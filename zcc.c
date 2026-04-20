@@ -5491,8 +5491,10 @@ Node *parse_stmt(Compiler *cc) {
                                 Node *init_list;
                                 Node **inits;
                                 int count;
+                                int init_cap;
                                 init_list = node_new(cc, ND_INIT_LIST, line);
-                                inits = (Node **)cc_alloc(cc, sizeof(Node *) * MAX_INIT);
+                                init_cap = 64;
+                                inits = (Node **)cc_alloc(cc, sizeof(Node *) * init_cap);
                                 count = 0;
                                 next_token(cc); /* skip { */
                                 int depth = 1;
@@ -5519,12 +5521,14 @@ Node *parse_stmt(Compiler *cc) {
                                         next_token(cc);
                                     } else {
                                         skip_tk = cc->tk;
-                                        if (count < MAX_INIT) {
-                                            inits[count++] = parse_assign(cc);
-                                        } else {
-                                            if (!_warned_max_init) { printf("zcc: warning: MAX_INIT (%d) exceeded at %s:%d — subsequent initializers silently discarded\n", MAX_INIT, cc->filename ? cc->filename : "?", cc->tk_line); _warned_max_init = 1; }
-                                            parse_assign(cc);
+                                        if (count >= init_cap) {
+                                            Node **old_inits = inits;
+                                            int gi;
+                                            init_cap *= 2;
+                                            inits = (Node **)cc_alloc(cc, sizeof(Node *) * init_cap);
+                                            for (gi = 0; gi < count; gi++) inits[gi] = old_inits[gi];
                                         }
+                                        inits[count++] = parse_assign(cc);
                                         if (cc->tk == skip_tk) {
                                             if (cc->tk != TK_EOF) next_token(cc);
                                         }
@@ -6331,8 +6335,10 @@ Node *parse_program(Compiler *cc) {
                     Node *init_list;
                     Node **inits;
                     int count;
+                    int init_cap;
                     init_list = node_new(cc, ND_INIT_LIST, line);
-                    inits = (Node **)cc_alloc(cc, sizeof(Node *) * MAX_INIT);
+                    init_cap = 64;
+                    inits = (Node **)cc_alloc(cc, sizeof(Node *) * init_cap);
                     count = 0;
                     next_token(cc); /* skip { */
                     int depth = 1;
@@ -6359,12 +6365,14 @@ Node *parse_program(Compiler *cc) {
                             next_token(cc);
                         } else {
                             skip_tk = cc->tk;
-                            if (count < MAX_INIT) {
-                                inits[count++] = parse_assign(cc);
-                            } else {
-                                if (!_warned_max_init) { printf("zcc: warning: MAX_INIT (%d) exceeded at %s:%d — subsequent initializers silently discarded\n", MAX_INIT, cc->filename ? cc->filename : "?", cc->tk_line); _warned_max_init = 1; }
-                                parse_assign(cc);
+                            if (count >= init_cap) {
+                                Node **old_inits = inits;
+                                int gi;
+                                init_cap *= 2;
+                                inits = (Node **)cc_alloc(cc, sizeof(Node *) * init_cap);
+                                for (gi = 0; gi < count; gi++) inits[gi] = old_inits[gi];
                             }
+                            inits[count++] = parse_assign(cc);
                             if (cc->tk == skip_tk) {
                                 if (cc->tk != TK_EOF) next_token(cc);
                             }
