@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G65",
+    "name": "Codegen Mutation G65 [schedule_war_pair]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-3",
+    "lineage_hash": "d701d8db9fdfa99a",
+    "island_id": 3
+  },
+  "mutations": [
+    {
+      "name": "schedule_war_pair",
+      "category": "SCHEDULE",
+      "description": "Swap independent pair to reduce WAR pipeline stall",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": 0,
+    "inst_count_delta": 117820,
+    "score_delta": -1.3623490000609308,
+    "composite_score": 1257407.8941589997
+  },
+  "timestamp": "2026-04-20T13:35:01.156518+00:00",
+  "generation": 65
+}

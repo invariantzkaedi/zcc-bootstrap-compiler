@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G81",
+    "name": "Codegen Mutation G81 [schedule_war_pair]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-9",
+    "lineage_hash": "67e511fa12fc84fa",
+    "island_id": 9
+  },
+  "mutations": [
+    {
+      "name": "schedule_war_pair",
+      "category": "SCHEDULE",
+      "description": "Swap independent pair to reduce WAR pipeline stall",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": 0,
+    "inst_count_delta": 117820,
+    "score_delta": -1.7351100000087172,
+    "composite_score": 1257409.2468599998
+  },
+  "timestamp": "2026-04-20T13:38:47.540443+00:00",
+  "generation": 81
+}

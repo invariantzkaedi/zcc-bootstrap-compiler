@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G79",
+    "name": "Codegen Mutation G79 [dead_move_elim]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-7",
+    "lineage_hash": "0b75639714b7a149",
+    "island_id": 7
+  },
+  "mutations": [
+    {
+      "name": "dead_move_elim",
+      "category": "PEEPHOLE",
+      "description": "Remove dead movq to %rax (overwritten at +1)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -20,
+    "inst_count_delta": 117819,
+    "score_delta": -8.903125999961048,
+    "composite_score": 1257400.4721219998
+  },
+  "timestamp": "2026-04-20T13:38:41.423228+00:00",
+  "generation": 79
+}

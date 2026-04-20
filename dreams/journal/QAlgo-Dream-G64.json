@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G64",
+    "name": "Codegen Mutation G64 [dead_move_elim]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-1",
+    "lineage_hash": "20bccff2aaf34146",
+    "island_id": 1
+  },
+  "mutations": [
+    {
+      "name": "dead_move_elim",
+      "category": "PEEPHOLE",
+      "description": "Remove dead movq to %rax (overwritten at +1)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -20,
+    "inst_count_delta": 117820,
+    "score_delta": -8.931524999905378,
+    "composite_score": 1257408.6068399998
+  },
+  "timestamp": "2026-04-20T13:34:56.489811+00:00",
+  "generation": 64
+}

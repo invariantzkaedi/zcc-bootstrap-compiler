@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G57",
+    "name": "Codegen Mutation G57 [schedule_war_pair]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-8",
+    "lineage_hash": "4ef8cf2f86a2d6af",
+    "island_id": 8
+  },
+  "mutations": [
+    {
+      "name": "schedule_war_pair",
+      "category": "SCHEDULE",
+      "description": "Swap independent pair to reduce WAR pipeline stall",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": 0,
+    "inst_count_delta": 117821,
+    "score_delta": -1.2447440000250936,
+    "composite_score": 1257417.7539869999
+  },
+  "timestamp": "2026-04-20T13:34:03.449070+00:00",
+  "generation": 57
+}
