@@ -30,6 +30,7 @@ extern int  g_peephole_verbose;
 /* Security pass globals */
 static int  g_security_signext = 0;
 static int  g_security_476 = 0;
+static int  g_security_787 = 0;
 
 static void init_compiler(Compiler *cc) {
   /* zero everyt5555hing — cc was calloc'd */
@@ -736,6 +737,126 @@ static void security_nullderef_scan(Compiler *cc, char *filename) {
   }
 }
 
+static void security_bounds_scan(Compiler *cc, char *filename) {
+  FILE *fp;
+  int nlines = 0;
+  int findings = 0;
+  int i;
+  char current_func[128];
+  char *line_buf;
+  char **lp;
+  int max_lines = 32768;
+
+  fp = fopen(filename, "r");
+  if (!fp) return;
+
+  line_buf = (char *)malloc(max_lines * 128);
+  lp = (char **)malloc(max_lines * sizeof(char *));
+  if (!line_buf || !lp) { fclose(fp); return; }
+
+  current_func[0] = 0;
+  while (nlines < max_lines && fgets(line_buf + nlines * 128, 128, fp)) {
+    lp[nlines] = line_buf + nlines * 128;
+    nlines++;
+  }
+  fclose(fp);
+
+  for (i = 0; i < nlines; i++) {
+    /* Track current function */
+    if (lp[i][0] != ' ' && lp[i][0] != '\t' && lp[i][0] != '.' &&
+        lp[i][0] != '#' && lp[i][0] != '\n') {
+      int k = 0;
+      while (lp[i][k] && lp[i][k] != ':' && k < 127) {
+        current_func[k] = lp[i][k];
+        k++;
+      }
+      current_func[k] = 0;
+    }
+
+    if (strstr(lp[i], "# ZCC_META_ARRAY")) {
+      char array_name[64] = "unknown";
+      char index_name[64] = "?";
+      char size_str[32] = "0";
+      char file_name[128] = "unknown";
+      int line_num = 0;
+
+      char *ptr = strstr(lp[i], "array=");
+      if (ptr) {
+          ptr += 6;
+          int k = 0;
+          while (ptr[k] && ptr[k] != ' ' && k < 63) array_name[k++] = ptr[k];
+          array_name[k] = 0;
+      }
+      
+      ptr = strstr(lp[i], "index=");
+      if (ptr) {
+          ptr += 6;
+          int k = 0;
+          while (ptr[k] && ptr[k] != ' ' && k < 63) index_name[k++] = ptr[k];
+          index_name[k] = 0;
+      }
+
+      ptr = strstr(lp[i], "size=");
+      if (ptr) {
+          ptr += 5;
+          int k = 0;
+          while (ptr[k] && ptr[k] != ' ' && k < 31) size_str[k++] = ptr[k];
+          size_str[k] = 0;
+      }
+      
+      ptr = strstr(lp[i], "@");
+      if (ptr) {
+          ptr += 1;
+          int k = 0;
+          while (ptr[k] && ptr[k] != ':' && k < 127) file_name[k++] = ptr[k];
+          file_name[k] = 0;
+          if (ptr[k] == ':') line_num = atoi(ptr + k + 1);
+      }
+
+      /* Do backwards walk looking for cmp bounds check */
+      int saw_size_cmp = 0;
+      int saw_cmp_instr = 0;
+      char size_pat[64];
+      sprintf(size_pat, "$%s", size_str);
+
+      int j;
+      for (j = i - 1; j >= 0 && j >= i - 30; j--) {
+          if (strstr(lp[j], "ret")) break;
+          if (strstr(lp[j], "call ")) break;
+          if (lp[j][0] != ' ' && lp[j][0] != '\t' && lp[j][0] != '.' && lp[j][0] != '#') break; /* Func def */
+
+          if (strstr(lp[j], size_pat)) saw_size_cmp = 1;
+          if (strstr(lp[j], "cmp")) saw_cmp_instr = 1;
+      }
+
+      if (!(saw_size_cmp && saw_cmp_instr)) {
+          findings++;
+          if (g_emit_anomalies) {
+               Symbol *sym = scope_find(cc, current_func);
+               const char *ret_type = "unknown";
+               if (sym && sym->type && sym->type->kind == TY_FUNC) {
+                   ret_type = type_to_str(sym->type->ret);
+               }
+               printf("{\"type\":\"ir_anomaly\", \"kind\":\"CWE-787\", \"site\":\"%s:%s:%d\", \"severity\":0.8, \"array\":\"%s\", \"index\":\"%s\", \"size\":%s, \"return_type\":\"%s\"}\n",
+                      file_name, current_func, line_num, array_name, index_name, size_str, ret_type);
+          } else {
+               printf("[--security-787] CWE-787 WARNING: unchecked array bounds for %s[%s] (size %s) in %s()\n",
+                      array_name, index_name, size_str, current_func);
+          }
+      }
+    }
+  }
+
+  free(line_buf);
+  free(lp);
+
+  if (findings) {
+    if (!g_emit_anomalies) printf("[--security-787] %d potential bounds-violation(s) found\n", findings);
+  } else {
+    if (!g_emit_anomalies) printf("[--security-787] Clean: all bounded arrays checked\n");
+  }
+}
+
 /* ================================================================ */
 /* MAIN                                                              */
 /* Bug fix: Compiler is heap-allocated (52KB+ struct, not stack)     */
@@ -812,9 +933,12 @@ int main(int argc, char **argv) {
       g_security_signext = 1;
     } else if (strcmp(argv[i], "--security-476") == 0) {
       g_security_476 = 1;
+    } else if (strcmp(argv[i], "--security-787") == 0) {
+      g_security_787 = 1;
     } else if (strcmp(argv[i], "--emit-anomalies") == 0) {
       g_emit_anomalies = 1;
       g_security_476 = 1;
+      g_security_787 = 1;
     } else if (strncmp(argv[i], "-l", 2) == 0 || strncmp(argv[i], "-L", 2) == 0 || strncmp(argv[i], "-O", 2) == 0) {
       /* ignore linker flags */
     } else {
@@ -963,6 +1087,11 @@ int main(int argc, char **argv) {
   /* security pass: null-deref detection */
   if (g_security_476) {
     security_nullderef_scan(cc, asm_file);
+  }
+
+  /* security pass: array bounds detection */
+  if (g_security_787) {
+    security_bounds_scan(cc, asm_file);
   }
 
   /* assemble and link if not stopping at assembly */

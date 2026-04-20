@@ -511,6 +511,8 @@ struct Compiler {
     int pending_aligned_n;  /* __attribute__((aligned(N))) value, 0 = none */
     int debug_abi_classes;  /* -fdebug-abi-classes flag */
     int abi_scratch_offset; /* %rbp-relative offset to 16-byte aggregate return scratch (CG-IR-019) */
+    int used_regs_mask;     /* for telemetry tracking */
+    int is_forced_mask;     /* 1 if 0x1F was forced (CG-IR-011) */
 };
 
 typedef struct TargetBackend {
@@ -711,7 +713,15 @@ static const char *zcc_stddef_text =
 "#define __builtin_types_compatible_p(x, y) 0\n"
 "#define __builtin_unreachable()\n"
 "#define __x86_64__ 1\n"
+"#define LUA_USE_JUMPTABLE 0\n"
 "#define __GNUC__ 1\n"
+"#define __attribute__(x)\n"
+"#define __declspec(x)\n"
+"#define __inline__ inline\n"
+"#define __restrict\n"
+"#define __restrict__\n"
+"#define __extension__\n"
+"#define __asm__(x)\n"
 "#define assert(x)\n"
 "#define offsetof(t, m) ((unsigned long)&(((t*)0)->m))\n"
 "typedef int int32_t;\n"
@@ -1104,75 +1114,233 @@ static void pp_parse_params(PPState *state, PPMacro *m) {
     if (pp_peek(state) == ')') pp_next(state);
 }
 
-static int pp_eval_expr_str(PPState *state, const char *s, int depth) {
-    char buf[1024];
-    int i=0, j=0;
-    char *or_ptr, *and_ptr;
-    
-    fprintf(stderr, "eval depth=%d s='%s'\n", depth, s);
-    if (depth > 16) {
-        fprintf(stderr, "RECURSION DEPTH MAXED OUT!\n");
+/* ============================================================
+ * pp_eval_expr_str — recursive-descent C #if expression parser.
+ * Handles full C operator precedence per C11 6.10.1.
+ * Returns long long. Undefined identifiers evaluate to 0.
+ * ============================================================ */
+
+typedef struct { const char *s; PPState *state; int depth; } PPEval;
+
+static long long pp_e_expr(PPEval *e);      /* lowest precedence */
+
+static void pp_e_skip(PPEval *e) {
+    while (*e->s == ' ' || *e->s == '\t' || *e->s == '\n' || *e->s == '\r') e->s++;
+}
+
+static int pp_e_match(PPEval *e, const char *tok) {
+    pp_e_skip(e);
+    int n = 0; while (tok[n]) n++;
+    int i;
+    for (i = 0; i < n; i++) if (e->s[i] != tok[i]) return 0;
+    /* Guard: don't match '>' when '>>' is present, etc. */
+    if (n == 1) {
+        char c = tok[0];
+        if ((c == '>' || c == '<' || c == '&' || c == '|' || c == '=') && e->s[1] == c) return 0;
+        if ((c == '<' || c == '>' || c == '!' || c == '=') && e->s[1] == '=') return 0;
+    }
+    e->s += n;
+    return 1;
+}
+
+/* primary: number | defined(X) | identifier | (expr) | unary */
+static long long pp_e_primary(PPEval *e) {
+    pp_e_skip(e);
+    if (*e->s == '(') {
+        e->s++;
+        long long v = pp_e_expr(e);
+        pp_e_skip(e);
+        if (*e->s == ')') e->s++;
+        return v;
+    }
+    if (*e->s == '!') { e->s++; return !pp_e_primary(e); }
+    if (*e->s == '~') { e->s++; return ~pp_e_primary(e); }
+    if (*e->s == '-') { e->s++; return -pp_e_primary(e); }
+    if (*e->s == '+') { e->s++; return  pp_e_primary(e); }
+    if (*e->s >= '0' && *e->s <= '9') {
+        char *end;
+        long long v = (long long)strtoull(e->s, &end, 0);
+        e->s = end;
+        /* skip integer suffix: U, L, UL, ULL, LL */
+        while (*e->s == 'u' || *e->s == 'U' || *e->s == 'l' || *e->s == 'L') e->s++;
+        return v;
+    }
+    /* identifier: defined() or macro */
+    if ((*e->s >= 'a' && *e->s <= 'z') || (*e->s >= 'A' && *e->s <= 'Z') || *e->s == '_') {
+        char name[256];
+        int n = 0;
+        while (((*e->s >= 'a' && *e->s <= 'z') || (*e->s >= 'A' && *e->s <= 'Z') ||
+                (*e->s >= '0' && *e->s <= '9') || *e->s == '_') && n < 255) {
+            name[n++] = *e->s++;
+        }
+        name[n] = 0;
+        if (n == 7 && name[0]=='d' && name[1]=='e' && name[2]=='f' && name[3]=='i' &&
+                      name[4]=='n' && name[5]=='e' && name[6]=='d') {
+            pp_e_skip(e);
+            int paren = 0;
+            if (*e->s == '(') { e->s++; paren = 1; }
+            pp_e_skip(e);
+            char arg[256]; int an = 0;
+            while (((*e->s >= 'a' && *e->s <= 'z') || (*e->s >= 'A' && *e->s <= 'Z') ||
+                    (*e->s >= '0' && *e->s <= '9') || *e->s == '_') && an < 255) {
+                arg[an++] = *e->s++;
+            }
+            arg[an] = 0;
+            pp_e_skip(e);
+            if (paren && *e->s == ')') e->s++;
+            return pp_find_macro(e->state, arg) != 0;
+        }
+        /* regular identifier: expand as macro if defined, else 0 */
+        PPMacro *m = pp_find_macro(e->state, name);
+        if (m) {
+            PPEval sub = { m->body, e->state, e->depth + 1 };
+            if (sub.depth > 32) return 0;
+            return pp_e_expr(&sub);
+        }
         return 0;
     }
-    
-    while(s[i] && j<1023) { if (s[i]!=' ' && s[i]!='\t' && s[i]!='\n' && s[i]!='\r') buf[j++]=s[i]; i++; }
-    buf[j]=0;
-    if (buf[0] == 0) return 0;
-    
-    or_ptr = strstr(buf, "||");
-    if (or_ptr) {
-        *or_ptr = 0;
-        return pp_eval_expr_str(state, buf, depth+1) || pp_eval_expr_str(state, or_ptr + 2, depth+1);
-    }
-    and_ptr = strstr(buf, "&&");
-    if (and_ptr) {
-        *and_ptr = 0;
-        return pp_eval_expr_str(state, buf, depth+1) && pp_eval_expr_str(state, and_ptr + 2, depth+1);
-    }
-    
-    char *op;
-    if ((op = strstr(buf, "=="))) {
-        *op = 0; return pp_eval_expr_str(state, buf, depth+1) == pp_eval_expr_str(state, op+2, depth+1);
-    }
-    if ((op = strstr(buf, "!="))) {
-        *op = 0; return pp_eval_expr_str(state, buf, depth+1) != pp_eval_expr_str(state, op+2, depth+1);
-    }
-    if ((op = strstr(buf, "<="))) {
-        *op = 0; return pp_eval_expr_str(state, buf, depth+1) <= pp_eval_expr_str(state, op+2, depth+1);
-    }
-    if ((op = strstr(buf, ">="))) {
-        *op = 0; return pp_eval_expr_str(state, buf, depth+1) >= pp_eval_expr_str(state, op+2, depth+1);
-    }
-    if ((op = strchr(buf, '<'))) {
-        *op = 0; return pp_eval_expr_str(state, buf, depth+1) < pp_eval_expr_str(state, op+1, depth+1);
-    }
-    if ((op = strchr(buf, '>'))) {
-        *op = 0; return pp_eval_expr_str(state, buf, depth+1) > pp_eval_expr_str(state, op+1, depth+1);
-    }
-    
-    if (buf[0] == '!') return !pp_eval_expr_str(state, buf+1, depth+1);
-    
-    /* parenthesis stripping */
-    if (buf[0] == '(' && buf[j-1] == ')') {
-        buf[j-1] = 0;
-        return pp_eval_expr_str(state, buf+1, depth+1);
-    }
-    
-    if (buf[0] >= '0' && buf[0] <= '9') return strtol(buf, NULL, 0);
-    
-    if (strncmp(buf, "defined", 7) == 0) {
-        char *p = buf + 7;
-        char name[128];
-        int n_idx = 0;
-        while (*p == '(') p++;
-        while (*p && *p != ')' && n_idx < 127) name[n_idx++] = *p++;
-        name[n_idx] = 0;
-        return pp_find_macro(state, name) != 0;
-    }
-    
-    PPMacro *m = pp_find_macro(state, buf);
-    if (m) return pp_eval_expr_str(state, m->body, depth+1);
     return 0;
+}
+
+/* multiplicative: * / % */
+static long long pp_e_mul(PPEval *e) {
+    long long v = pp_e_primary(e);
+    for (;;) {
+        pp_e_skip(e);
+        if      (pp_e_match(e, "*"))  v = v * pp_e_primary(e);
+        else if (pp_e_match(e, "/"))  { long long r = pp_e_primary(e); v = r ? v / r : 0; }
+        else if (pp_e_match(e, "%"))  { long long r = pp_e_primary(e); v = r ? v % r : 0; }
+        else break;
+    }
+    return v;
+}
+
+/* additive: + - */
+static long long pp_e_add(PPEval *e) {
+    long long v = pp_e_mul(e);
+    for (;;) {
+        pp_e_skip(e);
+        if      (pp_e_match(e, "+")) v = v + pp_e_mul(e);
+        else if (pp_e_match(e, "-")) v = v - pp_e_mul(e);
+        else break;
+    }
+    return v;
+}
+
+/* shift: << >> */
+static long long pp_e_shift(PPEval *e) {
+    long long v = pp_e_add(e);
+    for (;;) {
+        pp_e_skip(e);
+        if      (pp_e_match(e, "<<")) v = (long long)((unsigned long long)v << pp_e_add(e));
+        else if (pp_e_match(e, ">>")) v = (long long)((unsigned long long)v >> pp_e_add(e));
+        else break;
+    }
+    return v;
+}
+
+/* relational: < <= > >= */
+static long long pp_e_rel(PPEval *e) {
+    long long v = pp_e_shift(e);
+    for (;;) {
+        pp_e_skip(e);
+        if      (pp_e_match(e, "<=")) v = v <= pp_e_shift(e);
+        else if (pp_e_match(e, ">=")) v = v >= pp_e_shift(e);
+        else if (pp_e_match(e, "<"))  v = v <  pp_e_shift(e);
+        else if (pp_e_match(e, ">"))  v = v >  pp_e_shift(e);
+        else break;
+    }
+    return v;
+}
+
+/* equality: == != */
+static long long pp_e_eq(PPEval *e) {
+    long long v = pp_e_rel(e);
+    for (;;) {
+        pp_e_skip(e);
+        if      (pp_e_match(e, "==")) v = v == pp_e_rel(e);
+        else if (pp_e_match(e, "!=")) v = v != pp_e_rel(e);
+        else break;
+    }
+    return v;
+}
+
+/* bitwise AND: & */
+static long long pp_e_band(PPEval *e) {
+    long long v = pp_e_eq(e);
+    for (;;) {
+        pp_e_skip(e);
+        if (pp_e_match(e, "&")) v = v & pp_e_eq(e);
+        else break;
+    }
+    return v;
+}
+
+/* bitwise XOR: ^ */
+static long long pp_e_bxor(PPEval *e) {
+    long long v = pp_e_band(e);
+    for (;;) {
+        pp_e_skip(e);
+        if (pp_e_match(e, "^")) v = v ^ pp_e_band(e);
+        else break;
+    }
+    return v;
+}
+
+/* bitwise OR: | */
+static long long pp_e_bor(PPEval *e) {
+    long long v = pp_e_bxor(e);
+    for (;;) {
+        pp_e_skip(e);
+        if (pp_e_match(e, "|")) v = v | pp_e_bxor(e);
+        else break;
+    }
+    return v;
+}
+
+/* logical AND: && */
+static long long pp_e_land(PPEval *e) {
+    long long v = pp_e_bor(e);
+    for (;;) {
+        pp_e_skip(e);
+        if (pp_e_match(e, "&&")) { long long r = pp_e_bor(e); v = v && r; }
+        else break;
+    }
+    return v;
+}
+
+/* logical OR: || */
+static long long pp_e_lor(PPEval *e) {
+    long long v = pp_e_land(e);
+    for (;;) {
+        pp_e_skip(e);
+        if (pp_e_match(e, "||")) { long long r = pp_e_land(e); v = v || r; }
+        else break;
+    }
+    return v;
+}
+
+/* ternary: a ? b : c */
+static long long pp_e_expr(PPEval *e) {
+    long long c = pp_e_lor(e);
+    pp_e_skip(e);
+    if (*e->s == '?') {
+        e->s++;
+        long long t = pp_e_expr(e);
+        pp_e_skip(e);
+        if (*e->s == ':') e->s++;
+        long long f = pp_e_expr(e);
+        return c ? t : f;
+    }
+    return c;
+}
+
+static long long pp_eval_expr_str(PPState *state, const char *s, int depth) {
+    PPEval e;
+    e.s = s;
+    e.state = state;
+    e.depth = depth;
+    return pp_e_expr(&e);
 }
 
 static void pp_parse_directive(PPState *state) {
@@ -1414,8 +1582,58 @@ static void pp_expand_ident(PPState *state, const char *ident) {
     int arg_idx = 0;
     int in_string = 0;
     int in_char = 0;
+    int in_comment = 0;
     while (pp_peek(state) != 0) {
         c = pp_peek(state);
+
+        /* PP-COMMENT-ARG-FIX: track block comments inside macro args so
+           that apostrophes and quotes inside them do not toggle in_char
+           or in_string state. Copy characters through verbatim. */
+        if (!in_string && !in_char) {
+            if (!in_comment && c == '/' && state->src[state->pos + 1] == '*') {
+                in_comment = 1;
+                if (p_count < PP_MAX_PARAMS) {
+                    if (arg_idx >= arg_caps[p_count] - 2) {
+                        arg_caps[p_count] *= 2;
+                        args[p_count] = (char *)realloc(args[p_count], arg_caps[p_count]);
+                    }
+                    args[p_count][arg_idx++] = pp_next(state);
+                    args[p_count][arg_idx++] = pp_next(state);
+                    args[p_count][arg_idx] = 0;
+                } else {
+                    pp_next(state); pp_next(state);
+                }
+                continue;
+            }
+            if (in_comment && c == '*' && state->src[state->pos + 1] == '/') {
+                in_comment = 0;
+                if (p_count < PP_MAX_PARAMS) {
+                    if (arg_idx >= arg_caps[p_count] - 2) {
+                        arg_caps[p_count] *= 2;
+                        args[p_count] = (char *)realloc(args[p_count], arg_caps[p_count]);
+                    }
+                    args[p_count][arg_idx++] = pp_next(state);
+                    args[p_count][arg_idx++] = pp_next(state);
+                    args[p_count][arg_idx] = 0;
+                } else {
+                    pp_next(state); pp_next(state);
+                }
+                continue;
+            }
+        }
+        if (in_comment) {
+            if (p_count < PP_MAX_PARAMS) {
+                if (arg_idx >= arg_caps[p_count] - 1) {
+                    arg_caps[p_count] *= 2;
+                    args[p_count] = (char *)realloc(args[p_count], arg_caps[p_count]);
+                }
+                args[p_count][arg_idx++] = c;
+                args[p_count][arg_idx] = 0;
+            }
+            pp_next(state);
+            continue;
+        }
+
         
         if (c == '\\') {
             pp_next(state);
@@ -1788,6 +2006,7 @@ char *zcc_preprocess(const char *source, int source_len,
 #include "part1.c"
 #endif
 
+/* C99/POSIX support for curl graduation — see commit 262bd08 */
 /* ================================================================ */
 /* ARENA ALLOCATOR                                                   */
 /* ================================================================ */
@@ -2155,10 +2374,17 @@ static Keyword keywords[] = {
     {"restrict",  TK_VOLATILE},
     {"__int128",   TK_LONG},
     {"__int128_t", TK_LONG},
+    {"_Bool",      TK_INT},
+    {"_Atomic",    TK_VOLATILE},
+    {"_Noreturn",  TK_INLINE},
+    {"_Thread_local", TK_STATIC},
+    {"_Alignof",   TK_SIZEOF},
+    {"__alignof__", TK_SIZEOF},
+    {"__alignof",  TK_SIZEOF},
     {0, 0}
 };
 
-static int kw_count = 53;
+static int kw_count = 62;
 
 static int lookup_keyword(char *name) {
     int i;
@@ -2412,8 +2638,24 @@ again:
         }
     }
 
-    /* preprocessor lines: skip entirely */
+    /* preprocessor lines: skip entirely; update line/filename from directives */
     if (c == '#') {
+        /* check if it's a GCC line directive: # NNN "filename" [flags] */
+        int dpos = cc->pos + 1;
+        int new_line = 0;
+        int has_linenum = 0;
+        /* skip spaces after # */
+        while (dpos < cc->source_len && (cc->source[dpos] == ' ' || cc->source[dpos] == '\t')) dpos++;
+        /* parse number */
+        while (dpos < cc->source_len && cc->source[dpos] >= '0' && cc->source[dpos] <= '9') {
+            new_line = new_line * 10 + (cc->source[dpos] - '0');
+            has_linenum = 1;
+            dpos++;
+        }
+        if (has_linenum && new_line > 0) {
+            cc->line = new_line;
+        }
+        /* skip to end of line */
         while (cc->pos < cc->source_len) {
             if (cc->source[cc->pos] == '\n') break;
             /* handle line continuation */
@@ -2929,6 +3171,7 @@ int peek_token(Compiler *cc) {
 #include "part1.c"
 #endif
 
+/* C99/POSIX support for curl graduation — see commit 262bd08 */
 /* ================================================================ */
 /* PARSER                                                            */
 /* ================================================================ */
@@ -3138,6 +3381,13 @@ static long long parse_const_expr_primary(Compiler *cc) {
     if (cc->tk == TK_LPAREN) {
         long long val;
         next_token(cc);
+        /* Handle casts: (int)expr, (unsigned long)expr, etc. */
+        if (is_type_token(cc)) {
+            /* Skip the type and closing paren, then evaluate the expression */
+            while (cc->tk != TK_RPAREN && cc->tk != TK_EOF) next_token(cc);
+            expect(cc, TK_RPAREN);
+            return parse_const_expr_unary(cc);
+        }
         val = parse_const_expr(cc);
         expect(cc, TK_RPAREN);
         return val;
@@ -4862,6 +5112,33 @@ Node *parse_stmt(Compiler *cc) {
     int line;
     line = cc->tk_line;
 
+    /* Skip __asm__(...) / asm(...) / __asm(...) statements */
+    if (cc->tk == TK_IDENT) {
+        if (strcmp(cc->tk_text, "__asm__") == 0 ||
+            strcmp(cc->tk_text, "asm") == 0 ||
+            strcmp(cc->tk_text, "__asm") == 0) {
+            next_token(cc); /* consume asm keyword */
+            /* skip optional volatile qualifier */
+            if (cc->tk == TK_IDENT && (strcmp(cc->tk_text, "__volatile__") == 0 ||
+                strcmp(cc->tk_text, "volatile") == 0)) {
+                next_token(cc);
+            }
+            if (cc->tk == TK_VOLATILE) next_token(cc);
+            if (cc->tk == TK_LPAREN) {
+                int depth = 1;
+                next_token(cc);
+                while (depth > 0 && cc->tk != TK_EOF) {
+                    if (cc->tk == TK_LPAREN) depth++;
+                    else if (cc->tk == TK_RPAREN) depth--;
+                    if (depth > 0) next_token(cc);
+                }
+                if (cc->tk == TK_RPAREN) next_token(cc);
+            }
+            if (cc->tk == TK_SEMI) next_token(cc);
+            return node_new(cc, ND_NOP, line);
+        }
+    }
+
     /* inline assembly */
     if (cc->tk == TK_ASM) {
         Node *n;
@@ -5893,6 +6170,60 @@ Node *parse_program(Compiler *cc) {
                     }
                     /* fall through to typedef / global var handling */
                     goto after_name;
+                } else if (is_typedef_kw && gpk == TK_IDENT) {
+                    /* typedef returntype (Name)(params) — function type typedef
+                     * e.g. typedef ssize_t (Curl_send)(struct X *, int, ...); */
+                    next_token(cc); /* consume ( */
+                    strncpy(name, cc->tk_text, MAX_IDENT - 1);
+                    next_token(cc); /* consume Name */
+                    expect(cc, TK_RPAREN); /* consume ) */
+                    /* Now parse the parameter list */
+                    if (cc->tk == TK_LPAREN) {
+                        Type *ftype;
+                        next_token(cc);
+                        ftype = type_func(cc, ptr_type);
+                        ftype->params = (Type **)cc_alloc(cc, sizeof(Type *) * MAX_PARAMS);
+                        ftype->num_params = 0;
+                        ftype->is_variadic = 0;
+                        if (cc->tk != TK_RPAREN) {
+                            if (cc->tk == TK_VOID) {
+                                int vpk3 = peek_token(cc);
+                                if (vpk3 == TK_RPAREN) {
+                                    next_token(cc);
+                                } else {
+                                    goto parse_ft_params;
+                                }
+                            } else {
+                                parse_ft_params:
+                                while (cc->tk != TK_RPAREN) {
+                                    Type *ptype;
+                                    char pname[128];
+                                    if (cc->tk == TK_ELLIPSIS) {
+                                        ftype->is_variadic = 1;
+                                        next_token(cc);
+                                        break;
+                                    }
+                                    if (cc->tk == TK_EOF) break;
+                                    ptype = parse_type(cc);
+                                    ptype = parse_declarator(cc, ptype, pname);
+                                    if (ftype->num_params < MAX_PARAMS) {
+                                        ftype->params[ftype->num_params] = ptype;
+                                        ftype->num_params++;
+                                    }
+                                    if (cc->tk == TK_COMMA) {
+                                        next_token(cc);
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        expect(cc, TK_RPAREN);
+                        dtype = ftype;
+                    } else {
+                        dtype = ptr_type;
+                    }
+                    goto after_name;
                 }
             }
             if (cc->tk == TK_IDENT) {
@@ -6812,7 +7143,18 @@ static int log2_of(long long val) {
 /* Format codes for label emission — avoid passing string literals as 2nd arg
  * (stage2 mispasses them). */
 enum { FMT_JE = 1, FMT_JMP, FMT_DEF, FMT_JNE };
+static void emit_bb_telem(Compiler *cc, int label_id) {
+    if (getenv("ZCC_EMIT_TELEMETRY")) {
+        fprintf(stderr, "[telem] fn=%s bb=%d used_regs=0x%02X src=%s\n",
+                cc->current_func, label_id, cc->used_regs_mask, cc->is_forced_mask ? "forced" : "computed");
+    }
+}
+
 static void emit_label_fmt(Compiler *cc, int n, int fmt) {
+    if (fmt == FMT_DEF) {
+        emit_bb_telem(cc, n);
+    }
+
   if (backend_ops) {
       switch (fmt) {
       case FMT_JE:
@@ -10393,11 +10735,17 @@ void codegen_func(Compiler *cc, Node *func) {
   if (!func)
     return;
   fprintf(stderr, "cc_func: %s\n", func->func_def_name);
-  used_regs = allocate_registers(func);
-
-  /* CG-IR-011 FIX: Force all 5 callee-saved regs when IR backend active */
+  cc->used_regs_mask = allocate_registers(func);
+  cc->is_forced_mask = 0;
   if (backend_ops) {
-      used_regs = 0x1F;
+      if ((cc->used_regs_mask & 0x1F) != 0x1F) cc->is_forced_mask = 1;
+      cc->used_regs_mask = 0x1F;
+  }
+  used_regs = cc->used_regs_mask;
+
+  if (getenv("ZCC_EMIT_TELEMETRY")) {
+      fprintf(stderr, "[telem] fn=%s used_regs=0x%02X src=%s\n",
+              func->func_def_name, used_regs, cc->is_forced_mask ? "forced" : "computed");
   }
 
   argregs[0] = "rdi";
@@ -11293,6 +11641,7 @@ int node_ptr_elem_size(struct Node *n) {
   }
   return 0;
 }
+/* C99/POSIX support for curl graduation — see commit 262bd08 */
 /* ================================================================ */
 /* COMPILER INITIALIZATION                                           */
 /* ================================================================ */
@@ -11380,6 +11729,87 @@ static void init_compiler(Compiler *cc) {
     sym = scope_add(cc, "_Float128", cc->ty_double);
     sym->is_typedef = 1;
 
+    /* POSIX / system typedefs — needed for GCC-preprocessed code */
+    sym = scope_add(cc, "socklen_t", cc->ty_int);
+    sym->is_typedef = 1;
+    sym = scope_add(cc, "sa_family_t", cc->ty_ushort);
+    sym->is_typedef = 1;
+    sym = scope_add(cc, "in_port_t", cc->ty_ushort);
+    sym->is_typedef = 1;
+    sym = scope_add(cc, "in_addr_t", cc->ty_uint);
+    sym->is_typedef = 1;
+    sym = scope_add(cc, "pid_t", cc->ty_int);
+    sym->is_typedef = 1;
+    sym = scope_add(cc, "uid_t", cc->ty_uint);
+    sym->is_typedef = 1;
+    sym = scope_add(cc, "gid_t", cc->ty_uint);
+    sym->is_typedef = 1;
+    sym = scope_add(cc, "mode_t", cc->ty_uint);
+    sym->is_typedef = 1;
+    sym = scope_add(cc, "off_t", cc->ty_long);
+    sym->is_typedef = 1;
+    sym = scope_add(cc, "time_t", cc->ty_long);
+    sym->is_typedef = 1;
+    sym = scope_add(cc, "clock_t", cc->ty_long);
+    sym->is_typedef = 1;
+    sym = scope_add(cc, "suseconds_t", cc->ty_long);
+    sym->is_typedef = 1;
+    sym = scope_add(cc, "nfds_t", cc->ty_ulong);
+    sym->is_typedef = 1;
+
+    /* glibc internal __ typedefs — survive GCC preprocessing */
+    sym = scope_add(cc, "__time_t", cc->ty_long);   sym->is_typedef = 1;
+    sym = scope_add(cc, "__clock_t", cc->ty_long);   sym->is_typedef = 1;
+    sym = scope_add(cc, "__pid_t", cc->ty_int);      sym->is_typedef = 1;
+    sym = scope_add(cc, "__uid_t", cc->ty_uint);     sym->is_typedef = 1;
+    sym = scope_add(cc, "__gid_t", cc->ty_uint);     sym->is_typedef = 1;
+    sym = scope_add(cc, "__off_t", cc->ty_long);     sym->is_typedef = 1;
+    sym = scope_add(cc, "__off64_t", cc->ty_long);   sym->is_typedef = 1;
+    sym = scope_add(cc, "__mode_t", cc->ty_uint);    sym->is_typedef = 1;
+    sym = scope_add(cc, "__dev_t", cc->ty_ulong);    sym->is_typedef = 1;
+    sym = scope_add(cc, "__ino_t", cc->ty_ulong);    sym->is_typedef = 1;
+    sym = scope_add(cc, "__nlink_t", cc->ty_ulong);  sym->is_typedef = 1;
+    sym = scope_add(cc, "__blksize_t", cc->ty_long); sym->is_typedef = 1;
+    sym = scope_add(cc, "__blkcnt_t", cc->ty_long);  sym->is_typedef = 1;
+    sym = scope_add(cc, "__ssize_t", cc->ty_long);   sym->is_typedef = 1;
+    sym = scope_add(cc, "__socklen_t", cc->ty_int);  sym->is_typedef = 1;
+    sym = scope_add(cc, "__suseconds_t", cc->ty_long); sym->is_typedef = 1;
+    sym = scope_add(cc, "__syscall_slong_t", cc->ty_long); sym->is_typedef = 1;
+    sym = scope_add(cc, "__syscall_ulong_t", cc->ty_ulong); sym->is_typedef = 1;
+    sym = scope_add(cc, "__intmax_t", cc->ty_long);  sym->is_typedef = 1;
+    sym = scope_add(cc, "__uintmax_t", cc->ty_ulong); sym->is_typedef = 1;
+    sym = scope_add(cc, "__intptr_t", cc->ty_long);  sym->is_typedef = 1;
+    sym = scope_add(cc, "__sig_atomic_t", cc->ty_int); sym->is_typedef = 1;
+    sym = scope_add(cc, "__clockid_t", cc->ty_int);  sym->is_typedef = 1;
+    sym = scope_add(cc, "__timer_t", type_ptr(cc, cc->ty_void)); sym->is_typedef = 1;
+    sym = scope_add(cc, "__loff_t", cc->ty_long);    sym->is_typedef = 1;
+    sym = scope_add(cc, "__key_t", cc->ty_int);      sym->is_typedef = 1;
+    sym = scope_add(cc, "__id_t", cc->ty_uint);      sym->is_typedef = 1;
+    sym = scope_add(cc, "__useconds_t", cc->ty_uint); sym->is_typedef = 1;
+    sym = scope_add(cc, "__daddr_t", cc->ty_int);    sym->is_typedef = 1;
+    sym = scope_add(cc, "__caddr_t", type_ptr(cc, cc->ty_char)); sym->is_typedef = 1;
+    sym = scope_add(cc, "__fsblkcnt_t", cc->ty_ulong); sym->is_typedef = 1;
+    sym = scope_add(cc, "__fsfilcnt_t", cc->ty_ulong); sym->is_typedef = 1;
+    sym = scope_add(cc, "__fsword_t", cc->ty_long);  sym->is_typedef = 1;
+    sym = scope_add(cc, "__rlim_t", cc->ty_ulong);   sym->is_typedef = 1;
+    sym = scope_add(cc, "__quad_t", cc->ty_long);    sym->is_typedef = 1;
+    sym = scope_add(cc, "__u_quad_t", cc->ty_ulong); sym->is_typedef = 1;
+
+
+    /* fd_set — used by select(). glibc: struct with __fds_bits[16] (128 bytes) */
+    {
+        Type *t_fdset = type_new(cc, TY_STRUCT);
+        strncpy(t_fdset->tag, "fd_set", MAX_IDENT - 1);
+        t_fdset->size = 128;
+        t_fdset->align = 8;
+        t_fdset->is_complete = 1;
+        sym = scope_add(cc, "fd_set", t_fdset);
+        sym->is_typedef = 1;
+    }
+
+    /* curl_socket_t — typically int on POSIX */
+    sym = scope_add(cc, "curl_socket_t", cc->ty_int);
+    sym->is_typedef = 1;
 
     /* NULL as enum constant */
     sym = scope_add(cc, "NULL", cc->ty_long);
@@ -11542,6 +11972,136 @@ static void init_compiler(Compiler *cc) {
       /* _exit */
       ft = type_func(cc, cc->ty_void);
       sym = scope_add(cc, "_exit", ft);
+      sym->is_global = 1;
+
+      /* strrchr — returns char* */
+      ft = type_func(cc, type_ptr(cc, cc->ty_char));
+      sym = scope_add(cc, "strrchr", ft);
+      sym->is_global = 1;
+
+      /* strcspn — returns size_t (ulong) */
+      ft = type_func(cc, cc->ty_ulong);
+      sym = scope_add(cc, "strcspn", ft);
+      sym->is_global = 1;
+
+      /* strspn — returns size_t (ulong) */
+      ft = type_func(cc, cc->ty_ulong);
+      sym = scope_add(cc, "strspn", ft);
+      sym->is_global = 1;
+
+      /* memchr — returns void* */
+      ft = type_func(cc, type_ptr(cc, cc->ty_void));
+      sym = scope_add(cc, "memchr", ft);
+      sym->is_global = 1;
+
+      /* inet_pton — returns int */
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "inet_pton", ft);
+      sym->is_global = 1;
+
+      /* strtod — returns double */
+      ft = type_func(cc, cc->ty_double);
+      sym = scope_add(cc, "strtod", ft);
+      sym->is_global = 1;
+
+      /* ctype functions — all return int */
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "isalpha", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "isdigit", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "isxdigit", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "toupper", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "tolower", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "isalnum", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "isspace", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "isupper", ft); sym->is_global = 1;
+
+      /* strerror — returns char* */
+      ft = type_func(cc, type_ptr(cc, cc->ty_char));
+      sym = scope_add(cc, "strerror", ft);
+      sym->is_global = 1;
+
+      /* close — returns int */
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "close", ft);
+      sym->is_global = 1;
+
+      /* select — returns int */
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "select", ft);
+      sym->is_global = 1;
+
+      /* socket — returns int */
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "socket", ft);
+      sym->is_global = 1;
+
+      /* connect — returns int */
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "connect", ft);
+      sym->is_global = 1;
+
+      /* bind — returns int */
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "bind", ft);
+      sym->is_global = 1;
+
+      /* listen — returns int */
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "listen", ft);
+      sym->is_global = 1;
+
+      /* accept — returns int */
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "accept", ft);
+      sym->is_global = 1;
+
+      /* recv — returns ssize_t */
+      ft = type_func(cc, cc->ty_long);
+      sym = scope_add(cc, "recv", ft);
+      sym->is_global = 1;
+
+      /* send — returns ssize_t */
+      ft = type_func(cc, cc->ty_long);
+      sym = scope_add(cc, "send", ft);
+      sym->is_global = 1;
+
+      /* setsockopt — returns int */
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "setsockopt", ft);
+      sym->is_global = 1;
+
+      /* getsockopt — returns int */
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "getsockopt", ft);
+      sym->is_global = 1;
+
+      /* fcntl — returns int, variadic */
+      ft = type_func(cc, cc->ty_int);
+      ft->is_variadic = 1;
+      sym = scope_add(cc, "fcntl", ft);
+      sym->is_global = 1;
+
+      /* ioctl — returns int, variadic */
+      ft = type_func(cc, cc->ty_int);
+      ft->is_variadic = 1;
+      sym = scope_add(cc, "ioctl", ft);
+      sym->is_global = 1;
+
+      /* poll — returns int */
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "poll", ft);
+      sym->is_global = 1;
+
+      /* gettimeofday — returns int */
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "gettimeofday", ft);
       sym->is_global = 1;
     }
   }
@@ -13608,3 +14168,5 @@ void ir_telem_summary(int total_funcs,
 }
 
 void ir_telem_shutdown(void) {}
+
+void ir_telemetry_enable_stdout(void) {}

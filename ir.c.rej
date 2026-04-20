@@ -1,0 +1,114 @@
+diff a/ir.c b/ir.c	(rejected hunks)
+@@ -25,46 +25,46 @@ ir_module_t  *g_ir_module    = 0;
+ 
+ /* ── Opcode table ────────────────────────────────────────────────────── */
+ 
+-static const char *OP_NAMES[IR_OP_COUNT] = {
+-    "RET",
+-    "BR",
+-    "BR_IF",
+-    "ALLOCA",
+-    "LOAD",
+-    "STORE",
+-    "ADD",
+-    "SUB",
+-    "MUL",
+-    "DIV",
+-    "MOD",
+-    "NEG",
+-    "AND",
+-    "OR",
+-    "XOR",
+-    "NOT",
+-    "SHL",
+-    "SHR",
+-    "EQ",
+-    "NE",
+-    "LT",
+-    "LE",
+-    "GT",
+-    "GE",
+-    "CAST",
+-    "COPY",
+-    "CONST",
+-    "CONST_STR",
+-    "CALL",
+-    "ARG",
+-    "PHI",
+-    "ADDR",
+-    "LABEL",
+-    "NOP"
++static const char *OP_NAMES[34] = {
++    "ret",
++    "br",
++    "br_if",
++    "alloca",
++    "load",
++    "store",
++    "add",
++    "sub",
++    "mul",
++    "div",
++    "mod",
++    "neg",
++    "and",
++    "or",
++    "xor",
++    "not",
++    "shl",
++    "shr",
++    "eq",
++    "ne",
++    "lt",
++    "le",
++    "gt",
++    "ge",
++    "cast",
++    "copy",
++    "const",
++    "const_str",
++    "call",
++    "arg",
++    "phi",
++    "addr",
++    "label",
++    "nop"
+ };
+ 
+ /* ── Type table ──────────────────────────────────────────────────────── */
+ 
+-static const char *TY_NAMES[IR_TY_COUNT] = {
++static const char *TY_NAMES[12] = {
+     "void",
+     "i8", "i16", "i32", "i64",
+     "u8", "u16", "u32", "u64",
+@@ -72,7 +72,7 @@ static const char *TY_NAMES[IR_TY_COUNT] = {
+     "f32", "f64"
+ };
+ 
+-static const int TY_BYTES[IR_TY_COUNT] = {
++static const int TY_BYTES[12] = {
+     0,              /* void  */
+     1, 2, 4, 8,    /* i8..i64 */
+     1, 2, 4, 8,    /* u8..u64 */
+@@ -83,17 +83,17 @@ static const int TY_BYTES[IR_TY_COUNT] = {
+ /* ── Query helpers ────────────────────────────────────────────────────── */
+ 
+ const char *ir_op_name(ir_op_t op) {
+-    if (op < 0 || op >= IR_OP_COUNT) return "???";
++    if (op < 0 || op >= 34) return "???";
+     return OP_NAMES[op];
+ }
+ 
+ const char *ir_type_name(ir_type_t ty) {
+-    if (ty < 0 || ty >= IR_TY_COUNT) return "???";
++    if (ty < 0 || ty >= 12) return "???";
+     return TY_NAMES[ty];
+ }
+ 
+ int ir_type_bytes(ir_type_t ty) {
+-    if (ty < 0 || ty >= IR_TY_COUNT) return -1;
++    if (ty < 0 || ty >= 12) return -1;
+     return TY_BYTES[ty];
+ }
+ 

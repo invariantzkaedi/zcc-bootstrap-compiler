@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G11",
+    "name": "Codegen Mutation G11 [lea_optimization]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-4",
+    "lineage_hash": "be3dbb1e00be2c1a",
+    "island_id": 4
+  },
+  "mutations": [
+    {
+      "name": "lea_optimization",
+      "category": "IDIOM",
+      "description": "Fuse mov+add \u2192 leaq $24(%r15), %rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -3.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -15,
+    "inst_count_delta": 118052,
+    "score_delta": -11.10925199999474,
+    "composite_score": 1252927.868373
+  },
+  "timestamp": "2026-04-20T10:41:02.949197+00:00",
+  "generation": 11
+}

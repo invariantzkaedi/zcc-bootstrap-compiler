@@ -1,0 +1,3 @@
+#define MINIZ_USE_UNALIGNED_LOADS_AND_STORES 0
+#define MINIZ_HAS_64BIT_REGISTERS 0
+#include "miniz_test.c"

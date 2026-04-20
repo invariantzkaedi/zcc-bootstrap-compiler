@@ -1,0 +1,35 @@
+diff a/part3.c b/part3.c	(rejected hunks)
+@@ -1856,6 +1863,33 @@ Node *parse_stmt(Compiler *cc) {
+     int line;
+     line = cc->tk_line;
+ 
++    /* Skip __asm__(...) / asm(...) / __asm(...) statements */
++    if (cc->tk == TK_IDENT) {
++        if (strcmp(cc->tk_text, "__asm__") == 0 ||
++            strcmp(cc->tk_text, "asm") == 0 ||
++            strcmp(cc->tk_text, "__asm") == 0) {
++            next_token(cc); /* consume asm keyword */
++            /* skip optional volatile qualifier */
++            if (cc->tk == TK_IDENT && (strcmp(cc->tk_text, "__volatile__") == 0 ||
++                strcmp(cc->tk_text, "volatile") == 0)) {
++                next_token(cc);
++            }
++            if (cc->tk == TK_VOLATILE) next_token(cc);
++            if (cc->tk == TK_LPAREN) {
++                int depth = 1;
++                next_token(cc);
++                while (depth > 0 && cc->tk != TK_EOF) {
++                    if (cc->tk == TK_LPAREN) depth++;
++                    else if (cc->tk == TK_RPAREN) depth--;
++                    if (depth > 0) next_token(cc);
++                }
++                if (cc->tk == TK_RPAREN) next_token(cc);
++            }
++            if (cc->tk == TK_SEMI) next_token(cc);
++            return node_new(cc, ND_NOP, line);
++        }
++    }
++
+     /* block */
+     if (cc->tk == TK_LBRACE) {
+         Node *block;

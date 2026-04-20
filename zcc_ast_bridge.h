@@ -8,8 +8,6 @@
 #ifndef ZCC_AST_BRIDGE_H
 #define ZCC_AST_BRIDGE_H
 
-#include <stdint.h>
-
 #define ZCC_BRIDGE_NAME_LEN  64
 #define ZCC_AST_MAX_STMTS    4096
 #define ZCC_CALL_NAME_LEN    128
@@ -133,7 +131,7 @@ enum {
 typedef struct ZCCNode ZCCNode;
 struct ZCCNode {
     int       kind;
-    int64_t   int_val;
+    long long int_val;
     char      name[ZCC_BRIDGE_NAME_LEN];
     ZCCNode  *lhs;
     ZCCNode  *rhs;
@@ -150,7 +148,7 @@ struct ZCCNode {
     int       bit_size;
     /* ZND_SWITCH */
     int       num_cases;
-    int64_t  *case_vals;      /* length num_cases */
+    long long *case_vals;      /* length num_cases */
     ZCCNode **case_bodies;    /* length num_cases */
     ZCCNode  *default_body;   /* NULL if no default */
     ZCCNode **stmts;

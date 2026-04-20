@@ -1,255 +1,208 @@
 #include <stdio.h>
-#include <math.h>
+/* #include <math.h> */
+#include "models.h"
 
 double sqrt(double x);
-double pow(double x, double y);
 double floor(double x);
+double cos(double x);
+double sin(double x);
+char *getenv(const char *name);
+int atoi(const char *nptr);
 
-typedef struct { double x, y, z; } Vec3;
+#define PI 3.14159265358979
 
-/* Properties: 0=matte, 1=mirror */
-typedef struct { Vec3 c; double r; Vec3 color; double reflectivity; double shininess; } Sphere;
-
-void make_vec3(double x, double y, double z, Vec3 *out) {
-    out->x = x; out->y = y; out->z = z;
+/* ------------------------------------------------------------------ vec3 */
+#define make_vec3(xx, yy, zz, out) do { (out)->x = (xx); (out)->y = (yy); (out)->z = (zz); } while(0)
+void v_add(Vec3 *a, Vec3 *b, Vec3 *out){ make_vec3(a->x+b->x, a->y+b->y, a->z+b->z, out); }
+void v_sub(Vec3 *a, Vec3 *b, Vec3 *out){ make_vec3(a->x-b->x, a->y-b->y, a->z-b->z, out); }
+void v_mul(Vec3 *a, double d, Vec3 *out){ make_vec3(a->x*d, a->y*d, a->z*d, out); }
+double v_dot(Vec3 *a, Vec3 *b){ return a->x*b->x + a->y*b->y + a->z*b->z; }
+double v_len(Vec3 *v){ double d=v_dot(v,v); return d<=0.0?0.0:sqrt(d); }
+void v_norm(Vec3 *v, Vec3 *out){
+    double l=v_len(v);
+    if(l>0.0) make_vec3(v->x/l, v->y/l, v->z/l, out);
+    else make_vec3(0,0,1,out);
+}
+void v_cross(Vec3 *a, Vec3 *b, Vec3 *out){
+    make_vec3(a->y*b->z - a->z*b->y,
+              a->z*b->x - a->x*b->z,
+              a->x*b->y - a->y*b->x, out);
+}
+void v_reflect(Vec3 *I, Vec3 *N, Vec3 *out){
+    double d=v_dot(N,I);
+    Vec3 t; v_mul(N, 2.0*d, &t); v_sub(I, &t, out);
 }
 
-void v_add(Vec3 *a, Vec3 *b, Vec3 *out) { make_vec3(a->x+b->x, a->y+b->y, a->z+b->z, out); }
-void v_sub(Vec3 *a, Vec3 *b, Vec3 *out) { make_vec3(a->x-b->x, a->y-b->y, a->z-b->z, out); }
-void v_mul(Vec3 *a, double d, Vec3 *out) { make_vec3(a->x*d, a->y*d, a->z*d, out); }
-void v_mul_v(Vec3 *a, Vec3 *b, Vec3 *out) { make_vec3(a->x*b->x, a->y*b->y, a->z*b->z, out); }
-double v_dot(Vec3 *a, Vec3 *b) { return a->x*b->x + a->y*b->y + a->z*b->z; }
-double v_length(Vec3 *v) { 
-    double d = v_dot(v, v);
-    if (d <= 0.0) return 0.0;
-    return sqrt(d); 
-}
-void v_normalize(Vec3 *v, Vec3 *out) { 
-    double l = v_length(v); 
-    if (l > 0.0) make_vec3(v->x/l, v->y/l, v->z/l, out); 
-    else make_vec3(0,0,0, out);
-}
-void v_reflect(Vec3 *I, Vec3 *N, Vec3 *out) {
-    /* R = I - 2.0 * dot(N, I) * N */
-    double d = v_dot(N, I);
-    Vec3 t;
-    v_mul(N, 2.0 * d, &t);
-    v_sub(I, &t, out);
+/* ------------------------------------------------------ AABB intersection */
+int hit_aabb(Vec3 *mn, Vec3 *mx, Vec3 *ro, Vec3 *rdinv){
+    double tx0=(mn->x-ro->x)*rdinv->x, tx1=(mx->x-ro->x)*rdinv->x;
+    double ty0=(mn->y-ro->y)*rdinv->y, ty1=(mx->y-ro->y)*rdinv->y;
+    double tz0=(mn->z-ro->z)*rdinv->z, tz1=(mx->z-ro->z)*rdinv->z;
+    double tmin, tmax, a, b;
+    tmin = tx0<tx1?tx0:tx1; tmax = tx0<tx1?tx1:tx0;
+    a=ty0<ty1?ty0:ty1; b=ty0<ty1?ty1:ty0;
+    if(a>tmin)tmin=a; if(b<tmax)tmax=b;
+    a=tz0<tz1?tz0:tz1; b=tz0<tz1?tz1:tz0;
+    if(a>tmin)tmin=a; if(b<tmax)tmax=b;
+    return tmax>0.001 && tmin<tmax;
 }
 
-void make_sphere(Vec3 *c, double r, Vec3 *color, double refl, double shininess, Sphere *out) {
-    out->c = *c; out->r = r; out->color = *color; 
-    out->reflectivity = refl; out->shininess = shininess;
+/* ---------------------------------------------- Moller-Trumbore triangle */
+double hit_tri(Triangle *tri, Vec3 *ro, Vec3 *rd){
+    Vec3 e1,e2,h,s,q;
+    double a,f,u,vv;
+    v_sub(&tri->v1,&tri->v0,&e1);
+    v_sub(&tri->v2,&tri->v0,&e2);
+    v_cross(rd,&e2,&h);
+    a=v_dot(&e1,&h);
+    if(a>-1e-8&&a<1e-8) return -1.0;
+    f=1.0/a;
+    v_sub(ro,&tri->v0,&s);
+    u=f*v_dot(&s,&h);
+    if(u<0.0||u>1.0) return -1.0;
+    v_cross(&s,&e1,&q);
+    vv=f*v_dot(rd,&q);
+    if(vv<0.0||u+vv>1.0) return -1.0;
+    return f*v_dot(&e2,&q);
 }
 
-double intersect_sphere(Sphere *s, Vec3 *ray_origin, Vec3 *ray_dir) {
-    Vec3 oc;
-    v_sub(ray_origin, &s->c, &oc);
-    double b = 2.0 * v_dot(&oc, ray_dir);
-    double c = v_dot(&oc, &oc) - s->r * s->r;
-    double d = b*b - 4.0*c;
-    if (d < 0.0) return -1.0;
-    d = sqrt(d);
-    double t1 = (-b - d) / 2.0;
-    double t2 = (-b + d) / 2.0;
-    if (t1 > 0.001) return t1;
-    if (t2 > 0.001) return t2;
-    return -1.0;
+/* ---------------------------------------------- Determininistic Math */
+double zcc_pow_fixed(double base, int exp) {
+    double res = 1.0;
+    while (exp > 0) {
+        if (exp & 1) res *= base;
+        base *= base;
+        exp >>= 1;
+    }
+    return res;
 }
 
-Sphere spheres[5];
+/* ----------------------------------------------------------------- trace */
+void trace(Vec3 *ro, Vec3 *rd, int depth, Vec3 *out){
+    int mi, i, best_mi, best_ti, shadow;
+    double best_t, dk, df, sa, si, refl, shin;
+    Vec3 rdinv, td, hit, e1,e2,n, nudge, color, rl, ld, rf, fd, amb, diff_k, diff_f, spec, direct, tmp, neg_rd, vd, half, lv, rd_r, rc, t1, t2;
+    Triangle *tri;
+    Mesh *m;
 
-void trace(Vec3 *ray_origin, Vec3 *ray_dir, int depth, Vec3 *out) {
-    int i;
-    double t = 1000000.0;
-    int obj_idx = -1;
+    best_t  = 1e18;
+    best_mi = -1;
+    best_ti = -1;
 
-    for (i = 0; i < 5; i++) {
-        double it = intersect_sphere(&spheres[i], ray_origin, ray_dir);
-        if (it > 0.001 && it < t) {
-            t = it;
-            obj_idx = i;
+    make_vec3(rd->x!=0?1.0/rd->x:1e18,
+              rd->y!=0?1.0/rd->y:1e18,
+              rd->z!=0?1.0/rd->z:1e18, &rdinv);
+
+    for(mi=0; mi<SCENE_MESH_COUNT; mi++){
+        m = &scene_meshes[mi];
+        if(!hit_aabb(&m->aabb_min, &m->aabb_max, ro, &rdinv)) continue;
+        for(i=0; i<m->count; i++){
+            double t = hit_tri(&m->tris[i], ro, rd);
+            if(t>0.001 && t<best_t){ best_t=t; best_mi=mi; best_ti=i; }
         }
     }
-    
-    /* floor intersection at y = -1.0 */
-    double floor_t = -1.0;
-    if (ray_dir->y < 0.0) {
-        floor_t = (-1.0 - ray_origin->y) / ray_dir->y;
-    }
-    if (floor_t > 0.001 && floor_t < t) {
-        t = floor_t;
-        obj_idx = 100;
-    }
 
-    if (obj_idx == -1) {
-        /* sky gradient */
-        double a = 0.5 * (ray_dir->y + 1.0);
-        Vec3 w1, w2, t1, t2;
-        make_vec3(1.0, 1.0, 1.0, &w1);
-        make_vec3(0.5, 0.7, 1.0, &w2);
-        v_mul(&w1, 1.0 - a, &t1);
-        v_mul(&w2, a, &t2);
-        v_add(&t1, &t2, out);
+    if(best_mi==-1){
+        double a = 0.5*(rd->y+1.0);
+        Vec3 lo,hi,t1,t2;
+        make_vec3(0.01,0.01,0.03,&lo); /* Deeper space */
+        make_vec3(0.04,0.03,0.12,&hi);
+        v_mul(&lo,1.0-a,&t1); v_mul(&hi,a,&t2); v_add(&t1,&t2,out);
         return;
     }
 
-    Vec3 ray_dir_t, hit_p;
-    v_mul(ray_dir, t, &ray_dir_t);
-    v_add(ray_origin, &ray_dir_t, &hit_p);
-    Vec3 normal;
-    Vec3 color;
-    double reflectivity = 0.0;
-    double shininess = 0.0;
+    tri = &scene_meshes[best_mi].tris[best_ti];
+    v_mul(rd, best_t, &td); v_add(ro, &td, &hit);
 
-    if (obj_idx == 100) {
-        make_vec3(0.0, 1.0, 0.0, &normal);
-        /* checkerboard */
-        int cx = (int)(floor(hit_p.x * 2.0));
-        int cz = (int)(floor(hit_p.z * 2.0));
-        int m = (cx + cz) % 2;
-        if (m < 0) m = -m;
-        if (m == 0) make_vec3(0.9, 0.9, 0.9, &color);
-        else make_vec3(0.2, 0.2, 0.2, &color);
-        reflectivity = 0.3; /* floor is slightly reflective */
-        shininess = 0.0;
-    } else {
-        Vec3 sub_c;
-        v_sub(&hit_p, &spheres[obj_idx].c, &sub_c);
-        v_normalize(&sub_c, &normal);
-        color = spheres[obj_idx].color;
-        reflectivity = spheres[obj_idx].reflectivity;
-        shininess = spheres[obj_idx].shininess;
-    }
+    v_sub(&tri->v1,&tri->v0,&e1);
+    v_sub(&tri->v2,&tri->v0,&e2);
+    v_cross(&e1,&e2,&n); v_norm(&n,&n);
+    if(v_dot(&n,rd)>0.0) v_mul(&n,-1.0,&n);
+    v_mul(&n,0.001,&nudge); v_add(&hit,&nudge,&hit);
 
-    /* Prevent shadow/reflection acne by bumping the hit point outward */
-    Vec3 nudge;
-    v_mul(&normal, 0.001, &nudge);
-    v_add(&hit_p, &nudge, &hit_p);
+    color = tri->color;
+    refl = tri->reflectivity;
+    shin = tri->shininess;
 
-    Vec3 raw_light, light_dir;
-    make_vec3(1.0, 2.0, -1.5, &raw_light);
-    v_normalize(&raw_light, &light_dir);
-    
-    /* shadow casting */
-    int in_shadow = 0;
-    for (i = 0; i < 5; i++) {
-        if (intersect_sphere(&spheres[i], &hit_p, &light_dir) > 0.001) {
-            in_shadow = 1;
-            break;
+    make_vec3(4.0,6.0,8.0,&rl); v_norm(&rl,&ld);
+    shadow=0;
+    for(mi=0; mi<SCENE_MESH_COUNT && !shadow; mi++){
+        m = &scene_meshes[mi];
+        Vec3 ldinv;
+        make_vec3(ld.x!=0?1.0/ld.x:1e18, ld.y!=0?1.0/ld.y:1e18, ld.z!=0?1.0/ld.z:1e18, &ldinv);
+        if(!hit_aabb(&m->aabb_min,&m->aabb_max,&hit,&ldinv)) continue;
+        for(i=0; i<m->count && !shadow; i++){
+            if(hit_tri(&m->tris[i],&hit,&ld)>0.001) shadow=1;
         }
     }
 
-    /* Ambient */
-    Vec3 ambient;
-    v_mul(&color, 0.15, &ambient);
+    make_vec3(-3.0,2.0,-1.0,&rf); v_norm(&rf,&fd);
+    v_mul(&color,0.30,&amb);
+    dk = v_dot(&n,&ld); if(dk<0.0)dk=0.0; if(shadow)dk=0.0;
+    v_mul(&color,dk*0.80,&diff_k);
+    df = v_dot(&n,&fd); if(df<0.0)df=0.0;
+    v_mul(&color,df*0.45,&diff_f);
 
-    /* Diffuse */
-    double diff = v_dot(&normal, &light_dir);
-    if (diff < 0.0) diff = 0.0;
-    if (in_shadow) diff = 0.0;
-    Vec3 diffuse;
-    v_mul(&color, diff * 0.8, &diffuse);
-
-    /* Specular (Blinn-Phong) */
-    Vec3 specular;
-    make_vec3(0.0, 0.0, 0.0, &specular);
-    if (!in_shadow && shininess > 0.0 && diff > 0.0) {
-        Vec3 view_dir, half_vec, neg_ray;
-        v_mul(ray_dir, -1.0, &neg_ray);
-        v_normalize(&neg_ray, &view_dir);
-        
-        Vec3 light_plus_view;
-        v_add(&light_dir, &view_dir, &light_plus_view);
-        v_normalize(&light_plus_view, &half_vec);
-        
-        double spec_angle = v_dot(&normal, &half_vec);
-        if (spec_angle > 0.0) {
-            double spec_intensity = pow(spec_angle, shininess);
-            make_vec3(1.0, 1.0, 1.0, &specular);
-            v_mul(&specular, spec_intensity * 0.5, &specular);
-        }
+    make_vec3(0,0,0,&spec);
+    if(!shadow && shin>0.0 && dk>0.0){
+        v_mul(rd,-1.0,&neg_rd); v_norm(&neg_rd,&vd);
+        v_add(&ld,&vd,&lv); v_norm(&lv,&half);
+        sa=v_dot(&n,&half);
+        if(sa>0.0){ si=zcc_pow_fixed(sa,(int)shin); v_mul(&color,si*0.5,&spec); }
     }
 
-    /* Combine lighting */
-    Vec3 direct_light;
-    v_add(&ambient, &diffuse, &direct_light);
-    v_add(&direct_light, &specular, &direct_light);
-
-    /* Reflection */
-    if (reflectivity > 0.0 && depth < 3) {
-        Vec3 refl_dir, refl_color;
-        v_reflect(ray_dir, &normal, &refl_dir);
-        v_normalize(&refl_dir, &refl_dir);
-        trace(&hit_p, &refl_dir, depth + 1, &refl_color);
-        
-        Vec3 term1, term2;
-        v_mul(&direct_light, 1.0 - reflectivity, &term1);
-        v_mul(&refl_color, reflectivity, &term2);
-        v_add(&term1, &term2, out);
+    v_add(&amb,&diff_k,&tmp); v_add(&tmp,&diff_f,&direct); v_add(&direct,&spec,&direct);
+    if(refl>0.0 && depth<2){
+        v_reflect(rd,&n,&rd_r); v_norm(&rd_r,&rd_r);
+        trace(&hit,&rd_r,depth+1,&rc);
+        v_mul(&direct,1.0-refl,&t1); v_mul(&rc,refl,&t2); v_add(&t1,&t2,out);
     } else {
-        *out = direct_light;
+        *out = direct;
     }
 }
 
-int main() {
-    int width = 1920;
-    int height = 1080;
-    int i, j;
+/* ------------------------------------------------------------------ main */
+int main(){
+    int width=64, height=36, i, j;
+    int frame=0, total_frames=30;
+    char *f_env = getenv("FRAME");
+    if(f_env) frame = atoi(f_env);
 
-    Vec3 c1, c2;
-    /* Red Matte */
-    make_vec3(-2.0, 0.0, -3.0, &c1);
-    make_vec3(0.9, 0.2, 0.2, &c2);
-    make_sphere(&c1, 1.0, &c2, 0.1, 50.0, &spheres[0]);
+    printf("P3\n%d %d\n255\n",width,height);
 
-    /* Green Glass */
-    make_vec3(2.0, 0.0, -4.0, &c1);
-    make_vec3(0.2, 0.9, 0.2, &c2);
-    make_sphere(&c1, 1.0, &c2, 0.4, 100.0, &spheres[1]);
+    double angle = (double)frame * 2.0 * PI / (double)total_frames;
+    double cam_dist = 8.0;
+    Vec3 ro, target, forward, up_tmp, up, right, cam_y;
+    make_vec3(cam_dist * sin(angle), 1.5, cam_dist * cos(angle), &ro);
+    make_vec3(0, 0, -2.0, &target); /* Look at the center of the fleet */
+    
+    v_sub(&target, &ro, &forward); v_norm(&forward, &forward);
+    make_vec3(0, 1.0, 0, &up_tmp);
+    v_cross(&forward, &up_tmp, &right); v_norm(&right, &right);
+    v_cross(&right, &forward, &up); v_norm(&up, &up);
 
-    /* Chrome Mirror */
-    make_vec3(0.0, 0.0, -5.0, &c1);
-    make_vec3(0.9, 0.9, 0.9, &c2);
-    make_sphere(&c1, 1.0, &c2, 0.8, 200.0, &spheres[2]);
-
-    /* Blue Matte */
-    make_vec3(-1.5, -0.6, -1.5, &c1);
-    make_vec3(0.2, 0.2, 0.9, &c2);
-    make_sphere(&c1, 0.4, &c2, 0.1, 30.0, &spheres[3]);
-
-    /* Gold */
-    make_vec3(1.5, -0.5, -2.0, &c1);
-    make_vec3(0.9, 0.7, 0.1, &c2);
-    make_sphere(&c1, 0.5, &c2, 0.5, 150.0, &spheres[4]);
-
-    printf("P3\n%d %d\n255\n", width, height);
-
-    for (j = height - 1; j >= 0; j--) {
-        for (i = 0; i < width; i++) {
-            double u = (double)i / (double)(width - 1);
-            double v = (double)j / (double)(height - 1);
+    for(j=height-1; j>=0; j--){
+        for(i=0; i<width; i++){
+            double u=(double)i/(double)(width-1);
+            double v=(double)j/(double)(height-1);
+            double dx=(u*2.0-1.0)*0.6*(double)width/(double)height;
+            double dy=(v*2.0-1.0)*0.6;
             
-            Vec3 raw_dir, dir;
-            make_vec3(u * 2.0 - 1.0, v * 2.0 - 1.0, -1.0, &raw_dir);
-            raw_dir.x *= (double)width / (double)height;
-            v_normalize(&raw_dir, &dir);
-            
-            Vec3 ro, col;
-            make_vec3(0.0, 0.5, 1.0, &ro); /* Eye slightly elevated */
-            trace(&ro, &dir, 0, &col);
-            
-            int ir = (int)(255.99 * col.x);
-            int ig = (int)(255.99 * col.y);
-            int ib = (int)(255.99 * col.z);
-            if (ir > 255) ir = 255;
-            if (ig > 255) ig = 255;
-            if (ib > 255) ib = 255;
-            if (ir < 0) ir = 0;
-            if (ig < 0) ig = 0;
-            if (ib < 0) ib = 0;
-            
-            printf("%d %d %d\n", ir, ig, ib);
+            Vec3 rd, right_comp, up_comp, forward_comp, rdn;
+            v_mul(&right, dx, &right_comp);
+            v_mul(&up, dy, &up_comp);
+            v_mul(&forward, 1.0, &forward_comp);
+            v_add(&right_comp, &up_comp, &rd);
+            v_add(&rd, &forward_comp, &rd);
+            v_norm(&rd, &rdn);
+
+            Vec3 col;
+            trace(&ro,&rdn,0,&col);
+
+            int ir=(int)(255.99*col.x), ig=(int)(255.99*col.y), ib=(int)(255.99*col.z);
+            if(ir>255)ir=255; if(ig>255)ig=255; if(ib>255)ib=255;
+            if(ir<0)ir=0; if(ig<0)ig=0; if(ib<0)ib=0;
+            printf("%d %d %d\n",ir,ig,ib);
         }
     }
     return 0;

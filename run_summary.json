@@ -1,0 +1,20 @@
+{
+  "spent_credits": 0,
+  "budget": 600,
+  "lod_tasks_completed": 0,
+  "imported_assets": 0,
+  "failures": [
+    {
+      "asset": "Ancient_Marble_Temple_UFO",
+      "phase": "upload",
+      "error": "TripoError: code=2004 status=400: This image file type is not supported"
+    }
+  ],
+  "novel_errors": [
+    {
+      "code": 2004,
+      "message": "This image file type is not supported",
+      "endpoint": "/upload/sts"
+    }
+  ]
+}

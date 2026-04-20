@@ -38,7 +38,7 @@ void *cc_alloc(Compiler *cc, int size) {
       return p;
     }
     if (!a->next) {
-      if (block_count >= 512) {
+      if (block_count >= 32768) {
         printf("zcc: too many arena blocks (%d) — possible infinite loop or "
                "corrupt AST (last alloc size=%d)\n",
                block_count, size);
@@ -48,7 +48,7 @@ void *cc_alloc(Compiler *cc, int size) {
         }
         exit(1);
       }
-      if (block_count >= 500 && cc) {
+      if (block_count >= 32000 && cc) {
         printf("zcc: near block limit block_count=%d token=%d line=%d size=%d "
                "text=%.127s\n",
                block_count, cc->tk, cc->tk_line, size, cc->tk_text);

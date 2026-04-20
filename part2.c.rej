@@ -1,0 +1,20 @@
+diff a/part2.c b/part2.c	(rejected hunks)
+@@ -381,10 +381,17 @@ static Keyword keywords[] = {
+     {"restrict",  TK_VOLATILE},
+     {"__int128",   TK_LONG},
+     {"__int128_t", TK_LONG},
++    {"_Bool",      TK_INT},
++    {"_Atomic",    TK_VOLATILE},
++    {"_Noreturn",  TK_INLINE},
++    {"_Thread_local", TK_STATIC},
++    {"_Alignof",   TK_SIZEOF},
++    {"__alignof__", TK_SIZEOF},
++    {"__alignof",  TK_SIZEOF},
+     {0, 0}
+ };
+ 
+-static int kw_count = 47;
++static int kw_count = 56;
+ 
+ static int lookup_keyword(char *name) {
+     int i;

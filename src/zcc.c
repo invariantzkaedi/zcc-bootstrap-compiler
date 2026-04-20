@@ -34,7 +34,7 @@ enum {
   MAX_PARAMS = 128,
   MAX_CALL_ARGS = 256,
   MAX_CASES = 4096,
-  MAX_INIT = 8192,
+  MAX_INIT = 131072,
   ARENA_SIZE = 16777216
 };
 
@@ -1058,7 +1058,36 @@ static void pp_process_include(PPState *state, const char *path, int is_system) 
             state->macros[i].active = sub_state->macros[i].active;
         }
         
-        pp_emit_str(state, sub_state->out, sub_state->out_len);
+        {
+            /* PP-LINEMARKER: emit standard # N "file" markers at include boundaries.
+             * The "entering" marker tells the lexer to reset its line counter to 1
+             * and switch filename to the header. The "returning" marker restores the
+             * parent filename at the line AFTER the #include directive.
+             *
+             * state->line is still on the #include line here (the caller increments
+             * past the trailing '\n' after pp_process_include returns), so
+             * state->line + 1 is the correct post-include resume line.
+             *
+             * Filename buffer lifetime: single static per process is safe for
+             * single-level includes. Known limitation: nested includes overwrite
+             * this buffer. Fix B (arena_strdup in the lexer) deferred — see
+             * commit message PP-LINEMARKER-001.
+             */
+            char linemarker[512];
+            const char *hdr_name = (file_src == zcc_stddef_text)
+                                 ? "<built-in>" : path;
+            const char *par_name = state->filename ? state->filename : "<unknown>";
+            /* entering header: reset to line 1 */
+            snprintf(linemarker, sizeof(linemarker),
+                     "# 1 \"%s\"\n", hdr_name);
+            pp_emit_str(state, linemarker, (int)strlen(linemarker));
+            /* header body */
+            pp_emit_str(state, sub_state->out, sub_state->out_len);
+            /* returning to parent: resume at line after #include */
+            snprintf(linemarker, sizeof(linemarker),
+                     "# %d \"%s\"\n", state->line + 1, par_name);
+            pp_emit_str(state, linemarker, (int)strlen(linemarker));
+        }
         
         if (sub_state->out) free(sub_state->out);
         free(sub_state);
@@ -1662,7 +1691,7 @@ void *cc_alloc(Compiler *cc, int size) {
       return p;
     }
     if (!a->next) {
-      if (block_count >= 512) {
+      if (block_count >= 32768) {
         printf("zcc: too many arena blocks (%d) — possible infinite loop or "
                "corrupt AST (last alloc size=%d)\n",
                block_count, size);
@@ -1672,7 +1701,7 @@ void *cc_alloc(Compiler *cc, int size) {
         }
         exit(1);
       }
-      if (block_count >= 500 && cc) {
+      if (block_count >= 32000 && cc) {
         printf("zcc: near block limit block_count=%d token=%d line=%d size=%d "
                "text=%.127s\n",
                block_count, cc->tk, cc->tk_line, size, cc->tk_text);
@@ -2492,26 +2521,65 @@ again:
     }
   }
 
-  /* preprocessor lines: skip entirely */
+  /* preprocessor line marker or generic directive — handle both.
+   *
+   * Standard linemarker format emitted by pp_process_include:
+   *   # <decimal-line-number> "<filename>"
+   *
+   * When matched: update cc->line and cc->filename so that subsequent
+   * tokens report source-level coordinates. lm_line - 1 compensates
+   * for the '\n' at EOL that read_char/next_token will increment to
+   * lm_line when the first token on the resumed line is scanned.
+   *
+   * Filename buffer: static, single-process lifetime. Known limitation:
+   * nested includes (header including header) overwrite this buffer and
+   * all previous cc->filename pointers become stale. See PP-LINEMARKER-001.
+   * Fix B (arena_strdup) is the production solution; deferred.
+   */
   if (c == '#') {
-    while (cc->pos < cc->source_len) {
-      if (cc->source[cc->pos] == '\n')
-        break;
-      /* handle line continuation */
-      if (cc->source[cc->pos] == '\\') {
-        if (cc->pos + 1 < cc->source_len) {
-          if (cc->source[cc->pos + 1] == '\n') {
-            cc->pos += 2;
-            cc->line++;
-            cc->col = 1;
-            continue;
-          }
-        }
+    int lm_line = 0;
+    int lm_pos  = cc->pos + 1; /* position after '#' */
+    /* skip spaces between '#' and the digit */
+    while (lm_pos < cc->source_len && cc->source[lm_pos] == ' ')
+      lm_pos++;
+    /* linemarker if next char is a digit */
+    if (lm_pos < cc->source_len
+        && cc->source[lm_pos] >= '0' && cc->source[lm_pos] <= '9') {
+      /* parse the line number */
+      while (lm_pos < cc->source_len
+             && cc->source[lm_pos] >= '0' && cc->source[lm_pos] <= '9') {
+        lm_line = lm_line * 10 + (cc->source[lm_pos] - '0');
+        lm_pos++;
       }
-      cc->pos++;
+      /* skip space between number and opening quote */
+      while (lm_pos < cc->source_len && cc->source[lm_pos] == ' ')
+        lm_pos++;
+      /* opening quote — parse filename */
+      if (lm_pos < cc->source_len && cc->source[lm_pos] == '"') {
+        static char lm_filename[512];
+        int fn_len = 0;
+        lm_pos++; /* skip '"' */
+        while (lm_pos < cc->source_len
+               && cc->source[lm_pos] != '"'
+               && cc->source[lm_pos] != '\n'
+               && fn_len < 511) {
+          lm_filename[fn_len++] = cc->source[lm_pos++];
+        }
+        lm_filename[fn_len] = 0;
+        /* apply: lm_line - 1 because the '\n' at EOL of this marker line
+         * will be incremented by the whitespace-skip loop at top of next
+         * next_token call, bringing cc->line to lm_line for the first real
+         * token on the resumed line. */
+        cc->line     = lm_line - 1;
+        cc->filename = lm_filename;
+      }
     }
+    /* consume rest of line (flags after filename, or unrecognized directives) */
+    while (cc->pos < cc->source_len && cc->source[cc->pos] != '\n')
+      cc->pos++;
     goto again;
   }
+
 
   /* number literals */
   if (is_digit(c)) {
@@ -7152,6 +7220,24 @@ static void codegen_addr_checked(Compiler *cc, Node *n) {
   codegen_addr(cc, n);
 }
 
+static void emit_array_bounds_marker(Compiler *cc, Node *node) {
+    if (node && node->kind == ND_DEREF && node->lhs && node->lhs->kind == ND_ADD) {
+        Node *base = node->lhs->lhs;
+        Node *idx  = node->lhs->rhs;
+        if (base && base->kind == ND_VAR && base->type && base->type->kind == TY_ARRAY && base->name[0]) {
+            const char *idx_name = "?";
+            if (idx && idx->kind == ND_VAR && idx->name[0]) {
+                idx_name = idx->name;
+            }
+            if (idx_name[0] != '?') {
+                fprintf(cc->out, "    # ZCC_META_ARRAY %%rax array=%s index=%s size=%d @%s:%d\n",
+                        base->name, idx_name, base->type->array_len,
+                        cc->filename ? cc->filename : "unknown", node->line);
+            }
+        }
+    }
+}
+
 /* ---------------------------------------------------------------- */
 /* Address of lvalue into %rax                                       */
 /* ---------------------------------------------------------------- */
@@ -7250,6 +7336,7 @@ void codegen_addr(Compiler *cc, Node *node) {
       return;
     }
     codegen_expr_checked(cc, node->lhs);
+    emit_array_bounds_marker(cc, node);
     return; /* Note: ptr is ALREADY eval'd by codegen_expr! ir_last_result holds
                it! */
   }
@@ -8660,6 +8747,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       return;
     }
     codegen_expr_checked(cc, node->lhs);
+    emit_array_bounds_marker(cc, node);
     {
       char deref_addr[32];
       ir_save_result(deref_addr);
@@ -10713,6 +10801,7 @@ extern int  g_peephole_verbose;
 /* Security pass globals */
 static int  g_security_signext = 0;
 static int  g_security_476 = 0;
+static int  g_security_787 = 0;
 
 static void init_compiler(Compiler *cc) {
   /* zero everyt5555hing — cc was calloc'd */
@@ -11374,6 +11463,14 @@ static void security_nullderef_scan(Compiler *cc, char *filename) {
           findings++;
           char *reported_var = current_owner[0] ? current_owner : clean_call;
           if (g_emit_anomalies) {
+              /* Option 1: JSON consumers (like the mutation applier) require a valid
+               * lvalue owner to synthesize a guard. If missing (e.g. member assignment),
+               * suppress the anomaly entirely to prevent unactionable reports.
+               * Human reviewers (--security-476) still see the function-name fallback.
+               */
+              if (!current_owner[0]) {
+                  break;
+              }
               Symbol *sym = scope_find(cc, current_func);
               const char *ret_type = "unknown";
               if (sym && sym->type && sym->type->kind == TY_FUNC) {
@@ -11408,6 +11505,126 @@ static void security_nullderef_scan(Compiler *cc, char *filename) {
     printf("[--security-476] %d potential null-deref(s) found\n", findings);
   } else {
     printf("[--security-476] Clean: all nullable returns checked\n");
+  }
+}
+
+static void security_bounds_scan(Compiler *cc, char *filename) {
+  FILE *fp;
+  int nlines = 0;
+  int findings = 0;
+  int i;
+  char current_func[128];
+  char *line_buf;
+  char **lp;
+  int max_lines = 32768;
+
+  fp = fopen(filename, "r");
+  if (!fp) return;
+
+  line_buf = (char *)malloc(max_lines * 128);
+  lp = (char **)malloc(max_lines * sizeof(char *));
+  if (!line_buf || !lp) { fclose(fp); return; }
+
+  current_func[0] = 0;
+  while (nlines < max_lines && fgets(line_buf + nlines * 128, 128, fp)) {
+    lp[nlines] = line_buf + nlines * 128;
+    nlines++;
+  }
+  fclose(fp);
+
+  for (i = 0; i < nlines; i++) {
+    /* Track current function */
+    if (lp[i][0] != ' ' && lp[i][0] != '\t' && lp[i][0] != '.' &&
+        lp[i][0] != '#' && lp[i][0] != '\n') {
+      int k = 0;
+      while (lp[i][k] && lp[i][k] != ':' && k < 127) {
+        current_func[k] = lp[i][k];
+        k++;
+      }
+      current_func[k] = 0;
+    }
+
+    if (strstr(lp[i], "# ZCC_META_ARRAY")) {
+      char array_name[64] = "unknown";
+      char index_name[64] = "?";
+      char size_str[32] = "0";
+      char file_name[128] = "unknown";
+      int line_num = 0;
+
+      char *ptr = strstr(lp[i], "array=");
+      if (ptr) {
+          ptr += 6;
+          int k = 0;
+          while (ptr[k] && ptr[k] != ' ' && k < 63) array_name[k++] = ptr[k];
+          array_name[k] = 0;
+      }
+      
+      ptr = strstr(lp[i], "index=");
+      if (ptr) {
+          ptr += 6;
+          int k = 0;
+          while (ptr[k] && ptr[k] != ' ' && k < 63) index_name[k++] = ptr[k];
+          index_name[k] = 0;
+      }
+
+      ptr = strstr(lp[i], "size=");
+      if (ptr) {
+          ptr += 5;
+          int k = 0;
+          while (ptr[k] && ptr[k] != ' ' && k < 31) size_str[k++] = ptr[k];
+          size_str[k] = 0;
+      }
+      
+      ptr = strstr(lp[i], "@");
+      if (ptr) {
+          ptr += 1;
+          int k = 0;
+          while (ptr[k] && ptr[k] != ':' && k < 127) file_name[k++] = ptr[k];
+          file_name[k] = 0;
+          if (ptr[k] == ':') line_num = atoi(ptr + k + 1);
+      }
+
+      /* Do backwards walk looking for cmp bounds check */
+      int saw_size_cmp = 0;
+      int saw_cmp_instr = 0;
+      char size_pat[64];
+      sprintf(size_pat, "$%s", size_str);
+
+      int j;
+      for (j = i - 1; j >= 0 && j >= i - 30; j--) {
+          if (strstr(lp[j], "ret")) break;
+          if (strstr(lp[j], "call ")) break;
+          if (lp[j][0] != ' ' && lp[j][0] != '\t' && lp[j][0] != '.' && lp[j][0] != '#') break; /* Func def */
+
+          if (strstr(lp[j], size_pat)) saw_size_cmp = 1;
+          if (strstr(lp[j], "cmp")) saw_cmp_instr = 1;
+      }
+
+      if (!(saw_size_cmp && saw_cmp_instr)) {
+          findings++;
+          if (g_emit_anomalies) {
+               Symbol *sym = scope_find(cc, current_func);
+               const char *ret_type = "unknown";
+               if (sym && sym->type && sym->type->kind == TY_FUNC) {
+                   ret_type = type_to_str(sym->type->ret);
+               }
+               printf("{\"type\":\"ir_anomaly\", \"kind\":\"CWE-787\", \"site\":\"%s:%s:%d\", \"severity\":0.8, \"array\":\"%s\", \"index\":\"%s\", \"size\":%s, \"return_type\":\"%s\"}\n",
+                      file_name, current_func, line_num, array_name, index_name, size_str, ret_type);
+          } else {
+               printf("[--security-787] CWE-787 WARNING: unchecked array bounds for %s[%s] (size %s) in %s()\n",
+                      array_name, index_name, size_str, current_func);
+          }
+      }
+    }
+  }
+
+  free(line_buf);
+  free(lp);
+
+  if (findings) {
+    if (!g_emit_anomalies) printf("[--security-787] %d potential bounds-violation(s) found\n", findings);
+  } else {
+    if (!g_emit_anomalies) printf("[--security-787] Clean: all bounded arrays checked\n");
   }
 }
 
@@ -11487,9 +11704,12 @@ int main(int argc, char **argv) {
       g_security_signext = 1;
     } else if (strcmp(argv[i], "--security-476") == 0) {
       g_security_476 = 1;
+    } else if (strcmp(argv[i], "--security-787") == 0) {
+      g_security_787 = 1;
     } else if (strcmp(argv[i], "--emit-anomalies") == 0) {
       g_emit_anomalies = 1;
       g_security_476 = 1;
+      g_security_787 = 1;
     } else if (strncmp(argv[i], "-l", 2) == 0 || strncmp(argv[i], "-L", 2) == 0 || strncmp(argv[i], "-O", 2) == 0) {
       /* ignore linker flags */
     } else {
@@ -11638,6 +11858,11 @@ int main(int argc, char **argv) {
   /* security pass: null-deref detection */
   if (g_security_476) {
     security_nullderef_scan(cc, asm_file);
+  }
+
+  /* security pass: array bounds detection */
+  if (g_security_787) {
+    security_bounds_scan(cc, asm_file);
   }
 
   /* assemble and link if not stopping at assembly */

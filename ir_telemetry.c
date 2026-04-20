@@ -28,9 +28,14 @@
 /* ── Internal state ──────────────────────────────────────────────────── */
 
 static int s_enabled  = 0;
+static int s_stdout_enabled = 0;
 static int s_sock_fd  = -1;
 static struct sockaddr_in s_addr;
 static int s_compile_counter = 0;
+
+void ir_telemetry_enable_stdout(void) {
+    s_stdout_enabled = 1;
+}
 
 /* ── Send envelope to Gods Eye ───────────────────────────────────────── */
 /*
@@ -41,15 +46,22 @@ static void send_envelope(const char *body_escaped) {
     char pkt[2048];
     int len;
 
-    if (!s_enabled || s_sock_fd < 0) return;
+    if (!s_enabled && !s_stdout_enabled) return;
 
     len = snprintf(pkt, sizeof(pkt),
         "{\"_body\":\"%s\",\"_sig\":\"ir_telemetry\"}", body_escaped);
 
     if (len <= 0 || len >= (int)sizeof(pkt)) return;
 
-    sendto(s_sock_fd, pkt, len, MSG_DONTWAIT,
-           (struct sockaddr *)&s_addr, sizeof(s_addr));
+    if (s_stdout_enabled) {
+        printf("%s\n", pkt);
+        fflush(stdout);
+    }
+
+    if (s_enabled && s_sock_fd >= 0) {
+        sendto(s_sock_fd, pkt, len, MSG_DONTWAIT,
+               (struct sockaddr *)&s_addr, sizeof(s_addr));
+    }
 }
 
 /* ── Public API ──────────────────────────────────────────────────────── */

@@ -1,0 +1,5771 @@
+{
+  "fleet": [
+    {
+      "file": "Ancient_Marble_Temple_UFO.glb",
+      "name": "Ancient_Marble_Temple_UFO",
+      "sha256": "bb20c0f75c9b4778",
+      "size_mb": 15.06,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 279558,
+        "triangles": 503096,
+        "bbox_volume": 0.762,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          128,
+          128,
+          128
+        ],
+        [
+          160,
+          160,
+          160
+        ],
+        [
+          96,
+          96,
+          96
+        ],
+        [
+          64,
+          64,
+          64
+        ],
+        [
+          160,
+          160,
+          128
+        ]
+      ],
+      "palette_weights": [
+        1710,
+        1383,
+        546,
+        213,
+        75
+      ],
+      "hsv_mean": [
+        53.337646484375,
+        2.83251953125,
+        145.568115234375
+      ],
+      "prime": {
+        "H0_refined": 0.6549,
+        "class_scores_refined": {
+          "organic": 0.7,
+          "mechanical": 0.65,
+          "crystalline": 0.8,
+          "stellar": 0.65,
+          "spectral": 0.2
+        },
+        "dominant_class_refined": "crystalline",
+        "tier_refined": "MYTHIC",
+        "richness": 0.8,
+        "edge_norm": 0.545
+      },
+      "typology": "vessel",
+      "vram_mb": 45.07,
+      "lod_plan": {
+        "LOD0": 503096,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1
+        ],
+        "credits": 15
+      }
+    },
+    {
+      "file": "Ancient_Overgrown_Jungle_UFO.glb",
+      "name": "Ancient_Overgrown_Jungle_UFO",
+      "sha256": "c8d813be3a90d99f",
+      "size_mb": 15.44,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 291053,
+        "triangles": 502152,
+        "bbox_volume": 0.884,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          64,
+          64,
+          32
+        ],
+        [
+          32,
+          64,
+          0
+        ],
+        [
+          32,
+          32,
+          0
+        ],
+        [
+          32,
+          64,
+          32
+        ],
+        [
+          64,
+          64,
+          64
+        ]
+      ],
+      "palette_weights": [
+        542,
+        502,
+        382,
+        372,
+        340
+      ],
+      "hsv_mean": [
+        52.149658203125,
+        114.359619140625,
+        85.310546875
+      ],
+      "prime": {
+        "H0_refined": 0.7558,
+        "class_scores_refined": {
+          "organic": 1.05,
+          "mechanical": 0.6,
+          "crystalline": 0.25,
+          "stellar": 0.45,
+          "spectral": 0.55
+        },
+        "dominant_class_refined": "organic",
+        "tier_refined": "LEGENDARY",
+        "richness": 1.0,
+        "edge_norm": 0.62
+      },
+      "typology": "vessel",
+      "vram_mb": 45.56,
+      "lod_plan": {
+        "LOD0": 502152,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1,
+          2
+        ],
+        "credits": 30
+      }
+    },
+    {
+      "file": "Astral_Emperor_Crown.glb",
+      "name": "Astral_Emperor_Crown",
+      "sha256": "e7fd1205d085ce26",
+      "size_mb": 15.06,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 274910,
+        "triangles": 501316,
+        "bbox_volume": 0.782,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          160,
+          160,
+          128
+        ],
+        [
+          160,
+          128,
+          96
+        ],
+        [
+          160,
+          160,
+          160
+        ],
+        [
+          160,
+          128,
+          128
+        ],
+        [
+          64,
+          64,
+          64
+        ]
+      ],
+      "palette_weights": [
+        768,
+        734,
+        562,
+        278,
+        259
+      ],
+      "hsv_mean": [
+        45.236083984375,
+        51.041259765625,
+        154.593994140625
+      ],
+      "prime": {
+        "H0_refined": 0.7843,
+        "class_scores_refined": {
+          "organic": 0.9,
+          "mechanical": 0.85,
+          "crystalline": 0.8,
+          "stellar": 0.65,
+          "spectral": 0.4
+        },
+        "dominant_class_refined": "organic",
+        "tier_refined": "LEGENDARY",
+        "richness": 1.0,
+        "edge_norm": 0.775
+      },
+      "typology": "artifact",
+      "vram_mb": 44.8,
+      "lod_plan": {
+        "LOD0": 501316,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1
+        ],
+        "credits": 15
+      }
+    },
+    {
+      "file": "BioOrganic_Symbiote_Weapon.glb",
+      "name": "BioOrganic_Symbiote_Weapon",
+      "sha256": "8d9c6fe27cc2671f",
+      "size_mb": 6.63,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 110414,
+        "triangles": 200872,
+        "bbox_volume": 0.141,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          64,
+          64,
+          64
+        ],
+        [
+          32,
+          32,
+          32
+        ],
+        [
+          96,
+          96,
+          96
+        ],
+        [
+          64,
+          64,
+          32
+        ],
+        [
+          32,
+          64,
+          32
+        ]
+      ],
+      "palette_weights": [
+        1040,
+        760,
+        465,
+        393,
+        231
+      ],
+      "hsv_mean": [
+        80.349609375,
+        46.00341796875,
+        83.775146484375
+      ],
+      "prime": {
+        "H0_refined": 0.5653,
+        "class_scores_refined": {
+          "organic": 0.9,
+          "mechanical": 0.85,
+          "crystalline": 0.5,
+          "stellar": 0.25,
+          "spectral": 0.8
+        },
+        "dominant_class_refined": "organic",
+        "tier_refined": "EPIC",
+        "richness": 1.0,
+        "edge_norm": 0.73
+      },
+      "typology": "artifact",
+      "vram_mb": 26.95,
+      "lod_plan": {
+        "LOD0": 200872,
+        "LOD1": 80000,
+        "LOD2": 25000,
+        "LOD3": 8000
+      },
+      "lod_chain_plan": {
+        "native_only": true,
+        "environment_pass": false,
+        "levels": [],
+        "credits": 0
+      }
+    },
+    {
+      "file": "Biomechanical_Abyssal_UFO.glb",
+      "name": "Biomechanical_Abyssal_UFO",
+      "sha256": "de970603741d0c63",
+      "size_mb": 15.36,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 278837,
+        "triangles": 502044,
+        "bbox_volume": 0.586,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          64,
+          64,
+          64
+        ],
+        [
+          32,
+          32,
+          32
+        ],
+        [
+          96,
+          96,
+          96
+        ],
+        [
+          128,
+          128,
+          128
+        ],
+        [
+          0,
+          0,
+          0
+        ]
+      ],
+      "palette_weights": [
+        1050,
+        720,
+        688,
+        428,
+        111
+      ],
+      "hsv_mean": [
+        109.659912109375,
+        24.892333984375,
+        96.268798828125
+      ],
+      "prime": {
+        "H0_refined": 0.7395,
+        "class_scores_refined": {
+          "organic": 0.6,
+          "mechanical": 0.85,
+          "crystalline": 0.5,
+          "stellar": 0.25,
+          "spectral": 0.6
+        },
+        "dominant_class_refined": "mechanical",
+        "tier_refined": "MYTHIC",
+        "richness": 0.8,
+        "edge_norm": 0.908
+      },
+      "typology": "vessel",
+      "vram_mb": 45.0,
+      "lod_plan": {
+        "LOD0": 502044,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1
+        ],
+        "credits": 15
+      }
+    },
+    {
+      "file": "Celestial_Nebula_UFO.glb",
+      "name": "Celestial_Nebula_UFO",
+      "sha256": "ad78db964a8ba4da",
+      "size_mb": 14.49,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 261552,
+        "triangles": 501282,
+        "bbox_volume": 0.526,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          32,
+          32,
+          32
+        ],
+        [
+          0,
+          32,
+          64
+        ],
+        [
+          32,
+          32,
+          64
+        ],
+        [
+          0,
+          0,
+          32
+        ],
+        [
+          64,
+          64,
+          64
+        ]
+      ],
+      "palette_weights": [
+        1083,
+        528,
+        470,
+        379,
+        373
+      ],
+      "hsv_mean": [
+        152.967529296875,
+        90.239990234375,
+        75.093505859375
+      ],
+      "prime": {
+        "H0_refined": 0.7326,
+        "class_scores_refined": {
+          "organic": 0.6,
+          "mechanical": 0.85,
+          "crystalline": 0.25,
+          "stellar": 0.45,
+          "spectral": 0.55
+        },
+        "dominant_class_refined": "mechanical",
+        "tier_refined": "MYTHIC",
+        "richness": 1.0,
+        "edge_norm": 0.6
+      },
+      "typology": "vessel",
+      "vram_mb": 44.18,
+      "lod_plan": {
+        "LOD0": 501282,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1
+        ],
+        "credits": 15
+      }
+    },
+    {
+      "file": "Chrono_Lich_Phylactery.glb",
+      "name": "Chrono_Lich_Phylactery",
+      "sha256": "84f3d166f2ef7c6b",
+      "size_mb": 8.0,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 136421,
+        "triangles": 251480,
+        "bbox_volume": 0.596,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          128,
+          96,
+          32
+        ],
+        [
+          32,
+          0,
+          32
+        ],
+        [
+          160,
+          128,
+          64
+        ],
+        [
+          32,
+          32,
+          32
+        ],
+        [
+          128,
+          96,
+          64
+        ]
+      ],
+      "palette_weights": [
+        518,
+        427,
+        387,
+        288,
+        285
+      ],
+      "hsv_mean": [
+        91.78857421875,
+        121.962646484375,
+        108.09130859375
+      ],
+      "prime": {
+        "H0_refined": 0.646,
+        "class_scores_refined": {
+          "organic": 0.75,
+          "mechanical": 0.6,
+          "crystalline": 0.25,
+          "stellar": 0.45,
+          "spectral": 0.8
+        },
+        "dominant_class_refined": "spectral",
+        "tier_refined": "MYTHIC",
+        "richness": 1.0,
+        "edge_norm": 0.715
+      },
+      "typology": "artifact",
+      "vram_mb": 29.88,
+      "lod_plan": {
+        "LOD0": 251480,
+        "LOD1": 80000,
+        "LOD2": 25000,
+        "LOD3": 8000
+      },
+      "lod_chain_plan": {
+        "native_only": true,
+        "environment_pass": false,
+        "levels": [],
+        "credits": 0
+      }
+    },
+    {
+      "file": "Combat_UFO.glb",
+      "name": "Combat_UFO",
+      "sha256": "adee6a39a59659eb",
+      "size_mb": 13.18,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 233045,
+        "triangles": 437452,
+        "bbox_volume": 0.356,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          96,
+          96,
+          96
+        ],
+        [
+          64,
+          64,
+          64
+        ],
+        [
+          96,
+          96,
+          128
+        ],
+        [
+          32,
+          32,
+          32
+        ],
+        [
+          64,
+          64,
+          96
+        ]
+      ],
+      "palette_weights": [
+        647,
+        582,
+        524,
+        385,
+        345
+      ],
+      "hsv_mean": [
+        133.88525390625,
+        37.780517578125,
+        111.135498046875
+      ],
+      "prime": {
+        "H0_refined": 0.769,
+        "class_scores_refined": {
+          "organic": 0.6,
+          "mechanical": 0.85,
+          "crystalline": 0.5,
+          "stellar": 0.45,
+          "spectral": 0.6
+        },
+        "dominant_class_refined": "mechanical",
+        "tier_refined": "LEGENDARY",
+        "richness": 1.0,
+        "edge_norm": 0.954
+      },
+      "typology": "vessel",
+      "vram_mb": 40.69,
+      "lod_plan": {
+        "LOD0": 437452,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1
+        ],
+        "credits": 15
+      }
+    },
+    {
+      "file": "Conductor_Automaton.glb",
+      "name": "Conductor_Automaton",
+      "sha256": "780ebbbf5f900a01",
+      "size_mb": 14.93,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 275308,
+        "triangles": 501730,
+        "bbox_volume": 0.498,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          64,
+          32,
+          0
+        ],
+        [
+          96,
+          64,
+          0
+        ],
+        [
+          32,
+          32,
+          32
+        ],
+        [
+          32,
+          32,
+          0
+        ],
+        [
+          64,
+          32,
+          32
+        ]
+      ],
+      "palette_weights": [
+        1022,
+        618,
+        532,
+        409,
+        316
+      ],
+      "hsv_mean": [
+        23.64794921875,
+        155.9228515625,
+        84.4892578125
+      ],
+      "prime": {
+        "H0_refined": 0.7539,
+        "class_scores_refined": {
+          "organic": 0.55,
+          "mechanical": 0.55,
+          "crystalline": 0.25,
+          "stellar": 0.8,
+          "spectral": 0.35
+        },
+        "dominant_class_refined": "stellar",
+        "tier_refined": "LEGENDARY",
+        "richness": 1.0,
+        "edge_norm": 0.516
+      },
+      "typology": "character",
+      "vram_mb": 44.83,
+      "lod_plan": {
+        "LOD0": 501730,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1,
+          2
+        ],
+        "credits": 30
+      }
+    },
+    {
+      "file": "Cosmic_Atlantis_Environment.glb",
+      "name": "Cosmic_Atlantis_Environment",
+      "sha256": "9a98e8a952fdd10b",
+      "size_mb": 8.82,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 160487,
+        "triangles": 300658,
+        "bbox_volume": 0.207,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          32,
+          64,
+          96
+        ],
+        [
+          64,
+          96,
+          128
+        ],
+        [
+          32,
+          96,
+          128
+        ],
+        [
+          32,
+          32,
+          96
+        ],
+        [
+          64,
+          128,
+          160
+        ]
+      ],
+      "palette_weights": [
+        2825,
+        289,
+        242,
+        170,
+        124
+      ],
+      "hsv_mean": [
+        149.434326171875,
+        143.15234375,
+        121.94970703125
+      ],
+      "prime": {
+        "H0_refined": 0.5222,
+        "class_scores_refined": {
+          "organic": 0.55,
+          "mechanical": 0.4,
+          "crystalline": 0.45,
+          "stellar": 0.65,
+          "spectral": 0.55
+        },
+        "dominant_class_refined": "stellar",
+        "tier_refined": "EPIC",
+        "richness": 0.6,
+        "edge_norm": 0.353
+      },
+      "typology": "environment",
+      "vram_mb": 32.67,
+      "lod_plan": {
+        "LOD0": 300658,
+        "LOD1": 80000,
+        "LOD2": 25000,
+        "LOD3": 8000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": true,
+        "levels": [],
+        "credits": 0
+      }
+    },
+    {
+      "file": "Cosmic_Lotus_Matrix.glb",
+      "name": "Cosmic_Lotus_Matrix",
+      "sha256": "29f224e20b425daa",
+      "size_mb": 14.97,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 273402,
+        "triangles": 503562,
+        "bbox_volume": 0.973,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          64,
+          128,
+          192
+        ],
+        [
+          96,
+          128,
+          192
+        ],
+        [
+          64,
+          96,
+          192
+        ],
+        [
+          0,
+          32,
+          128
+        ],
+        [
+          96,
+          96,
+          192
+        ]
+      ],
+      "palette_weights": [
+        1455,
+        1159,
+        574,
+        297,
+        129
+      ],
+      "hsv_mean": [
+        155.08544921875,
+        150.111328125,
+        206.46337890625
+      ],
+      "prime": {
+        "H0_refined": 0.7255,
+        "class_scores_refined": {
+          "organic": 0.4,
+          "mechanical": 0.4,
+          "crystalline": 0.75,
+          "stellar": 0.65,
+          "spectral": 0.4
+        },
+        "dominant_class_refined": "crystalline",
+        "tier_refined": "MYTHIC",
+        "richness": 0.8,
+        "edge_norm": 0.385
+      },
+      "typology": "artifact",
+      "vram_mb": 44.8,
+      "lod_plan": {
+        "LOD0": 503562,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": true,
+        "environment_pass": false,
+        "levels": [],
+        "credits": 0
+      }
+    },
+    {
+      "file": "Cyber_Hive_Drone_UFO.glb",
+      "name": "Cyber_Hive_Drone_UFO",
+      "sha256": "09ad29872ccecf74",
+      "size_mb": 13.98,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 240840,
+        "triangles": 458680,
+        "bbox_volume": 0.521,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          96,
+          96,
+          96
+        ],
+        [
+          32,
+          32,
+          32
+        ],
+        [
+          64,
+          64,
+          64
+        ],
+        [
+          0,
+          0,
+          32
+        ],
+        [
+          32,
+          32,
+          64
+        ]
+      ],
+      "palette_weights": [
+        832,
+        797,
+        736,
+        518,
+        300
+      ],
+      "hsv_mean": [
+        141.287841796875,
+        45.032470703125,
+        79.902099609375
+      ],
+      "prime": {
+        "H0_refined": 0.7182,
+        "class_scores_refined": {
+          "organic": 0.6,
+          "mechanical": 0.85,
+          "crystalline": 0.5,
+          "stellar": 0.45,
+          "spectral": 0.55
+        },
+        "dominant_class_refined": "mechanical",
+        "tier_refined": "MYTHIC",
+        "richness": 1.0,
+        "edge_norm": 0.737
+      },
+      "typology": "vessel",
+      "vram_mb": 41.77,
+      "lod_plan": {
+        "LOD0": 458680,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1
+        ],
+        "credits": 15
+      }
+    },
+    {
+      "file": "Cyberpunk_Yakuza_UFO.glb",
+      "name": "Cyberpunk_Yakuza_UFO",
+      "sha256": "84063e871f4c2f5f",
+      "size_mb": 14.98,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 268916,
+        "triangles": 502024,
+        "bbox_volume": 0.7,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          96,
+          96,
+          96
+        ],
+        [
+          64,
+          64,
+          64
+        ],
+        [
+          64,
+          64,
+          96
+        ],
+        [
+          32,
+          32,
+          32
+        ],
+        [
+          96,
+          64,
+          64
+        ]
+      ],
+      "palette_weights": [
+        1197,
+        1117,
+        259,
+        214,
+        206
+      ],
+      "hsv_mean": [
+        120.99658203125,
+        34.301025390625,
+        99.72021484375
+      ],
+      "prime": {
+        "H0_refined": 0.7016,
+        "class_scores_refined": {
+          "organic": 0.4,
+          "mechanical": 0.65,
+          "crystalline": 0.5,
+          "stellar": 0.25,
+          "spectral": 0.6
+        },
+        "dominant_class_refined": "mechanical",
+        "tier_refined": "MYTHIC",
+        "richness": 1.0,
+        "edge_norm": 0.569
+      },
+      "typology": "vessel",
+      "vram_mb": 44.55,
+      "lod_plan": {
+        "LOD0": 502024,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1
+        ],
+        "credits": 15
+      }
+    },
+    {
+      "file": "Dark_Lord.glb",
+      "name": "Dark_Lord",
+      "sha256": "51024c1256d69bd4",
+      "size_mb": 15.01,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 279381,
+        "triangles": 501984,
+        "bbox_volume": 0.6,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          32,
+          32,
+          32
+        ],
+        [
+          64,
+          64,
+          64
+        ],
+        [
+          32,
+          32,
+          64
+        ],
+        [
+          64,
+          32,
+          64
+        ],
+        [
+          96,
+          96,
+          96
+        ]
+      ],
+      "palette_weights": [
+        1360,
+        1166,
+        769,
+        144,
+        119
+      ],
+      "hsv_mean": [
+        171.796875,
+        31.248046875,
+        68.727783203125
+      ],
+      "prime": {
+        "H0_refined": 0.5797,
+        "class_scores_refined": {
+          "organic": 0.25,
+          "mechanical": 0.65,
+          "crystalline": 0.7,
+          "stellar": 0.45,
+          "spectral": 0.55
+        },
+        "dominant_class_refined": "crystalline",
+        "tier_refined": "EPIC",
+        "richness": 0.6,
+        "edge_norm": 0.458
+      },
+      "typology": "character",
+      "vram_mb": 45.02,
+      "lod_plan": {
+        "LOD0": 501984,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1,
+          2
+        ],
+        "credits": 30
+      }
+    },
+    {
+      "file": "Eldritch_Void_Watcher_UFO.glb",
+      "name": "Eldritch_Void_Watcher_UFO",
+      "sha256": "9eae4214e59a2110",
+      "size_mb": 7.33,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 124678,
+        "triangles": 234104,
+        "bbox_volume": 0.593,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          32,
+          32,
+          32
+        ],
+        [
+          64,
+          64,
+          64
+        ],
+        [
+          32,
+          32,
+          64
+        ],
+        [
+          64,
+          32,
+          32
+        ],
+        [
+          32,
+          32,
+          0
+        ]
+      ],
+      "palette_weights": [
+        1628,
+        536,
+        511,
+        337,
+        324
+      ],
+      "hsv_mean": [
+        88.246337890625,
+        55.83837890625,
+        66.15966796875
+      ],
+      "prime": {
+        "H0_refined": 0.4983,
+        "class_scores_refined": {
+          "organic": 0.55,
+          "mechanical": 0.5,
+          "crystalline": 0.7,
+          "stellar": 0.25,
+          "spectral": 1.0
+        },
+        "dominant_class_refined": "spectral",
+        "tier_refined": "EPIC",
+        "richness": 1.0,
+        "edge_norm": 0.392
+      },
+      "typology": "vessel",
+      "vram_mb": 28.74,
+      "lod_plan": {
+        "LOD0": 234104,
+        "LOD1": 80000,
+        "LOD2": 25000,
+        "LOD3": 8000
+      },
+      "lod_chain_plan": {
+        "native_only": true,
+        "environment_pass": false,
+        "levels": [],
+        "credits": 0
+      }
+    },
+    {
+      "file": "Epic_Bitcoin.glb",
+      "name": "Epic_Bitcoin",
+      "sha256": "dc144a172293694f",
+      "size_mb": 13.25,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 227587,
+        "triangles": 439010,
+        "bbox_volume": 0.047,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          96,
+          64,
+          32
+        ],
+        [
+          128,
+          96,
+          64
+        ],
+        [
+          96,
+          96,
+          64
+        ],
+        [
+          192,
+          160,
+          96
+        ],
+        [
+          64,
+          64,
+          32
+        ]
+      ],
+      "palette_weights": [
+        660,
+        583,
+        490,
+        273,
+        239
+      ],
+      "hsv_mean": [
+        48.55322265625,
+        100.271728515625,
+        123.7744140625
+      ],
+      "prime": {
+        "H0_refined": 0.7642,
+        "class_scores_refined": {
+          "organic": 1.05,
+          "mechanical": 0.85,
+          "crystalline": 0.25,
+          "stellar": 0.65,
+          "spectral": 0.55
+        },
+        "dominant_class_refined": "organic",
+        "tier_refined": "LEGENDARY",
+        "richness": 1.0,
+        "edge_norm": 0.774
+      },
+      "typology": "creature",
+      "vram_mb": 40.49,
+      "lod_plan": {
+        "LOD0": 439010,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1,
+          2
+        ],
+        "credits": 30
+      }
+    },
+    {
+      "file": "Epic_Yeti.glb",
+      "name": "Epic_Yeti",
+      "sha256": "71e2259a4bb1649d",
+      "size_mb": 15.0,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 281339,
+        "triangles": 501848,
+        "bbox_volume": 0.466,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          96,
+          128,
+          160
+        ],
+        [
+          128,
+          128,
+          160
+        ],
+        [
+          96,
+          160,
+          192
+        ],
+        [
+          64,
+          96,
+          128
+        ],
+        [
+          128,
+          160,
+          192
+        ]
+      ],
+      "palette_weights": [
+        1113,
+        453,
+        408,
+        405,
+        327
+      ],
+      "hsv_mean": [
+        150.0537109375,
+        86.77880859375,
+        169.75732421875
+      ],
+      "prime": {
+        "H0_refined": 0.7623,
+        "class_scores_refined": {
+          "organic": 0.55,
+          "mechanical": 0.8,
+          "crystalline": 0.55,
+          "stellar": 0.65,
+          "spectral": 0.4
+        },
+        "dominant_class_refined": "mechanical",
+        "tier_refined": "LEGENDARY",
+        "richness": 1.0,
+        "edge_norm": 0.579
+      },
+      "typology": "character",
+      "vram_mb": 45.11,
+      "lod_plan": {
+        "LOD0": 501848,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1,
+          2
+        ],
+        "credits": 30
+      }
+    },
+    {
+      "file": "Ethereal_Crystal_Mothership.glb",
+      "name": "Ethereal_Crystal_Mothership",
+      "sha256": "caf5ff58dd175e49",
+      "size_mb": 15.93,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 297895,
+        "triangles": 503770,
+        "bbox_volume": 0.76,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          96,
+          96,
+          96
+        ],
+        [
+          128,
+          128,
+          128
+        ],
+        [
+          64,
+          64,
+          64
+        ],
+        [
+          96,
+          96,
+          128
+        ],
+        [
+          96,
+          128,
+          128
+        ]
+      ],
+      "palette_weights": [
+        1613,
+        1323,
+        227,
+        161,
+        134
+      ],
+      "hsv_mean": [
+        107.41845703125,
+        13.134033203125,
+        127.2626953125
+      ],
+      "prime": {
+        "H0_refined": 0.64,
+        "class_scores_refined": {
+          "organic": 0.6,
+          "mechanical": 0.85,
+          "crystalline": 0.5,
+          "stellar": 0.45,
+          "spectral": 0.6
+        },
+        "dominant_class_refined": "mechanical",
+        "tier_refined": "MYTHIC",
+        "richness": 0.6,
+        "edge_norm": 0.65
+      },
+      "typology": "vessel",
+      "vram_mb": 45.93,
+      "lod_plan": {
+        "LOD0": 503770,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1
+        ],
+        "credits": 15
+      }
+    },
+    {
+      "file": "Fractal_Heart_Geometry.glb",
+      "name": "Fractal_Heart_Geometry",
+      "sha256": "5d8476e9764be669",
+      "size_mb": 15.84,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 293218,
+        "triangles": 503516,
+        "bbox_volume": 0.69,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          64,
+          128,
+          160
+        ],
+        [
+          96,
+          128,
+          160
+        ],
+        [
+          64,
+          96,
+          128
+        ],
+        [
+          128,
+          128,
+          160
+        ],
+        [
+          64,
+          160,
+          192
+        ]
+      ],
+      "palette_weights": [
+        1656,
+        672,
+        580,
+        191,
+        152
+      ],
+      "hsv_mean": [
+        146.72802734375,
+        118.192626953125,
+        176.0546875
+      ],
+      "prime": {
+        "H0_refined": 0.725,
+        "class_scores_refined": {
+          "organic": 0.55,
+          "mechanical": 0.4,
+          "crystalline": 0.55,
+          "stellar": 0.65,
+          "spectral": 0.4
+        },
+        "dominant_class_refined": "stellar",
+        "tier_refined": "MYTHIC",
+        "richness": 0.8,
+        "edge_norm": 0.506
+      },
+      "typology": "artifact",
+      "vram_mb": 45.71,
+      "lod_plan": {
+        "LOD0": 503516,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": true,
+        "environment_pass": false,
+        "levels": [],
+        "credits": 0
+      }
+    },
+    {
+      "file": "FullBody_Kitsune_Masterpiece.glb",
+      "name": "FullBody_Kitsune_Masterpiece",
+      "sha256": "e3512c4a05204468",
+      "size_mb": 15.01,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 282762,
+        "triangles": 501686,
+        "bbox_volume": 0.449,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          160,
+          160,
+          160
+        ],
+        [
+          192,
+          96,
+          128
+        ],
+        [
+          160,
+          128,
+          128
+        ],
+        [
+          192,
+          128,
+          128
+        ],
+        [
+          160,
+          128,
+          160
+        ]
+      ],
+      "palette_weights": [
+        782,
+        609,
+        606,
+        396,
+        367
+      ],
+      "hsv_mean": [
+        203.50537109375,
+        78.534423828125,
+        178.90625
+      ],
+      "prime": {
+        "H0_refined": 0.7828,
+        "class_scores_refined": {
+          "organic": 0.6,
+          "mechanical": 0.85,
+          "crystalline": 0.55,
+          "stellar": 0.65,
+          "spectral": 0.4
+        },
+        "dominant_class_refined": "mechanical",
+        "tier_refined": "LEGENDARY",
+        "richness": 1.0,
+        "edge_norm": 0.666
+      },
+      "typology": "character",
+      "vram_mb": 45.17,
+      "lod_plan": {
+        "LOD0": 501686,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1,
+          2
+        ],
+        "credits": 30
+      }
+    },
+    {
+      "file": "Heavy_Metal_Apocalypse_UFO.glb",
+      "name": "Heavy_Metal_Apocalypse_UFO",
+      "sha256": "6097df7ed98efdec",
+      "size_mb": 15.25,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 273805,
+        "triangles": 501558,
+        "bbox_volume": 0.852,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          96,
+          64,
+          64
+        ],
+        [
+          64,
+          32,
+          32
+        ],
+        [
+          96,
+          96,
+          64
+        ],
+        [
+          96,
+          96,
+          96
+        ],
+        [
+          64,
+          64,
+          32
+        ]
+      ],
+      "palette_weights": [
+        713,
+        507,
+        355,
+        348,
+        325
+      ],
+      "hsv_mean": [
+        22.349365234375,
+        83.566650390625,
+        105.142578125
+      ],
+      "prime": {
+        "H0_refined": 0.7767,
+        "class_scores_refined": {
+          "organic": 0.75,
+          "mechanical": 1.0,
+          "crystalline": 0.25,
+          "stellar": 0.65,
+          "spectral": 0.55
+        },
+        "dominant_class_refined": "mechanical",
+        "tier_refined": "LEGENDARY",
+        "richness": 1.0,
+        "edge_norm": 0.745
+      },
+      "typology": "vessel",
+      "vram_mb": 44.75,
+      "lod_plan": {
+        "LOD0": 501558,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1,
+          2
+        ],
+        "credits": 30
+      }
+    },
+    {
+      "file": "Hyper_Geometry_Chrono_Disc.glb",
+      "name": "Hyper_Geometry_Chrono_Disc",
+      "sha256": "a5ad2357ded8c042",
+      "size_mb": 14.1,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 259525,
+        "triangles": 496114,
+        "bbox_volume": 0.534,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          96,
+          128,
+          128
+        ],
+        [
+          128,
+          128,
+          128
+        ],
+        [
+          96,
+          96,
+          128
+        ],
+        [
+          128,
+          128,
+          160
+        ],
+        [
+          160,
+          160,
+          160
+        ]
+      ],
+      "palette_weights": [
+        2575,
+        1013,
+        158,
+        140,
+        71
+      ],
+      "hsv_mean": [
+        149.8076171875,
+        30.15087890625,
+        144.78662109375
+      ],
+      "prime": {
+        "H0_refined": 0.4999,
+        "class_scores_refined": {
+          "organic": 0.4,
+          "mechanical": 0.65,
+          "crystalline": 1.0,
+          "stellar": 0.65,
+          "spectral": 0.4
+        },
+        "dominant_class_refined": "crystalline",
+        "tier_refined": "EPIC",
+        "richness": 0.4,
+        "edge_norm": 0.189
+      },
+      "typology": "artifact",
+      "vram_mb": 43.91,
+      "lod_plan": {
+        "LOD0": 496114,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": true,
+        "environment_pass": false,
+        "levels": [],
+        "credits": 0
+      }
+    },
+    {
+      "file": "Kitsune_Anime_3D.glb",
+      "name": "Kitsune_Anime_3D",
+      "sha256": "40cbf2271ef7aeb5",
+      "size_mb": 14.87,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 279257,
+        "triangles": 502078,
+        "bbox_volume": 0.401,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          160,
+          128,
+          160
+        ],
+        [
+          160,
+          160,
+          192
+        ],
+        [
+          128,
+          128,
+          160
+        ],
+        [
+          160,
+          160,
+          160
+        ],
+        [
+          128,
+          96,
+          128
+        ]
+      ],
+      "palette_weights": [
+        1267,
+        762,
+        656,
+        256,
+        206
+      ],
+      "hsv_mean": [
+        197.29541015625,
+        57.302490234375,
+        173.365234375
+      ],
+      "prime": {
+        "H0_refined": 0.753,
+        "class_scores_refined": {
+          "organic": 0.6,
+          "mechanical": 1.0,
+          "crystalline": 0.8,
+          "stellar": 0.65,
+          "spectral": 0.4
+        },
+        "dominant_class_refined": "mechanical",
+        "tier_refined": "LEGENDARY",
+        "richness": 1.0,
+        "edge_norm": 0.605
+      },
+      "typology": "character",
+      "vram_mb": 45.02,
+      "lod_plan": {
+        "LOD0": 502078,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1,
+          2
+        ],
+        "credits": 30
+      }
+    },
+    {
+      "file": "Legendary_Astral_Dragon.glb",
+      "name": "Legendary_Astral_Dragon",
+      "sha256": "4d63d55798d1fd5b",
+      "size_mb": 8.29,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 143689,
+        "triangles": 258338,
+        "bbox_volume": 0.263,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          32,
+          32,
+          32
+        ],
+        [
+          64,
+          64,
+          64
+        ],
+        [
+          32,
+          32,
+          64
+        ],
+        [
+          64,
+          32,
+          32
+        ],
+        [
+          96,
+          96,
+          96
+        ]
+      ],
+      "palette_weights": [
+        1424,
+        779,
+        345,
+        305,
+        209
+      ],
+      "hsv_mean": [
+        131.048828125,
+        40.180908203125,
+        74.32763671875
+      ],
+      "prime": {
+        "H0_refined": 0.5707,
+        "class_scores_refined": {
+          "organic": 0.45,
+          "mechanical": 0.7,
+          "crystalline": 0.5,
+          "stellar": 0.25,
+          "spectral": 0.8
+        },
+        "dominant_class_refined": "spectral",
+        "tier_refined": "EPIC",
+        "richness": 1.0,
+        "edge_norm": 0.637
+      },
+      "typology": "character",
+      "vram_mb": 30.45,
+      "lod_plan": {
+        "LOD0": 258338,
+        "LOD1": 80000,
+        "LOD2": 25000,
+        "LOD3": 8000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1
+        ],
+        "credits": 15
+      }
+    },
+    {
+      "file": "Legendary_Cyber_Seraphim.glb",
+      "name": "Legendary_Cyber_Seraphim",
+      "sha256": "e689955a05061ce3",
+      "size_mb": 12.54,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 227089,
+        "triangles": 391098,
+        "bbox_volume": 0.832,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          64,
+          64,
+          64
+        ],
+        [
+          32,
+          32,
+          32
+        ],
+        [
+          64,
+          64,
+          32
+        ],
+        [
+          96,
+          64,
+          64
+        ],
+        [
+          96,
+          96,
+          64
+        ]
+      ],
+      "palette_weights": [
+        1733,
+        758,
+        257,
+        256,
+        189
+      ],
+      "hsv_mean": [
+        92.529296875,
+        34.587646484375,
+        82.255859375
+      ],
+      "prime": {
+        "H0_refined": 0.6521,
+        "class_scores_refined": {
+          "organic": 0.6,
+          "mechanical": 0.85,
+          "crystalline": 0.5,
+          "stellar": 0.25,
+          "spectral": 0.6
+        },
+        "dominant_class_refined": "mechanical",
+        "tier_refined": "MYTHIC",
+        "richness": 1.0,
+        "edge_norm": 0.623
+      },
+      "typology": "character",
+      "vram_mb": 38.82,
+      "lod_plan": {
+        "LOD0": 391098,
+        "LOD1": 80000,
+        "LOD2": 25000,
+        "LOD3": 8000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1,
+          2
+        ],
+        "credits": 30
+      }
+    },
+    {
+      "file": "Leviathan_WorldEater.glb",
+      "name": "Leviathan_WorldEater",
+      "sha256": "7eb479ee55f0f1c6",
+      "size_mb": 15.64,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 294985,
+        "triangles": 502444,
+        "bbox_volume": 0.792,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          64,
+          64,
+          64
+        ],
+        [
+          64,
+          64,
+          96
+        ],
+        [
+          64,
+          96,
+          96
+        ],
+        [
+          96,
+          96,
+          96
+        ],
+        [
+          32,
+          32,
+          32
+        ]
+      ],
+      "palette_weights": [
+        1480,
+        456,
+        293,
+        276,
+        211
+      ],
+      "hsv_mean": [
+        97.680908203125,
+        50.373291015625,
+        97.199462890625
+      ],
+      "prime": {
+        "H0_refined": 0.7064,
+        "class_scores_refined": {
+          "organic": 0.4,
+          "mechanical": 0.65,
+          "crystalline": 0.5,
+          "stellar": 0.25,
+          "spectral": 0.8
+        },
+        "dominant_class_refined": "spectral",
+        "tier_refined": "MYTHIC",
+        "richness": 1.0,
+        "edge_norm": 0.555
+      },
+      "typology": "creature",
+      "vram_mb": 45.75,
+      "lod_plan": {
+        "LOD0": 502444,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1,
+          2
+        ],
+        "credits": 30
+      }
+    },
+    {
+      "file": "Locomotive.glb",
+      "name": "Locomotive",
+      "sha256": "cf11306396e61f5f",
+      "size_mb": 15.0,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 277912,
+        "triangles": 501322,
+        "bbox_volume": 0.254,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          64,
+          32,
+          32
+        ],
+        [
+          32,
+          32,
+          0
+        ],
+        [
+          32,
+          32,
+          32
+        ],
+        [
+          64,
+          64,
+          32
+        ],
+        [
+          96,
+          64,
+          32
+        ]
+      ],
+      "palette_weights": [
+        755,
+        634,
+        584,
+        505,
+        348
+      ],
+      "hsv_mean": [
+        24.52783203125,
+        100.51953125,
+        74.129150390625
+      ],
+      "prime": {
+        "H0_refined": 0.7363,
+        "class_scores_refined": {
+          "organic": 0.4,
+          "mechanical": 0.65,
+          "crystalline": 0.25,
+          "stellar": 0.45,
+          "spectral": 0.55
+        },
+        "dominant_class_refined": "mechanical",
+        "tier_refined": "MYTHIC",
+        "richness": 1.0,
+        "edge_norm": 0.593
+      },
+      "typology": "vehicle",
+      "vram_mb": 44.93,
+      "lod_plan": {
+        "LOD0": 501322,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1
+        ],
+        "credits": 15
+      }
+    },
+    {
+      "file": "Necro_Politan_Ghost_UFO.glb",
+      "name": "Necro_Politan_Ghost_UFO",
+      "sha256": "7f6b0fe4003f70eb",
+      "size_mb": 14.74,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 267303,
+        "triangles": 501460,
+        "bbox_volume": 0.581,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          96,
+          96,
+          96
+        ],
+        [
+          64,
+          64,
+          64
+        ],
+        [
+          96,
+          96,
+          64
+        ],
+        [
+          64,
+          96,
+          64
+        ],
+        [
+          96,
+          128,
+          96
+        ]
+      ],
+      "palette_weights": [
+        1899,
+        371,
+        370,
+        362,
+        206
+      ],
+      "hsv_mean": [
+        72.057861328125,
+        44.503173828125,
+        110.39013671875
+      ],
+      "prime": {
+        "H0_refined": 0.6754,
+        "class_scores_refined": {
+          "organic": 0.7,
+          "mechanical": 0.65,
+          "crystalline": 0.7,
+          "stellar": 0.45,
+          "spectral": 0.75
+        },
+        "dominant_class_refined": "spectral",
+        "tier_refined": "MYTHIC",
+        "richness": 1.0,
+        "edge_norm": 0.424
+      },
+      "typology": "vessel",
+      "vram_mb": 44.45,
+      "lod_plan": {
+        "LOD0": 501460,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1
+        ],
+        "credits": 15
+      }
+    },
+    {
+      "file": "Nurse_Character_3D.glb",
+      "name": "Nurse_Character_3D",
+      "sha256": "73aa732917bdf7cf",
+      "size_mb": 12.81,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 235389,
+        "triangles": 445840,
+        "bbox_volume": 0.331,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          160,
+          160,
+          192
+        ],
+        [
+          160,
+          160,
+          160
+        ],
+        [
+          128,
+          96,
+          96
+        ],
+        [
+          128,
+          96,
+          64
+        ],
+        [
+          32,
+          32,
+          32
+        ]
+      ],
+      "palette_weights": [
+        786,
+        488,
+        330,
+        297,
+        290
+      ],
+      "hsv_mean": [
+        92.683349609375,
+        52.735107421875,
+        152.56396484375
+      ],
+      "prime": {
+        "H0_refined": 0.7466,
+        "class_scores_refined": {
+          "organic": 0.6,
+          "mechanical": 0.85,
+          "crystalline": 0.8,
+          "stellar": 0.45,
+          "spectral": 0.65
+        },
+        "dominant_class_refined": "mechanical",
+        "tier_refined": "MYTHIC",
+        "richness": 1.0,
+        "edge_norm": 0.747
+      },
+      "typology": "character",
+      "vram_mb": 41.08,
+      "lod_plan": {
+        "LOD0": 445840,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1,
+          2
+        ],
+        "credits": 30
+      }
+    },
+    {
+      "file": "Obsidian_World_Eater_Engine.glb",
+      "name": "Obsidian_World_Eater_Engine",
+      "sha256": "a5170757c7270ff8",
+      "size_mb": 14.94,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 274462,
+        "triangles": 501460,
+        "bbox_volume": 0.528,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          64,
+          64,
+          64
+        ],
+        [
+          64,
+          64,
+          32
+        ],
+        [
+          96,
+          64,
+          32
+        ],
+        [
+          64,
+          32,
+          32
+        ],
+        [
+          128,
+          64,
+          32
+        ]
+      ],
+      "palette_weights": [
+        1350,
+        458,
+        348,
+        338,
+        311
+      ],
+      "hsv_mean": [
+        17.690185546875,
+        99.640869140625,
+        110.25439453125
+      ],
+      "prime": {
+        "H0_refined": 0.7404,
+        "class_scores_refined": {
+          "organic": 0.55,
+          "mechanical": 0.8,
+          "crystalline": 0.25,
+          "stellar": 0.65,
+          "spectral": 0.55
+        },
+        "dominant_class_refined": "mechanical",
+        "tier_refined": "MYTHIC",
+        "richness": 1.0,
+        "edge_norm": 0.554
+      },
+      "typology": "artifact",
+      "vram_mb": 44.78,
+      "lod_plan": {
+        "LOD0": 501460,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": true,
+        "environment_pass": false,
+        "levels": [],
+        "credits": 0
+      }
+    },
+    {
+      "file": "Quantum_AI_Core_Component.glb",
+      "name": "Quantum_AI_Core_Component",
+      "sha256": "d4dc08495eecf5b7",
+      "size_mb": 14.76,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 273641,
+        "triangles": 502818,
+        "bbox_volume": 0.671,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          32,
+          32,
+          32
+        ],
+        [
+          64,
+          64,
+          64
+        ],
+        [
+          96,
+          96,
+          96
+        ],
+        [
+          32,
+          64,
+          64
+        ],
+        [
+          64,
+          96,
+          96
+        ]
+      ],
+      "palette_weights": [
+        1348,
+        908,
+        404,
+        229,
+        201
+      ],
+      "hsv_mean": [
+        147.3701171875,
+        31.382568359375,
+        87.85302734375
+      ],
+      "prime": {
+        "H0_refined": 0.7194,
+        "class_scores_refined": {
+          "organic": 0.6,
+          "mechanical": 0.85,
+          "crystalline": 0.5,
+          "stellar": 0.45,
+          "spectral": 0.35
+        },
+        "dominant_class_refined": "mechanical",
+        "tier_refined": "MYTHIC",
+        "richness": 1.0,
+        "edge_norm": 0.666
+      },
+      "typology": "artifact",
+      "vram_mb": 44.79,
+      "lod_plan": {
+        "LOD0": 502818,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": true,
+        "environment_pass": false,
+        "levels": [],
+        "credits": 0
+      }
+    },
+    {
+      "file": "Rocket_SportsCar.glb",
+      "name": "Rocket_SportsCar",
+      "sha256": "138a0b1d322dabf8",
+      "size_mb": 15.34,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 287044,
+        "triangles": 501426,
+        "bbox_volume": 0.204,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          32,
+          32,
+          32
+        ],
+        [
+          64,
+          64,
+          64
+        ],
+        [
+          64,
+          64,
+          96
+        ],
+        [
+          96,
+          96,
+          96
+        ],
+        [
+          32,
+          32,
+          64
+        ]
+      ],
+      "palette_weights": [
+        1380,
+        995,
+        323,
+        289,
+        243
+      ],
+      "hsv_mean": [
+        148.14501953125,
+        31.958740234375,
+        80.7841796875
+      ],
+      "prime": {
+        "H0_refined": 0.7428,
+        "class_scores_refined": {
+          "organic": 0.6,
+          "mechanical": 0.85,
+          "crystalline": 0.5,
+          "stellar": 0.45,
+          "spectral": 0.35
+        },
+        "dominant_class_refined": "mechanical",
+        "tier_refined": "MYTHIC",
+        "richness": 1.0,
+        "edge_norm": 0.769
+      },
+      "typology": "vehicle",
+      "vram_mb": 45.35,
+      "lod_plan": {
+        "LOD0": 501426,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1
+        ],
+        "credits": 15
+      }
+    },
+    {
+      "file": "Solaris_Flare_UFO.glb",
+      "name": "Solaris_Flare_UFO",
+      "sha256": "472c5ce276eae6d1",
+      "size_mb": 14.37,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 263545,
+        "triangles": 501402,
+        "bbox_volume": 0.489,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          64,
+          32,
+          0
+        ],
+        [
+          160,
+          32,
+          0
+        ],
+        [
+          64,
+          0,
+          0
+        ],
+        [
+          96,
+          32,
+          0
+        ],
+        [
+          192,
+          64,
+          0
+        ]
+      ],
+      "palette_weights": [
+        589,
+        536,
+        438,
+        402,
+        391
+      ],
+      "hsv_mean": [
+        27.5888671875,
+        204.871337890625,
+        132.3740234375
+      ],
+      "prime": {
+        "H0_refined": 0.8123,
+        "class_scores_refined": {
+          "organic": 0.55,
+          "mechanical": 0.55,
+          "crystalline": 0.55,
+          "stellar": 1.0,
+          "spectral": 0.35
+        },
+        "dominant_class_refined": "stellar",
+        "tier_refined": "LEGENDARY",
+        "richness": 1.0,
+        "edge_norm": 0.559
+      },
+      "typology": "vessel",
+      "vram_mb": 44.28,
+      "lod_plan": {
+        "LOD0": 501402,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1,
+          2
+        ],
+        "credits": 30
+      }
+    },
+    {
+      "file": "Steampunk_Aether_UFO.glb",
+      "name": "Steampunk_Aether_UFO",
+      "sha256": "2200e94e1a4bd2cd",
+      "size_mb": 15.04,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 268846,
+        "triangles": 501860,
+        "bbox_volume": 0.805,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          128,
+          96,
+          64
+        ],
+        [
+          96,
+          64,
+          64
+        ],
+        [
+          96,
+          96,
+          64
+        ],
+        [
+          96,
+          64,
+          32
+        ],
+        [
+          160,
+          128,
+          96
+        ]
+      ],
+      "palette_weights": [
+        655,
+        596,
+        413,
+        382,
+        308
+      ],
+      "hsv_mean": [
+        29.33740234375,
+        87.19580078125,
+        119.90283203125
+      ],
+      "prime": {
+        "H0_refined": 0.7798,
+        "class_scores_refined": {
+          "organic": 0.75,
+          "mechanical": 1.0,
+          "crystalline": 0.25,
+          "stellar": 0.65,
+          "spectral": 0.55
+        },
+        "dominant_class_refined": "mechanical",
+        "tier_refined": "LEGENDARY",
+        "richness": 1.0,
+        "edge_norm": 0.726
+      },
+      "typology": "vessel",
+      "vram_mb": 44.54,
+      "lod_plan": {
+        "LOD0": 501860,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1,
+          2
+        ],
+        "credits": 30
+      }
+    },
+    {
+      "file": "Viking_Runestone_UFO.glb",
+      "name": "Viking_Runestone_UFO",
+      "sha256": "63a2a8fa30416a1f",
+      "size_mb": 14.42,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 262585,
+        "triangles": 501762,
+        "bbox_volume": 0.457,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          32,
+          32,
+          32
+        ],
+        [
+          64,
+          64,
+          64
+        ],
+        [
+          96,
+          160,
+          192
+        ],
+        [
+          64,
+          64,
+          32
+        ],
+        [
+          64,
+          96,
+          96
+        ]
+      ],
+      "palette_weights": [
+        2010,
+        435,
+        198,
+        197,
+        172
+      ],
+      "hsv_mean": [
+        85.09375,
+        47.263916015625,
+        90.949951171875
+      ],
+      "prime": {
+        "H0_refined": 0.7092,
+        "class_scores_refined": {
+          "organic": 0.7,
+          "mechanical": 0.65,
+          "crystalline": 0.5,
+          "stellar": 0.25,
+          "spectral": 0.8
+        },
+        "dominant_class_refined": "spectral",
+        "tier_refined": "MYTHIC",
+        "richness": 1.0,
+        "edge_norm": 0.583
+      },
+      "typology": "vessel",
+      "vram_mb": 44.25,
+      "lod_plan": {
+        "LOD0": 501762,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1
+        ],
+        "credits": 15
+      }
+    },
+    {
+      "file": "Volcanic_Spiked_UFO.glb",
+      "name": "Volcanic_Spiked_UFO",
+      "sha256": "55c170c3520b3d3c",
+      "size_mb": 14.62,
+      "geometry": {
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 264160,
+        "triangles": 501482,
+        "bbox_volume": 0.72,
+        "largest_dim": 1.0,
+        "has_normals": true,
+        "has_tangents": false,
+        "has_uvs": true
+      },
+      "materials": {
+        "count": 1
+      },
+      "textures": {
+        "textures": 3,
+        "images": 3
+      },
+      "palette": [
+        [
+          32,
+          32,
+          32
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          32,
+          0,
+          0
+        ],
+        [
+          64,
+          0,
+          0
+        ],
+        [
+          64,
+          32,
+          32
+        ]
+      ],
+      "palette_weights": [
+        1647,
+        490,
+        484,
+        212,
+        183
+      ],
+      "hsv_mean": [
+        48.39453125,
+        85.341064453125,
+        66.163330078125
+      ],
+      "prime": {
+        "H0_refined": 0.6898,
+        "class_scores_refined": {
+          "organic": 0.7,
+          "mechanical": 0.5,
+          "crystalline": 0.45,
+          "stellar": 0.45,
+          "spectral": 0.75
+        },
+        "dominant_class_refined": "spectral",
+        "tier_refined": "MYTHIC",
+        "richness": 1.0,
+        "edge_norm": 0.455
+      },
+      "typology": "vessel",
+      "vram_mb": 44.31,
+      "lod_plan": {
+        "LOD0": 501482,
+        "LOD1": 120000,
+        "LOD2": 40000,
+        "LOD3": 12000
+      },
+      "lod_chain_plan": {
+        "native_only": false,
+        "environment_pass": false,
+        "levels": [
+          1
+        ],
+        "credits": 15
+      }
+    }
+  ],
+  "count": 36,
+  "similarity_matrix": {
+    "names": [
+      "Ancient_Marble_Temple_UFO",
+      "Ancient_Overgrown_Jungle_UFO",
+      "Astral_Emperor_Crown",
+      "BioOrganic_Symbiote_Weapon",
+      "Biomechanical_Abyssal_UFO",
+      "Celestial_Nebula_UFO",
+      "Chrono_Lich_Phylactery",
+      "Combat_UFO",
+      "Conductor_Automaton",
+      "Cosmic_Atlantis_Environment",
+      "Cosmic_Lotus_Matrix",
+      "Cyber_Hive_Drone_UFO",
+      "Cyberpunk_Yakuza_UFO",
+      "Dark_Lord",
+      "Eldritch_Void_Watcher_UFO",
+      "Epic_Bitcoin",
+      "Epic_Yeti",
+      "Ethereal_Crystal_Mothership",
+      "Fractal_Heart_Geometry",
+      "FullBody_Kitsune_Masterpiece",
+      "Heavy_Metal_Apocalypse_UFO",
+      "Hyper_Geometry_Chrono_Disc",
+      "Kitsune_Anime_3D",
+      "Legendary_Astral_Dragon",
+      "Legendary_Cyber_Seraphim",
+      "Leviathan_WorldEater",
+      "Locomotive",
+      "Necro_Politan_Ghost_UFO",
+      "Nurse_Character_3D",
+      "Obsidian_World_Eater_Engine",
+      "Quantum_AI_Core_Component",
+      "Rocket_SportsCar",
+      "Solaris_Flare_UFO",
+      "Steampunk_Aether_UFO",
+      "Viking_Runestone_UFO",
+      "Volcanic_Spiked_UFO"
+    ],
+    "matrix": [
+      [
+        0.9999999999999999,
+        0.915210002685733,
+        0.983499513526301,
+        0.9554809415309544,
+        0.9349341384247939,
+        0.8809696861917642,
+        0.925489314960406,
+        0.9420143086045454,
+        0.8518095969440438,
+        0.7862293332837229,
+        0.8509054952219758,
+        0.918557118037139,
+        0.9459960688199617,
+        0.8022107023156563,
+        0.9170751339662797,
+        0.9486118183149834,
+        0.93381141392358,
+        0.946078031427422,
+        0.8924592547330558,
+        0.8996038107005057,
+        0.9379210293437387,
+        0.7736162039245629,
+        0.9045621084374982,
+        0.9210337775014268,
+        0.9542258547148057,
+        0.9545945726237722,
+        0.9044647884133313,
+        0.9642190806028778,
+        0.982867839869251,
+        0.9240977583483693,
+        0.9203006230413204,
+        0.9166389024659799,
+        0.8346064169215631,
+        0.94848411695305,
+        0.9587383159058932,
+        0.9115043141705741
+      ],
+      [
+        0.915210002685733,
+        1.0,
+        0.9609438239238121,
+        0.9705988488760291,
+        0.9085084616302725,
+        0.9277102377873411,
+        0.9882484299777143,
+        0.9249600174459693,
+        0.9824048404671614,
+        0.8410138751771797,
+        0.8583547166280056,
+        0.9253271091829607,
+        0.9336823651933616,
+        0.7811053183857548,
+        0.9575416706781058,
+        0.9896541650536015,
+        0.9200068390696846,
+        0.8679516270485098,
+        0.893059129184329,
+        0.8704521819678,
+        0.9826225220063817,
+        0.6778829298455787,
+        0.8627348140674894,
+        0.9293415534451104,
+        0.9582886193979152,
+        0.962630296686915,
+        0.9926728472733936,
+        0.9616179358232579,
+        0.9572232189679357,
+        0.9849719620748586,
+        0.9098283758422683,
+        0.9108686911897721,
+        0.9613074516666427,
+        0.9849125200173016,
+        0.9702974461137804,
+        0.990653253360677
+      ],
+      [
+        0.983499513526301,
+        0.9609438239238121,
+        1.0,
+        0.971417304153428,
+        0.9389490918530726,
+        0.884404622943307,
+        0.9577110017590904,
+        0.9431248580239842,
+        0.9179036496991954,
+        0.7870105396531916,
+        0.8398366008270629,
+        0.9156921100108112,
+        0.9332022620778387,
+        0.7671601532090753,
+        0.9208168819501215,
+        0.9873688939115748,
+        0.9197189412671327,
+        0.9231306977775823,
+        0.8835694654346378,
+        0.8736684511358693,
+        0.9834996605300079,
+        0.7053867878392315,
+        0.8715636499490959,
+        0.9156806850565623,
+        0.9568882585125512,
+        0.9549214141598009,
+        0.957681730290699,
+        0.96114352572767,
+        0.9842360631291496,
+        0.9687874205917589,
+        0.9062258006734425,
+        0.9088352927507362,
+        0.9018088872825644,
+        0.9887002892788217,
+        0.9649339969776095,
+        0.9460730843091645
+      ],
+      [
+        0.9554809415309544,
+        0.9705988488760291,
+        0.971417304153428,
+        1.0,
+        0.9725963781105085,
+        0.9542779057646584,
+        0.9776180087560831,
+        0.9821729899332327,
+        0.9094860138168881,
+        0.8289246736610649,
+        0.843909360495152,
+        0.9772827042708075,
+        0.9784701306538965,
+        0.8583698568523658,
+        0.9694107214699269,
+        0.9749439389145137,
+        0.9422983387532995,
+        0.9383744649027348,
+        0.8977926711463576,
+        0.9147030447344351,
+        0.964334217421903,
+        0.7377984422968471,
+        0.9138760800904816,
+        0.9780155400125117,
+        0.9954046115797718,
+        0.9885321341163856,
+        0.9561823023370978,
+        0.9730048385637844,
+        0.9844740961132649,
+        0.9430644229282481,
+        0.9685206389200933,
+        0.9726414107347745,
+        0.8728175401948647,
+        0.9664073118115512,
+        0.9944119313309236,
+        0.9667569073585188
+      ],
+      [
+        0.9349341384247939,
+        0.9085084616302725,
+        0.9389490918530726,
+        0.9725963781105085,
+        0.9999999999999998,
+        0.9404480363998438,
+        0.9448136344859587,
+        0.9967024108307232,
+        0.8181368462358566,
+        0.8343329077272106,
+        0.8368472313260062,
+        0.9765884725221797,
+        0.9592744208956916,
+        0.9011263375393719,
+        0.9087198760241852,
+        0.9329378575860967,
+        0.9336903230551011,
+        0.9788288579922626,
+        0.8989628483256937,
+        0.9313276984319692,
+        0.9077852090617727,
+        0.7848340727233583,
+        0.927807637045475,
+        0.9657457570367488,
+        0.9657330621088605,
+        0.9539182123325677,
+        0.877430620061851,
+        0.9145505174033478,
+        0.9693578176312697,
+        0.8621554385866637,
+        0.9677811037074177,
+        0.9790058960760999,
+        0.792051411627246,
+        0.9124971723449938,
+        0.9559648443734523,
+        0.8853776215141886
+      ],
+      [
+        0.8809696861917642,
+        0.9277102377873411,
+        0.884404622943307,
+        0.9542779057646584,
+        0.9404480363998438,
+        0.9999999999999999,
+        0.9643361001092334,
+        0.9628199836828364,
+        0.8617859248238324,
+        0.9353730140010683,
+        0.9168202968942156,
+        0.9880506705432577,
+        0.9820902872480554,
+        0.9534900787912476,
+        0.9704119259448212,
+        0.9083742729776935,
+        0.9733752612019989,
+        0.9307787884449205,
+        0.9519098817732401,
+        0.9712576482632777,
+        0.86933598315185,
+        0.852937376632973,
+        0.9683839999498339,
+        0.9890086988924621,
+        0.9681808301256492,
+        0.9761276254250655,
+        0.8828112424479794,
+        0.9435765094173185,
+        0.9452882206952226,
+        0.86265227614977,
+        0.986598570303757,
+        0.9826562543630807,
+        0.8373563563346687,
+        0.8801744740658362,
+        0.9662606603231878,
+        0.9273091740137015
+      ],
+      [
+        0.925489314960406,
+        0.9882484299777143,
+        0.9577110017590904,
+        0.9776180087560831,
+        0.9448136344859587,
+        0.9643361001092334,
+        1.0,
+        0.9595030644629582,
+        0.9522084633239347,
+        0.9028440227105292,
+        0.9105515373548755,
+        0.9601494415649132,
+        0.9610860296632647,
+        0.8583478810664056,
+        0.9620769932854011,
+        0.9833585219067899,
+        0.96144585961008,
+        0.9221063319255043,
+        0.9441444354060965,
+        0.9299362521049354,
+        0.9604289537850127,
+        0.7691889645757022,
+        0.9212988396414166,
+        0.9592920330022394,
+        0.9706710315194056,
+        0.9777531345557146,
+        0.9636281867481951,
+        0.9628371876404767,
+        0.9761668704798362,
+        0.9559926240245038,
+        0.9481113013976202,
+        0.9490388403093141,
+        0.9400115392147002,
+        0.9677361371044197,
+        0.9787096506838837,
+        0.9716189970895946
+      ],
+      [
+        0.9420143086045454,
+        0.9249600174459693,
+        0.9431248580239842,
+        0.9821729899332327,
+        0.9967024108307232,
+        0.9628199836828364,
+        0.9595030644629582,
+        0.9999999999999999,
+        0.8393330857703464,
+        0.8610833870165241,
+        0.8637166417066513,
+        0.9899948786744613,
+        0.9785830481059564,
+        0.9190119241202047,
+        0.937661048405168,
+        0.9404363152714259,
+        0.9548303955365295,
+        0.9795200106272938,
+        0.9201809283429103,
+        0.9504110189040318,
+        0.9136211568374789,
+        0.8089668295938548,
+        0.9482580418924553,
+        0.9830116163391726,
+        0.9808898118914279,
+        0.9735309805192646,
+        0.8924234896955558,
+        0.9389039850257034,
+        0.9786322708138363,
+        0.8779096135234412,
+        0.9839080567767936,
+        0.9907267269476893,
+        0.8119864939062891,
+        0.9199090376996888,
+        0.9732518998301521,
+        0.9095416370127778
+      ],
+      [
+        0.8518095969440438,
+        0.9824048404671614,
+        0.9179036496991954,
+        0.9094860138168881,
+        0.8181368462358566,
+        0.8617859248238324,
+        0.9522084633239347,
+        0.8393330857703464,
+        1.0,
+        0.7994996615245575,
+        0.8225059911487714,
+        0.8429353208814123,
+        0.8592767913255754,
+        0.6763256248727917,
+        0.9102290077748725,
+        0.9618373558942036,
+        0.8587655581706771,
+        0.7723531413987514,
+        0.8423161897521244,
+        0.7910923005449213,
+        0.9616320260700982,
+        0.5895212808619901,
+        0.7795966373156507,
+        0.8506075858358112,
+        0.8914834725484869,
+        0.9030817847523752,
+        0.9848369994068767,
+        0.916999685411595,
+        0.8967778293938011,
+        0.9825625428460102,
+        0.8231857737580901,
+        0.8215369447256257,
+        0.9886656325487194,
+        0.9631069853068226,
+        0.9132330631953839,
+        0.9720929532577168
+      ],
+      [
+        0.7862293332837229,
+        0.8410138751771797,
+        0.7870105396531916,
+        0.8289246736610649,
+        0.8343329077272106,
+        0.9353730140010683,
+        0.9028440227105292,
+        0.8610833870165241,
+        0.7994996615245575,
+        1.0000000000000002,
+        0.9823236420233082,
+        0.8880688773961243,
+        0.8867231939324495,
+        0.9210370453889201,
+        0.8647769766387343,
+        0.8236054772161524,
+        0.9511550136755474,
+        0.8751704595713562,
+        0.9791260797906995,
+        0.957254294298457,
+        0.7561969722008112,
+        0.9208117269076534,
+        0.9455067517045697,
+        0.8840451408556659,
+        0.845974173608973,
+        0.8788217578524481,
+        0.7713471801088473,
+        0.8478933498738869,
+        0.8664225795922046,
+        0.7727005751409337,
+        0.8899395447827277,
+        0.8777866609979618,
+        0.8258366255010106,
+        0.7813367699182538,
+        0.8556792835582618,
+        0.8186283823927858
+      ],
+      [
+        0.8509054952219758,
+        0.8583547166280056,
+        0.8398366008270629,
+        0.843909360495152,
+        0.8368472313260062,
+        0.9168202968942156,
+        0.9105515373548755,
+        0.8637166417066513,
+        0.8225059911487714,
+        0.9823236420233082,
+        0.9999999999999999,
+        0.8796001611134446,
+        0.8980560722462253,
+        0.8876078811585308,
+        0.87580093600253,
+        0.8554234646913889,
+        0.968659593453053,
+        0.8946495993912812,
+        0.9919503356794043,
+        0.9602765262534486,
+        0.7953346478233161,
+        0.9306983229998067,
+        0.9523927831008162,
+        0.8792439579081843,
+        0.8602135322830786,
+        0.8960382349511968,
+        0.7988303883099487,
+        0.8867475952377025,
+        0.9006214416705082,
+        0.8193403139227914,
+        0.8856964210975722,
+        0.8689138094759125,
+        0.8546226821112581,
+        0.8232491536317694,
+        0.8753763029614117,
+        0.8396896619828575
+      ],
+      [
+        0.918557118037139,
+        0.9253271091829607,
+        0.9156921100108112,
+        0.9772827042708075,
+        0.9765884725221797,
+        0.9880506705432577,
+        0.9601494415649132,
+        0.9899948786744613,
+        0.8429353208814123,
+        0.8880688773961243,
+        0.8796001611134446,
+        0.9999999999999997,
+        0.9917301749580275,
+        0.9462793903321374,
+        0.9650992219061547,
+        0.9223409750805611,
+        0.9652796295388452,
+        0.9602643229652611,
+        0.9298273341092813,
+        0.9638864557442959,
+        0.8916207669192152,
+        0.8310444872374927,
+        0.9637989869987885,
+        0.9983232787451015,
+        0.986226918863474,
+        0.9837207743514421,
+        0.8880349380287126,
+        0.9496514404795041,
+        0.9657237283710534,
+        0.8680010503623069,
+        0.9978317679453695,
+        0.99911681671803,
+        0.8092785238858289,
+        0.8990750816082365,
+        0.9790259272279856,
+        0.9231939587969824
+      ],
+      [
+        0.9459960688199617,
+        0.9336823651933616,
+        0.9332022620778387,
+        0.9784701306538965,
+        0.9592744208956916,
+        0.9820902872480554,
+        0.9610860296632647,
+        0.9785830481059564,
+        0.8592767913255754,
+        0.8867231939324495,
+        0.8980560722462253,
+        0.9917301749580275,
+        0.9999999999999999,
+        0.9294703697858017,
+        0.9821764451226621,
+        0.9305802273572377,
+        0.9781281107467005,
+        0.956200292284074,
+        0.9400296978735854,
+        0.9672114233496947,
+        0.9030329608389687,
+        0.8451281702707303,
+        0.9707898451600699,
+        0.9957496396578027,
+        0.9922927859860953,
+        0.9952753880418725,
+        0.9013345727203551,
+        0.9779871976165605,
+        0.9770809126237668,
+        0.8927210159535545,
+        0.9946564637275012,
+        0.9892956257462908,
+        0.827500080986576,
+        0.9132731478767034,
+        0.9898910977396153,
+        0.9412739194431954
+      ],
+      [
+        0.8022107023156563,
+        0.7811053183857548,
+        0.7671601532090753,
+        0.8583698568523658,
+        0.9011263375393719,
+        0.9534900787912476,
+        0.8583478810664056,
+        0.9190119241202047,
+        0.6763256248727917,
+        0.9210370453889201,
+        0.8876078811585308,
+        0.9462793903321374,
+        0.9294703697858017,
+        1.0,
+        0.8736968358288245,
+        0.773460285641579,
+        0.9339112881625301,
+        0.9264690105637039,
+        0.9219322913443321,
+        0.9705376783425351,
+        0.7113611705719552,
+        0.9296317177925935,
+        0.9709276785568549,
+        0.9404448955253736,
+        0.8867898908704692,
+        0.895485307510336,
+        0.7100293744071752,
+        0.8408412094805624,
+        0.867526728927142,
+        0.6899309211692204,
+        0.9557008798983266,
+        0.9506197181663641,
+        0.6603193895795486,
+        0.7296047181866007,
+        0.8737041272574835,
+        0.7774795711748845
+      ],
+      [
+        0.9170751339662797,
+        0.9575416706781058,
+        0.9208168819501215,
+        0.9694107214699269,
+        0.9087198760241852,
+        0.9704119259448212,
+        0.9620769932854011,
+        0.937661048405168,
+        0.9102290077748725,
+        0.8647769766387343,
+        0.87580093600253,
+        0.9650992219061547,
+        0.9821764451226621,
+        0.8736968358288245,
+        1.0,
+        0.9339843134363472,
+        0.9524939109837673,
+        0.8892266695525773,
+        0.9104984006390356,
+        0.9239688057569314,
+        0.9171522173681108,
+        0.7761999606348848,
+        0.927654337810228,
+        0.9770433869499313,
+        0.9834717033695424,
+        0.9899873144861912,
+        0.9372114748696796,
+        0.9866997735257359,
+        0.9529039749410028,
+        0.9254008938326242,
+        0.965763155869755,
+        0.9564558670659303,
+        0.8707170198095567,
+        0.9240573976746673,
+        0.9875515769955603,
+        0.9777791179934875
+      ],
+      [
+        0.9486118183149834,
+        0.9896541650536015,
+        0.9873688939115748,
+        0.9749439389145137,
+        0.9329378575860967,
+        0.9083742729776935,
+        0.9833585219067899,
+        0.9404363152714259,
+        0.9618373558942036,
+        0.8236054772161524,
+        0.8554234646913889,
+        0.9223409750805611,
+        0.9305802273572377,
+        0.773460285641579,
+        0.9339843134363472,
+        1.0,
+        0.9218068144140777,
+        0.9015761533000951,
+        0.895103952615858,
+        0.873663152022638,
+        0.9933936900976448,
+        0.6876944348424243,
+        0.8659171350943067,
+        0.9216303032178964,
+        0.9569846387472073,
+        0.9578668430840229,
+        0.983381291589946,
+        0.9568007205112057,
+        0.9754185099626604,
+        0.9841995050401605,
+        0.9066663915273121,
+        0.9110255016271355,
+        0.9477704829004333,
+        0.9967375844076445,
+        0.967540271101464,
+        0.9699777580360949
+      ],
+      [
+        0.93381141392358,
+        0.9200068390696846,
+        0.9197189412671327,
+        0.9422983387532995,
+        0.9336903230551011,
+        0.9733752612019989,
+        0.96144585961008,
+        0.9548303955365295,
+        0.8587655581706771,
+        0.9511550136755474,
+        0.968659593453053,
+        0.9652796295388452,
+        0.9781281107467005,
+        0.9339112881625301,
+        0.9524939109837673,
+        0.9218068144140777,
+        1.0,
+        0.9611399623234295,
+        0.989708553064098,
+        0.9907739493319131,
+        0.8781844669557144,
+        0.9105447369419507,
+        0.9890544392496062,
+        0.9661136926477213,
+        0.9563711710702926,
+        0.9738722136178759,
+        0.8740494595450475,
+        0.9593712412824467,
+        0.9711833915728465,
+        0.8805821792327341,
+        0.9697228086408758,
+        0.9597627221515429,
+        0.8576263714215151,
+        0.897207857503226,
+        0.9615937667117883,
+        0.9129511376770739
+      ],
+      [
+        0.946078031427422,
+        0.8679516270485098,
+        0.9231306977775823,
+        0.9383744649027348,
+        0.9788288579922626,
+        0.9307787884449205,
+        0.9221063319255043,
+        0.9795200106272938,
+        0.7723531413987514,
+        0.8751704595713562,
+        0.8946495993912812,
+        0.9602643229652611,
+        0.956200292284074,
+        0.9264690105637039,
+        0.8892266695525773,
+        0.9015761533000951,
+        0.9611399623234295,
+        1.0000000000000002,
+        0.9402672618204853,
+        0.9667708222670702,
+        0.8615862594266441,
+        0.8804893217192282,
+        0.9656013728454413,
+        0.9499876749389905,
+        0.9419548480341039,
+        0.9421568123090814,
+        0.8235183398303128,
+        0.9101696509727764,
+        0.9679680672571286,
+        0.8268097604814855,
+        0.9615167616541641,
+        0.9641134513234662,
+        0.7660945217738708,
+        0.8764853888430943,
+        0.9354127413614354,
+        0.8446987083125894
+      ],
+      [
+        0.8924592547330558,
+        0.893059129184329,
+        0.8835694654346378,
+        0.8977926711463576,
+        0.8989628483256937,
+        0.9519098817732401,
+        0.9441444354060965,
+        0.9201809283429103,
+        0.8423161897521244,
+        0.9791260797906995,
+        0.9919503356794043,
+        0.9298273341092813,
+        0.9400296978735854,
+        0.9219322913443321,
+        0.9104984006390356,
+        0.895103952615858,
+        0.989708553064098,
+        0.9402672618204853,
+        0.9999999999999999,
+        0.9838709173363382,
+        0.840585910759293,
+        0.9278052202998517,
+        0.9769998549932558,
+        0.9271953392620462,
+        0.9102710949288026,
+        0.9361583019714353,
+        0.8373826634578371,
+        0.9186185581161908,
+        0.9413464645702516,
+        0.8492152683654292,
+        0.9330750183255876,
+        0.9220539019023916,
+        0.8610275379188264,
+        0.8640271873371662,
+        0.9196201563635937,
+        0.8737752005066988
+      ],
+      [
+        0.8996038107005057,
+        0.8704521819678,
+        0.8736684511358693,
+        0.9147030447344351,
+        0.9313276984319692,
+        0.9712576482632777,
+        0.9299362521049354,
+        0.9504110189040318,
+        0.7910923005449213,
+        0.957254294298457,
+        0.9602765262534486,
+        0.9638864557442959,
+        0.9672114233496947,
+        0.9705376783425351,
+        0.9239688057569314,
+        0.873663152022638,
+        0.9907739493319131,
+        0.9667708222670702,
+        0.9838709173363382,
+        1.0000000000000002,
+        0.8196521770417321,
+        0.9446135144937041,
+        0.998712483711161,
+        0.9610745296534403,
+        0.9343172278435469,
+        0.9506050101209429,
+        0.8120529907672027,
+        0.921609458539579,
+        0.9448699623332227,
+        0.8132377166203946,
+        0.9712736960324855,
+        0.9624182385710001,
+        0.7904499272603991,
+        0.840574668140001,
+        0.9334532890065683,
+        0.8612571462062387
+      ],
+      [
+        0.9379210293437387,
+        0.9826225220063817,
+        0.9834996605300079,
+        0.964334217421903,
+        0.9077852090617727,
+        0.86933598315185,
+        0.9604289537850127,
+        0.9136211568374789,
+        0.9616320260700982,
+        0.7561969722008112,
+        0.7953346478233161,
+        0.8916207669192152,
+        0.9030329608389687,
+        0.7113611705719552,
+        0.9171522173681108,
+        0.9933936900976448,
+        0.8781844669557144,
+        0.8615862594266441,
+        0.840585910759293,
+        0.8196521770417321,
+        1.0000000000000002,
+        0.6095563092864397,
+        0.8135026323709251,
+        0.8933075279509042,
+        0.9417138113018023,
+        0.9370827974870236,
+        0.9900630379791043,
+        0.9437640232369491,
+        0.954495682243523,
+        0.989630252616813,
+        0.8735117847173438,
+        0.8797476376611906,
+        0.937906440950481,
+        0.9986188310932127,
+        0.952669315381254,
+        0.9678805828622549
+      ],
+      [
+        0.7736162039245629,
+        0.6778829298455787,
+        0.7053867878392315,
+        0.7377984422968471,
+        0.7848340727233583,
+        0.852937376632973,
+        0.7691889645757022,
+        0.8089668295938548,
+        0.5895212808619901,
+        0.9208117269076534,
+        0.9306983229998067,
+        0.8310444872374927,
+        0.8451281702707303,
+        0.9296317177925935,
+        0.7761999606348848,
+        0.6876944348424243,
+        0.9105447369419507,
+        0.8804893217192282,
+        0.9278052202998517,
+        0.9446135144937041,
+        0.6095563092864397,
+        0.9999999999999996,
+        0.946917642153627,
+        0.8279149318642122,
+        0.7764510559198401,
+        0.8086922048860028,
+        0.5961459452196489,
+        0.7816763615270282,
+        0.8082366878806896,
+        0.6166109812761048,
+        0.8542986574624669,
+        0.8338122651590881,
+        0.6161010646292462,
+        0.6440218846344827,
+        0.776107236822173,
+        0.670849033512563
+      ],
+      [
+        0.9045621084374982,
+        0.8627348140674894,
+        0.8715636499490959,
+        0.9138760800904816,
+        0.927807637045475,
+        0.9683839999498339,
+        0.9212988396414166,
+        0.9482580418924553,
+        0.7795966373156507,
+        0.9455067517045697,
+        0.9523927831008162,
+        0.9637989869987885,
+        0.9707898451600699,
+        0.9709276785568549,
+        0.927654337810228,
+        0.8659171350943067,
+        0.9890544392496062,
+        0.9656013728454413,
+        0.9769998549932558,
+        0.998712483711161,
+        0.8135026323709251,
+        0.946917642153627,
+        1.0000000000000002,
+        0.9628824266750717,
+        0.9367190119464494,
+        0.9523146448995268,
+        0.8057345562270345,
+        0.9261752012508916,
+        0.9435790300099004,
+        0.8078635459887673,
+        0.973775404229288,
+        0.9633369845724764,
+        0.7746250805184881,
+        0.8345211059257536,
+        0.9349286580809292,
+        0.8593851113786569
+      ],
+      [
+        0.9210337775014268,
+        0.9293415534451104,
+        0.9156806850565623,
+        0.9780155400125117,
+        0.9657457570367488,
+        0.9890086988924621,
+        0.9592920330022394,
+        0.9830116163391726,
+        0.8506075858358112,
+        0.8840451408556659,
+        0.8792439579081843,
+        0.9983232787451015,
+        0.9957496396578027,
+        0.9404448955253736,
+        0.9770433869499313,
+        0.9216303032178964,
+        0.9661136926477213,
+        0.9499876749389905,
+        0.9271953392620462,
+        0.9610745296534403,
+        0.8933075279509042,
+        0.8279149318642122,
+        0.9628824266750717,
+        0.9999999999999998,
+        0.9900729992316019,
+        0.9890199505799411,
+        0.8947291369442643,
+        0.9608150914648864,
+        0.964751176778936,
+        0.8758090358886217,
+        0.9980628355650007,
+        0.9965766247608369,
+        0.8134798020540323,
+        0.9008346213465144,
+        0.9841739231036126,
+        0.9343341690956739
+      ],
+      [
+        0.9542258547148057,
+        0.9582886193979152,
+        0.9568882585125512,
+        0.9954046115797718,
+        0.9657330621088605,
+        0.9681808301256492,
+        0.9706710315194056,
+        0.9808898118914279,
+        0.8914834725484869,
+        0.845974173608973,
+        0.8602135322830786,
+        0.986226918863474,
+        0.9922927859860953,
+        0.8867898908704692,
+        0.9834717033695424,
+        0.9569846387472073,
+        0.9563711710702926,
+        0.9419548480341039,
+        0.9102710949288026,
+        0.9343172278435469,
+        0.9417138113018023,
+        0.7764510559198401,
+        0.9367190119464494,
+        0.9900729992316019,
+        1.0,
+        0.9964372407025822,
+        0.9386325159918885,
+        0.9822132472089306,
+        0.9820883204767122,
+        0.9263005808975768,
+        0.9831219510569338,
+        0.9825126364991821,
+        0.852266949100778,
+        0.9464193834591521,
+        0.998118423696506,
+        0.963814591844568
+      ],
+      [
+        0.9545945726237722,
+        0.962630296686915,
+        0.9549214141598009,
+        0.9885321341163856,
+        0.9539182123325677,
+        0.9761276254250655,
+        0.9777531345557146,
+        0.9735309805192646,
+        0.9030817847523752,
+        0.8788217578524481,
+        0.8960382349511968,
+        0.9837207743514421,
+        0.9952753880418725,
+        0.895485307510336,
+        0.9899873144861912,
+        0.9578668430840229,
+        0.9738722136178759,
+        0.9421568123090814,
+        0.9361583019714353,
+        0.9506050101209429,
+        0.9370827974870236,
+        0.8086922048860028,
+        0.9523146448995268,
+        0.9890199505799411,
+        0.9964372407025822,
+        1.0,
+        0.9384299593276012,
+        0.9901746782942494,
+        0.9847048843900219,
+        0.931709727780101,
+        0.9827835693163199,
+        0.9780371988032105,
+        0.8726005529613721,
+        0.9454209046856544,
+        0.9983259827700739,
+        0.9684238509790053
+      ],
+      [
+        0.9044647884133313,
+        0.9926728472733936,
+        0.957681730290699,
+        0.9561823023370978,
+        0.877430620061851,
+        0.8828112424479794,
+        0.9636281867481951,
+        0.8924234896955558,
+        0.9848369994068767,
+        0.7713471801088473,
+        0.7988303883099487,
+        0.8880349380287126,
+        0.9013345727203551,
+        0.7100293744071752,
+        0.9372114748696796,
+        0.983381291589946,
+        0.8740494595450475,
+        0.8235183398303128,
+        0.8373826634578371,
+        0.8120529907672027,
+        0.9900630379791043,
+        0.5961459452196489,
+        0.8057345562270345,
+        0.8947291369442643,
+        0.9386325159918885,
+        0.9384299593276012,
+        0.9999999999999999,
+        0.9474890466281455,
+        0.9346371224119211,
+        0.99304333424419,
+        0.8700499595713288,
+        0.8724818403571809,
+        0.9559997624921566,
+        0.9879619031381948,
+        0.95220411216264,
+        0.987796828566837
+      ],
+      [
+        0.9642190806028778,
+        0.9616179358232579,
+        0.96114352572767,
+        0.9730048385637844,
+        0.9145505174033478,
+        0.9435765094173185,
+        0.9628371876404767,
+        0.9389039850257034,
+        0.916999685411595,
+        0.8478933498738869,
+        0.8867475952377025,
+        0.9496514404795041,
+        0.9779871976165605,
+        0.8408412094805624,
+        0.9866997735257359,
+        0.9568007205112057,
+        0.9593712412824467,
+        0.9101696509727764,
+        0.9186185581161908,
+        0.921609458539579,
+        0.9437640232369491,
+        0.7816763615270282,
+        0.9261752012508916,
+        0.9608150914648864,
+        0.9822132472089306,
+        0.9901746782942494,
+        0.9474890466281455,
+        0.9999999999999999,
+        0.976695434915534,
+        0.9522566488760327,
+        0.9516260513295387,
+        0.941396917456614,
+        0.8882267278429096,
+        0.9531745298731935,
+        0.9901779751995462,
+        0.9760063395664843
+      ],
+      [
+        0.982867839869251,
+        0.9572232189679357,
+        0.9842360631291496,
+        0.9844740961132649,
+        0.9693578176312697,
+        0.9452882206952226,
+        0.9761668704798362,
+        0.9786322708138363,
+        0.8967778293938011,
+        0.8664225795922046,
+        0.9006214416705082,
+        0.9657237283710534,
+        0.9770809126237668,
+        0.867526728927142,
+        0.9529039749410028,
+        0.9754185099626604,
+        0.9711833915728465,
+        0.9679680672571286,
+        0.9413464645702516,
+        0.9448699623332227,
+        0.954495682243523,
+        0.8082366878806896,
+        0.9435790300099004,
+        0.964751176778936,
+        0.9820883204767122,
+        0.9847048843900219,
+        0.9346371224119211,
+        0.976695434915534,
+        0.9999999999999999,
+        0.9399619820983202,
+        0.9619341894701241,
+        0.9612481029555772,
+        0.8819457336734311,
+        0.9645231970893834,
+        0.9857368245271455,
+        0.9454283179830649
+      ],
+      [
+        0.9240977583483693,
+        0.9849719620748586,
+        0.9687874205917589,
+        0.9430644229282481,
+        0.8621554385866637,
+        0.86265227614977,
+        0.9559926240245038,
+        0.8779096135234412,
+        0.9825625428460102,
+        0.7727005751409337,
+        0.8193403139227914,
+        0.8680010503623069,
+        0.8927210159535545,
+        0.6899309211692204,
+        0.9254008938326242,
+        0.9841995050401605,
+        0.8805821792327341,
+        0.8268097604814855,
+        0.8492152683654292,
+        0.8132377166203946,
+        0.989630252616813,
+        0.6166109812761048,
+        0.8078635459887673,
+        0.8758090358886217,
+        0.9263005808975768,
+        0.931709727780101,
+        0.99304333424419,
+        0.9522566488760327,
+        0.9399619820983202,
+        0.9999999999999998,
+        0.8533541111169134,
+        0.8517998299637974,
+        0.9649523666459279,
+        0.991592581079111,
+        0.9443014540504666,
+        0.9788752370582525
+      ],
+      [
+        0.9203006230413204,
+        0.9098283758422683,
+        0.9062258006734425,
+        0.9685206389200933,
+        0.9677811037074177,
+        0.986598570303757,
+        0.9481113013976202,
+        0.9839080567767936,
+        0.8231857737580901,
+        0.8899395447827277,
+        0.8856964210975722,
+        0.9978317679453695,
+        0.9946564637275012,
+        0.9557008798983266,
+        0.965763155869755,
+        0.9066663915273121,
+        0.9697228086408758,
+        0.9615167616541641,
+        0.9330750183255876,
+        0.9712736960324855,
+        0.8735117847173438,
+        0.8542986574624669,
+        0.973775404229288,
+        0.9980628355650007,
+        0.9831219510569338,
+        0.9827835693163199,
+        0.8700499595713288,
+        0.9516260513295387,
+        0.9619341894701241,
+        0.8533541111169134,
+        1.0,
+        0.997976052210726,
+        0.7893517675635572,
+        0.8831350463007639,
+        0.975604578983841,
+        0.9133165491098771
+      ],
+      [
+        0.9166389024659799,
+        0.9108686911897721,
+        0.9088352927507362,
+        0.9726414107347745,
+        0.9790058960760999,
+        0.9826562543630807,
+        0.9490388403093141,
+        0.9907267269476893,
+        0.8215369447256257,
+        0.8777866609979618,
+        0.8689138094759125,
+        0.99911681671803,
+        0.9892956257462908,
+        0.9506197181663641,
+        0.9564558670659303,
+        0.9110255016271355,
+        0.9597627221515429,
+        0.9641134513234662,
+        0.9220539019023916,
+        0.9624182385710001,
+        0.8797476376611906,
+        0.8338122651590881,
+        0.9633369845724764,
+        0.9965766247608369,
+        0.9825126364991821,
+        0.9780371988032105,
+        0.8724818403571809,
+        0.941396917456614,
+        0.9612481029555772,
+        0.8517998299637974,
+        0.997976052210726,
+        0.9999999999999999,
+        0.7860343170355507,
+        0.8871377148025558,
+        0.9730879133579021,
+        0.9089719339473525
+      ],
+      [
+        0.8346064169215631,
+        0.9613074516666427,
+        0.9018088872825644,
+        0.8728175401948647,
+        0.792051411627246,
+        0.8373563563346687,
+        0.9400115392147002,
+        0.8119864939062891,
+        0.9886656325487194,
+        0.8258366255010106,
+        0.8546226821112581,
+        0.8092785238858289,
+        0.827500080986576,
+        0.6603193895795486,
+        0.8707170198095567,
+        0.9477704829004333,
+        0.8576263714215151,
+        0.7660945217738708,
+        0.8610275379188264,
+        0.7904499272603991,
+        0.937906440950481,
+        0.6161010646292462,
+        0.7746250805184881,
+        0.8134798020540323,
+        0.852266949100778,
+        0.8726005529613721,
+        0.9559997624921566,
+        0.8882267278429096,
+        0.8819457336734311,
+        0.9649523666459279,
+        0.7893517675635572,
+        0.7860343170355507,
+        1.0000000000000002,
+        0.9448207563515859,
+        0.8791936058058573,
+        0.937714726223809
+      ],
+      [
+        0.94848411695305,
+        0.9849125200173016,
+        0.9887002892788217,
+        0.9664073118115512,
+        0.9124971723449938,
+        0.8801744740658362,
+        0.9677361371044197,
+        0.9199090376996888,
+        0.9631069853068226,
+        0.7813367699182538,
+        0.8232491536317694,
+        0.8990750816082365,
+        0.9132731478767034,
+        0.7296047181866007,
+        0.9240573976746673,
+        0.9967375844076445,
+        0.897207857503226,
+        0.8764853888430943,
+        0.8640271873371662,
+        0.840574668140001,
+        0.9986188310932127,
+        0.6440218846344827,
+        0.8345211059257536,
+        0.9008346213465144,
+        0.9464193834591521,
+        0.9454209046856544,
+        0.9879619031381948,
+        0.9531745298731935,
+        0.9645231970893834,
+        0.991592581079111,
+        0.8831350463007639,
+        0.8871377148025558,
+        0.9448207563515859,
+        1.0,
+        0.9584894429139779,
+        0.9695943135577018
+      ],
+      [
+        0.9587383159058932,
+        0.9702974461137804,
+        0.9649339969776095,
+        0.9944119313309236,
+        0.9559648443734523,
+        0.9662606603231878,
+        0.9787096506838837,
+        0.9732518998301521,
+        0.9132330631953839,
+        0.8556792835582618,
+        0.8753763029614117,
+        0.9790259272279856,
+        0.9898910977396153,
+        0.8737041272574835,
+        0.9875515769955603,
+        0.967540271101464,
+        0.9615937667117883,
+        0.9354127413614354,
+        0.9196201563635937,
+        0.9334532890065683,
+        0.952669315381254,
+        0.776107236822173,
+        0.9349286580809292,
+        0.9841739231036126,
+        0.998118423696506,
+        0.9983259827700739,
+        0.95220411216264,
+        0.9901779751995462,
+        0.9857368245271455,
+        0.9443014540504666,
+        0.975604578983841,
+        0.9730879133579021,
+        0.8791936058058573,
+        0.9584894429139779,
+        1.0,
+        0.9752426437921305
+      ],
+      [
+        0.9115043141705741,
+        0.990653253360677,
+        0.9460730843091645,
+        0.9667569073585188,
+        0.8853776215141886,
+        0.9273091740137015,
+        0.9716189970895946,
+        0.9095416370127778,
+        0.9720929532577168,
+        0.8186283823927858,
+        0.8396896619828575,
+        0.9231939587969824,
+        0.9412739194431954,
+        0.7774795711748845,
+        0.9777791179934875,
+        0.9699777580360949,
+        0.9129511376770739,
+        0.8446987083125894,
+        0.8737752005066988,
+        0.8612571462062387,
+        0.9678805828622549,
+        0.670849033512563,
+        0.8593851113786569,
+        0.9343341690956739,
+        0.963814591844568,
+        0.9684238509790053,
+        0.987796828566837,
+        0.9760063395664843,
+        0.9454283179830649,
+        0.9788752370582525,
+        0.9133165491098771,
+        0.9089719339473525,
+        0.937714726223809,
+        0.9695943135577018,
+        0.9752426437921305,
+        1.0000000000000002
+      ]
+    ]
+  },
+  "enrichment": {
+    "typology_counts": {
+      "vessel": 15,
+      "artifact": 8,
+      "character": 8,
+      "environment": 1,
+      "creature": 2,
+      "vehicle": 2
+    },
+    "tier_by_typology": {
+      "vessel": {
+        "MYTHIC": 9,
+        "LEGENDARY": 5,
+        "EPIC": 1
+      },
+      "artifact": {
+        "LEGENDARY": 1,
+        "EPIC": 2,
+        "MYTHIC": 5
+      },
+      "character": {
+        "LEGENDARY": 4,
+        "EPIC": 2,
+        "MYTHIC": 2
+      },
+      "environment": {
+        "EPIC": 1
+      },
+      "creature": {
+        "LEGENDARY": 1,
+        "MYTHIC": 1
+      },
+      "vehicle": {
+        "MYTHIC": 2
+      }
+    },
+    "total_vram_mb_full": 1518.38,
+    "total_vram_mb_lod2_est": 121.47040000000001,
+    "lod_budget_total_cr": 1155,
+    "lod_policy": {
+      "LEGENDARY": "LOD1+LOD2+LOD3 = 45cr",
+      "MYTHIC": "LOD1+LOD2     = 30cr",
+      "EPIC": "LOD1 only     = 15cr"
+    }
+  },
+  "lod_plan_optimized": {
+    "budget_credits": 600,
+    "spent_credits": 600,
+    "total_vram_saved_mb": 674.71,
+    "picks": [
+      {
+        "asset": "Solaris_Flare_UFO",
+        "tier": "LEGENDARY",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 17.71,
+        "cost": 15,
+        "util": 0.9592,
+        "prime_H0": 0.8123
+      },
+      {
+        "asset": "FullBody_Kitsune_Masterpiece",
+        "tier": "LEGENDARY",
+        "typology": "character",
+        "lod": 1,
+        "saved_mb": 18.07,
+        "cost": 15,
+        "util": 0.9429,
+        "prime_H0": 0.7828
+      },
+      {
+        "asset": "Astral_Emperor_Crown",
+        "tier": "LEGENDARY",
+        "typology": "artifact",
+        "lod": 1,
+        "saved_mb": 17.92,
+        "cost": 15,
+        "util": 0.937,
+        "prime_H0": 0.7843
+      },
+      {
+        "asset": "Heavy_Metal_Apocalypse_UFO",
+        "tier": "LEGENDARY",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 17.9,
+        "cost": 15,
+        "util": 0.9269,
+        "prime_H0": 0.7767
+      },
+      {
+        "asset": "Steampunk_Aether_UFO",
+        "tier": "LEGENDARY",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 17.82,
+        "cost": 15,
+        "util": 0.9262,
+        "prime_H0": 0.7798
+      },
+      {
+        "asset": "Ancient_Overgrown_Jungle_UFO",
+        "tier": "LEGENDARY",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 18.22,
+        "cost": 15,
+        "util": 0.9182,
+        "prime_H0": 0.7558
+      },
+      {
+        "asset": "Epic_Yeti",
+        "tier": "LEGENDARY",
+        "typology": "character",
+        "lod": 1,
+        "saved_mb": 18.04,
+        "cost": 15,
+        "util": 0.917,
+        "prime_H0": 0.7623
+      },
+      {
+        "asset": "Kitsune_Anime_3D",
+        "tier": "LEGENDARY",
+        "typology": "character",
+        "lod": 1,
+        "saved_mb": 18.01,
+        "cost": 15,
+        "util": 0.904,
+        "prime_H0": 0.753
+      },
+      {
+        "asset": "Conductor_Automaton",
+        "tier": "LEGENDARY",
+        "typology": "character",
+        "lod": 1,
+        "saved_mb": 17.93,
+        "cost": 15,
+        "util": 0.9013,
+        "prime_H0": 0.7539
+      },
+      {
+        "asset": "Rocket_SportsCar",
+        "tier": "MYTHIC",
+        "typology": "vehicle",
+        "lod": 1,
+        "saved_mb": 18.14,
+        "cost": 15,
+        "util": 0.8983,
+        "prime_H0": 0.7428
+      },
+      {
+        "asset": "Biomechanical_Abyssal_UFO",
+        "tier": "MYTHIC",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 18.0,
+        "cost": 15,
+        "util": 0.8874,
+        "prime_H0": 0.7395
+      },
+      {
+        "asset": "Obsidian_World_Eater_Engine",
+        "tier": "MYTHIC",
+        "typology": "artifact",
+        "lod": 1,
+        "saved_mb": 17.91,
+        "cost": 15,
+        "util": 0.8841,
+        "prime_H0": 0.7404
+      },
+      {
+        "asset": "Fractal_Heart_Geometry",
+        "tier": "MYTHIC",
+        "typology": "artifact",
+        "lod": 1,
+        "saved_mb": 18.28,
+        "cost": 15,
+        "util": 0.8837,
+        "prime_H0": 0.725
+      },
+      {
+        "asset": "Locomotive",
+        "tier": "MYTHIC",
+        "typology": "vehicle",
+        "lod": 1,
+        "saved_mb": 17.97,
+        "cost": 15,
+        "util": 0.8822,
+        "prime_H0": 0.7363
+      },
+      {
+        "asset": "Cosmic_Lotus_Matrix",
+        "tier": "MYTHIC",
+        "typology": "artifact",
+        "lod": 1,
+        "saved_mb": 17.92,
+        "cost": 15,
+        "util": 0.8667,
+        "prime_H0": 0.7255
+      },
+      {
+        "asset": "Celestial_Nebula_UFO",
+        "tier": "MYTHIC",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 17.67,
+        "cost": 15,
+        "util": 0.8631,
+        "prime_H0": 0.7326
+      },
+      {
+        "asset": "Leviathan_WorldEater",
+        "tier": "MYTHIC",
+        "typology": "creature",
+        "lod": 1,
+        "saved_mb": 18.3,
+        "cost": 15,
+        "util": 0.8618,
+        "prime_H0": 0.7064
+      },
+      {
+        "asset": "Quantum_AI_Core_Component",
+        "tier": "MYTHIC",
+        "typology": "artifact",
+        "lod": 1,
+        "saved_mb": 17.92,
+        "cost": 15,
+        "util": 0.8593,
+        "prime_H0": 0.7194
+      },
+      {
+        "asset": "Viking_Runestone_UFO",
+        "tier": "MYTHIC",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 17.7,
+        "cost": 15,
+        "util": 0.8369,
+        "prime_H0": 0.7092
+      },
+      {
+        "asset": "Combat_UFO",
+        "tier": "LEGENDARY",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 16.28,
+        "cost": 15,
+        "util": 0.8344,
+        "prime_H0": 0.769
+      },
+      {
+        "asset": "Cyberpunk_Yakuza_UFO",
+        "tier": "MYTHIC",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 17.82,
+        "cost": 15,
+        "util": 0.8335,
+        "prime_H0": 0.7016
+      },
+      {
+        "asset": "Epic_Bitcoin",
+        "tier": "LEGENDARY",
+        "typology": "creature",
+        "lod": 1,
+        "saved_mb": 16.2,
+        "cost": 15,
+        "util": 0.8251,
+        "prime_H0": 0.7642
+      },
+      {
+        "asset": "Nurse_Character_3D",
+        "tier": "MYTHIC",
+        "typology": "character",
+        "lod": 1,
+        "saved_mb": 16.43,
+        "cost": 15,
+        "util": 0.8179,
+        "prime_H0": 0.7466
+      },
+      {
+        "asset": "Volcanic_Spiked_UFO",
+        "tier": "MYTHIC",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 17.72,
+        "cost": 15,
+        "util": 0.8151,
+        "prime_H0": 0.6898
+      },
+      {
+        "asset": "Necro_Politan_Ghost_UFO",
+        "tier": "MYTHIC",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 17.78,
+        "cost": 15,
+        "util": 0.8006,
+        "prime_H0": 0.6754
+      },
+      {
+        "asset": "Cyber_Hive_Drone_UFO",
+        "tier": "MYTHIC",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 16.71,
+        "cost": 15,
+        "util": 0.8,
+        "prime_H0": 0.7182
+      },
+      {
+        "asset": "Solaris_Flare_UFO",
+        "tier": "LEGENDARY",
+        "typology": "vessel",
+        "lod": 2,
+        "saved_mb": 14.61,
+        "cost": 15,
+        "util": 0.7913,
+        "prime_H0": 0.8123
+      },
+      {
+        "asset": "Ancient_Marble_Temple_UFO",
+        "tier": "MYTHIC",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 18.03,
+        "cost": 15,
+        "util": 0.7871,
+        "prime_H0": 0.6549
+      },
+      {
+        "asset": "Ethereal_Crystal_Mothership",
+        "tier": "MYTHIC",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 18.37,
+        "cost": 15,
+        "util": 0.7839,
+        "prime_H0": 0.64
+      },
+      {
+        "asset": "FullBody_Kitsune_Masterpiece",
+        "tier": "LEGENDARY",
+        "typology": "character",
+        "lod": 2,
+        "saved_mb": 14.91,
+        "cost": 15,
+        "util": 0.7779,
+        "prime_H0": 0.7828
+      },
+      {
+        "asset": "Astral_Emperor_Crown",
+        "tier": "LEGENDARY",
+        "typology": "artifact",
+        "lod": 2,
+        "saved_mb": 14.78,
+        "cost": 15,
+        "util": 0.773,
+        "prime_H0": 0.7843
+      },
+      {
+        "asset": "Heavy_Metal_Apocalypse_UFO",
+        "tier": "LEGENDARY",
+        "typology": "vessel",
+        "lod": 2,
+        "saved_mb": 14.77,
+        "cost": 15,
+        "util": 0.7647,
+        "prime_H0": 0.7767
+      },
+      {
+        "asset": "Steampunk_Aether_UFO",
+        "tier": "LEGENDARY",
+        "typology": "vessel",
+        "lod": 2,
+        "saved_mb": 14.7,
+        "cost": 15,
+        "util": 0.7641,
+        "prime_H0": 0.7798
+      },
+      {
+        "asset": "Ancient_Overgrown_Jungle_UFO",
+        "tier": "LEGENDARY",
+        "typology": "vessel",
+        "lod": 2,
+        "saved_mb": 15.03,
+        "cost": 15,
+        "util": 0.7576,
+        "prime_H0": 0.7558
+      },
+      {
+        "asset": "Epic_Yeti",
+        "tier": "LEGENDARY",
+        "typology": "character",
+        "lod": 2,
+        "saved_mb": 14.89,
+        "cost": 15,
+        "util": 0.7565,
+        "prime_H0": 0.7623
+      },
+      {
+        "asset": "Kitsune_Anime_3D",
+        "tier": "LEGENDARY",
+        "typology": "character",
+        "lod": 2,
+        "saved_mb": 14.86,
+        "cost": 15,
+        "util": 0.7458,
+        "prime_H0": 0.753
+      },
+      {
+        "asset": "Conductor_Automaton",
+        "tier": "LEGENDARY",
+        "typology": "character",
+        "lod": 2,
+        "saved_mb": 14.79,
+        "cost": 15,
+        "util": 0.7435,
+        "prime_H0": 0.7539
+      },
+      {
+        "asset": "Rocket_SportsCar",
+        "tier": "MYTHIC",
+        "typology": "vehicle",
+        "lod": 2,
+        "saved_mb": 14.97,
+        "cost": 15,
+        "util": 0.7411,
+        "prime_H0": 0.7428
+      },
+      {
+        "asset": "Biomechanical_Abyssal_UFO",
+        "tier": "MYTHIC",
+        "typology": "vessel",
+        "lod": 2,
+        "saved_mb": 14.85,
+        "cost": 15,
+        "util": 0.7321,
+        "prime_H0": 0.7395
+      },
+      {
+        "asset": "Obsidian_World_Eater_Engine",
+        "tier": "MYTHIC",
+        "typology": "artifact",
+        "lod": 2,
+        "saved_mb": 14.78,
+        "cost": 15,
+        "util": 0.7294,
+        "prime_H0": 0.7404
+      }
+    ],
+    "assets_touched": 28
+  },
+  "lod_plan_optimized_v2": {
+    "budget_credits": 600,
+    "spent_credits": 600,
+    "total_vram_saved_mb": 658.71,
+    "assets_touched": 27,
+    "guaranteed_picks": [
+      {
+        "asset": "Ancient_Overgrown_Jungle_UFO",
+        "tier": "LEGENDARY",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 18.22,
+        "cost": 15,
+        "util": 0.9182,
+        "prime_H0": 0.7558,
+        "typology_weight": 1.0
+      },
+      {
+        "asset": "Astral_Emperor_Crown",
+        "tier": "LEGENDARY",
+        "typology": "artifact",
+        "lod": 1,
+        "saved_mb": 17.92,
+        "cost": 15,
+        "util": 0.6559,
+        "prime_H0": 0.7843,
+        "typology_weight": 0.7
+      },
+      {
+        "asset": "Combat_UFO",
+        "tier": "LEGENDARY",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 16.28,
+        "cost": 15,
+        "util": 0.8344,
+        "prime_H0": 0.769,
+        "typology_weight": 1.0
+      },
+      {
+        "asset": "Conductor_Automaton",
+        "tier": "LEGENDARY",
+        "typology": "character",
+        "lod": 1,
+        "saved_mb": 17.93,
+        "cost": 15,
+        "util": 1.2618,
+        "prime_H0": 0.7539,
+        "typology_weight": 1.4
+      },
+      {
+        "asset": "Dark_Lord",
+        "tier": "EPIC",
+        "typology": "character",
+        "lod": 1,
+        "saved_mb": 18.01,
+        "cost": 15,
+        "util": 0.9743,
+        "prime_H0": 0.5797,
+        "typology_weight": 1.4
+      },
+      {
+        "asset": "Epic_Bitcoin",
+        "tier": "LEGENDARY",
+        "typology": "creature",
+        "lod": 1,
+        "saved_mb": 16.2,
+        "cost": 15,
+        "util": 0.9902,
+        "prime_H0": 0.7642,
+        "typology_weight": 1.2
+      },
+      {
+        "asset": "Epic_Yeti",
+        "tier": "LEGENDARY",
+        "typology": "character",
+        "lod": 1,
+        "saved_mb": 18.04,
+        "cost": 15,
+        "util": 1.2838,
+        "prime_H0": 0.7623,
+        "typology_weight": 1.4
+      },
+      {
+        "asset": "FullBody_Kitsune_Masterpiece",
+        "tier": "LEGENDARY",
+        "typology": "character",
+        "lod": 1,
+        "saved_mb": 18.07,
+        "cost": 15,
+        "util": 1.3201,
+        "prime_H0": 0.7828,
+        "typology_weight": 1.4
+      },
+      {
+        "asset": "Heavy_Metal_Apocalypse_UFO",
+        "tier": "LEGENDARY",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 17.9,
+        "cost": 15,
+        "util": 0.9269,
+        "prime_H0": 0.7767,
+        "typology_weight": 1.0
+      },
+      {
+        "asset": "Kitsune_Anime_3D",
+        "tier": "LEGENDARY",
+        "typology": "character",
+        "lod": 1,
+        "saved_mb": 18.01,
+        "cost": 15,
+        "util": 1.2656,
+        "prime_H0": 0.753,
+        "typology_weight": 1.4
+      },
+      {
+        "asset": "Legendary_Astral_Dragon",
+        "tier": "EPIC",
+        "typology": "character",
+        "lod": 1,
+        "saved_mb": 12.18,
+        "cost": 15,
+        "util": 0.6488,
+        "prime_H0": 0.5707,
+        "typology_weight": 1.4
+      },
+      {
+        "asset": "Legendary_Cyber_Seraphim",
+        "tier": "MYTHIC",
+        "typology": "character",
+        "lod": 1,
+        "saved_mb": 15.53,
+        "cost": 15,
+        "util": 0.9451,
+        "prime_H0": 0.6521,
+        "typology_weight": 1.4
+      },
+      {
+        "asset": "Leviathan_WorldEater",
+        "tier": "MYTHIC",
+        "typology": "creature",
+        "lod": 1,
+        "saved_mb": 18.3,
+        "cost": 15,
+        "util": 1.0342,
+        "prime_H0": 0.7064,
+        "typology_weight": 1.2
+      },
+      {
+        "asset": "Nurse_Character_3D",
+        "tier": "MYTHIC",
+        "typology": "character",
+        "lod": 1,
+        "saved_mb": 16.43,
+        "cost": 15,
+        "util": 1.145,
+        "prime_H0": 0.7466,
+        "typology_weight": 1.4
+      },
+      {
+        "asset": "Solaris_Flare_UFO",
+        "tier": "LEGENDARY",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 17.71,
+        "cost": 15,
+        "util": 0.9592,
+        "prime_H0": 0.8123,
+        "typology_weight": 1.0
+      },
+      {
+        "asset": "Steampunk_Aether_UFO",
+        "tier": "LEGENDARY",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 17.82,
+        "cost": 15,
+        "util": 0.9262,
+        "prime_H0": 0.7798,
+        "typology_weight": 1.0
+      }
+    ],
+    "greedy_picks": [
+      {
+        "asset": "FullBody_Kitsune_Masterpiece",
+        "tier": "LEGENDARY",
+        "typology": "character",
+        "lod": 2,
+        "saved_mb": 14.91,
+        "cost": 15,
+        "util": 1.0891,
+        "prime_H0": 0.7828,
+        "typology_weight": 1.4
+      },
+      {
+        "asset": "Epic_Yeti",
+        "tier": "LEGENDARY",
+        "typology": "character",
+        "lod": 2,
+        "saved_mb": 14.89,
+        "cost": 15,
+        "util": 1.0591,
+        "prime_H0": 0.7623,
+        "typology_weight": 1.4
+      },
+      {
+        "asset": "Kitsune_Anime_3D",
+        "tier": "LEGENDARY",
+        "typology": "character",
+        "lod": 2,
+        "saved_mb": 14.86,
+        "cost": 15,
+        "util": 1.0441,
+        "prime_H0": 0.753,
+        "typology_weight": 1.4
+      },
+      {
+        "asset": "Conductor_Automaton",
+        "tier": "LEGENDARY",
+        "typology": "character",
+        "lod": 2,
+        "saved_mb": 14.79,
+        "cost": 15,
+        "util": 1.041,
+        "prime_H0": 0.7539,
+        "typology_weight": 1.4
+      },
+      {
+        "asset": "Nurse_Character_3D",
+        "tier": "MYTHIC",
+        "typology": "character",
+        "lod": 2,
+        "saved_mb": 13.56,
+        "cost": 15,
+        "util": 0.9446,
+        "prime_H0": 0.7466,
+        "typology_weight": 1.4
+      },
+      {
+        "asset": "Rocket_SportsCar",
+        "tier": "MYTHIC",
+        "typology": "vehicle",
+        "lod": 1,
+        "saved_mb": 18.14,
+        "cost": 15,
+        "util": 0.8983,
+        "prime_H0": 0.7428,
+        "typology_weight": 1.0
+      },
+      {
+        "asset": "Biomechanical_Abyssal_UFO",
+        "tier": "MYTHIC",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 18.0,
+        "cost": 15,
+        "util": 0.8874,
+        "prime_H0": 0.7395,
+        "typology_weight": 1.0
+      },
+      {
+        "asset": "Locomotive",
+        "tier": "MYTHIC",
+        "typology": "vehicle",
+        "lod": 1,
+        "saved_mb": 17.97,
+        "cost": 15,
+        "util": 0.8822,
+        "prime_H0": 0.7363,
+        "typology_weight": 1.0
+      },
+      {
+        "asset": "Celestial_Nebula_UFO",
+        "tier": "MYTHIC",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 17.67,
+        "cost": 15,
+        "util": 0.8631,
+        "prime_H0": 0.7326,
+        "typology_weight": 1.0
+      },
+      {
+        "asset": "Leviathan_WorldEater",
+        "tier": "MYTHIC",
+        "typology": "creature",
+        "lod": 2,
+        "saved_mb": 15.1,
+        "cost": 15,
+        "util": 0.8532,
+        "prime_H0": 0.7064,
+        "typology_weight": 1.2
+      },
+      {
+        "asset": "Viking_Runestone_UFO",
+        "tier": "MYTHIC",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 17.7,
+        "cost": 15,
+        "util": 0.8369,
+        "prime_H0": 0.7092,
+        "typology_weight": 1.0
+      },
+      {
+        "asset": "Cyberpunk_Yakuza_UFO",
+        "tier": "MYTHIC",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 17.82,
+        "cost": 15,
+        "util": 0.8335,
+        "prime_H0": 0.7016,
+        "typology_weight": 1.0
+      },
+      {
+        "asset": "Epic_Bitcoin",
+        "tier": "LEGENDARY",
+        "typology": "creature",
+        "lod": 2,
+        "saved_mb": 13.36,
+        "cost": 15,
+        "util": 0.8169,
+        "prime_H0": 0.7642,
+        "typology_weight": 1.2
+      },
+      {
+        "asset": "Volcanic_Spiked_UFO",
+        "tier": "MYTHIC",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 17.72,
+        "cost": 15,
+        "util": 0.8151,
+        "prime_H0": 0.6898,
+        "typology_weight": 1.0
+      },
+      {
+        "asset": "Dark_Lord",
+        "tier": "EPIC",
+        "typology": "character",
+        "lod": 2,
+        "saved_mb": 14.86,
+        "cost": 15,
+        "util": 0.8038,
+        "prime_H0": 0.5797,
+        "typology_weight": 1.4
+      },
+      {
+        "asset": "Necro_Politan_Ghost_UFO",
+        "tier": "MYTHIC",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 17.78,
+        "cost": 15,
+        "util": 0.8006,
+        "prime_H0": 0.6754,
+        "typology_weight": 1.0
+      },
+      {
+        "asset": "Cyber_Hive_Drone_UFO",
+        "tier": "MYTHIC",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 16.71,
+        "cost": 15,
+        "util": 0.8,
+        "prime_H0": 0.7182,
+        "typology_weight": 1.0
+      },
+      {
+        "asset": "Solaris_Flare_UFO",
+        "tier": "LEGENDARY",
+        "typology": "vessel",
+        "lod": 2,
+        "saved_mb": 14.61,
+        "cost": 15,
+        "util": 0.7913,
+        "prime_H0": 0.8123,
+        "typology_weight": 1.0
+      },
+      {
+        "asset": "Ancient_Marble_Temple_UFO",
+        "tier": "MYTHIC",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 18.03,
+        "cost": 15,
+        "util": 0.7871,
+        "prime_H0": 0.6549,
+        "typology_weight": 1.0
+      },
+      {
+        "asset": "Ethereal_Crystal_Mothership",
+        "tier": "MYTHIC",
+        "typology": "vessel",
+        "lod": 1,
+        "saved_mb": 18.37,
+        "cost": 15,
+        "util": 0.7839,
+        "prime_H0": 0.64,
+        "typology_weight": 1.0
+      },
+      {
+        "asset": "Legendary_Cyber_Seraphim",
+        "tier": "MYTHIC",
+        "typology": "character",
+        "lod": 2,
+        "saved_mb": 12.81,
+        "cost": 15,
+        "util": 0.7797,
+        "prime_H0": 0.6521,
+        "typology_weight": 1.4
+      },
+      {
+        "asset": "Heavy_Metal_Apocalypse_UFO",
+        "tier": "LEGENDARY",
+        "typology": "vessel",
+        "lod": 2,
+        "saved_mb": 14.77,
+        "cost": 15,
+        "util": 0.7647,
+        "prime_H0": 0.7767,
+        "typology_weight": 1.0
+      },
+      {
+        "asset": "Steampunk_Aether_UFO",
+        "tier": "LEGENDARY",
+        "typology": "vessel",
+        "lod": 2,
+        "saved_mb": 14.7,
+        "cost": 15,
+        "util": 0.7641,
+        "prime_H0": 0.7798,
+        "typology_weight": 1.0
+      },
+      {
+        "asset": "Ancient_Overgrown_Jungle_UFO",
+        "tier": "LEGENDARY",
+        "typology": "vessel",
+        "lod": 2,
+        "saved_mb": 15.03,
+        "cost": 15,
+        "util": 0.7576,
+        "prime_H0": 0.7558,
+        "typology_weight": 1.0
+      }
+    ],
+    "policy": {
+      "environment": "native \u2014 never LOD'd",
+      "character/creature": "guaranteed LOD1",
+      "legendary": "guaranteed LOD1",
+      "remaining_budget": "greedy utility ranking with typology bias"
+    },
+    "per_asset_chain": {
+      "Ancient_Marble_Temple_UFO": [
+        1
+      ],
+      "Ancient_Overgrown_Jungle_UFO": [
+        1,
+        2
+      ],
+      "Astral_Emperor_Crown": [
+        1
+      ],
+      "BioOrganic_Symbiote_Weapon": [],
+      "Biomechanical_Abyssal_UFO": [
+        1
+      ],
+      "Celestial_Nebula_UFO": [
+        1
+      ],
+      "Chrono_Lich_Phylactery": [],
+      "Combat_UFO": [
+        1
+      ],
+      "Conductor_Automaton": [
+        1,
+        2
+      ],
+      "Cosmic_Lotus_Matrix": [],
+      "Cyber_Hive_Drone_UFO": [
+        1
+      ],
+      "Cyberpunk_Yakuza_UFO": [
+        1
+      ],
+      "Dark_Lord": [
+        1,
+        2
+      ],
+      "Eldritch_Void_Watcher_UFO": [],
+      "Epic_Bitcoin": [
+        1,
+        2
+      ],
+      "Epic_Yeti": [
+        1,
+        2
+      ],
+      "Ethereal_Crystal_Mothership": [
+        1
+      ],
+      "Fractal_Heart_Geometry": [],
+      "FullBody_Kitsune_Masterpiece": [
+        1,
+        2
+      ],
+      "Heavy_Metal_Apocalypse_UFO": [
+        1,
+        2
+      ],
+      "Hyper_Geometry_Chrono_Disc": [],
+      "Kitsune_Anime_3D": [
+        1,
+        2
+      ],
+      "Legendary_Astral_Dragon": [
+        1
+      ],
+      "Legendary_Cyber_Seraphim": [
+        1,
+        2
+      ],
+      "Leviathan_WorldEater": [
+        1,
+        2
+      ],
+      "Locomotive": [
+        1
+      ],
+      "Necro_Politan_Ghost_UFO": [
+        1
+      ],
+      "Nurse_Character_3D": [
+        1,
+        2
+      ],
+      "Obsidian_World_Eater_Engine": [],
+      "Quantum_AI_Core_Component": [],
+      "Rocket_SportsCar": [
+        1
+      ],
+      "Solaris_Flare_UFO": [
+        1,
+        2
+      ],
+      "Steampunk_Aether_UFO": [
+        1,
+        2
+      ],
+      "Viking_Runestone_UFO": [
+        1
+      ],
+      "Volcanic_Spiked_UFO": [
+        1
+      ]
+    }
+  }
+}

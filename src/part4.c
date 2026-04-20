@@ -336,6 +336,24 @@ static void codegen_addr_checked(Compiler *cc, Node *n) {
   codegen_addr(cc, n);
 }
 
+static void emit_array_bounds_marker(Compiler *cc, Node *node) {
+    if (node && node->kind == ND_DEREF && node->lhs && node->lhs->kind == ND_ADD) {
+        Node *base = node->lhs->lhs;
+        Node *idx  = node->lhs->rhs;
+        if (base && base->kind == ND_VAR && base->type && base->type->kind == TY_ARRAY && base->name[0]) {
+            const char *idx_name = "?";
+            if (idx && idx->kind == ND_VAR && idx->name[0]) {
+                idx_name = idx->name;
+            }
+            if (idx_name[0] != '?') {
+                fprintf(cc->out, "    # ZCC_META_ARRAY %%rax array=%s index=%s size=%d @%s:%d\n",
+                        base->name, idx_name, base->type->array_len,
+                        cc->filename ? cc->filename : "unknown", node->line);
+            }
+        }
+    }
+}
+
 /* ---------------------------------------------------------------- */
 /* Address of lvalue into %rax                                       */
 /* ---------------------------------------------------------------- */
@@ -434,6 +452,7 @@ void codegen_addr(Compiler *cc, Node *node) {
       return;
     }
     codegen_expr_checked(cc, node->lhs);
+    emit_array_bounds_marker(cc, node);
     return; /* Note: ptr is ALREADY eval'd by codegen_expr! ir_last_result holds
                it! */
   }
@@ -1844,6 +1863,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       return;
     }
     codegen_expr_checked(cc, node->lhs);
+    emit_array_bounds_marker(cc, node);
     {
       char deref_addr[32];
       ir_save_result(deref_addr);

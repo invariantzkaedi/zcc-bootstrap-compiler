@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G15",
+    "name": "Codegen Mutation G15 [lea_optimization]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-3",
+    "lineage_hash": "66a57eeca264bb99",
+    "island_id": 3
+  },
+  "mutations": [
+    {
+      "name": "lea_optimization",
+      "category": "IDIOM",
+      "description": "Fuse mov+add \u2192 leaq $192(%r13), %rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -3.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -15,
+    "inst_count_delta": 118053,
+    "score_delta": -7.7352589999791235,
+    "composite_score": 1252936.336913
+  },
+  "timestamp": "2026-04-20T10:41:42.103529+00:00",
+  "generation": 15
+}

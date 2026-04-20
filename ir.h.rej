@@ -1,0 +1,10 @@
+diff a/ir.h b/ir.h	(rejected hunks)
+@@ -35,7 +35,7 @@ enum {
+     IR_NAME_MAX   = 64,    /* max length of a variable/temp name        */
+     IR_LABEL_MAX  = 64,    /* max length of a branch label              */
+     IR_FUNC_MAX   = 64,    /* max length of a function name             */
+-    IR_MAX_FUNCS  = 1024,  /* max functions per module                  */
++    IR_MAX_FUNCS  = 8192,  /* max functions per module                  */
+     IR_STR_MAX    = 256    /* max string literal length in IR           */
+ };
+ 

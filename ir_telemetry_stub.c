@@ -33,3 +33,5 @@ void ir_telem_summary(int total_funcs,
 }
 
 void ir_telem_shutdown(void) {}
+
+void ir_telemetry_enable_stdout(void) {}
