@@ -2722,6 +2722,7 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
 
     line = cc->tk_line;
     func = node_new(cc, ND_FUNC_DEF, line);
+    func->func_params = cc_alloc(cc, sizeof(struct FuncParams));
     strncpy(func->func_def_name, name, MAX_IDENT - 1);
     func->is_static = is_static;
 
@@ -2760,8 +2761,8 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
                 if (ptype->kind == TY_ARRAY) ptype = type_ptr(cc, ptype->base);
 
                 if (func->num_params < MAX_PARAMS) {
-                    func->param_types[func->num_params] = ptype;
-                    strncpy(func->param_names_buf[func->num_params], pname, MAX_IDENT - 1);
+                    func->func_params->types[func->num_params] = ptype;
+                    strncpy(func->func_params->names[func->num_params], pname, MAX_IDENT - 1);
                     psym = scope_add_local(cc, pname, ptype);
                     func->num_params++;
                 } else {
@@ -2777,7 +2778,7 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
                     if (cc->tk == TK_ARROW) {
                         error(cc, "unexpected '->' in parameter list (missing ',' or ')'?)");
                     } else {
-                        if (getenv("ZCC_DEBUG")) printf("!!! parse_fparams ERROR !!! func='%s' param_idx=%d tk_text='%s' tk=%d prev_pname='%s'\n", func->func_def_name, func->num_params, cc->tk_text, cc->tk, func->num_params > 0 ? func->param_names_buf[func->num_params - 1] : "NONE");
+                        if (getenv("ZCC_DEBUG")) printf("!!! parse_fparams ERROR !!! func='%s' param_idx=%d tk_text='%s' tk=%d prev_pname='%s'\n", func->func_def_name, func->num_params, cc->tk_text, cc->tk, func->num_params > 0 ? func->func_params->names[func->num_params - 1] : "NONE");
                         char buf[256];
                         sprintf(buf, "expected ',' or ')' after parameter [at token '%s']", cc->tk_text);
                         error(cc, buf);
@@ -2805,7 +2806,7 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
         if (func->num_params > 0) {
             ftype->params = (Type **)cc_alloc(cc, sizeof(Type *) * func->num_params);
             for (int k = 0; k < func->num_params; k++) {
-                ftype->params[k] = func->param_types[k];
+                ftype->params[k] = func->func_params->types[k];
             }
         }
         func->func_type = ftype;

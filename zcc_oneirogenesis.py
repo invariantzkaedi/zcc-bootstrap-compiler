@@ -641,7 +641,7 @@ class DreamEngine:
                 # blocks. Without this fix, node_kind and every other
                 # accessor defined in part1.c is emitted multiple times in
                 # the mutant assembly, causing 'symbol already defined'.
-                fout.write('#define ZCC_AST_BRIDGE_H\n')
+                fout.write('#define ZCC_AST_BRIDGE_H\n#define ZCC_IR_BRIDGE_H\n')
                 for line in fin:
                     if line.startswith('#include "zcc_ast_bridge.h"'):
                         if os.path.exists(ast_bridge_zcc):

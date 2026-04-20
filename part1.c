@@ -206,6 +206,11 @@ struct Scope {
     Scope *parent;
 };
 
+struct FuncParams {
+    char names[MAX_PARAMS][MAX_IDENT];
+    Type *types[MAX_PARAMS];
+};
+
 struct Node {
     unsigned long long magic;
     unsigned long long alloc_id;
@@ -249,8 +254,7 @@ struct Node {
     /* ND_FUNC_DEF */
     char func_def_name[MAX_IDENT];
     Type *func_type;
-    char param_names_buf[MAX_PARAMS][MAX_IDENT];
-    Type *param_types[MAX_PARAMS];
+    struct FuncParams *func_params;
     int num_params;
     Node *body;
     int stack_size;

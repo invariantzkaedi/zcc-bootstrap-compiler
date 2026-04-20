@@ -1,15 +1,15 @@
 # ZCC Oneirogenesis v2 — Evolution Report
 
-**Generated**: 2026-04-20T10:49:09.050895+00:00
+**Generated**: 2026-04-20T11:20:07.277735+00:00
 
 ## Summary
 
 | Metric | Value |
 |--------|-------|
-| Global Generation | 34 |
-| Total Survived | 38 |
-| Total Rejected | 43 |
-| Algorithms Discovered | 34 |
+| Global Generation | 50 |
+| Total Survived | 55 |
+| Total Rejected | 62 |
+| Algorithms Discovered | 50 |
 | Blacklisted Patterns | 6 |
 
 ## Lineage
@@ -50,6 +50,22 @@
 | G0032 | I0 | `1a3397d80f92` | Fuse mov+add → leaq $200(%r15), %rax | -8.1 | 2026-04-20T10:48:27 |
 | G0033 | I0 | `4e7ae2791351` | Fuse mov+add → leaq $136(%r14), %rax | -9.2 | 2026-04-20T10:48:43 |
 | G0034 | I1 | `96bf5ed5c3fd` | Fuse mov+add → leaq $16(%r13), %rax | -8.5 | 2026-04-20T10:49:03 |
+| G0035 | I0 | `443805d74a21` | Fuse mov+add → leaq $376(%r13), %rax | -24.3 | 2026-04-20T11:17:11 |
+| G0036 | I1 | `5112eaed4ff1` | Fuse mov+add → leaq $140(%r12), %rax | -7.8 | 2026-04-20T11:17:17 |
+| G0037 | I8 | `273436e9dbf5` | Fuse mov+add → leaq $144(%r12), %rax | -8.1 | 2026-04-20T11:17:49 |
+| G0038 | I0 | `be683556ae78` | Fuse mov+add → leaq $160(%r12), %rax | -8.6 | 2026-04-20T11:17:54 |
+| G0039 | I1 | `6209b3ab870a` | Fuse mov+add → leaq $8(%r15), %rax | -8.6 | 2026-04-20T11:18:00 |
+| G0040 | I6 | `e4821b46e172` | Fuse mov+add → leaq $192(%rbx), %rax | -7.0 | 2026-04-20T11:18:11 |
+| G0041 | I7 | `e926080e94b7` | Fuse mov+add → leaq $32(%r14), %rax | -7.4 | 2026-04-20T11:18:18 |
+| G0042 | I0 | `7855293a0d97` | Fuse mov+add → leaq $296(%r12), %rax, Fuse mov+add → leaq $72(%r13), %rax | -17.1 | 2026-04-20T11:18:33 |
+| G0043 | I1 | `04d6c1c75eec` | Fuse mov+add → leaq $4816896(%r14), %rax | -9.7 | 2026-04-20T11:18:38 |
+| G0044 | I6 | `5c499d05b14c` | Fuse mov+add → leaq $128(%rbx), %rax | -4.8 | 2026-04-20T11:18:50 |
+| G0045 | I7 | `bb35c6010c5e` | Swap independent pair to reduce WAR pipeline stall | -0.7 | 2026-04-20T11:18:55 |
+| G0046 | I2 | `3f59b35a226c` | Fuse mov+add → leaq $136(%r13), %rax | -8.6 | 2026-04-20T11:19:16 |
+| G0047 | I8 | `932bb76cef31` | Fuse mov+add → leaq $192(%rbx), %rax | -9.0 | 2026-04-20T11:19:33 |
+| G0048 | I1 | `ce9adf8f2f63` | Fuse mov+add → leaq $52(%rbx), %rax | -9.1 | 2026-04-20T11:19:43 |
+| G0049 | I3 | `55a8a51a62d0` | Fuse mov+add → leaq $200(%r14), %rax | -8.1 | 2026-04-20T11:19:49 |
+| G0050 | I8 | `b142113db2aa` | Fuse mov+add → leaq $18152(%r13), %rax | -8.6 | 2026-04-20T11:20:06 |
 
 ## Discovered Algorithms
 
@@ -87,26 +103,26 @@
 - `QAlgo-Dream-G32` → [`QAlgo-Dream-G32.json`](journal/QAlgo-Dream-G32.json)
 - `QAlgo-Dream-G33` → [`QAlgo-Dream-G33.json`](journal/QAlgo-Dream-G33.json)
 - `QAlgo-Dream-G34` → [`QAlgo-Dream-G34.json`](journal/QAlgo-Dream-G34.json)
+- `QAlgo-Dream-G35` → [`QAlgo-Dream-G35.json`](journal/QAlgo-Dream-G35.json)
+- `QAlgo-Dream-G36` → [`QAlgo-Dream-G36.json`](journal/QAlgo-Dream-G36.json)
+- `QAlgo-Dream-G37` → [`QAlgo-Dream-G37.json`](journal/QAlgo-Dream-G37.json)
+- `QAlgo-Dream-G38` → [`QAlgo-Dream-G38.json`](journal/QAlgo-Dream-G38.json)
+- `QAlgo-Dream-G39` → [`QAlgo-Dream-G39.json`](journal/QAlgo-Dream-G39.json)
+- `QAlgo-Dream-G40` → [`QAlgo-Dream-G40.json`](journal/QAlgo-Dream-G40.json)
+- `QAlgo-Dream-G41` → [`QAlgo-Dream-G41.json`](journal/QAlgo-Dream-G41.json)
+- `QAlgo-Dream-G42` → [`QAlgo-Dream-G42.json`](journal/QAlgo-Dream-G42.json)
+- `QAlgo-Dream-G43` → [`QAlgo-Dream-G43.json`](journal/QAlgo-Dream-G43.json)
+- `QAlgo-Dream-G44` → [`QAlgo-Dream-G44.json`](journal/QAlgo-Dream-G44.json)
+- `QAlgo-Dream-G45` → [`QAlgo-Dream-G45.json`](journal/QAlgo-Dream-G45.json)
+- `QAlgo-Dream-G46` → [`QAlgo-Dream-G46.json`](journal/QAlgo-Dream-G46.json)
+- `QAlgo-Dream-G47` → [`QAlgo-Dream-G47.json`](journal/QAlgo-Dream-G47.json)
+- `QAlgo-Dream-G48` → [`QAlgo-Dream-G48.json`](journal/QAlgo-Dream-G48.json)
+- `QAlgo-Dream-G49` → [`QAlgo-Dream-G49.json`](journal/QAlgo-Dream-G49.json)
+- `QAlgo-Dream-G50` → [`QAlgo-Dream-G50.json`](journal/QAlgo-Dream-G50.json)
 
 ## Fitness History
 
 ```
-G0005 I4: score=1252944
-G0006 I0: score=1252936
-G0007 I2: score=1252936
-G0008 I4: score=1252939
-G0009 I1: score=1252937
-G0010 I2: score=1252929
-G0011 I4: score=1252928
-G0012 I3: score=1252944
-G0013 I0: score=1252927
-G0014 I2: score=1252919
-G0015 I3: score=1252936
-G0016 I1: score=1252927
-G0017 I3: score=1252927
-G0018 I4: score=1252919
-G0019 I0: score=1252918
-G0020 I1: score=1252919
 G0021 I3: score=1252916
 G0022 I0: score=1252910
 G0023 I0: score=1252892
@@ -121,4 +137,20 @@ G0031 I2: score=1252910
 G0032 I0: score=1252867
 G0033 I0: score=1252858
 G0034 I1: score=1252893
+G0035 I0: score=1252945
+G0036 I1: score=1252946
+G0037 I8: score=1252945
+G0038 I0: score=1252936
+G0039 I1: score=1252938
+G0040 I6: score=1252946
+G0041 I7: score=1252945
+G0042 I0: score=1252919
+G0043 I1: score=1252928
+G0044 I6: score=1252941
+G0045 I7: score=1252945
+G0046 I2: score=1252944
+G0047 I8: score=1252936
+G0048 I1: score=1252919
+G0049 I3: score=1252945
+G0050 I8: score=1252928
 ```

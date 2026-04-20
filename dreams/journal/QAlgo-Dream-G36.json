@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G36",
+    "name": "Codegen Mutation G36 [lea_optimization]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-1",
+    "lineage_hash": "5112eaed4ff18296",
+    "island_id": 1
+  },
+  "mutations": [
+    {
+      "name": "lea_optimization",
+      "category": "IDIOM",
+      "description": "Fuse mov+add \u2192 leaq $140(%r12), %rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -3.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -15,
+    "inst_count_delta": 118054,
+    "score_delta": -7.817627999931574,
+    "composite_score": 1252946.2351960002
+  },
+  "timestamp": "2026-04-20T11:17:17.058017+00:00",
+  "generation": 36
+}

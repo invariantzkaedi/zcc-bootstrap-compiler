@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G40",
+    "name": "Codegen Mutation G40 [lea_optimization]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-6",
+    "lineage_hash": "e4821b46e172b54c",
+    "island_id": 6
+  },
+  "mutations": [
+    {
+      "name": "lea_optimization",
+      "category": "IDIOM",
+      "description": "Fuse mov+add \u2192 leaq $192(%rbx), %rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -3.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -15,
+    "inst_count_delta": 118054,
+    "score_delta": -6.972859999863431,
+    "composite_score": 1252946.1517180002
+  },
+  "timestamp": "2026-04-20T11:18:11.971181+00:00",
+  "generation": 40
+}

@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G44",
+    "name": "Codegen Mutation G44 [lea_optimization]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-6",
+    "lineage_hash": "5c499d05b14cce48",
+    "island_id": 6
+  },
+  "mutations": [
+    {
+      "name": "lea_optimization",
+      "category": "IDIOM",
+      "description": "Fuse mov+add \u2192 leaq $128(%rbx), %rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -3.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -15,
+    "inst_count_delta": 118053,
+    "score_delta": -4.79936800012365,
+    "composite_score": 1252941.35235
+  },
+  "timestamp": "2026-04-20T11:18:50.583368+00:00",
+  "generation": 44
+}

@@ -3752,7 +3752,7 @@ void codegen_func(Compiler *cc, Node *func) {
   int gp_idx = 0;
   if (!backend_ops) {
   for (i = 0; i < func->num_params; i++) {
-    Type *ptype = func->param_types[i];
+    Type *ptype = func->func_params->types[i];
     int sz = type_size(ptype);
     if (sz < 8) sz = 8;
     param_offset -= sz;
@@ -3837,7 +3837,7 @@ void codegen_func(Compiler *cc, Node *func) {
         for (int p_idx = 0; p_idx < func->num_params; p_idx++) {
           if (p_idx > 0)
             strcat(params_env, ",");
-          strncat(params_env, func->param_names_buf[p_idx],
+          strncat(params_env, func->func_params->names[p_idx],
                   511 - strlen(params_env));
         }
         setenv("ZCC_IR_PARAM_NAMES", params_env, 1);
@@ -4586,3 +4586,4 @@ int node_ptr_elem_size(struct Node *n) {
   }
   return 0;
 }
+

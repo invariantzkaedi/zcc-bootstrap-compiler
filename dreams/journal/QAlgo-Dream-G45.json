@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G45",
+    "name": "Codegen Mutation G45 [schedule_war_pair]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-7",
+    "lineage_hash": "bb35c6010c5e00b7",
+    "island_id": 7
+  },
+  "mutations": [
+    {
+      "name": "schedule_war_pair",
+      "category": "SCHEDULE",
+      "description": "Swap independent pair to reduce WAR pipeline stall",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": 0,
+    "inst_count_delta": 118054,
+    "score_delta": -0.6971850001718849,
+    "composite_score": 1252944.77279
+  },
+  "timestamp": "2026-04-20T11:18:55.777442+00:00",
+  "generation": 45
+}

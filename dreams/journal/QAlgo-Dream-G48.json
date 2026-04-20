@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G48",
+    "name": "Codegen Mutation G48 [lea_optimization]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-1",
+    "lineage_hash": "ce9adf8f2f6399c4",
+    "island_id": 1
+  },
+  "mutations": [
+    {
+      "name": "lea_optimization",
+      "category": "IDIOM",
+      "description": "Fuse mov+add \u2192 leaq $52(%rbx), %rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -3.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -15,
+    "inst_count_delta": 118051,
+    "score_delta": -9.05711799999699,
+    "composite_score": 1252918.848044
+  },
+  "timestamp": "2026-04-20T11:19:43.924506+00:00",
+  "generation": 48
+}

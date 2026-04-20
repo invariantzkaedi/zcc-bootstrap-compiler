@@ -1,4 +1,3 @@
-#define ZCC_AST_BRIDGE_H
 /*
  * ZCC - ZKAEDI C Compiler
  * A self-hosting C subset compiler targeting x86-64 Linux (System V ABI)
@@ -16,6 +15,10 @@
  *           static/extern/const qualifiers, #include <stdio.h> etc via host cpp.
  */
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stddef.h>
 
 /* ================================================================ */
 /* CONSTANTS — using enum for self-hosting (no preprocessor needed)  */
@@ -203,6 +206,11 @@ struct Scope {
     Scope *parent;
 };
 
+struct FuncParams {
+    char names[MAX_PARAMS][MAX_IDENT];
+    Type *types[MAX_PARAMS];
+};
+
 struct Node {
     unsigned long long magic;
     unsigned long long alloc_id;
@@ -246,8 +254,7 @@ struct Node {
     /* ND_FUNC_DEF */
     char func_def_name[MAX_IDENT];
     Type *func_type;
-    char param_names_buf[MAX_PARAMS][MAX_IDENT];
-    Type *param_types[MAX_PARAMS];
+    struct FuncParams *func_params;
     int num_params;
     Node *body;
     int stack_size;
@@ -294,6 +301,7 @@ struct Node {
 
 char *zcc_preprocess(const char *source, int source_len, const char *filename, const char *include_paths, int *out_len);
 
+#include "zcc_ast_bridge.h"
 
 /* Keep nd_to_znd mapping in sync with this file's enum. */
 /* _Static_assert(ND_NUM == ZCC_ND_NUM, "zcc_ast_bridge.h: ND_NUM out of sync"); */
@@ -585,1415 +593,6 @@ void error_at(Compiler *cc, int line, char *msg);
 void classify_aggregate(Type *agg, abi_class_t eb[2]);
 
 /* ZKAEDI FORCE RENDER CACHE INVALIDATION */
-/* part0_pp.c -- ZCC Preprocessor */
-#define PP_MAX_MACROS 4096
-#define PP_MAX_PARAMS 16
-static int _warned_pp_max_params = 0;
-#define PP_MAX_BODY   65536
-#define PP_MAX_INCLUDE_DEPTH 32
-
-typedef struct {
-    char name[128];
-    int  is_function_like;
-    int  num_params;
-    char params[PP_MAX_PARAMS][64];
-    char *body;
-    int  body_cap;
-    int  active;
-} PPMacro;
-
-typedef struct {
-    const char *src;
-    int pos;
-    int len;
-    char *alloc_buf;
-    PPMacro *expanding_macro;
-} PPInputCtx;
-
-typedef struct {
-    PPMacro macros[PP_MAX_MACROS];
-    int     num_macros;
-
-    int     cond_stack[64];
-    int     cond_satisfied[64];
-    int     cond_else_seen[64];
-    int     cond_depth;
-
-    char    included_files[256][256];
-    int     num_included;
-
-    char   *out;
-    int     out_len;
-    int     out_cap;
-
-    const char *src;
-    int         pos;
-    int         len;
-    int         line;
-    const char *filename;
-    const char *include_paths;
-
-    PPInputCtx input_stack[32];
-    int input_depth;
-    char *alloc_buf;
-    int pop_barrier;
-    int include_errors;
-} PPState;
-
-static const char *zcc_stddef_text = 
-"#ifndef _ZCC_STDDEF_H_\n"
-"#define _ZCC_STDDEF_H_\n"
-"#define NULL ((void*)0)\n"
-"#define EOF (-1)\n"
-"#define EXIT_SUCCESS 0\n"
-"#define EXIT_FAILURE 1\n"
-"#define CHAR_BIT 8\n"
-"#define INT_MAX 2147483647\n"
-"#define INT_MIN (-2147483647-1)\n"
-"#define LONG_MAX 9223372036854775807L\n"
-"#define LONG_MIN (-9223372036854775807L-1L)\n"
-"#define UINT_MAX 4294967295U\n"
-"#define ULONG_MAX 18446744073709551615UL\n"
-"#define SIZE_MAX ULONG_MAX\n"
-"/* PP-HEADERS-023A: C99 <limits.h> full sweep */\n"
-"#define SCHAR_MIN  (-128)\n"
-"#define SCHAR_MAX  127\n"
-"#define UCHAR_MAX  255\n"
-"/* CHAR_MIN/MAX assume signed char (x86-64 SysV ABI default) */\n"
-"#define CHAR_MIN   (-128)\n"
-"#define CHAR_MAX   127\n"
-"#define SHRT_MIN   (-32768)\n"
-"#define SHRT_MAX   32767\n"
-"#define USHRT_MAX  65535\n"
-"#define LLONG_MIN  (-9223372036854775807LL-1LL)\n"
-"#define LLONG_MAX  9223372036854775807LL\n"
-"#define ULLONG_MAX 18446744073709551615ULL\n"
-"#define RAND_MAX 2147483647\n"
-"#define BUFSIZ 8192\n"
-"#define FILENAME_MAX 4096\n"
-"#define true 1\n"
-"#define false 0\n"
-"#define __attribute__(x)\n"
-"#define __extension__\n"
-"#define __restrict\n"
-"#define __restrict__\n"
-"#define restrict\n"
-"#define __inline\n"
-"#define __inline__\n"
-"#define inline\n"
-"#define __volatile\n"
-"#define __volatile__\n"
-"#define __const__ const\n"
-"#define __const const\n"
-"#define _Noreturn\n"
-"#define _Static_assert(x, y)\n"
-"#define __declspec(x)\n"
-"#define __cdecl\n"
-"#define __stdcall\n"
-"#define __asm__(a,b,c,d,e)\n"
-"#define asm(a,b,c,d,e)\n"
-"typedef struct { unsigned int gp_offset; unsigned int fp_offset; void *overflow_arg_area; void *reg_save_area; } __va_list_struct[1];\n"
-"#define __builtin_va_list __va_list_struct\n"
-"#define __builtin_va_end(v)\n"
-"/* PP-STUB-024B: route va_* to ZCC builtins so va_arg(ap,type) is parsed correctly */\n"
-"#define va_list __builtin_va_list\n"
-"#define va_start(ap, last) ((void)0)\n"
-"#define va_end(ap)         ((void)0)\n"
-"#define va_copy(dst, src)  ((dst)[0] = (src)[0])\n"
-"#define va_arg(ap, type)   __builtin_va_arg(ap, type)\n"
-"#define __builtin_expect(exp, c) (exp)\n"
-"#define __builtin_constant_p(x) 0\n"
-"#define __builtin_types_compatible_p(x, y) 0\n"
-"#define __builtin_unreachable()\n"
-"#define __x86_64__ 1\n"
-"#define LUA_USE_JUMPTABLE 0\n"
-"#define __GNUC__ 1\n"
-"#define __attribute__(x)\n"
-"#define __declspec(x)\n"
-"#define __inline__ inline\n"
-"#define __restrict\n"
-"#define __restrict__\n"
-"#define __extension__\n"
-"#define __asm__(x)\n"
-"#define assert(x)\n"
-"#define offsetof(t, m) ((unsigned long)&(((t*)0)->m))\n"
-"typedef int int32_t;\n"
-"typedef unsigned int uint32_t;\n"
-"typedef long int64_t;\n"
-"typedef unsigned long uint64_t;\n"
-"typedef char int8_t;\n"
-"typedef unsigned char uint8_t;\n"
-"typedef short int16_t;\n"
-"typedef unsigned short uint16_t;\n"
-"typedef unsigned long size_t;\n"
-"typedef long ssize_t;\n"
-"typedef long ptrdiff_t;\n"
-"typedef long intptr_t;\n"
-"typedef unsigned long uintptr_t;\n"
-"/* PP-STUB-024: signal.h / setjmp.h / stdint primitives for Lua internals */\n"
-"typedef int sig_atomic_t;\n"
-"typedef unsigned int jmp_buf[14];\n"
-"typedef struct _IO_FILE FILE;\n"
-"extern FILE *stdin, *stdout, *stderr;\n"
-"#endif\n";
-
-static void pp_emit(PPState *state, char c) {
-    if (state->out_len + 1 >= state->out_cap) {
-        state->out_cap = (state->out_cap == 0) ? 4096 : state->out_cap * 2;
-        state->out = (char *)realloc(state->out, state->out_cap);
-    }
-    state->out[state->out_len++] = c;
-}
-
-static void pp_emit_str(PPState *state, const char *str, int len) {
-    int i;
-    for (i = 0; i < len; i++) pp_emit(state, str[i]);
-}
-
-static char pp_peek(PPState *state) {
-    static int pp_peek_cnt = 0;
-    if (++pp_peek_cnt % 500000 == 0) {
-        if (getenv("ZCC_DEBUG")) printf("DEBUG zcc2 pp_peek_cnt=%d pos=%d line=%d\n", pp_peek_cnt, state->pos, state->line);
-        fflush(stdout);
-    }
-    while (state->pos >= state->len && state->input_depth > state->pop_barrier) {
-        if (state->alloc_buf) free(state->alloc_buf);
-        state->input_depth--;
-        if (state->input_stack[state->input_depth].expanding_macro) {
-            state->input_stack[state->input_depth].expanding_macro->active = 1;
-        }
-        state->src = state->input_stack[state->input_depth].src;
-        state->pos = state->input_stack[state->input_depth].pos;
-        state->len = state->input_stack[state->input_depth].len;
-        state->alloc_buf = state->input_stack[state->input_depth].alloc_buf;
-    }
-    if (state->pos >= state->len) return 0;
-    return state->src[state->pos];
-}
-
-static char pp_next(PPState *state) {
-    char c = pp_peek(state);
-    if (c) {
-        if (c == '\n' && state->input_depth == 0) state->line++;
-        state->pos++;
-    }
-    return c;
-}
-
-static void pp_push_input(PPState *state, const char *new_src, char *alloc_buf, PPMacro *macro) {
-    if (state->input_depth >= 32) {
-        fprintf(stderr, "zcc preprocessor error: macro expansion too deep\n");
-        exit(1);
-    }
-    state->input_stack[state->input_depth].src = state->src;
-    state->input_stack[state->input_depth].pos = state->pos;
-    state->input_stack[state->input_depth].len = state->len;
-    state->input_stack[state->input_depth].alloc_buf = state->alloc_buf;
-    state->input_stack[state->input_depth].expanding_macro = macro;
-    state->input_depth++;
-    
-    state->src = new_src;
-    state->pos = 0;
-    state->len = strlen(new_src);
-    state->alloc_buf = alloc_buf;
-}
-
-static void pp_skip_whitespace(PPState *state) {
-    while (pp_peek(state) == ' ' || pp_peek(state) == '\t') pp_next(state);
-}
-
-static int is_ident_start(char c) {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
-}
-
-static int is_ident_char(char c) {
-    return is_ident_start(c) || (c >= '0' && c <= '9');
-}
-
-static void pp_parse_ident(PPState *state, char *out, int max) {
-    int i = 0;
-    while (is_ident_char(pp_peek(state)) && i < max - 1) out[i++] = pp_next(state);
-    out[i] = 0;
-}
-
-static PPMacro *pp_find_macro(PPState *state, const char *name) {
-    int i;
-    for (i = state->num_macros - 1; i >= 0; i--) {
-        if (state->macros[i].active && strcmp(state->macros[i].name, name) == 0) return &state->macros[i];
-    }
-    return 0;
-}
-
-static void pp_undef_macro(PPState *state, const char *name) {
-    PPMacro *m = pp_find_macro(state, name);
-    if (m) m->active = 0;
-}
-
-static PPMacro *pp_add_macro(PPState *state, const char *name) {
-    PPMacro *m_macro;
-    if (state->num_macros >= PP_MAX_MACROS) return 0;
-    m_macro = &state->macros[state->num_macros++];
-    memset(m_macro, 0, sizeof(PPMacro));
-    strncpy(m_macro->name, name, 127);
-    m_macro->active = 1;
-    m_macro->body_cap = 256;
-    m_macro->body = (char *)calloc(1, m_macro->body_cap);
-    return m_macro;
-}
-
-static void pp_read_line(PPState *state, char *buf, int max) {
-    int i = 0;
-    int in_comment = 0;
-    while (pp_peek(state) != 0 && i < max - 1) {
-        char c = pp_peek(state);
-        if (c == '\n' && !in_comment) {
-            break;
-        }
-        if (c == '\\' && state->src[state->pos + 1] == '\n') {
-            pp_next(state); pp_next(state);
-            continue;
-        }
-        if (!in_comment && c == '/' && state->src[state->pos + 1] == '/') {
-            while (pp_peek(state) != '\n' && pp_peek(state) != 0) pp_next(state);
-            break;
-        }
-        if (!in_comment && c == '/' && state->src[state->pos + 1] == '*') {
-            in_comment = 1; pp_next(state); pp_next(state);
-            continue;
-        }
-        if (in_comment && c == '*' && state->src[state->pos + 1] == '/') {
-            in_comment = 0; pp_next(state); pp_next(state);
-            continue;
-        }
-        pp_next(state);
-        if (!in_comment && c != '\n') buf[i++] = c;
-    }
-    buf[i] = 0;
-}
-
-static void pp_read_macro_body(PPState *state, PPMacro *m, int max_limit) {
-    int i = 0;
-    int in_comment = 0;
-    if (!m->body) {
-        m->body_cap = 256;
-        m->body = (char *)calloc(1, m->body_cap);
-    }
-    
-    while (pp_peek(state) != 0) {
-        if (i >= m->body_cap - 2) {
-            m->body_cap *= 2;
-            m->body = (char *)realloc(m->body, m->body_cap);
-        }
-        if (i >= max_limit - 1) {
-            fprintf(stderr, "zcc: macro body exceeds PP_MAX_BODY (%d bytes)\n", max_limit);
-            exit(1);
-        }
-        char c = pp_peek(state);
-        if (c == '\n' && !in_comment) break;
-        if (c == '\\' && state->src[state->pos + 1] == '\n') {
-            pp_next(state); pp_next(state);
-            continue;
-        }
-        if (!in_comment && c == '/' && state->src[state->pos + 1] == '/') {
-            while (pp_peek(state) != '\n' && pp_peek(state) != 0) pp_next(state);
-            break;
-        }
-        if (!in_comment && c == '/' && state->src[state->pos + 1] == '*') {
-            in_comment = 1; pp_next(state); pp_next(state);
-            continue;
-        }
-        if (in_comment && c == '*' && state->src[state->pos + 1] == '/') {
-            in_comment = 0; pp_next(state); pp_next(state);
-            continue;
-        }
-        pp_next(state);
-        if (!in_comment && c != '\n') m->body[i++] = c;
-    }
-    m->body[i] = 0;
-}
-
-static int pp_is_active(PPState *state) {
-    int i;
-    for (i = 0; i <= state->cond_depth; i++) {
-        if (!state->cond_stack[i]) return 0;
-    }
-    return 1;
-}
-
-static char *pp_read_file(const char *path, int *out_len) {
-    FILE *fp = fopen(path, "rb");
-    long len;
-    char *buf;
-    long nr;
-    
-    if (!fp) return 0;
-    fseek(fp, 0, 2);
-    len = ftell(fp);
-    fseek(fp, 0, 0);
-    
-    buf = (char *)malloc(len + 1);
-    if (!buf) { fclose(fp); return 0; }
-    
-    nr = fread(buf, 1, len, fp);
-    buf[nr] = 0;
-    fclose(fp);
-    
-    if (out_len) *out_len = nr;
-    return buf;
-}
-
-static void pp_parse_target_depth(PPState *state, int target_depth);
-
-static void pp_parse(PPState *state) {
-    pp_parse_target_depth(state, state->input_depth);
-}
-
-/* PP-INCLUDE-022: Only these exact basenames get the synthesized stub.
- * Everything else must resolve from disk or hard-fail. */
-static int is_stddef_stub(const char *path) {
-    const char *base = path;
-    const char *slash = strrchr(path, '/');
-    if (slash) base = slash + 1;
-    return strcmp(base, "stddef.h") == 0
-        || strcmp(base, "stdarg.h") == 0
-        || strcmp(base, "stdio.h")  == 0
-        || strcmp(base, "stdlib.h") == 0
-        || strcmp(base, "string.h") == 0;
-}
-
-/* PP-INCLUDE-022: Resolve an include path via -I search and relative lookup.
- * Returns 1 if found (writes to out_resolved), 0 if not found. */
-static int pp_resolve_path(PPState *state, const char *path, int is_system, char *out_resolved) {
-    /* For quoted includes, try relative to current file's directory first */
-    if (!is_system && state->filename) {
-        char dir[1024];
-        const char *sl = strrchr(state->filename, '/');
-        if (sl) {
-            int dirlen = (int)(sl - state->filename);
-            if (dirlen < 1023) {
-                memcpy(dir, state->filename, dirlen);
-                dir[dirlen] = '\0';
-            } else {
-                strcpy(dir, ".");
-            }
-        } else {
-            strcpy(dir, ".");  /* no directory component — use CWD */
-        }
-        snprintf(out_resolved, 1024, "%s/%s", dir, path);
-        {
-            FILE *fp = fopen(out_resolved, "rb");
-            if (fp) { fclose(fp); return 1; }
-        }
-    }
-
-    /* Search -I paths (colon-separated, Linux convention) */
-    if (state->include_paths && state->include_paths[0]) {
-        const char *p = state->include_paths;
-        while (*p) {
-            char seg[1024];
-            int si = 0;
-            while (*p && *p != ':' && si < 1022) seg[si++] = *p++;
-            seg[si] = '\0';
-            if (*p == ':') p++;
-            if (si > 0) {
-                snprintf(out_resolved, 1024, "%s/%s", seg, path);
-                {
-                    FILE *fp = fopen(out_resolved, "rb");
-                    if (fp) { fclose(fp); return 1; }
-                }
-            }
-        }
-    }
-    return 0;
-}
-
-static void pp_process_include(PPState *state, const char *path, int is_system) {
-    char *file_src = 0;
-    int file_len = 0;
-    int i;
-    int from_disk = 0;
-    char resolved_path[1024];
-
-    /* Step 1: Try disk lookup */
-    if (pp_resolve_path(state, path, is_system, resolved_path)) {
-        file_src = pp_read_file(resolved_path, &file_len);
-        if (file_src) from_disk = 1;
-    }
-
-    /* Step 2: If disk failed, check stub whitelist */
-    if (!file_src && is_stddef_stub(path)) {
-        file_src = (char *)zcc_stddef_text;
-        file_len = strlen(file_src);
-        strncpy(resolved_path, path, 1023);
-        resolved_path[1023] = '\0';
-    }
-
-    /* Step 3: Hard error if nothing found (Flag 2: accumulate, don't exit)
-     * Use printf because driver silences stderr before preprocessing. */
-    if (!file_src) {
-        printf("zcc: error: include file not found: %s\n", path);
-        printf("  (while processing %s:%d)\n",
-                state->filename ? state->filename : "<main>", state->line);
-        state->include_errors++;
-        return;
-    }
-
-    {
-        PPState *sub_state = (PPState *)malloc(sizeof(PPState));
-        if (!sub_state) {
-            fprintf(stderr, "zcc preprocessor error: out of memory for include state\n");
-            exit(1);
-        }
-        memset(sub_state, 0, sizeof(PPState));
-        sub_state->src           = file_src;
-        sub_state->pos           = 0;
-        sub_state->len           = file_len;
-        sub_state->line          = 1;
-        sub_state->filename      = resolved_path;
-        sub_state->include_paths = state->include_paths;
-        sub_state->cond_stack[0] = 1;
-        sub_state->pop_barrier   = 0;
-
-        /* Macro table transfer (preserving baseline memcpy behavior) */
-        sub_state->num_macros = state->num_macros;
-        for (i = 0; i < state->num_macros; i++)
-            memcpy(&sub_state->macros[i], &state->macros[i], sizeof(PPMacro));
-
-        pp_parse(sub_state);
-
-        /* Copy back macros added by the header */
-        for (i = state->num_macros; i < sub_state->num_macros; i++) {
-            if (state->num_macros >= PP_MAX_MACROS) {
-                fprintf(stderr, "MAX MACROS REACHED!\n");
-                break;
-            }
-            memcpy(&state->macros[state->num_macros++], &sub_state->macros[i], sizeof(PPMacro));
-        }
-
-        fprintf(stderr, "pp_process_include: %s added %d macros, total is %d\n",
-                path, sub_state->num_macros - i, state->num_macros);
-
-        /* Update active flags (undefs may have occurred) */
-        for (i = 0; i < state->num_macros; i++) {
-            state->macros[i].active = sub_state->macros[i].active;
-        }
-
-        pp_emit_str(state, sub_state->out, sub_state->out_len);
-        state->include_errors += sub_state->include_errors;
-
-        if (sub_state->out) free(sub_state->out);
-        free(sub_state);
-        if (from_disk && file_src) free(file_src);
-    }
-}
-
-/* parse parameter list for function-like macros */
-static void pp_parse_params(PPState *state, PPMacro *m) {
-    pp_skip_whitespace(state);
-    while (pp_peek(state) != ')' && pp_peek(state) != '\n' && pp_peek(state) != 0) {
-        if (is_ident_start(pp_peek(state))) {
-            if (m->num_params < PP_MAX_PARAMS) {
-                pp_parse_ident(state, m->params[m->num_params++], 64);
-            } else {
-                if (!_warned_pp_max_params) { printf("zcc: warning: PP_MAX_PARAMS (%d) exceeded at %s:%d — subsequent macro params silently discarded\n", PP_MAX_PARAMS, state->filename ? state->filename : "?", state->line); _warned_pp_max_params = 1; }
-                char dummy[64];
-                pp_parse_ident(state, dummy, 64);
-            }
-        } else {
-            pp_next(state); /* comma or whitespace */
-        }
-        pp_skip_whitespace(state);
-    }
-    if (pp_peek(state) == ')') pp_next(state);
-}
-
-/* ============================================================
- * pp_eval_expr_str — recursive-descent C #if expression parser.
- * Handles full C operator precedence per C11 6.10.1.
- * Returns long long. Undefined identifiers evaluate to 0.
- * ============================================================ */
-
-typedef struct { const char *s; PPState *state; int depth; } PPEval;
-
-static long long pp_e_expr(PPEval *e);      /* lowest precedence */
-
-static void pp_e_skip(PPEval *e) {
-    while (*e->s == ' ' || *e->s == '\t' || *e->s == '\n' || *e->s == '\r') e->s++;
-}
-
-static int pp_e_match(PPEval *e, const char *tok) {
-    pp_e_skip(e);
-    int n = 0; while (tok[n]) n++;
-    int i;
-    for (i = 0; i < n; i++) if (e->s[i] != tok[i]) return 0;
-    /* Guard: don't match '>' when '>>' is present, etc. */
-    if (n == 1) {
-        char c = tok[0];
-        if ((c == '>' || c == '<' || c == '&' || c == '|' || c == '=') && e->s[1] == c) return 0;
-        if ((c == '<' || c == '>' || c == '!' || c == '=') && e->s[1] == '=') return 0;
-    }
-    e->s += n;
-    return 1;
-}
-
-/* primary: number | defined(X) | identifier | (expr) | unary */
-static long long pp_e_primary(PPEval *e) {
-    pp_e_skip(e);
-    if (*e->s == '(') {
-        e->s++;
-        long long v = pp_e_expr(e);
-        pp_e_skip(e);
-        if (*e->s == ')') e->s++;
-        return v;
-    }
-    if (*e->s == '!') { e->s++; return !pp_e_primary(e); }
-    if (*e->s == '~') { e->s++; return ~pp_e_primary(e); }
-    if (*e->s == '-') { e->s++; return -pp_e_primary(e); }
-    if (*e->s == '+') { e->s++; return  pp_e_primary(e); }
-    if (*e->s >= '0' && *e->s <= '9') {
-        char *end;
-        long long v = (long long)strtoull(e->s, &end, 0);
-        e->s = end;
-        /* skip integer suffix: U, L, UL, ULL, LL */
-        while (*e->s == 'u' || *e->s == 'U' || *e->s == 'l' || *e->s == 'L') e->s++;
-        return v;
-    }
-    /* identifier: defined() or macro */
-    if ((*e->s >= 'a' && *e->s <= 'z') || (*e->s >= 'A' && *e->s <= 'Z') || *e->s == '_') {
-        char name[256];
-        int n = 0;
-        while (((*e->s >= 'a' && *e->s <= 'z') || (*e->s >= 'A' && *e->s <= 'Z') ||
-                (*e->s >= '0' && *e->s <= '9') || *e->s == '_') && n < 255) {
-            name[n++] = *e->s++;
-        }
-        name[n] = 0;
-        if (n == 7 && name[0]=='d' && name[1]=='e' && name[2]=='f' && name[3]=='i' &&
-                      name[4]=='n' && name[5]=='e' && name[6]=='d') {
-            pp_e_skip(e);
-            int paren = 0;
-            if (*e->s == '(') { e->s++; paren = 1; }
-            pp_e_skip(e);
-            char arg[256]; int an = 0;
-            while (((*e->s >= 'a' && *e->s <= 'z') || (*e->s >= 'A' && *e->s <= 'Z') ||
-                    (*e->s >= '0' && *e->s <= '9') || *e->s == '_') && an < 255) {
-                arg[an++] = *e->s++;
-            }
-            arg[an] = 0;
-            pp_e_skip(e);
-            if (paren && *e->s == ')') e->s++;
-            return pp_find_macro(e->state, arg) != 0;
-        }
-        /* regular identifier: expand as macro if defined, else 0 */
-        PPMacro *m = pp_find_macro(e->state, name);
-        if (m) {
-            PPEval sub = { m->body, e->state, e->depth + 1 };
-            if (sub.depth > 32) return 0;
-            return pp_e_expr(&sub);
-        }
-        return 0;
-    }
-    return 0;
-}
-
-/* multiplicative: * / % */
-static long long pp_e_mul(PPEval *e) {
-    long long v = pp_e_primary(e);
-    for (;;) {
-        pp_e_skip(e);
-        if      (pp_e_match(e, "*"))  v = v * pp_e_primary(e);
-        else if (pp_e_match(e, "/"))  { long long r = pp_e_primary(e); v = r ? v / r : 0; }
-        else if (pp_e_match(e, "%"))  { long long r = pp_e_primary(e); v = r ? v % r : 0; }
-        else break;
-    }
-    return v;
-}
-
-/* additive: + - */
-static long long pp_e_add(PPEval *e) {
-    long long v = pp_e_mul(e);
-    for (;;) {
-        pp_e_skip(e);
-        if      (pp_e_match(e, "+")) v = v + pp_e_mul(e);
-        else if (pp_e_match(e, "-")) v = v - pp_e_mul(e);
-        else break;
-    }
-    return v;
-}
-
-/* shift: << >> */
-static long long pp_e_shift(PPEval *e) {
-    long long v = pp_e_add(e);
-    for (;;) {
-        pp_e_skip(e);
-        if      (pp_e_match(e, "<<")) v = (long long)((unsigned long long)v << pp_e_add(e));
-        else if (pp_e_match(e, ">>")) v = (long long)((unsigned long long)v >> pp_e_add(e));
-        else break;
-    }
-    return v;
-}
-
-/* relational: < <= > >= */
-static long long pp_e_rel(PPEval *e) {
-    long long v = pp_e_shift(e);
-    for (;;) {
-        pp_e_skip(e);
-        if      (pp_e_match(e, "<=")) v = v <= pp_e_shift(e);
-        else if (pp_e_match(e, ">=")) v = v >= pp_e_shift(e);
-        else if (pp_e_match(e, "<"))  v = v <  pp_e_shift(e);
-        else if (pp_e_match(e, ">"))  v = v >  pp_e_shift(e);
-        else break;
-    }
-    return v;
-}
-
-/* equality: == != */
-static long long pp_e_eq(PPEval *e) {
-    long long v = pp_e_rel(e);
-    for (;;) {
-        pp_e_skip(e);
-        if      (pp_e_match(e, "==")) v = v == pp_e_rel(e);
-        else if (pp_e_match(e, "!=")) v = v != pp_e_rel(e);
-        else break;
-    }
-    return v;
-}
-
-/* bitwise AND: & */
-static long long pp_e_band(PPEval *e) {
-    long long v = pp_e_eq(e);
-    for (;;) {
-        pp_e_skip(e);
-        if (pp_e_match(e, "&")) v = v & pp_e_eq(e);
-        else break;
-    }
-    return v;
-}
-
-/* bitwise XOR: ^ */
-static long long pp_e_bxor(PPEval *e) {
-    long long v = pp_e_band(e);
-    for (;;) {
-        pp_e_skip(e);
-        if (pp_e_match(e, "^")) v = v ^ pp_e_band(e);
-        else break;
-    }
-    return v;
-}
-
-/* bitwise OR: | */
-static long long pp_e_bor(PPEval *e) {
-    long long v = pp_e_bxor(e);
-    for (;;) {
-        pp_e_skip(e);
-        if (pp_e_match(e, "|")) v = v | pp_e_bxor(e);
-        else break;
-    }
-    return v;
-}
-
-/* logical AND: && */
-static long long pp_e_land(PPEval *e) {
-    long long v = pp_e_bor(e);
-    for (;;) {
-        pp_e_skip(e);
-        if (pp_e_match(e, "&&")) { long long r = pp_e_bor(e); v = v && r; }
-        else break;
-    }
-    return v;
-}
-
-/* logical OR: || */
-static long long pp_e_lor(PPEval *e) {
-    long long v = pp_e_land(e);
-    for (;;) {
-        pp_e_skip(e);
-        if (pp_e_match(e, "||")) { long long r = pp_e_land(e); v = v || r; }
-        else break;
-    }
-    return v;
-}
-
-/* ternary: a ? b : c */
-static long long pp_e_expr(PPEval *e) {
-    long long c = pp_e_lor(e);
-    pp_e_skip(e);
-    if (*e->s == '?') {
-        e->s++;
-        long long t = pp_e_expr(e);
-        pp_e_skip(e);
-        if (*e->s == ':') e->s++;
-        long long f = pp_e_expr(e);
-        return c ? t : f;
-    }
-    return c;
-}
-
-static long long pp_eval_expr_str(PPState *state, const char *s, int depth) {
-    PPEval e;
-    e.s = s;
-    e.state = state;
-    e.depth = depth;
-    return pp_e_expr(&e);
-}
-
-static void pp_parse_directive(PPState *state) {
-    char dir[1024];
-    int active = pp_is_active(state);
-    
-    pp_skip_whitespace(state);
-    pp_parse_ident(state, dir, 1024);
-    pp_skip_whitespace(state);
-
-    if (strcmp(dir, "ifdef") == 0 || strcmp(dir, "ifndef") == 0) {
-        char name[128];
-        int is_defined;
-        pp_parse_ident(state, name, 128);
-        is_defined = (pp_find_macro(state, name) != 0);
-        
-        state->cond_depth++;
-        state->cond_else_seen[state->cond_depth] = 0;
-        if (!active) {
-            state->cond_stack[state->cond_depth] = 0;
-        } else {
-            if (strcmp(dir, "ifdef") == 0) state->cond_stack[state->cond_depth] = is_defined;
-            else state->cond_stack[state->cond_depth] = !is_defined;
-        }
-        state->cond_satisfied[state->cond_depth] = state->cond_stack[state->cond_depth];
-        pp_read_line(state, dir, 1024);
-    } else if (strcmp(dir, "if") == 0) {
-        char expr[256];
-        pp_skip_whitespace(state);
-        pp_read_line(state, expr, 256);
-        state->cond_depth++;
-        state->cond_else_seen[state->cond_depth] = 0;
-        if (!active) {
-            state->cond_stack[state->cond_depth] = 0;
-        } else {
-            state->cond_stack[state->cond_depth] = pp_eval_expr_str(state, expr, 0); 
-        }
-        state->cond_satisfied[state->cond_depth] = state->cond_stack[state->cond_depth];
-    } else if (strcmp(dir, "elif") == 0) {
-        if (state->cond_depth > 0 && !state->cond_else_seen[state->cond_depth]) {
-            char expr[256];
-            pp_read_line(state, expr, 256);
-            if (state->cond_satisfied[state->cond_depth]) {
-                state->cond_stack[state->cond_depth] = 0;
-            } else {
-                int active_parent = 1;
-                int i;
-                for (i = 0; i < state->cond_depth; i++) if (!state->cond_stack[i]) active_parent = 0;
-                if (active_parent) {
-                    int result = pp_eval_expr_str(state, expr, 0);
-                    state->cond_stack[state->cond_depth] = result;
-                    if (result) state->cond_satisfied[state->cond_depth] = 1;
-                } else {
-                    state->cond_stack[state->cond_depth] = 0;
-                }
-            }
-        } else {
-            pp_read_line(state, dir, 1024);
-        }
-    } else if (strcmp(dir, "else") == 0) {
-        if (state->cond_depth > 0) {
-            state->cond_else_seen[state->cond_depth] = 1;
-            int parent_active = 1;
-            int i;
-            for (i = 0; i < state->cond_depth; i++) if (!state->cond_stack[i]) parent_active = 0;
-            if (parent_active) {
-                if (state->cond_satisfied[state->cond_depth]) {
-                    state->cond_stack[state->cond_depth] = 0;
-                } else {
-                    state->cond_stack[state->cond_depth] = 1;
-                    state->cond_satisfied[state->cond_depth] = 1;
-                }
-            } else {
-                state->cond_stack[state->cond_depth] = 0;
-            }
-        }
-        pp_read_line(state, dir, 1024);
-    } else if (strcmp(dir, "endif") == 0) {
-        if (state->cond_depth > 0) {
-            state->cond_satisfied[state->cond_depth] = 0;
-            state->cond_else_seen[state->cond_depth] = 0;
-            state->cond_depth--;
-        }
-
-        pp_read_line(state, dir, 1024);
-    } else if (active) {
-        if (strcmp(dir, "define") == 0) {
-            char name[128];
-            PPMacro *m;
-            pp_parse_ident(state, name, 128);
-            m = pp_add_macro(state, name);
-            if (pp_peek(state) == '(') {
-                pp_next(state);
-                m->is_function_like = 1;
-                pp_parse_params(state, m);
-                pp_skip_whitespace(state);
-                pp_read_macro_body(state, m, PP_MAX_BODY);
-            } else {
-                pp_skip_whitespace(state);
-                pp_read_macro_body(state, m, PP_MAX_BODY);
-            }
-        } else if (strcmp(dir, "undef") == 0) {
-            char name[128];
-            pp_parse_ident(state, name, 128);
-            pp_undef_macro(state, name);
-            pp_read_line(state, dir, 1024);
-        } else if (strcmp(dir, "include") == 0) {
-            char inc_path[256];
-            int is_system = 0;
-            if (pp_peek(state) == '<') {
-                is_system = 1;
-                pp_next(state);
-            } else if (pp_peek(state) == '"') {
-                pp_next(state);
-            }
-            pp_read_line(state, inc_path, 256);
-            /* Strip trailing \r from Windows line endings */
-            {
-                int plen = strlen(inc_path);
-                while (plen > 0 && (inc_path[plen - 1] == '\r' || inc_path[plen - 1] == ' ' || inc_path[plen - 1] == '\t'))
-                    inc_path[--plen] = 0;
-                if (plen > 0 && (inc_path[plen - 1] == '"' || inc_path[plen - 1] == '>'))
-                    inc_path[--plen] = 0;
-            }
-            pp_process_include(state, inc_path, is_system);
-        } else if (strcmp(dir, "error") == 0) {
-            char msg[256];
-            pp_read_line(state, msg, 256);
-            fprintf(stderr, "zcc preprocessor error: #error %s\n", msg);
-        } else {
-            pp_read_line(state, dir, 1024);
-        }
-    } else {
-        pp_read_line(state, dir, 1024);
-    }
-    
-    if (pp_peek(state) == '\n') pp_next(state);
-    pp_emit(state, '\n');
-}
-
-
-static void pp_expand_ident(PPState *state, const char *ident) {
-    PPMacro *m;
-    int i, p_count;
-    char *args[PP_MAX_PARAMS];
-    int arg_caps[PP_MAX_PARAMS];
-    for (i = 0; i < PP_MAX_PARAMS; i++) {
-        arg_caps[i] = 256;
-        args[i] = (char *)malloc(arg_caps[i]);
-    }
-    char c;
-    
-    if (strcmp(ident, "defined") == 0) {
-        pp_emit_str(state, "defined", 7);
-        return;
-    }
-    
-    /* ATTR-UNKNOWN-001: handle __attribute__ specially — intercept BEFORE macro lookup
-     * so the empty #define __attribute__(x) never fires for this identifier.
-     * We parse (( attrname )) directly from the stream and emit __zcc_attr_packed__
-     * for 'packed', consume everything else silently. */
-    if (strcmp(ident, "__attribute__") == 0 || strcmp(ident, "__attribute") == 0) {
-        /* consume whitespace then (( */
-        while (pp_peek(state)==' '||pp_peek(state)=='\t'||pp_peek(state)=='\n') pp_next(state);
-        if (pp_peek(state)=='(') pp_next(state);
-        while (pp_peek(state)==' '||pp_peek(state)=='\t') pp_next(state);
-        if (pp_peek(state)=='(') pp_next(state);
-        while (pp_peek(state)==' '||pp_peek(state)=='\t') pp_next(state);
-        /* read attribute name */
-        {
-            char attr_name[64]; int ai = 0;
-            while (pp_peek(state)!=0 && ai<63) {
-                char ac = pp_peek(state);
-                if ((ac>='a'&&ac<='z')||(ac>='A'&&ac<='Z')||(ac>='0'&&ac<='9')||ac=='_') {
-                    attr_name[ai++] = pp_next(state);
-                } else break;
-            }
-            attr_name[ai] = 0;
-            /* strip __ prefix/suffix (GCC __packed__ etc.) */
-            {
-                char *an = attr_name; int alen = ai;
-                if (alen>4 && an[0]=='_'&&an[1]=='_'&&an[alen-1]=='_'&&an[alen-2]=='_') {
-                    an[alen-2]=0; an+=2;
-                }
-                if (strcmp(an, "packed") == 0) {
-                    pp_emit_str(state, " __zcc_attr_packed__ ", 21);
-                }
-                /* aligned(N): silently drop for now; add __zcc_attr_aligned_N__ later */
-                /* all other attributes: silently consumed */
-            }
-        }
-        /* consume remaining content up to and including the closing ))
-         * After reading the attribute name, we've consumed:  (  (  attrname
-         * Still in stream:      [args...]  )  )
-         * Strategy: balance-count from current position, stop when we've
-         * seen 2 more ')' than '(' (the two closes we opened above). */
-        {
-            int need = 2;  /* we pre-consumed two '(' — need two matching ')' */
-            while (pp_peek(state) != 0 && need > 0) {
-                char ac = pp_next(state);
-                if (ac == '(') need++;
-                else if (ac == ')') { need--; }
-            }
-        }
-        return;
-    }
-
-    m = pp_find_macro(state, ident);
-    if (!m) {
-        pp_emit_str(state, ident, strlen(ident));
-        return;
-    }
-
-    if (!m->is_function_like) {
-        m->active = 0;
-        pp_push_input(state, m->body, NULL, m);
-        return;
-    }
-    
-    /* Function-like macro expansion */
-    int saved_pos = state->pos;
-    int saved_line = state->line;
-    
-    pp_skip_whitespace(state);
-    if (pp_peek(state) != '(') {
-        /* Not an invocation */
-        state->pos = saved_pos;
-        state->line = saved_line;
-        pp_emit_str(state, ident, strlen(ident));
-        return;
-    }
-    pp_next(state); /* consume '(' */
-    
-    /* parse arguments */
-    for (i = 0; i < PP_MAX_PARAMS; i++) args[i][0] = 0;
-    
-    p_count = 0;
-    int paren_level = 0;
-    int arg_idx = 0;
-    int in_string = 0;
-    int in_char = 0;
-    int in_comment = 0;
-    while (pp_peek(state) != 0) {
-        c = pp_peek(state);
-
-        /* PP-COMMENT-ARG-FIX: track block comments inside macro args so
-           that apostrophes and quotes inside them do not toggle in_char
-           or in_string state. Copy characters through verbatim. */
-        if (!in_string && !in_char) {
-            if (!in_comment && c == '/' && state->src[state->pos + 1] == '*') {
-                in_comment = 1;
-                if (p_count < PP_MAX_PARAMS) {
-                    if (arg_idx >= arg_caps[p_count] - 2) {
-                        arg_caps[p_count] *= 2;
-                        args[p_count] = (char *)realloc(args[p_count], arg_caps[p_count]);
-                    }
-                    args[p_count][arg_idx++] = pp_next(state);
-                    args[p_count][arg_idx++] = pp_next(state);
-                    args[p_count][arg_idx] = 0;
-                } else {
-                    pp_next(state); pp_next(state);
-                }
-                continue;
-            }
-            if (in_comment && c == '*' && state->src[state->pos + 1] == '/') {
-                in_comment = 0;
-                if (p_count < PP_MAX_PARAMS) {
-                    if (arg_idx >= arg_caps[p_count] - 2) {
-                        arg_caps[p_count] *= 2;
-                        args[p_count] = (char *)realloc(args[p_count], arg_caps[p_count]);
-                    }
-                    args[p_count][arg_idx++] = pp_next(state);
-                    args[p_count][arg_idx++] = pp_next(state);
-                    args[p_count][arg_idx] = 0;
-                } else {
-                    pp_next(state); pp_next(state);
-                }
-                continue;
-            }
-        }
-        if (in_comment) {
-            if (p_count < PP_MAX_PARAMS) {
-                if (arg_idx >= arg_caps[p_count] - 1) {
-                    arg_caps[p_count] *= 2;
-                    args[p_count] = (char *)realloc(args[p_count], arg_caps[p_count]);
-                }
-                args[p_count][arg_idx++] = c;
-                args[p_count][arg_idx] = 0;
-            }
-            pp_next(state);
-            continue;
-        }
-
-        
-        if (c == '\\') {
-            pp_next(state);
-            if (pp_peek(state) == '\n') { pp_next(state); continue; }
-            if (p_count < PP_MAX_PARAMS) {
-                if (arg_idx >= arg_caps[p_count] - 2) {
-                    arg_caps[p_count] *= 2;
-                    args[p_count] = (char *)realloc(args[p_count], arg_caps[p_count]);
-                }
-                args[p_count][arg_idx++] = c;
-                args[p_count][arg_idx++] = pp_next(state);
-                args[p_count][arg_idx] = 0;
-            } else {
-                if (!_warned_pp_max_params && p_count >= PP_MAX_PARAMS) { printf("zcc: warning: PP_MAX_PARAMS (%d) exceeded at %s:%d — subsequent macro args silently discarded\n", PP_MAX_PARAMS, state->filename ? state->filename : "?", state->line); _warned_pp_max_params = 1; }
-                pp_next(state);
-            }
-            continue;
-        }
-        
-        if (c == '"' && !in_char) in_string = !in_string;
-        if (c == '\'' && !in_string) in_char = !in_char;
-        
-        if (!in_string && !in_char) {
-            if (c == '(') paren_level++;
-            else if (c == ')') {
-                if (paren_level == 0) {
-                    pp_next(state); /* consume ')' */
-                    if (arg_idx > 0 || m->num_params > 0) p_count++;
-                    break;
-                }
-                paren_level--;
-            } else if (c == ',' && paren_level == 0) {
-                p_count++;
-                arg_idx = 0;
-                pp_next(state);
-                continue;
-            }
-        }
-        
-        if (p_count < PP_MAX_PARAMS) {
-            if (arg_idx >= arg_caps[p_count] - 1) {
-                arg_caps[p_count] *= 2;
-                args[p_count] = (char *)realloc(args[p_count], arg_caps[p_count]);
-            }
-            args[p_count][arg_idx++] = c;
-            args[p_count][arg_idx] = 0;
-        } else if (p_count >= PP_MAX_PARAMS) {
-            if (!_warned_pp_max_params) { printf("zcc: warning: PP_MAX_PARAMS (%d) exceeded at %s:%d — subsequent macro args silently discarded\n", PP_MAX_PARAMS, state->filename ? state->filename : "?", state->line); _warned_pp_max_params = 1; }
-        }
-        pp_next(state);
-    }
-    
-    /* PRE-EXPAND ARGUMENTS */
-    char *expanded_args[PP_MAX_PARAMS];
-    int expanded_cap[PP_MAX_PARAMS];
-    for (i = 0; i < p_count; i++) {
-        expanded_cap[i] = 1024;
-        expanded_args[i] = (char *)malloc(expanded_cap[i]);
-    }
-    for (i = 0; i < p_count; i++) { /* using p_count which is correctly set */
-        /* Save */
-        int old_barrier = state->pop_barrier;
-        char *old_out = state->out;
-        int old_out_len = state->out_len;
-        int old_out_cap = state->out_cap;
-        
-        /* Raise barrier before pushing arg stream */
-        state->pop_barrier = state->input_depth;
-        state->out = expanded_args[i];
-        state->out_len = 0;
-        state->out_cap = expanded_cap[i] - 1;
-        
-        pp_push_input(state, args[i], NULL, NULL);
-        pp_parse_target_depth(state, state->input_depth);
-        
-        /* Force-drain residual frames under the barrier */
-        while (state->input_depth > state->pop_barrier) {
-            if (state->alloc_buf) free(state->alloc_buf);
-            state->input_depth--;
-            if (state->input_stack[state->input_depth].expanding_macro)
-                state->input_stack[state->input_depth].expanding_macro->active = 1;
-            state->src       = state->input_stack[state->input_depth].src;
-            state->pos       = state->input_stack[state->input_depth].pos;
-            state->len       = state->input_stack[state->input_depth].len;
-            state->alloc_buf = state->input_stack[state->input_depth].alloc_buf;
-        }
-        
-        /* Sync heap pointer back — realloc may have moved it */
-        expanded_args[i] = state->out;
-        expanded_cap[i] = state->out_cap + 1;
-        expanded_args[i][state->out_len] = 0;
-        
-        /* Restore */
-        state->out = old_out;
-        state->out_len = old_out_len;
-        state->out_cap = old_out_cap;
-        state->pop_barrier = old_barrier;
-    }
-    
-    /* substitute */
-    int len = strlen(m->body);
-    int subst_cap = 1024;
-    char *subst = (char *)malloc(subst_cap);
-    int subst_idx = 0;
-    
-    for (i = 0; i < len; i++) {
-        if (m->body[i] == '#' && m->body[i+1] == '#') {
-            i++; /* skip second # */
-            /* strip trailing spaces from subst output */
-            while (subst_idx > 0 && (subst[subst_idx-1] == ' ' || subst[subst_idx-1] == '\t')) {
-                subst_idx--;
-            }
-            /* strip leading spaces in upcoming tokens */
-            while (i + 1 < len && (m->body[i+1] == ' ' || m->body[i+1] == '\t')) {
-                i++;
-            }
-            continue;
-        }
-        if (m->body[i] == '#' && m->body[i+1] != '#') {
-            int tmp_i = i + 1;
-            while (tmp_i < len && (m->body[tmp_i] == ' ' || m->body[tmp_i] == '\t')) tmp_i++;
-            if (tmp_i < len && is_ident_start(m->body[tmp_i])) {
-                char param_name[128];
-                int p_idx = 0;
-                int tmp_k = tmp_i;
-                while (tmp_k < len && is_ident_char(m->body[tmp_k]) && p_idx < 127) {
-                    param_name[p_idx++] = m->body[tmp_k++];
-                }
-                param_name[p_idx] = 0;
-                int found = -1;
-                for (int j = 0; j < m->num_params; j++) {
-                    if (strcmp(m->params[j], param_name) == 0) {
-                        found = j;
-                        break;
-                    }
-                }
-                if (found >= 0 && found < p_count) {
-                    if (subst_idx + 1024 > subst_cap) {
-                        subst_cap *= 2;
-                        subst = (char *)realloc(subst, subst_cap);
-                    }
-                    subst[subst_idx++] = '"';
-                    char *sa = args[found];
-                    while (*sa) {
-                        if (subst_idx + 128 > subst_cap) { subst_cap *= 2; subst = (char *)realloc(subst, subst_cap); }
-                        if (*sa == '\\' || *sa == '"') subst[subst_idx++] = '\\';
-                        subst[subst_idx++] = *sa++;
-                    }
-                    subst[subst_idx++] = '"';
-                    i = tmp_k - 1;
-                    continue;
-                }
-            }
-        }
-        if (is_ident_start(m->body[i])) {
-            char param_name[128];
-            int p_idx = 0;
-            while (i < len && is_ident_char(m->body[i]) && p_idx < 127) {
-                param_name[p_idx++] = m->body[i++];
-            }
-            param_name[p_idx] = 0;
-            i--; /* backup */
-            
-            int found = -1;
-            int j;
-            for (j = 0; j < m->num_params; j++) {
-                if (strcmp(m->params[j], param_name) == 0) {
-                    found = j;
-                    break;
-                }
-            }
-            
-            if (found >= 0 && found < p_count) {
-                int exp_len = strlen(expanded_args[found]);
-                if (subst_idx + exp_len + 128 > subst_cap) {
-                    subst_cap = (subst_idx + exp_len + 1024) * 2;
-                    subst = (char *)realloc(subst, subst_cap);
-                }
-                strcpy(subst + subst_idx, expanded_args[found]);
-                subst_idx += exp_len;
-            } else {
-                int param_len = strlen(param_name);
-                if (subst_idx + param_len + 128 > subst_cap) {
-                    subst_cap = (subst_idx + param_len + 1024) * 2;
-                    subst = (char *)realloc(subst, subst_cap);
-                }
-                strcpy(subst + subst_idx, param_name);
-                subst_idx += param_len;
-            }
-        } else {
-            if (subst_idx + 128 > subst_cap) {
-                subst_cap *= 2;
-                subst = (char *)realloc(subst, subst_cap);
-            }
-            subst[subst_idx++] = m->body[i];
-        }
-    }
-    subst[subst_idx] = 0;
-    
-    /* Standard C preprocessor hide-set logic */
-    m->active = 0;
-    pp_push_input(state, subst, subst, m);
-
-    for (i = 0; i < PP_MAX_PARAMS; i++) {
-        if (args[i]) free(args[i]);
-    }
-    for (i = 0; i < p_count; i++) {
-        if (expanded_args[i]) free(expanded_args[i]);
-    }
-}
-
-static void pp_parse_target_depth(PPState *state, int target_depth) {
-    int in_string = 0;
-    while (1) {
-        char c = pp_peek(state);
-        if (state->input_depth < target_depth || c == 0) break;
-        
-        if (c == '"' || c == '\'') {
-            in_string = c;
-            if (pp_is_active(state)) pp_emit(state, pp_next(state)); else pp_next(state);
-            while (pp_peek(state) != 0 && pp_peek(state) != in_string) {
-                if (pp_peek(state) == '\\') {
-                    if (pp_is_active(state)) pp_emit(state, pp_next(state)); else pp_next(state);
-                    if (pp_peek(state) != 0) {
-                        if (pp_is_active(state)) pp_emit(state, pp_next(state)); else pp_next(state);
-                    }
-                } else {
-                    if (pp_is_active(state)) pp_emit(state, pp_next(state)); else pp_next(state);
-                }
-            }
-            if (pp_peek(state) != 0) {
-                if (pp_is_active(state)) pp_emit(state, pp_next(state)); else pp_next(state);
-            }
-            in_string = 0;
-            continue;
-        }
-        if (c == '/' && state->pos + 1 < state->len) {
-            char next_c = state->src[state->pos + 1];
-            if (next_c == '/') {
-                if (pp_is_active(state)) { pp_emit(state, pp_next(state)); pp_emit(state, pp_next(state)); }
-                else { pp_next(state); pp_next(state); }
-                while (pp_peek(state) != 0 && pp_peek(state) != '\n') {
-                    if (pp_is_active(state)) pp_emit(state, pp_next(state)); else pp_next(state);
-                }
-                continue;
-            } else if (next_c == '*') {
-                if (pp_is_active(state)) { pp_emit(state, pp_next(state)); pp_emit(state, pp_next(state)); }
-                else { pp_next(state); pp_next(state); }
-                while (pp_peek(state) != 0) {
-                    if (pp_peek(state) == '*' && state->pos + 1 < state->len && state->src[state->pos + 1] == '/') {
-                        if (pp_is_active(state)) { pp_emit(state, pp_next(state)); pp_emit(state, pp_next(state)); }
-                        else { pp_next(state); pp_next(state); }
-                        break;
-                    }
-                    if (pp_is_active(state)) pp_emit(state, pp_next(state)); else pp_next(state);
-                }
-                continue;
-            }
-        }
-        
-        if (is_ident_start(c)) {
-            char ident[128];
-            pp_parse_ident(state, ident, 128);
-            if (pp_is_active(state)) pp_expand_ident(state, ident);
-            continue;
-        }
-
-        if (c == '#') {
-            pp_next(state);
-            pp_parse_directive(state);
-            continue;
-        }
-
-        if (pp_is_active(state)) pp_emit(state, pp_next(state));
-        else {
-            if (c == '\n') pp_emit(state, '\n');
-            pp_next(state);
-        }
-    }
-}
-
-char *zcc_preprocess(const char *source, int source_len,
-                     const char *filename,
-                     const char *include_paths,
-                     int *out_len) {
-    PPState *state = (PPState *)malloc(sizeof(PPState));
-    char *result;
-    memset(state, 0, sizeof(PPState));
-    
-    state->src = source;
-    state->len = source_len;
-    state->filename = filename;
-    state->include_paths = include_paths;
-    state->line = 1;
-    
-    state->cond_stack[0] = 1;
-    
-    {
-        PPMacro *m = pp_add_macro(state, "__x86_64__");
-        strcpy(m->body, "1");
-        m = pp_add_macro(state, "__GNUC__");
-        strcpy(m->body, "1");
-        m = pp_add_macro(state, "__thread");
-        strcpy(m->body, "");
-        /* PP-HEADERS-023A: C99 <limits.h> predefined — must be in macro table
-         * (not only in zcc_stddef_text) so #if defined(LLONG_MAX) works before
-         * any #include fires. These duplicate the zcc_stddef_text entries
-         * intentionally: the table entries handle conditional evaluation,
-         * the stub entries handle explicit #include <limits.h>. */
-        m = pp_add_macro(state, "LLONG_MAX");
-        strcpy(m->body, "9223372036854775807LL");
-        m = pp_add_macro(state, "LLONG_MIN");
-        strcpy(m->body, "(-9223372036854775807LL-1LL)");
-        m = pp_add_macro(state, "ULLONG_MAX");
-        strcpy(m->body, "18446744073709551615ULL");
-        m = pp_add_macro(state, "SCHAR_MIN");
-        strcpy(m->body, "(-128)");
-        m = pp_add_macro(state, "SCHAR_MAX");
-        strcpy(m->body, "127");
-        m = pp_add_macro(state, "UCHAR_MAX");
-        strcpy(m->body, "255");
-        m = pp_add_macro(state, "CHAR_MIN");
-        strcpy(m->body, "(-128)");
-        m = pp_add_macro(state, "CHAR_MAX");
-        strcpy(m->body, "127");
-        m = pp_add_macro(state, "SHRT_MIN");
-        strcpy(m->body, "(-32768)");
-        m = pp_add_macro(state, "SHRT_MAX");
-        strcpy(m->body, "32767");
-        m = pp_add_macro(state, "USHRT_MAX");
-        strcpy(m->body, "65535");
-        /* Pre-register existing stub limits so #if defined() works before #include */
-        m = pp_add_macro(state, "CHAR_BIT");
-        strcpy(m->body, "8");
-        m = pp_add_macro(state, "INT_MAX");
-        strcpy(m->body, "2147483647");
-        m = pp_add_macro(state, "INT_MIN");
-        strcpy(m->body, "(-2147483647-1)");
-        m = pp_add_macro(state, "UINT_MAX");
-        strcpy(m->body, "4294967295U");
-        m = pp_add_macro(state, "LONG_MAX");
-        strcpy(m->body, "9223372036854775807L");
-        m = pp_add_macro(state, "LONG_MIN");
-        strcpy(m->body, "(-9223372036854775807L-1L)");
-        m = pp_add_macro(state, "ULONG_MAX");
-        strcpy(m->body, "18446744073709551615UL");
-        m = pp_add_macro(state, "SIZE_MAX");
-        strcpy(m->body, "18446744073709551615UL");
-    }
-
-    pp_parse_target_depth(state, 0);
-    
-    pp_emit(state, 0);
-    if (out_len) *out_len = state->out_len - 1;
-    result = state->out;
-    for (int i = 0; i < state->num_macros; i++) {
-        if (state->macros[i].body) {
-            free(state->macros[i].body);
-            state->macros[i].body = NULL;
-            state->macros[i].body_cap = 0;
-        }
-    }
-    free(state);
-    return result;
-}
-
-/* ================================================================ */
 #ifndef ZCC_AST_BRIDGE_H
 /* Exclusively for standalone IDE analysis */
 #include "part1.c"
@@ -5883,6 +4482,7 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
 
     line = cc->tk_line;
     func = node_new(cc, ND_FUNC_DEF, line);
+    func->func_params = cc_alloc(cc, sizeof(struct FuncParams));
     strncpy(func->func_def_name, name, MAX_IDENT - 1);
     func->is_static = is_static;
 
@@ -5921,8 +4521,8 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
                 if (ptype->kind == TY_ARRAY) ptype = type_ptr(cc, ptype->base);
 
                 if (func->num_params < MAX_PARAMS) {
-                    func->param_types[func->num_params] = ptype;
-                    strncpy(func->param_names_buf[func->num_params], pname, MAX_IDENT - 1);
+                    func->func_params->types[func->num_params] = ptype;
+                    strncpy(func->func_params->names[func->num_params], pname, MAX_IDENT - 1);
                     psym = scope_add_local(cc, pname, ptype);
                     func->num_params++;
                 } else {
@@ -5938,7 +4538,7 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
                     if (cc->tk == TK_ARROW) {
                         error(cc, "unexpected '->' in parameter list (missing ',' or ')'?)");
                     } else {
-                        if (getenv("ZCC_DEBUG")) printf("!!! parse_fparams ERROR !!! func='%s' param_idx=%d tk_text='%s' tk=%d prev_pname='%s'\n", func->func_def_name, func->num_params, cc->tk_text, cc->tk, func->num_params > 0 ? func->param_names_buf[func->num_params - 1] : "NONE");
+                        if (getenv("ZCC_DEBUG")) printf("!!! parse_fparams ERROR !!! func='%s' param_idx=%d tk_text='%s' tk=%d prev_pname='%s'\n", func->func_def_name, func->num_params, cc->tk_text, cc->tk, func->num_params > 0 ? func->func_params->names[func->num_params - 1] : "NONE");
                         char buf[256];
                         sprintf(buf, "expected ',' or ')' after parameter [at token '%s']", cc->tk_text);
                         error(cc, buf);
@@ -5966,7 +4566,7 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
         if (func->num_params > 0) {
             ftype->params = (Type **)cc_alloc(cc, sizeof(Type *) * func->num_params);
             for (int k = 0; k < func->num_params; k++) {
-                ftype->params[k] = func->param_types[k];
+                ftype->params[k] = func->func_params->types[k];
             }
         }
         func->func_type = ftype;
@@ -6474,6 +5074,9 @@ Node *parse_program(Compiler *cc) {
 #define ZCC_IR_H
 
 /* ── stdio.h is always available to ZCC ─────────────────────────────── */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 /* ── Field size constants ────────────────────────────────────────────── */
 enum {
@@ -10797,7 +9400,7 @@ void codegen_func(Compiler *cc, Node *func) {
   int gp_idx = 0;
   if (!backend_ops) {
   for (i = 0; i < func->num_params; i++) {
-    Type *ptype = func->param_types[i];
+    Type *ptype = func->func_params->types[i];
     int sz = type_size(ptype);
     if (sz < 8) sz = 8;
     param_offset -= sz;
@@ -10882,7 +9485,7 @@ void codegen_func(Compiler *cc, Node *func) {
         for (int p_idx = 0; p_idx < func->num_params; p_idx++) {
           if (p_idx > 0)
             strcat(params_env, ",");
-          strncat(params_env, func->param_names_buf[p_idx],
+          strncat(params_env, func->func_params->names[p_idx],
                   511 - strlen(params_env));
         }
         setenv("ZCC_IR_PARAM_NAMES", params_env, 1);
@@ -11631,6 +10234,8 @@ int node_ptr_elem_size(struct Node *n) {
   }
   return 0;
 }
+
+
 /* C99/POSIX support for curl graduation — see commit 262bd08 */
 /* ================================================================ */
 /* COMPILER INITIALIZATION                                           */
@@ -12139,6 +10744,7 @@ static char *read_file(char *path, int *out_len) {
 
 static char *line_buffer = 0;
 static char **line_ptrs = 0;
+static int  *line_skip = 0;
 
 static void peephole_optimize(char *filename) {
   FILE *fp;
@@ -12158,71 +10764,187 @@ static void peephole_optimize(char *filename) {
   if (!line_ptrs) {
     line_ptrs = (char **)malloc(MAX_PEEP_LINES * sizeof(char *));
   }
+  if (!line_skip) {
+    line_skip = (int *)malloc(MAX_PEEP_LINES * sizeof(int));
+  }
   line_buffer = (char *)malloc(file_size + MAX_PEEP_LINES * 128);
-  if (!line_buffer || !line_ptrs) {
+  if (!line_buffer || !line_ptrs || !line_skip) {
     fclose(fp);
     return;
   }
 
   while (nlines < MAX_PEEP_LINES && fgets(line_buffer + nlines * 128, 128, fp)) {
     line_ptrs[nlines] = line_buffer + nlines * 128;
+    line_skip[nlines] = 0;
     nlines++;
   }
   fclose(fp);
 
+  int changed;
+  char tmp1[64], tmp2[64];
+  char pop_reg[64];
+  char target[64], label[64];
+  char reg[64];
+  char src[64], dst1[64], dst2[64];
+  char imm_str[64];
+  long local_imm;
+  char val_str[32];
+
+peephole_loop:
+  changed = 0;
+
+  {
+    int out = 0;
+    int old_n = nlines;
+    for (i = 0; i < old_n; i++) {
+      if (line_skip[i] == 0 && line_ptrs[i][0] != '\n') {
+        line_ptrs[out] = line_ptrs[i];
+        line_skip[out] = 0;
+        out = out + 1;
+      }
+    }
+    for (i = out; i < old_n; i++) {
+      line_skip[i] = 0;
+    }
+    nlines = out;
+  }
+
   for (i = 0; i < nlines;) {
     char *l1 = line_ptrs[i];
+    int matched = 0;
 
     /* 1. Redundant Push/Pop */
     if (strncmp(l1, "    pushq ", 10) == 0 && i + 1 < nlines) {
       char *l2 = line_ptrs[i + 1];
       if (strncmp(l2, "    popq ", 9) == 0) {
-        char tmp1[64], tmp2[64];
         sscanf(l1, "    pushq %s", tmp1);
         sscanf(l2, "    popq %s", tmp2);
         if (strcmp(tmp1, tmp2) == 0) {
-          line_ptrs[i][0] = 0;
-          line_ptrs[i + 1][0] = 0;
+          line_skip[i] = 1;
+          line_skip[i + 1] = 1;
           eliminated += 2;
+          changed = 1;
           i += 2;
-          continue;
+          matched = 1;
         } else {
           sprintf(line_ptrs[i], "    movq %s, %s\n", tmp1, tmp2);
-          line_ptrs[i + 1][0] = 0;
+          line_skip[i + 1] = 1;
           eliminated += 2;
+          changed = 1;
           i += 2;
-          continue;
+          matched = 1;
         }
       }
     }
 
     /* 2. Arithmetic Nullification */
-    if (strcmp(l1, "    addq $0, %rax\n") == 0 ||
+    if (!matched && (strcmp(l1, "    addq $0, %rax\n") == 0 ||
         strcmp(l1, "    subq $0, %rax\n") == 0 ||
         strcmp(l1, "    addq $0, %rsp\n") == 0 ||
-        strcmp(l1, "    subq $0, %rsp\n") == 0) {
-      line_ptrs[i][0] = 0;
+        strcmp(l1, "    subq $0, %rsp\n") == 0)) {
+      line_skip[i] = 1;
       eliminated += 1;
+      changed = 1;
       i += 1;
-      continue;
+      matched = 1;
     }
 
     /* 3. Push/Lea/Pop Triad */
-    if (strcmp(l1, "    pushq %rax\n") == 0 && i + 2 < nlines) {
+    if (!matched && strncmp(l1, "    pushq %rax\n", 15) == 0 && i + 2 < nlines) {
       char *l2 = line_ptrs[i + 1];
       char *l3 = line_ptrs[i + 2];
-      if (strncmp(l2, "    leaq ", 9) == 0 && strstr(l2, ", %rax") &&
+      int has_rax_dst = 0;
+      {
+        int si;
+        int l2len = 0;
+        while (l2[l2len]) l2len++;
+        for (si = 0; si + 5 < l2len; si++) {
+          if (l2[si] == ',' && l2[si+1] == ' ' && l2[si+2] == '%' &&
+              l2[si+3] == 'r' && l2[si+4] == 'a' && l2[si+5] == 'x') {
+            has_rax_dst = 1;
+            break;
+          }
+        }
+      }
+      if (strncmp(l2, "    leaq ", 9) == 0 && has_rax_dst &&
           strncmp(l3, "    popq ", 9) == 0) {
-        char pop_reg[64];
         sscanf(l3, "    popq %s", pop_reg);
         sprintf(line_ptrs[i], "    movq %%rax, %s\n", pop_reg);
-        line_ptrs[i + 2][0] = 0;
+        line_skip[i + 2] = 1;
         eliminated += 3;
+        changed = 1;
         i += 3;
-        continue;
+        matched = 1;
       }
     }
-    i++;
+
+    /* 4. Branch Straightening */
+    if (!matched && strncmp(l1, "    jmp .L", 10) == 0 && i + 1 < nlines) {
+      if (sscanf(l1, "    jmp %63s", target) == 1) {
+        char *l2 = line_ptrs[i + 1];
+        if (l2[0] == '.' && l2[1] == 'L') {
+          if (sscanf(l2, "%63[^:]:", label) == 1 && strcmp(target, label) == 0) {
+            line_skip[i] = 1;
+            eliminated += 1;
+            changed = 1;
+            i += 1;
+            matched = 1;
+          }
+        }
+      }
+    }
+
+    /* 5. Zero-Test Optimization */
+    if (!matched && strncmp(l1, "    cmpq $0, %", 14) == 0) {
+      int ri;
+      strcpy(reg, l1 + 14);
+      /* Manually strip trailing newline — avoid strchr to prevent ZCC cltq bug */
+      for (ri = 0; ri < 63 && reg[ri]; ri++) {
+        if (reg[ri] == '\n') { reg[ri] = '\0'; break; }
+      }
+      strcpy(line_ptrs[i], "    testq %");
+      strcat(line_ptrs[i], reg);
+      strcat(line_ptrs[i], ", %");
+      strcat(line_ptrs[i], reg);
+      strcat(line_ptrs[i], "\n");
+      eliminated += 1;
+      changed = 1;
+      i += 1;
+      matched = 1;
+    }
+
+    /* 6. LEA Computation Fusion */
+    if (!matched && strncmp(l1, "    movq %", 10) == 0 && i + 1 < nlines) {
+      char *l2 = line_ptrs[i + 1];
+      if (strncmp(l2, "    addq $", 10) == 0) {
+        if (sscanf(l1, "    movq %%%[a-z0-9], %%%[a-z0-9]", src, dst1) == 2 &&
+            sscanf(l2, "    addq $%ld, %%%[a-z0-9]", &local_imm, dst2) == 2) {
+          if (strcmp(dst1, dst2) == 0) {
+            sprintf(val_str, "%ld", local_imm);
+            strcpy(line_ptrs[i], "    leaq ");
+            strcat(line_ptrs[i], val_str);
+            strcat(line_ptrs[i], "(%");
+            strcat(line_ptrs[i], src);
+            strcat(line_ptrs[i], "), %");
+            strcat(line_ptrs[i], dst1);
+            strcat(line_ptrs[i], "\n");
+
+            line_skip[i + 1] = 1;
+            eliminated += 2;
+            changed = 1;
+            i += 2;
+            matched = 1;
+          }
+        }
+      }
+    }
+
+    if (!matched) {
+      i++;
+    }
+  } 
+  if (changed) {
+      goto peephole_loop;
   }
 
   fp = fopen(filename, "w");
@@ -12231,7 +10953,7 @@ static void peephole_optimize(char *filename) {
     return;
   }
   for (i = 0; i < nlines; i++) {
-    if (line_ptrs[i][0] != 0)
+    if (line_skip[i] == 0)
       fputs(line_ptrs[i], fp);
   }
   fclose(fp);
@@ -12466,143 +11188,6 @@ int main(int argc, char **argv) {
 }
 
 /* ZKAEDI FORCE RENDER CACHE INVALIDATION */
-#ifndef ZCC_AST_BRIDGE_H
-/* Exclusively for standalone IDE analysis */
-#include "part1.c"
-#endif
-
-/* ================================================================ */
-/* PART 6: ARM TARGET BACKEND (thumbv6m)                             */
-/* ================================================================ */
-
-
-TargetBackend *backend_ops = 0;
-int ZCC_POINTER_WIDTH = 8;
-int ZCC_INT_WIDTH = 4;
-
-static void thumb_emit_prologue(Compiler *cc, Node *func) {
-    int stack_size = func->stack_size + 40;
-    if (stack_size < 256) stack_size = 256;
-    stack_size = (stack_size + 7) & ~7;
-
-    fprintf(cc->out, "    .text\n");
-    fprintf(cc->out, "    .syntax unified\n");
-    fprintf(cc->out, "    .cpu cortex-m0plus\n");
-    fprintf(cc->out, "    .thumb\n");
-    if (!func->is_static) {
-        fprintf(cc->out, "    .global %s\n", func->func_def_name);
-    }
-    fprintf(cc->out, "    .type %s, %%function\n", func->func_def_name);
-    fprintf(cc->out, "%s:\n", func->func_def_name);
-    
-    fprintf(cc->out, "    push {r4, r5, r6, r7, lr}\n");
-    fprintf(cc->out, "    mov r7, sp\n");
-
-    if (stack_size <= 508 && (stack_size % 4 == 0)) {
-        fprintf(cc->out, "    sub sp, #%d\n", stack_size);
-    } else {
-        fprintf(cc->out, "    ldr r3, =%d\n", stack_size);
-        fprintf(cc->out, "    mov r4, sp\n");
-        fprintf(cc->out, "    subs r4, r4, r3\n");
-        fprintf(cc->out, "    mov sp, r4\n");
-    }
-
-    int i;
-    for (i = 0; i < func->num_params && i < 4; i++) {
-        fprintf(cc->out, "    ldr r3, =%d\n", -(i * 4 + 8));
-        fprintf(cc->out, "    adds r3, r7, r3\n");
-        fprintf(cc->out, "    str r%d, [r3]\n", i);
-    }
-}
-
-static void thumb_emit_epilogue(Compiler *cc, Node *func) {
-    fprintf(cc->out, ".Lfunc_end_%d:\n", cc->func_end_label);
-    fprintf(cc->out, "    mov sp, r7\n");
-    fprintf(cc->out, "    pop {r4, r5, r6, r7, pc}\n");
-}
-
-static void thumb_emit_call(Compiler *cc, Node *func) {
-    fprintf(cc->out, "    bl %s\n", func->func_name);
-}
-
-static void thumb_emit_binary_op(Compiler *cc, int op) {
-    /* op matches ND_ADD, ND_SUB, etc.
-       r0 = lhs, r1 = rhs
-       output -> r0 */
-    switch (op) {
-        case ND_ADD:
-            fprintf(cc->out, "    adds r0, r0, r1\n");
-            break;
-        case ND_SUB:
-            fprintf(cc->out, "    subs r0, r0, r1\n");
-            break;
-        case ND_MUL:
-            fprintf(cc->out, "    muls r0, r1, r0\n"); /* thumb-1 allows only dest=lhs */
-            break;
-        case ND_DIV:
-            fprintf(cc->out, "    bl __aeabi_idiv\n"); /* software divide */
-            break;
-        case ND_BAND:
-            fprintf(cc->out, "    ands r0, r0, r1\n");
-            break;
-        case ND_BOR:
-            fprintf(cc->out, "    orrs r0, r0, r1\n");
-            break;
-        case ND_BXOR:
-            fprintf(cc->out, "    eors r0, r0, r1\n");
-            break;
-        case ND_SHL:
-            fprintf(cc->out, "    lsls r0, r0, r1\n");
-            break;
-        case ND_SHR:
-            fprintf(cc->out, "    asrs r0, r0, r1\n"); /* arithmetic shift right */
-            break;
-    }
-}
-
-static void thumb_emit_load_stack(Compiler *cc, int offset, const char *reg) {
-    if (offset >= 0 && offset <= 1020 && (offset % 4 == 0)) {
-        fprintf(cc->out, "    ldr %s, [r7, #%d]\n", reg, offset);
-    } else {
-        fprintf(cc->out, "    ldr r3, =%d\n", offset);
-        fprintf(cc->out, "    adds r3, r7, r3\n");
-        fprintf(cc->out, "    ldr %s, [r3]\n", reg);
-    }
-}
-
-static void thumb_emit_store_stack(Compiler *cc, int offset, const char *reg) {
-    if (offset >= 0 && offset <= 1020 && (offset % 4 == 0)) {
-        fprintf(cc->out, "    str %s, [r7, #%d]\n", reg, offset);
-    } else {
-        fprintf(cc->out, "    ldr r3, =%d\n", offset);
-        fprintf(cc->out, "    adds r3, r7, r3\n");
-        fprintf(cc->out, "    str %s, [r3]\n", reg);
-    }
-}
-
-static void thumb_emit_float_binop(Compiler *cc, int op) {
-    const char *fn = 0;
-    switch (op) {
-        case ND_FADD: fn = "__aeabi_fadd"; break;
-        case ND_FSUB: fn = "__aeabi_fsub"; break;
-        case ND_FMUL: fn = "__aeabi_fmul"; break;
-        case ND_FDIV: fn = "__aeabi_fdiv"; break;
-    }
-    if (fn) {
-        fprintf(cc->out, "    bl %s\n", fn);
-    }
-}
-
-TargetBackend backend_thumbv6m = {
-    4, /* ptr_size */
-    thumb_emit_prologue,
-    thumb_emit_epilogue,
-    thumb_emit_call,
-    thumb_emit_binary_op,
-    thumb_emit_load_stack,
-    thumb_emit_store_stack,
-    thumb_emit_float_binop
-};
 /*
  * ir.c — ZCC IR construction and text emission
  *
@@ -12618,6 +11203,9 @@ TargetBackend backend_thumbv6m = {
  */
 
 #include "ir.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 /* ── Globals ─────────────────────────────────────────────────────────── */
 
@@ -12944,6 +11532,9 @@ void ir_module_emit_text(const ir_module_t *mod, FILE *fp) {
 
 #include "ir.h"
 #include "regalloc.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 typedef struct {
     char name[IR_NAME_MAX];
@@ -13412,739 +12003,3 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
         ra_free(ra);
     }
 }
-/*
- * ir_pass_manager.c — ZCC IR Pass Manager Implementation
- * ========================================================
- * Compiled by GCC only (linked separately, NOT concatenated into zcc.c).
- * Operates on ir_func_t* linked lists defined in ir.h.
- *
- * Production passes:
- *   DCE            — backward liveness scan, unlinks dead definitions
- *   Constant Fold  — evaluates binary ops on known constants
- *   Strength Reduce — mul-by-0 → const 0, add/sub-by-0 → copy
- *
- * Default pipeline: DCE → const_fold → strength_reduce → DCE
- */
-
-#include "ir.h"
-
-/* ── Pass result type ────────────────────────────────────────────────── */
-
-typedef struct {
-    int nodes_before;
-    int nodes_after;
-    int nodes_deleted;
-    int nodes_modified;
-    int changed;
-} ir_pass_result_t;
-
-typedef ir_pass_result_t (*ir_pass_fn)(void *fn_ptr);
-
-#define IR_PM_MAX_PASSES 16
-
-typedef struct {
-    const char    *name;
-    ir_pass_fn     fn;
-    int            enabled;
-} ir_pass_entry_t;
-
-typedef struct {
-    ir_pass_entry_t passes[IR_PM_MAX_PASSES];
-    int             count;
-    int             verbose;
-} ir_pass_manager_t;
-
-/* ── Helpers ─────────────────────────────────────────────────────────── */
-
-static int count_nodes(ir_func_t *fn) {
-    int count = 0;
-    ir_node_t *n = fn->head;
-    while (n) {
-        count++;
-        n = n->next;
-    }
-    return count;
-}
-
-/* Check if an opcode is side-effectful (must not be DCE'd) */
-static int is_side_effect(ir_op_t op) {
-    switch (op) {
-    case IR_STORE:
-    case IR_CALL:
-    case IR_RET:
-    case IR_BR:
-    case IR_BR_IF:
-    case IR_LABEL:
-    case IR_ARG:
-        return 1;
-    default:
-        return 0;
-    }
-}
-
-/* Check if a node references 'name' as a source operand.
- * For IR_STORE, dst is actually a USE (the address), not a definition. */
-static int node_uses(ir_node_t *n, const char *name) {
-    if (name[0] == '\0') return 0;
-    if (n->src1[0] && strcmp(n->src1, name) == 0) return 1;
-    if (n->src2[0] && strcmp(n->src2, name) == 0) return 1;
-    /* IR_STORE uses dst as the address operand — it's a USE, not a DEF */
-    if (n->op == IR_STORE && n->dst[0] && strcmp(n->dst, name) == 0) return 1;
-    return 0;
-}
-
-/* ════════════════════════════════════════════════════════════════════════
- * PASS 1: Dead Code Elimination (DCE)
- * ════════════════════════════════════════════════════════════════════════
- * Scan the node list.  A node is dead if:
- *   1) It defines a temp (dst[0] != '\0')
- *   2) It is NOT side-effectful (not store/call/ret/br/br_if/label/arg)
- *   3) It is NOT IR_STORE (where dst is a use, not a definition)
- *   4) No subsequent node references dst in src1, src2, or store-dst
- *
- * Complexity: O(N²) per function. With ~300 nodes/function average,
- * this is ~90K comparisons/function — negligible.
- */
-static ir_pass_result_t ir_pass_dce(void *fn_ptr) {
-    ir_func_t *fn = (ir_func_t *)fn_ptr;
-    ir_pass_result_t r;
-    ir_node_t *prev;
-    ir_node_t *n;
-    ir_node_t *scan;
-    ir_node_t *next;
-    int deleted = 0;
-
-    memset(&r, 0, sizeof(r));
-    r.nodes_before = count_nodes(fn);
-
-    prev = NULL;
-    n = fn->head;
-    while (n) {
-        next = n->next;
-
-        /* Does this node define a temp that could be dead? */
-        if (n->dst[0] != '\0'
-            && !is_side_effect(n->op)
-            && n->op != IR_STORE) {
-
-            /* Check if ANY subsequent node uses this temp */
-            int used = 0;
-            for (scan = next; scan; scan = scan->next) {
-                if (node_uses(scan, n->dst)) {
-                    used = 1;
-                    break;
-                }
-            }
-
-            if (!used) {
-                /* Dead node — unlink from list */
-                if (prev) {
-                    prev->next = next;
-                } else {
-                    fn->head = next;
-                }
-                if (n == fn->tail) {
-                    fn->tail = prev;
-                }
-                free(n);
-                fn->node_count--;
-                deleted++;
-                /* Don't advance prev; it still points to the right place */
-                n = next;
-                continue;
-            }
-        }
-
-        prev = n;
-        n = next;
-    }
-
-    r.nodes_after = r.nodes_before - deleted;
-    r.nodes_deleted = deleted;
-    r.changed = deleted > 0;
-    return r;
-}
-
-/* ════════════════════════════════════════════════════════════════════════
- * PASS 2: Constant Folding
- * ════════════════════════════════════════════════════════════════════════
- * Scan forward.  Track temps defined by IR_CONST.  When a binary op
- * has both src1 and src2 as known constants, evaluate at compile time
- * and replace the node with IR_CONST.
- */
-
-#define CONST_MAP_MAX 2048
-
-typedef struct {
-    char name[32];  /* IR_NAME_MAX */
-    long value;
-} const_map_entry_t;
-
-static const_map_entry_t s_cmap[CONST_MAP_MAX];
-static int s_cmap_count;
-
-static void cmap_clear(void) {
-    s_cmap_count = 0;
-}
-
-static void cmap_add(const char *name, long value) {
-    int i;
-    /* Update if exists */
-    for (i = 0; i < s_cmap_count; i++) {
-        if (strcmp(s_cmap[i].name, name) == 0) {
-            s_cmap[i].value = value;
-            return;
-        }
-    }
-    /* Add new */
-    if (s_cmap_count >= CONST_MAP_MAX) return;
-    strncpy(s_cmap[s_cmap_count].name, name, 31);
-    s_cmap[s_cmap_count].name[31] = '\0';
-    s_cmap[s_cmap_count].value = value;
-    s_cmap_count++;
-}
-
-static int cmap_get(const char *name, long *value) {
-    int i;
-    if (name[0] == '\0') return 0;
-    for (i = 0; i < s_cmap_count; i++) {
-        if (strcmp(s_cmap[i].name, name) == 0) {
-            *value = s_cmap[i].value;
-            return 1;
-        }
-    }
-    return 0;
-}
-
-static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
-    ir_func_t *fn = (ir_func_t *)fn_ptr;
-    ir_pass_result_t r;
-    ir_node_t *n;
-    int modified = 0;
-
-    memset(&r, 0, sizeof(r));
-    r.nodes_before = count_nodes(fn);
-
-    cmap_clear();
-
-    for (n = fn->head; n; n = n->next) {
-        /* Track constants */
-        if (n->op == IR_CONST && n->dst[0]) {
-            cmap_add(n->dst, n->imm);
-            continue;
-        }
-
-        /* Check binary ops with two known constant operands */
-        if (n->src1[0] && n->src2[0]) {
-            long v1, v2, result;
-
-            if (!cmap_get(n->src1, &v1)) continue;
-            if (!cmap_get(n->src2, &v2)) continue;
-
-            switch (n->op) {
-            case IR_ADD: result = v1 + v2; break;
-            case IR_SUB: result = v1 - v2; break;
-            case IR_MUL: result = v1 * v2; break;
-            case IR_DIV: if (v2 == 0) continue; result = v1 / v2; break;
-            case IR_MOD: if (v2 == 0) continue; result = v1 % v2; break;
-            case IR_AND: result = v1 & v2; break;
-            case IR_OR:  result = v1 | v2; break;
-            case IR_XOR: result = v1 ^ v2; break;
-            case IR_SHL: result = v1 << v2; break;
-            case IR_SHR: result = v1 >> v2; break;
-            case IR_EQ:  result = (v1 == v2) ? 1 : 0; break;
-            case IR_NE:  result = (v1 != v2) ? 1 : 0; break;
-            case IR_LT:  result = (v1 < v2)  ? 1 : 0; break;
-            case IR_LE:  result = (v1 <= v2) ? 1 : 0; break;
-            case IR_GT:  result = (v1 > v2)  ? 1 : 0; break;
-            case IR_GE:  result = (v1 >= v2) ? 1 : 0; break;
-            default: continue;
-            }
-
-            /* Replace with IR_CONST */
-            n->op = IR_CONST;
-            n->imm = result;
-            n->src1[0] = '\0';
-            n->src2[0] = '\0';
-
-            /* Track the new constant */
-            cmap_add(n->dst, result);
-
-            modified++;
-        }
-    }
-
-    r.nodes_after = r.nodes_before; /* const fold mutates, doesn't delete */
-    r.nodes_modified = modified;
-    r.changed = modified > 0;
-    return r;
-}
-
-/* ════════════════════════════════════════════════════════════════════════
- * PASS 3: Strength Reduction
- * ════════════════════════════════════════════════════════════════════════
- * Pattern-match on operations with one known constant operand:
- *   MUL dst, src, 0  → CONST dst, 0
- *   MUL dst, 0, src  → CONST dst, 0
- *   ADD dst, src, 0  → COPY  dst, src
- *   ADD dst, 0, src  → COPY  dst, src
- *   SUB dst, src, 0  → COPY  dst, src
- *
- * Phase 3 will add: MUL 2^N → SHL N, DIV 2^N → SHR N (unsigned)
- */
-static ir_pass_result_t ir_pass_strength_reduce(void *fn_ptr) {
-    ir_func_t *fn = (ir_func_t *)fn_ptr;
-    ir_pass_result_t r;
-    ir_node_t *n;
-    int modified = 0;
-
-    memset(&r, 0, sizeof(r));
-    r.nodes_before = count_nodes(fn);
-
-    /* Collect constants */
-    cmap_clear();
-    for (n = fn->head; n; n = n->next) {
-        if (n->op == IR_CONST && n->dst[0]) {
-            cmap_add(n->dst, n->imm);
-        }
-    }
-
-    /* Apply strength reductions */
-    for (n = fn->head; n; n = n->next) {
-        long val;
-
-        if (n->op == IR_MUL) {
-            /* MUL by 0 (either operand) → CONST 0 */
-            if (cmap_get(n->src2, &val) && val == 0) {
-                n->op = IR_CONST;
-                n->imm = 0;
-                n->src1[0] = '\0';
-                n->src2[0] = '\0';
-                cmap_add(n->dst, 0);
-                modified++;
-                continue;
-            }
-            if (cmap_get(n->src1, &val) && val == 0) {
-                n->op = IR_CONST;
-                n->imm = 0;
-                n->src1[0] = '\0';
-                n->src2[0] = '\0';
-                cmap_add(n->dst, 0);
-                modified++;
-                continue;
-            }
-            /* MUL by 1 → COPY */
-            if (cmap_get(n->src2, &val) && val == 1) {
-                n->op = IR_COPY;
-                /* src1 stays, src2 cleared */
-                n->src2[0] = '\0';
-                modified++;
-                continue;
-            }
-            if (cmap_get(n->src1, &val) && val == 1) {
-                n->op = IR_COPY;
-                /* swap src2 into src1 position */
-                strncpy(n->src1, n->src2, 31);
-                n->src1[31] = '\0';
-                n->src2[0] = '\0';
-                modified++;
-                continue;
-            }
-        }
-
-        if (n->op == IR_ADD) {
-            /* ADD src, 0 → COPY src */
-            if (cmap_get(n->src2, &val) && val == 0) {
-                n->op = IR_COPY;
-                n->src2[0] = '\0';
-                modified++;
-                continue;
-            }
-            if (cmap_get(n->src1, &val) && val == 0) {
-                n->op = IR_COPY;
-                strncpy(n->src1, n->src2, 31);
-                n->src1[31] = '\0';
-                n->src2[0] = '\0';
-                modified++;
-                continue;
-            }
-        }
-
-        if (n->op == IR_SUB) {
-            /* SUB src, 0 → COPY src */
-            if (cmap_get(n->src2, &val) && val == 0) {
-                n->op = IR_COPY;
-                n->src2[0] = '\0';
-                modified++;
-                continue;
-            }
-        }
-    }
-
-    r.nodes_after = r.nodes_before; /* strength reduce mutates, doesn't delete */
-    r.nodes_modified = modified;
-    r.changed = modified > 0;
-    return r;
-}
-
-/* ── Registry API ────────────────────────────────────────────────────── */
-
-static ir_pass_manager_t *ir_pm_create(void) {
-    ir_pass_manager_t *pm = (ir_pass_manager_t *)calloc(1, sizeof(ir_pass_manager_t));
-    if (!pm) {
-        fprintf(stderr, "ir_pm_create: out of memory\n");
-        exit(1);
-    }
-    return pm;
-}
-
-static void ir_pm_register(ir_pass_manager_t *pm, const char *name, ir_pass_fn fn) {
-    if (pm->count >= IR_PM_MAX_PASSES) {
-        fprintf(stderr, "ir_pm_register: too many passes (max %d)\n", IR_PM_MAX_PASSES);
-        return;
-    }
-    pm->passes[pm->count].name = name;
-    pm->passes[pm->count].fn = fn;
-    pm->passes[pm->count].enabled = 1;
-    pm->count++;
-}
-
-static void ir_pm_run(ir_pass_manager_t *pm, ir_module_t *mod) {
-    int p;
-    int f;
-    int total_nodes_in = 0;
-    int total_nodes_out = 0;
-    int total_deleted = 0;
-    int total_modified = 0;
-
-    for (p = 0; p < pm->count; p++) {
-        int pass_before = 0;
-        int pass_after = 0;
-        int pass_deleted = 0;
-        int pass_modified = 0;
-
-        if (!pm->passes[p].enabled) continue;
-
-        for (f = 0; f < mod->func_count; f++) {
-            ir_pass_result_t r = pm->passes[p].fn(mod->funcs[f]);
-            pass_before += r.nodes_before;
-            pass_after += r.nodes_after;
-            pass_deleted += r.nodes_deleted;
-            pass_modified += r.nodes_modified;
-        }
-
-        if (pm->verbose) {
-            fprintf(stderr, "  [IR Pass] %-18s: %d funcs, %d nodes -> %d nodes (%d deleted, %d modified)\n",
-                    pm->passes[p].name, mod->func_count, pass_before, pass_after,
-                    pass_deleted, pass_modified);
-        }
-
-        if (p == 0) total_nodes_in = pass_before;
-        total_nodes_out = pass_after;
-        total_deleted += pass_deleted;
-        total_modified += pass_modified;
-    }
-
-    if (pm->verbose && pm->count > 0) {
-        fprintf(stderr, "  [IR Pass] Pipeline complete: %d nodes -> %d nodes (total: %d deleted, %d modified)\n",
-                total_nodes_in, total_nodes_out, total_deleted, total_modified);
-    }
-}
-
-static void ir_pm_free(ir_pass_manager_t *pm) {
-    if (pm) free(pm);
-}
-
-/* ── Primary entry point (called from part5.c) ──────────────────────── */
-
-void ir_pm_run_default(void *mod_ptr, int verbose) {
-    ir_module_t *mod = (ir_module_t *)mod_ptr;
-    ir_pass_manager_t *pm;
-
-    if (!mod || mod->func_count == 0) return;
-
-    pm = ir_pm_create();
-    pm->verbose = verbose;
-
-    /* Default pipeline: DCE → const_fold → strength_reduce → DCE */
-    ir_pm_register(pm, "dce", ir_pass_dce);
-    ir_pm_register(pm, "const_fold", ir_pass_const_fold);
-    ir_pm_register(pm, "strength_reduce", ir_pass_strength_reduce);
-    ir_pm_register(pm, "dce2", ir_pass_dce);
-
-    ir_pm_run(pm, mod);
-    ir_pm_free(pm);
-}
-/*
- * regalloc.c — Linear Scan Register Allocator for ZCC IR Backend
- *
- * See regalloc.h for design rationale.
- *
- * The IR is a singly-linked list of ir_node_t with string-named fields:
- *   n->dst   — destination temp (e.g. "%t3", "%stack_-8", "")
- *   n->src1  — first source temp
- *   n->src2  — second source temp
- *
- * Only names with prefix "%t" (pure SSA temporaries) are candidates.
- * %stack_* names are addressable locals: leave them on the stack always.
- */
-
-#include "regalloc.h"
-
-/* ── Physical register table ─────────────────────────────────────────── */
-
-static const char *preg_names[PREG_COUNT] = {
-    "rbx", "r12", "r13", "r14", "r15",  /* callee-saved */
-    "r10", "r11"                          /* caller-saved scratch */
-};
-
-const char *preg_name(PhysReg r) {
-    if (r < 0 || r >= PREG_COUNT) return "???";
-    return preg_names[r];
-}
-
-int preg_callee_saved(PhysReg r) {
-    return (r >= PREG_RBX && r <= PREG_R15);
-}
-
-/* ── Interval helpers ────────────────────────────────────────────────── */
-
-static int is_temp(const char *name) {
-    return (name && name[0] == '%' && name[1] == 't' &&
-            name[2] >= '0' && name[2] <= '9');
-}
-
-static LiveInterval *find_interval(RegAllocator *ra, const char *name) {
-    int i;
-    for (i = 0; i < ra->num_intervals; i++) {
-        if (strcmp(ra->intervals[i].name, name) == 0)
-            return &ra->intervals[i];
-    }
-    return NULL;
-}
-
-static LiveInterval *get_or_create(RegAllocator *ra, const char *name, int pos) {
-    LiveInterval *iv = find_interval(ra, name);
-    if (iv) return iv;
-
-    /* Grow if needed */
-    if (ra->num_intervals >= ra->cap_intervals) {
-        int newcap = ra->cap_intervals ? ra->cap_intervals * 2 : 64;
-        LiveInterval *nb = (LiveInterval *)realloc(ra->intervals,
-                                newcap * sizeof(LiveInterval));
-        if (!nb) { fprintf(stderr, "[regalloc] OOM\n"); exit(1); }
-        ra->intervals = nb;
-        ra->cap_intervals = newcap;
-    }
-
-    iv = &ra->intervals[ra->num_intervals++];
-    strncpy(iv->name, name, RA_NAME_MAX - 1);
-    iv->name[RA_NAME_MAX - 1] = '\0';
-    iv->start    = pos;
-    iv->end      = pos;
-    iv->assigned = PREG_NONE;
-    return iv;
-}
-
-/* ── Allocator lifecycle ─────────────────────────────────────────────── */
-
-RegAllocator *ra_create(void) {
-    RegAllocator *ra = (RegAllocator *)calloc(1, sizeof(RegAllocator));
-    if (!ra) { fprintf(stderr, "[regalloc] OOM\n"); exit(1); }
-    return ra;
-}
-
-void ra_free(RegAllocator *ra) {
-    if (!ra) return;
-    free(ra->intervals);
-    free(ra);
-}
-
-/* ── Sort helper for qsort ───────────────────────────────────────────── */
-
-static int iv_cmp_start(const void *a, const void *b) {
-    const LiveInterval *ia = (const LiveInterval *)a;
-    const LiveInterval *ib = (const LiveInterval *)b;
-    return ia->start - ib->start;
-}
-
-/* ── Phase 1: Build live intervals ──────────────────────────────────── */
-
-static void build_intervals(RegAllocator *ra, const ir_func_t *fn) {
-    const ir_node_t *n;
-    int pos = 0;
-
-    for (n = fn->head; n; n = n->next, pos++) {
-        /* Process destination (definition) */
-        if (is_temp(n->dst)) {
-            LiveInterval *iv = get_or_create(ra, n->dst, pos);
-            /* definitions extend end too (covers single-use temps) */
-            if (pos > iv->end) iv->end = pos;
-        }
-        /* Process source operands (uses) */
-        if (is_temp(n->src1)) {
-            LiveInterval *iv = get_or_create(ra, n->src1, pos);
-            if (pos > iv->end) iv->end = pos;
-        }
-        if (is_temp(n->src2)) {
-            LiveInterval *iv = get_or_create(ra, n->src2, pos);
-            if (pos > iv->end) iv->end = pos;
-        }
-    }
-
-    /* Sort by start for the scan */
-    qsort(ra->intervals, ra->num_intervals, sizeof(LiveInterval), iv_cmp_start);
-}
-
-/* ── Phase 2: Linear scan allocation ────────────────────────────────── */
-
-/*
- * Classic Poletto & Sarkar linear scan.
- * Active = set of intervals currently occupying a physical register.
- * We maintain active[] sorted by end point (earliest-ending first) so
- * expiry and spill decisions are O(k) where k = PREG_COUNT (small constant).
- */
-
-static void linear_scan(RegAllocator *ra) {
-    /* active[i] = index into ra->intervals of an allocated interval */
-    int active[PREG_COUNT];
-    int active_reg[PREG_COUNT]; /* physical register used by active[i] */
-    int active_cnt = 0;
-
-    /* Free-register stack */
-    PhysReg free_regs[PREG_COUNT];
-    int free_cnt = 0;
-    int r;
-    for (r = 0; r < PREG_COUNT; r++)
-        free_regs[free_cnt++] = (PhysReg)(PREG_COUNT - 1 - r); /* push in reverse so rbx is tried first */
-
-    int i;
-    for (i = 0; i < ra->num_intervals; i++) {
-        LiveInterval *cur = &ra->intervals[i];
-
-        /* --- Expire old intervals --- */
-        int j = 0;
-        while (j < active_cnt) {
-            LiveInterval *act = &ra->intervals[active[j]];
-            if (act->end < cur->start) {
-                /* Return this register to the free pool */
-                free_regs[free_cnt++] = (PhysReg)active_reg[j];
-                /* Compact active[] */
-                active[j]     = active[active_cnt - 1];
-                active_reg[j] = active_reg[active_cnt - 1];
-                active_cnt--;
-                /* Don't advance j — need to recheck this slot */
-            } else {
-                j++;
-            }
-        }
-
-        /* --- Allocate or spill --- */
-        if (free_cnt > 0) {
-            /* Grab a free register */
-            PhysReg preg = free_regs[--free_cnt];
-            cur->assigned = preg;
-            ra->used[preg] = 1;
-
-            /* Add to active */
-            active[active_cnt]     = i;
-            active_reg[active_cnt] = (int)preg;
-            active_cnt++;
-        } else {
-            /*
-             * No free register. Spill the interval that ends latest
-             * (keep the one ending soonest in a register — it frees up
-             * sooner and benefits more instructions).
-             */
-            int spill_idx = -1;
-            int spill_ai  = -1;
-            int latest_end = cur->end;
-
-            for (j = 0; j < active_cnt; j++) {
-                LiveInterval *act = &ra->intervals[active[j]];
-                if (act->end > latest_end) {
-                    latest_end = act->end;
-                    spill_idx  = active[j];
-                    spill_ai   = j;
-                }
-            }
-
-            if (spill_idx >= 0) {
-                /* The active interval ending latest gives its register to cur */
-                PhysReg stolen = (PhysReg)active_reg[spill_ai];
-                ra->intervals[spill_idx].assigned = PREG_NONE; /* spill it */
-                cur->assigned = stolen;
-
-                active[spill_ai]     = i;
-                active_reg[spill_ai] = (int)stolen;
-            }
-            /* else cur->assigned stays PREG_NONE (spilled) */
-        }
-    }
-}
-
-/* ── Public entry point ──────────────────────────────────────────────── */
-
-void ra_run(RegAllocator *ra, const ir_func_t *fn) {
-    build_intervals(ra, fn);
-    if (ra->num_intervals > 0)
-        linear_scan(ra);
-}
-
-/* ── Query API ───────────────────────────────────────────────────────── */
-
-PhysReg ra_get(const RegAllocator *ra, const char *name) {
-    int i;
-    if (!is_temp(name)) return PREG_NONE;
-    for (i = 0; i < ra->num_intervals; i++) {
-        if (strcmp(ra->intervals[i].name, name) == 0)
-            return ra->intervals[i].assigned;
-    }
-    return PREG_NONE;
-}
-
-int ra_any_callee_saved_used(const RegAllocator *ra) {
-    int r;
-    for (r = 0; r < PREG_COUNT; r++) {
-        if (ra->used[r] && preg_callee_saved((PhysReg)r))
-            return 1;
-    }
-    return 0;
-}
-/*
- * ir_telemetry_stub.c — No-op stubs for self-host build.
- *
- * The real ir_telemetry.c uses POSIX socket headers (<sys/socket.h>,
- * <netinet/in.h>) which ZCC cannot parse during self-hosting.
- * These stubs satisfy the link requirements of ir_pass_manager.c
- * without any POSIX dependency.
- *
- * The real ir_telemetry.c is compiled separately by GCC and linked
- * into the production compiler_passes_ir.c path only.
- */
-#include "ir_telemetry.h"
-
-void ir_telem_init(void) {}
-
-void ir_telem_pass(const char *pass_name,
-                   int func_count,
-                   int nodes_before,
-                   int nodes_after,
-                   int nodes_deleted,
-                   int nodes_modified) {
-    (void)pass_name; (void)func_count; (void)nodes_before;
-    (void)nodes_after; (void)nodes_deleted; (void)nodes_modified;
-}
-
-void ir_telem_summary(int total_funcs,
-                      int total_nodes_before,
-                      int total_nodes_after,
-                      int pass_count,
-                      const char **pass_names) {
-    (void)total_funcs; (void)total_nodes_before; (void)total_nodes_after;
-    (void)pass_count; (void)pass_names;
-}
-
-void ir_telem_shutdown(void) {}
-
-void ir_telemetry_enable_stdout(void) {}

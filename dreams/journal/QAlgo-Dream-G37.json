@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G37",
+    "name": "Codegen Mutation G37 [lea_optimization]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-8",
+    "lineage_hash": "273436e9dbf5e870",
+    "island_id": 8
+  },
+  "mutations": [
+    {
+      "name": "lea_optimization",
+      "category": "IDIOM",
+      "description": "Fuse mov+add \u2192 leaq $144(%r12), %rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -3.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -15,
+    "inst_count_delta": 118054,
+    "score_delta": -8.067297999979928,
+    "composite_score": 1252945.32633
+  },
+  "timestamp": "2026-04-20T11:17:49.465360+00:00",
+  "generation": 37
+}

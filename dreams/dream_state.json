@@ -1,11 +1,11 @@
 {
-  "generation": 34,
-  "parent_hash": "96bf5ed5c3fd7104",
+  "generation": 50,
+  "parent_hash": "b142113db2aa05b8",
   "parent_asm_size": 0,
   "parent_bin_size": 0,
-  "total_mutations_tried": 110,
-  "total_mutations_survived": 38,
-  "total_regressions": 43,
+  "total_mutations_tried": 151,
+  "total_mutations_survived": 55,
+  "total_regressions": 62,
   "lineage": [
     {
       "generation": 1,
@@ -350,6 +350,167 @@
       ],
       "delta_score": -8.499716999940574,
       "timestamp": "2026-04-20T10:49:03.293025+00:00"
+    },
+    {
+      "generation": 35,
+      "hash": "443805d74a2112a9",
+      "island_id": 0,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $376(%r13), %rax"
+      ],
+      "delta_score": -24.322159999981523,
+      "timestamp": "2026-04-20T11:17:11.484511+00:00"
+    },
+    {
+      "generation": 36,
+      "hash": "5112eaed4ff18296",
+      "island_id": 1,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $140(%r12), %rax"
+      ],
+      "delta_score": -7.817627999931574,
+      "timestamp": "2026-04-20T11:17:17.058005+00:00"
+    },
+    {
+      "generation": 37,
+      "hash": "273436e9dbf5e870",
+      "island_id": 8,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $144(%r12), %rax"
+      ],
+      "delta_score": -8.067297999979928,
+      "timestamp": "2026-04-20T11:17:49.465349+00:00"
+    },
+    {
+      "generation": 38,
+      "hash": "be683556ae78f299",
+      "island_id": 0,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $160(%r12), %rax"
+      ],
+      "delta_score": -8.56324899988249,
+      "timestamp": "2026-04-20T11:17:54.923075+00:00"
+    },
+    {
+      "generation": 39,
+      "hash": "6209b3ab870ab7d3",
+      "island_id": 1,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $8(%r15), %rax"
+      ],
+      "delta_score": -8.634895000141114,
+      "timestamp": "2026-04-20T11:18:00.174150+00:00"
+    },
+    {
+      "generation": 40,
+      "hash": "e4821b46e172b54c",
+      "island_id": 6,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $192(%rbx), %rax"
+      ],
+      "delta_score": -6.972859999863431,
+      "timestamp": "2026-04-20T11:18:11.971169+00:00"
+    },
+    {
+      "generation": 41,
+      "hash": "e926080e94b73612",
+      "island_id": 7,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $32(%r14), %rax"
+      ],
+      "delta_score": -7.391916999826208,
+      "timestamp": "2026-04-20T11:18:18.132801+00:00"
+    },
+    {
+      "generation": 42,
+      "hash": "7855293a0d97075c",
+      "island_id": 0,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $296(%r12), %rax",
+        "Fuse mov+add \u2192 leaq $72(%r13), %rax"
+      ],
+      "delta_score": -17.05675800004974,
+      "timestamp": "2026-04-20T11:18:33.402953+00:00"
+    },
+    {
+      "generation": 43,
+      "hash": "04d6c1c75eecb261",
+      "island_id": 1,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $4816896(%r14), %rax"
+      ],
+      "delta_score": -9.695138999959454,
+      "timestamp": "2026-04-20T11:18:38.686027+00:00"
+    },
+    {
+      "generation": 44,
+      "hash": "5c499d05b14cce48",
+      "island_id": 6,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $128(%rbx), %rax"
+      ],
+      "delta_score": -4.79936800012365,
+      "timestamp": "2026-04-20T11:18:50.583356+00:00"
+    },
+    {
+      "generation": 45,
+      "hash": "bb35c6010c5e00b7",
+      "island_id": 7,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.6971850001718849,
+      "timestamp": "2026-04-20T11:18:55.777429+00:00"
+    },
+    {
+      "generation": 46,
+      "hash": "3f59b35a226c50ae",
+      "island_id": 2,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $136(%r13), %rax"
+      ],
+      "delta_score": -8.638547000009567,
+      "timestamp": "2026-04-20T11:19:16.574138+00:00"
+    },
+    {
+      "generation": 47,
+      "hash": "932bb76cef314a21",
+      "island_id": 8,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $192(%rbx), %rax"
+      ],
+      "delta_score": -8.990243999985978,
+      "timestamp": "2026-04-20T11:19:33.337174+00:00"
+    },
+    {
+      "generation": 48,
+      "hash": "ce9adf8f2f6399c4",
+      "island_id": 1,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $52(%rbx), %rax"
+      ],
+      "delta_score": -9.05711799999699,
+      "timestamp": "2026-04-20T11:19:43.924495+00:00"
+    },
+    {
+      "generation": 49,
+      "hash": "55a8a51a62d0eae6",
+      "island_id": 3,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $200(%r14), %rax"
+      ],
+      "delta_score": -8.065383999841288,
+      "timestamp": "2026-04-20T11:19:49.571833+00:00"
+    },
+    {
+      "generation": 50,
+      "hash": "b142113db2aa05b8",
+      "island_id": 8,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $18152(%r13), %rax"
+      ],
+      "delta_score": -8.555500000016764,
+      "timestamp": "2026-04-20T11:20:06.174468+00:00"
     }
   ],
   "fitness_history": [
@@ -556,6 +717,102 @@
       "island_id": 1,
       "score": 1252893.1035060002,
       "timestamp": "2026-04-20T10:49:03.293000+00:00"
+    },
+    {
+      "generation": 35,
+      "island_id": 0,
+      "score": 1252944.916474,
+      "timestamp": "2026-04-20T11:17:11.484485+00:00"
+    },
+    {
+      "generation": 36,
+      "island_id": 1,
+      "score": 1252946.2351960002,
+      "timestamp": "2026-04-20T11:17:17.057975+00:00"
+    },
+    {
+      "generation": 37,
+      "island_id": 8,
+      "score": 1252945.32633,
+      "timestamp": "2026-04-20T11:17:49.465326+00:00"
+    },
+    {
+      "generation": 38,
+      "island_id": 0,
+      "score": 1252936.3532250002,
+      "timestamp": "2026-04-20T11:17:54.923049+00:00"
+    },
+    {
+      "generation": 39,
+      "island_id": 1,
+      "score": 1252937.600301,
+      "timestamp": "2026-04-20T11:18:00.174121+00:00"
+    },
+    {
+      "generation": 40,
+      "island_id": 6,
+      "score": 1252946.1517180002,
+      "timestamp": "2026-04-20T11:18:11.971145+00:00"
+    },
+    {
+      "generation": 41,
+      "island_id": 7,
+      "score": 1252945.4699750002,
+      "timestamp": "2026-04-20T11:18:18.132771+00:00"
+    },
+    {
+      "generation": 42,
+      "island_id": 0,
+      "score": 1252919.2964670002,
+      "timestamp": "2026-04-20T11:18:33.402927+00:00"
+    },
+    {
+      "generation": 43,
+      "island_id": 1,
+      "score": 1252927.905162,
+      "timestamp": "2026-04-20T11:18:38.686003+00:00"
+    },
+    {
+      "generation": 44,
+      "island_id": 6,
+      "score": 1252941.35235,
+      "timestamp": "2026-04-20T11:18:50.583330+00:00"
+    },
+    {
+      "generation": 45,
+      "island_id": 7,
+      "score": 1252944.77279,
+      "timestamp": "2026-04-20T11:18:55.777366+00:00"
+    },
+    {
+      "generation": 46,
+      "island_id": 2,
+      "score": 1252944.0281870002,
+      "timestamp": "2026-04-20T11:19:16.574107+00:00"
+    },
+    {
+      "generation": 47,
+      "island_id": 8,
+      "score": 1252936.336086,
+      "timestamp": "2026-04-20T11:19:33.337150+00:00"
+    },
+    {
+      "generation": 48,
+      "island_id": 1,
+      "score": 1252918.848044,
+      "timestamp": "2026-04-20T11:19:43.924471+00:00"
+    },
+    {
+      "generation": 49,
+      "island_id": 3,
+      "score": 1252944.5678760002,
+      "timestamp": "2026-04-20T11:19:49.571808+00:00"
+    },
+    {
+      "generation": 50,
+      "island_id": 8,
+      "score": 1252927.780586,
+      "timestamp": "2026-04-20T11:20:06.174440+00:00"
     }
   ],
   "discovered_algorithms": [
@@ -592,14 +849,30 @@
     "QAlgo-Dream-G31",
     "QAlgo-Dream-G32",
     "QAlgo-Dream-G33",
-    "QAlgo-Dream-G34"
+    "QAlgo-Dream-G34",
+    "QAlgo-Dream-G35",
+    "QAlgo-Dream-G36",
+    "QAlgo-Dream-G37",
+    "QAlgo-Dream-G38",
+    "QAlgo-Dream-G39",
+    "QAlgo-Dream-G40",
+    "QAlgo-Dream-G41",
+    "QAlgo-Dream-G42",
+    "QAlgo-Dream-G43",
+    "QAlgo-Dream-G44",
+    "QAlgo-Dream-G45",
+    "QAlgo-Dream-G46",
+    "QAlgo-Dream-G47",
+    "QAlgo-Dream-G48",
+    "QAlgo-Dream-G49",
+    "QAlgo-Dream-G50"
   ],
   "blacklisted_fingerprints": [
+    "622705fc90a2146f",
+    "a79f914d0ed857b1",
     "0d82191fc206010f",
     "40ff7107eae31b7a",
-    "622705fc90a2146f",
     "4e029b0277b8e53c",
-    "a79f914d0ed857b1",
     "60eaa3f9059264f1"
   ]
 }
