@@ -163,10 +163,14 @@ void trace(Vec3 *ro, Vec3 *rd, int depth, Vec3 *out){
 
 /* ------------------------------------------------------------------ main */
 int main(){
-    int width=64, height=36, i, j;
+    int width=640, height=360, i, j;
     int frame=0, total_frames=30;
-    char *f_env = getenv("FRAME");
-    if(f_env) frame = atoi(f_env);
+    char *f_env  = getenv("FRAME");
+    char *w_env  = getenv("WIDTH");
+    char *h_env  = getenv("HEIGHT");
+    if(f_env) frame  = atoi(f_env);
+    if(w_env) width  = atoi(w_env);
+    if(h_env) height = atoi(h_env);
 
     printf("P3\n%d %d\n255\n",width,height);
 
