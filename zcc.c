@@ -206,6 +206,11 @@ struct Scope {
     Scope *parent;
 };
 
+struct FuncParams {
+    char names[MAX_PARAMS][MAX_IDENT];
+    Type *types[MAX_PARAMS];
+};
+
 struct Node {
     unsigned long long magic;
     unsigned long long alloc_id;
@@ -249,8 +254,7 @@ struct Node {
     /* ND_FUNC_DEF */
     char func_def_name[MAX_IDENT];
     Type *func_type;
-    char param_names_buf[MAX_PARAMS][MAX_IDENT];
-    Type *param_types[MAX_PARAMS];
+    struct FuncParams *func_params;
     int num_params;
     Node *body;
     int stack_size;
@@ -5890,6 +5894,7 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
 
     line = cc->tk_line;
     func = node_new(cc, ND_FUNC_DEF, line);
+    func->func_params = cc_alloc(cc, sizeof(struct FuncParams));
     strncpy(func->func_def_name, name, MAX_IDENT - 1);
     func->is_static = is_static;
 
@@ -5928,8 +5933,8 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
                 if (ptype->kind == TY_ARRAY) ptype = type_ptr(cc, ptype->base);
 
                 if (func->num_params < MAX_PARAMS) {
-                    func->param_types[func->num_params] = ptype;
-                    strncpy(func->param_names_buf[func->num_params], pname, MAX_IDENT - 1);
+                    func->func_params->types[func->num_params] = ptype;
+                    strncpy(func->func_params->names[func->num_params], pname, MAX_IDENT - 1);
                     psym = scope_add_local(cc, pname, ptype);
                     func->num_params++;
                 } else {
@@ -5945,7 +5950,7 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
                     if (cc->tk == TK_ARROW) {
                         error(cc, "unexpected '->' in parameter list (missing ',' or ')'?)");
                     } else {
-                        if (getenv("ZCC_DEBUG")) printf("!!! parse_fparams ERROR !!! func='%s' param_idx=%d tk_text='%s' tk=%d prev_pname='%s'\n", func->func_def_name, func->num_params, cc->tk_text, cc->tk, func->num_params > 0 ? func->param_names_buf[func->num_params - 1] : "NONE");
+                        if (getenv("ZCC_DEBUG")) printf("!!! parse_fparams ERROR !!! func='%s' param_idx=%d tk_text='%s' tk=%d prev_pname='%s'\n", func->func_def_name, func->num_params, cc->tk_text, cc->tk, func->num_params > 0 ? func->func_params->names[func->num_params - 1] : "NONE");
                         char buf[256];
                         sprintf(buf, "expected ',' or ')' after parameter [at token '%s']", cc->tk_text);
                         error(cc, buf);
@@ -5973,7 +5978,7 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
         if (func->num_params > 0) {
             ftype->params = (Type **)cc_alloc(cc, sizeof(Type *) * func->num_params);
             for (int k = 0; k < func->num_params; k++) {
-                ftype->params[k] = func->param_types[k];
+                ftype->params[k] = func->func_params->types[k];
             }
         }
         func->func_type = ftype;
@@ -10807,7 +10812,7 @@ void codegen_func(Compiler *cc, Node *func) {
   int gp_idx = 0;
   if (!backend_ops) {
   for (i = 0; i < func->num_params; i++) {
-    Type *ptype = func->param_types[i];
+    Type *ptype = func->func_params->types[i];
     int sz = type_size(ptype);
     if (sz < 8) sz = 8;
     param_offset -= sz;
@@ -10892,7 +10897,7 @@ void codegen_func(Compiler *cc, Node *func) {
         for (int p_idx = 0; p_idx < func->num_params; p_idx++) {
           if (p_idx > 0)
             strcat(params_env, ",");
-          strncat(params_env, func->param_names_buf[p_idx],
+          strncat(params_env, func->func_params->names[p_idx],
                   511 - strlen(params_env));
         }
         setenv("ZCC_IR_PARAM_NAMES", params_env, 1);
@@ -11641,6 +11646,8 @@ int node_ptr_elem_size(struct Node *n) {
   }
   return 0;
 }
+
+
 /* C99/POSIX support for curl graduation — see commit 262bd08 */
 /* ================================================================ */
 /* COMPILER INITIALIZATION                                           */
@@ -12149,6 +12156,7 @@ static char *read_file(char *path, int *out_len) {
 
 static char *line_buffer = 0;
 static char **line_ptrs = 0;
+static int  *line_skip = 0;
 
 static void peephole_optimize(char *filename) {
   FILE *fp;
@@ -12168,71 +12176,187 @@ static void peephole_optimize(char *filename) {
   if (!line_ptrs) {
     line_ptrs = (char **)malloc(MAX_PEEP_LINES * sizeof(char *));
   }
+  if (!line_skip) {
+    line_skip = (int *)malloc(MAX_PEEP_LINES * sizeof(int));
+  }
   line_buffer = (char *)malloc(file_size + MAX_PEEP_LINES * 128);
-  if (!line_buffer || !line_ptrs) {
+  if (!line_buffer || !line_ptrs || !line_skip) {
     fclose(fp);
     return;
   }
 
   while (nlines < MAX_PEEP_LINES && fgets(line_buffer + nlines * 128, 128, fp)) {
     line_ptrs[nlines] = line_buffer + nlines * 128;
+    line_skip[nlines] = 0;
     nlines++;
   }
   fclose(fp);
 
+  int changed;
+  char tmp1[64], tmp2[64];
+  char pop_reg[64];
+  char target[64], label[64];
+  char reg[64];
+  char src[64], dst1[64], dst2[64];
+  char imm_str[64];
+  long local_imm;
+  char val_str[32];
+
+peephole_loop:
+  changed = 0;
+
+  {
+    int out = 0;
+    int old_n = nlines;
+    for (i = 0; i < old_n; i++) {
+      if (line_skip[i] == 0 && line_ptrs[i][0] != '\n') {
+        line_ptrs[out] = line_ptrs[i];
+        line_skip[out] = 0;
+        out = out + 1;
+      }
+    }
+    for (i = out; i < old_n; i++) {
+      line_skip[i] = 0;
+    }
+    nlines = out;
+  }
+
   for (i = 0; i < nlines;) {
     char *l1 = line_ptrs[i];
+    int matched = 0;
 
     /* 1. Redundant Push/Pop */
     if (strncmp(l1, "    pushq ", 10) == 0 && i + 1 < nlines) {
       char *l2 = line_ptrs[i + 1];
       if (strncmp(l2, "    popq ", 9) == 0) {
-        char tmp1[64], tmp2[64];
         sscanf(l1, "    pushq %s", tmp1);
         sscanf(l2, "    popq %s", tmp2);
         if (strcmp(tmp1, tmp2) == 0) {
-          line_ptrs[i][0] = 0;
-          line_ptrs[i + 1][0] = 0;
+          line_skip[i] = 1;
+          line_skip[i + 1] = 1;
           eliminated += 2;
+          changed = 1;
           i += 2;
-          continue;
+          matched = 1;
         } else {
           sprintf(line_ptrs[i], "    movq %s, %s\n", tmp1, tmp2);
-          line_ptrs[i + 1][0] = 0;
+          line_skip[i + 1] = 1;
           eliminated += 2;
+          changed = 1;
           i += 2;
-          continue;
+          matched = 1;
         }
       }
     }
 
     /* 2. Arithmetic Nullification */
-    if (strcmp(l1, "    addq $0, %rax\n") == 0 ||
+    if (!matched && (strcmp(l1, "    addq $0, %rax\n") == 0 ||
         strcmp(l1, "    subq $0, %rax\n") == 0 ||
         strcmp(l1, "    addq $0, %rsp\n") == 0 ||
-        strcmp(l1, "    subq $0, %rsp\n") == 0) {
-      line_ptrs[i][0] = 0;
+        strcmp(l1, "    subq $0, %rsp\n") == 0)) {
+      line_skip[i] = 1;
       eliminated += 1;
+      changed = 1;
       i += 1;
-      continue;
+      matched = 1;
     }
 
     /* 3. Push/Lea/Pop Triad */
-    if (strcmp(l1, "    pushq %rax\n") == 0 && i + 2 < nlines) {
+    if (!matched && strncmp(l1, "    pushq %rax\n", 15) == 0 && i + 2 < nlines) {
       char *l2 = line_ptrs[i + 1];
       char *l3 = line_ptrs[i + 2];
-      if (strncmp(l2, "    leaq ", 9) == 0 && strstr(l2, ", %rax") &&
+      int has_rax_dst = 0;
+      {
+        int si;
+        int l2len = 0;
+        while (l2[l2len]) l2len++;
+        for (si = 0; si + 5 < l2len; si++) {
+          if (l2[si] == ',' && l2[si+1] == ' ' && l2[si+2] == '%' &&
+              l2[si+3] == 'r' && l2[si+4] == 'a' && l2[si+5] == 'x') {
+            has_rax_dst = 1;
+            break;
+          }
+        }
+      }
+      if (strncmp(l2, "    leaq ", 9) == 0 && has_rax_dst &&
           strncmp(l3, "    popq ", 9) == 0) {
-        char pop_reg[64];
         sscanf(l3, "    popq %s", pop_reg);
         sprintf(line_ptrs[i], "    movq %%rax, %s\n", pop_reg);
-        line_ptrs[i + 2][0] = 0;
+        line_skip[i + 2] = 1;
         eliminated += 3;
+        changed = 1;
         i += 3;
-        continue;
+        matched = 1;
       }
     }
-    i++;
+
+    /* 4. Branch Straightening */
+    if (!matched && strncmp(l1, "    jmp .L", 10) == 0 && i + 1 < nlines) {
+      if (sscanf(l1, "    jmp %63s", target) == 1) {
+        char *l2 = line_ptrs[i + 1];
+        if (l2[0] == '.' && l2[1] == 'L') {
+          if (sscanf(l2, "%63[^:]:", label) == 1 && strcmp(target, label) == 0) {
+            line_skip[i] = 1;
+            eliminated += 1;
+            changed = 1;
+            i += 1;
+            matched = 1;
+          }
+        }
+      }
+    }
+
+    /* 5. Zero-Test Optimization */
+    if (!matched && strncmp(l1, "    cmpq $0, %", 14) == 0) {
+      int ri;
+      strcpy(reg, l1 + 14);
+      /* Manually strip trailing newline — avoid strchr to prevent ZCC cltq bug */
+      for (ri = 0; ri < 63 && reg[ri]; ri++) {
+        if (reg[ri] == '\n') { reg[ri] = '\0'; break; }
+      }
+      strcpy(line_ptrs[i], "    testq %");
+      strcat(line_ptrs[i], reg);
+      strcat(line_ptrs[i], ", %");
+      strcat(line_ptrs[i], reg);
+      strcat(line_ptrs[i], "\n");
+      eliminated += 1;
+      changed = 1;
+      i += 1;
+      matched = 1;
+    }
+
+    /* 6. LEA Computation Fusion */
+    if (!matched && strncmp(l1, "    movq %", 10) == 0 && i + 1 < nlines) {
+      char *l2 = line_ptrs[i + 1];
+      if (strncmp(l2, "    addq $", 10) == 0) {
+        if (sscanf(l1, "    movq %%%[a-z0-9], %%%[a-z0-9]", src, dst1) == 2 &&
+            sscanf(l2, "    addq $%ld, %%%[a-z0-9]", &local_imm, dst2) == 2) {
+          if (strcmp(dst1, dst2) == 0) {
+            sprintf(val_str, "%ld", local_imm);
+            strcpy(line_ptrs[i], "    leaq ");
+            strcat(line_ptrs[i], val_str);
+            strcat(line_ptrs[i], "(%");
+            strcat(line_ptrs[i], src);
+            strcat(line_ptrs[i], "), %");
+            strcat(line_ptrs[i], dst1);
+            strcat(line_ptrs[i], "\n");
+
+            line_skip[i + 1] = 1;
+            eliminated += 2;
+            changed = 1;
+            i += 2;
+            matched = 1;
+          }
+        }
+      }
+    }
+
+    if (!matched) {
+      i++;
+    }
+  } 
+  if (changed) {
+      goto peephole_loop;
   }
 
   fp = fopen(filename, "w");
@@ -12241,7 +12365,7 @@ static void peephole_optimize(char *filename) {
     return;
   }
   for (i = 0; i < nlines; i++) {
-    if (line_ptrs[i][0] != 0)
+    if (line_skip[i] == 0)
       fputs(line_ptrs[i], fp);
   }
   fclose(fp);
