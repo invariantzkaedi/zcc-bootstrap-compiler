@@ -13,39 +13,64 @@ int atoi(const char *nptr);
 
 /* ------------------------------------------------------------------ vec3 */
 #define make_vec3(xx, yy, zz, out) do { (out)->x = (xx); (out)->y = (yy); (out)->z = (zz); } while(0)
-void v_add(Vec3 *a, Vec3 *b, Vec3 *out){ make_vec3(a->x+b->x, a->y+b->y, a->z+b->z, out); }
-void v_sub(Vec3 *a, Vec3 *b, Vec3 *out){ make_vec3(a->x-b->x, a->y-b->y, a->z-b->z, out); }
-void v_mul(Vec3 *a, double d, Vec3 *out){ make_vec3(a->x*d, a->y*d, a->z*d, out); }
-double v_dot(Vec3 *a, Vec3 *b){ return a->x*b->x + a->y*b->y + a->z*b->z; }
-double v_len(Vec3 *v){ double d=v_dot(v,v); return d<=0.0?0.0:sqrt(d); }
-void v_norm(Vec3 *v, Vec3 *out){
-    double l=v_len(v);
-    if(l>0.0) make_vec3(v->x/l, v->y/l, v->z/l, out);
-    else make_vec3(0,0,1,out);
-}
-void v_cross(Vec3 *a, Vec3 *b, Vec3 *out){
-    make_vec3(a->y*b->z - a->z*b->y,
-              a->z*b->x - a->x*b->z,
-              a->x*b->y - a->y*b->x, out);
-}
-void v_reflect(Vec3 *I, Vec3 *N, Vec3 *out){
-    double d=v_dot(N,I);
-    Vec3 t; v_mul(N, 2.0*d, &t); v_sub(I, &t, out);
-}
+#define v_add(a, b, out) do { (out)->x = (a)->x+(b)->x; (out)->y = (a)->y+(b)->y; (out)->z = (a)->z+(b)->z; } while(0)
+#define v_sub(a, b, out) do { (out)->x = (a)->x-(b)->x; (out)->y = (a)->y-(b)->y; (out)->z = (a)->z-(b)->z; } while(0)
+#define v_mul(a, d, out) do { (out)->x = (a)->x*(d); (out)->y = (a)->y*(d); (out)->z = (a)->z*(d); } while(0)
+#define v_dot(a, b) ((a)->x*(b)->x + (a)->y*(b)->y + (a)->z*(b)->z)
+#define v_len(v) sqrt((v)->x*(v)->x + (v)->y*(v)->y + (v)->z*(v)->z)
+
+#define v_norm(in, out) do { \
+    double _l = v_len(in); \
+    if(_l>0.0){ (out)->x=(in)->x/_l; (out)->y=(in)->y/_l; (out)->z=(in)->z/_l; } \
+    else { (out)->x=0; (out)->y=0; (out)->z=1; } \
+} while(0)
+
+#define v_cross(a, b, out) do { \
+    double _ax=(a)->x, _ay=(a)->y, _az=(a)->z; \
+    double _bx=(b)->x, _by=(b)->y, _bz=(b)->z; \
+    (out)->x = _ay*_bz - _az*_by; \
+    (out)->y = _az*_bx - _ax*_bz; \
+    (out)->z = _ax*_by - _ay*_bx; \
+} while(0)
+
+#define v_reflect(I, N, out) do { \
+    double _d = v_dot(N, I); \
+    (out)->x = (I)->x - 2.0*_d*(N)->x; \
+    (out)->y = (I)->y - 2.0*_d*(N)->y; \
+    (out)->z = (I)->z - 2.0*_d*(N)->z; \
+} while(0)
 
 /* ------------------------------------------------------ AABB intersection */
 double hit_aabb_dist(Vec3 *mn, Vec3 *mx, Vec3 *ro, Vec3 *rdinv){
     double tx0=(mn->x-ro->x)*rdinv->x, tx1=(mx->x-ro->x)*rdinv->x;
+    double tmin = tx0<tx1?tx0:tx1, tmax = tx0<tx1?tx1:tx0;
     double ty0=(mn->y-ro->y)*rdinv->y, ty1=(mx->y-ro->y)*rdinv->y;
+    double tymin = ty0<ty1?ty0:ty1, tymax = ty0<ty1?ty1:ty0;
+    if (tmin > tymax || tymin > tmax) return 1e18;
+    if (tymin > tmin) tmin = tymin;
+    if (tymax < tmax) tmax = tymax;
     double tz0=(mn->z-ro->z)*rdinv->z, tz1=(mx->z-ro->z)*rdinv->z;
-    double tmin, tmax, a, b;
-    tmin = tx0<tx1?tx0:tx1; tmax = tx0<tx1?tx1:tx0;
-    a=ty0<ty1?ty0:ty1; b=ty0<ty1?ty1:ty0;
-    if(a>tmin)tmin=a; if(b<tmax)tmax=b;
-    a=tz0<tz1?tz0:tz1; b=tz0<tz1?tz1:tz0;
-    if(a>tmin)tmin=a; if(b<tmax)tmax=b;
+    double tzmin = tz0<tz1?tz0:tz1, tzmax = tz0<tz1?tz1:tz0;
+    if (tmin > tzmax || tzmin > tmax) return 1e18;
+    if (tzmin > tmin) tmin = tzmin;
+    if (tzmax < tmax) tmax = tzmax;
     if (tmax >= tmin && tmax > 0.0) return tmin > 0.0 ? tmin : 0.0;
     return 1e18;
+}
+
+int hit_aabb_shadow(Vec3 *mn, Vec3 *mx, Vec3 *ro, Vec3 *rdinv){
+    double tx0=(mn->x-ro->x)*rdinv->x, tx1=(mx->x-ro->x)*rdinv->x;
+    double tmin = tx0<tx1?tx0:tx1, tmax = tx0<tx1?tx1:tx0;
+    double ty0=(mn->y-ro->y)*rdinv->y, ty1=(mx->y-ro->y)*rdinv->y;
+    double tymin = ty0<ty1?ty0:ty1, tymax = ty0<ty1?ty1:ty0;
+    if (tmin > tymax || tymin > tmax) return 0;
+    if (tymin > tmin) tmin = tymin;
+    if (tymax < tmax) tmax = tymax;
+    double tz0=(mn->z-ro->z)*rdinv->z, tz1=(mx->z-ro->z)*rdinv->z;
+    double tzmin = tz0<tz1?tz0:tz1, tzmax = tz0<tz1?tz1:tz0;
+    if (tmin > tzmax || tzmin > tmax) return 0;
+    if (tzmax < tmax) tmax = tzmax;
+    return tmax > 0.001;
 }
 
 /* ------------------------------------------------------------------ BVH */
@@ -256,14 +281,14 @@ void trace(Vec3 *ro, Vec3 *rd, int depth, Vec3 *out){
         Vec3 ldinv;
         m = &scene_meshes[mi];
         make_vec3(ld.x!=0?1.0/ld.x:1e18, ld.y!=0?1.0/ld.y:1e18, ld.z!=0?1.0/ld.z:1e18, &ldinv);
-        if(hit_aabb_dist(&m->aabb_min,&m->aabb_max,&hit,&ldinv) > 1e17) continue;
+        if(!hit_aabb_shadow(&m->aabb_min,&m->aabb_max,&hit,&ldinv)) continue;
 
         stack_ptr = 0;
         stack[stack_ptr++] = mesh_bvh_roots[mi];
         while(stack_ptr > 0 && !shadow) {
             int ni = stack[--stack_ptr];
             BVHNode *node = &bvh_nodes[ni];
-            if(hit_aabb_dist(&node->aabb_min, &node->aabb_max, &hit, &ldinv) > 1e17) continue;
+            if(!hit_aabb_shadow(&node->aabb_min, &node->aabb_max, &hit, &ldinv)) continue;
             
             if(node->tri_count > 0) {
                 for(i=0; i<node->tri_count && !shadow; i++){
