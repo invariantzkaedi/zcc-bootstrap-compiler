@@ -34,7 +34,7 @@ void v_reflect(Vec3 *I, Vec3 *N, Vec3 *out){
 }
 
 /* ------------------------------------------------------ AABB intersection */
-int hit_aabb(Vec3 *mn, Vec3 *mx, Vec3 *ro, Vec3 *rdinv){
+double hit_aabb_dist(Vec3 *mn, Vec3 *mx, Vec3 *ro, Vec3 *rdinv){
     double tx0=(mn->x-ro->x)*rdinv->x, tx1=(mx->x-ro->x)*rdinv->x;
     double ty0=(mn->y-ro->y)*rdinv->y, ty1=(mx->y-ro->y)*rdinv->y;
     double tz0=(mn->z-ro->z)*rdinv->z, tz1=(mx->z-ro->z)*rdinv->z;
@@ -44,7 +44,108 @@ int hit_aabb(Vec3 *mn, Vec3 *mx, Vec3 *ro, Vec3 *rdinv){
     if(a>tmin)tmin=a; if(b<tmax)tmax=b;
     a=tz0<tz1?tz0:tz1; b=tz0<tz1?tz1:tz0;
     if(a>tmin)tmin=a; if(b<tmax)tmax=b;
-    return tmax>0.001 && tmin<tmax;
+    if (tmax >= tmin && tmax > 0.0) return tmin > 0.0 ? tmin : 0.0;
+    return 1e18;
+}
+
+/* ------------------------------------------------------------------ BVH */
+typedef struct {
+    Vec3 aabb_min, aabb_max;
+    int left_first, tri_count;
+} BVHNode;
+
+#define MAX_BVH_NODES 250000
+BVHNode bvh_nodes[MAX_BVH_NODES];
+int bvh_alloc = 0;
+int mesh_bvh_roots[10];
+
+void update_node_bounds(int node_idx, Triangle *tris, int first_tri, int tri_count) {
+    BVHNode *node = &bvh_nodes[node_idx];
+    int i;
+    make_vec3(1e30, 1e30, 1e30, &node->aabb_min);
+    make_vec3(-1e30, -1e30, -1e30, &node->aabb_max);
+    for (i = 0; i < tri_count; i++) {
+        Triangle *t = &tris[first_tri + i];
+        node->aabb_min.x = t->v0.x < node->aabb_min.x ? t->v0.x : node->aabb_min.x;
+        node->aabb_min.y = t->v0.y < node->aabb_min.y ? t->v0.y : node->aabb_min.y;
+        node->aabb_min.z = t->v0.z < node->aabb_min.z ? t->v0.z : node->aabb_min.z;
+        node->aabb_max.x = t->v0.x > node->aabb_max.x ? t->v0.x : node->aabb_max.x;
+        node->aabb_max.y = t->v0.y > node->aabb_max.y ? t->v0.y : node->aabb_max.y;
+        node->aabb_max.z = t->v0.z > node->aabb_max.z ? t->v0.z : node->aabb_max.z;
+
+        node->aabb_min.x = t->v1.x < node->aabb_min.x ? t->v1.x : node->aabb_min.x;
+        node->aabb_min.y = t->v1.y < node->aabb_min.y ? t->v1.y : node->aabb_min.y;
+        node->aabb_min.z = t->v1.z < node->aabb_min.z ? t->v1.z : node->aabb_min.z;
+        node->aabb_max.x = t->v1.x > node->aabb_max.x ? t->v1.x : node->aabb_max.x;
+        node->aabb_max.y = t->v1.y > node->aabb_max.y ? t->v1.y : node->aabb_max.y;
+        node->aabb_max.z = t->v1.z > node->aabb_max.z ? t->v1.z : node->aabb_max.z;
+
+        node->aabb_min.x = t->v2.x < node->aabb_min.x ? t->v2.x : node->aabb_min.x;
+        node->aabb_min.y = t->v2.y < node->aabb_min.y ? t->v2.y : node->aabb_min.y;
+        node->aabb_min.z = t->v2.z < node->aabb_min.z ? t->v2.z : node->aabb_min.z;
+        node->aabb_max.x = t->v2.x > node->aabb_max.x ? t->v2.x : node->aabb_max.x;
+        node->aabb_max.y = t->v2.y > node->aabb_max.y ? t->v2.y : node->aabb_max.y;
+        node->aabb_max.z = t->v2.z > node->aabb_max.z ? t->v2.z : node->aabb_max.z;
+    }
+}
+
+void subdivide_bvh(int node_idx, Triangle *tris, int first_tri, int tri_count) {
+    BVHNode *node = &bvh_nodes[node_idx];
+    Vec3 extent;
+    int axis, i, j, left_count, left_idx, right_idx;
+    double split_pos, center;
+
+    update_node_bounds(node_idx, tris, first_tri, tri_count);
+    if (tri_count <= 2) {
+        node->left_first = first_tri;
+        node->tri_count = tri_count;
+        return;
+    }
+
+    v_sub(&node->aabb_max, &node->aabb_min, &extent);
+    axis = 0;
+    if (extent.y > extent.x) axis = 1;
+    if (extent.z > extent.x && extent.z > extent.y) axis = 2;
+
+    split_pos = ((axis == 0 ? node->aabb_min.x : (axis == 1 ? node->aabb_min.y : node->aabb_min.z)) + 
+                 (axis == 0 ? node->aabb_max.x : (axis == 1 ? node->aabb_max.y : node->aabb_max.z))) * 0.5;
+
+    i = first_tri;
+    j = first_tri + tri_count - 1;
+    while (i <= j) {
+        center = ((axis == 0 ? tris[i].v0.x : (axis == 1 ? tris[i].v0.y : tris[i].v0.z)) +
+                  (axis == 0 ? tris[i].v1.x : (axis == 1 ? tris[i].v1.y : tris[i].v1.z)) +
+                  (axis == 0 ? tris[i].v2.x : (axis == 1 ? tris[i].v2.y : tris[i].v2.z))) / 3.0;
+        if (center < split_pos) {
+            i++;
+        } else {
+            Triangle temp = tris[i];
+            tris[i] = tris[j];
+            tris[j] = temp;
+            j--;
+        }
+    }
+
+    left_count = i - first_tri;
+    if (left_count == 0 || left_count == tri_count) {
+        node->left_first = first_tri;
+        node->tri_count = tri_count;
+        return;
+    }
+
+    left_idx = bvh_alloc++;
+    right_idx = bvh_alloc++;
+    node->left_first = left_idx;
+    node->tri_count = 0;
+    subdivide_bvh(left_idx, tris, first_tri, left_count);
+    subdivide_bvh(right_idx, tris, i, tri_count - left_count);
+}
+
+int build_bvh(int mesh_id) {
+    Mesh *m = &scene_meshes[mesh_id];
+    int root_idx = bvh_alloc++;
+    subdivide_bvh(root_idx, m->tris, 0, m->count);
+    return root_idx;
 }
 
 /* ---------------------------------------------- Moller-Trumbore triangle */
@@ -94,11 +195,35 @@ void trace(Vec3 *ro, Vec3 *rd, int depth, Vec3 *out){
               rd->z!=0?1.0/rd->z:1e18, &rdinv);
 
     for(mi=0; mi<SCENE_MESH_COUNT; mi++){
+        int stack[64], stack_ptr;
         m = &scene_meshes[mi];
-        if(!hit_aabb(&m->aabb_min, &m->aabb_max, ro, &rdinv)) continue;
-        for(i=0; i<m->count; i++){
-            double t = hit_tri(&m->tris[i], ro, rd);
-            if(t>0.001 && t<best_t){ best_t=t; best_mi=mi; best_ti=i; }
+        if(hit_aabb_dist(&m->aabb_min, &m->aabb_max, ro, &rdinv) >= best_t) continue;
+        
+        stack_ptr = 0;
+        stack[stack_ptr++] = mesh_bvh_roots[mi];
+        
+        while(stack_ptr > 0) {
+            int ni = stack[--stack_ptr];
+            BVHNode *node = &bvh_nodes[ni];
+            if(hit_aabb_dist(&node->aabb_min, &node->aabb_max, ro, &rdinv) >= best_t) continue;
+            
+            if(node->tri_count > 0) {
+                for(i=0; i<node->tri_count; i++){
+                    int ti = node->left_first + i;
+                    double t = hit_tri(&m->tris[ti], ro, rd);
+                    if(t>0.001 && t<best_t){ best_t=t; best_mi=mi; best_ti=ti; }
+                }
+            } else {
+                double t1 = hit_aabb_dist(&bvh_nodes[node->left_first].aabb_min, &bvh_nodes[node->left_first].aabb_max, ro, &rdinv);
+                double t2 = hit_aabb_dist(&bvh_nodes[node->left_first+1].aabb_min, &bvh_nodes[node->left_first+1].aabb_max, ro, &rdinv);
+                if(t1 > t2) {
+                    if(t1 < best_t) stack[stack_ptr++] = node->left_first;
+                    if(t2 < best_t) stack[stack_ptr++] = node->left_first + 1;
+                } else {
+                    if(t2 < best_t) stack[stack_ptr++] = node->left_first + 1;
+                    if(t1 < best_t) stack[stack_ptr++] = node->left_first;
+                }
+            }
         }
     }
 
@@ -127,12 +252,27 @@ void trace(Vec3 *ro, Vec3 *rd, int depth, Vec3 *out){
     make_vec3(4.0,6.0,8.0,&rl); v_norm(&rl,&ld);
     shadow=0;
     for(mi=0; mi<SCENE_MESH_COUNT && !shadow; mi++){
-        m = &scene_meshes[mi];
+        int stack[64], stack_ptr;
         Vec3 ldinv;
+        m = &scene_meshes[mi];
         make_vec3(ld.x!=0?1.0/ld.x:1e18, ld.y!=0?1.0/ld.y:1e18, ld.z!=0?1.0/ld.z:1e18, &ldinv);
-        if(!hit_aabb(&m->aabb_min,&m->aabb_max,&hit,&ldinv)) continue;
-        for(i=0; i<m->count && !shadow; i++){
-            if(hit_tri(&m->tris[i],&hit,&ld)>0.001) shadow=1;
+        if(hit_aabb_dist(&m->aabb_min,&m->aabb_max,&hit,&ldinv) > 1e17) continue;
+
+        stack_ptr = 0;
+        stack[stack_ptr++] = mesh_bvh_roots[mi];
+        while(stack_ptr > 0 && !shadow) {
+            int ni = stack[--stack_ptr];
+            BVHNode *node = &bvh_nodes[ni];
+            if(hit_aabb_dist(&node->aabb_min, &node->aabb_max, &hit, &ldinv) > 1e17) continue;
+            
+            if(node->tri_count > 0) {
+                for(i=0; i<node->tri_count && !shadow; i++){
+                    if(hit_tri(&m->tris[node->left_first + i], &hit, &ld)>0.001) shadow=1;
+                }
+            } else {
+                stack[stack_ptr++] = node->left_first + 1;
+                stack[stack_ptr++] = node->left_first;
+            }
         }
     }
 
@@ -168,6 +308,11 @@ int main(){
     char *f_env  = getenv("FRAME");
     char *w_env  = getenv("WIDTH");
     char *h_env  = getenv("HEIGHT");
+    
+    for(i=0; i<SCENE_MESH_COUNT; i++){
+        fprintf(stderr, "Building BVH for mesh %d...\n", i);
+        mesh_bvh_roots[i] = build_bvh(i);
+    }
     if(f_env) frame  = atoi(f_env);
     if(w_env) width  = atoi(w_env);
     if(h_env) height = atoi(h_env);
