@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G130",
+    "name": "Codegen Mutation G130 [schedule_war_pair]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-4",
+    "lineage_hash": "327becb09e8d1fb2",
+    "island_id": 4
+  },
+  "mutations": [
+    {
+      "name": "schedule_war_pair",
+      "category": "SCHEDULE",
+      "description": "Swap independent pair to reduce WAR pipeline stall",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": 0,
+    "inst_count_delta": 117815,
+    "score_delta": -0.014355999883264303,
+    "composite_score": 1257359.1260109998
+  },
+  "timestamp": "2026-04-20T13:46:20.673196+00:00",
+  "generation": 130
+}

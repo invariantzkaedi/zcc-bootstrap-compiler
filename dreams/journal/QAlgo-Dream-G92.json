@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G92",
+    "name": "Codegen Mutation G92 [schedule_war_pair]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-4",
+    "lineage_hash": "f3d2922614d86fd8",
+    "island_id": 4
+  },
+  "mutations": [
+    {
+      "name": "schedule_war_pair",
+      "category": "SCHEDULE",
+      "description": "Swap independent pair to reduce WAR pipeline stall",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": 0,
+    "inst_count_delta": 117821,
+    "score_delta": -1.3070079998578876,
+    "composite_score": 1257420.2266819999
+  },
+  "timestamp": "2026-04-20T13:42:54.491182+00:00",
+  "generation": 92
+}

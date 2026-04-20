@@ -1,0 +1,47 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G121",
+    "name": "Codegen Mutation G121 [dead_move_elim]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-4",
+    "lineage_hash": "9ac99bc39d7f11ea",
+    "island_id": 4
+  },
+  "mutations": [
+    {
+      "name": "dead_move_elim",
+      "category": "PEEPHOLE",
+      "description": "Remove dead movq to %rax (overwritten at +1)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.0,
+      "fingerprint": ""
+    },
+    {
+      "name": "dead_move_elim",
+      "category": "PEEPHOLE",
+      "description": "Remove dead movq to %rax (overwritten at +1)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.0,
+      "fingerprint": ""
+    },
+    {
+      "name": "schedule_war_pair",
+      "category": "SCHEDULE",
+      "description": "Swap independent pair to reduce WAR pipeline stall",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -40,
+    "inst_count_delta": 117815,
+    "score_delta": -19.162216000026092,
+    "composite_score": 1257359.7722619998
+  },
+  "timestamp": "2026-04-20T13:45:31.557968+00:00",
+  "generation": 121
+}

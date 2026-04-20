@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G99",
+    "name": "Codegen Mutation G99 [schedule_war_pair]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-4",
+    "lineage_hash": "d18b50b0ade48606",
+    "island_id": 4
+  },
+  "mutations": [
+    {
+      "name": "schedule_war_pair",
+      "category": "SCHEDULE",
+      "description": "Swap independent pair to reduce WAR pipeline stall",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": 0,
+    "inst_count_delta": 117821,
+    "score_delta": -0.05039500002749264,
+    "composite_score": 1257419.1946289998
+  },
+  "timestamp": "2026-04-20T13:43:36.973167+00:00",
+  "generation": 99
+}

@@ -1,0 +1,38 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G108",
+    "name": "Codegen Mutation G108 [dead_move_elim]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-4",
+    "lineage_hash": "e683b0c270296e04",
+    "island_id": 4
+  },
+  "mutations": [
+    {
+      "name": "dead_move_elim",
+      "category": "PEEPHOLE",
+      "description": "Remove dead movq to %rax (overwritten at +1)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.0,
+      "fingerprint": ""
+    },
+    {
+      "name": "dead_move_elim",
+      "category": "PEEPHOLE",
+      "description": "Remove dead movq to %rax (overwritten at +1)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -40,
+    "inst_count_delta": 117818,
+    "score_delta": -18.843509000027552,
+    "composite_score": 1257389.5112219998
+  },
+  "timestamp": "2026-04-20T13:44:28.444262+00:00",
+  "generation": 108
+}

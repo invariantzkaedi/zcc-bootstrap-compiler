@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G103",
+    "name": "Codegen Mutation G103 [schedule_war_pair]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-0",
+    "lineage_hash": "fbbc1aa90912cb32",
+    "island_id": 0
+  },
+  "mutations": [
+    {
+      "name": "schedule_war_pair",
+      "category": "SCHEDULE",
+      "description": "Swap independent pair to reduce WAR pipeline stall",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": 0,
+    "inst_count_delta": 117821,
+    "score_delta": -0.6931190001778305,
+    "composite_score": 1257418.7534099997
+  },
+  "timestamp": "2026-04-20T13:43:52.674773+00:00",
+  "generation": 103
+}

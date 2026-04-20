@@ -1,11 +1,11 @@
 {
-  "generation": 89,
-  "parent_hash": "9e08ca7b656277bb",
+  "generation": 131,
+  "parent_hash": "5d660156d2994aa1",
   "parent_asm_size": 0,
   "parent_bin_size": 0,
-  "total_mutations_tried": 421,
-  "total_mutations_survived": 107,
-  "total_regressions": 383,
+  "total_mutations_tried": 529,
+  "total_mutations_survived": 160,
+  "total_regressions": 406,
   "lineage": [
     {
       "generation": 1,
@@ -914,6 +914,437 @@
       ],
       "delta_score": -18.278062999946997,
       "timestamp": "2026-04-20T13:39:38.090682+00:00"
+    },
+    {
+      "generation": 90,
+      "hash": "a7adb6ab159d9ac5",
+      "island_id": 2,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.6071150000207126,
+      "timestamp": "2026-04-20T13:42:47.798106+00:00"
+    },
+    {
+      "generation": 91,
+      "hash": "89ebe6bcd1281329",
+      "island_id": 3,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall",
+        "Remove dead movq to %rax (overwritten at +1)"
+      ],
+      "delta_score": -9.337991999927908,
+      "timestamp": "2026-04-20T13:42:51.229989+00:00"
+    },
+    {
+      "generation": 92,
+      "hash": "f3d2922614d86fd8",
+      "island_id": 4,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -1.3070079998578876,
+      "timestamp": "2026-04-20T13:42:54.491164+00:00"
+    },
+    {
+      "generation": 93,
+      "hash": "bfcb944199ea9f17",
+      "island_id": 3,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall",
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -1.6218900000676513,
+      "timestamp": "2026-04-20T13:43:03.712448+00:00"
+    },
+    {
+      "generation": 94,
+      "hash": "feec1d72c1b7fe66",
+      "island_id": 4,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.9816580000333488,
+      "timestamp": "2026-04-20T13:43:06.275399+00:00"
+    },
+    {
+      "generation": 95,
+      "hash": "0721d608ff5f608f",
+      "island_id": 2,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.5498720000032336,
+      "timestamp": "2026-04-20T13:43:12.764146+00:00"
+    },
+    {
+      "generation": 96,
+      "hash": "2820e7bd32b30193",
+      "island_id": 0,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.18187600001692772,
+      "timestamp": "2026-04-20T13:43:20.922085+00:00"
+    },
+    {
+      "generation": 97,
+      "hash": "f147794a7158b39c",
+      "island_id": 1,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.28427099995315075,
+      "timestamp": "2026-04-20T13:43:23.823329+00:00"
+    },
+    {
+      "generation": 98,
+      "hash": "8641b8808e2338c4",
+      "island_id": 2,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.047366000013425946,
+      "timestamp": "2026-04-20T13:43:26.764674+00:00"
+    },
+    {
+      "generation": 99,
+      "hash": "d18b50b0ade48606",
+      "island_id": 4,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.05039500002749264,
+      "timestamp": "2026-04-20T13:43:36.973155+00:00"
+    },
+    {
+      "generation": 100,
+      "hash": "049e5302759d259b",
+      "island_id": 1,
+      "mutations": [
+        "Remove dead movq to %rsi (overwritten at +6)"
+      ],
+      "delta_score": -9.893491999944672,
+      "timestamp": "2026-04-20T13:43:42.332719+00:00"
+    },
+    {
+      "generation": 101,
+      "hash": "de6892b3fbe52d5f",
+      "island_id": 2,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.8567819998133928,
+      "timestamp": "2026-04-20T13:43:45.396812+00:00"
+    },
+    {
+      "generation": 102,
+      "hash": "66891ad8a46b2d6e",
+      "island_id": 4,
+      "mutations": [
+        "Remove dead movq to %rax (overwritten at +1)",
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -9.919976999983191,
+      "timestamp": "2026-04-20T13:43:50.467418+00:00"
+    },
+    {
+      "generation": 103,
+      "hash": "fbbc1aa90912cb32",
+      "island_id": 0,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.6931190001778305,
+      "timestamp": "2026-04-20T13:43:52.674762+00:00"
+    },
+    {
+      "generation": 104,
+      "hash": "0a71abf2c431154d",
+      "island_id": 2,
+      "mutations": [
+        "Remove dead movq to %rax (overwritten at +1)",
+        "Swap independent pair to reduce WAR pipeline stall",
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -9.848539000144228,
+      "timestamp": "2026-04-20T13:43:57.965882+00:00"
+    },
+    {
+      "generation": 105,
+      "hash": "4ea70317efc6ec14",
+      "island_id": 1,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.4005170001182705,
+      "timestamp": "2026-04-20T13:44:07.899164+00:00"
+    },
+    {
+      "generation": 106,
+      "hash": "c655828688f69a71",
+      "island_id": 4,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.9199210000224411,
+      "timestamp": "2026-04-20T13:44:15.477197+00:00"
+    },
+    {
+      "generation": 107,
+      "hash": "24b69f5cc83608d9",
+      "island_id": 1,
+      "mutations": [
+        "Remove dead movq to %rax (overwritten at +1)"
+      ],
+      "delta_score": -8.020302999997512,
+      "timestamp": "2026-04-20T13:44:20.678881+00:00"
+    },
+    {
+      "generation": 108,
+      "hash": "e683b0c270296e04",
+      "island_id": 4,
+      "mutations": [
+        "Remove dead movq to %rax (overwritten at +1)",
+        "Remove dead movq to %rax (overwritten at +1)"
+      ],
+      "delta_score": -18.843509000027552,
+      "timestamp": "2026-04-20T13:44:28.444248+00:00"
+    },
+    {
+      "generation": 109,
+      "hash": "7f3635cdfd33dfab",
+      "island_id": 1,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -2.2330489999148995,
+      "timestamp": "2026-04-20T13:44:33.387513+00:00"
+    },
+    {
+      "generation": 110,
+      "hash": "001216358dfc1c11",
+      "island_id": 3,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.6006489999126643,
+      "timestamp": "2026-04-20T13:44:38.484459+00:00"
+    },
+    {
+      "generation": 111,
+      "hash": "d0cea6e1487f4a65",
+      "island_id": 4,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.7940410000737756,
+      "timestamp": "2026-04-20T13:44:41.561944+00:00"
+    },
+    {
+      "generation": 112,
+      "hash": "1eb9ce34f276993d",
+      "island_id": 2,
+      "mutations": [
+        "Remove dead movq to %rax (overwritten at +1)",
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -8.196412999881431,
+      "timestamp": "2026-04-20T13:44:49.470316+00:00"
+    },
+    {
+      "generation": 113,
+      "hash": "ac47f71abb72b803",
+      "island_id": 4,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.09235199983231723,
+      "timestamp": "2026-04-20T13:44:55.440442+00:00"
+    },
+    {
+      "generation": 114,
+      "hash": "673569680d6faca1",
+      "island_id": 1,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.005405999952927232,
+      "timestamp": "2026-04-20T13:45:00.705514+00:00"
+    },
+    {
+      "generation": 115,
+      "hash": "bbfdfc58380011a2",
+      "island_id": 2,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -1.7001720000989735,
+      "timestamp": "2026-04-20T13:45:02.935822+00:00"
+    },
+    {
+      "generation": 116,
+      "hash": "5cad0719277dbaed",
+      "island_id": 3,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall",
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.28236100007779896,
+      "timestamp": "2026-04-20T13:45:05.283267+00:00"
+    },
+    {
+      "generation": 117,
+      "hash": "6a3dc07fd7eab8b8",
+      "island_id": 4,
+      "mutations": [
+        "Remove dead movq to %rax (overwritten at +1)"
+      ],
+      "delta_score": -8.632512000156567,
+      "timestamp": "2026-04-20T13:45:08.133156+00:00"
+    },
+    {
+      "generation": 118,
+      "hash": "90760274cdaa2f9a",
+      "island_id": 4,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall",
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -1.0578389998991042,
+      "timestamp": "2026-04-20T13:45:18.567026+00:00"
+    },
+    {
+      "generation": 119,
+      "hash": "1c7dff1a50ee69f2",
+      "island_id": 0,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.5231109999585897,
+      "timestamp": "2026-04-20T13:45:20.975052+00:00"
+    },
+    {
+      "generation": 120,
+      "hash": "8a3d07208a62e896",
+      "island_id": 2,
+      "mutations": [
+        "Remove dead movq to %rax (overwritten at +1)"
+      ],
+      "delta_score": -10.477905999869108,
+      "timestamp": "2026-04-20T13:45:26.217677+00:00"
+    },
+    {
+      "generation": 121,
+      "hash": "9ac99bc39d7f11ea",
+      "island_id": 4,
+      "mutations": [
+        "Remove dead movq to %rax (overwritten at +1)",
+        "Remove dead movq to %rax (overwritten at +1)",
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -19.162216000026092,
+      "timestamp": "2026-04-20T13:45:31.557952+00:00"
+    },
+    {
+      "generation": 122,
+      "hash": "fb1bfa09ad29a45c",
+      "island_id": 1,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.6477240000385791,
+      "timestamp": "2026-04-20T13:45:36.025683+00:00"
+    },
+    {
+      "generation": 123,
+      "hash": "f43ec3b5c3eec355",
+      "island_id": 2,
+      "mutations": [
+        "Remove dead movq to %rax (overwritten at +1)"
+      ],
+      "delta_score": -9.96595500013791,
+      "timestamp": "2026-04-20T13:45:38.569212+00:00"
+    },
+    {
+      "generation": 124,
+      "hash": "a91b6b4c4abae017",
+      "island_id": 3,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.1644499998074025,
+      "timestamp": "2026-04-20T13:45:40.923905+00:00"
+    },
+    {
+      "generation": 125,
+      "hash": "6869d3eed1f189c8",
+      "island_id": 4,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.631895000115037,
+      "timestamp": "2026-04-20T13:45:43.146616+00:00"
+    },
+    {
+      "generation": 126,
+      "hash": "5b99bdc26912898f",
+      "island_id": 1,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.11141899996437132,
+      "timestamp": "2026-04-20T13:45:48.346887+00:00"
+    },
+    {
+      "generation": 127,
+      "hash": "dd55e6060c9d891e",
+      "island_id": 2,
+      "mutations": [
+        "Remove dead movq to %rax (overwritten at +1)"
+      ],
+      "delta_score": -10.358611000003293,
+      "timestamp": "2026-04-20T13:45:57.575374+00:00"
+    },
+    {
+      "generation": 128,
+      "hash": "3737e5a6c255b053",
+      "island_id": 3,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.4442670000717044,
+      "timestamp": "2026-04-20T13:46:06.380778+00:00"
+    },
+    {
+      "generation": 129,
+      "hash": "b26ccb31785b30cb",
+      "island_id": 1,
+      "mutations": [
+        "Remove dead movq to %rax (overwritten at +1)"
+      ],
+      "delta_score": -8.595298000145704,
+      "timestamp": "2026-04-20T13:46:14.714768+00:00"
+    },
+    {
+      "generation": 130,
+      "hash": "327becb09e8d1fb2",
+      "island_id": 4,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.014355999883264303,
+      "timestamp": "2026-04-20T13:46:20.673183+00:00"
+    },
+    {
+      "generation": 131,
+      "hash": "5d660156d2994aa1",
+      "island_id": 4,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -0.8019350001122802,
+      "timestamp": "2026-04-20T13:46:31.124936+00:00"
     }
   ],
   "fitness_history": [
@@ -1450,6 +1881,258 @@
       "island_id": 9,
       "score": 1257390.7373969997,
       "timestamp": "2026-04-20T13:39:38.090656+00:00"
+    },
+    {
+      "generation": 90,
+      "island_id": 2,
+      "score": 1257420.0491889997,
+      "timestamp": "2026-04-20T13:42:47.798071+00:00"
+    },
+    {
+      "generation": 91,
+      "island_id": 3,
+      "score": 1257410.8293749997,
+      "timestamp": "2026-04-20T13:42:51.229954+00:00"
+    },
+    {
+      "generation": 92,
+      "island_id": 4,
+      "score": 1257420.2266819999,
+      "timestamp": "2026-04-20T13:42:54.491131+00:00"
+    },
+    {
+      "generation": 93,
+      "island_id": 3,
+      "score": 1257409.2074849997,
+      "timestamp": "2026-04-20T13:43:03.712416+00:00"
+    },
+    {
+      "generation": 94,
+      "island_id": 4,
+      "score": 1257419.2450239998,
+      "timestamp": "2026-04-20T13:43:06.275359+00:00"
+    },
+    {
+      "generation": 95,
+      "island_id": 2,
+      "score": 1257419.4993169997,
+      "timestamp": "2026-04-20T13:43:12.764119+00:00"
+    },
+    {
+      "generation": 96,
+      "island_id": 0,
+      "score": 1257419.4465289998,
+      "timestamp": "2026-04-20T13:43:20.922039+00:00"
+    },
+    {
+      "generation": 97,
+      "island_id": 1,
+      "score": 1257419.3758259998,
+      "timestamp": "2026-04-20T13:43:23.823296+00:00"
+    },
+    {
+      "generation": 98,
+      "island_id": 2,
+      "score": 1257419.4519509997,
+      "timestamp": "2026-04-20T13:43:26.764640+00:00"
+    },
+    {
+      "generation": 99,
+      "island_id": 4,
+      "score": 1257419.1946289998,
+      "timestamp": "2026-04-20T13:43:36.973129+00:00"
+    },
+    {
+      "generation": 100,
+      "island_id": 1,
+      "score": 1257409.4823339998,
+      "timestamp": "2026-04-20T13:43:42.332681+00:00"
+    },
+    {
+      "generation": 101,
+      "island_id": 2,
+      "score": 1257418.5951689999,
+      "timestamp": "2026-04-20T13:43:45.396786+00:00"
+    },
+    {
+      "generation": 102,
+      "island_id": 4,
+      "score": 1257409.2746519998,
+      "timestamp": "2026-04-20T13:43:50.467393+00:00"
+    },
+    {
+      "generation": 103,
+      "island_id": 0,
+      "score": 1257418.7534099997,
+      "timestamp": "2026-04-20T13:43:52.674736+00:00"
+    },
+    {
+      "generation": 104,
+      "island_id": 2,
+      "score": 1257408.7466299997,
+      "timestamp": "2026-04-20T13:43:57.965849+00:00"
+    },
+    {
+      "generation": 105,
+      "island_id": 1,
+      "score": 1257409.0818169997,
+      "timestamp": "2026-04-20T13:44:07.899129+00:00"
+    },
+    {
+      "generation": 106,
+      "island_id": 4,
+      "score": 1257408.3547309998,
+      "timestamp": "2026-04-20T13:44:15.477172+00:00"
+    },
+    {
+      "generation": 107,
+      "island_id": 1,
+      "score": 1257401.0615139997,
+      "timestamp": "2026-04-20T13:44:20.678846+00:00"
+    },
+    {
+      "generation": 108,
+      "island_id": 4,
+      "score": 1257389.5112219998,
+      "timestamp": "2026-04-20T13:44:28.444220+00:00"
+    },
+    {
+      "generation": 109,
+      "island_id": 1,
+      "score": 1257398.8284649998,
+      "timestamp": "2026-04-20T13:44:33.387481+00:00"
+    },
+    {
+      "generation": 110,
+      "island_id": 3,
+      "score": 1257408.6068359998,
+      "timestamp": "2026-04-20T13:44:38.484434+00:00"
+    },
+    {
+      "generation": 111,
+      "island_id": 4,
+      "score": 1257388.7171809997,
+      "timestamp": "2026-04-20T13:44:41.561917+00:00"
+    },
+    {
+      "generation": 112,
+      "island_id": 2,
+      "score": 1257400.5502169998,
+      "timestamp": "2026-04-20T13:44:49.470285+00:00"
+    },
+    {
+      "generation": 113,
+      "island_id": 4,
+      "score": 1257388.6248289999,
+      "timestamp": "2026-04-20T13:44:55.440415+00:00"
+    },
+    {
+      "generation": 114,
+      "island_id": 1,
+      "score": 1257398.8230589998,
+      "timestamp": "2026-04-20T13:45:00.705482+00:00"
+    },
+    {
+      "generation": 115,
+      "island_id": 2,
+      "score": 1257398.8500449997,
+      "timestamp": "2026-04-20T13:45:02.935796+00:00"
+    },
+    {
+      "generation": 116,
+      "island_id": 3,
+      "score": 1257408.3244749997,
+      "timestamp": "2026-04-20T13:45:05.283237+00:00"
+    },
+    {
+      "generation": 117,
+      "island_id": 4,
+      "score": 1257379.9923169997,
+      "timestamp": "2026-04-20T13:45:08.133127+00:00"
+    },
+    {
+      "generation": 118,
+      "island_id": 4,
+      "score": 1257378.9344779998,
+      "timestamp": "2026-04-20T13:45:18.567001+00:00"
+    },
+    {
+      "generation": 119,
+      "island_id": 0,
+      "score": 1257418.2302989997,
+      "timestamp": "2026-04-20T13:45:20.975023+00:00"
+    },
+    {
+      "generation": 120,
+      "island_id": 2,
+      "score": 1257388.3721389999,
+      "timestamp": "2026-04-20T13:45:26.217650+00:00"
+    },
+    {
+      "generation": 121,
+      "island_id": 4,
+      "score": 1257359.7722619998,
+      "timestamp": "2026-04-20T13:45:31.557921+00:00"
+    },
+    {
+      "generation": 122,
+      "island_id": 1,
+      "score": 1257398.1753349998,
+      "timestamp": "2026-04-20T13:45:36.025633+00:00"
+    },
+    {
+      "generation": 123,
+      "island_id": 2,
+      "score": 1257378.4061839997,
+      "timestamp": "2026-04-20T13:45:38.569181+00:00"
+    },
+    {
+      "generation": 124,
+      "island_id": 3,
+      "score": 1257408.1600249999,
+      "timestamp": "2026-04-20T13:45:40.923878+00:00"
+    },
+    {
+      "generation": 125,
+      "island_id": 4,
+      "score": 1257359.1403669997,
+      "timestamp": "2026-04-20T13:45:43.146587+00:00"
+    },
+    {
+      "generation": 126,
+      "island_id": 1,
+      "score": 1257398.0639159998,
+      "timestamp": "2026-04-20T13:45:48.346861+00:00"
+    },
+    {
+      "generation": 127,
+      "island_id": 2,
+      "score": 1257368.0475729997,
+      "timestamp": "2026-04-20T13:45:57.575350+00:00"
+    },
+    {
+      "generation": 128,
+      "island_id": 3,
+      "score": 1257407.7157579998,
+      "timestamp": "2026-04-20T13:46:06.380748+00:00"
+    },
+    {
+      "generation": 129,
+      "island_id": 1,
+      "score": 1257389.4686179997,
+      "timestamp": "2026-04-20T13:46:14.714738+00:00"
+    },
+    {
+      "generation": 130,
+      "island_id": 4,
+      "score": 1257359.1260109998,
+      "timestamp": "2026-04-20T13:46:20.673149+00:00"
+    },
+    {
+      "generation": 131,
+      "island_id": 4,
+      "score": 1257358.3240759997,
+      "timestamp": "2026-04-20T13:46:31.124899+00:00"
     }
   ],
   "discovered_algorithms": [
@@ -1541,26 +2224,78 @@
     "QAlgo-Dream-G86",
     "QAlgo-Dream-G87",
     "QAlgo-Dream-G88",
-    "QAlgo-Dream-G89"
+    "QAlgo-Dream-G89",
+    "QAlgo-Dream-G90",
+    "QAlgo-Dream-G91",
+    "QAlgo-Dream-G92",
+    "QAlgo-Dream-G93",
+    "QAlgo-Dream-G94",
+    "QAlgo-Dream-G95",
+    "QAlgo-Dream-G96",
+    "QAlgo-Dream-G97",
+    "QAlgo-Dream-G98",
+    "QAlgo-Dream-G99",
+    "QAlgo-Dream-G100",
+    "QAlgo-Dream-G101",
+    "QAlgo-Dream-G102",
+    "QAlgo-Dream-G103",
+    "QAlgo-Dream-G104",
+    "QAlgo-Dream-G105",
+    "QAlgo-Dream-G106",
+    "QAlgo-Dream-G107",
+    "QAlgo-Dream-G108",
+    "QAlgo-Dream-G109",
+    "QAlgo-Dream-G110",
+    "QAlgo-Dream-G111",
+    "QAlgo-Dream-G112",
+    "QAlgo-Dream-G113",
+    "QAlgo-Dream-G114",
+    "QAlgo-Dream-G115",
+    "QAlgo-Dream-G116",
+    "QAlgo-Dream-G117",
+    "QAlgo-Dream-G118",
+    "QAlgo-Dream-G119",
+    "QAlgo-Dream-G120",
+    "QAlgo-Dream-G121",
+    "QAlgo-Dream-G122",
+    "QAlgo-Dream-G123",
+    "QAlgo-Dream-G124",
+    "QAlgo-Dream-G125",
+    "QAlgo-Dream-G126",
+    "QAlgo-Dream-G127",
+    "QAlgo-Dream-G128",
+    "QAlgo-Dream-G129",
+    "QAlgo-Dream-G130",
+    "QAlgo-Dream-G131"
   ],
   "blacklisted_fingerprints": [
-    "d9981af351067323",
-    "4e029b0277b8e53c",
-    "dadd034f45c3bc0e",
-    "eab88eaf7dc813d7",
-    "1543127ec3e8bb4a",
-    "622705fc90a2146f",
-    "2dcf9a36f508b58a",
-    "0ad13642783fe2f4",
-    "6e3d22d4d7aee650",
-    "c243cb7c696705c8",
-    "c06680b6a24f321b",
-    "5ea25a80d5ac4b63",
-    "adc46d2b8acd4b00",
-    "06489b07a80c7fe9",
+    "24370fd58a093cd6",
     "a79f914d0ed857b1",
     "96d91a32c53e58de",
+    "adc46d2b8acd4b00",
+    "2112dc1c156c940d",
+    "3a8507e5d2b02894",
+    "1543127ec3e8bb4a",
+    "dadd034f45c3bc0e",
+    "2dcf9a36f508b58a",
+    "5e7286547be7771b",
+    "c243cb7c696705c8",
+    "b7f9c10a5b1c3b1a",
+    "622705fc90a2146f",
+    "0ad13642783fe2f4",
+    "c06680b6a24f321b",
+    "af34007ed47eaca3",
+    "06489b07a80c7fe9",
+    "c18acd211d58faf2",
     "4f28a986a047eebd",
+    "6e3d22d4d7aee650",
+    "0b17fb6febd46ffc",
+    "d9981af351067323",
+    "4e029b0277b8e53c",
+    "eab88eaf7dc813d7",
+    "af9f75213e027f07",
+    "d2b5bbc9eb00982a",
+    "5ea25a80d5ac4b63",
     "6dc682e84ae95052",
     "701332c1b91da513"
   ]

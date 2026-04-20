@@ -1,16 +1,16 @@
 # ZCC Oneirogenesis v2 — Evolution Report
 
-**Generated**: 2026-04-20T13:39:38.106833+00:00
+**Generated**: 2026-04-20T13:46:31.138684+00:00
 
 ## Summary
 
 | Metric | Value |
 |--------|-------|
-| Global Generation | 89 |
-| Total Survived | 107 |
-| Total Rejected | 383 |
-| Algorithms Discovered | 89 |
-| Blacklisted Patterns | 19 |
+| Global Generation | 131 |
+| Total Survived | 160 |
+| Total Rejected | 406 |
+| Algorithms Discovered | 131 |
+| Blacklisted Patterns | 29 |
 
 ## Lineage
 
@@ -105,6 +105,48 @@
 | G0087 | I3 | `fd487d6cb271` | Remove dead movq to %rax (overwritten at +1) | -8.8 | 2026-04-20T13:39:22 |
 | G0088 | I7 | `6c20c291d130` | Swap independent pair to reduce WAR pipeline stall | -1.0 | 2026-04-20T13:39:32 |
 | G0089 | I9 | `9e08ca7b6562` | Remove dead movq to %rax (overwritten at +1), Remove dead movq to %rax (overwritten at +1) | -18.3 | 2026-04-20T13:39:38 |
+| G0090 | I2 | `a7adb6ab159d` | Swap independent pair to reduce WAR pipeline stall | -0.6 | 2026-04-20T13:42:47 |
+| G0091 | I3 | `89ebe6bcd128` | Swap independent pair to reduce WAR pipeline stall, Remove dead movq to %rax (overwritten at +1) | -9.3 | 2026-04-20T13:42:51 |
+| G0092 | I4 | `f3d2922614d8` | Swap independent pair to reduce WAR pipeline stall | -1.3 | 2026-04-20T13:42:54 |
+| G0093 | I3 | `bfcb944199ea` | Swap independent pair to reduce WAR pipeline stall, Swap independent pair to reduce WAR pipeline stall | -1.6 | 2026-04-20T13:43:03 |
+| G0094 | I4 | `feec1d72c1b7` | Swap independent pair to reduce WAR pipeline stall | -1.0 | 2026-04-20T13:43:06 |
+| G0095 | I2 | `0721d608ff5f` | Swap independent pair to reduce WAR pipeline stall | -0.5 | 2026-04-20T13:43:12 |
+| G0096 | I0 | `2820e7bd32b3` | Swap independent pair to reduce WAR pipeline stall | -0.2 | 2026-04-20T13:43:20 |
+| G0097 | I1 | `f147794a7158` | Swap independent pair to reduce WAR pipeline stall | -0.3 | 2026-04-20T13:43:23 |
+| G0098 | I2 | `8641b8808e23` | Swap independent pair to reduce WAR pipeline stall | -0.0 | 2026-04-20T13:43:26 |
+| G0099 | I4 | `d18b50b0ade4` | Swap independent pair to reduce WAR pipeline stall | -0.1 | 2026-04-20T13:43:36 |
+| G0100 | I1 | `049e5302759d` | Remove dead movq to %rsi (overwritten at +6) | -9.9 | 2026-04-20T13:43:42 |
+| G0101 | I2 | `de6892b3fbe5` | Swap independent pair to reduce WAR pipeline stall | -0.9 | 2026-04-20T13:43:45 |
+| G0102 | I4 | `66891ad8a46b` | Remove dead movq to %rax (overwritten at +1), Swap independent pair to reduce WAR pipeline stall | -9.9 | 2026-04-20T13:43:50 |
+| G0103 | I0 | `fbbc1aa90912` | Swap independent pair to reduce WAR pipeline stall | -0.7 | 2026-04-20T13:43:52 |
+| G0104 | I2 | `0a71abf2c431` | Remove dead movq to %rax (overwritten at +1), Swap independent pair to reduce WAR pipeline stall (+1) | -9.8 | 2026-04-20T13:43:57 |
+| G0105 | I1 | `4ea70317efc6` | Swap independent pair to reduce WAR pipeline stall | -0.4 | 2026-04-20T13:44:07 |
+| G0106 | I4 | `c655828688f6` | Swap independent pair to reduce WAR pipeline stall | -0.9 | 2026-04-20T13:44:15 |
+| G0107 | I1 | `24b69f5cc836` | Remove dead movq to %rax (overwritten at +1) | -8.0 | 2026-04-20T13:44:20 |
+| G0108 | I4 | `e683b0c27029` | Remove dead movq to %rax (overwritten at +1), Remove dead movq to %rax (overwritten at +1) | -18.8 | 2026-04-20T13:44:28 |
+| G0109 | I1 | `7f3635cdfd33` | Swap independent pair to reduce WAR pipeline stall | -2.2 | 2026-04-20T13:44:33 |
+| G0110 | I3 | `001216358dfc` | Swap independent pair to reduce WAR pipeline stall | -0.6 | 2026-04-20T13:44:38 |
+| G0111 | I4 | `d0cea6e1487f` | Swap independent pair to reduce WAR pipeline stall | -0.8 | 2026-04-20T13:44:41 |
+| G0112 | I2 | `1eb9ce34f276` | Remove dead movq to %rax (overwritten at +1), Swap independent pair to reduce WAR pipeline stall | -8.2 | 2026-04-20T13:44:49 |
+| G0113 | I4 | `ac47f71abb72` | Swap independent pair to reduce WAR pipeline stall | -0.1 | 2026-04-20T13:44:55 |
+| G0114 | I1 | `673569680d6f` | Swap independent pair to reduce WAR pipeline stall | -0.0 | 2026-04-20T13:45:00 |
+| G0115 | I2 | `bbfdfc583800` | Swap independent pair to reduce WAR pipeline stall | -1.7 | 2026-04-20T13:45:02 |
+| G0116 | I3 | `5cad0719277d` | Swap independent pair to reduce WAR pipeline stall, Swap independent pair to reduce WAR pipeline stall | -0.3 | 2026-04-20T13:45:05 |
+| G0117 | I4 | `6a3dc07fd7ea` | Remove dead movq to %rax (overwritten at +1) | -8.6 | 2026-04-20T13:45:08 |
+| G0118 | I4 | `90760274cdaa` | Swap independent pair to reduce WAR pipeline stall, Swap independent pair to reduce WAR pipeline stall | -1.1 | 2026-04-20T13:45:18 |
+| G0119 | I0 | `1c7dff1a50ee` | Swap independent pair to reduce WAR pipeline stall | -0.5 | 2026-04-20T13:45:20 |
+| G0120 | I2 | `8a3d07208a62` | Remove dead movq to %rax (overwritten at +1) | -10.5 | 2026-04-20T13:45:26 |
+| G0121 | I4 | `9ac99bc39d7f` | Remove dead movq to %rax (overwritten at +1), Remove dead movq to %rax (overwritten at +1) (+1) | -19.2 | 2026-04-20T13:45:31 |
+| G0122 | I1 | `fb1bfa09ad29` | Swap independent pair to reduce WAR pipeline stall | -0.6 | 2026-04-20T13:45:36 |
+| G0123 | I2 | `f43ec3b5c3ee` | Remove dead movq to %rax (overwritten at +1) | -10.0 | 2026-04-20T13:45:38 |
+| G0124 | I3 | `a91b6b4c4aba` | Swap independent pair to reduce WAR pipeline stall | -0.2 | 2026-04-20T13:45:40 |
+| G0125 | I4 | `6869d3eed1f1` | Swap independent pair to reduce WAR pipeline stall | -0.6 | 2026-04-20T13:45:43 |
+| G0126 | I1 | `5b99bdc26912` | Swap independent pair to reduce WAR pipeline stall | -0.1 | 2026-04-20T13:45:48 |
+| G0127 | I2 | `dd55e6060c9d` | Remove dead movq to %rax (overwritten at +1) | -10.4 | 2026-04-20T13:45:57 |
+| G0128 | I3 | `3737e5a6c255` | Swap independent pair to reduce WAR pipeline stall | -0.4 | 2026-04-20T13:46:06 |
+| G0129 | I1 | `b26ccb31785b` | Remove dead movq to %rax (overwritten at +1) | -8.6 | 2026-04-20T13:46:14 |
+| G0130 | I4 | `327becb09e8d` | Swap independent pair to reduce WAR pipeline stall | -0.0 | 2026-04-20T13:46:20 |
+| G0131 | I4 | `5d660156d299` | Swap independent pair to reduce WAR pipeline stall | -0.8 | 2026-04-20T13:46:31 |
 
 ## Discovered Algorithms
 
@@ -197,38 +239,80 @@
 - `QAlgo-Dream-G87` → [`QAlgo-Dream-G87.json`](journal/QAlgo-Dream-G87.json)
 - `QAlgo-Dream-G88` → [`QAlgo-Dream-G88.json`](journal/QAlgo-Dream-G88.json)
 - `QAlgo-Dream-G89` → [`QAlgo-Dream-G89.json`](journal/QAlgo-Dream-G89.json)
+- `QAlgo-Dream-G90` → [`QAlgo-Dream-G90.json`](journal/QAlgo-Dream-G90.json)
+- `QAlgo-Dream-G91` → [`QAlgo-Dream-G91.json`](journal/QAlgo-Dream-G91.json)
+- `QAlgo-Dream-G92` → [`QAlgo-Dream-G92.json`](journal/QAlgo-Dream-G92.json)
+- `QAlgo-Dream-G93` → [`QAlgo-Dream-G93.json`](journal/QAlgo-Dream-G93.json)
+- `QAlgo-Dream-G94` → [`QAlgo-Dream-G94.json`](journal/QAlgo-Dream-G94.json)
+- `QAlgo-Dream-G95` → [`QAlgo-Dream-G95.json`](journal/QAlgo-Dream-G95.json)
+- `QAlgo-Dream-G96` → [`QAlgo-Dream-G96.json`](journal/QAlgo-Dream-G96.json)
+- `QAlgo-Dream-G97` → [`QAlgo-Dream-G97.json`](journal/QAlgo-Dream-G97.json)
+- `QAlgo-Dream-G98` → [`QAlgo-Dream-G98.json`](journal/QAlgo-Dream-G98.json)
+- `QAlgo-Dream-G99` → [`QAlgo-Dream-G99.json`](journal/QAlgo-Dream-G99.json)
+- `QAlgo-Dream-G100` → [`QAlgo-Dream-G100.json`](journal/QAlgo-Dream-G100.json)
+- `QAlgo-Dream-G101` → [`QAlgo-Dream-G101.json`](journal/QAlgo-Dream-G101.json)
+- `QAlgo-Dream-G102` → [`QAlgo-Dream-G102.json`](journal/QAlgo-Dream-G102.json)
+- `QAlgo-Dream-G103` → [`QAlgo-Dream-G103.json`](journal/QAlgo-Dream-G103.json)
+- `QAlgo-Dream-G104` → [`QAlgo-Dream-G104.json`](journal/QAlgo-Dream-G104.json)
+- `QAlgo-Dream-G105` → [`QAlgo-Dream-G105.json`](journal/QAlgo-Dream-G105.json)
+- `QAlgo-Dream-G106` → [`QAlgo-Dream-G106.json`](journal/QAlgo-Dream-G106.json)
+- `QAlgo-Dream-G107` → [`QAlgo-Dream-G107.json`](journal/QAlgo-Dream-G107.json)
+- `QAlgo-Dream-G108` → [`QAlgo-Dream-G108.json`](journal/QAlgo-Dream-G108.json)
+- `QAlgo-Dream-G109` → [`QAlgo-Dream-G109.json`](journal/QAlgo-Dream-G109.json)
+- `QAlgo-Dream-G110` → [`QAlgo-Dream-G110.json`](journal/QAlgo-Dream-G110.json)
+- `QAlgo-Dream-G111` → [`QAlgo-Dream-G111.json`](journal/QAlgo-Dream-G111.json)
+- `QAlgo-Dream-G112` → [`QAlgo-Dream-G112.json`](journal/QAlgo-Dream-G112.json)
+- `QAlgo-Dream-G113` → [`QAlgo-Dream-G113.json`](journal/QAlgo-Dream-G113.json)
+- `QAlgo-Dream-G114` → [`QAlgo-Dream-G114.json`](journal/QAlgo-Dream-G114.json)
+- `QAlgo-Dream-G115` → [`QAlgo-Dream-G115.json`](journal/QAlgo-Dream-G115.json)
+- `QAlgo-Dream-G116` → [`QAlgo-Dream-G116.json`](journal/QAlgo-Dream-G116.json)
+- `QAlgo-Dream-G117` → [`QAlgo-Dream-G117.json`](journal/QAlgo-Dream-G117.json)
+- `QAlgo-Dream-G118` → [`QAlgo-Dream-G118.json`](journal/QAlgo-Dream-G118.json)
+- `QAlgo-Dream-G119` → [`QAlgo-Dream-G119.json`](journal/QAlgo-Dream-G119.json)
+- `QAlgo-Dream-G120` → [`QAlgo-Dream-G120.json`](journal/QAlgo-Dream-G120.json)
+- `QAlgo-Dream-G121` → [`QAlgo-Dream-G121.json`](journal/QAlgo-Dream-G121.json)
+- `QAlgo-Dream-G122` → [`QAlgo-Dream-G122.json`](journal/QAlgo-Dream-G122.json)
+- `QAlgo-Dream-G123` → [`QAlgo-Dream-G123.json`](journal/QAlgo-Dream-G123.json)
+- `QAlgo-Dream-G124` → [`QAlgo-Dream-G124.json`](journal/QAlgo-Dream-G124.json)
+- `QAlgo-Dream-G125` → [`QAlgo-Dream-G125.json`](journal/QAlgo-Dream-G125.json)
+- `QAlgo-Dream-G126` → [`QAlgo-Dream-G126.json`](journal/QAlgo-Dream-G126.json)
+- `QAlgo-Dream-G127` → [`QAlgo-Dream-G127.json`](journal/QAlgo-Dream-G127.json)
+- `QAlgo-Dream-G128` → [`QAlgo-Dream-G128.json`](journal/QAlgo-Dream-G128.json)
+- `QAlgo-Dream-G129` → [`QAlgo-Dream-G129.json`](journal/QAlgo-Dream-G129.json)
+- `QAlgo-Dream-G130` → [`QAlgo-Dream-G130.json`](journal/QAlgo-Dream-G130.json)
+- `QAlgo-Dream-G131` → [`QAlgo-Dream-G131.json`](journal/QAlgo-Dream-G131.json)
 
 ## Fitness History
 
 ```
-G0060 I7: score=1257409
-G0061 I9: score=1257408
-G0062 I9: score=1257407
-G0063 I0: score=1257417
-G0064 I1: score=1257409
-G0065 I3: score=1257408
-G0066 I4: score=1257409
-G0067 I5: score=1257408
-G0068 I7: score=1257389
-G0069 I1: score=1257409
-G0070 I3: score=1257409
-G0071 I4: score=1257410
-G0072 I7: score=1257409
-G0073 I8: score=1257409
-G0074 I9: score=1257411
-G0075 I2: score=1257401
-G0076 I0: score=1257400
-G0077 I2: score=1257400
-G0078 I4: score=1257409
-G0079 I7: score=1257400
-G0080 I8: score=1257399
-G0081 I9: score=1257409
-G0082 I2: score=1257399
-G0083 I5: score=1257409
-G0084 I9: score=1257409
-G0085 I0: score=1257400
-G0086 I2: score=1257399
-G0087 I3: score=1257400
-G0088 I7: score=1257399
-G0089 I9: score=1257391
+G0102 I4: score=1257409
+G0103 I0: score=1257419
+G0104 I2: score=1257409
+G0105 I1: score=1257409
+G0106 I4: score=1257408
+G0107 I1: score=1257401
+G0108 I4: score=1257390
+G0109 I1: score=1257399
+G0110 I3: score=1257409
+G0111 I4: score=1257389
+G0112 I2: score=1257401
+G0113 I4: score=1257389
+G0114 I1: score=1257399
+G0115 I2: score=1257399
+G0116 I3: score=1257408
+G0117 I4: score=1257380
+G0118 I4: score=1257379
+G0119 I0: score=1257418
+G0120 I2: score=1257388
+G0121 I4: score=1257360
+G0122 I1: score=1257398
+G0123 I2: score=1257378
+G0124 I3: score=1257408
+G0125 I4: score=1257359
+G0126 I1: score=1257398
+G0127 I2: score=1257368
+G0128 I3: score=1257408
+G0129 I1: score=1257389
+G0130 I4: score=1257359
+G0131 I4: score=1257358
 ```

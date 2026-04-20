@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G107",
+    "name": "Codegen Mutation G107 [dead_move_elim]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-1",
+    "lineage_hash": "24b69f5cc83608d9",
+    "island_id": 1
+  },
+  "mutations": [
+    {
+      "name": "dead_move_elim",
+      "category": "PEEPHOLE",
+      "description": "Remove dead movq to %rax (overwritten at +1)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -20,
+    "inst_count_delta": 117819,
+    "score_delta": -8.020302999997512,
+    "composite_score": 1257401.0615139997
+  },
+  "timestamp": "2026-04-20T13:44:20.678896+00:00",
+  "generation": 107
+}

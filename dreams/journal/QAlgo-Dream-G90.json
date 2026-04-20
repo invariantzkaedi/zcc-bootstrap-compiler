@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G90",
+    "name": "Codegen Mutation G90 [schedule_war_pair]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-2",
+    "lineage_hash": "a7adb6ab159d9ac5",
+    "island_id": 2
+  },
+  "mutations": [
+    {
+      "name": "schedule_war_pair",
+      "category": "SCHEDULE",
+      "description": "Swap independent pair to reduce WAR pipeline stall",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": 0,
+    "inst_count_delta": 117821,
+    "score_delta": -0.6071150000207126,
+    "composite_score": 1257420.0491889997
+  },
+  "timestamp": "2026-04-20T13:42:47.798125+00:00",
+  "generation": 90
+}

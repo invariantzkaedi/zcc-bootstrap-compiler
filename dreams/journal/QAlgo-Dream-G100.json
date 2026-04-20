@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G100",
+    "name": "Codegen Mutation G100 [dead_move_elim]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-1",
+    "lineage_hash": "049e5302759d259b",
+    "island_id": 1
+  },
+  "mutations": [
+    {
+      "name": "dead_move_elim",
+      "category": "PEEPHOLE",
+      "description": "Remove dead movq to %rsi (overwritten at +6)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -20,
+    "inst_count_delta": 117820,
+    "score_delta": -9.893491999944672,
+    "composite_score": 1257409.4823339998
+  },
+  "timestamp": "2026-04-20T13:43:42.332738+00:00",
+  "generation": 100
+}
