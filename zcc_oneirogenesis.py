@@ -231,10 +231,15 @@ class SelfHostGate:
         s3_s   = os.path.join(tmpdir, 'g_s3.s')
         s3_bin = os.path.join(tmpdir, 'g_s3')
         s4_s   = os.path.join(tmpdir, 'g_s4.s')
-        p_args = [str(REPO_ROOT / p) for p in passes]
+        p_args   = [str(REPO_ROOT / p) for p in passes]
+        # Use full zcc.c (single compilation unit) — avoids multi-definition
+        # symbol clashes that arise when linking zcc_pp.c with extra .c files
+        zcc_full = str(REPO_ROOT / 'zcc.c')
+        gate_src = zcc_full if os.path.exists(zcc_full) else zcc_pp_c
+        s3_p_args = p_args
 
         try:
-            r = subprocess.run([mutant_bin, zcc_pp_c, '-o', s3_s],
+            r = subprocess.run([mutant_bin, gate_src, '-o', s3_s],
                                capture_output=True, timeout=timeout)
             if r.returncode != 0:
                 return False, f"mutant crash rc={r.returncode}"
@@ -248,8 +253,9 @@ class SelfHostGate:
 
         try:
             r = subprocess.run(
-                ['gcc', '-O0', '-w', '-fno-asynchronous-unwind-tables',
-                 '-o', s3_bin, s3_s] + p_args + ['-lm'],
+                ['gcc', '-no-pie', '-O0', '-w', '-fno-asynchronous-unwind-tables',
+                 '-Wa,--noexecstack', '-fno-unwind-tables',
+                 '-o', s3_bin, s3_s] + s3_p_args + ['-lm'],
                 capture_output=True, timeout=60)
             if r.returncode != 0:
                 full_stderr = r.stderr.decode('utf-8', 'ignore').strip()
@@ -264,7 +270,7 @@ class SelfHostGate:
             return False, "s3 link timeout"
 
         try:
-            r = subprocess.run([s3_bin, zcc_pp_c, '-o', s4_s],
+            r = subprocess.run([s3_bin, gate_src, '-o', s4_s],
                                capture_output=True, timeout=timeout)
             if r.returncode != 0:
                 return False, f"s3 crash rc={r.returncode}"
@@ -465,7 +471,8 @@ class Island:
         p_args = [str(REPO_ROOT / p) for p in PASSES]
         try:
             r = subprocess.run(
-                ['gcc', '-O0', '-w', '-fno-asynchronous-unwind-tables',
+                ['gcc', '-no-pie', '-O0', '-w', '-fno-asynchronous-unwind-tables',
+                 '-Wa,--noexecstack', '-fno-unwind-tables',
                  '-o', mutant_bin, mutant_asm] + p_args + ['-lm'],
                 capture_output=True, timeout=60)
             if r.returncode != 0:
@@ -544,7 +551,8 @@ class Island:
         p_args = [str(REPO_ROOT / p) for p in PASSES]
         try:
             r = subprocess.run(
-                ['gcc', '-O0', '-w', '-fno-asynchronous-unwind-tables',
+                ['gcc', '-no-pie', '-O0', '-w', '-fno-asynchronous-unwind-tables',
+                 '-Wa,--noexecstack', '-fno-unwind-tables',
                  '-o', bin_path, asm_path] + p_args + ['-lm'],
                 capture_output=True, timeout=60)
             if r.returncode != 0:
@@ -897,7 +905,8 @@ int main(void) {
                         # Rebuild canonical zcc2 binary
                         p_args = [str(REPO_ROOT / p) for p in PASSES]
                         subprocess.run(
-                            ['gcc', '-O0', '-w', '-fno-asynchronous-unwind-tables',
+                            ['gcc', '-no-pie', '-O0', '-w', '-fno-asynchronous-unwind-tables',
+                             '-Wa,--noexecstack', '-fno-unwind-tables',
                              '-o', str(REPO_ROOT / 'zcc2'), zcc2_asm] + p_args + ['-lm'],
                             capture_output=True, timeout=60)
                         print(f"\n  {_Y}[PROMOTE]{_W} Island {best.island_id} "
