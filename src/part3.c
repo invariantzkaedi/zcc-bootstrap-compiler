@@ -894,6 +894,13 @@ Node *parse_primary(Compiler *cc) {
             if (strcmp(n->name, "stdin") == 0 || strcmp(n->name, "stdout") == 0 || strcmp(n->name, "stderr") == 0) {
                 n->type = type_ptr(cc, cc->ty_char);
             } else {
+                /* ZCC SCOPING HARDENING: undeclared identifiers must be rejected    */
+                /* at AST build time. The old silent int decay caused CWE-476 healer */
+                /* mutations (guards inserted before decl) to survive bootstrap,     */
+                /* masking invalid C as applied_survived in the mutation log.        */
+                char _ud_buf[256];
+                sprintf(_ud_buf, "use of undeclared identifier '%s'", n->name);
+                error(cc, _ud_buf);
                 n->type = cc->ty_int;
             }
         }
