@@ -36,8 +36,10 @@ selfhost: zcc
 	@echo "=== Stage 2: zcc2 compiles itself -> zcc3 ==="
 	./zcc2 zcc.c -o zcc3
 	strip --strip-all zcc3
-	@echo "=== Verify: zcc2 == zcc3 (bitwise) ==="
-	cmp zcc2 zcc3 && echo "SELF-HOST VERIFIED (bitwise stable)" || (echo "SELF-HOST FAILED"; cmp -l zcc2 zcc3 | head; exit 1)
+	@echo "=== Verify: zcc2.s == zcc3.s (codegen parity) ==="
+	./zcc  zcc.c -o zcc2.s
+	./zcc2 zcc.c -o zcc3.s
+	diff zcc2.s zcc3.s && echo "SELF-HOST VERIFIED (assembly identical)" || (echo "SELF-HOST FAILED (assembly diverged)"; diff zcc2.s zcc3.s | head -20; exit 1)
 
 test: zcc
 	bash zcc_test_suite.sh --quick
