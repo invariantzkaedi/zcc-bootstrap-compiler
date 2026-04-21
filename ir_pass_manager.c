@@ -17,6 +17,14 @@
 #include <string.h>
 #include "ir.h"
 
+/* ── Globals referenced by zcc.c (part5.c declares these extern) ──────── */
+int  g_manifold_enabled    = 0;
+char g_ir_export_path[256] = {0};
+int  g_peephole_enabled    = 0;
+int  g_peephole_deterministic = 0;
+int  g_peephole_verbose    = 0;
+
+
 /* ── Pass result type ────────────────────────────────────────────────── */
 
 typedef struct {

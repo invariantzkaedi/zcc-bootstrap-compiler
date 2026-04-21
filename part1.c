@@ -33,8 +33,8 @@ enum {
     MAX_PARAMS  = 128,
     MAX_CALL_ARGS = 256,
     MAX_CASES   = 4096,
-    MAX_INIT    = 262144,
-    ARENA_SIZE  = 67108864
+    MAX_INIT    = 1048576,
+    ARENA_SIZE  = 536870912
 };
 
 /* ================================================================ */
@@ -176,6 +176,7 @@ struct Type {
     int is_complete;
     int is_packed;   /* __attribute__((packed)) — suppress field alignment */
     int explicit_align; /* __attribute__((aligned(N))) — override total align, 0 = none */
+    int is_tbfp;     /* transparent bitfield packing (tbfp) marker */
 };
 
 struct StringEntry {
@@ -258,6 +259,9 @@ struct Node {
     int num_params;
     Node *body;
     int stack_size;
+    /* param capture arrays (used by parse_func_def in part3.c) */
+    Type *param_types[MAX_PARAMS];
+    char param_names_buf[MAX_PARAMS][MAX_IDENT];
 
     /* ND_MEMBER */
     char member_name[MAX_IDENT];
@@ -513,6 +517,7 @@ struct Compiler {
     /* pending __attribute__ flags — set by lexer, consumed by parse_struct_or_union */
     int pending_packed;     /* __attribute__((packed)) seen before struct keyword */
     int pending_aligned_n;  /* __attribute__((aligned(N))) value, 0 = none */
+    int pending_tbfp;       /* transparent bitfield packing flag, consumed by parse_struct_or_union */
     int debug_abi_classes;  /* -fdebug-abi-classes flag */
     int abi_scratch_offset; /* %rbp-relative offset to 16-byte aggregate return scratch (CG-IR-019) */
     int used_regs_mask;     /* for telemetry tracking */

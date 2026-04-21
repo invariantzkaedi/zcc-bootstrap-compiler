@@ -151,6 +151,13 @@ static const char *zcc_stddef_text =
 "typedef unsigned int jmp_buf[14];\n"
 "typedef struct _IO_FILE FILE;\n"
 "extern FILE *stdin, *stdout, *stderr;\n"
+"char *getenv(const char *name);\n"
+"int setenv(const char *name, const char *value, int overwrite);\n"
+"int unsetenv(const char *name);\n"
+"unsigned long long strtoull(const char *s, char **end, int base);\n"
+"long long strtoll(const char *s, char **end, int base);\n"
+"long strtol(const char *s, char **end, int base);\n"
+"unsigned long strtoul(const char *s, char **end, int base);\n"
 "#endif\n";
 
 static void pp_emit(PPState *state, char c) {
