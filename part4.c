@@ -4088,6 +4088,13 @@ static void emit_global_var(Compiler *cc, Node *gvar) {
   if (gvar->is_extern)
     return; /* no emission for extern */
 
+  /* Skip .comm for function declarations — they must not create BSS symbols
+   * that shadow the real glibc implementations at link time. This catches
+   * complex declarations like signal() that the parser may treat as vars. */
+  if (gvar->type && (gvar->type->kind == TY_FUNC ||
+      (gvar->type->kind == TY_PTR && gvar->type->base && gvar->type->base->kind == TY_FUNC)))
+    return;
+
   size = type_size(gvar->type);
   if (size <= 0)
     size = 8;
