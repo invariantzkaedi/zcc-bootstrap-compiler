@@ -2787,8 +2787,23 @@ void codegen_expr(Compiler *cc, Node *node) {
     /* System V AMD64: no shadow space required. Space for 7th+ gp args and 9th+ fp args is left on the stack. */
     {
       int temp_gp = 0, temp_fp = 0;
+      /* Resolve callee type early for arg classification */
+      Symbol *pre_sym = node->func_name[0] ? scope_find(cc, node->func_name) : 0;
+      Type *pre_ftype = (pre_sym && pre_sym->type && pre_sym->type->kind == TY_FUNC) ? pre_sym->type : 0;
+      if (!pre_ftype && node->lhs && node->lhs->type) {
+        Type *plt = node->lhs->type;
+        if (plt->kind == TY_FUNC) pre_ftype = plt;
+        else if (plt->kind == TY_PTR && plt->base && plt->base->kind == TY_FUNC) pre_ftype = plt->base;
+      }
       for (i = 0; i < nargs; i++) {
+        int is_fp_arg = 0;
         if (node->args[i] && node->args[i]->type && is_float_type(node->args[i]->type)) {
+          is_fp_arg = 1;
+        } else if (pre_ftype && pre_ftype->params && i < pre_ftype->num_params &&
+                   pre_ftype->params[i] && is_float_type(pre_ftype->params[i])) {
+          is_fp_arg = 1; /* int promoted to float/double at call site */
+        }
+        if (is_fp_arg) {
           if (temp_fp < 8) temp_fp++;
         } else {
           if (temp_gp < 6) temp_gp++;
@@ -2921,6 +2936,22 @@ void codegen_expr(Compiler *cc, Node *node) {
                 }
                 if (need_cvt) fprintf(cc->out, "    cvtsd2ss %%xmm%d, %%xmm%d\n", fp_idx, fp_idx);
               }
+            }
+            fp_idx++;
+          }
+        } else if (callee_ftype && callee_ftype->params && i < callee_ftype->num_params &&
+                   callee_ftype->params[i] && is_float_type(callee_ftype->params[i])) {
+          /* CG-FLOAT-ABI-FIX: implicit int-to-float/double conversion at call site.
+           * The arg expression is integer but the callee declares this param as
+           * float/double. SysV ABI requires float/double args in xmm registers.
+           * Convert the integer value and route to xmm instead of GP. */
+          if (fp_idx < 8) {
+            fprintf(cc->out, "    popq %%rax\n");
+            cc->stack_depth--;
+            if (callee_ftype->params[i]->kind == TY_FLOAT) {
+              fprintf(cc->out, "    cvtsi2ss %%eax, %%xmm%d\n", fp_idx);
+            } else {
+              fprintf(cc->out, "    cvtsi2sd %%rax, %%xmm%d\n", fp_idx);
             }
             fp_idx++;
           }
