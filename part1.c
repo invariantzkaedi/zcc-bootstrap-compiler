@@ -26,7 +26,7 @@
 
 enum {
     MAX_IDENT   = 128,
-    MAX_STR     = 4096,
+    MAX_STR     = 16384,
     MAX_STRINGS = 262144,
     MAX_GLOBALS = 262144,
     MAX_STRUCTS = 65536,
