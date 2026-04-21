@@ -148,7 +148,7 @@ static const char *zcc_stddef_text =
 "typedef unsigned long uintptr_t;\n"
 "/* PP-STUB-024: signal.h / setjmp.h / stdint primitives for Lua internals */\n"
 "typedef int sig_atomic_t;\n"
-"typedef long jmp_buf[8];  /* x86-64 ABI: 8 x 8-byte regs = 64 bytes */\n"
+"typedef long jmp_buf[25];  /* x86-64 glibc: __jmp_buf(64) + mask_saved(4) + sigset(128) + pad = 200 bytes */\n"
 "typedef struct _IO_FILE FILE;\n"
 "extern FILE *stdin, *stdout, *stderr;\n"
 "char *getenv(const char *name);\n"
