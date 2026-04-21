@@ -2920,8 +2920,48 @@ Node *parse_program(Compiler *cc) {
                     }
                     /* fall through to typedef / global var handling */
                     goto after_name;
+                } else if (gpk == TK_IDENT) {
+                    /* parenthesized name: type (name)(params)
+                     * Used pervasively in Lua 5.4.6 API headers:
+                     *   extern lua_State *(lua_newstate)(lua_Alloc f, void *ud);
+                     *   extern void       (lua_close)(lua_State *L);
+                     * Consume (name) then parse trailing (params). */
+                    next_token(cc); /* consume ( */
+                    if (cc->tk == TK_IDENT) {
+                        strncpy(name, cc->tk_text, MAX_IDENT - 1);
+                        next_token(cc);
+                    }
+                    expect(cc, TK_RPAREN);
+                    if (cc->tk == TK_LPAREN) {
+                        Type *ftype;
+                        next_token(cc);
+                        ftype = type_func(cc, ptr_type);
+                        ftype->params = (Type **)cc_alloc(cc, sizeof(Type *) * MAX_PARAMS);
+                        ftype->num_params = 0;
+                        ftype->is_variadic = 0;
+                        if (cc->tk != TK_RPAREN) {
+                            if (cc->tk == TK_VOID && peek_token(cc) == TK_RPAREN) {
+                                next_token(cc);
+                            } else {
+                                while (cc->tk != TK_RPAREN && cc->tk != TK_EOF) {
+                                    Type *ptype; char pname[MAX_IDENT]; pname[0] = 0;
+                                    if (cc->tk == TK_ELLIPSIS) { ftype->is_variadic = 1; next_token(cc); break; }
+                                    ptype = parse_type(cc);
+                                    ptype = parse_declarator(cc, ptype, pname);
+                                    if (ftype->num_params < MAX_PARAMS) ftype->params[ftype->num_params++] = ptype;
+                                    if (cc->tk == TK_COMMA) next_token(cc); else break;
+                                }
+                            }
+                        }
+                        expect(cc, TK_RPAREN);
+                        dtype = ftype;
+                    } else {
+                        dtype = ptr_type;
+                    }
+                    goto after_name;
                 }
             }
+
             if (cc->tk == TK_IDENT) {
                 strncpy(name, cc->tk_text, MAX_IDENT - 1);
                 next_token(cc);
