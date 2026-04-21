@@ -1,5 +1,4 @@
 
-/* C99/POSIX support for curl graduation — see commit 262bd08 */
 /* ================================================================ */
 /* COMPILER INITIALIZATION                                           */
 /* ================================================================ */
@@ -14,6 +13,24 @@
  */
 #include "part1.c"
 #endif
+
+/* Global telemetry control */
+static int enable_telemetry_stdout = 0;
+extern void ir_telemetry_enable_stdout(void);
+
+/* Manifold engine globals (defined in ir_pass_manager.c) */
+extern int  g_manifold_enabled;
+extern char g_ir_export_path[256];
+
+/* Peephole globals (defined in ir_peephole.c) */
+extern int  g_peephole_enabled;
+extern int  g_peephole_deterministic;
+extern int  g_peephole_verbose;
+
+/* Security pass globals */
+static int  g_security_signext = 0;
+static int  g_security_476 = 0;
+static int  g_security_787 = 0;
 
 static void init_compiler(Compiler *cc) {
   /* zero everyt5555hing — cc was calloc'd */
@@ -44,8 +61,7 @@ static void init_compiler(Compiler *cc) {
   cc->col = 1;
   cc->pos = 0;
   cc->has_peek = 0;
-  cc->label_count = 0;
-  cc->str_label_count = 0;
+  cc->label_count = 100; /* start at 100 to avoid clashes */
   cc->errors = 0;
   cc->num_strings = 0;
   cc->num_structs = 0;
@@ -79,6 +95,7 @@ static void init_compiler(Compiler *cc) {
         t_va->size = 24;
         t_va->align = 8;
         t_va->is_complete = 1;
+        t_va->is_tbfp = 0;
         sym = scope_add(cc, "__builtin_va_list", type_array(cc, t_va, 1));
     }
     sym->is_typedef = 1;
@@ -87,87 +104,6 @@ static void init_compiler(Compiler *cc) {
     sym = scope_add(cc, "_Float128", cc->ty_double);
     sym->is_typedef = 1;
 
-    /* POSIX / system typedefs — needed for GCC-preprocessed code */
-    sym = scope_add(cc, "socklen_t", cc->ty_int);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "sa_family_t", cc->ty_ushort);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "in_port_t", cc->ty_ushort);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "in_addr_t", cc->ty_uint);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "pid_t", cc->ty_int);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "uid_t", cc->ty_uint);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "gid_t", cc->ty_uint);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "mode_t", cc->ty_uint);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "off_t", cc->ty_long);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "time_t", cc->ty_long);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "clock_t", cc->ty_long);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "suseconds_t", cc->ty_long);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "nfds_t", cc->ty_ulong);
-    sym->is_typedef = 1;
-
-    /* glibc internal __ typedefs — survive GCC preprocessing */
-    sym = scope_add(cc, "__time_t", cc->ty_long);   sym->is_typedef = 1;
-    sym = scope_add(cc, "__clock_t", cc->ty_long);   sym->is_typedef = 1;
-    sym = scope_add(cc, "__pid_t", cc->ty_int);      sym->is_typedef = 1;
-    sym = scope_add(cc, "__uid_t", cc->ty_uint);     sym->is_typedef = 1;
-    sym = scope_add(cc, "__gid_t", cc->ty_uint);     sym->is_typedef = 1;
-    sym = scope_add(cc, "__off_t", cc->ty_long);     sym->is_typedef = 1;
-    sym = scope_add(cc, "__off64_t", cc->ty_long);   sym->is_typedef = 1;
-    sym = scope_add(cc, "__mode_t", cc->ty_uint);    sym->is_typedef = 1;
-    sym = scope_add(cc, "__dev_t", cc->ty_ulong);    sym->is_typedef = 1;
-    sym = scope_add(cc, "__ino_t", cc->ty_ulong);    sym->is_typedef = 1;
-    sym = scope_add(cc, "__nlink_t", cc->ty_ulong);  sym->is_typedef = 1;
-    sym = scope_add(cc, "__blksize_t", cc->ty_long); sym->is_typedef = 1;
-    sym = scope_add(cc, "__blkcnt_t", cc->ty_long);  sym->is_typedef = 1;
-    sym = scope_add(cc, "__ssize_t", cc->ty_long);   sym->is_typedef = 1;
-    sym = scope_add(cc, "__socklen_t", cc->ty_int);  sym->is_typedef = 1;
-    sym = scope_add(cc, "__suseconds_t", cc->ty_long); sym->is_typedef = 1;
-    sym = scope_add(cc, "__syscall_slong_t", cc->ty_long); sym->is_typedef = 1;
-    sym = scope_add(cc, "__syscall_ulong_t", cc->ty_ulong); sym->is_typedef = 1;
-    sym = scope_add(cc, "__intmax_t", cc->ty_long);  sym->is_typedef = 1;
-    sym = scope_add(cc, "__uintmax_t", cc->ty_ulong); sym->is_typedef = 1;
-    sym = scope_add(cc, "__intptr_t", cc->ty_long);  sym->is_typedef = 1;
-    sym = scope_add(cc, "__sig_atomic_t", cc->ty_int); sym->is_typedef = 1;
-    sym = scope_add(cc, "__clockid_t", cc->ty_int);  sym->is_typedef = 1;
-    sym = scope_add(cc, "__timer_t", type_ptr(cc, cc->ty_void)); sym->is_typedef = 1;
-    sym = scope_add(cc, "__loff_t", cc->ty_long);    sym->is_typedef = 1;
-    sym = scope_add(cc, "__key_t", cc->ty_int);      sym->is_typedef = 1;
-    sym = scope_add(cc, "__id_t", cc->ty_uint);      sym->is_typedef = 1;
-    sym = scope_add(cc, "__useconds_t", cc->ty_uint); sym->is_typedef = 1;
-    sym = scope_add(cc, "__daddr_t", cc->ty_int);    sym->is_typedef = 1;
-    sym = scope_add(cc, "__caddr_t", type_ptr(cc, cc->ty_char)); sym->is_typedef = 1;
-    sym = scope_add(cc, "__fsblkcnt_t", cc->ty_ulong); sym->is_typedef = 1;
-    sym = scope_add(cc, "__fsfilcnt_t", cc->ty_ulong); sym->is_typedef = 1;
-    sym = scope_add(cc, "__fsword_t", cc->ty_long);  sym->is_typedef = 1;
-    sym = scope_add(cc, "__rlim_t", cc->ty_ulong);   sym->is_typedef = 1;
-    sym = scope_add(cc, "__quad_t", cc->ty_long);    sym->is_typedef = 1;
-    sym = scope_add(cc, "__u_quad_t", cc->ty_ulong); sym->is_typedef = 1;
-
-
-    /* fd_set — used by select(). glibc: struct with __fds_bits[16] (128 bytes) */
-    {
-        Type *t_fdset = type_new(cc, TY_STRUCT);
-        strncpy(t_fdset->tag, "fd_set", MAX_IDENT - 1);
-        t_fdset->size = 128;
-        t_fdset->align = 8;
-        t_fdset->is_complete = 1;
-        sym = scope_add(cc, "fd_set", t_fdset);
-        sym->is_typedef = 1;
-    }
-
-    /* curl_socket_t — typically int on POSIX */
-    sym = scope_add(cc, "curl_socket_t", cc->ty_int);
-    sym->is_typedef = 1;
 
     /* NULL as enum constant */
     sym = scope_add(cc, "NULL", cc->ty_long);
@@ -357,11 +293,6 @@ static void init_compiler(Compiler *cc) {
       sym = scope_add(cc, "inet_pton", ft);
       sym->is_global = 1;
 
-      /* strtod — returns double */
-      ft = type_func(cc, cc->ty_double);
-      sym = scope_add(cc, "strtod", ft);
-      sym->is_global = 1;
-
       /* ctype functions — all return int */
       ft = type_func(cc, cc->ty_int);
       sym = scope_add(cc, "isalpha", ft); sym->is_global = 1;
@@ -461,6 +392,72 @@ static void init_compiler(Compiler *cc) {
       ft = type_func(cc, cc->ty_int);
       sym = scope_add(cc, "gettimeofday", ft);
       sym->is_global = 1;
+
+      /* Math functions — return double */
+      ft = type_func(cc, cc->ty_double);
+      sym = scope_add(cc, "log", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_double);
+      sym = scope_add(cc, "cos", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_double);
+      sym = scope_add(cc, "exp", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_double);
+      sym = scope_add(cc, "fabs", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_double);
+      sym = scope_add(cc, "sqrt", ft); sym->is_global = 1;
+
+      /* snprintf — returns int, variadic */
+      ft = type_func(cc, cc->ty_int);
+      ft->is_variadic = 1;
+      sym = scope_add(cc, "snprintf", ft);
+      sym->is_global = 1;
+
+      /* fputc — returns int */
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "fputc", ft);
+      sym->is_global = 1;
+
+      /* ferror — returns int */
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "ferror", ft);
+      sym->is_global = 1;
+
+      /* qsort — returns void */
+      ft = type_func(cc, cc->ty_void);
+      sym = scope_add(cc, "qsort", ft);
+      sym->is_global = 1;
+
+      /* fflush — returns int */
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "fflush", ft);
+      sym->is_global = 1;
+
+      /* strchr — returns char* */
+      ft = type_func(cc, type_ptr(cc, cc->ty_char));
+      sym = scope_add(cc, "strchr", ft);
+      sym->is_global = 1;
+
+      /* strtol — returns long */
+      ft = type_func(cc, cc->ty_long);
+      sym = scope_add(cc, "strtol", ft);
+      sym->is_global = 1;
+
+      /* atoi — returns int */
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "atoi", ft);
+      sym->is_global = 1;
+
+      /* strcat, strncat — returns char* */
+      ft = type_func(cc, type_ptr(cc, cc->ty_char));
+      sym = scope_add(cc, "strcat", ft);
+      sym->is_global = 1;
+      ft = type_func(cc, type_ptr(cc, cc->ty_char));
+      sym = scope_add(cc, "strncat", ft);
+      sym->is_global = 1;
+
+      /* freopen — returns FILE* */
+      ft = type_func(cc, type_ptr(cc, cc->ty_void));
+      sym = scope_add(cc, "freopen", ft);
+      sym->is_global = 1;
     }
   }
 }
@@ -507,7 +504,6 @@ static char *read_file(char *path, int *out_len) {
 
 static char *line_buffer = 0;
 static char **line_ptrs = 0;
-static int  *line_skip = 0;
 
 static void peephole_optimize(char *filename) {
   FILE *fp;
@@ -527,187 +523,71 @@ static void peephole_optimize(char *filename) {
   if (!line_ptrs) {
     line_ptrs = (char **)malloc(MAX_PEEP_LINES * sizeof(char *));
   }
-  if (!line_skip) {
-    line_skip = (int *)malloc(MAX_PEEP_LINES * sizeof(int));
-  }
   line_buffer = (char *)malloc(file_size + MAX_PEEP_LINES * 128);
-  if (!line_buffer || !line_ptrs || !line_skip) {
+  if (!line_buffer || !line_ptrs) {
     fclose(fp);
     return;
   }
 
   while (nlines < MAX_PEEP_LINES && fgets(line_buffer + nlines * 128, 128, fp)) {
     line_ptrs[nlines] = line_buffer + nlines * 128;
-    line_skip[nlines] = 0;
     nlines++;
   }
   fclose(fp);
 
-  int changed;
-  char tmp1[64], tmp2[64];
-  char pop_reg[64];
-  char target[64], label[64];
-  char reg[64];
-  char src[64], dst1[64], dst2[64];
-  char imm_str[64];
-  long local_imm;
-  char val_str[32];
-
-peephole_loop:
-  changed = 0;
-
-  {
-    int out = 0;
-    int old_n = nlines;
-    for (i = 0; i < old_n; i++) {
-      if (line_skip[i] == 0 && line_ptrs[i][0] != '\n') {
-        line_ptrs[out] = line_ptrs[i];
-        line_skip[out] = 0;
-        out = out + 1;
-      }
-    }
-    for (i = out; i < old_n; i++) {
-      line_skip[i] = 0;
-    }
-    nlines = out;
-  }
-
   for (i = 0; i < nlines;) {
     char *l1 = line_ptrs[i];
-    int matched = 0;
 
     /* 1. Redundant Push/Pop */
     if (strncmp(l1, "    pushq ", 10) == 0 && i + 1 < nlines) {
       char *l2 = line_ptrs[i + 1];
       if (strncmp(l2, "    popq ", 9) == 0) {
+        char tmp1[64], tmp2[64];
         sscanf(l1, "    pushq %s", tmp1);
         sscanf(l2, "    popq %s", tmp2);
         if (strcmp(tmp1, tmp2) == 0) {
-          line_skip[i] = 1;
-          line_skip[i + 1] = 1;
+          line_ptrs[i][0] = 0;
+          line_ptrs[i + 1][0] = 0;
           eliminated += 2;
-          changed = 1;
           i += 2;
-          matched = 1;
+          continue;
         } else {
           sprintf(line_ptrs[i], "    movq %s, %s\n", tmp1, tmp2);
-          line_skip[i + 1] = 1;
+          line_ptrs[i + 1][0] = 0;
           eliminated += 2;
-          changed = 1;
           i += 2;
-          matched = 1;
+          continue;
         }
       }
     }
 
     /* 2. Arithmetic Nullification */
-    if (!matched && (strcmp(l1, "    addq $0, %rax\n") == 0 ||
+    if (strcmp(l1, "    addq $0, %rax\n") == 0 ||
         strcmp(l1, "    subq $0, %rax\n") == 0 ||
         strcmp(l1, "    addq $0, %rsp\n") == 0 ||
-        strcmp(l1, "    subq $0, %rsp\n") == 0)) {
-      line_skip[i] = 1;
+        strcmp(l1, "    subq $0, %rsp\n") == 0) {
+      line_ptrs[i][0] = 0;
       eliminated += 1;
-      changed = 1;
       i += 1;
-      matched = 1;
+      continue;
     }
 
     /* 3. Push/Lea/Pop Triad */
-    if (!matched && strncmp(l1, "    pushq %rax\n", 15) == 0 && i + 2 < nlines) {
+    if (strcmp(l1, "    pushq %rax\n") == 0 && i + 2 < nlines) {
       char *l2 = line_ptrs[i + 1];
       char *l3 = line_ptrs[i + 2];
-      int has_rax_dst = 0;
-      {
-        int si;
-        int l2len = 0;
-        while (l2[l2len]) l2len++;
-        for (si = 0; si + 5 < l2len; si++) {
-          if (l2[si] == ',' && l2[si+1] == ' ' && l2[si+2] == '%' &&
-              l2[si+3] == 'r' && l2[si+4] == 'a' && l2[si+5] == 'x') {
-            has_rax_dst = 1;
-            break;
-          }
-        }
-      }
-      if (strncmp(l2, "    leaq ", 9) == 0 && has_rax_dst &&
+      if (strncmp(l2, "    leaq ", 9) == 0 && strstr(l2, ", %rax") &&
           strncmp(l3, "    popq ", 9) == 0) {
+        char pop_reg[64];
         sscanf(l3, "    popq %s", pop_reg);
         sprintf(line_ptrs[i], "    movq %%rax, %s\n", pop_reg);
-        line_skip[i + 2] = 1;
+        line_ptrs[i + 2][0] = 0;
         eliminated += 3;
-        changed = 1;
         i += 3;
-        matched = 1;
+        continue;
       }
     }
-
-    /* 4. Branch Straightening */
-    if (!matched && strncmp(l1, "    jmp .L", 10) == 0 && i + 1 < nlines) {
-      if (sscanf(l1, "    jmp %63s", target) == 1) {
-        char *l2 = line_ptrs[i + 1];
-        if (l2[0] == '.' && l2[1] == 'L') {
-          if (sscanf(l2, "%63[^:]:", label) == 1 && strcmp(target, label) == 0) {
-            line_skip[i] = 1;
-            eliminated += 1;
-            changed = 1;
-            i += 1;
-            matched = 1;
-          }
-        }
-      }
-    }
-
-    /* 5. Zero-Test Optimization */
-    if (!matched && strncmp(l1, "    cmpq $0, %", 14) == 0) {
-      int ri;
-      strcpy(reg, l1 + 14);
-      /* Manually strip trailing newline — avoid strchr to prevent ZCC cltq bug */
-      for (ri = 0; ri < 63 && reg[ri]; ri++) {
-        if (reg[ri] == '\n') { reg[ri] = '\0'; break; }
-      }
-      strcpy(line_ptrs[i], "    testq %");
-      strcat(line_ptrs[i], reg);
-      strcat(line_ptrs[i], ", %");
-      strcat(line_ptrs[i], reg);
-      strcat(line_ptrs[i], "\n");
-      eliminated += 1;
-      changed = 1;
-      i += 1;
-      matched = 1;
-    }
-
-    /* 6. LEA Computation Fusion */
-    if (!matched && strncmp(l1, "    movq %", 10) == 0 && i + 1 < nlines) {
-      char *l2 = line_ptrs[i + 1];
-      if (strncmp(l2, "    addq $", 10) == 0) {
-        if (sscanf(l1, "    movq %%%[a-z0-9], %%%[a-z0-9]", src, dst1) == 2 &&
-            sscanf(l2, "    addq $%ld, %%%[a-z0-9]", &local_imm, dst2) == 2) {
-          if (strcmp(dst1, dst2) == 0) {
-            sprintf(val_str, "%ld", local_imm);
-            strcpy(line_ptrs[i], "    leaq ");
-            strcat(line_ptrs[i], val_str);
-            strcat(line_ptrs[i], "(%");
-            strcat(line_ptrs[i], src);
-            strcat(line_ptrs[i], "), %");
-            strcat(line_ptrs[i], dst1);
-            strcat(line_ptrs[i], "\n");
-
-            line_skip[i + 1] = 1;
-            eliminated += 2;
-            changed = 1;
-            i += 2;
-            matched = 1;
-          }
-        }
-      }
-    }
-
-    if (!matched) {
-      i++;
-    }
-  } 
-  if (changed) {
-      goto peephole_loop;
+    i++;
   }
 
   fp = fopen(filename, "w");
@@ -716,13 +596,456 @@ peephole_loop:
     return;
   }
   for (i = 0; i < nlines; i++) {
-    if (line_skip[i] == 0)
+    if (line_ptrs[i][0] != 0)
       fputs(line_ptrs[i], fp);
   }
   fclose(fp);
   free(line_buffer);
-  printf("[Phase 5] Native C Peephole Optimization... OK (%d elided)\n",
+  if (!enable_telemetry_stdout) printf("[Phase 5] Native C Peephole Optimization... OK (%d elided)\n",
          eliminated);
+}
+
+/* ================================================================ */
+/* SECURITY PASS: --security-signext (CWE-122)                       */
+/* Scans assembly for sign-extension (movsbl/movsbq) feeding         */
+/* memcpy/memset/memmove within a 15-instruction window.             */
+/* ================================================================ */
+
+/* Scan window: ZCC unoptimized codegen emits ~30-40 instructions of arg
+   setup between a sign-extending cast and the consuming memcpy call.
+   64 covers observed gaps (CVE-2023-38545: 34 lines) with margin. */
+#define SIGNEXT_WINDOW 64
+
+static void security_signext_scan(char *filename) {
+  FILE *fp;
+  int nlines = 0;
+  int findings = 0;
+  int i;
+  char current_func[128];
+  char *line_buf;
+  char **lp;
+  int max_lines = 32768;
+
+  fp = fopen(filename, "r");
+  if (!fp) return;
+
+  line_buf = (char *)malloc(max_lines * 128);
+  lp = (char **)malloc(max_lines * sizeof(char *));
+  if (!line_buf || !lp) { fclose(fp); return; }
+
+  current_func[0] = 0;
+  while (nlines < max_lines && fgets(line_buf + nlines * 128, 128, fp)) {
+    lp[nlines] = line_buf + nlines * 128;
+    nlines++;
+  }
+  fclose(fp);
+
+  for (i = 0; i < nlines; i++) {
+    /* Track current function */
+    if (lp[i][0] != ' ' && lp[i][0] != '\t' && lp[i][0] != '.' &&
+        lp[i][0] != '#' && lp[i][0] != '\n') {
+      int k = 0;
+      while (lp[i][k] && lp[i][k] != ':' && k < 127) {
+        current_func[k] = lp[i][k];
+        k++;
+      }
+      current_func[k] = 0;
+    }
+
+    /* Look for movsbl or movsbq (sign-extending byte to int/long) */
+    if (strstr(lp[i], "movsbl ") || strstr(lp[i], "movsbq ") ||
+        strstr(lp[i], "movswl ") || strstr(lp[i], "movswq ")) {
+      /* Scan forward within window for memcpy/memset/memmove call */
+      int j;
+      for (j = i + 1; j < nlines && j < i + SIGNEXT_WINDOW; j++) {
+        if (strstr(lp[j], "call memcpy") ||
+            strstr(lp[j], "call memset") ||
+            strstr(lp[j], "call memmove")) {
+          findings++;
+          printf("[--security-signext] CWE-122 WARNING: sign-extension at line %d "
+                 "feeds %s in %s() (asm lines %d->%d)\n",
+                 i + 1, strstr(lp[j], "call ") + 5,
+                 current_func[0] ? current_func : "<unknown>",
+                 i + 1, j + 1);
+          break;  /* don't double-report same sign-ext */
+        }
+        /* Stop at label or ret - different basic block */
+        if (lp[j][0] == '.' && lp[j][1] == 'L') break;
+        if (strstr(lp[j], "ret")) break;
+      }
+    }
+  }
+
+  free(line_buf);
+  free(lp);
+
+  if (findings) {
+    printf("[--security-signext] %d potential sign-extension overflow(s) found\n",
+           findings);
+  } else {
+    printf("[--security-signext] Clean: no sign-extension -> memcpy patterns\n");
+  }
+}
+
+/* ================================================================ */
+/* SECURITY PASS: --security-476 (CWE-476)                           */
+/* Scans assembly for nullable-return calls (malloc, calloc, realloc, */
+/* fopen, etc.) followed by dereference of %rax without null check.  */
+/* ================================================================ */
+
+#define NULLDEREF_WINDOW 30
+
+static int is_nullable_call(const char *line) {
+  return strstr(line, "call malloc") || strstr(line, "call calloc") ||
+         strstr(line, "call realloc") || strstr(line, "call fopen") ||
+         strstr(line, "call fdopen") || strstr(line, "call tmpfile") ||
+         strstr(line, "call strdup") || strstr(line, "call strndup") ||
+         strstr(line, "call mmap");
+}
+
+static int is_null_check(const char *line) {
+  /* testq %rax, %rax  or  cmpq $0, %rax */
+  return strstr(line, "testq %rax") || strstr(line, "cmpq $0, %rax") ||
+         strstr(line, "test %eax") || strstr(line, "cmp $0, %eax");
+}
+
+static int is_rax_deref(const char *line) {
+  /* (%rax) — memory access through %rax without offset guard */
+  return strstr(line, "(%rax)") != 0;
+}
+
+static int is_rax_moved(const char *line) {
+  /* movq %rax, %r.. — return value moved to another register */
+  if (strstr(line, "movq %rax, %r") && !strstr(line, "movq %rax, %rsp") &&
+      !strstr(line, "movq %rax, %rbp"))
+    return 1;
+  return 0;
+}
+
+int g_emit_anomalies = 0;
+
+/* Tiered type-to-string mapping for anomaly metadata.
+ * Shorthand "ptr" covers all pointer/array/function types.
+ * Aggregates are flagged for propose-only by returning their category.
+ * char/bool both default to return 0/false; documented here as compatible. */
+static const char *type_to_str(Type *ty) {
+  if (!ty) return "unknown";
+  switch (ty->kind) {
+    case TY_VOID:   return "void";
+    case TY_INT:    return "int";
+    case TY_CHAR:   return "char";
+    case TY_SHORT:  return "short";
+    case TY_LONG:   return "long";
+    case TY_LONGLONG: return "long long";
+    case TY_UINT:   return "uint";
+    case TY_UCHAR:  return "uchar";
+    case TY_USHORT: return "ushort";
+    case TY_ULONG:  return "ulong";
+    case TY_ULONGLONG: return "ulonglong";
+    case TY_FLOAT:  return "float";
+    case TY_DOUBLE: return "double";
+    case TY_PTR:
+    case TY_ARRAY:
+    case TY_FUNC:   return "ptr";
+    case TY_STRUCT: return "struct";
+    case TY_UNION:  return "union";
+    case TY_ENUM:   return "enum";
+    default:        return "unknown";
+  }
+}
+
+static void security_nullderef_scan(Compiler *cc, char *filename) {
+  FILE *fp;
+  int nlines = 0;
+  int findings = 0;
+  int i;
+  char current_func[128];
+  char *line_buf;
+  char **lp;
+  int max_lines = 32768;
+
+  fp = fopen(filename, "r");
+  if (!fp) return;
+
+  line_buf = (char *)malloc(max_lines * 128);
+  lp = (char **)malloc(max_lines * sizeof(char *));
+  if (!line_buf || !lp) { fclose(fp); return; }
+
+  current_func[0] = 0;
+  while (nlines < max_lines && fgets(line_buf + nlines * 128, 128, fp)) {
+    lp[nlines] = line_buf + nlines * 128;
+    nlines++;
+  }
+  fclose(fp);
+
+  for (i = 0; i < nlines; i++) {
+    /* Track current function */
+    if (lp[i][0] != ' ' && lp[i][0] != '\t' && lp[i][0] != '.' &&
+        lp[i][0] != '#' && lp[i][0] != '\n') {
+      int k = 0;
+      while (lp[i][k] && lp[i][k] != ':' && k < 127) {
+        current_func[k] = lp[i][k];
+        k++;
+      }
+      current_func[k] = 0;
+    }
+
+    /* Look for nullable-return function calls */
+    if (is_nullable_call(lp[i])) {
+      int j;
+      int saw_null_check = 0;
+      const char *call_name = strstr(lp[i], "call ") + 5;
+      char clean_call[64];
+      int c_idx = 0;
+      while (call_name[c_idx] && call_name[c_idx] != '\n' && call_name[c_idx] != '@' && call_name[c_idx] != ' ' && c_idx < 63) {
+          clean_call[c_idx] = call_name[c_idx];
+          c_idx++;
+      }
+      clean_call[c_idx] = '\0';
+
+      char tracked_reg[8];  /* register holding the return value */
+      char deref_pat[16];   /* "(%rXX)" pattern to search for */
+      char null_pat1[32];   /* "testq %rXX, %rXX" */
+      char null_pat2[32];   /* "cmpq $0, %rXX" */
+
+      strcpy(tracked_reg, "%rax");
+      strcpy(deref_pat, "(%rax)");
+      strcpy(null_pat1, "testq %rax");
+      strcpy(null_pat2, "cmpq $0, %rax");
+
+      char current_owner[128];
+      char current_file[128];
+      int current_line = 0;
+      current_owner[0] = 0;
+      current_file[0] = 0;
+
+      for (j = i + 1; j < nlines && j < i + NULLDEREF_WINDOW; j++) {
+        /* Parse latest ZCC_META for our tracked register */
+        /* Format: # ZCC_META %reg=owner@file:line */
+        char meta_pat[64];
+        sprintf(meta_pat, "# ZCC_META %s=", tracked_reg);
+        char *meta_match = strstr(lp[j], meta_pat);
+        if (meta_match) {
+           meta_match += strlen(meta_pat);
+           /* owner */
+           int k = 0;
+           while (meta_match[k] && meta_match[k] != '@' && k < 127) {
+               current_owner[k] = meta_match[k];
+               k++;
+           }
+           current_owner[k] = 0;
+           if (strcmp(current_owner, "_") == 0) current_owner[0] = 0;
+           
+           if (meta_match[k] == '@') {
+               meta_match += k + 1;
+               /* file */
+               k = 0;
+               while (meta_match[k] && meta_match[k] != ':' && k < 127) {
+                   current_file[k] = meta_match[k];
+                   k++;
+               }
+               current_file[k] = 0;
+               
+               if (meta_match[k] == ':') {
+                   current_line = atoi(meta_match + k + 1);
+               }
+           }
+        }
+
+        /* If we see a null check on tracked reg OR %rax, we're safe */
+        if (strstr(lp[j], null_pat1) || strstr(lp[j], null_pat2) ||
+            strstr(lp[j], "cmpq $0, %rax") || strstr(lp[j], "testq %rax")) {
+          saw_null_check = 1;
+          break;
+        }
+        /* If %rax is moved to another register, follow the copy */
+        if (strcmp(tracked_reg, "%rax") == 0 && is_rax_moved(lp[j])) {
+          /* Extract destination: "movq %rax, %rXX" */
+          char *dst = strstr(lp[j], ", %r");
+          if (dst) {
+            int k = 0;
+            dst += 2;  /* skip ", " */
+            while (dst[k] && dst[k] != '\n' && dst[k] != ' ' && k < 5) {
+              tracked_reg[k] = dst[k];
+              k++;
+            }
+            tracked_reg[k] = 0;
+            sprintf(deref_pat, "(%s)", tracked_reg);
+            sprintf(null_pat1, "testq %s", tracked_reg);
+            sprintf(null_pat2, "cmpq $0, %s", tracked_reg);
+          }
+          continue;  /* keep scanning with new register */
+        }
+        /* If there's a deref of the tracked register OR %rax (which
+         * may be a reload of the tracked register) without a null check */
+        if ((strstr(lp[j], deref_pat) || strstr(lp[j], "(%rax)")) &&
+            !saw_null_check) {
+          findings++;
+          char *reported_var = current_owner[0] ? current_owner : clean_call;
+          if (g_emit_anomalies) {
+              /* Option 1: JSON consumers (like the mutation applier) require a valid
+               * lvalue owner to synthesize a guard. If missing (e.g. member assignment),
+               * suppress the anomaly entirely to prevent unactionable reports.
+               * Human reviewers (--security-476) still see the function-name fallback.
+               */
+              if (!current_owner[0]) {
+                  break;
+              }
+              Symbol *sym = scope_find(cc, current_func);
+              const char *ret_type = "unknown";
+              if (sym && sym->type && sym->type->kind == TY_FUNC) {
+                  ret_type = type_to_str(sym->type->ret);
+              }
+              printf("{\"type\":\"ir_anomaly\", \"kind\":\"CWE-476\", \"site\":\"%s:%s:%d\", \"severity\":0.7, \"variable\":\"%s\", \"return_type\":\"%s\"}\n",
+                     current_file[0] ? current_file : (cc->filename ? cc->filename : "unknown"),
+                     current_func[0] ? current_func : "unknown",
+                     current_line, reported_var, ret_type);
+          } else {
+              printf("[--security-476] CWE-476 WARNING: unchecked %s return "
+                     "dereferenced via %s in %s() (asm lines %d->%d)\n",
+                     clean_call, reported_var,
+                     current_func[0] ? current_func : "<unknown>",
+                     i + 1, j + 1);
+          }
+          break;
+        }
+        /* Stop at label or ret - different basic block */
+        if (lp[j][0] == '.' && lp[j][1] == 'L') break;
+        if (strstr(lp[j], "ret")) break;
+        /* Stop at another call - %rax is clobbered */
+        if (strstr(lp[j], "call ")) break;
+      }
+    }
+  }
+
+  free(line_buf);
+  free(lp);
+
+  if (findings) {
+    printf("[--security-476] %d potential null-deref(s) found\n", findings);
+  } else {
+    printf("[--security-476] Clean: all nullable returns checked\n");
+  }
+}
+
+static void security_bounds_scan(Compiler *cc, char *filename) {
+  FILE *fp;
+  int nlines = 0;
+  int findings = 0;
+  int i;
+  char current_func[128];
+  char *line_buf;
+  char **lp;
+  int max_lines = 32768;
+
+  fp = fopen(filename, "r");
+  if (!fp) return;
+
+  line_buf = (char *)malloc(max_lines * 128);
+  lp = (char **)malloc(max_lines * sizeof(char *));
+  if (!line_buf || !lp) { fclose(fp); return; }
+
+  current_func[0] = 0;
+  while (nlines < max_lines && fgets(line_buf + nlines * 128, 128, fp)) {
+    lp[nlines] = line_buf + nlines * 128;
+    nlines++;
+  }
+  fclose(fp);
+
+  for (i = 0; i < nlines; i++) {
+    /* Track current function */
+    if (lp[i][0] != ' ' && lp[i][0] != '\t' && lp[i][0] != '.' &&
+        lp[i][0] != '#' && lp[i][0] != '\n') {
+      int k = 0;
+      while (lp[i][k] && lp[i][k] != ':' && k < 127) {
+        current_func[k] = lp[i][k];
+        k++;
+      }
+      current_func[k] = 0;
+    }
+
+    if (strstr(lp[i], "# ZCC_META_ARRAY")) {
+      char array_name[64] = "unknown";
+      char index_name[64] = "?";
+      char size_str[32] = "0";
+      char file_name[128] = "unknown";
+      int line_num = 0;
+
+      char *ptr = strstr(lp[i], "array=");
+      if (ptr) {
+          ptr += 6;
+          int k = 0;
+          while (ptr[k] && ptr[k] != ' ' && k < 63) array_name[k++] = ptr[k];
+          array_name[k] = 0;
+      }
+      
+      ptr = strstr(lp[i], "index=");
+      if (ptr) {
+          ptr += 6;
+          int k = 0;
+          while (ptr[k] && ptr[k] != ' ' && k < 63) index_name[k++] = ptr[k];
+          index_name[k] = 0;
+      }
+
+      ptr = strstr(lp[i], "size=");
+      if (ptr) {
+          ptr += 5;
+          int k = 0;
+          while (ptr[k] && ptr[k] != ' ' && k < 31) size_str[k++] = ptr[k];
+          size_str[k] = 0;
+      }
+      
+      ptr = strstr(lp[i], "@");
+      if (ptr) {
+          ptr += 1;
+          int k = 0;
+          while (ptr[k] && ptr[k] != ':' && k < 127) file_name[k++] = ptr[k];
+          file_name[k] = 0;
+          if (ptr[k] == ':') line_num = atoi(ptr + k + 1);
+      }
+
+      /* Do backwards walk looking for cmp bounds check */
+      int saw_size_cmp = 0;
+      int saw_cmp_instr = 0;
+      char size_pat[64];
+      sprintf(size_pat, "$%s", size_str);
+
+      int j;
+      for (j = i - 1; j >= 0 && j >= i - 30; j--) {
+          if (strstr(lp[j], "ret")) break;
+          if (strstr(lp[j], "call ")) break;
+          if (lp[j][0] != ' ' && lp[j][0] != '\t' && lp[j][0] != '.' && lp[j][0] != '#') break; /* Func def */
+
+          if (strstr(lp[j], size_pat)) saw_size_cmp = 1;
+          if (strstr(lp[j], "cmp")) saw_cmp_instr = 1;
+      }
+
+      if (!(saw_size_cmp && saw_cmp_instr)) {
+          findings++;
+          if (g_emit_anomalies) {
+               Symbol *sym = scope_find(cc, current_func);
+               const char *ret_type = "unknown";
+               if (sym && sym->type && sym->type->kind == TY_FUNC) {
+                   ret_type = type_to_str(sym->type->ret);
+               }
+               printf("{\"type\":\"ir_anomaly\", \"kind\":\"CWE-787\", \"site\":\"%s:%s:%d\", \"severity\":0.8, \"array\":\"%s\", \"index\":\"%s\", \"size\":%s, \"return_type\":\"%s\"}\n",
+                      file_name, current_func, line_num, array_name, index_name, size_str, ret_type);
+          } else {
+               printf("[--security-787] CWE-787 WARNING: unchecked array bounds for %s[%s] (size %s) in %s()\n",
+                      array_name, index_name, size_str, current_func);
+          }
+      }
+    }
+  }
+
+  free(line_buf);
+  free(lp);
+
+  if (findings) {
+    if (!g_emit_anomalies) printf("[--security-787] %d potential bounds-violation(s) found\n", findings);
+  } else {
+    if (!g_emit_anomalies) printf("[--security-787] Clean: all bounded arrays checked\n");
+  }
 }
 
 /* ================================================================ */
@@ -741,6 +1064,7 @@ int main(int argc, char **argv) {
   int source_len;
   char asm_file[256];
   char cmd[512];
+  char include_paths[4096];  /* -I paths, colon-separated */
   Node *prog;
   int ret;
   int i;
@@ -748,17 +1072,18 @@ int main(int argc, char **argv) {
 
   input_file = 0;
   output_file = 0;
+  include_paths[0] = '\0';
+  strcat(include_paths, ".:./include");  /* default paths */
 
   int pp_only = 0;
 
   int zcc_verbose_flag = 0;
-  int debug_abi_classes_flag = 0;
+
+  int zcc_quiet_flag = 0;
 
   int compile_only = 0;
 
   int g_ir_primary = 0;
-
-  const char *include_paths = ".:./include";
 
   /* parse arguments */
   for (i = 1; i < argc; i++) {
@@ -772,21 +1097,48 @@ int main(int argc, char **argv) {
       pp_only = 1;
     } else if (strcmp(argv[i], "-v") == 0) {
       zcc_verbose_flag = 1;
-    } else if (strcmp(argv[i], "-fdebug-abi-classes") == 0) {
-      debug_abi_classes_flag = 1;
+    } else if (strcmp(argv[i], "--quiet") == 0 || strcmp(argv[i], "-q") == 0) {
+      zcc_quiet_flag = 1;
     } else if (strcmp(argv[i], "--ir") == 0) {
       g_emit_ir = 1;
       g_ir_primary = 1;
+    } else if (strcmp(argv[i], "--telemetry") == 0) {
+      enable_telemetry_stdout = 1;
+      setenv("ZCC_EMIT_TELEMETRY", "1", 1);
+    } else if (strcmp(argv[i], "--manifold") == 0) {
+      g_manifold_enabled = 1;
+    } else if (strcmp(argv[i], "--manifold-deterministic") == 0) {
+      g_manifold_enabled = 1;
+      /* sigma=0 enforced inside ir_pass_manager via deterministic flag;
+       * set env so manifold engine sees it regardless of cfg path. */
+      setenv("ZCC_MANIFOLD_DET", "1", 1);
+    } else if (strncmp(argv[i], "--ir-export=", 12) == 0) {
+      strncpy(g_ir_export_path, argv[i] + 12, 255);
+      g_ir_export_path[255] = '\0';
+      g_manifold_enabled = 1;  /* export implies manifold active */
+    } else if (strcmp(argv[i], "--peephole") == 0) {
+      g_peephole_enabled = 1;
+    } else if (strcmp(argv[i], "--peephole-deterministic") == 0) {
+      g_peephole_enabled = 1;
+      g_peephole_deterministic = 1;
+    } else if (strcmp(argv[i], "--peephole-verbose") == 0) {
+      g_peephole_verbose = 1;
+    } else if (strcmp(argv[i], "--security-signext") == 0) {
+      g_security_signext = 1;
+    } else if (strcmp(argv[i], "--security-476") == 0) {
+      g_security_476 = 1;
+    } else if (strcmp(argv[i], "--security-787") == 0) {
+      g_security_787 = 1;
+    } else if (strcmp(argv[i], "--emit-anomalies") == 0) {
+      g_emit_anomalies = 1;
+      g_security_476 = 1;
+      g_security_787 = 1;
     } else if (strncmp(argv[i], "-I", 2) == 0) {
-      /* PP-INCLUDE-022: append -I path to include_paths */
-      const char *ipath = argv[i] + 2;
-      if (ipath[0] == '\0' && i + 1 < argc) { i++; ipath = argv[i]; }
+      /* include path: -Ipath or -I path */
+      const char *ipath = (argv[i][2] != '\0') ? argv[i] + 2 : ((i + 1 < argc) ? argv[++i] : "");
       if (ipath[0]) {
-        int olen = strlen(include_paths);
-        int nlen = strlen(ipath);
-        char *merged = (char *)malloc(olen + 1 + nlen + 1);
-        sprintf(merged, "%s:%s", include_paths, ipath);
-        include_paths = merged;
+        if (include_paths[0]) strncat(include_paths, ":", 4095 - (int)strlen(include_paths));
+        strncat(include_paths, ipath, 4095 - (int)strlen(include_paths));
       }
     } else if (strncmp(argv[i], "-l", 2) == 0 || strncmp(argv[i], "-L", 2) == 0 || strncmp(argv[i], "-O", 2) == 0) {
       /* ignore linker flags */
@@ -795,7 +1147,9 @@ int main(int argc, char **argv) {
     }
   }
 
-  if (!zcc_verbose_flag) {
+  /* Stderr policy: open by default, --quiet silences.
+   * -v adds extra diagnostic output but stderr is always open unless -q. */
+  if (zcc_quiet_flag) {
 #ifdef _WIN32
     freopen("nul", "w", stderr);
 #else
@@ -812,6 +1166,9 @@ int main(int argc, char **argv) {
     output_file = "a.out";
 
   ZCC_IR_INIT();
+  if (enable_telemetry_stdout) {
+      ir_telemetry_enable_stdout();
+  }
 
   /* read source file */
   source = read_file(input_file, &source_len);
@@ -825,22 +1182,24 @@ int main(int argc, char **argv) {
     int pp_len;
     char *pp_source = zcc_preprocess(source, source_len, input_file, include_paths, &pp_len);
     if (!pp_source) {
-      printf("zcc: preprocessing failed\n");
+      fprintf(stderr, "zcc: preprocessing failed\n");
       return 1;
     }
+    /* We leak original `source` here because we replaced it.
+       ZCC doesn't care much about leaking in main string allocations anyway. */
     source = pp_source;
     source_len = pp_len;
   }
 
   if (pp_only) {
-    printf("%s", source);
+    if (!enable_telemetry_stdout) printf("%s", source);
     return 0;
   }
 
   /* heap-allocate compiler state (too large for stack) */
   cc = (Compiler *)calloc(1, sizeof(Compiler));
   if (!cc) {
-    printf("zcc: out of memory\n");
+    if (!enable_telemetry_stdout) printf("zcc: out of memory\n");
     free(source);
     return 1;
   }
@@ -850,7 +1209,6 @@ int main(int argc, char **argv) {
   cc->filename = input_file;
 
   init_compiler(cc);
-  cc->debug_abi_classes = debug_abi_classes_flag;
 
   /* generate asm file name */
   strncpy(asm_file, output_file, 250);
@@ -870,34 +1228,34 @@ int main(int argc, char **argv) {
   /* open output */
   cc->out = fopen(asm_file, "w");
   if (!cc->out) {
-    printf("zcc: cannot write '%s'\n", asm_file);
+    if (!enable_telemetry_stdout) printf("zcc: cannot write '%s'\n", asm_file);
     free(source);
     free(cc);
     return 1;
   }
 
   /* lex first token */
-  printf("[Phase 1] Lexical Array Bootstrap... OK\n");
+  if (!enable_telemetry_stdout) printf("[Phase 1] Lexical Array Bootstrap... OK\n");
   next_token(cc);
 
   /* parse */
-  printf("[Phase 2] AST Topological Generation... ");
+  if (!enable_telemetry_stdout) printf("[Phase 2] AST Topological Generation... ");
   prog = parse_program(cc);
 
   if (cc->errors > 0) {
-    printf("\033[0;31mFAILED\033[0m\n");
-    printf("zcc: %d error(s)\n", cc->errors);
+    if (!enable_telemetry_stdout) printf("\033[0;31mFAILED\033[0m\n");
+    if (!enable_telemetry_stdout) printf("zcc: %d error(s)\n", cc->errors);
     fclose(cc->out);
     free(source);
     free(cc);
     return 1;
   }
 
-  printf("OK\n");
+  if (!enable_telemetry_stdout) printf("OK\n");
 
   /* generate code */
-  printf("[Phase 3] Native AST Constant Folding... OK\n");
-  printf("[Phase 4] SystemV ABI X86-64 Codegen... OK\n");
+  if (!enable_telemetry_stdout) printf("[Phase 3] Native AST Constant Folding... OK\n");
+  if (!enable_telemetry_stdout) printf("[Phase 4] SystemV ABI X86-64 Codegen... OK\n");
   fprintf(cc->out, "# ZCC asm begin\n");
   codegen_program(cc, prog);
   fclose(cc->out);
@@ -909,10 +1267,10 @@ int main(int argc, char **argv) {
     for (ir_fi = 0; ir_fi < g_ir_module->func_count; ir_fi++) {
       ir_total_nodes += g_ir_module->funcs[ir_fi]->node_count;
     }
-    printf("[Phase IR] IR Pass Manager (%d funcs, %d nodes)...\n",
+    if (!enable_telemetry_stdout) printf("[Phase IR] IR Pass Manager (%d funcs, %d nodes)...\n",
            g_ir_module->func_count, ir_total_nodes);
     ir_pm_run_default(g_ir_module, 1);
-    printf("[Phase IR] Pass Manager Complete.\n");
+    if (!enable_telemetry_stdout) printf("[Phase IR] Pass Manager Complete.\n");
   }
 
   if (!g_ir_primary) {
@@ -922,9 +1280,24 @@ int main(int argc, char **argv) {
   /* peephole optimize the emitted assembly safely out-of-bounds */
   peephole_optimize(asm_file);
 
+  /* security pass: sign-extension overflow detection */
+  if (g_security_signext) {
+    security_signext_scan(asm_file);
+  }
+
+  /* security pass: null-deref detection */
+  if (g_security_476) {
+    security_nullderef_scan(cc, asm_file);
+  }
+
+  /* security pass: array bounds detection */
+  if (g_security_787) {
+    security_bounds_scan(cc, asm_file);
+  }
+
   /* assemble and link if not stopping at assembly */
   if (!stop_at_asm) {
-    printf("[Phase 6] GCC Assembly/Linker Binding... ");
+    if (!enable_telemetry_stdout) printf("[Phase 6] GCC Assembly/Linker Binding... ");
     if (compile_only) {
       sprintf(cmd, "gcc -O0 -w -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -c -o %s %s 2>&1", output_file, asm_file);
     } else if (strcmp(input_file, "zcc.c") == 0 || (strlen(input_file) >= 6 && strcmp(input_file + strlen(input_file) - 6, "/zcc.c") == 0)) {
@@ -934,16 +1307,16 @@ int main(int argc, char **argv) {
     }
     ret = system(cmd);
     if (ret != 0) {
-      printf("FAILED\n");
-      printf("zcc: assembly/linking failed\n");
+      if (!enable_telemetry_stdout) printf("FAILED\n");
+      if (!enable_telemetry_stdout) printf("zcc: assembly/linking failed\n");
       free(source);
       free(cc);
       return 1;
     }
-    printf("OK\n");
+    if (!enable_telemetry_stdout) printf("OK\n");
   }
 
-  printf("[OK] ZCC Engine Compilation Terminated Successfully.\n");
+  if (!enable_telemetry_stdout) printf("[OK] ZCC Engine Compilation Terminated Successfully.\n");
 
   free(source);
   free(cc);
