@@ -1,9 +1,9 @@
 CC = gcc
-CFLAGS = -O0 -w -fno-asynchronous-unwind-tables
-LDFLAGS = -lm
+CFLAGS = -O0 -w -fno-asynchronous-unwind-tables -g0
+LDFLAGS = -lm -Wl,-s
 
-PARTS = part1.c part0_pp.c part2.c part3.c ir.h ir_emit_dispatch.h ir_bridge.h part4.c part5.c part6_arm.c ir.c ir_to_x86.c ir_pass_manager.c regalloc.c ir_telemetry_stub.c
-PASSES = compiler_passes.c compiler_passes_ir.c
+PARTS = part1.c part0_pp.c part2.c part3.c ir.h ir_emit_dispatch.h ir_bridge.h part4.c part5.c part6_arm.c ir.c ir_to_x86.c regalloc.c ir_telemetry_stub.c
+PASSES = compiler_passes.c compiler_passes_ir.c ir_pass_manager.c
 
 .PHONY: all clean selfhost test
 
@@ -27,15 +27,17 @@ zcc: zcc.c $(PASSES)
 	  rm -f .zcc_parts_check.tmp; \
 	fi
 	$(CC) $(CFLAGS) -o zcc zcc.c $(PASSES) $(LDFLAGS)
+	strip --strip-all zcc
 
 selfhost: zcc
-	@echo "=== Stage 1: zcc compiles itself ==="
-	./zcc zcc.c -o zcc2.s
-	$(CC) $(CFLAGS) -o zcc2 zcc2.s $(PASSES) $(LDFLAGS)
-	@echo "=== Stage 2: zcc2 compiles itself ==="
-	./zcc2 zcc.c -o zcc3.s
-	@echo "=== Verify: zcc2.s == zcc3.s ==="
-	cmp zcc2.s zcc3.s && echo "SELF-HOST VERIFIED" || echo "SELF-HOST FAILED"
+	@echo "=== Stage 1: zcc compiles itself -> zcc2 ==="
+	./zcc zcc.c -o zcc2
+	strip --strip-all zcc2
+	@echo "=== Stage 2: zcc2 compiles itself -> zcc3 ==="
+	./zcc2 zcc.c -o zcc3
+	strip --strip-all zcc3
+	@echo "=== Verify: zcc2 == zcc3 (bitwise) ==="
+	cmp zcc2 zcc3 && echo "SELF-HOST VERIFIED (bitwise stable)" || (echo "SELF-HOST FAILED"; cmp -l zcc2 zcc3 | head; exit 1)
 
 test: zcc
 	bash zcc_test_suite.sh --quick

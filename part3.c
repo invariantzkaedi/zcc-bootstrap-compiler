@@ -939,7 +939,29 @@ Node *parse_primary(Compiler *cc) {
             if (strcmp(n->name, "stdin") == 0 || strcmp(n->name, "stdout") == 0 || strcmp(n->name, "stderr") == 0) {
                 n->type = type_ptr(cc, cc->ty_char);
             } else {
-                n->type = cc->ty_int;
+                /* ZCC SCOPING HARDENING: undeclared identifier — do not silently
+                 * decay to ty_int. Emit a hard error so that mutations injecting
+                 * null-guards before a variable's declaration site (CWE-476
+                 * insertion drift) fail at Phase 2 AST rather than surviving to
+                 * the linker and triggering a bash-pipe-swallowed exit code. */
+                {
+                    /* FORTIFY gate: strict scoping is opt-in via env var.
+                     * Oneirogenesis runs set ZCC_STRICT_SCOPING=1 to catch
+                     * CWE-476 insertion drift. Normal bootstrap stays permissive
+                     * because ZCC has no libc extern block (libc calls silently
+                     * decay to int; linker resolves). TODO: Option 1 — bake
+                     * extern decls into part0_pp.c preamble, then drop this gate. */
+                    static int _zcc_strict_scoping = -1;
+                    if (_zcc_strict_scoping < 0) {
+                        _zcc_strict_scoping = (getenv("ZCC_STRICT_SCOPING") != 0) ? 1 : 0;
+                    }
+                    if (_zcc_strict_scoping) {
+                        char buf[256];
+                        snprintf(buf, sizeof(buf), "undeclared identifier '%s'", n->name);
+                        error(cc, buf);
+                    }
+                }
+                n->type = cc->ty_int; /* permissive fallback — libc decay path */
             }
         }
         next_token(cc);
