@@ -16,10 +16,18 @@ This doc supplies that evidence without rewriting the commit.
   Sizes:   138690 lines each (captured 2026-04-22)
 
 ### Gate 2 — Lua testes/all.lua suite tail
-  Command: (cd testes && ../src/lua -e "_U=true" all.lua 2>&1 | tail -8)
-  Binary:  /mnt/h/__DOWNLOADS/zcc_github_upload/lua-5.4.6/src/lua  (Lua 5.4.6, gcc-built reference)
+  Command: (cd testes && ../src/lua -e "_U=true" all.lua 2>&1 | tail -10)
+  Binary:  /mnt/h/__DOWNLOADS/zcc_github_upload/lua-5.4.6/src/lua (Lua 5.4.6, gcc-built reference, rebuilt 2026-04-22)
 ```
--bash: /mnt/h/__DOWNLOADS/zcc_github_upload/lua-5.4.6/src/lua: No such file or directory
+cleaning all!!!!
+......    ---- total memory: 57.0K, max memory: 15.8M ----
+
+
+
+total time: 0.35s (wall time: 0s)
+
+final OK !!!
+.>>> closing state <<<
 ```
 
 ### Gate 3 — Milestone-enabling commit chain (b299f43 <- 373afc5)
@@ -46,3 +54,7 @@ This doc supplies that evidence without rewriting the commit.
   FORENSIC_023A_PARSER001.md         scoped PARSER-001 (fixed at a50edf1)
   tickets/PP-REWRITE-REGRESSION-ROLLBACK.md (8098a94) latest entry;
            AG agent PP rewrite attempt reverted, bootstrap restored
+  c9e0e17 (initial landing of THIS file) captured Gate 2 with a stale
+          "No such file or directory" output because the Lua reference
+          binary had been cleaned between the earlier session run and
+          the gate-evidence commit. Corrected in this amendment.
