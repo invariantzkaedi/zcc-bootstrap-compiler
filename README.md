@@ -295,6 +295,7 @@ ZCC's development produced a compiler bug corpus with ground-truth fixes, CWE cl
 | CODEGEN-002 | Global struct initializer emitting 1-byte fields for all types | CWE-787 | Critical |
 | ARRAY-001 | Multidimensional array [N][M] parsed as [M][N], wrong stride — 22KB buffer overrun in Lua strcache | CWE-131 | Critical |
 | ABI-003 | va_arg register order inverted — addq should be subq for ZCC's downward register spill layout | CWE-704 | Critical |
+| CG-IR-019 | SysV Aggregate ABI: split spills and stack offset drift on register exhaustion | CWE-682 | Critical |
 
 ## Source Statistics
 
