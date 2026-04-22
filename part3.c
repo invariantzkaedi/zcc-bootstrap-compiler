@@ -1194,6 +1194,19 @@ Node *parse_postfix(Compiler *cc) {
                             } else {
                                 call->type = cc->ty_int;
                             }
+                            /* ZKAEDI: Implicitly coerce arguments to parameter types */
+                            for (int k = 0; k < call->num_args; k++) {
+                                if (k < sym->type->num_params && sym->type->params && sym->type->params[k]) {
+                                    Type *pty = sym->type->params[k];
+                                    if (call->args[k] && call->args[k]->type && call->args[k]->type != pty) {
+                                        Node *c = node_new(cc, ND_CAST, line);
+                                        c->lhs = call->args[k];
+                                        c->cast_type = pty;
+                                        c->type = pty;
+                                        call->args[k] = c;
+                                    }
+                                }
+                            }
                         } else {
                             call->type = cc->ty_int;
                         }
@@ -1234,8 +1247,32 @@ Node *parse_postfix(Compiler *cc) {
                 if (n->type) {
                     if (n->type->kind == TY_FUNC) {
                         call->type = n->type->ret ? n->type->ret : cc->ty_int;
+                        for (int k = 0; k < call->num_args; k++) {
+                            if (k < n->type->num_params && n->type->params && n->type->params[k]) {
+                                Type *pty = n->type->params[k];
+                                if (call->args[k] && call->args[k]->type && call->args[k]->type != pty) {
+                                    Node *c = node_new(cc, ND_CAST, line);
+                                    c->lhs = call->args[k];
+                                    c->cast_type = pty;
+                                    c->type = pty;
+                                    call->args[k] = c;
+                                }
+                            }
+                        }
                     } else if (n->type->kind == TY_PTR && n->type->base && n->type->base->kind == TY_FUNC) {
                         call->type = n->type->base->ret ? n->type->base->ret : cc->ty_int;
+                        for (int k = 0; k < call->num_args; k++) {
+                            if (k < n->type->base->num_params && n->type->base->params && n->type->base->params[k]) {
+                                Type *pty = n->type->base->params[k];
+                                if (call->args[k] && call->args[k]->type && call->args[k]->type != pty) {
+                                    Node *c = node_new(cc, ND_CAST, line);
+                                    c->lhs = call->args[k];
+                                    c->cast_type = pty;
+                                    c->type = pty;
+                                    call->args[k] = c;
+                                }
+                            }
+                        }
                     } else {
                         call->type = cc->ty_int;
                     }
