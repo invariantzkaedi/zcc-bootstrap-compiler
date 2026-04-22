@@ -46,11 +46,12 @@ SELECT rc=0 err=none
 
 All operations return rc=0. No segfaults. The B-tree allocator, LALR(1) parser, memory allocator, and page cache all function correctly under ZCC-compiled code. Bugs fixed to reach this milestone include a full System V AMD64 `va_list` implementation, global struct initializer emission, negative array initializer constants, struct-by-value ABI, octal escape sequences, and `sizeof` on string literal arrays.
 
-### Lua 5.4.6 Compilation (Working)
+### Lua 5.4.6 Compilation (Working: Minimum Footprint)
 
 ZCC compiles Lua 5.4.6 (30,000 lines) to zero errors.
 The VM boots, loads all core libraries, and manages numeric state reliably.
 Minimum runtime handshake (print + arithmetic + version) verified.
+(Note: Full milestone closure is pending `testes/all.lua` verification, tracked in `HYGIENE-LUA-TESTES`).
 
 Fixes applied to reach this point:
 - Preprocessing script strips GCC #line directives, computed goto tables, _Float128 types
