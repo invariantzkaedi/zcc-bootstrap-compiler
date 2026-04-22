@@ -9,7 +9,10 @@ PASSES = compiler_passes.c compiler_passes_ir.c ir_pass_manager.c
 
 all: zcc
 
-zcc.c: $(PARTS)
+zcc_ast_bridge_constants.h zcc_ast_bridge_asserts.inc: part1.c sync_bridge.py
+	python3 sync_bridge.py part1.c zcc_ast_bridge_constants.h zcc_ast_bridge_asserts.inc
+
+zcc.c: $(PARTS) zcc_ast_bridge_constants.h zcc_ast_bridge_asserts.inc
 	cat $(PARTS) > zcc.c
 
 zcc: zcc.c $(PASSES)
