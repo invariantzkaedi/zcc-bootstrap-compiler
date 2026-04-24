@@ -27,3 +27,15 @@ if (backend_ops) {
 - ✅ Aggressive reproducer passed
 - ✅ Bootstrap stable (zcc2.s == zcc3.s)
 - ✅ Graphics experiments: 5/5 passed
+
+## CG-AST-012: Local Multi-dim Array Decay Initialization Smash (DISCOVERED - Apr 23, 2026)
+
+**Status**: ✅ RESOLVED (Fixed via AST CAST Proxy unrolling)
+**Severity**: CRITICAL (Out of bounds stack overwrite)
+**Discover Date**: April 23, 2026
+
+### The Bug
+During local scope initialization of multidimensional arrays (e.g. `int local_matrix[2][2]`), ZCC processes the flattened array via `var + idx` assignment. Because `int[2][2]` has a base type of `int[2]` (8 bytes), the offset mathematical pointer arithmetic advances 8-bytes horizontally per scalar iteration, violently obliterating adjacent execution stack boundaries instead of contiguous 4-byte traversal.
+
+### Resolution Strategy
+Fixed surgically in `part3.c` without altering `part4.c` ABI behavior by unrolling dimensions to scalar boundaries and mapping to explicitly emitted `ND_CAST` proxy pointers, ensuring pointer arithmetic correctly maps out exactly `1 x scalar` boundaries rather than dimensional decays.

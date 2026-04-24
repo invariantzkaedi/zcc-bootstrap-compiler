@@ -4180,7 +4180,11 @@ static void emit_global_var(Compiler *cc, Node *gvar) {
         } else {
             int i;
             int elem_size = 1;
-            if (gvar->type && gvar->type->base) elem_size = type_size(gvar->type->base);
+            Type *stype = gvar->type;
+            while (stype && stype->kind == TY_ARRAY) {
+                stype = stype->base;
+            }
+            if (stype) elem_size = type_size(stype);
             for (i = 0; i < init->num_args; i++) {
                 Node *elem = init->args[i];
                 int const_ok = 1;
