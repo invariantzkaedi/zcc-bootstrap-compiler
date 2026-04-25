@@ -1,0 +1,30 @@
+{
+  "no_placeholders": {
+    "exclude_paths": [
+      "tools/check_no_placeholders.py"
+    ],
+    "allow_paths": [
+      {
+        "path": "ci/selftest-no-placeholders.sh",
+        "reason": "intentional scanner fixture containing forbidden tokens",
+        "expected_rules": [
+          "placeholder.todo"
+        ]
+      },
+      {
+        "path": "tools/validate_fortify_policy.py",
+        "reason": "policy validator embeds rule registry that mirrors no-placeholder rule names",
+        "expected_rules": [
+          "placeholder.todo",
+          "placeholder.fixme",
+          "placeholder.stub",
+          "placeholder.placeholder"
+        ]
+      }
+    ]
+  },
+  "layout_core_freeze": {
+    "exclude_paths": [],
+    "allow_paths": []
+  }
+}

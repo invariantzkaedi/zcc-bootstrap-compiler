@@ -1,0 +1,20 @@
+repos:
+  - repo: local
+    hooks:
+      - id: zcc-policy-filename
+        name: ZCC policy filename check
+        entry: python3 tools/check_policy_filename.py
+        language: system
+        pass_filenames: false
+
+      - id: zcc-no-placeholders
+        name: ZCC no placeholders
+        entry: python3 tools/check_no_placeholders.py --root . --policy .zcc-fortify-policy.json --report artifacts/no-placeholders.json
+        language: system
+        pass_filenames: false
+
+      - id: zcc-layout-core-freeze
+        name: ZCC layout core freeze
+        entry: python3 tools/check_layout_core_freeze.py --root . --report artifacts/layout-core-freeze.json
+        language: system
+        pass_filenames: false

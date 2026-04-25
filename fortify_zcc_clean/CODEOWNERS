@@ -1,0 +1,9 @@
+.zcc-fortify-policy.json @compiler-maintainers
+fortify-verify-policy.example.json @security-maintainers
+
+ci/ @ci-maintainers
+tools/ @ci-maintainers
+tests/layout/ @compiler-maintainers
+
+docs/fortify-* @security-maintainers
+docs/zcc-layout-fortify.md @compiler-maintainers
