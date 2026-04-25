@@ -220,12 +220,27 @@ static char pp_peek(PPState *state) {
         state->alloc_buf = state->input_stack[state->input_depth].alloc_buf;
     }
     if (state->pos >= state->len) return 0;
+    if (state->src[state->pos] == '\r') return '\n';
     return state->src[state->pos];
+}
+
+static int pp_is_line_continuation(PPState *state) {
+    if (state->pos + 1 >= state->len) return 0;
+    if (state->src[state->pos] != '\\') return 0;
+    if (state->src[state->pos + 1] == '\n') return 1;
+    if (state->src[state->pos + 1] == '\r') return 1;
+    return 0;
 }
 
 static char pp_next(PPState *state) {
     char c = pp_peek(state);
     if (c) {
+        if (c == '\r') {
+            if (state->input_depth == 0) state->line++;
+            state->pos++;
+            if (state->pos < state->len && state->src[state->pos] == '\n') state->pos++;
+            return '\n';
+        }
         if (c == '\n' && state->input_depth == 0) state->line++;
         state->pos++;
     }
@@ -298,11 +313,12 @@ static void pp_read_line(PPState *state, char *buf, int max) {
     int in_comment = 0;
     while (pp_peek(state) != 0 && i < max - 1) {
         char c = pp_peek(state);
-        if (c == '\n' && !in_comment) {
+        if ((c == '\n' || c == '\r') && !in_comment) {
             break;
         }
-        if (c == '\\' && state->src[state->pos + 1] == '\n') {
-            pp_next(state); pp_next(state);
+        if (pp_is_line_continuation(state)) {
+            pp_next(state);
+            if (pp_peek(state) == '\n' || pp_peek(state) == '\r') pp_next(state);
             continue;
         }
         if (!in_comment && c == '/' && state->src[state->pos + 1] == '/') {
@@ -318,7 +334,7 @@ static void pp_read_line(PPState *state, char *buf, int max) {
             continue;
         }
         pp_next(state);
-        if (!in_comment && c != '\n') buf[i++] = c;
+        if (!in_comment && c != '\n' && c != '\r') buf[i++] = c;
     }
     buf[i] = 0;
 }
@@ -341,9 +357,10 @@ static void pp_read_macro_body(PPState *state, PPMacro *m, int max_limit) {
             exit(1);
         }
         char c = pp_peek(state);
-        if (c == '\n' && !in_comment) break;
-        if (c == '\\' && state->src[state->pos + 1] == '\n') {
-            pp_next(state); pp_next(state);
+        if ((c == '\n' || c == '\r') && !in_comment) break;
+        if (pp_is_line_continuation(state)) {
+            pp_next(state);
+            if (pp_peek(state) == '\n' || pp_peek(state) == '\r') pp_next(state);
             continue;
         }
         if (!in_comment && c == '/' && state->src[state->pos + 1] == '/') {
@@ -359,7 +376,7 @@ static void pp_read_macro_body(PPState *state, PPMacro *m, int max_limit) {
             continue;
         }
         pp_next(state);
-        if (!in_comment && c != '\n') m->body[i++] = c;
+        if (!in_comment && c != '\n' && c != '\r') m->body[i++] = c;
     }
     m->body[i] = 0;
 }
@@ -387,6 +404,19 @@ static char *pp_read_file(const char *path, int *out_len) {
     if (!buf) { fclose(fp); return 0; }
     
     nr = fread(buf, 1, len, fp);
+    {
+        long r = 0, w = 0;
+        while (r < nr) {
+            char c = buf[r++];
+            if (c == '\r') {
+                if (r < nr && buf[r] == '\n') r++;
+                buf[w++] = '\n';
+            } else {
+                buf[w++] = c;
+            }
+        }
+        nr = w;
+    }
     buf[nr] = 0;
     fclose(fp);
     
@@ -1365,11 +1395,27 @@ char *zcc_preprocess(const char *source, int source_len,
                      const char *include_paths,
                      int *out_len) {
     PPState *state = (PPState *)malloc(sizeof(PPState));
+    char *normalized_src = (char *)malloc(source_len + 1);
     char *result;
+    int normalized_len = 0;
     memset(state, 0, sizeof(PPState));
-    
-    state->src = source;
-    state->len = source_len;
+
+    {
+        int r = 0;
+        while (r < source_len) {
+            char c = source[r++];
+            if (c == '\r') {
+                if (r < source_len && source[r] == '\n') r++;
+                normalized_src[normalized_len++] = '\n';
+            } else {
+                normalized_src[normalized_len++] = c;
+            }
+        }
+        normalized_src[normalized_len] = 0;
+    }
+
+    state->src = normalized_src;
+    state->len = normalized_len;
     state->filename = filename;
     state->include_paths = include_paths;
     state->line = 1;
@@ -1441,6 +1487,7 @@ char *zcc_preprocess(const char *source, int source_len,
             state->macros[i].body_cap = 0;
         }
     }
+    free(normalized_src);
     free(state);
     return result;
 }
