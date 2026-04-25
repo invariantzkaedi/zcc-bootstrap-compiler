@@ -1,0 +1,54 @@
+{
+  "artifact_hashes": {
+    "algorithm": "sha256",
+    "count": 3,
+    "files": [
+      {
+        "bytes": 55,
+        "path": "layout-core-freeze.json",
+        "sha256": "2ef970db89d4064deba61f789ba0c7ba6aca1a685b8c8bec649c4878c2e399be"
+      },
+      {
+        "bytes": 539,
+        "path": "layout-fuzz/manifest.example.json",
+        "sha256": "63467068110f5564b87b759dd56eeaa590e28a20a04f3251dff61450aba4531c"
+      },
+      {
+        "bytes": 496,
+        "path": "no-placeholders.json",
+        "sha256": "63ee4d944e34d9b5ee48a2b946aba8fd62f217ea2274dc721a4e2c9fa3b158f1"
+      }
+    ],
+    "kind": "fortify-artifact-hashes",
+    "root": "/mnt/g/zcc/fortify_zcc_clean/artifacts"
+  },
+  "certificate": null,
+  "created_at": "2026-04-25T03:46:48.478329+00:00",
+  "host": {
+    "machine": "x86_64",
+    "platform": "Linux-6.6.123.2-microsoft-standard-WSL2+-x86_64-with-glibc2.39",
+    "system": "Linux"
+  },
+  "kind": "fortify-attestation-bundle",
+  "signature": null,
+  "signing": {
+    "certificate": null,
+    "kind": "fortify-signing-status",
+    "required": false,
+    "signature": null,
+    "signer": "",
+    "status": "skipped",
+    "subject": "/mnt/g/zcc/fortify_zcc_clean/artifacts/fortify-layout.subject.json"
+  },
+  "signing_status_file": {
+    "bytes": 226,
+    "path": "/mnt/g/zcc/fortify_zcc_clean/artifacts/fortify-signing-status.json",
+    "sha256": "3fcbf590a9da1727cae4de3f6c94c036295d16a9a66792c8b7738458d899394f"
+  },
+  "status": "pass",
+  "subject": {
+    "bytes": 1380,
+    "path": "/mnt/g/zcc/fortify_zcc_clean/artifacts/fortify-layout.subject.json",
+    "sha256": "f5118e8f84f4239fd7c8bcb95fa253ba0894bd05efc99bb1dd14a57042c7dfe1"
+  }
+}

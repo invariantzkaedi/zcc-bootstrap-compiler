@@ -1,0 +1,21 @@
+{
+  "allowed_files": [
+    {
+      "path": "ci/selftest-no-placeholders.sh",
+      "reason": "intentional scanner fixture containing forbidden tokens"
+    },
+    {
+      "path": "tools/validate_fortify_policy.py",
+      "reason": "policy validator embeds rule registry that mirrors no-placeholder rule names"
+    }
+  ],
+  "count": 0,
+  "findings": [],
+  "skipped_files": [
+    {
+      "path": "tools/check_no_placeholders.py",
+      "reason": "excluded by policy"
+    }
+  ],
+  "status": "pass"
+}

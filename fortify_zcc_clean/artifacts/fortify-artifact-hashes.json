@@ -1,0 +1,23 @@
+{
+  "algorithm": "sha256",
+  "count": 3,
+  "files": [
+    {
+      "bytes": 55,
+      "path": "layout-core-freeze.json",
+      "sha256": "2ef970db89d4064deba61f789ba0c7ba6aca1a685b8c8bec649c4878c2e399be"
+    },
+    {
+      "bytes": 539,
+      "path": "layout-fuzz/manifest.example.json",
+      "sha256": "63467068110f5564b87b759dd56eeaa590e28a20a04f3251dff61450aba4531c"
+    },
+    {
+      "bytes": 496,
+      "path": "no-placeholders.json",
+      "sha256": "63ee4d944e34d9b5ee48a2b946aba8fd62f217ea2274dc721a4e2c9fa3b158f1"
+    }
+  ],
+  "kind": "fortify-artifact-hashes",
+  "root": "/mnt/g/zcc/fortify_zcc_clean/artifacts"
+}
