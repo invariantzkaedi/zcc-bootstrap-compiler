@@ -1,5 +1,7 @@
 # ZCC — A Self-Hosting C Compiler with an Optimizing IR Backend
 
+![Self-hosting verified](https://img.shields.io/badge/self--hosting-verified-brightgreen) ![Build passing](https://img.shields.io/badge/build-passing-brightgreen) ![License Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue) ![Platform Linux x86-64](https://img.shields.io/badge/platform-linux%20x86--64-lightgrey)
+
 ZCC is a self-hosting C compiler targeting x86-64 Linux (System V AMD64 ABI). It compiles a substantial subset of C, including structs, pointers, arrays, function pointers, enums, switch statements, and the full complement of arithmetic, bitwise, logical, and comparison operators. ZCC compiles itself — the bootstrap chain produces byte-identical output across stages.
 
 The compiler has two codegen paths: a direct AST-to-assembly emitter for rapid compilation, and a 3-address SSA IR backend with a full optimization pipeline. Both paths produce correct, self-hosting output.
@@ -14,17 +16,17 @@ GCC → zcc₁ → zcc₁ compiles itself → zcc₂.s
                               cmp zcc₂.s zcc₃.s → IDENTICAL ✓
 ```
 
-## Status (Apr 22 2026)
+## Status (Apr 25 2026)
 
 | Metric | Result |
 |--------|--------|
-| Self-hosting | ✅ `zcc2.s == zcc3.s` (byte-identical) |
+| Self-hosting | ✅ `zcc2.s == zcc3.s` (byte-identical, verified `1606119` from fresh clone in 17.8s) |
 | Regression tests | ✅ 21/21 pass |
 | Fuzz suite | ✅ 53/53 pass |
 | SQLite 3.45.0 | ✅ Full SQL round-trip verified |
 | Lua 5.4.6 | ✅ Full 100% `testes/all.lua` pass |
 | IR backend tests | ✅ 21/21 pass |
-| Peephole elisions (self-compile) | 5,363 |
+| Peephole elisions (self-compile) | 9,714 |
 
 ### DOOM 1.10 (id Software Engine)
 
