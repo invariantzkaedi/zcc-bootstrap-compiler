@@ -1,0 +1,30 @@
+name: Fortify Failure
+description: Report a CI fortify, attestation, or oracle failure
+title: "[fortify]: "
+labels:
+  - fortify
+  - ci
+body:
+  - type: input
+    id: command
+    attributes:
+      label: Command
+      placeholder: ci/fortify-layout.sh
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: Relevant artifacts
+      description: Include manifest paths, reduced cases, oracle/zcc outputs
+    validations:
+      required: false

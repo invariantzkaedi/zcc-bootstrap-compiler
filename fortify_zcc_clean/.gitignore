@@ -1,0 +1,12 @@
+artifacts/
+tests/layout/random/
+*.o
+*.out
+*.tmp
+.DS_Store
+# Fortify pipeline evidence — explicitly tracked
+# (overrides parent .gitignore rule that excludes artifacts/)
+!artifacts/
+!artifacts/*.json
+# Keep example/template files OUT of the tracked set
+artifacts/**/*.example.json

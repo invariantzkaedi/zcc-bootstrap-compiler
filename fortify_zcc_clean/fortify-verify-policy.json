@@ -1,0 +1,22 @@
+{
+  "require_signature": true,
+  "allowed_signers": {
+    "minisign": {
+      "public_key": "RWQ000000000000000000000000000000000000000000000000000000000000"
+    },
+    "gpg": {
+      "fingerprints": [
+        "0123456789ABCDEF0123456789ABCDEF01234567"
+      ]
+    },
+    "cosign": {
+      "certificate_identity": "https://github.com/OWNER/REPO/.github/workflows/fortify-layout.yml@refs/heads/main",
+      "certificate_oidc_issuer": "https://token.actions.githubusercontent.com"
+    }
+  },
+  "expected": {
+    "policy_sha256": null,
+    "git_commit": null,
+    "target": null
+  }
+}

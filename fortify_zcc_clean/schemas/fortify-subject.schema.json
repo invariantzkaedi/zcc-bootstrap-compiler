@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Fortify Subject Manifest",
+  "type": "object",
+  "required": [
+    "kind",
+    "status",
+    "created_at",
+    "target",
+    "seed",
+    "count",
+    "git",
+    "policy",
+    "host",
+    "reports",
+    "artifact_hashes"
+  ],
+  "properties": {
+    "kind": { "const": "fortify-layout" },
+    "status": { "const": "pass" },
+    "created_at": { "type": "string" },
+    "target": { "type": "string", "minLength": 1 },
+    "seed": { "type": "integer" },
+    "count": { "type": "integer", "minimum": 0 },
+    "git": {
+      "type": "object",
+      "required": ["commit", "branch", "dirty"]
+    },
+    "policy": {
+      "type": "object",
+      "required": ["path", "sha256"]
+    },
+    "artifact_hashes": {
+      "type": "object",
+      "required": ["algorithm", "files"],
+      "properties": {
+        "algorithm": { "const": "sha256" }
+      }
+    }
+  }
+}

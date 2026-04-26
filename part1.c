@@ -26,15 +26,15 @@
 
 enum {
     MAX_IDENT   = 128,
-    MAX_STR     = 4096,
+    MAX_STR     = 16384,
     MAX_STRINGS = 262144,
     MAX_GLOBALS = 262144,
     MAX_STRUCTS = 65536,
     MAX_PARAMS  = 128,
     MAX_CALL_ARGS = 256,
     MAX_CASES   = 4096,
-    MAX_INIT    = 262144,
-    ARENA_SIZE  = 67108864
+    MAX_INIT    = 1048576,
+    ARENA_SIZE  = 536870912
 };
 
 /* ================================================================ */
@@ -176,6 +176,7 @@ struct Type {
     int is_complete;
     int is_packed;   /* __attribute__((packed)) — suppress field alignment */
     int explicit_align; /* __attribute__((aligned(N))) — override total align, 0 = none */
+    int is_tbfp;     /* transparent bitfield packing (tbfp) marker */
 };
 
 struct StringEntry {
@@ -258,6 +259,9 @@ struct Node {
     int num_params;
     Node *body;
     int stack_size;
+    /* param capture arrays (used by parse_func_def in part3.c) */
+    Type *param_types[MAX_PARAMS];
+    char param_names_buf[MAX_PARAMS][MAX_IDENT];
 
     /* ND_MEMBER */
     char member_name[MAX_IDENT];
@@ -304,20 +308,7 @@ char *zcc_preprocess(const char *source, int source_len, const char *filename, c
 #include "zcc_ast_bridge.h"
 
 /* Keep nd_to_znd mapping in sync with this file's enum. */
-/* _Static_assert(ND_NUM == ZCC_ND_NUM, "zcc_ast_bridge.h: ND_NUM out of sync"); */
-/* _Static_assert(ND_STR == ZCC_ND_STR, "zcc_ast_bridge.h: ND_STR out of sync"); */
-/* _Static_assert(ND_WHILE == ZCC_ND_WHILE, "zcc_ast_bridge.h: ND_WHILE out of sync"); */
-/* _Static_assert(ND_CAST == ZCC_ND_CAST, "zcc_ast_bridge.h: ND_CAST out of sync"); */
-/* _Static_assert(ND_CALL == ZCC_ND_CALL, "zcc_ast_bridge.h: ND_CALL out of sync"); */
-/* _Static_assert(ND_NOP == ZCC_ND_NOP, "zcc_ast_bridge.h: ND_NOP out of sync"); */
-/* _Static_assert(ND_GT == ZCC_ND_GT, "zcc_ast_bridge.h: ND_GT out of sync"); */
-/* _Static_assert(ND_GE == ZCC_ND_GE, "zcc_ast_bridge.h: ND_GE out of sync"); */
-/* _Static_assert(ND_EQ == ZCC_ND_EQ, "zcc_ast_bridge.h: ND_EQ out of sync"); */
-/* _Static_assert(ND_NE == ZCC_ND_NE, "zcc_ast_bridge.h: ND_NE out of sync"); */
-/* _Static_assert(ND_MOD == ZCC_ND_MOD, "zcc_ast_bridge.h: ND_MOD out of sync"); */
-/* _Static_assert(ND_ADDR == ZCC_ND_ADDR, "zcc_ast_bridge.h: ND_ADDR out of sync"); */
-/* _Static_assert(ND_DEREF == ZCC_ND_DEREF, "zcc_ast_bridge.h: ND_DEREF out of sync"); */
-/* _Static_assert(ND_SWITCH == ZCC_ND_SWITCH, "zcc_ast_bridge.h: ND_SWITCH out of sync"); */
+#include "zcc_ast_bridge_asserts.inc"
 
 /* Bridge accessors: Node* → IR bridge (Option A copy boundary). */
 int is_pointer(Type *t);
@@ -513,6 +504,7 @@ struct Compiler {
     /* pending __attribute__ flags — set by lexer, consumed by parse_struct_or_union */
     int pending_packed;     /* __attribute__((packed)) seen before struct keyword */
     int pending_aligned_n;  /* __attribute__((aligned(N))) value, 0 = none */
+    int pending_tbfp;       /* transparent bitfield packing flag, consumed by parse_struct_or_union */
     int debug_abi_classes;  /* -fdebug-abi-classes flag */
     int abi_scratch_offset; /* %rbp-relative offset to 16-byte aggregate return scratch (CG-IR-019) */
     int used_regs_mask;     /* for telemetry tracking */

@@ -1,0 +1,14 @@
+.PHONY: fortify-layout fortify-clean fortify-preflight fortify-production
+
+fortify-preflight:
+	ci/preflight-fortify.sh
+
+fortify-clean:
+	ci/clean-fortify-artifacts.sh
+
+fortify-layout:
+	ci/fortify-layout.sh
+
+fortify-production:
+	ci/verify-production-env.sh
+	ci/fortify-layout-production.sh

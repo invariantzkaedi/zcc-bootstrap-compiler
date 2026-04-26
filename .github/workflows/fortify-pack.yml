@@ -1,0 +1,61 @@
+name: Fortify Pack
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/fortify-pack.yml"
+      - "fortify_zcc_clean/**"
+      - "fortify_zcc_clean.zip"
+      - "Makefile"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/fortify-pack.yml"
+      - "fortify_zcc_clean/**"
+      - "fortify_zcc_clean.zip"
+      - "Makefile"
+
+concurrency:
+  group: fortify-pack-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fortify-pack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang python3 make unzip
+
+      - name: Ensure fortify pack is available
+        run: |
+          if [ ! -d fortify_zcc_clean ]; then
+            if [ -f fortify_zcc_clean.zip ]; then
+              unzip -n fortify_zcc_clean.zip -d .
+            else
+              echo "Missing fortify_zcc_clean and fortify_zcc_clean.zip"
+              exit 2
+            fi
+          fi
+
+      - name: Run fortify-pack pipeline
+        run: |
+          make fortify-pack-init
+          make fortify-pack-preflight
+          make fortify-pack-layout
+          make fortify-pack-replay
+
+      - name: Upload fortify-pack artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fortify-pack-artifacts
+          path: |
+            fortify_zcc_clean/artifacts/**
+            fortify_zcc_clean/fortify-verify-policy.json

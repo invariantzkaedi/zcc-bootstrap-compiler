@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Fortify Attestation Bundle",
+  "type": "object",
+  "required": [
+    "kind",
+    "status",
+    "created_at",
+    "subject",
+    "artifact_hashes",
+    "signing",
+    "signing_status_file",
+    "host"
+  ],
+  "properties": {
+    "kind": { "const": "fortify-attestation-bundle" },
+    "status": { "const": "pass" },
+    "subject": {
+      "type": "object",
+      "required": ["path", "sha256", "bytes"]
+    },
+    "signing": {
+      "type": "object",
+      "required": ["kind", "status", "signer", "subject", "required"]
+    },
+    "signature": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["path", "sha256", "bytes"]
+        }
+      ]
+    },
+    "certificate": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["path", "sha256", "bytes"]
+        }
+      ]
+    }
+  }
+}

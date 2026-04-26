@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Fortify Verify Policy",
+  "type": "object",
+  "required": ["require_signature", "allowed_signers", "expected"],
+  "properties": {
+    "require_signature": { "type": "boolean" },
+    "allowed_signers": {
+      "type": "object",
+      "properties": {
+        "minisign": {
+          "type": "object",
+          "properties": {
+            "public_key": { "type": "string" },
+            "public_key_file": { "type": "string" }
+          }
+        },
+        "gpg": {
+          "type": "object",
+          "properties": {
+            "fingerprints": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "cosign": {
+          "type": "object",
+          "properties": {
+            "certificate_identity": { "type": "string" },
+            "certificate_oidc_issuer": { "type": "string" }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "expected": {
+      "type": "object",
+      "properties": {
+        "policy_sha256": {
+          "anyOf": [{ "type": "string" }, { "type": "null" }]
+        },
+        "git_commit": {
+          "anyOf": [{ "type": "string" }, { "type": "null" }]
+        },
+        "target": {
+          "anyOf": [{ "type": "string" }, { "type": "null" }]
+        }
+      }
+    }
+  }
+}

@@ -110,11 +110,12 @@ static const char *zcc_stddef_text =
 "#define asm(a,b,c,d,e)\n"
 "typedef struct { unsigned int gp_offset; unsigned int fp_offset; void *overflow_arg_area; void *reg_save_area; } __va_list_struct[1];\n"
 "#define __builtin_va_list __va_list_struct\n"
-"#define __builtin_va_end(v)\n"
+"void __builtin_va_start(__builtin_va_list ap, ...);\n"
+"void __builtin_va_end(__builtin_va_list ap);\n"
 "/* PP-STUB-024B: route va_* to ZCC builtins so va_arg(ap,type) is parsed correctly */\n"
 "#define va_list __builtin_va_list\n"
-"#define va_start(ap, last) ((void)0)\n"
-"#define va_end(ap)         ((void)0)\n"
+"#define va_start(ap, last) __builtin_va_start(ap, last)\n"
+"#define va_end(ap)         __builtin_va_end(ap)\n"
 "#define va_copy(dst, src)  ((dst)[0] = (src)[0])\n"
 "#define va_arg(ap, type)   __builtin_va_arg(ap, type)\n"
 "#define __builtin_expect(exp, c) (exp)\n"
@@ -148,9 +149,44 @@ static const char *zcc_stddef_text =
 "typedef unsigned long uintptr_t;\n"
 "/* PP-STUB-024: signal.h / setjmp.h / stdint primitives for Lua internals */\n"
 "typedef int sig_atomic_t;\n"
-"typedef unsigned int jmp_buf[14];\n"
+"typedef long jmp_buf[25];  /* x86-64 glibc: __jmp_buf(64) + mask_saved(4) + sigset(128) + pad = 200 bytes */\n"
 "typedef struct _IO_FILE FILE;\n"
 "extern FILE *stdin, *stdout, *stderr;\n"
+"char *getenv(const char *name);\n"
+"int setenv(const char *name, const char *value, int overwrite);\n"
+"int unsetenv(const char *name);\n"
+"unsigned long long strtoull(const char *s, char **end, int base);\n"
+"long long strtoll(const char *s, char **end, int base);\n"
+"long strtol(const char *s, char **end, int base);\n"
+"unsigned long strtoul(const char *s, char **end, int base);\n"
+"double strtod(const char *s, char **end);\n"
+"int abs(int n);\n"
+"long labs(long n);\n"
+"long long llabs(long long n);\n"
+"void abort(void);\n"
+"int atexit(void (*fn)(void));\n"
+"int atoi(const char *s);\n"
+"long atol(const char *s);\n"
+"double atof(const char *s);\n"
+"void *bsearch(const void *key, const void *base, size_t n, size_t sz, int (*cmp)(const void *, const void *));\n"
+"void qsort(void *base, size_t n, size_t sz, int (*cmp)(const void *, const void *));\n"
+"int system(const char *cmd);\n"
+"/* string.h extras needed by Lua */\n"
+"int memcmp(const void *a, const void *b, size_t n);\n"
+"void *memmove(void *dst, const void *src, size_t n);\n"
+"char *strncpy(char *dst, const char *src, size_t n);\n"
+"char *strncat(char *dst, const char *src, size_t n);\n"
+"int strncmp(const char *a, const char *b, size_t n);\n"
+"char *strchr(const char *s, int c);\n"
+"char *strrchr(const char *s, int c);\n"
+"size_t strspn(const char *s, const char *accept);\n"
+"size_t strcspn(const char *s, const char *reject);\n"
+"char *strpbrk(const char *s, const char *accept);\n"
+"char *strstr(const char *haystack, const char *needle);\n"
+"int strcoll(const char *a, const char *b);\n"
+"size_t strxfrm(char *dst, const char *src, size_t n);\n"
+"char *strtok(char *s, const char *delim);\n"
+"char *strerror(int errnum);\n"
 "#endif\n";
 
 static void pp_emit(PPState *state, char c) {
@@ -184,12 +220,27 @@ static char pp_peek(PPState *state) {
         state->alloc_buf = state->input_stack[state->input_depth].alloc_buf;
     }
     if (state->pos >= state->len) return 0;
+    if (state->src[state->pos] == '\r') return '\n';
     return state->src[state->pos];
+}
+
+static int pp_is_line_continuation(PPState *state) {
+    if (state->pos + 1 >= state->len) return 0;
+    if (state->src[state->pos] != '\\') return 0;
+    if (state->src[state->pos + 1] == '\n') return 1;
+    if (state->src[state->pos + 1] == '\r') return 1;
+    return 0;
 }
 
 static char pp_next(PPState *state) {
     char c = pp_peek(state);
     if (c) {
+        if (c == '\r') {
+            if (state->input_depth == 0) state->line++;
+            state->pos++;
+            if (state->pos < state->len && state->src[state->pos] == '\n') state->pos++;
+            return '\n';
+        }
         if (c == '\n' && state->input_depth == 0) state->line++;
         state->pos++;
     }
@@ -262,11 +313,12 @@ static void pp_read_line(PPState *state, char *buf, int max) {
     int in_comment = 0;
     while (pp_peek(state) != 0 && i < max - 1) {
         char c = pp_peek(state);
-        if (c == '\n' && !in_comment) {
+        if ((c == '\n' || c == '\r') && !in_comment) {
             break;
         }
-        if (c == '\\' && state->src[state->pos + 1] == '\n') {
-            pp_next(state); pp_next(state);
+        if (pp_is_line_continuation(state)) {
+            pp_next(state);
+            if (pp_peek(state) == '\n' || pp_peek(state) == '\r') pp_next(state);
             continue;
         }
         if (!in_comment && c == '/' && state->src[state->pos + 1] == '/') {
@@ -282,7 +334,7 @@ static void pp_read_line(PPState *state, char *buf, int max) {
             continue;
         }
         pp_next(state);
-        if (!in_comment && c != '\n') buf[i++] = c;
+        if (!in_comment && c != '\n' && c != '\r') buf[i++] = c;
     }
     buf[i] = 0;
 }
@@ -305,9 +357,10 @@ static void pp_read_macro_body(PPState *state, PPMacro *m, int max_limit) {
             exit(1);
         }
         char c = pp_peek(state);
-        if (c == '\n' && !in_comment) break;
-        if (c == '\\' && state->src[state->pos + 1] == '\n') {
-            pp_next(state); pp_next(state);
+        if ((c == '\n' || c == '\r') && !in_comment) break;
+        if (pp_is_line_continuation(state)) {
+            pp_next(state);
+            if (pp_peek(state) == '\n' || pp_peek(state) == '\r') pp_next(state);
             continue;
         }
         if (!in_comment && c == '/' && state->src[state->pos + 1] == '/') {
@@ -323,7 +376,7 @@ static void pp_read_macro_body(PPState *state, PPMacro *m, int max_limit) {
             continue;
         }
         pp_next(state);
-        if (!in_comment && c != '\n') m->body[i++] = c;
+        if (!in_comment && c != '\n' && c != '\r') m->body[i++] = c;
     }
     m->body[i] = 0;
 }
@@ -351,6 +404,19 @@ static char *pp_read_file(const char *path, int *out_len) {
     if (!buf) { fclose(fp); return 0; }
     
     nr = fread(buf, 1, len, fp);
+    {
+        long r = 0, w = 0;
+        while (r < nr) {
+            char c = buf[r++];
+            if (c == '\r') {
+                if (r < nr && buf[r] == '\n') r++;
+                buf[w++] = '\n';
+            } else {
+                buf[w++] = c;
+            }
+        }
+        nr = w;
+    }
     buf[nr] = 0;
     fclose(fp);
     
@@ -1329,11 +1395,27 @@ char *zcc_preprocess(const char *source, int source_len,
                      const char *include_paths,
                      int *out_len) {
     PPState *state = (PPState *)malloc(sizeof(PPState));
+    char *normalized_src = (char *)malloc(source_len + 1);
     char *result;
+    int normalized_len = 0;
     memset(state, 0, sizeof(PPState));
-    
-    state->src = source;
-    state->len = source_len;
+
+    {
+        int r = 0;
+        while (r < source_len) {
+            char c = source[r++];
+            if (c == '\r') {
+                if (r < source_len && source[r] == '\n') r++;
+                normalized_src[normalized_len++] = '\n';
+            } else {
+                normalized_src[normalized_len++] = c;
+            }
+        }
+        normalized_src[normalized_len] = 0;
+    }
+
+    state->src = normalized_src;
+    state->len = normalized_len;
     state->filename = filename;
     state->include_paths = include_paths;
     state->line = 1;
@@ -1405,6 +1487,7 @@ char *zcc_preprocess(const char *source, int source_len,
             state->macros[i].body_cap = 0;
         }
     }
+    free(normalized_src);
     free(state);
     return result;
 }

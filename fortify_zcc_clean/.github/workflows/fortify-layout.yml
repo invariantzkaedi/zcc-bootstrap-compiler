@@ -1,0 +1,43 @@
+name: Fortify Layout
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  fortify-layout:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang python3
+
+      - name: Build
+        run: |
+          if [ -f Makefile ]; then
+            make
+          elif [ -f CMakeLists.txt ]; then
+            cmake -S . -B build
+            cmake --build build
+          else
+            echo "No known build system found. Adapt this workflow."
+            exit 1
+          fi
+
+      - name: Fortify layout
+        run: |
+          chmod +x ci/*.sh || true
+          ci/fortify-layout.sh
+
+      - name: Upload fortify artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fortify-layout-artifacts
+          path: artifacts/

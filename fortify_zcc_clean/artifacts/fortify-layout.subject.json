@@ -1,0 +1,47 @@
+{
+  "artifact_hashes": {
+    "algorithm": "sha256",
+    "count": 3,
+    "files": [
+      {
+        "bytes": 55,
+        "path": "layout-core-freeze.json",
+        "sha256": "2ef970db89d4064deba61f789ba0c7ba6aca1a685b8c8bec649c4878c2e399be"
+      },
+      {
+        "bytes": 539,
+        "path": "layout-fuzz/manifest.example.json",
+        "sha256": "63467068110f5564b87b759dd56eeaa590e28a20a04f3251dff61450aba4531c"
+      },
+      {
+        "bytes": 496,
+        "path": "no-placeholders.json",
+        "sha256": "63ee4d944e34d9b5ee48a2b946aba8fd62f217ea2274dc721a4e2c9fa3b158f1"
+      }
+    ],
+    "kind": "fortify-artifact-hashes",
+    "root": "/mnt/g/zcc/fortify_zcc_clean/artifacts"
+  },
+  "count": 3,
+  "created_at": "2026-04-25T03:46:48.309836+00:00",
+  "git": {
+    "commit": "ad82cb929f64b56cfe5b8b4b5c0b9105645b8fa3"
+  },
+  "host": {
+    "machine": "x86_64",
+    "platform": "Linux-6.6.123.2-microsoft-standard-WSL2+-x86_64-with-glibc2.39",
+    "system": "Linux"
+  },
+  "kind": "fortify-layout",
+  "policy": {
+    "path": "/mnt/g/zcc/fortify_zcc_clean/.zcc-fortify-policy.json",
+    "sha256": "e00fb999a66bd046f9eb4bd245264cb8190b28725a97703d3471ed9c52a93a7a"
+  },
+  "reports": {
+    "layout_core_freeze": "artifacts/layout-core-freeze.json",
+    "no_placeholders": "artifacts/no-placeholders.json"
+  },
+  "seed": 0,
+  "status": "pass",
+  "target": "x86_64-linux-gnu"
+}

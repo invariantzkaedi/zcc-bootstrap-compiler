@@ -13,55 +13,8 @@
 #define ZCC_CALL_NAME_LEN    128
 #define ZCC_MAX_CALL_ARGS    16
 
-/* Sentinel ND_* values used by nd_to_znd(). Must match zcc.c enum; zcc.c asserts. */
-#define ZCC_ND_NUM     1
-#define ZCC_ND_STR     2
-#define ZCC_ND_VAR     5
-#define ZCC_ND_ASSIGN  6
-#define ZCC_ND_ADD     7
-#define ZCC_ND_SUB     8
-#define ZCC_ND_MUL     9
-#define ZCC_ND_DIV     10
-#define ZCC_ND_MOD     11
-#define ZCC_ND_EQ      12
-#define ZCC_ND_NE      13
-#define ZCC_ND_LT      14
-#define ZCC_ND_LE      15
-#define ZCC_ND_GT      16
-#define ZCC_ND_GE      17
-#define ZCC_ND_LAND    18
-#define ZCC_ND_LOR     19
-#define ZCC_ND_LNOT    20
-#define ZCC_ND_BAND    21
-#define ZCC_ND_BOR     22
-#define ZCC_ND_BXOR    23
-#define ZCC_ND_BNOT    24
-#define ZCC_ND_SHL     25
-#define ZCC_ND_SHR     26
-#define ZCC_ND_NEG     27
-#define ZCC_ND_ADDR    28
-#define ZCC_ND_DEREF   29
-#define ZCC_ND_CALL    30
-#define ZCC_ND_RETURN  31
-#define ZCC_ND_BLOCK   32
-#define ZCC_ND_IF      33
-#define ZCC_ND_WHILE   34
-#define ZCC_ND_FOR     35
-#define ZCC_ND_BREAK   37
-#define ZCC_ND_CONTINUE 38
-#define ZCC_ND_SWITCH  41
-#define ZCC_ND_CAST    44
-#define ZCC_ND_SIZEOF  45
-#define ZCC_ND_MEMBER  46
-#define ZCC_ND_PRE_INC 47
-#define ZCC_ND_PRE_DEC 48
-#define ZCC_ND_POST_INC 49
-#define ZCC_ND_POST_DEC 50
-#define ZCC_ND_TERNARY 51
-#define ZCC_ND_COMPOUND_ASSIGN 55
-#define ZCC_ND_NOP     57
-#define ZCC_ND_ASM     58
-#define ZCC_ND_VLA_ALLOC 59
+/* Auto-generated values used by nd_to_znd(). Must match zcc.c enum. */
+#include "zcc_ast_bridge_constants.h"
 
 /* Opaque ZCC AST node; layout defined in zcc.c */
 struct Node;
