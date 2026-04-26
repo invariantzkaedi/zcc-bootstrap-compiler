@@ -402,3 +402,23 @@ patches/
 !src/part4.c
 !src/zkaedi_fpx.c
 !src/zkaedi_fpx.h
+
+# ─── Render artifacts and test binaries (added Apr 25 2026) ───
+*.ppm
+frames/
+out.ppm
+ray
+r2
+r3
+ret_int_int_gate5
+ret_int_sse_gate5
+ret_sse_int_gate5
+ret_sse_sse_gate5
+ret_tvalue_gate5
+
+# Render binaries (kept narrow — don't shadow source files)
+/exp1
+/exp2
+/exp3
+/exp4
+/exp5
