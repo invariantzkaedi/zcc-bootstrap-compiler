@@ -3,7 +3,9 @@
 #include <pthread.h>
 void *malloc(unsigned long size);
 void free(void *ptr);
+#ifndef NULL
 #define NULL ((void*)0)
+#endif
 /* #include <math.h> */
 #include "models.h"
 
