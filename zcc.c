@@ -26,15 +26,15 @@
 
 enum {
     MAX_IDENT   = 128,
-    MAX_STR     = 4096,
+    MAX_STR     = 16384,
     MAX_STRINGS = 262144,
     MAX_GLOBALS = 262144,
     MAX_STRUCTS = 65536,
     MAX_PARAMS  = 128,
     MAX_CALL_ARGS = 256,
     MAX_CASES   = 4096,
-    MAX_INIT    = 262144,
-    ARENA_SIZE  = 67108864
+    MAX_INIT    = 1048576,
+    ARENA_SIZE  = 536870912
 };
 
 /* ================================================================ */
@@ -176,6 +176,7 @@ struct Type {
     int is_complete;
     int is_packed;   /* __attribute__((packed)) — suppress field alignment */
     int explicit_align; /* __attribute__((aligned(N))) — override total align, 0 = none */
+    int is_tbfp;     /* transparent bitfield packing (tbfp) marker */
 };
 
 struct StringEntry {
@@ -258,6 +259,9 @@ struct Node {
     int num_params;
     Node *body;
     int stack_size;
+    /* param capture arrays (used by parse_func_def in part3.c) */
+    Type *param_types[MAX_PARAMS];
+    char param_names_buf[MAX_PARAMS][MAX_IDENT];
 
     /* ND_MEMBER */
     char member_name[MAX_IDENT];
@@ -304,20 +308,7 @@ char *zcc_preprocess(const char *source, int source_len, const char *filename, c
 #include "zcc_ast_bridge.h"
 
 /* Keep nd_to_znd mapping in sync with this file's enum. */
-/* _Static_assert(ND_NUM == ZCC_ND_NUM, "zcc_ast_bridge.h: ND_NUM out of sync"); */
-/* _Static_assert(ND_STR == ZCC_ND_STR, "zcc_ast_bridge.h: ND_STR out of sync"); */
-/* _Static_assert(ND_WHILE == ZCC_ND_WHILE, "zcc_ast_bridge.h: ND_WHILE out of sync"); */
-/* _Static_assert(ND_CAST == ZCC_ND_CAST, "zcc_ast_bridge.h: ND_CAST out of sync"); */
-/* _Static_assert(ND_CALL == ZCC_ND_CALL, "zcc_ast_bridge.h: ND_CALL out of sync"); */
-/* _Static_assert(ND_NOP == ZCC_ND_NOP, "zcc_ast_bridge.h: ND_NOP out of sync"); */
-/* _Static_assert(ND_GT == ZCC_ND_GT, "zcc_ast_bridge.h: ND_GT out of sync"); */
-/* _Static_assert(ND_GE == ZCC_ND_GE, "zcc_ast_bridge.h: ND_GE out of sync"); */
-/* _Static_assert(ND_EQ == ZCC_ND_EQ, "zcc_ast_bridge.h: ND_EQ out of sync"); */
-/* _Static_assert(ND_NE == ZCC_ND_NE, "zcc_ast_bridge.h: ND_NE out of sync"); */
-/* _Static_assert(ND_MOD == ZCC_ND_MOD, "zcc_ast_bridge.h: ND_MOD out of sync"); */
-/* _Static_assert(ND_ADDR == ZCC_ND_ADDR, "zcc_ast_bridge.h: ND_ADDR out of sync"); */
-/* _Static_assert(ND_DEREF == ZCC_ND_DEREF, "zcc_ast_bridge.h: ND_DEREF out of sync"); */
-/* _Static_assert(ND_SWITCH == ZCC_ND_SWITCH, "zcc_ast_bridge.h: ND_SWITCH out of sync"); */
+#include "zcc_ast_bridge_asserts.inc"
 
 /* Bridge accessors: Node* → IR bridge (Option A copy boundary). */
 int is_pointer(Type *t);
@@ -513,6 +504,7 @@ struct Compiler {
     /* pending __attribute__ flags — set by lexer, consumed by parse_struct_or_union */
     int pending_packed;     /* __attribute__((packed)) seen before struct keyword */
     int pending_aligned_n;  /* __attribute__((aligned(N))) value, 0 = none */
+    int pending_tbfp;       /* transparent bitfield packing flag, consumed by parse_struct_or_union */
     int debug_abi_classes;  /* -fdebug-abi-classes flag */
     int abi_scratch_offset; /* %rbp-relative offset to 16-byte aggregate return scratch (CG-IR-019) */
     int used_regs_mask;     /* for telemetry tracking */
@@ -705,11 +697,12 @@ static const char *zcc_stddef_text =
 "#define asm(a,b,c,d,e)\n"
 "typedef struct { unsigned int gp_offset; unsigned int fp_offset; void *overflow_arg_area; void *reg_save_area; } __va_list_struct[1];\n"
 "#define __builtin_va_list __va_list_struct\n"
-"#define __builtin_va_end(v)\n"
+"void __builtin_va_start(__builtin_va_list ap, ...);\n"
+"void __builtin_va_end(__builtin_va_list ap);\n"
 "/* PP-STUB-024B: route va_* to ZCC builtins so va_arg(ap,type) is parsed correctly */\n"
 "#define va_list __builtin_va_list\n"
-"#define va_start(ap, last) ((void)0)\n"
-"#define va_end(ap)         ((void)0)\n"
+"#define va_start(ap, last) __builtin_va_start(ap, last)\n"
+"#define va_end(ap)         __builtin_va_end(ap)\n"
 "#define va_copy(dst, src)  ((dst)[0] = (src)[0])\n"
 "#define va_arg(ap, type)   __builtin_va_arg(ap, type)\n"
 "#define __builtin_expect(exp, c) (exp)\n"
@@ -743,9 +736,44 @@ static const char *zcc_stddef_text =
 "typedef unsigned long uintptr_t;\n"
 "/* PP-STUB-024: signal.h / setjmp.h / stdint primitives for Lua internals */\n"
 "typedef int sig_atomic_t;\n"
-"typedef unsigned int jmp_buf[14];\n"
+"typedef long jmp_buf[25];  /* x86-64 glibc: __jmp_buf(64) + mask_saved(4) + sigset(128) + pad = 200 bytes */\n"
 "typedef struct _IO_FILE FILE;\n"
 "extern FILE *stdin, *stdout, *stderr;\n"
+"char *getenv(const char *name);\n"
+"int setenv(const char *name, const char *value, int overwrite);\n"
+"int unsetenv(const char *name);\n"
+"unsigned long long strtoull(const char *s, char **end, int base);\n"
+"long long strtoll(const char *s, char **end, int base);\n"
+"long strtol(const char *s, char **end, int base);\n"
+"unsigned long strtoul(const char *s, char **end, int base);\n"
+"double strtod(const char *s, char **end);\n"
+"int abs(int n);\n"
+"long labs(long n);\n"
+"long long llabs(long long n);\n"
+"void abort(void);\n"
+"int atexit(void (*fn)(void));\n"
+"int atoi(const char *s);\n"
+"long atol(const char *s);\n"
+"double atof(const char *s);\n"
+"void *bsearch(const void *key, const void *base, size_t n, size_t sz, int (*cmp)(const void *, const void *));\n"
+"void qsort(void *base, size_t n, size_t sz, int (*cmp)(const void *, const void *));\n"
+"int system(const char *cmd);\n"
+"/* string.h extras needed by Lua */\n"
+"int memcmp(const void *a, const void *b, size_t n);\n"
+"void *memmove(void *dst, const void *src, size_t n);\n"
+"char *strncpy(char *dst, const char *src, size_t n);\n"
+"char *strncat(char *dst, const char *src, size_t n);\n"
+"int strncmp(const char *a, const char *b, size_t n);\n"
+"char *strchr(const char *s, int c);\n"
+"char *strrchr(const char *s, int c);\n"
+"size_t strspn(const char *s, const char *accept);\n"
+"size_t strcspn(const char *s, const char *reject);\n"
+"char *strpbrk(const char *s, const char *accept);\n"
+"char *strstr(const char *haystack, const char *needle);\n"
+"int strcoll(const char *a, const char *b);\n"
+"size_t strxfrm(char *dst, const char *src, size_t n);\n"
+"char *strtok(char *s, const char *delim);\n"
+"char *strerror(int errnum);\n"
 "#endif\n";
 
 static void pp_emit(PPState *state, char c) {
@@ -779,12 +807,27 @@ static char pp_peek(PPState *state) {
         state->alloc_buf = state->input_stack[state->input_depth].alloc_buf;
     }
     if (state->pos >= state->len) return 0;
+    if (state->src[state->pos] == '\r') return '\n';
     return state->src[state->pos];
+}
+
+static int pp_is_line_continuation(PPState *state) {
+    if (state->pos + 1 >= state->len) return 0;
+    if (state->src[state->pos] != '\\') return 0;
+    if (state->src[state->pos + 1] == '\n') return 1;
+    if (state->src[state->pos + 1] == '\r') return 1;
+    return 0;
 }
 
 static char pp_next(PPState *state) {
     char c = pp_peek(state);
     if (c) {
+        if (c == '\r') {
+            if (state->input_depth == 0) state->line++;
+            state->pos++;
+            if (state->pos < state->len && state->src[state->pos] == '\n') state->pos++;
+            return '\n';
+        }
         if (c == '\n' && state->input_depth == 0) state->line++;
         state->pos++;
     }
@@ -857,11 +900,12 @@ static void pp_read_line(PPState *state, char *buf, int max) {
     int in_comment = 0;
     while (pp_peek(state) != 0 && i < max - 1) {
         char c = pp_peek(state);
-        if (c == '\n' && !in_comment) {
+        if ((c == '\n' || c == '\r') && !in_comment) {
             break;
         }
-        if (c == '\\' && state->src[state->pos + 1] == '\n') {
-            pp_next(state); pp_next(state);
+        if (pp_is_line_continuation(state)) {
+            pp_next(state);
+            if (pp_peek(state) == '\n' || pp_peek(state) == '\r') pp_next(state);
             continue;
         }
         if (!in_comment && c == '/' && state->src[state->pos + 1] == '/') {
@@ -877,7 +921,7 @@ static void pp_read_line(PPState *state, char *buf, int max) {
             continue;
         }
         pp_next(state);
-        if (!in_comment && c != '\n') buf[i++] = c;
+        if (!in_comment && c != '\n' && c != '\r') buf[i++] = c;
     }
     buf[i] = 0;
 }
@@ -900,9 +944,10 @@ static void pp_read_macro_body(PPState *state, PPMacro *m, int max_limit) {
             exit(1);
         }
         char c = pp_peek(state);
-        if (c == '\n' && !in_comment) break;
-        if (c == '\\' && state->src[state->pos + 1] == '\n') {
-            pp_next(state); pp_next(state);
+        if ((c == '\n' || c == '\r') && !in_comment) break;
+        if (pp_is_line_continuation(state)) {
+            pp_next(state);
+            if (pp_peek(state) == '\n' || pp_peek(state) == '\r') pp_next(state);
             continue;
         }
         if (!in_comment && c == '/' && state->src[state->pos + 1] == '/') {
@@ -918,7 +963,7 @@ static void pp_read_macro_body(PPState *state, PPMacro *m, int max_limit) {
             continue;
         }
         pp_next(state);
-        if (!in_comment && c != '\n') m->body[i++] = c;
+        if (!in_comment && c != '\n' && c != '\r') m->body[i++] = c;
     }
     m->body[i] = 0;
 }
@@ -946,6 +991,19 @@ static char *pp_read_file(const char *path, int *out_len) {
     if (!buf) { fclose(fp); return 0; }
     
     nr = fread(buf, 1, len, fp);
+    {
+        long r = 0, w = 0;
+        while (r < nr) {
+            char c = buf[r++];
+            if (c == '\r') {
+                if (r < nr && buf[r] == '\n') r++;
+                buf[w++] = '\n';
+            } else {
+                buf[w++] = c;
+            }
+        }
+        nr = w;
+    }
     buf[nr] = 0;
     fclose(fp);
     
@@ -1924,11 +1982,27 @@ char *zcc_preprocess(const char *source, int source_len,
                      const char *include_paths,
                      int *out_len) {
     PPState *state = (PPState *)malloc(sizeof(PPState));
+    char *normalized_src = (char *)malloc(source_len + 1);
     char *result;
+    int normalized_len = 0;
     memset(state, 0, sizeof(PPState));
-    
-    state->src = source;
-    state->len = source_len;
+
+    {
+        int r = 0;
+        while (r < source_len) {
+            char c = source[r++];
+            if (c == '\r') {
+                if (r < source_len && source[r] == '\n') r++;
+                normalized_src[normalized_len++] = '\n';
+            } else {
+                normalized_src[normalized_len++] = c;
+            }
+        }
+        normalized_src[normalized_len] = 0;
+    }
+
+    state->src = normalized_src;
+    state->len = normalized_len;
     state->filename = filename;
     state->include_paths = include_paths;
     state->line = 1;
@@ -2000,6 +2074,7 @@ char *zcc_preprocess(const char *source, int source_len,
             state->macros[i].body_cap = 0;
         }
     }
+    free(normalized_src);
     free(state);
     return result;
 }
@@ -3175,19 +3250,9 @@ int peek_token(Compiler *cc) {
 #include "part1.c"
 #endif
 
-/* C99/POSIX support for curl graduation — see commit 262bd08 */
 /* ================================================================ */
 /* PARSER                                                            */
 /* ================================================================ */
-
-/* CG-HARDEN-SILENT-001: per-cap warning flags (one warning per cap per compilation) */
-static int _warned_max_structs = 0;
-static int _warned_max_params = 0;
-static int _warned_max_strings = 0;
-static int _warned_max_call_args = 0;
-static int _warned_max_cases = 0;
-static int _warned_max_init = 0;
-static int _warned_max_globals = 0;
 
 static int is_type_token(Compiler *cc) {
     if (cc->tk >= TK_INT && cc->tk <= TK_DOUBLE) return 1;
@@ -3202,10 +3267,7 @@ static int is_type_token(Compiler *cc) {
         Symbol *sym;
         sym = scope_find(cc, cc->tk_text);
         if (sym) {
-            if (sym->is_typedef) {
-                if (getenv("ZCC_DEBUG")) printf("!!! %s is a TYPEDEF !!!\n", cc->tk_text);
-                return 1;
-            }
+            if (sym->is_typedef) return 1;
         }
     }
     return 0;
@@ -3223,8 +3285,6 @@ static void register_struct(Compiler *cc, Type *t) {
     if (cc->num_structs < MAX_STRUCTS) {
         cc->structs[cc->num_structs] = t;
         cc->num_structs++;
-    } else {
-        if (!_warned_max_structs) { printf("zcc: warning: MAX_STRUCTS (%d) exceeded at %s:%d — subsequent struct types silently discarded\n", MAX_STRUCTS, cc->filename ? cc->filename : "?", cc->tk_line); _warned_max_structs = 1; }
     }
 }
 
@@ -3385,13 +3445,6 @@ static long long parse_const_expr_primary(Compiler *cc) {
     if (cc->tk == TK_LPAREN) {
         long long val;
         next_token(cc);
-        /* Handle casts: (int)expr, (unsigned long)expr, etc. */
-        if (is_type_token(cc)) {
-            /* Skip the type and closing paren, then evaluate the expression */
-            while (cc->tk != TK_RPAREN && cc->tk != TK_EOF) next_token(cc);
-            expect(cc, TK_RPAREN);
-            return parse_const_expr_unary(cc);
-        }
         val = parse_const_expr(cc);
         expect(cc, TK_RPAREN);
         return val;
@@ -3414,6 +3467,8 @@ static long long parse_const_expr_primary(Compiler *cc) {
     next_token(cc);
     return 0;
 }
+
+static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union);
 
 static Type *parse_struct_or_union(Compiler *cc, int is_union) {
     Type *stype;
@@ -3452,27 +3507,31 @@ static Type *parse_struct_or_union(Compiler *cc, int is_union) {
     }
     if (!stype) {
         stype = type_new(cc, is_union ? TY_UNION : TY_STRUCT);
+        if (cc->pending_tbfp) {
+            stype->is_tbfp = 1;
+            cc->pending_tbfp = 0;
+        }
         if (has_tag) {
             strncpy(stype->tag, tag, MAX_IDENT - 1);
             register_struct(cc, stype);
         }
-        /* Consume pending attribute flags immediately on creation (ATTR-UNKNOWN-001)
-         * Must happen here, not at the '{' boundary, to prevent leakage from
-         * __attribute__ annotations inside #include'd system headers. */
-        if (cc->pending_packed) {
-            stype->is_packed = 1;
-            cc->pending_packed = 0;
-        }
-        if (cc->pending_aligned_n) {
-            stype->explicit_align = cc->pending_aligned_n;
-            cc->pending_aligned_n = 0;
-        }
-    } else {
-        /* Existing struct found — discard any stale pending flags */
-        cc->pending_packed = 0;
-        cc->pending_aligned_n = 0;
+    } else if (cc->pending_tbfp) {
+        stype->is_tbfp = 1;
+        cc->pending_tbfp = 0;
     }
 
+    return parse_struct_or_union_body(cc, stype, is_union);
+}
+
+static int get_member_size(Type *stype, Type *ftype) {
+    if (stype && stype->is_tbfp) {
+        if (ftype->kind == TY_FLOAT) return 2;
+        if (ftype->kind == TY_DOUBLE) return 5;
+    }
+    return type_size(ftype);
+}
+
+static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union) {
     expect(cc, TK_LBRACE);
 
     {
@@ -3515,8 +3574,8 @@ static Type *parse_struct_or_union(Compiler *cc, int is_union) {
                 field->offset = 0;
                 if (type_size(ftype) > max_size) max_size = type_size(ftype);
             } else {
-                /* align offset — skip when struct is packed (ATTR-UNKNOWN-001) */
-                if (!stype->is_packed && falign > 1) {
+                /* align offset */
+                if (falign > 1) {
                     offset = (offset + falign - 1) & ~(falign - 1);
                 }
                 field->offset = offset;
@@ -3555,8 +3614,7 @@ static Type *parse_struct_or_union(Compiler *cc, int is_union) {
                     field2->offset = 0;
                     if (type_size(ftype2) > max_size) max_size = type_size(ftype2);
                 } else {
-                    /* skip alignment when packed (ATTR-UNKNOWN-001) */
-                    if (!stype->is_packed && falign2 > 1) {
+                    if (falign2 > 1) {
                         offset = (offset + falign2 - 1) & ~(falign2 - 1);
                     }
                     field2->offset = offset;
@@ -3570,35 +3628,20 @@ static Type *parse_struct_or_union(Compiler *cc, int is_union) {
             expect(cc, TK_SEMI);
         }
 
-        if (is_union) {
+            if (is_union) {
             stype->size = max_size;
         } else {
             stype->size = offset;
         }
-        /* align total size — skip trailing padding when packed; apply explicit_align if set */
-        if (stype->explicit_align > 0) {
-            int ea = stype->explicit_align;
-            stype->size = (stype->size + ea - 1) & ~(ea - 1);
-            stype->align = ea;
-        } else if (!stype->is_packed && max_align > 1) {
+        /* align total size */
+        if (max_align > 1) {
             stype->size = (stype->size + max_align - 1) & ~(max_align - 1);
-            stype->align = max_align;
-        } else {
-            stype->align = stype->is_packed ? 1 : max_align;
         }
+        stype->align = max_align;
         stype->is_complete = 1;
     }
 
     expect(cc, TK_RBRACE);
-    
-    if (cc->debug_abi_classes && stype->is_complete) {
-        abi_class_t eb[2];
-        classify_aggregate(stype, eb);
-        printf("ABI-CLASS: %s (size=%d, align=%d) -> lo:%d, hi:%d\n",
-               stype->tag[0] ? stype->tag : "<anon>",
-               stype->size, stype->align, (int)eb[0], (int)eb[1]);
-    }
-
     if (stype->tag[0] && (strcmp(stype->tag, "yyStackEntry") == 0 || strcmp(stype->tag, "yyParser") == 0 || strcmp(stype->tag, "Walker") == 0)) {
         int n = 0;
         StructField *f = stype->fields;
@@ -3911,8 +3954,6 @@ Type *parse_declarator(Compiler *cc, Type *base, char *name_out) {
                             if (ftype->num_params < MAX_PARAMS) {
                                 ftype->params[ftype->num_params] = ptype;
                                 ftype->num_params++;
-                            } else {
-                                if (!_warned_max_params) { printf("zcc: warning: MAX_PARAMS (%d) exceeded at %s:%d — subsequent params silently discarded\n", MAX_PARAMS, cc->filename ? cc->filename : "?", cc->tk_line); _warned_max_params = 1; }
                             }
                             if (cc->tk == TK_COMMA) {
                                 next_token(cc);
@@ -3985,8 +4026,6 @@ Type *parse_declarator(Compiler *cc, Type *base, char *name_out) {
                     if (ftype->num_params < MAX_PARAMS) {
                         ftype->params[ftype->num_params] = ptype;
                         ftype->num_params++;
-                    } else {
-                        if (!_warned_max_params) { printf("zcc: warning: MAX_PARAMS (%d) exceeded at %s:%d — subsequent params silently discarded\n", MAX_PARAMS, cc->filename ? cc->filename : "?", cc->tk_line); _warned_max_params = 1; }
                     }
 
                     if (cc->tk == TK_COMMA) {
@@ -4037,12 +4076,7 @@ Node *parse_primary(Compiler *cc) {
     }
 
     if (cc->tk == TK_FLIT) {
-        /* CG-FLOAT-007: lexer sets tk_text[0]='F' for f/F suffix literals.
-         * Value was already rounded to float precision by the lexer.
-         * Use ty_float so the AST node carries the correct type. */
-        int is_float_suffix = (cc->tk_text[0] == 'F');
         n = node_flit(cc, cc->tk_fval, line);
-        if (is_float_suffix) n->type = cc->ty_float;
         next_token(cc);
         return n;
     }
@@ -4063,11 +4097,9 @@ Node *parse_primary(Compiler *cc) {
             se = &cc->strings[sid];
             se->data = cc_strdup(cc, cc->tk_str);
             se->len = cc->tk_str_len;
-            se->label_id = cc->str_label_count;
-            cc->str_label_count++;
+            se->label_id = cc->label_count;
+            cc->label_count++;
             cc->num_strings++;
-        } else {
-            if (!_warned_max_strings) { printf("zcc: warning: MAX_STRINGS (%d) exceeded at %s:%d — subsequent string literals silently discarded\n", MAX_STRINGS, cc->filename ? cc->filename : "?", cc->tk_line); _warned_max_strings = 1; }
         }
         n = node_new(cc, ND_STR, line);
         n->str_id = sid;
@@ -4111,6 +4143,13 @@ Node *parse_primary(Compiler *cc) {
             if (strcmp(n->name, "stdin") == 0 || strcmp(n->name, "stdout") == 0 || strcmp(n->name, "stderr") == 0) {
                 n->type = type_ptr(cc, cc->ty_char);
             } else {
+                /* ZCC SCOPING HARDENING: undeclared identifiers must be rejected    */
+                /* at AST build time. The old silent int decay caused CWE-476 healer */
+                /* mutations (guards inserted before decl) to survive bootstrap,     */
+                /* masking invalid C as applied_survived in the mutation log.        */
+                char _ud_buf[256];
+                sprintf(_ud_buf, "use of undeclared identifier '%s'", n->name);
+                error(cc, _ud_buf);
                 n->type = cc->ty_int;
             }
         }
@@ -4302,6 +4341,7 @@ Node *parse_postfix(Compiler *cc) {
                 if (f) {
                     member->member_offset = accumulated_offset;
                     member->type = f->type;
+                    member->member_size = get_member_size(n->type, f->type);
                     member->member_size = type_size(f->type);
                 } else {
                     char buf[256];
@@ -4347,7 +4387,7 @@ Node *parse_postfix(Compiler *cc) {
                 if (f) {
                     n->member_offset = accumulated_offset;
                     n->type = f->type;
-                    n->member_size = type_size(f->type);
+                    n->member_size = get_member_size(deref->type, f->type);
                 } else {
                     char buf[256];
                     sprintf(buf, "unknown struct member '%s' after -> in struct '%s' (type=%p, fields=%p)", cc->tk_text, (deref->type && deref->type->tag[0]) ? deref->type->tag : "<anon>", (void*)deref->type, deref->type ? (void*)deref->type->fields : NULL);
@@ -4383,7 +4423,6 @@ Node *parse_postfix(Compiler *cc) {
                         call->args[call->num_args] = parse_assign(cc);
                         call->num_args = call->num_args + 1;
                     } else {
-                        if (!_warned_max_call_args) { printf("zcc: warning: MAX_CALL_ARGS (%d) exceeded at %s:%d — subsequent call args silently discarded\n", MAX_CALL_ARGS, cc->filename ? cc->filename : "?", cc->tk_line); _warned_max_call_args = 1; }
                         parse_assign(cc);
                     }
                     if (cc->tk == TK_COMMA) {
@@ -4401,6 +4440,19 @@ Node *parse_postfix(Compiler *cc) {
                                 call->type = sym->type->ret;
                             } else {
                                 call->type = cc->ty_int;
+                            }
+                            /* ZKAEDI: Implicitly coerce arguments to parameter types */
+                            for (int k = 0; k < call->num_args; k++) {
+                                if (k < sym->type->num_params && sym->type->params && sym->type->params[k]) {
+                                    Type *pty = sym->type->params[k];
+                                    if (call->args[k] && call->args[k]->type && call->args[k]->type != pty) {
+                                        Node *c = node_new(cc, ND_CAST, line);
+                                        c->lhs = call->args[k];
+                                        c->cast_type = pty;
+                                        c->type = pty;
+                                        call->args[k] = c;
+                                    }
+                                }
                             }
                         } else {
                             call->type = cc->ty_int;
@@ -4429,7 +4481,6 @@ Node *parse_postfix(Compiler *cc) {
                         call->args[call->num_args] = parse_assign(cc);
                         call->num_args = call->num_args + 1;
                     } else {
-                        if (!_warned_max_call_args) { printf("zcc: warning: MAX_CALL_ARGS (%d) exceeded at %s:%d — subsequent call args silently discarded\n", MAX_CALL_ARGS, cc->filename ? cc->filename : "?", cc->tk_line); _warned_max_call_args = 1; }
                         parse_assign(cc);
                     }
                     if (cc->tk == TK_COMMA) {
@@ -4443,8 +4494,32 @@ Node *parse_postfix(Compiler *cc) {
                 if (n->type) {
                     if (n->type->kind == TY_FUNC) {
                         call->type = n->type->ret ? n->type->ret : cc->ty_int;
+                        for (int k = 0; k < call->num_args; k++) {
+                            if (k < n->type->num_params && n->type->params && n->type->params[k]) {
+                                Type *pty = n->type->params[k];
+                                if (call->args[k] && call->args[k]->type && call->args[k]->type != pty) {
+                                    Node *c = node_new(cc, ND_CAST, line);
+                                    c->lhs = call->args[k];
+                                    c->cast_type = pty;
+                                    c->type = pty;
+                                    call->args[k] = c;
+                                }
+                            }
+                        }
                     } else if (n->type->kind == TY_PTR && n->type->base && n->type->base->kind == TY_FUNC) {
                         call->type = n->type->base->ret ? n->type->base->ret : cc->ty_int;
+                        for (int k = 0; k < call->num_args; k++) {
+                            if (k < n->type->base->num_params && n->type->base->params && n->type->base->params[k]) {
+                                Type *pty = n->type->base->params[k];
+                                if (call->args[k] && call->args[k]->type && call->args[k]->type != pty) {
+                                    Node *c = node_new(cc, ND_CAST, line);
+                                    c->lhs = call->args[k];
+                                    c->cast_type = pty;
+                                    c->type = pty;
+                                    call->args[k] = c;
+                                }
+                            }
+                        }
                     } else {
                         call->type = cc->ty_int;
                     }
@@ -4553,7 +4628,7 @@ Node *parse_unary(Compiler *cc) {
             if (cc->tk == TK_LBRACE) {
                 Symbol *sym;
                 char tmp_name[32];
-                sprintf(tmp_name, ".LS_comp_%d", cc->str_label_count++);
+                sprintf(tmp_name, ".L_comp_%d", cc->label_count++);
                 sym = scope_add_local(cc, tmp_name, cast_type);
 
                 Node *var_n_final = node_new(cc, ND_VAR, line);
@@ -4716,15 +4791,6 @@ Node *parse_unary(Compiler *cc) {
         n = node_new(cc, ND_ADDR, line);
         n->lhs = parse_unary(cc);
         n->type = type_ptr(cc, n->lhs->type);
-        return n;
-    }
-    if (cc->tk == TK_LAND) {
-        /* GNU C Extension: address of label &&label */
-        next_token(cc);
-        n = node_new(cc, ND_ADDR_LABEL, line);
-        strncpy(n->label_name, cc->tk_text, MAX_IDENT - 1);
-        expect(cc, TK_IDENT);
-        n->type = type_ptr(cc, cc->ty_void); /* void * */
         return n;
     }
     if (cc->tk == TK_INC) {
@@ -5117,49 +5183,29 @@ Node *parse_stmt(Compiler *cc) {
     line = cc->tk_line;
 
     /* Skip __asm__(...) / asm(...) / __asm(...) statements */
-    if (cc->tk == TK_IDENT) {
-        if (strcmp(cc->tk_text, "__asm__") == 0 ||
-            strcmp(cc->tk_text, "asm") == 0 ||
-            strcmp(cc->tk_text, "__asm") == 0) {
-            next_token(cc); /* consume asm keyword */
-            /* skip optional volatile qualifier */
-            if (cc->tk == TK_IDENT && (strcmp(cc->tk_text, "__volatile__") == 0 ||
-                strcmp(cc->tk_text, "volatile") == 0)) {
-                next_token(cc);
-            }
-            if (cc->tk == TK_VOLATILE) next_token(cc);
-            if (cc->tk == TK_LPAREN) {
-                int depth = 1;
-                next_token(cc);
-                while (depth > 0 && cc->tk != TK_EOF) {
-                    if (cc->tk == TK_LPAREN) depth++;
-                    else if (cc->tk == TK_RPAREN) depth--;
-                    if (depth > 0) next_token(cc);
-                }
-                if (cc->tk == TK_RPAREN) next_token(cc);
-            }
-            if (cc->tk == TK_SEMI) next_token(cc);
-            return node_new(cc, ND_NOP, line);
-        }
-    }
-
-    /* inline assembly */
-    if (cc->tk == TK_ASM) {
-        Node *n;
-        next_token(cc);
-        if (cc->tk == TK_VOLATILE) next_token(cc);
-        expect(cc, TK_LPAREN);
-        n = node_new(cc, ND_ASM, line);
-        if (cc->tk == TK_STR) {
-            n->asm_string = cc_strdup(cc, cc->tk_str);
+    if (cc->tk == TK_ASM || (cc->tk == TK_IDENT && (
+        strcmp(cc->tk_text, "__asm__") == 0 ||
+        strcmp(cc->tk_text, "asm") == 0 ||
+        strcmp(cc->tk_text, "__asm") == 0))) {
+        next_token(cc); /* consume asm keyword */
+        /* skip optional volatile qualifier */
+        if (cc->tk == TK_IDENT && (strcmp(cc->tk_text, "__volatile__") == 0 ||
+            strcmp(cc->tk_text, "volatile") == 0)) {
             next_token(cc);
-        } else {
-            error(cc, "expected string literal in asm");
-            n->asm_string = "";
         }
-        expect(cc, TK_RPAREN);
-        expect(cc, TK_SEMI);
-        return n;
+        if (cc->tk == TK_VOLATILE) next_token(cc);
+        if (cc->tk == TK_LPAREN) {
+            int depth = 1;
+            next_token(cc);
+            while (depth > 0 && cc->tk != TK_EOF) {
+                if (cc->tk == TK_LPAREN) depth++;
+                else if (cc->tk == TK_RPAREN) depth--;
+                if (depth > 0) next_token(cc);
+            }
+            if (cc->tk == TK_RPAREN) next_token(cc);
+        }
+        if (cc->tk == TK_SEMI) next_token(cc);
+        return node_new(cc, ND_NOP, line);
     }
 
     /* block */
@@ -5220,18 +5266,9 @@ Node *parse_stmt(Compiler *cc) {
         next_token(cc);
         ret = node_new(cc, ND_RETURN, line);
         if (cc->tk != TK_SEMI) {
-            Node *ret_expr = parse_expr(cc);
-            /* CG-FLOAT-005: coerce return value to declared return type.
-             * Prevents e.g. ND_FLIT (ty_double) being returned raw from a
-             * float-returning function — low 32 bits of double = 0.0 */
-            if (cc->current_func[0]) {
-                Symbol *fsym = scope_find(cc, cc->current_func);
-                if (fsym && fsym->type && fsym->type->ret)
-                    ret_expr = ensure_type(cc, ret_expr, fsym->type->ret);
-            }
-            ret->lhs = ret_expr;
+            ret->lhs = parse_expr(cc);
         }
-        expect(cc, TK_SEMI);
+            expect(cc, TK_SEMI);
         return ret;
     }
 
@@ -5353,7 +5390,7 @@ Node *parse_stmt(Compiler *cc) {
         expect(cc, TK_COLON);
 
         cn = node_new(cc, ND_LABEL, line);
-        sprintf(cn->label_name, "__zc_%llx_%d", (unsigned long long)val, cc->label_count++);
+        sprintf(cn->label_name, "__zc_%llx_%d", (unsigned long long)val, line);
         cn->lhs = parse_stmt(cc);
 
         if (current_sw && current_sw->num_cases < MAX_CASES) {
@@ -5363,8 +5400,6 @@ Node *parse_stmt(Compiler *cc) {
             strncpy(gto->label_name, cn->label_name, MAX_IDENT - 1);
             cnode->case_body = gto;
             current_sw->cases[current_sw->num_cases++] = cnode;
-        } else if (current_sw) {
-            if (!_warned_max_cases) { printf("zcc: warning: MAX_CASES (%d) exceeded at %s:%d — subsequent case labels silently discarded\n", MAX_CASES, cc->filename ? cc->filename : "?", cc->tk_line); _warned_max_cases = 1; }
         }
         return cn;
     }
@@ -5377,7 +5412,7 @@ Node *parse_stmt(Compiler *cc) {
         expect(cc, TK_COLON);
 
         dn = node_new(cc, ND_LABEL, line);
-        sprintf(dn->label_name, "__zc_def_%d", cc->label_count++);
+        sprintf(dn->label_name, "__zc_def_%d", line);
         dn->lhs = parse_stmt(cc);
 
         if (current_sw) {
@@ -5412,13 +5447,6 @@ Node *parse_stmt(Compiler *cc) {
     if (cc->tk == TK_GOTO) {
         Node *gto;
         next_token(cc);
-        if (cc->tk == TK_STAR) {
-            next_token(cc); /* consume * */
-            gto = node_new(cc, ND_GOTO_COMPUTED, line);
-            gto->lhs = parse_expr(cc);
-            expect(cc, TK_SEMI);
-            return gto;
-        }
         gto = node_new(cc, ND_GOTO, line);
         strncpy(gto->label_name, cc->tk_text, MAX_IDENT - 1);
         next_token(cc);
@@ -5473,7 +5501,7 @@ Node *parse_stmt(Compiler *cc) {
                         sym->is_typedef = 1;
                     } else if (is_static_local) {
                         char mangled[MAX_IDENT];
-                        sprintf(mangled, "%s__%s__S_%d", cc->current_func, vname, cc->str_label_count++);
+                        sprintf(mangled, "%s__%s__%d", cc->current_func, vname, cc->label_count++);
                         sym = scope_add_local(cc, vname, vtype);
                         sym->is_local = 0;
                         sym->is_global = 1;
@@ -5491,10 +5519,8 @@ Node *parse_stmt(Compiler *cc) {
                                 Node *init_list;
                                 Node **inits;
                                 int count;
-                                int init_cap;
                                 init_list = node_new(cc, ND_INIT_LIST, line);
-                                init_cap = 64;
-                                inits = (Node **)cc_alloc(cc, sizeof(Node *) * init_cap);
+                                inits = (Node **)cc_alloc(cc, sizeof(Node *) * MAX_INIT);
                                 count = 0;
                                 next_token(cc); /* skip { */
                                 int depth = 1;
@@ -5521,14 +5547,11 @@ Node *parse_stmt(Compiler *cc) {
                                         next_token(cc);
                                     } else {
                                         skip_tk = cc->tk;
-                                        if (count >= init_cap) {
-                                            Node **old_inits = inits;
-                                            int gi;
-                                            init_cap *= 2;
-                                            inits = (Node **)cc_alloc(cc, sizeof(Node *) * init_cap);
-                                            for (gi = 0; gi < count; gi++) inits[gi] = old_inits[gi];
+                                        if (count < MAX_INIT) {
+                                            inits[count++] = parse_assign(cc);
+                                        } else {
+                                            parse_assign(cc);
                                         }
-                                        inits[count++] = parse_assign(cc);
                                         if (cc->tk == skip_tk) {
                                             if (cc->tk != TK_EOF) next_token(cc);
                                         }
@@ -5566,8 +5589,7 @@ Node *parse_stmt(Compiler *cc) {
                             }
                         }
 
-                        if (cc->num_globals < MAX_GLOBALS) { cc->globals[cc->num_globals++] = gvar; }
-                        else { if (!_warned_max_globals) { printf("zcc: warning: MAX_GLOBALS (%d) exceeded at %s:%d — subsequent globals silently discarded\n", MAX_GLOBALS, cc->filename ? cc->filename : "?", cc->tk_line); _warned_max_globals = 1; } }
+                        if (cc->num_globals < MAX_GLOBALS) cc->globals[cc->num_globals++] = gvar;
                     } else {
                         sym = scope_add_local(cc, vname, vtype);
 
@@ -5674,8 +5696,7 @@ Node *parse_stmt(Compiler *cc) {
                                         deref->type = elem_type;
                                         asgn = node_new(cc, ND_ASSIGN, line);
                                         asgn->lhs = deref;
-                                        /* CG-FLOAT-006: coerce array element initializer */
-                                        asgn->rhs = ensure_type(cc, inits[idx], elem_type);
+                                        asgn->rhs = inits[idx];
                                         asgn->type = elem_type;
                                         block->stmts[cnt] = asgn;
                                         cnt++;
@@ -5760,8 +5781,7 @@ Node *parse_stmt(Compiler *cc) {
                                         }
                                         asgn_n = node_new(cc, ND_ASSIGN, line);
                                         asgn_n->lhs = mem_n;
-                                        /* CG-FLOAT-006: coerce struct field initializer */
-                                        asgn_n->rhs = ensure_type(cc, inits_s[fi], mem_n->type);
+                                        asgn_n->rhs = inits_s[fi];
                                         asgn_n->type = mem_n->type;
                                         /* Grow block if needed */
                                         if (cnt >= cap) {
@@ -5840,7 +5860,7 @@ Node *parse_stmt(Compiler *cc) {
                             var->type = vtype;
                             asgn = node_new(cc, ND_ASSIGN, line);
                             asgn->lhs = var;
-                            asgn->rhs = ensure_type(cc, parse_assign(cc), vtype);
+                            asgn->rhs = parse_assign(cc);
                             asgn->type = vtype;
                             if (cnt < cap) {
                                 block->stmts[cnt] = asgn;
@@ -5898,7 +5918,6 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
 
     line = cc->tk_line;
     func = node_new(cc, ND_FUNC_DEF, line);
-    func->func_params = cc_alloc(cc, sizeof(struct FuncParams));
     strncpy(func->func_def_name, name, MAX_IDENT - 1);
     func->is_static = is_static;
 
@@ -5937,12 +5956,10 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
                 if (ptype->kind == TY_ARRAY) ptype = type_ptr(cc, ptype->base);
 
                 if (func->num_params < MAX_PARAMS) {
-                    func->func_params->types[func->num_params] = ptype;
-                    strncpy(func->func_params->names[func->num_params], pname, MAX_IDENT - 1);
+                    func->param_types[func->num_params] = ptype;
+                    strncpy(func->param_names_buf[func->num_params], pname, MAX_IDENT - 1);
                     psym = scope_add_local(cc, pname, ptype);
                     func->num_params++;
-                } else {
-                    if (!_warned_max_params) { printf("zcc: warning: MAX_PARAMS (%d) exceeded at %s:%d — subsequent function params silently discarded\n", MAX_PARAMS, cc->filename ? cc->filename : "?", cc->tk_line); _warned_max_params = 1; }
                 }
 
                 if (cc->tk == TK_COMMA) {
@@ -5954,10 +5971,7 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
                     if (cc->tk == TK_ARROW) {
                         error(cc, "unexpected '->' in parameter list (missing ',' or ')'?)");
                     } else {
-                        if (getenv("ZCC_DEBUG")) printf("!!! parse_fparams ERROR !!! func='%s' param_idx=%d tk_text='%s' tk=%d prev_pname='%s'\n", func->func_def_name, func->num_params, cc->tk_text, cc->tk, func->num_params > 0 ? func->func_params->names[func->num_params - 1] : "NONE");
-                        char buf[256];
-                        sprintf(buf, "expected ',' or ')' after parameter [at token '%s']", cc->tk_text);
-                        error(cc, buf);
+                        error(cc, "expected ',' or ')' after parameter");
                     }
                     while (cc->tk != TK_RPAREN && cc->tk != TK_EOF) next_token(cc);
                     break;
@@ -5966,6 +5980,20 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
         }
     }
     expect(cc, TK_RPAREN);
+
+    /* Populate func->func_params from the inline capture arrays so
+     * codegen_func (part4.c) can safely do func->func_params->types[i].
+     * cc_alloc uses the arena so this is lifetime-safe. */
+    {
+        struct FuncParams *fp = (struct FuncParams *)cc_alloc(cc, sizeof(struct FuncParams));
+        int k;
+        for (k = 0; k < func->num_params && k < MAX_PARAMS; k++) {
+            fp->types[k] = func->param_types[k];
+            strncpy(fp->names[k], func->param_names_buf[k], MAX_IDENT - 1);
+            fp->names[k][MAX_IDENT - 1] = '\0';
+        }
+        func->func_params = fp;
+    }
 
     /* CG-IR-VARARGS: Reserve the first 48 bytes exclusively for reg_save_area */
     if (is_variadic && cc->local_offset > -48) {
@@ -5982,7 +6010,7 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
         if (func->num_params > 0) {
             ftype->params = (Type **)cc_alloc(cc, sizeof(Type *) * func->num_params);
             for (int k = 0; k < func->num_params; k++) {
-                ftype->params[k] = func->func_params->types[k];
+                ftype->params[k] = func->param_types[k];
             }
         }
         func->func_type = ftype;
@@ -6080,9 +6108,8 @@ Node *parse_program(Compiler *cc) {
             if (cc->tk == TK_LPAREN) {
                 int gpk;
                 gpk = peek_token(cc);
-                if (gpk == TK_STAR || gpk == TK_IDENT) {
+                if (gpk == TK_STAR) {
                     /* function pointer: typedef int (*name)(params); or int (*fp)(int); */
-                    /* also handles parenthesized identifiers: LUA_API int (lua_gettop)(lua_State *L) */
                     int gptr;
                     int arr_lens[8];
                     int arr_num;
@@ -6150,8 +6177,6 @@ Node *parse_program(Compiler *cc) {
                                     if (ftype->num_params < MAX_PARAMS) {
                                         ftype->params[ftype->num_params] = ptype;
                                         ftype->num_params++;
-                                    } else {
-                                        if (!_warned_max_params) { printf("zcc: warning: MAX_PARAMS (%d) exceeded at %s:%d — subsequent params silently discarded\n", MAX_PARAMS, cc->filename ? cc->filename : "?", cc->tk_line); _warned_max_params = 1; }
                                     }
                                     if (cc->tk == TK_COMMA) {
                                         next_token(cc);
@@ -6179,14 +6204,18 @@ Node *parse_program(Compiler *cc) {
                     }
                     /* fall through to typedef / global var handling */
                     goto after_name;
-                } else if (is_typedef_kw && gpk == TK_IDENT) {
-                    /* typedef returntype (Name)(params) — function type typedef
-                     * e.g. typedef ssize_t (Curl_send)(struct X *, int, ...); */
+                } else if (gpk == TK_IDENT) {
+                    /* parenthesized name: type (name)(params)
+                     * Used pervasively in Lua 5.4.6 API headers:
+                     *   extern lua_State *(lua_newstate)(lua_Alloc f, void *ud);
+                     *   extern void       (lua_close)(lua_State *L);
+                     * Consume (name) then parse trailing (params). */
                     next_token(cc); /* consume ( */
-                    strncpy(name, cc->tk_text, MAX_IDENT - 1);
-                    next_token(cc); /* consume Name */
-                    expect(cc, TK_RPAREN); /* consume ) */
-                    /* Now parse the parameter list */
+                    if (cc->tk == TK_IDENT) {
+                        strncpy(name, cc->tk_text, MAX_IDENT - 1);
+                        next_token(cc);
+                    }
+                    expect(cc, TK_RPAREN);
                     if (cc->tk == TK_LPAREN) {
                         Type *ftype;
                         next_token(cc);
@@ -6195,35 +6224,16 @@ Node *parse_program(Compiler *cc) {
                         ftype->num_params = 0;
                         ftype->is_variadic = 0;
                         if (cc->tk != TK_RPAREN) {
-                            if (cc->tk == TK_VOID) {
-                                int vpk3 = peek_token(cc);
-                                if (vpk3 == TK_RPAREN) {
-                                    next_token(cc);
-                                } else {
-                                    goto parse_ft_params;
-                                }
+                            if (cc->tk == TK_VOID && peek_token(cc) == TK_RPAREN) {
+                                next_token(cc);
                             } else {
-                                parse_ft_params:
-                                while (cc->tk != TK_RPAREN) {
-                                    Type *ptype;
-                                    char pname[128];
-                                    if (cc->tk == TK_ELLIPSIS) {
-                                        ftype->is_variadic = 1;
-                                        next_token(cc);
-                                        break;
-                                    }
-                                    if (cc->tk == TK_EOF) break;
+                                while (cc->tk != TK_RPAREN && cc->tk != TK_EOF) {
+                                    Type *ptype; char pname[MAX_IDENT]; pname[0] = 0;
+                                    if (cc->tk == TK_ELLIPSIS) { ftype->is_variadic = 1; next_token(cc); break; }
                                     ptype = parse_type(cc);
                                     ptype = parse_declarator(cc, ptype, pname);
-                                    if (ftype->num_params < MAX_PARAMS) {
-                                        ftype->params[ftype->num_params] = ptype;
-                                        ftype->num_params++;
-                                    }
-                                    if (cc->tk == TK_COMMA) {
-                                        next_token(cc);
-                                    } else {
-                                        break;
-                                    }
+                                    if (ftype->num_params < MAX_PARAMS) ftype->params[ftype->num_params++] = ptype;
+                                    if (cc->tk == TK_COMMA) next_token(cc); else break;
                                 }
                             }
                         }
@@ -6235,6 +6245,7 @@ Node *parse_program(Compiler *cc) {
                     goto after_name;
                 }
             }
+
             if (cc->tk == TK_IDENT) {
                 strncpy(name, cc->tk_text, MAX_IDENT - 1);
                 next_token(cc);
@@ -6335,10 +6346,8 @@ Node *parse_program(Compiler *cc) {
                     Node *init_list;
                     Node **inits;
                     int count;
-                    int init_cap;
                     init_list = node_new(cc, ND_INIT_LIST, line);
-                    init_cap = 64;
-                    inits = (Node **)cc_alloc(cc, sizeof(Node *) * init_cap);
+                    inits = (Node **)cc_alloc(cc, sizeof(Node *) * MAX_INIT);
                     count = 0;
                     next_token(cc); /* skip { */
                     int depth = 1;
@@ -6365,14 +6374,11 @@ Node *parse_program(Compiler *cc) {
                             next_token(cc);
                         } else {
                             skip_tk = cc->tk;
-                            if (count >= init_cap) {
-                                Node **old_inits = inits;
-                                int gi;
-                                init_cap *= 2;
-                                inits = (Node **)cc_alloc(cc, sizeof(Node *) * init_cap);
-                                for (gi = 0; gi < count; gi++) inits[gi] = old_inits[gi];
+                            if (count < MAX_INIT) {
+                                inits[count++] = parse_assign(cc);
+                            } else {
+                                parse_assign(cc); /* discard if over limit */
                             }
-                            inits[count++] = parse_assign(cc);
                             if (cc->tk == skip_tk) {
                                 if (cc->tk != TK_EOF) next_token(cc);
                             }
@@ -6418,8 +6424,6 @@ Node *parse_program(Compiler *cc) {
             if (cc->num_globals < MAX_GLOBALS) {
                 cc->globals[cc->num_globals] = gvar;
                 cc->num_globals++;
-            } else {
-                if (!_warned_max_globals) { printf("zcc: warning: MAX_GLOBALS (%d) exceeded at %s:%d — subsequent globals silently discarded\n", MAX_GLOBALS, cc->filename ? cc->filename : "?", cc->tk_line); _warned_max_globals = 1; }
             }
 
             /* handle multiple declarators: int a, b; */
@@ -6448,8 +6452,6 @@ Node *parse_program(Compiler *cc) {
                 if (cc->num_globals < MAX_GLOBALS) {
                     cc->globals[cc->num_globals] = gvar2;
                     cc->num_globals++;
-                } else {
-                    if (!_warned_max_globals) { printf("zcc: warning: MAX_GLOBALS (%d) exceeded at %s:%d — subsequent globals silently discarded\n", MAX_GLOBALS, cc->filename ? cc->filename : "?", cc->tk_line); _warned_max_globals = 1; }
                 }
             }
 
@@ -9827,6 +9829,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     int alignment_pad;
     int cleanup_bytes;
     char args_ir_1d[2048];
+    int arg_is_stack[64];
 
     /* System V AMD64 (Linux): 6 register args: RDI, RSI, RDX, RCX, R8, R9; 7th+
      * on stack */
@@ -9855,14 +9858,51 @@ void codegen_expr(Compiler *cc, Node *node) {
     /* System V AMD64: no shadow space required. Space for 7th+ gp args and 9th+ fp args is left on the stack. */
     {
       int temp_gp = 0, temp_fp = 0;
-      for (i = 0; i < nargs; i++) {
-        if (node->args[i] && node->args[i]->type && is_float_type(node->args[i]->type)) {
-          if (temp_fp < 8) temp_fp++;
-        } else {
-          if (temp_gp < 6) temp_gp++;
-        }
+      int stack_slots = 0;
+      /* Resolve callee type early for arg classification */
+      Symbol *pre_sym = node->func_name[0] ? scope_find(cc, node->func_name) : 0;
+      Type *pre_ftype = (pre_sym && pre_sym->type && pre_sym->type->kind == TY_FUNC) ? pre_sym->type : 0;
+      if (!pre_ftype && node->lhs && node->lhs->type) {
+        Type *plt = node->lhs->type;
+        if (plt->kind == TY_FUNC) pre_ftype = plt;
+        else if (plt->kind == TY_PTR && plt->base && plt->base->kind == TY_FUNC) pre_ftype = plt->base;
       }
-      args_on_stack = nargs - (temp_gp + temp_fp);
+      for (i = 0; i < nargs; i++) {
+        Type *at = (node->args[i] && node->args[i]->type) ? node->args[i]->type : 0;
+        int is_stack = 0;
+        if (at && (at->kind == TY_STRUCT || at->kind == TY_UNION)) {
+            abi_class_t eb[2];
+            classify_aggregate(at, eb);
+            if (eb[0] == CLASS_MEMORY) {
+                is_stack = 1;
+            } else {
+                int needed_gp = 0, needed_fp = 0;
+                if (eb[0] == CLASS_SSE) needed_fp++; else needed_gp++;
+                if (type_size(at) > 8) {
+                    if (eb[1] == CLASS_SSE) needed_fp++; else needed_gp++;
+                }
+                if (temp_gp + needed_gp <= 6 && temp_fp + needed_fp <= 8) {
+                    temp_gp += needed_gp;
+                    temp_fp += needed_fp;
+                } else {
+                    is_stack = 1;
+                }
+            }
+        } else {
+            int is_fp = (at && is_float_type(at));
+            if (!is_fp && pre_ftype && pre_ftype->params && i < pre_ftype->num_params &&
+                pre_ftype->params[i] && is_float_type(pre_ftype->params[i])) is_fp = 1;
+            
+            if (is_fp) {
+                if (temp_fp < 8) temp_fp++; else is_stack = 1;
+            } else {
+                if (temp_gp < 6) temp_gp++; else is_stack = 1;
+            }
+        }
+        arg_is_stack[i] = is_stack;
+        if (is_stack) stack_slots += (at ? (type_size(at) + 7) / 8 : 1);
+      }
+      args_on_stack = stack_slots;
     }
     /* We must ensure that AFTER the args are on the stack, %rsp is 16-byte
      * aligned. */
@@ -9895,24 +9935,34 @@ void codegen_expr(Compiler *cc, Node *node) {
       }
       codegen_expr_checked(cc, node->args[i]);
       Type *atype = node->args[i]->type;
-      if (atype && (atype->kind == TY_STRUCT || atype->kind == TY_UNION)) {
-          abi_class_t eb[2];
-          classify_aggregate(atype, eb);
-          if (eb[0] != CLASS_MEMORY) {
-              /* Small aggregate: push by value (eightbytes) */
+      if (arg_is_stack[i]) {
+          if (atype && (atype->kind == TY_STRUCT || atype->kind == TY_UNION)) {
+              /* Move aggregate data to stack in 8-byte chunks */
+              int j, n_slots = (type_size(atype) + 7) / 8;
               fprintf(cc->out, "    movq %%rax, %%r10\n");
-              if (type_size(atype) > 8) {
-                  fprintf(cc->out, "    pushq 8(%%r10)\n");
+              for (j = n_slots - 1; j >= 0; j--) {
+                  fprintf(cc->out, "    pushq %d(%%r10)\n", j * 8);
                   cc->stack_depth++;
               }
-              fprintf(cc->out, "    pushq 0(%%r10)\n");
-              cc->stack_depth++;
-              continue;
+          } else {
+              push_reg(cc, "rax");
           }
+          continue;
+      }
+      /* REG arg: push placeholders for register loading pass */
+      if (atype && (atype->kind == TY_STRUCT || atype->kind == TY_UNION)) {
+          fprintf(cc->out, "    movq %%rax, %%r10\n");
+          if (type_size(atype) > 8) {
+              fprintf(cc->out, "    pushq 8(%%r10)\n");
+              cc->stack_depth++;
+          }
+          fprintf(cc->out, "    pushq 0(%%r10)\n");
+          cc->stack_depth++;
+      } else {
+          push_reg(cc, "rax");
       }
       ir_save_result(&args_ir_1d[i * 32]);
       ZCC_EMIT_ARG(ir_map_type(node->args[i] ? node->args[i]->type : 0), &args_ir_1d[i * 32], node->line);
-      push_reg(cc, "rax");
     }
 
     /* pop args into correct registers: floats->xmm, ints->gpregs independently */
@@ -9931,40 +9981,31 @@ void codegen_expr(Compiler *cc, Node *node) {
           callee_ftype = lt->base;
       }
        for (i = 0; i < nargs; i++) {
+        if (arg_is_stack[i]) continue;
         Type *atype = node->args[i]->type;
         if (atype && (atype->kind == TY_STRUCT || atype->kind == TY_UNION)) {
             abi_class_t eb[2];
             classify_aggregate(atype, eb);
-            if (eb[0] != CLASS_MEMORY) {
-                /* Small aggregate: pop eightbytes into correct registers. */
-                /* Pop eightbyte 0 */
-                if (eb[0] == CLASS_SSE) {
-                    if (fp_idx < 8) {
-                        fprintf(cc->out, "    popq %%rax\n");
-                        cc->stack_depth--;
-                        fprintf(cc->out, "    movq %%rax, %%xmm%d\n", fp_idx++);
-                    }
-                } else {
-                    if (gp_idx < 6) {
-                        pop_reg(cc, argregs[gp_idx++]);
-                    }
-                }
-                /* Pop eightbyte 1 */
-                if (type_size(atype) > 8) {
-                    if (eb[1] == CLASS_SSE) {
-                        if (fp_idx < 8) {
-                            fprintf(cc->out, "    popq %%rax\n");
-                            cc->stack_depth--;
-                            fprintf(cc->out, "    movq %%rax, %%xmm%d\n", fp_idx++);
-                        }
-                    } else {
-                        if (gp_idx < 6) {
-                            pop_reg(cc, argregs[gp_idx++]);
-                        }
-                    }
-                }
-                continue;
+            /* Small aggregate: pop eightbytes into correct registers. */
+            /* Pop eightbyte 0 */
+            if (eb[0] == CLASS_SSE) {
+                fprintf(cc->out, "    popq %%rax\n");
+                cc->stack_depth--;
+                fprintf(cc->out, "    movq %%rax, %%xmm%d\n", fp_idx++);
+            } else {
+                pop_reg(cc, argregs[gp_idx++]);
             }
+            /* Pop eightbyte 1 */
+            if (type_size(atype) > 8) {
+                if (eb[1] == CLASS_SSE) {
+                    fprintf(cc->out, "    popq %%rax\n");
+                    cc->stack_depth--;
+                    fprintf(cc->out, "    movq %%rax, %%xmm%d\n", fp_idx++);
+                } else {
+                    pop_reg(cc, argregs[gp_idx++]);
+                }
+            }
+            continue;
         }
         if (atype && is_float_type(atype)) {
           if (fp_idx < 8) {
@@ -9989,6 +10030,22 @@ void codegen_expr(Compiler *cc, Node *node) {
                 }
                 if (need_cvt) fprintf(cc->out, "    cvtsd2ss %%xmm%d, %%xmm%d\n", fp_idx, fp_idx);
               }
+            }
+            fp_idx++;
+          }
+        } else if (callee_ftype && callee_ftype->params && i < callee_ftype->num_params &&
+                   callee_ftype->params[i] && is_float_type(callee_ftype->params[i])) {
+          /* CG-FLOAT-ABI-FIX: implicit int-to-float/double conversion at call site.
+           * The arg expression is integer but the callee declares this param as
+           * float/double. SysV ABI requires float/double args in xmm registers.
+           * Convert the integer value and route to xmm instead of GP. */
+          if (fp_idx < 8) {
+            fprintf(cc->out, "    popq %%rax\n");
+            cc->stack_depth--;
+            if (callee_ftype->params[i]->kind == TY_FLOAT) {
+              fprintf(cc->out, "    cvtsi2ss %%eax, %%xmm%d\n", fp_idx);
+            } else {
+              fprintf(cc->out, "    cvtsi2sd %%rax, %%xmm%d\n", fp_idx);
             }
             fp_idx++;
           }
@@ -10456,6 +10513,13 @@ void codegen_stmt(Compiler *cc, Node *node) {
       ZCC_EMIT_LABEL(ir_lbl, node->line);
       if (node->cases[i]->case_body)
         codegen_stmt(cc, node->cases[i]->case_body);
+      /* IR: emit explicit fallthrough-guard BR to end if no terminator was
+       * already emitted by a return/break inside the case body.            */
+      if (g_ir_cur_func && g_ir_cur_func->tail &&
+          !ir_op_is_terminator(g_ir_cur_func->tail->op)) {
+        sprintf(ir_lbl, ".L%d", end_lbl);
+        ZCC_EMIT_BR(ir_lbl, node->line);
+      }
     }
     if (node->default_case) {
       emit_label_fmt(cc, default_lbl, FMT_DEF);
@@ -10463,6 +10527,11 @@ void codegen_stmt(Compiler *cc, Node *node) {
       ZCC_EMIT_LABEL(ir_lbl, node->line);
       if (node->default_case->case_body)
         codegen_stmt(cc, node->default_case->case_body);
+      if (g_ir_cur_func && g_ir_cur_func->tail &&
+          !ir_op_is_terminator(g_ir_cur_func->tail->op)) {
+        sprintf(ir_lbl, ".L%d", end_lbl);
+        ZCC_EMIT_BR(ir_lbl, node->line);
+      }
     }
 
     if (node->body)
@@ -10626,8 +10695,13 @@ static void compute_liveness(Node *n) {
     }
   }
 
-  compute_liveness(n->lhs);
-  compute_liveness(n->rhs);
+  if (n->kind == ND_ASSIGN) {
+    compute_liveness(n->rhs);
+    compute_liveness(n->lhs);
+  } else {
+    compute_liveness(n->lhs);
+    compute_liveness(n->rhs);
+  }
   compute_liveness(n->cond);
   compute_liveness(n->then_body);
   compute_liveness(n->else_body);
@@ -10814,65 +10888,57 @@ void codegen_func(Compiler *cc, Node *func) {
 
   scope_push(cc);
 
-  /* Store params from registers to their stack locations... */
+  /* Store params using System V ABI classification rules §3.2.3. */
   int param_offset = 0;
   int f_idx = 0;
   int gp_idx = 0;
+  int stack_arg_off = 16; /* args on stack start at 16(%rbp) */
   if (!backend_ops) {
   for (i = 0; i < func->num_params; i++) {
     Type *ptype = func->func_params->types[i];
     int sz = type_size(ptype);
-    if (sz < 8) sz = 8;
-    param_offset -= sz;
+    int slots = (sz + 7) / 8;
+    param_offset -= (slots * 8); // Always 8-byte aligned slots in the local frame
     
     if (ptype->kind == TY_STRUCT || ptype->kind == TY_UNION) {
         abi_class_t eb[2];
         classify_aggregate(ptype, eb);
-        if (eb[0] != CLASS_MEMORY) {
-            /* Small aggregate in registers: load each eightbyte from correct register set. */
-            if (eb[0] == CLASS_SSE) {
-                if (f_idx < 8) fprintf(cc->out, "    movq %%xmm%d, %d(%%rbp)\n", f_idx++, param_offset);
-            } else {
-                if (gp_idx < 6) fprintf(cc->out, "    movq %%%s, %d(%%rbp)\n", argregs[gp_idx++], param_offset);
+        int fits = (eb[0] != CLASS_MEMORY);
+        if (fits) {
+            int needed_gp = 0, needed_fp = 0;
+            if (eb[0] == CLASS_SSE) needed_fp++; else needed_gp++;
+            if (sz > 8) { if (eb[1] == CLASS_SSE) needed_fp++; else needed_gp++; }
+            if (gp_idx + needed_gp > 6 || f_idx + needed_fp > 8) fits = 0;
+        }
+
+        if (fits) {
+            /* Registers */
+            if (eb[0] == CLASS_SSE) fprintf(cc->out, "    movq %%xmm%d, %d(%%rbp)\n", f_idx++, param_offset);
+            else fprintf(cc->out, "    movq %%%s, %d(%%rbp)\n", argregs[gp_idx++], param_offset);
+            if (sz > 8) {
+                if (eb[1] == CLASS_SSE) fprintf(cc->out, "    movq %%xmm%d, %d(%%rbp)\n", f_idx++, param_offset + 8);
+                else fprintf(cc->out, "    movq %%%s, %d(%%rbp)\n", argregs[gp_idx++], param_offset + 8);
             }
-            if (type_size(ptype) > 8) {
-                if (eb[1] == CLASS_SSE) {
-                    if (f_idx < 8) fprintf(cc->out, "    movq %%xmm%d, %d(%%rbp)\n", f_idx++, param_offset + 8);
-                } else {
-                    if (gp_idx < 6) fprintf(cc->out, "    movq %%%s, %d(%%rbp)\n", argregs[gp_idx++], param_offset + 8);
-                }
+        } else {
+            /* Memory: data is directly on stack at stack_arg_off */
+            for (int j = 0; j < slots; j++) {
+                fprintf(cc->out, "    movq %d(%%rbp), %%rax\n", stack_arg_off + j * 8);
+                fprintf(cc->out, "    movq %%rax, %d(%%rbp)\n", param_offset + j * 8);
             }
-            continue;
-        }
-        /* MEMORY class: pointer is passed in next available GPR or on stack. */
-        if (gp_idx < 6) {
-          fprintf(cc->out, "    movq %%%s, %%r10\n", argregs[gp_idx]);
-          gp_idx++;
-        } else {
-          /* Fallback for many-args: ZCC simplified stack handling */
-          fprintf(cc->out, "    movq %d(%%rbp), %%r10\n", 16 + (i - 6) * 8);
-        }
-        int j;
-        for (j = 0; j < sz; j++) {
-            fprintf(cc->out, "    movb %d(%%r10), %%al\n", j);
-            fprintf(cc->out, "    movb %%al, %d(%%rbp)\n", param_offset + j);
-        }
-    } else if (is_float_type(ptype)) {
-        if (f_idx < 8) {
-            if (ptype->kind == TY_FLOAT) fprintf(cc->out, "    movss %%xmm%d, %d(%%rbp)\n", f_idx, param_offset);
-            else fprintf(cc->out, "    movsd %%xmm%d, %d(%%rbp)\n", f_idx, param_offset);
-            f_idx++;
-        } else {
-            fprintf(cc->out, "    movq %d(%%rbp), %%rax\n", 16 + (i - 6) * 8);
-            fprintf(cc->out, "    movq %%rax, %d(%%rbp)\n", param_offset);
+            stack_arg_off += slots * 8;
         }
     } else {
-        if (gp_idx < 6) {
-          fprintf(cc->out, "    movq %%%s, %d(%%rbp)\n", argregs[gp_idx], param_offset);
-          gp_idx++;
+        int is_fp = is_float_type(ptype);
+        if (is_fp && f_idx < 8) {
+            if (ptype->kind == TY_FLOAT) fprintf(cc->out, "    movss %%xmm%d, %d(%%rbp)\n", f_idx++, param_offset);
+            else fprintf(cc->out, "    movsd %%xmm%d, %d(%%rbp)\n", f_idx++, param_offset);
+        } else if (!is_fp && gp_idx < 6) {
+            fprintf(cc->out, "    movq %%%s, %d(%%rbp)\n", argregs[gp_idx++], param_offset);
         } else {
-          fprintf(cc->out, "    movq %d(%%rbp), %%rax\n", 16 + (i - 6) * 8);
-          fprintf(cc->out, "    movq %%rax, %d(%%rbp)\n", param_offset);
+            /* Pass on stack */
+            fprintf(cc->out, "    movq %d(%%rbp), %%rax\n", stack_arg_off);
+            fprintf(cc->out, "    movq %%rax, %d(%%rbp)\n", param_offset);
+            stack_arg_off += 8;
         }
     }
   }
@@ -11125,6 +11191,13 @@ static void emit_global_var(Compiler *cc, Node *gvar) {
   if (gvar->is_extern)
     return; /* no emission for extern */
 
+  /* Skip .comm for function declarations — they must not create BSS symbols
+   * that shadow the real glibc implementations at link time. This catches
+   * complex declarations like signal() that the parser may treat as vars. */
+  if (gvar->type && (gvar->type->kind == TY_FUNC ||
+      (gvar->type->kind == TY_PTR && gvar->type->base && gvar->type->base->kind == TY_FUNC)))
+    return;
+
   size = type_size(gvar->type);
   if (size <= 0)
     size = 8;
@@ -11248,7 +11321,11 @@ static void emit_global_var(Compiler *cc, Node *gvar) {
         } else {
             int i;
             int elem_size = 1;
-            if (gvar->type && gvar->type->base) elem_size = type_size(gvar->type->base);
+            Type *stype = gvar->type;
+            while (stype && stype->kind == TY_ARRAY) {
+                stype = stype->base;
+            }
+            if (stype) elem_size = type_size(stype);
             for (i = 0; i < init->num_args; i++) {
                 Node *elem = init->args[i];
                 int const_ok = 1;
@@ -11656,7 +11733,6 @@ int node_ptr_elem_size(struct Node *n) {
 }
 
 
-/* C99/POSIX support for curl graduation — see commit 262bd08 */
 /* ================================================================ */
 /* COMPILER INITIALIZATION                                           */
 /* ================================================================ */
@@ -11671,6 +11747,24 @@ int node_ptr_elem_size(struct Node *n) {
  */
 #include "part1.c"
 #endif
+
+/* Global telemetry control */
+static int enable_telemetry_stdout = 0;
+extern void ir_telemetry_enable_stdout(void);
+
+/* Manifold engine globals (defined in ir_pass_manager.c) */
+extern int  g_manifold_enabled;
+extern char g_ir_export_path[256];
+
+/* Peephole globals (defined in ir_peephole.c) */
+extern int  g_peephole_enabled;
+extern int  g_peephole_deterministic;
+extern int  g_peephole_verbose;
+
+/* Security pass globals */
+static int  g_security_signext = 0;
+static int  g_security_476 = 0;
+static int  g_security_787 = 0;
 
 static void init_compiler(Compiler *cc) {
   /* zero everyt5555hing — cc was calloc'd */
@@ -11701,8 +11795,7 @@ static void init_compiler(Compiler *cc) {
   cc->col = 1;
   cc->pos = 0;
   cc->has_peek = 0;
-  cc->label_count = 0;
-  cc->str_label_count = 0;
+  cc->label_count = 100; /* start at 100 to avoid clashes */
   cc->errors = 0;
   cc->num_strings = 0;
   cc->num_structs = 0;
@@ -11736,6 +11829,7 @@ static void init_compiler(Compiler *cc) {
         t_va->size = 24;
         t_va->align = 8;
         t_va->is_complete = 1;
+        t_va->is_tbfp = 0;
         sym = scope_add(cc, "__builtin_va_list", type_array(cc, t_va, 1));
     }
     sym->is_typedef = 1;
@@ -11744,87 +11838,6 @@ static void init_compiler(Compiler *cc) {
     sym = scope_add(cc, "_Float128", cc->ty_double);
     sym->is_typedef = 1;
 
-    /* POSIX / system typedefs — needed for GCC-preprocessed code */
-    sym = scope_add(cc, "socklen_t", cc->ty_int);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "sa_family_t", cc->ty_ushort);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "in_port_t", cc->ty_ushort);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "in_addr_t", cc->ty_uint);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "pid_t", cc->ty_int);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "uid_t", cc->ty_uint);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "gid_t", cc->ty_uint);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "mode_t", cc->ty_uint);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "off_t", cc->ty_long);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "time_t", cc->ty_long);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "clock_t", cc->ty_long);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "suseconds_t", cc->ty_long);
-    sym->is_typedef = 1;
-    sym = scope_add(cc, "nfds_t", cc->ty_ulong);
-    sym->is_typedef = 1;
-
-    /* glibc internal __ typedefs — survive GCC preprocessing */
-    sym = scope_add(cc, "__time_t", cc->ty_long);   sym->is_typedef = 1;
-    sym = scope_add(cc, "__clock_t", cc->ty_long);   sym->is_typedef = 1;
-    sym = scope_add(cc, "__pid_t", cc->ty_int);      sym->is_typedef = 1;
-    sym = scope_add(cc, "__uid_t", cc->ty_uint);     sym->is_typedef = 1;
-    sym = scope_add(cc, "__gid_t", cc->ty_uint);     sym->is_typedef = 1;
-    sym = scope_add(cc, "__off_t", cc->ty_long);     sym->is_typedef = 1;
-    sym = scope_add(cc, "__off64_t", cc->ty_long);   sym->is_typedef = 1;
-    sym = scope_add(cc, "__mode_t", cc->ty_uint);    sym->is_typedef = 1;
-    sym = scope_add(cc, "__dev_t", cc->ty_ulong);    sym->is_typedef = 1;
-    sym = scope_add(cc, "__ino_t", cc->ty_ulong);    sym->is_typedef = 1;
-    sym = scope_add(cc, "__nlink_t", cc->ty_ulong);  sym->is_typedef = 1;
-    sym = scope_add(cc, "__blksize_t", cc->ty_long); sym->is_typedef = 1;
-    sym = scope_add(cc, "__blkcnt_t", cc->ty_long);  sym->is_typedef = 1;
-    sym = scope_add(cc, "__ssize_t", cc->ty_long);   sym->is_typedef = 1;
-    sym = scope_add(cc, "__socklen_t", cc->ty_int);  sym->is_typedef = 1;
-    sym = scope_add(cc, "__suseconds_t", cc->ty_long); sym->is_typedef = 1;
-    sym = scope_add(cc, "__syscall_slong_t", cc->ty_long); sym->is_typedef = 1;
-    sym = scope_add(cc, "__syscall_ulong_t", cc->ty_ulong); sym->is_typedef = 1;
-    sym = scope_add(cc, "__intmax_t", cc->ty_long);  sym->is_typedef = 1;
-    sym = scope_add(cc, "__uintmax_t", cc->ty_ulong); sym->is_typedef = 1;
-    sym = scope_add(cc, "__intptr_t", cc->ty_long);  sym->is_typedef = 1;
-    sym = scope_add(cc, "__sig_atomic_t", cc->ty_int); sym->is_typedef = 1;
-    sym = scope_add(cc, "__clockid_t", cc->ty_int);  sym->is_typedef = 1;
-    sym = scope_add(cc, "__timer_t", type_ptr(cc, cc->ty_void)); sym->is_typedef = 1;
-    sym = scope_add(cc, "__loff_t", cc->ty_long);    sym->is_typedef = 1;
-    sym = scope_add(cc, "__key_t", cc->ty_int);      sym->is_typedef = 1;
-    sym = scope_add(cc, "__id_t", cc->ty_uint);      sym->is_typedef = 1;
-    sym = scope_add(cc, "__useconds_t", cc->ty_uint); sym->is_typedef = 1;
-    sym = scope_add(cc, "__daddr_t", cc->ty_int);    sym->is_typedef = 1;
-    sym = scope_add(cc, "__caddr_t", type_ptr(cc, cc->ty_char)); sym->is_typedef = 1;
-    sym = scope_add(cc, "__fsblkcnt_t", cc->ty_ulong); sym->is_typedef = 1;
-    sym = scope_add(cc, "__fsfilcnt_t", cc->ty_ulong); sym->is_typedef = 1;
-    sym = scope_add(cc, "__fsword_t", cc->ty_long);  sym->is_typedef = 1;
-    sym = scope_add(cc, "__rlim_t", cc->ty_ulong);   sym->is_typedef = 1;
-    sym = scope_add(cc, "__quad_t", cc->ty_long);    sym->is_typedef = 1;
-    sym = scope_add(cc, "__u_quad_t", cc->ty_ulong); sym->is_typedef = 1;
-
-
-    /* fd_set — used by select(). glibc: struct with __fds_bits[16] (128 bytes) */
-    {
-        Type *t_fdset = type_new(cc, TY_STRUCT);
-        strncpy(t_fdset->tag, "fd_set", MAX_IDENT - 1);
-        t_fdset->size = 128;
-        t_fdset->align = 8;
-        t_fdset->is_complete = 1;
-        sym = scope_add(cc, "fd_set", t_fdset);
-        sym->is_typedef = 1;
-    }
-
-    /* curl_socket_t — typically int on POSIX */
-    sym = scope_add(cc, "curl_socket_t", cc->ty_int);
-    sym->is_typedef = 1;
 
     /* NULL as enum constant */
     sym = scope_add(cc, "NULL", cc->ty_long);
@@ -12014,11 +12027,6 @@ static void init_compiler(Compiler *cc) {
       sym = scope_add(cc, "inet_pton", ft);
       sym->is_global = 1;
 
-      /* strtod — returns double */
-      ft = type_func(cc, cc->ty_double);
-      sym = scope_add(cc, "strtod", ft);
-      sym->is_global = 1;
-
       /* ctype functions — all return int */
       ft = type_func(cc, cc->ty_int);
       sym = scope_add(cc, "isalpha", ft); sym->is_global = 1;
@@ -12118,6 +12126,72 @@ static void init_compiler(Compiler *cc) {
       ft = type_func(cc, cc->ty_int);
       sym = scope_add(cc, "gettimeofday", ft);
       sym->is_global = 1;
+
+      /* Math functions — return double */
+      ft = type_func(cc, cc->ty_double);
+      sym = scope_add(cc, "log", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_double);
+      sym = scope_add(cc, "cos", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_double);
+      sym = scope_add(cc, "exp", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_double);
+      sym = scope_add(cc, "fabs", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_double);
+      sym = scope_add(cc, "sqrt", ft); sym->is_global = 1;
+
+      /* snprintf — returns int, variadic */
+      ft = type_func(cc, cc->ty_int);
+      ft->is_variadic = 1;
+      sym = scope_add(cc, "snprintf", ft);
+      sym->is_global = 1;
+
+      /* fputc — returns int */
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "fputc", ft);
+      sym->is_global = 1;
+
+      /* ferror — returns int */
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "ferror", ft);
+      sym->is_global = 1;
+
+      /* qsort — returns void */
+      ft = type_func(cc, cc->ty_void);
+      sym = scope_add(cc, "qsort", ft);
+      sym->is_global = 1;
+
+      /* fflush — returns int */
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "fflush", ft);
+      sym->is_global = 1;
+
+      /* strchr — returns char* */
+      ft = type_func(cc, type_ptr(cc, cc->ty_char));
+      sym = scope_add(cc, "strchr", ft);
+      sym->is_global = 1;
+
+      /* strtol — returns long */
+      ft = type_func(cc, cc->ty_long);
+      sym = scope_add(cc, "strtol", ft);
+      sym->is_global = 1;
+
+      /* atoi — returns int */
+      ft = type_func(cc, cc->ty_int);
+      sym = scope_add(cc, "atoi", ft);
+      sym->is_global = 1;
+
+      /* strcat, strncat — returns char* */
+      ft = type_func(cc, type_ptr(cc, cc->ty_char));
+      sym = scope_add(cc, "strcat", ft);
+      sym->is_global = 1;
+      ft = type_func(cc, type_ptr(cc, cc->ty_char));
+      sym = scope_add(cc, "strncat", ft);
+      sym->is_global = 1;
+
+      /* freopen — returns FILE* */
+      ft = type_func(cc, type_ptr(cc, cc->ty_void));
+      sym = scope_add(cc, "freopen", ft);
+      sym->is_global = 1;
     }
   }
 }
@@ -12164,7 +12238,6 @@ static char *read_file(char *path, int *out_len) {
 
 static char *line_buffer = 0;
 static char **line_ptrs = 0;
-static int  *line_skip = 0;
 
 static void peephole_optimize(char *filename) {
   FILE *fp;
@@ -12184,187 +12257,71 @@ static void peephole_optimize(char *filename) {
   if (!line_ptrs) {
     line_ptrs = (char **)malloc(MAX_PEEP_LINES * sizeof(char *));
   }
-  if (!line_skip) {
-    line_skip = (int *)malloc(MAX_PEEP_LINES * sizeof(int));
-  }
   line_buffer = (char *)malloc(file_size + MAX_PEEP_LINES * 128);
-  if (!line_buffer || !line_ptrs || !line_skip) {
+  if (!line_buffer || !line_ptrs) {
     fclose(fp);
     return;
   }
 
   while (nlines < MAX_PEEP_LINES && fgets(line_buffer + nlines * 128, 128, fp)) {
     line_ptrs[nlines] = line_buffer + nlines * 128;
-    line_skip[nlines] = 0;
     nlines++;
   }
   fclose(fp);
 
-  int changed;
-  char tmp1[64], tmp2[64];
-  char pop_reg[64];
-  char target[64], label[64];
-  char reg[64];
-  char src[64], dst1[64], dst2[64];
-  char imm_str[64];
-  long local_imm;
-  char val_str[32];
-
-peephole_loop:
-  changed = 0;
-
-  {
-    int out = 0;
-    int old_n = nlines;
-    for (i = 0; i < old_n; i++) {
-      if (line_skip[i] == 0 && line_ptrs[i][0] != '\n') {
-        line_ptrs[out] = line_ptrs[i];
-        line_skip[out] = 0;
-        out = out + 1;
-      }
-    }
-    for (i = out; i < old_n; i++) {
-      line_skip[i] = 0;
-    }
-    nlines = out;
-  }
-
   for (i = 0; i < nlines;) {
     char *l1 = line_ptrs[i];
-    int matched = 0;
 
     /* 1. Redundant Push/Pop */
     if (strncmp(l1, "    pushq ", 10) == 0 && i + 1 < nlines) {
       char *l2 = line_ptrs[i + 1];
       if (strncmp(l2, "    popq ", 9) == 0) {
+        char tmp1[64], tmp2[64];
         sscanf(l1, "    pushq %s", tmp1);
         sscanf(l2, "    popq %s", tmp2);
         if (strcmp(tmp1, tmp2) == 0) {
-          line_skip[i] = 1;
-          line_skip[i + 1] = 1;
+          line_ptrs[i][0] = 0;
+          line_ptrs[i + 1][0] = 0;
           eliminated += 2;
-          changed = 1;
           i += 2;
-          matched = 1;
+          continue;
         } else {
           sprintf(line_ptrs[i], "    movq %s, %s\n", tmp1, tmp2);
-          line_skip[i + 1] = 1;
+          line_ptrs[i + 1][0] = 0;
           eliminated += 2;
-          changed = 1;
           i += 2;
-          matched = 1;
+          continue;
         }
       }
     }
 
     /* 2. Arithmetic Nullification */
-    if (!matched && (strcmp(l1, "    addq $0, %rax\n") == 0 ||
+    if (strcmp(l1, "    addq $0, %rax\n") == 0 ||
         strcmp(l1, "    subq $0, %rax\n") == 0 ||
         strcmp(l1, "    addq $0, %rsp\n") == 0 ||
-        strcmp(l1, "    subq $0, %rsp\n") == 0)) {
-      line_skip[i] = 1;
+        strcmp(l1, "    subq $0, %rsp\n") == 0) {
+      line_ptrs[i][0] = 0;
       eliminated += 1;
-      changed = 1;
       i += 1;
-      matched = 1;
+      continue;
     }
 
     /* 3. Push/Lea/Pop Triad */
-    if (!matched && strncmp(l1, "    pushq %rax\n", 15) == 0 && i + 2 < nlines) {
+    if (strcmp(l1, "    pushq %rax\n") == 0 && i + 2 < nlines) {
       char *l2 = line_ptrs[i + 1];
       char *l3 = line_ptrs[i + 2];
-      int has_rax_dst = 0;
-      {
-        int si;
-        int l2len = 0;
-        while (l2[l2len]) l2len++;
-        for (si = 0; si + 5 < l2len; si++) {
-          if (l2[si] == ',' && l2[si+1] == ' ' && l2[si+2] == '%' &&
-              l2[si+3] == 'r' && l2[si+4] == 'a' && l2[si+5] == 'x') {
-            has_rax_dst = 1;
-            break;
-          }
-        }
-      }
-      if (strncmp(l2, "    leaq ", 9) == 0 && has_rax_dst &&
+      if (strncmp(l2, "    leaq ", 9) == 0 && strstr(l2, ", %rax") &&
           strncmp(l3, "    popq ", 9) == 0) {
+        char pop_reg[64];
         sscanf(l3, "    popq %s", pop_reg);
         sprintf(line_ptrs[i], "    movq %%rax, %s\n", pop_reg);
-        line_skip[i + 2] = 1;
+        line_ptrs[i + 2][0] = 0;
         eliminated += 3;
-        changed = 1;
         i += 3;
-        matched = 1;
+        continue;
       }
     }
-
-    /* 4. Branch Straightening */
-    if (!matched && strncmp(l1, "    jmp .L", 10) == 0 && i + 1 < nlines) {
-      if (sscanf(l1, "    jmp %63s", target) == 1) {
-        char *l2 = line_ptrs[i + 1];
-        if (l2[0] == '.' && l2[1] == 'L') {
-          if (sscanf(l2, "%63[^:]:", label) == 1 && strcmp(target, label) == 0) {
-            line_skip[i] = 1;
-            eliminated += 1;
-            changed = 1;
-            i += 1;
-            matched = 1;
-          }
-        }
-      }
-    }
-
-    /* 5. Zero-Test Optimization */
-    if (!matched && strncmp(l1, "    cmpq $0, %", 14) == 0) {
-      int ri;
-      strcpy(reg, l1 + 14);
-      /* Manually strip trailing newline — avoid strchr to prevent ZCC cltq bug */
-      for (ri = 0; ri < 63 && reg[ri]; ri++) {
-        if (reg[ri] == '\n') { reg[ri] = '\0'; break; }
-      }
-      strcpy(line_ptrs[i], "    testq %");
-      strcat(line_ptrs[i], reg);
-      strcat(line_ptrs[i], ", %");
-      strcat(line_ptrs[i], reg);
-      strcat(line_ptrs[i], "\n");
-      eliminated += 1;
-      changed = 1;
-      i += 1;
-      matched = 1;
-    }
-
-    /* 6. LEA Computation Fusion */
-    if (!matched && strncmp(l1, "    movq %", 10) == 0 && i + 1 < nlines) {
-      char *l2 = line_ptrs[i + 1];
-      if (strncmp(l2, "    addq $", 10) == 0) {
-        if (sscanf(l1, "    movq %%%[a-z0-9], %%%[a-z0-9]", src, dst1) == 2 &&
-            sscanf(l2, "    addq $%ld, %%%[a-z0-9]", &local_imm, dst2) == 2) {
-          if (strcmp(dst1, dst2) == 0) {
-            sprintf(val_str, "%ld", local_imm);
-            strcpy(line_ptrs[i], "    leaq ");
-            strcat(line_ptrs[i], val_str);
-            strcat(line_ptrs[i], "(%");
-            strcat(line_ptrs[i], src);
-            strcat(line_ptrs[i], "), %");
-            strcat(line_ptrs[i], dst1);
-            strcat(line_ptrs[i], "\n");
-
-            line_skip[i + 1] = 1;
-            eliminated += 2;
-            changed = 1;
-            i += 2;
-            matched = 1;
-          }
-        }
-      }
-    }
-
-    if (!matched) {
-      i++;
-    }
-  } 
-  if (changed) {
-      goto peephole_loop;
+    i++;
   }
 
   fp = fopen(filename, "w");
@@ -12373,13 +12330,456 @@ peephole_loop:
     return;
   }
   for (i = 0; i < nlines; i++) {
-    if (line_skip[i] == 0)
+    if (line_ptrs[i][0] != 0)
       fputs(line_ptrs[i], fp);
   }
   fclose(fp);
   free(line_buffer);
-  printf("[Phase 5] Native C Peephole Optimization... OK (%d elided)\n",
+  if (!enable_telemetry_stdout) printf("[Phase 5] Native C Peephole Optimization... OK (%d elided)\n",
          eliminated);
+}
+
+/* ================================================================ */
+/* SECURITY PASS: --security-signext (CWE-122)                       */
+/* Scans assembly for sign-extension (movsbl/movsbq) feeding         */
+/* memcpy/memset/memmove within a 15-instruction window.             */
+/* ================================================================ */
+
+/* Scan window: ZCC unoptimized codegen emits ~30-40 instructions of arg
+   setup between a sign-extending cast and the consuming memcpy call.
+   64 covers observed gaps (CVE-2023-38545: 34 lines) with margin. */
+#define SIGNEXT_WINDOW 64
+
+static void security_signext_scan(char *filename) {
+  FILE *fp;
+  int nlines = 0;
+  int findings = 0;
+  int i;
+  char current_func[128];
+  char *line_buf;
+  char **lp;
+  int max_lines = 32768;
+
+  fp = fopen(filename, "r");
+  if (!fp) return;
+
+  line_buf = (char *)malloc(max_lines * 128);
+  lp = (char **)malloc(max_lines * sizeof(char *));
+  if (!line_buf || !lp) { fclose(fp); return; }
+
+  current_func[0] = 0;
+  while (nlines < max_lines && fgets(line_buf + nlines * 128, 128, fp)) {
+    lp[nlines] = line_buf + nlines * 128;
+    nlines++;
+  }
+  fclose(fp);
+
+  for (i = 0; i < nlines; i++) {
+    /* Track current function */
+    if (lp[i][0] != ' ' && lp[i][0] != '\t' && lp[i][0] != '.' &&
+        lp[i][0] != '#' && lp[i][0] != '\n') {
+      int k = 0;
+      while (lp[i][k] && lp[i][k] != ':' && k < 127) {
+        current_func[k] = lp[i][k];
+        k++;
+      }
+      current_func[k] = 0;
+    }
+
+    /* Look for movsbl or movsbq (sign-extending byte to int/long) */
+    if (strstr(lp[i], "movsbl ") || strstr(lp[i], "movsbq ") ||
+        strstr(lp[i], "movswl ") || strstr(lp[i], "movswq ")) {
+      /* Scan forward within window for memcpy/memset/memmove call */
+      int j;
+      for (j = i + 1; j < nlines && j < i + SIGNEXT_WINDOW; j++) {
+        if (strstr(lp[j], "call memcpy") ||
+            strstr(lp[j], "call memset") ||
+            strstr(lp[j], "call memmove")) {
+          findings++;
+          printf("[--security-signext] CWE-122 WARNING: sign-extension at line %d "
+                 "feeds %s in %s() (asm lines %d->%d)\n",
+                 i + 1, strstr(lp[j], "call ") + 5,
+                 current_func[0] ? current_func : "<unknown>",
+                 i + 1, j + 1);
+          break;  /* don't double-report same sign-ext */
+        }
+        /* Stop at label or ret - different basic block */
+        if (lp[j][0] == '.' && lp[j][1] == 'L') break;
+        if (strstr(lp[j], "ret")) break;
+      }
+    }
+  }
+
+  free(line_buf);
+  free(lp);
+
+  if (findings) {
+    printf("[--security-signext] %d potential sign-extension overflow(s) found\n",
+           findings);
+  } else {
+    printf("[--security-signext] Clean: no sign-extension -> memcpy patterns\n");
+  }
+}
+
+/* ================================================================ */
+/* SECURITY PASS: --security-476 (CWE-476)                           */
+/* Scans assembly for nullable-return calls (malloc, calloc, realloc, */
+/* fopen, etc.) followed by dereference of %rax without null check.  */
+/* ================================================================ */
+
+#define NULLDEREF_WINDOW 30
+
+static int is_nullable_call(const char *line) {
+  return strstr(line, "call malloc") || strstr(line, "call calloc") ||
+         strstr(line, "call realloc") || strstr(line, "call fopen") ||
+         strstr(line, "call fdopen") || strstr(line, "call tmpfile") ||
+         strstr(line, "call strdup") || strstr(line, "call strndup") ||
+         strstr(line, "call mmap");
+}
+
+static int is_null_check(const char *line) {
+  /* testq %rax, %rax  or  cmpq $0, %rax */
+  return strstr(line, "testq %rax") || strstr(line, "cmpq $0, %rax") ||
+         strstr(line, "test %eax") || strstr(line, "cmp $0, %eax");
+}
+
+static int is_rax_deref(const char *line) {
+  /* (%rax) — memory access through %rax without offset guard */
+  return strstr(line, "(%rax)") != 0;
+}
+
+static int is_rax_moved(const char *line) {
+  /* movq %rax, %r.. — return value moved to another register */
+  if (strstr(line, "movq %rax, %r") && !strstr(line, "movq %rax, %rsp") &&
+      !strstr(line, "movq %rax, %rbp"))
+    return 1;
+  return 0;
+}
+
+int g_emit_anomalies = 0;
+
+/* Tiered type-to-string mapping for anomaly metadata.
+ * Shorthand "ptr" covers all pointer/array/function types.
+ * Aggregates are flagged for propose-only by returning their category.
+ * char/bool both default to return 0/false; documented here as compatible. */
+static const char *type_to_str(Type *ty) {
+  if (!ty) return "unknown";
+  switch (ty->kind) {
+    case TY_VOID:   return "void";
+    case TY_INT:    return "int";
+    case TY_CHAR:   return "char";
+    case TY_SHORT:  return "short";
+    case TY_LONG:   return "long";
+    case TY_LONGLONG: return "long long";
+    case TY_UINT:   return "uint";
+    case TY_UCHAR:  return "uchar";
+    case TY_USHORT: return "ushort";
+    case TY_ULONG:  return "ulong";
+    case TY_ULONGLONG: return "ulonglong";
+    case TY_FLOAT:  return "float";
+    case TY_DOUBLE: return "double";
+    case TY_PTR:
+    case TY_ARRAY:
+    case TY_FUNC:   return "ptr";
+    case TY_STRUCT: return "struct";
+    case TY_UNION:  return "union";
+    case TY_ENUM:   return "enum";
+    default:        return "unknown";
+  }
+}
+
+static void security_nullderef_scan(Compiler *cc, char *filename) {
+  FILE *fp;
+  int nlines = 0;
+  int findings = 0;
+  int i;
+  char current_func[128];
+  char *line_buf;
+  char **lp;
+  int max_lines = 32768;
+
+  fp = fopen(filename, "r");
+  if (!fp) return;
+
+  line_buf = (char *)malloc(max_lines * 128);
+  lp = (char **)malloc(max_lines * sizeof(char *));
+  if (!line_buf || !lp) { fclose(fp); return; }
+
+  current_func[0] = 0;
+  while (nlines < max_lines && fgets(line_buf + nlines * 128, 128, fp)) {
+    lp[nlines] = line_buf + nlines * 128;
+    nlines++;
+  }
+  fclose(fp);
+
+  for (i = 0; i < nlines; i++) {
+    /* Track current function */
+    if (lp[i][0] != ' ' && lp[i][0] != '\t' && lp[i][0] != '.' &&
+        lp[i][0] != '#' && lp[i][0] != '\n') {
+      int k = 0;
+      while (lp[i][k] && lp[i][k] != ':' && k < 127) {
+        current_func[k] = lp[i][k];
+        k++;
+      }
+      current_func[k] = 0;
+    }
+
+    /* Look for nullable-return function calls */
+    if (is_nullable_call(lp[i])) {
+      int j;
+      int saw_null_check = 0;
+      const char *call_name = strstr(lp[i], "call ") + 5;
+      char clean_call[64];
+      int c_idx = 0;
+      while (call_name[c_idx] && call_name[c_idx] != '\n' && call_name[c_idx] != '@' && call_name[c_idx] != ' ' && c_idx < 63) {
+          clean_call[c_idx] = call_name[c_idx];
+          c_idx++;
+      }
+      clean_call[c_idx] = '\0';
+
+      char tracked_reg[8];  /* register holding the return value */
+      char deref_pat[16];   /* "(%rXX)" pattern to search for */
+      char null_pat1[32];   /* "testq %rXX, %rXX" */
+      char null_pat2[32];   /* "cmpq $0, %rXX" */
+
+      strcpy(tracked_reg, "%rax");
+      strcpy(deref_pat, "(%rax)");
+      strcpy(null_pat1, "testq %rax");
+      strcpy(null_pat2, "cmpq $0, %rax");
+
+      char current_owner[128];
+      char current_file[128];
+      int current_line = 0;
+      current_owner[0] = 0;
+      current_file[0] = 0;
+
+      for (j = i + 1; j < nlines && j < i + NULLDEREF_WINDOW; j++) {
+        /* Parse latest ZCC_META for our tracked register */
+        /* Format: # ZCC_META %reg=owner@file:line */
+        char meta_pat[64];
+        sprintf(meta_pat, "# ZCC_META %s=", tracked_reg);
+        char *meta_match = strstr(lp[j], meta_pat);
+        if (meta_match) {
+           meta_match += strlen(meta_pat);
+           /* owner */
+           int k = 0;
+           while (meta_match[k] && meta_match[k] != '@' && k < 127) {
+               current_owner[k] = meta_match[k];
+               k++;
+           }
+           current_owner[k] = 0;
+           if (strcmp(current_owner, "_") == 0) current_owner[0] = 0;
+           
+           if (meta_match[k] == '@') {
+               meta_match += k + 1;
+               /* file */
+               k = 0;
+               while (meta_match[k] && meta_match[k] != ':' && k < 127) {
+                   current_file[k] = meta_match[k];
+                   k++;
+               }
+               current_file[k] = 0;
+               
+               if (meta_match[k] == ':') {
+                   current_line = atoi(meta_match + k + 1);
+               }
+           }
+        }
+
+        /* If we see a null check on tracked reg OR %rax, we're safe */
+        if (strstr(lp[j], null_pat1) || strstr(lp[j], null_pat2) ||
+            strstr(lp[j], "cmpq $0, %rax") || strstr(lp[j], "testq %rax")) {
+          saw_null_check = 1;
+          break;
+        }
+        /* If %rax is moved to another register, follow the copy */
+        if (strcmp(tracked_reg, "%rax") == 0 && is_rax_moved(lp[j])) {
+          /* Extract destination: "movq %rax, %rXX" */
+          char *dst = strstr(lp[j], ", %r");
+          if (dst) {
+            int k = 0;
+            dst += 2;  /* skip ", " */
+            while (dst[k] && dst[k] != '\n' && dst[k] != ' ' && k < 5) {
+              tracked_reg[k] = dst[k];
+              k++;
+            }
+            tracked_reg[k] = 0;
+            sprintf(deref_pat, "(%s)", tracked_reg);
+            sprintf(null_pat1, "testq %s", tracked_reg);
+            sprintf(null_pat2, "cmpq $0, %s", tracked_reg);
+          }
+          continue;  /* keep scanning with new register */
+        }
+        /* If there's a deref of the tracked register OR %rax (which
+         * may be a reload of the tracked register) without a null check */
+        if ((strstr(lp[j], deref_pat) || strstr(lp[j], "(%rax)")) &&
+            !saw_null_check) {
+          findings++;
+          char *reported_var = current_owner[0] ? current_owner : clean_call;
+          if (g_emit_anomalies) {
+              /* Option 1: JSON consumers (like the mutation applier) require a valid
+               * lvalue owner to synthesize a guard. If missing (e.g. member assignment),
+               * suppress the anomaly entirely to prevent unactionable reports.
+               * Human reviewers (--security-476) still see the function-name fallback.
+               */
+              if (!current_owner[0]) {
+                  break;
+              }
+              Symbol *sym = scope_find(cc, current_func);
+              const char *ret_type = "unknown";
+              if (sym && sym->type && sym->type->kind == TY_FUNC) {
+                  ret_type = type_to_str(sym->type->ret);
+              }
+              printf("{\"type\":\"ir_anomaly\", \"kind\":\"CWE-476\", \"site\":\"%s:%s:%d\", \"severity\":0.7, \"variable\":\"%s\", \"return_type\":\"%s\"}\n",
+                     current_file[0] ? current_file : (cc->filename ? cc->filename : "unknown"),
+                     current_func[0] ? current_func : "unknown",
+                     current_line, reported_var, ret_type);
+          } else {
+              printf("[--security-476] CWE-476 WARNING: unchecked %s return "
+                     "dereferenced via %s in %s() (asm lines %d->%d)\n",
+                     clean_call, reported_var,
+                     current_func[0] ? current_func : "<unknown>",
+                     i + 1, j + 1);
+          }
+          break;
+        }
+        /* Stop at label or ret - different basic block */
+        if (lp[j][0] == '.' && lp[j][1] == 'L') break;
+        if (strstr(lp[j], "ret")) break;
+        /* Stop at another call - %rax is clobbered */
+        if (strstr(lp[j], "call ")) break;
+      }
+    }
+  }
+
+  free(line_buf);
+  free(lp);
+
+  if (findings) {
+    printf("[--security-476] %d potential null-deref(s) found\n", findings);
+  } else {
+    printf("[--security-476] Clean: all nullable returns checked\n");
+  }
+}
+
+static void security_bounds_scan(Compiler *cc, char *filename) {
+  FILE *fp;
+  int nlines = 0;
+  int findings = 0;
+  int i;
+  char current_func[128];
+  char *line_buf;
+  char **lp;
+  int max_lines = 32768;
+
+  fp = fopen(filename, "r");
+  if (!fp) return;
+
+  line_buf = (char *)malloc(max_lines * 128);
+  lp = (char **)malloc(max_lines * sizeof(char *));
+  if (!line_buf || !lp) { fclose(fp); return; }
+
+  current_func[0] = 0;
+  while (nlines < max_lines && fgets(line_buf + nlines * 128, 128, fp)) {
+    lp[nlines] = line_buf + nlines * 128;
+    nlines++;
+  }
+  fclose(fp);
+
+  for (i = 0; i < nlines; i++) {
+    /* Track current function */
+    if (lp[i][0] != ' ' && lp[i][0] != '\t' && lp[i][0] != '.' &&
+        lp[i][0] != '#' && lp[i][0] != '\n') {
+      int k = 0;
+      while (lp[i][k] && lp[i][k] != ':' && k < 127) {
+        current_func[k] = lp[i][k];
+        k++;
+      }
+      current_func[k] = 0;
+    }
+
+    if (strstr(lp[i], "# ZCC_META_ARRAY")) {
+      char array_name[64] = "unknown";
+      char index_name[64] = "?";
+      char size_str[32] = "0";
+      char file_name[128] = "unknown";
+      int line_num = 0;
+
+      char *ptr = strstr(lp[i], "array=");
+      if (ptr) {
+          ptr += 6;
+          int k = 0;
+          while (ptr[k] && ptr[k] != ' ' && k < 63) array_name[k++] = ptr[k];
+          array_name[k] = 0;
+      }
+      
+      ptr = strstr(lp[i], "index=");
+      if (ptr) {
+          ptr += 6;
+          int k = 0;
+          while (ptr[k] && ptr[k] != ' ' && k < 63) index_name[k++] = ptr[k];
+          index_name[k] = 0;
+      }
+
+      ptr = strstr(lp[i], "size=");
+      if (ptr) {
+          ptr += 5;
+          int k = 0;
+          while (ptr[k] && ptr[k] != ' ' && k < 31) size_str[k++] = ptr[k];
+          size_str[k] = 0;
+      }
+      
+      ptr = strstr(lp[i], "@");
+      if (ptr) {
+          ptr += 1;
+          int k = 0;
+          while (ptr[k] && ptr[k] != ':' && k < 127) file_name[k++] = ptr[k];
+          file_name[k] = 0;
+          if (ptr[k] == ':') line_num = atoi(ptr + k + 1);
+      }
+
+      /* Do backwards walk looking for cmp bounds check */
+      int saw_size_cmp = 0;
+      int saw_cmp_instr = 0;
+      char size_pat[64];
+      sprintf(size_pat, "$%s", size_str);
+
+      int j;
+      for (j = i - 1; j >= 0 && j >= i - 30; j--) {
+          if (strstr(lp[j], "ret")) break;
+          if (strstr(lp[j], "call ")) break;
+          if (lp[j][0] != ' ' && lp[j][0] != '\t' && lp[j][0] != '.' && lp[j][0] != '#') break; /* Func def */
+
+          if (strstr(lp[j], size_pat)) saw_size_cmp = 1;
+          if (strstr(lp[j], "cmp")) saw_cmp_instr = 1;
+      }
+
+      if (!(saw_size_cmp && saw_cmp_instr)) {
+          findings++;
+          if (g_emit_anomalies) {
+               Symbol *sym = scope_find(cc, current_func);
+               const char *ret_type = "unknown";
+               if (sym && sym->type && sym->type->kind == TY_FUNC) {
+                   ret_type = type_to_str(sym->type->ret);
+               }
+               printf("{\"type\":\"ir_anomaly\", \"kind\":\"CWE-787\", \"site\":\"%s:%s:%d\", \"severity\":0.8, \"array\":\"%s\", \"index\":\"%s\", \"size\":%s, \"return_type\":\"%s\"}\n",
+                      file_name, current_func, line_num, array_name, index_name, size_str, ret_type);
+          } else {
+               printf("[--security-787] CWE-787 WARNING: unchecked array bounds for %s[%s] (size %s) in %s()\n",
+                      array_name, index_name, size_str, current_func);
+          }
+      }
+    }
+  }
+
+  free(line_buf);
+  free(lp);
+
+  if (findings) {
+    if (!g_emit_anomalies) printf("[--security-787] %d potential bounds-violation(s) found\n", findings);
+  } else {
+    if (!g_emit_anomalies) printf("[--security-787] Clean: all bounded arrays checked\n");
+  }
 }
 
 /* ================================================================ */
@@ -12398,6 +12798,7 @@ int main(int argc, char **argv) {
   int source_len;
   char asm_file[256];
   char cmd[512];
+  char include_paths[4096];  /* -I paths, colon-separated */
   Node *prog;
   int ret;
   int i;
@@ -12405,17 +12806,18 @@ int main(int argc, char **argv) {
 
   input_file = 0;
   output_file = 0;
+  include_paths[0] = '\0';
+  strcat(include_paths, ".:./include");  /* default paths */
 
   int pp_only = 0;
 
   int zcc_verbose_flag = 0;
-  int debug_abi_classes_flag = 0;
+
+  int zcc_quiet_flag = 0;
 
   int compile_only = 0;
 
   int g_ir_primary = 0;
-
-  const char *include_paths = ".:./include";
 
   /* parse arguments */
   for (i = 1; i < argc; i++) {
@@ -12429,21 +12831,48 @@ int main(int argc, char **argv) {
       pp_only = 1;
     } else if (strcmp(argv[i], "-v") == 0) {
       zcc_verbose_flag = 1;
-    } else if (strcmp(argv[i], "-fdebug-abi-classes") == 0) {
-      debug_abi_classes_flag = 1;
+    } else if (strcmp(argv[i], "--quiet") == 0 || strcmp(argv[i], "-q") == 0) {
+      zcc_quiet_flag = 1;
     } else if (strcmp(argv[i], "--ir") == 0) {
       g_emit_ir = 1;
       g_ir_primary = 1;
+    } else if (strcmp(argv[i], "--telemetry") == 0) {
+      enable_telemetry_stdout = 1;
+      setenv("ZCC_EMIT_TELEMETRY", "1", 1);
+    } else if (strcmp(argv[i], "--manifold") == 0) {
+      g_manifold_enabled = 1;
+    } else if (strcmp(argv[i], "--manifold-deterministic") == 0) {
+      g_manifold_enabled = 1;
+      /* sigma=0 enforced inside ir_pass_manager via deterministic flag;
+       * set env so manifold engine sees it regardless of cfg path. */
+      setenv("ZCC_MANIFOLD_DET", "1", 1);
+    } else if (strncmp(argv[i], "--ir-export=", 12) == 0) {
+      strncpy(g_ir_export_path, argv[i] + 12, 255);
+      g_ir_export_path[255] = '\0';
+      g_manifold_enabled = 1;  /* export implies manifold active */
+    } else if (strcmp(argv[i], "--peephole") == 0) {
+      g_peephole_enabled = 1;
+    } else if (strcmp(argv[i], "--peephole-deterministic") == 0) {
+      g_peephole_enabled = 1;
+      g_peephole_deterministic = 1;
+    } else if (strcmp(argv[i], "--peephole-verbose") == 0) {
+      g_peephole_verbose = 1;
+    } else if (strcmp(argv[i], "--security-signext") == 0) {
+      g_security_signext = 1;
+    } else if (strcmp(argv[i], "--security-476") == 0) {
+      g_security_476 = 1;
+    } else if (strcmp(argv[i], "--security-787") == 0) {
+      g_security_787 = 1;
+    } else if (strcmp(argv[i], "--emit-anomalies") == 0) {
+      g_emit_anomalies = 1;
+      g_security_476 = 1;
+      g_security_787 = 1;
     } else if (strncmp(argv[i], "-I", 2) == 0) {
-      /* PP-INCLUDE-022: append -I path to include_paths */
-      const char *ipath = argv[i] + 2;
-      if (ipath[0] == '\0' && i + 1 < argc) { i++; ipath = argv[i]; }
+      /* include path: -Ipath or -I path */
+      const char *ipath = (argv[i][2] != '\0') ? argv[i] + 2 : ((i + 1 < argc) ? argv[++i] : "");
       if (ipath[0]) {
-        int olen = strlen(include_paths);
-        int nlen = strlen(ipath);
-        char *merged = (char *)malloc(olen + 1 + nlen + 1);
-        sprintf(merged, "%s:%s", include_paths, ipath);
-        include_paths = merged;
+        if (include_paths[0]) strncat(include_paths, ":", 4095 - (int)strlen(include_paths));
+        strncat(include_paths, ipath, 4095 - (int)strlen(include_paths));
       }
     } else if (strncmp(argv[i], "-l", 2) == 0 || strncmp(argv[i], "-L", 2) == 0 || strncmp(argv[i], "-O", 2) == 0) {
       /* ignore linker flags */
@@ -12452,7 +12881,9 @@ int main(int argc, char **argv) {
     }
   }
 
-  if (!zcc_verbose_flag) {
+  /* Stderr policy: open by default, --quiet silences.
+   * -v adds extra diagnostic output but stderr is always open unless -q. */
+  if (zcc_quiet_flag) {
 #ifdef _WIN32
     freopen("nul", "w", stderr);
 #else
@@ -12469,6 +12900,9 @@ int main(int argc, char **argv) {
     output_file = "a.out";
 
   ZCC_IR_INIT();
+  if (enable_telemetry_stdout) {
+      ir_telemetry_enable_stdout();
+  }
 
   /* read source file */
   source = read_file(input_file, &source_len);
@@ -12482,22 +12916,24 @@ int main(int argc, char **argv) {
     int pp_len;
     char *pp_source = zcc_preprocess(source, source_len, input_file, include_paths, &pp_len);
     if (!pp_source) {
-      printf("zcc: preprocessing failed\n");
+      fprintf(stderr, "zcc: preprocessing failed\n");
       return 1;
     }
+    /* We leak original `source` here because we replaced it.
+       ZCC doesn't care much about leaking in main string allocations anyway. */
     source = pp_source;
     source_len = pp_len;
   }
 
   if (pp_only) {
-    printf("%s", source);
+    if (!enable_telemetry_stdout) printf("%s", source);
     return 0;
   }
 
   /* heap-allocate compiler state (too large for stack) */
   cc = (Compiler *)calloc(1, sizeof(Compiler));
   if (!cc) {
-    printf("zcc: out of memory\n");
+    if (!enable_telemetry_stdout) printf("zcc: out of memory\n");
     free(source);
     return 1;
   }
@@ -12507,7 +12943,6 @@ int main(int argc, char **argv) {
   cc->filename = input_file;
 
   init_compiler(cc);
-  cc->debug_abi_classes = debug_abi_classes_flag;
 
   /* generate asm file name */
   strncpy(asm_file, output_file, 250);
@@ -12527,34 +12962,34 @@ int main(int argc, char **argv) {
   /* open output */
   cc->out = fopen(asm_file, "w");
   if (!cc->out) {
-    printf("zcc: cannot write '%s'\n", asm_file);
+    if (!enable_telemetry_stdout) printf("zcc: cannot write '%s'\n", asm_file);
     free(source);
     free(cc);
     return 1;
   }
 
   /* lex first token */
-  printf("[Phase 1] Lexical Array Bootstrap... OK\n");
+  if (!enable_telemetry_stdout) printf("[Phase 1] Lexical Array Bootstrap... OK\n");
   next_token(cc);
 
   /* parse */
-  printf("[Phase 2] AST Topological Generation... ");
+  if (!enable_telemetry_stdout) printf("[Phase 2] AST Topological Generation... ");
   prog = parse_program(cc);
 
   if (cc->errors > 0) {
-    printf("\033[0;31mFAILED\033[0m\n");
-    printf("zcc: %d error(s)\n", cc->errors);
+    if (!enable_telemetry_stdout) printf("\033[0;31mFAILED\033[0m\n");
+    if (!enable_telemetry_stdout) printf("zcc: %d error(s)\n", cc->errors);
     fclose(cc->out);
     free(source);
     free(cc);
     return 1;
   }
 
-  printf("OK\n");
+  if (!enable_telemetry_stdout) printf("OK\n");
 
   /* generate code */
-  printf("[Phase 3] Native AST Constant Folding... OK\n");
-  printf("[Phase 4] SystemV ABI X86-64 Codegen... OK\n");
+  if (!enable_telemetry_stdout) printf("[Phase 3] Native AST Constant Folding... OK\n");
+  if (!enable_telemetry_stdout) printf("[Phase 4] SystemV ABI X86-64 Codegen... OK\n");
   fprintf(cc->out, "# ZCC asm begin\n");
   codegen_program(cc, prog);
   fclose(cc->out);
@@ -12566,10 +13001,10 @@ int main(int argc, char **argv) {
     for (ir_fi = 0; ir_fi < g_ir_module->func_count; ir_fi++) {
       ir_total_nodes += g_ir_module->funcs[ir_fi]->node_count;
     }
-    printf("[Phase IR] IR Pass Manager (%d funcs, %d nodes)...\n",
+    if (!enable_telemetry_stdout) printf("[Phase IR] IR Pass Manager (%d funcs, %d nodes)...\n",
            g_ir_module->func_count, ir_total_nodes);
     ir_pm_run_default(g_ir_module, 1);
-    printf("[Phase IR] Pass Manager Complete.\n");
+    if (!enable_telemetry_stdout) printf("[Phase IR] Pass Manager Complete.\n");
   }
 
   if (!g_ir_primary) {
@@ -12579,9 +13014,24 @@ int main(int argc, char **argv) {
   /* peephole optimize the emitted assembly safely out-of-bounds */
   peephole_optimize(asm_file);
 
+  /* security pass: sign-extension overflow detection */
+  if (g_security_signext) {
+    security_signext_scan(asm_file);
+  }
+
+  /* security pass: null-deref detection */
+  if (g_security_476) {
+    security_nullderef_scan(cc, asm_file);
+  }
+
+  /* security pass: array bounds detection */
+  if (g_security_787) {
+    security_bounds_scan(cc, asm_file);
+  }
+
   /* assemble and link if not stopping at assembly */
   if (!stop_at_asm) {
-    printf("[Phase 6] GCC Assembly/Linker Binding... ");
+    if (!enable_telemetry_stdout) printf("[Phase 6] GCC Assembly/Linker Binding... ");
     if (compile_only) {
       sprintf(cmd, "gcc -O0 -w -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -c -o %s %s 2>&1", output_file, asm_file);
     } else if (strcmp(input_file, "zcc.c") == 0 || (strlen(input_file) >= 6 && strcmp(input_file + strlen(input_file) - 6, "/zcc.c") == 0)) {
@@ -12591,16 +13041,16 @@ int main(int argc, char **argv) {
     }
     ret = system(cmd);
     if (ret != 0) {
-      printf("FAILED\n");
-      printf("zcc: assembly/linking failed\n");
+      if (!enable_telemetry_stdout) printf("FAILED\n");
+      if (!enable_telemetry_stdout) printf("zcc: assembly/linking failed\n");
       free(source);
       free(cc);
       return 1;
     }
-    printf("OK\n");
+    if (!enable_telemetry_stdout) printf("OK\n");
   }
 
-  printf("[OK] ZCC Engine Compilation Terminated Successfully.\n");
+  if (!enable_telemetry_stdout) printf("[OK] ZCC Engine Compilation Terminated Successfully.\n");
 
   free(source);
   free(cc);
@@ -13559,472 +14009,6 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
 
         ra_free(ra);
     }
-}
-/*
- * ir_pass_manager.c — ZCC IR Pass Manager Implementation
- * ========================================================
- * Compiled by GCC only (linked separately, NOT concatenated into zcc.c).
- * Operates on ir_func_t* linked lists defined in ir.h.
- *
- * Production passes:
- *   DCE            — backward liveness scan, unlinks dead definitions
- *   Constant Fold  — evaluates binary ops on known constants
- *   Strength Reduce — mul-by-0 → const 0, add/sub-by-0 → copy
- *
- * Default pipeline: DCE → const_fold → strength_reduce → DCE
- */
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "ir.h"
-
-/* ── Pass result type ────────────────────────────────────────────────── */
-
-typedef struct {
-    int nodes_before;
-    int nodes_after;
-    int nodes_deleted;
-    int nodes_modified;
-    int changed;
-} ir_pass_result_t;
-
-typedef ir_pass_result_t (*ir_pass_fn)(void *fn_ptr);
-
-#define IR_PM_MAX_PASSES 16
-
-typedef struct {
-    const char    *name;
-    ir_pass_fn     fn;
-    int            enabled;
-} ir_pass_entry_t;
-
-typedef struct {
-    ir_pass_entry_t passes[IR_PM_MAX_PASSES];
-    int             count;
-    int             verbose;
-} ir_pass_manager_t;
-
-/* ── Helpers ─────────────────────────────────────────────────────────── */
-
-static int count_nodes(ir_func_t *fn) {
-    int count = 0;
-    ir_node_t *n = fn->head;
-    while (n) {
-        count++;
-        n = n->next;
-    }
-    return count;
-}
-
-/* Check if an opcode is side-effectful (must not be DCE'd) */
-static int is_side_effect(ir_op_t op) {
-    switch (op) {
-    case IR_STORE:
-    case IR_CALL:
-    case IR_RET:
-    case IR_BR:
-    case IR_BR_IF:
-    case IR_LABEL:
-    case IR_ARG:
-        return 1;
-    default:
-        return 0;
-    }
-}
-
-/* Check if a node references 'name' as a source operand.
- * For IR_STORE, dst is actually a USE (the address), not a definition. */
-static int node_uses(ir_node_t *n, const char *name) {
-    if (name[0] == '\0') return 0;
-    if (n->src1[0] && strcmp(n->src1, name) == 0) return 1;
-    if (n->src2[0] && strcmp(n->src2, name) == 0) return 1;
-    /* IR_STORE uses dst as the address operand — it's a USE, not a DEF */
-    if (n->op == IR_STORE && n->dst[0] && strcmp(n->dst, name) == 0) return 1;
-    return 0;
-}
-
-/* ════════════════════════════════════════════════════════════════════════
- * PASS 1: Dead Code Elimination (DCE)
- * ════════════════════════════════════════════════════════════════════════
- * Scan the node list.  A node is dead if:
- *   1) It defines a temp (dst[0] != '\0')
- *   2) It is NOT side-effectful (not store/call/ret/br/br_if/label/arg)
- *   3) It is NOT IR_STORE (where dst is a use, not a definition)
- *   4) No subsequent node references dst in src1, src2, or store-dst
- *
- * Complexity: O(N²) per function. With ~300 nodes/function average,
- * this is ~90K comparisons/function — negligible.
- */
-static ir_pass_result_t ir_pass_dce(void *fn_ptr) {
-    ir_func_t *fn = (ir_func_t *)fn_ptr;
-    ir_pass_result_t r;
-    ir_node_t *prev;
-    ir_node_t *n;
-    ir_node_t *scan;
-    ir_node_t *next;
-    int deleted = 0;
-
-    memset(&r, 0, sizeof(r));
-    r.nodes_before = count_nodes(fn);
-
-    prev = NULL;
-    n = fn->head;
-    while (n) {
-        next = n->next;
-
-        /* Does this node define a temp that could be dead? */
-        if (n->dst[0] != '\0'
-            && !is_side_effect(n->op)
-            && n->op != IR_STORE) {
-
-            /* Check if ANY subsequent node uses this temp */
-            int used = 0;
-            for (scan = next; scan; scan = scan->next) {
-                if (node_uses(scan, n->dst)) {
-                    used = 1;
-                    break;
-                }
-            }
-
-            if (!used) {
-                /* Dead node — unlink from list */
-                if (prev) {
-                    prev->next = next;
-                } else {
-                    fn->head = next;
-                }
-                if (n == fn->tail) {
-                    fn->tail = prev;
-                }
-                free(n);
-                fn->node_count--;
-                deleted++;
-                /* Don't advance prev; it still points to the right place */
-                n = next;
-                continue;
-            }
-        }
-
-        prev = n;
-        n = next;
-    }
-
-    r.nodes_after = r.nodes_before - deleted;
-    r.nodes_deleted = deleted;
-    r.changed = deleted > 0;
-    return r;
-}
-
-/* ════════════════════════════════════════════════════════════════════════
- * PASS 2: Constant Folding
- * ════════════════════════════════════════════════════════════════════════
- * Scan forward.  Track temps defined by IR_CONST.  When a binary op
- * has both src1 and src2 as known constants, evaluate at compile time
- * and replace the node with IR_CONST.
- */
-
-#define CONST_MAP_MAX 2048
-
-typedef struct {
-    char name[32];  /* IR_NAME_MAX */
-    long value;
-} const_map_entry_t;
-
-static const_map_entry_t s_cmap[CONST_MAP_MAX];
-static int s_cmap_count;
-
-static void cmap_clear(void) {
-    s_cmap_count = 0;
-}
-
-static void cmap_add(const char *name, long value) {
-    int i;
-    /* Update if exists */
-    for (i = 0; i < s_cmap_count; i++) {
-        if (strcmp(s_cmap[i].name, name) == 0) {
-            s_cmap[i].value = value;
-            return;
-        }
-    }
-    /* Add new */
-    if (s_cmap_count >= CONST_MAP_MAX) return;
-    strncpy(s_cmap[s_cmap_count].name, name, 31);
-    s_cmap[s_cmap_count].name[31] = '\0';
-    s_cmap[s_cmap_count].value = value;
-    s_cmap_count++;
-}
-
-static int cmap_get(const char *name, long *value) {
-    int i;
-    if (name[0] == '\0') return 0;
-    for (i = 0; i < s_cmap_count; i++) {
-        if (strcmp(s_cmap[i].name, name) == 0) {
-            *value = s_cmap[i].value;
-            return 1;
-        }
-    }
-    return 0;
-}
-
-static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
-    ir_func_t *fn = (ir_func_t *)fn_ptr;
-    ir_pass_result_t r;
-    ir_node_t *n;
-    int modified = 0;
-
-    memset(&r, 0, sizeof(r));
-    r.nodes_before = count_nodes(fn);
-
-    cmap_clear();
-
-    for (n = fn->head; n; n = n->next) {
-        /* Track constants */
-        if (n->op == IR_CONST && n->dst[0]) {
-            cmap_add(n->dst, n->imm);
-            continue;
-        }
-
-        /* Check binary ops with two known constant operands */
-        if (n->src1[0] && n->src2[0]) {
-            long v1, v2, result;
-
-            if (!cmap_get(n->src1, &v1)) continue;
-            if (!cmap_get(n->src2, &v2)) continue;
-
-            switch (n->op) {
-            case IR_ADD: result = v1 + v2; break;
-            case IR_SUB: result = v1 - v2; break;
-            case IR_MUL: result = v1 * v2; break;
-            case IR_DIV: if (v2 == 0) continue; result = v1 / v2; break;
-            case IR_MOD: if (v2 == 0) continue; result = v1 % v2; break;
-            case IR_AND: result = v1 & v2; break;
-            case IR_OR:  result = v1 | v2; break;
-            case IR_XOR: result = v1 ^ v2; break;
-            case IR_SHL: result = v1 << v2; break;
-            case IR_SHR: result = v1 >> v2; break;
-            case IR_EQ:  result = (v1 == v2) ? 1 : 0; break;
-            case IR_NE:  result = (v1 != v2) ? 1 : 0; break;
-            case IR_LT:  result = (v1 < v2)  ? 1 : 0; break;
-            case IR_LE:  result = (v1 <= v2) ? 1 : 0; break;
-            case IR_GT:  result = (v1 > v2)  ? 1 : 0; break;
-            case IR_GE:  result = (v1 >= v2) ? 1 : 0; break;
-            default: continue;
-            }
-
-            /* Replace with IR_CONST */
-            n->op = IR_CONST;
-            n->imm = result;
-            n->src1[0] = '\0';
-            n->src2[0] = '\0';
-
-            /* Track the new constant */
-            cmap_add(n->dst, result);
-
-            modified++;
-        }
-    }
-
-    r.nodes_after = r.nodes_before; /* const fold mutates, doesn't delete */
-    r.nodes_modified = modified;
-    r.changed = modified > 0;
-    return r;
-}
-
-/* ════════════════════════════════════════════════════════════════════════
- * PASS 3: Strength Reduction
- * ════════════════════════════════════════════════════════════════════════
- * Pattern-match on operations with one known constant operand:
- *   MUL dst, src, 0  → CONST dst, 0
- *   MUL dst, 0, src  → CONST dst, 0
- *   ADD dst, src, 0  → COPY  dst, src
- *   ADD dst, 0, src  → COPY  dst, src
- *   SUB dst, src, 0  → COPY  dst, src
- *
- * Phase 3 will add: MUL 2^N → SHL N, DIV 2^N → SHR N (unsigned)
- */
-static ir_pass_result_t ir_pass_strength_reduce(void *fn_ptr) {
-    ir_func_t *fn = (ir_func_t *)fn_ptr;
-    ir_pass_result_t r;
-    ir_node_t *n;
-    int modified = 0;
-
-    memset(&r, 0, sizeof(r));
-    r.nodes_before = count_nodes(fn);
-
-    /* Collect constants */
-    cmap_clear();
-    for (n = fn->head; n; n = n->next) {
-        if (n->op == IR_CONST && n->dst[0]) {
-            cmap_add(n->dst, n->imm);
-        }
-    }
-
-    /* Apply strength reductions */
-    for (n = fn->head; n; n = n->next) {
-        long val;
-
-        if (n->op == IR_MUL) {
-            /* MUL by 0 (either operand) → CONST 0 */
-            if (cmap_get(n->src2, &val) && val == 0) {
-                n->op = IR_CONST;
-                n->imm = 0;
-                n->src1[0] = '\0';
-                n->src2[0] = '\0';
-                cmap_add(n->dst, 0);
-                modified++;
-                continue;
-            }
-            if (cmap_get(n->src1, &val) && val == 0) {
-                n->op = IR_CONST;
-                n->imm = 0;
-                n->src1[0] = '\0';
-                n->src2[0] = '\0';
-                cmap_add(n->dst, 0);
-                modified++;
-                continue;
-            }
-            /* MUL by 1 → COPY */
-            if (cmap_get(n->src2, &val) && val == 1) {
-                n->op = IR_COPY;
-                /* src1 stays, src2 cleared */
-                n->src2[0] = '\0';
-                modified++;
-                continue;
-            }
-            if (cmap_get(n->src1, &val) && val == 1) {
-                n->op = IR_COPY;
-                /* swap src2 into src1 position */
-                strncpy(n->src1, n->src2, 31);
-                n->src1[31] = '\0';
-                n->src2[0] = '\0';
-                modified++;
-                continue;
-            }
-        }
-
-        if (n->op == IR_ADD) {
-            /* ADD src, 0 → COPY src */
-            if (cmap_get(n->src2, &val) && val == 0) {
-                n->op = IR_COPY;
-                n->src2[0] = '\0';
-                modified++;
-                continue;
-            }
-            if (cmap_get(n->src1, &val) && val == 0) {
-                n->op = IR_COPY;
-                strncpy(n->src1, n->src2, 31);
-                n->src1[31] = '\0';
-                n->src2[0] = '\0';
-                modified++;
-                continue;
-            }
-        }
-
-        if (n->op == IR_SUB) {
-            /* SUB src, 0 → COPY src */
-            if (cmap_get(n->src2, &val) && val == 0) {
-                n->op = IR_COPY;
-                n->src2[0] = '\0';
-                modified++;
-                continue;
-            }
-        }
-    }
-
-    r.nodes_after = r.nodes_before; /* strength reduce mutates, doesn't delete */
-    r.nodes_modified = modified;
-    r.changed = modified > 0;
-    return r;
-}
-
-/* ── Registry API ────────────────────────────────────────────────────── */
-
-static ir_pass_manager_t *ir_pm_create(void) {
-    ir_pass_manager_t *pm = (ir_pass_manager_t *)calloc(1, sizeof(ir_pass_manager_t));
-    if (!pm) {
-        fprintf(stderr, "ir_pm_create: out of memory\n");
-        exit(1);
-    }
-    return pm;
-}
-
-static void ir_pm_register(ir_pass_manager_t *pm, const char *name, ir_pass_fn fn) {
-    if (pm->count >= IR_PM_MAX_PASSES) {
-        fprintf(stderr, "ir_pm_register: too many passes (max %d)\n", IR_PM_MAX_PASSES);
-        return;
-    }
-    pm->passes[pm->count].name = name;
-    pm->passes[pm->count].fn = fn;
-    pm->passes[pm->count].enabled = 1;
-    pm->count++;
-}
-
-static void ir_pm_run(ir_pass_manager_t *pm, ir_module_t *mod) {
-    int p;
-    int f;
-    int total_nodes_in = 0;
-    int total_nodes_out = 0;
-    int total_deleted = 0;
-    int total_modified = 0;
-
-    for (p = 0; p < pm->count; p++) {
-        int pass_before = 0;
-        int pass_after = 0;
-        int pass_deleted = 0;
-        int pass_modified = 0;
-
-        if (!pm->passes[p].enabled) continue;
-
-        for (f = 0; f < mod->func_count; f++) {
-            ir_pass_result_t r = pm->passes[p].fn(mod->funcs[f]);
-            pass_before += r.nodes_before;
-            pass_after += r.nodes_after;
-            pass_deleted += r.nodes_deleted;
-            pass_modified += r.nodes_modified;
-        }
-
-        if (pm->verbose) {
-            fprintf(stderr, "  [IR Pass] %-18s: %d funcs, %d nodes -> %d nodes (%d deleted, %d modified)\n",
-                    pm->passes[p].name, mod->func_count, pass_before, pass_after,
-                    pass_deleted, pass_modified);
-        }
-
-        if (p == 0) total_nodes_in = pass_before;
-        total_nodes_out = pass_after;
-        total_deleted += pass_deleted;
-        total_modified += pass_modified;
-    }
-
-    if (pm->verbose && pm->count > 0) {
-        fprintf(stderr, "  [IR Pass] Pipeline complete: %d nodes -> %d nodes (total: %d deleted, %d modified)\n",
-                total_nodes_in, total_nodes_out, total_deleted, total_modified);
-    }
-}
-
-static void ir_pm_free(ir_pass_manager_t *pm) {
-    if (pm) free(pm);
-}
-
-/* ── Primary entry point (called from part5.c) ──────────────────────── */
-
-void ir_pm_run_default(void *mod_ptr, int verbose) {
-    ir_module_t *mod = (ir_module_t *)mod_ptr;
-    ir_pass_manager_t *pm;
-
-    if (!mod || mod->func_count == 0) return;
-
-    pm = ir_pm_create();
-    pm->verbose = verbose;
-
-    /* Default pipeline: DCE → const_fold → strength_reduce → DCE */
-    ir_pm_register(pm, "dce", ir_pass_dce);
-    ir_pm_register(pm, "const_fold", ir_pass_const_fold);
-    ir_pm_register(pm, "strength_reduce", ir_pass_strength_reduce);
-    ir_pm_register(pm, "dce2", ir_pass_dce);
-
-    ir_pm_run(pm, mod);
-    ir_pm_free(pm);
 }
 /*
  * regalloc.c — Linear Scan Register Allocator for ZCC IR Backend
