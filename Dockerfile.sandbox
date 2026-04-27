@@ -1,0 +1,43 @@
+# Use an official Python runtime as a parent image
+FROM python:3.14-slim-bookworm
+
+# Add a non-root user
+RUN useradd --create-home --shell /bin/bash sandboxuser
+
+# Install GCC and essential build tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libc6-dev \
+    make \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up workdir
+WORKDIR /app
+
+# Copy the ZCC compiler and required Python files
+COPY zcc /app/zcc
+COPY fortify_policy.json /app/
+COPY fortify_gate.py /app/
+COPY error_handling.py /app/
+COPY production_guard.py /app/
+COPY chimera_mutagen_daemon.py /app/
+COPY pq_sqlite_shim.c /app/
+COPY sandbox_attestation.py /app/
+COPY sandbox_entrypoint.py /app/
+
+# Set permissions
+RUN chown -R sandboxuser:sandboxuser /app && \
+    chmod -R 500 /app && \
+    chmod 500 /app/sandbox_entrypoint.py
+
+# Temporarily allow write to scratch directory
+RUN mkdir -p /app/scratch && chown -R sandboxuser:sandboxuser /app/scratch && chmod 700 /app/scratch
+
+# Switch to the non-root user
+USER sandboxuser
+
+# Set working directory to scratch so generated files go there
+WORKDIR /app/scratch
+
+# Set default entrypoint
+ENTRYPOINT ["python3", "/app/sandbox_entrypoint.py"]

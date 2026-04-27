@@ -277,6 +277,11 @@ void codegen_stmt(Compiler *cc, Node *node) {
       ZCC_EMIT_LABEL(ir_lbl, node->line);
       if (node->cases[i]->case_body)
         codegen_stmt(cc, node->cases[i]->case_body);
+      if (g_ir_cur_func && g_ir_cur_func->tail &&
+          !ir_op_is_terminator(g_ir_cur_func->tail->op)) {
+        sprintf(ir_lbl, ".L%d", end_lbl);
+        ZCC_EMIT_BR(ir_lbl, node->line);
+      }
     }
     if (node->default_case) {
       emit_label_fmt(cc, default_lbl, FMT_DEF);
@@ -284,6 +289,11 @@ void codegen_stmt(Compiler *cc, Node *node) {
       ZCC_EMIT_LABEL(ir_lbl, node->line);
       if (node->default_case->case_body)
         codegen_stmt(cc, node->default_case->case_body);
+      if (g_ir_cur_func && g_ir_cur_func->tail &&
+          !ir_op_is_terminator(g_ir_cur_func->tail->op)) {
+        sprintf(ir_lbl, ".L%d", end_lbl);
+        ZCC_EMIT_BR(ir_lbl, node->line);
+      }
     }
 
     if (node->body)
