@@ -1,0 +1,3 @@
+error[RUST-TYPE-E0014]: let binding `x` requires explicit type annotation in strict mode
+  --> tests/rust/strict-let-missing-annotation.rs:2:5
+  hint: add `: i32` or `: bool`, for example: `let x: i32 = 1;`

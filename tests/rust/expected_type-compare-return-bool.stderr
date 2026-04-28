@@ -1,0 +1,2 @@
+error[RUST-TYPE-E0003]: return type mismatch: expected `i32`, found `bool`
+  hint: return an expression matching the function return type

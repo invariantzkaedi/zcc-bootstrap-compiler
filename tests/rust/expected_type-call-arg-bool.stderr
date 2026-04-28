@@ -1,0 +1,2 @@
+error[RUST-TYPE-E0007]: argument 1 to function `helper` has mismatched type: expected `i32`, found `bool`
+  hint: pass an argument with the declared parameter type

@@ -138,6 +138,8 @@ typedef struct Compiler Compiler;
 typedef struct ArenaBlock ArenaBlock;
 typedef struct StringEntry StringEntry;
 typedef struct StructField StructField;
+typedef struct RustAst RustAst;
+typedef struct RustDiag RustDiag;
 
 /* ================================================================ */
 /* DATA STRUCTURES                                                   */
@@ -522,6 +524,70 @@ typedef struct TargetBackend {
     void (*emit_float_binop)(Compiler *cc, int op);
 } TargetBackend;
 
+typedef enum {
+    FRONTEND_LANG_C = 0,
+    FRONTEND_LANG_RUST = 1
+} FrontendLang;
+
+typedef unsigned int RustSymbolId;
+typedef enum {
+    RUST_SYMBOL_INVALID = 0
+} RustSymbolConst;
+
+typedef enum {
+    RUST_SYMBOL_FUNCTION = 0,
+    RUST_SYMBOL_LOCAL,
+    RUST_SYMBOL_PARAM
+} RustSymbolKind;
+
+typedef struct RustSymbol {
+    RustSymbolId id;
+    RustSymbolKind kind;
+    const char *name;
+    int line;
+    int col;
+    unsigned scope_depth;
+} RustSymbol;
+
+typedef struct RustResolveContext {
+    const char *filename;
+    RustAst *ast;
+    RustDiag *diags;
+    int *num_diags;
+    int max_diags;
+    RustSymbol *symbols;
+    int symbol_count;
+    int symbol_capacity;
+    int had_error;
+} RustResolveContext;
+
+typedef struct RustTypecheckContext {
+    const char *filename;
+    RustAst *ast;
+    RustDiag *diags;
+    int *num_diags;
+    int max_diags;
+    const RustSymbol *symbols;
+    int symbol_count;
+    int *symbol_types;
+    int symbol_types_len;
+    int strict_let_annotations;
+    int strict_function_signatures;
+    int had_error;
+} RustTypecheckContext;
+
+typedef struct RustLowerContext {
+    const char *filename;
+    RustAst *ast;
+    const RustSymbol *symbols;
+    int symbol_count;
+    RustDiag *diags;
+    int *num_diags;
+    int max_diags;
+    int had_error;
+    int dump_ir;
+} RustLowerContext;
+
 extern TargetBackend *backend_ops;
 extern int ZCC_POINTER_WIDTH;
 extern int ZCC_INT_WIDTH;
@@ -583,5 +649,10 @@ int peek_token(Compiler *cc);
 void error(Compiler *cc, char *msg);
 void error_at(Compiler *cc, int line, char *msg);
 void classify_aggregate(Type *agg, abi_class_t eb[2]);
+int rust_frontend_compile_file(const char *filename, const char *source, int source_len, int dump_ast, int dump_ast_with_symbols, int dump_symbol_table, int dump_ir, int strict_let_annotations, int strict_function_signatures);
+int rust_backend_bridge_compile_file(const char *filename, const char *source, int source_len, const char *output_file, int compile_only, int strict_let_annotations, int strict_function_signatures);
+int rust_resolve_names(RustResolveContext *ctx);
+int rust_typecheck(RustTypecheckContext *ctx);
+int rust_lower_to_ir(RustLowerContext *ctx);
 
 /* ZKAEDI FORCE RENDER CACHE INVALIDATION */

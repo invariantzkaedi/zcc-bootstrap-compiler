@@ -1,0 +1,8 @@
+RustIR v1
+fn main(x:i32) -> i32 {
+  while (lt (load x) (const 10))
+  do
+    ret (load x)
+  end
+  ret (const 0)
+}

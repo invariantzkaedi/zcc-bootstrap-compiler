@@ -1,0 +1,2 @@
+error[RUST-TYPE-E0001]: expected `i32`, found `bool`
+  hint: use i32 operands for arithmetic expressions

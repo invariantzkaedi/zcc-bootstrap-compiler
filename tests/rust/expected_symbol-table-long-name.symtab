@@ -1,0 +1,2 @@
+symbol 1 function main tests/rust/symbol-table-long-name.rs:1:4 scope=0
+symbol 2 local aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...(len=100) tests/rust/symbol-table-long-name.rs:2:9 scope=1

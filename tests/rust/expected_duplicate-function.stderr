@@ -1,0 +1,5 @@
+error[RUST-E0001]: duplicate binding `dup` in the same scope
+  --> tests/rust/duplicate-function.rs:5:4
+note: previous binding declared here
+  --> tests/rust/duplicate-function.rs:1:4
+  hint: rename this binding or remove the previous declaration

@@ -1,0 +1,5 @@
+RustAstSymbols v1
+Function name="main" symbol=1 return=i32
+  Block
+    Return
+      Ident name="missing" symbol=invalid

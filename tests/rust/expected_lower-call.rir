@@ -1,0 +1,7 @@
+RustIR v1
+fn helper(x:i32) -> i32 {
+  ret (add (load x) (const 1))
+}
+fn main() -> i32 {
+  ret (call helper (const 41))
+}

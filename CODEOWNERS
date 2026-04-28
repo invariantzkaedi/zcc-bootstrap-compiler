@@ -1,0 +1,9 @@
+# Default owner for all files in this repository.
+* @zkaedi
+
+# Compiler-critical Rust paths.
+/part7_rust.c @zkaedi
+/part5.c @zkaedi
+/tests/rust/** @zkaedi
+/.github/workflows/** @zkaedi
+/docs/rust_frontend_plan.md @zkaedi

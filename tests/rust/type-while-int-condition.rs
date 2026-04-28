@@ -1,0 +1,6 @@
+fn main() -> i32 {
+    while 1 {
+        return 1;
+    }
+    return 0;
+}

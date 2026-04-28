@@ -1,0 +1,2 @@
+error[RUST-TYPE-E0005]: called value `x` is not a function
+  hint: call expressions require a function name

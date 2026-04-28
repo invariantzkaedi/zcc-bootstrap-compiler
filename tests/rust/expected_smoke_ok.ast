@@ -1,0 +1,19 @@
+RustAst v1
+Functions 1
+Function main -> i32
+  Param seed : i32
+  Stmt Let x : i32
+    Expr Binary op=20
+      Expr Num 40
+      Expr Num 2
+  Stmt If
+    Cond
+      Expr Bool true
+    Then
+      Stmt Return
+        Expr Binary op=20
+          Expr Ident x
+          Expr Ident seed
+    Else
+      Stmt Return
+        Expr Ident seed
