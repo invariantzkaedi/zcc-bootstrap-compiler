@@ -422,3 +422,31 @@ ret_tvalue_gate5
 /exp3
 /exp4
 /exp5
+
+# ─── Patch reject files & manual backups (added Apr 28 2026) ───
+# Conflict residue from `git apply` / `patch -p1` — never commit these.
+*.rej
+
+# Manual pre-fix snapshots — git history is the backup.
+*.prev
+*.pre-*-fix
+
+# ─── Tracked-binary gap closers (added Apr 28 2026) ───
+# .gitignore line 35 catches `test_*` but not `t_*` ABI binaries.
+# Constrained to repo root + tests/abi/ to avoid eating legitimate names.
+/abi_interop
+/fhn_gen
+/island_0_bin
+/t_[0-9]*
+/t_zcc
+/t_zcc_*
+/t_gcc
+/t_gcc_*
+tests/abi/t_*
+tests/abi/classify_sizes_*
+
+# Windows Store package files — nothing C-compiler about them.
+*.appxbundle
+*.appx
+*.msix
+*.msixbundle
