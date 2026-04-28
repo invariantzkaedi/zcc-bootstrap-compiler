@@ -1,0 +1,3 @@
+error[RUST-TYPE-E0015]: function `helper` requires explicit return type in strict signature mode
+  --> tests/rust/strict-signature-missing-return-type.rs:1:4
+  hint: add `-> i32` or `-> bool`, for example: `fn name(...) -> i32 { ... }`

@@ -1,0 +1,3 @@
+error[RUST-BACKEND-E0002]: recursive constant function call is not supported
+  --> tests/rust/backend-call-recursive.rs:7:12
+  hint: backend-v1 can only evaluate non-recursive constant function calls

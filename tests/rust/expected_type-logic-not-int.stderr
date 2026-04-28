@@ -1,0 +1,2 @@
+error[RUST-TYPE-E0009]: logical not operand must be `bool`
+  hint: use a bool expression with `!`

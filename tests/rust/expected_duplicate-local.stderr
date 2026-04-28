@@ -1,0 +1,5 @@
+error[RUST-E0001]: duplicate binding `x` in the same scope
+  --> tests/rust/duplicate-local.rs:3:9
+note: previous binding declared here
+  --> tests/rust/duplicate-local.rs:2:9
+  hint: rename this binding or remove the previous declaration

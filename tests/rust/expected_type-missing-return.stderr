@@ -1,0 +1,2 @@
+error[RUST-TYPE-E0004]: missing return from function `main`
+  hint: add a return expression on all control-flow paths

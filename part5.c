@@ -472,7 +472,6 @@ static char *read_file(char *path, int *out_len) {
   char *buf;
   int nr;
 
-  fprintf(stderr, "read_file: path = '%s' (addr: %p)\n", path, path);
   fp = fopen(path, "rb");
   if (!fp)
     return 0;
@@ -1058,6 +1057,7 @@ void ir_pm_run_default(void *mod_ptr, int verbose);
 
 int main(int argc, char **argv) {
   Compiler *cc;
+  FrontendLang frontend_lang;
   char *input_file;
   char *output_file;
   char *source;
@@ -1082,6 +1082,14 @@ int main(int argc, char **argv) {
   int zcc_quiet_flag = 0;
 
   int compile_only = 0;
+  int dump_rust_ast = 0;
+  int dump_rust_ast_with_symbols = 0;
+  int dump_rust_symbol_table = 0;
+  int dump_rust_ir = 0;
+  int rust_backend_v1 = 0;
+  int rust_strict_let_annotations = 0;
+  int rust_strict_function_signatures = 0;
+  int rust_dump_mode = 0;
 
   int g_ir_primary = 0;
 
@@ -1095,6 +1103,23 @@ int main(int argc, char **argv) {
       compile_only = 1;
     } else if (strcmp(argv[i], "--pp-only") == 0) {
       pp_only = 1;
+    } else if (strcmp(argv[i], "--dump-rust-ast") == 0) {
+      dump_rust_ast = 1;
+    } else if (strcmp(argv[i], "--dump-rust-ast-with-symbols") == 0) {
+      dump_rust_ast_with_symbols = 1;
+    } else if (strcmp(argv[i], "--dump-rust-symbol-table") == 0) {
+      dump_rust_symbol_table = 1;
+    } else if (strcmp(argv[i], "--dump-rust-ir") == 0) {
+      dump_rust_ir = 1;
+    } else if (strcmp(argv[i], "--rust-backend-v1") == 0) {
+      rust_backend_v1 = 1;
+    } else if (strcmp(argv[i], "--rust-strict-let-annotations") == 0) {
+      rust_strict_let_annotations = 1;
+    } else if (strcmp(argv[i], "--rust-strict-function-signatures") == 0) {
+      rust_strict_function_signatures = 1;
+    } else if (strcmp(argv[i], "--rust-strict") == 0) {
+      rust_strict_let_annotations = 1;
+      rust_strict_function_signatures = 1;
     } else if (strcmp(argv[i], "-v") == 0) {
       zcc_verbose_flag = 1;
     } else if (strcmp(argv[i], "--quiet") == 0 || strcmp(argv[i], "-q") == 0) {
@@ -1158,12 +1183,29 @@ int main(int argc, char **argv) {
   }
 
   if (!input_file) {
-    printf("Usage: zcc <input.c> [-o output]\n");
+    printf("Usage: zcc <input.{c|rs}> [-o output] [options]\n");
+    printf("Options:\n");
+    printf("  --pp-only         print preprocessed C source and exit\n");
+    printf("  --dump-rust-ast   parse Rust and print deterministic AST\n");
+    printf("  --dump-rust-ast-with-symbols   parse Rust and print AST with symbol ids\n");
+    printf("  --dump-rust-symbol-table   parse Rust and print flat resolver symbol table\n");
+    printf("  --dump-rust-ir   lower typed Rust subset to textual IR form\n");
+    printf("  --rust-backend-v1   compile Rust via minimal backend bridge (main returns i32 literal)\n");
+    printf("  --rust-strict-let-annotations   require explicit type annotations on all let bindings\n");
+    printf("  --rust-strict-function-signatures   require explicit return type annotations on all functions\n");
+    printf("  --rust-strict   enable both strict let annotations and strict function signatures\n");
+    printf("  -c                compile only (C path)\n");
+    printf("  -q, --quiet       suppress diagnostics output\n");
     return 1;
   }
 
   if (!output_file)
     output_file = "a.out";
+
+  frontend_lang = FRONTEND_LANG_C;
+  if (strlen(input_file) >= 3 && strcmp(input_file + strlen(input_file) - 3, ".rs") == 0) {
+    frontend_lang = FRONTEND_LANG_RUST;
+  }
 
   ZCC_IR_INIT();
   if (enable_telemetry_stdout) {
@@ -1177,18 +1219,47 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  /* PREPROCESSOR HOOK */
-  {
-    int pp_len;
-    char *pp_source = zcc_preprocess(source, source_len, input_file, include_paths, &pp_len);
-    if (!pp_source) {
-      fprintf(stderr, "zcc: preprocessing failed\n");
+  if (frontend_lang == FRONTEND_LANG_C) {
+    /* PREPROCESSOR HOOK */
+    {
+      int pp_len;
+      char *pp_source = zcc_preprocess(source, source_len, input_file, include_paths, &pp_len);
+      if (!pp_source) {
+        fprintf(stderr, "zcc: preprocessing failed\n");
+        return 1;
+      }
+      /* We leak original `source` here because we replaced it.
+         ZCC doesn't care much about leaking in main string allocations anyway. */
+      source = pp_source;
+      source_len = pp_len;
+    }
+  } else {
+    if (pp_only) {
+      printf("zcc: --pp-only is only valid for C sources\n");
+      free(source);
       return 1;
     }
-    /* We leak original `source` here because we replaced it.
-       ZCC doesn't care much about leaking in main string allocations anyway. */
-    source = pp_source;
-    source_len = pp_len;
+    rust_dump_mode = (dump_rust_ast || dump_rust_ast_with_symbols || dump_rust_symbol_table || dump_rust_ir);
+    if (rust_dump_mode) {
+      if (rust_frontend_compile_file(input_file, source, source_len, dump_rust_ast, dump_rust_ast_with_symbols, dump_rust_symbol_table, dump_rust_ir, rust_strict_let_annotations, rust_strict_function_signatures) != 0) {
+        free(source);
+        return 1;
+      }
+    } else if (rust_backend_v1) {
+      if (rust_backend_bridge_compile_file(input_file, source, source_len, output_file, compile_only, rust_strict_let_annotations, rust_strict_function_signatures) != 0) {
+        free(source);
+        return 1;
+      }
+      if (!enable_telemetry_stdout) printf("[OK] Rust backend bridge compilation completed.\n");
+      free(source);
+      return 0;
+    } else if (rust_frontend_compile_file(input_file, source, source_len, 0, 0, 0, 0, rust_strict_let_annotations, rust_strict_function_signatures) != 0) {
+      free(source);
+      return 1;
+    }
+    if (!enable_telemetry_stdout && !rust_dump_mode) printf("[OK] Rust frontend parsed successfully.\n");
+    free(source);
+    return 0;
   }
 
   if (pp_only) {

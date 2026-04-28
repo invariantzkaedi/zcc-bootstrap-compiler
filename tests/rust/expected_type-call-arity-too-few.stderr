@@ -1,0 +1,2 @@
+error[RUST-TYPE-E0006]: function `helper` expects 1 argument but found 0
+  hint: pass the expected number of arguments

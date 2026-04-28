@@ -1,0 +1,7 @@
+fn main() -> i32 {
+    return add_one(41);
+}
+
+fn add_one(x: i32) -> i32 {
+    return x + 1;
+}

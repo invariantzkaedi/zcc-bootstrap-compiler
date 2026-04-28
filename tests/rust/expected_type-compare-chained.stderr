@@ -1,0 +1,2 @@
+error[RUST-TYPE-E0008]: comparison operands must be `i32`: left is `bool`, right is `i32`
+  hint: compare integer expressions

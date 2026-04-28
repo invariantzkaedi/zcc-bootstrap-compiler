@@ -1,0 +1,51 @@
+name: Rust Front Smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/rust-front-smoke.yml"
+      - "part7_rust.c"
+      - "part5.c"
+      - "part1.c"
+      - "tests/rust/**"
+      - "docs/rust_frontend_plan.md"
+      - "Makefile"
+  push:
+    branches-ignore:
+      - main
+    paths:
+      - ".github/workflows/rust-front-smoke.yml"
+      - "part7_rust.c"
+      - "part5.c"
+      - "part1.c"
+      - "tests/rust/**"
+      - "docs/rust_frontend_plan.md"
+      - "Makefile"
+
+concurrency:
+  group: rust-front-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-front-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make gcc python3
+
+      - name: Run rust smoke
+        run: |
+          make rust-front-smoke | tee rust-front-smoke.log
+
+      - name: Upload rust smoke log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-front-smoke-log
+          path: rust-front-smoke.log

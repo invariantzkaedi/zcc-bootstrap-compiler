@@ -1,0 +1,2 @@
+error[RUST-TYPE-E0010]: logical operands must be `bool`: left is `i32`, right is `bool`
+  hint: use bool expressions with logical operators

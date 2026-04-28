@@ -1,0 +1,2 @@
+error[RUST-TYPE-E0002]: expected `bool`, found `i32`
+  hint: use a bool expression for condition

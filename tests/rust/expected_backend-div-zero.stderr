@@ -1,0 +1,3 @@
+error[RUST-BACKEND-E0001]: division by zero in constant expression
+  --> tests/rust/backend-div-zero.rs:2:14
+  hint: avoid dividing by zero in constant expressions

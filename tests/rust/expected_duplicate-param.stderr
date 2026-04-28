@@ -1,0 +1,5 @@
+error[RUST-E0001]: duplicate binding `x` in the same scope
+  --> tests/rust/duplicate-param.rs:1:17
+note: previous binding declared here
+  --> tests/rust/duplicate-param.rs:1:9
+  hint: rename this binding or remove the previous declaration

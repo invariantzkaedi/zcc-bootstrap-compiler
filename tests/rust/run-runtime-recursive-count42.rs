@@ -1,0 +1,11 @@
+fn s(n: i32) -> i32 {
+    if n == 0 {
+        return 0;
+    } else {
+        return 1 + s(n - 1);
+    }
+}
+
+fn main() -> i32 {
+    return s(42);
+}
