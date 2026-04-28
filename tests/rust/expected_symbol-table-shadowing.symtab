@@ -1,0 +1,4 @@
+symbol 1 function main tests/rust/symbol-table-shadowing.rs:1:4 scope=0
+symbol 2 param x tests/rust/symbol-table-shadowing.rs:1:9 scope=1
+symbol 3 local y tests/rust/symbol-table-shadowing.rs:2:9 scope=1
+symbol 4 local y tests/rust/symbol-table-shadowing.rs:4:13 scope=2

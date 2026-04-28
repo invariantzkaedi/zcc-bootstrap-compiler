@@ -1,0 +1,5 @@
+RustIR v1
+fn main(x:i32) -> i32 {
+  let y <- (add (load x) (const 1))
+  ret (load y)
+}

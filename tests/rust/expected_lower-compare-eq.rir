@@ -1,0 +1,9 @@
+RustIR v1
+fn main(x:i32) -> i32 {
+  if (eq (load x) (const 0))
+  then
+    ret (const 1)
+  else
+    ret (const 0)
+  end
+}

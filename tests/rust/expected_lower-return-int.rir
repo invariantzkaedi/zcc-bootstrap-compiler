@@ -1,0 +1,4 @@
+RustIR v1
+fn main() -> i32 {
+  ret (const 42)
+}

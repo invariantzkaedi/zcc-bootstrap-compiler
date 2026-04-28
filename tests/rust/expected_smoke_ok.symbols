@@ -1,0 +1,19 @@
+RustAstSymbols v1
+Function name="main" symbol=1 return=i32
+  Param name="seed" symbol=2
+  Block
+    Let name="x" symbol=3
+      Binary op=20
+        Int 40
+        Int 2
+    If
+      Cond
+        Bool true
+      Then
+        Return
+          Binary op=20
+            Ident name="x" symbol=3
+            Ident name="seed" symbol=2
+      Else
+        Return
+          Ident name="seed" symbol=2

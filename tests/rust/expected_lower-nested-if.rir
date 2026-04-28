@@ -1,0 +1,14 @@
+RustIR v1
+fn main(x:i32) -> i32 {
+  if (gt (load x) (const 10))
+  then
+    ret (const 10)
+  else
+    if (gt (load x) (const 0))
+    then
+      ret (const 1)
+    else
+      ret (const 0)
+    end
+  end
+}
