@@ -59,6 +59,14 @@ static void ir_save_result(char *dst) {
 
 /* ── AST Type → IR Type Mapper ───────────────────────────────────── */
 /*                                                                     */
+/* ── IR PERSISTENCE SCHEMA VERSION ─────────────────────────────────── */
+/* See IR_SCHEMA.md for bump rules. Bump on any persisted-IR format     */
+/* change (text grammar, JSON shape, opcode rename, type encoding).     */
+#define ZCC_IR_VERSION_MAJOR 1
+#define ZCC_IR_VERSION_MINOR 0
+#define ZCC_IR_VERSION_PATCH 0
+#define ZCC_IR_VERSION       "1.0.0"
+
 /* Maps the compiler's internal Type* to the ir_type_t enum.           */
 /* Handles all TY_* kinds including pointers, arrays, and structs.     */
 
@@ -120,7 +128,7 @@ static char *ir_var_name(Node *node) {
 static void ir_bridge_func_begin(Node *func) {
     ir_tmp_counter = 0;
     ir_last_result[0] = 0;
-    ZCC_IR_FUNC_BEGIN(func->func_def_name, ir_map_type(func->func_type), func->num_params);
+    ZCC_IR_FUNC_BEGIN(func->func_def_name, ir_map_type(func->func_type->ret), func->num_params);
 }
 
 static void ir_bridge_func_end(void) {
