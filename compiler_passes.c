@@ -4309,6 +4309,9 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     }
 
     Instr *st = calloc(1, sizeof(Instr));
+    st->id = ctx->next_instr_id++;
+    st->op = OP_STORE;
+    st->dst = 0;
     st->src[0] = val_r;
     st->src[1] = addr_r;
     st->n_src = 2;
@@ -5978,6 +5981,32 @@ static void ir_asm_number_and_liveness(Function *fn,
            * through the predecessor's BR where the edge copy executes. */
           last_use[src_r] = seq > 0 ? seq - 1 : 0;
         }
+      }
+    }
+  }
+  /* BUG-2 FIX: extend lifetime of any value defined before a loop and used
+   * inside it. Detects back-edges via block_order indices. Conservative:
+   * extends to end of function (pessimizes regalloc but provably correct). */
+  for (uint32_t bi = 0; bi < n_block_order; bi++) {
+    BlockID hdr_bid = block_order[bi];
+    if (hdr_bid >= fn->n_blocks) continue;
+    Block *hdr = fn->blocks[hdr_bid];
+    if (!hdr) continue;
+    int is_loop_header = 0;
+    for (uint32_t pi = 0; pi < hdr->n_preds; pi++) {
+      BlockID pred_bid = hdr->preds[pi];
+      for (uint32_t k = bi + 1; k < n_block_order; k++) {
+        if (block_order[k] == pred_bid) { is_loop_header = 1; break; }
+      }
+      if (is_loop_header) break;
+    }
+    if (!is_loop_header) continue;
+    int hdr_first_seq = hdr->head ? hdr->head->lscan_seq : -1;
+    if (hdr_first_seq < 0) continue;
+    for (int r = 0; r < MAX_INSTRS; r++) {
+      if (def_seq[r] < 0) continue;
+      if (def_seq[r] < hdr_first_seq && last_use[r] >= hdr_first_seq) {
+        last_use[r] = seq > 0 ? seq - 1 : 0;
       }
     }
   }
