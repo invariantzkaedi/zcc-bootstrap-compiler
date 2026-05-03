@@ -339,6 +339,7 @@ void ir_func_emit_text(const ir_func_t *fn, FILE *fp) {
 
 void ir_module_emit_text(const ir_module_t *mod, FILE *fp) {
     int i;
+    fprintf(fp, "; ZCC IR v%s\n", ZCC_IR_VERSION);
     fprintf(fp, "; ZCC IR module  funcs=%d\n\n", mod->func_count);
     for (i = 0; i < mod->func_count; i++) {
         ir_func_emit_text(mod->funcs[i], fp);
