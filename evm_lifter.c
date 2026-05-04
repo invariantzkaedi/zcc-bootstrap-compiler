@@ -235,6 +235,7 @@ void evm_lifter_init(evm_lifter_t *ls,
 evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
     unsigned int op;
     int push_bytes;
+    unsigned long imm_bits; /* accumulate as unsigned to avoid sign-extension UB */
     long imm_val;
     int i;
     char tmp_dst[IR_NAME_MAX];
@@ -257,7 +258,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
     if (op == (unsigned int)EVM_PUSH0) {
         ls->pc++;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_CONST, IR_TY_I64, tmp_dst, 0, 0, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_CONST, IR_TY_I64, tmp_dst, NULL, NULL, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
     }
 
@@ -276,16 +277,19 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
             return EVM_LIFT_TRUNCATED;
         }
 
-        /* Collect up to 8 bytes into a long (EVM words are 256-bit;
-         * values wider than 64 bits are silently truncated for this scaffold). */
-        imm_val = 0L;
+        /* Collect up to 8 bytes into an unsigned long to avoid sign-extension
+         * UB when shifting (EVM words are 256-bit; values wider than 64 bits
+         * are silently truncated for this scaffold).  Cast to signed long at
+         * the end so the value is stored correctly in ir_node_t.imm. */
+        imm_bits = 0UL;
         for (i = 0; i < push_bytes; i++) {
-            imm_val = (imm_val << 8) | (long)ls->bytecode[ls->pc + i];
+            imm_bits = (imm_bits << 8) | (unsigned long)ls->bytecode[ls->pc + i];
         }
+        imm_val = (long)imm_bits;
         ls->pc += push_bytes;
 
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_CONST, IR_TY_I64, tmp_dst, 0, 0, 0, imm_val, ls->pc);
+        ir_emit(ls->func, IR_CONST, IR_TY_I64, tmp_dst, NULL, NULL, NULL, imm_val, ls->pc);
         return stack_push(ls, tmp_dst);
     }
 
@@ -303,7 +307,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         }
         src = stack_peek(ls, depth);
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_COPY, IR_TY_I64, tmp_dst, src, 0, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_COPY, IR_TY_I64, tmp_dst, src, NULL, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
     }
 
@@ -327,7 +331,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         memcpy(ls->stack.slots[top_idx], ls->stack.slots[tgt_idx], IR_NAME_MAX);
         memcpy(ls->stack.slots[tgt_idx], tmp_swap, IR_NAME_MAX);
         /* Emit a NOP marker so the IR record shows the swap */
-        ir_emit(ls->func, IR_NOP, IR_TY_VOID, 0, 0, 0, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_NOP, IR_TY_VOID, NULL, NULL, NULL, NULL, 0L, ls->pc);
         return EVM_LIFT_OK;
     }
 
@@ -338,7 +342,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
 
     /* ── STOP / RETURN / REVERT ──────────────────────────────────── */
     case EVM_STOP:
-        ir_emit(ls->func, IR_RET, IR_TY_VOID, 0, "", 0, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_RET, IR_TY_VOID, NULL, "", NULL, NULL, 0L, ls->pc);
         return EVM_LIFT_OK;
 
     case EVM_RETURN:
@@ -346,7 +350,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_b);  /* length */
         if (res != EVM_LIFT_OK) return res;
-        ir_emit(ls->func, IR_RET, IR_TY_I64, 0, tmp_a, 0, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_RET, IR_TY_I64, NULL, tmp_a, NULL, NULL, 0L, ls->pc);
         return EVM_LIFT_OK;
 
     case EVM_REVERT:
@@ -354,12 +358,12 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_b);
         if (res != EVM_LIFT_OK) return res;
-        tagged_emit(ls, IR_RET, IR_TY_VOID, 0, tmp_a, 0, 0, 0L, ls->pc,
+        tagged_emit(ls, IR_RET, IR_TY_VOID, NULL, tmp_a, NULL, NULL, 0L, ls->pc,
                     IR_TAG_EVM_BARRIER);
         return EVM_LIFT_OK;
 
     case EVM_INVALID:
-        tagged_emit(ls, IR_NOP, IR_TY_VOID, 0, 0, 0, 0, 0L, ls->pc,
+        tagged_emit(ls, IR_NOP, IR_TY_VOID, NULL, NULL, NULL, NULL, 0L, ls->pc,
                     IR_TAG_EVM_BARRIER);
         return EVM_LIFT_OK;
 
@@ -372,21 +376,21 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_ADD, IR_TY_I64, tmp_dst, tmp_a, tmp_b, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_ADD, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
     case EVM_SUB:
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_SUB, IR_TY_I64, tmp_dst, tmp_a, tmp_b, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_SUB, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
     case EVM_MUL:
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_MUL, IR_TY_I64, tmp_dst, tmp_a, tmp_b, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_MUL, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
     case EVM_DIV:
@@ -394,7 +398,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_DIV, IR_TY_I64, tmp_dst, tmp_a, tmp_b, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_DIV, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
     case EVM_MOD:
@@ -402,7 +406,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_MOD, IR_TY_I64, tmp_dst, tmp_a, tmp_b, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_MOD, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
     /* ── Comparison ops: pops 2, pushes i32 0/1 ─────────────────── */
@@ -411,7 +415,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_LT, IR_TY_I32, tmp_dst, tmp_a, tmp_b, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_LT, IR_TY_I32, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
     case EVM_GT:
@@ -419,23 +423,23 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_GT, IR_TY_I32, tmp_dst, tmp_a, tmp_b, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_GT, IR_TY_I32, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
     case EVM_EQ:
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_EQ, IR_TY_I32, tmp_dst, tmp_a, tmp_b, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_EQ, IR_TY_I32, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
     case EVM_ISZERO:
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         /* ISZERO: push (a == 0) */
         lifter_fresh_tmp(ls, tmp_b);
-        ir_emit(ls->func, IR_CONST, IR_TY_I64, tmp_b, 0, 0, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_CONST, IR_TY_I64, tmp_b, NULL, NULL, NULL, 0L, ls->pc);
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_EQ, IR_TY_I32, tmp_dst, tmp_a, tmp_b, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_EQ, IR_TY_I32, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
     /* ── Bitwise ops ─────────────────────────────────────────────── */
@@ -443,34 +447,34 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_AND, IR_TY_I64, tmp_dst, tmp_a, tmp_b, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_AND, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
     case EVM_OR:
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_OR, IR_TY_I64, tmp_dst, tmp_a, tmp_b, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_OR, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
     case EVM_XOR:
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_XOR, IR_TY_I64, tmp_dst, tmp_a, tmp_b, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_XOR, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
     case EVM_NOT:
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_NOT, IR_TY_I64, tmp_dst, tmp_a, 0, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_NOT, IR_TY_I64, tmp_dst, tmp_a, NULL, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
     case EVM_SHL:
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_SHL, IR_TY_I64, tmp_dst, tmp_a, tmp_b, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_SHL, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
     case EVM_SHR:
@@ -478,34 +482,34 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_SHR, IR_TY_I64, tmp_dst, tmp_a, tmp_b, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_SHR, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
     /* ── Memory/storage ops ──────────────────────────────────────── */
     case EVM_MLOAD:
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_LOAD, IR_TY_I64, tmp_dst, tmp_a, 0, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_LOAD, IR_TY_I64, tmp_dst, tmp_a, NULL, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
     case EVM_MSTORE:
     case EVM_MSTORE8:
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
-        ir_emit(ls->func, IR_STORE, IR_TY_I64, tmp_a, tmp_b, 0, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_STORE, IR_TY_I64, tmp_a, tmp_b, NULL, NULL, 0L, ls->pc);
         return EVM_LIFT_OK;
 
     case EVM_SLOAD:
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_LOAD, IR_TY_I64, tmp_dst, tmp_a, 0, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_LOAD, IR_TY_I64, tmp_dst, tmp_a, NULL, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
     case EVM_SSTORE:
         /* Persistent storage write — security-tagged */
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
-        tagged_emit(ls, IR_STORE, IR_TY_I64, tmp_a, tmp_b, 0, 0, 0L, ls->pc,
+        tagged_emit(ls, IR_STORE, IR_TY_I64, tmp_a, tmp_b, NULL, NULL, 0L, ls->pc,
                     IR_TAG_SSTORE);
         return EVM_LIFT_OK;
 
@@ -514,20 +518,20 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         /* Indirect jump — we can't resolve the target statically here.
          * Emit a NOP with the target temp as src1 for future CFG pass. */
-        ir_emit(ls->func, IR_NOP, IR_TY_VOID, 0, tmp_a, 0, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_NOP, IR_TY_VOID, NULL, tmp_a, NULL, NULL, 0L, ls->pc);
         return EVM_LIFT_OK;
 
     case EVM_JUMPI:
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         /* Conditional branch — emit BR_IF with condition in src1 */
-        ir_emit(ls->func, IR_BR_IF, IR_TY_VOID, 0, tmp_b, 0, tmp_a, 0L, ls->pc);
+        ir_emit(ls->func, IR_BR_IF, IR_TY_VOID, NULL, tmp_b, NULL, tmp_a, 0L, ls->pc);
         return EVM_LIFT_OK;
 
     case EVM_JUMPDEST:
         /* Define a labelled entry point in the IR */
         snprintf(lbl_buf, IR_LABEL_MAX, ".L_evm_%d", ls->pc - 1);
-        ir_emit(ls->func, IR_LABEL, IR_TY_VOID, 0, 0, 0, lbl_buf, 0L, ls->pc);
+        ir_emit(ls->func, IR_LABEL, IR_TY_VOID, NULL, NULL, NULL, lbl_buf, 0L, ls->pc);
         return EVM_LIFT_OK;
 
     /* ── Environment queries — zero-operand pushes ───────────────── */
@@ -552,7 +556,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
     case EVM_GAS:
         /* These push an environment-derived value; model as CONST 0 for now */
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_CONST, IR_TY_I64, tmp_dst, 0, 0, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_CONST, IR_TY_I64, tmp_dst, NULL, NULL, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
     case EVM_BALANCE:
@@ -563,7 +567,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         /* Pop 1, push 1 (address/key → value) */
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_LOAD, IR_TY_I64, tmp_dst, tmp_a, 0, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_LOAD, IR_TY_I64, tmp_dst, tmp_a, NULL, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
     case EVM_SHA3:
@@ -578,7 +582,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_NOP, IR_TY_I64, tmp_dst, tmp_a, tmp_b, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_NOP, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
     case EVM_EXTCODECOPY:
@@ -588,7 +592,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_c); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_dst); if (res != EVM_LIFT_OK) return res;
-        ir_emit(ls->func, IR_NOP, IR_TY_VOID, 0, 0, 0, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_NOP, IR_TY_VOID, NULL, NULL, NULL, NULL, 0L, ls->pc);
         return EVM_LIFT_OK;
 
     /* ── LOG0..LOG4 ──────────────────────────────────────────────── */
@@ -605,7 +609,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
             res = stack_pop(ls, tmp_a);
             if (res != EVM_LIFT_OK) return res;
         }
-        ir_emit(ls->func, IR_NOP, IR_TY_VOID, 0, 0, 0, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_NOP, IR_TY_VOID, NULL, NULL, NULL, NULL, 0L, ls->pc);
         return EVM_LIFT_OK;
     }
 
@@ -642,8 +646,8 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
                            tmp_dst, 0, 0, addr, 0L, ls->pc,
                            IR_TAG_UNTRUSTED_EXTERNAL_CALL);
         /* Emit ARG nodes for gas, value (key audit parameters) */
-        ir_emit(ls->func, IR_ARG, IR_TY_I64, 0, gas,   0, 0, 0L, ls->pc);
-        ir_emit(ls->func, IR_ARG, IR_TY_I64, 0, value, 0, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_ARG, IR_TY_I64, NULL, gas, NULL, NULL, 0L, ls->pc);
+        ir_emit(ls->func, IR_ARG, IR_TY_I64, NULL, value, NULL, NULL, 0L, ls->pc);
         (void)node;
         ls->call_count++;
         /* Push the success flag */
@@ -664,7 +668,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         node = tagged_emit(ls, IR_CALL, IR_TY_I64,
                            tmp_dst, 0, 0, addr, 0L, ls->pc,
                            IR_TAG_UNTRUSTED_EXTERNAL_CALL);
-        ir_emit(ls->func, IR_ARG, IR_TY_I64, 0, gas, 0, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_ARG, IR_TY_I64, NULL, gas, NULL, NULL, 0L, ls->pc);
         (void)node;
         ls->call_count++;
         return stack_push(ls, tmp_dst);
@@ -684,7 +688,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         node = tagged_emit(ls, IR_CALL, IR_TY_I64,
                            tmp_dst, 0, 0, addr, 0L, ls->pc,
                            IR_TAG_STATIC_CALL);
-        ir_emit(ls->func, IR_ARG, IR_TY_I64, 0, gas, 0, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_ARG, IR_TY_I64, NULL, gas, NULL, NULL, 0L, ls->pc);
         (void)node;
         ls->call_count++;
         return stack_push(ls, tmp_dst);
@@ -720,13 +724,13 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
     /* ── SELFDESTRUCT ────────────────────────────────────────────── */
     case EVM_SELFDESTRUCT:
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
-        tagged_emit(ls, IR_RET, IR_TY_VOID, 0, tmp_a, 0, 0, 0L, ls->pc,
+        tagged_emit(ls, IR_RET, IR_TY_VOID, NULL, tmp_a, NULL, NULL, 0L, ls->pc,
                     IR_TAG_SELFDESTRUCT);
         return EVM_LIFT_OK;
 
     /* ── Unknown / unimplemented ─────────────────────────────────── */
     default:
-        ir_emit(ls->func, IR_NOP, IR_TY_VOID, 0, 0, 0, 0, 0L, ls->pc);
+        ir_emit(ls->func, IR_NOP, IR_TY_VOID, NULL, NULL, NULL, NULL, 0L, ls->pc);
         return EVM_LIFT_OK;
     }
 }
