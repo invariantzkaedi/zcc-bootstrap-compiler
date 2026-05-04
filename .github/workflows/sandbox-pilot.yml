@@ -26,8 +26,8 @@ jobs:
       - name: Build Sandbox Image
         run: |
           docker build -f Dockerfile.sandbox -t chimera-sandbox:latest .
-          IMAGE_ID=$(docker inspect --format='{{index .RepoDigests 0}}' chimera-sandbox:latest || docker inspect --format='{{.Id}}' chimera-sandbox:latest)
-          echo "IMAGE_ID=${IMAGE_ID}" >> $GITHUB_ENV
+          IMAGE_ID=$(docker inspect --format='{{.Id}}' chimera-sandbox:latest)
+          echo "IMAGE_ID=${IMAGE_ID}" >> "$GITHUB_ENV"
           
       - name: Inject Local Approvals
         # Ensure the built image hash is explicitly trusted for the local offline run
