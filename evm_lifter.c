@@ -277,10 +277,11 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
             return EVM_LIFT_TRUNCATED;
         }
 
-        /* Collect up to 8 bytes into an unsigned long to avoid sign-extension
-         * UB when shifting (EVM words are 256-bit; values wider than 64 bits
-         * are silently truncated for this scaffold).  Cast to signed long at
-         * the end so the value is stored correctly in ir_node_t.imm. */
+        /* Collect all push_bytes into an unsigned long to avoid sign-extension
+         * UB when shifting.  EVM words are 256-bit; values wider than 8 bytes
+         * (PUSH9..PUSH32) are truncated: only the last 8 bytes worth of bits
+         * are retained in imm_bits because unsigned long overflow wraps the
+         * high bytes away.  Cast to signed long to store in ir_node_t.imm. */
         imm_bits = 0UL;
         for (i = 0; i < push_bytes; i++) {
             imm_bits = (imm_bits << 8) | (unsigned long)ls->bytecode[ls->pc + i];
@@ -643,7 +644,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         lifter_fresh_tmp(ls, tmp_dst);
         /* Emit IR_CALL targeting the address held in `addr` temp */
         node = tagged_emit(ls, IR_CALL, IR_TY_I64,
-                           tmp_dst, 0, 0, addr, 0L, ls->pc,
+                           tmp_dst, NULL, NULL, addr, 0L, ls->pc,
                            IR_TAG_UNTRUSTED_EXTERNAL_CALL);
         /* Emit ARG nodes for gas, value (key audit parameters) */
         ir_emit(ls->func, IR_ARG, IR_TY_I64, NULL, gas, NULL, NULL, 0L, ls->pc);
@@ -666,7 +667,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
 
         lifter_fresh_tmp(ls, tmp_dst);
         node = tagged_emit(ls, IR_CALL, IR_TY_I64,
-                           tmp_dst, 0, 0, addr, 0L, ls->pc,
+                           tmp_dst, NULL, NULL, addr, 0L, ls->pc,
                            IR_TAG_UNTRUSTED_EXTERNAL_CALL);
         ir_emit(ls->func, IR_ARG, IR_TY_I64, NULL, gas, NULL, NULL, 0L, ls->pc);
         (void)node;
@@ -686,7 +687,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
 
         lifter_fresh_tmp(ls, tmp_dst);
         node = tagged_emit(ls, IR_CALL, IR_TY_I64,
-                           tmp_dst, 0, 0, addr, 0L, ls->pc,
+                           tmp_dst, NULL, NULL, addr, 0L, ls->pc,
                            IR_TAG_STATIC_CALL);
         ir_emit(ls->func, IR_ARG, IR_TY_I64, NULL, gas, NULL, NULL, 0L, ls->pc);
         (void)node;

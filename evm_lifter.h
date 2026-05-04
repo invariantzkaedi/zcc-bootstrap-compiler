@@ -19,6 +19,13 @@
  *     CALLCODE — operations that transfer control to arbitrary addresses.
  *   - TAG_STATIC_CALL is assigned to STATICCALL — read-only, lower risk.
  *
+ * OPCODE COVERAGE NOTE:
+ *   The opcode space is 256 values (0x00–0xFF).  Of these, ~140 are defined
+ *   (valid) opcodes in the Yellow Paper + Shanghai EIPs; the rest are INVALID.
+ *   The enum below names all ~70 distinct mnemonic groups; PUSH1..PUSH32,
+ *   DUP1..DUP16, and SWAP1..SWAP16 are ranges (not individually enumerated).
+ *   All 256 byte values are handled by the lifter (invalid opcodes → IR_NOP).
+ *
  * COVERAGE NOTE:
  *   This is a scaffold.  The tests in tests/test_evm_lifter.c cover the
  *   critical paths (stepping, PUSH immediates, CALL-family tagging, stack
