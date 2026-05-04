@@ -51,7 +51,7 @@ jobs:
             --memory=512m \
             --cpus=1 \
             --tmpfs /tmp:rw,nosuid,size=64m \
-            --tmpfs /app/scratch:rw,nosuid,size=128m \
+            --tmpfs /app/scratch:rw,nosuid,size=128m,uid=1000,gid=1000,mode=700 \
             -e CHIMERA_SANDBOX_ONLY=1 \
             -v "$PWD/pilot_artifacts:/workspace/release_artifacts" \
             chimera-sandbox:latest \
