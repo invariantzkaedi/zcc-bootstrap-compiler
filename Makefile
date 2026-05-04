@@ -4,7 +4,7 @@ LDFLAGS = -lm -Wl,-s
 FAST_CFLAGS = -O2 -DNDEBUG -w -fno-asynchronous-unwind-tables -g0
 FORTIFY_PACK_DIR ?= fortify_zcc_clean
 
-PARTS = part1.c part0_pp.c part2.c part3.c ir.h ir_emit_dispatch.h ir_bridge.h part4.c part5.c part7_rust.c part6_arm.c ir.c ir_to_x86.c regalloc.c ir_telemetry_stub.c
+PARTS = part1.c part0_pp.c part2.c part3.c ir.h ir_emit_dispatch.h ir_bridge.h part4.c part5.c part7_rust.c part6_arm.c ir.c ir_to_x86.c regalloc.c ir_telemetry_stub.c forgezero_receipt_stub.c
 PASSES = compiler_passes.c compiler_passes_ir.c ir_pass_manager.c
 COMPAT_SMOKE_SRCS = \
 	exp1_raytracer_simd.c \
@@ -18,7 +18,7 @@ COMPAT_SMOKE_SRCS = \
 	tests/test_asm_real.c
 COMPAT_EXTENDED_SRCS = $(COMPAT_SMOKE_SRCS) raytracer.c
 
-.PHONY: all clean selfhost selfhost-fast compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test rust-front-smoke check-evm-lifter check-ir-vuln-tag
+.PHONY: all clean selfhost selfhost-fast compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test rust-front-smoke check-evm-lifter check-ir-vuln-tag check-forgezero-receipt
 
 all: zcc
 
@@ -360,6 +360,21 @@ check-ir-vuln-tag:
 	    tests/test_ir_vuln_tag.c ir_vuln_tag.c evm_lifter.c ir.c $(LDFLAGS)
 	@echo "=== Running IR Vuln Tag tests ==="
 	/tmp/test_ir_vuln_tag
+
+# ─── ForgeZero Audit Receipt Scaffold Tests ──────────────────────────
+# Defensive audit receipt / telemetry scaffold only.
+# Offline / file / stdout emission only — no network, no payload.
+# Builds and runs tests/test_forgezero_receipt.c against
+# forgezero_receipt.c + ir_vuln_tag.c + evm_lifter.c + ir.c.
+# Does NOT depend on the ZCC self-hosting path; compiled directly with gcc.
+check-forgezero-receipt:
+	@echo "=== Building ForgeZero Audit Receipt test binary ==="
+	$(CC) $(CFLAGS) -I. \
+	    -o /tmp/test_forgezero_receipt \
+	    tests/test_forgezero_receipt.c forgezero_receipt.c \
+	    ir_vuln_tag.c evm_lifter.c ir.c $(LDFLAGS)
+	@echo "=== Running ForgeZero Audit Receipt tests ==="
+	/tmp/test_forgezero_receipt
 
 asan: zcc.c $(PASSES)
 	$(CC) -fsanitize=address -O0 -g -o zcc_asan zcc.c $(PASSES) $(LDFLAGS)
