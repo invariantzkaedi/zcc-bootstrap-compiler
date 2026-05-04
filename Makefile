@@ -18,7 +18,7 @@ COMPAT_SMOKE_SRCS = \
 	tests/test_asm_real.c
 COMPAT_EXTENDED_SRCS = $(COMPAT_SMOKE_SRCS) raytracer.c
 
-.PHONY: all clean selfhost selfhost-fast compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test rust-front-smoke
+.PHONY: all clean selfhost selfhost-fast compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test rust-front-smoke check-evm-lifter
 
 all: zcc
 
@@ -336,6 +336,18 @@ supercharge-ad: selfhost-fast compat-smoke
 
 test: zcc
 	bash zcc_test_suite.sh --quick
+
+# ─── EVM Lifter Scaffold Tests ───────────────────────────────────────
+# Defensive audit scaffold only — not for exploit use.
+# Builds and runs tests/test_evm_lifter.c against evm_lifter.c + ir.c.
+# Does NOT depend on the ZCC self-hosting path; compiled directly with gcc.
+check-evm-lifter:
+	@echo "=== Building EVM Lifter test binary ==="
+	$(CC) $(CFLAGS) -I. \
+	    -o /tmp/test_evm_lifter \
+	    tests/test_evm_lifter.c evm_lifter.c ir.c $(LDFLAGS)
+	@echo "=== Running EVM Lifter tests ==="
+	/tmp/test_evm_lifter
 
 asan: zcc.c $(PASSES)
 	$(CC) -fsanitize=address -O0 -g -o zcc_asan zcc.c $(PASSES) $(LDFLAGS)

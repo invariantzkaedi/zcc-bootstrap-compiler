@@ -161,6 +161,14 @@ typedef struct ir_node_t {
     long               imm;      /* integer immediate (CONST, ALLOCA)     */
     int                lineno;   /* source file line number               */
 
+    /* Security/analysis tag — set by EVM lifter and other analysis passes.
+     * Value 0 (IR_TAG_NONE) means "untagged, no security concern".
+     * Non-zero values are defined in evm_lifter.h (evm_ir_tag_t).
+     * Callers using ir_node_alloc() / calloc get tag=0 automatically.
+     * Future: RegisterWarden, liveness/dominance passes can query this field
+     * to detect reentrancy-vulnerable call sites and other security events.  */
+    int                tag;      /* security/analysis tag (evm_ir_tag_t)  */
+
     struct ir_node_t  *next;     /* intrusive singly-linked list          */
 } ir_node_t;
 
