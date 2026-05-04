@@ -27,12 +27,14 @@ COPY sandbox_attestation.py /app/
 COPY sandbox_entrypoint.py /app/
 
 # Set permissions
-RUN chown -R sandboxuser:sandboxuser /app && 
-    chmod -R 500 /app && 
+RUN chown -R sandboxuser:sandboxuser /app && \
+    chmod -R 500 /app && \
     chmod 500 /app/sandbox_entrypoint.py
 
 # Temporarily allow write to scratch directory
-RUN mkdir -p /app/scratch && chown -R sandboxuser:sandboxuser /app/scratch && chmod 700 /app/scratch
+RUN mkdir -p /app/scratch && \
+    chown -R sandboxuser:sandboxuser /app/scratch && \
+    chmod 700 /app/scratch
 
 # Switch to the non-root user
 USER sandboxuser
