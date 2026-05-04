@@ -1,15 +1,24 @@
+# syntax=docker/dockerfile:1
+
 # Use an official Python runtime as a parent image
 FROM python:3.14-slim-bookworm
 
+# Use bash with strict error handling for RUN steps
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 # Add a non-root user
-RUN useradd --create-home --shell /bin/bash sandboxuser
+RUN set -eux; \
+    useradd --create-home --shell /bin/bash sandboxuser; \
+    id sandboxuser
 
 # Install GCC and essential build tools
-RUN apt-get update && apt-get install -y \
-    gcc \
-    libc6-dev \
-    make \
- && rm -rf /var/lib/apt/lists/*
+RUN set -eux; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        gcc \
+        libc6-dev \
+        make; \
+    rm -rf /var/lib/apt/lists/*
 
 # Set up workdir
 WORKDIR /app
@@ -26,14 +35,29 @@ COPY pq_sqlite_shim.c /app/
 COPY sandbox_attestation.py /app/
 COPY sandbox_entrypoint.py /app/
 
+# Validate required runtime files exist before locking permissions down
+RUN set -eux; \
+    test -f /app/fortify_policy.json; \
+    test -f /app/fortify_gate.py; \
+    test -f /app/error_handling.py; \
+    test -f /app/production_guard.py; \
+    test -f /app/kill_switch.py; \
+    test -f /app/chimera_mutagen_daemon.py; \
+    test -f /app/pq_sqlite_shim.c; \
+    test -f /app/sandbox_attestation.py; \
+    test -f /app/sandbox_entrypoint.py; \
+    test -e /app/zcc
+
 # Set permissions
-RUN chown -R sandboxuser:sandboxuser /app && \
-    chmod -R 500 /app && \
+RUN set -eux; \
+    chown -R sandboxuser:sandboxuser /app; \
+    chmod -R 500 /app; \
     chmod 500 /app/sandbox_entrypoint.py
 
 # Temporarily allow write to scratch directory
-RUN mkdir -p /app/scratch && \
-    chown -R sandboxuser:sandboxuser /app/scratch && \
+RUN set -eux; \
+    mkdir -p /app/scratch; \
+    chown -R sandboxuser:sandboxuser /app/scratch; \
     chmod 700 /app/scratch
 
 # Switch to the non-root user
@@ -41,6 +65,12 @@ USER sandboxuser
 
 # Set working directory to scratch so generated files go there
 WORKDIR /app/scratch
+
+# Lightweight runtime self-check
+RUN set -eux; \
+    test -x /usr/local/bin/python3; \
+    test -f /app/sandbox_entrypoint.py; \
+    test -d /app/scratch
 
 # Set default entrypoint
 ENTRYPOINT ["python3", "/app/sandbox_entrypoint.py"]
