@@ -5276,7 +5276,7 @@ static ASTNode *build_phase_b_ast(void) {
  *   IR_VULN_UNTRUSTED_CALL   — untrusted external call
  *   IR_VULN_DELEGATE_CALL    — delegate call (caller context hazard)
  *   IR_VULN_STATIC_CALL      — static/read-only call
- *   IR_VULN_STATE_WRITE       — persistent state mutation
+ *   IR_VULN_STATE_WRITE      — persistent state mutation
  *   IR_VULN_PRIV_BOUNDARY    — privilege boundary crossing
  *   IR_VULN_UNKNOWN          — unclassified security event
  *   IR_VULN_SELFDESTRUCT     — destructive termination
