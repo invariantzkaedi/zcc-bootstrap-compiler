@@ -18,7 +18,7 @@ COMPAT_SMOKE_SRCS = \
 	tests/test_asm_real.c
 COMPAT_EXTENDED_SRCS = $(COMPAT_SMOKE_SRCS) raytracer.c
 
-.PHONY: all clean selfhost selfhost-fast compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test rust-front-smoke check-evm-lifter
+.PHONY: all clean selfhost selfhost-fast compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test rust-front-smoke check-evm-lifter check-ir-vuln-tag
 
 all: zcc
 
@@ -345,9 +345,21 @@ check-evm-lifter:
 	@echo "=== Building EVM Lifter test binary ==="
 	$(CC) $(CFLAGS) -I. \
 	    -o /tmp/test_evm_lifter \
-	    tests/test_evm_lifter.c evm_lifter.c ir.c $(LDFLAGS)
+	    tests/test_evm_lifter.c evm_lifter.c ir_vuln_tag.c ir.c $(LDFLAGS)
 	@echo "=== Running EVM Lifter tests ==="
 	/tmp/test_evm_lifter
+
+# ─── IR Vulnerability Tag Schema Tests ───────────────────────────────
+# Defensive security-analysis scaffold only — no exploit generation.
+# Builds and runs tests/test_ir_vuln_tag.c against ir_vuln_tag.c +
+# evm_lifter.c + ir.c.  Does NOT depend on the ZCC self-hosting path.
+check-ir-vuln-tag:
+	@echo "=== Building IR Vuln Tag test binary ==="
+	$(CC) $(CFLAGS) -I. \
+	    -o /tmp/test_ir_vuln_tag \
+	    tests/test_ir_vuln_tag.c ir_vuln_tag.c evm_lifter.c ir.c $(LDFLAGS)
+	@echo "=== Running IR Vuln Tag tests ==="
+	/tmp/test_ir_vuln_tag
 
 asan: zcc.c $(PASSES)
 	$(CC) -fsanitize=address -O0 -g -o zcc_asan zcc.c $(PASSES) $(LDFLAGS)

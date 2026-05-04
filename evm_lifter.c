@@ -19,6 +19,7 @@
  */
 
 #include "evm_lifter.h"
+#include "ir_vuln_tag.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -90,6 +91,8 @@ static ir_node_t *tagged_emit(evm_lifter_t *ls,
     if (n && tag != IR_TAG_NONE) {
         n->tag = (int)tag;
         ls->tagged_count++;
+        /* Bridge to new ir_vuln_tag schema (bitmask in n->vuln_tags) */
+        ir_vuln_tag_set(n, ir_vuln_map_from_evm_tag((int)tag));
     }
     return n;
 }
@@ -669,8 +672,13 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         node = tagged_emit(ls, IR_CALL, IR_TY_I64,
                            tmp_dst, NULL, NULL, addr, 0L, ls->pc,
                            IR_TAG_UNTRUSTED_EXTERNAL_CALL);
+        /* DELEGATECALL additionally crosses a privilege boundary:
+         * callee executes in caller's storage context. */
+        if (node) {
+            ir_vuln_tag_set(node,
+                (ir_vuln_tag_t)(IR_VULN_DELEGATE_CALL | IR_VULN_PRIV_BOUNDARY));
+        }
         ir_emit(ls->func, IR_ARG, IR_TY_I64, NULL, gas, NULL, NULL, 0L, ls->pc);
-        (void)node;
         ls->call_count++;
         return stack_push(ls, tmp_dst);
     }
