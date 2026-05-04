@@ -18,6 +18,12 @@
 static int enable_telemetry_stdout = 0;
 extern void ir_telemetry_enable_stdout(void);
 
+/* ForgeZero audit receipt integration — defensive scaffold only.
+ * Non-blocking: disabled by default; enabled only when --audit-export
+ * or --audit-export-file=<path> is passed on the CLI.
+ * In disabled mode all fzr_* calls are zero-overhead no-ops.          */
+#include "forgezero_receipt.h"
+
 /* Manifold engine globals (defined in ir_pass_manager.c) */
 extern int  g_manifold_enabled;
 extern char g_ir_export_path[256];
@@ -1093,6 +1099,11 @@ int main(int argc, char **argv) {
 
   int g_ir_primary = 0;
 
+  /* ForgeZero audit export flags (non-blocking; disabled by default) */
+  int audit_export_mode = 0;           /* 0=off, 1=stdout, 2=file */
+  char audit_export_file[256];
+  audit_export_file[0] = '\0';
+
   /* parse arguments */
   for (i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-o") == 0) {
@@ -1158,6 +1169,14 @@ int main(int argc, char **argv) {
       g_emit_anomalies = 1;
       g_security_476 = 1;
       g_security_787 = 1;
+    } else if (strcmp(argv[i], "--audit-export") == 0) {
+      /* ForgeZero audit receipt to stdout — defensive analysis only */
+      audit_export_mode = 1;
+    } else if (strncmp(argv[i], "--audit-export-file=", 20) == 0) {
+      /* ForgeZero audit receipt to file — offline/local provenance only */
+      strncpy(audit_export_file, argv[i] + 20, 255);
+      audit_export_file[255] = '\0';
+      audit_export_mode = 2;
     } else if (strncmp(argv[i], "-I", 2) == 0) {
       /* include path: -Ipath or -I path */
       const char *ipath = (argv[i][2] != '\0') ? argv[i] + 2 : ((i + 1 < argc) ? argv[++i] : "");
@@ -1372,7 +1391,7 @@ int main(int argc, char **argv) {
     if (compile_only) {
       sprintf(cmd, "gcc -O0 -w -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -c -o %s %s 2>&1", output_file, asm_file);
     } else if (strcmp(input_file, "zcc.c") == 0 || (strlen(input_file) >= 6 && strcmp(input_file + strlen(input_file) - 6, "/zcc.c") == 0)) {
-      sprintf(cmd, "gcc -O0 -w -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c -lm 2>&1", output_file, asm_file);
+      sprintf(cmd, "gcc -O0 -w -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c forgezero_receipt.c ir_vuln_tag.c evm_lifter.c -lm 2>&1", output_file, asm_file);
     } else {
       sprintf(cmd, "gcc -O0 -w -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s -lm -lpthread -ldl 2>&1", output_file, asm_file);
     }
@@ -1388,6 +1407,29 @@ int main(int argc, char **argv) {
   }
 
   if (!enable_telemetry_stdout) printf("[OK] ZCC Engine Compilation Terminated Successfully.\n");
+
+  /* ForgeZero audit receipt — non-blocking; only active when explicitly enabled.
+   * Scans the IR module (if present) for vulnerability tags and serializes
+   * structured receipt events for offline/local provenance.              */
+  if (audit_export_mode > 0) {
+    fzr_emitter_t fzr_em;
+    fzr_mode_t    fzr_mode = (audit_export_mode == 2) ? FZR_MODE_FILE : FZR_MODE_STDOUT;
+    fzr_emitter_init(&fzr_em, fzr_mode, (void *)0, 0);
+    if (audit_export_mode == 2 && audit_export_file[0]) {
+      fzr_emitter_open_file(&fzr_em, audit_export_file);
+    }
+    fzr_emitter_set_target(&fzr_em, input_file);
+    if (g_ir_module) {
+      fzr_emit_from_vuln_scan(&fzr_em, g_ir_module);
+    } else {
+      /* No IR module (native codegen path); emit a summary-only receipt */
+      fzr_event_t sumev;
+      fzr_event_build(&sumev, FZR_EVENT_COMPILE_SUMMARY,
+                      IR_VULN_NONE, "compiler_cli", input_file, 0);
+      fzr_emitter_emit(&fzr_em, &sumev);
+    }
+    fzr_emitter_close(&fzr_em);
+  }
 
   free(source);
   free(cc);
