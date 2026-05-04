@@ -5252,6 +5252,42 @@ static ASTNode *build_phase_b_ast(void) {
  * PASS PIPELINE: run all three passes in order
  * ──────────────────────────────────────────────────────────────── */
 
+/* ── IR Vulnerability Tag Schema Integration ─────────────────────────────────
+ *
+ * ZCC supports a defensive security-analysis tag schema for IR nodes via
+ * ir_vuln_tag.h / ir_vuln_tag.c.  Tags are stored as bitmasks in the
+ * `vuln_tags` field of ir_node_t (see ir.h).
+ *
+ * The pass pipeline here operates on the internal Function/Instr IR which is
+ * separate from ir_node_t.  Future liveness, dominance, and RegisterWarden
+ * passes that consume ir_node_t directly can integrate via:
+ *
+ *   #include "ir_vuln_tag.h"
+ *
+ *   // Query a node:
+ *   if (ir_vuln_tag_has(node, IR_VULN_UNTRUSTED_CALL)) { ... }
+ *   if (ir_vuln_tag_has(node, IR_VULN_DELEGATE_CALL | IR_VULN_PRIV_BOUNDARY))
+ *       { ... }
+ *
+ *   // Run the standalone module-level scanner (read-only):
+ *   ir_pass_vuln_scan(ir_module, stderr);
+ *
+ * Tag schema (bitmask, defined in ir_vuln_tag.h):
+ *   IR_VULN_UNTRUSTED_CALL   — untrusted external call
+ *   IR_VULN_DELEGATE_CALL    — delegate call (caller context hazard)
+ *   IR_VULN_STATIC_CALL      — static/read-only call
+ *   IR_VULN_STATE_WRITE      — persistent state mutation
+ *   IR_VULN_PRIV_BOUNDARY    — privilege boundary crossing
+ *   IR_VULN_UNKNOWN          — unclassified security event
+ *   IR_VULN_SELFDESTRUCT     — destructive termination
+ *   IR_VULN_CONTRACT_CREATE  — new contract deployment
+ *   IR_VULN_EXEC_BARRIER     — execution barrier (REVERT/INVALID)
+ *
+ * NOTE: Do not include ir_vuln_tag.h in this file — IR_TY_* names conflict
+ * with this TU's IRType enum.  The schema lives entirely in ir_vuln_tag.c
+ * and is linked separately.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
 /**
  * run_all_passes() — Execute the full three-pass optimization pipeline.
  *

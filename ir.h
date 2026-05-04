@@ -167,7 +167,15 @@ typedef struct ir_node_t {
      * Callers using ir_node_alloc() / calloc get tag=0 automatically.
      * Future: RegisterWarden, liveness/dominance passes can query this field
      * to detect reentrancy-vulnerable call sites and other security events.  */
-    int                tag;      /* security/analysis tag (evm_ir_tag_t)  */
+    int                tag;      /* legacy EVM security tag (evm_ir_tag_t)  */
+
+    /* Vulnerability tag bitmask — IR vulnerability/security tag schema.
+     * Bit-flag field: multiple tags can be OR-ed together.
+     * Zero (IR_VULN_NONE) is the safe default from calloc/ir_node_alloc().
+     * Defined in ir_vuln_tag.h (ir_vuln_tag_t).
+     * Use ir_vuln_tag_set() / ir_vuln_tag_has() to manipulate.
+     * Consumed by ir_pass_vuln_scan() and future liveness/dominance passes. */
+    unsigned int       vuln_tags; /* ir_vuln_tag_t bitmask                 */
 
     struct ir_node_t  *next;     /* intrusive singly-linked list          */
 } ir_node_t;
