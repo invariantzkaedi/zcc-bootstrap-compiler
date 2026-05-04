@@ -17,6 +17,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+      
+      - name: Build ZCC binary
+        run: |
+          make zcc
+          test -x zcc
 
       - name: Build Sandbox Image
         run: |
