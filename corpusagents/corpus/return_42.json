@@ -1,0 +1,19 @@
+{
+  "name": "return_42",
+  "category": "basic-return",
+  "violated_invariant": "CG-15",
+  "severity": "P1",
+  "evidence_strength": "strong",
+  "trigger": "int main() { return 42; }",
+  "source_base64": "aW50IG1haW4odm9pZCkgeyByZXR1cm4gNDI7IH0K",
+  "decode_command": "base64 -d > return_42.c",
+  "target_compile_argv": ["zcc", "{SRC}", "-o", "{OUT}"],
+  "reference_compile_argv": ["cc", "{SRC}", "-o", "{OUT}"],
+  "target_run_argv": ["{OUT}"],
+  "reference_run_argv": ["{OUT}"],
+  "expected_exit": 42,
+  "expected_stdout": "",
+  "causal_chain": "source 'return 42' → AST ReturnStmt with IntLit(42) → codegen emits 'mov eax, 42; ret' → process exits 42",
+  "suggested_fix": "(no fix — smoke test confirms baseline)",
+  "regression_test": "this corpus entry"
+}

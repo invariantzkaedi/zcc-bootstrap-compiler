@@ -1,0 +1,13 @@
+{
+  "_comment": "WSL environment overrides for Windows hosts. Bug hunter applies these substitutions to corpus argv before execution.",
+  "compiler_map": {
+    "zcc": ["wsl", "--", "/mnt/c/Users/zkaed/Downloads/zcc-main/zcc-main/zcc"],
+    "cc":  ["wsl", "--", "gcc"],
+    "gcc": ["wsl", "--", "gcc"]
+  },
+  "path_rewrite": {
+    "win_to_wsl": true,
+    "drive_prefix": "/mnt/",
+    "comment": "All {SRC} and {OUT} paths are rewritten from C:\\... to /mnt/c/... before WSL invocation."
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "name": "signed_div_missing_cqo",
+  "category": "codegen",
+  "violated_invariants": [
+    "CG-19",
+    "CG-09",
+    "CG-15"
+  ],
+  "severity": "P1",
+  "evidence_strength": "strong",
+  "status": "fixed_verified",
+  "trigger": "Signed quotient and remainder of negative dividend \u2014 must emit cqo before idivq.",
+  "source_base64": "LyoKICogQ0ctMTkg4oCUIERpdmlzaW9uOiBzaWduZWQgZGl2aWRlIG9mIG5lZ2F0aXZlIGRpdmlkZW5kLgogKgogKiBPbiB4ODYtNjQsIHNpZ25lZCBgaWRpdnFgIHJlcXVpcmVzIHNpZ24tZXh0ZW5zaW9uIG9mICVyYXggaW50byAlcmR4IHZpYQogKiBgY3F0b2AgKGEuay5hLiBjcW8pIGJlZm9yZSB0aGUgZGl2aXNpb24uIEEgY29kZWdlbiB0aGF0IGVtaXRzIGBkaXZxYAogKiAodW5zaWduZWQpIG9yIG9taXRzIGBjcXRvYCB3aWxsIGNvbXB1dGUgKC0zMCAvIDUpID0gaHVnZSB1bnNpZ25lZCB2YWx1ZS4KICoKICogUmVmZXJlbmNlIGNvbXBpbGVyIGFsd2F5cyBlbWl0cyBjcW8raWRpdnEgZm9yIHNpZ25lZCBkaXZpc2lvbi4gVGhpcyBjb3JwdXMKICogZW50cnkgc2VhbHMgdGhhdCBiZWhhdmlvciBzbyBhIGZ1dHVyZSBaQ0MgcGF0Y2ggdGhhdCBicmVha3MgdGhlIGNxbyBwYXRoCiAqIGlzIGRldGVjdGVkIGJ5IGV4aXQtY29kZSBkaXZlcmdlbmNlLgogKi8KI2luY2x1ZGUgPHN0ZGlvLmg+CgppbnQgbWFpbih2b2lkKSB7CiAgICBsb25nIGEgPSAtMzA7CiAgICBsb25nIGIgPSA1OwogICAgbG9uZyBxID0gYSAvIGI7CiAgICBsb25nIHIgPSBhICUgYjsKICAgIHByaW50ZigiJWxkICVsZFxuIiwgcSwgcik7CiAgICAvKiBFeHBlY3RlZDogcSA9IC02LCByID0gMCAqLwogICAgcmV0dXJuIChxID09IC02ICYmIHIgPT0gMCkgPyAwIDogMTsKfQo=",
+  "decode_command": "base64 -d > signed_div_missing_cqo.c",
+  "target_compile_argv": [
+    "cc",
+    "{SRC}",
+    "-o",
+    "{OUT}"
+  ],
+  "reference_compile_argv": [
+    "cc",
+    "{SRC}",
+    "-o",
+    "{OUT}"
+  ],
+  "target_run_argv": [
+    "{OUT}"
+  ],
+  "reference_run_argv": [
+    "{OUT}"
+  ],
+  "expected_stdout": "-6 0\n",
+  "expected_exit": 0,
+  "causal_chain": "AST sees /, % on signed long \u2192 IR emits SDIV/SREM \u2192 codegen lowers to cqo + idivq pair (rdx:rax = sign-extended dividend, idivq divisor \u2192 quotient in rax, remainder in rdx). Missing cqo: rdx contains stale data, idivq computes wrong quotient. Missing sign extension: divq treats -30 as unsigned 0xFFFFFFFFFFFFFFE2.",
+  "suggested_fix": "(reference behavior) IR codegen for signed division must emit cqo (or cqto) before idivq; for unsigned, must zero rdx with xor before divq.",
+  "regression_test": "this corpus entry: corpus/signed_div_missing_cqo.json",
+  "counterexamples_tried": [
+    "unsigned a / unsigned b \u2014 uses divq with rdx=0; different code path",
+    "positive signed dividend \u2014 works without cqo by accident if rdx happens to be 0"
+  ],
+  "remaining_uncertainty": "a buggy ZCC that elides cqo will produce a huge wrong quotient \u2192 exit 1 (divergent). reference produces exit 0."
+}

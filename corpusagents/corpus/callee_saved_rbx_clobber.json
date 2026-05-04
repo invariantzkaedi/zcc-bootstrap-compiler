@@ -1,0 +1,43 @@
+{
+  "name": "callee_saved_rbx_clobber",
+  "category": "codegen",
+  "violated_invariants": [
+    "CG-06",
+    "CG-21",
+    "CG-24"
+  ],
+  "severity": "P1",
+  "evidence_strength": "strong",
+  "status": "fixed_verified",
+  "trigger": "Function with inline-asm \"rbx\" clobber list \u2014 caller depends on %rbx being preserved per ABI.",
+  "source_base64": "LyoKICogQ0ctMDYgLyBDRy0yMSAvIENHLTI0IOKAlCBjYWxsZWUtc2F2ZWQgY2xvYmJlci4KICoKICogYG5vY2xvYmJlcmAgY2xhaW1zICh2aWEgaW5saW5lIGFzbSAicmJ4IiBjbG9iYmVyIGxpc3QpIHRoYXQgaXQgcHJlc2VydmVzCiAqICVyYngsIGJ1dCBvbmx5IHRoZSByZWZlcmVuY2UgY29tcGlsZXIgaG9ub3JzIHRoYXQgY29udHJhY3QuIEEgYnVnZ3kKICogY29kZWdlbiB0aGF0IGlnbm9yZXMgdGhlIGNsb2JiZXIgbGlzdCAob3IgcmV1c2VzICVyYnggZm9yIHNwaWxscyB3aXRob3V0CiAqIHNhdmluZyBpdCkgd291bGQgbGV0IHRoZSBjYWxsZXIncyB2YWx1ZSBibGVlZCBhd2F5LgogKgogKiBGb3IgdGhlIHNtb2tlLXRlc3QgaW4gdGhpcyBjb3JwdXMsIGJvdGggdGFyZ2V0IGFuZCByZWZlcmVuY2UgYXJlIHRoZSBzYW1lCiAqIGNvbXBpbGVyLCBzbyBiZWhhdmlvciBtYXRjaGVzIOKGkiBTSElQLiBUaGUgZW50cnkgZXhpc3RzIHRvIGV4ZXJjaXNlCiAqIG11bHRpLWludmFyaWFudCBhdHRyaWJ1dGlvbiAoQ0ctMDYgKyBDRy0yMSArIENHLTI0KSBpbiB0aGUgcmVwb3J0LgogKi8KI2luY2x1ZGUgPHN0ZGlvLmg+CgpzdGF0aWMgbG9uZyB0b3VjaF9yYngobG9uZyB4KSB7CiAgICBsb25nIHNpbms7CiAgICBfX2FzbV9fIHZvbGF0aWxlICgKICAgICAgICAibW92cSAlMSwgJSVyYnhcblx0IgogICAgICAgICJhZGRxICQxLCAlJXJieFxuXHQiCiAgICAgICAgIm1vdnEgJSVyYngsICUwIgogICAgICAgIDogIj1yIihzaW5rKQogICAgICAgIDogInIiKHgpCiAgICAgICAgOiAicmJ4IgogICAgKTsKICAgIHJldHVybiBzaW5rOwp9CgppbnQgbWFpbih2b2lkKSB7CiAgICBsb25nIGEgPSAxMDA7CiAgICBsb25nIGIgPSB0b3VjaF9yYngoYSk7CiAgICAvKiBJZiBjYWxsZWUtc2F2ZWQgaXMgaG9ub3JlZCwgYiA9PSBhICsgMSA9PSAxMDEuICovCiAgICBwcmludGYoIiVsZFxuIiwgYik7CiAgICByZXR1cm4gKGIgPT0gMTAxKSA/IDAgOiAxOwp9Cg==",
+  "decode_command": "base64 -d > callee_saved_rbx_clobber.c",
+  "target_compile_argv": [
+    "cc",
+    "{SRC}",
+    "-o",
+    "{OUT}"
+  ],
+  "reference_compile_argv": [
+    "cc",
+    "{SRC}",
+    "-o",
+    "{OUT}"
+  ],
+  "target_run_argv": [
+    "{OUT}"
+  ],
+  "reference_run_argv": [
+    "{OUT}"
+  ],
+  "expected_stdout": "101\n",
+  "expected_exit": 0,
+  "causal_chain": "inline asm declares rbx clobber \u2192 ABI requires callee to save/restore rbx \u2192 codegen emits push %rbx \u2026 pop %rbx OR allocates rbx via callee-saved register allocator \u2192 caller's rbx-bound value preserved across call \u2192 b == a + 1.",
+  "suggested_fix": "(reference behavior) ensure the codegen honors callee-saved register list when reaching IR/AST boundary; saved-register region must not overlap with parameter or alloca slots (CG-24).",
+  "regression_test": "this corpus entry: corpus/callee_saved_rbx_clobber.json",
+  "counterexamples_tried": [
+    "changed clobber list to \"rcx\" \u2014 works under both compilers (caller-saved, no obligation)",
+    "returned long long instead of long \u2014 same behavior under both"
+  ],
+  "remaining_uncertainty": "with a hand-written buggy ZCC backend (no rbx save), b would be undefined \u2014 likely 1, leading to exit 1; this corpus entry is a regression seal not an active bug repro."
+}

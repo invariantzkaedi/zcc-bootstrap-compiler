@@ -1,0 +1,20 @@
+{
+  "name": "sign_extend_char_arg",
+  "category": "codegen-integer-promotion",
+  "violated_invariant": "CG-09",
+  "severity": "P0",
+  "evidence_strength": "strong",
+  "trigger": "Passing signed char with negative value to a function that takes int — should sign-extend through eax/rdi, not zero-extend.",
+  "source_base64": "I2luY2x1ZGUgPHN0ZGlvLmg+CmludCBhYnNfaW50KGludCB4KSB7IHJldHVybiB4IDwgMCA/IC14IDogeDsgfQppbnQgbWFpbih2b2lkKSB7CiAgICBzaWduZWQgY2hhciBjID0gLTU7CiAgICBpbnQgYSA9IGFic19pbnQoYyk7CiAgICBwcmludGYoIiVkXG4iLCBhKTsKICAgIHJldHVybiBhID09IDUgPyAwIDogMTsKfQo=",
+  "decode_command": "base64 -d > sign_extend_char_arg.c",
+  "target_compile_argv": ["zcc", "{SRC}", "-o", "{OUT}"],
+  "reference_compile_argv": ["cc", "-O0", "{SRC}", "-o", "{OUT}"],
+  "target_run_argv": ["{OUT}"],
+  "reference_run_argv": ["{OUT}"],
+  "expected_exit": 0,
+  "expected_stdout": "5\n",
+  "causal_chain": "source 'signed char c=-5; abs_int(c)' → integer promotion to int (must sign-extend) → if codegen zero-extends c through edi, abs_int receives 251 → returns 251 instead of 5 → exit 1",
+  "suggested_fix": "At argument-passing site for char→int promotion, emit 'movsx edi, byte ptr [...]' (sign-extend) for signed char source. Verify also for short→int.",
+  "regression_test": "this corpus entry; add unsigned-char twin to confirm zero-extension is correct in that case",
+  "notes": "If target compiler doesn't accept #include <stdio.h>, switch to a stdio-free variant: drop printf and rely on exit code only. The exit-code check (a == 5) is the load-bearing assertion."
+}

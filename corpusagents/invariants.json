@@ -1,0 +1,378 @@
+{
+  "schema_version": "1.1.0",
+  "categories": {
+    "global": "GLOBAL — apply to every defect anywhere in the system",
+    "codegen": "CODEGEN — semantic preservation, ABI, registers, stack, types, branches, returns, frames",
+    "error_mgmt": "ERROR-MANAGEMENT — diagnostics, propagation, cleanup, recovery",
+    "docs": "DOCS — documentation/source synchronization, stale claims, known-bug records, contributor guidance",
+    "tests": "TESTS — regression quality, flake resistance, oracle strength, corpus hygiene",
+    "security": "SECURITY — memory safety, trust boundaries, hostile input, exploitability, supply-chain integrity",
+    "build": "BUILD — self-hosting, bootstrap, generated artifacts, toolchain integration, reproducibility",
+    "ir": "IR — SSA, CFG, PHI, liveness, optimization correctness, IR/AST lowering boundaries"
+  },
+  "invariants": [
+    {"id": "G-01", "category": "global", "name": "Evidence", "rule": "No claim treated as true without direct evidence (cmd output, stack trace, diff, source line, test result, reference behavior, runtime observation).", "violation_smell": "PASS claimed without raw output; 'should work'; vague stability claim"},
+    {"id": "G-02", "category": "global", "name": "Repro", "rule": "A bug is not actionable until it has exact input, exact command, exact env, expected vs actual behavior, stability classification.", "violation_smell": "Bug filed with prose only; 'sometimes fails'; no stable trigger"},
+    {"id": "G-03", "category": "global", "name": "Causal Chain", "rule": "Every confirmed defect must connect: source/input → internal state → broken assumption → bad operation → observable failure.", "violation_smell": "Fix lands without explaining why the symptom appeared"},
+    {"id": "G-04", "category": "global", "name": "Minimality", "rule": "Smallest repro and smallest safe fix that preserves the failing behavior and corrects the root cause.", "violation_smell": "1000-line repro; sweeping refactor instead of surgical patch"},
+    {"id": "G-05", "category": "global", "name": "Error Visibility", "rule": "No error may disappear silently. Every failure must return explicit error, emit diagnostic, abort with context, or recover with observable status.", "violation_smell": "Empty catch; ignored return; if (rc) { /* TODO */ }"},
+    {"id": "G-06", "category": "global", "name": "Cleanup", "rule": "Every failure path must release or preserve resources correctly: memory, fds, temp files, locks, parser/compiler state, partial init.", "violation_smell": "Leak under error path; partial AST left attached; emitted .o on parse failure"},
+    {"id": "G-07", "category": "global", "name": "State Integrity", "rule": "After failure, the system must not continue with corrupted, partial, stale, or contradictory state.", "violation_smell": "Cascade of nonsense diagnostics after first error"},
+    {"id": "G-08", "category": "global", "name": "Boundary", "rule": "Every external boundary (CLI args, source files, includes, object files, env, paths, generated asm, subprocess output, fixtures) validates inputs.", "violation_smell": "Trust of subprocess return code without checking output; assume include path exists"},
+    {"id": "G-09", "category": "global", "name": "Determinism", "rule": "Same input + env produces same result unless nondeterminism is intentional and controlled.", "violation_smell": "Test passes solo, fails in suite; HashMap iteration order in output"},
+    {"id": "G-10", "category": "global", "name": "Regression", "rule": "Every fixed bug becomes a future-detectable test, corpus case, assertion, or documented invariant.", "violation_smell": "Bug fixed but no test added; corpus not updated"},
+    {"id": "G-11", "category": "global", "name": "Documentation Synchronization", "rule": "Canonical docs, bug records, comments, tests, and implementation must not contradict each other.", "violation_smell": "BUGS.md claims a fix exists in a function where the code no longer implements that mechanism; stale line numbers; obsolete snippets"},
+    {"id": "G-12", "category": "global", "name": "Source of Truth", "rule": "When multiple files describe the same behavior, one source of truth must be named and all mirrors must reference or derive from it.", "violation_smell": "README, BUGS.md, corpus JSON, and source comments each tell different stories"},
+    {"id": "G-13", "category": "global", "name": "Artifact Integrity", "rule": "Generated artifacts must be either reproducible from source or clearly marked as snapshots; stale generated files must not drive decisions.", "violation_smell": "src/ duplicate diverges from root file; generated zcc_pp.c differs from source parts without explanation"},
+    {"id": "G-14", "category": "global", "name": "Assumption Disclosure", "rule": "Every non-obvious assumption must be documented at the boundary where it matters.", "violation_smell": "IR assumes AST owns prologue; caller assumes callee saved registers; no local comment explains the contract"},
+    {"id": "G-15", "category": "global", "name": "No Phantom Certainty", "rule": "A suspected bug must not be escalated to confirmed without reproducer, source evidence, or runtime proof.", "violation_smell": "Critical runtime corruption claimed from grep mismatch alone"},
+
+    {"id": "CG-01", "category": "codegen", "name": "Semantic Preservation", "rule": "Generated code must preserve C semantics for the supported subset.", "violation_smell": "Output diverges from cc/gcc reference for legal C"},
+    {"id": "CG-02", "category": "codegen", "name": "ABI", "rule": "Generated code obeys x86-64 System V ABI: arg regs, return regs, stack alignment, caller/callee saved, struct passing, varargs.", "violation_smell": "Crash on call to libc; wrong arg in second register; misaligned stack at call site"},
+    {"id": "CG-03", "category": "codegen", "name": "Stack Alignment", "rule": "Before every call, RSP must satisfy ABI alignment (16-byte at call boundary on x86-64 SysV).", "violation_smell": "SIGSEGV in SSE/AVX libc routines (movaps); crash in printf with float args"},
+    {"id": "CG-04", "category": "codegen", "name": "Register Ownership", "rule": "A register must not be overwritten while it still contains a live value.", "violation_smell": "Variable value mysteriously becomes the loop counter; arg clobbered before call"},
+    {"id": "CG-05", "category": "codegen", "name": "Caller-Saved", "rule": "Values needed after a call must not remain only in caller-saved registers across that call.", "violation_smell": "Local goes garbage after function call; arg in rcx/rdx/rsi/rdi/r8-r11 overwritten by callee"},
+    {"id": "CG-06", "category": "codegen", "name": "Callee-Saved", "rule": "Any callee-saved register modified by a function must be restored before return.", "violation_smell": "Caller's rbx/r12-r15/rbp value corrupted after returning from our function"},
+    {"id": "CG-07", "category": "codegen", "name": "Expression Lifetime", "rule": "Temporaries valid until final use; not clobbered by nested expressions/calls.", "violation_smell": "f(g(x), h(y)) — second arg corrupts first; complex expressions fail but simple ones pass"},
+    {"id": "CG-08", "category": "codegen", "name": "Type Width", "rule": "Loads/stores/casts/returns/arith use correct width: 1, 2, 4, 8, ptr.", "violation_smell": "char written with movq; int returned with rax full-width when caller expects 32-bit; short read with full reg"},
+    {"id": "CG-09", "category": "codegen", "name": "Sign/Zero Extension", "rule": "Signed/unsigned values extended correctly during promotion, comparison, arg-passing, return.", "violation_smell": "Negative char passed as huge unsigned; return -1 from int read as 4294967295 by caller"},
+    {"id": "CG-10", "category": "codegen", "name": "Pointer Geometry", "rule": "Pointer arithmetic scales by pointee size, not raw bytes (except char* / explicit byte ops).", "violation_smell": "p+1 advances by 1 byte instead of sizeof(*p); array indexing off by factor of element size"},
+    {"id": "CG-11", "category": "codegen", "name": "Address vs Value", "rule": "Compiler must not confuse address-of, load, store, lvalue, rvalue, array decay, function pointer value.", "violation_smell": "Storing address where value expected; array passed as value not pointer; &x emitted as load of x"},
+    {"id": "CG-12", "category": "codegen", "name": "Branch Truth", "rule": "Conditional branches preserve C truthiness: zero false, nonzero true; signed/unsigned compares lower differently.", "violation_smell": "if (-1 < 1u) takes wrong branch; pointer compared with signed jl instead of jb"},
+    {"id": "CG-13", "category": "codegen", "name": "Short-Circuit", "rule": "&& and || must avoid evaluating RHS when semantics require skipping it.", "violation_smell": "Null deref in if (p && p->x) — both sides evaluated; side effect on RHS happens when LHS is false/true"},
+    {"id": "CG-14", "category": "codegen", "name": "Sequence/Side-Effect", "rule": "Side effects occur in valid order for the supported C subset.", "violation_smell": "i++ + i++ produces unexpected value; a[i]=i++ stores wrong index"},
+    {"id": "CG-15", "category": "codegen", "name": "Return Value", "rule": "Returns place values in correct return location with correct width and sign behavior.", "violation_smell": "return (char)x leaves upper bits of rax dirty; struct return ABI broken; int returned in rax with wrong sign-extension"},
+    {"id": "CG-16", "category": "codegen", "name": "Frame Layout", "rule": "Every local, spill slot, temp, saved register has unique correctly aligned stack location.", "violation_smell": "Two locals alias the same slot; saved rbx overlaps with a local; misaligned 8-byte access"},
+    {"id": "CG-17", "category": "codegen", "name": "Struct Layout", "rule": "Struct fields use correct offsets, padding, alignment, size.", "violation_smell": "sizeof differs from gcc; field offset wrong; bitfield reads adjacent field's bits"},
+    {"id": "CG-18", "category": "codegen", "name": "Global Address", "rule": "Global symbols referenced with correct relocation/addressing mode.", "violation_smell": "Link error R_X86_64_PC32 out of range; PIE crash; symbol resolved to wrong section"},
+    {"id": "CG-19", "category": "codegen", "name": "Division", "rule": "Signed and unsigned div/mod use correct setup, extension, and result registers.", "violation_smell": "Signed div produces unsigned result; cqo/cdq missing before idiv; rdx not zeroed before div"},
+    {"id": "CG-20", "category": "codegen", "name": "Shift", "rule": "Shifts use correct operand register/width and respect target arch constraints.", "violation_smell": "Variable shift count not in cl; shift width exceeds operand width; arithmetic vs logical shift swapped"},
+    {"id": "CG-21", "category": "codegen", "name": "IR/AST Boundary", "rule": "When AST owns prologue/epilogue and IR owns body emission, stack layout, saved registers, return jumps, and frame extensions must be explicitly coordinated.", "violation_smell": "IR emits body-only code but uses pushq/popq; AST epilogue reached without IR restoring modified registers"},
+    {"id": "CG-22", "category": "codegen", "name": "Bootstrap Identity", "rule": "Self-hosting compiler stages must remain byte-identical or have documented acceptable nondeterminism.", "violation_smell": "zcc2.s != zcc3.s; bootstrap passes only with timing/order luck"},
+    {"id": "CG-23", "category": "codegen", "name": "Backend Abstraction", "rule": "Target-specific instructions must not leak across backend abstraction boundaries.", "violation_smell": "x86 imulq/cmpq/shlq emitted during ARM/Thumb backend generation"},
+    {"id": "CG-24", "category": "codegen", "name": "Spill Slot Isolation", "rule": "IR spill slots, AST locals, parameters, saved registers, alloca buffers, and temporary save areas must not overlap.", "violation_smell": "IR virtual register slot collides with argv at -16(%rbp); saved rbx overlaps with dynamic alloca"},
+    {"id": "CG-25", "category": "codegen", "name": "PHI Parallel Copy", "rule": "PHI edge copies must preserve parallel assignment semantics; all sources are read before any destination is clobbered.", "violation_smell": "Serial copy loses value when PHI destination overlaps another PHI source"},
+    {"id": "CG-26", "category": "codegen", "name": "Liveness Soundness", "rule": "Register allocation must keep every value live through its final actual use, including loop backedges, PHI edges, calls, and reordered blocks.", "violation_smell": "Linear scan expires value before backedge PHI copy; variable changes only inside optimized loop"},
+    {"id": "CG-27", "category": "codegen", "name": "Optimizer Safety", "rule": "Optimization passes must preserve semantics and must not rely on stale def-use, dominance, alias, or reachability information.", "violation_smell": "LICM hoists load across aliasing store; DCE removes value later used by PHI; copy-prop uses freed instruction"},
+    {"id": "CG-28", "category": "codegen", "name": "Aggregate ABI", "rule": "Struct/union arguments and returns must follow the platform ABI classification, split rules, scratch storage, and register/stack placement.", "violation_smell": "Small struct returned in wrong register pair; aggregate stack offset drifts after register exhaustion"},
+    {"id": "CG-29", "category": "codegen", "name": "Generated Assembly Validity", "rule": "Generated assembly must be syntactically valid for the selected assembler and target architecture.", "violation_smell": "Assembler rejects bad instruction; wrong register class; invalid addressing mode"},
+    {"id": "CG-30", "category": "codegen", "name": "Call Boundary Preservation", "rule": "Before and after every emitted call, stack alignment, live caller-saved preservation, argument placement, return capture, and cleanup must be correct.", "violation_smell": "Value live in r10/r11 lost after call; stack args not popped; al not set for variadic call"},
+
+    {"id": "IR-01", "category": "ir", "name": "CFG Integrity", "rule": "Every block's predecessor and successor lists must agree with terminator instructions.", "violation_smell": "Block pred says edge exists but branch target differs; unreachable block emitted as hot path"},
+    {"id": "IR-02", "category": "ir", "name": "PHI Completeness", "rule": "Every PHI must have exactly one incoming value per predecessor and no incoming value from non-predecessors.", "violation_smell": "n_phi != n_preds; PHI source references deleted predecessor"},
+    {"id": "IR-03", "category": "ir", "name": "Dominance", "rule": "Every SSA use must be dominated by its definition or be represented by a valid PHI edge.", "violation_smell": "Use before def after LICM/mem2reg; alloca first emitted inside branch but used outside"},
+    {"id": "IR-04", "category": "ir", "name": "Reachability Refresh", "rule": "Any pass that changes CFG must refresh reachability, dominance, and def-use data before later passes depend on them.", "violation_smell": "DCE/LICM runs using stale block flags or freed def_of pointers"},
+    {"id": "IR-05", "category": "ir", "name": "Lowering Completeness", "rule": "Every supported AST node lowered into IR must preserve its semantics or explicitly decline/fallback.", "violation_smell": "Statement-level call ignored; compound assignment partially lowered; unsupported node silently becomes zero"},
+
+    {"id": "EM-01", "category": "error_mgmt", "name": "No Swallow", "rule": "If an operation fails, the failure must not be ignored.", "violation_smell": "(void)write(fd, ...); fclose() return ignored; malloc result not checked"},
+    {"id": "EM-02", "category": "error_mgmt", "name": "No Ambiguous Success", "rule": "Function must not return success after partial or failed work unless partial success is explicitly modeled.", "violation_smell": "compile() returns 0 but emitted no .o; parse_function returns ok with NULL body"},
+    {"id": "EM-03", "category": "error_mgmt", "name": "Diagnostic Specificity", "rule": "Diagnostics identify what failed, where, why, and what input triggered it.", "violation_smell": "'syntax error' with no line/col; 'something went wrong'"},
+    {"id": "EM-04", "category": "error_mgmt", "name": "Recovery Consistency", "rule": "Equivalent errors follow equivalent recovery paths.", "violation_smell": "Two callers of same alloc handle OOM differently; one aborts, one returns NULL silently"},
+    {"id": "EM-05", "category": "error_mgmt", "name": "Fatality", "rule": "Fatal errors must stop unsafe continuation immediately.", "violation_smell": "Continued codegen after type-check failure produced wrong .s; parser kept going past unbalanced brace"},
+    {"id": "EM-06", "category": "error_mgmt", "name": "Partial Output", "rule": "Failed compilation must not leave misleading successful output artifacts.", "violation_smell": ".o file remains after failed compile; stale .s on disk after error"},
+    {"id": "EM-07", "category": "error_mgmt", "name": "Cleanup Idempotence", "rule": "Cleanup safe to call once and not corrupt state if partially initialized.", "violation_smell": "double-free in error path; cleanup of NULL crashes; lock released twice"},
+    {"id": "EM-08", "category": "error_mgmt", "name": "Error Propagation", "rule": "Lower-level errors preserve enough context when propagated upward.", "violation_smell": "errno lost across return; rich error squashed to bool; original line number not preserved"},
+    {"id": "EM-09", "category": "error_mgmt", "name": "Parser Recovery", "rule": "Parser resynchronization must be safe and avoid cascading nonsense diagnostics.", "violation_smell": "100 errors from one missing semicolon; parser confused into infinite loop on bad input"},
+    {"id": "EM-10", "category": "error_mgmt", "name": "Allocation Failure", "rule": "Every allocation failure handled explicitly or intentionally fatal with clear context.", "violation_smell": "malloc result deref'd unchecked; OOM path crashes instead of erroring"},
+    {"id": "EM-11", "category": "error_mgmt", "name": "File IO", "rule": "Every open/read/write/close failure checked where it can affect correctness.", "violation_smell": "fwrite return ignored; fclose error not checked on output file"},
+    {"id": "EM-12", "category": "error_mgmt", "name": "Subprocess", "rule": "Assembler/linker/subprocess failures must propagate to final exit status.", "violation_smell": "as failed but driver returned 0; ld error printed but exit code zero"},
+    {"id": "EM-13", "category": "error_mgmt", "name": "Exit Status Truth", "rule": "Process exit code must reflect actual success or failure of all required phases.", "violation_smell": "Assembler failed but compiler driver returned 0"},
+    {"id": "EM-14", "category": "error_mgmt", "name": "Atomic Output", "rule": "Successful outputs should be written atomically or removed on failure so stale artifacts are not mistaken for fresh success.", "violation_smell": "Old .o remains after failed compile; partial assembly file later linked"},
+    {"id": "EM-15", "category": "error_mgmt", "name": "Panic Context", "rule": "Fatal internal errors must include subsystem, phase, file/function when possible, and the invariant that failed.", "violation_smell": "abort(); assert(0); fatal with no codegen phase or node info"},
+    {"id": "EM-16", "category": "error_mgmt", "name": "Recovery Boundary", "rule": "Recovery must stop at a safe boundary; never recover into codegen from invalid parse/type state.", "violation_smell": "Parser reports error but still emits AST used by codegen"},
+
+    {"id": "DOC-01", "category": "docs", "name": "Known-Bug Ledger Accuracy", "rule": "Bug ledgers must distinguish discovered, confirmed, fixed, obsolete, superseded, and regression-risk states.", "violation_smell": "FIXED entry describes obsolete mechanism; discovered bug marked fixed without validation"},
+    {"id": "DOC-02", "category": "docs", "name": "Line Number Freshness", "rule": "Docs should avoid brittle line numbers unless generated or pinned to a commit permalink.", "violation_smell": "part4.c:L3050 points to unrelated code after refactor"},
+    {"id": "DOC-03", "category": "docs", "name": "Evidence Attachment", "rule": "Claims of verification must reference the command, raw output, commit, or artifact that proves them.", "violation_smell": "Bootstrap stable listed without command output, date, commit, or log"},
+
+    {"id": "TEST-01", "category": "tests", "name": "Oracle Strength", "rule": "Tests should compare against the strongest available oracle: reference compiler, ABI rule, selfhost identity, sanitizer, or minimized expected output.", "violation_smell": "Test only checks that compiler does not crash when semantic output matters"},
+    {"id": "TEST-02", "category": "tests", "name": "Flake Resistance", "rule": "Regression tests must be deterministic, isolated, order-independent, and not depend on stale artifacts.", "violation_smell": "Passes after make clean only; fails when run twice; depends on previous .s file"},
+    {"id": "TEST-03", "category": "tests", "name": "Negative Coverage", "rule": "Invalid input tests must verify diagnostic class and nonzero failure, not exact fragile wording unless intentional.", "violation_smell": "Bad source accepted; exact error text makes test brittle"},
+
+    {"id": "SEC-01", "category": "security", "name": "Memory Safety", "rule": "No path may allow out-of-bounds read/write, use-after-free, double-free, uninitialized read, or invalid lifetime use.", "violation_smell": "Stack slot collision; freed IR instruction remains in def_of; parser buffer overrun"},
+    {"id": "SEC-02", "category": "security", "name": "Hostile Source Input", "rule": "Malformed or adversarial source must not crash the compiler or produce unsafe continuation.", "violation_smell": "Deep nesting stack overflow; unterminated string causes infinite loop; huge token count overflows int"},
+    {"id": "SEC-03", "category": "security", "name": "Toolchain Trust Boundary", "rule": "Assembler, linker, shell, environment variables, profile files, and include paths are untrusted boundaries.", "violation_smell": "Profile path unchecked; env var controls codegen without validation; shell injection in driver"},
+
+    {"id": "BUILD-01", "category": "build", "name": "Clean Build Reproducibility", "rule": "A clean checkout should build from declared sources without requiring undeclared generated artifacts.", "violation_smell": "Build only works if local generated zcc.c exists"},
+    {"id": "BUILD-02", "category": "build", "name": "Selfhost Gate", "rule": "Compiler changes touching parse/type/codegen/IR must run selfhost or explicitly mark selfhost blocked with raw failure.", "violation_smell": "Backend patch merged with only unit test; no bootstrap comparison"},
+    {"id": "BUILD-03", "category": "build", "name": "Source Mirror Sync", "rule": "Duplicated source trees or generated source mirrors must either be synchronized or marked obsolete.", "violation_smell": "root compiler_passes.c differs from src/compiler_passes.c without owner or rule"}
+  ],
+
+  "gates": [
+    {"id": 0, "name": "Baseline", "purpose": "Confirm current failure with raw output before changing code; detect pre-existing red baseline."},
+    {"id": 1, "name": "Minimal Repro", "purpose": "Fix has a minimized reproducer or clearly scoped failing test."},
+    {"id": 2, "name": "Root Cause", "purpose": "Do not patch symptoms until root cause is identified or uncertainty is explicitly marked."},
+    {"id": 3, "name": "Surgical Fix", "purpose": "Patch is as small as safely possible."},
+    {"id": 4, "name": "Targeted Validation", "purpose": "Original repro passes after the fix."},
+    {"id": 5, "name": "Regression Validation", "purpose": "Test added/updated so the bug cannot return silently."},
+    {"id": 6, "name": "Broad Validation", "purpose": "Run relevant broader tests: build, unit, integration, self-host, reference compare, sanitizer/fuzzer."},
+    {"id": 7, "name": "Risk Review", "purpose": "Classify risk: low (localized, strong coverage), medium (shared path, some uncertainty), high (broad codegen/ABI/parser/type impact)."},
+    {"id": 8, "name": "Ship/Hold", "purpose": "Ship only if evidence supports correctness and regressions are controlled."},
+    {"id": 9, "name": "Doc Sync", "purpose": "For fixes touching known bugs, update BUGS.md/corpus/README/comments so they match the implemented mechanism."},
+    {"id": 10, "name": "Artifact Hygiene", "purpose": "Confirm generated files, duplicate source trees, and build artifacts are fresh or intentionally unchanged."},
+    {"id": 11, "name": "Adversarial Counterexample", "purpose": "Try at least one nearby counterexample to prove the patch is not overfit to the minimal repro."},
+    {"id": 12, "name": "Rollback Plan", "purpose": "For high-risk production changes, identify how to revert, disable, blacklist, or fall back safely."}
+  ],
+
+  "agents": [
+    {"id": "Sentinel", "role": "Classify primary failure signal."},
+    {"id": "Reproducer", "role": "Create minimal repro."},
+    {"id": "CausalTracer", "role": "Trace source → AST/type info → codegen → assembly → runtime failure."},
+    {"id": "ABISentinel", "role": "Verify x86-64 System V compliance."},
+    {"id": "RegisterWarden", "role": "Detect clobbers, bad spills, lifetime corruption."},
+    {"id": "StackCartographer", "role": "Verify frame layout and call alignment."},
+    {"id": "BranchOracle", "role": "Verify comparisons, truthiness, loops, short-circuiting."},
+    {"id": "IntegerSemanticsAuditor", "role": "Verify promotions, sign/zero extension, truncation, div/mod, shifts."},
+    {"id": "PointerGeometryInspector", "role": "Verify scaling, offsets, lvalues/rvalues, loads/stores."},
+    {"id": "ReferenceJudge", "role": "Compare against a reference compiler."},
+    {"id": "InvariantKeeper", "role": "Name the violated invariant; add assertion/test/doc."},
+    {"id": "BoundaryFuzzer", "role": "Attack inputs at the edges; generate boundary cases."},
+    {"id": "BlastRadiusMapper", "role": "Estimate what else the fix may affect."},
+    {"id": "CorpusCurator", "role": "Add minimized repros, categorize, keep stable."},
+    {"id": "ProductionHistorian", "role": "Search for prior similar bugs; identify recurring patterns."},
+    {"id": "AdversarialReviewer", "role": "Try to break the proposed fix; counterexamples; overfit risk."},
+    {"id": "Validator", "role": "Prove fix with raw command output."},
+    {"id": "RegressionArchivist", "role": "Add permanent test coverage."},
+    {"id": "ReleaseMarshal", "role": "Decide ship or hold."},
+    {"id": "DocSynchronizer", "role": "Ensure BUGS.md, README, corpus JSON, comments, and implementation describe the same mechanism."},
+    {"id": "BootstrapMarshal", "role": "Own selfhost, byte-identical comparison, stage isolation, and bootstrap artifact interpretation."},
+    {"id": "IRVerifier", "role": "Check CFG, PHI, dominance, reachability, liveness, def-use, and optimizer safety."},
+    {"id": "ArtifactJanitor", "role": "Detect stale generated files, duplicate source drift, partial outputs, and misleading build artifacts."},
+    {"id": "SecurityLens", "role": "Classify exploitability and memory-safety/security impact from each defect."},
+    {"id": "OracleDesigner", "role": "Pick the strongest validation oracle: reference compiler, ABI spec, selfhost, sanitizer, fuzzing, or assembly inspection."}
+  ],
+
+  "severity_model": {
+    "P0": {"name": "Production Stopper", "criteria": ["confirmed miscompile", "memory corruption", "security exploit path", "selfhost identity broken", "data loss", "release artifact cannot be trusted"], "ship_policy": "hold unless mitigated or reverted"},
+    "P1": {"name": "High Risk", "criteria": ["compiler crash on valid input", "ABI violation with confirmed runtime effect", "subprocess failure hidden", "major regression in supported workload"], "ship_policy": "ship only with targeted fix and regression coverage"},
+    "P2": {"name": "Medium Risk", "criteria": ["documentation drift", "unproven but plausible regression risk", "diagnostic failure", "non-critical unsupported edge case"], "ship_policy": "ship if scoped and low blast radius"},
+    "P3": {"name": "Low Risk", "criteria": ["formatting", "minor doc clarity", "test naming", "non-functional cleanup"], "ship_policy": "ship with basic review"}
+  },
+
+  "evidence_model": {
+    "confidence_levels": {
+      "strong": "Direct source/runtime/reference evidence proves the defect or proves the absence of the claimed defect.",
+      "moderate": "Multiple signals suggest a defect, but a minimized repro or runtime proof is missing.",
+      "uncertain": "Suspicion only; must not be treated as confirmed."
+    },
+    "evidence_types": ["source_line", "permalink", "diff", "raw_command_output", "stack_trace", "sanitizer_report", "reference_compiler_diff", "generated_assembly", "disassembly", "selfhost_comparison", "fuzzer_seed", "base64_payload", "issue_or_pr_link", "test_log"],
+    "claim_rules": [
+      "Runtime corruption requires runtime, assembly, or ABI proof.",
+      "Documentation drift can be proven by source/doc contradiction.",
+      "PASS requires raw command output.",
+      "A suspected invariant violation must name the missing evidence."
+    ]
+  },
+
+  "finding_statuses": {
+    "suspected": "Possible bug; evidence incomplete.",
+    "confirmed": "Evidence proves defect.",
+    "fixed_unverified": "Patch exists but validation not yet run.",
+    "fixed_verified": "Patch and raw validation output exist.",
+    "not_a_bug": "Behavior is correct or unsupported by design.",
+    "doc_drift": "Documentation contradicts implementation or current architecture.",
+    "superseded": "Old fix/bug record replaced by a newer mechanism.",
+    "blocked": "Cannot proceed because baseline/tool/env is unavailable or red."
+  },
+
+  "finding_report_template": {
+    "fields": ["Finding", "Status", "Evidence strength", "Severity", "Subsystem", "File/function", "Violated invariants", "Trigger", "Expected behavior", "Actual behavior", "Root cause", "Causal chain", "Impact", "Minimal repro", "Base64 repro payload", "Reference behavior", "Generated assembly symptom", "Suggested fix", "Regression test", "Validation commands", "Raw validation output", "Blast radius", "Counterexamples tried", "Remaining uncertainty", "Ship decision"],
+    "required_for_confirmed_bug": ["Finding", "Evidence strength", "Severity", "Violated invariants", "Trigger", "Expected behavior", "Actual behavior", "Root cause", "Causal chain", "Suggested fix", "Validation commands"],
+    "required_for_doc_drift": ["Finding", "Evidence strength", "File/function or doc section", "Contradicting sources", "Current source-of-truth behavior", "Suggested documentation update"]
+  },
+
+  "workflows": {
+    "doc_drift_audit": {
+      "mission": "Find and fix stale known-bug documentation without falsely escalating to runtime defects.",
+      "agents": ["Sentinel", "DocSynchronizer", "ProductionHistorian", "InvariantKeeper", "Validator", "ReleaseMarshal"],
+      "steps": ["Identify documented claim.", "Find live implementation mechanism.", "Classify contradiction as doc_drift unless runtime proof exists.", "Update docs to describe current source-of-truth mechanism.", "Run grep/static validation.", "Run broad validation only if runtime behavior was touched."],
+      "ship_policy": "Documentation-only drift fixes are usually low risk, but must not claim runtime validation unless raw output exists."
+    },
+    "codegen_runtime_bug": {
+      "mission": "Confirm and fix a semantic, ABI, register, stack, or emitted assembly defect.",
+      "agents": ["Sentinel", "Reproducer", "CausalTracer", "ABISentinel", "RegisterWarden", "StackCartographer", "ReferenceJudge", "Fixer", "Validator", "RegressionArchivist", "ReleaseMarshal"],
+      "steps": ["Capture baseline failure with raw output.", "Minimize source repro.", "Compile with target compiler and reference compiler.", "Compare stdout, stderr, exit code, and assembly where useful.", "Trace source → AST/type → IR → register allocation → assembly → runtime behavior.", "Name violated invariant.", "Patch smallest root cause.", "Add regression test.", "Run targeted repro, reference compare, and selfhost if affected path is broad."],
+      "ship_policy": "Hold if baseline cannot be reproduced or if selfhost fails for touched codegen paths."
+    },
+    "error_management_bug": {
+      "mission": "Fix swallowed errors, bad diagnostics, partial outputs, or unsafe recovery.",
+      "agents": ["Sentinel", "Reproducer", "RecoveryEngineer", "ArtifactJanitor", "Validator", "RegressionArchivist", "ReleaseMarshal"],
+      "steps": ["Identify failing operation and ignored/ambiguous result.", "Create test that forces failure path.", "Ensure nonzero exit or structured diagnostic.", "Ensure no stale successful artifacts remain.", "Validate cleanup and propagation."],
+      "ship_policy": "Do not ship if failed compilation can still appear successful."
+    },
+    "selfhost_regression": {
+      "mission": "Investigate bootstrap divergence or self-hosting instability.",
+      "agents": ["BootstrapMarshal", "Sentinel", "CausalTracer", "ReferenceJudge", "BlastRadiusMapper", "Validator", "ReleaseMarshal"],
+      "steps": ["Run clean selfhost and capture raw output.", "Preserve zcc1/zcc2/zcc3 artifacts.", "Diff first divergent assembly region.", "Map divergence to source function and codegen path.", "Determine if nondeterminism is expected or a defect.", "Fix or hold."],
+      "ship_policy": "Selfhost byte divergence in supported path is P0 unless explicitly explained and accepted."
+    }
+  },
+
+  "test_matrix": {
+    "codegen": [
+      {"class": "callee_saved", "purpose": "Verify rbx/r12-r15 preserved across IR-emitted functions.", "oracle": "inline asm or harness snapshots registers before/after call", "invariants": ["CG-02", "CG-06", "CG-21", "CG-24"]},
+      {"class": "caller_saved", "purpose": "Verify live values in caller-saved registers survive calls via spill/save if needed.", "oracle": "reference compiler output and assembly inspection", "invariants": ["CG-05", "CG-07", "CG-30"]},
+      {"class": "stack_alignment", "purpose": "Verify 16-byte call alignment across stack args, caller-saved saves, and body-only IR.", "oracle": "runtime calls to libc/printf plus assembly RSP accounting", "invariants": ["CG-02", "CG-03", "CG-30"]},
+      {"class": "pointer_geometry", "purpose": "Verify pointer arithmetic scales by element type including multi-dimensional arrays.", "oracle": "reference compiler output", "invariants": ["CG-10", "CG-11", "CG-16"]},
+      {"class": "signed_unsigned", "purpose": "Verify comparisons, shifts, division, modulo, promotions, and returns.", "oracle": "reference compiler output", "invariants": ["CG-09", "CG-12", "CG-19", "CG-20"]},
+      {"class": "phi_liveness", "purpose": "Verify loops and PHIs preserve values under PGO/reordered block layouts.", "oracle": "reference compiler output plus generated assembly inspection", "invariants": ["IR-02", "IR-03", "CG-25", "CG-26"]}
+    ],
+    "error_management": [
+      {"class": "bad_input", "purpose": "Invalid C source fails clearly and does not emit successful artifacts.", "oracle": "nonzero exit, diagnostic, no stale output", "invariants": ["EM-03", "EM-05", "EM-06", "EM-13", "EM-14"]},
+      {"class": "io_failure", "purpose": "Output write/open/close failures propagate correctly.", "oracle": "forced unwritable path or full filesystem simulation", "invariants": ["EM-11", "EM-13", "EM-14"]},
+      {"class": "subprocess_failure", "purpose": "Assembler/linker failures propagate to compiler driver exit status.", "oracle": "bad assembler path or intentionally invalid assembly", "invariants": ["EM-12", "EM-13"]}
+    ],
+    "docs": [
+      {"class": "known_bug_sync", "purpose": "Known-bug docs match current source mechanism or mark old mechanism superseded.", "oracle": "grep/static check plus reviewed source-of-truth links", "invariants": ["G-11", "G-12", "DOC-01", "DOC-02", "DOC-03"]}
+    ]
+  },
+
+  "base64_magic_protocol": {
+    "purpose": "Preserve fragile repro sources, binary data, shell-sensitive content, or minimized compiler crash cases.",
+    "test_case_schema": {"name": "string", "category": "string", "violated_invariants": ["string"], "source_base64": "string", "decode_command": "string", "target_compile_command": "string", "reference_compile_command": "string", "target_run_command": "string", "reference_run_command": "string", "expected_stdout": "string", "expected_stderr": "string", "expected_exit": "integer", "actual_stdout": "string", "actual_stderr": "string", "actual_exit": "integer"},
+    "rules": ["Decode exactly.", "Compile target and reference from identical decoded source.", "Compare stdout, stderr class, and exit code.", "If divergent, minimize and update source_base64.", "Do not use base64 to obscure missing evidence."]
+  },
+
+  "ship_decision_policy": {
+    "ship": ["Baseline understood.", "Fix is scoped.", "Targeted validation passed with raw output.", "Regression coverage exists or rationale for omission is explicit.", "Blast radius reviewed.", "Docs updated when behavior/known-bug status changed."],
+    "hold": ["P0 or P1 defect lacks validation.", "Selfhost fails on touched compiler path.", "Runtime corruption is suspected but unproven and risk is broad.", "Patch changes ABI/codegen/register allocation without reference comparison.", "Failure path still returns success."],
+    "needs_more_evidence": ["Only grep/static contradiction exists but runtime behavior is claimed.", "Repro missing.", "Baseline red for unrelated reasons.", "Reference behavior unavailable and no substitute oracle chosen."]
+  },
+
+  "quick_commands": {
+    "doc_sync_cg_ir_011": ["grep -A25 \"CG-IR-011\" BUGS.md", "grep -n \"body_only\\|slot_base\\|csave_base\\|movq %%rbx\\|movq %%r12\\|movq %%r13\\|movq %%r14\\|movq %%r15\" compiler_passes.c"],
+    "broad_codegen_validation": ["make clean", "make selfhost", "bash verify_ir_backend.sh"],
+    "artifact_hygiene": ["git status --short", "find . -name '*.o' -o -name '*.s' -o -name 'zcc2' -o -name 'zcc3'"]
+  },
+
+  "tiers": {
+    "T0": {
+      "label": "T0/P0",
+      "name": "Must Not Ship",
+      "core_question": "Are we lying, corrupting, leaking, or continuing unsafely?",
+      "policy": "Any violation blocks production.",
+      "ship_impact": "Hard blocker",
+      "invariants": [
+        {"id": "T0-01", "name": "Evidence Before Belief", "rule": "No pass, fail, fix, or root-cause claim is accepted without direct evidence.", "mapped_invariants": ["G-01", "DOC-03"]},
+        {"id": "T0-02", "name": "No Silent Failure", "rule": "Failures must not be ignored, swallowed, overwritten, or reported as success.", "mapped_invariants": ["G-05", "EM-01", "EM-02"]},
+        {"id": "T0-03", "name": "No Corrupt Continuation", "rule": "After fatal or integrity-breaking failure, the system must stop unsafe continuation.", "mapped_invariants": ["G-07", "EM-05", "EM-16"]},
+        {"id": "T0-04", "name": "Artifact Integrity", "rule": "Failed operations must not leave stale, partial, or misleading success artifacts.", "mapped_invariants": ["G-13", "EM-06", "EM-14"]},
+        {"id": "T0-05", "name": "Resource Safety", "rule": "Every failure path must preserve or release resources correctly.", "mapped_invariants": ["G-06", "EM-07", "SEC-01"]},
+        {"id": "T0-06", "name": "Exit Status Truth", "rule": "The final observable status must reflect the real outcome.", "mapped_invariants": ["EM-12", "EM-13"]}
+      ]
+    },
+    "T1": {
+      "label": "T1/P1",
+      "name": "Must Understand",
+      "core_question": "Do we know exactly what failed and why?",
+      "policy": "Blocks normal ship unless risk-accepted.",
+      "ship_impact": "Blocks normal ship",
+      "invariants": [
+        {"id": "T1-01", "name": "Exact Reproduction", "rule": "Every actionable defect has exact input, command, environment, expected behavior, actual behavior, and stability classification.", "mapped_invariants": ["G-02"]},
+        {"id": "T1-02", "name": "Causal Chain", "rule": "Every confirmed defect connects source/input → internal state → broken assumption → bad operation → observable failure.", "mapped_invariants": ["G-03"]},
+        {"id": "T1-03", "name": "Minimal Repro", "rule": "The reproducer is minimized enough to isolate the defect while preserving the failure.", "mapped_invariants": ["G-04"]},
+        {"id": "T1-04", "name": "Boundary Classification", "rule": "The failing boundary is identified: CLI, parser, type system, codegen, file IO, subprocess, network, cache, runtime, deploy, or user input.", "mapped_invariants": ["G-08"]},
+        {"id": "T1-05", "name": "Deterministic Diagnosis", "rule": "Same input and environment produce the same diagnosis unless nondeterminism is intentional and controlled.", "mapped_invariants": ["G-09", "TEST-02"]}
+      ]
+    },
+    "T2": {
+      "label": "T2/P2",
+      "name": "Must Patch Safely",
+      "core_question": "Is the fix narrow, consistent, and semantics-preserving?",
+      "policy": "Required for normal production push.",
+      "ship_impact": "Blocks or risk-accept",
+      "invariants": [
+        {"id": "T2-01", "name": "Surgical Minimality", "rule": "The fix is the smallest safe change that addresses the root cause.", "mapped_invariants": ["G-04"]},
+        {"id": "T2-02", "name": "Semantic Preservation", "rule": "The fix preserves existing correct behavior outside the defect scope.", "mapped_invariants": ["CG-01"]},
+        {"id": "T2-03", "name": "Equivalent Error Consistency", "rule": "Equivalent failures follow equivalent recovery and reporting paths.", "mapped_invariants": ["EM-04"]},
+        {"id": "T2-04", "name": "Context Preservation", "rule": "Errors propagated upward preserve enough context to diagnose the original failure.", "mapped_invariants": ["EM-08"]},
+        {"id": "T2-05", "name": "Cleanup Idempotence", "rule": "Cleanup is safe under partial initialization and repeated or early failure paths where applicable.", "mapped_invariants": ["EM-07"]},
+        {"id": "T2-06", "name": "Blast Radius Bound", "rule": "The affected surface area is identified and bounded.", "mapped_invariants": []}
+      ]
+    },
+    "T3": {
+      "label": "T3/P3",
+      "name": "Must Prove and Preserve",
+      "core_question": "Did we prove it and prevent recurrence?",
+      "policy": "Required before normal ship unless impossible and documented.",
+      "ship_impact": "Required for normal ship",
+      "invariants": [
+        {"id": "T3-01", "name": "Targeted Proof", "rule": "The original reproducer passes after the fix with raw output captured.", "mapped_invariants": ["G-01"]},
+        {"id": "T3-02", "name": "Permanent Regression Test", "rule": "Every fixed bug becomes a future-detectable test, corpus case, assertion, fixture, or documented invariant.", "mapped_invariants": ["G-10"]},
+        {"id": "T3-03", "name": "Negative Path Coverage", "rule": "Error paths touched by the fix are tested where practical.", "mapped_invariants": ["TEST-03"]},
+        {"id": "T3-04", "name": "Broad Validation", "rule": "Run broader validation proportional to blast radius.", "mapped_invariants": ["BUILD-02"]},
+        {"id": "T3-05", "name": "Reference Comparison", "rule": "Where a reference implementation exists, compare behavior against it.", "mapped_invariants": ["TEST-01"]},
+        {"id": "T3-06", "name": "No Red Baseline Confusion", "rule": "Pre-existing failures are separated from fix-induced failures.", "mapped_invariants": []}
+      ]
+    },
+    "T4": {
+      "label": "T4/P4",
+      "name": "Must Operate Well",
+      "core_question": "Can operators see, recover, and roll back?",
+      "policy": "Required for high-risk or production-critical changes.",
+      "ship_impact": "Required for critical paths",
+      "invariants": [
+        {"id": "T4-01", "name": "Diagnostic Specificity", "rule": "Diagnostics identify what failed, where, why, and which input triggered it.", "mapped_invariants": ["EM-03", "EM-15"]},
+        {"id": "T4-02", "name": "Recovery Observability", "rule": "Recovery is observable through status, logs, metrics, events, or explicit return values.", "mapped_invariants": ["G-05"]},
+        {"id": "T4-03", "name": "Rollback Readiness", "rule": "The release has a known rollback, disable, or containment path proportional to risk.", "mapped_invariants": []},
+        {"id": "T4-04", "name": "Failure Mode Documentation", "rule": "New or changed failure modes are documented for operators and future maintainers.", "mapped_invariants": ["G-11", "G-14"]},
+        {"id": "T4-05", "name": "Adversarial Counterexample Review", "rule": "The fix is challenged with near-miss, malformed, malicious, and boundary inputs.", "mapped_invariants": []},
+        {"id": "T4-06", "name": "Historical Pattern Check", "rule": "Search for similar prior defects or sibling code paths that may contain the same bug.", "mapped_invariants": []}
+      ]
+    },
+    "T5": {
+      "label": "T5/P5",
+      "name": "Must Scale Under Stress",
+      "core_question": "Does it survive load, latency, concurrency, and degraded deps?",
+      "policy": "Required for high-volume, concurrent, latency-sensitive, or infrastructure-critical paths.",
+      "ship_impact": "Required for scale paths",
+      "invariants": [
+        {"id": "T5-01", "name": "Load-Safe Failure Handling", "rule": "Failure paths remain bounded under load and do not amplify resource pressure.", "violation_smell": "Error path allocates heavily, logs explosively, retries infinitely, or queues unbounded work."},
+        {"id": "T5-02", "name": "Backpressure Integrity", "rule": "When downstream capacity is limited, the system applies explicit backpressure, shedding, queuing limits, or rejection instead of uncontrolled accumulation.", "violation_smell": "Memory grows without bound during downstream outage."},
+        {"id": "T5-03", "name": "Retry Discipline", "rule": "Retries must be bounded, jittered where needed, classified by retryability, and must not duplicate unsafe side effects.", "violation_smell": "All errors retried blindly; payment/email/job emitted twice; thundering herd after outage."},
+        {"id": "T5-04", "name": "Concurrency Safety", "rule": "Failure and recovery paths preserve thread, process, async, lock, and transaction safety.", "violation_smell": "Deadlock only on error path; race during rollback; cancellation leaves shared state inconsistent."},
+        {"id": "T5-05", "name": "Timeout Boundaries", "rule": "Every external or potentially blocking operation has an intentional timeout, cancellation, or deadline policy.", "violation_smell": "Deploy hangs forever; request thread blocked indefinitely; subprocess wait has no bound."},
+        {"id": "T5-06", "name": "Degraded Dependency Behavior", "rule": "The system has explicit behavior for slow, unavailable, inconsistent, or partially failing dependencies.", "violation_smell": "Cache outage takes down primary path; metrics backend failure blocks request handling."},
+        {"id": "T5-07", "name": "Performance Regression Bound", "rule": "The fix does not introduce unacceptable latency, CPU, memory, IO, or artifact-size regression.", "violation_smell": "Surgical correctness fix causes 10x compile time, request latency, or memory footprint."}
+      ]
+    },
+    "T6": {
+      "label": "T6/P6",
+      "name": "Must Resist Adversaries",
+      "core_question": "Does it fail securely against hostile inputs and environments?",
+      "policy": "Required for public-facing, security-sensitive, parser/compiler, deployment, and supply-chain paths.",
+      "ship_impact": "Required for trust boundaries",
+      "invariants": [
+        {"id": "T6-01", "name": "Trust Boundary Validation", "rule": "Every crossing from untrusted to trusted context validates, normalizes, and constrains input before use.", "mapped_invariants": ["G-08", "SEC-03"], "violation_smell": "Path, env var, config, source file, archive, subprocess output, or network payload trusted directly."},
+        {"id": "T6-02", "name": "Fail Closed", "rule": "Security-relevant failures deny, abort, quarantine, or degrade safely rather than granting access or continuing privileged work.", "violation_smell": "Auth service timeout grants access; signature verification error treated as warning."},
+        {"id": "T6-03", "name": "Secret Non-Disclosure", "rule": "Diagnostics, logs, crash reports, traces, and artifacts must not expose secrets or sensitive data.", "violation_smell": "Token printed in error; environment dumped to CI log; private source path leaked unnecessarily."},
+        {"id": "T6-04", "name": "Injection Resistance", "rule": "Inputs used in shell commands, SQL, paths, templates, generated code, logs, or protocols are escaped, parameterized, or structurally separated.", "violation_smell": "Subprocess command built by string concatenation with untrusted path."},
+        {"id": "T6-05", "name": "Privilege Containment", "rule": "Failure handling must not widen privilege, disable controls globally, or leave elevated state active.", "violation_smell": "sudo token persists after failure; sandbox disabled for fallback; permission check skipped on retry."},
+        {"id": "T6-06", "name": "Supply-Chain Integrity", "rule": "External tools, artifacts, dependencies, generated files, and release assets are verified according to their trust level.", "mapped_invariants": ["BUILD-01", "BUILD-03"], "violation_smell": "Downloaded compiler/plugin/binary executed without checksum, signature, pin, or provenance."},
+        {"id": "T6-07", "name": "Abuse-Case Coverage", "rule": "Tests or reviews include malicious, malformed, oversized, path-traversal, replay, race, and permission-denied cases where relevant.", "mapped_invariants": ["SEC-02"], "violation_smell": "Only happy-path and accidental-error cases tested."}
+      ]
+    },
+    "T7": {
+      "label": "T7/P7",
+      "name": "Must Improve the System",
+      "core_question": "Did the incident make the system stronger?",
+      "policy": "Required after repeated incidents, systemic failures, high-severity production incidents, or recurring bug classes.",
+      "ship_impact": "Required after systemic/repeat/high-sev issues",
+      "invariants": [
+        {"id": "T7-01", "name": "Class-Level Prevention", "rule": "If a bug represents a class, add a mechanism that prevents or detects the class, not only the instance.", "examples": ["lint rule", "static assertion", "type-level constraint", "shared helper", "centralized error wrapper", "test generator", "fuzzer seed"]},
+        {"id": "T7-02", "name": "Feedback Loop Compression", "rule": "The time from defect introduction to detection must be reduced where practical.", "examples": ["faster targeted test", "pre-commit check", "CI shard", "compiler assertion", "runtime invariant", "canary signal"]},
+        {"id": "T7-03", "name": "Knowledge Capture", "rule": "Root cause, invariant violation, repro, fix reasoning, and validation evidence are captured where future maintainers will find them.", "examples": ["test name", "comment near tricky code", "runbook", "postmortem", "issue", "release note", "design doc"]},
+        {"id": "T7-04", "name": "Ownership Clarification", "rule": "Ambiguous boundaries discovered during the incident are assigned clear ownership.", "violation_smell": "Same failure bounces between parser, driver, CI, deploy, and platform teams."},
+        {"id": "T7-05", "name": "Tooling Upgrade", "rule": "If humans had to manually inspect a repeatable property, consider automating that inspection.", "examples": ["ABI checker", "golden output comparator", "artifact integrity verifier", "error-path test harness", "log redaction scanner", "subprocess failure injector"]},
+        {"id": "T7-06", "name": "Policy Refinement", "rule": "If the existing gates allowed the bug through, update the gate, invariant, checklist, or CI policy.", "violation_smell": "Postmortem says 'we should be careful' but no gate changes."},
+        {"id": "T7-07", "name": "Signal-to-Noise Improvement", "rule": "Validation and diagnostics should become more decisive, less flaky, and less noisy after the fix.", "violation_smell": "CI still noisy; error remains vague; flaky test merely rerun until green."}
+      ]
+    }
+  },
+
+  "release_policy": {
+    "normal_ship": {"required": ["T0", "T1", "T2", "T3"], "conditional": ["T4", "T5", "T6"], "post_incident_required": ["T7"]},
+    "high_risk_ship": {"required": ["T0", "T1", "T2", "T3", "T4", "T5", "T6"], "post_incident_required": ["T7"]},
+    "emergency_hotfix": {"required": ["T0", "T3-01", "rollback_or_containment"], "risk_acceptance_required_for_missing": ["T1", "T2", "T3-02", "T4", "T5", "T6"], "followup_required": ["T3-02", "T4", "T7"]}
+  }
+}
