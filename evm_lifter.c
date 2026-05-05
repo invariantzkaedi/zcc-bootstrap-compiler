@@ -94,6 +94,21 @@ static void evm_u256_sub(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t 
     }
 }
 
+static void evm_u256_mul(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t *b) {
+    int i, j;
+    memset(dst->bytes, 0, 32);
+    for (i = 31; i >= 0; i--) {
+        unsigned int carry = 0;
+        for (j = 31; j >= 0; j--) {
+            int k = i + j - 31;
+            if (k < 0) continue;
+            unsigned int prod = dst->bytes[k] + (a->bytes[i] * b->bytes[j]) + carry;
+            dst->bytes[k] = (unsigned char)(prod & 0xFF);
+            carry = prod >> 8;
+        }
+    }
+}
+
 static long evm_u256_to_narrow(const evm_u256_t *a) {
     unsigned long val = 0;
     int i;
@@ -649,12 +664,26 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         return stack_push(ls, tmp_dst);
     }
 
-    case EVM_MUL:
+    case EVM_MUL: {
+        int a_st = EVM_VAL_UNKNOWN, b_st = EVM_VAL_UNKNOWN;
+        evm_u256_t a_val, b_val, res_val;
+        if (ls->stack.depth >= 2) {
+            a_st = ls->stack.state[ls->stack.depth - 2]; /* below top */
+            b_st = ls->stack.state[ls->stack.depth - 1]; /* top */
+            memcpy(&a_val, &ls->stack.wide_vals[ls->stack.depth - 2], sizeof(evm_u256_t));
+            memcpy(&b_val, &ls->stack.wide_vals[ls->stack.depth - 1], sizeof(evm_u256_t));
+        }
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
         ir_emit(ls->func, IR_MUL, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
+        if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
+            (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
+            evm_u256_mul(&res_val, &a_val, &b_val);
+            return stack_push_const_wide(ls, tmp_dst, res_val.bytes, 32, evm_u256_to_narrow(&res_val));
+        }
         return stack_push(ls, tmp_dst);
+    }
 
     case EVM_DIV:
     case EVM_SDIV:
