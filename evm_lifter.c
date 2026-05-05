@@ -746,10 +746,11 @@ void evm_lifter_init(evm_lifter_t *ls,
     /* Warm the stack so all slot strings start NUL-terminated. */
     for (i = 0; i < EVM_STACK_MAX; i++)
         ls->stack.slots[i][0] = '\0';
-        
-    extern void* memory_v2_new(void);
+
+    extern void *memory_v2_new(void);
+    extern void memory_v2_free(void *);
     ls->memory_v2 = memory_v2_new();
-        
+
     /* Allocate and pre-scan valid JUMPDESTs */
     ls->valid_jumpdest = (unsigned char *)calloc(length > 0 ? (size_t)length : 1, 1);
     if (ls->valid_jumpdest && bytecode) {
