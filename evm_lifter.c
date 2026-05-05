@@ -53,6 +53,22 @@ static int evm_u256_cmp(const evm_u256_t *a, const evm_u256_t *b) {
     return 0;
 }
 
+static int evm_u256_is_negative(const evm_u256_t *a) {
+    return (a->bytes[0] & 0x80) != 0;
+}
+
+/* Returns 1 if a > b, -1 if a < b, 0 if a == b. (Signed fixed-width two's complement comparison) */
+static int evm_u256_cmp_signed(const evm_u256_t *a, const evm_u256_t *b) {
+    int a_neg = evm_u256_is_negative(a);
+    int b_neg = evm_u256_is_negative(b);
+    
+    if (a_neg && !b_neg) return -1; /* negative < positive */
+    if (!a_neg && b_neg) return 1;  /* positive > negative */
+    
+    /* Signs match: fixed-width two's complement bit-pattern ordering is identical to unsigned ordering */
+    return evm_u256_cmp(a, b);
+}
+
 /* Allocate a fresh VReg name aligned with ir_bridge.h convention ("t<N>"). */
 static void lifter_fresh_tmp(evm_lifter_t *ls, char *buf) {
     /* ir_bridge.h uses "%t<N>"; ir.c uses "t<N>".  We follow ir.c style
@@ -608,9 +624,13 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
         ir_emit(ls->func, IR_LT, IR_TY_I32, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
-        if (op == EVM_LT && (a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
+        if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
             (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
-            return stack_push_const_narrow(ls, tmp_dst, (evm_u256_cmp(&a_val, &b_val) < 0) ? 1L : 0L);
+            if (op == EVM_LT) {
+                return stack_push_const_narrow(ls, tmp_dst, (evm_u256_cmp(&a_val, &b_val) < 0) ? 1L : 0L);
+            } else if (op == EVM_SLT) {
+                return stack_push_const_narrow(ls, tmp_dst, (evm_u256_cmp_signed(&a_val, &b_val) < 0) ? 1L : 0L);
+            }
         }
         return stack_push(ls, tmp_dst);
     }
@@ -629,9 +649,13 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
         ir_emit(ls->func, IR_GT, IR_TY_I32, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
-        if (op == EVM_GT && (a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
+        if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
             (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
-            return stack_push_const_narrow(ls, tmp_dst, (evm_u256_cmp(&a_val, &b_val) > 0) ? 1L : 0L);
+            if (op == EVM_GT) {
+                return stack_push_const_narrow(ls, tmp_dst, (evm_u256_cmp(&a_val, &b_val) > 0) ? 1L : 0L);
+            } else if (op == EVM_SGT) {
+                return stack_push_const_narrow(ls, tmp_dst, (evm_u256_cmp_signed(&a_val, &b_val) > 0) ? 1L : 0L);
+            }
         }
         return stack_push(ls, tmp_dst);
     }
