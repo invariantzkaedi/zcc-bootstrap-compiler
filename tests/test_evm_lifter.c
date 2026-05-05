@@ -1204,6 +1204,10 @@ static void test_t54_push16(void) {
         CHECK(n->imm == 0x0102030405060708L,       "PUSH16: low 8 bytes correct");
         CHECK(n->tag == (int)IR_TAG_TRUNCATED_WIDE_CONST, "PUSH16: tagged TRUNCATED_WIDE_CONST");
     }
+    CHECK(ls.stack.state[0] == EVM_VAL_KNOWN_WIDE, "PUSH16: state is KNOWN_WIDE");
+    CHECK(ls.stack.wide_vals[0].bytes[16] == 0x00, "PUSH16: wide payload start is 0");
+    CHECK(ls.stack.wide_vals[0].bytes[24] == 0x01, "PUSH16: wide payload middle is 1");
+    CHECK(ls.stack.wide_vals[0].bytes[31] == 0x08, "PUSH16: wide payload end is 8");
     evm_lifter_destroy(&ls);
     ir_module_free(mod);
 }
@@ -1778,6 +1782,7 @@ static void test_t78_invalid_jumpi(void) {
     ir_module_free(mod);
 }
 
+
 /* ── T80: Issue #15 EVM Lifter Support Accounting ─────────────────────
  *
  * This test audits the 256 opcode space against the strict support
@@ -1816,6 +1821,155 @@ static void test_t80_support_accounting(void) {
     /* Ensure no basic regression in assignment space */
     CHECK(total_assigned >= 140, "At least 140 opcodes must be assigned to an active class");
     CHECK(placeholder <= 6, "Placeholder count should strictly diminish");
+}
+
+/* ── T81: EQ with wide known constants ───────────────────────────── */
+static void test_t81_eq_wide(void) {
+    ir_module_t *mod;
+    evm_lifter_t ls;
+    evm_lift_result_t res;
+    /* PUSH32 (all A's), PUSH32 (all A's), EQ */
+    static const unsigned char bc_eq[] = {
+        0x7f,
+        0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+        0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+        0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+        0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+        0x7f,
+        0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+        0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+        0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+        0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+        0x14
+    };
+    /* PUSH32 (all A's), PUSH32 (all B's), EQ */
+    static const unsigned char bc_neq[] = {
+        0x7f,
+        0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+        0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+        0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+        0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+        0x7f,
+        0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb,
+        0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb,
+        0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb,
+        0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb,
+        0x14
+    };
+    TEST("T81: EQ with wide known constants evaluates correctly");
+    mod = new_module();
+    lift_bytes(&ls, mod, bc_eq, 67);
+    res = evm_lift_bytecode(&ls);
+    CHECK(res == EVM_LIFT_OK, "EQ wide eq: lift OK");
+    CHECK(ls.stack.state[0] == EVM_VAL_KNOWN_NARROW, "EQ wide eq: yields narrow known");
+    CHECK(ls.stack.const_vals[0] == 1, "EQ wide eq: 1 (true)");
+    evm_lifter_destroy(&ls);
+    ir_module_free(mod);
+
+    mod = new_module();
+    lift_bytes(&ls, mod, bc_neq, 67);
+    res = evm_lift_bytecode(&ls);
+    CHECK(res == EVM_LIFT_OK, "EQ wide neq: lift OK");
+    CHECK(ls.stack.state[0] == EVM_VAL_KNOWN_NARROW, "EQ wide neq: yields narrow known");
+    CHECK(ls.stack.const_vals[0] == 0, "EQ wide neq: 0 (false)");
+    evm_lifter_destroy(&ls);
+    ir_module_free(mod);
+}
+
+/* ── T82: ISZERO with wide known constants ───────────────────────── */
+static void test_t82_iszero_wide(void) {
+    ir_module_t *mod;
+    evm_lifter_t ls;
+    evm_lift_result_t res;
+    /* PUSH32 (all 0's), ISZERO */
+    static const unsigned char bc_zero[] = {
+        0x7f,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x15
+    };
+    /* PUSH32 (non-zero), ISZERO */
+    static const unsigned char bc_nzero[] = {
+        0x7f,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+        0x15
+    };
+    TEST("T82: ISZERO with wide known constants evaluates correctly");
+    mod = new_module();
+    lift_bytes(&ls, mod, bc_zero, 34);
+    res = evm_lift_bytecode(&ls);
+    CHECK(res == EVM_LIFT_OK, "ISZERO wide zero: lift OK");
+    CHECK(ls.stack.state[0] == EVM_VAL_KNOWN_NARROW, "ISZERO wide zero: yields narrow known");
+    CHECK(ls.stack.const_vals[0] == 1, "ISZERO wide zero: 1 (true)");
+    evm_lifter_destroy(&ls);
+    ir_module_free(mod);
+
+    mod = new_module();
+    lift_bytes(&ls, mod, bc_nzero, 34);
+    res = evm_lift_bytecode(&ls);
+    CHECK(res == EVM_LIFT_OK, "ISZERO wide non-zero: lift OK");
+    CHECK(ls.stack.state[0] == EVM_VAL_KNOWN_NARROW, "ISZERO wide non-zero: yields narrow known");
+    CHECK(ls.stack.const_vals[0] == 0, "ISZERO wide non-zero: 0 (false)");
+    evm_lifter_destroy(&ls);
+    ir_module_free(mod);
+}
+
+/* ── T83: LT/GT with wide known constants ────────────────────────── */
+static void test_t83_lt_gt_wide(void) {
+    ir_module_t *mod;
+    evm_lifter_t ls;
+    evm_lift_result_t res;
+    /* PUSH32 (1), PUSH32 (2), LT */
+    static const unsigned char bc_lt[] = {
+        0x7f,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, /* a = 1 */
+        0x7f,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, /* b = 2 */
+        0x10 /* LT */
+    };
+    /* PUSH32 (2), PUSH32 (1), GT */
+    static const unsigned char bc_gt[] = {
+        0x7f,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, /* a = 2 */
+        0x7f,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, /* b = 1 */
+        0x11 /* GT */
+    };
+    TEST("T83: LT/GT with wide known constants evaluates correctly");
+    mod = new_module();
+    lift_bytes(&ls, mod, bc_lt, 67);
+    res = evm_lift_bytecode(&ls);
+    CHECK(res == EVM_LIFT_OK, "LT wide 1 < 2: lift OK");
+    CHECK(ls.stack.state[0] == EVM_VAL_KNOWN_NARROW, "LT wide 1 < 2: yields narrow known");
+    CHECK(ls.stack.const_vals[0] == 1, "LT wide 1 < 2: 1 (true)");
+    evm_lifter_destroy(&ls);
+    ir_module_free(mod);
+
+    mod = new_module();
+    lift_bytes(&ls, mod, bc_gt, 67);
+    res = evm_lift_bytecode(&ls);
+    CHECK(res == EVM_LIFT_OK, "GT wide 2 > 1: lift OK");
+    CHECK(ls.stack.state[0] == EVM_VAL_KNOWN_NARROW, "GT wide 2 > 1: yields narrow known");
+    CHECK(ls.stack.const_vals[0] == 1, "GT wide 2 > 1: 1 (true)");
+    evm_lifter_destroy(&ls);
+    ir_module_free(mod);
 }
 
 /* ── T79: Coverage report — list covered and uncovered opcode groups ─
@@ -2039,6 +2193,9 @@ int main(void) {
     test_t78_invalid_jumpi();
     test_t79_coverage_report();
     test_t80_support_accounting();
+    test_t81_eq_wide();
+    test_t82_iszero_wide();
+    test_t83_lt_gt_wide();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     if (g_fail > 0) {

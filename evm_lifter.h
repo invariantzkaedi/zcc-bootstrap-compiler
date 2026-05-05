@@ -200,10 +200,22 @@ typedef enum {
  */
 enum { EVM_STACK_MAX = 1024 };
 
+typedef enum {
+    EVM_VAL_UNKNOWN = 0,
+    EVM_VAL_KNOWN_NARROW = 1,      /* Completely fits in 64-bit const_vals */
+    EVM_VAL_KNOWN_WIDE = 2,        /* Exact 256-bit constant preserved in wide_vals */
+    EVM_VAL_APPROXIMATED = 3       /* Truncated or otherwise approximated */
+} evm_val_state_t;
+
+typedef struct {
+    unsigned char bytes[32]; /* 256-bit big-endian payload */
+} evm_u256_t;
+
 typedef struct {
     char slots[EVM_STACK_MAX][IR_NAME_MAX]; /* IR temp name at each slot     */
-    long const_vals[EVM_STACK_MAX];         /* If known constant, its value  */
-    char is_const[EVM_STACK_MAX];           /* 1 if slots[i] is a known const*/
+    long const_vals[EVM_STACK_MAX];         /* If narrow const or truncated, its 64-bit value */
+    evm_u256_t wide_vals[EVM_STACK_MAX];    /* Exact 256-bit payload if known */
+    evm_val_state_t state[EVM_STACK_MAX];   /* Knowledge state of the slot    */
     int  depth;                              /* current depth (0 = empty)     */
 } evm_stack_t;
 
