@@ -1096,6 +1096,12 @@ int main(int argc, char **argv) {
   int rust_strict_let_annotations = 0;
   int rust_strict_function_signatures = 0;
   int rust_dump_mode = 0;
+  int decompile_mode = 0;
+  int jit_mode = 0;
+  int prove_mode = 0;
+  char* prove_prop = 0;
+  int memory_trace = 0;
+  int abi_mode = 0;
 
   int g_ir_primary = 0;
 
@@ -1169,6 +1175,32 @@ int main(int argc, char **argv) {
       g_emit_anomalies = 1;
       g_security_476 = 1;
       g_security_787 = 1;
+    } else if (strcmp(argv[i], "--decompile") == 0) {
+      decompile_mode = 1;
+      i++;
+      if (i < argc) input_file = argv[i];
+    } else if (strcmp(argv[i], "--jit") == 0) {
+      jit_mode = 1;
+      i++;
+      if (i < argc) input_file = argv[i];
+    } else if (strcmp(argv[i], "--prove") == 0) {
+      prove_mode = 1;
+      i++;
+      if (i < argc) input_file = argv[i];
+      i++;
+      if (i < argc) prove_prop = argv[i];
+    } else if (strcmp(argv[i], "--memory-trace") == 0) {
+      memory_trace = 1;
+    } else if (strcmp(argv[i], "--abi") == 0) {
+      abi_mode = 1;
+    } else if (strcmp(argv[i], "--release") == 0) {
+      if (i + 1 < argc) {
+          const char* ticket = argv[++i];
+          char cmd[1024];
+          snprintf(cmd, sizeof(cmd), "python3 tools/release_gate.py \"%s\" --ledger releases/ledger.jsonl", ticket);
+          int ret = system(cmd);
+          return ret;
+      }
     } else if (strcmp(argv[i], "--audit-export") == 0) {
       /* ForgeZero audit receipt to stdout — defensive analysis only */
       audit_export_mode = 1;
@@ -1213,6 +1245,12 @@ int main(int argc, char **argv) {
     printf("  --rust-strict-let-annotations   require explicit type annotations on all let bindings\n");
     printf("  --rust-strict-function-signatures   require explicit return type annotations on all functions\n");
     printf("  --rust-strict   enable both strict let annotations and strict function signatures\n");
+    printf("  --decompile <file>  decompile EVM bytecode to C pseudo-code\n");
+    printf("  --jit <file>        compile EVM bytecode to native x86 machine code\n");
+    printf("  --prove <file> <prop> run symbolic proofs on EVM bytecode\n");
+    printf("  --memory-trace      enable full symbolic memory dump\n");
+    printf("  --abi             force full ABI reconstruction\n");
+    printf("  --release <ticket> run Courtroom Release Gate-Zero\n");
     printf("  -c                compile only (C path)\n");
     printf("  -q, --quiet       suppress diagnostics output\n");
     return 1;
@@ -1236,6 +1274,35 @@ int main(int argc, char **argv) {
   if (!source) {
     printf("zcc: cannot read '%s'\n", input_file);
     return 1;
+  }
+
+  if (decompile_mode) {
+    extern void evm_decompile(const unsigned char* bytecode, size_t len, const char* output_path, int abi_mode);
+    evm_decompile((const unsigned char*)source, source_len, output_file, abi_mode);
+    free(source);
+    return 0;
+  }
+
+  if (jit_mode) {
+    extern void evm_jit_entry(const unsigned char* bytecode, size_t len, const char* output_path);
+    evm_jit_entry((const unsigned char*)source, source_len, output_file);
+    free(source);
+    return 0;
+  }
+
+  if (prove_mode) {
+    extern void evm_symbolic_run(const unsigned char* bytecode, size_t len, const char* prop);
+    evm_symbolic_run((const unsigned char*)source, source_len, prove_prop ? prove_prop : "no-revert");
+    
+    // Export proof to SMT2
+    extern ir_module_t* g_ir_module;
+    if (g_ir_module && g_ir_module->funcs) {
+        extern void export_smt2(ir_func_t* graph, const char* path);
+        export_smt2(g_ir_module->funcs, "proof.smt2");
+    }
+    
+    free(source);
+    return 0;
   }
 
   if (frontend_lang == FRONTEND_LANG_C) {
@@ -1391,7 +1458,7 @@ int main(int argc, char **argv) {
     if (compile_only) {
       sprintf(cmd, "gcc -O0 -w -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -c -o %s %s 2>&1", output_file, asm_file);
     } else if (strcmp(input_file, "zcc.c") == 0 || (strlen(input_file) >= 6 && strcmp(input_file + strlen(input_file) - 6, "/zcc.c") == 0)) {
-      sprintf(cmd, "gcc -O0 -w -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c forgezero_receipt.c ir_vuln_tag.c evm_lifter.c -lm 2>&1", output_file, asm_file);
+      sprintf(cmd, "gcc -O0 -w -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_vuln_tag.c evm_lifter.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c -lm 2>&1", output_file, asm_file);
     } else {
       sprintf(cmd, "gcc -O0 -w -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s -lm -lpthread -ldl 2>&1", output_file, asm_file);
     }

@@ -1,0 +1,47 @@
+{
+  "id": "rel-2026-05-05.demo",
+  "risk": "medium",
+  "tumblers": [
+    {
+      "tier": "T0-01",
+      "invariant": "Evidence Before Belief",
+      "status": "seated",
+      "evidence_ids": ["ev_t0"]
+    },
+    {
+      "tier": "T1-02",
+      "invariant": "Causal Chain",
+      "status": "partial",
+      "note": "trace captured, root-cause not yet documented"
+    },
+    {
+      "tier": "T2-04",
+      "invariant": "Patch Safely",
+      "status": "waived",
+      "waiver": {
+        "reason": "scope deferred",
+        "owner": "zkaedi",
+        "expires_at": "2026-12-01T00:00:00+00:00",
+        "repayment": "HYG-CR-005",
+        "approved_by": "release-marshal"
+      }
+    },
+    {
+      "tier": "T6-01",
+      "invariant": "Adversary Resistance",
+      "status": "not_applicable",
+      "note": "internal-only release"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "ev_t0",
+      "type": "cmd",
+      "claim_supported": "evidence threshold met",
+      "command": "pytest tests/test_evidence.py -q",
+      "result": "1 passed in 0.42s",
+      "artifact": "ci://run/2026-05-05/job/789#step-3",
+      "quality": 5
+    }
+  ]
+}

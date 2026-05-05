@@ -456,3 +456,15 @@ tests/abi/classify_sizes_*
 # expected_*.* are golden inputs (committed); out-*.bin are runtime outputs.
 tests/rust/out-*.bin
 tests/rust/out-*
+
+# ─── Mega Swarm Artifacts (added May 05 2026) ───
+mega_corpus/
+mega_decomp/
+mega_jit/
+mega_cases/
+mega_ledger.jsonl
+report_mega.html
+report.html
+evm_decomp/
+swarm_out/
+evm_jit/
