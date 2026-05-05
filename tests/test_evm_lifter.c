@@ -1027,14 +1027,20 @@ static void test_t49_jump(void) {
     ir_module_t *mod;
     evm_lifter_t ls;
     evm_lift_result_t res;
-    /* PUSH0, JUMP (0x56) */
-    static const unsigned char bc[] = { 0x5f, 0x56 };
-    TEST("T49: JUMP emits IR_NOP with target temp");
+    const ir_node_t *br;
+    /* PUSH1 0x04, JUMP (0x56) */
+    static const unsigned char bc[] = { 0x60, 0x04, 0x56 };
+    TEST("T49: JUMP emits IR_BR with resolved constant target");
     mod = new_module();
-    lift_bytes(&ls, mod, bc, 2);
+    lift_bytes(&ls, mod, bc, 3);
     res = evm_lift_bytecode(&ls);
     CHECK(res == EVM_LIFT_OK,   "JUMP: lift returns OK");
     CHECK(ls.stack.depth == 0,  "JUMP: consumes target, nothing left on stack");
+    br = find_op(ls.func, IR_BR);
+    CHECK(br != NULL, "JUMP: IR_BR emitted for constant target");
+    if (br && br->label) {
+        CHECK(strcmp(br->label, ".L_evm_4") == 0, "JUMP: resolved target label correctly");
+    }
     ir_module_free(mod);
 }
 
@@ -1043,15 +1049,21 @@ static void test_t50_jumpi(void) {
     ir_module_t *mod;
     evm_lifter_t ls;
     evm_lift_result_t res;
-    /* PUSH0 x2, JUMPI (0x57) */
-    static const unsigned char bc[] = { 0x5f, 0x5f, 0x57 };
-    TEST("T50: JUMPI emits IR_BR_IF");
+    const ir_node_t *br;
+    /* PUSH1 0x01 (cond), PUSH1 0x08 (target), JUMPI (0x57) */
+    static const unsigned char bc[] = { 0x60, 0x01, 0x60, 0x08, 0x57 };
+    TEST("T50: JUMPI emits IR_BR_IF with resolved constant target");
     mod = new_module();
-    lift_bytes(&ls, mod, bc, 3);
+    lift_bytes(&ls, mod, bc, 5);
     res = evm_lift_bytecode(&ls);
     CHECK(res == EVM_LIFT_OK,                "JUMPI: lift returns OK");
     CHECK(count_op(ls.func, IR_BR_IF) == 1,  "JUMPI: 1 IR_BR_IF emitted");
     CHECK(ls.stack.depth == 0,               "JUMPI: nothing left on stack");
+    br = find_op(ls.func, IR_BR_IF);
+    CHECK(br != NULL, "JUMPI: IR_BR_IF emitted");
+    if (br && br->label) {
+        CHECK(strcmp(br->label, ".L_evm_8") == 0, "JUMPI: resolved target label correctly");
+    }
     ir_module_free(mod);
 }
 
@@ -1122,14 +1134,17 @@ static void test_t54_push16(void) {
         0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
     };
     const ir_node_t *n;
-    TEST("T54: PUSH16 (wide push, low 8 bytes kept)");
+    TEST("T54: PUSH16 (wide push, low 8 bytes kept and tagged)");
     mod = new_module();
     lift_bytes(&ls, mod, bc, 17);
     res = evm_lift_bytecode(&ls);
     CHECK(res == EVM_LIFT_OK,                      "PUSH16: lift returns OK");
     n = find_op(ls.func, IR_CONST);
     CHECK(n != NULL,                               "PUSH16: IR_CONST emitted");
-    if (n) CHECK(n->imm == 0x0102030405060708L,    "PUSH16: low 8 bytes correct");
+    if (n) {
+        CHECK(n->imm == 0x0102030405060708L,       "PUSH16: low 8 bytes correct");
+        CHECK(n->tag == (int)IR_TAG_TRUNCATED_WIDE_CONST, "PUSH16: tagged TRUNCATED_WIDE_CONST");
+    }
     ir_module_free(mod);
 }
 

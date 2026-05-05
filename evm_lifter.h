@@ -35,8 +35,10 @@
  *
  * FUTURE WORK:
  *   - Expose tagged nodes to RegisterWarden / liveness / dominance passes.
- *   - Full 256-bit word support (currently truncated to 64-bit for scaffold).
- *   - CFG reconstruction from JUMP/JUMPI targets.
+ *   - Full 256-bit word support (currently truncated to 64-bit, but wide
+ *     constants are explicitly tagged with IR_TAG_TRUNCATED_WIDE_CONST).
+ *   - More advanced indirect jump resolution (basic direct PUSH+JUMP
+ *     targets are now resolved and emitted as IR_BR/IR_BR_IF).
  */
 
 #ifndef ZCC_EVM_LIFTER_H
@@ -62,7 +64,8 @@ typedef enum {
     IR_TAG_SELFDESTRUCT            = 3, /* SELFDESTRUCT — destructive op        */
     IR_TAG_SSTORE                  = 4, /* SSTORE — persistent state write      */
     IR_TAG_CREATE                  = 5, /* CREATE / CREATE2 — contract deploy   */
-    IR_TAG_EVM_BARRIER             = 6  /* INVALID / REVERT — execution barrier */
+    IR_TAG_EVM_BARRIER             = 6, /* INVALID / REVERT — execution barrier */
+    IR_TAG_TRUNCATED_WIDE_CONST    = 7  /* Wide PUSH truncated to 64-bit        */
 } evm_ir_tag_t;
 
 /* ── EVM Opcodes (Ethereum Yellow Paper + Shanghai EIPs) ────────────── */
@@ -185,6 +188,8 @@ enum { EVM_STACK_MAX = 1024 };
 
 typedef struct {
     char slots[EVM_STACK_MAX][IR_NAME_MAX]; /* IR temp name at each slot     */
+    long const_vals[EVM_STACK_MAX];         /* If known constant, its value  */
+    char is_const[EVM_STACK_MAX];           /* 1 if slots[i] is a known const*/
     int  depth;                              /* current depth (0 = empty)     */
 } evm_stack_t;
 
