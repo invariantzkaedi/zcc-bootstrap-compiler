@@ -313,6 +313,148 @@ static void evm_u256_signextend_op(evm_u256_t *dst, const evm_u256_t *b, const e
     }
 }
 
+/* SHL: shift left */
+static void evm_u256_shl_op(evm_u256_t *dst, const evm_u256_t *shift, const evm_u256_t *val) {
+    memset(dst->bytes, 0, 32);
+    for (int i = 0; i < 31; i++) {
+        if (shift->bytes[i] != 0) return;
+    }
+    unsigned int s = shift->bytes[31];
+    unsigned int byte_shift = s / 8;
+    unsigned int bit_shift = s % 8;
+    for (int i = 0; i < 32; i++) {
+        if (i + byte_shift < 32) {
+            unsigned int v = val->bytes[i + byte_shift];
+            if (bit_shift == 0) {
+                dst->bytes[i] = v;
+            } else {
+                dst->bytes[i] = (v << bit_shift) & 0xFF;
+                if (i + byte_shift + 1 < 32) {
+                    dst->bytes[i] |= (val->bytes[i + byte_shift + 1] >> (8 - bit_shift)) & 0xFF;
+                }
+            }
+        }
+    }
+}
+
+/* SHR: logical shift right */
+static void evm_u256_shr_op(evm_u256_t *dst, const evm_u256_t *shift, const evm_u256_t *val) {
+    memset(dst->bytes, 0, 32);
+    for (int i = 0; i < 31; i++) {
+        if (shift->bytes[i] != 0) return;
+    }
+    unsigned int s = shift->bytes[31];
+    unsigned int byte_shift = s / 8;
+    unsigned int bit_shift = s % 8;
+    for (int i = 31; i >= 0; i--) {
+        if (i - (int)byte_shift >= 0) {
+            unsigned int v = val->bytes[i - byte_shift];
+            if (bit_shift == 0) {
+                dst->bytes[i] = v;
+            } else {
+                dst->bytes[i] = (v >> bit_shift) & 0xFF;
+                if (i - (int)byte_shift - 1 >= 0) {
+                    dst->bytes[i] |= (val->bytes[i - byte_shift - 1] << (8 - bit_shift)) & 0xFF;
+                }
+            }
+        }
+    }
+}
+
+/* SAR: arithmetic shift right */
+static void evm_u256_sar_op(evm_u256_t *dst, const evm_u256_t *shift, const evm_u256_t *val) {
+    int sign_bit = (val->bytes[0] >> 7) & 1;
+    unsigned char fill = sign_bit ? 0xFF : 0x00;
+    for (int i = 0; i < 31; i++) {
+        if (shift->bytes[i] != 0) {
+            memset(dst->bytes, fill, 32);
+            return;
+        }
+    }
+    unsigned int s = shift->bytes[31];
+    unsigned int byte_shift = s / 8;
+    unsigned int bit_shift = s % 8;
+    for (int i = 31; i >= 0; i--) {
+        if (i - (int)byte_shift >= 0) {
+            unsigned int v = val->bytes[i - byte_shift];
+            if (bit_shift == 0) {
+                dst->bytes[i] = v;
+            } else {
+                dst->bytes[i] = (v >> bit_shift) & 0xFF;
+                if (i - (int)byte_shift - 1 >= 0) {
+                    dst->bytes[i] |= (val->bytes[i - byte_shift - 1] << (8 - bit_shift)) & 0xFF;
+                } else {
+                    dst->bytes[i] |= (fill << (8 - bit_shift)) & 0xFF;
+                }
+            }
+        } else {
+            dst->bytes[i] = fill;
+        }
+    }
+}
+
+/* KECCAK-256 implementation */
+static const unsigned long keccakf_rndc[24] = {
+    0x0000000000000001UL, 0x0000000000008082UL, 0x800000000000808aUL,
+    0x8000000080008000UL, 0x000000000000808bUL, 0x0000000080000001UL,
+    0x8000000080008081UL, 0x8000000000008009UL, 0x000000000000008aUL,
+    0x0000000000000088UL, 0x0000000080008009UL, 0x000000008000000aUL,
+    0x000000008000808bUL, 0x800000000000008bUL, 0x8000000000008089UL,
+    0x8000000000008003UL, 0x8000000000008002UL, 0x8000000000000080UL,
+    0x000000000000800aUL, 0x800000008000000aUL, 0x8000000080008081UL,
+    0x8000000000008080UL, 0x0000000080000001UL, 0x8000000080008008UL
+};
+static const unsigned int keccakf_rotc[24] = {
+    1,  3,  6,  10, 15, 21, 28, 36, 45, 55, 2,  14,
+    27, 41, 56, 8,  25, 43, 62, 18, 39, 61, 20, 44
+};
+static const unsigned int keccakf_piln[24] = {
+    10, 7,  11, 17, 18, 3, 5,  16, 8,  21, 24, 4,
+    15, 23, 19, 13, 12, 2, 20, 14, 22, 9,  6,  1
+};
+#define ROTL64(x, y) (((x) << (y)) | ((x) >> (64 - (y))))
+
+static void keccakf(unsigned long st[25]) {
+    int i, j, round;
+    unsigned long t, bc[5];
+    for (round = 0; round < 24; round++) {
+        for (i = 0; i < 5; i++) bc[i] = st[i] ^ st[i + 5] ^ st[i + 10] ^ st[i + 15] ^ st[i + 20];
+        for (i = 0; i < 5; i++) {
+            t = bc[(i + 4) % 5] ^ ROTL64(bc[(i + 1) % 5], 1);
+            for (j = 0; j < 25; j += 5) st[j + i] ^= t;
+        }
+        t = st[1];
+        for (i = 0; i < 24; i++) {
+            j = keccakf_piln[i];
+            bc[0] = st[j];
+            st[j] = ROTL64(t, keccakf_rotc[i]);
+            t = bc[0];
+        }
+        for (j = 0; j < 25; j += 5) {
+            for (i = 0; i < 5; i++) bc[i] = st[j + i];
+            for (i = 0; i < 5; i++) st[j + i] ^= (~bc[(i + 1) % 5]) & bc[(i + 2) % 5];
+        }
+        st[0] ^= keccakf_rndc[round];
+    }
+}
+
+static void evm_keccak256(const unsigned char *data, size_t len, evm_u256_t *out) {
+    unsigned long st[25];
+    memset(st, 0, sizeof(st));
+    size_t i, r = 136;
+    while (len >= r) {
+        for (i = 0; i < r; i++) st[i/8] ^= (unsigned long)(data[i]) << (8 * (i % 8));
+        keccakf(st);
+        data += r;
+        len -= r;
+    }
+    for (i = 0; i < len; i++) st[i/8] ^= (unsigned long)(data[i]) << (8 * (i % 8));
+    st[len/8] ^= (unsigned long)1 << (8 * (len % 8));
+    st[(r-1)/8] ^= (unsigned long)0x80 << (8 * ((r-1) % 8));
+    keccakf(st);
+    for (i = 0; i < 32; i++) out->bytes[i] = (unsigned char)((st[i/8] >> (8 * (i % 8))) & 0xFF);
+}
+
 
 /* Allocate a fresh VReg name aligned with ir_bridge.h convention ("t<N>"). */
 static void lifter_fresh_tmp(evm_lifter_t *ls, char *buf) {
@@ -1082,19 +1224,32 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
     }
 
     case EVM_SHL:
-        res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
-        res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
-        lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_SHL, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
-        return stack_push(ls, tmp_dst);
-
     case EVM_SHR:
-    case EVM_SAR:
-        res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
-        res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
+    case EVM_SAR: {
+        int a_st = EVM_VAL_UNKNOWN, b_st = EVM_VAL_UNKNOWN;
+        evm_u256_t shift_val, val_val, res_val;
+        if (ls->stack.depth >= 2) {
+            b_st = ls->stack.state[ls->stack.depth - 1]; /* top: shift */
+            a_st = ls->stack.state[ls->stack.depth - 2]; /* below: value */
+            memcpy(&shift_val, &ls->stack.wide_vals[ls->stack.depth - 1], sizeof(evm_u256_t));
+            memcpy(&val_val, &ls->stack.wide_vals[ls->stack.depth - 2], sizeof(evm_u256_t));
+        }
+        res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res; /* shift */
+        res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res; /* value */
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_SHR, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
+        
+        int ir_op = (op == EVM_SHL) ? IR_SHL : IR_SHR;
+        ir_emit(ls->func, ir_op, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
+        
+        if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
+            (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
+            if (op == EVM_SHL) evm_u256_shl_op(&res_val, &shift_val, &val_val);
+            else if (op == EVM_SHR) evm_u256_shr_op(&res_val, &shift_val, &val_val);
+            else evm_u256_sar_op(&res_val, &shift_val, &val_val);
+            return stack_push_const_wide(ls, tmp_dst, res_val.bytes, 32, evm_u256_to_narrow(&res_val));
+        }
         return stack_push(ls, tmp_dst);
+    }
 
     /* ── Memory/storage ops ──────────────────────────────────────── */
     case EVM_MLOAD:
@@ -1104,11 +1259,39 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         return stack_push(ls, tmp_dst);
 
     case EVM_MSTORE:
-    case EVM_MSTORE8:
-        res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
-        res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
+    case EVM_MSTORE8: {
+        int a_st = EVM_VAL_UNKNOWN, b_st = EVM_VAL_UNKNOWN;
+        long offset = 0;
+        evm_u256_t b_val;
+        if (ls->stack.depth >= 2) {
+            a_st = ls->stack.state[ls->stack.depth - 1]; /* top: offset */
+            b_st = ls->stack.state[ls->stack.depth - 2]; /* below: value */
+            if (a_st == EVM_VAL_KNOWN_NARROW) {
+                offset = ls->stack.const_vals[ls->stack.depth - 1];
+            }
+            if (b_st == EVM_VAL_KNOWN_WIDE || b_st == EVM_VAL_KNOWN_NARROW) {
+                b_val = ls->stack.wide_vals[ls->stack.depth - 2];
+            }
+        }
+        res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res; /* offset */
+        res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res; /* value */
         ir_emit(ls->func, IR_STORE, IR_TY_I64, tmp_a, tmp_b, NULL, NULL, 0L, ls->pc);
+        
+        if (a_st == EVM_VAL_KNOWN_NARROW && (b_st == EVM_VAL_KNOWN_WIDE || b_st == EVM_VAL_KNOWN_NARROW)) {
+            if (op == EVM_MSTORE && offset >= 0 && offset + 32 <= 1024) {
+                memcpy(&ls->memory[offset], b_val.bytes, 32);
+                memset(&ls->memory_known[offset], 1, 32);
+            } else if (op == EVM_MSTORE8 && offset >= 0 && offset + 1 <= 1024) {
+                ls->memory[offset] = b_val.bytes[31];
+                ls->memory_known[offset] = 1;
+            } else if (offset >= 0 && offset < 1024) {
+                memset(ls->memory_known, 0, 1024);
+            }
+        } else {
+            memset(ls->memory_known, 0, 1024);
+        }
         return EVM_LIFT_OK;
+    }
 
     case EVM_SLOAD:
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
@@ -1220,12 +1403,36 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         return stack_push(ls, tmp_dst);
 
     case EVM_SHA3: {
+        int a_st = EVM_VAL_UNKNOWN, b_st = EVM_VAL_UNKNOWN;
+        long offset = 0, length = 0;
+        evm_u256_t res_val;
+        if (ls->stack.depth >= 2) {
+            a_st = ls->stack.state[ls->stack.depth - 1]; /* offset */
+            b_st = ls->stack.state[ls->stack.depth - 2]; /* length */
+            if (a_st == EVM_VAL_KNOWN_NARROW && b_st == EVM_VAL_KNOWN_NARROW) {
+                offset = ls->stack.const_vals[ls->stack.depth - 1];
+                length = ls->stack.const_vals[ls->stack.depth - 2];
+            }
+        }
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
         tagged_emit(ls, IR_CALL, IR_TY_I64, tmp_dst, NULL, NULL, "__evm_sha3", 0L, ls->pc, IR_TAG_SHA3);
         ir_emit(ls->func, IR_ARG, IR_TY_I64, NULL, tmp_a, NULL, NULL, 0L, ls->pc);
         ir_emit(ls->func, IR_ARG, IR_TY_I64, NULL, tmp_b, NULL, NULL, 0L, ls->pc);
+        
+        if (a_st == EVM_VAL_KNOWN_NARROW && b_st == EVM_VAL_KNOWN_NARROW) {
+            if (offset >= 0 && length >= 0 && offset + length <= 1024) {
+                int fully_known = 1;
+                for (long i = 0; i < length; i++) {
+                    if (!ls->memory_known[offset + i]) { fully_known = 0; break; }
+                }
+                if (fully_known) {
+                    evm_keccak256(&ls->memory[offset], (size_t)length, &res_val);
+                    return stack_push_const_wide(ls, tmp_dst, res_val.bytes, 32, evm_u256_to_narrow(&res_val));
+                }
+            }
+        }
         return stack_push(ls, tmp_dst);
     }
 

@@ -2719,6 +2719,68 @@ static void test_t89_byte_signextend_exp(void) {
     }
 }
 
+static void test_t90_shifts_wide(void) {
+    evm_lifter_t ls;
+    ir_module_t *mod;
+    evm_lift_result_t res;
+
+    printf("\n[T90: Exact wide SHL / SHR / SAR]\n");
+
+    /* SHL: 0xAA << 4 = 0xAA0 */
+    {
+        unsigned char bc[] = { 0x60, 0xAA, 0x60, 0x04, 0x1B };
+        mod = new_module();
+        lift_bytes(&ls, mod, bc, 5);
+        res = evm_lift_bytecode(&ls);
+        CHECK(res == EVM_LIFT_OK, "SHL lift OK");
+        CHECK(ls.stack.const_vals[0] == 0xAA0, "SHL 0xAA << 4 = 0xAA0");
+        evm_lifter_destroy(&ls);
+        ir_module_free(mod);
+    }
+    /* SHR: 0x80 >> 4 = 0x08 */
+    {
+        unsigned char bc[] = { 0x60, 0x80, 0x60, 0x04, 0x1C };
+        mod = new_module();
+        lift_bytes(&ls, mod, bc, 5);
+        res = evm_lift_bytecode(&ls);
+        CHECK(res == EVM_LIFT_OK, "SHR lift OK");
+        CHECK(ls.stack.const_vals[0] == 0x08, "SHR 0x80 >> 4 = 0x08");
+        evm_lifter_destroy(&ls);
+        ir_module_free(mod);
+    }
+}
+
+static void test_t91_keccak_folding(void) {
+    evm_lifter_t ls;
+    ir_module_t *mod;
+    evm_lift_result_t res;
+
+    printf("\n[T91: Exact Keccak-256 folding]\n");
+
+    /* SHA3(0, 5) where mem[0..4] = "hello" = 0x68656c6c6f */
+    {
+        unsigned char bc[] = {
+            0x60, 0x68, 0x60, 0x00, 0x53, /* MSTORE8(0, 'h') */
+            0x60, 0x65, 0x60, 0x01, 0x53, /* MSTORE8(1, 'e') */
+            0x60, 0x6c, 0x60, 0x02, 0x53, /* MSTORE8(2, 'l') */
+            0x60, 0x6c, 0x60, 0x03, 0x53, /* MSTORE8(3, 'l') */
+            0x60, 0x6f, 0x60, 0x04, 0x53, /* MSTORE8(4, 'o') */
+            0x60, 0x05, 0x60, 0x00, 0x20  /* SHA3(0, 5) */
+        };
+        mod = new_module();
+        lift_bytes(&ls, mod, bc, sizeof(bc));
+        res = evm_lift_bytecode(&ls);
+        CHECK(res == EVM_LIFT_OK, "SHA3 lift OK");
+        CHECK(ls.stack.state[0] == EVM_VAL_KNOWN_WIDE, "SHA3 yields known wide");
+        /* keccak("hello") = 1c8aff95... */
+        CHECK(ls.stack.wide_vals[0].bytes[0] == 0x1C, "SHA3 byte 0 = 0x1C");
+        CHECK(ls.stack.wide_vals[0].bytes[1] == 0x8A, "SHA3 byte 1 = 0x8A");
+        CHECK(ls.stack.wide_vals[0].bytes[31] == 0xC8, "SHA3 byte 31 = 0xC8");
+        evm_lifter_destroy(&ls);
+        ir_module_free(mod);
+    }
+}
+
 /* ── main ─────────────────────────────────────────────────────────── */
 
 int main(void) {
@@ -2816,6 +2878,8 @@ int main(void) {
     test_t87_div_mod_wide();
     test_t88_bitwise_wide();
     test_t89_byte_signextend_exp();
+    test_t90_shifts_wide();
+    test_t91_keccak_folding();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     if (g_fail > 0) {
