@@ -71,6 +71,17 @@ typedef enum {
     IR_TAG_LOG                     = 10 /* LOG0..LOG4 event emission            */
 } evm_ir_tag_t;
 
+/* ── Support Accounting (Issue #15 Tracking) ───────────────────────── */
+typedef enum {
+    EVM_SUPPORT_FULLY_SUPPORTED       = 0, /* Semantics mapped to accurate IR */
+    EVM_SUPPORT_APPROXIMATED_ANALYZABLE = 1, /* Emits analyzable IR but semantics approx */
+    EVM_SUPPORT_PLACEHOLDER_ONLY      = 2, /* Raw generic scaffold (e.g. pop N push N) */
+    EVM_SUPPORT_INVALID_OR_UNASSIGNED = 3  /* Unused opcode space or reserved */
+} evm_support_class_t;
+
+const char *evm_support_class_name(evm_support_class_t sc);
+evm_support_class_t evm_opcode_support(unsigned int opcode);
+
 /* ── EVM Opcodes (Ethereum Yellow Paper + Shanghai EIPs) ────────────── */
 typedef enum {
     /* 0x00 — stop/arithmetic */

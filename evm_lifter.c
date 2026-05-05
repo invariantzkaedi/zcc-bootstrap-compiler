@@ -210,6 +210,58 @@ int evm_is_call_family(unsigned int opcode) {
            opcode == (unsigned int)EVM_STATICCALL;
 }
 
+const char *evm_support_class_name(evm_support_class_t sc) {
+    switch (sc) {
+        case EVM_SUPPORT_FULLY_SUPPORTED:       return "FULLY_SUPPORTED";
+        case EVM_SUPPORT_APPROXIMATED_ANALYZABLE: return "APPROXIMATED_ANALYZABLE";
+        case EVM_SUPPORT_PLACEHOLDER_ONLY:      return "PLACEHOLDER_ONLY";
+        case EVM_SUPPORT_INVALID_OR_UNASSIGNED: return "INVALID_OR_UNASSIGNED";
+    }
+    return "UNKNOWN_CLASS";
+}
+
+evm_support_class_t evm_opcode_support(unsigned int opcode) {
+    if (opcode > 0xff) return EVM_SUPPORT_INVALID_OR_UNASSIGNED;
+
+    /* ── 1. FULLY_SUPPORTED ──────────────────────────────────────────────
+     * Semantics are completely captured by the emitted IR or structural
+     * primitives. PUSH, DUP, SWAP, basic arithmetic, memory/storage layout.
+     */
+    if (opcode == EVM_STOP || opcode == EVM_RETURN || opcode == EVM_REVERT || opcode == EVM_INVALID || opcode == EVM_POP || opcode == EVM_JUMPDEST) return EVM_SUPPORT_FULLY_SUPPORTED;
+    if (opcode >= EVM_ADD && opcode <= EVM_SMOD) return EVM_SUPPORT_FULLY_SUPPORTED;
+    if (opcode >= EVM_LT && opcode <= EVM_SAR) return EVM_SUPPORT_FULLY_SUPPORTED;
+    if (opcode == EVM_MLOAD || opcode == EVM_MSTORE || opcode == EVM_MSTORE8 || opcode == EVM_SLOAD || opcode == EVM_SSTORE) return EVM_SUPPORT_FULLY_SUPPORTED;
+    if (opcode >= EVM_PUSH1 && opcode <= EVM_PUSH32) return EVM_SUPPORT_FULLY_SUPPORTED;
+    if (opcode >= EVM_DUP1 && opcode <= EVM_DUP16) return EVM_SUPPORT_FULLY_SUPPORTED;
+    if (opcode >= EVM_SWAP1 && opcode <= EVM_SWAP16) return EVM_SUPPORT_FULLY_SUPPORTED;
+    if (opcode == EVM_PUSH0) return EVM_SUPPORT_FULLY_SUPPORTED;
+
+    /* ── 2. APPROXIMATED_ANALYZABLE ──────────────────────────────────────
+     * Analyzable structure emitted (e.g., tagged IR_CALL or valid CFG edges),
+     * but deeper dynamic semantics (memory layout effects, indirect jumps)
+     * are still abstracted away.
+     */
+    if (opcode == EVM_JUMP || opcode == EVM_JUMPI) return EVM_SUPPORT_APPROXIMATED_ANALYZABLE; /* CFG valid, but indirect dynamic jumps are partial */
+    if (opcode == EVM_SHA3 || opcode == EVM_CALLDATACOPY || opcode == EVM_CODECOPY || opcode == EVM_RETURNDATACOPY || opcode == EVM_EXTCODECOPY) return EVM_SUPPORT_APPROXIMATED_ANALYZABLE;
+    if (opcode >= EVM_LOG0 && opcode <= EVM_LOG4) return EVM_SUPPORT_APPROXIMATED_ANALYZABLE;
+    if (opcode == EVM_CALL || opcode == EVM_CALLCODE || opcode == EVM_DELEGATECALL || opcode == EVM_STATICCALL) return EVM_SUPPORT_APPROXIMATED_ANALYZABLE;
+    if (opcode == EVM_CREATE || opcode == EVM_CREATE2) return EVM_SUPPORT_APPROXIMATED_ANALYZABLE;
+    
+    /* Env/Block queries emit generic IR_CONST / IR_LOAD */
+    if (opcode >= EVM_ADDRESS && opcode <= EVM_CALLDATALOAD) return EVM_SUPPORT_APPROXIMATED_ANALYZABLE;
+    if (opcode >= EVM_CODESIZE && opcode <= EVM_BASEFEE) return EVM_SUPPORT_APPROXIMATED_ANALYZABLE;
+    if (opcode >= EVM_PC && opcode <= EVM_GAS) return EVM_SUPPORT_APPROXIMATED_ANALYZABLE;
+    
+    /* ── 3. PLACEHOLDER_ONLY ─────────────────────────────────────────────
+     * Opcodes with no real analyzable structure beyond popping/pushing.
+     */
+    if (opcode == EVM_ADDMOD || opcode == EVM_MULMOD || opcode == EVM_EXP || opcode == EVM_SIGNEXTEND || opcode == EVM_BYTE) return EVM_SUPPORT_PLACEHOLDER_ONLY;
+    if (opcode == EVM_SELFDESTRUCT) return EVM_SUPPORT_PLACEHOLDER_ONLY;
+
+    /* ── 4. INVALID_OR_UNASSIGNED ──────────────────────────────────────── */
+    return EVM_SUPPORT_INVALID_OR_UNASSIGNED;
+}
+
 /* ── Initialisation ──────────────────────────────────────────────────── */
 
 void evm_lifter_init(evm_lifter_t *ls,

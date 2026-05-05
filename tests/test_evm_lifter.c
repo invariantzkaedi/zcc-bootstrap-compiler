@@ -1778,6 +1778,46 @@ static void test_t78_invalid_jumpi(void) {
     ir_module_free(mod);
 }
 
+/* ── T80: Issue #15 EVM Lifter Support Accounting ─────────────────────
+ *
+ * This test audits the 256 opcode space against the strict support
+ * classification schema introduced for final closure tracking.
+ */
+static void test_t80_support_accounting(void) {
+    int i;
+    int fully_supported = 0;
+    int approximated = 0;
+    int placeholder = 0;
+    int unassigned = 0;
+    
+    printf("\n=== EVM Issue #15 Support Accounting ===\n");
+    for (i = 0; i < 256; i++) {
+        evm_support_class_t sc = evm_opcode_support(i);
+        switch (sc) {
+            case EVM_SUPPORT_FULLY_SUPPORTED: fully_supported++; break;
+            case EVM_SUPPORT_APPROXIMATED_ANALYZABLE: approximated++; break;
+            case EVM_SUPPORT_PLACEHOLDER_ONLY: placeholder++; break;
+            case EVM_SUPPORT_INVALID_OR_UNASSIGNED: unassigned++; break;
+        }
+    }
+    int total_assigned = fully_supported + approximated + placeholder;
+    printf("FULLY_SUPPORTED:         %3d\n", fully_supported);
+    printf("APPROXIMATED_ANALYZABLE: %3d\n", approximated);
+    printf("PLACEHOLDER_ONLY:        %3d\n", placeholder);
+    printf("INVALID_OR_UNASSIGNED:   %3d\n", unassigned);
+    printf("----------------------------------\n");
+    printf("Total Assigned Opcodes:  %3d\n", total_assigned);
+    
+    if (total_assigned > 0) {
+        printf("Semantic Support (Full + Approx): %.1f%%\n",
+               (double)(fully_supported + approximated) * 100.0 / (double)total_assigned);
+    }
+    
+    /* Ensure no basic regression in assignment space */
+    CHECK(total_assigned >= 140, "At least 140 opcodes must be assigned to an active class");
+    CHECK(placeholder <= 6, "Placeholder count should strictly diminish");
+}
+
 /* ── T79: Coverage report — list covered and uncovered opcode groups ─
  *
  * This test always PASSES; it prints a coverage summary to stdout.
@@ -1998,6 +2038,7 @@ int main(void) {
     test_t77_invalid_jump();
     test_t78_invalid_jumpi();
     test_t79_coverage_report();
+    test_t80_support_accounting();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     if (g_fail > 0) {
