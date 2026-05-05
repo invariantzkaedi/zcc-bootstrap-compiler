@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 /* ── Internal helpers ────────────────────────────────────────────────── */
 
@@ -746,6 +747,9 @@ void evm_lifter_init(evm_lifter_t *ls,
     for (i = 0; i < EVM_STACK_MAX; i++)
         ls->stack.slots[i][0] = '\0';
         
+    extern void* memory_v2_new(void);
+    ls->memory_v2 = memory_v2_new();
+        
     /* Allocate and pre-scan valid JUMPDESTs */
     ls->valid_jumpdest = (unsigned char *)calloc(length > 0 ? (size_t)length : 1, 1);
     if (ls->valid_jumpdest && bytecode) {
@@ -1265,16 +1269,11 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         lifter_fresh_tmp(ls, tmp_dst);
         ir_emit(ls->func, IR_LOAD, IR_TY_I64, tmp_dst, tmp_a, NULL, NULL, 0L, ls->pc);
         
-        if (a_st == EVM_VAL_KNOWN_NARROW && offset >= 0 && offset + 32 <= 1024) {
-            int fully_known = 1;
-            for (long i = 0; i < 32; i++) {
-                if (!ls->memory_known[offset + i]) { fully_known = 0; break; }
-            }
-            if (fully_known) {
-                evm_u256_t res_val;
-                memcpy(res_val.bytes, &ls->memory[offset], 32);
-                return stack_push_const_wide(ls, tmp_dst, res_val.bytes, 32, evm_u256_to_narrow(&res_val));
-            }
+        extern evm_u256_t mload_v2(void* mem, uint64_t offset, char** out_expr);
+        if (a_st == EVM_VAL_KNOWN_NARROW) {
+            char* expr = NULL;
+            evm_u256_t val = mload_v2(ls->memory_v2, offset, &expr);
+            return stack_push_const_wide(ls, tmp_dst, val.bytes, 32, evm_u256_to_narrow(&val));
         }
         return stack_push(ls, tmp_dst);
     }
@@ -1298,18 +1297,11 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res; /* value */
         ir_emit(ls->func, IR_STORE, IR_TY_I64, tmp_a, tmp_b, NULL, NULL, 0L, ls->pc);
         
+        extern void mstore_v2(void* mem, uint64_t offset, evm_u256_t val, const char* expr);
         if (a_st == EVM_VAL_KNOWN_NARROW && (b_st == EVM_VAL_KNOWN_WIDE || b_st == EVM_VAL_KNOWN_NARROW)) {
-            if (op == EVM_MSTORE && offset >= 0 && offset + 32 <= 1024) {
-                memcpy(&ls->memory[offset], b_val.bytes, 32);
-                memset(&ls->memory_known[offset], 1, 32);
-            } else if (op == EVM_MSTORE8 && offset >= 0 && offset + 1 <= 1024) {
-                ls->memory[offset] = b_val.bytes[31];
-                ls->memory_known[offset] = 1;
-            } else if (offset >= 0 && offset < 1024) {
-                memset(ls->memory_known, 0, 1024);
+            if (op == EVM_MSTORE) {
+                mstore_v2(ls->memory_v2, offset, b_val, NULL);
             }
-        } else {
-            memset(ls->memory_known, 0, 1024);
         }
         return EVM_LIFT_OK;
     }
@@ -1320,13 +1312,27 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         ir_emit(ls->func, IR_LOAD, IR_TY_I64, tmp_dst, tmp_a, NULL, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
-    case EVM_SSTORE:
+    case EVM_SSTORE: {
         /* Persistent storage write — security-tagged */
+        evm_u256_t slot_val, b_val;
+        int slot_st = EVM_VAL_UNKNOWN, b_st = EVM_VAL_UNKNOWN;
+        if (ls->stack.depth >= 2) {
+            slot_st = ls->stack.state[ls->stack.depth - 1];
+            b_st = ls->stack.state[ls->stack.depth - 2];
+            if (slot_st == EVM_VAL_KNOWN_NARROW || slot_st == EVM_VAL_KNOWN_WIDE) slot_val = ls->stack.wide_vals[ls->stack.depth - 1];
+            if (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE) b_val = ls->stack.wide_vals[ls->stack.depth - 2];
+        }
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         tagged_emit(ls, IR_STORE, IR_TY_I64, tmp_a, tmp_b, NULL, NULL, 0L, ls->pc,
                     IR_TAG_SSTORE);
+                    
+        extern void sstore_v2(void* mem, evm_u256_t slot, evm_u256_t val);
+        if ((slot_st == EVM_VAL_KNOWN_NARROW || slot_st == EVM_VAL_KNOWN_WIDE) && (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
+            sstore_v2(ls->memory_v2, slot_val, b_val);
+        }
         return EVM_LIFT_OK;
+    }
 
     /* ── Flow control ────────────────────────────────────────────── */
     case EVM_JUMP: {
@@ -1416,12 +1422,14 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
     case EVM_EXTCODESIZE:
     case EVM_EXTCODEHASH:
     case EVM_BLOCKHASH:
-    case EVM_CALLDATALOAD:
-        /* Pop 1, push 1 (address/key → value) */
+    case EVM_CALLDATALOAD: {
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
         ir_emit(ls->func, IR_LOAD, IR_TY_I64, tmp_dst, tmp_a, NULL, NULL, 0L, ls->pc);
+        extern void evm_calldata_load(void* mem, const char* offset_tmp);
+        evm_calldata_load(ls->memory_v2, tmp_a);
         return stack_push(ls, tmp_dst);
+    }
 
     case EVM_SHA3: {
         int a_st = EVM_VAL_UNKNOWN, b_st = EVM_VAL_UNKNOWN;

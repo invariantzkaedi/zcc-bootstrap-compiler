@@ -247,6 +247,7 @@ typedef struct {
     int                  insn_count;  /* total instructions stepped        */
     int                  call_count;  /* CALL-family opcodes seen          */
     int                  tagged_count;/* nodes with non-zero security tags */
+    void                *memory_v2;   /* symbolic memory model v2          */
 
     /* Static memory tracking for Keccak folding (first 1024 bytes) */
     unsigned char        memory[1024];
