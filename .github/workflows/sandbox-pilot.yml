@@ -17,7 +17,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-      
+
       - name: Build ZCC binary
         run: |
           make zcc
@@ -28,7 +28,7 @@ jobs:
           docker build -f Dockerfile.sandbox -t chimera-sandbox:latest .
           IMAGE_ID=$(docker inspect --format='{{.Id}}' chimera-sandbox:latest)
           echo "IMAGE_ID=${IMAGE_ID}" >> "$GITHUB_ENV"
-          
+
       - name: Inject Local Approvals
         # Ensure the built image hash is explicitly trusted for the local offline run
         run: |
@@ -39,9 +39,10 @@ jobs:
           with open('policy_approvals.json', 'w') as f: json.dump(app, f)
           "
 
-            - name: Execute Offline Sandbox Pilot
-         run: |
+      - name: Execute Offline Sandbox Pilot
+        run: |
           mkdir -p pilot_artifacts
+          chmod 777 pilot_artifacts
           docker run --rm \
             --network=none \
             --read-only \
@@ -51,9 +52,8 @@ jobs:
             --memory=512m \
             --cpus=1 \
             --tmpfs /tmp:rw,nosuid,size=64m \
-            --tmpfs /app/scratch:rw,nosuid,size=128m,uid=1000,gid=1000,mode=700 \
             -e CHIMERA_SANDBOX_ONLY=1 \
-            -v "$PWD/pilot_artifacts:/workspace/release_artifacts" \
+            -v "$PWD/pilot_artifacts:/app/scratch:rw" \
             chimera-sandbox:latest \
             python scheduled_sandbox_pilot.py --once
           mkdir -p pilot_artifacts/release_artifacts
@@ -71,7 +71,7 @@ jobs:
             echo "FATAL: Network was reachable in attestation."
             exit 1
           fi
-          
+
       - name: Verify Signed Manifest
         run: |
           cd pilot_artifacts
