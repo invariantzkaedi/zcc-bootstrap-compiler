@@ -212,7 +212,7 @@ int evm_is_call_family(unsigned int opcode) {
 void evm_lifter_init(evm_lifter_t *ls,
                      const unsigned char *bytecode, int length,
                      ir_module_t *module) {
-    int i;
+    int i, p;
     memset(ls, 0, sizeof(*ls));
     ls->bytecode = bytecode;
     ls->length   = length;
@@ -223,6 +223,30 @@ void evm_lifter_init(evm_lifter_t *ls,
     /* Warm the stack so all slot strings start NUL-terminated. */
     for (i = 0; i < EVM_STACK_MAX; i++)
         ls->stack.slots[i][0] = '\0';
+        
+    /* Allocate and pre-scan valid JUMPDESTs */
+    ls->valid_jumpdest = (unsigned char *)calloc(length > 0 ? (size_t)length : 1, 1);
+    if (ls->valid_jumpdest && bytecode) {
+        p = 0;
+        while (p < length) {
+            unsigned int op = bytecode[p];
+            if (op == (unsigned int)EVM_JUMPDEST) {
+                ls->valid_jumpdest[p] = 1;
+                p++;
+            } else if (op >= (unsigned int)EVM_PUSH1 && op <= (unsigned int)EVM_PUSH32) {
+                p += 1 + (int)(op - (unsigned int)EVM_PUSH1 + 1);
+            } else {
+                p++;
+            }
+        }
+    }
+}
+
+void evm_lifter_destroy(evm_lifter_t *ls) {
+    if (ls->valid_jumpdest) {
+        free(ls->valid_jumpdest);
+        ls->valid_jumpdest = NULL;
+    }
 }
 
 /* ── Step: lift one EVM instruction ─────────────────────────────────── */
@@ -559,8 +583,13 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         
         if (target_is_const) {
-            snprintf(lbl_buf, IR_LABEL_MAX, ".L_evm_%ld", target_val);
-            ir_emit(ls->func, IR_BR, IR_TY_VOID, NULL, NULL, NULL, lbl_buf, 0L, ls->pc);
+            if (target_val >= 0 && target_val < ls->length && ls->valid_jumpdest && ls->valid_jumpdest[target_val]) {
+                snprintf(lbl_buf, IR_LABEL_MAX, ".L_evm_%ld", target_val);
+                ir_emit(ls->func, IR_BR, IR_TY_VOID, NULL, NULL, NULL, lbl_buf, 0L, ls->pc);
+            } else {
+                /* Target is known but INVALID: emits an EVM_BARRIER rather than a blind branch */
+                tagged_emit(ls, IR_NOP, IR_TY_VOID, NULL, NULL, NULL, NULL, 0L, ls->pc, IR_TAG_EVM_BARRIER);
+            }
         } else {
             /* Indirect jump — we can't resolve the target statically here.
              * Emit a NOP with the target temp as src1 for future CFG pass. */
@@ -580,8 +609,15 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         
         if (target_is_const) {
-            snprintf(lbl_buf, IR_LABEL_MAX, ".L_evm_%ld", target_val);
-            ir_emit(ls->func, IR_BR_IF, IR_TY_VOID, NULL, tmp_b, NULL, lbl_buf, 0L, ls->pc);
+            if (target_val >= 0 && target_val < ls->length && ls->valid_jumpdest && ls->valid_jumpdest[target_val]) {
+                snprintf(lbl_buf, IR_LABEL_MAX, ".L_evm_%ld", target_val);
+                ir_emit(ls->func, IR_BR_IF, IR_TY_VOID, NULL, tmp_b, NULL, lbl_buf, 0L, ls->pc);
+            } else {
+                /* Invalid JUMPI target: if taken, it halts. We emit a conditional BR_IF to an error block ideally, 
+                 * but lacking that, we tag a NOP as barrier fallback. Note: a true CFG might split the block here. 
+                 * For now, emit a tagged barrier placeholder so analysis knows it's an invalid conditional path. */
+                tagged_emit(ls, IR_NOP, IR_TY_VOID, NULL, tmp_b, NULL, NULL, 0L, ls->pc, IR_TAG_EVM_BARRIER);
+            }
         } else {
             /* Conditional branch — emit BR_IF with condition in src1 */
             ir_emit(ls->func, IR_BR_IF, IR_TY_VOID, NULL, tmp_b, NULL, tmp_a, 0L, ls->pc);

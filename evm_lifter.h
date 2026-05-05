@@ -221,6 +221,8 @@ typedef struct {
     int                  insn_count;  /* total instructions stepped        */
     int                  call_count;  /* CALL-family opcodes seen          */
     int                  tagged_count;/* nodes with non-zero security tags */
+
+    unsigned char       *valid_jumpdest; /* bitmap of valid JUMPDEST offsets */
 } evm_lifter_t;
 
 /* ── Public API ──────────────────────────────────────────────────────── */
@@ -233,6 +235,11 @@ typedef struct {
 void evm_lifter_init(evm_lifter_t *ls,
                      const unsigned char *bytecode, int length,
                      ir_module_t *module);
+
+/*
+ * Free dynamically allocated resources inside the lifter state.
+ */
+void evm_lifter_destroy(evm_lifter_t *ls);
 
 /*
  * Lift the entire bytecode stream into IR.
