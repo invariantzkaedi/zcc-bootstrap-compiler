@@ -9,29 +9,71 @@ permissions:
   contents: read
   actions: read
 
+concurrency:
+  group: sandbox-pilot-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  PYTHONUNBUFFERED: "1"
+
 jobs:
   run-pilot:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
+      - name: Preflight Diagnostics
+        run: |
+          set -euxo pipefail
+          echo "Runner user:"
+          id
+          echo "Workspace:"
+          pwd
+          echo "Git revision:"
+          git rev-parse HEAD
+          echo "Python:"
+          python --version
+          echo "Docker:"
+          docker --version
+          docker info
+          echo "Disk:"
+          df -h
+          echo "Memory:"
+          free -h || true
+
       - name: Build ZCC binary
         run: |
+          set -euxo pipefail
           make zcc
           test -x zcc
+          sha256sum zcc
 
       - name: Build Sandbox Image
         run: |
+          set -euxo pipefail
           docker build -f Dockerfile.sandbox -t chimera-sandbox:latest .
           IMAGE_ID=$(docker inspect --format='{{.Id}}' chimera-sandbox:latest)
           echo "IMAGE_ID=${IMAGE_ID}" >> "$GITHUB_ENV"
 
+          mkdir -p pilot_artifacts/diagnostics
+          docker image inspect chimera-sandbox:latest > pilot_artifacts/diagnostics/docker_image_inspect.json
+          docker history --no-trunc chimera-sandbox:latest > pilot_artifacts/diagnostics/docker_history.txt
+          sha256sum Dockerfile.sandbox > pilot_artifacts/diagnostics/dockerfile.sha256
+          sha256sum zcc > pilot_artifacts/diagnostics/zcc.sha256
+
       - name: Inject Local Approvals
-        # Ensure the built image hash is explicitly trusted for the local offline run
+        # Ensure the built image hash is explicitly trusted for this local offline CI run.
         run: |
+          set -euxo pipefail
           python -c "
           import json, os
           with open('policy_approvals.json', 'r') as f: app = json.load(f)
@@ -39,10 +81,35 @@ jobs:
           with open('policy_approvals.json', 'w') as f: json.dump(app, f)
           "
 
+      - name: Validate Required Inputs
+        run: |
+          set -euxo pipefail
+          test -f Dockerfile.sandbox
+          test -f fortify_policy.json
+          test -f policy_approvals.json
+          test -f verify_release_artifacts.py
+          test -f sign_release_artifacts.py
+          test -f scheduled_sandbox_pilot.py
+          python -m json.tool fortify_policy.json >/dev/null
+          python -m json.tool policy_approvals.json >/dev/null
+
       - name: Execute Offline Sandbox Pilot
         run: |
+          set -euxo pipefail
+
           mkdir -p pilot_artifacts
           chmod 777 pilot_artifacts
+
+          normalize_artifacts() {
+            if [ -d pilot_artifacts ]; then
+              sudo chown -R "$(id -u):$(id -g)" pilot_artifacts || true
+              chmod -R u+rwX,go-rwx pilot_artifacts || true
+            fi
+          }
+
+          # Always normalize permissions on exit so diagnostics/upload can read
+          # files even if Docker creates them with container-owned UIDs.
+          trap normalize_artifacts EXIT
 
           docker run --rm \
             --network=none \
@@ -58,39 +125,196 @@ jobs:
             chimera-sandbox:latest \
             python scheduled_sandbox_pilot.py --once
 
-          sudo chown -R "$USER":"$USER" pilot_artifacts
-          chmod -R u+rwX,go+rX pilot_artifacts
+          normalize_artifacts
 
           mkdir -p pilot_artifacts/release_artifacts
           find pilot_artifacts -maxdepth 1 -type f -name '*.json' -exec cp {} pilot_artifacts/release_artifacts/ \;
 
           cd pilot_artifacts
           python ../sign_release_artifacts.py
-
           cd ..
-          sudo chown -R "$USER":"$USER" pilot_artifacts
-          chmod -R u+rwX,go+rX pilot_artifacts
+
+          normalize_artifacts
+
+      - name: Inspect Pilot Artifacts
+        if: always()
+        run: |
+          echo "PWD=$(pwd)"
+          echo "User=$(id)"
+          echo "Artifact tree:"
+          find pilot_artifacts -maxdepth 5 -printf '%M %u:%g %s %p\n' | sort || true
+
+      - name: Validate Artifact Layout
+        run: |
+          set -euxo pipefail
+          test -d pilot_artifacts
+          test -d pilot_artifacts/release_artifacts
+          test -f pilot_artifacts/release_artifacts/manifest.json
+          test -r pilot_artifacts/release_artifacts/manifest.json
+
+      - name: Validate Artifact Permissions
+        run: |
+          set -euxo pipefail
+          sudo chown -R "$(id -u):$(id -g)" pilot_artifacts
+          chmod -R u+rwX,go-rwx pilot_artifacts
+
+          find pilot_artifacts -type f -exec test -r {} \;
+          find pilot_artifacts -type d -exec test -x {} \;
+
+      - name: Reject Symlinks In Artifact Bundle
+        run: |
+          set -euxo pipefail
+          if find pilot_artifacts -type l | grep -q .; then
+            echo "FATAL: Symlinks detected in artifact bundle."
+            find pilot_artifacts -type l -ls
+            exit 1
+          fi
+
+      - name: Validate JSON Artifacts
+        run: |
+          set -euxo pipefail
+          find pilot_artifacts -type f -name '*.json' -print0 | while IFS= read -r -d '' file; do
+            echo "Validating JSON: $file"
+            python -m json.tool "$file" >/dev/null
+          done
 
       - name: Prevent Mock Bypasses
         run: |
+          set -euxo pipefail
+
+          # The top-level attestation is the live sandbox evidence copied from /app/scratch.
+          test -f pilot_artifacts/sandbox_attestation.json
+
           if grep -q "CHIMERA_ALLOW_LOCAL_NETWORK_DIAGNOSTIC" pilot_artifacts/sandbox_attestation.json; then
             echo "FATAL: Local network override detected in release evidence."
             exit 1
           fi
+
           if grep -q '"network_reachable": true' pilot_artifacts/sandbox_attestation.json; then
             echo "FATAL: Network was reachable in attestation."
             exit 1
           fi
 
+          if grep -q '"secrets_detected": true' pilot_artifacts/sandbox_attestation.json; then
+            echo "FATAL: Secrets were detected in attestation."
+            exit 1
+          fi
+
       - name: Verify Signed Manifest
         run: |
+          set -euxo pipefail
           cd pilot_artifacts
           python ../verify_release_artifacts.py
+
+      - name: Generate Artifact Checksums
+        if: always()
+        run: |
+          set -euxo pipefail
+          sudo chown -R "$(id -u):$(id -g)" pilot_artifacts || true
+          chmod -R u+rwX,go-rwx pilot_artifacts || true
+
+          if [ -d pilot_artifacts ]; then
+            find pilot_artifacts -type f -print0 \
+              | sort -z \
+              | xargs -0 sha256sum \
+              > pilot_artifacts/diagnostics/artifact_files.sha256
+          fi
+
+      - name: Write Pilot Summary
+        if: always()
+        run: |
+          {
+            echo "## Sandbox Pilot Summary"
+            echo ""
+            echo "- Run ID: \`${{ github.run_id }}\`"
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Image ID: \`${IMAGE_ID:-unknown}\`"
+            echo ""
+
+            echo "### Artifact Tree"
+            echo '```text'
+            find pilot_artifacts -maxdepth 5 -printf '%M %u:%g %s %p\n' | sort || true
+            echo '```'
+            echo ""
+
+            if [ -f pilot_artifacts/release_artifacts/manifest.json ]; then
+              echo "### Manifest"
+              python -c '
+          import json
+          from pathlib import Path
+          p = Path("pilot_artifacts/release_artifacts/manifest.json")
+          m = json.loads(p.read_text())
+          print(f"- Bundle hash: `{m.get(\"bundle_hash\")}`")
+          print(f"- Artifact count: `{len(m.get(\"artifacts\", []))}`")
+          for item in m.get("artifacts", []):
+              print(f"  - `{item.get(\"path\")}`")
+          '
+              echo ""
+            else
+              echo "### Manifest"
+              echo "- Missing"
+              echo ""
+            fi
+
+            if [ -f pilot_artifacts/release_artifacts/sandbox_attestation.json ]; then
+              echo "### Attestation"
+              python -c '
+          import json
+          from pathlib import Path
+          p = Path("pilot_artifacts/release_artifacts/sandbox_attestation.json")
+          a = json.loads(p.read_text())
+          print(f"- Status: `{a.get(\"status\")}`")
+          print(f"- Network reachable: `{a.get(\"network_reachable\")}`")
+          print(f"- Secrets detected: `{a.get(\"secrets_detected\")}`")
+          print(f"- Policy hash: `{a.get(\"policy_hash\")}`")
+          print(f"- Python version: `{a.get(\"python_version\")}`")
+          '
+              echo ""
+            else
+              echo "### Attestation"
+              echo "- Missing"
+              echo ""
+            fi
+
+            if [ -f pilot_artifacts/release_artifacts/metrics.json ]; then
+              echo "### Metrics"
+              python -c '
+          import json
+          from pathlib import Path
+          p = Path("pilot_artifacts/release_artifacts/metrics.json")
+          m = json.loads(p.read_text())
+          keys = [
+              "total_fixtures_tested",
+              "redteam_fixtures_contained",
+              "subprocess_timeouts",
+              "output_limit_kills",
+              "compile_failures",
+              "runtime_failures",
+              "policy_rejections",
+              "average_generation_duration_ms",
+              "compiler_hash",
+          ]
+          for k in keys:
+              if k in m:
+                  print(f"- {k}: `{m.get(k)}`")
+          '
+              echo ""
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Final Artifact Permission Normalize
+        if: always()
+        run: |
+          if [ -d pilot_artifacts ]; then
+            sudo chown -R "$(id -u):$(id -g)" pilot_artifacts || true
+            chmod -R u+rwX,go-rwx pilot_artifacts || true
+          fi
 
       - name: Upload Verified Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pilot-evidence-bundle
+          name: pilot-evidence-bundle-${{ github.run_id }}
           path: pilot_artifacts/
           retention-days: 90
+          if-no-files-found: warn
