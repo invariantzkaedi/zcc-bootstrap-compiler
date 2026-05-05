@@ -69,7 +69,7 @@ static int evm_u256_cmp_signed(const evm_u256_t *a, const evm_u256_t *b) {
     return evm_u256_cmp(a, b);
 }
 
-static void evm_u256_add(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t *b) {
+static int evm_u256_add(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t *b) {
     int i;
     unsigned int carry = 0;
     for (i = 31; i >= 0; i--) {
@@ -77,6 +77,7 @@ static void evm_u256_add(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t 
         dst->bytes[i] = (unsigned char)(sum & 0xFF);
         carry = sum >> 8;
     }
+    return carry;
 }
 
 static void evm_u256_sub(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t *b) {
@@ -109,6 +110,141 @@ static void evm_u256_mul(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t 
     }
 }
 
+static void evm_u256_and(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t *b) {
+    for (int i = 0; i < 32; i++) dst->bytes[i] = a->bytes[i] & b->bytes[i];
+}
+
+static void evm_u256_or(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t *b) {
+    for (int i = 0; i < 32; i++) dst->bytes[i] = a->bytes[i] | b->bytes[i];
+}
+
+static void evm_u256_xor(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t *b) {
+    for (int i = 0; i < 32; i++) dst->bytes[i] = a->bytes[i] ^ b->bytes[i];
+}
+
+static void evm_u256_not(evm_u256_t *dst, const evm_u256_t *a) {
+    for (int i = 0; i < 32; i++) dst->bytes[i] = ~a->bytes[i];
+}
+
+static void evm_u256_shl1(evm_u256_t *a) {
+    int carry = 0;
+    for (int i = 31; i >= 0; i--) {
+        int next_carry = (a->bytes[i] >> 7) & 1;
+        a->bytes[i] = (a->bytes[i] << 1) | carry;
+        carry = next_carry;
+    }
+}
+
+static int evm_u256_get_bit(const evm_u256_t *a, int bit_idx) {
+    int byte_idx = 31 - (bit_idx / 8);
+    int bit_off = bit_idx % 8;
+    return (a->bytes[byte_idx] >> bit_off) & 1;
+}
+
+static void evm_u256_set_bit(evm_u256_t *a, int bit_idx) {
+    int byte_idx = 31 - (bit_idx / 8);
+    int bit_off = bit_idx % 8;
+    a->bytes[byte_idx] |= (1 << bit_off);
+}
+
+static void evm_u256_negate(evm_u256_t *dst, const evm_u256_t *a) {
+    evm_u256_t one;
+    memset(one.bytes, 0, 32);
+    one.bytes[31] = 1;
+    evm_u256_t inv;
+    for (int i = 0; i < 32; i++) {
+        inv.bytes[i] = ~a->bytes[i];
+    }
+    evm_u256_add(dst, &inv, &one);
+}
+
+/* Unsigned DIV / MOD */
+static void evm_u256_div_mod(evm_u256_t *q, evm_u256_t *r, const evm_u256_t *a, const evm_u256_t *b) {
+    memset(q->bytes, 0, 32);
+    memset(r->bytes, 0, 32);
+    if (evm_u256_is_zero(b)) return;
+    
+    for (int i = 255; i >= 0; i--) {
+        evm_u256_shl1(r);
+        if (evm_u256_get_bit(a, i)) {
+            r->bytes[31] |= 1;
+        }
+        if (evm_u256_cmp(r, b) >= 0) {
+            evm_u256_sub(r, r, b);
+            evm_u256_set_bit(q, i);
+        }
+    }
+}
+
+/* Signed SDIV / SMOD */
+static void evm_u256_sdiv_smod(evm_u256_t *q, evm_u256_t *r, const evm_u256_t *a, const evm_u256_t *b) {
+    if (evm_u256_is_zero(b)) {
+        memset(q->bytes, 0, 32);
+        memset(r->bytes, 0, 32);
+        return;
+    }
+    int a_neg = evm_u256_is_negative(a);
+    int b_neg = evm_u256_is_negative(b);
+    
+    evm_u256_t abs_a, abs_b;
+    if (a_neg) evm_u256_negate(&abs_a, a); else memcpy(&abs_a, a, sizeof(evm_u256_t));
+    if (b_neg) evm_u256_negate(&abs_b, b); else memcpy(&abs_b, b, sizeof(evm_u256_t));
+    
+    evm_u256_div_mod(q, r, &abs_a, &abs_b);
+    
+    int q_neg = a_neg ^ b_neg;
+    if (q_neg) evm_u256_negate(q, q);
+    if (a_neg) evm_u256_negate(r, r); // Remainder sign matches dividend
+}
+
+/* ADDMOD */
+static void evm_u256_addmod(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t *b, const evm_u256_t *n) {
+    if (evm_u256_is_zero(n)) {
+        memset(dst->bytes, 0, 32);
+        return;
+    }
+    evm_u256_t sum, q, r, r_max;
+    int carry = evm_u256_add(&sum, a, b);
+    evm_u256_div_mod(&q, &r, &sum, n);
+    if (carry) {
+        evm_u256_t max256, one, carry_mod;
+        memset(max256.bytes, 0xFF, 32);
+        memset(one.bytes, 0, 32); one.bytes[31] = 1;
+        evm_u256_div_mod(&q, &r_max, &max256, n);
+        evm_u256_add(&carry_mod, &r_max, &one);
+        evm_u256_div_mod(&q, &carry_mod, &carry_mod, n);
+        evm_u256_add(&r, &r, &carry_mod);
+        evm_u256_div_mod(&q, dst, &r, n);
+    } else {
+        memcpy(dst, &r, sizeof(evm_u256_t));
+    }
+}
+
+/* MULMOD */
+static void evm_u256_mulmod(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t *b, const evm_u256_t *n) {
+    if (evm_u256_is_zero(n)) {
+        memset(dst->bytes, 0, 32);
+        return;
+    }
+    evm_u256_t res, q, a_mod;
+    memset(res.bytes, 0, 32);
+    evm_u256_div_mod(&q, &a_mod, a, n);
+    for (int i = 255; i >= 0; i--) {
+        int carry = evm_u256_add(&res, &res, &res);
+        if (carry || evm_u256_cmp(&res, n) >= 0) {
+            evm_u256_sub(&res, &res, n);
+        }
+        if (evm_u256_get_bit(b, i)) {
+            carry = evm_u256_add(&res, &res, &a_mod);
+            if (carry || evm_u256_cmp(&res, n) >= 0) {
+                evm_u256_sub(&res, &res, n);
+            }
+        }
+    }
+    memcpy(dst, &res, sizeof(evm_u256_t));
+}
+
+
 static long evm_u256_to_narrow(const evm_u256_t *a) {
     unsigned long val = 0;
     int i;
@@ -116,6 +252,65 @@ static long evm_u256_to_narrow(const evm_u256_t *a) {
         val = (val << 8) | (unsigned long)a->bytes[i];
     }
     return (long)val;
+}
+
+
+/* EXP: base^exp mod 2^256 via binary exponentiation */
+static void evm_u256_exp(evm_u256_t *dst, const evm_u256_t *base, const evm_u256_t *exp) {
+    evm_u256_t result, b, tmp;
+    memset(result.bytes, 0, 32);
+    result.bytes[31] = 1; /* result = 1 */
+    memcpy(&b, base, sizeof(evm_u256_t));
+    /* iterate over all 256 bits of exp from LSB to MSB */
+    for (int i = 0; i < 256; i++) {
+        if (evm_u256_get_bit(exp, i)) {
+            evm_u256_mul(&tmp, &result, &b); /* tmp = result * b */
+            memcpy(&result, &tmp, sizeof(evm_u256_t));
+        }
+        evm_u256_mul(&tmp, &b, &b); /* tmp = b * b */
+        memcpy(&b, &tmp, sizeof(evm_u256_t));
+    }
+    memcpy(dst, &result, sizeof(evm_u256_t));
+}
+
+/* BYTE: extract byte at position `pos` (0 = most-significant) from 256-bit `val`.
+ * EVM spec: result = (val >> (248 - pos*8)) & 0xFF  if pos < 32, else 0. */
+static void evm_u256_byte_op(evm_u256_t *dst, const evm_u256_t *pos, const evm_u256_t *val) {
+    memset(dst->bytes, 0, 32);
+    /* pos must fit in 6 bits to be a valid byte index [0..31] */
+    for (int i = 0; i < 31; i++) {
+        if (pos->bytes[i] != 0) return; /* pos >= 256, result is 0 */
+    }
+    unsigned int p = (unsigned int)pos->bytes[31];
+    if (p >= 32) return; /* out of range */
+    dst->bytes[31] = val->bytes[p]; /* byte 0 is MSB (bytes[0]) */
+}
+
+/* SIGNEXTEND: sign-extend value `x` from bit (b*8+7) upward.
+ * EVM spec: if b >= 31, result = x unchanged.
+ *           else: sign bit = bit (b*8+7) of x; fill bits [255..b*8+8] with sign bit. */
+static void evm_u256_signextend_op(evm_u256_t *dst, const evm_u256_t *b, const evm_u256_t *x) {
+    memcpy(dst, x, sizeof(evm_u256_t));
+    /* if b >= 31, no truncation needed */
+    for (int i = 0; i < 31; i++) {
+        if (b->bytes[i] != 0) return;
+    }
+    unsigned int bval = (unsigned int)b->bytes[31];
+    if (bval >= 31) return;
+    /* byte index in big-endian: byte bval is at dst->bytes[31 - bval] */
+    unsigned int byte_idx = 31 - bval;
+    int sign_bit = (dst->bytes[byte_idx] >> 7) & 1;
+    /* fill bytes 0..(byte_idx-1) with sign extension */
+    unsigned char fill = sign_bit ? 0xFF : 0x00;
+    for (unsigned int i = 0; i < byte_idx; i++) {
+        dst->bytes[i] = fill;
+    }
+    /* mask the top bit of byte at byte_idx according to sign */
+    if (sign_bit) {
+        dst->bytes[byte_idx] |= 0x80;
+    } else {
+        dst->bytes[byte_idx] &= 0x7F;
+    }
 }
 
 
@@ -351,8 +546,10 @@ evm_support_class_t evm_opcode_support(unsigned int opcode) {
      * primitives. PUSH, DUP, SWAP, basic arithmetic, memory/storage layout.
      */
     if (opcode == EVM_STOP || opcode == EVM_RETURN || opcode == EVM_REVERT || opcode == EVM_INVALID || opcode == EVM_POP || opcode == EVM_JUMPDEST) return EVM_SUPPORT_FULLY_SUPPORTED;
-    if (opcode >= EVM_ADD && opcode <= EVM_SMOD) return EVM_SUPPORT_FULLY_SUPPORTED;
+    if (opcode >= EVM_ADD && opcode <= EVM_MULMOD) return EVM_SUPPORT_FULLY_SUPPORTED; /* ADD..MULMOD all exact */
+    if (opcode == EVM_EXP || opcode == EVM_SIGNEXTEND) return EVM_SUPPORT_FULLY_SUPPORTED; /* exact 256-bit propagation */
     if (opcode >= EVM_LT && opcode <= EVM_SAR) return EVM_SUPPORT_FULLY_SUPPORTED;
+    if (opcode == EVM_BYTE) return EVM_SUPPORT_FULLY_SUPPORTED; /* exact byte extraction */
     if (opcode == EVM_MLOAD || opcode == EVM_MSTORE || opcode == EVM_MSTORE8 || opcode == EVM_SLOAD || opcode == EVM_SSTORE) return EVM_SUPPORT_FULLY_SUPPORTED;
     if (opcode >= EVM_PUSH1 && opcode <= EVM_PUSH32) return EVM_SUPPORT_FULLY_SUPPORTED;
     if (opcode >= EVM_DUP1 && opcode <= EVM_DUP16) return EVM_SUPPORT_FULLY_SUPPORTED;
@@ -375,11 +572,16 @@ evm_support_class_t evm_opcode_support(unsigned int opcode) {
     if (opcode >= EVM_CODESIZE && opcode <= EVM_BASEFEE) return EVM_SUPPORT_APPROXIMATED_ANALYZABLE;
     if (opcode >= EVM_PC && opcode <= EVM_GAS) return EVM_SUPPORT_APPROXIMATED_ANALYZABLE;
     
+    /* SHA3/KECCAK256 emits tagged IR_CALL — analyzable */
+    if (opcode == EVM_SHA3) return EVM_SUPPORT_APPROXIMATED_ANALYZABLE;
+    /* SELFDESTRUCT emits tagged IR_RET — analyzable terminal effect */
+    if (opcode == EVM_SELFDESTRUCT) return EVM_SUPPORT_APPROXIMATED_ANALYZABLE;
+
     /* ── 3. PLACEHOLDER_ONLY ─────────────────────────────────────────────
-     * Opcodes with no real analyzable structure beyond popping/pushing.
+     * No remaining true placeholders — all arithmetic/logic families are
+     * now exactly evaluated when inputs are known-wide constants.
+     * This class is reserved for future opcodes not yet implemented.
      */
-    if (opcode == EVM_ADDMOD || opcode == EVM_MULMOD || opcode == EVM_EXP || opcode == EVM_SIGNEXTEND || opcode == EVM_BYTE) return EVM_SUPPORT_PLACEHOLDER_ONLY;
-    if (opcode == EVM_SELFDESTRUCT) return EVM_SUPPORT_PLACEHOLDER_ONLY;
 
     /* ── 4. INVALID_OR_UNASSIGNED ──────────────────────────────────────── */
     return EVM_SUPPORT_INVALID_OR_UNASSIGNED;
@@ -686,20 +888,56 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
     }
 
     case EVM_DIV:
-    case EVM_SDIV:
+    case EVM_SDIV: {
+        int a_st = EVM_VAL_UNKNOWN, b_st = EVM_VAL_UNKNOWN;
+        evm_u256_t a_val, b_val, q_val, r_val;
+        if (ls->stack.depth >= 2) {
+            a_st = ls->stack.state[ls->stack.depth - 2]; /* below top */
+            b_st = ls->stack.state[ls->stack.depth - 1]; /* top */
+            memcpy(&a_val, &ls->stack.wide_vals[ls->stack.depth - 2], sizeof(evm_u256_t));
+            memcpy(&b_val, &ls->stack.wide_vals[ls->stack.depth - 1], sizeof(evm_u256_t));
+        }
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
         ir_emit(ls->func, IR_DIV, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
+        if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
+            (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
+            if (op == EVM_DIV) {
+                evm_u256_div_mod(&q_val, &r_val, &a_val, &b_val);
+            } else {
+                evm_u256_sdiv_smod(&q_val, &r_val, &a_val, &b_val);
+            }
+            return stack_push_const_wide(ls, tmp_dst, q_val.bytes, 32, evm_u256_to_narrow(&q_val));
+        }
         return stack_push(ls, tmp_dst);
+    }
 
     case EVM_MOD:
-    case EVM_SMOD:
+    case EVM_SMOD: {
+        int a_st = EVM_VAL_UNKNOWN, b_st = EVM_VAL_UNKNOWN;
+        evm_u256_t a_val, b_val, q_val, r_val;
+        if (ls->stack.depth >= 2) {
+            a_st = ls->stack.state[ls->stack.depth - 2]; /* below top */
+            b_st = ls->stack.state[ls->stack.depth - 1]; /* top */
+            memcpy(&a_val, &ls->stack.wide_vals[ls->stack.depth - 2], sizeof(evm_u256_t));
+            memcpy(&b_val, &ls->stack.wide_vals[ls->stack.depth - 1], sizeof(evm_u256_t));
+        }
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
         ir_emit(ls->func, IR_MOD, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
+        if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
+            (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
+            if (op == EVM_MOD) {
+                evm_u256_div_mod(&q_val, &r_val, &a_val, &b_val);
+            } else {
+                evm_u256_sdiv_smod(&q_val, &r_val, &a_val, &b_val);
+            }
+            return stack_push_const_wide(ls, tmp_dst, r_val.bytes, 32, evm_u256_to_narrow(&r_val));
+        }
         return stack_push(ls, tmp_dst);
+    }
 
     /* ── Comparison ops: pops 2, pushes i32 0/1 ─────────────────── */
     case EVM_LT:
@@ -793,31 +1031,55 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
 
     /* ── Bitwise ops ─────────────────────────────────────────────── */
     case EVM_AND:
-        res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
-        res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
-        lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_AND, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
-        return stack_push(ls, tmp_dst);
-
     case EVM_OR:
+    case EVM_XOR: {
+        int a_st = EVM_VAL_UNKNOWN, b_st = EVM_VAL_UNKNOWN;
+        evm_u256_t a_val, b_val, res_val;
+        if (ls->stack.depth >= 2) {
+            a_st = ls->stack.state[ls->stack.depth - 2]; /* below top */
+            b_st = ls->stack.state[ls->stack.depth - 1]; /* top */
+            if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
+                (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
+                a_val = ls->stack.wide_vals[ls->stack.depth - 2];
+                b_val = ls->stack.wide_vals[ls->stack.depth - 1];
+            }
+        }
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_OR, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
+        
+        int ir_op = (op == EVM_AND) ? IR_AND : ((op == EVM_OR) ? IR_OR : IR_XOR);
+        ir_emit(ls->func, ir_op, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
+        
+        if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
+            (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
+            if (op == EVM_AND) evm_u256_and(&res_val, &a_val, &b_val);
+            else if (op == EVM_OR) evm_u256_or(&res_val, &a_val, &b_val);
+            else evm_u256_xor(&res_val, &a_val, &b_val);
+            return stack_push_const_wide(ls, tmp_dst, res_val.bytes, 32, evm_u256_to_narrow(&res_val));
+        }
         return stack_push(ls, tmp_dst);
+    }
 
-    case EVM_XOR:
-        res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
-        res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
-        lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_XOR, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
-        return stack_push(ls, tmp_dst);
-
-    case EVM_NOT:
+    case EVM_NOT: {
+        int a_st = EVM_VAL_UNKNOWN;
+        evm_u256_t a_val, res_val;
+        if (ls->stack.depth >= 1) {
+            a_st = ls->stack.state[ls->stack.depth - 1]; /* top */
+            if (a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) {
+                a_val = ls->stack.wide_vals[ls->stack.depth - 1];
+            }
+        }
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
         ir_emit(ls->func, IR_NOT, IR_TY_I64, tmp_dst, tmp_a, NULL, NULL, 0L, ls->pc);
+        
+        if (a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) {
+            evm_u256_not(&res_val, &a_val);
+            return stack_push_const_wide(ls, tmp_dst, res_val.bytes, 32, evm_u256_to_narrow(&res_val));
+        }
         return stack_push(ls, tmp_dst);
+    }
 
     case EVM_SHL:
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
@@ -968,22 +1230,114 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
     }
 
     case EVM_ADDMOD:
-    case EVM_MULMOD:
-        res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
-        res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
+    case EVM_MULMOD: {
+        int a_st = EVM_VAL_UNKNOWN, b_st = EVM_VAL_UNKNOWN, c_st = EVM_VAL_UNKNOWN;
+        evm_u256_t a_val, b_val, c_val, res_val;
+        if (ls->stack.depth >= 3) {
+            a_st = ls->stack.state[ls->stack.depth - 3]; /* top-2 (a) */
+            b_st = ls->stack.state[ls->stack.depth - 2]; /* top-1 (b) */
+            c_st = ls->stack.state[ls->stack.depth - 1]; /* top   (N) */
+            memcpy(&a_val, &ls->stack.wide_vals[ls->stack.depth - 3], sizeof(evm_u256_t));
+            memcpy(&b_val, &ls->stack.wide_vals[ls->stack.depth - 2], sizeof(evm_u256_t));
+            memcpy(&c_val, &ls->stack.wide_vals[ls->stack.depth - 1], sizeof(evm_u256_t));
+        }
         res = stack_pop(ls, tmp_c); if (res != EVM_LIFT_OK) return res;
-        lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_NOP, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc); /* Still scaffold */
-        return stack_push(ls, tmp_dst);
-
-    case EVM_EXP:
-    case EVM_SIGNEXTEND:
-    case EVM_BYTE:
-        res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
+        res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
         ir_emit(ls->func, IR_NOP, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc); /* Still scaffold */
+        if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
+            (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE) &&
+            (c_st == EVM_VAL_KNOWN_NARROW || c_st == EVM_VAL_KNOWN_WIDE)) {
+            if (op == EVM_ADDMOD) {
+                evm_u256_addmod(&res_val, &a_val, &b_val, &c_val);
+            } else {
+                evm_u256_mulmod(&res_val, &a_val, &b_val, &c_val);
+            }
+            return stack_push_const_wide(ls, tmp_dst, res_val.bytes, 32, evm_u256_to_narrow(&res_val));
+        }
         return stack_push(ls, tmp_dst);
+    }
+
+    case EVM_EXP: {
+        /* EXP(base, exp): PUSH base then PUSH exp.
+         * depth-2 = base (first pushed), depth-1 = exp (top). */
+        int a_st = EVM_VAL_UNKNOWN, b_st = EVM_VAL_UNKNOWN;
+        evm_u256_t a_val, b_val, res_val;
+        if (ls->stack.depth >= 2) {
+            a_st = ls->stack.state[ls->stack.depth - 2]; /* base (below top) */
+            b_st = ls->stack.state[ls->stack.depth - 1]; /* exp  (top) */
+            if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
+                (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
+                a_val = ls->stack.wide_vals[ls->stack.depth - 2]; /* base */
+                b_val = ls->stack.wide_vals[ls->stack.depth - 1]; /* exp */
+            }
+        }
+        res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res; /* exp (top) */
+        res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res; /* base */
+        lifter_fresh_tmp(ls, tmp_dst);
+        ir_emit(ls->func, IR_NOP, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
+        if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
+            (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
+            evm_u256_exp(&res_val, &a_val /*base*/, &b_val /*exp*/);
+            return stack_push_const_wide(ls, tmp_dst, res_val.bytes, 32, evm_u256_to_narrow(&res_val));
+        }
+        return stack_push(ls, tmp_dst);
+    }
+
+    case EVM_BYTE: {
+        /* BYTE(i, x): PUSH x first then PUSH i.
+         * depth-2 = x (value, below top), depth-1 = i (position, top). */
+        int a_st = EVM_VAL_UNKNOWN, b_st = EVM_VAL_UNKNOWN;
+        evm_u256_t a_val, b_val, res_val;
+        if (ls->stack.depth >= 2) {
+            a_st = ls->stack.state[ls->stack.depth - 2]; /* x = value (below top) */
+            b_st = ls->stack.state[ls->stack.depth - 1]; /* i = position (top) */
+            if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
+                (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
+                a_val = ls->stack.wide_vals[ls->stack.depth - 2]; /* x (value) */
+                b_val = ls->stack.wide_vals[ls->stack.depth - 1]; /* i (position) */
+            }
+        }
+        res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res; /* i (top) */
+        res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res; /* x */
+        lifter_fresh_tmp(ls, tmp_dst);
+        ir_emit(ls->func, IR_NOP, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
+        if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
+            (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
+            /* helper signature: byte_op(dst, pos, val) */
+            evm_u256_byte_op(&res_val, &b_val /*pos=i*/, &a_val /*val=x*/);
+            return stack_push_const_wide(ls, tmp_dst, res_val.bytes, 32, evm_u256_to_narrow(&res_val));
+        }
+        return stack_push(ls, tmp_dst);
+    }
+
+    case EVM_SIGNEXTEND: {
+        /* SIGNEXTEND(b, x): PUSH x first then PUSH b.
+         * depth-2 = x (value to extend, below top), depth-1 = b (byte index, top). */
+        int a_st = EVM_VAL_UNKNOWN, b_st = EVM_VAL_UNKNOWN;
+        evm_u256_t a_val, b_val, res_val;
+        if (ls->stack.depth >= 2) {
+            a_st = ls->stack.state[ls->stack.depth - 2]; /* x (below top) */
+            b_st = ls->stack.state[ls->stack.depth - 1]; /* b = byte index (top) */
+            if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
+                (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
+                a_val = ls->stack.wide_vals[ls->stack.depth - 2]; /* x */
+                b_val = ls->stack.wide_vals[ls->stack.depth - 1]; /* b */
+            }
+        }
+        res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res; /* b (top) */
+        res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res; /* x */
+        lifter_fresh_tmp(ls, tmp_dst);
+        ir_emit(ls->func, IR_NOP, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
+        if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
+            (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
+            /* helper signature: signextend_op(dst, b, x) */
+            evm_u256_signextend_op(&res_val, &b_val /*b=byte_idx*/, &a_val /*x=value*/);
+            return stack_push_const_wide(ls, tmp_dst, res_val.bytes, 32, evm_u256_to_narrow(&res_val));
+        }
+        return stack_push(ls, tmp_dst);
+    }
 
     case EVM_CALLDATACOPY:
     case EVM_CODECOPY:
