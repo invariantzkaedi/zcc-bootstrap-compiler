@@ -56,6 +56,10 @@ jobs:
             -v "$PWD/pilot_artifacts:/workspace/release_artifacts" \
             chimera-sandbox:latest \
             python scheduled_sandbox_pilot.py --once
+          mkdir -p pilot_artifacts/release_artifacts
+          find pilot_artifacts -maxdepth 1 -type f -name '*.json' -exec cp {} pilot_artifacts/release_artifacts/ \;
+          cd pilot_artifacts
+          python ../sign_release_artifacts.py
 
       - name: Prevent Mock Bypasses
         run: |
