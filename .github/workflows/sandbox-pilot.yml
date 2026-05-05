@@ -43,6 +43,7 @@ jobs:
         run: |
           mkdir -p pilot_artifacts
           chmod 777 pilot_artifacts
+
           docker run --rm \
             --network=none \
             --read-only \
@@ -56,10 +57,19 @@ jobs:
             -v "$PWD/pilot_artifacts:/app/scratch:rw" \
             chimera-sandbox:latest \
             python scheduled_sandbox_pilot.py --once
+
+          sudo chown -R "$USER":"$USER" pilot_artifacts
+          chmod -R u+rwX,go+rX pilot_artifacts
+
           mkdir -p pilot_artifacts/release_artifacts
           find pilot_artifacts -maxdepth 1 -type f -name '*.json' -exec cp {} pilot_artifacts/release_artifacts/ \;
+
           cd pilot_artifacts
           python ../sign_release_artifacts.py
+
+          cd ..
+          sudo chown -R "$USER":"$USER" pilot_artifacts
+          chmod -R u+rwX,go+rX pilot_artifacts
 
       - name: Prevent Mock Bypasses
         run: |
