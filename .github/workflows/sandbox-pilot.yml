@@ -130,7 +130,7 @@ jobs:
           normalize_artifacts
 
           mkdir -p pilot_artifacts/release_artifacts
-          find pilot_artifacts -maxdepth 1 -type f -name '*.json' -exec cp {} pilot_artifacts/release_artifacts/ \;
+          find pilot_artifacts -type f -name '*.json' ! -path 'pilot_artifacts/release_artifacts/*' -exec cp {} pilot_artifacts/release_artifacts/ \;
 
           cd pilot_artifacts
           python ../sign_release_artifacts.py
@@ -184,9 +184,16 @@ jobs:
         run: |
           set -euxo pipefail
 
-          ATTESTATION="pilot_artifacts/release_artifacts/sandbox_attestation.json"
+          ATTESTATION="$(find pilot_artifacts -maxdepth 5 -type f -name 'sandbox_attestation.json' | head -n 1 || true)"
 
-          test -f "$ATTESTATION"
+          if [ -z "$ATTESTATION" ]; then
+            echo "FATAL: sandbox_attestation.json was not found."
+            echo "Artifact tree:"
+            find pilot_artifacts -maxdepth 5 -printf '%M %u:%g %s %p\n' | sort || true
+            exit 1
+          fi
+
+          echo "Using attestation: $ATTESTATION"
           test -r "$ATTESTATION"
 
           if grep -q "CHIMERA_ALLOW_LOCAL_NETWORK_DIAGNOSTIC" "$ATTESTATION"; then
@@ -275,9 +282,15 @@ jobs:
           print()
 
           attestation_path = Path("pilot_artifacts/release_artifacts/sandbox_attestation.json")
+          if not attestation_path.exists():
+              matches = sorted(Path("pilot_artifacts").rglob("sandbox_attestation.json"))
+              if matches:
+                  attestation_path = matches[0]
+
           print("### Attestation")
           if attestation_path.exists():
               a = json.loads(attestation_path.read_text())
+              print(f"- Path: `{attestation_path}`")
               print(f"- Status: `{a.get('status')}`")
               print(f"- Network reachable: `{a.get('network_reachable')}`")
               print(f"- Secrets detected: `{a.get('secrets_detected')}`")
