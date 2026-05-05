@@ -2781,6 +2781,36 @@ static void test_t91_keccak_folding(void) {
     }
 }
 
+static void test_t92_mload_folding(void) {
+    evm_lifter_t ls;
+    ir_module_t *mod;
+    evm_lift_result_t res;
+
+    printf("\n[T92: Exact MLOAD folding from MSTORE]\n");
+
+    /* MSTORE(0, 0xDEADBEEF), MLOAD(0) */
+    {
+        unsigned char bc[] = {
+            0x63, 0xDE, 0xAD, 0xBE, 0xEF, /* PUSH4 0xDEADBEEF */
+            0x60, 0x00,                   /* PUSH1 0 */
+            0x52,                         /* MSTORE(0, 0xDEADBEEF) */
+            0x60, 0x00,                   /* PUSH1 0 */
+            0x51                          /* MLOAD(0) */
+        };
+        mod = new_module();
+        lift_bytes(&ls, mod, bc, sizeof(bc));
+        res = evm_lift_bytecode(&ls);
+        CHECK(res == EVM_LIFT_OK, "MLOAD lift OK");
+        CHECK(ls.stack.state[0] == EVM_VAL_KNOWN_WIDE, "MLOAD yields known wide");
+        CHECK(ls.stack.wide_vals[0].bytes[28] == 0xDE, "MLOAD byte 28 = 0xDE");
+        CHECK(ls.stack.wide_vals[0].bytes[29] == 0xAD, "MLOAD byte 29 = 0xAD");
+        CHECK(ls.stack.wide_vals[0].bytes[30] == 0xBE, "MLOAD byte 30 = 0xBE");
+        CHECK(ls.stack.wide_vals[0].bytes[31] == 0xEF, "MLOAD byte 31 = 0xEF");
+        evm_lifter_destroy(&ls);
+        ir_module_free(mod);
+    }
+}
+
 /* ── main ─────────────────────────────────────────────────────────── */
 
 int main(void) {
@@ -2880,6 +2910,7 @@ int main(void) {
     test_t89_byte_signextend_exp();
     test_t90_shifts_wide();
     test_t91_keccak_folding();
+    test_t92_mload_folding();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     if (g_fail > 0) {

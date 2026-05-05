@@ -1252,11 +1252,32 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
     }
 
     /* ── Memory/storage ops ──────────────────────────────────────── */
-    case EVM_MLOAD:
+    case EVM_MLOAD: {
+        int a_st = EVM_VAL_UNKNOWN;
+        long offset = 0;
+        if (ls->stack.depth >= 1) {
+            a_st = ls->stack.state[ls->stack.depth - 1];
+            if (a_st == EVM_VAL_KNOWN_NARROW) {
+                offset = ls->stack.const_vals[ls->stack.depth - 1];
+            }
+        }
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
         ir_emit(ls->func, IR_LOAD, IR_TY_I64, tmp_dst, tmp_a, NULL, NULL, 0L, ls->pc);
+        
+        if (a_st == EVM_VAL_KNOWN_NARROW && offset >= 0 && offset + 32 <= 1024) {
+            int fully_known = 1;
+            for (long i = 0; i < 32; i++) {
+                if (!ls->memory_known[offset + i]) { fully_known = 0; break; }
+            }
+            if (fully_known) {
+                evm_u256_t res_val;
+                memcpy(res_val.bytes, &ls->memory[offset], 32);
+                return stack_push_const_wide(ls, tmp_dst, res_val.bytes, 32, evm_u256_to_narrow(&res_val));
+            }
+        }
         return stack_push(ls, tmp_dst);
+    }
 
     case EVM_MSTORE:
     case EVM_MSTORE8: {
