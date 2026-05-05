@@ -39,8 +39,8 @@ jobs:
           with open('policy_approvals.json', 'w') as f: json.dump(app, f)
           "
 
-      - name: Execute Offline Sandbox Pilot
-        run: |
+            - name: Execute Offline Sandbox Pilot
+         run: |
           mkdir -p pilot_artifacts
           docker run --rm \
             --network=none \
