@@ -69,6 +69,41 @@ static int evm_u256_cmp_signed(const evm_u256_t *a, const evm_u256_t *b) {
     return evm_u256_cmp(a, b);
 }
 
+static void evm_u256_add(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t *b) {
+    int i;
+    unsigned int carry = 0;
+    for (i = 31; i >= 0; i--) {
+        unsigned int sum = a->bytes[i] + b->bytes[i] + carry;
+        dst->bytes[i] = (unsigned char)(sum & 0xFF);
+        carry = sum >> 8;
+    }
+}
+
+static void evm_u256_sub(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t *b) {
+    int i;
+    int borrow = 0;
+    for (i = 31; i >= 0; i--) {
+        int diff = (int)a->bytes[i] - (int)b->bytes[i] - borrow;
+        if (diff < 0) {
+            diff += 256;
+            borrow = 1;
+        } else {
+            borrow = 0;
+        }
+        dst->bytes[i] = (unsigned char)diff;
+    }
+}
+
+static long evm_u256_to_narrow(const evm_u256_t *a) {
+    unsigned long val = 0;
+    int i;
+    for (i = 24; i < 32; i++) {
+        val = (val << 8) | (unsigned long)a->bytes[i];
+    }
+    return (long)val;
+}
+
+
 /* Allocate a fresh VReg name aligned with ir_bridge.h convention ("t<N>"). */
 static void lifter_fresh_tmp(evm_lifter_t *ls, char *buf) {
     /* ir_bridge.h uses "%t<N>"; ir.c uses "t<N>".  We follow ir.c style
@@ -572,19 +607,47 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         return stack_pop(ls, tmp_a);   /* discard the value */
 
     /* ── Arithmetic: pops 2, pushes 1 ───────────────────────────── */
-    case EVM_ADD:
+    case EVM_ADD: {
+        int a_st = EVM_VAL_UNKNOWN, b_st = EVM_VAL_UNKNOWN;
+        evm_u256_t a_val, b_val, res_val;
+        if (ls->stack.depth >= 2) {
+            a_st = ls->stack.state[ls->stack.depth - 2]; /* below top */
+            b_st = ls->stack.state[ls->stack.depth - 1]; /* top */
+            memcpy(&a_val, &ls->stack.wide_vals[ls->stack.depth - 2], sizeof(evm_u256_t));
+            memcpy(&b_val, &ls->stack.wide_vals[ls->stack.depth - 1], sizeof(evm_u256_t));
+        }
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
         ir_emit(ls->func, IR_ADD, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
+        if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
+            (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
+            evm_u256_add(&res_val, &a_val, &b_val);
+            return stack_push_const_wide(ls, tmp_dst, res_val.bytes, 32, evm_u256_to_narrow(&res_val));
+        }
         return stack_push(ls, tmp_dst);
+    }
 
-    case EVM_SUB:
+    case EVM_SUB: {
+        int a_st = EVM_VAL_UNKNOWN, b_st = EVM_VAL_UNKNOWN;
+        evm_u256_t a_val, b_val, res_val;
+        if (ls->stack.depth >= 2) {
+            a_st = ls->stack.state[ls->stack.depth - 2]; /* below top */
+            b_st = ls->stack.state[ls->stack.depth - 1]; /* top */
+            memcpy(&a_val, &ls->stack.wide_vals[ls->stack.depth - 2], sizeof(evm_u256_t));
+            memcpy(&b_val, &ls->stack.wide_vals[ls->stack.depth - 1], sizeof(evm_u256_t));
+        }
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
         ir_emit(ls->func, IR_SUB, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
+        if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
+            (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
+            evm_u256_sub(&res_val, &a_val, &b_val);
+            return stack_push_const_wide(ls, tmp_dst, res_val.bytes, 32, evm_u256_to_narrow(&res_val));
+        }
         return stack_push(ls, tmp_dst);
+    }
 
     case EVM_MUL:
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
