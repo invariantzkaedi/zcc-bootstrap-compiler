@@ -65,7 +65,10 @@ typedef enum {
     IR_TAG_SSTORE                  = 4, /* SSTORE — persistent state write      */
     IR_TAG_CREATE                  = 5, /* CREATE / CREATE2 — contract deploy   */
     IR_TAG_EVM_BARRIER             = 6, /* INVALID / REVERT — execution barrier */
-    IR_TAG_TRUNCATED_WIDE_CONST    = 7  /* Wide PUSH truncated to 64-bit        */
+    IR_TAG_TRUNCATED_WIDE_CONST    = 7, /* Wide PUSH truncated to 64-bit        */
+    IR_TAG_SHA3                    = 8, /* SHA3 hash operation                  */
+    IR_TAG_MEMORY_COPY             = 9, /* CODECOPY / CALLDATACOPY / etc.       */
+    IR_TAG_LOG                     = 10 /* LOG0..LOG4 event emission            */
 } evm_ir_tag_t;
 
 /* ── EVM Opcodes (Ethereum Yellow Paper + Shanghai EIPs) ────────────── */

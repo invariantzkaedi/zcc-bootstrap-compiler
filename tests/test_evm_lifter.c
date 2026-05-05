@@ -698,13 +698,13 @@ static void test_t30_addmod_mulmod(void) {
     ir_module_t *mod;
     evm_lifter_t ls;
     evm_lift_result_t res;
-    /* PUSH0 x2, ADDMOD (0x08) — scaffold pops 2, pushes 1 */
-    static const unsigned char bc_addmod[] = { 0x5f, 0x5f, 0x08 };
-    /* PUSH0 x2, MULMOD (0x09) */
-    static const unsigned char bc_mulmod[] = { 0x5f, 0x5f, 0x09 };
-    TEST("T30: ADDMOD/MULMOD emit IR_NOP and push result (scaffold pop-2 contract)");
+    /* PUSH0 x3, ADDMOD (0x08) — scaffold pops 3, pushes 1 */
+    static const unsigned char bc_addmod[] = { 0x5f, 0x5f, 0x5f, 0x08 };
+    /* PUSH0 x3, MULMOD (0x09) */
+    static const unsigned char bc_mulmod[] = { 0x5f, 0x5f, 0x5f, 0x09 };
+    TEST("T30: ADDMOD/MULMOD emit IR_NOP and push result (scaffold pop-3 contract)");
     mod = new_module();
-    lift_bytes(&ls, mod, bc_addmod, 3);
+    lift_bytes(&ls, mod, bc_addmod, 4);
     res = evm_lift_bytecode(&ls);
     CHECK(res == EVM_LIFT_OK,  "ADDMOD: lift returns OK");
     CHECK(ls.stack.depth == 1, "ADDMOD: 1 result on stack");
@@ -712,7 +712,7 @@ static void test_t30_addmod_mulmod(void) {
     ir_module_free(mod);
 
     mod = new_module();
-    lift_bytes(&ls, mod, bc_mulmod, 3);
+    lift_bytes(&ls, mod, bc_mulmod, 4);
     res = evm_lift_bytecode(&ls);
     CHECK(res == EVM_LIFT_OK,  "MULMOD: lift returns OK");
     CHECK(ls.stack.depth == 1, "MULMOD: 1 result on stack");
@@ -975,12 +975,14 @@ static void test_t43_sha3(void) {
     evm_lift_result_t res;
     /* PUSH0 x2, SHA3 (0x20) */
     static const unsigned char bc[] = { 0x5f, 0x5f, 0x20 };
-    TEST("T43: SHA3 emits IR_NOP result on stack");
+    TEST("T43: SHA3 emits IR_CALL tagged IR_TAG_SHA3 result on stack");
     mod = new_module();
     lift_bytes(&ls, mod, bc, 3);
     res = evm_lift_bytecode(&ls);
     CHECK(res == EVM_LIFT_OK,  "SHA3: lift returns OK");
     CHECK(ls.stack.depth == 1, "SHA3: result on stack");
+    CHECK(count_op(ls.func, IR_CALL) == 1, "SHA3: 1 IR_CALL emitted");
+    CHECK(count_tagged(ls.func, (int)IR_TAG_SHA3) == 1, "SHA3: 1 IR_TAG_SHA3 emitted");
     evm_lifter_destroy(&ls);
     ir_module_free(mod);
 }
@@ -1391,35 +1393,34 @@ static void test_t63_env_one_arg_b(void) {
     ir_module_free(mod);
 }
 
-/* ── T64: CALLDATACOPY / CODECOPY (scaffold: pops 2, pushes 1 IR_NOP) ─
+/* ── T64: CALLDATACOPY / CODECOPY (pops 3, pushes 0 IR_CALL) ─
  *
- * The scaffold lifter groups CALLDATACOPY/CODECOPY with SHA3 in the same
- * case (all pop 2, push 1 NOP result). True EVM semantics pop 3 and push 0.
- * This test documents and verifies the scaffold's simplified contract.
- * Tests use a 2-item preamble matching the scaffold's pop-2 behaviour.
+ * True EVM semantics pop 3 and push 0.
  */
 static void test_t64_copy_ops_3arg(void) {
     ir_module_t *mod;
     evm_lifter_t ls;
     evm_lift_result_t res;
-    /* PUSH0 x2, CALLDATACOPY (0x37) — scaffold pops 2, pushes 1 */
-    static const unsigned char bc_cdc[] = { 0x5f, 0x5f, 0x37 };
-    /* PUSH0 x2, CODECOPY (0x39) */
-    static const unsigned char bc_cc[]  = { 0x5f, 0x5f, 0x39 };
-    TEST("T64: CALLDATACOPY/CODECOPY scaffold: pop 2, push 1 NOP result");
+    /* PUSH0 x3, CALLDATACOPY (0x37) */
+    static const unsigned char bc_cdc[] = { 0x5f, 0x5f, 0x5f, 0x37 };
+    /* PUSH0 x3, CODECOPY (0x39) */
+    static const unsigned char bc_cc[]  = { 0x5f, 0x5f, 0x5f, 0x39 };
+    TEST("T64: CALLDATACOPY/CODECOPY pop 3, push 0, emit IR_TAG_MEMORY_COPY");
     mod = new_module();
-    lift_bytes(&ls, mod, bc_cdc, 3);
+    lift_bytes(&ls, mod, bc_cdc, 4);
     res = evm_lift_bytecode(&ls);
     CHECK(res == EVM_LIFT_OK,   "CALLDATACOPY: lift OK");
-    CHECK(ls.stack.depth == 1,  "CALLDATACOPY: 1 NOP result on stack (scaffold)");
+    CHECK(ls.stack.depth == 0,  "CALLDATACOPY: 0 result on stack");
+    CHECK(count_tagged(ls.func, (int)IR_TAG_MEMORY_COPY) == 1, "CALLDATACOPY: 1 IR_TAG_MEMORY_COPY emitted");
     evm_lifter_destroy(&ls);
     ir_module_free(mod);
 
     mod = new_module();
-    lift_bytes(&ls, mod, bc_cc, 3);
+    lift_bytes(&ls, mod, bc_cc, 4);
     res = evm_lift_bytecode(&ls);
     CHECK(res == EVM_LIFT_OK,   "CODECOPY: lift OK");
-    CHECK(ls.stack.depth == 1,  "CODECOPY: 1 NOP result on stack (scaffold)");
+    CHECK(ls.stack.depth == 0,  "CODECOPY: 0 result on stack");
+    CHECK(count_tagged(ls.func, (int)IR_TAG_MEMORY_COPY) == 1, "CODECOPY: 1 IR_TAG_MEMORY_COPY emitted");
     evm_lifter_destroy(&ls);
     ir_module_free(mod);
 }
@@ -1431,22 +1432,24 @@ static void test_t65_copy_ops_4arg(void) {
     evm_lift_result_t res;
     /* PUSH0 x4, EXTCODECOPY (0x3c) */
     static const unsigned char bc_exc[] = { 0x5f, 0x5f, 0x5f, 0x5f, 0x3c };
-    /* PUSH0 x4, RETURNDATACOPY (0x3e) */
-    static const unsigned char bc_rdc[] = { 0x5f, 0x5f, 0x5f, 0x5f, 0x3e };
-    TEST("T65: EXTCODECOPY/RETURNDATACOPY pop 4, no result");
+    /* PUSH0 x3, RETURNDATACOPY (0x3e) */
+    static const unsigned char bc_rdc[] = { 0x5f, 0x5f, 0x5f, 0x3e };
+    TEST("T65: EXTCODECOPY pop 4, RETURNDATACOPY pop 3, emit IR_TAG_MEMORY_COPY");
     mod = new_module();
     lift_bytes(&ls, mod, bc_exc, 5);
     res = evm_lift_bytecode(&ls);
     CHECK(res == EVM_LIFT_OK,   "EXTCODECOPY: lift OK");
     CHECK(ls.stack.depth == 0,  "EXTCODECOPY: stack empty after");
+    CHECK(count_tagged(ls.func, (int)IR_TAG_MEMORY_COPY) == 1, "EXTCODECOPY: 1 IR_TAG_MEMORY_COPY emitted");
     evm_lifter_destroy(&ls);
     ir_module_free(mod);
 
     mod = new_module();
-    lift_bytes(&ls, mod, bc_rdc, 5);
+    lift_bytes(&ls, mod, bc_rdc, 4);
     res = evm_lift_bytecode(&ls);
     CHECK(res == EVM_LIFT_OK,   "RETURNDATACOPY: lift OK");
     CHECK(ls.stack.depth == 0,  "RETURNDATACOPY: stack empty after");
+    CHECK(count_tagged(ls.func, (int)IR_TAG_MEMORY_COPY) == 1, "RETURNDATACOPY: 1 IR_TAG_MEMORY_COPY emitted");
     evm_lifter_destroy(&ls);
     ir_module_free(mod);
 }
@@ -1458,12 +1461,13 @@ static void test_t66_log0(void) {
     evm_lift_result_t res;
     /* PUSH0 x2, LOG0 (0xa0) */
     static const unsigned char bc[] = { 0x5f, 0x5f, 0xa0 };
-    TEST("T66: LOG0 pops 2, emits IR_NOP");
+    TEST("T66: LOG0 pops 2, emits IR_CALL tagged IR_TAG_LOG");
     mod = new_module();
     lift_bytes(&ls, mod, bc, 3);
     res = evm_lift_bytecode(&ls);
     CHECK(res == EVM_LIFT_OK,   "LOG0: lift returns OK");
     CHECK(ls.stack.depth == 0,  "LOG0: nothing left on stack");
+    CHECK(count_tagged(ls.func, (int)IR_TAG_LOG) == 1, "LOG0: 1 IR_TAG_LOG emitted");
     evm_lifter_destroy(&ls);
     ir_module_free(mod);
 }
@@ -1489,6 +1493,7 @@ static void test_t67_log1_to_log4(void) {
     res = evm_lift_bytecode(&ls);
     CHECK(res == EVM_LIFT_OK,   "LOG1: lift OK");
     CHECK(ls.stack.depth == 0,  "LOG1: stack empty");
+    CHECK(count_tagged(ls.func, (int)IR_TAG_LOG) == 1, "LOG1: 1 IR_TAG_LOG emitted");
     evm_lifter_destroy(&ls);
     ir_module_free(mod);
 
@@ -1497,6 +1502,7 @@ static void test_t67_log1_to_log4(void) {
     res = evm_lift_bytecode(&ls);
     CHECK(res == EVM_LIFT_OK,   "LOG2: lift OK");
     CHECK(ls.stack.depth == 0,  "LOG2: stack empty");
+    CHECK(count_tagged(ls.func, (int)IR_TAG_LOG) == 1, "LOG2: 1 IR_TAG_LOG emitted");
     evm_lifter_destroy(&ls);
     ir_module_free(mod);
 
@@ -1505,6 +1511,7 @@ static void test_t67_log1_to_log4(void) {
     res = evm_lift_bytecode(&ls);
     CHECK(res == EVM_LIFT_OK,   "LOG3: lift OK");
     CHECK(ls.stack.depth == 0,  "LOG3: stack empty");
+    CHECK(count_tagged(ls.func, (int)IR_TAG_LOG) == 1, "LOG3: 1 IR_TAG_LOG emitted");
     evm_lifter_destroy(&ls);
     ir_module_free(mod);
 
@@ -1513,6 +1520,7 @@ static void test_t67_log1_to_log4(void) {
     res = evm_lift_bytecode(&ls);
     CHECK(res == EVM_LIFT_OK,   "LOG4: lift OK");
     CHECK(ls.stack.depth == 0,  "LOG4: stack empty");
+    CHECK(count_tagged(ls.func, (int)IR_TAG_LOG) == 1, "LOG4: 1 IR_TAG_LOG emitted");
     evm_lifter_destroy(&ls);
     ir_module_free(mod);
 }

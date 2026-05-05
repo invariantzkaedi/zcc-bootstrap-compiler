@@ -184,7 +184,10 @@ static const char *EVM_TAG_NAMES[] = {
     "IR_TAG_SSTORE",
     "IR_TAG_CREATE",
     "IR_TAG_EVM_BARRIER",
-    "IR_TAG_TRUNCATED_WIDE_CONST"
+    "IR_TAG_TRUNCATED_WIDE_CONST",
+    "IR_TAG_SHA3",
+    "IR_TAG_MEMORY_COPY",
+    "IR_TAG_LOG"
 };
 
 /* ── Public query functions ──────────────────────────────────────────── */
@@ -667,30 +670,64 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         ir_emit(ls->func, IR_LOAD, IR_TY_I64, tmp_dst, tmp_a, NULL, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
-    case EVM_SHA3:
-    case EVM_CALLDATACOPY:
-    case EVM_CODECOPY:
-    case EVM_ADDMOD:
-    case EVM_MULMOD:
-    case EVM_EXP:
-    case EVM_SIGNEXTEND:
-    case EVM_BYTE:
-        /* Pop 2 or 3, push 0 or 1 — emit NOP for scaffold */
+    case EVM_SHA3: {
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_NOP, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
+        tagged_emit(ls, IR_CALL, IR_TY_I64, tmp_dst, NULL, NULL, "__evm_sha3", 0L, ls->pc, IR_TAG_SHA3);
+        ir_emit(ls->func, IR_ARG, IR_TY_I64, NULL, tmp_a, NULL, NULL, 0L, ls->pc);
+        ir_emit(ls->func, IR_ARG, IR_TY_I64, NULL, tmp_b, NULL, NULL, 0L, ls->pc);
         return stack_push(ls, tmp_dst);
+    }
 
-    case EVM_EXTCODECOPY:
-    case EVM_RETURNDATACOPY:
-        /* Pop 4 */
+    case EVM_ADDMOD:
+    case EVM_MULMOD:
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_c); if (res != EVM_LIFT_OK) return res;
-        res = stack_pop(ls, tmp_dst); if (res != EVM_LIFT_OK) return res;
-        ir_emit(ls->func, IR_NOP, IR_TY_VOID, NULL, NULL, NULL, NULL, 0L, ls->pc);
+        lifter_fresh_tmp(ls, tmp_dst);
+        ir_emit(ls->func, IR_NOP, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc); /* Still scaffold */
+        return stack_push(ls, tmp_dst);
+
+    case EVM_EXP:
+    case EVM_SIGNEXTEND:
+    case EVM_BYTE:
+        res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
+        res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
+        lifter_fresh_tmp(ls, tmp_dst);
+        ir_emit(ls->func, IR_NOP, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc); /* Still scaffold */
+        return stack_push(ls, tmp_dst);
+
+    case EVM_CALLDATACOPY:
+    case EVM_CODECOPY:
+    case EVM_RETURNDATACOPY: {
+        const char *fn = "";
+        if (op == (unsigned int)EVM_CALLDATACOPY) fn = "__evm_calldatacopy";
+        else if (op == (unsigned int)EVM_CODECOPY) fn = "__evm_codecopy";
+        else fn = "__evm_returndatacopy";
+        res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
+        res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
+        res = stack_pop(ls, tmp_c); if (res != EVM_LIFT_OK) return res;
+        tagged_emit(ls, IR_CALL, IR_TY_VOID, NULL, NULL, NULL, fn, 0L, ls->pc, IR_TAG_MEMORY_COPY);
+        ir_emit(ls->func, IR_ARG, IR_TY_I64, NULL, tmp_a, NULL, NULL, 0L, ls->pc);
+        ir_emit(ls->func, IR_ARG, IR_TY_I64, NULL, tmp_b, NULL, NULL, 0L, ls->pc);
+        ir_emit(ls->func, IR_ARG, IR_TY_I64, NULL, tmp_c, NULL, NULL, 0L, ls->pc);
         return EVM_LIFT_OK;
+    }
+
+    case EVM_EXTCODECOPY: {
+        char ext_a[IR_NAME_MAX], ext_b[IR_NAME_MAX], ext_c[IR_NAME_MAX], ext_d[IR_NAME_MAX];
+        res = stack_pop(ls, ext_a); if (res != EVM_LIFT_OK) return res;
+        res = stack_pop(ls, ext_b); if (res != EVM_LIFT_OK) return res;
+        res = stack_pop(ls, ext_c); if (res != EVM_LIFT_OK) return res;
+        res = stack_pop(ls, ext_d); if (res != EVM_LIFT_OK) return res;
+        tagged_emit(ls, IR_CALL, IR_TY_VOID, NULL, NULL, NULL, "__evm_extcodecopy", 0L, ls->pc, IR_TAG_MEMORY_COPY);
+        ir_emit(ls->func, IR_ARG, IR_TY_I64, NULL, ext_a, NULL, NULL, 0L, ls->pc);
+        ir_emit(ls->func, IR_ARG, IR_TY_I64, NULL, ext_b, NULL, NULL, 0L, ls->pc);
+        ir_emit(ls->func, IR_ARG, IR_TY_I64, NULL, ext_c, NULL, NULL, 0L, ls->pc);
+        ir_emit(ls->func, IR_ARG, IR_TY_I64, NULL, ext_d, NULL, NULL, 0L, ls->pc);
+        return EVM_LIFT_OK;
+    }
 
     /* ── LOG0..LOG4 ──────────────────────────────────────────────── */
     case EVM_LOG0:
@@ -702,11 +739,17 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         int log_topics = (int)(op - (unsigned int)EVM_LOG0);
         int log_pops   = 2 + log_topics;
         int j;
+        char args[7][IR_NAME_MAX]; /* Max pops is 6 (LOG4) */
+        char fn[32];
+        snprintf(fn, sizeof(fn), "__evm_log%d", log_topics);
         for (j = 0; j < log_pops; j++) {
-            res = stack_pop(ls, tmp_a);
+            res = stack_pop(ls, args[j]);
             if (res != EVM_LIFT_OK) return res;
         }
-        ir_emit(ls->func, IR_NOP, IR_TY_VOID, NULL, NULL, NULL, NULL, 0L, ls->pc);
+        tagged_emit(ls, IR_CALL, IR_TY_VOID, NULL, NULL, NULL, fn, 0L, ls->pc, IR_TAG_LOG);
+        for (j = 0; j < log_pops; j++) {
+            ir_emit(ls->func, IR_ARG, IR_TY_I64, NULL, args[j], NULL, NULL, 0L, ls->pc);
+        }
         return EVM_LIFT_OK;
     }
 
