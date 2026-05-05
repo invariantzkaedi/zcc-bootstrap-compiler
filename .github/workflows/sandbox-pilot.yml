@@ -60,11 +60,13 @@ jobs:
       - name: Build Sandbox Image
         run: |
           set -euxo pipefail
+
+          mkdir -p pilot_artifacts/diagnostics
+
           docker build -f Dockerfile.sandbox -t chimera-sandbox:latest .
           IMAGE_ID=$(docker inspect --format='{{.Id}}' chimera-sandbox:latest)
           echo "IMAGE_ID=${IMAGE_ID}" >> "$GITHUB_ENV"
 
-          mkdir -p pilot_artifacts/diagnostics
           docker image inspect chimera-sandbox:latest > pilot_artifacts/diagnostics/docker_image_inspect.json
           docker history --no-trunc chimera-sandbox:latest > pilot_artifacts/diagnostics/docker_history.txt
           sha256sum Dockerfile.sandbox > pilot_artifacts/diagnostics/dockerfile.sha256
@@ -182,20 +184,22 @@ jobs:
         run: |
           set -euxo pipefail
 
-          # The top-level attestation is the live sandbox evidence copied from /app/scratch.
-          test -f pilot_artifacts/sandbox_attestation.json
+          ATTESTATION="pilot_artifacts/release_artifacts/sandbox_attestation.json"
 
-          if grep -q "CHIMERA_ALLOW_LOCAL_NETWORK_DIAGNOSTIC" pilot_artifacts/sandbox_attestation.json; then
+          test -f "$ATTESTATION"
+          test -r "$ATTESTATION"
+
+          if grep -q "CHIMERA_ALLOW_LOCAL_NETWORK_DIAGNOSTIC" "$ATTESTATION"; then
             echo "FATAL: Local network override detected in release evidence."
             exit 1
           fi
 
-          if grep -q '"network_reachable": true' pilot_artifacts/sandbox_attestation.json; then
+          if grep -q '"network_reachable": true' "$ATTESTATION"; then
             echo "FATAL: Network was reachable in attestation."
             exit 1
           fi
 
-          if grep -q '"secrets_detected": true' pilot_artifacts/sandbox_attestation.json; then
+          if grep -q '"secrets_detected": true' "$ATTESTATION"; then
             echo "FATAL: Secrets were detected in attestation."
             exit 1
           fi
@@ -214,93 +218,95 @@ jobs:
           chmod -R u+rwX,go-rwx pilot_artifacts || true
 
           if [ -d pilot_artifacts ]; then
-            find pilot_artifacts -type f -print0 \
+            mkdir -p pilot_artifacts/diagnostics
+            find pilot_artifacts -type f ! -path 'pilot_artifacts/diagnostics/artifact_files.sha256' -print0 \
               | sort -z \
-              | xargs -0 sha256sum \
+              | xargs -0 -r sha256sum \
               > pilot_artifacts/diagnostics/artifact_files.sha256
           fi
 
       - name: Write Pilot Summary
         if: always()
         run: |
-          {
-            echo "## Sandbox Pilot Summary"
-            echo ""
-            echo "- Run ID: \`${{ github.run_id }}\`"
-            echo "- Commit: \`${{ github.sha }}\`"
-            echo "- Image ID: \`${IMAGE_ID:-unknown}\`"
-            echo ""
-
-            echo "### Artifact Tree"
-            echo '```text'
-            find pilot_artifacts -maxdepth 5 -printf '%M %u:%g %s %p\n' | sort || true
-            echo '```'
-            echo ""
-
-            if [ -f pilot_artifacts/release_artifacts/manifest.json ]; then
-              echo "### Manifest"
-              python -c '
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json
+          import os
           from pathlib import Path
-          p = Path("pilot_artifacts/release_artifacts/manifest.json")
-          m = json.loads(p.read_text())
-          print(f"- Bundle hash: `{m.get(\"bundle_hash\")}`")
-          print(f"- Artifact count: `{len(m.get(\"artifacts\", []))}`")
-          for item in m.get("artifacts", []):
-              print(f"  - `{item.get(\"path\")}`")
-          '
-              echo ""
-            else
-              echo "### Manifest"
-              echo "- Missing"
-              echo ""
-            fi
 
-            if [ -f pilot_artifacts/release_artifacts/sandbox_attestation.json ]; then
-              echo "### Attestation"
-              python -c '
-          import json
-          from pathlib import Path
-          p = Path("pilot_artifacts/release_artifacts/sandbox_attestation.json")
-          a = json.loads(p.read_text())
-          print(f"- Status: `{a.get(\"status\")}`")
-          print(f"- Network reachable: `{a.get(\"network_reachable\")}`")
-          print(f"- Secrets detected: `{a.get(\"secrets_detected\")}`")
-          print(f"- Policy hash: `{a.get(\"policy_hash\")}`")
-          print(f"- Python version: `{a.get(\"python_version\")}`")
-          '
-              echo ""
-            else
-              echo "### Attestation"
-              echo "- Missing"
-              echo ""
-            fi
+          run_id = os.environ.get("GITHUB_RUN_ID", "unknown")
+          sha = os.environ.get("GITHUB_SHA", "unknown")
+          image_id = os.environ.get("IMAGE_ID", "unknown")
 
-            if [ -f pilot_artifacts/release_artifacts/metrics.json ]; then
-              echo "### Metrics"
-              python -c '
-          import json
-          from pathlib import Path
-          p = Path("pilot_artifacts/release_artifacts/metrics.json")
-          m = json.loads(p.read_text())
-          keys = [
-              "total_fixtures_tested",
-              "redteam_fixtures_contained",
-              "subprocess_timeouts",
-              "output_limit_kills",
-              "compile_failures",
-              "runtime_failures",
-              "policy_rejections",
-              "average_generation_duration_ms",
-              "compiler_hash",
-          ]
-          for k in keys:
-              if k in m:
-                  print(f"- {k}: `{m.get(k)}`")
-          '
-              echo ""
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
+          print("## Sandbox Pilot Summary")
+          print()
+          print(f"- Run ID: `{run_id}`")
+          print(f"- Commit: `{sha}`")
+          print(f"- Image ID: `{image_id}`")
+          print()
+
+          print("### Artifact Tree")
+          print("```text")
+          root = Path("pilot_artifacts")
+          if root.exists():
+              rows = []
+              for p in sorted(root.rglob("*")):
+                  try:
+                      st = p.stat()
+                      kind = "d" if p.is_dir() else "f"
+                      rows.append(f"{kind} {st.st_size:>10} {p}")
+                  except OSError as exc:
+                      rows.append(f"? ERROR {p}: {exc}")
+              print("\n".join(rows))
+          else:
+              print("pilot_artifacts missing")
+          print("```")
+          print()
+
+          manifest_path = Path("pilot_artifacts/release_artifacts/manifest.json")
+          print("### Manifest")
+          if manifest_path.exists():
+              m = json.loads(manifest_path.read_text())
+              print(f"- Bundle hash: `{m.get('bundle_hash')}`")
+              print(f"- Artifact count: `{len(m.get('artifacts', []))}`")
+              for item in m.get("artifacts", []):
+                  print(f"  - `{item.get('path')}`")
+          else:
+              print("- Missing")
+          print()
+
+          attestation_path = Path("pilot_artifacts/release_artifacts/sandbox_attestation.json")
+          print("### Attestation")
+          if attestation_path.exists():
+              a = json.loads(attestation_path.read_text())
+              print(f"- Status: `{a.get('status')}`")
+              print(f"- Network reachable: `{a.get('network_reachable')}`")
+              print(f"- Secrets detected: `{a.get('secrets_detected')}`")
+              print(f"- Policy hash: `{a.get('policy_hash')}`")
+              print(f"- Python version: `{a.get('python_version')}`")
+          else:
+              print("- Missing")
+          print()
+
+          metrics_path = Path("pilot_artifacts/release_artifacts/metrics.json")
+          if metrics_path.exists():
+              print("### Metrics")
+              metrics = json.loads(metrics_path.read_text())
+              keys = [
+                  "total_fixtures_tested",
+                  "redteam_fixtures_contained",
+                  "subprocess_timeouts",
+                  "output_limit_kills",
+                  "compile_failures",
+                  "runtime_failures",
+                  "policy_rejections",
+                  "average_generation_duration_ms",
+                  "compiler_hash",
+              ]
+              for key in keys:
+                  if key in metrics:
+                      print(f"- {key}: `{metrics.get(key)}`")
+              print()
+          PY
 
       - name: Final Artifact Permission Normalize
         if: always()
