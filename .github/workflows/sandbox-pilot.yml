@@ -72,17 +72,6 @@ jobs:
           sha256sum Dockerfile.sandbox > pilot_artifacts/diagnostics/dockerfile.sha256
           sha256sum zcc > pilot_artifacts/diagnostics/zcc.sha256
 
-      - name: Inject Local Approvals
-        # Ensure the built image hash is explicitly trusted for this local offline CI run.
-        run: |
-          set -euxo pipefail
-          python -c "
-          import json, os
-          with open('policy_approvals.json', 'r') as f: app = json.load(f)
-          app['approved_dockerfile_hashes'].append(os.environ['IMAGE_ID'])
-          with open('policy_approvals.json', 'w') as f: json.dump(app, f)
-          "
-
       - name: Validate Required Inputs
         run: |
           set -euxo pipefail
@@ -91,7 +80,7 @@ jobs:
           test -f policy_approvals.json
           test -f verify_release_artifacts.py
           test -f sign_release_artifacts.py
-          test -f scheduled_sandbox_pilot.py
+          test -f sandbox_attestation.py
           python -m json.tool fortify_policy.json >/dev/null
           python -m json.tool policy_approvals.json >/dev/null
 
@@ -109,10 +98,11 @@ jobs:
             fi
           }
 
-          # Always normalize permissions on exit so diagnostics/upload can read
-          # files even if Docker creates them with container-owned UIDs.
           trap normalize_artifacts EXIT
 
+          # Run the image's default hardened entrypoint:
+          #   python3 /app/sandbox_entrypoint.py
+          # This produces chimera_run_report.json in /app/scratch.
           docker run --rm \
             --network=none \
             --read-only \
@@ -124,16 +114,37 @@ jobs:
             --tmpfs /tmp:rw,nosuid,size=64m \
             -e CHIMERA_SANDBOX_ONLY=1 \
             -v "$PWD/pilot_artifacts:/app/scratch:rw" \
+            chimera-sandbox:latest
+
+          normalize_artifacts
+
+          # Run attestation explicitly. The Dockerfile ENTRYPOINT would otherwise
+          # keep routing commands through sandbox_entrypoint.py.
+          docker run --rm \
+            --network=none \
+            --read-only \
+            --cap-drop=ALL \
+            --security-opt no-new-privileges \
+            --pids-limit=128 \
+            --memory=512m \
+            --cpus=1 \
+            --tmpfs /tmp:rw,nosuid,size=64m \
+            -e CHIMERA_SANDBOX_ONLY=1 \
+            -v "$PWD/pilot_artifacts:/app/scratch:rw" \
+            --entrypoint python3 \
             chimera-sandbox:latest \
-            python scheduled_sandbox_pilot.py --once
+            /app/sandbox_attestation.py
 
           normalize_artifacts
 
           mkdir -p pilot_artifacts/release_artifacts
-          find pilot_artifacts -type f -name '*.json' ! -path 'pilot_artifacts/release_artifacts/*' -exec cp {} pilot_artifacts/release_artifacts/ \;
+
+          find pilot_artifacts -type f -name '*.json' ! -path 'pilot_artifacts/release_artifacts/*' \
+            -exec cp {} pilot_artifacts/release_artifacts/ \;
 
           cd pilot_artifacts
           python ../sign_release_artifacts.py
+          python ../verify_release_artifacts.py
           cd ..
 
           normalize_artifacts
@@ -151,7 +162,11 @@ jobs:
           set -euxo pipefail
           test -d pilot_artifacts
           test -d pilot_artifacts/release_artifacts
+          test -f pilot_artifacts/chimera_run_report.json
+          test -f pilot_artifacts/sandbox_attestation.json
           test -f pilot_artifacts/release_artifacts/manifest.json
+          test -f pilot_artifacts/release_artifacts/chimera_run_report.json
+          test -f pilot_artifacts/release_artifacts/sandbox_attestation.json
           test -r pilot_artifacts/release_artifacts/manifest.json
 
       - name: Validate Artifact Permissions
@@ -184,7 +199,7 @@ jobs:
         run: |
           set -euxo pipefail
 
-          ATTESTATION="$(find pilot_artifacts -maxdepth 5 -type f -name 'sandbox_attestation.json' | head -n 1 || true)"
+          ATTESTATION="$(find pilot_artifacts -maxdepth 5 -type f -name 'sandbox_attestation.json' | sort | head -n 1 || true)"
 
           if [ -z "$ATTESTATION" ]; then
             echo "FATAL: sandbox_attestation.json was not found."
@@ -208,6 +223,11 @@ jobs:
 
           if grep -q '"secrets_detected": true' "$ATTESTATION"; then
             echo "FATAL: Secrets were detected in attestation."
+            exit 1
+          fi
+
+          if grep -q '"status": "failed"' "$ATTESTATION"; then
+            echo "FATAL: Attestation status is failed."
             exit 1
           fi
 
@@ -281,14 +301,10 @@ jobs:
               print("- Missing")
           print()
 
-          attestation_path = Path("pilot_artifacts/release_artifacts/sandbox_attestation.json")
-          if not attestation_path.exists():
-              matches = sorted(Path("pilot_artifacts").rglob("sandbox_attestation.json"))
-              if matches:
-                  attestation_path = matches[0]
-
+          attestation_matches = sorted(Path("pilot_artifacts").rglob("sandbox_attestation.json"))
           print("### Attestation")
-          if attestation_path.exists():
+          if attestation_matches:
+              attestation_path = attestation_matches[0]
               a = json.loads(attestation_path.read_text())
               print(f"- Path: `{attestation_path}`")
               print(f"- Status: `{a.get('status')}`")
@@ -300,25 +316,17 @@ jobs:
               print("- Missing")
           print()
 
-          metrics_path = Path("pilot_artifacts/release_artifacts/metrics.json")
-          if metrics_path.exists():
-              print("### Metrics")
-              metrics = json.loads(metrics_path.read_text())
-              keys = [
-                  "total_fixtures_tested",
-                  "redteam_fixtures_contained",
-                  "subprocess_timeouts",
-                  "output_limit_kills",
-                  "compile_failures",
-                  "runtime_failures",
-                  "policy_rejections",
-                  "average_generation_duration_ms",
-                  "compiler_hash",
-              ]
-              for key in keys:
-                  if key in metrics:
-                      print(f"- {key}: `{metrics.get(key)}`")
-              print()
+          report_path = Path("pilot_artifacts/chimera_run_report.json")
+          print("### Chimera Run")
+          if report_path.exists():
+              r = json.loads(report_path.read_text())
+              print(f"- Status: `{r.get('status')}`")
+              print(f"- Generations completed: `{r.get('generations_completed')}`")
+              print(f"- Policy hash: `{r.get('policy_hash')}`")
+              print(f"- Compiler version: `{r.get('compiler_version')}`")
+          else:
+              print("- Missing")
+          print()
           PY
 
       - name: Final Artifact Permission Normalize
