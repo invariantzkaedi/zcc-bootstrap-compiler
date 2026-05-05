@@ -16,7 +16,8 @@ void export_smt2(ir_func_t* graph, const char* path) {
                     n->dst, n->src1, n->src2);
         }
         else if (n->op == IR_CONST) {
-            fprintf(f, "(assert (= %s #x%lx))\n", n->dst, n->imm);
+            fprintf(f, "(assert (= %s #x%048llx%016llx))\n",
+                    n->dst, 0ULL, (unsigned long long)n->imm);
         }
     }
 
