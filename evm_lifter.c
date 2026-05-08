@@ -855,7 +855,22 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
 
         lifter_fresh_tmp(ls, tmp_dst);
         if (push_bytes > 8) {
-            tagged_emit(ls, IR_CONST, IR_TY_I64, tmp_dst, NULL, NULL, NULL, imm_val, ls->pc, IR_TAG_TRUNCATED_WIDE_CONST);
+            ir_node_t *n_const = tagged_emit(ls, IR_CONST, IR_TY_I64, tmp_dst, NULL, NULL, NULL, imm_val, ls->pc, IR_TAG_TRUNCATED_WIDE_CONST);
+            if (n_const) {
+                unsigned char wide[32];
+                memset(wide, 0, 32);
+                int pad_start = 32 - push_bytes;
+                for (int j = 0; j < push_bytes; j++) {
+                    wide[pad_start + j] = ls->bytecode[ls->pc - push_bytes + j];
+                }
+                for (int w = 0; w < 4; w++) {
+                    unsigned long limb = 0;
+                    for (int b = 0; b < 8; b++) {
+                        limb = (limb << 8) | (unsigned long)wide[31 - w * 8 - 7 + b];
+                    }
+                    n_const->imm256.limbs[w] = limb;
+                }
+            }
             res = stack_push_const_wide(ls, tmp_dst, &ls->bytecode[ls->pc - push_bytes], push_bytes, imm_val);
         } else {
             ir_emit(ls->func, IR_CONST, IR_TY_I64, tmp_dst, NULL, NULL, NULL, imm_val, ls->pc);
@@ -1100,7 +1115,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_LT, IR_TY_I32, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
+        tagged_emit(ls, IR_LT, IR_TY_I32, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc, IR_TAG_EVM_LT);
         if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
             (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
             if (op == EVM_LT) {
@@ -1125,7 +1140,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_GT, IR_TY_I32, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
+        tagged_emit(ls, IR_GT, IR_TY_I32, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc, IR_TAG_EVM_GT);
         if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
             (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
             if (op == EVM_GT) {
@@ -1149,7 +1164,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_EQ, IR_TY_I32, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
+        tagged_emit(ls, IR_EQ, IR_TY_I32, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc, IR_TAG_EVM_EQ);
         if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
             (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
             return stack_push_const_narrow(ls, tmp_dst, evm_u256_eq(&a_val, &b_val) ? 1L : 0L);
@@ -1169,7 +1184,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         lifter_fresh_tmp(ls, tmp_b);
         ir_emit(ls->func, IR_CONST, IR_TY_I64, tmp_b, NULL, NULL, NULL, 0L, ls->pc);
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_EQ, IR_TY_I32, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
+        tagged_emit(ls, IR_EQ, IR_TY_I32, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc, IR_TAG_EVM_ISZERO);
         if (a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) {
             return stack_push_const_narrow(ls, tmp_dst, evm_u256_is_zero(&a_val) ? 1L : 0L);
         }

@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "ir.h"
+#include "evm_lifter.h"
 
 /* ── Globals referenced by zcc.c (part5.c declares these extern) ──────── */
 int  g_manifold_enabled    = 0;
@@ -176,6 +177,8 @@ static ir_pass_result_t ir_pass_dce(void *fn_ptr) {
 typedef struct {
     char name[32];  /* IR_NAME_MAX */
     long value;
+    uint256_t value256;
+    int is_256;
 } const_map_entry_t;
 
 static const_map_entry_t s_cmap[CONST_MAP_MAX];
@@ -187,18 +190,35 @@ static void cmap_clear(void) {
 
 static void cmap_add(const char *name, long value) {
     int i;
-    /* Update if exists */
     for (i = 0; i < s_cmap_count; i++) {
         if (strcmp(s_cmap[i].name, name) == 0) {
             s_cmap[i].value = value;
+            s_cmap[i].is_256 = 0;
             return;
         }
     }
-    /* Add new */
     if (s_cmap_count >= CONST_MAP_MAX) return;
     strncpy(s_cmap[s_cmap_count].name, name, 31);
     s_cmap[s_cmap_count].name[31] = '\0';
     s_cmap[s_cmap_count].value = value;
+    s_cmap[s_cmap_count].is_256 = 0;
+    s_cmap_count++;
+}
+
+static void cmap_add_256(const char *name, uint256_t value256) {
+    int i;
+    for (i = 0; i < s_cmap_count; i++) {
+        if (strcmp(s_cmap[i].name, name) == 0) {
+            s_cmap[i].value256 = value256;
+            s_cmap[i].is_256 = 1;
+            return;
+        }
+    }
+    if (s_cmap_count >= CONST_MAP_MAX) return;
+    strncpy(s_cmap[s_cmap_count].name, name, 31);
+    s_cmap[s_cmap_count].name[31] = '\0';
+    s_cmap[s_cmap_count].value256 = value256;
+    s_cmap[s_cmap_count].is_256 = 1;
     s_cmap_count++;
 }
 
@@ -208,8 +228,39 @@ static int cmap_get(const char *name, long *value) {
     for (i = 0; i < s_cmap_count; i++) {
         if (strcmp(s_cmap[i].name, name) == 0) {
             *value = s_cmap[i].value;
-            return 1;
+            return (s_cmap[i].is_256 == 0);
         }
+    }
+    return 0;
+}
+
+static int cmap_get_256(const char *name, uint256_t *value256) {
+    int i;
+    if (name[0] == '\0') return 0;
+    for (i = 0; i < s_cmap_count; i++) {
+        if (strcmp(s_cmap[i].name, name) == 0) {
+            if (s_cmap[i].is_256) {
+                *value256 = s_cmap[i].value256;
+                return 1;
+            }
+            return 0;
+        }
+    }
+    return 0;
+}
+
+static int zcc_uint256_eq(uint256_t a, uint256_t b) {
+    return (a.limbs[0] == b.limbs[0] &&
+            a.limbs[1] == b.limbs[1] &&
+            a.limbs[2] == b.limbs[2] &&
+            a.limbs[3] == b.limbs[3]);
+}
+
+static int zcc_uint256_lt(uint256_t a, uint256_t b) {
+    int i;
+    for (i = 3; i >= 0; i--) {
+        if (a.limbs[i] < b.limbs[i]) return 1;
+        if (a.limbs[i] > b.limbs[i]) return 0;
     }
     return 0;
 }
@@ -228,44 +279,86 @@ static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
     for (n = fn->head; n; n = n->next) {
         /* Track constants */
         if (n->op == IR_CONST && n->dst[0]) {
-            cmap_add(n->dst, n->imm);
+            if (n->tag == IR_TAG_TRUNCATED_WIDE_CONST || n->tag == IR_TAG_NONE) {
+                /* For now, just add as 64-bit if not explicit 256-bit. 
+                   Wait, EVM PUSH32 sets TRUNCATED_WIDE_CONST but we want to load imm256! */
+                /* If imm256 is used, we can check a flag, but we'll assume if imm256 is populated we use it. 
+                   Actually, let's just add both or add as 256 if applicable. */
+                cmap_add(n->dst, n->imm);
+                /* For 256-bit wide constants, we should probably set a specific op or tag.
+                   Since we added imm256, if it's a 256-bit push, we add it to cmap_add_256. */
+                if (n->tag == IR_TAG_TRUNCATED_WIDE_CONST) {
+                    cmap_add_256(n->dst, n->imm256);
+                }
+            } else {
+                cmap_add(n->dst, n->imm);
+            }
             continue;
         }
 
         /* Check binary ops with two known constant operands */
         if (n->src1[0] && n->src2[0]) {
             long v1, v2, result;
+            uint256_t v1_256, v2_256;
+            int is_256_op = 0;
+            int can_fold = 0;
 
-            if (!cmap_get(n->src1, &v1)) continue;
-            if (!cmap_get(n->src2, &v2)) continue;
+            if (n->tag == IR_TAG_EVM_EQ || n->tag == IR_TAG_EVM_LT || n->tag == IR_TAG_EVM_GT || n->tag == IR_TAG_EVM_ISZERO) {
+                if (cmap_get_256(n->src1, &v1_256) && (n->tag == IR_TAG_EVM_ISZERO || cmap_get_256(n->src2, &v2_256))) {
+                    is_256_op = 1;
+                    can_fold = 1;
+                }
+            } else {
+                if (cmap_get(n->src1, &v1) && cmap_get(n->src2, &v2)) {
+                    can_fold = 1;
+                }
+            }
 
-            switch (n->op) {
-            case IR_ADD: result = v1 + v2; break;
-            case IR_SUB: result = v1 - v2; break;
-            case IR_MUL: result = v1 * v2; break;
-            case IR_DIV: if (v2 == 0) continue; result = v1 / v2; break;
-            case IR_MOD: if (v2 == 0) continue; result = v1 % v2; break;
-            case IR_AND: result = v1 & v2; break;
-            case IR_OR:  result = v1 | v2; break;
-            case IR_XOR: result = v1 ^ v2; break;
-            case IR_SHL: result = v1 << v2; break;
-            case IR_SHR: result = v1 >> v2; break;
-            case IR_EQ:  result = (v1 == v2) ? 1 : 0; break;
-            case IR_NE:  result = (v1 != v2) ? 1 : 0; break;
-            case IR_LT:  result = (v1 < v2)  ? 1 : 0; break;
-            case IR_LE:  result = (v1 <= v2) ? 1 : 0; break;
-            case IR_GT:  result = (v1 > v2)  ? 1 : 0; break;
-            case IR_GE:  result = (v1 >= v2) ? 1 : 0; break;
-            default: continue;
+            if (!can_fold) continue;
+
+            if (is_256_op) {
+                if (n->tag == IR_TAG_EVM_EQ) {
+                    result = zcc_uint256_eq(v1_256, v2_256) ? 1 : 0;
+                } else if (n->tag == IR_TAG_EVM_LT) {
+                    result = zcc_uint256_lt(v1_256, v2_256) ? 1 : 0;
+                } else if (n->tag == IR_TAG_EVM_GT) {
+                    result = zcc_uint256_lt(v2_256, v1_256) ? 1 : 0;
+                } else if (n->tag == IR_TAG_EVM_ISZERO) {
+                    uint256_t zero256 = {{0, 0, 0, 0}};
+                    result = zcc_uint256_eq(v1_256, zero256) ? 1 : 0;
+                } else {
+                    continue;
+                }
+            } else {
+                switch (n->op) {
+                case IR_ADD: result = v1 + v2; break;
+                case IR_SUB: result = v1 - v2; break;
+                case IR_MUL: result = v1 * v2; break;
+                case IR_DIV: if (v2 == 0) continue; result = v1 / v2; break;
+                case IR_MOD: if (v2 == 0) continue; result = v1 % v2; break;
+                case IR_AND: result = v1 & v2; break;
+                case IR_OR:  result = v1 | v2; break;
+                case IR_XOR: result = v1 ^ v2; break;
+                case IR_SHL: result = v1 << v2; break;
+                case IR_SHR: result = v1 >> v2; break;
+                case IR_EQ:  result = (v1 == v2) ? 1 : 0; break;
+                case IR_NE:  result = (v1 != v2) ? 1 : 0; break;
+                case IR_LT:  result = (v1 < v2)  ? 1 : 0; break;
+                case IR_LE:  result = (v1 <= v2) ? 1 : 0; break;
+                case IR_GT:  result = (v1 > v2)  ? 1 : 0; break;
+                case IR_GE:  result = (v1 >= v2) ? 1 : 0; break;
+                default: continue;
+                }
             }
 
             /* Replace with IR_CONST */
             n->op = IR_CONST;
             n->imm = result;
+            n->tag = IR_TAG_NONE; /* clear the EVM comparison tag since it's now just a constant */
             n->src1[0] = '\0';
             n->src2[0] = '\0';
 
-            /* Track the new constant */
+            /* Track the new constant (which is just 1 or 0, so 64-bit is fine) */
             cmap_add(n->dst, result);
 
             modified++;

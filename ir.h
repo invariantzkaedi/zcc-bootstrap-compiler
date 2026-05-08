@@ -134,6 +134,10 @@ typedef enum {
     IR_TY_COUNT     /* sentinel                                             */
 } ir_type_t;
 
+typedef struct {
+    unsigned long limbs[4]; /* 4x64-bit limbs = 256 bits */
+} uint256_t;
+
 /* ── Core node ───────────────────────────────────────────────────────── */
 /*
  * Every IR instruction is one ir_node_t.
@@ -163,6 +167,7 @@ typedef struct ir_node_t {
     char              *asm_string;          /* assembly string            */
 
     long               imm;      /* integer immediate (CONST, ALLOCA)     */
+    uint256_t          imm256;   /* 256-bit wide integer immediate        */
     int                lineno;   /* source file line number               */
 
     /* Security/analysis tag — set by EVM lifter and other analysis passes.
