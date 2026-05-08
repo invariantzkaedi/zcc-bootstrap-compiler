@@ -469,3 +469,18 @@ evm_decomp/
 swarm_out/
 evm_jit/
 .env
+
+# ZKAEDI Ephemeral Data
+scratch/
+captures/
+2026-*/
+dist/
+*.bin
+*.hex
+*.i
+test2
+test_ternary
+int1
+int2
+__pycache__/
+*.wav
