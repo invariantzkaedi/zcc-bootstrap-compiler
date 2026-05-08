@@ -1,7 +1,6 @@
 #include "../../evm_lifter.h"
 #include "../../ir.h"
 #include <stdio.h>
-#include <stdlib.h>
 
 extern void ir_pm_run_default(void *mod_ptr, int verbose);
 extern void evm_lifter_init(evm_lifter_t *ls, const unsigned char *bytecode, int length, ir_module_t *module);

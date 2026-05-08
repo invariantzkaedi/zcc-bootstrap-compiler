@@ -127,7 +127,7 @@ def main():
     
     # Build the C executable
     subprocess.run(["gcc", "-O0", "-g0", "-w", "-fno-asynchronous-unwind-tables", "-o", "tools/battle/fuzz_fold", 
-                    "tools/battle/fuzz_fold.c", "ir_pass_manager.c", "evm_lifter.c", "ir.c", "ir_vuln_tag.c", "compiler_passes_ir.c", 
+                    "tools/battle/fuzz_fold.c", "ir_pass_manager.c", "ir_pass_warden.c", "ir_symbolic_cfg.c", "ir_dominance.c", "evm_lifter.c", "ir.c", "ir_vuln_tag.c", "compiler_passes_ir.c", 
                     "src/evm/memory_v2.c", "src/evm/symbolic.c", "src/evm/abi_extractor.c", "-lm"], capture_output=True)
     
     for i, (op, v1, v2) in enumerate(tests):
