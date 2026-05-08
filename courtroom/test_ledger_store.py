@@ -1,18 +1,25 @@
 """Regression suite for ledger_store.py."""
 import json
-import shutil
 import tempfile
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from invariant_compiler import (
-    Evidence, ReleaseCase, Status, TumblerStatus, Waiver,
+    Evidence,
+    ReleaseCase,
+    Status,
+    TumblerStatus,
+    Waiver,
 )
-from courtroom import CourtSession, EntryKind
 from ledger_store import (
-    LedgerStoreError, PersistedLedger, append_entry, load, rotate, save,
+    LedgerStoreError,
+    PersistedLedger,
+    load,
+    rotate,
+    save,
 )
 
+from courtroom import CourtSession, EntryKind
 
 NOW = datetime(2026, 5, 5, tzinfo=timezone.utc)
 FUTURE = (NOW + timedelta(days=30)).isoformat()

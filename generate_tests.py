@@ -1,4 +1,3 @@
-import os
 
 def create_large_arg_test():
     content = "#define BIG(x) x\nint test(void) {\n    return BIG(\n"

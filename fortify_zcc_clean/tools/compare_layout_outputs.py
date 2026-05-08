@@ -2,6 +2,7 @@
 import argparse
 from pathlib import Path
 
+
 def normalize(text):
     return "\n".join(line.rstrip() for line in text.splitlines() if line.strip()) + "\n"
 

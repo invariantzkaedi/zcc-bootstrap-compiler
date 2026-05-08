@@ -1,6 +1,5 @@
 import os
 import subprocess
-import itertools
 import sys
 
 ZCC = "/mnt/h/__DOWNLOADS/zcc_github_upload/zcc"
@@ -69,7 +68,7 @@ def run_fuzzer():
         if i > 0 and i % 500 == 0:
             print(f"Progress: {i}/{len(cases)}...", flush=True)
             
-    print(f"\n--- FUZZ REPORT ---")
+    print("\n--- FUZZ REPORT ---")
     print(f"Total Cases: {len(cases)}")
     print(f"Valid C (Exit 0): {valids}")
     print(f"Invalid C (Exit 1): {invalids}")

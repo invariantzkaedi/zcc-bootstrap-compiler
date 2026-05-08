@@ -358,7 +358,8 @@ check-ir-vuln-tag:
 	@echo "=== Building IR Vuln Tag test binary ==="
 	$(CC) $(CFLAGS) -I. \
 	    -o /tmp/test_ir_vuln_tag \
-	    tests/test_ir_vuln_tag.c ir_vuln_tag.c evm_lifter.c ir.c $(LDFLAGS)
+	    tests/test_ir_vuln_tag.c ir_vuln_tag.c evm_lifter.c ir.c \
+	    src/evm/memory_v2.c src/evm/abi_extractor.c $(LDFLAGS)
 	@echo "=== Running IR Vuln Tag tests ==="
 	/tmp/test_ir_vuln_tag
 
@@ -373,7 +374,8 @@ check-forgezero-receipt:
 	$(CC) $(CFLAGS) -I. \
 	    -o /tmp/test_forgezero_receipt \
 	    tests/test_forgezero_receipt.c forgezero_receipt.c \
-	    ir_vuln_tag.c evm_lifter.c ir.c $(LDFLAGS)
+	    ir_vuln_tag.c evm_lifter.c ir.c \
+	    src/evm/memory_v2.c src/evm/abi_extractor.c $(LDFLAGS)
 	@echo "=== Running ForgeZero Audit Receipt tests ==="
 	/tmp/test_forgezero_receipt
 

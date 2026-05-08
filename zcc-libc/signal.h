@@ -11,3 +11,5 @@ int sigaction(int, const struct sigaction*, struct sigaction*);
 #define SIG_DFL ((sighandler_t)0)
 #define SIG_IGN ((sighandler_t)1)
 #define SIG_ERR ((sighandler_t)-1)
+typedef unsigned long sigset_t;
+int sigemptyset(sigset_t *set);

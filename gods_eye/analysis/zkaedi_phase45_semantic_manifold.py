@@ -1,11 +1,12 @@
 import json
+
 import numpy as np
-from typing import List, Dict, Tuple, Optional
 from sentence_transformers import SentenceTransformer
 
+
 class SemanticManifold:
-    def __init__(self, concepts: List[str], embeddings: np.ndarray, 
-                 domains: Optional[Dict[str, List[str]]] = None):
+    def __init__(self, concepts: list[str], embeddings: np.ndarray, 
+                 domains: dict[str, list[str]] | None = None):
         self.concepts = concepts
         self.embeddings = self._normalize(embeddings)
         self.N = len(concepts)
@@ -22,7 +23,7 @@ class SemanticManifold:
     def _cosine_similarity_matrix(self) -> np.ndarray:
         return self.embeddings @ self.embeddings.T
     
-    def _auto_cluster(self, n_clusters: int = 4) -> Dict[str, List[str]]:
+    def _auto_cluster(self, n_clusters: int = 4) -> dict[str, list[str]]:
         from sklearn.cluster import SpectralClustering
         affinity = (self.similarity + 1) / 2
         clustering = SpectralClustering(
@@ -40,13 +41,13 @@ class SemanticManifold:
         return domains
     
     @classmethod
-    def from_huggingface(cls, concepts: List[str], domains: Dict[str, List[str]] = None,
+    def from_huggingface(cls, concepts: list[str], domains: dict[str, list[str]] = None,
                          model: str = "all-MiniLM-L6-v2") -> 'SemanticManifold':
         encoder = SentenceTransformer(model)
         embeddings = encoder.encode(concepts, show_progress_bar=False)
         return cls(concepts, np.array(embeddings), domains)
     
-    def hub_concepts(self, top_n: int = 10) -> List[Tuple[str, float]]:
+    def hub_concepts(self, top_n: int = 10) -> list[tuple[str, float]]:
         avg_sim = []
         for i in range(self.N):
             total = sum(self.similarity[i, j] for j in range(self.N) if j != i)
@@ -57,7 +58,7 @@ class SemanticManifold:
         avg_sim.sort(key=lambda x: x[1], reverse=True)
         return avg_sim[:top_n]
 
-    def cross_domain_bridges(self, threshold: float = 0.5) -> List[Tuple[str, str, float, str, str]]:
+    def cross_domain_bridges(self, threshold: float = 0.5) -> list[tuple[str, str, float, str, str]]:
         concept_to_domain = {}
         for domain, concepts in self.domains.items():
             for c in concepts:
@@ -82,7 +83,7 @@ class SemanticManifold:
     def evolve_hamiltonian(self, timesteps: int = 2000, 
                            eta: float = 0.4, gamma: float = 0.3,
                            beta: float = 0.1, sigma: float = 0.05,
-                           regimes: List[Tuple[float, float, float, float]] = None) -> Dict:
+                           regimes: list[tuple[float, float, float, float]] = None) -> dict:
         if regimes is None:
             regimes = [
                 (0.1, 0.05, 0.02, 0.01),  # Gentle: low feedback, low noise
@@ -121,7 +122,7 @@ class SemanticManifold:
                                 })
         return {'emergent_paths': emergent_paths}
     
-    def persistent_homology(self, max_epsilon: float = 1.0, steps: int = 50) -> Dict:
+    def persistent_homology(self, max_epsilon: float = 1.0, steps: int = 50) -> dict:
         distance = 1.0 - self.similarity
         np.fill_diagonal(distance, 0)
         h0_deaths = [max_epsilon] * self.N
@@ -161,7 +162,7 @@ class SemanticManifold:
         return {'h1_features': h1_features}
     
     def wormhole_detection(self, min_distance: float = 0.6, 
-                           min_similarity: float = 0.4) -> List[Dict]:
+                           min_similarity: float = 0.4) -> list[dict]:
         wormholes = []
         for i in range(self.N):
             for j in range(i + 1, self.N):
@@ -198,7 +199,7 @@ if __name__ == "__main__":
     print("--- ZKAEDI PHASE 4.5: SEMANTIC MANIFOLD PROCESSOR ---")
     
     try:
-        with open("zcc-compiler-bug-corpus.json", "r") as f:
+        with open("zcc-compiler-bug-corpus.json") as f:
             bugs = json.load(f)
     except Exception as e:
         print(f"Failed to load corpus: {e}")
@@ -233,7 +234,7 @@ if __name__ == "__main__":
     print("\n[Topology Result] WORMHOLE DETECTION (Hidden Paths):")
     wormholes = manifold.wormhole_detection(min_distance=0.3, min_similarity=0.1)
     for w in wormholes[:5]:
-        print(f"  *** WORMHOLE DISCOVERED ***")
+        print("  *** WORMHOLE DISCOVERED ***")
         print(f"      Node A: {w['concept_a'][:80]}...")
         print(f"      Node B: {w['concept_b'][:80]}...")
         print(f"      Bridge: {w['bridge_concept'][:80]}...")

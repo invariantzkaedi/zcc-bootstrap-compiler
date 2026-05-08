@@ -23,9 +23,14 @@
 ==========================================================================
 """
 from __future__ import annotations
-import os, sys, json, time, argparse, hashlib
+
+import argparse
+import json
+import os
+import sys
+import time
 from pathlib import Path
-from typing import Optional
+
 import httpx
 
 # boto3 imported lazily — only required for live runs, not --dry-run
@@ -77,7 +82,7 @@ class TripoClient:
             headers={"Authorization": f"Bearer {api_key}"},
             timeout=120,
         )
-        self._working_format: Optional[str] = None  # cached after first success
+        self._working_format: str | None = None  # cached after first success
 
     def balance(self) -> dict:
         return _check(self.c.get("/user/balance"))
@@ -113,7 +118,7 @@ class TripoClient:
                 # Any other code: don't keep probing blindly
                 raise
         if sts_data is None:
-            raise TripoError(-3, f"no format accepted by /upload/sts/token",
+            raise TripoError(-3, "no format accepted by /upload/sts/token",
                               f"tried {formats_to_try}; last: {last_err}")
         self._working_format = used_fmt
 
@@ -289,7 +294,7 @@ def main():
             task = client.poll(imp, POLL_TIMEOUT_IMPORT, verbose=True)
             if task["status"] == "success":
                 print(f"[probe] ✓ success — import path works, format={client._working_format!r}")
-                print(f"[probe] You can now run WITHOUT --probe-only for the full batch")
+                print("[probe] You can now run WITHOUT --probe-only for the full batch")
                 log("import", asset, "success", task_id=imp, probe=True)
             else:
                 print(f"[probe] ✗ import failed: status={task['status']}")
@@ -325,7 +330,7 @@ def main():
             task = client.poll(imp_tid, POLL_TIMEOUT_IMPORT, verbose=args.verbose)
             if task["status"] == "success":
                 imported_cache[asset] = imp_tid
-                print(f"      ✓")
+                print("      ✓")
                 log("import", asset, "success", task_id=imp_tid,
                     consumed=task.get("consumed_credit", 0),
                     bucket=obj["bucket"], key=obj["key"])
@@ -423,7 +428,7 @@ def main():
     print(f"\n[done] {spent}cr spent / {args.budget}cr budget")
     print(f"[done] imported {len(imported_cache)} assets via STS/S3")
     print(f"[done] {len(failures)} failures")
-    print(f"[done] run_summary.json written")
+    print("[done] run_summary.json written")
 
 
 if __name__ == "__main__":

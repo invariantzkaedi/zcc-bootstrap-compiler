@@ -37,14 +37,17 @@ import copy
 import math
 import random
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 from invariant_compiler import (
-    DecisionReport, Evidence, ReleaseCase, Status, TumblerStatus,
-    Verdict, Waiver, decide,
+    DecisionReport,
+    ReleaseCase,
+    Status,
+    TumblerStatus,
+    Verdict,
+    decide,
 )
 from tier_parser import is_t0, severity_for
-
 
 # Verdict severity ordering — same as compiler's _SEVERITY but local
 # for fuzzer comparisons.

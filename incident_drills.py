@@ -1,11 +1,12 @@
 from kill_switch import assert_not_globally_disabled
+
 assert_not_globally_disabled()
-import os
-import sys
 import json
 import logging
-import shutil
+import os
+import sys
 from pathlib import Path
+
 from error_handling import run_bounded_subprocess
 
 logging.basicConfig(level=logging.INFO, format='[DRILL] %(message)s')

@@ -1,13 +1,18 @@
 """Tests for release_energy.py — energy + Hamiltonian + differential fuzzer."""
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 from invariant_compiler import (
-    Evidence, ReleaseCase, Status, TumblerStatus, Waiver, decide,
+    Evidence,
+    ReleaseCase,
+    Status,
+    TumblerStatus,
+    Waiver,
 )
 from release_energy import (
-    CaseFuzzer, energy_of, evolve_H, fuzz_case, release_energy,
+    energy_of,
+    evolve_H,
+    fuzz_case,
 )
-
 
 NOW = datetime(2026, 5, 5, tzinfo=timezone.utc)
 FUTURE = (NOW + timedelta(days=30)).isoformat()
@@ -134,16 +139,21 @@ if not report.ok:
 # Patch decide briefly to a wrong impl and verify fuzzer catches it.
 print()
 print("--- fuzzer catches a known-bad gate ---")
-import release_energy as re_mod
 import invariant_compiler as ic_mod
+import release_energy as re_mod
 
 original_decide = ic_mod.decide
 
 def buggy_decide(case, now=None):
     """Mimics the original Copilot bug: WAIVED non-T0 short-circuits SHIP-class."""
     from invariant_compiler import (
-        DecisionReport, TumblerFinding, Verdict, Status,
-        has_valid_evidence, has_valid_waiver, required_quality_for_tier,
+        DecisionReport,
+        Status,
+        TumblerFinding,
+        Verdict,
+        has_valid_evidence,
+        has_valid_waiver,
+        required_quality_for_tier,
     )
     from tier_parser import is_t0
     findings = []
@@ -209,6 +219,7 @@ re_mod.decide = original_decide
 print()
 print("--- adversarial sweep on real compiler ---")
 import random
+
 rng = random.Random(123)
 
 def random_case(i):

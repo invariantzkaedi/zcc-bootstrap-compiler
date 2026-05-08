@@ -1410,6 +1410,7 @@ static void pp_parse_target_depth(PPState *state, int target_depth) {
 char *zcc_preprocess(const char *source, int source_len,
                      const char *filename,
                      const char *include_paths,
+                     const char *define_flags,
                      int *out_len) {
     PPState *state = (PPState *)malloc(sizeof(PPState));
     char *normalized_src = (char *)malloc(source_len + 1);
@@ -1490,6 +1491,27 @@ char *zcc_preprocess(const char *source, int source_len,
         strcpy(m->body, "18446744073709551615UL");
         m = pp_add_macro(state, "SIZE_MAX");
         strcpy(m->body, "18446744073709551615UL");
+    }
+
+    /* parse and register -D flags */
+    if (define_flags && define_flags[0]) {
+        char defs[4096];
+        char *p;
+        strncpy(defs, define_flags, 4095);
+        defs[4095] = '\0';
+        p = strtok(defs, "\n");
+        while (p) {
+            char *eq = strchr(p, '=');
+            if (eq) {
+                *eq = '\0';
+                PPMacro *m = pp_add_macro(state, p);
+                if (m) strncpy(m->body, eq + 1, sizeof(m->body) - 1);
+            } else {
+                PPMacro *m = pp_add_macro(state, p);
+                if (m) strcpy(m->body, "1");
+            }
+            p = strtok(NULL, "\n");
+        }
     }
 
     pp_parse_target_depth(state, 0);

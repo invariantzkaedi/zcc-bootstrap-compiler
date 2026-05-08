@@ -1,8 +1,9 @@
 import re
 import sys
 
+
 def parse_enums(filename):
-    with open(filename, 'r') as f:
+    with open(filename) as f:
         content = f.read()
 
     match = re.search(r'/\* =+ \*/\s*/\* AST NODE TYPES\s*\*/\s*/\* =+ \*/\s*enum \{(.*?)\};', content, re.DOTALL)

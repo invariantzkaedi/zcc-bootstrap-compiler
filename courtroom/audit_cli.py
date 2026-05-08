@@ -27,14 +27,13 @@ import argparse
 import sys
 import traceback
 from datetime import datetime, timezone
-from pathlib import Path
 
 from case_schema import CaseSchemaError, load_case
-from courtroom import CourtSession
-from invariant_compiler import Verdict, decide
+from invariant_compiler import Verdict
 from ledger_store import LedgerStoreError, PersistedLedger, load, save
 from release_energy import energy_of, evolve_H, fuzz_case
 
+from courtroom import CourtSession
 
 _VERDICT_EXIT_CODE = {
     Verdict.SHIP: 0,
@@ -73,7 +72,7 @@ def cmd_audit(args) -> int:
     # 1. Indict.
     brief = session.indict(now=now)
     print()
-    print(f"=== INDICTMENT ===")
+    print("=== INDICTMENT ===")
     print(f"  {brief.summary}")
     for c in brief.charges:
         print(f"  • [{c.tier}] {c.invariant}  (severity {c.severity})  — {c.reason}")
@@ -81,7 +80,7 @@ def cmd_audit(args) -> int:
     # 2. Defense plan.
     plan = session.plan_defense(brief, now=now)
     print()
-    print(f"=== DEFENSE PLAN ===")
+    print("=== DEFENSE PLAN ===")
     print(f"  {plan.note}")
     for a in plan.actions:
         print(f"  • {a.kind.value:24} [{a.target_tier}] {a.target_invariant}")
@@ -95,7 +94,7 @@ def cmd_audit(args) -> int:
     e = energy_of(case, now=now)
 
     print()
-    print(f"=== VERDICT ===")
+    print("=== VERDICT ===")
     print(f"  verdict:        {verdict.value}")
     print(f"  release_energy: {e:.1f}  (0.0 = SHIP-ready)")
 

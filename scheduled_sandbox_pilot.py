@@ -1,16 +1,17 @@
 from kill_switch import assert_not_globally_disabled
+
 assert_not_globally_disabled()
 
-import os
-import sys
-import json
-import time
 import argparse
-import logging
-from pathlib import Path
 import datetime
-from error_handling import run_bounded_subprocess
+import json
+import logging
+import sys
+import time
+from pathlib import Path
+
 from alerting import emit_alert
+from error_handling import run_bounded_subprocess
 
 logging.basicConfig(level=logging.INFO, format='[PILOT] %(message)s')
 logger = logging.getLogger("sandbox_pilot")
@@ -54,12 +55,12 @@ def run_pilot_cycle():
     try:
         ops_path = Path("release_artifacts/ops_summary.json")
         if ops_path.exists():
-            with open(ops_path, "r") as f:
+            with open(ops_path) as f:
                 ops = json.load(f)
         else:
             ops = {"consecutive_successes": 0, "consecutive_failures": 0}
             
-        with open("release_artifacts/metrics.json", "r") as f:
+        with open("release_artifacts/metrics.json") as f:
             metrics = json.load(f)
             
         ops["last_successful_run"] = datetime.datetime.utcnow().isoformat() + "Z"
@@ -75,7 +76,7 @@ def run_pilot_cycle():
         with open(ops_path, "w") as f:
             json.dump(ops, f, indent=2)
             
-    except Exception as e:
+    except Exception:
         emit_alert("critical", "pilot_ops_summary_failed", "sandbox_pilot", "pilot_aborted")
         sys.exit(1)
         

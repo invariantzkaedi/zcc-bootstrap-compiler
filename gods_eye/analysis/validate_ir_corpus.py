@@ -6,8 +6,9 @@ Validates JSON structure and extracts metrics
 
 import json
 import sys
-from pathlib import Path
 from collections import defaultdict
+from pathlib import Path
+
 
 def validate_corpus(jsonl_file):
     """Validate JSONL telemetry file"""
@@ -44,7 +45,7 @@ def validate_corpus(jsonl_file):
                 errors.append(f"Line {line_num}: Invalid JSON - {e}")
     
     # Print results
-    print(f"\n✅ Event Type Distribution:")
+    print("\n✅ Event Type Distribution:")
     for event_type, count in sorted(stats.items()):
         print(f"  {event_type:30s}: {count:6d}")
     
@@ -55,7 +56,7 @@ def validate_corpus(jsonl_file):
         for error in errors[:10]:  # Show first 10
             print(f"  {error}")
     else:
-        print(f"\n✅ All events valid!")
+        print("\n✅ All events valid!")
     
     return len(errors) == 0
 

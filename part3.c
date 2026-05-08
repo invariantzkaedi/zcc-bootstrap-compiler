@@ -1387,11 +1387,13 @@ Node *parse_unary(Compiler *cc) {
             } else {
                 expr_n = parse_unary(cc);
             }
-            if (expr_n && expr_n->type) {
+            if (expr_n && expr_n->kind == ND_STR) {
+                sz = cc->strings[expr_n->str_id].len + 1;
+            } else if (expr_n && expr_n->type) {
                 t = expr_n->type;
             }
         }
-        if (t) sz = type_size(t);
+        if (sz == 0 && t) sz = type_size(t);
         if (sz == 0) sz = 8;
         n = node_num(cc, sz, line);
         n->type = cc->ty_ulong;
@@ -2367,7 +2369,7 @@ Node *parse_stmt(Compiler *cc) {
                             } else {
                                 Node *init_node2 = parse_assign(cc);
                                 gvar->initializer = init_node2;
-                                /* Fix: if char[] initialized with string literal, update size */
+                                                                /* Fix: if char[] initialized with string literal, update size */
                                 if (init_node2 && init_node2->kind == ND_STR &&
                                     gvar->type->kind == TY_ARRAY && gvar->type->array_len == 0) {
                                     int slen2 = cc->strings[init_node2->str_id].len + 1;

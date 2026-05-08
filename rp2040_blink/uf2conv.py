@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-import sys
-import struct
-import subprocess
-import re
-import os
-import os.path
 import argparse
 import json
+import os
+import os.path
+import re
+import struct
+import subprocess
+import sys
 from time import sleep
-
 
 UF2_MAGIC_START0 = 0x0A324655 # "UF2\n"
 UF2_MAGIC_START1 = 0x9E5D5157 # Randomly selected
@@ -78,7 +77,7 @@ def convert_from_uf2(buf):
             outp.append(block[32 : 32 + datalen])
         curraddr = newaddr + datalen
         if hd[2] & 0x2000:
-            if hd[7] in families_found.keys():
+            if hd[7] in families_found:
                 if families_found[hd[7]] > newaddr:
                     families_found[hd[7]] = newaddr
             else:
@@ -90,15 +89,15 @@ def convert_from_uf2(buf):
         if blockno == (numblocks - 1):
             print("--- UF2 File Header Info ---")
             families = load_families()
-            for family_hex in families_found.keys():
+            for family_hex in families_found:
                 family_short_name = ""
                 for name, value in families.items():
                     if value == family_hex:
                         family_short_name = name
-                print("Family ID is {:s}, hex value is 0x{:08x}".format(family_short_name,family_hex))
-                print("Target Address is 0x{:08x}".format(families_found[family_hex]))
+                print(f"Family ID is {family_short_name:s}, hex value is 0x{family_hex:08x}")
+                print(f"Target Address is 0x{families_found[family_hex]:08x}")
             if all_flags_same:
-                print("All block flag values consistent, 0x{:04x}".format(hd[2]))
+                print(f"All block flag values consistent, 0x{hd[2]:04x}")
             else:
                 print("Flags were not all the same")
             print("----------------------------")
@@ -237,7 +236,7 @@ def get_drives():
 
 
 def board_id(path):
-    with open(path + INFO_FILE, mode='r') as file:
+    with open(path + INFO_FILE) as file:
         file_content = file.read()
     return re.search(r"Board-ID: ([^\r\n]*)", file_content).group(1)
 

@@ -27,8 +27,12 @@
 ==========================================================================
 """
 from __future__ import annotations
-import json, math, argparse, sys
+
+import argparse
+import json
+import sys
 from pathlib import Path
+
 import numpy as np
 
 HERE = Path(__file__).parent.resolve()
@@ -242,7 +246,7 @@ def main():
         print(f"{c:<15} {counts[c]:>4}  ({dist[c]:.2f})  "
               f"{TARGET_DIST[c]:>9.3f} {gap_s:>10}{flag}")
 
-    print("\n--- PRIME two-field scheduler (η={}, κ={}) ---".format(ETA, KAPPA))
+    print(f"\n--- PRIME two-field scheduler (η={ETA}, κ={KAPPA}) ---")
     picks = schedule_batch(gap, args.slots, rng, args.prioritize)
     existing = {a["name"] for a in data["fleet"]}
     specs = []
@@ -300,7 +304,7 @@ def main():
         txt.append(f"  style: {p['style']}  version: {p['model_version']}")
         txt.append(f"  seed: {p['model_seed']}  texture_seed: {p['texture_seed']}")
     (HERE / "forge_plan.txt").write_text("\n".join(txt))
-    print(f"[ok] forge_plan.txt written")
+    print("[ok] forge_plan.txt written")
 
 if __name__ == "__main__":
     main()

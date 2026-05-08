@@ -1,18 +1,20 @@
 from kill_switch import assert_not_globally_disabled
+
 assert_not_globally_disabled()
-import os
-import sys
-import json
-import socket
-import logging
 import datetime
-from pathlib import Path
+import hashlib
+import json
+import logging
+import os
+import socket
+import sys
+
 from error_handling import run_bounded_subprocess
 from production_guard import assert_sandbox_mode
-import hashlib
+
 
 def get_policy_hash():
-    with open("fortify_policy.json", "r", encoding="utf-8") as f:
+    with open("fortify_policy.json", encoding="utf-8") as f:
         return hashlib.sha256(f.read().encode()).hexdigest()
 
 logging.basicConfig(level=logging.INFO, format='[ATTESTATION] %(message)s')
@@ -40,7 +42,7 @@ def probe_network_egress():
         sock.connect(("8.8.8.8", 53))
         sock.close()
         return True
-    except (socket.timeout, OSError):
+    except (TimeoutError, OSError):
         return False
 
 def get_compiler_provenance():

@@ -43,8 +43,8 @@
 
 /* When this test file is compiled standalone (not as part of zcc), we include
  * the headers relative to the repo root. */
-#include "evm_lifter.h"
-#include "ir.h"
+#include "../evm_lifter.h"
+#include "../ir.h"
 
 /* ── Minimal test harness ─────────────────────────────────────────── */
 
@@ -169,8 +169,8 @@ static void test_t04_push8(void) {
     res = evm_lift_bytecode(&ls);
     CHECK(res == EVM_LIFT_OK,    "lift returns OK");
     n = find_op(ls.func, IR_CONST);
-    CHECK(n != NULL,             "IR_CONST node emitted");
-    if (n) CHECK(n->imm == 0x0102030405060708L, "PUSH8 imm correct");
+    CHECK(n != NULL, "IR_CONST node emitted for PUSH8 boundary");
+    if (n) CHECK(n->imm == (long)0x0102030405060708ULL, "PUSH8 boundary value correct");
     evm_lifter_destroy(&ls);
     ir_module_free(mod);
 }
@@ -1092,7 +1092,7 @@ static void test_t49_jump(void) {
     CHECK(ls.stack.depth == 0,  "JUMP: consumes target, nothing left on stack");
     br = find_op(ls.func, IR_BR);
     CHECK(br != NULL, "JUMP: IR_BR emitted for constant target");
-    if (br && br->label) {
+    if (br && br->label[0] != '\0') {
         CHECK(strcmp(br->label, ".L_evm_4") == 0, "JUMP: resolved target label correctly");
     }
     evm_lifter_destroy(&ls);
@@ -1116,7 +1116,7 @@ static void test_t50_jumpi(void) {
     CHECK(ls.stack.depth == 0,               "JUMPI: nothing left on stack");
     br = find_op(ls.func, IR_BR_IF);
     CHECK(br != NULL, "JUMPI: IR_BR_IF emitted");
-    if (br && br->label) {
+    if (br && br->label[0] != '\0') {
         CHECK(strcmp(br->label, ".L_evm_8") == 0, "JUMPI: resolved target label correctly");
     }
     evm_lifter_destroy(&ls);

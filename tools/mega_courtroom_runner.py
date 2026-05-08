@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Run Courtroom on Swarm Decompilations."""
 
-import sys
 import json
 import subprocess
+import sys
 from pathlib import Path
+
 
 def generate_case_json(c_file_path: Path, out_dir: Path) -> Path:
     case_id = c_file_path.stem

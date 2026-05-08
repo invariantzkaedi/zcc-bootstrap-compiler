@@ -16,3 +16,4 @@ unsigned long long strtoull(const char*, char**, int);
 char* getenv(const char*);
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
+int mkstemp(char *template);

@@ -56,7 +56,7 @@ if __name__ == "__main__":
     anomalies = manifold.detect_wormholes(final_field)
     
     print("\n" + "="*60)
-    print(f" 🌀 TOPOLOGICAL WORMHOLES DISCOVERED IN EMBEDDING SPACE:")
+    print(" 🌀 TOPOLOGICAL WORMHOLES DISCOVERED IN EMBEDDING SPACE:")
     print("="*60)
     if anomalies:
         for a in anomalies[:5]:

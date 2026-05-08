@@ -384,6 +384,84 @@ static ir_pass_result_t ir_pass_strength_reduce(void *fn_ptr) {
     return r;
 }
 
+/* Helper to find the unique definition of a temporary register */
+static ir_node_t *find_def(ir_func_t *fn, ir_node_t *end_node, const char *reg) {
+    ir_node_t *n;
+    ir_node_t *def = NULL;
+    if (!reg || !reg[0]) return NULL;
+    for (n = fn->head; n && n != end_node; n = n->next) {
+        if (n->dst[0] && strcmp(n->dst, reg) == 0) {
+            def = n;
+        }
+    }
+    return def;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * PASS: Coalesce Vector Loads
+ * ════════════════════════════════════════════════════════════════════════
+ */
+static ir_pass_result_t ir_pass_coalesce_vload(void *fn_ptr) {
+    ir_func_t *fn = (ir_func_t *)fn_ptr;
+    ir_pass_result_t r;
+    ir_node_t *L1, *scan;
+    int modified = 0;
+
+    memset(&r, 0, sizeof(r));
+    r.nodes_before = count_nodes(fn);
+
+    for (L1 = fn->head; L1; L1 = L1->next) {
+        if (L1->op == IR_LOAD && ir_type_bytes(L1->type) == 4) {
+            ir_node_t *A1 = find_def(fn, L1, L1->src1);
+            if (!A1 || A1->op != IR_ADD) continue;
+            ir_node_t *C1 = find_def(fn, A1, A1->src2);
+            if (!C1 || C1->op != IR_CONST) continue;
+
+            const char *base_r = A1->src1;
+            long offset1 = C1->imm;
+
+            /* Alignment Verification: Ensure base struct is at least 8-byte aligned */
+            if (offset1 % 8 != 0) continue;
+
+            /* Scan forward for L2 */
+            int distance = 0;
+            for (scan = L1->next; scan && distance < 10; scan = scan->next, distance++) {
+                if (is_side_effect(scan->op)) {
+                    /* Pointer Aliasing Bounds: Any side effect or store invalidates the window (WAR protection) */
+                    break;
+                }
+                if (scan->op == IR_LOAD && ir_type_bytes(scan->type) == 4) {
+                    ir_node_t *L2 = scan;
+                    ir_node_t *A2 = find_def(fn, L2, L2->src1);
+                    if (!A2 || A2->op != IR_ADD) continue;
+                    if (strcmp(A2->src1, base_r) != 0) continue;
+                    ir_node_t *C2 = find_def(fn, A2, A2->src2);
+                    if (!C2 || C2->op != IR_CONST) continue;
+
+                    long offset2 = C2->imm;
+                    if (offset2 == offset1 + 4) {
+                        /* Match! Execute fusion */
+                        L1->op = IR_VLOAD;
+                        L1->type = IR_TY_U64; /* 8 bytes */
+                        
+                        L2->op = IR_VEXTRACT;
+                        strncpy(L2->src1, L1->dst, IR_NAME_MAX);
+                        L2->imm = 1; /* high dword */
+
+                        modified++;
+                        break; /* fused, move on to next L1 */
+                    }
+                }
+            }
+        }
+    }
+
+    r.nodes_after = r.nodes_before;
+    r.nodes_modified = modified;
+    r.changed = modified > 0;
+    return r;
+}
+
 /* ── Registry API ────────────────────────────────────────────────────── */
 
 static ir_pass_manager_t *ir_pm_create(void) {
@@ -467,6 +545,7 @@ void ir_pm_run_default(void *mod_ptr, int verbose) {
     ir_pm_register(pm, "dce", ir_pass_dce);
     ir_pm_register(pm, "const_fold", ir_pass_const_fold);
     ir_pm_register(pm, "strength_reduce", ir_pass_strength_reduce);
+    ir_pm_register(pm, "coalesce_vload", ir_pass_coalesce_vload);
     ir_pm_register(pm, "dce2", ir_pass_dce);
 
     ir_pm_run(pm, mod);

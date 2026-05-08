@@ -1,6 +1,7 @@
 typedef unsigned long size_t;
 #define NULL 0
 #define EOF (-1)
+#define BUFSIZ 8192
 typedef struct _FILE FILE;
 extern FILE *stdin;
 extern FILE *stdout;
@@ -35,3 +36,10 @@ char* tmpnam(char*);
 #define _IONBF 0
 #define _IOLBF 1
 #define _IOFBF 2
+FILE *popen(const char *command, const char *type);
+int pclose(FILE *stream);
+void flockfile(FILE *filehandle);
+void funlockfile(FILE *filehandle);
+int getc_unlocked(FILE *stream);
+int fseeko(FILE *stream, long offset, int whence);
+long ftello(FILE *stream);

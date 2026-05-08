@@ -1,11 +1,13 @@
 from kill_switch import assert_not_globally_disabled
+
 assert_not_globally_disabled()
-import os
-import sys
 import json
 import logging
+import os
 import shutil
+import sys
 from pathlib import Path
+
 from error_handling import run_bounded_subprocess
 
 logging.basicConfig(level=logging.INFO, format='[RELEASE GATE] %(message)s')
@@ -30,7 +32,7 @@ def run_gate():
     os.environ["CHIMERA_SANDBOX_ONLY"] = "1"
     os.environ["CHIMERA_SEED"] = "v4-release-seed"
     
-    with open("fortify_policy.json", "r") as f:
+    with open("fortify_policy.json") as f:
         policy = json.load(f)
         for req in ["max_stdout_bytes", "max_stderr_bytes", "max_preprocessed_bytes"]:
             if req not in policy:
@@ -45,7 +47,7 @@ def run_gate():
         logger.error(stdout)
         sys.exit(1)
     
-    with open("sandbox_attestation.json", "r") as f:
+    with open("sandbox_attestation.json") as f:
         att_report = json.load(f)
         if att_report.get("status") == "local_override" or att_report.get("network_reachable") is True:
             logger.error("FATAL: Release Gate rejects network_reachable == true or local override!")
@@ -75,8 +77,8 @@ def run_gate():
     os.environ["CHIMERA_REPORT_PATH"] = "chimera_run_report.second.json"
     run_bounded_subprocess([sys.executable, "chimera_mutagen_daemon.py"], timeout_sec=20)
         
-    with open("chimera_run_report.first.json", "r") as f: r1 = json.load(f)
-    with open("chimera_run_report.second.json", "r") as f: r2 = json.load(f)
+    with open("chimera_run_report.first.json") as f: r1 = json.load(f)
+    with open("chimera_run_report.second.json") as f: r2 = json.load(f)
         
     if r1["source_hashes"] != r2["source_hashes"]:
         logger.error("DETERMINISM FAILURE: Source hashes mismatch between identical seed runs!")

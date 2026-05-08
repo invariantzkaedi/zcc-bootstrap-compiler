@@ -5,6 +5,7 @@ import re
 import subprocess
 from pathlib import Path
 
+
 def run(cmd):
     return subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 

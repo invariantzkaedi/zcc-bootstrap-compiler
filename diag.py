@@ -1,4 +1,4 @@
-import trimesh, numpy as np
+import trimesh
 
 for name in ['Heavy_Metal_Apocalypse_UFO_LOD1',
              'Ancient_Overgrown_Jungle_UFO_LOD1',

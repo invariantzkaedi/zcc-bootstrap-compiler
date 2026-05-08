@@ -1,5 +1,5 @@
-import json
 import collections
+import json
 
 bifurcation_counts = collections.defaultdict(int)
 divergence_counts = collections.defaultdict(int)
@@ -11,7 +11,7 @@ total_steps = collections.defaultdict(int)
 # 0x4D04 = MF_TELEM_EVOLVE_STEP
 
 try:
-    with open('/mnt/h/agents/selforglinux_build/sqlite_telemetry.log', 'r') as f:
+    with open('/mnt/h/agents/selforglinux_build/sqlite_telemetry.log') as f:
         for line in f:
             line = line.strip()
             if not line.startswith('{'): continue

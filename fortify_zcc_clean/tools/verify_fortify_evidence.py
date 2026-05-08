@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 
+
 def sha256_file(path):
     h = hashlib.sha256()
 

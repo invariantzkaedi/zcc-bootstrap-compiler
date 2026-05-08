@@ -1,14 +1,15 @@
 import json
-import numpy as np
+
 import plotly.graph_objects as go
 from sentence_transformers import SentenceTransformer
-from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+
 
 def main():
     print("Initializing ZKAEDI PRIME Manifold Visualizer...")
     try:
-        with open("zcc-compiler-bug-corpus.json", "r", encoding="utf-8") as f:
+        with open("zcc-compiler-bug-corpus.json", encoding="utf-8") as f:
             bugs = json.load(f)
     except Exception as e:
         print(f"Failed to load corpus: {e}")

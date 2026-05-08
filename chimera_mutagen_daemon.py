@@ -1,19 +1,19 @@
 from __future__ import annotations
+
 from kill_switch import assert_not_globally_disabled
+
 assert_not_globally_disabled()
 
-import os
-import math
-import tempfile
-from pathlib import Path
-import logging
 import hashlib
-import sys
-import shutil
 import json
+import logging
+import math
+import os
+import sys
 import time
+from pathlib import Path
 
-from error_handling import run_bounded_subprocess, validate_energy_output, ErrorTier
+from error_handling import run_bounded_subprocess
 from fortify_gate import fortify_check_file
 from production_guard import assert_sandbox_mode
 from sandbox_attestation import get_compiler_provenance
@@ -359,11 +359,11 @@ int main(void) {
 """
 
 def load_policy():
-    with open("fortify_policy.json", "r", encoding="utf-8") as f:
+    with open("fortify_policy.json", encoding="utf-8") as f:
         return json.load(f)
 
 def get_policy_hash():
-    with open("fortify_policy.json", "r", encoding="utf-8") as f:
+    with open("fortify_policy.json", encoding="utf-8") as f:
         return hashlib.sha256(f.read().encode()).hexdigest()
 
 def _make_variant_seed(generation: int, seed: str) -> int:
@@ -434,7 +434,7 @@ def parse_voxel_output(stdout: str):
         return None, None
     return energy, checksum
 
-def compute_baseline_checksum(policy: dict) -> "int | None":
+def compute_baseline_checksum(policy: dict) -> int | None:
     """
     Compile and run the unmutated (generation=0) harness to pin the baseline
     checksum.  Returns the checksum integer on success, None on any failure.
@@ -666,8 +666,9 @@ def orchestrate():
                     artifacts_cleaned = False
 
         if not artifacts_cleaned:
-            import uuid
             import shutil
+            import uuid
+
             from alerting import emit_alert
             quarantine_dir = Path("quarantine") / f"run-{uuid.uuid4().hex[:8]}"
             quarantine_dir.mkdir(parents=True, exist_ok=True)

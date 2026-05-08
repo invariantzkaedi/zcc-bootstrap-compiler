@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import enum
-import json
 import logging
-import subprocess
 import math
+import subprocess
 
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 logger = logging.getLogger("bonus_error_handler")
@@ -16,6 +15,7 @@ class ErrorTier(enum.Enum):
     CRITICAL_BREACH = 4
 
 import threading
+
 
 def run_bounded_subprocess(cmd: list[str], timeout_sec: int = 5, max_stdout_bytes: int = 65536, max_stderr_bytes: int = 65536) -> tuple[int, str, str]:
     """
@@ -79,7 +79,7 @@ def run_bounded_subprocess(cmd: list[str], timeout_sec: int = 5, max_stdout_byte
         return process.returncode, stdout_str, stderr_str
 
     except Exception as e:
-        logger.error(f"SUBPROCESS FAULT: {str(e)}")
+        logger.error(f"SUBPROCESS FAULT: {e!s}")
         return -2, "", str(e)
 
 def validate_energy_output(stdout: str) -> float | None:

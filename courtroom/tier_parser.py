@@ -15,7 +15,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-
 # Match T<n> or T<n>-<m>. n is unbounded in the regex but bounded below.
 _TIER_RE = re.compile(r"^T(\d+)(?:-(\d+))?$")
 MAX_TIER = 15      # generous ceiling; T0..T7 is the documented ladder

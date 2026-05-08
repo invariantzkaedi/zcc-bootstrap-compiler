@@ -36,10 +36,8 @@ import subprocess
 import sys
 import threading
 import time
-from dataclasses import dataclass, asdict, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Optional
-
 
 __version__ = "2.0.0"
 
@@ -63,7 +61,7 @@ def _is_segfault(exit_code: int) -> bool:
 # ──────────────────────────────────────────────────────────────────────────────
 
 _HERE = Path(__file__).resolve().parent
-_CATALOG: Optional[dict] = None
+_CATALOG: dict | None = None
 
 
 def catalog() -> dict:
@@ -81,7 +79,7 @@ def catalog() -> dict:
     return _CATALOG
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def invariant(inv_id: str) -> dict:
     """Look up a domain or tier invariant by id. Returns {} if unknown."""
     cat = catalog()
@@ -145,7 +143,7 @@ class RunResult:
         )
 
 
-def run(cmd: list[str], timeout: int = 30, cwd: Optional[Path] = None) -> RunResult:
+def run(cmd: list[str], timeout: int = 30, cwd: Path | None = None) -> RunResult:
     """
     Sandboxed subprocess runner (SEC-01 / T6-Must-Resist-Adversaries).
     POSIX: spawns in a new process group so os.killpg() cleanly terminates
@@ -415,7 +413,7 @@ def assess_corpus_entry(
     entry: dict,
     workdir: Path,
     timeout: int = 30,
-    env: Optional[dict] = None,
+    env: dict | None = None,
 ) -> Finding:
     # Guard: corpus entry must have required keys (fail loud, not silent)
     for required_key in ("name", "source_base64", "target_compile_argv",
@@ -628,7 +626,7 @@ def _build_finding(
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def _load_env_overrides(path: Optional[str]) -> dict:
+def _load_env_overrides(path: str | None) -> dict:
     if not path:
         return {}
     try:
@@ -734,7 +732,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         for fut in concurrent.futures.as_completed(futures):
             try:
                 idx, finding = fut.result()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 # Surface worker exceptions as non-fatal; don't silently absorb.
                 with _PRINT_LOCK:
                     print(f"[WORKER-ERROR] entry #{futures[fut]}: {exc}", file=sys.stderr)
@@ -900,8 +898,8 @@ def cmd_gates(args: argparse.Namespace) -> int:
     for g in catalog()["gates"]:
         print(f"Gate {g['id']}: {g['name']}")
         print(f"  purpose: {g['purpose']}")
-        print(f"  status:  [ ] pass  [ ] fail  [ ] n/a")
-        print(f"  evidence:")
+        print("  status:  [ ] pass  [ ] fail  [ ] n/a")
+        print("  evidence:")
         print()
     return 0
 
@@ -967,7 +965,7 @@ def cmd_workflow(args: argparse.Namespace) -> int:
         print(f"\n=== {name} ===")
         print(f"  mission: {body['mission']}")
         print(f"  agents:  {', '.join(body['agents'])}")
-        print(f"  steps:")
+        print("  steps:")
         for i, step in enumerate(body["steps"], 1):
             print(f"    {i}. {step}")
         print(f"  ship_policy: {body['ship_policy']}")
@@ -998,7 +996,7 @@ def cmd_severity(args: argparse.Namespace) -> int:
     for tier_id, body in sm.items():
         print(f"\n{tier_id} — {body['name']}")
         print(f"  ship_policy: {body['ship_policy']}")
-        print(f"  criteria:")
+        print("  criteria:")
         for c in body["criteria"]:
             print(f"    - {c}")
     return 0
@@ -1138,7 +1136,7 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     return args.func(args)
 

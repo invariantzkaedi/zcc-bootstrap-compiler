@@ -8,8 +8,8 @@ runs the full pipeline, and validates the training output.
 """
 
 import json
-import sys
 import os
+import sys
 
 # ═══════════════════════════════════════════════════════════════════
 # Synthetic Corpus Generator

@@ -1079,6 +1079,8 @@ int main(int argc, char **argv) {
   input_file = 0;
   output_file = 0;
   include_paths[0] = '\0';
+  char define_flags[4096] = {0};
+  char extra_link_args[4096] = {0};
   strcat(include_paths, ".:./include");  /* default paths */
 
   int pp_only = 0;
@@ -1209,6 +1211,13 @@ int main(int argc, char **argv) {
       strncpy(audit_export_file, argv[i] + 20, 255);
       audit_export_file[255] = '\0';
       audit_export_mode = 2;
+    } else if (strncmp(argv[i], "-D", 2) == 0) {
+      /* macro definition: -DNAME=VALUE or -DNAME */
+      const char *def = (argv[i][2] != '\0') ? argv[i] + 2 : ((i + 1 < argc) ? argv[++i] : "");
+      if (def[0]) {
+        if (define_flags[0]) strncat(define_flags, "\n", 4095 - (int)strlen(define_flags));
+        strncat(define_flags, def, 4095 - (int)strlen(define_flags));
+      }
     } else if (strncmp(argv[i], "-I", 2) == 0) {
       /* include path: -Ipath or -I path */
       const char *ipath = (argv[i][2] != '\0') ? argv[i] + 2 : ((i + 1 < argc) ? argv[++i] : "");
@@ -1218,8 +1227,18 @@ int main(int argc, char **argv) {
       }
     } else if (strncmp(argv[i], "-l", 2) == 0 || strncmp(argv[i], "-L", 2) == 0 || strncmp(argv[i], "-O", 2) == 0) {
       /* ignore linker flags */
+    } else if (strncmp(argv[i], "-Wl,", 4) == 0) {
+      /* pass through linker flags */
+      if (extra_link_args[0]) strncat(extra_link_args, " ", 4095 - (int)strlen(extra_link_args));
+      strncat(extra_link_args, argv[i], 4095 - (int)strlen(extra_link_args));
     } else {
-      input_file = argv[i];
+      int len = strlen(argv[i]);
+      if (len > 2 && (strcmp(argv[i] + len - 2, ".c") == 0 || strcmp(argv[i] + len - 3, ".rs") == 0)) {
+        input_file = argv[i];
+      } else {
+        if (extra_link_args[0]) strncat(extra_link_args, " ", 4095 - (int)strlen(extra_link_args));
+        strncat(extra_link_args, argv[i], 4095 - (int)strlen(extra_link_args));
+      }
     }
   }
 
@@ -1234,6 +1253,11 @@ int main(int argc, char **argv) {
   }
 
   if (!input_file) {
+    if (extra_link_args[0] && output_file) {
+        char cmd[8192];
+        sprintf(cmd, "gcc -O0 -w -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s -lm -lpthread -ldl 2>&1", output_file, extra_link_args);
+        return system(cmd);
+    }
     printf("Usage: zcc <input.{c|rs}> [-o output] [options]\n");
     printf("Options:\n");
     printf("  --pp-only         print preprocessed C source and exit\n");
@@ -1309,7 +1333,7 @@ int main(int argc, char **argv) {
     /* PREPROCESSOR HOOK */
     {
       int pp_len;
-      char *pp_source = zcc_preprocess(source, source_len, input_file, include_paths, &pp_len);
+      char *pp_source = zcc_preprocess(source, source_len, input_file, include_paths, define_flags, &pp_len);
       if (!pp_source) {
         fprintf(stderr, "zcc: preprocessing failed\n");
         return 1;
@@ -1456,11 +1480,11 @@ int main(int argc, char **argv) {
   if (!stop_at_asm) {
     if (!enable_telemetry_stdout) printf("[Phase 6] GCC Assembly/Linker Binding... ");
     if (compile_only) {
-      sprintf(cmd, "gcc -O0 -w -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -c -o %s %s 2>&1", output_file, asm_file);
+      sprintf(cmd, "gcc -O0 -w -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -c -o %s %s 2>&1", output_file, asm_file);
     } else if (strcmp(input_file, "zcc.c") == 0 || (strlen(input_file) >= 6 && strcmp(input_file + strlen(input_file) - 6, "/zcc.c") == 0)) {
-      sprintf(cmd, "gcc -O0 -w -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_vuln_tag.c evm_lifter.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c -lm 2>&1", output_file, asm_file);
+      sprintf(cmd, "gcc -O0 -w -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_vuln_tag.c evm_lifter.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c -lm 2>&1", output_file, asm_file);
     } else {
-      sprintf(cmd, "gcc -O0 -w -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s -lm -lpthread -ldl 2>&1", output_file, asm_file);
+      sprintf(cmd, "gcc -O0 -w -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s %s -lm -lpthread -ldl 2>&1", output_file, asm_file, extra_link_args);
     }
     ret = system(cmd);
     if (ret != 0) {

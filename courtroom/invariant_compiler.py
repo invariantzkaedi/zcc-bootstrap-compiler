@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 
-from tier_parser import is_t0, required_quality_for_tier  # noqa: F401
+from tier_parser import is_t0, required_quality_for_tier
 
 
 class Status(str, Enum):

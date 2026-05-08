@@ -1,6 +1,8 @@
 import sys
-import trimesh
+
 import numpy as np
+import trimesh
+
 
 def main():
     if len(sys.argv) < 3:

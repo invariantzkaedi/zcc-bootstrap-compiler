@@ -6,6 +6,7 @@ import platform
 import subprocess
 from pathlib import Path
 
+
 def version_of(cmd):
     try:
         result = subprocess.run(

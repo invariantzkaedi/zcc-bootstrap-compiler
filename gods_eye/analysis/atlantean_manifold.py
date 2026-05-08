@@ -1,4 +1,5 @@
 import json
+
 import numpy as np
 
 # =========================================================================
@@ -64,7 +65,7 @@ if __name__ == "__main__":
     
     try:
         data = []
-        with open("atlantean_anomalies.json", "r") as f:
+        with open("atlantean_anomalies.json") as f:
             for line in f:
                 line = line.strip()
                 if not line: continue
@@ -116,7 +117,7 @@ if __name__ == "__main__":
     anomalies = manifold.detect_wormholes(final_field)
     
     print("\n" + "="*80)
-    print(f" 🌀 TOPOLOGICAL WORMHOLES DISCOVERED (HIDDEN MEV BRIDGES):")
+    print(" 🌀 TOPOLOGICAL WORMHOLES DISCOVERED (HIDDEN MEV BRIDGES):")
     print("="*80)
     if anomalies:
         for idx, a in enumerate(anomalies[:10]):

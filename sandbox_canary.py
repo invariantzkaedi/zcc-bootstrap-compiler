@@ -1,11 +1,12 @@
 from kill_switch import assert_not_globally_disabled
+
 assert_not_globally_disabled()
+import json
+import logging
 import os
 import sys
-import json
 import time
-import logging
-from pathlib import Path
+
 from error_handling import run_bounded_subprocess
 
 logging.basicConfig(level=logging.INFO, format='[CANARY] %(message)s')
@@ -30,7 +31,7 @@ def run_canary():
         logger.error(f"Attestation FAILED (Exit {code}).")
         sys.exit(1)
         
-    with open("sandbox_attestation.json", "r") as f:
+    with open("sandbox_attestation.json") as f:
         att = json.load(f)
         if att.get("network_reachable"):
             logger.error("FATAL: Network is reachable.")
@@ -46,7 +47,7 @@ def run_canary():
         logger.error(f"Daemon FAILED (Exit {code}).")
         sys.exit(1)
         
-    with open("chimera_run_report.canary.json", "r") as f:
+    with open("chimera_run_report.canary.json") as f:
         rep = json.load(f)
         if rep.get("generations_completed") != 3:
             logger.error("FATAL: Daemon did not complete exactly 3 generations.")

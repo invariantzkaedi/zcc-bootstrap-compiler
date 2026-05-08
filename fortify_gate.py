@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-import re
 import json
-from pathlib import Path
 import logging
-import os
-import tempfile
+import re
+from pathlib import Path
+
 from error_handling import run_bounded_subprocess
 
 logger = logging.getLogger("fortify_gate")
 
 def load_policy():
-    with open("fortify_policy.json", "r", encoding="utf-8") as f:
+    with open("fortify_policy.json", encoding="utf-8") as f:
         return json.load(f)
 
 def validate_source(source_code: str, file_path: Path) -> tuple[bool, str]:
@@ -88,4 +87,4 @@ def fortify_check_file(file_path: Path) -> tuple[bool, str]:
         content = file_path.read_text(encoding="utf-8")
         return validate_source(content, file_path)
     except Exception as e:
-        return False, f"FILE_READ_ERROR: {str(e)}"
+        return False, f"FILE_READ_ERROR: {e!s}"

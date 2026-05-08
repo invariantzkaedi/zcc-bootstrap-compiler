@@ -1,7 +1,7 @@
-import os
-import sys
 import json
 import logging
+import os
+import sys
 
 logging.basicConfig(level=logging.INFO, format='[KILL_SWITCH] %(message)s')
 

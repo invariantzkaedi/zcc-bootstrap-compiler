@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-import sys, json, os
+import os
+import sys
 from datetime import datetime
+
 
 def generate_report(swarm_dir, decomp_dir, output):
     contracts = []

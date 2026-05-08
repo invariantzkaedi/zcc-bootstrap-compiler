@@ -1,9 +1,10 @@
-import os
-import sys
-import json
 import hashlib
+import json
+import sys
 from pathlib import Path
+
 from alerting import emit_alert
+
 
 def verify_manifest():
     manifest_path = Path("release_artifacts/manifest.json")
@@ -11,7 +12,7 @@ def verify_manifest():
         emit_alert("critical", "manifest_missing", "verify_artifacts", "verification_blocked")
         sys.exit(1)
         
-    with open(manifest_path, "r") as f:
+    with open(manifest_path) as f:
         manifest = json.load(f)
         
     # Verify bundle hash integrity

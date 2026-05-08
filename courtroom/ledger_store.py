@@ -16,15 +16,17 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
 from courtroom import (
-    EntryKind, GENESIS, LedgerEntry, LEDGER_FORMAT_VERSION, ReleaseLedger,
+    GENESIS,
+    LEDGER_FORMAT_VERSION,
+    EntryKind,
+    LedgerEntry,
+    ReleaseLedger,
 )
-
 
 # Optional fcntl import — POSIX-only. On Windows we silently skip locking;
 # zkaedi runs WSL2 so fcntl works there.

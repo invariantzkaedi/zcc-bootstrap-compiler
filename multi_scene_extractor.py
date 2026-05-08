@@ -13,9 +13,11 @@ Output: models.h with:
   int   SCENE_MESH_COUNT
   Mesh  scene_meshes[N]   where Mesh = {triangles, count, aabb_min, aabb_max}
 """
-import sys, struct, numpy as np, trimesh
-from PIL import Image
 import io
+
+import numpy as np
+import trimesh
+from PIL import Image
 
 MAX_FACES = 30000  # patched ZCC MAX_INIT can handle 131072, so 3x30000 = 90k is fine
 

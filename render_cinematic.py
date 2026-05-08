@@ -1,7 +1,7 @@
 import os
 import subprocess
-import time
 import sys
+import time
 
 # Ensure we are in the script's directory
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -30,6 +30,7 @@ def build_raytracer():
     return True
 
 import concurrent.futures
+
 
 def render_frame(i, total_frames):
     frame_start = time.time()

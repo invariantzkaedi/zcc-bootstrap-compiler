@@ -26,10 +26,9 @@ import sys
 import threading
 import time
 import traceback
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Optional
-
+from typing import Any
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Crash taxonomy (mirrored from bug_hunter._CRASH_CODES)
@@ -224,7 +223,7 @@ def pre_flight(
 def post_flight(
     ctx: PreFlightContext,
     finding,                  # bug_hunter.Finding — typed as Any to avoid circular import
-    exc: Optional[BaseException],
+    exc: BaseException | None,
     logger: ShadowLogger,
     workdir: Path,
 ) -> None:
@@ -266,7 +265,7 @@ def post_flight(
     # ── Output Validation: physical side-effects ────────────────────────────
     artifacts_found: list[str] = []
     artifacts_missing: list[str] = []
-    for suffix in (".target", ".reference", f".c"):
+    for suffix in (".target", ".reference", ".c"):
         candidate = workdir / f"{ctx.entry_name}{suffix}"
         if candidate.exists():
             artifacts_found.append(str(candidate))
@@ -333,18 +332,18 @@ def install(
         entry: dict,
         workdir: Path,
         timeout: int = 30,
-        env: Optional[dict] = None,
+        env: dict | None = None,
     ):
         # ── Pre-Flight ──────────────────────────────────────────────────────
         try:
             ctx = pre_flight(entry, env or {}, logger)
-        except ValueError as e:
+        except ValueError:
             # Pre-flight hard fail: re-raise so the worker surfaces it properly
             raise
 
         # ── Core Logic (untouched) ─────────────────────────────────────────
         finding = None
-        exc: Optional[BaseException] = None
+        exc: BaseException | None = None
         try:
             finding = _original(entry, workdir, timeout=timeout, env=env)
         except Exception as e:
@@ -382,7 +381,7 @@ def install(
 # CLI entry point: python shadow_monitor.py run corpus/ [bug_hunter args...]
 # ──────────────────────────────────────────────────────────────────────────────
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     import argparse
     p = argparse.ArgumentParser(
         prog="shadow_monitor",

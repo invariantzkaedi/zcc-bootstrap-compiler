@@ -5,11 +5,19 @@ Usage:  python3 fleet_extract.py /path/to/glbs -o fleet_ir.json
 Requires: pygltflib, pillow, numpy     pip install pygltflib pillow numpy
 """
 from __future__ import annotations
-import argparse, hashlib, io, json, math, struct, sys
+
+import argparse
+import hashlib
+import io
+import json
+import struct
+import sys
 from pathlib import Path
+
 import numpy as np
 from PIL import Image
 from pygltflib import GLTF2
+
 
 def analyze_textures(path: Path):
     g = GLTF2().load(str(path))

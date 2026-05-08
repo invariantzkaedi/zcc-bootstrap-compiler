@@ -1,4 +1,8 @@
-import json, numpy as np
+import json
+
+import numpy as np
+
+
 class SemanticManifold:
     def __init__(self, concepts, embeddings, domains):
         self.concepts = concepts
@@ -45,7 +49,7 @@ class SemanticManifold:
 concepts = []
 embeddings = []
 domains = {}
-with open('hft_harvest_pipeline.jsonl', 'r') as f:
+with open('hft_harvest_pipeline.jsonl') as f:
     for i, line in enumerate(f):
         try:
             d = json.loads(line)

@@ -3,8 +3,9 @@ import argparse
 import hashlib
 import json
 import platform
-from pathlib import Path
 from datetime import datetime, timezone
+from pathlib import Path
+
 
 def sha256_file(path):
     h = hashlib.sha256()

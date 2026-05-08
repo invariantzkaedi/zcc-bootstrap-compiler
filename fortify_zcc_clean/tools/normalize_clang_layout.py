@@ -3,6 +3,7 @@
 import re
 import sys
 
+
 def main():
     text = sys.stdin.read()
 

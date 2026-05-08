@@ -1,5 +1,6 @@
 import os
 
+
 def assert_sandbox_mode() -> None:
     """
     Hard execution guard.

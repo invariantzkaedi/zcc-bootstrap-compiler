@@ -1,10 +1,11 @@
 from kill_switch import assert_not_globally_disabled
+
 assert_not_globally_disabled()
+import hashlib
+import json
+import logging
 import os
 import sys
-import json
-import hashlib
-import logging
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format='[REGRESSION] %(message)s')
@@ -24,7 +25,7 @@ def run_regression_check():
         logger.error("FATAL: policy_approvals.json is missing.")
         sys.exit(1)
         
-    with open("policy_approvals.json", "r") as f:
+    with open("policy_approvals.json") as f:
         approvals = json.load(f)
         
     # 1. Hash Checks
@@ -40,7 +41,7 @@ def run_regression_check():
         
     # We load compiler hash from attestation report if available, else skip check for now (handled in gate)
     if Path("sandbox_attestation.json").exists():
-        with open("sandbox_attestation.json", "r") as f:
+        with open("sandbox_attestation.json") as f:
             att = json.load(f)
             chash = att.get("compiler_provenance", {}).get("compiler_sha256")
             if chash and chash not in approvals["approved_compiler_hashes"]:
@@ -52,7 +53,7 @@ def run_regression_check():
         logger.error("FATAL: fortify_policy.json is missing.")
         sys.exit(1)
         
-    with open("fortify_policy.json", "r") as f:
+    with open("fortify_policy.json") as f:
         current_policy = json.load(f)
         
     if current_policy.get("max_generations", 999) > approvals["max_generations"]:
@@ -79,7 +80,7 @@ def run_regression_check():
         
     # 3. Baseline Snapshot & Capability Freeze
     if Path("baseline_snapshot.json").exists():
-        with open("baseline_snapshot.json", "r") as f:
+        with open("baseline_snapshot.json") as f:
             baseline = json.load(f)
             
         if redteam_count < baseline.get("minimum_redteam_fixtures", 11):
@@ -121,7 +122,7 @@ def run_regression_check():
                 
             # Compiler check
             if Path("sandbox_attestation.json").exists():
-                with open("sandbox_attestation.json", "r") as f:
+                with open("sandbox_attestation.json") as f:
                     att = json.load(f)
                     if att.get("compiler_provenance", {}).get("compiler_command") != "gcc":
                         logger.error("FREEZE VIOLATION: compiler command changed.")

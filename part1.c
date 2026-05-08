@@ -305,7 +305,7 @@ struct Node {
     Node *next;
 };
 
-char *zcc_preprocess(const char *source, int source_len, const char *filename, const char *include_paths, int *out_len);
+char *zcc_preprocess(const char *source, int source_len, const char *filename, const char *include_paths, const char *define_flags, int *out_len);
 
 #include "zcc_ast_bridge.h"
 

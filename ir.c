@@ -25,7 +25,7 @@ ir_module_t  *g_ir_module    = 0;
 
 /* ── Opcode table ────────────────────────────────────────────────────── */
 
-static const char *OP_NAMES[41] = {
+static const char *OP_NAMES[] = {
     "ret",
     "br",
     "br_if",
@@ -68,7 +68,8 @@ static const char *OP_NAMES[41] = {
     "itof",
     "ftoi",
     "asm",
-    "alloca"
+    "vload",
+    "vextract"
 };
 
 /* ── Type table ──────────────────────────────────────────────────────── */

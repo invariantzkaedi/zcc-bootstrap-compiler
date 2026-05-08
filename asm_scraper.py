@@ -1,9 +1,10 @@
-import sys
 import re
+import sys
+
 
 def parse_telemetry(log_file):
     telem = {}
-    with open(log_file, "r") as f:
+    with open(log_file) as f:
         for line in f:
             # Example: [telem] fn=trace used_regs=0x1F src=forced
             m = re.search(r"\[telem\] fn=(\S+) used_regs=(0x[0-9a-fA-F]+) src=(\S+)", line)
@@ -18,7 +19,7 @@ def parse_asm(asm_file):
     asm_usage = {}
     current_fn = None
     mask = 0
-    with open(asm_file, "r") as f:
+    with open(asm_file) as f:
         for line in f:
             line = line.strip()
             if line.endswith(":") and not line.startswith("."):

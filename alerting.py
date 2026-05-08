@@ -1,9 +1,9 @@
+import datetime
+import json
 import os
 import sys
-import json
-import datetime
-import traceback
 from pathlib import Path
+
 
 def emit_alert(severity: str, event: str, component: str, action: str):
     alert = {

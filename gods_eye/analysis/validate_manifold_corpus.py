@@ -1,4 +1,5 @@
-import json, sys
+import json
+import sys
 
 path = "manifold_corpus_test.jsonl"
 records = []

@@ -468,3 +468,4 @@ report.html
 evm_decomp/
 swarm_out/
 evm_jit/
+.env

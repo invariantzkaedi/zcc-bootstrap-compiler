@@ -29,9 +29,15 @@
 ==========================================================================
 """
 from __future__ import annotations
-import os, sys, json, csv, argparse, re
+
+import argparse
+import csv
+import json
+import os
+import re
+import sys
 from pathlib import Path
-from typing import Optional
+
 import httpx
 
 BASE = "https://api.tripo3d.ai/v2/openapi"

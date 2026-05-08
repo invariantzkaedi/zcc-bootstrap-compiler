@@ -1,6 +1,7 @@
 import os
-import json
+
 import numpy as np
+
 
 # A simple text-to-vector embedding using character frequency to simulate dense vectors
 def text_to_embedding(text, dim=128):

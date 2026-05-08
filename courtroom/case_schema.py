@@ -49,9 +49,13 @@ import json
 from pathlib import Path
 
 from invariant_compiler import (
-    Evidence, ReleaseCase, Status, TumblerStatus, Waiver,
+    Evidence,
+    ReleaseCase,
+    Status,
+    TumblerStatus,
+    Waiver,
 )
-from tier_parser import parse_tier, TierParseError
+from tier_parser import TierParseError, parse_tier
 
 
 class CaseSchemaError(ValueError):

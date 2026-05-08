@@ -347,6 +347,18 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                     store_result(out, n->dst, "%rax", ra);
                     break;
                 }
+                case IR_VLOAD: {
+                    load_address_ra(out, n->src1, "%rax", ra);
+                    fprintf(out, "    movq (%%rax), %%rax\n");
+                    store_result(out, n->dst, "%rax", ra);
+                    break;
+                }
+                case IR_VEXTRACT: {
+                    load_operand(out, n->src1, "%rax", ra);
+                    fprintf(out, "    shrq $32, %%rax\n");
+                    store_result(out, n->dst, "%rax", ra);
+                    break;
+                }
                 case IR_ADDR: {
                     load_address(out, n->src1, "%rax");
                     store_result(out, n->dst, "%rax", ra);

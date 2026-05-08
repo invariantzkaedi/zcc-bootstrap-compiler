@@ -1,6 +1,8 @@
 import sys
+
 sys.path.append('/mnt/h/__DOWNLOADS/zcc_github_upload')
 from zcc_dream_mutations import MutationEngine
+
 with open('/mnt/h/__DOWNLOADS/zcc_github_upload/dreams/island_0_parent.s') as f:
     lines = f.readlines()
 engine = MutationEngine(seed=42)

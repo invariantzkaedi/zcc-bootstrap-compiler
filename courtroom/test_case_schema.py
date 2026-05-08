@@ -1,12 +1,11 @@
 """Tests for case_schema.py — declarative case loading."""
 import json
 import tempfile
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from case_schema import CaseSchemaError, load_case, parse_case
-from invariant_compiler import Status, decide, Verdict
-
+from invariant_compiler import Status, Verdict, decide
 
 NOW = datetime(2026, 5, 5, tzinfo=timezone.utc)
 FUTURE = (NOW + timedelta(days=30)).isoformat()

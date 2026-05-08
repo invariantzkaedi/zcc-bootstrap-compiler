@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-import sys, json, os
+import os
+import sys
 from collections import Counter
 from datetime import datetime
+
 
 def generate_mega_report(corpus_dir, decomp_dir, output_html):
     stats = {

@@ -1,9 +1,11 @@
 """Tests for tier_parser. Covers the T1-vs-T10 collision case that motivated the fix."""
 from tier_parser import (
-    ParsedTier, TierParseError, is_t0, parse_tier,
-    required_quality_for_tier, severity_for,
+    TierParseError,
+    is_t0,
+    parse_tier,
+    required_quality_for_tier,
+    severity_for,
 )
-
 
 results = []
 

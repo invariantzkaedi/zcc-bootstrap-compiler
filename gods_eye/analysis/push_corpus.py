@@ -1,5 +1,6 @@
 import os
-from huggingface_hub import HfApi, CommitOperationAdd
+
+from huggingface_hub import CommitOperationAdd, HfApi
 
 api = HfApi(token = os.environ.get("HF_TOKEN", ""))
 files = [
@@ -24,7 +25,7 @@ try:
         commit_message="🔱 ZCC Graduation — C99 Compound Literals, Teapot Mesh, Doom Parse Audit"
     )
     print(result)
-except Exception as e:
+except Exception:
     api = HfApi(token = os.environ.get("HF_TOKEN", ""))
     result = api.create_commit(
         repo_id="zkaedi/zcc-ir-prime-v1",

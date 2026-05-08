@@ -8,15 +8,15 @@ massive array of dark pools. Harvests the synthetic data
 to an append-only log, keeping track of cumulative metrics.
 """
 
-import time
-import random
 import json
 import os
-from decimal import Decimal
+import random
+import time
 from datetime import datetime
+from decimal import Decimal
 
 # Import the core execution logic from the tunneling module
-from custom_tunneling import custom_hft_tunneling, system
+from custom_tunneling import custom_hft_tunneling
 
 # ── TARGET POOLS ──
 DARK_POOLS = [

@@ -1,4 +1,5 @@
 import json
+
 from huggingface_hub import HfApi, hf_hub_download
 
 api = HfApi()
@@ -13,7 +14,7 @@ all_bugs = []
 for f in jsonl_files:
     try:
         path = hf_hub_download(repo_id=repo_id, filename=f, repo_type="dataset")
-        with open(path, 'r') as file:
+        with open(path) as file:
             for line in file:
                 if line.strip():
                     all_bugs.append(json.loads(line))

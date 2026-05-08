@@ -1,11 +1,12 @@
-import os
 import json
+
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
+
 class ZKAEDIAutoFixer:
     def __init__(self, bug_corpus_path):
-        self.bugs = json.load(open(bug_corpus_path, "r", encoding="utf-8"))
+        self.bugs = json.load(open(bug_corpus_path, encoding="utf-8"))
         self.model = SentenceTransformer('all-MiniLM-L6-v2')
         
         # Auto-compute the manifold matrix instead of loading a .npy file
@@ -138,7 +139,7 @@ class ZKAEDIAutoFixer:
             print(f"{'='*70}")
             print(f"\n📋 Bug: {bug['title']}")
             print(f"   Category: {bug.get('cwe', 'Unknown')}")
-            print(f"\n📊 Overall Risk Assessment:")
+            print("\n📊 Overall Risk Assessment:")
             print(f"   Regression Probability: {regression_probability*100:.1f}%")
             print(f"   Hub Status: {'⚠️  YES - High cascade risk' if is_hub else '✓ No'}")
             print(f"   Loop Detected: {'⚠️  YES - Coordinated fix needed' if loop_detected else '✓ No'}")
@@ -157,7 +158,7 @@ class ZKAEDIAutoFixer:
                 for r in medium_risk[:2]:
                     print(f"   • {r['bug']['id']}: {r['bug']['title']} (sim: {r['sim']:.3f})")
             
-            print(f"\n💡 RECOMMENDATIONS:")
+            print("\n💡 RECOMMENDATIONS:")
             if is_hub: print("   1. Fix this bug FIRST (hub).")
             elif loop_detected: print("   1. Part of a loop, needs coordinated fixes.")
             elif critical_risk: print("   1. HIGH regression risk detected.")

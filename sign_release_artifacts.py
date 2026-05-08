@@ -1,8 +1,8 @@
-import os
-import sys
-import json
 import hashlib
+import json
+import os
 from pathlib import Path
+
 
 def generate_manifest():
     bundle_dir = Path("release_artifacts")

@@ -14,17 +14,16 @@ Validates:
   - orchestrate: checksum mismatch causes genome rejection (not abort)
   - orchestrate: non-zero exit causes genome rejection (not abort)
 """
-import sys
 import os
+import sys
 
 # Allow import from repo root when run directly
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import math
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -38,6 +37,7 @@ def _import_daemon():
         kill_switch.assert_not_globally_disabled = lambda: None
         try:
             import importlib
+
             import chimera_mutagen_daemon as d
             importlib.reload(d)
             return d
@@ -51,7 +51,9 @@ def _load_daemon():
     orig = ks.assert_not_globally_disabled
     ks.assert_not_globally_disabled = lambda: None
     try:
-        import importlib, chimera_mutagen_daemon as d
+        import importlib
+
+        import chimera_mutagen_daemon as d
         importlib.reload(d)
         return d
     finally:
@@ -317,7 +319,6 @@ def test_checksum_mismatch_rejects_genome():
         report_holder = {}
 
         def fake_open(path, mode="r", **kwargs):
-            from unittest.mock import mock_open
             if "report.json" in str(path) and "w" in mode:
                 import io
                 buf = io.StringIO()

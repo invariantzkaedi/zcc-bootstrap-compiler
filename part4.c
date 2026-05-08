@@ -4141,12 +4141,27 @@ static void emit_global_var(Compiler *cc, Node *gvar) {
       fprintf(cc->out, "    .globl %s\n", gvar->name);
     }
     fprintf(cc->out, "%s:\n", gvar->name);
+
     /* only handle simple integer initializers */
     /* Strip ND_CAST wrappers (e.g. function pointer casts like
        `Curl_cmalloc = (curl_malloc_callback)malloc`) */
     Node *init = gvar->initializer;
+    
+    if (init && init->kind != ND_INIT_LIST && init->kind != ND_STR && init->kind != ND_ADDR && init->kind != ND_ADDR_LABEL && init->kind != ND_ADD) {
+        int const_ok = 1;
+        long long const_val = eval_const_expr_p4(init, &const_ok);
+        if (const_ok) {
+            if (size == 1) fprintf(cc->out, "    .byte %lld\n", const_val);
+            else if (size == 2) fprintf(cc->out, "    .short %lld\n", const_val);
+            else if (size == 4) fprintf(cc->out, "    .long %lld\n", const_val);
+            else fprintf(cc->out, "    .quad %lld\n", const_val);
+            return;
+        }
+    }
+
     while (init && init->kind == ND_CAST) init = init->lhs;
     if (init && init->kind == ND_NUM) {
+
       if (size == 1)
         fprintf(cc->out, "    .byte %lld\n", init->int_val);
       else if (size == 2)

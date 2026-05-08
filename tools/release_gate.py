@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """ZCC Release Gate — Courtroom as Gate-Zero."""
 
-import sys
 import argparse
+import sys
 from pathlib import Path
 
 # ensure courtroom is in path before importing
 zcc_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(zcc_dir / "courtroom"))
 
-from audit_cli import main as courtroom_main
 from invariant_compiler import ReleaseCase
+
 from courtroom import CourtSession
 
 
@@ -41,7 +41,7 @@ def load_case_from_ticket(ticket_path: str) -> ReleaseCase:
             }
         }
         
-    from invariant_compiler import TumblerStatus, Evidence
+    from invariant_compiler import Evidence, TumblerStatus
     
     tumblers = []
     for t in data.get("tumblers", []):
@@ -64,7 +64,7 @@ def gate_zero(ticket_path: str, ledger_path: str = "releases/ledger.jsonl") -> i
     session.indict()
     report = session.recompute()
 
-    print(f"\n🔱 ZKAEDI RELEASE GATE")
+    print("\n🔱 ZKAEDI RELEASE GATE")
     print(f"Case: {case.id}")
     print(f"Verdict: {report.verdict}")
     print(f"Summary: {report.summary}\n")

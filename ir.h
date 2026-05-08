@@ -105,6 +105,10 @@ typedef enum {
     IR_FTOI,        /* dst = (int64)src1   (double to signed int64)        */
     IR_ASM,         /* dst = asm_string                                    */
 
+    /* Vector Operations */
+    IR_VLOAD,       /* dst = *(vec*)src1   (Coalesced Vector Load)         */
+    IR_VEXTRACT,    /* dst = src1[imm]     (Vector Element Extract)        */
+
     IR_OP_COUNT     /* sentinel — keep last                                */
 } ir_op_t;
 

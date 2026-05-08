@@ -1,4 +1,6 @@
-import subprocess, os
+import os
+import subprocess
+
 os.chdir('/mnt/h/__DOWNLOADS/zcc_github_upload')
 msg = (
     "chore: stamp baseline metrics + final tripwire lock\n\n"

@@ -1,5 +1,7 @@
 import os
+
 from PIL import Image
+
 
 def create_animation():
     frame_dir = "frames"
