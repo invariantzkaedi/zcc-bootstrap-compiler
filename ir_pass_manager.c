@@ -411,6 +411,12 @@ static ir_pass_result_t ir_pass_strength_reduce(void *fn_ptr) {
 typedef struct {
     unsigned long hash;
     char          dst[IR_NAME_MAX];  /* destination of the canonical def   */
+    /* ── Structural key (fortification layer) ──────────────────────── */
+    ir_op_t       key_op;
+    ir_type_t     key_type;
+    char          key_src1[IR_NAME_MAX];
+    char          key_src2[IR_NAME_MAX];
+    long          key_imm;
     int           occupied;
 } gvn_entry_t;
 
@@ -465,7 +471,12 @@ static unsigned long gvn_hash_node(ir_node_t *n) {
     return h;
 }
 
-/* Check if an opcode is pure (eligible for GVN) */
+/* Check if an opcode is pure (eligible for GVN).
+ * BOLSTER: IR_COPY excluded — GVN-produced copies must not be
+ *   re-matched (they are forwarding aliases, not computations).
+ * BOLSTER: IR_CONST excluded — each CONST defines a unique temp;
+ *   two CONSTs with the same value but different dst names must
+ *   both survive so downstream references remain valid. */
 static int gvn_is_pure(ir_op_t op) {
     switch (op) {
     case IR_ADD: case IR_SUB: case IR_MUL: case IR_DIV: case IR_MOD:
@@ -474,8 +485,7 @@ static int gvn_is_pure(ir_op_t op) {
     case IR_SHL: case IR_SHR:
     case IR_EQ:  case IR_NE:  case IR_LT:  case IR_LE:
     case IR_GT:  case IR_GE:
-    case IR_CAST: case IR_COPY:
-    case IR_CONST:
+    case IR_CAST:
     case IR_FADD: case IR_FSUB: case IR_FMUL: case IR_FDIV:
     case IR_ITOF: case IR_FTOI:
         return 1;
@@ -484,9 +494,22 @@ static int gvn_is_pure(ir_op_t op) {
     }
 }
 
-/* Lookup or insert. Returns the canonical dst if a match exists,
- * or NULL if this is a new entry (which gets inserted). */
-static const char *gvn_lookup_or_insert(unsigned long hash, const char *dst) {
+/* HARDEN: Full structural comparison — invoked on hash hit.
+ * Returns 1 only when all 5 key fields match exactly. */
+static int gvn_keys_match(gvn_entry_t *e, ir_node_t *n) {
+    if (e->key_op   != n->op)   return 0;
+    if (e->key_type != n->type) return 0;
+    if (e->key_imm  != n->imm)  return 0;
+    if (strcmp(e->key_src1, n->src1) != 0) return 0;
+    if (strcmp(e->key_src2, n->src2) != 0) return 0;
+    return 1;
+}
+
+/* Lookup or insert with full structural verification.
+ * HARDEN: Hash hit alone is insufficient — we compare all 5 key fields.
+ * On hash collision (same hash, different structure), probing continues.
+ * Returns the canonical dst on true structural match, NULL on new insert. */
+static const char *gvn_lookup_or_insert(unsigned long hash, ir_node_t *n) {
     unsigned int idx = (unsigned int)(hash & GVN_TABLE_MASK);
     int probe;
 
@@ -494,18 +517,27 @@ static const char *gvn_lookup_or_insert(unsigned long hash, const char *dst) {
         unsigned int slot = (idx + probe) & GVN_TABLE_MASK;
 
         if (!s_gvn_table[slot].occupied) {
-            /* Empty slot — insert */
+            /* Empty slot — insert with full structural key */
             s_gvn_table[slot].hash = hash;
-            strncpy(s_gvn_table[slot].dst, dst, IR_NAME_MAX - 1);
+            strncpy(s_gvn_table[slot].dst, n->dst, IR_NAME_MAX - 1);
             s_gvn_table[slot].dst[IR_NAME_MAX - 1] = '\0';
+            s_gvn_table[slot].key_op   = n->op;
+            s_gvn_table[slot].key_type = n->type;
+            strncpy(s_gvn_table[slot].key_src1, n->src1, IR_NAME_MAX - 1);
+            s_gvn_table[slot].key_src1[IR_NAME_MAX - 1] = '\0';
+            strncpy(s_gvn_table[slot].key_src2, n->src2, IR_NAME_MAX - 1);
+            s_gvn_table[slot].key_src2[IR_NAME_MAX - 1] = '\0';
+            s_gvn_table[slot].key_imm  = n->imm;
             s_gvn_table[slot].occupied = 1;
             return NULL;
         }
 
-        if (s_gvn_table[slot].hash == hash) {
-            /* Hash match — return the canonical destination */
+        if (s_gvn_table[slot].hash == hash &&
+            gvn_keys_match(&s_gvn_table[slot], n)) {
+            /* HARDEN: Hash AND structure match — true redundancy */
             return s_gvn_table[slot].dst;
         }
+        /* Hash collision but different structure — continue probing */
     }
 
     /* Table full — treat as miss, don't optimize */
@@ -527,12 +559,21 @@ static ir_pass_result_t ir_pass_gvn(void *fn_ptr) {
         unsigned long h;
         const char *canon;
 
+        /* BOLSTER: Reset GVN map at label boundaries.
+         * Values computed in one basic block are not guaranteed
+         * available at the entry of another (no dominator analysis
+         * in this single-pass mode). Conservative but safe. */
+        if (n->op == IR_LABEL) {
+            gvn_clear();
+            continue;
+        }
+
         /* Skip non-pure or non-defining instructions */
         if (!gvn_is_pure(n->op)) continue;
         if (n->dst[0] == '\0') continue;
 
         h = gvn_hash_node(n);
-        canon = gvn_lookup_or_insert(h, n->dst);
+        canon = gvn_lookup_or_insert(h, n);
 
         if (canon) {
             /* Redundant — rewrite as COPY from canonical def */
