@@ -1,0 +1,23 @@
+name = "zkaedi-global-matrix"
+main = "src/index.ts"
+compatibility_date = "2023-12-01"
+
+[[kv_namespaces]]
+binding = "MEMPOOL_STATE"
+id = "c4d3b2a1"
+
+[[d1_databases]]
+binding = "TELEMETRY_DB"
+database_name = "strike_telemetry"
+database_id = "f8e7d6c5"
+
+[[r2_buckets]]
+binding = "ASSET_VAULT"
+bucket_name = "zkaedi-payloads"
+
+[durable_objects]
+bindings = [{ name = "MATRIX_ROOM", class_name = "MatrixRoom" }]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["MatrixRoom"]

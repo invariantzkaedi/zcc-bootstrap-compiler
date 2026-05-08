@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZKAEDI // Apex Matrix Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+        
+        :root {
+            --bg: #050608;
+            --navy: #0B0E1A;
+            --cyan: #00f0ff;
+            --magenta: #ff003c;
+            --glass: rgba(11, 14, 26, 0.75);
+            --border: rgba(0, 240, 255, 0.2);
+        }
+
+        body {
+            margin: 0; padding: 0; background: var(--bg);
+            color: var(--cyan); font-family: 'Space Mono', monospace;
+            min-height: 100vh; overflow: hidden;
+        }
+
+        #webgl-container {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: 0; pointer-events: none;
+        }
+
+        .scanline {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(to bottom, transparent 50%, rgba(0, 240, 255, 0.05) 51%);
+            background-size: 100% 4px; pointer-events: none; z-index: 999;
+        }
+
+        #ui-layer {
+            position: relative; z-index: 10; height: 100vh;
+            display: flex; flex-direction: column;
+        }
+
+        header {
+            padding: 1.5rem 2rem; border-bottom: 1px solid var(--border);
+            background: var(--glass); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 0 40px rgba(0, 240, 255, 0.05);
+        }
+
+        h1 {
+            margin: 0; font-size: 1.3rem; letter-spacing: 5px;
+            text-transform: uppercase; text-shadow: 0 0 12px var(--cyan);
+            animation: pulse 2.5s infinite;
+        }
+
+        .status {
+            color: var(--magenta); font-weight: bold;
+            text-shadow: 0 0 10px var(--magenta);
+        }
+
+        .grid {
+            display: grid; grid-template-columns: 350px 1fr 400px;
+            gap: 1.5rem; padding: 1.5rem; flex-grow: 1;
+        }
+
+        .panel {
+            background: var(--glass); border: 1px solid rgba(255, 0, 60, 0.3);
+            padding: 1.5rem; box-shadow: 0 0 20px rgba(255, 0, 60, 0.1), inset 0 0 15px rgba(0, 240, 255, 0.03);
+            -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); display: flex; flex-direction: column;
+        }
+
+        h2 {
+            margin-top: 0; font-size: 1rem; border-bottom: 1px solid var(--border);
+            padding-bottom: 0.5rem; color: #fff;
+            text-shadow: 0 0 5px #fff; text-transform: uppercase;
+        }
+
+        .metrics { display: flex; flex-direction: column; gap: 1.5rem; }
+        .metric-card {
+            display: flex; flex-direction: column;
+            font-size: 0.8rem; color: #aaa;
+        }
+        .metric-card span {
+            font-size: 2.2rem; font-weight: bold; color: var(--magenta);
+            text-shadow: 0 0 15px var(--magenta); margin-top: 5px;
+        }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid rgba(0, 240, 255, 0.1); }
+        th { color: var(--magenta); }
+        .hash { color: #fff; }
+        .log-container { overflow-y: auto; flex-grow: 1; max-height: 60vh; }
+        
+        .controls { display: flex; flex-direction: column; gap: 1rem; margin-top: 2rem; }
+        label { font-size: 0.8rem; color: #fff; display: flex; justify-content: space-between; }
+        input[type="range"] {
+            -webkit-appearance: none; appearance: none; width: 100%; background: transparent; margin-top: 5px;
+        }
+        .panel-transparent { background: transparent; border: none; box-shadow: none; }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 16px; width: 16px;
+            background: var(--cyan); box-shadow: 0 0 10px var(--cyan);
+            cursor: pointer; border-radius: 0;
+        }
+        input[type="range"]::-webkit-slider-runnable-track {
+            width: 100%; height: 2px; background: rgba(0, 240, 255, 0.3);
+        }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+        
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: var(--navy); }
+        ::-webkit-scrollbar-thumb { background: var(--magenta); }
+    </style>
+</head>
+<body>
+    <div id="webgl-container"></div>
+    <div class="scanline"></div>
+    
+    <div id="ui-layer">
+        <header>
+            <h1>ZKAEDI // Apex Matrix</h1>
+            <div id="ws-status" class="status">● CONNECTING...</div>
+        </header>
+        
+        <div class="grid">
+            <!-- Left Panel -->
+            <div class="panel">
+                <h2>HAMILTONIAN ENGINE</h2>
+                <div class="metrics">
+                    <div class="metric-card">H_t VOLATILITY SCALAR <span id="h_scalar">0.0000</span></div>
+                    <div class="metric-card">NASH BID SPREAD <span id="nash_bid">0 WEI</span></div>
+                    <div class="metric-card">EDGE RTT <span id="ping">0 ms</span></div>
+                </div>
+                
+                <div class="controls">
+                    <h2>ENGINE PARAMS</h2>
+                    <label for="eta_slider">η (Eta) <span id="eta_val">0.40</span></label>
+                    <input type="range" id="eta_slider" title="Eta: Volatility Multiplier" min="0.0" max="1.0" step="0.01" value="0.4">
+                    
+                    <label for="gamma_slider">γ (Gamma) <span id="gamma_val">1.20</span></label>
+                    <input type="range" id="gamma_slider" title="Gamma: Tanh Saturation" min="0.0" max="5.0" step="0.01" value="1.2">
+                </div>
+            </div>
+            
+            <!-- Center Panel (Transparent) -->
+            <div class="panel-transparent"></div>
+            
+            <!-- Right Panel -->
+            <div class="panel">
+                <h2>GLOBAL STRIKE FEED</h2>
+                <div class="log-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>TARGET</th>
+                                <th>H_SCALAR</th>
+                                <th>LATENCY</th>
+                            </tr>
+                        </thead>
+                        <tbody id="strike_log">
+                            <!-- Injected via WebSocket -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- WebGL & WebSocket Logic -->
+    <script>
+        /* WEBGL TOPOLOGY RENDERER */
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x0b0e1a, 0.002);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('webgl-container').appendChild(renderer.domElement);
+
+        const geometry = new THREE.PlaneGeometry(200, 200, 64, 64);
+        const vertices = geometry.attributes.position.array;
+        for (let i = 0; i < vertices.length; i += 3) {
+            vertices[i+2] = (Math.random() - 0.5) * 5; 
+        }
+        
+        const material = new THREE.MeshBasicMaterial({ 
+            color: 0x00f0ff, 
+            wireframe: true,
+            transparent: true,
+            opacity: 0.18
+        });
+        
+        const terrain = new THREE.Mesh(geometry, material);
+        terrain.rotation.x = -Math.PI / 2.2;
+        terrain.position.y = -15;
+        scene.add(terrain);
+
+        camera.position.z = 40;
+        camera.position.y = 10;
+
+        let global_ht = 0.5;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            terrain.rotation.z += 0.001; // Kinetic rotation
+            
+            const verts = terrain.geometry.attributes.position.array;
+            const time = Date.now() * 0.001;
+            
+            for (let i = 0; i < verts.length; i += 3) {
+                const x = verts[i];
+                const y = verts[i+1];
+                // Math wave driven directly by H_t scalar
+                verts[i+2] = Math.sin(x * 0.1 + time) * Math.cos(y * 0.1 + time) * (2.0 + Math.abs(global_ht) * 2.5);
+            }
+            terrain.geometry.attributes.position.needsUpdate = true;
+            
+            // Volatility color gating
+            if (Math.abs(global_ht) > 2.0) {
+                material.color.setHex(0xff003c); // Magenta Spike
+            } else {
+                material.color.setHex(0x00f0ff); // Cyan Nominal
+            }
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        });
+
+        /* BIDIRECTIONAL WEBSOCKET UPLINK */
+        const statusEl = document.getElementById('ws-status');
+        let ws;
+        
+        function connectWebSocket() {
+            try {
+                // Determine edge matrix domain securely
+                let wsUrl = "wss://" + window.location.host + "/matrix";
+                if (window.location.protocol === "file:") throw new Error("Local mock required");
+                
+                ws = new WebSocket(wsUrl);
+                ws.onopen = () => { statusEl.innerText = "● UPLINK SECURE"; statusEl.style.color = "var(--cyan)"; };
+                ws.onclose = () => { statusEl.innerText = "● MATRIX OFFLINE"; statusEl.style.color = "var(--magenta)"; setTimeout(connectWebSocket, 3000); };
+                ws.onmessage = handleIncomingTelemetry;
+            } catch(e) {
+                statusEl.innerText = "● LOCAL MOCK UPLINK";
+                setInterval(mockTelemetry, 450);
+            }
+        }
+        connectWebSocket();
+
+        function handleIncomingTelemetry(event) {
+            const data = JSON.parse(event.data);
+            updateUI(data);
+        }
+
+        // Send Param Updates directly back to Edge
+        function broadcastParam(key, val) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'param_update', [key]: val }));
+            }
+        }
+
+        document.getElementById('eta_slider').addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value).toFixed(2);
+            document.getElementById('eta_val').innerText = val;
+            broadcastParam('eta', val);
+        });
+
+        document.getElementById('gamma_slider').addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value).toFixed(2);
+            document.getElementById('gamma_val').innerText = val;
+            broadcastParam('gamma', val);
+        });
+
+        /* DATA BINDING */
+        let pingStart = Date.now();
+        function mockTelemetry() {
+            const ping = Date.now() - pingStart;
+            pingStart = Date.now();
+            
+            global_ht += (Math.random() - 0.5) * 0.5;
+            global_ht = Math.max(-5, Math.min(5, global_ht));
+            const bid = Math.floor(Math.random() * 500000 + 10000);
+            
+            updateUI({
+                hash: "0x" + Math.random().toString(16).substr(2, 8) + "..." + Math.random().toString(16).substr(2, 4),
+                h_scalar: global_ht,
+                target: "0x" + Math.random().toString(16).substr(2, 4) + "..." + Math.random().toString(16).substr(2, 4),
+                latency: ping,
+                bid: bid
+            });
+        }
+
+        function updateUI(data) {
+            if (data.h_scalar !== undefined) {
+                global_ht = data.h_scalar;
+                document.getElementById('h_scalar').innerText = data.h_scalar.toFixed(4);
+            }
+            if (data.bid !== undefined) document.getElementById('nash_bid').innerText = data.bid.toLocaleString() + " WEI";
+            if (data.latency !== undefined) document.getElementById('ping').innerText = data.latency + " ms";
+            
+            if (data.target && data.h_scalar !== undefined) {
+                const tbody = document.getElementById('strike_log');
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${data.target}</td><td class="hash">${data.h_scalar.toFixed(3)}</td><td>${data.latency}ms</td>`;
+                tbody.prepend(tr);
+                if (tbody.children.length > 20) tbody.removeChild(tbody.lastChild);
+            }
+        }
+    </script>
+</body>
+</html>

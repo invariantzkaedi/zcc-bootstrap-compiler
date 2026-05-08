@@ -1,0 +1,21 @@
+{
+  "name": "zkaedi-edge-brainstem",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev src/index.ts",
+    "deploy": "wrangler deploy --minify src/index.ts",
+    "build": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240924.0",
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.12",
+    "typescript": "^5.5.2",
+    "wrangler": "^3.0.0"
+  },
+  "dependencies": {
+    "ethers": "^6.13.4",
+    "ws": "^8.18.0"
+  }
+}

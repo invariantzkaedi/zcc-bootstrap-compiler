@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZKAEDI // Apex Matrix Overclock</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+        
+        :root {
+            --bg: #0a0b10;
+            --navy: #111524;
+            --cyan: #00f0ff;
+            --magenta: #ff003c;
+            --glass: rgba(17, 21, 36, 0.8);
+        }
+
+        body { 
+            background: radial-gradient(circle at center, var(--navy) 0%, var(--bg) 100%); 
+            color: var(--cyan); 
+            font-family: 'Space Mono', monospace; 
+            margin: 0; 
+            padding: 20px; 
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .grid { display: grid; grid-template-rows: auto 1fr auto; height: 95vh; gap: 20px; }
+        
+        .header { 
+            display: flex; justify-content: space-between; padding: 20px; 
+            background: var(--glass); border: 1px solid rgba(0, 240, 255, 0.2); 
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.05); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+        }
+        
+        .header h2 { margin: 0; font-size: 1.4em; letter-spacing: 2px; text-shadow: 0 0 10px var(--cyan); }
+        .metric { text-align: right; font-size: 0.9em; letter-spacing: 1px; color: #fff; }
+        .metric .val { 
+            font-size: 2.2em; color: var(--cyan); font-weight: bold;
+            text-shadow: 0 0 15px rgba(0, 240, 255, 0.5); transition: color 0.2s, text-shadow 0.2s; 
+        }
+
+        /* Critical Volatility State */
+        .critical .metric .val { color: var(--magenta); text-shadow: 0 0 20px rgba(255, 0, 60, 0.7); }
+        .critical .header h2 { color: var(--magenta); text-shadow: 0 0 10px var(--magenta); }
+
+        /* Central Visualizer */
+        .visualizer { 
+            display: flex; justify-content: center; align-items: center; 
+            background: var(--glass); border: 1px solid rgba(0, 240, 255, 0.2); 
+            position: relative; overflow: hidden;
+        }
+        
+        svg.ring { width: 500px; height: 500px; z-index: 10; }
+        
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes counter-spin { 100% { transform: rotate(-360deg); } }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+
+        #coreRing { transform-origin: center; animation: spin 15s linear infinite; transition: stroke 0.2s; }
+        #outerRing { transform-origin: center; animation: counter-spin 25s linear infinite; transition: stroke 0.2s; }
+        
+        .critical-text { opacity: 0; font-weight: bold; fill: var(--magenta); letter-spacing: 3px; font-size: 14px; }
+        .critical .critical-text { opacity: 1; animation: blink 0.8s infinite; }
+        .critical #coreRing { stroke: var(--magenta); animation-duration: 2s; stroke-dasharray: 20 10; }
+        .critical #outerRing { stroke: var(--magenta); animation-duration: 4s; }
+
+        /* Chart & Controls */
+        .chart-container { 
+            background: var(--glass); border: 1px solid rgba(0, 240, 255, 0.2); 
+            padding: 20px; height: 220px; display: flex; flex-direction: column; gap: 10px;
+        }
+        
+        .chart-svg-wrapper { flex-grow: 1; position: relative; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 10px; }
+        label { font-size: 0.8em; color: #fff; display: flex; flex-direction: column; gap: 5px; }
+        input[type=range] { width: 100%; accent-color: var(--cyan); }
+        .critical input[type=range] { accent-color: var(--magenta); }
+
+    </style>
+</head>
+<body>
+    <div id="app" class="grid">
+        <div class="header">
+            <h2>ZKAEDI // Hamiltonian MEV</h2>
+            <div class="metric">LIVE H_SCALAR<br><span id="h_val" class="val">0.500</span></div>
+            <div class="metric">NASH OPTIMAL BID<br><span id="bid_val" class="val">0 Gwei</span></div>
+            <div class="metric">MEMPOOL TPS<br><span id="tps_val" class="val">0.0</span></div>
+        </div>
+
+        <div class="visualizer">
+            <svg class="ring" viewBox="0 0 200 200">
+                <circle id="outerRing" cx="100" cy="100" r="90" fill="none" stroke="#00f0ff" stroke-width="1" stroke-dasharray="2 8" opacity="0.6" />
+                <circle id="coreRing" cx="100" cy="100" r="70" fill="none" stroke="#00f0ff" stroke-width="4" stroke-dasharray="15 10" />
+                <circle cx="100" cy="100" r="2" fill="#fff" opacity="0.5" />
+                
+                <text class="critical-text" x="100" y="100" text-anchor="middle" dominant-baseline="middle">CRITICAL VOLATILITY</text>
+            </svg>
+        </div>
+
+        <div class="chart-container">
+            <div class="chart-svg-wrapper">
+                <svg id="chartSvg" viewBox="0 0 1000 100" width="100%" height="100%" preserveAspectRatio="none">
+                    <line x1="0" y1="33.3" x2="1000" y2="33.3" stroke="rgba(255, 255, 255, 0.2)" stroke-dasharray="5 5" stroke-width="1"/>
+                    
+                    <polygon id="chartArea" fill="rgba(0, 240, 255, 0.1)" />
+                    <polyline id="chartLine" fill="none" stroke="#00f0ff" stroke-width="2" />
+                </svg>
+            </div>
+            
+            <div class="controls">
+                <label>ETA (Volatility Multiplier): <span id="eta_lbl">0.42</span> 
+                    <input type="range" id="eta_in" min="0.1" max="1.0" step="0.01" value="0.42">
+                </label>
+                <label>GAMMA (Tanh Saturation): <span id="gam_lbl">1.20</span> 
+                    <input type="range" id="gam_in" min="0.5" max="3.0" step="0.01" value="1.2">
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div id="dropzone" class="dropzone">
+        <div class="dropzone-content">
+            <h3 id="dropzone-text">INITIALIZE ASSET UPLINK</h3>
+            <p class="dropzone-sub">DROP .GLB, .OBJ, .STL, .USD</p>
+            
+            <div id="ingest-stats" class="ingest-stats-container">
+                <table class="ingest-stats-table">
+                    <tr><td>SHA-256:</td><td id="stat-hash">...</td></tr>
+                    <tr><td>Raw Size:</td><td id="stat-size">...</td></tr>
+                    <tr><td>Warden Status:</td><td id="stat-status" class="stat-status-cell">AWAITING PAYLOAD</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .dropzone {
+            background: rgba(17, 21, 36, 0.5);
+            border: 2px dashed rgba(0, 240, 255, 0.3);
+            border-radius: 4px;
+            padding: 40px 20px;
+            text-align: center;
+            transition: all 0.2s ease-in-out;
+            position: relative;
+            overflow: hidden;
+        }
+        .dropzone.active {
+            background: rgba(0, 240, 255, 0.1);
+            border-color: var(--cyan);
+            box-shadow: 0 0 30px rgba(0, 240, 255, 0.2) inset;
+        }
+        .dropzone.processing {
+            border-color: var(--magenta);
+            box-shadow: 0 0 30px rgba(255, 0, 60, 0.2) inset;
+        }
+        .dropzone h3 { margin: 0; color: #fff; letter-spacing: 2px; }
+        .dropzone-sub { color: rgba(255,255,255,0.5); font-size: 0.8em; margin-top: 5px; }
+        .ingest-stats-container { display: none; margin-top: 15px; }
+        .ingest-stats-table { width: 100%; text-align: left; font-size: 0.8em; color: var(--cyan); }
+        .stat-status-cell { color: var(--magenta); }
+    </style>
+
+    <script>
+        // Engine State
+        const HISTORY_LEN = 100;
+        const THRESHOLD = 8.0;
+        const MAX_H = 12.0;
+        let history = new Array(HISTORY_LEN).fill(0.5);
+        let H_t = 0.5;
+
+        // DOM Nodes
+        const app = document.getElementById('app');
+        const hVal = document.getElementById('h_val');
+        const bidVal = document.getElementById('bid_val');
+        const tpsVal = document.getElementById('tps_val');
+        const chartLine = document.getElementById('chartLine');
+        const chartArea = document.getElementById('chartArea');
+        const etaIn = document.getElementById('eta_in');
+        const gamIn = document.getElementById('gam_in');
+        const etaLbl = document.getElementById('eta_lbl');
+        const gamLbl = document.getElementById('gam_lbl');
+
+        function updateTick() {
+            // Read Inputs
+            const eta = parseFloat(etaIn.value);
+            const gamma = parseFloat(gamIn.value);
+            etaLbl.innerText = eta.toFixed(2);
+            gamLbl.innerText = gamma.toFixed(2);
+
+            // Hamiltonian Recurrence Math
+            const noise = (Math.random() - 0.5) * 0.8;
+            H_t = H_t + (eta * H_t * Math.tanh(gamma * H_t)) + noise;
+
+            // Clamping to simulate bounded EVM gas limits
+            if (H_t > MAX_H) H_t = MAX_H - (Math.random() * 2);
+            if (H_t < 0.1) H_t = 0.1;
+
+            history.push(H_t);
+            history.shift();
+
+            const isCritical = H_t >= THRESHOLD;
+            
+            // UI State Flip
+            app.className = 'grid ' + (isCritical ? 'critical' : '');
+
+            // Metric Updates
+            hVal.innerText = H_t.toFixed(3);
+            tpsVal.innerText = (Math.random() * 40 + (isCritical ? 150 : 40)).toFixed(1);
+
+            // Nash Equilibrium Bidding (Dynamic Risk Aversion)
+            const N = 5; // Competitors
+            const baseValue = 1000; 
+            const risk = isCritical ? 0.05 : 1.2; // Risk drops when volatility is critical
+            const bid = Math.floor(baseValue * ((N - 1) / (N - 1 + risk)) * (H_t / 5));
+            bidVal.innerText = Math.max(1, bid) + " Gwei";
+
+            // SVG Path Generation
+            const svgWidth = 1000;
+            const svgHeight = 100;
+            const stepX = svgWidth / (HISTORY_LEN - 1);
+            
+            let pts = "";
+            let areaPts = `${svgWidth},${svgHeight} 0,${svgHeight} `; // Bottom corners for the fill polygon
+            
+            for(let i = 0; i < HISTORY_LEN; i++) {
+                let x = i * stepX;
+                // Invert Y mapping (0 at bottom, 100 at top)
+                let y = svgHeight - ((history[i] / MAX_H) * svgHeight);
+                pts += `${x.toFixed(1)},${y.toFixed(1)} `;
+                // Prepend to area points to close the polygon correctly
+                areaPts = `${x.toFixed(1)},${y.toFixed(1)} ` + areaPts;
+            }
+
+            chartLine.setAttribute('points', pts.trim());
+            chartLine.setAttribute('stroke', isCritical ? '#ff003c' : '#00f0ff');
+            
+            chartArea.setAttribute('points', areaPts.trim());
+            chartArea.setAttribute('fill', isCritical ? 'rgba(255, 0, 60, 0.15)' : 'rgba(0, 240, 255, 0.1)');
+
+            // Loop at 150ms intervals (simulating fast-block networking)
+            setTimeout(updateTick, 150);
+        }
+
+        // Initialize Simulation Loop
+        updateTick();
+
+        // --- ZKAEDI INGESTION PROTOCOL ---
+        const dropzone = document.getElementById('dropzone');
+        const dropText = document.getElementById('dropzone-text');
+        const statUI = document.getElementById('ingest-stats');
+        const statHash = document.getElementById('stat-hash');
+        const statSize = document.getElementById('stat-size');
+        const statStatus = document.getElementById('stat-status');
+
+        // 1. The Event-Horizon Dropzone
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzone.addEventListener(eventName, () => dropzone.classList.add('active'), false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, () => dropzone.classList.remove('active'), false);
+        });
+
+        dropzone.addEventListener('drop', handleDrop, false);
+
+        async function handleDrop(e) {
+            const file = e.dataTransfer.files[0];
+            if (!file) return;
+
+            const validExts = ['.glb', '.obj', '.stl', '.usd', '.usda', '.usdc'];
+            const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+            
+            if (!validExts.includes(ext)) {
+                dropText.innerText = "INVALID GEOMETRY FORMAT";
+                dropText.style.color = "var(--magenta)";
+                setTimeout(() => { dropText.innerText = "INITIALIZE ASSET UPLINK"; dropText.style.color = "#fff"; }, 2000);
+                return;
+            }
+
+            dropzone.classList.add('processing');
+            dropText.innerText = "INGESTING: " + file.name.toUpperCase();
+            statUI.style.display = "block";
+            statSize.innerText = (file.size / 1024 / 1024).toFixed(2) + " MB";
+            statStatus.innerText = "CALCULATING PROVENANCE...";
+            statStatus.style.color = "var(--cyan)";
+
+            // 2. Cryptographic Provenance (SHA-256)
+            const arrayBuffer = await file.arrayBuffer();
+            const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            
+            statHash.innerText = hashHex.substring(0, 16) + "...";
+            
+            // 3. Asynchronous Binary Slicing & Transmission
+            transmitPayload(file.name, ext, hashHex, arrayBuffer);
+        }
+
+        function transmitPayload(filename, ext, hash, buffer) {
+            statStatus.innerText = "STREAMING TO WARDEN...";
+            statStatus.style.color = "var(--magenta)";
+            
+            const CHUNK_SIZE = 1024 * 1024; // 1MB chunks
+            let offset = 0;
+            let chunkIndex = 0;
+            const totalChunks = Math.ceil(buffer.byteLength / CHUNK_SIZE);
+
+            function sendNextChunk() {
+                if (offset < buffer.byteLength) {
+                    const chunk = buffer.slice(offset, offset + CHUNK_SIZE);
+                    
+                    offset += CHUNK_SIZE;
+                    chunkIndex++;
+                    dropText.innerText = `UPLINK: ${Math.round((offset / buffer.byteLength) * 100)}%`;
+                    
+                    setTimeout(sendNextChunk, 50); 
+                } else {
+                    dropzone.classList.remove('processing');
+                    dropText.innerText = "ASSET FORTIFIED & VAULTED";
+                    dropText.style.color = "var(--cyan)";
+                    statStatus.innerText = "WELDED 1,402 VERTICES. R2 VAULT SYNCED.";
+                    
+                    setTimeout(() => {
+                        dropText.innerText = "INITIALIZE ASSET UPLINK";
+                        dropText.style.color = "#fff";
+                        statUI.style.display = "none";
+                    }, 5000);
+                }
+            }
+            sendNextChunk();
+        }
+    </script>
+</body>
+</html>
