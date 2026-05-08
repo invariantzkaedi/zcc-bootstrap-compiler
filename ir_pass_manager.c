@@ -8,8 +8,9 @@
  *   DCE            — backward liveness scan, unlinks dead definitions
  *   Constant Fold  — evaluates binary ops on known constants
  *   Strength Reduce — mul-by-0 → const 0, add/sub-by-0 → copy
+ *   GVN            — global value numbering, eliminates redundant computations
  *
- * Default pipeline: DCE → const_fold → strength_reduce → DCE
+ * Default pipeline: DCE → const_fold → strength_reduce → GVN → vload → DCE
  */
 
 #include <stdio.h>
@@ -384,6 +385,173 @@ static ir_pass_result_t ir_pass_strength_reduce(void *fn_ptr) {
     return r;
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+ * PASS 4: Global Value Numbering (GVN)
+ * ════════════════════════════════════════════════════════════════════════
+ * Hash each pure instruction by (op, type, src1, src2, imm).
+ * If a prior instruction produced the same value, rewrite the current
+ * instruction as IR_COPY from the prior's destination temp.
+ * Subsequent DCE will clean up the now-dead original source defs.
+ *
+ * Eligible: arithmetic, bitwise, comparison, cast, copy, neg, not, const.
+ * Excluded: loads, stores, calls, branches, labels, phi, alloca, arg,
+ *           asm, fconst (side-effectful or memory-dependent).
+ *
+ * Hash: FNV-1a 64-bit, folded to table index.
+ * Collision: open-addressed linear probing.
+ */
+
+#define GVN_TABLE_SIZE 4096    /* power of 2, must accommodate largest fn */
+#define GVN_TABLE_MASK (GVN_TABLE_SIZE - 1)
+
+/* FNV-1a constants for 64-bit */
+#define FNV_OFFSET 14695981039346656037UL
+#define FNV_PRIME  1099511628211UL
+
+typedef struct {
+    unsigned long hash;
+    char          dst[IR_NAME_MAX];  /* destination of the canonical def   */
+    int           occupied;
+} gvn_entry_t;
+
+static gvn_entry_t s_gvn_table[GVN_TABLE_SIZE];
+
+static void gvn_clear(void) {
+    int i;
+    for (i = 0; i < GVN_TABLE_SIZE; i++) {
+        s_gvn_table[i].occupied = 0;
+    }
+}
+
+static unsigned long gvn_hash_node(ir_node_t *n) {
+    unsigned long h = FNV_OFFSET;
+    const char *p;
+    unsigned char op_byte;
+    unsigned char ty_byte;
+    int i;
+
+    /* Hash opcode */
+    op_byte = (unsigned char)n->op;
+    h ^= op_byte;
+    h *= FNV_PRIME;
+
+    /* Hash type */
+    ty_byte = (unsigned char)n->type;
+    h ^= ty_byte;
+    h *= FNV_PRIME;
+
+    /* Hash src1 */
+    for (p = n->src1; *p; p++) {
+        h ^= (unsigned char)*p;
+        h *= FNV_PRIME;
+    }
+    h ^= 0xFF; /* separator */
+    h *= FNV_PRIME;
+
+    /* Hash src2 */
+    for (p = n->src2; *p; p++) {
+        h ^= (unsigned char)*p;
+        h *= FNV_PRIME;
+    }
+    h ^= 0xFE; /* separator */
+    h *= FNV_PRIME;
+
+    /* Hash imm (for IR_CONST, IR_ALLOCA, etc.) */
+    for (i = 0; i < 8; i++) {
+        h ^= (unsigned char)((n->imm >> (i * 8)) & 0xFF);
+        h *= FNV_PRIME;
+    }
+
+    return h;
+}
+
+/* Check if an opcode is pure (eligible for GVN) */
+static int gvn_is_pure(ir_op_t op) {
+    switch (op) {
+    case IR_ADD: case IR_SUB: case IR_MUL: case IR_DIV: case IR_MOD:
+    case IR_NEG:
+    case IR_AND: case IR_OR:  case IR_XOR: case IR_NOT:
+    case IR_SHL: case IR_SHR:
+    case IR_EQ:  case IR_NE:  case IR_LT:  case IR_LE:
+    case IR_GT:  case IR_GE:
+    case IR_CAST: case IR_COPY:
+    case IR_CONST:
+    case IR_FADD: case IR_FSUB: case IR_FMUL: case IR_FDIV:
+    case IR_ITOF: case IR_FTOI:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+/* Lookup or insert. Returns the canonical dst if a match exists,
+ * or NULL if this is a new entry (which gets inserted). */
+static const char *gvn_lookup_or_insert(unsigned long hash, const char *dst) {
+    unsigned int idx = (unsigned int)(hash & GVN_TABLE_MASK);
+    int probe;
+
+    for (probe = 0; probe < GVN_TABLE_SIZE; probe++) {
+        unsigned int slot = (idx + probe) & GVN_TABLE_MASK;
+
+        if (!s_gvn_table[slot].occupied) {
+            /* Empty slot — insert */
+            s_gvn_table[slot].hash = hash;
+            strncpy(s_gvn_table[slot].dst, dst, IR_NAME_MAX - 1);
+            s_gvn_table[slot].dst[IR_NAME_MAX - 1] = '\0';
+            s_gvn_table[slot].occupied = 1;
+            return NULL;
+        }
+
+        if (s_gvn_table[slot].hash == hash) {
+            /* Hash match — return the canonical destination */
+            return s_gvn_table[slot].dst;
+        }
+    }
+
+    /* Table full — treat as miss, don't optimize */
+    return NULL;
+}
+
+static ir_pass_result_t ir_pass_gvn(void *fn_ptr) {
+    ir_func_t *fn = (ir_func_t *)fn_ptr;
+    ir_pass_result_t r;
+    ir_node_t *n;
+    int modified = 0;
+
+    memset(&r, 0, sizeof(r));
+    r.nodes_before = count_nodes(fn);
+
+    gvn_clear();
+
+    for (n = fn->head; n; n = n->next) {
+        unsigned long h;
+        const char *canon;
+
+        /* Skip non-pure or non-defining instructions */
+        if (!gvn_is_pure(n->op)) continue;
+        if (n->dst[0] == '\0') continue;
+
+        h = gvn_hash_node(n);
+        canon = gvn_lookup_or_insert(h, n->dst);
+
+        if (canon) {
+            /* Redundant — rewrite as COPY from canonical def */
+            n->op = IR_COPY;
+            n->type = n->type; /* preserve type */
+            strncpy(n->src1, canon, IR_NAME_MAX - 1);
+            n->src1[IR_NAME_MAX - 1] = '\0';
+            n->src2[0] = '\0';
+            n->imm = 0;
+            modified++;
+        }
+    }
+
+    r.nodes_after = r.nodes_before; /* GVN mutates, doesn't delete */
+    r.nodes_modified = modified;
+    r.changed = modified > 0;
+    return r;
+}
+
 /* Helper to find the unique definition of a temporary register */
 static ir_node_t *find_def(ir_func_t *fn, ir_node_t *end_node, const char *reg) {
     ir_node_t *n;
@@ -541,10 +709,11 @@ void ir_pm_run_default(void *mod_ptr, int verbose) {
     pm = ir_pm_create();
     pm->verbose = verbose;
 
-    /* Default pipeline: DCE → const_fold → strength_reduce → DCE */
+    /* Default pipeline: DCE → const_fold → strength_reduce → GVN → vload → DCE */
     ir_pm_register(pm, "dce", ir_pass_dce);
     ir_pm_register(pm, "const_fold", ir_pass_const_fold);
     ir_pm_register(pm, "strength_reduce", ir_pass_strength_reduce);
+    ir_pm_register(pm, "gvn", ir_pass_gvn);
     ir_pm_register(pm, "coalesce_vload", ir_pass_coalesce_vload);
     ir_pm_register(pm, "dce2", ir_pass_dce);
 
