@@ -1161,6 +1161,23 @@ static void pp_expand_ident(PPState *state, const char *ident) {
         pp_next(state);
     }
     
+    /* strip leading/trailing spaces from arguments */
+    for (i = 0; i < p_count; i++) {
+        char *a = args[i];
+        int l = strlen(a);
+        while (l > 0 && (a[l-1] == ' ' || a[l-1] == '\t' || a[l-1] == '\n' || a[l-1] == '\r')) {
+            l--;
+            a[l] = 0;
+        }
+        int start = 0;
+        while (a[start] == ' ' || a[start] == '\t' || a[start] == '\n' || a[start] == '\r') {
+            start++;
+        }
+        if (start > 0) {
+            memmove(a, a + start, l - start + 1);
+        }
+    }
+
     /* PRE-EXPAND ARGUMENTS */
     char *expanded_args[PP_MAX_PARAMS];
     int expanded_cap[PP_MAX_PARAMS];

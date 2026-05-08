@@ -21,3 +21,17 @@ int remove(const char*);
 #define SEEK_SET 0
 #define SEEK_CUR 1
 #define SEEK_END 2
+int feof(FILE*);
+int getc(FILE*);
+int ferror(FILE*);
+void clearerr(FILE*);
+int ungetc(int, FILE*);
+char* fgets(char*, int, FILE*);
+int fputs(const char*, FILE*);
+FILE* tmpfile(void);
+int setvbuf(FILE*, char*, int, size_t);
+int rename(const char*, const char*);
+char* tmpnam(char*);
+#define _IONBF 0
+#define _IOLBF 1
+#define _IOFBF 2

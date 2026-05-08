@@ -8,3 +8,11 @@ int atoi(const char*);
 void exit(int);
 #define RAND_MAX 32767
 int rand(void);
+int abs(int);
+void abort(void);
+long strtol(const char*, char**, int);
+unsigned long strtoul(const char*, char**, int);
+unsigned long long strtoull(const char*, char**, int);
+char* getenv(const char*);
+#define EXIT_SUCCESS 0
+#define EXIT_FAILURE 1

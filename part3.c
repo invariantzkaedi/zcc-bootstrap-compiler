@@ -148,7 +148,24 @@ static long long parse_const_expr_mul(Compiler *cc) {
     }
     return val;
 }
+static StructField *find_struct_member(Type *type, const char *name, int *out_offset);
 static long long parse_const_expr_unary(Compiler *cc) {
+    if (cc->tk == TK_IDENT && strcmp(cc->tk_text, "__builtin_offsetof") == 0) {
+        next_token(cc);
+        expect(cc, TK_LPAREN);
+        Type *st = parse_type(cc);
+        char dummy[128];
+        st = parse_declarator(cc, st, dummy);
+        expect(cc, TK_COMMA);
+        char member[128];
+        strncpy(member, cc->tk_text, 127);
+        member[127] = 0;
+        expect(cc, TK_IDENT);
+        expect(cc, TK_RPAREN);
+        int offset = 0;
+        find_struct_member(st, member, &offset);
+        return offset;
+    }
     if (cc->tk == TK_LPAREN) {
         int is_cast = 0;
         int ptk = peek_token(cc);
@@ -1319,6 +1336,26 @@ Node *parse_unary(Compiler *cc) {
     Node *n;
 
     line = cc->tk_line;
+
+    if (cc->tk == TK_IDENT && strcmp(cc->tk_text, "__builtin_offsetof") == 0) {
+        next_token(cc);
+        expect(cc, TK_LPAREN);
+        Type *st = parse_type(cc);
+        char dummy[128];
+        st = parse_declarator(cc, st, dummy);
+        expect(cc, TK_COMMA);
+        char member[128];
+        strncpy(member, cc->tk_text, 127);
+        member[127] = 0;
+        expect(cc, TK_IDENT);
+        expect(cc, TK_RPAREN);
+        int offset = 0;
+        find_struct_member(st, member, &offset);
+        n = node_new(cc, ND_NUM, line);
+        n->type = cc->ty_int; // size_t is unsigned long, but ty_int is fine for offset
+        n->int_val = offset;
+        return n;
+    }
 
     if (cc->tk == TK_SIZEOF) {
         Type *t = 0;
