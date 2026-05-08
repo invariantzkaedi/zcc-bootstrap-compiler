@@ -6,15 +6,10 @@
 #include <stdio.h>
 #include <stdint.h>
 
-typedef struct MemCell {
-    evm_u256_t value;
-    char* symbolic_expr;      // NULL = concrete
-    uint64_t last_write_pc;
-} MemCell;
-
 typedef struct {
-    MemCell* linear;          // dense fast path (64KB default)
-    size_t linear_size;
+    uint8_t* bytes;           // Flat byte array for true EVM overlapping memory
+    size_t size;              // Active size
+    size_t capacity;          // Allocated capacity
     void* storage_map;        // hashmap<256-bit slot, MemCell>
     uint8_t* calldata;
     size_t calldata_len;
@@ -22,28 +17,65 @@ typedef struct {
 
 MemoryModelV2* memory_v2_new(void) {
     MemoryModelV2* m = calloc(1, sizeof(MemoryModelV2));
-    m->linear_size = 65536;
-    m->linear = calloc(m->linear_size, sizeof(MemCell));
+    m->capacity = 65536; // 64KB default
+    m->bytes = calloc(m->capacity, sizeof(uint8_t));
+    m->size = 0;
     return m;
+}
+
+static void ensure_capacity(MemoryModelV2* mem, size_t needed) {
+    if (needed > mem->capacity) {
+        size_t new_cap = mem->capacity * 2;
+        while (new_cap < needed) {
+            new_cap *= 2;
+        }
+        mem->bytes = realloc(mem->bytes, new_cap);
+        memset(mem->bytes + mem->capacity, 0, new_cap - mem->capacity);
+        mem->capacity = new_cap;
+    }
+    if (needed > mem->size) {
+        mem->size = needed;
+    }
 }
 
 void mstore_v2(MemoryModelV2* mem, uint64_t offset, evm_u256_t val, const char* expr) {
     if (!mem) return;
-    if (offset < mem->linear_size) {
-        mem->linear[offset].value = val;
-        mem->linear[offset].symbolic_expr = expr ? strdup(expr) : NULL;
-        mem->linear[offset].last_write_pc = 0; // update with current PC
+    (void)expr; // Symbolic expression tracking omitted for flat byte simplicity
+    
+    ensure_capacity(mem, offset + 32);
+    
+    // Write 32 bytes with correct Big-Endian EVM semantics
+    for (int i = 0; i < 32; i++) {
+        mem->bytes[offset + i] = val.bytes[i];
     }
 }
 
+void mstore8_v2(MemoryModelV2* mem, uint64_t offset, uint8_t val) {
+    if (!mem) return;
+    ensure_capacity(mem, offset + 1);
+    mem->bytes[offset] = val;
+}
+
+const uint8_t* memory_v2_get_ptr(MemoryModelV2* mem, uint64_t offset, size_t length) {
+    if (!mem) return NULL;
+    ensure_capacity(mem, offset + length);
+    return &mem->bytes[offset];
+}
+
 evm_u256_t mload_v2(MemoryModelV2* mem, uint64_t offset, char** out_expr) {
-    evm_u256_t zero = {0};
-    if (!mem) return zero;
-    if (offset < mem->linear_size) {
-        if (out_expr) *out_expr = mem->linear[offset].symbolic_expr;
-        return mem->linear[offset].value;
+    evm_u256_t result;
+    memset(result.bytes, 0, 32);
+    if (!mem) return result;
+    
+    if (out_expr) *out_expr = NULL; // Flat byte model omits symbolic tracking
+    
+    // EVM implicitly expands memory on load too
+    ensure_capacity(mem, offset + 32);
+    
+    for (int i = 0; i < 32; i++) {
+        result.bytes[i] = mem->bytes[offset + i];
     }
-    return zero;
+    return result;
 }
 
 void sstore_v2(MemoryModelV2* mem, evm_u256_t slot, evm_u256_t val) {

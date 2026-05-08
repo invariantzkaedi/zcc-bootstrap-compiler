@@ -32,17 +32,10 @@ verdict below before doing anything else.
      in history, STOP AND REPORT. Do not proceed.
 
 0.4  Run the bootstrap gate BEFORE any edits:
-       bash ./run_selfhost.sh 2>&1 | tail -5
+       make selfhost | tail -5
      Or equivalent:
-       cat part1.c part0_pp.c part2.c part3.c ir.h ir_emit_dispatch.h \
-           ir_bridge.h part4.c part5.c part6_arm.c ir.c ir_to_x86.c \
-           ir_pass_manager.c regalloc.c ir_telemetry_stub.c > zcc.c && \
-         gcc -O0 -w -fno-asynchronous-unwind-tables \
-             -o zcc zcc.c compiler_passes.c compiler_passes_ir.c -lm && \
-         ./zcc  -S -o zcc2.s zcc.c && \
-         gcc -o zcc2 zcc2.s compiler_passes.c compiler_passes_ir.c -lm && \
-         ./zcc2 -S -o zcc3.s zcc.c && \
-         cmp zcc2.s zcc3.s && echo BASELINE_GREEN || echo BASELINE_RED
+       make selfhost
+     Expect to see "SELF-HOST VERIFIED (assembly identical)" indicating BASELINE_GREEN.
 
 0.5  Report the Phase 0 verdict in this exact format:
        BASELINE:              GREEN | RED
@@ -198,8 +191,8 @@ for triage ideas; then continue with the protocol below.
   `gcc -o hello hello.s -lm && ./hello`. From PowerShell:
   `.\scripts\use_zcc.ps1 hello.c -o hello.s`. Or in WSL: `make zcc` then
   `./zcc <file.c> -o <out.s>`.
-- **Self-host**: In WSL: `./run_selfhost.sh`. From PowerShell:
-  `.\scripts\run_selfhost.ps1`.
+- **Self-host**: In WSL: `make selfhost`. From PowerShell:
+  `wsl -e bash -c "make selfhost"`.
 
 ---
 

@@ -345,7 +345,8 @@ check-evm-lifter:
 	@echo "=== Building EVM Lifter test binary ==="
 	$(CC) $(CFLAGS) -I. \
 	    -o /tmp/test_evm_lifter \
-	    tests/test_evm_lifter.c evm_lifter.c ir_vuln_tag.c ir.c $(LDFLAGS)
+	    tests/test_evm_lifter.c evm_lifter.c ir_vuln_tag.c ir.c \
+	    src/evm/memory_v2.c src/evm/abi_extractor.c $(LDFLAGS)
 	@echo "=== Running EVM Lifter tests ==="
 	/tmp/test_evm_lifter
 

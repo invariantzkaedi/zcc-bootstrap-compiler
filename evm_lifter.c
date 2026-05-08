@@ -395,15 +395,15 @@ static void evm_u256_sar_op(evm_u256_t *dst, const evm_u256_t *shift, const evm_
 }
 
 /* KECCAK-256 implementation */
-static const unsigned long keccakf_rndc[24] = {
-    0x0000000000000001UL, 0x0000000000008082UL, 0x800000000000808aUL,
-    0x8000000080008000UL, 0x000000000000808bUL, 0x0000000080000001UL,
-    0x8000000080008081UL, 0x8000000000008009UL, 0x000000000000008aUL,
-    0x0000000000000088UL, 0x0000000080008009UL, 0x000000008000000aUL,
-    0x000000008000808bUL, 0x800000000000008bUL, 0x8000000000008089UL,
-    0x8000000000008003UL, 0x8000000000008002UL, 0x8000000000000080UL,
-    0x000000000000800aUL, 0x800000008000000aUL, 0x8000000080008081UL,
-    0x8000000000008080UL, 0x0000000080000001UL, 0x8000000080008008UL
+static const uint64_t keccakf_rndc[24] = {
+    0x0000000000000001ULL, 0x0000000000008082ULL, 0x800000000000808aULL,
+    0x8000000080008000ULL, 0x000000000000808bULL, 0x0000000080000001ULL,
+    0x8000000080008081ULL, 0x8000000000008009ULL, 0x000000000000008aULL,
+    0x0000000000000088ULL, 0x0000000080008009ULL, 0x000000008000000aULL,
+    0x000000008000808bULL, 0x800000000000008bULL, 0x8000000000008089ULL,
+    0x8000000000008003ULL, 0x8000000000008002ULL, 0x8000000000000080ULL,
+    0x000000000000800aULL, 0x800000008000000aULL, 0x8000000080008081ULL,
+    0x8000000000008080ULL, 0x0000000080000001ULL, 0x8000000080008008ULL
 };
 static const unsigned int keccakf_rotc[24] = {
     1,  3,  6,  10, 15, 21, 28, 36, 45, 55, 2,  14,
@@ -415,9 +415,9 @@ static const unsigned int keccakf_piln[24] = {
 };
 #define ROTL64(x, y) (((x) << (y)) | ((x) >> (64 - (y))))
 
-static void keccakf(unsigned long st[25]) {
+static void keccakf(uint64_t st[25]) {
     int i, j, round;
-    unsigned long t, bc[5];
+    uint64_t t, bc[5];
     for (round = 0; round < 24; round++) {
         for (i = 0; i < 5; i++) bc[i] = st[i] ^ st[i + 5] ^ st[i + 10] ^ st[i + 15] ^ st[i + 20];
         for (i = 0; i < 5; i++) {
@@ -440,18 +440,18 @@ static void keccakf(unsigned long st[25]) {
 }
 
 static void evm_keccak256(const unsigned char *data, size_t len, evm_u256_t *out) {
-    unsigned long st[25];
+    uint64_t st[25];
     memset(st, 0, sizeof(st));
     size_t i, r = 136;
     while (len >= r) {
-        for (i = 0; i < r; i++) st[i/8] ^= (unsigned long)(data[i]) << (8 * (i % 8));
+        for (i = 0; i < r; i++) st[i/8] ^= (uint64_t)(data[i]) << (8 * (i % 8));
         keccakf(st);
         data += r;
         len -= r;
     }
-    for (i = 0; i < len; i++) st[i/8] ^= (unsigned long)(data[i]) << (8 * (i % 8));
-    st[len/8] ^= (unsigned long)1 << (8 * (len % 8));
-    st[(r-1)/8] ^= (unsigned long)0x80 << (8 * ((r-1) % 8));
+    for (i = 0; i < len; i++) st[i/8] ^= (uint64_t)(data[i]) << (8 * (i % 8));
+    st[len/8] ^= (uint64_t)1 << (8 * (len % 8));
+    st[(r-1)/8] ^= (uint64_t)0x80 << (8 * ((r-1) % 8));
     keccakf(st);
     for (i = 0; i < 32; i++) out->bytes[i] = (unsigned char)((st[i/8] >> (8 * (i % 8))) & 0xFF);
 }
@@ -1299,9 +1299,12 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         ir_emit(ls->func, IR_STORE, IR_TY_I64, tmp_a, tmp_b, NULL, NULL, 0L, ls->pc);
         
         extern void mstore_v2(void* mem, uint64_t offset, evm_u256_t val, const char* expr);
+        extern void mstore8_v2(void* mem, uint64_t offset, uint8_t val);
         if (a_st == EVM_VAL_KNOWN_NARROW && (b_st == EVM_VAL_KNOWN_WIDE || b_st == EVM_VAL_KNOWN_NARROW)) {
             if (op == EVM_MSTORE) {
                 mstore_v2(ls->memory_v2, offset, b_val, NULL);
+            } else if (op == EVM_MSTORE8) {
+                mstore8_v2(ls->memory_v2, offset, b_val.bytes[31]);
             }
         }
         return EVM_LIFT_OK;
@@ -1453,12 +1456,10 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         
         if (a_st == EVM_VAL_KNOWN_NARROW && b_st == EVM_VAL_KNOWN_NARROW) {
             if (offset >= 0 && length >= 0 && offset + length <= 1024) {
-                int fully_known = 1;
-                for (long i = 0; i < length; i++) {
-                    if (!ls->memory_known[offset + i]) { fully_known = 0; break; }
-                }
-                if (fully_known) {
-                    evm_keccak256(&ls->memory[offset], (size_t)length, &res_val);
+                extern const uint8_t* memory_v2_get_ptr(void* mem, uint64_t offset, size_t length);
+                const uint8_t* ptr = memory_v2_get_ptr(ls->memory_v2, offset, length);
+                if (ptr) {
+                    evm_keccak256(ptr, (size_t)length, &res_val);
                     return stack_push_const_wide(ls, tmp_dst, res_val.bytes, 32, evm_u256_to_narrow(&res_val));
                 }
             }
