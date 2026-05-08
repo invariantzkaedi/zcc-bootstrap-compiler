@@ -980,7 +980,7 @@ static void security_bounds_scan(Compiler *cc, char *filename) {
       if (ptr) {
           ptr += 6;
           int k = 0;
-          while (ptr[k] && ptr[k] != ' ' && k < 63) array_name[k++] = ptr[k];
+          while (ptr[k] && ptr[k] != ' ' && k < 63) { array_name[k] = ptr[k]; k++; }
           array_name[k] = 0;
       }
       
@@ -988,7 +988,7 @@ static void security_bounds_scan(Compiler *cc, char *filename) {
       if (ptr) {
           ptr += 6;
           int k = 0;
-          while (ptr[k] && ptr[k] != ' ' && k < 63) index_name[k++] = ptr[k];
+          while (ptr[k] && ptr[k] != ' ' && k < 63) { index_name[k] = ptr[k]; k++; }
           index_name[k] = 0;
       }
 
@@ -996,7 +996,7 @@ static void security_bounds_scan(Compiler *cc, char *filename) {
       if (ptr) {
           ptr += 5;
           int k = 0;
-          while (ptr[k] && ptr[k] != ' ' && k < 31) size_str[k++] = ptr[k];
+          while (ptr[k] && ptr[k] != ' ' && k < 31) { size_str[k] = ptr[k]; k++; }
           size_str[k] = 0;
       }
       
@@ -1004,7 +1004,7 @@ static void security_bounds_scan(Compiler *cc, char *filename) {
       if (ptr) {
           ptr += 1;
           int k = 0;
-          while (ptr[k] && ptr[k] != ':' && k < 127) file_name[k++] = ptr[k];
+          while (ptr[k] && ptr[k] != ':' && k < 127) { file_name[k] = ptr[k]; k++; }
           file_name[k] = 0;
           if (ptr[k] == ':') line_num = atoi(ptr + k + 1);
       }
@@ -1069,7 +1069,7 @@ int main(int argc, char **argv) {
   char *source;
   int source_len;
   char asm_file[256];
-  char cmd[512];
+  char cmd[2048];
   char include_paths[4096];  /* -I paths, colon-separated */
   Node *prog;
   int ret;
@@ -1099,11 +1099,15 @@ int main(int argc, char **argv) {
   int rust_strict_function_signatures = 0;
   int rust_dump_mode = 0;
   int decompile_mode = 0;
+  int hunt_mode = 0;
   int jit_mode = 0;
   int prove_mode = 0;
   char* prove_prop = 0;
   int memory_trace = 0;
   int abi_mode = 0;
+  int sculpt_sdf_mode = 0;
+  int sculpt_mode = 0;
+  char *sculpt_prompt = 0;
 
   int g_ir_primary = 0;
 
@@ -1179,6 +1183,8 @@ int main(int argc, char **argv) {
       g_security_787 = 1;
     } else if (strcmp(argv[i], "--decompile") == 0) {
       decompile_mode = 1;
+    } else if (strcmp(argv[i], "--hunt") == 0) {
+      hunt_mode = 1;
       i++;
       if (i < argc) input_file = argv[i];
     } else if (strcmp(argv[i], "--jit") == 0) {
@@ -1195,6 +1201,12 @@ int main(int argc, char **argv) {
       memory_trace = 1;
     } else if (strcmp(argv[i], "--abi") == 0) {
       abi_mode = 1;
+    } else if (strcmp(argv[i], "--sculpt_sdf") == 0) {
+      sculpt_sdf_mode = 1;
+    } else if (strcmp(argv[i], "--sculpt") == 0) {
+      sculpt_mode = 1;
+      i++;
+      if (i < argc) sculpt_prompt = argv[i];
     } else if (strcmp(argv[i], "--release") == 0) {
       if (i + 1 < argc) {
           const char* ticket = argv[++i];
@@ -1303,8 +1315,50 @@ int main(int argc, char **argv) {
   if (decompile_mode) {
     extern void evm_decompile(const unsigned char* bytecode, size_t len, const char* output_path, int abi_mode);
     evm_decompile((const unsigned char*)source, source_len, output_file, abi_mode);
+    if (!enable_telemetry_stdout) printf("[OK] EVM decompiled to %s.\n", output_file);
     free(source);
     return 0;
+  }
+
+  if (hunt_mode) {
+    extern int ipc_bridge_init(void);
+    extern FILE *ipc_bridge_open_tx(void);
+    extern void ipc_bridge_close_tx(FILE *f);
+    extern char *ipc_bridge_receive(void);
+    extern void evm_decompile_stream(const unsigned char* bytecode, size_t len, FILE *out, int abi_mode);
+
+    if (!enable_telemetry_stdout) printf("[WARDEN] Initializing zero-day MEV hunt mode...\n");
+    ipc_bridge_init();
+    
+    FILE *tx = ipc_bridge_open_tx();
+    if (tx) {
+        if (!enable_telemetry_stdout) printf("[WARDEN] Streaming decompiled AST to PyTorch orchestrator...\n");
+        extern void evm_decompile(const unsigned char*, size_t, const char*, int);
+        /* We write it directly using evm_decompile to the pipe path */
+        fclose(tx); /* Let evm_decompile open it */
+        evm_decompile((const unsigned char*)source, source_len, "/tmp/warden_tx.pipe", abi_mode);
+        
+        if (!enable_telemetry_stdout) printf("[WARDEN] Awaiting synthesized IR payload...\n");
+        char *payload = ipc_bridge_receive();
+        if (payload) {
+            if (!enable_telemetry_stdout) printf("[WARDEN] Exploit payload received. Length: %zu bytes.\n", strlen(payload));
+            
+            extern void ipc_bridge_compile_and_strike(char *payload);
+            ipc_bridge_compile_and_strike(payload);
+            
+            free(payload);
+            free(source);
+            return 0;
+        } else {
+            if (!enable_telemetry_stdout) printf("[WARDEN] Error: No payload received from orchestrator.\n");
+            free(source);
+            return 1;
+        }
+    } else {
+        if (!enable_telemetry_stdout) printf("[WARDEN] Error: Failed to open IPC bridge.\n");
+        free(source);
+        return 1;
+    }
   }
 
   if (jit_mode) {
@@ -1320,11 +1374,25 @@ int main(int argc, char **argv) {
     
     // Export proof to SMT2
     extern ir_module_t* g_ir_module;
-    if (g_ir_module && g_ir_module->funcs) {
+    if (g_ir_module && g_ir_module->func_count > 0) {
         extern void export_smt2(ir_func_t* graph, const char* path);
-        export_smt2(g_ir_module->funcs, "proof.smt2");
+        export_smt2(g_ir_module->funcs[0], "proof.smt2");
     }
     
+    free(source);
+    return 0;
+  }
+
+  if (sculpt_sdf_mode) {
+    extern void zcc_sculpt_sdf(const char *output_file, int resolution);
+    zcc_sculpt_sdf(output_file ? output_file : "mesh.obj", 128); // Generate 128^3 grid
+    free(source);
+    return 0;
+  }
+
+  if (sculpt_mode && sculpt_prompt) {
+    extern void zcc_sculpt(const char *prompt, const char *output_file);
+    zcc_sculpt(sculpt_prompt, output_file ? output_file : "mesh.gltf");
     free(source);
     return 0;
   }
@@ -1482,7 +1550,7 @@ int main(int argc, char **argv) {
     if (compile_only) {
       sprintf(cmd, "gcc -O0 -w -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -c -o %s %s 2>&1", output_file, asm_file);
     } else if (strcmp(input_file, "zcc.c") == 0 || (strlen(input_file) >= 6 && strcmp(input_file + strlen(input_file) - 6, "/zcc.c") == 0)) {
-      sprintf(cmd, "gcc -O0 -w -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_vuln_tag.c evm_lifter.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c -lm 2>&1", output_file, asm_file);
+      sprintf(cmd, "gcc -O0 -w -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_symbolic_cfg.c ir_dominance.c ir_vuln_tag.c evm_lifter.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c -lm 2>&1", output_file, asm_file);
     } else {
       sprintf(cmd, "gcc -O0 -w -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s %s -lm -lpthread -ldl 2>&1", output_file, asm_file, extra_link_args);
     }

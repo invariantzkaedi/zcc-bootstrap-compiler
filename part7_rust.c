@@ -2058,40 +2058,193 @@ static int rust_lower_stmt_list_supported(RustLowerContext *ctx, RustStmt *st) {
     return 1;
 }
 
+/* ================================================================ */
+/* RUST AST TO ZCC IR LOWERING ENGINE                               */
+/* ================================================================ */
+
+#ifndef ZCC_IR_H
+#include "ir.h"
+#endif
+
+extern ir_module_t *g_ir_module;
+
+/* Context mappings for VReg allocation */
+static char rust_sym_vregs[8192][IR_NAME_MAX];
+static int rust_sym_is_mut[8192];
+
+static void rust_lower_expr_ir(RustLowerContext *ctx, ir_func_t *ir_fn, RustExpr *e, char *out_vreg) {
+    if (!e) return;
+
+    if (e->kind == RUST_EXPR_NUM) {
+        ir_fresh_tmp(ir_fn, out_vreg);
+        ir_emit(ir_fn, IR_CONST, IR_TY_I32, out_vreg, "", "", "", e->num, e->line);
+    } 
+    else if (e->kind == RUST_EXPR_BOOL) {
+        ir_fresh_tmp(ir_fn, out_vreg);
+        ir_emit(ir_fn, IR_CONST, IR_TY_I32, out_vreg, "", "", "", e->bool_val ? 1 : 0, e->line);
+    } 
+    else if (e->kind == RUST_EXPR_IDENT) {
+        if (rust_sym_is_mut[e->symbol_id]) {
+            /* Mutable local: stored in memory/stack, must emit IR_LOAD */
+            ir_fresh_tmp(ir_fn, out_vreg);
+            ir_emit(ir_fn, IR_LOAD, IR_TY_I32, out_vreg, rust_sym_vregs[e->symbol_id], "", "", 0, e->line);
+        } else {
+            /* Immutable local: directly map to the SSA virtual register */
+            strncpy(out_vreg, rust_sym_vregs[e->symbol_id], IR_NAME_MAX);
+        }
+    } 
+    else if (e->kind == RUST_EXPR_BINARY) {
+        char lhs_vreg[IR_NAME_MAX], rhs_vreg[IR_NAME_MAX];
+        rust_lower_expr_ir(ctx, ir_fn, e->lhs, lhs_vreg);
+        rust_lower_expr_ir(ctx, ir_fn, e->rhs, rhs_vreg);
+        ir_fresh_tmp(ir_fn, out_vreg);
+        
+        ir_op_t ir_op;
+        switch (e->op) {
+            case RUST_TK_PLUS: ir_op = IR_ADD; break;
+            case RUST_TK_MINUS: ir_op = IR_SUB; break;
+            case RUST_TK_STAR: ir_op = IR_MUL; break;
+            case RUST_TK_SLASH: ir_op = IR_DIV; break;
+            case RUST_TK_EQ: ir_op = IR_EQ; break;
+            case RUST_TK_NE: ir_op = IR_NE; break;
+            case RUST_TK_LT: ir_op = IR_LT; break;
+            case RUST_TK_LE: ir_op = IR_LE; break;
+            case RUST_TK_GT: ir_op = IR_GT; break;
+            case RUST_TK_GE: ir_op = IR_GE; break;
+            case RUST_TK_LAND: ir_op = IR_AND; break;
+            case RUST_TK_LOR: ir_op = IR_OR; break;
+            default: ir_op = IR_NOP; break;
+        }
+        ir_emit(ir_fn, ir_op, IR_TY_I32, out_vreg, lhs_vreg, rhs_vreg, "", 0, e->line);
+    } 
+    else if (e->kind == RUST_EXPR_UNARY) {
+        char lhs_vreg[IR_NAME_MAX];
+        rust_lower_expr_ir(ctx, ir_fn, e->lhs, lhs_vreg);
+        ir_fresh_tmp(ir_fn, out_vreg);
+        if (e->op == RUST_TK_BANG) {
+            /* EVM mapping: boolean NOT is IR_EQ(val, 0) */
+            char zero_vreg[IR_NAME_MAX];
+            ir_fresh_tmp(ir_fn, zero_vreg);
+            ir_emit(ir_fn, IR_CONST, IR_TY_I32, zero_vreg, "", "", "", 0, e->line);
+            ir_emit(ir_fn, IR_EQ, IR_TY_I32, out_vreg, lhs_vreg, zero_vreg, "", 0, e->line);
+        }
+    }
+}
+
+static void rust_lower_stmt_list_ir(RustLowerContext *ctx, ir_func_t *ir_fn, RustStmt *st) {
+    while (st) {
+        if (st->kind == RUST_STMT_LET) {
+            char init_vreg[IR_NAME_MAX];
+            rust_lower_expr_ir(ctx, ir_fn, st->expr, init_vreg);
+            
+            if (st->is_mut) {
+                /* Mutable allocation: alloca space, store initial value */
+                char ptr_vreg[IR_NAME_MAX];
+                ir_fresh_tmp(ir_fn, ptr_vreg);
+                ir_emit(ir_fn, IR_ALLOCA, IR_TY_PTR, ptr_vreg, "", "", "", 8, st->line);
+                ir_emit(ir_fn, IR_STORE, IR_TY_I32, ptr_vreg, init_vreg, "", "", 0, st->line);
+                
+                strncpy(rust_sym_vregs[st->symbol_id], ptr_vreg, IR_NAME_MAX);
+                rust_sym_is_mut[st->symbol_id] = 1;
+            } else {
+                /* Immutable bind: just forward the VReg alias */
+                strncpy(rust_sym_vregs[st->symbol_id], init_vreg, IR_NAME_MAX);
+                rust_sym_is_mut[st->symbol_id] = 0;
+            }
+        } 
+        else if (st->kind == RUST_STMT_ASSIGN) {
+            char val_vreg[IR_NAME_MAX];
+            rust_lower_expr_ir(ctx, ir_fn, st->expr, val_vreg);
+            ir_emit(ir_fn, IR_STORE, IR_TY_I32, rust_sym_vregs[st->symbol_id], val_vreg, "", "", 0, st->line);
+        } 
+        else if (st->kind == RUST_STMT_RETURN) {
+            char ret_vreg[IR_NAME_MAX];
+            rust_lower_expr_ir(ctx, ir_fn, st->expr, ret_vreg);
+            ir_emit(ir_fn, IR_RET, IR_TY_I32, "", ret_vreg, "", "", 0, st->line);
+        } 
+        else if (st->kind == RUST_STMT_IF) {
+            char cond_vreg[IR_NAME_MAX];
+            rust_lower_expr_ir(ctx, ir_fn, st->cond, cond_vreg);
+            
+            char l_then[IR_LABEL_MAX], l_else[IR_LABEL_MAX], l_end[IR_LABEL_MAX];
+            ir_fresh_label(ir_fn, l_then);
+            ir_fresh_label(ir_fn, l_else);
+            ir_fresh_label(ir_fn, l_end);
+
+            /* Branching logic compatible with our EVM Dominator Trees */
+            ir_emit(ir_fn, IR_BR_IF, IR_TY_VOID, "", cond_vreg, "", l_then, 0, st->line);
+            ir_emit(ir_fn, IR_BR, IR_TY_VOID, "", "", "", st->else_head ? l_else : l_end, 0, st->line);
+            
+            ir_emit(ir_fn, IR_LABEL, IR_TY_VOID, "", "", "", l_then, 0, st->line);
+            rust_lower_stmt_list_ir(ctx, ir_fn, st->then_head);
+            ir_emit(ir_fn, IR_BR, IR_TY_VOID, "", "", "", l_end, 0, st->line);
+
+            if (st->else_head) {
+                ir_emit(ir_fn, IR_LABEL, IR_TY_VOID, "", "", "", l_else, 0, st->line);
+                rust_lower_stmt_list_ir(ctx, ir_fn, st->else_head);
+                ir_emit(ir_fn, IR_BR, IR_TY_VOID, "", "", "", l_end, 0, st->line);
+            }
+            ir_emit(ir_fn, IR_LABEL, IR_TY_VOID, "", "", "", l_end, 0, st->line);
+        } 
+        else if (st->kind == RUST_STMT_WHILE) {
+            char l_cond[IR_LABEL_MAX], l_body[IR_LABEL_MAX], l_end[IR_LABEL_MAX];
+            ir_fresh_label(ir_fn, l_cond);
+            ir_fresh_label(ir_fn, l_body);
+            ir_fresh_label(ir_fn, l_end);
+
+            ir_emit(ir_fn, IR_LABEL, IR_TY_VOID, "", "", "", l_cond, 0, st->line);
+            
+            char cond_vreg[IR_NAME_MAX];
+            rust_lower_expr_ir(ctx, ir_fn, st->cond, cond_vreg);
+            
+            ir_emit(ir_fn, IR_BR_IF, IR_TY_VOID, "", cond_vreg, "", l_body, 0, st->line);
+            ir_emit(ir_fn, IR_BR, IR_TY_VOID, "", "", "", l_end, 0, st->line);
+
+            ir_emit(ir_fn, IR_LABEL, IR_TY_VOID, "", "", "", l_body, 0, st->line);
+            rust_lower_stmt_list_ir(ctx, ir_fn, st->body_head);
+            ir_emit(ir_fn, IR_BR, IR_TY_VOID, "", "", "", l_cond, 0, st->line);
+
+            ir_emit(ir_fn, IR_LABEL, IR_TY_VOID, "", "", "", l_end, 0, st->line);
+        }
+        st = st->next;
+    }
+}
+
 int rust_lower_to_ir(RustLowerContext *ctx) {
-    RustFunction *fn;
     if (!ctx || !ctx->ast) return 1;
     ctx->had_error = 0;
-    if (ctx->dump_ir) {
-        RustFunction *pre_fn = ctx->ast->functions;
-        while (pre_fn) {
-            if (!rust_lower_stmt_list_supported(ctx, pre_fn->body_head)) {
-                return 1;
-            }
-            pre_fn = pre_fn->next;
-        }
+
+    /* Initialize the global IR module if it hasn't been */
+    if (!g_ir_module) {
+        g_ir_module = ir_module_create();
     }
-    fn = ctx->ast->functions;
-    if (ctx->dump_ir) {
-        printf("RustIR v1\n");
-    }
+
+    /* Reset symbol map */
+    memset(rust_sym_vregs, 0, sizeof(rust_sym_vregs));
+    memset(rust_sym_is_mut, 0, sizeof(rust_sym_is_mut));
+
+    RustFunction *fn = ctx->ast->functions;
     while (fn) {
-        if (ctx->dump_ir) {
-            int pi;
-            fputs("fn ", stdout);
-            rust_dump_name(stdout, fn->name, RUST_DUMP_NAME_UNQUOTED);
-            fputc('(', stdout);
-            for (pi = 0; pi < fn->num_params; pi++) {
-                if (pi) fputs(", ", stdout);
-                rust_dump_name(stdout, fn->param_names[pi], RUST_DUMP_NAME_UNQUOTED);
-                fputs(":i32", stdout);
-            }
-            fputs(") -> i32 {\n", stdout);
-            rust_lower_dump_stmt_list(ctx, fn->body_head, 2);
-            fputs("}\n", stdout);
+        ir_type_t ret_ty = (strcmp(fn->ret_type, "i32") == 0) ? IR_TY_I32 : IR_TY_VOID;
+        ir_func_t *ir_fn = ir_func_create(g_ir_module, fn->name, ret_ty, fn->num_params);
+
+        /* Map Rust function parameters to IR VRegs natively */
+        int pi;
+        for (pi = 0; pi < fn->num_params; pi++) {
+            char param_vreg[IR_NAME_MAX];
+            snprintf(param_vreg, IR_NAME_MAX, "p%d", pi);
+            strncpy(ir_fn->param_names[pi], param_vreg, IR_NAME_MAX);
+            
+            /* Parameters in our subset are immutable */
+            strncpy(rust_sym_vregs[fn->param_symbol_ids[pi]], param_vreg, IR_NAME_MAX);
+            rust_sym_is_mut[fn->param_symbol_ids[pi]] = 0;
         }
+
+        rust_lower_stmt_list_ir(ctx, ir_fn, fn->body_head);
+        
         fn = fn->next;
     }
+
     return ctx->had_error ? 1 : 0;
 }
 

@@ -1,7 +1,9 @@
 #ifndef _TIME_H
 #define _TIME_H
-#include <stddef.h>
-typedef unsigned long size_t;
+#ifndef __size_t__
+#define __size_t__
+typedef __SIZE_TYPE__ size_t;
+#endif
 typedef long time_t;
 typedef long clock_t;
 #define CLOCKS_PER_SEC 1000000

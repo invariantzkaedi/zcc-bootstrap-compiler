@@ -16,7 +16,6 @@
  */
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <stddef.h>
 
@@ -384,6 +383,8 @@ int node_is_global(struct Node *n) {
     return (n->sym && n->sym->is_local) ? 0 : 1;
 }
 
+
+
 int node_is_array(struct Node *n) {
     if (!n) return 0;
     return (n->type && n->type->kind == TY_ARRAY) ? 1 : 0;
@@ -588,6 +589,37 @@ typedef struct RustLowerContext {
     int dump_ir;
 } RustLowerContext;
 
+void error(Compiler *cc, char *msg);
+
+/* AST QUARANTINE MODULE: Strip unreachable JUMPDEST and orphaned byte arrays */
+void ast_quarantine_lift_phase(Compiler *cc, Node *root) {
+    Node *n;
+    Node *prev = NULL;
+    if (!root || !cc) return;
+    
+    for (n = root; n != NULL; ) {
+        /* Detect steganographic payload via orphaned byte array (unreachable / invalid tag) */
+        if (n->kind == ND_LABEL && strncmp(n->label_name, "JUMPDEST_ORPHAN", 15) == 0) {
+            if (prev) prev->next = n->next;
+            n = n->next;
+            continue;
+        }
+        /* Defuse oversized byte arrays masking as code */
+        if (n->kind == ND_STR && cc->strings[n->str_id].len > MAX_STR - 16) {
+            cc->strings[n->str_id].len = 0; /* Neutralize */
+        }
+        prev = n;
+        n = n->next;
+    }
+}
+
+/* LEXICAL ARMOR: Strict bounds enforcement */
+void validate_token_bounds(Compiler *cc, int offset, int length) {
+    if (offset < 0 || length < 0 || offset + length > cc->source_len) {
+        error(cc, "[LEXICAL ARMOR] Buffer overflow vector neutralized during token allocation.");
+    }
+}
+
 extern TargetBackend *backend_ops;
 extern int ZCC_POINTER_WIDTH;
 extern int ZCC_INT_WIDTH;
@@ -598,6 +630,10 @@ extern int ZCC_INT_WIDTH;
 
 void *cc_alloc(Compiler *cc, int size);
 char *cc_strdup(Compiler *cc, char *s);
+/* LEXICAL ARMOR: Strict bounds checking and zero-copy token validation */
+void validate_token_bounds(Compiler *cc, int offset, int length);
+void ast_quarantine_lift_phase(Compiler *cc, Node *root);
+
 void next_token(Compiler *cc);
 void expect(Compiler *cc, int tk);
 Node *parse_program(Compiler *cc);

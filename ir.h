@@ -274,4 +274,7 @@ int          ir_type_unsigned(ir_type_t ty);
 /* Non-zero if op is a basic-block terminator */
 int          ir_op_is_terminator(ir_op_t op);
 
+/* EVM Yul Weaver */
+void evm_yul_weaver(ir_func_t *fn, FILE *out);
+
 #endif /* ZCC_IR_H */

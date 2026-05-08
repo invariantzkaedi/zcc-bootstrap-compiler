@@ -18,6 +18,9 @@
 #include <string.h>
 #include "ir.h"
 #include "evm_lifter.h"
+#include "ir_pass_warden.h"
+#include "ir_symbolic_cfg.h"
+#include "ir_dominance.h"
 
 /* ── Globals referenced by zcc.c (part5.c declares these extern) ──────── */
 int  g_manifold_enabled    = 0;
@@ -27,31 +30,8 @@ int  g_peephole_deterministic = 0;
 int  g_peephole_verbose    = 0;
 
 
-/* ── Pass result type ────────────────────────────────────────────────── */
-
-typedef struct {
-    int nodes_before;
-    int nodes_after;
-    int nodes_deleted;
-    int nodes_modified;
-    int changed;
-} ir_pass_result_t;
-
-typedef ir_pass_result_t (*ir_pass_fn)(void *fn_ptr);
-
-#define IR_PM_MAX_PASSES 16
-
-typedef struct {
-    const char    *name;
-    ir_pass_fn     fn;
-    int            enabled;
-} ir_pass_entry_t;
-
-typedef struct {
-    ir_pass_entry_t passes[IR_PM_MAX_PASSES];
-    int             count;
-    int             verbose;
-} ir_pass_manager_t;
+/* ── Pass types (from ir_pass_manager.h) ─────────────────────────────── */
+#include "ir_pass_manager.h"
 
 /* ── Helpers ─────────────────────────────────────────────────────────── */
 
@@ -265,6 +245,18 @@ static int zcc_uint256_lt(uint256_t a, uint256_t b) {
     return 0;
 }
 
+static double long_to_double(long l) {
+    union { long l; double d; } u;
+    u.l = l;
+    return u.d;
+}
+
+static long double_to_long(double d) {
+    union { double d; long l; } u;
+    u.d = d;
+    return u.l;
+}
+
 static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
     ir_func_t *fn = (ir_func_t *)fn_ptr;
     ir_pass_result_t r;
@@ -329,6 +321,24 @@ static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
                 } else {
                     continue;
                 }
+            } else if (n->op == IR_FADD || n->op == IR_FSUB || n->op == IR_FMUL || n->op == IR_FDIV) {
+                double f1 = long_to_double(v1);
+                double f2 = long_to_double(v2);
+                double f_res = 0.0;
+                if (n->op == IR_FADD) f_res = f1 + f2;
+                else if (n->op == IR_FSUB) f_res = f1 - f2;
+                else if (n->op == IR_FMUL) f_res = f1 * f2;
+                else if (n->op == IR_FDIV) { if (f2 == 0.0) continue; f_res = f1 / f2; }
+                
+                n->op = IR_FCONST;
+                n->imm = double_to_long(f_res);
+                n->tag = IR_TAG_NONE;
+                n->src1[0] = '\0';
+                n->src2[0] = '\0';
+                cmap_add(n->dst, n->imm);
+                modified++;
+                fprintf(stderr, "\033[38;5;17m[FOLD]\033[38;5;51m Folded floating-point operation into IR_FCONST \033[38;5;199m%f\033[0m\n", f_res);
+                continue;
             } else {
                 switch (n->op) {
                 case IR_ADD: result = v1 + v2; break;
@@ -637,52 +647,181 @@ static const char *gvn_lookup_or_insert(unsigned long long hash, ir_node_t *n) {
     return NULL;
 }
 
+/*
+ * GVN scope stack: tracks which table slots were occupied at each
+ * scope level so we can roll them back when leaving a dominated subtree.
+ * Zero malloc — uses a static array of slot indices.
+ */
+#define GVN_SCOPE_MAX 8192   /* max slots modified across all scopes */
+
+static int  s_gvn_scope_stack[GVN_SCOPE_MAX]; /* slot indices to clear */
+static int  s_gvn_scope_top;                   /* top of the stack     */
+static int  s_gvn_scope_marks[DOM_MAX_BLOCKS]; /* stack depth at push  */
+static int  s_gvn_modified;                    /* mutation counter     */
+
+/*
+ * gvn_lookup_or_insert_scoped: same as gvn_lookup_or_insert, but
+ * records newly occupied slots on the scope stack for rollback.
+ */
+static const char *gvn_lookup_or_insert_scoped(unsigned long long hash, ir_node_t *n) {
+    unsigned int idx = (unsigned int)(hash & GVN_TABLE_MASK);
+    int probe;
+
+    for (probe = 0; probe < GVN_TABLE_SIZE; probe++) {
+        unsigned int slot = (idx + probe) & GVN_TABLE_MASK;
+
+        if (!s_gvn_table[slot].occupied) {
+            /* Empty slot — insert with full structural key */
+            s_gvn_table[slot].hash = hash;
+            strncpy(s_gvn_table[slot].dst, n->dst, IR_NAME_MAX - 1);
+            s_gvn_table[slot].dst[IR_NAME_MAX - 1] = '\0';
+            s_gvn_table[slot].key_op   = n->op;
+            s_gvn_table[slot].key_type = n->type;
+            strncpy(s_gvn_table[slot].key_src1, n->src1, IR_NAME_MAX - 1);
+            s_gvn_table[slot].key_src1[IR_NAME_MAX - 1] = '\0';
+            strncpy(s_gvn_table[slot].key_src2, n->src2, IR_NAME_MAX - 1);
+            s_gvn_table[slot].key_src2[IR_NAME_MAX - 1] = '\0';
+            s_gvn_table[slot].key_imm  = n->imm;
+            s_gvn_table[slot].occupied = 1;
+
+            /* Record on scope stack for rollback */
+            if (s_gvn_scope_top < GVN_SCOPE_MAX) {
+                s_gvn_scope_stack[s_gvn_scope_top++] = (int)slot;
+            }
+            return NULL;
+        }
+
+        if (s_gvn_table[slot].hash == hash &&
+            gvn_keys_match(&s_gvn_table[slot], n)) {
+            return s_gvn_table[slot].dst;
+        }
+    }
+
+    return NULL;  /* table full */
+}
+
+/*
+ * gvn_scope_push: save the current stack depth as a scope marker.
+ */
+static void gvn_scope_push(int block_id) {
+    s_gvn_scope_marks[block_id] = s_gvn_scope_top;
+}
+
+/*
+ * gvn_scope_pop: roll back all GVN table entries inserted since the
+ * scope was pushed for this block.
+ */
+static void gvn_scope_pop(int block_id) {
+    int mark = s_gvn_scope_marks[block_id];
+    while (s_gvn_scope_top > mark) {
+        s_gvn_scope_top--;
+        int slot = s_gvn_scope_stack[s_gvn_scope_top];
+        s_gvn_table[slot].occupied = 0;
+    }
+}
+
+/*
+ * gvn_process_block: run GVN on all nodes within a single basic block.
+ */
+static void gvn_process_block(const dom_cfg_t *cfg, int bid) {
+    ir_node_t *n;
+    const dom_bb_t *b = &cfg->blocks[bid];
+
+    for (n = b->first; n; n = n->next) {
+        unsigned long long h;
+        const char *canon;
+
+        /* Skip non-pure or non-defining instructions */
+        if (!gvn_is_pure(n->op)) goto next;
+        if (n->dst[0] == '\0') goto next;
+
+        h = gvn_hash_node(n);
+        canon = gvn_lookup_or_insert_scoped(h, n);
+
+        if (canon) {
+            /* Redundant — rewrite as COPY from canonical def */
+            n->op = IR_COPY;
+            strncpy(n->src1, canon, IR_NAME_MAX - 1);
+            n->src1[IR_NAME_MAX - 1] = '\0';
+            n->src2[0] = '\0';
+            n->imm = 0;
+            s_gvn_modified++;
+        }
+
+    next:
+        if (n == b->last) break;
+    }
+}
+
+/*
+ * gvn_walk_domtree: pre-order traversal of the dominator tree.
+ * For each block:
+ *   1. Push a scope marker
+ *   2. Process the block's IR nodes
+ *   3. Recurse into dominated children
+ *   4. Pop the scope (rollback entries from this block)
+ */
+static void gvn_walk_domtree(const dom_cfg_t *cfg, int bid) {
+    int i;
+
+    gvn_scope_push(bid);
+    gvn_process_block(cfg, bid);
+
+    for (i = 0; i < cfg->blocks[bid].child_count; i++) {
+        gvn_walk_domtree(cfg, cfg->blocks[bid].children[i]);
+    }
+
+    gvn_scope_pop(bid);
+}
+
 static ir_pass_result_t ir_pass_gvn(void *fn_ptr) {
     ir_func_t *fn = (ir_func_t *)fn_ptr;
     ir_pass_result_t r;
-    ir_node_t *n;
-    int modified = 0;
+    const dom_cfg_t *cfg;
 
     memset(&r, 0, sizeof(r));
     r.nodes_before = count_nodes(fn);
 
     gvn_clear();
+    s_gvn_scope_top = 0;
+    s_gvn_modified = 0;
 
-    for (n = fn->head; n; n = n->next) {
-        unsigned long long h;
-        const char *canon;
+    cfg = dom_get_cfg();
 
-        /* BOLSTER: Reset GVN map at label boundaries.
-         * Values computed in one basic block are not guaranteed
-         * available at the entry of another (no dominator analysis
-         * in this single-pass mode). Conservative but safe. */
-        if (n->op == IR_LABEL) {
-            gvn_clear();
-            continue;
-        }
+    if (cfg && cfg->block_count > 0 && cfg->fn == fn) {
+        /* Dominator tree available — walk it for cross-block GVN */
+        gvn_walk_domtree(cfg, 0);
+    } else {
+        /* Fallback: linear scan with label-boundary reset (legacy mode) */
+        ir_node_t *n;
+        for (n = fn->head; n; n = n->next) {
+            unsigned long long h;
+            const char *canon;
 
-        /* Skip non-pure or non-defining instructions */
-        if (!gvn_is_pure(n->op)) continue;
-        if (n->dst[0] == '\0') continue;
+            if (n->op == IR_LABEL) {
+                gvn_clear();
+                continue;
+            }
+            if (!gvn_is_pure(n->op)) continue;
+            if (n->dst[0] == '\0') continue;
 
-        h = gvn_hash_node(n);
-        canon = gvn_lookup_or_insert(h, n);
+            h = gvn_hash_node(n);
+            canon = gvn_lookup_or_insert(h, n);
 
-        if (canon) {
-            /* Redundant — rewrite as COPY from canonical def */
-            n->op = IR_COPY;
-            n->type = n->type; /* preserve type */
-            strncpy(n->src1, canon, IR_NAME_MAX - 1);
-            n->src1[IR_NAME_MAX - 1] = '\0';
-            n->src2[0] = '\0';
-            n->imm = 0;
-            modified++;
+            if (canon) {
+                n->op = IR_COPY;
+                strncpy(n->src1, canon, IR_NAME_MAX - 1);
+                n->src1[IR_NAME_MAX - 1] = '\0';
+                n->src2[0] = '\0';
+                n->imm = 0;
+                s_gvn_modified++;
+            }
         }
     }
 
-    r.nodes_after = r.nodes_before; /* GVN mutates, doesn't delete */
-    r.nodes_modified = modified;
-    r.changed = modified > 0;
+    r.nodes_after = r.nodes_before;
+    r.nodes_modified = s_gvn_modified;
+    r.changed = s_gvn_modified > 0;
     return r;
 }
 
@@ -843,12 +982,16 @@ void ir_pm_run_default(void *mod_ptr, int verbose) {
     pm = ir_pm_create();
     pm->verbose = verbose;
 
-    /* Default pipeline: DCE → const_fold → strength_reduce → GVN → vload → DCE */
+    /* Default pipeline: symbolic_cfg → DCE → const_fold → strength_reduce → dominance → GVN → vload → lower_float → warden → DCE */
+    ir_pm_register(pm, "symbolic_cfg", ir_pass_symbolic_cfg);
     ir_pm_register(pm, "dce", ir_pass_dce);
     ir_pm_register(pm, "const_fold", ir_pass_const_fold);
     ir_pm_register(pm, "strength_reduce", ir_pass_strength_reduce);
+    ir_pm_register(pm, "dominance", ir_pass_dominance);
     ir_pm_register(pm, "gvn", ir_pass_gvn);
     ir_pm_register(pm, "coalesce_vload", ir_pass_coalesce_vload);
+    ir_pm_register(pm, "lower_float", ir_pass_lower_float);
+    ir_pm_register(pm, "warden", ir_pass_warden);
     ir_pm_register(pm, "dce2", ir_pass_dce);
 
     ir_pm_run(pm, mod);

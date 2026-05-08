@@ -25,6 +25,9 @@ typedef struct {
  */
 typedef ir_pass_result_t (*ir_pass_fn)(void *fn_ptr);
 
+/* New Lowering Pass */
+ir_pass_result_t ir_pass_lower_float(void *fn);
+
 /* ── Pass registry ───────────────────────────────────────────────────── */
 #define IR_PM_MAX_PASSES 16
 

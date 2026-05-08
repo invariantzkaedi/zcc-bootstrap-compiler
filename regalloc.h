@@ -42,7 +42,17 @@ typedef enum {
     /* caller-saved scratch — no push/pop needed */
     PREG_R10  = 5,
     PREG_R11  = 6,
-    PREG_COUNT = 7
+    
+    /* SSE2 Float registers */
+    PREG_XMM0 = 7,
+    PREG_XMM1 = 8,
+    PREG_XMM2 = 9,
+    PREG_XMM3 = 10,
+    PREG_XMM4 = 11,
+    PREG_XMM5 = 12,
+    PREG_XMM6 = 13,
+    PREG_XMM7 = 14,
+    PREG_COUNT = 15
 } PhysReg;
 
 /* Human-readable name for a PhysReg, e.g. "rbx" */
@@ -59,6 +69,7 @@ typedef struct LiveInterval {
     int       start;             /* node index of first definition    */
     int       end;               /* node index of last use            */
     PhysReg   assigned;          /* physical reg, or PREG_NONE        */
+    int       is_float;          /* 1 if node type is F32/F64         */
 } LiveInterval;
 
 /* ── Allocator state ──────────────────────────────────────────────────── */

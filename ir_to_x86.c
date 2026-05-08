@@ -11,6 +11,7 @@
 
 #include "ir.h"
 #include "regalloc.h"
+#include "src/x86_codegen_sse.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -95,6 +96,38 @@ static void store_result(FILE *out, const char *dst, const char *src_reg,
     }
     int off = get_or_create_var(dst);
     fprintf(out, "    movq %s, %d(%%rbp)\n", src_reg, off);
+}
+
+static void load_operand_xmm(FILE *out, const char *src, const char *dst_reg, const RegAllocator *ra) {
+    if (ra) {
+        PhysReg pr = ra_get(ra, src);
+        if (pr != PREG_NONE) {
+            const char *pname = preg_name(pr);
+            if (strcmp(pname, dst_reg + 1) != 0) {
+                if (pr >= PREG_XMM0) fprintf(out, "    movsd %%%s, %s\n", pname, dst_reg);
+                else                 fprintf(out, "    movq %%%s, %s\n", pname, dst_reg);
+            }
+            return;
+        }
+    }
+    int off = get_or_create_var(src);
+    fprintf(out, "    movsd %d(%%rbp), %s\n", off, dst_reg);
+}
+
+static void store_result_xmm(FILE *out, const char *dst, const char *src_reg, const RegAllocator *ra) {
+    if (ra) {
+        PhysReg pr = ra_get(ra, dst);
+        if (pr != PREG_NONE) {
+            const char *pname = preg_name(pr);
+            if (strcmp(pname, src_reg + 1) != 0) {
+                if (pr >= PREG_XMM0) fprintf(out, "    movsd %s, %%%s\n", src_reg, pname);
+                else                 fprintf(out, "    movq %s, %%%s\n", src_reg, pname);
+            }
+            return;
+        }
+    }
+    int off = get_or_create_var(dst);
+    fprintf(out, "    movsd %s, %d(%%rbp)\n", src_reg, off);
 }
 
 /*
@@ -448,32 +481,37 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                 case IR_FSUB:
                 case IR_FMUL:
                 case IR_FDIV: {
-                    int off1 = get_or_create_var(n->src1);
+                    load_operand_xmm(out, n->src1, "%xmm0", ra);
+                    if (ra) {
+                        PhysReg pr2 = ra_get(ra, n->src2);
+                        if (pr2 != PREG_NONE && pr2 >= PREG_XMM0) {
+                            if      (n->op == IR_FADD) fprintf(out, "    addsd %%%s, %%xmm0\n", preg_name(pr2));
+                            else if (n->op == IR_FSUB) fprintf(out, "    subsd %%%s, %%xmm0\n", preg_name(pr2));
+                            else if (n->op == IR_FMUL) fprintf(out, "    mulsd %%%s, %%xmm0\n", preg_name(pr2));
+                            else                       fprintf(out, "    divsd %%%s, %%xmm0\n", preg_name(pr2));
+                            store_result_xmm(out, n->dst, "%xmm0", ra);
+                            break;
+                        }
+                    }
+                    /* memory operand fallback */
                     int off2 = get_or_create_var(n->src2);
-                    int offd = get_or_create_var(n->dst);
-                    fprintf(out, "    movq %d(%%rbp), %%xmm0\n", off1);
-                    fprintf(out, "    movq %d(%%rbp), %%xmm1\n", off2);
-                    if      (n->op == IR_FADD) fprintf(out, "    addsd %%xmm1, %%xmm0\n");
-                    else if (n->op == IR_FSUB) fprintf(out, "    subsd %%xmm1, %%xmm0\n");
-                    else if (n->op == IR_FMUL) fprintf(out, "    mulsd %%xmm1, %%xmm0\n");
-                    else                       fprintf(out, "    divsd %%xmm1, %%xmm0\n");
-                    fprintf(out, "    movq %%xmm0, %d(%%rbp)\n", offd);
+                    if      (n->op == IR_FADD) fprintf(out, "    addsd %d(%%rbp), %%xmm0\n", off2);
+                    else if (n->op == IR_FSUB) fprintf(out, "    subsd %d(%%rbp), %%xmm0\n", off2);
+                    else if (n->op == IR_FMUL) fprintf(out, "    mulsd %d(%%rbp), %%xmm0\n", off2);
+                    else                       fprintf(out, "    divsd %d(%%rbp), %%xmm0\n", off2);
+                    store_result_xmm(out, n->dst, "%xmm0", ra);
                     break;
                 }
                 case IR_ITOF: {
-                    int off1 = get_or_create_var(n->src1);
-                    int offd = get_or_create_var(n->dst);
-                    fprintf(out, "    movq %d(%%rbp), %%rax\n", off1);
+                    load_operand(out, n->src1, "%rax", ra);
                     fprintf(out, "    cvtsi2sdq %%rax, %%xmm0\n");
-                    fprintf(out, "    movq %%xmm0, %d(%%rbp)\n", offd);
+                    store_result_xmm(out, n->dst, "%xmm0", ra);
                     break;
                 }
                 case IR_FTOI: {
-                    int off1 = get_or_create_var(n->src1);
-                    int offd = get_or_create_var(n->dst);
-                    fprintf(out, "    movq %d(%%rbp), %%xmm0\n", off1);
+                    load_operand_xmm(out, n->src1, "%xmm0", ra);
                     fprintf(out, "    cvttsd2si %%xmm0, %%rax\n");
-                    fprintf(out, "    movq %%rax, %d(%%rbp)\n", offd);
+                    store_result(out, n->dst, "%rax", ra);
                     break;
                 }
                 default: break;

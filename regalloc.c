@@ -21,7 +21,8 @@
 
 static const char *preg_names[PREG_COUNT] = {
     "rbx", "r12", "r13", "r14", "r15",  /* callee-saved */
-    "r10", "r11"                          /* caller-saved scratch */
+    "r10", "r11",                         /* caller-saved scratch */
+    "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
 };
 
 const char *preg_name(PhysReg r) {
@@ -104,6 +105,7 @@ static void build_intervals(RegAllocator *ra, const ir_func_t *fn) {
         /* Process destination (definition) */
         if (is_temp(n->dst)) {
             LiveInterval *iv = get_or_create(ra, n->dst, pos);
+            if (n->type == IR_TY_F32 || n->type == IR_TY_F64) iv->is_float = 1;
             /* definitions extend end too (covers single-use temps) */
             if (pos > iv->end) iv->end = pos;
         }
@@ -137,12 +139,17 @@ static void linear_scan(RegAllocator *ra) {
     int active_reg[PREG_COUNT]; /* physical register used by active[i] */
     int active_cnt = 0;
 
-    /* Free-register stack */
-    PhysReg free_regs[PREG_COUNT];
-    int free_cnt = 0;
+    /* Free-register stacks */
+    PhysReg free_gpr[PREG_COUNT];
+    PhysReg free_xmm[PREG_COUNT];
+    int free_gpr_cnt = 0;
+    int free_xmm_cnt = 0;
+    
     int r;
-    for (r = 0; r < PREG_COUNT; r++)
-        free_regs[free_cnt++] = (PhysReg)(PREG_COUNT - 1 - r); /* push in reverse so rbx is tried first */
+    for (r = 0; r <= PREG_R11; r++)
+        free_gpr[free_gpr_cnt++] = (PhysReg)(PREG_R11 - r);
+    for (r = PREG_XMM0; r <= PREG_XMM7; r++)
+        free_xmm[free_xmm_cnt++] = (PhysReg)(PREG_XMM7 - (r - PREG_XMM0));
 
     int i;
     for (i = 0; i < ra->num_intervals; i++) {
@@ -154,7 +161,11 @@ static void linear_scan(RegAllocator *ra) {
             LiveInterval *act = &ra->intervals[active[j]];
             if (act->end < cur->start) {
                 /* Return this register to the free pool */
-                free_regs[free_cnt++] = (PhysReg)active_reg[j];
+                if (active_reg[j] >= PREG_XMM0) {
+                    free_xmm[free_xmm_cnt++] = (PhysReg)active_reg[j];
+                } else {
+                    free_gpr[free_gpr_cnt++] = (PhysReg)active_reg[j];
+                }
                 /* Compact active[] */
                 active[j]     = active[active_cnt - 1];
                 active_reg[j] = active_reg[active_cnt - 1];
@@ -166,9 +177,10 @@ static void linear_scan(RegAllocator *ra) {
         }
 
         /* --- Allocate or spill --- */
-        if (free_cnt > 0) {
+        int has_free = cur->is_float ? (free_xmm_cnt > 0) : (free_gpr_cnt > 0);
+        if (has_free) {
             /* Grab a free register */
-            PhysReg preg = free_regs[--free_cnt];
+            PhysReg preg = cur->is_float ? free_xmm[--free_xmm_cnt] : free_gpr[--free_gpr_cnt];
             cur->assigned = preg;
             ra->used[preg] = 1;
 
@@ -181,6 +193,7 @@ static void linear_scan(RegAllocator *ra) {
              * No free register. Spill the interval that ends latest
              * (keep the one ending soonest in a register — it frees up
              * sooner and benefits more instructions).
+             * Only spill matching types (GPR for GPR, XMM for XMM).
              */
             int spill_idx = -1;
             int spill_ai  = -1;
@@ -188,6 +201,7 @@ static void linear_scan(RegAllocator *ra) {
 
             for (j = 0; j < active_cnt; j++) {
                 LiveInterval *act = &ra->intervals[active[j]];
+                if (act->is_float != cur->is_float) continue; /* must match */
                 if (act->end > latest_end) {
                     latest_end = act->end;
                     spill_idx  = active[j];

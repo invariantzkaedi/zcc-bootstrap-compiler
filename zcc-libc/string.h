@@ -1,4 +1,7 @@
-typedef unsigned long size_t;
+#ifndef __size_t__
+#define __size_t__
+typedef __SIZE_TYPE__ size_t;
+#endif
 #define NULL 0
 void* memcpy(void*, const void*, size_t);
 void* memset(void*, int, size_t);
