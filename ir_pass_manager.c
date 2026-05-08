@@ -404,12 +404,12 @@ static ir_pass_result_t ir_pass_strength_reduce(void *fn_ptr) {
 #define GVN_TABLE_SIZE 4096    /* power of 2, must accommodate largest fn */
 #define GVN_TABLE_MASK (GVN_TABLE_SIZE - 1)
 
-/* FNV-1a constants for 64-bit */
-#define FNV_OFFSET 14695981039346656037UL
-#define FNV_PRIME  1099511628211UL
+/* FNV-1a constants for 64-bit (ULL: portable across LP64 and LLP64) */
+#define FNV_OFFSET 14695981039346656037ULL
+#define FNV_PRIME  1099511628211ULL
 
 typedef struct {
-    unsigned long hash;
+    unsigned long long hash;
     char          dst[IR_NAME_MAX];  /* destination of the canonical def   */
     /* ── Structural key (fortification layer) ──────────────────────── */
     ir_op_t       key_op;
@@ -429,8 +429,8 @@ static void gvn_clear(void) {
     }
 }
 
-static unsigned long gvn_hash_node(ir_node_t *n) {
-    unsigned long h = FNV_OFFSET;
+static unsigned long long gvn_hash_node(ir_node_t *n) {
+    unsigned long long h = FNV_OFFSET;
     const char *p;
     unsigned char op_byte;
     unsigned char ty_byte;
@@ -509,7 +509,7 @@ static int gvn_keys_match(gvn_entry_t *e, ir_node_t *n) {
  * HARDEN: Hash hit alone is insufficient — we compare all 5 key fields.
  * On hash collision (same hash, different structure), probing continues.
  * Returns the canonical dst on true structural match, NULL on new insert. */
-static const char *gvn_lookup_or_insert(unsigned long hash, ir_node_t *n) {
+static const char *gvn_lookup_or_insert(unsigned long long hash, ir_node_t *n) {
     unsigned int idx = (unsigned int)(hash & GVN_TABLE_MASK);
     int probe;
 
@@ -556,7 +556,7 @@ static ir_pass_result_t ir_pass_gvn(void *fn_ptr) {
     gvn_clear();
 
     for (n = fn->head; n; n = n->next) {
-        unsigned long h;
+        unsigned long long h;
         const char *canon;
 
         /* BOLSTER: Reset GVN map at label boundaries.
