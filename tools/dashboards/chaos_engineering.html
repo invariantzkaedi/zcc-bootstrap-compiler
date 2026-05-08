@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>lucky_coder.chaos - Chaos Engineering Agent Team</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        
+        :root {
+            --cyan: #00ffff;
+            --magenta: #ff00ff;
+            --bg-void: #05000a;
+            --bg-panel: rgba(10, 0, 20, 0.85);
+            --font-sys: 'Press Start 2P', monospace;
+            --font-math: 'Inter', sans-serif;
+            --chaos-red: #ff3366;
+            --chaos-yellow: #ffff00;
+        }
+
+        body {
+            background: radial-gradient(circle at center, #1a0000 0%, var(--bg-void) 100%);
+            color: var(--cyan);
+            font-family: var(--font-sys);
+            margin: 0;
+            padding: 40px 20px;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        /* Cyberpunk Scanlines */
+        body::before {
+            content: " "; display: block; position: fixed;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 9999; background-size: 100% 4px, 6px 100%; pointer-events: none; opacity: 0.8;
+        }
+
+        .container { 
+            max-width: 1400px; 
+            margin: 0 auto; 
+            position: relative;
+            z-index: 10;
+            transform-style: preserve-3d;
+            will-change: transform;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--chaos-red);
+            font-size: 2.2rem;
+            text-shadow: 0 0 20px var(--chaos-red), 0 0 40px var(--chaos-yellow);
+            animation: chaosPulse 2s infinite alternate;
+            letter-spacing: -2px;
+            cursor: crosshair;
+        }
+        @keyframes chaosPulse { from { opacity: 0.8; text-shadow: 0 0 10px var(--chaos-red); } to { opacity: 1; text-shadow: 0 0 30px var(--chaos-red), 0 0 60px var(--chaos-yellow); } }
+
+        .team-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 25px;
+            margin: 40px 0;
+            transform-style: preserve-3d;
+        }
+
+        .agent {
+            background: var(--bg-panel);
+            border: 2px solid var(--chaos-red);
+            padding: 25px;
+            box-shadow: inset 0 0 20px rgba(255, 51, 102, 0.1), 0 0 30px rgba(255, 51, 102, 0.2);
+            position: relative;
+            backdrop-filter: blur(10px);
+            transition: all 0.2s ease-out;
+            transform: translateZ(10px);
+        }
+        .agent:hover {
+            border-color: var(--chaos-yellow);
+            box-shadow: inset 0 0 30px rgba(255, 255, 0, 0.2), 0 0 50px rgba(255, 255, 0, 0.3);
+            transform: translateZ(30px) scale(1.02);
+        }
+
+        .agent h3 { color: var(--chaos-yellow); margin: 0 0 10px 0; text-shadow: 0 0 10px var(--chaos-yellow); font-size: 1rem; }
+        .agent small { color: var(--cyan); font-family: var(--font-math); font-size: 0.9rem; display: block; margin-bottom: 15px; }
+        
+        .log {
+            background: rgba(0,0,0,0.8);
+            height: 160px;
+            overflow-y: auto;
+            padding: 15px;
+            font-size: 0.7rem;
+            font-family: var(--font-math);
+            border: 1px dashed var(--chaos-red);
+            color: #fff;
+            line-height: 1.6;
+        }
+
+        .task-input {
+            width: 100%;
+            padding: 20px;
+            background: rgba(0,0,0,0.6);
+            border: 2px solid var(--chaos-red);
+            color: #fff;
+            font-family: var(--font-sys);
+            font-size: 0.9rem;
+            margin: 30px 0;
+            outline: none;
+            box-shadow: inset 0 0 20px rgba(255,0,0,0.2);
+            transition: 0.3s all;
+        }
+        .task-input:focus { border-color: var(--cyan); box-shadow: 0 0 30px rgba(0,255,255,0.3); }
+
+        .btn-panel { display: flex; justify-content: center; gap: 20px; margin-bottom: 40px; }
+        
+        button {
+            background: rgba(255,0,0,0.1);
+            color: var(--chaos-red);
+            border: 2px solid var(--chaos-red);
+            padding: 16px 34px;
+            font-family: var(--font-sys);
+            font-size: 0.8rem;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(255,0,0,0.3);
+            transition: 0.2s all;
+            text-transform: uppercase;
+        }
+        button:hover { background: var(--chaos-red); color: #fff; box-shadow: 0 0 30px var(--chaos-red); }
+        button.btn-safe { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 15px rgba(0,255,255,0.2); }
+        button.btn-safe:hover { background: var(--cyan); color: #000; box-shadow: 0 0 30px var(--cyan); }
+
+        .audit {
+            background: var(--bg-panel);
+            padding: 30px;
+            border: 2px solid var(--chaos-yellow);
+            box-shadow: inset 0 0 30px rgba(255,255,0,0.1);
+            max-height: 520px;
+            overflow: auto;
+            backdrop-filter: blur(10px);
+        }
+        
+        .audit h2 { color: var(--chaos-yellow); font-size: 1.2rem; margin-top: 0; text-shadow: 0 0 10px var(--chaos-yellow); }
+
+        .chaos-block {
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-left: 4px solid var(--chaos-red);
+            margin: 15px 0;
+            white-space: pre-wrap;
+            font-family: var(--font-math);
+            color: #ddd;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        /* Secret Glitch State */
+        @keyframes coreGlitch {
+            0% { transform: translate(0) scale(1) skew(0deg); filter: invert(0); }
+            20% { transform: translate(-20px, 5px) scale(1.05) skew(-30deg); filter: invert(1) hue-rotate(90deg); box-shadow: 0 0 100px red; }
+            40% { transform: translate(20px, -5px) scale(0.9) skew(30deg); filter: invert(0) hue-rotate(-90deg); }
+            60% { transform: translate(-10px, 20px) scale(1.1) skew(-15deg); filter: invert(1) blur(3px); }
+            80% { transform: translate(10px, -20px) scale(0.95) skew(15deg); filter: invert(0) blur(0px); }
+            100% { transform: translate(0) scale(1) skew(0deg); filter: invert(0); }
+        }
+        .glitch-active { animation: coreGlitch 0.4s cubic-bezier(.25,.8,.25,1) forwards !important; border-color: #ff0000 !important; }
+
+        .system-warning {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: clamp(2rem, 5vw, 4rem); color: red; font-family: var(--font-sys);
+            text-shadow: 0 0 30px red, 0 0 60px darkred; z-index: 10000; pointer-events: none;
+            opacity: 0; transition: 0.1s opacity; text-align: center; line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="system-warning" id="sysWarning">CRITICAL SHATTER<br>ENTROPY OVERFLOW</div>
+    <div class="container" id="mainContainer">
+        <h1>☢️ LUCKY_CODER.CHAOS TEAM</h1>
+        <p style="text-align:center; color:#ff88aa;">
+            Chaos Engineering • Failure Injection • Resilience • Recovery
+        </p>
+
+        <div id="agents" class="team-grid"></div>
+
+        <input type="text" id="taskDesc" class="task-input" 
+               placeholder="Chaos task (e.g. Simulate database outage during peak load)">
+        
+        <div class="btn-panel">
+            <button onclick="unleashChaos()">UNLEASH CHAOS</button>
+            <button class="btn-safe" onclick="clearAll()">STABILIZE SYSTEM</button>
+        </div>
+
+        <div class="audit">
+            <h2 style="color:#ffff00;">CHAOS AUDIT LOG + FAILURE REPORTS</h2>
+            <div id="auditLog"></div>
+        </div>
+    </div>
+
+    <script>
+        class ChaosAgent {
+            constructor(name, role, skills, color) {
+                this.name = name;
+                this.role = role;
+                this.skills = skills.map(s => s.toLowerCase());
+                this.color = color;
+                this.log = [];
+                this.busy = false;
+                this.element = null;
+            }
+
+            canHandle(desc) {
+                desc = desc.toLowerCase();
+                return this.skills.some(skill => desc.includes(skill));
+            }
+
+            process(task) {
+                this.busy = true;
+                this.render();
+                const start = Date.now();
+
+                this.addLog(`☢️ INJECTING CHAOS...`);
+
+                setTimeout(() => {
+                    let report = '';
+                    const d = task.description.toLowerCase();
+
+                    if (d.includes("database") || d.includes("outage")) {
+                        report = `CHAOS EXPERIMENT #${Date.now().toString(36)}\n` +
+                            `Failure: PostgreSQL killed (SIGKILL)\n` +
+                            `Impact: 47% requests failed\n` +
+                            `Recovery Time: 2.8s (circuit breaker triggered)\n` +
+                            `Result: RESILIENT`;
+                    } 
+                    else if (d.includes("network") || d.includes("latency")) {
+                        report = `CHAOS EXPERIMENT #${Date.now().toString(36)}\n` +
+                            `Injected: 800ms latency + 15% packet loss\n` +
+                            `System Behavior: Graceful degradation observed\n` +
+                            `Recommendation: Add client-side retries`;
+                    } 
+                    else if (d.includes("cpu") || d.includes("memory")) {
+                        report = `CHAOS EXPERIMENT #${Date.now().toString(36)}\n` +
+                            `Stress: 100% CPU + Memory leak simulation\n` +
+                            `Outcome: Auto-scaling triggered\n` +
+                            `Weakness Found: No circuit breaker on heavy computation`;
+                    } 
+                    else {
+                        report = `CHAOS EXPERIMENT COMPLETE\n` +
+                            `Failure Mode: Random service death\n` +
+                            `Resilience Score: 92/100\n` +
+                            `Chaos Monkey Approved ✓`;
+                    }
+
+                    this.addLog("✅ Chaos experiment concluded");
+                    addAudit(`☢️ ${this.name} injected chaos`, report);
+                    
+                    this.busy = false;
+                    this.render();
+                }, 900 + Math.random() * 1100);
+            }
+
+            addLog(msg) {
+                this.log.push(`[${new Date().toLocaleTimeString()}] ${msg}`);
+                if (this.log.length > 8) this.log.shift();
+                this.render();
+            }
+
+            render() {
+                if (!this.element) return;
+                this.element.innerHTML = `
+                    <h3 style="color:${this.color}">${this.name}</h3>
+                    <small>${this.role}</small>
+                    <div class="log">${this.log.map(l => l + '<br>').join('')}</div>
+                    <div style="margin-top:10px;color:${this.busy?'#ffff00':'#ff3366'}">
+                        ${this.busy ? '☢️ CHAOS ACTIVE' : '🟢 STANDBY'}
+                    </div>
+                `;
+            }
+        }
+
+        let agents = [];
+        let auditEntries = [];
+
+        function createTeam() {
+            agents = [
+                new ChaosAgent("ChaosMonkey", "Random Failure Injector", ["random", "kill", "outage"], "#ff3366"),
+                new ChaosAgent("GorillaKing", "Massive Failure", ["region", "cluster", "massive"], "#ffff00"),
+                new ChaosAgent("LatencyLord", "Network & Latency", ["latency", "packet", "network"], "#00ffff"),
+                new ChaosAgent("StressDemon", "Resource Exhaustion", ["cpu", "memory", "load"], "#ff8800"),
+                new ChaosAgent("ResilienceSage", "Recovery & Observability", ["recover", "circuit", "metric"], "#00ff88"),
+                new ChaosAgent("BlastRadius", "Blast Radius Analyzer", ["blast", "impact", "scope"], "#ff00ff")
+            ];
+
+            const container = document.getElementById('agents');
+            container.innerHTML = '';
+            
+            agents.forEach(agent => {
+                const div = document.createElement('div');
+                div.className = 'agent';
+                agent.element = div;
+                container.appendChild(div);
+                agent.render();
+            });
+        }
+
+        function addAudit(title, content = '') {
+            const time = new Date().toLocaleTimeString();
+            let html = `<div><strong>[${time}] ${title}</strong></div>`;
+            if (content) {
+                html += `<div class="chaos-block">${content}</div>`;
+            }
+            auditEntries.unshift(html);
+            if (auditEntries.length > 18) auditEntries.pop();
+            document.getElementById('auditLog').innerHTML = auditEntries.join('');
+        }
+
+        window.unleashChaos = function() {
+            const desc = document.getElementById('taskDesc').value.trim();
+            if (!desc) return;
+
+            const task = { id: "chaos_" + Date.now().toString(36), description: desc };
+
+            addAudit(`☢️ CHAOS EXPERIMENT INITIATED`, desc);
+
+            let candidates = agents.filter(a => !a.busy && a.canHandle(desc));
+            if (candidates.length === 0) {
+                candidates = [agents[Math.floor(Math.random() * agents.length)]];
+            }
+
+            candidates.forEach((agent, i) => {
+                setTimeout(() => {
+                    addAudit(`💥 ${agent.name} unleashed`);
+                    agent.process(task);
+                }, i * 450);
+            });
+        };
+
+        window.clearAll = function() {
+            auditEntries = [];
+            document.getElementById('auditLog').innerHTML = '';
+            agents.forEach(a => { a.log = []; a.render(); });
+        };
+
+        // Auto chaos demo
+        window.onload = function() {
+            createTeam();
+            addAudit("☢️ LUCKY_CODER.CHAOS TEAM DEPLOYED — Let the chaos begin!");
+
+            const demoTasks = [
+                "Simulate database outage during peak load",
+                "Inject 1200ms latency across all services",
+                "Stress test memory leak under high traffic",
+                "Test system recovery after total region failure"
+            ];
+
+            let i = 0;
+            const interval = setInterval(() => {
+                if (i < demoTasks.length) {
+                    document.getElementById('taskDesc').value = demoTasks[i];
+                    unleashChaos();
+                    i++;
+                } else clearInterval(interval);
+            }, 2200);
+        };
+        // 🚀 ZKAEDI PRIME: 3D Holographic Parallax Engine
+        const containerNode = document.getElementById('mainContainer');
+        document.addEventListener('mousemove', (e) => {
+            const xAxis = (window.innerWidth / 2 - e.pageX) / 100;
+            const yAxis = (window.innerHeight / 2 - e.pageY) / 100;
+            containerNode.style.transform = `perspective(1200px) rotateY(${xAxis}deg) rotateX(${yAxis}deg)`;
+        });
+
+        document.addEventListener('mouseleave', () => {
+            containerNode.style.transition = 'transform 0.5s ease-out';
+            containerNode.style.transform = `perspective(1200px) rotateY(0deg) rotateX(0deg)`;
+        });
+
+        document.addEventListener('mouseenter', () => {
+            containerNode.style.transition = 'none';
+        });
+
+        // 💥 MATHEMATICAL COLLAPSE EASTER EGG (Click Title)
+        const titleCore = document.querySelector('h1');
+        const warningSys = document.getElementById('sysWarning');
+        
+        titleCore.addEventListener('click', () => {
+            containerNode.classList.add('glitch-active');
+            warningSys.style.opacity = '1';
+            document.body.style.background = "radial-gradient(circle at center, #500 0%, #000 100%)";
+            
+            // Inject fatal noise
+            for(let i=0; i<4; i++) {
+                addAudit(`[FATAL] SYSTEM SHATTERED`, `CORE DUMP: MATRIX KERNEL PANIC // ADDRESS 0x${Math.floor(Math.random()*9999999).toString(16)}`);
+            }
+
+            setTimeout(() => {
+                containerNode.classList.remove('glitch-active');
+                warningSys.style.opacity = '0';
+                document.body.style.background = "radial-gradient(circle at center, #1a0000 0%, var(--bg-void) 100%)";
+            }, 400);
+        });
+    </script>
+
+    <!-- ZKAEDI ENCHANTMENT PROTOCOL -->
+    <style>
+        .aether-spark {
+            position: fixed;
+            width: 3px; height: 3px;
+            background: #00ffff;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 10000;
+            box-shadow: 0 0 8px #00ffff, 0 0 15px #ff00ff;
+            animation: aetherFade 0.8s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+        }
+        @keyframes aetherFade {
+            0% { opacity: 1; transform: scale(1) translateY(0) translateX(0); }
+            100% { opacity: 0; transform: scale(0) translateY(-30px) translateX(10px); }
+        }
+        .hud-wrapper {
+            animation: hudBreathe 4s infinite alternate ease-in-out !important;
+        }
+        @keyframes hudBreathe {
+            0% { box-shadow: 0 0 50px rgba(0, 255, 255, 0.05), inset 0 0 30px rgba(0, 255, 255, 0.05); border-color: rgba(0, 255, 255, 0.2); }
+            100% { box-shadow: 0 0 80px rgba(255, 0, 255, 0.15), inset 0 0 60px rgba(0, 255, 255, 0.15); border-color: rgba(255, 0, 255, 0.4); }
+        }
+    </style>
+    <script>
+        (function enchantCursor(){
+            document.addEventListener('mousemove', (e) => {
+                if(Math.random() > 0.5) {
+                    const spark = document.createElement('div');
+                    spark.className = 'aether-spark';
+                    spark.style.left = e.pageX + 'px';
+                    spark.style.top = e.pageY + 'px';
+                    document.body.appendChild(spark);
+                    setTimeout(() => spark.remove(), 800);
+                }
+            });
+        })();
+    </script>
+</body>
+
+</html>

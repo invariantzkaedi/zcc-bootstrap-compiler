@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PoKW Formula Render</title>
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(', '\\)'], ['$', '$']],
+        displayMath: [['\\[', '\\]']]
+      },
+      svg: {
+        fontCache: 'global'
+      }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+
+    :root {
+      --cyan: #00ffff;
+      --magenta: #ff00ff;
+      --bg-void: #05000a;
+      --bg-panel: rgba(10, 0, 20, 0.85);
+      --font-sys: 'Press Start 2P', monospace;
+      --font-math: 'Inter', sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at center, #0a001a 0%, var(--bg-void) 100%);
+      color: var(--cyan);
+      font-family: var(--font-sys);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      overflow-x: hidden;
+    }
+
+    /* Cyberpunk Scanlines */
+    body::before {
+      content: " "; display: block; position: fixed;
+      top: 0; left: 0; bottom: 0; right: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+      z-index: 9999; background-size: 100% 4px, 6px 100%; pointer-events: none; opacity: 0.8;
+    }
+
+    .card {
+      width: min(100%, 980px);
+      background: var(--bg-panel);
+      border: 2px solid var(--cyan);
+      border-radius: 4px;
+      padding: 40px;
+      position: relative;
+      box-shadow: 0 0 50px rgba(0, 255, 255, 0.1), inset 0 0 30px rgba(0,255,255,0.05);
+      backdrop-filter: blur(15px);
+      animation: glitchIn 0.8s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+      z-index: 10;
+      transform-style: preserve-3d;
+      will-change: transform;
+    }
+
+    @keyframes glitchIn {
+      0% { opacity: 0; transform: perspective(1000px) scale(0.95) translateY(20px) rotateX(10deg); filter: hue-rotate(90deg); }
+      50% { opacity: 0.8; transform: perspective(1000px) scale(1.02) translateY(-5px) rotateX(-2deg); filter: hue-rotate(-90deg); }
+      100% { opacity: 1; transform: perspective(1000px) scale(1) translateY(0) rotateX(0deg); filter: hue-rotate(0deg); }
+    }
+
+    /* Secret Glitch State */
+    @keyframes coreGlitch {
+      0% { transform: translate(0) scale(1) skew(0deg); filter: invert(0); }
+      20% { transform: translate(-15px, 5px) scale(1.05) skew(-20deg); filter: invert(1) hue-rotate(90deg); box-shadow: 0 0 100px red; }
+      40% { transform: translate(15px, -5px) scale(0.9) skew(20deg); filter: invert(0) hue-rotate(-90deg); border-color: red;}
+      60% { transform: translate(-5px, 15px) scale(1.1) skew(-10deg); filter: invert(1) blur(3px); }
+      80% { transform: translate(5px, -15px) scale(0.95) skew(10deg); filter: invert(0) blur(0px); }
+      100% { transform: translate(0) scale(1) skew(0deg); filter: invert(0); }
+    }
+    
+    .glitch-active {
+      animation: coreGlitch 0.3s cubic-bezier(.25,.8,.25,1) forwards !important;
+      border-color: #ff0000 !important;
+    }
+
+    .system-warning {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: clamp(2rem, 5vw, 4rem);
+      color: red;
+      font-family: var(--font-sys);
+      text-shadow: 0 0 30px red, 0 0 60px darkred;
+      z-index: 10000;
+      pointer-events: none;
+      opacity: 0;
+      transition: 0.1s opacity;
+    }
+
+    /* HUD Corners */
+    .hud-corner { position: absolute; width: 30px; height: 30px; border: 2px solid var(--magenta); z-index: 10; }
+    .hud-tl { top: -2px; left: -2px; border-right: none; border-bottom: none; }
+    .hud-tr { top: -2px; right: -2px; border-left: none; border-bottom: none; }
+    .hud-bl { bottom: -2px; left: -2px; border-right: none; border-top: none; }
+    .hud-br { bottom: -2px; right: -2px; border-left: none; border-top: none; }
+
+    .title {
+      margin: 0 0 10px;
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--magenta);
+      text-shadow: 0 0 20px var(--magenta);
+      text-align: center;
+      letter-spacing: -1px;
+    }
+
+    .subtitle {
+      margin: 0 0 30px;
+      color: var(--cyan);
+      font-size: 0.7rem;
+      text-align: center;
+      line-height: 1.8;
+      text-shadow: 0 0 5px var(--cyan);
+    }
+
+    .formula {
+      overflow-x: auto;
+      padding: 40px 16px;
+      background: rgba(5,0,17,0.6);
+      border: 2px dashed var(--magenta);
+      box-shadow: inset 0 0 40px rgba(255, 0, 255, 0.1);
+      text-align: center;
+      font-family: var(--font-math);
+      font-size: clamp(1.4rem, 3vw, 2.5rem);
+      color: #fff;
+      filter: drop-shadow(0 0 15px #fff);
+      transition: all 0.3s ease;
+      cursor: crosshair; /* Hint at interaction */
+    }
+    
+    .formula:hover {
+      border-color: var(--cyan);
+      box-shadow: inset 0 0 60px rgba(0, 255, 255, 0.2);
+      filter: drop-shadow(0 0 25px var(--cyan));
+    }
+
+    .legend-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 15px;
+      margin-top: 30px;
+    }
+
+    .legend-item {
+      background: rgba(0, 255, 255, 0.05);
+      border: 1px solid rgba(0, 255, 255, 0.3);
+      padding: 15px;
+      font-family: var(--font-sys);
+      font-size: 0.65rem;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: 0.2s all;
+      backdrop-filter: blur(5px);
+    }
+    
+    .legend-item:hover {
+      background: rgba(255, 0, 255, 0.1);
+      border-color: var(--magenta);
+      box-shadow: 0 0 20px rgba(255, 0, 255, 0.2);
+      transform: translateY(-2px);
+    }
+
+    .term {
+      color: var(--magenta);
+      font-size: 0.85rem;
+      text-shadow: 0 0 10px var(--magenta);
+    }
+
+    .def {
+      color: #fff;
+      font-family: var(--font-math);
+      font-size: 0.9rem;
+      line-height: 1.4;
+      color: var(--cyan);
+    }
+
+    .telemetry-feed {
+      margin-top: 30px;
+      border: 1px solid var(--cyan);
+      background: rgba(0, 0, 0, 0.8);
+      font-family: var(--font-sys);
+      font-size: 0.6rem;
+      height: 150px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: inset 0 0 20px rgba(0, 255, 255, 0.1);
+      position: relative;
+    }
+
+    .feed-header {
+      background: var(--cyan);
+      color: #000;
+      padding: 8px 10px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      border-bottom: 2px solid #fff;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .feed-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .feed-actions button {
+      background: #000;
+      color: var(--cyan);
+      border: 1px solid var(--cyan);
+      font-family: var(--font-sys);
+      font-size: 0.5rem;
+      padding: 4px 8px;
+      cursor: pointer;
+      transition: 0.2s all;
+    }
+    
+    .feed-actions button:hover {
+      background: var(--cyan);
+      color: #000;
+    }
+    
+    .feed-actions .btn-bind {
+      background: rgba(255, 0, 255, 0.1);
+      border-color: var(--magenta);
+      color: var(--magenta);
+    }
+
+    .feed-actions .btn-bind:hover {
+      background: var(--magenta);
+      color: #fff;
+      box-shadow: 0 0 10px var(--magenta);
+    }
+
+    .feed-content {
+      padding: 10px;
+      overflow-y: hidden;
+      color: #8ab4ff;
+      line-height: 1.8;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .feed-line {
+      animation: feedIn 0.15s ease-out forwards;
+      border-bottom: 1px dashed rgba(0, 255, 255, 0.1);
+      padding-bottom: 4px;
+      margin-bottom: 4px;
+    }
+
+    .feed-hash { color: var(--magenta); text-shadow: 0 0 8px var(--magenta); }
+
+    @keyframes feedIn { 
+      from { opacity: 0; transform: translateX(-20px); filter: hue-rotate(90deg); } 
+      to { opacity: 1; transform: translateX(0); filter: hue-rotate(0deg); } 
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="hud-corner hud-tl"></div>
+    <div class="hud-corner hud-tr"></div>
+    <div class="hud-corner hud-bl"></div>
+    <div class="hud-corner hud-br"></div>
+
+    <h1 class="title">PoKW KINETIC FORMULA</h1>
+    <p class="subtitle">
+      // GEOMETRIC ENTROPY AGGREGATION ENGINE
+    </p>
+
+    <section class="formula" aria-label="Rendered mathematical formula">
+      \[
+      H_{\mathrm{PoKW}} = \mathrm{Keccak256}\left(
+      \bigoplus_{i=1}^{n}
+      \left(
+      A_i \,\|\, G_i \,\|\, \Delta t_i \,\|\, \sigma(Z_{t-1})
+      \right)
+      \right)
+      \]
+    </section>
+
+    <div class="legend-grid">
+      <div class="legend-item">
+        <span class="term">H_PoKW</span>
+        <span class="def">Cryptographic Output Root (Keccak-256)</span>
+      </div>
+      <div class="legend-item">
+        <span class="term">A_i</span>
+        <span class="def">3-Axis Linear Accelerometer Vector [X,Y,Z]</span>
+      </div>
+      <div class="legend-item">
+        <span class="term">G_i</span>
+        <span class="def">3-Axis Gyroscopic Angular Velocity Vector</span>
+      </div>
+      <div class="legend-item">
+        <span class="term">Δt_i</span>
+        <span class="def">Temporal Delta Matrix (Frame Timing Sync)</span>
+      </div>
+      <div class="legend-item">
+        <span class="term">σ(Z_{t-1})</span>
+        <span class="def">Recursive State Entanglement Anchor</span>
+      </div>
+      <div class="legend-item">
+        <span class="term">⨁</span>
+        <span class="def">Sequential XOR Fold across n-frames</span>
+      </div>
+    </div>
+
+    <div class="telemetry-feed">
+      <div class="feed-header">
+        <span>>> LIVE VECTOR INGESTION STREAM (SIMULATION)</span>
+        <div class="feed-actions">
+          <button id="btnPause">⏸ PAUSE</button>
+          <button id="btnBind" class="btn-bind">🔗 BIND TO HARDWARE</button>
+        </div>
+      </div>
+      <div class="feed-content" id="feedContent">
+        <!-- JS Injected Streams -->
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const feed = document.getElementById('feedContent');
+    let tick = 0;
+    let streamPaused = false;
+    let streamTimer = null;
+    
+    function generateStream() {
+      if(!feed || streamPaused) return;
+      
+      const ax = (Math.random() * 2 - 1).toFixed(3).padStart(6, ' ');
+      const ay = (Math.random() * 2 - 1).toFixed(3).padStart(6, ' ');
+      const az = (Math.random() * 2 + 8).toFixed(3).padStart(6, ' '); 
+      
+      const gx = (Math.random() * 0.1 - 0.05).toFixed(3).padStart(6, ' ');
+      const gy = (Math.random() * 0.1 - 0.05).toFixed(3).padStart(6, ' ');
+      const gz = (Math.random() * 0.1 - 0.05).toFixed(3).padStart(6, ' ');
+      
+      const dt = 100;
+      const fakeHash = "0x" + Array.from({length:12}, () => Math.floor(Math.random()*16).toString(16)).join('');
+
+      const line = document.createElement('div');
+      line.className = 'feed-line';
+      line.innerHTML = `[T+${tick.toString().padStart(5, '0')}ms] A:[<span style="color:#fff">${ax},${ay},${az}</span>] G:[<span style="color:#fff">${gx},${gy},${gz}</span>] -> ⨁ <span class="feed-hash">${fakeHash}</span>`;
+      
+      feed.insertBefore(line, feed.firstChild);
+      
+      if (feed.children.length > 6) {
+        feed.removeChild(feed.lastChild);
+      }
+      
+      tick += dt;
+      streamTimer = setTimeout(generateStream, dt + (Math.random() * 50)); // Jitter for realism
+    }
+    
+    streamTimer = setTimeout(generateStream, 1000);
+
+    // Bind UI Actions
+    document.getElementById('btnPause').addEventListener('click', (e) => {
+      streamPaused = !streamPaused;
+      e.target.textContent = streamPaused ? "▶ RESUME" : "⏸ PAUSE";
+      if (!streamPaused) generateStream();
+    });
+
+    document.getElementById('btnBind').addEventListener('click', () => {
+      alert("[HARDWARE LOCK REQUIRED]\\n\\nThis is a static documentation asset. To bind a physical Flipper Zero device via Web Serial API and capture real kinetic entropy, return to the Master God Dashboard.");
+    });
+
+    // 🚀 ZKAEDI PRIME: 3D Holographic Parallax Engine
+    const card = document.querySelector('.card');
+    let parallaxActive = false;
+
+    // Wait for the entrance glitch animation to finish before enabling parallax
+    setTimeout(() => { parallaxActive = true; }, 800);
+
+    document.addEventListener('mousemove', (e) => {
+      if (!parallaxActive) return;
+      // Calculate cursor delta from screen center
+      const xAxis = (window.innerWidth / 2 - e.pageX) / 80;
+      const yAxis = (window.innerHeight / 2 - e.pageY) / 80;
+      card.style.transform = `perspective(1000px) rotateY(${xAxis}deg) rotateX(${yAxis}deg)`;
+    });
+
+    document.addEventListener('mouseleave', () => {
+      if (!parallaxActive) return;
+      card.style.transition = 'transform 0.5s ease-out';
+      card.style.transform = `perspective(1000px) rotateY(0deg) rotateX(0deg)`;
+    });
+
+    document.addEventListener('mouseenter', () => {
+      if (!parallaxActive) return;
+      card.style.transition = 'none'; // Snap to mouse instantly when returning
+    });
+
+    // 💥 POST-FINAL PASS: MATHEMATICAL COLLAPSE EASTER EGG
+    const formulaCore = document.querySelector('.formula');
+    const warningText = document.createElement('div');
+    warningText.className = 'system-warning';
+    warningText.innerText = "ENTROPY OVERFLOW";
+    document.body.appendChild(warningText);
+
+    formulaCore.addEventListener('click', () => {
+      // Trigger CSS Violence
+      formulaCore.classList.add('glitch-active');
+      warningText.style.opacity = '1';
+      document.body.style.background = "radial-gradient(circle at center, #300 0%, #000 100%)";
+      
+      // Dump Fatal Errors into Terminal
+      if (feed && !streamPaused) {
+        for(let i=0; i<3; i++){
+          const line = document.createElement('div');
+          line.className = 'feed-line';
+          line.innerHTML = `[FATAL] MATH.COLLAPSE <span style="color:red; text-shadow: 0 0 5px red;">ERR: MATRIX SHATTERED</span>`;
+          feed.insertBefore(line, feed.firstChild);
+          if (feed.children.length > 6) feed.removeChild(feed.lastChild);
+        }
+      }
+
+      // Restore Order
+      setTimeout(() => {
+        formulaCore.classList.remove('glitch-active');
+        warningText.style.opacity = '0';
+        document.body.style.background = "radial-gradient(circle at center, #0a001a 0%, var(--bg-void) 100%)";
+      }, 350);
+    });
+  </script>
+
+    <!-- ZKAEDI ENCHANTMENT PROTOCOL -->
+    <style>
+        .aether-spark {
+            position: fixed;
+            width: 3px; height: 3px;
+            background: #00ffff;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 10000;
+            box-shadow: 0 0 8px #00ffff, 0 0 15px #ff00ff;
+            animation: aetherFade 0.8s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+        }
+        @keyframes aetherFade {
+            0% { opacity: 1; transform: scale(1) translateY(0) translateX(0); }
+            100% { opacity: 0; transform: scale(0) translateY(-30px) translateX(10px); }
+        }
+        .hud-wrapper {
+            animation: hudBreathe 4s infinite alternate ease-in-out !important;
+        }
+        @keyframes hudBreathe {
+            0% { box-shadow: 0 0 50px rgba(0, 255, 255, 0.05), inset 0 0 30px rgba(0, 255, 255, 0.05); border-color: rgba(0, 255, 255, 0.2); }
+            100% { box-shadow: 0 0 80px rgba(255, 0, 255, 0.15), inset 0 0 60px rgba(0, 255, 255, 0.15); border-color: rgba(255, 0, 255, 0.4); }
+        }
+    </style>
+    <script>
+        (function enchantCursor(){
+            document.addEventListener('mousemove', (e) => {
+                if(Math.random() > 0.5) {
+                    const spark = document.createElement('div');
+                    spark.className = 'aether-spark';
+                    spark.style.left = e.pageX + 'px';
+                    spark.style.top = e.pageY + 'px';
+                    document.body.appendChild(spark);
+                    setTimeout(() => spark.remove(), 800);
+                }
+            });
+        })();
+    </script>
+</body>
+
+</html>

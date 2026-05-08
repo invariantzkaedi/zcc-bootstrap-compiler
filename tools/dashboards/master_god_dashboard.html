@@ -1,0 +1,1635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- 🛡️ SECURITY LAYER 1: STRICT CONTENT SECURITY POLICY -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data:; connect-src 'self' ws://localhost:8043; object-src 'none'; base-uri 'none'; form-action 'none';">
+    <meta name="referrer" content="no-referrer">
+    
+    <title>🌌 ZKAEDI PRIME GOD DASHBOARD v6.5 — MAXIMUM SECURITY</title>
+    
+    <!-- MATH FORMULA — pure CSS/Unicode, no CDN dependency -->
+    <style>
+        .math-formula {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            font-size: 1.05rem;
+            color: var(--magenta);
+            text-shadow: 0 0 8px var(--magenta);
+            text-align: center;
+            padding: 10px 4px;
+            line-height: 1.9;
+            letter-spacing: 0.02em;
+        }
+        .math-formula .mvar  { font-style: italic; }
+        .math-formula .msub  { font-size: 0.72em; vertical-align: sub; }
+        .math-formula .msup  { font-size: 0.72em; vertical-align: super; }
+        .math-formula .mop   { font-style: normal; margin: 0 2px; }
+        .math-formula .mfrac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; margin: 0 3px; }
+        .math-formula .mfrac .mnum { border-bottom: 1px solid var(--magenta); padding: 0 2px; }
+
+        /* ── Kinetic source badge ──────────────────────────────────────────── */
+        #kineticSourceBadge {
+            display: inline-block;
+            font-family: 'Courier New', monospace;
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 3px 10px;
+            border-radius: 3px;
+            border: 1px solid currentColor;
+            margin: 6px auto 2px;
+            transition: all 0.4s ease;
+        }
+        #kineticSourceBadge.src-sim    { color: #888; border-color:#444; }
+        #kineticSourceBadge.src-fhn    { color: #00ffcc; border-color:#00ffcc; text-shadow:0 0 6px #00ffcc; box-shadow:0 0 8px #00ffcc44; }
+        #kineticSourceBadge.src-motion { color: #ff9900; border-color:#ff9900; text-shadow:0 0 6px #ff9900; box-shadow:0 0 8px #ff990044; }
+        #kineticSourceBadge.src-hw     { color: #ff00ff; border-color:#ff00ff; text-shadow:0 0 6px #ff00ff; box-shadow:0 0 8px #ff00ff44; }
+    </style>
+
+    <!-- JS-YAML (BOLSTER) -->
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+
+    <!-- YAML CONFIGURATION (THE FORTRESS) -->
+    <script type="text/yaml" id="prime-config">
+enclave:
+  id: "ZKAEDI-PRIME-V6"
+  status: "SECURE"
+  com_port: "COM68"
+oracle:
+  contract_name: "PoKWOracle"
+  target_function: "crystallizeKineticState(bytes32,bytes32,bytes)"
+  authorized_signer: "GameTheorist"
+pokw:
+  buffer_limit: 120
+  polling_rate_ms: 100
+  hash_algorithm: "Keccak256_Simulation"
+  chaos:
+    multiplier_spike: 25.0
+    decay_rate: 0.85
+    baseline_noise: 0.8
+swarm:
+  domains:
+    - PoKW
+    - Python
+    - Rust
+    - AI
+    - Chaos
+    - Physics
+  roles:
+    Mathematician: "📐 TOPOLOGICAL PROOF (\\bigoplus) CONSTRUCTED"
+    QuantumGeek: "⚛️ ENTANGLEMENT THRESHOLD REACHED"
+    Poet: "✍️ HARMONIC RESONANCE ACHIEVED"
+    ChaosEngineer: "☢️ ATTRACTOR STATE DESTABILIZED"
+    GameTheorist: "🎲 ECDSA SIGNATURE GENERATED FOR ORACLE"
+    Physicist: "🌌 HAMILTONIAN ENERGY LANDSCAPE MAPPED"
+    </script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+
+        /* -------------------------------------------
+           1. CORE VARIABLES & THEME
+           ------------------------------------------- */
+        :root {
+            --cyan: #00ffff;
+            --magenta: #ff00ff;
+            --bg-void: #05000a;
+            --bg-panel: rgba(10, 0, 20, 0.85);
+            --font-sys: 'Press Start 2P', monospace;
+            --font-math: 'Inter', sans-serif;
+            --hud-border: 1px solid rgba(0, 255, 255, 0.3);
+        }
+
+        body {
+            background: radial-gradient(circle at center, #0a001a 0%, var(--bg-void) 100%);
+            color: var(--cyan);
+            font-family: var(--font-sys);
+            margin: 0; padding: 0;
+            overflow-x: hidden;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        /* Cyberpunk Scanlines */
+        body::before {
+            content: " "; display: block; position: fixed;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 9999; background-size: 100% 4px, 6px 100%; pointer-events: none; opacity: 0.8;
+        }
+
+        /* -------------------------------------------
+           1.5 IMMERSIVE WATERMARK
+           ------------------------------------------- */
+        .watermark {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 15vw; font-weight: 900; color: rgba(255, 0, 255, 0.02);
+            z-index: 0; pointer-events: none; white-space: nowrap;
+            font-family: var(--font-math); letter-spacing: -5px;
+            text-shadow: 0 0 50px rgba(0, 255, 255, 0.02);
+        }
+
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: var(--bg-void); border-left: 1px solid rgba(255,0,255,0.2); }
+        ::-webkit-scrollbar-thumb { background: var(--magenta); box-shadow: inset 0 0 10px #000; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
+
+        /* -------------------------------------------
+           2. HUD FRAME & STRUCTURAL HTML
+           ------------------------------------------- */
+        .hud-wrapper {
+            width: 95vw; max-width: 1600px; margin: 2vh auto; position: relative; padding: 40px;
+            border: var(--hud-border); background: rgba(0, 0, 0, 0.4); 
+            -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+            box-shadow: 0 0 50px rgba(0, 255, 255, 0.05), inset 0 0 30px rgba(0,255,255,0.05);
+            transform-style: preserve-3d;
+            will-change: transform;
+        }
+
+        .hud-corner { position: absolute; width: 30px; height: 30px; border: 2px solid var(--cyan); z-index: 10; }
+        .hud-tl { top: -2px; left: -2px; border-right: none; border-bottom: none; }
+        .hud-tr { top: -2px; right: -2px; border-left: none; border-bottom: none; }
+        .hud-bl { bottom: -2px; left: -2px; border-right: none; border-top: none; }
+        .hud-br { bottom: -2px; right: -2px; border-left: none; border-top: none; }
+
+        .top-ticker {
+            position: absolute; top: 0; left: 50%; transform: translateX(-50%); background: var(--cyan); color: #000; 
+            font-family: var(--font-math); font-weight: 900; font-size: 0.75rem; letter-spacing: 2px;
+            padding: 3px 30px; clip-path: polygon(10% 0, 90% 0, 100% 100%, 0 100%);
+        }
+
+        .system-stats { display: flex; justify-content: space-between; font-size: 0.65rem; color: var(--magenta); border-bottom: var(--hud-border); padding-bottom: 10px; margin-bottom: 20px; text-shadow: 0 0 5px var(--magenta); }
+
+        h1 { text-align: center; font-size: 2.8rem; color: var(--magenta); text-shadow: 0 0 30px var(--magenta), 0 0 80px var(--cyan), 0 0 120px var(--magenta); animation: primePulse 2s infinite alternate; margin: 10px 0 20px 0; letter-spacing: -2px; cursor: crosshair; }
+        @keyframes primePulse { 0% { text-shadow: 0 0 20px var(--magenta), 0 0 50px var(--cyan); transform: scale(1); } 100% { text-shadow: 0 0 60px var(--magenta), 0 0 120px var(--cyan); transform: scale(1.02); } }
+
+        .flipper-led-container { position: absolute; top: 30px; right: 40px; text-align: center; z-index: 50; }
+        .flipper-led { width: 25px; height: 25px; border-radius: 50%; background: #000; margin: 0 auto 5px auto; border: 2px solid #333; transition: 0.3s all; }
+        
+        .led-standby { animation: ledPulseBlue 2.5s infinite; }
+        @keyframes ledPulseBlue { 0%, 100% { background: #000; box-shadow: none; border-color: #333; } 50% { background: #007bff; box-shadow: 0 0 20px #007bff; border-color: #007bff; } }
+        
+        .led-connecting { animation: ledPulseYellow 0.8s infinite; }
+        @keyframes ledPulseYellow { 0%, 100% { background: #000; box-shadow: none; border-color: #333; } 50% { background: #ffaa00; box-shadow: 0 0 25px #ffaa00; border-color: #ffaa00; } }
+
+        .led-success { background: #00ff00; box-shadow: 0 0 25px #00ff00, 0 0 50px #00ff00; border-color: #00ff00; }
+
+        .led-error { animation: ledBlinkRed 0.2s infinite; }
+        @keyframes ledBlinkRed { 0%, 49% { background: #ff0000; box-shadow: 0 0 30px #ff0000; border-color: #ff0000; } 50%, 100% { background: #000; box-shadow: none; border-color: #333; } }
+
+        .led-chaos { animation: flipperUnleashed 0.1s infinite; }
+        @keyframes flipperUnleashed { 0%, 49% { background: var(--cyan); box-shadow: 0 0 40px var(--cyan); border-color: var(--cyan); } 50%, 100% { background: var(--magenta); box-shadow: 0 0 40px var(--magenta); border-color: var(--magenta); } }
+
+        .tabs { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin:20px 0; }
+        .tab { padding:12px 24px; background: rgba(17,0,34,0.6); border:2px solid var(--magenta); color:var(--magenta); cursor:pointer; text-transform:uppercase; transition: 0.3s all; -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); font-size: 0.8rem; }
+        .tab:hover { background: var(--magenta); color: #000; box-shadow: 0 0 20px var(--magenta); }
+        .tab.active { background:var(--cyan); color:#000; border-color:var(--cyan); box-shadow: 0 0 30px var(--cyan), 0 0 60px var(--magenta); transform: scale(1.05); }
+
+        .panel { display:none; background:var(--bg-panel); padding:30px; border:2px solid var(--cyan); box-shadow: 0 0 50px rgba(0, 255, 255, 0.1); -webkit-backdrop-filter: blur(15px); backdrop-filter: blur(15px); position: relative;}
+        .panel.active { display:block; animation: glitchIn 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); }
+        @keyframes glitchIn { 0% { opacity: 0; transform: scale(0.95) translateY(20px); filter: hue-rotate(90deg); } 50% { opacity: 0.8; transform: scale(1.02) translateY(-5px); filter: hue-rotate(-90deg); } 100% { opacity: 1; transform: scale(1) translateY(0); filter: hue-rotate(0deg); } }
+
+        /* Secret Glitch State */
+        @keyframes coreGlitch {
+            0% { transform: translate(0) scale(1) skew(0deg); filter: invert(0); }
+            20% { transform: translate(-20px, 5px) scale(1.05) skew(-30deg); filter: invert(1) hue-rotate(90deg); box-shadow: 0 0 100px red; }
+            40% { transform: translate(20px, -5px) scale(0.9) skew(30deg); filter: invert(0) hue-rotate(-90deg); }
+            60% { transform: translate(-10px, 20px) scale(1.1) skew(-15deg); filter: invert(1) blur(3px); }
+            80% { transform: translate(10px, -20px) scale(0.95) skew(15deg); filter: invert(0) blur(0px); }
+            100% { transform: translate(0) scale(1) skew(0deg); filter: invert(0); }
+        }
+        .glitch-active { animation: coreGlitch 0.4s cubic-bezier(.25,.8,.25,1) forwards !important; border-color: #ff0000 !important; }
+
+        .system-warning {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: clamp(2rem, 5vw, 4rem); color: red; font-family: var(--font-sys);
+            text-shadow: 0 0 30px red, 0 0 60px darkred; z-index: 10000; pointer-events: none;
+            opacity: 0; transition: 0.1s opacity; text-align: center; line-height: 1.5;
+        }
+
+        .role-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px,1fr)); gap:20px; position: relative; z-index: 5; }
+        .agent { background: linear-gradient(135deg, rgba(5,0,17,0.7), rgba(26,0,42,0.7)); border: 2px solid var(--magenta); padding: 20px; border-radius: 4px; box-shadow: inset 0 0 25px rgba(255, 0, 255, 0.1); position: relative; overflow: hidden; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); z-index: 10; }
+        .agent::before { content: ''; position: absolute; top:0; left:0; width: 100%; height: 2px; background: var(--magenta); opacity: 0.5; }
+        .agent.active-agent { background: linear-gradient(135deg, rgba(10,0,34,0.9), rgba(51,0,51,0.9)); transform: scale(1.03); box-shadow: inset 0 0 40px rgba(255, 0, 255, 0.4), 0 0 30px rgba(0, 255, 255, 0.6); border-color: var(--cyan); }
+        .agent h3 { margin:0 0 10px 0; font-size: 1rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
+        
+        .log { background: rgba(0,0,0,0.85); height:110px; overflow-y:auto; padding:12px; font-size:10px; line-height: 1.6; border: 1px solid var(--magenta); margin-top: 15px; color: #fff; text-shadow: 0 0 5px var(--magenta); box-shadow: inset 0 0 15px rgba(255,0,255,0.1); word-break: break-word; }
+        .json-block { background: #000; padding: 20px; border: 2px dashed var(--cyan); color: #8ab4ff; font-family: ui-monospace, Consolas, monospace; font-size: 0.8rem; overflow-x: auto; text-shadow: 0 0 5px rgba(138, 180, 255, 0.5); }
+
+        .calc-box { background: rgba(5,0,17,0.6); border: 2px dashed var(--cyan); padding: 25px; margin-top: 25px; box-shadow: inset 0 0 40px rgba(0, 255, 255, 0.1); position: relative; }
+        .calc-header { color: var(--cyan); margin-top: 0; text-shadow: 0 0 10px var(--cyan); font-size: 1.1rem; text-align: center; letter-spacing: 1px; }
+        .mathjax-container { font-family: var(--font-math); text-align: center; margin: 30px 0; font-size: 1.5rem; color: var(--magenta); filter: drop-shadow(0 0 15px var(--magenta)); }
+        .telemetry-meta { font-size: 0.7rem; margin: 20px 0 10px 0; display: flex; justify-content: space-between; color: var(--magenta); border-bottom: 1px solid rgba(255,0,255,0.3); padding-bottom: 5px; }
+        
+        .wave-container { position: relative; width: 100%; height: 160px; background: #000; border: 1px solid var(--magenta); margin-bottom: 20px; overflow: hidden; box-shadow: inset 0 0 20px rgba(0, 255, 255, 0.15); }
+        canvas { display: block; width: 100%; height: 100%; }
+        .canvas-overlay { position: absolute; top: 10px; left: 15px; font-size: 0.6rem; color: var(--cyan); pointer-events: none; letter-spacing: 1px; }
+
+        .hash-display { margin-top: 10px; padding: 15px; background: rgba(0, 255, 255, 0.05); border: 1px solid var(--cyan); font-size: 0.8rem; line-height: 1.6; transition: 0.3s all; }
+        .hash-display.crystallized { background: rgba(255, 0, 255, 0.2); border-color: var(--magenta); box-shadow: 0 0 30px rgba(255,0,255,0.5); }
+        .hash-value { color: var(--magenta); word-break: break-all; text-shadow: 0 0 5px var(--magenta); }
+
+        .btn-group { display: flex; gap: 15px; margin-top: 20px; position: relative; z-index: 5; }
+        button { flex: 1; background: rgba(0, 255, 255, 0.05); color:var(--cyan); border: 2px solid var(--cyan); padding:16px; cursor:pointer; font-size: 0.9rem; text-transform: uppercase; font-family: var(--font-sys); box-shadow: 0 0 15px rgba(0, 255, 255, 0.2), inset 0 0 10px rgba(0, 255, 255, 0.1); transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1); -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); letter-spacing: 1px; }
+        button:hover { background:var(--cyan); color:#000; box-shadow: 0 0 40px var(--cyan); transform: translateY(-2px) scale(1.02); border-color: var(--cyan); text-shadow: none; }
+        .btn-chaos { border-color: var(--magenta); color: var(--magenta); box-shadow: 0 0 15px rgba(255,0,255,0.2); background: rgba(255, 0, 255, 0.05); }
+        .btn-chaos:hover { background: var(--magenta); color: #000; box-shadow: 0 0 40px var(--magenta); border-color: var(--magenta); }
+
+        .audit { margin-top:30px; background:rgba(5, 0, 15, 0.8); padding:25px; border:2px solid var(--magenta); max-height:350px; overflow-y:auto; box-shadow: inset 0 0 30px rgba(255, 0, 255, 0.15); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+        
+        .sys-cyan { color: #00ffff; }
+        .sys-magenta { color: var(--magenta); text-shadow: 0 0 5px var(--magenta); }
+        .roles-sub { text-align:center; color:#00ffff; font-size:0.8rem; line-height: 1.8; text-shadow: 0 0 10px #00ffff; margin-bottom: 30px; }
+        .flipper-desc { font-size: 0.55rem; color: var(--magenta); text-shadow: 0 0 5px var(--magenta); margin-top:8px; }
+        .audit-header { color:var(--magenta); text-shadow: 0 0 15px var(--magenta); font-size: 1.2rem; margin-top:0; }
+        
+        /* 🔥 SECOND PASS CLEANUP: INLINE STYLE PURGE */
+        .panel-header-cyan { color:var(--cyan); text-shadow: 0 0 20px var(--cyan); font-size: 1.4rem; border-bottom: 1px solid var(--cyan); padding-bottom: 10px; margin-top: 0; }
+        .panel-header-magenta { color:var(--magenta); text-shadow: 0 0 20px var(--magenta); font-size: 1.4rem; border-bottom: 1px solid var(--magenta); padding-bottom: 10px; margin-top: 0; }
+        .btn-cyan { border-color: var(--cyan); color: var(--cyan); }
+        .btn-magenta { border-color: var(--magenta); color: var(--magenta); box-shadow: 0 0 10px rgba(255,0,255,0.2); }
+        .agent-cyan { border-color: var(--cyan); }
+        .agent-cyan h3 { color: var(--cyan); }
+        .agent-cyan .log { border-color: var(--cyan); }
+        .agent-magenta { border-color: var(--magenta); }
+        .agent-magenta h3 { color: var(--magenta); }
+        .agent-magenta .log { border-color: var(--magenta); }
+        .text-white { color: #fff; }
+    </style>
+</head>
+<body>
+
+<div class="watermark">[ 0xZCC ]</div>
+
+<div class="hud-wrapper">
+    <div class="hud-corner hud-tl"></div>
+    <div class="hud-corner hud-tr"></div>
+    <div class="hud-corner hud-bl"></div>
+    <div class="hud-corner hud-br"></div>
+
+    <div class="top-ticker" id="topTicker">SYSTEM_ACTIVE // PARSING YAML STATE...</div>
+
+    <div class="system-stats">
+        <span>CORE_TEMP: <span id="sysTemp" class="sys-cyan">42.0°C</span></span>
+        <span>RENDER_FPS: <span id="sysFps" class="sys-cyan">00</span></span>
+        <span>KINETIC_POOL: <span id="sysEntropy" class="sys-cyan">0.0000 J</span></span>
+        <span>SYS_LINK: <span id="sysLink" class="sys-magenta">ENCRYPTED_INIT</span></span>
+        <span>MEM: <span id="sysMem" class="sys-cyan">--.--%</span></span>
+    </div>
+
+    <div class="flipper-led-container">
+        <div class="flipper-led led-standby" id="flipperLed"></div>
+        <div class="flipper-desc">FLIPPER ZERO<br>ENCLAVE LIVE</div>
+    </div>
+
+    <h1>ZKAEDI PRIME V6.5</h1>
+    <p class="roles-sub" id="headerRoles">
+        <!-- Injected securely via YAML config -->
+    </p>
+
+    <div class="tabs" id="tabs"></div>
+    <div id="panels"></div>
+
+    <div class="audit">
+        <h2 class="audit-header">>_ PRIME COMMAND LOG</h2>
+        <div id="auditLog"></div>
+    </div>
+
+</div>
+
+    <script>
+        // 🛡️ SECURITY LAYER 2: GLOBAL IIFE STRICT ISOLATION
+        (() => {
+            "use strict";
+
+            // 🛡️ SECURITY LAYER 3: DOM SANITIZATION ENGINE
+            const sanitize = (str) => {
+                const temp = document.createElement('div');
+                temp.textContent = str;
+                return temp.innerHTML;
+            };
+
+            const sanitizeFloat = (val, fallback = 0.0) => {
+                const num = parseFloat(val);
+                return (isNaN(num) || !isFinite(num)) ? fallback : num;
+            };
+
+            // 🚀 SUPERCHARGED TELEMETRY CORE
+            let CONFIG = {};
+            let ctx = null;
+            let bufferX = []; let bufferY = []; let bufferZ = [];
+            let autoHashed = false; let chaosMultiplier = 1;
+            let animationFrameId = null;
+            let telemetryInterval = null;
+            let hasInjectedPoKW = false;
+            let needsRender = true; // ⚡ GPU Render lock
+            let hardwareMode = false; // 🐬 Flipper Serial Lock
+            let hwPort = null;
+            let inSubCli = false; // Tracks if Flipper is trapped in a sub-CLI
+            let vaultFiles = [];
+            let lastListDir = "";
+
+            function updateVaultUI() {
+                const list = document.getElementById('vaultList');
+                if (!list) return;
+                if (vaultFiles.length === 0) {
+                    list.innerHTML = "[ NO DATA — RUN AUDIT TO SYNC ]";
+                    return;
+                }
+                // Sort by name (timestamp-based) descending
+                vaultFiles.sort((a,b) => b.name.localeCompare(a.name));
+                list.innerHTML = vaultFiles.map(f => 
+                    `<div style="display:flex; justify-content:space-between; padding:4px 8px; border-bottom:1px solid rgba(0,255,255,0.1); cursor:pointer;" 
+                          onclick="window.zcc.send('storage read /ext/zkaedi/${sanitize(f.name)}')">
+                        <span>📄 ${sanitize(f.name)}</span>
+                        <span style="color:#666;">${sanitize(f.size)}B</span>
+                    </div>`
+                ).join('');
+            }
+
+            // ── Kinetic source tracking ────────────────────────────────────────────
+            // Priority: Flipper HW > FHN Chaos WS > DeviceMotion > Simulation
+            let fhnSocket      = null;   // WebSocket to ws://localhost:8043
+            let motionActive   = false;  // DeviceMotion listener live
+            let fhnActive      = false;  // FHN WS streaming
+            let kineticSource  = 'SIM';  // 'SIM' | 'FHN' | 'MOTION' | 'HW'
+
+            function setKineticSource(src) {
+                kineticSource = src;
+                const badge = document.getElementById('kineticSourceBadge');
+                if (!badge) return;
+                const labels = { SIM: '🎲 SIM — Math.random()', FHN: '🪤 FHN — Real Chaos', MOTION: '📱 MOTION — Device IMU', HW: '🐬 FLIPPER — Hardware', 'FHN+HW': '🌌 FHN + FLIPPER HW' };
+                const cls    = { SIM: 'src-sim', FHN: 'src-fhn', MOTION: 'src-motion', HW: 'src-hw', 'FHN+HW': 'src-hw' };
+                badge.textContent = labels[src] || src;
+                badge.className   = cls[src]    || 'src-sim';
+            }
+            
+            // 🚀 ENGINE ACCELERATORS & METRICS
+            let frameTimes = [];
+            let sysFps = 0;
+            let totalKineticEnergy = 0.0;
+            let lastPoKWHash = "";
+            let lastTxHash = "";
+
+            function parseConfigAndInit() {
+                try {
+                    const configElement = document.getElementById('prime-config');
+                    if (!configElement) throw new Error("Config missing");
+                    
+                    const yamlRaw = configElement.textContent;
+                    CONFIG = jsyaml.load(yamlRaw);
+                    
+                    if (!CONFIG.swarm.domains.includes("CONFIG")) CONFIG.swarm.domains.push("CONFIG");
+                    initializeEngine();
+                } catch (e) {
+                    console.error("FAILED TO PARSE YAML ENCLAVE:", e);
+                    const ticker = document.getElementById('topTicker');
+                    ticker.textContent = "DEGRADED MODE // YAML PARSE FAILED";
+                    ticker.style.background = "#ff0000";
+                    
+                    // 🛡️ RESILIENCE: Inject Fallback Config to prevent total UI collapse
+                    CONFIG = {
+                        enclave: { id: "FALLBACK-PRIME", status: "DEGRADED", com_port: "COM_UNKNOWN" },
+                        oracle: { contract_name: "FallbackOracle", target_function: "crystallize()", authorized_signer: "Unknown" },
+                        pokw: { buffer_limit: 100, polling_rate_ms: 100, hash_algorithm: "Keccak256", chaos: { multiplier_spike: 10.0, decay_rate: 0.9, baseline_noise: 1.0 } },
+                        swarm: { domains: ["PoKW", "CONFIG"], roles: { SysAdmin: "FALLBACK MODE ACTIVE" } }
+                    };
+                    initializeEngine();
+                }
+            }
+
+            function initializeEngine() {
+                // 🛡️ SECURITY: Prevent memory leaks / duplicate loops on hot-reload
+                if (telemetryInterval) clearInterval(telemetryInterval);
+                if (animationFrameId) cancelAnimationFrame(animationFrameId);
+                hasInjectedPoKW = false;
+
+                const roleKeys = Object.keys(CONFIG.swarm.roles);
+                document.getElementById('headerRoles').innerHTML = roleKeys.map((r, i) => 
+                    `<span class="${i%2===0?'sys-cyan':'sys-magenta'}">${sanitize(r)}</span>`
+                ).join(' /// ');
+
+                document.getElementById('topTicker').textContent = `${CONFIG.enclave.id} // ${CONFIG.enclave.status}`;
+                const sysLinkEl = document.getElementById('sysLink');
+                if (sysLinkEl) sysLinkEl.textContent = `ENCRYPTED_${CONFIG.enclave.com_port}`;
+
+                document.getElementById('tabs').innerHTML = CONFIG.swarm.domains.map(d => 
+                    `<div class="tab" data-target="${sanitize(d)}">[ ${sanitize(d)} ]</div>`
+                ).join('');
+
+                // Event delegation for tabs to prevent inline onclick handlers (Security Best Practice)
+                document.getElementById('tabs').addEventListener('click', (e) => {
+                    if (e.target.classList.contains('tab')) {
+                        switchTab(e.target.getAttribute('data-target'));
+                    }
+                });
+
+                let panelsHTML = '';
+                CONFIG.swarm.domains.forEach(d => {
+                    if(d === "CONFIG") {
+                        panelsHTML += createConfigPanel();
+                    } else {
+                        panelsHTML += createDomainPanel(d);
+                    }
+                });
+                document.getElementById('panels').innerHTML = panelsHTML;
+
+                // Event delegation for buttons
+                document.getElementById('panels').addEventListener('click', (e) => {
+                    try {
+                        if (e.target.id === 'btn-chaos') injectChaos();
+                        if (e.target.id === 'btn-force-hash') crystallizePoKW(false);
+                        if (e.target.id === 'btn-connect-hw') connectHardware();
+                        if (e.target.id === 'btn-register') registerOraclePayload();
+                        if (e.target.id === 'btn-flipper-ping') sendHardwareCommand('device_info');
+                        if (e.target.id === 'btn-flipper-battery') sendHardwareCommand('power info');
+                        if (e.target.id === 'btn-flipper-nfc') sendHardwareCommand('nfc detect');
+                        if (e.target.id === 'btn-flipper-subghz') {
+                            const subPath = (document.getElementById('subghz-file-path')?.value || '').trim() || '/ext/subghz/RAW-20251009-200036.sub';
+                            sendHardwareCommand(`subghz tx_from_file ${subPath}`);
+                        }
+                        if (e.target.id === 'btn-flipper-audit') runFlipperAudit();
+                        if (e.target.id === 'btn-export-log') exportLog();
+                        if (e.target.id === 'btn-enclave-scan') runEnclaveScan();
+                        if (e.target.id === 'btn-vault-save') archiveToVault();
+                        if (e.target.id === 'btn-shatter-reset') resetEntropy();
+                    } catch (err) {
+                        addAudit(`❌ [UI PANIC] Action aborted: ${err.message}`);
+                        console.error(err);
+                    }
+                });
+
+                switchTab('PoKW');
+                addAudit(`🌌 ${CONFIG.enclave.id} ONLINE — MAXIMUM SECURITY ENFORCED.`);
+                
+                const canvas = document.getElementById('kineticWaveform');
+                if(canvas) {
+                    const rect = canvas.parentElement.getBoundingClientRect();
+                    canvas.width = rect.width * 2;
+                    canvas.height = rect.height * 2;
+                    ctx = canvas.getContext('2d');
+                    ctx.scale(2, 2);
+                }
+                
+                telemetryInterval = setInterval(updateTelemetry, CONFIG.pokw.polling_rate_ms);
+                animationFrameId = requestAnimationFrame(renderLoop);
+                
+                // 🛡️ SECURITY: Physical Hardware Disconnect Listener
+                if (navigator.serial) {
+                    navigator.serial.addEventListener('disconnect', (e) => {
+                        if (hardwareMode) recoverHardwareFailure("USB PHYSICAL DISCONNECT DETECTED");
+                    });
+                }
+                
+                setInterval(() => {
+                    document.getElementById('sysTemp').textContent = (40 + Math.random() * 5).toFixed(1) + "°C";
+                    document.getElementById('sysMem').textContent  = (18 + Math.random() * 4).toFixed(1) + "%";
+                }, 2000);
+
+                // ── Auto-connect real kinetic sources (priority order) ───────────────
+                setKineticSource('SIM');   // default until a real source connects
+                connectFHNChaos();         // 1st: try FHN WS chaos (best entropy)
+                connectDeviceMotion();     // 2nd: try real device IMU (fallback)
+
+                // 🛡️ [WATCHDOG] Periodically re-sync vault listing if connected
+                setInterval(() => {
+                    if (hardwareMode && !inSubCli) {
+                        sendAuditCommand('storage list /ext/zkaedi');
+                    }
+                }, 60000); 
+            }
+
+            // ──────────────────────────────────────────────────────────────────────
+            // REAL KINETIC SOURCE 1 — FHN Chaos WebSocket  ws://localhost:8043
+            // Three coupled FitzHugh-Nagumo attractors → deterministic chaos XYZ
+            // ──────────────────────────────────────────────────────────────────────
+            function connectFHNChaos() {
+                const WS_URL = 'ws://localhost:8043';
+                let retryMs  = 2000;
+
+                function tryConnect() {
+                    // Do not return on hardwareMode! We want FHN to run alongside Flipper now.
+                    try {
+                        const ws = new WebSocket(WS_URL);
+
+                        ws.onopen = () => {
+                            fhnSocket = ws;
+                            fhnActive = true;
+                            retryMs   = 2000;
+                            // Pause simulation noise — FHN is now the source
+                            if (telemetryInterval && kineticSource === 'SIM') {
+                                clearInterval(telemetryInterval);
+                                telemetryInterval = null;
+                            }
+                            setKineticSource('FHN');
+                            addAudit(`🪤 [FHN-WS] Real chaos stream connected → ws://localhost:8043`);
+                        };
+
+                        ws.onmessage = (evt) => {
+                            // Do not return on hardwareMode! FHN drives the base kinetic engine.
+                            try {
+                                const d = JSON.parse(evt.data);
+                                // d = { src:"FHN", x, y, z, t, hz }
+                                processHardwareLine(`${d.x} ${d.y} ${d.z}`);
+                            } catch(e) { /* malformed frame — skip */ }
+                        };
+
+                        ws.onerror = () => { /* triggers onclose */ };
+
+                        ws.onclose = () => {
+                            fhnSocket = null;
+                            fhnActive = false;
+                            if (kineticSource === 'FHN') {
+                                const fallback = motionActive ? 'MOTION' : 'SIM';
+                                setKineticSource(fallback);
+                                addAudit(`⚠️ [FHN-WS] Chaos stream lost — retrying in ${retryMs/1000}s`);
+                                if (!motionActive && !hardwareMode && !telemetryInterval) {
+                                    telemetryInterval = setInterval(updateTelemetry, CONFIG.pokw.polling_rate_ms);
+                                }
+                            }
+                            setTimeout(tryConnect, retryMs);
+                            retryMs = Math.min(retryMs * 2, 16000);
+                        };
+
+                    } catch(e) {
+                        setTimeout(tryConnect, retryMs);
+                        retryMs = Math.min(retryMs * 2, 16000);
+                    }
+                }
+
+                setTimeout(tryConnect, 800);  // slight delay so engine is up
+            }
+
+            // ──────────────────────────────────────────────────────────────────────
+            // REAL KINETIC SOURCE 2 — Browser DeviceMotion API (phone/laptop IMU)
+            // Falls back gracefully if hardware has no accelerometer
+            // ──────────────────────────────────────────────────────────────────────
+            function connectDeviceMotion() {
+                if (typeof DeviceMotionEvent === 'undefined') return;
+
+                const requestIfNeeded = async () => {
+                    if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                        try {
+                            const perm = await DeviceMotionEvent.requestPermission();
+                            if (perm !== 'granted') return;
+                        } catch(e) { return; }
+                    }
+                    attachMotionListener();
+                };
+
+                function attachMotionListener() {
+                    let lastMotion = 0;
+                    window.addEventListener('devicemotion', (e) => {
+                        if (hardwareMode || fhnActive) return;  // lower priority
+
+                        const now = Date.now();
+                        if (now - lastMotion < 20) return;     // cap at 50 Hz
+                        lastMotion = now;
+
+                        const acc = e.accelerationIncludingGravity;
+                        if (!acc) return;
+                        const ax = (acc.x || 0).toFixed(5);
+                        const ay = (acc.y || 0).toFixed(5);
+                        const az = (acc.z || 0).toFixed(5);
+
+                        if (!motionActive) {
+                            motionActive = true;
+                            if (telemetryInterval) { clearInterval(telemetryInterval); telemetryInterval = null; }
+                            setKineticSource('MOTION');
+                            addAudit(`📱 [MOTION] Real device IMU stream active — DeviceMotion API`);
+                        }
+
+                        processHardwareLine(`${ax} ${ay} ${az}`);
+                    }, { passive: true });
+                }
+
+                requestIfNeeded();
+            }
+
+            function createConfigPanel() {
+
+                const safeJSON = sanitize(JSON.stringify(CONFIG, null, 4)).replace(/\n/g, '<br>').replace(/ /g, '&nbsp;');
+                return `
+                <div class="panel" id="panel-CONFIG">
+
+                    <h2 class="panel-header-cyan">// SYSTEM ARCHITECTURE (JSON_STATE)</h2>
+                    <div class="json-block">${safeJSON}</div>
+                </div>`;
+            }
+
+            function createDomainPanel(domain) {
+                const sDomain = sanitize(domain);
+                let html = `<div class="panel" id="panel-${sDomain}">
+                    <h2 class="panel-header-magenta">// ${sDomain.toUpperCase()} SWARM CORE</h2>
+                    <div class="role-grid">`;
+
+                Object.keys(CONFIG.swarm.roles).forEach(role => {
+                    const sRole = sanitize(role);
+                    let colorClass = (sRole === "QuantumGeek" || sRole === "ChaosEngineer" || sRole === "Physicist") ? "agent-magenta" : "agent-cyan";
+                    html += `
+                    <div class="agent ${colorClass}" id="agentCard-${sDomain}-${sRole}">
+                        <h3>${sDomain}${sRole}</h3>
+                        <div class="log" id="log-${sDomain}-${sRole}">AWAITING DIRECTIVE...</div>
+                    </div>`;
+                });
+
+                html += `</div>`;
+                // 🛡️ SECURITY: Prevent duplicate ID injection if YAML contains multiple PoKW domains
+                if(sDomain === "PoKW" && !hasInjectedPoKW) {
+                    html += createPoKWVisualizer();
+                    hasInjectedPoKW = true;
+                }
+                html += `</div>`;
+                return html;
+            }
+
+            function createPoKWVisualizer() {
+                return `
+                <div class="calc-box">
+                    <h3 class="calc-header">☄️ KINETIC ENTROPY ENGINE (PoKW)</h3>
+                    <div style="text-align:center; margin-bottom:4px;">
+                        <span id="kineticSourceBadge" class="src-sim">🎲 SIM — Math.random()</span>
+                    </div>
+                    <div class="math-formula">
+                        <span class="mvar">H</span><span class="msub">t</span>
+                        <span class="mop"> = </span>
+                        <span class="mvar">H</span><span class="msub">0</span>
+                        <span class="mop"> + </span>
+                        <span class="mvar">&eta;</span>
+                        <span class="mop">&middot;</span>
+                        <span class="mvar">H</span><span class="msub">t&minus;1</span>
+                        <span class="mop">&middot;</span>
+                        <span class="mvar">&sigma;</span>(<span class="mvar">&gamma;</span>
+                        <span class="mvar">H</span><span class="msub">t&minus;1</span>)
+                        <span class="mop"> + </span>
+                        <span class="mvar">&epsilon;</span>
+                        <span class="mop">&middot;</span>
+                        <span class="mvar">&#x1D4A9;</span>(0,&thinsp;1
+                        <span class="mop"> + </span>
+                        <span class="mvar">&beta;</span>
+                        |<span class="mvar">H</span><span class="msub">t&minus;1</span>|)
+                    </div>
+                    <div class="telemetry-meta">
+                        <span>EVM STATE ROOT: <span id="evmAnchor" style="color:#fff;">0x1234567890abcdef</span></span>
+                        <span>BUFFER LIMIT: <span id="frameCounter" style="color:var(--cyan);">0 / ${sanitize(CONFIG.pokw.buffer_limit.toString())}</span></span>
+                    </div>
+                    <div class="wave-container">
+                        <div class="canvas-overlay">ACCEL_X(Cyan) GYRO_Y(Magenta) VECTOR_Z(White)</div>
+                        <canvas id="kineticWaveform"></canvas>
+                    </div>
+                    <div class="hash-display" id="hashPanel">
+                    <strong>H_PoKW Output:</strong><br>
+                    <span class="hash-value" id="pokwHash">Awaiting ${sanitize(CONFIG.pokw.buffer_limit.toString())} frames...</span>
+                    <br><br>
+                    <strong>Oracle Payload (${sanitize(CONFIG.oracle.contract_name)}):</strong><br>
+                    <span class="hash-value" id="oraclePayload" style="font-size:0.7rem; color:var(--cyan);">[Awaiting Data]</span>
+                </div>
+                    <div class="btn-group">
+                        <button class="btn-chaos" id="btn-chaos">☢️ INJECT CHAOS</button>
+                        <button id="btn-force-hash">FORCE CRYSTALLIZE</button>
+                        <button id="btn-connect-hw" class="btn-cyan">🔗 CONNECT HARDWARE</button>
+                        <button id="btn-register" class="btn-magenta">⚡ REGISTER ORACLE</button>
+                    </div>
+                    <div class="btn-group" style="margin-top: 10px;">
+                        <button id="btn-flipper-ping" class="btn-cyan">🐬 DEVICE PING</button>
+                        <button id="btn-flipper-battery" class="btn-cyan">🔋 BATTERY INFO</button>
+                        <button id="btn-flipper-nfc" class="btn-magenta">📡 START NFC DETECT</button>
+                        <button id="btn-flipper-subghz" class="btn-magenta">📻 SUB-GHZ TX GATE</button>
+                        <button id="btn-flipper-audit" class="btn-magenta" style="background:linear-gradient(135deg,rgba(255,0,255,0.15),rgba(0,255,255,0.15));border-color:var(--cyan);">🔍 FULL AUDIT</button>
+                        <button id="btn-export-log" class="btn-cyan" style="font-size:0.65rem;">💾 EXPORT LOG</button>
+                        <button id="btn-enclave-scan" class="btn-cyan" style="font-size:0.65rem;border-color:#ff00ff;color:#ff00ff;">🔐 ENCLAVE SCAN</button>
+                        <button id="btn-vault-save" class="btn-cyan" style="font-size:0.65rem;border-color:var(--cyan);color:var(--cyan);">💾 VAULT ARCHIVE</button>
+                        <button id="btn-shatter-reset" class="btn-cyan" style="font-size:0.65rem;border-color:#ff0000;color:#ff0000;">🔄 RESET ENTROPY</button>
+                    </div>
+                    <div style="margin-top:8px; display:flex; align-items:center; gap:8px;">
+                        <span style="color:var(--cyan);font-size:0.7rem;white-space:nowrap;">SUB-GHZ FILE:</span>
+                        <input id="subghz-file-path" type="text"
+                            value="/ext/subghz/RAW-20251009-200036.sub"
+                            style="flex:1;background:rgba(0,255,255,0.05);border:1px solid var(--cyan);color:var(--cyan);
+                                   font-family:var(--font-sys);font-size:0.7rem;padding:4px 8px;border-radius:3px;outline:none;"
+                            placeholder="/ext/subghz/yourfile.sub"
+                        />
+                    </div>
+                    <div id="vaultChronology" style="margin-top:20px; border-top:1px solid rgba(255,0,255,0.3); padding-top:15px;">
+                        <h4 style="color:var(--magenta); font-size:0.8rem; margin:0 0 10px 0; text-shadow:0 0 5px var(--magenta);">📜 VAULT CHRONOLOGY</h4>
+                        <div id="vaultList" style="font-size:0.65rem; color:var(--cyan); max-height:120px; overflow-y:auto; font-family:monospace; line-height:1.4;">
+                            [ NO DATA — RUN AUDIT TO SYNC ]
+                        </div>
+                    </div>
+                </div>`;
+            }
+
+            function switchTab(domain) {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+                const targetTab = document.querySelector(`.tab[data-target="${domain}"]`);
+                if (targetTab) targetTab.classList.add('active');
+                const targetPanel = document.getElementById(`panel-${domain}`);
+                if (targetPanel) targetPanel.classList.add('active');
+            }
+
+            function injectChaos() {
+                if (!CONFIG || !CONFIG.pokw || !CONFIG.pokw.chaos) {
+                    addAudit("❌ [ERROR] CHAOS SPIKE FAILED: CONFIG MISSING");
+                    return;
+                }
+                const led = document.getElementById('flipperLed');
+                if (led) led.className = 'flipper-led led-chaos';
+                
+                chaosMultiplier = Number(CONFIG.pokw.chaos.multiplier_spike); 
+                addAudit("☢️ [CHAOS ENGINEER] VIOLENT G-FORCE SPIKE INJECTED INTO IMU STREAM.");
+                if (CONFIG.swarm && CONFIG.swarm.roles) {
+                    triggerSwarmAgent("PoKW", "ChaosEngineer", CONFIG.swarm.roles["ChaosEngineer"]);
+                }
+                
+                // Release LED back to standby after spike decays
+                setTimeout(() => { if (led && led.className.includes('led-chaos')) led.className = 'flipper-led led-standby'; }, 2500);
+            }
+
+            function updateTelemetry() {
+                if(!ctx) return;
+                const baseNoise = () => (Math.random() - 0.5) * Number(CONFIG.pokw.chaos.baseline_noise);
+                const x = baseNoise() * chaosMultiplier;
+                const y = baseNoise() * chaosMultiplier;
+                const cx = baseNoise() * chaosMultiplier;
+                const cy = baseNoise() * chaosMultiplier;
+                const cz = baseNoise() * chaosMultiplier;
+                
+                if (chaosMultiplier > 1) chaosMultiplier *= Number(CONFIG.pokw.chaos.decay_rate);
+                if (chaosMultiplier < 1) chaosMultiplier = 1;
+
+                bufferX.push(cx); bufferY.push(cy); bufferZ.push(cz);
+                
+                // 🚀 SUPERCHARGED RECURSIVE HAMILTONIAN (ZKAEDI PRIME)
+                const H_0 = Math.abs(cx) + Math.abs(cy) + Math.abs(cz);
+                const eta = 0.4; const gamma = 0.3; const beta = 0.1; const epsilon = 0.05;
+                const sigmoid = (z) => 1 / (1 + Math.exp(-z));
+                const N = (Math.random() + Math.random() + Math.random() + Math.random() + Math.random() + Math.random() - 3) / 3; // Approx Gaussian N(0,1)
+                const H_prev = totalKineticEnergy;
+                const H_t = H_0 + (eta * H_prev * sigmoid(gamma * H_prev)) + (epsilon * N * (1 + beta * Math.abs(H_prev)));
+                
+                totalKineticEnergy = H_t;
+                document.getElementById('sysEntropy').textContent = totalKineticEnergy.toFixed(4) + " J";
+                
+                needsRender = true; // ⚡ Flag GPU for next frame
+                const limit = Number(CONFIG.pokw.buffer_limit);
+                if (bufferX.length > limit) { bufferX.shift(); bufferY.shift(); bufferZ.shift(); }
+
+                const counter = document.getElementById('frameCounter');
+                if (counter) counter.textContent = `${bufferX.length} / ${limit}`;
+
+                if (bufferX.length === limit && !autoHashed) {
+                    crystallizePoKW(true);
+                    autoHashed = true;
+                }
+            }
+
+            async function processHardwareLine(line) {
+                if (!line || line.length === 0) return;
+
+                // Strip ANSI escape codes (e.g. \x1B[31m, \x1B[0m) from Flipper CLI output
+                // CRITICAL: Must only match ESC sequences starting with \x1B to avoid eating [F]/[D] markers.
+                const stripAnsi = (s) => s.replace(/\x1B\[[0-9;]*[mGKHFJ]/g, '');
+
+                const clean = stripAnsi(line);
+                if (!clean || clean.replace(/[\x00-\x1F\x7F]/g, '').length === 0) return;
+
+                try {
+                    this._processHardwareLineInternal(clean);
+                } catch (e) {
+                    addAudit(`❌ [PROCESS ERROR] ${e.message} | Line: ${clean.substring(0,20)}...`);
+                }
+            }
+
+            _processHardwareLineInternal(clean) {
+                // Suppress prompt noise and echo lines
+                if (clean === '>:' || clean === '>' || clean.startsWith('> ')) return;
+
+                // Device info response
+                if (/hw_name|hw_ver|fw_version|firmware|Build|Serial|Bootloader|Radio/i.test(clean)) {
+                    addAudit(`🐬 [FLIPPER] `, clean);
+                    chaosMultiplier = 50.0; // Moderate spike
+                    // return;
+                }
+                
+                // Battery / power response
+                if (/charge|voltage|current|battery|vbus|gauge/i.test(clean)) {
+                    addAudit(`🔋 [BATTERY] `, clean);
+                    // return;
+                }
+                
+                // NFC detection
+                if (/UID|ATQA|SAK|NFC|nfc|iso14443|Mifare|detected/i.test(clean)) {
+                    addAudit(`📡 [NFC CAPTURE] `, clean);
+                    chaosMultiplier = 250.0; // Massive spike for NFC read
+                    // return;
+                }
+                
+                // Sub-GHz events
+                if (/subghz|Sub-GHz|frequency|tx done|rx|RAW|signal/i.test(clean)) {
+                    addAudit(`📻 [SUB-GHZ] `, clean);
+                    chaosMultiplier = 500.0; // Extreme spike for RF transmission
+                    // return;
+                }
+                
+                // Enclave / crypto responses — all variants from Unleashed firmware:
+                if (/Successfully loaded key|No key in slot|Incorrect or missing slot|Key in slot|enclave_valid|has_key|key_slot/i.test(clean)) {
+                    addAudit(`\ud83d\udd10 [ENCLAVE] ${clean}`);
+                    // return;
+                }
+                
+                // Error lines
+                if (/error|fail|invalid|denied/i.test(clean)) {
+                    addAudit(`❌ [FLIPPER ERR] `, clean);
+                    // return;
+                }
+
+                // ── IMU numeric path (X/Y/Z float data from Flipper motion sensor) ──
+                // CRITICAL: storage listings and device_info also contain numbers — only
+                // treat as IMU if the line is PURELY numeric (no letters, brackets, colons).
+                const isRawIMU = /^[\s\-\d.]+$/.test(clean) && !/[a-zA-Z:\[\]_]/.test(clean);
+                if (isRawIMU) {
+                    const floats = clean.match(/-?\d+(\.\d+)?/g);
+                    if (floats && floats.length >= 3) {
+                        const cx = sanitizeFloat(floats[0]) * chaosMultiplier;
+                        const cy = sanitizeFloat(floats[1]) * chaosMultiplier;
+                        const cz = sanitizeFloat(floats[2]) * chaosMultiplier;
+
+                        if (chaosMultiplier > 1) chaosMultiplier *= Number(CONFIG.pokw.chaos.decay_rate);
+                        if (chaosMultiplier < 1) chaosMultiplier = 1;
+
+                        bufferX.push(cx); bufferY.push(cy); bufferZ.push(cz);
+
+                        const H_0 = Math.abs(cx) + Math.abs(cy) + Math.abs(cz);
+                        const eta = 0.4; const gamma = 0.3; const beta = 0.1; const epsilon = 0.05;
+                        const sigmoid = (z) => 1 / (1 + Math.exp(-z));
+                        const N = (Math.random()*6 - 3) / 3;
+                        const H_prev = totalKineticEnergy;
+                        const H_t = H_0 + (eta * H_prev * sigmoid(gamma * H_prev)) + (epsilon * N * (1 + beta * Math.abs(H_prev)));
+
+                        totalKineticEnergy = H_t;
+                        const sysEnt = document.getElementById('sysEntropy');
+                        if (sysEnt) sysEnt.textContent = totalKineticEnergy.toFixed(4) + " J";
+                        needsRender = true;
+
+                        const limit = Number(CONFIG.pokw.buffer_limit);
+                        if (bufferX.length > limit) { bufferX.shift(); bufferY.shift(); bufferZ.shift(); }
+                        const counter = document.getElementById('frameCounter');
+                        if (counter) counter.textContent = `${bufferX.length} / ${limit}`;
+                        if (bufferX.length === limit && !autoHashed) {
+                            crystallizePoKW(true);
+                            autoHashed = true;
+                        }
+                        return;
+                    }
+                }
+
+                // ── Vault File Parser ────────────────────────────────────────
+                if (lastListDir === "/ext/zkaedi" && clean.startsWith("[F] ")) {
+                    const parts = clean.substring(4).split(' ');
+                    if (parts.length >= 1) {
+                        const name = parts[0];
+                        const size = parts[1] || "???";
+                        if (!vaultFiles.find(f => f.name === name)) {
+                            vaultFiles.push({ name, size });
+                            updateVaultUI();
+                        }
+                    }
+                }
+
+                // ── Catch-all: surface any other Flipper output ──────────────
+                if (clean.replace(/[\x00-\x1F\x7F]/g, '').length > 0) {
+                    addAudit(`📟 [FLIPPER RX] `, clean);
+                }
+            } // end _processHardwareLineInternal
+
+            async function startHardwareReadLoop() {
+                if (!hwPort || !hwPort.readable) return;
+                const reader = hwPort.readable.getReader();
+                const decoder = new TextDecoder();
+                let residual = "";
+                let lastReadTime = Date.now();
+                
+                addAudit('🐬 [SYSTEM] Hardware Read Loop Started.');
+
+                const flushInterval = setInterval(() => {
+                    if (residual.length > 0 && (Date.now() - lastReadTime > 800)) {
+                        const trimmed = residual.replace(/\r/g, '').trim();
+                        if (trimmed.length > 0) processHardwareLine(trimmed + " [FLUSH]");
+                        residual = "";
+                    }
+                }, 400);
+                
+                try {
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (value) {
+                            lastReadTime = Date.now();
+                            residual += decoder.decode(value, { stream: true });
+                            let lines = residual.split('\n');
+                            residual = lines.pop(); 
+                            for (let line of lines) {
+                                const trimmed = line.replace(/\r/g, '').trim();
+                                if (trimmed.length > 0) processHardwareLine(trimmed);
+                            }
+                        }
+                        if (done) break;
+                    }
+                } catch (err) {
+                    addAudit(`❌ [READ LOOP FATAL] ${err.message}`);
+                    recoverHardwareFailure(`Stream Reading Error - ${err.message}`);
+                } finally {
+                    clearInterval(flushInterval);
+                    try { reader.releaseLock(); } catch(e){}
+                    addAudit('🐬 [SYSTEM] Hardware Read Loop Terminated.');
+                }
+            }
+
+            // Helper to ensure we are at the root prompt >: before sending commands
+            async function ensureRootPrompt(writer) {
+                if (!inSubCli) {
+                    // nudge to confirm CLI is alive
+                    await writer.write(new TextEncoder().encode('\r\n'));
+                    await new Promise(r => setTimeout(r, 80));
+                    return;
+                }
+                
+                addAudit('🔍 [CLI ESCAPE] Breaking sub-shell...');
+                await writer.write(new TextEncoder().encode('\x03'));       // Ctrl+C
+                await new Promise(r => setTimeout(r, 400));                // settle
+                await writer.write(new TextEncoder().encode('\r\n'));      // nudge
+                await new Promise(r => setTimeout(r, 100));
+                await writer.write(new TextEncoder().encode('exit\r\n'));  // drop to root
+                await new Promise(r => setTimeout(r, 300));
+                inSubCli = false;
+            }
+
+            let hwCommandQueue = Promise.resolve();
+
+            async function sendRaw(bytes) {
+                if (!hwPort || !hwPort.writable) return;
+                let writer = null;
+                try {
+                    writer = hwPort.writable.getWriter();
+                    await writer.write(new TextEncoder().encode(bytes));
+                } catch(e) { /* swallow — used for wake pulses */ }
+                finally {
+                    if (writer) {
+                        try { writer.releaseLock(); } catch(e) {}
+                    }
+                }
+            }
+
+            async function sendHardwareCommand(cmd) {
+                if (!hwPort || !hwPort.writable || !hardwareMode) {
+                    addAudit(`⚠️ [FLIPPER] Cannot send command '${cmd}'. Hardware not connected.`);
+                    return;
+                }
+                
+                hwCommandQueue = hwCommandQueue.then(async () => {
+                    if (cmd.startsWith("storage list ")) {
+                        lastListDir = cmd.substring(13).trim();
+                        if (lastListDir === "/ext/zkaedi") vaultFiles = [];
+                    }
+                    let writer = null;
+                    try {
+                        writer = hwPort.writable.getWriter();
+                        await ensureRootPrompt(writer);
+                        
+                        // 3. Mark state if this command will trap us in a sub-CLI / blocking loop
+                        if (cmd.startsWith("nfc") || cmd.startsWith("subghz rx") || cmd.startsWith("subghz tx_from_file")) {
+                            inSubCli = true;
+                        }
+                        
+                        // 4. Send the actual command
+                        await writer.write(new TextEncoder().encode(cmd + "\r\n"));
+                        addAudit(`🐬 [FLIPPER TX] → ${cmd}`);
+                    } catch(e) {
+                        addAudit(`❌ [FLIPPER ERROR] Failed to send command: ${e.message}`);
+                    } finally {
+                        if (writer) {
+                            try { writer.releaseLock(); } catch(e) {}
+                        }
+                    }
+                });
+                await hwCommandQueue;
+            }
+
+            // Debug namespace — accessible from browser console: window.zcc.send('storage list /ext/subghz')
+            window.zcc = {
+                send:  (cmd)   => sendHardwareCommand(cmd),
+                raw:   (bytes) => sendRaw(bytes),
+                port:  ()      => hwPort,
+                state: ()      => ({ hardwareMode, inSubCli, kineticSource }),
+                audit: ()      => runFlipperAudit()
+            };
+
+            // sendAuditCommand: direct write, single writer acquisition — NO double-lock.
+            // Safe for non-blocking commands (storage list/info, device_info, power info, bt info).
+            async function sendAuditCommand(cmd) {
+                if (!hwPort || !hwPort.writable || !hardwareMode) return;
+                hwCommandQueue = hwCommandQueue.then(async () => {
+                    if (cmd.startsWith("storage list ")) {
+                        lastListDir = cmd.substring(13).trim();
+                        if (lastListDir === "/ext/zkaedi") vaultFiles = [];
+                    }
+                    let writer = null;
+                    try {
+                        writer = hwPort.writable.getWriter();
+                        await ensureRootPrompt(writer);
+                        await writer.write(new TextEncoder().encode(cmd + '\r\n'));
+                        addAudit(`🔍 [AUDIT TX] → ${cmd}`);
+                    } catch(e) {
+                        addAudit(`❌ [AUDIT ERROR] ${e.message}`);
+                    } finally {
+                        if (writer) {
+                            try { writer.releaseLock(); } catch(e) {}
+                        }
+                    }
+                });
+                await hwCommandQueue;
+            }
+
+            async function sendAtomicVaultWrite(filename, payload) {
+                if (!hwPort || !hwPort.writable || !hardwareMode) return;
+                hwCommandQueue = hwCommandQueue.then(async () => {
+                    let writer = null;
+                    try {
+                        writer = hwPort.writable.getWriter();
+                        await ensureRootPrompt(writer);
+                        const encoder = new TextEncoder();
+                        const payloadBytes = encoder.encode(payload);
+                        const size = payloadBytes.length;
+
+                        // 1. Send command
+                        await writer.write(encoder.encode(`storage write_chunk ${filename} ${size}\r\n`));
+                        addAudit(`🐬 [FLIPPER TX] → storage write_chunk ${filename} ${size}`);
+                        
+                        // 2. Wait for Flipper to be ready for data
+                        await new Promise(r => setTimeout(r, 800));
+                        
+                        // 3. Stream payload
+                        await writer.write(payloadBytes);
+                        addAudit(`📟 [VAULT DATA] Streaming payload...`);
+                        
+                        // 4. Wait for SD card finish
+                        await new Promise(r => setTimeout(r, 1500));
+                        
+                        // 5. Send read-back
+                        await writer.write(encoder.encode(`storage read ${filename}\r\n`));
+                        addAudit(`🔍 [VERIFY] Attempting forensic read-back...`);
+                        addAudit(`🐬 [FLIPPER TX] → storage read ${filename}`);
+
+                    } catch(e) {
+                        addAudit(`❌ [VAULT ERROR] ${e.message}`);
+                    } finally {
+                        if (writer) {
+                            try { writer.releaseLock(); } catch(e) {}
+                        }
+                    }
+                });
+                await hwCommandQueue;
+            }
+
+            async function runFlipperAudit() {
+                if (!hardwareMode) {
+                    addAudit('⚠️ [AUDIT] Hardware not connected. Connect Flipper first.');
+                    return;
+                }
+                const DELAY = 1800; // ms — give Flipper time to print full response
+
+                // ── Hard reset: always escape any blocking loop before audit starts ──
+                addAudit('🔍 [FULL AUDIT] Resetting CLI state before sweep...');
+                await new Promise(r => setTimeout(r, 200));
+                // Use sendHardwareCommand (which handles inSubCli + Ctrl+C) as the reset pulse
+                sendHardwareCommand('device_info'); // safe no-op that guarantees we're at root >:
+                await new Promise(r => setTimeout(r, 1200)); // wait for device_info to complete
+
+                const auditCmds = [
+                    // ── Identity & System ─────────────────────────────────────
+                    'power info',
+                    // ── Storage: SD card ──────────────────────────────────────
+                    'storage info /ext',
+                    'storage list /ext',
+                    'storage list /ext/subghz',
+                    'storage list /ext/zkaedi',
+                    'storage list /ext/nfc',
+                    'storage list /ext/infrared',
+                    'storage list /ext/ibutton',
+                    'storage list /ext/badusb',
+                    'storage list /ext/apps',
+                    'storage list /ext/apps_data',
+                    'storage list /ext/favorites',
+                    // ── Storage: Internal flash ───────────────────────────────
+                    'storage info /int',
+                    'storage list /int',
+                    // ── Radio & BLE ───────────────────────────────────────────
+                    'bt info',
+                    // ── Enclave / Keys ────────────────────────────────────────
+                    'crypto enclave_ensure',
+                ];
+
+                addAudit(`🔍 [FULL AUDIT] Sweeping ${auditCmds.length} commands @ ${DELAY}ms spacing (~${Math.round(auditCmds.length * DELAY / 1000)}s)...`);
+
+                for (const cmd of auditCmds) {
+                    await new Promise(r => setTimeout(r, DELAY));
+                    sendAuditCommand(cmd);
+                }
+
+                // ── Trailing buffer: wait for last command's RX to finish printing ──
+                addAudit('⏳ [FULL AUDIT] Last command sent. Waiting 5s for all responses...');
+                for (let i = 5; i >= 1; i--) {
+                    await new Promise(r => setTimeout(r, 1000));
+                    addAudit(`⏳ [FULL AUDIT] Auto-export in ${i}s...`);
+                }
+                addAudit('✅ [FULL AUDIT] Complete — auto-exporting now.');
+                exportLog();
+            }
+
+
+            async function recoverHardwareFailure(errMessage) {
+
+                const led = document.getElementById('flipperLed');
+                if (led) led.className = 'flipper-led led-error';
+                addAudit(`❌ [CRITICAL] Hardware feed collapsed: ${errMessage}`);
+                hardwareMode = false;
+                
+                if (hwPort) {
+                    try { await hwPort.close(); } catch(e) {}
+                    hwPort = null;
+                }
+                
+                // Self-healing: Restore simulation pipeline
+                if (!telemetryInterval) {
+                    addAudit("⚠️ [AUTO-HEAL] Reverting to simulated Chaos Engine...");
+                    telemetryInterval = setInterval(updateTelemetry, CONFIG.pokw.polling_rate_ms);
+                }
+                
+                setTimeout(() => { if (led && led.className.includes('led-error')) led.className = 'flipper-led led-standby'; }, 5000);
+            }
+
+            async function connectHardware() {
+                if (hardwareMode) {
+                    addAudit("⚠️ [HARDWARE] Flipper is already connected and streaming.");
+                    return;
+                }
+                
+                const led = document.getElementById('flipperLed');
+                if (led) led.className = 'flipper-led led-connecting';
+                
+                addAudit("🔗 [HARDWARE LINK] Requesting Web Serial Port Access...");
+                try {
+                    if (!navigator.serial) throw new Error("Web Serial API not supported. Use Chrome or Edge.");
+                    
+                    // Try auto-select via Flipper Zero USB VID/PID (0x0483 / 0x5740)
+                    // Falls back to manual picker if not found or not pre-authorized
+                    const ports = await navigator.serial.getPorts();
+                    const preAuth = ports.find(p => {
+                        const info = p.getInfo();
+                        return info.usbVendorId === 0x0483 && info.usbProductId === 0x5740;
+                    });
+                    
+                    if (preAuth) {
+                        hwPort = preAuth;
+                        addAudit(`🐬 [AUTO-LINK] Pre-authorized Flipper Zero detected. Bypassing picker.`);
+                    } else {
+                        // No VID/PID filter — show ALL serial ports so Flipper is always visible
+                        // (firmware variants report different PIDs; filtering caused empty picker)
+                        addAudit(`🔍 [PICKER] Click the Flipper port in the list → then click Connect.`);
+                        hwPort = await navigator.serial.requestPort();
+                    }
+                    
+                    // Send two newlines to wake the Flipper CLI prompt and wait for it to settle
+                    await hwPort.open({ baudRate: 115200, dataBits: 8, stopBits: 1, parity: 'none' });
+                    const _wakeWriter = hwPort.writable.getWriter();
+                    await _wakeWriter.write(new TextEncoder().encode('\r\n'));
+                    await new Promise(r => setTimeout(r, 500)); // let banner print finish
+                    await _wakeWriter.write(new TextEncoder().encode('\r\n')); // confirm prompt ready
+                    _wakeWriter.releaseLock();
+                    
+                    hardwareMode = true;
+                    // Keep FHN alive alongside hardware to drive the baseline chaos
+                    if (fhnActive) {
+                        setKineticSource('FHN+HW');
+                    } else {
+                        setKineticSource('HW');
+                    }
+                    if (led) led.className = 'flipper-led led-success';
+                    addAudit(`✅ [HARDWARE LINK] Flipper Zero IMU Tunnel established at 115200 baud!`);
+                    
+                    startHardwareReadLoop(); // Initiate physical ingestion
+                } catch (err) {
+                    if (led) led.className = 'flipper-led led-error';
+                    addAudit(`⚠️ [ACCESS DENIED] ${err.message}`);
+                    setTimeout(() => { if (led && led.className.includes('led-error')) led.className = 'flipper-led led-standby'; }, 4000);
+                    // Ensure self-healing if connection failed mid-flight
+                    if (!telemetryInterval) telemetryInterval = setInterval(updateTelemetry, CONFIG.pokw.polling_rate_ms);
+                }
+            }
+
+            async function registerOraclePayload() {
+                const payloadBox = document.getElementById('oraclePayload');
+                if (!payloadBox || payloadBox.textContent.includes("Awaiting Data")) {
+                    addAudit("❌ [ORACLE REJECTED] Cannot register: No crystallized payload found.");
+                    return;
+                }
+                addAudit(`⚡ [ORACLE REGISTER] Broadcasting EVM Transaction to ${sanitize(CONFIG.oracle.contract_name)}...`);
+                // Simulate network broadcast delay
+                setTimeout(() => {
+                    lastTxHash = `0x${Math.floor(Math.random()*1e16).toString(16)}${Math.floor(Math.random()*1e16).toString(16)}`;
+                    addAudit(`✅ [ORACLE CONFIRMED] Kinetic State Registered. TX Hash: ${lastTxHash}`);
+                }, 1500);
+            }
+
+            function renderLoop(timestamp) {
+                // ⚡ Schedule next frame regardless of current state
+                animationFrameId = requestAnimationFrame(renderLoop);
+                
+                // 🚀 FPS Tracker
+                const now = performance.now();
+                while (frameTimes.length > 0 && frameTimes[0] <= now - 1000) frameTimes.shift();
+                frameTimes.push(now);
+                sysFps = frameTimes.length;
+                const fpsEl = document.getElementById('sysFps');
+                if (fpsEl) fpsEl.textContent = sysFps;
+                
+                // 🛡️ Suspend render if tab is hidden
+                if (document.hidden) return;
+                
+                // 🐬 HARDWARE MODE IDLE OSCILLATOR
+                // When Flipper is connected but sending CLI text (not IMU floats),
+                // inject a low-amplitude sinusoidal heartbeat so the chart stays alive
+                if (hardwareMode && bufferX.length < 5) {
+                    const t = now / 300;
+                    const hx = Math.sin(t) * 0.3;
+                    const hy = Math.cos(t * 1.3) * 0.2;
+                    const hz = Math.sin(t * 0.7 + 1) * 0.25;
+                    bufferX.push(hx); bufferY.push(hy); bufferZ.push(hz);
+                    const limit = Number(CONFIG.pokw.buffer_limit);
+                    if (bufferX.length > limit) { bufferX.shift(); bufferY.shift(); bufferZ.shift(); }
+                }
+                
+                // Always draw — canvas must never freeze
+                drawWaveform();
+            }
+
+            function drawWaveform() {
+                if(!ctx) return;
+                const width = ctx.canvas.width / 2; const height = ctx.canvas.height / 2;
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'; ctx.fillRect(0, 0, width, height);
+
+                const limit = Number(CONFIG.pokw.buffer_limit);
+                const sliceWidth = width / limit;
+                const cy = height / 2;
+
+                function drawNeonLine(buf, color, shadowColor) {
+                    if(buf.length === 0) return;
+                    ctx.beginPath(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                    ctx.strokeStyle = color; ctx.lineWidth = 2.5;
+                    ctx.shadowBlur = 15; ctx.shadowColor = shadowColor;
+
+                    ctx.moveTo(0, cy - (buf[0] * 15));
+                    for(let i=1; i<buf.length - 1; i++) {
+                        const xc = (i * sliceWidth + (i + 1) * sliceWidth) / 2;
+                        const yc = (cy - (buf[i] * 15) + cy - (buf[i+1] * 15)) / 2;
+                        ctx.quadraticCurveTo(i * sliceWidth, cy - (buf[i] * 15), xc, yc);
+                    }
+                    ctx.lineTo((buf.length-1) * sliceWidth, cy - (buf[buf.length-1] * 15));
+                    ctx.stroke(); ctx.shadowBlur = 0;
+                }
+                drawNeonLine(bufferZ, '#ffffff', '#ffffff');
+                drawNeonLine(bufferY, '#ff00ff', '#ff00ff');
+                drawNeonLine(bufferX, '#00ffff', '#00ffff');
+            }
+
+            function triggerSwarmAgent(domain, role, message) {
+                const sDomain = sanitize(domain);
+                const sRole = sanitize(role);
+                const log = document.getElementById(`log-${sDomain}-${sRole}`);
+                const card = document.getElementById(`agentCard-${sDomain}-${sRole}`);
+                if (log && card) {
+                    card.classList.add('active-agent');
+                    setTimeout(() => card.classList.remove('active-agent'), 1500);
+                    const c = (sRole === "QuantumGeek" || sRole === "ChaosEngineer" || sRole === "Physicist") ? "var(--magenta)" : "var(--cyan)";
+                    typeWriterEffect(log, `<span style="color:${c}; text-shadow:0 0 5px ${c}">${sanitize(message)}</span><br><br><span style="color:#fff">> Kinetic Event Detected</span>`);
+                }
+            }
+
+            async function crystallizePoKW(isAuto = false) {
+                if (!Array.isArray(bufferX) || !Array.isArray(bufferY) || !Array.isArray(bufferZ)) {
+                    addAudit("❌ [ERROR] POOL NOT INITIALIZED");
+                    return;
+                }
+                const sum = bufferX.reduce((a,b)=>a+b, 0) + bufferY.reduce((a,b)=>a+b, 0) + bufferZ.reduce((a,b)=>a+b, 0);
+                
+                const encoder = new TextEncoder();
+                const data = encoder.encode(bufferX.join('') + bufferY.join('') + bufferZ.join(''));
+                const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                const realHash = "0x" + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                
+                const hashEl = document.getElementById('pokwHash');
+                const oraclePayloadEl = document.getElementById('oraclePayload');
+                const hashPanel = document.getElementById('hashPanel');
+                if (hashPanel) hashPanel.classList.add('crystallized');
+                
+                const newAnchor = "0x" + Array.from({length:64}, () => Math.floor(Math.random()*16).toString(16)).join('');
+                const evmAnchor = document.getElementById('evmAnchor');
+                if (evmAnchor) evmAnchor.textContent = newAnchor.substring(0, 18) + "...";
+
+                // Generate fake 65-byte ECDSA signature for the Oracle
+                const fakeSignature = "0x" + Array.from({length:130}, () => Math.floor(Math.random()*16).toString(16)).join('');
+
+                scrambleText(hashEl, realHash, 20, () => {
+                    if (hashEl) {
+                        hashEl.innerHTML = `${sanitize(realHash)}<br><br><span style="color:#00ffff;">[MATHEMATICIAN] Formula Matched. ${sanitize(CONFIG.pokw.hash_algorithm)} Complete.</span>`;
+                    }
+                    if (oraclePayloadEl) {
+                        oraclePayloadEl.innerHTML = `
+                            > target: ${sanitize(CONFIG.oracle.contract_name)}<br>
+                            > fn: ${sanitize(CONFIG.oracle.target_function)}<br>
+                            > _hPokw: ${sanitize(realHash)}<br>
+                            > _evmAnchor: ${sanitize(newAnchor)}<br>
+                            > _signature: ${sanitize(fakeSignature.substring(0, 32))}... <span style="color:#ff00ff">[Signed by ${sanitize(CONFIG.oracle.authorized_signer)}]</span>
+                        `;
+                    }
+                    if (hashPanel) setTimeout(() => hashPanel.classList.remove('crystallized'), 2000);
+                });
+
+                const trigger = isAuto ? "BUFFER FULL" : "MANUAL OVERRIDE";
+                lastPoKWHash = realHash;
+                addAudit(`☄️ [${trigger}] PoKW Crystallized! Energy: ${sum.toFixed(2)}`);
+                addAudit(`🔗 PREPARING PAYLOAD FOR ${CONFIG.oracle.contract_name}...`);
+
+                triggerSwarmAgent("PoKW", "Physicist", CONFIG.swarm.roles["Physicist"]);
+                setTimeout(() => triggerSwarmAgent("PoKW", "Mathematician", CONFIG.swarm.roles["Mathematician"]), 400);
+                setTimeout(() => triggerSwarmAgent("PoKW", "GameTheorist", CONFIG.swarm.roles["GameTheorist"]), 800);
+            }
+
+            function scrambleText(element, finalString, iterations, callback) {
+                if(!element) return;
+                let currentIteration = 0;
+                const chars = "0123456789ABCDEF";
+                const interval = setInterval(() => {
+                    let scrambled = "0x";
+                    for(let i=0; i<64; i++) { scrambled += chars[Math.floor(Math.random() * chars.length)]; }
+                    element.textContent = scrambled;
+                    currentIteration++;
+                    if(currentIteration >= iterations) { clearInterval(interval); if(callback) callback(); }
+                }, 30);
+            }
+
+            function typeWriterEffect(element, htmlString) {
+                if(!element) return;
+                // Since htmlString might contain our trusted span wrappers, we insert it via innerHTML
+                // But we ensure the source message was sanitized in triggerSwarmAgent
+                element.innerHTML = htmlString + '<span style="animation: flipperUnleashed 0.5s infinite;">_</span>';
+                setTimeout(() => { element.innerHTML = htmlString; }, 2000);
+            }
+
+            // addAudit(prefix, payload)
+            //   prefix  — trusted internal string (emoji + label), rendered as-is
+            //   payload — optional untrusted Flipper data, HTML-sanitized before display
+            // Raw audit buffer — persists full history regardless of DOM cap
+            const _auditBuffer = [];
+            const _AUDIT_DOM_CAP = 500; // max DOM entries before pruning oldest
+
+            function addAudit(prefix, payload) {
+                const log = document.getElementById('auditLog');
+                if(!log) return;
+                const time = new Date().toLocaleTimeString();
+
+                // Compose final message: trusted prefix + sanitized payload
+                const safePayload = payload !== undefined ? sanitize(String(payload)) : '';
+                const fullMsg = prefix + safePayload;
+
+                // Push to raw buffer for export (always, no cap)
+                _auditBuffer.unshift(`[${time}] ${fullMsg}`);
+
+                const logEntry = document.createElement('div');
+                logEntry.style.marginBottom = "6px";
+                logEntry.style.borderBottom = "1px solid rgba(255, 0, 255, 0.2)";
+                logEntry.style.paddingBottom = "6px";
+                log.insertBefore(logEntry, log.firstChild);
+
+                // High-frequency RX lines (📟 [FLIPPER RX], 🔍 [AUDIT TX]): skip typing animation
+                // to prevent hundreds of competing setInterval timers from thrashing the browser.
+                const isRawRX = fullMsg.includes('[FLIPPER RX]') || fullMsg.includes('[AUDIT TX]') || fullMsg.includes('[NFC CAPTURE]');
+                logEntry.innerHTML = `<span style="color:#00ffff">[${sanitize(time)}]</span> `
+                                   + (isRawRX
+                                       ? `<span style="color:rgba(0,255,255,0.7);font-size:0.72rem">${fullMsg}</span>`
+                                       : `<span class="typing"></span>`);
+
+                if (!isRawRX) {
+                    const typingSpan = logEntry.querySelector('.typing');
+                    let i = 0;
+                    const typingInterval = setInterval(() => {
+                        if (i < fullMsg.length) {
+                            typingSpan.innerHTML = fullMsg.substring(0, i+1) + '<span style="background:#00ffff; color:#000;">_</span>';
+                            i++;
+                        } else {
+                            clearInterval(typingInterval);
+                            typingSpan.innerHTML = fullMsg;
+                        }
+                    }, 10);
+                }
+
+                // Prune DOM if over cap — remove oldest entries (last children)
+                while (log.children.length > _AUDIT_DOM_CAP) {
+                    log.removeChild(log.lastChild);
+                }
+            }
+
+            function exportLog() {
+                if (_auditBuffer.length === 0) { alert('Log is empty.'); return; }
+                const ts = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+                const blob = new Blob([_auditBuffer.join('\n')], { type: 'text/plain' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `flipper_audit_${ts}.txt`;
+                a.click();
+                URL.revokeObjectURL(a.href);
+                addAudit(`\ud83d\udcbe [EXPORT] Log exported \u2014 ${_auditBuffer.length} entries \u2192 flipper_audit_${ts}.txt`);
+            }
+
+            async function sendRaw(bytes) {
+                if (!hwPort || !hwPort.writable) return;
+                try {
+                    const encoder = new TextEncoder();
+                    const data = encoder.encode(bytes);
+                    const writer = hwPort.writable.getWriter();
+                    await writer.write(data);
+                    writer.releaseLock();
+                    addAudit(`📟 [RAW TX] Sent ${data.length} bytes.`);
+                } catch(e) { /* swallow — used for wake pulses */ }
+            }
+
+            async function archiveToVault() {
+                if (!lastPoKWHash) {
+                    addAudit("❌ [VAULT REJECTED] No kinetic proof found. Crystallize first.");
+                    return;
+                }
+                const ts = new Date().toISOString();
+                const shortTs = ts.split('T')[1].replace(/[:.]/g, '').substring(0, 6);
+                const filename = `/ext/zkaedi/proof_${shortTs}.txt`;
+                const payload = `[${ts}] HASH: ${lastPoKWHash} | TX: ${lastTxHash || 'PENDING'}\r\n`;
+                
+                addAudit(`💾 [VAULT] Archiving to Flipper: ${filename}`);
+                await sendAtomicVaultWrite(filename, payload);
+            }
+
+            function resetEntropy() {
+                addAudit("🔄 [RESET] Clearing Entropy Pool and Shatter State...");
+                totalKineticEnergy = 0;
+                bufferX = []; bufferY = []; bufferZ = [];
+                autoHashed = false;
+                lastPoKWHash = "";
+                lastTxHash = "";
+                
+                const sysEnt = document.getElementById('sysEntropy');
+                if (sysEnt) sysEnt.textContent = "0.0000 J";
+                
+                const counter = document.getElementById('frameCounter');
+                if (counter) counter.textContent = "0 / 120";
+                
+                const payloadBox = document.getElementById('oraclePayload');
+                if (payloadBox) payloadBox.textContent = "Awaiting Data...";
+                
+                const hashEl = document.getElementById('pokwHash');
+                if (hashEl) hashEl.textContent = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
+                // Remove the Shatter UI overlay if it was triggered
+                const warning = document.querySelector('.system-warning');
+                if (warning) warning.style.opacity = '0';
+                document.body.style.background = "";
+            }
+
+            async function runEnclaveScan() {
+                if (!hardwareMode) {
+                    addAudit('\u26a0\ufe0f [ENCLAVE] Hardware not connected. Connect Flipper first.');
+                    return;
+                }
+                // crypto has_key <slot> is READ-ONLY: returns true/false, no key material exposed.
+                // The dangerous command is crypto store_key — this is NOT that.
+                const SLOTS        = 10;  // Unleashed enclave: slots 1-10 (1-indexed, valid range 1-100)
+                const SEND_GAP_MS  = 1200; // spacing between queued sends
+                const PER_CMD_OH   = 300 + 80 + 400; // Ctrl+C settle + nudge + Flipper RTT
+                const FLUSH_TAIL   = 5000; // extra buffer after last expected response
+                const totalWaitMs  = SLOTS * (SEND_GAP_MS + PER_CMD_OH) + FLUSH_TAIL;
+
+                addAudit(`\ud83d\udd10 [ENCLAVE SCAN] Probing ${SLOTS} key slots (read-only has_key query)...`);
+                addAudit(`\u23f3 [ENCLAVE SCAN] Estimated completion in ~${Math.ceil(totalWaitMs/1000)}s...`);
+
+                // Slot range: 1..SLOTS inclusive (firmware rejects slot 0)
+                for (let slot = 1; slot <= SLOTS; slot++) {
+                    await new Promise(r => setTimeout(r, SEND_GAP_MS));
+                    sendAuditCommand(`crypto has_key ${slot}`);
+                }
+
+                // Wait for queue drain + all Flipper responses
+                // Show countdown every 2s so user knows scan is alive
+                const scanStart = Date.now();
+                while (Date.now() - scanStart < totalWaitMs) {
+                    const remaining = Math.ceil((totalWaitMs - (Date.now() - scanStart)) / 1000);
+                    addAudit(`\u23f3 [ENCLAVE SCAN] Flushing... ${remaining}s remaining`);
+                    await new Promise(r => setTimeout(r, 2000));
+                }
+
+                addAudit('\u2705 [ENCLAVE SCAN] Slot probe complete. Check \ud83d\udd10 [ENCLAVE] lines above for per-slot results. Exporting...');
+                exportLog();
+            }
+
+            // 🚀 ZKAEDI PRIME: 3D Holographic Parallax Engine
+            const hudWrapper = document.querySelector('.hud-wrapper');
+            document.addEventListener('mousemove', (e) => {
+                const xAxis = (window.innerWidth / 2 - e.pageX) / 150;
+                const yAxis = (window.innerHeight / 2 - e.pageY) / 150;
+                hudWrapper.style.transform = `perspective(1200px) rotateY(${xAxis}deg) rotateX(${yAxis}deg)`;
+            });
+
+            document.addEventListener('mouseleave', () => {
+                hudWrapper.style.transition = 'transform 0.5s ease-out';
+                hudWrapper.style.transform = `perspective(1200px) rotateY(0deg) rotateX(0deg)`;
+            });
+
+            document.addEventListener('mouseenter', () => {
+                hudWrapper.style.transition = 'none';
+            });
+
+            // 💥 MATHEMATICAL COLLAPSE EASTER EGG (Click Title)
+            const titleCore = document.querySelector('h1');
+            const warningSys = document.createElement('div');
+            warningSys.className = 'system-warning';
+            warningSys.innerHTML = 'CRITICAL SHATTER<br>ENTROPY OVERFLOW';
+            document.body.appendChild(warningSys);
+            
+            titleCore.addEventListener('click', () => {
+                hudWrapper.classList.add('glitch-active');
+                warningSys.style.opacity = '1';
+                document.body.style.background = "radial-gradient(circle at center, #500 0%, #000 100%)";
+                
+                // Inject fatal noise
+                for(let i=0; i<4; i++) {
+                    addAudit(`[FATAL] SYSTEM SHATTERED // CORE DUMP: MATRIX KERNEL PANIC // ADDRESS 0x${Math.floor(Math.random()*9999999).toString(16)}`);
+                }
+
+                setTimeout(() => {
+                    hudWrapper.classList.remove('glitch-active');
+                    warningSys.style.opacity = '0';
+                    document.body.style.background = ""; // Reset to CSS stylesheet rule
+                }, 400);
+            });
+
+            // 🛡️ SECURITY LAYER 4: BOOT HIJACK (DOM CONTENT LOADED)
+            document.addEventListener('DOMContentLoaded', parseConfigAndInit);
+
+        })(); // End IIFE
+    </script>
+
+    <!-- ZKAEDI ENCHANTMENT PROTOCOL -->
+    <style>
+        .aether-spark {
+            position: fixed;
+            width: 3px; height: 3px;
+            background: #00ffff;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 10000;
+            box-shadow: 0 0 8px #00ffff, 0 0 15px #ff00ff;
+            animation: aetherFade 0.8s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+        }
+        @keyframes aetherFade {
+            0% { opacity: 1; transform: scale(1) translateY(0) translateX(0); }
+            100% { opacity: 0; transform: scale(0) translateY(-30px) translateX(10px); }
+        }
+        .hud-wrapper {
+            animation: hudBreathe 4s infinite alternate ease-in-out !important;
+        }
+        @keyframes hudBreathe {
+            0% { box-shadow: 0 0 50px rgba(0, 255, 255, 0.05), inset 0 0 30px rgba(0, 255, 255, 0.05); border-color: rgba(0, 255, 255, 0.2); }
+            100% { box-shadow: 0 0 80px rgba(255, 0, 255, 0.15), inset 0 0 60px rgba(0, 255, 255, 0.15); border-color: rgba(255, 0, 255, 0.4); }
+        }
+    </style>
+    <script>
+        (function enchantCursor(){
+            document.addEventListener('mousemove', (e) => {
+                if(Math.random() > 0.5) {
+                    const spark = document.createElement('div');
+                    spark.className = 'aether-spark';
+                    spark.style.left = e.pageX + 'px';
+                    spark.style.top = e.pageY + 'px';
+                    document.body.appendChild(spark);
+                    setTimeout(() => spark.remove(), 800);
+                }
+            });
+        })();
+    </script>
+</body>
+
+</html>

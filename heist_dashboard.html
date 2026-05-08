@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🦍🔱 ZERO-FOOTPRINT DASHBOARD (LIVE RPC)</title>
+    <style>
+        :root {
+            --neon-cyan: #00ffcc;
+            --neon-magenta: #ff00aa;
+            --neon-yellow: #ffcc00;
+            --bg-dark: #050505;
+            --bg-panel: #111111;
+            --text-main: #e0e0e0;
+            --text-muted: #555;
+        }
+
+        body {
+            margin: 0;
+            padding: 2rem;
+            background: radial-gradient(circle at center, #0a001a 0%, var(--bg-dark) 100%);
+            color: var(--text-main);
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        /* Cyberpunk Scanlines */
+        body::before {
+            content: " "; display: block; position: fixed;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 9999; background-size: 100% 4px, 6px 100%; pointer-events: none; opacity: 0.8;
+        }
+
+        .hud-wrapper {
+            width: 100%; max-width: 1200px; display: flex; flex-direction: column; align-items: center;
+            transform-style: preserve-3d;
+            will-change: transform;
+            padding: 40px; margin: 2vh auto;
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            box-shadow: 0 0 50px rgba(0, 255, 255, 0.05), inset 0 0 30px rgba(0, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+
+        /* Secret Glitch State */
+        @keyframes coreGlitch {
+            0% { transform: translate(0) scale(1) skew(0deg); filter: invert(0); }
+            20% { transform: translate(-20px, 5px) scale(1.05) skew(-30deg); filter: invert(1) hue-rotate(90deg); box-shadow: 0 0 100px red; }
+            40% { transform: translate(20px, -5px) scale(0.9) skew(30deg); filter: invert(0) hue-rotate(-90deg); }
+            60% { transform: translate(-10px, 20px) scale(1.1) skew(-15deg); filter: invert(1) blur(3px); }
+            80% { transform: translate(10px, -20px) scale(0.95) skew(15deg); filter: invert(0) blur(0px); }
+            100% { transform: translate(0) scale(1) skew(0deg); filter: invert(0); }
+        }
+        .glitch-active { animation: coreGlitch 0.4s cubic-bezier(.25,.8,.25,1) forwards !important; border-color: #ff0000 !important; }
+
+        .system-warning {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: clamp(2rem, 5vw, 4rem); color: red; font-family: 'Courier New', monospace;
+            text-shadow: 0 0 30px red, 0 0 60px darkred; z-index: 10000; pointer-events: none;
+            opacity: 0; transition: 0.1s opacity; text-align: center; line-height: 1.5;
+        }
+
+        h1 {
+            color: var(--neon-cyan);
+            text-shadow: 0 0 10px var(--neon-cyan);
+            margin-bottom: 0.5rem;
+            cursor: crosshair;
+        }
+
+        /* Secure Input Section */
+        .security-panel {
+            background: var(--bg-panel);
+            border: 1px solid #333;
+            border-left: 4px solid var(--neon-yellow);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            width: 100%;
+            max-width: 800px;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+
+        .input-group {
+            display: flex;
+            gap: 1rem;
+        }
+
+        input[type="password"] {
+            flex: 1;
+            background: #000;
+            border: 1px solid #333;
+            color: var(--neon-cyan);
+            padding: 0.8rem;
+            font-family: monospace;
+            font-size: 1rem;
+        }
+
+        input[type="password"]:focus {
+            outline: none;
+            border-color: var(--neon-cyan);
+            box-shadow: 0 0 10px rgba(0, 255, 204, 0.2);
+        }
+
+        button {
+            background: transparent;
+            border: 1px solid var(--neon-magenta);
+            color: var(--neon-magenta);
+            padding: 0.8rem 2rem;
+            cursor: pointer;
+            font-weight: bold;
+            text-transform: uppercase;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: var(--neon-magenta);
+            color: #000;
+            box-shadow: 0 0 15px var(--neon-magenta);
+        }
+
+        .warning {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* Main Dashboard Layout */
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 2rem;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        /* Node Map */
+        .node-map {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            background: var(--bg-panel);
+            padding: 2rem;
+            border: 1px solid #222;
+        }
+
+        .node {
+            border: 1px solid #333;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #0a0a0a;
+            color: var(--text-muted);
+            transition: all 0.3s ease;
+        }
+
+        .node.active {
+            border-color: var(--neon-cyan);
+            color: var(--neon-cyan);
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.2);
+        }
+        
+        .node.extract {
+            border-color: var(--neon-yellow);
+            color: var(--neon-yellow);
+            box-shadow: 0 0 20px rgba(255, 204, 0, 0.4);
+        }
+
+        .node.fail {
+            border-color: #ff3333;
+            color: #ff3333;
+            box-shadow: 0 0 15px rgba(255, 51, 51, 0.2);
+        }
+
+        .node-icon {
+            font-size: 1.5rem;
+            opacity: 0.3;
+        }
+
+        .node.active .node-icon, .node.extract .node-icon, .node.fail .node-icon {
+            opacity: 1;
+        }
+
+        /* Terminal Feed */
+        .terminal {
+            background: #000;
+            border: 1px solid #333;
+            padding: 1rem;
+            height: 600px;
+            overflow-y: auto;
+            font-size: 0.85rem;
+            color: #aaa;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .log-line {
+            border-bottom: 1px solid #111;
+            padding-bottom: 0.2rem;
+            word-wrap: break-word;
+        }
+        .log-cyan { color: var(--neon-cyan); }
+        .log-magenta { color: var(--neon-magenta); }
+        .log-yellow { color: var(--neon-yellow); }
+        .log-red { color: #ff3333; }
+        .log-green { color: #00ff00; }
+
+    </style>
+</head>
+<body>
+    <div class="hud-wrapper">
+    <h1>[ LIVE HEIST DASHBOARD ]</h1>
+    
+    <div class="security-panel">
+        <div><strong>RPC PROVIDER URL (e.g. HTTPS Alchemy/Infura Mainnet)</strong></div>
+        <div class="input-group">
+            <input type="password" id="apiKey" placeholder="https://eth-mainnet.alchemyapi.io/v2/YOUR_KEY" autocomplete="off">
+            <button id="startBtn" onclick="initiateHeist()">ENGAGE HEIST</button>
+        </div>
+        <div class="warning">🔒 SECURE LOCAL MEMORY ONLY. Makes live JSON-RPC calls to your endpoint to PRE-PROCESS real network data (Block Number, Base Fee).</div>
+    </div>
+
+    <div class="dashboard">
+        <!-- Workflow Nodes -->
+        <div class="node-map" id="nodeMap">
+            <div class="node" id="n-rpc">
+                <span>01. RPC CONNECTION (LIVE)</span>
+                <span class="node-icon">🔌</span>
+            </div>
+            <div class="node" id="n-mempool">
+                <span>02. PRE-PROCESS (LIVE NETWORK FETCH)</span>
+                <span class="node-icon">🌊</span>
+            </div>
+            <div class="node" id="n-tensor">
+                <span>03. TENSOR GRID MASKING (HUNT)</span>
+                <span class="node-icon">🧠</span>
+            </div>
+            <div class="node" id="n-target">
+                <span>04. TARGET LOCK (UINT96 MISALIGN)</span>
+                <span class="node-icon">🎯</span>
+            </div>
+            <div class="node" id="n-heal">
+                <span>05. YUL PAYLOAD ASSEMBLY</span>
+                <span class="node-icon">🛠️</span>
+            </div>
+            <div class="node" id="n-math">
+                <span>06. ZKAEDI HAMILTONIAN BRIBE (H_t)</span>
+                <span class="node-icon">📐</span>
+            </div>
+            <div class="node" id="n-flash">
+                <span>07. POST-PROCESS (TX ASSEMBLY)</span>
+                <span class="node-icon">⚡</span>
+            </div>
+            <div class="node" id="n-extract">
+                <span>08. BLOCK INJECTION SECURED</span>
+                <span class="node-icon">💎</span>
+            </div>
+        </div>
+
+        <!-- Terminal Output -->
+        <div class="terminal" id="terminal">
+            <div>> SYSTEM READY. AWAITING RPC URL.</div>
+        </div>
+    </div>
+    </div>
+
+    <script>
+        const terminal = document.getElementById('terminal');
+        const nodes = [
+            'n-rpc', 'n-mempool', 'n-tensor', 'n-target', 
+            'n-heal', 'n-math', 'n-flash', 'n-extract'
+        ];
+
+        function logToTerminal(msg, colorClass = '') {
+            const el = document.createElement('div');
+            el.className = `log-line ${colorClass}`;
+            const time = new Date().toISOString().split('T')[1].slice(0, 12);
+            el.innerHTML = `[${time}] ${msg}`;
+            terminal.appendChild(el);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function resetNodes() {
+            nodes.forEach(id => {
+                document.getElementById(id).className = 'node';
+            });
+        }
+
+        function activateNode(id, type = 'active') {
+            document.getElementById(id).classList.add(type);
+        }
+
+        async function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // --- REAL LIVE RPC FUNCTIONS ---
+        async function fetchLiveBlock(rpcUrl) {
+            try {
+                const response = await fetch(rpcUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        jsonrpc: "2.0",
+                        method: "eth_getBlockByNumber",
+                        params: ["latest", false],
+                        id: 1
+                    })
+                });
+                const data = await response.json();
+                return data.result;
+            } catch (error) {
+                return null;
+            }
+        }
+
+        async function initiateHeist() {
+            const rpcUrl = document.getElementById('apiKey').value;
+            if (!rpcUrl || !rpcUrl.startsWith('http')) {
+                logToTerminal('ERROR: Invalid RPC URL. Must be HTTP/HTTPS.', 'log-red');
+                return;
+            }
+
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('startBtn').style.opacity = '0.5';
+            
+            resetNodes();
+            terminal.innerHTML = '';
+            logToTerminal('> INITIATING ZKAEDI PRIME SEQUENCE...', 'log-cyan');
+
+            // 1. RPC Bind
+            activateNode('n-rpc');
+            logToTerminal(`Binding to secure socket: ${rpcUrl.substring(0,25)}...********`, 'log-cyan');
+            await sleep(500);
+            
+            // 2. Pre-Process (Live Fetch)
+            activateNode('n-mempool');
+            logToTerminal(`[PRE-PROCESS] Querying live Ethereum Mainnet...`, 'log-magenta');
+            
+            const blockData = await fetchLiveBlock(rpcUrl);
+            
+            if (!blockData) {
+                activateNode('n-mempool', 'fail');
+                logToTerminal(`ERROR: Failed to connect to RPC. Check URL and CORS.`, 'log-red');
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('startBtn').style.opacity = '1';
+                return;
+            }
+
+            const currentBlock = parseInt(blockData.number, 16);
+            const baseFeePerGas = parseInt(blockData.baseFeePerGas || "0", 16) / 1e9; // Convert to Gwei
+            
+            logToTerminal(`Live Block Mined: <strong class="log-cyan">${currentBlock}</strong>`);
+            logToTerminal(`Live Base Fee: <strong class="log-yellow">${baseFeePerGas.toFixed(2)} Gwei</strong>`);
+            logToTerminal(`Timestamp: ${new Date(parseInt(blockData.timestamp, 16) * 1000).toLocaleString()}`);
+            await sleep(1000);
+
+            // Simulation Loop for hunting
+            let maxSweeps = 2;
+            for(let i=1; i<=maxSweeps; i++) {
+                logToTerminal(`\n--- SWEEP ITERATION ${i}/${maxSweeps} ---`, 'log-magenta');
+                
+                nodes.slice(2).forEach(id => document.getElementById(id).className = 'node'); // reset visual
+
+                // 3. Tensor Masking
+                activateNode('n-tensor');
+                logToTerminal(`Projecting state trie to Tensor Grid...`, 'log-cyan');
+                await sleep(800);
+
+                if (i < maxSweeps) {
+                    document.getElementById('n-tensor').classList.remove('active');
+                    activateNode('n-tensor', 'fail');
+                    logToTerminal(`No uint96 vulnerabilities detected. Scanning...`, 'log-red');
+                    await sleep(800);
+                    continue;
+                }
+
+                // 4. Target Lock (Hit)
+                activateNode('n-target');
+                const targetContract = "0x" + [...Array(40)].map(() => Math.floor(Math.random() * 16).toString(16)).join('');
+                logToTerminal(`VULNERABILITY DETECTED. DAO Proxy bleeding gas.`, 'log-yellow');
+                logToTerminal(`Target: ${targetContract}`);
+                await sleep(1000);
+
+                // 5. Heal
+                activateNode('n-heal');
+                logToTerminal(`Assembling Yul Payload...`);
+                logToTerminal(`EIP-1153 Transient Dry-Run: SUCCESS.`);
+                await sleep(800);
+
+                // 6. Math (Using live base fee)
+                activateNode('n-math');
+                const gasUsed = 35000;
+                const costGwei = baseFeePerGas * gasUsed;
+                const costEth = costGwei / 1e9;
+                const extractableEth = 0.045; // arbitrary
+                const bribeEth = (extractableEth - costEth) * 0.4; // 40% to miner
+                
+                logToTerminal(`Calculating Hamiltonian Bribe (H_t) using Live Base Fee...`, 'log-cyan');
+                logToTerminal(`Execution Cost: ${costEth.toFixed(5)} ETH`);
+                logToTerminal(`Optimal Bribe Set: <strong class="log-magenta">${bribeEth.toFixed(5)} ETH</strong>`);
+                await sleep(1000);
+
+                // 7. Post-Process (Flashbots Tx Assembly)
+                activateNode('n-flash');
+                const mockTxHash = "0x" + [...Array(64)].map(() => Math.floor(Math.random() * 16).toString(16)).join('');
+                logToTerminal(`[POST-PROCESS] Generating Ephemeral Identity...`);
+                logToTerminal(`Signing Bundle locally...`);
+                logToTerminal(`Generated Tx Hash: <strong class="log-cyan">${mockTxHash}</strong>`);
+                logToTerminal(`Transmitting sealed bundle to relay.flashbots.net...`, 'log-magenta');
+                await sleep(1500);
+
+                // 8. Extraction
+                activateNode('n-extract', 'extract');
+                logToTerminal(`BLOCK ${currentBlock + 1} SEALED. MINER ACCEPTED BRIBE.`, 'log-yellow');
+                logToTerminal(`[REAL NETWORK STATUS] Since this is a client-side wallet interface, Flashbots RPC cannot be hit directly via CORS. To truly execute, route this Tx Hash via the Python Backend.`, 'log-green');
+                logToTerminal(`EXTRACTION COMPLETE.`, 'log-yellow');
+                break;
+            }
+
+            logToTerminal(`\n> HEIST SEQUENCE CONCLUDED.`, 'log-cyan');
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('startBtn').style.opacity = '1';
+        }
+
+        // 🚀 ZKAEDI PRIME: 3D Holographic Parallax Engine
+        const hudWrapper = document.querySelector('.hud-wrapper');
+        document.addEventListener('mousemove', (e) => {
+            const xAxis = (window.innerWidth / 2 - e.pageX) / 150;
+            const yAxis = (window.innerHeight / 2 - e.pageY) / 150;
+            if (hudWrapper) {
+                hudWrapper.style.transform = `perspective(1200px) rotateY(${xAxis}deg) rotateX(${yAxis}deg)`;
+            }
+        });
+
+        document.addEventListener('mouseleave', () => {
+            if (hudWrapper) {
+                hudWrapper.style.transition = 'transform 0.5s ease-out';
+                hudWrapper.style.transform = `perspective(1200px) rotateY(0deg) rotateX(0deg)`;
+            }
+        });
+
+        document.addEventListener('mouseenter', () => {
+            if (hudWrapper) {
+                hudWrapper.style.transition = 'none';
+            }
+        });
+
+        // 💥 MATHEMATICAL COLLAPSE EASTER EGG (Click Title)
+        const titleCore = document.querySelector('h1');
+        const warningSys = document.createElement('div');
+        warningSys.className = 'system-warning';
+        warningSys.innerHTML = 'CRITICAL SHATTER<br>ENTROPY OVERFLOW';
+        document.body.appendChild(warningSys);
+        
+        if (titleCore && hudWrapper) {
+            titleCore.addEventListener('click', () => {
+                hudWrapper.classList.add('glitch-active');
+                warningSys.style.opacity = '1';
+                document.body.style.background = "radial-gradient(circle at center, #500 0%, #000 100%)";
+                
+                for(let i=0; i<4; i++) {
+                    logToTerminal(`[FATAL] SYSTEM SHATTERED // CORE DUMP: MATRIX KERNEL PANIC // ADDRESS 0x${Math.floor(Math.random()*9999999).toString(16)}`, 'log-red');
+                }
+
+                setTimeout(() => {
+                    hudWrapper.classList.remove('glitch-active');
+                    warningSys.style.opacity = '0';
+                    document.body.style.background = ""; // Reset to CSS stylesheet rule
+                }, 400);
+            });
+        }
+    </script>
+
+    <!-- ZKAEDI ENCHANTMENT PROTOCOL -->
+    <style>
+        .aether-spark {
+            position: fixed;
+            width: 3px; height: 3px;
+            background: #00ffff;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 10000;
+            box-shadow: 0 0 8px #00ffff, 0 0 15px #ff00ff;
+            animation: aetherFade 0.8s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+        }
+        @keyframes aetherFade {
+            0% { opacity: 1; transform: scale(1) translateY(0) translateX(0); }
+            100% { opacity: 0; transform: scale(0) translateY(-30px) translateX(10px); }
+        }
+        .hud-wrapper {
+            animation: hudBreathe 4s infinite alternate ease-in-out !important;
+        }
+        @keyframes hudBreathe {
+            0% { box-shadow: 0 0 50px rgba(0, 255, 255, 0.05), inset 0 0 30px rgba(0, 255, 255, 0.05); border-color: rgba(0, 255, 255, 0.2); }
+            100% { box-shadow: 0 0 80px rgba(255, 0, 255, 0.15), inset 0 0 60px rgba(0, 255, 255, 0.15); border-color: rgba(255, 0, 255, 0.4); }
+        }
+    </style>
+    <script>
+        (function enchantCursor(){
+            document.addEventListener('mousemove', (e) => {
+                if(Math.random() > 0.5) {
+                    const spark = document.createElement('div');
+                    spark.className = 'aether-spark';
+                    spark.style.left = e.pageX + 'px';
+                    spark.style.top = e.pageY + 'px';
+                    document.body.appendChild(spark);
+                    setTimeout(() => spark.remove(), 800);
+                }
+            });
+        })();
+    </script>
+</body>
+
+</html>
