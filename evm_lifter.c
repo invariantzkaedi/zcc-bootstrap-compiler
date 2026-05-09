@@ -770,6 +770,11 @@ void evm_lifter_init(evm_lifter_t *ls,
 }
 
 void evm_lifter_destroy(evm_lifter_t *ls) {
+    extern void memory_v2_free(void *);
+    if (ls->memory_v2) {
+        memory_v2_free(ls->memory_v2);
+        ls->memory_v2 = NULL;
+    }
     if (ls->valid_jumpdest) {
         free(ls->valid_jumpdest);
         ls->valid_jumpdest = NULL;
@@ -1328,7 +1333,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
     case EVM_SLOAD:
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_LOAD, IR_TY_I64, tmp_dst, tmp_a, NULL, NULL, 0L, ls->pc);
+        ir_emit(ls->func, IR_LOAD, IR_TY_I64, tmp_dst, tmp_a, NULL, "__evm_sload", 0L, ls->pc);
         return stack_push(ls, tmp_dst);
 
     case EVM_SSTORE: {
@@ -1343,7 +1348,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         }
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
-        tagged_emit(ls, IR_STORE, IR_TY_I64, tmp_a, tmp_b, NULL, NULL, 0L, ls->pc,
+        tagged_emit(ls, IR_STORE, IR_TY_I64, tmp_a, tmp_b, NULL, "__evm_sstore", 0L, ls->pc,
                     IR_TAG_SSTORE);
                     
         extern void sstore_v2(void* mem, evm_u256_t slot, evm_u256_t val);
@@ -1352,6 +1357,20 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         }
         return EVM_LIFT_OK;
     }
+
+    case EVM_TLOAD:
+        res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
+        lifter_fresh_tmp(ls, tmp_dst);
+        /* Transient read - explicit side effect implicitly handled by tag/backend */
+        tagged_emit(ls, IR_LOAD, IR_TY_I64, tmp_dst, tmp_a, NULL, "__evm_tload", 0L, ls->pc, IR_TAG_TLOAD);
+        return stack_push(ls, tmp_dst);
+
+    case EVM_TSTORE:
+        res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
+        res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
+        /* Transient write - explicit side effect implicitly handled by tag/backend */
+        tagged_emit(ls, IR_STORE, IR_TY_I64, tmp_a, tmp_b, NULL, "__evm_tstore", 0L, ls->pc, IR_TAG_TSTORE);
+        return EVM_LIFT_OK;
 
     /* ── Flow control ────────────────────────────────────────────── */
     case EVM_JUMP: {
@@ -1470,7 +1489,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         ir_emit(ls->func, IR_ARG, IR_TY_I64, NULL, tmp_b, NULL, NULL, 0L, ls->pc);
         
         if (a_st == EVM_VAL_KNOWN_NARROW && b_st == EVM_VAL_KNOWN_NARROW) {
-            if (offset >= 0 && length >= 0 && offset + length <= 1024) {
+            if (offset >= 0 && length >= 0 && length <= 1024 && offset <= 1024 - length) {
                 extern const uint8_t* memory_v2_get_ptr(void* mem, uint64_t offset, size_t length);
                 const uint8_t* ptr = memory_v2_get_ptr(ls->memory_v2, offset, length);
                 if (ptr) {

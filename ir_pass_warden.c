@@ -12,6 +12,8 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include "ir.h"
 #include "evm_lifter.h"
@@ -31,75 +33,178 @@
 #define W_BCYN  "\033[1;36m"
 #define W_BMAG  "\033[1;35m"
 
-/* ── Taint Map ───────────────────────────────────────────────────────── */
+/* ── Dynamic Hash Map (FNV-1a + Open Addressing) ────────────────────── */
 /*
- * Simple array-backed map: VReg name → taint state.
- * Sufficient for single-function analysis on EVM-lifted IR where VReg
- * counts are bounded by the bytecode length (< 4K for most contracts).
+ * Replaces the fixed-size 4096-slot linear-scan array with a dynamically
+ * resizing hash table.  Prevents silent taint-drop on complex contracts
+ * where VReg count exceeds the old ceiling.
+ *
+ * Rehash-on-grow: entries are properly re-inserted into the new table
+ * to preserve open-addressing probe invariants.  A naive realloc would
+ * break lookups because slot = hash % old_cap != hash % new_cap.
  */
-#define WARDEN_MAP_MAX 4096
+#define WARDEN_INITIAL_CAP  8192
+#define FNV_OFFSET_BASIS    2166136261u
+#define FNV_PRIME           16777619u
 
 typedef struct {
     char            name[IR_NAME_MAX];
     warden_taint_t  state;
     int             source_lineno;   /* line where taint originated          */
-    char            source_desc[64]; /* human-readable taint source          */
+    char            source_desc[128]; /* human-readable taint source          */
 } warden_entry_t;
 
-static warden_entry_t s_wmap[WARDEN_MAP_MAX];
-static int            s_wmap_count;
+typedef struct {
+    warden_entry_t *slots;
+    size_t          capacity;
+    size_t          count;
+} warden_map_t;
+
+static warden_map_t s_wmap = {0};
+
+static uint32_t wmap_hash(const char *str) {
+    uint32_t h = FNV_OFFSET_BASIS;
+    while (*str) {
+        h ^= (unsigned char)*str++;
+        h *= FNV_PRIME;
+    }
+    return h;
+}
+
+/* Raw insert into a pre-allocated slot array (no load-factor check). */
+static void wmap_insert_raw(warden_entry_t *slots, size_t cap,
+                            const warden_entry_t *entry) {
+    size_t slot = wmap_hash(entry->name) % cap;
+    while (slots[slot].name[0] != '\0') {
+        slot = (slot + 1) % cap;
+    }
+    memcpy(&slots[slot], entry, sizeof(warden_entry_t));
+}
+
+/* Ensure the map has capacity; grow + rehash if load factor >= 75%. */
+static int wmap_ensure_cap(void) {
+    size_t i, new_cap;
+    warden_entry_t *new_slots;
+
+    if (s_wmap.capacity == 0) {
+        s_wmap.slots = (warden_entry_t *)calloc(WARDEN_INITIAL_CAP,
+                                                sizeof(warden_entry_t));
+        if (!s_wmap.slots) {
+            fprintf(stderr, "[warden] FATAL: initial alloc failed\n");
+            return 0;
+        }
+        s_wmap.capacity = WARDEN_INITIAL_CAP;
+        s_wmap.count = 0;
+        return 1;
+    }
+
+    /* Grow at 75% load */
+    if (s_wmap.count * 4 >= s_wmap.capacity * 3) {
+        new_cap = s_wmap.capacity * 2;
+        new_slots = (warden_entry_t *)calloc(new_cap, sizeof(warden_entry_t));
+        if (!new_slots) {
+            fprintf(stderr, "[warden] FATAL: rehash alloc failed at %zu\n", new_cap);
+            abort();
+        }
+        /* Rehash all existing entries into the new table */
+        for (i = 0; i < s_wmap.capacity; i++) {
+            if (s_wmap.slots[i].name[0] != '\0') {
+                wmap_insert_raw(new_slots, new_cap, &s_wmap.slots[i]);
+            }
+        }
+        free(s_wmap.slots);
+        s_wmap.slots = new_slots;
+        s_wmap.capacity = new_cap;
+    }
+    return 1;
+}
 
 static void wmap_clear(void) {
-    s_wmap_count = 0;
+    if (s_wmap.slots) {
+        memset(s_wmap.slots, 0, s_wmap.capacity * sizeof(warden_entry_t));
+    }
+    s_wmap.count = 0;
+}
+
+static void wmap_free(void) {
+    free(s_wmap.slots);
+    memset(&s_wmap, 0, sizeof(s_wmap));
 }
 
 static warden_entry_t *wmap_find(const char *name) {
-    int i;
-    if (!name || name[0] == '\0') return NULL;
-    for (i = 0; i < s_wmap_count; i++) {
-        if (strcmp(s_wmap[i].name, name) == 0)
-            return &s_wmap[i];
+    size_t slot;
+    if (!name || name[0] == '\0' || s_wmap.capacity == 0) return NULL;
+    slot = wmap_hash(name) % s_wmap.capacity;
+    while (s_wmap.slots[slot].name[0] != '\0') {
+        if (strcmp(s_wmap.slots[slot].name, name) == 0)
+            return &s_wmap.slots[slot];
+        slot = (slot + 1) % s_wmap.capacity;
     }
     return NULL;
 }
 
 static void wmap_set(const char *name, warden_taint_t state,
                      int lineno, const char *desc) {
+    size_t slot;
     warden_entry_t *e;
     if (!name || name[0] == '\0') return;
+    if (!wmap_ensure_cap()) return;
 
-    e = wmap_find(name);
-    if (e) {
-        /* Only escalate: SAFE < CHECKED < TAINTED */
-        if ((int)state > (int)e->state) {
-            e->state = state;
-            e->source_lineno = lineno;
-            if (desc) {
-                strncpy(e->source_desc, desc, 63);
-                e->source_desc[63] = '\0';
-            }
+    slot = wmap_hash(name) % s_wmap.capacity;
+    while (s_wmap.slots[slot].name[0] != '\0' &&
+           strcmp(s_wmap.slots[slot].name, name) != 0) {
+        slot = (slot + 1) % s_wmap.capacity;
+    }
+
+    e = &s_wmap.slots[slot];
+    if (e->name[0] == '\0') {
+        /* New entry */
+        strncpy(e->name, name, IR_NAME_MAX - 1);
+        e->name[IR_NAME_MAX - 1] = '\0';
+        e->source_desc[0] = '\0';
+        s_wmap.count++;
+    }
+
+    /* Only escalate: SAFE < CHECKED < TAINTED */
+    if ((int)state > (int)e->state) {
+        e->state = state;
+        e->source_lineno = lineno;
+        if (desc) {
+            strncpy(e->source_desc, desc, 127);
+            e->source_desc[127] = '\0';
         }
-        return;
     }
-
-    if (s_wmap_count >= WARDEN_MAP_MAX) return;
-
-    strncpy(s_wmap[s_wmap_count].name, name, IR_NAME_MAX - 1);
-    s_wmap[s_wmap_count].name[IR_NAME_MAX - 1] = '\0';
-    s_wmap[s_wmap_count].state = state;
-    s_wmap[s_wmap_count].source_lineno = lineno;
-    if (desc) {
-        strncpy(s_wmap[s_wmap_count].source_desc, desc, 63);
-        s_wmap[s_wmap_count].source_desc[63] = '\0';
-    } else {
-        s_wmap[s_wmap_count].source_desc[0] = '\0';
-    }
-    s_wmap_count++;
 }
 
 static warden_taint_t wmap_get(const char *name) {
     warden_entry_t *e = wmap_find(name);
     return e ? e->state : WARDEN_SAFE;
+}
+
+/* ── Context Taint Stack (Implicit Control-Flow Tracking) ────────────── */
+/*
+ * When a tainted value is used as a branch condition (IR_BR_IF), all
+ * operations in the taken block are control-flow-dependent on tainted
+ * input.  We model this with a simple stack: push on tainted branch,
+ * pop on basic-block boundary (IR_LABEL).
+ */
+#define MAX_CTX_DEPTH 64
+static warden_taint_t s_ctx_stack[MAX_CTX_DEPTH];
+static int s_ctx_depth = 0;
+
+static void ctx_reset(void) { s_ctx_depth = 0; }
+
+static void ctx_push(warden_taint_t t) {
+    if (s_ctx_depth < MAX_CTX_DEPTH)
+        s_ctx_stack[s_ctx_depth++] = t;
+}
+
+static void ctx_pop(void) {
+    if (s_ctx_depth > 0) s_ctx_depth--;
+}
+
+static warden_taint_t ctx_current(void) {
+    return (s_ctx_depth > 0) ? s_ctx_stack[s_ctx_depth - 1] : WARDEN_SAFE;
 }
 
 /* ── Taint Source Detection ──────────────────────────────────────────── */
@@ -254,11 +359,26 @@ ir_pass_result_t ir_pass_warden(void *fn_ptr) {
     r.nodes_after  = fn->node_count;
 
     wmap_clear();
+    ctx_reset();
 
     /* ── Forward pass: identify sources and propagate taint ──────── */
     for (n = fn->head; n; n = n->next) {
-        char desc[64];
+        char desc[128];
+        warden_taint_t ctx_t;
         nodes++;
+
+        /* Phase 0: Control-flow context tracking ─────────────────── */
+        /* Pop context on basic-block boundary */
+        if (n->op == IR_LABEL) {
+            ctx_pop();
+        }
+        /* Push context when branching on a tainted condition */
+        if (n->op == IR_BR_IF && n->src1[0] != '\0') {
+            warden_taint_t cond_taint = wmap_get(n->src1);
+            if ((int)cond_taint > (int)WARDEN_SAFE) {
+                ctx_push(cond_taint);
+            }
+        }
 
         /* Phase 1: Taint source identification */
         if (n->dst[0] != '\0' && is_taint_source(n, desc, sizeof(desc))) {
@@ -330,11 +450,18 @@ ir_pass_result_t ir_pass_warden(void *fn_ptr) {
             warden_taint_t slot_taint = wmap_get(n->dst);
             warden_taint_t val_taint  = wmap_get(n->src1);
 
+            /* Implicit flow: elevate taint if inside a tainted branch */
+            ctx_t = ctx_current();
+            if ((int)ctx_t > (int)slot_taint) slot_taint = ctx_t;
+            if ((int)ctx_t > (int)val_taint)  val_taint  = ctx_t;
+
             if (slot_taint == WARDEN_TAINTED) {
                 warden_violation_t v;
                 v.node = n;
                 v.operand_name = n->dst;
-                v.sink_type = "SSTORE (tainted slot address)";
+                v.sink_type = (ctx_t != WARDEN_SAFE)
+                    ? "SSTORE (implicit flow — tainted branch)"
+                    : "SSTORE (tainted slot address)";
                 v.taint = slot_taint;
                 emit_violation(&v, fn->name);
                 violations++;
@@ -343,7 +470,9 @@ ir_pass_result_t ir_pass_warden(void *fn_ptr) {
                 warden_violation_t v;
                 v.node = n;
                 v.operand_name = n->src1;
-                v.sink_type = "SSTORE (tainted value)";
+                v.sink_type = (ctx_t != WARDEN_SAFE)
+                    ? "SSTORE (implicit flow — tainted branch)"
+                    : "SSTORE (tainted value)";
                 v.taint = val_taint;
                 emit_violation(&v, fn->name);
                 violations++;
@@ -365,11 +494,17 @@ ir_pass_result_t ir_pass_warden(void *fn_ptr) {
          * that means we're calling an attacker-controlled address. */
         if (n->op == IR_CALL && n->tag == (int)IR_TAG_UNTRUSTED_EXTERNAL_CALL) {
             warden_taint_t target_taint = wmap_get(n->label);
+            /* Implicit flow: elevate if inside tainted branch */
+            ctx_t = ctx_current();
+            if ((int)ctx_t > (int)target_taint) target_taint = ctx_t;
+
             if (target_taint == WARDEN_TAINTED) {
                 warden_violation_t v;
                 v.node = n;
                 v.operand_name = n->label;
-                v.sink_type = "CALL (tainted target address)";
+                v.sink_type = (ctx_t != WARDEN_SAFE)
+                    ? "CALL (implicit flow — tainted branch)"
+                    : "CALL (tainted target address)";
                 v.taint = target_taint;
                 emit_violation(&v, fn->name);
                 violations++;
@@ -379,11 +514,17 @@ ir_pass_result_t ir_pass_warden(void *fn_ptr) {
         /* SELFDESTRUCT sink */
         if (n->tag == (int)IR_TAG_SELFDESTRUCT) {
             warden_taint_t dst_taint = wmap_get(n->src1);
+            /* Implicit flow: elevate if inside tainted branch */
+            ctx_t = ctx_current();
+            if ((int)ctx_t > (int)dst_taint) dst_taint = ctx_t;
+
             if (dst_taint != WARDEN_SAFE) {
                 warden_violation_t v;
                 v.node = n;
                 v.operand_name = n->src1;
-                v.sink_type = "SELFDESTRUCT (tainted beneficiary)";
+                v.sink_type = (ctx_t != WARDEN_SAFE)
+                    ? "SELFDESTRUCT (implicit flow — tainted branch)"
+                    : "SELFDESTRUCT (tainted beneficiary)";
                 v.taint = dst_taint;
                 emit_violation(&v, fn->name);
                 violations++;
@@ -410,5 +551,6 @@ ir_pass_result_t ir_pass_warden(void *fn_ptr) {
 
     r.nodes_modified = violations;
     r.changed = 0; /* read-only pass */
+    wmap_free();
     return r;
 }
