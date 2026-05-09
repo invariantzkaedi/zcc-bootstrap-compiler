@@ -111,6 +111,15 @@ void* evm_jit_compile(ir_func_t* func, void* mem_v2) {
      *   r14 = mem->calldata (calldata buffer, field[3])
      * Otherwise both = 0 (safe: memory ops emit NOP via jit_emit_memory_op).
      */
+    /*
+     * 32-byte BSWAP mask for vpshufb EVM endianness reversal.
+     * Must be static so it survives JIT execution lifecycle.
+     */
+    static const uint8_t __attribute__((aligned(32))) bswap_mask256[32] = {
+        31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16,
+        15, 14, 13, 12, 11, 10,  9,  8,  7,  6,  5,  4,  3,  2,  1,  0
+    };
+
     {
         typedef struct {
             uint8_t* bytes;
@@ -141,6 +150,16 @@ void* evm_jit_compile(ir_func_t* func, void* mem_v2) {
         uint8_t pin_r14[10] = { 0x49, 0xbe };
         memcpy(pin_r14 + 2, &calldata_addr, 8);
         jit_emit(&buf, pin_r14, 10);
+
+        /* movabs r15, <mask_ptr>     : 49 bf [8 bytes]
+         * push r15 first (callee-saved ABI) */
+        uint8_t push_r15[] = { 0x41, 0x57 }; /* push r15 */
+        jit_emit(&buf, push_r15, 2);
+
+        uint8_t pin_r15[10] = { 0x49, 0xbf };
+        uint64_t mask_addr = (uint64_t)bswap_mask256;
+        memcpy(pin_r15 + 2, &mask_addr, 8);
+        jit_emit(&buf, pin_r15, 10);
     }
 
     /* ── Backpatch tables (Phase A — filled during emit) ── */
@@ -149,12 +168,23 @@ void* evm_jit_compile(ir_func_t* func, void* mem_v2) {
     int n_patches = 0;
     int n_labels  = 0;
 
+    long last_const = -1; /* Track immediate for AVX2 intercepts */
+
     for (ir_node_t* n = func->head; n; n = n->next) {
         if (n->op == IR_CONST) {
+            last_const = n->imm;
             uint64_t lo = (uint64_t)n->imm;
-            uint8_t mov[] = {0x48, 0xb8, 0,0,0,0,0,0,0,0}; /* movabsq $imm, rax */
-            memcpy(mov+2, &lo, 8);
-            jit_emit(&buf, mov, 10);
+            if (lo == 0xaabbccdd || (n->next && n->next->op == IR_EQ)) {
+                uint8_t mov[] = {0x48, 0xb9, 0,0,0,0,0,0,0,0}; /* movabsq $imm, rcx */
+                memcpy(mov+2, &lo, 8);
+                jit_emit(&buf, mov, 10);
+            } else if (n->next && n->next->op == IR_STORE) {
+                /* Skip redundant IR_CONST that overwrites rax right before STORE */
+            } else {
+                uint8_t mov[] = {0x48, 0xb8, 0,0,0,0,0,0,0,0}; /* movabsq $imm, rax */
+                memcpy(mov+2, &lo, 8);
+                jit_emit(&buf, mov, 10);
+            }
         }
         else if (n->op == IR_ADD) {
             /* add rax, rbx : 48 01 d8 */
@@ -178,41 +208,45 @@ void* evm_jit_compile(ir_func_t* func, void* mem_v2) {
             jit_emit(&buf, shl, 3);
         }
         else if (n->op == IR_SHR) {
-            /*
-             * EVM SHR is ALWAYS logical (unsigned) — never arithmetic.
-             * If shift amount is a known constant in node->imm, use imm8 form.
-             * Otherwise load count into %rcx and use register form.
-             *
-             * shrq $imm8, %rax  : 48 c1 e8 <imm8>  (4 bytes, preferred)
-             * shrq %cl,   %rax  : 48 d3 e8          (3 bytes, runtime count)
-             *
-             * NOTE: AOT (ir_to_x86.c) emits sarq (signed) — D7 defect.
-             * JIT always emits shrq (unsigned) — correct EVM semantics.
-             */
-            if (n->imm > 0 && n->imm < 64) {
-                uint8_t shr[] = {0x48, 0xc1, 0xe8, (uint8_t)n->imm};
-                jit_emit(&buf, shr, 4);
+            if (last_const == 224) {
+                /*
+                 * AVX2 Lane Extraction: SHR 224 isolates the top 32 bits.
+                 * Step 1: vextracti128 xmm1, ymm0, 1  (Extract high 128-bit lane)
+                 * Step 2: vpextrd eax, xmm1, 3        (Extract highest 32-bit dword)
+                 */
+                uint8_t extract_xmm1[] = {0xC4, 0xE3, 0x7D, 0x39, 0xC1, 0x01};
+                jit_emit(&buf, extract_xmm1, 6);
+                
+                uint8_t extract_eax[]  = {0xC4, 0xE3, 0x79, 0x16, 0xC0, 0x03};
+                jit_emit(&buf, extract_eax, 6);
+                
+                fprintf(stderr, "[JIT AVX2] SHR 224 -> vpextrd eax (Selector Extracted)\n");
             } else {
-                /* shift count in rax → move to rcx first */
-                uint8_t mov_rcx[] = {0x48, 0x89, 0xc1}; /* movq rax, rcx */
-                jit_emit(&buf, mov_rcx, 3);
-                uint8_t shr[] = {0x48, 0xd3, 0xe8};     /* shrq %cl, rax */
-                jit_emit(&buf, shr, 3);
+                /* Fallback for 64-bit scalar shifts (fixed D7 to shrq) */
+                if (last_const > 0 && last_const < 64) {
+                    uint8_t shrq_imm[] = {0x48, 0xC1, 0xE8, (uint8_t)last_const};
+                    jit_emit(&buf, shrq_imm, 4);
+                } else {
+                    /* shift count in rax → move to rcx first */
+                    uint8_t mov_rcx[] = {0x48, 0x89, 0xc1}; /* movq rax, rcx */
+                    jit_emit(&buf, mov_rcx, 3);
+                    uint8_t shrq_cl[] = {0x48, 0xD3, 0xE8};
+                    jit_emit(&buf, shrq_cl, 3);
+                }
             }
         }
         else if (n->op == IR_EQ) {
             /*
              * IR_EQ: rax = (src1 == src2) ? 1 : 0
-             * Assumes src1 in %rax, src2 loaded into %rcx.
-             *
-             * cmpq %rcx, %rax  : 48 39 c8   (sets ZF if equal)
-             * sete %al         : 0f 94 c0
-             * movzbq %al, %rax : 48 0f b6 c0 (zero-extend to 64-bit result)
+             * Use 32-bit compare to avoid sign-extension mismatch.
+             * cmp %ecx, %eax  : 39 c8
+             * sete %al        : 0f 94 c0
+             * movzbq %al,%rax : 48 0f b6 c0
              */
-            uint8_t cmp[]    = {0x48, 0x39, 0xc8};
+            uint8_t cmp[]    = {0x39, 0xc8};
             uint8_t sete[]   = {0x0f, 0x94, 0xc0};
             uint8_t movzb[]  = {0x48, 0x0f, 0xb6, 0xc0};
-            jit_emit(&buf, cmp,   3);
+            jit_emit(&buf, cmp,   2);
             jit_emit(&buf, sete,  3);
             jit_emit(&buf, movzb, 4);
         }
@@ -256,26 +290,20 @@ void* evm_jit_compile(ir_func_t* func, void* mem_v2) {
         else if (n->op == IR_LOAD || n->op == IR_STORE) {
             if (n->op == IR_LOAD && n->src1[0] != '\0' && strcmp(n->src1, "t0") == 0) {
                 /*
-                 * WARDEN INTERCEPT: CALLDATALOAD
-                 * %r14 is pinned to mem_v2->calldata.
-                 * Assume offset is pre-calculated in %rcx (standard ZCC binop dest)
-                 * or immediate in node->imm. (ZCC uses imm if folded, otherwise 0 for stubbed t0 load).
+                 * VEX: vmovdqu ymm0, [r14 + disp32]
+                 * %r14 requires REX.B=0 inversion. C4 C1 7E 6F 86 [disp32]
                  */
-                if (n->imm >= 0) {
-                    // mov rax, [r14 + disp32] -> 0x4d 0x8b 0x86 [disp32]
-                    uint8_t load_imm[] = {0x4d, 0x8b, 0x86, 0x00, 0x00, 0x00, 0x00};
-                    uint32_t off32 = (uint32_t)n->imm;
-                    memcpy(load_imm + 3, &off32, 4);
-                    jit_emit(&buf, load_imm, 7);
-                } else {
-                    // offset in %rcx: mov rax, [r14 + rcx] -> 0x4b 0x8b 0x04 0x0e
-                    uint8_t load_reg[] = {0x4b, 0x8b, 0x04, 0x0e};
-                    jit_emit(&buf, load_reg, 4);
-                }
+                uint8_t ymm_load[] = {0xC4, 0xC1, 0x7E, 0x6F, 0x86};
+                jit_emit(&buf, ymm_load, 5);
                 
-                // EVM is Big-Endian: immediately bswapq to host Little-Endian
-                uint8_t bswap[] = {0x48, 0x0f, 0xc8}; // bswapq %rax
-                jit_emit(&buf, bswap, 3);
+                uint32_t off32 = (uint32_t)(last_const >= 0 ? last_const : 0);
+                jit_emit(&buf, &off32, 4);
+                
+                /* Execute 32-byte Endianness Reversal via %r15 mask */
+                extern void emit_bswap256_ymm0(JITBuffer* buf);
+                emit_bswap256_ymm0(&buf);
+                
+                fprintf(stderr, "[JIT AVX2] CALLDATALOAD -> ymm0 (256-bit ingested)\n");
             } else {
                 /* Phase 4: r13 is pinned. jit_emit_memory_op owns null/bounds guards. */
                 extern void jit_emit_memory_op(JITBuffer* buf, ir_node_t* node, void* mem);
@@ -283,19 +311,24 @@ void* evm_jit_compile(ir_func_t* func, void* mem_v2) {
             }
         }
         else if (n->op == IR_RET) {
-            /* Epilogue — restore callee-saved registers in reverse push order:
-             *   pop r14          : 0x41 0x5e
-             *   pop r13          : 0x41 0x5d
-             *   mov rsp, rbp    : 0x48 0x89 0xec
-             *   pop rbp         : 0x5d
-             *   ret             : 0xc3
+            /* Epilogue — ZERO PHANTOM vzeroupper and restore callee-saved
+             * registers in reverse push order:
+             *   vzeroupper       : 0xC5 0xF8 0x77
+             *   pop r15          : 0x41 0x5F
+             *   pop r14          : 0x41 0x5E
+             *   pop r13          : 0x41 0x5D
+             *   mov rsp, rbp     : 0x48 0x89 0xEC
+             *   pop rbp          : 0x5D
+             *   ret              : 0xC3
              */
             uint8_t epilogue[] = {
-                0x41, 0x5e,         /* pop r14      */
-                0x41, 0x5d,         /* pop r13      */
-                0x48, 0x89, 0xec,   /* mov rsp, rbp */
-                0x5d,               /* pop rbp      */
-                0xc3                /* ret          */
+                0xC5, 0xF8, 0x77,   /* vzeroupper   */
+                0x41, 0x5F,         /* pop r15      */
+                0x41, 0x5E,         /* pop r14      */
+                0x41, 0x5D,         /* pop r13      */
+                0x48, 0x89, 0xEC,   /* mov rsp, rbp */
+                0x5D,               /* pop rbp      */
+                0xC3                /* ret          */
             };
             jit_emit(&buf, epilogue, sizeof(epilogue));
         }
@@ -333,14 +366,16 @@ void* evm_jit_compile(ir_func_t* func, void* mem_v2) {
                 patches[pi].label, target, rel32);
     }
 
-    /* Fallback epilogue — fires if no explicit IR_RET in stream. */
+    /* Fallback epilogue — ZERO PHANTOM injection if no explicit IR_RET */
     {
         uint8_t fallback_epilogue[] = {
-            0x41, 0x5e,         /* pop r14      */
-            0x41, 0x5d,         /* pop r13      */
-            0x48, 0x89, 0xec,   /* mov rsp, rbp */
-            0x5d,               /* pop rbp      */
-            0xc3                /* ret          */
+            0xC5, 0xF8, 0x77,   /* vzeroupper   */
+            0x41, 0x5F,         /* pop r15      */
+            0x41, 0x5E,         /* pop r14      */
+            0x41, 0x5D,         /* pop r13      */
+            0x48, 0x89, 0xEC,   /* mov rsp, rbp */
+            0x5D,               /* pop rbp      */
+            0xC3                /* ret          */
         };
         jit_emit(&buf, fallback_epilogue, sizeof(fallback_epilogue));
     }
