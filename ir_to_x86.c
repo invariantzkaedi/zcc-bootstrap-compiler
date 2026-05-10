@@ -46,7 +46,8 @@ static int get_or_create_var(const char *name) {
     }
     
     int off;
-    strcpy(vars[num_vars].name, name);
+    strncpy(vars[num_vars].name, name, IR_NAME_MAX - 1);
+    vars[num_vars].name[IR_NAME_MAX - 1] = '\0';
     vars[num_vars].offset = next_offset_from_rbp;
     off = next_offset_from_rbp;
     next_offset_from_rbp -= 8;
@@ -196,6 +197,7 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
         ir_node_t *n;
         int stack_size;
         int arg_idx;
+        int call_padding = 0;
 
         num_vars = 0;
         next_offset_from_rbp = -8;
@@ -221,6 +223,16 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
         
         stack_size = -next_offset_from_rbp + 40;
         stack_size = (stack_size + 15) & ~15;
+
+        int num_pushes = 0;
+        if (ra->used[PREG_RBX])  num_pushes++;
+        if (ra->used[PREG_R12])  num_pushes++;
+        if (ra->used[PREG_R13])  num_pushes++;
+        if (ra->used[PREG_R14])  num_pushes++;
+        if (ra->used[PREG_R15])  num_pushes++;
+        if (num_pushes % 2 != 0) {
+            stack_size += 8;
+        }
         
         /* ── Prologue ── */
         fprintf(out, "    .globl %s\n", fn->name);
@@ -436,6 +448,20 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                     break;
                 }
                 case IR_ARG: {
+                    if (arg_idx == 0) {
+                        int total_args = 0;
+                        ir_node_t *scan = n;
+                        while (scan && scan->op == IR_ARG) {
+                            total_args++;
+                            scan = scan->next;
+                        }
+                        if (total_args > 6 && (total_args - 6) % 2 != 0) {
+                            fprintf(out, "    subq $8, %%rsp\n");
+                            call_padding = 8;
+                        } else {
+                            call_padding = 0;
+                        }
+                    }
                     load_operand(out, n->src1, "%rax", ra);
                     if (arg_idx < 6) {
                         fprintf(out, "    movq %%rax, %s\n", arg_regs[arg_idx]);
@@ -448,13 +474,15 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                 case IR_CALL: {
                     fprintf(out, "    movb $0, %%al\n");
                     fprintf(out, "    callq %s\n", n->label);
-                    if (arg_idx > 6) {
-                        fprintf(out, "    addq $%d, %%rsp\n", (arg_idx - 6) * 8);
+                    if (arg_idx > 6 || call_padding > 0) {
+                        int cleanup_size = (arg_idx > 6 ? (arg_idx - 6) * 8 : 0) + call_padding;
+                        fprintf(out, "    addq $%d, %%rsp\n", cleanup_size);
                     }
                     if (n->dst[0] != '\0' && n->dst[0] != '-') {
                         store_result(out, n->dst, "%rax", ra);
                     }
                     arg_idx = 0;
+                    call_padding = 0;
                     break;
                 }
                 case IR_RET: {
