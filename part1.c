@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stddef.h>
+#include <stdlib.h>
 
 /* ================================================================ */
 /* CONSTANTS — using enum for self-hosting (no preprocessor needed)  */
@@ -680,6 +681,7 @@ int type_align(Type *t);
 int is_integer(Type *t);
 int is_pointer(Type *t);
 int is_float_type(Type *t);
+int is_unsigned_type(Type *t);
 static int is_type_token(Compiler *cc);
 int peek_token(Compiler *cc);
 void error(Compiler *cc, char *msg);

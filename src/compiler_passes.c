@@ -32,7 +32,7 @@
  * declarations of zcc_node_from_expr / zcc_node_from_stmt.           */
 struct Node;
 
-#include "zcc_ast_bridge.h"
+#include "../zcc_ast_bridge.h"
 
 /* When set (ZCC_PGO_DEBUG_MAIN=1 and emitting main), OP_LOAD in
  * ir_asm_lower_insn logs block/dst/src0/slot to stderr for crash triage. */
@@ -5870,10 +5870,40 @@ static void ir_asm_linear_scan(Function *fn, const uint32_t *block_order,
       phys_reg_out[cur->vreg] = chosen;
       intervals[active_end++] = *cur;
     } else {
-      if (getenv("ZCC_DEBUG_LSCAN"))
-        fprintf(stderr, "[LSCAN] vreg=%d spilled\n", cur->vreg);
-      /* No free reg: leave current interval spilled (no eviction = no spill
-       * code to emit). */
+      /* ── Poletto-Sarkar Eviction ──
+       * All phys regs occupied. Find the active interval with the latest
+       * endpoint. If it ends after the current interval, evict it (the
+       * current value is used sooner and benefits more from a register).
+       * Otherwise spill the current interval (it lives too long). */
+      int victim = -1;
+      int victim_end = -1;
+      for (int j = 0; j < active_end; j++) {
+        if (intervals[j].phys_reg >= 0 && intervals[j].end > victim_end) {
+          victim_end = intervals[j].end;
+          victim = j;
+        }
+      }
+      if (victim >= 0 && victim_end > cur->end) {
+        /* Evict: steal victim's register, spill victim to stack */
+        int stolen_reg = intervals[victim].phys_reg;
+        if (getenv("ZCC_DEBUG_LSCAN"))
+          fprintf(stderr, "[LSCAN] vreg=%d evicts vreg=%d from phys_reg=%d\n",
+                  cur->vreg, intervals[victim].vreg, stolen_reg);
+        phys_reg_out[intervals[victim].vreg] = -1; /* victim → stack */
+        intervals[victim].phys_reg = -1;
+        /* Remove victim from active set */
+        intervals[victim] = intervals[active_end - 1];
+        active_end--;
+        /* Assign stolen register to current interval */
+        cur->phys_reg = stolen_reg;
+        phys_reg_out[cur->vreg] = stolen_reg;
+        intervals[active_end++] = *cur;
+      } else {
+        /* Current interval lives longer than all active — spill it */
+        if (getenv("ZCC_DEBUG_LSCAN"))
+          fprintf(stderr, "[LSCAN] vreg=%d spilled (outlives all active)\n",
+                  cur->vreg);
+      }
     }
   }
 }

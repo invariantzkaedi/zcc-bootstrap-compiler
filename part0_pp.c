@@ -187,6 +187,44 @@ static const char *zcc_stddef_text =
 "size_t strxfrm(char *dst, const char *src, size_t n);\n"
 "char *strtok(char *s, const char *delim);\n"
 "char *strerror(int errnum);\n"
+"/* TCC extra dependencies */\n"
+"typedef int sem_t;\n"
+"struct timeval { long tv_sec; long tv_usec; };\n"
+"int gettimeofday(struct timeval *tv, void *tz);\n"
+"#define O_RDONLY 0\n"
+"#define O_WRONLY 1\n"
+"#define O_RDWR 2\n"
+"#define O_CREAT 64\n"
+"#define O_TRUNC 512\n"
+"#define O_BINARY 0\n"
+"#define SEEK_SET 0\n"
+"#define SEEK_CUR 1\n"
+"#define SEEK_END 2\n"
+"int open(const char *pathname, int flags, ...);\n"
+"int close(int fd);\n"
+"ssize_t read(int fd, void *buf, size_t count);\n"
+"ssize_t write(int fd, const void *buf, size_t count);\n"
+"int remove(const char *pathname);\n"
+"FILE *fdopen(int fd, const char *mode);\n"
+"int fgetc(FILE *stream);\n"
+"char *getcwd(char *buf, size_t size);\n"
+"typedef long off_t;\n"
+"void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);\n"
+"int munmap(void *addr, size_t length);\n"
+"#define PROT_READ 1\n"
+"#define PROT_WRITE 2\n"
+"#define PROT_EXEC 4\n"
+"#define MAP_PRIVATE 2\n"
+"#define MAP_ANONYMOUS 32\n"
+"#define MAP_FAILED ((void *)-1)\n"
+"#define PATH_MAX 4096\n"
+"int snprintf(char *str, size_t size, const char *format, ...);\n"
+"extern int errno;\n"
+"#define EINTR 4\n"
+"int sem_init(sem_t *sem, int pshared, unsigned int value);\n"
+"int sem_wait(sem_t *sem);\n"
+"int sem_post(sem_t *sem);\n"
+"int execvp(const char *file, char *const argv[]);\n"
 "#endif\n";
 
 static void pp_emit(PPState *state, char c) {
@@ -440,7 +478,19 @@ static int is_stddef_stub(const char *path) {
         || strcmp(base, "stdarg.h") == 0
         || strcmp(base, "stdio.h")  == 0
         || strcmp(base, "stdlib.h") == 0
-        || strcmp(base, "string.h") == 0;
+        || strcmp(base, "string.h") == 0
+        || strcmp(base, "math.h") == 0
+        || strcmp(base, "errno.h") == 0
+        || strcmp(base, "fcntl.h") == 0
+        || strcmp(base, "setjmp.h") == 0
+        || strcmp(base, "time.h") == 0
+        || strcmp(base, "unistd.h") == 0
+        || strcmp(base, "dlfcn.h") == 0
+        || strcmp(base, "inttypes.h") == 0
+        || strcmp(base, "stdint.h") == 0
+        || strcmp(base, "semaphore.h") == 0
+        || strcmp(base, "signal.h") == 0
+        || strcmp(base, "types.h") == 0;
 }
 
 /* PP-INCLUDE-022: Resolve an include path via -I search and relative lookup.
@@ -683,8 +733,8 @@ static long long pp_e_mul(PPEval *e) {
     for (;;) {
         pp_e_skip(e);
         if      (pp_e_match(e, "*"))  v = v * pp_e_primary(e);
-        else if (pp_e_match(e, "/"))  { long long r = pp_e_primary(e); v = r ? v / r : 0; }
-        else if (pp_e_match(e, "%"))  { long long r = pp_e_primary(e); v = r ? v % r : 0; }
+        else if (pp_e_match(e, "/"))  { long long r = pp_e_primary(e); v = (r == 0 || (v == -9223372036854775807LL - 1LL && r == -1)) ? 0 : v / r; }
+        else if (pp_e_match(e, "%"))  { long long r = pp_e_primary(e); v = (r == 0 || (v == -9223372036854775807LL - 1LL && r == -1)) ? 0 : v % r; }
         else break;
     }
     return v;
@@ -1505,7 +1555,14 @@ char *zcc_preprocess(const char *source, int source_len,
             if (eq) {
                 *eq = '\0';
                 PPMacro *m = pp_add_macro(state, p);
-                if (m) strncpy(m->body, eq + 1, sizeof(m->body) - 1);
+                if (m) {
+                    if (strlen(eq + 1) >= m->body_cap) {
+                        m->body_cap = strlen(eq + 1) + 1;
+                        m->body = (char *)realloc(m->body, m->body_cap);
+                    }
+                    strncpy(m->body, eq + 1, m->body_cap - 1);
+                    m->body[m->body_cap - 1] = '\0';
+                }
             } else {
                 PPMacro *m = pp_add_macro(state, p);
                 if (m) strcpy(m->body, "1");

@@ -1236,8 +1236,8 @@ Node *parse_postfix(Compiler *cc) {
                 n = call;
                 continue;
             }
-            if (n->kind == ND_MEMBER || n->kind == ND_DEREF || n->kind == ND_CAST || (n->kind == ND_VAR && !is_direct)) {
-                /* indirect call through function pointer member, deref, or cast */
+            if (!is_direct) {
+                /* indirect call through any expression (function pointer, comma expr, deref, etc) */
                 Node *call;
                 next_token(cc);
                 call = node_new(cc, ND_CALL, line);
