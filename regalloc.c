@@ -124,103 +124,176 @@ static void build_intervals(RegAllocator *ra, const ir_func_t *fn) {
     qsort(ra->intervals, ra->num_intervals, sizeof(LiveInterval), iv_cmp_start);
 }
 
-/* ── Phase 2: Linear scan allocation ────────────────────────────────── */
+/* ── Phase 2: Chaitin-Briggs Graph Coloring ──────────────────────────── */
 
-/*
- * Classic Poletto & Sarkar linear scan.
- * Active = set of intervals currently occupying a physical register.
- * We maintain active[] sorted by end point (earliest-ending first) so
- * expiry and spill decisions are O(k) where k = PREG_COUNT (small constant).
- */
-
-static void linear_scan(RegAllocator *ra) {
-    /* active[i] = index into ra->intervals of an allocated interval */
-    int active[PREG_COUNT];
-    int active_reg[PREG_COUNT]; /* physical register used by active[i] */
-    int active_cnt = 0;
-
-    /* Free-register stacks */
-    PhysReg free_gpr[PREG_COUNT];
-    PhysReg free_xmm[PREG_COUNT];
-    int free_gpr_cnt = 0;
-    int free_xmm_cnt = 0;
-    
-    int r;
-    for (r = 0; r <= PREG_R11; r++)
-        free_gpr[free_gpr_cnt++] = (PhysReg)(PREG_R11 - r);
-    for (r = PREG_XMM0; r <= PREG_XMM7; r++)
-        free_xmm[free_xmm_cnt++] = (PhysReg)(PREG_XMM7 - (r - PREG_XMM0));
-
+static void chaitin_briggs(RegAllocator *ra, const ir_func_t *fn) {
+    int N = ra->num_intervals;
     int i;
-    for (i = 0; i < ra->num_intervals; i++) {
-        LiveInterval *cur = &ra->intervals[i];
+    int j;
+    int stack_top;
+    int nodes_left;
+    char *adj;
+    int *degree;
+    int *removed;
+    int *stack;
+    int *alias;
 
-        /* --- Expire old intervals --- */
-        int j = 0;
-        while (j < active_cnt) {
-            LiveInterval *act = &ra->intervals[active[j]];
-            if (act->end < cur->start) {
-                /* Return this register to the free pool */
-                if (active_reg[j] >= PREG_XMM0) {
-                    free_xmm[free_xmm_cnt++] = (PhysReg)active_reg[j];
-                } else {
-                    free_gpr[free_gpr_cnt++] = (PhysReg)active_reg[j];
-                }
-                /* Compact active[] */
-                active[j]     = active[active_cnt - 1];
-                active_reg[j] = active_reg[active_cnt - 1];
-                active_cnt--;
-                /* Don't advance j — need to recheck this slot */
-            } else {
-                j++;
+    if (N <= 0) return;
+
+    adj     = (char *)calloc(N * N, 1);
+    degree  = (int *)calloc(N, sizeof(int));
+    removed = (int *)calloc(N, sizeof(int));
+    stack   = (int *)calloc(N, sizeof(int));
+    alias   = (int *)calloc(N, sizeof(int));
+    stack_top = 0;
+
+    for (i = 0; i < N; i++) alias[i] = i;
+
+    /* Populate adj matrix based on overlapping intervals */
+    for (i = 0; i < N; i++) {
+        for (j = i + 1; j < N; j++) {
+            if (ra->intervals[i].is_float != ra->intervals[j].is_float) continue;
+            int overlap = (ra->intervals[i].start <= ra->intervals[j].end && ra->intervals[j].start <= ra->intervals[i].end);
+            if (overlap) {
+                adj[i*N + j] = 1;
+                adj[j*N + i] = 1;
+                degree[i]++;
+                degree[j]++;
             }
-        }
-
-        /* --- Allocate or spill --- */
-        int has_free = cur->is_float ? (free_xmm_cnt > 0) : (free_gpr_cnt > 0);
-        if (has_free) {
-            /* Grab a free register */
-            PhysReg preg = cur->is_float ? free_xmm[--free_xmm_cnt] : free_gpr[--free_gpr_cnt];
-            cur->assigned = preg;
-            ra->used[preg] = 1;
-
-            /* Add to active */
-            active[active_cnt]     = i;
-            active_reg[active_cnt] = (int)preg;
-            active_cnt++;
-        } else {
-            /*
-             * No free register. Spill the interval that ends latest
-             * (keep the one ending soonest in a register — it frees up
-             * sooner and benefits more instructions).
-             * Only spill matching types (GPR for GPR, XMM for XMM).
-             */
-            int spill_idx = -1;
-            int spill_ai  = -1;
-            int latest_end = cur->end;
-
-            for (j = 0; j < active_cnt; j++) {
-                LiveInterval *act = &ra->intervals[active[j]];
-                if (act->is_float != cur->is_float) continue; /* must match */
-                if (act->end > latest_end) {
-                    latest_end = act->end;
-                    spill_idx  = active[j];
-                    spill_ai   = j;
-                }
-            }
-
-            if (spill_idx >= 0) {
-                /* The active interval ending latest gives its register to cur */
-                PhysReg stolen = (PhysReg)active_reg[spill_ai];
-                ra->intervals[spill_idx].assigned = PREG_NONE; /* spill it */
-                cur->assigned = stolen;
-
-                active[spill_ai]     = i;
-                active_reg[spill_ai] = (int)stolen;
-            }
-            /* else cur->assigned stays PREG_NONE (spilled) */
         }
     }
+
+    /* Coalesce copies */
+    const ir_node_t *n;
+    for (n = fn->head; n; n = n->next) {
+        if (n->op == IR_COPY && is_temp(n->dst) && is_temp(n->src1)) {
+            int u = -1, v = -1;
+            for (i = 0; i < N; i++) {
+                if (strcmp(ra->intervals[i].name, n->dst) == 0) u = i;
+                if (strcmp(ra->intervals[i].name, n->src1) == 0) v = i;
+            }
+            if (u != -1 && v != -1) {
+                while(alias[u] != u) u = alias[u];
+                while(alias[v] != v) v = alias[v];
+                if (u != v && ra->intervals[u].is_float == ra->intervals[v].is_float && !adj[u*N + v]) {
+                    /* Merge v into u */
+                    alias[v] = u;
+                    for (i = 0; i < N; i++) {
+                        if (adj[v*N + i] && !adj[u*N + i] && u != i) {
+                            adj[u*N + i] = 1;
+                            adj[i*N + u] = 1;
+                            degree[u]++;
+                            degree[i]++;
+                        }
+                    }
+                    removed[v] = 1;
+                }
+            }
+        }
+    }
+
+    /* Simplify & Spill */
+    nodes_left = 0;
+    for (i = 0; i < N; i++) if (!removed[i]) nodes_left++;
+
+    while (nodes_left > 0) {
+        int target = -1;
+        for (i = 0; i < N; i++) {
+            if (removed[i]) continue;
+            int K = ra->intervals[i].is_float ? 8 : 7;
+            if (degree[i] < K) {
+                target = i;
+                break;
+            }
+        }
+
+        if (target == -1) {
+            /* Spill: pick node with highest degree / lowest cost */
+            double max_metric = -1.0;
+            for (i = 0; i < N; i++) {
+                if (!removed[i]) {
+                    int len = ra->intervals[i].end - ra->intervals[i].start + 1;
+                    double metric = (double)degree[i] / (double)len; 
+                    if (metric > max_metric) {
+                        max_metric = metric;
+                        target = i;
+                    }
+                }
+            }
+        }
+
+        removed[target] = 1;
+        stack[stack_top++] = target;
+        nodes_left--;
+
+        for (j = 0; j < N; j++) {
+            if (!removed[j] && adj[target*N + j]) {
+                degree[j]--;
+            }
+        }
+    }
+
+    /* Select Colors */
+    for (i = 0; i < N; i++) removed[i] = 0;
+    {
+    int *color = (int *)calloc(N, sizeof(int));
+    int c;
+    for (i = 0; i < N; i++) color[i] = -1;
+
+    /* Canonical callee-save preference order matching GCC: rbx first.
+     * CRITICAL: this order must be stable across ZCC stage-1 and stage-2
+     * or the register coloring will produce different assembly. r10/r11 are
+     * caller-saved scratch — prefer them last to minimize push/pop in hot
+     * paths, but keep them after all callee-saved to maintain the canon. */
+    PhysReg gpr_colors[7] = {PREG_RBX, PREG_R12, PREG_R13, PREG_R14, PREG_R15, PREG_R10, PREG_R11};
+    PhysReg xmm_colors[8] = {PREG_XMM0, PREG_XMM1, PREG_XMM2, PREG_XMM3, PREG_XMM4, PREG_XMM5, PREG_XMM6, PREG_XMM7};
+
+    while (stack_top > 0) {
+        int target = stack[--stack_top];
+        int K = ra->intervals[target].is_float ? 8 : 7;
+        int used_colors = 0;
+
+        for (j = 0; j < N; j++) {
+            if (removed[j] && adj[target*N + j]) {
+                int c = color[alias[j]];
+                if (c != -1) used_colors |= (1 << c);
+            }
+        }
+
+        c = -1;
+        for (i = 0; i < K; i++) {
+            if (!(used_colors & (1 << i))) {
+                c = i;
+                break;
+            }
+        }
+
+        color[target] = c;
+        removed[target] = 1;
+    }
+
+    /* Assign to struct */
+    for (i = 0; i < N; i++) {
+        int root = i;
+        while (alias[root] != root) root = alias[root];
+        c = color[root];
+        if (c != -1) {
+            PhysReg preg = ra->intervals[i].is_float ? xmm_colors[c] : gpr_colors[c];
+            ra->intervals[i].assigned = preg;
+            ra->used[preg] = 1;
+        } else {
+            ra->intervals[i].assigned = PREG_NONE;
+        }
+    }
+
+    free(color);
+    } /* end color block */
+
+    free(adj);
+    free(degree);
+    free(removed);
+    free(stack);
+    free(alias);
 }
 
 /* ── Public entry point ──────────────────────────────────────────────── */
@@ -228,7 +301,7 @@ static void linear_scan(RegAllocator *ra) {
 void ra_run(RegAllocator *ra, const ir_func_t *fn) {
     build_intervals(ra, fn);
     if (ra->num_intervals > 0)
-        linear_scan(ra);
+        chaitin_briggs(ra, fn);
 }
 
 /* ── Query API ───────────────────────────────────────────────────────── */

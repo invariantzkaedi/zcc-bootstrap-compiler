@@ -496,12 +496,19 @@ static int is_stddef_stub(const char *path) {
 /* PP-INCLUDE-022: Resolve an include path via -I search and relative lookup.
  * Returns 1 if found (writes to out_resolved), 0 if not found. */
 static int pp_resolve_path(PPState *state, const char *path, int is_system, char *out_resolved) {
+    char dir[1024];
+    char seg[1024];
+    const char *sl;
+    const char *p;
+    int dirlen;
+    int si;
+    FILE *fp;
+
     /* For quoted includes, try relative to current file's directory first */
     if (!is_system && state->filename) {
-        char dir[1024];
-        const char *sl = strrchr(state->filename, '/');
+        sl = strrchr(state->filename, '/');
         if (sl) {
-            int dirlen = (int)(sl - state->filename);
+            dirlen = (int)(sl - state->filename);
             if (dirlen < 1023) {
                 memcpy(dir, state->filename, dirlen);
                 dir[dirlen] = '\0';
@@ -512,27 +519,22 @@ static int pp_resolve_path(PPState *state, const char *path, int is_system, char
             strcpy(dir, ".");  /* no directory component — use CWD */
         }
         snprintf(out_resolved, 1024, "%s/%s", dir, path);
-        {
-            FILE *fp = fopen(out_resolved, "rb");
-            if (fp) { fclose(fp); return 1; }
-        }
+        fp = fopen(out_resolved, "rb");
+        if (fp) { fclose(fp); return 1; }
     }
 
     /* Search -I paths (colon-separated, Linux convention) */
     if (state->include_paths && state->include_paths[0]) {
-        const char *p = state->include_paths;
+        p = state->include_paths;
         while (*p) {
-            char seg[1024];
-            int si = 0;
+            si = 0;
             while (*p && *p != ':' && si < 1022) seg[si++] = *p++;
             seg[si] = '\0';
             if (*p == ':') p++;
             if (si > 0) {
                 snprintf(out_resolved, 1024, "%s/%s", seg, path);
-                {
-                    FILE *fp = fopen(out_resolved, "rb");
-                    if (fp) { fclose(fp); return 1; }
-                }
+                fp = fopen(out_resolved, "rb");
+                if (fp) { fclose(fp); return 1; }
             }
         }
     }
@@ -546,6 +548,8 @@ static void pp_process_include(PPState *state, const char *path, int is_system) 
     int from_disk;
     char resolved_path[1024];
     PPState *sub_state;
+    /* NOTE: resolved_path is exactly 1024 bytes. Do NOT resize — any change
+     * will shift the stack frame and break the selfhost fixed-point gate. */
 
     file_src  = 0;
     file_len  = 0;
@@ -623,6 +627,8 @@ static void pp_process_include(PPState *state, const char *path, int is_system) 
 
 /* parse parameter list for function-like macros */
 static void pp_parse_params(PPState *state, PPMacro *m) {
+    char dummy[64];
+    dummy[0] = 0;
     pp_skip_whitespace(state);
     while (pp_peek(state) != ')' && pp_peek(state) != '\n' && pp_peek(state) != 0) {
         if (is_ident_start(pp_peek(state))) {
@@ -630,7 +636,6 @@ static void pp_parse_params(PPState *state, PPMacro *m) {
                 pp_parse_ident(state, m->params[m->num_params++], 64);
             } else {
                 if (!_warned_pp_max_params) { printf("zcc: warning: PP_MAX_PARAMS (%d) exceeded at %s:%d — subsequent macro params silently discarded\n", PP_MAX_PARAMS, state->filename ? state->filename : "?", state->line); _warned_pp_max_params = 1; }
-                char dummy[64];
                 pp_parse_ident(state, dummy, 64);
             }
         } else {

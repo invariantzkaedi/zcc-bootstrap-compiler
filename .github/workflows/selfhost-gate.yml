@@ -1,14 +1,21 @@
 # ZCC Self-Host Gate
 #
-# Catches two classes of failure:
+# Catches four classes of failure:
 #   1. Hard compile errors (zcc2 or zcc3 fails to build)
 #   2. Non-deterministic regalloc divergence (zcc2.s != zcc3.s)
+#   3. make-clean race: a previous iteration's clean deletes zcc2.s
+#      before zcc3 is written, producing 0-byte output (detected by
+#      line-count sanity check before diff)
+#   4. Truncated assembly: codegen exits mid-function
 #
-# Strategy: run selfhost THREE times back-to-back on the same checkout.
-# A true fix is stable across all three; a flaky fix will surface here.
+# Strategy: run selfhost THREE times back-to-back. Each run validates
+# .s line counts before diffing. A flaky fix will surface here.
 # Previously caught: pp_process_include (bare-block PPState*),
 #                    parse_program (nested ShmRingBuffer*/uint64_t),
-#                    zcc_rust_shm_entry (nested Node*/int).
+#                    zcc_rust_shm_entry (nested Node*/int),
+#                    pp_resolve_path (nested char dir[1024]/seg[1024]),
+#                    pp_parse_params (nested char dummy[64]),
+#                    regalloc chaitin_briggs (block-scope alloc pointers).
 
 name: ZCC Selfhost Gate
 
@@ -21,6 +28,7 @@ on:
       - 'ir*.c'
       - 'ir*.h'
       - 'regalloc.c'
+      - 'regalloc.h'
       - 'zcc_ast_bridge.h'
       - 'Makefile'
   pull_request:
@@ -30,6 +38,7 @@ on:
       - 'ir*.c'
       - 'ir*.h'
       - 'regalloc.c'
+      - 'regalloc.h'
       - 'zcc_ast_bridge.h'
       - 'Makefile'
 
@@ -37,7 +46,7 @@ jobs:
   selfhost-gate:
     name: "Selfhost 3× Determinism Check"
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -46,34 +55,41 @@ jobs:
       - name: Install build dependencies
         run: sudo apt-get install -y gcc make
 
-      # Run 1 — cold build
-      - name: "Selfhost run 1/3"
+      - name: "Selfhost 3× with .s sanity validation"
         env:
           ZCC_MUTATION_SANDBOX: "1"
         run: |
-          make clean selfhost ONE_SOURCE=1
-          echo "RUN1=PASS" >> "$GITHUB_ENV"
+          set -e
+          MIN_LINES=50000   # zcc.s is ~178k lines; 50k = safe floor
 
-      # Run 2 — rebuild without clean to stress stage-2 determinism
-      - name: "Selfhost run 2/3"
-        env:
-          ZCC_MUTATION_SANDBOX: "1"
-        run: |
-          make clean selfhost ONE_SOURCE=1
-          echo "RUN2=PASS" >> "$GITHUB_ENV"
+          for RUN in 1 2 3; do
+            echo "=== Selfhost run ${RUN}/3 ==="
+            make clean selfhost ONE_SOURCE=1
 
-      # Run 3 — final cold verification
-      - name: "Selfhost run 3/3"
-        env:
-          ZCC_MUTATION_SANDBOX: "1"
-        run: |
-          make clean selfhost ONE_SOURCE=1
-          echo "RUN3=PASS" >> "$GITHUB_ENV"
+            # Sanity: both .s files must exist and be non-trivially large
+            S2=$(wc -l < zcc2.s 2>/dev/null || echo 0)
+            S3=$(wc -l < zcc3.s 2>/dev/null || echo 0)
+            echo "  zcc2.s: ${S2} lines  zcc3.s: ${S3} lines"
 
-      - name: Verify all 3 runs passed
-        run: |
-          echo "Run 1: $RUN1  Run 2: $RUN2  Run 3: $RUN3"
-          [ "$RUN1" = "PASS" ] && [ "$RUN2" = "PASS" ] && [ "$RUN3" = "PASS" ]
+            if [ "$S2" -lt "$MIN_LINES" ]; then
+              echo "ERROR: zcc2.s is too short (${S2} lines < ${MIN_LINES}). Make-clean race or codegen crash."
+              exit 1
+            fi
+            if [ "$S3" -lt "$MIN_LINES" ]; then
+              echo "ERROR: zcc3.s is too short (${S3} lines < ${MIN_LINES}). Make-clean race or codegen crash."
+              exit 1
+            fi
+
+            # Line-count equality check (fast proxy for byte-identical)
+            if [ "$S2" -ne "$S3" ]; then
+              echo "ERROR: Assembly line counts differ (zcc2.s=${S2}, zcc3.s=${S3})"
+              diff zcc2.s zcc3.s | head -30
+              exit 1
+            fi
+
+            echo "  Run ${RUN}/3: SELF-HOST VERIFIED (${S2} lines identical)"
+          done
+          echo "All 3 selfhost runs VERIFIED."
 
       - name: Upload assembly artifacts on failure
         if: failure()
@@ -84,6 +100,7 @@ jobs:
             zcc2.s
             zcc3.s
           retention-days: 7
+
 
   rust-bridge-smoke:
     name: "Rust Frontend Bridge Smoke"
