@@ -152,7 +152,7 @@ static ir_pass_result_t ir_pass_dce(void *fn_ptr) {
  * and replace the node with IR_CONST.
  */
 
-#define CONST_MAP_MAX 2048
+#define CONST_MAP_MAX 8192
 
 typedef struct {
     char name[32];  /* IR_NAME_MAX */
@@ -177,7 +177,11 @@ static void cmap_add(const char *name, long value) {
             return;
         }
     }
-    if (s_cmap_count >= CONST_MAP_MAX) return;
+    if (s_cmap_count >= CONST_MAP_MAX) {
+        fprintf(stderr, "[const_fold] WARNING: cmap overflow at %d entries\n",
+                CONST_MAP_MAX);
+        return;
+    }
     strncpy(s_cmap[s_cmap_count].name, name, 31);
     s_cmap[s_cmap_count].name[31] = '\0';
     s_cmap[s_cmap_count].value = value;
@@ -194,7 +198,11 @@ static void cmap_add_256(const char *name, uint256_t value256) {
             return;
         }
     }
-    if (s_cmap_count >= CONST_MAP_MAX) return;
+    if (s_cmap_count >= CONST_MAP_MAX) {
+        fprintf(stderr, "[const_fold] WARNING: cmap_256 overflow at %d entries\n",
+                CONST_MAP_MAX);
+        return;
+    }
     strncpy(s_cmap[s_cmap_count].name, name, 31);
     s_cmap[s_cmap_count].name[31] = '\0';
     s_cmap[s_cmap_count].value256 = value256;
@@ -349,8 +357,10 @@ static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
                 case IR_AND: result = v1 & v2; break;
                 case IR_OR:  result = v1 | v2; break;
                 case IR_XOR: result = v1 ^ v2; break;
-                case IR_SHL: result = v1 << v2; break;
-                case IR_SHR: result = v1 >> v2; break;
+                case IR_SHL: result = (v2 >= 0 && v2 < 64)
+                    ? (long)((unsigned long)v1 << (unsigned)v2) : 0; break;
+                case IR_SHR: result = (v2 >= 0 && v2 < 64)
+                    ? (long)((unsigned long)v1 >> (unsigned)v2) : 0; break;
                 case IR_EQ:  result = (v1 == v2) ? 1 : 0; break;
                 case IR_NE:  result = (v1 != v2) ? 1 : 0; break;
                 case IR_LT:  result = (v1 < v2)  ? 1 : 0; break;
@@ -687,6 +697,9 @@ static const char *gvn_lookup_or_insert_scoped(unsigned long long hash, ir_node_
             /* Record on scope stack for rollback */
             if (s_gvn_scope_top < GVN_SCOPE_MAX) {
                 s_gvn_scope_stack[s_gvn_scope_top++] = (int)slot;
+            } else {
+                fprintf(stderr, "[gvn] WARNING: scope stack overflow — "
+                        "rollback may be incomplete\n");
             }
             return NULL;
         }

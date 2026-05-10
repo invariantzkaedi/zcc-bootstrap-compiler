@@ -41,7 +41,7 @@
  * This is the IR-level equivalent of the lifter's valid_jumpdest bitmap.
  * We extract the numeric offset from `.L_evm_<N>` labels.
  */
-#define SYMCFG_LABEL_MAX 4096
+#define SYMCFG_LABEL_MAX 8192
 
 static long s_valid_labels[SYMCFG_LABEL_MAX];
 static int  s_valid_label_count;
@@ -51,7 +51,11 @@ static void label_table_clear(void) {
 }
 
 static void label_table_add(long offset) {
-    if (s_valid_label_count >= SYMCFG_LABEL_MAX) return;
+    if (s_valid_label_count >= SYMCFG_LABEL_MAX) {
+        fprintf(stderr, "[symcfg] WARNING: label table overflow at %d entries\n",
+                SYMCFG_LABEL_MAX);
+        return;
+    }
     s_valid_labels[s_valid_label_count++] = offset;
 }
 
