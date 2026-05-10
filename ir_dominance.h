@@ -97,4 +97,19 @@ ir_pass_result_t ir_pass_dominance(void *fn_ptr);
  */
 const dom_cfg_t *dom_get_cfg(void);
 
+/*
+ * dom_dominates: returns 1 if `dominator` block dominates `block`.
+ */
+int dom_dominates(const dom_cfg_t *cfg, int dominator, int block);
+
+/* ── Dominance Frontier API (new) ─────────────────────────────────────── */
+typedef struct {
+    int *frontier;      /* block ids in dominance frontier */
+    int   count;
+    int   capacity;
+} df_set_t;
+
+void df_compute_all(const dom_cfg_t *cfg, df_set_t **out_df);
+void df_free(df_set_t *df);
+
 #endif /* ZCC_IR_DOMINANCE_H */

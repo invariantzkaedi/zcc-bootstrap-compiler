@@ -24,6 +24,17 @@ const dom_cfg_t *dom_get_cfg(void) {
     return &s_dom_cfg;
 }
 
+int dom_dominates(const dom_cfg_t *cfg, int dominator, int block) {
+    if (!cfg || dominator < 0 || block < 0 || dominator >= cfg->block_count || block >= cfg->block_count) return 0;
+    int curr = block;
+    while (curr != -1) {
+        if (curr == dominator) return 1;
+        if (curr == 0) break; // entry block has no idom that we need to traverse further
+        curr = cfg->blocks[curr].idom;
+    }
+    return 0;
+}
+
 /* ── BB Graph Construction ───────────────────────────────────────────── */
 
 /*
