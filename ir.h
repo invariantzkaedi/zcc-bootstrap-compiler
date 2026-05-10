@@ -154,6 +154,14 @@ typedef struct {
  *   store:   IR_STORE  type  dst(addr)  src1(val)
  *   load:    IR_LOAD   type  dst  src1(addr)
  */
+
+/* ── SSA Extensions ───────────────────────────────────────────────────── */
+/* Phi operand: (incoming_value, incoming_block_label) */
+typedef struct {
+    char value[IR_NAME_MAX];
+    char block[IR_LABEL_MAX];   /* .L_evm_xxx or basic block id */
+} ir_phi_operand_t;
+
 typedef struct ir_node_t {
     ir_op_t            op;
     ir_type_t          type;
@@ -185,6 +193,15 @@ typedef struct ir_node_t {
      * Use ir_vuln_tag_set() / ir_vuln_tag_has() to manipulate.
      * Consumed by ir_pass_vuln_scan() and future liveness/dominance passes. */
     unsigned int       vuln_tags; /* ir_vuln_tag_t bitmask                 */
+
+    /* SSA-specific */
+    int                phi_count;              /* 0 = normal node          */
+    ir_phi_operand_t  *phi_ops;                /* dynamically allocated    */
+    int                phi_capacity;
+    
+    /* Dominance & numbering */
+    int                dom_id;
+    int                ssa_version;            /* for renaming             */
 
     struct ir_node_t  *next;     /* intrusive singly-linked list          */
 } ir_node_t;

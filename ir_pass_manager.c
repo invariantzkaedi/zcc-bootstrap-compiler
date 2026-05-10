@@ -22,6 +22,8 @@
 #include "ir_symbolic_cfg.h"
 #include "ir_dominance.h"
 
+#define SSA_ENABLED 0   // flip to 1 after we stabilize
+
 /* ── Globals referenced by zcc.c (part5.c declares these extern) ──────── */
 int  g_manifold_enabled    = 0;
 char g_ir_export_path[256] = {0};
@@ -990,6 +992,13 @@ void ir_pm_run_default(void *mod_ptr, int verbose) {
     ir_pm_register(pm, "const_fold", ir_pass_const_fold);
     ir_pm_register(pm, "strength_reduce", ir_pass_strength_reduce);
     ir_pm_register(pm, "dominance", ir_pass_dominance);
+    
+#if SSA_ENABLED
+    extern ir_pass_result_t ir_pass_ssa(void *mod_ptr);
+    ir_pm_register(pm, "ssa", ir_pass_ssa);
+    ir_pm_register(pm, "ssa_dce", ir_pass_dce);   // SSA-aware DCE later
+#endif
+
     ir_pm_register(pm, "gvn", ir_pass_gvn);
     ir_pm_register(pm, "coalesce_vload", ir_pass_coalesce_vload);
     ir_pm_register(pm, "lower_float", ir_pass_lower_float);

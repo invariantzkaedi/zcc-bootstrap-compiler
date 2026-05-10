@@ -5,7 +5,7 @@ FAST_CFLAGS = -O2 -DNDEBUG -w -fno-asynchronous-unwind-tables -g0
 FORTIFY_PACK_DIR ?= fortify_zcc_clean
 
 PARTS = part1.c part0_pp.c part2.c part3.c ir.h ir_emit_dispatch.h ir_bridge.h part4.c part5.c part7_rust.c part6_arm.c ir.c ir_to_x86.c regalloc.c ir_telemetry_stub.c forgezero_receipt_stub.c
-PASSES = compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_symbolic_cfg.c ir_dominance.c evm_lifter.c ir_vuln_tag.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c
+PASSES = compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c
 COMPAT_SMOKE_SRCS = \
 	exp1_raytracer_simd.c \
 	exp2_voxel_engine.c \
