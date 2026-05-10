@@ -838,18 +838,7 @@ static ir_pass_result_t ir_pass_gvn(void *fn_ptr) {
     return r;
 }
 
-/* Helper to find the unique definition of a temporary register */
-static ir_node_t *find_def(ir_func_t *fn, ir_node_t *end_node, const char *reg) {
-    ir_node_t *n;
-    ir_node_t *def = NULL;
-    if (!reg || !reg[0]) return NULL;
-    for (n = fn->head; n && n != end_node; n = n->next) {
-        if (n->dst[0] && strcmp(n->dst, reg) == 0) {
-            def = n;
-        }
-    }
-    return def;
-}
+/* (Removed local find_def, now using ir_find_def from ir.h) */
 
 /* ════════════════════════════════════════════════════════════════════════
  * PASS: Coalesce Vector Loads
@@ -866,9 +855,9 @@ static ir_pass_result_t ir_pass_coalesce_vload(void *fn_ptr) {
 
     for (L1 = fn->head; L1; L1 = L1->next) {
         if (L1->op == IR_LOAD && ir_type_bytes(L1->type) == 4) {
-            ir_node_t *A1 = find_def(fn, L1, L1->src1);
+            ir_node_t *A1 = ir_find_def(fn, L1, L1->src1);
             if (!A1 || A1->op != IR_ADD) continue;
-            ir_node_t *C1 = find_def(fn, A1, A1->src2);
+            ir_node_t *C1 = ir_find_def(fn, A1, A1->src2);
             if (!C1 || C1->op != IR_CONST) continue;
 
             const char *base_r = A1->src1;
@@ -886,10 +875,10 @@ static ir_pass_result_t ir_pass_coalesce_vload(void *fn_ptr) {
                 }
                 if (scan->op == IR_LOAD && ir_type_bytes(scan->type) == 4) {
                     ir_node_t *L2 = scan;
-                    ir_node_t *A2 = find_def(fn, L2, L2->src1);
+                    ir_node_t *A2 = ir_find_def(fn, L2, L2->src1);
                     if (!A2 || A2->op != IR_ADD) continue;
                     if (strcmp(A2->src1, base_r) != 0) continue;
-                    ir_node_t *C2 = find_def(fn, A2, A2->src2);
+                    ir_node_t *C2 = ir_find_def(fn, A2, A2->src2);
                     if (!C2 || C2->op != IR_CONST) continue;
 
                     long offset2 = C2->imm;

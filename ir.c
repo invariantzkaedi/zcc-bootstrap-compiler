@@ -254,6 +254,20 @@ void ir_module_free(ir_module_t *mod) {
     free(mod);
 }
 
+/* ── Query ───────────────────────────────────────────────────────────── */
+
+ir_node_t *ir_find_def(ir_func_t *fn, ir_node_t *end_node, const char *vreg) {
+    ir_node_t *n;
+    ir_node_t *def = NULL;
+    if (!vreg || !vreg[0]) return NULL;
+    for (n = fn->head; n && n != end_node; n = n->next) {
+        if (n->dst[0] && strcmp(n->dst, vreg) == 0) {
+            def = n;
+        }
+    }
+    return def;
+}
+
 /* ── Text emission ────────────────────────────────────────────────────── */
 /*
  * Text format (columns are tab-separated):

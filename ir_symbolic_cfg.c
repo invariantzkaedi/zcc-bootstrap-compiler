@@ -78,28 +78,7 @@ static void label_table_build(ir_func_t *fn) {
     }
 }
 
-/* ── Backward Definition Finder ──────────────────────────────────────── */
-/*
- * Find the IR node that DEFINES `vreg` by walking backward from
- * `start` through the linked list.  Returns NULL if not found.
- *
- * Zero malloc: we iterate the linked list from fn->head to start,
- * tracking the last node whose dst matches vreg.  This is O(N) per
- * lookup but with EVM function sizes bounded to ~2K nodes, it's fast.
- */
-static ir_node_t *find_def(ir_func_t *fn, ir_node_t *before, const char *vreg) {
-    ir_node_t *n;
-    ir_node_t *last_def = NULL;
-
-    if (!vreg || vreg[0] == '\0') return NULL;
-
-    for (n = fn->head; n && n != before; n = n->next) {
-        if (n->dst[0] != '\0' && strcmp(n->dst, vreg) == 0) {
-            last_def = n;
-        }
-    }
-    return last_def;
-}
+/* (Removed local find_def, now using ir_find_def from ir.h) */
 
 /* ── Recursive Symbolic Evaluator ────────────────────────────────────── */
 /*
@@ -126,7 +105,7 @@ static symcfg_status_t resolve_target(ir_func_t *fn, ir_node_t *before,
     if (depth >= MAX_SYMBOLIC_DEPTH) return SYMCFG_DEPTH_EXCEEDED;
     if (!vreg || vreg[0] == '\0') return SYMCFG_UNRESOLVED;
 
-    def = find_def(fn, before, vreg);
+    def = ir_find_def(fn, before, vreg);
     if (!def) return SYMCFG_UNRESOLVED;
 
     /* Leaf: constant */

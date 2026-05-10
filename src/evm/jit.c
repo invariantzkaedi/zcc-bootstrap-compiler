@@ -28,8 +28,9 @@ void jit_emit_call(JITBuffer* buf, const char* target) {
     (void)buf; (void)target;
 }
 
-void* evm_jit_compile(ir_func_t* func, void* mem_v2) {
+void* evm_jit_compile(ir_func_t* func, void* mem_v2, size_t* out_size) {
     if (!func) return NULL;
+    if (out_size) *out_size = 0;
 
     JITBuffer buf = { .capacity = 64*1024, .size = 0 };
     buf.code = mmap(NULL, buf.capacity, PROT_READ|PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
@@ -66,6 +67,7 @@ void* evm_jit_compile(ir_func_t* func, void* mem_v2) {
     jit_emit(&buf, ret, 1);
 
     mprotect(buf.code, buf.size, PROT_READ|PROT_EXEC);
+    if (out_size) *out_size = buf.size;
     return buf.code;
 }
 
@@ -79,14 +81,15 @@ void evm_jit_entry(const unsigned char* bytecode, size_t len, const char* output
 
     evm_lift_bytecode(&ls);
 
-    void* jitted_code = evm_jit_compile(ls.func, ls.memory_v2);
+    size_t code_size = 0;
+    void* jitted_code = evm_jit_compile(ls.func, ls.memory_v2, &code_size);
     if (jitted_code && output_path) {
         FILE* out = fopen(output_path, "wb");
         if (out) {
             // We write out the raw x86 instructions for testing
             // Real JIT would execute it here.
             /* J2: write only actual JIT code, not full mmap page */
-            fwrite(jitted_code, 1, 64*1024, out); /* TODO: pass actual size from evm_jit_compile */
+            fwrite(jitted_code, 1, code_size, out);
             fclose(out);
         }
     }

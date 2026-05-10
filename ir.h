@@ -274,6 +274,9 @@ int          ir_type_unsigned(ir_type_t ty);
 /* Non-zero if op is a basic-block terminator */
 int          ir_op_is_terminator(ir_op_t op);
 
+/* Find the unique definition of a temporary register before end_node */
+ir_node_t   *ir_find_def(ir_func_t *fn, ir_node_t *end_node, const char *vreg);
+
 /* EVM Yul Weaver */
 void evm_yul_weaver(ir_func_t *fn, FILE *out);
 
