@@ -8,6 +8,10 @@
 #ifndef ZCC_AST_BRIDGE_H
 #define ZCC_AST_BRIDGE_H
 
+#include <stdint.h>
+/* Removed stdatomic.h, using volatile on x86_64 instead */
+
+/* Forward declarations */
 #define ZCC_BRIDGE_NAME_LEN  64
 #define ZCC_AST_MAX_STMTS    4096
 #define ZCC_CALL_NAME_LEN    128
@@ -197,5 +201,62 @@ struct Node* zcc_build_initializer(struct Compiler* cc, ZccInitNode* root, struc
 
 /* Rust-side free callback (weakly implemented in C for standalone builds) */
 void zcc_rust_free_init_tree(ZccInitNode* tree);
+
+/* ================================================================ */
+/* Flat Wire Protocol for Shared Memory Ring Buffer                 */
+/* ================================================================ */
+
+#define WIRE_INIT_MAGIC 0x5A434349  /* "ZCCI" */
+#define SHM_RING_SIZE   (16 * 1024 * 1024)
+#define MAX_SLOTS       256
+#define WIRE_SLOT_SIZE  (SHM_RING_SIZE / MAX_SLOTS)
+
+typedef enum {
+    WIRE_LIST             = 1,
+    WIRE_VALUE            = 2,
+    WIRE_DESIGNATED_FIELD = 3,
+    WIRE_DESIGNATED_INDEX = 4,
+} WireKind;
+
+typedef struct WireInitNode WireInitNode;
+
+struct WireInitNode {
+    uint32_t magic;
+    uint8_t  kind;
+    uint32_t payload_size;     /* total bytes of this node + all descendants */
+
+    union {
+        struct { uint32_t child_count; } list;           /* children follow immediately */
+
+        struct {                                         /* WIRE_VALUE */
+            uint8_t  vkind;      /* 0=i64, 1=f64, 2=str, 3=ident */
+            uint32_t len;
+            /* followed by raw bytes */
+        } value;
+
+        struct {                                         /* DESIGNATED */
+            uint8_t  dkind;      /* 0=field, 1=index */
+            uint32_t name_len;   /* 0 for index */
+            long long index;
+            /* name bytes (if field) + child node follow */
+        } designated;
+    } u;
+};
+
+typedef struct {
+    volatile uint64_t   head;          // writer (Rust)
+    volatile uint64_t   tail;          // reader (ZCC)
+    volatile uint32_t   drop_count;    // backpressure signal
+    uint8_t            data[SHM_RING_SIZE];
+} ShmRingBuffer;
+
+/* Public API */
+struct Node* zcc_build_from_wire(struct Compiler *cc, const uint8_t *data, size_t len);
+ShmRingBuffer* zcc_shm_ring_open(void);
+struct Node* zcc_shm_ring_read(struct Compiler *cc, ShmRingBuffer* ring);
+
+/* Cross-platform SHM entry point — called from part3 parse_program intercept.
+ * Returns NULL on open failure, otherwise spins and returns parsed tree. */
+struct Node* zcc_rust_shm_entry(struct Compiler *cc);
 
 #endif /* ZCC_AST_BRIDGE_H */

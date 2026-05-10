@@ -540,11 +540,16 @@ static int pp_resolve_path(PPState *state, const char *path, int is_system, char
 }
 
 static void pp_process_include(PPState *state, const char *path, int is_system) {
-    char *file_src = 0;
-    int file_len = 0;
+    char *file_src;
+    int file_len;
     int i;
-    int from_disk = 0;
+    int from_disk;
     char resolved_path[1024];
+    PPState *sub_state;
+
+    file_src  = 0;
+    file_len  = 0;
+    from_disk = 0;
 
     /* Step 1: Try disk lookup */
     if (pp_resolve_path(state, path, is_system, resolved_path)) {
@@ -560,8 +565,7 @@ static void pp_process_include(PPState *state, const char *path, int is_system) 
         resolved_path[1023] = '\0';
     }
 
-    /* Step 3: Hard error if nothing found (Flag 2: accumulate, don't exit)
-     * Use printf because driver silences stderr before preprocessing. */
+    /* Step 3: Hard error if nothing found */
     if (!file_src) {
         printf("zcc: error: include file not found: %s\n", path);
         printf("  (while processing %s:%d)\n",
@@ -570,53 +574,51 @@ static void pp_process_include(PPState *state, const char *path, int is_system) 
         return;
     }
 
-    {
-        PPState *sub_state = (PPState *)malloc(sizeof(PPState));
-        if (!sub_state) {
-            fprintf(stderr, "zcc preprocessor error: out of memory for include state\n");
-            exit(1);
-        }
-        memset(sub_state, 0, sizeof(PPState));
-        sub_state->src           = file_src;
-        sub_state->pos           = 0;
-        sub_state->len           = file_len;
-        sub_state->line          = 1;
-        sub_state->filename      = resolved_path;
-        sub_state->include_paths = state->include_paths;
-        sub_state->cond_stack[0] = 1;
-        sub_state->pop_barrier   = 0;
-
-        /* Macro table transfer (preserving baseline memcpy behavior) */
-        sub_state->num_macros = state->num_macros;
-        for (i = 0; i < state->num_macros; i++)
-            memcpy(&sub_state->macros[i], &state->macros[i], sizeof(PPMacro));
-
-        pp_parse(sub_state);
-
-        /* Copy back macros added by the header */
-        for (i = state->num_macros; i < sub_state->num_macros; i++) {
-            if (state->num_macros >= PP_MAX_MACROS) {
-                fprintf(stderr, "MAX MACROS REACHED!\n");
-                break;
-            }
-            memcpy(&state->macros[state->num_macros++], &sub_state->macros[i], sizeof(PPMacro));
-        }
-
-        fprintf(stderr, "pp_process_include: %s added %d macros, total is %d\n",
-                path, sub_state->num_macros - i, state->num_macros);
-
-        /* Update active flags (undefs may have occurred) */
-        for (i = 0; i < state->num_macros; i++) {
-            state->macros[i].active = sub_state->macros[i].active;
-        }
-
-        pp_emit_str(state, sub_state->out, sub_state->out_len);
-        state->include_errors += sub_state->include_errors;
-
-        if (sub_state->out) free(sub_state->out);
-        free(sub_state);
-        if (from_disk && file_src) free(file_src);
+    sub_state = (PPState *)malloc(sizeof(PPState));
+    if (!sub_state) {
+        fprintf(stderr, "zcc preprocessor error: out of memory for include state\n");
+        exit(1);
     }
+    memset(sub_state, 0, sizeof(PPState));
+    sub_state->src           = file_src;
+    sub_state->pos           = 0;
+    sub_state->len           = file_len;
+    sub_state->line          = 1;
+    sub_state->filename      = resolved_path;
+    sub_state->include_paths = state->include_paths;
+    sub_state->cond_stack[0] = 1;
+    sub_state->pop_barrier   = 0;
+
+    /* Macro table transfer */
+    sub_state->num_macros = state->num_macros;
+    for (i = 0; i < state->num_macros; i++)
+        memcpy(&sub_state->macros[i], &state->macros[i], sizeof(PPMacro));
+
+    pp_parse(sub_state);
+
+    /* Copy back macros added by the header */
+    for (i = state->num_macros; i < sub_state->num_macros; i++) {
+        if (state->num_macros >= PP_MAX_MACROS) {
+            fprintf(stderr, "MAX MACROS REACHED!\n");
+            break;
+        }
+        memcpy(&state->macros[state->num_macros++], &sub_state->macros[i], sizeof(PPMacro));
+    }
+
+    fprintf(stderr, "pp_process_include: %s added %d macros, total is %d\n",
+            path, sub_state->num_macros - i, state->num_macros);
+
+    /* Update active flags (undefs may have occurred) */
+    for (i = 0; i < state->num_macros; i++) {
+        state->macros[i].active = sub_state->macros[i].active;
+    }
+
+    pp_emit_str(state, sub_state->out, sub_state->out_len);
+    state->include_errors += sub_state->include_errors;
+
+    if (sub_state->out) free(sub_state->out);
+    free(sub_state);
+    if (from_disk && file_src) free(file_src);
 }
 
 /* parse parameter list for function-like macros */

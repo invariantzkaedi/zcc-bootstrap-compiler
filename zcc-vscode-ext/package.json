@@ -1,0 +1,78 @@
+{
+  "name": "zcc-rust-frontend",
+  "displayName": "ZCC Rust Frontend",
+  "description": "Zero-copy SHM + WSS bridge — feed 4D tesseract initializers into ZCC at memory speed",
+  "version": "0.1.0",
+  "publisher": "zkaedi",
+  "license": "MIT",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onLanguage:c", "onLanguage:cpp"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "zcc.injectTesseract",
+        "title": "ZCC: Inject Initializer Tree via SHM/WSS"
+      },
+      {
+        "command": "zcc.connectFrontend",
+        "title": "ZCC: Connect Rust Frontend"
+      },
+      {
+        "command": "zcc.disconnectFrontend",
+        "title": "ZCC: Disconnect Rust Frontend"
+      }
+    ],
+    "configuration": {
+      "title": "ZCC Rust Frontend",
+      "properties": {
+        "zcc.frontendUrl": {
+          "type": "string",
+          "default": "ws://127.0.0.1:9001",
+          "description": "WebSocket URL of the ZCC Rust frontend server"
+        },
+        "zcc.autoInjectOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically inject on C/C++ file save"
+        },
+        "zcc.shmEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Prefer SHM hot path when on localhost (requires native messaging host)"
+        },
+        "zcc.secret": {
+          "type": "string",
+          "default": "zcc-flow-state-2026",
+          "description": "Shared secret header for the WSS connection"
+        }
+      }
+    },
+    "menus": {
+      "editor/context": [
+        {
+          "command": "zcc.injectTesseract",
+          "when": "editorLangId == c || editorLangId == cpp",
+          "group": "zcc"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.0",
+    "typescript": "^5.3.0",
+    "@vscode/vsce": "^2.22.0"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}
