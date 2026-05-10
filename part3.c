@@ -3024,4 +3024,64 @@ Node *parse_program(Compiler *cc) {
 
     return head;
 }
+
+/* ================================================================ */
+/* Rust Frontend FFI: Recursive Initializer Bridge                  */
+/* ================================================================ */
+
+ZccInitNode* zcc_init_list_begin(Type* ty) {
+    ZccInitNode* node = calloc(1, sizeof(ZccInitNode));
+    node->kind = ZCC_INIT_LIST;
+    node->ty = ty;
+    node->list.capacity = 8;
+    node->list.count = 0;
+    node->list.children = malloc(sizeof(ZccInitNode*) * node->list.capacity);
+    return node;
+}
+
+void zcc_init_list_append(ZccInitNode* list, ZccInitNode* child) {
+    if (!list || list->kind != ZCC_INIT_LIST) return;
+    if (list->list.count >= list->list.capacity) {
+        list->list.capacity *= 2;
+        list->list.children = realloc(list->list.children, sizeof(ZccInitNode*) * list->list.capacity);
+    }
+    list->list.children[list->list.count++] = child;
+}
+
+void zcc_init_list_end(ZccInitNode* list) {
+    /* No-op, future designated initializer finalizations */
+}
+
+ZccInitNode* zcc_init_value(Node* expr_node) {
+    ZccInitNode* node = calloc(1, sizeof(ZccInitNode));
+    node->kind = ZCC_INIT_VALUE;
+    node->value_node = expr_node;
+    if (expr_node) node->ty = expr_node->type;
+    return node;
+}
+
+static Node* zcc_build_init_internal(Compiler* cc, ZccInitNode* root, Type* target_type) {
+    if (!root) return NULL;
+    if (root->kind == ZCC_INIT_VALUE) {
+        return root->value_node;
+    }
+    if (root->kind == ZCC_INIT_LIST) {
+        Node* list_node = node_new(cc, ND_INIT_LIST, 0);
+        list_node->type = target_type ? target_type : root->ty;
+        list_node->num_args = root->list.count;
+        if (list_node->num_args > 0) {
+            list_node->args = cc_alloc(cc, list_node->num_args * sizeof(Node*));
+            for (int i = 0; i < root->list.count; i++) {
+                list_node->args[i] = zcc_build_init_internal(cc, root->list.children[i], NULL);
+            }
+        }
+        return list_node;
+    }
+    return NULL;
+}
+
+Node* zcc_build_initializer(Compiler* cc, ZccInitNode* root, Type* target_type) {
+    return zcc_build_init_internal(cc, root, target_type);
+}
+
 /* ZKAEDI FORCE RENDER CACHE INVALIDATION */

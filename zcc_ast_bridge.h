@@ -160,4 +160,39 @@ int zcc_run_passes_emit_body(ZCCNode *body_ast, const char *profile_path, const 
 int zcc_run_passes_emit_body_pgo(ZCCNode *body_ast, const char *profile_path, const char *func_name,
     void *out_file, int stack_size, int num_params, int func_end_label, int func_label_id);
 
+/* ================================================================ */
+/* Rust Frontend FFI: Recursive Initializer Bridge                  */
+/* ================================================================ */
+
+typedef struct ZccInitNode ZccInitNode;
+
+typedef enum {
+    ZCC_INIT_VALUE,      /* leaf scalar or string */
+    ZCC_INIT_LIST,       /* { ... } node */
+    ZCC_INIT_DESIGNATED  /* .field = or [idx] = (future) */
+} ZccInitKind;
+
+struct ZccInitNode {
+    ZccInitKind kind;
+    struct Type* ty;     /* owning type for this subtree */
+    union {
+        struct Node* value_node;  /* for leaf */
+        struct {
+            ZccInitNode** children;
+            int           count;
+            int           capacity;
+        } list;
+    };
+};
+
+/* Public builder API for Rust → ZCC */
+ZccInitNode* zcc_init_list_begin(struct Type* ty);
+void         zcc_init_list_append(ZccInitNode* list, ZccInitNode* child);
+void         zcc_init_list_end(ZccInitNode* list);
+
+ZccInitNode* zcc_init_value(struct Node* expr_node);
+
+/* Convert Rust-built tree into full ZCC initializer (hooks directly into emit path) */
+struct Node* zcc_build_initializer(struct Compiler* cc, ZccInitNode* root, struct Type* target_type);
+
 #endif /* ZCC_AST_BRIDGE_H */
