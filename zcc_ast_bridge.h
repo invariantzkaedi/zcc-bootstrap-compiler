@@ -195,4 +195,7 @@ ZccInitNode* zcc_init_value(struct Node* expr_node);
 /* Convert Rust-built tree into full ZCC initializer (hooks directly into emit path) */
 struct Node* zcc_build_initializer(struct Compiler* cc, ZccInitNode* root, struct Type* target_type);
 
+/* Rust-side free callback (weakly implemented in C for standalone builds) */
+void zcc_rust_free_init_tree(ZccInitNode* tree);
+
 #endif /* ZCC_AST_BRIDGE_H */

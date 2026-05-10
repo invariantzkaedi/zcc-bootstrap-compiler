@@ -3060,28 +3060,43 @@ ZccInitNode* zcc_init_value(Node* expr_node) {
     return node;
 }
 
+/* Default weak implementation for C-only builds. 
+   Rust frontend overrides this via extern "C" */
+__attribute__((weak)) void zcc_rust_free_init_tree(ZccInitNode* root) {
+    if (!root) return;
+    if (root->kind == ZCC_INIT_LIST) {
+        for (int i = 0; i < root->list.count; i++) {
+            zcc_rust_free_init_tree(root->list.children[i]);
+        }
+        if (root->list.children) free(root->list.children);
+    }
+    free(root);
+}
+
 static Node* zcc_build_init_internal(Compiler* cc, ZccInitNode* root, Type* target_type) {
     if (!root) return NULL;
+    
+    Node* node = NULL;
     if (root->kind == ZCC_INIT_VALUE) {
-        return root->value_node;
-    }
-    if (root->kind == ZCC_INIT_LIST) {
-        Node* list_node = node_new(cc, ND_INIT_LIST, 0);
-        list_node->type = target_type ? target_type : root->ty;
-        list_node->num_args = root->list.count;
-        if (list_node->num_args > 0) {
-            list_node->args = cc_alloc(cc, list_node->num_args * sizeof(Node*));
+        node = root->value_node;
+    } else if (root->kind == ZCC_INIT_LIST) {
+        node = node_new(cc, ND_INIT_LIST, 0);
+        node->type = target_type ? target_type : root->ty;
+        node->num_args = root->list.count;
+        if (node->num_args > 0) {
+            node->args = cc_alloc(cc, node->num_args * sizeof(Node*));
             for (int i = 0; i < root->list.count; i++) {
-                list_node->args[i] = zcc_build_init_internal(cc, root->list.children[i], NULL);
+                node->args[i] = zcc_build_init_internal(cc, root->list.children[i], NULL);
             }
         }
-        return list_node;
     }
-    return NULL;
+    return node;
 }
 
 Node* zcc_build_initializer(Compiler* cc, ZccInitNode* root, Type* target_type) {
-    return zcc_build_init_internal(cc, root, target_type);
+    Node* final_node = zcc_build_init_internal(cc, root, target_type);
+    zcc_rust_free_init_tree(root);
+    return final_node;
 }
 
 /* ZKAEDI FORCE RENDER CACHE INVALIDATION */
