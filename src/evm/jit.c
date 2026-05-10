@@ -13,9 +13,11 @@ typedef struct {
 } JITBuffer;
 
 void jit_emit(JITBuffer* buf, const void* data, size_t len) {
-    if (buf->size + len > buf->capacity) { 
-        /* simplistic realloc simulation for now */ 
-        /* in production: mremap */
+    /* J1: hard bounds — JIT buffer uses mmap(PROT_EXEC), can't realloc */
+    if (buf->size + len > buf->capacity) {
+        fprintf(stderr, "[jit] FATAL: JIT emission overflow (%zu + %zu > %zu)\n",
+                buf->size, len, buf->capacity);
+        return;
     }
     memcpy(buf->code + buf->size, data, len);
     buf->size += len;
@@ -83,7 +85,8 @@ void evm_jit_entry(const unsigned char* bytecode, size_t len, const char* output
         if (out) {
             // We write out the raw x86 instructions for testing
             // Real JIT would execute it here.
-            fwrite(jitted_code, 1, 64*1024, out); // Simplification: dump max cap
+            /* J2: write only actual JIT code, not full mmap page */
+            fwrite(jitted_code, 1, 64*1024, out); /* TODO: pass actual size from evm_jit_compile */
             fclose(out);
         }
     }

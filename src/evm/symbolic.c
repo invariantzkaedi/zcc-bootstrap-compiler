@@ -31,6 +31,7 @@ bool prove_property(ir_func_t* func, const char* property) {
 
     for (ir_node_t* n = func->head; n; n = n->next) {
         if (n->op == IR_CONST) {
+            if (state.sp >= 32) return false; /* S1: bounds guard */
             SymValue v = {0};
             v.kind = CONCRETE;
             v.concrete.w[0] = n->imm;
@@ -44,6 +45,7 @@ bool prove_property(ir_func_t* func, const char* property) {
                 SymValue res = {0};
                 res.kind = SYMBOLIC_EXPR;
                 res.expr = "symbolic_result";
+                if (state.sp >= 32) return false; /* S1: bounds guard */
                 state.stack[state.sp++] = res;
             }
         }
