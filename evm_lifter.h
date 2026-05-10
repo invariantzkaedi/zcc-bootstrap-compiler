@@ -72,7 +72,9 @@ typedef enum {
     IR_TAG_EVM_EQ                  = 11,/* EVM 256-bit equality comparison      */
     IR_TAG_EVM_LT                  = 12,/* EVM 256-bit less-than comparison     */
     IR_TAG_EVM_GT                  = 13,/* EVM 256-bit greater-than comparison  */
-    IR_TAG_EVM_ISZERO              = 14 /* EVM 256-bit is-zero comparison       */
+    IR_TAG_EVM_ISZERO              = 14,/* EVM 256-bit is-zero comparison       */
+    IR_TAG_TLOAD                   = 15,/* TLOAD — transient state read       */
+    IR_TAG_TSTORE                  = 16 /* TSTORE — transient state write     */
 } evm_ir_tag_t;
 
 /* ── Support Accounting (Issue #15 Tracking) ───────────────────────── */
@@ -163,6 +165,8 @@ typedef enum {
     EVM_MSIZE         = 0x59,
     EVM_GAS           = 0x5a,
     EVM_JUMPDEST      = 0x5b,
+    EVM_TLOAD         = 0x5c,  /* EIP-1153 (Cancun) */
+    EVM_TSTORE        = 0x5d,  /* EIP-1153 (Cancun) */
     EVM_PUSH0         = 0x5f,  /* EIP-3855 (Shanghai) */
 
     /* 0x60–0x7f — PUSH1..PUSH32 */

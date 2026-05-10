@@ -23,6 +23,14 @@ MemoryModelV2* memory_v2_new(void) {
     return m;
 }
 
+void memory_v2_free(void *ptr) {
+    MemoryModelV2 *m = (MemoryModelV2 *)ptr;
+    if (!m) return;
+    free(m->bytes);
+    free(m->calldata);
+    free(m);
+}
+
 static void ensure_capacity(MemoryModelV2* mem, size_t needed) {
     if (needed > mem->capacity) {
         size_t new_cap = mem->capacity * 2;
