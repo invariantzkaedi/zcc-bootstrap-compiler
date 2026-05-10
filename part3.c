@@ -1970,6 +1970,124 @@ Node *parse_expr(Compiler *cc) {
 
 static Node *current_sw = 0;
 
+static Node *parse_initializer_list(Compiler *cc, int *out_count) {
+    Node *list = node_new(cc, ND_INIT_LIST, cc->line);
+    int cap = 16;
+    list->args = (Node **)cc_alloc(cc, sizeof(Node *) * cap);
+    list->num_args = 0;
+    
+    if (cc->tk == TK_LBRACE) {
+        next_token(cc);
+    }
+    
+    if (cc->tk == TK_RBRACE) {
+        next_token(cc);
+        if (out_count) *out_count = 0;
+        return list;
+    }
+    
+    while (cc->tk != TK_EOF) {
+        Node *item = NULL;
+        if (cc->tk == TK_LBRACE) {
+            item = parse_initializer_list(cc, NULL);
+        } else {
+            item = parse_assign(cc);
+        }
+        
+        if (list->num_args >= cap) {
+            Node **old_args = list->args;
+            cap *= 2;
+            list->args = (Node **)cc_alloc(cc, sizeof(Node *) * cap);
+            for (int i = 0; i < list->num_args; i++) {
+                list->args[i] = old_args[i];
+            }
+        }
+        list->args[list->num_args++] = item;
+        
+        if (cc->tk == TK_COMMA) {
+            next_token(cc);
+            if (cc->tk == TK_RBRACE) {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+    
+    if (cc->tk == TK_RBRACE) {
+        next_token(cc);
+    } else {
+        error(cc, "expected '}' in initializer list");
+    }
+    if (out_count) *out_count = list->num_args;
+    return list;
+}
+
+static void emit_local_initializer(Compiler *cc, Node *block, int *cnt, int *cap, Node *base_var, Type *curr_type, Node *init_list, int offset) {
+    if (curr_type->kind == TY_ARRAY) {
+        Type *elem_type = curr_type->base;
+        int elem_sz = type_size(elem_type);
+        for (int i = 0; i < init_list->num_args; i++) {
+            Node *item = init_list->args[i];
+            if (item->kind == ND_INIT_LIST) {
+                emit_local_initializer(cc, block, cnt, cap, base_var, elem_type, item, offset + i * elem_sz);
+            } else {
+                Node *add = node_new(cc, ND_ADD, cc->line);
+                add->lhs = base_var;
+                add->rhs = node_num(cc, offset + i * elem_sz, cc->line);
+                add->type = type_ptr(cc, elem_type);
+                
+                Node *deref = node_new(cc, ND_DEREF, cc->line);
+                deref->lhs = add;
+                deref->type = elem_type;
+                
+                Node *asgn = node_new(cc, ND_ASSIGN, cc->line);
+                asgn->lhs = deref;
+                asgn->rhs = item;
+                asgn->type = elem_type;
+                
+                if (*cnt >= *cap) {
+                    Node **new_stmts = (Node **)cc_alloc(cc, sizeof(Node *) * (*cap) * 2);
+                    for (int j = 0; j < *cnt; j++) new_stmts[j] = block->stmts[j];
+                    block->stmts = new_stmts;
+                    *cap = (*cap) * 2;
+                }
+                block->stmts[(*cnt)++] = asgn;
+            }
+        }
+    } else if (curr_type->kind == TY_STRUCT || curr_type->kind == TY_UNION) {
+        StructField *f = curr_type->fields;
+        for (int i = 0; i < init_list->num_args && f != NULL; i++, f = f->next) {
+            Node *item = init_list->args[i];
+            if (item->kind == ND_INIT_LIST) {
+                emit_local_initializer(cc, block, cnt, cap, base_var, f->type, item, offset + f->offset);
+            } else {
+                Node *add = node_new(cc, ND_ADD, cc->line);
+                add->lhs = base_var;
+                add->rhs = node_num(cc, offset + f->offset, cc->line);
+                add->type = type_ptr(cc, f->type);
+                
+                Node *deref = node_new(cc, ND_DEREF, cc->line);
+                deref->lhs = add;
+                deref->type = f->type;
+                
+                Node *asgn = node_new(cc, ND_ASSIGN, cc->line);
+                asgn->lhs = deref;
+                asgn->rhs = item;
+                asgn->type = f->type;
+                
+                if (*cnt >= *cap) {
+                    Node **new_stmts = (Node **)cc_alloc(cc, sizeof(Node *) * (*cap) * 2);
+                    for (int j = 0; j < *cnt; j++) new_stmts[j] = block->stmts[j];
+                    block->stmts = new_stmts;
+                    *cap = (*cap) * 2;
+                }
+                block->stmts[(*cnt)++] = asgn;
+            }
+        }
+    }
+}
+
 Node *parse_stmt(Compiler *cc) {
     int line;
     line = cc->tk_line;
@@ -2308,56 +2426,8 @@ Node *parse_stmt(Compiler *cc) {
                         if (cc->tk == TK_ASSIGN) {
                             next_token(cc);
                             if (cc->tk == TK_LBRACE) {
-                                Node *init_list;
-                                Node **inits;
-                                int count;
-                                init_list = node_new(cc, ND_INIT_LIST, line);
-                                inits = (Node **)cc_alloc(cc, sizeof(Node *) * MAX_INIT);
-                                count = 0;
-                                next_token(cc); /* skip { */
-                                int depth = 1;
-                                int skip_tk;
-                                int prev_pos;
-                                int no_progress_count = 0;
                                 int top_elems = 0;
-                                int last_comma = 1;
-                                while (depth > 0 && cc->tk != TK_EOF) {
-                                    if (depth == 1 && cc->tk != TK_RBRACE && cc->tk != TK_COMMA && last_comma) {
-                                        top_elems++;
-                                        last_comma = 0;
-                                    }
-                                    prev_pos = cc->pos;
-                                    if (cc->tk == TK_LBRACE) {
-                                        depth++;
-                                        next_token(cc);
-                                    } else if (cc->tk == TK_RBRACE) {
-                                        depth--;
-                                        if (depth == 0) break;
-                                        next_token(cc);
-                                    } else if (cc->tk == TK_COMMA) {
-                                        if (depth == 1) last_comma = 1;
-                                        next_token(cc);
-                                    } else {
-                                        skip_tk = cc->tk;
-                                        if (count < MAX_INIT) {
-                                            inits[count++] = parse_assign(cc);
-                                        } else {
-                                            parse_assign(cc);
-                                        }
-                                        if (cc->tk == skip_tk) {
-                                            if (cc->tk != TK_EOF) next_token(cc);
-                                        }
-                                        if (cc->pos == prev_pos) {
-                                            no_progress_count++;
-                                            if (no_progress_count > 100) { break; }
-                                        } else {
-                                            no_progress_count = 0;
-                                        }
-                                    }
-                                }
-                                if (cc->tk == TK_RBRACE) next_token(cc);
-                                init_list->args = inits;
-                                init_list->num_args = count;
+                                Node *init_list = parse_initializer_list(cc, &top_elems);
                                 gvar->initializer = init_list;
                                 
                                 if (gvar->type->kind == TY_ARRAY && gvar->type->array_len == 0) {
@@ -2393,257 +2463,29 @@ Node *parse_stmt(Compiler *cc) {
 
                         /* check for array/struct initializer list */
                         if (cc->tk == TK_LBRACE) {
+                            int top_elems = 0;
+                            Node *init_list = parse_initializer_list(cc, &top_elems);
+                            Type *elem_type = NULL;
+                            Type *arr_type = vtype;
                             if (vtype->kind == TY_ARRAY) {
-                                /* Parse array initializer list and emit element assignments */
-                                int depth;
-                                int init_count;
-                                Node **inits;
-                                int init_cap;
-                                Type *elem_type;
-                                Type *arr_type;
-                                int sz;
-                                int skip_tk;
-                                int prev_pos;
-                                int no_progress_count = 0;
-                                next_token(cc); /* skip { */
-                                init_count = 0;
-                                init_cap = 16;
-                                inits = (Node **)cc_alloc(cc, sizeof(Node *) * init_cap);
-                                depth = 1;
-                                while (depth > 0 && cc->tk != TK_EOF) {
-                                    prev_pos = cc->pos;
-                                    if (cc->tk == TK_LBRACE) {
-                                        depth++;
-                                        next_token(cc);
-                                    } else if (cc->tk == TK_RBRACE) {
-                                        depth--;
-                                        if (depth == 0) break;
-                                        next_token(cc);
-                                    } else if (cc->tk == TK_COMMA) {
-                                        next_token(cc);
-                                    } else {
-                                        skip_tk = cc->tk;
-                                        Node *expr = parse_assign(cc);
-                                        if (cc->tk == skip_tk) {
-                                            if (cc->tk != TK_EOF) next_token(cc);
-                                        }
-                                        if (cc->pos == prev_pos) {
-                                            no_progress_count++;
-                                            if (no_progress_count > 100) {
-                                                error(cc, "array parser stuck (possible infinite loop)");
-                                                break;
-                                            }
-                                        } else {
-                                            no_progress_count = 0;
-                                        }
-                                        if (init_count >= init_cap) {
-                                            Node **old_inits = inits;
-                                            int j;
-                                            init_cap *= 2;
-                                            inits = (Node **)cc_alloc(cc, sizeof(Node *) * init_cap);
-                                            for (j = 0; j < init_count; j++) inits[j] = old_inits[j];
-                                        }
-                                        inits[init_count++] = expr;
-                                    }
-                                }
-                                if (cc->tk == TK_RBRACE) next_token(cc); /* skip final } */
                                 elem_type = vtype->base;
                                 if (vtype->array_len == 0) {
-                                    arr_type = type_array(cc, elem_type, init_count);
+                                    arr_type = type_array(cc, elem_type, top_elems);
                                     sym->type = arr_type;
-                                    sz = type_size(arr_type);
+                                    int sz = type_size(arr_type);
                                     if (sz < 8) sz = 8;
                                     cc->local_offset = cc->local_offset + 8;
                                     cc->local_offset = cc->local_offset - sz;
                                     sym->stack_offset = cc->local_offset;
-                                } else {
-                                    arr_type = vtype;
                                 }
-                                /* Grow block stmts if needed */
-                                while (cnt + init_count > cap) {
-                                    Node **new_stmts;
-                                    int j;
-                                    new_stmts = (Node **)cc_alloc(cc, sizeof(Node *) * cap * 2);
-                                    for (j = 0; j < cnt; j++) new_stmts[j] = block->stmts[j];
-                                    block->stmts = new_stmts;
-                                    cap = cap * 2;
-                                }
-                                {
-                                    int idx;
-                                    for (idx = 0; idx < init_count; idx++) {
-                                        Node *var;
-                                        Node *add;
-                                        Node *deref;
-                                        Node *asgn;
-                                        var = node_new(cc, ND_VAR, line);
-                                        strncpy(var->name, vname, MAX_IDENT - 1);
-                                        var->sym = sym;
-                                        var->type = arr_type;
-                                        add = node_new(cc, ND_ADD, line);
-                                        add->lhs = var;
-                                        add->rhs = node_num(cc, (long long)idx, line);
-                                        add->type = arr_type;
-                                        deref = node_new(cc, ND_DEREF, line);
-                                        deref->lhs = add;
-                                        deref->type = elem_type;
-                                        asgn = node_new(cc, ND_ASSIGN, line);
-                                        asgn->lhs = deref;
-                                        asgn->rhs = inits[idx];
-                                        asgn->type = elem_type;
-                                        block->stmts[cnt] = asgn;
-                                        cnt++;
-                                    }
-                                }
-                            } else if (vtype->kind == TY_STRUCT || vtype->kind == TY_UNION) {
-                                /* Local struct/union initializer: {v0, v1, ...}
-                                 * Walk StructField list, assign each field in order. */
-                                int init_count_s;
-                                int init_cap_s;
-                                Node **inits_s;
-                                int skip_tk_s;
-                                int prev_pos_s;
-                                int no_progress_s;
-                                int depth_s;
-                                init_count_s = 0;
-                                init_cap_s = 32;
-                                inits_s = (Node **)cc_alloc(cc, sizeof(Node *) * init_cap_s);
-                                depth_s = 1;
-                                no_progress_s = 0;
-                                next_token(cc); /* skip { */
-                                while (depth_s > 0 && cc->tk != TK_EOF) {
-                                    prev_pos_s = cc->pos;
-                                    if (cc->tk == TK_LBRACE) {
-                                        depth_s++;
-                                        next_token(cc);
-                                    } else if (cc->tk == TK_RBRACE) {
-                                        depth_s--;
-                                        if (depth_s == 0) break;
-                                        next_token(cc);
-                                    } else if (cc->tk == TK_COMMA) {
-                                        next_token(cc);
-                                    } else {
-                                        skip_tk_s = cc->tk;
-                                        if (init_count_s < init_cap_s) {
-                                            inits_s[init_count_s++] = parse_assign(cc);
-                                        } else {
-                                            parse_assign(cc);
-                                        }
-                                        if (cc->tk == skip_tk_s) {
-                                            if (cc->tk != TK_EOF) next_token(cc);
-                                        }
-                                        if (cc->pos == prev_pos_s) {
-                                            no_progress_s++;
-                                            if (no_progress_s > 100) break;
-                                        } else {
-                                            no_progress_s = 0;
-                                        }
-                                    }
-                                }
-                                if (cc->tk == TK_RBRACE) next_token(cc);
-                                /* Now emit field assignments */
-                                {
-                                    StructField *sf;
-                                    int fi;
-                                    fi = 0;
-                                    sf = vtype->fields;
-                                    while (sf && fi < init_count_s) {
-                                        /* Build: var.sf_name = inits_s[fi] */
-                                        Node *var_n;
-                                        Node *mem_n;
-                                        Node *asgn_n;
-                                        int acc_off;
-                                        StructField *found_f;
-                                        var_n = node_new(cc, ND_VAR, line);
-                                        strncpy(var_n->name, vname, MAX_IDENT - 1);
-                                        var_n->sym = sym;
-                                        var_n->type = vtype;
-                                        acc_off = 0;
-                                        found_f = find_struct_member(vtype, sf->name, &acc_off);
-                                        mem_n = node_new(cc, ND_MEMBER, line);
-                                        mem_n->lhs = var_n;
-                                        strncpy(mem_n->member_name, sf->name, MAX_IDENT - 1);
-                                        if (found_f) {
-                                            mem_n->member_offset = acc_off;
-                                            mem_n->type = found_f->type;
-                                            mem_n->member_size = type_size(found_f->type);
-                                        } else {
-                                            mem_n->member_offset = sf->offset;
-                                            mem_n->type = sf->type;
-                                            mem_n->member_size = type_size(sf->type);
-                                        }
-                                        asgn_n = node_new(cc, ND_ASSIGN, line);
-                                        asgn_n->lhs = mem_n;
-                                        asgn_n->rhs = inits_s[fi];
-                                        asgn_n->type = mem_n->type;
-                                        /* Grow block if needed */
-                                        if (cnt >= cap) {
-                                            Node **new_stmts;
-                                            int ji;
-                                            new_stmts = (Node **)cc_alloc(cc, sizeof(Node *) * cap * 2);
-                                            for (ji = 0; ji < cnt; ji++) new_stmts[ji] = block->stmts[ji];
-                                            block->stmts = new_stmts;
-                                            cap = cap * 2;
-                                        }
-                                        block->stmts[cnt] = asgn_n;
-                                        cnt++;
-                                        sf = sf->next;
-                                        fi++;
-                                        /* Skip nested struct fields for now — treat as flat */
-                                    }
-                                    /* Zero-initialize remaining fields if fewer inits provided */
-                                    while (sf) {
-                                        Node *var_n;
-                                        Node *mem_n;
-                                        Node *asgn_n;
-                                        int acc_off;
-                                        StructField *found_f;
-                                        var_n = node_new(cc, ND_VAR, line);
-                                        strncpy(var_n->name, vname, MAX_IDENT - 1);
-                                        var_n->sym = sym;
-                                        var_n->type = vtype;
-                                        acc_off = 0;
-                                        found_f = find_struct_member(vtype, sf->name, &acc_off);
-                                        mem_n = node_new(cc, ND_MEMBER, line);
-                                        mem_n->lhs = var_n;
-                                        strncpy(mem_n->member_name, sf->name, MAX_IDENT - 1);
-                                        if (found_f) {
-                                            mem_n->member_offset = acc_off;
-                                            mem_n->type = found_f->type;
-                                            mem_n->member_size = type_size(found_f->type);
-                                        } else {
-                                            mem_n->member_offset = sf->offset;
-                                            mem_n->type = sf->type;
-                                            mem_n->member_size = type_size(sf->type);
-                                        }
-                                        asgn_n = node_new(cc, ND_ASSIGN, line);
-                                        asgn_n->lhs = mem_n;
-                                        asgn_n->rhs = node_num(cc, 0LL, line);
-                                        asgn_n->type = mem_n->type;
-                                        if (cnt >= cap) {
-                                            Node **new_stmts;
-                                            int ji;
-                                            new_stmts = (Node **)cc_alloc(cc, sizeof(Node *) * cap * 2);
-                                            for (ji = 0; ji < cnt; ji++) new_stmts[ji] = block->stmts[ji];
-                                            block->stmts = new_stmts;
-                                            cap = cap * 2;
-                                        }
-                                        block->stmts[cnt] = asgn_n;
-                                        cnt++;
-                                        sf = sf->next;
-                                    }
-                                }
-                            } else {
-                                /* Other non-array, non-struct types: skip initializer list */
-                                int skip_depth_x;
-                                skip_depth_x = 1;
-                                next_token(cc);
-                                while (skip_depth_x > 0) {
-                                    if (cc->tk == TK_EOF) break;
-                                    if (cc->tk == TK_LBRACE) skip_depth_x = skip_depth_x + 1;
-                                    if (cc->tk == TK_RBRACE) skip_depth_x = skip_depth_x - 1;
-                                    if (skip_depth_x > 0) next_token(cc);
-                                }
-                                next_token(cc);
+                            }
+                            
+                            if (vtype->kind == TY_ARRAY || vtype->kind == TY_STRUCT || vtype->kind == TY_UNION) {
+                                Node *var_node = node_new(cc, ND_VAR, line);
+                                strncpy(var_node->name, vname, MAX_IDENT - 1);
+                                var_node->sym = sym;
+                                var_node->type = arr_type;
+                                emit_local_initializer(cc, block, &cnt, &cap, var_node, arr_type, init_list, 0);
                             }
                         } else {
                             var = node_new(cc, ND_VAR, line);
@@ -3109,60 +2951,8 @@ Node *parse_program(Compiler *cc) {
             if (cc->tk == TK_ASSIGN) {
                 next_token(cc);
                 if (cc->tk == TK_LBRACE) {
-                    /* Parse array initializer list */
-                    Node *init_list;
-                    Node **inits;
-                    int count;
-                    init_list = node_new(cc, ND_INIT_LIST, line);
-                    inits = (Node **)cc_alloc(cc, sizeof(Node *) * MAX_INIT);
-                    count = 0;
-                    next_token(cc); /* skip { */
-                    int depth = 1;
-                    int skip_tk;
-                    int prev_pos;
-                    int no_progress_count = 0;
                     int top_elems = 0;
-                    int last_comma = 1;
-                    while (depth > 0 && cc->tk != TK_EOF) {
-                        if (depth == 1 && cc->tk != TK_RBRACE && cc->tk != TK_COMMA && last_comma) {
-                            top_elems++;
-                            last_comma = 0;
-                        }
-                        prev_pos = cc->pos;
-                        if (cc->tk == TK_LBRACE) {
-                            depth++;
-                            next_token(cc);
-                        } else if (cc->tk == TK_RBRACE) {
-                            depth--;
-                            if (depth == 0) break;
-                            next_token(cc);
-                        } else if (cc->tk == TK_COMMA) {
-                            if (depth == 1) last_comma = 1;
-                            next_token(cc);
-                        } else {
-                            skip_tk = cc->tk;
-                            if (count < MAX_INIT) {
-                                inits[count++] = parse_assign(cc);
-                            } else {
-                                parse_assign(cc); /* discard if over limit */
-                            }
-                            if (cc->tk == skip_tk) {
-                                if (cc->tk != TK_EOF) next_token(cc);
-                            }
-                            if (cc->pos == prev_pos) {
-                                no_progress_count++;
-                                if (no_progress_count > 100) {
-                                    error(cc, "global array parser stuck");
-                                    break;
-                                }
-                            } else {
-                                no_progress_count = 0;
-                            }
-                        }
-                    }
-                    if (cc->tk == TK_RBRACE) next_token(cc); /* skip } */
-                    init_list->args = inits;
-                    init_list->num_args = count;
+                    Node *init_list = parse_initializer_list(cc, &top_elems);
                     gvar->initializer = init_list;
                     
                     /* adjust array size if omitted */

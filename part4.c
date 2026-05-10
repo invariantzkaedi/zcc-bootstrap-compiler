@@ -3994,88 +3994,79 @@ static long long eval_const_expr_p4(Node *elem, int *ok) {
     return 0;
 }
 
-static void emit_struct_fields(Compiler *cc, StructField *fields, Node **args, int num_args, int *arg_idx, int arg_end, int base_offset, int *emitted) {
-    StructField *f;
-    for (f = fields; f; f = f->next) {
-        int field_abs_offset = base_offset + f->offset;
-        
-        if (field_abs_offset > *emitted) {
-            fprintf(cc->out, "    .zero %d\n", field_abs_offset - *emitted);
-            *emitted = field_abs_offset;
-        }
-        
-        if (f->type->kind == TY_STRUCT) {
-            emit_struct_fields(cc, f->type->fields, args, num_args, arg_idx, arg_end, field_abs_offset, emitted);
-        } else if (f->type->kind == TY_ARRAY) {
-            int j;
-            if (f->type->base && (f->type->base->kind == TY_STRUCT || f->type->base->kind == TY_UNION)) {
-                int elem_size = type_size(f->type->base);
-                for (j = 0; j < f->type->array_len; j++) {
-                    int expected_end = field_abs_offset + (j + 1) * elem_size;
-                    emit_struct_fields(cc, f->type->base->fields, args, num_args, arg_idx, arg_end, field_abs_offset + j * elem_size, emitted);
-                    if (*emitted < expected_end) {
-                        fprintf(cc->out, "    .zero %d\n", expected_end - *emitted);
-                        *emitted = expected_end;
+static void emit_global_init_list(Compiler *cc, Type *type, Node *init_list, int base_offset, int *emitted) {
+    if (type->kind == TY_ARRAY) {
+        Type *elem_type = type->base;
+        int elem_size = type_size(elem_type);
+        for (int i = 0; i < type->array_len; i++) {
+            int expected_end = base_offset + (i + 1) * elem_size;
+            if (i < init_list->num_args) {
+                Node *elem = init_list->args[i];
+                if (elem->kind == ND_INIT_LIST) {
+                    emit_global_init_list(cc, elem_type, elem, base_offset + i * elem_size, emitted);
+                } else {
+                    while (elem && elem->kind == ND_CAST) elem = elem->lhs;
+                    int const_ok = 1;
+                    long long const_val = eval_const_expr_p4(elem, &const_ok);
+                    if (*emitted < base_offset + i * elem_size) {
+                        fprintf(cc->out, "    .zero %d\n", (base_offset + i * elem_size) - *emitted);
+                        *emitted = base_offset + i * elem_size;
                     }
-                }
-            } else {
-                int elem_size = type_size(f->type->base);
-                for (j = 0; j < f->type->array_len; j++) {
-                    if (*arg_idx < arg_end && *arg_idx < num_args) {
-                        Node *elem = args[(*arg_idx)++];
-                        while (elem && elem->kind == ND_CAST) elem = elem->lhs; /* Strip ND_CAST */
-                        int const_ok = 1;
-                        long long const_val = eval_const_expr_p4(elem, &const_ok);
-                        if (!elem) {
-                            fprintf(cc->out, "    .zero %d\n", elem_size);
-                        } else if (const_ok) {
-                            if (elem_size == 1) fprintf(cc->out, "    .byte %lld\n", const_val);
-                            else if (elem_size == 2) fprintf(cc->out, "    .short %lld\n", const_val);
-                            else if (elem_size == 4) fprintf(cc->out, "    .long %lld\n", const_val);
-                            else fprintf(cc->out, "    .quad %lld\n", const_val);
-                        } else if (elem->kind == ND_STR) {
-                            if (elem_size == 4) fprintf(cc->out, "    .long .Lstr_%d\n", elem->str_id);
-                            else fprintf(cc->out, "    .quad .Lstr_%d\n", elem->str_id);
-                        } else if (elem->kind == ND_ADDR_LABEL) {
-                            if (elem_size == 4) fprintf(cc->out, "    .long .Luser_%s_%s\n", cc->current_func, elem->label_name);
-                            else fprintf(cc->out, "    .quad .Luser_%s_%s\n", cc->current_func, elem->label_name);
-                        } else if (elem->kind == ND_ADDR && elem->lhs && elem->lhs->kind == ND_VAR) {
-                            if (elem_size == 4) fprintf(cc->out, "    .long %s\n", elem->lhs->name);
-                            else fprintf(cc->out, "    .quad %s\n", elem->lhs->name);
-                } else if (elem->kind == ND_ADDR && elem->lhs && elem->lhs->kind == ND_DEREF && elem->lhs->lhs && elem->lhs->lhs->kind == ND_ADD && elem->lhs->lhs->lhs && elem->lhs->lhs->lhs->kind == ND_VAR && elem->lhs->lhs->rhs && elem->lhs->lhs->rhs->kind == ND_NUM) {
-                    long long offset = elem->lhs->lhs->rhs->int_val;
-                    if (elem->lhs->lhs->lhs->type && elem->lhs->lhs->lhs->type->base) offset *= type_size(elem->lhs->lhs->lhs->type->base);
-                    if (elem_size == 4) fprintf(cc->out, "    .long %s + %lld\n", elem->lhs->lhs->lhs->name, offset);
-                    else fprintf(cc->out, "    .quad %s + %lld\n", elem->lhs->lhs->lhs->name, offset);
-                } else if (elem->kind == ND_ADD && elem->lhs && elem->lhs->kind == ND_VAR && elem->rhs && elem->rhs->kind == ND_NUM) {
-                    long long offset = elem->rhs->int_val;
-                    if (elem->lhs->type && elem->lhs->type->base) offset *= type_size(elem->lhs->type->base);
-                    if (elem_size == 4) fprintf(cc->out, "    .long %s + %lld\n", elem->lhs->name, offset);
-                    else fprintf(cc->out, "    .quad %s + %lld\n", elem->lhs->name, offset);
-                        } else if (elem->kind == ND_VAR) {
-                            if (elem_size == 4) fprintf(cc->out, "    .long %s\n", elem->name);
-                            else fprintf(cc->out, "    .quad %s\n", elem->name);
-                        } else {
-                            fprintf(stderr, "STRUCT-ARRAY FALLBACK ZERO: kind=%d, const_ok=%d\n", elem->kind, const_ok);
-                            if (elem->lhs) fprintf(stderr, "  lhs->kind=%d lhs->name=%s\n", elem->lhs->kind, elem->lhs->name ? elem->lhs->name : "none");
-                            fprintf(cc->out, "    .zero %d\n", elem_size);
-                        }
+                    if (const_ok) {
+                        if (elem_size == 1) fprintf(cc->out, "    .byte %lld\n", const_val);
+                        else if (elem_size == 2) fprintf(cc->out, "    .short %lld\n", const_val);
+                        else if (elem_size == 4) fprintf(cc->out, "    .long %lld\n", const_val);
+                        else fprintf(cc->out, "    .quad %lld\n", const_val);
+                    } else if (elem->kind == ND_STR) {
+                        if (elem_size == 4) fprintf(cc->out, "    .long .Lstr_%d\n", elem->str_id);
+                        else fprintf(cc->out, "    .quad .Lstr_%d\n", elem->str_id);
+                    } else if (elem->kind == ND_ADDR_LABEL) {
+                        if (elem_size == 4) fprintf(cc->out, "    .long .Luser_%s_%s\n", cc->current_func, elem->label_name);
+                        else fprintf(cc->out, "    .quad .Luser_%s_%s\n", cc->current_func, elem->label_name);
+                    } else if (elem->kind == ND_ADDR && elem->lhs && elem->lhs->kind == ND_VAR) {
+                        if (elem_size == 4) fprintf(cc->out, "    .long %s\n", elem->lhs->name);
+                        else fprintf(cc->out, "    .quad %s\n", elem->lhs->name);
+                    } else if (elem->kind == ND_ADDR && elem->lhs && elem->lhs->kind == ND_DEREF && elem->lhs->lhs && elem->lhs->lhs->kind == ND_ADD && elem->lhs->lhs->lhs && elem->lhs->lhs->lhs->kind == ND_VAR && elem->lhs->lhs->rhs && elem->lhs->lhs->rhs->kind == ND_NUM) {
+                        long long offset = elem->lhs->lhs->rhs->int_val;
+                        if (elem->lhs->lhs->lhs->type && elem->lhs->lhs->lhs->type->base) offset *= type_size(elem->lhs->lhs->lhs->type->base);
+                        if (elem_size == 4) fprintf(cc->out, "    .long %s + %lld\n", elem->lhs->lhs->lhs->name, offset);
+                        else fprintf(cc->out, "    .quad %s + %lld\n", elem->lhs->lhs->lhs->name, offset);
+                    } else if (elem->kind == ND_ADD && elem->lhs && elem->lhs->kind == ND_VAR && elem->rhs && elem->rhs->kind == ND_NUM) {
+                        long long offset = elem->rhs->int_val;
+                        if (elem->lhs->type && elem->lhs->type->base) offset *= type_size(elem->lhs->type->base);
+                        if (elem_size == 4) fprintf(cc->out, "    .long %s + %lld\n", elem->lhs->name, offset);
+                        else fprintf(cc->out, "    .quad %s + %lld\n", elem->lhs->name, offset);
+                    } else if (elem->kind == ND_VAR) {
+                        if (elem_size == 4) fprintf(cc->out, "    .long %s\n", elem->name);
+                        else fprintf(cc->out, "    .quad %s\n", elem->name);
                     } else {
                         fprintf(cc->out, "    .zero %d\n", elem_size);
                     }
                     *emitted += elem_size;
                 }
             }
-        } else {
-            int elem_size = type_size(f->type);
-            if (*arg_idx < arg_end && *arg_idx < num_args) {
-                Node *elem = args[(*arg_idx)++];
-                while (elem && elem->kind == ND_CAST) { elem = elem->lhs; } /* Strip ND_CAST */
+            if (*emitted < expected_end) {
+                fprintf(cc->out, "    .zero %d\n", expected_end - *emitted);
+                *emitted = expected_end;
+            }
+        }
+    } else if (type->kind == TY_STRUCT || type->kind == TY_UNION) {
+        StructField *f = type->fields;
+        for (int i = 0; i < init_list->num_args && f != NULL; i++, f = f->next) {
+            int field_abs_offset = base_offset + f->offset;
+            if (field_abs_offset > *emitted) {
+                fprintf(cc->out, "    .zero %d\n", field_abs_offset - *emitted);
+                *emitted = field_abs_offset;
+            }
+            Node *elem = init_list->args[i];
+            if (elem->kind == ND_INIT_LIST) {
+                emit_global_init_list(cc, f->type, elem, field_abs_offset, emitted);
+            } else {
+                int elem_size = type_size(f->type);
+                while (elem && elem->kind == ND_CAST) elem = elem->lhs;
                 int const_ok = 1;
                 long long const_val = eval_const_expr_p4(elem, &const_ok);
-                if (!elem) {
-                    fprintf(cc->out, "    .zero %d\n", elem_size);
-                } else if (const_ok) {
+                if (const_ok) {
                     if (elem_size == 1) fprintf(cc->out, "    .byte %lld\n", const_val);
                     else if (elem_size == 2) fprintf(cc->out, "    .short %lld\n", const_val);
                     else if (elem_size == 4) fprintf(cc->out, "    .long %lld\n", const_val);
@@ -4103,14 +4094,15 @@ static void emit_struct_fields(Compiler *cc, StructField *fields, Node **args, i
                     if (elem_size == 4) fprintf(cc->out, "    .long %s\n", elem->name);
                     else fprintf(cc->out, "    .quad %s\n", elem->name);
                 } else {
-                    fprintf(stderr, "STRUCT FIELD FALLBACK ZERO: kind=%d, const_ok=%d\n", elem->kind, const_ok);
-                    if (elem->lhs) fprintf(stderr, "  lhs->kind=%d lhs->name=%s\n", elem->lhs->kind, elem->lhs->name ? elem->lhs->name : "none");
                     fprintf(cc->out, "    .zero %d\n", elem_size);
                 }
-            } else {
-                fprintf(cc->out, "    .zero %d\n", elem_size);
+                *emitted += elem_size;
             }
-            *emitted += elem_size;
+        }
+        int expected_end = base_offset + type_size(type);
+        if (*emitted < expected_end) {
+            fprintf(cc->out, "    .zero %d\n", expected_end - *emitted);
+            *emitted = expected_end;
         }
     }
 }
@@ -4244,79 +4236,13 @@ static void emit_global_var(Compiler *cc, Node *gvar) {
       }
         } else if (init->kind == ND_INIT_LIST) {
             int emitted = 0;
-            int i;
-            int elem_size = 1;
-        if (gvar->type && gvar->type->kind == TY_STRUCT) {
-            int arg_idx = 0;
-            emit_struct_fields(cc, gvar->type->fields, init->args, init->num_args, &arg_idx, init->num_args, 0, &emitted);
-        } else if (gvar->type && gvar->type->kind == TY_ARRAY && gvar->type->base && (gvar->type->base->kind == TY_STRUCT || gvar->type->base->kind == TY_UNION)) {
-            int i;
-            int arg_idx = 0;
-            int elem_size = type_size(gvar->type->base);
-            int budget = init->num_args / gvar->type->array_len;
-            for (i = 0; i < gvar->type->array_len; i++) {
-                int expected_end = (i + 1) * elem_size;
-                int arg_end = (i + 1) * budget;
-                if (arg_end > init->num_args) arg_end = init->num_args;
-                emit_struct_fields(cc, gvar->type->base->fields, init->args, init->num_args, &arg_idx, arg_end, i * elem_size, &emitted);
-                if (emitted < expected_end) {
-                    fprintf(cc->out, "    .zero %d\n", expected_end - emitted);
-                    emitted = expected_end;
-                }
+            emit_global_init_list(cc, gvar->type, init, 0, &emitted);
+            if (emitted < size) {
+                fprintf(cc->out, "    .zero %d\n", size - emitted);
             }
         } else {
-            int i;
-            int elem_size = 1;
-            Type *stype = gvar->type;
-            while (stype && stype->kind == TY_ARRAY) {
-                stype = stype->base;
-            }
-            if (stype) elem_size = type_size(stype);
-            for (i = 0; i < init->num_args; i++) {
-                Node *elem = init->args[i];
-                int const_ok = 1;
-                long long const_val = eval_const_expr_p4(elem, &const_ok);
-                if (!elem) {
-                    fprintf(cc->out, "    .zero %d\n", elem_size);
-                } else if (const_ok) {
-                    if (elem_size == 1) fprintf(cc->out, "    .byte %lld\n", const_val);
-                    else if (elem_size == 2) fprintf(cc->out, "    .short %lld\n", const_val);
-                    else if (elem_size == 4) fprintf(cc->out, "    .long %lld\n", const_val);
-                    else fprintf(cc->out, "    .quad %lld\n", const_val);
-                } else if (elem->kind == ND_STR) {
-                    if (elem_size == 4) fprintf(cc->out, "    .long .Lstr_%d\n", elem->str_id);
-                    else fprintf(cc->out, "    .quad .Lstr_%d\n", elem->str_id);
-                } else if (elem->kind == ND_ADDR_LABEL) {
-                    if (elem_size == 4) fprintf(cc->out, "    .long .Luser_%s_%s\n", cc->current_func, elem->label_name);
-                    else fprintf(cc->out, "    .quad .Luser_%s_%s\n", cc->current_func, elem->label_name);
-                } else if (elem->kind == ND_ADDR && elem->lhs && elem->lhs->kind == ND_VAR) {
-                    if (elem_size == 4) fprintf(cc->out, "    .long %s\n", elem->lhs->name);
-                    else fprintf(cc->out, "    .quad %s\n", elem->lhs->name);
-                } else if (elem->kind == ND_ADDR && elem->lhs && elem->lhs->kind == ND_DEREF && elem->lhs->lhs && elem->lhs->lhs->kind == ND_ADD && elem->lhs->lhs->lhs && elem->lhs->lhs->lhs->kind == ND_VAR && elem->lhs->lhs->rhs && elem->lhs->lhs->rhs->kind == ND_NUM) {
-                    long long offset = elem->lhs->lhs->rhs->int_val;
-                    if (elem->lhs->lhs->lhs->type && elem->lhs->lhs->lhs->type->base) offset *= type_size(elem->lhs->lhs->lhs->type->base);
-                    if (elem_size == 4) fprintf(cc->out, "    .long %s + %lld\n", elem->lhs->lhs->lhs->name, offset);
-                    else fprintf(cc->out, "    .quad %s + %lld\n", elem->lhs->lhs->lhs->name, offset);
-                } else if (elem->kind == ND_ADD && elem->lhs && elem->lhs->kind == ND_VAR && elem->rhs && elem->rhs->kind == ND_NUM) {
-                    long long offset = elem->rhs->int_val;
-                    if (elem->lhs->type && elem->lhs->type->base) offset *= type_size(elem->lhs->type->base);
-                    if (elem_size == 4) fprintf(cc->out, "    .long %s + %lld\n", elem->lhs->name, offset);
-                    else fprintf(cc->out, "    .quad %s + %lld\n", elem->lhs->name, offset);
-                } else if (elem->kind == ND_VAR) {
-                    if (elem_size == 4) fprintf(cc->out, "    .long %s\n", elem->name);
-                    else fprintf(cc->out, "    .quad %s\n", elem->name);
-                } else {
-                    fprintf(cc->out, "    .zero %d\n", elem_size);
-                }
-                emitted += elem_size;
-            }
+            fprintf(cc->out, "    .zero %d\n", size);
         }
-        if (emitted < size) {
-            fprintf(cc->out, "    .zero %d\n", size - emitted);
-        }
-    } else {
-        fprintf(cc->out, "    .zero %d\n", size);
-    }
   } else {
     /* tentative definitions and uninitialized data */
     if (gvar->is_static) {
