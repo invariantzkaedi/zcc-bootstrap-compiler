@@ -2678,11 +2678,179 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
     return func;
 }
 
+#ifndef MAP_SHARED
+#define MAP_SHARED 1
+#endif
+extern void *mmap(void *addr, size_t length, int prot, int flags, int fd, size_t offset);
+extern int shm_open(const char *name, int oflag, int mode);
+extern int close(int fd);
+
+/* ================================================================ */
+/* Flat Wire → ND_INIT_LIST Converter (Zero Deserialization)        */
+/* ================================================================ */
+
+
+static Node* parse_value_from_wire(Compiler *cc, const uint8_t *ptr) {
+    const struct WireInitNode *w = (const struct WireInitNode *)ptr;
+    const uint8_t *payload = ptr + sizeof(struct WireInitNode);
+
+    Node *n = NULL;
+    switch (w->u.value.vkind) {
+        case 0: { /* i64 */
+            long long val = *(long long*)payload;
+            n = node_num(cc, val, cc->line);
+            break;
+        }
+        case 1: { /* f64 */
+            double val = *(double*)payload;
+            n = node_flit(cc, val, cc->line);
+            break;
+        }
+        case 2: { /* string literal */
+            n = node_new(cc, ND_STR, cc->line);
+            int sid = cc->num_strings;
+            if (sid < MAX_STRINGS) {
+                StringEntry *se = &cc->strings[sid];
+                se->data = cc_strdup(cc, (const char*)payload);
+                se->len = w->u.value.len;
+                se->label_id = cc->label_count++;
+                cc->num_strings++;
+            }
+            n->str_id = sid;
+            n->type = type_ptr(cc, cc->ty_char);
+            break;
+        }
+        case 3: { /* identifier */
+            n = node_new(cc, ND_VAR, cc->line);
+            strncpy(n->name, (const char*)payload, MAX_IDENT-1);
+            Symbol *sym = scope_find(cc, n->name);
+            if (sym) {
+                n->sym = sym;
+                n->type = sym->type;
+            } else {
+                n->type = cc->ty_int;
+            }
+            break;
+        }
+    }
+    return n;
+}
+
+Node* zcc_build_from_wire(Compiler *cc, const uint8_t *data, size_t len) {
+    if (!data || len < sizeof(WireInitNode)) return NULL;
+
+    const WireInitNode *w = (const WireInitNode*)data;
+    if (w->magic != WIRE_INIT_MAGIC) return NULL;
+
+    Node *node = NULL;
+
+    switch (w->kind) {
+        case WIRE_LIST: {
+            node = node_new(cc, ND_INIT_LIST, cc->line);
+            node->num_args = 0;
+            node->args = NULL;
+
+            const uint8_t *child_ptr = data + sizeof(WireInitNode);
+            for (uint32_t i = 0; i < w->u.list.child_count; i++) {
+                Node *child = zcc_build_from_wire(cc, child_ptr, len - (child_ptr - data));
+                if (child) {
+                    if (node->num_args == 0) {
+                        node->args = (Node**)cc_alloc(cc, 16 * sizeof(Node*));
+                    }
+                    node->args[node->num_args++] = child;
+                }
+                child_ptr += ((const WireInitNode*)child_ptr)->payload_size;
+            }
+            break;
+        }
+
+        case WIRE_VALUE:
+            node = parse_value_from_wire(cc, data);
+            break;
+
+        case WIRE_DESIGNATED_FIELD:
+        case WIRE_DESIGNATED_INDEX: {
+            error(cc, "Designated initializers not yet supported in AST");
+            break;
+        }
+    }
+
+    return node;
+}
+
+ShmRingBuffer* zcc_shm_ring_open(void) {
+    int fd = shm_open("zcc_ast_ring", 2 /* O_RDWR */, 0);
+    if (fd < 0) return NULL;
+    ShmRingBuffer* ring = (ShmRingBuffer*)mmap(NULL, sizeof(ShmRingBuffer),
+                                               1 | 2 /* PROT_READ | PROT_WRITE */, MAP_SHARED, fd, 0);
+    close(fd);
+    return ring;
+}
+
+Node* zcc_shm_ring_read(Compiler *cc, ShmRingBuffer* ring) {
+    if (!ring) return NULL;
+
+    uint64_t head = ring->head;
+    uint64_t tail = ring->tail;
+
+    if (head == tail) return NULL;   // empty
+
+    size_t slot_size = SHM_RING_SIZE / MAX_SLOTS;
+    size_t offset = (tail % MAX_SLOTS) * slot_size;
+    const uint8_t* archived = ring->data + offset;
+
+    Node* ast = zcc_build_from_wire(cc, archived, slot_size);
+
+    ring->tail = (tail + 1) % MAX_SLOTS;
+    return ast;
+}
+
+
+/* ================================================================ */
+/* Cross-platform ZCC-RUST SHM entry — isolated to avoid ZCC stack  */
+/* offset divergence from nested declarations.                      */
+/* ================================================================ */
+
+Node *zcc_rust_shm_entry(Compiler *cc) {
+    ShmRingBuffer *ring;
+    int spins;
+    Node *init_tree;
+    Node *global;
+
+    ring = zcc_shm_ring_open();
+    if (!ring) {
+        error(cc, "[ZCC-RUST] Failed to open SHM ring buffer");
+        return NULL;
+    }
+
+    spins = 0;
+    while (spins < 2000000) {
+        init_tree = zcc_shm_ring_read(cc, ring);
+        if (init_tree) {
+            printf("[ZCC-RUST] Adopted zero-copy ND_INIT_LIST tree from Rust SHM\n");
+            global = node_new(cc, ND_GLOBAL_VAR, 0);
+            strncpy(global->name, "rust_shm_tesseract", MAX_IDENT-1);
+            global->initializer = init_tree;
+            global->type = type_ptr(cc, cc->ty_int);
+            return global;
+        }
+        spins++;
+    }
+    error(cc, "[ZCC-RUST] SHM timeout waiting for Rust frontend data");
+    return NULL;
+}
+
 Node *parse_program(Compiler *cc) {
     Node *head;
     Node *tail;
     int top_count;
     int prev_pos;
+
+    /* SHM hot path: delegate to isolated entry function */
+    if (getenv("ZCC_RUST_SHM")) {
+        printf("[ZCC-RUST] SHM hot path activated\n");
+        return zcc_rust_shm_entry(cc);
+    }
 
     head = 0;
     tail = 0;
