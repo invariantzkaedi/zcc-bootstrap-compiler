@@ -30,6 +30,10 @@ static int weld_vertices(vec3_t *verts, int *count, int *indices, int num_indice
     int i, j;
     
     for (i = 0; i < original_count; i++) {
+        if (i % 10000 == 0) {
+            fprintf(stderr, "\r\033[38;5;17m[WARDEN PROGRESS]\033[38;5;51m Welding vertex %d / %d (%.2f%%) | Unique: %d\033[0m", 
+                    i, original_count, (float)i / original_count * 100.0f, unique_count);
+        }
         int found = -1;
         /* Reverse search for localized spatial coherence */
         for (j = unique_count - 1; j >= 0; j--) {
@@ -51,6 +55,7 @@ static int weld_vertices(vec3_t *verts, int *count, int *indices, int num_indice
             unique_count++;
         }
     }
+    fprintf(stderr, "\n");
     
     /* Safely remap the index buffer */
     for (i = 0; i < num_indices; i++) {
@@ -109,8 +114,10 @@ void zcc_mesh_warden(const char *raw_json, int length, const char *output_file) 
     }
     
     /* Parse the raw neural splats */
-    vec3_t *verts = (vec3_t*)malloc(sizeof(vec3_t) * 100000);
-    int *indices = (int*)malloc(sizeof(int) * 300000);
+    /* Dynamic bounds enforcement based on payload length heuristic */
+    size_t est_verts = (length / 15) + 10000;
+    vec3_t *verts = (vec3_t*)malloc(sizeof(vec3_t) * est_verts);
+    int *indices = (int*)malloc(sizeof(int) * (est_verts * 3));
     int v_count = 0;
     int idx_count = 0;
     
