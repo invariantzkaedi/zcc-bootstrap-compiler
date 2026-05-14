@@ -423,7 +423,7 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                 }
                 case IR_ALLOCA: {
                     int offd = get_or_create_var(n->dst);
-                    fprintf(out, "    leaq %d(%%rbp), %%rax\n", vars[offd].offset - (int)n->imm);
+                    fprintf(out, "    leaq %d(%%rbp), %%rax\n", offd - (int)n->imm);
                     store_result(out, n->dst, "%rax", ra);
                     break;
                 }

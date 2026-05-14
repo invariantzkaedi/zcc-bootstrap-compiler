@@ -2166,6 +2166,10 @@ static int cmp_freq_desc(const void *a, const void *b) {
     return -1;
   if (fa < fb)
     return 1;
+  if (ia < ib)
+    return -1;
+  if (ia > ib)
+    return 1;
   return 0;
 }
 
@@ -5934,7 +5938,11 @@ static int live_interval_compare(const void *a, const void *b) {
   const LiveInterval *ib = (const LiveInterval *)b;
   if (ia->start != ib->start)
     return (ia->start > ib->start) ? 1 : -1;
-  return (ia->end > ib->end) ? 1 : ((ia->end < ib->end) ? -1 : 0);
+  if (ia->end != ib->end)
+    return (ia->end > ib->end) ? 1 : -1;
+  if (ia->vreg != ib->vreg)
+    return (ia->vreg > ib->vreg) ? 1 : -1;
+  return 0;
 }
 
 /* Number instructions in block order; fill def_seq and last_use for each vreg.

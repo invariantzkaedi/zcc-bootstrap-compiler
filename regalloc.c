@@ -70,6 +70,7 @@ static LiveInterval *get_or_create(RegAllocator *ra, const char *name, int pos) 
     iv->start    = pos;
     iv->end      = pos;
     iv->assigned = PREG_NONE;
+    iv->is_float = 0;
     return iv;
 }
 
@@ -92,7 +93,9 @@ void ra_free(RegAllocator *ra) {
 static int iv_cmp_start(const void *a, const void *b) {
     const LiveInterval *ia = (const LiveInterval *)a;
     const LiveInterval *ib = (const LiveInterval *)b;
-    return ia->start - ib->start;
+    if (ia->start != ib->start)
+        return ia->start - ib->start;
+    return strcmp(ia->name, ib->name);
 }
 
 /* ── Phase 1: Build live intervals ──────────────────────────────────── */
@@ -202,21 +205,30 @@ static void chaitin_briggs(RegAllocator *ra, const ir_func_t *fn) {
             if (removed[i]) continue;
             int K = ra->intervals[i].is_float ? 8 : 7;
             if (degree[i] < K) {
-                target = i;
-                break;
+                if (target == -1 || strcmp(ra->intervals[i].name, ra->intervals[target].name) < 0) {
+                    target = i;
+                }
             }
         }
 
         if (target == -1) {
             /* Spill: pick node with highest degree / lowest cost */
-            double max_metric = -1.0;
+            int max_num = -1;
+            int max_den = 1;
             for (i = 0; i < N; i++) {
                 if (!removed[i]) {
-                    int len = ra->intervals[i].end - ra->intervals[i].start + 1;
-                    double metric = (double)degree[i] / (double)len; 
-                    if (metric > max_metric) {
-                        max_metric = metric;
+                    int num = degree[i];
+                    int den = ra->intervals[i].end - ra->intervals[i].start + 1;
+                    if (max_num == -1 || num * max_den > max_num * den) {
+                        max_num = num;
+                        max_den = den;
                         target = i;
+                    } else if (num * max_den == max_num * den) {
+                        if (target == -1 || strcmp(ra->intervals[i].name, ra->intervals[target].name) < 0) {
+                            max_num = num;
+                            max_den = den;
+                            target = i;
+                        }
                     }
                 }
             }
