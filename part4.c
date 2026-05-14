@@ -3684,7 +3684,7 @@ static int allocate_registers(Node *func) {
     for (j = i + 1; j < num_ra_locals; j++) {
       if (ra_locals[j]->live_start < ra_locals[i]->live_start ||
           (ra_locals[j]->live_start == ra_locals[i]->live_start &&
-           strcmp(ra_locals[j]->name, ra_locals[i]->name) < 0)) {
+           ra_locals[j]->stack_offset < ra_locals[i]->stack_offset)) {
         Symbol *t = ra_locals[i];
         ra_locals[i] = ra_locals[j];
         ra_locals[j] = t;
