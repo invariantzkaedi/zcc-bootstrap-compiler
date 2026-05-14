@@ -24,18 +24,4 @@ windows = { version = "0.58", features = [
     "Win32_System_Memory",
 ] }
 
-[[bin]]
-name = "zcc-native-host"
-path = "src/native_host.rs"
 
-[dependencies.rayon]
-version = "1.8"
-
-[dependencies.rand]
-version = "0.8"
-[dependencies.chrono]
-version = "0.4"
-
-[[bin]]
-name = "generate_gallery"
-path = "tools/generate_gallery.rs"

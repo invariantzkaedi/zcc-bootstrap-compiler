@@ -1,6 +1,9 @@
 CC = gcc
 CFLAGS = -O0 -w -fno-asynchronous-unwind-tables -g0
-LDFLAGS = -lm -Wl,-s
+LDFLAGS = -lm
+ifneq ($(NO_STRIP),1)
+LDFLAGS += -Wl,-s
+endif
 FAST_CFLAGS = -O2 -DNDEBUG -w -fno-asynchronous-unwind-tables -g0
 FORTIFY_PACK_DIR ?= fortify_zcc_clean
 
@@ -43,11 +46,11 @@ zcc: zcc.c $(PASSES)
 	  rm -f .zcc_parts_check.tmp; \
 	fi
 	$(CC) $(CFLAGS) -o zcc zcc.c $(PASSES) $(LDFLAGS)
-	strip --strip-all zcc
+	@if [ "$(NO_STRIP)" != "1" ]; then strip --strip-all zcc; fi
 
 zcc_fast: zcc.c $(PASSES)
 	$(CC) $(FAST_CFLAGS) -o zcc_fast zcc.c $(PASSES) $(LDFLAGS)
-	strip --strip-all zcc_fast
+	@if [ "$(NO_STRIP)" != "1" ]; then strip --strip-all zcc_fast; fi
 
 selfhost: zcc
 	@echo "=== Stage 1: zcc compiles itself -> zcc2 ==="

@@ -159,7 +159,7 @@ jobs:
       - name: Build ZCC (not selfhost — just verify ZCC_RUST_SHM env compiles clean)
         env:
           ZCC_MUTATION_SANDBOX: "1"
-        run: make clean zcc ONE_SOURCE=1
+        run: make clean zcc ONE_SOURCE=1 NO_STRIP=1
 
       - name: Verify SHM entry point is present
         run: |
