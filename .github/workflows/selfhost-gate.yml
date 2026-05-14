@@ -31,6 +31,7 @@ on:
       - 'regalloc.h'
       - 'zcc_ast_bridge.h'
       - 'Makefile'
+      - 'rust_frontend/**'
   pull_request:
     paths:
       - 'part*.c'
@@ -41,6 +42,7 @@ on:
       - 'regalloc.h'
       - 'zcc_ast_bridge.h'
       - 'Makefile'
+      - 'rust_frontend/**'
 
 jobs:
   selfhost-gate:
