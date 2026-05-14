@@ -3658,9 +3658,14 @@ static int allocate_registers(Node *func) {
   int count = 0;
   int i, j, r;
   int param_limit = -(func->num_params * 8);
-  char *active_regs[5] = {0, 0, 0, 0, 0};
-  int active_ends[5] = {0, 0, 0, 0, 0};
+  char *active_regs[5];
+  int active_ends[5];
   int used_regs_bitmask = 0;
+
+  for (r = 0; r < 5; r++) {
+    active_regs[r] = 0;
+    active_ends[r] = 0;
+  }
 
   num_ra_locals = 0;
   pseudo_pc = 1;
@@ -3682,9 +3687,15 @@ static int allocate_registers(Node *func) {
 
   for (i = 0; i < num_ra_locals; i++) {
     for (j = i + 1; j < num_ra_locals; j++) {
-      if (ra_locals[j]->live_start < ra_locals[i]->live_start ||
-          (ra_locals[j]->live_start == ra_locals[i]->live_start &&
-           ra_locals[j]->stack_offset < ra_locals[i]->stack_offset)) {
+      int do_swap = 0;
+      if (ra_locals[j]->live_start < ra_locals[i]->live_start) {
+        do_swap = 1;
+      } else if (ra_locals[j]->live_start == ra_locals[i]->live_start) {
+        if (ra_locals[j]->stack_offset < ra_locals[i]->stack_offset) {
+          do_swap = 1;
+        }
+      }
+      if (do_swap) {
         Symbol *t = ra_locals[i];
         ra_locals[i] = ra_locals[j];
         ra_locals[j] = t;
@@ -3719,6 +3730,7 @@ static int allocate_registers(Node *func) {
       sym->assigned_reg = 0;
     }
   }
+
   return used_regs_bitmask;
 }
 
