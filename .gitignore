@@ -508,3 +508,4 @@ ra_snapshot.json
 proof.smt2
 courtroom/polyglot
 courtroom/polyglot_singularity
+node_modules/
