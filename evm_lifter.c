@@ -20,6 +20,34 @@
 
 #include "evm_lifter.h"
 #include "ir_vuln_tag.h"
+#include "evm_uint256.h"
+
+// Convert evm_u256_t to uint256_t (handle endianness properly if needed, 
+// though evm_u256_t is already little-endian limbs!)
+// In evm_lifter.h: evm_u256_t has uint64_t limbs[4].
+// In evm_uint256.h: uint256_t has unsigned long limbs[4].
+static inline uint256_t to_physics(const evm_u256_t *a) {
+    uint256_t p = {0};
+    for (int i = 0; i < 4; i++) {
+        unsigned long long limb = 0;
+        for (int j = 0; j < 8; j++) {
+            // a->bytes[31] is the LSB of the entire 256-bit number.
+            // limbs[0] is the least significant limb.
+            // so limbs[0] gets bytes 24..31.
+            limb |= ((unsigned long long)a->bytes[31 - (i * 8 + j)]) << (j * 8);
+        }
+        p.limbs[i] = limb;
+    }
+    return p;
+}
+static inline void from_physics(evm_u256_t *dst, uint256_t p) {
+    for (int i = 0; i < 4; i++) {
+        unsigned long long limb = p.limbs[i];
+        for (int j = 0; j < 8; j++) {
+            dst->bytes[31 - (i * 8 + j)] = (limb >> (j * 8)) & 0xFF;
+        }
+    }
+}
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,7 +56,198 @@
 
 /* ── Internal helpers ────────────────────────────────────────────────── */
 
-static int evm_u256_is_zero(const evm_u256_t *a) {
+static void lifter_fresh_tmp(evm_lifter_t *ls, char *buf);
+
+static int evm_gas_for_op(unsigned int op) {
+    if (op >= 0x60 && op <= 0x7F) return 3; // PUSH
+    if (op >= 0x80 && op <= 0x8F) return 3; // DUP
+    if (op >= 0x90 && op <= 0x9F) return 3; // SWAP
+    switch(op) {
+        case 0x00: return 0;
+        case 0x01: return 3;
+        case 0x02: return 5;
+        case 0x03: return 3;
+        case 0x04: return 5;
+        case 0x05: return 5;
+        case 0x06: return 5;
+        case 0x07: return 5;
+        case 0x08: return 8;
+        case 0x09: return 8;
+        case 0x0A: return 10;
+        case 0x0B: return 3;
+        case 0x10: case 0x11: case 0x12: case 0x13: case 0x14:
+        case 0x15: case 0x16: case 0x17: case 0x18: case 0x19:
+        case 0x1A: case 0x1B: case 0x1C: case 0x1D: return 3;
+        case 0x20: return 30; // KECCAK256
+        case 0x30: return 2;
+        case 0x31: return 20;
+        case 0x32: return 2;
+        case 0x33: return 2;
+        case 0x34: return 2;
+        case 0x35: return 3;
+        case 0x36: return 3;
+        case 0x37: return 3;
+        case 0x38: return 2;
+        case 0x39: return 3;
+        case 0x3A: return 2;
+        case 0x3B: return 2;
+        case 0x3C: return 3;
+        case 0x3D: return 2;
+        case 0x3E: return 3;
+        case 0x3F: return 2;
+        case 0x40: return 20;
+        case 0x41: return 2;
+        case 0x42: return 2;
+        case 0x43: return 2;
+        case 0x44: return 2;
+        case 0x45: return 2;
+        case 0x46: return 2;
+        case 0x47: return 2;
+        case 0x48: return 2;
+        case 0x50: return 2;
+        case 0x51: return 3;
+        case 0x52: return 3;
+        case 0x53: return 3;
+        case 0x54: return 200;
+        case 0x55: return 20000;
+        case 0x56: return 8;
+        case 0x57: return 10;
+        case 0x58: return 2;
+        case 0x59: return 2;
+        case 0x5A: return 2;
+        case 0x5B: return 1;
+        case 0x5C: return 100;
+        case 0x5D: return 100;
+        case 0x5F: return 2;
+        case 0xA0: return 375;
+        case 0xF0: return 32000;
+        case 0xF1: return 21000;
+        case 0xF2: return 21000;
+        case 0xF3: return 0;
+        case 0xF4: return 21000;
+        case 0xF5: return 32000;
+        case 0xFA: return 21000;
+        case 0xFD: return 0;
+        case 0xFE: return 0;
+        case 0xFF: return 5000;
+    }
+    return 0;
+}
+
+static int get_block_static_gas(const unsigned char *bytecode, int length, int pc) {
+    int gas = 0;
+    while (pc < length) {
+        unsigned int op = bytecode[pc];
+        gas += evm_gas_for_op(op);
+        
+        if (op >= 0x60 && op <= 0x7F) {
+            pc += 1 + (op - 0x60 + 1);
+        } else {
+            pc++;
+        }
+        
+        // Stop if this instruction ends the block
+        if (op == 0x56 || op == 0x57 || op == 0x00 || op == 0xF3 || op == 0xFD || op == 0xFE || op == 0xFF) {
+            break;
+        }
+        // If next instruction is JUMPDEST, this block ends BEFORE it
+        if (pc < length && bytecode[pc] == 0x5B) {
+            break;
+        }
+    }
+    return gas;
+}
+
+static void evm_apply_static_gas(ir_func_t *fn, evm_lifter_t *ls, int static_gas_delta, const char *current_gas_vreg, char *next_gas_vreg) {
+    char delta_vreg[IR_NAME_MAX];
+    char cmp_vreg[IR_NAME_MAX];
+    
+    lifter_fresh_tmp(ls, delta_vreg);
+    ir_emit(fn, IR_CONST, IR_TY_I64, delta_vreg, NULL, NULL, NULL, static_gas_delta, ls->pc);
+    
+    // Subtract gas
+    ir_emit(fn, IR_SUB, IR_TY_I64, next_gas_vreg, current_gas_vreg, delta_vreg, NULL, 0L, ls->pc);
+    
+    // Barrier: if next_gas < 0, revert OOG
+    lifter_fresh_tmp(ls, cmp_vreg);
+    char zero_vreg[IR_NAME_MAX];
+    lifter_fresh_tmp(ls, zero_vreg);
+    ir_emit(fn, IR_CONST, IR_TY_I64, zero_vreg, NULL, NULL, NULL, 0, ls->pc);
+    
+    ir_emit(fn, IR_LT, IR_TY_I64, cmp_vreg, next_gas_vreg, zero_vreg, NULL, 0L, ls->pc);
+    
+    char l_oog[IR_NAME_MAX];
+    char l_ok[IR_NAME_MAX];
+    sprintf(l_oog, ".L_OOG_REVERT_%d", ls->tmp_seq++);
+    sprintf(l_ok, ".L_OOG_OK_%d", ls->tmp_seq++);
+    ir_node_t *br = ir_emit(fn, IR_BR_IF, IR_TY_VOID, "", cmp_vreg, "", l_oog, 0L, ls->pc);
+    // Note: since this is just a scaffold, we need to manually bypass the split if the user 
+    // says "drops the basic block split" for EIP-150 clamp, but for OOG the user explicitely provided:
+    // ir_node_t *br = ir_emit(fn, IR_BR_IF, IR_TY_VOID, "", cmp_vreg, "", ".L_OOG_REVERT", 0, 0);
+    // br->vuln_tags |= IR_VULN_EXEC_BARRIER; 
+    br->tag = IR_TAG_EVM_BARRIER;
+    ir_emit(fn, IR_BR, IR_TY_VOID, "", "", "", l_ok, 0L, ls->pc);
+    ir_emit(fn, IR_LABEL, IR_TY_VOID, "", "", "", l_oog, 0L, ls->pc);
+    ir_emit(fn, IR_RET, IR_TY_VOID, "", zero_vreg, "", "", 0L, ls->pc); // Revert
+    ir_emit(fn, IR_LABEL, IR_TY_VOID, "", "", "", l_ok, 0L, ls->pc);
+}
+
+static void evm_inject_eip150_clamp(ir_func_t *fn, evm_lifter_t *ls, const char *req_gas_vreg, const char *avail_gas_vreg, char *out_vreg) {
+    char div64_vreg[IR_NAME_MAX], allowed_vreg[IR_NAME_MAX], cmp_vreg[IR_NAME_MAX];
+    char const_64[IR_NAME_MAX];
+    
+    lifter_fresh_tmp(ls, const_64);
+    ir_emit(fn, IR_CONST, IR_TY_I64, const_64, NULL, NULL, NULL, 64, ls->pc);
+    
+    lifter_fresh_tmp(ls, div64_vreg);
+    ir_emit(fn, IR_DIV, IR_TY_I64, div64_vreg, avail_gas_vreg, const_64, NULL, 0L, ls->pc);
+    
+    lifter_fresh_tmp(ls, allowed_vreg);
+    ir_emit(fn, IR_SUB, IR_TY_I64, allowed_vreg, avail_gas_vreg, div64_vreg, NULL, 0L, ls->pc);
+    
+    lifter_fresh_tmp(ls, cmp_vreg);
+    ir_emit(fn, IR_LT, IR_TY_I64, cmp_vreg, req_gas_vreg, allowed_vreg, NULL, 0L, ls->pc);
+    
+    char l_req[IR_NAME_MAX], l_all[IR_NAME_MAX], l_end[IR_NAME_MAX];
+    sprintf(l_req, ".L_req_%d", ls->tmp_seq++);
+    sprintf(l_all, ".L_all_%d", ls->tmp_seq++);
+    sprintf(l_end, ".L_end_%d", ls->tmp_seq++);
+    
+    ir_emit(fn, IR_BR_IF, IR_TY_VOID, "", cmp_vreg, "", l_req, 0L, ls->pc);
+    ir_emit(fn, IR_BR, IR_TY_VOID, "", "", "", l_all, 0L, ls->pc);
+    
+    ir_emit(fn, IR_LABEL, IR_TY_VOID, "", "", "", l_req, 0L, ls->pc);
+    ir_emit(fn, IR_COPY, IR_TY_I64, out_vreg, req_gas_vreg, "", "", 0L, ls->pc);
+    ir_emit(fn, IR_BR, IR_TY_VOID, "", "", "", l_end, 0L, ls->pc);
+    
+    ir_emit(fn, IR_LABEL, IR_TY_VOID, "", "", "", l_all, 0L, ls->pc);
+    ir_emit(fn, IR_COPY, IR_TY_I64, out_vreg, allowed_vreg, "", "", 0L, ls->pc);
+    ir_emit(fn, IR_BR, IR_TY_VOID, "", "", "", l_end, 0L, ls->pc);
+    
+    ir_emit(fn, IR_LABEL, IR_TY_VOID, "", "", "", l_end, 0L, ls->pc);
+}
+
+static void evm_inject_memory_expansion_cost(ir_func_t *fn, evm_lifter_t *ls, const char *words_vreg, char *cost_vreg) {
+    char linear_cost[IR_NAME_MAX], quad_cost[IR_NAME_MAX], squared[IR_NAME_MAX];
+    char const_3[IR_NAME_MAX], const_512[IR_NAME_MAX];
+    
+    lifter_fresh_tmp(ls, const_3);
+    ir_emit(fn, IR_CONST, IR_TY_I64, const_3, NULL, NULL, NULL, 3, ls->pc);
+    lifter_fresh_tmp(ls, linear_cost);
+    ir_emit(fn, IR_MUL, IR_TY_I64, linear_cost, words_vreg, const_3, NULL, 0L, ls->pc);
+    
+    lifter_fresh_tmp(ls, squared);
+    ir_emit(fn, IR_MUL, IR_TY_I64, squared, words_vreg, words_vreg, NULL, 0L, ls->pc);
+    
+    lifter_fresh_tmp(ls, const_512);
+    ir_emit(fn, IR_CONST, IR_TY_I64, const_512, NULL, NULL, NULL, 512, ls->pc);
+    lifter_fresh_tmp(ls, quad_cost);
+    ir_emit(fn, IR_DIV, IR_TY_I64, quad_cost, squared, const_512, NULL, 0L, ls->pc);
+    
+    ir_emit(fn, IR_ADD, IR_TY_I64, cost_vreg, linear_cost, quad_cost, NULL, 0L, ls->pc);
+}
+
+static int lift_u256_is_zero(const evm_u256_t *a) {
     int i;
     for (i = 0; i < 32; i++) {
         if (a->bytes[i] != 0) return 0;
@@ -70,45 +289,20 @@ static int evm_u256_cmp_signed(const evm_u256_t *a, const evm_u256_t *b) {
     return evm_u256_cmp(a, b);
 }
 
-static int evm_u256_add(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t *b) {
-    int i;
-    unsigned int carry = 0;
-    for (i = 31; i >= 0; i--) {
-        unsigned int sum = a->bytes[i] + b->bytes[i] + carry;
-        dst->bytes[i] = (unsigned char)(sum & 0xFF);
-        carry = sum >> 8;
-    }
-    return carry;
+static int lift_u256_add(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t *b) {
+    uint256_t pa = to_physics(a);
+    uint256_t pb = to_physics(b);
+    uint256_t pr = evm_u256_add(pa, pb);
+    from_physics(dst, pr);
+    return (pr.limbs[3] < pa.limbs[3]) ? 1 : 0; // rough carry
 }
 
-static void evm_u256_sub(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t *b) {
-    int i;
-    int borrow = 0;
-    for (i = 31; i >= 0; i--) {
-        int diff = (int)a->bytes[i] - (int)b->bytes[i] - borrow;
-        if (diff < 0) {
-            diff += 256;
-            borrow = 1;
-        } else {
-            borrow = 0;
-        }
-        dst->bytes[i] = (unsigned char)diff;
-    }
+static void lift_u256_sub(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t *b) {
+    from_physics(dst, evm_u256_sub(to_physics(a), to_physics(b)));
 }
 
-static void evm_u256_mul(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t *b) {
-    int i, j;
-    memset(dst->bytes, 0, 32);
-    for (i = 31; i >= 0; i--) {
-        unsigned int carry = 0;
-        for (j = 31; j >= 0; j--) {
-            int k = i + j - 31;
-            if (k < 0) continue;
-            unsigned int prod = dst->bytes[k] + (a->bytes[i] * b->bytes[j]) + carry;
-            dst->bytes[k] = (unsigned char)(prod & 0xFF);
-            carry = prod >> 8;
-        }
-    }
+static void lift_u256_mul(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t *b) {
+    from_physics(dst, evm_u256_mul(to_physics(a), to_physics(b)));
 }
 
 static void evm_u256_and(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t *b) {
@@ -156,14 +350,14 @@ static void evm_u256_negate(evm_u256_t *dst, const evm_u256_t *a) {
     for (int i = 0; i < 32; i++) {
         inv.bytes[i] = ~a->bytes[i];
     }
-    evm_u256_add(dst, &inv, &one);
+    lift_u256_add(dst, &inv, &one);
 }
 
 /* Unsigned DIV / MOD */
 static void evm_u256_div_mod(evm_u256_t *q, evm_u256_t *r, const evm_u256_t *a, const evm_u256_t *b) {
     memset(q->bytes, 0, 32);
     memset(r->bytes, 0, 32);
-    if (evm_u256_is_zero(b)) return;
+    if (lift_u256_is_zero(b)) return;
     
     for (int i = 255; i >= 0; i--) {
         evm_u256_shl1(r);
@@ -171,7 +365,7 @@ static void evm_u256_div_mod(evm_u256_t *q, evm_u256_t *r, const evm_u256_t *a, 
             r->bytes[31] |= 1;
         }
         if (evm_u256_cmp(r, b) >= 0) {
-            evm_u256_sub(r, r, b);
+            lift_u256_sub(r, r, b);
             evm_u256_set_bit(q, i);
         }
     }
@@ -179,7 +373,7 @@ static void evm_u256_div_mod(evm_u256_t *q, evm_u256_t *r, const evm_u256_t *a, 
 
 /* Signed SDIV / SMOD */
 static void evm_u256_sdiv_smod(evm_u256_t *q, evm_u256_t *r, const evm_u256_t *a, const evm_u256_t *b) {
-    if (evm_u256_is_zero(b)) {
+    if (lift_u256_is_zero(b)) {
         memset(q->bytes, 0, 32);
         memset(r->bytes, 0, 32);
         return;
@@ -200,21 +394,21 @@ static void evm_u256_sdiv_smod(evm_u256_t *q, evm_u256_t *r, const evm_u256_t *a
 
 /* ADDMOD */
 static void evm_u256_addmod(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t *b, const evm_u256_t *n) {
-    if (evm_u256_is_zero(n)) {
+    if (lift_u256_is_zero(n)) {
         memset(dst->bytes, 0, 32);
         return;
     }
     evm_u256_t sum, q, r, r_max;
-    int carry = evm_u256_add(&sum, a, b);
+    int carry = lift_u256_add(&sum, a, b);
     evm_u256_div_mod(&q, &r, &sum, n);
     if (carry) {
         evm_u256_t max256, one, carry_mod;
         memset(max256.bytes, 0xFF, 32);
         memset(one.bytes, 0, 32); one.bytes[31] = 1;
         evm_u256_div_mod(&q, &r_max, &max256, n);
-        evm_u256_add(&carry_mod, &r_max, &one);
+        lift_u256_add(&carry_mod, &r_max, &one);
         evm_u256_div_mod(&q, &carry_mod, &carry_mod, n);
-        evm_u256_add(&r, &r, &carry_mod);
+        lift_u256_add(&r, &r, &carry_mod);
         evm_u256_div_mod(&q, dst, &r, n);
     } else {
         memcpy(dst, &r, sizeof(evm_u256_t));
@@ -223,7 +417,7 @@ static void evm_u256_addmod(evm_u256_t *dst, const evm_u256_t *a, const evm_u256
 
 /* MULMOD */
 static void evm_u256_mulmod(evm_u256_t *dst, const evm_u256_t *a, const evm_u256_t *b, const evm_u256_t *n) {
-    if (evm_u256_is_zero(n)) {
+    if (lift_u256_is_zero(n)) {
         memset(dst->bytes, 0, 32);
         return;
     }
@@ -231,14 +425,14 @@ static void evm_u256_mulmod(evm_u256_t *dst, const evm_u256_t *a, const evm_u256
     memset(res.bytes, 0, 32);
     evm_u256_div_mod(&q, &a_mod, a, n);
     for (int i = 255; i >= 0; i--) {
-        int carry = evm_u256_add(&res, &res, &res);
+        int carry = lift_u256_add(&res, &res, &res);
         if (carry || evm_u256_cmp(&res, n) >= 0) {
-            evm_u256_sub(&res, &res, n);
+            lift_u256_sub(&res, &res, n);
         }
         if (evm_u256_get_bit(b, i)) {
-            carry = evm_u256_add(&res, &res, &a_mod);
+            carry = lift_u256_add(&res, &res, &a_mod);
             if (carry || evm_u256_cmp(&res, n) >= 0) {
-                evm_u256_sub(&res, &res, n);
+                lift_u256_sub(&res, &res, n);
             }
         }
     }
@@ -265,10 +459,10 @@ static void evm_u256_exp(evm_u256_t *dst, const evm_u256_t *base, const evm_u256
     /* iterate over all 256 bits of exp from LSB to MSB */
     for (int i = 0; i < 256; i++) {
         if (evm_u256_get_bit(exp, i)) {
-            evm_u256_mul(&tmp, &result, &b); /* tmp = result * b */
+            lift_u256_mul(&tmp, &result, &b); /* tmp = result * b */
             memcpy(&result, &tmp, sizeof(evm_u256_t));
         }
-        evm_u256_mul(&tmp, &b, &b); /* tmp = b * b */
+        lift_u256_mul(&tmp, &b, &b); /* tmp = b * b */
         memcpy(&b, &tmp, sizeof(evm_u256_t));
     }
     memcpy(dst, &result, sizeof(evm_u256_t));
@@ -751,6 +945,10 @@ void evm_lifter_init(evm_lifter_t *ls,
     extern void memory_v2_free(void *);
     ls->memory_v2 = memory_v2_new();
 
+    ls->is_block_start = 1;
+    strcpy(ls->current_gas_vreg, "g0");
+    ir_emit(ls->func, IR_CONST, IR_TY_I64, ls->current_gas_vreg, NULL, NULL, NULL, 30000000ULL, 0);
+
     /* Allocate and pre-scan valid JUMPDESTs */
     ls->valid_jumpdest = (unsigned char *)calloc(length > 0 ? (size_t)length : 1, 1);
     if (ls->valid_jumpdest && bytecode) {
@@ -822,6 +1020,19 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
 
     op = (unsigned int)ls->bytecode[ls->pc];
     ls->insn_count++;
+
+    if (op == (unsigned int)EVM_JUMPDEST) {
+        ls->is_block_start = 1;
+    }
+
+    if (ls->is_block_start) {
+        int block_gas = get_block_static_gas(ls->bytecode, ls->length, ls->pc);
+        char next_gas[IR_NAME_MAX];
+        lifter_fresh_tmp(ls, next_gas);
+        evm_apply_static_gas(ls->func, ls, block_gas, ls->current_gas_vreg, next_gas);
+        strcpy(ls->current_gas_vreg, next_gas);
+        ls->is_block_start = 0;
+    }
 
     /* ── PUSH0 (EIP-3855) ──────────────────────────────────────────── */
     if (op == (unsigned int)EVM_PUSH0) {
@@ -1006,7 +1217,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         ir_emit(ls->func, IR_ADD, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
         if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
             (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
-            evm_u256_add(&res_val, &a_val, &b_val);
+            lift_u256_add(&res_val, &a_val, &b_val);
             return stack_push_const_wide(ls, tmp_dst, res_val.bytes, 32, evm_u256_to_narrow(&res_val));
         }
         return stack_push(ls, tmp_dst);
@@ -1027,7 +1238,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         ir_emit(ls->func, IR_SUB, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
         if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
             (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
-            evm_u256_sub(&res_val, &a_val, &b_val);
+            lift_u256_sub(&res_val, &a_val, &b_val);
             return stack_push_const_wide(ls, tmp_dst, res_val.bytes, 32, evm_u256_to_narrow(&res_val));
         }
         return stack_push(ls, tmp_dst);
@@ -1048,7 +1259,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         ir_emit(ls->func, IR_MUL, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
         if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
             (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
-            evm_u256_mul(&res_val, &a_val, &b_val);
+            lift_u256_mul(&res_val, &a_val, &b_val);
             return stack_push_const_wide(ls, tmp_dst, res_val.bytes, 32, evm_u256_to_narrow(&res_val));
         }
         return stack_push(ls, tmp_dst);
@@ -1067,7 +1278,11 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_DIV, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
+        if (op == EVM_SDIV) {
+            tagged_emit(ls, IR_DIV, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc, IR_TAG_EVM_SDIV);
+        } else {
+            ir_emit(ls->func, IR_DIV, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
+        }
         if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
             (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
             if (op == EVM_DIV) {
@@ -1093,7 +1308,11 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, tmp_b); if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_MOD, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
+        if (op == EVM_SMOD) {
+            tagged_emit(ls, IR_MOD, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc, IR_TAG_EVM_SMOD);
+        } else {
+            ir_emit(ls->func, IR_MOD, IR_TY_I64, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc);
+        }
         if ((a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) &&
             (b_st == EVM_VAL_KNOWN_NARROW || b_st == EVM_VAL_KNOWN_WIDE)) {
             if (op == EVM_MOD) {
@@ -1191,7 +1410,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         lifter_fresh_tmp(ls, tmp_dst);
         tagged_emit(ls, IR_EQ, IR_TY_I32, tmp_dst, tmp_a, tmp_b, NULL, 0L, ls->pc, IR_TAG_EVM_ISZERO);
         if (a_st == EVM_VAL_KNOWN_NARROW || a_st == EVM_VAL_KNOWN_WIDE) {
-            return stack_push_const_narrow(ls, tmp_dst, evm_u256_is_zero(&a_val) ? 1L : 0L);
+            return stack_push_const_narrow(ls, tmp_dst, lift_u256_is_zero(&a_val) ? 1L : 0L);
         }
         return stack_push(ls, tmp_dst);
     }
@@ -1453,7 +1672,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
     case EVM_GAS:
         /* These push an environment-derived value; model as CONST 0 for now */
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_CONST, IR_TY_I64, tmp_dst, NULL, NULL, NULL, 0L, ls->pc);
+        tagged_emit(ls, IR_CONST, IR_TY_I64, tmp_dst, NULL, NULL, NULL, 0L, ls->pc, IR_TAG_HOST_CONTEXT);
         return stack_push(ls, tmp_dst);
 
     case EVM_BALANCE:
@@ -1463,7 +1682,7 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
     case EVM_CALLDATALOAD: {
         res = stack_pop(ls, tmp_a); if (res != EVM_LIFT_OK) return res;
         lifter_fresh_tmp(ls, tmp_dst);
-        ir_emit(ls->func, IR_LOAD, IR_TY_I64, tmp_dst, tmp_a, NULL, NULL, 0L, ls->pc);
+        tagged_emit(ls, IR_LOAD, IR_TY_I64, tmp_dst, tmp_a, NULL, "__evm_calldataload", 0L, ls->pc, IR_TAG_CALLDATALOAD);
         extern void evm_calldata_load(void* mem, const char* offset_tmp);
         evm_calldata_load(ls->memory_v2, tmp_a);
         return stack_push(ls, tmp_dst);
@@ -1693,6 +1912,11 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, ro);    if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, rl);    if (res != EVM_LIFT_OK) return res;
 
+        char clamped_gas[IR_NAME_MAX];
+        lifter_fresh_tmp(ls, clamped_gas);
+        evm_inject_eip150_clamp(ls->func, ls, gas, ls->current_gas_vreg, clamped_gas);
+        strcpy(gas, clamped_gas);
+
         lifter_fresh_tmp(ls, tmp_dst);
         /* Emit IR_CALL targeting the address held in `addr` temp */
         node = tagged_emit(ls, IR_CALL, IR_TY_I64,
@@ -1716,6 +1940,11 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, al);   if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, ro);   if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, rl);   if (res != EVM_LIFT_OK) return res;
+
+        char clamped_gas[IR_NAME_MAX];
+        lifter_fresh_tmp(ls, clamped_gas);
+        evm_inject_eip150_clamp(ls->func, ls, gas, ls->current_gas_vreg, clamped_gas);
+        strcpy(gas, clamped_gas);
 
         lifter_fresh_tmp(ls, tmp_dst);
         node = tagged_emit(ls, IR_CALL, IR_TY_I64,
@@ -1741,6 +1970,11 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, al);   if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, ro);   if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, rl);   if (res != EVM_LIFT_OK) return res;
+
+        char clamped_gas[IR_NAME_MAX];
+        lifter_fresh_tmp(ls, clamped_gas);
+        evm_inject_eip150_clamp(ls->func, ls, gas, ls->current_gas_vreg, clamped_gas);
+        strcpy(gas, clamped_gas);
 
         lifter_fresh_tmp(ls, tmp_dst);
         node = tagged_emit(ls, IR_CALL, IR_TY_I64,
@@ -1799,18 +2033,23 @@ evm_lift_result_t evm_lift_bytecode(evm_lifter_t *ls) {
     evm_lift_result_t res;
 
     while (ls->pc < ls->length) {
+        unsigned int op = ls->bytecode[ls->pc];
         res = evm_lift_step(ls);
+        
+        if (op == EVM_JUMP || op == EVM_JUMPI || op == EVM_STOP || op == EVM_RETURN || 
+            op == EVM_REVERT || op == EVM_INVALID || op == EVM_SELFDESTRUCT) {
+            ls->is_block_start = 1;
+        }
+        
         if (res == EVM_LIFT_TRUNCATED || res == EVM_LIFT_OOM) {
             return res;
         }
         if (res == EVM_LIFT_INVALID_OP) {
-            /* Record but continue — defensive lifter tolerates unknown opcodes */
             return res;
         }
         if (res == EVM_LIFT_STACK_OVER || res == EVM_LIFT_STACK_UNDER) {
             return res;
         }
-        /* EVM_LIFT_OK — proceed to next instruction */
     }
     return EVM_LIFT_OK;
 }

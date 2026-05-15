@@ -64,9 +64,13 @@ void evm_symbolic_run(const unsigned char* bytecode, size_t len, const char* pro
     extern ir_module_t *g_ir_module;
     ir_module_t *mod = ir_module_create();
     if (!mod) return;
+    g_ir_module = mod;
     
     evm_lifter_init(&ls, bytecode, len, mod);
     evm_lift_bytecode(&ls);
+
+    extern void ir_pm_run_default(void *mod_ptr, int verbose);
+    ir_pm_run_default(mod, 0);
 
     bool proved = prove_property(ls.func, prop);
     printf("Proof %s: %s\n", prop, proved ? "✓ HOLD" : "✗ UNKNOWN");

@@ -2411,11 +2411,7 @@ static const RustFunction *rust_backend_find_function_by_symbol_in_ast(const Rus
 
 static void rust_backend_runtime_function_label(char *buf, int buf_len, const RustFunction *fn) {
     if (!buf || buf_len <= 0 || !fn) return;
-    if (strcmp(fn->name, "main") == 0) {
-        snprintf(buf, (size_t)buf_len, "main");
-    } else {
-        snprintf(buf, (size_t)buf_len, "rust_fn_%d", (int)fn->symbol_id);
-    }
+    snprintf(buf, (size_t)buf_len, "%s", fn->name);
 }
 
 static int rust_backend_runtime_expr_supported(const RustAst *ast, const RustExpr *e, const RustSymbolId *call_stack, int call_stack_len);
@@ -2823,9 +2819,15 @@ static int rust_backend_emit_runtime_function(FILE *out, RustParser *p, const Ru
 static int rust_backend_emit_runtime_program(FILE *out, RustParser *p, const RustAst *ast) {
     const RustFunction *fn;
     int label_id = 0;
+    char fn_label[64];
     if (!out || !p || !ast) return 1;
     fprintf(out, ".text\n");
-    fprintf(out, ".globl main\n");
+    fn = ast->functions;
+    while (fn) {
+        rust_backend_runtime_function_label(fn_label, (int)sizeof(fn_label), fn);
+        fprintf(out, ".globl %s\n", fn_label);
+        fn = fn->next;
+    }
     fn = ast->functions;
     while (fn) {
         if (rust_backend_emit_runtime_function(out, p, ast, fn, &label_id) != 0) return 1;
@@ -3315,7 +3317,7 @@ int rust_backend_bridge_compile_file(const char *filename, const char *source, i
         return 1;
     }
     main_fn = rust_backend_find_main_function(ast);
-    if (main_fn && rust_backend_runtime_program_supported(ast)) {
+    if ((main_fn || stop_at_asm || compile_only) && rust_backend_runtime_program_supported(ast)) {
         if (rust_backend_emit_runtime_program(out, &p, ast) != 0) {
             fclose(out);
             rust_print_diags(filename, p.diags, p.num_diags);

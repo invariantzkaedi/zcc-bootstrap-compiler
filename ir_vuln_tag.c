@@ -41,6 +41,7 @@ static const ir_vuln_tag_entry_t IR_VULN_TAG_TABLE[] = {
     { IR_VULN_SELFDESTRUCT,    "IR_VULN_SELFDESTRUCT"     },
     { IR_VULN_CONTRACT_CREATE, "IR_VULN_CONTRACT_CREATE"  },
     { IR_VULN_EXEC_BARRIER,    "IR_VULN_EXEC_BARRIER"     },
+    { IR_VULN_OOG,             "IR_VULN_OOG"              },
 };
 
 enum { IR_VULN_TAG_TABLE_LEN =

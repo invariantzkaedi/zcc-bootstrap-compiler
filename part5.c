@@ -1100,6 +1100,8 @@ int main(int argc, char **argv) {
   int rust_dump_mode = 0;
   int decompile_mode = 0;
   int hunt_mode = 0;
+  int symbolic_mode = 0;
+  int g_smt_mode = 0;
   int jit_mode = 0;
   int prove_mode = 0;
   char* prove_prop = 0;
@@ -1109,6 +1111,8 @@ int main(int argc, char **argv) {
   int sculpt_mode = 0;
   char *sculpt_prompt = 0;
 
+  char smt_out_file[256];
+  smt_out_file[0] = '\0';
   int g_ir_primary = 0;
 
   /* ForgeZero audit export flags (non-blocking; disabled by default) */
@@ -1183,10 +1187,17 @@ int main(int argc, char **argv) {
       g_security_787 = 1;
     } else if (strcmp(argv[i], "--decompile") == 0) {
       decompile_mode = 1;
-    } else if (strcmp(argv[i], "--hunt") == 0) {
-      hunt_mode = 1;
       i++;
       if (i < argc) input_file = argv[i];
+    } else if (strcmp(argv[i], "--hunt") == 0) {
+      hunt_mode = 1;
+    } else if (strcmp(argv[i], "--symbolic") == 0) {
+      symbolic_mode = 1;
+    } else if (strcmp(argv[i], "--smt") == 0) {
+      g_smt_mode = 1;
+    } else if (strncmp(argv[i], "--smt-out=", 10) == 0) {
+      strncpy(smt_out_file, argv[i] + 10, 255);
+      smt_out_file[255] = '\0';
     } else if (strcmp(argv[i], "--jit") == 0) {
       jit_mode = 1;
       i++;
@@ -1245,7 +1256,7 @@ int main(int argc, char **argv) {
       strncat(extra_link_args, argv[i], 4095 - (int)strlen(extra_link_args));
     } else {
       int len = strlen(argv[i]);
-      if (len > 2 && (strcmp(argv[i] + len - 2, ".c") == 0 || strcmp(argv[i] + len - 3, ".rs") == 0)) {
+      if (len > 2 && (strcmp(argv[i] + len - 2, ".c") == 0 || strcmp(argv[i] + len - 3, ".rs") == 0 || (len > 4 && strcmp(argv[i] + len - 4, ".yul") == 0))) {
         input_file = argv[i];
       } else {
         if (extra_link_args[0]) strncat(extra_link_args, " ", 4095 - (int)strlen(extra_link_args));
@@ -1312,6 +1323,15 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  if (strlen(input_file) >= 4 && strcmp(input_file + strlen(input_file) - 4, ".yul") == 0) {
+      extern uint8_t* compile_yul_to_evm(const char* yul_source, size_t* out_len);
+      size_t new_len = 0;
+      uint8_t* new_source = compile_yul_to_evm(source, &new_len);
+      free(source);
+      source = (char*)new_source;
+      source_len = new_len;
+  }
+
   if (decompile_mode) {
     extern void evm_decompile(const unsigned char* bytecode, size_t len, const char* output_path, int abi_mode);
     evm_decompile((const unsigned char*)source, source_len, output_file, abi_mode);
@@ -1321,6 +1341,22 @@ int main(int argc, char **argv) {
   }
 
   if (hunt_mode) {
+    if (getenv("ZCC_OFFLINE_HUNT")) {
+        if (!enable_telemetry_stdout) printf("[WARDEN] Offline mode active. Bypassing PyTorch IPC. Dumping raw telemetry...\n");
+        extern void evm_decompile(const unsigned char*, size_t, const char*, int);
+        
+        if (symbolic_mode) {
+            extern void evm_run_symbolic_from_bytecode(const unsigned char* bytecode, size_t len, int smt_mode);
+            evm_run_symbolic_from_bytecode((const unsigned char*)source, source_len, g_smt_mode);
+        } else {
+            /* Dump decompiled pseudo-code directly to stderr for inspection */
+            evm_decompile((const unsigned char*)source, source_len, "/dev/stderr", abi_mode);
+        }
+        
+        free(source);
+        return 0;
+    }
+
     extern int ipc_bridge_init(void);
     extern FILE *ipc_bridge_open_tx(void);
     extern void ipc_bridge_close_tx(FILE *f);
@@ -1376,7 +1412,7 @@ int main(int argc, char **argv) {
     extern ir_module_t* g_ir_module;
     if (g_ir_module && g_ir_module->func_count > 0) {
         extern void export_smt2(ir_func_t* graph, const char* path);
-        export_smt2(g_ir_module->funcs[0], "proof.smt2");
+        export_smt2(g_ir_module->funcs[0], smt_out_file[0] ? smt_out_file : "proof.smt2");
     }
     
     free(source);
@@ -1505,29 +1541,65 @@ int main(int argc, char **argv) {
   /* generate code */
   if (!enable_telemetry_stdout) printf("[Phase 3] Native AST Constant Folding... OK\n");
   if (!enable_telemetry_stdout) printf("[Phase 4] SystemV ABI X86-64 Codegen... OK\n");
-  fprintf(cc->out, "# ZCC asm begin\n");
-  codegen_program(cc, prog);
+  
+  if (g_ir_primary && g_ir_module) {
+      /* Dummy pass to generate IR. We write the AST codegen to a temp file or just let it overwrite.
+         Wait, cc->out is already open to asm_file. We will overwrite it later. */
+      codegen_program(cc, prog);
+      fclose(cc->out);
+
+      if (!enable_telemetry_stdout) printf("[Phase IR] IR Pass Manager...\n");
+      ir_pm_run_default(g_ir_module, 1);
+      
+      cc->out = fopen(asm_file, "w");
+      extern void ir_module_lower_x86(const ir_module_t *mod, FILE *out);
+      ir_module_lower_x86(g_ir_module, cc->out);
+  } else {
+      fprintf(cc->out, "# ZCC asm begin\n");
+      codegen_program(cc, prog);
+  }
   fclose(cc->out);
 
-  /* IR pass manager — runs when --ir flag is active */
-  if (g_ir_primary && g_ir_module) {
-    int ir_total_nodes = 0;
-    int ir_fi;
-    for (ir_fi = 0; ir_fi < g_ir_module->func_count; ir_fi++) {
-      ir_total_nodes += g_ir_module->funcs[ir_fi]->node_count;
+  if (getenv("ZCC_HOOK_IR_COURTROOM")) {
+    FILE *f = fopen("ir_snapshot.json", "w");
+    if (f && g_ir_module) {
+      fprintf(f, "{\n  \"module\": \"zcc_ir\",\n  \"functions\": [\n");
+      int fi;
+      for (fi = 0; fi < g_ir_module->func_count; fi++) {
+        ir_func_t *fnc = g_ir_module->funcs[fi];
+        fprintf(f, "    {\n      \"name\": \"%s\",\n      \"nodes\": [\n", fnc->name[0] ? fnc->name : "anon");
+        ir_node_t *n = fnc->head;
+        while (n) {
+          fprintf(f, "        {\"op\": %d, \"type\": %d, \"dst\": \"%s\", \"src1\": \"%s\", \"src2\": \"%s\", \"label\": \"%s\", \"imm\": %ld}%s\n",
+            n->op, n->type, n->dst[0] ? n->dst : "", n->src1[0] ? n->src1 : "", n->src2[0] ? n->src2 : "", n->label[0] ? n->label : "", (long)n->imm,
+            n->next ? "," : "");
+          n = n->next;
+        }
+        fprintf(f, "      ]\n    }%s\n", fi == g_ir_module->func_count - 1 ? "" : ",");
+      }
+      fprintf(f, "  ]\n}\n");
+      fclose(f);
+      int ret = system("python3 /mnt/g/suno/ZKAEDI_CORE/courtroom/ir_validator.py ir_snapshot.json");
+      if (ret != 0) {
+        fprintf(stderr, "[ZCC-HOOK-04] FATAL: IR Lowering Courtroom check failed.\\n");
+        exit(1);
+      }
     }
-    if (!enable_telemetry_stdout) printf("[Phase IR] IR Pass Manager (%d funcs, %d nodes)...\n",
-           g_ir_module->func_count, ir_total_nodes);
-    ir_pm_run_default(g_ir_module, 1);
-    if (!enable_telemetry_stdout) printf("[Phase IR] Pass Manager Complete.\n");
   }
+
+  /* IR pass manager already ran during codegen if active */
 
   if (!g_ir_primary) {
     ZCC_IR_FLUSH(stdout);
   }
 
   /* peephole optimize the emitted assembly safely out-of-bounds */
-  peephole_optimize(asm_file);
+  int opt_peephole = 1;
+  if (getenv("ZCC_OPT") && strcmp(getenv("ZCC_OPT"), "0") == 0) opt_peephole = 0;
+  if (getenv("ZCC_OPT_PEEPHOLE") && strcmp(getenv("ZCC_OPT_PEEPHOLE"), "0") == 0) opt_peephole = 0;
+  if (opt_peephole) {
+    peephole_optimize(asm_file);
+  }
 
   /* security pass: sign-extension overflow detection */
   if (g_security_signext) {
@@ -1550,7 +1622,7 @@ int main(int argc, char **argv) {
     if (compile_only) {
       sprintf(cmd, "gcc -O0 -w -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -c -o %s %s 2>&1", output_file, asm_file);
     } else if (strcmp(input_file, "zcc.c") == 0 || (strlen(input_file) >= 6 && strcmp(input_file + strlen(input_file) - 6, "/zcc.c") == 0)) {
-      sprintf(cmd, "gcc -O0 -w -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_symbolic_cfg.c ir_dominance.c ir_vuln_tag.c evm_lifter.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c -lm 2>&1", output_file, asm_file);
+      sprintf(cmd, "gcc -O0 -w -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c -lm 2>&1", output_file, asm_file);
     } else {
       sprintf(cmd, "gcc -O0 -w -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s %s -lm -lpthread -ldl 2>&1", output_file, asm_file, extra_link_args);
     }

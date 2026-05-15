@@ -74,7 +74,11 @@ typedef enum {
     IR_TAG_EVM_GT                  = 13,/* EVM 256-bit greater-than comparison  */
     IR_TAG_EVM_ISZERO              = 14,/* EVM 256-bit is-zero comparison       */
     IR_TAG_TLOAD                   = 15,/* TLOAD — transient state read       */
-    IR_TAG_TSTORE                  = 16 /* TSTORE — transient state write     */
+    IR_TAG_TSTORE                  = 16,/* TSTORE — transient state write     */
+    IR_TAG_HOST_CONTEXT            = 17,/* ADDRESS / CALLER / ORIGIN          */
+    IR_TAG_CALLDATALOAD            = 18,/* CALLDATALOAD                       */
+    IR_TAG_EVM_SDIV                = 19,/* EVM 256-bit signed division          */
+    IR_TAG_EVM_SMOD                = 20 /* EVM 256-bit signed modulo            */
 } evm_ir_tag_t;
 
 /* ── Support Accounting (Issue #15 Tracking) ───────────────────────── */
@@ -257,11 +261,12 @@ typedef struct {
     int                  tagged_count;/* nodes with non-zero security tags */
     void                *memory_v2;   /* symbolic memory model v2          */
 
-    /* Static memory tracking for Keccak folding (first 1024 bytes) */
     unsigned char        memory[1024];
     unsigned char        memory_known[1024];
 
     unsigned char       *valid_jumpdest; /* bitmap of valid JUMPDEST offsets */
+    char                 current_gas_vreg[IR_NAME_MAX]; /* current available gas */
+    int                  is_block_start; /* triggers block gas analysis */
 } evm_lifter_t;
 
 /* ── Public API ──────────────────────────────────────────────────────── */
