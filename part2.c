@@ -302,7 +302,6 @@ Symbol *scope_add_local(Compiler *cc, char *name, Type *type) {
     sym = scope_add(cc, name, type);
     sym->is_local = 1;
     sz = type_size(type);
-    sz = (sz + 7) & ~7;
     if (sz < 8) sz = 8;  /* minimum 8-byte slots */
     cc->local_offset = cc->local_offset - sz;
     sym->stack_offset = cc->local_offset;

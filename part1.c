@@ -511,7 +511,6 @@ struct Compiler {
     int pending_tbfp;       /* transparent bitfield packing flag, consumed by parse_struct_or_union */
     int debug_abi_classes;  /* -fdebug-abi-classes flag */
     int abi_scratch_offset; /* %rbp-relative offset to 16-byte aggregate return scratch (CG-IR-019) */
-    int sret_offset;        /* %rbp-relative offset to the hidden struct return pointer */
     int used_regs_mask;     /* for telemetry tracking */
     int is_forced_mask;     /* 1 if 0x1F was forced (CG-IR-011) */
 };

@@ -67,9 +67,8 @@ typedef enum {
     IR_VULN_SELFDESTRUCT     = (1 << 6),   /* destructive termination (SELFDESTRUCT)  */
     IR_VULN_CONTRACT_CREATE  = (1 << 7),   /* new contract deployment (CREATE/CREATE2)*/
     IR_VULN_EXEC_BARRIER     = (1 << 8),   /* execution barrier (REVERT/INVALID)      */
-    IR_VULN_OOG              = (1 << 9),   /* out of gas execution barrier            */
-    /* bits 10–29 reserved for future schema extensions                        */
-    IR_VULN_ALL_KNOWN        = (1 << 10) - 1, /* mask of all currently defined flags  */
+    /* bits 9–29 reserved for future schema extensions                         */
+    IR_VULN_ALL_KNOWN        = (1 << 9) - 1, /* mask of all currently defined flags  */
     IR_VULN_FLAG_MAX         = (1 << 30)   /* sentinel — do not assign to nodes       */
 } ir_vuln_tag_t;
 

@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define SSA_ENABLED 1
+#define SSA_ENABLED 0
 #define MAX_PHI_PREDS 32
 #define MAX_VARS      1024
 
@@ -42,7 +42,7 @@ void df_compute_all(const dom_cfg_t *cfg, df_set_t **out_df) {
             int runner = b;
             while (runner != -1) {
                 for (int p = 0; p < cfg->blocks[runner].pred_count; p++) {
-                    int pred = cfg->blocks[runner].pred[p];
+                    int pred = cfg->blocks[runner].preds[p];
                     if (pred == -1) continue;
 
                     if (!dom_dominates(cfg, b, pred)) {
@@ -70,108 +70,81 @@ void df_free(df_set_t *df) {
 
 /* ── SSA Renaming + Versioning ────────────────────────────────────────── */
 
-#define MAX_SSA_VARS 1024
+typedef struct {
+    char base_name[IR_NAME_MAX];
+    int  version;
+    char versioned_name[IR_NAME_MAX];
+} ssa_version_entry_t;
 
-// Tracks the current active SSA definition for each tracked alloca
-static char active_defs[MAX_SSA_VARS][IR_NAME_MAX];
-static const char *tracked_allocas[MAX_SSA_VARS];
-static int num_tracked = 0;
+#define MAX_VERSIONS 512
+static ssa_version_entry_t version_stack[MAX_VERSIONS];
+static int version_top = 0;
 
-// Helper to find the index of an alloca
-static int get_alloca_idx(const char *name) {
-    for (int i = 0; i < num_tracked; i++) {
-        if (strcmp(tracked_allocas[i], name) == 0) return i;
+static int push_version(const char *base) {
+    if (version_top >= MAX_VERSIONS) {
+        fprintf(stderr, "[SSA] FATAL: version stack overflow\n");
+        return -1;
     }
-    return -1;
+    strncpy(version_stack[version_top].base_name, base, IR_NAME_MAX-1);
+    version_stack[version_top].version = 0;  // start at v0
+    snprintf(version_stack[version_top].versioned_name, IR_NAME_MAX, "%s.%d", base, 0);
+    return version_top++;
 }
 
-static void rename_dfs_recursive(ir_func_t *fn, int block_id, const dom_cfg_t *cfg) {
-    const dom_bb_t *b = &cfg->blocks[block_id];
-    
-    // Snapshot incoming definitions for backtracking
-    char incoming_defs[MAX_SSA_VARS][IR_NAME_MAX];
-    for (int i = 0; i < num_tracked; i++) {
-        strncpy(incoming_defs[i], active_defs[i], IR_NAME_MAX);
+static void pop_version(void) {
+    if (version_top > 0) version_top--;
+}
+
+static const char *get_current_version(const char *base) {
+    for (int i = version_top-1; i >= 0; i--) {
+        if (strcmp(version_stack[i].base_name, base) == 0)
+            return version_stack[i].versioned_name;
     }
+    return base;  // fallback
+}
 
-    ir_node_t *n = b->first;
-    while (n) {
-        ir_node_t *next = n->next;
-
-        // 1. Update active def if we hit a PHI node
-        if (n->op == IR_PHI) {
-            int idx = get_alloca_idx((const char*)n->imm); // We assume imm holds the alloca ptr/name
-            if (idx >= 0) strncpy(active_defs[idx], n->dst, IR_NAME_MAX);
-        }
-        // 2. STORE -> Update active def, convert to NOP (annihilate)
-        else if (n->op == IR_STORE) {
-            int idx = get_alloca_idx(n->dst); // dst is the address
-            if (idx >= 0) {
-                strncpy(active_defs[idx], n->src1, IR_NAME_MAX); // src1 is the value
-                n->op = IR_NOP; 
-            }
-        }
-        // 3. LOAD -> Convert to COPY from active def
-        else if (n->op == IR_LOAD) {
-            int idx = get_alloca_idx(n->src1); // src1 is the address
-            if (idx >= 0) {
-                n->op = IR_COPY;
-                strncpy(n->src1, active_defs[idx], IR_NAME_MAX);
-            }
-        }
-        
-        if (n == b->last) break;
-        n = next;
-    }
-
-    // 4. Fill PHI operands in successors
-    for (int i = 0; i < b->succ_count; i++) {
-        int succ_id = b->succ[i];
-        const dom_bb_t *succ_block = &cfg->blocks[succ_id];
-        
-        for (ir_node_t *phi = succ_block->first; phi && phi->op == IR_PHI; phi = phi->next) {
-            int idx = get_alloca_idx((const char*)phi->imm);
-            if (idx >= 0) {
-                // Find empty slot and inject active_def
-                for (int p = 0; p < phi->phi_capacity; p++) {
-                    if (phi->phi_ops[p].block[0] == '\0') {
-                        strncpy(phi->phi_ops[p].value, active_defs[idx], IR_NAME_MAX);
-                        sprintf(phi->phi_ops[p].block, ".L%d", block_id); // Target the specific block
-                        phi->phi_count++;
-                        break;
-                    }
-                }
-            }
+static void new_version(const char *base) {
+    for (int i = version_top-1; i >= 0; i--) {
+        if (strcmp(version_stack[i].base_name, base) == 0) {
+            version_stack[i].version++;
+            snprintf(version_stack[i].versioned_name, IR_NAME_MAX, "%s.%d", base, version_stack[i].version);
+            return;
         }
     }
-
-    // 5. Recurse down the Dominator Tree
-    for (int i = 0; i < cfg->block_count; i++) {
-        if (cfg->blocks[i].idom == block_id && i != block_id) {
-            rename_dfs_recursive(fn, i, cfg);
-        }
-    }
-
-    // 6. Restore definitions
-    for (int i = 0; i < num_tracked; i++) {
-        strncpy(active_defs[i], incoming_defs[i], IR_NAME_MAX);
-    }
+    push_version(base);
 }
 
 void ssa_rename_function(ir_func_t *fn, const dom_cfg_t *cfg) {
-    if (!fn || !cfg || cfg->block_count == 0) return;
+    if (!fn || !cfg) return;
 
-    num_tracked = 0;
-    for (ir_node_t *n = fn->head; n; n = n->next) {
-        if (n->op == IR_ALLOCA && num_tracked < MAX_SSA_VARS) {
-            tracked_allocas[num_tracked] = n->dst;
-            active_defs[num_tracked][0] = '\0';
-            num_tracked++;
+    version_top = 0;
+
+    for (int bid = 0; bid < cfg->block_count; bid++) {
+        ir_node_t *n = cfg->blocks[bid].first;
+
+        while (n && n != cfg->blocks[bid].last->next) {
+            if (n->dst[0] != '\0' && n->op != IR_PHI) {
+                new_version(n->dst);
+                strncpy(n->dst, get_current_version(n->dst), IR_NAME_MAX-1);
+            }
+
+            if (n->src1[0] != '\0')
+                strncpy(n->src1, get_current_version(n->src1), IR_NAME_MAX-1);
+            if (n->src2[0] != '\0')
+                strncpy(n->src2, get_current_version(n->src2), IR_NAME_MAX-1);
+
+            if (n->op == IR_PHI) {
+                for (int i = 0; i < n->phi_count; i++) {
+                    strncpy(n->phi_ops[i].value, 
+                            get_current_version(n->phi_ops[i].value), IR_NAME_MAX-1);
+                }
+            }
+
+            n = n->next;
         }
     }
 
-    rename_dfs_recursive(fn, 0, cfg);
-    fprintf(stderr, "[SSA] Renamed %s with %d allocas\n", fn->name, num_tracked);
+    fprintf(stderr, "[SSA] Renamed %s with %d versions\n", fn->name, version_top);
 }
 
 /* ── Full Bitset Liveness Analysis ────────────────────────────────────── */
@@ -210,7 +183,7 @@ static void compute_liveness(ir_func_t *fn, const dom_cfg_t *cfg) {
 }
 
 /* ── Real Φ Insertion at Dominance Frontiers ──────────────────────────── */
-static void insert_phis_at_frontiers(ir_module_t *mod, dom_cfg_t *cfg, df_set_t *df_sets) {
+static void insert_phis_at_frontiers(ir_module_t *mod, const dom_cfg_t *cfg, df_set_t *df_sets) {
     for (int f = 0; f < mod->func_count; f++) {
         ir_func_t *fn = mod->funcs[f];
 
@@ -322,7 +295,7 @@ ir_pass_result_t ir_pass_ssa(void *mod_ptr) {
     for (int i = 0; i < mod->func_count; i++) {
         ir_func_t *fn = mod->funcs[i];
         compute_liveness(fn, cfg);                       /* bitset liveness  */
-        insert_phis_at_frontiers(mod, (dom_cfg_t *)cfg, df_sets); /* precise Φ nodes  */
+        insert_phis_at_frontiers(mod, cfg, df_sets);     /* precise Φ nodes  */
         ssa_rename_function(fn, cfg);                    /* versioning       */
     }
 

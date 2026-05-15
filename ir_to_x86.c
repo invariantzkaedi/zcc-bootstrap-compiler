@@ -11,20 +11,11 @@
 
 #include "ir.h"
 #include "regalloc.h"
+#include "src/x86_codegen_sse.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-static const char *preg_name32(PhysReg r) {
-    if (r == PREG_RBX) return "ebx";
-    if (r == PREG_R12) return "r12d";
-    if (r == PREG_R13) return "r13d";
-    if (r == PREG_R14) return "r14d";
-    if (r == PREG_R15) return "r15d";
-    if (r == PREG_R10) return "r10d";
-    if (r == PREG_R11) return "r11d";
-    return preg_name(r);
-}
 typedef struct {
     char name[IR_NAME_MAX];
     int offset;
@@ -309,23 +300,11 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                     else if (n->op == IR_SHL) {
                         /* shift count must be in %cl */
                         load_operand(out, n->src2, "%rcx", ra);
-                        if (n->type == IR_TY_I32 || n->type == IR_TY_U32) fprintf(out, "    shll %%cl, %%eax\n");
-                        else if (n->type == IR_TY_I16 || n->type == IR_TY_U16) fprintf(out, "    shlw %%cl, %%ax\n");
-                        else if (n->type == IR_TY_I8 || n->type == IR_TY_U8) fprintf(out, "    shlb %%cl, %%al\n");
-                        else fprintf(out, "    shlq %%cl, %%rax\n");
+                        fprintf(out, "    shlq %%cl, %%rax\n");
                     } else if (n->op == IR_SHR) {
                         load_operand(out, n->src2, "%rcx", ra);
-                        if (ir_type_unsigned(n->type)) {
-                            if (n->type == IR_TY_U32) fprintf(out, "    shrl %%cl, %%eax\n");
-                            else if (n->type == IR_TY_U16) fprintf(out, "    shrw %%cl, %%ax\n");
-                            else if (n->type == IR_TY_U8) fprintf(out, "    shrb %%cl, %%al\n");
-                            else fprintf(out, "    shrq %%cl, %%rax\n");
-                        } else {
-                            if (n->type == IR_TY_I32) fprintf(out, "    sarl %%cl, %%eax\n");
-                            else if (n->type == IR_TY_I16) fprintf(out, "    sarw %%cl, %%ax\n");
-                            else if (n->type == IR_TY_I8) fprintf(out, "    sarb %%cl, %%al\n");
-                            else fprintf(out, "    sarq %%cl, %%rax\n");
-                        }
+                        if (ir_type_unsigned(n->type)) fprintf(out, "    shrq %%cl, %%rax\n");
+                        else                            fprintf(out, "    sarq %%cl, %%rax\n");
                     } else {
                         /* comparison: src2 as memory operand or reg */
                         if (ra) {
@@ -355,44 +334,33 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                 case IR_MOD: {
                     load_operand(out, n->src1, "%rax", ra);
                     /* divisor: must be in a register or memory for idivq/divq */
-                    int is_32 = (n->type == IR_TY_I32 || n->type == IR_TY_U32);
                     if (ir_type_unsigned(n->type)) {
-                        if (is_32) fprintf(out, "    xorl %%edx, %%edx\n");
-                        else       fprintf(out, "    xorq %%rdx, %%rdx\n");
-                        
+                        fprintf(out, "    xorq %%rdx, %%rdx\n");
                         if (ra) {
                             PhysReg pr2 = ra_get(ra, n->src2);
-                            if (pr2 != PREG_NONE) {
-                                if (is_32) fprintf(out, "    divl %%%s\n", preg_name32(pr2));
-                                else       fprintf(out, "    divq %%%s\n", preg_name(pr2));
-                            } else {
+                            if (pr2 != PREG_NONE)
+                                fprintf(out, "    divq %%%s\n", preg_name(pr2));
+                            else {
                                 int off2 = get_or_create_var(n->src2);
-                                if (is_32) fprintf(out, "    divl %d(%%rbp)\n", off2);
-                                else       fprintf(out, "    divq %d(%%rbp)\n", off2);
+                                fprintf(out, "    divq %d(%%rbp)\n", off2);
                             }
                         } else {
                             int off2 = get_or_create_var(n->src2);
-                            if (is_32) fprintf(out, "    divl %d(%%rbp)\n", off2);
-                            else       fprintf(out, "    divq %d(%%rbp)\n", off2);
+                            fprintf(out, "    divq %d(%%rbp)\n", off2);
                         }
                     } else {
-                        if (is_32) fprintf(out, "    cltd\n");
-                        else       fprintf(out, "    cqo\n");
-                        
+                        fprintf(out, "    cqo\n");
                         if (ra) {
                             PhysReg pr2 = ra_get(ra, n->src2);
-                            if (pr2 != PREG_NONE) {
-                                if (is_32) fprintf(out, "    idivl %%%s\n", preg_name32(pr2));
-                                else       fprintf(out, "    idivq %%%s\n", preg_name(pr2));
-                            } else {
+                            if (pr2 != PREG_NONE)
+                                fprintf(out, "    idivq %%%s\n", preg_name(pr2));
+                            else {
                                 int off2 = get_or_create_var(n->src2);
-                                if (is_32) fprintf(out, "    idivl %d(%%rbp)\n", off2);
-                                else       fprintf(out, "    idivq %d(%%rbp)\n", off2);
+                                fprintf(out, "    idivq %d(%%rbp)\n", off2);
                             }
                         } else {
                             int off2 = get_or_create_var(n->src2);
-                            if (is_32) fprintf(out, "    idivl %d(%%rbp)\n", off2);
-                            else       fprintf(out, "    idivq %d(%%rbp)\n", off2);
+                            fprintf(out, "    idivq %d(%%rbp)\n", off2);
                         }
                     }
                     if (n->op == IR_MOD) store_result(out, n->dst, "%rdx", ra);
@@ -437,7 +405,7 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                     break;
                 }
                 case IR_ADDR: {
-                    load_address_ra(out, n->src1, "%rax", ra);
+                    load_address(out, n->src1, "%rax");
                     store_result(out, n->dst, "%rax", ra);
                     break;
                 }
@@ -447,8 +415,6 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                     load_address_ra(out, n->dst, "%rax", ra);
                     if (n->type == IR_TY_I32 || n->type == IR_TY_U32)
                         fprintf(out, "    movl %%ecx, (%%rax)\n");
-                    else if (n->type == IR_TY_I16 || n->type == IR_TY_U16)
-                        fprintf(out, "    movw %%cx, (%%rax)\n");
                     else if (n->type == IR_TY_I8 || n->type == IR_TY_U8)
                         fprintf(out, "    movb %%cl, (%%rax)\n");
                     else
@@ -464,14 +430,6 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                 case IR_COPY:
                 case IR_CAST: {
                     load_operand(out, n->src1, "%rax", ra);
-                    if (n->op == IR_CAST) {
-                        if (n->type == IR_TY_I8) fprintf(out, "    movsbl %%al, %%eax\n    movsbq %%al, %%rax\n");
-                        else if (n->type == IR_TY_U8) fprintf(out, "    movzbl %%al, %%eax\n");
-                        else if (n->type == IR_TY_I16) fprintf(out, "    movswl %%ax, %%eax\n    movswq %%ax, %%rax\n");
-                        else if (n->type == IR_TY_U16) fprintf(out, "    movzwl %%ax, %%eax\n");
-                        else if (n->type == IR_TY_I32) fprintf(out, "    movslq %%eax, %%rax\n");
-                        else if (n->type == IR_TY_U32) fprintf(out, "    movl %%eax, %%eax\n");
-                    }
                     store_result(out, n->dst, "%rax", ra);
                     break;
                 }
@@ -498,25 +456,17 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                             scan = scan->next;
                         }
                         if (total_args > 6 && (total_args - 6) % 2 != 0) {
+                            fprintf(out, "    subq $8, %%rsp\n");
                             call_padding = 8;
                         } else {
                             call_padding = 0;
                         }
-                        // [FIX]: Pre-allocate exact stack frame for all args > 6
-                        int alloc_size = (total_args > 6 ? (total_args - 6) * 8 : 0) + call_padding;
-                        if (alloc_size > 0) {
-                            fprintf(out, "    subq $%d, %%rsp\n", alloc_size);
-                        }
                     }
-                    
                     load_operand(out, n->src1, "%rax", ra);
-                    
                     if (arg_idx < 6) {
                         fprintf(out, "    movq %%rax, %s\n", arg_regs[arg_idx]);
                     } else {
-                        // [FIX]: Map stack args to precise offsets (0, 8, 16...)
-                        int offset = (arg_idx - 6) * 8;
-                        fprintf(out, "    movq %%rax, %d(%%rsp)\n", offset);
+                        fprintf(out, "    pushq %%rax\n");
                     }
                     arg_idx++;
                     break;
@@ -538,12 +488,6 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                 case IR_RET: {
                     if (n->src1[0] != '\0' && n->src1[0] != '-') {
                         load_operand(out, n->src1, "%rax", ra);
-                        if (n->type == IR_TY_I8) fprintf(out, "    movsbl %%al, %%eax\n    movsbq %%al, %%rax\n");
-                        else if (n->type == IR_TY_U8) fprintf(out, "    movzbl %%al, %%eax\n");
-                        else if (n->type == IR_TY_I16) fprintf(out, "    movswl %%ax, %%eax\n    movswq %%ax, %%rax\n");
-                        else if (n->type == IR_TY_U16) fprintf(out, "    movzwl %%ax, %%eax\n");
-                        else if (n->type == IR_TY_I32) fprintf(out, "    movslq %%eax, %%rax\n");
-                        else if (n->type == IR_TY_U32) fprintf(out, "    movl %%eax, %%eax\n");
                     }
                     /* Restore callee-saved registers (reverse order) */
                     if (ra->used[PREG_R15]) fprintf(out, "    popq %%r15\n");

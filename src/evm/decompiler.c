@@ -73,9 +73,6 @@ void evm_decompile(const unsigned char* bytecode, size_t len, const char* output
     evm_lifter_init(&ls, bytecode, len, mod);
     evm_lift_bytecode(&ls);
 
-    extern void ir_pm_run_default(void *mod_ptr, int verbose);
-    ir_pm_run_default(mod, 1);
-
     DecompilerCtx ctx = { .func = ls.func, .next_var_id = 0 };
     
     FILE* out = fopen(output_path, "w");

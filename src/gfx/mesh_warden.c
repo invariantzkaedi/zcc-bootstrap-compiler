@@ -14,13 +14,6 @@
 #include <math.h>
 #include <time.h>
 
-extern float strtof(const char *nptr, char **endptr);
-extern long clock(void);
-
-#ifndef CLOCKS_PER_SEC
-#define CLOCKS_PER_SEC 1000000
-#endif
-
 #define EPSILON 1e-6f
 
 typedef struct {
@@ -109,7 +102,7 @@ static void export_fortified_gltf(const char *output_file, vec3_t *verts, int nu
 
 /* The primary ZCC Interception Hook */
 void zcc_mesh_warden(const char *raw_json, int length, const char *output_file) {
-    long start = clock();
+    clock_t start = clock();
     
     /* Minimalist Zero-Dependency JSON Extraction */
     char *v_ptr = strstr((char*)raw_json, "\"vertices\": [");

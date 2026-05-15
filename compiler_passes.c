@@ -2812,7 +2812,6 @@ extern int node_ptr_elem_size(struct Node *n);
 /* CG-IR-015: always-present declarations (not guarded by STANDALONE) */
 extern int node_type_size(struct Node *n);
 extern int node_type_unsigned(struct Node *n);
-extern const char *node_asm_string(struct Node *n);
 
 /* Map ND_* (zcc.c) to ZND_* (bridge). Use sentinels from zcc_ast_bridge.h. */
 static int nd_to_znd(int nd_kind) {

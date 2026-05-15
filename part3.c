@@ -48,7 +48,6 @@ static void register_struct(Compiler *cc, Type *t) {
 Type *parse_type(Compiler *cc);
 Type *parse_declarator(Compiler *cc, Type *base, char *name_out);
 static long long parse_const_expr_ternary(Compiler *cc);
-static Node *ensure_type(Compiler *cc, Node *n, Type *ty);
 static long long parse_const_expr_lor(Compiler *cc);
 static long long parse_const_expr_land(Compiler *cc);
 static long long parse_const_expr_bor(Compiler *cc);
@@ -596,18 +595,18 @@ Type *parse_type(Compiler *cc) {
 
 Node *parse_assign(Compiler *cc);
 
-static long long eval_const_expr(Node *n) {
+static int eval_const_expr(Node *n) {
     if (!n) return 0;
-    if (n->kind == ND_NUM) return n->int_val;
+    if (n->kind == ND_NUM) return (int)n->int_val;
     if (n->kind == ND_ADD) return eval_const_expr(n->lhs) + eval_const_expr(n->rhs);
     if (n->kind == ND_SUB) return eval_const_expr(n->lhs) - eval_const_expr(n->rhs);
     if (n->kind == ND_MUL) return eval_const_expr(n->lhs) * eval_const_expr(n->rhs);
     if (n->kind == ND_DIV) {
-        long long r = eval_const_expr(n->rhs);
+        int r = eval_const_expr(n->rhs);
         return r ? eval_const_expr(n->lhs) / r : 0;
     }
     if (n->kind == ND_MOD) {
-        long long r = eval_const_expr(n->rhs);
+        int r = eval_const_expr(n->rhs);
         return r ? eval_const_expr(n->lhs) % r : 0;
     }
     if (n->kind == ND_SHL) return eval_const_expr(n->lhs) << eval_const_expr(n->rhs);
@@ -1055,25 +1054,6 @@ static StructField *find_struct_member(Type *type, const char *name, int *out_of
     return 0;
 }
 
-static Node *apply_default_promotions(Compiler *cc, Node *arg) {
-    if (!arg || !arg->type) return arg;
-    int k = arg->type->kind;
-    Type *promo = 0;
-    if (k == TY_CHAR || k == TY_UCHAR || k == TY_SHORT || k == TY_USHORT) {
-        promo = cc->ty_int;
-    } else if (k == TY_FLOAT) {
-        promo = cc->ty_double;
-    }
-    if (promo && arg->type != promo) {
-        Node *c = node_new(cc, ND_CAST, arg->line);
-        c->lhs = arg;
-        c->cast_type = promo;
-        c->type = promo;
-        return c;
-    }
-    return arg;
-}
-
 Node *parse_postfix(Compiler *cc) {
     Node *n;
     n = parse_primary(cc);
@@ -1242,8 +1222,6 @@ Node *parse_postfix(Compiler *cc) {
                                         c->type = pty;
                                         call->args[k] = c;
                                     }
-                                } else {
-                                    call->args[k] = apply_default_promotions(cc, call->args[k]);
                                 }
                             }
                         } else {
@@ -1296,8 +1274,6 @@ Node *parse_postfix(Compiler *cc) {
                                     c->type = pty;
                                     call->args[k] = c;
                                 }
-                            } else {
-                                call->args[k] = apply_default_promotions(cc, call->args[k]);
                             }
                         }
                     } else if (n->type->kind == TY_PTR && n->type->base && n->type->base->kind == TY_FUNC) {
@@ -1312,8 +1288,6 @@ Node *parse_postfix(Compiler *cc) {
                                     c->type = pty;
                                     call->args[k] = c;
                                 }
-                            } else {
-                                call->args[k] = apply_default_promotions(cc, call->args[k]);
                             }
                         }
                     } else {
@@ -1475,7 +1449,7 @@ Node *parse_unary(Compiler *cc) {
                         Node *asgn_v = parse_assign(cc);
                         Node *asgn_n = node_new(cc, ND_ASSIGN, line);
                         asgn_n->lhs = mem_n;
-                        asgn_n->rhs = ensure_type(cc, asgn_v, mem_n->type);
+                        asgn_n->rhs = asgn_v;
                         asgn_n->type = mem_n->type;
 
                         if (expr) {
@@ -1511,7 +1485,7 @@ Node *parse_unary(Compiler *cc) {
                         Node *asgn_v = parse_assign(cc);
                         Node *asgn_n = node_new(cc, ND_ASSIGN, line);
                         asgn_n->lhs = deref_n;
-                        asgn_n->rhs = ensure_type(cc, asgn_v, cast_type->base);
+                        asgn_n->rhs = asgn_v;
                         asgn_n->type = cast_type->base;
 
                         if (expr) {
@@ -1536,7 +1510,7 @@ Node *parse_unary(Compiler *cc) {
                     Node *asgn_v = parse_assign(cc);
                     Node *asgn_n = node_new(cc, ND_ASSIGN, line);
                     asgn_n->lhs = var_n;
-                    asgn_n->rhs = ensure_type(cc, asgn_v, cast_type);
+                    asgn_n->rhs = asgn_v;
                     asgn_n->type = cast_type;
                     expr = asgn_n;
                     if (cc->tk == TK_COMMA) next_token(cc);
@@ -1631,45 +1605,17 @@ Node *parse_unary(Compiler *cc) {
 
 /* --- binary operators: mul, add, shift, relational, equality, bit, logical --- */
 
-static Type *integer_promotion(Compiler *cc, Type *ty) {
-    if (!ty) return ty;
-    if (ty->kind == TY_CHAR || ty->kind == TY_UCHAR || ty->kind == TY_SHORT || ty->kind == TY_USHORT || ty->kind == TY_ENUM) {
-        return cc->ty_int;
-    }
-    return ty;
-}
-
-static Type *usual_arith_conv(Compiler *cc, Type *t1, Type *t2) {
+static Type *promote_type(Compiler *cc, Type *t1, Type *t2) {
     if (!t1) return t2;
     if (!t2) return t1;
     if (t1->kind == TY_DOUBLE || t2->kind == TY_DOUBLE) return cc->ty_double;
     if (t1->kind == TY_FLOAT || t2->kind == TY_FLOAT) return cc->ty_float;
     if (t1->kind == TY_PTR) return t1;
     if (t2->kind == TY_PTR) return t2;
-
-    t1 = integer_promotion(cc, t1);
-    t2 = integer_promotion(cc, t2);
-
-    int sz1 = type_size(t1);
-    int sz2 = type_size(t2);
-
-    if (sz1 == sz2 && is_unsigned_type(t1) == is_unsigned_type(t2)) return t1;
-
-    if (sz1 >= 8 || sz2 >= 8) {
-        if (sz1 == sz2) {
-            return is_unsigned_type(t1) ? t1 : t2;
-        }
-        Type *larger = (sz1 > sz2) ? t1 : t2;
-        Type *smaller = (sz1 > sz2) ? t2 : t1;
-        if (is_unsigned_type(larger) || !is_unsigned_type(smaller)) {
-            return larger;
-        }
-        if (type_size(larger) > type_size(smaller)) {
-            return larger;
-        }
-        return cc->ty_ulong;
+    if (type_size(t1) >= 8 || type_size(t2) >= 8) {
+        if (is_unsigned_type(t1) || is_unsigned_type(t2)) return cc->ty_ulong;
+        return cc->ty_long;
     }
-
     if (is_unsigned_type(t1) || is_unsigned_type(t2)) return cc->ty_uint;
     return cc->ty_int;
 }
@@ -1699,7 +1645,7 @@ Node *parse_mul(Compiler *cc) {
         else op = ND_MOD;
         next_token(cc);
         rhs = parse_unary(cc);
-        pt = usual_arith_conv(cc, n->type, rhs->type);
+        pt = promote_type(cc, n->type, rhs->type);
         n = ensure_type(cc, n, pt);
         rhs = ensure_type(cc, rhs, pt);
         binop = node_new(cc, op, line);
@@ -1735,7 +1681,7 @@ Node *parse_add(Compiler *cc) {
         } else if (is_pointer(rhs->type)) {
             binop->type = rhs->type;
         } else {
-            pt = usual_arith_conv(cc, n->type, rhs->type);
+            pt = promote_type(cc, n->type, rhs->type);
             n = ensure_type(cc, n, pt);
             rhs = ensure_type(cc, rhs, pt);
             binop->lhs = n;
@@ -1760,13 +1706,10 @@ Node *parse_shift(Compiler *cc) {
         else op = ND_SHR;
         next_token(cc);
         rhs = parse_add(cc);
-        Type *pt = integer_promotion(cc, n->type);
-        n = ensure_type(cc, n, pt);
-        rhs = ensure_type(cc, rhs, integer_promotion(cc, rhs->type));
         binop = node_new(cc, op, line);
         binop->lhs = n;
         binop->rhs = rhs;
-        binop->type = pt;
+        binop->type = n->type;
         n = binop;
     }
     return n;
@@ -1788,7 +1731,7 @@ Node *parse_relational(Compiler *cc) {
         else op = ND_GE;
         next_token(cc);
         rhs = parse_shift(cc);
-        pt = usual_arith_conv(cc, n->type, rhs->type);
+        pt = promote_type(cc, n->type, rhs->type);
         n = ensure_type(cc, n, pt);
         rhs = ensure_type(cc, rhs, pt);
         binop = node_new(cc, op, line);
@@ -1814,7 +1757,7 @@ Node *parse_equality(Compiler *cc) {
         else op = ND_NE;
         next_token(cc);
         rhs = parse_relational(cc);
-        pt = usual_arith_conv(cc, n->type, rhs->type);
+        pt = promote_type(cc, n->type, rhs->type);
         n = ensure_type(cc, n, pt);
         rhs = ensure_type(cc, rhs, pt);
         binop = node_new(cc, op, line);
@@ -1837,7 +1780,7 @@ Node *parse_bitand(Compiler *cc) {
         line = cc->tk_line;
         next_token(cc);
         rhs = parse_equality(cc);
-        pt = usual_arith_conv(cc, n->type, rhs->type);
+        pt = promote_type(cc, n->type, rhs->type);
         n = ensure_type(cc, n, pt);
         rhs = ensure_type(cc, rhs, pt);
         binop = node_new(cc, ND_BAND, line);
@@ -1860,7 +1803,7 @@ Node *parse_bitxor(Compiler *cc) {
         line = cc->tk_line;
         next_token(cc);
         rhs = parse_bitand(cc);
-        pt = usual_arith_conv(cc, n->type, rhs->type);
+        pt = promote_type(cc, n->type, rhs->type);
         n = ensure_type(cc, n, pt);
         rhs = ensure_type(cc, rhs, pt);
         binop = node_new(cc, ND_BXOR, line);
@@ -1884,7 +1827,7 @@ Node *parse_bitor(Compiler *cc) {
         line = cc->tk_line;
         next_token(cc);
         rhs = parse_bitxor(cc);
-        pt = usual_arith_conv(cc, n->type, rhs->type);
+        pt = promote_type(cc, n->type, rhs->type);
         n = ensure_type(cc, n, pt);
         rhs = ensure_type(cc, rhs, pt);
         binop = node_new(cc, ND_BOR, line);
@@ -1947,7 +1890,7 @@ Node *parse_ternary(Compiler *cc) {
         tern->then_body = parse_expr(cc);
         expect(cc, TK_COLON);
         tern->else_body = parse_ternary(cc);
-        tern->type = usual_arith_conv(cc, tern->then_body->type, tern->else_body->type);
+        tern->type = promote_type(cc, tern->then_body->type, tern->else_body->type);
         tern->then_body = ensure_type(cc, tern->then_body, tern->type);
         tern->else_body = ensure_type(cc, tern->else_body, tern->type);
         n = tern;
@@ -2089,30 +2032,18 @@ static void emit_local_initializer(Compiler *cc, Node *block, int *cnt, int *cap
             if (item->kind == ND_INIT_LIST) {
                 emit_local_initializer(cc, block, cnt, cap, base_var, elem_type, item, offset + i * elem_sz);
             } else {
-                /* Cast base to char* so byte offset is not double-scaled */
-                Node *cast_base = node_new(cc, ND_CAST, cc->line);
-                cast_base->lhs = base_var;
-                cast_base->cast_type = type_ptr(cc, cc->ty_char);
-                cast_base->type = type_ptr(cc, cc->ty_char);
-
                 Node *add = node_new(cc, ND_ADD, cc->line);
-                add->lhs = cast_base;
+                add->lhs = base_var;
                 add->rhs = node_num(cc, offset + i * elem_sz, cc->line);
-                add->type = type_ptr(cc, cc->ty_char);
-
-                /* Cast result back to elem_type* for correct deref */
-                Node *cast_back = node_new(cc, ND_CAST, cc->line);
-                cast_back->lhs = add;
-                cast_back->cast_type = type_ptr(cc, elem_type);
-                cast_back->type = type_ptr(cc, elem_type);
+                add->type = type_ptr(cc, elem_type);
                 
                 Node *deref = node_new(cc, ND_DEREF, cc->line);
-                deref->lhs = cast_back;
+                deref->lhs = add;
                 deref->type = elem_type;
                 
                 Node *asgn = node_new(cc, ND_ASSIGN, cc->line);
                 asgn->lhs = deref;
-                asgn->rhs = ensure_type(cc, item, elem_type);
+                asgn->rhs = item;
                 asgn->type = elem_type;
                 
                 if (*cnt >= *cap) {
@@ -2131,30 +2062,18 @@ static void emit_local_initializer(Compiler *cc, Node *block, int *cnt, int *cap
             if (item->kind == ND_INIT_LIST) {
                 emit_local_initializer(cc, block, cnt, cap, base_var, f->type, item, offset + f->offset);
             } else {
-                /* Cast base to char* so byte offset is not double-scaled */
-                Node *cast_base = node_new(cc, ND_CAST, cc->line);
-                cast_base->lhs = base_var;
-                cast_base->cast_type = type_ptr(cc, cc->ty_char);
-                cast_base->type = type_ptr(cc, cc->ty_char);
-
                 Node *add = node_new(cc, ND_ADD, cc->line);
-                add->lhs = cast_base;
+                add->lhs = base_var;
                 add->rhs = node_num(cc, offset + f->offset, cc->line);
-                add->type = type_ptr(cc, cc->ty_char);
-
-                /* Cast result back to field type* for correct deref */
-                Node *cast_back = node_new(cc, ND_CAST, cc->line);
-                cast_back->lhs = add;
-                cast_back->cast_type = type_ptr(cc, f->type);
-                cast_back->type = type_ptr(cc, f->type);
+                add->type = type_ptr(cc, f->type);
                 
                 Node *deref = node_new(cc, ND_DEREF, cc->line);
-                deref->lhs = cast_back;
+                deref->lhs = add;
                 deref->type = f->type;
                 
                 Node *asgn = node_new(cc, ND_ASSIGN, cc->line);
                 asgn->lhs = deref;
-                asgn->rhs = ensure_type(cc, item, f->type);
+                asgn->rhs = item;
                 asgn->type = f->type;
                 
                 if (*cnt >= *cap) {
@@ -2575,7 +2494,7 @@ Node *parse_stmt(Compiler *cc) {
                             var->type = vtype;
                             asgn = node_new(cc, ND_ASSIGN, line);
                             asgn->lhs = var;
-                            asgn->rhs = ensure_type(cc, parse_assign(cc), vtype);
+                            asgn->rhs = parse_assign(cc);
                             asgn->type = vtype;
                             if (cnt < cap) {
                                 block->stmts[cnt] = asgn;
@@ -2792,7 +2711,7 @@ static Node* parse_value_from_wire(Compiler *cc, const uint8_t *ptr) {
             int sid = cc->num_strings;
             if (sid < MAX_STRINGS) {
                 StringEntry *se = &cc->strings[sid];
-                se->data = cc_strdup(cc, (char*)payload);
+                se->data = cc_strdup(cc, (const char*)payload);
                 se->len = w->u.value.len;
                 se->label_id = cc->label_count++;
                 cc->num_strings++;
