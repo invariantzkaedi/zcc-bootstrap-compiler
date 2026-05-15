@@ -2,17 +2,17 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#define PP_MAX_MACROS 4096
-#define PP_MAX_PARAMS 16
+#define PP_MAX_MACROS 8192  /* raised: SQLite */
+#define PP_MAX_PARAMS 128   /* raised: SQLite */
 static int _warned_pp_max_params = 0;
 #define PP_MAX_BODY   65536
-#define PP_MAX_INCLUDE_DEPTH 32
+#define PP_MAX_INCLUDE_DEPTH 64  /* raised */
 
 typedef struct {
     char name[128];
     int  is_function_like;
     int  num_params;
-    char params[PP_MAX_PARAMS][64];
+    char params[PP_MAX_PARAMS][128];
     char *body;
     int  body_cap;
     int  active;
