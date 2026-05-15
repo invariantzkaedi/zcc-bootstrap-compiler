@@ -486,3 +486,25 @@ __pycache__/
 *.wav
 healed_payloads/
 mega_corpus/
+
+# Local build artifacts & binaries
+*.mp4
+a_gcc
+zcc_gcc
+zcc_stage2_gcc
+repro_gcc_*
+repro_zcc_*
+repro0
+t_sret_large
+t_variadic_sum
+proof_cache/
+proofs/
+.mutation_sandbox
+crucible.ir
+repro.ir
+repro_ssa.ir
+ir_snapshot.json
+ra_snapshot.json
+proof.smt2
+courtroom/polyglot
+courtroom/polyglot_singularity

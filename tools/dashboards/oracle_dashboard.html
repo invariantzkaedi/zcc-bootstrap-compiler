@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZKAEDI PRIME // Neural Oracle Telemetry</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #050505;
+            color: #00ffcc;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            display: flex;
+        }
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            pointer-events: none;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border: 1px solid #00ffcc;
+            border-radius: 5px;
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.2);
+            -webkit-backdrop-filter: blur(4px);
+            backdrop-filter: blur(4px);
+        }
+        .hud-line { margin: 5px 0; }
+        .hud-title { font-size: 1.2em; font-weight: bold; border-bottom: 1px solid #00ffcc; padding-bottom: 5px; margin-bottom: 10px; }
+        .hud-highlight { color: #ff00ff; font-weight: bold; }
+        
+        #log-stream {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 400px;
+            height: 250px;
+            overflow: hidden;
+            z-index: 100;
+            font-size: 11px;
+            line-height: 1.4;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            text-shadow: 0 0 5px #00ffcc;
+        }
+        .log-entry { margin-top: 2px; opacity: 0.8; }
+        .log-applied { color: #ff00ff; text-shadow: 0 0 5px #ff00ff; }
+        .log-rejected { color: #444; text-shadow: none; }
+        
+        #stats {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            text-align: right;
+        }
+        .stat-box {
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid #ff00ff;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 15px rgba(255, 0, 255, 0.2);
+        }
+        .stat-value { font-size: 2em; font-weight: bold; color: #ff00ff; text-shadow: 0 0 10px #ff00ff;}
+        
+        #histogram {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border: 1px solid #00ffcc;
+            border-radius: 5px;
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.2);
+            -webkit-backdrop-filter: blur(4px);
+            backdrop-filter: blur(4px);
+            width: 250px;
+        }
+        .hist-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+        .hist-label {
+            width: 80px;
+            color: #888;
+        }
+        .hist-bar-container {
+            flex-grow: 1;
+            height: 10px;
+            background: #222;
+            margin-left: 10px;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .hist-bar {
+            height: 100%;
+            background: #ff00ff;
+            width: 0%;
+            box-shadow: 0 0 5px #ff00ff;
+            transition: width 0.2s ease-out;
+        }
+        .hist-count {
+            width: 40px;
+            text-align: right;
+            margin-left: 10px;
+            color: #00ffcc;
+        }
+
+        #allocator-bus {
+            position: absolute;
+            top: 360px;
+            right: 20px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border: 1px solid #ffd700;
+            border-radius: 5px;
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.2);
+            -webkit-backdrop-filter: blur(4px);
+            backdrop-filter: blur(4px);
+            width: 250px;
+            display: none;
+        }
+        .alloc-line { margin: 5px 0; font-size: 0.9em; }
+        .color-gold { color: #ffd700; }
+        .color-cyan { color: #00ffff; }
+        .color-red { color: #ff0000; }
+        .color-green { color: #00ff00; }
+        .color-amber { color: #ffbf00; }
+        .color-magenta { color: #ff00ff; }
+        
+        #patch-matrix {
+            position: absolute;
+            top: 200px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border: 1px solid #ff00ff;
+            border-radius: 5px;
+            box-shadow: 0 0 15px rgba(255, 0, 255, 0.2);
+            -webkit-backdrop-filter: blur(4px);
+            backdrop-filter: blur(4px);
+            width: 350px;
+            display: none;
+        }
+        .patch-candidate { margin-bottom: 10px; border-left: 2px solid #555; padding-left: 10px; }
+        .patch-candidate.recommended { border-left-color: #ffd700; background: rgba(255, 215, 0, 0.1); }
+        
+        .text-cyan { color: #00ffcc; }
+        .stat-title { font-size: 0.8em; color: #888; }
+        .stat-value-cyan { color: #00ffcc; text-shadow: 0 0 10px #00ffcc; }
+        .hud-title-small { font-size: 1em; }
+        
+        
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        <div class="hud-title">ZKAEDI PRIME // GATE F1 TELEMETRY</div>
+        <div class="hud-line">Status: <span class="hud-highlight" id="conn-status">CONNECTING...</span></div>
+        <div class="hud-line">Oracle Arbiter: <span class="hud-highlight">AVX-512 ACTIVE</span></div>
+        <div class="hud-line">Compiler Parity: <span class="hud-highlight" id="parity-status">LOCKED (zcc2.s == zcc3.s)</span></div>
+        <div class="hud-line">Mode: <span class="text-cyan">CONTINUOUS TOPOLOGY</span></div>
+    </div>
+    
+    <div id="stats">
+        <div class="stat-box">
+            <div class="stat-title">TOTAL EVALUATIONS</div>
+            <div class="stat-value stat-value-cyan" id="stat-total">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-title">KINETIC TRANSFORMS APPLIED</div>
+            <div class="stat-value" id="stat-applied">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-title">AVG LATENCY (ms)</div>
+            <div class="stat-value stat-value-cyan" id="stat-latency">0.00</div>
+        </div>
+    </div>
+
+    <div id="allocator-bus">
+        <div class="hud-title color-gold">ALLOCATOR OVERRIDE BUS</div>
+        <div class="alloc-line">Pins Active: <span id="alloc-active" class="color-gold">0</span></div>
+        <div class="alloc-line">Pinned: <span id="alloc-pinned" class="color-gold"></span></div>
+        <div class="alloc-line">Fallback: <span id="alloc-fallback" class="color-cyan"></span></div>
+        <div class="alloc-line">Stack &Delta;: <span id="alloc-stack" class="color-green">0</span></div>
+        <div class="alloc-line">Spill &Delta;: <span id="alloc-spill" class="color-green">0</span></div>
+        <div class="alloc-line">ABI: <span id="alloc-abi" class="color-green">LOCKED</span></div>
+        <div class="alloc-line">Mode: <span id="alloc-mode" class="color-amber">SANDBOX</span></div>
+    </div>
+
+    <div id="histogram">
+        <div class="hud-title hud-title-small">CONFIDENCE HISTOGRAM</div>
+        <div class="hist-row"><div class="hist-label">0.90 - 1.00</div><div class="hist-bar-container"><div class="hist-bar" id="bar-90"></div></div><div class="hist-count" id="count-90">0</div></div>
+        <div class="hist-row"><div class="hist-label">0.80 - 0.90</div><div class="hist-bar-container"><div class="hist-bar" id="bar-80"></div></div><div class="hist-count" id="count-80">0</div></div>
+        <div class="hist-row"><div class="hist-label">0.70 - 0.80</div><div class="hist-bar-container"><div class="hist-bar" id="bar-70"></div></div><div class="hist-count" id="count-70">0</div></div>
+        <div class="hist-row"><div class="hist-label">0.60 - 0.70</div><div class="hist-bar-container"><div class="hist-bar" id="bar-60"></div></div><div class="hist-count" id="count-60">0</div></div>
+        <div class="hist-row"><div class="hist-label">0.50 - 0.60</div><div class="hist-bar-container"><div class="hist-bar" id="bar-50"></div></div><div class="hist-count" id="count-50">0</div></div>
+    </div>
+
+    <div id="log-stream"></div>
+    
+    <div id="patch-matrix">
+        <div class="hud-title color-magenta">PATCH RANKING MATRIX</div>
+        <div id="patch-candidates"></div>
+    </div>
+    
+    <div id="canvas-container"></div>
+
+    <!-- Include Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+
+    <script>
+        // --- 3D Visualization Setup ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x050505, 0.002);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 100;
+        camera.position.y = 20;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        // Post-processing Bloom
+        const renderScene = new THREE.RenderPass(scene, camera);
+        const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.threshold = 0.2;
+        bloomPass.strength = 2.0;
+        bloomPass.radius = 0.5;
+
+        const composer = new THREE.EffectComposer(renderer);
+        composer.addPass(renderScene);
+        composer.addPass(bloomPass);
+
+        // Particle System for Hamiltonian Energy Landscape
+        const particleCount = 5000;
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+        const colors = new Float32Array(particleCount * 3);
+        const sizes = new Float32Array(particleCount);
+        const energyLevels = new Float32Array(particleCount); // custom attribute for animation
+
+        const colorBase = new THREE.Color(0x004444); // Dim cyan
+        
+        for (let i = 0; i < particleCount; i++) {
+            // Torus layout
+            const u = Math.random() * Math.PI * 2;
+            const v = Math.random() * Math.PI * 2;
+            const r = 40 + Math.random() * 20;
+            const tube = 10 + Math.random() * 5;
+            
+            positions[i * 3] = (r + tube * Math.cos(v)) * Math.cos(u);
+            positions[i * 3 + 1] = tube * Math.sin(v) + (Math.random() - 0.5) * 10;
+            positions[i * 3 + 2] = (r + tube * Math.cos(v)) * Math.sin(u);
+
+            colors[i * 3] = colorBase.r;
+            colors[i * 3 + 1] = colorBase.g;
+            colors[i * 3 + 2] = colorBase.b;
+            
+            sizes[i] = Math.random() * 1.5 + 0.5;
+            energyLevels[i] = 0;
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+        
+        // Custom Shader Material for glow effects
+        const material = new THREE.ShaderMaterial({
+            uniforms: {
+                time: { value: 0 },
+                globalEnergy: { value: 0 }
+            },
+            vertexShader: `
+                uniform float time;
+                uniform float globalEnergy;
+                attribute float size;
+                attribute vec3 color;
+                varying vec3 vColor;
+                
+                void main() {
+                    vColor = color;
+                    
+                    // Wave motion based on global energy
+                    vec3 pos = position;
+                    float wave = sin(pos.x * 0.05 + time) * cos(pos.z * 0.05 + time) * (2.0 + globalEnergy * 0.1);
+                    pos.y += wave;
+                    
+                    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                    gl_PointSize = size * (300.0 / -mvPosition.z) * (1.0 + globalEnergy * 0.05);
+                    gl_Position = projectionMatrix * mvPosition;
+                }
+            `,
+            fragmentShader: `
+                varying vec3 vColor;
+                void main() {
+                    // Circular particle
+                    float dist = length(gl_PointCoord - vec2(0.5));
+                    if (dist > 0.5) discard;
+                    
+                    // Soft glow edge
+                    float alpha = 1.0 - (dist * 2.0);
+                    gl_FragColor = vec4(vColor, alpha);
+                }
+            `,
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+
+        const particleSystem = new THREE.Points(geometry, material);
+        scene.add(particleSystem);
+
+        // Visual FX Triggers
+        let globalEnergyTarget = 0;
+        let globalEnergyCurrent = 0;
+        
+        function triggerEnergySpike(vote, energyVal) {
+            // Apply shockwave to the system
+            globalEnergyTarget += energyVal;
+            
+            // Highlight random nodes
+            const colorAttr = geometry.attributes.color;
+            const cArray = colorAttr.array;
+            
+            const highlightColor = vote === 1 ? new THREE.Color(0xff00ff) : new THREE.Color(0x00ffff);
+            const count = vote === 1 ? 200 : 20; // Bigger impact if applied
+            
+            for (let j = 0; j < count; j++) {
+                const idx = Math.floor(Math.random() * particleCount) * 3;
+                cArray[idx] = highlightColor.r;
+                cArray[idx + 1] = highlightColor.g;
+                cArray[idx + 2] = highlightColor.b;
+            }
+            colorAttr.needsUpdate = true;
+        }
+
+        // Animation Loop
+        let clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const dt = clock.getDelta();
+            const time = clock.getElapsedTime();
+            
+            // Rotate system
+            particleSystem.rotation.y += dt * 0.2 * (1.0 + globalEnergyCurrent * 0.05);
+            particleSystem.rotation.x = Math.sin(time * 0.1) * 0.2;
+            
+            // Decay global energy
+            globalEnergyTarget = Math.max(0, globalEnergyTarget - dt * 20.0);
+            globalEnergyCurrent += (globalEnergyTarget - globalEnergyCurrent) * 0.1;
+            material.uniforms.globalEnergy.value = globalEnergyCurrent;
+            material.uniforms.time.value = time;
+            
+            // Slowly decay particle colors back to base
+            const colorAttr = geometry.attributes.color;
+            const cArray = colorAttr.array;
+            let changed = false;
+            for (let i = 0; i < particleCount * 3; i+=3) {
+                if (cArray[i] > colorBase.r || cArray[i+1] > colorBase.g || cArray[i+2] > colorBase.b) {
+                    cArray[i] += (colorBase.r - cArray[i]) * 0.02;
+                    cArray[i+1] += (colorBase.g - cArray[i+1]) * 0.02;
+                    cArray[i+2] += (colorBase.b - cArray[i+2]) * 0.02;
+                    changed = true;
+                }
+            }
+            if (changed) colorAttr.needsUpdate = true;
+
+            composer.render();
+        }
+        animate();
+
+        // Window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- WebSocket Telemetry Logic ---
+        let totalEvals = 0;
+        let totalApplied = 0;
+        let latencySum = 0;
+        
+        let histCounts = { 50: 0, 60: 0, 70: 0, 80: 0, 90: 0 };
+        let maxHistCount = 0;
+        
+        const logStream = document.getElementById('log-stream');
+        
+        function appendLog(eventData) {
+            const el = document.createElement('div');
+            el.className = 'log-entry ' + (eventData.vote === 1 ? 'log-applied' : 'log-rejected');
+            
+            const ts = new Date().toISOString().split('T')[1].slice(0, -1);
+            let action = eventData.vote === 1 ? "APPLY " : "REJECT";
+            
+            el.innerHTML = `[${ts}] ${action} | ${eventData.pattern || 'UNKNOWN'} | E:${(eventData.energy || 0).toFixed(2)}`;
+            logStream.appendChild(el);
+            
+            if (logStream.children.length > 15) {
+                logStream.removeChild(logStream.firstChild);
+            }
+        }
+
+        function updateHistogram(confidence) {
+            if (confidence < 0.5) return;
+            let bucket = 50;
+            if (confidence >= 0.9) bucket = 90;
+            else if (confidence >= 0.8) bucket = 80;
+            else if (confidence >= 0.7) bucket = 70;
+            else if (confidence >= 0.6) bucket = 60;
+            
+            histCounts[bucket]++;
+            if (histCounts[bucket] > maxHistCount) maxHistCount = histCounts[bucket];
+            
+            // Update UI
+            document.getElementById(`count-${bucket}`).textContent = histCounts[bucket];
+            
+            // Update all bars width relative to max
+            for (let b of [50, 60, 70, 80, 90]) {
+                const width = maxHistCount > 0 ? (histCounts[b] / maxHistCount) * 100 : 0;
+                document.getElementById(`bar-${b}`).style.width = width + "%";
+            }
+        }
+
+        function connectWebSocket() {
+            const ws = new WebSocket('wss://edge.zkaedi.net/telemetry');
+            const statusEl = document.getElementById('conn-status');
+            
+            ws.onopen = () => {
+                statusEl.textContent = "CONNECTED - RECEIVING TELEMETRY";
+                statusEl.style.color = "#00ffcc";
+            };
+            
+            ws.onmessage = (msg) => {
+                try {
+                    const data = JSON.parse(msg.data);
+                    
+                    // Update Stats
+                    totalEvals++;
+                    document.getElementById('stat-total').textContent = totalEvals;
+                    
+                    if (data.vote === 1) {
+                        totalApplied++;
+                        document.getElementById('stat-applied').textContent = totalApplied;
+                    }
+                    
+                    if (data.latency) {
+                        latencySum += data.latency;
+                        document.getElementById('stat-latency').textContent = (latencySum / totalEvals).toFixed(3);
+                    }
+                    
+                    if (data.event === "allocator_pin") {
+                        document.getElementById('allocator-bus').style.display = 'block';
+                        
+                        document.getElementById('alloc-active').textContent = data.pin_var2 ? '2' : '1';
+                        
+                        let pinnedText = `${data.pin_var1}→${data.pin_register1}`;
+                        if (data.pin_var2) {
+                            pinnedText += `, ${data.pin_var2}→${data.pin_register2}`;
+                        }
+                        document.getElementById('alloc-pinned').textContent = pinnedText;
+                        
+                        if (data.fallback_registers) {
+                            document.getElementById('alloc-fallback').textContent = data.fallback_registers.join(', ');
+                        }
+                        
+                        document.getElementById('alloc-stack').textContent = (data.stack_frame_after - data.stack_frame_before);
+                        document.getElementById('alloc-spill').textContent = data.spill_delta;
+                        
+                        const spillEl = document.getElementById('alloc-spill');
+                        if (data.spill_delta > 0) {
+                            spillEl.className = 'color-red';
+                            // red warning pulse
+                            document.getElementById('hud').style.boxShadow = '0 0 30px rgba(255, 0, 0, 0.8)';
+                            setTimeout(() => { document.getElementById('hud').style.boxShadow = '0 0 15px rgba(0, 255, 204, 0.2)'; }, 500);
+                        } else {
+                            spillEl.className = 'color-green';
+                        }
+                        
+                        document.getElementById('alloc-abi').textContent = data.abi || 'LOCKED';
+                        if (data.abi === 'LOCKED') {
+                            document.getElementById('alloc-abi').className = 'color-green';
+                            // green perimeter flash
+                            document.body.style.boxShadow = 'inset 0 0 50px rgba(0, 255, 0, 0.5)';
+                            setTimeout(() => { document.body.style.boxShadow = 'none'; }, 500);
+                        }
+                        
+                        document.getElementById('alloc-mode').textContent = data.parity || 'SANDBOX';
+                        
+                        // bloom spike & fallback ripple
+                        bloomPass.strength = 3.0;
+                        setTimeout(() => { bloomPass.strength = 1.0; }, 200);
+                        
+                        for (let i = 0; i < particleCount; i+=5) {
+                            colors[i*3] = 0.0;
+                            colors[i*3+1] = 1.0;
+                            colors[i*3+2] = 1.0;
+                        }
+                        geometry.attributes.color.needsUpdate = true;
+                        setTimeout(() => {
+                            for (let i = 0; i < particleCount; i+=5) {
+                                colors[i*3] = colorBase.r;
+                                colors[i*3+1] = colorBase.g;
+                                colors[i*3+2] = colorBase.b;
+                            }
+                            geometry.attributes.color.needsUpdate = true;
+                        }, 800);
+                        
+                    } else if (data.parity && data.parity !== "LOCKED") {
+                        const parityStatusEl = document.getElementById('parity-status');
+                        parityStatusEl.textContent = "PARITY WARNING";
+                        parityStatusEl.style.color = "#ff0000";
+                    }
+                    
+                    if (data.event === "patch_ranking") {
+                        document.getElementById('patch-matrix').style.display = 'block';
+                        const container = document.getElementById('patch-candidates');
+                        container.innerHTML = '';
+                        
+                        data.candidates.forEach(cand => {
+                            const isRecommended = (cand.name === data.recommended);
+                            const el = document.createElement('div');
+                            el.className = 'patch-candidate' + (isRecommended ? ' recommended' : '');
+                            
+                            let titleColor = isRecommended ? 'color-gold' : (isRecommended ? 'color-green' : '');
+                            let gasColor = (cand.gas_cost === 'LOW' || cand.gas_cost === 'NONE') ? 'color-cyan' : '';
+                            let secColor = parseFloat(cand.security_score) >= 0.95 ? 'color-magenta' : '';
+                            let compColor = (cand.compatibility === 'LOW' || cand.compatibility === 'MEDIUM') ? 'color-red' : 'color-green';
+                            
+                            el.innerHTML = `
+                                <div class="${titleColor}" style="font-weight:bold;">${cand.name}</div>
+                                <div style="font-size:0.9em; margin-top:2px;">
+                                    Sec: <span class="${secColor}">${cand.security_score}</span> | 
+                                    Gas: <span class="${gasColor}">${cand.gas_cost}</span> | 
+                                    Comp: <span class="${compColor}">${cand.compatibility}</span>
+                                </div>
+                            `;
+                            container.appendChild(el);
+                        });
+                    }
+
+                    // Dynamically scale Bloom intensity based on confidence
+                    if (data.confidence !== undefined) {
+                        bloomPass.strength = 1.0 + (data.confidence * 2.0);
+                        updateHistogram(data.confidence);
+                    }
+                    
+                    // Visuals
+                    appendLog(data);
+                    triggerEnergySpike(data.vote, data.energy || 1.0);
+                    
+                } catch(e) {
+                    console.error("Parse error:", e);
+                }
+            };
+            
+            ws.onclose = () => {
+                statusEl.textContent = "DISCONNECTED - RECONNECTING...";
+                statusEl.style.color = "#ff0000";
+                setTimeout(connectWebSocket, 2000);
+            };
+        }
+        
+        // Boot
+        connectWebSocket();
+    </script>
+</body>
+</html>

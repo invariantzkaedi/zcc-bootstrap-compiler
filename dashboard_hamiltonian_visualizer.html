@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZKAEDI PRIME: Hamiltonian Energy Dashboard</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #020202; color: #00ffcc; font-family: 'Courier New', Courier, monospace; }
+        #canvas-container { width: 100vw; height: 100vh; }
+        #overlay { position: absolute; top: 20px; left: 20px; pointer-events: none; }
+        .glitch { font-size: 28px; font-weight: bold; text-shadow: 2px 2px #ff007f; margin-bottom: 15px; }
+        #fps { color: #00ffcc; font-size: 18px; font-weight: bold; }
+        #asset-selector { margin-top: 15px; background: rgba(0,255,204,0.1); color: #00ffcc; border: 1px solid #00ffcc; padding: 5px; font-family: 'Courier New', Courier, monospace; cursor: pointer; pointer-events: auto; }
+        #asset-selector option { background: #020202; }
+        #controls-hud { position: absolute; bottom: 20px; left: 20px; color: #aaaaaa; font-size: 12px; pointer-events: none; background: rgba(0,0,0,0.5); padding: 10px; border: 1px solid #ff007f; }
+        .key-bind { color: #00ffcc; font-weight: bold; }
+        .status-live { color: #00ffcc; }
+        #loading-overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: #00ffcc; font-size: 24px; justify-content: center; align-items: center; z-index: 1000; font-family: monospace; flex-direction: column; }
+        #error-text { color: #ff003c; margin-top: 10px; font-size: 16px; }
+        .hud-title { color: #ff007f; font-weight: bold; margin-bottom: 5px; border-bottom: 1px solid #ff007f; padding-bottom: 3px; }
+    </style>
+</head>
+<body>
+    <div id="overlay">
+        <div class="glitch">ZKAEDI HAMILTONIAN DASHBOARD</div>
+        <div class="telemetry">ASSET NAME: <span class="highlight">Meshy_AI_Astral_Spiral_Citadel</span></div>
+        <div class="telemetry">HIGH-POLY VERTICES: <span class="highlight">2,714,139</span></div>
+        <div class="telemetry">ACTIVE FPS: <span id="fps">60</span></div>
+        <div class="telemetry" id="telemetry-status">STATUS: <span class="status-live">LIVE ZERO-COPY DEFORMATION</span></div>
+        <select id="asset-selector" title="Select Asset">
+            <option value="/assets/Meshy_AI_Ancient_Mask_of_the_A_0511101724_texture.glb">Ancient_Mask_of_the_A_0511101724</option>
+            <option value="/assets/Meshy_AI_Astral_Fortress_Bluep_0511230218_texture.glb">Astral_Fortress_Bluep_0511230218</option>
+            <option value="/assets/Meshy_AI_Astral_Spiral_Citadel_0511010206_texture.glb">Astral_Spiral_Citadel_0511010206</option>
+            <option value="/assets/Meshy_AI_Aurora_Vanguard_0512020003_texture.glb">Aurora_Vanguard_0512020003</option>
+            <option value="/assets/Meshy_AI_Aurora_Vanguard_0512020730_texture.glb">Aurora_Vanguard_0512020730</option>
+            <option value="/assets/Meshy_AI_Azure_Lake_Dragon_0510130252_texture.glb">Azure_Lake_Dragon_0510130252</option>
+            <option value="/assets/Meshy_AI_A_breathtaking_floati_0511132859_texture.glb">A_breathtaking_floati_0511132859</option>
+            <option value="/assets/Meshy_AI_A_highly_detailed_is_0511223848_texture.glb">A_highly_detailed_is_0511223848</option>
+            <option value="/assets/Meshy_AI_A_highly_detailed_is_0511224030_texture.glb">A_highly_detailed_is_0511224030</option>
+            <option value="/assets/Meshy_AI_A_hyper_detailed_futu_0511132843_texture.glb">A_hyper_detailed_futu_0511132843</option>
+            <option value="/assets/Meshy_AI_Captain_Zkaedi_0511000557_texture.glb">Captain_Zkaedi_0511000557</option>
+            <option value="/assets/Meshy_AI_Celestial_Bloom_of_Ve_0510130303_texture.glb">Celestial_Bloom_of_Ve_0510130303</option>
+            <option value="/assets/Meshy_AI_Celestial_Cathedral_0511003730_generate.glb">Celestial_Cathedral_0511003730_generate</option>
+            <option value="/assets/Meshy_AI_Celestial_Cathedral_0511004552_texture.glb">Celestial_Cathedral_0511004552</option>
+            <option value="/assets/Meshy_AI_Celestial_Spooncaster_0511104613_texture.glb">Celestial_Spooncaster_0511104613</option>
+            <option value="/assets/Meshy_AI_Cerulean_Vanguard_0512023639_generate.glb">Cerulean_Vanguard_0512023639_generate</option>
+            <option value="/assets/Meshy_AI_Cerulean_Vanguard_0512023852_texture.glb">Cerulean_Vanguard_0512023852</option>
+            <option value="/assets/Meshy_AI_Cerulean_Vanguard_0512030005_texture.glb">Cerulean_Vanguard_0512030005</option>
+            <option value="/assets/Meshy_AI_Cerulean_Vanguard_0512030137_texture.glb">Cerulean_Vanguard_0512030137</option>
+            <option value="/assets/Meshy_AI_Cerulean_Vanguard_0512234753_texture.glb">Cerulean_Vanguard_0512234753</option>
+            <option value="/assets/Meshy_AI_Cerulean_Vanguard_0512234832_texture.glb">Cerulean_Vanguard_0512234832</option>
+            <option value="/assets/Meshy_AI_Cerulean_Vanguard_0512235044_texture.glb">Cerulean_Vanguard_0512235044</option>
+            <option value="/assets/Meshy_AI_Cerulean_Vanguard_0512235520_texture.glb">Cerulean_Vanguard_0512235520</option>
+            <option value="/assets/Meshy_AI_Chromatic_Apocalypse_0511011752_generate.glb">Chromatic_Apocalypse_0511011752_generate</option>
+            <option value="/assets/Meshy_AI_Cinematic_futuristic__0511145723_generate.glb">Cinematic_futuristic__0511145723_generate</option>
+            <option value="/assets/Meshy_AI_Cinematic_futuristic__0511145728_generate.glb">Cinematic_futuristic__0511145728_generate</option>
+            <option value="/assets/Meshy_AI_Cinematic_quantum_ent_0511222020_texture.glb">Cinematic_quantum_ent_0511222020</option>
+            <option value="/assets/Meshy_AI_Cosmic_Pilot_Bear_0511000617_texture.glb">Cosmic_Pilot_Bear_0511000617</option>
+            <option value="/assets/Meshy_AI_Crystalline_Horizon_o_0510131835_generate.glb">Crystalline_Horizon_o_0510131835_generate</option>
+            <option value="/assets/Meshy_AI_Crystalline_Horizon_o_0510132106_texture.glb">Crystalline_Horizon_o_0510132106</option>
+            <option value="/assets/Meshy_AI_Cyberpunk_Operative_0511101752_texture.glb">Cyberpunk_Operative_0511101752</option>
+            <option value="/assets/Meshy_AI_Cyberpunk_Operative_0511101843_texture.glb">Cyberpunk_Operative_0511101843</option>
+            <option value="/assets/Meshy_AI_Digital_Lock_Shield_0511004709_texture.glb">Digital_Lock_Shield_0511004709</option>
+            <option value="/assets/Meshy_AI_Electric_Citadel_of_D_0511010229_texture.glb">Electric_Citadel_of_D_0511010229</option>
+            <option value="/assets/Meshy_AI_Emberflame_Sovereign_0510130316_texture.glb">Emberflame_Sovereign_0510130316</option>
+            <option value="/assets/Meshy_AI_Emberflame_Sovereign_0510130330_texture.glb">Emberflame_Sovereign_0510130330</option>
+            <option value="/assets/Meshy_AI_Emberwing_Ascendant_0512005141_texture.glb">Emberwing_Ascendant_0512005141</option>
+            <option value="/assets/Meshy_AI_Ember_Gate_to_the_Dar_0511004808_texture.glb">Ember_Gate_to_the_Dar_0511004808</option>
+            <option value="/assets/Meshy_AI_Emerald_Guardian_of_t_0511004916_texture.glb">Emerald_Guardian_of_t_0511004916</option>
+            <option value="/assets/Meshy_AI_Enchanted_Forest_Path_0511005110_texture.glb">Enchanted_Forest_Path_0511005110</option>
+            <option value="/assets/Meshy_AI_Epic_23_Unwrap_the_C_0512012132_texture.glb">Epic_23_Unwrap_the_C_0512012132</option>
+            <option value="/assets/Meshy_AI_Event_Horizon_City_0511011656_texture.glb">Event_Horizon_City_0511011656</option>
+            <option value="/assets/Meshy_AI_Forbidden_Revelry_0512012207_texture.glb">Forbidden_Revelry_0512012207</option>
+            <option value="/assets/Meshy_AI_From_Clay_Blueprint_t_0512025940_texture.glb">From_Clay_Blueprint_t_0512025940</option>
+            <option value="/assets/Meshy_AI_From_Clay_Blueprint_t_0512025955_texture.glb">From_Clay_Blueprint_t_0512025955</option>
+            <option value="/assets/Meshy_AI_Gengar_LV_100_0512012002_texture.glb">Gengar_LV_100_0512012002</option>
+            <option value="/assets/Meshy_AI_Hack_Analyze_Exploi_0511003306_texture.glb">Hack_Analyze_Exploi_0511003306</option>
+            <option value="/assets/Meshy_AI_Hamiltonian_Recursive_0512112007_generate.glb">Hamiltonian_Recursive_0512112007_generate</option>
+            <option value="/assets/Meshy_AI_Hamiltonian_Zkaedi_Pr_0512111930_generate.glb">Hamiltonian_Zkaedi_Pr_0512111930_generate</option>
+            <option value="/assets/Meshy_AI_Horizon_of_Floating_C_0510132608_texture.glb">Horizon_of_Floating_C_0510132608</option>
+            <option value="/assets/Meshy_AI_Industrial_Espresso_M_0512060316_texture.glb">Industrial_Espresso_M_0512060316</option>
+            <option value="/assets/Meshy_AI_Kaedi_AI_The_Eternal_0512012306_generate.glb">Kaedi_AI_The_Eternal_0512012306_generate</option>
+            <option value="/assets/Meshy_AI_Kaelith_Veyra_The_V_0512012029_texture.glb">Kaelith_Veyra_The_V_0512012029</option>
+            <option value="/assets/Meshy_AI_King_of_Superpowers_0511104556_texture.glb">King_of_Superpowers_0511104556</option>
+            <option value="/assets/Meshy_AI_Lantern_Gate_to_the_M_0511004858_texture.glb">Lantern_Gate_to_the_M_0511004858</option>
+            <option value="/assets/Meshy_AI_Legendary_Colored_Con_0511230245_texture.glb">Legendary_Colored_Con_0511230245</option>
+            <option value="/assets/Meshy_AI_legendary_cyberpunk_h_0512062855_generate.glb">legendary_cyberpunk_h_0512062855_generate</option>
+            <option value="/assets/Meshy_AI_legendary_cyberpunk_h_0512063548_texture.glb">legendary_cyberpunk_h_0512063548</option>
+            <option value="/assets/Meshy_AI_Lightning_Leviathan_0511105418_texture.glb">Lightning_Leviathan_0511105418</option>
+            <option value="/assets/Meshy_AI_Mech_Blueprint_to_Hig_0512025930_texture.glb">Mech_Blueprint_to_Hig_0512025930</option>
+            <option value="/assets/Meshy_AI_Meshy_Merged_Animations.glb">Meshy_Merged_Animations</option>
+            <option value="/assets/Meshy_AI_Meshy_Ready_Template_0512021556_texture.glb">Meshy_Ready_Template_0512021556</option>
+            <option value="/assets/Meshy_AI_Meshy_Ready_Template_0512021602_texture.glb">Meshy_Ready_Template_0512021602</option>
+            <option value="/assets/Meshy_AI_MOBA_3V3_5V5_MULTIPLA_0511225154_texture.glb">MOBA_3V3_5V5_MULTIPLA_0511225154</option>
+            <option value="/assets/Meshy_AI_Multi_Stage_Vapor_Com_0512111908_generate.glb">Multi_Stage_Vapor_Com_0512111908_generate</option>
+            <option value="/assets/Meshy_AI_Nebula_Lantern_Queen_0512013704_texture.glb">Nebula_Lantern_Queen_0512013704</option>
+            <option value="/assets/Meshy_AI_Neon_Arcane_Triad_0511103613_texture.glb">Neon_Arcane_Triad_0511103613</option>
+            <option value="/assets/Meshy_AI_Neon_Catastrophe_Over_0511010148_texture.glb">Neon_Catastrophe_Over_0511010148</option>
+            <option value="/assets/Meshy_AI_Neon_Chaos_Blaster_0510134719_generate.glb">Neon_Chaos_Blaster_0510134719_generate</option>
+            <option value="/assets/Meshy_AI_Neon_Chaos_Blaster_0510134930_texture.glb">Neon_Chaos_Blaster_0510134930</option>
+            <option value="/assets/Meshy_AI_Neon_Cloudburst_Over__0511010502_texture.glb">Neon_Cloudburst_Over__0511010502</option>
+            <option value="/assets/Meshy_AI_Neon_Crystal_Helix_0510130533_generate.glb">Neon_Crystal_Helix_0510130533_generate</option>
+            <option value="/assets/Meshy_AI_Neon_Fury_Warcar_0511232639_texture.glb">Neon_Fury_Warcar_0511232639</option>
+            <option value="/assets/Meshy_AI_Neon_Mech_Siege_0512023000_texture.glb">Neon_Mech_Siege_0512023000</option>
+            <option value="/assets/Meshy_AI_Neon_Mech_Siege_0512023021_texture.glb">Neon_Mech_Siege_0512023021</option>
+            <option value="/assets/Meshy_AI_Neon_Metropolis_of_Fl_0511011822_texture.glb">Neon_Metropolis_of_Fl_0511011822</option>
+            <option value="/assets/Meshy_AI_Neon_Nexus_Grid_0511230306_texture.glb">Neon_Nexus_Grid_0511230306</option>
+            <option value="/assets/Meshy_AI_Neon_Night_Operative_0511102654_texture.glb">Neon_Night_Operative_0511102654</option>
+            <option value="/assets/Meshy_AI_Neon_Oni_Ronin_0511103900_texture.glb">Neon_Oni_Ronin_0511103900</option>
+            <option value="/assets/Meshy_AI_Neon_Rain_Rider_0511104303_texture.glb">Neon_Rain_Rider_0511104303</option>
+            <option value="/assets/Meshy_AI_Neon_Reaper_0510134704_generate.glb">Neon_Reaper_0510134704_generate</option>
+            <option value="/assets/Meshy_AI_Neon_Reaper_0510134714_generate.glb">Neon_Reaper_0510134714_generate</option>
+            <option value="/assets/Meshy_AI_Neon_Reaper_0510134922_texture.glb">Neon_Reaper_0510134922</option>
+            <option value="/assets/Meshy_AI_Neon_Reaper_0510135024_texture.glb">Neon_Reaper_0510135024</option>
+            <option value="/assets/Meshy_AI_Neon_Sentinel_0511103214_texture.glb">Neon_Sentinel_0511103214</option>
+            <option value="/assets/Meshy_AI_Neon_Sentinel_0511141036_texture.glb">Neon_Sentinel_0511141036</option>
+            <option value="/assets/Meshy_AI_Neon_Spiral_Microcosm_0512112107_texture.glb">Neon_Spiral_Microcosm_0512112107</option>
+            <option value="/assets/Meshy_AI_Neon_Void_Enchantress_0511103838_texture.glb">Neon_Void_Enchantress_0511103838</option>
+            <option value="/assets/Meshy_AI_Neon_Void_Reaver_0510134650_generate.glb">Neon_Void_Reaver_0510134650_generate</option>
+            <option value="/assets/Meshy_AI_Neon_Void_Reaver_0510134946_texture.glb">Neon_Void_Reaver_0510134946</option>
+            <option value="/assets/Meshy_AI_Neon_Void_Rider_0511104409_texture.glb">Neon_Void_Rider_0511104409</option>
+            <option value="/assets/Meshy_AI_Neon_Wasteland_of_Cra_0510131823_generate.glb">Neon_Wasteland_of_Cra_0510131823_generate</option>
+            <option value="/assets/Meshy_AI_Neon_Wasteland_of_Cra_0510132125_texture.glb">Neon_Wasteland_of_Cra_0510132125</option>
+            <option value="/assets/Meshy_AI_Neon_Yeti_Hacker_0511060126_texture.glb">Neon_Yeti_Hacker_0511060126</option>
+            <option value="/assets/Meshy_AI_Next_Major_Test_Mult_0512030425_generate.glb">Next_Major_Test_Mult_0512030425_generate</option>
+            <option value="/assets/Meshy_AI_Next_Major_Test_Mult_0512031008_texture.glb">Next_Major_Test_Mult_0512031008</option>
+            <option value="/assets/Meshy_AI_Next_Major_Test_Mult_0512031019_texture.glb">Next_Major_Test_Mult_0512031019</option>
+            <option value="/assets/Meshy_AI_Next_Major_Test_Mult_0512234739_texture.glb">Next_Major_Test_Mult_0512234739</option>
+            <option value="/assets/Meshy_AI_Next_Major_Test_Mult_0512235417_texture.glb">Next_Major_Test_Mult_0512235417</option>
+            <option value="/assets/Meshy_AI_Next_Major_Test_Mult_0512235426_texture.glb">Next_Major_Test_Mult_0512235426</option>
+            <option value="/assets/Meshy_AI_Omega_17_Rises_0510095426_texture.glb">Omega_17_Rises_0510095426</option>
+            <option value="/assets/Meshy_AI_Pixel_Sunset_Quest_0511005043_texture.glb">Pixel_Sunset_Quest_0511005043</option>
+            <option value="/assets/Meshy_AI_Post_apocalyptic_cybe_0511205036_texture.glb">Post_apocalyptic_cybe_0511205036</option>
+            <option value="/assets/Meshy_AI_Prime_Spike_0511234248_texture.glb">Prime_Spike_0511234248</option>
+            <option value="/assets/Meshy_AI_Prismatic_Cataclysm_0511010253_texture.glb">Prismatic_Cataclysm_0511010253</option>
+            <option value="/assets/Meshy_AI_Prismatic_Cataclysm_0511010307_texture.glb">Prismatic_Cataclysm_0511010307</option>
+            <option value="/assets/Meshy_AI_Prismatic_Nexus_Lege_0511230327_texture.glb">Prismatic_Nexus_Lege_0511230327</option>
+            <option value="/assets/Meshy_AI_Prismatic_Voyager_0511142256_texture.glb">Prismatic_Voyager_0511142256</option>
+            <option value="/assets/Meshy_AI_Radiant_Gate_0511005002_texture.glb">Radiant_Gate_0511005002</option>
+            <option value="/assets/Meshy_AI_Rainbow_Burst_Over_Ne_0511010242_texture.glb">Rainbow_Burst_Over_Ne_0511010242</option>
+            <option value="/assets/Meshy_AI_Spacecraft_Blueprint_0512112049_generate.glb">Spacecraft_Blueprint_0512112049_generate</option>
+            <option value="/assets/Meshy_AI_Spacecraft_Blueprint_0512112055_generate.glb">Spacecraft_Blueprint_0512112055_generate</option>
+            <option value="/assets/Meshy_AI_Spacecraft_Blueprint_0512233255_texture.glb">Spacecraft_Blueprint_0512233255</option>
+            <option value="/assets/Meshy_AI_Spacecraft_Blueprint_0512233313_texture.glb">Spacecraft_Blueprint_0512233313</option>
+            <option value="/assets/Meshy_AI_Spiral_Glass_Atrium_0512234942_texture.glb">Spiral_Glass_Atrium_0512234942</option>
+            <option value="/assets/Meshy_AI_StrikeOptionGPT_Neon__0512015007_texture.glb">StrikeOptionGPT_Neon__0512015007</option>
+            <option value="/assets/Meshy_AI_Super_assassin_girl__0511105957_texture.glb">Super_assassin_girl__0511105957</option>
+            <option value="/assets/Meshy_AI_Triad_of_Night_Steel_0511103559_texture.glb">Triad_of_Night_Steel_0511103559</option>
+            <option value="/assets/Meshy_AI_Twin_Moons_Over_the_C_0510132253_generate.glb">Twin_Moons_Over_the_C_0510132253_generate</option>
+            <option value="/assets/Meshy_AI_Twin_Moons_Over_the_C_0510132825_texture.glb">Twin_Moons_Over_the_C_0510132825</option>
+            <option value="/assets/Meshy_AI_Two_Sided_Egyptian_Ri_0512012111_texture.glb">Two_Sided_Egyptian_Ri_0512012111</option>
+            <option value="/assets/Meshy_AI_ULTIMATE_EPIC_MOBA_AR_0511225247_texture.glb">ULTIMATE_EPIC_MOBA_AR_0511225247</option>
+            <option value="/assets/Meshy_AI_ULTIMATE_EPIC_MOBA_AR_0511225650_texture.glb">ULTIMATE_EPIC_MOBA_AR_0511225650</option>
+            <option value="/assets/Meshy_AI_Ultra_detailed_inters_0512063831_generate.glb">Ultra_detailed_inters_0512063831_generate</option>
+            <option value="/assets/Meshy_AI_Vapor_Lagoon_Escape_0510095658_texture.glb">Vapor_Lagoon_Escape_0510095658</option>
+            <option value="/assets/Meshy_AI_Wings_of_Fire_and_Ice_0512010037_texture.glb">Wings_of_Fire_and_Ice_0512010037</option>
+            <option value="/assets/Meshy_AI_Wings_of_Fire_and_Ice_0512010207_texture.glb">Wings_of_Fire_and_Ice_0512010207</option>
+            <option value="/assets/Meshy_AI_YETISEC_ARENA_0511101046_texture.glb">YETISEC_ARENA_0511101046</option>
+            <option value="/assets/Meshy_AI_YETISEC_Overlord_Prot_0511102045_texture.glb">YETISEC_Overlord_Prot_0511102045</option>
+            <option value="/assets/Meshy_AI_YETISEC_The_White_Ha_0511062808_generate.glb">YETISEC_The_White_Ha_0511062808_generate</option>
+            <option value="/assets/Meshy_AI_YETISEC_The_White_Ha_0511063313_texture.glb">YETISEC_The_White_Ha_0511063313</option>
+            <option value="/assets/Meshy_AI_Zkadi_Prime_0511232624_texture.glb">Zkadi_Prime_0511232624</option>
+            <option value="/assets/Meshy_AI_ZKAEDI_0511003257_texture.glb">ZKAEDI_0511003257</option>
+            <option value="/assets/Meshy_AI_ZKAEDI_AI_Legendary_W_0512012050_texture.glb">ZKAEDI_AI_Legendary_W_0512012050</option>
+            <option value="/assets/Meshy_AI_ZKAEDI_Gate_to_the_Co_0511003656_texture.glb">ZKAEDI_Gate_to_the_Co_0511003656</option>
+            <option value="/assets/Meshy_AI_ZKAEDI_PRIME_BLUEPRIN_0512112039_generate.glb">ZKAEDI_PRIME_BLUEPRIN_0512112039_generate</option>
+            <option value="/assets/Meshy_AI_Zkaedi_Prime_Electric_0512011925_texture.glb">Zkaedi_Prime_Electric_0512011925</option>
+            <option value="/assets/Meshy_AI_Zkaedi_Prime_Neon_Si_0510131506_generate.glb">Zkaedi_Prime_Neon_Si_0510131506_generate</option>
+            <option value="/assets/Meshy_AI_Zkaedi_Prime_Neon_Si_0510131741_texture.glb">Zkaedi_Prime_Neon_Si_0510131741</option>
+            <option value="/assets/Meshy_AI_ZKAEDI_Prime_Neon_War_0510131847_generate.glb">ZKAEDI_Prime_Neon_War_0510131847_generate</option>
+            <option value="/assets/Meshy_AI_ZKAEDI_Prime_Neon_War_0510132047_texture.glb">ZKAEDI_Prime_Neon_War_0510132047</option>
+            <option value="/assets/Meshy_AI_Zkaedi_Prime_Weaponi_0510131842_generate.glb">Zkaedi_Prime_Weaponi_0510131842_generate</option>
+            <option value="/assets/Meshy_AI_Zkaedi_Prime_Weaponi_0510132212_texture.glb">Zkaedi_Prime_Weaponi_0510132212</option>
+            <option value="/assets/Meshy_AI_ZKAEDI_Teal_Pilot_Yet_0511000607_texture.glb">ZKAEDI_Teal_Pilot_Yet_0511000607</option>
+            <option value="/assets/Meshy_AI_ZKAEDI_Yeti_Co_Pilot_0511000634_texture.glb">ZKAEDI_Yeti_Co_Pilot_0511000634</option>
+        </select>
+    </div>
+    
+    <div id="loading-overlay">
+        <div id="loading-text">INGESTING MANIFOLD...</div>
+        <div id="error-text"></div>
+    </div>
+    
+    <div id="controls-hud">
+        <div class="hud-title">ZKAEDI NEURAL LINK CONTROLS</div>
+        <div><span class="key-bind">[SPACE]</span>: Toggle Auto-Rotation <span id="st-rot" class="highlight">ON</span></div>
+        <div><span class="key-bind">[ W / M5 ]</span>: Toggle Wireframe Core <span id="st-wire" class="highlight">OFF</span></div>
+        <div><span class="key-bind">[ P ]</span>: Toggle Particle Matrix <span id="st-part" class="highlight">ON</span></div>
+        <div><span class="key-bind">[ + / - ]</span>: Adjust Bloom Multiplier <span id="st-bloom" class="highlight">2.0</span></div>
+        <div><span class="key-bind">[ M / M4 ]</span>: Cycle Color Gradient LUT</div>
+        <div><span class="key-bind">[ R / M3 ]</span>: Reset Viewpoint</div>
+        <div><span class="key-bind">[Arrows/Tilt]</span>: Switch Data Asset</div>
+        <div><span class="key-bind">[Scroll]</span>: Zoom Viewport</div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <!-- WebGL Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // --------------------------------------------------------------------
+        // SYSTEM INITIALIZATION
+        // --------------------------------------------------------------------
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x020202, 0.05);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 2, 8);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Cap pixel ratio to 2 to save fill rate on 4K displays
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 1.0;
+
+        // --------------------------------------------------------------------
+        // POST-PROCESSING PIPELINE
+        // --------------------------------------------------------------------
+        // Need to load post-processing scripts dynamically or assume they are available.
+        // We will simulate the post-processing effects natively in the fragment shader 
+        // to avoid dependency issues, keeping it a zero-dependency standalone HTML file!
+
+        // --------------------------------------------------------------------
+        // ZKAEDI PRIME: DEFORMATION SHADER (HAMILTONIAN OVERRIDE)
+        // --------------------------------------------------------------------
+        const vertexShader = `
+            attribute vec3 _SLAVE_BARY_UVW;
+            
+            uniform float uTime;
+            uniform float uEnergyField;
+            uniform float uBloomMult;
+
+            varying vec3 vColor;
+            varying float vGlow;
+            varying vec2 vUv;
+            varying vec3 vNormal;
+
+            // LUT Color Gradient Injection
+            uniform vec3 uColorA;
+            uniform vec3 uColorB;
+
+            // Simple hash function for pseudo-random but coherent values
+            float hash(vec3 p) {
+                return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+            }
+
+            // Low-frequency structural noise (cheap Voronoi-style)
+            float structuralNoise(vec3 p) {
+                vec3 i = floor(p);
+                vec3 f = fract(p);
+                
+                float minDist = 1.0;
+                for (int x = -1; x <= 1; x++) {
+                    for (int y = -1; y <= 1; y++) {
+                        for (int z = -1; z <= 1; z++) {
+                            vec3 neighbor = vec3(float(x), float(y), float(z));
+                            vec3 point = neighbor + hash(i + neighbor);
+                            float d = length(f - point);
+                            minDist = min(minDist, d);
+                        }
+                    }
+                }
+                return minDist;
+            }
+
+            void main() {
+                vUv = uv;
+                vNormal = normalize(normalMatrix * normal);
+                vec3 pos = position;
+
+                // Use world position for coherent fracturing across the mesh
+                // (Using position directly here since we center the mesh in JS, avoids uniform matrix issues)
+                vec3 worldPos = position; 
+
+                // Primary Layer: Low-frequency structural fracture (Chunky/Angular)
+                float fracture = structuralNoise(worldPos * 0.15 + uTime * 0.3);
+                fracture = pow(fracture, 1.8); // Sharpen the fracture edges
+
+                // Secondary Layer: High-frequency debris chatter
+                float microNoise = fract(sin(dot(worldPos, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
+                float debris = microNoise * 0.15 * fracture; 
+
+                // Combine with energy
+                float energy = uEnergyField; // uEnergyField already includes bass from the JS websocket
+                float displacement = (fracture + debris) * energy * 2.5;
+
+                // Apply displacement along normal + slight world-space push for chunk separation
+                vec3 normalDir = normalize(normal);
+                pos += normalDir * displacement;
+                pos += normalize(worldPos) * displacement * 0.3;
+
+                // Colorize based on structural displacement depth to drive fragment chromatic aberration
+                float heat = clamp(displacement * 0.25, 0.0, 1.0);
+                vColor = mix(uColorA, uColorB, heat);
+                
+                // Exponential glow curve for cinematic bloom simulation
+                vGlow = pow(heat, 2.0) * uBloomMult;
+
+                vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                gl_Position = projectionMatrix * mvPosition;
+            }
+        `;
+
+        const fragmentShader = `
+            uniform float uTime;
+            varying vec3 vColor;
+            varying float vGlow;
+            varying vec2 vUv;
+            varying vec3 vNormal;
+            
+            void main() {
+                // Base Color with Heat Glow
+                vec3 normal = normalize(vNormal);
+                vec3 lightDir = normalize(vec3(1.0, 1.0, 1.0));
+                float diff = max(dot(normal, lightDir), 0.2);
+                vec3 finalColor = vColor * diff * (1.0 + vGlow * 1.5);
+                
+                // Pseudo-Chromatic Aberration based on Glow Intensity
+                float r = finalColor.r * (1.0 + vGlow * 1.5);
+                float g = finalColor.g * (1.0 + vGlow * 1.0);
+                float b = finalColor.b * (1.0 + vGlow * 2.0);
+                finalColor = vec3(r, g, b);
+
+                // Scanline effect
+                float scanline = sin(gl_FragCoord.y * 2.0 - uTime * 10.0) * 0.04;
+                finalColor -= scanline;
+                
+                // Vignette edge darkening
+                float dist = distance(vUv, vec2(0.5));
+                finalColor *= smoothstep(0.8, 0.2, dist);
+
+                gl_FragColor = vec4(finalColor, 1.0);
+            }
+        `;
+
+        // ZKAEDI Color LUTs
+        const colorLUTs = [
+            { a: new THREE.Vector3(0.0, 1.0, 0.8), b: new THREE.Vector3(1.0, 0.0, 0.5) }, // Cyan -> Magenta (Default)
+            { a: new THREE.Vector3(1.0, 0.2, 0.0), b: new THREE.Vector3(1.0, 0.8, 0.0) }, // Hellfire (Red -> Yellow)
+            { a: new THREE.Vector3(0.1, 0.1, 1.0), b: new THREE.Vector3(0.0, 1.0, 1.0) }, // Deep Ocean (Blue -> Cyan)
+            { a: new THREE.Vector3(0.0, 1.0, 0.0), b: new THREE.Vector3(0.8, 1.0, 0.0) }  // Matrix (Green -> Lime)
+        ];
+        let currentLUTIndex = 0;
+        let globalBloomMult = 2.0;
+
+        const customMaterial = new THREE.ShaderMaterial({
+            vertexShader: vertexShader,
+            fragmentShader: fragmentShader,
+            uniforms: {
+                uTime: { value: 0.0 },
+                uEnergyField: { value: 0.4 }, // Lowered base energy
+                uColorA: { value: colorLUTs[0].a },
+                uColorB: { value: colorLUTs[0].b },
+                uBloomMult: { value: globalBloomMult }
+            },
+            wireframe: false, // Default to solid, press W for wireframe
+            transparent: true,
+            opacity: 1.0,
+            blending: THREE.NormalBlending, // Additive blending destroys dense meshes
+            side: THREE.DoubleSide
+        });
+
+        // --------------------------------------------------------------------
+        // BACKGROUND PARTICLE FIELD
+        // --------------------------------------------------------------------
+        const particleGeo = new THREE.BufferGeometry();
+        const particleCount = 5000;
+        const posArray = new Float32Array(particleCount * 3);
+        for(let i = 0; i < particleCount * 3; i++) {
+            posArray[i] = (Math.random() - 0.5) * 40;
+        }
+        particleGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        const particleMat = new THREE.PointsMaterial({
+            size: 0.05,
+            color: 0x00ffcc,
+            transparent: true,
+            opacity: 0.5,
+            blending: THREE.AdditiveBlending
+        });
+        const particles = new THREE.Points(particleGeo, particleMat);
+        scene.add(particles);
+
+        // --------------------------------------------------------------------
+        // GLB ASSET INGESTION & SWITCHING LOGIC
+        // --------------------------------------------------------------------
+        const loader = new THREE.GLTFLoader();
+        let currentMesh = null;
+        
+        function loadAsset(assetName) {
+            if (currentMesh) {
+                scene.remove(currentMesh);
+                // VRAM Leak Prevention: Properly dispose of massive geometries and materials
+                currentMesh.traverse((child) => {
+                    if (child.isMesh) {
+                        if (child.geometry) child.geometry.dispose();
+                        if (child.material && !child.material.isShaderMaterial) {
+                            child.material.dispose();
+                        }
+                    }
+                });
+            }
+            
+            document.getElementById('loading-overlay').style.display = 'flex';
+            document.getElementById('error-text').innerText = '';
+
+            if (assetName === "mock") {
+                const geo = new THREE.IcosahedronGeometry(3, 150);
+                const count = geo.attributes.position.count;
+                const baryArray = new Float32Array(count * 3);
+                for(let i=0; i<count*3; i+=3) {
+                    baryArray[i] = Math.random(); baryArray[i+1] = Math.random(); baryArray[i+2] = 1.0 - baryArray[i] - baryArray[i+1]; 
+                }
+                geo.setAttribute('_SLAVE_BARY_UVW', new THREE.BufferAttribute(baryArray, 3));
+                currentMesh = new THREE.Mesh(geo, customMaterial);
+                scene.add(currentMesh);
+                document.querySelector('.highlight').innerText = "MOCK GEOMETRY";
+                document.getElementById('loading-overlay').style.display = 'none';
+                return;
+            }
+
+            document.querySelector('.highlight').innerText = "LOADING: " + assetName;
+            document.getElementById('loading-text').innerText = "INGESTING " + assetName + "...";
+
+            loader.load('http://localhost:8081/assets/' + assetName, function(gltf) {
+                let targetMesh = null;
+                gltf.scene.traverse(function(child) {
+                    if (child.isMesh && !targetMesh) {
+                        targetMesh = child;
+                    }
+                });
+
+                if (targetMesh) {
+                    const geo = targetMesh.geometry;
+                    
+                    if (!geo.attributes._SLAVE_BARY_UVW) {
+                        const count = geo.attributes.position.count;
+                        const baryArray = new Float32Array(count * 3);
+                        for(let i=0; i<count*3; i+=3) {
+                            baryArray[i] = Math.random(); baryArray[i+1] = Math.random(); baryArray[i+2] = 1.0 - baryArray[i] - baryArray[i+1]; 
+                        }
+                        geo.setAttribute('_SLAVE_BARY_UVW', new THREE.BufferAttribute(baryArray, 3));
+                        
+                        document.getElementById('error-text').innerText = "CRITICAL WARNING: _SLAVE_BARY_UVW MISSING. DYNAMICALLY INJECTING NOISE.";
+                        setTimeout(() => { document.getElementById('loading-overlay').style.display = 'none'; }, 2000);
+                    } else {
+                        document.getElementById('loading-overlay').style.display = 'none';
+                    }
+
+                    targetMesh.material = customMaterial;
+                    
+                    geo.computeBoundingBox();
+                    const center = new THREE.Vector3();
+                    geo.boundingBox.getCenter(center);
+                    targetMesh.position.sub(center);
+                    
+                    currentMesh = new THREE.Group();
+                    currentMesh.add(targetMesh);
+                    scene.add(currentMesh);
+
+                    const vertexCount = geo.attributes.position.count;
+                    document.querySelector('.highlight').innerText = vertexCount.toLocaleString() + " VERTICES";
+                }
+            }, undefined, function(error) {
+                console.error("Failed to load GLB: ", error);
+                document.querySelector('.highlight').innerText = "LOAD ERROR";
+                document.getElementById('error-text').innerText = "FATAL: FILE NOT FOUND OR CORS BLOCKED.";
+            });
+        }
+
+        // Initial Load
+        loadAsset(document.getElementById('asset-selector').value);
+
+        document.getElementById('asset-selector').addEventListener('change', function(e) {
+            loadAsset(e.target.value);
+        });
+
+        // Add keyboard arrow navigation for asset cycling
+        window.addEventListener('keydown', (e) => {
+            // Asset Selection
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                const select = document.getElementById('asset-selector');
+                if (select.selectedIndex < select.options.length - 1) {
+                    select.selectedIndex++;
+                    select.dispatchEvent(new Event('change'));
+                }
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                const select = document.getElementById('asset-selector');
+                if (select.selectedIndex > 0) {
+                    select.selectedIndex--;
+                    select.dispatchEvent(new Event('change'));
+                }
+            }
+            
+            // Toggle Auto-Rotation
+            if (e.code === 'Space') {
+                controls.autoRotate = !controls.autoRotate;
+                document.getElementById('st-rot').innerText = controls.autoRotate ? "ON" : "OFF";
+            }
+            
+            // Toggle Wireframe
+            if (e.key.toLowerCase() === 'w') {
+                customMaterial.wireframe = !customMaterial.wireframe;
+                customMaterial.blending = customMaterial.wireframe ? THREE.AdditiveBlending : THREE.NormalBlending;
+                customMaterial.opacity = customMaterial.wireframe ? 0.15 : 1.0;
+                customMaterial.needsUpdate = true;
+                document.getElementById('st-wire').innerText = customMaterial.wireframe ? "ON" : "OFF";
+            }
+            
+            // Toggle Particles
+            if (e.key.toLowerCase() === 'p') {
+                particles.visible = !particles.visible;
+                document.getElementById('st-part').innerText = particles.visible ? "ON" : "OFF";
+            }
+            
+            // Adjust Bloom (Deformation Heat Multiplier)
+            if (e.key === '=' || e.key === '+') {
+                globalBloomMult = Math.min(10.0, globalBloomMult + 0.5);
+                customMaterial.uniforms.uBloomMult.value = globalBloomMult;
+                document.getElementById('st-bloom').innerText = globalBloomMult.toFixed(1);
+            }
+            if (e.key === '-' || e.key === '_') {
+                globalBloomMult = Math.max(0.0, globalBloomMult - 0.5);
+                customMaterial.uniforms.uBloomMult.value = globalBloomMult;
+                document.getElementById('st-bloom').innerText = globalBloomMult.toFixed(1);
+            }
+            
+            // Cycle Color LUTs
+            if (e.key.toLowerCase() === 'm') {
+                currentLUTIndex = (currentLUTIndex + 1) % colorLUTs.length;
+                customMaterial.uniforms.uColorA.value = colorLUTs[currentLUTIndex].a;
+                customMaterial.uniforms.uColorB.value = colorLUTs[currentLUTIndex].b;
+                
+                // Also update particle colors to match
+                particleMat.color.copy(colorLUTs[currentLUTIndex].a);
+            }
+            
+            // Reset Viewpoint
+            if (e.key.toLowerCase() === 'r') {
+                controls.reset();
+                camera.position.set(0, 2, 8);
+            }
+        });
+
+        // --------------------------------------------------------------------
+        // LOGITECH G502X & ADVANCED MOUSE HARDWARE INTEGRATION
+        // --------------------------------------------------------------------
+        
+        // Prevent default browser back/forward navigation on Mouse4/Mouse5
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 3 || e.button === 4) {
+                e.preventDefault();
+            }
+            
+            // Mouse 4 (Back Button): Cycle Color LUT
+            if (e.button === 3) {
+                currentLUTIndex = (currentLUTIndex + 1) % colorLUTs.length;
+                customMaterial.uniforms.uColorA.value = colorLUTs[currentLUTIndex].a;
+                customMaterial.uniforms.uColorB.value = colorLUTs[currentLUTIndex].b;
+                particleMat.color.copy(colorLUTs[currentLUTIndex].a);
+            }
+            
+            // Mouse 5 (Forward Button): Toggle Wireframe Core
+            if (e.button === 4) {
+                customMaterial.wireframe = !customMaterial.wireframe;
+                customMaterial.blending = customMaterial.wireframe ? THREE.AdditiveBlending : THREE.NormalBlending;
+                customMaterial.opacity = customMaterial.wireframe ? 0.15 : 1.0;
+                customMaterial.needsUpdate = true;
+                document.getElementById('st-wire').innerText = customMaterial.wireframe ? "ON" : "OFF";
+            }
+            
+            // Middle Click: Reset Viewpoint
+            if (e.button === 1) {
+                controls.reset();
+                camera.position.set(0, 2, 8);
+            }
+        });
+
+        // Prevent context menu on right click to allow smooth OrbitControls panning
+        window.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Tilt Roller (Horizontal Scroll) integration
+        let tiltCooldown = false;
+        window.addEventListener('wheel', (e) => {
+            // Check for horizontal scroll (Tilt Roller)
+            if (Math.abs(e.deltaX) > 10 && !tiltCooldown) {
+                const select = document.getElementById('asset-selector');
+                
+                if (e.deltaX > 0) {
+                    // Tilt Right -> Next Asset
+                    if (select.selectedIndex < select.options.length - 1) {
+                        select.selectedIndex++;
+                        select.dispatchEvent(new Event('change'));
+                    }
+                } else {
+                    // Tilt Left -> Prev Asset
+                    if (select.selectedIndex > 0) {
+                        select.selectedIndex--;
+                        select.dispatchEvent(new Event('change'));
+                    }
+                }
+                
+                // 500ms debounce to prevent rapid-fire asset switching
+                tiltCooldown = true;
+                setTimeout(() => tiltCooldown = false, 500);
+            }
+        }, { passive: true });
+
+
+        // --------------------------------------------------------------------
+        // RENDERING LOOP & TELEMETRY
+        // --------------------------------------------------------------------
+        let lastTime = performance.now();
+        let frames = 0;
+
+        // Base target scale for audio reactivity
+        let targetScale = 1.0;
+
+        // --------------------------------------------------------------------
+        // AUTO-RECORDING: CRITICALITY THRESHOLD BREACH
+        // --------------------------------------------------------------------
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let isRecording = false;
+        let criticalityTimer = null;
+        const CRITICALITY_THRESHOLD = 2.5; // Energy field threshold for breach
+        const COOLDOWN_MS = 2000; // Keep recording for 2 seconds after returning to normal
+
+        function startCriticalityRecording() {
+            if (isRecording) return;
+            const canvas = document.querySelector('canvas');
+            if (!canvas) return;
+            
+            const stream = canvas.captureStream(30);
+            try {
+                mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
+            } catch (e) {
+                mediaRecorder = new MediaRecorder(stream); // fallback
+            }
+
+            mediaRecorder.ondataavailable = function(e) {
+                if (e.data.size > 0) recordedChunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = function() {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'criticality_breach_' + Date.now() + '.webm';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                recordedChunks = [];
+            };
+
+            mediaRecorder.start();
+            isRecording = true;
+            
+            const statusDiv = document.getElementById('telemetry-status');
+            if (statusDiv) {
+                const recBadge = document.createElement('span');
+                recBadge.id = 'rec-badge';
+                recBadge.style.color = '#ff0000';
+                recBadge.style.fontWeight = 'bold';
+                recBadge.style.marginLeft = '10px';
+                recBadge.innerText = ' [REC: CRITICALITY]';
+                statusDiv.appendChild(recBadge);
+            }
+        }
+
+        function stopCriticalityRecording() {
+            if (!isRecording) return;
+            mediaRecorder.stop();
+            isRecording = false;
+            const badge = document.getElementById('rec-badge');
+            if (badge) badge.remove();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Push time to the Vertex Shader
+            customMaterial.uniforms.uTime.value += 0.05; // Speed up deformation
+            
+            // Slow orbital rotation
+            if(currentMesh) {
+                // Smoothly interpolate the scale based on the audio energy
+                currentMesh.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.1);
+            }
+            
+            // Rotate background particle field
+            particles.rotation.y -= 0.001;
+            particles.rotation.z += 0.0005;
+
+            // Live FPS Telemetry calculation
+            frames++;
+            const time = performance.now();
+            if (time >= lastTime + 1000) {
+                document.getElementById('fps').innerText = Math.round((frames * 1000) / (time - lastTime));
+                frames = 0;
+                lastTime = time;
+            }
+
+            // CRITICALITY MONITORING: Check energy field on every frame
+            const currentEnergy = customMaterial.uniforms.uEnergyField.value;
+            if (currentEnergy > CRITICALITY_THRESHOLD) {
+                if (!isRecording) {
+                    startCriticalityRecording();
+                }
+                // Reset the cooldown timer
+                if (criticalityTimer) clearTimeout(criticalityTimer);
+                criticalityTimer = setTimeout(() => {
+                    stopCriticalityRecording();
+                }, COOLDOWN_MS);
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // --------------------------------------------------------------------
+        // ZKAEDI SUNO INJECTOR WEBSOCKET BRIDGE
+        // --------------------------------------------------------------------
+        const ws = new WebSocket('ws://localhost:8892');
+        
+        ws.onopen = () => {
+            console.log("[ZKAEDI HUD] Telemetry Link Established.");
+            document.getElementById('telemetry-status').innerHTML = 'STATUS: <span style="color:#ff007f;">HAMILTONIAN SYNC ACTIVE</span>';
+        };
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                
+                // We use bass to amplify the underlying energy field
+                const baseEnergy = 0.8;
+                customMaterial.uniforms.uEnergyField.value = baseEnergy + (data.bass * 3.5);
+                
+                // If the python bridge is sending the full 5-float payload, map phase and chaos
+                if (data.phase !== undefined) {
+                    customMaterial.uniforms.uTime.value = data.phase; // Hijack uTime with orchestrated phase
+                }
+                
+                // Make the entire mesh physical scale react to the bass
+                targetScale = 1.0 + (data.bass * 0.4);
+                
+                // Make background particles react to treble
+                particleMat.size = 0.05 + (data.treble * 0.15);
+                
+            } catch (e) {
+                console.error("Telemetry parse error", e);
+            }
+        };
+
+        ws.onclose = () => {
+            console.log("[ZKAEDI HUD] Audio link severed.");
+            document.getElementById('telemetry-status').innerHTML = 'STATUS: <span style="color:#ff0000;">AUDIO LINK SEVERED</span>';
+        };
+
+
+        // Responsive handling
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
