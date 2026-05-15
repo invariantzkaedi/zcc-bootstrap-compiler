@@ -270,6 +270,22 @@
             <div>> SYSTEM READY. AWAITING RPC URL.</div>
         </div>
     </div>
+    
+    <!-- FORENSIC GALLERY SECTION -->
+    <div class="security-panel" style="max-width: 1200px; margin-top: 2rem; border-left-color: var(--neon-magenta);">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong style="color: var(--neon-magenta); font-size: 1.2rem;">[ FORENSIC CAPTURE GALLERY ]</strong>
+            <label class="custom-file-upload" style="cursor: pointer; border: 1px solid var(--neon-cyan); padding: 0.5rem 1rem; color: var(--neon-cyan);">
+                <input type="file" id="forensicPicker" webkitdirectory directory multiple style="display: none;">
+                SCAN DOWNLOADS FOLDER FOR .WEBM
+            </label>
+        </div>
+        <div class="warning" style="margin-top: 0.5rem;">Load the directory where your browser saved the criticality_breach_*.webm files.</div>
+        
+        <div id="videoGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; margin-top: 1.5rem;">
+            <!-- Videos will be injected here -->
+        </div>
+    </div>
     </div>
 
     <script>
@@ -430,6 +446,58 @@
             document.getElementById('startBtn').disabled = false;
             document.getElementById('startBtn').style.opacity = '1';
         }
+
+        // --- FORENSIC VIDEO GRID LOGIC ---
+        document.getElementById('forensicPicker').addEventListener('change', function(e) {
+            const files = Array.from(e.target.files).filter(f => f.name.includes('criticality_breach') && f.name.endsWith('.webm'));
+            const grid = document.getElementById('videoGrid');
+            grid.innerHTML = ''; // Clear existing
+            
+            if (files.length === 0) {
+                grid.innerHTML = '<div style="color: red;">NO CRITICALITY CAPTURES FOUND IN SELECTED DIRECTORY.</div>';
+                return;
+            }
+
+            logToTerminal(`> INGESTING ${files.length} FORENSIC CAPTURES...`, 'log-magenta');
+
+            // Limit to 12 videos to prevent browser memory crash
+            const displayFiles = files.slice(0, 12);
+            
+            displayFiles.forEach((file, index) => {
+                const url = URL.createObjectURL(file);
+                const container = document.createElement('div');
+                container.style.border = '1px solid #333';
+                container.style.background = '#000';
+                container.style.padding = '0.5rem';
+                
+                const header = document.createElement('div');
+                header.style.color = 'var(--neon-cyan)';
+                header.style.fontSize = '0.75rem';
+                header.style.marginBottom = '0.5rem';
+                header.style.wordBreak = 'break-all';
+                header.innerText = `[${index + 1}] ${file.name}`;
+                
+                const vid = document.createElement('video');
+                vid.src = url;
+                vid.autoplay = true;
+                vid.loop = true;
+                vid.muted = true;
+                vid.style.width = '100%';
+                vid.style.border = '1px solid var(--neon-magenta)';
+                
+                container.appendChild(header);
+                container.appendChild(vid);
+                grid.appendChild(container);
+            });
+            
+            if (files.length > 12) {
+                const more = document.createElement('div');
+                more.style.color = 'var(--neon-yellow)';
+                more.style.padding = '1rem';
+                more.innerText = `+ ${files.length - 12} MORE CAPTURES SUPPRESSED TO MAINTAIN MEMORY INTEGRITY.`;
+                grid.appendChild(more);
+            }
+        });
 
         // 🚀 ZKAEDI PRIME: 3D Holographic Parallax Engine
         const hudWrapper = document.querySelector('.hud-wrapper');

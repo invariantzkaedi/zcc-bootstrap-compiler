@@ -65,7 +65,7 @@ class ZkaediBarycentricSlaver:
         self.slave_data: Optional[BarySlaveData] = None
         self.deformed_high: Optional[torch.Tensor] = None
 
-    def build_slave_mapping(self, high_verts, ghost_verts, ghost_faces, precomputed_tri_idx=None):
+    def build_slave_mapping(self, high_verts, ghost_verts, ghost_faces, precomputed_tri_idx=None, precomputed_uvw=None):
         if precomputed_tri_idx is None:
             from zkaedi_gpu_spatial_hash_full import build_full_gpu_spatial_slave_mapping
             tri_idx, uvw = build_full_gpu_spatial_slave_mapping(
@@ -73,8 +73,10 @@ class ZkaediBarycentricSlaver:
             )
         else:
             tri_idx = precomputed_tri_idx
-            # compute uvw from tri_idx using the bary formula (one-time Triton pass)
-            uvw = torch.zeros((high_verts.shape[0], 3), device=high_verts.device, dtype=torch.float32)
+            if precomputed_uvw is not None:
+                uvw = precomputed_uvw
+            else:
+                uvw = torch.zeros((high_verts.shape[0], 3), device=high_verts.device, dtype=torch.float32)
 
         N = high_verts.shape[0]
         self.slave_data = BarySlaveData(triangle_idx=tri_idx, uvw=uvw, N=N)

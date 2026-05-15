@@ -484,3 +484,5 @@ int1
 int2
 __pycache__/
 *.wav
+healed_payloads/
+mega_corpus/

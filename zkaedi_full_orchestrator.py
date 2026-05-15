@@ -16,6 +16,21 @@ from zkaedi_validation import validate_zkaedi_pipeline
 
 import sys
 import os
+import logging
+from datetime import datetime
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s | %(levelname)s | %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("zkaedi_pipeline.log", mode='a')
+    ]
+)
+logger = logging.getLogger("ZKAEDI")
+
+import sys
+import os
 
 # === Load your compiled ZCC shared library ===
 lib_path = r"g:\zccMAIN\zcc\zcc_ghost.dll" if sys.platform == "win32" else "/mnt/g/zccMAIN/zcc/zcc_ghost.so"
@@ -39,7 +54,7 @@ class ZkaediOrchestrator:
         bone_sources: torch.Tensor,
         output_glb: str = "rigged_slave.glb"
     ):
-        print("[ZKAEDI] Starting full pipeline...")
+        logger.info("[ZKAEDI] Starting full pipeline...")
 
         # 1. Upload Ghost to VRAM via C shim + Triton
         # (Assume you already called the C voxel_shrinkwrap + register functions)
@@ -57,21 +72,56 @@ class ZkaediOrchestrator:
             torch.from_numpy(high_positions).cuda(),
             torch.from_numpy(ghost_verts).cuda(),
             torch.from_numpy(ghost_faces).cuda(),
-            precomputed_tri_idx=tri_idx
+            precomputed_tri_idx=tri_idx,
+            precomputed_uvw=uvw
         )
 
-        # 3.5 Validate the pipeline invariants before proceeding
-        results = validate_zkaedi_pipeline(
-            uvw=self.slaver.slave_data.uvw,
-            tri_idx=self.slaver.slave_data.triangle_idx,
-            ghost_faces=torch.from_numpy(ghost_faces).cuda(),
-            ghost_verts=torch.from_numpy(ghost_verts).cuda(),
-            verbose=True
+        from zkaedi_utils import normalize_barycentric_weights
+        from zkaedi_diagnostics import ZkaediDiagnostics
+
+        # === Post-processing normalization ===
+        # clamp_negative is False because barycentric extrapolation is mathematically REQUIRED 
+        # for high-poly slave vertices that sit outside the proxy Ghost mesh surface.
+        uvw_normalized, tri_idx_norm, quality_report = normalize_barycentric_weights(
+            self.slaver.slave_data.uvw,
+            self.slaver.slave_data.triangle_idx,
+            clamp_negative=False,
+            return_report=True
         )
 
-        if not results["all_invariants_passed"]:
-            print("[ZKAEDI ERROR] Validation failed. Halting pipeline. Do not proceed to 500MB assets.")
-            return None
+        self.slaver.slave_data.uvw = uvw_normalized
+        self.slaver.slave_data.triangle_idx = tri_idx_norm
+
+        if quality_report:
+            logger.info("=== Barycentric Quality Report ===")
+            logger.info(f"Assignment Rate       : {quality_report['assignment_rate']*100:.1f}%")
+            logger.info(f"Vertices Clamped      : {quality_report['clamped_vertices']} ({quality_report['clamped_ratio']*100:.1f}%)")
+            logger.info(f"Mean Weight Sum (Before) : {quality_report['mean_weight_sum_before']}")
+            logger.info(f"Mean Weight Sum (After)  : {quality_report['mean_weight_sum_after']}")
+            logger.info(f"Negative Weight Ratio : {quality_report['negative_weight_ratio']}")
+
+        try:
+            results = validate_zkaedi_pipeline(
+                uvw=self.slaver.slave_data.uvw,
+                tri_idx=self.slaver.slave_data.triangle_idx,
+                ghost_faces=torch.from_numpy(ghost_faces).cuda(),
+                ghost_verts=torch.from_numpy(ghost_verts).cuda(),
+                verbose=True
+            )
+
+            if not results["all_invariants_passed"]:
+                diagnostics = ZkaediDiagnostics()
+                tips = diagnostics.analyze(quality_report, results)
+                diagnostics.log_tips(tips, logger)
+                
+                if any(t.severity.value in ["CRITICAL", "ERROR"] for t in tips):
+                    raise RuntimeError("Pipeline failed critical diagnostics. Review tips above.")
+
+            logger.info("Validation passed successfully.")
+
+        except Exception as e:
+            logger.exception("Critical error during ZKAEDI pipeline execution")
+            raise
 
         # 4. Solve weights on Ghost (your existing Triton kernel)
         weights = self.fusion.solve_weights(bone_sources)

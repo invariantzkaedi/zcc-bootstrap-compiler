@@ -22,7 +22,7 @@
 #include "ir_symbolic_cfg.h"
 #include "ir_dominance.h"
 
-#define SSA_ENABLED 0   // flip to 1 after we stabilize
+#define SSA_ENABLED 1   // flipped to 1 for SSA courtroom
 
 /* ── Globals referenced by zcc.c (part5.c declares these extern) ──────── */
 int  g_manifold_enabled    = 0;
@@ -34,6 +34,7 @@ int  g_peephole_verbose    = 0;
 
 /* ── Pass types (from ir_pass_manager.h) ─────────────────────────────── */
 #include "ir_pass_manager.h"
+#include "evm_uint256.h"
 
 /* ── Helpers ─────────────────────────────────────────────────────────── */
 
@@ -98,6 +99,12 @@ static ir_pass_result_t ir_pass_dce(void *fn_ptr) {
     memset(&r, 0, sizeof(r));
     r.nodes_before = count_nodes(fn);
 
+    fprintf(stderr, "\n[DCE-DEBUG] FULL IR BEFORE DCE:\n");
+    for (n = fn->head; n; n = n->next) {
+        fprintf(stderr, "  %s %s, %s -> %s\n", ir_op_name(n->op), n->src1, n->src2, n->dst);
+    }
+    fprintf(stderr, "[DCE-DEBUG] END FULL IR\n\n");
+
     prev = NULL;
     n = fn->head;
     while (n) {
@@ -108,9 +115,9 @@ static ir_pass_result_t ir_pass_dce(void *fn_ptr) {
             && !is_side_effect(n->op)
             && n->op != IR_STORE) {
 
-            /* Check if ANY subsequent node uses this temp */
+            /* Check if ANY node in the function uses this temp (CFG/Loop aware via full scan) */
             int used = 0;
-            for (scan = next; scan; scan = scan->next) {
+            for (scan = fn->head; scan; scan = scan->next) {
                 if (node_uses(scan, n->dst)) {
                     used = 1;
                     break;
@@ -127,6 +134,9 @@ static ir_pass_result_t ir_pass_dce(void *fn_ptr) {
                 if (n == fn->tail) {
                     fn->tail = prev;
                 }
+                // DEBUG PRINT
+                fprintf(stderr, "[dce] deleted: %s %s, %s -> %s\n", ir_op_name(n->op), n->src1, n->src2, n->dst);
+                
                 free(n);
                 fn->node_count--;
                 deleted++;
@@ -305,7 +315,8 @@ static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
             int is_256_op = 0;
             int can_fold = 0;
 
-            if (n->tag == IR_TAG_EVM_EQ || n->tag == IR_TAG_EVM_LT || n->tag == IR_TAG_EVM_GT || n->tag == IR_TAG_EVM_ISZERO) {
+            if (n->tag == IR_TAG_EVM_EQ || n->tag == IR_TAG_EVM_LT || n->tag == IR_TAG_EVM_GT || n->tag == IR_TAG_EVM_ISZERO ||
+                n->tag == IR_TAG_TRUNCATED_WIDE_CONST || cmap_get_256(n->src1, &v1_256)) {
                 if (cmap_get_256(n->src1, &v1_256) && (n->tag == IR_TAG_EVM_ISZERO || cmap_get_256(n->src2, &v2_256))) {
                     is_256_op = 1;
                     can_fold = 1;
@@ -328,6 +339,30 @@ static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
                 } else if (n->tag == IR_TAG_EVM_ISZERO) {
                     uint256_t zero256 = {{0, 0, 0, 0}};
                     result = zcc_uint256_eq(v1_256, zero256) ? 1 : 0;
+                } else if (n->op == IR_ADD || n->op == IR_SUB || n->op == IR_MUL || n->op == IR_DIV || n->op == IR_MOD) {
+                    uint256_t res256;
+                    if (n->op == IR_ADD) res256 = evm_u256_add(v1_256, v2_256);
+                    else if (n->op == IR_SUB) res256 = evm_u256_sub(v1_256, v2_256);
+                    else if (n->op == IR_MUL) res256 = evm_u256_mul(v1_256, v2_256);
+                    else if (n->op == IR_DIV) {
+                        if (n->tag == IR_TAG_EVM_SDIV) res256 = evm_u256_sdiv(v1_256, v2_256);
+                        else res256 = evm_u256_div(v1_256, v2_256);
+                    }
+                    else {
+                        // MOD stub for now
+                        res256 = evm_u256_div(v1_256, v2_256); 
+                    }
+
+                    n->op = IR_CONST;
+                    n->imm = res256.limbs[0];
+                    n->imm256 = res256;
+                    n->tag = IR_TAG_TRUNCATED_WIDE_CONST;
+                    n->src1[0] = '\0';
+                    n->src2[0] = '\0';
+                    cmap_add(n->dst, n->imm);
+                    cmap_add_256(n->dst, res256);
+                    modified++;
+                    continue;
                 } else {
                     continue;
                 }
@@ -907,6 +942,47 @@ static ir_pass_result_t ir_pass_coalesce_vload(void *fn_ptr) {
     return r;
 }
 
+/* ── Snapshot Logic for SSA Courtroom ────────────────────────────────── */
+static unsigned long long hash_ir_full(ir_func_t *fn) {
+    unsigned long long h = 14695981039346656037ULL;
+    ir_node_t *n;
+    for (n = fn->head; n; n = n->next) {
+        h ^= n->op; h *= 1099511628211ULL;
+        if (n->dst[0]) {
+            for(int i=0; n->dst[i]; i++) { h ^= n->dst[i]; h *= 1099511628211ULL; }
+        }
+        if (n->src1[0]) {
+            for(int i=0; n->src1[i]; i++) { h ^= n->src1[i]; h *= 1099511628211ULL; }
+        }
+        if (n->src2[0]) {
+            for(int i=0; n->src2[i]; i++) { h ^= n->src2[i]; h *= 1099511628211ULL; }
+        }
+        h ^= n->imm; h *= 1099511628211ULL;
+    }
+    return h;
+}
+
+static void ir_snapshot_state(ir_func_t *fn, const char *pass_name) {
+    const dom_cfg_t *cfg = dom_get_cfg();
+    unsigned long long ir_hash = hash_ir_full(fn);
+    unsigned long long cfg_hash = 0;
+    unsigned long long dom_hash = 0;
+    unsigned long long live_hash = 0; // Skeleton
+
+    if (cfg && cfg->fn == fn) {
+        cfg_hash = cfg->block_count;
+        for (int i = 0; i < cfg->block_count; i++) {
+            cfg_hash ^= cfg->blocks[i].id; cfg_hash *= 1099511628211ULL;
+            cfg_hash ^= cfg->blocks[i].pred_count; cfg_hash *= 1099511628211ULL;
+            cfg_hash ^= cfg->blocks[i].succ_count; cfg_hash *= 1099511628211ULL;
+            dom_hash ^= cfg->blocks[i].idom; dom_hash *= 1099511628211ULL;
+        }
+    }
+    
+    fprintf(stderr, "[ZCC-SNAPSHOT] Pass %s: IR=%016llx CFG=%016llx DOM=%016llx LIVE=%016llx\n",
+            pass_name, ir_hash, cfg_hash, dom_hash, live_hash);
+}
+
 /* ── Registry API ────────────────────────────────────────────────────── */
 
 static ir_pass_manager_t *ir_pm_create(void) {
@@ -946,6 +1022,7 @@ static void ir_pm_run(ir_pass_manager_t *pm, ir_module_t *mod) {
         if (!pm->passes[p].enabled) continue;
 
         for (f = 0; f < mod->func_count; f++) {
+            if (pm->verbose) ir_snapshot_state(mod->funcs[f], pm->passes[p].name);
             ir_pass_result_t r = pm->passes[p].fn(mod->funcs[f]);
             pass_before += r.nodes_before;
             pass_after += r.nodes_after;
@@ -986,24 +1063,43 @@ void ir_pm_run_default(void *mod_ptr, int verbose) {
     pm = ir_pm_create();
     pm->verbose = verbose;
 
-    /* Default pipeline: symbolic_cfg → DCE → const_fold → strength_reduce → dominance → GVN → vload → lower_float → warden → DCE */
-    ir_pm_register(pm, "symbolic_cfg", ir_pass_symbolic_cfg);
-    ir_pm_register(pm, "dce", ir_pass_dce);
-    ir_pm_register(pm, "const_fold", ir_pass_const_fold);
-    ir_pm_register(pm, "strength_reduce", ir_pass_strength_reduce);
-    ir_pm_register(pm, "dominance", ir_pass_dominance);
+    int opt_level = 1;
+    if (getenv("ZCC_OPT") && strcmp(getenv("ZCC_OPT"), "0") == 0) opt_level = 0;
     
+    int opt_constfold = opt_level;
+    int opt_dce = opt_level;
+    int opt_mem2reg = opt_level;
+    
+    if (getenv("ZCC_OPT_CONSTFOLD") && strcmp(getenv("ZCC_OPT_CONSTFOLD"), "0") == 0) opt_constfold = 0;
+    if (getenv("ZCC_OPT_DCE") && strcmp(getenv("ZCC_OPT_DCE"), "0") == 0) opt_dce = 0;
+    if (getenv("ZCC_OPT_MEM2REG") && strcmp(getenv("ZCC_OPT_MEM2REG"), "0") == 0) opt_mem2reg = 0;
+
+    ir_pm_register(pm, "symbolic_cfg", ir_pass_symbolic_cfg);
+    if (opt_constfold) ir_pm_register(pm, "const_fold", ir_pass_const_fold);
+    if (opt_constfold) ir_pm_register(pm, "strength_reduce", ir_pass_strength_reduce);
+
+    ir_pm_register(pm, "dominance", ir_pass_dominance);
+
 #if SSA_ENABLED
     extern ir_pass_result_t ir_pass_ssa(void *mod_ptr);
-    ir_pm_register(pm, "ssa", ir_pass_ssa);
-    ir_pm_register(pm, "ssa_dce", ir_pass_dce);   // SSA-aware DCE later
+    extern ir_pass_result_t ir_pass_taint_propagate(void *fn_ptr);
+    extern ir_pass_result_t ir_pass_auto_heal(void *fn_ptr);
+    if (opt_mem2reg) {
+        ir_pm_register(pm, "ssa", ir_pass_ssa);
+        ir_pm_register(pm, "taint_propagate", ir_pass_taint_propagate);
+        ir_pm_register(pm, "auto_healer", ir_pass_auto_heal);
+    }
 #endif
 
-    ir_pm_register(pm, "gvn", ir_pass_gvn);
-    ir_pm_register(pm, "coalesce_vload", ir_pass_coalesce_vload);
+    if (opt_dce) ir_pm_register(pm, "dce", ir_pass_dce);
+
+    if (opt_constfold) ir_pm_register(pm, "gvn", ir_pass_gvn);
+    if (opt_constfold) ir_pm_register(pm, "coalesce_vload", ir_pass_coalesce_vload);
+
     ir_pm_register(pm, "lower_float", ir_pass_lower_float);
     ir_pm_register(pm, "warden", ir_pass_warden);
-    ir_pm_register(pm, "dce2", ir_pass_dce);
+
+    if (opt_dce) ir_pm_register(pm, "dce2", ir_pass_dce);
 
     ir_pm_run(pm, mod);
     ir_pm_free(pm);

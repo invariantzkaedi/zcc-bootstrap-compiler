@@ -181,6 +181,77 @@ int main() {
 EOF
 test_file "multi_var" "$TESTDIR/t_multi_var.c" 100
 
+cat > "$TESTDIR/t_shift_mask.c" << 'EOF'
+int main() {
+    long v0 = -60;
+    v0 = ((-69 ^ -76) << ((-31 & v0) & 63));
+    return v0 & 255;
+}
+EOF
+test_file "shift_mask" "$TESTDIR/t_shift_mask.c" 15
+
+cat > "$TESTDIR/t_ushort_div_long.c" << 'EOF'
+int main() {
+    unsigned int v1 =
+        (((long)-478) / (((unsigned short)717) == 0 ? 1 : ((unsigned short)717)));
+    return v1 & 255;
+}
+EOF
+test_file "ushort_div_long" "$TESTDIR/t_ushort_div_long.c" 0
+
+cat > "$TESTDIR/t_signed_char_cast.c" << 'EOF'
+int main() {
+    signed char a = -5;
+    unsigned int b = 10;
+    if (a > b) return 1;
+    return 0;
+}
+EOF
+test_file "signed_char_cast" "$TESTDIR/t_signed_char_cast.c" 1
+
+cat > "$TESTDIR/t_mixed_unsigned_long.c" << 'EOF'
+int main() {
+    signed char a = -56;
+    unsigned long b = 754;
+    unsigned long res = a & b;
+    if (res == 704) return 0;
+    return 1;
+}
+EOF
+test_file "mixed_unsigned_long" "$TESTDIR/t_mixed_unsigned_long.c" 0
+
+cat > "$TESTDIR/t_signed_char_128.c" << 'EOF'
+int main(){ signed char x=(char)128; return x & 255; }
+EOF
+test_file "signed_char_128" "$TESTDIR/t_signed_char_128.c" 128
+
+cat > "$TESTDIR/t_short_wrap.c" << 'EOF'
+int main(){ short x=65530; return x & 255; }
+EOF
+test_file "short_wrap" "$TESTDIR/t_short_wrap.c" 250
+
+cat > "$TESTDIR/t_ushort_negative.c" << 'EOF'
+int main(){ unsigned short x=-14; return x & 255; }
+EOF
+test_file "ushort_negative" "$TESTDIR/t_ushort_negative.c" 242
+
+cat > "$TESTDIR/t_unsigned_char_to_long.c" << 'EOF'
+int main(){ unsigned char x=250; long y=x; return y; }
+EOF
+test_file "unsigned_char_to_long" "$TESTDIR/t_unsigned_char_to_long.c" 250
+
+cat > "$TESTDIR/t_char_mod_1023.c" << 'EOF'
+int main(){ char x=((long)927 ^ (char)-118) % 1023; return x & 255; }
+EOF
+test_file "char_mod_1023" "$TESTDIR/t_char_mod_1023.c" 235
+
+cat > "$TESTDIR/t_int_and_uint.c" << 'EOF'
+int main(){ int x=(-919 & (unsigned int)566); return x & 255; }
+EOF
+test_file "int_and_uint" "$TESTDIR/t_int_and_uint.c" 70
+
+
+
 step "Category 3: Pointers and Memory (CG-IR-008/010 regression)"
 
 cat > "$TESTDIR/t_ptr.c" << 'EOF'
