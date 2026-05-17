@@ -11,7 +11,9 @@ zcc1
 zcc2
 zcc2_*
 zcc3_*
-zcc_*[!.cph]
+zcc_[!s]*[!.cph]
+zcc_s[!y]*[!.cph]
+zcc_sy[!s]*[!.cph]
 gcc_*
 seed*_gcc
 seed*_zcc
@@ -28,6 +30,7 @@ tmp_zcc
 *.log
 *.txt
 !README*.txt
+!gate_ir*_xfail.txt
 !BUILD.txt
 !COMMANDS.md
 
