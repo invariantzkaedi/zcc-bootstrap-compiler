@@ -190,6 +190,8 @@ static const char *zcc_stddef_text =
 "char *strdup(const char *s);\n"
 "int __builtin_popcount(unsigned int x);\n"
 "typedef int bool;\n"
+"int getchar(void);\n"
+"int putchar(int c);\n"
 "/* TCC extra dependencies */\n"
 "typedef int sem_t;\n"
 "struct timeval { long tv_sec; long tv_usec; };\n"
