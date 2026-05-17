@@ -512,3 +512,8 @@ proof.smt2
 courtroom/polyglot
 courtroom/polyglot_singularity
 node_modules/
+phase1_probe*.py
+run_hf_upload.py
+run_gates.sh
+gen_report.py
+task.md
