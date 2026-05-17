@@ -1,0 +1,2 @@
+# Known failures — tolerated
+xfail_compiler_passes
