@@ -3911,19 +3911,21 @@ extern int zcc_run_passes_emit_body_pgo(struct ZCCNode *body, const char *profil
 #pragma weak zcc_run_passes_emit_body_pgo
 #pragma weak zcc_node_from
 
-static int ir_blacklisted(const char *name) {
-  if (!name)
-    return 0;
-  static const char *blacklist[] = {
-      /* Add explicitly dangerous functions here to fallback to AST backend */
-      "main", "read_file", "init_compiler", 
-      "lookup_keyword_fallback", "parse_stmt", "next_token", NULL};
+static int ir_whitelisted(const char *name) {
+  if (!name) return 0;
+  static const char *wl[] = {
+      /* Batch 1-2: test suite */
+      "fold_test", "dce_test", "licm_test", "pressure_test", "escape_test",
+      /* Batch 3a: pure enum-switch, no struct/global writes — VERIFIED SAFE */
+      "ir_op_name", "ir_type_name", "ir_type_bytes", "ir_type_unsigned",
+      "ir_op_is_terminator",
+      /* Batch 3c: lexer functions — pure comparisons, no shifts */
+      "is_digit", "is_space", "is_alpha", "is_alnum", "hex_val",
+      NULL
+  };
   int i;
-  for (i = 0; blacklist[i]; i++) {
-    if (strcmp(name, blacklist[i]) == 0) {
-      fprintf(stderr, "[ZCC-BLACKLIST] HIT (skipping IR): %s\n", name);
-      return 1;
-    }
+  for (i = 0; wl[i]; i++) {
+      if (strcmp(name, wl[i]) == 0) return 1;
   }
   return 0;
 }
@@ -4090,8 +4092,7 @@ void codegen_func(Compiler *cc, Node *func) {
   } /* end !backend_ops block */
 
   int ir_ok = 0;
-  if ((getenv("ZCC_IR_BACKEND") || getenv("ZCC_IR_LOWER")) &&
-      !ir_blacklisted(func->func_def_name)) {
+  if (getenv("ZCC_IR_BACKEND") || getenv("ZCC_IR_LOWER") || ir_whitelisted(func->func_def_name)) {
     if (zcc_run_passes_emit_body_pgo && zcc_node_from) {
       void *ir_ast = zcc_node_from((void *)func->body);
       if (ir_ast) {

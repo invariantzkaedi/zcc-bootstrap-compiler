@@ -1189,6 +1189,9 @@ int main(int argc, char **argv) {
       decompile_mode = 1;
       i++;
       if (i < argc) input_file = argv[i];
+    } else if (strcmp(argv[i], "--no-fold") == 0) {
+      setenv("ZCC_OPT_CONSTFOLD", "0", 1);
+      setenv("ZCC_OPT_DCE", "0", 1);
     } else if (strcmp(argv[i], "--hunt") == 0) {
       hunt_mode = 1;
     } else if (strcmp(argv[i], "--symbolic") == 0) {
@@ -1293,6 +1296,7 @@ int main(int argc, char **argv) {
     printf("  --rust-strict-function-signatures   require explicit return type annotations on all functions\n");
     printf("  --rust-strict   enable both strict let annotations and strict function signatures\n");
     printf("  --decompile <file>  decompile EVM bytecode to C pseudo-code\n");
+    printf("  --no-fold         disable const-folding and DCE (preserves bounds checks)\n");
     printf("  --jit <file>        compile EVM bytecode to native x86 machine code\n");
     printf("  --prove <file> <prop> run symbolic proofs on EVM bytecode\n");
     printf("  --memory-trace      enable full symbolic memory dump\n");
@@ -1620,11 +1624,11 @@ int main(int argc, char **argv) {
   if (!stop_at_asm) {
     if (!enable_telemetry_stdout) printf("[Phase 6] GCC Assembly/Linker Binding... ");
     if (compile_only) {
-      sprintf(cmd, "gcc -O0 -w -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -c -o %s %s 2>&1", output_file, asm_file);
+      sprintf(cmd, "gcc -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -c -o %s %s 2>&1", output_file, asm_file);
     } else if (strcmp(input_file, "zcc.c") == 0 || (strlen(input_file) >= 6 && strcmp(input_file + strlen(input_file) - 6, "/zcc.c") == 0)) {
-      sprintf(cmd, "gcc -O0 -w -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c -lm 2>&1", output_file, asm_file);
+      sprintf(cmd, "gcc -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c -lm 2>&1", output_file, asm_file);
     } else {
-      sprintf(cmd, "gcc -O0 -w -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s %s -lm -lpthread -ldl 2>&1", output_file, asm_file, extra_link_args);
+      sprintf(cmd, "gcc -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s %s -lm -lpthread -ldl 2>&1", output_file, asm_file, extra_link_args);
     }
     ret = system(cmd);
     if (ret != 0) {
