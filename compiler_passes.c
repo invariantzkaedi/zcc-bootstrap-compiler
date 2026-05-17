@@ -6578,15 +6578,19 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
       fprintf(stderr, "[PGO-DEBUG] block %u OP_LOAD dst=%u src0=%u\n",
               (unsigned)cur_block, ins->dst, ins->src[0]);
     ir_asm_load_to_rax(ctx, ins->src[0]);
+    int is_unsigned = (ins->ir_type == IR_TY_U32 || ins->ir_type == IR_TY_U64);
     switch ((int)ins->imm) {
     case 1:
-      fprintf(f, "    movzbq (%%rax), %%rax\n");
+      if (is_unsigned) fprintf(f, "    movzbq (%%rax), %%rax\n");
+      else             fprintf(f, "    movsbq (%%rax), %%rax\n");
       break;
     case 2:
-      fprintf(f, "    movzwq (%%rax), %%rax\n");
+      if (is_unsigned) fprintf(f, "    movzwq (%%rax), %%rax\n");
+      else             fprintf(f, "    movswq (%%rax), %%rax\n");
       break;
     case 4:
-      fprintf(f, "    movslq (%%rax), %%rax\n");
+      if (is_unsigned) fprintf(f, "    movl (%%rax), %%eax\n"); /* zero-extends to rax */
+      else             fprintf(f, "    movslq (%%rax), %%rax\n");
       break;
     default:
       fprintf(f, "    movq (%%rax), %%rax\n");
