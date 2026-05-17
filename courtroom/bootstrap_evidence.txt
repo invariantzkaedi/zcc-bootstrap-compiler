@@ -1,1 +1,3 @@
 T0-01 SEATED: make selfhost && cmp zcc2.s zcc3.s => SELF-HOST VERIFIED (assembly identical) — 2026-05-17
+T1-01 SEATED: used_regs_mask = 0x1F confirmed in part4.c — 2026-05-17
+T1-02 SEATED: CRLF guard pp_peek == chr(13) in part0_pp.c lines 359+401 — 2026-05-17
