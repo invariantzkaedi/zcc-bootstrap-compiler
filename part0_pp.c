@@ -187,6 +187,9 @@ static const char *zcc_stddef_text =
 "size_t strxfrm(char *dst, const char *src, size_t n);\n"
 "char *strtok(char *s, const char *delim);\n"
 "char *strerror(int errnum);\n"
+"char *strdup(const char *s);\n"
+"int __builtin_popcount(unsigned int x);\n"
+"typedef int bool;\n"
 "/* TCC extra dependencies */\n"
 "typedef int sem_t;\n"
 "struct timeval { long tv_sec; long tv_usec; };\n"
@@ -490,6 +493,8 @@ static int is_stddef_stub(const char *path) {
         || strcmp(base, "stdint.h") == 0
         || strcmp(base, "semaphore.h") == 0
         || strcmp(base, "signal.h") == 0
+        || strcmp(base, "stdbool.h") == 0
+        || strcmp(base, "assert.h") == 0
         || strcmp(base, "types.h") == 0;
 }
 

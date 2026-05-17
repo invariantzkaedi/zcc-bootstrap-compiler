@@ -58,7 +58,7 @@ probe smoke_part2           "${ZCC_DIR}/part2.c"
 probe smoke_part3           "${ZCC_DIR}/part3.c"
 probe smoke_part4           "${ZCC_DIR}/part4.c"
 probe smoke_part5           "${ZCC_DIR}/part5.c"
-probe xfail_compiler_passes "${ZCC_DIR}/compiler_passes.c"
+probe smoke_compiler_passes "${ZCC_DIR}/compiler_passes.c"
 
 echo ""
 echo "Results: PASS=$pass FAIL=$fail xfail=$xfail XPASS=$xpass"
