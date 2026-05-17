@@ -1,0 +1,1 @@
+T0-01 SEATED: make selfhost && cmp zcc2.s zcc3.s => SELF-HOST VERIFIED (assembly identical) — 2026-05-17
