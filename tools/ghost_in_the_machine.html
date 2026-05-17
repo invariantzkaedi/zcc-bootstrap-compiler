@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ZCC // Sentry Telemetry Playback</title>
+    <style>
+        body { background-color: #050b14; color: #00ffff; font-family: 'Space Mono', monospace; margin: 0; padding: 20px; }
+        h2 { color: #ff00ff; text-transform: uppercase; text-shadow: 0 0 5px #ff00ff; }
+        #player-container { margin-top: 20px; box-shadow: 0 0 15px rgba(0, 255, 255, 0.2); border: 1px solid #00ffff; }
+    </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/rrweb-player@latest/dist/style.css" />
+</head>
+<body>
+    <h2>[+] FORENSIC PLAYBACK: Session Telemetry</h2>
+    <p>TARGET: Blockpath Edge Cache // STATE: Isolated</p>
+    <div id="player-container"></div>
+    <script src="https://cdn.jsdelivr.net/npm/rrweb-player@latest/dist/index.js"></script>
+    <script>
+        const events = [];
+        if (events.length > 0) {
+            new rrwebPlayer({
+                target: document.getElementById('player-container'),
+                props: { events: events, autoPlay: false }
+            });
+        } else {
+            document.getElementById('player-container').innerText = "[!] No valid DOM mutation events found in payload.";
+        }
+    </script>
+</body>
+</html>
