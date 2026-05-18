@@ -3920,7 +3920,18 @@ static int ir_whitelisted(const char *name) {
       "ir_op_name", "ir_type_name", "ir_type_bytes", "ir_type_unsigned",
       "ir_op_is_terminator",
       /* Batch 3c: lexer functions — pure comparisons, no shifts */
-      "is_digit", "is_space", "is_alpha", "is_alnum", "hex_val",
+      "is_digit", "is_space", "is_alpha", "is_alnum", "hex_val", "is_power_of_2_val",
+      /* Batch 4: AST bridge helpers */
+      "node_kind", "node_asm_string", "node_int_val", "node_str_id",
+      "node_lhs", "node_rhs", "node_cond", "node_then_body", "node_else_body",
+      "node_body", "node_init", "node_inc", "node_compound_op",
+      "node_num_stmts", "node_func_name", "node_lhs_ptr_size", "node_rhs_ptr_size",
+      "node_arg", "node_num_args", "node_cases", "node_num_cases", "node_default_case",
+      "node_case_val", "node_case_body", "node_member_offset", "node_member_size",
+      "node_line_no", "node_is_bitfield", "node_bit_offset", "node_bit_size",
+      "node_is_global", "node_is_array", "node_is_func", "node_type_size", "node_type_unsigned",
+      /* Batch 5: Type checking helpers */
+      "type_size", "type_align", "is_integer", "is_pointer", "is_float_type", "is_unsigned_type",
       NULL
   };
   int i;
