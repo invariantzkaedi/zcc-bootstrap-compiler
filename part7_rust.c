@@ -2214,6 +2214,17 @@ int rust_lower_to_ir(RustLowerContext *ctx) {
     if (!ctx || !ctx->ast) return 1;
     ctx->had_error = 0;
 
+    if (ctx->dump_ir) {
+        RustFunction *pre_fn = ctx->ast->functions;
+        while (pre_fn) {
+            if (!rust_lower_stmt_list_supported(ctx, pre_fn->body_head)) {
+                return 1;
+            }
+            pre_fn = pre_fn->next;
+        }
+        printf("RustIR v1\n");
+    }
+
     /* Initialize the global IR module if it hasn't been */
     if (!g_ir_module) {
         g_ir_module = ir_module_create();
@@ -2225,6 +2236,21 @@ int rust_lower_to_ir(RustLowerContext *ctx) {
 
     RustFunction *fn = ctx->ast->functions;
     while (fn) {
+        if (ctx->dump_ir) {
+            int pi;
+            fputs("fn ", stdout);
+            rust_dump_name(stdout, fn->name, RUST_DUMP_NAME_UNQUOTED);
+            fputc('(', stdout);
+            for (pi = 0; pi < fn->num_params; pi++) {
+                if (pi) fputs(", ", stdout);
+                rust_dump_name(stdout, fn->param_names[pi], RUST_DUMP_NAME_UNQUOTED);
+                fputs(":i32", stdout);
+            }
+            fputs(") -> i32 {\n", stdout);
+            rust_lower_dump_stmt_list(ctx, fn->body_head, 2);
+            fputs("}\n", stdout);
+        }
+
         ir_type_t ret_ty = (strcmp(fn->ret_type, "i32") == 0) ? IR_TY_I32 : IR_TY_VOID;
         ir_func_t *ir_fn = ir_func_create(g_ir_module, fn->name, ret_ty, fn->num_params);
 

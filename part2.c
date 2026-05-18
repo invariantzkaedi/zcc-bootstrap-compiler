@@ -820,6 +820,28 @@ again:
                         cc->col++;
                     }
                     cc->pos++;
+                } else if (ch == '/' && cc->pos + 1 < cc->source_len) {
+                    if (cc->source[cc->pos + 1] == '/') {
+                        while (cc->pos < cc->source_len && cc->source[cc->pos] != '\n') cc->pos++;
+                    } else if (cc->source[cc->pos + 1] == '*') {
+                        cc->pos += 2;
+                        cc->col += 2;
+                        while (cc->pos + 1 < cc->source_len) {
+                            if (cc->source[cc->pos] == '\n') {
+                                cc->line++;
+                                cc->col = 1;
+                            }
+                            if (cc->source[cc->pos] == '*' && cc->source[cc->pos + 1] == '/') {
+                                cc->pos += 2;
+                                cc->col += 2;
+                                break;
+                            }
+                            cc->pos++;
+                            cc->col++;
+                        }
+                    } else {
+                        break;
+                    }
                 } else {
                     break;
                 }
