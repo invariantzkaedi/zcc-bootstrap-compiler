@@ -946,8 +946,8 @@ void evm_lifter_init(evm_lifter_t *ls,
     ls->memory_v2 = memory_v2_new();
 
     ls->is_block_start = 1;
+    ls->disable_gas_tracking = 1;
     strcpy(ls->current_gas_vreg, "g0");
-    ir_emit(ls->func, IR_CONST, IR_TY_I64, ls->current_gas_vreg, NULL, NULL, NULL, 30000000ULL, 0);
 
     /* Allocate and pre-scan valid JUMPDESTs */
     ls->valid_jumpdest = (unsigned char *)calloc(length > 0 ? (size_t)length : 1, 1);
@@ -1026,11 +1026,16 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
     }
 
     if (ls->is_block_start) {
-        int block_gas = get_block_static_gas(ls->bytecode, ls->length, ls->pc);
-        char next_gas[IR_NAME_MAX];
-        lifter_fresh_tmp(ls, next_gas);
-        evm_apply_static_gas(ls->func, ls, block_gas, ls->current_gas_vreg, next_gas);
-        strcpy(ls->current_gas_vreg, next_gas);
+        if (!ls->disable_gas_tracking) {
+            if (ls->insn_count == 1) {
+                ir_emit(ls->func, IR_CONST, IR_TY_I64, ls->current_gas_vreg, NULL, NULL, NULL, 30000000ULL, 0);
+            }
+            int block_gas = get_block_static_gas(ls->bytecode, ls->length, ls->pc);
+            char next_gas[IR_NAME_MAX];
+            lifter_fresh_tmp(ls, next_gas);
+            evm_apply_static_gas(ls->func, ls, block_gas, ls->current_gas_vreg, next_gas);
+            strcpy(ls->current_gas_vreg, next_gas);
+        }
         ls->is_block_start = 0;
     }
 
@@ -1912,10 +1917,12 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, ro);    if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, rl);    if (res != EVM_LIFT_OK) return res;
 
-        char clamped_gas[IR_NAME_MAX];
-        lifter_fresh_tmp(ls, clamped_gas);
-        evm_inject_eip150_clamp(ls->func, ls, gas, ls->current_gas_vreg, clamped_gas);
-        strcpy(gas, clamped_gas);
+        if (!ls->disable_gas_tracking) {
+            char clamped_gas[IR_NAME_MAX];
+            lifter_fresh_tmp(ls, clamped_gas);
+            evm_inject_eip150_clamp(ls->func, ls, gas, ls->current_gas_vreg, clamped_gas);
+            strcpy(gas, clamped_gas);
+        }
 
         lifter_fresh_tmp(ls, tmp_dst);
         /* Emit IR_CALL targeting the address held in `addr` temp */
@@ -1941,10 +1948,12 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, ro);   if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, rl);   if (res != EVM_LIFT_OK) return res;
 
-        char clamped_gas[IR_NAME_MAX];
-        lifter_fresh_tmp(ls, clamped_gas);
-        evm_inject_eip150_clamp(ls->func, ls, gas, ls->current_gas_vreg, clamped_gas);
-        strcpy(gas, clamped_gas);
+        if (!ls->disable_gas_tracking) {
+            char clamped_gas[IR_NAME_MAX];
+            lifter_fresh_tmp(ls, clamped_gas);
+            evm_inject_eip150_clamp(ls->func, ls, gas, ls->current_gas_vreg, clamped_gas);
+            strcpy(gas, clamped_gas);
+        }
 
         lifter_fresh_tmp(ls, tmp_dst);
         node = tagged_emit(ls, IR_CALL, IR_TY_I64,
@@ -1971,10 +1980,12 @@ evm_lift_result_t evm_lift_step(evm_lifter_t *ls) {
         res = stack_pop(ls, ro);   if (res != EVM_LIFT_OK) return res;
         res = stack_pop(ls, rl);   if (res != EVM_LIFT_OK) return res;
 
-        char clamped_gas[IR_NAME_MAX];
-        lifter_fresh_tmp(ls, clamped_gas);
-        evm_inject_eip150_clamp(ls->func, ls, gas, ls->current_gas_vreg, clamped_gas);
-        strcpy(gas, clamped_gas);
+        if (!ls->disable_gas_tracking) {
+            char clamped_gas[IR_NAME_MAX];
+            lifter_fresh_tmp(ls, clamped_gas);
+            evm_inject_eip150_clamp(ls->func, ls, gas, ls->current_gas_vreg, clamped_gas);
+            strcpy(gas, clamped_gas);
+        }
 
         lifter_fresh_tmp(ls, tmp_dst);
         node = tagged_emit(ls, IR_CALL, IR_TY_I64,

@@ -17,6 +17,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef ZCC_IR_VERSION
+#define ZCC_IR_VERSION "1.0.0"
+#endif
+
 /* ── Globals ─────────────────────────────────────────────────────────── */
 
 int           g_emit_ir      = 0;

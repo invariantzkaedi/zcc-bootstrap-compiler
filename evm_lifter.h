@@ -267,6 +267,7 @@ typedef struct {
     unsigned char       *valid_jumpdest; /* bitmap of valid JUMPDEST offsets */
     char                 current_gas_vreg[IR_NAME_MAX]; /* current available gas */
     int                  is_block_start; /* triggers block gas analysis */
+    int                  disable_gas_tracking; /* disables block gas analysis & EIP-150 clamp */
 } evm_lifter_t;
 
 /* ── Public API ──────────────────────────────────────────────────────── */
