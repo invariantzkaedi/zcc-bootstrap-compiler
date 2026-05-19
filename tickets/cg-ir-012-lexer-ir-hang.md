@@ -69,3 +69,16 @@ Root cause: next_token register pressure under extended intervals
 causes degenerate allocator behavior in self-hosted binary.
 Next approach: source-level split of next_token OR spill handling fix.
 Status: REOPENED — self-host stable fix required.
+
+## Revert 3 — 2026-05-19
+Commit 6f760335 reverted in b82dd365.
+Fix: CFG back-edge detection in compiler_passes.c — block_start_seq/
+block_end_seq tracking, back-edge via topological order, precise latch
+boundary extension.
+Result: gcc-built selfhost PASS, self-hosted zcc2 hang (zcc3.s=0 bytes).
+Pattern: ALL four liveness fixes correct under gcc, ALL fail self-hosted.
+Root cause confirmed: IR backend has no spill support (N_PHYS_REGS=7).
+next_token (588 blocks) exceeds register budget under any correct liveness
+extension. Allocator has no fallback when pressure > 7 registers.
+Resolution: next_token permanently deferred until spill support lands.
+Status: CLOSED-BLOCKED — requires IR spill implementation.
