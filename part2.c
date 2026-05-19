@@ -550,6 +550,429 @@ static int read_escape(Compiler *cc) {
     }
 }
 
+static void lex_number(Compiler *cc, int c) {
+        long val;
+        int start;
+        int is_float = 0;
+        int i_look = 0;
+        char *end;
+        double fval;
+        int len;
+        
+        if (c == '0' && cc->pos + 1 < cc->source_len && 
+            (cc->source[cc->pos + 1] == 'x' || cc->source[cc->pos + 1] == 'X')) {
+            is_float = 0;
+        } else {
+            while (cc->pos + i_look < cc->source_len) {
+                char ch = cc->source[cc->pos + i_look];
+                if (ch == '.' || ch == 'e' || ch == 'E') { is_float = 1; break; }
+                if (!is_digit(ch) && !is_alpha(ch)) break;
+                i_look++;
+            }
+        }
+        
+        if (is_float) {
+            fval = strtod(cc->source + cc->pos, &end);
+            len = end - (cc->source + cc->pos);
+            if (len <= 0) len = 1;
+            /* we peeked c, so real current index is cc->pos, 
+               but we need to advance cc->pos. */
+            cc->pos = cc->pos + len;
+            cc->col = cc->col + len;
+            /* CG-FLOAT-007: record f/F suffix in tk_text[0] for parse_primary */
+            cc->tk_text[0] = 0;
+            if (cc->pos < cc->source_len) {
+                char sc = cc->source[cc->pos];
+                if (sc == 'f' || sc == 'F') {
+                    cc->pos++; cc->col++;
+                    cc->tk_text[0] = 'F';  /* tag as float literal */
+                } else if (sc == 'l' || sc == 'L') {
+                    cc->pos++; cc->col++;
+                }
+            }
+            cc->tk = TK_FLIT;
+            cc->tk_fval = fval;
+            return;
+        }
+
+        val = 0;
+        start = cc->pos;
+        if (c == '0') {
+            read_char(cc);
+            if (peek_char(cc) == 'x' || peek_char(cc) == 'X') {
+                read_char(cc);
+                while (hex_val(peek_char(cc)) >= 0) {
+                    val = val * 16 + hex_val(peek_char(cc));
+                    read_char(cc);
+                }
+            } else if (peek_char(cc) >= '0') {
+                if (peek_char(cc) <= '7') {
+                    /* octal */
+                    while (peek_char(cc) >= '0') {
+                        if (peek_char(cc) <= '7') {
+                            val = val * 8 + (peek_char(cc) - '0');
+                            read_char(cc);
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
+        } else {
+            while (is_digit(peek_char(cc))) {
+                val = val * 10 + (peek_char(cc) - '0');
+                read_char(cc);
+            }
+        }
+        /* parse suffixes like L, U, UL, ULL, etc */
+        int is_uns = 0;
+        int is_lng = 0;
+        while (peek_char(cc) == 'L' || peek_char(cc) == 'l' ||
+               peek_char(cc) == 'U' || peek_char(cc) == 'u') {
+            int ch = read_char(cc);
+            if (ch == 'U' || ch == 'u') is_uns = 1;
+            if (ch == 'L' || ch == 'l') is_lng = 1;
+        }
+        cc->tk = TK_NUM;
+        cc->tk_val = val;
+        cc->tk_text[0] = is_uns ? 'U' : 0;
+        cc->tk_text[1] = is_lng ? 'L' : 0;
+}
+
+static void lex_char(Compiler *cc) {
+        int val;
+        read_char(cc);  /* skip opening ' */
+        if (peek_char(cc) == '\\') {
+            read_char(cc);
+            val = read_escape(cc);
+        } else {
+            val = read_char(cc);
+        }
+        if (peek_char(cc) == '\'') read_char(cc);  /* skip closing ' */
+        cc->tk = TK_CHAR_LIT;
+        cc->tk_val = val;
+}
+
+static void lex_string(Compiler *cc) {
+        int len;
+        read_char(cc);  /* skip opening " */
+        len = 0;
+        while (peek_char(cc) != '"') {
+            if (peek_char(cc) == -1) break;
+            if (peek_char(cc) == '\\') {
+                read_char(cc);
+                cc->tk_str[len] = read_escape(cc);
+            } else {
+                cc->tk_str[len] = read_char(cc);
+            }
+            len++;
+            if (len >= MAX_STR - 1) break;
+        }
+        if (peek_char(cc) == '"') read_char(cc);  /* skip closing " */
+        cc->tk_str[len] = 0;
+        cc->tk_str_len = len;
+        cc->tk = TK_STR;
+
+        /* handle adjacent string literals */
+        /* skip whitespace and check for another " */
+        while (1) {
+            int saved_pos;
+            int saved_line;
+            int saved_col;
+            saved_pos = cc->pos;
+            saved_line = cc->line;
+            saved_col = cc->col;
+            while (cc->pos < cc->source_len) {
+                int ch;
+                ch = cc->source[cc->pos];
+                if (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n') {
+                    if (ch == '\n') {
+                        cc->line++;
+                        cc->col = 1;
+                    } else {
+                        cc->col++;
+                    }
+                    cc->pos++;
+                } else if (ch == '/' && cc->pos + 1 < cc->source_len) {
+                    if (cc->source[cc->pos + 1] == '/') {
+                        while (cc->pos < cc->source_len && cc->source[cc->pos] != '\n') cc->pos++;
+                    } else if (cc->source[cc->pos + 1] == '*') {
+                        cc->pos += 2;
+                        cc->col += 2;
+                        while (cc->pos + 1 < cc->source_len) {
+                            if (cc->source[cc->pos] == '\n') {
+                                cc->line++;
+                                cc->col = 1;
+                            }
+                            if (cc->source[cc->pos] == '*' && cc->source[cc->pos + 1] == '/') {
+                                cc->pos += 2;
+                                cc->col += 2;
+                                break;
+                            }
+                            cc->pos++;
+                            cc->col++;
+                        }
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+            if (cc->pos < cc->source_len) {
+                if (cc->source[cc->pos] == '"') {
+                    /* concatenate adjacent string */
+                    read_char(cc); /* skip " */
+                    while (peek_char(cc) != '"') {
+                        if (peek_char(cc) == -1) break;
+                        if (peek_char(cc) == '\\') {
+                            read_char(cc);
+                            cc->tk_str[len] = read_escape(cc);
+                        } else {
+                            cc->tk_str[len] = read_char(cc);
+                        }
+                        len++;
+                        if (len >= MAX_STR - 1) break;
+                    }
+                    if (peek_char(cc) == '"') read_char(cc);
+                    cc->tk_str[len] = 0;
+                    cc->tk_str_len = len;
+                } else {
+                    /* no adjacent string — restore position and exit loop */
+                    cc->pos = saved_pos;
+                    cc->line = saved_line;
+                    cc->col = saved_col;
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+}
+
+static int lex_ident(Compiler *cc) {
+    int kw;
+        static char ident_buf[MAX_IDENT];
+        int len;
+        len = 0;
+        while (is_alnum(peek_char(cc))) {
+            ident_buf[len] = read_char(cc);
+            len++;
+            if (len >= MAX_IDENT - 1) break;
+        }
+        ident_buf[len] = 0;
+
+        kw = lookup_keyword(ident_buf);
+        if (!kw) kw = lookup_keyword_fallback(ident_buf, len);
+        if (kw) {
+            cc->tk = kw;
+        } else {
+            /* ATTR-UNKNOWN-001: preprocessor emits __zcc_attr_packed__ for __attribute__((packed)).
+             * Set the pending flag and loop to the next real token. */
+            if (strcmp(ident_buf, "__zcc_attr_packed__") == 0) {
+                cc->pending_packed = 1;
+                return 0;
+            }
+            if (strcmp(ident_buf, "__attribute__") == 0 || strcmp(ident_buf, "__attribute") == 0) {
+                /* Two-pass attribute handler (handles any __attribute__ that leaks through PP) */
+                int pos0 = cc->pos;  /* save position right after __attribute__ */
+                {
+                    /* --- Pass 1: find attribute name --- */
+                    int p = pos0;
+                    char attr_name[64];
+                    int ai = 0;
+                    char *src = cc->source;
+                    int slen = cc->source_len;
+                    /* skip whitespace then opening (( */
+                    while (p < slen && (src[p]==' '||src[p]=='\t'||src[p]=='\n'||src[p]=='\r')) p++;
+                    if (p < slen && src[p] == '(') p++;
+                    while (p < slen && (src[p]==' '||src[p]=='\t')) p++;
+                    if (p < slen && src[p] == '(') p++;
+                    while (p < slen && (src[p]==' '||src[p]=='\t')) p++;
+                    /* read attribute name identifier */
+                    while (p < slen && ai < 63) {
+                        char ac = src[p];
+                        if ((ac>='a'&&ac<='z')||(ac>='A'&&ac<='Z')||(ac>='0'&&ac<='9')||ac=='_') {
+                            attr_name[ai++] = ac; p++;
+                        } else break;
+                    }
+                    attr_name[ai] = 0;
+                    /* strip __ prefix/suffix (GCC __packed__ style) */
+                    {
+                        char *an = attr_name;
+                        int alen = ai;
+                        if (alen > 4 && an[0]=='_' && an[1]=='_' && an[alen-1]=='_' && an[alen-2]=='_') {
+                            an[alen-2] = 0; an += 2; alen -= 4;
+                        }
+                        if (strcmp(an, "packed") == 0) {
+                            cc->pending_packed = 1;
+                        } else if (strcmp(an, "aligned") == 0) {
+                            /* find (N) argument */
+                            while (p < slen && src[p] != '(' && src[p] != ')') p++;
+                            if (p < slen && src[p] == '(') {
+                                int n = 0;
+                                p++;
+                                while (p < slen && src[p] >= '0' && src[p] <= '9') {
+                                    n = n * 10 + (src[p] - '0'); p++;
+                                }
+                                if (n > 0) cc->pending_aligned_n = n;
+                            }
+                        } else if (an[0] != 0) {
+                            /* Unknown attribute — warn and drop (GCC -Wunknown-attributes) */
+                            /* NOTE: suppress noisy stdio.h attrs to keep output readable */
+                            if (strcmp(an, "nothrow") != 0 && strcmp(an, "leaf") != 0 &&
+                                strcmp(an, "nonnull") != 0 && strcmp(an, "malloc") != 0 &&
+                                strcmp(an, "warn_unused_result") != 0 && strcmp(an, "deprecated") != 0 &&
+                                strcmp(an, "format") != 0 && strcmp(an, "noreturn") != 0 &&
+                                strcmp(an, "sentinel") != 0 && strcmp(an, "artificial") != 0) {
+                                fprintf(stderr, "%s:%d: warning: unknown attribute '%s' ignored [-Wunknown-attributes]\n",
+                                        cc->filename ? cc->filename : "<input>", cc->line, an);
+                            }
+                        }
+                    }
+                }
+                /* --- Pass 2: rewind to pos0 and gobble entire __attribute__((...)) --- */
+                {
+                    int pcount = 0;
+                    int started = 0;
+                    cc->pos = pos0;
+                    while (cc->pos < cc->source_len) {
+                        char ac = cc->source[cc->pos];
+                        cc->pos++;
+                        if (ac == '(') { pcount++; started = 1; }
+                        else if (ac == ')') {
+                            pcount--;
+                            if (started && pcount == 0) break;
+                        }
+                    }
+                }
+                return 0;
+            }
+
+
+
+
+            if (strcmp(ident_buf, "__extension__") == 0) {
+                return 0;
+            }
+            
+            cc->tk = TK_IDENT;
+        }
+        strncpy(cc->tk_text, ident_buf, MAX_IDENT - 1);
+        cc->tk_text[MAX_IDENT - 1] = 0;
+    return 1;
+}
+
+static int lex_operator(Compiler *cc, int c) {
+    /* operators and delimiters */
+    read_char(cc);
+
+    if (c == '+') {
+        if (peek_char(cc) == '+') { read_char(cc); cc->tk = TK_INC; return 1; }
+        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_PLUS_ASSIGN; return 1; }
+        cc->tk = TK_PLUS; return 1;
+    }
+    if (c == '-') {
+        if (peek_char(cc) == '-') { read_char(cc); cc->tk = TK_DEC; return 1; }
+        if (peek_char(cc) == '>') { read_char(cc); cc->tk = TK_ARROW; return 1; }
+        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_MINUS_ASSIGN; return 1; }
+        cc->tk = TK_MINUS; return 1;
+    }
+    if (c == '*') {
+        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_STAR_ASSIGN; return 1; }
+        cc->tk = TK_STAR; return 1;
+    }
+    if (c == '/') {
+        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_SLASH_ASSIGN; return 1; }
+        cc->tk = TK_SLASH; return 1;
+    }
+    if (c == '%') {
+        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_PERCENT_ASSIGN; return 1; }
+        cc->tk = TK_PERCENT; return 1;
+    }
+    if (c == '&') {
+        if (peek_char(cc) == '&') { read_char(cc); cc->tk = TK_LAND; return 1; }
+        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_AMP_ASSIGN; return 1; }
+        cc->tk = TK_AMP; return 1;
+    }
+    if (c == '|') {
+        if (peek_char(cc) == '|') { read_char(cc); cc->tk = TK_LOR; return 1; }
+        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_PIPE_ASSIGN; return 1; }
+        cc->tk = TK_PIPE; return 1;
+    }
+    if (c == '^') {
+        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_CARET_ASSIGN; return 1; }
+        cc->tk = TK_CARET; return 1;
+    }
+    if (c == '~') { cc->tk = TK_TILDE; return 1; }
+    if (c == '!') {
+        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_NE; return 1; }
+        cc->tk = TK_BANG; return 1;
+    }
+    if (c == '=') {
+        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_EQ; return 1; }
+        cc->tk = TK_ASSIGN; return 1;
+    }
+    if (c == '<') {
+        if (peek_char(cc) == '<') {
+            read_char(cc);
+            if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_SHL_ASSIGN; return 1; }
+            cc->tk = TK_SHL; return 1;
+        }
+        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_LE; return 1; }
+        cc->tk = TK_LT; return 1;
+    }
+    if (c == '>') {
+        if (peek_char(cc) == '>') {
+            read_char(cc);
+            if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_SHR_ASSIGN; return 1; }
+            cc->tk = TK_SHR; return 1;
+        }
+        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_GE; return 1; }
+        cc->tk = TK_GT; return 1;
+    }
+    if (c == '(') { cc->tk = TK_LPAREN; return 1; }
+    if (c == ')') { cc->tk = TK_RPAREN; return 1; }
+    if (c == '{') { cc->tk = TK_LBRACE; return 1; }
+    if (c == '}') { cc->tk = TK_RBRACE; return 1; }
+    if (c == '[') { cc->tk = TK_LBRACKET; return 1; }
+    if (c == ']') { cc->tk = TK_RBRACKET; return 1; }
+    if (c == ';') { cc->tk = TK_SEMI; return 1; }
+    if (c == ',') { cc->tk = TK_COMMA; return 1; }
+    if (c == '.') {
+        if (is_digit(peek_char(cc))) {
+            char *end;
+            double fval = strtod(cc->source + cc->pos - 1, &end);
+            int len = end - (cc->source + cc->pos - 1);
+            if (len <= 0) len = 1;
+            cc->pos = cc->pos - 1 + len;
+            cc->col = cc->col - 1 + len;
+            /* CG-FLOAT-007: record f/F suffix in tk_text[0] for parse_primary */
+            cc->tk_text[0] = 0;
+            if (cc->pos < cc->source_len) {
+                char sc = cc->source[cc->pos];
+                if (sc == 'f' || sc == 'F') {
+                    cc->pos++; cc->col++;
+                    cc->tk_text[0] = 'F';  /* tag as float literal */
+                } else if (sc == 'l' || sc == 'L') {
+                    cc->pos++; cc->col++;
+                }
+            }
+            cc->tk = TK_FLIT;
+            cc->tk_fval = fval;
+            return 1;
+        }
+        if (peek_char(cc) == '.') {
+            read_char(cc);
+            if (peek_char(cc) == '.') { read_char(cc); cc->tk = TK_ELLIPSIS; return 1; }
+        }
+        cc->tk = TK_DOT; return 1;
+    }
+    if (c == '?') { cc->tk = TK_QUESTION; return 1; }
+    if (c == ':') { cc->tk = TK_COLON; return 1; }
+    return 0;
+}
+
 void next_token(Compiler *cc) {
     int c;
     int kw;
@@ -664,433 +1087,12 @@ again:
         goto again;
     }
 
-    /* number literals */
-    if (is_digit(c)) {
-        long val;
-        int start;
-        int is_float = 0;
-        int i_look = 0;
-        char *end;
-        double fval;
-        int len;
-        
-        if (c == '0' && cc->pos + 1 < cc->source_len && 
-            (cc->source[cc->pos + 1] == 'x' || cc->source[cc->pos + 1] == 'X')) {
-            is_float = 0;
-        } else {
-            while (cc->pos + i_look < cc->source_len) {
-                char ch = cc->source[cc->pos + i_look];
-                if (ch == '.' || ch == 'e' || ch == 'E') { is_float = 1; break; }
-                if (!is_digit(ch) && !is_alpha(ch)) break;
-                i_look++;
-            }
-        }
-        
-        if (is_float) {
-            fval = strtod(cc->source + cc->pos, &end);
-            len = end - (cc->source + cc->pos);
-            if (len <= 0) len = 1;
-            /* we peeked c, so real current index is cc->pos, 
-               but we need to advance cc->pos. */
-            cc->pos = cc->pos + len;
-            cc->col = cc->col + len;
-            /* CG-FLOAT-007: record f/F suffix in tk_text[0] for parse_primary */
-            cc->tk_text[0] = 0;
-            if (cc->pos < cc->source_len) {
-                char sc = cc->source[cc->pos];
-                if (sc == 'f' || sc == 'F') {
-                    cc->pos++; cc->col++;
-                    cc->tk_text[0] = 'F';  /* tag as float literal */
-                } else if (sc == 'l' || sc == 'L') {
-                    cc->pos++; cc->col++;
-                }
-            }
-            cc->tk = TK_FLIT;
-            cc->tk_fval = fval;
-            return;
-        }
-
-        val = 0;
-        start = cc->pos;
-        if (c == '0') {
-            read_char(cc);
-            if (peek_char(cc) == 'x' || peek_char(cc) == 'X') {
-                read_char(cc);
-                while (hex_val(peek_char(cc)) >= 0) {
-                    val = val * 16 + hex_val(peek_char(cc));
-                    read_char(cc);
-                }
-            } else if (peek_char(cc) >= '0') {
-                if (peek_char(cc) <= '7') {
-                    /* octal */
-                    while (peek_char(cc) >= '0') {
-                        if (peek_char(cc) <= '7') {
-                            val = val * 8 + (peek_char(cc) - '0');
-                            read_char(cc);
-                        } else {
-                            break;
-                        }
-                    }
-                }
-            }
-        } else {
-            while (is_digit(peek_char(cc))) {
-                val = val * 10 + (peek_char(cc) - '0');
-                read_char(cc);
-            }
-        }
-        /* parse suffixes like L, U, UL, ULL, etc */
-        int is_uns = 0;
-        int is_lng = 0;
-        while (peek_char(cc) == 'L' || peek_char(cc) == 'l' ||
-               peek_char(cc) == 'U' || peek_char(cc) == 'u') {
-            int ch = read_char(cc);
-            if (ch == 'U' || ch == 'u') is_uns = 1;
-            if (ch == 'L' || ch == 'l') is_lng = 1;
-        }
-        cc->tk = TK_NUM;
-        cc->tk_val = val;
-        cc->tk_text[0] = is_uns ? 'U' : 0;
-        cc->tk_text[1] = is_lng ? 'L' : 0;
-        return;
-    }
-
-    /* character literal */
-    if (c == '\'') {
-        int val;
-        read_char(cc);  /* skip opening ' */
-        if (peek_char(cc) == '\\') {
-            read_char(cc);
-            val = read_escape(cc);
-        } else {
-            val = read_char(cc);
-        }
-        if (peek_char(cc) == '\'') read_char(cc);  /* skip closing ' */
-        cc->tk = TK_CHAR_LIT;
-        cc->tk_val = val;
-        return;
-    }
-
-    /* string literal */
-    if (c == '"') {
-        int len;
-        read_char(cc);  /* skip opening " */
-        len = 0;
-        while (peek_char(cc) != '"') {
-            if (peek_char(cc) == -1) break;
-            if (peek_char(cc) == '\\') {
-                read_char(cc);
-                cc->tk_str[len] = read_escape(cc);
-            } else {
-                cc->tk_str[len] = read_char(cc);
-            }
-            len++;
-            if (len >= MAX_STR - 1) break;
-        }
-        if (peek_char(cc) == '"') read_char(cc);  /* skip closing " */
-        cc->tk_str[len] = 0;
-        cc->tk_str_len = len;
-        cc->tk = TK_STR;
-
-        /* handle adjacent string literals */
-        /* skip whitespace and check for another " */
-        while (1) {
-            int saved_pos;
-            int saved_line;
-            int saved_col;
-            saved_pos = cc->pos;
-            saved_line = cc->line;
-            saved_col = cc->col;
-            while (cc->pos < cc->source_len) {
-                int ch;
-                ch = cc->source[cc->pos];
-                if (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n') {
-                    if (ch == '\n') {
-                        cc->line++;
-                        cc->col = 1;
-                    } else {
-                        cc->col++;
-                    }
-                    cc->pos++;
-                } else if (ch == '/' && cc->pos + 1 < cc->source_len) {
-                    if (cc->source[cc->pos + 1] == '/') {
-                        while (cc->pos < cc->source_len && cc->source[cc->pos] != '\n') cc->pos++;
-                    } else if (cc->source[cc->pos + 1] == '*') {
-                        cc->pos += 2;
-                        cc->col += 2;
-                        while (cc->pos + 1 < cc->source_len) {
-                            if (cc->source[cc->pos] == '\n') {
-                                cc->line++;
-                                cc->col = 1;
-                            }
-                            if (cc->source[cc->pos] == '*' && cc->source[cc->pos + 1] == '/') {
-                                cc->pos += 2;
-                                cc->col += 2;
-                                break;
-                            }
-                            cc->pos++;
-                            cc->col++;
-                        }
-                    } else {
-                        break;
-                    }
-                } else {
-                    break;
-                }
-            }
-            if (cc->pos < cc->source_len) {
-                if (cc->source[cc->pos] == '"') {
-                    /* concatenate adjacent string */
-                    read_char(cc); /* skip " */
-                    while (peek_char(cc) != '"') {
-                        if (peek_char(cc) == -1) break;
-                        if (peek_char(cc) == '\\') {
-                            read_char(cc);
-                            cc->tk_str[len] = read_escape(cc);
-                        } else {
-                            cc->tk_str[len] = read_char(cc);
-                        }
-                        len++;
-                        if (len >= MAX_STR - 1) break;
-                    }
-                    if (peek_char(cc) == '"') read_char(cc);
-                    cc->tk_str[len] = 0;
-                    cc->tk_str_len = len;
-                } else {
-                    /* no adjacent string — restore position and exit loop */
-                    cc->pos = saved_pos;
-                    cc->line = saved_line;
-                    cc->col = saved_col;
-                    break;
-                }
-            } else {
-                break;
-            }
-        }
-        return;
-    }
-
-    /* identifiers and keywords: use local buffer for lookup to avoid bad cc->tk_text in stage2 (offset/codegen quirk) */
-    if (is_alpha(c)) {
-        static char ident_buf[MAX_IDENT];
-        int len;
-        len = 0;
-        while (is_alnum(peek_char(cc))) {
-            ident_buf[len] = read_char(cc);
-            len++;
-            if (len >= MAX_IDENT - 1) break;
-        }
-        ident_buf[len] = 0;
-
-        kw = lookup_keyword(ident_buf);
-        if (!kw) kw = lookup_keyword_fallback(ident_buf, len);
-        if (kw) {
-            cc->tk = kw;
-        } else {
-            /* ATTR-UNKNOWN-001: preprocessor emits __zcc_attr_packed__ for __attribute__((packed)).
-             * Set the pending flag and loop to the next real token. */
-            if (strcmp(ident_buf, "__zcc_attr_packed__") == 0) {
-                cc->pending_packed = 1;
-                goto again;
-            }
-            if (strcmp(ident_buf, "__attribute__") == 0 || strcmp(ident_buf, "__attribute") == 0) {
-                /* Two-pass attribute handler (handles any __attribute__ that leaks through PP) */
-                int pos0 = cc->pos;  /* save position right after __attribute__ */
-                {
-                    /* --- Pass 1: find attribute name --- */
-                    int p = pos0;
-                    char attr_name[64];
-                    int ai = 0;
-                    char *src = cc->source;
-                    int slen = cc->source_len;
-                    /* skip whitespace then opening (( */
-                    while (p < slen && (src[p]==' '||src[p]=='\t'||src[p]=='\n'||src[p]=='\r')) p++;
-                    if (p < slen && src[p] == '(') p++;
-                    while (p < slen && (src[p]==' '||src[p]=='\t')) p++;
-                    if (p < slen && src[p] == '(') p++;
-                    while (p < slen && (src[p]==' '||src[p]=='\t')) p++;
-                    /* read attribute name identifier */
-                    while (p < slen && ai < 63) {
-                        char ac = src[p];
-                        if ((ac>='a'&&ac<='z')||(ac>='A'&&ac<='Z')||(ac>='0'&&ac<='9')||ac=='_') {
-                            attr_name[ai++] = ac; p++;
-                        } else break;
-                    }
-                    attr_name[ai] = 0;
-                    /* strip __ prefix/suffix (GCC __packed__ style) */
-                    {
-                        char *an = attr_name;
-                        int alen = ai;
-                        if (alen > 4 && an[0]=='_' && an[1]=='_' && an[alen-1]=='_' && an[alen-2]=='_') {
-                            an[alen-2] = 0; an += 2; alen -= 4;
-                        }
-                        if (strcmp(an, "packed") == 0) {
-                            cc->pending_packed = 1;
-                        } else if (strcmp(an, "aligned") == 0) {
-                            /* find (N) argument */
-                            while (p < slen && src[p] != '(' && src[p] != ')') p++;
-                            if (p < slen && src[p] == '(') {
-                                int n = 0;
-                                p++;
-                                while (p < slen && src[p] >= '0' && src[p] <= '9') {
-                                    n = n * 10 + (src[p] - '0'); p++;
-                                }
-                                if (n > 0) cc->pending_aligned_n = n;
-                            }
-                        } else if (an[0] != 0) {
-                            /* Unknown attribute — warn and drop (GCC -Wunknown-attributes) */
-                            /* NOTE: suppress noisy stdio.h attrs to keep output readable */
-                            if (strcmp(an, "nothrow") != 0 && strcmp(an, "leaf") != 0 &&
-                                strcmp(an, "nonnull") != 0 && strcmp(an, "malloc") != 0 &&
-                                strcmp(an, "warn_unused_result") != 0 && strcmp(an, "deprecated") != 0 &&
-                                strcmp(an, "format") != 0 && strcmp(an, "noreturn") != 0 &&
-                                strcmp(an, "sentinel") != 0 && strcmp(an, "artificial") != 0) {
-                                fprintf(stderr, "%s:%d: warning: unknown attribute '%s' ignored [-Wunknown-attributes]\n",
-                                        cc->filename ? cc->filename : "<input>", cc->line, an);
-                            }
-                        }
-                    }
-                }
-                /* --- Pass 2: rewind to pos0 and gobble entire __attribute__((...)) --- */
-                {
-                    int pcount = 0;
-                    int started = 0;
-                    cc->pos = pos0;
-                    while (cc->pos < cc->source_len) {
-                        char ac = cc->source[cc->pos];
-                        cc->pos++;
-                        if (ac == '(') { pcount++; started = 1; }
-                        else if (ac == ')') {
-                            pcount--;
-                            if (started && pcount == 0) break;
-                        }
-                    }
-                }
-                goto again;
-            }
-
-
-
-
-            if (strcmp(ident_buf, "__extension__") == 0) {
-                goto again;
-            }
-            
-            cc->tk = TK_IDENT;
-        }
-        strncpy(cc->tk_text, ident_buf, MAX_IDENT - 1);
-        cc->tk_text[MAX_IDENT - 1] = 0;
-        return;
-    }
-
-    /* operators and delimiters */
-    read_char(cc);
-
-    if (c == '+') {
-        if (peek_char(cc) == '+') { read_char(cc); cc->tk = TK_INC; return; }
-        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_PLUS_ASSIGN; return; }
-        cc->tk = TK_PLUS; return;
-    }
-    if (c == '-') {
-        if (peek_char(cc) == '-') { read_char(cc); cc->tk = TK_DEC; return; }
-        if (peek_char(cc) == '>') { read_char(cc); cc->tk = TK_ARROW; return; }
-        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_MINUS_ASSIGN; return; }
-        cc->tk = TK_MINUS; return;
-    }
-    if (c == '*') {
-        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_STAR_ASSIGN; return; }
-        cc->tk = TK_STAR; return;
-    }
-    if (c == '/') {
-        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_SLASH_ASSIGN; return; }
-        cc->tk = TK_SLASH; return;
-    }
-    if (c == '%') {
-        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_PERCENT_ASSIGN; return; }
-        cc->tk = TK_PERCENT; return;
-    }
-    if (c == '&') {
-        if (peek_char(cc) == '&') { read_char(cc); cc->tk = TK_LAND; return; }
-        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_AMP_ASSIGN; return; }
-        cc->tk = TK_AMP; return;
-    }
-    if (c == '|') {
-        if (peek_char(cc) == '|') { read_char(cc); cc->tk = TK_LOR; return; }
-        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_PIPE_ASSIGN; return; }
-        cc->tk = TK_PIPE; return;
-    }
-    if (c == '^') {
-        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_CARET_ASSIGN; return; }
-        cc->tk = TK_CARET; return;
-    }
-    if (c == '~') { cc->tk = TK_TILDE; return; }
-    if (c == '!') {
-        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_NE; return; }
-        cc->tk = TK_BANG; return;
-    }
-    if (c == '=') {
-        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_EQ; return; }
-        cc->tk = TK_ASSIGN; return;
-    }
-    if (c == '<') {
-        if (peek_char(cc) == '<') {
-            read_char(cc);
-            if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_SHL_ASSIGN; return; }
-            cc->tk = TK_SHL; return;
-        }
-        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_LE; return; }
-        cc->tk = TK_LT; return;
-    }
-    if (c == '>') {
-        if (peek_char(cc) == '>') {
-            read_char(cc);
-            if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_SHR_ASSIGN; return; }
-            cc->tk = TK_SHR; return;
-        }
-        if (peek_char(cc) == '=') { read_char(cc); cc->tk = TK_GE; return; }
-        cc->tk = TK_GT; return;
-    }
-    if (c == '(') { cc->tk = TK_LPAREN; return; }
-    if (c == ')') { cc->tk = TK_RPAREN; return; }
-    if (c == '{') { cc->tk = TK_LBRACE; return; }
-    if (c == '}') { cc->tk = TK_RBRACE; return; }
-    if (c == '[') { cc->tk = TK_LBRACKET; return; }
-    if (c == ']') { cc->tk = TK_RBRACKET; return; }
-    if (c == ';') { cc->tk = TK_SEMI; return; }
-    if (c == ',') { cc->tk = TK_COMMA; return; }
-    if (c == '.') {
-        if (is_digit(peek_char(cc))) {
-            char *end;
-            double fval = strtod(cc->source + cc->pos - 1, &end);
-            int len = end - (cc->source + cc->pos - 1);
-            if (len <= 0) len = 1;
-            cc->pos = cc->pos - 1 + len;
-            cc->col = cc->col - 1 + len;
-            /* CG-FLOAT-007: record f/F suffix in tk_text[0] for parse_primary */
-            cc->tk_text[0] = 0;
-            if (cc->pos < cc->source_len) {
-                char sc = cc->source[cc->pos];
-                if (sc == 'f' || sc == 'F') {
-                    cc->pos++; cc->col++;
-                    cc->tk_text[0] = 'F';  /* tag as float literal */
-                } else if (sc == 'l' || sc == 'L') {
-                    cc->pos++; cc->col++;
-                }
-            }
-            cc->tk = TK_FLIT;
-            cc->tk_fval = fval;
-            return;
-        }
-        if (peek_char(cc) == '.') {
-            read_char(cc);
-            if (peek_char(cc) == '.') { read_char(cc); cc->tk = TK_ELLIPSIS; return; }
-        }
-        cc->tk = TK_DOT; return;
-    }
-    if (c == '?') { cc->tk = TK_QUESTION; return; }
-    if (c == ':') { cc->tk = TK_COLON; return; }
-
-    /* unknown character — skip */
+    if (is_digit(c)) { lex_number(cc, c); return; }
+    if (c == '\'') { lex_char(cc); return; }
+    if (c == '"') { lex_string(cc); return; }
+    if (is_alpha(c)) { if (lex_ident(cc)) return; else goto again; }
+    if (lex_operator(cc, c)) return;
+    goto again;
     goto again;
 
 }
