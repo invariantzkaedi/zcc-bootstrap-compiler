@@ -82,3 +82,14 @@ next_token (588 blocks) exceeds register budget under any correct liveness
 extension. Allocator has no fallback when pressure > 7 registers.
 Resolution: next_token permanently deferred until spill support lands.
 Status: CLOSED-BLOCKED — requires IR spill implementation.
+
+## Revert 4 — 2026-05-19
+Commit a571e2b8 reverted in b0a56d0f.
+Fix: BFS topological liveness order + heap first_use tracking +
+     linear scan eviction (most complete fix attempted).
+Result: gcc-built selfhost PASS, zcc2.s=3.6MB generated clean,
+        zcc3.s=0 bytes — self-hosted hung on assembly phase.
+Pattern: 5 fixes, 5 reverts. All correct under gcc, all hang self-hosted.
+FINAL VERDICT: next_token requires full spill-to-stack IR support.
+No further liveness fixes should be attempted without spill implementation.
+Status: PERMANENTLY DEFERRED — open CG-IR-013 for spill support.
