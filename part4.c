@@ -3941,6 +3941,9 @@ static int ir_whitelisted(const char *name) {
       "peek_token", "peek_char", "is_type_token", "lookup_keyword",
       "lookup_keyword_fallback", "expect",
       "node_ptr_elem_size", "ptr_elem_size", "get_member_size",
+      /* Batch 8: Memory Safety & Math Primitives */
+      "log2_of", "guard_node", "is_bad_ptr", "ptr_in_fault_range",
+      "validate_token_bounds", "validate_node", "validate_type", "bad_node_cutoff",
       NULL
   };
   int i;
