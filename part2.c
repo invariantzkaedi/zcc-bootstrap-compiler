@@ -111,24 +111,16 @@ Type *type_new(Compiler *cc, int kind) {
     t->magic = 0xDEADBEEF87654321ULL;
     t->alloc_id = next_alloc_id - 1;
     t->kind = kind;
-    switch (kind) {
-        case TY_VOID:  t->size = 0; t->align = 1; break;
-        case TY_CHAR:  t->size = 1; t->align = 1; break;
-        case TY_UCHAR: t->size = 1; t->align = 1; break;
-        case TY_SHORT: t->size = 2; t->align = 2; break;
-        case TY_USHORT:t->size = 2; t->align = 2; break;
-        case TY_INT:   t->size = 4; t->align = 4; break;
-        case TY_UINT:  t->size = 4; t->align = 4; break;
-        case TY_LONG:  t->size = 8; t->align = 8; break;
-        case TY_ULONG: t->size = 8; t->align = 8; break;
-        case TY_LONGLONG:  t->size = 8; t->align = 8; break;
-        case TY_ULONGLONG: t->size = 8; t->align = 8; break;
-        case TY_FLOAT: t->size = 4; t->align = 4; break;
-        case TY_DOUBLE: t->size = 8; t->align = 8; break;
-        case TY_PTR:   t->size = 8; t->align = 8; break;
-        case TY_ENUM:  t->size = 4; t->align = 4; break;
-        default:       t->size = 0; t->align = 1; break;
-    }
+    if (kind == TY_VOID) { t->size = 0; t->align = 1; }
+    else if (kind == TY_CHAR || kind == TY_UCHAR) { t->size = 1; t->align = 1; }
+    else if (kind == TY_SHORT || kind == TY_USHORT) { t->size = 2; t->align = 2; }
+    else if (kind == TY_INT || kind == TY_UINT) { t->size = 4; t->align = 4; }
+    else if (kind == TY_LONG || kind == TY_ULONG || kind == TY_LONGLONG || kind == TY_ULONGLONG) { t->size = 8; t->align = 8; }
+    else if (kind == TY_FLOAT) { t->size = 4; t->align = 4; }
+    else if (kind == TY_DOUBLE) { t->size = 8; t->align = 8; }
+    else if (kind == TY_PTR) { t->size = 8; t->align = 8; }
+    else if (kind == TY_ENUM) { t->size = 4; t->align = 4; }
+    else { t->size = 0; t->align = 1; }
     validate_type(cc, t, "type_new", 0);
     return t;
 }

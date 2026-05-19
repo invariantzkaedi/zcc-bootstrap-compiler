@@ -3932,6 +3932,11 @@ static int ir_whitelisted(const char *name) {
       "node_is_global", "node_is_array", "node_is_func", "node_type_size", "node_type_unsigned",
       /* Batch 5: Type checking helpers */
       "type_size", "type_align", "is_integer", "is_pointer", "is_float_type", "is_unsigned_type",
+      /* Batch 6: Allocator, Constructors, and Scope Helpers (part2.c) */
+      "cc_alloc", "cc_strdup", "error", "error_at",
+      "type_new", "type_ptr", "type_array", "type_func",
+      "node_new", "node_num", "node_flit",
+      "scope_push", "scope_pop", "scope_find", "scope_find_local", "scope_add", "scope_add_local",
       NULL
   };
   int i;
