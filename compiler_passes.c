@@ -5956,11 +5956,10 @@ static int live_interval_compare(const void *a, const void *b) {
 static void ir_asm_number_and_liveness(Function *fn,
                                        const uint32_t *block_order,
                                        uint32_t n_block_order, int *def_seq,
-                                       int *last_use, int *first_use) {
+                                       int *last_use) {
   for (int i = 0; i < MAX_INSTRS; i++) {
     def_seq[i] = -1;
     last_use[i] = -1;
-    first_use[i] = -1;
   }
   int seq = 0;
   for (uint32_t i = 0; i < n_block_order; i++) {
@@ -5975,42 +5974,32 @@ static void ir_asm_number_and_liveness(Function *fn,
         continue;
       ins->lscan_seq = seq;
       /* Uses */
-#define RECORD_USE(reg) do { \
-  RegID r_id = (reg); \
-  if (r_id < MAX_INSTRS) { \
-    if (first_use[r_id] < 0) first_use[r_id] = seq; \
-    last_use[r_id] = seq; \
-  } \
-} while(0)
-
       if (ins->op == OP_CONDBR) {
         if (ins->n_src >= 1 && ins->src[0])
-          RECORD_USE(ins->src[0]);
+          last_use[ins->src[0]] = seq;
       } else if (ins->op == OP_BR) {
         /* no reg operands */
       } else if (ins->op == OP_RET) {
         if (ins->n_src >= 1 && ins->src[0])
-          RECORD_USE(ins->src[0]);
+          last_use[ins->src[0]] = seq;
       } else if (ins->op == OP_STORE) {
         if (ins->n_src >= 1 && ins->src[0])
-          RECORD_USE(ins->src[0]);
+          last_use[ins->src[0]] = seq;
         if (ins->n_src >= 2 && ins->src[1])
-          RECORD_USE(ins->src[1]);
+          last_use[ins->src[1]] = seq;
       } else if (ins->op == OP_PHI) {
         for (uint32_t p = 0; p < ins->n_phi; p++)
           if (ins->phi[p].reg)
-            RECORD_USE(ins->phi[p].reg);
+            last_use[ins->phi[p].reg] = seq;
       } else if (ins->op == OP_CALL) {
         for (uint32_t c = 0; c < ins->n_call_args; c++)
           if (ins->call_args[c])
-            RECORD_USE(ins->call_args[c]);
+            last_use[ins->call_args[c]] = seq;
       } else {
         for (uint32_t s = 0; s < ins->n_src; s++)
           if (ins->src[s])
-            RECORD_USE(ins->src[s]);
+            last_use[ins->src[s]] = seq;
       }
-#undef RECORD_USE
-
       /* Def */
       if (ins->dst &&
           (ins->op != OP_BR && ins->op != OP_CONDBR && ins->op != OP_STORE))
@@ -6075,11 +6064,11 @@ static void ir_asm_number_and_liveness(Function *fn,
    * order. The linear scanner assumes the interval starts at def_seq. If use < def,
    * the interval [def, end] DOES NOT COVER the use, allowing the allocator to assign
    * a register that is already active at the use point, causing lethal clobbering.
-   * Fix: Expand the interval backward to start at first_use, and forward to the
+   * Fix: Expand the interval backward to start at last_use, and forward to the
    * end of the function (since it must span a loop back-edge). */
   for (int r = 0; r < MAX_INSTRS; r++) {
-    if (def_seq[r] >= 0 && first_use[r] >= 0 && first_use[r] < def_seq[r]) {
-      def_seq[r] = first_use[r];
+    if (def_seq[r] >= 0 && last_use[r] >= 0 && last_use[r] < def_seq[r]) {
+      def_seq[r] = last_use[r];
       last_use[r] = seq > 0 ? seq - 1 : 0;
     }
   }
@@ -6149,35 +6138,10 @@ static void ir_asm_linear_scan(Function *fn, const uint32_t *block_order,
       phys_reg_out[cur->vreg] = chosen;
       intervals[active_end++] = *cur;
     } else {
-      /* No free reg: spill the active interval ending latest. */
-      int latest_end = cur->end;
-      int spill_j = -1;
-      for (int j = 0; j < active_end; j++) {
-        if (intervals[j].phys_reg >= 0 && intervals[j].end > latest_end) {
-          latest_end = intervals[j].end;
-          spill_j = j;
-        }
-      }
-      if (spill_j >= 0) {
-        int stolen_reg = intervals[spill_j].phys_reg;
-        if (getenv("ZCC_DEBUG_LSCAN")) {
-          fprintf(stderr, "[LSCAN] vreg=%d spills vreg=%d from phys_reg=%d\n",
-                  cur->vreg, intervals[spill_j].vreg, stolen_reg);
-        }
-        /* Evict the stolen register from the active interval */
-        phys_reg_out[intervals[spill_j].vreg] = -1;
-        
-        /* Assign stolen register to current */
-        cur->phys_reg = stolen_reg;
-        phys_reg_out[cur->vreg] = stolen_reg;
-        
-        /* Replace evicted interval in the active set with current */
-        intervals[spill_j] = *cur;
-      } else {
-        if (getenv("ZCC_DEBUG_LSCAN"))
-          fprintf(stderr, "[LSCAN] vreg=%d spilled\n", cur->vreg);
-        phys_reg_out[cur->vreg] = -1;
-      }
+      if (getenv("ZCC_DEBUG_LSCAN"))
+        fprintf(stderr, "[LSCAN] vreg=%d spilled\n", cur->vreg);
+      /* No free reg: leave current interval spilled (no eviction = no spill
+       * code to emit). */
     }
   }
 }
@@ -7122,44 +7086,12 @@ static void ir_asm_emit_function_body(IRAsmCtx *ctx) {
   }
 
   /* Linear scan register allocation: number instructions, compute intervals,
-   * assign phys regs.  We must perform liveness analysis and linear scan
-   * using a topologically clean block order (BFS from entry block) rather
-   * than the PGO/BBR emission order.  This ensures loop preheaders and 
-   * dominators are processed before their headers/uses, preventing lethal
-   * loop register clobbering due to PGO-reordered block lifetimes. */
-  uint32_t alloc_order[MAX_BLOCKS];
-  uint32_t n_alloc_order = 0;
-  {
-    bool visited[MAX_BLOCKS];
-    memset(visited, 0, sizeof(visited));
-    uint32_t queue[MAX_BLOCKS];
-    uint32_t head = 0, tail = 0;
-    queue[tail++] = fn->entry;
-    visited[fn->entry] = true;
-    while (head < tail) {
-      BlockID bid = queue[head++];
-      Block *blk = fn->blocks[bid];
-      if (!blk) continue;
-      for (uint32_t si = 0; si < blk->n_succs; si++) {
-        BlockID s = blk->succs[si];
-        if (s < fn->n_blocks && !visited[s]) {
-          visited[s] = true;
-          queue[tail++] = s;
-        }
-      }
-    }
-    n_alloc_order = tail;
-    for (uint32_t i = 0; i < tail; i++)
-      alloc_order[i] = queue[i];
-  }
-
+   * assign phys regs. */
   for (int i = 0; i < MAX_INSTRS; i++)
     ctx->phys_reg[i] = -1;
-  int *first_use = (int *)calloc(MAX_INSTRS, sizeof(int));
-  ir_asm_number_and_liveness(fn, alloc_order, n_alloc_order,
-                             ctx->def_seq, ctx->last_use, first_use);
-  free(first_use);
-  ir_asm_linear_scan(fn, alloc_order, n_alloc_order, ctx->def_seq,
+  ir_asm_number_and_liveness(fn, ctx->block_order, ctx->n_block_order,
+                             ctx->def_seq, ctx->last_use);
+  ir_asm_linear_scan(fn, ctx->block_order, ctx->n_block_order, ctx->def_seq,
                      ctx->last_use, ctx->phys_reg);
 
   /* Which callee-saved phys regs (rbx, r12-r15) are used — for
@@ -7403,6 +7335,7 @@ int zcc_run_passes_emit_body_pgo(ZCCNode *body_ast, const char *profile_path,
     return 0;
   }
   run_all_passes(fn, result, profile_path, num_params);
+
   IRAsmCtx ctx;
   memset(&ctx, 0, sizeof(ctx));
   ctx.out = out;
