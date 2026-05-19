@@ -3937,6 +3937,10 @@ static int ir_whitelisted(const char *name) {
       "type_new", "type_ptr", "type_array", "type_func",
       "node_new", "node_num", "node_flit",
       "scope_push", "scope_pop", "scope_find", "scope_find_local", "scope_add", "scope_add_local",
+      /* Batch 7: Token & Lexing Core + Missed AST Helpers (bisect-safe) */
+      "peek_token", "peek_char", "is_type_token", "lookup_keyword",
+      "lookup_keyword_fallback", "expect",
+      "node_ptr_elem_size", "ptr_elem_size", "get_member_size",
       NULL
   };
   int i;
