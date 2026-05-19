@@ -5957,9 +5957,15 @@ static void ir_asm_number_and_liveness(Function *fn,
                                        const uint32_t *block_order,
                                        uint32_t n_block_order, int *def_seq,
                                        int *last_use) {
+  int block_start_seq[MAX_BLOCKS];
+  int block_end_seq[MAX_BLOCKS];
   for (int i = 0; i < MAX_INSTRS; i++) {
     def_seq[i] = -1;
     last_use[i] = -1;
+  }
+  for (int i = 0; i < MAX_BLOCKS; i++) {
+    block_start_seq[i] = -1;
+    block_end_seq[i] = -1;
   }
   int seq = 0;
   for (uint32_t i = 0; i < n_block_order; i++) {
@@ -5969,6 +5975,7 @@ static void ir_asm_number_and_liveness(Function *fn,
     Block *blk = fn->blocks[bid];
     if (!blk)
       continue;
+    block_start_seq[bid] = seq;
     for (Instr *ins = blk->head; ins; ins = ins->next) {
       if (ins->op == OP_NOP)
         continue;
@@ -6005,6 +6012,43 @@ static void ir_asm_number_and_liveness(Function *fn,
           (ins->op != OP_BR && ins->op != OP_CONDBR && ins->op != OP_STORE))
         def_seq[ins->dst] = seq;
       seq++;
+    }
+    block_end_seq[bid] = seq > block_start_seq[bid] ? seq - 1 : block_start_seq[bid];
+  }
+
+  /* CG-IR-012 FIX: Linear scan register allocation fails on loops because
+   * it relies purely on textual use-def intervals. Variables defined before
+   * a loop but used inside the loop have their last_use inside the loop,
+   * causing them to expire before the loop back-edge. We must extend their
+   * last_use to the end of the loop (latch block). */
+  for (uint32_t i = 0; i < n_block_order; i++) {
+    BlockID bid = block_order[i];
+    if (bid >= fn->n_blocks) continue;
+    Block *blk = fn->blocks[bid];
+    if (!blk) continue;
+
+    for (uint32_t s = 0; s < blk->n_succs; s++) {
+      BlockID succ = blk->succs[s];
+      int is_backedge = 0;
+      for (uint32_t j = 0; j < i; j++) {
+        if (block_order[j] == succ) {
+          is_backedge = 1;
+          break;
+        }
+      }
+      if (is_backedge) {
+        int loop_start = block_start_seq[succ];
+        int loop_end = block_end_seq[bid];
+        if (loop_start >= 0 && loop_end >= loop_start) {
+          for (int r = 0; r < MAX_INSTRS; r++) {
+            if (def_seq[r] >= 0 && def_seq[r] < loop_start && last_use[r] >= loop_start) {
+              if (last_use[r] < loop_end) {
+                last_use[r] = loop_end;
+              }
+            }
+          }
+        }
+      }
     }
   }
   /* CG-IR-005 FIX (BUG 1): Back-edge PHI sources have inverted intervals

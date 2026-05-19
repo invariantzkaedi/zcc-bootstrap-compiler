@@ -123,6 +123,37 @@ static void build_intervals(RegAllocator *ra, const ir_func_t *fn) {
         }
     }
 
+    /* Pass 2: Extend intervals for backward jumps (loops) */
+    pos = 0;
+    for (n = fn->head; n; n = n->next, pos++) {
+        if (n->op == IR_BR || n->op == IR_BR_IF) {
+            if (n->label[0]) {
+                int label_pos = -1;
+                int p2 = 0;
+                const ir_node_t *n2;
+                for (n2 = fn->head; n2; n2 = n2->next, p2++) {
+                    if (n2->op == IR_LABEL && strcmp(n2->label, n->label) == 0) {
+                        label_pos = p2;
+                        break;
+                    }
+                }
+                /* If it's a backward jump (loop latch) */
+                if (label_pos != -1 && label_pos < pos) {
+                    /* Extend any interval that spans into the loop */
+                    int i;
+                    for (i = 0; i < ra->num_intervals; i++) {
+                        LiveInterval *iv = &ra->intervals[i];
+                        if (iv->start < label_pos && iv->end >= label_pos) {
+                            if (pos > iv->end) {
+                                iv->end = pos;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /* Sort by start for the scan */
     qsort(ra->intervals, ra->num_intervals, sizeof(LiveInterval), iv_cmp_start);
 }
