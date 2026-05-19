@@ -5060,19 +5060,24 @@ Function *zcc_ast_to_ir(ZCCNode *body_ast, const char *func_name) {
 
   zcc_lower_stmt(&ctx, body_ast);
 
-  Block *cur = fn->blocks[ctx.cur_block];
-  if (cur->n_succs == 0 && cur->tail && cur->tail->op != OP_RET) {
-    Instr *br = calloc(1, sizeof(Instr));
-    br->id = ctx.next_instr_id++;
-    br->op = OP_BR;
-    br->src[0] = exit_blk;
-    br->n_src = 1;
-    br->exec_freq = 1.0;
-    emit_instr(&ctx, br);
-    cur->succs[0] = exit_blk;
-    cur->n_succs = 1;
-    fn->blocks[exit_blk]->preds[fn->blocks[exit_blk]->n_preds++] =
-        ctx.cur_block;
+  /* Root cause fix: instead of just checking cur_block, check all blocks.
+   * If a block has 0 successors and doesn't end with a terminator, emit OP_RET.
+   * This fixes the bug where an empty merge_blk falls through into whatever
+   * physical block PGO places next (causing infinite loops/segfaults). */
+  for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
+    Block *b = fn->blocks[bi];
+    if (!b) continue;
+    if (b->n_succs == 0) {
+      if (!b->tail || (b->tail->op != OP_RET && b->tail->op != OP_BR && b->tail->op != OP_CONDBR)) {
+        ctx.cur_block = bi;
+        Instr *ret = calloc(1, sizeof(Instr));
+        ret->id = ctx.next_instr_id++;
+        ret->op = OP_RET;
+        ret->n_src = 0;
+        ret->exec_freq = 1.0;
+        emit_instr(&ctx, ret);
+      }
+    }
   }
 
   return fn;
@@ -6053,6 +6058,18 @@ static void ir_asm_number_and_liveness(Function *fn,
       if (def_seq[r] < hdr_first_seq && last_use[r] >= hdr_first_seq) {
         last_use[r] = seq > 0 ? seq - 1 : 0;
       }
+    }
+  }
+  /* BUG-3 FIX: LICM hoisting + PGO can place a use BEFORE a def in linear emission
+   * order. The linear scanner assumes the interval starts at def_seq. If use < def,
+   * the interval [def, end] DOES NOT COVER the use, allowing the allocator to assign
+   * a register that is already active at the use point, causing lethal clobbering.
+   * Fix: Expand the interval backward to start at last_use, and forward to the
+   * end of the function (since it must span a loop back-edge). */
+  for (int r = 0; r < MAX_INSTRS; r++) {
+    if (def_seq[r] >= 0 && last_use[r] >= 0 && last_use[r] < def_seq[r]) {
+      def_seq[r] = last_use[r];
+      last_use[r] = seq > 0 ? seq - 1 : 0;
     }
   }
 }
