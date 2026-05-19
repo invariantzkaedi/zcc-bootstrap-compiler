@@ -59,3 +59,13 @@ function in its own codegen path.
 Next investigation: compare zcc2.s output with vs without the fix to
 find which function diverges.
 Status: REOPENED
+
+## Revert 2 — 2026-05-19
+Commit e4b5494b reverted in 66f826b7.
+Fix: backward-jump latch extension in regalloc.c build_intervals().
+Result: gcc-built selfhost PASS, self-hosted zcc2 hang (zcc3.s=0 bytes).
+Pattern: both fixes correct under gcc, both fail under self-host.
+Root cause: next_token register pressure under extended intervals
+causes degenerate allocator behavior in self-hosted binary.
+Next approach: source-level split of next_token OR spill handling fix.
+Status: REOPENED — self-host stable fix required.
