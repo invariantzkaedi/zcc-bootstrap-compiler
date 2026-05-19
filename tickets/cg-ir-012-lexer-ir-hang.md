@@ -46,3 +46,16 @@ Current state: GREEN (commit `7979f6d0` + Batch 7 landed clean).
 - BUG-3 FIX: `compiler_passes.c` — inverted interval backward expansion
 - Bisect artifact: `tickets/batch7-bisect-20260518.md`
 - Gate evidence: `tickets/b302c11-gate-evidence.md`
+
+## Revert — 2026-05-19
+Commit ebfb7d68 reverted in 8a133ef4.
+Reason: bounded latch expansion fix passes gcc-built selfhost gate but
+produces a self-host regression — zcc2 generates broken ELF when
+compiling itself with the new liveness intervals. 0 peephole elisions
+in Stage 2 confirmed the codegen path diverged.
+Root cause of regression: unknown. Likely the new interval boundaries
+change register assignments enough that zcc2 miscompiles a critical
+function in its own codegen path.
+Next investigation: compare zcc2.s output with vs without the fix to
+find which function diverges.
+Status: REOPENED
