@@ -5956,10 +5956,11 @@ static int live_interval_compare(const void *a, const void *b) {
 static void ir_asm_number_and_liveness(Function *fn,
                                        const uint32_t *block_order,
                                        uint32_t n_block_order, int *def_seq,
-                                       int *last_use) {
+                                       int *last_use, int *first_use) {
   for (int i = 0; i < MAX_INSTRS; i++) {
     def_seq[i] = -1;
     last_use[i] = -1;
+    first_use[i] = -1;
   }
   int seq = 0;
   for (uint32_t i = 0; i < n_block_order; i++) {
@@ -5975,30 +5976,44 @@ static void ir_asm_number_and_liveness(Function *fn,
       ins->lscan_seq = seq;
       /* Uses */
       if (ins->op == OP_CONDBR) {
-        if (ins->n_src >= 1 && ins->src[0])
+        if (ins->n_src >= 1 && ins->src[0]) {
+          if (first_use[ins->src[0]] == -1) first_use[ins->src[0]] = seq;
           last_use[ins->src[0]] = seq;
+        }
       } else if (ins->op == OP_BR) {
         /* no reg operands */
       } else if (ins->op == OP_RET) {
-        if (ins->n_src >= 1 && ins->src[0])
+        if (ins->n_src >= 1 && ins->src[0]) {
+          if (first_use[ins->src[0]] == -1) first_use[ins->src[0]] = seq;
           last_use[ins->src[0]] = seq;
+        }
       } else if (ins->op == OP_STORE) {
-        if (ins->n_src >= 1 && ins->src[0])
+        if (ins->n_src >= 1 && ins->src[0]) {
+          if (first_use[ins->src[0]] == -1) first_use[ins->src[0]] = seq;
           last_use[ins->src[0]] = seq;
-        if (ins->n_src >= 2 && ins->src[1])
+        }
+        if (ins->n_src >= 2 && ins->src[1]) {
+          if (first_use[ins->src[1]] == -1) first_use[ins->src[1]] = seq;
           last_use[ins->src[1]] = seq;
+        }
       } else if (ins->op == OP_PHI) {
         for (uint32_t p = 0; p < ins->n_phi; p++)
-          if (ins->phi[p].reg)
+          if (ins->phi[p].reg) {
+            if (first_use[ins->phi[p].reg] == -1) first_use[ins->phi[p].reg] = seq;
             last_use[ins->phi[p].reg] = seq;
+          }
       } else if (ins->op == OP_CALL) {
         for (uint32_t c = 0; c < ins->n_call_args; c++)
-          if (ins->call_args[c])
+          if (ins->call_args[c]) {
+            if (first_use[ins->call_args[c]] == -1) first_use[ins->call_args[c]] = seq;
             last_use[ins->call_args[c]] = seq;
+          }
       } else {
         for (uint32_t s = 0; s < ins->n_src; s++)
-          if (ins->src[s])
+          if (ins->src[s]) {
+            if (first_use[ins->src[s]] == -1) first_use[ins->src[s]] = seq;
             last_use[ins->src[s]] = seq;
+          }
       }
       /* Def */
       if (ins->dst &&
@@ -6034,42 +6049,77 @@ static void ir_asm_number_and_liveness(Function *fn,
       }
     }
   }
-  /* BUG-2 FIX: extend lifetime of any value defined before a loop and used
-   * inside it. Detects back-edges via block_order indices. Conservative:
-   * extends to end of function (pessimizes regalloc but provably correct). */
+  /* BUG-2 and BUG-3 / CG-IR-012 FIX:
+   * PGO block reordering and LICM can create inverted or loop-spanning intervals.
+   * Instead of pessimistically extending everything to the end of the function
+   * (which causes graph coloring OOMs/hangs in chaitin_briggs), we must find the
+   * exact loop latch sequence and extend the interval only to the end of the loop.
+   */
   for (uint32_t bi = 0; bi < n_block_order; bi++) {
     BlockID hdr_bid = block_order[bi];
     if (hdr_bid >= fn->n_blocks) continue;
     Block *hdr = fn->blocks[hdr_bid];
     if (!hdr) continue;
+
     int is_loop_header = 0;
+    int latch_last_seq = -1;
     for (uint32_t pi = 0; pi < hdr->n_preds; pi++) {
       BlockID pred_bid = hdr->preds[pi];
       for (uint32_t k = bi + 1; k < n_block_order; k++) {
-        if (block_order[k] == pred_bid) { is_loop_header = 1; break; }
+        if (block_order[k] == pred_bid) { 
+          is_loop_header = 1; 
+          Block *latch = fn->blocks[pred_bid];
+          int cand_seq = latch && latch->tail ? latch->tail->lscan_seq : -1;
+          if (cand_seq > latch_last_seq)
+            latch_last_seq = cand_seq;
+          break; 
+        }
       }
-      if (is_loop_header) break;
     }
     if (!is_loop_header) continue;
+    
     int hdr_first_seq = hdr->head ? hdr->head->lscan_seq : -1;
     if (hdr_first_seq < 0) continue;
+    if (latch_last_seq < hdr_first_seq) latch_last_seq = hdr_first_seq;
+
     for (int r = 0; r < MAX_INSTRS; r++) {
       if (def_seq[r] < 0) continue;
+      
+      /* BUG-2: Defined before loop, used inside loop -> extend to latch */
       if (def_seq[r] < hdr_first_seq && last_use[r] >= hdr_first_seq) {
-        last_use[r] = seq > 0 ? seq - 1 : 0;
+        if (last_use[r] < latch_last_seq) last_use[r] = latch_last_seq;
+      }
+      
+      /* BUG-3 / CG-IR-012: Loop-bound inverted or loop-spanning variables.
+       * If variable is defined inside the loop (def_seq >= hdr_first_seq)
+       * but used before its definition in emission order (last_use < def_seq
+       * OR first_use < def_seq). Because it carries a value across the back-edge,
+       * it must be live from the start of the loop to the latch. */
+      if (def_seq[r] >= hdr_first_seq && def_seq[r] <= latch_last_seq) {
+        if ((last_use[r] >= 0 && last_use[r] < def_seq[r]) ||
+            (first_use[r] >= 0 && first_use[r] < def_seq[r])) {
+          /* Expand backwards to start of loop */
+          if (def_seq[r] > hdr_first_seq) def_seq[r] = hdr_first_seq;
+          /* Expand forwards to latch */
+          if (last_use[r] < latch_last_seq) last_use[r] = latch_last_seq;
+        }
       }
     }
   }
-  /* BUG-3 FIX: LICM hoisting + PGO can place a use BEFORE a def in linear emission
-   * order. The linear scanner assumes the interval starts at def_seq. If use < def,
-   * the interval [def, end] DOES NOT COVER the use, allowing the allocator to assign
-   * a register that is already active at the use point, causing lethal clobbering.
-   * Fix: Expand the interval backward to start at last_use, and forward to the
-   * end of the function (since it must span a loop back-edge). */
+
+  /* Any remaining inverted intervals (e.g. forward-edges reordered by PGO)
+   * simply swap them so the interval is well-formed. */
   for (int r = 0; r < MAX_INSTRS; r++) {
     if (def_seq[r] >= 0 && last_use[r] >= 0 && last_use[r] < def_seq[r]) {
+      int orig_def = def_seq[r];
       def_seq[r] = last_use[r];
-      last_use[r] = seq > 0 ? seq - 1 : 0;
+      last_use[r] = orig_def;
+    }
+    /* FINAL FALLBACK: ensure interval covers the absolute first use.
+     * This protects against any PGO reordering that escaped the loop logic
+     * and prevents the massive 135MB munmap SIGSEGV. */
+    if (def_seq[r] >= 0 && first_use[r] >= 0 && first_use[r] < def_seq[r]) {
+      def_seq[r] = first_use[r];
     }
   }
 }
@@ -7089,8 +7139,10 @@ static void ir_asm_emit_function_body(IRAsmCtx *ctx) {
    * assign phys regs. */
   for (int i = 0; i < MAX_INSTRS; i++)
     ctx->phys_reg[i] = -1;
+  int *first_use = calloc(MAX_INSTRS, sizeof(int));
   ir_asm_number_and_liveness(fn, ctx->block_order, ctx->n_block_order,
-                             ctx->def_seq, ctx->last_use);
+                             ctx->def_seq, ctx->last_use, first_use);
+  free(first_use);
   ir_asm_linear_scan(fn, ctx->block_order, ctx->n_block_order, ctx->def_seq,
                      ctx->last_use, ctx->phys_reg);
 
