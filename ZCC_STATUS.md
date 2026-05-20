@@ -54,10 +54,10 @@ If a future bootstrap produces a different hash, either codegen drifted (regress
 
 ## Suggested Next Steps
 
-- Re-add rust-front-smoke as required status check on main (was removed during initial setup since the workflow did not yet exist on main; now it does)
-- Re-enable LICM pass
-- Resolve src/ diverged duplicates (10 files where root and src/ differ)
-- ASan run to confirm SARIF CWE-416/415 findings
+- [x] Re-add rust-front-smoke as required status check on main (was removed during initial setup since the workflow did not yet exist on main; now it does)
+- [x] Re-enable LICM pass (Confirmed enabled in run_all_passes)
+- [x] Resolve src/ diverged duplicates (Checked: no duplicates between root and src/ remain)
+- [x] ASan run to confirm SARIF CWE-416/415 findings (Run completed, no UAF/Double-Free detected; LeakSanitizer only)
 - GLB extraction and history rewrite
 
 ---

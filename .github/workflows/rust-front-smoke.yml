@@ -12,7 +12,7 @@ on:
       - "docs/rust_frontend_plan.md"
       - "Makefile"
   push:
-    branches-ignore:
+    branches:
       - main
     paths:
       - ".github/workflows/rust-front-smoke.yml"
