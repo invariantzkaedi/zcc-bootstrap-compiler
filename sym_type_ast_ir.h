@@ -29,8 +29,8 @@
 #define ZCC_SYM_TYPE_AST_IR_H
 
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* ============================================================
  * PART A: Coverage / Gate Tags
@@ -39,31 +39,31 @@
  * when ZCC_COVERAGE is defined, otherwise compiles to nothing.
  * ============================================================ */
 
-#define TAG_SCOPE      "TAG:SCOPE"
-#define TAG_TYPE       "TAG:TYPE"
-#define TAG_STRUCT     "TAG:STRUCT"
-#define TAG_UNION      "TAG:UNION"
-#define TAG_ENUM       "TAG:ENUM"
-#define TAG_FUNC       "TAG:FUNC"
-#define TAG_GLOBAL     "TAG:GLOBAL"
-#define TAG_LOCAL      "TAG:LOCAL"
-#define TAG_PARAM      "TAG:PARAM"
-#define TAG_MEMBER     "TAG:MEMBER"
-#define TAG_TYPEDEF    "TAG:TYPEDEF"
-#define TAG_LABEL      "TAG:LABEL"
-#define TAG_IR_OP      "TAG:IR_OP"
-#define TAG_ABI        "TAG:ABI"
-#define TAG_PREPROC    "TAG:PREPROC"
-#define TAG_PARSER     "TAG:PARSER"
-#define TAG_CODEGEN    "TAG:CODEGEN"
-#define TAG_SELFHOST   "TAG:SELFHOST"
+#define TAG_SCOPE "TAG:SCOPE"
+#define TAG_TYPE "TAG:TYPE"
+#define TAG_STRUCT "TAG:STRUCT"
+#define TAG_UNION "TAG:UNION"
+#define TAG_ENUM "TAG:ENUM"
+#define TAG_FUNC "TAG:FUNC"
+#define TAG_GLOBAL "TAG:GLOBAL"
+#define TAG_LOCAL "TAG:LOCAL"
+#define TAG_PARAM "TAG:PARAM"
+#define TAG_MEMBER "TAG:MEMBER"
+#define TAG_TYPEDEF "TAG:TYPEDEF"
+#define TAG_LABEL "TAG:LABEL"
+#define TAG_IR_OP "TAG:IR_OP"
+#define TAG_ABI "TAG:ABI"
+#define TAG_PREPROC "TAG:PREPROC"
+#define TAG_PARSER "TAG:PARSER"
+#define TAG_CODEGEN "TAG:CODEGEN"
+#define TAG_SELFHOST "TAG:SELFHOST"
 #define TAG_REGRESSION "TAG:REGRESSION"
 
 #ifdef ZCC_COVERAGE
 extern void zcc_coverage_hit(const char *tag, const char *file, int line);
-#define ZCC_TAG(tag)  zcc_coverage_hit((tag), __FILE__, __LINE__)
+#define ZCC_TAG(tag) zcc_coverage_hit((tag), __FILE__, __LINE__)
 #else
-#define ZCC_TAG(tag)  ((void)0)
+#define ZCC_TAG(tag) ((void)0)
 #endif
 
 /* ============================================================
@@ -71,69 +71,129 @@ extern void zcc_coverage_hit(const char *tag, const char *file, int line);
  * ============================================================ */
 
 /* Scope kinds */
-#define ZCC_SCOPE_GLOBAL    0
-#define ZCC_SCOPE_FUNC      1
-#define ZCC_SCOPE_BLOCK     2
-#define ZCC_SCOPE_PROTO     3   /* function prototype scope */
+#define ZCC_SCOPE_GLOBAL 0
+#define ZCC_SCOPE_FUNC 1
+#define ZCC_SCOPE_BLOCK 2
+#define ZCC_SCOPE_PROTO 3 /* function prototype scope */
 
 /* Symbol namespace kinds */
-#define ZCC_SYM_ORDINARY    0   /* plain identifier */
-#define ZCC_SYM_TYPEDEF     1
-#define ZCC_SYM_ENUM_CONST  2
-#define ZCC_SYM_LABEL       3
-#define ZCC_SYM_FUNC        4
-#define ZCC_SYM_GLOBAL      5
-#define ZCC_SYM_LOCAL       6
-#define ZCC_SYM_PARAM       7
-#define ZCC_SYM_MEMBER      8
+#define ZCC_SYM_ORDINARY 0 /* plain identifier */
+#define ZCC_SYM_TYPEDEF 1
+#define ZCC_SYM_ENUM_CONST 2
+#define ZCC_SYM_LABEL 3
+#define ZCC_SYM_FUNC 4
+#define ZCC_SYM_GLOBAL 5
+#define ZCC_SYM_LOCAL 6
+#define ZCC_SYM_PARAM 7
+#define ZCC_SYM_MEMBER 8
 
 /* Tag namespace kinds */
-#define ZCC_TAG_KIND_STRUCT  0
-#define ZCC_TAG_KIND_UNION   1
-#define ZCC_TAG_KIND_ENUM    2
+#define ZCC_TAG_KIND_STRUCT 0
+#define ZCC_TAG_KIND_UNION 1
+#define ZCC_TAG_KIND_ENUM 2
 
 /*
  * ADAPT-1: Type kind constants.
- * These mirror ZCC's TY_* enum from part1.c/part2.c.
- * If ZCC already defines TY_INT etc., replace these #defines with
- * a mapping table:  #define ZCC_TY_INT  TY_INT
+ *
+ * In standalone mode we use a compact ordering for smoke-test purposes.
+ * In the concat build (ZCC_CONCAT_BUILD), we must use ZCC's actual TY_*
+ * enum from part1.c because real Type structs already have those values
+ * baked in.  ZCC interleaves signed/unsigned pairs; we grouped them --
+ * so every value from SHORT onward differs.  The #ifdef below resolves
+ * all 19 constants correctly for both paths.
+ *
+ * Verified mapping (part1.c enum, 0-indexed):
+ *   TY_VOID=0  TY_CHAR=1  TY_UCHAR=2   TY_SHORT=3   TY_USHORT=4
+ *   TY_INT=5   TY_UINT=6  TY_LONG=7    TY_ULONG=8
+ *   TY_LONGLONG=9  TY_ULONGLONG=10  TY_FLOAT=11  TY_DOUBLE=12
+ *   TY_PTR=13  TY_ARRAY=14  TY_FUNC=15  TY_STRUCT=16 TY_UNION=17 TY_ENUM=18
  */
-#define ZCC_TY_VOID     0
-#define ZCC_TY_CHAR     1
-#define ZCC_TY_SHORT    2
-#define ZCC_TY_INT      3
-#define ZCC_TY_LONG     4
-#define ZCC_TY_LLONG    5
-#define ZCC_TY_UCHAR    6
-#define ZCC_TY_USHORT   7
-#define ZCC_TY_UINT     8
-#define ZCC_TY_ULONG    9
-#define ZCC_TY_ULLONG   10
-#define ZCC_TY_FLOAT    11
-#define ZCC_TY_DOUBLE   12
-#define ZCC_TY_PTR      13
-#define ZCC_TY_ARRAY    14
-#define ZCC_TY_FUNC     15
-#define ZCC_TY_STRUCT   16
-#define ZCC_TY_UNION    17
-#define ZCC_TY_ENUM     18
+#ifdef ZCC_CONCAT_BUILD
+/*
+ * Concat build: alias ZCC_TY_* onto ZCC's actual TY_* constants.
+ * TY_* are already defined via part1.c earlier in the concat file.
+ */
+#define ZCC_TY_VOID TY_VOID
+#define ZCC_TY_CHAR TY_CHAR
+#define ZCC_TY_UCHAR TY_UCHAR
+#define ZCC_TY_SHORT TY_SHORT
+#define ZCC_TY_USHORT TY_USHORT
+#define ZCC_TY_INT TY_INT
+#define ZCC_TY_UINT TY_UINT
+#define ZCC_TY_LONG TY_LONG
+#define ZCC_TY_ULONG TY_ULONG
+#define ZCC_TY_LLONG TY_LONGLONG   /* ZCC spells it LONGLONG */
+#define ZCC_TY_ULLONG TY_ULONGLONG /* ZCC spells it ULONGLONG */
+#define ZCC_TY_FLOAT TY_FLOAT
+#define ZCC_TY_DOUBLE TY_DOUBLE
+#define ZCC_TY_PTR TY_PTR
+#define ZCC_TY_ARRAY TY_ARRAY
+#define ZCC_TY_FUNC TY_FUNC
+#define ZCC_TY_STRUCT TY_STRUCT
+#define ZCC_TY_UNION TY_UNION
+#define ZCC_TY_ENUM TY_ENUM
+#else
+/*
+ * Standalone smoke-test ordering (compact, self-consistent).
+ * These values are ONLY used when ZCC_STANDALONE_BUILD is active.
+ * They do NOT need to match part1.c numerically.
+ */
+#define ZCC_TY_VOID 0
+#define ZCC_TY_CHAR 1
+#define ZCC_TY_SHORT 2
+#define ZCC_TY_INT 3
+#define ZCC_TY_LONG 4
+#define ZCC_TY_LLONG 5
+#define ZCC_TY_UCHAR 6
+#define ZCC_TY_USHORT 7
+#define ZCC_TY_UINT 8
+#define ZCC_TY_ULONG 9
+#define ZCC_TY_ULLONG 10
+#define ZCC_TY_FLOAT 11
+#define ZCC_TY_DOUBLE 12
+#define ZCC_TY_PTR 13
+#define ZCC_TY_ARRAY 14
+#define ZCC_TY_FUNC 15
+#define ZCC_TY_STRUCT 16
+#define ZCC_TY_UNION 17
+#define ZCC_TY_ENUM 18
+#endif /* ZCC_CONCAT_BUILD */
+
+/*
+ * ADAPT-4/5: Field name aliases.
+ *
+ * In the concat build, ZCC's Node and field structs use different names:
+ *   Node->type  (not Node->ty)      ZCC_N_TY
+ *   field->type (not field->ty)     ZCC_M_TY
+ *
+ * In standalone mode the stub structs use the shorter names.
+ * All live code in this file uses ZCC_N_TY / ZCC_M_TY so both
+ * paths compile correctly with zero conditional branches.
+ */
+#ifdef ZCC_CONCAT_BUILD
+#define ZCC_N_TY type /* Node->type  in ZCC's part1.c/part3.c */
+#define ZCC_M_TY type /* field->type in ZCC's part2.c         */
+#else
+#define ZCC_N_TY ty /* Node->ty  in standalone stub struct   */
+#define ZCC_M_TY ty /* Member->ty in standalone stub struct  */
+#endif
 
 /* Table sizes -- must be powers of two */
-#define ZCC_SCOPE_HASH_SIZE  256
-#define ZCC_TAG_HASH_SIZE    128
-#define ZCC_SYM_NAME_MAX     256
+#define ZCC_SCOPE_HASH_SIZE 256
+#define ZCC_TAG_HASH_SIZE 128
+#define ZCC_SYM_NAME_MAX 256
 
 /* Coverage table capacity */
-#define ZCC_COVERAGE_MAX_HITS  4096
+#define ZCC_COVERAGE_MAX_HITS 4096
 
 /* ============================================================
  * PART C: Forward declarations (self-referential structs)
  * ============================================================ */
 
-typedef struct ZccSymbol    ZccSymbol;
-typedef struct ZccScope     ZccScope;
-typedef struct ZccTagEntry  ZccTagEntry;
-typedef struct ZccTagTable  ZccTagTable;
+typedef struct ZccSymbol ZccSymbol;
+typedef struct ZccScope ZccScope;
+typedef struct ZccTagEntry ZccTagEntry;
+typedef struct ZccTagTable ZccTagTable;
 
 /*
  * ADAPT-2: ZCC internal types.
@@ -147,40 +207,40 @@ typedef struct ZccTagTable  ZccTagTable;
  * the real ZCC concat, set ZCC_TYPES_DECLARED so these are suppressed.
  */
 #ifndef ZCC_TYPES_DECLARED
-#  ifdef ZCC_STANDALONE_BUILD
+#ifdef ZCC_STANDALONE_BUILD
 /*
  * Standalone stub structs.  Order matters: Member first (Type uses it),
  * Type second (Node uses it), Node last.
  */
 struct Member {
-    char          name[256];   /* ADAPT-5: Member->name    */
-    int           offset;      /* ADAPT-5: Member->offset  */
-    struct Type  *ty;          /* ADAPT-5: Member->ty      */
-    struct Member *next;       /* ADAPT-5: Member->next    */
+  char name[256];      /* ADAPT-5: Member->name    */
+  int offset;          /* ADAPT-5: Member->offset  */
+  struct Type *ty;     /* ADAPT-5: Member->ty      */
+  struct Member *next; /* ADAPT-5: Member->next    */
 };
 
 struct Type {
-    int            kind;       /* ADAPT-3: ZCC_TY_* constant */
-    int            size;       /* ADAPT-3: sizeof in bytes   */
-    int            align;      /* ADAPT-3: alignment         */
-    struct Type   *base;       /* ADAPT-3: pointee / element / return type */
-    struct Member *members;    /* ADAPT-3: struct/union field list */
+  int kind;               /* ADAPT-3: ZCC_TY_* constant */
+  int size;               /* ADAPT-3: sizeof in bytes   */
+  int align;              /* ADAPT-3: alignment         */
+  struct Type *base;      /* ADAPT-3: pointee / element / return type */
+  struct Member *members; /* ADAPT-3: struct/union field list */
 };
 
 struct Node {
-    int           kind;        /* ADAPT-4: ND_* constant */
-    struct Node  *lhs;         /* ADAPT-4: left child    */
-    struct Node  *rhs;         /* ADAPT-4: right child   */
-    struct Type  *ty;          /* ADAPT-4: type annotation */
-    int           line;        /* ADAPT-4: source line   */
-    struct Node  *next;        /* ADAPT-4: sibling / list link */
-    int           val;         /* literal integer value  */
+  int kind;          /* ADAPT-4: ND_* constant */
+  struct Node *lhs;  /* ADAPT-4: left child    */
+  struct Node *rhs;  /* ADAPT-4: right child   */
+  struct Type *ty;   /* ADAPT-4: type annotation */
+  int line;          /* ADAPT-4: source line   */
+  struct Node *next; /* ADAPT-4: sibling / list link */
+  int val;           /* literal integer value  */
 };
-#  endif /* ZCC_STANDALONE_BUILD */
+#endif /* ZCC_STANDALONE_BUILD */
 
-typedef struct Type    Type;
-typedef struct Node    Node;
-typedef struct Member  Member;
+typedef struct Type Type;
+typedef struct Node Node;
+typedef struct Member Member;
 #endif /* !ZCC_TYPES_DECLARED */
 
 /* ============================================================
@@ -188,42 +248,42 @@ typedef struct Member  Member;
  * ============================================================ */
 
 struct ZccSymbol {
-    char        name[ZCC_SYM_NAME_MAX];  /* null-terminated symbol name */
-    int         kind;                     /* ZCC_SYM_* */
-    int         scope_depth;              /* 0=global, n=block nesting depth */
-    Type       *ty;                       /* ZCC type pointer */
-    int         is_typedef;               /* 1 if typedef name */
-    int         is_param;                 /* 1 if function parameter */
-    int         offset;                   /* stack byte offset (locals/params) */
-    int         enum_value;               /* value for ZCC_SYM_ENUM_CONST */
-    ZccSymbol  *next;                     /* next in hash bucket chain */
-    ZccSymbol  *shadow;                   /* outer-scope symbol this shadows */
+  char name[ZCC_SYM_NAME_MAX]; /* null-terminated symbol name */
+  int kind;                    /* ZCC_SYM_* */
+  int scope_depth;             /* 0=global, n=block nesting depth */
+  Type *ty;                    /* ZCC type pointer */
+  int is_typedef;              /* 1 if typedef name */
+  int is_param;                /* 1 if function parameter */
+  int offset;                  /* stack byte offset (locals/params) */
+  int enum_value;              /* value for ZCC_SYM_ENUM_CONST */
+  ZccSymbol *next;             /* next in hash bucket chain */
+  ZccSymbol *shadow;           /* outer-scope symbol this shadows */
 };
 
 struct ZccScope {
-    ZccSymbol  *buckets[ZCC_SCOPE_HASH_SIZE];
-    ZccScope   *parent;
-    int         depth;
-    int         n_symbols;
-    int         kind;    /* ZCC_SCOPE_* */
+  ZccSymbol *buckets[ZCC_SCOPE_HASH_SIZE];
+  ZccScope *parent;
+  int depth;
+  int n_symbols;
+  int kind; /* ZCC_SCOPE_* */
 };
 
 struct ZccTagEntry {
-    char          name[ZCC_SYM_NAME_MAX];
-    int           kind;          /* ZCC_TAG_KIND_* */
-    int           is_complete;   /* 1=fully defined, 0=forward declared */
-    Type         *ty;            /* NULL until tag_complete_type() is called */
-    ZccTagEntry  *next;          /* hash bucket chain */
+  char name[ZCC_SYM_NAME_MAX];
+  int kind;          /* ZCC_TAG_KIND_* */
+  int is_complete;   /* 1=fully defined, 0=forward declared */
+  Type *ty;          /* NULL until tag_complete_type() is called */
+  ZccTagEntry *next; /* hash bucket chain */
 };
 
 struct ZccTagTable {
-    ZccTagEntry *buckets[ZCC_TAG_HASH_SIZE];
-    ZccTagTable *parent;   /* enclosing tag scope */
-    int          n_entries;
+  ZccTagEntry *buckets[ZCC_TAG_HASH_SIZE];
+  ZccTagTable *parent; /* enclosing tag scope */
+  int n_entries;
 };
 
 /* Visitor / rewriter callbacks for AST walkers */
-typedef void  (*ZccASTVisitor) (Node *node, void *ctx);
+typedef void (*ZccASTVisitor)(Node *node, void *ctx);
 typedef Node *(*ZccASTRewriter)(Node *node, void *ctx);
 
 /* ============================================================
@@ -232,98 +292,84 @@ typedef Node *(*ZccASTRewriter)(Node *node, void *ctx);
 
 #ifdef ZCC_COVERAGE
 typedef struct {
-    const char *tag;
-    const char *file;
-    int         line;
-    int         count;
+  const char *tag;
+  const char *file;
+  int line;
+  int count;
 } ZccCoverageHit;
 
 extern ZccCoverageHit g_zcc_coverage_hits[ZCC_COVERAGE_MAX_HITS];
-extern int            g_zcc_coverage_n;
+extern int g_zcc_coverage_n;
 
 void zcc_coverage_report(void);
-int  zcc_coverage_count(const char *tag);
+int zcc_coverage_count(const char *tag);
 #endif
 
 /* ============================================================
  * PART F: Layer 1 -- Recursive symbol-table layer
  * ============================================================ */
 
-ZccScope  *sym_scope_push      (ZccScope *parent, int kind);
-ZccScope  *sym_scope_pop       (ZccScope *scope);
-int        sym_define          (ZccScope *sc, const char *name,
-                                 int kind, Type *ty, int offset);
-ZccSymbol *sym_lookup_local    (ZccScope *sc, const char *name);
+ZccScope *sym_scope_push(ZccScope *parent, int kind);
+ZccScope *sym_scope_pop(ZccScope *scope);
+int sym_define(ZccScope *sc, const char *name, int kind, Type *ty, int offset);
+ZccSymbol *sym_lookup_local(ZccScope *sc, const char *name);
 ZccSymbol *sym_lookup_recursive(ZccScope *sc, const char *name);
 
-ZccTagEntry *sym_lookup_tag_recursive    (ZccTagTable *tt,
-                                           const char *name, int kind);
-ZccSymbol   *sym_lookup_member_recursive (Type *struct_or_union_ty,
-                                           const char *name);
-ZccSymbol   *sym_shadow_check            (ZccScope *sc, const char *name);
+ZccTagEntry *sym_lookup_tag_recursive(ZccTagTable *tt, const char *name,
+                                      int kind);
+ZccSymbol *sym_lookup_member_recursive(Type *struct_or_union_ty,
+                                       const char *name);
+ZccSymbol *sym_shadow_check(ZccScope *sc, const char *name);
 
-void  sym_mangle_internal(const char *base, int uid,
-                           char *out, int out_len);
-void  sym_dump_scope_tree(ZccScope *sc, int indent);
+void sym_mangle_internal(const char *base, int uid, char *out, int out_len);
+void sym_dump_scope_tree(ZccScope *sc, int indent);
 
 /* ============================================================
  * PART G: Layer 2 -- Tag namespace layer
  * ============================================================ */
 
-ZccTagTable *tag_table_push      (ZccTagTable *parent);
-ZccTagTable *tag_table_pop       (ZccTagTable *tt);
-ZccTagEntry *tag_define_struct   (ZccTagTable *tt,
-                                   const char *name, Type *ty);
-ZccTagEntry *tag_define_union    (ZccTagTable *tt,
-                                   const char *name, Type *ty);
-ZccTagEntry *tag_define_enum     (ZccTagTable *tt,
-                                   const char *name, Type *ty);
-ZccTagEntry *tag_lookup_recursive(ZccTagTable *tt,
-                                   const char *name, int kind);
-int          tag_complete_type   (ZccTagEntry *e, Type *ty);
-int          tag_is_complete     (ZccTagEntry *e);
-ZccTagEntry *tag_forward_declare (ZccTagTable *tt,
-                                   const char *name, int kind);
-int          tag_attach_members  (ZccTagEntry *e,
-                                   Member **members, int n);
+ZccTagTable *tag_table_push(ZccTagTable *parent);
+ZccTagTable *tag_table_pop(ZccTagTable *tt);
+ZccTagEntry *tag_define_struct(ZccTagTable *tt, const char *name, Type *ty);
+ZccTagEntry *tag_define_union(ZccTagTable *tt, const char *name, Type *ty);
+ZccTagEntry *tag_define_enum(ZccTagTable *tt, const char *name, Type *ty);
+ZccTagEntry *tag_lookup_recursive(ZccTagTable *tt, const char *name, int kind);
+int tag_complete_type(ZccTagEntry *e, Type *ty);
+int tag_is_complete(ZccTagEntry *e);
+ZccTagEntry *tag_forward_declare(ZccTagTable *tt, const char *name, int kind);
+int tag_attach_members(ZccTagEntry *e, Member **members, int n);
 
 /* ============================================================
  * PART H: Layer 3 -- Type-recursion layer
  * ============================================================ */
 
-Type *type_canonical          (Type *ty);
-int   type_equal_recursive    (Type *a, Type *b);
-Type *type_decay_array        (Type *ty);
-Type *type_decay_func         (Type *ty);
-Type *type_pointer_to         (Type *base);
-Type *type_array_of           (Type *base, int n);
-Type *type_function_of        (Type *ret, Type **params,
-                                int n_params, int is_vararg);
-int   type_struct_member_offset (Type *ty, const char *member_name);
-int   type_sizeof_recursive   (Type *ty);
-int   type_alignof_recursive  (Type *ty);
-int   type_integer_rank       (Type *ty);
-Type *type_usual_arith_conv   (Type *a, Type *b);
-Type *type_lvalue_conversion  (Type *ty);
+Type *type_canonical(Type *ty);
+int type_equal_recursive(Type *a, Type *b);
+Type *type_decay_array(Type *ty);
+Type *type_decay_func(Type *ty);
+Type *type_pointer_to(Type *base);
+Type *type_array_of(Type *base, int n);
+Type *type_function_of(Type *ret, Type **params, int n_params, int is_vararg);
+int type_struct_member_offset(Type *ty, const char *member_name);
+int type_sizeof_recursive(Type *ty);
+int type_alignof_recursive(Type *ty);
+int type_integer_rank(Type *ty);
+Type *type_usual_arith_conv(Type *a, Type *b);
+Type *type_lvalue_conversion(Type *ty);
 
 /* ============================================================
  * PART I: Layer 4 -- AST recursive walkers
  * ============================================================ */
 
-void  ast_walk_preorder         (Node *root,
-                                  ZccASTVisitor fn, void *ctx);
-void  ast_walk_postorder        (Node *root,
-                                  ZccASTVisitor fn, void *ctx);
-Node *ast_rewrite_expr_recursive(Node *expr,
-                                  ZccASTRewriter fn, void *ctx);
-Node *ast_rewrite_stmt_recursive(Node *stmt,
-                                  ZccASTRewriter fn, void *ctx);
-void  ast_collect_symbols       (Node *root, ZccScope *out_scope);
-void  ast_collect_tags          (Node *root, ZccTagTable *out_tt);
-int   ast_validate_types        (Node *root);
-int   ast_resolve_identifiers   (Node *root,
-                                  ZccScope *sc, ZccTagTable *tt);
-void  ast_dump_tree             (Node *root, int indent);
+void ast_walk_preorder(Node *root, ZccASTVisitor fn, void *ctx);
+void ast_walk_postorder(Node *root, ZccASTVisitor fn, void *ctx);
+Node *ast_rewrite_expr_recursive(Node *expr, ZccASTRewriter fn, void *ctx);
+Node *ast_rewrite_stmt_recursive(Node *stmt, ZccASTRewriter fn, void *ctx);
+void ast_collect_symbols(Node *root, ZccScope *out_scope);
+void ast_collect_tags(Node *root, ZccTagTable *out_tt);
+int ast_validate_types(Node *root);
+int ast_resolve_identifiers(Node *root, ZccScope *sc, ZccTagTable *tt);
+void ast_dump_tree(Node *root, int indent);
 
 /* ============================================================
  * PART J: Layer 5 -- IR bridge / completeness
@@ -342,25 +388,20 @@ void  ast_dump_tree             (Node *root, int indent);
 struct Function;
 struct IRAsmCtx;
 
-void ir_emit_expr_recursive (struct IRAsmCtx *ctx, Node *expr);
-void ir_emit_stmt_recursive (struct IRAsmCtx *ctx, Node *stmt);
-void ir_emit_lvalue_addr    (struct IRAsmCtx *ctx, Node *expr);
-void ir_emit_load_if_lvalue (struct IRAsmCtx *ctx, Node *expr);
-void ir_emit_store          (struct IRAsmCtx *ctx,
-                              const char *addr_tmp,
-                              const char *val_tmp, Type *ty);
-void ir_emit_cast           (struct IRAsmCtx *ctx,
-                              const char *src_tmp,
-                              Type *from_ty, Type *to_ty,
-                              char *dst_out, int dst_len);
-void ir_emit_short_circuit  (struct IRAsmCtx *ctx, Node *expr,
-                              int is_and,
-                              char *result_out, int out_len);
-void ir_emit_call_args      (struct IRAsmCtx *ctx, Node *arg_list,
-                              int *n_args_out);
-void ir_emit_control_flow   (struct IRAsmCtx *ctx, Node *stmt);
-int  ir_validate_module     (struct Function **funcs, int n_funcs);
-int  ir_validate_func       (struct Function *fn);
-int  ir_validate_operand_types(struct Function *fn);
+void ir_emit_expr_recursive(struct IRAsmCtx *ctx, Node *expr);
+void ir_emit_stmt_recursive(struct IRAsmCtx *ctx, Node *stmt);
+void ir_emit_lvalue_addr(struct IRAsmCtx *ctx, Node *expr);
+void ir_emit_load_if_lvalue(struct IRAsmCtx *ctx, Node *expr);
+void ir_emit_store(struct IRAsmCtx *ctx, const char *addr_tmp,
+                   const char *val_tmp, Type *ty);
+void ir_emit_cast(struct IRAsmCtx *ctx, const char *src_tmp, Type *from_ty,
+                  Type *to_ty, char *dst_out, int dst_len);
+void ir_emit_short_circuit(struct IRAsmCtx *ctx, Node *expr, int is_and,
+                           char *result_out, int out_len);
+void ir_emit_call_args(struct IRAsmCtx *ctx, Node *arg_list, int *n_args_out);
+void ir_emit_control_flow(struct IRAsmCtx *ctx, Node *stmt);
+int ir_validate_module(struct Function **funcs, int n_funcs);
+int ir_validate_func(struct Function *fn);
+int ir_validate_operand_types(struct Function *fn);
 
 #endif /* ZCC_SYM_TYPE_AST_IR_H */
