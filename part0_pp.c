@@ -607,6 +607,7 @@ static void pp_process_include(PPState *state, const char *path, int is_system) 
 
     pp_parse(sub_state);
 
+    int initial_macros = state->num_macros;
     /* Copy back macros added by the header */
     for (i = state->num_macros; i < sub_state->num_macros; i++) {
         if (state->num_macros >= PP_MAX_MACROS) {
@@ -617,7 +618,7 @@ static void pp_process_include(PPState *state, const char *path, int is_system) 
     }
 
     fprintf(stderr, "pp_process_include: %s added %d macros, total is %d\n",
-            path, sub_state->num_macros - i, state->num_macros);
+            path, state->num_macros - initial_macros, state->num_macros);
 
     /* Update active flags (undefs may have occurred) */
     for (i = 0; i < state->num_macros; i++) {
