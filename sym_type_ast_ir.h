@@ -160,22 +160,19 @@ extern void zcc_coverage_hit(const char *tag, const char *file, int line);
 #endif /* ZCC_CONCAT_BUILD */
 
 /*
- * ADAPT-4/5: Field name aliases.
+ * ADAPT-4: Field name aliases.
  *
- * In the concat build, ZCC's Node and field structs use different names:
+ * In the concat build, ZCC's Node struct uses:
  *   Node->type  (not Node->ty)      ZCC_N_TY
- *   field->type (not field->ty)     ZCC_M_TY
  *
- * In standalone mode the stub structs use the shorter names.
- * All live code in this file uses ZCC_N_TY / ZCC_M_TY so both
+ * In standalone mode the stub struct uses the shorter name.
+ * All live code in this file uses ZCC_N_TY so both
  * paths compile correctly with zero conditional branches.
  */
 #ifdef ZCC_CONCAT_BUILD
 #define ZCC_N_TY type /* Node->type  in ZCC's part1.c/part3.c */
-#define ZCC_M_TY type /* field->type in ZCC's part2.c         */
 #else
 #define ZCC_N_TY ty /* Node->ty  in standalone stub struct   */
-#define ZCC_M_TY ty /* Member->ty in standalone stub struct  */
 #endif
 
 /* Table sizes -- must be powers of two */
@@ -209,14 +206,14 @@ typedef struct ZccTagTable ZccTagTable;
 #ifndef ZCC_TYPES_DECLARED
 #ifdef ZCC_STANDALONE_BUILD
 /*
- * Standalone stub structs.  Order matters: Member first (Type uses it),
+ * Standalone stub structs.  Order matters: StructField first (Type uses it),
  * Type second (Node uses it), Node last.
  */
-struct Member {
-  char name[256];      /* ADAPT-5: Member->name    */
-  int offset;          /* ADAPT-5: Member->offset  */
-  struct Type *ty;     /* ADAPT-5: Member->ty      */
-  struct Member *next; /* ADAPT-5: Member->next    */
+struct StructField {
+  char name[256];      /* ADAPT-5: StructField->name    */
+  int offset;          /* ADAPT-5: StructField->offset  */
+  struct Type *type;   /* ADAPT-5: StructField->type (ZCC uses type, not ty) */
+  struct StructField *next; /* ADAPT-5: StructField->next    */
 };
 
 struct Type {
@@ -224,7 +221,7 @@ struct Type {
   int size;               /* ADAPT-3: sizeof in bytes   */
   int align;              /* ADAPT-3: alignment         */
   struct Type *base;      /* ADAPT-3: pointee / element / return type */
-  struct Member *members; /* ADAPT-3: struct/union field list */
+  struct StructField *fields; /* ADAPT-3: struct/union field list */
 };
 
 struct Node {
@@ -240,7 +237,7 @@ struct Node {
 
 typedef struct Type Type;
 typedef struct Node Node;
-typedef struct Member Member;
+typedef struct StructField StructField;
 #endif /* !ZCC_TYPES_DECLARED */
 
 /* ============================================================
@@ -337,7 +334,7 @@ ZccTagEntry *tag_lookup_recursive(ZccTagTable *tt, const char *name, int kind);
 int tag_complete_type(ZccTagEntry *e, Type *ty);
 int tag_is_complete(ZccTagEntry *e);
 ZccTagEntry *tag_forward_declare(ZccTagTable *tt, const char *name, int kind);
-int tag_attach_members(ZccTagEntry *e, Member **members, int n);
+int tag_attach_members(ZccTagEntry *e, StructField **fields, int n);
 
 /* ============================================================
  * PART H: Layer 3 -- Type-recursion layer

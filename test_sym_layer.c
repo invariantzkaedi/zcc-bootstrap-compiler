@@ -303,7 +303,7 @@ static void test_coverage(void)
         ZccTagTable *tt;
         struct Type  sty;
         sty.kind = ZCC_TY_STRUCT; sty.size = 4; sty.align = 4;
-        sty.base = NULL; sty.members = NULL;
+        sty.base = NULL; sty.fields = NULL;
         tt = tag_table_push(NULL);
         tag_define_struct(tt, "__T5_CovStruct", &sty);   /* hits TAG_STRUCT */
         tag_table_pop(tt);

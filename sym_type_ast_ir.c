@@ -209,46 +209,25 @@ ZccTagEntry *sym_lookup_tag_recursive(ZccTagTable *tt, const char *name,
 
 ZccSymbol *sym_lookup_member_recursive(Type *struct_or_union_ty,
                                        const char *name) {
-  /*
-   * Walk the member list of a struct or union type and return
-   * a synthetic ZccSymbol for the named member.
-   *
-   * ADAPT-5: replace with ZCC's actual Member field names:
-   *   struct_or_union_ty->members  -- head of Member linked list
-   *   member->name                 -- member name (char[N] or char*)
-   *   member->next                 -- next Member in list
-   *   member->ty                   -- Member's Type*
-   *   member->offset               -- byte offset within struct/union
-   *
-   * The returned ZccSymbol is allocated fresh each call.
-   * Caller may free() it when done, or use an arena.
-   */
-  static ZccSymbol scratch; /* scratch return; not thread-safe */
+  StructField *m;
+  static ZccSymbol scratch;
   ZCC_TAG(TAG_MEMBER);
   if (!struct_or_union_ty || !name)
     return NULL;
 
-  /*
-  {
-      Member *m;
-      m = struct_or_union_ty->members;   -- ADAPT-5
-      while (m) {
-          if (strcmp(m->name, name) == 0) {
-              memset(&scratch, 0, sizeof(scratch));
-              strncpy(scratch.name, name, ZCC_SYM_NAME_MAX - 1);
-              scratch.kind   = ZCC_SYM_MEMBER;
-              scratch.ty     = m->ZCC_M_TY;   -- ADAPT-5: ZCC_M_TY=type in
-  concat, ty in standalone scratch.offset = m->offset;     -- ADAPT-5 return
-  &scratch;
-          }
-          m = m->next; -- ADAPT-5
-      }
+  m = struct_or_union_ty->fields;
+  while (m) {
+    if (strcmp(m->name, name) == 0) {
+      memset(&scratch, 0, sizeof(scratch));
+      strncpy(scratch.name, name, ZCC_SYM_NAME_MAX - 1);
+      scratch.kind = ZCC_SYM_MEMBER;
+      scratch.ty = m->type;
+      scratch.offset = m->offset;
+      return &scratch;
+    }
+    m = m->next;
   }
-  */
-  (void)struct_or_union_ty;
-  (void)name;
-  (void)scratch;
-  return NULL; /* ADAPT-5: wire member list traversal */
+  return NULL;
 }
 
 ZccSymbol *sym_shadow_check(ZccScope *sc, const char *name) {
@@ -433,20 +412,20 @@ ZccTagEntry *tag_forward_declare(ZccTagTable *tt, const char *name, int kind) {
   return tag_define_internal(tt, name, kind, NULL);
 }
 
-int tag_attach_members(ZccTagEntry *e, Member **members, int n) {
+int tag_attach_members(ZccTagEntry *e, StructField **fields, int n) {
   /*
-   * Attach a parsed member array to a (now-complete) tag entry.
+   * Attach a parsed StructField array to a (now-complete) tag entry.
    *
    * Two-pass struct parsing:
    *   Pass 1: tag_forward_declare  -- registers incomplete entry
    *   Pass 2: parse body + tag_complete_type -- fills in ty
-   *           tag_attach_members -- wires members into ty
+   *           tag_attach_members -- wires fields into ty
    *
    * ADAPT-5: replace the commented body with ZCC's actual
-   *   ty->members pointer and member->next linkage.
+   *   ty->fields pointer and field->next linkage.
    */
   ZCC_TAG(TAG_STRUCT);
-  if (!e || !members || n <= 0)
+  if (!e || !fields || n <= 0)
     return 0;
   if (!e->is_complete || !e->ty) {
     fprintf(stderr, "zcc: tag_attach_members: '%s' not yet complete\n",
@@ -456,15 +435,15 @@ int tag_attach_members(ZccTagEntry *e, Member **members, int n) {
   /*
   {
       int i;
-      members[0]->next = NULL;     -- ADAPT-5: head of linked list
+      fields[0]->next = NULL;     -- ADAPT-5: head of linked list
       for (i = 1; i < n; i++)
-          members[i-1]->next = members[i]; -- ADAPT-5
-      e->ty->members = members[0]; -- ADAPT-5
+          fields[i-1]->next = fields[i]; -- ADAPT-5
+      e->ty->fields = fields[0]; -- ADAPT-5
   }
   */
-  (void)members;
+  (void)fields;
   (void)n;
-  return 1; /* ADAPT-5: enable body above once member fields known */
+  return 1; /* ADAPT-5: enable body above once StructField fields known */
 }
 
 /* ============================================================
@@ -602,7 +581,7 @@ int type_struct_member_offset(Type *ty, const char *member_name) {
   /*
    * ADAPT-5:
    *   {
-   *       Member *m = ty->members;
+   *       StructField *m = ty->fields;
    *       while (m) {
    *           if (strcmp(m->name, member_name) == 0) return m->offset;
    *           m = m->next;
