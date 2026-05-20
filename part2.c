@@ -374,7 +374,7 @@ static Keyword keywords[] = {
     {0, 0}
 };
 
-static int kw_count = 62;
+static int kw_count = 60;
 
 static int lookup_keyword(char *name) {
     int i;
@@ -443,6 +443,15 @@ static int lookup_keyword_fallback(char *buf, int len) {
     if (len==12 && buf[0]=='_'&&buf[1]=='_'&&buf[2]=='v'&&buf[3]=='o'&&buf[4]=='l'&&buf[5]=='a'&&buf[6]=='t'&&buf[7]=='i'&&buf[8]=='l'&&buf[9]=='e'&&buf[10]=='_'&&buf[11]=='_') return TK_VOLATILE;
     if (len==8 && buf[0]=='_'&&buf[1]=='_'&&buf[2]=='i'&&buf[3]=='n'&&buf[4]=='t'&&buf[5]=='1'&&buf[6]=='2'&&buf[7]=='8') return TK_LONG;
     if (len==10 && buf[0]=='_'&&buf[1]=='_'&&buf[2]=='i'&&buf[3]=='n'&&buf[4]=='t'&&buf[5]=='1'&&buf[6]=='2'&&buf[7]=='8'&&buf[8]=='_'&&buf[9]=='t') return TK_LONG;
+    if (len==5 && buf[0]=='_'&&buf[1]=='B'&&buf[2]=='o'&&buf[3]=='o'&&buf[4]=='l') return TK_INT;
+    if (len==7 && buf[0]=='_'&&buf[1]=='A'&&buf[2]=='t'&&buf[3]=='o'&&buf[4]=='m'&&buf[5]=='i'&&buf[6]=='c') return TK_VOLATILE;
+    if (len==9 && buf[0]=='_'&&buf[1]=='N'&&buf[2]=='o'&&buf[3]=='r'&&buf[4]=='e'&&buf[5]=='t'&&buf[6]=='u'&&buf[7]=='r'&&buf[8]=='n') return TK_INLINE;
+    if (len==13 && buf[0]=='_'&&buf[1]=='T'&&buf[2]=='h'&&buf[3]=='r'&&buf[4]=='e'&&buf[5]=='a'&&buf[6]=='d'&&buf[7]=='_'&&buf[8]=='l'&&buf[9]=='o'&&buf[10]=='c'&&buf[11]=='a'&&buf[12]=='l') return TK_STATIC;
+    if (len==8 && buf[0]=='_'&&buf[1]=='A'&&buf[2]=='l'&&buf[3]=='i'&&buf[4]=='g'&&buf[5]=='n'&&buf[6]=='o'&&buf[7]=='f') return TK_SIZEOF;
+    if (len==11 && buf[0]=='_'&&buf[1]=='_'&&buf[2]=='a'&&buf[3]=='l'&&buf[4]=='i'&&buf[5]=='g'&&buf[6]=='n'&&buf[7]=='o'&&buf[8]=='f'&&buf[9]=='_'&&buf[10]=='_') return TK_SIZEOF;
+    if (len==9 && buf[0]=='_'&&buf[1]=='_'&&buf[2]=='a'&&buf[3]=='l'&&buf[4]=='i'&&buf[5]=='g'&&buf[6]=='n'&&buf[7]=='o'&&buf[8]=='f') return TK_SIZEOF;
+    if (len==11 && buf[0]=='_'&&buf[1]=='_'&&buf[2]=='a'&&buf[3]=='u'&&buf[4]=='t'&&buf[5]=='o'&&buf[6]=='_'&&buf[7]=='t'&&buf[8]=='y'&&buf[9]=='p'&&buf[10]=='e') return TK_AUTO_TYPE;
+    if (len==16 && buf[0]=='_'&&buf[1]=='_'&&buf[2]=='b'&&buf[3]=='u'&&buf[4]=='i'&&buf[5]=='l'&&buf[6]=='t'&&buf[7]=='i'&&buf[8]=='n'&&buf[9]=='_'&&buf[10]=='v'&&buf[11]=='a'&&buf[12]=='_'&&buf[13]=='a'&&buf[14]=='r'&&buf[15]=='g') return TK_BUILTIN_VA_ARG;
     return 0;
 }
 
