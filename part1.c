@@ -529,7 +529,8 @@ typedef struct TargetBackend {
 
 typedef enum {
     FRONTEND_LANG_C = 0,
-    FRONTEND_LANG_RUST = 1
+    FRONTEND_LANG_RUST = 1,
+    FRONTEND_LANG_ASSET = 2
 } FrontendLang;
 
 typedef unsigned int RustSymbolId;

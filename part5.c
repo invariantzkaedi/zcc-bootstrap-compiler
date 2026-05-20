@@ -1259,7 +1259,7 @@ int main(int argc, char **argv) {
       strncat(extra_link_args, argv[i], 4095 - (int)strlen(extra_link_args));
     } else {
       int len = strlen(argv[i]);
-      if (len > 2 && (strcmp(argv[i] + len - 2, ".c") == 0 || strcmp(argv[i] + len - 3, ".rs") == 0 || (len > 4 && strcmp(argv[i] + len - 4, ".yul") == 0))) {
+      if (len > 2 && (strcmp(argv[i] + len - 2, ".c") == 0 || strcmp(argv[i] + len - 3, ".rs") == 0 || (len > 4 && strcmp(argv[i] + len - 4, ".yul") == 0) || (len > 5 && strcmp(argv[i] + len - 5, ".html") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".css") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".svg") == 0))) {
         input_file = argv[i];
       } else {
         if (extra_link_args[0]) strncat(extra_link_args, " ", 4095 - (int)strlen(extra_link_args));
@@ -1311,7 +1311,11 @@ int main(int argc, char **argv) {
     output_file = "a.out";
 
   frontend_lang = FRONTEND_LANG_C;
-  if (strlen(input_file) >= 3 && strcmp(input_file + strlen(input_file) - 3, ".rs") == 0) {
+  if (strlen(input_file) >= 5 && strcmp(input_file + strlen(input_file) - 5, ".html") == 0) {
+    frontend_lang = FRONTEND_LANG_ASSET;
+  } else if (strlen(input_file) >= 4 && (strcmp(input_file + strlen(input_file) - 4, ".css") == 0 || strcmp(input_file + strlen(input_file) - 4, ".svg") == 0)) {
+    frontend_lang = FRONTEND_LANG_ASSET;
+  } else if (strlen(input_file) >= 3 && strcmp(input_file + strlen(input_file) - 3, ".rs") == 0) {
     frontend_lang = FRONTEND_LANG_RUST;
   }
 
@@ -1435,6 +1439,68 @@ int main(int argc, char **argv) {
     zcc_sculpt(sculpt_prompt, output_file ? output_file : "mesh.gltf");
     free(source);
     return 0;
+  }
+
+  if (frontend_lang == FRONTEND_LANG_ASSET) {
+      /* heap-allocate compiler state (too large for stack) */
+      cc = (Compiler *)calloc(1, sizeof(Compiler));
+      if (!cc) {
+          if (!enable_telemetry_stdout) printf("zcc: out of memory\n");
+          free(source); return 1;
+      }
+      
+      char asm_f[256];
+      strncpy(asm_f, output_file ? output_file : "a.s", 250);
+      int alf = 0; while (asm_f[alf]) alf++;
+      if (!(alf >= 2 && asm_f[alf - 2] == '.' && asm_f[alf - 1] == 's')) {
+          asm_f[alf] = '.'; asm_f[alf + 1] = 's'; asm_f[alf + 2] = 0;
+      }
+      
+      cc->out = fopen(asm_f, "w");
+      if (!cc->out) {
+          printf("zcc: cannot write '%s'\n", asm_f);
+          free(source); free(cc); return 1;
+      }
+      
+      char sym[256];
+      int si = 0;
+      const char *p = input_file;
+      const char *slash = strrchr(p, '/');
+      if (slash) p = slash + 1;
+      while (*p && si < 255) {
+          if ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || (*p >= '0' && *p <= '9')) {
+              sym[si++] = *p;
+          } else {
+              sym[si++] = '_';
+          }
+          p++;
+      }
+      sym[si] = '\0';
+      
+      fprintf(cc->out, ".data\n");
+      fprintf(cc->out, ".global %s_data\n", sym);
+      fprintf(cc->out, ".global %s_len\n", sym);
+      fprintf(cc->out, ".align 8\n");
+      fprintf(cc->out, "%s_data:\n", sym);
+      
+      int col = 0;
+      for (i = 0; i < source_len; i++) {
+          if (col == 0) fprintf(cc->out, "  .byte ");
+          fprintf(cc->out, "0x%02x", (unsigned char)source[i]);
+          col++;
+          if (col == 16 || i == source_len - 1) {
+              fprintf(cc->out, "\n");
+              col = 0;
+          } else {
+              fprintf(cc->out, ", ");
+          }
+      }
+      fprintf(cc->out, "  .byte 0x00\n");
+      fprintf(cc->out, "\n%s_len:\n  .long %d\n", sym, source_len);
+      
+      fclose(cc->out);
+      if (!enable_telemetry_stdout) printf("[OK] Asset %s compiled to assembly.\n", input_file);
+      goto link_phase;
   }
 
   if (frontend_lang == FRONTEND_LANG_C) {
@@ -1621,6 +1687,7 @@ int main(int argc, char **argv) {
   }
 
   /* assemble and link if not stopping at assembly */
+link_phase:
   if (!stop_at_asm) {
     if (!enable_telemetry_stdout) printf("[Phase 6] GCC Assembly/Linker Binding... ");
     if (compile_only) {
