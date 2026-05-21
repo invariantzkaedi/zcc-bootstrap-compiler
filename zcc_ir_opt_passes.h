@@ -260,4 +260,64 @@ static uint32_t opt_peephole_pass(Function *fn) {
     return count;
 }
 
+static uint32_t opt_address_mode_folding_pass(Function *fn) {
+    uint32_t count = 0;
+    licm_build_def_block(fn);
+    for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
+        Block *blk = fn->blocks[bi];
+        if (!blk || !blk->reachable) continue;
+        for (Instr *ins = blk->head; ins; ins = ins->next) {
+            if (ins->dead) continue;
+            
+            if (ins->op == OP_LOAD || ins->op == OP_STORE) {
+                RegID addr_reg = (ins->op == OP_LOAD) ? ins->src[0] : ins->src[1];
+                if (addr_reg == 0 || addr_reg >= MAX_INSTRS) continue;
+                
+                Instr *def_addr = fn->def_of[addr_reg];
+                if (def_addr && def_addr->op == OP_ADD && def_addr->n_src == 2) {
+                    RegID s0 = def_addr->src[0];
+                    RegID s1 = def_addr->src[1];
+                    if (s0 >= MAX_INSTRS || s1 >= MAX_INSTRS) continue;
+                    
+                    Instr *d0 = fn->def_of[s0];
+                    Instr *d1 = fn->def_of[s1];
+                    
+                    RegID base_reg = 0;
+                    int64_t disp = 0;
+                    bool matched = false;
+                    
+                    if (d1 && d1->op == OP_CONST) {
+                        base_reg = s0;
+                        disp = d1->imm;
+                        matched = true;
+                    } else if (d0 && d0->op == OP_CONST) {
+                        base_reg = s1;
+                        disp = d0->imm;
+                        matched = true;
+                    }
+                    
+                    if (matched && base_reg != 0) {
+                        /* Displacement boundary check for x86-64 sign-extended ModRM limit */
+                        if (disp >= -2147483648LL && disp <= 2147483647LL) {
+                            ins->amf.folded = true;
+                            ins->amf.base = base_reg;
+                            ins->amf.disp = disp;
+                            
+                            /* [Commit 1: Annotation only — do not change source registers yet]
+                            if (ins->op == OP_LOAD) {
+                                ins->src[0] = base_reg;
+                            } else {
+                                ins->src[1] = base_reg;
+                            }
+                            */
+                            count++;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return count;
+}
+
 #endif

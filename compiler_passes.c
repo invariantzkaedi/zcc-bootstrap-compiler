@@ -179,6 +179,13 @@ typedef struct Instr {
                     /* (0 = IR_TY_I64 default; set for OP_DIV/MOD/SHR/SHL)   */
   int lscan_seq;    /* Liveness sequence ID injected by ir_asm_number_and_liveness */
 
+  /* Address-Mode Folding (AMF) metadata */
+  struct {
+    bool folded;      /* true if address-mode fold was matched */
+    RegID base;       /* base register ID */
+    int64_t disp;     /* displacement offset */
+  } amf;
+
   char *asm_string;
 
   struct Instr *next;
@@ -2390,6 +2397,10 @@ typedef struct {
   BlockID loop_exit_stack[MAX_NESTED_LOOPS];
   BlockID loop_latch_stack[MAX_NESTED_LOOPS];
   int loop_depth;
+  /* label mapping: label name -> BlockID */
+  char label_names[128][NAME_LEN];
+  BlockID label_blocks[128];
+  uint32_t n_labels;
 } LowerCtx;
 
 static RegID lower_expr(LowerCtx *ctx, ASTNode *ast);
@@ -2881,6 +2892,10 @@ static int nd_to_znd(int nd_kind) {
     return ZND_CONTINUE;
   case ZCC_ND_RETURN:
     return ZND_RETURN;
+  case ZCC_ND_GOTO:
+    return ZND_GOTO;
+  case ZCC_ND_LABEL:
+    return ZND_LABEL;
   case ZCC_ND_BLOCK:
     return ZND_BLOCK;
   case ZCC_ND_CAST:
@@ -3195,6 +3210,13 @@ static ZCCNode *zcc_node_from_stmt(struct Node *n) {
     break;
   case ZND_BREAK:
   case ZND_CONTINUE:
+    break;
+  case ZND_GOTO:
+    node_label_name(n, z->name, ZCC_BRIDGE_NAME_LEN);
+    break;
+  case ZND_LABEL:
+    node_label_name(n, z->name, ZCC_BRIDGE_NAME_LEN);
+    z->lhs = zcc_node_from_stmt(node_lhs(n));
     break;
   case ZND_RETURN:
     z->lhs = zcc_node_from_expr(node_lhs(n));
@@ -4987,6 +5009,79 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
     ctx->cur_block = exit_blk;
     return;
   }
+  case ZND_LABEL: {
+    BlockID lbl_blk = 0;
+    for (uint32_t li = 0; li < ctx->n_labels; li++) {
+      if (strcmp(ctx->label_names[li], node->name) == 0) {
+        lbl_blk = ctx->label_blocks[li];
+        break;
+      }
+    }
+    if (!lbl_blk) {
+      lbl_blk = new_block(ctx, node->name);
+      if (ctx->n_labels < 128) {
+        strncpy(ctx->label_names[ctx->n_labels], node->name, NAME_LEN - 1);
+        ctx->label_blocks[ctx->n_labels] = lbl_blk;
+        ctx->n_labels++;
+      }
+    }
+
+    Block *cur = fn->blocks[ctx->cur_block];
+    Instr *tail = cur ? cur->tail : NULL;
+    if (!(tail && (tail->op == OP_RET || tail->op == OP_BR || tail->op == OP_CONDBR))) {
+      Instr *br = calloc(1, sizeof(Instr));
+      br->id = ctx->next_instr_id++;
+      br->op = OP_BR;
+      br->src[0] = lbl_blk;
+      br->n_src = 1;
+      br->exec_freq = 1.0;
+      emit_instr(ctx, br);
+      cur->succs[0] = lbl_blk;
+      cur->n_succs = 1;
+      fn->blocks[lbl_blk]->preds[fn->blocks[lbl_blk]->n_preds++] = ctx->cur_block;
+    }
+
+    ctx->cur_block = lbl_blk;
+    if (node->lhs) {
+      zcc_lower_stmt(ctx, node->lhs);
+    }
+    return;
+  }
+  case ZND_GOTO: {
+    BlockID lbl_blk = 0;
+    for (uint32_t li = 0; li < ctx->n_labels; li++) {
+      if (strcmp(ctx->label_names[li], node->name) == 0) {
+        lbl_blk = ctx->label_blocks[li];
+        break;
+      }
+    }
+    if (!lbl_blk) {
+      lbl_blk = new_block(ctx, node->name);
+      if (ctx->n_labels < 128) {
+        strncpy(ctx->label_names[ctx->n_labels], node->name, NAME_LEN - 1);
+        ctx->label_blocks[ctx->n_labels] = lbl_blk;
+        ctx->n_labels++;
+      }
+    }
+
+    Block *cur = fn->blocks[ctx->cur_block];
+    Instr *tail = cur ? cur->tail : NULL;
+    if (!(tail && (tail->op == OP_RET || tail->op == OP_BR || tail->op == OP_CONDBR))) {
+      Instr *br = calloc(1, sizeof(Instr));
+      br->id = ctx->next_instr_id++;
+      br->op = OP_BR;
+      br->src[0] = lbl_blk;
+      br->n_src = 1;
+      br->exec_freq = 1.0;
+      emit_instr(ctx, br);
+      cur->succs[0] = lbl_blk;
+      cur->n_succs = 1;
+      fn->blocks[lbl_blk]->preds[fn->blocks[lbl_blk]->n_preds++] = ctx->cur_block;
+    }
+    
+    ctx->cur_block = new_block(ctx, "unreachable.after.goto");
+    return;
+  }
   case ZND_RETURN: {
     RegID val_r = zcc_lower_expr(ctx, node->lhs);
     Instr *ret = calloc(1, sizeof(Instr));
@@ -5813,6 +5908,13 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
     licm_build_def_block(fn);
   }
 
+  /* Address-Mode Folding (AMF) Pattern A Pass */
+  uint32_t amf_count = opt_address_mode_folding_pass(fn);
+  if (amf_count > 0) {
+    fprintf(stderr, "[AMF]       address modes folded: %u\n", amf_count);
+    licm_build_def_block(fn);
+  }
+
   /* ── Pass 1: SSA-form DCE ── */
   uint32_t dce_removed = ssa_dce_pass(fn);
   uint32_t dce_total   = dce_removed;
@@ -5956,10 +6058,11 @@ static int live_interval_compare(const void *a, const void *b) {
 static void ir_asm_number_and_liveness(Function *fn,
                                        const uint32_t *block_order,
                                        uint32_t n_block_order, int *def_seq,
-                                       int *last_use) {
+                                       int *last_use, int *first_use) {
   for (int i = 0; i < MAX_INSTRS; i++) {
     def_seq[i] = -1;
     last_use[i] = -1;
+    first_use[i] = -1;
   }
   int seq = 0;
   for (uint32_t i = 0; i < n_block_order; i++) {
@@ -5974,32 +6077,42 @@ static void ir_asm_number_and_liveness(Function *fn,
         continue;
       ins->lscan_seq = seq;
       /* Uses */
+#define RECORD_USE(reg) do { \
+  RegID r_id = (reg); \
+  if (r_id > 0 && r_id < MAX_INSTRS) { \
+    if (first_use[r_id] < 0) first_use[r_id] = seq; \
+    last_use[r_id] = seq; \
+  } \
+} while(0)
+
       if (ins->op == OP_CONDBR) {
         if (ins->n_src >= 1 && ins->src[0])
-          last_use[ins->src[0]] = seq;
+          RECORD_USE(ins->src[0]);
       } else if (ins->op == OP_BR) {
         /* no reg operands */
       } else if (ins->op == OP_RET) {
         if (ins->n_src >= 1 && ins->src[0])
-          last_use[ins->src[0]] = seq;
+          RECORD_USE(ins->src[0]);
       } else if (ins->op == OP_STORE) {
         if (ins->n_src >= 1 && ins->src[0])
-          last_use[ins->src[0]] = seq;
+          RECORD_USE(ins->src[0]);
         if (ins->n_src >= 2 && ins->src[1])
-          last_use[ins->src[1]] = seq;
+          RECORD_USE(ins->src[1]);
       } else if (ins->op == OP_PHI) {
         for (uint32_t p = 0; p < ins->n_phi; p++)
           if (ins->phi[p].reg)
-            last_use[ins->phi[p].reg] = seq;
+            RECORD_USE(ins->phi[p].reg);
       } else if (ins->op == OP_CALL) {
         for (uint32_t c = 0; c < ins->n_call_args; c++)
           if (ins->call_args[c])
-            last_use[ins->call_args[c]] = seq;
+            RECORD_USE(ins->call_args[c]);
       } else {
         for (uint32_t s = 0; s < ins->n_src; s++)
           if (ins->src[s])
-            last_use[ins->src[s]] = seq;
+            RECORD_USE(ins->src[s]);
       }
+#undef RECORD_USE
+
       /* Def */
       if (ins->dst &&
           (ins->op != OP_BR && ins->op != OP_CONDBR && ins->op != OP_STORE))
@@ -6064,11 +6177,14 @@ static void ir_asm_number_and_liveness(Function *fn,
    * order. The linear scanner assumes the interval starts at def_seq. If use < def,
    * the interval [def, end] DOES NOT COVER the use, allowing the allocator to assign
    * a register that is already active at the use point, causing lethal clobbering.
-   * Fix: Expand the interval backward to start at last_use, and forward to the
+   * Fix: Expand the interval backward to start at first_use, and forward to the
    * end of the function (since it must span a loop back-edge). */
   for (int r = 0; r < MAX_INSTRS; r++) {
     if (def_seq[r] >= 0 && last_use[r] >= 0 && last_use[r] < def_seq[r]) {
       def_seq[r] = last_use[r];
+      last_use[r] = seq > 0 ? seq - 1 : 0;
+    } else if (def_seq[r] >= 0 && first_use[r] >= 0 && first_use[r] < def_seq[r]) {
+      def_seq[r] = first_use[r];
       last_use[r] = seq > 0 ? seq - 1 : 0;
     }
   }
@@ -6138,10 +6254,37 @@ static void ir_asm_linear_scan(Function *fn, const uint32_t *block_order,
       phys_reg_out[cur->vreg] = chosen;
       intervals[active_end++] = *cur;
     } else {
-      if (getenv("ZCC_DEBUG_LSCAN"))
-        fprintf(stderr, "[LSCAN] vreg=%d spilled\n", cur->vreg);
-      /* No free reg: leave current interval spilled (no eviction = no spill
-       * code to emit). */
+      /* Eviction: find the active interval that has the furthest end point.
+       * If its end point is later than cur->end, we evict it to the stack,
+       * steal its physical register, and assign it to cur. */
+      int spill_j = -1;
+      int max_end = cur->end;
+      for (int j = 0; j < active_end; j++) {
+        if (intervals[j].phys_reg >= 0 && intervals[j].end > max_end) {
+          max_end = intervals[j].end;
+          spill_j = j;
+        }
+      }
+      if (spill_j >= 0) {
+        int stolen_reg = intervals[spill_j].phys_reg;
+        if (getenv("ZCC_DEBUG_LSCAN")) {
+          fprintf(stderr, "[LSCAN] vreg=%d spills vreg=%d from phys_reg=%d\n",
+                  cur->vreg, intervals[spill_j].vreg, stolen_reg);
+        }
+        /* Evict the stolen register from the active interval */
+        phys_reg_out[intervals[spill_j].vreg] = -1;
+        
+        /* Assign stolen register to current */
+        cur->phys_reg = stolen_reg;
+        phys_reg_out[cur->vreg] = stolen_reg;
+        
+        /* Replace evicted interval in the active set with current */
+        intervals[spill_j] = *cur;
+      } else {
+        if (getenv("ZCC_DEBUG_LSCAN"))
+          fprintf(stderr, "[LSCAN] vreg=%d spilled\n", cur->vreg);
+        phys_reg_out[cur->vreg] = -1;
+      }
     }
   }
 }
@@ -7086,12 +7229,44 @@ static void ir_asm_emit_function_body(IRAsmCtx *ctx) {
   }
 
   /* Linear scan register allocation: number instructions, compute intervals,
-   * assign phys regs. */
+   * assign phys regs.  We must perform liveness analysis and linear scan
+   * using a topologically clean block order (BFS from entry block) rather
+   * than the PGO/BBR emission order.  This ensures loop preheaders and 
+   * dominators are processed before their headers/uses, preventing lethal
+   * loop register clobbering due to PGO-reordered block lifetimes. */
+  uint32_t alloc_order[MAX_BLOCKS];
+  uint32_t n_alloc_order = 0;
+  {
+    bool visited[MAX_BLOCKS];
+    memset(visited, 0, sizeof(visited));
+    uint32_t queue[MAX_BLOCKS];
+    uint32_t head = 0, tail = 0;
+    queue[tail++] = fn->entry;
+    visited[fn->entry] = true;
+    while (head < tail) {
+      BlockID bid = queue[head++];
+      Block *blk = fn->blocks[bid];
+      if (!blk) continue;
+      for (uint32_t si = 0; si < blk->n_succs; si++) {
+        BlockID s = blk->succs[si];
+        if (s < fn->n_blocks && !visited[s]) {
+          visited[s] = true;
+          queue[tail++] = s;
+        }
+      }
+    }
+    n_alloc_order = tail;
+    for (uint32_t i = 0; i < tail; i++)
+      alloc_order[i] = queue[i];
+  }
+
   for (int i = 0; i < MAX_INSTRS; i++)
     ctx->phys_reg[i] = -1;
-  ir_asm_number_and_liveness(fn, ctx->block_order, ctx->n_block_order,
-                             ctx->def_seq, ctx->last_use);
-  ir_asm_linear_scan(fn, ctx->block_order, ctx->n_block_order, ctx->def_seq,
+  int *first_use = (int *)calloc(MAX_INSTRS, sizeof(int));
+  ir_asm_number_and_liveness(fn, alloc_order, n_alloc_order,
+                             ctx->def_seq, ctx->last_use, first_use);
+  free(first_use);
+  ir_asm_linear_scan(fn, alloc_order, n_alloc_order, ctx->def_seq,
                      ctx->last_use, ctx->phys_reg);
 
   /* Which callee-saved phys regs (rbx, r12-r15) are used — for

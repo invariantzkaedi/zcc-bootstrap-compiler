@@ -3918,7 +3918,7 @@ static int ir_whitelisted(const char *name) {
   if (!name) return 0;
   static const char *wl[] = {
       /* Batch 1-2: test suite */
-      "fold_test", "dce_test", "licm_test", "pressure_test", "escape_test",
+      "fold_test", "dce_test", "licm_test", "pressure_test", "escape_test", "test_amf",
       /* Batch 3a: pure enum-switch, no struct/global writes — VERIFIED SAFE */
       "ir_op_name", "ir_type_name", "ir_type_bytes", "ir_type_unsigned",
       "ir_op_is_terminator",
