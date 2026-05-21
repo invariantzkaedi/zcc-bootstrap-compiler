@@ -37,6 +37,7 @@ struct Node;
 /* When set (ZCC_PGO_DEBUG_MAIN=1 and emitting main), OP_LOAD in
  * ir_asm_lower_insn logs block/dst/src0/slot to stderr for crash triage. */
 static int s_debug_main_emit = 0;
+static const char *current_function_name = NULL;
 
 /* ─────────────────────────────────────────────────────────────────────────────
  * SHARED IR PRIMITIVES
@@ -1821,19 +1822,19 @@ static uint32_t local_stack_alias_pass(Function *fn) {
   return tagged_loads + tagged_stores;
 }
 
-static void gvn_dom_tree_pass(Function *fn) {
+static void build_dominator_tree_pass(Function *fn) {
   licm_compute_rpo(fn);
   licm_compute_doms(fn);
 
-  /* Output immediate dominators to stderr for Phase 2 verification */
-  fprintf(stderr, "[GVN-Dom]\n");
+  fprintf(stderr, "[DomTree] fn=%s", current_function_name ? current_function_name : "?");
   for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
     Block *blk = fn->blocks[bi];
     if (!blk || !blk->reachable)
       continue;
     BlockID idom = licm_idom[bi];
-    fprintf(stderr, "  block %u: idom = %d\n", bi, (idom == NO_BLOCK) ? -1 : (int)idom);
+    fprintf(stderr, "  BB%u->idom=BB%d", bi, (idom == NO_BLOCK) ? -1 : (int)idom);
   }
+  fprintf(stderr, "\n");
 }
 
 static uint32_t scalar_promotion_pass(Function *fn, EscapeCtx *ctx) {
@@ -5233,6 +5234,7 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
  * so they get param slots.
  */
 Function *zcc_ast_to_ir(ZCCNode *body_ast, const char *func_name) {
+  current_function_name = func_name;
   Function *fn = calloc(1, sizeof(Function));
   LowerCtx ctx;
   memset(&ctx, 0, sizeof(ctx));
@@ -6368,7 +6370,10 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   /* ── Pass 4c: Local Stack Alias Analysis Pass (annotation-only) ── */
   local_stack_alias_pass(fn);
 
-  /* ── Pass 4d: Global Value Numbering (GVN) Pass ── */
+  /* ── Pass 4d: GVN Dominator Tree Construction Pass (annotation-only) ── */
+  build_dominator_tree_pass(fn);
+
+  /* ── Pass 4e: Global Value Numbering (GVN) Pass ── */
   uint32_t gvn_ops = global_value_numbering_pass(fn);
   if (gvn_ops > 0) {
     opt_copy_prop_pass(fn);
