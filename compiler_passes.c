@@ -1821,6 +1821,21 @@ static uint32_t local_stack_alias_pass(Function *fn) {
   return tagged_loads + tagged_stores;
 }
 
+static void gvn_dom_tree_pass(Function *fn) {
+  licm_compute_rpo(fn);
+  licm_compute_doms(fn);
+
+  /* Output immediate dominators to stderr for Phase 2 verification */
+  fprintf(stderr, "[GVN-Dom]\n");
+  for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
+    Block *blk = fn->blocks[bi];
+    if (!blk || !blk->reachable)
+      continue;
+    BlockID idom = licm_idom[bi];
+    fprintf(stderr, "  block %u: idom = %d\n", bi, (idom == NO_BLOCK) ? -1 : (int)idom);
+  }
+}
+
 static uint32_t scalar_promotion_pass(Function *fn, EscapeCtx *ctx) {
   uint32_t promoted_count = 0;
   RegID repl[MAX_INSTRS]; /* repl[r] = register to use instead of r (for loads
@@ -6081,6 +6096,9 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
 
   /* ── Pass 4c: Local Stack Alias Analysis Pass (annotation-only) ── */
   local_stack_alias_pass(fn);
+
+  /* ── Pass 4d: GVN Dominator Tree Construction Pass (annotation-only) ── */
+  gvn_dom_tree_pass(fn);
 
   /* ── Pass 5: PGO Basic Block Reordering ── */
   if (getenv("ZCC_DUMP_PGO_BLOCKS") &&
