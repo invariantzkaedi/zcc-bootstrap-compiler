@@ -28,6 +28,12 @@
 #ifndef ZCC_SYM_TYPE_AST_IR_H
 #define ZCC_SYM_TYPE_AST_IR_H
 
+#ifndef ZCC_STANDALONE_BUILD
+#ifndef ZCC_CONCAT_BUILD
+#define ZCC_CONCAT_BUILD 1
+#endif
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -233,11 +239,11 @@ struct Node {
   struct Node *next; /* ADAPT-4: sibling / list link */
   int val;           /* literal integer value  */
 };
-#endif /* ZCC_STANDALONE_BUILD */
 
 typedef struct Type Type;
 typedef struct Node Node;
 typedef struct StructField StructField;
+#endif /* ZCC_STANDALONE_BUILD */
 #endif /* !ZCC_TYPES_DECLARED */
 
 /* ============================================================
@@ -377,6 +383,7 @@ void ast_dump_tree(Node *root, int indent);
  * Must appear AFTER ir_bridge.h in the concat order.
  * ============================================================ */
 
+#ifndef ZCC_CONCAT_BUILD
 /*
  * Forward declarations for IR types defined in compiler_passes.c.
  * In the concat build these are already visible; the struct tags
@@ -400,5 +407,6 @@ void ir_emit_control_flow(struct IRAsmCtx *ctx, Node *stmt);
 int ir_validate_module(struct Function **funcs, int n_funcs);
 int ir_validate_func(struct Function *fn);
 int ir_validate_operand_types(struct Function *fn);
+#endif
 
 #endif /* ZCC_SYM_TYPE_AST_IR_H */

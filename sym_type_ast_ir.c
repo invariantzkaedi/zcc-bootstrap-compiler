@@ -74,7 +74,11 @@ ZccScope *sym_scope_push(ZccScope *parent, int kind) {
   ZCC_TAG(TAG_SCOPE);
   sc = (ZccScope *)zcc_sym_alloc((unsigned int)sizeof(ZccScope));
   sc->parent = parent;
-  sc->depth = parent ? parent->depth + 1 : 0;
+  if (parent) {
+    sc->depth = parent->depth + 1;
+  } else {
+    sc->depth = 0;
+  }
   sc->kind = kind;
   return sc;
 }
@@ -132,8 +136,12 @@ int sym_define(ZccScope *sc, const char *name, int kind, Type *ty, int offset) {
   sym->scope_depth = sc->depth;
   sym->ty = ty;
   sym->offset = offset;
-  sym->is_typedef = (kind == ZCC_SYM_TYPEDEF) ? 1 : 0;
-  sym->is_param = (kind == ZCC_SYM_PARAM) ? 1 : 0;
+  sym->is_typedef = 0;
+  if (kind == ZCC_SYM_TYPEDEF)
+    sym->is_typedef = 1;
+  sym->is_param = 0;
+  if (kind == ZCC_SYM_PARAM)
+    sym->is_param = 1;
 
   /* Fire coverage tag matching the symbol kind */
   switch (kind) {
@@ -262,9 +270,16 @@ void sym_dump_scope_tree(ZccScope *sc, int indent) {
     while (s) {
       for (i = 0; i < indent + 2; i++)
         fputc(' ', stderr);
+      const char *td_str;
+      const char *pm_str;
+      td_str = "";
+      if (s->is_typedef)
+        td_str = " [typedef]";
+      pm_str = "";
+      if (s->is_param)
+        pm_str = " [param]";
       fprintf(stderr, "  sym '%s' kind=%d depth=%d offset=%d%s%s\n", s->name,
-              s->kind, s->scope_depth, s->offset,
-              s->is_typedef ? " [typedef]" : "", s->is_param ? " [param]" : "");
+              s->kind, s->scope_depth, s->offset, td_str, pm_str);
       s = s->next;
     }
   }
@@ -343,8 +358,9 @@ static ZccTagEntry *tag_define_internal(ZccTagTable *tt, const char *name,
   e = (ZccTagEntry *)zcc_sym_alloc((unsigned int)sizeof(ZccTagEntry));
   strncpy(e->name, name, ZCC_SYM_NAME_MAX - 1);
   e->name[ZCC_SYM_NAME_MAX - 1] = '\0';
-  e->kind = kind;
-  e->is_complete = (ty != NULL) ? 1 : 0;
+  e->is_complete = 0;
+  if (ty != NULL)
+    e->is_complete = 1;
   e->ty = ty;
 
   bucket = strhash(name, ZCC_TAG_HASH_SIZE - 1u);
@@ -404,7 +420,9 @@ int tag_complete_type(ZccTagEntry *e, Type *ty) {
 
 int tag_is_complete(ZccTagEntry *e) {
   ZCC_TAG(TAG_TYPE);
-  return (e && e->is_complete) ? 1 : 0;
+  if (e && e->is_complete)
+    return 1;
+  return 0;
 }
 
 ZccTagEntry *tag_forward_declare(ZccTagTable *tt, const char *name, int kind) {
@@ -723,10 +741,14 @@ Type *type_usual_arith_conv(Type *a, Type *b) {
   b = type_canonical(b);
 
   /* Floating-point promotions */
-  if (a->kind == ZCC_TY_DOUBLE || b->kind == ZCC_TY_DOUBLE) /* ADAPT-3 */
-    return (a->kind == ZCC_TY_DOUBLE) ? a : b;
-  if (a->kind == ZCC_TY_FLOAT || b->kind == ZCC_TY_FLOAT)
-    return (a->kind == ZCC_TY_FLOAT) ? a : b;
+  if (a->kind == ZCC_TY_DOUBLE || b->kind == ZCC_TY_DOUBLE) { /* ADAPT-3 */
+    if (a->kind == ZCC_TY_DOUBLE) return a;
+    return b;
+  }
+  if (a->kind == ZCC_TY_FLOAT || b->kind == ZCC_TY_FLOAT) {
+    if (a->kind == ZCC_TY_FLOAT) return a;
+    return b;
+  }
 
   /* Ensure a has the higher rank */
   if (type_integer_rank(a) < type_integer_rank(b)) {
@@ -796,6 +818,7 @@ Type *type_lvalue_conversion(Type *ty) {
  * Replace these with ZCC's actual enum constants from part2.c/part3.c.
  * Grep for: ND_IF ND_FOR ND_WHILE ND_BLOCK ND_RETURN ND_CALL ND_ASSIGN
  */
+#ifdef ZCC_STANDALONE_BUILD
 #ifndef ND_BLOCK
 #define ND_BLOCK 100
 #define ND_IF 101
@@ -809,6 +832,7 @@ Type *type_lvalue_conversion(Type *ty) {
 #define ND_ADDR 110
 #define ND_CAST 111
 #define ND_DECL 112
+#endif
 #endif
 
 /* Internal: single-node dispatch, shared by pre and post walkers */
@@ -1022,7 +1046,9 @@ int ast_validate_types(Node *root) {
   ZCC_TAG(TAG_REGRESSION);
   cx.n_errors = 0;
   ast_walk_postorder(root, type_validate_visitor, &cx);
-  return (cx.n_errors == 0) ? 1 : 0;
+  if (cx.n_errors == 0)
+    return 1;
+  return 0;
 }
 
 /* --- ast_resolve_identifiers --- */
@@ -1063,7 +1089,9 @@ int ast_resolve_identifiers(Node *root, ZccScope *sc, ZccTagTable *tt) {
   cx.tt = tt;
   cx.n_errors = 0;
   ast_walk_preorder(root, resolve_visitor, &cx);
-  return (cx.n_errors == 0) ? 1 : 0;
+  if (cx.n_errors == 0)
+    return 1;
+  return 0;
 }
 
 /* --- ast_dump_tree --- */
@@ -1076,9 +1104,13 @@ static void dump_visitor(Node *node, void *vctx) {
     return;
   for (i = 0; i < *depth; i++)
     fputc(' ', stderr);
+  const char *ty_str;
+  ty_str = "<untyped>";
+  if (node->ZCC_N_TY)
+    ty_str = "<typed>";
   fprintf(stderr, "Node kind=%-4d ty=%s line=%d\n",
           node->kind,                               /* ADAPT-4: kind field */
-          node->ZCC_N_TY ? "<typed>" : "<untyped>", /* ADAPT-4: type field */
+          ty_str,                                   /* ADAPT-4: type field */
           node->line);                              /* ADAPT-4: line field */
   *depth += 2;
 }
@@ -1171,8 +1203,6 @@ struct IRAsmCtx {
 struct Function {
   int n_blocks;
 };
-
-#endif /* !ZCC_CONCAT_BUILD */
 
 /* ir_type_name: maps ir_type_t to the text representation in ZCC IR */
 static const char *ir_type_name_local(ir_type_t t) {
@@ -1551,6 +1581,8 @@ int ir_validate_operand_types(struct Function *fn) {
   /* ADAPT-6: validate per instruction */
   return 1;
 }
+
+#endif /* !ZCC_CONCAT_BUILD */
 
 /* ============================================================
  * Coverage hit tracker (ZCC_COVERAGE=1 only)

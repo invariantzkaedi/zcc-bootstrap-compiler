@@ -1630,6 +1630,14 @@ int main(int argc, char **argv) {
   }
   fclose(cc->out);
 
+  if (cc->errors > 0) {
+    if (!enable_telemetry_stdout) printf("\033[0;31mFAILED (codegen error(s) detected)\033[0m\n");
+    fprintf(stderr, "zcc: %d codegen error(s) detected during SystemV AST lowering\n", cc->errors);
+    free(source);
+    free(cc);
+    return 1;
+  }
+
   if (getenv("ZCC_HOOK_IR_COURTROOM")) {
     FILE *f = fopen("ir_snapshot.json", "w");
     if (f && g_ir_module) {

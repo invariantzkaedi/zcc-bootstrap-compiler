@@ -3223,9 +3223,12 @@ void codegen_expr(Compiler *cc, Node *node) {
   case ND_NOP:
     return;
 
-  default:
-    error_at(cc, node->line, "unsupported expression in codegen");
+  default: {
+    char errbuf[256];
+    sprintf(errbuf, "unsupported expression in codegen (kind=%d)", node->kind);
+    error_at(cc, node->line, errbuf);
     return;
+  }
   }
 }
 
@@ -3945,7 +3948,7 @@ static int ir_whitelisted(const char *name) {
       "log2_of", "guard_node", "is_bad_ptr", "ptr_in_fault_range",
       "validate_token_bounds", "validate_node", "validate_type", "bad_node_cutoff",
       /* Split Lexer Core (fortified and hardened) */
-      "lex_char", "lex_operator",
+      /* "lex_char", "lex_operator", "next_token", "read_char", "read_escape", "node_name", */
       NULL
   };
   int i;
@@ -3966,7 +3969,7 @@ void codegen_func(Compiler *cc, Node *func) {
   fprintf(stderr, "cc_func: %s\n", func->func_def_name);
   cc->used_regs_mask = allocate_registers(func);
   cc->is_forced_mask = 0;
-  if (backend_ops) {
+  if (backend_ops || ir_whitelisted(func->func_def_name)) {
       if ((cc->used_regs_mask & 0x1F) != 0x1F) cc->is_forced_mask = 1;
       cc->used_regs_mask = 0x1F;
   }
