@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>🔱 ZKAEDI OMNI-DASHBOARD</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0A0E1A;--navy2:#0D1225;--cyan:#00D4FF;--mag:#FF006E;--gold:#FFD700;--green:#00FF88;--text:#E2E8F0;--muted:#475569;--border:rgba(0,212,255,.18);--font:'Space Mono',monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--navy);color:var(--text);font-family:var(--font);display:flex;flex-direction:column}
+#hdr{height:46px;flex-shrink:0;background:var(--navy2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 14px;background-image:linear-gradient(rgba(0,212,255,.03)1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.03)1px,transparent 1px);background-size:32px 32px}
+.logo{color:var(--cyan);font-size:12px;font-weight:700;letter-spacing:5px}
+.sub{color:var(--muted);font-size:10px;letter-spacing:2px}
+#main{flex:1;padding:40px;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px;align-content:start}
+.tool-card{background:var(--navy2);border:1px solid var(--border);padding:20px;text-decoration:none;color:var(--text);transition:0.2s;display:block}
+.tool-card:hover{border-color:var(--cyan);background:rgba(0,212,255,.05);transform:translateY(-2px)}
+.t-title{color:var(--cyan);font-weight:700;letter-spacing:2px;margin-bottom:10px;font-size:14px}
+.t-desc{color:var(--muted);font-size:11px;line-height:1.5}
+</style>
+</head><body>
+<div id="hdr"><span class="logo">🔱 ZKAEDI</span><span class="sub">FLEET OMNI-DASHBOARD</span></div>
+<div id="main">
+  <a href="zkaedi-glb-repair-ultra.html" class="tool-card"><div class="t-title">GLB REPAIR ULTRA</div><div class="t-desc">Detect non-manifold holes and auto-repair using fan-triangulation.</div></a>
+  <a href="zkaedi-tool-smoother.html" class="tool-card"><div class="t-title">MESH SMOOTHER</div><div class="t-desc">Laplacian and volume-preserving Taubin smoothing filters.</div></a>
+  <a href="zkaedi-qem-decimator.html" class="tool-card"><div class="t-title">QEM DECIMATOR</div><div class="t-desc">Rigorous Quadric Error Metric LOD generation with MinHeap collapse.</div></a>
+  <a href="zkaedi-uv-inspector.html" class="tool-card"><div class="t-title">UV SEAM INSPECTOR</div><div class="t-desc">Software-rasterized UV mapping overlap and OOB detection.</div></a>
+  <a href="zkaedi-normal-checker.html" class="tool-card"><div class="t-title">NORMAL CHECKER</div><div class="t-desc">Detect and batch-flip inverted face normals automatically.</div></a>
+  <a href="zkaedi-vram-calculator.html" class="tool-card"><div class="t-title">VRAM CALCULATOR</div><div class="t-desc">Batch calculate GPU memory footprints across dense GLB payloads.</div></a>
+  <a href="zkaedi-fleet-scanner.html" class="tool-card"><div class="t-title">FLEET HEALTH SCANNER</div><div class="t-desc">High-throughput batch auditor for topological manifold validation.</div></a>
+</div>
+</body></html>

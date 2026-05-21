@@ -1,0 +1,22 @@
+{
+  "UNCHECKED_SSTORE": {
+    "agree": 147,
+    "disagree": 0
+  },
+  "ARITH_OVERFLOW": {
+    "agree": 147,
+    "disagree": 0
+  },
+  "SSTORE_PATTERN": {
+    "agree": 147,
+    "disagree": 0
+  },
+  "MOD_ARITHMETIC": {
+    "agree": 32,
+    "disagree": 0
+  },
+  "MEM_READ_WRITE": {
+    "agree": 2,
+    "disagree": 0
+  }
+}

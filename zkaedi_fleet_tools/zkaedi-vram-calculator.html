@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>🔱 ZKAEDI VRAM CALCULATOR</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/three@0.134.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
+<style>
+:root{--navy:#0A0E1A;--navy2:#0D1225;--cyan:#00D4FF;--mag:#FF006E;--gold:#FFD700;--green:#00FF88;--text:#E2E8F0;--muted:#475569;--border:rgba(0,212,255,.18);--font:'Space Mono',monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--navy);color:var(--text);font-family:var(--font);display:flex;flex-direction:column}
+#hdr{height:46px;flex-shrink:0;background:var(--navy2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 14px;background-image:linear-gradient(rgba(0,212,255,.03)1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.03)1px,transparent 1px);background-size:32px 32px}
+.logo{color:var(--cyan);font-size:12px;font-weight:700;letter-spacing:5px}
+.sub{color:var(--muted);font-size:10px;letter-spacing:2px}
+#main{flex:1;padding:20px;overflow-y:auto}
+.drop-zone{border:2px dashed var(--border);padding:40px;text-align:center;color:var(--cyan);cursor:pointer;background:rgba(0,212,255,.03);margin-bottom:20px;letter-spacing:2px;font-weight:700}
+.drop-zone:hover{background:rgba(0,212,255,.08)}
+table{width:100%;border-collapse:collapse;font-size:11px}
+th,td{padding:10px;text-align:left;border-bottom:1px solid var(--border)}
+th{color:var(--muted);text-transform:uppercase;letter-spacing:2px}
+.summary{display:flex;gap:20px;margin-bottom:20px;padding:15px;background:var(--navy2);border:1px solid var(--border)}
+.sum-box{flex:1}
+.sum-val{font-size:24px;color:var(--cyan);font-weight:700;margin-top:5px}
+.ok{color:var(--green)}.warn{color:var(--gold)}.crit{color:var(--mag)}
+</style>
+</head><body>
+<div id="hdr"><span class="logo">🔱 ZKAEDI</span><span class="sub">VRAM CALCULATOR</span></div>
+<div id="main">
+  <div class="summary">
+    <div class="sum-box"><div>TOTAL ASSETS</div><div class="sum-val" id="st-ast">0</div></div>
+    <div class="sum-box"><div>GEOMETRY VRAM</div><div class="sum-val" id="st-geo">0 MB</div></div>
+    <div class="sum-box"><div>TEXTURE VRAM</div><div class="sum-val" id="st-tex">0 MB</div></div>
+    <div class="sum-box"><div>TOTAL VRAM</div><div class="sum-val" id="st-tot">0 MB</div></div>
+  </div>
+  <label class="drop-zone">
+    <input type="file" multiple accept=".glb,.gltf" style="display:none" onchange="handleFiles(event)">
+    [ DROP GLB FILES OR CLICK TO UPLOAD ]
+  </label>
+  <table>
+    <thead><tr><th>Asset Name</th><th>Vertices</th><th>Faces</th><th>Textures</th><th>VRAM Cost</th><th>Status</th></tr></thead>
+    <tbody id="tbl"></tbody>
+  </table>
+</div>
+<script>
+let totalGeo=0, totalTex=0, numAssets=0;
+const budget=1024*1024*512; // 512MB threshold for warning
+
+function handleFiles(e){
+  const files=Array.from(e.target.files);
+  files.forEach(f=>processFile(f));
+}
+
+function processFile(f){
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    new THREE.GLTFLoader().parse(ev.target.result,'',gltf=>{
+      let verts=0, faces=0, texCount=0, texBytes=0;
+      gltf.scene.traverse(c=>{
+        if(c.isMesh){
+          const p=c.geometry.attributes.position;
+          verts+=p?p.count:0;
+          const idx=c.geometry.index;
+          faces+=idx?(idx.count/3):0;
+          if(c.material){
+            ['map','normalMap','roughnessMap','metalnessMap'].forEach(m=>{
+              if(c.material[m] && c.material[m].image){
+                texCount++;
+                const img=c.material[m].image;
+                const w=img.width||1024, h=img.height||1024;
+                texBytes+=w*h*4*1.33; // RGBA + Mipmaps
+              }
+            });
+          }
+        }
+      });
+      // 48 bytes per vertex (pos:12, norm:12, uv:8, tang:16)
+      const geoBytes=verts*48;
+      const totalBytes=geoBytes+texBytes;
+      
+      totalGeo+=geoBytes; totalTex+=texBytes; numAssets++;
+      updateUI();
+      
+      const tr=document.createElement('tr');
+      const mb=(totalBytes/(1024*1024)).toFixed(2);
+      let status='<span class="ok">OPTIMAL</span>';
+      if(mb>50) status='<span class="warn">HEAVY</span>';
+      if(mb>150) status='<span class="crit">CRITICAL</span>';
+      
+      tr.innerHTML=`<td>${f.name}</td><td>${verts.toLocaleString()}</td><td>${faces.toLocaleString()}</td><td>${texCount}</td><td>${mb} MB</td><td>${status}</td>`;
+      document.getElementById('tbl').appendChild(tr);
+    },err=>console.error(err));
+  };
+  reader.readAsArrayBuffer(f);
+}
+
+function updateUI(){
+  document.getElementById('st-ast').textContent=numAssets;
+  document.getElementById('st-geo').textContent=(totalGeo/(1024*1024)).toFixed(2)+' MB';
+  document.getElementById('st-tex').textContent=(totalTex/(1024*1024)).toFixed(2)+' MB';
+  const tot=(totalGeo+totalTex);
+  const el=document.getElementById('st-tot');
+  el.textContent=(tot/(1024*1024)).toFixed(2)+' MB';
+  el.className='sum-val '+(tot>budget?'crit':'ok');
+}
+</script>
+</body></html>

@@ -1,0 +1,1076 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="100%" height="100%" style="background-color: #03020c;" id="zkaedi-matrix-simulator">
+  <title>ZKAEDI PRIME: Hamiltonian Attractor Matrix</title>
+  <defs>
+    <!-- Background grid texture -->
+    <pattern id="matrix-grid" width="80" height="80" patternUnits="userSpaceOnUse">
+      <path d="M 80 0 L 0 0 0 80" fill="none" stroke="#1c0f3d" stroke-width="1.2" stroke-opacity="0.8"/>
+      <circle cx="0" cy="0" r="1.5" fill="#00f0ff" opacity="0.3"/>
+    </pattern>
+    
+    <!-- Neon intense glow filters -->
+    <filter id="neon-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="blur1"/>
+      <feGaussianBlur stdDeviation="15" result="blur2"/>
+      <feMerge>
+        <feMergeNode in="blur2"/>
+        <feMergeNode in="blur1"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Radial glowing backgrounds -->
+    <radialGradient id="reactor-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="1"/>
+      <stop offset="25%" stop-color="#ff007f" stop-opacity="0.8"/>
+      <stop offset="60%" stop-color="#3d1575" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#03020c" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Ambient Vector Outlines -->
+  <rect width="1920" height="1080" fill="url(#matrix-grid)" />
+  <circle cx="960" cy="540" r="700" fill="none" stroke="#2c165c" stroke-width="1.5" stroke-dasharray="10,30" opacity="0.25" />
+  <circle cx="960" cy="540" r="450" fill="none" stroke="#ff007f" stroke-width="1.2" stroke-dasharray="4,12" opacity="0.3" />
+  <circle cx="960" cy="540" r="220" fill="none" stroke="#00f0ff" stroke-width="2" stroke-dasharray="15,15" opacity="0.4" />
+
+  <!-- Flow Vector lines spanning screen -->
+  <line x1="0" y1="540" x2="1920" y2="540" stroke="#1d1140" stroke-width="1" stroke-dasharray="20,10" opacity="0.4"/>
+  <line x1="960" y1="0" x2="960" y2="1080" stroke="#1d1140" stroke-width="1" stroke-dasharray="20,10" opacity="0.4"/>
+
+  <!-- Interactive HTML5 / CSS / Canvas Subsystem -->
+  <foreignObject x="0" y="0" width="1920" height="1080">
+    <div xmlns="http://www.w3.org/1999/xhtml" style="width:100%; height:100%; font-family:'Courier New', monospace; position:relative; overflow:hidden; user-select:none;">
+      
+      <!-- CSS Stylesheet -->
+      <style>
+        <![CDATA[
+        .glass-panel {
+          background: rgba(8, 4, 22, 0.72);
+          backdrop-filter: blur(18px);
+          -webkit-backdrop-filter: blur(18px);
+          border: 1px solid rgba(0, 240, 255, 0.22);
+          box-shadow: 0 0 40px rgba(0, 240, 255, 0.08), inset 0 0 20px rgba(0, 240, 255, 0.04);
+          border-radius: 12px;
+          color: #00f0ff;
+          padding: 22px;
+          box-sizing: border-box;
+          position: absolute;
+          transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        
+        .glass-panel:hover {
+          border-color: rgba(255, 0, 127, 0.45);
+          box-shadow: 0 0 50px rgba(255, 0, 127, 0.18);
+          transform: translateY(-2px);
+        }
+
+        .hud-header {
+          font-size: 14px;
+          font-weight: 900;
+          letter-spacing: 3px;
+          text-transform: uppercase;
+          border-bottom: 1px solid rgba(0, 240, 255, 0.3);
+          padding-bottom: 8px;
+          margin-bottom: 14px;
+          display: flex;
+          justify-content: space-between;
+          color: #ffffff;
+          text-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+        }
+
+        .hud-row {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 10px;
+          font-size: 12px;
+          letter-spacing: 1px;
+        }
+
+        .hud-value {
+          color: #ff007f;
+          font-weight: bold;
+          text-shadow: 0 0 8px rgba(255, 0, 127, 0.5);
+        }
+
+        /* Diagnostic logs style */
+        .terminal-box {
+          height: 155px;
+          overflow-y: hidden;
+          font-size: 11px;
+          line-height: 1.5;
+          color: #00ffff;
+          scrollbar-width: none;
+        }
+
+        .terminal-line {
+          margin-bottom: 6px;
+          opacity: 0.9;
+          animation: scanline 0.25s ease-out;
+        }
+
+        .terminal-warn { color: #ffaa00; text-shadow: 0 0 4px rgba(255, 170, 0, 0.3); }
+        .terminal-crit { color: #ff0055; text-shadow: 0 0 6px rgba(255, 0, 85, 0.4); }
+        .terminal-ok { color: #00ff66; text-shadow: 0 0 4px rgba(0, 255, 102, 0.3); }
+
+        @keyframes scanline {
+          from { opacity: 0; transform: translateY(5px); }
+          to { opacity: 0.9; transform: translateY(0); }
+        }
+
+        /* Interactive Controls */
+        .action-btn {
+          background: rgba(0, 240, 255, 0.08);
+          border: 1px solid rgba(0, 240, 255, 0.4);
+          color: #ffffff;
+          padding: 10px 16px;
+          border-radius: 6px;
+          font-size: 11px;
+          font-weight: bold;
+          cursor: pointer;
+          font-family: 'Courier New', monospace;
+          letter-spacing: 1.5px;
+          transition: all 0.25s ease;
+          display: inline-block;
+          margin: 6px;
+          text-align: center;
+        }
+
+        .action-btn:hover {
+          background: rgba(255, 0, 127, 0.25);
+          border-color: #ff007f;
+          box-shadow: 0 0 16px rgba(255, 0, 127, 0.5);
+          transform: scale(1.03);
+        }
+
+        .action-btn-active {
+          background: rgba(255, 0, 127, 0.3) !important;
+          border-color: #ff007f !important;
+          box-shadow: 0 0 15px rgba(255, 0, 127, 0.4);
+        }
+
+        /* Splendid ambient screen artifacts */
+        .scanlines {
+          pointer-events: none;
+          position: absolute;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(
+            rgba(18, 16, 16, 0) 50%, 
+            rgba(0, 0, 0, 0.3) 50%
+          );
+          background-size: 100% 4px;
+          z-index: 100;
+          opacity: 0.35;
+        }
+
+        /* Dynamic progress bar */
+        .bar-container {
+          width: 100%;
+          height: 8px;
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 4px;
+          overflow: hidden;
+          margin-top: 4px;
+          border: 1px solid rgba(0, 240, 255, 0.15);
+        }
+
+        .bar-fill {
+          height: 100%;
+          width: 100%;
+          background: linear-gradient(90deg, #00f0ff, #ff007f);
+          box-shadow: 0 0 8px #00f0ff;
+          transition: width 0.3s ease;
+        }
+
+        /* Mode badge pulsing */
+        .badge {
+          display: inline-block;
+          padding: 3px 8px;
+          border-radius: 4px;
+          font-size: 10px;
+          font-weight: bold;
+          letter-spacing: 1px;
+        }
+        .badge-cyan { background: rgba(0, 240, 255, 0.15); border: 1px solid #00f0ff; color: #00f0ff; }
+        .badge-magenta { background: rgba(255, 0, 127, 0.15); border: 1px solid #ff007f; color: #ff007f; }
+        .badge-green { background: rgba(0, 255, 102, 0.15); border: 1px solid #00ff66; color: #00ff66; }
+        ]]>
+      </style>
+
+      <!-- Glassmorphic Left Panel: Hamiltonian Chaos Analyzer -->
+      <div class="glass-panel" style="left:40px; top:40px; width:360px; height:500px;" id="panel-metrics">
+        <div class="hud-header">
+          <span>CHAOS DYNAMICS</span>
+          <span style="color:#00ff66; font-size:10px; align-self:center;" id="sys-status-badge">STABLE</span>
+        </div>
+        <div class="hud-row">
+          <span>SYSTEM ENERGY (H)</span>
+          <span class="hud-value" id="val-hamiltonian">0.0000 eV</span>
+        </div>
+        <div class="hud-row">
+          <span>LYAPUNOV EXP (λ)</span>
+          <span class="hud-value" id="val-lyapunov" style="color:#ffaa00;">+0.3842</span>
+        </div>
+        <div class="hud-row">
+          <span>FRACTAL DIM (Df)</span>
+          <span class="hud-value" id="val-fractal-dim">2.0841</span>
+        </div>
+        <div class="hud-row">
+          <span>ORBITAL STABILITY</span>
+          <span class="hud-value" id="val-stability">100.0%</span>
+        </div>
+        <div class="bar-container">
+          <div class="bar-fill" id="bar-stability-fill"></div>
+        </div>
+
+        <div style="margin-top:20px;" class="hud-header">PHASE PORTRAIT</div>
+        <!-- Phase plot drawing container (Canvas will overlay here) -->
+        <canvas id="phase-portrait-canvas" width="314" height="150" style="background: rgba(4, 2, 12, 0.6); border: 1px solid rgba(0, 240, 255, 0.15); border-radius: 6px;"></canvas>
+
+        <div style="text-align:center; margin-top:14px;">
+          <div class="action-btn" id="btn-perturb">PERTURB VECTOR FIELD</div>
+        </div>
+      </div>
+
+      <!-- Glassmorphic Right Panel: Compiler Pipeline logs and Actions -->
+      <div class="glass-panel" style="right:40px; top:40px; width:360px; height:500px;" id="panel-security">
+        <div class="hud-header">
+          <span>INTERACTIONS</span>
+          <span class="badge badge-cyan" id="node-count-badge">50/50 NODES</span>
+        </div>
+        <div class="hud-row">
+          <span>CONTROL MODE</span>
+          <span id="click-mode-label" class="hud-value" style="color:#00f0ff;">SPAWN ATTRACTION FIELD</span>
+        </div>
+        
+        <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+          <div class="action-btn action-btn-active" id="btn-mode-attract" style="flex:1; font-size:9px; padding:8px 4px; margin:2px;">ATTRACTOR</div>
+          <div class="action-btn" id="btn-mode-repel" style="flex:1; font-size:9px; padding:8px 4px; margin:2px;">REPELLER</div>
+          <div class="action-btn" id="btn-mode-shield" style="flex:1; font-size:9px; padding:8px 4px; margin:2px;">DEFECTOR</div>
+        </div>
+
+        <div class="hud-header">VECTOR FORENSICS</div>
+        <div class="terminal-box" id="terminal-feed">
+          <!-- Real-time telemetry events -->
+        </div>
+
+        <div style="text-align:center; margin-top:10px;">
+          <div class="action-btn" id="btn-realign" style="border-color:#ff007f; color:#ff007f;">EXECUTE QUANTUM REALIGNMENT</div>
+        </div>
+      </div>
+
+      <!-- Center Console: Core Hamiltonian Engine Status -->
+      <div class="glass-panel" style="left:50%; transform:translateX(-50%); top:40px; width:520px; height:110px; text-align:center; padding:15px;" id="panel-center">
+        <h1 style="font-size:13px; font-weight:bold; letter-spacing:4px; color:#ffffff; margin:0 0 6px 0; text-shadow:0 0 8px rgba(0,240,255,0.4);">ZKAEDI SYSTEM // HAMILTONIAN MATRIX</h1>
+        <div style="font-size:26px; font-weight:900; color:#ff007f; text-shadow:0 0 12px rgba(255, 0, 127, 0.85); letter-spacing:1px;" id="matrix-state-indicator">SYSTEM COMPILING</div>
+        <div style="font-size:9px; color:#00f0ff; opacity:0.8; margin-top:6px; letter-spacing:1px;">CLICK ARENA TO PROJECT HAMILTONIAN POTENTIAL SINGULARITIES</div>
+      </div>
+
+      <!-- Full-screen Canvas for Physics Core Particle Engine -->
+      <canvas id="arena-canvas" style="position:absolute; top:0; left:0; width:1920px; height:1080px; z-index:0; cursor:crosshair;"></canvas>
+      
+      <!-- Scanlines Overlay -->
+      <div class="scanlines"></div>
+      
+      <!-- JavaScript Interactive Gameplay and Simulation Engine -->
+      <script type="text/javascript">
+        <![CDATA[
+        (function() {
+          // Bind primary canvases
+          const canvas = document.getElementById('arena-canvas');
+          const ctx = canvas.getContext('2d');
+          
+          const phaseCanvas = document.getElementById('phase-portrait-canvas');
+          const pctx = phaseCanvas.getContext('2d');
+
+          // Align resolution to high fidelity parameters
+          canvas.width = 1920;
+          canvas.height = 1080;
+
+          // Game / Physics parameters
+          const simState = {
+            energy: 0,
+            lyapunov: 0.3842,
+            stability: 100.0,
+            attractorMode: 'attract', // attract, repel, defector
+            nodes: [],
+            exploits: [],
+            attractors: [],
+            lasers: [],
+            particles: [],
+            score: 0,
+            maxOrbitals: 70,
+            ticks: 0,
+            chaosIntensity: 0.05
+          };
+
+          const colors = {
+            cyan: '#00f0ff',
+            magenta: '#ff007f',
+            green: '#00ff66',
+            amber: '#ffaa00',
+            purple: '#6d28d9',
+            exploit: '#ff0055',
+            particleTail: 'rgba(0, 240, 255, 0.12)'
+          };
+
+          const centerX = 960;
+          const centerY = 540;
+
+          // Event logger helper
+          const feed = document.getElementById('terminal-feed');
+          function logEvent(msg, styleClass = '') {
+            const line = document.createElement('div');
+            line.className = `terminal-line ${styleClass}`;
+            line.innerHTML = `&gt; ${msg}`;
+            feed.appendChild(line);
+            while (feed.childNodes.length > 10) {
+              feed.removeChild(feed.firstChild);
+            }
+            feed.scrollTop = feed.scrollHeight;
+          }
+
+          // Real-time scrolling Phase portrait vector
+          const phaseHistory = [];
+          function updatePhasePortrait(q, p) {
+            phaseHistory.push({ q, p });
+            if (phaseHistory.length > 120) {
+              phaseHistory.shift();
+            }
+
+            pctx.clearRect(0, 0, phaseCanvas.width, phaseCanvas.height);
+            
+            // Draw phase axis
+            pctx.strokeStyle = 'rgba(0, 240, 255, 0.15)';
+            pctx.lineWidth = 1;
+            pctx.beginPath();
+            pctx.moveTo(phaseCanvas.width / 2, 0);
+            pctx.lineTo(phaseCanvas.width / 2, phaseCanvas.height);
+            pctx.moveTo(0, phaseCanvas.height / 2);
+            pctx.lineTo(phaseCanvas.width, phaseCanvas.height / 2);
+            pctx.stroke();
+
+            // Label Axis
+            pctx.font = '8px monospace';
+            pctx.fillStyle = 'rgba(0, 240, 255, 0.4)';
+            pctx.fillText("Coordinate (q)", phaseCanvas.width - 80, phaseCanvas.height / 2 - 4);
+            pctx.fillText("Momentum (p)", phaseCanvas.width / 2 + 4, 10);
+
+            // Draw trajectory path
+            if (phaseHistory.length > 1) {
+              pctx.strokeStyle = colors.magenta;
+              pctx.lineWidth = 1.8;
+              pctx.beginPath();
+              
+              const scaleQ = phaseCanvas.width / 4;
+              const scaleP = phaseCanvas.height / 4;
+              const ox = phaseCanvas.width / 2;
+              const oy = phaseCanvas.height / 2;
+
+              for (let i = 0; i < phaseHistory.length; i++) {
+                const px = ox + phaseHistory[i].q * scaleQ;
+                const py = oy + phaseHistory[i].p * scaleP;
+                if (i === 0) pctx.moveTo(px, py);
+                else pctx.lineTo(px, py);
+              }
+              pctx.stroke();
+
+              // Glowing current state node
+              const last = phaseHistory[phaseHistory.length - 1];
+              pctx.fillStyle = '#ffffff';
+              pctx.beginPath();
+              pctx.arc(ox + last.q * scaleQ, oy + last.p * scaleP, 4, 0, Math.PI * 2);
+              pctx.fill();
+            }
+          }
+
+          // Physics Node Classes
+          class SymbolNode {
+            constructor(r, speed, angle, color = colors.cyan) {
+              this.r = r;
+              this.speed = speed;
+              this.angle = angle;
+              this.color = color;
+              this.size = 5 + Math.random() * 4;
+              this.x = centerX + Math.cos(angle) * r;
+              this.y = centerY + Math.sin(angle) * r;
+              this.vx = -Math.sin(angle) * speed;
+              this.vy = Math.cos(angle) * speed;
+              this.trail = [];
+              this.corrupted = false;
+            }
+
+            update() {
+              // Standard Hamiltonian central force integration
+              const dx = centerX - this.x;
+              const dy = centerY - this.y;
+              const distSq = dx * dx + dy * dy;
+              const dist = Math.sqrt(distSq);
+
+              // Gravitational attractor force (central potential well)
+              let fx = (dx / dist) * (3.8 + simState.chaosIntensity);
+              let fy = (dy / dist) * (3.8 + simState.chaosIntensity);
+
+              // Apply manual user singularities forces
+              simState.attractors.forEach(att => {
+                const adx = att.x - this.x;
+                const ady = att.y - this.y;
+                const adist = Math.hypot(adx, ady) + 1;
+                
+                if (adist < 400) {
+                  const strength = (att.radius * 22) / (adist * 0.15 + 1);
+                  if (att.type === 'attract') {
+                    fx += (adx / adist) * strength;
+                    fy += (ady / adist) * strength;
+                  } else if (att.type === 'repel') {
+                    fx -= (adx / adist) * strength * 1.5;
+                    fy -= (ady / adist) * strength * 1.5;
+                  } else if (att.type === 'defector') {
+                    // Spiral tangential force
+                    fx += (-ady / adist) * strength * 1.2;
+                    fy += (adx / adist) * strength * 1.2;
+                  }
+                }
+              });
+
+              // Apply velocity updates
+              this.vx += fx;
+              this.vy += fy;
+
+              // Dampen standard speeds to maintain chaotic orbits
+              this.vx *= 0.985;
+              this.vy *= 0.985;
+
+              this.x += this.vx;
+              this.y += this.vy;
+
+              // Store trail history
+              this.trail.push({ x: this.x, y: this.y });
+              if (this.trail.length > 12) {
+                this.trail.shift();
+              }
+
+              // Vulnerability containment check against boundaries
+              if (this.x < 0 || this.x > 1920 || this.y < 0 || this.y > 1080) {
+                this.x = centerX + (Math.random() - 0.5) * 200;
+                this.y = centerY + (Math.random() - 0.5) * 200;
+                this.vx = (Math.random() - 0.5) * 10;
+                this.vy = (Math.random() - 0.5) * 10;
+              }
+            }
+
+            draw() {
+              // Draw orbital trails
+              if (this.trail.length > 1) {
+                ctx.strokeStyle = this.corrupted ? 'rgba(255, 0, 85, 0.12)' : 'rgba(0, 240, 255, 0.12)';
+                ctx.lineWidth = this.size * 0.4;
+                ctx.beginPath();
+                ctx.moveTo(this.trail[0].x, this.trail[0].y);
+                for (let i = 1; i < this.trail.length; i++) {
+                  ctx.lineTo(this.trail[i].x, this.trail[i].y);
+                }
+                ctx.stroke();
+              }
+
+              ctx.save();
+              ctx.shadowColor = this.color;
+              ctx.shadowBlur = this.corrupted ? 15 : 6;
+              ctx.fillStyle = this.color;
+
+              ctx.beginPath();
+              if (this.corrupted) {
+                // Chaotic diamonds
+                ctx.moveTo(this.x, this.y - this.size * 1.2);
+                ctx.lineTo(this.x + this.size * 1.2, this.y);
+                ctx.lineTo(this.x, this.y + this.size * 1.2);
+                ctx.lineTo(this.x - this.size * 1.2, this.y);
+              } else {
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+              }
+              ctx.fill();
+              ctx.restore();
+            }
+          }
+
+          // Exploit node vector
+          class Exploit {
+            constructor() {
+              // Spawn randomly off-screen
+              const angle = Math.random() * Math.PI * 2;
+              this.x = centerX + Math.cos(angle) * 1200;
+              this.y = centerY + Math.sin(angle) * 1200;
+              this.vx = -Math.cos(angle) * (2.8 + Math.random() * 2);
+              this.vy = -Math.sin(angle) * (2.8 + Math.random() * 2);
+              this.size = 10 + Math.random() * 8;
+              this.color = colors.exploit;
+              this.pulseAngle = Math.random() * 10;
+            }
+
+            update() {
+              // Chaotic drifting towards center core potential
+              const dx = centerX - this.x;
+              const dy = centerY - this.y;
+              const dist = Math.hypot(dx, dy);
+
+              this.vx += (dx / dist) * 0.12;
+              this.vy += (dy / dist) * 0.12;
+
+              // Apply attractor perturbation forces
+              simState.attractors.forEach(att => {
+                const adx = att.x - this.x;
+                const ady = att.y - this.y;
+                const adist = Math.hypot(adx, ady) + 1;
+                if (adist < 300) {
+                  // Repellers push exploits away intensely
+                  if (att.type === 'repel') {
+                    this.vx -= (adx / adist) * 1.8;
+                    this.vy -= (ady / adist) * 1.8;
+                  } else {
+                    this.vx += (adx / adist) * 0.4;
+                    this.vy += (ady / adist) * 0.4;
+                  }
+                }
+              });
+
+              this.x += this.vx;
+              this.y += this.vy;
+
+              // Collision checks with standard SymbolNodes
+              simState.nodes.forEach(node => {
+                if (!node.corrupted) {
+                  const dist = Math.hypot(node.x - this.x, node.y - this.y);
+                  if (dist < node.size + this.size) {
+                    node.corrupted = true;
+                    node.color = colors.exploit;
+                    simState.stability = Math.max(0, simState.stability - 4.5);
+                    logEvent(`[WARN] Node infected at (${Math.round(node.x)}, ${Math.round(node.y)})`, 'terminal-warn');
+                    
+                    // Explosion sparks
+                    for (let i = 0; i < 8; i++) {
+                      simState.particles.push(new Particle(
+                        node.x, 
+                        node.y, 
+                        (Math.random() - 0.5) * 6, 
+                        (Math.random() - 0.5) * 6, 
+                        colors.exploit, 
+                        8
+                      ));
+                    }
+                  }
+                }
+              });
+
+              // Exploit reached reactor core
+              const distCore = Math.hypot(centerX - this.x, centerY - this.y);
+              if (distCore < 120) {
+                simState.stability = Math.max(0, simState.stability - 12);
+                logEvent(`[CRIT] Central Hamiltonian core compromised by Exploit Vector!`, 'terminal-crit');
+                
+                // Nuclear sparks
+                for (let i = 0; i < 20; i++) {
+                  simState.particles.push(new Particle(
+                    this.x, 
+                    this.y, 
+                    (Math.random() - 0.5) * 10, 
+                    (Math.random() - 0.5) * 10, 
+                    '#ffffff', 
+                    12
+                  ));
+                }
+                return false;
+              }
+
+              return true;
+            }
+
+            draw() {
+              this.pulseAngle += 0.15;
+              const glowSize = this.size + Math.sin(this.pulseAngle) * 3;
+              
+              ctx.save();
+              ctx.shadowColor = colors.exploit;
+              ctx.shadowBlur = 18;
+              ctx.fillStyle = colors.exploit;
+
+              // Draw spiky hazard geometries
+              ctx.translate(this.x, this.y);
+              ctx.rotate(this.pulseAngle * 0.1);
+              ctx.beginPath();
+              for (let i = 0; i < 6; i++) {
+                const angle = (i * Math.PI) / 3;
+                ctx.lineTo(Math.cos(angle) * glowSize, Math.sin(angle) * glowSize);
+                ctx.lineTo(Math.cos(angle + 0.5) * (glowSize * 0.4), Math.sin(angle + 0.5) * (glowSize * 0.4));
+              }
+              ctx.closePath();
+              ctx.fill();
+              ctx.restore();
+            }
+          }
+
+          // Dynamic Manual Attractors / Potential Fields
+          class Attractor {
+            constructor(x, y, type) {
+              this.x = x;
+              this.y = y;
+              this.type = type;
+              this.radius = 40;
+              this.life = 260; // persists for ~5 seconds
+              this.maxLife = 260;
+              this.pulse = 0;
+            }
+
+            update() {
+              this.life--;
+              this.pulse += 0.08;
+              
+              // Pulsing radius animation
+              this.radius = 28 + Math.sin(this.pulse) * 4;
+
+              // Precision laser alignment from center core to the attractor
+              if (this.life > 0) {
+                // Apply occasional field healing to nearby infected nodes
+                simState.nodes.forEach(node => {
+                  if (node.corrupted) {
+                    const dist = Math.hypot(node.x - this.x, node.y - this.y);
+                    if (dist < 120 && Math.random() > 0.95) {
+                      node.corrupted = false;
+                      node.color = colors.cyan;
+                      simState.stability = Math.min(100, simState.stability + 3);
+                      logEvent(`[REPAIR] Attractor realigned node at 0x${Math.floor(node.x).toString(16)}`, 'terminal-ok');
+                      
+                      // Cyber sparks
+                      for (let i = 0; i < 5; i++) {
+                        simState.particles.push(new Particle(
+                          node.x, node.y, 
+                          (Math.random() - 0.5) * 4, 
+                          (Math.random() - 0.5) * 4, 
+                          colors.cyan, 6
+                        ));
+                      }
+                    }
+                  }
+                });
+              }
+
+              return this.life > 0;
+            }
+
+            draw() {
+              const pct = this.life / this.maxLife;
+              ctx.save();
+              ctx.shadowColor = this.type === 'attract' ? colors.cyan : this.type === 'repel' ? colors.exploit : colors.amber;
+              ctx.shadowBlur = 20 * pct;
+              
+              // Semi-transparent field boundary
+              ctx.strokeStyle = this.type === 'attract' ? 'rgba(0, 240, 255, 0.4)' : this.type === 'repel' ? 'rgba(255, 0, 85, 0.4)' : 'rgba(255, 170, 0, 0.4)';
+              ctx.lineWidth = 1.5;
+              ctx.beginPath();
+              ctx.arc(this.x, this.y, this.radius * 2.2, 0, Math.PI * 2);
+              ctx.stroke();
+
+              // Solid node core
+              ctx.fillStyle = this.type === 'attract' ? colors.cyan : this.type === 'repel' ? colors.exploit : colors.amber;
+              ctx.beginPath();
+              ctx.arc(this.x, this.y, this.radius * 0.6 * pct, 0, Math.PI * 2);
+              ctx.fill();
+
+              // Geometric orbital boundary lines
+              ctx.strokeStyle = '#ffffff';
+              ctx.lineWidth = 2 * pct;
+              ctx.beginPath();
+              ctx.arc(this.x, this.y, this.radius * 1.1, 0, Math.PI * 2);
+              ctx.stroke();
+
+              ctx.restore();
+            }
+          }
+
+          // Laser lines
+          class LaserBeam {
+            constructor(x1, y1, x2, y2, color, duration = 12) {
+              this.x1 = x1;
+              this.y1 = y1;
+              this.x2 = x2;
+              this.y2 = y2;
+              this.color = color;
+              this.life = duration;
+              this.maxLife = duration;
+            }
+            update() {
+              this.life--;
+              return this.life > 0;
+            }
+            draw() {
+              const pct = this.life / this.maxLife;
+              ctx.save();
+              ctx.shadowColor = this.color;
+              ctx.shadowBlur = 20;
+              ctx.strokeStyle = this.color;
+              ctx.lineWidth = 5 * pct;
+              ctx.beginPath();
+              ctx.moveTo(this.x1, this.y1);
+              ctx.lineTo(this.x2, this.y2);
+              ctx.stroke();
+              
+              // Thermal core line
+              ctx.strokeStyle = '#ffffff';
+              ctx.lineWidth = 1.5 * pct;
+              ctx.beginPath();
+              ctx.moveTo(this.x1, this.y1);
+              ctx.lineTo(this.x2, this.y2);
+              ctx.stroke();
+              ctx.restore();
+            }
+          }
+
+          // Particle sparks
+          class Particle {
+            constructor(x, y, vx, vy, color, size) {
+              this.x = x;
+              this.y = y;
+              this.vx = vx;
+              this.vy = vy;
+              this.color = color;
+              this.size = size;
+              this.maxLife = Math.random() * 25 + 15;
+              this.life = this.maxLife;
+            }
+
+            update() {
+              this.x += this.vx;
+              this.y += this.vy;
+              this.vx *= 0.96;
+              this.vy *= 0.96;
+              this.life--;
+              return this.life > 0;
+            }
+
+            draw() {
+              const pct = this.life / this.maxLife;
+              ctx.save();
+              ctx.globalAlpha = pct;
+              ctx.shadowColor = this.color;
+              ctx.shadowBlur = 8;
+              ctx.fillStyle = this.color;
+              ctx.beginPath();
+              ctx.arc(this.x, this.y, this.size * pct, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.restore();
+            }
+          }
+
+          // Spawn Orbital Nodes in beautiful concentric ring setups
+          for (let i = 0; i < simState.maxOrbitals; i++) {
+            const angle = (i * Math.PI * 2) / 30;
+            const r = 260 + Math.floor(i / 15) * 90 + Math.random() * 30;
+            const speed = 2.4 + (400 / r) * 1.8;
+            simState.nodes.push(new SymbolNode(r, speed, angle));
+          }
+
+          // Initial terminal telemetry
+          logEvent("HAMILTONIAN KINETIC FIELD INITIATED", "terminal-ok");
+          logEvent("ZKAEDI PRIME Attractor matrix online", "terminal-ok");
+          logEvent("Reactor cores locked. Parity validation active.");
+
+          // Attack sweeps / clicks triggering potential singular fields
+          canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const px = ((e.clientX - rect.left) / rect.width) * canvas.width;
+            const py = ((e.clientY - rect.top) / rect.height) * canvas.height;
+
+            // Deploy dynamic singularity based on active selection
+            simState.attractors.push(new Attractor(px, py, simState.attractorMode));
+            
+            // Log interaction
+            logEvent(`Deployed ${simState.attractorMode.toUpperCase()} field node at (${Math.round(px)}, ${Math.round(py)})`, "terminal-ok");
+
+            // Draw alignment beam from core to the projected node
+            simState.lasers.push(new LaserBeam(centerX, centerY, px, py, colors.cyan, 18));
+
+            // Explode sparks on click vector
+            const activeColor = simState.attractorMode === 'attract' ? colors.cyan : simState.attractorMode === 'repel' ? colors.exploit : colors.amber;
+            for (let i = 0; i < 15; i++) {
+              const angle = Math.random() * Math.PI * 2;
+              const spd = 2 + Math.random() * 5;
+              simState.particles.push(new Particle(
+                px, py, 
+                Math.cos(angle) * spd, 
+                Math.sin(angle) * spd, 
+                activeColor, 
+                10
+              ));
+            }
+
+            // Click shockwaves directly disintegrate nearby exploits
+            simState.exploits = simState.exploits.filter(exp => {
+              const dist = Math.hypot(exp.x - px, exp.y - py);
+              if (dist < 140) {
+                // Dissolve exploit
+                simState.score += 250;
+                logEvent(`[VACCINE] Dissolved buffer vulnerability node! (+250)`, "terminal-ok");
+                
+                // Exploding exploit sparks
+                for (let i = 0; i < 18; i++) {
+                  simState.particles.push(new Particle(
+                    exp.x, exp.y, 
+                    (Math.random() - 0.5) * 8, 
+                    (Math.random() - 0.5) * 8, 
+                    colors.exploit, 
+                    10
+                  ));
+                }
+                return false;
+              }
+              return true;
+            });
+          });
+
+          // Attractor mode toggle buttons
+          const btnAttract = document.getElementById('btn-mode-attract');
+          const btnRepel = document.getElementById('btn-mode-repel');
+          const btnShield = document.getElementById('btn-mode-shield');
+          const modeLabel = document.getElementById('click-mode-label');
+
+          btnAttract.addEventListener('click', () => {
+            simState.attractorMode = 'attract';
+            modeLabel.innerText = "SPAWN ATTRACTION FIELD";
+            modeLabel.style.color = colors.cyan;
+            btnAttract.className = "action-btn action-btn-active";
+            btnRepel.className = "action-btn";
+            btnShield.className = "action-btn";
+          });
+
+          btnRepel.addEventListener('click', () => {
+            simState.attractorMode = 'repel';
+            modeLabel.innerText = "SPAWN REPELLING DISCHARGE";
+            modeLabel.style.color = colors.exploit;
+            btnAttract.className = "action-btn";
+            btnRepel.className = "action-btn action-btn-active";
+            btnShield.className = "action-btn";
+          });
+
+          btnShield.addEventListener('click', () => {
+            simState.attractorMode = 'defector';
+            modeLabel.innerText = "SPAWN ROTATING PHASE VECTOR";
+            modeLabel.style.color = colors.amber;
+            btnAttract.className = "action-btn";
+            btnRepel.className = "action-btn";
+            btnShield.className = "action-btn action-btn-active";
+          });
+
+          // Action buttons mechanics
+          document.getElementById('btn-perturb').addEventListener('click', () => {
+            simState.chaosIntensity = Math.min(0.5, simState.chaosIntensity + 0.08);
+            simState.lyapunov += 0.05 + Math.random() * 0.08;
+            logEvent(`[SEC] Perturbed chaotic orbits! Chaos intensity: ${simState.chaosIntensity.toFixed(2)}`, "terminal-warn");
+
+            // Apply randomized forces on all particles
+            simState.nodes.forEach(node => {
+              node.vx += (Math.random() - 0.5) * 15;
+              node.vy += (Math.random() - 0.5) * 15;
+            });
+
+            // Energy flash visual
+            simState.lasers.push(new LaserBeam(centerX - 100, centerY, centerX + 100, centerY, '#ffffff', 24));
+          });
+
+          document.getElementById('btn-realign').addEventListener('click', () => {
+            simState.stability = 100.0;
+            simState.chaosIntensity = 0.05;
+            simState.lyapunov = 0.3842;
+            
+            logEvent("[SEC] COMPILER COHERENT REALIGNMENT EXECUTED", "terminal-ok");
+            
+            // Clean infected nodes
+            simState.nodes.forEach(node => {
+              node.corrupted = false;
+              node.color = colors.cyan;
+              // Re-orbit standard concentric tracks
+              const dx = node.x - centerX;
+              const dy = node.y - centerY;
+              const angle = Math.atan2(dy, dx);
+              const r = Math.hypot(dx, dy);
+              const spd = 2.4 + (400 / r) * 1.8;
+              node.vx = -Math.sin(angle) * spd;
+              node.vy = Math.cos(angle) * spd;
+            });
+
+            // Massive radial realignment lasers
+            for (let i = 0; i < 8; i++) {
+              const angle = (i * Math.PI) / 4;
+              simState.lasers.push(new LaserBeam(
+                centerX, centerY, 
+                centerX + Math.cos(angle) * 800, 
+                centerY + Math.sin(angle) * 800, 
+                colors.green, 25
+              ));
+            }
+          });
+
+          // Standard Simulation / Game loop
+          function loop() {
+            simState.ticks++;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. Draw central reactor (Core potential well)
+            ctx.save();
+            ctx.shadowColor = colors.magenta;
+            ctx.shadowBlur = 35 + Math.sin(simState.ticks * 0.08) * 10;
+            
+            const radius = 120 + Math.sin(simState.ticks * 0.08) * 8;
+            const coreGrad = ctx.createRadialGradient(centerX, centerY, 10, centerX, centerY, radius);
+            coreGrad.addColorStop(0, '#ffffff');
+            coreGrad.addColorStop(0.25, colors.magenta);
+            coreGrad.addColorStop(0.7, '#240d4a');
+            coreGrad.addColorStop(1, 'transparent');
+            
+            ctx.fillStyle = coreGrad;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Dynamic geometric lock outlines
+            ctx.strokeStyle = colors.cyan;
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([20, 10]);
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius - 15, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.restore();
+
+            // 2. Update and draw Manual Attractors
+            simState.attractors = simState.attractors.filter(att => {
+              const keep = att.update();
+              att.draw();
+              return keep;
+            });
+
+            // 3. Update and draw Nodes
+            simState.nodes.forEach(node => {
+              node.update();
+              node.draw();
+            });
+
+            // 4. Update and draw Exploit attackers
+            simState.exploits = simState.exploits.filter(exp => {
+              const keep = exp.update();
+              if (keep) exp.draw();
+              return keep;
+            });
+
+            // 5. Update and draw Particle explosions
+            simState.particles = simState.particles.filter(p => {
+              const keep = p.update();
+              p.draw();
+              return keep;
+            });
+
+            // 6. Update and draw lasers
+            simState.lasers = simState.lasers.filter(laser => {
+              const keep = laser.update();
+              laser.draw();
+              return keep;
+            });
+
+            // 7. Dynamic threat generation
+            if (simState.ticks % 70 === 0 && simState.stability > 0) {
+              simState.exploits.push(new Exploit());
+              logEvent("Detected incoming compiler exploit packet!", "terminal-crit");
+            }
+
+            // 8. Dynamic Lyapunov metric oscillation
+            if (simState.ticks % 10 === 0) {
+              const drift = (Math.random() - 0.5) * 0.02;
+              simState.lyapunov = Math.max(0.1, simState.lyapunov + drift);
+              
+              // Calculate global energy Hamiltonian (Kinetic sum)
+              let totalK = 0;
+              simState.nodes.forEach(n => {
+                totalK += 0.5 * (n.vx * n.vx + n.vy * n.vy);
+              });
+              simState.energy = totalK / 1000;
+            }
+
+            // 9. Render HUD UI components
+            document.getElementById('val-hamiltonian').innerText = `${simState.energy.toFixed(4)} eV`;
+            document.getElementById('val-lyapunov').innerText = `+${simState.lyapunov.toFixed(4)}`;
+            document.getElementById('val-stability').innerText = `${simState.stability.toFixed(1)}%`;
+            document.getElementById('bar-stability-fill').style.width = `${simState.stability}%`;
+
+            // Draw scrolling phase portrait of first Node
+            if (simState.nodes.length > 0) {
+              const mainNode = simState.nodes[0];
+              updatePhasePortrait(
+                (mainNode.x - centerX) / 400, 
+                mainNode.vx / 12
+              );
+            }
+
+            // Orbital node count status updates
+            const infectedCount = simState.nodes.filter(n => n.corrupted).length;
+            const healthyCount = simState.nodes.length - infectedCount;
+            document.getElementById('node-count-badge').innerText = `${healthyCount}/${simState.nodes.length} SHIELDS`;
+            
+            // Set dynamic badges classes
+            const badge = document.getElementById('sys-status-badge');
+            if (simState.stability > 70) {
+              badge.innerText = "STABLE";
+              badge.className = "badge badge-green";
+            } else if (simState.stability > 30) {
+              badge.innerText = "CHAOTIC";
+              badge.className = "badge badge-cyan";
+            } else {
+              badge.innerText = "CRITICAL";
+              badge.className = "badge badge-magenta";
+            }
+
+            const stateIndicator = document.getElementById('matrix-state-indicator');
+            if (simState.stability > 70) {
+              stateIndicator.innerText = "COHERENT ORBIT SYSTEM";
+              stateIndicator.style.color = colors.cyan;
+            } else if (simState.stability > 30) {
+              stateIndicator.innerText = "PHASE TRANSITION WARNING";
+              stateIndicator.style.color = colors.amber;
+            } else {
+              stateIndicator.innerText = "CORE DECOHERENCE WARNING";
+              stateIndicator.style.color = colors.exploit;
+            }
+
+            // Loop checking
+            if (simState.stability > 0) {
+              requestAnimationFrame(loop);
+            } else {
+              // Core Collapse Matrix Screen
+              ctx.fillStyle = 'rgba(4, 2, 12, 0.9)';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+              ctx.shadowColor = colors.exploit;
+              ctx.shadowBlur = 30;
+              ctx.fillStyle = colors.exploit;
+              ctx.font = '900 68px Courier New';
+              ctx.textAlign = 'center';
+              ctx.fillText("MATRIX COLLAPSE DETECTED", centerX, centerY - 40);
+
+              ctx.fillStyle = '#ffffff';
+              ctx.font = 'bold 22px Courier New';
+              ctx.fillText("SYSTEM DISSOLVED INTO FULL THERMAL ENTROPY", centerX, centerY + 20);
+              
+              ctx.font = '16px Courier New';
+              ctx.fillStyle = colors.cyan;
+              ctx.fillText("EXECUTE REALIGNMENT BY CLICKING THE SIDEBAR CONTROL", centerX, centerY + 65);
+
+              stateIndicator.innerText = "FATAL DECOHERENCE SHUTDOWN";
+              stateIndicator.style.color = colors.exploit;
+              logEvent("[ERR] SYSTEM DECOHERENCE COMPLETE. REALIGNMENT REQUIRED.", "terminal-crit");
+            }
+          }
+
+          // Launch Loop
+          requestAnimationFrame(loop);
+        })();
+        ]]>
+      </script>
+    </div>
+  </foreignObject>
+</svg>

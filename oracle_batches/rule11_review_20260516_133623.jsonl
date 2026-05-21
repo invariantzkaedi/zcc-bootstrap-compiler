@@ -1,0 +1,1 @@
+{"contract": "contract_36735.c", "score": 18, "oracle_reasoning": "The calculation `t23 = t9 - t12` can overflow, leading to an out-of-bounds SSTORE index. This is not guarded by any access control check.", "rule11_triggered": true, "ts": "2026-05-16T21:53:26.904553+00:00"}

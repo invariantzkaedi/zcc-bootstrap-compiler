@@ -1,0 +1,62 @@
+{
+  "generated_at": "2026-05-16T20:32:03.057135+00:00",
+  "pipeline_config": {
+    "min_score": 12,
+    "max_contracts": 200,
+    "confidence_threshold": 0.65,
+    "model": "H:\\agents\\Gemma2_Omega_Supreme_Q4_K_M.gguf"
+  },
+  "stats": {
+    "total_input": 200,
+    "processed": 200,
+    "oracle_vulnerable": 182,
+    "oracle_clean": 17,
+    "oracle_uncertain": 1,
+    "ground_truth_labeled": 199,
+    "skipped_no_source": 0,
+    "errors": 0,
+    "elapsed_seconds": 10034.3,
+    "contracts_per_second": 0.02
+  },
+  "pattern_reliability": {
+    "UNCHECKED_SSTORE": {
+      "oracle_confirms": 182,
+      "oracle_rejects": 17,
+      "total": 199,
+      "reliability": 0.915,
+      "signal": "HIGH"
+    },
+    "ARITH_OVERFLOW": {
+      "oracle_confirms": 182,
+      "oracle_rejects": 17,
+      "total": 199,
+      "reliability": 0.915,
+      "signal": "HIGH"
+    },
+    "SSTORE_PATTERN": {
+      "oracle_confirms": 182,
+      "oracle_rejects": 17,
+      "total": 199,
+      "reliability": 0.915,
+      "signal": "HIGH"
+    },
+    "MOD_ARITHMETIC": {
+      "oracle_confirms": 24,
+      "oracle_rejects": 8,
+      "total": 32,
+      "reliability": 0.75,
+      "signal": "HIGH"
+    },
+    "MEM_READ_WRITE": {
+      "oracle_confirms": 3,
+      "oracle_rejects": 0,
+      "total": 3,
+      "reliability": 1.0,
+      "signal": "HIGH"
+    }
+  },
+  "output_files": {
+    "validated_corpus": "G:\\zccMAIN\\zcc\\mega_oracle_validated.jsonl",
+    "html_report": "G:\\zccMAIN\\zcc\\oracle_pipeline_report.json"
+  }
+}

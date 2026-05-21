@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>🔱 ZKAEDI NORMAL CHECKER</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/three@0.134.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
+<style>
+:root{--navy:#0A0E1A;--navy2:#0D1225;--cyan:#00D4FF;--mag:#FF006E;--gold:#FFD700;--green:#00FF88;--text:#E2E8F0;--muted:#475569;--border:rgba(0,212,255,.18);--font:'Space Mono',monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--navy);color:var(--text);font-family:var(--font);display:flex;flex-direction:column}
+#hdr{height:46px;flex-shrink:0;background:var(--navy2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 14px;background-image:linear-gradient(rgba(0,212,255,.03)1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.03)1px,transparent 1px);background-size:32px 32px}
+.logo{color:var(--cyan);font-size:12px;font-weight:700;letter-spacing:5px}
+.sub{color:var(--muted);font-size:10px;letter-spacing:2px}
+#main{display:flex;flex:1;overflow:hidden}
+#vp3d{flex:1;position:relative;border-right:1px solid var(--border)}
+#panel{width:300px;flex-shrink:0;background:var(--navy2);border-left:1px solid var(--border);overflow-y:auto;background-image:linear-gradient(rgba(0,212,255,.025)1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.025)1px,transparent 1px);background-size:28px 28px}
+.sec{padding:12px;border-bottom:1px solid rgba(0,212,255,.09)}
+.sec h3{font-size:9px;color:var(--muted);letter-spacing:3px;margin-bottom:10px;text-transform:uppercase}
+.btn{width:100%;padding:8px;background:rgba(0,212,255,.06);color:var(--cyan);border:1px solid var(--border);font-family:var(--font);font-size:10px;cursor:pointer;margin-bottom:8px;font-weight:700;letter-spacing:2px}
+.btn:hover:not(:disabled){background:rgba(0,212,255,.15)}
+.btn:disabled{opacity:0.3;cursor:not-allowed}
+.btn.crit{color:var(--mag);border-color:rgba(255,0,110,.4)}
+.btn.crit:hover:not(:disabled){background:rgba(255,0,110,.1)}
+.sgrid{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:10px}
+.sl{color:var(--muted)}.sv{text-align:right;color:var(--text)}
+.sv.warn{color:var(--gold)}.sv.crit{color:var(--mag)}.sv.ok{color:var(--green)}
+#log{font-size:10px;color:var(--muted);height:150px;overflow-y:auto}
+.log-e{padding:2px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+</style>
+</head><body>
+<div id="hdr"><span class="logo">🔱 ZKAEDI</span><span class="sub">NORMAL CHECKER</span></div>
+<div id="main">
+  <div id="vp3d"></div>
+  <div id="panel">
+    <div class="sec">
+      <h3>Actions</h3>
+      <button class="btn" onclick="document.getElementById('fi').click()">OPEN GLB</button>
+      <button class="btn crit" id="btn-flip" onclick="flipInverted()" disabled>FLIP INVERTED NORMALS</button>
+      <input type="file" id="fi" accept=".glb,.gltf" style="display:none" onchange="loadFile(event)">
+    </div>
+    <div class="sec">
+      <h3>Stats</h3>
+      <div class="sgrid">
+        <span class="sl">Faces</span><span class="sv" id="st-faces">—</span>
+        <span class="sl">Inverted</span><span class="sv" id="st-inv">—</span>
+      </div>
+    </div>
+    <div class="sec"><h3>Log</h3><div id="log"></div></div>
+  </div>
+</div>
+<script>
+const logEl=document.getElementById('log');
+function log(m,c=''){logEl.innerHTML+=`<div class="log-e" style="color:var(--${c||'muted'})">${m}</div>`;logEl.scrollTop=logEl.scrollHeight}
+const scene=new THREE.Scene();scene.fog=new THREE.Fog(0x0A0E1A,5,50);
+const camera=new THREE.PerspectiveCamera(50,1,0.1,100);camera.position.z=5;
+const renderer=new THREE.WebGLRenderer({antialias:true});
+document.getElementById('vp3d').appendChild(renderer.domElement);
+scene.add(new THREE.AmbientLight(0x223344));
+const dl=new THREE.DirectionalLight(0x00D4FF,1);dl.position.set(2,5,2);scene.add(dl);
+const vp3d=document.getElementById('vp3d');
+let meshGrp=new THREE.Group();scene.add(meshGrp);
+
+function resize(){
+  const w=vp3d.clientWidth,h=vp3d.clientHeight;
+  renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();
+}
+window.addEventListener('resize',resize);resize();
+
+let isDragging=false, px=0, py=0, theta=0, phi=0.5, radius=5;
+renderer.domElement.addEventListener('mousedown',e=>{isDragging=true;px=e.clientX;py=e.clientY});
+window.addEventListener('mouseup',()=>isDragging=false);
+window.addEventListener('mousemove',e=>{
+  if(!isDragging)return;
+  theta-=(e.clientX-px)*0.01; phi=Math.max(0.1,Math.min(Math.PI/2-0.1, phi+(e.clientY-py)*0.01));
+  px=e.clientX; py=e.clientY;
+});
+renderer.domElement.addEventListener('wheel',e=>radius+=e.deltaY*0.01);
+
+function render(){
+  requestAnimationFrame(render);
+  camera.position.x=radius*Math.sin(theta)*Math.cos(phi);
+  camera.position.y=radius*Math.sin(phi);
+  camera.position.z=radius*Math.cos(theta)*Math.cos(phi);
+  camera.lookAt(0,0,0);
+  renderer.render(scene,camera);
+}
+render();
+
+let S={geo:null, inverted:[]};
+
+function loadFile(e){
+  const f=e.target.files[0];if(!f)return;
+  log(`Loading ${f.name}...`,'cyan');
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    new THREE.GLTFLoader().parse(ev.target.result,'',gltf=>{
+      meshGrp.clear();
+      let geo=null;
+      gltf.scene.traverse(c=>{if(c.isMesh&&!geo)geo=c.geometry.clone()});
+      if(!geo){log('No mesh found','mag');return;}
+      if(!geo.index){
+        const pos=geo.attributes.position.array;
+        const idx=new Uint32Array(pos.length/3);
+        for(let i=0;i<idx.length;i++)idx[i]=i;
+        geo.setIndex(new THREE.BufferAttribute(idx,1));
+      }
+      S.geo=geo;
+      meshGrp.add(new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:0x00D4FF,roughness:0.3,metalness:0.4,side:THREE.DoubleSide})));
+      analyzeNormals();
+    },err=>log('Load error','mag'));
+  };
+  reader.readAsArrayBuffer(f);
+}
+
+function analyzeNormals(){
+  const geo=S.geo;
+  const pos=geo.attributes.position.array;
+  geo.computeVertexNormals();
+  const norm=geo.attributes.normal.array;
+  const idx=geo.index.array;
+  const numFaces=idx.length/3;
+  
+  S.inverted=[];
+  const lines=[];
+  
+  for(let f=0;f<numFaces;f++){
+    const a=idx[f*3], b=idx[f*3+1], c=idx[f*3+2];
+    const pA=new THREE.Vector3(pos[a*3],pos[a*3+1],pos[a*3+2]);
+    const pB=new THREE.Vector3(pos[b*3],pos[b*3+1],pos[b*3+2]);
+    const pC=new THREE.Vector3(pos[c*3],pos[c*3+1],pos[c*3+2]);
+    const cb=new THREE.Vector3().subVectors(pC,pB);
+    const ab=new THREE.Vector3().subVectors(pA,pB);
+    const faceNorm=new THREE.Vector3().crossVectors(cb,ab).normalize();
+    
+    const vNormA=new THREE.Vector3(norm[a*3],norm[a*3+1],norm[a*3+2]);
+    if(faceNorm.dot(vNormA) < -0.1){
+      S.inverted.push(f);
+    }
+    
+    const center=new THREE.Vector3().addVectors(pA,pB).add(pC).divideScalar(3);
+    lines.push(center.x,center.y,center.z);
+    lines.push(center.x+faceNorm.x*0.2, center.y+faceNorm.y*0.2, center.z+faceNorm.z*0.2);
+  }
+  
+  const lineGeo=new THREE.BufferGeometry();
+  lineGeo.setAttribute('position',new THREE.Float32BufferAttribute(lines,3));
+  meshGrp.add(new THREE.LineSegments(lineGeo,new THREE.LineBasicMaterial({color:0xFF006E})));
+  
+  document.getElementById('st-faces').textContent=numFaces;
+  document.getElementById('st-inv').textContent=S.inverted.length;
+  document.getElementById('st-inv').className='sv '+(S.inverted.length>0?'crit':'ok');
+  document.getElementById('btn-flip').disabled=S.inverted.length===0;
+  
+  log(`Analyzed ${numFaces} faces. ${S.inverted.length} inverted.`,'cyan');
+}
+
+function flipInverted(){
+  if(!S.geo || S.inverted.length===0)return;
+  const idx=S.geo.index.array;
+  for(const f of S.inverted){
+    const tmp=idx[f*3+1];
+    idx[f*3+1]=idx[f*3+2];
+    idx[f*3+2]=tmp;
+  }
+  S.geo.index.needsUpdate=true;
+  meshGrp.clear();
+  meshGrp.add(new THREE.Mesh(S.geo,new THREE.MeshStandardMaterial({color:0x00FF88,roughness:0.3,metalness:0.4,side:THREE.DoubleSide})));
+  log(`Flipped ${S.inverted.length} normals.`,'green');
+  analyzeNormals(); // recheck
+}
+</script>
+</body></html>

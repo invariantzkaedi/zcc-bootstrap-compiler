@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G61",
+    "name": "Codegen Mutation G61 [dead_move_elim]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-9",
+    "lineage_hash": "0fa545e859ec5d8e",
+    "island_id": 9
+  },
+  "mutations": [
+    {
+      "name": "dead_move_elim",
+      "category": "PEEPHOLE",
+      "description": "Remove dead movq to %rax (overwritten at +1)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -20,
+    "inst_count_delta": 117820,
+    "score_delta": -10.47768499981612,
+    "composite_score": 1257407.7498869998
+  },
+  "timestamp": "2026-04-20T13:34:29.868940+00:00",
+  "generation": 61
+}

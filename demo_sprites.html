@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔱 ZKAEDI VMAX: 3D Exploit Topology Sprite Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #030106;
+            --card-bg: #09060f;
+            --accent-cyan: #00ffcc;
+            --accent-pink: #ff007f;
+            --accent-orange: #ffaa00;
+            --text-primary: #f3f0f7;
+            --text-secondary: #8b8599;
+            --border-color: #1a1426;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: 'Outfit', sans-serif;
+            padding: 3rem 2rem;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Subtle glowing grid background overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: 
+                linear-gradient(rgba(26, 20, 38, 0.15) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(26, 20, 38, 0.15) 1px, transparent 1px);
+            background-size: 40px 40px;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .header {
+            max-width: 1280px;
+            margin: 0 auto 3rem auto;
+            text-align: center;
+            border-bottom: 1.5px solid var(--border-color);
+            padding-bottom: 2rem;
+        }
+
+        .header h1 {
+            font-size: 2.8rem;
+            font-weight: 800;
+            letter-spacing: -0.05em;
+            background: linear-gradient(135deg, var(--text-primary) 30%, var(--accent-pink) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.95rem;
+            color: var(--accent-cyan);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+        }
+
+        .grid-container {
+            max-width: 1280px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: 2.5rem;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1.5px solid var(--border-color);
+            border-radius: 16px;
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+            position: relative;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 16px;
+            box-shadow: 0 0 30px rgba(0, 255, 204, 0.03);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            pointer-events: none;
+        }
+
+        .card:hover {
+            transform: translateY(-8px);
+            border-color: rgba(0, 255, 204, 0.3);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .card:hover::before {
+            opacity: 1;
+        }
+
+        .sprite-wrapper {
+            position: relative;
+            width: 100%;
+            padding-bottom: 100%; /* Perfect Square Aspect Ratio */
+            background-color: #020104;
+        }
+
+        .sprite-wrapper svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .card-info {
+            padding: 1.5rem;
+            border-top: 1.5px solid var(--border-color);
+        }
+
+        .card-info h3 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+            letter-spacing: -0.02em;
+        }
+
+        .card-info p {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            margin-bottom: 1rem;
+        }
+
+        .tag-panel {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .tag {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.75rem;
+            padding: 0.3rem 0.7rem;
+            border-radius: 4px;
+            font-weight: bold;
+            letter-spacing: 0.05em;
+        }
+
+        .tag-sec {
+            background-color: rgba(26, 20, 38, 0.5);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        .tag-glow {
+            background-color: rgba(0, 255, 204, 0.05);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(0, 255, 204, 0.2);
+        }
+
+        .footer {
+            max-width: 1280px;
+            margin: 4rem auto 0 auto;
+            text-align: center;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            border-top: 1.5px solid var(--border-color);
+            padding-top: 2rem;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Load the SVG sprite sheet invisibly into the DOM -->
+    <div id="sprite-container" style="display: none;"></div>
+
+    <header class="header">
+        <h1>🔱 ZKAEDI VMAX PORTAL</h1>
+        <p>3D Volumetric Exploit Topology Sprite Matrix</p>
+    </header>
+
+    <main class="grid-container">
+
+        <!-- 1. Reentrancy -->
+        <article class="card">
+            <div class="sprite-wrapper">
+                <svg><use href="#reentrancy"/></svg>
+            </div>
+            <div class="card-info">
+                <h3>01. Reentrancy Attractor</h3>
+                <p>Volumetric trace of recursive re-entrant call routing with PGO block weight layouts and Koch Snowflake shield.</p>
+                <div class="tag-panel">
+                    <span class="tag tag-glow">SEV: CRITICAL</span>
+                    <span class="tag tag-sec">SWIFT-FLOW</span>
+                </div>
+            </div>
+        </article>
+
+        <!-- 2. Flashloan -->
+        <article class="card">
+            <div class="sprite-wrapper">
+                <svg><use href="#flashloan"/></svg>
+            </div>
+            <div class="card-info">
+                <h3>02. Flashloan Vortex</h3>
+                <p>Arbitrage vortex depicting a major borrow repayment cycle with multi-dex swap flow and expanding liquidity waves.</p>
+                <div class="tag-panel">
+                    <span class="tag tag-glow">SEV: HIGH</span>
+                    <span class="tag tag-sec">ARBITRAGE</span>
+                </div>
+            </div>
+        </article>
+
+        <!-- 3. Governance -->
+        <article class="card">
+            <div class="sprite-wrapper">
+                <svg><use href="#governance"/></svg>
+            </div>
+            <div class="card-info">
+                <h3>03. Governance Takeover</h3>
+                <p>DAO vote manipulation mapping with malicious proposal execution paths shielded by spiky Menger Sponge sub-geometry.</p>
+                <div class="tag-panel">
+                    <span class="tag tag-glow">SEV: CRITICAL</span>
+                    <span class="tag tag-sec">DAO-BYPASS</span>
+                </div>
+            </div>
+        </article>
+
+        <!-- 4. Frontrun -->
+        <article class="card">
+            <div class="sprite-wrapper">
+                <svg><use href="#frontrun"/></svg>
+            </div>
+            <div class="card-info">
+                <h3>04. MEV Sandwich</h3>
+                <p>Sandwich attack twin-helix orbit showing attacker buy/sell routes trapping victim slippage boundaries.</p>
+                <div class="tag-panel">
+                    <span class="tag tag-glow">SEV: MEDIUM</span>
+                    <span class="tag tag-sec">MEV-SANDWICH</span>
+                </div>
+            </div>
+        </article>
+
+        <!-- 5. Overflow -->
+        <article class="card">
+            <div class="sprite-wrapper">
+                <svg><use href="#overflow"/></svg>
+            </div>
+            <div class="card-info">
+                <h3>05. Integer Overflow</h3>
+                <p>Math hub integer wrapping trace showing a supernova-pulsing Mandelbulb fractal core expanding under arithmetic overload.</p>
+                <div class="tag-panel">
+                    <span class="tag tag-glow">SEV: HIGH</span>
+                    <span class="tag tag-sec">UNCHECKED-MATH</span>
+                </div>
+            </div>
+        </article>
+
+        <!-- 6. Honeypot -->
+        <article class="card">
+            <div class="sprite-wrapper">
+                <svg><use href="#honeypot"/></svg>
+            </div>
+            <div class="card-info">
+                <h3>06. Honeypot Trap</h3>
+                <p>Bait contract trap with a subtractive Menger Sponge central cavity routing lockouts to user exits.</p>
+                <div class="tag-panel">
+                    <span class="tag tag-glow">SEV: HIGH</span>
+                    <span class="tag tag-sec">HONEYPOT</span>
+                </div>
+            </div>
+        </article>
+
+    </main>
+
+    <footer class="footer">
+        <p>🔱 SYSTEM SECURED VIA DETECT-VERIFY-VACCINATE MATRIX // ASSEMBLY SELF-HOST DETERMINISTIC</p>
+    </footer>
+
+    <script>
+        // Fetch and inject sprite sheet dynamically to ensure local file path works cleanly in browsers
+        fetch('zcc_sprites.svg')
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById('sprite-container').innerHTML = data;
+            });
+    </script>
+</body>
+</html>

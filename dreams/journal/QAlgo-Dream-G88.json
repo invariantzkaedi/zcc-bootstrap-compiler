@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G88",
+    "name": "Codegen Mutation G88 [schedule_war_pair]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-7",
+    "lineage_hash": "6c20c291d1308a1c",
+    "island_id": 7
+  },
+  "mutations": [
+    {
+      "name": "schedule_war_pair",
+      "category": "SCHEDULE",
+      "description": "Swap independent pair to reduce WAR pipeline stall",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": 0,
+    "inst_count_delta": 117819,
+    "score_delta": -0.9744309999514371,
+    "composite_score": 1257399.4976909999
+  },
+  "timestamp": "2026-04-20T13:39:32.162179+00:00",
+  "generation": 88
+}

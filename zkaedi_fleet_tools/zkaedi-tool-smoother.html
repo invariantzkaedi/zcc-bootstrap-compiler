@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>🔱 ZKAEDI MESH SMOOTHER</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/three@0.134.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/exporters/GLTFExporter.js"></script>
+<style>
+:root{--navy:#0A0E1A;--navy2:#0D1225;--cyan:#00D4FF;--mag:#FF006E;--gold:#FFD700;--green:#00FF88;
+  --text:#E2E8F0;--muted:#475569;--border:rgba(0,212,255,.18);--font:'Space Mono',monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--navy);color:var(--text);font-family:var(--font)}
+body{display:flex;flex-direction:column}
+#hdr{height:46px;flex-shrink:0;background:var(--navy2);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;padding:0 14px;
+  background-image:linear-gradient(rgba(0,212,255,.03)1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.03)1px,transparent 1px);
+  background-size:32px 32px}
+.logo{color:var(--cyan);font-size:12px;font-weight:700;letter-spacing:5px}
+.sub{color:var(--muted);font-size:10px;letter-spacing:2px}
+.badge{padding:2px 8px;font-size:10px;border:1px solid var(--border);color:var(--cyan);background:rgba(0,212,255,.06)}
+.badge.ok{border-color:rgba(0,255,136,.4);color:var(--green);background:rgba(0,255,136,.07)}
+.spacer{flex:1}
+#main{display:flex;flex:1;overflow:hidden}
+#vp{flex:1;position:relative;overflow:hidden}
+#vp canvas{display:block}
+#lbl-l{position:absolute;top:10px;left:10px;font-size:10px;color:var(--muted);pointer-events:none;letter-spacing:2px;background:rgba(10,14,26,.7);padding:3px 8px;border:1px solid var(--border)}
+#lbl-r{position:absolute;top:10px;right:10px;font-size:10px;color:var(--green);pointer-events:none;letter-spacing:2px;background:rgba(10,14,26,.7);padding:3px 8px;border:1px solid rgba(0,255,136,.3)}
+#panel{width:288px;flex-shrink:0;background:var(--navy2);border-left:1px solid var(--border);overflow-y:auto;
+  background-image:linear-gradient(rgba(0,212,255,.025)1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.025)1px,transparent 1px);background-size:28px 28px}
+.sec{border-bottom:1px solid rgba(0,212,255,.09);padding:12px 13px}
+.sec h3{font-size:9px;letter-spacing:3px;color:var(--muted);text-transform:uppercase;margin-bottom:10px}
+.slider-row{display:flex;justify-content:space-between;align-items:center;font-size:10px;margin-bottom:8px}
+.slider-label{color:var(--muted);min-width:80px}
+.slider-val{color:var(--cyan);min-width:40px;text-align:right}
+input[type=range]{flex:1;margin:0 8px;accent-color:var(--cyan);height:3px}
+.toggle-row{display:flex;gap:6px;margin-bottom:8px}
+.tog{flex:1;padding:5px;font-family:var(--font);font-size:9px;font-weight:700;letter-spacing:2px;
+  border:1px solid var(--border);background:rgba(0,212,255,.06);color:var(--muted);cursor:pointer;text-align:center}
+.tog.active{border-color:var(--cyan);color:var(--cyan);background:rgba(0,212,255,.15)}
+.btn{width:100%;padding:7px;font-family:var(--font);font-size:10px;font-weight:700;letter-spacing:2px;
+  border:1px solid var(--border);background:rgba(0,212,255,.06);color:var(--cyan);cursor:pointer;text-align:center;margin-bottom:6px}
+.btn:hover:not(:disabled){background:rgba(0,212,255,.18)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn.accent{border-color:rgba(0,255,136,.4);color:var(--green);background:rgba(0,255,136,.07)}
+.btn.accent:hover:not(:disabled){background:rgba(0,255,136,.2)}
+.check-row{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--muted);margin-bottom:8px;cursor:pointer}
+input[type=checkbox]{accent-color:var(--cyan)}
+.sgrid{display:grid;grid-template-columns:auto 1fr;gap:2px 12px}
+.sl{font-size:10px;color:var(--muted);padding:2px 0}
+.sv{font-size:10px;color:var(--text);text-align:right;padding:2px 0}
+#log{max-height:140px;overflow-y:auto;font-size:10px;line-height:1.9;padding:0}
+.le{border-bottom:1px solid rgba(255,255,255,.03);padding:2px 0;color:var(--muted)}
+.le.ok{color:var(--green)}.le.info{color:var(--cyan)}.le.warn{color:var(--gold)}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style></head><body>
+<div id="hdr">
+  <span class="logo">🔱 ZKAEDI</span>
+  <span class="sub">MESH SMOOTHER</span>
+  <span class="badge" id="bv">— VERTS</span>
+  <span class="badge" id="bf">— FACES</span>
+  <span class="spacer"></span>
+  <span class="badge ok" id="bmode">TAUBIN MODE</span>
+</div>
+<div id="main">
+  <div id="vp">
+    <div id="lbl-l">ORIGINAL</div>
+    <div id="lbl-r">SMOOTHED</div>
+  </div>
+  <div id="panel">
+    <div class="sec">
+      <h3>Smoothing Mode</h3>
+      <div class="toggle-row">
+        <div class="tog active" id="tog-taubin" onclick="setMode('taubin')">TAUBIN</div>
+        <div class="tog" id="tog-lap" onclick="setMode('laplacian')">LAPLACIAN</div>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Iterations</span>
+        <input type="range" id="sl-iter" min="1" max="50" value="10" oninput="updateSliders()">
+        <span class="slider-val" id="sv-iter">10</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">λ (expand)</span>
+        <input type="range" id="sl-lam" min="1" max="90" value="50" oninput="updateSliders()">
+        <span class="slider-val" id="sv-lam">0.50</span>
+      </div>
+      <div id="mu-row" class="slider-row">
+        <span class="slider-label">μ (contract)</span>
+        <input type="range" id="sl-mu" min="1" max="90" value="52" oninput="updateSliders()">
+        <span class="slider-val" id="sv-mu">-0.52</span>
+      </div>
+      <label class="check-row"><input type="checkbox" id="cb-boundary" checked> Lock boundary vertices</label>
+    </div>
+    <div class="sec">
+      <h3>Actions</h3>
+      <button class="btn" onclick="loadDemo()">LOAD DEMO MESH</button>
+      <button class="btn" onclick="document.getElementById('fi').click()">OPEN GLB</button>
+      <button class="btn" id="btn-run" disabled onclick="runSmooth()">RUN SMOOTH</button>
+      <button class="btn accent" id="btn-exp" disabled onclick="exportGLB()">DOWNLOAD SMOOTHED GLB</button>
+      <input type="file" id="fi" accept=".glb,.gltf" style="display:none" onchange="loadFile(event)">
+    </div>
+    <div class="sec">
+      <h3>Mesh Stats</h3>
+      <div class="sgrid">
+        <span class="sl">Vertices</span><span class="sv" id="st-v">—</span>
+        <span class="sl">Faces</span><span class="sv" id="st-f">—</span>
+        <span class="sl">Boundary</span><span class="sv" id="st-b">—</span>
+        <span class="sl">Smooth iters</span><span class="sv" id="st-i">—</span>
+        <span class="sl">Position Δ</span><span class="sv" id="st-d">—</span>
+      </div>
+    </div>
+    <div class="sec">
+      <h3>Log</h3><div id="log"></div>
+    </div>
+  </div>
+</div>
+<script>
+'use strict';
+// ── state ──
+let S={positions:null,indices:null,smoothed:null,isBoundary:null,mode:'taubin'};
+let origMesh=null, smoothMesh=null;
+// ── Three.js ──
+const vp=document.getElementById('vp');
+const DPR=Math.min(devicePixelRatio,2);
+const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(DPR); renderer.setSize(vp.clientWidth,vp.clientHeight);
+renderer.setClearColor(0x0A0E1A,1); vp.appendChild(renderer.domElement);
+const sceneL=new THREE.Scene(), sceneR=new THREE.Scene();
+sceneL.fog=new THREE.Fog(0x0A0E1A,30,80); sceneR.fog=new THREE.Fog(0x0A0E1A,30,80);
+const camera=new THREE.PerspectiveCamera(55,vp.clientWidth/vp.clientHeight,0.01,500);
+camera.position.set(0,0,6);
+function addLights(sc){
+  sc.add(new THREE.AmbientLight(0x112244,0.9));
+  const d=new THREE.DirectionalLight(0x00D4FF,1); d.position.set(5,8,5); sc.add(d);
+  const p=new THREE.PointLight(0xFF006E,0.5,30); p.position.set(-4,2,4); sc.add(p);
+}
+addLights(sceneL); addLights(sceneR);
+const gL=new THREE.GridHelper(20,15,0x00D4FF,0x0D1A2E); gL.material.opacity=0.18; gL.material.transparent=true; sceneL.add(gL);
+const gR=new THREE.GridHelper(20,15,0x00D4FF,0x0D1A2E); gR.material.opacity=0.18; gR.material.transparent=true; sceneR.add(gR);
+let theta=0.2,phi=0.35,radius=6,tTheta=0.2,tPhi=0.35,tRadius=6,dragging=false,pX=0,pY=0,lastI=Date.now();
+let orbitCenter=new THREE.Vector3();
+const cvs=renderer.domElement;
+cvs.addEventListener('mousedown',e=>{dragging=true;pX=e.clientX;pY=e.clientY;lastI=Date.now()});
+window.addEventListener('mouseup',()=>dragging=false);
+window.addEventListener('mousemove',e=>{if(!dragging)return;tTheta-=(e.clientX-pX)*0.006;tPhi=Math.max(0.05,Math.min(1.45,tPhi+(e.clientY-pY)*0.006));pX=e.clientX;pY=e.clientY;lastI=Date.now()});
+cvs.addEventListener('wheel',e=>{tRadius=Math.max(1,Math.min(40,tRadius+e.deltaY*0.012));e.preventDefault();},{passive:false});
+// ── algorithms ──
+function buildAdj(idx,nv){const a=Array.from({length:nv},()=>new Set());for(let f=0;f<idx.length;f+=3){const[x,y,z]=[idx[f],idx[f+1],idx[f+2]];a[x].add(y);a[x].add(z);a[y].add(x);a[y].add(z);a[z].add(x);a[z].add(y)}return a.map(s=>[...s])}
+function buildEdgeMap(idx){const m=new Map();for(let f=0;f<idx.length;f+=3)for(let e=0;e<3;e++){const a=idx[f+e],b=idx[f+(e+1)%3];const k=a<b?`${a}|${b}`:`${b}|${a}`;if(!m.has(k))m.set(k,{faces:0,da:a,db:b});m.get(k).faces++}return m}
+function getBoundary(idx,nv){const em=buildEdgeMap(idx);const ib=new Uint8Array(nv);for(const e of em.values())if(e.faces===1){ib[e.da]=1;ib[e.db]=1}return ib}
+function smooth(pos,adj,ib,iters,lam,mu,mode){
+  let p=Float32Array.from(pos);
+  for(let t=0;t<iters;t++){
+    const step=mode==='taubin'?(t%2===0?lam:mu):lam;
+    const np=Float32Array.from(p);
+    for(let v=0;v<p.length/3;v++){
+      if(ib[v])continue;
+      const nb=adj[v];if(!nb.length)continue;
+      let sx=0,sy=0,sz=0;
+      for(const n of nb){sx+=p[n*3];sy+=p[n*3+1];sz+=p[n*3+2]}
+      const c=nb.length;
+      np[v*3]+=step*(sx/c-p[v*3]);
+      np[v*3+1]+=step*(sy/c-p[v*3+1]);
+      np[v*3+2]+=step*(sz/c-p[v*3+2]);
+    }
+    p=np;
+  }
+  return p;
+}
+function avgDelta(a,b){let s=0;const n=a.length/3;for(let i=0;i<a.length;i++)s+=Math.abs(b[i]-a[i]);return s/(n||1)}
+function weld(pos,idx){const mn=[1e38,1e38,1e38],mx=[-1e38,-1e38,-1e38];for(let i=0;i<pos.length;i+=3)for(let k=0;k<3;k++){if(pos[i+k]<mn[k])mn[k]=pos[i+k];if(pos[i+k]>mx[k])mx[k]=pos[i+k]}const d=Math.sqrt((mx[0]-mn[0])**2+(mx[1]-mn[1])**2+(mx[2]-mn[2])**2);const eps=Math.max(d*1e-5,1e-10);const grid=new Map(),rm=new Int32Array(pos.length/3),np=[];const q=v=>Math.round(v/eps);for(let i=0;i<pos.length/3;i++){const[x,y,z]=[pos[i*3],pos[i*3+1],pos[i*3+2]];const k=`${q(x)},${q(y)},${q(z)}`;if(!grid.has(k)){grid.set(k,np.length/3);np.push(x,y,z)}rm[i]=grid.get(k)}const ni=new Uint32Array(idx.length);for(let i=0;i<idx.length;i++)ni[i]=rm[idx[i]];return{positions:new Float32Array(np),indices:ni}}
+function geoFrom(pos,idx){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setIndex(new THREE.BufferAttribute(idx,1));g.computeVertexNormals();return g}
+function makeMesh(geo,color,emissive=false){return new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color,metalness:.1,roughness:.55,side:THREE.DoubleSide,...(emissive?{emissive:0x00FF88,emissiveIntensity:.08}:{})}))}
+function clearGroup(g){g.children.slice().forEach(c=>{c.geometry?.dispose();c.material?.dispose();g.remove(c)})}
+const grpL=new THREE.Group(),grpR=new THREE.Group();sceneL.add(grpL);sceneR.add(grpR);
+function showMeshes(){
+  clearGroup(grpL);clearGroup(grpR);
+  if(!S.positions)return;
+  const go=geoFrom(S.positions,S.indices);
+  grpL.add(makeMesh(go,0x00D4FF));
+  if(S.smoothed){
+    const gs=geoFrom(S.smoothed,S.indices);
+    grpR.add(makeMesh(gs,0x00FF88,true));
+  } else {
+    grpR.add(makeMesh(go,0x475569));
+  }
+  // fit camera
+  go.computeBoundingBox();
+  go.boundingBox.getCenter(orbitCenter);
+  const sz=new THREE.Vector3();go.boundingBox.getSize(sz);
+  const md=Math.max(sz.x,sz.y,sz.z);tRadius=radius=md*1.8;
+  gL.position.y=go.boundingBox.min.y-0.05;gR.position.y=go.boundingBox.min.y-0.05;
+}
+// ── load ──
+function ingestGeo(rawGeo,name){
+  const pos=rawGeo.index?rawGeo.attributes.position.array.slice():rawGeo.attributes.position.array.slice();
+  const rawIdx=rawGeo.index?Uint32Array.from(rawGeo.index.array):new Uint32Array(rawGeo.attributes.position.count).map((_,i)=>i);
+  const {positions,indices}=weld(pos,rawIdx);
+  S.positions=positions; S.indices=indices; S.smoothed=null;
+  S.isBoundary=getBoundary(indices,positions.length/3);
+  const bCount=[...S.isBoundary].filter(v=>v).length;
+  document.getElementById('bv').textContent=`${positions.length/3|0} VERTS`;
+  document.getElementById('bf').textContent=`${indices.length/3|0} FACES`;
+  document.getElementById('st-v').textContent=(positions.length/3).toLocaleString();
+  document.getElementById('st-f').textContent=(indices.length/3).toLocaleString();
+  document.getElementById('st-b').textContent=bCount;
+  document.getElementById('btn-run').disabled=false;
+  showMeshes(); log(`Loaded: ${name}  (${bCount} boundary verts)`, 'info');
+}
+function loadDemo(){
+  const s=new THREE.SphereGeometry(2,26,20);
+  ingestGeo(s,'demo-sphere.glb');
+  log('Demo: sphere loaded — run smooth to compare','ok');
+}
+function loadFile(ev){
+  const f=ev.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=e=>{
+    new THREE.GLTFLoader().parse(e.target.result,'',(g)=>{
+      let geo=null;g.scene.traverse(n=>{if(n.isMesh&&!geo)geo=n.geometry.clone()});
+      if(geo)ingestGeo(geo,f.name); else log('No mesh in file','warn');
+    },(err)=>log(err.message,'warn'));
+  };
+  r.readAsArrayBuffer(f);ev.target.value='';
+}
+// ── smooth ──
+function runSmooth(){
+  if(!S.positions){log('Load a mesh first','warn');return;}
+  const iters=+document.getElementById('sl-iter').value;
+  const lam=+document.getElementById('sl-lam').value/100;
+  const mu=-(+document.getElementById('sl-mu').value/100);
+  const lockB=document.getElementById('cb-boundary').checked;
+  const ib=lockB?S.isBoundary:new Uint8Array(S.positions.length/3);
+  const adj=buildAdj(S.indices,S.positions.length/3);
+  log(`Running ${S.mode} smooth: ${iters} iters, λ=${lam.toFixed(2)}${S.mode==='taubin'?`, μ=${mu.toFixed(2)}`:''}...`);
+  const t0=performance.now();
+  S.smoothed=smooth(S.positions,adj,ib,iters,lam,mu,S.mode);
+  const dt=(performance.now()-t0).toFixed(0);
+  const delta=avgDelta(S.positions,S.smoothed);
+  document.getElementById('st-i').textContent=iters;
+  document.getElementById('st-d').textContent=delta.toExponential(3);
+  document.getElementById('btn-exp').disabled=false;
+  showMeshes();
+  log(`Done in ${dt}ms. Avg Δpos=${delta.toExponential(2)}`,'ok');
+}
+// ── export ──
+function exportGLB(){
+  if(!S.smoothed){return}
+  const geo=geoFrom(S.smoothed,S.indices);
+  const sc=new THREE.Scene();sc.add(new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:0xffffff})));
+  new THREE.GLTFExporter().parse(sc,(r)=>{
+    const b=new Blob([r],{type:'application/octet-stream'});
+    const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(b),download:'smoothed.glb'});
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    log('Saved: smoothed.glb','ok');
+  },{binary:true});
+}
+// ── UI ──
+function setMode(m){S.mode=m;document.getElementById('tog-taubin').classList.toggle('active',m==='taubin');document.getElementById('tog-lap').classList.toggle('active',m==='laplacian');document.getElementById('mu-row').style.display=m==='taubin'?'flex':'none';document.getElementById('bmode').textContent=m==='taubin'?'TAUBIN MODE':'LAPLACIAN MODE'}
+function updateSliders(){document.getElementById('sv-iter').textContent=document.getElementById('sl-iter').value;document.getElementById('sv-lam').textContent=(document.getElementById('sl-lam').value/100).toFixed(2);document.getElementById('sv-mu').textContent=-(document.getElementById('sl-mu').value/100).toFixed(2)}
+const logEl=document.getElementById('log');
+function log(msg,cls=''){const el=document.createElement('div');el.className=`le ${cls}`;el.textContent=msg;logEl.appendChild(el);logEl.scrollTop=logEl.scrollHeight}
+// ── animate ──
+(function animate(){requestAnimationFrame(animate);
+  if(Date.now()-lastI>3000)tTheta+=0.003;
+  theta+=(tTheta-theta)*0.08;phi+=(tPhi-phi)*0.08;radius+=(tRadius-radius)*0.08;
+  camera.position.x=orbitCenter.x+radius*Math.sin(theta)*Math.cos(phi);
+  camera.position.y=orbitCenter.y+radius*Math.sin(phi);
+  camera.position.z=orbitCenter.z+radius*Math.cos(theta)*Math.cos(phi);
+  camera.lookAt(orbitCenter);
+  const W=vp.clientWidth,H=vp.clientHeight,HW=W/2;
+  renderer.setScissorTest(true);
+  renderer.setViewport(0,0,HW,H);renderer.setScissor(0,0,HW,H);renderer.render(sceneL,camera);
+  renderer.setViewport(HW,0,HW,H);renderer.setScissor(HW,0,HW,H);renderer.render(sceneR,camera);
+  renderer.setScissorTest(false);
+})();
+window.addEventListener('resize',()=>{camera.aspect=vp.clientWidth/vp.clientHeight;camera.updateProjectionMatrix();renderer.setSize(vp.clientWidth,vp.clientHeight)});
+log('🔱 Mesh Smoother ready. Load a GLB or demo mesh.','info');
+log('Taubin: λ/μ alternating passes → near-zero shrinkage');
+log('Laplacian: single pass → shrinks mesh over iterations','warn');
+</script></body></html>

@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔱 ZKAEDI VMAX: Next Generation Optimizing Loaders</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #030206;
+            --card-bg: #09060f;
+            --accent-cyan: #00ffcc;
+            --accent-pink: #ff007f;
+            --accent-orange: #ffaa00;
+            --text-primary: #f3f0f7;
+            --text-secondary: #8b8599;
+            --border-color: #1a1426;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: 'Outfit', sans-serif;
+            padding: 3rem 2rem;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Ambient background glow dots */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 10%;
+            left: 20%;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(0, 255, 204, 0.04) 0%, transparent 70%);
+            z-index: -1;
+            pointer-events: none;
+        }
+        body::after {
+            content: '';
+            position: fixed;
+            bottom: 10%;
+            right: 20%;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(255, 0, 127, 0.04) 0%, transparent 70%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .header {
+            max-width: 1000px;
+            margin: 0 auto 3rem auto;
+            text-align: center;
+            border-bottom: 1.5px solid var(--border-color);
+            padding-bottom: 2rem;
+        }
+
+        .header h1 {
+            font-size: 2.8rem;
+            font-weight: 800;
+            letter-spacing: -0.05em;
+            background: linear-gradient(135deg, var(--text-primary) 30%, var(--accent-cyan) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.95rem;
+            color: var(--accent-pink);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+        }
+
+        .dashboard-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2.5rem;
+        }
+
+        .loader-card {
+            background-color: var(--card-bg);
+            border: 1.5px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2.5rem;
+            position: relative;
+            transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+            overflow: hidden;
+        }
+
+        .loader-card:hover {
+            border-color: rgba(0, 255, 204, 0.25);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            transform: translateY(-4px);
+        }
+
+        .svg-container {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #020104;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+        }
+
+        .svg-container svg {
+            width: 100%;
+            height: auto;
+            max-width: 800px;
+            display: block;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .btn-panel {
+            display: flex;
+            gap: 1rem;
+        }
+
+        button {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.85rem;
+            font-weight: bold;
+            padding: 0.6rem 1.2rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: transparent;
+            color: var(--text-primary);
+            border: 1.5px solid var(--border-color);
+        }
+
+        button:hover {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+            background-color: rgba(0, 255, 204, 0.05);
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.15);
+        }
+
+        button.active {
+            background-color: var(--accent-pink);
+            border-color: var(--accent-pink);
+            color: white;
+        }
+
+        .console-logs {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.85rem;
+            background-color: #020104;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            height: 140px;
+            overflow-y: auto;
+            color: #8b8599;
+            margin-top: 1.5rem;
+        }
+
+        .console-logs span {
+            display: block;
+            margin-bottom: 0.3rem;
+        }
+
+        .console-logs span.cyan {
+            color: var(--accent-cyan);
+        }
+
+        .console-logs span.pink {
+            color: var(--accent-pink);
+        }
+
+        .console-logs span.orange {
+            color: var(--accent-orange);
+        }
+
+        .footer {
+            max-width: 1000px;
+            margin: 4rem auto 0 auto;
+            text-align: center;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            border-top: 1.5px solid var(--border-color);
+            padding-top: 2rem;
+        }
+    </style>
+</head>
+<body>
+
+    <header class="header">
+        <h1>🔱 ZKAEDI VMAX LOADERS</h1>
+        <p>Mathematical Vector Optimizations & Progress Trackers</p>
+    </header>
+
+    <main class="dashboard-container">
+
+        <section class="loader-card">
+            <div class="svg-container" id="svg-host">
+                <!-- SVG content will be injected dynamically -->
+            </div>
+
+            <div class="controls">
+                <div>
+                    <h3 style="font-size: 1.4rem; margin-bottom: 0.3rem;">ZCC Live Optimization Telemetry</h3>
+                    <p style="color: var(--text-secondary); font-size: 0.9rem;">Four next-generation mathematically-guided loading bars running in parallel self-host stages.</p>
+                </div>
+                <div class="btn-panel">
+                    <button id="btn-boost" onclick="triggerBoost()">⚡ COMPILER BOOST</button>
+                    <button id="btn-rebuild" onclick="rebuildTelemetry()">🔄 REBUILD PIPELINE</button>
+                </div>
+            </div>
+
+            <div class="console-logs" id="console">
+                <span>[SYSTEM] Telemetry monitors initialized at 127.0.0.1:8086</span>
+                <span class="cyan">[STAGE 1] Liquid wave optimization scanning memory boundaries...</span>
+                <span class="pink">[STAGE 2] Chaitin-Briggs register allocation spinner tracking virtual nodes...</span>
+                <span>[STAGE 3] Segmented telemetry pipeline shifting register colors...</span>
+                <span class="orange">[STAGE 4] Fractal breathing gateway stabilizing self-host bootstrap assembly...</span>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="footer">
+        <p>🔱 ASSEMBLY SELF-HOST VERIFIED DETERMINISTIC // LOW OVERHEAD SMIL VECTOR ENGINE</p>
+    </footer>
+
+    <script>
+        // Fetch and inject the compiled vector loaders SVG dynamically
+        function loadSVG() {
+            fetch('test_loading_bars.svg?v=' + Date.now())
+                .then(response => response.text())
+                .then(data => {
+                    document.getElementById('svg-host').innerHTML = data;
+                });
+        }
+
+        // Live interactive log system
+        const logs = document.getElementById('console');
+        function addLog(text, color = '') {
+            const span = document.createElement('span');
+            span.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+            if (color) span.className = color;
+            logs.appendChild(span);
+            logs.scrollTop = logs.scrollHeight;
+        }
+
+        function triggerBoost() {
+            addLog("⚡ compiler-forge boost triggered! Speeding up Chaitin-Briggs allocation...", "pink");
+            // Find and speed up the rotate animations
+            const anims = document.querySelectorAll('animateTransform, animate');
+            anims.forEach(anim => {
+                const dur = anim.getAttribute('dur');
+                if (dur) {
+                    const sec = parseFloat(dur);
+                    anim.setAttribute('dur', `${sec * 0.4}s`);
+                }
+            });
+            addLog("⚡ Vector SMIL easing frequencies multiplied by 2.5x!", "cyan");
+        }
+
+        function rebuildTelemetry() {
+            addLog("🔄 Resetting compilation loops and clearing telemetry buffers...", "orange");
+            setTimeout(() => {
+                loadSVG();
+                addLog("🔱 Compilation telemetry rebuilt successfully! parities green.", "cyan");
+            }, 800);
+        }
+
+        // Initialize loader
+        loadSVG();
+    </script>
+</body>
+</html>

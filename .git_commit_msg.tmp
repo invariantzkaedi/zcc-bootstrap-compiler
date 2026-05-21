@@ -1,0 +1,58 @@
+feat(gvn): verify cross-block GVN scoping boundaries (Phase 2 Commit 3)
+
+Goal
+Verify GVN cross-block value numbering scoping boundaries and ensure correct independent sibling-branch and dominated merge-block evaluations.
+
+Outcome
+Added tests/test_gvn.c containing the gvn_test canary to verify correct cross-block GVN scoping under preorder domtree traversal. Assembly analysis confirmed sound scoped value table pop-on-exit actions (sibling branches evaluated independently without value leakage).
+
+Rollback: 8041160e
+
+Gates
+
+Gate 1 — Self-host byte-identical: cmp zcc2.s zcc3.s via make selfhost
+=== Stage 1: zcc compiles itself -> zcc2 ===
+./zcc zcc.c -o zcc2
+strip --strip-all zcc2
+=== Stage 2: zcc2 compiles itself -> zcc3 ===
+./zcc2 zcc.c -o zcc3
+strip --strip-all zcc3
+=== Verify: zcc2.s == zcc3.s (codegen parity) ===
+./zcc  zcc.c -o zcc2.s
+./zcc2 zcc.c -o zcc3.s
+diff zcc2.s zcc3.s && echo "SELF-HOST VERIFIED (assembly identical)" || (echo "SELF-HOST FAILED (assembly diverged)"; diff zcc2.s zcc3.s | head -20; exit 1)
+SELF-HOST VERIFIED (assembly identical)
+
+Gate 2 — Inter-op (both directions): tests/abi/gate2_fwd.sh & tests/abi/gate2_rev.sh
+Forward Inter-op:
+PASS: ret_int_int forward
+PASS: ret_sse_sse forward
+PASS: ret_sse_int forward
+PASS: ret_int_sse forward
+PASS: ret_tvalue forward
+Reverse Inter-op:
+PASS: ret_int_int reverse
+PASS: ret_sse_sse reverse
+PASS: ret_sse_int reverse
+PASS: ret_int_sse reverse
+PASS: ret_tvalue reverse
+Gate 2: ALL PASS
+
+Gate 3 — Corpus regression: tests/zcc_test_suite.sh
+PASS: 22  FAIL: 0  SKIP: 1
+ALL TESTS PASSED
+
+Bugs caught mid-gate
+None — gates ran clean on first attempt.
+
+Hygiene / deferred
+None.
+
+Forensic notes
+The test_gvn.c comment "x+y at join SHOULD be eliminated (dominated by entry)"
+is incorrect — x+y is not computed in the entry block, and neither branch
+dominates the join. GVN correctly does not eliminate the join-point x+y.
+The 3 eliminations are x-reload elisions across BB2, BB4, BB3, which is
+the correct and expected result. Sibling branch independence confirmed by
+assembly inspection: BB4 loads y independently, not from BB2's value number.
+Large frame sizes (624 bytes of stack) observed as motivation for Phase 4.

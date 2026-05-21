@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>🔱 ZKAEDI GLB MANIFOLD REPAIR — ULTRA</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/three@0.134.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/exporters/GLTFExporter.js"></script>
+<style>
+:root{
+  --navy:#0A0E1A;--navy2:#0D1225;--surface:#111827;
+  --cyan:#00D4FF;--mag:#FF006E;--gold:#FFD700;--orange:#FF6B00;
+  --green:#00FF88;--text:#E2E8F0;--muted:#475569;
+  --border:rgba(0,212,255,.18);--font:'Space Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--navy);color:var(--text);font-family:var(--font)}
+body{display:flex;flex-direction:column}
+
+/* ── HEADER ── */
+#hdr{height:46px;flex-shrink:0;background:var(--navy2);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;padding:0 14px;
+  background-image:linear-gradient(rgba(0,212,255,.03)1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.03)1px,transparent 1px);
+  background-size:32px 32px}
+.logo{color:var(--cyan);font-size:12px;font-weight:700;letter-spacing:5px;white-space:nowrap}
+.sub{color:var(--muted);font-size:10px;letter-spacing:2px;white-space:nowrap}
+.badge{padding:2px 8px;font-size:10px;letter-spacing:1px;border:1px solid var(--border);color:var(--cyan);background:rgba(0,212,255,.06);white-space:nowrap}
+.badge.crit{border-color:rgba(255,0,110,.4);color:var(--mag);background:rgba(255,0,110,.07)}
+.badge.good{border-color:rgba(0,255,136,.4);color:var(--green);background:rgba(0,255,136,.07)}
+.badge.prime{border-color:rgba(255,215,0,.35);color:var(--gold);background:rgba(255,215,0,.07)}
+.spacer{flex:1}
+
+/* ── MAIN ── */
+#main{display:flex;flex:1;overflow:hidden}
+#vp{flex:1;position:relative;overflow:hidden}
+#vp canvas{display:block}
+
+/* ── DROP ZONE ── */
+#drop{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;
+  background:rgba(10,14,26,.88);border:2px dashed var(--border);transition:border-color .2s,background .2s;cursor:pointer}
+#drop.drag-over{border-color:var(--cyan);background:rgba(0,212,255,.06)}
+#drop.hidden{display:none}
+.drop-ico{font-size:48px;opacity:.25;display:block;margin-bottom:12px;text-align:center}
+.drop-title{font-size:14px;font-weight:700;letter-spacing:3px;color:var(--cyan);text-align:center;margin-bottom:6px}
+.drop-sub{font-size:10px;color:var(--muted);text-align:center;letter-spacing:1px}
+
+/* ── PANEL ── */
+#panel{width:310px;flex-shrink:0;background:var(--navy2);border-left:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;
+  background-image:linear-gradient(rgba(0,212,255,.025)1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.025)1px,transparent 1px);
+  background-size:28px 28px}
+.sec{border-bottom:1px solid rgba(0,212,255,.09);padding:11px 13px;flex-shrink:0}
+.sec h3{font-size:9px;letter-spacing:3px;color:var(--muted);text-transform:uppercase;margin-bottom:9px}
+
+/* stats grid */
+.sgrid{display:grid;grid-template-columns:auto 1fr;gap:2px 12px}
+.slbl{font-size:10px;color:var(--muted);padding:2px 0}
+.sval{font-size:10px;color:var(--text);text-align:right;padding:2px 0}
+.sval.ok{color:var(--green)}.sval.warn{color:var(--gold)}.sval.crit{color:var(--mag)}
+
+/* coherence bar */
+.coh-wrap{margin-top:10px}
+.coh-row{display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-bottom:3px}
+.coh-bar{height:4px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden}
+.coh-fill{height:100%;border-radius:2px;transition:width .6s ease,background .6s ease}
+
+/* buttons */
+#actions{display:flex;flex-direction:column;gap:6px}
+.btn{padding:7px 12px;font-family:var(--font);font-size:10px;font-weight:700;letter-spacing:2px;
+  border:1px solid var(--border);background:rgba(0,212,255,.06);color:var(--cyan);cursor:pointer;
+  text-transform:uppercase;transition:all .2s}
+.btn:hover:not(:disabled){background:rgba(0,212,255,.15);border-color:var(--cyan)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn.primary{border-color:rgba(0,212,255,.5);color:var(--cyan)}
+.btn.accent{border-color:rgba(255,0,110,.5);color:var(--mag);background:rgba(255,0,110,.07)}
+.btn.accent:hover:not(:disabled){background:rgba(255,0,110,.18)}
+.btn.success{border-color:rgba(0,255,136,.5);color:var(--green);background:rgba(0,255,136,.07)}
+.btn.success:hover:not(:disabled){background:rgba(0,255,136,.18)}
+.btn.toggle{font-size:9px;padding:5px 10px;border-color:rgba(255,215,0,.35);color:var(--gold);background:rgba(255,215,0,.06)}
+
+/* log */
+#log-sec{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+#log{flex:1;overflow-y:auto;padding:0 13px 8px;font-size:10px;line-height:1.9}
+.log-entry{border-bottom:1px solid rgba(255,255,255,.03);padding:2px 0;color:var(--muted)}
+.log-entry.info{color:var(--cyan)}.log-entry.ok{color:var(--green)}.log-entry.warn{color:var(--gold)}.log-entry.err{color:var(--mag)}
+.log-ts{opacity:.4;margin-right:8px}
+
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+
+<div id="hdr">
+  <span class="logo">🔱 ZKAEDI</span>
+  <span class="sub">GLB MANIFOLD REPAIR TOOL — ULTRA</span>
+  <span class="badge" id="bv">— VERTS</span>
+  <span class="badge" id="bf">— FACES</span>
+  <span class="badge crit" id="bh">— HOLES</span>
+  <span class="spacer"></span>
+  <span class="badge prime" id="bc">COHERENCE —</span>
+</div>
+
+<div id="main">
+  <div id="vp">
+    <div id="drop">
+      <div>
+        <span class="drop-ico">⬡</span>
+        <div class="drop-title">DROP GLB / GLTF</div>
+        <div class="drop-sub">or use "OPEN GLB" →</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="panel">
+    <div class="sec">
+      <h3>Mesh Analysis</h3>
+      <div class="sgrid">
+        <span class="slbl">Vertices</span>   <span class="sval" id="sv">—</span>
+        <span class="slbl">Faces</span>      <span class="sval" id="sf">—</span>
+        <span class="slbl">Total Edges</span><span class="sval" id="se">—</span>
+        <span class="slbl">Boundary Edges</span><span class="sval" id="sbe">—</span>
+        <span class="slbl">Holes Found</span><span class="sval crit" id="sh">—</span>
+        <span class="slbl">Non-Manifold</span><span class="sval" id="snm">—</span>
+        <span class="slbl">Verts Welded</span><span class="sval" id="sweld">—</span>
+        <span class="slbl">Degen Removed</span><span class="sval" id="sdeg">—</span>
+      </div>
+      <div class="coh-wrap">
+        <div class="coh-row"><span>PRIME COHERENCE</span><span id="cohv">—</span></div>
+        <div class="coh-bar"><div class="coh-fill" id="cohf" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>Actions</h3>
+      <div id="actions">
+        <button class="btn" id="btn-demo">LOAD DEMO MESH</button>
+        <button class="btn" id="btn-open">OPEN GLB FILE</button>
+        <button class="btn primary" id="btn-analyze" disabled>ANALYZE MESH</button>
+        <button class="btn accent"  id="btn-repair"  disabled>AUTO-REPAIR ALL HOLES</button>
+        <button class="btn toggle"  id="btn-view"    disabled>TOGGLE HOLES / REPAIRED</button>
+        <button class="btn success" id="btn-export"  disabled>DOWNLOAD REPAIRED GLB</button>
+        <input type="file" id="file-input" accept=".glb,.gltf" style="display:none">
+      </div>
+    </div>
+
+    <div class="sec" id="log-sec" style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column">
+      <h3>Repair Log</h3>
+      <div id="log"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ═══════════════════════════════════════════════════════════
+// ZKAEDI COLOR TOKENS
+// ═══════════════════════════════════════════════════════════
+const C = { cyan:0x00D4FF, mag:0xFF006E, gold:0xFFD700, orange:0xFF6B00, green:0x00FF88, navy:0x0A0E1A };
+
+// ═══════════════════════════════════════════════════════════
+// LOG
+// ═══════════════════════════════════════════════════════════
+const logEl = document.getElementById('log');
+let logClock = 0;
+function log(msg, cls='') {
+  const ts = (logClock++).toString().padStart(4,'0');
+  const el = document.createElement('div');
+  el.className = `log-entry ${cls}`;
+  el.innerHTML = `<span class="log-ts">${ts}</span>${msg}`;
+  logEl.appendChild(el);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+// ═══════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════
+const S = {
+  rawGeo: null,      // THREE.BufferGeometry (original, possibly non-indexed)
+  positions: null,   // Float32Array (after weld)
+  indices: null,     // Uint32Array  (after weld + degen removal)
+  boundary: null,    // [{da,db,faces}] boundary edges
+  loops: null,       // [[v0,v1,...], ...] hole loops
+  repaired: null,    // {positions, indices, patches}
+  repairedGeo: null, // THREE.BufferGeometry
+  viewMode: 'holes', // 'holes' | 'repaired'
+  stats: {}
+};
+
+// ═══════════════════════════════════════════════════════════
+// GEOMETRY ALGORITHMS — pure functions, no Three.js
+// ═══════════════════════════════════════════════════════════
+
+/** If geometry has no index, assign sequential indices, then weld. */
+function extractIndexed(geo) {
+  const pos = geo.attributes.position.array.slice(); // Float32Array copy
+  let idx;
+  if (geo.index) {
+    idx = Uint32Array.from(geo.index.array);
+  } else {
+    const n = geo.attributes.position.count;
+    idx = new Uint32Array(n);
+    for (let i = 0; i < n; i++) idx[i] = i;
+  }
+  return { pos, idx };
+}
+
+/** Quantize-and-hash vertex welding. Returns {positions, indices, welded}. */
+function weldVertices(pos, idx) {
+  // Compute epsilon from bounding box diagonal
+  let mn = [1e38, 1e38, 1e38], mx = [-1e38, -1e38, -1e38];
+  for (let i = 0; i < pos.length; i += 3) {
+    for (let k = 0; k < 3; k++) {
+      if (pos[i+k] < mn[k]) mn[k] = pos[i+k];
+      if (pos[i+k] > mx[k]) mx[k] = pos[i+k];
+    }
+  }
+  const d = Math.sqrt((mx[0]-mn[0])**2+(mx[1]-mn[1])**2+(mx[2]-mn[2])**2);
+  const eps = Math.max(d * 1e-5, 1e-10);
+
+  const grid = new Map();
+  const remap = new Int32Array(pos.length / 3);
+  const nPos = [];
+  const q = v => Math.round(v / eps);
+
+  for (let i = 0; i < pos.length / 3; i++) {
+    const x=pos[i*3], y=pos[i*3+1], z=pos[i*3+2];
+    const key = `${q(x)},${q(y)},${q(z)}`;
+    if (!grid.has(key)) { grid.set(key, nPos.length/3); nPos.push(x,y,z); }
+    remap[i] = grid.get(key);
+  }
+
+  const nIdx = new Uint32Array(idx.length);
+  for (let i = 0; i < idx.length; i++) nIdx[i] = remap[idx[i]];
+
+  return { positions: new Float32Array(nPos), indices: nIdx, welded: pos.length/3 - nPos.length/3 };
+}
+
+/** Remove triangles where two or more vertex indices are equal. */
+function removeDegenerates(idx) {
+  const out = [];
+  let removed = 0;
+  for (let f = 0; f < idx.length; f += 3) {
+    const a=idx[f], b=idx[f+1], c=idx[f+2];
+    if (a!==b && b!==c && a!==c) out.push(a,b,c);
+    else removed++;
+  }
+  return { indices: new Uint32Array(out), removed };
+}
+
+/**
+ * Build edge map: canonical_key → {faces:N, da:int, db:int}
+ * da, db are the face-winding direction of the first face that added this edge.
+ */
+function buildEdgeMap(idx) {
+  const map = new Map();
+  for (let f = 0; f < idx.length; f += 3) {
+    for (let e = 0; e < 3; e++) {
+      const a = idx[f+e], b = idx[f+(e+1)%3];
+      const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+      if (!map.has(key)) map.set(key, { faces:0, da:a, db:b });
+      map.get(key).faces++;
+    }
+  }
+  return map;
+}
+
+/** Separate boundary edges (faces===1) from non-manifold (faces>2). */
+function classifyEdges(edgeMap) {
+  const boundary = [], nonManifold = [];
+  for (const e of edgeMap.values()) {
+    if (e.faces === 1) boundary.push(e);
+    else if (e.faces > 2) nonManifold.push(e);
+  }
+  return { boundary, nonManifold };
+}
+
+/**
+ * Traverse boundary edges to find closed hole loops.
+ * For face-winding edge da→db, boundary traversal is db→da.
+ * Returns {loops: [[v0,v1,...], ...], nonManifoldVerts: N}.
+ */
+function findHoleLoops(boundary) {
+  const nextV = new Map();
+  const conflicts = new Set();
+
+  for (const e of boundary) {
+    const from = e.db, to = e.da;  // reverse of face edge = hole direction
+    if (nextV.has(from)) conflicts.add(from);
+    else nextV.set(from, to);
+  }
+
+  const visited = new Set();
+  const loops = [];
+
+  for (const start of nextV.keys()) {
+    if (visited.has(start) || conflicts.has(start)) continue;
+    const loop = [];
+    let cur = start, safety = 0;
+    while (!visited.has(cur) && nextV.has(cur) && !conflicts.has(cur) && safety++ < 100000) {
+      visited.add(cur);
+      loop.push(cur);
+      cur = nextV.get(cur);
+    }
+    if (cur === start && loop.length >= 3) loops.push(loop);
+  }
+
+  return { loops, nonManifoldVerts: conflicts.size };
+}
+
+/**
+ * Fan-triangulation hole fill.
+ * Each hole loop → centroid vertex + n fan triangles.
+ * Winding check: first triangle normal vs (centroid − mesh_center).
+ * NOTE: heuristic can invert for deeply concave holes — logged as warn.
+ */
+function fillHoles(positions, indices, loops) {
+  const pos = [...positions];
+  const idx = [...indices];
+  const patches = [];
+
+  // Approximate mesh centroid for outward-normal heuristic
+  const nv = pos.length / 3;
+  let mcx=0, mcy=0, mcz=0;
+  for (let i = 0; i < nv; i++) { mcx+=pos[i*3]; mcy+=pos[i*3+1]; mcz+=pos[i*3+2]; }
+  mcx/=nv; mcy/=nv; mcz/=nv;
+
+  const windingWarnings = [];
+
+  for (let li = 0; li < loops.length; li++) {
+    const loop = loops[li];
+    const n = loop.length;
+    if (n < 3) continue;
+
+    // Centroid of hole boundary
+    let cx=0, cy=0, cz=0;
+    for (const vi of loop) { cx+=pos[vi*3]; cy+=pos[vi*3+1]; cz+=pos[vi*3+2]; }
+    cx/=n; cy/=n; cz/=n;
+
+    const ci = pos.length / 3;
+    pos.push(cx, cy, cz);
+
+    const pStart = idx.length / 3;
+    for (let i = 0; i < n; i++) idx.push(loop[i], loop[(i+1)%n], ci);
+    const pEnd = pStart + n;
+
+    // Winding check: compute normal of first fill triangle
+    const v0=loop[0], v1=loop[1];
+    const ax=pos[v0*3], ay=pos[v0*3+1], az=pos[v0*3+2];
+    const bx=pos[v1*3], by=pos[v1*3+1], bz=pos[v1*3+2];
+    const ex1=bx-ax, ey1=by-ay, ez1=bz-az;
+    const ex2=cx-ax, ey2=cy-ay, ez2=cz-az;
+    const nx=ey1*ez2-ez1*ey2, ny=ez1*ex2-ex1*ez2, nz=ex1*ey2-ey1*ex2;
+    const ox=cx-mcx, oy=cy-mcy, oz=cz-mcz; // outward direction
+
+    if (nx*ox + ny*oy + nz*oz < 0) {
+      // Flip winding of all patch triangles for this hole
+      for (let f = pStart; f < pEnd; f++) {
+        const b = f*3;
+        const tmp=idx[b]; idx[b]=idx[b+1]; idx[b+1]=tmp;
+      }
+      windingWarnings.push(li);
+    }
+
+    patches.push({ start: pStart, end: pEnd, ci, verts: n });
+  }
+
+  return {
+    positions: new Float32Array(pos),
+    indices: new Uint32Array(idx),
+    patches,
+    windingWarnings
+  };
+}
+
+// ═══════════════════════════════════════════════════════════
+// THREE.JS SETUP
+// ═══════════════════════════════════════════════════════════
+const vp = document.getElementById('vp');
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference:'high-performance' });
+const DPR = Math.min(devicePixelRatio, 2);
+renderer.setPixelRatio(DPR);
+renderer.setSize(vp.clientWidth, vp.clientHeight);
+renderer.setClearColor(C.navy, 1);
+vp.appendChild(renderer.domElement);
+
+const camera = new THREE.PerspectiveCamera(55, vp.clientWidth/vp.clientHeight, 0.01, 500);
+camera.position.set(0, 0, 8);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(C.navy, 30, 80);
+scene.add(new THREE.AmbientLight(0x112244, 0.9));
+const dL = new THREE.DirectionalLight(0x00D4FF, 1.0); dL.position.set(5,8,5); scene.add(dL);
+const pL = new THREE.PointLight(0xFF006E, 0.5, 30); pL.position.set(-4,2,4); scene.add(pL);
+
+// Grid floor (shown once mesh loads)
+const grid = new THREE.GridHelper(30, 20, 0x00D4FF, 0x0D1A2E);
+grid.material.opacity = 0.18; grid.material.transparent = true;
+grid.visible = false;
+scene.add(grid);
+
+// Scene group for mesh objects
+const meshGroup = new THREE.Group();
+scene.add(meshGroup);
+
+// ── Orbit controls (manual) ──────────────────────────────
+let theta=0.2, phi=0.35, radius=8, tTheta=0.2, tPhi=0.35, tRadius=8;
+let orbitCenter = new THREE.Vector3(0,0,0);
+let dragging=false, pX=0, pY=0, lastInteract=Date.now();
+const cvs = renderer.domElement;
+cvs.addEventListener('mousedown', e=>{ dragging=true; pX=e.clientX; pY=e.clientY; lastInteract=Date.now(); });
+window.addEventListener('mouseup', ()=>dragging=false);
+window.addEventListener('mousemove', e=>{
+  if (!dragging) return;
+  tTheta -= (e.clientX-pX)*0.006; tPhi=Math.max(0.05,Math.min(1.45,tPhi+(e.clientY-pY)*0.006));
+  pX=e.clientX; pY=e.clientY; lastInteract=Date.now();
+});
+cvs.addEventListener('wheel', e=>{
+  tRadius=Math.max(1,Math.min(50,tRadius+e.deltaY*0.012));
+  lastInteract=Date.now(); e.preventDefault();
+},{passive:false});
+
+// ── Touch support ─────────────────────────────────────────
+let tPrev=null;
+cvs.addEventListener('touchstart', e=>{ tPrev={x:e.touches[0].clientX,y:e.touches[0].clientY}; lastInteract=Date.now(); e.preventDefault();},{passive:false});
+cvs.addEventListener('touchmove', e=>{
+  if (!tPrev) return;
+  const t=e.touches[0];
+  tTheta -= (t.clientX-tPrev.x)*0.006; tPhi=Math.max(0.05,Math.min(1.45,tPhi+(t.clientY-tPrev.y)*0.006));
+  tPrev={x:t.clientX,y:t.clientY}; lastInteract=Date.now(); e.preventDefault();
+},{passive:false});
+cvs.addEventListener('touchend', ()=>tPrev=null);
+
+// ═══════════════════════════════════════════════════════════
+// VISUALIZATION HELPERS
+// ═══════════════════════════════════════════════════════════
+
+function geoFromData(positions, indices) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  g.setIndex(new THREE.BufferAttribute(indices, 1));
+  g.computeVertexNormals();
+  return g;
+}
+
+function buildBoundaryLines(boundary, positions) {
+  const pts = [];
+  for (const e of boundary) {
+    pts.push(positions[e.da*3],positions[e.da*3+1],positions[e.da*3+2]);
+    pts.push(positions[e.db*3],positions[e.db*3+1],positions[e.db*3+2]);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  return new THREE.LineSegments(g, new THREE.LineBasicMaterial({
+    color:C.mag, depthTest:false, transparent:true, opacity:0.85
+  }));
+}
+
+function buildPatchMesh(repairedPositions, repairedIndices, patches) {
+  const pFaces = [];
+  for (const p of patches) {
+    for (let f=p.start; f<p.end; f++) pFaces.push(repairedIndices[f*3],repairedIndices[f*3+1],repairedIndices[f*3+2]);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(repairedPositions, 3));
+  g.setIndex(new THREE.BufferAttribute(new Uint32Array(pFaces), 1));
+  g.computeVertexNormals();
+  return new THREE.Mesh(g, new THREE.MeshPhongMaterial({
+    color:C.gold, emissive:C.gold, emissiveIntensity:0.4,
+    side:THREE.DoubleSide, transparent:true, opacity:0.82
+  }));
+}
+
+function fitCamera(geo) {
+  geo.computeBoundingBox();
+  const box = geo.boundingBox;
+  box.getCenter(orbitCenter);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const maxD = Math.max(size.x, size.y, size.z);
+  tRadius = radius = maxD * 1.8;
+  grid.position.y = box.min.y - 0.05;
+  grid.visible = true;
+}
+
+// ═══════════════════════════════════════════════════════════
+// STATS UI
+// ═══════════════════════════════════════════════════════════
+function setVal(id, val, cls='') {
+  const el = document.getElementById(id);
+  el.textContent = val;
+  el.className = `sval ${cls}`;
+}
+
+function updateStats() {
+  const st = S.stats;
+  setVal('sv', st.verts?.toLocaleString() ?? '—');
+  setVal('sf', st.faces?.toLocaleString() ?? '—');
+  setVal('se', st.edges?.toLocaleString() ?? '—');
+  setVal('sbe', st.boundary ?? '—', (st.boundary > 0) ? 'warn' : 'ok');
+  setVal('sh', st.holes ?? '—', (st.holes > 0) ? 'crit' : 'ok');
+  setVal('snm', st.nonManifold ?? '—', (st.nonManifold > 0) ? 'warn' : '');
+  setVal('sweld', st.welded ?? '—');
+  setVal('sdeg', st.degenRemoved ?? '—');
+
+  document.getElementById('bv').textContent = `${(st.verts??'—')} VERTS`;
+  document.getElementById('bf').textContent = `${(st.faces??'—')} FACES`;
+  document.getElementById('bh').textContent = `${(st.holes??'—')} HOLES`;
+  document.getElementById('bh').className = `badge ${(st.holes??0) > 0 ? 'crit' : 'good'}`;
+
+  const coh = st.coherence ?? 0;
+  const cohPct = (coh * 100).toFixed(1) + '%';
+  document.getElementById('cohv').textContent = coh.toFixed(4);
+  document.getElementById('bc').textContent = `COHERENCE ${cohPct}`;
+  const fill = document.getElementById('cohf');
+  fill.style.width = cohPct;
+  fill.style.background = coh >= 0.999 ? '#00FF88' : coh >= 0.9 ? '#FFD700' : coh >= 0.5 ? '#FF6B00' : '#FF006E';
+}
+
+// ═══════════════════════════════════════════════════════════
+// ANALYSIS + REPAIR PIPELINE
+// ═══════════════════════════════════════════════════════════
+
+function analyzeGeo(rawGeo) {
+  log('Extracting geometry...', 'info');
+  const { pos, idx: rawIdx } = extractIndexed(rawGeo);
+
+  log(`Welding vertices (${(pos.length/3).toLocaleString()} raw)...`);
+  const { positions, indices: wIdx, welded } = weldVertices(pos, rawIdx);
+  S.stats.welded = welded;
+  log(`  Welded ${welded} duplicate vertices`, welded > 0 ? 'ok' : '');
+
+  log('Removing degenerate faces...');
+  const { indices, removed } = removeDegenerates(wIdx);
+  S.stats.degenRemoved = removed;
+  if (removed > 0) log(`  Removed ${removed} degenerate faces`, 'warn');
+
+  log('Building edge map...');
+  const edgeMap = buildEdgeMap(indices);
+  const totalEdges = edgeMap.size;
+  const { boundary, nonManifold } = classifyEdges(edgeMap);
+
+  log(`Finding hole loops (${boundary.length} boundary edges)...`);
+  const { loops, nonManifoldVerts } = findHoleLoops(boundary);
+
+  // Update state
+  S.positions = positions;
+  S.indices   = indices;
+  S.boundary  = boundary;
+  S.loops     = loops;
+
+  S.stats.verts         = positions.length / 3;
+  S.stats.faces         = indices.length / 3;
+  S.stats.edges         = totalEdges;
+  S.stats.boundary      = boundary.length;
+  S.stats.holes         = loops.length;
+  S.stats.nonManifold   = nonManifold.length;
+  S.stats.nonManifVerts = nonManifoldVerts;
+  S.stats.coherence     = totalEdges > 0 ? 1 - (boundary.length / totalEdges) : 0;
+
+  log(`Vertices:       ${S.stats.verts.toLocaleString()}`, 'ok');
+  log(`Faces:          ${S.stats.faces.toLocaleString()}`, 'ok');
+  log(`Total edges:    ${totalEdges.toLocaleString()}`);
+  log(`Boundary edges: ${boundary.length}${boundary.length>0?' ← HOLES':''}`, boundary.length>0?'warn':'ok');
+  log(`Holes found:    ${loops.length}`, loops.length>0?'crit':'ok');
+  for (let i=0; i<loops.length; i++) {
+    log(`  Hole ${i+1}: ${loops[i].length}-edge loop`);
+  }
+  if (nonManifold.length > 0) log(`Non-manifold edges: ${nonManifold.length}`, 'warn');
+  if (nonManifoldVerts > 0)   log(`Non-manifold verts: ${nonManifoldVerts}`, 'warn');
+  log(`PRIME coherence: ${S.stats.coherence.toFixed(6)}`, S.stats.coherence >= 1 ? 'ok' : 'warn');
+
+  // Visualize: mesh + boundary lines
+  S.viewMode = 'holes';
+  rebuildScene();
+  updateStats();
+
+  document.getElementById('btn-repair').disabled = (loops.length === 0);
+  document.getElementById('btn-view').disabled   = true;
+  document.getElementById('btn-export').disabled = true;
+
+  if (loops.length === 0) log('Mesh is already watertight!', 'ok');
+  else log(`→ Run AUTO-REPAIR to fill ${loops.length} hole(s)`, 'info');
+}
+
+function repairMesh() {
+  if (!S.loops || S.loops.length === 0) { log('No holes to repair.', 'warn'); return; }
+
+  log('— STARTING AUTO-REPAIR —', 'info');
+  log(`Filling ${S.loops.length} hole(s) via fan triangulation...`);
+
+  S.repaired = fillHoles(S.positions, S.indices, S.loops);
+
+  if (S.repaired.windingWarnings.length > 0) {
+    log(`Winding auto-corrected for holes: ${S.repaired.windingWarnings.map(i=>i+1).join(', ')}`, 'warn');
+    log('  (heuristic ok for convex meshes; verify concave)', 'warn');
+  }
+
+  const totalNew = S.repaired.patches.reduce((s,p)=>s+p.verts, 0);
+  log(`Added ${S.repaired.patches.length} patches, ${totalNew} triangles`);
+  for (let i=0; i<S.repaired.patches.length; i++) {
+    const p = S.repaired.patches[i];
+    log(`  Patch ${i+1}: ${p.verts} triangles (centroid v${p.ci})`);
+  }
+
+  // Verify
+  const checkMap = buildEdgeMap(S.repaired.indices);
+  const { boundary: remBoundary } = classifyEdges(checkMap);
+  const remHoles = findHoleLoops(remBoundary).loops.length;
+  const newCoherence = checkMap.size > 0 ? 1 - (remBoundary.length / checkMap.size) : 1;
+
+  S.stats.coherence = newCoherence;
+  S.stats.boundary  = remBoundary.length;
+  S.stats.holes     = remHoles;
+  S.stats.verts     = S.repaired.positions.length / 3;
+  S.stats.faces     = S.repaired.indices.length / 3;
+  S.stats.edges     = checkMap.size;
+
+  S.repairedGeo = geoFromData(S.repaired.positions, S.repaired.indices);
+
+  if (remHoles === 0 && remBoundary.length === 0) {
+    log('✓ MESH IS NOW WATERTIGHT', 'ok');
+    log(`PRIME coherence: ${newCoherence.toFixed(6)}`, 'ok');
+  } else {
+    log(`⚠ ${remHoles} hole(s) remain (likely non-manifold vertices)`, 'warn');
+    log(`  Coherence: ${newCoherence.toFixed(6)}`, 'warn');
+  }
+
+  S.viewMode = 'repaired';
+  rebuildScene();
+  updateStats();
+
+  document.getElementById('btn-view').disabled   = false;
+  document.getElementById('btn-export').disabled = false;
+  log('— REPAIR COMPLETE —', 'ok');
+}
+
+// ═══════════════════════════════════════════════════════════
+// SCENE REBUILD
+// ═══════════════════════════════════════════════════════════
+function rebuildScene() {
+  // Dispose old
+  meshGroup.children.slice().forEach(c => {
+    c.geometry?.dispose();
+    if (Array.isArray(c.material)) c.material.forEach(m=>m.dispose());
+    else c.material?.dispose();
+    meshGroup.remove(c);
+  });
+
+  if (!S.positions) return;
+
+  if (S.viewMode === 'holes' || !S.repairedGeo) {
+    // Show holey mesh + boundary lines
+    const geo = geoFromData(S.positions, S.indices);
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+      color: C.cyan, metalness: 0.15, roughness: 0.55,
+      side: THREE.DoubleSide, transparent: true, opacity: 0.78
+    }));
+    meshGroup.add(mesh);
+
+    if (S.boundary && S.boundary.length > 0) {
+      meshGroup.add(buildBoundaryLines(S.boundary, S.positions));
+    }
+
+    fitCamera(geo);
+  } else {
+    // Show repaired mesh + patch highlights
+    meshGroup.add(new THREE.Mesh(S.repairedGeo, new THREE.MeshStandardMaterial({
+      color: C.cyan, metalness: 0.15, roughness: 0.5,
+      side: THREE.DoubleSide
+    })));
+
+    if (S.repaired?.patches?.length) {
+      meshGroup.add(buildPatchMesh(S.repaired.positions, S.repaired.indices, S.repaired.patches));
+    }
+
+    fitCamera(S.repairedGeo);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// DEMO MESH — sphere with 3 intentional holes
+// ═══════════════════════════════════════════════════════════
+function loadDemo() {
+  log('Generating demo mesh (sphere with 3 punched holes)...', 'info');
+
+  const sGeo = new THREE.SphereGeometry(2.0, 26, 20);
+  const rawPos = sGeo.attributes.position.array;
+  const rawIdx = sGeo.index.array;
+  const nf = rawIdx.length / 3;
+
+  // 3 hole centers on sphere surface + radius²
+  const holes = [
+    [1.72, 0.85, 0.62, 0.62],
+    [-1.60, 0.10, -1.10, 0.58],
+    [0.20, -1.85, 0.90, 0.60],
+  ];
+
+  const keepIdx = [];
+  for (let f = 0; f < nf; f++) {
+    const a = rawIdx[f*3];
+    const px=rawPos[a*3], py=rawPos[a*3+1], pz=rawPos[a*3+2];
+    let inHole = false;
+    for (const [hx,hy,hz,hr2] of holes) {
+      const dx=px-hx, dy=py-hy, dz=pz-hz;
+      if (dx*dx+dy*dy+dz*dz < hr2) { inHole=true; break; }
+    }
+    if (!inHole) keepIdx.push(rawIdx[f*3],rawIdx[f*3+1],rawIdx[f*3+2]);
+  }
+
+  const demoGeo = new THREE.BufferGeometry();
+  demoGeo.setAttribute('position', new THREE.BufferAttribute(rawPos.slice(), 3));
+  demoGeo.setIndex(new THREE.BufferAttribute(new Uint32Array(keepIdx), 1));
+  demoGeo.computeVertexNormals();
+
+  log('Demo mesh created', 'ok');
+  S.rawGeo = demoGeo;
+  document.getElementById('drop').classList.add('hidden');
+  document.getElementById('btn-analyze').disabled = false;
+  analyzeGeo(demoGeo);
+}
+
+// ═══════════════════════════════════════════════════════════
+// GLB FILE LOADING
+// ═══════════════════════════════════════════════════════════
+function loadGLBBuffer(buffer, filename) {
+  log(`Loading ${filename}...`, 'info');
+  const loader = new THREE.GLTFLoader();
+  loader.parse(buffer, '', (gltf) => {
+    let geo = null;
+    gltf.scene.traverse(node => {
+      if (node.isMesh && !geo) {
+        geo = node.geometry.clone();
+      }
+    });
+    if (!geo) { log('No mesh found in GLB', 'err'); return; }
+    log(`Loaded: ${filename}`, 'ok');
+    S.rawGeo = geo;
+    document.getElementById('drop').classList.add('hidden');
+    document.getElementById('btn-analyze').disabled = false;
+    analyzeGeo(geo);
+  }, (err) => {
+    log(`Load error: ${err.message}`, 'err');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// GLB EXPORT
+// ═══════════════════════════════════════════════════════════
+function exportGLB() {
+  if (!S.repairedGeo) { log('No repaired mesh to export.', 'warn'); return; }
+  log('Exporting repaired GLB...', 'info');
+
+  const exportScene = new THREE.Scene();
+  exportScene.add(new THREE.Mesh(S.repairedGeo, new THREE.MeshStandardMaterial({ color:0xffffff })));
+
+  const exporter = new THREE.GLTFExporter();
+  exporter.parse(exportScene, (result) => {
+    const blob = new Blob(
+      [result instanceof ArrayBuffer ? result : JSON.stringify(result)],
+      { type: 'application/octet-stream' }
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'repaired.glb';
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+    log('Saved: repaired.glb', 'ok');
+  }, { binary: true });
+}
+
+// ═══════════════════════════════════════════════════════════
+// UI HANDLERS
+// ═══════════════════════════════════════════════════════════
+document.getElementById('btn-demo').addEventListener('click', () => {
+  S.repaired = S.repairedGeo = S.rawGeo = null;
+  S.stats = {};
+  logEl.innerHTML = '';
+  logClock = 0;
+  document.getElementById('btn-repair').disabled = true;
+  document.getElementById('btn-view').disabled   = true;
+  document.getElementById('btn-export').disabled = true;
+  loadDemo();
+});
+
+document.getElementById('btn-analyze').addEventListener('click', () => {
+  if (S.rawGeo) {
+    S.repaired = S.repairedGeo = null;
+    S.stats = {};
+    logEl.innerHTML = '';
+    logClock = 0;
+    analyzeGeo(S.rawGeo);
+  }
+});
+
+document.getElementById('btn-repair').addEventListener('click', repairMesh);
+
+document.getElementById('btn-view').addEventListener('click', () => {
+  if (!S.repairedGeo) return;
+  S.viewMode = S.viewMode === 'holes' ? 'repaired' : 'holes';
+  rebuildScene();
+  log(`View → ${S.viewMode.toUpperCase()}`);
+  document.getElementById('btn-view').textContent =
+    S.viewMode === 'holes' ? 'VIEW REPAIRED' : 'VIEW WITH HOLES';
+});
+
+document.getElementById('btn-export').addEventListener('click', exportGLB);
+
+document.getElementById('btn-open').addEventListener('click', () => {
+  document.getElementById('file-input').click();
+});
+
+document.getElementById('file-input').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => loadGLBBuffer(ev.target.result, file.name);
+  reader.readAsArrayBuffer(file);
+  e.target.value = '';
+});
+
+// Drag-and-drop
+const dropEl = document.getElementById('drop');
+document.body.addEventListener('dragover', e => { e.preventDefault(); dropEl.classList.add('drag-over'); });
+document.body.addEventListener('dragleave', () => dropEl.classList.remove('drag-over'));
+document.body.addEventListener('drop', e => {
+  e.preventDefault();
+  dropEl.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => loadGLBBuffer(ev.target.result, file.name);
+  reader.readAsArrayBuffer(file);
+});
+
+// Resize
+window.addEventListener('resize', () => {
+  camera.aspect = vp.clientWidth / vp.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(vp.clientWidth, vp.clientHeight);
+});
+
+// ═══════════════════════════════════════════════════════════
+// ANIMATION LOOP
+// ═══════════════════════════════════════════════════════════
+function animate() {
+  requestAnimationFrame(animate);
+
+  if (Date.now() - lastInteract > 3000) tTheta += 0.003;
+
+  theta  += (tTheta  - theta)  * 0.08;
+  phi    += (tPhi    - phi)    * 0.08;
+  radius += (tRadius - radius) * 0.08;
+
+  camera.position.x = orbitCenter.x + radius * Math.sin(theta) * Math.cos(phi);
+  camera.position.y = orbitCenter.y + radius * Math.sin(phi);
+  camera.position.z = orbitCenter.z + radius * Math.cos(theta) * Math.cos(phi);
+  camera.lookAt(orbitCenter);
+
+  renderer.render(scene, camera);
+}
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+log('🔱 ZKAEDI GLB MANIFOLD REPAIR TOOL — ULTRA', 'info');
+log('Click LOAD DEMO MESH or drop a GLB to begin.');
+animate();
+</script>
+</body>
+</html>

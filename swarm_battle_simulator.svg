@@ -1,0 +1,976 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="100%" height="100%" style="background-color: #020108;">
+  <defs>
+    <!-- Background grid texture -->
+    <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+      <path d="M 60 0 L 0 0 0 60" fill="none" stroke="#160c30" stroke-width="1"/>
+    </pattern>
+    
+    <!-- Neon heavy glow filters -->
+    <filter id="glow-heavy" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8" result="blur1"/>
+      <feGaussianBlur stdDeviation="20" result="blur2"/>
+      <feMerge>
+        <feMergeNode in="blur2"/>
+        <feMergeNode in="blur1"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Base Grid Background -->
+  <rect width="1920" height="1080" fill="url(#grid)" />
+  <circle cx="960" cy="540" r="600" fill="none" stroke="#1f1042" stroke-width="1.5" stroke-dasharray="10,25" opacity="0.3" />
+  <circle cx="960" cy="540" r="300" fill="none" stroke="#2a165b" stroke-width="1.5" stroke-dasharray="5,15" opacity="0.4" />
+
+  <!-- The Interactive HTML5 / CSS / Canvas Subsystem -->
+  <foreignObject x="0" y="0" width="1920" height="1080">
+    <div xmlns="http://www.w3.org/1999/xhtml" style="width:100%; height:100%; font-family:monospace; position:relative; overflow:hidden; user-select:none;">
+      
+      <!-- CSS Stylesheet -->
+      <style>
+        <![CDATA[
+        .glass-panel {
+          background: rgba(11, 6, 26, 0.65);
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
+          border: 1px solid rgba(0, 240, 255, 0.18);
+          box-shadow: 0 0 30px rgba(0, 240, 255, 0.05), inset 0 0 15px rgba(0, 240, 255, 0.03);
+          border-radius: 8px;
+          color: #00f0ff;
+          padding: 18px;
+          box-sizing: border-box;
+          position: absolute;
+          transition: all 0.3s ease;
+        }
+        
+        .glass-panel:hover {
+          border-color: rgba(255, 0, 127, 0.3);
+          box-shadow: 0 0 40px rgba(255, 0, 127, 0.1);
+        }
+
+        .hud-header {
+          font-size: 13px;
+          font-weight: bold;
+          letter-spacing: 2px;
+          text-transform: uppercase;
+          border-bottom: 1px solid rgba(0, 240, 255, 0.25);
+          padding-bottom: 6px;
+          margin-bottom: 12px;
+          display: flex;
+          justify-content: space-between;
+          color: #ffffff;
+          text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+        }
+
+        .hud-row {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 8px;
+          font-size: 11px;
+        }
+
+        .hud-value {
+          color: #ff007f;
+          font-weight: bold;
+          text-shadow: 0 0 8px rgba(255, 0, 127, 0.4);
+        }
+
+        /* Diagnostic logs style */
+        .terminal-box {
+          height: 190px;
+          overflow-y: hidden;
+          font-size: 10px;
+          line-height: 1.4;
+          color: #00ffff;
+          scrollbar-width: none;
+        }
+
+        .terminal-line {
+          margin-bottom: 4px;
+          opacity: 0.85;
+          animation: scanline 0.2s ease-out;
+        }
+
+        .terminal-warn { color: #ffaa00; }
+        .terminal-crit { color: #ff0055; }
+        .terminal-ok { color: #00ff66; }
+
+        @keyframes scanline {
+          from { opacity: 0; transform: translateY(4px); }
+          to { opacity: 0.85; transform: translateY(0); }
+        }
+
+        /* Pulsing status ring */
+        .threat-radar {
+          width: 80px;
+          height: 80px;
+          border: 2px solid #00f0ff;
+          border-radius: 50%;
+          position: relative;
+          margin: 10px auto;
+          animation: radar-pulse 3s infinite linear;
+        }
+        
+        .threat-radar-sweep {
+          width: 100%;
+          height: 100%;
+          border-radius: 50%;
+          background: conic-gradient(from 0deg, rgba(0, 240, 255, 0.15) 0deg, transparent 90deg);
+          animation: rotate-sweep 4s infinite linear;
+        }
+
+        @keyframes radar-pulse {
+          0% { box-shadow: 0 0 0 0 rgba(0, 240, 255, 0.3); }
+          70% { box-shadow: 0 0 0 15px rgba(0, 240, 255, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(0, 240, 255, 0); }
+        }
+
+        @keyframes rotate-sweep {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
+        /* Custom interactive UI buttons */
+        .action-btn {
+          background: rgba(255, 0, 127, 0.15);
+          border: 1px solid rgba(255, 0, 127, 0.4);
+          color: #ffffff;
+          padding: 8px 14px;
+          border-radius: 4px;
+          font-size: 11px;
+          cursor: pointer;
+          font-family: monospace;
+          letter-spacing: 1px;
+          transition: all 0.2s ease;
+          display: inline-block;
+          margin-top: 10px;
+        }
+
+        .action-btn:hover {
+          background: rgba(0, 240, 255, 0.2);
+          border-color: #00f0ff;
+          box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+        }
+
+        /* Hex memory grid */
+        .hex-grid {
+          display: grid;
+          grid-template-columns: repeat(8, 1fr);
+          gap: 4px;
+          font-size: 9px;
+        }
+
+        .hex-cell {
+          background: rgba(0, 240, 255, 0.05);
+          border: 1px solid rgba(0, 240, 255, 0.1);
+          text-align: center;
+          padding: 3px 0;
+          color: rgba(0, 240, 255, 0.7);
+        }
+        
+        .hex-active {
+          color: #ffaa00 !important;
+          border-color: #ffaa00 !important;
+          background: rgba(255, 170, 0, 0.15);
+        }
+
+        .hex-corrupt {
+          color: #ff0055 !important;
+          border-color: #ff0055 !important;
+          background: rgba(255, 0, 85, 0.2);
+          animation: hex-blink 0.5s infinite alternate;
+        }
+
+        @keyframes hex-blink {
+          0% { opacity: 0.3; }
+          100% { opacity: 1; }
+        }
+
+        /* Splendid ambient screen artifacts */
+        .scanlines {
+          pointer-events: none;
+          position: absolute;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(
+            rgba(18, 16, 16, 0) 50%, 
+            rgba(0, 0, 0, 0.25) 50%
+          ), linear-gradient(
+            90deg,
+            rgba(255, 0, 0, 0.06),
+            rgba(0, 255, 0, 0.02),
+            rgba(0, 0, 255, 0.06)
+          );
+          background-size: 100% 4px, 6px 100%;
+          z-index: 100;
+          opacity: 0.4;
+        }
+        ]]>
+      </style>
+
+      <!-- Glassmorphism Left HUD Panel: Compiler Metrics -->
+      <div class="glass-panel" style="left:40px; top:40px; width:340px; height:460px;">
+        <div class="hud-header">
+          <span>Diagnostics Platform</span>
+          <span style="color:#00ff66;">ACTIVE</span>
+        </div>
+        <div class="hud-row">
+          <span>PIPELINE ENGINE</span>
+          <span class="hud-value">ZCC_STAGE_2</span>
+        </div>
+        <div class="hud-row">
+          <span>CYBERNETIC CORE</span>
+          <span class="hud-value" id="val-core-health">100.00%</span>
+        </div>
+        <div class="hud-row">
+          <span>VACCINE LOAD</span>
+          <span class="hud-value" id="val-vaccines">256/256</span>
+        </div>
+        <div class="hud-row">
+          <span>ELISION CODES</span>
+          <span class="hud-value">0x0A97_FEE1</span>
+        </div>
+        <div class="hud-row">
+          <span>ACTIVE THREATS</span>
+          <span class="hud-value" id="val-threat-count">0</span>
+        </div>
+        <div class="hud-row">
+          <span>SCORE / COMPILATIONS</span>
+          <span class="hud-value" id="val-score" style="color:#ffaa00;">000000</span>
+        </div>
+
+        <div style="margin-top:20px;" class="hud-header">SYMBOLIC RADAR</div>
+        <div class="threat-radar">
+          <div class="threat-radar-sweep"></div>
+        </div>
+
+        <div style="text-align:center; margin-top:15px;">
+          <div class="action-btn" id="btn-nuke">DEPLOY GLOBAL SHIELD</div>
+        </div>
+      </div>
+
+      <!-- Glassmorphism Right HUD Panel: Threat logs and Hex allocations -->
+      <div class="glass-panel" style="right:40px; top:40px; width:340px; height:460px;">
+        <div class="hud-header">
+          <span>EVM Memory Map</span>
+          <span style="color:#ff007f;">0x7FFD_5E8A</span>
+        </div>
+        
+        <!-- Live hex mapping -->
+        <div class="hex-grid" id="container-hex">
+          <!-- Populated by JavaScript -->
+        </div>
+
+        <div style="margin-top:25px;" class="hud-header">TACTICAL STATE ENGINE</div>
+        <div class="terminal-box" id="terminal-feed">
+          <!-- Populated by JavaScript -->
+        </div>
+      </div>
+
+      <!-- Center Console: Threat Defense Status -->
+      <div class="glass-panel" style="left:50%; transform:translateX(-50%); top:40px; width:450px; height:100px; text-align:center; padding:12px;">
+        <div style="font-size:12px; font-weight:bold; letter-spacing:3px; color:#ffffff; margin-bottom:5px;">ZKAEDI PRIME // THREAT DESTRUCTOR</div>
+        <div style="font-size:24px; font-weight:900; color:#ff007f; text-shadow:0 0 10px rgba(255, 0, 127, 0.8);" id="battle-state-indicator">SYSTEM COMPILING</div>
+        <div style="font-size:9px; color:#00f0ff; opacity:0.7; margin-top:4px;">CLICK IN ARENA TO RELEASE VOLT VACCINE BURSTS</div>
+      </div>
+
+      <!-- Full-screen Canvas for High Performance Combat & Particle Engine -->
+      <canvas id="arena-canvas" style="position:absolute; top:0; left:0; width:1920px; height:1080px; z-index:0; cursor:crosshair;"></canvas>
+      
+      <!-- Scanlines overlay -->
+      <div class="scanlines"></div>
+      
+      <!-- JavaScript Gameplay Engine -->
+      <script type="text/javascript">
+        <![CDATA[
+        (function() {
+          const canvas = document.getElementById('arena-canvas');
+          const ctx = canvas.getContext('2d');
+
+          // Enforce absolute resolution matching SVG viewbox coordinates
+          canvas.width = 1920;
+          canvas.height = 1080;
+
+          // Game state tracking
+          const gameState = {
+            coreHealth: 100,
+            score: 0,
+            activeThreats: 0,
+            turrets: [],
+            bugs: [],
+            lasers: [],
+            particles: [],
+            vaccines: 256,
+            shockwaves: [],
+            timeSinceLastBug: 0,
+            spawnRate: 45, // ticks between spawns
+            globalShieldActive: false,
+            shieldTime: 0
+          };
+
+          const colors = {
+            cyan: '#00f0ff',
+            magenta: '#ff007f',
+            amber: '#ffaa00',
+            green: '#00ff66',
+            bug: '#ff0044',
+            core: '#5b2c9e',
+            grid: '#1f1042'
+          };
+
+          // Setup core defenses (3 programmatically rotating turrets)
+          const coreX = 960;
+          const coreY = 540;
+          const coreRadius = 80;
+
+          class Turret {
+            constructor(angle, distance, weaponType, color) {
+              this.angle = angle;
+              this.distance = distance;
+              this.weaponType = weaponType; // 'beam', 'laser', 'flak'
+              this.color = color;
+              this.target = null;
+              this.cooldown = 0;
+            }
+
+            update() {
+              // Rotate around reactor core
+              this.angle += 0.007; 
+              this.x = coreX + Math.cos(this.angle) * this.distance;
+              this.y = coreY + Math.sin(this.angle) * this.distance;
+
+              if (this.cooldown > 0) this.cooldown--;
+
+              // Acquire closest target
+              if (gameState.bugs.length > 0) {
+                let closest = null;
+                let minDist = Infinity;
+                
+                gameState.bugs.forEach(bug => {
+                  const dx = bug.x - this.x;
+                  const dy = bug.y - this.y;
+                  const d = Math.hypot(dx, dy);
+                  if (d < minDist && d < 600) {
+                    minDist = d;
+                    closest = bug;
+                  }
+                });
+
+                this.target = closest;
+              } else {
+                this.target = null;
+              }
+
+              // Attack mechanics
+              if (this.target && this.cooldown === 0) {
+                this.fire();
+              }
+            }
+
+            fire() {
+              if (this.weaponType === 'beam') {
+                // Precision vector lock laser
+                gameState.lasers.push(new Laser(this.x, this.y, this.target.x, this.target.y, this.color, 15));
+                this.target.health -= 25;
+                this.cooldown = 12;
+              } else if (this.weaponType === 'laser') {
+                // Heavy thermal blast
+                gameState.lasers.push(new Laser(this.x, this.y, this.target.x, this.target.y, '#ffffff', 25));
+                this.target.health -= 55;
+                this.cooldown = 32;
+              } else if (this.weaponType === 'flak') {
+                // Fast tactical sweep pulses
+                gameState.lasers.push(new Laser(this.x, this.y, this.target.x, this.target.y, colors.magenta, 8));
+                this.target.health -= 15;
+                this.cooldown = 6;
+              }
+            }
+
+            draw() {
+              // Draw turret base
+              ctx.save();
+              ctx.translate(this.x, this.y);
+              ctx.rotate(this.angle + Math.PI/2);
+              
+              ctx.shadowColor = this.color;
+              ctx.shadowBlur = 10;
+              
+              ctx.fillStyle = this.color;
+              ctx.beginPath();
+              ctx.moveTo(0, -18);
+              ctx.lineTo(12, 10);
+              ctx.lineTo(-12, 10);
+              ctx.closePath();
+              ctx.fill();
+
+              // Glowing barrel line
+              ctx.strokeStyle = '#ffffff';
+              ctx.lineWidth = 2.5;
+              ctx.beginPath();
+              ctx.moveTo(0, -18);
+              ctx.lineTo(0, -4);
+              ctx.stroke();
+
+              ctx.restore();
+            }
+          }
+
+          // Exploit Bugs (Targeting Core Reactor)
+          class Bug {
+            constructor(x, y, type) {
+              this.x = x;
+              this.y = y;
+              this.type = type; // 'reentrancy', 'overflow', 'decay'
+              this.speed = 1.6 + Math.random() * 1.5;
+              this.angle = Math.atan2(coreY - this.y, coreX - this.x);
+              
+              if (type === 'reentrancy') {
+                this.maxHealth = 40;
+                this.radius = 12;
+                this.color = '#ff0044';
+                this.points = 150;
+              } else if (type === 'overflow') {
+                this.maxHealth = 100;
+                this.radius = 22;
+                this.color = '#ff8800';
+                this.speed *= 0.6;
+                this.points = 450;
+              } else {
+                this.maxHealth = 20;
+                this.radius = 8;
+                this.color = '#ff00cc';
+                this.speed *= 1.4;
+                this.points = 80;
+              }
+              
+              this.health = this.maxHealth;
+            }
+
+            update() {
+              // Path vectoring towards core reactor
+              this.angle = Math.atan2(coreY - this.y, coreX - this.x);
+              this.x += Math.cos(this.angle) * this.speed;
+              this.y += Math.sin(this.angle) * this.speed;
+
+              // Check if bug reached core
+              const dist = Math.hypot(coreX - this.x, coreY - this.y);
+              if (dist < coreRadius + this.radius) {
+                this.explode(false);
+                if (!gameState.globalShieldActive) {
+                  gameState.coreHealth = Math.max(0, gameState.coreHealth - Math.round(this.radius));
+                  addLog(`[WARN] Exploit breached core at 0x${Math.floor(this.x).toString(16)}: -${Math.round(this.radius)}% HEALTH`, 'terminal-warn');
+                  corruptRandomHex();
+                } else {
+                  addLog(`[SEC] Global shield absorbed 0x${Math.floor(this.x).toString(16)} exploit force!`, 'terminal-ok');
+                }
+                return false;
+              }
+
+              if (this.health <= 0) {
+                this.explode(true);
+                gameState.score += this.points;
+                return false;
+              }
+
+              return true;
+            }
+
+            explode(killed) {
+              // Trigger physics debris
+              const debrisCount = killed ? this.radius * 1.5 : 8;
+              for (let i = 0; i < debrisCount; i++) {
+                gameState.particles.push(new Particle(
+                  this.x, 
+                  this.y, 
+                  (Math.random() - 0.5) * 6, 
+                  (Math.random() - 0.5) * 6, 
+                  this.color, 
+                  Math.random() * 20 + 10
+                ));
+              }
+
+              if (killed) {
+                addLog(`[OK] Vaccinated ${this.type.toUpperCase()} node (+${this.points} pts)`, 'terminal-ok');
+              }
+            }
+
+            draw() {
+              ctx.save();
+              ctx.shadowColor = this.color;
+              ctx.shadowBlur = 8;
+              ctx.fillStyle = this.color;
+              
+              // Draw beautiful rotating geometric vectors based on bug type
+              ctx.translate(this.x, this.y);
+              ctx.rotate(Date.now() * 0.005);
+
+              if (this.type === 'reentrancy') {
+                // Square loop
+                ctx.fillRect(-this.radius, -this.radius, this.radius*2, this.radius*2);
+                ctx.strokeStyle = '#ffffff';
+                ctx.strokeRect(-this.radius*0.6, -this.radius*0.6, this.radius*1.2, this.radius*1.2);
+              } else if (this.type === 'overflow') {
+                // Thick spiky ring
+                ctx.beginPath();
+                for (let i = 0; i < 8; i++) {
+                  const angle = (i * Math.PI) / 4;
+                  const x1 = Math.cos(angle) * this.radius;
+                  const y1 = Math.sin(angle) * this.radius;
+                  const x2 = Math.cos(angle + 0.2) * (this.radius * 0.5);
+                  const y2 = Math.sin(angle + 0.2) * (this.radius * 0.5);
+                  if (i === 0) ctx.moveTo(x1, y1);
+                  else {
+                    ctx.lineTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                  }
+                }
+                ctx.closePath();
+                ctx.fill();
+              } else {
+                // Triangular pointer bug
+                ctx.beginPath();
+                ctx.moveTo(0, -this.radius * 1.5);
+                ctx.lineTo(this.radius, this.radius);
+                ctx.lineTo(-this.radius, this.radius);
+                ctx.closePath();
+                ctx.fill();
+              }
+
+              // Simple health bar indicators
+              if (this.health < this.maxHealth) {
+                const pct = this.health / this.maxHealth;
+                ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                ctx.fillRect(-15, -this.radius - 8, 30, 4);
+                ctx.fillStyle = colors.green;
+                ctx.fillRect(-15, -this.radius - 8, 30 * pct, 4);
+              }
+
+              ctx.restore();
+            }
+          }
+
+          // Laser line drawing class
+          class Laser {
+            constructor(x1, y1, x2, y2, color, life) {
+              this.x1 = x1;
+              this.y1 = y1;
+              this.x2 = x2;
+              this.y2 = y2;
+              this.color = color;
+              this.life = life;
+              this.maxLife = life;
+            }
+
+            update() {
+              this.life--;
+              return this.life > 0;
+            }
+
+            draw() {
+              const alpha = this.life / this.maxLife;
+              ctx.save();
+              ctx.strokeStyle = this.color;
+              ctx.lineWidth = 4 * alpha;
+              ctx.shadowColor = this.color;
+              ctx.shadowBlur = 15;
+              ctx.beginPath();
+              ctx.moveTo(this.x1, this.y1);
+              ctx.lineTo(this.x2, this.y2);
+              ctx.stroke();
+              
+              // Secondary white thermal core line
+              ctx.strokeStyle = '#ffffff';
+              ctx.lineWidth = 1.2 * alpha;
+              ctx.beginPath();
+              ctx.moveTo(this.x1, this.y1);
+              ctx.lineTo(this.x2, this.y2);
+              ctx.stroke();
+              
+              ctx.restore();
+            }
+          }
+
+          // Physical particle effects
+          class Particle {
+            constructor(x, y, vx, vy, color, size) {
+              this.x = x;
+              this.y = y;
+              this.vx = vx;
+              this.vy = vy;
+              this.color = color;
+              this.size = size;
+              this.maxLife = Math.random() * 30 + 20;
+              this.life = this.maxLife;
+            }
+
+            update() {
+              this.x += this.vx;
+              this.y += this.vy;
+              this.vx *= 0.95;
+              this.vy *= 0.95;
+              this.life--;
+              return this.life > 0;
+            }
+
+            draw() {
+              const alpha = this.life / this.maxLife;
+              ctx.save();
+              ctx.fillStyle = this.color;
+              ctx.globalAlpha = alpha;
+              ctx.shadowColor = this.color;
+              ctx.shadowBlur = 8;
+              ctx.beginPath();
+              ctx.arc(this.x, this.y, this.size * alpha * 0.4, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.restore();
+            }
+          }
+
+          // Shockwave ripple
+          class Shockwave {
+            constructor(x, y, color) {
+              this.x = x;
+              this.y = y;
+              this.color = color;
+              this.radius = 5;
+              this.maxRadius = 380;
+              this.speed = 12;
+              this.life = 1;
+            }
+
+            update() {
+              this.radius += this.speed;
+              
+              // Check hit interactions with bugs
+              gameState.bugs.forEach(bug => {
+                const d = Math.hypot(bug.x - this.x, bug.y - this.y);
+                // Trigger knockback + major damage when wave matches distance
+                if (Math.abs(d - this.radius) < 20) {
+                  bug.health -= 15;
+                  const angle = Math.atan2(bug.y - this.y, bug.x - this.x);
+                  bug.x += Math.cos(angle) * 12;
+                  bug.y += Math.sin(angle) * 12;
+                }
+              });
+
+              return this.radius < this.maxRadius;
+            }
+
+            draw() {
+              const alpha = 1 - (this.radius / this.maxRadius);
+              ctx.save();
+              ctx.strokeStyle = this.color;
+              ctx.lineWidth = 6 * alpha;
+              ctx.shadowColor = this.color;
+              ctx.shadowBlur = 20;
+              ctx.beginPath();
+              ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+              ctx.stroke();
+              ctx.restore();
+            }
+          }
+
+          // Initialize core turrets
+          gameState.turrets.push(new Turret(0, 160, 'beam', colors.cyan));
+          gameState.turrets.push(new Turret(Math.PI * 2 / 3, 160, 'flak', colors.magenta));
+          gameState.turrets.push(new Turret(Math.PI * 4 / 3, 160, 'laser', colors.amber));
+
+          // Log mechanics helper
+          const terminalFeed = document.getElementById('terminal-feed');
+          function addLog(msg, typeClass = '') {
+            const line = document.createElement('div');
+            line.className = `terminal-line ${typeClass}`;
+            line.innerHTML = `&gt; ${msg}`;
+            terminalFeed.appendChild(line);
+            
+            // Limit line history
+            while (terminalFeed.childNodes.length > 25) {
+              terminalFeed.removeChild(terminalFeed.firstChild);
+            }
+            
+            // Auto scroll to bottom
+            terminalFeed.scrollTop = terminalFeed.scrollHeight;
+          }
+
+          // EVM Hex map generator
+          const hexGrid = document.getElementById('container-hex');
+          const hexCells = [];
+          for (let i = 0; i < 48; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'hex-cell';
+            cell.innerText = Math.floor(Math.random() * 256).toString(16).toUpperCase().padStart(2, '0');
+            hexGrid.appendChild(cell);
+            hexCells.push(cell);
+          }
+
+          function corruptRandomHex() {
+            const idx = Math.floor(Math.random() * hexCells.length);
+            hexCells[idx].className = 'hex-cell hex-corrupt';
+            hexCells[idx].innerText = 'FF';
+            
+            // Auto repair hex mapping after a few seconds
+            setTimeout(() => {
+              hexCells[idx].className = 'hex-cell hex-active';
+              hexCells[idx].innerText = Math.floor(Math.random() * 256).toString(16).toUpperCase().padStart(2, '0');
+              setTimeout(() => {
+                hexCells[idx].className = 'hex-cell';
+              }, 1500);
+            }, 5000);
+          }
+
+          // Tactical console starting messages
+          addLog("SYSTEM INITIALIZED", 'terminal-ok');
+          addLog("ZKAEDI PRIME DETECTOR V4 ONLINE", 'terminal-ok');
+          addLog("Swarm shields operational.", 'terminal-ok');
+          addLog("Ready to quarantine incoming exploits.");
+
+          // Click handling for manual shockwaves (quarantines)
+          canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            // Map window coordinates to custom canvas bounds
+            const clickX = ((e.clientX - rect.left) / rect.width) * canvas.width;
+            const clickY = ((e.clientY - rect.top) / rect.height) * canvas.height;
+
+            if (gameState.vaccines > 0) {
+              gameState.shockwaves.push(new Shockwave(clickX, clickY, colors.cyan));
+              gameState.vaccines--;
+              addLog(`[VACCINE] Tactical quarantining blast deployed at (${Math.round(clickX)}, ${Math.round(clickY)})`, 'terminal-ok');
+              
+              // Trigger minor splash debris
+              for (let i = 0; i < 15; i++) {
+                gameState.particles.push(new Particle(clickX, clickY, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, colors.cyan, 12));
+              }
+            } else {
+              addLog(`[ERR] Vaccine storage depleted!`, 'terminal-crit');
+            }
+          });
+
+          // Nuke trigger (global shield)
+          const btnNuke = document.getElementById('btn-nuke');
+          btnNuke.addEventListener('click', () => {
+            if (!gameState.globalShieldActive) {
+              gameState.globalShieldActive = true;
+              gameState.shieldTime = 300; // 5 seconds duration
+              gameState.shockwaves.push(new Shockwave(coreX, coreY, '#ffffff'));
+              addLog("[SEC] CRITICAL PIPELINE SHIELD DEPLOYED!", 'terminal-crit');
+              
+              // Massive visual blast particles
+              for (let i = 0; i < 60; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const spd = 2 + Math.random() * 8;
+                gameState.particles.push(new Particle(
+                  coreX, 
+                  coreY, 
+                  Math.cos(angle) * spd, 
+                  Math.sin(angle) * spd, 
+                  '#ffffff', 
+                  15
+                ));
+              }
+            }
+          });
+
+          // Dynamic bug spawner helper
+          function spawnBug() {
+            // Pick random direction offscreen
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 1000; // Offscreen radius
+            const bx = coreX + Math.cos(angle) * dist;
+            const by = coreY + Math.sin(angle) * dist;
+
+            // Pick random bug type
+            const rand = Math.random();
+            let type = 'decay';
+            if (rand > 0.75) type = 'overflow';
+            else if (rand > 0.4) type = 'reentrancy';
+
+            gameState.bugs.push(new Bug(bx, by, type));
+            gameState.activeThreats++;
+            
+            addLog(`[THREAT] ${type.toUpperCase()} node incoming vector detected!`, 'terminal-warn');
+          }
+
+          // Real-time battle states list
+          const statesList = [
+            "THREAT VECTORING ACTIVE",
+            "COMPILING VACCINES",
+            "OPTIMIZING MEMORY GATES",
+            "SYMBOLIC VERIFICATION ACTIVE",
+            "ISOLATING MALICIOUS NODES"
+          ];
+
+          // Game loop
+          function loop() {
+            // Clean slate canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. Draw glowing background grid lines
+            ctx.save();
+            ctx.strokeStyle = colors.grid;
+            ctx.lineWidth = 1;
+            
+            // Pulsing threat level overlay background glow
+            if (gameState.activeThreats > 5) {
+              ctx.fillStyle = 'rgba(255, 0, 70, 0.04)';
+              ctx.fillRect(0,0,canvas.width,canvas.height);
+            }
+            ctx.restore();
+
+            // 2. Draw global shield if active
+            if (gameState.globalShieldActive) {
+              gameState.shieldTime--;
+              if (gameState.shieldTime <= 0) {
+                gameState.globalShieldActive = false;
+                addLog("[SEC] Global shield expired.", 'terminal-warn');
+              }
+              
+              ctx.save();
+              ctx.shadowColor = '#ffffff';
+              ctx.shadowBlur = 30;
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+              ctx.strokeStyle = '#ffffff';
+              ctx.lineWidth = 4;
+              ctx.beginPath();
+              ctx.arc(coreX, coreY, coreRadius + 20, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.stroke();
+              ctx.restore();
+            }
+
+            // 3. Draw central reactor (Core Pipeline Core)
+            ctx.save();
+            ctx.shadowColor = gameState.globalShieldActive ? '#ffffff' : colors.cyan;
+            ctx.shadowBlur = 25;
+            
+            // Dynamic pulsating radius
+            const pulseRadius = coreRadius + Math.sin(Date.now() * 0.005) * 6;
+
+            const reactorGrad = ctx.createRadialGradient(coreX, coreY, 10, coreX, coreY, pulseRadius);
+            reactorGrad.addColorStop(0, '#ffffff');
+            reactorGrad.addColorStop(0.3, colors.cyan);
+            reactorGrad.addColorStop(0.8, '#2e1266');
+            reactorGrad.addColorStop(1, 'transparent');
+
+            ctx.fillStyle = reactorGrad;
+            ctx.beginPath();
+            ctx.arc(coreX, coreY, pulseRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Inner geometric orbits
+            ctx.strokeStyle = colors.magenta;
+            ctx.lineWidth = 2.5;
+            ctx.shadowColor = colors.magenta;
+            ctx.beginPath();
+            ctx.arc(coreX, coreY, pulseRadius - 10, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.restore();
+
+            // 4. Update and Draw Core Defenses (Turrets)
+            gameState.turrets.forEach(turret => {
+              turret.update();
+              turret.draw();
+            });
+
+            // 5. Update and Draw Shockwaves
+            gameState.shockwaves = gameState.shockwaves.filter(wave => {
+              const keep = wave.update();
+              wave.draw();
+              return keep;
+            });
+
+            // 6. Update and Draw Particle Explosions
+            gameState.particles = gameState.particles.filter(p => {
+              const keep = p.update();
+              p.draw();
+              return keep;
+            });
+
+            // 7. Update and Draw Lasers
+            gameState.lasers = gameState.lasers.filter(laser => {
+              const keep = laser.update();
+              laser.draw();
+              return keep;
+            });
+
+            // 8. Update and Draw Bugs
+            gameState.bugs = gameState.bugs.filter(bug => {
+              const keep = bug.update();
+              if (keep) bug.draw();
+              else gameState.activeThreats = Math.max(0, gameState.activeThreats - 1);
+              return keep;
+            });
+
+            // 9. Wave system triggers
+            gameState.timeSinceLastBug++;
+            if (gameState.timeSinceLastBug > gameState.spawnRate) {
+              spawnBug();
+              gameState.timeSinceLastBug = 0;
+              // Gradual speedup
+              gameState.spawnRate = Math.max(12, gameState.spawnRate - 0.2);
+            }
+
+            // 10. Update text/gauge diagnostics panels
+            document.getElementById('val-core-health').innerText = `${gameState.coreHealth}%`;
+            document.getElementById('val-vaccines').innerText = `${gameState.vaccines}/256`;
+            document.getElementById('val-threat-count').innerText = gameState.activeThreats;
+            document.getElementById('val-score').innerText = gameState.score.toString().padStart(6, '0');
+            
+            // Core health conditional classes
+            const coreVal = document.getElementById('val-core-health');
+            if (gameState.coreHealth > 60) coreVal.style.color = colors.green;
+            else if (gameState.coreHealth > 30) coreVal.style.color = '#ffaa00';
+            else coreVal.style.color = '#ff0033';
+
+            // Center header text transitions
+            const indicator = document.getElementById('battle-state-indicator');
+            if (gameState.activeThreats > 6) {
+              indicator.innerText = "WARNING: CORE INTRUSION";
+              indicator.style.color = '#ff0033';
+              indicator.style.animation = 'hex-blink 0.3s infinite alternate';
+            } else if (gameState.activeThreats > 0) {
+              indicator.innerText = "DEFENSE SWARM LOCKING TARGETS";
+              indicator.style.color = '#ffaa00';
+              indicator.style.animation = 'none';
+            } else {
+              indicator.innerText = statesList[Math.floor(Date.now() / 3000) % statesList.length];
+              indicator.style.color = colors.cyan;
+              indicator.style.animation = 'none';
+            }
+
+            // 11. Loop cycle check
+            if (gameState.coreHealth > 0) {
+              requestAnimationFrame(loop);
+            } else {
+              // Game Over Visual Overlay
+              ctx.fillStyle = 'rgba(10, 2, 20, 0.85)';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              
+              ctx.shadowColor = '#ff0033';
+              ctx.shadowBlur = 25;
+              ctx.fillStyle = '#ff0033';
+              ctx.font = '900 64px Courier New';
+              ctx.textAlign = 'center';
+              ctx.fillText("PIPELINE CORRUPTED", coreX, coreY - 40);
+              
+              ctx.fillStyle = '#ffffff';
+              ctx.font = 'bold 24px Courier New';
+              ctx.fillText(`TOTAL SCORE: ${gameState.score} POINTS`, coreX, coreY + 20);
+              ctx.font = '16px Courier New';
+              ctx.fillStyle = colors.cyan;
+              ctx.fillText("REFRESH CANVAS PAGE TO COMPILE AGAIN", coreX, coreY + 60);
+
+              indicator.innerText = "SYSTEM FATAL: SHUTDOWN";
+              indicator.style.color = '#ff0033';
+              addLog("CRITICAL FAILURE: Pipeline compiler memory bounds corrupted.", 'terminal-crit');
+            }
+          }
+
+          // Initial loop launch
+          requestAnimationFrame(loop);
+        })();
+        ]]>
+      </script>
+    </div>
+  </foreignObject>
+</svg>

@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>🔱 ZKAEDI QEM DECIMATOR — ENHANCED</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/three@0.134.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/exporters/GLTFExporter.js"></script>
+<style>
+:root{--navy:#0A0E1A;--navy2:#0D1225;--cyan:#00D4FF;--mag:#FF006E;--gold:#FFD700;--green:#00FF88;--text:#E2E8F0;--muted:#475569;--border:rgba(0,212,255,.18);--font:'Space Mono',monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--navy);color:var(--text);font-family:var(--font);display:flex;flex-direction:column}
+#hdr{height:46px;flex-shrink:0;background:var(--navy2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 14px;background-image:linear-gradient(rgba(0,212,255,.03)1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.03)1px,transparent 1px);background-size:32px 32px}
+.logo{color:var(--cyan);font-size:12px;font-weight:700;letter-spacing:5px}
+.sub{color:var(--muted);font-size:10px;letter-spacing:2px}
+.badge{padding:2px 8px;font-size:10px;border:1px solid var(--border);color:var(--gold);background:rgba(255,215,0,.06)}
+#main{display:flex;flex:1;overflow:hidden}
+#vp3d{flex:1;position:relative;border-right:1px solid var(--border)}
+#panel{width:320px;flex-shrink:0;background:var(--navy2);border-left:1px solid var(--border);overflow-y:auto;background-image:linear-gradient(rgba(0,212,255,.025)1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.025)1px,transparent 1px);background-size:28px 28px}
+.sec{padding:12px;border-bottom:1px solid rgba(0,212,255,.09)}
+.sec h3{font-size:9px;color:var(--muted);letter-spacing:3px;margin-bottom:10px;text-transform:uppercase}
+.btn{width:100%;padding:8px;background:rgba(0,212,255,.06);color:var(--cyan);border:1px solid var(--border);font-family:var(--font);font-size:10px;cursor:pointer;margin-bottom:8px;font-weight:700;letter-spacing:2px;transition:0.2s}
+.btn:hover:not(:disabled){background:rgba(0,212,255,.15)}
+.btn:disabled{opacity:0.3;cursor:not-allowed}
+.btn.accent{color:var(--green);border-color:rgba(0,255,136,.4)}
+.btn.accent:hover:not(:disabled){background:rgba(0,255,136,.15)}
+.sgrid{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:10px}
+.sl{color:var(--muted)}.sv{text-align:right;color:var(--text)}
+#log{font-size:10px;color:var(--muted);height:150px;overflow-y:auto;word-wrap:break-word}
+.log-e{padding:2px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+</style>
+</head><body>
+<div id="hdr">
+  <span class="logo">🔱 ZKAEDI</span>
+  <span class="sub">QEM DECIMATOR</span>
+  <span class="badge" id="mode-badge">ENHANCED ALGORITHM</span>
+</div>
+<div id="main">
+  <div id="vp3d"></div>
+  <div id="panel">
+    <div class="sec">
+      <h3>Actions</h3>
+      <button class="btn" onclick="document.getElementById('fi').click()">OPEN GLB</button>
+      <input type="file" id="fi" accept=".glb,.gltf" style="display:none" onchange="loadFile(event)">
+      <div style="display:flex;gap:5px">
+        <button class="btn" id="btn-50" onclick="startDecimate(0.5)" disabled>50%</button>
+        <button class="btn" id="btn-25" onclick="startDecimate(0.25)" disabled>25%</button>
+        <button class="btn" id="btn-10" onclick="startDecimate(0.10)" disabled>10%</button>
+      </div>
+      <button class="btn accent" id="btn-exp" onclick="exportGLB()" disabled>EXPORT LOD</button>
+    </div>
+    <div class="sec">
+      <h3>Stats</h3>
+      <div class="sgrid">
+        <span class="sl">Original Faces</span><span class="sv" id="st-orig">—</span>
+        <span class="sl">Current Faces</span><span class="sv" id="st-curr">—</span>
+      </div>
+    </div>
+    <div class="sec"><h3>Log</h3><div id="log"></div></div>
+  </div>
+</div>
+<script>
+const logEl=document.getElementById('log');
+function log(m,c=''){logEl.innerHTML+=`<div class="log-e" style="color:var(--${c||'muted'})">${m}</div>`;logEl.scrollTop=logEl.scrollHeight}
+const scene=new THREE.Scene();scene.fog=new THREE.Fog(0x0A0E1A,5,50);
+const camera=new THREE.PerspectiveCamera(50,1,0.1,100);camera.position.z=5;
+const renderer=new THREE.WebGLRenderer({antialias:true});
+document.getElementById('vp3d').appendChild(renderer.domElement);
+scene.add(new THREE.AmbientLight(0x223344));
+const dl=new THREE.DirectionalLight(0x00D4FF,1);dl.position.set(2,5,2);scene.add(dl);
+const vp3d=document.getElementById('vp3d');
+let meshGrp=new THREE.Group();scene.add(meshGrp);
+
+function resize(){
+  const w=vp3d.clientWidth,h=vp3d.clientHeight;
+  renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();
+}
+window.addEventListener('resize',resize);resize();
+
+let isDragging=false, px=0, py=0, theta=0, phi=0.5, radius=5;
+renderer.domElement.addEventListener('mousedown',e=>{isDragging=true;px=e.clientX;py=e.clientY});
+window.addEventListener('mouseup',()=>isDragging=false);
+window.addEventListener('mousemove',e=>{
+  if(!isDragging)return;
+  theta-=(e.clientX-px)*0.01; phi=Math.max(0.1,Math.min(Math.PI/2-0.1, phi+(e.clientY-py)*0.01));
+  px=e.clientX; py=e.clientY;
+});
+renderer.domElement.addEventListener('wheel',e=>radius+=e.deltaY*0.01);
+
+function render(){
+  requestAnimationFrame(render);
+  camera.position.x=radius*Math.sin(theta)*Math.cos(phi);
+  camera.position.y=radius*Math.sin(phi);
+  camera.position.z=radius*Math.cos(theta)*Math.cos(phi);
+  camera.lookAt(0,0,0);
+  renderer.render(scene,camera);
+}
+render();
+
+let S={origGeo:null, currGeo:null};
+
+function loadFile(e){
+  const f=e.target.files[0];if(!f)return;
+  log(`Loading ${f.name}...`,'cyan');
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    new THREE.GLTFLoader().parse(ev.target.result,'',gltf=>{
+      meshGrp.clear();
+      let geo=null;
+      gltf.scene.traverse(c=>{if(c.isMesh&&!geo)geo=c.geometry.clone()});
+      if(!geo){log('No mesh found','mag');return;}
+      if(!geo.index){
+        const pos=geo.attributes.position.array;
+        const idx=new Uint32Array(pos.length/3);
+        for(let i=0;i<idx.length;i++)idx[i]=i;
+        geo.setIndex(new THREE.BufferAttribute(idx,1));
+      }
+      S.origGeo=geo; S.currGeo=geo;
+      updateView();
+      
+      const nf=geo.index.array.length/3;
+      document.getElementById('st-orig').textContent=nf.toLocaleString();
+      document.getElementById('st-curr').textContent=nf.toLocaleString();
+      
+      // Compute bounding box for camera fit
+      geo.computeBoundingBox();
+      const center = new THREE.Vector3();
+      geo.boundingBox.getCenter(center);
+      const size = new THREE.Vector3();
+      geo.boundingBox.getSize(size);
+      radius = Math.max(size.x, size.y, size.z) * 1.5;
+      scene.position.sub(center); // center the mesh
+
+      ['btn-50','btn-25','btn-10'].forEach(id=>document.getElementById(id).disabled=false);
+      document.getElementById('btn-exp').disabled=true;
+      log('Mesh loaded and ready for QEM analysis.','green');
+    },err=>log('Load error','mag'));
+  };
+  reader.readAsArrayBuffer(f);
+}
+
+function updateView(){
+  meshGrp.clear();
+  const mat = new THREE.MeshStandardMaterial({color:0x00D4FF, roughness:0.3, metalness:0.4, side:THREE.DoubleSide, polygonOffset:true, polygonOffsetFactor:1, polygonOffsetUnits:1});
+  const mesh = new THREE.Mesh(S.currGeo, mat);
+  meshGrp.add(mesh);
+  
+  // Wireframe
+  const edges = new THREE.WireframeGeometry(S.currGeo);
+  const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({color:0x0D1A2E, transparent:true, opacity:0.3}));
+  meshGrp.add(line);
+}
+
+// ==========================================
+// RIGOROUS QEM IMPLEMENTATION
+// ==========================================
+class SymMat {
+  constructor(c=0){this.m=new Float64Array(10);if(c)this.m.fill(c)}
+  static fromPlane(a,b,c,d){
+    let s=new SymMat();
+    s.m[0]=a*a; s.m[1]=a*b; s.m[2]=a*c; s.m[3]=a*d;
+    s.m[4]=b*b; s.m[5]=b*c; s.m[6]=b*d;
+    s.m[7]=c*c; s.m[8]=c*d;
+    s.m[9]=d*d;
+    return s;
+  }
+  add(o){
+    let s=new SymMat();
+    for(let i=0;i<10;i++)s.m[i]=this.m[i]+o.m[i];
+    return s;
+  }
+  det(a11,a12,a13,a21,a22,a23,a31,a32,a33){
+    return a11*(a22*a33-a32*a23)-a12*(a21*a33-a31*a23)+a13*(a21*a32-a31*a22);
+  }
+  optimize(){
+    let det=this.det(this.m[0],this.m[1],this.m[2],this.m[1],this.m[4],this.m[5],this.m[2],this.m[5],this.m[7]);
+    if(Math.abs(det)<1e-6)return null;
+    let x=-this.det(this.m[3],this.m[1],this.m[2],this.m[6],this.m[4],this.m[5],this.m[8],this.m[5],this.m[7])/det;
+    let y=-this.det(this.m[0],this.m[3],this.m[2],this.m[1],this.m[6],this.m[5],this.m[2],this.m[8],this.m[7])/det;
+    let z=-this.det(this.m[0],this.m[1],this.m[3],this.m[1],this.m[4],this.m[6],this.m[2],this.m[5],this.m[8])/det;
+    return {x,y,z};
+  }
+  eval(x,y,z){
+    return this.m[0]*x*x + 2*this.m[1]*x*y + 2*this.m[2]*x*z + 2*this.m[3]*x +
+           this.m[4]*y*y + 2*this.m[5]*y*z + 2*this.m[6]*y +
+           this.m[7]*z*z + 2*this.m[8]*z + this.m[9];
+  }
+}
+
+class MinHeap {
+  constructor(){this.d=[]}
+  push(e){this.d.push(e);this.up(this.d.length-1)}
+  pop(){
+    if(!this.d.length)return null;
+    let t=this.d[0], b=this.d.pop();
+    if(this.d.length){this.d[0]=b;this.dn(0)}
+    return t;
+  }
+  up(i){
+    while(i>0){
+      let p=(i-1)>>1;
+      if(this.d[i].cost>=this.d[p].cost)break;
+      let t=this.d[i];this.d[i]=this.d[p];this.d[p]=t;
+      i=p;
+    }
+  }
+  dn(i){
+    let l=this.d.length;
+    while(1){
+      let lf=2*i+1, rt=2*i+2, min=i;
+      if(lf<l&&this.d[lf].cost<this.d[min].cost)min=lf;
+      if(rt<l&&this.d[rt].cost<this.d[min].cost)min=rt;
+      if(min===i)break;
+      let t=this.d[i];this.d[i]=this.d[min];this.d[min]=t;
+      i=min;
+    }
+  }
+}
+
+function startDecimate(ratio) {
+  log(`Initializing rigorous QEM (Target: ${ratio*100}%)...`,'cyan');
+  setTimeout(() => {
+    let t0 = performance.now();
+    let newGeo = runQEM(S.origGeo, ratio);
+    let t1 = performance.now();
+    
+    S.currGeo = newGeo;
+    updateView();
+    
+    let nf = newGeo.index.array.length/3;
+    document.getElementById('st-curr').textContent = nf.toLocaleString();
+    document.getElementById('btn-exp').disabled = false;
+    log(`QEM computation finished in ${(t1-t0).toFixed(1)}ms. Reduced to ${nf} faces.`,'green');
+  }, 50);
+}
+
+function runQEM(geo, ratio) {
+  let pos = geo.attributes.position.array;
+  let idx = geo.index.array;
+  let targetFaces = Math.floor((idx.length/3)*ratio);
+  
+  let verts = [];
+  for(let i=0;i<pos.length;i+=3) {
+    verts.push({p:{x:pos[i],y:pos[i+1],z:pos[i+2]}, q:new SymMat(), edges:new Set(), faces:new Set(), deleted:false});
+  }
+  
+  let faces = [];
+  for(let i=0;i<idx.length;i+=3) {
+    let a=idx[i], b=idx[i+1], c=idx[i+2];
+    faces.push({v:[a,b,c], deleted:false});
+    
+    // Normal & plane equation
+    let pA=verts[a].p, pB=verts[b].p, pC=verts[c].p;
+    let ab={x:pB.x-pA.x, y:pB.y-pA.y, z:pB.z-pA.z};
+    let ac={x:pC.x-pA.x, y:pC.y-pA.y, z:pC.z-pA.z};
+    let nx=ab.y*ac.z-ab.z*ac.y, ny=ab.z*ac.x-ab.x*ac.z, nz=ab.x*ac.y-ab.y*ac.x;
+    let len=Math.sqrt(nx*nx+ny*ny+nz*nz);
+    if(len>1e-6) { nx/=len; ny/=len; nz/=len; }
+    let d = -(nx*pA.x + ny*pA.y + nz*pA.z);
+    
+    let K = SymMat.fromPlane(nx,ny,nz,d);
+    verts[a].q = verts[a].q.add(K);
+    verts[b].q = verts[b].q.add(K);
+    verts[c].q = verts[c].q.add(K);
+    
+    verts[a].faces.add(i/3); verts[b].faces.add(i/3); verts[c].faces.add(i/3);
+    
+    verts[a].edges.add(b); verts[b].edges.add(a);
+    verts[b].edges.add(c); verts[c].edges.add(b);
+    verts[c].edges.add(a); verts[a].edges.add(c);
+  }
+  
+  let edgeGen = new Map();
+  let heap = new MinHeap();
+  
+  function pushEdge(a,b) {
+    let k = a<b ? `${a},${b}`:`${b},${a}`;
+    let gen = (edgeGen.get(k)||0)+1;
+    edgeGen.set(k,gen);
+    
+    let q = verts[a].q.add(verts[b].q);
+    let opt = q.optimize();
+    let cost = 0;
+    if(opt) {
+      cost = q.eval(opt.x,opt.y,opt.z);
+    } else {
+      let pa=verts[a].p, pb=verts[b].p, pm={x:(pa.x+pb.x)/2, y:(pa.y+pb.y)/2, z:(pa.z+pb.z)/2};
+      let c1=q.eval(pa.x,pa.y,pa.z), c2=q.eval(pb.x,pb.y,pb.z), c3=q.eval(pm.x,pm.y,pm.z);
+      if(c1<=c2 && c1<=c3){opt=pa; cost=c1;}
+      else if(c2<=c1 && c2<=c3){opt=pb; cost=c2;}
+      else{opt=pm; cost=c3;}
+    }
+    heap.push({a,b,opt,cost,gen});
+  }
+  
+  for(let i=0;i<verts.length;i++) {
+    for(let j of verts[i].edges) {
+      if(i<j) pushEdge(i,j);
+    }
+  }
+  
+  let activeFaces = faces.length;
+  
+  while(activeFaces > targetFaces && heap.d.length) {
+    let e = heap.pop();
+    let k = e.a<e.b ? `${e.a},${e.b}`:`${e.b},${e.a}`;
+    if(e.gen !== edgeGen.get(k)) continue;
+    if(verts[e.a].deleted || verts[e.b].deleted) continue;
+    
+    let a=e.a, b=e.b;
+    verts[a].p = e.opt;
+    verts[a].q = verts[a].q.add(verts[b].q);
+    verts[b].deleted = true;
+    
+    for(let fIdx of verts[b].faces) {
+      let f = faces[fIdx];
+      if(f.deleted) continue;
+      if(f.v.includes(a)) {
+        f.deleted = true;
+        activeFaces--;
+        for(let v of f.v) {
+          if(v!==b) verts[v].faces.delete(fIdx);
+        }
+      } else {
+        for(let i=0;i<3;i++) if(f.v[i]===b) f.v[i]=a;
+        verts[a].faces.add(fIdx);
+      }
+    }
+    
+    for(let nIdx of verts[b].edges) {
+      if(verts[nIdx].deleted || nIdx===a) continue;
+      verts[nIdx].edges.delete(b);
+      verts[nIdx].edges.add(a);
+      verts[a].edges.add(nIdx);
+      pushEdge(a,nIdx);
+    }
+    for(let nIdx of verts[a].edges) {
+      if(verts[nIdx].deleted || nIdx===b) continue;
+      pushEdge(a,nIdx);
+    }
+  }
+  
+  let newPos=[], newIdx=[], remap=new Int32Array(verts.length);
+  remap.fill(-1);
+  let vCount=0;
+  for(let i=0;i<verts.length;i++){
+    if(!verts[i].deleted) {
+      remap[i]=vCount++;
+      newPos.push(verts[i].p.x, verts[i].p.y, verts[i].p.z);
+    }
+  }
+  for(let f of faces){
+    if(!f.deleted) {
+      newIdx.push(remap[f.v[0]], remap[f.v[1]], remap[f.v[2]]);
+    }
+  }
+  
+  let decGeo=new THREE.BufferGeometry();
+  decGeo.setAttribute('position',new THREE.Float32BufferAttribute(newPos,3));
+  decGeo.setIndex(new THREE.Uint32BufferAttribute(newIdx,1));
+  decGeo.computeVertexNormals();
+  return decGeo;
+}
+
+function exportGLB(){
+  const expScene=new THREE.Scene();
+  expScene.add(new THREE.Mesh(S.currGeo,new THREE.MeshStandardMaterial()));
+  new THREE.GLTFExporter().parse(expScene,res=>{
+    const blob=new Blob([res],{type:'application/octet-stream'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download='decimated_lod.glb';
+    a.click(); URL.revokeObjectURL(a.href);
+    log('Exported LOD successfully.','green');
+  },{binary:true});
+}
+</script>
+</body></html>

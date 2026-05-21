@@ -1,0 +1,47 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G1",
+    "name": "Codegen Mutation G1 [sweep_branch_straighten]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-0",
+    "lineage_hash": "083120c8fb872b3b",
+    "island_id": 0
+  },
+  "mutations": [
+    {
+      "name": "sweep_branch_straighten",
+      "category": "SWEEP",
+      "description": "Sweep: remove ALL 206 jmp-to-next-label (branch straightening)",
+      "is_sweep": true,
+      "sweep_count": 206,
+      "energy_delta": -618.0,
+      "fingerprint": ""
+    },
+    {
+      "name": "cmpq_zero_to_testq",
+      "category": "PEEPHOLE",
+      "description": "Replace cmpq $0,%rax with testq %rax,%rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    },
+    {
+      "name": "lea_optimization",
+      "category": "IDIOM",
+      "description": "Fuse mov+add \u2192 leaq $136(%r15), %rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -3.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -4649,
+    "inst_count_delta": 117848,
+    "score_delta": -3046.9520130001474,
+    "composite_score": 1249905.938453
+  },
+  "timestamp": "2026-04-20T10:37:12.746141+00:00",
+  "generation": 1
+}

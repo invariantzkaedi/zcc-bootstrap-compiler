@@ -1,0 +1,1 @@
+{"severity": "ERROR", "event": "ZKAEDI_SWEEP_GLITCH", "component": "main", "action": "'charmap' codec can't encode character '\\U0001f3b0' in position 0: character maps to <undefined>", "timestamp_utc": "2026-05-18T07:54:46.277841Z"}

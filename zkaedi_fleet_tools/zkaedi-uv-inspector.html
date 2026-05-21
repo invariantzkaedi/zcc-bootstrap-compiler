@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>🔱 ZKAEDI UV SEAM INSPECTOR</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/three@0.134.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
+<style>
+:root{--navy:#0A0E1A;--navy2:#0D1225;--cyan:#00D4FF;--mag:#FF006E;--gold:#FFD700;--green:#00FF88;--text:#E2E8F0;--muted:#475569;--border:rgba(0,212,255,.18);--font:'Space Mono',monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--navy);color:var(--text);font-family:var(--font);display:flex;flex-direction:column}
+#hdr{height:46px;flex-shrink:0;background:var(--navy2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 14px;background-image:linear-gradient(rgba(0,212,255,.03)1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.03)1px,transparent 1px);background-size:32px 32px}
+.logo{color:var(--cyan);font-size:12px;font-weight:700;letter-spacing:5px}
+.sub{color:var(--muted);font-size:10px;letter-spacing:2px}
+#main{display:flex;flex:1;overflow:hidden}
+#vp3d{flex:1;position:relative;border-right:1px solid var(--border)}
+#vp2d{flex:1;position:relative;background:#05070a;display:flex;align-items:center;justify-content:center;overflow:hidden}
+canvas{display:block}
+#uv-canvas{background:#000;border:1px solid var(--border);max-width:90%;max-height:90%;object-fit:contain}
+#panel{width:300px;flex-shrink:0;background:var(--navy2);border-left:1px solid var(--border);overflow-y:auto;background-image:linear-gradient(rgba(0,212,255,.025)1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.025)1px,transparent 1px);background-size:28px 28px}
+.sec{padding:12px;border-bottom:1px solid rgba(0,212,255,.09)}
+.sec h3{font-size:9px;color:var(--muted);letter-spacing:3px;margin-bottom:10px;text-transform:uppercase}
+.btn{width:100%;padding:8px;background:rgba(0,212,255,.06);color:var(--cyan);border:1px solid var(--border);font-family:var(--font);font-size:10px;cursor:pointer;margin-bottom:8px;font-weight:700;letter-spacing:2px}
+.btn:hover{background:rgba(0,212,255,.15)}
+.sgrid{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:10px}
+.sl{color:var(--muted)}.sv{text-align:right;color:var(--text)}
+.sv.warn{color:var(--gold)}.sv.crit{color:var(--mag)}.sv.ok{color:var(--green)}
+#log{font-size:10px;color:var(--muted);height:150px;overflow-y:auto}
+.log-e{padding:2px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+</style>
+</head><body>
+<div id="hdr"><span class="logo">🔱 ZKAEDI</span><span class="sub">UV SEAM INSPECTOR</span></div>
+<div id="main">
+  <div id="vp3d"></div>
+  <div id="vp2d"><canvas id="uv-canvas" width="512" height="512"></canvas></div>
+  <div id="panel">
+    <div class="sec">
+      <h3>Actions</h3>
+      <button class="btn" onclick="document.getElementById('fi').click()">OPEN GLB</button>
+      <input type="file" id="fi" accept=".glb,.gltf" style="display:none" onchange="loadFile(event)">
+    </div>
+    <div class="sec">
+      <h3>UV Stats</h3>
+      <div class="sgrid">
+        <span class="sl">UV Elements</span><span class="sv" id="st-uvs">—</span>
+        <span class="sl">Out of bounds</span><span class="sv" id="st-oob">—</span>
+        <span class="sl">Overlaps</span><span class="sv" id="st-ovl">—</span>
+      </div>
+    </div>
+    <div class="sec"><h3>Log</h3><div id="log"></div></div>
+  </div>
+</div>
+<script>
+const logEl=document.getElementById('log');
+function log(m,c=''){logEl.innerHTML+=`<div class="log-e" style="color:var(--${c||'muted'})">${m}</div>`;logEl.scrollTop=logEl.scrollHeight}
+const scene=new THREE.Scene();scene.fog=new THREE.Fog(0x0A0E1A,5,50);
+const camera=new THREE.PerspectiveCamera(50,1,0.1,100);camera.position.z=5;
+const renderer=new THREE.WebGLRenderer({antialias:true});
+document.getElementById('vp3d').appendChild(renderer.domElement);
+scene.add(new THREE.AmbientLight(0x223344));
+const dl=new THREE.DirectionalLight(0x00D4FF,1);dl.position.set(2,5,2);scene.add(dl);
+const vp3d=document.getElementById('vp3d');
+let meshGrp=new THREE.Group();scene.add(meshGrp);
+
+function resize(){
+  const w=vp3d.clientWidth,h=vp3d.clientHeight;
+  renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();
+}
+window.addEventListener('resize',resize);resize();
+
+let isDragging=false, px=0, py=0, theta=0, phi=0.5, radius=5;
+renderer.domElement.addEventListener('mousedown',e=>{isDragging=true;px=e.clientX;py=e.clientY});
+window.addEventListener('mouseup',()=>isDragging=false);
+window.addEventListener('mousemove',e=>{
+  if(!isDragging)return;
+  theta-=(e.clientX-px)*0.01; phi=Math.max(0.1,Math.min(Math.PI/2-0.1, phi+(e.clientY-py)*0.01));
+  px=e.clientX; py=e.clientY;
+});
+renderer.domElement.addEventListener('wheel',e=>radius+=e.deltaY*0.01);
+
+function render(){
+  requestAnimationFrame(render);
+  camera.position.x=radius*Math.sin(theta)*Math.cos(phi);
+  camera.position.y=radius*Math.sin(phi);
+  camera.position.z=radius*Math.cos(theta)*Math.cos(phi);
+  camera.lookAt(0,0,0);
+  renderer.render(scene,camera);
+}
+render();
+
+const uvCtx=document.getElementById('uv-canvas').getContext('2d');
+
+function loadFile(e){
+  const f=e.target.files[0];if(!f)return;
+  log(`Loading ${f.name}...`,'cyan');
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    new THREE.GLTFLoader().parse(ev.target.result,'',gltf=>{
+      meshGrp.clear();
+      let geo=null;
+      gltf.scene.traverse(c=>{if(c.isMesh&&!geo)geo=c.geometry});
+      if(!geo){log('No mesh found','mag');return;}
+      meshGrp.add(new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:0x475569,wireframe:true})));
+      analyzeUVs(geo);
+    },err=>log('Load error','mag'));
+  };
+  reader.readAsArrayBuffer(f);
+}
+
+function analyzeUVs(geo){
+  uvCtx.fillStyle='#000'; uvCtx.fillRect(0,0,512,512);
+  if(!geo.attributes.uv){log('No UV data found','mag');return;}
+  const uv=geo.attributes.uv.array;
+  const idx=geo.index?geo.index.array:null;
+  const numFaces=idx?idx.length/3:uv.length/6;
+  let oob=0, overlaps=0;
+  
+  const grid=new Uint8Array(512*512);
+  
+  for(let i=0;i<uv.length;i+=2){
+    if(uv[i]<0||uv[i]>1 || uv[i+1]<0||uv[i+1]>1) oob++;
+  }
+  
+  uvCtx.strokeStyle='rgba(0,212,255,0.8)';
+  uvCtx.lineWidth=1;
+  uvCtx.beginPath();
+  for(let f=0;f<numFaces;f++){
+    let u1,v1,u2,v2,u3,v3;
+    if(idx){
+      u1=uv[idx[f*3]*2]; v1=uv[idx[f*3]*2+1];
+      u2=uv[idx[f*3+1]*2]; v2=uv[idx[f*3+1]*2+1];
+      u3=uv[idx[f*3+2]*2]; v3=uv[idx[f*3+2]*2+1];
+    }else{
+      u1=uv[f*6]; v1=uv[f*6+1];
+      u2=uv[f*6+2]; v2=uv[f*6+3];
+      u3=uv[f*6+4]; v3=uv[f*6+5];
+    }
+    const x1=u1*512, y1=(1-v1)*512;
+    const x2=u2*512, y2=(1-v2)*512;
+    const x3=u3*512, y3=(1-v3)*512;
+    uvCtx.moveTo(x1,y1); uvCtx.lineTo(x2,y2); uvCtx.lineTo(x3,y3); uvCtx.lineTo(x1,y1);
+    
+    const minX=Math.max(0,Math.floor(Math.min(x1,x2,x3))), maxX=Math.min(511,Math.ceil(Math.max(x1,x2,x3)));
+    const minY=Math.max(0,Math.floor(Math.min(y1,y2,y3))), maxY=Math.min(511,Math.ceil(Math.max(y1,y2,y3)));
+    
+    for(let y=minY;y<=maxY;y++){
+      for(let x=minX;x<=maxX;x++){
+        const dX=x-x3, dY=y-y3;
+        const dX21=x2-x1, dY12=y1-y2;
+        const D=dY12*(x3-x1) + dX21*(y3-y1);
+        if(D===0) continue;
+        const s=(dY12*dX + dX21*dY)/D;
+        const t=((y1-y3)*dX + (x3-x1)*dY)/D;
+        if(s>=0 && t>=0 && s+t<=1){
+          const p=y*512+x;
+          if(grid[p]===1) overlaps++;
+          grid[p]=1;
+        }
+      }
+    }
+  }
+  uvCtx.stroke();
+  
+  document.getElementById('st-uvs').textContent=uv.length/2;
+  document.getElementById('st-oob').textContent=oob;
+  document.getElementById('st-oob').className='sv '+(oob>0?'crit':'ok');
+  document.getElementById('st-ovl').textContent=overlaps>0?'>0':'0';
+  document.getElementById('st-ovl').className='sv '+(overlaps>0?'warn':'ok');
+  log(`Analysis complete. Overlaps: ${overlaps>0?'DETECTED':'NONE'}`,'green');
+}
+</script>
+</body></html>

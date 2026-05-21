@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZKAEDI PRIME // Kinetic Lyric Sequencer</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #03081c; font-family: 'Courier New', Courier, monospace; }
+        canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1; }
+        #overlay {
+            position: absolute; top: 20px; left: 20px; z-index: 10;
+            color: #0ff; font-size: 14px; pointer-events: none; text-shadow: 0 0 5px #0ff;
+        }
+        .highlight { color: #f0f; text-shadow: 0 0 5px #f0f; font-weight: bold; }
+        .btn {
+            background: rgba(0,0,0,0.5); border: 1px solid #0ff; color: #0ff;
+            padding: 10px 20px; cursor: pointer; text-transform: uppercase;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5); transition: all 0.2s;
+            margin-bottom: 10px; display: block; width: 300px; text-align: center;
+        }
+        .btn:hover { background: #0ff; color: #000; box-shadow: 0 0 20px #0ff; }
+        #controls { position: absolute; bottom: 20px; right: 20px; z-index: 10; }
+        
+        #lyric-input-container {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            z-index: 20; background: rgba(0,0,0,0.8); border: 1px solid #0ff; padding: 20px;
+            text-align: center; display: none;
+        }
+        #lyric-textarea {
+            width: 400px; height: 200px; background: #000; color: #0ff; border: 1px solid #f0f;
+            font-family: monospace; padding: 10px; margin-bottom: 10px;
+        }
+        
+        #cinematic-lyric {
+            position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
+            z-index: 5; color: rgba(255, 0, 255, 0.8); font-size: 80px; font-weight: bold;
+            text-align: center; pointer-events: none; text-shadow: 0 0 20px #0ff;
+            font-family: 'Arial Black', Impact, sans-serif; opacity: 0; transition: opacity 0.1s;
+        }
+
+        #status-log {
+            position: absolute; left: 20px; bottom: 20px; z-index: 10;
+            color: #0ff; font-size: 12px; pointer-events: none; opacity: 0.9;
+        }
+        
+        #metrics { margin-top: 10px; opacity: 0.8; }
+        .lyric-title { color: #0ff; margin-bottom: 10px; }
+        #start-sequence-btn { margin: 0 auto; }
+        .hidden-btn { display: none; }
+        #setup-lyrics-btn { font-size: 10px; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+</head>
+<body>
+    <div id="overlay">
+        <div>ZKAEDI PRIME // <span class="highlight">KINETIC LYRIC SEQUENCER</span></div>
+        <div>TARGET: Extruded Asset (Modesto Grid)</div>
+        <div>STATUS: <span id="sync-status" class="highlight">SYNCING IR...</span></div>
+        <div id="metrics"></div>
+    </div>
+    
+    <div id="status-log">Awaiting Audio Engine...</div>
+    <div id="cinematic-lyric"></div>
+    
+    <div id="lyric-input-container">
+        <div class="lyric-title">Paste Suno Lyrics Here</div>
+        <textarea id="lyric-textarea"></textarea><br>
+        <button id="start-sequence-btn" class="btn">Lock Sequence</button>
+    </div>
+
+    <div id="controls">
+        <button id="audio-btn" class="btn">1. Load Suno Track (.mp3)</button>
+        <button id="dataset-btn" class="btn hidden-btn">2. Parse Dataset (.jsonl)</button>
+        <button id="setup-lyrics-btn" class="btn hidden-btn">(Fallback) Paste Lyrics</button>
+    </div>
+    
+    <script>
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x03081c, 0.15);
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 2.5;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        const renderScene = new THREE.RenderPass(scene, camera);
+        const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.threshold = 0.2; bloomPass.strength = 1.0; bloomPass.radius = 0.5;
+
+        const ChromaticAberrationShader = {
+            uniforms: { "tDiffuse": { value: null }, "amount": { value: 0.003 } },
+            vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+            fragmentShader: `uniform sampler2D tDiffuse; uniform float amount; varying vec2 vUv; void main() { vec4 cr = texture2D(tDiffuse, vUv + vec2(amount, 0.0)); vec4 cg = texture2D(tDiffuse, vUv); vec4 cb = texture2D(tDiffuse, vUv - vec2(amount, 0.0)); gl_FragColor = vec4(cr.r, cg.g, cb.b, cg.a); }`
+        };
+
+        const caPass = new THREE.ShaderPass(ChromaticAberrationShader);
+        const composer = new THREE.EffectComposer(renderer);
+        composer.addPass(renderScene); composer.addPass(bloomPass); composer.addPass(caPass);
+
+        let audioAnalyser = null;
+        let audioActive = false;
+        
+        // Lyric Sequencer State
+        let lyricArray = [];
+        let currentLyricIndex = 0;
+        let sequenceActive = false;
+        let lastHitTime = 0;
+        let currentAudioFilename = "";
+
+        const audioInput = document.createElement('input');
+        audioInput.type = 'file'; audioInput.accept = 'audio/*'; audioInput.style.display = 'none';
+        document.body.appendChild(audioInput);
+        
+        const datasetInput = document.createElement('input');
+        datasetInput.type = 'file'; datasetInput.accept = '.json,.jsonl'; datasetInput.style.display = 'none';
+        document.body.appendChild(datasetInput);
+
+        document.getElementById('audio-btn').addEventListener('click', () => audioInput.click());
+        document.getElementById('dataset-btn').addEventListener('click', () => datasetInput.click());
+        document.getElementById('setup-lyrics-btn').addEventListener('click', () => {
+            document.getElementById('lyric-input-container').style.display = 'block';
+        });
+
+        document.getElementById('start-sequence-btn').addEventListener('click', () => {
+            const text = document.getElementById('lyric-textarea').value;
+            lyricArray = text.split(/\\s+/).filter(w => w.length > 0);
+            currentLyricIndex = 0; sequenceActive = true;
+            document.getElementById('lyric-input-container').style.display = 'none';
+            document.getElementById('dataset-btn').style.display = 'none';
+            document.getElementById('setup-lyrics-btn').style.display = 'none';
+            document.getElementById('status-log').innerText = "Kinetic Sequencer LOCKED. Waiting for audio transient.";
+        });
+
+        audioInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            currentAudioFilename = file.name;
+            const listener = new THREE.AudioListener();
+            camera.add(listener);
+            const sound = new THREE.Audio(listener);
+            const audioLoader = new THREE.AudioLoader();
+            const url = URL.createObjectURL(file);
+            document.getElementById('status-log').innerText = "Loading " + file.name + "...";
+            audioLoader.load(url, function(buffer) {
+                sound.setBuffer(buffer); sound.setLoop(true); sound.setVolume(1.0); sound.play();
+                audioAnalyser = new THREE.AudioAnalyser(sound, 128); audioActive = true;
+                document.getElementById('audio-btn').style.display = 'none';
+                document.getElementById('dataset-btn').classList.remove('hidden-btn');
+                document.getElementById('setup-lyrics-btn').classList.remove('hidden-btn');
+                document.getElementById('status-log').innerText = "Audio Synced. Parse JSONL Dataset to arm Sequencer.";
+            });
+        });
+
+        datasetInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const text = evt.target.result;
+                const lines = text.split('\\n');
+                
+                let foundLyrics = "";
+                let matchedId = "";
+                for(let line of lines) {
+                    if(!line.trim()) continue;
+                    try {
+                        const data = JSON.parse(line);
+                        // The mp3 filename usually contains the suno ID
+                        if (currentAudioFilename && currentAudioFilename.includes(data.id)) {
+                            foundLyrics = data.prompt || data.lyrics || data.text || "";
+                            matchedId = data.id;
+                            break;
+                        }
+                    } catch(err) {}
+                }
+                
+                if(foundLyrics) {
+                    // Strip structural tags like [Verse], [Chorus]
+                    foundLyrics = foundLyrics.replace(/\\[.*?\\]/g, ''); 
+                    lyricArray = foundLyrics.split(/\\s+/).filter(w => w.length > 0);
+                    currentLyricIndex = 0;
+                    sequenceActive = true;
+                    document.getElementById('dataset-btn').style.display = 'none';
+                    document.getElementById('setup-lyrics-btn').style.display = 'none';
+                    document.getElementById('status-log').innerText = "Dataset Extracted (ID: " + matchedId + "). Sequencer LOCKED.";
+                } else {
+                    document.getElementById('status-log').innerText = "ID not found in dataset. Use Manual Fallback.";
+                }
+            };
+            reader.readAsText(file);
+        });
+
+        const vertexShader = `
+            precision highp float;
+            uniform float uTime;
+            uniform float uAudioEnergy;
+            uniform vec2 proxyPositionsSize;
+            uniform vec2 proxyFacesSize;
+            uniform sampler2D proxyVertexPositions;
+            uniform sampler2D proxyFaces;
+            uniform sampler2D uGhostLayer;
+            uniform float uGhostInfluence;
+            
+            uniform sampler2D proxyTargetFaces;
+            uniform float uMorphProgress;
+
+            attribute float slaveTriangleIdx;
+            attribute vec3 slaveBaryUVW;
+
+            varying vec3 vWorldNormal;
+            varying vec3 vViewPosition;
+            varying float vEnergyStress;
+
+            vec3 getProxyVertex(int index) {
+                int x = index % int(proxyPositionsSize.x);
+                int y = index / int(proxyPositionsSize.x);
+                vec2 uv = vec2(float(x) + 0.5, float(y) + 0.5) / proxyPositionsSize;
+                return texture2D(proxyVertexPositions, uv).xyz;
+            }
+
+            ivec3 getProxyFace(int index) {
+                int x = index % int(proxyFacesSize.x);
+                int y = index / int(proxyFacesSize.x);
+                vec2 uv = vec2(float(x) + 0.5, float(y) + 0.5) / proxyFacesSize;
+                vec4 faceData = texture2D(proxyFaces, uv);
+                return ivec3(int(faceData.r), int(faceData.g), int(faceData.b));
+            }
+
+            void main() {
+                ivec3 face = getProxyFace(int(slaveTriangleIdx));
+                vec3 vA = getProxyVertex(face.x);
+                vec3 vB = getProxyVertex(face.y);
+                vec3 vC = getProxyVertex(face.z);
+
+                vec2 faceUV = vec2(float(int(slaveTriangleIdx) % int(proxyFacesSize.x)) + 0.5, float(int(slaveTriangleIdx) / int(proxyFacesSize.x)) + 0.5) / proxyFacesSize;
+                vec3 faceTarget = texture2D(proxyTargetFaces, faceUV).xyz;
+                
+                vec3 targetPos = faceTarget + (slaveBaryUVW - vec3(0.333)) * 0.03;
+
+                vec2 ghostUV = vec2(mod(float(slaveTriangleIdx) * 0.13 + uTime * 0.05, 1.0), 0.5);
+                vec3 ghostMod = texture2D(uGhostLayer, ghostUV).xyz;
+                
+                vec3 localPos = (vA * slaveBaryUVW.x) + (vB * slaveBaryUVW.y) + (vC * slaveBaryUVW.z);
+                localPos *= 1.0 + (uAudioEnergy * 0.15);
+                localPos += ghostMod * uGhostInfluence * sin(uTime * 3.0 + float(slaveTriangleIdx) * 0.05) * (0.5 + uAudioEnergy * 0.5);
+
+                localPos = mix(localPos, targetPos, uMorphProgress);
+
+                float excitation = sin(localPos.y * 10.0 + uTime * 2.0);
+                float dispersion = cos(localPos.x * 10.0 + uTime * 3.0);
+                vEnergyStress = abs(excitation * dispersion) * (0.3 + uAudioEnergy * 0.7);
+
+                vec3 edge1 = vB - vA; vec3 edge2 = vC - vA;
+                vec3 cross_prod = cross(edge1, edge2); float area = length(cross_prod);
+                vec3 proxyNormal = area > 0.0001 ? (cross_prod / area) : vec3(0,0,1);
+                
+                vWorldNormal = normalize(normalMatrix * proxyNormal);
+                vec4 worldPosition = modelMatrix * vec4(localPos, 1.0);
+                vViewPosition = -(viewMatrix * worldPosition).xyz;
+                gl_Position = projectionMatrix * viewMatrix * worldPosition;
+            }
+        `;
+
+        const fragmentShader = `
+            precision highp float;
+            varying vec3 vWorldNormal; varying vec3 vViewPosition; varying float vEnergyStress;
+            uniform float uAudioEnergy; uniform float uMorphProgress;
+            void main() {
+                vec3 viewDir = normalize(vViewPosition);
+                float fresnel = pow(1.0 - max(dot(normalize(vWorldNormal), viewDir), 0.0), 3.0);
+                vec3 coreColor = mix(vec3(0.01, 0.02, 0.05), vec3(0.1, 0.0, 0.2), uMorphProgress);
+                vec3 neonCyan = vec3(0.0, 1.0, 1.0); vec3 neonMagenta = vec3(1.0, 0.0, 1.0);
+                vec3 energyColor = mix(neonCyan, neonMagenta, sin(vEnergyStress * 3.14) * 0.5 + 0.5);
+                vec3 emission = energyColor * vEnergyStress * (1.5 + uAudioEnergy * 3.0) + (uMorphProgress * neonMagenta); 
+                vec3 rimLight = neonCyan * fresnel * (0.5 + uAudioEnergy * 1.5);       
+                gl_FragColor = vec4(coreColor + emission + rimLight, 1.0);
+            }
+        `;
+
+        async function initZkaediPipeline() {
+            try {
+                const vertsRes = await fetch('proxy_verts.bin'); const facesRes = await fetch('proxy_faces.bin');
+                const vertsArray = new Float32Array(await vertsRes.arrayBuffer());
+                const facesArray = new Int32Array(await facesRes.arrayBuffer());
+                
+                const numVerts = vertsArray.length / 3; const numFaces = facesArray.length / 3;
+                document.getElementById('metrics').innerText = "Geometry: " + numVerts + " Verts | " + numFaces + " Faces";
+
+                const posTexSize = Math.max(2, Math.ceil(Math.sqrt(numVerts)));
+                const faceTexSize = Math.max(2, Math.ceil(Math.sqrt(numFaces)));
+
+                const posData = new Float32Array(posTexSize * posTexSize * 4);
+                for(let i=0; i<numVerts; i++) { posData[i*4+0] = vertsArray[i*3+0]; posData[i*4+1] = vertsArray[i*3+1]; posData[i*4+2] = vertsArray[i*3+2]; posData[i*4+3] = 1.0; }
+                const proxyVertexPositions = new THREE.DataTexture(posData, posTexSize, posTexSize, THREE.RGBAFormat, THREE.FloatType);
+                proxyVertexPositions.magFilter = proxyVertexPositions.minFilter = THREE.NearestFilter; proxyVertexPositions.needsUpdate = true;
+
+                const faceData = new Float32Array(faceTexSize * faceTexSize * 4);
+                for(let i=0; i<numFaces; i++) { faceData[i*4+0] = facesArray[i*3+0]; faceData[i*4+1] = facesArray[i*3+1]; faceData[i*4+2] = facesArray[i*3+2]; faceData[i*4+3] = 1.0; }
+                const proxyFaces = new THREE.DataTexture(faceData, faceTexSize, faceTexSize, THREE.RGBAFormat, THREE.FloatType);
+                proxyFaces.magFilter = proxyFaces.minFilter = THREE.NearestFilter; proxyFaces.needsUpdate = true;
+
+                const targetFaceData = new Float32Array(faceTexSize * faceTexSize * 4);
+                const proxyTargetFaces = new THREE.DataTexture(targetFaceData, faceTexSize, faceTexSize, THREE.RGBAFormat, THREE.FloatType);
+                proxyTargetFaces.magFilter = proxyTargetFaces.minFilter = THREE.NearestFilter; proxyTargetFaces.needsUpdate = true;
+
+                let ghostArray = new Float32Array(1024 * 4); let ghostActive = false; let ghostCount = 32;
+                try {
+                    const ghostRes = await fetch('proxy_ghost.bin');
+                    if (ghostRes.ok) {
+                        const rawGhost = new Float32Array(await ghostRes.arrayBuffer());
+                        ghostCount = Math.min(rawGhost.length / 3, 1024);
+                        for(let i=0; i<ghostCount; i++) { ghostArray[i*4+0] = rawGhost[i*3+0]; ghostArray[i*4+1] = rawGhost[i*3+1]; ghostArray[i*4+2] = rawGhost[i*3+2]; ghostArray[i*4+3] = 1.0; }
+                        document.getElementById('sync-status').innerText = "IR SYNCED (" + ghostCount + " NODES)"; ghostActive = true;
+                    }
+                } catch (e) { }
+                const ghostTexture = new THREE.DataTexture(ghostArray, ghostCount, 1, THREE.RGBAFormat, THREE.FloatType);
+                ghostTexture.magFilter = ghostTexture.minFilter = THREE.NearestFilter; ghostTexture.needsUpdate = true;
+
+                const geometry = new THREE.BufferGeometry();
+                const slaveVerts = new Float32Array(numFaces * 9); const slaveBaryUVW = new Float32Array(numFaces * 9); const slaveTriangleIdx = new Float32Array(numFaces * 3);
+                for(let i=0; i<numFaces; i++) {
+                    slaveTriangleIdx[i*3+0] = i; slaveTriangleIdx[i*3+1] = i; slaveTriangleIdx[i*3+2] = i;
+                    slaveBaryUVW[i*9+0] = 1; slaveBaryUVW[i*9+1] = 0; slaveBaryUVW[i*9+2] = 0; slaveBaryUVW[i*9+3] = 0; slaveBaryUVW[i*9+4] = 1; slaveBaryUVW[i*9+5] = 0; slaveBaryUVW[i*9+6] = 0; slaveBaryUVW[i*9+7] = 0; slaveBaryUVW[i*9+8] = 1;
+                }
+                geometry.setAttribute('position', new THREE.BufferAttribute(slaveVerts, 3)); geometry.setAttribute('slaveBaryUVW', new THREE.BufferAttribute(slaveBaryUVW, 3)); geometry.setAttribute('slaveTriangleIdx', new THREE.BufferAttribute(slaveTriangleIdx, 1));
+
+                const material = new THREE.ShaderMaterial({
+                    vertexShader: vertexShader, fragmentShader: fragmentShader,
+                    uniforms: {
+                        uTime: { value: 0 }, uAudioEnergy: { value: 0.0 }, uMorphProgress: { value: 0.0 },
+                        proxyPositionsSize: { value: new THREE.Vector2(posTexSize, posTexSize) }, proxyFacesSize: { value: new THREE.Vector2(faceTexSize, faceTexSize) },
+                        proxyVertexPositions: { value: proxyVertexPositions }, proxyFaces: { value: proxyFaces }, proxyTargetFaces: { value: proxyTargetFaces },
+                        uGhostLayer: { value: ghostTexture }, uGhostInfluence: { value: ghostActive ? 1.0 : 0.0 }
+                    },
+                    side: THREE.DoubleSide
+                });
+
+                const mesh = new THREE.Mesh(geometry, material); scene.add(mesh);
+
+                let targetMorphValue = 0.0;
+                let morphTimeout;
+
+                function executeLyricMorph(word) {
+                    const cinematicDiv = document.getElementById('cinematic-lyric');
+                    cinematicDiv.innerText = word;
+                    cinematicDiv.style.opacity = '1';
+                    
+                    const ctx = document.createElement('canvas').getContext('2d', {willReadFrequently: true});
+                    ctx.canvas.width = 512; ctx.canvas.height = 512;
+                    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 512, 512);
+                    ctx.fillStyle = '#fff'; ctx.font = 'bold 120px Courier New'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    ctx.fillText(word.substring(0, 8), 256, 256); 
+                    
+                    const imgData = ctx.getImageData(0, 0, 512, 512).data;
+                    let validPixels = [];
+                    for(let i=0; i<imgData.length; i+=4) {
+                        if(imgData[i] > 128) {
+                            let idx = i / 4;
+                            validPixels.push({ x: ((idx % 512) - 256)/100.0, y: -((Math.floor(idx / 512)) - 256)/100.0 });
+                        }
+                    }
+                    
+                    if(validPixels.length > 0) {
+                        for(let f=0; f<numFaces; f++) {
+                            let p = validPixels[Math.floor(Math.random() * validPixels.length)];
+                            targetFaceData[f*4+0] = p.x; targetFaceData[f*4+1] = p.y; targetFaceData[f*4+2] = (Math.random()-0.5)*0.2; targetFaceData[f*4+3] = 1.0;
+                        }
+                        proxyTargetFaces.needsUpdate = true;
+                    }
+                    
+                    targetMorphValue = 1.0;
+                    
+                    clearTimeout(morphTimeout);
+                    morphTimeout = setTimeout(() => { 
+                        targetMorphValue = 0.0; 
+                        cinematicDiv.style.opacity = '0';
+                    }, 400); 
+                }
+
+                const clock = new THREE.Clock(); let mouseInfluence = 0.0; let mouseTargetX = 0; let mouseTargetY = 0;
+                window.addEventListener('mousemove', (e) => { mouseInfluence = (e.clientX / window.innerWidth) * 2.0; mouseTargetX = (e.clientX / window.innerWidth) * 2 - 1; mouseTargetY = -(e.clientY / window.innerHeight) * 2 + 1; });
+
+                function animate() {
+                    requestAnimationFrame(animate);
+                    const dt = clock.getDelta(); material.uniforms.uTime.value += dt;
+                    
+                    let audioVal = 0.0;
+                    if (audioActive && audioAnalyser) {
+                        const data = audioAnalyser.getFrequencyData();
+                        let sum = 0; for(let i = 0; i < 16; i++) sum += data[i];
+                        audioVal = (sum / 16.0) / 255.0;
+                        caPass.uniforms.amount.value = 0.001 + audioVal * 0.005; bloomPass.strength = 1.0 + audioVal * 1.0;
+                        
+                        if (sequenceActive && lyricArray.length > 0) {
+                            let now = Date.now();
+                            if (audioVal > 0.7 && (now - lastHitTime) > 400) {
+                                lastHitTime = now;
+                                let nextWord = lyricArray[currentLyricIndex];
+                                executeLyricMorph(nextWord);
+                                currentLyricIndex++;
+                                if(currentLyricIndex >= lyricArray.length) {
+                                    sequenceActive = false; 
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (audioVal > material.uniforms.uAudioEnergy.value) material.uniforms.uAudioEnergy.value += (audioVal - material.uniforms.uAudioEnergy.value) * 0.4;
+                    else material.uniforms.uAudioEnergy.value += (audioVal - material.uniforms.uAudioEnergy.value) * 0.05;
+
+                    material.uniforms.uMorphProgress.value += (targetMorphValue - material.uniforms.uMorphProgress.value) * 0.2;
+                    if (ghostActive) material.uniforms.uGhostInfluence.value += (mouseInfluence - material.uniforms.uGhostInfluence.value) * 0.1;
+                    
+                    mesh.rotation.y += (mouseTargetX * 1.5 - mesh.rotation.y) * 0.05 + 0.01;
+                    mesh.rotation.x += (-mouseTargetY * 1.5 - mesh.rotation.x) * 0.05 + 0.005;
+                    composer.render();
+                }
+                animate();
+
+            } catch(e) { document.getElementById('sync-status').innerText = "FATAL ERROR."; console.error(e); }
+        }
+        window.addEventListener('load', initZkaediPipeline);
+        window.addEventListener('resize', () => { renderer.setSize(window.innerWidth, window.innerHeight); composer.setSize(window.innerWidth, window.innerHeight); camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); });
+    </script>
+</body>
+</html>

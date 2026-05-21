@@ -6133,9 +6133,9 @@ static uint32_t hash_gvn_key(Opcode op, RegID src1_vn, RegID src2_vn, int64_t im
   hash = ((hash << 5) + hash) + (uint32_t)(imm & 0xFFFFFFFF);
   hash = ((hash << 5) + hash) + (uint32_t)((imm >> 32) & 0xFFFFFFFF);
   if (global_name && global_name[0]) {
-    for (int i = 0; global_name[i]; i++) {
-      hash = ((hash << 5) + hash) + (uint32_t)global_name[i];
-    }
+    { int gi2; for (gi2 = 0; global_name[gi2]; gi2++) {
+      hash = ((hash << 5) + hash) + (uint32_t)global_name[gi2];
+    } }
   }
   return hash;
 }
@@ -6144,16 +6144,12 @@ static GVNEntry *gvn_lookup_or_insert(Opcode op, RegID src1_vn, RegID src2_vn, i
   uint32_t hash = hash_gvn_key(op, src1_vn, src2_vn, imm, global_name);
   uint32_t idx = hash % GVN_TABLE_SIZE;
 
-  for (int probe = 0; probe < GVN_TABLE_SIZE; probe++) {
+  { int probe; for (probe = 0; probe < GVN_TABLE_SIZE; probe++) {
     uint32_t slot = (idx + probe) % GVN_TABLE_SIZE;
 
     if (!gvn_table[slot].occupied) {
       if (gvn_scope_top < GVN_SCOPE_MAX) {
-        gvn_scope_stack[gvn_scope_top++] = (GVNScopeAction){
-          .slot = slot,
-          .old_occupied = false,
-          .old_valid = false
-        };
+        { GVNScopeAction gvn_sa; gvn_sa.slot = slot; gvn_sa.old_occupied = false; gvn_sa.old_valid = false; gvn_scope_stack[gvn_scope_top++] = gvn_sa; }
       }
       gvn_table[slot].occupied = true;
       gvn_table[slot].valid = true;
@@ -6189,7 +6185,7 @@ static GVNEntry *gvn_lookup_or_insert(Opcode op, RegID src1_vn, RegID src2_vn, i
         }
       }
     }
-  }
+  } }
   return NULL;
 }
 
@@ -6252,18 +6248,14 @@ static void gvn_walk_domtree(Function *fn, BlockID bid, uint32_t *eliminated) {
     }
 
     if (ins->op == OP_CALL) {
-      for (int i = 0; i < GVN_TABLE_SIZE; i++) {
-        if (gvn_table[i].occupied && gvn_table[i].valid && gvn_table[i].op == OP_LOAD) {
+      { int gvni; for (gvni = 0; gvni < GVN_TABLE_SIZE; gvni++) {
+        if (gvn_table[gvni].occupied && gvn_table[gvni].valid && gvn_table[gvni].op == OP_LOAD) {
           if (gvn_scope_top < GVN_SCOPE_MAX) {
-            gvn_scope_stack[gvn_scope_top++] = (GVNScopeAction){
-              .slot = i,
-              .old_occupied = gvn_table[i].occupied,
-              .old_valid = gvn_table[i].valid
-            };
+            { GVNScopeAction gvn_sa2; gvn_sa2.slot = gvni; gvn_sa2.old_occupied = gvn_table[gvni].occupied; gvn_sa2.old_valid = gvn_table[gvni].valid; gvn_scope_stack[gvn_scope_top++] = gvn_sa2; }
           }
-          gvn_table[i].valid = false;
+          gvn_table[gvni].valid = false;
         }
-      }
+      } }
       continue;
     }
 
@@ -6286,31 +6278,31 @@ static void gvn_walk_domtree(Function *fn, BlockID bid, uint32_t *eliminated) {
                 ins->id, root_store, vn_of[root_store], store_offset, store_has_cast);
       }
 
-      for (int i = 0; i < GVN_TABLE_SIZE; i++) {
-        if (gvn_table[i].occupied && gvn_table[i].valid && gvn_table[i].op == OP_LOAD) {
+      { int gvni2; for (gvni2 = 0; gvni2 < GVN_TABLE_SIZE; gvni2++) {
+        if (gvn_table[gvni2].occupied && gvn_table[gvni2].valid && gvn_table[gvni2].op == OP_LOAD) {
           bool must_kill = false;
 
           /* Rule 1: Cast fallback rule (Risk 2 mitigation) */
-          if (store_has_cast || gvn_table[i].sbt_has_cast) {
+          if (store_has_cast || gvn_table[gvni2].sbt_has_cast) {
             must_kill = true;
             if (getenv("ZCC_DEBUG_GVN")) {
-              fprintf(stderr, "  -> KILLED by Rule 1 (cast): load dst=%u base=%u offset=%ld has_cast=%d\n", gvn_table[i].dst_reg, gvn_table[i].sbt_base, gvn_table[i].sbt_offset, gvn_table[i].sbt_has_cast);
+              fprintf(stderr, "  -> KILLED by Rule 1 (cast): load dst=%u base=%u offset=%ld has_cast=%d\n", gvn_table[gvni2].dst_reg, gvn_table[gvni2].sbt_base, gvn_table[gvni2].sbt_offset, gvn_table[gvni2].sbt_has_cast);
             }
           }
           /* Rule 2: If both have valid symbolic bases */
-          else if (root_store > 0 && gvn_table[i].sbt_base > 0) {
+          else if (root_store > 0 && gvn_table[gvni2].sbt_base > 0) {
             RegID store_base_vn = vn_of[root_store];
-            RegID load_base_vn = vn_of[gvn_table[i].sbt_base];
+            RegID load_base_vn = vn_of[gvn_table[gvni2].sbt_base];
             if (store_base_vn != load_base_vn) {
               /* Different symbolic bases -> must not alias! No kill! */
               must_kill = false;
             } else {
               /* Same symbolic base -> check offsets (struct field TBAA) */
-              if (store_offset == gvn_table[i].sbt_offset) {
+              if (store_offset == gvn_table[gvni2].sbt_offset) {
                 /* Same offset -> must kill! */
                 must_kill = true;
                 if (getenv("ZCC_DEBUG_GVN")) {
-                  fprintf(stderr, "  -> KILLED by Rule 2 (same base & offset): load dst=%u base=%u offset=%ld has_cast=%d\n", gvn_table[i].dst_reg, gvn_table[i].sbt_base, gvn_table[i].sbt_offset, gvn_table[i].sbt_has_cast);
+                  fprintf(stderr, "  -> KILLED by Rule 2 (same base & offset): load dst=%u base=%u offset=%ld has_cast=%d\n", gvn_table[gvni2].dst_reg, gvn_table[gvni2].sbt_base, gvn_table[gvni2].sbt_offset, gvn_table[gvni2].sbt_has_cast);
                 }
               } else {
                 /* Different offsets -> must not alias! No kill! */
@@ -6321,17 +6313,17 @@ static void gvn_walk_domtree(Function *fn, BlockID bid, uint32_t *eliminated) {
           /* Rule 3: Unknown bases -> conservative invalidation based on alias class */
           else {
             if (ins->alias_class == ALIAS_LOCAL_STACK) {
-              if (gvn_table[i].alias_class == ALIAS_LOCAL_STACK && gvn_table[i].root_addr == root_store) {
+              if (gvn_table[gvni2].alias_class == ALIAS_LOCAL_STACK && gvn_table[gvni2].root_addr == root_store) {
                 must_kill = true;
                 if (getenv("ZCC_DEBUG_GVN")) {
-                  fprintf(stderr, "  -> KILLED by Rule 3 (local stack): load dst=%u base=%u offset=%ld has_cast=%d\n", gvn_table[i].dst_reg, gvn_table[i].sbt_base, gvn_table[i].sbt_offset, gvn_table[i].sbt_has_cast);
+                  fprintf(stderr, "  -> KILLED by Rule 3 (local stack): load dst=%u base=%u offset=%ld has_cast=%d\n", gvn_table[gvni2].dst_reg, gvn_table[gvni2].sbt_base, gvn_table[gvni2].sbt_offset, gvn_table[gvni2].sbt_has_cast);
                 }
               }
             } else {
-              if (gvn_table[i].alias_class == ALIAS_UNKNOWN) {
+              if (gvn_table[gvni2].alias_class == ALIAS_UNKNOWN) {
                 must_kill = true;
                 if (getenv("ZCC_DEBUG_GVN")) {
-                  fprintf(stderr, "  -> KILLED by Rule 3 (unknown base): load dst=%u base=%u offset=%ld has_cast=%d\n", gvn_table[i].dst_reg, gvn_table[i].sbt_base, gvn_table[i].sbt_offset, gvn_table[i].sbt_has_cast);
+                  fprintf(stderr, "  -> KILLED by Rule 3 (unknown base): load dst=%u base=%u offset=%ld has_cast=%d\n", gvn_table[gvni2].dst_reg, gvn_table[gvni2].sbt_base, gvn_table[gvni2].sbt_offset, gvn_table[gvni2].sbt_has_cast);
                 }
               }
             }
@@ -6339,16 +6331,12 @@ static void gvn_walk_domtree(Function *fn, BlockID bid, uint32_t *eliminated) {
 
           if (must_kill) {
             if (gvn_scope_top < GVN_SCOPE_MAX) {
-              gvn_scope_stack[gvn_scope_top++] = (GVNScopeAction){
-                .slot = i,
-                .old_occupied = gvn_table[i].occupied,
-                .old_valid = gvn_table[i].valid
-              };
+              { GVNScopeAction gvn_sa3; gvn_sa3.slot = gvni2; gvn_sa3.old_occupied = gvn_table[gvni2].occupied; gvn_sa3.old_valid = gvn_table[gvni2].valid; gvn_scope_stack[gvn_scope_top++] = gvn_sa3; }
             }
-            gvn_table[i].valid = false;
+            gvn_table[gvni2].valid = false;
           }
         }
-      }
+      } }
 
       /* Store-to-Load Forwarding: Cache store values */
       if (root_store > 0 && !store_has_cast) {

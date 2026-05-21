@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>🔱 ZKAEDI FLEET SCANNER</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/three@0.134.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
+<style>
+:root{--navy:#0A0E1A;--navy2:#0D1225;--cyan:#00D4FF;--mag:#FF006E;--gold:#FFD700;--green:#00FF88;--text:#E2E8F0;--muted:#475569;--border:rgba(0,212,255,.18);--font:'Space Mono',monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--navy);color:var(--text);font-family:var(--font);display:flex;flex-direction:column}
+#hdr{height:46px;flex-shrink:0;background:var(--navy2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 14px;background-image:linear-gradient(rgba(0,212,255,.03)1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.03)1px,transparent 1px);background-size:32px 32px}
+.logo{color:var(--cyan);font-size:12px;font-weight:700;letter-spacing:5px}
+.sub{color:var(--muted);font-size:10px;letter-spacing:2px}
+#main{flex:1;padding:20px;overflow-y:auto}
+.drop-zone{border:2px dashed var(--border);padding:40px;text-align:center;color:var(--cyan);cursor:pointer;background:rgba(0,212,255,.03);margin-bottom:20px;letter-spacing:2px;font-weight:700}
+.drop-zone:hover{background:rgba(0,212,255,.08)}
+table{width:100%;border-collapse:collapse;font-size:11px}
+th,td{padding:10px;text-align:left;border-bottom:1px solid var(--border)}
+th{color:var(--muted);text-transform:uppercase;letter-spacing:2px}
+.badge{padding:3px 8px;border:1px solid var(--border);color:var(--text);font-weight:700;letter-spacing:1px;white-space:nowrap}
+.badge.ok{color:var(--green);border-color:rgba(0,255,136,.4);background:rgba(0,255,136,.08)}
+.badge.warn{color:var(--gold);border-color:rgba(255,215,0,.4);background:rgba(255,215,0,.08)}
+.badge.crit{color:var(--mag);border-color:rgba(255,0,110,.4);background:rgba(255,0,110,.08)}
+.ok{color:var(--green)}.warn{color:var(--gold)}.crit{color:var(--mag)}
+</style>
+</head><body>
+<div id="hdr"><span class="logo">🔱 ZKAEDI</span><span class="sub">FLEET HEALTH SCANNER</span></div>
+<div id="main">
+  <label class="drop-zone">
+    <input type="file" multiple accept=".glb,.gltf" style="display:none" onchange="handleFiles(event)">
+    [ DROP FLEET BATCH FOR AUDIT ]
+  </label>
+  <table>
+    <thead><tr><th>Asset Name</th><th>Manifold (H0)</th><th>UV Data</th><th>Materials</th><th>Status</th></tr></thead>
+    <tbody id="tbl"></tbody>
+  </table>
+</div>
+<script>
+function handleFiles(e){
+  const files=Array.from(e.target.files);
+  files.forEach(f=>processFile(f));
+}
+
+function processFile(f){
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    new THREE.GLTFLoader().parse(ev.target.result,'',gltf=>{
+      let geo=null, hasUV=false, matCount=0;
+      gltf.scene.traverse(c=>{
+        if(c.isMesh&&!geo){ geo=c.geometry; hasUV=!!geo.attributes.uv; }
+        if(c.material) matCount++;
+      });
+      if(!geo)return;
+      
+      const idx=geo.index?geo.index.array:null;
+      let openEdges=0, h0=1.0;
+      if(idx){
+        const edges=new Map();
+        for(let i=0;i<idx.length;i+=3){
+          for(let e=0;e<3;e++){
+            const a=idx[i+e], b=idx[i+(e+1)%3];
+            const k=a<b?`${a}|${b}`:`${b}|${a}`;
+            edges.set(k,(edges.get(k)||0)+1);
+          }
+        }
+        for(let c of edges.values()) if(c===1) openEdges++;
+        h0 = edges.size>0 ? 1 - (openEdges/edges.size) : 1;
+      }
+      
+      const tr=document.createElement('tr');
+      let status='<span class="badge ok">SHIP READY</span>';
+      if(openEdges>0 || !hasUV) status='<span class="badge warn">NEEDS REPAIR</span>';
+      if(h0 < 0.9) status='<span class="badge crit">CRITICAL</span>';
+      
+      tr.innerHTML=`<td>${f.name}</td>
+      <td class="${openEdges>0?'crit':'ok'}">${h0.toFixed(4)} (${openEdges} holes)</td>
+      <td class="${hasUV?'ok':'crit'}">${hasUV?'PRESENT':'MISSING'}</td>
+      <td>${matCount}</td>
+      <td>${status}</td>`;
+      document.getElementById('tbl').appendChild(tr);
+    });
+  };
+  reader.readAsArrayBuffer(f);
+}
+</script>
+</body></html>

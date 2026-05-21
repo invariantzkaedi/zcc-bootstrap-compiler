@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G24",
+    "name": "Codegen Mutation G24 [lea_optimization]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-3",
+    "lineage_hash": "77bedb1e3bbde1c8",
+    "island_id": 3
+  },
+  "mutations": [
+    {
+      "name": "lea_optimization",
+      "category": "IDIOM",
+      "description": "Fuse mov+add \u2192 leaq $17952(%r14), %rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -3.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -15,
+    "inst_count_delta": 118050,
+    "score_delta": -9.29810499981977,
+    "composite_score": 1252909.5049250002
+  },
+  "timestamp": "2026-04-20T10:47:05.460659+00:00",
+  "generation": 24
+}

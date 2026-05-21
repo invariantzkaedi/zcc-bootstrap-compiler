@@ -1,0 +1,437 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="100%" height="100%" style="background-color: #03010a;">
+  <defs>
+    <linearGradient id="cyan-magenta" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00ffff" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#ff007f" stop-opacity="0.8"/>
+    </linearGradient>
+    <linearGradient id="gold-orange" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffaa00" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#ff3c00" stop-opacity="0.9"/>
+    </linearGradient>
+    <linearGradient id="neon-glow" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#000" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#00f0ff" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#ff007f" stop-opacity="0.9"/>
+    </linearGradient>
+    <radialGradient id="core-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00f0ff" stop-opacity="0.4"/>
+      <stop offset="50%" stop-color="#1a0033" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#03010a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="shield-radial" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ff007f" stop-opacity="0.15"/>
+      <stop offset="70%" stop-color="#00f0ff" stop-opacity="0.03"/>
+      <stop offset="100%" stop-color="#03010a" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow-heavy" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="blur1"/>
+      <feGaussianBlur stdDeviation="15" result="blur2"/>
+      <feMerge>
+        <feMergeNode in="blur2"/>
+        <feMergeNode in="blur1"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="shadow-holo" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#00ffff" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+  <!-- Warping spacetime computation grid -->
+  <g opacity="0.15">
+    <path d="M 50 50.0 Q 960 50.0 1870 50.0" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50.0 50 Q 110.0 540 50.0 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 80.625 Q 960 92.54515984770367 1870 80.625" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 106.875 50 Q 165.67899467047448 540 106.875 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 111.25 Q 960 134.61510053851902 1870 111.25" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 163.75 50 Q 219.0136596401731 540 163.75 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 141.875 Q 960 175.75354840370213 1870 141.875" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 220.625 50 Q 270.1451368945807 540 220.625 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 172.5 Q 960 215.54136545397137 1870 172.5" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 277.5 50 Q 319.30240256082993 540 277.5 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 203.125 Q 960 253.6132590884738 1870 203.125" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 334.375 50 Q 366.79313835208836 540 334.375 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 233.75 Q 960 289.6723451580336 1870 233.75" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 391.25 50 Q 412.9914652686004 540 391.25 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 264.375 Q 960 323.5019837993076 1870 264.375" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 448.125 50 Q 458.3230285740145 540 448.125 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 295.0 Q 960 354.9744161824903 1870 295.0" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 505.0 50 Q 503.24802866192266 540 505.0 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 325.625 Q 960 384.0558578526917 1870 325.625" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 561.875 50 Q 548.2428743184148 540 561.875 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 356.25 Q 960 410.8078456095409 1870 356.25" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 618.75 50 Q 593.7811898071715 540 618.75 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 386.875 Q 960 435.3847842291754 1870 386.875" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 675.625 50 Q 640.3149329646792 540 675.625 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 417.5 Q 960 458.02779083306905 1870 417.5" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 732.5 50 Q 688.2563770675252 540 732.5 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 448.125 Q 960 479.05508230928785 1870 448.125" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 789.375 50 Q 737.9616747978631 540 789.375 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 478.75 Q 960 498.84928900935427 1870 478.75" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 846.25 50 Q 789.7166595598806 540 846.25 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 509.375 Q 960 517.842200483592 1870 509.375" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 903.125 50 Q 843.7254502039733 540 903.125 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 540.0 Q 960 536.4975513943452 1870 540.0" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 960.0 50 Q 900.1023134523148 540 960.0 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 570.625 Q 960 555.2925338783901 1870 570.625" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 1016.875 50 Q 958.8671084452324 540 1016.875 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 601.25 Q 960 574.6987734023088 1870 601.25" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 1073.75 50 Q 1019.9444950199512 540 1073.75 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 631.875 Q 960 595.1635265434369 1870 631.875" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 1130.625 50 Q 1083.166937285135 540 1130.625 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 662.5 Q 960 617.0918502815243 1870 662.5" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 1187.5 50 Q 1148.2813827481832 540 1187.5 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 693.125 Q 960 640.8304536551847 1870 693.125" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 1244.375 50 Q 1214.959350719558 540 1244.375 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 723.75 Q 960 666.653875566629 1870 723.75" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 1301.25 50 Q 1282.8100278012948 540 1301.25 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 754.375 Q 960 694.7535397819921 1870 754.375" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 1358.125 50 Q 1351.3958483838967 540 1358.125 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 785.0 Q 960 725.2301234698496 1870 785.0" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 1415.0 50 Q 1420.2499390063667 540 1415.0 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 815.625 Q 960 758.0895435202117 1870 815.625" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 1471.875 50 Q 1488.8947311277936 540 1471.875 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 846.25 Q 960 793.2427206567908 1870 846.25" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 1528.75 50 Q 1556.8610002780226 540 1528.75 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 876.875 Q 960 830.5091307466407 1870 876.875" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 1585.625 50 Q 1623.706572556558 540 1585.625 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 907.5 Q 960 869.6240017276607 1870 907.5" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 1642.5 50 Q 1689.033952710615 540 1642.5 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 938.125 Q 960 910.2488692351747 1870 938.125" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 1699.375 50 Q 1752.5061710164791 540 1699.375 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 968.75 Q 960 951.9850701080644 1870 968.75" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 1756.25 50 Q 1813.860217199022 540 1756.25 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 999.375 Q 960 994.3896358309502 1870 999.375" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 1813.125 50 Q 1872.9175258213932 540 1813.125 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 50 1030.0 Q 960 1036.9929522910297 1870 1030.0" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+    <path d="M 1870.0 50 Q 1929.5910951254916 540 1870.0 1030" fill="none" stroke="#5b2c9e" stroke-width="0.7" />
+  </g>
+  <circle cx="960" cy="540" r="650" fill="url(#core-glow)" />
+  <!-- Weierstrass Curve Group Law Visualization -->
+  <path d="M 384.00,578.15 L 385.20,560.54 L 386.40,550.28 L 387.60,542.36 L 388.80,535.75 L 390.00,530.00 L 391.20,524.89 L 392.40,520.27 L 393.60,516.06 L 394.80,512.18 L 396.00,508.59 L 397.20,505.25 L 398.40,502.12 L 399.60,499.19 L 400.80,496.44 L 402.00,493.85 L 403.20,491.41 L 404.40,489.10 L 405.60,486.91 L 406.80,484.84 L 408.00,482.89 L 409.20,481.03 L 410.40,479.27 L 411.60,477.61 L 412.80,476.02 L 414.00,474.53 L 415.20,473.10 L 416.40,471.76 L 417.60,470.48 L 418.80,469.28 L 420.00,468.14 L 421.20,467.06 L 422.40,466.05 L 423.60,465.09 L 424.80,464.19 L 426.00,463.34 L 427.20,462.55 L 428.40,461.81 L 429.60,461.12 L 430.80,460.48 L 432.00,459.88 L 433.20,459.33 L 434.40,458.83 L 435.60,458.36 L 436.80,457.94 L 438.00,457.56 L 439.20,457.23 L 440.40,456.93 L 441.60,456.66 L 442.80,456.44 L 444.00,456.25 L 445.20,456.10 L 446.40,455.98 L 447.60,455.90 L 448.80,455.85 L 450.00,455.84 L 451.20,455.85 L 452.40,455.90 L 453.60,455.98 L 454.80,456.09 L 456.00,456.23 L 457.20,456.39 L 458.40,456.59 L 459.60,456.81 L 460.80,457.07 L 462.00,457.35 L 463.20,457.65 L 464.40,457.99 L 465.60,458.34 L 466.80,458.73 L 468.00,459.14 L 469.20,459.57 L 470.40,460.03 L 471.60,460.51 L 472.80,461.01 L 474.00,461.54 L 475.20,462.09 L 476.40,462.66 L 477.60,463.25 L 478.80,463.87 L 480.00,464.50 L 481.20,465.16 L 482.40,465.83 L 483.60,466.53 L 484.80,467.24 L 486.00,467.98 L 487.20,468.73 L 488.40,469.50 L 489.60,470.29 L 490.80,471.10 L 492.00,471.92 L 493.20,472.76 L 494.40,473.62 L 495.60,474.49 L 496.80,475.38 L 498.00,476.28 L 499.20,477.20 L 500.40,478.14 L 501.60,479.09 L 502.80,480.05 L 504.00,481.02 L 505.20,482.01 L 506.40,483.01 L 507.60,484.02 L 508.80,485.04 L 510.00,486.08 L 511.20,487.12 L 512.40,488.18 L 513.60,489.24 L 514.80,490.31 L 516.00,491.39 L 517.20,492.48 L 518.40,493.57 L 519.60,494.68 L 520.80,495.78 L 522.00,496.89 L 523.20,498.01 L 524.40,499.13 L 525.60,500.25 L 526.80,501.37 L 528.00,502.49 L 529.20,503.62 L 530.40,504.74 L 531.60,505.86 L 532.80,506.97 L 534.00,508.08 L 535.20,509.19 L 536.40,510.28 L 537.60,511.37 L 538.80,512.45 L 540.00,513.51 L 541.20,514.57 L 542.40,515.60 L 543.60,516.62 L 544.80,517.62 L 546.00,518.60 L 547.20,519.56 L 548.40,520.49 L 549.60,521.39 L 550.80,522.27 L 552.00,523.11 L 553.20,523.91 L 554.40,524.68 L 555.60,525.41 L 556.80,526.09 L 558.00,526.73 L 559.20,527.32 L 560.40,527.86 L 561.60,528.34 L 562.80,528.77 L 564.00,529.14 L 565.20,529.44 L 566.40,529.68 L 567.60,529.86 L 568.80,529.96 L 570.00,530.00 L 571.20,529.96 L 572.40,529.85 L 573.60,529.67 L 574.80,529.41 L 576.00,529.08 L 577.20,528.67 L 578.40,528.18 L 579.60,527.62 L 580.80,526.98 L 582.00,526.28 L 583.20,525.49 L 584.40,524.64 L 585.60,523.72 L 586.80,522.73 L 588.00,521.67 L 589.20,520.55 L 590.40,519.36 L 591.60,518.11 L 592.80,516.81 L 594.00,515.45 L 595.20,514.03 L 596.40,512.56 L 597.60,511.03 L 598.80,509.46 L 600.00,507.84 L 601.20,506.18 L 602.40,504.47 L 603.60,502.71 L 604.80,500.92 L 606.00,499.08 L 607.20,497.21 L 608.40,495.30 L 609.60,493.36 L 610.80,491.38 L 612.00,489.37 L 613.20,487.32 L 614.40,485.25 L 615.60,483.14 L 616.80,481.01 L 618.00,478.85 L 619.20,476.66 L 620.40,474.44 L 621.60,472.20 L 622.80,469.93 L 624.00,467.64 L 625.20,465.32 L 626.40,462.98 L 627.60,460.62 L 628.80,458.24 L 630.00,455.84 L 631.20,453.41 L 632.40,450.96 L 633.60,448.50 L 634.80,446.01 L 636.00,443.51 L 637.20,440.99 L 638.40,438.44 L 639.60,435.88 L 640.80,433.31 L 642.00,430.71 L 643.20,428.10 L 644.40,425.47 L 645.60,422.83 L 646.80,420.16 L 648.00,417.49 L 649.20,414.79 L 650.40,412.08 L 651.60,409.36 L 652.80,406.62 L 654.00,403.86 L 655.20,401.10 L 656.40,398.31 L 657.60,395.51 L 658.80,392.70 L 660.00,389.88 L 661.20,387.03 L 662.40,384.18 L 663.60,381.31 L 664.80,378.43 L 666.00,375.54 L 667.20,372.63 L 668.40,369.71 L 669.60,366.78 L 670.80,363.83 L 672.00,360.87 L 673.20,357.90 L 674.40,354.92 L 675.60,351.92 L 676.80,348.92 L 678.00,345.90 L 679.20,342.86 L 680.40,339.82 L 681.60,336.76 L 682.80,333.69 L 684.00,330.62 L 685.20,327.52 L 686.40,324.42 L 687.60,321.31 L 688.80,318.18 L 690.00,315.05 L 691.20,311.90 L 692.40,308.74 L 693.60,305.57 L 694.80,302.39 L 696.00,299.19 L 697.20,295.99 L 698.40,292.78 L 699.60,289.55 L 700.80,286.32 L 702.00,283.07 L 703.20,279.82 L 704.40,276.55 L 705.60,273.27 L 706.80,269.98 L 708.00,266.68 L 709.20,263.38 L 710.40,260.06 L 711.60,256.73 L 712.80,253.39 L 714.00,250.04 L 715.20,246.68 L 716.40,243.31 L 717.60,239.93 L 718.80,236.54 L 720.00,233.14 L 721.20,229.73 L 722.40,226.31 L 723.60,222.88 L 724.80,219.44 L 726.00,215.99 L 727.20,212.53 L 728.40,209.07 L 729.60,205.59 L 730.80,202.10 L 732.00,198.60 L 733.20,195.10 L 734.40,191.58 L 735.60,188.06 L 736.80,184.52 L 738.00,180.98 L 739.20,177.42 L 740.40,173.86 L 741.60,170.29 L 742.80,166.71 L 744.00,163.12 L 745.20,159.52 L 746.40,155.91 L 747.60,152.29 L 748.80,148.66 L 748.80,1031.34 L 747.60,1027.71 L 746.40,1024.09 L 745.20,1020.48 L 744.00,1016.88 L 742.80,1013.29 L 741.60,1009.71 L 740.40,1006.14 L 739.20,1002.58 L 738.00,999.02 L 736.80,995.48 L 735.60,991.94 L 734.40,988.42 L 733.20,984.90 L 732.00,981.40 L 730.80,977.90 L 729.60,974.41 L 728.40,970.93 L 727.20,967.47 L 726.00,964.01 L 724.80,960.56 L 723.60,957.12 L 722.40,953.69 L 721.20,950.27 L 720.00,946.86 L 718.80,943.46 L 717.60,940.07 L 716.40,936.69 L 715.20,933.32 L 714.00,929.96 L 712.80,926.61 L 711.60,923.27 L 710.40,919.94 L 709.20,916.62 L 708.00,913.32 L 706.80,910.02 L 705.60,906.73 L 704.40,903.45 L 703.20,900.18 L 702.00,896.93 L 700.80,893.68 L 699.60,890.45 L 698.40,887.22 L 697.20,884.01 L 696.00,880.81 L 694.80,877.61 L 693.60,874.43 L 692.40,871.26 L 691.20,868.10 L 690.00,864.95 L 688.80,861.82 L 687.60,858.69 L 686.40,855.58 L 685.20,852.48 L 684.00,849.38 L 682.80,846.31 L 681.60,843.24 L 680.40,840.18 L 679.20,837.14 L 678.00,834.10 L 676.80,831.08 L 675.60,828.08 L 674.40,825.08 L 673.20,822.10 L 672.00,819.13 L 670.80,816.17 L 669.60,813.22 L 668.40,810.29 L 667.20,807.37 L 666.00,804.46 L 664.80,801.57 L 663.60,798.69 L 662.40,795.82 L 661.20,792.97 L 660.00,790.12 L 658.80,787.30 L 657.60,784.49 L 656.40,781.69 L 655.20,778.90 L 654.00,776.14 L 652.80,773.38 L 651.60,770.64 L 650.40,767.92 L 649.20,765.21 L 648.00,762.51 L 646.80,759.84 L 645.60,757.17 L 644.40,754.53 L 643.20,751.90 L 642.00,749.29 L 640.80,746.69 L 639.60,744.12 L 638.40,741.56 L 637.20,739.01 L 636.00,736.49 L 634.80,733.99 L 633.60,731.50 L 632.40,729.04 L 631.20,726.59 L 630.00,724.16 L 628.80,721.76 L 627.60,719.38 L 626.40,717.02 L 625.20,714.68 L 624.00,712.36 L 622.80,710.07 L 621.60,707.80 L 620.40,705.56 L 619.20,703.34 L 618.00,701.15 L 616.80,698.99 L 615.60,696.86 L 614.40,694.75 L 613.20,692.68 L 612.00,690.63 L 610.80,688.62 L 609.60,686.64 L 608.40,684.70 L 607.20,682.79 L 606.00,680.92 L 604.80,679.08 L 603.60,677.29 L 602.40,675.53 L 601.20,673.82 L 600.00,672.16 L 598.80,670.54 L 597.60,668.97 L 596.40,667.44 L 595.20,665.97 L 594.00,664.55 L 592.80,663.19 L 591.60,661.89 L 590.40,660.64 L 589.20,659.45 L 588.00,658.33 L 586.80,657.27 L 585.60,656.28 L 584.40,655.36 L 583.20,654.51 L 582.00,653.72 L 580.80,653.02 L 579.60,652.38 L 578.40,651.82 L 577.20,651.33 L 576.00,650.92 L 574.80,650.59 L 573.60,650.33 L 572.40,650.15 L 571.20,650.04 L 570.00,650.00 L 568.80,650.04 L 567.60,650.14 L 566.40,650.32 L 565.20,650.56 L 564.00,650.86 L 562.80,651.23 L 561.60,651.66 L 560.40,652.14 L 559.20,652.68 L 558.00,653.27 L 556.80,653.91 L 555.60,654.59 L 554.40,655.32 L 553.20,656.09 L 552.00,656.89 L 550.80,657.73 L 549.60,658.61 L 548.40,659.51 L 547.20,660.44 L 546.00,661.40 L 544.80,662.38 L 543.60,663.38 L 542.40,664.40 L 541.20,665.43 L 540.00,666.49 L 538.80,667.55 L 537.60,668.63 L 536.40,669.72 L 535.20,670.81 L 534.00,671.92 L 532.80,673.03 L 531.60,674.14 L 530.40,675.26 L 529.20,676.38 L 528.00,677.51 L 526.80,678.63 L 525.60,679.75 L 524.40,680.87 L 523.20,681.99 L 522.00,683.11 L 520.80,684.22 L 519.60,685.32 L 518.40,686.43 L 517.20,687.52 L 516.00,688.61 L 514.80,689.69 L 513.60,690.76 L 512.40,691.82 L 511.20,692.88 L 510.00,693.92 L 508.80,694.96 L 507.60,695.98 L 506.40,696.99 L 505.20,697.99 L 504.00,698.98 L 502.80,699.95 L 501.60,700.91 L 500.40,701.86 L 499.20,702.80 L 498.00,703.72 L 496.80,704.62 L 495.60,705.51 L 494.40,706.38 L 493.20,707.24 L 492.00,708.08 L 490.80,708.90 L 489.60,709.71 L 488.40,710.50 L 487.20,711.27 L 486.00,712.02 L 484.80,712.76 L 483.60,713.47 L 482.40,714.17 L 481.20,714.84 L 480.00,715.50 L 478.80,716.13 L 477.60,716.75 L 476.40,717.34 L 475.20,717.91 L 474.00,718.46 L 472.80,718.99 L 471.60,719.49 L 470.40,719.97 L 469.20,720.43 L 468.00,720.86 L 466.80,721.27 L 465.60,721.66 L 464.40,722.01 L 463.20,722.35 L 462.00,722.65 L 460.80,722.93 L 459.60,723.19 L 458.40,723.41 L 457.20,723.61 L 456.00,723.77 L 454.80,723.91 L 453.60,724.02 L 452.40,724.10 L 451.20,724.15 L 450.00,724.16 L 448.80,724.15 L 447.60,724.10 L 446.40,724.02 L 445.20,723.90 L 444.00,723.75 L 442.80,723.56 L 441.60,723.34 L 440.40,723.07 L 439.20,722.77 L 438.00,722.44 L 436.80,722.06 L 435.60,721.64 L 434.40,721.17 L 433.20,720.67 L 432.00,720.12 L 430.80,719.52 L 429.60,718.88 L 428.40,718.19 L 427.20,717.45 L 426.00,716.66 L 424.80,715.81 L 423.60,714.91 L 422.40,713.95 L 421.20,712.94 L 420.00,711.86 L 418.80,710.72 L 417.60,709.52 L 416.40,708.24 L 415.20,706.90 L 414.00,705.47 L 412.80,703.98 L 411.60,702.39 L 410.40,700.73 L 409.20,698.97 L 408.00,697.11 L 406.80,695.16 L 405.60,693.09 L 404.40,690.90 L 403.20,688.59 L 402.00,686.15 L 400.80,683.56 L 399.60,680.81 L 398.40,677.88 L 397.20,674.75 L 396.00,671.41 L 394.80,667.82 L 393.60,663.94 L 392.40,659.73 L 391.20,655.11 L 390.00,650.00 L 388.80,644.25 L 387.60,637.64 L 386.40,629.72 L 385.20,619.46 L 384.00,601.85" fill="none" stroke="#00ffff" stroke-width="1.8" filter="url(#glow-heavy)" opacity="0.8" />
+  <line x1="288.0" y1="542.3395855313098" x2="665.1649057840699" y2="472.91709620717387" stroke="#ff007f" stroke-width="1" stroke-dasharray="4,4" opacity="0.6"/>
+  <line x1="565.1649057840699" y1="529.4339163938373" x2="565.1649057840699" y2="650.5660836061627" stroke="#ffaa00" stroke-width="1.2" stroke-dasharray="2,2" opacity="0.8"/>
+  <circle cx="438.0" cy="457.5643552513146" r="5.5" fill="#00ffff" filter="url(#glow-heavy)"/>
+  <text x="450.0" y="445.5643552513146" fill="#00ffff" font-family="monospace" font-size="12" font-weight="bold">P</text>
+  <circle cx="546.0" cy="518.6025210529111" r="5.5" fill="#00ffff" filter="url(#glow-heavy)"/>
+  <text x="558.0" y="506.60252105291113" fill="#00ffff" font-family="monospace" font-size="12" font-weight="bold">Q</text>
+  <circle cx="565.1649057840699" cy="529.4339163938373" r="5.5" fill="#ff007f" filter="url(#glow-heavy)"/>
+  <text x="577.1649057840699" y="517.4339163938373" fill="#ff007f" font-family="monospace" font-size="12" font-weight="bold">P*Q</text>
+  <circle cx="565.1649057840699" cy="650.5660836061627" r="5.5" fill="#ffaa00" filter="url(#glow-heavy)"/>
+  <text x="577.1649057840699" y="638.5660836061627" fill="#ffaa00" font-family="monospace" font-size="12" font-weight="bold">P+Q</text>
+  <!-- Programmatic 3D Crystalline Lattice (ZK-Core Oracle) -->
+  <g transform="translate(960, 540)">
+    <circle cx="0" cy="0" r="160" fill="url(#shield-radial)" filter="url(#glow-heavy)">
+      <animate attributeName="r" values="140;180;140" dur="4s" repeatCount="indefinite" />
+    </circle>
+    <!-- Outer Crystal Shell -->
+    <g stroke="url(#cyan-magenta)" stroke-width="1.2" opacity="0.65" fill="none">
+      <line x1="35.56" y1="-123.50" x2="-35.56" y2="-197.00">
+        <animateTransform attributeName="transform" type="scale" values="1;1.08;1" dur="6s" repeatCount="indefinite"/>
+      </line>
+      <line x1="28.00" y1="116.29" x2="158.17" y2="76.14">
+        <animateTransform attributeName="transform" type="scale" values="1;1.08;1" dur="6s" repeatCount="indefinite"/>
+      </line>
+      <line x1="-170.40" y1="-8.65" x2="-170.40" y2="113.77">
+        <animateTransform attributeName="transform" type="scale" values="1;1.08;1" dur="6s" repeatCount="indefinite"/>
+      </line>
+      <line x1="-158.17" y1="-76.14" x2="-28.00" y2="-116.29">
+        <animateTransform attributeName="transform" type="scale" values="1;1.08;1" dur="6s" repeatCount="indefinite"/>
+      </line>
+      <line x1="35.56" y1="197.00" x2="-35.56" y2="123.50">
+        <animateTransform attributeName="transform" type="scale" values="1;1.08;1" dur="6s" repeatCount="indefinite"/>
+      </line>
+      <line x1="170.40" y1="-113.77" x2="170.40" y2="8.65">
+        <animateTransform attributeName="transform" type="scale" values="1;1.08;1" dur="6s" repeatCount="indefinite"/>
+      </line>
+    </g>
+    <!-- Golden Inner Core Shield -->
+    <g stroke="url(#gold-orange)" stroke-width="1.4" opacity="0.85" fill="none">
+      <line x1="-15.64" y1="-110.04" x2="15.64" y2="-74.56">
+        <animateTransform attributeName="transform" type="scale" values="1;0.92;1" dur="4s" repeatCount="indefinite"/>
+      </line>
+      <line x1="-77.96" y1="-38.94" x2="-3.95" y2="-53.94">
+        <animateTransform attributeName="transform" type="scale" values="1;0.92;1" dur="4s" repeatCount="indefinite"/>
+      </line>
+      <line x1="-96.87" y1="-15.62" x2="-96.87" y2="54.89">
+        <animateTransform attributeName="transform" type="scale" values="1;0.92;1" dur="4s" repeatCount="indefinite"/>
+      </line>
+      <line x1="3.95" y1="53.94" x2="77.96" y2="38.94">
+        <animateTransform attributeName="transform" type="scale" values="1;0.92;1" dur="4s" repeatCount="indefinite"/>
+      </line>
+      <line x1="-15.64" y1="74.56" x2="15.64" y2="110.04">
+        <animateTransform attributeName="transform" type="scale" values="1;0.92;1" dur="4s" repeatCount="indefinite"/>
+      </line>
+      <line x1="96.87" y1="-54.89" x2="96.87" y2="15.62">
+        <animateTransform attributeName="transform" type="scale" values="1;0.92;1" dur="4s" repeatCount="indefinite"/>
+      </line>
+    </g>
+    <circle cx="0" cy="0" r="14" fill="#ffffff" filter="url(#glow-heavy)">
+      <animate attributeName="r" values="12;16;12" dur="2s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  <!-- Concentric Orbital Verification Rings -->
+  <g transform="translate(960, 540)">
+    <circle cx="0" cy="0" r="280" fill="none" stroke="url(#cyan-magenta)" stroke-width="1" stroke-dasharray="5,20" opacity="0.5" filter="url(#glow-heavy)">
+      <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="40s" repeatCount="indefinite"/>
+    </circle>
+    <g transform="translate(280.00, 0.00) rotate(90.0)">
+      <text x="0" y="0" fill="#00ffff" font-family="monospace" font-size="9" font-weight="bold" text-anchor="middle" opacity="0.75">PUSH32</text>
+    </g>
+    <g transform="translate(242.49, 140.00) rotate(120.0)">
+      <text x="0" y="0" fill="#00ffff" font-family="monospace" font-size="9" font-weight="bold" text-anchor="middle" opacity="0.75">JUMPDEST</text>
+    </g>
+    <g transform="translate(140.00, 242.49) rotate(150.0)">
+      <text x="0" y="0" fill="#00ffff" font-family="monospace" font-size="9" font-weight="bold" text-anchor="middle" opacity="0.75">MSTORE</text>
+    </g>
+    <g transform="translate(0.00, 280.00) rotate(180.0)">
+      <text x="0" y="0" fill="#00ffff" font-family="monospace" font-size="9" font-weight="bold" text-anchor="middle" opacity="0.75">SSTORE</text>
+    </g>
+    <g transform="translate(-140.00, 242.49) rotate(210.0)">
+      <text x="0" y="0" fill="#00ffff" font-family="monospace" font-size="9" font-weight="bold" text-anchor="middle" opacity="0.75">DELEGATECALL</text>
+    </g>
+    <g transform="translate(-242.49, 140.00) rotate(240.0)">
+      <text x="0" y="0" fill="#00ffff" font-family="monospace" font-size="9" font-weight="bold" text-anchor="middle" opacity="0.75">STATICCALL</text>
+    </g>
+    <g transform="translate(-280.00, 0.00) rotate(270.0)">
+      <text x="0" y="0" fill="#00ffff" font-family="monospace" font-size="9" font-weight="bold" text-anchor="middle" opacity="0.75">REENTRANCY_GUARD</text>
+    </g>
+    <g transform="translate(-242.49, -140.00) rotate(300.0)">
+      <text x="0" y="0" fill="#00ffff" font-family="monospace" font-size="9" font-weight="bold" text-anchor="middle" opacity="0.75">HALO2_PROOF</text>
+    </g>
+    <g transform="translate(-140.00, -242.49) rotate(330.0)">
+      <text x="0" y="0" fill="#00ffff" font-family="monospace" font-size="9" font-weight="bold" text-anchor="middle" opacity="0.75">PLONKISH</text>
+    </g>
+    <g transform="translate(-0.00, -280.00) rotate(360.0)">
+      <text x="0" y="0" fill="#00ffff" font-family="monospace" font-size="9" font-weight="bold" text-anchor="middle" opacity="0.75">SNARK_VERIFY</text>
+    </g>
+    <g transform="translate(140.00, -242.49) rotate(390.0)">
+      <text x="0" y="0" fill="#00ffff" font-family="monospace" font-size="9" font-weight="bold" text-anchor="middle" opacity="0.75">R1CS_CONSTRAINT</text>
+    </g>
+    <g transform="translate(242.49, -140.00) rotate(420.0)">
+      <text x="0" y="0" fill="#00ffff" font-family="monospace" font-size="9" font-weight="bold" text-anchor="middle" opacity="0.75">KECCAK256</text>
+    </g>
+  </g>
+  <g transform="translate(960, 540)">
+    <circle cx="0" cy="0" r="380" fill="none" stroke="url(#gold-orange)" stroke-width="1.5" stroke-dasharray="10, 40, 30, 20" opacity="0.4">
+      <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="60s" repeatCount="indefinite"/>
+    </circle>
+    <g transform="translate(380.00, 0.00) rotate(90.0)">
+      <text x="0" y="0" fill="#ffaa00" font-family="Courier New" font-size="10" font-weight="bold" text-anchor="middle" opacity="0.8">y^2 = x^3 + ax + b (mod p)</text>
+    </g>
+    <g transform="translate(268.70, 268.70) rotate(135.0)">
+      <text x="0" y="0" fill="#ffaa00" font-family="Courier New" font-size="10" font-weight="bold" text-anchor="middle" opacity="0.8">L(x)R(x) - O(x) = h(x)t(x)</text>
+    </g>
+    <g transform="translate(0.00, 380.00) rotate(180.0)">
+      <text x="0" y="0" fill="#ffaa00" font-family="Courier New" font-size="10" font-weight="bold" text-anchor="middle" opacity="0.8">e(P, Q) = e(P+R, S)</text>
+    </g>
+    <g transform="translate(-268.70, 268.70) rotate(225.0)">
+      <text x="0" y="0" fill="#ffaa00" font-family="Courier New" font-size="10" font-weight="bold" text-anchor="middle" opacity="0.8">T = g^(a*b) mod p</text>
+    </g>
+    <g transform="translate(-380.00, 0.00) rotate(270.0)">
+      <text x="0" y="0" fill="#ffaa00" font-family="Courier New" font-size="10" font-weight="bold" text-anchor="middle" opacity="0.8">pi = (A, B, C)</text>
+    </g>
+    <g transform="translate(-268.70, -268.70) rotate(315.0)">
+      <text x="0" y="0" fill="#ffaa00" font-family="Courier New" font-size="10" font-weight="bold" text-anchor="middle" opacity="0.8">H(m) || H(R)</text>
+    </g>
+    <g transform="translate(-0.00, -380.00) rotate(360.0)">
+      <text x="0" y="0" fill="#ffaa00" font-family="Courier New" font-size="10" font-weight="bold" text-anchor="middle" opacity="0.8">ECDSA_VERIFY</text>
+    </g>
+    <g transform="translate(268.70, -268.70) rotate(405.0)">
+      <text x="0" y="0" fill="#ffaa00" font-family="Courier New" font-size="10" font-weight="bold" text-anchor="middle" opacity="0.8">ZCC_COMPILED_PROVE</text>
+    </g>
+  </g>
+  <g transform="translate(960, 540)">
+    <line x1="430.00" y1="0.00" x2="446.00" y2="0.00" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="429.08" y1="28.12" x2="435.07" y2="28.52" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="426.32" y1="56.13" x2="436.24" y2="57.43" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="421.74" y1="83.89" x2="427.62" y2="85.06" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="415.35" y1="111.29" x2="430.80" y2="115.43" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="407.18" y1="138.22" x2="412.86" y2="140.15" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="397.27" y1="164.55" x2="406.51" y2="168.38" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="385.66" y1="190.18" x2="391.04" y2="192.84" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="372.39" y1="215.00" x2="386.25" y2="223.00" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="357.53" y1="238.90" x2="362.52" y2="242.23" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="341.14" y1="261.77" x2="349.08" y2="267.86" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="323.29" y1="283.52" x2="327.80" y2="287.47" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="304.06" y1="304.06" x2="315.37" y2="315.37" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="283.52" y1="323.29" x2="287.47" y2="327.80" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="261.77" y1="341.14" x2="267.86" y2="349.08" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="238.90" y1="357.53" x2="242.23" y2="362.52" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="215.00" y1="372.39" x2="223.00" y2="386.25" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="190.18" y1="385.66" x2="192.84" y2="391.04" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="164.55" y1="397.27" x2="168.38" y2="406.51" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="138.22" y1="407.18" x2="140.15" y2="412.86" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="111.29" y1="415.35" x2="115.43" y2="430.80" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="83.89" y1="421.74" x2="85.06" y2="427.62" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="56.13" y1="426.32" x2="57.43" y2="436.24" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="28.12" y1="429.08" x2="28.52" y2="435.07" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="0.00" y1="430.00" x2="0.00" y2="446.00" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="-28.12" y1="429.08" x2="-28.52" y2="435.07" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-56.13" y1="426.32" x2="-57.43" y2="436.24" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-83.89" y1="421.74" x2="-85.06" y2="427.62" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-111.29" y1="415.35" x2="-115.43" y2="430.80" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="-138.22" y1="407.18" x2="-140.15" y2="412.86" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-164.55" y1="397.27" x2="-168.38" y2="406.51" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-190.18" y1="385.66" x2="-192.84" y2="391.04" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-215.00" y1="372.39" x2="-223.00" y2="386.25" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="-238.90" y1="357.53" x2="-242.23" y2="362.52" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-261.77" y1="341.14" x2="-267.86" y2="349.08" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-283.52" y1="323.29" x2="-287.47" y2="327.80" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-304.06" y1="304.06" x2="-315.37" y2="315.37" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="-323.29" y1="283.52" x2="-327.80" y2="287.47" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-341.14" y1="261.77" x2="-349.08" y2="267.86" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-357.53" y1="238.90" x2="-362.52" y2="242.23" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-372.39" y1="215.00" x2="-386.25" y2="223.00" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="-385.66" y1="190.18" x2="-391.04" y2="192.84" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-397.27" y1="164.55" x2="-406.51" y2="168.38" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-407.18" y1="138.22" x2="-412.86" y2="140.15" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-415.35" y1="111.29" x2="-430.80" y2="115.43" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="-421.74" y1="83.89" x2="-427.62" y2="85.06" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-426.32" y1="56.13" x2="-436.24" y2="57.43" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-429.08" y1="28.12" x2="-435.07" y2="28.52" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-430.00" y1="0.00" x2="-446.00" y2="0.00" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="-429.08" y1="-28.12" x2="-435.07" y2="-28.52" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-426.32" y1="-56.13" x2="-436.24" y2="-57.43" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-421.74" y1="-83.89" x2="-427.62" y2="-85.06" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-415.35" y1="-111.29" x2="-430.80" y2="-115.43" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="-407.18" y1="-138.22" x2="-412.86" y2="-140.15" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-397.27" y1="-164.55" x2="-406.51" y2="-168.38" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-385.66" y1="-190.18" x2="-391.04" y2="-192.84" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-372.39" y1="-215.00" x2="-386.25" y2="-223.00" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="-357.53" y1="-238.90" x2="-362.52" y2="-242.23" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-341.14" y1="-261.77" x2="-349.08" y2="-267.86" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-323.29" y1="-283.52" x2="-327.80" y2="-287.47" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-304.06" y1="-304.06" x2="-315.37" y2="-315.37" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="-283.52" y1="-323.29" x2="-287.47" y2="-327.80" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-261.77" y1="-341.14" x2="-267.86" y2="-349.08" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-238.90" y1="-357.53" x2="-242.23" y2="-362.52" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-215.00" y1="-372.39" x2="-223.00" y2="-386.25" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="-190.18" y1="-385.66" x2="-192.84" y2="-391.04" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-164.55" y1="-397.27" x2="-168.38" y2="-406.51" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-138.22" y1="-407.18" x2="-140.15" y2="-412.86" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-111.29" y1="-415.35" x2="-115.43" y2="-430.80" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="-83.89" y1="-421.74" x2="-85.06" y2="-427.62" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-56.13" y1="-426.32" x2="-57.43" y2="-436.24" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-28.12" y1="-429.08" x2="-28.52" y2="-435.07" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="-0.00" y1="-430.00" x2="-0.00" y2="-446.00" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="28.12" y1="-429.08" x2="28.52" y2="-435.07" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="56.13" y1="-426.32" x2="57.43" y2="-436.24" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="83.89" y1="-421.74" x2="85.06" y2="-427.62" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="111.29" y1="-415.35" x2="115.43" y2="-430.80" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="138.22" y1="-407.18" x2="140.15" y2="-412.86" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="164.55" y1="-397.27" x2="168.38" y2="-406.51" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="190.18" y1="-385.66" x2="192.84" y2="-391.04" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="215.00" y1="-372.39" x2="223.00" y2="-386.25" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="238.90" y1="-357.53" x2="242.23" y2="-362.52" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="261.77" y1="-341.14" x2="267.86" y2="-349.08" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="283.52" y1="-323.29" x2="287.47" y2="-327.80" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="304.06" y1="-304.06" x2="315.37" y2="-315.37" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="323.29" y1="-283.52" x2="327.80" y2="-287.47" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="341.14" y1="-261.77" x2="349.08" y2="-267.86" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="357.53" y1="-238.90" x2="362.52" y2="-242.23" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="372.39" y1="-215.00" x2="386.25" y2="-223.00" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="385.66" y1="-190.18" x2="391.04" y2="-192.84" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="397.27" y1="-164.55" x2="406.51" y2="-168.38" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="407.18" y1="-138.22" x2="412.86" y2="-140.15" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="415.35" y1="-111.29" x2="430.80" y2="-115.43" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+    <line x1="421.74" y1="-83.89" x2="427.62" y2="-85.06" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="426.32" y1="-56.13" x2="436.24" y2="-57.43" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <line x1="429.08" y1="-28.12" x2="435.07" y2="-28.52" stroke="#00f0ff" stroke-width="1.2" opacity="0.4" />
+    <!-- Outer tracking dial rotation animation -->
+    <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="120s" repeatCount="indefinite" />
+  </g>
+  <!-- Floating Mathematical Proof Streams -->
+  <path id="path-stream-0" d="M 250 1130 C 200 740, 300 340, 250 -50" fill="none" stroke="none"/>
+  <text font-family="monospace" font-size="11" font-weight="bold" fill="url(#cyan-magenta)">
+    <textPath href="#path-stream-0" startOffset="100%">
+ &gt;&gt; PUSH32 &gt;&gt; 0xef32ab91 &gt;&gt; ADD &gt;&gt; SSTORE
+      <animate attributeName="startOffset" from="100%" to="-100%" dur="20s" begin="0s" repeatCount="indefinite"/>
+    </textPath>
+  </text>
+  <path id="path-stream-1" d="M 1670 1130 C 1720 740, 1620 340, 1670 -50" fill="none" stroke="none"/>
+  <text font-family="monospace" font-size="11" font-weight="bold" fill="url(#cyan-magenta)">
+    <textPath href="#path-stream-1" startOffset="100%">
+ &gt;&gt; CALL &gt;&gt; 0x00...00 &gt;&gt; GAS &gt;&gt; RETURN
+      <animate attributeName="startOffset" from="100%" to="-100%" dur="20s" begin="2.5s" repeatCount="indefinite"/>
+    </textPath>
+  </text>
+  <path id="path-stream-2" d="M 450 1130 C 500 840, 400 440, 600 -50" fill="none" stroke="none"/>
+  <text font-family="monospace" font-size="11" font-weight="bold" fill="url(#cyan-magenta)">
+    <textPath href="#path-stream-2" startOffset="100%">
+ &gt;&gt; JUMP &gt;&gt; JUMPDEST &gt;&gt; DUP1 &gt;&gt; SWAP1
+      <animate attributeName="startOffset" from="100%" to="-100%" dur="20s" begin="1.2s" repeatCount="indefinite"/>
+    </textPath>
+  </text>
+  <path id="path-stream-3" d="M 1470 1130 C 1420 840, 1520 440, 1320 -50" fill="none" stroke="none"/>
+  <text font-family="monospace" font-size="11" font-weight="bold" fill="url(#cyan-magenta)">
+    <textPath href="#path-stream-3" startOffset="100%">
+ &gt;&gt; MLOAD &gt;&gt; MSTORE &gt;&gt; 0x20 &gt;&gt; SHA3
+      <animate attributeName="startOffset" from="100%" to="-100%" dur="20s" begin="3.7s" repeatCount="indefinite"/>
+    </textPath>
+  </text>
+  <!-- Cyber-Sigils of Compile Mastery (ZK-Snark / EVM Gates) -->
+  <g transform="translate(150, 150)">
+    <circle cx="0" cy="0" r="45" fill="none" stroke="#00ffff" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>
+    <polygon points="0,-40 35,20 -35,20" fill="none" stroke="#ff007f" stroke-width="1.5" opacity="0.8" filter="url(#glow-heavy)"/>
+    <circle cx="0" cy="0" r="10" fill="none" stroke="#ffaa00" stroke-width="1.8"/>
+    <text x="0" y="4" fill="#ffffff" font-family="monospace" font-size="10" font-weight="bold" text-anchor="middle">R1CS</text>
+    <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="25s" repeatCount="indefinite"/>
+  </g>
+  <g transform="translate(1770, 150)">
+    <circle cx="0" cy="0" r="45" fill="none" stroke="#ffaa00" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>
+    <g>
+      <rect x="-28" y="-28" width="56" height="56" fill="none" stroke="#00ffff" stroke-width="1.2" opacity="0.8" />
+      <rect x="-28" y="-28" width="56" height="56" transform="rotate(45)" fill="none" stroke="#ff007f" stroke-width="1.2" opacity="0.8" />
+      <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="30s" repeatCount="indefinite"/>
+    </g>
+    <circle cx="0" cy="0" r="12" fill="none" stroke="#ffffff" stroke-width="1.8" filter="url(#glow-heavy)"/>
+    <text x="0" y="4" fill="#ffffff" font-family="monospace" font-size="10" font-weight="bold" text-anchor="middle">KZG</text>
+  </g>
+  <!-- Ambient Background Mathematical Symbols -->
+  <text x="300" y="250" fill="#00ffff" font-family="serif" font-size="28" font-style="italic" opacity="0.25" font-weight="bold">
+    <animate attributeName="opacity" values="0.1;0.4;0.1" dur="7s" repeatCount="indefinite"/>
+    <animate attributeName="y" values="250;220;250" dur="15s" repeatCount="indefinite"/>
+    α
+  </text>
+  <text x="350" y="800" fill="#ff007f" font-family="serif" font-size="28" font-style="italic" opacity="0.25" font-weight="bold">
+    <animate attributeName="opacity" values="0.1;0.4;0.1" dur="7s" repeatCount="indefinite"/>
+    <animate attributeName="y" values="800;770;800" dur="12s" repeatCount="indefinite"/>
+    β
+  </text>
+  <text x="1500" y="300" fill="#ffaa00" font-family="serif" font-size="28" font-style="italic" opacity="0.25" font-weight="bold">
+    <animate attributeName="opacity" values="0.1;0.4;0.1" dur="7s" repeatCount="indefinite"/>
+    <animate attributeName="y" values="300;270;300" dur="16s" repeatCount="indefinite"/>
+    γ
+  </text>
+  <text x="1600" y="850" fill="#00ffff" font-family="serif" font-size="28" font-style="italic" opacity="0.25" font-weight="bold">
+    <animate attributeName="opacity" values="0.1;0.4;0.1" dur="7s" repeatCount="indefinite"/>
+    <animate attributeName="y" values="850;820;850" dur="13s" repeatCount="indefinite"/>
+    δ
+  </text>
+  <text x="800" y="200" fill="#ff007f" font-family="serif" font-size="28" font-style="italic" opacity="0.25" font-weight="bold">
+    <animate attributeName="opacity" values="0.1;0.4;0.1" dur="7s" repeatCount="indefinite"/>
+    <animate attributeName="y" values="200;170;200" dur="14s" repeatCount="indefinite"/>
+    λ
+  </text>
+  <text x="1100" y="220" fill="#ffaa00" font-family="serif" font-size="28" font-style="italic" opacity="0.25" font-weight="bold">
+    <animate attributeName="opacity" values="0.1;0.4;0.1" dur="7s" repeatCount="indefinite"/>
+    <animate attributeName="y" values="220;190;220" dur="13s" repeatCount="indefinite"/>
+    H
+  </text>
+  <text x="500" y="900" fill="#00ffff" font-family="serif" font-size="28" font-style="italic" opacity="0.25" font-weight="bold">
+    <animate attributeName="opacity" values="0.1;0.4;0.1" dur="7s" repeatCount="indefinite"/>
+    <animate attributeName="y" values="900;870;900" dur="14s" repeatCount="indefinite"/>
+    Σ
+  </text>
+  <text x="1350" y="920" fill="#ff007f" font-family="serif" font-size="28" font-style="italic" opacity="0.25" font-weight="bold">
+    <animate attributeName="opacity" values="0.1;0.4;0.1" dur="7s" repeatCount="indefinite"/>
+    <animate attributeName="y" values="920;890;920" dur="13s" repeatCount="indefinite"/>
+    t(x)
+  </text>
+  <!-- Masterwork Inscription Badge -->
+  <g transform="translate(960, 995)">
+    <rect x="-240" y="-35" width="480" height="60" rx="6" fill="#040112" stroke="url(#cyan-magenta)" stroke-width="1.5" opacity="0.9" filter="url(#glow-heavy)"/>
+    <text x="0" y="-12" fill="#ffffff" font-family="monospace" font-size="14" font-weight="bold" text-anchor="middle" letter-spacing="4">PROOF OF COMPUTATION</text>
+    <text x="0" y="12" fill="#ff007f" font-family="monospace" font-size="11" font-weight="bold" text-anchor="middle" letter-spacing="2">ZKAEDI PRIME // ZERO-KNOWLEDGE COMPILED V3</text>
+  </g>
+</svg>
