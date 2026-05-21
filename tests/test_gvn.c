@@ -41,3 +41,11 @@ int main() {
     long long r2 = test_cast_fallback(&pt);
     return gvn_test(5, 10) + r1 + r2 + forward_test(&pt);
 }
+
+int slf_sink(int x) { return x; }
+
+int slf_call_barrier(struct Point *p) {
+    p->x = 77;
+    slf_sink(p->x);
+    return p->x;
+}
