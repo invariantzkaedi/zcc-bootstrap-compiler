@@ -6057,10 +6057,10 @@ static void gvn_walk_domtree(Function *fn, BlockID bid, uint32_t *eliminated) {
       RegID src1_vn = (ins->n_src > 0) ? vn_of[ins->src[0]] : 0;
       RegID src2_vn = (ins->n_src > 1) ? vn_of[ins->src[1]] : 0;
       int64_t imm = ins->imm;
-      if (ins->op == OP_LOAD) {
+      if (ins->op == OP_LOAD || ins->op == OP_STORE) {
         int64_t disp = ins->amf.folded ? ins->amf.disp : 0;
-        uint64_t load_key = ((uint64_t)(uint32_t)disp << 4) | (uint32_t)(ins->imm & 0xF);
-        imm = (int64_t)load_key;
+        uint64_t mem_key = ((uint64_t)(uint32_t)disp << 4) | (uint32_t)(ins->imm & 0xF);
+        imm = (int64_t)mem_key;
       }
       const char *global_name = (ins->op == OP_GLOBAL) ? ins->call_name : NULL;
 
