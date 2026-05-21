@@ -30,9 +30,14 @@ int gvn_test(int x, int y) {
     return a + (x + y);  /* this x+y at join SHOULD be eliminated (dominated by entry) */
 }
 
+int forward_test(struct Point *p) {
+    p->x = 55;
+    return p->x;
+}
+
 int main() {
     struct Point pt = {10, 20};
     long long r1 = test_struct_tbaa(&pt);
     long long r2 = test_cast_fallback(&pt);
-    return gvn_test(5, 10) + r1 + r2;
+    return gvn_test(5, 10) + r1 + r2 + forward_test(&pt);
 }

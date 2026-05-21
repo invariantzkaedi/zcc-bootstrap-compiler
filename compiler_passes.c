@@ -5964,6 +5964,9 @@ typedef struct {
   RegID sbt_base;
   int64_t sbt_offset;
   bool sbt_has_cast;
+  /* Store-to-Load Forwarding */
+  RegID store_src;
+  bool from_store;
 } GVNEntry;
 
 typedef struct {
@@ -6036,6 +6039,8 @@ static GVNEntry *gvn_lookup_or_insert(Opcode op, RegID src1_vn, RegID src2_vn, i
       gvn_table[slot].sbt_base = sbt_base;
       gvn_table[slot].sbt_offset = sbt_offset;
       gvn_table[slot].sbt_has_cast = sbt_has_cast;
+      gvn_table[slot].store_src = 0;
+      gvn_table[slot].from_store = false;
       return &gvn_table[slot];
     }
 
@@ -6128,10 +6133,15 @@ static void gvn_walk_domtree(Function *fn, BlockID bid, uint32_t *eliminated) {
     }
 
     if (ins->op == OP_STORE && ins->n_src >= 2) {
-      RegID store_addr = ins->src[1];
+      RegID store_addr_reg = ins->src[1];
       int64_t store_offset = 0;
       bool store_has_cast = false;
-      RegID root_store = trace_address_root_offset(fn, store_addr, &store_offset, &store_has_cast);
+      RegID root_store = trace_address_root_offset(fn, store_addr_reg, &store_offset, &store_has_cast);
+      int64_t store_disp;
+      uint64_t store_mem_key;
+      int64_t store_imm;
+      GVNEntry *e;
+
       if (ins->amf.folded) {
         store_offset += ins->amf.disp;
       }
@@ -6204,6 +6214,35 @@ static void gvn_walk_domtree(Function *fn, BlockID bid, uint32_t *eliminated) {
           }
         }
       }
+
+      /* Store-to-Load Forwarding: Cache store values */
+      if (root_store > 0 && !store_has_cast) {
+        store_disp = ins->amf.folded ? ins->amf.disp : 0;
+        store_mem_key = ((uint64_t)(uint32_t)store_disp << 4) | (uint32_t)(ins->imm & 0xF);
+        store_imm = (int64_t)store_mem_key;
+
+        e = gvn_lookup_or_insert(
+            OP_LOAD,
+            vn_of[store_addr_reg],
+            0,
+            store_imm,
+            NULL,
+            ins->src[0],
+            ins->alias_class,
+            root_store,
+            root_store,
+            store_offset,
+            false
+        );
+        if (e) {
+            e->dst_reg   = ins->src[0];
+            e->val_num   = ins->src[0];
+            e->store_src = ins->src[0];
+            e->from_store = true;
+            e->valid     = true;
+        }
+      }
+
       continue;
     }
 
@@ -6238,14 +6277,19 @@ static void gvn_walk_domtree(Function *fn, BlockID bid, uint32_t *eliminated) {
 
       if (entry && entry->dst_reg != ins->dst) {
         if (ins->op != OP_CONST) {
-          ins->op = OP_COPY;
+          ins->op    = OP_COPY;
           ins->src[0] = entry->dst_reg;
-          ins->n_src = 1;
-          ins->imm = 0;
+          ins->n_src  = 1;
+          ins->imm    = 0;
           vn_of[ins->dst] = vn_of[entry->dst_reg];
           (*eliminated)++;
           if (getenv("ZCC_DEBUG_GVN")) {
-            fprintf(stderr, "  -> ELIMINATED redundant load! Replaced with COPY of %u\n", entry->dst_reg);
+            if (entry->from_store)
+              fprintf(stderr, "  -> SLF: forwarded store reg %u to load dst %u\n",
+                      entry->store_src, ins->dst);
+            else
+              fprintf(stderr, "  -> ELIMINATED redundant load, replaced with COPY of %u\n",
+                      entry->dst_reg);
           }
         } else {
           vn_of[ins->dst] = vn_of[entry->dst_reg];
