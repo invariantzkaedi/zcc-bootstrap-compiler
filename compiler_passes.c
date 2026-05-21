@@ -2046,6 +2046,15 @@ static void detect_loop_structure_pass(Function *fn, BlockID *idom) {
   fprintf(stderr, "[LoopStruct] fn=%s  headers=%u  max_depth=%u\n",
           current_function_name ? current_function_name : "?",
           headers_count, max_depth);
+  {
+    uint32_t pi;
+    for (pi = 0; pi < fn->n_blocks; pi++) {
+      Block *pb = fn->blocks[pi];
+      if (pb && pb->reachable && pb->is_pre_header && pb->pre_header_of >= 0) {
+        fprintf(stderr, "[LoopStruct]   pre-header BB%u -> header BB%d\n", pi, pb->pre_header_of);
+      }
+    }
+  }
 }
 
 static uint32_t scalar_promotion_pass(Function *fn, EscapeCtx *ctx) {
