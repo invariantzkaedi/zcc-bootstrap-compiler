@@ -233,6 +233,10 @@ typedef struct Block {
   BlockID chain_next; /* next block in the PGO chain            */
 
   bool reachable; /* set by CFG reachability pass           */
+  uint8_t loop_depth;      /* 0 = not in loop, >0 = nesting depth */
+  bool is_loop_header;  /* true if block has an incoming back-edge */
+  bool is_pre_header;   /* true if block is the pre-header of a loop */
+  int pre_header_of;   /* block index of the loop header this pre-headers */
 } Block;
 
 typedef struct Function {
@@ -1920,6 +1924,128 @@ static void build_dominator_tree_pass(Function *fn) {
     fprintf(stderr, "  BB%u->idom=BB%d", bi, (idom == NO_BLOCK) ? -1 : (int)idom);
   }
   fprintf(stderr, "\n");
+}
+
+static bool dominates(BlockID *idom, int h, int b, int n_blocks) {
+  int cur = b;
+  int depth = 0;
+  while (cur != h && depth++ < n_blocks) {
+    if (idom[cur] == cur) break; /* reached root */
+    cur = idom[cur];
+  }
+  return cur == h;
+}
+
+static void detect_loop_structure_pass(Function *fn, BlockID *idom) {
+  uint32_t bi;
+  uint32_t pi;
+  uint32_t H;
+  uint32_t headers_count = 0;
+  uint32_t max_depth = 0;
+
+  /* Initialize all blocks */
+  for (bi = 0; bi < fn->n_blocks; bi++) {
+    Block *blk = fn->blocks[bi];
+    if (!blk) continue;
+    blk->loop_depth = 0;
+    blk->is_loop_header = false;
+    blk->is_pre_header = false;
+    blk->pre_header_of = -1;
+  }
+
+  /* 1. Mark loop headers */
+  for (H = 0; H < fn->n_blocks; H++) {
+    Block *blk = fn->blocks[H];
+    if (!blk || !blk->reachable) continue;
+    for (pi = 0; pi < blk->n_preds; pi++) {
+      BlockID pred_id = blk->preds[pi];
+      if (dominates(idom, (int)H, (int)pred_id, (int)fn->n_blocks)) {
+        blk->is_loop_header = true;
+        break;
+      }
+    }
+  }
+
+  /* 2. For each loop header, find its pre-header & calculate depth */
+  for (H = 0; H < fn->n_blocks; H++) {
+    Block *hdr = fn->blocks[H];
+    if (hdr && hdr->reachable && hdr->is_loop_header) {
+      int pre_header_candidate = -1;
+      int non_back_edge_pred_count = 0;
+
+      /* Queue/worklist for backwards traversal */
+      int body_queue[MAX_BLOCKS];
+      bool in_body[MAX_BLOCKS];
+      int q_head = 0;
+      int q_tail = 0;
+      uint32_t b_idx;
+
+      for (pi = 0; pi < hdr->n_preds; pi++) {
+        BlockID pred_id = hdr->preds[pi];
+        if (!dominates(idom, (int)H, (int)pred_id, (int)fn->n_blocks)) {
+          pre_header_candidate = (int)pred_id;
+          non_back_edge_pred_count++;
+        }
+      }
+
+      if (non_back_edge_pred_count == 1) {
+        Block *ph = fn->blocks[pre_header_candidate];
+        if (ph) {
+          ph->is_pre_header = true;
+          ph->pre_header_of = (int)H;
+        }
+      }
+
+      /* Step 3: Loop body traversal for depth assignment */
+      memset(in_body, 0, sizeof(in_body));
+      in_body[H] = true;
+
+      for (pi = 0; pi < hdr->n_preds; pi++) {
+        BlockID pred_id = hdr->preds[pi];
+        if (dominates(idom, (int)H, (int)pred_id, (int)fn->n_blocks)) {
+          if (!in_body[pred_id]) {
+            in_body[pred_id] = true;
+            body_queue[q_tail++] = (int)pred_id;
+          }
+        }
+      }
+
+      while (q_head < q_tail) {
+        int curr = body_queue[q_head++];
+        Block *curr_blk = fn->blocks[curr];
+        if (!curr_blk) continue;
+        for (pi = 0; pi < curr_blk->n_preds; pi++) {
+          BlockID pred_id = curr_blk->preds[pi];
+          if (!in_body[pred_id]) {
+            in_body[pred_id] = true;
+            body_queue[q_tail++] = (int)pred_id;
+          }
+        }
+      }
+
+      for (b_idx = 0; b_idx < fn->n_blocks; b_idx++) {
+        if (in_body[b_idx] && fn->blocks[b_idx] && fn->blocks[b_idx]->reachable) {
+          fn->blocks[b_idx]->loop_depth++;
+        }
+      }
+    }
+  }
+
+  /* 4. Log */
+  for (bi = 0; bi < fn->n_blocks; bi++) {
+    Block *blk = fn->blocks[bi];
+    if (blk && blk->reachable) {
+      if (blk->is_loop_header) {
+        headers_count++;
+      }
+      if (blk->loop_depth > max_depth) {
+        max_depth = blk->loop_depth;
+      }
+    }
+  }
+  fprintf(stderr, "[LoopStruct] fn=%s  headers=%u  max_depth=%u\n",
+          current_function_name ? current_function_name : "?",
+          headers_count, max_depth);
 }
 
 static uint32_t scalar_promotion_pass(Function *fn, EscapeCtx *ctx) {
@@ -6584,6 +6710,7 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
 
   /* ── Pass 4d: GVN Dominator Tree Construction Pass (annotation-only) ── */
   build_dominator_tree_pass(fn);
+  detect_loop_structure_pass(fn, licm_idom);
 
   /* ── Pass 4e: Global Value Numbering (GVN) Pass ── */
   uint32_t gvn_ops = global_value_numbering_pass(fn);
