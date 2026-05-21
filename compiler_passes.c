@@ -8022,6 +8022,35 @@ static void ir_asm_emit_one_block(IRAsmCtx *ctx, BlockID bid) {
   }
 }
 
+/* Post-RA peephole: mark dead any OP_COPY where src and dst share
+ * the same physical register after linear scan. */
+static uint32_t ir_asm_post_ra_peephole(Function *fn, int *phys_reg) {
+  uint32_t count = 0;
+  uint32_t bi;
+  for (bi = 0; bi < fn->n_blocks; bi++) {
+    Block *blk = fn->blocks[bi];
+    Instr *ins;
+    if (!blk || !blk->reachable) continue;
+    for (ins = blk->head; ins; ins = ins->next) {
+      if (ins->dead) continue;
+      if (ins->op == OP_COPY && ins->n_src == 1) {
+        RegID dst = ins->dst;
+        RegID src = ins->src[0];
+        if (dst > 0 && dst < MAX_INSTRS &&
+            src > 0 && src < MAX_INSTRS &&
+            phys_reg[dst] >= 0 &&
+            phys_reg[dst] == phys_reg[src]) {
+          ins->dead = true;
+          count++;
+        }
+      }
+    }
+  }
+  if (count > 0)
+    fprintf(stderr, "[PostRA-Peephole]  self-copies eliminated: %u\n", count);
+  return count;
+}
+
 static void ir_asm_emit_function_body(IRAsmCtx *ctx) {
   Function *fn = ctx->fn;
   /* ir_asm_assign_alloca_offsets hoisted to caller */
@@ -8091,6 +8120,8 @@ static void ir_asm_emit_function_body(IRAsmCtx *ctx) {
   free(first_use);
   ir_asm_linear_scan(fn, alloc_order, n_alloc_order, ctx->def_seq,
                      ctx->last_use, ctx->phys_reg);
+
+  ir_asm_post_ra_peephole(fn, ctx->phys_reg);
 
   /* Which callee-saved phys regs (rbx, r12-r15) are used — for
    * prologue/epilogue. */
