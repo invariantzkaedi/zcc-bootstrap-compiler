@@ -382,6 +382,17 @@ struct Node *node_case_body(struct Node *n) { return n ? n->case_body : NULL; }
 int node_member_offset(struct Node *n) { return n ? n->member_offset : 0; }
 int node_member_size(struct Node *n) { return (n && n->type) ? (int)n->type->size : 8; }
 int node_line_no(struct Node *n) { return n ? n->line : 0; }
+int node_is_char_or_void_ptr_cast(struct Node *n) {
+    if (!n || n->kind != ND_CAST || !n->cast_type) return 0;
+    Type *t = n->cast_type;
+    if (t->kind == TY_PTR && t->base) {
+        int bk = t->base->kind;
+        if (bk == TY_CHAR || bk == TY_UCHAR || bk == TY_VOID) {
+            return 1;
+        }
+    }
+    return 0;
+}
 int node_is_bitfield(struct Node *n) { return n ? n->is_bitfield : 0; }
 int node_bit_offset(struct Node *n) { return n ? n->bit_offset : 0; }
 int node_bit_size(struct Node *n) { return n ? n->bit_size : 0; }

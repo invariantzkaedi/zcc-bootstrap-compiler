@@ -59,6 +59,7 @@ int           node_num_args(struct Node *n);
 int           node_line_no(struct Node *n);   /* source line for DWARF .loc */
 
 int           node_lhs_ptr_size(struct Node *n);
+int           node_is_char_or_void_ptr_cast(struct Node *n);
 int           node_rhs_ptr_size(struct Node *n);
 int           node_is_array(struct Node *n);
 int           node_is_func(struct Node *n);
@@ -124,6 +125,7 @@ struct ZCCNode {
     int       is_global;    /* ZND_VAR: 1 if global symbol, 0 if local */
     int       is_array;     /* 1 if variable has TY_ARRAY type */
     int       is_func;      /* 1 if variable has TY_FUNC type */
+    int       is_char_or_void_cast;
     int       line_no;     /* source line for DWARF (from node_line_no) */
     char     *asm_string;
 };
