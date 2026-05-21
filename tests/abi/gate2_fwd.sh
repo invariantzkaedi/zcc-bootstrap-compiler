@@ -1,6 +1,6 @@
 # tests/abi/gate3_fwd.sh
 set -e
-cd /mnt/h/__DOWNLOADS/zcc_github_upload
+cd "$(dirname "$0")/../.."
 echo "Starting Gate 3: Forward Inter-op"
 for t in ret_int_int ret_sse_sse ret_sse_int ret_int_sse ret_tvalue; do
     echo "Testing $t..."

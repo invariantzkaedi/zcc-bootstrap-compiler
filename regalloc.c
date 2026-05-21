@@ -267,7 +267,9 @@ static void chaitin_briggs(RegAllocator *ra, const ir_func_t *fn) {
 
         for (j = 0; j < N; j++) {
             if (removed[j] && adj[target*N + j]) {
-                int c = color[alias[j]];
+                int root = j;
+                while (alias[root] != root) root = alias[root];
+                int c = color[root];
                 if (c != -1) used_colors |= (1 << c);
             }
         }

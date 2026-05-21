@@ -1,6 +1,6 @@
 # tests/abi/gate4_rev.sh
 set -e
-cd /mnt/h/__DOWNLOADS/zcc_github_upload
+cd "$(dirname "$0")/../.."
 echo "Starting Gate 4: Reverse Inter-op"
 for t in ret_int_int ret_sse_sse ret_sse_int ret_int_sse ret_tvalue; do
     echo "Testing $t..."

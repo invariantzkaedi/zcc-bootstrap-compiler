@@ -16,8 +16,15 @@
 
 set -u
 
-ZCC_DIR="${ZCC_DIR:-/mnt/h/__DOWNLOADS/selforglinux}"
-SRC="${SRC:-${ZCC_DIR}/zcc_pp.c}"
+ZCC_DIR="${ZCC_DIR:-$(cd "$(dirname "$0")" && pwd)}"
+SRC="${SRC:-}"
+if [ -z "$SRC" ]; then
+    if [ -f "${ZCC_DIR}/zcc_pp.c" ]; then
+        SRC="${ZCC_DIR}/zcc_pp.c"
+    else
+        SRC="${ZCC_DIR}/part0_pp.c"
+    fi
+fi
 OUT="${OUT:-/tmp/ir_gate2}"
 ZCC="${ZCC_DIR}/zcc"
 

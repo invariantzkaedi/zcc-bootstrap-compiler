@@ -28,6 +28,7 @@ int           node_kind(struct Node *n);
 long long     node_int_val(struct Node *n);
 int           node_str_id(struct Node *n);   /* ND_STR: string table index */
 void          node_name(struct Node *n, char *buf, int len);
+void          node_label_name(struct Node *n, char *buf, int len);
 struct Node  *node_lhs(struct Node *n);
 struct Node  *node_rhs(struct Node *n);
 struct Node  *node_cond(struct Node *n);
@@ -82,7 +83,9 @@ enum {
     ZND_SIZEOF,   /* sizeof(type) or sizeof expr — resolved size in int_val */
     ZND_POST_DEC, ZND_PRE_INC, ZND_PRE_DEC,  /* --x, ++x, x-- */
     ZND_ASM = 58,
-    ZND_VLA_ALLOC = 59
+    ZND_VLA_ALLOC = 59,
+    ZND_GOTO = 60,
+    ZND_LABEL = 61
 };
 
 typedef struct ZCCNode ZCCNode;

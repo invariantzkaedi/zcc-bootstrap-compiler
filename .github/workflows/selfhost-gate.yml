@@ -167,3 +167,36 @@ jobs:
         run: |
           nm zcc | grep -E 'zcc_rust_shm_entry|zcc_build_from_wire|zcc_shm_ring_open' \
             || (echo "SHM symbols missing from binary!" && exit 1)
+
+  correctness-gates:
+    name: "Defensive Compiler & IR emission Gates"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Install build dependencies
+        run: sudo apt-get install -y gcc make
+
+      - name: Build ZCC Engine
+        env:
+          ZCC_MUTATION_SANDBOX: "1"
+        run: make clean zcc ONE_SOURCE=1 NO_STRIP=1
+
+      - name: Execute EVM Lifter Correctness Tests
+        run: make check-evm-lifter
+
+      - name: Execute IR Vulnerability Tag Tests
+        run: make check-ir-vuln-tag
+
+      - name: Execute ForgeZero Audit Receipt Tests
+        run: make check-forgezero-receipt
+
+      - name: Execute Gate IR-1 Coverage check
+        run: bash gate_ir1.sh
+
+      - name: Execute Gate IR-2 Determinism check
+        run: bash gate_ir2.sh
+

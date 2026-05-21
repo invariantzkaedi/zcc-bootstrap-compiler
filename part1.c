@@ -330,6 +330,12 @@ void node_name(struct Node *n, char *buf, int len) {
     while (i < len - 1 && n->name[i]) { buf[i] = n->name[i]; i++; }
     buf[i] = '\0';
 }
+void node_label_name(struct Node *n, char *buf, int len) {
+    if (!n || !buf || len == 0) return;
+    int i; i = 0;
+    while (i < len - 1 && n->label_name[i]) { buf[i] = n->label_name[i]; i++; }
+    buf[i] = '\0';
+}
 struct Node *node_lhs(struct Node *n) { return n ? n->lhs : NULL; }
 struct Node *node_rhs(struct Node *n) { return n ? n->rhs : NULL; }
 struct Node *node_cond(struct Node *n) { return n ? n->cond : NULL; }
