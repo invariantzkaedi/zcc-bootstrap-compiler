@@ -194,6 +194,11 @@ typedef struct Instr {
 
   AliasClass alias_class;
 
+  /* Symbolic Base Tracking (SBT) */
+  RegID sbt_base;
+  int64_t sbt_offset;
+  bool sbt_has_cast;
+
   char *asm_string;
 
   struct Instr *next;
@@ -1723,12 +1728,16 @@ static void unlink_instr(Block *blk, Instr *ins) {
   blk->n_instrs--;
 }
 
-static RegID trace_address_root_recurse(Function *fn, RegID reg, int depth) {
+static RegID trace_address_root_offset_recurse(Function *fn, RegID reg, int64_t *offset, bool *has_cast, int depth) {
   if (depth > 10) return 0;
   if (reg == 0 || reg >= MAX_INSTRS) return 0;
 
   Instr *def = fn->def_of[reg];
   if (!def) return reg;
+
+  if (def->sbt_has_cast) {
+    *has_cast = true;
+  }
 
   if (def->op == OP_PHI) {
     return 0; /* Explicitly fail on PHI-rooted chains */
@@ -1738,35 +1747,95 @@ static RegID trace_address_root_recurse(Function *fn, RegID reg, int depth) {
     return reg;
   }
 
-  if (def->op == OP_COPY || def->op == OP_GEP) {
+  if (def->op == OP_COPY) {
     if (def->n_src > 0) {
-      return trace_address_root_recurse(fn, def->src[0], depth + 1);
+      return trace_address_root_offset_recurse(fn, def->src[0], offset, has_cast, depth + 1);
     }
   }
 
-  if (def->op == OP_ADD || def->op == OP_SUB) {
-    /* Trace both src[0] and src[1] to see if either reaches an OP_ALLOCA */
+  if (def->op == OP_GEP) {
     if (def->n_src > 0) {
-      RegID r0 = trace_address_root_recurse(fn, def->src[0], depth + 1);
+      /* If the GEP index is constant, accumulate it */
+      if (def->n_src > 1) {
+        Instr *idx_def = fn->def_of[def->src[1]];
+        if (idx_def && idx_def->op == OP_CONST) {
+          *offset += idx_def->imm;
+        }
+      }
+      return trace_address_root_offset_recurse(fn, def->src[0], offset, has_cast, depth + 1);
+    }
+  }
+
+  if (def->op == OP_ADD) {
+    /* If one of the operands is an OP_CONST, accumulate it and trace the other */
+    if (def->n_src == 2) {
+      Instr *d0 = fn->def_of[def->src[0]];
+      Instr *d1 = fn->def_of[def->src[1]];
+      if (d0 && d0->op == OP_CONST) {
+        *offset += d0->imm;
+        return trace_address_root_offset_recurse(fn, def->src[1], offset, has_cast, depth + 1);
+      }
+      if (d1 && d1->op == OP_CONST) {
+        *offset += d1->imm;
+        return trace_address_root_offset_recurse(fn, def->src[0], offset, has_cast, depth + 1);
+      }
+    }
+    /* Fallback: trace both src[0] and src[1] to find an OP_ALLOCA */
+    if (def->n_src > 0) {
+      int64_t off0 = 0;
+      bool cast0 = *has_cast;
+      RegID r0 = trace_address_root_offset_recurse(fn, def->src[0], &off0, &cast0, depth + 1);
       if (r0 > 0 && r0 < MAX_INSTRS) {
         Instr *d0 = fn->def_of[r0];
-        if (d0 && d0->op == OP_ALLOCA) return r0;
+        if (d0 && d0->op == OP_ALLOCA) {
+          *offset += off0;
+          *has_cast = cast0;
+          return r0;
+        }
       }
     }
     if (def->n_src > 1) {
-      RegID r1 = trace_address_root_recurse(fn, def->src[1], depth + 1);
+      int64_t off1 = 0;
+      bool cast1 = *has_cast;
+      RegID r1 = trace_address_root_offset_recurse(fn, def->src[1], &off1, &cast1, depth + 1);
       if (r1 > 0 && r1 < MAX_INSTRS) {
         Instr *d1 = fn->def_of[r1];
-        if (d1 && d1->op == OP_ALLOCA) return r1;
+        if (d1 && d1->op == OP_ALLOCA) {
+          *offset += off1;
+          *has_cast = cast1;
+          return r1;
+        }
       }
+    }
+  }
+
+  if (def->op == OP_SUB) {
+    /* If the second operand is OP_CONST, subtract it and trace the first */
+    if (def->n_src == 2) {
+      Instr *d1 = fn->def_of[def->src[1]];
+      if (d1 && d1->op == OP_CONST) {
+        *offset -= d1->imm;
+        return trace_address_root_offset_recurse(fn, def->src[0], offset, has_cast, depth + 1);
+      }
+    }
+    if (def->n_src > 0) {
+      return trace_address_root_offset_recurse(fn, def->src[0], offset, has_cast, depth + 1);
     }
   }
 
   return reg;
 }
 
+static RegID trace_address_root_offset(Function *fn, RegID reg, int64_t *offset, bool *has_cast) {
+  *offset = 0;
+  *has_cast = false;
+  return trace_address_root_offset_recurse(fn, reg, offset, has_cast, 0);
+}
+
 static RegID trace_address_root(Function *fn, RegID reg) {
-  return trace_address_root_recurse(fn, reg, 0);
+  int64_t dummy_offset = 0;
+  bool dummy_cast = false;
+  return trace_address_root_offset(fn, reg, &dummy_offset, &dummy_cast);
 }
 
 static uint32_t local_stack_alias_pass(Function *fn) {
@@ -1785,7 +1854,15 @@ static uint32_t local_stack_alias_pass(Function *fn) {
 
       if (ins->op == OP_LOAD && ins->n_src >= 1) {
         RegID addr = ins->src[0];
-        RegID root = trace_address_root(fn, addr);
+        int64_t offset = 0;
+        bool has_cast = false;
+        RegID root = trace_address_root_offset(fn, addr, &offset, &has_cast);
+        if (ins->amf.folded) {
+          offset += ins->amf.disp;
+        }
+        ins->sbt_base = root;
+        ins->sbt_offset = offset;
+        ins->sbt_has_cast = has_cast;
         if (root > 0 && root < MAX_INSTRS) {
           Instr *def = fn->def_of[root];
           if (def && def->op == OP_ALLOCA && !def->escape) {
@@ -1799,7 +1876,15 @@ static uint32_t local_stack_alias_pass(Function *fn) {
         }
       } else if (ins->op == OP_STORE && ins->n_src >= 2) {
         RegID addr = ins->src[1];
-        RegID root = trace_address_root(fn, addr);
+        int64_t offset = 0;
+        bool has_cast = false;
+        RegID root = trace_address_root_offset(fn, addr, &offset, &has_cast);
+        if (ins->amf.folded) {
+          offset += ins->amf.disp;
+        }
+        ins->sbt_base = root;
+        ins->sbt_offset = offset;
+        ins->sbt_has_cast = has_cast;
         if (root > 0 && root < MAX_INSTRS) {
           Instr *def = fn->def_of[root];
           if (def && def->op == OP_ALLOCA && !def->escape) {
@@ -2945,6 +3030,7 @@ extern int node_ptr_elem_size(struct Node *n);
 /* CG-IR-015: always-present declarations (not guarded by STANDALONE) */
 extern int node_type_size(struct Node *n);
 extern int node_type_unsigned(struct Node *n);
+extern int node_is_char_or_void_ptr_cast(struct Node *n);
 extern const char *node_asm_string(struct Node *n);
 
 /* Map ND_* (zcc.c) to ZND_* (bridge). Use sentinels from zcc_ast_bridge.h. */
@@ -3193,6 +3279,7 @@ static ZCCNode *zcc_node_from_expr(struct Node *n) {
     break;
   case ZND_CAST:
     z->lhs = zcc_node_from_expr(node_lhs(n));
+    z->is_char_or_void_cast = node_is_char_or_void_ptr_cast(n);
     break;
   case ZND_ADDR:
   case ZND_DEREF:
@@ -3500,8 +3587,23 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
   if (!node)
     return 0;
   /* Transparent passthrough: only recurse on operand. */
-  if (node->kind == ZND_CAST)
-    return node->lhs ? zcc_lower_expr(ctx, node->lhs) : 0;
+  if (node->kind == ZND_CAST) {
+    RegID lhs_reg = node->lhs ? zcc_lower_expr(ctx, node->lhs) : 0;
+    if (lhs_reg && node->is_char_or_void_cast) {
+      RegID cast_reg = ctx->next_reg++;
+      Instr *copy_ins = calloc(1, sizeof(Instr));
+      copy_ins->id = ctx->next_instr_id++;
+      copy_ins->op = OP_COPY;
+      copy_ins->dst = cast_reg;
+      copy_ins->src[0] = lhs_reg;
+      copy_ins->n_src = 1;
+      copy_ins->sbt_has_cast = true;
+      copy_ins->exec_freq = 1.0;
+      emit_instr(ctx, copy_ins);
+      return cast_reg;
+    }
+    return lhs_reg;
+  }
   /* ZND_ADDR: force child to yield address; no extra IR. */
   if (node->kind == ZND_ADDR) {
     int old = ctx->want_address;
@@ -5858,6 +5960,10 @@ typedef struct {
   bool valid;
   AliasClass alias_class;
   RegID root_addr;
+  /* Symbolic Base Tracking (SBT) */
+  RegID sbt_base;
+  int64_t sbt_offset;
+  bool sbt_has_cast;
 } GVNEntry;
 
 typedef struct {
@@ -5896,7 +6002,7 @@ static uint32_t hash_gvn_key(Opcode op, RegID src1_vn, RegID src2_vn, int64_t im
   return hash;
 }
 
-static GVNEntry *gvn_lookup_or_insert(Opcode op, RegID src1_vn, RegID src2_vn, int64_t imm, const char *global_name, RegID dst_reg, AliasClass alias_class, RegID root_addr) {
+static GVNEntry *gvn_lookup_or_insert(Opcode op, RegID src1_vn, RegID src2_vn, int64_t imm, const char *global_name, RegID dst_reg, AliasClass alias_class, RegID root_addr, RegID sbt_base, int64_t sbt_offset, bool sbt_has_cast) {
   uint32_t hash = hash_gvn_key(op, src1_vn, src2_vn, imm, global_name);
   uint32_t idx = hash % GVN_TABLE_SIZE;
 
@@ -5927,6 +6033,9 @@ static GVNEntry *gvn_lookup_or_insert(Opcode op, RegID src1_vn, RegID src2_vn, i
       gvn_table[slot].dst_reg = dst_reg;
       gvn_table[slot].alias_class = alias_class;
       gvn_table[slot].root_addr = root_addr;
+      gvn_table[slot].sbt_base = sbt_base;
+      gvn_table[slot].sbt_offset = sbt_offset;
+      gvn_table[slot].sbt_has_cast = sbt_has_cast;
       return &gvn_table[slot];
     }
 
@@ -5997,7 +6106,7 @@ static void gvn_walk_domtree(Function *fn, BlockID bid, uint32_t *eliminated) {
     if (ins->dead || ins->op == OP_NOP)
       continue;
 
-    if (ins->op == OP_COPY && ins->n_src >= 1) {
+    if (ins->op == OP_COPY && ins->n_src >= 1 && ins->dst) {
       vn_of[ins->dst] = vn_of[ins->src[0]];
       continue;
     }
@@ -6020,32 +6129,78 @@ static void gvn_walk_domtree(Function *fn, BlockID bid, uint32_t *eliminated) {
 
     if (ins->op == OP_STORE && ins->n_src >= 2) {
       RegID store_addr = ins->src[1];
-      RegID root_store = trace_address_root(fn, store_addr);
+      int64_t store_offset = 0;
+      bool store_has_cast = false;
+      RegID root_store = trace_address_root_offset(fn, store_addr, &store_offset, &store_has_cast);
+      if (ins->amf.folded) {
+        store_offset += ins->amf.disp;
+      }
+
+      if (getenv("ZCC_DEBUG_GVN")) {
+        fprintf(stderr, "[GVN-STORE] ins %u: store into base=%u (vn=%u), offset=%ld, has_cast=%d\n", 
+                ins->id, root_store, vn_of[root_store], store_offset, store_has_cast);
+      }
 
       for (int i = 0; i < GVN_TABLE_SIZE; i++) {
         if (gvn_table[i].occupied && gvn_table[i].valid && gvn_table[i].op == OP_LOAD) {
-          if (ins->alias_class == ALIAS_LOCAL_STACK) {
-            if (gvn_table[i].alias_class == ALIAS_LOCAL_STACK && gvn_table[i].root_addr == root_store) {
-              if (gvn_scope_top < GVN_SCOPE_MAX) {
-                gvn_scope_stack[gvn_scope_top++] = (GVNScopeAction){
-                  .slot = i,
-                  .old_occupied = gvn_table[i].occupied,
-                  .old_valid = gvn_table[i].valid
-                };
-              }
-              gvn_table[i].valid = false;
+          bool must_kill = false;
+
+          /* Rule 1: Cast fallback rule (Risk 2 mitigation) */
+          if (store_has_cast || gvn_table[i].sbt_has_cast) {
+            must_kill = true;
+            if (getenv("ZCC_DEBUG_GVN")) {
+              fprintf(stderr, "  -> KILLED by Rule 1 (cast): load dst=%u base=%u offset=%ld has_cast=%d\n", gvn_table[i].dst_reg, gvn_table[i].sbt_base, gvn_table[i].sbt_offset, gvn_table[i].sbt_has_cast);
             }
-          } else {
-            if (gvn_table[i].alias_class == ALIAS_UNKNOWN) {
-              if (gvn_scope_top < GVN_SCOPE_MAX) {
-                gvn_scope_stack[gvn_scope_top++] = (GVNScopeAction){
-                  .slot = i,
-                  .old_occupied = gvn_table[i].occupied,
-                  .old_valid = gvn_table[i].valid
-                };
+          }
+          /* Rule 2: If both have valid symbolic bases */
+          else if (root_store > 0 && gvn_table[i].sbt_base > 0) {
+            RegID store_base_vn = vn_of[root_store];
+            RegID load_base_vn = vn_of[gvn_table[i].sbt_base];
+            if (store_base_vn != load_base_vn) {
+              /* Different symbolic bases -> must not alias! No kill! */
+              must_kill = false;
+            } else {
+              /* Same symbolic base -> check offsets (struct field TBAA) */
+              if (store_offset == gvn_table[i].sbt_offset) {
+                /* Same offset -> must kill! */
+                must_kill = true;
+                if (getenv("ZCC_DEBUG_GVN")) {
+                  fprintf(stderr, "  -> KILLED by Rule 2 (same base & offset): load dst=%u base=%u offset=%ld has_cast=%d\n", gvn_table[i].dst_reg, gvn_table[i].sbt_base, gvn_table[i].sbt_offset, gvn_table[i].sbt_has_cast);
+                }
+              } else {
+                /* Different offsets -> must not alias! No kill! */
+                must_kill = false;
               }
-              gvn_table[i].valid = false;
             }
+          }
+          /* Rule 3: Unknown bases -> conservative invalidation based on alias class */
+          else {
+            if (ins->alias_class == ALIAS_LOCAL_STACK) {
+              if (gvn_table[i].alias_class == ALIAS_LOCAL_STACK && gvn_table[i].root_addr == root_store) {
+                must_kill = true;
+                if (getenv("ZCC_DEBUG_GVN")) {
+                  fprintf(stderr, "  -> KILLED by Rule 3 (local stack): load dst=%u base=%u offset=%ld has_cast=%d\n", gvn_table[i].dst_reg, gvn_table[i].sbt_base, gvn_table[i].sbt_offset, gvn_table[i].sbt_has_cast);
+                }
+              }
+            } else {
+              if (gvn_table[i].alias_class == ALIAS_UNKNOWN) {
+                must_kill = true;
+                if (getenv("ZCC_DEBUG_GVN")) {
+                  fprintf(stderr, "  -> KILLED by Rule 3 (unknown base): load dst=%u base=%u offset=%ld has_cast=%d\n", gvn_table[i].dst_reg, gvn_table[i].sbt_base, gvn_table[i].sbt_offset, gvn_table[i].sbt_has_cast);
+                }
+              }
+            }
+          }
+
+          if (must_kill) {
+            if (gvn_scope_top < GVN_SCOPE_MAX) {
+              gvn_scope_stack[gvn_scope_top++] = (GVNScopeAction){
+                .slot = i,
+                .old_occupied = gvn_table[i].occupied,
+                .old_valid = gvn_table[i].valid
+              };
+            }
+            gvn_table[i].valid = false;
           }
         }
       }
@@ -6067,9 +6222,19 @@ static void gvn_walk_domtree(Function *fn, BlockID bid, uint32_t *eliminated) {
       const char *global_name = (ins->op == OP_GLOBAL) ? ins->call_name : NULL;
 
       AliasClass alias_class = ins->alias_class;
-      RegID root_addr = is_load ? trace_address_root(fn, ins->src[0]) : 0;
+      int64_t load_offset = 0;
+      bool load_has_cast = false;
+      RegID root_addr = trace_address_root_offset(fn, ins->src[0], &load_offset, &load_has_cast);
+      if (ins->op == OP_LOAD && ins->amf.folded) {
+        load_offset += ins->amf.disp;
+      }
 
-      GVNEntry *entry = gvn_lookup_or_insert(ins->op, src1_vn, src2_vn, imm, global_name, ins->dst, alias_class, root_addr);
+      if (getenv("ZCC_DEBUG_GVN") && ins->op == OP_LOAD) {
+        fprintf(stderr, "[GVN-LOAD-LOOKUP] ins %u: load dst=%u, src0_vn=%u, imm=%ld, base=%u (vn=%u), offset=%ld, has_cast=%d\n", 
+                ins->id, ins->dst, src1_vn, imm, root_addr, vn_of[root_addr], load_offset, load_has_cast);
+      }
+
+      GVNEntry *entry = gvn_lookup_or_insert(ins->op, src1_vn, src2_vn, imm, global_name, ins->dst, alias_class, root_addr, root_addr, load_offset, load_has_cast);
 
       if (entry && entry->dst_reg != ins->dst) {
         if (ins->op != OP_CONST) {
@@ -6079,6 +6244,9 @@ static void gvn_walk_domtree(Function *fn, BlockID bid, uint32_t *eliminated) {
           ins->imm = 0;
           vn_of[ins->dst] = vn_of[entry->dst_reg];
           (*eliminated)++;
+          if (getenv("ZCC_DEBUG_GVN")) {
+            fprintf(stderr, "  -> ELIMINATED redundant load! Replaced with COPY of %u\n", entry->dst_reg);
+          }
         } else {
           vn_of[ins->dst] = vn_of[entry->dst_reg];
         }

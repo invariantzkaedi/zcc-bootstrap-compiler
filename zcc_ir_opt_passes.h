@@ -81,7 +81,7 @@ static uint32_t opt_copy_prop_pass(Function *fn) {
         if (!blk || !blk->reachable) continue;
         for (Instr *ins = blk->head; ins; ins = ins->next) {
             if (ins->dead) continue;
-            if (ins->op == OP_COPY && ins->n_src == 1) {
+            if (ins->op == OP_COPY && ins->n_src == 1 && !ins->sbt_has_cast) {
                 copy_map[ins->dst] = ins->src[0];
             }
         }

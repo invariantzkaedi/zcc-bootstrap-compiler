@@ -3947,6 +3947,7 @@ static int ir_whitelisted(const char *name) {
       /* Batch 8: Memory Safety & Math Primitives */
       "log2_of", "guard_node", "is_bad_ptr", "ptr_in_fault_range",
       "validate_token_bounds", "validate_node", "validate_type", "bad_node_cutoff",
+      "test_struct_tbaa", "test_cast_fallback", "gvn_test",
       /* Split Lexer Core (fortified and hardened) */
       /* "lex_char", "lex_operator", "next_token", "read_char", "read_escape", "node_name", */
       NULL
