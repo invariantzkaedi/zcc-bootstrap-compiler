@@ -5844,6 +5844,277 @@ void zcc_ir_bridge_dump_and_free(ZCCNode *z_node, const char *func_name,
   zcc_node_free(z_node);
 }
 
+typedef struct {
+  Opcode op;
+  RegID src1_vn;
+  RegID src2_vn;
+  int64_t imm;
+  char global_name[128];
+  RegID val_num;
+  RegID dst_reg;
+  bool occupied;
+  bool valid;
+  AliasClass alias_class;
+  RegID root_addr;
+} GVNEntry;
+
+typedef struct {
+  int slot;
+  bool old_occupied;
+  bool old_valid;
+} GVNScopeAction;
+
+#define GVN_TABLE_SIZE 1024
+#define GVN_SCOPE_MAX 8192
+
+static GVNEntry gvn_table[GVN_TABLE_SIZE];
+static GVNScopeAction gvn_scope_stack[GVN_SCOPE_MAX];
+static int gvn_scope_top = 0;
+static int gvn_scope_marks[MAX_BLOCKS];
+static RegID vn_of[MAX_INSTRS];
+
+static void gvn_clear_table(void) {
+  memset(gvn_table, 0, sizeof(gvn_table));
+  gvn_scope_top = 0;
+  memset(gvn_scope_marks, 0, sizeof(gvn_scope_marks));
+}
+
+static uint32_t hash_gvn_key(Opcode op, RegID src1_vn, RegID src2_vn, int64_t imm, const char *global_name) {
+  uint32_t hash = 5381;
+  hash = ((hash << 5) + hash) + (uint32_t)op;
+  hash = ((hash << 5) + hash) + src1_vn;
+  hash = ((hash << 5) + hash) + src2_vn;
+  hash = ((hash << 5) + hash) + (uint32_t)(imm & 0xFFFFFFFF);
+  hash = ((hash << 5) + hash) + (uint32_t)((imm >> 32) & 0xFFFFFFFF);
+  if (global_name && global_name[0]) {
+    for (int i = 0; global_name[i]; i++) {
+      hash = ((hash << 5) + hash) + (uint32_t)global_name[i];
+    }
+  }
+  return hash;
+}
+
+static GVNEntry *gvn_lookup_or_insert(Opcode op, RegID src1_vn, RegID src2_vn, int64_t imm, const char *global_name, RegID dst_reg, AliasClass alias_class, RegID root_addr) {
+  uint32_t hash = hash_gvn_key(op, src1_vn, src2_vn, imm, global_name);
+  uint32_t idx = hash % GVN_TABLE_SIZE;
+
+  for (int probe = 0; probe < GVN_TABLE_SIZE; probe++) {
+    uint32_t slot = (idx + probe) % GVN_TABLE_SIZE;
+
+    if (!gvn_table[slot].occupied) {
+      if (gvn_scope_top < GVN_SCOPE_MAX) {
+        gvn_scope_stack[gvn_scope_top++] = (GVNScopeAction){
+          .slot = slot,
+          .old_occupied = false,
+          .old_valid = false
+        };
+      }
+      gvn_table[slot].occupied = true;
+      gvn_table[slot].valid = true;
+      gvn_table[slot].op = op;
+      gvn_table[slot].src1_vn = src1_vn;
+      gvn_table[slot].src2_vn = src2_vn;
+      gvn_table[slot].imm = imm;
+      if (global_name) {
+        strncpy(gvn_table[slot].global_name, global_name, sizeof(gvn_table[slot].global_name) - 1);
+        gvn_table[slot].global_name[sizeof(gvn_table[slot].global_name) - 1] = '\0';
+      } else {
+        gvn_table[slot].global_name[0] = '\0';
+      }
+      gvn_table[slot].val_num = dst_reg;
+      gvn_table[slot].dst_reg = dst_reg;
+      gvn_table[slot].alias_class = alias_class;
+      gvn_table[slot].root_addr = root_addr;
+      return &gvn_table[slot];
+    }
+
+    if (gvn_table[slot].occupied && gvn_table[slot].valid) {
+      if (gvn_table[slot].op == op &&
+          gvn_table[slot].src1_vn == src1_vn &&
+          gvn_table[slot].src2_vn == src2_vn &&
+          gvn_table[slot].imm == imm) {
+        if (!global_name || strcmp(gvn_table[slot].global_name, global_name) == 0) {
+          return &gvn_table[slot];
+        }
+      }
+    }
+  }
+  return NULL;
+}
+
+static void gvn_scope_push(BlockID bid) {
+  gvn_scope_marks[bid] = gvn_scope_top;
+}
+
+static void gvn_scope_pop(BlockID bid) {
+  int mark = gvn_scope_marks[bid];
+  while (gvn_scope_top > mark) {
+    gvn_scope_top--;
+    GVNScopeAction action = gvn_scope_stack[gvn_scope_top];
+    gvn_table[action.slot].occupied = action.old_occupied;
+    gvn_table[action.slot].valid = action.old_valid;
+  }
+}
+
+static bool is_gvn_pure(Opcode op) {
+  switch (op) {
+    case OP_ADD:
+    case OP_SUB:
+    case OP_MUL:
+    case OP_DIV:
+    case OP_MOD:
+    case OP_BAND:
+    case OP_BOR:
+    case OP_BXOR:
+    case OP_BNOT:
+    case OP_SHL:
+    case OP_SHR:
+    case OP_LT:
+    case OP_EQ:
+    case OP_NE:
+    case OP_GT:
+    case OP_GE:
+    case OP_LE:
+    case OP_GEP:
+    case OP_GLOBAL:
+    case OP_CONST:
+      return true;
+    default:
+      return false;
+  }
+}
+
+static void gvn_walk_domtree(Function *fn, BlockID bid, uint32_t *eliminated) {
+  Block *blk = fn->blocks[bid];
+  if (!blk || !blk->reachable)
+    return;
+
+  gvn_scope_push(bid);
+
+  for (Instr *ins = blk->head; ins; ins = ins->next) {
+    if (ins->dead || ins->op == OP_NOP)
+      continue;
+
+    if (ins->op == OP_COPY && ins->n_src >= 1) {
+      vn_of[ins->dst] = vn_of[ins->src[0]];
+      continue;
+    }
+
+    if (ins->op == OP_CALL) {
+      for (int i = 0; i < GVN_TABLE_SIZE; i++) {
+        if (gvn_table[i].occupied && gvn_table[i].valid && gvn_table[i].op == OP_LOAD) {
+          if (gvn_scope_top < GVN_SCOPE_MAX) {
+            gvn_scope_stack[gvn_scope_top++] = (GVNScopeAction){
+              .slot = i,
+              .old_occupied = gvn_table[i].occupied,
+              .old_valid = gvn_table[i].valid
+            };
+          }
+          gvn_table[i].valid = false;
+        }
+      }
+      continue;
+    }
+
+    if (ins->op == OP_STORE && ins->n_src >= 2) {
+      RegID store_addr = ins->src[1];
+      RegID root_store = trace_address_root(fn, store_addr);
+
+      for (int i = 0; i < GVN_TABLE_SIZE; i++) {
+        if (gvn_table[i].occupied && gvn_table[i].valid && gvn_table[i].op == OP_LOAD) {
+          if (ins->alias_class == ALIAS_LOCAL_STACK) {
+            if (gvn_table[i].alias_class == ALIAS_LOCAL_STACK && gvn_table[i].root_addr == root_store) {
+              if (gvn_scope_top < GVN_SCOPE_MAX) {
+                gvn_scope_stack[gvn_scope_top++] = (GVNScopeAction){
+                  .slot = i,
+                  .old_occupied = gvn_table[i].occupied,
+                  .old_valid = gvn_table[i].valid
+                };
+              }
+              gvn_table[i].valid = false;
+            }
+          } else {
+            if (gvn_table[i].alias_class == ALIAS_UNKNOWN) {
+              if (gvn_scope_top < GVN_SCOPE_MAX) {
+                gvn_scope_stack[gvn_scope_top++] = (GVNScopeAction){
+                  .slot = i,
+                  .old_occupied = gvn_table[i].occupied,
+                  .old_valid = gvn_table[i].valid
+                };
+              }
+              gvn_table[i].valid = false;
+            }
+          }
+        }
+      }
+      continue;
+    }
+
+    bool is_pure = is_gvn_pure(ins->op);
+    bool is_load = (ins->op == OP_LOAD && ins->n_src >= 1 && ins->dst);
+
+    if ((is_pure || is_load) && ins->dst) {
+      RegID src1_vn = (ins->n_src > 0) ? vn_of[ins->src[0]] : 0;
+      RegID src2_vn = (ins->n_src > 1) ? vn_of[ins->src[1]] : 0;
+      int64_t imm = ins->imm;
+      if (ins->op == OP_LOAD) {
+        int64_t disp = ins->amf.folded ? ins->amf.disp : 0;
+        uint64_t load_key = ((uint64_t)(uint32_t)disp << 4) | (uint32_t)(ins->imm & 0xF);
+        imm = (int64_t)load_key;
+      }
+      const char *global_name = (ins->op == OP_GLOBAL) ? ins->call_name : NULL;
+
+      AliasClass alias_class = ins->alias_class;
+      RegID root_addr = is_load ? trace_address_root(fn, ins->src[0]) : 0;
+
+      GVNEntry *entry = gvn_lookup_or_insert(ins->op, src1_vn, src2_vn, imm, global_name, ins->dst, alias_class, root_addr);
+
+      if (entry && entry->dst_reg != ins->dst) {
+        if (ins->op != OP_CONST) {
+          ins->op = OP_COPY;
+          ins->src[0] = entry->dst_reg;
+          ins->n_src = 1;
+          ins->imm = 0;
+          vn_of[ins->dst] = vn_of[entry->dst_reg];
+          (*eliminated)++;
+        } else {
+          vn_of[ins->dst] = vn_of[entry->dst_reg];
+        }
+      } else {
+        vn_of[ins->dst] = ins->dst;
+      }
+    }
+  }
+
+  for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
+    if (bi != bid && licm_idom[bi] == bid) {
+      gvn_walk_domtree(fn, bi, eliminated);
+    }
+  }
+
+  gvn_scope_pop(bid);
+}
+
+static uint32_t global_value_numbering_pass(Function *fn) {
+  licm_compute_rpo(fn);
+  licm_compute_doms(fn);
+
+  gvn_clear_table();
+  for (uint32_t i = 0; i < MAX_INSTRS; i++) {
+    vn_of[i] = i;
+  }
+
+  uint32_t eliminated = 0;
+  if (fn->n_blocks > 0 && fn->blocks[fn->entry]) {
+    gvn_walk_domtree(fn, fn->entry, &eliminated);
+  }
+
+  if (eliminated > 0) {
+    fprintf(stderr, "[GVN]       redundant operations eliminated: %u\n", eliminated);
+  }
+  return eliminated;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
  * REDUNDANT LOAD ELIMINATION (RLE)
  *
@@ -6097,8 +6368,14 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   /* ── Pass 4c: Local Stack Alias Analysis Pass (annotation-only) ── */
   local_stack_alias_pass(fn);
 
-  /* ── Pass 4d: GVN Dominator Tree Construction Pass (annotation-only) ── */
-  gvn_dom_tree_pass(fn);
+  /* ── Pass 4d: Global Value Numbering (GVN) Pass ── */
+  uint32_t gvn_ops = global_value_numbering_pass(fn);
+  if (gvn_ops > 0) {
+    opt_copy_prop_pass(fn);
+    licm_build_def_block(fn);
+    ssa_dce_pass(fn);
+    compute_reachability(fn);
+  }
 
   /* ── Pass 5: PGO Basic Block Reordering ── */
   if (getenv("ZCC_DUMP_PGO_BLOCKS") &&
@@ -7167,7 +7444,7 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
   }
   case OP_COPY: {
     if (ins->n_src >= 1) {
-      ir_asm_load_to_rax(ctx, ins->src[0]);
+      ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);
       ir_asm_store_rax_to(ctx, ins->dst);
     }
     break;
