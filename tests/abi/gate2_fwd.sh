@@ -1,7 +1,7 @@
-# tests/abi/gate3_fwd.sh
+# tests/abi/gate2_fwd.sh
 set -e
 cd "$(dirname "$0")/../.."
-echo "Starting Gate 3: Forward Inter-op"
+echo "Starting Gate 2: Forward Inter-op"
 for t in ret_int_int ret_sse_sse ret_sse_int ret_int_sse ret_tvalue; do
     echo "Testing $t..."
     ./zcc -c tests/abi/${t}_lib.c -o ${t}.o
@@ -10,4 +10,4 @@ for t in ret_int_int ret_sse_sse ret_sse_int ret_int_sse ret_tvalue; do
     echo "PASS: $t forward"
     rm -f ${t}.o ${t}_fwd
 done
-echo "Gate 3: ALL PASS"
+echo "Gate 2: ALL PASS"

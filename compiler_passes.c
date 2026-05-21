@@ -76,6 +76,11 @@ typedef uint32_t BlockID; /* basic block identifier                 */
 typedef uint32_t InstrID; /* instruction identifier within a block  */
 
 typedef enum {
+  ALIAS_UNKNOWN = 0,
+  ALIAS_LOCAL_STACK = 1
+} AliasClass;
+
+typedef enum {
   OP_NOP = 0,
   OP_CONST, /* immediate constant (Phase B lowering)           */
   OP_PHI,   /* φ(r₀:B₀, r₁:B₁, …)                */
@@ -185,6 +190,8 @@ typedef struct Instr {
     RegID base;       /* base register ID */
     int64_t disp;     /* displacement offset */
   } amf;
+
+  AliasClass alias_class;
 
   char *asm_string;
 
@@ -1713,6 +1720,105 @@ static void unlink_instr(Block *blk, Instr *ins) {
   else
     blk->tail = ins->prev;
   blk->n_instrs--;
+}
+
+static RegID trace_address_root_recurse(Function *fn, RegID reg, int depth) {
+  if (depth > 10) return 0;
+  if (reg == 0 || reg >= MAX_INSTRS) return 0;
+
+  Instr *def = fn->def_of[reg];
+  if (!def) return reg;
+
+  if (def->op == OP_PHI) {
+    return 0; /* Explicitly fail on PHI-rooted chains */
+  }
+
+  if (def->op == OP_ALLOCA) {
+    return reg;
+  }
+
+  if (def->op == OP_COPY || def->op == OP_GEP) {
+    if (def->n_src > 0) {
+      return trace_address_root_recurse(fn, def->src[0], depth + 1);
+    }
+  }
+
+  if (def->op == OP_ADD || def->op == OP_SUB) {
+    /* Trace both src[0] and src[1] to see if either reaches an OP_ALLOCA */
+    if (def->n_src > 0) {
+      RegID r0 = trace_address_root_recurse(fn, def->src[0], depth + 1);
+      if (r0 > 0 && r0 < MAX_INSTRS) {
+        Instr *d0 = fn->def_of[r0];
+        if (d0 && d0->op == OP_ALLOCA) return r0;
+      }
+    }
+    if (def->n_src > 1) {
+      RegID r1 = trace_address_root_recurse(fn, def->src[1], depth + 1);
+      if (r1 > 0 && r1 < MAX_INSTRS) {
+        Instr *d1 = fn->def_of[r1];
+        if (d1 && d1->op == OP_ALLOCA) return r1;
+      }
+    }
+  }
+
+  return reg;
+}
+
+static RegID trace_address_root(Function *fn, RegID reg) {
+  return trace_address_root_recurse(fn, reg, 0);
+}
+
+static uint32_t local_stack_alias_pass(Function *fn) {
+  licm_build_def_block(fn);
+  uint32_t tagged_loads = 0;
+  uint32_t tagged_stores = 0;
+
+  for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
+    Block *blk = fn->blocks[bi];
+    if (!blk || !blk->reachable)
+      continue;
+
+    for (Instr *ins = blk->head; ins; ins = ins->next) {
+      if (ins->dead || ins->op == OP_NOP)
+        continue;
+
+      if (ins->op == OP_LOAD && ins->n_src >= 1) {
+        RegID addr = ins->src[0];
+        RegID root = trace_address_root(fn, addr);
+        if (root > 0 && root < MAX_INSTRS) {
+          Instr *def = fn->def_of[root];
+          if (def && def->op == OP_ALLOCA && !def->escape) {
+            ins->alias_class = ALIAS_LOCAL_STACK;
+            tagged_loads++;
+          } else {
+            ins->alias_class = ALIAS_UNKNOWN;
+          }
+        } else {
+          ins->alias_class = ALIAS_UNKNOWN;
+        }
+      } else if (ins->op == OP_STORE && ins->n_src >= 2) {
+        RegID addr = ins->src[1];
+        RegID root = trace_address_root(fn, addr);
+        if (root > 0 && root < MAX_INSTRS) {
+          Instr *def = fn->def_of[root];
+          if (def && def->op == OP_ALLOCA && !def->escape) {
+            ins->alias_class = ALIAS_LOCAL_STACK;
+            tagged_stores++;
+          } else {
+            ins->alias_class = ALIAS_UNKNOWN;
+          }
+        } else {
+          ins->alias_class = ALIAS_UNKNOWN;
+        }
+      }
+    }
+  }
+
+  if (tagged_loads > 0 || tagged_stores > 0) {
+    fprintf(stderr, "[LocalStackAlias] tagged loads: %u, tagged stores: %u\n",
+            tagged_loads, tagged_stores);
+  }
+  return tagged_loads + tagged_stores;
 }
 
 static uint32_t scalar_promotion_pass(Function *fn, EscapeCtx *ctx) {
@@ -5972,6 +6078,9 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
     compute_reachability(fn);
   }
   free(ea_ctx);
+
+  /* ── Pass 4c: Local Stack Alias Analysis Pass (annotation-only) ── */
+  local_stack_alias_pass(fn);
 
   /* ── Pass 5: PGO Basic Block Reordering ── */
   if (getenv("ZCC_DUMP_PGO_BLOCKS") &&
