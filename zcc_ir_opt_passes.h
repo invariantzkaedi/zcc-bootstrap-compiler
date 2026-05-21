@@ -303,13 +303,13 @@ static uint32_t opt_address_mode_folding_pass(Function *fn) {
                             ins->amf.base = base_reg;
                             ins->amf.disp = disp;
                             
-                            /* [Commit 1: Annotation only — do not change source registers yet]
+                            /* Update src of LOAD/STORE to use base register instead of computed pointer.
+                             * This drops use-count of the intermediate OP_ADD, allowing DCE to sweep it. */
                             if (ins->op == OP_LOAD) {
                                 ins->src[0] = base_reg;
                             } else {
                                 ins->src[1] = base_reg;
                             }
-                            */
                             count++;
                         }
                     }

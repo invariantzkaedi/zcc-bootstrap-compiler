@@ -6739,22 +6739,43 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
               (unsigned)cur_block, ins->dst, ins->src[0]);
     ir_asm_load_to_rax(ctx, ins->src[0]);
     int is_unsigned = (ins->ir_type == IR_TY_U32 || ins->ir_type == IR_TY_U64);
-    switch ((int)ins->imm) {
-    case 1:
-      if (is_unsigned) fprintf(f, "    movzbq (%%rax), %%rax\n");
-      else             fprintf(f, "    movsbq (%%rax), %%rax\n");
-      break;
-    case 2:
-      if (is_unsigned) fprintf(f, "    movzwq (%%rax), %%rax\n");
-      else             fprintf(f, "    movswq (%%rax), %%rax\n");
-      break;
-    case 4:
-      if (is_unsigned) fprintf(f, "    movl (%%rax), %%eax\n"); /* zero-extends to rax */
-      else             fprintf(f, "    movslq (%%rax), %%rax\n");
-      break;
-    default:
-      fprintf(f, "    movq (%%rax), %%rax\n");
-      break;
+    if (ins->amf.folded && ins->amf.disp >= -2147483648LL && ins->amf.disp <= 2147483647LL) {
+      int64_t disp = ins->amf.disp;
+      switch ((int)ins->imm) {
+      case 1:
+        if (is_unsigned) fprintf(f, "    movzbq %lld(%%rax), %%rax\n", (long long)disp);
+        else             fprintf(f, "    movsbq %lld(%%rax), %%rax\n", (long long)disp);
+        break;
+      case 2:
+        if (is_unsigned) fprintf(f, "    movzwq %lld(%%rax), %%rax\n", (long long)disp);
+        else             fprintf(f, "    movswq %lld(%%rax), %%rax\n", (long long)disp);
+        break;
+      case 4:
+        if (is_unsigned) fprintf(f, "    movl %lld(%%rax), %%eax\n", (long long)disp);
+        else             fprintf(f, "    movslq %lld(%%rax), %%rax\n", (long long)disp);
+        break;
+      default:
+        fprintf(f, "    movq %lld(%%rax), %%rax\n", (long long)disp);
+        break;
+      }
+    } else {
+      switch ((int)ins->imm) {
+      case 1:
+        if (is_unsigned) fprintf(f, "    movzbq (%%rax), %%rax\n");
+        else             fprintf(f, "    movsbq (%%rax), %%rax\n");
+        break;
+      case 2:
+        if (is_unsigned) fprintf(f, "    movzwq (%%rax), %%rax\n");
+        else             fprintf(f, "    movswq (%%rax), %%rax\n");
+        break;
+      case 4:
+        if (is_unsigned) fprintf(f, "    movl (%%rax), %%eax\n"); /* zero-extends to rax */
+        else             fprintf(f, "    movslq (%%rax), %%rax\n");
+        break;
+      default:
+        fprintf(f, "    movq (%%rax), %%rax\n");
+        break;
+      }
     }
     ir_asm_store_rax_to(ctx, ins->dst);
     break;
@@ -6763,19 +6784,37 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
     if (ins->n_src >= 2) {
       ir_asm_load_to_rax(ctx, ins->src[1]);
       ir_asm_load_to_rcx(ctx, ins->src[0]);
-      switch ((int)ins->imm) {
-      case 1:
-        fprintf(f, "    movb %%cl, (%%rax)\n");
-        break;
-      case 2:
-        fprintf(f, "    movw %%cx, (%%rax)\n");
-        break;
-      case 4:
-        fprintf(f, "    movl %%ecx, (%%rax)\n");
-        break;
-      default:
-        fprintf(f, "    movq %%rcx, (%%rax)\n");
-        break;
+      if (ins->amf.folded && ins->amf.disp >= -2147483648LL && ins->amf.disp <= 2147483647LL) {
+        int64_t disp = ins->amf.disp;
+        switch ((int)ins->imm) {
+        case 1:
+          fprintf(f, "    movb %%cl, %lld(%%rax)\n", (long long)disp);
+          break;
+        case 2:
+          fprintf(f, "    movw %%cx, %lld(%%rax)\n", (long long)disp);
+          break;
+        case 4:
+          fprintf(f, "    movl %%ecx, %lld(%%rax)\n", (long long)disp);
+          break;
+        default:
+          fprintf(f, "    movq %%rcx, %lld(%%rax)\n", (long long)disp);
+          break;
+        }
+      } else {
+        switch ((int)ins->imm) {
+        case 1:
+          fprintf(f, "    movb %%cl, (%%rax)\n");
+          break;
+        case 2:
+          fprintf(f, "    movw %%cx, (%%rax)\n");
+          break;
+        case 4:
+          fprintf(f, "    movl %%ecx, (%%rax)\n");
+          break;
+        default:
+          fprintf(f, "    movq %%rcx, (%%rax)\n");
+          break;
+        }
       }
     }
     break;
