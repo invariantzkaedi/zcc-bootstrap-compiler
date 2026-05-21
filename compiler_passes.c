@@ -6796,6 +6796,7 @@ typedef struct {
   int start;
   int end;
   int phys_reg; /* 0..N_PHYS_REGS-1 or -1 if spilled */
+  int loop_depth; /* max loop_depth of blocks this interval spans */
 } LiveInterval;
 
 static int live_interval_compare(const void *a, const void *b) {
@@ -6952,8 +6953,24 @@ static void ir_asm_number_and_liveness(Function *fn,
 static void ir_asm_linear_scan(Function *fn, const uint32_t *block_order,
                                uint32_t n_block_order, int *def_seq,
                                int *last_use, int *phys_reg_out) {
+  int *vreg_loop_depth;
+  int bi2;
+
   for (int i = 0; i < MAX_INSTRS; i++)
     phys_reg_out[i] = -1;
+
+  /* Build vreg->loop_depth map from block annotations */
+  vreg_loop_depth = calloc(MAX_INSTRS, sizeof(int));
+  for (bi2 = 0; bi2 < (int)fn->n_blocks; bi2++) {
+    Block *blk2 = fn->blocks[bi2];
+    Instr *ins2;
+    if (!blk2 || !blk2->reachable) continue;
+    for (ins2 = blk2->head; ins2; ins2 = ins2->next) {
+      if (ins2->dst > 0 && ins2->dst < MAX_INSTRS)
+        vreg_loop_depth[ins2->dst] = blk2->loop_depth;
+    }
+  }
+
   LiveInterval intervals[MAX_INSTRS];
   int n_int = 0;
   for (int r = 0; r < MAX_INSTRS; r++) {
@@ -6963,6 +6980,7 @@ static void ir_asm_linear_scan(Function *fn, const uint32_t *block_order,
     intervals[n_int].start = def_seq[r];
     intervals[n_int].end = last_use[r] >= 0 ? last_use[r] : def_seq[r];
     intervals[n_int].phys_reg = -1;
+    intervals[n_int].loop_depth = vreg_loop_depth[r];
     n_int++;
   }
   qsort(intervals, (size_t)n_int, sizeof(LiveInterval), live_interval_compare);
@@ -7016,11 +7034,19 @@ static void ir_asm_linear_scan(Function *fn, const uint32_t *block_order,
        * steal its physical register, and assign it to cur. */
       int spill_j = -1;
       int max_end = cur->end;
-      for (int j = 0; j < active_end; j++) {
-        if (intervals[j].phys_reg >= 0 && intervals[j].end > max_end) {
-          max_end = intervals[j].end;
-          spill_j = j;
+      int j;
+      for (j = 0; j < active_end; j++) {
+        if (intervals[j].phys_reg < 0) continue;
+        if (intervals[j].end <= cur->end) continue;
+        if (spill_j >= 0) {
+          if (intervals[j].loop_depth > intervals[spill_j].loop_depth)
+            continue;
+          if (intervals[j].loop_depth == intervals[spill_j].loop_depth &&
+              intervals[j].end <= max_end)
+            continue;
         }
+        max_end = intervals[j].end;
+        spill_j = j;
       }
       if (spill_j >= 0) {
         int stolen_reg = intervals[spill_j].phys_reg;
@@ -7044,6 +7070,7 @@ static void ir_asm_linear_scan(Function *fn, const uint32_t *block_order,
       }
     }
   }
+  free(vreg_loop_depth);
 }
 
 /* ── IR-to-asm emission (for PGO-instrumented build) ─────────────────────────
