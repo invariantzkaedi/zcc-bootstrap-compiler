@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 typedef struct ZccSvgNode {
     const char* tag;
@@ -19,6 +20,13 @@ void svg_add_child(ZccSvgNode* parent, ZccSvgNode* child);
 void svg_set_attr(ZccSvgNode* node, const char* attr_name, const char* attr_val);
 void svg_set_content(ZccSvgNode* node, const char* text);
 char* svg_to_string(ZccSvgNode* root);
+
+/* Base64 & ASCII Utility Functions */
+char* base64_encode(const unsigned char* data, size_t input_length);
+unsigned char* base64_decode(const char* data, size_t input_length, size_t* output_length);
+char* svg_to_base64(ZccSvgNode* root);
+char* svg_to_data_uri(ZccSvgNode* root);
+char* svg_to_html_uri(ZccSvgNode* root);
 
 /* Path Builder Utility */
 typedef struct SvgPathBuilder {

@@ -177,6 +177,49 @@ int main() {
     }
     
     printf("Successfully compiled and generated hybrid_omnified.svg\n");
+
+    // Upgrade verification: Test the new Base64 ASCII capabilities
+    char* b64_uri = svg_to_data_uri(svg);
+    if (b64_uri) {
+        FILE* fp_b64 = fopen("hybrid_omnified_b64.txt", "w");
+        if (fp_b64) {
+            fprintf(fp_b64, "%s", b64_uri);
+            fclose(fp_b64);
+            printf("Successfully generated Base64 Data URI: hybrid_omnified_b64.txt (length: %zu)\n", strlen(b64_uri));
+        }
+
+        // Test symmetric decoding to verify absolute correctness
+        const char* prefix = "data:image/svg+xml;base64,";
+        size_t prefix_len = strlen(prefix);
+        if (strncmp(b64_uri, prefix, prefix_len) == 0) {
+            size_t dec_len = 0;
+            unsigned char* dec_str = base64_decode(b64_uri + prefix_len, strlen(b64_uri + prefix_len), &dec_len);
+            if (dec_str) {
+                if (strcmp((char*)dec_str, svg_str) == 0) {
+                    printf("Symmetric Base64 Decode validation: SUCCESS (decoded data matches original exact SVG string!)\n");
+                } else {
+                    printf("Symmetric Base64 Decode validation: FAILED (mismatch between original and decoded)\n");
+                }
+                free(dec_str);
+            } else {
+                printf("Symmetric Base64 Decode validation: FAILED (decode returned NULL)\n");
+            }
+        }
+        free(b64_uri);
+    }
+
+    char* html_uri = svg_to_html_uri(svg);
+    if (html_uri) {
+        FILE* fp_html = fopen("hybrid_omnified_html_b64.txt", "w");
+        if (fp_html) {
+            fprintf(fp_html, "%s", html_uri);
+            fclose(fp_html);
+            printf("Successfully generated HTML Base64 Data URI: hybrid_omnified_html_b64.txt (length: %zu)\n", strlen(html_uri));
+        }
+        free(html_uri);
+    }
+    
+    free(svg_str);
     free(values_attr);
     return 0;
 }

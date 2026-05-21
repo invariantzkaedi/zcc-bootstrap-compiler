@@ -101,6 +101,167 @@ char* svg_to_string(ZccSvgNode* root) {
     return out;
 }
 
+/* Base64 & ASCII Utility Implementations */
+static const char b64_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+static int get_b64_char_value(char c) {
+    if (c >= 'A' && c <= 'Z') return c - 'A';
+    if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+    if (c >= '0' && c <= '9') return c - '0' + 52;
+    if (c == '+') return 62;
+    if (c == '/') return 63;
+    return -1;
+}
+
+char* base64_encode(const unsigned char* data, size_t input_length) {
+    size_t output_length = 4 * ((input_length + 2) / 3);
+    char* encoded_data = (char*)malloc(output_length + 1);
+    if (!encoded_data) return NULL;
+
+    size_t i, j;
+    for (i = 0, j = 0; i < input_length;) {
+        uint32_t octet_a = i < input_length ? data[i++] : 0;
+        uint32_t octet_b = i < input_length ? data[i++] : 0;
+        uint32_t octet_c = i < input_length ? data[i++] : 0;
+
+        uint32_t triple = (octet_a << 0x10) + (octet_b << 0x08) + octet_c;
+
+        encoded_data[j++] = b64_table[(triple >> 3 * 6) & 0x3F];
+        encoded_data[j++] = b64_table[(triple >> 2 * 6) & 0x3F];
+        encoded_data[j++] = b64_table[(triple >> 1 * 6) & 0x3F];
+        encoded_data[j++] = b64_table[(triple >> 0 * 6) & 0x3F];
+    }
+
+    // Add padding if needed
+    size_t mod = input_length % 3;
+    if (mod == 1) {
+        encoded_data[output_length - 2] = '=';
+        encoded_data[output_length - 1] = '=';
+    } else if (mod == 2) {
+        encoded_data[output_length - 1] = '=';
+    }
+
+    encoded_data[output_length] = '\0';
+    return encoded_data;
+}
+
+unsigned char* base64_decode(const char* data, size_t input_length, size_t* output_length) {
+    if (input_length % 4 != 0) return NULL;
+
+    size_t padding = 0;
+    if (input_length >= 2 && data[input_length - 1] == '=') {
+        padding++;
+        if (data[input_length - 2] == '=') padding++;
+    }
+
+    size_t out_len = (input_length / 4) * 3 - padding;
+    unsigned char* decoded_data = (unsigned char*)malloc(out_len + 1);
+    if (!decoded_data) return NULL;
+
+    size_t i, j = 0;
+    for (i = 0; i < input_length;) {
+        int val0 = get_b64_char_value(data[i++]);
+        int val1 = get_b64_char_value(data[i++]);
+        int val2 = i < input_length ? get_b64_char_value(data[i++]) : -1;
+        int val3 = i < input_length ? get_b64_char_value(data[i++]) : -1;
+
+        if (val0 < 0 || val1 < 0) {
+            free(decoded_data);
+            return NULL;
+        }
+
+        uint32_t triple = (val0 << 18) + (val1 << 12);
+        if (val2 >= 0) triple += (val2 << 6);
+        if (val3 >= 0) triple += val3;
+
+        if (j < out_len) decoded_data[j++] = (triple >> 16) & 0xFF;
+        if (j < out_len) decoded_data[j++] = (triple >> 8) & 0xFF;
+        if (j < out_len) decoded_data[j++] = triple & 0xFF;
+    }
+    decoded_data[out_len] = '\0';
+
+    if (output_length) *output_length = out_len;
+    return decoded_data;
+}
+
+char* svg_to_base64(ZccSvgNode* root) {
+    char* svg_str = svg_to_string(root);
+    if (!svg_str) return NULL;
+    char* b64 = base64_encode((const unsigned char*)svg_str, strlen(svg_str));
+    free(svg_str);
+    return b64;
+}
+
+char* svg_to_data_uri(ZccSvgNode* root) {
+    char* b64 = svg_to_base64(root);
+    if (!b64) return NULL;
+    size_t b64_len = strlen(b64);
+    const char* prefix = "data:image/svg+xml;base64,";
+    size_t prefix_len = strlen(prefix);
+    char* uri = (char*)malloc(prefix_len + b64_len + 1);
+    if (!uri) {
+        free(b64);
+        return NULL;
+    }
+    strcpy(uri, prefix);
+    strcpy(uri + prefix_len, b64);
+    free(b64);
+    return uri;
+}
+
+char* svg_to_html_uri(ZccSvgNode* root) {
+    char* svg_str = svg_to_string(root);
+    if (!svg_str) return NULL;
+
+    size_t len = strlen(svg_str);
+    char* svg_single = (char*)malloc(len + 1);
+    if (!svg_single) {
+        free(svg_str);
+        return NULL;
+    }
+    for (size_t i = 0; i <= len; i++) {
+        if (svg_str[i] == '"') {
+            svg_single[i] = '\'';
+        } else {
+            svg_single[i] = svg_str[i];
+        }
+    }
+    free(svg_str);
+
+    const char* html_pre = "<!DOCTYPE html><html><body style='margin:0;background:#03010a;overflow:hidden;'>";
+    const char* html_post = "</body></html>";
+    size_t pre_len = strlen(html_pre);
+    size_t post_len = strlen(html_post);
+
+    size_t html_len = pre_len + len + post_len;
+    char* html_content = (char*)malloc(html_len + 1);
+    if (!html_content) {
+        free(svg_single);
+        return NULL;
+    }
+    strcpy(html_content, html_pre);
+    strcpy(html_content + pre_len, svg_single);
+    strcpy(html_content + pre_len + len, html_post);
+    free(svg_single);
+
+    char* b64 = base64_encode((const unsigned char*)html_content, html_len);
+    free(html_content);
+    if (!b64) return NULL;
+
+    const char* prefix = "data:text/html;base64,";
+    size_t prefix_len = strlen(prefix);
+    size_t b64_len = strlen(b64);
+    char* uri = (char*)malloc(prefix_len + b64_len + 1);
+    if (!uri) {
+        free(b64);
+        return NULL;
+    }
+    strcpy(uri, prefix);
+    strcpy(uri + prefix_len, b64);
+    free(b64);
+    return uri;
+}
+
 /* Path Builder Implementation */
 SvgPathBuilder* svg_path_begin() {
     SvgPathBuilder* pb = (SvgPathBuilder*)calloc(1, sizeof(SvgPathBuilder));
