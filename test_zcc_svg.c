@@ -1,4 +1,5 @@
 #include "zcc_svg.h"
+#include "zcc_ast_bridge.h"
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
@@ -219,6 +220,60 @@ int main() {
         free(html_uri);
     }
     
+    // AST Visualizer test
+    ZCCNode n_num = {0};
+    n_num.kind = ZND_NUM;
+    n_num.int_val = 10;
+
+    ZCCNode n_y = {0};
+    n_y.kind = ZND_VAR;
+    strcpy(n_y.name, "y");
+
+    ZCCNode n_add = {0};
+    n_add.kind = ZND_ADD;
+    n_add.lhs = &n_y;
+    n_add.rhs = &n_num;
+
+    ZCCNode n_x = {0};
+    n_x.kind = ZND_VAR;
+    strcpy(n_x.name, "x");
+
+    ZCCNode n_assign = {0};
+    n_assign.kind = ZND_ASSIGN;
+    n_assign.lhs = &n_x;
+    n_assign.rhs = &n_add;
+
+    ZCCNode n_ret = {0};
+    n_ret.kind = ZND_RETURN;
+    n_ret.lhs = &n_x;
+
+    ZCCNode n_if = {0};
+    n_if.kind = ZND_IF;
+    n_if.cond = &n_assign;
+    n_if.then_body = &n_ret;
+
+    char* ast_svg = svg_render_ast(&n_if);
+    if (ast_svg) {
+        FILE* fp_ast = fopen("test_ast_visualizer.svg", "w");
+        if (fp_ast) {
+            fprintf(fp_ast, "%s", ast_svg);
+            fclose(fp_ast);
+            printf("Successfully generated AST SVG: test_ast_visualizer.svg\n");
+        }
+        free(ast_svg);
+    }
+
+    char* ast_html = svg_render_ast_html_uri(&n_if);
+    if (ast_html) {
+        FILE* fp_ast_html = fopen("test_ast_visualizer_html_b64.txt", "w");
+        if (fp_ast_html) {
+            fprintf(fp_ast_html, "%s", ast_html);
+            fclose(fp_ast_html);
+            printf("Successfully generated AST HTML Data URI: test_ast_visualizer_html_b64.txt (length: %zu)\n", strlen(ast_html));
+        }
+        free(ast_html);
+    }
+
     free(svg_str);
     free(values_attr);
     return 0;
