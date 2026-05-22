@@ -443,12 +443,38 @@ void trace(Vec3 *ro, Vec3 *rd, int depth, int level_idx, int frame, double bass,
     }
 
     v_add(&amb,&diff_k,&tmp); v_add(&tmp,&diff_f,&direct); v_add(&direct,&spec,&direct);
+    
+    /* Calculate dynamic Schlick Fresnel reflection coefficient */
+    double cos_theta = -v_dot(rd, &n);
+    if(cos_theta < 0.0) cos_theta = 0.0;
+    double fresnel = refl + (1.0 - refl) * pow(1.0 - cos_theta, 5.0);
+    if(fresnel > 1.0) fresnel = 1.0;
+    if(fresnel < 0.0) fresnel = 0.0;
+
     if(refl>0.0 && depth<8){
         v_reflect(rd,&n,&rd_r); v_norm(&rd_r,&rd_r);
         trace(&hit,&rd_r,depth+1,level_idx,frame,bass,mid,treble,level_t,&rc);
-        v_mul(&direct,1.0-refl,&t1); v_mul(&rc,refl,&t2); v_add(&t1,&t2,out);
+        v_mul(&direct,1.0-fresnel,&t1); v_mul(&rc,fresnel,&t2); v_add(&t1,&t2,out);
     } else {
         *out = direct;
+    }
+
+    /* Volumetric Fog / Depth Atmospheric Scattering */
+    if(hit_kind == 1) {
+        double fog_density = 0.06 + 0.08 * bass;
+        double fog_factor = 1.0 - exp(-best_t * fog_density);
+        if(fog_factor > 1.0) fog_factor = 1.0;
+        if(fog_factor < 0.0) fog_factor = 0.0;
+        
+        Vec3 fog_color;
+        if(level_idx == 0) make_vec3(0.01, 0.01, 0.03, &fog_color);      /* Deep space dark navy fog */
+        else if(level_idx == 1) make_vec3(0.04, 0.01, 0.01, &fog_color); /* Burning reactor gold-crimson fog */
+        else make_vec3(0.01, 0.03, 0.03, &fog_color);                    /* Deep abyss cyan-teal fog */
+        
+        Vec3 fog_term, color_term;
+        v_mul(out, 1.0 - fog_factor, &color_term);
+        v_mul(&fog_color, fog_factor, &fog_term);
+        v_add(&color_term, &fog_term, out);
     }
 }
 
@@ -477,44 +503,14 @@ void prime_step(Vec3 *pos, Vec3 *target, int frame) {
     /* Dynamic Hamiltonian parameters modulated by audio telemetry */
     AudioEntry *ae = &audio_buffer[frame];
     
-    double total_t = (double)frame / 1200.0;
-    double level_t = (total_t * 3.0) - (int)(total_t * 3.0);
-
-    /* eta (attraction) scales with bass, epsilon (exploration) with treble, gamma (sharpness) with mid */
-    double base_eta = 0.4, base_gamma = 0.5, base_epsilon = 0.08, beta = 0.1;
-    double eta = base_eta * (1.0 + ae->b * 1.5) + 0.3 * level_t;
-    double gamma = base_gamma * (1.0 + ae->m);
-    double epsilon = base_epsilon * (1.0 + ae->t * 3.0); 
-    if (level_t > 0.7) epsilon *= 1.4; /* Amplified exploration during bleed */
-
-    Vec3 dir, noise, attractor;
-    v_sub(target, pos, &attractor); v_norm(&attractor, &attractor);
+    /* Stable, audio-reactive orbital/helical trajectory mapping */
+    double theta = (double)frame * 0.025 + ae->m * 0.15;
+    double phi = 0.25 * sin((double)frame * 0.01) + ae->b * 0.08;
+    double radius = 7.5 + 1.5 * cos((double)frame * 0.015) - ae->b * 1.0;
     
-    double H_prev = v_len(pos);
-    double sigma = 1.0 / (1.0 + 1.0/(1.0 + gamma * H_prev)); 
-    
-    double rx = (double)((frame*137 + 123)%1000)/1000.0 - 0.5;
-    double ry = (double)((frame*149 + 456)%1000)/1000.0 - 0.5;
-    double rz = (double)((frame*163 + 789)%1000)/1000.0 - 0.5;
-    make_vec3(rx, ry, rz, &noise);
-    
-    /* Advanced Inter-Level Bleed Optimized (lambda = 0.150) */
-    double bleed_val = 0.0;
-    if (level_t > 0.7) {
-        double bleed_factor = 0.150 * (level_t - 0.7) / 0.3;
-        bleed_val = bleed_factor * (1.0 + ae->m * 0.5); /* bleed influence */
-    }
-
-    /* Evolution: Step = H0 + eta * Sigma + epsilon * Noise + Bleed */
-    v_mul(&attractor, 1.0 + bleed_val, &dir);
-    v_mul(&attractor, eta * sigma, &attractor);
-    v_add(&dir, &attractor, &dir);
-    v_mul(&noise, epsilon * (1.0 + beta * H_prev), &noise);
-    v_add(&dir, &noise, &dir);
-    
-    double step_size = 0.05 + 0.1 * ae->b;
-    v_mul(&dir, step_size, &dir);
-    v_add(pos, &dir, pos);
+    pos->x = target->x + radius * cos(theta) * cos(phi);
+    pos->y = target->y + radius * sin(phi) + 1.2;
+    pos->z = target->z + radius * sin(theta) * cos(phi);
 }
 
 void get_h_field(Vec3 *pos, Vec3 *target, double *h_val) {
@@ -535,6 +531,9 @@ void deform_liquid(double bass, double mid, double treble, int level_idx) {
 
 /* ------------------------------------------------------------------ main */
 
+int next_rendering_row = 0;
+pthread_mutex_t row_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 struct ThreadArg {
     int start_j, end_j;
     int width, height, current_level, frame;
@@ -547,7 +546,16 @@ void *render_tile(void *arg) {
     struct ThreadArg *ta = (struct ThreadArg *)arg;
     int i, j, s;
     double focal_factor = 0.6 - (ta->level_t * ta->level_t * 0.35);
-    for(j = ta->start_j; j < ta->end_j; j++){
+    double focal_distance = v_len(&ta->ro);
+    double base_aperture = 0.07 * (1.0 + ta->env_bass * 0.5); /* Widens dynamically on bass transients! */
+
+    while(1) {
+        pthread_mutex_lock(&row_mutex);
+        j = next_rendering_row++;
+        pthread_mutex_unlock(&row_mutex);
+
+        if (j >= ta->height) break;
+
         for(i = 0; i < ta->width; i++){
             Vec3 accum; make_vec3(0,0,0,&accum);
             double tx = ta->ro.x + ((double)((ta->frame*53+j*3)%100)/5000.0) * ta->env_treble;
@@ -569,8 +577,29 @@ void *render_tile(void *arg) {
                 v_add(&right_comp, &up_comp,      &rd);
                 v_add(&rd,         &forward_comp, &rd);
                 v_norm(&rd, &rdn);
+
+                /* Cinematic Bokeh Depth of Field Calculation */
+                Vec3 focal_point;
+                v_mul(&rdn, focal_distance, &focal_point);
+                v_add(&ro_j, &focal_point, &focal_point);
+
+                /* Circular disk sampling on lens aperture */
+                double angle = (double)(s) * 2.39996 + ta->frame * 0.13; /* Golden angle rotation */
+                double r = sqrt((double)(s + 1) / 16.0) * base_aperture;
+                double lx = r * cos(angle);
+                double ly = r * sin(angle);
+
+                Vec3 offset_right, offset_up, ro_displaced;
+                v_mul(&ta->right, lx, &offset_right);
+                v_mul(&ta->up, ly, &offset_up);
+                v_add(&ro_j, &offset_right, &ro_displaced);
+                v_add(&ro_displaced, &offset_up, &ro_displaced);
+
+                Vec3 rd_new;
+                v_sub(&focal_point, &ro_displaced, &rd_new);
+                v_norm(&rd_new, &rdn);
                 
-                trace(&ro_j, &rdn, 0, ta->current_level, ta->frame, ta->env_bass, ta->env_mid, ta->env_treble, ta->level_t, &col);
+                trace(&ro_displaced, &rdn, 0, ta->current_level, ta->frame, ta->env_bass, ta->env_mid, ta->env_treble, ta->level_t, &col);
                 v_add(&accum, &col, &accum);
             }
             v_mul(&accum, 0.0625, &accum); /* average 16 samples for 16x SSAA */
@@ -691,6 +720,7 @@ int main(){
     pthread_t threads[16];
     struct ThreadArg args[16];
     
+    next_rendering_row = 0;
     int chunk = height / num_threads;
     for(i=0; i<num_threads; i++) {
         args[i].start_j = i * chunk;
