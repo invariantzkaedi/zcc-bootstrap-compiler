@@ -24,6 +24,8 @@ typedef struct {
     int len;
     char *alloc_buf;
     PPMacro *expanding_macro;
+    PPMacro *blocked_macros[32];
+    int num_blocked;
 } PPInputCtx;
 
 typedef struct {
@@ -54,6 +56,9 @@ typedef struct {
     char *alloc_buf;
     int pop_barrier;
     int include_errors;
+
+    PPMacro *blocked_macros[32];
+    int num_blocked;
 } PPState;
 
 static const char *zcc_stddef_text = 
@@ -254,8 +259,9 @@ static char pp_peek(PPState *state) {
     while (state->pos >= state->len && state->input_depth > state->pop_barrier) {
         if (state->alloc_buf) free(state->alloc_buf);
         state->input_depth--;
-        if (state->input_stack[state->input_depth].expanding_macro) {
-            state->input_stack[state->input_depth].expanding_macro->active = 1;
+        state->num_blocked = state->input_stack[state->input_depth].num_blocked;
+        for (int bi = 0; bi < state->num_blocked; bi++) {
+            state->blocked_macros[bi] = state->input_stack[state->input_depth].blocked_macros[bi];
         }
         state->src = state->input_stack[state->input_depth].src;
         state->pos = state->input_stack[state->input_depth].pos;
@@ -300,12 +306,26 @@ static void pp_push_input(PPState *state, const char *new_src, char *alloc_buf, 
     state->input_stack[state->input_depth].len = state->len;
     state->input_stack[state->input_depth].alloc_buf = state->alloc_buf;
     state->input_stack[state->input_depth].expanding_macro = macro;
+    state->input_stack[state->input_depth].num_blocked = state->num_blocked;
+    for (int bi = 0; bi < state->num_blocked; bi++) {
+        state->input_stack[state->input_depth].blocked_macros[bi] = state->blocked_macros[bi];
+    }
     state->input_depth++;
     
     state->src = new_src;
     state->pos = 0;
     state->len = strlen(new_src);
     state->alloc_buf = alloc_buf;
+
+    if (macro) {
+        int found = 0;
+        for (int bi = 0; bi < state->num_blocked; bi++) {
+            if (state->blocked_macros[bi] == macro) { found = 1; break; }
+        }
+        if (!found && state->num_blocked < 32) {
+            state->blocked_macros[state->num_blocked++] = macro;
+        }
+    }
 }
 
 static void pp_skip_whitespace(PPState *state) {
@@ -322,8 +342,11 @@ static int is_ident_char(char c) {
 
 static void pp_parse_ident(PPState *state, char *out, int max) {
     int i = 0;
+    int old_barrier = state->pop_barrier;
+    state->pop_barrier = state->input_depth;
     while (is_ident_char(pp_peek(state)) && i < max - 1) out[i++] = pp_next(state);
     out[i] = 0;
+    state->pop_barrier = old_barrier;
 }
 
 static PPMacro *pp_find_macro(PPState *state, const char *name) {
@@ -1186,8 +1209,20 @@ static void pp_expand_ident(PPState *state, const char *ident) {
         return;
     }
 
+
+
+    {
+        int bi, is_blk = 0;
+        for (bi = 0; bi < state->num_blocked; bi++) {
+            if (state->blocked_macros[bi] == m) { is_blk = 1; break; }
+        }
+        if (is_blk) {
+            pp_emit_str(state, ident, strlen(ident));
+            return;
+        }
+    }
+
     if (!m->is_function_like) {
-        m->active = 0;
         pp_push_input(state, m->body, NULL, m);
         return;
     }
@@ -1195,6 +1230,15 @@ static void pp_expand_ident(PPState *state, const char *ident) {
     /* Function-like macro expansion */
     int saved_pos = state->pos;
     int saved_line = state->line;
+
+    PPMacro *parent_blocked[32];
+    int parent_num_blocked = state->num_blocked;
+    {
+        int bi;
+        for (bi = 0; bi < state->num_blocked; bi++) {
+            parent_blocked[bi] = state->blocked_macros[bi];
+        }
+    }
     
     pp_skip_whitespace(state);
     if (pp_peek(state) != '(') {
@@ -1355,6 +1399,14 @@ static void pp_expand_ident(PPState *state, const char *ident) {
         state->out_len = 0;
         state->out_cap = expanded_cap[i] - 1;
         
+        state->num_blocked = parent_num_blocked;
+        {
+            int bi;
+            for (bi = 0; bi < parent_num_blocked; bi++) {
+                state->blocked_macros[bi] = parent_blocked[bi];
+            }
+        }
+        
         pp_push_input(state, args[i], NULL, NULL);
         pp_parse_target_depth(state, state->input_depth);
         
@@ -1362,8 +1414,10 @@ static void pp_expand_ident(PPState *state, const char *ident) {
         while (state->input_depth > state->pop_barrier) {
             if (state->alloc_buf) free(state->alloc_buf);
             state->input_depth--;
-            if (state->input_stack[state->input_depth].expanding_macro)
-                state->input_stack[state->input_depth].expanding_macro->active = 1;
+            state->num_blocked = state->input_stack[state->input_depth].num_blocked;
+            for (int bi = 0; bi < state->num_blocked; bi++) {
+                state->blocked_macros[bi] = state->input_stack[state->input_depth].blocked_macros[bi];
+            }
             state->src       = state->input_stack[state->input_depth].src;
             state->pos       = state->input_stack[state->input_depth].pos;
             state->len       = state->input_stack[state->input_depth].len;
@@ -1482,8 +1536,15 @@ static void pp_expand_ident(PPState *state, const char *ident) {
     }
     subst[subst_idx] = 0;
     
+    state->num_blocked = parent_num_blocked;
+    {
+        int bi;
+        for (bi = 0; bi < parent_num_blocked; bi++) {
+            state->blocked_macros[bi] = parent_blocked[bi];
+        }
+    }
+    
     /* Standard C preprocessor hide-set logic */
-    m->active = 0;
     pp_push_input(state, subst, subst, m);
 
     for (i = 0; i < PP_MAX_PARAMS; i++) {
