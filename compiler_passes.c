@@ -3643,6 +3643,7 @@ static ZCCNode *zcc_node_from_stmt(struct Node *n) {
     int num = node_num_cases(n);
     struct Node **cases = node_cases(n);
     z->cond = node_cond(n) ? zcc_node_from_expr(node_cond(n)) : NULL;
+    z->body = node_body(n) ? zcc_node_from_stmt(node_body(n)) : NULL;
     if (num <= 0 || num > 128 || !cases) {
       z->num_cases = 0;
       z->case_vals = NULL;
@@ -5303,6 +5304,11 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
       ctx->cur_block = exit_blk;
       return;
     }
+
+    ctx->loop_exit_stack[ctx->loop_depth] = exit_blk;
+    ctx->loop_latch_stack[ctx->loop_depth] = 0;
+    ctx->loop_depth++;
+
     if (n == 0) {
       Instr *br = calloc(1, sizeof(Instr));
       br->id = ctx->next_instr_id++;
@@ -5357,33 +5363,37 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
       ctx->cur_block = case_blk;
       if (node->case_bodies && node->case_bodies[i])
         zcc_lower_stmt(ctx, node->case_bodies[i]);
-      Instr *br_exit = calloc(1, sizeof(Instr));
-      br_exit->id = ctx->next_instr_id++;
-      br_exit->op = OP_BR;
-      br_exit->src[0] = exit_blk;
-      br_exit->n_src = 1;
-      br_exit->exec_freq = 1.0;
-      emit_instr(ctx, br_exit);
-      fn->blocks[case_blk]->succs[0] = exit_blk;
-      fn->blocks[case_blk]->n_succs = 1;
-      fn->blocks[exit_blk]->preds[fn->blocks[exit_blk]->n_preds++] = case_blk;
       ctx->cur_block = next_blk;
     }
     if (node->default_body) {
       ctx->cur_block = default_blk;
       zcc_lower_stmt(ctx, node->default_body);
-      Instr *br_def = calloc(1, sizeof(Instr));
-      br_def->id = ctx->next_instr_id++;
-      br_def->op = OP_BR;
-      br_def->src[0] = exit_blk;
-      br_def->n_src = 1;
-      br_def->exec_freq = 1.0;
-      emit_instr(ctx, br_def);
-      fn->blocks[default_blk]->succs[0] = exit_blk;
-      fn->blocks[default_blk]->n_succs = 1;
-      fn->blocks[exit_blk]->preds[fn->blocks[exit_blk]->n_preds++] =
-          default_blk;
     }
+
+    BlockID body_start_blk = new_block(ctx, "switch.body");
+    ctx->cur_block = body_start_blk;
+    if (node->body) {
+      zcc_lower_stmt(ctx, node->body);
+    }
+
+    Block *final_blk = fn->blocks[ctx->cur_block];
+    if (final_blk) {
+      Instr *tail = final_blk->tail;
+      if (!(tail && (tail->op == OP_RET || tail->op == OP_BR || tail->op == OP_CONDBR))) {
+        Instr *br_exit = calloc(1, sizeof(Instr));
+        br_exit->id = ctx->next_instr_id++;
+        br_exit->op = OP_BR;
+        br_exit->src[0] = exit_blk;
+        br_exit->n_src = 1;
+        br_exit->exec_freq = 1.0;
+        emit_instr(ctx, br_exit);
+        final_blk->succs[0] = exit_blk;
+        final_blk->n_succs = 1;
+        fn->blocks[exit_blk]->preds[fn->blocks[exit_blk]->n_preds++] = ctx->cur_block;
+      }
+    }
+
+    ctx->loop_depth--;
     ctx->cur_block = exit_blk;
     return;
   }
