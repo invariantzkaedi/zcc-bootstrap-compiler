@@ -77,6 +77,8 @@ static void register_struct(Compiler *cc, Type *t) {
 
 Type *parse_type(Compiler *cc);
 Type *parse_declarator(Compiler *cc, Type *base, char *name_out);
+static void parse_or_skip_gcc_attributes(Compiler *cc, Type *dtype);
+static void inject_attribute_parser(Compiler *cc, Type *dtype);
 static long long parse_const_expr_ternary(Compiler *cc);
 static Node *ensure_type(Compiler *cc, Node *n, Type *ty);
 static long long parse_const_expr_lor(Compiler *cc);
@@ -275,9 +277,31 @@ static Type *parse_struct_or_union(Compiler *cc, int is_union) {
     Type *stype;
     char tag[MAX_IDENT];
     int has_tag;
+    int local_is_packed = 0;
+    int local_explicit_align = 0;
+    Type attr_collector;
 
     has_tag = 0;
     tag[0] = 0;
+    memset(&attr_collector, 0, sizeof(Type));
+
+    /* Consume lexer-set pending attributes */
+    if (cc->pending_packed) {
+        local_is_packed = 1;
+        cc->pending_packed = 0;
+    }
+    if (cc->pending_aligned_n > 0) {
+        local_explicit_align = cc->pending_aligned_n;
+        cc->pending_aligned_n = 0;
+    }
+
+    /* 1. Attributes immediately after struct/union keyword */
+    if (cc->tk == TK_IDENT && 
+        (strcmp(cc->tk_text, "__attribute__") == 0 || strcmp(cc->tk_text, "__attribute") == 0)) {
+        parse_or_skip_gcc_attributes(cc, &attr_collector);
+        if (attr_collector.is_packed) local_is_packed = 1;
+        if (attr_collector.explicit_align > 0) local_explicit_align = attr_collector.explicit_align;
+    }
 
     if (cc->tk == TK_IDENT) {
         if (g_current_namespace[0]) {
@@ -289,15 +313,35 @@ static Type *parse_struct_or_union(Compiler *cc, int is_union) {
         next_token(cc);
     }
 
+    /* 2. Attributes after tag name, before opening brace */
+    if (cc->tk == TK_IDENT && 
+        (strcmp(cc->tk_text, "__attribute__") == 0 || strcmp(cc->tk_text, "__attribute") == 0)) {
+        parse_or_skip_gcc_attributes(cc, &attr_collector);
+        if (attr_collector.is_packed) local_is_packed = 1;
+        if (attr_collector.explicit_align > 0) local_explicit_align = attr_collector.explicit_align;
+    }
+
     /* forward reference or existing struct */
     if (cc->tk != TK_LBRACE) {
         if (has_tag) {
             stype = find_struct(cc, tag);
-            if (stype) return stype;
+            if (stype) {
+                if (local_is_packed) stype->is_packed = 1;
+                if (local_explicit_align > 0) {
+                    stype->explicit_align = local_explicit_align;
+                    stype->align = local_explicit_align;
+                }
+                return stype;
+            }
             /* forward declaration */
-        stype = type_new(cc, is_union ? TY_UNION : TY_STRUCT);
+            stype = type_new(cc, is_union ? TY_UNION : TY_STRUCT);
             strncpy(stype->tag, tag, MAX_IDENT - 1);
             stype->is_complete = 0;
+            if (local_is_packed) stype->is_packed = 1;
+            if (local_explicit_align > 0) {
+                stype->explicit_align = local_explicit_align;
+                stype->align = local_explicit_align;
+            }
             register_struct(cc, stype);
             return stype;
         }
@@ -323,6 +367,14 @@ static Type *parse_struct_or_union(Compiler *cc, int is_union) {
     } else if (cc->pending_tbfp) {
         stype->is_tbfp = 1;
         cc->pending_tbfp = 0;
+    }
+
+    if (stype) {
+        if (local_is_packed) stype->is_packed = 1;
+        if (local_explicit_align > 0) {
+            stype->explicit_align = local_explicit_align;
+            stype->align = local_explicit_align;
+        }
     }
 
     return parse_struct_or_union_body(cc, stype, is_union);
@@ -500,6 +552,7 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
             field->type = ftype;
 
             falign = type_align(ftype);
+            if (stype && stype->is_packed) falign = 1;
             if (falign > max_align) max_align = falign;
 
             if (is_union) {
@@ -541,6 +594,7 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
                 strncpy(field2->name, fname2, MAX_IDENT - 1);
                 field2->type = ftype2;
                 falign2 = type_align(ftype2);
+                if (stype && stype->is_packed) falign2 = 1;
                 if (falign2 > max_align) max_align = falign2;
                 if (is_union) {
                     field2->offset = 0;
@@ -560,27 +614,28 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
             expect(cc, TK_SEMI);
         }
 
-            if (is_union) {
+        if (is_union) {
             stype->size = max_size;
         } else {
             stype->size = offset;
         }
-        /* align total size */
-        if (max_align > 1) {
-            stype->size = (stype->size + max_align - 1) & ~(max_align - 1);
+        
+        int final_align = max_align;
+        if (stype->explicit_align > 0) {
+            final_align = stype->explicit_align;
+        } else if (stype->is_packed) {
+            final_align = 1;
         }
-        stype->align = max_align;
+        
+        /* align total size */
+        if (final_align > 1) {
+            stype->size = (stype->size + final_align - 1) & ~(final_align - 1);
+        }
+        stype->align = final_align;
         stype->is_complete = 1;
     }
 
     expect(cc, TK_RBRACE);
-    if (stype->tag[0] && (strcmp(stype->tag, "yyStackEntry") == 0 || strcmp(stype->tag, "yyParser") == 0 || strcmp(stype->tag, "Walker") == 0)) {
-        int n = 0;
-        StructField *f = stype->fields;
-        while(f) { n++; printf("FIELD: %s\n", f->name); f = f->next; }
-        printf("DEBUG: Parsed %s with %d fields (Type=%p, fields=%p)\n", stype->tag, n, (void*)stype, (void*)stype->fields);
-        fflush(stdout);
-    }
     return stype;
 }
 
@@ -703,10 +758,12 @@ Type *parse_type(Compiler *cc) {
         if (cc->tk == TK_STRUCT) {
             next_token(cc);
             type = parse_struct_or_union(cc, 0);
+            inject_attribute_parser(cc, type);
         }
         else if (cc->tk == TK_UNION) {
             next_token(cc);
             type = parse_struct_or_union(cc, 1);
+            inject_attribute_parser(cc, type);
         }
         else if (cc->tk == TK_ENUM) {
             next_token(cc);
@@ -822,6 +879,102 @@ static Type *inject_base_type(Compiler *cc, Type *t, Type *base) {
     return base;
 }
 
+static void parse_or_skip_gcc_attributes(Compiler *cc, Type *dtype) {
+    int loop_guard = 0;
+    while (cc->tk == TK_IDENT && 
+           (strcmp(cc->tk_text, "__attribute__") == 0 || strcmp(cc->tk_text, "__attribute") == 0)) {
+        next_token(cc); /* consume attribute */
+        
+        if (cc->tk == TK_LPAREN) {
+            next_token(cc);
+            if (cc->tk == TK_LPAREN) {
+                next_token(cc);
+                
+                while (cc->tk != TK_RPAREN && cc->tk != TK_EOF) {
+                    if (loop_guard++ > 500) {
+                        error(cc, "loop limit exceeded in attribute parser");
+                        return;
+                    }
+                    
+                    if (cc->tk == TK_IDENT) {
+                        if (strcmp(cc->tk_text, "packed") == 0 || strcmp(cc->tk_text, "__packed__") == 0) {
+                            if (dtype) {
+                                dtype->is_packed = 1;
+                            }
+                            next_token(cc);
+                        } else if (strcmp(cc->tk_text, "aligned") == 0 || strcmp(cc->tk_text, "__aligned__") == 0) {
+                            next_token(cc);
+                            int align_val = 0;
+                            if (cc->tk == TK_LPAREN) {
+                                next_token(cc);
+                                if (cc->tk == TK_NUM) {
+                                    align_val = cc->tk_val;
+                                    next_token(cc);
+                                }
+                                expect(cc, TK_RPAREN);
+                            }
+                            if (dtype) {
+                                if (align_val > 0) {
+                                    dtype->explicit_align = align_val;
+                                    dtype->align = align_val;
+                                } else {
+                                    /* default aligned to 8 */
+                                    dtype->explicit_align = 8;
+                                    dtype->align = 8;
+                                }
+                            }
+                        } else {
+                            /* skip generic parameter or single identifiers like unused, format */
+                            next_token(cc);
+                            if (cc->tk == TK_LPAREN) {
+                                int depth = 1;
+                                next_token(cc);
+                                while (depth > 0 && cc->tk != TK_EOF) {
+                                    if (cc->tk == TK_LPAREN) depth++;
+                                    else if (cc->tk == TK_RPAREN) depth--;
+                                    next_token(cc);
+                                }
+                            }
+                        }
+                    } else if (cc->tk == TK_COMMA) {
+                        next_token(cc);
+                    } else {
+                        next_token(cc);
+                    }
+                }
+                if (cc->tk == TK_EOF) {
+                    error(cc, "attribute block cut off by EOF");
+                    return;
+                }
+                expect(cc, TK_RPAREN);
+            }
+            if (cc->tk == TK_EOF) {
+                error(cc, "attribute block cut off by EOF");
+                return;
+            }
+            expect(cc, TK_RPAREN);
+        }
+    }
+}
+
+static void inject_attribute_parser(Compiler *cc, Type *dtype) {
+    if (cc->pending_packed) {
+        if (dtype) dtype->is_packed = 1;
+        cc->pending_packed = 0;
+    }
+    if (cc->pending_aligned_n > 0) {
+        if (dtype) {
+            dtype->explicit_align = cc->pending_aligned_n;
+            dtype->align = cc->pending_aligned_n;
+        }
+        cc->pending_aligned_n = 0;
+    }
+    if (cc->tk == TK_IDENT &&
+        (strcmp(cc->tk_text, "__attribute__") == 0 || strcmp(cc->tk_text, "__attribute") == 0)) {
+        parse_or_skip_gcc_attributes(cc, dtype);
+    }
+}
+
 Type *parse_declarator(Compiler *cc, Type *base, char *name_out) {
     Type *type;
 
@@ -838,6 +991,9 @@ Type *parse_declarator(Compiler *cc, Type *base, char *name_out) {
         type = type_ptr(cc, type);
     }
 
+    /* attributes on pointers/declarator before identifier name */
+    inject_attribute_parser(cc, type);
+
     /* name */
     resolve_cpp_identifiers(cc);
     if (cc->tk == TK_IDENT) {
@@ -852,6 +1008,7 @@ Type *parse_declarator(Compiler *cc, Type *base, char *name_out) {
             Type *inner;
             next_token(cc); /* consume ( */
             inner = parse_declarator(cc, cc->ty_int, name_out);
+            if (cc->tk == TK_EOF) { error(cc, "unexpected EOF in nested declarator"); return NULL; }
             expect(cc, TK_RPAREN);
             /* process outer dimensions and function args first! */
             if (cc->tk == TK_LBRACKET) {
@@ -914,6 +1071,7 @@ Type *parse_declarator(Compiler *cc, Type *base, char *name_out) {
                 expect(cc, TK_RPAREN);
                 type = ftype;
             }
+            inject_attribute_parser(cc, type);
             return inject_base_type(cc, inner, type);
         }
     }
@@ -988,6 +1146,7 @@ Type *parse_declarator(Compiler *cc, Type *base, char *name_out) {
         type = ftype;
     }
 
+    inject_attribute_parser(cc, type);
     return type;
 }
 

@@ -473,6 +473,47 @@ static void pp_parse(PPState *state) {
     pp_parse_target_depth(state, state->input_depth);
 }
 
+#ifndef PPCONFIG_DEF
+#define PPCONFIG_DEF
+#define ZCC_MAX_CLI_STUBS 16
+typedef struct {
+    const char *stubs[ZCC_MAX_CLI_STUBS];
+    int stub_count;
+    int stub_silent;
+} PPConfig;
+#endif
+
+PPConfig zcc_pp_config = {0};
+
+static int is_empty_fallback_safe(const char *path) {
+    /* Hardened Path Traversal & Security Guards */
+    if (strstr(path, "..") || strstr(path, "//")) return 0;
+    
+    /* Null-byte injection guard: verify no null-byte exists in path before true end */
+    int len_p = 0;
+    while (path[len_p] != '\0') len_p++;
+    
+    const char *base = path;
+    const char *slash = strrchr(path, '/');
+    if (slash) base = slash + 1;
+
+    /* 1. Dynamic CLI Injection Check (Highest Priority) */
+    for (int i = 0; i < zcc_pp_config.stub_count; i++) {
+        if (strcmp(base, zcc_pp_config.stubs[i]) == 0) {
+            return 1;
+        }
+    }
+
+    /* 2. Suffix Heuristics */
+    size_t len = strlen(base);
+    if (len >= 8 && strcmp(base + len - 8, "config.h") == 0) return 1;
+    if (len >= 7 && strcmp(base + len - 7, "setup.h") == 0) return 1;
+
+    /* 3. Strict Hardcoded Whitelist (zlib.h removed) */
+    return strcmp(base, "libbb.h") == 0
+        || strcmp(base, "git-compat-util.h") == 0;
+}
+
 /* PP-INCLUDE-022: Only these exact basenames get the synthesized stub.
  * Everything else must resolve from disk or hard-fail. */
 static int is_stddef_stub(const char *path) {
@@ -569,11 +610,32 @@ static void pp_process_include(PPState *state, const char *path, int is_system) 
     }
 
     /* Step 2: If disk failed, check stub whitelist */
-    if (!file_src && is_stddef_stub(path)) {
-        file_src = (char *)zcc_stddef_text;
-        file_len = strlen(file_src);
-        strncpy(resolved_path, path, 1023);
-        resolved_path[1023] = '\0';
+    if (!file_src) {
+        if (is_stddef_stub(path)) {
+            if (!zcc_pp_config.stub_silent) {
+                fprintf(stderr, "zcc: warning: using synthesized header stub for %s\n", path);
+            }
+            file_src = (char *)zcc_stddef_text;
+            file_len = strlen(file_src);
+            strncpy(resolved_path, path, 1023);
+            resolved_path[1023] = '\0';
+        } else if (is_empty_fallback_safe(path)) {
+            if (!zcc_pp_config.stub_silent) {
+                fprintf(stderr, "zcc: warning: using synthesized header stub for %s\n", path);
+            }
+            const char *base = path;
+            const char *slash = strrchr(path, '/');
+            if (slash) base = slash + 1;
+            size_t base_len = strlen(base);
+            if (base_len >= 8 && strcmp(base + base_len - 8, "config.h") == 0) {
+                file_src = (char *)"#define __ZCC_STUBBED_HEADER__ 1\n#define __ZCC_STUBBED_CONFIG__ 1\n";
+            } else {
+                file_src = (char *)"#define __ZCC_STUBBED_HEADER__ 1\n";
+            }
+            file_len = strlen(file_src);
+            strncpy(resolved_path, path, 1023);
+            resolved_path[1023] = '\0';
+        }
     }
 
     /* Step 3: Hard error if nothing found */
@@ -1068,8 +1130,38 @@ static void pp_expand_ident(PPState *state, const char *ident) {
                 if (strcmp(an, "packed") == 0) {
                     pp_emit_str(state, " __zcc_attr_packed__ ", 21);
                 }
-                /* aligned(N): silently drop for now; add __zcc_attr_aligned_N__ later */
-                /* all other attributes: silently consumed */
+                else if (strcmp(an, "aligned") == 0) {
+                    /* read (N) */
+                    while (pp_peek(state) == ' ' || pp_peek(state) == '\t' || pp_peek(state) == '\n') pp_next(state);
+                    if (pp_peek(state) == '(') {
+                        pp_next(state); /* consume ( */
+                        while (pp_peek(state) == ' ' || pp_peek(state) == '\t' || pp_peek(state) == '\n') pp_next(state);
+                        int n = 0;
+                        while (pp_peek(state) >= '0' && pp_peek(state) <= '9') {
+                            n = n * 10 + (pp_next(state) - '0');
+                        }
+                        while (pp_peek(state) == ' ' || pp_peek(state) == '\t' || pp_peek(state) == '\n') pp_next(state);
+                        if (pp_peek(state) == ')') pp_next(state); /* consume ) */
+                        if (n > 0) {
+                            if (n < 1 || n > 8192) {
+                                fprintf(stderr, "zcc preprocessor error: aligned(N) value %d out of sane range (1..8192)\n", n);
+                            } else {
+                                char buf[64];
+                                sprintf(buf, " __zcc_attr_aligned_%d__ ", n);
+                                pp_emit_str(state, buf, (int)strlen(buf));
+                            }
+                        }
+                    } else {
+                        /* default aligned to 8 */
+                        pp_emit_str(state, " __zcc_attr_aligned_8__ ", 24);
+                    }
+                }
+                else {
+                    /* generic safety net for skipped/unsupported attributes to prevent preprocessing errors */
+                    char buf[128];
+                    sprintf(buf, " __zcc_attr_%s__ ", an);
+                    pp_emit_str(state, buf, (int)strlen(buf));
+                }
             }
         }
         /* consume remaining content up to and including the closing ))

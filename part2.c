@@ -821,8 +821,28 @@ static int lex_ident(Compiler *cc) {
             }
             /* ATTR-UNKNOWN-001: preprocessor emits __zcc_attr_packed__ for __attribute__((packed)).
              * Set the pending flag and loop to the next real token. */
-            if (strcmp(ident_buf, "__zcc_attr_packed__") == 0) {
-                cc->pending_packed = 1;
+            if (strncmp(ident_buf, "__zcc_attr_", 11) == 0) {
+                if (strcmp(ident_buf, "__zcc_attr_packed__") == 0) {
+                    cc->pending_packed = 1;
+                } else if (strncmp(ident_buf, "__zcc_attr_aligned_", 19) == 0) {
+                    int len = (int)strlen(ident_buf);
+                    if (len > 21 && ident_buf[len - 1] == '_' && ident_buf[len - 2] == '_') {
+                        int n = 0;
+                        for (int i = 19; i < len - 2; i++) {
+                            if (ident_buf[i] >= '0' && ident_buf[i] <= '9') {
+                                n = n * 10 + (ident_buf[i] - '0');
+                            }
+                        }
+                        if (n > 0) {
+                            if (n < 1 || n > 8192) {
+                                error(cc, "aligned(N) value out of sane range (1..8192)");
+                            } else {
+                                cc->pending_aligned_n = n;
+                            }
+                        }
+                    }
+                }
+                /* Consume any recognized or unrecognized __zcc_attr_*__ tokens silently */
                 return 0;
             }
             if (strcmp(ident_buf, "__attribute__") == 0 || strcmp(ident_buf, "__attribute") == 0) {
@@ -1174,9 +1194,16 @@ static const char *token_name(int t) {
         "LPAREN", "RPAREN", "LBRACE", "RBRACE", "LBRACKET", "RBRACKET",
         "SEMI", "COMMA", "ELLIPSIS", "HASH"
     };
-    if (t >= 0 && t < 100) return names[t];  /* 100 = number of token names */
+
+    if (t >= 0 && t < 100) return names[t];
     return "?";
 }
+
+/* Global Assert 1: Parity check between names list size (100) and token enum count (TK_HASH + 1) */
+typedef char _assert_token_map_parity[1 - 2 * (100 != (TK_HASH + 1))];
+
+/* Global Assert 2: Order safety verify that first token is EOF */
+typedef char _assert_token_order[1 - 2 * (TK_EOF != 0)];
 
 void expect(Compiler *cc, int tk) {
     char buf[256];

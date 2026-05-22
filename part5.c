@@ -38,6 +38,17 @@ static int  g_security_signext = 0;
 static int  g_security_476 = 0;
 static int  g_security_787 = 0;
 
+#ifndef PPCONFIG_DEF
+#define PPCONFIG_DEF
+#define ZCC_MAX_CLI_STUBS 16
+typedef struct {
+    const char *stubs[ZCC_MAX_CLI_STUBS];
+    int stub_count;
+    int stub_silent;
+} PPConfig;
+#endif
+extern PPConfig zcc_pp_config;
+
 static void init_compiler(Compiler *cc) {
   /* zero everyt5555hing — cc was calloc'd */
 
@@ -1237,6 +1248,20 @@ int main(int argc, char **argv) {
       strncpy(audit_export_file, argv[i] + 20, 255);
       audit_export_file[255] = '\0';
       audit_export_mode = 2;
+    } else if (strcmp(argv[i], "-Zstub-silent") == 0) {
+      zcc_pp_config.stub_silent = 1;
+    } else if (strncmp(argv[i], "-Zstub=", 7) == 0) {
+      const char *stub = argv[i] + 7;
+      if (strchr(stub, '/') || strchr(stub, '\\') || strstr(stub, "..")) {
+        fprintf(stderr, "zcc fatal: stub name must be basename only: %s\n", stub);
+        exit(1);
+      }
+      if (zcc_pp_config.stub_count < ZCC_MAX_CLI_STUBS) {
+        zcc_pp_config.stubs[zcc_pp_config.stub_count++] = stub;
+      } else {
+        fprintf(stderr, "zcc fatal: exceeded maximum dynamic stubs (%d)\n", ZCC_MAX_CLI_STUBS);
+        exit(1);
+      }
     } else if (strncmp(argv[i], "-D", 2) == 0) {
       /* macro definition: -DNAME=VALUE or -DNAME */
       const char *def = (argv[i][2] != '\0') ? argv[i] + 2 : ((i + 1 < argc) ? argv[++i] : "");

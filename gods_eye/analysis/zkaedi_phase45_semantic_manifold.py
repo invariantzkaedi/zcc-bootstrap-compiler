@@ -161,7 +161,7 @@ class SemanticManifold:
         
         return {'h1_features': h1_features}
     
-    def wormhole_detection(self, min_distance: float = 0.6, 
+    def wormhole_detection(self, min_distance: float = 0.32, 
                            min_similarity: float = 0.4) -> list[dict]:
         wormholes = []
         for i in range(self.N):
@@ -209,7 +209,11 @@ if __name__ == "__main__":
     domains = {}
     
     for bug in bugs:
-        concept_text = f"[{bug['cwe']}] {bug['title']}: {bug['root_cause']} -> {bug['fix_summary']}"
+        cwe = bug.get('cwe', bug.get('id', 'CWE-Other'))
+        title = bug.get('title', 'N/A')
+        root_cause = bug.get('root_cause', bug.get('symptom', 'N/A'))
+        fix_summary = bug.get('fix_summary', bug.get('fix', 'N/A'))
+        concept_text = f"[{cwe}] {title}: {root_cause} -> {fix_summary}"
         concepts.append(concept_text)
         
         domain = bug.get('domain', 'general')
