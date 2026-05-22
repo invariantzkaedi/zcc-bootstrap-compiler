@@ -1644,19 +1644,15 @@ uint32_t escape_analysis_pass(Function *fn, EscapeCtx *ctx) {
         }
       }
 
-      /* E2: alloca address stored into non-local memory
+      /* E2: alloca address stored into any memory location
        *   STORE <value> <pointer>
-       *   If <value> is alloca-derived AND <pointer> is not a local alloca
-       *   → the pointer escapes into the heap.
+       *   If <value> is alloca-derived (its address is taken), it must escape
+       *   because we cannot track indirect accesses via pointer loads.
        */
       if (ins->op == OP_STORE && ins->n_src >= 2) {
         RegID value_reg = ins->src[0];
-        RegID ptr_reg = ins->src[1];
         AllocaID val_aid = ea_alloc_of(ctx, value_reg);
-        AllocaID ptr_aid = ea_alloc_of(ctx, ptr_reg);
-
-        if (val_aid != NO_ALLOC && ptr_aid == NO_ALLOC) {
-          /* value is a local alloca, pointer is external → escape */
+        if (val_aid != NO_ALLOC) {
           ctx->allocs[val_aid].escapes = true;
         }
       }
