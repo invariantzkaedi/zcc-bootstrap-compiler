@@ -251,12 +251,10 @@ static void pp_emit_str(PPState *state, const char *str, int len) {
     for (i = 0; i < len; i++) pp_emit(state, str[i]);
 }
 
-static char pp_peek(PPState *state) {
-    static int pp_peek_cnt = 0;
-    if (++pp_peek_cnt % 500000 == 0) {
-        if (getenv("ZCC_DEBUG")) printf("DEBUG zcc2 pp_peek_cnt=%d pos=%d line=%d\n", pp_peek_cnt, state->pos, state->line);
-        fflush(stdout);
-    }
+/* HYGIENE-PP-001: explicit frame-drain helper.
+ * Called before stream-continuation loop guards and by pp_next after pos advance.
+ * The pop_barrier guard in pp_parse_ident (7d049358) still constrains this. */
+static void pp_drain_frames(PPState *state) {
     while (state->pos >= state->len && state->input_depth > state->pop_barrier) {
         if (state->alloc_buf) free(state->alloc_buf);
         state->input_depth--;
@@ -264,10 +262,20 @@ static char pp_peek(PPState *state) {
         for (int bi = 0; bi < state->num_blocked; bi++) {
             state->blocked_macros[bi] = state->input_stack[state->input_depth].blocked_macros[bi];
         }
-        state->src = state->input_stack[state->input_depth].src;
-        state->pos = state->input_stack[state->input_depth].pos;
-        state->len = state->input_stack[state->input_depth].len;
+        state->src       = state->input_stack[state->input_depth].src;
+        state->pos       = state->input_stack[state->input_depth].pos;
+        state->len       = state->input_stack[state->input_depth].len;
         state->alloc_buf = state->input_stack[state->input_depth].alloc_buf;
+    }
+}
+
+/* HYGIENE-PP-001: pure O(1) observation -- no frame transitions.
+ * Drain is now explicit: pp_drain_frames at loop guards + inside pp_next. */
+static char pp_peek(PPState *state) {
+    static int pp_peek_cnt = 0;
+    if (++pp_peek_cnt % 500000 == 0) {
+        if (getenv("ZCC_DEBUG")) printf("DEBUG zcc2 pp_peek_cnt=%d pos=%d line=%d\n", pp_peek_cnt, state->pos, state->line);
+        fflush(stdout);
     }
     if (state->pos >= state->len) return 0;
     if (state->src[state->pos] == '\r') return '\n';
@@ -289,11 +297,15 @@ static char pp_next(PPState *state) {
             if (state->input_depth == 0) state->line++;
             state->pos++;
             if (state->pos < state->len && state->src[state->pos] == '\n') state->pos++;
+            pp_drain_frames(state);
             return '\n';
         }
         if (c == '\n' && state->input_depth == 0) state->line++;
         state->pos++;
     }
+    /* Drain after EVERY call: covers both the consumed-char path and the c==0
+     * path where pos>=len but depth>barrier (exhausted frame needing pop). */
+    pp_drain_frames(state);
     return c;
 }
 
@@ -384,6 +396,7 @@ static PPMacro *pp_add_macro(PPState *state, const char *name) {
 static void pp_read_line(PPState *state, char *buf, int max) {
     int i = 0;
     int in_comment = 0;
+    pp_drain_frames(state); /* PP-001: drain before stream-continuation loop */
     while (pp_peek(state) != 0 && i < max - 1) {
         char c = pp_peek(state);
         if ((c == '\n' || c == '\r') && !in_comment) {
@@ -420,6 +433,7 @@ static void pp_read_macro_body(PPState *state, PPMacro *m, int max_limit) {
         m->body = (char *)calloc(1, m->body_cap);
     }
     
+    pp_drain_frames(state); /* PP-001: drain before stream-continuation loop */
     while (pp_peek(state) != 0) {
         if (i >= m->body_cap - 2) {
             m->body_cap *= 2;
@@ -730,6 +744,7 @@ static void pp_parse_params(PPState *state, PPMacro *m) {
     char dummy[64];
     dummy[0] = 0;
     pp_skip_whitespace(state);
+    pp_drain_frames(state); /* PP-001: drain before stream-continuation loop */
     while (pp_peek(state) != ')' && pp_peek(state) != '\n' && pp_peek(state) != 0) {
         if (is_ident_start(pp_peek(state))) {
             if (m->num_params < PP_MAX_PARAMS) {
@@ -1144,6 +1159,7 @@ static void pp_expand_ident(PPState *state, const char *ident) {
         /* read attribute name */
         {
             char attr_name[64]; int ai = 0;
+            pp_drain_frames(state); /* PP-001: drain before stream-continuation loop */
             while (pp_peek(state)!=0 && ai<63) {
                 char ac = pp_peek(state);
                 if ((ac>='a'&&ac<='z')||(ac>='A'&&ac<='Z')||(ac>='0'&&ac<='9')||ac=='_') {
@@ -1201,6 +1217,7 @@ static void pp_expand_ident(PPState *state, const char *ident) {
          * seen 2 more ')' than '(' (the two closes we opened above). */
         {
             int need = 2;  /* we pre-consumed two '(' — need two matching ')' */
+            pp_drain_frames(state); /* PP-001: drain before stream-continuation loop */
             while (pp_peek(state) != 0 && need > 0) {
                 char ac = pp_next(state);
                 if (ac == '(') need++;
@@ -1266,6 +1283,7 @@ static void pp_expand_ident(PPState *state, const char *ident) {
     int in_string = 0;
     int in_char = 0;
     int in_comment = 0;
+    pp_drain_frames(state); /* PP-001: drain before stream-continuation loop */
     while (pp_peek(state) != 0) {
         c = pp_peek(state);
 
@@ -1565,6 +1583,7 @@ static void pp_expand_ident(PPState *state, const char *ident) {
 static void pp_parse_target_depth(PPState *state, int target_depth) {
     int in_string = 0;
     while (1) {
+        pp_drain_frames(state); /* PP-001: drain before each peek in main scan loop */
         char c = pp_peek(state);
         if (state->input_depth < target_depth || c == 0) break;
         
