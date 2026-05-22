@@ -274,6 +274,44 @@ int main() {
         free(ast_html);
     }
 
+    // 1. Verification of whitespace-resilient Base64 decode
+    const char* b64_with_ws = "SGVsbG8g\r\nZHVzdHkg\tY29tcGlsZXIgd2Fyem9uZQ==";
+    size_t ws_decoded_len = 0;
+    unsigned char* ws_decoded = base64_decode(b64_with_ws, strlen(b64_with_ws), &ws_decoded_len);
+    if (ws_decoded) {
+        printf("Whitespace-resilient Base64 decode success: '%s'\n", (char*)ws_decoded);
+        free(ws_decoded);
+    } else {
+        printf("Whitespace-resilient Base64 decode FAILED\n");
+    }
+
+    // 2. Verification of Unicode AST ASCII Tree generator
+    char* ast_ascii_tree = zcc_ast_to_ascii(&n_if);
+    if (ast_ascii_tree) {
+        FILE* fp_ascii = fopen("test_ast_ascii_tree.txt", "w");
+        if (fp_ascii) {
+            fprintf(fp_ascii, "%s", ast_ascii_tree);
+            fclose(fp_ascii);
+            printf("Successfully generated AST ASCII Tree: test_ast_ascii_tree.txt\n");
+        }
+        printf("--- AST ASCII Tree ---\n%s----------------------\n", ast_ascii_tree);
+        free(ast_ascii_tree);
+    }
+
+    // 3. Verification of side-by-side Hex/ASCII dump visualizer
+    const unsigned char dummy_binary[] = "\x7F\x45\x4C\x46\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3E\x00\x01\x00\x00\x00\x78\x00\x40\x00\x00\x00\x00\x00CompilerWarzoneStateHT+1";
+    char* hex_dump = hexdump_to_ascii(dummy_binary, sizeof(dummy_binary) - 1);
+    if (hex_dump) {
+        FILE* fp_hex = fopen("test_hexdump_ascii.txt", "w");
+        if (fp_hex) {
+            fprintf(fp_hex, "%s", hex_dump);
+            fclose(fp_hex);
+            printf("Successfully generated Hex/ASCII dump: test_hexdump_ascii.txt\n");
+        }
+        printf("--- Hex/ASCII Dump ---\n%s----------------------\n", hex_dump);
+        free(hex_dump);
+    }
+
     free(svg_str);
     free(values_attr);
     return 0;

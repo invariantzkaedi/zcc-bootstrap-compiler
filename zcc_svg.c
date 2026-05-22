@@ -124,24 +124,57 @@ char* base64_encode(const unsigned char* data, size_t input_length) {
 }
 
 unsigned char* base64_decode(const char* data, size_t input_length, size_t* output_length) {
-    if (input_length % 4 != 0) return NULL;
-
-    size_t padding = 0;
-    if (input_length >= 2 && data[input_length - 1] == '=') {
-        padding++;
-        if (data[input_length - 2] == '=') padding++;
+    size_t clean_len = 0;
+    for (size_t i = 0; i < input_length; i++) {
+        char c = data[i];
+        if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
+            clean_len++;
+        }
     }
 
-    size_t out_len = (input_length / 4) * 3 - padding;
+    if (clean_len % 4 != 0) return NULL;
+
+    size_t padding = 0;
+    int non_ws_count = 0;
+    char last_chars[4] = {0};
+    for (size_t i = input_length; i > 0; i--) {
+        char c = data[i - 1];
+        if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
+            if (non_ws_count < 4) {
+                last_chars[3 - non_ws_count] = c;
+                non_ws_count++;
+            }
+        }
+    }
+    if (non_ws_count >= 1 && last_chars[3] == '=') {
+        padding++;
+        if (non_ws_count >= 2 && last_chars[2] == '=') padding++;
+    }
+
+    size_t out_len = (clean_len / 4) * 3 - padding;
     unsigned char* decoded_data = (unsigned char*)malloc(out_len + 1);
     if (!decoded_data) return NULL;
 
-    size_t i, j = 0;
-    for (i = 0; i < input_length;) {
-        int val0 = get_b64_char_value(data[i++]);
-        int val1 = get_b64_char_value(data[i++]);
-        int val2 = i < input_length ? get_b64_char_value(data[i++]) : -1;
-        int val3 = i < input_length ? get_b64_char_value(data[i++]) : -1;
+    size_t i = 0, j = 0;
+    while (i < input_length) {
+        char chars[4] = {0};
+        int filled = 0;
+        while (filled < 4 && i < input_length) {
+            char c = data[i++];
+            if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
+                chars[filled++] = c;
+            }
+        }
+        if (filled == 0) break;
+        if (filled < 4) {
+            free(decoded_data);
+            return NULL;
+        }
+
+        int val0 = get_b64_char_value(chars[0]);
+        int val1 = get_b64_char_value(chars[1]);
+        int val2 = chars[2] != '=' ? get_b64_char_value(chars[2]) : -1;
+        int val3 = chars[3] != '=' ? get_b64_char_value(chars[3]) : -1;
 
         if (val0 < 0 || val1 < 0) {
             free(decoded_data);
@@ -749,4 +782,148 @@ char* svg_render_ast_html_uri(struct ZCCNode* root) {
     strcpy(uri + prefix_len, b64);
     free(b64);
     return uri;
+}
+
+static void _ast_to_ascii_rec(ZCCNode* z, char** out, int* cap, int* len, const char* prefix, int is_last) {
+    if (!z) return;
+
+    char details[128] = "";
+    int k = z->kind;
+    if (z->name[0] != '\0') {
+        sprintf(details, " (sym: %s)", z->name);
+    } else if (z->int_val != 0 || k == ZND_NUM) {
+        sprintf(details, " (val: %lld)", z->int_val);
+    } else if (k == ZND_VAR) {
+        sprintf(details, " (var: %s)", z->name);
+    }
+
+    char node_line[256];
+    sprintf(node_line, "%s%s%s%s\n", prefix, is_last ? "└── " : "├── ", zcc_kind_to_str(k), details);
+    int line_len = strlen(node_line);
+
+    while (*len + line_len + 512 > *cap) {
+        *cap *= 2;
+        *out = (char*)realloc(*out, *cap);
+    }
+    strcpy(*out + *len, node_line);
+    *len += line_len;
+
+    ZCCNode* children[64];
+    int child_count = 0;
+    #define PUSH_CHILD(c) if (c && child_count < 64) children[child_count++] = (ZCCNode*)(c);
+    PUSH_CHILD(z->lhs);
+    PUSH_CHILD(z->rhs);
+    PUSH_CHILD(z->cond);
+    PUSH_CHILD(z->then_body);
+    PUSH_CHILD(z->else_body);
+    PUSH_CHILD(z->body);
+    PUSH_CHILD(z->init);
+    PUSH_CHILD(z->inc);
+
+    if (z->stmts && z->num_stmts > 0) {
+        for (unsigned int i = 0; i < z->num_stmts; i++) {
+            PUSH_CHILD(z->stmts[i]);
+        }
+    }
+    if (z->args && z->num_args > 0) {
+        for (int i = 0; i < z->num_args; i++) {
+            PUSH_CHILD(z->args[i]);
+        }
+    }
+    #undef PUSH_CHILD
+
+    for (int i = 0; i < child_count; i++) {
+        char new_prefix[256];
+        sprintf(new_prefix, "%s%s", prefix, is_last ? "    " : "│   ");
+        _ast_to_ascii_rec(children[i], out, cap, len, new_prefix, i == child_count - 1);
+    }
+}
+
+char* zcc_ast_to_ascii(struct ZCCNode* root) {
+    if (!root) return NULL;
+    int cap = 4096;
+    int len = 0;
+    char* out = (char*)calloc(1, cap);
+
+    char details[128] = "";
+    int k = root->kind;
+    if (root->name[0] != '\0') {
+        sprintf(details, " (sym: %s)", root->name);
+    } else if (root->int_val != 0 || k == ZND_NUM) {
+        sprintf(details, " (val: %lld)", root->int_val);
+    } else if (k == ZND_VAR) {
+        sprintf(details, " (var: %s)", root->name);
+    }
+
+    len += sprintf(out, "%s%s\n", zcc_kind_to_str(k), details);
+
+    ZCCNode* children[64];
+    int child_count = 0;
+    #define PUSH_CHILD(c) if (c && child_count < 64) children[child_count++] = (ZCCNode*)(c);
+    PUSH_CHILD(root->lhs);
+    PUSH_CHILD(root->rhs);
+    PUSH_CHILD(root->cond);
+    PUSH_CHILD(root->then_body);
+    PUSH_CHILD(root->else_body);
+    PUSH_CHILD(root->body);
+    PUSH_CHILD(root->init);
+    PUSH_CHILD(root->inc);
+
+    if (root->stmts && root->num_stmts > 0) {
+        for (unsigned int i = 0; i < root->num_stmts; i++) {
+            PUSH_CHILD(root->stmts[i]);
+        }
+    }
+    if (root->args && root->num_args > 0) {
+        for (int i = 0; i < root->num_args; i++) {
+            PUSH_CHILD(root->args[i]);
+        }
+    }
+    #undef PUSH_CHILD
+
+    for (int i = 0; i < child_count; i++) {
+        _ast_to_ascii_rec(children[i], &out, &cap, &len, "", i == child_count - 1);
+    }
+    return out;
+}
+
+char* hexdump_to_ascii(const unsigned char* data, size_t len) {
+    if (!data || len == 0) return NULL;
+    size_t cap = 256 + len * 80;
+    char* out = (char*)malloc(cap);
+    if (!out) return NULL;
+    size_t offset = 0;
+    size_t out_len = 0;
+
+    while (offset < len) {
+        out_len += sprintf(out + out_len, "%08zX: ", offset);
+        size_t chunk = len - offset;
+        if (chunk > 16) chunk = 16;
+
+        for (size_t i = 0; i < 16; i++) {
+            if (i < chunk) {
+                out_len += sprintf(out + out_len, "%02X ", data[offset + i]);
+            } else {
+                strcpy(out + out_len, "   ");
+                out_len += 3;
+            }
+        }
+        
+        strcpy(out + out_len, " |");
+        out_len += 2;
+
+        for (size_t i = 0; i < chunk; i++) {
+            unsigned char c = data[offset + i];
+            if (c >= 32 && c <= 126) {
+                out[out_len++] = c;
+            } else {
+                out[out_len++] = '.';
+            }
+        }
+        out[out_len++] = '|';
+        out[out_len++] = '\n';
+        offset += chunk;
+    }
+    out[out_len] = '\0';
+    return out;
 }
