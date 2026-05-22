@@ -1259,7 +1259,7 @@ int main(int argc, char **argv) {
       strncat(extra_link_args, argv[i], 4095 - (int)strlen(extra_link_args));
     } else {
       int len = strlen(argv[i]);
-      if (len > 2 && (strcmp(argv[i] + len - 2, ".c") == 0 || strcmp(argv[i] + len - 3, ".rs") == 0 || (len > 4 && strcmp(argv[i] + len - 4, ".yul") == 0) || (len > 5 && strcmp(argv[i] + len - 5, ".html") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".css") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".svg") == 0))) {
+      if (len > 2 && (strcmp(argv[i] + len - 2, ".c") == 0 || (len > 4 && strcmp(argv[i] + len - 4, ".cpp") == 0) || strcmp(argv[i] + len - 3, ".rs") == 0 || (len > 4 && strcmp(argv[i] + len - 4, ".yul") == 0) || (len > 5 && strcmp(argv[i] + len - 5, ".html") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".css") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".svg") == 0))) {
         input_file = argv[i];
       } else {
         if (extra_link_args[0]) strncat(extra_link_args, " ", 4095 - (int)strlen(extra_link_args));

@@ -380,10 +380,11 @@ static Keyword keywords[] = {
     {"static_cast",      TK_STATIC_CAST},
     {"const_cast",       TK_CONST_CAST},
     {"reinterpret_cast", TK_REINTERPRET_CAST},
+    {"operator",         TK_OPERATOR},
     {0, 0}
 };
 
-static int kw_count = 69;
+static int kw_count = 70;
 
 static int lookup_keyword(char *name) {
     int i;
@@ -470,6 +471,7 @@ static int lookup_keyword_fallback(char *buf, int len) {
     if (len==11 && buf[0]=='s'&&buf[1]=='t'&&buf[2]=='a'&&buf[3]=='t'&&buf[4]=='i'&&buf[5]=='c'&&buf[6]=='_'&&buf[7]=='c'&&buf[8]=='a'&&buf[9]=='s'&&buf[10]=='t') return TK_STATIC_CAST;
     if (len==10 && buf[0]=='c'&&buf[1]=='o'&&buf[2]=='n'&&buf[3]=='s'&&buf[4]=='t'&&buf[5]=='_'&&buf[6]=='c'&&buf[7]=='a'&&buf[8]=='s'&&buf[9]=='t') return TK_CONST_CAST;
     if (len==16 && buf[0]=='r'&&buf[1]=='e'&&buf[2]=='i'&&buf[3]=='n'&&buf[4]=='t'&&buf[5]=='e'&&buf[6]=='r'&&buf[7]=='p'&&buf[8]=='r'&&buf[9]=='e'&&buf[10]=='t'&&buf[11]=='_'&&buf[12]=='c'&&buf[13]=='a'&&buf[14]=='s'&&buf[15]=='t') return TK_REINTERPRET_CAST;
+    if (len==8 && buf[0]=='o'&&buf[1]=='p'&&buf[2]=='e'&&buf[3]=='r'&&buf[4]=='a'&&buf[5]=='t'&&buf[6]=='o'&&buf[7]=='r') return TK_OPERATOR;
     return 0;
 }
 

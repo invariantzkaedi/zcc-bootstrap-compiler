@@ -7,12 +7,19 @@
 /* PARSER                                                            */
 /* ================================================================ */
 
+static Type *find_struct(Compiler *cc, char *tag);
+static char g_current_namespace[1024] = {0};
+
 static void resolve_cpp_identifiers(Compiler *cc) {
     while (cc->tk == TK_IDENT && peek_token(cc) == TK_COLON_COLON) {
         char merged_name[MAX_IDENT * 2];
         sprintf(merged_name, "%.120s_", cc->tk_text);
         next_token(cc); /* consume current identifier */
         next_token(cc); /* consume :: */
+        if (cc->tk == TK_TILDE) {
+            next_token(cc); /* consume ~ */
+            strncat(merged_name, "destructor_", MAX_IDENT - strlen(merged_name) - 1);
+        }
         if (cc->tk == TK_IDENT) {
             strncat(merged_name, cc->tk_text, MAX_IDENT - strlen(merged_name) - 1);
             strncpy(cc->tk_text, merged_name, MAX_IDENT - 1);
@@ -38,9 +45,8 @@ static int is_type_token(Compiler *cc) {
     if (cc->tk == TK_IDENT) {
         Symbol *sym;
         sym = scope_find(cc, cc->tk_text);
-        if (sym) {
-            if (sym->is_typedef) return 1;
-        }
+        if (sym && sym->is_typedef) return 1;
+        if (find_struct(cc, cc->tk_text)) return 1;
     }
     return 0;
 }
@@ -355,7 +361,110 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
                 continue;
             }
 
+            if (cc->tk == TK_IDENT && strcmp(cc->tk_text, stype->tag) == 0 && peek_token(cc) == TK_LPAREN) {
+                next_token(cc); /* consume constructor name */
+                expect(cc, TK_LPAREN);
+                int depth = 1;
+                while (depth > 0 && cc->tk != TK_EOF) {
+                    if (cc->tk == TK_LPAREN) depth++;
+                    else if (cc->tk == TK_RPAREN) depth--;
+                    next_token(cc);
+                }
+                if (cc->tk == TK_COLON) {
+                    next_token(cc);
+                    while (cc->tk != TK_LBRACE && cc->tk != TK_SEMI && cc->tk != TK_EOF) {
+                        next_token(cc);
+                    }
+                }
+                if (cc->tk == TK_LBRACE) {
+                    int bdepth = 1;
+                    next_token(cc);
+                    while (bdepth > 0 && cc->tk != TK_EOF) {
+                        if (cc->tk == TK_LBRACE) bdepth++;
+                        else if (cc->tk == TK_RBRACE) bdepth--;
+                        next_token(cc);
+                    }
+                } else if (cc->tk == TK_SEMI) {
+                    next_token(cc);
+                }
+                continue;
+            }
+
+            if (cc->tk == TK_TILDE) {
+                next_token(cc); /* consume ~ */
+                if (cc->tk == TK_IDENT && strcmp(cc->tk_text, stype->tag) == 0) {
+                    next_token(cc);
+                    expect(cc, TK_LPAREN);
+                    expect(cc, TK_RPAREN);
+                    if (cc->tk == TK_LBRACE) {
+                        int bdepth = 1;
+                        next_token(cc);
+                        while (bdepth > 0 && cc->tk != TK_EOF) {
+                            if (cc->tk == TK_LBRACE) bdepth++;
+                            else if (cc->tk == TK_RBRACE) bdepth--;
+                            next_token(cc);
+                        }
+                    } else if (cc->tk == TK_SEMI) {
+                        next_token(cc);
+                    }
+                    continue;
+                }
+            }
+
+            if (cc->tk == TK_OPERATOR) {
+                next_token(cc); /* consume operator */
+                while (cc->tk != TK_LPAREN && cc->tk != TK_EOF) {
+                    next_token(cc);
+                }
+                expect(cc, TK_LPAREN);
+                int depth = 1;
+                while (depth > 0 && cc->tk != TK_EOF) {
+                    if (cc->tk == TK_LPAREN) depth++;
+                    else if (cc->tk == TK_RPAREN) depth--;
+                    next_token(cc);
+                }
+                if (cc->tk == TK_LBRACE) {
+                    int bdepth = 1;
+                    next_token(cc);
+                    while (bdepth > 0 && cc->tk != TK_EOF) {
+                        if (cc->tk == TK_LBRACE) bdepth++;
+                        else if (cc->tk == TK_RBRACE) bdepth--;
+                        next_token(cc);
+                    }
+                } else if (cc->tk == TK_SEMI) {
+                    next_token(cc);
+                }
+                continue;
+            }
+
             base_ftype = parse_type(cc);
+
+            if (cc->tk == TK_OPERATOR) {
+                next_token(cc); /* consume operator */
+                while (cc->tk != TK_LPAREN && cc->tk != TK_EOF) {
+                    next_token(cc);
+                }
+                expect(cc, TK_LPAREN);
+                int depth = 1;
+                while (depth > 0 && cc->tk != TK_EOF) {
+                    if (cc->tk == TK_LPAREN) depth++;
+                    else if (cc->tk == TK_RPAREN) depth--;
+                    next_token(cc);
+                }
+                if (cc->tk == TK_LBRACE) {
+                    int bdepth = 1;
+                    next_token(cc);
+                    while (bdepth > 0 && cc->tk != TK_EOF) {
+                        if (cc->tk == TK_LBRACE) bdepth++;
+                        else if (cc->tk == TK_RBRACE) bdepth--;
+                        next_token(cc);
+                    }
+                } else if (cc->tk == TK_SEMI) {
+                    next_token(cc);
+                }
+                continue;
+            }
+
             ftype = parse_declarator(cc, base_ftype, fname);
 
             if (ftype && ftype->kind == TY_FUNC && cc->tk == TK_LBRACE) {
@@ -608,7 +717,7 @@ Type *parse_type(Compiler *cc) {
             type->size = 0; /* placeholder */
         }
         else if (cc->tk == TK_IDENT) {
-            /* could be a typedef name */
+            /* could be a typedef name or a struct/class tag */
             Symbol *sym;
             sym = scope_find(cc, cc->tk_text);
             if (strcmp(cc->tk_text, "yyParser") == 0) {
@@ -617,6 +726,12 @@ Type *parse_type(Compiler *cc) {
             if (sym && sym->is_typedef) {
                 type = sym->type;
                 next_token(cc);
+            } else {
+                Type *st = find_struct(cc, cc->tk_text);
+                if (st) {
+                    type = st;
+                    next_token(cc);
+                }
             }
         }
     }
@@ -3032,6 +3147,34 @@ Node *parse_program(Compiler *cc) {
         prev_pos = cc->pos;
         line = cc->tk_line;
 
+        if (cc->tk == TK_IDENT && peek_token(cc) == TK_COLON_COLON) {
+            next_token(cc); /* consume class name */
+            next_token(cc); /* consume :: */
+            if (cc->tk == TK_TILDE) {
+                next_token(cc); /* consume ~ */
+            }
+            expect(cc, TK_IDENT); /* consume method name */
+            expect(cc, TK_LPAREN);
+            int depth = 1;
+            while (depth > 0 && cc->tk != TK_EOF) {
+                if (cc->tk == TK_LPAREN) depth++;
+                else if (cc->tk == TK_RPAREN) depth--;
+                next_token(cc);
+            }
+            if (cc->tk == TK_LBRACE) {
+                int bdepth = 1;
+                next_token(cc);
+                while (bdepth > 0 && cc->tk != TK_EOF) {
+                    if (cc->tk == TK_LBRACE) bdepth++;
+                    else if (cc->tk == TK_RBRACE) bdepth--;
+                    next_token(cc);
+                }
+            } else if (cc->tk == TK_SEMI) {
+                next_token(cc);
+            }
+            continue;
+        }
+
         if (cc->tk == TK_SEMI) {
             next_token(cc);
             continue;
@@ -3051,6 +3194,12 @@ Node *parse_program(Compiler *cc) {
             next_token(cc); /* consume namespace */
             resolve_cpp_identifiers(cc);
             if (cc->tk == TK_IDENT) {
+                if (g_current_namespace[0]) {
+                    strncat(g_current_namespace, "_", sizeof(g_current_namespace) - strlen(g_current_namespace) - 1);
+                    strncat(g_current_namespace, cc->tk_text, sizeof(g_current_namespace) - strlen(g_current_namespace) - 1);
+                } else {
+                    strncpy(g_current_namespace, cc->tk_text, sizeof(g_current_namespace) - 1);
+                }
                 next_token(cc); /* consume namespace identifier */
             }
             expect(cc, TK_LBRACE); /* consume { */
@@ -3059,6 +3208,38 @@ Node *parse_program(Compiler *cc) {
 
         if (cc->tk == TK_RBRACE) {
             next_token(cc); /* consume } from namespaces */
+            char *last_under = strrchr(g_current_namespace, '_');
+            if (last_under) {
+                *last_under = '\0';
+            } else {
+                g_current_namespace[0] = '\0';
+            }
+            continue;
+        }
+
+        if (cc->tk == TK_OPERATOR) {
+            next_token(cc); /* consume operator */
+            while (cc->tk != TK_LPAREN && cc->tk != TK_EOF) {
+                next_token(cc);
+            }
+            expect(cc, TK_LPAREN);
+            int depth = 1;
+            while (depth > 0 && cc->tk != TK_EOF) {
+                if (cc->tk == TK_LPAREN) depth++;
+                else if (cc->tk == TK_RPAREN) depth--;
+                next_token(cc);
+            }
+            if (cc->tk == TK_LBRACE) {
+                int bdepth = 1;
+                next_token(cc);
+                while (bdepth > 0 && cc->tk != TK_EOF) {
+                    if (cc->tk == TK_LBRACE) bdepth++;
+                    else if (cc->tk == TK_RBRACE) bdepth--;
+                    next_token(cc);
+                }
+            } else if (cc->tk == TK_SEMI) {
+                next_token(cc);
+            }
             continue;
         }
 
@@ -3072,6 +3253,60 @@ Node *parse_program(Compiler *cc) {
         if (cc->tk == TK_EXTERN) { is_extern = 1; }
 
         base = parse_type(cc);
+
+        if (cc->tk == TK_IDENT && peek_token(cc) == TK_COLON_COLON) {
+            next_token(cc); /* consume class name */
+            next_token(cc); /* consume :: */
+            if (cc->tk == TK_TILDE) {
+                next_token(cc); /* consume ~ */
+            }
+            expect(cc, TK_IDENT); /* consume method name */
+            expect(cc, TK_LPAREN);
+            int depth = 1;
+            while (depth > 0 && cc->tk != TK_EOF) {
+                if (cc->tk == TK_LPAREN) depth++;
+                else if (cc->tk == TK_RPAREN) depth--;
+                next_token(cc);
+            }
+            if (cc->tk == TK_LBRACE) {
+                int bdepth = 1;
+                next_token(cc);
+                while (bdepth > 0 && cc->tk != TK_EOF) {
+                    if (cc->tk == TK_LBRACE) bdepth++;
+                    else if (cc->tk == TK_RBRACE) bdepth--;
+                    next_token(cc);
+                }
+            } else if (cc->tk == TK_SEMI) {
+                next_token(cc);
+            }
+            continue;
+        }
+
+        if (cc->tk == TK_OPERATOR) {
+            next_token(cc); /* consume operator */
+            while (cc->tk != TK_LPAREN && cc->tk != TK_EOF) {
+                next_token(cc);
+            }
+            expect(cc, TK_LPAREN);
+            int depth = 1;
+            while (depth > 0 && cc->tk != TK_EOF) {
+                if (cc->tk == TK_LPAREN) depth++;
+                else if (cc->tk == TK_RPAREN) depth--;
+                next_token(cc);
+            }
+            if (cc->tk == TK_LBRACE) {
+                int bdepth = 1;
+                next_token(cc);
+                while (bdepth > 0 && cc->tk != TK_EOF) {
+                    if (cc->tk == TK_LBRACE) bdepth++;
+                    else if (cc->tk == TK_RBRACE) bdepth--;
+                    next_token(cc);
+                }
+            } else if (cc->tk == TK_SEMI) {
+                next_token(cc);
+            }
+            continue;
+        }
 
         /* bare struct/enum definition with no declarator */
         if (cc->tk == TK_SEMI) {
@@ -3111,7 +3346,14 @@ Node *parse_program(Compiler *cc) {
                         gptr++;
                     }
                     if (cc->tk == TK_IDENT) {
-                        strncpy(name, cc->tk_text, MAX_IDENT - 1);
+                        if (g_current_namespace[0]) {
+                            char prefixed_name[MAX_IDENT * 2];
+                            sprintf(prefixed_name, "%.120s_%.120s", g_current_namespace, cc->tk_text);
+                            strncpy(name, prefixed_name, MAX_IDENT - 1);
+                            name[MAX_IDENT - 1] = 0;
+                        } else {
+                            strncpy(name, cc->tk_text, MAX_IDENT - 1);
+                        }
                         next_token(cc);
                     }
                     int is_inner_func = 0;
@@ -3211,7 +3453,14 @@ Node *parse_program(Compiler *cc) {
             }
 
             if (cc->tk == TK_IDENT) {
-                strncpy(name, cc->tk_text, MAX_IDENT - 1);
+                if (g_current_namespace[0]) {
+                    char prefixed_name[MAX_IDENT * 2];
+                    sprintf(prefixed_name, "%.120s_%.120s", g_current_namespace, cc->tk_text);
+                    strncpy(name, prefixed_name, MAX_IDENT - 1);
+                    name[MAX_IDENT - 1] = 0;
+                } else {
+                    strncpy(name, cc->tk_text, MAX_IDENT - 1);
+                }
                 next_token(cc);
             }
             dtype = ptr_type;

@@ -18,6 +18,29 @@ private:
 public:
     int z;
 
+    // Test A: Inline Constructor and initializer list skip
+    Vector3() : x(0), y(0), z(0) {
+        z = 5;
+    }
+
+    Vector3(int xv, int yv, int zv) {
+        x = xv;
+        y = yv;
+        z = zv;
+    }
+
+    // Inline Destructor skip
+    ~Vector3() {
+        // cleanup
+    }
+
+    // Member Operator Overload skip (ZCC ignores content but must parse params)
+    Vector3 operator+(const Vector3* other) {
+        return *this;
+    }
+
+    Vector3 operator-=(const Vector3* other);
+
     void set_x(int val) {
         x = val;
     }
@@ -26,6 +49,21 @@ public:
         return x;
     }
 };
+
+// Out-of-line constructor definition
+Vector3::Vector3(int xv) {
+    x = xv;
+}
+
+// Out-of-line destructor definition
+Vector3::~Vector3() {
+    // cleanup
+}
+
+// Global Operator Overload skip
+Vector3 operator*(const Vector3* a, const Vector3* b) {
+    return *a;
+}
 
 int main() {
     using namespace Outer;
