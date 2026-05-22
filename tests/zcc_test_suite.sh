@@ -42,16 +42,18 @@ step "Build Setup"
 
 cat part1.c part2.c part3.c ir.h ir_emit_dispatch.h ir_bridge.h part4.c part5.c ir.c ir_to_x86.c > zcc_pp.c
 
+PASSES="compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c"
+
 if [ ! -f zcc ]; then
     info "Building zcc from GCC"
-    gcc -O0 -w -fno-asynchronous-unwind-tables -o zcc zcc_pp.c compiler_passes.c compiler_passes_ir.c -lm
+    gcc -O0 -w -fno-asynchronous-unwind-tables -o zcc zcc_pp.c $PASSES -lm
 fi
 
 # Build zcc2 (AST selfhost) if not present
 if [ ! -f zcc2 ]; then
     info "Building zcc2 (AST selfhost)"
     ./zcc zcc.c -o zcc2.s 2>/dev/null
-    gcc -O0 -w -fno-asynchronous-unwind-tables -o zcc2 zcc2.s compiler_passes.c compiler_passes_ir.c -lm
+    gcc -O0 -w -fno-asynchronous-unwind-tables -o zcc2 zcc2.s $PASSES -lm
 fi
 
 pass "Build environment ready"
@@ -81,8 +83,10 @@ test_file() {
 
     # Link and run AST version
     if gcc -O0 -w -o "$TESTDIR/${name}_ast" "$TESTDIR/${name}_ast.s" -lm 2>/dev/null; then
-        "$TESTDIR/${name}_ast" > "$TESTDIR/${name}_ast.out" 2>&1 || true
+        set +e
+        "$TESTDIR/${name}_ast" > "$TESTDIR/${name}_ast.out" 2>&1
         AST_RC=$?
+        set -e
     else
         fail "$name: AST link failed"
         return
@@ -90,8 +94,10 @@ test_file() {
 
     # Link and run IR version
     if gcc -O0 -w -o "$TESTDIR/${name}_ir" "$TESTDIR/${name}_ir.s" -lm 2>/dev/null; then
-        "$TESTDIR/${name}_ir" > "$TESTDIR/${name}_ir.out" 2>&1 || true
+        set +e
+        "$TESTDIR/${name}_ir" > "$TESTDIR/${name}_ir.out" 2>&1
         IR_RC=$?
+        set -e
     else
         fail "$name: IR link failed"
         return

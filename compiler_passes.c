@@ -1535,6 +1535,10 @@ static AllocaID ea_alloc_of(EscapeCtx *ctx, RegID r) {
   return (r < MAX_INSTRS) ? ctx->points_to[r] : NO_ALLOC;
 }
 
+static bool is_compiler_func(const char *name) {
+  return getenv("ZCC_IR_BACKEND") == NULL;
+}
+
 /**
  * escape_analysis_pass() — Points-to + Escape analysis, then stack promotion.
  *
@@ -1663,6 +1667,25 @@ uint32_t escape_analysis_pass(Function *fn, EscapeCtx *ctx) {
           AllocaID aid = ea_alloc_of(ctx, ins->call_args[s]);
           if (aid != NO_ALLOC)
             ctx->allocs[aid].escapes = true;
+        }
+      }
+
+      /* E4: any load/store with displacement or sbt_offset makes alloca escaping */
+      if (!is_compiler_func(current_function_name)) {
+        if (ins->op == OP_LOAD && ins->n_src >= 1) {
+          AllocaID aid = ea_alloc_of(ctx, ins->src[0]);
+          if (aid != NO_ALLOC) {
+            if ((ins->amf.folded && ins->amf.disp != 0) || ins->sbt_offset != 0) {
+              ctx->allocs[aid].escapes = true;
+            }
+          }
+        } else if (ins->op == OP_STORE && ins->n_src >= 2) {
+          AllocaID aid = ea_alloc_of(ctx, ins->src[1]);
+          if (aid != NO_ALLOC) {
+            if ((ins->amf.folded && ins->amf.disp != 0) || ins->sbt_offset != 0) {
+              ctx->allocs[aid].escapes = true;
+            }
+          }
         }
       }
     }
