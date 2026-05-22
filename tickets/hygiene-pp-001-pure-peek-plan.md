@@ -1,7 +1,9 @@
 # HYGIENE-PP-001 — Make `pp_peek` Purely Observational
 
 ## Status
-🟡 OPEN — Pre-implementation ticket. No code modified.
+🔴 IMPLEMENTATION ATTEMPTED — REVERTED. Plan requires correction.
+
+See **Mid-Gate Finding** section below.
 
 ## Invariant to enforce
 ```text
@@ -29,24 +31,31 @@ PP-001 retires the root smell.
 
 ### Category A — Observation-Only (rely on current-char value only)
 These callers read the character `pp_peek` returns and branch/consume based on it.
-With a pure `pp_peek`, they work identically provided frames are drained by
-`pp_next` after each `pos++`. **No caller-site changes required.**
 
-| Lines | Function | Pattern |
-|-------|----------|---------|
-| 339 | `pp_skip_whitespace` | `while (pp_peek == ' ' \| '\t') pp_next` |
-| 354 | `pp_parse_ident` | `while (is_ident_char(pp_peek)) out[i++] = pp_next` |
-| 387–411 | `pp_read_line` | `while (pp_peek != 0)` + `pp_peek` for branch checks |
-| 423–461 | `pp_read_macro_body` | `while (pp_peek != 0)` + branch checks |
-| 733–746 | `pp_parse_params` | `while (pp_peek != ')' && != '\n' && != 0)` |
-| 1067,1085,1088 | `pp_parse_directive` (define/include) | branch on `'('`, `'<'`, `'"'` |
-| 1112 | `pp_parse_directive` (trailing) | `if (pp_peek == '\n') pp_next` |
-| 1139–1210 | `pp_expand_ident` (__attribute__ parser) | whitespace/paren balance scan |
-| 1251 | `pp_expand_ident` | `if (pp_peek != '(')` — invocation detection |
-| 1269–1270 | `pp_expand_ident` (arg loop) | `while (pp_peek != 0)` |
-| 1323 | `pp_expand_ident` (backslash) | `if (pp_peek == '\n')` |
-| 1568–1620 | `pp_parse_target_depth` | string/comment/ident scanning loop |
-| 1595–1608 | `pp_parse_target_depth` (comments) | `while (pp_peek != 0)` |
+**Q1 CORRECTION (from mid-gate failure):** The original classification was wrong.
+Cat-A callers are NOT safely decoupled from frame transitions. Every loop of the form
+`while (pp_peek(state) != 0)` uses `pp_peek == 0` as a transparent *cross-frame
+continuation signal*, not just an end-of-input sentinel. They call `pp_peek` to
+decide whether to call `pp_next` — but if `pp_peek` returns `0` on an exhausted
+frame (without draining), the loop terminates prematurely. Moving the drain to
+`pp_next` alone cannot fix this: `pp_next` is never called when `pp_peek` says 0.
+
+In practice: preprocessing `zcc.c` went from 29,490 lines output (baseline) to
+12,710 lines (post-refactor) before gate failure, confirming loops aborted at frame
+boundaries throughout the compiler's own source.
+
+**Correct classification:**
+
+| Lines | Function | Pattern | Safe with pure pp_peek? |
+|-------|----------|---------|-------------------------|
+| 339 | `pp_skip_whitespace` | `while (pp_peek == ' '\|'\t') pp_next` | ✅ YES — exits on non-WS, never crosses frame at WS boundary |
+| 354 | `pp_parse_ident` | `while (is_ident_char(pp_peek)) out[i++] = pp_next` | ✅ YES — pop_barrier already prevents crossing; exhaustion returns 0 correctly |
+| 387–411 | `pp_read_line` | `while (pp_peek != 0)` outer loop | ❌ NO — relies on `pp_peek` draining frames transparently |
+| 423–461 | `pp_read_macro_body` | `while (pp_peek != 0)` | ❌ NO |
+| 733–746 | `pp_parse_params` | `while (pp_peek != ')' && != '\n' && != 0)` | ❌ NO |
+| 1067 etc | directive parsers | single-char branch checks after `pp_skip_whitespace` | ✅ YES |
+| 1269–1270 | arg loop in `pp_expand_ident` | `while (pp_peek != 0)` | ❌ NO |
+| 1568–1620 | `pp_parse_target_depth` | `while (pp_peek != 0)` | ❌ NO |
 
 ### Category B — Indirectly Relies on Frame Drain (via `pp_next` chain)
 `pp_next` calls `pp_peek` internally (line 286). Once `pp_peek` is pure, `pp_next`
@@ -211,11 +220,58 @@ edit session before committing.
 
 Expected net change: ~20 lines (remove drain from `pp_peek`, add drain to
 `pp_next`, with inline comment). Well within the 50-line surgical budget.
+## Mid-Gate Finding (implementation attempt — reverted)
+
+The implementation was attempted: drain loop removed from `pp_peek`, drain added
+to `pp_next` (unconditionally at end of the function). Result:
+
+- `vfsList` repro test (Gate 2): **PASS** — expected `vfsList`, got `vfsList`.
+- `pp_only zcc.c` output: **12,710 lines vs baseline 29,490 lines** — ~57% truncation.
+- `make selfhost`: 2,812 errors. Reverted via `git checkout part0_pp.c`.
+
+**Root cause of the truncation:**
+
+Every scan loop of the form `while (pp_peek(state) != 0) { ... pp_next ... }`
+uses `pp_peek == 0` as a *transparent cross-frame signal*: "the token stream has
+more content, just in the parent frame." The current `pp_peek` drain makes this
+transparency automatic. With a pure `pp_peek`, when a frame is exhausted, `pp_peek`
+returns `0` — but the scan loop sees `0`, terminates, and never calls `pp_next`,
+so `pp_drain_frames` inside `pp_next` is never triggered. The parent frame is never
+restored. All subsequent scans see an exhausted stream.
+
+**What this means for PP-001:**
+
+Pure `pp_peek` is not achievable by only modifying `pp_next`. It requires one of:
+
+1. **Explicit drain at every loop guard** — change all `while (pp_peek != 0)`
+   patterns to `pp_drain_frames(state); while (pp_peek != 0)` or equivalent.
+   This touches approximately 8 distinct loop sites across `pp_read_line`,
+   `pp_read_macro_body`, `pp_parse_params`, `pp_expand_ident` (arg loop), and
+   `pp_parse_target_depth`. Estimated diff: 15–25 lines across 5 functions.
+   Within the 50-line budget but requires explicit authorisation.
+
+2. **Thin wrapper approach** — rename current `pp_peek` to `pp_peek_raw`
+   (pure), keep a `pp_peek` that calls `pp_drain_frames` then `pp_peek_raw`.
+   This preserves all call-site semantics with zero changes to callers, but only
+   makes the drain *explicit at one level* rather than truly removing it from
+   the peek API. Architectural improvement is real but smaller than Option 1.
+
+3. **Defer PP-001** — the `pop_barrier` guard from `7d049358` correctly fences
+   the one site (pp_parse_ident) where the drain side-effect was dangerous.
+   No active safety risk exists at the current commit. PP-001 is debt, not a
+   live bug.
+
+## Recommendation
+
+The scan-loop architecture of the PP engine was designed around `pp_peek`
+performing transparent frame transitions. Decoupling them cleanly requires
+touching all `while (pp_peek != 0)` guards — which is within budget but is a
+wider diff than initially scoped. **Defer PP-001 pending explicit authorisation**
+to touch the 8 loop-guard sites. The current `pop_barrier` fence makes this
+safe to defer indefinitely.
+
+Parent commits: `7d049358`, `596287d0`, `7282e206`
+— pop-barrier fix (directly related; guard stays in place)
+- `596287d0` — PP_MAX_HIDESET bounds (directly related; loop uses same constant)
 
 Files touched: `part0_pp.c` only.
-
----
-
-## Parent commits
-- `7d049358` — pop-barrier fix (directly related; guard stays in place)
-- `596287d0` — PP_MAX_HIDESET bounds (directly related; loop uses same constant)
