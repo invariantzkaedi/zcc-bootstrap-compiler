@@ -7,6 +7,7 @@
 static int _warned_pp_max_params = 0;
 #define PP_MAX_BODY   65536
 #define PP_MAX_INCLUDE_DEPTH 64  /* raised */
+#define PP_MAX_HIDESET 32        /* max simultaneous blocked macros (hide-set depth) */
 
 typedef struct {
     char name[128];
@@ -24,7 +25,7 @@ typedef struct {
     int len;
     char *alloc_buf;
     PPMacro *expanding_macro;
-    PPMacro *blocked_macros[32];
+    PPMacro *blocked_macros[PP_MAX_HIDESET];
     int num_blocked;
 } PPInputCtx;
 
@@ -57,7 +58,7 @@ typedef struct {
     int pop_barrier;
     int include_errors;
 
-    PPMacro *blocked_macros[32];
+    PPMacro *blocked_macros[PP_MAX_HIDESET];
     int num_blocked;
 } PPState;
 
@@ -322,7 +323,13 @@ static void pp_push_input(PPState *state, const char *new_src, char *alloc_buf, 
         for (int bi = 0; bi < state->num_blocked; bi++) {
             if (state->blocked_macros[bi] == macro) { found = 1; break; }
         }
-        if (!found && state->num_blocked < 32) {
+        if (!found) {
+            if (state->num_blocked >= PP_MAX_HIDESET) {
+                fprintf(stderr, "zcc: FATAL: macro hide-set overflow (depth > %d) near macro '%s' "
+                        "— circular expansion chain too deep\n",
+                        PP_MAX_HIDESET, macro->name);
+                exit(1);
+            }
             state->blocked_macros[state->num_blocked++] = macro;
         }
     }
