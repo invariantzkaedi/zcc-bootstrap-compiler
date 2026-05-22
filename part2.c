@@ -381,10 +381,11 @@ static Keyword keywords[] = {
     {"const_cast",       TK_CONST_CAST},
     {"reinterpret_cast", TK_REINTERPRET_CAST},
     {"operator",         TK_OPERATOR},
+    {"bool",             TK_INT},
     {0, 0}
 };
 
-static int kw_count = 70;
+static int kw_count = 71;
 
 static int lookup_keyword(char *name) {
     int i;
@@ -468,6 +469,7 @@ static int lookup_keyword_fallback(char *buf, int len) {
     if (len==9 && buf[0]=='p'&&buf[1]=='r'&&buf[2]=='o'&&buf[3]=='t'&&buf[4]=='e'&&buf[5]=='c'&&buf[6]=='t'&&buf[7]=='e'&&buf[8]=='d') return TK_PROTECTED;
     if (len==9 && buf[0]=='n'&&buf[1]=='a'&&buf[2]=='m'&&buf[3]=='e'&&buf[4]=='s'&&buf[5]=='p'&&buf[6]=='a'&&buf[7]=='c'&&buf[8]=='e') return TK_NAMESPACE;
     if (len==5 && buf[0]=='u'&&buf[1]=='s'&&buf[2]=='i'&&buf[3]=='n'&&buf[4]=='g') return TK_USING;
+    if (len==4 && buf[0]=='b'&&buf[1]=='o'&&buf[2]=='o'&&buf[3]=='l') return TK_INT;
     if (len==11 && buf[0]=='s'&&buf[1]=='t'&&buf[2]=='a'&&buf[3]=='t'&&buf[4]=='i'&&buf[5]=='c'&&buf[6]=='_'&&buf[7]=='c'&&buf[8]=='a'&&buf[9]=='s'&&buf[10]=='t') return TK_STATIC_CAST;
     if (len==10 && buf[0]=='c'&&buf[1]=='o'&&buf[2]=='n'&&buf[3]=='s'&&buf[4]=='t'&&buf[5]=='_'&&buf[6]=='c'&&buf[7]=='a'&&buf[8]=='s'&&buf[9]=='t') return TK_CONST_CAST;
     if (len==16 && buf[0]=='r'&&buf[1]=='e'&&buf[2]=='i'&&buf[3]=='n'&&buf[4]=='t'&&buf[5]=='e'&&buf[6]=='r'&&buf[7]=='p'&&buf[8]=='r'&&buf[9]=='e'&&buf[10]=='t'&&buf[11]=='_'&&buf[12]=='c'&&buf[13]=='a'&&buf[14]=='s'&&buf[15]=='t') return TK_REINTERPRET_CAST;
@@ -796,6 +798,27 @@ static int lex_ident(Compiler *cc) {
         if (kw) {
             cc->tk = kw;
         } else {
+            if (strcmp(ident_buf, "true") == 0) {
+                cc->tk = TK_NUM;
+                cc->tk_val = 1;
+                strncpy(cc->tk_text, ident_buf, MAX_IDENT - 1);
+                cc->tk_text[MAX_IDENT - 1] = 0;
+                return 1;
+            }
+            if (strcmp(ident_buf, "false") == 0) {
+                cc->tk = TK_NUM;
+                cc->tk_val = 0;
+                strncpy(cc->tk_text, ident_buf, MAX_IDENT - 1);
+                cc->tk_text[MAX_IDENT - 1] = 0;
+                return 1;
+            }
+            if (strcmp(ident_buf, "nullptr") == 0) {
+                cc->tk = TK_NUM;
+                cc->tk_val = 0;
+                strncpy(cc->tk_text, ident_buf, MAX_IDENT - 1);
+                cc->tk_text[MAX_IDENT - 1] = 0;
+                return 1;
+            }
             /* ATTR-UNKNOWN-001: preprocessor emits __zcc_attr_packed__ for __attribute__((packed)).
              * Set the pending flag and loop to the next real token. */
             if (strcmp(ident_buf, "__zcc_attr_packed__") == 0) {
@@ -1141,6 +1164,8 @@ static const char *token_name(int t) {
         "SWITCH", "CASE", "DEFAULT", "STRUCT", "UNION", "ENUM", "TYPEDEF",
         "SIZEOF", "STATIC", "EXTERN", "CONST", "VOLATILE", "AUTO", "REGISTER", "INLINE",
         "ASM", "BUILTIN_VA_ARG", "TYPEOF", "AUTO_TYPE",
+        "PUBLIC", "PRIVATE", "PROTECTED", "NAMESPACE", "USING",
+        "STATIC_CAST", "CONST_CAST", "REINTERPRET_CAST", "COLON_COLON", "OPERATOR",
         "PLUS", "MINUS", "STAR", "SLASH", "PERCENT", "AMP", "PIPE", "CARET", "TILDE", "BANG",
         "ASSIGN", "EQ", "NE", "LT", "GT", "LE", "GE", "LAND", "LOR", "SHL", "SHR",
         "INC", "DEC", "ARROW", "DOT", "QUESTION", "COLON",
@@ -1149,7 +1174,7 @@ static const char *token_name(int t) {
         "LPAREN", "RPAREN", "LBRACE", "RBRACE", "LBRACKET", "RBRACKET",
         "SEMI", "COMMA", "ELLIPSIS", "HASH"
     };
-    if (t >= 0 && t < 88) return names[t];  /* 88 = number of token names */
+    if (t >= 0 && t < 100) return names[t];  /* 100 = number of token names */
     return "?";
 }
 

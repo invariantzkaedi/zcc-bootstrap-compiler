@@ -46,6 +46,11 @@ static int is_type_token(Compiler *cc) {
         Symbol *sym;
         sym = scope_find(cc, cc->tk_text);
         if (sym && sym->is_typedef) return 1;
+        if (g_current_namespace[0]) {
+            char lookup_tag[MAX_IDENT * 2];
+            sprintf(lookup_tag, "%.120s_%.120s", g_current_namespace, cc->tk_text);
+            if (find_struct(cc, lookup_tag)) return 1;
+        }
         if (find_struct(cc, cc->tk_text)) return 1;
     }
     return 0;
@@ -275,7 +280,11 @@ static Type *parse_struct_or_union(Compiler *cc, int is_union) {
     tag[0] = 0;
 
     if (cc->tk == TK_IDENT) {
-        strncpy(tag, cc->tk_text, MAX_IDENT - 1);
+        if (g_current_namespace[0]) {
+            sprintf(tag, "%.120s_%.120s", g_current_namespace, cc->tk_text);
+        } else {
+            strncpy(tag, cc->tk_text, MAX_IDENT - 1);
+        }
         has_tag = 1;
         next_token(cc);
     }
@@ -727,7 +736,15 @@ Type *parse_type(Compiler *cc) {
                 type = sym->type;
                 next_token(cc);
             } else {
-                Type *st = find_struct(cc, cc->tk_text);
+                Type *st = 0;
+                if (g_current_namespace[0]) {
+                    char lookup_tag[MAX_IDENT * 2];
+                    sprintf(lookup_tag, "%.120s_%.120s", g_current_namespace, cc->tk_text);
+                    st = find_struct(cc, lookup_tag);
+                }
+                if (!st) {
+                    st = find_struct(cc, cc->tk_text);
+                }
                 if (st) {
                     type = st;
                     next_token(cc);
@@ -1009,6 +1026,9 @@ Node *parse_primary(Compiler *cc) {
 
     if (cc->tk == TK_FLIT) {
         n = node_flit(cc, cc->tk_fval, line);
+        if (cc->tk_text[0] == 'F') {
+            n->type = cc->ty_float;
+        }
         next_token(cc);
         return n;
     }
