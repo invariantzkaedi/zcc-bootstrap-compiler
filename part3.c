@@ -7,7 +7,26 @@
 /* PARSER                                                            */
 /* ================================================================ */
 
+static void resolve_cpp_identifiers(Compiler *cc) {
+    while (cc->tk == TK_IDENT && peek_token(cc) == TK_COLON_COLON) {
+        char merged_name[MAX_IDENT * 2];
+        sprintf(merged_name, "%.120s_", cc->tk_text);
+        next_token(cc); /* consume current identifier */
+        next_token(cc); /* consume :: */
+        if (cc->tk == TK_IDENT) {
+            strncat(merged_name, cc->tk_text, MAX_IDENT - strlen(merged_name) - 1);
+            strncpy(cc->tk_text, merged_name, MAX_IDENT - 1);
+            cc->tk_text[MAX_IDENT - 1] = 0;
+            cc->tk = TK_IDENT;
+        } else {
+            error(cc, "expected identifier after '::'");
+            break;
+        }
+    }
+}
+
 static int is_type_token(Compiler *cc) {
+    resolve_cpp_identifiers(cc);
     if (cc->tk >= TK_INT && cc->tk <= TK_DOUBLE) return 1;
     if (cc->tk >= TK_STATIC && cc->tk <= TK_INLINE) return 1;
     if (cc->tk == TK_STRUCT) return 1;
@@ -325,8 +344,32 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
 
             if (cc->tk == TK_EOF) break;
 
+            if (cc->tk == TK_SEMI) {
+                next_token(cc);
+                continue;
+            }
+
+            if (cc->tk == TK_PUBLIC || cc->tk == TK_PRIVATE || cc->tk == TK_PROTECTED) {
+                next_token(cc); /* consume public/private/protected */
+                expect(cc, TK_COLON); /* consume : */
+                continue;
+            }
+
             base_ftype = parse_type(cc);
             ftype = parse_declarator(cc, base_ftype, fname);
+
+            if (ftype && ftype->kind == TY_FUNC && cc->tk == TK_LBRACE) {
+                /* skip function body */
+                int depth = 0;
+                next_token(cc); /* consume { */
+                depth = 1;
+                while (depth > 0 && cc->tk != TK_EOF) {
+                    if (cc->tk == TK_LBRACE) depth++;
+                    else if (cc->tk == TK_RBRACE) depth--;
+                    next_token(cc);
+                }
+                continue;
+            }
 
             /* Ignore bitfield size since ZCC allocates full integers for them */
             if (cc->tk == TK_COLON) {
@@ -482,6 +525,7 @@ static Type *parse_enum_def(Compiler *cc) {
 /* ---------------------------------------------------------------- */
 
 Type *parse_type(Compiler *cc) {
+    resolve_cpp_identifiers(cc);
     Type *type = 0;
     int is_unsigned = 0;
     int is_signed = 0;
@@ -663,6 +707,7 @@ Type *parse_declarator(Compiler *cc, Type *base, char *name_out) {
     }
 
     /* name */
+    resolve_cpp_identifiers(cc);
     if (cc->tk == TK_IDENT) {
         strncpy(name_out, cc->tk_text, MAX_IDENT - 1);
         next_token(cc);
@@ -821,6 +866,7 @@ Type *parse_declarator(Compiler *cc, Type *base, char *name_out) {
 /* --- primary --- */
 
 Node *parse_primary(Compiler *cc) {
+    resolve_cpp_identifiers(cc);
     Node *n;
     int line;
 
@@ -1362,6 +1408,25 @@ Node *parse_unary(Compiler *cc) {
     Node *n;
 
     line = cc->tk_line;
+
+    if (cc->tk == TK_STATIC_CAST || cc->tk == TK_CONST_CAST || cc->tk == TK_REINTERPRET_CAST) {
+        Type *cast_type;
+        char dummy[MAX_IDENT];
+        next_token(cc); /* consume static_cast etc */
+        expect(cc, TK_LT); /* consume < */
+        cast_type = parse_type(cc);
+        cast_type = parse_declarator(cc, cast_type, dummy);
+        expect(cc, TK_GT); /* consume > */
+        
+        expect(cc, TK_LPAREN); /* consume ( */
+        n = node_new(cc, ND_CAST, line);
+        n->lhs = parse_expr(cc);
+        expect(cc, TK_RPAREN); /* consume ) */
+        
+        n->type = cast_type;
+        n->cast_type = cast_type;
+        return n;
+    }
 
     if (cc->tk == TK_IDENT && strcmp(cc->tk_text, "__builtin_offsetof") == 0) {
         next_token(cc);
@@ -2173,6 +2238,16 @@ Node *parse_stmt(Compiler *cc) {
     int line;
     line = cc->tk_line;
 
+    if (cc->tk == TK_USING) {
+        while (cc->tk != TK_SEMI && cc->tk != TK_EOF) {
+            next_token(cc);
+        }
+        if (cc->tk == TK_SEMI) {
+            next_token(cc);
+        }
+        return node_new(cc, ND_NOP, line);
+    }
+
     /* Skip __asm__(...) / asm(...) / __asm(...) statements */
     if (cc->tk == TK_ASM || (cc->tk == TK_IDENT && (
         strcmp(cc->tk_text, "__asm__") == 0 ||
@@ -2956,6 +3031,37 @@ Node *parse_program(Compiler *cc) {
         top_count++;
         prev_pos = cc->pos;
         line = cc->tk_line;
+
+        if (cc->tk == TK_SEMI) {
+            next_token(cc);
+            continue;
+        }
+
+        if (cc->tk == TK_USING) {
+            while (cc->tk != TK_SEMI && cc->tk != TK_EOF) {
+                next_token(cc);
+            }
+            if (cc->tk == TK_SEMI) {
+                next_token(cc);
+            }
+            continue;
+        }
+
+        if (cc->tk == TK_NAMESPACE) {
+            next_token(cc); /* consume namespace */
+            resolve_cpp_identifiers(cc);
+            if (cc->tk == TK_IDENT) {
+                next_token(cc); /* consume namespace identifier */
+            }
+            expect(cc, TK_LBRACE); /* consume { */
+            continue;
+        }
+
+        if (cc->tk == TK_RBRACE) {
+            next_token(cc); /* consume } from namespaces */
+            continue;
+        }
+
         is_typedef_kw = 0;
         is_static = 0;
         is_extern = 0;

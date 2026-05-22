@@ -371,10 +371,19 @@ static Keyword keywords[] = {
     {"_Alignof",   TK_SIZEOF},
     {"__alignof__", TK_SIZEOF},
     {"__alignof",  TK_SIZEOF},
+    {"class",            TK_STRUCT},
+    {"public",           TK_PUBLIC},
+    {"private",          TK_PRIVATE},
+    {"protected",        TK_PROTECTED},
+    {"namespace",        TK_NAMESPACE},
+    {"using",            TK_USING},
+    {"static_cast",      TK_STATIC_CAST},
+    {"const_cast",       TK_CONST_CAST},
+    {"reinterpret_cast", TK_REINTERPRET_CAST},
     {0, 0}
 };
 
-static int kw_count = 60;
+static int kw_count = 69;
 
 static int lookup_keyword(char *name) {
     int i;
@@ -452,6 +461,15 @@ static int lookup_keyword_fallback(char *buf, int len) {
     if (len==9 && buf[0]=='_'&&buf[1]=='_'&&buf[2]=='a'&&buf[3]=='l'&&buf[4]=='i'&&buf[5]=='g'&&buf[6]=='n'&&buf[7]=='o'&&buf[8]=='f') return TK_SIZEOF;
     if (len==11 && buf[0]=='_'&&buf[1]=='_'&&buf[2]=='a'&&buf[3]=='u'&&buf[4]=='t'&&buf[5]=='o'&&buf[6]=='_'&&buf[7]=='t'&&buf[8]=='y'&&buf[9]=='p'&&buf[10]=='e') return TK_AUTO_TYPE;
     if (len==16 && buf[0]=='_'&&buf[1]=='_'&&buf[2]=='b'&&buf[3]=='u'&&buf[4]=='i'&&buf[5]=='l'&&buf[6]=='t'&&buf[7]=='i'&&buf[8]=='n'&&buf[9]=='_'&&buf[10]=='v'&&buf[11]=='a'&&buf[12]=='_'&&buf[13]=='a'&&buf[14]=='r'&&buf[15]=='g') return TK_BUILTIN_VA_ARG;
+    if (len==5 && buf[0]=='c'&&buf[1]=='l'&&buf[2]=='a'&&buf[3]=='s'&&buf[4]=='s') return TK_STRUCT;
+    if (len==6 && buf[0]=='p'&&buf[1]=='u'&&buf[2]=='b'&&buf[3]=='l'&&buf[4]=='i'&&buf[5]=='c') return TK_PUBLIC;
+    if (len==7 && buf[0]=='p'&&buf[1]=='r'&&buf[2]=='i'&&buf[3]=='v'&&buf[4]=='a'&&buf[5]=='t'&&buf[6]=='e') return TK_PRIVATE;
+    if (len==9 && buf[0]=='p'&&buf[1]=='r'&&buf[2]=='o'&&buf[3]=='t'&&buf[4]=='e'&&buf[5]=='c'&&buf[6]=='t'&&buf[7]=='e'&&buf[8]=='d') return TK_PROTECTED;
+    if (len==9 && buf[0]=='n'&&buf[1]=='a'&&buf[2]=='m'&&buf[3]=='e'&&buf[4]=='s'&&buf[5]=='p'&&buf[6]=='a'&&buf[7]=='c'&&buf[8]=='e') return TK_NAMESPACE;
+    if (len==5 && buf[0]=='u'&&buf[1]=='s'&&buf[2]=='i'&&buf[3]=='n'&&buf[4]=='g') return TK_USING;
+    if (len==11 && buf[0]=='s'&&buf[1]=='t'&&buf[2]=='a'&&buf[3]=='t'&&buf[4]=='i'&&buf[5]=='c'&&buf[6]=='_'&&buf[7]=='c'&&buf[8]=='a'&&buf[9]=='s'&&buf[10]=='t') return TK_STATIC_CAST;
+    if (len==10 && buf[0]=='c'&&buf[1]=='o'&&buf[2]=='n'&&buf[3]=='s'&&buf[4]=='t'&&buf[5]=='_'&&buf[6]=='c'&&buf[7]=='a'&&buf[8]=='s'&&buf[9]=='t') return TK_CONST_CAST;
+    if (len==16 && buf[0]=='r'&&buf[1]=='e'&&buf[2]=='i'&&buf[3]=='n'&&buf[4]=='t'&&buf[5]=='e'&&buf[6]=='r'&&buf[7]=='p'&&buf[8]=='r'&&buf[9]=='e'&&buf[10]=='t'&&buf[11]=='_'&&buf[12]=='c'&&buf[13]=='a'&&buf[14]=='s'&&buf[15]=='t') return TK_REINTERPRET_CAST;
     return 0;
 }
 
@@ -978,7 +996,10 @@ static int lex_operator(Compiler *cc, int c) {
         cc->tk = TK_DOT; return 1;
     }
     if (c == '?') { cc->tk = TK_QUESTION; return 1; }
-    if (c == ':') { cc->tk = TK_COLON; return 1; }
+    if (c == ':') {
+        if (peek_char(cc) == ':') { read_char(cc); cc->tk = TK_COLON_COLON; return 1; }
+        cc->tk = TK_COLON; return 1;
+    }
     return 0;
 }
 
