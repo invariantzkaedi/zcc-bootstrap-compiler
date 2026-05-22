@@ -1649,6 +1649,8 @@ int main(int argc, char **argv) {
       cc->out = fopen(asm_file, "w");
       extern void ir_module_lower_x86(const ir_module_t *mod, FILE *out);
       ir_module_lower_x86(g_ir_module, cc->out);
+      extern void codegen_emit_globals_and_strings(Compiler *cc);
+      codegen_emit_globals_and_strings(cc);
   } else {
       fprintf(cc->out, "# ZCC asm begin\n");
       codegen_program(cc, prog);

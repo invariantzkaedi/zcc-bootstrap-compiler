@@ -789,6 +789,35 @@ void codegen_expr(Compiler *cc, Node *node) {
       fprintf(cc->out, "    movq $0, %%rax\n");
       return;
     }
+    if (node->lhs->is_bitfield) {
+      pop_reg(cc, "r11");
+      fprintf(cc->out, "    movq %%r11, %%r9\n");
+      switch (node->lhs->member_size) {
+      case 1: fprintf(cc->out, "    movzbl (%%rax), %%r10d\n"); break;
+      case 2: fprintf(cc->out, "    movzwl (%%rax), %%r10d\n"); break;
+      case 4: fprintf(cc->out, "    movl (%%rax), %%r10d\n"); break;
+      default: fprintf(cc->out, "    movq (%%rax), %%r10\n"); break;
+      }
+      long long mask_val = (1ULL << node->lhs->bit_size) - 1;
+      long long shift_mask = ~(mask_val << node->lhs->bit_offset);
+      fprintf(cc->out, "    movq $%lld, %%rcx\n", shift_mask);
+      fprintf(cc->out, "    andq %%rcx, %%r10\n");
+      fprintf(cc->out, "    andq $%lld, %%r11\n", mask_val);
+      fprintf(cc->out, "    shlq $%d, %%r11\n", node->lhs->bit_offset);
+      fprintf(cc->out, "    orq %%r11, %%r10\n");
+      switch (node->lhs->member_size) {
+      case 1: fprintf(cc->out, "    movb %%r10b, (%%rax)\n"); break;
+      case 2: fprintf(cc->out, "    movw %%r10w, (%%rax)\n"); break;
+      case 4: fprintf(cc->out, "    movl %%r10d, (%%rax)\n"); break;
+      default: fprintf(cc->out, "    movq %%r10, (%%rax)\n"); break;
+      }
+      fprintf(cc->out, "    movq %%r9, %%rax\n");
+      {
+        ZCC_EMIT_STORE(ir_map_type(node->lhs->type), lhs_addr_ir, rhs_ir,
+                       node->line);
+      }
+      return;
+    }
     /* Use member_size for ND_MEMBER so stage2 stores 4 bytes to cc->tk etc.,
      * not 8 */
     if (node->lhs->kind == ND_MEMBER && node->lhs->member_size > 0) {
@@ -2280,6 +2309,18 @@ void codegen_expr(Compiler *cc, Node *node) {
           break;
         default:
           break;
+        }
+      }
+      if (node->is_bitfield) {
+        int uns = 1;
+        if (node->type) {
+          uns = is_unsigned_type(node->type);
+        }
+        fprintf(cc->out, "    shlq $%d, %%rax\n", 64 - node->bit_offset - node->bit_size);
+        if (uns) {
+          fprintf(cc->out, "    shrq $%d, %%rax\n", 64 - node->bit_size);
+        } else {
+          fprintf(cc->out, "    sarq $%d, %%rax\n", 64 - node->bit_size);
         }
       }
       {
@@ -4004,6 +4045,10 @@ void codegen_func(Compiler *cc, Node *func) {
       }
       if (stack_size < 256)
         stack_size = 256;
+      /* NOTE CG-ABI-001: the frame produced here has N ≡ 0 (mod 16) but
+       * after pushq %rbp (-8), the actual rsp ≡ 8 (mod 16), not 0.
+       * A full fix requires coordinating the callee-save slot offsets with
+       * the enlarged stack_size — deferred to a dedicated ABI hardening pass. */
       stack_size = (stack_size + 15) & ~15;
 
       fprintf(cc->out, "    .text\n");
@@ -4831,5 +4876,27 @@ int node_ptr_elem_size(struct Node *n) {
     return ptr_elem_size(n->type);
   }
   return 0;
+}
+
+void codegen_emit_globals_and_strings(Compiler *cc) {
+  int i;
+  for (i = 0; i < cc->num_globals; i++) {
+    if (cc->globals[i]) {
+      fold_constants(cc, cc->globals[i]->initializer);
+      emit_global_var(cc, cc->globals[i]);
+    }
+  }
+  if (cc->num_strings > 0) {
+    emit_strings(cc);
+  }
+  if (!backend_ops) {
+    fprintf(cc->out, "    .section .rodata\n");
+    fprintf(cc->out, "    .align 4\n");
+    fprintf(cc->out, ".Lf32_one:\n");
+    fprintf(cc->out, "    .long 0x3F800000\n");   /* 1.0f IEEE-754 */
+    fprintf(cc->out, "    .align 8\n");
+    fprintf(cc->out, ".Lf64_one:\n");
+    fprintf(cc->out, "    .quad 0x3FF0000000000000\n"); /* 1.0 double */
+  }
 }
 

@@ -160,6 +160,9 @@ struct StructField {
     char name[MAX_IDENT];
     Type *type;
     int offset;
+    int is_bitfield;
+    int bit_offset;
+    int bit_size;
     StructField *next;
 };
 
@@ -397,9 +400,24 @@ int node_is_char_or_void_ptr_cast(struct Node *n) {
     }
     return 0;
 }
-int node_is_bitfield(struct Node *n) { return n ? n->is_bitfield : 0; }
-int node_bit_offset(struct Node *n) { return n ? n->bit_offset : 0; }
-int node_bit_size(struct Node *n) { return n ? n->bit_size : 0; }
+int node_is_bitfield(struct Node *n) {
+    if (n) {
+        fprintf(stderr, "[DEBUG-ACCESSOR] node_is_bitfield called: kind=%d, is_bitfield=%d, member_name='%s'\n", n->kind, n->is_bitfield, n->kind == ND_MEMBER ? n->member_name : "");
+    }
+    return n ? n->is_bitfield : 0;
+}
+int node_bit_offset(struct Node *n) {
+    if (n && n->kind == ND_MEMBER && n->is_bitfield) {
+        fprintf(stderr, "[DEBUG-ACCESSOR] node_bit_offset: kind=%d, member='%s', bit_offset=%d\n", n->kind, n->member_name, n->bit_offset);
+    }
+    return n ? n->bit_offset : 0;
+}
+int node_bit_size(struct Node *n) {
+    if (n && n->kind == ND_MEMBER && n->is_bitfield) {
+        fprintf(stderr, "[DEBUG-ACCESSOR] node_bit_size: kind=%d, member='%s', bit_size=%d\n", n->kind, n->member_name, n->bit_size);
+    }
+    return n ? n->bit_size : 0;
+}
 int node_is_global(struct Node *n) {
     if (!n || n->kind != ND_VAR) return 0;
     return (n->sym && n->sym->is_local) ? 0 : 1;

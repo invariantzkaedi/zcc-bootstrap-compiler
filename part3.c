@@ -396,11 +396,19 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
         int offset;
         int max_size;
         int max_align;
+        int bf_active;
+        int bf_unit_size;
+        int bf_current_bit;
+        int bf_unit_offset;
 
         last_field = 0;
         offset = 0;
         max_size = 0;
         max_align = 1;
+        bf_active = 0;
+        bf_unit_size = 0;
+        bf_current_bit = 0;
+        bf_unit_offset = 0;
 
         while (cc->tk != TK_RBRACE) {
             Type *ftype;
@@ -541,15 +549,20 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
                 continue;
             }
 
-            /* Ignore bitfield size since ZCC allocates full integers for them */
+            int is_bf = 0;
+            int bf_size = 0;
             if (cc->tk == TK_COLON) {
                 next_token(cc);
-                parse_const_expr(cc);
+                bf_size = (int)parse_const_expr(cc);
+                is_bf = 1;
             }
 
             field = (StructField *)cc_alloc(cc, sizeof(StructField));
             strncpy(field->name, fname, MAX_IDENT - 1);
             field->type = ftype;
+            field->is_bitfield = 0;
+            field->bit_offset = 0;
+            field->bit_size = 0;
 
             falign = type_align(ftype);
             if (stype && stype->is_packed) falign = 1;
@@ -557,14 +570,49 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
 
             if (is_union) {
                 field->offset = 0;
+                if (is_bf) {
+                    field->is_bitfield = 1;
+                    field->bit_size = bf_size;
+                }
                 if (type_size(ftype) > max_size) max_size = type_size(ftype);
             } else {
-                /* align offset */
-                if (falign > 1) {
-                    offset = (offset + falign - 1) & ~(falign - 1);
+                if (is_bf) {
+                    int fsize = type_size(ftype);
+                    if (bf_active && fsize == bf_unit_size && bf_size > 0 && bf_current_bit + bf_size <= fsize * 8) {
+                        field->offset = bf_unit_offset;
+                        field->is_bitfield = 1;
+                        field->bit_offset = bf_current_bit;
+                        field->bit_size = bf_size;
+                        bf_current_bit += bf_size;
+                    } else {
+                        bf_active = 1;
+                        bf_unit_size = fsize;
+                        bf_current_bit = 0;
+                        if (falign > 1) {
+                            offset = (offset + falign - 1) & ~(falign - 1);
+                        }
+                        bf_unit_offset = offset;
+                        if (bf_size > 0) {
+                            field->offset = bf_unit_offset;
+                            field->is_bitfield = 1;
+                            field->bit_offset = 0;
+                            field->bit_size = bf_size;
+                            bf_current_bit = bf_size;
+                            offset += fsize;
+                        } else {
+                            bf_active = 0;
+                            bf_unit_size = 0;
+                            bf_current_bit = 0;
+                        }
+                    }
+                } else {
+                    bf_active = 0;
+                    if (falign > 1) {
+                        offset = (offset + falign - 1) & ~(falign - 1);
+                    }
+                    field->offset = offset;
+                    offset = offset + type_size(ftype);
                 }
-                field->offset = offset;
-                offset = offset + type_size(ftype);
             }
 
             field->next = 0;
@@ -584,27 +632,70 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
                 next_token(cc);
                 ftype2 = parse_declarator(cc, base_ftype, fname2);
 
-                /* Ignore bitfield size since ZCC allocates full integers */
+                int is_bf2 = 0;
+                int bf_size2 = 0;
                 if (cc->tk == TK_COLON) {
                     next_token(cc);
-                    parse_const_expr(cc);
+                    bf_size2 = (int)parse_const_expr(cc);
+                    is_bf2 = 1;
                 }
 
                 field2 = (StructField *)cc_alloc(cc, sizeof(StructField));
                 strncpy(field2->name, fname2, MAX_IDENT - 1);
                 field2->type = ftype2;
+                field2->is_bitfield = 0;
+                field2->bit_offset = 0;
+                field2->bit_size = 0;
+
                 falign2 = type_align(ftype2);
                 if (stype && stype->is_packed) falign2 = 1;
                 if (falign2 > max_align) max_align = falign2;
+
                 if (is_union) {
                     field2->offset = 0;
+                    if (is_bf2) {
+                        field2->is_bitfield = 1;
+                        field2->bit_size = bf_size2;
+                    }
                     if (type_size(ftype2) > max_size) max_size = type_size(ftype2);
                 } else {
-                    if (falign2 > 1) {
-                        offset = (offset + falign2 - 1) & ~(falign2 - 1);
+                    if (is_bf2) {
+                        int fsize2 = type_size(ftype2);
+                        if (bf_active && fsize2 == bf_unit_size && bf_size2 > 0 && bf_current_bit + bf_size2 <= fsize2 * 8) {
+                            field2->offset = bf_unit_offset;
+                            field2->is_bitfield = 1;
+                            field2->bit_offset = bf_current_bit;
+                            field2->bit_size = bf_size2;
+                            bf_current_bit += bf_size2;
+                        } else {
+                            bf_active = 1;
+                            bf_unit_size = fsize2;
+                            bf_current_bit = 0;
+                            if (falign2 > 1) {
+                                offset = (offset + falign2 - 1) & ~(falign2 - 1);
+                            }
+                            bf_unit_offset = offset;
+                            if (bf_size2 > 0) {
+                                field2->offset = bf_unit_offset;
+                                field2->is_bitfield = 1;
+                                field2->bit_offset = 0;
+                                field2->bit_size = bf_size2;
+                                bf_current_bit = bf_size2;
+                                offset += fsize2;
+                            } else {
+                                bf_active = 0;
+                                bf_unit_size = 0;
+                                bf_current_bit = 0;
+                            }
+                        }
+                    } else {
+                        bf_active = 0;
+                        if (falign2 > 1) {
+                            offset = (offset + falign2 - 1) & ~(falign2 - 1);
+                        }
+                        field2->offset = offset;
+                        offset = offset + type_size(ftype2);
                     }
-                    field2->offset = offset;
-                    offset = offset + type_size(ftype2);
                 }
                 field2->next = 0;
                 last_field->next = field2;
@@ -1471,8 +1562,10 @@ Node *parse_postfix(Compiler *cc) {
                 if (f) {
                     member->member_offset = accumulated_offset;
                     member->type = f->type;
-                    member->member_size = get_member_size(n->type, f->type);
                     member->member_size = type_size(f->type);
+                    member->is_bitfield = f->is_bitfield;
+                    member->bit_offset = f->bit_offset;
+                    member->bit_size = f->bit_size;
                 } else {
                     char buf[256];
                     sprintf(buf, "unknown struct member '%s' in struct '%s' (type=%p, fields=%p)", cc->tk_text, (n->type && n->type->tag[0]) ? n->type->tag : "<anon>", (void*)n->type, n->type ? (void*)n->type->fields : NULL);
@@ -1517,7 +1610,10 @@ Node *parse_postfix(Compiler *cc) {
                 if (f) {
                     n->member_offset = accumulated_offset;
                     n->type = f->type;
-                    n->member_size = get_member_size(deref->type, f->type);
+                    n->member_size = type_size(f->type);
+                    n->is_bitfield = f->is_bitfield;
+                    n->bit_offset = f->bit_offset;
+                    n->bit_size = f->bit_size;
                 } else {
                     char buf[256];
                     sprintf(buf, "unknown struct member '%s' after -> in struct '%s' (type=%p, fields=%p)", cc->tk_text, (deref->type && deref->type->tag[0]) ? deref->type->tag : "<anon>", (void*)deref->type, deref->type ? (void*)deref->type->fields : NULL);
@@ -1830,6 +1926,9 @@ Node *parse_unary(Compiler *cc) {
                         mem_n->member_offset = sf->offset;
                         mem_n->type = sf->type;
                         mem_n->member_size = type_size(sf->type);
+                        mem_n->is_bitfield = sf->is_bitfield;
+                        mem_n->bit_offset = sf->bit_offset;
+                        mem_n->bit_size = sf->bit_size;
 
                         Node *asgn_v = parse_assign(cc);
                         Node *asgn_n = node_new(cc, ND_ASSIGN, line);

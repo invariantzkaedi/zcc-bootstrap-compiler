@@ -4647,7 +4647,6 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     RegID val_r = zcc_lower_expr(ctx, node->rhs);
     
     if (node->lhs && node->lhs->is_bitfield) {
-        fprintf(stderr, "WIRING L-VALUE BITFIELD: offset=%d, size=%d\n", node->lhs->bit_offset, node->lhs->bit_size);
         RegID old_r = ctx->next_reg++;
         Instr *ld_o = calloc(1, sizeof(Instr));
         ld_o->id = ctx->next_instr_id++;
@@ -4865,26 +4864,8 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
     return;
   }
   case ZND_ASSIGN: {
-    if (!node->lhs)
-      return;
-    RegID addr_r;
-    ctx->want_address = 1;
-    addr_r = zcc_lower_expr(ctx, node->lhs);
-    ctx->want_address = 0;
-    if (!addr_r)
-      return;
-    RegID val_r = zcc_lower_expr(ctx, node->rhs);
-    Instr *st = calloc(1, sizeof(Instr));
-    st->id = ctx->next_instr_id++;
-    st->op = OP_STORE;
-    st->dst = 0;
-    st->src[0] = val_r;
-    st->src[1] = addr_r;
-    st->n_src = 2;
-    st->exec_freq = 1.0;
-    st->imm =
-        (node->lhs && node->lhs->member_size > 0) ? node->lhs->member_size : 8;
-    emit_instr(ctx, st);
+    (void)zcc_lower_expr(ctx, node);
+    assert(node->lhs && (node->lhs->is_bitfield == 0 || node->lhs->bit_size > 0));
     return;
   }
   case ZND_COMPOUND_ASSIGN: {
