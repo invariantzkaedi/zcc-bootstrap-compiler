@@ -207,7 +207,24 @@ static uint32_t opt_peephole_pass(Function *fn) {
         for (Instr *ins = blk->head; ins; ins = ins->next) {
             if (ins->dead) continue;
             
-            // ADD x, 0 -> COPY x
+            // Algebraic Identities: x - x -> CONST 0, x ^ x -> CONST 0
+            if ((ins->op == OP_SUB || ins->op == OP_BXOR) && ins->n_src == 2 && ins->src[0] == ins->src[1]) {
+                ins->op = OP_CONST;
+                ins->imm = 0;
+                ins->n_src = 0;
+                count++;
+                continue;
+            }
+
+            // Algebraic Identities: x & x -> COPY x, x | x -> COPY x
+            if ((ins->op == OP_BAND || ins->op == OP_BOR) && ins->n_src == 2 && ins->src[0] == ins->src[1]) {
+                ins->op = OP_COPY;
+                ins->n_src = 1;
+                count++;
+                continue;
+            }
+            
+            // ADD x, 0 -> COPY x etc.
             if (ins->op == OP_ADD || ins->op == OP_SUB || ins->op == OP_BOR || ins->op == OP_BXOR || ins->op == OP_SHL || ins->op == OP_SHR) {
                 Instr *d1 = (ins->n_src > 1) ? fn->def_of[ins->src[1]] : NULL;
                 Instr *d0 = (ins->n_src > 0) ? fn->def_of[ins->src[0]] : NULL;
@@ -243,7 +260,7 @@ static uint32_t opt_peephole_pass(Function *fn) {
                 }
             }
             
-            // MUL x, 0 -> CONST 0
+            // MUL x, 0 -> CONST 0; BAND x, 0 -> CONST 0
             if (ins->op == OP_MUL || ins->op == OP_BAND) {
                 Instr *d1 = fn->def_of[ins->src[1]];
                 Instr *d0 = fn->def_of[ins->src[0]];
@@ -252,6 +269,62 @@ static uint32_t opt_peephole_pass(Function *fn) {
                     ins->op = OP_CONST;
                     ins->imm = 0;
                     ins->n_src = 0;
+                    count++;
+                } else if (d1 && d1->op == OP_CONST && d1->imm == -1) { // BAND x, -1 -> COPY x
+                    ins->op = OP_COPY;
+                    ins->n_src = 1;
+                    count++;
+                } else if (d0 && d0->op == OP_CONST && d0->imm == -1) { // BAND -1, x -> COPY x
+                    ins->op = OP_COPY;
+                    ins->src[0] = ins->src[1];
+                    ins->n_src = 1;
+                    count++;
+                }
+            }
+
+            // BOR x, -1 -> CONST -1
+            if (ins->op == OP_BOR && ins->n_src == 2) {
+                Instr *d1 = fn->def_of[ins->src[1]];
+                Instr *d0 = fn->def_of[ins->src[0]];
+                if ((d1 && d1->op == OP_CONST && d1->imm == -1) || 
+                    (d0 && d0->op == OP_CONST && d0->imm == -1)) {
+                    ins->op = OP_CONST;
+                    ins->imm = -1;
+                    ins->n_src = 0;
+                    count++;
+                }
+            }
+
+            // BXOR x, -1 -> BNOT x
+            if (ins->op == OP_BXOR && ins->n_src == 2) {
+                Instr *d1 = fn->def_of[ins->src[1]];
+                Instr *d0 = fn->def_of[ins->src[0]];
+                if (d1 && d1->op == OP_CONST && d1->imm == -1) {
+                    ins->op = OP_BNOT;
+                    ins->n_src = 1;
+                    count++;
+                } else if (d0 && d0->op == OP_CONST && d0->imm == -1) {
+                    ins->op = OP_BNOT;
+                    ins->src[0] = ins->src[1];
+                    ins->n_src = 1;
+                    count++;
+                }
+            }
+
+            // Comparison Identities: x == x -> CONST 1, x != x -> CONST 0, etc.
+            if ((ins->op == OP_EQ || ins->op == OP_NE || ins->op == OP_LT || ins->op == OP_LE || ins->op == OP_GT || ins->op == OP_GE) && ins->n_src == 2 && ins->src[0] == ins->src[1]) {
+                ins->op = OP_CONST;
+                ins->imm = (ins->op == OP_EQ || ins->op == OP_LE || ins->op == OP_GE) ? 1 : 0;
+                ins->n_src = 0;
+                count++;
+            }
+
+            // Shift Identities: x << 0 -> COPY x, x >> 0 -> COPY x
+            if ((ins->op == OP_SHL || ins->op == OP_SHR) && ins->n_src == 2) {
+                Instr *d1 = fn->def_of[ins->src[1]];
+                if (d1 && d1->op == OP_CONST && d1->imm == 0) {
+                    ins->op = OP_COPY;
+                    ins->n_src = 1;
                     count++;
                 }
             }

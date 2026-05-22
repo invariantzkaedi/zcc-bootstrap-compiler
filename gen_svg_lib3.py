@@ -56,10 +56,10 @@ tags.update(standard_tags)
 attrs.update(standard_attrs)
 
 # Clean up tags/attrs
-tags = sorted(list([t for t in tags if len(t) > 1 and not t.isdigit()]))
-attrs = sorted(list([a for a in attrs if len(a) > 1 and not a.isdigit()]))
+tags = sorted(list([t for t in tags if len(t) >= 1 and not t.isdigit()]))
+attrs = sorted(list([a for a in attrs if len(a) >= 1 and not a.isdigit()]))
 
-with open(r'G:\zccMAIN\zcc\zcc_svg.h', 'w') as f:
+with open('zcc_svg.h', 'w') as f:
     f.write('/* Auto-generated ZCC SVG Deep Knowledge Library */\n')
     f.write('#ifndef ZCC_SVG_H\n#define ZCC_SVG_H\n\n')
     f.write('#include <stdio.h>\n')
@@ -99,6 +99,10 @@ with open(r'G:\zccMAIN\zcc\zcc_svg.h', 'w') as f:
     f.write('void svg_path_cubic_to(SvgPathBuilder* pb, float x1, float y1, float x2, float y2, float x, float y);\n')
     f.write('void svg_path_close(SvgPathBuilder* pb);\n')
     f.write('void svg_apply_path(ZccSvgNode* node, SvgPathBuilder* pb);\n\n')
+    f.write('/* ZCC AST Visualizer Utilities */\n')
+    f.write('struct ZCCNode;\n')
+    f.write('char* svg_render_ast(struct ZCCNode* root);\n')
+    f.write('char* svg_render_ast_html_uri(struct ZCCNode* root);\n\n')
 
     f.write('/* Node Generators */\n')
     for t in tags:
@@ -112,7 +116,7 @@ with open(r'G:\zccMAIN\zcc\zcc_svg.h', 'w') as f:
 
     f.write('\n#endif\n')
 
-with open(r'G:\zccMAIN\zcc\zcc_svg.c', 'w') as f:
+with open('zcc_svg.c', 'w') as f:
     f.write('#include "zcc_svg.h"\n\n')
     
     f.write('ZccSvgNode* svg_create_node(const char* tag) {\n')
@@ -155,19 +159,18 @@ with open(r'G:\zccMAIN\zcc\zcc_svg.c', 'w') as f:
 
     f.write('static void _svg_to_string_rec(ZccSvgNode* node, char** out, int* cap, int* len) {\n')
     f.write('    if (!node) return;\n')
-    f.write('    char buf[4096];\n')
-    f.write('    sprintf(buf, "<%s%s>", node->tag, node->attributes ? node->attributes : "");\n')
-    f.write('    int slen = strlen(buf);\n')
-    f.write('    if (*len + slen + 2048 > *cap) {\n')
+    f.write('    int tag_len = strlen(node->tag);\n')
+    f.write('    int attrs_len = node->attributes ? strlen(node->attributes) : 0;\n')
+    f.write('    int total_needed = tag_len + attrs_len + 3;\n')
+    f.write('    while (*len + total_needed + 2048 > *cap) {\n')
     f.write('        *cap *= 2;\n')
     f.write('        *out = (char*)realloc(*out, *cap);\n')
     f.write('    }\n')
-    f.write('    strcpy(*out + *len, buf);\n')
-    f.write('    *len += slen;\n')
+    f.write('    *len += sprintf(*out + *len, "<%s%s>", node->tag, node->attributes ? node->attributes : "");\n')
     
     f.write('    if (node->content) {\n')
-    f.write('        slen = strlen(node->content);\n')
-    f.write('        if (*len + slen + 2048 > *cap) {\n')
+    f.write('        int slen = strlen(node->content);\n')
+    f.write('        while (*len + slen + 2048 > *cap) {\n')
     f.write('            *cap *= 2;\n')
     f.write('            *out = (char*)realloc(*out, *cap);\n')
     f.write('        }\n')
@@ -183,10 +186,12 @@ with open(r'G:\zccMAIN\zcc\zcc_svg.c', 'w') as f:
     f.write('        }\n')
     f.write('    }\n')
 
-    f.write('    sprintf(buf, "</%s>\\n", node->tag);\n')
-    f.write('    slen = strlen(buf);\n')
-    f.write('    strcpy(*out + *len, buf);\n')
-    f.write('    *len += slen;\n')
+    f.write('    int close_len = tag_len + 5;\n')
+    f.write('    while (*len + close_len + 2048 > *cap) {\n')
+    f.write('        *cap *= 2;\n')
+    f.write('        *out = (char*)realloc(*out, *cap);\n')
+    f.write('    }\n')
+    f.write('    *len += sprintf(*out + *len, "</%s>\\n", node->tag);\n')
     f.write('}\n\n')
 
     f.write('char* svg_to_string(ZccSvgNode* root) {\n')
@@ -373,3 +378,352 @@ with open(r'G:\zccMAIN\zcc\zcc_svg.c', 'w') as f:
     for a in attrs:
         fn_name = a.replace('-', '_').replace(':', '_')
         f.write(f'void svg_set_{fn_name}(ZccSvgNode* node, const char* val) {{ svg_set_attr(node, "{a}", val); }}\n')
+
+    # Emit the ZCC AST visualizer implementation
+    f.write(r'''
+#include "zcc_ast_bridge.h"
+
+static const char* zcc_kind_to_str(int kind) {
+    switch (kind) {
+        case ZND_NUM: return "ZND_NUM";
+        case ZND_STR: return "ZND_STR";
+        case ZND_VAR: return "ZND_VAR";
+        case ZND_ASSIGN: return "ZND_ASSIGN";
+        case ZND_ADD: return "ZND_ADD";
+        case ZND_SUB: return "ZND_SUB";
+        case ZND_MOD: return "ZND_MOD";
+        case ZND_MUL: return "ZND_MUL";
+        case ZND_BAND: return "ZND_BAND";
+        case ZND_SHL: return "ZND_SHL";
+        case ZND_SHR: return "ZND_SHR";
+        case ZND_LT: return "ZND_LT";
+        case ZND_LE: return "ZND_LE";
+        case ZND_GT: return "ZND_GT";
+        case ZND_GE: return "ZND_GE";
+        case ZND_EQ: return "ZND_EQ";
+        case ZND_NE: return "ZND_NE";
+        case ZND_IF: return "ZND_IF";
+        case ZND_WHILE: return "ZND_WHILE";
+        case ZND_FOR: return "ZND_FOR";
+        case ZND_BREAK: return "ZND_BREAK";
+        case ZND_CONTINUE: return "ZND_CONTINUE";
+        case ZND_RETURN: return "ZND_RETURN";
+        case ZND_BLOCK: return "ZND_BLOCK";
+        case ZND_CAST: return "ZND_CAST";
+        case ZND_CALL: return "ZND_CALL";
+        case ZND_NOP: return "ZND_NOP";
+        case ZND_POST_INC: return "ZND_POST_INC";
+        case ZND_COMPOUND_ASSIGN: return "ZND_COMPOUND_ASSIGN";
+        case ZND_ADDR: return "ZND_ADDR";
+        case ZND_DEREF: return "ZND_DEREF";
+        case ZND_MEMBER: return "ZND_MEMBER";
+        case ZND_SWITCH: return "ZND_SWITCH";
+        case ZND_DIV: return "ZND_DIV";
+        case ZND_NEG: return "ZND_NEG";
+        case ZND_LAND: return "ZND_LAND";
+        case ZND_LOR: return "ZND_LOR";
+        case ZND_LNOT: return "ZND_LNOT";
+        case ZND_BOR: return "ZND_BOR";
+        case ZND_BXOR: return "ZND_BXOR";
+        case ZND_BNOT: return "ZND_BNOT";
+        case ZND_TERNARY: return "ZND_TERNARY";
+        case ZND_SIZEOF: return "ZND_SIZEOF";
+        case ZND_POST_DEC: return "ZND_POST_DEC";
+        case ZND_PRE_INC: return "ZND_PRE_INC";
+        case ZND_PRE_DEC: return "ZND_PRE_DEC";
+        case ZND_ASM: return "ZND_ASM";
+        case ZND_VLA_ALLOC: return "ZND_VLA_ALLOC";
+        case ZND_GOTO: return "ZND_GOTO";
+        case ZND_LABEL: return "ZND_LABEL";
+        default: return "ZND_UNKNOWN";
+    }
+}
+
+typedef struct LayoutNode {
+    ZCCNode* znode;
+    float x, y;
+    float subtree_width;
+    struct LayoutNode* children[64];
+    int child_count;
+} LayoutNode;
+
+static LayoutNode* build_layout_tree(ZCCNode* z, int depth) {
+    if (!z) return NULL;
+
+    LayoutNode* l = (LayoutNode*)calloc(1, sizeof(LayoutNode));
+    if (!l) return NULL;
+
+    l->znode = z;
+    l->y = depth * 110.0f;
+
+    #define ADD_CHILD(c) if (c) { \
+        LayoutNode* cl = build_layout_tree(c, depth + 1); \
+        if (cl && l->child_count < 64) l->children[l->child_count++] = cl; \
+    }
+
+    ADD_CHILD(z->lhs);
+    ADD_CHILD(z->rhs);
+    ADD_CHILD(z->cond);
+    ADD_CHILD(z->then_body);
+    ADD_CHILD(z->else_body);
+    ADD_CHILD(z->body);
+    ADD_CHILD(z->init);
+    ADD_CHILD(z->inc);
+
+    if (z->stmts && z->num_stmts > 0) {
+        for (unsigned int i = 0; i < z->num_stmts; i++) {
+            ADD_CHILD(z->stmts[i]);
+        }
+    }
+
+    if (z->args && z->num_args > 0) {
+        for (int i = 0; i < z->num_args; i++) {
+            ADD_CHILD(z->args[i]);
+        }
+    }
+
+    #undef ADD_CHILD
+
+    if (l->child_count == 0) {
+        l->subtree_width = 160.0f;
+    } else {
+        float sum = 0.0f;
+        for (int i = 0; i < l->child_count; i++) {
+            sum += l->children[i]->subtree_width;
+        }
+        sum += (l->child_count - 1) * 30.0f;
+        l->subtree_width = sum > 160.0f ? sum : 160.0f;
+    }
+
+    return l;
+}
+
+static void assign_x_coordinates(LayoutNode* l, float left_boundary) {
+    if (!l) return;
+
+    if (l->child_count == 0) {
+        l->x = left_boundary + l->subtree_width * 0.5f;
+    } else {
+        float current_left = left_boundary;
+        for (int i = 0; i < l->child_count; i++) {
+            assign_x_coordinates(l->children[i], current_left);
+            current_left += l->children[i]->subtree_width + 30.0f;
+        }
+        l->x = (l->children[0]->x + l->children[l->child_count - 1]->x) * 0.5f;
+    }
+}
+
+static void get_bounding_box(LayoutNode* l, float* min_x, float* max_x, float* min_y, float* max_y) {
+    if (!l) return;
+    if (l->x - 100.0f < *min_x) *min_x = l->x - 100.0f;
+    if (l->x + 100.0f > *max_x) *max_x = l->x + 100.0f;
+    if (l->y - 50.0f < *min_y) *min_y = l->y - 50.0f;
+    if (l->y + 100.0f > *max_y) *max_y = l->y + 100.0f;
+
+    for (int i = 0; i < l->child_count; i++) {
+        get_bounding_box(l->children[i], min_x, max_x, min_y, max_y);
+    }
+}
+
+static void render_layout_to_nodes(LayoutNode* l, ZccSvgNode* parent_svg) {
+    if (!l) return;
+
+    for (int i = 0; i < l->child_count; i++) {
+        LayoutNode* child = l->children[i];
+        ZccSvgNode* line = svg_path();
+        svg_set_fill(line, "none");
+        svg_set_stroke(line, "#390099");
+        svg_set_stroke_width(line, "2.5");
+        svg_set_opacity(line, "0.55");
+
+        char path_d[256];
+        float mid_y = (l->y + child->y) * 0.5f;
+        sprintf(path_d, "M %.1f %.1f C %.1f %.1f, %.1f %.1f, %.1f %.1f",
+                l->x, l->y + 25.0f,
+                l->x, mid_y,
+                child->x, mid_y,
+                child->x, child->y - 25.0f);
+        svg_set_attr(line, "d", path_d);
+        svg_add_child(parent_svg, line);
+    }
+
+    ZccSvgNode* group = svg_g();
+    ZccSvgNode* rect = svg_rect();
+    char x_str[32], y_str[32];
+    sprintf(x_str, "%.1f", l->x - 70.0f);
+    sprintf(y_str, "%.1f", l->y - 25.0f);
+    svg_set_x(rect, x_str);
+    svg_set_y(rect, y_str);
+    svg_set_width(rect, "140");
+    svg_set_height(rect, "50");
+    svg_set_attr(rect, "rx", "6");
+    svg_set_attr(rect, "ry", "6");
+    svg_set_fill(rect, "#0b0a1a");
+
+    int k = l->znode->kind;
+    if (k == ZND_IF || k == ZND_WHILE || k == ZND_FOR || k == ZND_BREAK || 
+        k == ZND_CONTINUE || k == ZND_RETURN || k == ZND_SWITCH || k == ZND_GOTO || k == ZND_LABEL) {
+        svg_set_stroke(rect, "#cc00ff");
+    } else if (k == ZND_ASSIGN || k == ZND_ADD || k == ZND_SUB || k == ZND_MUL || 
+               k == ZND_DIV || k == ZND_MOD || k == ZND_POST_INC || k == ZND_PRE_INC || 
+               k == ZND_POST_DEC || k == ZND_PRE_DEC || k == ZND_COMPOUND_ASSIGN) {
+        svg_set_stroke(rect, "#00ffcc");
+    } else {
+        svg_set_stroke(rect, "#3d30a2");
+    }
+    svg_set_stroke_width(rect, "2");
+    svg_set_attr(rect, "style", "transition: all 0.2s ease-in-out; cursor: pointer;");
+    svg_set_attr(rect, "onmouseover", "this.setAttribute('stroke-width', '3.5'); this.setAttribute('fill', '#14122d');");
+    svg_set_attr(rect, "onmouseout", "this.setAttribute('stroke-width', '2'); this.setAttribute('fill', '#0b0a1a');");
+    svg_add_child(group, rect);
+
+    ZccSvgNode* txt1 = svg_text();
+    char tx_str[32], ty_str1[32];
+    sprintf(tx_str, "%.1f", l->x);
+    sprintf(ty_str1, "%.1f", l->y - 4.0f);
+    svg_set_x(txt1, tx_str);
+    svg_set_y(txt1, ty_str1);
+    svg_set_fill(txt1, "#ffffff");
+    svg_set_attr(txt1, "font-size", "10");
+    svg_set_attr(txt1, "font-family", "Inter, system-ui, sans-serif");
+    svg_set_attr(txt1, "font-weight", "bold");
+    svg_set_attr(txt1, "text-anchor", "middle");
+    svg_set_content(txt1, zcc_kind_to_str(l->znode->kind));
+    svg_add_child(group, txt1);
+
+    ZccSvgNode* txt2 = svg_text();
+    char ty_str2[32];
+    sprintf(ty_str2, "%.1f", l->x);
+    sprintf(ty_str2, "%.1f", l->y + 12.0f);
+    svg_set_x(txt2, tx_str);
+    svg_set_y(txt2, ty_str2);
+
+    char details[64] = "";
+    if (l->znode->name[0] != '\0') {
+        sprintf(details, "sym: %s", l->znode->name);
+    } else if (l->znode->int_val != 0 || l->znode->kind == ZND_NUM) {
+        sprintf(details, "val: %lld", l->znode->int_val);
+    } else if (l->znode->kind == ZND_VAR) {
+        sprintf(details, "var: %s", l->znode->name);
+    }
+
+    if (details[0] != '\0') {
+        svg_set_fill(txt2, "#8f8fb8");
+        svg_set_attr(txt2, "font-size", "9");
+        svg_set_attr(txt2, "font-family", "Inter, system-ui, sans-serif");
+        svg_set_attr(txt2, "text-anchor", "middle");
+        svg_set_content(txt2, details);
+        svg_add_child(group, txt2);
+    }
+
+    svg_add_child(parent_svg, group);
+
+    for (int i = 0; i < l->child_count; i++) {
+        render_layout_to_nodes(l->children[i], parent_svg);
+    }
+}
+
+static void free_layout_tree(LayoutNode* l) {
+    if (!l) return;
+    for (int i = 0; i < l->child_count; i++) {
+        free_layout_tree(l->children[i]);
+    }
+    free(l);
+}
+
+char* svg_render_ast(struct ZCCNode* root) {
+    if (!root) return NULL;
+
+    LayoutNode* l = build_layout_tree((ZCCNode*)root, 0);
+    if (!l) return NULL;
+
+    assign_x_coordinates(l, 0.0f);
+
+    float min_x = 1e9f, max_x = -1e9f, min_y = 1e9f, max_y = -1e9f;
+    get_bounding_box(l, &min_x, &max_x, &min_y, &max_y);
+
+    ZccSvgNode* svg = svg_svg();
+    svg_set_xmlns(svg, "http://www.w3.org/2000/svg");
+
+    char w_str[32], h_str[32], vb_str[128];
+    float w = max_x - min_x;
+    float h = max_y - min_y;
+    sprintf(w_str, "%.1f", w);
+    sprintf(h_str, "%.1f", h);
+    sprintf(vb_str, "%.1f %.1f %.1f %.1f", min_x, min_y, w, h);
+    svg_set_width(svg, w_str);
+    svg_set_height(svg, h_str);
+    svg_set_viewBox(svg, vb_str);
+
+    ZccSvgNode* bg = svg_rect();
+    char rx_str[32], ry_str[32];
+    sprintf(rx_str, "%.1f", min_x);
+    sprintf(ry_str, "%.1f", min_y);
+    svg_set_x(bg, rx_str);
+    svg_set_y(bg, ry_str);
+    svg_set_width(bg, w_str);
+    svg_set_height(bg, h_str);
+    svg_set_fill(bg, "#020206");
+    svg_add_child(svg, bg);
+
+    render_layout_to_nodes(l, svg);
+
+    char* svg_str = svg_to_string(svg);
+    free_layout_tree(l);
+    return svg_str;
+}
+
+char* svg_render_ast_html_uri(struct ZCCNode* root) {
+    char* svg_str = svg_render_ast(root);
+    if (!svg_str) return NULL;
+
+    size_t len = strlen(svg_str);
+    char* svg_single = (char*)malloc(len + 1);
+    if (!svg_single) {
+        free(svg_str);
+        return NULL;
+    }
+    for (size_t i = 0; i <= len; i++) {
+        if (svg_str[i] == '"') {
+            svg_single[i] = '\'';
+        } else {
+            svg_single[i] = svg_str[i];
+        }
+    }
+    free(svg_str);
+
+    const char* html_pre = "<!DOCTYPE html><html><body style='margin:0;background:#020206;display:flex;justify-content:center;align-items:center;min-height:100vh;overflow:auto;'>";
+    const char* html_post = "</body></html>";
+    size_t pre_len = strlen(html_pre);
+    size_t post_len = strlen(html_post);
+
+    size_t html_len = pre_len + len + post_len;
+    char* html_content = (char*)malloc(html_len + 1);
+    if (!html_content) {
+        free(svg_single);
+        return NULL;
+    }
+    strcpy(html_content, html_pre);
+    strcpy(html_content + pre_len, svg_single);
+    strcpy(html_content + pre_len + len, html_post);
+    free(svg_single);
+
+    char* b64 = base64_encode((const unsigned char*)html_content, html_len);
+    free(html_content);
+    if (!b64) return NULL;
+
+    const char* prefix = "data:text/html;base64,";
+    size_t prefix_len = strlen(prefix);
+    size_t b64_len = strlen(b64);
+    char* uri = (char*)malloc(prefix_len + b64_len + 1);
+    if (!uri) {
+        free(b64);
+        return NULL;
+    }
+    strcpy(uri, prefix);
+    strcpy(uri + prefix_len, b64);
+    free(b64);
+    return uri;
+}
+''')
+
