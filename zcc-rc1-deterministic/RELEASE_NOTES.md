@@ -1,10 +1,10 @@
 # ZCC-RC1-DETERMINISTIC-CANDIDATE Release Notes
 
 - **Label**: `ZCC-RC1-DETERMINISTIC-CANDIDATE`
-- **Git Commit**: `7c8d5914fad085e14a306499bf72b3f6e73c3aa1`
+- **Git Commit**: `c714b68d6e5cb13510cf7ba554a724a18cc1ccbc`
 - **Assembly Parity**: `zcc2.s == zcc3.s`
-- **Assembly Lines Verified**: `145,887`
-- **Binary SHA256**: `f797893fcfa3d9a0d6673fa2c1f73656172606784463f366058f8dd0a2023231`
+- **Assembly Lines Verified**: `217,738`
+- **Binary SHA256**: `b44180e60ad9aafe64a869745ef6446449fe77b7a7bd1911f163ab0e42f226fc`
 - **Status**: `verification automated (release candidate stage)`
 
 ---
@@ -55,10 +55,10 @@ ZCC's developmental architecture was executed systematically in five core develo
 
 ## 3. Consensus Verification Verdict
 During the final courtroom convocation, stage 2 assembly (`zcc2.s`) and stage 3 assembly (`zcc3.s`) achieved **absolute semantic and bitwise parity**:
-- **Assembly lines verified**: 145,887 lines (wc -l)
+- **Assembly lines verified**: 217,738 lines (wc -l)
 - **Parity Check**: Identical Assembly Outputs (`diff zcc2.s zcc3.s`)
-- **Binary ID**: `f797893fcfa3d9a0`
-- **Binary SHA256**: `f797893fcfa3d9a0d6673fa2c1f73656172606784463f366058f8dd0a2023231`
+- **Binary ID**: `b44180e60ad9aafe`
+- **Binary SHA256**: `b44180e60ad9aafe64a869745ef6446449fe77b7a7bd1911f163ab0e42f226fc`
 - **Registry ID**: `05807bb6050924c1`
 - **Registry SHA256**: `05807bb6050924c1f85f3414ac83b7f0d3cf410655ffc357824c4693c7e426e5`
 
