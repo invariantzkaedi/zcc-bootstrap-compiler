@@ -46,6 +46,11 @@ static int is_type_token(Compiler *cc) {
         Symbol *sym;
         sym = scope_find(cc, cc->tk_text);
         if (sym && sym->is_typedef) return 1;
+        if (g_current_namespace[0]) {
+            char lookup_tag[MAX_IDENT * 2];
+            sprintf(lookup_tag, "%.120s_%.120s", g_current_namespace, cc->tk_text);
+            if (find_struct(cc, lookup_tag)) return 1;
+        }
         if (find_struct(cc, cc->tk_text)) return 1;
     }
     return 0;
@@ -72,6 +77,8 @@ static void register_struct(Compiler *cc, Type *t) {
 
 Type *parse_type(Compiler *cc);
 Type *parse_declarator(Compiler *cc, Type *base, char *name_out);
+static void parse_or_skip_gcc_attributes(Compiler *cc, Type *dtype);
+static void inject_attribute_parser(Compiler *cc, Type *dtype);
 static long long parse_const_expr_ternary(Compiler *cc);
 static Node *ensure_type(Compiler *cc, Node *n, Type *ty);
 static long long parse_const_expr_lor(Compiler *cc);
@@ -270,25 +277,71 @@ static Type *parse_struct_or_union(Compiler *cc, int is_union) {
     Type *stype;
     char tag[MAX_IDENT];
     int has_tag;
+    int local_is_packed = 0;
+    int local_explicit_align = 0;
+    Type attr_collector;
 
     has_tag = 0;
     tag[0] = 0;
+    memset(&attr_collector, 0, sizeof(Type));
+
+    /* Consume lexer-set pending attributes */
+    if (cc->pending_packed) {
+        local_is_packed = 1;
+        cc->pending_packed = 0;
+    }
+    if (cc->pending_aligned_n > 0) {
+        local_explicit_align = cc->pending_aligned_n;
+        cc->pending_aligned_n = 0;
+    }
+
+    /* 1. Attributes immediately after struct/union keyword */
+    if (cc->tk == TK_IDENT && 
+        (strcmp(cc->tk_text, "__attribute__") == 0 || strcmp(cc->tk_text, "__attribute") == 0)) {
+        parse_or_skip_gcc_attributes(cc, &attr_collector);
+        if (attr_collector.is_packed) local_is_packed = 1;
+        if (attr_collector.explicit_align > 0) local_explicit_align = attr_collector.explicit_align;
+    }
 
     if (cc->tk == TK_IDENT) {
-        strncpy(tag, cc->tk_text, MAX_IDENT - 1);
+        if (g_current_namespace[0]) {
+            sprintf(tag, "%.120s_%.120s", g_current_namespace, cc->tk_text);
+        } else {
+            strncpy(tag, cc->tk_text, MAX_IDENT - 1);
+        }
         has_tag = 1;
         next_token(cc);
+    }
+
+    /* 2. Attributes after tag name, before opening brace */
+    if (cc->tk == TK_IDENT && 
+        (strcmp(cc->tk_text, "__attribute__") == 0 || strcmp(cc->tk_text, "__attribute") == 0)) {
+        parse_or_skip_gcc_attributes(cc, &attr_collector);
+        if (attr_collector.is_packed) local_is_packed = 1;
+        if (attr_collector.explicit_align > 0) local_explicit_align = attr_collector.explicit_align;
     }
 
     /* forward reference or existing struct */
     if (cc->tk != TK_LBRACE) {
         if (has_tag) {
             stype = find_struct(cc, tag);
-            if (stype) return stype;
+            if (stype) {
+                if (local_is_packed) stype->is_packed = 1;
+                if (local_explicit_align > 0) {
+                    stype->explicit_align = local_explicit_align;
+                    stype->align = local_explicit_align;
+                }
+                return stype;
+            }
             /* forward declaration */
-        stype = type_new(cc, is_union ? TY_UNION : TY_STRUCT);
+            stype = type_new(cc, is_union ? TY_UNION : TY_STRUCT);
             strncpy(stype->tag, tag, MAX_IDENT - 1);
             stype->is_complete = 0;
+            if (local_is_packed) stype->is_packed = 1;
+            if (local_explicit_align > 0) {
+                stype->explicit_align = local_explicit_align;
+                stype->align = local_explicit_align;
+            }
             register_struct(cc, stype);
             return stype;
         }
@@ -316,6 +369,14 @@ static Type *parse_struct_or_union(Compiler *cc, int is_union) {
         cc->pending_tbfp = 0;
     }
 
+    if (stype) {
+        if (local_is_packed) stype->is_packed = 1;
+        if (local_explicit_align > 0) {
+            stype->explicit_align = local_explicit_align;
+            stype->align = local_explicit_align;
+        }
+    }
+
     return parse_struct_or_union_body(cc, stype, is_union);
 }
 
@@ -335,11 +396,19 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
         int offset;
         int max_size;
         int max_align;
+        int bf_active;
+        int bf_unit_size;
+        int bf_current_bit;
+        int bf_unit_offset;
 
         last_field = 0;
         offset = 0;
         max_size = 0;
         max_align = 1;
+        bf_active = 0;
+        bf_unit_size = 0;
+        bf_current_bit = 0;
+        bf_unit_offset = 0;
 
         while (cc->tk != TK_RBRACE) {
             Type *ftype;
@@ -480,29 +549,70 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
                 continue;
             }
 
-            /* Ignore bitfield size since ZCC allocates full integers for them */
+            int is_bf = 0;
+            int bf_size = 0;
             if (cc->tk == TK_COLON) {
                 next_token(cc);
-                parse_const_expr(cc);
+                bf_size = (int)parse_const_expr(cc);
+                is_bf = 1;
             }
 
             field = (StructField *)cc_alloc(cc, sizeof(StructField));
             strncpy(field->name, fname, MAX_IDENT - 1);
             field->type = ftype;
+            field->is_bitfield = 0;
+            field->bit_offset = 0;
+            field->bit_size = 0;
 
             falign = type_align(ftype);
+            if (stype && stype->is_packed) falign = 1;
             if (falign > max_align) max_align = falign;
 
             if (is_union) {
                 field->offset = 0;
+                if (is_bf) {
+                    field->is_bitfield = 1;
+                    field->bit_size = bf_size;
+                }
                 if (type_size(ftype) > max_size) max_size = type_size(ftype);
             } else {
-                /* align offset */
-                if (falign > 1) {
-                    offset = (offset + falign - 1) & ~(falign - 1);
+                if (is_bf) {
+                    int fsize = type_size(ftype);
+                    if (bf_active && fsize == bf_unit_size && bf_size > 0 && bf_current_bit + bf_size <= fsize * 8) {
+                        field->offset = bf_unit_offset;
+                        field->is_bitfield = 1;
+                        field->bit_offset = bf_current_bit;
+                        field->bit_size = bf_size;
+                        bf_current_bit += bf_size;
+                    } else {
+                        bf_active = 1;
+                        bf_unit_size = fsize;
+                        bf_current_bit = 0;
+                        if (falign > 1) {
+                            offset = (offset + falign - 1) & ~(falign - 1);
+                        }
+                        bf_unit_offset = offset;
+                        if (bf_size > 0) {
+                            field->offset = bf_unit_offset;
+                            field->is_bitfield = 1;
+                            field->bit_offset = 0;
+                            field->bit_size = bf_size;
+                            bf_current_bit = bf_size;
+                            offset += fsize;
+                        } else {
+                            bf_active = 0;
+                            bf_unit_size = 0;
+                            bf_current_bit = 0;
+                        }
+                    }
+                } else {
+                    bf_active = 0;
+                    if (falign > 1) {
+                        offset = (offset + falign - 1) & ~(falign - 1);
+                    }
+                    field->offset = offset;
+                    offset = offset + type_size(ftype);
                 }
-                field->offset = offset;
-                offset = offset + type_size(ftype);
             }
 
             field->next = 0;
@@ -522,26 +632,70 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
                 next_token(cc);
                 ftype2 = parse_declarator(cc, base_ftype, fname2);
 
-                /* Ignore bitfield size since ZCC allocates full integers */
+                int is_bf2 = 0;
+                int bf_size2 = 0;
                 if (cc->tk == TK_COLON) {
                     next_token(cc);
-                    parse_const_expr(cc);
+                    bf_size2 = (int)parse_const_expr(cc);
+                    is_bf2 = 1;
                 }
 
                 field2 = (StructField *)cc_alloc(cc, sizeof(StructField));
                 strncpy(field2->name, fname2, MAX_IDENT - 1);
                 field2->type = ftype2;
+                field2->is_bitfield = 0;
+                field2->bit_offset = 0;
+                field2->bit_size = 0;
+
                 falign2 = type_align(ftype2);
+                if (stype && stype->is_packed) falign2 = 1;
                 if (falign2 > max_align) max_align = falign2;
+
                 if (is_union) {
                     field2->offset = 0;
+                    if (is_bf2) {
+                        field2->is_bitfield = 1;
+                        field2->bit_size = bf_size2;
+                    }
                     if (type_size(ftype2) > max_size) max_size = type_size(ftype2);
                 } else {
-                    if (falign2 > 1) {
-                        offset = (offset + falign2 - 1) & ~(falign2 - 1);
+                    if (is_bf2) {
+                        int fsize2 = type_size(ftype2);
+                        if (bf_active && fsize2 == bf_unit_size && bf_size2 > 0 && bf_current_bit + bf_size2 <= fsize2 * 8) {
+                            field2->offset = bf_unit_offset;
+                            field2->is_bitfield = 1;
+                            field2->bit_offset = bf_current_bit;
+                            field2->bit_size = bf_size2;
+                            bf_current_bit += bf_size2;
+                        } else {
+                            bf_active = 1;
+                            bf_unit_size = fsize2;
+                            bf_current_bit = 0;
+                            if (falign2 > 1) {
+                                offset = (offset + falign2 - 1) & ~(falign2 - 1);
+                            }
+                            bf_unit_offset = offset;
+                            if (bf_size2 > 0) {
+                                field2->offset = bf_unit_offset;
+                                field2->is_bitfield = 1;
+                                field2->bit_offset = 0;
+                                field2->bit_size = bf_size2;
+                                bf_current_bit = bf_size2;
+                                offset += fsize2;
+                            } else {
+                                bf_active = 0;
+                                bf_unit_size = 0;
+                                bf_current_bit = 0;
+                            }
+                        }
+                    } else {
+                        bf_active = 0;
+                        if (falign2 > 1) {
+                            offset = (offset + falign2 - 1) & ~(falign2 - 1);
+                        }
+                        field2->offset = offset;
+                        offset = offset + type_size(ftype2);
                     }
-                    field2->offset = offset;
-                    offset = offset + type_size(ftype2);
                 }
                 field2->next = 0;
                 last_field->next = field2;
@@ -551,27 +705,28 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
             expect(cc, TK_SEMI);
         }
 
-            if (is_union) {
+        if (is_union) {
             stype->size = max_size;
         } else {
             stype->size = offset;
         }
-        /* align total size */
-        if (max_align > 1) {
-            stype->size = (stype->size + max_align - 1) & ~(max_align - 1);
+        
+        int final_align = max_align;
+        if (stype->explicit_align > 0) {
+            final_align = stype->explicit_align;
+        } else if (stype->is_packed) {
+            final_align = 1;
         }
-        stype->align = max_align;
+        
+        /* align total size */
+        if (final_align > 1) {
+            stype->size = (stype->size + final_align - 1) & ~(final_align - 1);
+        }
+        stype->align = final_align;
         stype->is_complete = 1;
     }
 
     expect(cc, TK_RBRACE);
-    if (stype->tag[0] && (strcmp(stype->tag, "yyStackEntry") == 0 || strcmp(stype->tag, "yyParser") == 0 || strcmp(stype->tag, "Walker") == 0)) {
-        int n = 0;
-        StructField *f = stype->fields;
-        while(f) { n++; printf("FIELD: %s\n", f->name); f = f->next; }
-        printf("DEBUG: Parsed %s with %d fields (Type=%p, fields=%p)\n", stype->tag, n, (void*)stype, (void*)stype->fields);
-        fflush(stdout);
-    }
     return stype;
 }
 
@@ -694,10 +849,12 @@ Type *parse_type(Compiler *cc) {
         if (cc->tk == TK_STRUCT) {
             next_token(cc);
             type = parse_struct_or_union(cc, 0);
+            inject_attribute_parser(cc, type);
         }
         else if (cc->tk == TK_UNION) {
             next_token(cc);
             type = parse_struct_or_union(cc, 1);
+            inject_attribute_parser(cc, type);
         }
         else if (cc->tk == TK_ENUM) {
             next_token(cc);
@@ -727,7 +884,15 @@ Type *parse_type(Compiler *cc) {
                 type = sym->type;
                 next_token(cc);
             } else {
-                Type *st = find_struct(cc, cc->tk_text);
+                Type *st = 0;
+                if (g_current_namespace[0]) {
+                    char lookup_tag[MAX_IDENT * 2];
+                    sprintf(lookup_tag, "%.120s_%.120s", g_current_namespace, cc->tk_text);
+                    st = find_struct(cc, lookup_tag);
+                }
+                if (!st) {
+                    st = find_struct(cc, cc->tk_text);
+                }
                 if (st) {
                     type = st;
                     next_token(cc);
@@ -805,6 +970,102 @@ static Type *inject_base_type(Compiler *cc, Type *t, Type *base) {
     return base;
 }
 
+static void parse_or_skip_gcc_attributes(Compiler *cc, Type *dtype) {
+    int loop_guard = 0;
+    while (cc->tk == TK_IDENT && 
+           (strcmp(cc->tk_text, "__attribute__") == 0 || strcmp(cc->tk_text, "__attribute") == 0)) {
+        next_token(cc); /* consume attribute */
+        
+        if (cc->tk == TK_LPAREN) {
+            next_token(cc);
+            if (cc->tk == TK_LPAREN) {
+                next_token(cc);
+                
+                while (cc->tk != TK_RPAREN && cc->tk != TK_EOF) {
+                    if (loop_guard++ > 500) {
+                        error(cc, "loop limit exceeded in attribute parser");
+                        return;
+                    }
+                    
+                    if (cc->tk == TK_IDENT) {
+                        if (strcmp(cc->tk_text, "packed") == 0 || strcmp(cc->tk_text, "__packed__") == 0) {
+                            if (dtype) {
+                                dtype->is_packed = 1;
+                            }
+                            next_token(cc);
+                        } else if (strcmp(cc->tk_text, "aligned") == 0 || strcmp(cc->tk_text, "__aligned__") == 0) {
+                            next_token(cc);
+                            int align_val = 0;
+                            if (cc->tk == TK_LPAREN) {
+                                next_token(cc);
+                                if (cc->tk == TK_NUM) {
+                                    align_val = cc->tk_val;
+                                    next_token(cc);
+                                }
+                                expect(cc, TK_RPAREN);
+                            }
+                            if (dtype) {
+                                if (align_val > 0) {
+                                    dtype->explicit_align = align_val;
+                                    dtype->align = align_val;
+                                } else {
+                                    /* default aligned to 8 */
+                                    dtype->explicit_align = 8;
+                                    dtype->align = 8;
+                                }
+                            }
+                        } else {
+                            /* skip generic parameter or single identifiers like unused, format */
+                            next_token(cc);
+                            if (cc->tk == TK_LPAREN) {
+                                int depth = 1;
+                                next_token(cc);
+                                while (depth > 0 && cc->tk != TK_EOF) {
+                                    if (cc->tk == TK_LPAREN) depth++;
+                                    else if (cc->tk == TK_RPAREN) depth--;
+                                    next_token(cc);
+                                }
+                            }
+                        }
+                    } else if (cc->tk == TK_COMMA) {
+                        next_token(cc);
+                    } else {
+                        next_token(cc);
+                    }
+                }
+                if (cc->tk == TK_EOF) {
+                    error(cc, "attribute block cut off by EOF");
+                    return;
+                }
+                expect(cc, TK_RPAREN);
+            }
+            if (cc->tk == TK_EOF) {
+                error(cc, "attribute block cut off by EOF");
+                return;
+            }
+            expect(cc, TK_RPAREN);
+        }
+    }
+}
+
+static void inject_attribute_parser(Compiler *cc, Type *dtype) {
+    if (cc->pending_packed) {
+        if (dtype) dtype->is_packed = 1;
+        cc->pending_packed = 0;
+    }
+    if (cc->pending_aligned_n > 0) {
+        if (dtype) {
+            dtype->explicit_align = cc->pending_aligned_n;
+            dtype->align = cc->pending_aligned_n;
+        }
+        cc->pending_aligned_n = 0;
+    }
+    if (cc->tk == TK_IDENT &&
+        (strcmp(cc->tk_text, "__attribute__") == 0 || strcmp(cc->tk_text, "__attribute") == 0)) {
+        parse_or_skip_gcc_attributes(cc, dtype);
+    }
+}
+
 Type *parse_declarator(Compiler *cc, Type *base, char *name_out) {
     Type *type;
 
@@ -821,6 +1082,9 @@ Type *parse_declarator(Compiler *cc, Type *base, char *name_out) {
         type = type_ptr(cc, type);
     }
 
+    /* attributes on pointers/declarator before identifier name */
+    inject_attribute_parser(cc, type);
+
     /* name */
     resolve_cpp_identifiers(cc);
     if (cc->tk == TK_IDENT) {
@@ -835,6 +1099,7 @@ Type *parse_declarator(Compiler *cc, Type *base, char *name_out) {
             Type *inner;
             next_token(cc); /* consume ( */
             inner = parse_declarator(cc, cc->ty_int, name_out);
+            if (cc->tk == TK_EOF) { error(cc, "unexpected EOF in nested declarator"); return NULL; }
             expect(cc, TK_RPAREN);
             /* process outer dimensions and function args first! */
             if (cc->tk == TK_LBRACKET) {
@@ -897,6 +1162,7 @@ Type *parse_declarator(Compiler *cc, Type *base, char *name_out) {
                 expect(cc, TK_RPAREN);
                 type = ftype;
             }
+            inject_attribute_parser(cc, type);
             return inject_base_type(cc, inner, type);
         }
     }
@@ -971,6 +1237,7 @@ Type *parse_declarator(Compiler *cc, Type *base, char *name_out) {
         type = ftype;
     }
 
+    inject_attribute_parser(cc, type);
     return type;
 }
 
@@ -1009,6 +1276,9 @@ Node *parse_primary(Compiler *cc) {
 
     if (cc->tk == TK_FLIT) {
         n = node_flit(cc, cc->tk_fval, line);
+        if (cc->tk_text[0] == 'F') {
+            n->type = cc->ty_float;
+        }
         next_token(cc);
         return n;
     }
@@ -1292,8 +1562,10 @@ Node *parse_postfix(Compiler *cc) {
                 if (f) {
                     member->member_offset = accumulated_offset;
                     member->type = f->type;
-                    member->member_size = get_member_size(n->type, f->type);
                     member->member_size = type_size(f->type);
+                    member->is_bitfield = f->is_bitfield;
+                    member->bit_offset = f->bit_offset;
+                    member->bit_size = f->bit_size;
                 } else {
                     char buf[256];
                     sprintf(buf, "unknown struct member '%s' in struct '%s' (type=%p, fields=%p)", cc->tk_text, (n->type && n->type->tag[0]) ? n->type->tag : "<anon>", (void*)n->type, n->type ? (void*)n->type->fields : NULL);
@@ -1338,7 +1610,10 @@ Node *parse_postfix(Compiler *cc) {
                 if (f) {
                     n->member_offset = accumulated_offset;
                     n->type = f->type;
-                    n->member_size = get_member_size(deref->type, f->type);
+                    n->member_size = type_size(f->type);
+                    n->is_bitfield = f->is_bitfield;
+                    n->bit_offset = f->bit_offset;
+                    n->bit_size = f->bit_size;
                 } else {
                     char buf[256];
                     sprintf(buf, "unknown struct member '%s' after -> in struct '%s' (type=%p, fields=%p)", cc->tk_text, (deref->type && deref->type->tag[0]) ? deref->type->tag : "<anon>", (void*)deref->type, deref->type ? (void*)deref->type->fields : NULL);
@@ -1651,6 +1926,9 @@ Node *parse_unary(Compiler *cc) {
                         mem_n->member_offset = sf->offset;
                         mem_n->type = sf->type;
                         mem_n->member_size = type_size(sf->type);
+                        mem_n->is_bitfield = sf->is_bitfield;
+                        mem_n->bit_offset = sf->bit_offset;
+                        mem_n->bit_size = sf->bit_size;
 
                         Node *asgn_v = parse_assign(cc);
                         Node *asgn_n = node_new(cc, ND_ASSIGN, line);

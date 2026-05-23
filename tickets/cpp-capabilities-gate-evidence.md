@@ -1,10 +1,10 @@
 # ZCC Gate Evidence: C++ Capabilities Expansion
 
 ## Goal
-Enable ZCC compiler to natively parse and compile basic C++ declarations and subsets—including namespace flattening (`A::B` -> `A_B`), class aliasing (`class` -> `struct`), access specifiers (`public:`, `private:`, `protected:`), ignoring inline member functions, using declaration skips (`using namespace std;`), and standard C++ casts (`static_cast`, `const_cast`, `reinterpret_cast`)—without syntax regressions.
+Enable ZCC compiler to natively parse and compile basic C++ declarations and subsets—including namespace flattening (`A::B` -> `A_B`), class aliasing (`class` -> `struct`), access specifiers (`public:`, `private:`, `protected:`), ignoring inline member functions, using declaration skips (`using namespace std;`), standard C++ casts (`static_cast`, `const_cast`, `reinterpret_cast`), native `bool` mapping, `true`/`false`/`nullptr` literals, and namespace-prefixed struct tag scope resolution—without syntax regressions.
 
 ## Outcome
-Implemented all parsing extensions surgically in the ZCC C frontend (`part1.c`, `part2.c`, `part3.c`). Successfully verified Stage 2 and Stage 3 byte-identity, fully compiled and executed the E2E C++ test fixture producing the expected exit code 42, and passed the full unit test suite with 21/21 tests passing.
+Implemented all parsing extensions surgically in the ZCC C frontend (`part1.c`, `part2.c`, `part3.c`). Successfully verified Stage 2 and Stage 3 byte-identity, fully compiled and executed the E2E C++ test fixture (with 5 verified tests) producing the expected exit code 42, and passed the full unit test suite with 21/21 tests passing.
 
 ---
 
@@ -45,6 +45,8 @@ $ ./cpp_test
 [PASS] Namespace resolution: got 100
 [PASS] Class member layout (vec.z): got 30
 [PASS] C++ Cast (static_cast): got 42
+[PASS] C++ bool/nullptr: true=1, false=0, nullptr=(nil)
+[PASS] Class inside namespace: got 123
 ALL C++ CAPABILITIES VERIFIED! EXITING WITH SUCCESS CODE 42.
 
 $ echo $?
@@ -74,3 +76,5 @@ ALL TESTS PASSED
 - **Arg Parser Bypass for .cpp**: The command-line argument parser originally passed `.cpp` files raw to the system linker, triggering standard `g++` compilation failures. Resolved in `part5.c` by recognizing `.cpp` as a primary input format.
 - **Out-of-Line Method Swallowing**: Swallowed out-of-line class constructor, destructor, and method definitions in `parse_program` to completely eliminate scoping errors on struct member accesses (like `x = xv;` in constructor definitions).
 - **Nested Namespace tracking**: Fixed global declarations inside nested namespaces being declared without the namespace prefix by tracking nested namespaces in a global buffer `g_current_namespace` and prepending it to all top-level global declarations in `parse_program`.
+- **Pre-resolved Namespace Tags**: Inside namespaces, implicit class tag lookup (such as `NestedClass obj;`) initially failed because tags were registered with namespace prefixes. Resolved by modifying `is_type_token` and `parse_type` to dynamically search for namespace-prefixed tags when `g_current_namespace` is active.
+- **Boolean and Pointer Lexing**: Added surgical `true`, `false`, and `nullptr` matches directly inside `lex_ident` to cleanly map them to `TK_NUM` literals with correct values (`1`, `0`, and `0` respectively), preventing AST constant-folding crashes.

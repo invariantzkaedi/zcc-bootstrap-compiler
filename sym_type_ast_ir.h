@@ -218,6 +218,9 @@ typedef struct ZccTagTable ZccTagTable;
 struct StructField {
   char name[256];      /* ADAPT-5: StructField->name    */
   int offset;          /* ADAPT-5: StructField->offset  */
+  int is_bitfield;
+  int bit_offset;
+  int bit_size;
   struct Type *type;   /* ADAPT-5: StructField->type (ZCC uses type, not ty) */
   struct StructField *next; /* ADAPT-5: StructField->next    */
 };

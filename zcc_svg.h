@@ -27,6 +27,7 @@ unsigned char* base64_decode(const char* data, size_t input_length, size_t* outp
 char* svg_to_base64(ZccSvgNode* root);
 char* svg_to_data_uri(ZccSvgNode* root);
 char* svg_to_html_uri(ZccSvgNode* root);
+char* hexdump_to_ascii(const unsigned char* data, size_t len);
 
 /* Path Builder Utility */
 typedef struct SvgPathBuilder {
@@ -45,6 +46,7 @@ void svg_apply_path(ZccSvgNode* node, SvgPathBuilder* pb);
 struct ZCCNode;
 char* svg_render_ast(struct ZCCNode* root);
 char* svg_render_ast_html_uri(struct ZCCNode* root);
+char* zcc_ast_to_ascii(struct ZCCNode* root);
 
 /* Node Generators */
 ZccSvgNode* svg_animate(void);

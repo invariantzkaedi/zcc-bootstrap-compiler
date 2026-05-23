@@ -1,0 +1,16 @@
+ZCC RELEASE RECEIPT V2
+----------------------
+Registry ID:       05807bb6050924c1
+Registry SHA256:   05807bb6050924c1f85f3414ac83b7f0d3cf410655ffc357824c4693c7e426e5
+Manifest ID:       3352d053b83f2dc8
+Manifest SHA256:   3352d053b83f2dc8e6ad5da341bd51fee9dc4f57fd9fda90bb163579938358ef
+Link ID:           dbd45d2506b106df
+Link SHA256:       dbd45d2506b106dfd33a19019a00b54b692d1162fa36c07a6933f07f8df13887
+Binary ID:         b44180e60ad9aafe
+Binary SHA256:     b44180e60ad9aafe64a869745ef6446449fe77b7a7bd1911f163ab0e42f226fc
+Assembly Lines:    217738
+Opcode Pack Count: 2
+Git Commit:        c714b68d6e5cb13510cf7ba554a724a18cc1ccbc
+Build Timestamp:   2026-05-23T20:10:02Z
+Label:             ZCC-RC1-DETERMINISTIC-CANDIDATE
+Status:            verification automated (release candidate stage)

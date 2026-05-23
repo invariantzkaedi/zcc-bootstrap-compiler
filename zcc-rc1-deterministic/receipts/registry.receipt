@@ -1,0 +1,15 @@
+ZCC OPCODE REGISTRY RECEIPT V1
+------------------------------
+Pack 1 ID:         1
+Pack 1 Version:    1
+Pack 1 Opcode Start: 100
+Pack 1 Opcode End:   150
+Pack 1 Hash:       0xa5a5
+Pack 1 Status:     enabled
+
+Pack 2 ID:         2
+Pack 2 Version:    1
+Pack 2 Opcode Start: 200
+Pack 2 Opcode End:   250
+Pack 2 Hash:       0x5a5a
+Pack 2 Status:     enabled

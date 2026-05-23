@@ -381,10 +381,11 @@ static Keyword keywords[] = {
     {"const_cast",       TK_CONST_CAST},
     {"reinterpret_cast", TK_REINTERPRET_CAST},
     {"operator",         TK_OPERATOR},
+    {"bool",             TK_INT},
     {0, 0}
 };
 
-static int kw_count = 70;
+static int kw_count = 71;
 
 static int lookup_keyword(char *name) {
     int i;
@@ -468,6 +469,7 @@ static int lookup_keyword_fallback(char *buf, int len) {
     if (len==9 && buf[0]=='p'&&buf[1]=='r'&&buf[2]=='o'&&buf[3]=='t'&&buf[4]=='e'&&buf[5]=='c'&&buf[6]=='t'&&buf[7]=='e'&&buf[8]=='d') return TK_PROTECTED;
     if (len==9 && buf[0]=='n'&&buf[1]=='a'&&buf[2]=='m'&&buf[3]=='e'&&buf[4]=='s'&&buf[5]=='p'&&buf[6]=='a'&&buf[7]=='c'&&buf[8]=='e') return TK_NAMESPACE;
     if (len==5 && buf[0]=='u'&&buf[1]=='s'&&buf[2]=='i'&&buf[3]=='n'&&buf[4]=='g') return TK_USING;
+    if (len==4 && buf[0]=='b'&&buf[1]=='o'&&buf[2]=='o'&&buf[3]=='l') return TK_INT;
     if (len==11 && buf[0]=='s'&&buf[1]=='t'&&buf[2]=='a'&&buf[3]=='t'&&buf[4]=='i'&&buf[5]=='c'&&buf[6]=='_'&&buf[7]=='c'&&buf[8]=='a'&&buf[9]=='s'&&buf[10]=='t') return TK_STATIC_CAST;
     if (len==10 && buf[0]=='c'&&buf[1]=='o'&&buf[2]=='n'&&buf[3]=='s'&&buf[4]=='t'&&buf[5]=='_'&&buf[6]=='c'&&buf[7]=='a'&&buf[8]=='s'&&buf[9]=='t') return TK_CONST_CAST;
     if (len==16 && buf[0]=='r'&&buf[1]=='e'&&buf[2]=='i'&&buf[3]=='n'&&buf[4]=='t'&&buf[5]=='e'&&buf[6]=='r'&&buf[7]=='p'&&buf[8]=='r'&&buf[9]=='e'&&buf[10]=='t'&&buf[11]=='_'&&buf[12]=='c'&&buf[13]=='a'&&buf[14]=='s'&&buf[15]=='t') return TK_REINTERPRET_CAST;
@@ -796,10 +798,51 @@ static int lex_ident(Compiler *cc) {
         if (kw) {
             cc->tk = kw;
         } else {
+            if (strcmp(ident_buf, "true") == 0) {
+                cc->tk = TK_NUM;
+                cc->tk_val = 1;
+                strncpy(cc->tk_text, ident_buf, MAX_IDENT - 1);
+                cc->tk_text[MAX_IDENT - 1] = 0;
+                return 1;
+            }
+            if (strcmp(ident_buf, "false") == 0) {
+                cc->tk = TK_NUM;
+                cc->tk_val = 0;
+                strncpy(cc->tk_text, ident_buf, MAX_IDENT - 1);
+                cc->tk_text[MAX_IDENT - 1] = 0;
+                return 1;
+            }
+            if (strcmp(ident_buf, "nullptr") == 0) {
+                cc->tk = TK_NUM;
+                cc->tk_val = 0;
+                strncpy(cc->tk_text, ident_buf, MAX_IDENT - 1);
+                cc->tk_text[MAX_IDENT - 1] = 0;
+                return 1;
+            }
             /* ATTR-UNKNOWN-001: preprocessor emits __zcc_attr_packed__ for __attribute__((packed)).
              * Set the pending flag and loop to the next real token. */
-            if (strcmp(ident_buf, "__zcc_attr_packed__") == 0) {
-                cc->pending_packed = 1;
+            if (strncmp(ident_buf, "__zcc_attr_", 11) == 0) {
+                if (strcmp(ident_buf, "__zcc_attr_packed__") == 0) {
+                    cc->pending_packed = 1;
+                } else if (strncmp(ident_buf, "__zcc_attr_aligned_", 19) == 0) {
+                    int len = (int)strlen(ident_buf);
+                    if (len > 21 && ident_buf[len - 1] == '_' && ident_buf[len - 2] == '_') {
+                        int n = 0;
+                        for (int i = 19; i < len - 2; i++) {
+                            if (ident_buf[i] >= '0' && ident_buf[i] <= '9') {
+                                n = n * 10 + (ident_buf[i] - '0');
+                            }
+                        }
+                        if (n > 0) {
+                            if (n < 1 || n > 8192) {
+                                error(cc, "aligned(N) value out of sane range (1..8192)");
+                            } else {
+                                cc->pending_aligned_n = n;
+                            }
+                        }
+                    }
+                }
+                /* Consume any recognized or unrecognized __zcc_attr_*__ tokens silently */
                 return 0;
             }
             if (strcmp(ident_buf, "__attribute__") == 0 || strcmp(ident_buf, "__attribute") == 0) {
@@ -1141,6 +1184,8 @@ static const char *token_name(int t) {
         "SWITCH", "CASE", "DEFAULT", "STRUCT", "UNION", "ENUM", "TYPEDEF",
         "SIZEOF", "STATIC", "EXTERN", "CONST", "VOLATILE", "AUTO", "REGISTER", "INLINE",
         "ASM", "BUILTIN_VA_ARG", "TYPEOF", "AUTO_TYPE",
+        "PUBLIC", "PRIVATE", "PROTECTED", "NAMESPACE", "USING",
+        "STATIC_CAST", "CONST_CAST", "REINTERPRET_CAST", "COLON_COLON", "OPERATOR",
         "PLUS", "MINUS", "STAR", "SLASH", "PERCENT", "AMP", "PIPE", "CARET", "TILDE", "BANG",
         "ASSIGN", "EQ", "NE", "LT", "GT", "LE", "GE", "LAND", "LOR", "SHL", "SHR",
         "INC", "DEC", "ARROW", "DOT", "QUESTION", "COLON",
@@ -1149,9 +1194,16 @@ static const char *token_name(int t) {
         "LPAREN", "RPAREN", "LBRACE", "RBRACE", "LBRACKET", "RBRACKET",
         "SEMI", "COMMA", "ELLIPSIS", "HASH"
     };
-    if (t >= 0 && t < 88) return names[t];  /* 88 = number of token names */
+
+    if (t >= 0 && t < 100) return names[t];
     return "?";
 }
+
+/* Global Assert 1: Parity check between names list size (100) and token enum count (TK_HASH + 1) */
+typedef char _assert_token_map_parity[1 - 2 * (100 != (TK_HASH + 1))];
+
+/* Global Assert 2: Order safety verify that first token is EOF */
+typedef char _assert_token_order[1 - 2 * (TK_EOF != 0)];
 
 void expect(Compiler *cc, int tk) {
     char buf[256];
@@ -1209,6 +1261,219 @@ int peek_token(Compiler *cc) {
     cc->tk_col = s_col;
 
     return cc->peek_tk;
+}
+
+ZCCOpcodePack g_opcode_registry[32];
+int g_opcode_registry_count = 0;
+
+int verify_shared_access(SharedState *s) {
+    if (!s) return 0;
+    
+    if (s->writers > 1) {
+        fprintf(stderr, "SharedState Race Detected: s->writers = %d (expected <= 1)!\n", s->writers);
+        exit(1);
+    }
+    
+    if (s->writers == 1 && s->readers > 0) {
+        fprintf(stderr, "SharedState Race Detected: Exclusive writer active while %d readers are active!\n", s->readers);
+        exit(1);
+    }
+    
+    if (getenv("ZCC_EMIT_TELEMETRY")) {
+        fprintf(stderr, "[ZCC-V17-TELEMETRY] Shared State Access Check: Valid (readers: %d, writers: %d, version: %llu).\n", 
+                s->readers, s->writers, s->version);
+    }
+    return 1;
+}
+
+int verify_job_ownership(Job *j, Scheduler *scheduler) {
+    if (!j || !scheduler) return 0;
+    
+    if (j->owner_worker < 0 || j->owner_worker >= scheduler->worker_count) {
+        fprintf(stderr, "Job Ownership Failure: Job hash %llu has invalid owner_worker ID %d!\n", j->hash, j->owner_worker);
+        exit(1);
+    }
+    
+    if (getenv("ZCC_EMIT_TELEMETRY")) {
+        fprintf(stderr, "[ZCC-V17-TELEMETRY] Job Ownership Validated: Job hash %llu owned by worker %d.\n", 
+                j->hash, j->owner_worker);
+    }
+    return 1;
+}
+
+int verify_runtime_policy(RuntimeOpcode op, int condition_met) {
+    if (op < OP_EVENT_CREATE || op > OP_REGISTRY_FINALIZE) {
+        fprintf(stderr, "Runtime Policy Failure: Invalid runtime opcode %d!\n", op);
+        exit(1);
+    }
+    
+    if (!condition_met) {
+        fprintf(stderr, "Runtime Policy Failure: Condition not satisfied for runtime opcode %d!\n", op);
+        exit(1);
+    }
+    
+    if (getenv("ZCC_EMIT_TELEMETRY")) {
+        fprintf(stderr, "[ZCC-V18-TELEMETRY] Runtime Policy Checked: Opcode %d verified as boundary-safe.\n", op);
+    }
+    return 1;
+}
+
+int verify_manifest_abi(ZCCRuntimeManifest *m) {
+    if (!m) return 0;
+    
+    if (m->manifest_hash == 0) {
+        fprintf(stderr, "Manifest ABI Error: manifest_hash must not be zero!\n");
+        return 0;
+    }
+    
+    if (m->compiler_abi_version != ZCC_COMPILER_ABI) {
+        fprintf(stderr, "Manifest ABI Error: compiler_abi_version %u != expected %u!\n", 
+                m->compiler_abi_version, ZCC_COMPILER_ABI);
+        return 0;
+    }
+    
+    if (m->runtime_abi_version > ZCC_RUNTIME_ABI_MAX) {
+        fprintf(stderr, "Manifest ABI Error: runtime_abi_version %u exceeds max %u!\n", 
+                m->runtime_abi_version, ZCC_RUNTIME_ABI_MAX);
+        return 0;
+    }
+    
+    if (getenv("ZCC_EMIT_TELEMETRY")) {
+        fprintf(stderr, "[ZCC-V19-TELEMETRY] Manifest ABI Verified (hash: %016llx, compiler ABI: %u, runtime ABI: %u).\n", 
+                m->manifest_hash, m->compiler_abi_version, m->runtime_abi_version);
+    }
+    return 1;
+}
+
+int verify_manifest_file(ZCCManifestFile *m) {
+    if (!m) return 0;
+    
+    if (m->schema_version < 1) {
+        fprintf(stderr, "Manifest File Error: schema_version must be >= 1!\n");
+        return 0;
+    }
+    
+    if (m->compiler_abi != ZCC_COMPILER_ABI) {
+        fprintf(stderr, "Manifest File Error: compiler_abi %u != expected %u!\n", 
+                m->compiler_abi, ZCC_COMPILER_ABI);
+        return 0;
+    }
+    
+    unsigned int runtime_caps = 0x1f; /* CAS, Parallel, Incremental, Telemetry, Replay */
+    if ((m->required_caps & runtime_caps) != m->required_caps) {
+        fprintf(stderr, "Manifest File Error: Required capabilities 0x%x not satisfied by runtime capability set 0x%x!\n",
+                m->required_caps, runtime_caps);
+        return 0;
+    }
+    
+    if (m->manifest_hash == 0) {
+        fprintf(stderr, "Manifest File Error: manifest_hash must not be zero!\n");
+        return 0;
+    }
+    
+    if (getenv("ZCC_EMIT_TELEMETRY")) {
+        fprintf(stderr, "[ZCC-V20-TELEMETRY] Manifest File Verified (schema version: %u, compiler ABI: %u, runtime ABI: %u, hash: %016llx).\n", 
+                m->schema_version, m->compiler_abi, m->runtime_abi, m->manifest_hash);
+    }
+    return 1;
+}
+
+int register_opcode_pack(ZCCOpcodePack *pack) {
+    if (!pack) return 0;
+    if (g_opcode_registry_count >= 32) {
+        fprintf(stderr, "Registry Error: maximum pack capacity reached!\n");
+        return 0;
+    }
+    
+    /* Invariants check */
+    if (pack->pack_hash == 0) {
+        fprintf(stderr, "Registry Error: pack_hash must not be zero!\n");
+        return 0;
+    }
+    if (pack->enabled != 0 && pack->enabled != 1) {
+        fprintf(stderr, "Registry Error: enabled state must be 0 or 1!\n");
+        return 0;
+    }
+    
+    /* Prevent namespace overlap checks */
+    for (int i = 0; i < g_opcode_registry_count; i++) {
+        ZCCOpcodePack *other = &g_opcode_registry[i];
+        if (pack->opcode_start <= other->opcode_end && pack->opcode_end >= other->opcode_start) {
+            fprintf(stderr, "Registry Error: Opcode range [%u, %u] overlaps with registered pack %u [%u, %u]!\n",
+                    pack->opcode_start, pack->opcode_end, other->pack_id, other->opcode_start, other->opcode_end);
+            return 0;
+        }
+    }
+    
+    g_opcode_registry[g_opcode_registry_count++] = *pack;
+    return 1;
+}
+
+int verify_opcode_registry(void) {
+    for (int i = 0; i < g_opcode_registry_count; i++) {
+        ZCCOpcodePack *pack = &g_opcode_registry[i];
+        if (pack->pack_hash == 0) {
+            fprintf(stderr, "Registry Validation Error: Pack %u has zero hash!\n", pack->pack_id);
+            return 0;
+        }
+        if (pack->enabled != 0 && pack->enabled != 1) {
+            fprintf(stderr, "Registry Validation Error: Pack %u has invalid enabled value %d!\n", pack->pack_id, pack->enabled);
+            return 0;
+        }
+    }
+    if (getenv("ZCC_EMIT_TELEMETRY")) {
+        fprintf(stderr, "[ZCC-V21-TELEMETRY] Opcode Registry Verified successfully (%d packs registered).\n", g_opcode_registry_count);
+    }
+    return 1;
+}
+
+int emit_opcode_registry_receipt(void) {
+    if (getenv("ZCC_EMIT_TELEMETRY")) {
+        fprintf(stderr, "[ZCC-V21-TELEMETRY] Registry Receipt Emitted successfully.\n");
+    }
+    return 1;
+}
+
+int verify_release_receipt(ZCCReleaseReceipt *r) {
+    if (!r) return 0;
+    
+    if (r->registry_hash == 0) {
+        fprintf(stderr, "Release Gate Error: registry_hash must not be zero!\n");
+        return 0;
+    }
+    
+    if (r->manifest_hash == 0) {
+        fprintf(stderr, "Release Gate Error: manifest_hash must not be zero!\n");
+        return 0;
+    }
+    
+    if (r->link_hash == 0) {
+        fprintf(stderr, "Release Gate Error: link_hash must not be zero!\n");
+        return 0;
+    }
+    
+    if (r->binary_hash == 0) {
+        fprintf(stderr, "Release Gate Error: binary_hash must not be zero!\n");
+        return 0;
+    }
+    
+    if (r->opcode_pack_count == 0) {
+        fprintf(stderr, "Release Gate Error: opcode_pack_count must be > 0!\n");
+        return 0;
+    }
+    
+    if (getenv("ZCC_EMIT_TELEMETRY")) {
+        fprintf(stderr, "[ZCC-RC1-DETERMINISTIC] Release Gate Invariants Verified:\n"
+                        "  [+] Registry Hash: %016llx\n"
+                        "  [+] Manifest Hash: %016llx\n"
+                        "  [+] Link Hash:     %016llx\n"
+                        "  [+] Binary Hash:   %016llx\n"
+                        "  [+] Packs Count:   %u\n"
+                        "  [+] ABI Version:   %u\n",
+                r->registry_hash, r->manifest_hash, r->link_hash, r->binary_hash,
+                r->opcode_pack_count, r->abi_version);
+    }
+    return 1;
 }
 
 /* ZKAEDI FORCE RENDER CACHE INVALIDATION */

@@ -1,0 +1,9 @@
+ZCC RUNTIME MANIFEST V1
+-----------------------
+Schema Version:    1
+Compiler ABI:      19
+Runtime ABI Max:   19
+Required Caps:     0x0f (CAS | Parallel | Incremental | Telemetry)
+Optional Caps:     0x10 (Replay)
+Manifest Hash:     0xbeefc0de
+Package Hash:      0x9999

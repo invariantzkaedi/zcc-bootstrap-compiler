@@ -7,6 +7,10 @@ namespace Outer {
     namespace Inner {
         int target_val = 100;
     }
+    class NestedClass {
+    public:
+        int value;
+    };
 }
 
 using namespace Outer::Inner;
@@ -100,6 +104,25 @@ int main() {
         return 3;
     }
     printf("[PASS] C++ Cast (static_cast): got %d\n", value_32);
+
+    // Test 4: bool, true, false, nullptr
+    bool flag_t = true;
+    bool flag_f = false;
+    int* null_ptr = nullptr;
+    if (flag_t != 1 || flag_f != 0 || null_ptr != 0) {
+        printf("[FAIL] C++ bool/nullptr: expected true=1, false=0, nullptr=0, got true=%d, false=%d, nullptr=%p\n", flag_t, flag_f, (void*)null_ptr);
+        return 4;
+    }
+    printf("[PASS] C++ bool/nullptr: true=%d, false=%d, nullptr=%p\n", flag_t, flag_f, (void*)null_ptr);
+
+    // Test 5: Class inside namespace resolution
+    Outer::NestedClass nested_instance;
+    nested_instance.value = 123;
+    if (nested_instance.value != 123) {
+        printf("[FAIL] Class inside namespace: expected 123, got %d\n", nested_instance.value);
+        return 5;
+    }
+    printf("[PASS] Class inside namespace: got %d\n", nested_instance.value);
 
     printf("ALL C++ CAPABILITIES VERIFIED! EXITING WITH SUCCESS CODE 42.\n");
     return 42;

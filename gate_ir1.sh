@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Gate IR-1 — ZCC IR Bridge coverage check.
 set -u
-ZCC_DIR="${ZCC_DIR:-/mnt/g/zccMAIN/zcc}"
+ZCC_DIR="${ZCC_DIR:-$(cd "$(dirname "$0")" && pwd)}"
 ZCC="${ZCC_DIR}/zcc"
 OUT="${OUT:-/tmp/ir_gate1}"
 XFAIL_FILE="${ZCC_DIR}/gate_ir1_xfail.txt"
