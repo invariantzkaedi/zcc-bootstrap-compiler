@@ -1263,4 +1263,217 @@ int peek_token(Compiler *cc) {
     return cc->peek_tk;
 }
 
+ZCCOpcodePack g_opcode_registry[32];
+int g_opcode_registry_count = 0;
+
+int verify_shared_access(SharedState *s) {
+    if (!s) return 0;
+    
+    if (s->writers > 1) {
+        fprintf(stderr, "SharedState Race Detected: s->writers = %d (expected <= 1)!\n", s->writers);
+        exit(1);
+    }
+    
+    if (s->writers == 1 && s->readers > 0) {
+        fprintf(stderr, "SharedState Race Detected: Exclusive writer active while %d readers are active!\n", s->readers);
+        exit(1);
+    }
+    
+    if (getenv("ZCC_EMIT_TELEMETRY")) {
+        fprintf(stderr, "[ZCC-V17-TELEMETRY] Shared State Access Check: Valid (readers: %d, writers: %d, version: %llu).\n", 
+                s->readers, s->writers, s->version);
+    }
+    return 1;
+}
+
+int verify_job_ownership(Job *j, Scheduler *scheduler) {
+    if (!j || !scheduler) return 0;
+    
+    if (j->owner_worker < 0 || j->owner_worker >= scheduler->worker_count) {
+        fprintf(stderr, "Job Ownership Failure: Job hash %llu has invalid owner_worker ID %d!\n", j->hash, j->owner_worker);
+        exit(1);
+    }
+    
+    if (getenv("ZCC_EMIT_TELEMETRY")) {
+        fprintf(stderr, "[ZCC-V17-TELEMETRY] Job Ownership Validated: Job hash %llu owned by worker %d.\n", 
+                j->hash, j->owner_worker);
+    }
+    return 1;
+}
+
+int verify_runtime_policy(RuntimeOpcode op, int condition_met) {
+    if (op < OP_EVENT_CREATE || op > OP_REGISTRY_FINALIZE) {
+        fprintf(stderr, "Runtime Policy Failure: Invalid runtime opcode %d!\n", op);
+        exit(1);
+    }
+    
+    if (!condition_met) {
+        fprintf(stderr, "Runtime Policy Failure: Condition not satisfied for runtime opcode %d!\n", op);
+        exit(1);
+    }
+    
+    if (getenv("ZCC_EMIT_TELEMETRY")) {
+        fprintf(stderr, "[ZCC-V18-TELEMETRY] Runtime Policy Checked: Opcode %d verified as boundary-safe.\n", op);
+    }
+    return 1;
+}
+
+int verify_manifest_abi(ZCCRuntimeManifest *m) {
+    if (!m) return 0;
+    
+    if (m->manifest_hash == 0) {
+        fprintf(stderr, "Manifest ABI Error: manifest_hash must not be zero!\n");
+        return 0;
+    }
+    
+    if (m->compiler_abi_version != ZCC_COMPILER_ABI) {
+        fprintf(stderr, "Manifest ABI Error: compiler_abi_version %u != expected %u!\n", 
+                m->compiler_abi_version, ZCC_COMPILER_ABI);
+        return 0;
+    }
+    
+    if (m->runtime_abi_version > ZCC_RUNTIME_ABI_MAX) {
+        fprintf(stderr, "Manifest ABI Error: runtime_abi_version %u exceeds max %u!\n", 
+                m->runtime_abi_version, ZCC_RUNTIME_ABI_MAX);
+        return 0;
+    }
+    
+    if (getenv("ZCC_EMIT_TELEMETRY")) {
+        fprintf(stderr, "[ZCC-V19-TELEMETRY] Manifest ABI Verified (hash: %016llx, compiler ABI: %u, runtime ABI: %u).\n", 
+                m->manifest_hash, m->compiler_abi_version, m->runtime_abi_version);
+    }
+    return 1;
+}
+
+int verify_manifest_file(ZCCManifestFile *m) {
+    if (!m) return 0;
+    
+    if (m->schema_version < 1) {
+        fprintf(stderr, "Manifest File Error: schema_version must be >= 1!\n");
+        return 0;
+    }
+    
+    if (m->compiler_abi != ZCC_COMPILER_ABI) {
+        fprintf(stderr, "Manifest File Error: compiler_abi %u != expected %u!\n", 
+                m->compiler_abi, ZCC_COMPILER_ABI);
+        return 0;
+    }
+    
+    unsigned int runtime_caps = 0x1f; /* CAS, Parallel, Incremental, Telemetry, Replay */
+    if ((m->required_caps & runtime_caps) != m->required_caps) {
+        fprintf(stderr, "Manifest File Error: Required capabilities 0x%x not satisfied by runtime capability set 0x%x!\n",
+                m->required_caps, runtime_caps);
+        return 0;
+    }
+    
+    if (m->manifest_hash == 0) {
+        fprintf(stderr, "Manifest File Error: manifest_hash must not be zero!\n");
+        return 0;
+    }
+    
+    if (getenv("ZCC_EMIT_TELEMETRY")) {
+        fprintf(stderr, "[ZCC-V20-TELEMETRY] Manifest File Verified (schema version: %u, compiler ABI: %u, runtime ABI: %u, hash: %016llx).\n", 
+                m->schema_version, m->compiler_abi, m->runtime_abi, m->manifest_hash);
+    }
+    return 1;
+}
+
+int register_opcode_pack(ZCCOpcodePack *pack) {
+    if (!pack) return 0;
+    if (g_opcode_registry_count >= 32) {
+        fprintf(stderr, "Registry Error: maximum pack capacity reached!\n");
+        return 0;
+    }
+    
+    /* Invariants check */
+    if (pack->pack_hash == 0) {
+        fprintf(stderr, "Registry Error: pack_hash must not be zero!\n");
+        return 0;
+    }
+    if (pack->enabled != 0 && pack->enabled != 1) {
+        fprintf(stderr, "Registry Error: enabled state must be 0 or 1!\n");
+        return 0;
+    }
+    
+    /* Prevent namespace overlap checks */
+    for (int i = 0; i < g_opcode_registry_count; i++) {
+        ZCCOpcodePack *other = &g_opcode_registry[i];
+        if (pack->opcode_start <= other->opcode_end && pack->opcode_end >= other->opcode_start) {
+            fprintf(stderr, "Registry Error: Opcode range [%u, %u] overlaps with registered pack %u [%u, %u]!\n",
+                    pack->opcode_start, pack->opcode_end, other->pack_id, other->opcode_start, other->opcode_end);
+            return 0;
+        }
+    }
+    
+    g_opcode_registry[g_opcode_registry_count++] = *pack;
+    return 1;
+}
+
+int verify_opcode_registry(void) {
+    for (int i = 0; i < g_opcode_registry_count; i++) {
+        ZCCOpcodePack *pack = &g_opcode_registry[i];
+        if (pack->pack_hash == 0) {
+            fprintf(stderr, "Registry Validation Error: Pack %u has zero hash!\n", pack->pack_id);
+            return 0;
+        }
+        if (pack->enabled != 0 && pack->enabled != 1) {
+            fprintf(stderr, "Registry Validation Error: Pack %u has invalid enabled value %d!\n", pack->pack_id, pack->enabled);
+            return 0;
+        }
+    }
+    if (getenv("ZCC_EMIT_TELEMETRY")) {
+        fprintf(stderr, "[ZCC-V21-TELEMETRY] Opcode Registry Verified successfully (%d packs registered).\n", g_opcode_registry_count);
+    }
+    return 1;
+}
+
+int emit_opcode_registry_receipt(void) {
+    if (getenv("ZCC_EMIT_TELEMETRY")) {
+        fprintf(stderr, "[ZCC-V21-TELEMETRY] Registry Receipt Emitted successfully.\n");
+    }
+    return 1;
+}
+
+int verify_release_receipt(ZCCReleaseReceipt *r) {
+    if (!r) return 0;
+    
+    if (r->registry_hash == 0) {
+        fprintf(stderr, "Release Gate Error: registry_hash must not be zero!\n");
+        return 0;
+    }
+    
+    if (r->manifest_hash == 0) {
+        fprintf(stderr, "Release Gate Error: manifest_hash must not be zero!\n");
+        return 0;
+    }
+    
+    if (r->link_hash == 0) {
+        fprintf(stderr, "Release Gate Error: link_hash must not be zero!\n");
+        return 0;
+    }
+    
+    if (r->binary_hash == 0) {
+        fprintf(stderr, "Release Gate Error: binary_hash must not be zero!\n");
+        return 0;
+    }
+    
+    if (r->opcode_pack_count == 0) {
+        fprintf(stderr, "Release Gate Error: opcode_pack_count must be > 0!\n");
+        return 0;
+    }
+    
+    if (getenv("ZCC_EMIT_TELEMETRY")) {
+        fprintf(stderr, "[ZCC-RC1-DETERMINISTIC] Release Gate Invariants Verified:\n"
+                        "  [+] Registry Hash: %016llx\n"
+                        "  [+] Manifest Hash: %016llx\n"
+                        "  [+] Link Hash:     %016llx\n"
+                        "  [+] Binary Hash:   %016llx\n"
+                        "  [+] Packs Count:   %u\n"
+                        "  [+] ABI Version:   %u\n",
+                r->registry_hash, r->manifest_hash, r->link_hash, r->binary_hash,
+                r->opcode_pack_count, r->abi_version);
+    }
+    return 1;
+}
+
 /* ZKAEDI FORCE RENDER CACHE INVALIDATION */

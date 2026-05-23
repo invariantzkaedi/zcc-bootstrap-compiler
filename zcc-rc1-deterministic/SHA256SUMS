@@ -1,0 +1,6 @@
+0675e42f3960acc4d272553db5eec2a11ec4a3c82ad05bd4c983afe34aaa2066  ./RELEASE_NOTES.md
+b44180e60ad9aafe64a869745ef6446449fe77b7a7bd1911f163ab0e42f226fc  ./bin/zcc
+3352d053b83f2dc8e6ad5da341bd51fee9dc4f57fd9fda90bb163579938358ef  ./manifests/runtime.manifest
+dbd45d2506b106dfd33a19019a00b54b692d1162fa36c07a6933f07f8df13887  ./receipts/link.receipt
+05807bb6050924c1f85f3414ac83b7f0d3cf410655ffc357824c4693c7e426e5  ./receipts/registry.receipt
+592ba20403ebcbab4aa2848811131cedda99f13715a96d43879a3f629e0361ca  ./receipts/release.receipt

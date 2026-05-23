@@ -130,6 +130,655 @@ typedef enum {
     CLASS_MEMORY
 } abi_class_t;
 
+/* ─── Symbol hygiene / linkage (V8) ─── */
+typedef enum {
+    OP_SYMBOL_INTERN = 300,  /* start high to avoid ND_* or IR_* overlap */
+    OP_SYMBOL_DEDUP,
+    OP_SYMBOL_RENAME,
+    OP_SYMBOL_SCOPE,
+    OP_SYMBOL_VISIBILITY,
+    OP_SYMBOL_BIND,
+    OP_SYMBOL_VERSION,
+    OP_SYMBOL_ALIAS,
+    OP_SYMBOL_ANCHOR,
+    OP_SYMBOL_VERIFY,
+
+    /* Label / local symbol safety */
+    OP_LABEL_ALLOC,
+    OP_LABEL_BIND,
+    OP_LABEL_DEDUP,
+    OP_LABEL_NAMESPACE,
+    OP_LABEL_VERIFY,
+
+    /* Debug / DWARF symbols */
+    OP_DWARF_FILE_SCOPE,
+    OP_DWARF_LOC_BIND,
+    OP_DWARF_SYMBOL_MAP,
+    OP_DWARF_VERIFY,
+
+    /* Linker / object safety */
+    OP_EXTERN_SYMBOL,
+    OP_WEAK_SYMBOL,
+    OP_GLOBAL_SYMBOL,
+    OP_STATIC_SYMBOL,
+    OP_UNDEF_SYMBOL,
+    IR_RELOCATION_BIND,
+    IR_RELOCATION_VERIFY,
+
+    /* Symbol Opcode Pack V8 */
+    OP_SYMBOL_CREATE,
+    OP_SYMBOL_HASH,
+    OP_SYMBOL_CANONICALIZE,
+    OP_SYMBOL_UID,
+    OP_SYMBOL_FINGERPRINT,
+
+    OP_NAMESPACE_ENTER,
+    OP_NAMESPACE_EXIT,
+    OP_NAMESPACE_PUSH,
+    OP_NAMESPACE_POP,
+    OP_NAMESPACE_VERIFY,
+
+    OP_LABEL_CREATE,
+    OP_LABEL_ATTACH,
+    OP_LABEL_LOCK,
+    OP_LABEL_FALLTHROUGH,
+
+    OP_STAGE_SYMBOL,
+    OP_EMIT_SYMBOL_HASH,
+    OP_SYMBOL_PARITY,
+    OP_SYMBOL_RECEIPT,
+    OP_SYMBOL_DIFF_LOCK,
+
+    OP_SYMBOL_EXPORT,
+    OP_SYMBOL_IMPORT,
+    OP_SYMBOL_WEAK,
+    OP_SYMBOL_RELOC,
+    OP_SYMBOL_RESOLVE,
+
+    OP_SYMBOL_SNAPSHOT,
+    OP_SYMBOL_RESTORE,
+    OP_SYMBOL_AUDIT,
+    OP_SYMBOL_FAILURE,
+    OP_SYMBOL_RECOVER,
+
+    /* Symbol Opcode Pack V9 — Symbol Lifecycle Engine */
+    OP_SYMBOL_DECLARE,      /* declaration encountered */
+    OP_SYMBOL_DEFINE,       /* strong definition */
+    OP_SYMBOL_EXTERN,       /* external declaration */
+    OP_SYMBOL_COMPLETE,     /* symbol finalized */
+    OP_SYMBOL_MERGE,        /* merge declaration state */
+
+    OP_SYMBOL_OWNER,        /* owning scope/function/module */
+    OP_SYMBOL_STATE,        /* declaration state enum */
+    OP_SYMBOL_LOCK,         /* freeze symbol mutation */
+    OP_SYMBOL_COLLISION,    /* duplicate identifier event */
+    OP_SYMBOL_SHADOW,       /* lexical shadow marker */
+
+    OP_SCOPE_ENTER,
+    OP_SCOPE_EXIT,
+    OP_SCOPE_ATTACH,
+    OP_SCOPE_DETACH,
+    OP_SCOPE_VERIFY,
+
+    OP_LINK_RESOLVE,
+    OP_LINK_CONFLICT,
+    OP_LINK_WEAK_SELECT,
+    OP_LINK_IMPORT,
+    OP_LINK_EXPORT,
+
+    OP_SYMBOL_TIMELINE,
+    OP_SYMBOL_ROLLBACK,
+    OP_SYMBOL_PATCH,
+    OP_SYMBOL_VERIFY_V2,
+
+    /* Symbol Pack V10 — ABI + Relocation Layer */
+    OP_ABI_SYMBOL_CLASS,     /* function/object/tls/section/file */
+    OP_ABI_CALLING_CONV,     /* SysV / internal / variadic */
+    OP_ABI_VISIBILITY,       /* default/hidden/internal */
+    OP_ABI_BINDING,          /* local/global/weak */
+    OP_ABI_SIZE,             /* emitted symbol size */
+    OP_ABI_ALIGN,            /* required alignment */
+
+    OP_RELOC_CREATE,         /* create relocation request */
+    OP_RELOC_BIND,           /* bind relocation to symbol */
+    OP_RELOC_KIND,           /* pc-relative/absolute/got/plt */
+    OP_RELOC_RESOLVE,        /* resolve relocation */
+    OP_RELOC_VERIFY,         /* validate relocation target */
+
+    OP_SECTION_ENTER,        /* .text/.data/.bss/.rodata */
+    OP_SECTION_EXIT,
+    OP_SECTION_BIND_SYMBOL,  /* symbol belongs to section */
+    OP_SECTION_ALIGN,
+    OP_SECTION_VERIFY,
+
+    OP_SYMBOL_FINALIZE,      /* freeze symbol after codegen */
+    OP_SYMBOL_EMIT_SIZE,     /* emit .size metadata */
+    OP_SYMBOL_EMIT_TYPE,     /* emit .type metadata */
+    OP_SYMBOL_ABI_VERIFY,    /* final ABI symbol check */
+    OP_LINKAGE_RECEIPT,      /* forensic linkage proof */
+
+    /* Symbol Pack V11 — Object Emission Contracts */
+    OP_ELF_HEADER_VERIFY,     /* validate ELF class/arch/ABI */
+    OP_ELF_SECTION_TABLE,     /* section table ownership */
+    OP_ELF_SYMBOL_TABLE,      /* .symtab/.strtab emission */
+    OP_ELF_RELOC_TABLE,       /* .rela.text/.rela.data emission */
+    OP_ELF_SHDR_VERIFY,       /* section header validation */
+
+    OP_SYMBOL_TYPE_FUNC,      /* emit .type @function */
+    OP_SYMBOL_TYPE_OBJECT,    /* emit .type @object */
+    OP_SYMBOL_SIZE_BEGIN,     /* mark size start */
+    OP_SYMBOL_SIZE_END,       /* emit .size */
+    OP_SYMBOL_BOUNDARY_CHECK, /* ensure no overlap */
+
+    OP_RELOC_PC32,            /* RIP-relative relocation */
+    OP_RELOC_PLT32,           /* call relocation */
+    OP_RELOC_GOTPCREL,        /* GOT access */
+    OP_RELOC_ABS64,           /* absolute 64-bit */
+    OP_RELOC_RANGE_CHECK,     /* relocation range validator */
+
+    OP_TEXT_SECTION_LOCK,
+    OP_DATA_SECTION_LOCK,
+    OP_BSS_SECTION_LOCK,
+    OP_RODATA_SECTION_LOCK,
+    OP_SECTION_ORDER_VERIFY,
+
+    OP_OBJECT_HASH,
+    OP_SECTION_HASH,
+    OP_RELOC_HASH,
+    OP_SYMBOL_TABLE_HASH,
+    OP_OBJECT_RECEIPT,
+
+    /* Symbol Pack V12 — Link-Time Determinism */
+    OP_TU_CREATE,           /* create translation unit record */
+    OP_TU_HASH,             /* deterministic TU hash */
+    OP_TU_SYMBOL_INDEX,     /* per-TU symbol index */
+    OP_TU_SECTION_INDEX,    /* per-TU section map */
+    OP_TU_VERIFY,           /* validate TU metadata */
+
+    OP_LINK_GRAPH_CREATE,   /* symbol dependency graph */
+    OP_LINK_GRAPH_EDGE,     /* object/symbol dependency edge */
+    OP_LINK_ORDER_LOCK,     /* deterministic object order */
+    OP_LINK_DUP_CHECK,      /* duplicate strong symbol check */
+    OP_LINK_WEAK_RESOLVE,   /* weak/strong resolution */
+
+    OP_ARCHIVE_INDEX,       /* archive symbol table */
+    OP_ARCHIVE_MEMBER_HASH, /* member identity hash */
+    OP_ARCHIVE_ORDER_LOCK,  /* deterministic member order */
+    OP_ARCHIVE_EXTRACT,     /* selected member extraction */
+    OP_ARCHIVE_VERIFY,      /* validate archive resolution */
+
+    OP_BINARY_LAYOUT_HASH,
+    OP_FINAL_SYMBOL_HASH,
+    OP_FINAL_RELOC_HASH,
+    OP_FINAL_SECTION_HASH,
+    OP_LINK_RECEIPT_V2,
+
+    /* Symbol Pack V13 — Incremental Build Cache + TU Reuse */
+    OP_CACHE_LOOKUP,          /* query TU cache */
+    OP_CACHE_HIT,             /* cached TU accepted */
+    OP_CACHE_MISS,            /* rebuild required */
+    OP_CACHE_INVALIDATE,      /* invalidate stale TU */
+    OP_CACHE_RECEIPT,         /* emit cache proof */
+
+    OP_DEP_GRAPH_CREATE,      /* build include/symbol dependency graph */
+    OP_DEP_GRAPH_EDGE,        /* dependency edge */
+    OP_DEP_HASH,              /* dependency hash */
+    OP_DEP_VERIFY,            /* validate dependency state */
+    OP_DEP_DIRTY,             /* mark dependent TU dirty */
+
+    OP_SYMBOL_CACHE_BIND,     /* bind symbol to cached TU */
+    OP_SYMBOL_CACHE_VERIFY,   /* verify reused symbol identity */
+    OP_SYMBOL_CACHE_INVALID,  /* stale cached symbol */
+    OP_RELOC_CACHE_BIND,      /* reuse relocation metadata */
+    OP_SECTION_CACHE_BIND,    /* reuse section layout metadata */
+
+    OP_BUILD_GRAPH_HASH,      /* whole build graph hash */
+    OP_INCREMENTAL_RECEIPT,   /* incremental proof */
+    OP_CACHE_HIT_RATE,        /* telemetry */
+    OP_REBUILD_REASON,        /* forensic reason */
+    OP_CACHE_FINALIZE,        /* freeze cache result */
+
+    /* Symbol Pack V14 — Content Addressable Build Graph */
+    OP_CAS_CREATE,            /* create content-addressed object */
+    OP_CAS_HASH_NODE,         /* hash graph node */
+    OP_CAS_HASH_EDGE,         /* hash dependency edge */
+    OP_CAS_LOOKUP,            /* retrieve cached node */
+    OP_CAS_VERIFY,            /* validate content object */
+
+    OP_DIRTY_PROPAGATE,       /* propagate dirty state */
+    OP_DIRTY_STOP,            /* stop propagation */
+    OP_DEP_PRUNE,             /* remove dead edge */
+    OP_DEP_COLLAPSE,          /* merge equivalent subgraphs */
+    OP_DEP_RECEIPT,           /* dependency proof */
+
+    OP_BUILD_PLAN_CREATE,
+    OP_BUILD_PLAN_SORT,
+    OP_BUILD_PLAN_EXECUTE,
+    OP_BUILD_PLAN_VERIFY,
+    OP_BUILD_PLAN_RECEIPT,
+
+    /* Symbol Pack V15 — Persistent CAS Storage + Build Plan Execution */
+    OP_CAS_FILE_WRITE,        /* write CAS object to disk */
+    OP_CAS_FILE_READ,         /* load CAS object from disk */
+    OP_CAS_FILE_VERIFY,       /* validate disk CAS object */
+    OP_CAS_INDEX_WRITE,       /* persist CAS index */
+    OP_CAS_INDEX_READ,        /* load CAS index */
+
+    OP_BUILD_DAG_CREATE,      /* construct executable DAG */
+    OP_BUILD_DAG_EDGE,        /* add task dependency edge */
+    OP_BUILD_DAG_READY,       /* node ready to execute */
+    OP_BUILD_DAG_RUN,         /* execute node */
+    OP_BUILD_DAG_DONE,        /* node complete */
+
+    OP_DIRTY_NODE_MARK,       /* mark node dirty */
+    OP_DIRTY_EDGE_PROPAGATE,  /* propagate dirtiness */
+    OP_DIRTY_SUBTREE,         /* dirty all dependents */
+    OP_DIRTY_REASON,          /* record forensic cause */
+    OP_DIRTY_RECEIPT,         /* emit dirty proof */
+
+    OP_JOB_QUEUE_CREATE,
+    OP_JOB_ENQUEUE,
+    OP_JOB_DEQUEUE,
+    OP_JOB_COMPLETE,
+    OP_JOB_BARRIER,
+
+    OP_CAS_RECEIPT,
+    OP_BUILD_PLAN_HASH,
+    OP_BUILD_EXEC_HASH,
+    OP_BUILD_FINAL_RECEIPT,
+    OP_REPLAY_BUILD,
+
+    /* Symbol Pack V16 — Parallel Build Executor + Work Stealing */
+    OP_WORKER_CREATE,
+    OP_WORKER_SLEEP,
+    OP_WORKER_WAKE,
+    OP_DEP_READY,
+    OP_DEP_BLOCKED,
+    OP_DEP_COMPLETE,
+    OP_DEP_NOTIFY,
+    OP_DEP_RELEASE,
+
+    OP_SYNC_FENCE,
+    OP_SYNC_WAIT,
+    OP_SYNC_SIGNAL,
+    OP_SYNC_BARRIER,
+    OP_SYNC_VERIFY,
+
+    OP_EXEC_TIME,
+    OP_WORKER_LOAD,
+    OP_QUEUE_DEPTH,
+    OP_STEAL_COUNT,
+    OP_EXEC_RECEIPT,
+
+    /* Bonus V16.5 — Scheduler Safety + Cycle Proof Pack */
+    OP_DAG_TOPO_SORT,
+    OP_DAG_CYCLE_CHECK,
+    OP_DAG_ROOT_SET,
+    OP_DAG_LEAF_SET,
+    OP_DAG_LEVELIZE,
+
+    OP_WORK_STEAL_PROBE,
+    OP_WORK_STEAL_CLAIM,
+    OP_WORK_STEAL_FAIL,
+    OP_WORK_REBALANCE,
+    OP_WORK_STARVATION_GUARD,
+
+    OP_JOB_READY_RECEIPT,
+    OP_JOB_START_RECEIPT,
+    OP_JOB_DONE_RECEIPT,
+    OP_JOB_FAIL_RECEIPT,
+    OP_JOB_RETRY_RECEIPT,
+
+    OP_DETERMINISTIC_JOIN,
+    OP_RESULT_ORDER_LOCK,
+    OP_PARALLEL_HASH_MERGE,
+    OP_RACE_GUARD,
+    OP_PARALLEL_RECEIPT,
+
+    /* Bonus V17 — Memory Model + Lock-Free Execution Pack */
+    OP_ATOMIC_LOAD,
+    OP_ATOMIC_STORE,
+    OP_ATOMIC_EXCHANGE,
+    OP_ATOMIC_COMPARE_SWAP,
+    OP_ATOMIC_FETCH_ADD,
+
+    OP_MEMORY_ACQUIRE,
+    OP_MEMORY_RELEASE,
+    OP_MEMORY_ACQ_REL,
+    OP_MEMORY_SEQ_CST,
+    OP_MEMORY_RELAXED,
+
+    OP_QUEUE_ATOMIC_PUSH,
+    OP_QUEUE_ATOMIC_POP,
+    OP_QUEUE_HEAD_UPDATE,
+    OP_QUEUE_TAIL_UPDATE,
+    OP_QUEUE_VERIFY,
+
+    OP_HAZARD_CREATE,
+    OP_HAZARD_PROTECT,
+    OP_HAZARD_RELEASE,
+    OP_EPOCH_ADVANCE,
+    OP_GC_RETIRE,
+
+    OP_RACE_TRACK,
+    OP_RACE_VERIFY,
+    OP_SHARED_ACCESS,
+    OP_EXCLUSIVE_ACCESS,
+} ZCCSymbolOpcode;
+
+/* ================================================================ */
+/* Bonus V18 — Compiler Runtime Boundary Pack                       */
+/* ================================================================ */
+
+typedef enum {
+    /* Runtime event system */
+    OP_EVENT_CREATE,
+    OP_EVENT_EMIT,
+    OP_EVENT_SUBSCRIBE,
+    OP_EVENT_COMPLETE,
+    OP_EVENT_VERIFY,
+
+    /* Build-state snapshots */
+    OP_STATE_SAVE,
+    OP_STATE_LOAD,
+    OP_STATE_DIFF,
+    OP_STATE_MERGE,
+    OP_STATE_VERIFY_SNAP,
+
+    /* Runtime policy */
+    OP_POLICY_ATTACH,
+    OP_POLICY_DETACH,
+    OP_POLICY_EVALUATE,
+    OP_POLICY_OVERRIDE,
+    OP_POLICY_RECEIPT_POL,
+
+    /* Build execution receipts */
+    OP_EXEC_BEGIN,
+    OP_EXEC_END,
+    OP_EXEC_VERIFY_EXEC,
+    OP_EXEC_HASH,
+    OP_EXEC_AUDIT,
+
+    /* Bonus V19 — Compiler/Runtime Manifest ABI */
+    OP_MANIFEST_CREATE,
+    OP_MANIFEST_HASH,
+    OP_MANIFEST_VERSION,
+    OP_MANIFEST_COMPAT,
+    OP_MANIFEST_VERIFY,
+
+    OP_HANDSHAKE_BEGIN,
+    OP_HANDSHAKE_CAPABILITY,
+    OP_HANDSHAKE_POLICY,
+    OP_HANDSHAKE_ACCEPT,
+    OP_HANDSHAKE_REJECT,
+
+    OP_CAP_CAS,
+    OP_CAP_PARALLEL,
+    OP_CAP_INCREMENTAL,
+    OP_CAP_TELEMETRY,
+    OP_CAP_REPLAY,
+
+    OP_BOUNDARY_HASH,
+    OP_BOUNDARY_RECEIPT,
+    OP_BOUNDARY_AUDIT,
+    OP_BOUNDARY_REPLAY,
+    OP_BOUNDARY_FINALIZE,
+
+    /* Bonus V20 — Manifest Schema + Disk Handshake */
+    OP_MANIFEST_FILE_READ,
+    OP_MANIFEST_FILE_WRITE,
+    OP_MANIFEST_FILE_LOCK,
+    OP_MANIFEST_FILE_HASH,
+    OP_MANIFEST_FILE_VERIFY,
+
+    OP_SCHEMA_CREATE,
+    OP_SCHEMA_FIELD,
+    OP_SCHEMA_REQUIRED,
+    OP_SCHEMA_VERSION,
+    OP_SCHEMA_VERIFY,
+
+    OP_CAP_REQUIRE,
+    OP_CAP_OPTIONAL,
+    OP_CAP_NEGOTIATE,
+    OP_CAP_DENY,
+    OP_CAP_RECEIPT,
+
+    OP_COMPAT_MATRIX_CREATE,
+    OP_COMPAT_CHECK,
+    OP_COMPAT_DOWNGRADE,
+    OP_COMPAT_UPGRADE,
+    OP_COMPAT_RECEIPT,
+
+    OP_RUNTIME_PACKAGE_HASH,
+    OP_RUNTIME_PACKAGE_VERIFY,
+    OP_RUNTIME_PACKAGE_LOCK,
+    OP_RUNTIME_PACKAGE_AUDIT,
+    OP_RUNTIME_PACKAGE_RECEIPT,
+
+    /* Bonus V21 — Audit Compression + Versioned Registry */
+    OP_PACK_REGISTER,
+    OP_PACK_ENABLE,
+    OP_PACK_DISABLE,
+    OP_PACK_HASH,
+    OP_PACK_VERIFY,
+    OP_PACK_RECEIPT,
+    OP_REGISTRY_LOCK,
+    OP_REGISTRY_AUDIT,
+    OP_REGISTRY_REPLAY,
+    OP_REGISTRY_FINALIZE
+} RuntimeOpcode;
+
+#define ZCC_COMPILER_ABI 19
+#define ZCC_RUNTIME_ABI_MAX 19
+
+typedef struct {
+    unsigned long long manifest_hash;
+    unsigned int compiler_abi_version;
+    unsigned int runtime_abi_version;
+    unsigned int capabilities;
+    unsigned long long policy_hash;
+} ZCCRuntimeManifest;
+
+typedef struct {
+    unsigned int schema_version;
+    unsigned int compiler_abi;
+    unsigned int runtime_abi;
+    unsigned int required_caps;
+    unsigned int optional_caps;
+    unsigned long long manifest_hash;
+    unsigned long long package_hash;
+} ZCCManifestFile;
+
+typedef struct {
+    unsigned int pack_id;
+    unsigned int version;
+    unsigned int opcode_start;
+    unsigned int opcode_end;
+    unsigned long long pack_hash;
+    int enabled;
+} ZCCOpcodePack;
+
+typedef struct {
+    unsigned long long registry_hash;
+    unsigned long long manifest_hash;
+    unsigned long long link_hash;
+    unsigned long long binary_hash;
+    unsigned int opcode_pack_count;
+    unsigned int abi_version;
+} ZCCReleaseReceipt;
+
+typedef enum {
+    SYM_DECLARED,
+    SYM_DEFINED,
+    SYM_EXTERN,
+    SYM_COMPLETE
+} SymbolState;
+
+typedef enum {
+    SYM_KIND_FUNC,
+    SYM_KIND_OBJECT,
+    SYM_KIND_TLS,
+    SYM_KIND_SECTION,
+    SYM_KIND_FILE
+} SymbolKind;
+
+typedef enum {
+    SEC_NONE = 0,
+    SEC_TEXT = 1,
+    SEC_DATA = 2,
+    SEC_BSS = 3,
+    SEC_RODATA = 4,
+    SEC_STACK = 99
+} SectionID;
+
+typedef struct TranslationUnit TranslationUnit;
+typedef struct LinkGraphEdge LinkGraphEdge;
+typedef struct LinkGraph LinkGraph;
+typedef struct ArchiveMember ArchiveMember;
+typedef struct Archive Archive;
+typedef struct LinkReceiptV2 LinkReceiptV2;
+
+struct TranslationUnit {
+    char name[256];
+    unsigned long long hash;
+    unsigned int symbol_count;
+    unsigned int section_map[10];
+    unsigned long long symbol_hashes[512];
+};
+
+struct LinkGraphEdge {
+    char from_symbol[MAX_IDENT];
+    char to_symbol[MAX_IDENT];
+    int is_weak;
+};
+
+struct LinkGraph {
+    TranslationUnit tus[64];
+    int num_tus;
+    LinkGraphEdge edges[1024];
+    int num_edges;
+    int deterministic_order_locked;
+};
+
+struct ArchiveMember {
+    char name[256];
+    unsigned long long hash;
+    int order;
+};
+
+struct Archive {
+    char name[256];
+    ArchiveMember members[64];
+    int num_members;
+    unsigned long long symbol_table_hash;
+};
+
+struct LinkReceiptV2 {
+    unsigned long long tu_hash;
+    unsigned long long symbol_table_hash;
+    unsigned long long section_order_hash;
+    unsigned long long relocation_hash;
+    unsigned long long final_binary_hash;
+};
+
+typedef struct DependencyNode DependencyNode;
+typedef struct DependencyGraph DependencyGraph;
+typedef struct IncrementalCacheEntry IncrementalCacheEntry;
+typedef struct IncrementalCache IncrementalCache;
+
+struct DependencyNode {
+    char path[256];
+    unsigned long long mtime_or_hash;
+    int is_dirty;
+};
+
+struct DependencyGraph {
+    DependencyNode nodes[128];
+    int num_nodes;
+    unsigned long long accumulated_dep_hash;
+};
+
+struct IncrementalCacheEntry {
+    unsigned long long cache_key; /* Link Receipt V2 based hash key */
+    TranslationUnit tu;
+    unsigned long long dependency_hash;
+    int hit_count;
+    int is_valid;
+    struct IncrementalCacheEntry *next; /* next in bucket chain */
+};
+
+typedef struct CacheBucket CacheBucket;
+struct CacheBucket {
+    IncrementalCacheEntry *head;
+};
+
+struct IncrementalCache {
+    IncrementalCacheEntry entries[32];
+    int num_entries;
+    CacheBucket buckets[17]; /* CACHE_BUCKETS = 17 */
+    int cache_hits;
+    int cache_misses;
+};
+
+typedef struct CASEntry CASEntry;
+struct CASEntry {
+    unsigned long long hash;
+    unsigned int size;
+    char path[256];
+};
+
+typedef struct BuildDAGNode BuildDAGNode;
+struct BuildDAGNode {
+    char name[256];
+    int state; /* 0 = pending, 1 = ready, 2 = running, 3 = done */
+    unsigned long long input_hash;
+    unsigned long long output_hash;
+    int dependencies[8];
+    int num_dependencies;
+};
+
+typedef struct BuildDAG BuildDAG;
+struct BuildDAG {
+    BuildDAGNode nodes[32];
+    int num_nodes;
+    unsigned long long dag_hash;
+};
+
+typedef struct Job Job;
+struct Job {
+    unsigned long long hash;
+    int state;
+    int dep_count;
+    int owner_worker; /* V17 job ownership invariant */
+    struct Job *next;
+};
+
+typedef struct Worker Worker;
+struct Worker {
+    int id;
+    Job *local_queue;
+    unsigned long long completed;
+};
+
+typedef struct Scheduler Scheduler;
+struct Scheduler {
+    Worker workers[32];
+    int worker_count;
+};
+
+typedef struct SharedState SharedState;
+struct SharedState {
+    volatile unsigned long long version;
+    volatile int readers;
+    volatile int writers;
+};
+
+typedef struct HazardPtr HazardPtr;
+struct HazardPtr {
+    void *ptr;
+    unsigned long long epoch;
+};
+
 /* ================================================================ */
 /* FORWARD DECLARATIONS OF STRUCTS                                   */
 /* ================================================================ */
