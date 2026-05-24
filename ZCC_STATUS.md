@@ -1,11 +1,12 @@
 # ZCC Status Report
+
 Generated: 2026-04-28
 Generation 2 — supersedes generation 1 below
 
 ## Build Health (verified Apr 28, 2026)
 
 | Component | Status |
-|-----------|--------|
+| --------- | ------ |
 | AST Selfhost (zcc2.s == zcc3.s) | VERIFIED |
 | IR Backend | Operational (CG-IR-001 through CG-IR-022 all closed) |
 | IR Telemetry | Operational |
@@ -16,9 +17,9 @@ Generation 2 — supersedes generation 1 below
 
 ## Bootstrap Baselines (drift detectors)
 
-| Compiler config | md5(zcc2.s) | Notes |
-|-----------------|-------------|-------|
-| C-only (pre-rust merge) | bbe72c8e677d4270bca32db48897e956 | locked Apr 28 on main b69147d |
+| Compiler config            | md5(zcc2.s)                      | Notes                         |
+| -------------------------- | -------------------------------- | ----------------------------- |
+| C-only (pre-rust merge)    | bbe72c8e677d4270bca32db48897e956 | locked Apr 28 on main b69147d |
 | C + Rust v1 (current main) | a9d68cd228e2a34d508f849d7390ae9c | locked Apr 28 on main 15e2b2d |
 
 If a future bootstrap produces a different hash, either codegen drifted (regression) or new compilation units were added (intentional). Use this table as the first line of forensic defense.
@@ -66,35 +67,36 @@ If a future bootstrap produces a different hash, either codegen drifted (regress
 
 *The following section is preserved as-is from the previous status doc. Most claims here are now superseded — IR Backend went from FAILED to operational, and several milestones have landed since. Kept for forensic record.*
 
-# ZCC Status Report
+## ZCC Status Report (Historical)
+
 Generated: 2026-04-04 13:58:45 PDT
 
-## Build Health
+### Build Health (Historical)
 
 | Component | Status |
-|-----------|--------|
+| --------- | ------ |
 | AST Selfhost | VERIFIED (zcc2.s == zcc3.s) |
 | IR Backend | FAILED |
 | IR Functions | 176 compiled through IR |
 | Blacklist Hits | 0 |
 | IR Gate | ir_whitelisted() returns ? |
 
-## Source Sizes (as of generation 1)
+### Source Sizes (as of generation 1)
 
 | File | Lines |
-|------|-------|
+| ---- | ----- |
 | zcc_pp.c (concatenated) | 7792 |
 | part4.c (codegen) | 2635 |
 | compiler_passes.c (IR passes) | 7317 |
 | compiler_passes_ir.c (IR helpers) | 570 |
 
-## CG-IR Bug Fixes Applied (as of generation 1)
+### CG-IR Bug Fixes Applied (as of generation 1)
 
 CG-IR-005, CG-IR-008, CG-IR-009, CG-IR-011, CG-IR-012, CG-IR-013
 
 (Note: by generation 2, all of CG-IR-001 through CG-IR-022 are closed.)
 
-## Optimization Pass Stats (last IR run, generation 1)
+### Optimization Pass Stats (last IR run, generation 1)
 
 - [IR-Opts] Folded: 9 | S-Reduce: 2 | Copy-Prop: 0 | Peephole: 16
 - [RLE] redundant loads eliminated: 2
@@ -102,7 +104,7 @@ CG-IR-005, CG-IR-008, CG-IR-009, CG-IR-011, CG-IR-012, CG-IR-013
 - [EscapeAna] allocations promoted to stack: 12 (of 15 total)
 - [Mem2Reg] single-block allocas promoted: 11
 
-## Architecture (generation 1)
+### Architecture (generation 1)
 
 - Dual-emission: AST-direct (part4.c codegen_expr/codegen_stmt) plus IR backend (compiler_passes.c)
 - IR gate: ir_whitelisted() in part4.c controls which functions use IR
@@ -113,10 +115,10 @@ CG-IR-005, CG-IR-008, CG-IR-009, CG-IR-011, CG-IR-012, CG-IR-013
 - Environment: Windows + WSL, PowerShell -> wsl -e sh -c
 - Working dir: /mnt/h/__DOWNLOADS/selforglinux
 
-## Key Code Locations (generation 1)
+### Key Code Locations (generation 1)
 
 | What | File | Line(s) |
-|------|------|---------|
+| ---- | ---- | ------- |
 | ir_whitelisted gate | part4.c | ~1890 |
 | codegen_func | part4.c | ~1909 |
 | IR body entry | compiler_passes.c | zcc_run_passes_emit_body_pgo ~5394 |
@@ -127,11 +129,11 @@ CG-IR-005, CG-IR-008, CG-IR-009, CG-IR-011, CG-IR-012, CG-IR-013
 | IRAsmCtx struct | compiler_passes.c | ~4775 |
 | ir_asm_vreg_location | compiler_passes.c | ~4790 |
 
-## Known Issues (generation 1)
+### Known Issues (generation 1)
 
 - LICM pass is commented out in run_all_passes
 
-## Next Steps (suggested, generation 1)
+### Next Steps (suggested, generation 1)
 
 - Register allocation improvements (reduce spills)
 - Re-enable LICM pass
@@ -160,7 +162,7 @@ Bugs closed to achieve this:
 - Array parameter decay
 - ND_NEG: negative array initializers -> yyRuleInfoNRhs
 - struct-by-value Token ABI
-- __atomic_* inline
+- `__atomic_*` inline
 - cltq pointer corruption (8 sites)
 - __builtin_va_end linker
 - Makefile -no-pie

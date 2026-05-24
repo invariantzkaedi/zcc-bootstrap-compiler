@@ -18,7 +18,8 @@ COMPAT_SMOKE_SRCS = \
 	test_asm_real.c \
 	test_vla.c \
 	tests/test_abi.c \
-	tests/test_asm_real.c
+	tests/test_asm_real.c \
+	tests/regressions/t_zkaedi_rigging_regressions.c
 COMPAT_EXTENDED_SRCS = $(COMPAT_SMOKE_SRCS) raytracer.c
 
 .PHONY: all clean selfhost selfhost-fast compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test rust-front-smoke check-evm-lifter check-ir-vuln-tag check-forgezero-receipt
@@ -52,17 +53,22 @@ zcc_fast: zcc.c $(PASSES)
 	$(CC) $(FAST_CFLAGS) -o zcc_fast zcc.c $(PASSES) $(LDFLAGS)
 	@if [ "$(NO_STRIP)" != "1" ]; then strip --strip-all zcc_fast; fi
 
-selfhost: zcc
+zcc2: zcc zcc.c
 	@echo "=== Stage 1: zcc compiles itself -> zcc2 ==="
 	./zcc zcc.c -o zcc2
 	strip --strip-all zcc2
+
+zcc3: zcc2 zcc.c
 	@echo "=== Stage 2: zcc2 compiles itself -> zcc3 ==="
 	./zcc2 zcc.c -o zcc3
 	strip --strip-all zcc3
+
+selfhost: zcc3
 	@echo "=== Verify: zcc2.s == zcc3.s (codegen parity) ==="
 	./zcc  zcc.c -o zcc2.s
 	./zcc2 zcc.c -o zcc3.s
 	diff zcc2.s zcc3.s && echo "SELF-HOST VERIFIED (assembly identical)" || (echo "SELF-HOST FAILED (assembly diverged)"; diff zcc2.s zcc3.s | head -20; exit 1)
+
 
 selfhost-fast: zcc_fast
 	@echo "=== FAST Stage 1: zcc_fast compiles itself -> zcc2_fast ==="
@@ -394,7 +400,7 @@ ir-verify: zcc2
 	@echo "[IR-VERIFY] Stage 2 IR emission..."
 	ZCC_EMIT_IR=1 ./zcc2 zcc.c -o zcc_ir_stage2.s
 	@echo "[IR-VERIFY] Linking IR stage 2 binary..."
-	gcc zcc_ir_stage2.s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c -o zcc_ir_stage2 -lm
+	gcc zcc_ir_stage2.s $(PASSES) -o zcc_ir_stage2 -lm
 	@echo "[IR-VERIFY] Stage 3 via IR path..."
 	ZCC_EMIT_IR=1 ./zcc_ir_stage2 zcc.c -o zcc_ir_stage3.s
 

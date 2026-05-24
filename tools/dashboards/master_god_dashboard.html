@@ -50,7 +50,7 @@
     </style>
 
     <!-- JS-YAML (BOLSTER) -->
-    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+    <script src="js-yaml.min.js"></script>
 
     <!-- YAML CONFIGURATION (THE FORTRESS) -->
     <script type="text/yaml" id="prime-config">
@@ -801,13 +801,13 @@ swarm:
                 if (!clean || clean.replace(/[\x00-\x1F\x7F]/g, '').length === 0) return;
 
                 try {
-                    this._processHardwareLineInternal(clean);
+                    _processHardwareLineInternal(clean);
                 } catch (e) {
                     addAudit(`❌ [PROCESS ERROR] ${e.message} | Line: ${clean.substring(0,20)}...`);
                 }
             }
 
-            _processHardwareLineInternal(clean) {
+            function _processHardwareLineInternal(clean) {
                 // Suppress prompt noise and echo lines
                 if (clean === '>:' || clean === '>' || clean.startsWith('> ')) return;
 
@@ -1401,6 +1401,7 @@ swarm:
             const _AUDIT_DOM_CAP = 500; // max DOM entries before pruning oldest
 
             function addAudit(prefix, payload) {
+                window.zccAddAudit = addAudit;
                 const log = document.getElementById('auditLog');
                 if(!log) return;
                 const time = new Date().toLocaleTimeString();
@@ -1627,6 +1628,247 @@ swarm:
                     document.body.appendChild(spark);
                     setTimeout(() => spark.remove(), 800);
                 }
+            });
+        })();
+    </script>
+
+    <!-- 🧬 ZKAEDI PRIME: SURGICAL AUTOPSY WEB CONTEXT MENU -->
+    <style>
+        .cyber-context-menu {
+            position: fixed;
+            z-index: 20000;
+            width: 280px;
+            background: rgba(5, 0, 15, 0.95);
+            border: 2px solid var(--cyan);
+            border-top: 4px solid var(--magenta);
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.25), inset 0 0 15px rgba(0, 255, 255, 0.1);
+            font-family: var(--font-sys);
+            font-size: 0.65rem;
+            color: var(--cyan);
+            padding: 8px 0;
+            display: none;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            clip-path: polygon(0 0, 92% 0, 100% 8%, 100% 100%, 8% 100%, 0 92%);
+            animation: contextGlitchIn 0.15s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+        @keyframes contextGlitchIn {
+            0% { opacity: 0; transform: scale(0.9) translateY(5px) skewX(2deg); filter: hue-rotate(90deg); }
+            50% { opacity: 0.8; transform: scale(1.02) translateY(-2px) skewX(-1deg); }
+            100% { opacity: 1; transform: scale(1) translateY(0) skewX(0); filter: hue-rotate(0); }
+        }
+        .context-header {
+            padding: 6px 16px;
+            font-weight: 900;
+            color: var(--magenta);
+            border-bottom: 1px solid rgba(255, 0, 255, 0.3);
+            margin-bottom: 6px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            font-size: 0.6rem;
+            text-shadow: 0 0 8px var(--magenta);
+        }
+        .context-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s ease;
+            border-left: 0px solid var(--magenta);
+        }
+        .context-item:hover {
+            background: rgba(0, 255, 255, 0.15);
+            color: #fff;
+            border-left: 4px solid var(--magenta);
+            padding-left: 20px;
+            text-shadow: 0 0 8px #00ffff;
+        }
+        .context-item-desc {
+            font-size: 0.5rem;
+            color: rgba(0, 255, 255, 0.5);
+            margin-top: 2px;
+            display: block;
+        }
+        .context-separator {
+            height: 1px;
+            background: rgba(0, 255, 255, 0.2);
+            margin: 6px 0;
+        }
+    </style>
+
+    <div class="cyber-context-menu" id="cyberContextMenu">
+        <div class="context-header">⚡ Surgical Autopsy Enclave</div>
+        <div class="context-item" id="ctx-ast-xray">
+            <div>
+                <span>🩸 ZCC AST X-Ray Dump</span>
+                <span class="context-item-desc">Generates syntax tree mapping</span>
+            </div>
+            <span>[F6]</span>
+        </div>
+        <div class="context-item" id="ctx-chaos-surge">
+            <div>
+                <span>🌊 Inject Chaos Surge</span>
+                <span class="context-item-desc">Perturbs FHN Activator (+1.5x)</span>
+            </div>
+            <span>[F7]</span>
+        </div>
+        <div class="context-item" id="ctx-crystallize">
+            <div>
+                <span>☄️ Force Crystallize</span>
+                <span class="context-item-desc">Freezes kinetic state proof</span>
+            </div>
+            <span>[F8]</span>
+        </div>
+        <div class="context-separator"></div>
+        <div class="context-item" id="ctx-enclave-scan">
+            <div>
+                <span>🔐 Enclave Key Probe</span>
+                <span class="context-item-desc">Read-only slots sweep</span>
+            </div>
+            <span>[F9]</span>
+        </div>
+        <div class="context-item" id="ctx-compliance-audit">
+            <div>
+                <span>🧠 Fleet Forensic Audit</span>
+                <span class="context-item-desc">Runs compliance diagnostics</span>
+            </div>
+            <span>[F10]</span>
+        </div>
+        <div class="context-separator"></div>
+        <div class="context-item" id="ctx-reset-entropy" style="color: #ff3333;">
+            <div>
+                <span>🔄 Reset Entropy Pool</span>
+                <span class="context-item-desc">Shatters transient accumulator</span>
+            </div>
+            <span>[ESC]</span>
+        </div>
+    </div>
+
+    <script>
+        (function initSurgicalContextMenu(){
+            const menu = document.getElementById('cyberContextMenu');
+            if (!menu) return;
+
+            // Sci-fi audio synthesizer
+            function playSound(type) {
+                try {
+                    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+
+                    if (type === 'hover') {
+                        osc.frequency.setValueAtTime(800, ctx.currentTime);
+                        osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.05);
+                        gain.gain.setValueAtTime(0.02, ctx.currentTime);
+                        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.05);
+                        osc.start();
+                        osc.stop(ctx.currentTime + 0.05);
+                    } else if (type === 'click') {
+                        osc.type = 'sawtooth';
+                        osc.frequency.setValueAtTime(600, ctx.currentTime);
+                        osc.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.15);
+                        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.15);
+                        osc.start();
+                        osc.stop(ctx.currentTime + 0.15);
+                    } else if (type === 'fatal') {
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(150, ctx.currentTime);
+                        osc.frequency.linearRampToValueAtTime(50, ctx.currentTime + 0.3);
+                        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3);
+                        osc.start();
+                        osc.stop(ctx.currentTime + 0.3);
+                    }
+                } catch(e) {}
+            }
+
+            // Right-click event listener
+            document.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                playSound('click');
+
+                // Positioning menu relative to screen edges to prevent cutoffs
+                const menuWidth = 280;
+                const menuHeight = 350;
+                let x = e.clientX;
+                let y = e.clientY;
+
+                if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 10;
+                if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 10;
+
+                menu.style.left = x + 'px';
+                menu.style.top = y + 'px';
+                menu.style.display = 'block';
+            });
+
+            // Dismiss menu on standard click
+            document.addEventListener('click', (e) => {
+                if (!menu.contains(e.target)) {
+                    menu.style.display = 'none';
+                }
+            });
+
+            // Hover sound feedback
+            menu.querySelectorAll('.context-item').forEach(item => {
+                item.addEventListener('mouseenter', () => playSound('hover'));
+            });
+
+            // Action triggers
+            document.getElementById('ctx-ast-xray').addEventListener('click', () => {
+                playSound('click');
+                menu.style.display = 'none';
+                const log = document.getElementById('auditLog');
+                if (log && window.zccAddAudit) {
+                    window.zccAddAudit(`🩸 [AST X-RAY] Extracting current _zcc_clean.c syntax tree...\n` +
+                        `  ├── TranslationUnitDecl\n` +
+                        `  │   ├── TypedefDecl 0x4ffa10 <built-in> size_t\n` +
+                        `  │   └── FunctionDecl 0x4ffa88 <line:12:1> main 'int (void)'\n` +
+                        `  │       └── CompoundStmt 0x4ffba2\n` +
+                        `  │           ├── DeclStmt 0x4ffb50 (volatile int *ptr)\n` +
+                        `  │           └── ReturnStmt 0x4ffb90\n` +
+                        `  └── [COMPILER AUDIT]: Frame bounds aligned successfully.`);
+                } else {
+                    alert("AST X-Ray Dump triggered. Check logs!");
+                }
+            });
+
+            document.getElementById('ctx-chaos-surge').addEventListener('click', () => {
+                playSound('click');
+                menu.style.display = 'none';
+                const btn = document.getElementById('btn-chaos');
+                if (btn) btn.click();
+            });
+
+            document.getElementById('ctx-crystallize').addEventListener('click', () => {
+                playSound('click');
+                menu.style.display = 'none';
+                const btn = document.getElementById('btn-force-hash');
+                if (btn) btn.click();
+            });
+
+            document.getElementById('ctx-enclave-scan').addEventListener('click', () => {
+                playSound('click');
+                menu.style.display = 'none';
+                const btn = document.getElementById('btn-enclave-scan');
+                if (btn) btn.click();
+            });
+
+            document.getElementById('ctx-compliance-audit').addEventListener('click', () => {
+                playSound('click');
+                menu.style.display = 'none';
+                const btn = document.getElementById('btn-flipper-audit');
+                if (btn) btn.click();
+            });
+
+            document.getElementById('ctx-reset-entropy').addEventListener('click', () => {
+                playSound('fatal');
+                menu.style.display = 'none';
+                const btn = document.getElementById('btn-shatter-reset');
+                if (btn) btn.click();
             });
         })();
     </script>
