@@ -71,13 +71,8 @@ struct FHNSolverState {
     float time;
 };
 
-// Step FitzHugh-Nagumo solver per bone using sub-stepping
-void StepFHNSolver(FHNSolverState& s, float dt, int boneCount) {
-    const float epsilon = 0.08f;
-    const float alpha = 0.7f;
-    const float beta = 0.8f;
-    const float I_ext = 0.5f;
-
+// Step FitzHugh-Nagumo solver per bone using sub-stepping with dynamic overrides
+void StepFHNSolver(FHNSolverState& s, float dt, int boneCount, float epsilon = 0.08f, float alpha = 0.7f, float beta = 0.8f, float I_ext = 0.5f) {
     const int substeps = 16;
     const float h = dt / substeps;
 
@@ -209,6 +204,11 @@ struct FleetAsset {
     std::string hash;
     std::string physicalPath;
     bool hasSkeletalData = false;
+    float pcaX = 0.0f;
+    float pcaY = 0.0f;
+    float pcaZ = 0.0f;
+    float energyState = 0.0f;
+    bool hasManifoldData = false;
 };
 
 std::vector<FleetAsset> g_fleet;
@@ -485,6 +485,120 @@ void IngestFleetManifest() {
 
     LogOutput("[Manifest] Loaded " + std::to_string(g_fleet.size()) + " total browseable models (" + 
               std::to_string(extraCount) + " unique unmapped premium extras appended).");
+
+    // Integrate solved dynamic animation manifold coordinates per asset!
+    extern void LoadManifoldData();
+    LoadManifoldData();
+}
+
+void LoadManifoldData() {
+    std::ifstream file("zkaedi_animation_manifold.json");
+    if (!file.is_open()) {
+        LogOutput("[Manifold] zkaedi_animation_manifold.json not found. Procedural defaults will be active.");
+        return;
+    }
+
+    std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    file.close();
+
+    LogOutput("[Manifold] Read zkaedi_animation_manifold.json: " + std::to_string(content.length()) + " characters.");
+
+    // Create a lowercase version of the manifold content for case-insensitive matches
+    std::string contentLower = content;
+    for (char& c : contentLower) {
+        c = (char)std::tolower((unsigned char)c);
+    }
+
+    int matchedCount = 0;
+    for (auto& asset : g_fleet) {
+        // Extract the filename from the physicalPath
+        size_t lastSlash = asset.physicalPath.find_last_of("\\/");
+        std::string filename = (lastSlash == std::string::npos) ? asset.physicalPath : asset.physicalPath.substr(lastSlash + 1);
+
+        std::string filenameLower = filename;
+        for (char& c : filenameLower) {
+            c = (char)std::tolower((unsigned char)c);
+        }
+
+        // Trim trailing carriage returns, whitespace, or control characters from filenameLower
+        while (!filenameLower.empty() && ((unsigned char)filenameLower.back() <= 32)) {
+            filenameLower.pop_back();
+        }
+
+        // Search directly for the unique filename lower in the lowercase json block
+        size_t idPos = contentLower.find(filenameLower);
+
+        if (idPos != std::string::npos) {
+            // Find the energy_state field starting from idPos
+            size_t energyPos = contentLower.find("\"energy_state\":", idPos);
+            if (energyPos != std::string::npos) {
+                size_t energyValStart = energyPos + 15;
+                size_t energyValEnd = contentLower.find_first_of(",\r\n", energyValStart);
+                if (energyValEnd != std::string::npos) {
+                    try {
+                        std::string energyStr = content.substr(energyValStart, energyValEnd - energyValStart);
+                        // Helper to trim JSON delimiters and whitespace
+                        auto TrimJSONStrSimple = [](std::string s) {
+                            while (!s.empty() && (s.back() == ',' || s.back() == ']' || s.back() == '}' || (unsigned char)s.back() <= 32)) {
+                                s.pop_back();
+                            }
+                            while (!s.empty() && ((unsigned char)s.front() <= 32)) {
+                                s.erase(s.begin());
+                            }
+                            return s;
+                        };
+                        energyStr = TrimJSONStrSimple(energyStr);
+                        asset.energyState = std::stof(energyStr);
+                    } catch (...) {}
+                }
+            }
+
+            // Find position array starting from idPos
+            size_t posArrayPos = contentLower.find("\"position\":", idPos);
+            if (posArrayPos != std::string::npos) {
+                // Find start of values (skip colon, brackets, spaces, newlines)
+                size_t val1Start = contentLower.find_first_not_of(" \t\r\n:[,", posArrayPos + 11);
+                size_t val1End = contentLower.find_first_of(",\r\n", val1Start);
+                size_t val2Start = contentLower.find_first_not_of(" \t\r\n,", val1End);
+                size_t val2End = contentLower.find_first_of(",\r\n", val2Start);
+                size_t val3Start = contentLower.find_first_not_of(" \t\r\n,", val2End);
+                size_t val3End = contentLower.find_first_of("]\r\n", val3Start);
+
+                if (val1Start != std::string::npos && val1End != std::string::npos && 
+                    val2Start != std::string::npos && val2End != std::string::npos && 
+                    val3Start != std::string::npos && val3End != std::string::npos) {
+                    try {
+                        std::string v1 = content.substr(val1Start, val1End - val1Start);
+                        std::string v2 = content.substr(val2Start, val2End - val2Start);
+                        std::string v3 = content.substr(val3Start, val3End - val3Start);
+
+                        // Helper to trim JSON delimiters and whitespace
+                        auto TrimJSONStr = [](std::string s) {
+                            while (!s.empty() && (s.back() == ',' || s.back() == ']' || s.back() == '}' || (unsigned char)s.back() <= 32)) {
+                                s.pop_back();
+                            }
+                            while (!s.empty() && ((unsigned char)s.front() <= 32 || s.front() == '[')) {
+                                s.erase(s.begin());
+                            }
+                            return s;
+                        };
+
+                        v1 = TrimJSONStr(v1);
+                        v2 = TrimJSONStr(v2);
+                        v3 = TrimJSONStr(v3);
+
+                        asset.pcaX = std::stof(v1);
+                        asset.pcaY = std::stof(v2);
+                        asset.pcaZ = std::stof(v3);
+                        asset.hasManifoldData = true;
+                        matchedCount++;
+                    } catch (...) {}
+                }
+            }
+        }
+    }
+
+    LogOutput("[Manifold] Successfully integrated topological coordinates for " + std::to_string(matchedCount) + " / " + std::to_string(g_fleet.size()) + " fleet assets.");
 }
 
 // Helper to log errors
@@ -1148,37 +1262,49 @@ bool LoadGLBGeometry(D3D12Context* ctx, const std::string& filepath) {
     }
 
     // 5. Traverse meshes to identify accessors and set up GPU Buffer Views
-    cgltf_accessor* posAccessor = nullptr;
-    cgltf_accessor* normAccessor = nullptr;
-    cgltf_accessor* uvAccessor = nullptr;
+    // Two-pass first-wins: prefer the first rigged primitive (pass 0),
+    // fall back to first valid static primitive (pass 1).
+    // Prevents trailing static LOD/outline primitives from clobbering joint data.
+    cgltf_accessor* posAccessor     = nullptr;
+    cgltf_accessor* normAccessor    = nullptr;
+    cgltf_accessor* uvAccessor      = nullptr;
     cgltf_accessor* indicesAccessor = nullptr;
-    cgltf_accessor* jointsAccessor = nullptr;
+    cgltf_accessor* jointsAccessor  = nullptr;
     cgltf_accessor* weightsAccessor = nullptr;
 
-    for (cgltf_size i = 0; i < data->meshes_count; ++i) {
-        cgltf_mesh& mesh = data->meshes[i];
-        for (cgltf_size j = 0; j < mesh.primitives_count; ++j) {
-            cgltf_primitive& prim = mesh.primitives[j];
-            if (prim.type != cgltf_primitive_type_triangles) continue;
+    for (int pass = 0; pass < 2 && !indicesAccessor; ++pass) {
+        bool requireJoints = (pass == 0);
+        for (cgltf_size i = 0; i < data->meshes_count; ++i) {
+            cgltf_mesh& mesh = data->meshes[i];
+            for (cgltf_size j = 0; j < mesh.primitives_count; ++j) {
+                cgltf_primitive& prim = mesh.primitives[j];
+                if (prim.type != cgltf_primitive_type_triangles || !prim.indices)
+                    continue;
 
-            indicesAccessor = prim.indices;
-
-            for (cgltf_size k = 0; k < prim.attributes_count; ++k) {
-                cgltf_attribute& attr = prim.attributes[k];
-                if (attr.type == cgltf_attribute_type_position) {
-                    posAccessor = attr.data;
-                } else if (attr.type == cgltf_attribute_type_normal) {
-                    normAccessor = attr.data;
-                } else if (attr.type == cgltf_attribute_type_texcoord) {
-                    uvAccessor = attr.data;
-                } else if (attr.type == cgltf_attribute_type_joints) {
-                    jointsAccessor = attr.data;
-                } else if (attr.type == cgltf_attribute_type_weights) {
-                    weightsAccessor = attr.data;
+                cgltf_accessor *p=nullptr, *n=nullptr, *u=nullptr, *ji=nullptr, *w=nullptr;
+                for (cgltf_size k = 0; k < prim.attributes_count; ++k) {
+                    cgltf_attribute& attr = prim.attributes[k];
+                    if      (attr.type == cgltf_attribute_type_position) p  = attr.data;
+                    else if (attr.type == cgltf_attribute_type_normal)   n  = attr.data;
+                    else if (attr.type == cgltf_attribute_type_texcoord) u  = attr.data;
+                    else if (attr.type == cgltf_attribute_type_joints)   ji = attr.data;
+                    else if (attr.type == cgltf_attribute_type_weights)  w  = attr.data;
                 }
+
+                if (!p) continue;                          // position required
+                if (requireJoints && (!ji || !w)) continue; // pass 0: must have rig
+
+                posAccessor     = p;
+                normAccessor    = n;
+                uvAccessor      = u;
+                indicesAccessor = prim.indices;
+                jointsAccessor  = ji;
+                weightsAccessor = w;
+                goto primitive_found;
             }
         }
     }
+primitive_found:;
 
     if (!posAccessor || !indicesAccessor) {
         LogError("GLB file does not contain necessary POSITION or INDEX buffers.");
@@ -2137,29 +2263,57 @@ void RenderFrame(D3D12Context* ctx) {
         isSkinned = g_fleet[g_activeAssetIndex].hasSkeletalData;
     }
 
-    // Step FHN and map matrices to the upload buffer
+    // Step FHN every frame:
+    //   isSkinned  → drives per-bone joint matrices
+    //   !isSkinned → drives world-space oscillation on static meshes
+    {
+        int fhnBones = (isSkinned && ctx->activeBoneCount > 0) ? ctx->activeBoneCount : 1;
+
+        // Dynamically modulate FHN properties based on converged manifold values!
+        float epsilon = 0.08f;
+        float alpha   = 0.7f;
+        float beta    = 0.8f;
+        float I_ext   = 0.5f;
+
+        if (!g_fleet.empty() && g_activeAssetIndex >= 0 && g_activeAssetIndex < (int)g_fleet.size()) {
+            const auto& asset = g_fleet[g_activeAssetIndex];
+            if (asset.hasManifoldData) {
+                // PCA X modulates the time-scale epsilon (higher coordinate -> faster recovery)
+                // Normalize PCA coordinates which are scaled [-10, 10]
+                float normX = (asset.pcaX + 10.0f) / 20.0f; // [0, 1]
+                epsilon = 0.03f + 0.12f * normX;
+
+                // PCA Y modulates alpha (shifts the resting potential)
+                float normY = (asset.pcaY + 10.0f) / 20.0f;
+                alpha = 0.4f + 0.6f * normY;
+
+                // EnergyState modulates the external stimulation current I_ext
+                // Hubs (low negative energy e.g. -250) get a very steady current,
+                // while peripheral high-energy boundaries get irregular/higher current.
+                float normEnergy = std::abs(asset.energyState) / 300.0f; // approx [0, 1]
+                if (normEnergy > 1.0f) normEnergy = 1.0f;
+                I_ext = 0.3f + 0.4f * (1.0f - normEnergy);
+            }
+        }
+
+        StepFHNSolver(ctx->fhnState, 0.016f, fhnBones, epsilon, alpha, beta, I_ext);
+    }
+
     if (isSkinned) {
         static int lastActiveIndex = -1;
         if (g_activeAssetIndex != lastActiveIndex) {
             lastActiveIndex = g_activeAssetIndex;
-            LogOutput("[Render] Active asset has skeletal data. Routing via SM6.0 skinned pipeline (Format: " 
-                      + std::string(ctx->jointsUseU16 ? "UINT16" : "UINT8") 
+            LogOutput("[Render] Active asset has skeletal data. Routing via SM6.0 skinned pipeline (Format: "
+                      + std::string(ctx->jointsUseU16 ? "UINT16" : "UINT8")
                       + " | Active Bones: " + std::to_string(ctx->activeBoneCount) + ").");
         }
-        StepFHNSolver(ctx->fhnState, 0.016f, ctx->activeBoneCount);
         ZkaediJointTransform* mappedJoints = (ZkaediJointTransform*)ctx->skinningBufferMapped;
         BuildJointMatricesFromFHN(ctx->fhnState, mappedJoints, ctx->activeBoneCount);
 
-        // Update the metadata constant buffer (b1) dynamically with the active bone count!
-        struct SkinningConstants {
-            uint32_t BoneCount;
-            float pad[3];
-        };
+        struct SkinningConstants { uint32_t BoneCount; float pad[3]; };
         SkinningConstants* cbufData = (SkinningConstants*)ctx->skinningCbufferMapped;
         cbufData->BoneCount = ctx->activeBoneCount;
-        cbufData->pad[0] = 0.0f;
-        cbufData->pad[1] = 0.0f;
-        cbufData->pad[2] = 0.0f;
+        cbufData->pad[0] = cbufData->pad[1] = cbufData->pad[2] = 0.0f;
     }
 
     // 1. Reset Direct Command Allocator & Command List
@@ -2211,7 +2365,34 @@ void RenderFrame(D3D12Context* ctx) {
     XMMATRIX view = XMMatrixLookAtLH(eye, focus, up);
     XMMATRIX proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)ctx->width / (float)ctx->height, 0.01f, 1000.0f);
     
-    XMMATRIX world = XMMatrixIdentity();
+    XMMATRIX world;
+    if (isSkinned) {
+        // Skinned: world stays identity — bone matrices handle all deformation
+        world = XMMatrixIdentity();
+    } else {
+        // Static mesh: FHN membrane potential drives a world-space oscillation.
+        // v[0] is the single-oscillator output stepped above.
+        // Slow Y-spin + subtle Z-tilt makes every static asset visibly alive.
+        float spinRate = 0.25f;
+        float maxTilt  = 0.08f;
+
+        if (!g_fleet.empty() && g_activeAssetIndex >= 0 && g_activeAssetIndex < (int)g_fleet.size()) {
+            const auto& asset = g_fleet[g_activeAssetIndex];
+            if (asset.hasManifoldData) {
+                // PCA Z modulates the max tilt angle
+                float normZ = (asset.pcaZ + 10.0f) / 20.0f; // [0, 1]
+                maxTilt = 0.02f + 0.12f * normZ;
+
+                // PCA Y modulates the base spin speed
+                float normY = (asset.pcaY + 10.0f) / 20.0f;
+                spinRate = 0.05f + 0.4f * normY;
+            }
+        }
+
+        float spin = ctx->fhnState.time * spinRate;
+        float tilt = ctx->fhnState.v[0] * maxTilt;
+        world = XMMatrixRotationY(spin) * XMMatrixRotationZ(tilt);
+    }
 
     // D3D12 expects transposed matrices in constant buffers for column-major HLSL multiplications
     SceneConstantBuffer cbData = {};
