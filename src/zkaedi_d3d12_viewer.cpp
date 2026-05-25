@@ -340,7 +340,7 @@ void IngestFleetManifest() {
     };
     std::vector<PhysicalInfo> physicalInfos;
     for (const auto& wpath : physicalPaths) {
-        std::string pathNarrow(wpath.begin(), wpath.end());
+        std::string pathNarrow = Utf16ToUtf8(wpath);
         size_t lastSlash = pathNarrow.find_last_of("\\/");
         std::string filename = (lastSlash == std::string::npos) ? pathNarrow : pathNarrow.substr(lastSlash + 1);
         std::string filenameLower = filename;
