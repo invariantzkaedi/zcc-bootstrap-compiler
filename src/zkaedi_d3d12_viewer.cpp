@@ -331,6 +331,7 @@ bool GLBHasSkeletalData(const std::string& path) {
 }
 
 // Ingest manifest and match files
+void LoadManifoldData();
 void IngestFleetManifest() {
     std::vector<std::wstring> physicalPaths;
     FindGLBFilesInDir(L"E:\\3D_GOOD", physicalPaths);
@@ -487,7 +488,6 @@ void IngestFleetManifest() {
               std::to_string(extraCount) + " unique unmapped premium extras appended).");
 
     // Integrate solved dynamic animation manifold coordinates per asset!
-    extern void LoadManifoldData();
     LoadManifoldData();
 }
 
