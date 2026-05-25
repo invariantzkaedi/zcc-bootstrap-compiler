@@ -22,6 +22,13 @@
 #define CGLTF_IMPLEMENTATION
 #include "cgltf.h"
 
+// stb_image — single-header PNG/JPEG decoder for embedded GLB textures
+#define STB_IMAGE_IMPLEMENTATION
+#pragma warning(push)
+#pragma warning(disable: 4244 4996) // stb uses unsafe int/float casts
+#include "stb_image.h"
+#pragma warning(pop)
+
 // Link standard D3D12 and DXGI libraries
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -181,6 +188,10 @@ struct D3D12Context {
     // Procedural Solid Color Texture
     ID3D12Resource* textureDefault = nullptr;
     ID3D12Resource* textureUpload = nullptr;
+
+    // Per-asset embedded texture (replaced on every hot-swap)
+    ID3D12Resource* textureAsset = nullptr;
+    bool activeAssetHasTexture = false;
 
     // Camera Variables
     XMFLOAT3 meshCenter = { 0.0f, 0.0f, 0.0f };
@@ -760,6 +771,157 @@ cgltf_result ParseGLBMetadataRobust(
     return cgltf_result_success;
 }
 
+// Decode the first embedded PNG/JPEG from the GLB BIN chunk and upload
+// to VRAM as a TEXTURE2D. Creates SRV at slot 1 of srvHeap.
+// Called from LoadGLBGeometry() while cgltf_data* is still alive.
+bool LoadGLBTexture(D3D12Context* ctx, const std::string& filepath,
+                    cgltf_data* data, uint64_t binChunkStartOffset)
+{
+    // Release previous asset texture
+    if (ctx->textureAsset) {
+        ctx->textureAsset->Release();
+        ctx->textureAsset = nullptr;
+    }
+    ctx->activeAssetHasTexture = false;
+
+    // Find first image with an embedded buffer_view
+    cgltf_image* img = nullptr;
+    for (cgltf_size i = 0; i < data->images_count; ++i) {
+        if (data->images[i].buffer_view &&
+            data->images[i].buffer_view->size > 0) {
+            img = &data->images[i];
+            break;
+        }
+    }
+    if (!img) return false; // no embedded texture — silent fallback to cyan
+
+    uint64_t imgOffset = binChunkStartOffset + img->buffer_view->offset;
+    uint32_t imgSize   = (uint32_t)img->buffer_view->size;
+
+    // Read raw PNG/JPEG bytes from the BIN chunk via Win32 seek+read
+    std::wstring wpath = Utf8ToUtf16(filepath);
+    HANDLE hFile = CreateFileW(wpath.c_str(), GENERIC_READ,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (hFile == INVALID_HANDLE_VALUE) return false;
+
+    LARGE_INTEGER liOff;
+    liOff.QuadPart = (LONGLONG)imgOffset;
+    if (!SetFilePointerEx(hFile, liOff, nullptr, FILE_BEGIN)) {
+        CloseHandle(hFile); return false;
+    }
+
+    std::vector<uint8_t> rawBytes(imgSize);
+    DWORD bytesRead = 0;
+    bool ok = ReadFile(hFile, rawBytes.data(), imgSize, &bytesRead, nullptr)
+              && bytesRead == imgSize;
+    CloseHandle(hFile);
+    if (!ok) return false;
+
+    // Decode to RGBA8
+    int w, h, ch;
+    uint8_t* pixels = stbi_load_from_memory(
+        rawBytes.data(), (int)imgSize, &w, &h, &ch, 4);
+    if (!pixels) {
+        LogError("LoadGLBTexture: stb_image decode failed for: " + filepath);
+        return false;
+    }
+
+    // Create GPU TEXTURE2D on Default heap
+    D3D12_RESOURCE_DESC texDesc = {};
+    texDesc.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    texDesc.Width            = (UINT)w;
+    texDesc.Height           = (UINT)h;
+    texDesc.DepthOrArraySize = 1;
+    texDesc.MipLevels        = 1;
+    texDesc.Format           = DXGI_FORMAT_R8G8B8A8_UNORM;
+    texDesc.SampleDesc.Count = 1;
+    texDesc.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+
+    D3D12_HEAP_PROPERTIES defHeap = {};
+    defHeap.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+    HRESULT hr = ctx->device->CreateCommittedResource(
+        &defHeap, D3D12_HEAP_FLAG_NONE, &texDesc,
+        D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+        IID_PPV_ARGS(&ctx->textureAsset));
+    if (FAILED(hr)) { stbi_image_free(pixels); return false; }
+
+    // Staging upload buffer
+    UINT64 uploadSize = GetRequiredIntermediateSize(ctx->textureAsset, 0, 1);
+    D3D12_HEAP_PROPERTIES upHeap = {};
+    upHeap.Type = D3D12_HEAP_TYPE_UPLOAD;
+    D3D12_RESOURCE_DESC upDesc = {};
+    upDesc.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER;
+    upDesc.Width            = uploadSize;
+    upDesc.Height           = 1;
+    upDesc.DepthOrArraySize = 1;
+    upDesc.MipLevels        = 1;
+    upDesc.Format           = DXGI_FORMAT_UNKNOWN;
+    upDesc.SampleDesc.Count = 1;
+    upDesc.Layout           = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+    ID3D12Resource* uploadBuf = nullptr;
+    hr = ctx->device->CreateCommittedResource(
+        &upHeap, D3D12_HEAP_FLAG_NONE, &upDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+        IID_PPV_ARGS(&uploadBuf));
+    if (FAILED(hr)) {
+        stbi_image_free(pixels);
+        ctx->textureAsset->Release(); ctx->textureAsset = nullptr;
+        return false;
+    }
+
+    // Temp command list for the upload
+    ID3D12CommandAllocator* tempAlloc = nullptr;
+    ctx->device->CreateCommandAllocator(
+        D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&tempAlloc));
+    ID3D12GraphicsCommandList* tempList = nullptr;
+    ctx->device->CreateCommandList(
+        0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+        tempAlloc, nullptr, IID_PPV_ARGS(&tempList));
+
+    D3D12_SUBRESOURCE_DATA sub = {};
+    sub.pData      = pixels;
+    sub.RowPitch   = (LONG_PTR)w * 4;
+    sub.SlicePitch = sub.RowPitch * h;
+
+    UpdateSubresources(tempList, ctx->textureAsset, uploadBuf, 0, 0, 1, &sub);
+    TransitionResource(tempList, ctx->textureAsset,
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+    tempList->Close();
+    ID3D12CommandList* lists[] = { tempList };
+    ctx->commandQueue->ExecuteCommandLists(1, lists);
+    WaitForGpu(ctx);
+
+    tempList->Release();
+    tempAlloc->Release();
+    uploadBuf->Release();
+    stbi_image_free(pixels);
+
+    // Write SRV into heap slot 1
+    UINT srvStep = ctx->device->GetDescriptorHandleIncrementSize(
+        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    D3D12_CPU_DESCRIPTOR_HANDLE srvHandle =
+        ctx->srvHeap->GetCPUDescriptorHandleForHeapStart();
+    srvHandle.ptr += srvStep; // slot 1
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Format                  = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srvDesc.ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels     = 1;
+
+    ctx->device->CreateShaderResourceView(ctx->textureAsset, &srvDesc, srvHandle);
+    ctx->activeAssetHasTexture = true;
+
+    LogOutput("[Texture] " + std::to_string(w) + "x" + std::to_string(h)
+              + " embedded texture loaded for: " + filepath);
+    return true;
+}
+
 // Traditional D3D12 Staging Upload for USB/External exFAT Drives to prevent UASP resets (SYSTEMS-AUTOPSY-008)
 bool LoadGLBGeometryTraditional(D3D12Context* ctx, const std::string& filepath, uint32_t glbFileSize) {
     LogOutput("[Staging] Utilizing traditional Win32 buffered staging pipeline for external/USB stability: " + filepath);
@@ -1119,6 +1281,9 @@ bool LoadGLBGeometry(D3D12Context* ctx, const std::string& filepath) {
     ctx->meshRadius = sqrtf(dx*dx + dy*dy + dz*dz) * 0.5f;
     if (ctx->meshRadius < 0.1f) ctx->meshRadius = 1.0f;
 
+    // Load embedded texture while cgltf_data is still alive
+    LoadGLBTexture(ctx, filepath, data, binChunkStartOffset);
+
     cgltf_free(data);
     return true;
 }
@@ -1417,9 +1582,9 @@ bool InitializeD3D12Monolith(D3D12Context* ctx) {
     ctx->fenceEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     if (!ctx->fenceEvent) { LogError("Failed to allocate Win32 sync thread event object."); return false; }
 
-    // 11. Create SRV Descriptor Heap (1 Descriptor for procedural cyan texture)
+    // 11. Create SRV Descriptor Heap (slot 0 = cyan fallback, slot 1 = per-asset texture)
     D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
-    srvHeapDesc.NumDescriptors = 1;
+    srvHeapDesc.NumDescriptors = 2;
     srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     
@@ -2018,7 +2183,17 @@ void RenderFrame(D3D12Context* ctx) {
         ctx->commandList->SetDescriptorHeaps(_countof(heaps), heaps);
 
         // Bind texture to parameter 1
-        ctx->commandList->SetGraphicsRootDescriptorTable(1, ctx->srvHeap->GetGPUDescriptorHandleForHeapStart());
+        {
+            UINT srvStep = ctx->device->GetDescriptorHandleIncrementSize(
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            D3D12_GPU_DESCRIPTOR_HANDLE srvGpu =
+                ctx->srvHeap->GetGPUDescriptorHandleForHeapStart();
+            if (ctx->activeAssetHasTexture) {
+                srvGpu.ptr += srvStep; // slot 1 = real asset texture
+            }
+            // else slot 0 = PRIME cyan fallback
+            ctx->commandList->SetGraphicsRootDescriptorTable(1, srvGpu);
+        }
     }
 
     // 3. Compute Frame Camera Rotations (Dynamic Orbital Camera)
@@ -2133,6 +2308,7 @@ void ShutdownD3D12Context(D3D12Context* ctx) {
 
     if (ctx->textureDefault) ctx->textureDefault->Release();
     if (ctx->textureUpload) ctx->textureUpload->Release();
+    if (ctx->textureAsset) ctx->textureAsset->Release();
 
     if (ctx->depthBuffer) ctx->depthBuffer->Release();
     if (ctx->dsvHeap) ctx->dsvHeap->Release();
