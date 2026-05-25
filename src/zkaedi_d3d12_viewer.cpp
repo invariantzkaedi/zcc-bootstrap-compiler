@@ -219,6 +219,25 @@ void LogOutput(const std::string& msg) {
     }
 }
 
+// Robust UTF-8 to UTF-16 Unicode wide character conversion helper (CG-VIEWER-006)
+std::wstring Utf8ToUtf16(const std::string& utf8Str) {
+    if (utf8Str.empty()) return L"";
+    int sizeNeeded = MultiByteToWideChar(CP_UTF8, 0, utf8Str.c_str(), (int)utf8Str.size(), nullptr, 0);
+    std::wstring utf16Str(sizeNeeded, 0);
+    MultiByteToWideChar(CP_UTF8, 0, utf8Str.c_str(), (int)utf8Str.size(), &utf16Str[0], sizeNeeded);
+    return utf16Str;
+}
+
+// Robust UTF-16 to UTF-8 Unicode character conversion helper (CG-VIEWER-006)
+std::string Utf16ToUtf8(const std::wstring& utf16Str) {
+    if (utf16Str.empty()) return "";
+    int sizeNeeded = WideCharToMultiByte(CP_UTF8, 0, utf16Str.c_str(), (int)utf16Str.size(), nullptr, 0, nullptr, nullptr);
+    std::string utf8Str(sizeNeeded, 0);
+    WideCharToMultiByte(CP_UTF8, 0, utf16Str.c_str(), (int)utf16Str.size(), &utf8Str[0], sizeNeeded, nullptr, nullptr);
+    return utf8Str;
+}
+
+
 // Helper to extract JSON string fields from simple JSONL entries
 std::string ExtractJSONField(const std::string& line, const std::string& fieldName) {
     std::string searchStr = "\"" + fieldName + "\":\"";
@@ -251,7 +270,7 @@ void FindGLBFilesInDir(const std::wstring& dirPath, std::vector<std::wstring>& g
 
 // Helper to inspect GLB JSON chunk for skeletal/skin structures without loading entire binary
 bool GLBHasSkeletalData(const std::string& path) {
-    std::wstring wpath(path.begin(), path.end());
+    std::wstring wpath = Utf8ToUtf16(path);
     HANDLE hFile = CreateFileW(
         wpath.c_str(),
         GENERIC_READ,
@@ -485,7 +504,7 @@ std::vector<char> ReadBinaryFile(const std::wstring& filename) {
         nullptr
     );
     if (hFile == INVALID_HANDLE_VALUE) {
-        std::string narrow(filename.begin(), filename.end());
+        std::string narrow = Utf16ToUtf8(filename);
         DWORD err = GetLastError();
         LogError("Failed to open file: " + narrow + " | Win32 Error: " + std::to_string(err));
         return {};
@@ -667,7 +686,7 @@ cgltf_result ParseGLBMetadataRobust(
     uint64_t* out_binOffset,
     uint32_t* out_totalSize)
 {
-    std::wstring wpath(filepath.begin(), filepath.end());
+    std::wstring wpath = Utf8ToUtf16(filepath);
     HANDLE hFile = CreateFileW(
         wpath.c_str(),
         GENERIC_READ,
@@ -746,7 +765,7 @@ bool LoadGLBGeometryTraditional(D3D12Context* ctx, const std::string& filepath, 
     LogOutput("[Staging] Utilizing traditional Win32 buffered staging pipeline for external/USB stability: " + filepath);
     
     // 1. Read file into CPU memory using safe, buffered Win32 IO
-    std::wstring wpath(filepath.begin(), filepath.end());
+    std::wstring wpath = Utf8ToUtf16(filepath);
     std::vector<char> fileData = ReadBinaryFile(wpath);
     if (fileData.size() != glbFileSize) {
         LogError("Traditional read size mismatch: expected " + std::to_string(glbFileSize) + " but got " + std::to_string(fileData.size()));
@@ -914,7 +933,7 @@ bool LoadGLBGeometry(D3D12Context* ctx, const std::string& filepath) {
 
             // Submit high-throughput DirectStorage PCIe DMA request
             IDStorageFile* dsFile = nullptr;
-            std::wstring wpath(filepath.begin(), filepath.end());
+            std::wstring wpath = Utf8ToUtf16(filepath);
             hr = ctx->dsQueue.GetFactory()->OpenFile(wpath.c_str(), IID_PPV_ARGS(&dsFile));
             if (FAILED(hr)) {
                 LogError("Failed to open file via DirectStorage factory. Drive may be re-enumerating. (HRESULT: " + std::to_string(hr) + ").", hr);
