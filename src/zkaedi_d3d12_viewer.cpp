@@ -622,7 +622,7 @@ cgltf_result CustomCgltfFileRead(
     void (*memory_free)(void*, void*) = memory_options->free_func ? memory_options->free_func : [](void*, void* p) { free(p); };
     
     std::string narrowPath(path);
-    std::wstring widePath(narrowPath.begin(), narrowPath.end());
+    std::wstring widePath = Utf8ToUtf16(narrowPath);
     
     HANDLE hFile = CreateFileW(
         widePath.c_str(),
