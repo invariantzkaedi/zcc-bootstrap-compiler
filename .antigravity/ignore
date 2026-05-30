@@ -1,5 +1,56 @@
+# Core Antigravity IDE Workspace Exclusions
+
+# Security/Environments
 .env
 .env.*
 *.key
 secrets/
 credentials/
+
+# Giant machine learning model weights
+*.gguf
+*.pt
+*.onnx
+*.onnx.data
+*.npy
+*.index
+oracle_3k_faiss.index
+
+# Heavy binary media, log captures, and trace files
+*.mp4
+*.ppm
+*.log
+*.dump
+*.objdump
+qemu.log
+out.ppm
+debug.txt
+
+# Deep dependency directories
+node_modules/
+aethercut/node_modules/
+tools/hunt/edge_brainstem/node_modules/
+
+# Cache directories and temporary sandboxes
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.forge0/
+.mutation_sandbox/
+.tmp_zcc_tests/
+fuzz_results/
+healed_payloads/
+mega_corpus/
+mega_decomp/
+mega_jit/
+swarm_out/
+evm_decomp/
+evm_jit/
+proof_cache/
+proofs/
+seamfuzz/
+scratch/
+captures/
+2026-*/
+_sweep_output/
+__pycache__/
