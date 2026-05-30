@@ -519,3 +519,72 @@ gen_report.py
 task.md
 zcc_pp.c
 
+<<<<<<< HEAD
+=======
+governance/*.pem
+*.gguf
+*.onnx
+*.onnx.data
+*.npy
+*.index
+kernel/*.elf
+kernel/*.o
+seamfuzz/
+.tmp_zcc_tests/
+.forge0/
+phase*_gcc
+phase*_zcc
+interop_*
+zcc4
+dreams/dream_state.json
+governance/
+identity/
+*.pem
+
+# Whitelist fuzzing harness
+!zcc_fuzz_harness.py
+
+# Generated heavy artifacts
+*.glb
+*.ppm
+*.ir
+node_modules/
+*.gguf
+*.pt
+*.onnx
+*.onnx.data
+oracle_batches/
+>>>>>>> 38cfa549 (chore: ignore generated heavy artifacts)
+
+# Additional generated artifacts
+*.glb
+*.gguf
+*.onnx
+*.onnx.data
+*.npy
+*.index
+oracle_batches/
+seamfuzz/
+.tmp_zcc_tests/
+.forge0/
+
+# Kernel build outputs
+kernel/*.elf
+kernel/*.o
+
+# Generated phase outputs
+phase*_gcc
+phase*_zcc
+interop_*
+zcc4
+
+# Runtime state
+dreams/dream_state.json
+
+# Governance / identity secrets
+governance/*.pem
+identity/
+*.pem
+
+# Whitelist fuzzing harness
+!zcc_fuzz_harness.py
