@@ -1957,11 +1957,22 @@ void codegen_expr(Compiler *cc, Node *node) {
       return;
     }
 
+    /* CG-MISMATCH-1003697: C99 §6.4.4.1 Table 5 — unsuffixed hex literals that
+       exceed INT_MAX (e.g. 0xA6D0CABD) have type 'unsigned int', not 'int'.
+       ZCC stores them as ty_long (signed) for codegen width purposes, so
+       is_unsigned_type() returns 0. Detect this case via ND_NUM int_val and
+       force unsigned comparison instructions (setb/seta vs setl/setg). */
     uns = (node->lhs && node->lhs->type && is_unsigned_type(node->lhs->type)) ||
-          (node->rhs && node->rhs->type && is_unsigned_type(node->rhs->type));
+          (node->rhs && node->rhs->type && is_unsigned_type(node->rhs->type)) ||
+          /* Large unsuffixed hex/octal constant: value > INT_MAX, <= UINT_MAX */
+          (node->lhs && node->lhs->kind == ND_NUM &&
+           node->lhs->int_val > 2147483647LL && node->lhs->int_val <= 4294967295LL) ||
+          (node->rhs && node->rhs->kind == ND_NUM &&
+           node->rhs->int_val > 2147483647LL && node->rhs->int_val <= 4294967295LL);
     use32 = node->lhs && node->lhs->type && node->rhs &&
             node->rhs->type && type_size(node->lhs->type) == 4 &&
             type_size(node->rhs->type) == 4;
+
     codegen_expr_checked(cc, node->lhs);
     ir_save_result(lhs_ir);
     push_reg(cc, "rax");
