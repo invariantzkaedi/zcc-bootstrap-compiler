@@ -725,6 +725,19 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
         }
         stype->align = final_align;
         stype->is_complete = 1;
+
+        if (stype) {
+            int already_registered = 0;
+            for (int i = 0; i < cc->num_structs; i++) {
+                if (cc->structs[i] == stype) {
+                    already_registered = 1;
+                    break;
+                }
+            }
+            if (!already_registered) {
+                register_struct(cc, stype);
+            }
+        }
     }
 
     expect(cc, TK_RBRACE);
@@ -940,6 +953,14 @@ static long long eval_const_expr(Node *n) {
     if (n->kind == ND_BAND) return eval_const_expr(n->lhs) & eval_const_expr(n->rhs);
     if (n->kind == ND_BOR) return eval_const_expr(n->lhs) | eval_const_expr(n->rhs);
     if (n->kind == ND_BXOR) return eval_const_expr(n->lhs) ^ eval_const_expr(n->rhs);
+    if (n->kind == ND_EQ)   return eval_const_expr(n->lhs) == eval_const_expr(n->rhs);
+    if (n->kind == ND_NE)   return eval_const_expr(n->lhs) != eval_const_expr(n->rhs);
+    if (n->kind == ND_LT)   return eval_const_expr(n->lhs) <  eval_const_expr(n->rhs);
+    if (n->kind == ND_LE)   return eval_const_expr(n->lhs) <= eval_const_expr(n->rhs);
+    if (n->kind == ND_GT)   return eval_const_expr(n->lhs) >  eval_const_expr(n->rhs);
+    if (n->kind == ND_GE)   return eval_const_expr(n->lhs) >= eval_const_expr(n->rhs);
+    if (n->kind == ND_LAND) return eval_const_expr(n->lhs) && eval_const_expr(n->rhs);
+    if (n->kind == ND_LOR)  return eval_const_expr(n->lhs) || eval_const_expr(n->rhs);
     if (n->kind == ND_CAST) return eval_const_expr(n->lhs);
     /* Unary operators — critical for negative switch cases like case (-15): */
     if (n->kind == ND_NEG)  return -eval_const_expr(n->lhs);
@@ -1062,7 +1083,90 @@ static void parse_or_skip_gcc_attributes(Compiler *cc, Type *dtype) {
     }
 }
 
+static void recompute_struct_layout(Type *stype) {
+    if (!stype || (stype->kind != TY_STRUCT && stype->kind != TY_UNION) || !stype->is_complete) return;
+    
+    int is_union = (stype->kind == TY_UNION);
+    int offset = 0;
+    int max_size = 0;
+    int max_align = 1;
+    int bf_active = 0;
+    int bf_unit_size = 0;
+    int bf_current_bit = 0;
+    int bf_unit_offset = 0;
+    
+    StructField *field = stype->fields;
+    while (field) {
+        Type *ftype = field->type;
+        int falign = type_align(ftype);
+        if (stype->is_packed) falign = 1;
+        if (falign > max_align) max_align = falign;
+        
+        if (is_union) {
+            field->offset = 0;
+            if (type_size(ftype) > max_size) max_size = type_size(ftype);
+        } else {
+            if (field->is_bitfield) {
+                int bf_size = field->bit_size;
+                int fsize = type_size(ftype);
+                if (bf_active && fsize == bf_unit_size && bf_size > 0 && bf_current_bit + bf_size <= fsize * 8) {
+                    field->offset = bf_unit_offset;
+                    field->bit_offset = bf_current_bit;
+                    bf_current_bit += bf_size;
+                } else {
+                    bf_active = 1;
+                    bf_unit_size = fsize;
+                    bf_current_bit = 0;
+                    if (falign > 1) {
+                        offset = (offset + falign - 1) & ~(falign - 1);
+                    }
+                    bf_unit_offset = offset;
+                    if (bf_size > 0) {
+                        field->offset = bf_unit_offset;
+                        field->bit_offset = 0;
+                        bf_current_bit = bf_size;
+                        offset += fsize;
+                    } else {
+                        bf_active = 0;
+                        bf_unit_size = 0;
+                        bf_current_bit = 0;
+                    }
+                }
+            } else {
+                bf_active = 0;
+                if (falign > 1) {
+                    offset = (offset + falign - 1) & ~(falign - 1);
+                }
+                field->offset = offset;
+                offset = offset + type_size(ftype);
+            }
+        }
+        field = field->next;
+    }
+    
+    if (is_union) {
+        stype->size = max_size;
+    } else {
+        stype->size = offset;
+    }
+    
+    int final_align = max_align;
+    if (stype->explicit_align > 0) {
+        final_align = stype->explicit_align;
+    } else if (stype->is_packed) {
+        final_align = 1;
+    }
+    
+    if (final_align > 1) {
+        stype->size = (stype->size + final_align - 1) & ~(final_align - 1);
+    }
+    stype->align = final_align;
+}
+
 static void inject_attribute_parser(Compiler *cc, Type *dtype) {
+    int was_packed = dtype ? dtype->is_packed : 0;
+    int was_explicit = dtype ? dtype->explicit_align : 0;
+
     if (cc->pending_packed) {
         if (dtype) dtype->is_packed = 1;
         cc->pending_packed = 0;
@@ -1077,6 +1181,12 @@ static void inject_attribute_parser(Compiler *cc, Type *dtype) {
     if (cc->tk == TK_IDENT &&
         (strcmp(cc->tk_text, "__attribute__") == 0 || strcmp(cc->tk_text, "__attribute") == 0)) {
         parse_or_skip_gcc_attributes(cc, dtype);
+    }
+
+    if (dtype && dtype->is_complete) {
+        if (dtype->is_packed != was_packed || dtype->explicit_align != was_explicit) {
+            recompute_struct_layout(dtype);
+        }
     }
 }
 
@@ -1376,19 +1486,7 @@ Node *parse_primary(Compiler *cc) {
     if (cc->tk == TK_LPAREN) {
         next_token(cc);
 
-        /* check for cast expression */
-        if (is_type_token(cc)) {
-            Type *cast_type;
-            char dummy[MAX_IDENT];
-            cast_type = parse_type(cc);
-            cast_type = parse_declarator(cc, cast_type, dummy);
-            expect(cc, TK_RPAREN);
-            n = node_new(cc, ND_CAST, line);
-            n->cast_type = cast_type;
-            n->lhs = parse_unary(cc);
-            n->type = cast_type;
-            return n;
-        }
+
 
         n = parse_expr(cc);
         expect(cc, TK_RPAREN);
@@ -1896,14 +1994,23 @@ Node *parse_unary(Compiler *cc) {
     }
 
     if (cc->tk == TK_LPAREN) {
-        int pk = peek_token(cc);
-        int is_cast = 0;
-        if (pk == TK_INT || pk == TK_CHAR || pk == TK_VOID || pk == TK_STRUCT || pk == TK_UNION || pk == TK_ENUM || pk == TK_LONG || pk == TK_SHORT || pk == TK_UNSIGNED || pk == TK_SIGNED || pk == TK_FLOAT || pk == TK_DOUBLE) {
-            is_cast = 1;
-        } else if (pk == TK_IDENT) {
-            Symbol *sym = scope_find(cc, cc->peek_text);
-            if (sym && sym->is_typedef) is_cast = 1;
-        }
+        int pk;
+        int is_cast;
+        int curr_tk;
+        char curr_txt[MAX_IDENT];
+        
+        pk = peek_token(cc);
+        is_cast = 0;
+        curr_tk = cc->tk;
+        strncpy(curr_txt, cc->tk_text, MAX_IDENT - 1);
+        curr_txt[MAX_IDENT - 1] = 0;
+        cc->tk = pk;
+        strncpy(cc->tk_text, cc->peek_text, MAX_IDENT - 1);
+        cc->tk_text[MAX_IDENT - 1] = 0;
+        if (is_type_token(cc)) is_cast = 1;
+        cc->tk = curr_tk;
+        strncpy(cc->tk_text, curr_txt, MAX_IDENT - 1);
+        cc->tk_text[MAX_IDENT - 1] = 0;
         
         if (is_cast) {
             char dummy[MAX_IDENT];
@@ -2562,6 +2669,72 @@ static Node *parse_initializer_list(Compiler *cc, int *out_count) {
     return list;
 }
 
+int g_init_list_nodes = 0;
+int g_max_init_depth = 0;
+
+static int compute_initializer_depth(Node *init) {
+    if (!init || init->kind != ND_INIT_LIST) return 0;
+    int max_child_depth = 0;
+    for (int i = 0; i < init->num_args; i++) {
+        int d = compute_initializer_depth(init->args[i]);
+        if (d > max_child_depth) max_child_depth = d;
+    }
+    return 1 + max_child_depth;
+}
+
+static void validate_initializer_dimensions(Compiler *cc, Type *t, Node *init) {
+    if (!t || !init) return;
+    
+    if (init->kind == ND_INIT_LIST) {
+        g_init_list_nodes++;
+        
+        int depth = compute_initializer_depth(init);
+        if (depth > g_max_init_depth) {
+            g_max_init_depth = depth;
+        }
+        
+        if (t->kind == TY_ARRAY) {
+            int len = t->array_len;
+            if (len > 0 && init->num_args > len) {
+                error_at(cc, init->line, "excess elements in array initializer");
+            }
+            Type *elem_type = t->base;
+            for (int i = 0; i < init->num_args; i++) {
+                Node *item = init->args[i];
+                if (item->kind == ND_INIT_LIST) {
+                    validate_initializer_dimensions(cc, elem_type, item);
+                }
+            }
+        } else if (t->kind == TY_STRUCT || t->kind == TY_UNION) {
+            StructField *f = t->fields;
+            int field_count = 0;
+            while (f) { field_count++; f = f->next; }
+            
+            if (init->num_args > field_count && t->kind == TY_STRUCT) {
+                error_at(cc, init->line, "excess elements in struct initializer");
+            }
+            
+            f = t->fields;
+            for (int i = 0; i < init->num_args && f != NULL; i++, f = f->next) {
+                Node *item = init->args[i];
+                if (item->kind == ND_INIT_LIST) {
+                    validate_initializer_dimensions(cc, f->type, item);
+                }
+            }
+        } else {
+            if (init->num_args > 1) {
+                error_at(cc, init->line, "excess elements in scalar initializer");
+            }
+            for (int i = 0; i < init->num_args; i++) {
+                Node *item = init->args[i];
+                if (item->kind == ND_INIT_LIST) {
+                    validate_initializer_dimensions(cc, t, item);
+                }
+            }
+        }
+    }
+}
+
 static void emit_local_initializer(Compiler *cc, Node *block, int *cnt, int *cap, Node *base_var, Type *curr_type, Node *init_list, int offset) {
     if (curr_type->kind == TY_ARRAY) {
         Type *elem_type = curr_type->base;
@@ -3058,6 +3231,7 @@ Node *parse_stmt_internal(Compiler *cc) {
                                 strncpy(var_node->name, vname, MAX_IDENT - 1);
                                 var_node->sym = sym;
                                 var_node->type = arr_type;
+                                validate_initializer_dimensions(cc, arr_type, init_list);
                                 emit_local_initializer(cc, block, &cnt, &cap, var_node, arr_type, init_list, 0);
                             }
                         } else {
@@ -3142,6 +3316,13 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
     expect(cc, TK_LPAREN);
     scope_push(cc);
     cc->local_offset = 0;
+    if (ret_type && (ret_type->kind == TY_STRUCT || ret_type->kind == TY_UNION)) {
+        abi_class_t eb[2];
+        classify_aggregate(ret_type, eb);
+        if (eb[0] == CLASS_MEMORY) {
+            cc->local_offset = -8;
+        }
+    }
 
     func->num_params = 0;
     if (cc->tk != TK_RPAREN) {
@@ -3233,14 +3414,15 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
         func->func_type = ftype;
 
         /* add to parent scope (global) */
-        fsym = scope_find(cc, name);
-        if (!fsym) {
-            /* temporarily pop to add to parent */
+        {
             Scope *cur;
             cur = cc->current_scope;
             cc->current_scope = cur->parent;
-            fsym = scope_add(cc, name, ftype);
-            fsym->is_global = 1;
+            fsym = scope_find(cc, name);
+            if (!fsym) {
+                fsym = scope_add(cc, name, ftype);
+                fsym->is_global = 1;
+            }
             cc->current_scope = cur;
         }
     }
@@ -3257,6 +3439,12 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
     func->body = parse_stmt(cc);
     func->stack_size = -cc->local_offset;
     scope_pop(cc);
+
+    if (func->body) {
+        if (cc->num_globals < MAX_GLOBALS) {
+            cc->globals[cc->num_globals++] = func;
+        }
+    }
 
     return func;
 }

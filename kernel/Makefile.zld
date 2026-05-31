@@ -1,0 +1,73 @@
+# Makefile.zld — append these rules to kernel/Makefile
+#
+# Add to existing Makefile:
+#   include Makefile.zld
+# or paste the targets below into the existing Makefile.
+#
+# New targets:
+#   zld              — build the freestanding linker from ../zld.c
+#   zkernel-zld.elf  — link zkernel using zld instead of GNU ld
+#   verify-zld       — run structural + QEMU verification against reference
+#   stage2-zld       — full multi-stage bootstrap using zld throughout
+#   stage3-zld       — third stage, verifies zld output is invariant
+
+ZLD         = ../zld
+ZLD_SRC     = ../zld.c
+LINKER_LD   = linker.ld
+
+zld: $(ZLD)
+
+# ── Build zld ─────────────────────────────────────────────────────────────
+# zld.c is C89 + POSIX — compile with GCC first (bootstrap stage 0)
+$(ZLD): $(ZLD_SRC)
+	@echo "=== Building zld (stage 0: GCC bootstrap) ==="
+	gcc -O2 -Wall -Wextra -std=c89 -D_GNU_SOURCE -o $(ZLD) $(ZLD_SRC)
+	@echo "    zld built"
+
+# ── Self-host zld with ZCC ─────────────────────────────────────────────────
+zld-zcc: $(ZLD_SRC)
+	@echo "=== Building zld with ZCC (self-hosting validation) ==="
+	../zcc $(ZLD_SRC) -o ../zld-zcc
+	@echo "    zld-zcc built"
+
+# ── Link zkernel with zld (replaces GNU ld) ────────────────────────────────
+# Depends on the same .o files produced by ZCC
+zkernel-zld.elf: boot.o kmain.o $(ZLD)
+	@echo "=== Linking zkernel-zld.elf with zld (no GNU ld) ==="
+	$(ZLD) -T $(LINKER_LD) -o zkernel-zld.elf boot.o kmain.o
+	@echo "    zkernel-zld.elf linked"
+
+# Stage 2 and 3 variants
+zkernel-stage2-zld.elf: boot.o kmain2.o $(ZLD)
+	$(ZLD) -T $(LINKER_LD) -o zkernel-stage2-zld.elf boot.o kmain2.o
+
+zkernel-stage3-zld.elf: boot.o kmain3.o $(ZLD)
+	$(ZLD) -T $(LINKER_LD) -o zkernel-stage3-zld.elf boot.o kmain3.o
+
+# ── Verify zld output ──────────────────────────────────────────────────────
+verify-zld: zkernel.elf zkernel-zld.elf
+	@echo "=== ZLD Structural + QEMU Verification ==="
+	python3 verify_zld.py zkernel.elf zkernel-zld.elf
+
+# ── Full ZLD integration test ──────────────────────────────────────────────
+# 1. Build zld from ZCC source (zcc must be present)
+# 2. Link stage2 and stage3 kernels with zld
+# 3. Verify both against reference ld output
+# 4. Confirm QEMU boots both
+verify-zld-full: $(ZLD) zkernel.elf \
+	zkernel-stage2-zld.elf zkernel-stage3-zld.elf
+	@echo "=== ZLD Full Multi-Stage Verification ==="
+	python3 verify_zld.py zkernel-stage2.elf zkernel-stage2-zld.elf
+	python3 verify_zld.py zkernel-stage3.elf zkernel-stage3-zld.elf
+	@echo "=== Boot Parity (zld): VERIFIED ==="
+
+# ── Self-hosted ZLD link (ultimate gate) ──────────────────────────────────
+# Uses zld to link a kernel that was itself linked by zld
+# Proves zld output is a valid input to the next bootstrap stage
+verify-zld-selfhost: zld-zcc
+	@echo "=== Self-hosted ZLD: link with zld-zcc ==="
+	../zld-zcc -T $(LINKER_LD) -o zkernel-zld-sh.elf boot.o kmain.o
+	python3 verify_zld.py zkernel.elf zkernel-zld-sh.elf
+	@echo "=== ZLD SELF-HOST VERIFIED ==="
+
+.PHONY: verify-zld verify-zld-full verify-zld-selfhost zld-zcc zld

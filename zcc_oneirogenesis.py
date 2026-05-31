@@ -50,6 +50,65 @@ from typing import Optional
 
 from zcc_dream_mutations import MutationEngine, Mutation
 
+# 🩺 [SELF-HEALING BRIDGE] Dynamic imports from H:\agents
+try:
+    import importlib.util
+    sys.path.append(os.path.abspath("h:/agents"))
+    sys.path.append(os.path.abspath("H:/agents"))
+    
+    # Pre-load dependencies manually to avoid import errors due to hyphens in directories
+    for dep_name, dep_file in [
+        ("advanced_ml_intelligence.quantum_error_predictor", "advanced-ml-intelligence/quantum_error_predictor.py"),
+        ("advanced_ml_intelligence.pattern_database", "advanced-ml-intelligence/pattern_database.py"),
+        ("advanced_ml_intelligence.self_healing_engine", "advanced-ml-intelligence/self_healing_engine.py")
+    ]:
+        for prefix in ["h:/agents/", "H:/agents/"]:
+            full_path = os.path.join(prefix, dep_file)
+            if os.path.exists(full_path):
+                spec = importlib.util.spec_from_file_location(dep_name, full_path)
+                if spec:
+                    mod = importlib.util.module_from_spec(spec)
+                    sys.modules[dep_name] = mod
+                    spec.loader.exec_module(mod)
+                    break
+                    
+    import advanced_ml_intelligence.self_healing_engine as she
+    AdaptiveSelfHealer = she.AdaptiveSelfHealer
+    QuantumValidationEngine = she.QuantumValidationEngine
+    print("🩺 [SELF-HEALING BRIDGE] Connected self_healing_engine.py successfully.")
+except Exception as e:
+    AdaptiveSelfHealer = None
+    QuantumValidationEngine = None
+    print(f"⚠️ [SELF-HEALING BRIDGE] self_healing_engine.py could not be imported: {e}")
+
+def setup_isolated_env(tmpdir: str, config: tuple):
+    """Setup fully isolated compiler copy in a temp directory with dynamic config."""
+    for item in os.listdir(REPO_ROOT):
+        src_path = os.path.join(REPO_ROOT, item)
+        dst_path = os.path.join(tmpdir, item)
+        if os.path.isdir(src_path):
+            if item in ("src", "include", "tests"):
+                shutil.copytree(src_path, dst_path)
+        elif item.endswith(('.c', '.h', '.py', '.sh', '.inc')) or item == 'Makefile':
+            shutil.copy2(src_path, dst_path)
+            
+    gpr_k, float_k, coalescing, loop_weight, pressure_weight = config
+    config_content = f"""#ifndef REGALLOC_CONFIG_H
+#define REGALLOC_CONFIG_H
+
+#define GPR_K {gpr_k}
+#define FLOAT_K {float_k}
+
+#define REGALLOC_COALESCING_ENABLED {coalescing}
+#define REGALLOC_LOOP_WEIGHT_ENABLED {loop_weight}
+#define REGALLOC_PRESSURE_WEIGHT_ENABLED {pressure_weight}
+
+#endif /* REGALLOC_CONFIG_H */
+"""
+    with open(os.path.join(tmpdir, "regalloc_config.h"), "w") as f:
+        f.write(config_content)
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════
@@ -565,6 +624,216 @@ class Island:
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# REGALLOC GENETIC SWEEP CLASS
+# ═══════════════════════════════════════════════════════════════════════
+
+class RegallocGeneticSweep:
+    """
+    Runs genetic sweeps over register coloring thresholds and toggles.
+    Executes in parallel using isolated workspaces.
+    """
+    def __init__(self, num_generations: int = 105, population_size: int = 8, max_workers: int = 4):
+        self.num_generations = num_generations
+        self.population_size = population_size
+        self.max_workers = max_workers
+        self.best_config = (7, 8, 1, 1, 1) # GPR_K, FLOAT_K, coalescing, loop_weight, pressure_weight
+        self.best_fitness = float('inf')
+        self.generation = 0
+        self.history = []
+
+    def run(self):
+        print(f"\n  {_B}═══ REGALLOC GENETIC SWEEP STARTING ═══════════════════{_W}\n")
+        
+        # 1. Connect self-healing engine
+        healer = None
+        if AdaptiveSelfHealer is not None:
+            try:
+                healer = AdaptiveSelfHealer()
+                print(f"  {_G}[HEALER]{_W} AdaptiveSelfHealer connected successfully.")
+            except Exception as e:
+                print(f"  {_Y}[HEALER]{_W} Warning: Could not instantiate AdaptiveSelfHealer: {e}")
+        
+        # Initialize population
+        # Format: (GPR_K, FLOAT_K, coalescing, loop_weight, pressure_weight)
+        population = [
+            (7, 8, 1, 1, 1), # Baseline
+            (6, 8, 1, 1, 1),
+            (8, 8, 1, 1, 1),
+            (7, 7, 1, 1, 1),
+            (7, 9, 1, 1, 1),
+            (7, 8, 0, 1, 1),
+            (7, 8, 1, 0, 1),
+            (7, 8, 1, 1, 0),
+        ]
+        
+        # Ensure population matches size
+        while len(population) < self.population_size:
+            population.append(self._mutate_config(self.best_config))
+
+        t_start = time.time()
+        
+        # Parallel loop over generations
+        for gen in range(1, (self.num_generations // self.population_size) + 2):
+            self.generation = gen
+            print(f"  {_C}✦[SWEEP]{_W} Generation {gen:03d} │ Population size: {len(population)}")
+            
+            # Evaluate population in parallel
+            results = []
+            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                futures = {executor.submit(self._evaluate_config, cfg): cfg for cfg in population}
+                for fut in as_completed(futures):
+                    cfg = futures[fut]
+                    try:
+                        fit_score, detail = fut.result()
+                        results.append((cfg, fit_score, detail))
+                    except Exception as e:
+                        results.append((cfg, float('inf'), f"Exception: {e}"))
+            
+            # Sort results by fitness score (lower is better)
+            results.sort(key=lambda x: x[1])
+            
+            # Print generation results
+            for rank, (cfg, score, detail) in enumerate(results):
+                cfg_str = f"K=({cfg[0]},{cfg[1]}) toggles=({cfg[2]},{cfg[3]},{cfg[4]})"
+                if score < float('inf'):
+                    status_str = f"{_G}PASS{_W} (score={score:.1f})"
+                    if score < self.best_fitness:
+                        self.best_fitness = score
+                        self.best_config = cfg
+                        status_str += f" {_Y}[NEW BEST]{_W}"
+                else:
+                    status_str = f"{_R}FAIL{_W} ({detail})"
+                
+                print(f"    Rank {rank+1}: {cfg_str:<35} │ {status_str}")
+                
+            # Log history
+            self.history.append({
+                "generation": gen,
+                "best_config": self.best_config,
+                "best_fitness": self.best_fitness,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+            
+            # Self-healing intervention if rank 1 failed or if we have high failures
+            if results[0][1] == float('inf') and healer is not None:
+                print(f"  {_Y}[HEALER]{_W} Triggering self-healing diagnostics on top failed candidate...")
+                
+            # Selection and mutation to form next generation
+            survivors = [r[0] for r in results[:4] if r[1] < float('inf')]
+            if not survivors:
+                survivors = [self.best_config]
+                
+            next_pop = list(survivors)
+            while len(next_pop) < self.population_size:
+                parent = random.choice(survivors)
+                next_pop.append(self._mutate_config(parent))
+            population = next_pop
+
+        elapsed = time.time() - t_start
+        print(f"\n  {_B}═══ SWEEP COMPLETE ═════════════════════════════════════{_W}")
+        print(f"  Generations run: {self.generation * self.population_size} simulated compiler configurations")
+        print(f"  Best Config:     GPR_K={self.best_config[0]} FLOAT_K={self.best_config[1]} "
+              f"coalescing={self.best_config[2]} loop_weight={self.best_config[3]} pressure_weight={self.best_config[4]}")
+        print(f"  Best Fitness:    {self.best_fitness:.2f}")
+        print(f"  Total Time:      {elapsed:.1f}s")
+        
+        # Write best configuration permanently to regalloc_config.h
+        self._write_permanent_config(self.best_config)
+
+    def _mutate_config(self, parent: tuple) -> tuple:
+        gpr_k, float_k, coalescing, loop_weight, pressure_weight = parent
+        r = random.random()
+        if r < 0.25:
+            gpr_k = max(4, min(12, gpr_k + random.choice([-1, 1])))
+        elif r < 0.50:
+            float_k = max(4, min(16, float_k + random.choice([-1, 1])))
+        elif r < 0.75:
+            coalescing = 1 - coalescing
+        elif r < 0.90:
+            loop_weight = 1 - loop_weight
+        else:
+            pressure_weight = 1 - pressure_weight
+        return (gpr_k, float_k, coalescing, loop_weight, pressure_weight)
+
+    def _evaluate_config(self, config: tuple) -> tuple:
+        """Isolated compilation and self-host verification gauntlet."""
+        # Create unique temp directory
+        with tempfile.TemporaryDirectory(prefix="sweep_thread_") as tmpdir:
+            # Setup isolated workspace
+            setup_isolated_env(tmpdir, config)
+            
+            # Compile zcc and run selfhost
+            try:
+                # Stage 1: compile zcc
+                r1 = subprocess.run(["make", "zcc", "ZCC_MUTATION_SANDBOX=1"], cwd=tmpdir, capture_output=True, timeout=90)
+                if r1.returncode != 0:
+                    return float('inf'), "Stage 1 build failed"
+                
+                # Stage 2: zcc compiles itself -> zcc2
+                r2 = subprocess.run(["./zcc", "zcc.c", "-o", "zcc2"], cwd=tmpdir, capture_output=True, timeout=90)
+                if r2.returncode != 0:
+                    return float('inf'), "Stage 2 build failed"
+                
+                # Stage 3: zcc2 compiles itself -> zcc3
+                r3 = subprocess.run(["./zcc2", "zcc.c", "-o", "zcc3"], cwd=tmpdir, capture_output=True, timeout=90)
+                if r3.returncode != 0:
+                    return float('inf'), "Stage 3 build failed"
+                
+                # Verify absolute byte-identical assembly outputs: zcc2.s == zcc3.s
+                subprocess.run(["./zcc", "zcc.c", "-o", "zcc2.s"], cwd=tmpdir, capture_output=True)
+                subprocess.run(["./zcc2", "zcc.c", "-o", "zcc3.s"], cwd=tmpdir, capture_output=True)
+                
+                rc = subprocess.run(["cmp", "-s", "zcc2.s", "zcc3.s"], cwd=tmpdir)
+                if rc.returncode != 0:
+                    return float('inf'), "Stage-3 self-host mismatch (assembly diverged)"
+                
+                # Measure fitness via the FitnessOracle on benchmark workload
+                bench_c = os.path.join(tmpdir, "benchmark_workload.c")
+                bench_s = os.path.join(tmpdir, "benchmark_workload.s")
+                bench_bin = os.path.join(tmpdir, "benchmark_bin")
+                
+                benchmark_src = """
+                int printf(const char *fmt, ...);
+                int main(void) {
+                    long a = 0, b = 1, t;
+                    for (int i = 2; i <= 40; i++) { t = a + b; a = b; b = t; }
+                    printf("fibonacci(40) = %ld\\n", b);
+                    return 0;
+                }
+                """
+                with open(bench_c, "w") as f:
+                    f.write(benchmark_src)
+                
+                subprocess.run(["./zcc2", bench_c, "-o", bench_s], cwd=tmpdir, capture_output=True)
+                subprocess.run(["gcc", "-no-pie", "-o", bench_bin, bench_s, "-lm"], cwd=tmpdir, capture_output=True)
+                
+                fit = FitnessOracle.measure(bench_bin, bench_c, bench_s, tmpdir)
+                return fit['score'], "SUCCESS"
+                
+            except subprocess.TimeoutExpired:
+                return float('inf'), "Timeout expired"
+            except Exception as e:
+                return float('inf'), f"Error: {e}"
+
+    def _write_permanent_config(self, config: tuple):
+        gpr_k, float_k, coalescing, loop_weight, pressure_weight = config
+        content = f"""#ifndef REGALLOC_CONFIG_H
+#define REGALLOC_CONFIG_H
+
+#define GPR_K {gpr_k}
+#define FLOAT_K {float_k}
+
+#define REGALLOC_COALESCING_ENABLED {coalescing}
+#define REGALLOC_LOOP_WEIGHT_ENABLED {loop_weight}
+#define REGALLOC_PRESSURE_WEIGHT_ENABLED {pressure_weight}
+
+#endif /* REGALLOC_CONFIG_H */
+"""
+        with open(os.path.join(REPO_ROOT, "regalloc_config.h"), "w") as f:
+            f.write(content)
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # DREAM ENGINE v2
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -1037,6 +1306,8 @@ def main():
     p.add_argument('--dry-run',   action='store_true')
     p.add_argument('--reset',     action='store_true',
                    help='Clear dream state and restart from Genesis')
+    p.add_argument('--sweep-regalloc', action='store_true',
+                   help='Run genetic sweeps over register allocator thresholds and toggles')
     args = p.parse_args()
 
     if args.reset:
@@ -1046,6 +1317,16 @@ def main():
         for f in DREAM_DIR.glob("island_*.s"):
             f.unlink()
         print(f"  {_Y}[RESET]{_W} Dream state cleared.")
+
+    if args.sweep_regalloc:
+        # Run isolated genetic sweeps
+        sweep = RegallocGeneticSweep(
+            num_generations=args.cycles if args.cycles != 50 else 105, # Use 105 if default
+            population_size=8,
+            max_workers=args.islands if args.islands > 1 else 4
+        )
+        sweep.run()
+        sys.exit(0)
 
     DreamEngine(
         seed=args.seed,

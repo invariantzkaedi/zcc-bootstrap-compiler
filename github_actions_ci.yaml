@@ -1,0 +1,14 @@
+name: zkaedi-runtime-ci
+on: [push, pull_request]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install numpy faiss-cpu torch onnx onnxruntime fastapi pydantic
+      - run: python scripts/audit_runtime.py --out runtime_audit_report.json
+      - run: python scripts/faiss_check.py
+      - run: python scripts/checkpoint_summary.py prime_epoch_010.pt A_AdamW_seed19.pt A_CATALYZE_seed19.pt A_SGD_seed19.pt B_CATALYZE_seed1.pt --out checkpoint_report.json

@@ -11,6 +11,8 @@
  */
 #include "ir_telemetry.h"
 
+#ifndef ZCC_REAL_TELEMETRY
+
 void ir_telem_init(void) {}
 
 void ir_telem_pass(const char *pass_name,
@@ -35,3 +37,18 @@ void ir_telem_summary(int total_funcs,
 void ir_telem_shutdown(void) {}
 
 void ir_telemetry_enable_stdout(void) {}
+
+void zcc_telem_phase(int phase, const char *phase_name, const char *status, int duration_us,
+                     const char *metric_key1, long long metric_val1,
+                     const char *metric_key2, long long metric_val2,
+                     const char *metric_key3, long long metric_val3) {
+    (void)phase; (void)phase_name; (void)status; (void)duration_us;
+    (void)metric_key1; (void)metric_val1;
+    (void)metric_key2; (void)metric_val2;
+    (void)metric_key3; (void)metric_val3;
+}
+
+
+#endif
+
+

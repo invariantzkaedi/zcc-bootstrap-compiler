@@ -151,6 +151,18 @@ static const char *zcc_stddef_text =
     "typedef unsigned char uint8_t;\n"
     "typedef short int16_t;\n"
     "typedef unsigned short uint16_t;\n"
+    "#define INT8_MIN   (-128)\n"
+    "#define INT8_MAX   127\n"
+    "#define INT16_MIN  (-32768)\n"
+    "#define INT16_MAX  32767\n"
+    "#define INT32_MIN  (-2147483647-1)\n"
+    "#define INT32_MAX  2147483647\n"
+    "#define INT64_MIN  (-9223372036854775807LL-1LL)\n"
+    "#define INT64_MAX  9223372036854775807LL\n"
+    "#define UINT8_MAX  255\n"
+    "#define UINT16_MAX 65535\n"
+    "#define UINT32_MAX 4294967295U\n"
+    "#define UINT64_MAX 18446744073709551615ULL\n"
     "typedef unsigned long size_t;\n"
     "typedef long ssize_t;\n"
     "typedef long ptrdiff_t;\n"
@@ -171,6 +183,10 @@ static const char *zcc_stddef_text =
     "long strtol(const char *s, char **end, int base);\n"
     "unsigned long strtoul(const char *s, char **end, int base);\n"
     "double strtod(const char *s, char **end);\n"
+    "double ldexp(double x, int exp);\n"
+    "float ldexpf(float x, int exp);\n"
+    "double fabs(double x);\n"
+    "float fabsf(float x);\n"
     "int abs(int n);\n"
     "long labs(long n);\n"
     "long long llabs(long long n);\n"
@@ -1949,6 +1965,36 @@ char *zcc_preprocess(const char *source, int source_len, const char *filename,
 
   state->src = normalized_src;
   state->len = normalized_len;
+
+  /* Preprocessor Pass 0 Risk Scanner */
+  {
+    int loops = 0;
+    int indirections = 0;
+    int structs = 0;
+    int idx;
+    for (idx = 0; idx < normalized_len - 6; idx++) {
+      if (strncmp(normalized_src + idx, "while", 5) == 0) {
+        char next_c = normalized_src[idx + 5];
+        if (next_c == ' ' || next_c == '\t' || next_c == '(') loops++;
+      } else if (strncmp(normalized_src + idx, "for", 3) == 0) {
+        if (idx == 0 || normalized_src[idx - 1] == ' ' || normalized_src[idx - 1] == '\t' || normalized_src[idx - 1] == '\n' || normalized_src[idx - 1] == ';') {
+          char next_c = normalized_src[idx + 3];
+          if (next_c == ' ' || next_c == '\t' || next_c == '(') loops++;
+        }
+      } else if (strncmp(normalized_src + idx, "struct", 6) == 0) {
+        if (idx == 0 || normalized_src[idx - 1] == ' ' || normalized_src[idx - 1] == '\t' || normalized_src[idx - 1] == '\n' || normalized_src[idx - 1] == ';') {
+          char next_c = normalized_src[idx + 6];
+          if (next_c == ' ' || next_c == '\t' || next_c == '{') structs++;
+        }
+      } else if (normalized_src[idx] == '*' && normalized_src[idx + 1] == '*') {
+        indirections++;
+        if (normalized_src[idx + 2] == '*') idx++;
+      }
+    }
+    extern void zcc_oracle_log_prediction(const char *filename, int loops, int indirections, int structs);
+    zcc_oracle_log_prediction(filename, loops, indirections, structs);
+  }
+
   state->filename = filename;
   state->include_paths = include_paths;
   state->line = 1;

@@ -220,3 +220,27 @@ void ir_telem_shutdown(void) {
     }
     s_enabled = 0;
 }
+
+void zcc_telem_phase(int phase, const char *phase_name, const char *status, int duration_us,
+                     const char *metric_key1, long long metric_val1,
+                     const char *metric_key2, long long metric_val2,
+                     const char *metric_key3, long long metric_val3) {
+    char body[1024];
+
+    snprintf(body, sizeof(body),
+        "{\\\"phase\\\":%d,"
+         "\\\"phase_name\\\":\\\"%s\\\","
+         "\\\"status\\\":\\\"%s\\\","
+         "\\\"duration_us\\\":%d,"
+         "\\\"%s\\\":%lld,"
+         "\\\"%s\\\":%lld,"
+         "\\\"%s\\\":%lld}",
+         phase, phase_name, status, duration_us,
+         metric_key1, metric_val1,
+         metric_key2, metric_val2,
+         metric_key3, metric_val3);
+
+    send_envelope(body);
+}
+
+

@@ -28,6 +28,7 @@
 #ifndef ZCC_REGALLOC_H
 #define ZCC_REGALLOC_H
 
+#include "regalloc_config.h"
 #include "ir.h"
 
 /* ── Physical registers ───────────────────────────────────────────────── */
@@ -70,6 +71,10 @@ typedef struct LiveInterval {
     int       end;               /* node index of last use            */
     PhysReg   assigned;          /* physical reg, or PREG_NONE        */
     int       is_float;          /* 1 if node type is F32/F64         */
+    int       ref_count;         /* frequency of uses + defs          */
+    int       loop_depth_weight; /* 10^nesting_depth                  */
+    int       pressure_score;    /* peak local register pressure      */
+    int       is_move;           /* 1 if copy/phi-related             */
 } LiveInterval;
 
 /* ── Allocator state ──────────────────────────────────────────────────── */
@@ -80,6 +85,7 @@ typedef struct RegAllocator {
 
     /* Which phys regs are used (for push/pop generation) */
     int           used[PREG_COUNT];
+    int           global_peak_pressure; /* Gen 49: peak pressure across all nodes */
 } RegAllocator;
 
 /* ── API ──────────────────────────────────────────────────────────────── */

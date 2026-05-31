@@ -41,4 +41,12 @@ void ir_telem_shutdown(void);
 /* Enable standard output redirection for local corpus harvesting */
 void ir_telemetry_enable_stdout(void);
 
+/* Emit compiler phase telemetry (e.g. lexer, parser, codegen, peephole, linking) */
+void zcc_telem_phase(int phase, const char *phase_name, const char *status, int duration_us,
+                     const char *metric_key1, long long metric_val1,
+                     const char *metric_key2, long long metric_val2,
+                     const char *metric_key3, long long metric_val3);
+
 #endif /* ZCC_IR_TELEMETRY_H */
+
+

@@ -1,3 +1,5 @@
+![Self-Host Verification](https://github.com/izkaedi-ui/ZCC/actions/workflows/selfhost.yml/badge.svg)
+
 # ZCC v1.0 — The God-Tier Self-Hosting EVM Weapon
 
 **Self-hosting C compiler + Elite EVM Toolchain**

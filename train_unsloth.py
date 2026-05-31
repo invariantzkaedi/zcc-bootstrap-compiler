@@ -37,9 +37,10 @@ class ZKAEDIPrimeOptimizer(Optimizer):
                 state = self.state[p]
                 if len(state) == 0:
                     state['step'] = 0
-                    state['H_prev'] = torch.zeros_like(p)
+                    state['H_prev'] = torch.zeros_like(p, device='cpu')
                 
-                H_prev = state['H_prev']
+                # Move state back to GPU device only during update step
+                H_prev = state['H_prev'].to(p.device)
                 
                 # Base potential = loss gradient
                 H_0 = p.grad
@@ -51,22 +52,42 @@ class ZKAEDIPrimeOptimizer(Optimizer):
                 # Update weights
                 p.sub_(lambda_ * H_t)
                 
-                # Store state
-                state['H_prev'] = H_t
+                # Store state back on CPU to prevent VRAM explosion
+                state['H_prev'] = H_t.to('cpu')
                 state['step'] += 1
 
         return loss
 
+def normalize_ir(nodes):
+    lines = []
+    for node in nodes:
+        op = node.get('op') or '-'
+        t = node.get('type') or '-'
+        dst = node.get('dst') or '-'
+        src1 = node.get('src1') or '-'
+        src2 = node.get('src2') or '-'
+        src3 = node.get('src3') or node.get('label') or '-'
+        imm = node.get('imm')
+        line = node.get('line') or 0
+        
+        line_str = f"  {op}  {t}  {dst}  {src1}  {src2}  {src3}"
+        if imm is not None:
+            line_str += f"  imm={imm}"
+        line_str += f"  ; line {line}"
+        lines.append(line_str)
+        
+    return "\n".join(lines[:32])
+
 def format_prompt(sample):
-    # Constructing a prompt matching the IR telemetry ledger
+    nodes = sample.get('nodes', [])
+    input_text = normalize_ir(nodes)
     instruction = "Optimize the following ZCC Intermediate Representation sequence:"
-    input_text = str(sample)
     prompt = f"### Instruction:\n{instruction}\n\n### Input:\n{input_text}\n\n### Response:\n[OPTIMIZED_IR]"
     return {"text": prompt}
 
 def main():
     parser = argparse.ArgumentParser(description="ZKAEDI PRIME Unsloth Training Engine")
-    parser.add_argument("--dataset", type=str, default="mega_ledger_target", help="Target dataset alias")
+    parser.add_argument("--dataset", type=str, default="zkaedi/zcc-ir-prime-v1", help="Target dataset alias")
     parser.add_argument("--model", type=str, default="zcc_prime_v1", help="Base model identifier")
     parser.add_argument("--device", type=str, default="cuda:0", help="Target compute device")
     args = parser.parse_args()
@@ -75,16 +96,15 @@ def main():
     print(f"[CYAN SYS] VRAM Target: RTX 5070 (0) - 64GB DDR5 Interconnect: ACTIVE.")
     
     # 1. Map Dataset
-    # Actual file is mega_ledger.jsonl
-    file_path = "mega_ledger.jsonl" if args.dataset == "mega_ledger_target" else args.dataset
     print(f"[NAVY KERNEL] Ingesting Topology: {args.dataset}...")
-    dataset = load_dataset("json", data_files=file_path, split="train")
+    dataset = load_dataset(args.dataset, split="train")
     dataset = dataset.map(format_prompt)
     print(f"[NAVY KERNEL] Verifying Parity Axiom Bounds... SECURE. ({len(dataset)} sequences loaded)")
 
+
     # 2. Load Model via Unsloth FastLanguageModel
     # Using Llama-3 8B as the base surrogate for 'zcc_prime_v1'
-    max_seq_length = 2048
+    max_seq_length = 512
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name="unsloth/llama-3-8b-bnb-4bit",
         max_seq_length=max_seq_length,
@@ -117,7 +137,7 @@ def main():
         dataset_num_proc=2,
         optimizers=(optimizer, None), # Custom optimizer inject
         args=TrainingArguments(
-            per_device_train_batch_size=2,
+            per_device_train_batch_size=1,
             gradient_accumulation_steps=4,
             warmup_steps=5,
             max_steps=60, # Simulation steps
@@ -129,9 +149,20 @@ def main():
             weight_decay=0.01,
             lr_scheduler_type="linear",
             seed=3407,
+            gradient_checkpointing=True,
             output_dir="outputs",
         ),
     )
+
+    # Print VRAM memory summary to verify headroom
+    print("[VRAM HEADER] Printing PyTorch CUDA memory summary before training:")
+    print(torch.cuda.memory_summary())
+
+    import os
+    import sys
+    if os.environ.get("VERIFY_ONLY") == "1":
+        print("[VRAM VERIFICATION] VERIFY_ONLY mode active. Exiting before training.")
+        sys.exit(0)
 
     print("[MAGENTA LOAD] Epoch 1/1 | Backpropagation Engine Sparked.")
     

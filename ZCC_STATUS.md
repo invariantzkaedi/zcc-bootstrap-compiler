@@ -35,6 +35,19 @@ If a future bootstrap produces a different hash, either codegen drifted (regress
 - Frontend dispatch: file extension -> C path (.c) or Rust path (.rs); rust hooks live in part5.c
 - Rust frontend: part7_rust.c (~3200 lines), positioned in PARTS after part5.c
 
+### PARTS Concatenation Order & Verification
+
+ZCC is compiled by concatenating discrete parts inside the `Makefile` before invoking the host C compiler. This precise order is mathematically and lexically canonical. Swapping any two adjacent units results in immediate compilation failure:
+
+| PARTS Order Sequence | Lexical Root Cause of Compilation Failure if Swapped |
+| :--- | :--- |
+| **`part1.c` $\leftrightarrow$ `part0_pp.c`** | **Implicit Struct Declarations & Macro Definitions**:<br>- `part0_pp.c` relies on global token mappings (`token_t` enum, `Token` struct) declared in `part1.c`. |
+| **`part0_pp.c` $\leftrightarrow$ `part2.c`** | **Symbol Redefinition / Undeclared Identifiers**:<br>- `part2.c` is the lexer/parser logic that invokes `pp_peek()` and `pp_next()` defined in `part0_pp.c`. Swapping causes `error: implicit declaration of function 'pp_peek'`. |
+| **`part2.c` $\leftrightarrow$ `part3.c`** | **AST Generation Node Dependencies**:<br>- `part3.c` parses statements and declarations using semantic functions and token parsers (`parse_decl()`, `parse_expr()`) declared in `part2.c`. |
+| **`ir_emit_dispatch.h` $\leftrightarrow$ `ir_bridge.h`** | **Intermediate Representation Dispatch Declarations**:<br>- `ir_bridge.h` includes macros and inline methods that call the SSA and IR translation routines defined inside the dispatch tables. |
+| **`part4.c` $\leftrightarrow$ `part5.c`** | **Peephole Optimization & Codegen Dependencies**:<br>- `part5.c` (driver and peephole) accesses code-generation entry points (`codegen_program()`, `cc->out`) defined in `part4.c`. |
+
+
 ## Milestones (chronological)
 
 - DOOM compiled: 732 functions, 18.5% IR node reduction
@@ -45,6 +58,7 @@ If a future bootstrap produces a different hash, either codegen drifted (regress
 - DCE pass: eliminated 1,862 / 17,264 instructions (10.79%)
 - IR bridge: GCC-compiled boundary module with three-pointer ABI
 - Rust v1 frontend merged: fn, let, let mut, return, if/else, while, calls, recursion (direct + mutual), SysV ABI <=6 reg args + >=7 stack args, strict modes, named diagnostics with concrete fix examples
+- System V ABI Dynamic Stack Alignment: Implemented pre-allocated stack parameter slot footprints, dynamic stack-depth relative offsets for stack parameter copies, and dynamic sret buffer resolution to perfectly isolate parameters and prevent FFI callback/memory aggregate argument collisions. Achieved 100% green test passes across all 33 test categories and maintained byte-identical self-host compilation.
 
 ## Known Open Items
 

@@ -210,41 +210,37 @@ static void compute_liveness(ir_func_t *fn, const dom_cfg_t *cfg) {
 }
 
 /* ── Real Φ Insertion at Dominance Frontiers ──────────────────────────── */
-static void insert_phis_at_frontiers(ir_module_t *mod, dom_cfg_t *cfg, df_set_t *df_sets) {
-    for (int f = 0; f < mod->func_count; f++) {
-        ir_func_t *fn = mod->funcs[f];
+static void insert_phis_at_frontiers(ir_func_t *fn, dom_cfg_t *cfg, df_set_t *df_sets) {
+    compute_liveness(fn, cfg);
 
-        compute_liveness(fn, cfg);
-
-        ir_node_t *n = fn->head;
-        while (n) {
-            if (n->dst[0] == '\0' || n->op == IR_PHI) {
-                n = n->next; continue;
-            }
-
-            int def_block = dom_find_block_for_node(cfg, n);
-            if (def_block >= 0 && df_sets[def_block].count > 0) {
-                for (int i = 0; i < df_sets[def_block].count; i++) {
-                    int frontier_bid = df_sets[def_block].frontier[i];
-
-                    ir_node_t *phi = calloc(1, sizeof(ir_node_t));
-                    phi->op = IR_PHI;
-                    strncpy(phi->dst, n->dst, IR_NAME_MAX-1);
-                    phi->phi_count = 0;
-                    phi->phi_capacity = MAX_PHI_PREDS;
-                    phi->phi_ops = calloc(MAX_PHI_PREDS, sizeof(ir_phi_operand_t));
-
-                    phi->next = cfg->blocks[frontier_bid].first;
-                    cfg->blocks[frontier_bid].first = phi;
-                    if (cfg->blocks[frontier_bid].last == NULL)
-                        cfg->blocks[frontier_bid].last = phi;
-
-                    fprintf(stderr, "[SSA] Inserted Φ for %s at block %d (frontier of def)\n",
-                            n->dst, frontier_bid);
-                }
-            }
-            n = n->next;
+    ir_node_t *n = fn->head;
+    while (n) {
+        if (n->dst[0] == '\0' || n->op == IR_PHI) {
+            n = n->next; continue;
         }
+
+        int def_block = dom_find_block_for_node(cfg, n);
+        if (def_block >= 0 && df_sets[def_block].count > 0) {
+            for (int i = 0; i < df_sets[def_block].count; i++) {
+                int frontier_bid = df_sets[def_block].frontier[i];
+
+                ir_node_t *phi = calloc(1, sizeof(ir_node_t));
+                phi->op = IR_PHI;
+                strncpy(phi->dst, n->dst, IR_NAME_MAX-1);
+                phi->phi_count = 0;
+                phi->phi_capacity = MAX_PHI_PREDS;
+                phi->phi_ops = calloc(MAX_PHI_PREDS, sizeof(ir_phi_operand_t));
+
+                phi->next = cfg->blocks[frontier_bid].first;
+                cfg->blocks[frontier_bid].first = phi;
+                if (cfg->blocks[frontier_bid].last == NULL)
+                    cfg->blocks[frontier_bid].last = phi;
+
+                fprintf(stderr, "[SSA] Inserted Φ for %s at block %d (frontier of def)\n",
+                        n->dst, frontier_bid);
+            }
+        }
+        n = n->next;
     }
 }
 
@@ -303,15 +299,15 @@ static int destroy_ssa(ir_func_t *fn) {
 }
 
 /* ── Main SSA Pass — complete round-trip ─────────────────────────────── */
-ir_pass_result_t ir_pass_ssa(void *mod_ptr) {
-    ir_module_t *mod = (ir_module_t *)mod_ptr;
+ir_pass_result_t ir_pass_ssa(void *fn_ptr) {
+    ir_func_t *fn = (ir_func_t *)fn_ptr;
     ir_pass_result_t r = {0};
 
-    if (!mod) return r;
+    if (!fn) return r;
 
     const dom_cfg_t *cfg = dom_get_cfg();
-    if (!cfg) {
-        fprintf(stderr, "[SSA] WARNING: No dominance info\n");
+    if (!cfg || cfg->fn != fn) {
+        fprintf(stderr, "[SSA] WARNING: No dominance info or mismatched function\n");
         return r;
     }
 
@@ -319,18 +315,12 @@ ir_pass_result_t ir_pass_ssa(void *mod_ptr) {
     df_set_t *df_sets = NULL;
     df_compute_all(cfg, &df_sets);
 
-    for (int i = 0; i < mod->func_count; i++) {
-        ir_func_t *fn = mod->funcs[i];
-        compute_liveness(fn, cfg);                       /* bitset liveness  */
-        insert_phis_at_frontiers(mod, (dom_cfg_t *)cfg, df_sets); /* precise Φ nodes  */
-        ssa_rename_function(fn, cfg);                    /* versioning       */
-    }
+    compute_liveness(fn, cfg);                       /* bitset liveness  */
+    insert_phis_at_frontiers(fn, (dom_cfg_t *)cfg, df_sets); /* precise Φ nodes  */
+    ssa_rename_function(fn, cfg);                    /* versioning       */
 
     /* Phase B — Destruction (convert back for codegen) */
-    int total_removed = 0;
-    for (int i = 0; i < mod->func_count; i++) {
-        total_removed += destroy_ssa(mod->funcs[i]);
-    }
+    int total_removed = destroy_ssa(fn);
 
     df_free(df_sets);
 
@@ -342,9 +332,8 @@ ir_pass_result_t ir_pass_ssa(void *mod_ptr) {
 
 #else
 ir_pass_result_t ir_pass_ssa(void *mod_ptr) {
-    ir_module_t *mod = (ir_module_t *)mod_ptr;
     ir_pass_result_t r = {0};
-    (void)mod;
+    (void)mod_ptr;
     return r;
 }
 #endif // SSA_ENABLED

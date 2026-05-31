@@ -1,0 +1,33 @@
+{
+  "lineage_name": "ZKAEDI OMEGA EDGE Model Evolution & Hash Lineage Log",
+  "governing_public_key": "4e430ee3d31aadd1112f2cf3b81383935ba61e962ebaba7c1e1f189260a27365",
+  "historical_records": [
+    {
+      "epoch": 0,
+      "tag": "META-HEALING-POC",
+      "model_type": "FP32",
+      "onnx_model_hash": "80c38d326ccb7309993f5da97af0f71e3f9c8a7cdcc1e4d87f7e083000e32e1d",
+      "status": "DEPRECATED",
+      "description": "Initial 100-step Meta mode Hamiltonian optimization run. Validated in early chaos attractors (state_H = 7.003). Trajectory proved model ability to suppress high-dimension noise and lock into stable positive attractor basins. Replaced by production graph compilation."
+    }
+  ],
+  "production_records": [
+    {
+      "epoch": 1,
+      "tag": "OMEGA-EDGE-PROD-FP32",
+      "model_type": "FP32-GRAPH",
+      "onnx_model_hash": "65d3dee19c25c86a7955c54efce6a424a4374bba822af2127ee33f89cdf00e92",
+      "weights_data_hash": "2bdeff0bacf0b32e7675bd9d466439fddd4689b42f2ed680c95f513ca820bb0d",
+      "status": "ACTIVE",
+      "description": "Current production FP32 graph structure and associated external weights data. Locked and signed under Ed25519."
+    },
+    {
+      "epoch": 1,
+      "tag": "OMEGA-EDGE-PROD-INT8",
+      "model_type": "INT8-QUANTIZED",
+      "onnx_model_hash": "97c7f7090af08251d3ec127858bb2259773010fa8c6b6e97c0b2168922c2ff8e",
+      "status": "ACTIVE",
+      "description": "Quantized INT8 model optimizing inference latency for edge deployments. Locked and signed under Ed25519."
+    }
+  ]
+}

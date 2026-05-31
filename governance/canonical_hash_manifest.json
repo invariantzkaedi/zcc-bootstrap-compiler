@@ -1,0 +1,14 @@
+{
+  "manifest": {
+    "decision_tree_model.pkl": "c5370cc46349a592d55cc420369665b7b1721e9007a8aed373c56dcfeb4d7887",
+    "oracle_3k_embeddings.npy": "f86d8e2427849041368f19297bfd52c1912b41dca167827dd5182a73c58088f7",
+    "oracle_3k_faiss.index": "1095e64448ac6b121f5173776b00ca7a68229bdf793f8b6e2478b7458ffdf68d",
+    "oracle_3k_prime_scored.jsonl": "bc5395e094a8c6a86f0c35532d84b5362f7317ab1dfa1e92a34c3801757374e5",
+    "ZKAEDI_OMEGA_EDGE_int8.onnx": "97c7f7090af08251d3ec127858bb2259773010fa8c6b6e97c0b2168922c2ff8e",
+    "ZKAEDI_OMEGA_EDGE_fp32.onnx.data": "2bdeff0bacf0b32e7675bd9d466439fddd4689b42f2ed680c95f513ca820bb0d",
+    "ZKAEDI_OMEGA_EDGE_fp32.onnx": "65d3dee19c25c86a7955c54efce6a424a4374bba822af2127ee33f89cdf00e92",
+    "tombstone_manifest.json": "c71bbebfd58757767a2e52934e1dfb85dad5564ee10d84ef9c689d52f424ee18",
+    "governance/model_lineage_log.json": "815eaaa2273927f4435bcd59dfe25de6b67cabd4e122cbc9868b279446a879b3"
+  },
+  "signature": "e6091a770df99fa1e506917b38bbfaa764c80cfb73d027dcad7c320b4ad6fae18dd9df089df055022d4609df7128db9edb141b0e4ad2501f51723aeffffc6c08"
+}

@@ -34,6 +34,10 @@ void *cc_alloc(Compiler *cc, int size) {
             if (size >= 16) {
                 *((unsigned long long *)((char *)p + 8)) = next_alloc_id++;
             }
+            {
+                extern void zcc_oracle_log_allocation(void *ptr, size_t size);
+                zcc_oracle_log_allocation(p, size);
+            }
             return p;
         }
         if (!a->next) {
@@ -592,7 +596,18 @@ static void lex_number(Compiler *cc, int c) {
         
         if (c == '0' && cc->pos + 1 < cc->source_len && 
             (cc->source[cc->pos + 1] == 'x' || cc->source[cc->pos + 1] == 'X')) {
-            is_float = 0;
+            /* CG-HEXFLT-001: C99 hex float 0x[hex].[hex]p[+-][dec] */
+            int look = cc->pos + 2;
+            int hex_float = 0;
+            while (look < cc->source_len &&
+                   (hex_val(cc->source[look]) >= 0 || cc->source[look] == '.')) {
+                look++;
+            }
+            if (look < cc->source_len &&
+                (cc->source[look] == 'p' || cc->source[look] == 'P')) {
+                hex_float = 1;
+            }
+            is_float = hex_float;
         } else {
             while (cc->pos + i_look < cc->source_len) {
                 char ch = cc->source[cc->pos + i_look];

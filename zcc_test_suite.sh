@@ -35,7 +35,7 @@ info()  { echo -e "  ${CYN}[INFO]${RST} $1"; }
 # Timeout for IR test execution: 10s in quick mode, 60s otherwise
 IR_TIMEOUT=${IR_TIMEOUT:-10}
 
-TESTDIR="/tmp/zcc_tests"
+TESTDIR="${TESTDIR:-/tmp/zcc_tests}"
 rm -rf "$TESTDIR"
 mkdir -p "$TESTDIR"
 
@@ -116,6 +116,52 @@ test_file() {
     # Count IR functions emitted
     local ir_funcs=$(grep -c '\[ZCC-IR\] fn=' "$TESTDIR/${name}_ir.log" 2>/dev/null || echo 0)
     pass "$name (rc=$AST_RC, $ir_funcs IR funcs)"
+}
+
+# Helper: compile through AST path, link/run against GCC and verify output
+test_file_ast_only() {
+    local name="$1"
+    local src="$2"
+    local expect_rc="${3:-0}"
+
+    # Compile through AST
+    if ! ./zcc2 "$src" -o "$TESTDIR/${name}_ast.s" 2>/dev/null; then
+        fail "$name: AST compilation failed"
+        return
+    fi
+
+    # Link and run AST version
+    if gcc -O0 -w -o "$TESTDIR/${name}_ast" "$TESTDIR/${name}_ast.s" -lm 2>/dev/null; then
+        "$TESTDIR/${name}_ast" > "$TESTDIR/${name}_ast.out" 2>&1 || true
+        AST_RC=$?
+    else
+        fail "$name: AST link failed"
+        return
+    fi
+
+    # Compile using GCC directly to get golden reference
+    if gcc -O0 -w -o "$TESTDIR/${name}_gcc" "$src" -lm 2>/dev/null; then
+        "$TESTDIR/${name}_gcc" > "$TESTDIR/${name}_gcc.out" 2>&1 || true
+        GCC_RC=$?
+    else
+        fail "$name: GCC compilation failed"
+        return
+    fi
+
+    # Compare exit codes
+    if [ "$AST_RC" != "$GCC_RC" ]; then
+        fail "$name: exit code mismatch (AST=$AST_RC, GCC=$GCC_RC)"
+        return
+    fi
+
+    # Compare stdout
+    if ! cmp -s "$TESTDIR/${name}_ast.out" "$TESTDIR/${name}_gcc.out"; then
+        fail "$name: output mismatch"
+        diff "$TESTDIR/${name}_ast.out" "$TESTDIR/${name}_gcc.out" | head -5
+        return
+    fi
+
+    pass "$name (rc=$AST_RC, AST verified against GCC)"
 }
 
 # ── Generate test files ──────────────────────────────────────────
@@ -313,6 +359,211 @@ int main() {
 }
 EOF
 test_file "struct_access" "$TESTDIR/t_struct.c" 42
+
+step "Category 5b: Nested Aggregate Return and Stack FFI (ABI Stress)"
+
+cat > "$TESTDIR/t_nested_aggregate_return.c" << 'EOF'
+#include <stdio.h>
+
+typedef struct {
+    long x;
+    double y;
+} Pair;
+
+typedef struct {
+    Pair a;
+    Pair b;
+    int tag;
+} Big;
+
+Big make_big(long seed, double scale, int tag) {
+    Big r;
+    r.a.x = seed + 11;
+    r.a.y = scale * 2.0;
+    r.b.x = seed ^ 0x5a5a5a5aL;
+    r.b.y = scale + 7.25;
+    r.tag = tag + 3;
+    return r;
+}
+
+long consume(Big v, int n) {
+    long acc = v.a.x + v.b.x + v.tag;
+    for (int i = 0; i < n; i++) {
+        acc += (long)(v.a.y * 100.0);
+        acc ^= (long)(v.b.y * 1000.0);
+        acc = (acc << 1) ^ (acc >> 3) ^ i;
+    }
+    return acc;
+}
+
+int main(void) {
+    Big v = make_big(1234567L, 3.5, 9);
+    long r = consume(v, 17);
+    printf("a.x=%ld\n", v.a.x);
+    printf("a.y=%ld\n", (long)(v.a.y * 1000.0));
+    printf("b.x=%ld\n", v.b.x);
+    printf("b.y=%ld\n", (long)(v.b.y * 1000.0));
+    printf("tag=%d\n", v.tag);
+    printf("r=%ld\n", r);
+    return 0;
+}
+EOF
+test_file_ast_only "nested_aggregate_return" "$TESTDIR/t_nested_aggregate_return.c" 0
+
+cat > "$TESTDIR/t_callback_aggregate_ffi.c" << 'EOF'
+#include <stdio.h>
+
+typedef struct {
+    long a;
+    long b;
+} Pair64;
+
+typedef struct {
+    Pair64 p;
+    double scale;
+    int tag;
+} Payload;
+
+typedef Pair64 (*Combiner)(Payload v, long x, long y, long z, long w, long q);
+
+Pair64 combine(Payload v, long x, long y, long z, long w, long q) {
+    Pair64 r;
+    r.a = v.p.a + x + z + q + v.tag;
+    r.b = v.p.b ^ y ^ w ^ (long)(v.scale * 1000.0);
+    return r;
+}
+
+long invoke(Combiner fn, Payload v) {
+    Pair64 r = fn(v, 11, 22, 33, 44, 55);
+    return (r.a * 3) ^ (r.b * 7);
+}
+
+int main(void) {
+    Payload v;
+    v.p.a = 1234;
+    v.p.b = 0x55aa55aaL;
+    v.scale = 6.25;
+    v.tag = 9;
+
+    long out = invoke(combine, v);
+
+    printf("out=%ld\n", out);
+    return 0;
+}
+EOF
+test_file_ast_only "callback_aggregate_ffi" "$TESTDIR/t_callback_aggregate_ffi.c" 0
+
+cat > "$TESTDIR/t_recursive_callback_sret.c" << 'EOF'
+#include <stdio.h>
+
+typedef struct {
+    long x;
+    long y;
+} Vec2;
+
+typedef struct {
+    Vec2 v;
+    double scale;
+    int depth;
+} Frame;
+
+typedef Vec2 (*Transform)(Frame f, long k);
+
+Vec2 twist(Frame f, long k);
+
+Vec2 bounce(Frame f, long k) {
+    Vec2 r;
+    r.x = f.v.x + k + f.depth;
+    r.y = f.v.y ^ ((long)(f.scale * 1000.0));
+    if (f.depth > 0) {
+        Frame next = f;
+        next.depth--;
+        Vec2 t = twist(next, k + 3);
+        r.x ^= t.x;
+        r.y += t.y;
+    }
+    return r;
+}
+
+Vec2 twist(Frame f, long k) {
+    Vec2 r;
+    r.x = (f.v.x * 3) + k;
+    r.y = (f.v.y * 7) ^ k;
+    if (f.depth > 0) {
+        Frame next = f;
+        next.depth--;
+        Vec2 b = bounce(next, k + 5);
+        r.x += b.x;
+        r.y ^= b.y;
+    }
+    return r;
+}
+
+long drive(Transform fn, Frame f) {
+    Vec2 r = fn(f, 11);
+    return (r.x * 13) ^ (r.y * 17);
+}
+
+int main(void) {
+    Frame f;
+    f.v.x = 12345;
+    f.v.y = 0x12345678L;
+    f.scale = 4.75;
+    f.depth = 4;
+    long out = drive(bounce, f);
+    printf("out=%ld\n", out);
+    return 0;
+}
+EOF
+test_file_ast_only "recursive_callback_sret" "$TESTDIR/t_recursive_callback_sret.c" 0
+
+cat > "$TESTDIR/t_trapdoor_side_effect_abi.c" << 'EOF'
+#include <stdio.h>
+
+typedef struct {
+    long a;
+    long b;
+} Pair;
+
+typedef struct {
+    Pair p;
+    int flag;
+    double scale;
+} Box;
+
+typedef Box (*Mixer)(Box x, long *state, int gate);
+
+Box mutate(Box x, long *state, int gate) {
+    Box r = x;
+    if (gate && ((*state += 7) > 0)) {
+        r.p.a += *state;
+        r.flag ^= gate;
+    } else {
+        r.p.b -= 13;
+    }
+    if ((r.flag || ((*state += 11) == 0)) && r.scale > 1.0) {
+        r.p.b ^= (long)(r.scale * 1000.0);
+    }
+    return r;
+}
+
+long drive(Mixer fn, Box b) {
+    long state = 5;
+    Box r = fn(b, &state, 3);
+    return (r.p.a * 31) ^ (r.p.b * 17) ^ state ^ r.flag;
+}
+
+int main(void) {
+    Box b;
+    b.p.a = 100;
+    b.p.b = 0xabcdefL;
+    b.flag = 2;
+    b.scale = 2.5;
+    printf("out=%ld\n", drive(mutate, b));
+    return 0;
+}
+EOF
+test_file_ast_only "trapdoor_side_effect_abi" "$TESTDIR/t_trapdoor_side_effect_abi.c" 0
 
 step "Category 6: Switch Statements"
 

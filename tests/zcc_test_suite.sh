@@ -32,7 +32,7 @@ fail()  { echo -e "  ${RED}[FAIL]${RST} $1"; FAIL_COUNT=$((FAIL_COUNT + 1)); }
 skip()  { echo -e "  ${YEL}[SKIP]${RST} $1"; SKIP_COUNT=$((SKIP_COUNT + 1)); }
 info()  { echo -e "  ${CYN}[INFO]${RST} $1"; }
 
-TESTDIR="/tmp/zcc_tests"
+TESTDIR="${TESTDIR:-/tmp/zcc_tests}"
 rm -rf "$TESTDIR"
 mkdir -p "$TESTDIR"
 

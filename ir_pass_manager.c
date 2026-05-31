@@ -21,6 +21,7 @@
 #include "ir_pass_warden.h"
 #include "ir_symbolic_cfg.h"
 #include "ir_dominance.h"
+#include "src/zcc_oracle_substrate.h"
 
 #define SSA_ENABLED 1   // flipped to 1 for SSA courtroom
 
@@ -282,6 +283,10 @@ static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
     ir_pass_result_t r;
     ir_node_t *n;
     int modified = 0;
+    uint64_t hash_pre;
+
+    record_pass_begin("constant_folding");
+    hash_pre = compute_cfg_topology_hash(fn);
 
     memset(&r, 0, sizeof(r));
     r.nodes_before = count_nodes(fn);
@@ -362,6 +367,17 @@ static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
                     cmap_add(n->dst, n->imm);
                     cmap_add_256(n->dst, res256);
                     modified++;
+
+                    {
+                        uint64_t node_id = 0;
+                        ir_node_t *curr;
+                        for (curr = fn->head; curr && curr != n; curr = curr->next) {
+                            node_id++;
+                        }
+                        char details[256];
+                        sprintf(details, "Folded wide op into 256-bit constant");
+                        record_transform("constant_folding", node_id, details);
+                    }
                     continue;
                 } else {
                     continue;
@@ -382,6 +398,17 @@ static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
                 n->src2[0] = '\0';
                 cmap_add(n->dst, n->imm);
                 modified++;
+
+                {
+                    uint64_t node_id = 0;
+                    ir_node_t *curr;
+                    for (curr = fn->head; curr && curr != n; curr = curr->next) {
+                        node_id++;
+                    }
+                    char details[256];
+                    sprintf(details, "Folded float op into constant");
+                    record_transform("constant_folding", node_id, details);
+                }
                 fprintf(stderr, "\033[38;5;17m[FOLD]\033[38;5;51m Folded floating-point operation into IR_FCONST \033[38;5;199m%f\033[0m\n", f_res);
                 continue;
             } else {
@@ -419,12 +446,29 @@ static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
             cmap_add(n->dst, result);
 
             modified++;
+
+            {
+                uint64_t node_id = 0;
+                ir_node_t *curr;
+                for (curr = fn->head; curr && curr != n; curr = curr->next) {
+                    node_id++;
+                }
+                char details[256];
+                sprintf(details, "Folded op into constant %ld", result);
+                record_transform("constant_folding", node_id, details);
+            }
         }
     }
 
     r.nodes_after = r.nodes_before; /* const fold mutates, doesn't delete */
     r.nodes_modified = modified;
     r.changed = modified > 0;
+
+    uint64_t hash_post = compute_cfg_topology_hash(fn);
+    assert_cfg_invariance("constant_folding", hash_pre, hash_post);
+    record_proof("cfg_topology_invariance", "constant_folding", hash_pre, 1, 0, 1, 1);
+    record_pass_end("constant_folding");
+
     return r;
 }
 
