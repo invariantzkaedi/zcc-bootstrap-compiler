@@ -10,6 +10,9 @@
 #include "ir_emit_dispatch.h"
 #include "ir_bridge.h"
 
+/* Forward declaration — defined ~4200 lines below, used in ND_DIV const-fold guard */
+static long long eval_const_expr_p4(Node *elem, int *ok);
+
 #ifdef __clang__
 #pragma clang diagnostic ignored "-Wdangling-else"
 #pragma clang diagnostic ignored "-Wmisleading-indentation"
@@ -1584,6 +1587,22 @@ void codegen_expr(Compiler *cc, Node *node) {
       return;
     }
 
+    /* CG-SIGFPE-001: constant-fold both operands before emitting idiv.
+       INT_MIN / -1 is signed integer overflow — emitting idiv causes SIGFPE
+       on x86. GCC folds this at compile time; ZCC must too when both sides
+       are compile-time constants (e.g. Csmith seed498).
+       NOTE: float path has already returned above, so this is integers only. */
+    if (!backend_ops) {
+      int lhs_ok = 1, rhs_ok = 1;
+      long long lhs_cv = eval_const_expr_p4(node->lhs, &lhs_ok);
+      long long rhs_cv = eval_const_expr_p4(node->rhs, &rhs_ok);
+      if (lhs_ok && rhs_ok && rhs_cv != 0) {
+        long long result = lhs_cv / rhs_cv;
+        fprintf(cc->out, "    movq $%lld, %%rax\n", result);
+        ir_emit_binary_op(ND_DIV, node->type, "$const_lhs", "$const_rhs", node->line);
+        return;
+      }
+    }
     codegen_expr_checked(cc, node->lhs);
     ir_save_result(lhs_ir);
     push_reg(cc, "rax");
@@ -4251,6 +4270,19 @@ static long long eval_const_expr_p4(Node *elem, int *ok) {
     }
     if (elem->kind == ND_BNOT) return ~eval_const_expr_p4(elem->lhs, ok);
     if (elem->kind == ND_LNOT) return !eval_const_expr_p4(elem->lhs, ok);
+    /* Relational + logical ops — needed for ternary denominator patterns */
+    if (elem->kind == ND_EQ)   return eval_const_expr_p4(elem->lhs, ok) == eval_const_expr_p4(elem->rhs, ok);
+    if (elem->kind == ND_NE)   return eval_const_expr_p4(elem->lhs, ok) != eval_const_expr_p4(elem->rhs, ok);
+    if (elem->kind == ND_LT)   return eval_const_expr_p4(elem->lhs, ok) <  eval_const_expr_p4(elem->rhs, ok);
+    if (elem->kind == ND_LE)   return eval_const_expr_p4(elem->lhs, ok) <= eval_const_expr_p4(elem->rhs, ok);
+    if (elem->kind == ND_GT)   return eval_const_expr_p4(elem->lhs, ok) >  eval_const_expr_p4(elem->rhs, ok);
+    if (elem->kind == ND_GE)   return eval_const_expr_p4(elem->lhs, ok) >= eval_const_expr_p4(elem->rhs, ok);
+    if (elem->kind == ND_LAND) return eval_const_expr_p4(elem->lhs, ok) && eval_const_expr_p4(elem->rhs, ok);
+    if (elem->kind == ND_LOR)  return eval_const_expr_p4(elem->lhs, ok) || eval_const_expr_p4(elem->rhs, ok);
+    /* Ternary constant folding — closes seed498: INT_MIN / (cond==0 ? 1 : cond) */
+    if (elem->kind == ND_TERNARY && elem->cond && elem->then_body && elem->else_body)
+        return eval_const_expr_p4(elem->cond, ok) ? eval_const_expr_p4(elem->then_body, ok)
+                                                   : eval_const_expr_p4(elem->else_body, ok);
     /* CG-GINIT-FLOAT-001: float/double literals in aggregate initializers */
     if (elem->kind == ND_FLIT) {
         if (elem->type && elem->type->kind == TY_FLOAT) {

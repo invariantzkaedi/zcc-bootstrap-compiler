@@ -2,6 +2,7 @@
 /* Exclusively for standalone IDE analysis */
 #include "part1.c"
 #endif
+#include "zcc_telemetry.h"
 
 /* ================================================================ */
 /* PARSER                                                            */
@@ -944,6 +945,19 @@ static long long eval_const_expr(Node *n) {
     if (n->kind == ND_NEG)  return -eval_const_expr(n->lhs);
     if (n->kind == ND_BNOT) return ~eval_const_expr(n->lhs);
     if (n->kind == ND_LNOT) return !eval_const_expr(n->lhs);
+    /* Relational and logical operators (commit 3cc64db6 — re-applied from history) */
+    if (n->kind == ND_EQ)   return eval_const_expr(n->lhs) == eval_const_expr(n->rhs);
+    if (n->kind == ND_NE)   return eval_const_expr(n->lhs) != eval_const_expr(n->rhs);
+    if (n->kind == ND_LT)   return eval_const_expr(n->lhs) <  eval_const_expr(n->rhs);
+    if (n->kind == ND_LE)   return eval_const_expr(n->lhs) <= eval_const_expr(n->rhs);
+    if (n->kind == ND_GT)   return eval_const_expr(n->lhs) >  eval_const_expr(n->rhs);
+    if (n->kind == ND_GE)   return eval_const_expr(n->lhs) >= eval_const_expr(n->rhs);
+    if (n->kind == ND_LAND) return eval_const_expr(n->lhs) && eval_const_expr(n->rhs);
+    if (n->kind == ND_LOR)  return eval_const_expr(n->lhs) || eval_const_expr(n->rhs);
+    /* Ternary constant folding — enables (expr==0 ? 1 : expr) denominator patterns */
+    if (n->kind == ND_TERNARY && n->cond && n->then_body && n->else_body)
+        return eval_const_expr(n->cond) ? eval_const_expr(n->then_body)
+                                        : eval_const_expr(n->else_body);
     /* Enum constants (global only — local vars are NOT constants) */
     if (n->kind == ND_VAR && n->sym && n->sym->is_enum_const && !n->sym->is_local)
         return n->sym->enum_val;
@@ -2462,7 +2476,7 @@ Node *parse_assign(Compiler *cc) {
     return n;
 }
 
-Node *parse_expr(Compiler *cc) {
+Node *parse_expr_internal(Compiler *cc) {
     Node *n;
     n = parse_assign(cc);
     while (cc->tk == TK_COMMA) {
@@ -2476,6 +2490,16 @@ Node *parse_expr(Compiler *cc) {
         comma->type = comma->rhs->type;
         n = comma;
     }
+    return n;
+}
+
+Node *parse_expr(Compiler *cc) {
+    Node *n;
+    cc->telemetry_depth++;
+    telemetry_emit_node(AST_ENTER_NODE, "expr", cc->telemetry_depth);
+    n = parse_expr_internal(cc);
+    telemetry_emit_node(AST_EXIT_NODE, "expr", cc->telemetry_depth);
+    cc->telemetry_depth--;
     return n;
 }
 
@@ -2627,7 +2651,7 @@ static void emit_local_initializer(Compiler *cc, Node *block, int *cnt, int *cap
     }
 }
 
-Node *parse_stmt(Compiler *cc) {
+Node *parse_stmt_internal(Compiler *cc) {
     int line;
     line = cc->tk_line;
 
@@ -3087,6 +3111,16 @@ Node *parse_stmt(Compiler *cc) {
             expect(cc, TK_SEMI);
         return expr;
     }
+}
+
+Node *parse_stmt(Compiler *cc) {
+    Node *n;
+    cc->telemetry_depth++;
+    telemetry_emit_node(AST_ENTER_NODE, "stmt", cc->telemetry_depth);
+    n = parse_stmt_internal(cc);
+    telemetry_emit_node(AST_EXIT_NODE, "stmt", cc->telemetry_depth);
+    cc->telemetry_depth--;
+    return n;
 }
 
 /* ================================================================ */
