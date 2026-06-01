@@ -85,9 +85,8 @@ class MutationEngine:
         self.mutations_found = []
         results = []
 
-        # --- SWEEP mutations (apply whole-assembly transformations) ---
         if include_sweeps:
-            # results.extend(self._sweep_zero_mov_to_xor(asm_lines))  # re-enable after validation
+            results.extend(self._sweep_zero_mov_to_xor(asm_lines))
             results.extend(self._sweep_strength_reduction(asm_lines))
             results.extend(self._sweep_cmpq_zero_to_testq(asm_lines))
             results.extend(self._sweep_branch_straighten(asm_lines))
@@ -165,6 +164,46 @@ class MutationEngine:
     # SWEEP MUTATIONS (whole-assembly pass)
     # ──────────────────────────────────────────────────────────────────
 
+    def _is_zero_mov_safe(self, lines: list[str], idx: int, reg: str) -> bool:
+        """
+        Verify if EFLAGS is consumed by a conditional branch, setcc, cmovcc, or adc/sbb
+        before being killed or exiting the basic block / label boundary, up to 20 instructions.
+        """
+        clobber_patterns = [
+            r'\bcmp[qwl]?', r'\btest[qwl]?', r'\badd[qwl]?', r'\bsub[qwl]?',
+            r'\band[qwl]?', r'\bor[qwl]?', r'\bxor[qwl]?', r'\bshl[qwl]?',
+            r'\bshr[qwl]?', r'\bsar[qwl]?', r'\bimul[qwl]?', r'\bneg[qwl]?'
+        ]
+        cond_jumps = [
+            r'\bje\b', r'\bjne\b', r'\bjg\b', r'\bjge\b', r'\bjl\b', r'\bjle\b',
+            r'\bja\b', r'\bjae\b', r'\bjb\b', r'\bjbe\b', r'\bjs\b', r'\bjns\b',
+            r'\bjc\b', r'\bjnc\b', r'\bjo\b', r'\bjno\b', r'\bjp\b', r'\bjnp\b',
+            r'\bjz\b', r'\bjnz\b', r'\bjrcxz\b', r'\bloop',
+            r'\bset[a-z]{1,3}\b', r'\bcmov[a-z]{1,3}\b',
+            r'\badc[qwl]?\b', r'\bsbb[qwl]?\b'
+        ]
+        terminators = [
+            r'\bret\b', r'\bleave\b', r'\bjmp\b'
+        ]
+        
+        count = 0
+        for k in range(idx + 1, len(lines)):
+            line = lines[k].strip()
+            if not line or line.startswith('#'):
+                continue
+            if line.endswith(':'):
+                return False  # Label is unsafe target
+            count += 1
+            if count > 20:
+                return False  # Reached scan window cap
+            if any(re.search(pat, line) for pat in cond_jumps):
+                return False
+            if any(re.search(pat, line) for pat in clobber_patterns):
+                return True
+            if any(re.search(pat, line) for pat in terminators):
+                return True
+        return True
+
     def _sweep_zero_mov_to_xor(self, lines: list[str]) -> list[Mutation]:
         """
         SWEEP: Replace ALL movq $0, %rX with xorq %rX, %rX.
@@ -178,9 +217,12 @@ class MutationEngine:
         x86 processors have a zeroing idiom recognizer for xor reg,reg.
         """
         count = 0
-        for l in lines:
-            if re.match(r'\s*movq\s+\$0,\s*(%[re]?[a-z]{2,3})', l):
-                count += 1
+        for idx, l in enumerate(lines):
+            m = re.match(r'\s*movq\s+\$0,\s*(%[re]?[a-z]{2,3})', l)
+            if m:
+                reg = m.group(1)
+                if self._is_zero_mov_safe(lines, idx, reg):
+                    count += 1
 
         if count == 0:
             return []
@@ -234,12 +276,15 @@ class MutationEngine:
         name = mutation.name
 
         if name == "sweep_zero_mov_to_xor":
-            for line in lines:
+            for idx, line in enumerate(lines):
                 m = re.match(r'(\s*)movq\s+\$0,\s*(%[re]?[a-z]{2,3})\s*$', line)
                 if m:
                     indent = m.group(1)
                     reg = m.group(2)
-                    result.append(f"{indent}xorq {reg}, {reg}\n")
+                    if self._is_zero_mov_safe(lines, idx, reg):
+                        result.append(f"{indent}xorq {reg}, {reg}\n")
+                    else:
+                        result.append(line)
                 else:
                     result.append(line)
 

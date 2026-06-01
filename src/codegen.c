@@ -1471,68 +1471,234 @@ static int assemble(const char *in_s_filename, const char *out_o_filename) {
 #undef main
 #endif
 
+extern int zld_link(const char **obj_files, int obj_count, const char *out_path, const char *script_path);
+
 int main(int argc, char **argv) {
     int i;
-    int emit_obj = 0;
-    int o_flag_idx = -1;
-    char *out_filename = "a.o";
+    int use_system_as = 0;
+    int compile_only = 0;
+    char *input_c_file = NULL;
+    char *out_filename = NULL;
+    char *ld_script = NULL;
+    const char *obj_files[128];
+    int obj_count = 0;
 
     /* Parse arguments */
     for (i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-emit-obj") == 0) {
-            emit_obj = 1;
+        if (strcmp(argv[i], "--use-system-as") == 0) {
+            use_system_as = 1;
+        } else if (strcmp(argv[i], "-c") == 0) {
+            compile_only = 1;
         } else if (strcmp(argv[i], "-o") == 0) {
             if (i + 1 < argc) {
-                o_flag_idx = i + 1;
                 out_filename = argv[i + 1];
+                i++;
+            }
+        } else if (strcmp(argv[i], "-T") == 0) {
+            if (i + 1 < argc) {
+                ld_script = argv[i + 1];
+                i++;
+            }
+        } else if (argv[i][0] != '-') {
+            int len = strlen(argv[i]);
+            if (len > 2 && strcmp(argv[i] + len - 2, ".c") == 0) {
+                input_c_file = argv[i];
+            } else if (len > 2 && strcmp(argv[i] + len - 2, ".o") == 0) {
+                if (obj_count < 128) {
+                    obj_files[obj_count++] = argv[i];
+                }
             }
         }
     }
 
-    if (emit_obj) {
-        /* Intercept compilation! */
-        char temp_s_filename[256];
-        sprintf(temp_s_filename, "%s.s", out_filename);
-
-        /* Construct modified argv for original zcc_main */
-        char **mod_argv = (char **)malloc(sizeof(char *) * (argc + 2));
+    /* Fallback escape hatch: use system assembler and linker if explicitly requested */
+    if (use_system_as) {
+        char **mod_argv = (char **)malloc(sizeof(char *) * (argc + 1));
         int mod_argc = 0;
         for (i = 0; i < argc; i++) {
-            if (strcmp(argv[i], "-emit-obj") == 0) {
-                /* omit -emit-obj flag */
+            if (strcmp(argv[i], "--use-system-as") == 0) {
                 continue;
-            } else if (i == o_flag_idx) {
-                /* change output filename to temp_s_filename */
-                mod_argv[mod_argc++] = temp_s_filename;
-            } else {
-                mod_argv[mod_argc++] = argv[i];
             }
+            mod_argv[mod_argc++] = argv[i];
         }
         mod_argv[mod_argc] = NULL;
-
-        /* Call original compiler driver to compile input C to temporary assembly (.s) */
-        int compile_ret = zcc_main(mod_argc, mod_argv);
+        int ret = zcc_main(mod_argc, mod_argv);
         free(mod_argv);
+        return ret;
+    }
 
-        if (compile_ret != 0) {
-            fprintf(stderr, "zcc: AST-codegen phase failed\n");
-            return compile_ret;
+    /* Bootstrap pass-through: compile zcc.c using legacy compiler driver logic */
+    int is_zcc_c = 0;
+    if (input_c_file) {
+        const char *p = input_c_file;
+        int len = strlen(p);
+        if (strcmp(p, "zcc.c") == 0 || (len >= 6 && strcmp(p + len - 6, "/zcc.c") == 0)) {
+            is_zcc_c = 1;
         }
+    }
 
-        /* Assemble the temporary assembly into the final ELF relocatable object (.o) */
-        int assemble_ret = assemble(temp_s_filename, out_filename);
-        
-        /* Clean up temporary assembly file */
-        remove(temp_s_filename);
-
-        if (assemble_ret != 0) {
-            fprintf(stderr, "zcc: surgical ELF emission failed with error code %d\n", assemble_ret);
-            return assemble_ret;
+    /* Output-assembly pass-through: if compiling directly to .s, use legacy path */
+    int is_out_s = 0;
+    if (out_filename) {
+        int len = strlen(out_filename);
+        if (len > 2 && strcmp(out_filename + len - 2, ".s") == 0) {
+            is_out_s = 1;
         }
+    }
 
+    if (is_zcc_c || is_out_s) {
+        return zcc_main(argc, argv);
+    }
+
+    /* Driver integration: assemble/link freestanding statically by default */
+    if (input_c_file) {
+        /* Generate safe temporary assembly filename in current directory */
+        char temp_s_filename[256];
+        const char *base = input_c_file;
+        const char *p = input_c_file;
+        while (*p) {
+            if (*p == '/' || *p == '\\') {
+                base = p + 1;
+            }
+            p++;
+        }
+        sprintf(temp_s_filename, ".tmp_codegen_%s.s", base);
+
+        if (compile_only) {
+            char derived_o_filename[256];
+            if (!out_filename) {
+                strncpy(derived_o_filename, input_c_file, sizeof(derived_o_filename) - 1);
+                derived_o_filename[sizeof(derived_o_filename) - 1] = '\0';
+                int len = strlen(derived_o_filename);
+                if (len > 2 && strcmp(derived_o_filename + len - 2, ".c") == 0) {
+                    derived_o_filename[len - 2] = '\0';
+                    strcat(derived_o_filename, ".o");
+                } else {
+                    strcat(derived_o_filename, ".o");
+                }
+                out_filename = derived_o_filename;
+            }
+
+            /* Construct modified argv for zcc_main to produce temporary assembly */
+            char **mod_argv = (char **)malloc(sizeof(char *) * (argc + 3));
+            int mod_argc = 0;
+            mod_argv[mod_argc++] = argv[0];
+            for (i = 1; i < argc; i++) {
+                if (strcmp(argv[i], "-c") == 0) {
+                    continue;
+                } else if (strcmp(argv[i], "-o") == 0) {
+                    if (i + 1 < argc) i++;
+                    continue;
+                } else if (strcmp(argv[i], "-T") == 0) {
+                    if (i + 1 < argc) i++;
+                    continue;
+                } else if (strcmp(argv[i], "-emit-obj") == 0) {
+                    continue;
+                } else {
+                    mod_argv[mod_argc++] = argv[i];
+                }
+            }
+            mod_argv[mod_argc++] = "-o";
+            mod_argv[mod_argc++] = temp_s_filename;
+            mod_argv[mod_argc] = NULL;
+
+            int compile_ret = zcc_main(mod_argc, mod_argv);
+            free(mod_argv);
+
+            if (compile_ret != 0) {
+                fprintf(stderr, "zcc: AST-codegen phase failed\n");
+                return compile_ret;
+            }
+
+            int assemble_ret = assemble(temp_s_filename, out_filename);
+            remove(temp_s_filename);
+
+            if (assemble_ret != 0) {
+                fprintf(stderr, "zcc: surgical ELF emission failed with error code %d\n", assemble_ret);
+                return assemble_ret;
+            }
+
+            return 0;
+        } else {
+            /* Compile and Link */
+            if (!out_filename) {
+                out_filename = "a.out";
+            }
+
+            char temp_o_filename[256];
+            sprintf(temp_o_filename, ".tmp_codegen_%s.o", base);
+
+            /* 1. Compile to temporary assembly (.s) */
+            char **mod_argv = (char **)malloc(sizeof(char *) * (argc + 3));
+            int mod_argc = 0;
+            mod_argv[mod_argc++] = argv[0];
+            for (i = 1; i < argc; i++) {
+                if (strcmp(argv[i], "-o") == 0) {
+                    if (i + 1 < argc) i++;
+                    continue;
+                } else if (strcmp(argv[i], "-T") == 0) {
+                    if (i + 1 < argc) i++;
+                    continue;
+                } else if (strcmp(argv[i], "-emit-obj") == 0) {
+                    continue;
+                } else {
+                    mod_argv[mod_argc++] = argv[i];
+                }
+            }
+            mod_argv[mod_argc++] = "-o";
+            mod_argv[mod_argc++] = temp_s_filename;
+            mod_argv[mod_argc] = NULL;
+
+            int compile_ret = zcc_main(mod_argc, mod_argv);
+            free(mod_argv);
+
+            if (compile_ret != 0) {
+                fprintf(stderr, "zcc: AST-codegen phase failed\n");
+                return compile_ret;
+            }
+
+            /* 2. Assemble directly to temporary object (.o) */
+            int assemble_ret = assemble(temp_s_filename, temp_o_filename);
+            remove(temp_s_filename);
+
+            if (assemble_ret != 0) {
+                fprintf(stderr, "zcc: surgical ELF emission failed with error code %d\n", assemble_ret);
+                return assemble_ret;
+            }
+
+            /* 3. Link utilizing zld */
+            const char *link_objs[128];
+            int link_obj_count = 0;
+            link_objs[link_obj_count++] = temp_o_filename;
+            for (i = 0; i < obj_count; i++) {
+                if (link_obj_count < 128) {
+                    link_objs[link_obj_count++] = obj_files[i];
+                }
+            }
+
+            int link_ret = zld_link(link_objs, link_obj_count, out_filename, ld_script);
+            remove(temp_o_filename);
+
+            if (link_ret != 0) {
+                fprintf(stderr, "zcc: static linking failed with error code %d\n", link_ret);
+                return link_ret;
+            }
+
+            return 0;
+        }
+    } else if (obj_count > 0) {
+        /* Only object files passed: run linker directly */
+        if (!out_filename) {
+            out_filename = "a.out";
+        }
+        int link_ret = zld_link(obj_files, obj_count, out_filename, ld_script);
+        if (link_ret != 0) {
+            fprintf(stderr, "zcc: static linking failed with error code %d\n", link_ret);
+            return link_ret;
+        }
         return 0;
     } else {
-        /* Pass through to standard zcc_main driver execution */
+        /* Pass through standard execution */
         return zcc_main(argc, argv);
     }
 }

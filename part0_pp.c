@@ -151,18 +151,6 @@ static const char *zcc_stddef_text =
     "typedef unsigned char uint8_t;\n"
     "typedef short int16_t;\n"
     "typedef unsigned short uint16_t;\n"
-    "#define INT8_MIN   (-128)\n"
-    "#define INT8_MAX   127\n"
-    "#define INT16_MIN  (-32768)\n"
-    "#define INT16_MAX  32767\n"
-    "#define INT32_MIN  (-2147483647-1)\n"
-    "#define INT32_MAX  2147483647\n"
-    "#define INT64_MIN  (-9223372036854775807LL-1LL)\n"
-    "#define INT64_MAX  9223372036854775807LL\n"
-    "#define UINT8_MAX  255\n"
-    "#define UINT16_MAX 65535\n"
-    "#define UINT32_MAX 4294967295U\n"
-    "#define UINT64_MAX 18446744073709551615ULL\n"
     "typedef unsigned long size_t;\n"
     "typedef long ssize_t;\n"
     "typedef long ptrdiff_t;\n"
@@ -183,10 +171,6 @@ static const char *zcc_stddef_text =
     "long strtol(const char *s, char **end, int base);\n"
     "unsigned long strtoul(const char *s, char **end, int base);\n"
     "double strtod(const char *s, char **end);\n"
-    "double ldexp(double x, int exp);\n"
-    "float ldexpf(float x, int exp);\n"
-    "double fabs(double x);\n"
-    "float fabsf(float x);\n"
     "int abs(int n);\n"
     "long labs(long n);\n"
     "long long llabs(long long n);\n"
@@ -281,7 +265,12 @@ static void pp_emit_str(PPState *state, const char *str, int len) {
  * advance. The pop_barrier guard in pp_parse_ident (7d049358) still constrains
  * this. */
 static void pp_drain_frames(PPState *state) {
-  while (state->pos >= state->len && state->input_depth > state->pop_barrier) {
+  while (state->pos >= state->len && state->input_depth > 0) {
+    int can_pop = (state->input_depth > state->pop_barrier) ||
+                  (state->input_stack[state->input_depth - 1].expanding_macro == NULL);
+    if (!can_pop)
+      break;
+
     if (state->alloc_buf)
       free(state->alloc_buf);
     state->input_depth--;
@@ -419,8 +408,9 @@ static void pp_parse_ident(PPState *state, char *out, int max) {
 static PPMacro *pp_find_macro(PPState *state, const char *name) {
   int i;
   for (i = state->num_macros - 1; i >= 0; i--) {
-    if (state->macros[i].active && strcmp(state->macros[i].name, name) == 0)
+    if (state->macros[i].active && strcmp(state->macros[i].name, name) == 0) {
       return &state->macros[i];
+    }
   }
   return 0;
 }
@@ -653,8 +643,7 @@ static int is_stddef_stub(const char *path) {
          strcmp(base, "inttypes.h") == 0 || strcmp(base, "stdint.h") == 0 ||
          strcmp(base, "semaphore.h") == 0 || strcmp(base, "signal.h") == 0 ||
          strcmp(base, "stdbool.h") == 0 || strcmp(base, "assert.h") == 0 ||
-         strcmp(base, "types.h") == 0 || strcmp(base, "stat.h") == 0 ||
-         strcmp(base, "ioctl.h") == 0 || strcmp(base, "mman.h") == 0;
+         strcmp(base, "types.h") == 0;
 }
 
 /* PP-INCLUDE-022: Resolve an include path via -I search and relative lookup.
@@ -1165,11 +1154,11 @@ static long long pp_eval_expr_str(PPState *state, const char *s, int depth) {
 }
 
 static void pp_parse_directive(PPState *state) {
-  char dir[1024];
+  char dir[16384];
   int active = pp_is_active(state);
 
   pp_skip_whitespace(state);
-  pp_parse_ident(state, dir, 1024);
+  pp_parse_ident(state, dir, 16384);
   pp_skip_whitespace(state);
 
   if (strcmp(dir, "ifdef") == 0 || strcmp(dir, "ifndef") == 0) {
@@ -1190,11 +1179,11 @@ static void pp_parse_directive(PPState *state) {
     }
     state->cond_satisfied[state->cond_depth] =
         state->cond_stack[state->cond_depth];
-    pp_read_line(state, dir, 1024);
+    pp_read_line(state, dir, 16384);
   } else if (strcmp(dir, "if") == 0) {
-    char expr[4096];
+    char expr[16384];
     pp_skip_whitespace(state);
-    pp_read_line(state, expr, 4096);
+    pp_read_line(state, expr, 16384);
     state->cond_depth++;
     state->cond_else_seen[state->cond_depth] = 0;
     if (!active) {
@@ -1206,8 +1195,8 @@ static void pp_parse_directive(PPState *state) {
         state->cond_stack[state->cond_depth];
   } else if (strcmp(dir, "elif") == 0) {
     if (state->cond_depth > 0 && !state->cond_else_seen[state->cond_depth]) {
-      char expr[4096];
-      pp_read_line(state, expr, 4096);
+      char expr[16384];
+      pp_read_line(state, expr, 16384);
       if (state->cond_satisfied[state->cond_depth]) {
         state->cond_stack[state->cond_depth] = 0;
       } else {
@@ -1226,7 +1215,7 @@ static void pp_parse_directive(PPState *state) {
         }
       }
     } else {
-      pp_read_line(state, dir, 1024);
+      pp_read_line(state, dir, 16384);
     }
   } else if (strcmp(dir, "else") == 0) {
     if (state->cond_depth > 0) {
@@ -1247,7 +1236,7 @@ static void pp_parse_directive(PPState *state) {
         state->cond_stack[state->cond_depth] = 0;
       }
     }
-    pp_read_line(state, dir, 1024);
+    pp_read_line(state, dir, 16384);
   } else if (strcmp(dir, "endif") == 0) {
     if (state->cond_depth > 0) {
       state->cond_satisfied[state->cond_depth] = 0;
@@ -1255,7 +1244,7 @@ static void pp_parse_directive(PPState *state) {
       state->cond_depth--;
     }
 
-    pp_read_line(state, dir, 1024);
+    pp_read_line(state, dir, 16384);
   } else if (active) {
     if (strcmp(dir, "define") == 0) {
       char name[128];
@@ -1276,9 +1265,9 @@ static void pp_parse_directive(PPState *state) {
       char name[128];
       pp_parse_ident(state, name, 128);
       pp_undef_macro(state, name);
-      pp_read_line(state, dir, 1024);
+      pp_read_line(state, dir, 16384);
     } else if (strcmp(dir, "include") == 0) {
-      char inc_path[256];
+      char inc_path[4096];
       int is_system = 0;
       if (pp_peek(state) == '<') {
         is_system = 1;
@@ -1286,7 +1275,7 @@ static void pp_parse_directive(PPState *state) {
       } else if (pp_peek(state) == '"') {
         pp_next(state);
       }
-      pp_read_line(state, inc_path, 256);
+      pp_read_line(state, inc_path, 4096);
       /* Strip trailing \r from Windows line endings */
       {
         int plen = strlen(inc_path);
@@ -1300,14 +1289,14 @@ static void pp_parse_directive(PPState *state) {
       }
       pp_process_include(state, inc_path, is_system);
     } else if (strcmp(dir, "error") == 0) {
-      char msg[256];
-      pp_read_line(state, msg, 256);
+      char msg[8192];
+      pp_read_line(state, msg, 8192);
       fprintf(stderr, "zcc preprocessor error: #error %s\n", msg);
     } else {
-      pp_read_line(state, dir, 1024);
+      pp_read_line(state, dir, 16384);
     }
   } else {
-    pp_read_line(state, dir, 1024);
+    pp_read_line(state, dir, 16384);
   }
 
   if (pp_peek(state) == '\n')
@@ -1966,36 +1955,6 @@ char *zcc_preprocess(const char *source, int source_len, const char *filename,
 
   state->src = normalized_src;
   state->len = normalized_len;
-
-  /* Preprocessor Pass 0 Risk Scanner */
-  {
-    int loops = 0;
-    int indirections = 0;
-    int structs = 0;
-    int idx;
-    for (idx = 0; idx < normalized_len - 6; idx++) {
-      if (strncmp(normalized_src + idx, "while", 5) == 0) {
-        char next_c = normalized_src[idx + 5];
-        if (next_c == ' ' || next_c == '\t' || next_c == '(') loops++;
-      } else if (strncmp(normalized_src + idx, "for", 3) == 0) {
-        if (idx == 0 || normalized_src[idx - 1] == ' ' || normalized_src[idx - 1] == '\t' || normalized_src[idx - 1] == '\n' || normalized_src[idx - 1] == ';') {
-          char next_c = normalized_src[idx + 3];
-          if (next_c == ' ' || next_c == '\t' || next_c == '(') loops++;
-        }
-      } else if (strncmp(normalized_src + idx, "struct", 6) == 0) {
-        if (idx == 0 || normalized_src[idx - 1] == ' ' || normalized_src[idx - 1] == '\t' || normalized_src[idx - 1] == '\n' || normalized_src[idx - 1] == ';') {
-          char next_c = normalized_src[idx + 6];
-          if (next_c == ' ' || next_c == '\t' || next_c == '{') structs++;
-        }
-      } else if (normalized_src[idx] == '*' && normalized_src[idx + 1] == '*') {
-        indirections++;
-        if (normalized_src[idx + 2] == '*') idx++;
-      }
-    }
-    extern void zcc_oracle_log_prediction(const char *filename, int loops, int indirections, int structs);
-    zcc_oracle_log_prediction(filename, loops, indirections, structs);
-  }
-
   state->filename = filename;
   state->include_paths = include_paths;
   state->line = 1;
