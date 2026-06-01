@@ -653,7 +653,8 @@ static int is_stddef_stub(const char *path) {
          strcmp(base, "inttypes.h") == 0 || strcmp(base, "stdint.h") == 0 ||
          strcmp(base, "semaphore.h") == 0 || strcmp(base, "signal.h") == 0 ||
          strcmp(base, "stdbool.h") == 0 || strcmp(base, "assert.h") == 0 ||
-         strcmp(base, "types.h") == 0;
+         strcmp(base, "types.h") == 0 || strcmp(base, "stat.h") == 0 ||
+         strcmp(base, "ioctl.h") == 0 || strcmp(base, "mman.h") == 0;
 }
 
 /* PP-INCLUDE-022: Resolve an include path via -I search and relative lookup.
@@ -1191,9 +1192,9 @@ static void pp_parse_directive(PPState *state) {
         state->cond_stack[state->cond_depth];
     pp_read_line(state, dir, 1024);
   } else if (strcmp(dir, "if") == 0) {
-    char expr[256];
+    char expr[4096];
     pp_skip_whitespace(state);
-    pp_read_line(state, expr, 256);
+    pp_read_line(state, expr, 4096);
     state->cond_depth++;
     state->cond_else_seen[state->cond_depth] = 0;
     if (!active) {
@@ -1205,8 +1206,8 @@ static void pp_parse_directive(PPState *state) {
         state->cond_stack[state->cond_depth];
   } else if (strcmp(dir, "elif") == 0) {
     if (state->cond_depth > 0 && !state->cond_else_seen[state->cond_depth]) {
-      char expr[256];
-      pp_read_line(state, expr, 256);
+      char expr[4096];
+      pp_read_line(state, expr, 4096);
       if (state->cond_satisfied[state->cond_depth]) {
         state->cond_stack[state->cond_depth] = 0;
       } else {
