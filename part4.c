@@ -4278,6 +4278,14 @@ static void emit_global_init_list(Compiler *cc, Type *type, Node *init_list, int
                 Node *elem = init_list->args[i];
                 if (elem->kind == ND_INIT_LIST) {
                     emit_global_init_list(cc, elem_type, elem, base_offset + i * elem_size, emitted);
+                } else if (elem_type->kind == TY_STRUCT || elem_type->kind == TY_UNION || elem_type->kind == TY_ARRAY) {
+                    Node dummy;
+                    memset(&dummy, 0, sizeof(Node));
+                    dummy.kind = ND_INIT_LIST;
+                    dummy.args = (Node **)cc_alloc(cc, sizeof(Node *));
+                    dummy.args[0] = elem;
+                    dummy.num_args = 1;
+                    emit_global_init_list(cc, elem_type, &dummy, base_offset + i * elem_size, emitted);
                 } else {
                     while (elem && elem->kind == ND_CAST) elem = elem->lhs;
                     int const_ok = 1;
@@ -4335,6 +4343,14 @@ static void emit_global_init_list(Compiler *cc, Type *type, Node *init_list, int
             Node *elem = init_list->args[i];
             if (elem->kind == ND_INIT_LIST) {
                 emit_global_init_list(cc, f->type, elem, field_abs_offset, emitted);
+            } else if (f->type->kind == TY_STRUCT || f->type->kind == TY_UNION || f->type->kind == TY_ARRAY) {
+                Node dummy;
+                memset(&dummy, 0, sizeof(Node));
+                dummy.kind = ND_INIT_LIST;
+                dummy.args = (Node **)cc_alloc(cc, sizeof(Node *));
+                dummy.args[0] = elem;
+                dummy.num_args = 1;
+                emit_global_init_list(cc, f->type, &dummy, field_abs_offset, emitted);
             } else {
                 int elem_size = type_size(f->type);
                 while (elem && elem->kind == ND_CAST) elem = elem->lhs;

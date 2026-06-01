@@ -1,16 +1,16 @@
 # ZCC Oneirogenesis v2 — Evolution Report
 
-**Generated**: 2026-04-20T13:46:31.138684+00:00
+**Generated**: 2026-06-01T08:09:17.071594+00:00
 
 ## Summary
 
 | Metric | Value |
 |--------|-------|
-| Global Generation | 131 |
-| Total Survived | 160 |
-| Total Rejected | 406 |
+| Global Generation | 10 |
+| Total Survived | 234 |
+| Total Rejected | 737 |
 | Algorithms Discovered | 131 |
-| Blacklisted Patterns | 29 |
+| Blacklisted Patterns | 53 |
 
 ## Lineage
 
@@ -147,6 +147,67 @@
 | G0129 | I1 | `b26ccb31785b` | Remove dead movq to %rax (overwritten at +1) | -8.6 | 2026-04-20T13:46:14 |
 | G0130 | I4 | `327becb09e8d` | Swap independent pair to reduce WAR pipeline stall | -0.0 | 2026-04-20T13:46:20 |
 | G0131 | I4 | `5d660156d299` | Swap independent pair to reduce WAR pipeline stall | -0.8 | 2026-04-20T13:46:31 |
+| G0001 | I0 | `?` | cmpq_zero_to_testq, cmpq_zero_to_testq | -51.4 | N/A |
+| G0002 | I0 | `?` | cmpq_zero_to_testq | -1.9 | N/A |
+| G0001 | I2 | `?` | lea_optimization | -3.4 | N/A |
+| G0001 | I0 | `?` | lea_optimization | -5.9 | N/A |
+| G0002 | I2 | `?` | lea_optimization | -4.4 | N/A |
+| G0002 | I0 | `?` | lea_optimization | -7.8 | N/A |
+| G0001 | I0 | `?` | schedule_war_pair, lea_optimization | -8.3 | N/A |
+| G0001 | I2 | `?` | lea_optimization | -25.0 | N/A |
+| G0002 | I2 | `?` | lea_optimization | -7.9 | N/A |
+| G0003 | I2 | `?` | lea_optimization | -4.5 | N/A |
+| G0002 | I0 | `?` | lea_optimization | -2.1 | N/A |
+| G0001 | I1 | `?` | lea_optimization | -8.6 | N/A |
+| G0001 | I0 | `?` | unused_frame_save, unused_frame_save | -80.3 | N/A |
+| G0002 | I0 | `?` | unused_frame_save | -13.3 | N/A |
+| G0003 | I0 | `?` | unused_frame_save, unused_frame_save (+1) | -25.2 | N/A |
+| G0004 | I0 | `?` | unused_frame_save | -13.7 | N/A |
+| G0005 | I0 | `?` | unused_frame_save | -20.9 | N/A |
+| G0006 | I0 | `?` | unused_frame_save, unused_frame_save | -25.1 | N/A |
+| G0007 | I0 | `?` | unused_frame_save, unused_frame_save (+1) | -35.6 | N/A |
+| G0001 | I0 | `?` | unused_frame_save | -28.4 | N/A |
+| G0002 | I0 | `?` | unused_frame_save | -11.5 | N/A |
+| G0003 | I0 | `?` | unused_frame_save | -11.9 | N/A |
+| G0004 | I0 | `?` | unused_frame_save | -4.8 | N/A |
+| G0005 | I0 | `?` | unused_frame_save | -17.6 | N/A |
+| G0006 | I0 | `?` | unused_frame_save, unused_frame_save (+1) | -37.5 | N/A |
+| G0007 | I0 | `?` | unused_frame_save | -11.9 | N/A |
+| G0008 | I0 | `?` | unused_frame_save | -10.7 | N/A |
+| G0009 | I0 | `?` | unused_frame_save | -13.1 | N/A |
+| G0010 | I0 | `?` | unused_frame_save | -10.2 | N/A |
+| G0001 | I2 | `?` | unused_frame_save | -14.9 | N/A |
+| G0001 | I0 | `?` | unused_frame_save, unused_frame_save | -38.3 | N/A |
+| G0001 | I1 | `?` | unused_frame_save, unused_frame_save | -10.8 | N/A |
+| G0002 | I0 | `?` | unused_frame_save | -4.5 | N/A |
+| G0003 | I0 | `?` | unused_frame_save | -12.9 | N/A |
+| G0002 | I2 | `?` | unused_frame_save | -10.7 | N/A |
+| G0004 | I0 | `?` | unused_frame_save | -13.3 | N/A |
+| G0002 | I1 | `?` | unused_frame_save | -16.6 | N/A |
+| G0003 | I1 | `?` | unused_frame_save | -13.9 | N/A |
+| G0004 | I1 | `?` | unused_frame_save | -9.3 | N/A |
+| G0003 | I2 | `?` | unused_frame_save | -13.4 | N/A |
+| G0004 | I2 | `?` | unused_frame_save | -11.8 | N/A |
+| G0005 | I1 | `?` | unused_frame_save | -13.8 | N/A |
+| G0005 | I2 | `?` | unused_frame_save | -12.8 | N/A |
+| G0006 | I1 | `?` | unused_frame_save | -12.2 | N/A |
+| G0007 | I1 | `?` | unused_frame_save | -7.2 | N/A |
+| G0006 | I2 | `?` | unused_frame_save | -7.2 | N/A |
+| G0007 | I2 | `?` | unused_frame_save | -13.6 | N/A |
+| G0005 | I0 | `?` | unused_frame_save | -1.5 | N/A |
+| G0008 | I2 | `?` | unused_frame_save | -9.4 | N/A |
+| G0009 | I2 | `?` | unused_frame_save | -12.4 | N/A |
+| G0006 | I0 | `?` | unused_frame_save | -19.2 | N/A |
+| G0008 | I1 | `?` | unused_frame_save, unused_frame_save | -27.3 | N/A |
+| G0007 | I0 | `?` | unused_frame_save | -14.8 | N/A |
+| G0008 | I0 | `?` | unused_frame_save | -12.1 | N/A |
+| G0010 | I2 | `?` | unused_frame_save | -10.3 | N/A |
+| G0009 | I1 | `?` | unused_frame_save | -12.8 | N/A |
+| G0011 | I2 | `?` | unused_frame_save | -18.3 | N/A |
+| G0009 | I0 | `?` | unused_frame_save | -11.7 | N/A |
+| G0012 | I2 | `?` | unused_frame_save | -7.3 | N/A |
+| G0010 | I0 | `?` | unused_frame_save | -8.1 | N/A |
+| G0010 | I1 | `?` | unused_frame_save | -6.7 | N/A |
 
 ## Discovered Algorithms
 

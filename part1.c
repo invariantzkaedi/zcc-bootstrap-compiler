@@ -917,9 +917,6 @@ struct Node {
     int num_params;
     Node *body;
     int stack_size;
-    /* param capture arrays (used by parse_func_def in part3.c) */
-    Type *param_types[MAX_PARAMS];
-    char param_names_buf[MAX_PARAMS][MAX_IDENT];
 
     /* ND_MEMBER */
     char member_name[MAX_IDENT];

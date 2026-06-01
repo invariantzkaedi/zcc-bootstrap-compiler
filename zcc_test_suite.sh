@@ -35,7 +35,7 @@ info()  { echo -e "  ${CYN}[INFO]${RST} $1"; }
 # Timeout for IR test execution: 10s in quick mode, 60s otherwise
 IR_TIMEOUT=${IR_TIMEOUT:-10}
 
-TESTDIR="/tmp/zcc_tests"
+TESTDIR="/tmp/zcc_tests_zkaedi"
 rm -rf "$TESTDIR"
 mkdir -p "$TESTDIR"
 
