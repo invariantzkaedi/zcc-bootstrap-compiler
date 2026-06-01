@@ -1526,6 +1526,7 @@ int zcc_main(int argc, char **argv) {
       return ir_diff_json(g_diff_ir_path_a, g_diff_ir_path_b);
   }
 
+  int stop_at_asm = 0;
   if (g_replay_ir_path) {
       extern int ir_deserialize_json(ir_module_t *mod, const char *in_filename);
       ZCC_IR_INIT();
@@ -1539,7 +1540,7 @@ int zcc_main(int argc, char **argv) {
       cc = (Compiler *)calloc(1, sizeof(Compiler));
       cc->filename = "replayed_ir";
       if (!output_file) output_file = "a.out";
-      sprintf(asm_file, "%s.s", output_file);
+      { size_t _ol = strlen(output_file); if (_ol >= 2 && output_file[_ol-2] == '.' && output_file[_ol-1] == 's') { strncpy(asm_file, output_file, sizeof(asm_file)-1); } else { sprintf(asm_file, "%s.s", output_file); } }
       cc->out = fopen(asm_file, "w");
       if (!cc->out) {
           fprintf(stderr, "zcc: cannot open output file '%s'\n", asm_file);
@@ -1559,8 +1560,10 @@ int zcc_main(int argc, char **argv) {
        /* cc will be freed and telemetry shut down cleanly at the end of link_phase */
       
       /* Now go to linking phase cleanly! */
-      int stop_at_asm = 0;
+      stop_at_asm = 0;
       if (compile_only) stop_at_asm = 1;
+      { size_t _ol2 = strlen(output_file); if (_ol2 >= 2 && output_file[_ol2-2] == '.' && output_file[_ol2-1] == 's') stop_at_asm = 1; }
+      input_file = "replayed_ir";
       goto link_phase;
   }
 
@@ -1889,7 +1892,7 @@ int zcc_main(int argc, char **argv) {
   while (asm_file[al])
     al++;
 
-  int stop_at_asm = 0;
+  stop_at_asm = 0;
   if (al >= 2 && asm_file[al - 2] == '.' && asm_file[al - 1] == 's') {
     stop_at_asm = 1;
   } else {
