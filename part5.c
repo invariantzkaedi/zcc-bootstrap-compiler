@@ -68,6 +68,15 @@ static int         g_emit_gguf = 0;
 static const char *g_gguf_out_path = NULL;
 static int         g_quantize_type = 0;
 
+/* POSIX memory stream declarations */
+extern FILE *fmemopen(void *buf, size_t size, const char *mode);
+extern FILE *open_memstream(char **ptr, size_t *sizeloc);
+
+/* In-memory assembly stream globals */
+char *g_in_mem_asm_buf = NULL;
+size_t g_in_mem_asm_size = 0;
+int g_use_in_mem_asm = 0;
+
 #ifndef PPCONFIG_DEF
 #define PPCONFIG_DEF
 #define ZCC_MAX_CLI_STUBS 16
@@ -560,15 +569,19 @@ static void peephole_optimize(char *filename) {
 
   record_pass_begin("peephole");
 
-  fp = fopen(filename, "r");
-  if (!fp) {
-    record_pass_end("peephole");
-    return;
+  if (g_use_in_mem_asm) {
+    fp = fmemopen((void *)g_in_mem_asm_buf, g_in_mem_asm_size, "r");
+    file_size = (long)g_in_mem_asm_size;
+  } else {
+    fp = fopen(filename, "r");
+    if (!fp) {
+      record_pass_end("peephole");
+      return;
+    }
+    fseek(fp, 0, 2);
+    file_size = ftell(fp);
+    fseek(fp, 0, 0);
   }
-
-  fseek(fp, 0, 2);
-  file_size = ftell(fp);
-  fseek(fp, 0, 0);
 
   if (!line_ptrs) {
     line_ptrs = (char **)malloc(MAX_PEEP_LINES * sizeof(char *));
@@ -682,17 +695,36 @@ static void peephole_optimize(char *filename) {
     i++;
   }
 
-  fp = fopen(filename, "w");
-  if (!fp) {
-    free(line_buffer);
-    record_pass_end("peephole");
-    return;
+  if (g_use_in_mem_asm) {
+    char *new_buf = NULL;
+    size_t new_size = 0;
+    fp = open_memstream(&new_buf, &new_size);
+    if (!fp) {
+      free(line_buffer);
+      record_pass_end("peephole");
+      return;
+    }
+    for (i = 0; i < nlines; i++) {
+      if (line_ptrs[i][0] != 0)
+        fputs(line_ptrs[i], fp);
+    }
+    fclose(fp);
+    free(g_in_mem_asm_buf);
+    g_in_mem_asm_buf = new_buf;
+    g_in_mem_asm_size = new_size;
+  } else {
+    fp = fopen(filename, "w");
+    if (!fp) {
+      free(line_buffer);
+      record_pass_end("peephole");
+      return;
+    }
+    for (i = 0; i < nlines; i++) {
+      if (line_ptrs[i][0] != 0)
+        fputs(line_ptrs[i], fp);
+    }
+    fclose(fp);
   }
-  for (i = 0; i < nlines; i++) {
-    if (line_ptrs[i][0] != 0)
-      fputs(line_ptrs[i], fp);
-  }
-  fclose(fp);
   free(line_buffer);
 
   record_pass_end("peephole");
@@ -722,7 +754,11 @@ static void security_signext_scan(char *filename) {
   char **lp;
   int max_lines = 32768;
 
-  fp = fopen(filename, "r");
+  if (g_use_in_mem_asm) {
+    fp = fmemopen((void *)g_in_mem_asm_buf, g_in_mem_asm_size, "r");
+  } else {
+    fp = fopen(filename, "r");
+  }
   if (!fp) return;
 
   line_buf = (char *)malloc(max_lines * 128);
@@ -860,7 +896,11 @@ static void security_nullderef_scan(Compiler *cc, char *filename) {
   char **lp;
   int max_lines = 32768;
 
-  fp = fopen(filename, "r");
+  if (g_use_in_mem_asm) {
+    fp = fmemopen((void *)g_in_mem_asm_buf, g_in_mem_asm_size, "r");
+  } else {
+    fp = fopen(filename, "r");
+  }
   if (!fp) return;
 
   line_buf = (char *)malloc(max_lines * 128);
@@ -1034,7 +1074,11 @@ static void security_bounds_scan(Compiler *cc, char *filename) {
   char **lp;
   int max_lines = 32768;
 
-  fp = fopen(filename, "r");
+  if (g_use_in_mem_asm) {
+    fp = fmemopen((void *)g_in_mem_asm_buf, g_in_mem_asm_size, "r");
+  } else {
+    fp = fopen(filename, "r");
+  }
   if (!fp) return;
 
   line_buf = (char *)malloc(max_lines * 128);
@@ -1855,7 +1899,11 @@ int zcc_main(int argc, char **argv) {
   }
 
   /* open output */
-  cc->out = fopen(asm_file, "w");
+  if (g_use_in_mem_asm) {
+    cc->out = open_memstream(&g_in_mem_asm_buf, &g_in_mem_asm_size);
+  } else {
+    cc->out = fopen(asm_file, "w");
+  }
   if (!cc->out) {
     if (!enable_telemetry_stdout) printf("zcc: cannot write '%s'\n", asm_file);
     free(source);
@@ -1960,8 +2008,16 @@ int zcc_main(int argc, char **argv) {
           extern int ir_serialize_json(const ir_module_t *mod, const char *out_filename, const char *source_file);
           ir_serialize_json(g_ir_module, g_emit_ir_graph_path, input_file);
       }
-      
-      cc->out = fopen(asm_file, "w");
+      if (g_use_in_mem_asm) {
+          if (g_in_mem_asm_buf) {
+              free(g_in_mem_asm_buf);
+              g_in_mem_asm_buf = NULL;
+              g_in_mem_asm_size = 0;
+          }
+          cc->out = open_memstream(&g_in_mem_asm_buf, &g_in_mem_asm_size);
+      } else {
+          cc->out = fopen(asm_file, "w");
+      }
       extern void ir_module_lower_x86(const ir_module_t *mod, FILE *out);
       ir_module_lower_x86(g_ir_module, cc->out);
       extern void codegen_emit_globals_and_strings(Compiler *cc);

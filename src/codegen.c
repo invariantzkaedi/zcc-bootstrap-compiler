@@ -7,6 +7,12 @@
 /* Declare original main from part5.c */
 extern int zcc_main(int argc, char **argv);
 
+/* External POSIX signature and in-memory stream globals */
+extern FILE *fmemopen(void *buf, size_t size, const char *mode);
+extern char *g_in_mem_asm_buf;
+extern size_t g_in_mem_asm_size;
+extern int g_use_in_mem_asm;
+
 /* Segment structure */
 typedef struct {
     unsigned char *data;
@@ -835,8 +841,13 @@ static char *trim(char *s) {
 }
 
 /* Two-Pass Assembler Core */
-static int assemble(const char *in_s_filename, const char *out_o_filename) {
-    FILE *in = fopen(in_s_filename, "r");
+static int assemble(const char *in_s_filename, const char *out_o_filename, const char *in_mem_buf, size_t mem_buf_len) {
+    FILE *in = NULL;
+    if (in_mem_buf) {
+        in = fmemopen((void *)in_mem_buf, mem_buf_len, "r");
+    } else {
+        in = fopen(in_s_filename, "r");
+    }
     Segment text_seg = { NULL, 0, 0 };
     Segment data_seg = { NULL, 0, 0 };
     char line[1024];
@@ -1602,16 +1613,30 @@ int main(int argc, char **argv) {
             mod_argv[mod_argc++] = temp_s_filename;
             mod_argv[mod_argc] = NULL;
 
+            /* Enable in-memory assembly stream */
+            g_use_in_mem_asm = 1;
+            g_in_mem_asm_buf = NULL;
+            g_in_mem_asm_size = 0;
+
             int compile_ret = zcc_main(mod_argc, mod_argv);
             free(mod_argv);
 
             if (compile_ret != 0) {
                 fprintf(stderr, "zcc: AST-codegen phase failed\n");
+                if (g_in_mem_asm_buf) free(g_in_mem_asm_buf);
+                g_in_mem_asm_buf = NULL;
+                g_in_mem_asm_size = 0;
+                g_use_in_mem_asm = 0;
                 return compile_ret;
             }
 
-            int assemble_ret = assemble(temp_s_filename, out_filename);
-            remove(temp_s_filename);
+            int assemble_ret = assemble(NULL, out_filename, g_in_mem_asm_buf, g_in_mem_asm_size);
+            if (g_in_mem_asm_buf) {
+                free(g_in_mem_asm_buf);
+                g_in_mem_asm_buf = NULL;
+                g_in_mem_asm_size = 0;
+            }
+            g_use_in_mem_asm = 0;
 
             if (assemble_ret != 0) {
                 fprintf(stderr, "zcc: surgical ELF emission failed with error code %d\n", assemble_ret);
@@ -1649,17 +1674,31 @@ int main(int argc, char **argv) {
             mod_argv[mod_argc++] = temp_s_filename;
             mod_argv[mod_argc] = NULL;
 
+            /* Enable in-memory assembly stream */
+            g_use_in_mem_asm = 1;
+            g_in_mem_asm_buf = NULL;
+            g_in_mem_asm_size = 0;
+
             int compile_ret = zcc_main(mod_argc, mod_argv);
             free(mod_argv);
 
             if (compile_ret != 0) {
                 fprintf(stderr, "zcc: AST-codegen phase failed\n");
+                if (g_in_mem_asm_buf) free(g_in_mem_asm_buf);
+                g_in_mem_asm_buf = NULL;
+                g_in_mem_asm_size = 0;
+                g_use_in_mem_asm = 0;
                 return compile_ret;
             }
 
-            /* 2. Assemble directly to temporary object (.o) */
-            int assemble_ret = assemble(temp_s_filename, temp_o_filename);
-            remove(temp_s_filename);
+            /* 2. Assemble directly to temporary object (.o) in memory */
+            int assemble_ret = assemble(NULL, temp_o_filename, g_in_mem_asm_buf, g_in_mem_asm_size);
+            if (g_in_mem_asm_buf) {
+                free(g_in_mem_asm_buf);
+                g_in_mem_asm_buf = NULL;
+                g_in_mem_asm_size = 0;
+            }
+            g_use_in_mem_asm = 0;
 
             if (assemble_ret != 0) {
                 fprintf(stderr, "zcc: surgical ELF emission failed with error code %d\n", assemble_ret);
