@@ -1202,6 +1202,7 @@ struct Compiler {
     int sret_offset;        /* %rbp-relative offset to the hidden struct return pointer */
     int used_regs_mask;     /* for telemetry tracking */
     int is_forced_mask;     /* 1 if 0x1F was forced (CG-IR-011) */
+    int telemetry_depth;    /* depth tracking for telemetry logging */
 };
 
 typedef struct TargetBackend {

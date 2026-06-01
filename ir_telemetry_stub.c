@@ -10,6 +10,7 @@
  * into the production compiler_passes_ir.c path only.
  */
 #include "ir_telemetry.h"
+#include "zcc_telemetry.h"
 
 #ifndef ZCC_REAL_TELEMETRY
 
@@ -48,7 +49,31 @@ void zcc_telem_phase(int phase, const char *phase_name, const char *status, int 
     (void)metric_key3; (void)metric_val3;
 }
 
+void telemetry_init(const char* host, int port) {
+    (void)host;
+    (void)port;
+}
+
+void telemetry_emit_node(TelemetryOp op, const char* node_type, int depth) {
+    (void)op;
+    (void)node_type;
+    (void)depth;
+}
+
+void telemetry_emit_mem(TelemetryOp op, uint64_t ptr_address, size_t size) {
+    (void)op;
+    (void)ptr_address;
+    (void)size;
+}
+
+void telemetry_emit_coverage(float coverage_pct) {
+    (void)coverage_pct;
+}
+
+void telemetry_close(void) {
+}
 
 #endif
+
 
 
