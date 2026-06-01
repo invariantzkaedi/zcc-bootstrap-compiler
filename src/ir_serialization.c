@@ -11,6 +11,218 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Forward declarations of ZCC internal AST structures so ir_serialization is self-contained */
+typedef struct Type Type;
+typedef struct Node Node;
+typedef struct Symbol Symbol;
+typedef struct Scope Scope;
+typedef struct Compiler Compiler;
+typedef struct ArenaBlock ArenaBlock;
+typedef struct StringEntry StringEntry;
+typedef struct StructField StructField;
+typedef struct FuncParams FuncParams;
+
+enum {
+    MAX_IDENT   = 128,
+    MAX_STR     = 16384,
+    MAX_STRINGS = 262144,
+    MAX_GLOBALS = 262144,
+    MAX_STRUCTS = 65536,
+    MAX_PARAMS  = 128,
+    MAX_CALL_ARGS = 256,
+    MAX_CASES   = 4096,
+    MAX_INIT    = 1048576
+};
+
+struct ArenaBlock {
+    char *data;
+    int pos;
+    int cap;
+    ArenaBlock *next;
+};
+
+struct StructField {
+    char name[MAX_IDENT];
+    Type *type;
+    int offset;
+    int is_bitfield;
+    int bit_offset;
+    int bit_size;
+    StructField *next;
+};
+
+struct Type {
+    unsigned long long magic;
+    unsigned long long alloc_id;
+    int kind;
+    int size;
+    int align;
+    Type *base;
+    int array_len;
+    Type *ret;
+    Type **params;
+    int num_params;
+    int is_variadic;
+    char tag[MAX_IDENT];
+    StructField *fields;
+    int is_complete;
+    int is_packed;
+    int explicit_align;
+    int is_tbfp;
+};
+
+struct StringEntry {
+    char *data;
+    int len;
+    int label_id;
+};
+
+struct Symbol {
+    char name[MAX_IDENT];
+    Type *type;
+    int is_local;
+    int is_global;
+    int is_typedef;
+    int is_enum_const;
+    long long enum_val;
+    int stack_offset;
+    char asm_name[MAX_IDENT];
+    char *assigned_reg;
+    int live_start;
+    int live_end;
+    Symbol *next;
+};
+
+struct Scope {
+    Symbol *symbols;
+    Scope *parent;
+};
+
+struct FuncParams {
+    char names[MAX_PARAMS][MAX_IDENT];
+    Type *types[MAX_PARAMS];
+};
+
+struct Node {
+    unsigned long long magic;
+    unsigned long long alloc_id;
+    int kind;
+    int line;
+    Type *type;
+    long long int_val;
+    double f_val;
+    int str_id;
+    char name[MAX_IDENT];
+    Symbol *sym;
+    Node *lhs;
+    Node *rhs;
+    char func_name[MAX_IDENT];
+    Node **args;
+    int num_args;
+    Node *cond;
+    Node *then_body;
+    Node *else_body;
+    Node *init;
+    Node *inc;
+    Node **stmts;
+    int num_stmts;
+    char func_def_name[MAX_IDENT];
+    Type *func_type;
+    struct FuncParams *func_params;
+    int num_params;
+    Node *body;
+    int stack_size;
+    Type *param_types[MAX_PARAMS];
+    char param_names_buf[MAX_PARAMS][MAX_IDENT];
+    char member_name[MAX_IDENT];
+    int member_offset;
+    int member_size;
+    Node **cases;
+    int num_cases;
+    Node *default_case;
+    long long case_val;
+    Node *case_body;
+    char label_name[MAX_IDENT];
+    int compound_op;
+    Type *cast_type;
+    int is_static;
+    int is_extern;
+    Node *initializer;
+    int is_bitfield;
+    int bit_offset;
+    int bit_size;
+    char *asm_string;
+    Node *next;
+};
+
+struct Compiler {
+    int verbose;
+    char *source;
+    int source_len;
+    int pos;
+    char *filename;
+    int tk;
+    long long tk_val;
+    double tk_fval;
+    char tk_text[MAX_IDENT];
+    char tk_str[MAX_STR];
+    int tk_str_len;
+    int tk_line;
+    int tk_col;
+    int has_peek;
+    int peek_tk;
+    long long peek_val;
+    double peek_fval;
+    char peek_text[MAX_IDENT];
+    char peek_str[MAX_STR];
+    int peek_str_len;
+    int peek_line;
+    int peek_col;
+    int line;
+    int col;
+    Type *ty_void;
+    Type *ty_char;
+    Type *ty_uchar;
+    Type *ty_short;
+    Type *ty_ushort;
+    Type *ty_int;
+    Type *ty_uint;
+    Type *ty_long;
+    Type *ty_ulong;
+    Type *ty_longlong;
+    Type *ty_ulonglong;
+    Type *ty_float;
+    Type *ty_double;
+    Scope *current_scope;
+    StringEntry strings[MAX_STRINGS];
+    int num_strings;
+    Type *structs[MAX_STRUCTS];
+    int num_structs;
+    Node *globals[MAX_GLOBALS];
+    int num_globals;
+    FILE *out;
+    int label_count;
+    int str_label_count;
+    int stack_depth;
+    int break_label;
+    int continue_label;
+    int switch_end_label;
+    char current_func[MAX_IDENT];
+    int func_end_label;
+    ArenaBlock arena;
+    int errors;
+    int local_offset;
+    int current_is_static;
+    int pending_packed;
+    int pending_aligned_n;
+    int pending_tbfp;
+    int debug_abi_classes;
+    int abi_scratch_offset;
+    int sret_offset;
+    int used_regs_mask;
+    int is_forced_mask;
+};
+
 /* Lexer / Tokenizer structures */
 typedef enum {
     TOK_EOF = 0,
@@ -200,11 +412,121 @@ static void escape_json_string(char *dst, const char *src) {
     dst[j] = '\0';
 }
 
+static int get_gvar_size(const struct Node *gvar) {
+    if (!gvar || !gvar->type) return 8;
+    extern int type_size(Type *t);
+    return type_size(gvar->type);
+}
+
+static void serialize_initializer(FILE *fp, const struct Node *init) {
+    if (!init) {
+        fprintf(fp, "null");
+        return;
+    }
+    fprintf(fp, "{\n");
+    fprintf(fp, "        \"kind\": %d,\n", init->kind);
+    fprintf(fp, "        \"int_val\": %lld,\n", init->int_val);
+    fprintf(fp, "        \"f_val\": %g,\n", init->f_val);
+    fprintf(fp, "        \"str_id\": %d,\n", init->str_id);
+    
+    char escaped_name[256];
+    escape_json_string(escaped_name, init->name);
+    fprintf(fp, "        \"name\": \"%s\"", escaped_name);
+    
+    if (init->kind == 63 /* ND_INIT_LIST */) {
+        fprintf(fp, ",\n        \"num_args\": %d,\n", init->num_args);
+        fprintf(fp, "        \"args\": [\n");
+        for (int i = 0; i < init->num_args; i++) {
+            fprintf(fp, "          ");
+            serialize_initializer(fp, init->args[i]);
+            if (i + 1 < init->num_args) fprintf(fp, ",\n");
+        }
+        fprintf(fp, "\n        ]");
+    }
+    if (init->lhs) {
+        fprintf(fp, ",\n        \"lhs\": ");
+        serialize_initializer(fp, init->lhs);
+    }
+    if (init->rhs) {
+        fprintf(fp, ",\n        \"rhs\": ");
+        serialize_initializer(fp, init->rhs);
+    }
+    fprintf(fp, "\n      }");
+}
+
+static struct Node *deserialize_initializer_val(json_lexer_t *lex, struct Compiler *cc, tok_kind_t first_tok) {
+    if (first_tok != TOK_LBRACE) return NULL;
+    
+    extern void *cc_alloc(struct Compiler *cc, int size);
+    
+    struct Node *n = (struct Node *)cc_alloc(cc, sizeof(struct Node));
+    memset(n, 0, sizeof(struct Node));
+    n->magic = 0x1122334455667788ULL;
+    
+    tok_kind_t tok;
+    while (1) {
+        tok = lex_next(lex);
+        if (tok == TOK_COMMA) continue;
+        if (tok == TOK_RBRACE) break;
+        if (tok != TOK_STRING) return NULL;
+        
+        char key[256];
+        strcpy(key, lex->val_str);
+        
+        if (!parse_expect(lex, TOK_COLON)) return NULL;
+        
+        if (strcmp(key, "kind") == 0) {
+            if (!parse_expect(lex, TOK_NUMBER)) return NULL;
+            n->kind = (int)lex->val_int;
+        } else if (strcmp(key, "int_val") == 0) {
+            if (!parse_expect(lex, TOK_NUMBER)) return NULL;
+            n->int_val = lex->val_int;
+        } else if (strcmp(key, "f_val") == 0) {
+            if (!parse_expect(lex, TOK_NUMBER)) return NULL;
+            n->f_val = atof(lex->val_str);
+        } else if (strcmp(key, "str_id") == 0) {
+            if (!parse_expect(lex, TOK_NUMBER)) return NULL;
+            n->str_id = (int)lex->val_int;
+        } else if (strcmp(key, "name") == 0) {
+            if (!parse_expect(lex, TOK_STRING)) return NULL;
+            strcpy(n->name, lex->val_str);
+        } else if (strcmp(key, "num_args") == 0) {
+            if (!parse_expect(lex, TOK_NUMBER)) return NULL;
+            n->num_args = (int)lex->val_int;
+        } else if (strcmp(key, "args") == 0) {
+            if (!parse_expect(lex, TOK_LBRACK)) return NULL;
+            n->args = (struct Node **)cc_alloc(cc, (n->num_args > 0 ? n->num_args : 1) * sizeof(struct Node *));
+            int idx = 0;
+            while (1) {
+                tok = lex_next(lex);
+                if (tok == TOK_RBRACK) break;
+                if (tok == TOK_COMMA) continue;
+                if (tok == TOK_LBRACE) {
+                    struct Node *child = deserialize_initializer_val(lex, cc, tok);
+                    if (idx < n->num_args) {
+                        n->args[idx++] = child;
+                    }
+                }
+            }
+        } else if (strcmp(key, "lhs") == 0) {
+            tok = lex_next(lex);
+            n->lhs = deserialize_initializer_val(lex, cc, tok);
+        } else if (strcmp(key, "rhs") == 0) {
+            tok = lex_next(lex);
+            n->rhs = deserialize_initializer_val(lex, cc, tok);
+        } else {
+            tok = lex_next(lex);
+            skip_json_value(lex, tok);
+        }
+    }
+    return n;
+}
+
 /* ========================================================================= */
 /* PUBLIC API                                                                */
 /* ========================================================================= */
 
-int ir_serialize_json(const ir_module_t *mod, const char *out_filename, const char *source_file) {
+int ir_serialize_json(const ir_module_t *mod, const char *out_filename, const char *source_file, const struct Compiler *cc) {
     FILE *fp = fopen(out_filename, "w");
     int f_idx;
     if (!fp) {
@@ -217,6 +539,51 @@ int ir_serialize_json(const ir_module_t *mod, const char *out_filename, const ch
     char escaped_source[2048];
     escape_json_string(escaped_source, source_file);
     fprintf(fp, "  \"source\": \"%s\",\n", escaped_source);
+    
+    /* Serialize Strings Table */
+    if (cc && cc->num_strings > 0) {
+        fprintf(fp, "  \"strings\": [\n");
+        for (int i = 0; i < cc->num_strings; i++) {
+            char escaped_data[8192];
+            escape_json_string(escaped_data, cc->strings[i].data);
+            fprintf(fp, "    {\n");
+            fprintf(fp, "      \"label_id\": %d,\n", cc->strings[i].label_id);
+            fprintf(fp, "      \"data\": \"%s\",\n", escaped_data);
+            fprintf(fp, "      \"len\": %d\n", cc->strings[i].len);
+            fprintf(fp, "    }%s\n", (i + 1 < cc->num_strings) ? "," : "");
+        }
+        fprintf(fp, "  ],\n");
+    } else {
+        fprintf(fp, "  \"strings\": [],\n");
+    }
+    
+    /* Serialize Global Variables */
+    if (cc && cc->num_globals > 0) {
+        fprintf(fp, "  \"globals\": [\n");
+        int emitted_globals = 0;
+        for (int i = 0; i < cc->num_globals; i++) {
+            const struct Node *gvar = cc->globals[i];
+            if (!gvar || gvar->kind != 61 /* ND_GLOBAL_VAR */) continue;
+            if (gvar->is_extern) continue;
+            
+            if (emitted_globals > 0) fprintf(fp, ",\n");
+            emitted_globals++;
+            
+            char escaped_name[256];
+            escape_json_string(escaped_name, gvar->name);
+            fprintf(fp, "    {\n");
+            fprintf(fp, "      \"name\": \"%s\",\n", escaped_name);
+            fprintf(fp, "      \"size\": %d,\n", get_gvar_size(gvar));
+            fprintf(fp, "      \"is_static\": %s,\n", gvar->is_static ? "true" : "false");
+            fprintf(fp, "      \"is_extern\": %s,\n", gvar->is_extern ? "true" : "false");
+            fprintf(fp, "      \"initializer\": ");
+            serialize_initializer(fp, gvar->initializer);
+            fprintf(fp, "\n    }");
+        }
+        fprintf(fp, "\n  ],\n");
+    } else {
+        fprintf(fp, "  \"globals\": [],\n");
+    }
     
     fprintf(fp, "  \"functions\": [\n");
     
@@ -339,7 +706,7 @@ int ir_serialize_json(const ir_module_t *mod, const char *out_filename, const ch
     return 0;
 }
 
-int ir_deserialize_json(ir_module_t *mod, const char *in_filename) {
+int ir_deserialize_json(ir_module_t *mod, const char *in_filename, struct Compiler *cc) {
     FILE *fp = fopen(in_filename, "r");
     tok_kind_t tok;
     if (!fp) {
@@ -374,7 +741,123 @@ int ir_deserialize_json(ir_module_t *mod, const char *in_filename) {
             return -1;
         }
         
-        if (strcmp(key, "functions") == 0) {
+        if (strcmp(key, "strings") == 0) {
+            if (!parse_expect(&lex, TOK_LBRACK)) {
+                fclose(fp);
+                return -1;
+            }
+            while (1) {
+                tok = lex_next(&lex);
+                if (tok == TOK_RBRACK) break;
+                if (tok == TOK_COMMA) continue;
+                if (tok != TOK_LBRACE) {
+                    fclose(fp);
+                    return -1;
+                }
+                int lbl_id = 0;
+                char str_data[8192] = "";
+                int str_len = 0;
+                while (1) {
+                    tok = lex_next(&lex);
+                    if (tok == TOK_COMMA) continue;
+                    if (tok == TOK_RBRACE) break;
+                    if (tok != TOK_STRING) { fclose(fp); return -1; }
+                    char skey[256];
+                    strcpy(skey, lex.val_str);
+                    if (!parse_expect(&lex, TOK_COLON)) { fclose(fp); return -1; }
+                    if (strcmp(skey, "label_id") == 0) {
+                        if (!parse_expect(&lex, TOK_NUMBER)) { fclose(fp); return -1; }
+                        lbl_id = (int)lex.val_int;
+                    } else if (strcmp(skey, "data") == 0) {
+                        if (!parse_expect(&lex, TOK_STRING)) { fclose(fp); return -1; }
+                        strcpy(str_data, lex.val_str);
+                    } else if (strcmp(skey, "len") == 0) {
+                        if (!parse_expect(&lex, TOK_NUMBER)) { fclose(fp); return -1; }
+                        str_len = (int)lex.val_int;
+                    } else {
+                        tok = lex_next(&lex);
+                        skip_json_value(&lex, tok);
+                    }
+                }
+                if (cc && cc->num_strings < MAX_STRINGS) {
+                    struct StringEntry *se = &cc->strings[cc->num_strings++];
+                    se->label_id = lbl_id;
+                    se->len = str_len;
+                    extern void *cc_alloc(struct Compiler *cc, int size);
+                    se->data = (char *)cc_alloc(cc, str_len + 1);
+                    memcpy(se->data, str_data, str_len);
+                    se->data[str_len] = '\0';
+                }
+            }
+        } else if (strcmp(key, "globals") == 0) {
+            if (!parse_expect(&lex, TOK_LBRACK)) {
+                fclose(fp);
+                return -1;
+            }
+            while (1) {
+                tok = lex_next(&lex);
+                if (tok == TOK_RBRACK) break;
+                if (tok == TOK_COMMA) continue;
+                if (tok != TOK_LBRACE) {
+                    fclose(fp);
+                    return -1;
+                }
+                char gname[256] = "";
+                int gsize = 8;
+                int gstatic = 0;
+                int gextern = 0;
+                struct Node *ginit = NULL;
+                while (1) {
+                    tok = lex_next(&lex);
+                    if (tok == TOK_COMMA) continue;
+                    if (tok == TOK_RBRACE) break;
+                    if (tok != TOK_STRING) { fclose(fp); return -1; }
+                    char gkey[256];
+                    strcpy(gkey, lex.val_str);
+                    if (!parse_expect(&lex, TOK_COLON)) { fclose(fp); return -1; }
+                    if (strcmp(gkey, "name") == 0) {
+                        if (!parse_expect(&lex, TOK_STRING)) { fclose(fp); return -1; }
+                        strcpy(gname, lex.val_str);
+                    } else if (strcmp(gkey, "size") == 0) {
+                        if (!parse_expect(&lex, TOK_NUMBER)) { fclose(fp); return -1; }
+                        gsize = (int)lex.val_int;
+                    } else if (strcmp(gkey, "is_static") == 0) {
+                        tok = lex_next(&lex);
+                        gstatic = (tok == TOK_TRUE || (tok == TOK_NUMBER && lex.val_int != 0));
+                    } else if (strcmp(gkey, "is_extern") == 0) {
+                        tok = lex_next(&lex);
+                        gextern = (tok == TOK_TRUE || (tok == TOK_NUMBER && lex.val_int != 0));
+                    } else if (strcmp(gkey, "initializer") == 0) {
+                        tok = lex_next(&lex);
+                        ginit = deserialize_initializer_val(&lex, cc, tok);
+                    } else {
+                        tok = lex_next(&lex);
+                        skip_json_value(&lex, tok);
+                    }
+                }
+                if (cc && cc->num_globals < MAX_GLOBALS) {
+                    extern void *cc_alloc(struct Compiler *cc, int size);
+                    struct Node *gvar = (struct Node *)cc_alloc(cc, sizeof(struct Node));
+                    memset(gvar, 0, sizeof(struct Node));
+                    gvar->magic = 0x1122334455667788ULL;
+                    gvar->kind = 61; /* ND_GLOBAL_VAR */
+                    strcpy(gvar->name, gname);
+                    gvar->is_static = gstatic;
+                    gvar->is_extern = gextern;
+                    struct Type *t = (struct Type *)cc_alloc(cc, sizeof(struct Type));
+                    memset(t, 0, sizeof(struct Type));
+                    t->magic = 0x8877665544332211ULL;
+                    t->size = gsize;
+                    if (gsize == 1) t->kind = 1;
+                    else if (gsize == 2) t->kind = 3;
+                    else if (gsize == 4) t->kind = 5;
+                    else t->kind = 7;
+                    gvar->type = t;
+                    gvar->initializer = ginit;
+                    cc->globals[cc->num_globals++] = gvar;
+                }
+            }
+        } else if (strcmp(key, "functions") == 0) {
             if (!parse_expect(&lex, TOK_LBRACK)) {
                 fclose(fp);
                 return -1;
@@ -643,13 +1126,13 @@ int ir_diff_json(const char *path_a, const char *path_b) {
     ir_module_t *mod_b = ir_module_create();
     int f_idx;
     
-    if (ir_deserialize_json(mod_a, path_a) != 0) {
+    if (ir_deserialize_json(mod_a, path_a, NULL) != 0) {
         fprintf(stderr, "diff-ir: failed to deserialize graph A '%s'\n", path_a);
         ir_module_free(mod_a);
         ir_module_free(mod_b);
         return 1;
     }
-    if (ir_deserialize_json(mod_b, path_b) != 0) {
+    if (ir_deserialize_json(mod_b, path_b, NULL) != 0) {
         fprintf(stderr, "diff-ir: failed to deserialize graph B '%s'\n", path_b);
         ir_module_free(mod_a);
         ir_module_free(mod_b);

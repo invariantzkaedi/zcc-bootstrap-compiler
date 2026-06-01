@@ -1528,17 +1528,19 @@ int zcc_main(int argc, char **argv) {
 
   int stop_at_asm = 0;
   if (g_replay_ir_path) {
-      extern int ir_deserialize_json(ir_module_t *mod, const char *in_filename);
+      extern int ir_deserialize_json(ir_module_t *mod, const char *in_filename, Compiler *cc);
       ZCC_IR_INIT();
       g_ir_module = ir_module_create();
-      int parse_ret = ir_deserialize_json(g_ir_module, g_replay_ir_path);
+      
+      cc = (Compiler *)calloc(1, sizeof(Compiler));
+      cc->filename = "replayed_ir";
+      
+      int parse_ret = ir_deserialize_json(g_ir_module, g_replay_ir_path, cc);
       if (parse_ret != 0) {
           fprintf(stderr, "zcc: failed to deserialize IR graph '%s'\n", g_replay_ir_path);
           return 1;
       }
       
-      cc = (Compiler *)calloc(1, sizeof(Compiler));
-      cc->filename = "replayed_ir";
       if (!output_file) output_file = "a.out";
       { size_t _ol = strlen(output_file); if (_ol >= 2 && output_file[_ol-2] == '.' && output_file[_ol-1] == 's') { strncpy(asm_file, output_file, sizeof(asm_file)-1); } else { sprintf(asm_file, "%s.s", output_file); } }
       cc->out = fopen(asm_file, "w");
@@ -2008,8 +2010,8 @@ int zcc_main(int argc, char **argv) {
       if (!enable_telemetry_stdout) printf("[Phase IR] IR Pass Manager...\n");
       ir_pm_run_default(g_ir_module, 1);
       if (g_emit_ir_graph_path) {
-          extern int ir_serialize_json(const ir_module_t *mod, const char *out_filename, const char *source_file);
-          ir_serialize_json(g_ir_module, g_emit_ir_graph_path, input_file);
+          extern int ir_serialize_json(const ir_module_t *mod, const char *out_filename, const char *source_file, const Compiler *cc);
+          ir_serialize_json(g_ir_module, g_emit_ir_graph_path, input_file, cc);
       }
       if (g_use_in_mem_asm) {
           if (g_in_mem_asm_buf) {

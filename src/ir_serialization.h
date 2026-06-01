@@ -3,11 +3,13 @@
 
 #include "../ir.h"
 
+struct Compiler;
+
 /* Serialize SSA IR module to clean JSON format */
-int ir_serialize_json(const ir_module_t *mod, const char *out_filename, const char *source_file);
+int ir_serialize_json(const ir_module_t *mod, const char *out_filename, const char *source_file, const struct Compiler *cc);
 
 /* Deserialize JSON schema directly back into native ir_module_t and instructions in memory */
-int ir_deserialize_json(ir_module_t *mod, const char *in_filename);
+int ir_deserialize_json(ir_module_t *mod, const char *in_filename, struct Compiler *cc);
 
 /* Graph-matching CFG difference engine evaluating optimization topology drifts */
 int ir_diff_json(const char *path_a, const char *path_b);
