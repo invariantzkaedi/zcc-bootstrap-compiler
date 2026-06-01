@@ -1,9 +1,9 @@
-CFLAGS = -O0 -w -fno-asynchronous-unwind-tables -g0 -DZCC_REAL_TELEMETRY -Dmain=zcc_main
+CFLAGS = -O0 -w -fno-asynchronous-unwind-tables -g0 -DZCC_REAL_TELEMETRY
 LDFLAGS = -lm
 ifneq ($(NO_STRIP),1)
 LDFLAGS += -Wl,-s
 endif
-FAST_CFLAGS = -O2 -DNDEBUG -w -fno-asynchronous-unwind-tables -g0 -DZCC_REAL_TELEMETRY -Dmain=zcc_main
+FAST_CFLAGS = -O2 -DNDEBUG -w -fno-asynchronous-unwind-tables -g0 -DZCC_REAL_TELEMETRY
 FORTIFY_PACK_DIR ?= fortify_zcc_clean
 
 PARTS = part1.c part0_pp.c part2.c part3.c ir.h ir_emit_dispatch.h ir_bridge.h sym_type_ast_ir.c part4.c part5.c part7_rust.c part6_arm.c ir.c ir_to_x86.c regalloc.c ir_telemetry_stub.c forgezero_receipt_stub.c
@@ -47,11 +47,11 @@ zcc: zcc.c $(PASSES)
 	  fi; \
 	  rm -f .zcc_parts_check.tmp; \
 	fi
-	$(CC) $(CFLAGS) -o zcc zcc.c $(PASSES) $(LDFLAGS)
+	$(CC) $(CFLAGS) -Dmain=zcc_main -o zcc zcc.c $(PASSES) $(LDFLAGS)
 	@if [ "$(NO_STRIP)" != "1" ]; then strip --strip-all zcc; fi
 
 zcc_fast: zcc.c $(PASSES)
-	$(CC) $(FAST_CFLAGS) -o zcc_fast zcc.c $(PASSES) $(LDFLAGS)
+	$(CC) $(FAST_CFLAGS) -Dmain=zcc_main -o zcc_fast zcc.c $(PASSES) $(LDFLAGS)
 	@if [ "$(NO_STRIP)" != "1" ]; then strip --strip-all zcc_fast; fi
 
 zcc2: zcc zcc.c
@@ -390,7 +390,7 @@ check-forgezero-receipt:
 	/tmp/test_forgezero_receipt
 
 asan: zcc.c $(PASSES)
-	$(CC) -fsanitize=address -O0 -g -o zcc_asan zcc.c $(PASSES) $(LDFLAGS)
+	$(CC) -fsanitize=address -O0 -g -Dmain=zcc_main -o zcc_asan zcc.c $(PASSES) $(LDFLAGS)
 	@echo "ASan build ready. Run: ./zcc_asan zcc.c -o /dev/null"
 
 clean:
