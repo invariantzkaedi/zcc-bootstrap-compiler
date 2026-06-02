@@ -1,11 +1,11 @@
 {
-  "generation": 180,
-  "parent_hash": "4164cc80a9131dd7",
+  "generation": 221,
+  "parent_hash": "072d97b6bda448b0",
   "parent_asm_size": 0,
   "parent_bin_size": 0,
-  "total_mutations_tried": 814,
-  "total_mutations_survived": 268,
-  "total_regressions": 504,
+  "total_mutations_tried": 1011,
+  "total_mutations_survived": 349,
+  "total_regressions": 604,
   "lineage": [
     {
       "generation": 1,
@@ -1844,6 +1844,456 @@
       ],
       "delta_score": -20.317091000732034,
       "timestamp": "2026-06-02T07:18:12.529461+00:00"
+    },
+    {
+      "generation": 181,
+      "hash": "b72bd343f63a84b6",
+      "island_id": 0,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -9.30334800016135,
+      "timestamp": "2026-06-02T08:30:57.752568+00:00"
+    },
+    {
+      "generation": 182,
+      "hash": "1ceebffde2e519ea",
+      "island_id": 2,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -5.140539000276476,
+      "timestamp": "2026-06-02T08:31:43.138593+00:00"
+    },
+    {
+      "generation": 183,
+      "hash": "4022d7b27afe44b4",
+      "island_id": 0,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -1.853120000101626,
+      "timestamp": "2026-06-02T08:32:05.000892+00:00"
+    },
+    {
+      "generation": 184,
+      "hash": "d8e286913967c4a3",
+      "island_id": 1,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -3.532327000517398,
+      "timestamp": "2026-06-02T08:32:25.785526+00:00"
+    },
+    {
+      "generation": 185,
+      "hash": "b72bd343f63a84b6",
+      "island_id": 0,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -7.5821560001932085,
+      "timestamp": "2026-06-02T08:34:36.853627+00:00"
+    },
+    {
+      "generation": 186,
+      "hash": "d0777c523400fb6c",
+      "island_id": 1,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -8.51178100053221,
+      "timestamp": "2026-06-02T08:35:01.461849+00:00"
+    },
+    {
+      "generation": 187,
+      "hash": "fa12589d2b9c3240",
+      "island_id": 2,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -31.41250400012359,
+      "timestamp": "2026-06-02T08:35:27.022188+00:00"
+    },
+    {
+      "generation": 188,
+      "hash": "5fc1c930fc0a36c0",
+      "island_id": 2,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -1.4277610001154244,
+      "timestamp": "2026-06-02T08:36:36.699761+00:00"
+    },
+    {
+      "generation": 189,
+      "hash": "dff3c423dbeea332",
+      "island_id": 0,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -16.18256300035864,
+      "timestamp": "2026-06-02T08:36:58.002547+00:00"
+    },
+    {
+      "generation": 190,
+      "hash": "d0ae88870d4f05f2",
+      "island_id": 1,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall",
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Fuse mov+add \u2192 leaq $48(%r15), %rax"
+      ],
+      "delta_score": -10.556694999337196,
+      "timestamp": "2026-06-02T08:37:19.887017+00:00"
+    },
+    {
+      "generation": 191,
+      "hash": "ed9761a6582397ae",
+      "island_id": 2,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Fuse mov+add \u2192 leaq $140(%r12), %rax",
+        "Fuse mov+add \u2192 leaq $140(%r12), %rax"
+      ],
+      "delta_score": -11.652739000041038,
+      "timestamp": "2026-06-02T08:38:49.317766+00:00"
+    },
+    {
+      "generation": 192,
+      "hash": "df4b3355eee78fd2",
+      "island_id": 1,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Fuse mov+add \u2192 leaq $216(%r14), %rax"
+      ],
+      "delta_score": -2.5563529999926686,
+      "timestamp": "2026-06-02T08:39:37.246579+00:00"
+    },
+    {
+      "generation": 193,
+      "hash": "e961a89a9cc21353",
+      "island_id": 0,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $24(%r14), %rax",
+        "Fuse mov+add \u2192 leaq $6849216(%r12), %rax"
+      ],
+      "delta_score": -11.67983099957928,
+      "timestamp": "2026-06-02T08:40:22.534597+00:00"
+    },
+    {
+      "generation": 194,
+      "hash": "32669b811be3ecad",
+      "island_id": 1,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $52(%r14), %rax",
+        "Fuse mov+add \u2192 leaq $24(%r12), %rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -17.494632000103593,
+      "timestamp": "2026-06-02T08:40:45.106261+00:00"
+    },
+    {
+      "generation": 195,
+      "hash": "e9d8b2a9730558eb",
+      "island_id": 0,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $56(%rbx), %rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -1.4975690003484488,
+      "timestamp": "2026-06-02T08:43:51.753438+00:00"
+    },
+    {
+      "generation": 196,
+      "hash": "7fa3beac1e0462e6",
+      "island_id": 1,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $24(%r12), %rax"
+      ],
+      "delta_score": -0.321064000017941,
+      "timestamp": "2026-06-02T08:44:17.089597+00:00"
+    },
+    {
+      "generation": 197,
+      "hash": "d008daf783220523",
+      "island_id": 0,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -2.019912999588996,
+      "timestamp": "2026-06-02T08:45:02.861851+00:00"
+    },
+    {
+      "generation": 198,
+      "hash": "57b233ff0c2d1818",
+      "island_id": 1,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -6.188899000175297,
+      "timestamp": "2026-06-02T08:45:25.351986+00:00"
+    },
+    {
+      "generation": 199,
+      "hash": "fdb7c60edd882c0e",
+      "island_id": 2,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -0.14494299981743097,
+      "timestamp": "2026-06-02T08:46:50.917627+00:00"
+    },
+    {
+      "generation": 200,
+      "hash": "57f2212b6495e6db",
+      "island_id": 0,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $16520(%r14), %rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -14.183279000222683,
+      "timestamp": "2026-06-02T08:47:10.989269+00:00"
+    },
+    {
+      "generation": 201,
+      "hash": "730ce903129bcc27",
+      "island_id": 1,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -1.578825999982655,
+      "timestamp": "2026-06-02T08:47:34.665753+00:00"
+    },
+    {
+      "generation": 202,
+      "hash": "5b5e56c652ed2760",
+      "island_id": 2,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Fuse mov+add \u2192 leaq $128(%r12), %rax",
+        "Fuse mov+add \u2192 leaq $24(%r12), %rax"
+      ],
+      "delta_score": -10.089509000070393,
+      "timestamp": "2026-06-02T08:50:14.427783+00:00"
+    },
+    {
+      "generation": 203,
+      "hash": "24c1a694d5577aed",
+      "island_id": 2,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $52(%r13), %rax"
+      ],
+      "delta_score": -10.33647199999541,
+      "timestamp": "2026-06-02T08:51:22.988542+00:00"
+    },
+    {
+      "generation": 204,
+      "hash": "eb53573a088f6f4d",
+      "island_id": 1,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $16520(%r13), %rax",
+        "Fuse mov+add \u2192 leaq $128(%r15), %rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -15.5105269998312,
+      "timestamp": "2026-06-02T08:53:13.704509+00:00"
+    },
+    {
+      "generation": 205,
+      "hash": "07d11e8b41f0d38b",
+      "island_id": 0,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $136(%r13), %rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -4.552285000216216,
+      "timestamp": "2026-06-02T08:53:55.176755+00:00"
+    },
+    {
+      "generation": 206,
+      "hash": "e37c556fb3f81900",
+      "island_id": 2,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -2.3719960004091263,
+      "timestamp": "2026-06-02T08:54:37.386663+00:00"
+    },
+    {
+      "generation": 207,
+      "hash": "036699ff137e770c",
+      "island_id": 0,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Fuse mov+add \u2192 leaq $24(%r12), %rax"
+      ],
+      "delta_score": -3.386980999726802,
+      "timestamp": "2026-06-02T08:57:11.389102+00:00"
+    },
+    {
+      "generation": 208,
+      "hash": "b1a5f0c2d5216890",
+      "island_id": 2,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $16528(%r13), %rax"
+      ],
+      "delta_score": -7.518842999823391,
+      "timestamp": "2026-06-02T08:57:54.860737+00:00"
+    },
+    {
+      "generation": 209,
+      "hash": "daa4666c491fcb48",
+      "island_id": 0,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $18344(%r12), %rax"
+      ],
+      "delta_score": -13.743367999792099,
+      "timestamp": "2026-06-02T08:58:17.183818+00:00"
+    },
+    {
+      "generation": 210,
+      "hash": "c7670aff6018b8df",
+      "island_id": 2,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Fuse mov+add \u2192 leaq $272(%r12), %rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -2.969840000383556,
+      "timestamp": "2026-06-02T08:59:02.198899+00:00"
+    },
+    {
+      "generation": 211,
+      "hash": "d6e256fe85578425",
+      "island_id": 2,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $300(%r12), %rax"
+      ],
+      "delta_score": -6.521353999618441,
+      "timestamp": "2026-06-02T09:01:23.394311+00:00"
+    },
+    {
+      "generation": 212,
+      "hash": "d274e53854dab842",
+      "island_id": 2,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Fuse mov+add \u2192 leaq $140(%r12), %rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -7.30165999988094,
+      "timestamp": "2026-06-02T09:02:33.541836+00:00"
+    },
+    {
+      "generation": 213,
+      "hash": "7e017b458e8023e7",
+      "island_id": 1,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $536(%r13), %rax"
+      ],
+      "delta_score": -3.7952169999480247,
+      "timestamp": "2026-06-02T09:03:20.786314+00:00"
+    },
+    {
+      "generation": 214,
+      "hash": "b6a3127c630309a4",
+      "island_id": 2,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $26344(%r12), %rax",
+        "Fuse mov+add \u2192 leaq $260(%r12), %rax"
+      ],
+      "delta_score": -20.314786000177264,
+      "timestamp": "2026-06-02T09:03:43.200444+00:00"
+    },
+    {
+      "generation": 215,
+      "hash": "5e56c4d844f02c66",
+      "island_id": 1,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Fuse mov+add \u2192 leaq $16520(%r13), %rax"
+      ],
+      "delta_score": -1.7729909997433424,
+      "timestamp": "2026-06-02T09:04:29.767674+00:00"
+    },
+    {
+      "generation": 216,
+      "hash": "49c77802b8536ce4",
+      "island_id": 1,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Fuse mov+add \u2192 leaq $128(%r13), %rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -13.063670000527054,
+      "timestamp": "2026-06-02T09:05:39.314629+00:00"
+    },
+    {
+      "generation": 217,
+      "hash": "05b525ab9db6dc98",
+      "island_id": 0,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall",
+        "Fuse mov+add \u2192 leaq $18312(%r14), %rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -2.777128000278026,
+      "timestamp": "2026-06-02T09:06:23.927136+00:00"
+    },
+    {
+      "generation": 218,
+      "hash": "a3dfb08118b7c00c",
+      "island_id": 1,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -3.7439369997009635,
+      "timestamp": "2026-06-02T09:06:46.200510+00:00"
+    },
+    {
+      "generation": 219,
+      "hash": "cf90f0d78eb86e7b",
+      "island_id": 2,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -1.2174569997005165,
+      "timestamp": "2026-06-02T09:07:06.720468+00:00"
+    },
+    {
+      "generation": 220,
+      "hash": "cb16b18b414a83b5",
+      "island_id": 0,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax"
+      ],
+      "delta_score": -3.257255000062287,
+      "timestamp": "2026-06-02T09:07:27.727744+00:00"
+    },
+    {
+      "generation": 221,
+      "hash": "072d97b6bda448b0",
+      "island_id": 1,
+      "mutations": [
+        "Replace cmpq $0,%rax with testq %rax,%rax",
+        "Fuse mov+add \u2192 leaq $16520(%r13), %rax"
+      ],
+      "delta_score": -7.221128000412136,
+      "timestamp": "2026-06-02T09:07:50.623649+00:00"
     }
   ],
   "fitness_history": [
@@ -2926,6 +3376,252 @@
       "island_id": 1,
       "score": 2219706.7589629996,
       "timestamp": "2026-06-02T07:18:12.529430+00:00"
+    },
+    {
+      "generation": 181,
+      "island_id": 0,
+      "score": 2219725.932069,
+      "timestamp": "2026-06-02T08:30:57.752526+00:00"
+    },
+    {
+      "generation": 182,
+      "island_id": 2,
+      "score": 2219720.574875,
+      "timestamp": "2026-06-02T08:31:43.138528+00:00"
+    },
+    {
+      "generation": 183,
+      "island_id": 0,
+      "score": 2219724.0789489998,
+      "timestamp": "2026-06-02T08:32:05.000866+00:00"
+    },
+    {
+      "generation": 184,
+      "island_id": 1,
+      "score": 2219720.8874869994,
+      "timestamp": "2026-06-02T08:32:25.785497+00:00"
+    },
+    {
+      "generation": 185,
+      "island_id": 0,
+      "score": 2219739.571414,
+      "timestamp": "2026-06-02T08:34:36.853586+00:00"
+    },
+    {
+      "generation": 186,
+      "island_id": 1,
+      "score": 2219724.3144919993,
+      "timestamp": "2026-06-02T08:35:01.461817+00:00"
+    },
+    {
+      "generation": 187,
+      "island_id": 2,
+      "score": 2219724.179463,
+      "timestamp": "2026-06-02T08:35:27.022159+00:00"
+    },
+    {
+      "generation": 188,
+      "island_id": 2,
+      "score": 2219722.751702,
+      "timestamp": "2026-06-02T08:36:36.699732+00:00"
+    },
+    {
+      "generation": 189,
+      "island_id": 0,
+      "score": 2219723.3888509995,
+      "timestamp": "2026-06-02T08:36:58.002517+00:00"
+    },
+    {
+      "generation": 190,
+      "island_id": 1,
+      "score": 2219713.757797,
+      "timestamp": "2026-06-02T08:37:19.886988+00:00"
+    },
+    {
+      "generation": 191,
+      "island_id": 2,
+      "score": 2219711.098963,
+      "timestamp": "2026-06-02T08:38:49.317734+00:00"
+    },
+    {
+      "generation": 192,
+      "island_id": 1,
+      "score": 2219711.201444,
+      "timestamp": "2026-06-02T08:39:37.246516+00:00"
+    },
+    {
+      "generation": 193,
+      "island_id": 0,
+      "score": 2219711.70902,
+      "timestamp": "2026-06-02T08:40:22.534565+00:00"
+    },
+    {
+      "generation": 194,
+      "island_id": 1,
+      "score": 2219693.706812,
+      "timestamp": "2026-06-02T08:40:45.106222+00:00"
+    },
+    {
+      "generation": 195,
+      "island_id": 0,
+      "score": 2219710.2114509996,
+      "timestamp": "2026-06-02T08:43:51.753404+00:00"
+    },
+    {
+      "generation": 196,
+      "island_id": 1,
+      "score": 2219693.385748,
+      "timestamp": "2026-06-02T08:44:17.089547+00:00"
+    },
+    {
+      "generation": 197,
+      "island_id": 0,
+      "score": 2219708.191538,
+      "timestamp": "2026-06-02T08:45:02.861819+00:00"
+    },
+    {
+      "generation": 198,
+      "island_id": 1,
+      "score": 2219687.1968489997,
+      "timestamp": "2026-06-02T08:45:25.351952+00:00"
+    },
+    {
+      "generation": 199,
+      "island_id": 2,
+      "score": 2219710.95402,
+      "timestamp": "2026-06-02T08:46:50.917582+00:00"
+    },
+    {
+      "generation": 200,
+      "island_id": 0,
+      "score": 2219694.008259,
+      "timestamp": "2026-06-02T08:47:10.989231+00:00"
+    },
+    {
+      "generation": 201,
+      "island_id": 1,
+      "score": 2219685.6180229997,
+      "timestamp": "2026-06-02T08:47:34.665721+00:00"
+    },
+    {
+      "generation": 202,
+      "island_id": 2,
+      "score": 2219700.864511,
+      "timestamp": "2026-06-02T08:50:14.427746+00:00"
+    },
+    {
+      "generation": 203,
+      "island_id": 2,
+      "score": 2219690.528039,
+      "timestamp": "2026-06-02T08:51:22.988506+00:00"
+    },
+    {
+      "generation": 204,
+      "island_id": 1,
+      "score": 2219670.107496,
+      "timestamp": "2026-06-02T08:53:13.704479+00:00"
+    },
+    {
+      "generation": 205,
+      "island_id": 0,
+      "score": 2219689.4559739996,
+      "timestamp": "2026-06-02T08:53:55.176722+00:00"
+    },
+    {
+      "generation": 206,
+      "island_id": 2,
+      "score": 2219688.1560429996,
+      "timestamp": "2026-06-02T08:54:37.386634+00:00"
+    },
+    {
+      "generation": 207,
+      "island_id": 0,
+      "score": 2219686.068993,
+      "timestamp": "2026-06-02T08:57:11.389068+00:00"
+    },
+    {
+      "generation": 208,
+      "island_id": 2,
+      "score": 2219680.6371999998,
+      "timestamp": "2026-06-02T08:57:54.860705+00:00"
+    },
+    {
+      "generation": 209,
+      "island_id": 0,
+      "score": 2219672.325625,
+      "timestamp": "2026-06-02T08:58:17.183788+00:00"
+    },
+    {
+      "generation": 210,
+      "island_id": 2,
+      "score": 2219677.6673599994,
+      "timestamp": "2026-06-02T08:59:02.198733+00:00"
+    },
+    {
+      "generation": 211,
+      "island_id": 2,
+      "score": 2219671.1460059998,
+      "timestamp": "2026-06-02T09:01:23.394227+00:00"
+    },
+    {
+      "generation": 212,
+      "island_id": 2,
+      "score": 2219663.844346,
+      "timestamp": "2026-06-02T09:02:33.541799+00:00"
+    },
+    {
+      "generation": 213,
+      "island_id": 1,
+      "score": 2219666.312279,
+      "timestamp": "2026-06-02T09:03:20.786237+00:00"
+    },
+    {
+      "generation": 214,
+      "island_id": 2,
+      "score": 2219643.5295599997,
+      "timestamp": "2026-06-02T09:03:43.200412+00:00"
+    },
+    {
+      "generation": 215,
+      "island_id": 1,
+      "score": 2219664.539288,
+      "timestamp": "2026-06-02T09:04:29.767642+00:00"
+    },
+    {
+      "generation": 216,
+      "island_id": 1,
+      "score": 2219651.4756179997,
+      "timestamp": "2026-06-02T09:05:39.314597+00:00"
+    },
+    {
+      "generation": 217,
+      "island_id": 0,
+      "score": 2219669.548497,
+      "timestamp": "2026-06-02T09:06:23.927103+00:00"
+    },
+    {
+      "generation": 218,
+      "island_id": 1,
+      "score": 2219647.731681,
+      "timestamp": "2026-06-02T09:06:46.200476+00:00"
+    },
+    {
+      "generation": 219,
+      "island_id": 2,
+      "score": 2219642.312103,
+      "timestamp": "2026-06-02T09:07:06.720435+00:00"
+    },
+    {
+      "generation": 220,
+      "island_id": 0,
+      "score": 2219666.2912419997,
+      "timestamp": "2026-06-02T09:07:27.727701+00:00"
+    },
+    {
+      "generation": 221,
+      "island_id": 1,
+      "score": 2219640.5105529996,
+      "timestamp": "2026-06-02T09:07:50.623612+00:00"
     }
   ],
   "discovered_algorithms": [
@@ -3108,55 +3804,96 @@
     "QAlgo-Dream-G177",
     "QAlgo-Dream-G178",
     "QAlgo-Dream-G179",
-    "QAlgo-Dream-G180"
+    "QAlgo-Dream-G180",
+    "QAlgo-Dream-G181",
+    "QAlgo-Dream-G182",
+    "QAlgo-Dream-G183",
+    "QAlgo-Dream-G184",
+    "QAlgo-Dream-G185",
+    "QAlgo-Dream-G186",
+    "QAlgo-Dream-G187",
+    "QAlgo-Dream-G188",
+    "QAlgo-Dream-G189",
+    "QAlgo-Dream-G190",
+    "QAlgo-Dream-G191",
+    "QAlgo-Dream-G192",
+    "QAlgo-Dream-G193",
+    "QAlgo-Dream-G194",
+    "QAlgo-Dream-G195",
+    "QAlgo-Dream-G196",
+    "QAlgo-Dream-G197",
+    "QAlgo-Dream-G198",
+    "QAlgo-Dream-G199",
+    "QAlgo-Dream-G200",
+    "QAlgo-Dream-G201",
+    "QAlgo-Dream-G202",
+    "QAlgo-Dream-G203",
+    "QAlgo-Dream-G204",
+    "QAlgo-Dream-G205",
+    "QAlgo-Dream-G206",
+    "QAlgo-Dream-G207",
+    "QAlgo-Dream-G208",
+    "QAlgo-Dream-G209",
+    "QAlgo-Dream-G210",
+    "QAlgo-Dream-G211",
+    "QAlgo-Dream-G212",
+    "QAlgo-Dream-G213",
+    "QAlgo-Dream-G214",
+    "QAlgo-Dream-G215",
+    "QAlgo-Dream-G216",
+    "QAlgo-Dream-G217",
+    "QAlgo-Dream-G218",
+    "QAlgo-Dream-G219",
+    "QAlgo-Dream-G220",
+    "QAlgo-Dream-G221"
   ],
   "blacklisted_fingerprints": [
-    "b7f9c10a5b1c3b1a",
-    "c18acd211d58faf2",
-    "0ad13642783fe2f4",
-    "af34007ed47eaca3",
-    "247c9d25258fdd26",
-    "6dc682e84ae95052",
-    "622705fc90a2146f",
-    "5ae9e1339ab835b2",
-    "2112dc1c156c940d",
-    "06489b07a80c7fe9",
-    "6a9ed9b74840d1b1",
-    "64264f90998a17b0",
-    "701332c1b91da513",
-    "1543127ec3e8bb4a",
-    "2dcf9a36f508b58a",
-    "24370fd58a093cd6",
-    "3a8507e5d2b02894",
     "e11406fd2ba5fdbc",
-    "f0200402ba28c47d",
+    "3a8507e5d2b02894",
+    "6dc682e84ae95052",
+    "0b17fb6febd46ffc",
+    "6a9ed9b74840d1b1",
     "141b657d31e1f045",
-    "96d91a32c53e58de",
+    "b6b81c8dc2ca9abc",
+    "f0200402ba28c47d",
     "af4a9aaae8d1ede7",
-    "dadd034f45c3bc0e",
-    "71dd4c67955e8420",
-    "8303ac54830f6287",
-    "c06680b6a24f321b",
-    "6e3d22d4d7aee650",
-    "5e7286547be7771b",
+    "5ae9e1339ab835b2",
+    "6470c076fbf4e39b",
+    "24370fd58a093cd6",
+    "64264f90998a17b0",
+    "4f28a986a047eebd",
+    "5ea25a80d5ac4b63",
+    "c18acd211d58faf2",
+    "b2552ce2df988fd6",
     "c243cb7c696705c8",
+    "adc46d2b8acd4b00",
+    "2dcf9a36f508b58a",
+    "8303ac54830f6287",
+    "247c9d25258fdd26",
+    "6e3d22d4d7aee650",
+    "12ef99f3b0cebc33",
     "eab88eaf7dc813d7",
     "d2b5bbc9eb00982a",
+    "60eaa3f9059264f1",
+    "71dd4c67955e8420",
+    "1543127ec3e8bb4a",
+    "06489b07a80c7fe9",
     "4e029b0277b8e53c",
-    "4f28a986a047eebd",
-    "b2552ce2df988fd6",
-    "12ef99f3b0cebc33",
     "d9981af351067323",
-    "6470c076fbf4e39b",
+    "622705fc90a2146f",
+    "d8c44e654d8fffa0",
+    "dadd034f45c3bc0e",
     "494247a80a370dff",
     "e06ed6b6dffcf70a",
-    "a79f914d0ed857b1",
-    "5ea25a80d5ac4b63",
-    "0b17fb6febd46ffc",
+    "701332c1b91da513",
+    "5e7286547be7771b",
+    "2112dc1c156c940d",
     "af9f75213e027f07",
-    "adc46d2b8acd4b00",
-    "60eaa3f9059264f1",
-    "d8c44e654d8fffa0",
-    "b6b81c8dc2ca9abc"
+    "b7f9c10a5b1c3b1a",
+    "96d91a32c53e58de",
+    "c06680b6a24f321b",
+    "a79f914d0ed857b1",
+    "0ad13642783fe2f4",
+    "af34007ed47eaca3"
   ]
 }

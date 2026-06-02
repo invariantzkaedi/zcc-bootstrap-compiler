@@ -435,6 +435,7 @@ class Island:
             parent_lines,
             max_point_mutations=max_mutations,
             include_sweeps=force_sweep or (self.rng.random() < 0.3),
+            blacklist=self.blacklist,
         )
 
         # Filter blacklisted fingerprints

@@ -86,7 +86,8 @@ with open('zcc_svg.h', 'w') as f:
     f.write('char* svg_to_base64(ZccSvgNode* root);\n')
     f.write('char* svg_to_data_uri(ZccSvgNode* root);\n')
     f.write('char* svg_to_html_uri(ZccSvgNode* root);\n')
-    f.write('char* hexdump_to_ascii(const unsigned char* data, size_t len);\n\n')
+    f.write('char* hexdump_to_ascii(const unsigned char* data, size_t len);\n')
+    f.write('char* hexdump_to_svg(const unsigned char* data, size_t len);\n\n')
  
     f.write('/* Path Builder Utility */\n')
     f.write('typedef struct SvgPathBuilder {\n')
@@ -119,7 +120,8 @@ with open('zcc_svg.h', 'w') as f:
     f.write('\n#endif\n')
 
 with open('zcc_svg.c', 'w') as f:
-    f.write('#include "zcc_svg.h"\n\n')
+    f.write('#include "zcc_svg.h"\n')
+    f.write('#include <math.h>\n\n')
     
     f.write('ZccSvgNode* svg_create_node(const char* tag) {\n')
     f.write('    ZccSvgNode* n = (ZccSvgNode*)calloc(1, sizeof(ZccSvgNode));\n')
@@ -862,21 +864,75 @@ char* zcc_ast_to_ascii(struct ZCCNode* root) {
     return out;
 }
 
+static double zcc_log2(double x) {
+    if (x <= 0.0) return 0.0;
+    uint64_t u = *(uint64_t*)&x;
+    int exp = ((u >> 52) & 0x7FF) - 1023;
+    u = (u & 0xFFFFFFFFFFFFFULL) | 0x3FF0000000000000ULL;
+    double m = *(double*)&u;
+    double z = m - 1.0;
+    double log2_m = z * (1.4426950408889634 + z * (-0.7213475204444817 + z * (0.4808983469629878 - 0.3606737602222409 * z)));
+    return (double)exp + log2_m;
+}
+
 char* hexdump_to_ascii(const unsigned char* data, size_t len) {
     if (!data || len == 0) return NULL;
-    size_t cap = 256 + len * 80;
+    
+    size_t nulls = 0;
+    size_t printable = 0;
+    size_t byte_counts[256];
+    for (int i = 0; i < 256; i++) {
+        byte_counts[i] = 0;
+    }
+    for (size_t i = 0; i < len; i++) {
+        unsigned char b = data[i];
+        byte_counts[b]++;
+        if (b == 0) nulls++;
+        if (b >= 32 && b <= 126) printable++;
+    }
+    
+    double entropy = 0.0;
+    for (int i = 0; i < 256; i++) {
+        if (byte_counts[i] > 0) {
+            double p = (double)byte_counts[i] / len;
+            entropy -= p * zcc_log2(p);
+        }
+    }
+    
+    size_t cap = 1024 + (len / 16 + 1) * 100;
     char* out = (char*)malloc(cap);
     if (!out) return NULL;
-    size_t offset = 0;
     size_t out_len = 0;
-
+    
+    out_len += sprintf(out + out_len, 
+        "[HEXDUMP: Size = %zu bytes, Nulls = %zu, Printable = %zu, Entropy = %.4f bits/byte]\n",
+        len, nulls, printable, entropy);
+        
+    out_len += sprintf(out + out_len, 
+        "Offset    00 01 02 03 04 05 06 07  08 09 0A 0B 0C 0D 0E 0F  ASCII Text\n"
+        "--------  -----------------------  -----------------------  ----------------\n");
+        
+    size_t offset = 0;
     while (offset < len) {
-        out_len += sprintf(out + out_len, "%08zX: ", offset);
+        out_len += sprintf(out + out_len, "%08X  ", (unsigned int)offset);
+        
         size_t chunk = len - offset;
         if (chunk > 16) chunk = 16;
-
-        for (size_t i = 0; i < 16; i++) {
-            if (i < chunk) {
+        
+        for (size_t i = 0; i < 8; i++) {
+            if (offset + i < len) {
+                out_len += sprintf(out + out_len, "%02X ", data[offset + i]);
+            } else {
+                strcpy(out + out_len, "   ");
+                out_len += 3;
+            }
+        }
+        
+        strcpy(out + out_len, " ");
+        out_len += 1;
+        
+        for (size_t i = 8; i < 16; i++) {
+            if (offset + i < len) {
                 out_len += sprintf(out + out_len, "%02X ", data[offset + i]);
             } else {
                 strcpy(out + out_len, "   ");
@@ -886,7 +942,7 @@ char* hexdump_to_ascii(const unsigned char* data, size_t len) {
         
         strcpy(out + out_len, " |");
         out_len += 2;
-
+        
         for (size_t i = 0; i < chunk; i++) {
             unsigned char c = data[offset + i];
             if (c >= 32 && c <= 126) {
@@ -895,10 +951,196 @@ char* hexdump_to_ascii(const unsigned char* data, size_t len) {
                 out[out_len++] = '.';
             }
         }
+        
+        if (chunk < 16) {
+            for (size_t i = chunk; i < 16; i++) {
+                out[out_len++] = ' ';
+            }
+        }
+        
         out[out_len++] = '|';
         out[out_len++] = '\n';
-        offset += chunk;
+        offset += 16;
     }
+    out[out_len] = '\0';
+    return out;
+}
+
+char* hexdump_to_svg(const unsigned char* data, size_t len) {
+    if (!data || len == 0) return NULL;
+
+    size_t nulls = 0;
+    size_t printable = 0;
+    size_t byte_counts[256];
+    for (int i = 0; i < 256; i++) {
+        byte_counts[i] = 0;
+    }
+    for (size_t i = 0; i < len; i++) {
+        unsigned char b = data[i];
+        byte_counts[b]++;
+        if (b == 0) nulls++;
+        if (b >= 32 && b <= 126) printable++;
+    }
+
+    double entropy = 0.0;
+    for (int i = 0; i < 256; i++) {
+        if (byte_counts[i] > 0) {
+            double p = (double)byte_counts[i] / len;
+            entropy -= p * zcc_log2(p);
+        }
+    }
+
+    size_t cap = 8192 + len * 400;
+    char* out = (char*)malloc(cap);
+    if (!out) return NULL;
+    size_t out_len = 0;
+
+    out_len += sprintf(out + out_len,
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"800\" height=\"600\" viewBox=\"0 0 800 600\">\n"
+        "  <defs>\n"
+        "    <linearGradient id=\"cyberGrad\" x1=\"0%%\" y1=\"0%%\" x2=\"100%%\" y2=\"100%%\">\n"
+        "      <stop offset=\"0%%\" stop-color=\"#00ffcc\"/>\n"
+        "      <stop offset=\"50%%\" stop-color=\"#ff007f\"/>\n"
+        "      <stop offset=\"100%%\" stop-color=\"#7f00ff\"/>\n"
+        "    </linearGradient>\n"
+        "    <filter id=\"glow\">\n"
+        "      <feGaussianBlur stdDeviation=\"3\" result=\"coloredBlur\"/>\n"
+        "      <feMerge>\n"
+        "        <feMergeNode in=\"coloredBlur\"/>\n"
+        "        <feMergeNode in=\"SourceGraphic\"/>\n"
+        "      </feMerge>\n"
+        "    </filter>\n"
+        "  </defs>\n"
+        "  <!-- Background -->\n"
+        "  <rect width=\"800\" height=\"600\" fill=\"#05040d\" rx=\"8\" ry=\"8\"/>\n"
+        "  <!-- Grid overlay -->\n"
+        "  <g stroke=\"#15112e\" stroke-width=\"1\">\n");
+
+    for (int x = 20; x < 800; x += 20) {
+        out_len += sprintf(out + out_len, "    <line x1=\"%d\" y1=\"0\" x2=\"%d\" y2=\"600\" opacity=\"0.4\"/>\n", x, x);
+    }
+    for (int y = 20; y < 600; y += 20) {
+        out_len += sprintf(out + out_len, "    <line x1=\"0\" y1=\"%d\" x2=\"800\" y2=\"%d\" opacity=\"0.4\"/>\n", y, y);
+    }
+
+    out_len += sprintf(out + out_len,
+        "  </g>\n"
+        "  <!-- Outer Border -->\n"
+        "  <rect x=\"2\" y=\"2\" width=\"796\" height=\"596\" fill=\"none\" stroke=\"url(#cyberGrad)\" stroke-width=\"2\" rx=\"8\" ry=\"8\"/>\n"
+        "  <!-- Header Panel -->\n"
+        "  <rect x=\"30\" y=\"25\" width=\"740\" height=\"45\" rx=\"6\" ry=\"6\" fill=\"#0c0a1a\" stroke=\"#1c163a\" stroke-width=\"1.5\"/>\n"
+        "  <text x=\"50\" y=\"52\" font-family=\"monospace\" font-size=\"15\" font-weight=\"bold\" fill=\"#00ffcc\" letter-spacing=\"2\" filter=\"url(#glow)\">ZCC SOVEREIGN BINARY RESOURCE METRIC ANALYZER</text>\n"
+        "  <!-- Left Panel: Memory Matrix -->\n"
+        "  <rect x=\"30\" y=\"90\" width=\"420\" height=\"480\" rx=\"6\" ry=\"6\" fill=\"#080613\" stroke=\"#1c163a\" stroke-width=\"1.5\"/>\n"
+        "  <text x=\"50\" y=\"116\" font-family=\"monospace\" font-size=\"11\" font-weight=\"bold\" fill=\"#7f84b6\">MEMORY MATRIX MAP (16-BYTE ALIGNED)</text>\n");
+
+    size_t num_rows = (len + 15) / 16;
+    if (num_rows > 14) num_rows = 14;
+
+    for (size_t r = 0; r < num_rows; r++) {
+        out_len += sprintf(out + out_len,
+            "  <text x=\"50\" y=\"%d\" font-family=\"monospace\" font-size=\"10\" fill=\"#50508a\">0x%08X</text>\n",
+            (int)(146 + r * 28), (unsigned int)(r * 16));
+
+        for (size_t c = 0; c < 16; c++) {
+            size_t idx = r * 16 + c;
+            if (idx >= len) break;
+
+            unsigned char b = data[idx];
+            int x_pos = 120 + c * 19;
+            if (c >= 8) x_pos += 8;
+            int y_pos = 132 + r * 28;
+
+            const char* color_fill = "";
+            const char* color_stroke = "";
+            const char* text_color = "#ffffff";
+
+            if (b == 0) {
+                color_fill = "#141124";
+                color_stroke = "#231f3c";
+                text_color = "#4c486a";
+            } else if (b >= 32 && b <= 126) {
+                color_fill = "#00e5ff";
+                color_stroke = "#0088aa";
+                text_color = "#000000";
+            } else if (b >= 128) {
+                color_fill = "#8b2ff5";
+                color_stroke = "#4b0082";
+                text_color = "#ffffff";
+            } else {
+                color_fill = "#ff007f";
+                color_stroke = "#aa0055";
+                text_color = "#ffffff";
+            }
+
+            out_len += sprintf(out + out_len,
+                "  <rect x=\"%d\" y=\"%d\" width=\"15\" height=\"20\" rx=\"2\" ry=\"2\" fill=\"%s\" stroke=\"%s\" stroke-width=\"1\">\n"
+                "    <title>Offset: 0x%zX | Byte: 0x%02X (%d)</title>\n"
+                "  </rect>\n",
+                x_pos, y_pos, color_fill, color_stroke, idx, b, (int)b);
+
+            out_len += sprintf(out + out_len,
+                "  <text x=\"%d\" y=\"%d\" font-family=\"monospace\" font-size=\"7.5\" font-weight=\"bold\" fill=\"%s\" text-anchor=\"middle\">%02X</text>\n",
+                x_pos + 7, y_pos + 13, text_color, b);
+        }
+    }
+
+    out_len += sprintf(out + out_len,
+        "  <rect x=\"470\" y=\"90\" width=\"300\" height=\"480\" rx=\"6\" ry=\"6\" fill=\"#080613\" stroke=\"#1c163a\" stroke-width=\"1.5\"/>\n"
+        "  <text x=\"490\" y=\"116\" font-family=\"monospace\" font-size=\"11\" font-weight=\"bold\" fill=\"#7f84b6\">SHANNON ENTROPY PROFILE</text>\n");
+
+    double dash_offset = 314.159 * (1.0 - (entropy > 8.0 ? 8.0 : entropy) / 8.0);
+    out_len += sprintf(out + out_len,
+        "  <!-- Radial Gauge -->\n"
+        "  <circle cx=\"620\" cy=\"210\" r=\"50\" fill=\"none\" stroke=\"#121024\" stroke-width=\"10\"/>\n"
+        "  <circle cx=\"620\" cy=\"210\" r=\"50\" fill=\"none\" stroke=\"url(#cyberGrad)\" stroke-width=\"10\"\n"
+        "          stroke-dasharray=\"314.159\" stroke-dashoffset=\"%.3f\" transform=\"rotate(-90 620 210)\" filter=\"url(#glow)\"/>\n"
+        "  <text x=\"620\" y=\"214\" font-family=\"monospace\" font-size=\"14\" font-weight=\"bold\" fill=\"#ffffff\" text-anchor=\"middle\">%.4f</text>\n"
+        "  <text x=\"620\" y=\"228\" font-family=\"monospace\" font-size=\"9\" fill=\"#7f84b6\" text-anchor=\"middle\">bits/byte</text>\n",
+        dash_offset, entropy);
+
+    double null_pct = len > 0 ? (double)nulls / len * 100.0 : 0.0;
+    double print_pct = len > 0 ? (double)printable / len * 100.0 : 0.0;
+    double other_pct = 100.0 - null_pct - print_pct;
+    if (other_pct < 0.0) other_pct = 0.0;
+
+    int null_bar_w = (int)(240 * (null_pct / 100.0));
+    int print_bar_w = (int)(240 * (print_pct / 100.0));
+    int other_bar_w = (int)(240 * (other_pct / 100.0));
+
+    out_len += sprintf(out + out_len,
+        "  <!-- Progress Bars -->\n"
+        "  <text x=\"490\" y=\"285\" font-family=\"monospace\" font-size=\"10\" fill=\"#ffffff\">TOTAL DATA SIZE: %zu bytes</text>\n"
+        "  <rect x=\"490\" y=\"293\" width=\"260\" height=\"8\" rx=\"2\" ry=\"2\" fill=\"#121024\"/>\n"
+        "  <rect x=\"490\" y=\"293\" width=\"260\" height=\"8\" rx=\"2\" ry=\"2\" fill=\"#7f00ff\" filter=\"url(#glow)\"/>\n",
+        len);
+
+    out_len += sprintf(out + out_len,
+        "  <text x=\"490\" y=\"335\" font-family=\"monospace\" font-size=\"10\" fill=\"#ffffff\">NULL BYTES: %zu (%.1f%%)</text>\n"
+        "  <rect x=\"490\" y=\"343\" width=\"260\" height=\"8\" rx=\"2\" ry=\"2\" fill=\"#121024\"/>\n"
+        "  <rect x=\"490\" y=\"343\" width=\"%d\" height=\"8\" rx=\"2\" ry=\"2\" fill=\"#ff007f\" filter=\"url(#glow)\"/>\n",
+        nulls, null_pct, null_bar_w);
+
+    out_len += sprintf(out + out_len,
+        "  <text x=\"490\" y=\"385\" font-family=\"monospace\" font-size=\"10\" fill=\"#ffffff\">PRINTABLE ASCII: %zu (%.1f%%)</text>\n"
+        "  <rect x=\"490\" y=\"393\" width=\"260\" height=\"8\" rx=\"2\" ry=\"2\" fill=\"#121024\"/>\n"
+        "  <rect x=\"490\" y=\"393\" width=\"%d\" height=\"8\" rx=\"2\" ry=\"2\" fill=\"#00ffcc\" filter=\"url(#glow)\"/>\n",
+        printable, print_pct, print_bar_w);
+
+    out_len += sprintf(out + out_len,
+        "  <text x=\"490\" y=\"435\" font-family=\"monospace\" font-size=\"10\" fill=\"#ffffff\">CONTROL/EXTENDED: %zu (%.1f%%)</text>\n"
+        "  <rect x=\"490\" y=\"443\" width=\"260\" height=\"8\" rx=\"2\" ry=\"2\" fill=\"#121024\"/>\n"
+        "  <rect x=\"490\" y=\"443\" width=\"%d\" height=\"8\" rx=\"2\" ry=\"2\" fill=\"#8b2ff5\" filter=\"url(#glow)\"/>\n",
+        len - nulls - printable, other_pct, other_bar_w);
+
+    out_len += sprintf(out + out_len,
+        "  <!-- Footer Status -->\n"
+        "  <line x1=\"490\" y1=\"485\" x2=\"750\" y2=\"485\" stroke=\"#1c163a\" stroke-width=\"1\"/>\n"
+        "  <text x=\"490\" y=\"515\" font-family=\"monospace\" font-size=\"10\" fill=\"#50508a\">SYSTEM STATUS: SECURE</text>\n"
+        "  <text x=\"490\" y=\"535\" font-family=\"monospace\" font-size=\"10\" fill=\"#50508a\">ABI LANE: X86-64 SYSTEM V</text>\n"
+        "  <text x=\"490\" y=\"555\" font-family=\"monospace\" font-size=\"10\" fill=\"#00ffcc\" filter=\"url(#glow)\">ZCC SOVEREIGN COMPILED</text>\n"
+        "</svg>\n");
+
     out[out_len] = '\0';
     return out;
 }

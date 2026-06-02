@@ -76,12 +76,14 @@ class MutationEngine:
     # ──────────────────────────────────────────────────────────────────
 
     def dream(self, asm_lines: list[str], max_point_mutations: int = 5,
-              include_sweeps: bool = True) -> list[Mutation]:
+              include_sweeps: bool = True, blacklist: set = None) -> list[Mutation]:
         """
         Discover all applicable mutations.
         Returns sweep mutations (full-assembly passes) + point mutations
         (individual sites) up to max_point_mutations.
         """
+        if blacklist is None:
+            blacklist = set()
         self.mutations_found = []
         results = []
 
@@ -105,6 +107,9 @@ class MutationEngine:
         point_candidates.extend(self._scan_imul_one(asm_lines))
         point_candidates.extend(self._scan_addq_zero(asm_lines))
         point_candidates.extend(self._scan_unused_frame_save(asm_lines))
+
+        # Filter blacklist early so blacklisted candidates don't starve other mutations
+        point_candidates = [c for c in point_candidates if c.fingerprint() not in blacklist]
 
         # Sample from point candidates with hybrid priority injection for unused_frame_save
         frame_saves = [c for c in point_candidates if c.name == "unused_frame_save"]

@@ -1,15 +1,15 @@
 # ZCC Oneirogenesis v2 — Evolution Report
 
-**Generated**: 2026-06-02T07:18:29.833503+00:00
+**Generated**: 2026-06-02T09:12:03.693780+00:00
 
 ## Summary
 
 | Metric | Value |
 |--------|-------|
-| Global Generation | 180 |
-| Total Survived | 268 |
-| Total Rejected | 504 |
-| Algorithms Discovered | 180 |
+| Global Generation | 221 |
+| Total Survived | 349 |
+| Total Rejected | 604 |
+| Algorithms Discovered | 221 |
 | Blacklisted Patterns | 47 |
 
 ## Lineage
@@ -196,6 +196,47 @@
 | G0178 | I0 | `41e7ad38ea08` | Remove unused frame-save: %rax → -1184(%rbp) (slot never loaded) | -18.0 | 2026-06-01T18:41:13 |
 | G0179 | I0 | `4164cc80a913` | Remove unused frame-save: %rax → -17168(%rbp) (slot never loaded) | -5.4 | 2026-06-02T07:17:50 |
 | G0180 | I1 | `4164cc80a913` | Remove unused frame-save: %rax → -17168(%rbp) (slot never loaded) | -20.3 | 2026-06-02T07:18:12 |
+| G0181 | I0 | `b72bd343f63a` | Replace cmpq $0,%rax with testq %rax,%rax, Replace cmpq $0,%rax with testq %rax,%rax | -9.3 | 2026-06-02T08:30:57 |
+| G0182 | I2 | `1ceebffde2e5` | Replace cmpq $0,%rax with testq %rax,%rax, Replace cmpq $0,%rax with testq %rax,%rax | -5.1 | 2026-06-02T08:31:43 |
+| G0183 | I0 | `4022d7b27afe` | Replace cmpq $0,%rax with testq %rax,%rax | -1.9 | 2026-06-02T08:32:05 |
+| G0184 | I1 | `d8e286913967` | Replace cmpq $0,%rax with testq %rax,%rax | -3.5 | 2026-06-02T08:32:25 |
+| G0185 | I0 | `b72bd343f63a` | Replace cmpq $0,%rax with testq %rax,%rax, Replace cmpq $0,%rax with testq %rax,%rax | -7.6 | 2026-06-02T08:34:36 |
+| G0186 | I1 | `d0777c523400` | Replace cmpq $0,%rax with testq %rax,%rax | -8.5 | 2026-06-02T08:35:01 |
+| G0187 | I2 | `fa12589d2b9c` | Replace cmpq $0,%rax with testq %rax,%rax, Replace cmpq $0,%rax with testq %rax,%rax | -31.4 | 2026-06-02T08:35:27 |
+| G0188 | I2 | `5fc1c930fc0a` | Replace cmpq $0,%rax with testq %rax,%rax | -1.4 | 2026-06-02T08:36:36 |
+| G0189 | I0 | `dff3c423dbee` | Replace cmpq $0,%rax with testq %rax,%rax, Replace cmpq $0,%rax with testq %rax,%rax | -16.2 | 2026-06-02T08:36:58 |
+| G0190 | I1 | `d0ae88870d4f` | Swap independent pair to reduce WAR pipeline stall, Replace cmpq $0,%rax with testq %rax,%rax (+1) | -10.6 | 2026-06-02T08:37:19 |
+| G0191 | I2 | `ed9761a65823` | Replace cmpq $0,%rax with testq %rax,%rax, Fuse mov+add → leaq $140(%r12), %rax (+1) | -11.7 | 2026-06-02T08:38:49 |
+| G0192 | I1 | `df4b3355eee7` | Replace cmpq $0,%rax with testq %rax,%rax, Fuse mov+add → leaq $216(%r14), %rax | -2.6 | 2026-06-02T08:39:37 |
+| G0193 | I0 | `e961a89a9cc2` | Fuse mov+add → leaq $24(%r14), %rax, Fuse mov+add → leaq $6849216(%r12), %rax | -11.7 | 2026-06-02T08:40:22 |
+| G0194 | I1 | `32669b811be3` | Fuse mov+add → leaq $52(%r14), %rax, Fuse mov+add → leaq $24(%r12), %rax (+1) | -17.5 | 2026-06-02T08:40:45 |
+| G0195 | I0 | `e9d8b2a97305` | Fuse mov+add → leaq $56(%rbx), %rax, Replace cmpq $0,%rax with testq %rax,%rax (+1) | -1.5 | 2026-06-02T08:43:51 |
+| G0196 | I1 | `7fa3beac1e04` | Fuse mov+add → leaq $24(%r12), %rax | -0.3 | 2026-06-02T08:44:17 |
+| G0197 | I0 | `d008daf78322` | Replace cmpq $0,%rax with testq %rax,%rax | -2.0 | 2026-06-02T08:45:02 |
+| G0198 | I1 | `57b233ff0c2d` | Replace cmpq $0,%rax with testq %rax,%rax, Replace cmpq $0,%rax with testq %rax,%rax | -6.2 | 2026-06-02T08:45:25 |
+| G0199 | I2 | `fdb7c60edd88` | Replace cmpq $0,%rax with testq %rax,%rax, Replace cmpq $0,%rax with testq %rax,%rax (+1) | -0.1 | 2026-06-02T08:46:50 |
+| G0200 | I0 | `57f2212b6495` | Fuse mov+add → leaq $16520(%r14), %rax, Replace cmpq $0,%rax with testq %rax,%rax (+1) | -14.2 | 2026-06-02T08:47:10 |
+| G0201 | I1 | `730ce903129b` | Replace cmpq $0,%rax with testq %rax,%rax, Replace cmpq $0,%rax with testq %rax,%rax | -1.6 | 2026-06-02T08:47:34 |
+| G0202 | I2 | `5b5e56c652ed` | Replace cmpq $0,%rax with testq %rax,%rax, Fuse mov+add → leaq $128(%r12), %rax (+1) | -10.1 | 2026-06-02T08:50:14 |
+| G0203 | I2 | `24c1a694d557` | Fuse mov+add → leaq $52(%r13), %rax | -10.3 | 2026-06-02T08:51:22 |
+| G0204 | I1 | `eb53573a088f` | Fuse mov+add → leaq $16520(%r13), %rax, Fuse mov+add → leaq $128(%r15), %rax (+1) | -15.5 | 2026-06-02T08:53:13 |
+| G0205 | I0 | `07d11e8b41f0` | Fuse mov+add → leaq $136(%r13), %rax, Replace cmpq $0,%rax with testq %rax,%rax (+1) | -4.6 | 2026-06-02T08:53:55 |
+| G0206 | I2 | `e37c556fb3f8` | Replace cmpq $0,%rax with testq %rax,%rax | -2.4 | 2026-06-02T08:54:37 |
+| G0207 | I0 | `036699ff137e` | Replace cmpq $0,%rax with testq %rax,%rax, Fuse mov+add → leaq $24(%r12), %rax | -3.4 | 2026-06-02T08:57:11 |
+| G0208 | I2 | `b1a5f0c2d521` | Fuse mov+add → leaq $16528(%r13), %rax | -7.5 | 2026-06-02T08:57:54 |
+| G0209 | I0 | `daa4666c491f` | Fuse mov+add → leaq $18344(%r12), %rax | -13.7 | 2026-06-02T08:58:17 |
+| G0210 | I2 | `c7670aff6018` | Replace cmpq $0,%rax with testq %rax,%rax, Fuse mov+add → leaq $272(%r12), %rax (+1) | -3.0 | 2026-06-02T08:59:02 |
+| G0211 | I2 | `d6e256fe8557` | Fuse mov+add → leaq $300(%r12), %rax | -6.5 | 2026-06-02T09:01:23 |
+| G0212 | I2 | `d274e53854da` | Replace cmpq $0,%rax with testq %rax,%rax, Fuse mov+add → leaq $140(%r12), %rax (+1) | -7.3 | 2026-06-02T09:02:33 |
+| G0213 | I1 | `7e017b458e80` | Fuse mov+add → leaq $536(%r13), %rax | -3.8 | 2026-06-02T09:03:20 |
+| G0214 | I2 | `b6a3127c6303` | Fuse mov+add → leaq $26344(%r12), %rax, Fuse mov+add → leaq $260(%r12), %rax | -20.3 | 2026-06-02T09:03:43 |
+| G0215 | I1 | `5e56c4d844f0` | Replace cmpq $0,%rax with testq %rax,%rax, Fuse mov+add → leaq $16520(%r13), %rax | -1.8 | 2026-06-02T09:04:29 |
+| G0216 | I1 | `49c77802b853` | Replace cmpq $0,%rax with testq %rax,%rax, Fuse mov+add → leaq $128(%r13), %rax (+1) | -13.1 | 2026-06-02T09:05:39 |
+| G0217 | I0 | `05b525ab9db6` | Swap independent pair to reduce WAR pipeline stall, Fuse mov+add → leaq $18312(%r14), %rax (+1) | -2.8 | 2026-06-02T09:06:23 |
+| G0218 | I1 | `a3dfb08118b7` | Replace cmpq $0,%rax with testq %rax,%rax | -3.7 | 2026-06-02T09:06:46 |
+| G0219 | I2 | `cf90f0d78eb8` | Replace cmpq $0,%rax with testq %rax,%rax, Replace cmpq $0,%rax with testq %rax,%rax | -1.2 | 2026-06-02T09:07:06 |
+| G0220 | I0 | `cb16b18b414a` | Replace cmpq $0,%rax with testq %rax,%rax | -3.3 | 2026-06-02T09:07:27 |
+| G0221 | I1 | `072d97b6bda4` | Replace cmpq $0,%rax with testq %rax,%rax, Fuse mov+add → leaq $16520(%r13), %rax | -7.2 | 2026-06-02T09:07:50 |
 
 ## Discovered Algorithms
 
@@ -379,38 +420,79 @@
 - `QAlgo-Dream-G178` → [`QAlgo-Dream-G178.json`](journal/QAlgo-Dream-G178.json)
 - `QAlgo-Dream-G179` → [`QAlgo-Dream-G179.json`](journal/QAlgo-Dream-G179.json)
 - `QAlgo-Dream-G180` → [`QAlgo-Dream-G180.json`](journal/QAlgo-Dream-G180.json)
+- `QAlgo-Dream-G181` → [`QAlgo-Dream-G181.json`](journal/QAlgo-Dream-G181.json)
+- `QAlgo-Dream-G182` → [`QAlgo-Dream-G182.json`](journal/QAlgo-Dream-G182.json)
+- `QAlgo-Dream-G183` → [`QAlgo-Dream-G183.json`](journal/QAlgo-Dream-G183.json)
+- `QAlgo-Dream-G184` → [`QAlgo-Dream-G184.json`](journal/QAlgo-Dream-G184.json)
+- `QAlgo-Dream-G185` → [`QAlgo-Dream-G185.json`](journal/QAlgo-Dream-G185.json)
+- `QAlgo-Dream-G186` → [`QAlgo-Dream-G186.json`](journal/QAlgo-Dream-G186.json)
+- `QAlgo-Dream-G187` → [`QAlgo-Dream-G187.json`](journal/QAlgo-Dream-G187.json)
+- `QAlgo-Dream-G188` → [`QAlgo-Dream-G188.json`](journal/QAlgo-Dream-G188.json)
+- `QAlgo-Dream-G189` → [`QAlgo-Dream-G189.json`](journal/QAlgo-Dream-G189.json)
+- `QAlgo-Dream-G190` → [`QAlgo-Dream-G190.json`](journal/QAlgo-Dream-G190.json)
+- `QAlgo-Dream-G191` → [`QAlgo-Dream-G191.json`](journal/QAlgo-Dream-G191.json)
+- `QAlgo-Dream-G192` → [`QAlgo-Dream-G192.json`](journal/QAlgo-Dream-G192.json)
+- `QAlgo-Dream-G193` → [`QAlgo-Dream-G193.json`](journal/QAlgo-Dream-G193.json)
+- `QAlgo-Dream-G194` → [`QAlgo-Dream-G194.json`](journal/QAlgo-Dream-G194.json)
+- `QAlgo-Dream-G195` → [`QAlgo-Dream-G195.json`](journal/QAlgo-Dream-G195.json)
+- `QAlgo-Dream-G196` → [`QAlgo-Dream-G196.json`](journal/QAlgo-Dream-G196.json)
+- `QAlgo-Dream-G197` → [`QAlgo-Dream-G197.json`](journal/QAlgo-Dream-G197.json)
+- `QAlgo-Dream-G198` → [`QAlgo-Dream-G198.json`](journal/QAlgo-Dream-G198.json)
+- `QAlgo-Dream-G199` → [`QAlgo-Dream-G199.json`](journal/QAlgo-Dream-G199.json)
+- `QAlgo-Dream-G200` → [`QAlgo-Dream-G200.json`](journal/QAlgo-Dream-G200.json)
+- `QAlgo-Dream-G201` → [`QAlgo-Dream-G201.json`](journal/QAlgo-Dream-G201.json)
+- `QAlgo-Dream-G202` → [`QAlgo-Dream-G202.json`](journal/QAlgo-Dream-G202.json)
+- `QAlgo-Dream-G203` → [`QAlgo-Dream-G203.json`](journal/QAlgo-Dream-G203.json)
+- `QAlgo-Dream-G204` → [`QAlgo-Dream-G204.json`](journal/QAlgo-Dream-G204.json)
+- `QAlgo-Dream-G205` → [`QAlgo-Dream-G205.json`](journal/QAlgo-Dream-G205.json)
+- `QAlgo-Dream-G206` → [`QAlgo-Dream-G206.json`](journal/QAlgo-Dream-G206.json)
+- `QAlgo-Dream-G207` → [`QAlgo-Dream-G207.json`](journal/QAlgo-Dream-G207.json)
+- `QAlgo-Dream-G208` → [`QAlgo-Dream-G208.json`](journal/QAlgo-Dream-G208.json)
+- `QAlgo-Dream-G209` → [`QAlgo-Dream-G209.json`](journal/QAlgo-Dream-G209.json)
+- `QAlgo-Dream-G210` → [`QAlgo-Dream-G210.json`](journal/QAlgo-Dream-G210.json)
+- `QAlgo-Dream-G211` → [`QAlgo-Dream-G211.json`](journal/QAlgo-Dream-G211.json)
+- `QAlgo-Dream-G212` → [`QAlgo-Dream-G212.json`](journal/QAlgo-Dream-G212.json)
+- `QAlgo-Dream-G213` → [`QAlgo-Dream-G213.json`](journal/QAlgo-Dream-G213.json)
+- `QAlgo-Dream-G214` → [`QAlgo-Dream-G214.json`](journal/QAlgo-Dream-G214.json)
+- `QAlgo-Dream-G215` → [`QAlgo-Dream-G215.json`](journal/QAlgo-Dream-G215.json)
+- `QAlgo-Dream-G216` → [`QAlgo-Dream-G216.json`](journal/QAlgo-Dream-G216.json)
+- `QAlgo-Dream-G217` → [`QAlgo-Dream-G217.json`](journal/QAlgo-Dream-G217.json)
+- `QAlgo-Dream-G218` → [`QAlgo-Dream-G218.json`](journal/QAlgo-Dream-G218.json)
+- `QAlgo-Dream-G219` → [`QAlgo-Dream-G219.json`](journal/QAlgo-Dream-G219.json)
+- `QAlgo-Dream-G220` → [`QAlgo-Dream-G220.json`](journal/QAlgo-Dream-G220.json)
+- `QAlgo-Dream-G221` → [`QAlgo-Dream-G221.json`](journal/QAlgo-Dream-G221.json)
 
 ## Fitness History
 
 ```
-G0151 I0: score=2198239
-G0152 I2: score=2198290
-G0153 I1: score=2198218
-G0154 I2: score=2198275
-G0155 I0: score=2198230
-G0156 I2: score=2198261
-G0157 I2: score=2198250
-G0158 I0: score=2198214
-G0159 I1: score=2198206
-G0160 I2: score=2198238
-G0161 I2: score=2198226
-G0162 I1: score=2198195
-G0163 I2: score=2198216
-G0164 I1: score=2198179
-G0165 I2: score=2198203
-G0166 I0: score=2198203
-G0167 I2: score=2198189
-G0168 I1: score=2198169
-G0169 I1: score=2198159
-G0170 I0: score=2198201
-G0171 I1: score=2198145
-G0172 I2: score=2198183
-G0173 I0: score=2198181
-G0174 I1: score=2198132
-G0175 I0: score=2198173
-G0176 I2: score=2198167
-G0177 I1: score=2198120
-G0178 I0: score=2198155
-G0179 I0: score=2219721
-G0180 I1: score=2219707
+G0192 I1: score=2219711
+G0193 I0: score=2219712
+G0194 I1: score=2219694
+G0195 I0: score=2219710
+G0196 I1: score=2219693
+G0197 I0: score=2219708
+G0198 I1: score=2219687
+G0199 I2: score=2219711
+G0200 I0: score=2219694
+G0201 I1: score=2219686
+G0202 I2: score=2219701
+G0203 I2: score=2219691
+G0204 I1: score=2219670
+G0205 I0: score=2219689
+G0206 I2: score=2219688
+G0207 I0: score=2219686
+G0208 I2: score=2219681
+G0209 I0: score=2219672
+G0210 I2: score=2219678
+G0211 I2: score=2219671
+G0212 I2: score=2219664
+G0213 I1: score=2219666
+G0214 I2: score=2219644
+G0215 I1: score=2219665
+G0216 I1: score=2219651
+G0217 I0: score=2219670
+G0218 I1: score=2219648
+G0219 I2: score=2219642
+G0220 I0: score=2219666
+G0221 I1: score=2219641
 ```

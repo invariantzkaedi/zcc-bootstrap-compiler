@@ -299,8 +299,12 @@ int main() {
     }
 
     // 3. Verification of side-by-side Hex/ASCII dump visualizer
-    const unsigned char dummy_binary[] = "\x7F\x45\x4C\x46\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3E\x00\x01\x00\x00\x00\x78\x00\x40\x00\x00\x00\x00\x00CompilerWarzoneStateHT+1";
-    char* hex_dump = hexdump_to_ascii(dummy_binary, sizeof(dummy_binary) - 1);
+    static const unsigned char dummy_binary[] = {
+        0x7F, 0x45, 0x4C, 0x46, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x02, 0x00, 0x3E, 0x00, 0x01, 0x00, 0x00, 0x00, 0x78, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00,
+        'C', 'o', 'm', 'p', 'i', 'l', 'e', 'r', 'W', 'a', 'r', 'z', 'o', 'n', 'e', 'S', 't', 'a', 't', 'e', 'H', 'T', '+', '1'
+    };
+    char* hex_dump = hexdump_to_ascii(dummy_binary, sizeof(dummy_binary));
     if (hex_dump) {
         FILE* fp_hex = fopen("test_hexdump_ascii.txt", "w");
         if (fp_hex) {
@@ -310,6 +314,17 @@ int main() {
         }
         printf("--- Hex/ASCII Dump ---\n%s----------------------\n", hex_dump);
         free(hex_dump);
+    }
+
+    char* hex_svg = hexdump_to_svg(dummy_binary, sizeof(dummy_binary));
+    if (hex_svg) {
+        FILE* fp_hex_svg = fopen("test_hexdump_visual.svg", "w");
+        if (fp_hex_svg) {
+            fprintf(fp_hex_svg, "%s", hex_svg);
+            fclose(fp_hex_svg);
+            printf("Successfully generated Hex/ASCII visual SVG: test_hexdump_visual.svg\n");
+        }
+        free(hex_svg);
     }
 
     free(svg_str);

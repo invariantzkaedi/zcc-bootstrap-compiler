@@ -399,11 +399,11 @@ clean:
 
 ir-verify: zcc2
 	@echo "[IR-VERIFY] Stage 2 IR emission..."
-	ZCC_EMIT_IR=1 ./zcc2 zcc.c -o zcc_ir_stage2.s
+	ZCC_EMIT_IR=1 ./zcc2 -DZCC_REAL_TELEMETRY zcc.c -o zcc_ir_stage2.s
 	@echo "[IR-VERIFY] Linking IR stage 2 binary..."
 	gcc zcc_ir_stage2.s $(PASSES) -o zcc_ir_stage2 -lm
 	@echo "[IR-VERIFY] Stage 3 via IR path..."
-	ZCC_EMIT_IR=1 ./zcc_ir_stage2 zcc.c -o zcc_ir_stage3.s
+	ZCC_EMIT_IR=1 ./zcc_ir_stage2 -DZCC_REAL_TELEMETRY zcc.c -o zcc_ir_stage3.s
 
 sqlite: zcc2
 	@echo "=== Compiling SQLite 160MB Amalgamation with ZCC ==="
