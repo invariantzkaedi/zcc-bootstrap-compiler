@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#define PP_MAX_MACROS 8192 /* raised: SQLite */
+#define PP_MAX_MACROS 16384 /* raised: SQLite; inactive slots reclaimed */
 #define PP_MAX_PARAMS 128  /* raised: SQLite */
 static int _warned_pp_max_params = 0;
 #define PP_MAX_BODY 65536
@@ -270,7 +270,6 @@ static void pp_drain_frames(PPState *state) {
                   (state->input_stack[state->input_depth - 1].expanding_macro == NULL);
     if (!can_pop)
       break;
-
     if (state->alloc_buf)
       free(state->alloc_buf);
     state->input_depth--;
@@ -423,6 +422,25 @@ static void pp_undef_macro(PPState *state, const char *name) {
 
 static PPMacro *pp_add_macro(PPState *state, const char *name) {
   PPMacro *m_macro;
+  int i;
+  /* PP-MACRO-SLOT-001: Reuse the most recently undef'd slot for this name
+   * before appending a new entry. This prevents silent table exhaustion
+   * caused by high #undef/#define churn in large TUs like SQLite. */
+  for (i = state->num_macros - 1; i >= 0; i--) {
+    if (!state->macros[i].active && strcmp(state->macros[i].name, name) == 0) {
+      m_macro = &state->macros[i];
+      /* body is still alloc'd from the prior definition — reuse it */
+      if (!m_macro->body) {
+        m_macro->body_cap = 256;
+        m_macro->body = (char *)calloc(1, m_macro->body_cap);
+      }
+      m_macro->body[0] = 0;
+      m_macro->num_params = 0;
+      m_macro->is_function_like = 0;
+      m_macro->active = 1;
+      return m_macro;
+    }
+  }
   if (state->num_macros >= PP_MAX_MACROS)
     return 0;
   m_macro = &state->macros[state->num_macros++];
@@ -643,7 +661,9 @@ static int is_stddef_stub(const char *path) {
          strcmp(base, "inttypes.h") == 0 || strcmp(base, "stdint.h") == 0 ||
          strcmp(base, "semaphore.h") == 0 || strcmp(base, "signal.h") == 0 ||
          strcmp(base, "stdbool.h") == 0 || strcmp(base, "assert.h") == 0 ||
-         strcmp(base, "types.h") == 0;
+         strcmp(base, "types.h") == 0 || strcmp(base, "ctype.h") == 0 ||
+         strcmp(base, "stat.h") == 0 || strcmp(base, "ioctl.h") == 0 ||
+         strcmp(base, "mman.h") == 0;
 }
 
 /* PP-INCLUDE-022: Resolve an include path via -I search and relative lookup.
@@ -1428,6 +1448,18 @@ static void pp_expand_ident(PPState *state, const char *ident) {
     }
     return;
   }
+  if (strcmp(ident, "__LINE__") == 0) {
+    char buf[32];
+    sprintf(buf, "%d", state->line);
+    pp_emit_str(state, buf, (int)strlen(buf));
+    return;
+  }
+  if (strcmp(ident, "__FILE__") == 0) {
+    char buf[1024];
+    sprintf(buf, "\"%s\"", state->filename ? state->filename : "main");
+    pp_emit_str(state, buf, (int)strlen(buf));
+    return;
+  }
 
   m = pp_find_macro(state, ident);
   if (!m) {
@@ -1475,6 +1507,13 @@ static void pp_expand_ident(PPState *state, const char *ident) {
     pp_emit_str(state, ident, strlen(ident));
     return;
   }
+
+  /* PP-HIDE-001: Lock the current frame depth during arg collection.
+   * Without this, a frame that ends exactly at ')' drains prematurely
+   * via pp_next(), which corrupts the hide-set by allowing the outer
+   * macro's frame to vanish before parent_num_blocked is applied. */
+  int old_arg_barrier = state->pop_barrier;
+  state->pop_barrier = state->input_depth;
   pp_next(state); /* consume '(' */
 
   /* parse arguments */
@@ -1610,6 +1649,7 @@ static void pp_expand_ident(PPState *state, const char *ident) {
     }
     pp_next(state);
   }
+  state->pop_barrier = old_arg_barrier; /* PP-HIDE-001: restore after arg collect */
 
   /* strip leading/trailing spaces from arguments */
   for (i = 0; i < p_count; i++) {
@@ -1802,7 +1842,6 @@ static void pp_expand_ident(PPState *state, const char *ident) {
       state->blocked_macros[bi] = parent_blocked[bi];
     }
   }
-
   /* Standard C preprocessor hide-set logic */
   pp_push_input(state, subst, subst, m);
 
@@ -1915,6 +1954,7 @@ static void pp_parse_target_depth(PPState *state, int target_depth) {
 
     if (c == '#') {
       pp_next(state);
+      pp_skip_whitespace(state);
       pp_parse_directive(state);
       continue;
     }

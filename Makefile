@@ -571,3 +571,22 @@ elf_emit_smoke: zcc
 	./zcc test/add.c -emit-obj -o test/add.o
 	readelf -a test/add.o
 
+zkernel: zcc
+	@echo "=== Building RP2040 zkernel ==="
+	cp zcc.c /tmp/zcc_arm.c
+	sed -i 's/TargetBackend \*backend_ops = 0;/extern TargetBackend backend_thumbv6m; TargetBackend \*backend_ops = \&backend_thumbv6m;/g' /tmp/zcc_arm.c
+	sed -i 's/int ZCC_POINTER_WIDTH = 8;/int ZCC_POINTER_WIDTH = 4;/g' /tmp/zcc_arm.c
+	python3 scripts/patch_arm_codegen.py /tmp/zcc_arm.c
+	$(CC) -I. -O0 -w -fno-asynchronous-unwind-tables -g0 -DZCC_REAL_TELEMETRY -Dmain=zcc_main -o /tmp/zcc_arm /tmp/zcc_arm.c $(PASSES) $(LDFLAGS)
+	/tmp/zcc_arm src/zkernel/main.c -o main_zcc.s
+	/tmp/zcc_arm src/zkernel/uart.c -o uart_zcc.s
+	/tmp/zcc_arm src/zkernel/sched.c -o sched_zcc.s
+	arm-none-eabi-gcc -mcpu=cortex-m0plus -mthumb -O0 -ffreestanding -nostdlib -T src/zkernel/linker.ld \
+		src/zkernel/startup.s main_zcc.s uart_zcc.s sched_zcc.s -o zkernel.elf
+	arm-none-eabi-objcopy -O binary zkernel.elf zkernel.bin
+	python3 rp2040_blink/uf2conv.py zkernel.bin -f RP2040 --base 0x10000000 -o zkernel.uf2
+	rm -f main_zcc.s uart_zcc.s sched_zcc.s zkernel.bin /tmp/zcc_arm.c /tmp/zcc_arm
+	@echo "=== zkernel.elf and zkernel.uf2 built successfully ==="
+
+
+
