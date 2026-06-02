@@ -138,6 +138,10 @@ typedef struct {
     unsigned long limbs[4]; /* 4x64-bit limbs = 256 bits */
 } uint256_t;
 
+/* ── IR node flags (ir_node_t.flags bitmask) ───────────────────────── */
+#define IRF_RET_IMM   0x00000001u  /* IR_RET carries imm directly, skip regalloc */
+#define IRF_DEAD      0x00000002u  /* node is dead, skip emission                */
+
 /* ── Core node ───────────────────────────────────────────────────────── */
 /*
  * Every IR instruction is one ir_node_t.
@@ -193,6 +197,7 @@ typedef struct ir_node_t {
      * Use ir_vuln_tag_set() / ir_vuln_tag_has() to manipulate.
      * Consumed by ir_pass_vuln_scan() and future liveness/dominance passes. */
     unsigned int       vuln_tags; /* ir_vuln_tag_t bitmask                 */
+    unsigned int       flags;     /* IRF_* bitmask (IRF_RET_IMM etc.)      */
 
     /* SSA-specific */
     int                phi_count;              /* 0 = normal node          */
@@ -217,6 +222,8 @@ typedef struct {
 
     int        tmp_counter;   /* monotonic counter for fresh temps        */
     int        lbl_counter;   /* monotonic counter for fresh labels       */
+    int        id;            /* monotonic function ID for end labels      */
+    char       end_label[64]; /* .Lfunc_end_N convergence label            */
     
     int        num_params;
     char       param_names[8][IR_NAME_MAX]; /* SystemV up to 6 in regs, keep 8 safe */
@@ -293,6 +300,8 @@ int          ir_op_is_terminator(ir_op_t op);
 
 /* Find the unique definition of a temporary register before end_node */
 ir_node_t   *ir_find_def(ir_func_t *fn, ir_node_t *end_node, const char *vreg);
+int          ir_fold_const_ret(ir_func_t *fn);
+int          ir_fold_const_ret_module(ir_module_t *mod);
 
 /* EVM Yul Weaver */
 void evm_yul_weaver(ir_func_t *fn, FILE *out);

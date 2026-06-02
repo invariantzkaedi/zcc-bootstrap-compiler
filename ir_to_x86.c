@@ -278,6 +278,8 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
         /* ── Pass 2: Emit assembly ── */
         n = fn->head;
         while (n) {
+            /* CG-IR-OPT-001: skip dead nodes */
+            if (n->flags & IRF_DEAD) { n = n->next; continue; }
             fprintf(out, "    # %s\n", ir_op_name(n->op));
             switch (n->op) {
                 case IR_CONST: {
@@ -548,25 +550,17 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                     break;
                 }
                 case IR_RET: {
-                    if (n->src1[0] != '\0' && n->src1[0] != '-') {
+                    /* CG-IR-OPT-001: IRF_RET_IMM — direct constant return, bypass regalloc */
+                    if (n->flags & IRF_RET_IMM) {
+                        fprintf(out, "    movq $%ld, %%rax\n", n->imm);
+                    } else if (n->src1[0] != '\0' && n->src1[0] != '-') {
                         load_operand(out, n->src1, "%rax", ra);
                         if (n->type == IR_TY_I8) fprintf(out, "    movsbl %%al, %%eax\n    movsbq %%al, %%rax\n");
                         else if (n->type == IR_TY_U8) fprintf(out, "    movzbl %%al, %%eax\n");
                         else if (n->type == IR_TY_I16) fprintf(out, "    movswl %%ax, %%eax\n    movswq %%ax, %%rax\n");
                         else if (n->type == IR_TY_U16) fprintf(out, "    movzwl %%ax, %%eax\n");
-                        /* NOTE: i32/u32 — AST path does NOT sign/zero-extend; SysV ABI does not
-                         * require the callee to extend 32-bit returns. Match AST for parity. */
                     }
-                    /* Task 2: Restore callee-saves from %rbp-relative slots (reverse order) */
-                    for (int ci = 4; ci >= 0; ci--) {
-                        if (ra->used[callee_flag[ci]]) {
-                            int save_off = -(stack_raw + 8 * (ci + 1));
-                            fprintf(out, "    movq %d(%%rbp), %s\n", save_off, callee_regs[ci]);
-                        }
-                    }
-                    fprintf(out, "    movq %%rbp, %%rsp\n");
-                    fprintf(out, "    popq %%rbp\n");
-                    fprintf(out, "    ret\n");
+                    fprintf(out, "    jmp %s\n", fn->end_label);
                     has_ret = 1;
                     break;
                 }
@@ -617,18 +611,17 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
             n = n->next;
         }
         
-        /* Fallback epilogue only if no explicit IR_RET was emitted */
-        if (!has_ret) {
-            for (int ci = 4; ci >= 0; ci--) {
-                if (ra->used[callee_flag[ci]]) {
-                    int save_off = -(stack_raw + 8 * (ci + 1));
-                    fprintf(out, "    movq %d(%%rbp), %s\n", save_off, callee_regs[ci]);
-                }
+        /* Convergence epilogue — all IR_RET paths jmp here */
+        fprintf(out, "%s:\n", fn->end_label);
+        for (int ci = 4; ci >= 0; ci--) {
+            if (ra->used[callee_flag[ci]]) {
+                int save_off = -(stack_raw + 8 * (ci + 1));
+                fprintf(out, "    movq %d(%%rbp), %s\n", save_off, callee_regs[ci]);
             }
-            fprintf(out, "    movq %%rbp, %%rsp\n");
-            fprintf(out, "    popq %%rbp\n");
-            fprintf(out, "    ret\n");
         }
+        fprintf(out, "    movq %%rbp, %%rsp\n");
+        fprintf(out, "    popq %%rbp\n");
+        fprintf(out, "    ret\n");
 
 
         ra_free(ra);

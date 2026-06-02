@@ -238,6 +238,8 @@ ir_func_t *ir_func_create(ir_module_t *mod, const char *name,
     safe_copy(fn->name, name ? name : "anon", IR_FUNC_MAX);
     fn->ret_type = ret_type;
     fn->num_params = num_params;
+    fn->id = 100 + mod->func_count; /* match AST label_count base of 100 */
+    snprintf(fn->end_label, sizeof(fn->end_label), ".Lfunc_end_%d", fn->id);
     mod->funcs[mod->func_count++] = fn;
     return fn;
 }
@@ -270,6 +272,36 @@ ir_node_t *ir_find_def(ir_func_t *fn, ir_node_t *end_node, const char *vreg) {
         }
     }
     return def;
+}
+
+/* ── IR optimization passes ─────────────────────────────────────────── */
+/* CG-IR-OPT-001: fold IR_CONST -> IR_RET into IRF_RET_IMM.
+ * Eliminates regalloc assignment for trivial constant returns,
+ * preventing unnecessary callee-save roundtrips. */
+int ir_fold_const_ret(ir_func_t *fn) {
+    int changed = 0;
+    ir_node_t *n;
+    if (!fn) return 0;
+    for (n = fn->head; n; n = n->next) {
+        ir_node_t *def;
+        if (n->op != IR_RET || !n->src1[0]) continue;
+        def = ir_find_def(fn, n, n->src1);
+        if (!def || def->op != IR_CONST) continue;
+        n->imm = def->imm;
+        n->src1[0] = '\0';
+        n->flags |= IRF_RET_IMM;
+        def->flags |= IRF_DEAD;
+        changed++;
+    }
+    return changed;
+}
+
+int ir_fold_const_ret_module(ir_module_t *mod) {
+    int i, changed = 0;
+    if (!mod) return 0;
+    for (i = 0; i < mod->func_count; i++)
+        changed += ir_fold_const_ret(mod->funcs[i]);
+    return changed;
 }
 
 /* ── Text emission ────────────────────────────────────────────────────── */

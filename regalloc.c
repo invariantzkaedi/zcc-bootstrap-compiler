@@ -211,6 +211,8 @@ static void build_intervals(RegAllocator *ra, const ir_func_t *fn) {
         }
 #endif
 
+        /* CG-IR-OPT-001: skip dead nodes (IRF_DEAD set by ir_fold_const_ret) */
+        if (n->flags & IRF_DEAD) { pos++; continue; }
         /* Process destination (definition) */
         if (is_temp(n->dst)) {
             LiveInterval *iv = get_or_create(ra, n->dst, pos);
