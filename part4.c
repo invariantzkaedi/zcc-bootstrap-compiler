@@ -1941,16 +1941,17 @@ void codegen_expr(Compiler *cc, Node *node) {
         fprintf(cc->out, "    setne %%al\n    setp %%r11b\n    orb %%r11b, %%al\n");
         break;
       case ND_LT:
-        fprintf(cc->out, "    setb %%al\n");
+        /* CG-FLOAT-013: NaN unordered — PF set means unordered, result must be 0 */
+        fprintf(cc->out, "    setb %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
         break;
       case ND_LE:
-        fprintf(cc->out, "    setbe %%al\n");
+        fprintf(cc->out, "    setbe %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
         break;
       case ND_GT:
-        fprintf(cc->out, "    seta %%al\n");
+        fprintf(cc->out, "    seta %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
         break;
       case ND_GE:
-        fprintf(cc->out, "    setae %%al\n");
+        fprintf(cc->out, "    setae %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
         break;
       }
       fprintf(cc->out, "    movzbl %%al, %%eax\n");
@@ -4340,8 +4341,11 @@ static long long eval_const_expr_p4(Node *elem, int *ok) {
     if (elem->kind == ND_SHL) return eval_const_expr_p4(elem->lhs, ok) << eval_const_expr_p4(elem->rhs, ok);
     if (elem->kind == ND_SHR) return eval_const_expr_p4(elem->lhs, ok) >> eval_const_expr_p4(elem->rhs, ok);
     if (elem->kind == ND_NEG) {
-        /* CG-GINIT-FLOAT-001: float negation must negate the float value,
-           not the bit-pattern. Check if child is ND_FLIT. */
+        /* CG-GINIT-FLOAT-001/002: float negation — handle both direct
+           ND_FLIT child and float-typed subexpressions (e.g. -(1.0f/0.0f)). */
+        int child_is_fp = (elem->lhs && elem->lhs->type &&
+                           (elem->lhs->type->kind == TY_FLOAT ||
+                            elem->lhs->type->kind == TY_DOUBLE));
         if (elem->lhs && elem->lhs->kind == ND_FLIT) {
             double negval = -(elem->lhs->f_val);
             if (elem->lhs->type && elem->lhs->type->kind == TY_FLOAT) {
@@ -4353,6 +4357,24 @@ static long long eval_const_expr_p4(Node *elem, int *ok) {
                 unsigned long long bits;
                 memcpy(&bits, &negval, sizeof(double));
                 return (long long)bits;
+            }
+        } else if (child_is_fp) {
+            int cok = 1;
+            long long cbits = eval_const_expr_p4(elem->lhs, &cok);
+            if (!cok) { *ok = 0; return 0; }
+            if (elem->lhs->type->kind == TY_FLOAT) {
+                unsigned int fb = (unsigned int)cbits;
+                float ftmp; memcpy(&ftmp, &fb, sizeof(float));
+                ftmp = -ftmp;
+                unsigned int rbits;
+                memcpy(&rbits, &ftmp, sizeof(float));
+                return (long long)rbits;
+            } else {
+                double dv; memcpy(&dv, &cbits, sizeof(double));
+                dv = -dv;
+                unsigned long long rbits;
+                memcpy(&rbits, &dv, sizeof(double));
+                return (long long)rbits;
             }
         }
         return -eval_const_expr_p4(elem->lhs, ok);
