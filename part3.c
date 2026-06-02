@@ -1241,7 +1241,7 @@ Type *parse_declarator(Compiler *cc, Type *base, char *name_out) {
                     type = type_array(cc, type, arr_lens[arr_num]);
                 }
             }
-            if (cc->tk == TK_LPAREN) {
+            while (cc->tk == TK_LPAREN) {
                 Type *ftype;
                 next_token(cc);
                 ftype = type_func(cc, type);
@@ -3379,6 +3379,20 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
     }
     expect(cc, TK_RPAREN);
 
+    if (cc->tk == TK_RPAREN) {
+        next_token(cc);
+    }
+
+    if (cc->tk == TK_LPAREN) {
+        next_token(cc);
+        int pdepth = 1;
+        while (pdepth > 0 && cc->tk != TK_EOF) {
+            if (cc->tk == TK_LPAREN) pdepth++;
+            else if (cc->tk == TK_RPAREN) pdepth--;
+            next_token(cc);
+        }
+    }
+
     /* Populate func->func_params from the inline capture arrays so
      * codegen_func (part4.c) can safely do func->func_params->types[i].
      * cc_alloc uses the arena so this is lifetime-safe. */
@@ -3609,6 +3623,69 @@ Node *zcc_rust_shm_entry(Compiler *cc) {
     }
     error(cc, "[ZCC-RUST] SHM timeout waiting for Rust frontend data");
     return NULL;
+}
+
+typedef struct {
+    int pos;
+    int line;
+    int col;
+    int tk;
+    long tk_val;
+    char tk_text[MAX_IDENT];
+    char tk_str[MAX_STR];
+    int tk_str_len;
+    int tk_line;
+    int tk_col;
+    int has_peek;
+    int peek_tk;
+    long peek_val;
+    char peek_text[MAX_IDENT];
+    char peek_str[MAX_STR];
+    int peek_str_len;
+    int peek_line;
+    int peek_col;
+} TokenState;
+
+static void save_token_state(Compiler *cc, TokenState *ts) {
+    ts->pos = cc->pos;
+    ts->line = cc->line;
+    ts->col = cc->col;
+    ts->tk = cc->tk;
+    ts->tk_val = cc->tk_val;
+    memcpy(ts->tk_text, cc->tk_text, MAX_IDENT);
+    memcpy(ts->tk_str, cc->tk_str, MAX_STR);
+    ts->tk_str_len = cc->tk_str_len;
+    ts->tk_line = cc->tk_line;
+    ts->tk_col = cc->tk_col;
+    ts->has_peek = cc->has_peek;
+    ts->peek_tk = cc->peek_tk;
+    ts->peek_val = cc->peek_val;
+    memcpy(ts->peek_text, cc->peek_text, MAX_IDENT);
+    memcpy(ts->peek_str, cc->peek_str, MAX_STR);
+    ts->peek_str_len = cc->peek_str_len;
+    ts->peek_line = cc->peek_line;
+    ts->peek_col = cc->peek_col;
+}
+
+static void restore_token_state(Compiler *cc, TokenState *ts) {
+    cc->pos = ts->pos;
+    cc->line = ts->line;
+    cc->col = ts->col;
+    cc->tk = ts->tk;
+    cc->tk_val = ts->tk_val;
+    memcpy(cc->tk_text, ts->tk_text, MAX_IDENT);
+    memcpy(cc->tk_str, ts->tk_str, MAX_STR);
+    cc->tk_str_len = ts->tk_str_len;
+    cc->tk_line = ts->tk_line;
+    cc->tk_col = ts->tk_col;
+    cc->has_peek = ts->has_peek;
+    cc->peek_tk = ts->peek_tk;
+    cc->peek_val = ts->peek_val;
+    memcpy(cc->peek_text, ts->peek_text, MAX_IDENT);
+    memcpy(cc->peek_str, ts->peek_str, MAX_STR);
+    cc->peek_str_len = ts->peek_str_len;
+    cc->peek_line = ts->peek_line;
+    cc->peek_col = ts->peek_col;
 }
 
 Node *parse_program(Compiler *cc) {
@@ -3857,8 +3934,10 @@ Node *parse_program(Compiler *cc) {
                         next_token(cc);
                     }
                     int is_inner_func = 0;
+                    TokenState ts_before_params;
                     if (cc->tk == TK_LPAREN) {
                         is_inner_func = 1;
+                        save_token_state(cc, &ts_before_params);
                         next_token(cc);
                         int pcnt = 1;
                         while (pcnt > 0 && cc->tk != TK_EOF) {
@@ -3929,6 +4008,16 @@ Node *parse_program(Compiler *cc) {
                     while (arr_num > 0) {
                         arr_num--;
                         dtype = type_array(cc, dtype, arr_lens[arr_num]);
+                    }
+                    if (is_inner_func && (cc->tk == TK_LBRACE || cc->tk == TK_SEMI)) {
+                        restore_token_state(cc, &ts_before_params);
+                        Node *func = parse_func_def(cc, dtype, name, is_static);
+                        if (func->body) {
+                            func->next = 0;
+                            if (!head) { head = func; tail = func; }
+                            else { tail->next = func; tail = func; }
+                        }
+                        continue;
                     }
                     if (is_inner_func) {
                         dtype = type_func(cc, dtype);
@@ -4008,13 +4097,20 @@ Node *parse_program(Compiler *cc) {
             }
 
             /* array dimensions after name */
-            while (cc->tk == TK_LBRACKET) {
-                int alen;
-                next_token(cc);
-                alen = 0;
-                if (cc->tk != TK_RBRACKET) alen = (int)parse_const_expr(cc);
-                expect(cc, TK_RBRACKET);
-                dtype = type_array(cc, dtype, alen);
+            if (cc->tk == TK_LBRACKET) {
+                int arr_lens[16];
+                int arr_num = 0;
+                while (cc->tk == TK_LBRACKET) {
+                    int alen = 0;
+                    next_token(cc);
+                    if (cc->tk != TK_RBRACKET) alen = (int)parse_const_expr(cc);
+                    expect(cc, TK_RBRACKET);
+                    if (arr_num < 16) arr_lens[arr_num++] = alen;
+                }
+                while (arr_num > 0) {
+                    arr_num--;
+                    dtype = type_array(cc, dtype, arr_lens[arr_num]);
+                }
             }
         }
 
