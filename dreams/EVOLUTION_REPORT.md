@@ -1,16 +1,16 @@
 # ZCC Oneirogenesis v2 — Evolution Report
 
-**Generated**: 2026-04-20T13:46:31.138684+00:00
+**Generated**: 2026-06-02T07:18:29.833503+00:00
 
 ## Summary
 
 | Metric | Value |
 |--------|-------|
-| Global Generation | 131 |
-| Total Survived | 160 |
-| Total Rejected | 406 |
-| Algorithms Discovered | 131 |
-| Blacklisted Patterns | 29 |
+| Global Generation | 180 |
+| Total Survived | 268 |
+| Total Rejected | 504 |
+| Algorithms Discovered | 180 |
+| Blacklisted Patterns | 47 |
 
 ## Lineage
 
@@ -147,6 +147,55 @@
 | G0129 | I1 | `b26ccb31785b` | Remove dead movq to %rax (overwritten at +1) | -8.6 | 2026-04-20T13:46:14 |
 | G0130 | I4 | `327becb09e8d` | Swap independent pair to reduce WAR pipeline stall | -0.0 | 2026-04-20T13:46:20 |
 | G0131 | I4 | `5d660156d299` | Swap independent pair to reduce WAR pipeline stall | -0.8 | 2026-04-20T13:46:31 |
+| G0132 | I0 | `f1de63099e27` | Remove unused frame-save: %rax → -56(%rbp) (slot never loaded), Remove unused frame-save: %rax → -592(%rbp) (slot never loaded) | -26.1 | 2026-06-01T18:19:11 |
+| G0133 | I1 | `0e6a0cc13a82` | Remove unused frame-save: %rax → -64(%rbp) (slot never loaded) | -13.6 | 2026-06-01T18:19:33 |
+| G0134 | I0 | `55ebf57136a2` | Remove unused frame-save: %rax → -72(%rbp) (slot never loaded) | -1.8 | 2026-06-01T18:20:22 |
+| G0135 | I1 | `e664c3f34183` | Remove unused frame-save: %rax → -360(%rbp) (slot never loaded) | -12.2 | 2026-06-01T18:20:46 |
+| G0136 | I0 | `6e07a5de5ba4` | Sweep: remove ALL 396 jmp-to-next-label (branch straightening), Remove unused frame-save: %rax → -64(%rbp) (slot never loaded) (+1) | -5938.2 | 2026-06-01T18:21:30 |
+| G0137 | I1 | `f60c496fd176` | Sweep: remove ALL 396 jmp-to-next-label (branch straightening), Remove unused frame-save: %rax → -384(%rbp) (slot never loaded) (+2) | -5936.5 | 2026-06-01T18:21:51 |
+| G0138 | I0 | `0df69ccd9e18` | Remove unused frame-save: %rax → -520(%rbp) (slot never loaded) | -0.7 | 2026-06-01T18:22:31 |
+| G0139 | I1 | `9107064343a7` | Remove unused frame-save: %rax → -1368(%rbp) (slot never loaded) | -15.3 | 2026-06-01T18:22:51 |
+| G0140 | I2 | `e9f2d06922ae` | Sweep: remove ALL 396 jmp-to-next-label (branch straightening), Remove unused frame-save: %rax → -64(%rbp) (slot never loaded) | -5914.7 | 2026-06-01T18:23:10 |
+| G0141 | I1 | `657e9c95ef46` | Remove unused frame-save: %rax → -1184(%rbp) (slot never loaded) | -14.5 | 2026-06-01T18:23:53 |
+| G0142 | I0 | `b585124c8375` | Remove unused frame-save: %rax → -456(%rbp) (slot never loaded), Remove unused frame-save: %rax → -17168(%rbp) (slot never loaded) | -35.5 | 2026-06-01T18:24:33 |
+| G0143 | I1 | `22ab4d75d36e` | Remove unused frame-save: %rax → -440(%rbp) (slot never loaded) | -9.2 | 2026-06-01T18:24:53 |
+| G0144 | I2 | `6b32954e032f` | Remove unused frame-save: %rax → -624(%rbp) (slot never loaded) | -19.1 | 2026-06-01T18:25:12 |
+| G0145 | I1 | `d68217060ec7` | Remove unused frame-save: %rax → -592(%rbp) (slot never loaded), Remove unused frame-save: %rax → -504(%rbp) (slot never loaded) | -24.1 | 2026-06-01T18:25:31 |
+| G0146 | I0 | `83d2a630ba97` | Remove unused frame-save: %rax → -440(%rbp) (slot never loaded) | -14.8 | 2026-06-01T18:26:10 |
+| G0147 | I1 | `615b04db3c6f` | Remove unused frame-save: %rax → -1280(%rbp) (slot never loaded) | -16.4 | 2026-06-01T18:26:28 |
+| G0148 | I2 | `7ae9a589f81a` | Remove unused frame-save: %rax → -64(%rbp) (slot never loaded) | -9.3 | 2026-06-01T18:26:47 |
+| G0149 | I2 | `2da04c740186` | Remove unused frame-save: %rax → -560(%rbp) (slot never loaded) | -12.2 | 2026-06-01T18:27:41 |
+| G0150 | I2 | `52056e2559b4` | Remove unused frame-save: %rax → -520(%rbp) (slot never loaded) | -11.5 | 2026-06-01T18:28:02 |
+| G0151 | I0 | `79ec1d5358a8` | Remove unused frame-save: %rax → -1368(%rbp) (slot never loaded) | -11.3 | 2026-06-01T18:28:22 |
+| G0152 | I2 | `43fdef6f417a` | Remove unused frame-save: %rax → -464(%rbp) (slot never loaded) | -7.8 | 2026-06-01T18:29:22 |
+| G0153 | I1 | `25c38694eb1a` | Remove unused frame-save: %rax → -72(%rbp) (slot never loaded) | -7.9 | 2026-06-01T18:30:01 |
+| G0154 | I2 | `a044759a15e7` | Remove unused frame-save: %rax → -17168(%rbp) (slot never loaded) | -14.6 | 2026-06-01T18:30:21 |
+| G0155 | I0 | `4c194dea22c1` | Remove unused frame-save: %rax → -504(%rbp) (slot never loaded) | -8.6 | 2026-06-01T18:30:40 |
+| G0156 | I2 | `aed37add75d1` | Remove unused frame-save: %rax → -456(%rbp) (slot never loaded) | -14.5 | 2026-06-01T18:31:20 |
+| G0157 | I2 | `f3a389afe538` | Remove unused frame-save: %rax → -1280(%rbp) (slot never loaded) | -10.7 | 2026-06-01T18:32:16 |
+| G0158 | I0 | `cad97f45818a` | Remove unused frame-save: %rax → -1280(%rbp) (slot never loaded) | -16.2 | 2026-06-01T18:32:35 |
+| G0159 | I1 | `b8b31c5268f6` | Remove unused frame-save: %rax → -376(%rbp) (slot never loaded) | -11.6 | 2026-06-01T18:32:54 |
+| G0160 | I2 | `8e1b4bbb865b` | Remove unused frame-save: %rax → -64(%rbp) (slot never loaded) | -11.9 | 2026-06-01T18:33:12 |
+| G0161 | I2 | `9bc23e960157` | Remove unused frame-save: %rax → -1184(%rbp) (slot never loaded) | -12.6 | 2026-06-01T18:33:35 |
+| G0162 | I1 | `a7be926e2880` | Remove unused frame-save: %rax → -464(%rbp) (slot never loaded) | -10.4 | 2026-06-01T18:33:56 |
+| G0163 | I2 | `0fa9b1adf52c` | Remove unused frame-save: %rax → -1368(%rbp) (slot never loaded) | -10.1 | 2026-06-01T18:34:27 |
+| G0164 | I1 | `6367dbefd293` | Remove unused frame-save: %rax → -1136(%rbp) (slot never loaded) | -16.4 | 2026-06-01T18:35:04 |
+| G0165 | I2 | `07cb27472371` | Remove unused frame-save: %rax → -72(%rbp) (slot never loaded) | -12.5 | 2026-06-01T18:35:23 |
+| G0166 | I0 | `fb25e394c9a8` | Remove unused frame-save: %rax → -560(%rbp) (slot never loaded) | -11.1 | 2026-06-01T18:35:41 |
+| G0167 | I2 | `f0420f9926b1` | Remove unused frame-save: %rax → -504(%rbp) (slot never loaded) | -13.6 | 2026-06-01T18:36:18 |
+| G0168 | I1 | `bb88b3f6d57c` | Remove unused frame-save: %rax → -456(%rbp) (slot never loaded) | -9.7 | 2026-06-01T18:36:56 |
+| G0169 | I1 | `e7ed4414b478` | Remove unused frame-save: %rax → -384(%rbp) (slot never loaded) | -10.8 | 2026-06-01T18:37:58 |
+| G0170 | I0 | `45327ad238bb` | Remove unused frame-save: %rax → -376(%rbp) (slot never loaded) | -1.8 | 2026-06-01T18:38:19 |
+| G0171 | I1 | `6ea0bf7a385f` | Remove unused frame-save: %rax → -560(%rbp) (slot never loaded) | -14.0 | 2026-06-01T18:38:44 |
+| G0172 | I2 | `a0cf168c1c4a` | Remove unused frame-save: %rax → -72(%rbp) (slot never loaded) | -6.6 | 2026-06-01T18:39:06 |
+| G0173 | I0 | `93f0b52cd4a0` | Remove unused frame-save: %rax → -624(%rbp) (slot never loaded) | -20.1 | 2026-06-01T18:39:28 |
+| G0174 | I1 | `538a5422c6e8` | Remove unused frame-save: %rax → -520(%rbp) (slot never loaded) | -12.8 | 2026-06-01T18:39:50 |
+| G0175 | I0 | `f806ef785ae7` | Remove unused frame-save: %rax → -464(%rbp) (slot never loaded) | -7.8 | 2026-06-01T18:40:10 |
+| G0176 | I2 | `58cca0bdccda` | Remove unused frame-save: %rax → -440(%rbp) (slot never loaded) | -16.3 | 2026-06-01T18:40:29 |
+| G0177 | I1 | `9de2aa911e4a` | Remove unused frame-save: %rax → -17168(%rbp) (slot never loaded) | -12.1 | 2026-06-01T18:40:49 |
+| G0178 | I0 | `41e7ad38ea08` | Remove unused frame-save: %rax → -1184(%rbp) (slot never loaded) | -18.0 | 2026-06-01T18:41:13 |
+| G0179 | I0 | `4164cc80a913` | Remove unused frame-save: %rax → -17168(%rbp) (slot never loaded) | -5.4 | 2026-06-02T07:17:50 |
+| G0180 | I1 | `4164cc80a913` | Remove unused frame-save: %rax → -17168(%rbp) (slot never loaded) | -20.3 | 2026-06-02T07:18:12 |
 
 ## Discovered Algorithms
 
@@ -281,38 +330,87 @@
 - `QAlgo-Dream-G129` → [`QAlgo-Dream-G129.json`](journal/QAlgo-Dream-G129.json)
 - `QAlgo-Dream-G130` → [`QAlgo-Dream-G130.json`](journal/QAlgo-Dream-G130.json)
 - `QAlgo-Dream-G131` → [`QAlgo-Dream-G131.json`](journal/QAlgo-Dream-G131.json)
+- `QAlgo-Dream-G132` → [`QAlgo-Dream-G132.json`](journal/QAlgo-Dream-G132.json)
+- `QAlgo-Dream-G133` → [`QAlgo-Dream-G133.json`](journal/QAlgo-Dream-G133.json)
+- `QAlgo-Dream-G134` → [`QAlgo-Dream-G134.json`](journal/QAlgo-Dream-G134.json)
+- `QAlgo-Dream-G135` → [`QAlgo-Dream-G135.json`](journal/QAlgo-Dream-G135.json)
+- `QAlgo-Dream-G136` → [`QAlgo-Dream-G136.json`](journal/QAlgo-Dream-G136.json)
+- `QAlgo-Dream-G137` → [`QAlgo-Dream-G137.json`](journal/QAlgo-Dream-G137.json)
+- `QAlgo-Dream-G138` → [`QAlgo-Dream-G138.json`](journal/QAlgo-Dream-G138.json)
+- `QAlgo-Dream-G139` → [`QAlgo-Dream-G139.json`](journal/QAlgo-Dream-G139.json)
+- `QAlgo-Dream-G140` → [`QAlgo-Dream-G140.json`](journal/QAlgo-Dream-G140.json)
+- `QAlgo-Dream-G141` → [`QAlgo-Dream-G141.json`](journal/QAlgo-Dream-G141.json)
+- `QAlgo-Dream-G142` → [`QAlgo-Dream-G142.json`](journal/QAlgo-Dream-G142.json)
+- `QAlgo-Dream-G143` → [`QAlgo-Dream-G143.json`](journal/QAlgo-Dream-G143.json)
+- `QAlgo-Dream-G144` → [`QAlgo-Dream-G144.json`](journal/QAlgo-Dream-G144.json)
+- `QAlgo-Dream-G145` → [`QAlgo-Dream-G145.json`](journal/QAlgo-Dream-G145.json)
+- `QAlgo-Dream-G146` → [`QAlgo-Dream-G146.json`](journal/QAlgo-Dream-G146.json)
+- `QAlgo-Dream-G147` → [`QAlgo-Dream-G147.json`](journal/QAlgo-Dream-G147.json)
+- `QAlgo-Dream-G148` → [`QAlgo-Dream-G148.json`](journal/QAlgo-Dream-G148.json)
+- `QAlgo-Dream-G149` → [`QAlgo-Dream-G149.json`](journal/QAlgo-Dream-G149.json)
+- `QAlgo-Dream-G150` → [`QAlgo-Dream-G150.json`](journal/QAlgo-Dream-G150.json)
+- `QAlgo-Dream-G151` → [`QAlgo-Dream-G151.json`](journal/QAlgo-Dream-G151.json)
+- `QAlgo-Dream-G152` → [`QAlgo-Dream-G152.json`](journal/QAlgo-Dream-G152.json)
+- `QAlgo-Dream-G153` → [`QAlgo-Dream-G153.json`](journal/QAlgo-Dream-G153.json)
+- `QAlgo-Dream-G154` → [`QAlgo-Dream-G154.json`](journal/QAlgo-Dream-G154.json)
+- `QAlgo-Dream-G155` → [`QAlgo-Dream-G155.json`](journal/QAlgo-Dream-G155.json)
+- `QAlgo-Dream-G156` → [`QAlgo-Dream-G156.json`](journal/QAlgo-Dream-G156.json)
+- `QAlgo-Dream-G157` → [`QAlgo-Dream-G157.json`](journal/QAlgo-Dream-G157.json)
+- `QAlgo-Dream-G158` → [`QAlgo-Dream-G158.json`](journal/QAlgo-Dream-G158.json)
+- `QAlgo-Dream-G159` → [`QAlgo-Dream-G159.json`](journal/QAlgo-Dream-G159.json)
+- `QAlgo-Dream-G160` → [`QAlgo-Dream-G160.json`](journal/QAlgo-Dream-G160.json)
+- `QAlgo-Dream-G161` → [`QAlgo-Dream-G161.json`](journal/QAlgo-Dream-G161.json)
+- `QAlgo-Dream-G162` → [`QAlgo-Dream-G162.json`](journal/QAlgo-Dream-G162.json)
+- `QAlgo-Dream-G163` → [`QAlgo-Dream-G163.json`](journal/QAlgo-Dream-G163.json)
+- `QAlgo-Dream-G164` → [`QAlgo-Dream-G164.json`](journal/QAlgo-Dream-G164.json)
+- `QAlgo-Dream-G165` → [`QAlgo-Dream-G165.json`](journal/QAlgo-Dream-G165.json)
+- `QAlgo-Dream-G166` → [`QAlgo-Dream-G166.json`](journal/QAlgo-Dream-G166.json)
+- `QAlgo-Dream-G167` → [`QAlgo-Dream-G167.json`](journal/QAlgo-Dream-G167.json)
+- `QAlgo-Dream-G168` → [`QAlgo-Dream-G168.json`](journal/QAlgo-Dream-G168.json)
+- `QAlgo-Dream-G169` → [`QAlgo-Dream-G169.json`](journal/QAlgo-Dream-G169.json)
+- `QAlgo-Dream-G170` → [`QAlgo-Dream-G170.json`](journal/QAlgo-Dream-G170.json)
+- `QAlgo-Dream-G171` → [`QAlgo-Dream-G171.json`](journal/QAlgo-Dream-G171.json)
+- `QAlgo-Dream-G172` → [`QAlgo-Dream-G172.json`](journal/QAlgo-Dream-G172.json)
+- `QAlgo-Dream-G173` → [`QAlgo-Dream-G173.json`](journal/QAlgo-Dream-G173.json)
+- `QAlgo-Dream-G174` → [`QAlgo-Dream-G174.json`](journal/QAlgo-Dream-G174.json)
+- `QAlgo-Dream-G175` → [`QAlgo-Dream-G175.json`](journal/QAlgo-Dream-G175.json)
+- `QAlgo-Dream-G176` → [`QAlgo-Dream-G176.json`](journal/QAlgo-Dream-G176.json)
+- `QAlgo-Dream-G177` → [`QAlgo-Dream-G177.json`](journal/QAlgo-Dream-G177.json)
+- `QAlgo-Dream-G178` → [`QAlgo-Dream-G178.json`](journal/QAlgo-Dream-G178.json)
+- `QAlgo-Dream-G179` → [`QAlgo-Dream-G179.json`](journal/QAlgo-Dream-G179.json)
+- `QAlgo-Dream-G180` → [`QAlgo-Dream-G180.json`](journal/QAlgo-Dream-G180.json)
 
 ## Fitness History
 
 ```
-G0102 I4: score=1257409
-G0103 I0: score=1257419
-G0104 I2: score=1257409
-G0105 I1: score=1257409
-G0106 I4: score=1257408
-G0107 I1: score=1257401
-G0108 I4: score=1257390
-G0109 I1: score=1257399
-G0110 I3: score=1257409
-G0111 I4: score=1257389
-G0112 I2: score=1257401
-G0113 I4: score=1257389
-G0114 I1: score=1257399
-G0115 I2: score=1257399
-G0116 I3: score=1257408
-G0117 I4: score=1257380
-G0118 I4: score=1257379
-G0119 I0: score=1257418
-G0120 I2: score=1257388
-G0121 I4: score=1257360
-G0122 I1: score=1257398
-G0123 I2: score=1257378
-G0124 I3: score=1257408
-G0125 I4: score=1257359
-G0126 I1: score=1257398
-G0127 I2: score=1257368
-G0128 I3: score=1257408
-G0129 I1: score=1257389
-G0130 I4: score=1257359
-G0131 I4: score=1257358
+G0151 I0: score=2198239
+G0152 I2: score=2198290
+G0153 I1: score=2198218
+G0154 I2: score=2198275
+G0155 I0: score=2198230
+G0156 I2: score=2198261
+G0157 I2: score=2198250
+G0158 I0: score=2198214
+G0159 I1: score=2198206
+G0160 I2: score=2198238
+G0161 I2: score=2198226
+G0162 I1: score=2198195
+G0163 I2: score=2198216
+G0164 I1: score=2198179
+G0165 I2: score=2198203
+G0166 I0: score=2198203
+G0167 I2: score=2198189
+G0168 I1: score=2198169
+G0169 I1: score=2198159
+G0170 I0: score=2198201
+G0171 I1: score=2198145
+G0172 I2: score=2198183
+G0173 I0: score=2198181
+G0174 I1: score=2198132
+G0175 I0: score=2198173
+G0176 I2: score=2198167
+G0177 I1: score=2198120
+G0178 I0: score=2198155
+G0179 I0: score=2219721
+G0180 I1: score=2219707
 ```

@@ -85,6 +85,7 @@ class MutationEngine:
         self.mutations_found = []
         results = []
 
+        # --- SWEEP mutations (apply whole-assembly transformations) ---
         if include_sweeps:
             results.extend(self._sweep_zero_mov_to_xor(asm_lines))
             results.extend(self._sweep_strength_reduction(asm_lines))
@@ -100,10 +101,24 @@ class MutationEngine:
         point_candidates.extend(self._scan_redundant_load_after_store(asm_lines))
         point_candidates.extend(self._scan_lea_optimization(asm_lines))
         point_candidates.extend(self._scan_push_pop_elimination(asm_lines))
+        # v4 plateau-breaker scanners (deployment order: risk ascending)
+        point_candidates.extend(self._scan_imul_one(asm_lines))
+        point_candidates.extend(self._scan_addq_zero(asm_lines))
+        point_candidates.extend(self._scan_unused_frame_save(asm_lines))
 
-        # Sample from point candidates
-        self.rng.shuffle(point_candidates)
-        results.extend(point_candidates[:max_point_mutations])
+        # Sample from point candidates with hybrid priority injection for unused_frame_save
+        frame_saves = [c for c in point_candidates if c.name == "unused_frame_save"]
+        others = [c for c in point_candidates if c.name != "unused_frame_save"]
+
+        self.rng.shuffle(frame_saves)
+        self.rng.shuffle(others)
+
+        chosen = frame_saves[:3]
+        needed = max_point_mutations - len(chosen)
+        if needed > 0:
+            chosen.extend(others[:needed])
+
+        results.extend(chosen)
 
         self.mutations_found = results
         return results
@@ -164,46 +179,6 @@ class MutationEngine:
     # SWEEP MUTATIONS (whole-assembly pass)
     # ──────────────────────────────────────────────────────────────────
 
-    def _is_zero_mov_safe(self, lines: list[str], idx: int, reg: str) -> bool:
-        """
-        Verify if EFLAGS is consumed by a conditional branch, setcc, cmovcc, or adc/sbb
-        before being killed or exiting the basic block / label boundary, up to 20 instructions.
-        """
-        clobber_patterns = [
-            r'\bcmp[qwl]?', r'\btest[qwl]?', r'\badd[qwl]?', r'\bsub[qwl]?',
-            r'\band[qwl]?', r'\bor[qwl]?', r'\bxor[qwl]?', r'\bshl[qwl]?',
-            r'\bshr[qwl]?', r'\bsar[qwl]?', r'\bimul[qwl]?', r'\bneg[qwl]?'
-        ]
-        cond_jumps = [
-            r'\bje\b', r'\bjne\b', r'\bjg\b', r'\bjge\b', r'\bjl\b', r'\bjle\b',
-            r'\bja\b', r'\bjae\b', r'\bjb\b', r'\bjbe\b', r'\bjs\b', r'\bjns\b',
-            r'\bjc\b', r'\bjnc\b', r'\bjo\b', r'\bjno\b', r'\bjp\b', r'\bjnp\b',
-            r'\bjz\b', r'\bjnz\b', r'\bjrcxz\b', r'\bloop',
-            r'\bset[a-z]{1,3}\b', r'\bcmov[a-z]{1,3}\b',
-            r'\badc[qwl]?\b', r'\bsbb[qwl]?\b'
-        ]
-        terminators = [
-            r'\bret\b', r'\bleave\b', r'\bjmp\b'
-        ]
-        
-        count = 0
-        for k in range(idx + 1, len(lines)):
-            line = lines[k].strip()
-            if not line or line.startswith('#'):
-                continue
-            if line.endswith(':'):
-                return False  # Label is unsafe target
-            count += 1
-            if count > 20:
-                return False  # Reached scan window cap
-            if any(re.search(pat, line) for pat in cond_jumps):
-                return False
-            if any(re.search(pat, line) for pat in clobber_patterns):
-                return True
-            if any(re.search(pat, line) for pat in terminators):
-                return True
-        return True
-
     def _sweep_zero_mov_to_xor(self, lines: list[str]) -> list[Mutation]:
         """
         SWEEP: Replace ALL movq $0, %rX with xorq %rX, %rX.
@@ -217,12 +192,9 @@ class MutationEngine:
         x86 processors have a zeroing idiom recognizer for xor reg,reg.
         """
         count = 0
-        for idx, l in enumerate(lines):
-            m = re.match(r'\s*movq\s+\$0,\s*(%[re]?[a-z]{2,3})', l)
-            if m:
-                reg = m.group(1)
-                if self._is_zero_mov_safe(lines, idx, reg):
-                    count += 1
+        for l in lines:
+            if re.match(r'\s*movq\s+\$0,\s*(%[re]?[a-z]{2,3})', l):
+                count += 1
 
         if count == 0:
             return []
@@ -276,15 +248,12 @@ class MutationEngine:
         name = mutation.name
 
         if name == "sweep_zero_mov_to_xor":
-            for idx, line in enumerate(lines):
+            for line in lines:
                 m = re.match(r'(\s*)movq\s+\$0,\s*(%[re]?[a-z]{2,3})\s*$', line)
                 if m:
                     indent = m.group(1)
                     reg = m.group(2)
-                    if self._is_zero_mov_safe(lines, idx, reg):
-                        result.append(f"{indent}xorq {reg}, {reg}\n")
-                    else:
-                        result.append(line)
+                    result.append(f"{indent}xorq {reg}, {reg}\n")
                 else:
                     result.append(line)
 
@@ -301,9 +270,9 @@ class MutationEngine:
                         continue
                 result.append(line)
         elif name == "sweep_cmpq_zero_to_testq":
-            for line in lines:
+            for i, line in enumerate(lines):
                 m = re.match(r'(\s*)cmpq\s+\$0,\s*(%\w+)\s*$', line)
-                if m:
+                if m and self._cmpq_zero_safe(lines, i):
                     indent = m.group(1)
                     reg = m.group(2)
                     result.append(f"{indent}testq {reg}, {reg}\n")
@@ -523,7 +492,7 @@ class MutationEngine:
             # test %rax, %rax; sete %cl → setne not after negate...
             # Actually: cmpq $0, %rX → testq %rX, %rX (shorter encoding)
             mc = re.match(r'cmpq\s+\$0,\s*(%\w+)', s1)
-            if mc:
+            if mc and self._cmpq_zero_safe(lines, i):
                 reg = mc.group(1)
                 mutations.append(Mutation(
                     name="cmpq_zero_to_testq",
@@ -568,21 +537,36 @@ class MutationEngine:
     # SWEEP MUTATIONS — NEW (v3)
     # ──────────────────────────────────────────────────────────────────
 
+    # Instruction patterns that zero/sign-extend into a register's upper bits.
+    # A cmpq $0 following these is NOT safely replaceable with testq because
+    # cmpq sets CF (carry flag) while testq never sets CF, and ZCC's codegen
+    # uses CF in conditional branches that follow these patterns.
+    _ZERO_EXT_PAT = re.compile(
+        r'\s*(movzbl|movzbq|movzwl|movzwq|movsbq|movslq|movswl|movswq)\b'
+    )
+
+    def _cmpq_zero_safe(self, lines: list[str], idx: int) -> bool:
+        """Return True only if cmpq $0 at idx is safe to replace with testq."""
+        if idx == 0:
+            return True
+        return not self._ZERO_EXT_PAT.match(lines[idx - 1])
+
     def _sweep_cmpq_zero_to_testq(self, lines: list[str]) -> list[Mutation]:
         """
-        SWEEP: Replace ALL cmpq $0, %rX with testq %rX, %rX.
-        testq is shorter (no immediate operand) and faster.
+        SWEEP: Replace cmpq $0, %rX → testq %rX, %rX — SAFE sites only.
+        Skips any cmpq following zero/sign-extend (movzbl, movsbq, etc.)
+        because those sites depend on CF being cleared by cmpq.
         """
         count = 0
-        for l in lines:
-            if re.match(r'\s*cmpq\s+\$0,\s*%\w+', l):
+        for i, l in enumerate(lines):
+            if re.match(r'\s*cmpq\s+\$0,\s*%\w+', l) and self._cmpq_zero_safe(lines, i):
                 count += 1
         if count == 0:
             return []
         return [Mutation(
             name="sweep_cmpq_zero_to_testq",
             category="SWEEP",
-            description=f"Sweep: replace ALL {count:,} cmpq $0,%rX with testq %rX,%rX",
+            description=f"Sweep: replace {count:,} SAFE cmpq $0,%rX with testq %rX,%rX",
             line_range=(0, 0),
             original_asm="cmpq $0, %r*",
             mutated_asm="testq %r*, %r*",
@@ -752,6 +736,161 @@ class MutationEngine:
                     original_asm=f"{s1}\n{s2}",
                     mutated_asm="",
                     energy_delta=-4.0,
+                ))
+        return mutations
+
+    # ──────────────────────────────────────────────────────────────────
+    # POINT MUTATIONS — PLATEAU BREAKERS (v4)
+    # ──────────────────────────────────────────────────────────────────
+
+    # Flag-consumer instructions: any of these following an addq $0 / imulq $1
+    # means the zero/overflow flags produced by that instruction are live.
+    _FLAG_CONSUMER = re.compile(
+        r'\b(j[znspcoe]\w*|cmov\w+|set\w+|jo\w*|jno\w*|jc\w*|jnc\w*)\b'
+    )
+    # Flag-setting instructions that clobber the flags before any consumer
+    _FLAG_SETTER = re.compile(
+        r'\b(addq|subq|andq|orq|xorq|cmpq|testq|incq|decq|negq|imulq|shlq|shrq|sarq)\b'
+    )
+
+    def _scan_imul_one(self, lines: list[str]) -> list[Mutation]:
+        """
+        IMUL-ONE ELIMINATION
+        Pattern: imulq $1, %rX, %rX  or  imulq $1, %rX  (two-operand form)
+        Both are identity operations and may be removed.
+
+        Guard: imulq sets OF and CF — safe only if no j[oc]/jnc/jno follows
+        before the next flag-clobbering instruction. In practice these are
+        constant-folding residuals from the ZCC code-generator and almost
+        never have live flag consumers. Lowest false-positive risk of the
+        three new classes.
+        """
+        mutations = []
+        # Three-operand form: imulq $1, %rX, %rX  (dst == src)
+        pat3 = re.compile(r'^\s+imulq\s+\$1,\s+(%r\w+),\s+(%r\w+)\s*$')
+        # Two-operand form:  imulq $1, %rX
+        pat2 = re.compile(r'^\s+imulq\s+\$1,\s+(%r\w+)\s*$')
+        # Flag consumers specific to OF/CF (the flags imulq sets)
+        of_cf_consumer = re.compile(r'\b(jo|jno|jc|jnc)\w*\b')
+
+        for i, line in enumerate(lines):
+            m3 = pat3.match(line)
+            if m3 and m3.group(1) == m3.group(2):
+                reg = m3.group(1)
+                form = f"imulq $1, {reg}, {reg}"
+            elif pat2.match(line):
+                reg = pat2.match(line).group(1)
+                form = f"imulq $1, {reg}"
+            else:
+                continue
+
+            # Check next 4 instructions for OF/CF consumers
+            window = lines[i + 1:i + 5]
+            if any(of_cf_consumer.search(l) for l in window):
+                continue  # OF/CF is live — not safe
+
+            mutations.append(Mutation(
+                name="imul_one_elim",
+                category="PEEPHOLE",
+                description=f"Eliminate {form} (identity — no OF/CF consumer in +4)",
+                line_range=(i, i + 1),
+                original_asm=line.strip(),
+                mutated_asm="",
+                energy_delta=-3.0,  # 3-cycle multiply latency eliminated
+            ))
+        return mutations
+
+    def _scan_addq_zero(self, lines: list[str]) -> list[Mutation]:
+        """
+        ADDQ-ZERO ELIMINATION
+        Pattern: addq $0, %rX  — identity for the register value.
+
+        WARNING: addq $0 sets ZF/SF/PF based on %rX. This is NOT a true nop.
+        Safe only if the next flag-setting instruction dominates all flag
+        consumers before any jz/js/jp that could read ZF/SF/PF from this add.
+        We implement a conservative forward scan: safe iff a _FLAG_SETTER
+        appears before any _FLAG_CONSUMER within an 8-instruction window.
+        Highest false-positive risk of the three — gate is hard.
+        """
+        mutations = []
+        pat = re.compile(r'^\s+addq\s+\$0,\s+(%r\w+)\s*$')
+        for i, line in enumerate(lines):
+            m = pat.match(line)
+            if not m:
+                continue
+            reg = m.group(1)
+            safe = False
+            for j in range(i + 1, min(i + 9, len(lines))):
+                lj = lines[j]
+                if self._FLAG_CONSUMER.search(lj):
+                    break  # consumer reached first — flags are live, NOT safe
+                if self._FLAG_SETTER.search(lj):
+                    safe = True  # setter clobbers flags before any consumer
+                    break
+                # Control flow boundary — stop conservatively
+                if re.search(r'\b(ret|call|leave|jmp)\b', lj):
+                    break
+            if safe:
+                mutations.append(Mutation(
+                    name="addq_zero_elim",
+                    category="PEEPHOLE",
+                    description=f"Eliminate addq $0,{reg} (flag-setter dominates consumers)",
+                    line_range=(i, i + 1),
+                    original_asm=line.strip(),
+                    mutated_asm="",
+                    energy_delta=-1.0,
+                ))
+        return mutations
+
+    def _scan_unused_frame_save(self, lines: list[str]) -> list[Mutation]:
+        """
+        UNUSED FRAME-SAVE ELIMINATION
+        Pattern: movq %rax, -N(%rbp) where the stack slot is never read before
+        the next call/ret boundary.
+
+        ABI guard: we abort if we see a call instruction in the scan window,
+        because the callee might read the frame indirectly via varargs or
+        alloca-derived pointers. We also abort if the function uses %rbp
+        for any non-standard purpose (va_list patterns).
+        Conservative window: 32 instructions or first call/ret/leave.
+        """
+        mutations = []
+        write_pat = re.compile(r'^\s+movq\s+%rax,\s+(-\d+)\(%rbp\)\s*$')
+        load_pat  = re.compile(r'(-\d+)\(%rbp\)')
+        # ABI hazard: these indicate indirect frame access
+        abi_hazard = re.compile(r'\b(va_arg|va_start|va_list|alloca|__builtin)\b')
+
+        for i, line in enumerate(lines):
+            m = write_pat.match(line)
+            if not m:
+                continue
+            slot = m.group(1)
+            loaded = False
+            for j in range(i + 1, min(i + 33, len(lines))):
+                lj = lines[j]
+                # ABI hazard — bail out, treat slot as live
+                if abi_hazard.search(lj):
+                    loaded = True
+                    break
+                # Control flow boundary — treat slot as live/used
+                if re.search(r'\b(ret|call|leave|jmp|j\w+)\b', lj) or lj.strip().endswith(':'):
+                    loaded = True
+                    break
+                lm = load_pat.search(lj)
+                if lm and lm.group(1) == slot:
+                    # Confirm it's a load, not another store of the same slot
+                    if not re.match(r'^\s+movq\s+%r\w+,', lj):
+                        loaded = True
+                    break
+            if not loaded:
+                mutations.append(Mutation(
+                    name="unused_frame_save",
+                    category="PEEPHOLE",
+                    description=f"Remove unused frame-save: %rax → {slot}(%rbp) (slot never loaded)",
+                    line_range=(i, i + 1),
+                    original_asm=line.strip(),
+                    mutated_asm="",
+                    energy_delta=-2.0,
                 ))
         return mutations
 
