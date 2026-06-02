@@ -4285,10 +4285,55 @@ static long long eval_const_expr_p4(Node *elem, int *ok) {
     if (!elem) { *ok = 0; return 0; }
     if (elem->kind == ND_CAST) return eval_const_expr_p4(elem->lhs, ok);
     if (elem->kind == ND_NUM) return elem->int_val;
-    if (elem->kind == ND_ADD) return eval_const_expr_p4(elem->lhs, ok) + eval_const_expr_p4(elem->rhs, ok);
-    if (elem->kind == ND_SUB) return eval_const_expr_p4(elem->lhs, ok) - eval_const_expr_p4(elem->rhs, ok);
-    if (elem->kind == ND_MUL) return eval_const_expr_p4(elem->lhs, ok) * eval_const_expr_p4(elem->rhs, ok);
-    if (elem->kind == ND_DIV) { long long r = eval_const_expr_p4(elem->rhs, ok); if(r) return eval_const_expr_p4(elem->lhs, ok) / r; return 0; }
+    if (elem->kind == ND_ADD || elem->kind == ND_SUB ||
+        elem->kind == ND_MUL || elem->kind == ND_DIV) {
+        /* CG-GINIT-FLOAT-002: float/double arithmetic in static initializers
+           must use actual FP ops, not integer ops on raw bits.
+           Also fixes silent div/0 return 0 without *ok=0. */
+        int is_fp = (elem->type && (elem->type->kind == TY_FLOAT ||
+                                     elem->type->kind == TY_DOUBLE)) ||
+                    (elem->lhs && elem->lhs->type &&
+                     (elem->lhs->type->kind == TY_FLOAT ||
+                      elem->lhs->type->kind == TY_DOUBLE)) ||
+                    (elem->rhs && elem->rhs->type &&
+                     (elem->rhs->type->kind == TY_FLOAT ||
+                      elem->rhs->type->kind == TY_DOUBLE));
+        if (is_fp) {
+            int lok = 1, rok = 1;
+            long long lbits = eval_const_expr_p4(elem->lhs, &lok);
+            long long rbits = eval_const_expr_p4(elem->rhs, &rok);
+            if (!lok || !rok) { *ok = 0; return 0; }
+            double lv, rv;
+            if (elem->lhs->type && elem->lhs->type->kind == TY_FLOAT) {
+                unsigned int fb = (unsigned int)lbits;
+                float ftmp; memcpy(&ftmp, &fb, sizeof(float)); lv = (double)ftmp;
+            } else { memcpy(&lv, &lbits, sizeof(double)); }
+            if (elem->rhs->type && elem->rhs->type->kind == TY_FLOAT) {
+                unsigned int fb = (unsigned int)rbits;
+                float ftmp; memcpy(&ftmp, &fb, sizeof(float)); rv = (double)ftmp;
+            } else { memcpy(&rv, &rbits, sizeof(double)); }
+            double result;
+            if      (elem->kind == ND_ADD) result = lv + rv;
+            else if (elem->kind == ND_SUB) result = lv - rv;
+            else if (elem->kind == ND_MUL) result = lv * rv;
+            else                           result = lv / rv; /* div/0 -> inf, valid */
+            if (elem->type && elem->type->kind == TY_FLOAT) {
+                float fv = (float)result;
+                unsigned int fbits;
+                memcpy(&fbits, &fv, sizeof(float));
+                return (long long)fbits;
+            } else {
+                unsigned long long bits;
+                memcpy(&bits, &result, sizeof(double));
+                return (long long)bits;
+            }
+        }
+        /* Integer path */
+        if (elem->kind == ND_ADD) return eval_const_expr_p4(elem->lhs, ok) + eval_const_expr_p4(elem->rhs, ok);
+        if (elem->kind == ND_SUB) return eval_const_expr_p4(elem->lhs, ok) - eval_const_expr_p4(elem->rhs, ok);
+        if (elem->kind == ND_MUL) return eval_const_expr_p4(elem->lhs, ok) * eval_const_expr_p4(elem->rhs, ok);
+        { long long r = eval_const_expr_p4(elem->rhs, ok); if (r) return eval_const_expr_p4(elem->lhs, ok) / r; *ok = 0; return 0; }
+    }
     if (elem->kind == ND_BOR) return eval_const_expr_p4(elem->lhs, ok) | eval_const_expr_p4(elem->rhs, ok);
     if (elem->kind == ND_BAND) return eval_const_expr_p4(elem->lhs, ok) & eval_const_expr_p4(elem->rhs, ok);
     if (elem->kind == ND_BXOR) return eval_const_expr_p4(elem->lhs, ok) ^ eval_const_expr_p4(elem->rhs, ok);
