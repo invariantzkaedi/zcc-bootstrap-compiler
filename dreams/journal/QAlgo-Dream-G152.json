@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G152",
+    "name": "Codegen Mutation G152 [unused_frame_save]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-2",
+    "lineage_hash": "43fdef6f417a7d80",
+    "island_id": 2
+  },
+  "mutations": [
+    {
+      "name": "unused_frame_save",
+      "category": "PEEPHOLE",
+      "description": "Remove unused frame-save: %rax \u2192 -464(%rbp) (slot never loaded)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -26,
+    "inst_count_delta": 198715,
+    "score_delta": -7.794360000174493,
+    "composite_score": 2198290.004187
+  },
+  "timestamp": "2026-06-01T18:29:22.583580+00:00",
+  "generation": 152
+}

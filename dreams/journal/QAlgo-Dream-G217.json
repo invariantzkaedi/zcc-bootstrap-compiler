@@ -1,0 +1,47 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G217",
+    "name": "Codegen Mutation G217 [schedule_war_pair]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-0",
+    "lineage_hash": "05b525ab9db6dc98",
+    "island_id": 0
+  },
+  "mutations": [
+    {
+      "name": "schedule_war_pair",
+      "category": "SCHEDULE",
+      "description": "Swap independent pair to reduce WAR pipeline stall",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    },
+    {
+      "name": "lea_optimization",
+      "category": "IDIOM",
+      "description": "Fuse mov+add \u2192 leaq $18312(%r14), %rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -3.0,
+      "fingerprint": ""
+    },
+    {
+      "name": "cmpq_zero_to_testq",
+      "category": "PEEPHOLE",
+      "description": "Replace cmpq $0,%rax with testq %rax,%rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -12,
+    "inst_count_delta": 200435,
+    "score_delta": -2.777128000278026,
+    "composite_score": 2219669.548497
+  },
+  "timestamp": "2026-06-02T09:06:23.927150+00:00",
+  "generation": 217
+}

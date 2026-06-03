@@ -1,0 +1,38 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G201",
+    "name": "Codegen Mutation G201 [cmpq_zero_to_testq]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-1",
+    "lineage_hash": "730ce903129bcc27",
+    "island_id": 1
+  },
+  "mutations": [
+    {
+      "name": "cmpq_zero_to_testq",
+      "category": "PEEPHOLE",
+      "description": "Replace cmpq $0,%rax with testq %rax,%rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    },
+    {
+      "name": "cmpq_zero_to_testq",
+      "category": "PEEPHOLE",
+      "description": "Replace cmpq $0,%rax with testq %rax,%rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": 6,
+    "inst_count_delta": 200438,
+    "score_delta": -1.578825999982655,
+    "composite_score": 2219685.6180229997
+  },
+  "timestamp": "2026-06-02T08:47:34.665765+00:00",
+  "generation": 201
+}

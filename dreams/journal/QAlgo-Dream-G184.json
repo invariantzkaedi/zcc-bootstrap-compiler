@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G184",
+    "name": "Codegen Mutation G184 [cmpq_zero_to_testq]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-1",
+    "lineage_hash": "d8e286913967c4a3",
+    "island_id": 1
+  },
+  "mutations": [
+    {
+      "name": "cmpq_zero_to_testq",
+      "category": "PEEPHOLE",
+      "description": "Replace cmpq $0,%rax with testq %rax,%rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": 3,
+    "inst_count_delta": 200443,
+    "score_delta": -3.532327000517398,
+    "composite_score": 2219720.8874869994
+  },
+  "timestamp": "2026-06-02T08:32:25.785538+00:00",
+  "generation": 184
+}

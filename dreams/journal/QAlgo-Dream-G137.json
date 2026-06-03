@@ -1,0 +1,56 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G137",
+    "name": "Codegen Mutation G137 [sweep_branch_straighten]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-1",
+    "lineage_hash": "f60c496fd17679fc",
+    "island_id": 1
+  },
+  "mutations": [
+    {
+      "name": "sweep_branch_straighten",
+      "category": "SWEEP",
+      "description": "Sweep: remove ALL 396 jmp-to-next-label (branch straightening)",
+      "is_sweep": true,
+      "sweep_count": 396,
+      "energy_delta": -1188.0,
+      "fingerprint": ""
+    },
+    {
+      "name": "unused_frame_save",
+      "category": "PEEPHOLE",
+      "description": "Remove unused frame-save: %rax \u2192 -384(%rbp) (slot never loaded)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.0,
+      "fingerprint": ""
+    },
+    {
+      "name": "unused_frame_save",
+      "category": "PEEPHOLE",
+      "description": "Remove unused frame-save: %rax \u2192 -528(%rbp) (slot never loaded)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.0,
+      "fingerprint": ""
+    },
+    {
+      "name": "unused_frame_save",
+      "category": "PEEPHOLE",
+      "description": "Remove unused frame-save: %rax \u2192 -352(%rbp) (slot never loaded)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -9199,
+    "inst_count_delta": 198716,
+    "score_delta": -5936.5176949999295,
+    "composite_score": 2198304.7963
+  },
+  "timestamp": "2026-06-01T18:21:51.864784+00:00",
+  "generation": 137
+}

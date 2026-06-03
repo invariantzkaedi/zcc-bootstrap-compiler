@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G154",
+    "name": "Codegen Mutation G154 [unused_frame_save]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-2",
+    "lineage_hash": "a044759a15e79315",
+    "island_id": 2
+  },
+  "mutations": [
+    {
+      "name": "unused_frame_save",
+      "category": "PEEPHOLE",
+      "description": "Remove unused frame-save: %rax \u2192 -17168(%rbp) (slot never loaded)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -28,
+    "inst_count_delta": 198714,
+    "score_delta": -14.636584999971092,
+    "composite_score": 2198275.367602
+  },
+  "timestamp": "2026-06-01T18:30:21.132125+00:00",
+  "generation": 154
+}

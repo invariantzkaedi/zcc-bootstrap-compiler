@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G157",
+    "name": "Codegen Mutation G157 [unused_frame_save]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-2",
+    "lineage_hash": "f3a389afe538c3e4",
+    "island_id": 2
+  },
+  "mutations": [
+    {
+      "name": "unused_frame_save",
+      "category": "PEEPHOLE",
+      "description": "Remove unused frame-save: %rax \u2192 -1280(%rbp) (slot never loaded)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -27,
+    "inst_count_delta": 198712,
+    "score_delta": -10.732650000602007,
+    "composite_score": 2198250.1266599996
+  },
+  "timestamp": "2026-06-01T18:32:16.513361+00:00",
+  "generation": 157
+}

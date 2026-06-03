@@ -1,0 +1,38 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G140",
+    "name": "Codegen Mutation G140 [sweep_branch_straighten]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-2",
+    "lineage_hash": "e9f2d06922aef629",
+    "island_id": 2
+  },
+  "mutations": [
+    {
+      "name": "sweep_branch_straighten",
+      "category": "SWEEP",
+      "description": "Sweep: remove ALL 396 jmp-to-next-label (branch straightening)",
+      "is_sweep": true,
+      "sweep_count": 396,
+      "energy_delta": -1188.0,
+      "fingerprint": ""
+    },
+    {
+      "name": "unused_frame_save",
+      "category": "PEEPHOLE",
+      "description": "Remove unused frame-save: %rax \u2192 -64(%rbp) (slot never loaded)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -9152,
+    "inst_count_delta": 198720,
+    "score_delta": -5914.7447710004635,
+    "composite_score": 2198349.9086479996
+  },
+  "timestamp": "2026-06-01T18:23:10.908224+00:00",
+  "generation": 140
+}

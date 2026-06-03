@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G170",
+    "name": "Codegen Mutation G170 [unused_frame_save]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-0",
+    "lineage_hash": "45327ad238bb0159",
+    "island_id": 0
+  },
+  "mutations": [
+    {
+      "name": "unused_frame_save",
+      "category": "PEEPHOLE",
+      "description": "Remove unused frame-save: %rax \u2192 -376(%rbp) (slot never loaded)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -26,
+    "inst_count_delta": 198707,
+    "score_delta": -1.7615880002267659,
+    "composite_score": 2198201.064157
+  },
+  "timestamp": "2026-06-01T18:38:19.291521+00:00",
+  "generation": 170
+}

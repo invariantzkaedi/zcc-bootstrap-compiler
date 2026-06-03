@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G146",
+    "name": "Codegen Mutation G146 [unused_frame_save]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-0",
+    "lineage_hash": "83d2a630ba97a153",
+    "island_id": 0
+  },
+  "mutations": [
+    {
+      "name": "unused_frame_save",
+      "category": "PEEPHOLE",
+      "description": "Remove unused frame-save: %rax \u2192 -440(%rbp) (slot never loaded)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -26,
+    "inst_count_delta": 198712,
+    "score_delta": -14.760959999635816,
+    "composite_score": 2198249.996406
+  },
+  "timestamp": "2026-06-01T18:26:10.256186+00:00",
+  "generation": 146
+}

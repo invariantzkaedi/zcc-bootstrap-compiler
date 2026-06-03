@@ -1,0 +1,47 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G200",
+    "name": "Codegen Mutation G200 [lea_optimization]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-0",
+    "lineage_hash": "57f2212b6495e6db",
+    "island_id": 0
+  },
+  "mutations": [
+    {
+      "name": "lea_optimization",
+      "category": "IDIOM",
+      "description": "Fuse mov+add \u2192 leaq $16520(%r14), %rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -3.0,
+      "fingerprint": ""
+    },
+    {
+      "name": "cmpq_zero_to_testq",
+      "category": "PEEPHOLE",
+      "description": "Replace cmpq $0,%rax with testq %rax,%rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    },
+    {
+      "name": "cmpq_zero_to_testq",
+      "category": "PEEPHOLE",
+      "description": "Replace cmpq $0,%rax with testq %rax,%rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -9,
+    "inst_count_delta": 200439,
+    "score_delta": -14.183279000222683,
+    "composite_score": 2219694.008259
+  },
+  "timestamp": "2026-06-02T08:47:10.989284+00:00",
+  "generation": 200
+}

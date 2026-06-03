@@ -1,0 +1,38 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G145",
+    "name": "Codegen Mutation G145 [unused_frame_save]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-1",
+    "lineage_hash": "d68217060ec7e5f1",
+    "island_id": 1
+  },
+  "mutations": [
+    {
+      "name": "unused_frame_save",
+      "category": "PEEPHOLE",
+      "description": "Remove unused frame-save: %rax \u2192 -592(%rbp) (slot never loaded)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.0,
+      "fingerprint": ""
+    },
+    {
+      "name": "unused_frame_save",
+      "category": "PEEPHOLE",
+      "description": "Remove unused frame-save: %rax \u2192 -504(%rbp) (slot never loaded)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -52,
+    "inst_count_delta": 198711,
+    "score_delta": -24.060227000620216,
+    "composite_score": 2198241.7603129996
+  },
+  "timestamp": "2026-06-01T18:25:31.696702+00:00",
+  "generation": 145
+}

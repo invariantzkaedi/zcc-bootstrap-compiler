@@ -1,0 +1,47 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G216",
+    "name": "Codegen Mutation G216 [cmpq_zero_to_testq]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-1",
+    "lineage_hash": "49c77802b8536ce4",
+    "island_id": 1
+  },
+  "mutations": [
+    {
+      "name": "cmpq_zero_to_testq",
+      "category": "PEEPHOLE",
+      "description": "Replace cmpq $0,%rax with testq %rax,%rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    },
+    {
+      "name": "lea_optimization",
+      "category": "IDIOM",
+      "description": "Fuse mov+add \u2192 leaq $128(%r13), %rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -3.0,
+      "fingerprint": ""
+    },
+    {
+      "name": "cmpq_zero_to_testq",
+      "category": "PEEPHOLE",
+      "description": "Replace cmpq $0,%rax with testq %rax,%rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -9,
+    "inst_count_delta": 200433,
+    "score_delta": -13.063670000527054,
+    "composite_score": 2219651.4756179997
+  },
+  "timestamp": "2026-06-02T09:05:39.314643+00:00",
+  "generation": 216
+}

@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G220",
+    "name": "Codegen Mutation G220 [cmpq_zero_to_testq]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-0",
+    "lineage_hash": "cb16b18b414a83b5",
+    "island_id": 0
+  },
+  "mutations": [
+    {
+      "name": "cmpq_zero_to_testq",
+      "category": "PEEPHOLE",
+      "description": "Replace cmpq $0,%rax with testq %rax,%rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": 3,
+    "inst_count_delta": 200435,
+    "score_delta": -3.257255000062287,
+    "composite_score": 2219666.2912419997
+  },
+  "timestamp": "2026-06-02T09:07:27.727764+00:00",
+  "generation": 220
+}
