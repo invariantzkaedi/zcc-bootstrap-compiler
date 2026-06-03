@@ -1,0 +1,47 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G241",
+    "name": "Codegen Mutation G241 [schedule_war_triple]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-2",
+    "lineage_hash": "a232062f69fd4a92",
+    "island_id": 2
+  },
+  "mutations": [
+    {
+      "name": "schedule_war_triple",
+      "category": "SCHEDULE",
+      "description": "Reorder 3-instruction window to reduce WAR pipeline stall",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -1.5,
+      "fingerprint": ""
+    },
+    {
+      "name": "redundant_load_after_store",
+      "category": "PEEPHOLE",
+      "description": "Remove redundant load: %rax already has -344(%rbp)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.5,
+      "fingerprint": ""
+    },
+    {
+      "name": "schedule_load_sink",
+      "category": "SCHEDULE",
+      "description": "Sink load of -1024(%rbp) to %rbx past independent instruction",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -1.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -26,
+    "inst_count_delta": 202121,
+    "score_delta": -12.32989100040868,
+    "composite_score": 2238003.0546359997
+  },
+  "timestamp": "2026-06-03T09:55:15.813744+00:00",
+  "generation": 241
+}

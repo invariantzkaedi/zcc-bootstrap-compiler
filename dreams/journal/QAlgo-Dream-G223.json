@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G223",
+    "name": "Codegen Mutation G223 [cmpq_zero_to_testq]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-1",
+    "lineage_hash": "8d9d0592ba6b7e8c",
+    "island_id": 1
+  },
+  "mutations": [
+    {
+      "name": "cmpq_zero_to_testq",
+      "category": "PEEPHOLE",
+      "description": "Replace cmpq $0,%rax with testq %rax,%rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -0.5,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": 3,
+    "inst_count_delta": 202125,
+    "score_delta": -2.6491810004226863,
+    "composite_score": 2238044.4476059997
+  },
+  "timestamp": "2026-06-03T09:43:54.422184+00:00",
+  "generation": 223
+}
