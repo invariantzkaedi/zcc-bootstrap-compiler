@@ -4872,6 +4872,7 @@ static void pp_parse_target_depth(PPState *state, int target_depth) {
 
         if (c == '#') {
             pp_next(state);
+            pp_skip_whitespace(state);
             pp_parse_directive(state);
             continue;
         }
