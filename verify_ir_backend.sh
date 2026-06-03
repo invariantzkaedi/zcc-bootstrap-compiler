@@ -31,7 +31,6 @@ ZCC_EMIT_IR=1 "$ZCC" --emit-ir-graph "$TMPDIR/sqlite3_functest.json" sqlite3_fun
 # 4. Compare AST and IR assembly output
 if diff -u "$TMPDIR/ast.s" "$TMPDIR/ir.s" > "$TMPDIR/diff.log"; then
     echo -e "${GRN}[PASS] IR backend parity verified${RST}"
-    exit 0
 else
     echo -e "${RED}[FAIL] IR backend parity diverged${RST}"
     cat "$TMPDIR/diff.log" | head -n 50
