@@ -107,6 +107,10 @@ class MutationEngine:
         point_candidates.extend(self._scan_imul_one(asm_lines))
         point_candidates.extend(self._scan_addq_zero(asm_lines))
         point_candidates.extend(self._scan_unused_frame_save(asm_lines))
+        point_candidates.extend(self._scan_lea_rip_relative(asm_lines))
+        point_candidates.extend(self._scan_lea_scaled_index(asm_lines))
+        point_candidates.extend(self._scan_schedule_war_triple(asm_lines))
+        point_candidates.extend(self._scan_schedule_load_sink(asm_lines))
 
         # Filter blacklist early so blacklisted candidates don't starve other mutations
         point_candidates = [c for c in point_candidates if c.fingerprint() not in blacklist]
@@ -897,6 +901,177 @@ class MutationEngine:
                     mutated_asm="",
                     energy_delta=-2.0,
                 ))
+        return mutations
+
+    def _scan_lea_rip_relative(self, lines: list[str]) -> list[Mutation]:
+        mutations = []
+        n = len(lines)
+        pat1 = re.compile(r'^\s*movq\s+([a-zA-Z_]\w*)\(%rip\),\s*(%r[a-z0-9]+)\s*$')
+        pat2 = re.compile(r'^\s*addq\s+\$(\d+),\s*(%r[a-z0-9]+)\s*$')
+        for i in range(n - 1):
+            s1 = lines[i].strip()
+            s2 = lines[i + 1].strip()
+            m1 = pat1.match(lines[i])
+            if not m1:
+                continue
+            symbol = m1.group(1)
+            reg = m1.group(2)
+            if reg in ('%rsp', '%rbp'):
+                continue
+            m2 = pat2.match(lines[i + 1])
+            if not m2 or m2.group(2) != reg:
+                continue
+            val = int(m2.group(1))
+            if not (1 <= val <= 4095):
+                continue
+            safe = True
+            for j in range(i + 2, min(i + 5, n)):
+                sj = lines[j].strip()
+                if not sj or sj.endswith(':') or sj.startswith('.'):
+                    safe = False
+                    break
+                if re.search(fr'\bcall\s+\*{re.escape(reg)}\b', sj):
+                    safe = False
+                    break
+                if any(x in sj for x in ('ret', 'leave', 'jmp')):
+                    break
+            if safe:
+                mutations.append(Mutation(
+                    name="lea_rip_relative",
+                    category="IDIOM",
+                    description=f"Fuse movq rip + addq -> leaq {val}+{symbol}(%rip), {reg}",
+                    line_range=(i, i + 2),
+                    original_asm=f"{s1}\n{s2}",
+                    mutated_asm=f"    leaq {val}+{symbol}(%rip), {reg}",
+                    energy_delta=-3.0,
+                ))
+        return mutations
+
+    def _scan_lea_scaled_index(self, lines: list[str]) -> list[Mutation]:
+        mutations = []
+        n = len(lines)
+        pat3 = re.compile(r'^\s*imulq\s+\$(\d+),\s*(%r\w+),\s*(%r\w+)\s*$')
+        pat2 = re.compile(r'^\s*imulq\s+\$(\d+),\s*(%r\w+)\s*$')
+        of_cf_consumer = re.compile(r'\b(jo|jno|jc|jnc)\w*\b')
+
+        for i in range(n):
+            line = lines[i]
+            m3 = pat3.match(line)
+            if m3:
+                val = int(m3.group(1))
+                src = m3.group(2)
+                dst = m3.group(3)
+                if val not in (2, 4, 8):
+                    continue
+                mutated = f"leaq 0(,{src},{val}), {dst}"
+            else:
+                m2 = pat2.match(line)
+                if m2:
+                    val = int(m2.group(1))
+                    src = m2.group(2)
+                    if val not in (2, 4, 8):
+                        continue
+                    mutated = f"leaq 0(,{src},{val}), {src}"
+                else:
+                    continue
+
+            window = lines[i + 1:i + 5]
+            if any(of_cf_consumer.search(l) for l in window):
+                continue
+
+            mutations.append(Mutation(
+                name="lea_scaled_index",
+                category="IDIOM",
+                description=f"Replace imulq ${val} -> {mutated} (3->1 cycle latency, flag-safe)",
+                line_range=(i, i + 1),
+                original_asm=line.strip(),
+                mutated_asm=f"    {mutated}",
+                energy_delta=-2.0,
+            ))
+        return mutations
+
+    def _scan_schedule_war_triple(self, lines: list[str]) -> list[Mutation]:
+        mutations = []
+        n = len(lines)
+        sampled_indices = list(range(n - 3))
+        self.rng.shuffle(sampled_indices)
+
+        for i in sampled_indices[:2000]:
+            s1 = lines[i].strip()
+            s2 = lines[i + 1].strip()
+            s3 = lines[i + 2].strip()
+            s4 = lines[i + 3].strip()
+
+            if not all((s1, s2, s3, s4)):
+                continue
+            if any(s.endswith(':') or s.startswith('.') for s in (s1, s2, s3, s4)):
+                continue
+            control_flow = ('j', 'call', 'ret', 'leave')
+            if any(any(s.startswith(x) for x in control_flow) for s in (s1, s2, s3, s4)):
+                continue
+
+            rw1 = self._write_regs(s1)
+            rr1 = self._read_regs(s1)
+            rw2 = self._write_regs(s2)
+            rr2 = self._read_regs(s2)
+            rw3 = self._write_regs(s3)
+            rr3 = self._read_regs(s3)
+            rw4 = self._write_regs(s4)
+            rr4 = self._read_regs(s4)
+
+            if rw1 & rr2 or rw2 & rr1 or rw1 & rw2:
+                continue
+            if rw1 & rr3 or rw3 & rr1 or rw1 & rw3:
+                continue
+            if not (rw1 & rr4):
+                continue
+
+            mutations.append(Mutation(
+                name="schedule_war_triple",
+                category="SCHEDULE",
+                description="Reorder 3-instruction window to reduce WAR pipeline stall",
+                line_range=(i, i + 3),
+                original_asm=f"{s1}\n{s2}\n{s3}",
+                mutated_asm=f"    {s2}\n    {s3}\n    {s1}",
+                energy_delta=-1.5,
+            ))
+        return mutations
+
+    def _scan_schedule_load_sink(self, lines: list[str]) -> list[Mutation]:
+        mutations = []
+        n = len(lines)
+        pat = re.compile(r'^\s*movq\s+(-\d+\(%rbp\)),\s*(%r\w+)\s*$')
+
+        for i in range(n - 1):
+            s1 = lines[i].strip()
+            s2 = lines[i + 1].strip()
+            m = pat.match(lines[i])
+            if not m:
+                continue
+            mem = m.group(1)
+            reg = m.group(2)
+
+            if not s2 or s2.endswith(':') or s2.startswith('.'):
+                continue
+            if any(s2.startswith(x) for x in ('j', 'call', 'ret', 'leave')):
+                continue
+
+            rw2 = self._write_regs(s2)
+            rr2 = self._read_regs(s2)
+            if reg in rw2 or reg in rr2:
+                continue
+            if mem in s2:
+                continue
+
+            mutations.append(Mutation(
+                name="schedule_load_sink",
+                category="SCHEDULE",
+                description=f"Sink load of {mem} to {reg} past independent instruction",
+                line_range=(i, i + 2),
+                original_asm=f"{s1}\n{s2}",
+                mutated_asm=f"    {s2}\n    {s1}",
+                energy_delta=-1.0,
+            ))
         return mutations
 
     # ──────────────────────────────────────────────────────────────────
