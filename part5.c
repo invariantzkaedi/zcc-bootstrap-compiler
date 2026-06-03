@@ -1549,11 +1549,11 @@ int zcc_main(int argc, char **argv) {
           return 1;
       }
       
-      /* Run the standard optimization passes if requested! */
-      ir_pm_run_default(g_ir_module, 1);
       /* CG-IR-OPT-001: fold IR_CONST->IR_RET before lowering */
       { extern int ir_fold_const_ret_module(ir_module_t *mod);
         ir_fold_const_ret_module(g_ir_module); }
+      /* Run the standard optimization passes if requested! */
+      ir_pm_run_default(g_ir_module, 1);
       
       /* Lower to x86-64 assembly! */
       extern void ir_module_lower_x86(const ir_module_t *mod, FILE *out);
@@ -2011,6 +2011,8 @@ int zcc_main(int argc, char **argv) {
       fclose(cc->out);
 
       if (!enable_telemetry_stdout) printf("[Phase IR] IR Pass Manager...\n");
+      { extern int ir_fold_const_ret_module(ir_module_t *mod);
+        ir_fold_const_ret_module(g_ir_module); }
       ir_pm_run_default(g_ir_module, 1);
       if (g_emit_ir_graph_path) {
           extern int ir_serialize_json(const ir_module_t *mod, const char *out_filename, const char *source_file, const Compiler *cc);

@@ -95,7 +95,8 @@ static ir_pass_result_t ir_pass_dce(void *fn_ptr) {
     ir_node_t *n;
     ir_node_t *scan;
     ir_node_t *next;
-    int deleted = 0;
+    int total_deleted = 0;
+    int pass_deleted;
 
     memset(&r, 0, sizeof(r));
     r.nodes_before = count_nodes(fn);
@@ -106,54 +107,58 @@ static ir_pass_result_t ir_pass_dce(void *fn_ptr) {
     }
     fprintf(stderr, "[DCE-DEBUG] END FULL IR\n\n");
 
-    prev = NULL;
-    n = fn->head;
-    while (n) {
-        next = n->next;
+    do {
+        pass_deleted = 0;
+        prev = NULL;
+        n = fn->head;
+        while (n) {
+            next = n->next;
 
-        /* Does this node define a temp that could be dead? */
-        if (n->dst[0] != '\0'
-            && !is_side_effect(n->op)
-            && n->op != IR_STORE) {
+            /* Does this node define a temp that could be dead? */
+            if (n->dst[0] != '\0'
+                && !is_side_effect(n->op)
+                && n->op != IR_STORE) {
 
-            /* Check if ANY node in the function uses this temp (CFG/Loop aware via full scan) */
-            int used = 0;
-            for (scan = fn->head; scan; scan = scan->next) {
-                if (node_uses(scan, n->dst)) {
-                    used = 1;
-                    break;
+                /* Check if ANY node in the function uses this temp (CFG/Loop aware via full scan) */
+                int used = 0;
+                for (scan = fn->head; scan; scan = scan->next) {
+                    if (node_uses(scan, n->dst)) {
+                        used = 1;
+                        break;
+                    }
+                }
+
+                if (!used) {
+                    /* Dead node — unlink from list */
+                    if (prev) {
+                        prev->next = next;
+                    } else {
+                        fn->head = next;
+                    }
+                    if (n == fn->tail) {
+                        fn->tail = prev;
+                    }
+                    // DEBUG PRINT
+                    fprintf(stderr, "[dce] deleted: %s %s, %s -> %s\n", ir_op_name(n->op), n->src1, n->src2, n->dst);
+                    
+                    free(n);
+                    fn->node_count--;
+                    pass_deleted++;
+                    total_deleted++;
+                    /* Don't advance prev; it still points to the right place */
+                    n = next;
+                    continue;
                 }
             }
 
-            if (!used) {
-                /* Dead node — unlink from list */
-                if (prev) {
-                    prev->next = next;
-                } else {
-                    fn->head = next;
-                }
-                if (n == fn->tail) {
-                    fn->tail = prev;
-                }
-                // DEBUG PRINT
-                fprintf(stderr, "[dce] deleted: %s %s, %s -> %s\n", ir_op_name(n->op), n->src1, n->src2, n->dst);
-                
-                free(n);
-                fn->node_count--;
-                deleted++;
-                /* Don't advance prev; it still points to the right place */
-                n = next;
-                continue;
-            }
+            prev = n;
+            n = next;
         }
+    } while (pass_deleted > 0);
 
-        prev = n;
-        n = next;
-    }
-
-    r.nodes_after = r.nodes_before - deleted;
-    r.nodes_deleted = deleted;
-    r.changed = deleted > 0;
+    r.nodes_after = r.nodes_before - total_deleted;
+    r.nodes_deleted = total_deleted;
+    r.changed = total_deleted > 0;
     return r;
 }
 
@@ -1023,8 +1028,8 @@ static void ir_snapshot_state(ir_func_t *fn, const char *pass_name) {
         }
     }
     
-    fprintf(stderr, "[ZCC-SNAPSHOT] Pass %s: IR=%016llx CFG=%016llx DOM=%016llx LIVE=%016llx\n",
-            pass_name, ir_hash, cfg_hash, dom_hash, live_hash);
+    fprintf(stderr, "[ZCC-SNAPSHOT] Pass %s: Func=%s IR=%016llx CFG=%016llx DOM=%016llx LIVE=%016llx\n",
+            pass_name, fn->name, ir_hash, cfg_hash, dom_hash, live_hash);
 }
 
 /* ── Registry API ────────────────────────────────────────────────────── */

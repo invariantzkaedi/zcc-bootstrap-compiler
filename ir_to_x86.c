@@ -39,6 +39,10 @@ static int get_or_create_var(const char *name) {
     int i;
     if (!name || name[0] == '\0' || name[0] == '-') return 0;
     
+    if (strncmp(name, "%stack_", 7) == 0) {
+        return atoi(name + 7);
+    }
+    
     for (i = 0; i < num_vars; i++) {
         if (strcmp(vars[i].name, name) == 0) return vars[i].offset;
     }
@@ -214,7 +218,30 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
         int call_padding = 0;
 
         num_vars = 0;
-        next_offset_from_rbp = -8;
+        {
+            int min_stack_off = -8 * fn->num_params;
+            ir_node_t *scan = fn->head;
+            while (scan) {
+                if (scan->flags & IRF_DEAD) {
+                    scan = scan->next;
+                    continue;
+                }
+                if (strncmp(scan->dst, "%stack_", 7) == 0) {
+                    int off = atoi(scan->dst + 7);
+                    if (off < min_stack_off) min_stack_off = off;
+                }
+                if (strncmp(scan->src1, "%stack_", 7) == 0) {
+                    int off = atoi(scan->src1 + 7);
+                    if (off < min_stack_off) min_stack_off = off;
+                }
+                if (strncmp(scan->src2, "%stack_", 7) == 0) {
+                    int off = atoi(scan->src2 + 7);
+                    if (off < min_stack_off) min_stack_off = off;
+                }
+                scan = scan->next;
+            }
+            next_offset_from_rbp = min_stack_off - 8;
+        }
 
         /* ── Pass 0: Run linear scan register allocator ── */
         RegAllocator *ra = ra_create();
@@ -226,6 +253,10 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
          * remains as a spill target if needed by loads/stores.         */
         n = fn->head;
         while (n) {
+            if (n->flags & IRF_DEAD) {
+                n = n->next;
+                continue;
+            }
             if (n->dst[0]  != '\0' && n->dst[0]  != '-') get_or_create_var(n->dst);
             if (n->src1[0] != '\0' && n->src1[0] != '-') get_or_create_var(n->src1);
             if (n->src2[0] != '\0' && n->src2[0] != '-') get_or_create_var(n->src2);
