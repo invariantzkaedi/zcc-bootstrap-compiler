@@ -37,3 +37,8 @@ else
     cat "$TMPDIR/diff.log" | head -n 50
     exit 1
 fi
+
+# --- DCE coverage target (test_cond74.c — DCE deletes 6 nodes) ---
+ZCC_EMIT_IR=1 ./zcc2 tests/test_cond74.c --emit-ir-graph /tmp/cond74.ir.json -o /tmp/cond74_ast.s 2>/dev/null
+./zcc2 --replay-ir /tmp/cond74.ir.json -o /tmp/cond74_replay.s 2>/dev/null
+diff /tmp/cond74_ast.s /tmp/cond74_replay.s && echo "[PASS] IR backend parity verified (DCE target)" || (echo "[FAIL] IR backend parity diverged (DCE target)"; exit 1)
