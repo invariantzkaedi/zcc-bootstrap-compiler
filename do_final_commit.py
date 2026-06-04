@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-os.chdir('/mnt/h/__DOWNLOADS/zcc_github_upload')
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 msg = (
     "chore: stamp baseline metrics + final tripwire lock\n\n"
     "- Makefile: confirmed tripwire is locked in w/ POSIX fix and sandbox escape\n"

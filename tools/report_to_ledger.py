@@ -3,11 +3,11 @@
 report_to_ledger.py — Parse zcc_analyze.py markdown report into repair ledger
 
 Reads report.md output from zcc_analyze.py and appends structured findings
-to H:\agents\zcc_repair_ledger.jsonl
+to <repo_root>/zcc_repair_ledger.jsonl
 
 Usage:
     python3 report_to_ledger.py --report report.md
-    python3 report_to_ledger.py --report report.md --ledger /mnt/h/agents/zcc_repair_ledger.jsonl
+    python3 report_to_ledger.py --report report.md --ledger ../zcc_repair_ledger.jsonl
     python3 report_to_ledger.py --report report.md --dry-run
 """
 
@@ -15,7 +15,7 @@ import argparse, json, re, sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-LEDGER_DEFAULT = "/mnt/h/agents/zcc_repair_ledger.jsonl"
+LEDGER_DEFAULT = str(Path(__file__).resolve().parent.parent / "zcc_repair_ledger.jsonl")
 
 # Severity keywords → priority
 CRITICAL_KEYWORDS = [

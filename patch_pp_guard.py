@@ -1,4 +1,5 @@
-path = '/mnt/h/__DOWNLOADS/zcc_github_upload/zcc_oneirogenesis.py'
+import os
+path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'zcc_oneirogenesis.py')
 with open(path) as f:
     content = f.read()
 

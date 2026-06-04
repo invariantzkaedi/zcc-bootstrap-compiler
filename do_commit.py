@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-os.chdir('/mnt/h/__DOWNLOADS/zcc_github_upload')
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 msg = (
     "fix: parts-as-SoT enforcement + AST bridge guard in mutation pipeline\n\n"
     "- Makefile: re-land tripwire (POSIX sh, temp-file diff) blocking hand-edits\n"
