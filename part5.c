@@ -1268,6 +1268,8 @@ int zcc_main(int argc, char **argv) {
   int oracle_selfhost_mode = 0;
   int oracle_stack_mode = 0;
   char *g_emit_ir_graph_path = NULL;
+  char *g_emit_ir_pre_path = NULL;
+  int g_free_emit_ir_pre_path = 0;
   char *g_replay_ir_path = NULL;
   char *g_diff_ir_path_a = NULL;
   char *g_diff_ir_path_b = NULL;
@@ -1410,6 +1412,13 @@ int zcc_main(int argc, char **argv) {
       if (i < argc) {
         g_emit_ir_graph_path = argv[i];
       }
+    } else if (strcmp(argv[i], "--emit-ir-pre") == 0) {
+      g_emit_ir = 1;
+      g_ir_primary = 1;
+      i++;
+      if (i < argc) {
+        g_emit_ir_pre_path = argv[i];
+      }
     } else if (strcmp(argv[i], "--replay-ir") == 0) {
       i++;
       if (i < argc) {
@@ -1511,6 +1520,22 @@ int zcc_main(int argc, char **argv) {
         strncat(extra_link_args, argv[i], 4095 - (int)strlen(extra_link_args));
       }
     }
+  }
+
+  if (getenv("ZCC_EMIT_IR_PRE")) {
+      g_emit_ir = 1;
+      g_ir_primary = 1;
+      if (!g_emit_ir_pre_path) {
+          if (g_emit_ir_graph_path) {
+              g_emit_ir_pre_path = (char *)malloc(strlen(g_emit_ir_graph_path) + 5);
+              if (g_emit_ir_pre_path) {
+                  sprintf(g_emit_ir_pre_path, "%s.pre", g_emit_ir_graph_path);
+                  g_free_emit_ir_pre_path = 1;
+              }
+          } else {
+              g_emit_ir_pre_path = "/tmp/zcc_pre.ir.json";
+          }
+      }
   }
 
   if (g_emit_gguf) {
@@ -2013,6 +2038,10 @@ int zcc_main(int argc, char **argv) {
       if (!enable_telemetry_stdout) printf("[Phase IR] IR Pass Manager...\n");
       { extern int ir_fold_const_ret_module(ir_module_t *mod);
         ir_fold_const_ret_module(g_ir_module); }
+      if (g_emit_ir_pre_path) {
+          extern int ir_serialize_json(const ir_module_t *mod, const char *out_filename, const char *source_file, const Compiler *cc);
+          ir_serialize_json(g_ir_module, g_emit_ir_pre_path, input_file, cc);
+      }
       ir_pm_run_default(g_ir_module, 1);
       if (g_emit_ir_graph_path) {
           extern int ir_serialize_json(const ir_module_t *mod, const char *out_filename, const char *source_file, const Compiler *cc);
@@ -2185,6 +2214,10 @@ link_phase:
       ir_telem_shutdown();
       return 1;
     }
+  }
+
+  if (g_free_emit_ir_pre_path && g_emit_ir_pre_path) {
+      free(g_emit_ir_pre_path);
   }
 
   free(source);
