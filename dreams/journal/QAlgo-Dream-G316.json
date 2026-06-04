@@ -1,0 +1,38 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G316",
+    "name": "Codegen Mutation G316 [schedule_war_triple]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-2",
+    "lineage_hash": "8ebcd8b6bbc364a3",
+    "island_id": 2
+  },
+  "mutations": [
+    {
+      "name": "schedule_war_triple",
+      "category": "SCHEDULE",
+      "description": "Reorder 3-instruction window to reduce WAR pipeline stall",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -1.5,
+      "fingerprint": ""
+    },
+    {
+      "name": "lea_optimization",
+      "category": "IDIOM",
+      "description": "Fuse mov+add \u2192 leaq $4(%r12), %rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -3.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -15,
+    "inst_count_delta": 202307,
+    "score_delta": -6.2137609999626875,
+    "composite_score": 2240054.005722
+  },
+  "timestamp": "2026-06-04T20:59:25.715827+00:00",
+  "generation": 316
+}

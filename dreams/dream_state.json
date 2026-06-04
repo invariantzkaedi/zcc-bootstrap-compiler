@@ -1,11 +1,11 @@
 {
-  "generation": 279,
-  "parent_hash": "e813cb4a14971a59",
+  "generation": 330,
+  "parent_hash": "92974f110d5de404",
   "parent_asm_size": 0,
   "parent_bin_size": 0,
-  "total_mutations_tried": 1302,
-  "total_mutations_survived": 477,
-  "total_regressions": 606,
+  "total_mutations_tried": 1492,
+  "total_mutations_survived": 579,
+  "total_regressions": 607,
   "lineage": [
     {
       "generation": 1,
@@ -2944,6 +2944,567 @@
       ],
       "delta_score": -8.511890000198036,
       "timestamp": "2026-06-04T01:36:15.931916+00:00"
+    },
+    {
+      "generation": 280,
+      "hash": "8fa7819caab885f0",
+      "island_id": 0,
+      "mutations": [
+        "Sink load of -520(%rbp) to %r14 past independent instruction",
+        "Sink load of -704(%rbp) to %r13 past independent instruction"
+      ],
+      "delta_score": -4.905873000156134,
+      "timestamp": "2026-06-04T20:27:19.672762+00:00"
+    },
+    {
+      "generation": 281,
+      "hash": "9d4ce27d19759780",
+      "island_id": 1,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $68(%r13), %rax"
+      ],
+      "delta_score": -8.41287999972701,
+      "timestamp": "2026-06-04T20:27:41.927898+00:00"
+    },
+    {
+      "generation": 282,
+      "hash": "a3526b9964664af7",
+      "island_id": 2,
+      "mutations": [
+        "Sink load of -1064(%rbp) to %r12 past independent instruction",
+        "Fuse mov+add \u2192 leaq $56(%r14), %rax"
+      ],
+      "delta_score": -12.648506000172347,
+      "timestamp": "2026-06-04T20:28:02.977242+00:00"
+    },
+    {
+      "generation": 283,
+      "hash": "1c2176bf14620e18",
+      "island_id": 1,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $16520(%r13), %rax",
+        "Fuse mov+add \u2192 leaq $136(%r12), %rax",
+        "Sink load of -648(%rbp) to %r14 past independent instruction"
+      ],
+      "delta_score": -11.793680999893695,
+      "timestamp": "2026-06-04T20:29:57.634686+00:00"
+    },
+    {
+      "generation": 284,
+      "hash": "66acf6bfadc2d754",
+      "island_id": 1,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $136(%r12), %rax",
+        "Fuse mov+add \u2192 leaq $2056(%r12), %rax",
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -11.64211400039494,
+      "timestamp": "2026-06-04T20:31:09.088418+00:00"
+    },
+    {
+      "generation": 285,
+      "hash": "304e4d2588695aa7",
+      "island_id": 2,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $270992144(%r14), %rax",
+        "Fuse mov+add \u2192 leaq $24(%r15), %rax",
+        "Fuse mov+add \u2192 leaq $16(%r15), %rax"
+      ],
+      "delta_score": -4.222498000133783,
+      "timestamp": "2026-06-04T20:31:34.721552+00:00"
+    },
+    {
+      "generation": 286,
+      "hash": "56338924d2e264ae",
+      "island_id": 2,
+      "mutations": [
+        "Sink load of -5768(%rbp) to %r15 past independent instruction"
+      ],
+      "delta_score": -14.795791999902576,
+      "timestamp": "2026-06-04T20:32:48.522649+00:00"
+    },
+    {
+      "generation": 287,
+      "hash": "9ae9893fb823912c",
+      "island_id": 1,
+      "mutations": [
+        "Sink load of -39368(%rbp) to %r12 past independent instruction",
+        "Fuse mov+add \u2192 leaq $24(%r12), %rax",
+        "Fuse mov+add \u2192 leaq $16520(%r14), %rax"
+      ],
+      "delta_score": -25.112980999983847,
+      "timestamp": "2026-06-04T20:33:37.281646+00:00"
+    },
+    {
+      "generation": 288,
+      "hash": "450713e8fb701b43",
+      "island_id": 2,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $12(%r12), %rax"
+      ],
+      "delta_score": -7.1892899996601045,
+      "timestamp": "2026-06-04T20:35:06.462816+00:00"
+    },
+    {
+      "generation": 289,
+      "hash": "5e27f0dfaa84c552",
+      "island_id": 2,
+      "mutations": [
+        "Sink load of -56(%rbp) to %r12 past independent instruction",
+        "Sink load of -624(%rbp) to %rbx past independent instruction"
+      ],
+      "delta_score": -1.4200020004063845,
+      "timestamp": "2026-06-04T20:36:19.242664+00:00"
+    },
+    {
+      "generation": 290,
+      "hash": "cde1594a2b3e72d8",
+      "island_id": 0,
+      "mutations": [
+        "Sink load of -504(%rbp) to %r14 past independent instruction",
+        "Fuse mov+add \u2192 leaq $12(%r14), %rax",
+        "Fuse mov+add \u2192 leaq $352(%r13), %rax"
+      ],
+      "delta_score": -1.3967880001291633,
+      "timestamp": "2026-06-04T20:36:41.072468+00:00"
+    },
+    {
+      "generation": 291,
+      "hash": "8120275758f22999",
+      "island_id": 0,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $140(%r12), %rax"
+      ],
+      "delta_score": -16.572261000052094,
+      "timestamp": "2026-06-04T20:39:00.188212+00:00"
+    },
+    {
+      "generation": 292,
+      "hash": "dbc4008b1d59124b",
+      "island_id": 2,
+      "mutations": [
+        "Sink load of -1048(%rbp) to %r14 past independent instruction",
+        "Fuse mov+add \u2192 leaq $52(%r13), %rax",
+        "Sink load of -24(%rbp) to %r12 past independent instruction"
+      ],
+      "delta_score": -6.3352989996783435,
+      "timestamp": "2026-06-04T20:39:48.085944+00:00"
+    },
+    {
+      "generation": 293,
+      "hash": "77825deca585c0f6",
+      "island_id": 0,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $128(%r13), %rax",
+        "Fuse mov+add \u2192 leaq $140(%r12), %rax"
+      ],
+      "delta_score": -8.006858999840915,
+      "timestamp": "2026-06-04T20:41:20.653932+00:00"
+    },
+    {
+      "generation": 294,
+      "hash": "3855ced4af0c9d45",
+      "island_id": 2,
+      "mutations": [
+        "Sink load of -72(%rbp) to %r15 past independent instruction",
+        "Fuse mov+add \u2192 leaq $40(%r13), %rax"
+      ],
+      "delta_score": -3.5564399999566376,
+      "timestamp": "2026-06-04T20:42:07.049851+00:00"
+    },
+    {
+      "generation": 295,
+      "hash": "2f5e6d39de694b6a",
+      "island_id": 2,
+      "mutations": [
+        "Sink load of -624(%rbp) to %rbx past independent instruction",
+        "Fuse mov+add \u2192 leaq $192(%r14), %rax",
+        "Sink load of -632(%rbp) to %r12 past independent instruction"
+      ],
+      "delta_score": -10.372514000162482,
+      "timestamp": "2026-06-04T20:43:20.932945+00:00"
+    },
+    {
+      "generation": 296,
+      "hash": "ed7b7af95f3b75a6",
+      "island_id": 2,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $388(%r13), %rax"
+      ],
+      "delta_score": -10.611076999921352,
+      "timestamp": "2026-06-04T20:44:33.874661+00:00"
+    },
+    {
+      "generation": 297,
+      "hash": "e36f541495e9bc31",
+      "island_id": 2,
+      "mutations": [
+        "Sink load of -704(%rbp) to %r14 past independent instruction",
+        "Fuse mov+add \u2192 leaq $24(%rbx), %rax",
+        "Sink load of -920(%rbp) to %r14 past independent instruction"
+      ],
+      "delta_score": -13.066002000123262,
+      "timestamp": "2026-06-04T20:45:46.443523+00:00"
+    },
+    {
+      "generation": 298,
+      "hash": "fc61187b8eb606a8",
+      "island_id": 0,
+      "mutations": [
+        "Sink load of -39376(%rbp) to %r13 past independent instruction"
+      ],
+      "delta_score": -10.014657999854535,
+      "timestamp": "2026-06-04T20:46:11.106099+00:00"
+    },
+    {
+      "generation": 299,
+      "hash": "7952cfad76fea445",
+      "island_id": 2,
+      "mutations": [
+        "Sink load of -39360(%rbp) to %rbx past independent instruction"
+      ],
+      "delta_score": -4.477618999779224,
+      "timestamp": "2026-06-04T20:50:50.859705+00:00"
+    },
+    {
+      "generation": 300,
+      "hash": "5bf22fde72249d0c",
+      "island_id": 0,
+      "mutations": [
+        "Sink load of -48(%rbp) to %r12 past independent instruction",
+        "Sink load of -2056(%rbp) to %r14 past independent instruction",
+        "Sink load of -48(%rbp) to %r12 past independent instruction"
+      ],
+      "delta_score": -2.165682000108063,
+      "timestamp": "2026-06-04T20:51:14.396242+00:00"
+    },
+    {
+      "generation": 301,
+      "hash": "6d7d57ad76e33c49",
+      "island_id": 0,
+      "mutations": [
+        "Sink load of -496(%rbp) to %r13 past independent instruction",
+        "Sink load of -1048(%rbp) to %r14 past independent instruction"
+      ],
+      "delta_score": -2.5790209998376667,
+      "timestamp": "2026-06-04T20:52:19.939433+00:00"
+    },
+    {
+      "generation": 302,
+      "hash": "2e83cace06a72c6c",
+      "island_id": 0,
+      "mutations": [
+        "Sink load of -912(%rbp) to %rbx past independent instruction",
+        "Fuse mov+add \u2192 leaq $16(%r13), %rax"
+      ],
+      "delta_score": -8.616900000255555,
+      "timestamp": "2026-06-04T20:53:24.266981+00:00"
+    },
+    {
+      "generation": 303,
+      "hash": "091782708ac49e94",
+      "island_id": 1,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $156(%r13), %rax"
+      ],
+      "delta_score": -7.814627999905497,
+      "timestamp": "2026-06-04T20:53:45.311551+00:00"
+    },
+    {
+      "generation": 304,
+      "hash": "0da4749a4b8ffa56",
+      "island_id": 2,
+      "mutations": [
+        "Sink load of -936(%rbp) to %rbx past independent instruction"
+      ],
+      "delta_score": -0.029992000199854374,
+      "timestamp": "2026-06-04T20:54:06.554761+00:00"
+    },
+    {
+      "generation": 305,
+      "hash": "2962e9c1d7a9efc2",
+      "island_id": 0,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $336(%r12), %rax"
+      ],
+      "delta_score": -6.868582000024617,
+      "timestamp": "2026-06-04T20:54:27.246705+00:00"
+    },
+    {
+      "generation": 306,
+      "hash": "7c07ecf84473bdec",
+      "island_id": 1,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $24(%r15), %rax"
+      ],
+      "delta_score": -1.0175870000384748,
+      "timestamp": "2026-06-04T20:54:48.867997+00:00"
+    },
+    {
+      "generation": 307,
+      "hash": "d34c525abcaad9d0",
+      "island_id": 0,
+      "mutations": [
+        "Sink load of -424(%rbp) to %rax past independent instruction",
+        "Sink load of -48(%rbp) to %rbx past independent instruction",
+        "Sink load of -496(%rbp) to %r13 past independent instruction"
+      ],
+      "delta_score": -0.7906319997273386,
+      "timestamp": "2026-06-04T20:55:31.940568+00:00"
+    },
+    {
+      "generation": 308,
+      "hash": "6871e457044a624a",
+      "island_id": 1,
+      "mutations": [
+        "Sink load of -32(%rbp) to %r13 past independent instruction",
+        "Fuse mov+add \u2192 leaq $140(%r12), %rax"
+      ],
+      "delta_score": -17.444875000044703,
+      "timestamp": "2026-06-04T20:55:52.642652+00:00"
+    },
+    {
+      "generation": 309,
+      "hash": "9d6ea63737aa5865",
+      "island_id": 2,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $16(%r15), %rax",
+        "Sink load of -56(%rbp) to %r13 past independent instruction",
+        "Sink load of -640(%rbp) to %r13 past independent instruction"
+      ],
+      "delta_score": -6.895661000162363,
+      "timestamp": "2026-06-04T20:56:13.180334+00:00"
+    },
+    {
+      "generation": 310,
+      "hash": "7521ad9ad9b2d82b",
+      "island_id": 0,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $192(%r14), %rax",
+        "Fuse mov+add \u2192 leaq $12(%r14), %rax"
+      ],
+      "delta_score": -17.65097100008279,
+      "timestamp": "2026-06-04T20:56:34.088198+00:00"
+    },
+    {
+      "generation": 311,
+      "hash": "268086a9aeff38ba",
+      "island_id": 2,
+      "mutations": [
+        "Sink load of -696(%rbp) to %r14 past independent instruction"
+      ],
+      "delta_score": -0.8256719997152686,
+      "timestamp": "2026-06-04T20:57:17.608641+00:00"
+    },
+    {
+      "generation": 312,
+      "hash": "78563466600b8679",
+      "island_id": 0,
+      "mutations": [
+        "Sink load of -39384(%rbp) to %r14 past independent instruction",
+        "Fuse mov+add \u2192 leaq $16520(%rbx), %rax"
+      ],
+      "delta_score": -1.4433900001458824,
+      "timestamp": "2026-06-04T20:57:39.113237+00:00"
+    },
+    {
+      "generation": 313,
+      "hash": "95ccd56d96a3a10b",
+      "island_id": 2,
+      "mutations": [
+        "Sink load of -40(%rbp) to %r15 past independent instruction",
+        "Fuse mov+add \u2192 leaq $20(%r12), %rax",
+        "Sink load of -552(%rbp) to %r13 past independent instruction"
+      ],
+      "delta_score": -8.37589200027287,
+      "timestamp": "2026-06-04T20:58:22.046915+00:00"
+    },
+    {
+      "generation": 314,
+      "hash": "875efd07360d6de1",
+      "island_id": 0,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $192(%r14), %rax"
+      ],
+      "delta_score": -13.932634999975562,
+      "timestamp": "2026-06-04T20:58:42.992287+00:00"
+    },
+    {
+      "generation": 315,
+      "hash": "7d261040e5aa304c",
+      "island_id": 1,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $296(%r13), %rax"
+      ],
+      "delta_score": -8.30033200001344,
+      "timestamp": "2026-06-04T20:59:04.329667+00:00"
+    },
+    {
+      "generation": 316,
+      "hash": "8ebcd8b6bbc364a3",
+      "island_id": 2,
+      "mutations": [
+        "Reorder 3-instruction window to reduce WAR pipeline stall",
+        "Fuse mov+add \u2192 leaq $4(%r12), %rax"
+      ],
+      "delta_score": -6.2137609999626875,
+      "timestamp": "2026-06-04T20:59:25.715812+00:00"
+    },
+    {
+      "generation": 317,
+      "hash": "65c72b59f369806b",
+      "island_id": 1,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $24(%r12), %rax",
+        "Sink load of -640(%rbp) to %r13 past independent instruction"
+      ],
+      "delta_score": -8.707498000003397,
+      "timestamp": "2026-06-04T21:00:08.137556+00:00"
+    },
+    {
+      "generation": 318,
+      "hash": "f058c71d9ff6063a",
+      "island_id": 2,
+      "mutations": [
+        "Sink load of -56(%rbp) to %r13 past independent instruction",
+        "Fuse mov+add \u2192 leaq $8(%r12), %rax",
+        "Sink load of -648(%rbp) to %r14 past independent instruction"
+      ],
+      "delta_score": -0.4355969997122884,
+      "timestamp": "2026-06-04T21:00:29.096185+00:00"
+    },
+    {
+      "generation": 319,
+      "hash": "114a1f23a3271dc7",
+      "island_id": 1,
+      "mutations": [
+        "Sink load of -736(%rbp) to %rbx past independent instruction",
+        "Sink load of -632(%rbp) to %r12 past independent instruction",
+        "Fuse mov+add \u2192 leaq $128(%r12), %rax"
+      ],
+      "delta_score": -8.712740999646485,
+      "timestamp": "2026-06-04T21:01:11.623856+00:00"
+    },
+    {
+      "generation": 320,
+      "hash": "5678b496f7df58f6",
+      "island_id": 2,
+      "mutations": [
+        "Sink load of -504(%rbp) to %r14 past independent instruction",
+        "Sink load of -96(%rbp) to %r13 past independent instruction"
+      ],
+      "delta_score": -10.096975000109524,
+      "timestamp": "2026-06-04T21:01:32.478387+00:00"
+    },
+    {
+      "generation": 321,
+      "hash": "ae9f0dc02c888c3b",
+      "island_id": 0,
+      "mutations": [
+        "Sink load of -32(%rbp) to %r14 past independent instruction",
+        "Fuse mov+add \u2192 leaq $192(%r15), %rax",
+        "Sink load of -672(%rbp) to %r13 past independent instruction"
+      ],
+      "delta_score": -2.9545729998499155,
+      "timestamp": "2026-06-04T21:01:56.148477+00:00"
+    },
+    {
+      "generation": 322,
+      "hash": "32e116784fe5e93d",
+      "island_id": 1,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $6849024(%r12), %rax"
+      ],
+      "delta_score": -7.34827100019902,
+      "timestamp": "2026-06-04T21:02:17.297169+00:00"
+    },
+    {
+      "generation": 323,
+      "hash": "cc1b3fbc23c85440",
+      "island_id": 2,
+      "mutations": [
+        "Sink load of -360(%rbp) to %r14 past independent instruction",
+        "Sink load of -520(%rbp) to %r14 past independent instruction"
+      ],
+      "delta_score": -0.8622650001198053,
+      "timestamp": "2026-06-04T21:02:38.716572+00:00"
+    },
+    {
+      "generation": 324,
+      "hash": "ff38245cd50978c1",
+      "island_id": 2,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $152(%r14), %rax",
+        "Sink load of -72(%rbp) to %r13 past independent instruction"
+      ],
+      "delta_score": -8.215605000033975,
+      "timestamp": "2026-06-04T21:03:43.092895+00:00"
+    },
+    {
+      "generation": 325,
+      "hash": "cff6b17be5f01afc",
+      "island_id": 2,
+      "mutations": [
+        "Sink load of -296(%rbp) to %r14 past independent instruction",
+        "Remove dead movq to %rax (overwritten at +1)",
+        "Sink load of -736(%rbp) to %r14 past independent instruction"
+      ],
+      "delta_score": -9.939861999824643,
+      "timestamp": "2026-06-04T21:04:46.739342+00:00"
+    },
+    {
+      "generation": 326,
+      "hash": "02b835c2fc6cf5cd",
+      "island_id": 0,
+      "mutations": [
+        "Sink load of -632(%rbp) to %r12 past independent instruction",
+        "Fuse mov+add \u2192 leaq $16528(%r13), %rax"
+      ],
+      "delta_score": -11.492339000105858,
+      "timestamp": "2026-06-04T21:05:07.622801+00:00"
+    },
+    {
+      "generation": 327,
+      "hash": "5b8fffff8e2fe778",
+      "island_id": 1,
+      "mutations": [
+        "Sink load of -480(%rbp) to %rbx past independent instruction",
+        "Fuse mov+add \u2192 leaq $336(%r13), %rax"
+      ],
+      "delta_score": -5.46634199982509,
+      "timestamp": "2026-06-04T21:05:29.833779+00:00"
+    },
+    {
+      "generation": 328,
+      "hash": "db70be989f918456",
+      "island_id": 0,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $560(%r13), %rax",
+        "Sink load of -496(%rbp) to %r13 past independent instruction"
+      ],
+      "delta_score": -2.566753000020981,
+      "timestamp": "2026-06-04T21:06:12.841279+00:00"
+    },
+    {
+      "generation": 329,
+      "hash": "c730498e06007290",
+      "island_id": 1,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall",
+        "Fuse mov+add \u2192 leaq $64(%r12), %rax"
+      ],
+      "delta_score": -9.093437999952585,
+      "timestamp": "2026-06-04T21:06:35.625729+00:00"
+    },
+    {
+      "generation": 330,
+      "hash": "92974f110d5de404",
+      "island_id": 0,
+      "mutations": [
+        "Sink load of -34616(%rbp) to %rbx past independent instruction"
+      ],
+      "delta_score": -2.583136999979615,
+      "timestamp": "2026-06-04T21:07:18.734810+00:00"
     }
   ],
   "fitness_history": [
@@ -4620,6 +5181,312 @@
       "island_id": 1,
       "score": 2237993.676497,
       "timestamp": "2026-06-04T01:36:15.931888+00:00"
+    },
+    {
+      "generation": 280,
+      "island_id": 0,
+      "score": 2240159.732343,
+      "timestamp": "2026-06-04T20:27:19.672695+00:00"
+    },
+    {
+      "generation": 281,
+      "island_id": 1,
+      "score": 2240151.630109,
+      "timestamp": "2026-06-04T20:27:41.927838+00:00"
+    },
+    {
+      "generation": 282,
+      "island_id": 2,
+      "score": 2240152.393233,
+      "timestamp": "2026-06-04T20:28:02.977214+00:00"
+    },
+    {
+      "generation": 283,
+      "island_id": 1,
+      "score": 2240139.836428,
+      "timestamp": "2026-06-04T20:29:57.634659+00:00"
+    },
+    {
+      "generation": 284,
+      "island_id": 1,
+      "score": 2240128.1943139997,
+      "timestamp": "2026-06-04T20:31:09.088388+00:00"
+    },
+    {
+      "generation": 285,
+      "island_id": 2,
+      "score": 2240148.1707349997,
+      "timestamp": "2026-06-04T20:31:34.721522+00:00"
+    },
+    {
+      "generation": 286,
+      "island_id": 2,
+      "score": 2240133.374943,
+      "timestamp": "2026-06-04T20:32:48.522617+00:00"
+    },
+    {
+      "generation": 287,
+      "island_id": 1,
+      "score": 2240103.0813329997,
+      "timestamp": "2026-06-04T20:33:37.281620+00:00"
+    },
+    {
+      "generation": 288,
+      "island_id": 2,
+      "score": 2240126.185653,
+      "timestamp": "2026-06-04T20:35:06.462735+00:00"
+    },
+    {
+      "generation": 289,
+      "island_id": 2,
+      "score": 2240124.7656509997,
+      "timestamp": "2026-06-04T20:36:19.242512+00:00"
+    },
+    {
+      "generation": 290,
+      "island_id": 0,
+      "score": 2240158.3355549998,
+      "timestamp": "2026-06-04T20:36:41.072388+00:00"
+    },
+    {
+      "generation": 291,
+      "island_id": 0,
+      "score": 2240141.7632939997,
+      "timestamp": "2026-06-04T20:39:00.188078+00:00"
+    },
+    {
+      "generation": 292,
+      "island_id": 2,
+      "score": 2240118.430352,
+      "timestamp": "2026-06-04T20:39:48.085893+00:00"
+    },
+    {
+      "generation": 293,
+      "island_id": 0,
+      "score": 2240133.756435,
+      "timestamp": "2026-06-04T20:41:20.653855+00:00"
+    },
+    {
+      "generation": 294,
+      "island_id": 2,
+      "score": 2240114.873912,
+      "timestamp": "2026-06-04T20:42:07.049824+00:00"
+    },
+    {
+      "generation": 295,
+      "island_id": 2,
+      "score": 2240104.501398,
+      "timestamp": "2026-06-04T20:43:20.932909+00:00"
+    },
+    {
+      "generation": 296,
+      "island_id": 2,
+      "score": 2240093.890321,
+      "timestamp": "2026-06-04T20:44:33.874633+00:00"
+    },
+    {
+      "generation": 297,
+      "island_id": 2,
+      "score": 2240080.824319,
+      "timestamp": "2026-06-04T20:45:46.443488+00:00"
+    },
+    {
+      "generation": 298,
+      "island_id": 0,
+      "score": 2240123.741777,
+      "timestamp": "2026-06-04T20:46:11.106071+00:00"
+    },
+    {
+      "generation": 299,
+      "island_id": 2,
+      "score": 2240076.3467,
+      "timestamp": "2026-06-04T20:50:50.859580+00:00"
+    },
+    {
+      "generation": 300,
+      "island_id": 0,
+      "score": 2240121.576095,
+      "timestamp": "2026-06-04T20:51:14.396168+00:00"
+    },
+    {
+      "generation": 301,
+      "island_id": 0,
+      "score": 2240118.997074,
+      "timestamp": "2026-06-04T20:52:19.939229+00:00"
+    },
+    {
+      "generation": 302,
+      "island_id": 0,
+      "score": 2240110.380174,
+      "timestamp": "2026-06-04T20:53:24.266918+00:00"
+    },
+    {
+      "generation": 303,
+      "island_id": 1,
+      "score": 2240095.266705,
+      "timestamp": "2026-06-04T20:53:45.311436+00:00"
+    },
+    {
+      "generation": 304,
+      "island_id": 2,
+      "score": 2240076.316708,
+      "timestamp": "2026-06-04T20:54:06.554737+00:00"
+    },
+    {
+      "generation": 305,
+      "island_id": 0,
+      "score": 2240103.511592,
+      "timestamp": "2026-06-04T20:54:27.246640+00:00"
+    },
+    {
+      "generation": 306,
+      "island_id": 1,
+      "score": 2240094.249118,
+      "timestamp": "2026-06-04T20:54:48.867969+00:00"
+    },
+    {
+      "generation": 307,
+      "island_id": 0,
+      "score": 2240102.72096,
+      "timestamp": "2026-06-04T20:55:31.940541+00:00"
+    },
+    {
+      "generation": 308,
+      "island_id": 1,
+      "score": 2240076.8042429998,
+      "timestamp": "2026-06-04T20:55:52.642626+00:00"
+    },
+    {
+      "generation": 309,
+      "island_id": 2,
+      "score": 2240069.4210469997,
+      "timestamp": "2026-06-04T20:56:13.180295+00:00"
+    },
+    {
+      "generation": 310,
+      "island_id": 0,
+      "score": 2240085.069989,
+      "timestamp": "2026-06-04T20:56:34.088173+00:00"
+    },
+    {
+      "generation": 311,
+      "island_id": 2,
+      "score": 2240068.595375,
+      "timestamp": "2026-06-04T20:57:17.608614+00:00"
+    },
+    {
+      "generation": 312,
+      "island_id": 0,
+      "score": 2240083.626599,
+      "timestamp": "2026-06-04T20:57:39.113208+00:00"
+    },
+    {
+      "generation": 313,
+      "island_id": 2,
+      "score": 2240060.2194829998,
+      "timestamp": "2026-06-04T20:58:22.046887+00:00"
+    },
+    {
+      "generation": 314,
+      "island_id": 0,
+      "score": 2240069.693964,
+      "timestamp": "2026-06-04T20:58:42.992260+00:00"
+    },
+    {
+      "generation": 315,
+      "island_id": 1,
+      "score": 2240068.5039109997,
+      "timestamp": "2026-06-04T20:59:04.329641+00:00"
+    },
+    {
+      "generation": 316,
+      "island_id": 2,
+      "score": 2240054.005722,
+      "timestamp": "2026-06-04T20:59:25.715779+00:00"
+    },
+    {
+      "generation": 317,
+      "island_id": 1,
+      "score": 2240059.7964129997,
+      "timestamp": "2026-06-04T21:00:08.137531+00:00"
+    },
+    {
+      "generation": 318,
+      "island_id": 2,
+      "score": 2240053.570125,
+      "timestamp": "2026-06-04T21:00:29.096155+00:00"
+    },
+    {
+      "generation": 319,
+      "island_id": 1,
+      "score": 2240051.083672,
+      "timestamp": "2026-06-04T21:01:11.623816+00:00"
+    },
+    {
+      "generation": 320,
+      "island_id": 2,
+      "score": 2240043.47315,
+      "timestamp": "2026-06-04T21:01:32.478362+00:00"
+    },
+    {
+      "generation": 321,
+      "island_id": 0,
+      "score": 2240066.739391,
+      "timestamp": "2026-06-04T21:01:56.148450+00:00"
+    },
+    {
+      "generation": 322,
+      "island_id": 1,
+      "score": 2240043.735401,
+      "timestamp": "2026-06-04T21:02:17.297144+00:00"
+    },
+    {
+      "generation": 323,
+      "island_id": 2,
+      "score": 2240042.610885,
+      "timestamp": "2026-06-04T21:02:38.716546+00:00"
+    },
+    {
+      "generation": 324,
+      "island_id": 2,
+      "score": 2240034.39528,
+      "timestamp": "2026-06-04T21:03:43.092870+00:00"
+    },
+    {
+      "generation": 325,
+      "island_id": 2,
+      "score": 2240024.455418,
+      "timestamp": "2026-06-04T21:04:46.739241+00:00"
+    },
+    {
+      "generation": 326,
+      "island_id": 0,
+      "score": 2240055.247052,
+      "timestamp": "2026-06-04T21:05:07.622728+00:00"
+    },
+    {
+      "generation": 327,
+      "island_id": 1,
+      "score": 2240038.269059,
+      "timestamp": "2026-06-04T21:05:29.833750+00:00"
+    },
+    {
+      "generation": 328,
+      "island_id": 0,
+      "score": 2240052.680299,
+      "timestamp": "2026-06-04T21:06:12.841254+00:00"
+    },
+    {
+      "generation": 329,
+      "island_id": 1,
+      "score": 2240029.175621,
+      "timestamp": "2026-06-04T21:06:35.625702+00:00"
+    },
+    {
+      "generation": 330,
+      "island_id": 0,
+      "score": 2240050.097162,
+      "timestamp": "2026-06-04T21:07:18.734759+00:00"
     }
   ],
   "discovered_algorithms": [
@@ -4901,60 +5768,114 @@
     "QAlgo-Dream-G276",
     "QAlgo-Dream-G277",
     "QAlgo-Dream-G278",
-    "QAlgo-Dream-G279"
+    "QAlgo-Dream-G279",
+    "QAlgo-Dream-G280",
+    "QAlgo-Dream-G281",
+    "QAlgo-Dream-G282",
+    "QAlgo-Dream-G283",
+    "QAlgo-Dream-G284",
+    "QAlgo-Dream-G285",
+    "QAlgo-Dream-G286",
+    "QAlgo-Dream-G287",
+    "QAlgo-Dream-G288",
+    "QAlgo-Dream-G289",
+    "QAlgo-Dream-G290",
+    "QAlgo-Dream-G291",
+    "QAlgo-Dream-G292",
+    "QAlgo-Dream-G293",
+    "QAlgo-Dream-G294",
+    "QAlgo-Dream-G295",
+    "QAlgo-Dream-G296",
+    "QAlgo-Dream-G297",
+    "QAlgo-Dream-G298",
+    "QAlgo-Dream-G299",
+    "QAlgo-Dream-G300",
+    "QAlgo-Dream-G301",
+    "QAlgo-Dream-G302",
+    "QAlgo-Dream-G303",
+    "QAlgo-Dream-G304",
+    "QAlgo-Dream-G305",
+    "QAlgo-Dream-G306",
+    "QAlgo-Dream-G307",
+    "QAlgo-Dream-G308",
+    "QAlgo-Dream-G309",
+    "QAlgo-Dream-G310",
+    "QAlgo-Dream-G311",
+    "QAlgo-Dream-G312",
+    "QAlgo-Dream-G313",
+    "QAlgo-Dream-G314",
+    "QAlgo-Dream-G315",
+    "QAlgo-Dream-G316",
+    "QAlgo-Dream-G317",
+    "QAlgo-Dream-G318",
+    "QAlgo-Dream-G319",
+    "QAlgo-Dream-G320",
+    "QAlgo-Dream-G321",
+    "QAlgo-Dream-G322",
+    "QAlgo-Dream-G323",
+    "QAlgo-Dream-G324",
+    "QAlgo-Dream-G325",
+    "QAlgo-Dream-G326",
+    "QAlgo-Dream-G327",
+    "QAlgo-Dream-G328",
+    "QAlgo-Dream-G329",
+    "QAlgo-Dream-G330"
   ],
   "blacklisted_fingerprints": [
-    "2112dc1c156c940d",
-    "dadd034f45c3bc0e",
-    "af4a9aaae8d1ede7",
-    "64264f90998a17b0",
-    "f0200402ba28c47d",
-    "141b657d31e1f045",
-    "494247a80a370dff",
-    "6470c076fbf4e39b",
-    "eab88eaf7dc813d7",
-    "96c1799be1d2c713",
-    "c18acd211d58faf2",
-    "e11406fd2ba5fdbc",
-    "06489b07a80c7fe9",
-    "0d82191fc206010f",
+    "d9981af351067323",
+    "60eaa3f9059264f1",
+    "e6cf7f2fcce8732b",
     "24370fd58a093cd6",
+    "12ef99f3b0cebc33",
+    "6a9ed9b74840d1b1",
+    "e11406fd2ba5fdbc",
+    "5ea25a80d5ac4b63",
+    "6e3d22d4d7aee650",
+    "96c1799be1d2c713",
+    "dadd034f45c3bc0e",
+    "d2b5bbc9eb00982a",
+    "2dcf9a36f508b58a",
+    "b6b81c8dc2ca9abc",
+    "f0200402ba28c47d",
+    "64264f90998a17b0",
+    "3a8507e5d2b02894",
+    "622705fc90a2146f",
+    "0d82191fc206010f",
+    "af34007ed47eaca3",
+    "6dc682e84ae95052",
+    "0ad13642783fe2f4",
+    "389b989ef2334926",
+    "247c9d25258fdd26",
+    "141b657d31e1f045",
+    "6470c076fbf4e39b",
+    "d8c44e654d8fffa0",
+    "0b17fb6febd46ffc",
+    "494247a80a370dff",
+    "b7f9c10a5b1c3b1a",
+    "c06680b6a24f321b",
+    "2112dc1c156c940d",
+    "96d91a32c53e58de",
+    "2a235aa3c2264dee",
+    "71dd4c67955e8420",
+    "b0cfe6249cc64527",
+    "c243cb7c696705c8",
+    "69f145a8d1466990",
+    "06489b07a80c7fe9",
+    "4e029b0277b8e53c",
+    "e06ed6b6dffcf70a",
+    "b2552ce2df988fd6",
+    "a79f914d0ed857b1",
+    "af4a9aaae8d1ede7",
+    "c18acd211d58faf2",
+    "5ae9e1339ab835b2",
     "5e7286547be7771b",
     "af9f75213e027f07",
-    "0ad13642783fe2f4",
-    "60eaa3f9059264f1",
     "adc46d2b8acd4b00",
-    "389b989ef2334926",
-    "2a235aa3c2264dee",
-    "d2b5bbc9eb00982a",
-    "c243cb7c696705c8",
-    "247c9d25258fdd26",
-    "af34007ed47eaca3",
-    "6a9ed9b74840d1b1",
-    "71dd4c67955e8420",
-    "845795031376faff",
-    "6dc682e84ae95052",
-    "d8c44e654d8fffa0",
-    "2dcf9a36f508b58a",
-    "0b17fb6febd46ffc",
-    "12ef99f3b0cebc33",
-    "701332c1b91da513",
-    "3a8507e5d2b02894",
-    "4e029b0277b8e53c",
-    "96d91a32c53e58de",
-    "4f28a986a047eebd",
-    "e06ed6b6dffcf70a",
+    "eab88eaf7dc813d7",
     "8303ac54830f6287",
-    "622705fc90a2146f",
-    "b2552ce2df988fd6",
-    "c06680b6a24f321b",
-    "5ea25a80d5ac4b63",
-    "5ae9e1339ab835b2",
-    "d9981af351067323",
-    "b7f9c10a5b1c3b1a",
-    "a79f914d0ed857b1",
     "1543127ec3e8bb4a",
-    "6e3d22d4d7aee650",
-    "b6b81c8dc2ca9abc"
+    "845795031376faff",
+    "701332c1b91da513",
+    "4f28a986a047eebd"
   ]
 }
