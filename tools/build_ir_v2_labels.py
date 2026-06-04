@@ -43,7 +43,7 @@ def parse_dce_logs(log_path):
     dce_deleted = {}
     current_func = None
 
-    func_pattern = re.compile(r'\[ZCC-SNAPSHOT\] Pass (dce\d?): Func=([a-zA-Z0-9_]+)')
+    func_pattern = re.compile(r'(?:cc_func:\s*|\[ZCC-SNAPSHOT\] Pass dce\d?:\s*Func=)([a-zA-Z0-9_]+)')
     dce_pattern = re.compile(r'\[dce\] deleted:\s*([a-zA-Z0-9_]+)\s*(.*?)\s*->\s*(\S+)')
 
     log_info(f"Parsing DCE logs: {log_path}...")
@@ -59,7 +59,7 @@ def parse_dce_logs(log_path):
             # Check for function context switch in DCE pass
             func_match = func_pattern.search(line)
             if func_match:
-                current_func = func_match.group(2)
+                current_func = func_match.group(1)
                 if current_func not in dce_deleted:
                     dce_deleted[current_func] = set()
                 continue
@@ -76,9 +76,94 @@ def parse_dce_logs(log_path):
     log_info(f"Processed {total_lines} log lines. Found {len(dce_deleted)} functions with deletes and {match_count} deleted register instructions.")
     return dce_deleted
 
+def parse_pre_ir(ir_path):
+    """
+    Parses pre-optimization IR text dump in custom line-oriented format.
+    Returns: dict mapping func_name -> list of nodes in dataset-compatible format.
+    """
+    log_info(f"Parsing pre-optimization IR nodes: {ir_path}...")
+    if not os.path.exists(ir_path):
+        log_error(f"Pre-optimization IR file not found: {ir_path}")
+        sys.exit(1)
+
+    pre_funcs = {}
+    current_func = None
+    func_pattern = re.compile(r'^func name="([^"]+)"')
+    kv_pattern = re.compile(r'(\w+)=(?:"([^"]*)"|(\S+))')
+
+    total_funcs = 0
+    total_nodes = 0
+    with open(ir_path, 'r', encoding='utf-8', errors='ignore') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+
+            # Check func start
+            m_func = func_pattern.match(line)
+            if m_func:
+                current_func = m_func.group(1)
+                pre_funcs[current_func] = []
+                total_funcs += 1
+                continue
+
+            # Check end func
+            if line == "end func":
+                current_func = None
+                continue
+
+            # Check inst
+            if line.startswith("inst ") and current_func is not None:
+                node_dict = {
+                    'dst': None,
+                    'imm': None,
+                    'label': None,
+                    'line': None,
+                    'op': None,
+                    'src1': None,
+                    'src2': None,
+                    'type': None
+                }
+                for m in kv_pattern.finditer(line):
+                    key = m.group(1)
+                    val = m.group(2) if m.group(2) is not None else m.group(3)
+                    if key == 'dst':
+                        node_dict['dst'] = val if val else None
+                    elif key == 'imm':
+                        try:
+                            node_dict['imm'] = int(val)
+                        except ValueError:
+                            node_dict['imm'] = None
+                    elif key == 'label':
+                        node_dict['label'] = val if val else None
+                    elif key == 'lineno':
+                        try:
+                            node_dict['line'] = int(val)
+                        except ValueError:
+                            node_dict['line'] = None
+                    elif key == 'op':
+                        node_dict['op'] = val if val else None
+                    elif key == 'src1':
+                        node_dict['src1'] = val if val else None
+                    elif key == 'src2':
+                        node_dict['src2'] = val if val else None
+                    elif key == 'type':
+                        node_dict['type'] = val if val else None
+
+                # Schema safety: imm must be None for all ops except const and fconst
+                if node_dict['op'] not in ('const', 'fconst'):
+                    node_dict['imm'] = None
+
+                pre_funcs[current_func].append(node_dict)
+                total_nodes += 1
+
+    log_info(f"Successfully parsed {total_funcs} functions containing {total_nodes} pre-optimized IR instruction nodes.")
+    return pre_funcs
+
 def main():
     parser = argparse.ArgumentParser(description="ZCC IR V2 Label Extraction Pipeline")
-    parser.add_argument("--dce-logs", default="/tmp/dce_logs_interleaved_new.txt", help="Path to interleaved compiler logs")
+    parser.add_argument("--dce-logs", default="/tmp/combined_dce_logs.txt", help="Path to interleaved compiler logs")
+    parser.add_argument("--pre-ir", default="/tmp/zcc_pre.ir.json", help="Path to pre-optimization IR dump")
     parser.add_argument("--source-ds", default="zkaedi/zcc-ir-prime-v1", help="Source Hugging Face dataset name")
     parser.add_argument("--target-ds", default="zkaedi/zcc-ir-prime-v2", help="Target Hugging Face dataset name")
     parser.add_argument("--dry-run", action="store_true", help="Execute dry run and print sample records without uploading")
@@ -104,8 +189,9 @@ def main():
             log_error("HF_TOKEN environment variable is not defined and no cached token found. Cannot upload dataset.")
             sys.exit(1)
 
-    # 1. Parse DCE Logs
+    # 1. Parse DCE Logs and Pre-Optimization IR
     dce_deleted = parse_dce_logs(args.dce_logs)
+    pre_nodes = parse_pre_ir(args.pre_ir)
 
     # 2. Load Source Dataset
     log_info(f"Loading source dataset: {args.source_ds}...")
@@ -133,10 +219,15 @@ def main():
     })
 
     def add_dce_labels_fn(example):
-        func_name = example['name']
+        func_name = example["name"].split(" ->")[0].strip()
+        if func_name in pre_nodes:
+            nodes = pre_nodes[func_name]
+        else:
+            nodes = example['nodes']
+            
         deleted_set = dce_deleted.get(func_name, set())
         labels = []
-        for node_idx, node in enumerate(example['nodes']):
+        for node_idx, node in enumerate(nodes):
             op = node.get('op')
             dst = node.get('dst') or ''
             if (op, dst) in deleted_set:
@@ -147,6 +238,7 @@ def main():
                     "source": "compiler_pass"
                 })
         return {
+            "nodes": nodes,
             "dce_labels": labels,
             "label_source": "compiler_pass",
             "dce_label_count": len(labels)
