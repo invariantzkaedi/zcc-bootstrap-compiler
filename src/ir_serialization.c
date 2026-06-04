@@ -1,7 +1,8 @@
 /*
- * ir_serialization.c — ZCC IR JSON Serialization & Replay Engine
+ * ir_serialization.c — ZCC IR Serialization & Replay Engine
  *
  * Freestanding C89-compliant implementation with zero external library dependencies.
+ * Custom line-oriented text format replacing JSON.
  */
 
 #include "ir_serialization.h"
@@ -223,193 +224,145 @@ struct Compiler {
     int is_forced_mask;
 };
 
-/* Lexer / Tokenizer structures */
-typedef enum {
-    TOK_EOF = 0,
-    TOK_LBRACE,
-    TOK_RBRACE,
-    TOK_LBRACK,
-    TOK_RBRACK,
-    TOK_COLON,
-    TOK_COMMA,
-    TOK_STRING,
-    TOK_NUMBER,
-    TOK_TRUE,
-    TOK_FALSE,
-    TOK_NULL,
-    TOK_ERROR
-} tok_kind_t;
+/* ========================================================================= */
+/* HELPERS                                                                   */
+/* ========================================================================= */
 
-typedef struct {
-    FILE *fp;
-    int ch;
-    char val_str[4096];
-    long val_int;
-} json_lexer_t;
-
-static void lex_init(json_lexer_t *lex, FILE *fp) {
-    lex->fp = fp;
-    lex->ch = fgetc(fp);
-    lex->val_str[0] = '\0';
-    lex->val_int = 0;
-}
-
-static void next_ch(json_lexer_t *lex) {
-    if (lex->ch != EOF) {
-        lex->ch = fgetc(lex->fp);
-    }
-}
-
-static tok_kind_t lex_next(json_lexer_t *lex) {
-    while (lex->ch != EOF && (lex->ch == ' ' || lex->ch == '\t' || lex->ch == '\n' || lex->ch == '\r')) {
-        next_ch(lex);
-    }
-
-    if (lex->ch == EOF) return TOK_EOF;
-
-    switch (lex->ch) {
-        case '{': next_ch(lex); return TOK_LBRACE;
-        case '}': next_ch(lex); return TOK_RBRACE;
-        case '[': next_ch(lex); return TOK_LBRACK;
-        case ']': next_ch(lex); return TOK_RBRACK;
-        case ':': next_ch(lex); return TOK_COLON;
-        case ',': next_ch(lex); return TOK_COMMA;
-        case '"': {
-            next_ch(lex); /* skip opening quote */
-            int i = 0;
-            while (lex->ch != EOF && lex->ch != '"') {
-                if (lex->ch == '\\') {
-                    next_ch(lex);
-                    if (lex->ch == EOF) break;
-                    if (lex->ch == 'n') lex->val_str[i++] = '\n';
-                    else if (lex->ch == 't') lex->val_str[i++] = '\t';
-                    else if (lex->ch == 'r') lex->val_str[i++] = '\r';
-                    else if (lex->ch == 'b') lex->val_str[i++] = '\b';
-                    else if (lex->ch == 'f') lex->val_str[i++] = '\f';
-                    else lex->val_str[i++] = lex->ch;
-                } else {
-                    lex->val_str[i++] = lex->ch;
-                }
-                if (i >= 4095) break; /* prevent buffer overflow */
-                next_ch(lex);
-            }
-            lex->val_str[i] = '\0';
-            if (lex->ch == '"') {
-                next_ch(lex);
-            }
-            return TOK_STRING;
-        }
-    }
-
-    /* parse number or identifier */
-    if (lex->ch == '-' || (lex->ch >= '0' && lex->ch <= '9')) {
-        int i = 0;
-        int is_neg = 0;
-        long val = 0;
-        if (lex->ch == '-') {
-            is_neg = 1;
-            lex->val_str[i++] = '-';
-            next_ch(lex);
-        }
-        while (lex->ch != EOF && (lex->ch >= '0' && lex->ch <= '9')) {
-            lex->val_str[i++] = lex->ch;
-            val = val * 10 + (lex->ch - '0');
-            if (i >= 4095) break;
-            next_ch(lex);
-        }
-        /* Handle decimal part if any */
-        if (lex->ch == '.') {
-            lex->val_str[i++] = '.';
-            next_ch(lex);
-            while (lex->ch != EOF && (lex->ch >= '0' && lex->ch <= '9')) {
-                lex->val_str[i++] = lex->ch;
-                next_ch(lex);
-            }
-        }
-        lex->val_str[i] = '\0';
-        lex->val_int = is_neg ? -val : val;
-        return TOK_NUMBER;
-    }
-
-    /* parse true/false/null */
-    if ((lex->ch >= 'a' && lex->ch <= 'z') || (lex->ch >= 'A' && lex->ch <= 'Z')) {
-        int i = 0;
-        while (lex->ch != EOF && ((lex->ch >= 'a' && lex->ch <= 'z') || (lex->ch >= 'A' && lex->ch <= 'Z'))) {
-            lex->val_str[i++] = lex->ch;
-            if (i >= 4095) break;
-            next_ch(lex);
-        }
-        lex->val_str[i] = '\0';
-        if (strcmp(lex->val_str, "true") == 0) return TOK_TRUE;
-        if (strcmp(lex->val_str, "false") == 0) return TOK_FALSE;
-        if (strcmp(lex->val_str, "null") == 0) return TOK_NULL;
-        return TOK_ERROR;
-    }
-
-    /* skip unknown characters */
-    next_ch(lex);
-    return TOK_ERROR;
-}
-
-static int parse_expect(json_lexer_t *lex, tok_kind_t expected) {
-    tok_kind_t tok = lex_next(lex);
-    if (tok != expected) {
-        fprintf(stderr, "json parse error: expected token %d, got %d (value: %s)\n", expected, tok, lex->val_str);
-        return 0;
-    }
-    return 1;
-}
-
-static void skip_json_value(json_lexer_t *lex, tok_kind_t tok) {
-    if (tok == TOK_LBRACE) {
-        int depth = 1;
-        while (depth > 0) {
-            tok_kind_t t = lex_next(lex);
-            if (t == TOK_EOF) break;
-            if (t == TOK_LBRACE) depth++;
-            if (t == TOK_RBRACE) depth--;
-        }
-    } else if (tok == TOK_LBRACK) {
-        int depth = 1;
-        while (depth > 0) {
-            tok_kind_t t = lex_next(lex);
-            if (t == TOK_EOF) break;
-            if (t == TOK_LBRACK) depth++;
-            if (t == TOK_RBRACK) depth--;
-        }
-    } else {
-        /* single token values */
-    }
-}
-
-static void escape_json_string(char *dst, const char *src) {
-    int i, j;
+static void escape_string(char *dst, const char *src) {
+    int i = 0, j = 0;
     if (!src) {
         dst[0] = '\0';
         return;
     }
-    j = 0;
     for (i = 0; src[i] != '\0'; i++) {
-        if (src[i] == '"') {
-            dst[j++] = '\\';
-            dst[j++] = '"';
-        } else if (src[i] == '\\') {
-            dst[j++] = '\\';
-            dst[j++] = '\\';
-        } else if (src[i] == '\n') {
-            dst[j++] = '\\';
-            dst[j++] = 'n';
-        } else if (src[i] == '\t') {
-            dst[j++] = '\\';
-            dst[j++] = 't';
-        } else if (src[i] == '\r') {
-            dst[j++] = '\\';
-            dst[j++] = 'r';
+        char c = src[i];
+        if (c == '\n') { dst[j++] = '\\'; dst[j++] = 'n'; }
+        else if (c == '\t') { dst[j++] = '\\'; dst[j++] = 't'; }
+        else if (c == '\r') { dst[j++] = '\\'; dst[j++] = 'r'; }
+        else if (c == '\\') { dst[j++] = '\\'; dst[j++] = '\\'; }
+        else if (c == '"') { dst[j++] = '\\'; dst[j++] = '"'; }
+        else dst[j++] = c;
+    }
+    dst[j] = '\0';
+}
+
+static void unescape_string(char *dst, const char *src) {
+    int i = 0, j = 0;
+    while (src[i] != '\0') {
+        if (src[i] == '\\') {
+            i++;
+            if (src[i] == 'n') dst[j++] = '\n';
+            else if (src[i] == 't') dst[j++] = '\t';
+            else if (src[i] == 'r') dst[j++] = '\r';
+            else if (src[i] == '\\') dst[j++] = '\\';
+            else if (src[i] == '"') dst[j++] = '"';
+            else dst[j++] = src[i];
         } else {
             dst[j++] = src[i];
         }
+        i++;
     }
     dst[j] = '\0';
+}
+
+static int find_arg(const char *line, const char *key, char *val_buf) {
+    const char *p = strstr(line, key);
+    if (!p) {
+        val_buf[0] = '\0';
+        return 0;
+    }
+    p += strlen(key);
+    if (*p == '"') {
+        int i = 0;
+        p++;
+        while (*p && *p != '"') {
+            if (*p == '\\') {
+                p++;
+                if (*p == 'n') val_buf[i++] = '\n';
+                else if (*p == 't') val_buf[i++] = '\t';
+                else if (*p == 'r') val_buf[i++] = '\r';
+                else if (*p == '\\') val_buf[i++] = '\\';
+                else if (*p == '"') val_buf[i++] = '"';
+                else val_buf[i++] = *p;
+            } else {
+                val_buf[i++] = *p;
+            }
+            p++;
+        }
+        val_buf[i] = '\0';
+    } else {
+        int i = 0;
+        while (*p && *p != ' ' && *p != '\t' && *p != '\n' && *p != '\r') {
+            val_buf[i++] = *p;
+            p++;
+        }
+        val_buf[i] = '\0';
+    }
+    return 1;
+}
+
+static long long find_arg_int(const char *line, const char *key, long long default_val) {
+    char buf[256];
+    if (find_arg(line, key, buf)) {
+        return atoll(buf);
+    }
+    return default_val;
+}
+
+static int parse_id_list(const char *str, int *out_ids, int max_ids) {
+    int count = 0;
+    const char *p = str;
+    while (*p && count < max_ids) {
+        out_ids[count++] = atoi(p);
+        p = strchr(p, ',');
+        if (!p) break;
+        p++;
+    }
+    return count;
+}
+
+static int parse_string_list(const char *str, char out_names[][IR_NAME_MAX], int max_names) {
+    int count = 0;
+    const char *p = str;
+    while (*p && count < max_names) {
+        int i = 0;
+        if (*p == '"') p++;
+        while (*p && *p != '"' && i < IR_NAME_MAX - 1) {
+            out_names[count][i++] = *p++;
+        }
+        out_names[count][i] = '\0';
+        if (*p == '"') p++;
+        count++;
+        if (*p == ',') p++;
+        else break;
+    }
+    return count;
+}
+
+static int parse_phi_list(const char *str, ir_phi_operand_t *ops, int max_ops) {
+    int count = 0;
+    const char *p = str;
+    while (*p && count < max_ops) {
+        int i = 0;
+        if (*p == '"') p++;
+        while (*p && *p != '"' && i < IR_NAME_MAX - 1) {
+            ops[count].value[i++] = *p++;
+        }
+        ops[count].value[i] = '\0';
+        if (*p == '"') p++;
+        if (*p == ':') p++;
+        if (*p == '"') p++;
+        i = 0;
+        while (*p && *p != '"' && i < IR_LABEL_MAX - 1) {
+            ops[count].block[i++] = *p++;
+        }
+        ops[count].block[i] = '\0';
+        if (*p == '"') p++;
+        count++;
+        if (*p == ',') p++;
+        else break;
+    }
+    return count;
 }
 
 static int get_gvar_size(const struct Node *gvar) {
@@ -418,108 +371,61 @@ static int get_gvar_size(const struct Node *gvar) {
     return type_size(gvar->type);
 }
 
-static void serialize_initializer(FILE *fp, const struct Node *init) {
-    if (!init) {
-        fprintf(fp, "null");
-        return;
+/* ========================================================================= */
+/* TYPE & NODE GRAPH TRAVERSAL                                              */
+/* ========================================================================= */
+
+#define MAX_TYPES_LIST 65536
+static Type *types_list_ser[MAX_TYPES_LIST];
+static int num_types_ser = 0;
+
+static int collect_type(Type *t) {
+    int i;
+    if (!t) return -1;
+    for (i = 0; i < num_types_ser; i++) {
+        if (types_list_ser[i] == t) return i;
     }
-    fprintf(fp, "{\n");
-    fprintf(fp, "        \"kind\": %d,\n", init->kind);
-    fprintf(fp, "        \"int_val\": %lld,\n", init->int_val);
-    fprintf(fp, "        \"f_val\": %g,\n", init->f_val);
-    fprintf(fp, "        \"str_id\": %d,\n", init->str_id);
-    
-    char escaped_name[256];
-    escape_json_string(escaped_name, init->name);
-    fprintf(fp, "        \"name\": \"%s\"", escaped_name);
-    
-    if (init->kind == 63 /* ND_INIT_LIST */) {
-        fprintf(fp, ",\n        \"num_args\": %d,\n", init->num_args);
-        fprintf(fp, "        \"args\": [\n");
-        for (int i = 0; i < init->num_args; i++) {
-            fprintf(fp, "          ");
-            serialize_initializer(fp, init->args[i]);
-            if (i + 1 < init->num_args) fprintf(fp, ",\n");
-        }
-        fprintf(fp, "\n        ]");
+    if (num_types_ser >= MAX_TYPES_LIST) {
+        fprintf(stderr, "ir_serialization: too many unique types\n");
+        exit(1);
     }
-    if (init->lhs) {
-        fprintf(fp, ",\n        \"lhs\": ");
-        serialize_initializer(fp, init->lhs);
+    int id = num_types_ser++;
+    types_list_ser[id] = t;
+    if (t->base) collect_type(t->base);
+    if (t->ret) collect_type(t->ret);
+    for (i = 0; i < t->num_params; i++) {
+        collect_type(t->params[i]);
     }
-    if (init->rhs) {
-        fprintf(fp, ",\n        \"rhs\": ");
-        serialize_initializer(fp, init->rhs);
+    StructField *f = t->fields;
+    while (f) {
+        collect_type(f->type);
+        f = f->next;
     }
-    fprintf(fp, "\n      }");
+    return id;
 }
 
-static struct Node *deserialize_initializer_val(json_lexer_t *lex, struct Compiler *cc, tok_kind_t first_tok) {
-    if (first_tok != TOK_LBRACE) return NULL;
-    
-    extern void *cc_alloc(struct Compiler *cc, int size);
-    
-    struct Node *n = (struct Node *)cc_alloc(cc, sizeof(struct Node));
-    memset(n, 0, sizeof(struct Node));
-    n->magic = 0x1122334455667788ULL;
-    
-    tok_kind_t tok;
-    while (1) {
-        tok = lex_next(lex);
-        if (tok == TOK_COMMA) continue;
-        if (tok == TOK_RBRACE) break;
-        if (tok != TOK_STRING) return NULL;
-        
-        char key[256];
-        strcpy(key, lex->val_str);
-        
-        if (!parse_expect(lex, TOK_COLON)) return NULL;
-        
-        if (strcmp(key, "kind") == 0) {
-            if (!parse_expect(lex, TOK_NUMBER)) return NULL;
-            n->kind = (int)lex->val_int;
-        } else if (strcmp(key, "int_val") == 0) {
-            if (!parse_expect(lex, TOK_NUMBER)) return NULL;
-            n->int_val = lex->val_int;
-        } else if (strcmp(key, "f_val") == 0) {
-            if (!parse_expect(lex, TOK_NUMBER)) return NULL;
-            n->f_val = atof(lex->val_str);
-        } else if (strcmp(key, "str_id") == 0) {
-            if (!parse_expect(lex, TOK_NUMBER)) return NULL;
-            n->str_id = (int)lex->val_int;
-        } else if (strcmp(key, "name") == 0) {
-            if (!parse_expect(lex, TOK_STRING)) return NULL;
-            strcpy(n->name, lex->val_str);
-        } else if (strcmp(key, "num_args") == 0) {
-            if (!parse_expect(lex, TOK_NUMBER)) return NULL;
-            n->num_args = (int)lex->val_int;
-        } else if (strcmp(key, "args") == 0) {
-            if (!parse_expect(lex, TOK_LBRACK)) return NULL;
-            n->args = (struct Node **)cc_alloc(cc, (n->num_args > 0 ? n->num_args : 1) * sizeof(struct Node *));
-            int idx = 0;
-            while (1) {
-                tok = lex_next(lex);
-                if (tok == TOK_RBRACK) break;
-                if (tok == TOK_COMMA) continue;
-                if (tok == TOK_LBRACE) {
-                    struct Node *child = deserialize_initializer_val(lex, cc, tok);
-                    if (idx < n->num_args) {
-                        n->args[idx++] = child;
-                    }
-                }
-            }
-        } else if (strcmp(key, "lhs") == 0) {
-            tok = lex_next(lex);
-            n->lhs = deserialize_initializer_val(lex, cc, tok);
-        } else if (strcmp(key, "rhs") == 0) {
-            tok = lex_next(lex);
-            n->rhs = deserialize_initializer_val(lex, cc, tok);
-        } else {
-            tok = lex_next(lex);
-            skip_json_value(lex, tok);
-        }
+#define MAX_NODES_LIST 1048576
+static Node *nodes_list_ser[MAX_NODES_LIST];
+static int num_nodes_ser = 0;
+
+static int collect_node(Node *n) {
+    int i;
+    if (!n) return -1;
+    for (i = 0; i < num_nodes_ser; i++) {
+        if (nodes_list_ser[i] == n) return i;
     }
-    return n;
+    if (num_nodes_ser >= MAX_NODES_LIST) {
+        fprintf(stderr, "ir_serialization: too many unique initializer nodes\n");
+        exit(1);
+    }
+    int id = num_nodes_ser++;
+    nodes_list_ser[id] = n;
+    if (n->lhs) collect_node(n->lhs);
+    if (n->rhs) collect_node(n->rhs);
+    for (i = 0; i < n->num_args; i++) {
+        collect_node(n->args[i]);
+    }
+    return id;
 }
 
 /* ========================================================================= */
@@ -528,595 +434,542 @@ static struct Node *deserialize_initializer_val(json_lexer_t *lex, struct Compil
 
 int ir_serialize_json(const ir_module_t *mod, const char *out_filename, const char *source_file, const struct Compiler *cc) {
     FILE *fp = fopen(out_filename, "w");
-    int f_idx;
+    int i, j;
     if (!fp) {
         return -1;
     }
 
-    fprintf(fp, "{\n");
-    fprintf(fp, "  \"zcc_ir_version\": \"1.0.0\",\n");
-    
-    char escaped_source[2048];
-    escape_json_string(escaped_source, source_file);
-    fprintf(fp, "  \"source\": \"%s\",\n", escaped_source);
-    
-    /* Serialize Strings Table */
-    if (cc && cc->num_strings > 0) {
-        fprintf(fp, "  \"strings\": [\n");
-        for (int i = 0; i < cc->num_strings; i++) {
-            char escaped_data[8192];
-            escape_json_string(escaped_data, cc->strings[i].data);
-            fprintf(fp, "    {\n");
-            fprintf(fp, "      \"label_id\": %d,\n", cc->strings[i].label_id);
-            fprintf(fp, "      \"data\": \"%s\",\n", escaped_data);
-            fprintf(fp, "      \"len\": %d\n", cc->strings[i].len);
-            fprintf(fp, "    }%s\n", (i + 1 < cc->num_strings) ? "," : "");
-        }
-        fprintf(fp, "  ],\n");
-    } else {
-        fprintf(fp, "  \"strings\": [],\n");
-    }
-    
-    /* Serialize Global Variables */
-    if (cc && cc->num_globals > 0) {
-        fprintf(fp, "  \"globals\": [\n");
-        int emitted_globals = 0;
-        for (int i = 0; i < cc->num_globals; i++) {
-            const struct Node *gvar = cc->globals[i];
-            if (!gvar || gvar->kind != 61 /* ND_GLOBAL_VAR */) continue;
-            if (gvar->is_extern) continue;
-            
-            if (emitted_globals > 0) fprintf(fp, ",\n");
-            emitted_globals++;
-            
-            char escaped_name[256];
-            escape_json_string(escaped_name, gvar->name);
-            fprintf(fp, "    {\n");
-            fprintf(fp, "      \"name\": \"%s\",\n", escaped_name);
-            fprintf(fp, "      \"size\": %d,\n", get_gvar_size(gvar));
-            fprintf(fp, "      \"is_static\": %s,\n", gvar->is_static ? "true" : "false");
-            fprintf(fp, "      \"is_extern\": %s,\n", gvar->is_extern ? "true" : "false");
-            fprintf(fp, "      \"initializer\": ");
-            serialize_initializer(fp, gvar->initializer);
-            fprintf(fp, "\n    }");
-        }
-        fprintf(fp, "\n  ],\n");
-    } else {
-        fprintf(fp, "  \"globals\": [],\n");
-    }
-    
-    fprintf(fp, "  \"functions\": [\n");
-    
-    for (f_idx = 0; f_idx < mod->func_count; f_idx++) {
-        ir_func_t *fn = mod->funcs[f_idx];
-        fprintf(fp, "    {\n");
-        
-        char escaped_name[256];
-        escape_json_string(escaped_name, fn->name);
-        fprintf(fp, "      \"name\": \"%s\",\n", escaped_name);
-        fprintf(fp, "      \"ret_type\": \"%s\",\n", ir_type_name(fn->ret_type));
-        fprintf(fp, "      \"num_params\": %d,\n", fn->num_params);
-        
-        fprintf(fp, "      \"param_names\": [");
-        int p_idx;
-        for (p_idx = 0; p_idx < fn->num_params; p_idx++) {
-            char escaped_param[256];
-            escape_json_string(escaped_param, fn->param_names[p_idx]);
-            fprintf(fp, "\"%s\"%s", escaped_param, (p_idx + 1 < fn->num_params) ? ", " : "");
-        }
-        fprintf(fp, "],\n");
+    fprintf(fp, "; ZCC IR Graph v1.0.0\n");
+    fprintf(fp, "; source: \"%s\"\n\n", source_file);
 
-        /* Build CFG */
+    /* 1. Strings Table */
+    if (cc && cc->num_strings > 0) {
+        for (i = 0; i < cc->num_strings; i++) {
+            char esc[MAX_STR];
+            escape_string(esc, cc->strings[i].data);
+            fprintf(fp, "string label_id=%d len=%d data=\"%s\"\n", cc->strings[i].label_id, cc->strings[i].len, esc);
+        }
+        fprintf(fp, "\n");
+    }
+
+    /* Collect types and nodes */
+    num_types_ser = 0;
+    num_nodes_ser = 0;
+    if (cc) {
+        for (i = 0; i < cc->num_globals; i++) {
+            Node *gvar = cc->globals[i];
+            if (gvar && gvar->kind == 61 /* ND_GLOBAL_VAR */) {
+                if (gvar->is_extern) continue;
+                collect_type(gvar->type);
+                if (gvar->initializer) {
+                    collect_node(gvar->initializer);
+                }
+            }
+        }
+        /* Collect types inside collected nodes as well */
+        for (i = 0; i < num_nodes_ser; i++) {
+            collect_type(nodes_list_ser[i]->type);
+        }
+    }
+
+    /* 2. Type Table declarations */
+    for (i = 0; i < num_types_ser; i++) {
+        Type *t = types_list_ser[i];
+        fprintf(fp, "type %d kind=%d size=%d align=%d is_complete=%d is_packed=%d explicit_align=%d is_tbfp=%d array_len=%d",
+                i, t->kind, t->size, t->align, t->is_complete, t->is_packed, t->explicit_align, t->is_tbfp, t->array_len);
+        if (t->tag[0]) {
+            char esc[256];
+            escape_string(esc, t->tag);
+            fprintf(fp, " tag=\"%s\"", esc);
+        }
+        fprintf(fp, "\n");
+    }
+
+    /* type links */
+    for (i = 0; i < num_types_ser; i++) {
+        Type *t = types_list_ser[i];
+        if (t->base || t->ret || t->num_params > 0) {
+            fprintf(fp, "type_link %d base=%d ret=%d", i, collect_type(t->base), collect_type(t->ret));
+            if (t->num_params > 0) {
+                fprintf(fp, " params=");
+                for (j = 0; j < t->num_params; j++) {
+                    fprintf(fp, "%d%s", collect_type(t->params[j]), (j + 1 < t->num_params) ? "," : "");
+                }
+            }
+            fprintf(fp, "\n");
+        }
+    }
+
+    /* type fields */
+    for (i = 0; i < num_types_ser; i++) {
+        Type *t = types_list_ser[i];
+        StructField *f = t->fields;
+        while (f) {
+            char esc[256];
+            escape_string(esc, f->name);
+            fprintf(fp, "type_field %d name=\"%s\" type=%d offset=%d is_bitfield=%d bit_offset=%d bit_size=%d\n",
+                    i, esc, collect_type(f->type), f->offset, f->is_bitfield, f->bit_offset, f->bit_size);
+            f = f->next;
+        }
+    }
+    fprintf(fp, "\n");
+
+    /* 3. Initializer Nodes */
+    for (i = 0; i < num_nodes_ser; i++) {
+        Node *n = nodes_list_ser[i];
+        fprintf(fp, "init_node %d kind=%d type=%d int_val=%lld f_val=%g str_id=%d",
+                i, n->kind, collect_type(n->type), n->int_val, n->f_val, n->str_id);
+        if (n->name[0]) {
+            char esc[256];
+            escape_string(esc, n->name);
+            fprintf(fp, " name=\"%s\"", esc);
+        }
+        fprintf(fp, "\n");
+    }
+
+    /* initializer links */
+    for (i = 0; i < num_nodes_ser; i++) {
+        Node *n = nodes_list_ser[i];
+        if (n->lhs || n->rhs || n->num_args > 0) {
+            fprintf(fp, "init_link %d lhs=%d rhs=%d", i, collect_node(n->lhs), collect_node(n->rhs));
+            if (n->num_args > 0) {
+                fprintf(fp, " args=");
+                for (j = 0; j < n->num_args; j++) {
+                    fprintf(fp, "%d%s", collect_node(n->args[j]), (j + 1 < n->num_args) ? "," : "");
+                }
+            }
+            fprintf(fp, "\n");
+        }
+    }
+    fprintf(fp, "\n");
+
+    /* 4. Global Variables */
+    if (cc) {
+        for (i = 0; i < cc->num_globals; i++) {
+            Node *gvar = cc->globals[i];
+            if (gvar && gvar->kind == 61 /* ND_GLOBAL_VAR */) {
+                if (gvar->is_extern) continue;
+                char esc[256];
+                escape_string(esc, gvar->name);
+                fprintf(fp, "global name=\"%s\" type=%d static=%d extern=%d init=%d\n",
+                        esc, collect_type(gvar->type), gvar->is_static, gvar->is_extern, collect_node(gvar->initializer));
+            }
+        }
+        fprintf(fp, "\n");
+    }
+
+    /* 5. Functions, Blocks, and Instructions */
+    for (int f_idx = 0; f_idx < mod->func_count; f_idx++) {
+        ir_func_t *fn = mod->funcs[f_idx];
+        char esc[256];
+        escape_string(esc, fn->name);
+        fprintf(fp, "func name=\"%s\" ret=%s num_params=%d", esc, ir_type_name(fn->ret_type), fn->num_params);
+        if (fn->num_params > 0) {
+            fprintf(fp, " params=");
+            for (j = 0; j < fn->num_params; j++) {
+                char esc_p[256];
+                escape_string(esc_p, fn->param_names[j]);
+                fprintf(fp, "\"%s\"%s", esc_p, (j + 1 < fn->num_params) ? "," : "");
+            }
+        }
+        fprintf(fp, "\n");
+
         dom_cfg_t cfg;
         memset(&cfg, 0, sizeof(dom_cfg_t));
         dom_build_cfg(&cfg, fn);
 
-        fprintf(fp, "      \"blocks\": [\n");
-        int b_idx;
-        for (b_idx = 0; b_idx < cfg.block_count; b_idx++) {
-            dom_bb_t *bb = &cfg.blocks[b_idx];
-            fprintf(fp, "        {\n");
-            fprintf(fp, "          \"id\": %d,\n", bb->id);
-            
-            char escaped_label[256];
-            escape_json_string(escaped_label, bb->label);
-            fprintf(fp, "          \"label\": \"%s\",\n", escaped_label);
-            
-            /* Predecessors */
-            fprintf(fp, "          \"preds\": [");
-            int pr_idx;
-            for (pr_idx = 0; pr_idx < bb->pred_count; pr_idx++) {
-                fprintf(fp, "%d%s", bb->pred[pr_idx], (pr_idx + 1 < bb->pred_count) ? ", " : "");
+        for (i = 0; i < cfg.block_count; i++) {
+            dom_bb_t *bb = &cfg.blocks[i];
+            char esc_lbl[256];
+            escape_string(esc_lbl, bb->label);
+            fprintf(fp, "block id=%d label=\"%s\"", bb->id, esc_lbl);
+            fprintf(fp, " preds=");
+            for (j = 0; j < bb->pred_count; j++) {
+                fprintf(fp, "%d%s", bb->pred[j], (j + 1 < bb->pred_count) ? "," : "");
             }
-            fprintf(fp, "],\n");
-
-            /* Successors */
-            fprintf(fp, "          \"succs\": [");
-            int sc_idx;
-            for (sc_idx = 0; sc_idx < bb->succ_count; sc_idx++) {
-                fprintf(fp, "%d%s", bb->succ[sc_idx], (sc_idx + 1 < bb->succ_count) ? ", " : "");
+            fprintf(fp, " succs=");
+            for (j = 0; j < bb->succ_count; j++) {
+                fprintf(fp, "%d%s", bb->succ[j], (j + 1 < bb->succ_count) ? "," : "");
             }
-            fprintf(fp, "],\n");
+            fprintf(fp, "\n");
 
-            /* Instructions under this block */
-            fprintf(fp, "          \"instructions\": [\n");
             ir_node_t *n = bb->first;
             while (n) {
-                fprintf(fp, "            {\n");
-                fprintf(fp, "              \"op\": \"%s\",\n", ir_op_name(n->op));
-                fprintf(fp, "              \"type\": \"%s\",\n", ir_type_name(n->type));
-                
-                char esc_dst[256], esc_src1[256], esc_src2[256];
-                char esc_lbl[256], esc_lbl2[256], esc_asm[4096];
-                escape_json_string(esc_dst, n->dst);
-                escape_json_string(esc_src1, n->src1);
-                escape_json_string(esc_src2, n->src2);
-                escape_json_string(esc_lbl, n->label);
-                escape_json_string(esc_lbl2, n->label2);
-                
-                fprintf(fp, "              \"dst\": \"%s\",\n", esc_dst);
-                fprintf(fp, "              \"src1\": \"%s\",\n", esc_src1);
-                fprintf(fp, "              \"src2\": \"%s\",\n", esc_src2);
-                fprintf(fp, "              \"label\": \"%s\",\n", esc_lbl);
-                fprintf(fp, "              \"label2\": \"%s\",\n", esc_lbl2);
-                
-                if (n->asm_string) {
-                    escape_json_string(esc_asm, n->asm_string);
-                    fprintf(fp, "              \"asm_string\": \"%s\",\n", esc_asm);
-                } else {
-                    fprintf(fp, "              \"asm_string\": \"\",\n");
-                }
-                
-                fprintf(fp, "              \"imm\": %ld,\n", n->imm);
-                fprintf(fp, "              \"lineno\": %d,\n", n->lineno);
-                fprintf(fp, "              \"tag\": %d,\n", n->tag);
-                fprintf(fp, "              \"vuln_tags\": %u%s\n", n->vuln_tags, (n->phi_count > 0) ? "," : "");
+                char esc_dst[256], esc_src1[256], esc_src2[256], esc_l1[256], esc_l2[256];
+                escape_string(esc_dst, n->dst);
+                escape_string(esc_src1, n->src1);
+                escape_string(esc_src2, n->src2);
+                escape_string(esc_l1, n->label);
+                escape_string(esc_l2, n->label2);
+
+                fprintf(fp, "  inst op=%s type=%s dst=\"%s\" src1=\"%s\" src2=\"%s\" label=\"%s\" label2=\"%s\" imm=%ld lineno=%d tag=%d vuln_tags=%u flags=%u",
+                        ir_op_name(n->op), ir_type_name(n->type), esc_dst, esc_src1, esc_src2, esc_l1, esc_l2, n->imm, n->lineno, n->tag, n->vuln_tags, n->flags);
 
                 if (n->phi_count > 0) {
-                    fprintf(fp, "              \"phi_ops\": [\n");
-                    int phi_idx;
-                    for (phi_idx = 0; phi_idx < n->phi_count; phi_idx++) {
-                        char esc_phi_val[256], esc_phi_blk[256];
-                        escape_json_string(esc_phi_val, n->phi_ops[phi_idx].value);
-                        escape_json_string(esc_phi_blk, n->phi_ops[phi_idx].block);
-                        fprintf(fp, "                {\"value\": \"%s\", \"block\": \"%s\"}%s\n",
-                                esc_phi_val, esc_phi_blk, (phi_idx + 1 < n->phi_count) ? "," : "");
+                    fprintf(fp, " phi=");
+                    for (j = 0; j < n->phi_count; j++) {
+                        char esc_v[256], esc_b[256];
+                        escape_string(esc_v, n->phi_ops[j].value);
+                        escape_string(esc_b, n->phi_ops[j].block);
+                        fprintf(fp, "\"%s\":\"%s\"%s", esc_v, esc_b, (j + 1 < n->phi_count) ? "," : "");
                     }
-                    fprintf(fp, "              ]\n");
                 }
-                
-                fprintf(fp, "            }%s\n", (n == bb->last) ? "" : ",");
-                
+
+                if (n->asm_string) {
+                    char esc_asm[4096];
+                    escape_string(esc_asm, n->asm_string);
+                    fprintf(fp, " asm=\"%s\"", esc_asm);
+                }
+
+                fprintf(fp, "\n");
+
                 if (n == bb->last) break;
                 n = n->next;
             }
-            fprintf(fp, "          ]\n");
-            
-            fprintf(fp, "        }%s\n", (b_idx + 1 < cfg.block_count) ? "," : "");
         }
-        fprintf(fp, "      ]\n");
-        
-        fprintf(fp, "    }%s\n", (f_idx + 1 < mod->func_count) ? "," : "");
+        fprintf(fp, "end func\n\n");
     }
-    
-    fprintf(fp, "  ]\n");
-    fprintf(fp, "}\n");
 
     fclose(fp);
     return 0;
 }
 
+static Symbol *local_scope_find(Compiler *cc, const char *name) {
+    Scope *s;
+    Symbol *sym;
+    if (!cc) return NULL;
+    s = cc->current_scope;
+    while (s) {
+        sym = s->symbols;
+        while (sym) {
+            if (strcmp(sym->name, name) == 0) return sym;
+            sym = sym->next;
+        }
+        s = s->parent;
+    }
+    return NULL;
+}
+
 int ir_deserialize_json(ir_module_t *mod, const char *in_filename, struct Compiler *cc) {
     FILE *fp = fopen(in_filename, "r");
-    tok_kind_t tok;
+    char line[32768];
+    Type **types_list = NULL;
+    Node **nodes_list = NULL;
+    ir_func_t *curr_fn = NULL;
+
     if (!fp) {
-        fprintf(stderr, "cannot open IR json file %s\n", in_filename);
+        fprintf(stderr, "ir_serialization: cannot open input file %s\n", in_filename);
         return -1;
     }
-    
-    json_lexer_t lex;
-    lex_init(&lex, fp);
-    
-    tok = lex_next(&lex);
-    if (tok != TOK_LBRACE) {
-        fclose(fp);
-        return -1;
-    }
-    
-    /* Parse module object keys */
-    while (1) {
-        tok = lex_next(&lex);
-        if (tok == TOK_COMMA) continue;
-        if (tok == TOK_RBRACE) break; /* end of module object */
-        if (tok != TOK_STRING) {
-            fclose(fp);
-            return -1;
-        }
-        
-        char key[256];
-        strcpy(key, lex.val_str);
-        
-        if (!parse_expect(&lex, TOK_COLON)) {
-            fclose(fp);
-            return -1;
-        }
-        
-        if (strcmp(key, "strings") == 0) {
-            if (!parse_expect(&lex, TOK_LBRACK)) {
-                fclose(fp);
-                return -1;
-            }
-            while (1) {
-                tok = lex_next(&lex);
-                if (tok == TOK_RBRACK) break;
-                if (tok == TOK_COMMA) continue;
-                if (tok != TOK_LBRACE) {
-                    fclose(fp);
-                    return -1;
-                }
-                int lbl_id = 0;
-                char str_data[8192] = "";
-                int str_len = 0;
-                while (1) {
-                    tok = lex_next(&lex);
-                    if (tok == TOK_COMMA) continue;
-                    if (tok == TOK_RBRACE) break;
-                    if (tok != TOK_STRING) { fclose(fp); return -1; }
-                    char skey[256];
-                    strcpy(skey, lex.val_str);
-                    if (!parse_expect(&lex, TOK_COLON)) { fclose(fp); return -1; }
-                    if (strcmp(skey, "label_id") == 0) {
-                        if (!parse_expect(&lex, TOK_NUMBER)) { fclose(fp); return -1; }
-                        lbl_id = (int)lex.val_int;
-                    } else if (strcmp(skey, "data") == 0) {
-                        if (!parse_expect(&lex, TOK_STRING)) { fclose(fp); return -1; }
-                        strcpy(str_data, lex.val_str);
-                    } else if (strcmp(skey, "len") == 0) {
-                        if (!parse_expect(&lex, TOK_NUMBER)) { fclose(fp); return -1; }
-                        str_len = (int)lex.val_int;
-                    } else {
-                        tok = lex_next(&lex);
-                        skip_json_value(&lex, tok);
-                    }
-                }
-                if (cc && cc->num_strings < MAX_STRINGS) {
-                    struct StringEntry *se = &cc->strings[cc->num_strings++];
-                    se->label_id = lbl_id;
-                    se->len = str_len;
-                    extern void *cc_alloc(struct Compiler *cc, int size);
-                    se->data = (char *)cc_alloc(cc, str_len + 1);
-                    memcpy(se->data, str_data, str_len);
-                    se->data[str_len] = '\0';
-                }
-            }
-        } else if (strcmp(key, "globals") == 0) {
-            if (!parse_expect(&lex, TOK_LBRACK)) {
-                fclose(fp);
-                return -1;
-            }
-            while (1) {
-                tok = lex_next(&lex);
-                if (tok == TOK_RBRACK) break;
-                if (tok == TOK_COMMA) continue;
-                if (tok != TOK_LBRACE) {
-                    fclose(fp);
-                    return -1;
-                }
-                char gname[256] = "";
-                int gsize = 8;
-                int gstatic = 0;
-                int gextern = 0;
-                struct Node *ginit = NULL;
-                while (1) {
-                    tok = lex_next(&lex);
-                    if (tok == TOK_COMMA) continue;
-                    if (tok == TOK_RBRACE) break;
-                    if (tok != TOK_STRING) { fclose(fp); return -1; }
-                    char gkey[256];
-                    strcpy(gkey, lex.val_str);
-                    if (!parse_expect(&lex, TOK_COLON)) { fclose(fp); return -1; }
-                    if (strcmp(gkey, "name") == 0) {
-                        if (!parse_expect(&lex, TOK_STRING)) { fclose(fp); return -1; }
-                        strcpy(gname, lex.val_str);
-                    } else if (strcmp(gkey, "size") == 0) {
-                        if (!parse_expect(&lex, TOK_NUMBER)) { fclose(fp); return -1; }
-                        gsize = (int)lex.val_int;
-                    } else if (strcmp(gkey, "is_static") == 0) {
-                        tok = lex_next(&lex);
-                        gstatic = (tok == TOK_TRUE || (tok == TOK_NUMBER && lex.val_int != 0));
-                    } else if (strcmp(gkey, "is_extern") == 0) {
-                        tok = lex_next(&lex);
-                        gextern = (tok == TOK_TRUE || (tok == TOK_NUMBER && lex.val_int != 0));
-                    } else if (strcmp(gkey, "initializer") == 0) {
-                        tok = lex_next(&lex);
-                        ginit = deserialize_initializer_val(&lex, cc, tok);
-                    } else {
-                        tok = lex_next(&lex);
-                        skip_json_value(&lex, tok);
-                    }
-                }
-                if (cc && cc->num_globals < MAX_GLOBALS) {
-                    extern void *cc_alloc(struct Compiler *cc, int size);
-                    struct Node *gvar = (struct Node *)cc_alloc(cc, sizeof(struct Node));
-                    memset(gvar, 0, sizeof(struct Node));
-                    gvar->magic = 0x1122334455667788ULL;
-                    gvar->kind = 61; /* ND_GLOBAL_VAR */
-                    strcpy(gvar->name, gname);
-                    gvar->is_static = gstatic;
-                    gvar->is_extern = gextern;
-                    struct Type *t = (struct Type *)cc_alloc(cc, sizeof(struct Type));
-                    memset(t, 0, sizeof(struct Type));
-                    t->magic = 0x8877665544332211ULL;
-                    t->size = gsize;
-                    if (gsize == 1) t->kind = 1;
-                    else if (gsize == 2) t->kind = 3;
-                    else if (gsize == 4) t->kind = 5;
-                    else t->kind = 7;
-                    gvar->type = t;
-                    gvar->initializer = ginit;
-                    cc->globals[cc->num_globals++] = gvar;
-                }
-            }
-        } else if (strcmp(key, "functions") == 0) {
-            if (!parse_expect(&lex, TOK_LBRACK)) {
-                fclose(fp);
-                return -1;
-            }
-            
-            /* Parse functions array */
-            while (1) {
-                tok = lex_next(&lex);
-                if (tok == TOK_RBRACK) break; /* end of functions array */
-                if (tok == TOK_COMMA) continue;
-                if (tok != TOK_LBRACE) {
-                    fclose(fp);
-                    return -1;
-                }
-                
-                /* Parse function object keys */
-                char fn_name[256] = "";
-                ir_type_t fn_ret = IR_TY_VOID;
-                int fn_num_params = 0;
-                char fn_param_names[8][IR_NAME_MAX];
-                memset(fn_param_names, 0, sizeof(fn_param_names));
-                
-                ir_func_t *fn = NULL;
-                
-                while (1) {
-                    tok = lex_next(&lex);
-                    if (tok == TOK_COMMA) continue;
-                    if (tok == TOK_RBRACE) break; /* end of function object */
-                    if (tok != TOK_STRING) {
-                        fclose(fp);
-                        return -1;
-                    }
-                    
-                    char fkey[256];
-                    strcpy(fkey, lex.val_str);
-                    
-                    if (!parse_expect(&lex, TOK_COLON)) {
-                        fclose(fp);
-                        return -1;
-                    }
-                    
-                    if (strcmp(fkey, "name") == 0) {
-                        if (!parse_expect(&lex, TOK_STRING)) { fclose(fp); return -1; }
-                        strcpy(fn_name, lex.val_str);
-                    } else if (strcmp(fkey, "ret_type") == 0) {
-                        if (!parse_expect(&lex, TOK_STRING)) { fclose(fp); return -1; }
-                        int t;
-                        for (t = 0; t < 12; t++) {
-                            if (strcmp(ir_type_name(t), lex.val_str) == 0) {
-                                fn_ret = (ir_type_t)t;
-                                break;
-                            }
-                        }
-                    } else if (strcmp(fkey, "num_params") == 0) {
-                        if (!parse_expect(&lex, TOK_NUMBER)) { fclose(fp); return -1; }
-                        fn_num_params = (int)lex.val_int;
-                    } else if (strcmp(fkey, "param_names") == 0) {
-                        if (!parse_expect(&lex, TOK_LBRACK)) { fclose(fp); return -1; }
-                        int p_count = 0;
-                        while (1) {
-                            tok = lex_next(&lex);
-                            if (tok == TOK_RBRACK) break;
-                            if (tok == TOK_COMMA) continue;
-                            if (tok == TOK_STRING) {
-                                if (p_count < 8) {
-                                    strcpy(fn_param_names[p_count], lex.val_str);
-                                }
-                                p_count++;
-                            }
-                        }
-                    } else if (strcmp(fkey, "blocks") == 0) {
-                        if (!fn) {
-                            fn = ir_func_create(mod, fn_name, fn_ret, fn_num_params);
-                            int p;
-                            for (p = 0; p < fn_num_params && p < 8; p++) {
-                                strcpy(fn->param_names[p], fn_param_names[p]);
-                            }
-                        }
-                        
-                        if (!parse_expect(&lex, TOK_LBRACK)) { fclose(fp); return -1; }
-                        
-                        /* Parse blocks array */
-                        while (1) {
-                            tok = lex_next(&lex);
-                            if (tok == TOK_RBRACK) break;
-                            if (tok == TOK_COMMA) continue;
-                            if (tok != TOK_LBRACE) { fclose(fp); return -1; }
-                            
-                            /* Parse block object */
-                            while (1) {
-                                tok = lex_next(&lex);
-                                if (tok == TOK_COMMA) continue;
-                                if (tok == TOK_RBRACE) break;
-                                if (tok != TOK_STRING) { fclose(fp); return -1; }
-                                
-                                char bkey[256];
-                                strcpy(bkey, lex.val_str);
-                                
-                                if (!parse_expect(&lex, TOK_COLON)) { fclose(fp); return -1; }
-                                
-                                if (strcmp(bkey, "id") == 0) {
-                                    if (!parse_expect(&lex, TOK_NUMBER)) { fclose(fp); return -1; }
-                                } else if (strcmp(bkey, "label") == 0) {
-                                    if (!parse_expect(&lex, TOK_STRING)) { fclose(fp); return -1; }
-                                } else if (strcmp(bkey, "preds") == 0) {
-                                    if (!parse_expect(&lex, TOK_LBRACK)) { fclose(fp); return -1; }
-                                    while (1) {
-                                        tok = lex_next(&lex);
-                                        if (tok == TOK_RBRACK) break;
-                                    }
-                                } else if (strcmp(bkey, "succs") == 0) {
-                                    if (!parse_expect(&lex, TOK_LBRACK)) { fclose(fp); return -1; }
-                                    while (1) {
-                                        tok = lex_next(&lex);
-                                        if (tok == TOK_RBRACK) break;
-                                    }
-                                } else if (strcmp(bkey, "instructions") == 0) {
-                                    if (!parse_expect(&lex, TOK_LBRACK)) { fclose(fp); return -1; }
-                                    
-                                    /* Parse instructions array */
-                                    while (1) {
-                                        tok = lex_next(&lex);
-                                        if (tok == TOK_RBRACK) break;
-                                        if (tok == TOK_COMMA) continue;
-                                        if (tok != TOK_LBRACE) { fclose(fp); return -1; }
-                                        
-                                        /* Parse instruction object */
-                                        ir_node_t *n = ir_node_alloc();
-                                        
-                                        while (1) {
-                                            tok = lex_next(&lex);
-                                            if (tok == TOK_COMMA) continue;
-                                            if (tok == TOK_RBRACE) break;
-                                            if (tok != TOK_STRING) { fclose(fp); return -1; }
-                                            
-                                            char ikey[256];
-                                            strcpy(ikey, lex.val_str);
-                                            
-                                            if (!parse_expect(&lex, TOK_COLON)) { fclose(fp); return -1; }
-                                            
-                                            if (strcmp(ikey, "op") == 0) {
-                                                if (!parse_expect(&lex, TOK_STRING)) { fclose(fp); return -1; }
-                                                int o;
-                                                for (o = 0; o < IR_OP_COUNT; o++) {
-                                                    if (strcmp(ir_op_name(o), lex.val_str) == 0) {
-                                                        n->op = (ir_op_t)o;
-                                                        break;
-                                                    }
-                                                }
-                                            } else if (strcmp(ikey, "type") == 0) {
-                                                if (!parse_expect(&lex, TOK_STRING)) { fclose(fp); return -1; }
-                                                int t;
-                                                for (t = 0; t < 12; t++) {
-                                                    if (strcmp(ir_type_name(t), lex.val_str) == 0) {
-                                                        n->type = (ir_type_t)t;
-                                                        break;
-                                                    }
-                                                }
-                                            } else if (strcmp(ikey, "dst") == 0) {
-                                                if (!parse_expect(&lex, TOK_STRING)) { fclose(fp); return -1; }
-                                                strcpy(n->dst, lex.val_str);
-                                            } else if (strcmp(ikey, "src1") == 0) {
-                                                if (!parse_expect(&lex, TOK_STRING)) { fclose(fp); return -1; }
-                                                strcpy(n->src1, lex.val_str);
-                                            } else if (strcmp(ikey, "src2") == 0) {
-                                                if (!parse_expect(&lex, TOK_STRING)) { fclose(fp); return -1; }
-                                                strcpy(n->src2, lex.val_str);
-                                            } else if (strcmp(ikey, "label") == 0) {
-                                                if (!parse_expect(&lex, TOK_STRING)) { fclose(fp); return -1; }
-                                                strcpy(n->label, lex.val_str);
-                                            } else if (strcmp(ikey, "label2") == 0) {
-                                                if (!parse_expect(&lex, TOK_STRING)) { fclose(fp); return -1; }
-                                                strcpy(n->label2, lex.val_str);
-                                            } else if (strcmp(ikey, "asm_string") == 0) {
-                                                if (!parse_expect(&lex, TOK_STRING)) { fclose(fp); return -1; }
-                                                if (lex.val_str[0]) {
-                                                    n->asm_string = strdup(lex.val_str);
-                                                }
-                                            } else if (strcmp(ikey, "imm") == 0) {
-                                                if (!parse_expect(&lex, TOK_NUMBER)) { fclose(fp); return -1; }
-                                                n->imm = lex.val_int;
-                                            } else if (strcmp(ikey, "lineno") == 0) {
-                                                if (!parse_expect(&lex, TOK_NUMBER)) { fclose(fp); return -1; }
-                                                n->lineno = (int)lex.val_int;
-                                            } else if (strcmp(ikey, "tag") == 0) {
-                                                if (!parse_expect(&lex, TOK_NUMBER)) { fclose(fp); return -1; }
-                                                n->tag = (int)lex.val_int;
-                                            } else if (strcmp(ikey, "vuln_tags") == 0) {
-                                                if (!parse_expect(&lex, TOK_NUMBER)) { fclose(fp); return -1; }
-                                                n->vuln_tags = (unsigned int)lex.val_int;
-                                            } else if (strcmp(ikey, "phi_ops") == 0) {
-                                                if (!parse_expect(&lex, TOK_LBRACK)) { fclose(fp); return -1; }
-                                                
-                                                int p_cap = 4;
-                                                n->phi_ops = (ir_phi_operand_t *)calloc(p_cap, sizeof(ir_phi_operand_t));
-                                                n->phi_count = 0;
-                                                
-                                                while (1) {
-                                                    tok = lex_next(&lex);
-                                                    if (tok == TOK_RBRACK) break;
-                                                    if (tok == TOK_COMMA) continue;
-                                                    if (tok != TOK_LBRACE) { fclose(fp); return -1; }
-                                                    
-                                                    char p_val[256] = "";
-                                                    char p_blk[256] = "";
-                                                    
-                                                    while (1) {
-                                                        tok = lex_next(&lex);
-                                                        if (tok == TOK_RBRACE) break;
-                                                        if (tok == TOK_COMMA) continue;
-                                                        if (tok != TOK_STRING) { fclose(fp); return -1; }
-                                                        
-                                                        char pkey[256];
-                                                        strcpy(pkey, lex.val_str);
-                                                        
-                                                        if (!parse_expect(&lex, TOK_COLON)) { fclose(fp); return -1; }
-                                                        if (!parse_expect(&lex, TOK_STRING)) { fclose(fp); return -1; }
-                                                        
-                                                        if (strcmp(pkey, "value") == 0) {
-                                                            strcpy(p_val, lex.val_str);
-                                                        } else if (strcmp(pkey, "block") == 0) {
-                                                            strcpy(p_blk, lex.val_str);
-                                                        }
-                                                    }
-                                                    
-                                                    if (n->phi_count >= p_cap) {
-                                                        p_cap *= 2;
-                                                        n->phi_ops = (ir_phi_operand_t *)realloc(n->phi_ops, p_cap * sizeof(ir_phi_operand_t));
-                                                    }
-                                                    strcpy(n->phi_ops[n->phi_count].value, p_val);
-                                                    strcpy(n->phi_ops[n->phi_count].block, p_blk);
-                                                    n->phi_count++;
-                                                }
-                                                n->phi_capacity = p_cap;
-                                            } else {
-                                                tok_kind_t val_tok = lex_next(&lex);
-                                                skip_json_value(&lex, val_tok);
-                                            }
-                                        }
-                                        ir_append(fn, n);
-                                    }
-                                } else {
-                                    tok_kind_t val_tok = lex_next(&lex);
-                                    skip_json_value(&lex, val_tok);
-                                }
-                            }
-                        }
-                    } else {
-                        tok_kind_t val_tok = lex_next(&lex);
-                        skip_json_value(&lex, val_tok);
-                    }
-                }
-            }
-        } else {
-            tok_kind_t val_tok = lex_next(&lex);
-            skip_json_value(&lex, val_tok);
+
+    if (cc) {
+        if (!cc->current_scope) {
+            extern void *cc_alloc(struct Compiler *cc, int size);
+            Scope *gs = (Scope *)cc_alloc(cc, sizeof(Scope));
+            gs->parent = NULL;
+            gs->symbols = NULL;
+            cc->current_scope = gs;
         }
     }
-    
+
+    types_list = (Type **)calloc(65536, sizeof(Type *));
+    nodes_list = (Node **)calloc(1048576, sizeof(Node *));
+
+    /* PASS 1: Allocate Types, Nodes, Strings, and Globals skeleton */
+    while (fgets(line, sizeof(line), fp)) {
+        /* strip comment/whitespace */
+        char *p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p == ';' || *p == '\n' || *p == '\r' || *p == '\0') continue;
+
+        if (strncmp(p, "string", 6) == 0) {
+            int s_lbl = (int)find_arg_int(p, "label_id=", -1);
+            int s_len = (int)find_arg_int(p, "len=", 0);
+            char s_data[MAX_STR] = "";
+            find_arg(p, "data=", s_data);
+
+            if (cc && cc->num_strings < MAX_STRINGS) {
+                struct StringEntry *se = &cc->strings[cc->num_strings++];
+                se->label_id = s_lbl;
+                se->len = s_len;
+                extern void *cc_alloc(struct Compiler *cc, int size);
+                se->data = (char *)cc_alloc(cc, s_len + 1);
+                memcpy(se->data, s_data, s_len);
+                se->data[s_len] = '\0';
+            }
+        } else if (strncmp(p, "type ", 5) == 0) {
+            int id = -1;
+            if (sscanf(p, "type %d", &id) == 1 && id >= 0 && id < 65536) {
+                extern void *cc_alloc(struct Compiler *cc, int size);
+                Type *t = (Type *)cc_alloc(cc, sizeof(Type));
+                t->magic = 0x8877665544332211ULL;
+                t->kind = (int)find_arg_int(p, "kind=", 0);
+                t->size = (int)find_arg_int(p, "size=", 0);
+                t->align = (int)find_arg_int(p, "align=", 1);
+                t->is_complete = (int)find_arg_int(p, "is_complete=", 0);
+                t->is_packed = (int)find_arg_int(p, "is_packed=", 0);
+                t->explicit_align = (int)find_arg_int(p, "explicit_align=", 0);
+                t->is_tbfp = (int)find_arg_int(p, "is_tbfp=", 0);
+                t->array_len = (int)find_arg_int(p, "array_len=", 0);
+                
+                char tag[256];
+                if (find_arg(p, "tag=", tag)) {
+                    strcpy(t->tag, tag);
+                }
+                types_list[id] = t;
+            }
+        } else if (strncmp(p, "init_node", 9) == 0) {
+            int id = -1;
+            if (sscanf(p, "init_node %d", &id) == 1 && id >= 0 && id < 1048576) {
+                extern void *cc_alloc(struct Compiler *cc, int size);
+                Node *n = (Node *)cc_alloc(cc, sizeof(Node));
+                n->magic = 0xC0FFEEBAD1234567ULL;
+                n->kind = (int)find_arg_int(p, "kind=", 0);
+                n->int_val = find_arg_int(p, "int_val=", 0);
+                
+                char f_val_str[256];
+                if (find_arg(p, "f_val=", f_val_str)) {
+                    n->f_val = atof(f_val_str);
+                }
+                n->str_id = (int)find_arg_int(p, "str_id=", 0);
+                
+                char name[256];
+                if (find_arg(p, "name=", name)) {
+                    strcpy(n->name, name);
+                }
+                nodes_list[id] = n;
+            }
+        }
+    }
+
+    /* PASS 2: Link Types, Nodes, parse Globals, Functions and Instructions */
+    rewind(fp);
+    while (fgets(line, sizeof(line), fp)) {
+        char *p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p == ';' || *p == '\n' || *p == '\r' || *p == '\0') continue;
+
+        if (strncmp(p, "type_link", 9) == 0) {
+            int id = -1;
+            if (sscanf(p, "type_link %d", &id) == 1 && id >= 0 && id < 65536 && types_list[id]) {
+                Type *t = types_list[id];
+                int base_id = (int)find_arg_int(p, "base=", -1);
+                int ret_id = (int)find_arg_int(p, "ret=", -1);
+                if (base_id != -1) t->base = types_list[base_id];
+                if (ret_id != -1) t->ret = types_list[ret_id];
+
+                char params_str[4096];
+                if (find_arg(p, "params=", params_str)) {
+                    int param_ids[MAX_PARAMS];
+                    int n_params = parse_id_list(params_str, param_ids, MAX_PARAMS);
+                    t->num_params = n_params;
+                    extern void *cc_alloc(struct Compiler *cc, int size);
+                    t->params = (Type **)cc_alloc(cc, n_params * sizeof(Type *));
+                    for (int k = 0; k < n_params; k++) {
+                        t->params[k] = types_list[param_ids[k]];
+                    }
+                }
+            }
+        } else if (strncmp(p, "type_field", 10) == 0) {
+            int id = -1;
+            if (sscanf(p, "type_field %d", &id) == 1 && id >= 0 && id < 65536 && types_list[id]) {
+                Type *t = types_list[id];
+                char f_name[256];
+                find_arg(p, "name=", f_name);
+                int f_type_id = (int)find_arg_int(p, "type=", -1);
+                int f_offset = (int)find_arg_int(p, "offset=", 0);
+                int f_is_bf = (int)find_arg_int(p, "is_bitfield=", 0);
+                int f_bit_off = (int)find_arg_int(p, "bit_offset=", 0);
+                int f_bit_sz = (int)find_arg_int(p, "bit_size=", 0);
+
+                extern void *cc_alloc(struct Compiler *cc, int size);
+                StructField *f = (StructField *)cc_alloc(cc, sizeof(StructField));
+                strcpy(f->name, f_name);
+                f->type = types_list[f_type_id];
+                f->offset = f_offset;
+                f->is_bitfield = f_is_bf;
+                f->bit_offset = f_bit_off;
+                f->bit_size = f_bit_sz;
+                f->next = NULL;
+
+                if (!t->fields) {
+                    t->fields = f;
+                } else {
+                    StructField *curr = t->fields;
+                    while (curr->next) curr = curr->next;
+                    curr->next = f;
+                }
+            }
+        } else if (strncmp(p, "init_node", 9) == 0) {
+            int id = -1;
+            if (sscanf(p, "init_node %d", &id) == 1 && id >= 0 && id < 1048576 && nodes_list[id]) {
+                int type_id = (int)find_arg_int(p, "type=", -1);
+                if (type_id != -1) nodes_list[id]->type = types_list[type_id];
+            }
+        } else if (strncmp(p, "init_link", 9) == 0) {
+            int id = -1;
+            if (sscanf(p, "init_link %d", &id) == 1 && id >= 0 && id < 1048576 && nodes_list[id]) {
+                Node *n = nodes_list[id];
+                int lhs_id = (int)find_arg_int(p, "lhs=", -1);
+                int rhs_id = (int)find_arg_int(p, "rhs=", -1);
+                if (lhs_id != -1) n->lhs = nodes_list[lhs_id];
+                if (rhs_id != -1) n->rhs = nodes_list[rhs_id];
+
+                char args_str[4096];
+                if (find_arg(p, "args=", args_str)) {
+                    int arg_ids[MAX_CALL_ARGS];
+                    int n_args = parse_id_list(args_str, arg_ids, MAX_CALL_ARGS);
+                    n->num_args = n_args;
+                    extern void *cc_alloc(struct Compiler *cc, int size);
+                    n->args = (Node **)cc_alloc(cc, n_args * sizeof(Node *));
+                    for (int k = 0; k < n_args; k++) {
+                        n->args[k] = nodes_list[arg_ids[k]];
+                    }
+                }
+            }
+        } else if (strncmp(p, "global", 6) == 0) {
+            char g_name[256];
+            find_arg(p, "name=", g_name);
+            int g_type_id = (int)find_arg_int(p, "type=", -1);
+            int g_static = (int)find_arg_int(p, "static=", 0);
+            int g_extern = (int)find_arg_int(p, "extern=", 0);
+            int g_init_id = (int)find_arg_int(p, "init=", -1);
+
+            if (cc && cc->num_globals < MAX_GLOBALS) {
+                extern void *cc_alloc(struct Compiler *cc, int size);
+                Node *gvar = (Node *)cc_alloc(cc, sizeof(Node));
+                Symbol *sym = NULL;
+                gvar->magic = 0xC0FFEEBAD1234567ULL;
+                gvar->kind = 61; /* ND_GLOBAL_VAR */
+                strcpy(gvar->name, g_name);
+                gvar->type = types_list[g_type_id];
+                gvar->is_static = g_static;
+                gvar->is_extern = g_extern;
+                if (g_init_id != -1) gvar->initializer = nodes_list[g_init_id];
+
+                cc->globals[cc->num_globals++] = gvar;
+
+                if (cc->current_scope) {
+                    sym = (Symbol *)cc_alloc(cc, sizeof(Symbol));
+                    strcpy(sym->name, g_name);
+                    sym->type = gvar->type;
+                    sym->is_global = 1;
+                    sym->is_local = 0;
+                    sym->next = cc->current_scope->symbols;
+                    cc->current_scope->symbols = sym;
+                }
+            }
+        } else if (strncmp(p, "func", 4) == 0) {
+            char fn_name[256];
+            find_arg(p, "name=", fn_name);
+            char fn_ret_str[256];
+            find_arg(p, "ret=", fn_ret_str);
+            int fn_num_params = (int)find_arg_int(p, "num_params=", 0);
+
+            ir_type_t fn_ret = IR_TY_VOID;
+            for (int t = 0; t < 12; t++) {
+                if (strcmp(ir_type_name(t), fn_ret_str) == 0) {
+                    fn_ret = (ir_type_t)t;
+                    break;
+                }
+            }
+
+            curr_fn = ir_func_create(mod, fn_name, fn_ret, fn_num_params);
+
+            char params_str[4096];
+            if (find_arg(p, "params=", params_str)) {
+                char param_names[8][IR_NAME_MAX];
+                int p_count = parse_string_list(params_str, param_names, 8);
+                for (int k = 0; k < p_count && k < 8; k++) {
+                    strcpy(curr_fn->param_names[k], param_names[k]);
+                }
+            }
+
+            if (cc && cc->current_scope) {
+                extern void *cc_alloc(struct Compiler *cc, int size);
+                Symbol *sym = (Symbol *)cc_alloc(cc, sizeof(Symbol));
+                Type *ft = (Type *)cc_alloc(cc, sizeof(Type));
+                strcpy(sym->name, fn_name);
+                ft->magic = 0x8877665544332211ULL;
+                ft->kind = 10; /* TY_FUNC */
+                ft->size = 8;
+                ft->align = 8;
+                sym->type = ft;
+                sym->is_global = 1;
+                sym->is_local = 0;
+                sym->next = cc->current_scope->symbols;
+                cc->current_scope->symbols = sym;
+            }
+        } else if (strncmp(p, "inst", 4) == 0 && curr_fn) {
+            char op_str[256], type_str[256];
+            find_arg(p, "op=", op_str);
+            find_arg(p, "type=", type_str);
+
+            ir_op_t op = IR_NOP;
+            for (int o = 0; o < IR_OP_COUNT; o++) {
+                if (strcmp(ir_op_name(o), op_str) == 0) {
+                    op = (ir_op_t)o;
+                    break;
+                }
+            }
+
+            ir_type_t ty = IR_TY_VOID;
+            for (int t = 0; t < 12; t++) {
+                if (strcmp(ir_type_name(t), type_str) == 0) {
+                    ty = (ir_type_t)t;
+                    break;
+                }
+            }
+
+            ir_node_t *n = ir_node_alloc();
+            n->op = op;
+            n->type = ty;
+            find_arg(p, "dst=", n->dst);
+            find_arg(p, "src1=", n->src1);
+            find_arg(p, "src2=", n->src2);
+            find_arg(p, "label=", n->label);
+            find_arg(p, "label2=", n->label2);
+            n->imm = find_arg_int(p, "imm=", 0);
+            n->lineno = (int)find_arg_int(p, "lineno=", 0);
+            n->tag = (int)find_arg_int(p, "tag=", 0);
+            n->vuln_tags = (unsigned int)find_arg_int(p, "vuln_tags=", 0);
+            n->flags = (unsigned int)find_arg_int(p, "flags=", 0);
+
+            char phi_str[4096];
+            if (find_arg(p, "phi=", phi_str)) {
+                /* count commas to determine phi count roughly */
+                int comm = 0;
+                for (int c = 0; phi_str[c]; c++) if (phi_str[c] == ',') comm++;
+                int phi_cap = comm + 2;
+                n->phi_ops = (ir_phi_operand_t *)calloc(phi_cap, sizeof(ir_phi_operand_t));
+                n->phi_count = parse_phi_list(phi_str, n->phi_ops, phi_cap);
+                n->phi_capacity = phi_cap;
+            }
+
+            char asm_str[4096];
+            if (find_arg(p, "asm=", asm_str)) {
+                n->asm_string = strdup(asm_str);
+            }
+
+            ir_append(curr_fn, n);
+        } else if (strncmp(p, "end func", 8) == 0) {
+            curr_fn = NULL;
+        }
+    }
+
+    /* PASS 3: Resolve node symbols */
+    if (cc) {
+        int idx;
+        for (idx = 0; idx < 1048576; idx++) {
+            Node *n = nodes_list[idx];
+            if (n && n->name[0] != '\0') {
+                n->sym = local_scope_find(cc, n->name);
+            }
+        }
+    }
+
+    free(types_list);
+    free(nodes_list);
     fclose(fp);
     return 0;
 }
@@ -1242,7 +1095,7 @@ int ir_diff_json(const char *path_a, const char *path_b) {
                 
                 if (n_a == bb_a->last || n_b == bb_b->last) {
                     if (n_a != bb_a->last || n_b != bb_b->last) {
-                        printf("[diff-ir] MISMATCH in '%s()' BB%d: instruction density mismatch (one block has more instructions than the other)\n",
+                        printf("[diff-ir] MISMATCH in '%s()' BB%d: instruction density mismatch\n",
                                fn_a->name, b_idx);
                         ir_module_free(mod_a);
                         ir_module_free(mod_b);
