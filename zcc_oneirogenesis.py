@@ -643,6 +643,45 @@ class DreamEngine:
         self.sweep_prob    = max(0.1, min(0.9, 1.0 / self.wf_nu))   # fallback: 0.3
         self.migrate_every = max(3, int(10.0 / self.wf_gamma))       # fallback: 5
         self.T_0 = 1.0  # initial Boltzmann temperature
+        
+        # Thread safety locks and state for live update
+        self._wf_lock = threading.Lock()
+        self._wf_ready = threading.Event()
+        self._wf_applied = False
+
+    # ──────────────────────────────────────────────────────────────────
+
+    def _async_extract_cfg_and_exponents(self, zcc2_asm: str):
+        """Runs CFG analysis and exponent search asynchronously."""
+        try:
+            with open(zcc2_asm) as f:
+                asm_lines = f.readlines()
+            cfg = extract_cfg(asm_lines)
+            stats = cfg_stats(cfg)
+            
+            # Use a conservative subgraph size of 150 nodes to keep the 
+            # background CPU overhead minimal while maintaining structural signal.
+            if stats['nodes'] > 150:
+                sub_nodes = sorted(cfg.keys())[:150]
+                sub_cfg = {n: [t for t in cfg[n] if t in sub_nodes]
+                           for n in sub_nodes if n in cfg}
+            else:
+                sub_cfg = cfg
+
+            d_s = cfg_spectral_dim(sub_cfg)
+            eta_c = topology_eta_search(sub_cfg, tol=1e-2, max_sweeps=25, n_samples=3)
+            uclass = universality_class(eta_c, d_s)
+            
+            with self._wf_lock:
+                self.wf_nu    = uclass.nu
+                self.wf_beta  = uclass.beta
+                self.wf_gamma = uclass.gamma
+                self.sweep_prob    = max(0.1, min(0.9, 1.0 / self.wf_nu))
+                self.migrate_every = max(3, int(10.0 / self.wf_gamma))
+                self._wf_ready.set()
+        except Exception as e:
+            # Fallback values remain active in case of unexpected errors
+            pass
 
     # ──────────────────────────────────────────────────────────────────
 
@@ -871,39 +910,14 @@ int main(void) {
         with tempfile.TemporaryDirectory(prefix='dream_canon_') as canon_tmp:
             _, zcc2_asm, zcc_pp_c = self._prepare_canonical(canon_tmp)
 
-            # ── Wilson-Fisher: extract CFG and compute exponents ──
-            try:
-                with open(zcc2_asm) as f:
-                    asm_lines = f.readlines()
-                cfg = extract_cfg(asm_lines)
-                stats = cfg_stats(cfg)
-                d_s = cfg_spectral_dim(cfg)
-                if stats['nodes'] > 500:
-                    sub_nodes = sorted(cfg.keys())[:500]
-                    sub_cfg = {n: [t for t in cfg[n] if t in sub_nodes]
-                               for n in sub_nodes if n in cfg}
-                    eta_c = topology_eta_search(sub_cfg, tol=1e-3,
-                                                max_sweeps=80, n_samples=3)
-                else:
-                    eta_c = topology_eta_search(cfg, tol=1e-3,
-                                                max_sweeps=100, n_samples=3)
-                uclass = universality_class(eta_c, d_s)
-                self.wf_nu    = uclass.nu
-                self.wf_beta  = uclass.beta
-                self.wf_gamma = uclass.gamma
-                self.sweep_prob    = max(0.1, min(0.9, 1.0 / self.wf_nu))
-                self.migrate_every = max(3, int(10.0 / self.wf_gamma))
-                print(f"  {_C}[WF]{_W} CFG: {stats['nodes']} nodes, "
-                      f"{stats['edges']} edges, d_s={d_s:.3f}")
-                print(f"  {_C}[WF]{_W} η_c={eta_c:.4f} │ class={uclass.label} │ "
-                      f"ν={uclass.nu:.3f} β={uclass.beta:.3f} γ={uclass.gamma:.3f}")
-                print(f"  {_C}[WF]{_W} sweep_prob={self.sweep_prob:.3f} │ "
-                      f"migrate_every={self.migrate_every} │ "
-                      f"T_decay=cycle^(-{self.wf_beta:.3f})")
-            except Exception as e:
-                print(f"  {_Y}[WF]{_W} CFG extraction failed ({e}), using fallbacks")
-                print(f"  {_Y}[WF]{_W} sweep_prob={self.sweep_prob:.3f} │ "
-                      f"migrate_every={self.migrate_every}")
+            # ── Wilson-Fisher: extract CFG and compute exponents asynchronously ──
+            self._wf_applied = False
+            self._extractor_thread = threading.Thread(
+                target=self._async_extract_cfg_and_exponents,
+                args=(zcc2_asm,),
+                daemon=True
+            )
+            self._extractor_thread.start()
 
             # Initialise islands
             print(f"  {_C}[INIT]{_W} Spawning {self.n_islands} island(s)…")
@@ -926,6 +940,17 @@ int main(void) {
             print(f"\n  {_B}═══ DREAMING ════════════════════════════════════════{_W}\n")
 
             for cycle in range(num_cycles):
+                # Thread-safe live parameter swap
+                if self._wf_ready.is_set() and not self._wf_applied:
+                    with self._wf_lock:
+                        for isl in islands:
+                            isl.sweep_prob = self.sweep_prob
+                        self._wf_applied = True
+                        print(f"\n  {_C}[WF-ASYNC]{_W} Swapped live exponents: "
+                              f"sweep_prob={self.sweep_prob:.3f} │ "
+                              f"migrate_every={self.migrate_every} │ "
+                              f"T_decay=cycle^(-{self.wf_beta:.3f})\n")
+
                 # Round-robin across islands
                 island = islands[cycle % self.n_islands]
                 mutation_engine = MutationEngine(
