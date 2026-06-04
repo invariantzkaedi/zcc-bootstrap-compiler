@@ -556,3 +556,21 @@ identity/
 # Whitelist fuzzing harness
 !zcc_fuzz_harness.py
 
+.tmp_test_dir/
+.wrangler/
+*.elf
+*.uf2
+cr_gcc
+cr_zcc
+zcc_backup
+out.ir.json
+out.json
+hello_ir.json
+pp_sqlite.c
+scratch_mode_t.c
+seed_*.c
+source.c
+ctimetest*.c
+check_*.sh
+export_graphics.sh
+Makefile.dbg
