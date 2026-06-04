@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G261",
+    "name": "Codegen Mutation G261 [lea_optimization]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-0",
+    "lineage_hash": "0ec21c6a9c6c3abb",
+    "island_id": 0
+  },
+  "mutations": [
+    {
+      "name": "lea_optimization",
+      "category": "IDIOM",
+      "description": "Fuse mov+add \u2192 leaq $32(%r15), %rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -3.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -15,
+    "inst_count_delta": 202120,
+    "score_delta": -5.550282999873161,
+    "composite_score": 2238016.904888
+  },
+  "timestamp": "2026-06-04T00:46:37.105586+00:00",
+  "generation": 261
+}

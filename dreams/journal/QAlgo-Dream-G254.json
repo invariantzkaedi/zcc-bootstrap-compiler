@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G254",
+    "name": "Codegen Mutation G254 [schedule_load_sink]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-0",
+    "lineage_hash": "705dc751e170d6f4",
+    "island_id": 0
+  },
+  "mutations": [
+    {
+      "name": "schedule_load_sink",
+      "category": "SCHEDULE",
+      "description": "Sink load of -648(%rbp) to %r12 past independent instruction",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -1.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": 0,
+    "inst_count_delta": 202125,
+    "score_delta": -9.443068000022322,
+    "composite_score": 2238043.719412
+  },
+  "timestamp": "2026-06-04T00:31:26.205296+00:00",
+  "generation": 254
+}

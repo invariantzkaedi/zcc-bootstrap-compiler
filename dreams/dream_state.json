@@ -1,10 +1,10 @@
 {
-  "generation": 251,
-  "parent_hash": "09885ed4e33fcd63",
+  "generation": 261,
+  "parent_hash": "0ec21c6a9c6c3abb",
   "parent_asm_size": 0,
   "parent_bin_size": 0,
-  "total_mutations_tried": 1108,
-  "total_mutations_survived": 414,
+  "total_mutations_tried": 1205,
+  "total_mutations_survived": 433,
   "total_regressions": 605,
   "lineage": [
     {
@@ -2629,6 +2629,115 @@
       ],
       "delta_score": -12.563955999910831,
       "timestamp": "2026-06-03T10:01:29.693117+00:00"
+    },
+    {
+      "generation": 252,
+      "hash": "06278056378b237f",
+      "island_id": 1,
+      "mutations": [
+        "Swap independent pair to reduce WAR pipeline stall"
+      ],
+      "delta_score": -4.957535000052303,
+      "timestamp": "2026-06-04T00:30:39.031838+00:00"
+    },
+    {
+      "generation": 253,
+      "hash": "90839c7084b2c71d",
+      "island_id": 2,
+      "mutations": [
+        "Sink load of -5776(%rbp) to %rbx past independent instruction",
+        "Fuse mov+add \u2192 leaq $308(%r13), %rax"
+      ],
+      "delta_score": -38.48370599979535,
+      "timestamp": "2026-06-04T00:31:02.700192+00:00"
+    },
+    {
+      "generation": 254,
+      "hash": "705dc751e170d6f4",
+      "island_id": 0,
+      "mutations": [
+        "Sink load of -648(%rbp) to %r12 past independent instruction"
+      ],
+      "delta_score": -9.443068000022322,
+      "timestamp": "2026-06-04T00:31:26.205283+00:00"
+    },
+    {
+      "generation": 255,
+      "hash": "d4e9d84b6f823715",
+      "island_id": 0,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $24(%r12), %rax",
+        "Fuse mov+add \u2192 leaq $128(%r12), %rax"
+      ],
+      "delta_score": -7.207373999990523,
+      "timestamp": "2026-06-04T00:32:38.377608+00:00"
+    },
+    {
+      "generation": 256,
+      "hash": "9cfe4d9126c8eeb4",
+      "island_id": 1,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $24(%r14), %rax",
+        "Fuse mov+add \u2192 leaq $6849024(%r12), %rax",
+        "Fuse mov+add \u2192 leaq $64(%r14), %rax"
+      ],
+      "delta_score": -22.618135000113398,
+      "timestamp": "2026-06-04T00:33:02.607596+00:00"
+    },
+    {
+      "generation": 257,
+      "hash": "dfcc83a5eb6ae6b2",
+      "island_id": 0,
+      "mutations": [
+        "Sink load of -696(%rbp) to %r14 past independent instruction"
+      ],
+      "delta_score": -9.848987999837846,
+      "timestamp": "2026-06-04T00:33:50.768863+00:00"
+    },
+    {
+      "generation": 258,
+      "hash": "56094ddf11a53b41",
+      "island_id": 1,
+      "mutations": [
+        "Sink load of -96(%rbp) to %rbx past independent instruction",
+        "Fuse mov+add \u2192 leaq $56(%rbx), %rax"
+      ],
+      "delta_score": -9.3263049996458,
+      "timestamp": "2026-06-04T00:35:26.915178+00:00"
+    },
+    {
+      "generation": 259,
+      "hash": "f57d2aa6409543bd",
+      "island_id": 1,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $104(%r12), %rax",
+        "Sink load of -496(%rbp) to %rbx past independent instruction",
+        "Sink load of -624(%rbp) to %r13 past independent instruction"
+      ],
+      "delta_score": -3.4341950002126396,
+      "timestamp": "2026-06-04T00:36:43.771067+00:00"
+    },
+    {
+      "generation": 260,
+      "hash": "0cea4a5b926987a7",
+      "island_id": 0,
+      "mutations": [
+        "Sink load of -34592(%rbp) to %r13 past independent instruction",
+        "Fuse mov+add \u2192 leaq $24(%r14), %rax",
+        "Fuse mov+add \u2192 leaq $16(%r12), %rax"
+      ],
+      "delta_score": -4.207879000343382,
+      "timestamp": "2026-06-04T00:43:57.515331+00:00"
+    },
+    {
+      "generation": 261,
+      "hash": "0ec21c6a9c6c3abb",
+      "island_id": 0,
+      "mutations": [
+        "Fuse mov+add \u2192 leaq $32(%r15), %rax"
+      ],
+      "delta_score": -5.550282999873161,
+      "timestamp": "2026-06-04T00:46:37.105566+00:00"
     }
   ],
   "fitness_history": [
@@ -4137,6 +4246,66 @@
       "island_id": 1,
       "score": 2237944.452867,
       "timestamp": "2026-06-03T10:01:29.693093+00:00"
+    },
+    {
+      "generation": 252,
+      "island_id": 1,
+      "score": 2238043.798958,
+      "timestamp": "2026-06-04T00:30:39.031585+00:00"
+    },
+    {
+      "generation": 253,
+      "island_id": 2,
+      "score": 2238036.161185,
+      "timestamp": "2026-06-04T00:31:02.700097+00:00"
+    },
+    {
+      "generation": 254,
+      "island_id": 0,
+      "score": 2238043.719412,
+      "timestamp": "2026-06-04T00:31:26.205221+00:00"
+    },
+    {
+      "generation": 255,
+      "island_id": 0,
+      "score": 2238036.512038,
+      "timestamp": "2026-06-04T00:32:38.377525+00:00"
+    },
+    {
+      "generation": 256,
+      "island_id": 1,
+      "score": 2238021.1808229997,
+      "timestamp": "2026-06-04T00:33:02.607503+00:00"
+    },
+    {
+      "generation": 257,
+      "island_id": 0,
+      "score": 2238026.66305,
+      "timestamp": "2026-06-04T00:33:50.768702+00:00"
+    },
+    {
+      "generation": 258,
+      "island_id": 1,
+      "score": 2238011.854518,
+      "timestamp": "2026-06-04T00:35:26.915139+00:00"
+    },
+    {
+      "generation": 259,
+      "island_id": 1,
+      "score": 2238008.420323,
+      "timestamp": "2026-06-04T00:36:43.771037+00:00"
+    },
+    {
+      "generation": 260,
+      "island_id": 0,
+      "score": 2238022.4551709997,
+      "timestamp": "2026-06-04T00:43:57.515259+00:00"
+    },
+    {
+      "generation": 261,
+      "island_id": 0,
+      "score": 2238016.904888,
+      "timestamp": "2026-06-04T00:46:37.105522+00:00"
     }
   ],
   "discovered_algorithms": [
@@ -4390,57 +4559,67 @@
     "QAlgo-Dream-G248",
     "QAlgo-Dream-G249",
     "QAlgo-Dream-G250",
-    "QAlgo-Dream-G251"
+    "QAlgo-Dream-G251",
+    "QAlgo-Dream-G252",
+    "QAlgo-Dream-G253",
+    "QAlgo-Dream-G254",
+    "QAlgo-Dream-G255",
+    "QAlgo-Dream-G256",
+    "QAlgo-Dream-G257",
+    "QAlgo-Dream-G258",
+    "QAlgo-Dream-G259",
+    "QAlgo-Dream-G260",
+    "QAlgo-Dream-G261"
   ],
   "blacklisted_fingerprints": [
-    "96d91a32c53e58de",
-    "1543127ec3e8bb4a",
-    "b6b81c8dc2ca9abc",
-    "c243cb7c696705c8",
-    "6a9ed9b74840d1b1",
-    "2dcf9a36f508b58a",
-    "5ae9e1339ab835b2",
-    "247c9d25258fdd26",
-    "d9981af351067323",
-    "af34007ed47eaca3",
-    "494247a80a370dff",
-    "6dc682e84ae95052",
-    "4e029b0277b8e53c",
-    "a79f914d0ed857b1",
-    "0b17fb6febd46ffc",
-    "64264f90998a17b0",
-    "4f28a986a047eebd",
-    "f0200402ba28c47d",
-    "141b657d31e1f045",
-    "c18acd211d58faf2",
-    "2112dc1c156c940d",
-    "b7f9c10a5b1c3b1a",
-    "71dd4c67955e8420",
-    "24370fd58a093cd6",
-    "0d82191fc206010f",
-    "dadd034f45c3bc0e",
-    "622705fc90a2146f",
     "06489b07a80c7fe9",
+    "6dc682e84ae95052",
+    "e11406fd2ba5fdbc",
+    "b2552ce2df988fd6",
+    "247c9d25258fdd26",
+    "af4a9aaae8d1ede7",
     "701332c1b91da513",
+    "60eaa3f9059264f1",
+    "24370fd58a093cd6",
     "6470c076fbf4e39b",
-    "6e3d22d4d7aee650",
-    "e06ed6b6dffcf70a",
-    "8303ac54830f6287",
-    "eab88eaf7dc813d7",
-    "5e7286547be7771b",
     "d2b5bbc9eb00982a",
     "3a8507e5d2b02894",
-    "0ad13642783fe2f4",
-    "5ea25a80d5ac4b63",
-    "af9f75213e027f07",
-    "12ef99f3b0cebc33",
-    "adc46d2b8acd4b00",
+    "1543127ec3e8bb4a",
+    "f0200402ba28c47d",
+    "96d91a32c53e58de",
+    "141b657d31e1f045",
+    "e06ed6b6dffcf70a",
+    "6a9ed9b74840d1b1",
+    "494247a80a370dff",
+    "4e029b0277b8e53c",
     "c06680b6a24f321b",
-    "af4a9aaae8d1ede7",
     "d8c44e654d8fffa0",
-    "e11406fd2ba5fdbc",
+    "2dcf9a36f508b58a",
+    "5ea25a80d5ac4b63",
+    "5ae9e1339ab835b2",
+    "0b17fb6febd46ffc",
+    "adc46d2b8acd4b00",
+    "2112dc1c156c940d",
+    "d9981af351067323",
+    "b7f9c10a5b1c3b1a",
+    "af9f75213e027f07",
+    "af34007ed47eaca3",
+    "0d82191fc206010f",
+    "12ef99f3b0cebc33",
     "96c1799be1d2c713",
-    "b2552ce2df988fd6",
-    "60eaa3f9059264f1"
+    "5e7286547be7771b",
+    "71dd4c67955e8420",
+    "dadd034f45c3bc0e",
+    "c18acd211d58faf2",
+    "0ad13642783fe2f4",
+    "a79f914d0ed857b1",
+    "eab88eaf7dc813d7",
+    "6e3d22d4d7aee650",
+    "c243cb7c696705c8",
+    "622705fc90a2146f",
+    "64264f90998a17b0",
+    "b6b81c8dc2ca9abc",
+    "8303ac54830f6287",
+    "4f28a986a047eebd"
   ]
 }
