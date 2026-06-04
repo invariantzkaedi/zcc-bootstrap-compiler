@@ -111,6 +111,8 @@ class MutationEngine:
         point_candidates.extend(self._scan_lea_scaled_index(asm_lines))
         point_candidates.extend(self._scan_schedule_war_triple(asm_lines))
         point_candidates.extend(self._scan_schedule_load_sink(asm_lines))
+        point_candidates.extend(self._scan_redundant_cmp_after_test(asm_lines))
+        point_candidates.extend(self._scan_lea_neg_offset(asm_lines))
 
         # Filter blacklist early so blacklisted candidates don't starve other mutations
         point_candidates = [c for c in point_candidates if c.fingerprint() not in blacklist]
@@ -1072,6 +1074,69 @@ class MutationEngine:
                 mutated_asm=f"    {s2}\n    {s1}",
                 energy_delta=-1.0,
             ))
+        return mutations
+
+    def _scan_redundant_cmp_after_test(self, lines: list[str]) -> list[Mutation]:
+        """
+        REDUNDANT CMP AFTER TEST ELIMINATION
+        Pattern: testq %rA, %rA / cmpq $0, %rA
+        Remove cmpq - both set ZF/SF/PF identically.
+        """
+        mutations = []
+        n = len(lines)
+        for i in range(n - 1):
+            s1 = lines[i].strip()
+            s2 = lines[i + 1].strip()
+            
+            m1 = re.match(r'^testq\s+(%\w+),\s*(%\w+)\s*$', s1)
+            if not m1 or m1.group(1) != m1.group(2):
+                continue
+            reg = m1.group(1)
+            
+            m2 = re.match(r'^cmpq\s+\$0,\s*(%\w+)\s*$', s2)
+            if m2 and m2.group(1) == reg:
+                mutations.append(Mutation(
+                    name="redundant_cmp_after_test",
+                    category="PEEPHOLE",
+                    description=f"Remove redundant cmpq $0,{reg} following testq {reg},{reg}",
+                    line_range=(i + 1, i + 2),
+                    original_asm=s2,
+                    mutated_asm="",
+                    energy_delta=-2.0,
+                ))
+        return mutations
+
+    def _scan_lea_neg_offset(self, lines: list[str]) -> list[Mutation]:
+        """
+        LEA NEGATIVE OFFSET OPTIMIZATION
+        Pattern: movq %rA, %rB / subq $N, %rB → leaq -N(%rA), %rB
+        Fuses two instructions into one with a negative offset.
+        """
+        mutations = []
+        n = len(lines)
+        for i in range(n - 1):
+            s1 = lines[i].strip()
+            s2 = lines[i + 1].strip()
+            m1 = re.match(r'^movq\s+(%\w+),\s*(%\w+)\s*$', s1)
+            if not m1:
+                continue
+            src_reg = m1.group(1)
+            dst_reg = m1.group(2)
+            if src_reg in ('%rsp', '%rbp') or dst_reg in ('%rsp', '%rbp'):
+                continue
+            
+            m2 = re.match(r'^subq\s+\$(\d+),\s*(%\w+)\s*$', s2)
+            if m2 and m2.group(2) == dst_reg:
+                imm = m2.group(1)
+                mutations.append(Mutation(
+                    name="lea_neg_offset",
+                    category="IDIOM",
+                    description=f"Fuse mov+sub → leaq -{imm}({src_reg}), {dst_reg}",
+                    line_range=(i, i + 2),
+                    original_asm=f"{s1}\n{s2}",
+                    mutated_asm=f"    leaq -{imm}({src_reg}), {dst_reg}",
+                    energy_delta=-3.0,
+                ))
         return mutations
 
     # ──────────────────────────────────────────────────────────────────
