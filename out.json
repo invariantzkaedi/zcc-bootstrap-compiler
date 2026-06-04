@@ -1,0 +1,50 @@
+{
+  "zcc_ir_version": "1.0.0",
+  "source": "source.c",
+  "functions": [
+    {
+      "name": "main",
+      "ret_type": "i32",
+      "num_params": 0,
+      "param_names": [],
+      "blocks": [
+        {
+          "id": 0,
+          "label": "",
+          "preds": [],
+          "succs": [],
+          "instructions": [
+            {
+              "op": "const",
+              "type": "i32",
+              "dst": "%t0",
+              "src1": "",
+              "src2": "",
+              "label": "",
+              "label2": "",
+              "asm_string": "",
+              "imm": 42,
+              "lineno": 1,
+              "tag": 0,
+              "vuln_tags": 0
+            },
+            {
+              "op": "ret",
+              "type": "i32",
+              "dst": "",
+              "src1": "%t0",
+              "src2": "",
+              "label": "",
+              "label2": "",
+              "asm_string": "",
+              "imm": 0,
+              "lineno": 1,
+              "tag": 0,
+              "vuln_tags": 0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

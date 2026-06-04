@@ -1,0 +1,190 @@
+; ZCC IR Graph v1.0.0
+; source: "test_hello.c"
+
+string label_id=100 len=16 data="Hello from ZCC!\n"
+
+
+
+
+func name="__zcc_clzll" ret=i32 num_params=1 params=""
+block id=0 label="" preds= succs=
+  inst op=const type=i32 dst="%t0" src1="" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=store type=i32 dst="%stack_-16" src1="%t0" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=load type=u64 dst="%t2" src1="%stack_-8" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=const type=i32 dst="%t3" src1="" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t4" src1="%t3" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=eq type=i32 dst="%t5" src1="%t2" src2="%t4" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=br_if type=void dst="" src1="%t5" src2="" label=".L102" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=const type=i32 dst="%t6" src1="" src2="" label="" label2="" imm=64 lineno=162 tag=0 vuln_tags=0
+  inst op=ret type=i32 dst="" src1="%t6" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+block id=1 label=".L102" preds= succs=2
+  inst op=label type=void dst="" src1="" src2="" label=".L102" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=load type=u64 dst="%t8" src1="%stack_-8" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=const type=u64 dst="%t9" src1="" src2="" label="" label2="" imm=-4294967296 lineno=162 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t10" src1="%t9" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=and type=u64 dst="%t11" src1="%t8" src2="%t10" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=const type=i32 dst="%t12" src1="" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t13" src1="%t12" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=eq type=i32 dst="%t14" src1="%t11" src2="%t13" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=br_if type=void dst="" src1="%t14" src2="" label=".L103" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+block id=2 label=".L103" preds=1 succs=3
+  inst op=label type=void dst="" src1="" src2="" label=".L103" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=load type=u64 dst="%t21" src1="%stack_-8" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=const type=u64 dst="%t22" src1="" src2="" label="" label2="" imm=-281474976710656 lineno=162 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t23" src1="%t22" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=and type=u64 dst="%t24" src1="%t21" src2="%t23" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=const type=i32 dst="%t25" src1="" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t26" src1="%t25" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=eq type=i32 dst="%t27" src1="%t24" src2="%t26" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=br_if type=void dst="" src1="%t27" src2="" label=".L104" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+block id=3 label=".L104" preds=2 succs=4
+  inst op=label type=void dst="" src1="" src2="" label=".L104" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=load type=u64 dst="%t34" src1="%stack_-8" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=const type=u64 dst="%t35" src1="" src2="" label="" label2="" imm=-72057594037927936 lineno=162 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t36" src1="%t35" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=and type=u64 dst="%t37" src1="%t34" src2="%t36" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=const type=i32 dst="%t38" src1="" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t39" src1="%t38" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=eq type=i32 dst="%t40" src1="%t37" src2="%t39" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=br_if type=void dst="" src1="%t40" src2="" label=".L105" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+block id=4 label=".L105" preds=3 succs=5
+  inst op=label type=void dst="" src1="" src2="" label=".L105" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=load type=u64 dst="%t47" src1="%stack_-8" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=const type=u64 dst="%t48" src1="" src2="" label="" label2="" imm=-1152921504606846976 lineno=162 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t49" src1="%t48" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=and type=u64 dst="%t50" src1="%t47" src2="%t49" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=const type=i32 dst="%t51" src1="" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t52" src1="%t51" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=eq type=i32 dst="%t53" src1="%t50" src2="%t52" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=br_if type=void dst="" src1="%t53" src2="" label=".L106" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+block id=5 label=".L106" preds=4 succs=6
+  inst op=label type=void dst="" src1="" src2="" label=".L106" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=load type=u64 dst="%t60" src1="%stack_-8" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=const type=u64 dst="%t61" src1="" src2="" label="" label2="" imm=-4611686018427387904 lineno=162 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t62" src1="%t61" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=and type=u64 dst="%t63" src1="%t60" src2="%t62" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=const type=i32 dst="%t64" src1="" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t65" src1="%t64" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=eq type=i32 dst="%t66" src1="%t63" src2="%t65" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=br_if type=void dst="" src1="%t66" src2="" label=".L107" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+block id=6 label=".L107" preds=5 succs=7
+  inst op=label type=void dst="" src1="" src2="" label=".L107" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=load type=u64 dst="%t73" src1="%stack_-8" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=const type=u64 dst="%t74" src1="" src2="" label="" label2="" imm=-9223372036854775808 lineno=162 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t75" src1="%t74" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=and type=u64 dst="%t76" src1="%t73" src2="%t75" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=const type=i32 dst="%t77" src1="" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t78" src1="%t77" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=eq type=i32 dst="%t79" src1="%t76" src2="%t78" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=br_if type=void dst="" src1="%t79" src2="" label=".L108" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+block id=7 label=".L108" preds=6 succs=
+  inst op=label type=void dst="" src1="" src2="" label=".L108" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=load type=i32 dst="%t81" src1="%stack_-16" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+  inst op=ret type=i32 dst="" src1="%t81" src2="" label="" label2="" imm=0 lineno=162 tag=0 vuln_tags=0
+end func
+
+func name="__zcc_isinf" ret=i32 num_params=1 params=""
+block id=0 label="" preds= succs=2
+  inst op=const type=i32 dst="%t0" src1="" src2="" label="" label2="" imm=8 lineno=239 tag=0 vuln_tags=0
+  inst op=addr type=ptr dst="%t1" src1="%stack_-8" src2="" label="" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=addr type=ptr dst="%t2" src1="%t1" src2="" label="" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=addr type=ptr dst="%t3" src1="%stack_-16" src2="" label="" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=addr type=ptr dst="%t4" src1="%t3" src2="" label="" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=arg type=ptr dst="" src1="%t4" src2="" label="" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=arg type=ptr dst="" src1="%t2" src2="" label="" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=arg type=i32 dst="" src1="%t0" src2="" label="" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=call type=ptr dst="%t5" src1="" src2="" label="memcpy" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=load type=u64 dst="%t7" src1="%stack_-16" src2="" label="" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=const type=i32 dst="%t8" src1="" src2="" label="" label2="" imm=52 lineno=239 tag=0 vuln_tags=0
+  inst op=shr type=u64 dst="%t9" src1="%t7" src2="%t8" label="" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=const type=i32 dst="%t10" src1="" src2="" label="" label2="" imm=2047 lineno=239 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t11" src1="%t10" src2="" label="" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=and type=u64 dst="%t12" src1="%t9" src2="%t11" label="" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=const type=i32 dst="%t13" src1="" src2="" label="" label2="" imm=2047 lineno=239 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t14" src1="%t13" src2="" label="" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=eq type=i32 dst="%t15" src1="%t12" src2="%t14" label="" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=br_if type=void dst="" src1="%t15" src2="" label=".L110" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=load type=u64 dst="%t17" src1="%stack_-16" src2="" label="" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=const type=u64 dst="%t18" src1="" src2="" label="" label2="" imm=4503599627370495 lineno=239 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t19" src1="%t18" src2="" label="" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=and type=u64 dst="%t20" src1="%t17" src2="%t19" label="" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=const type=i32 dst="%t21" src1="" src2="" label="" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t22" src1="%t21" src2="" label="" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=eq type=i32 dst="%t23" src1="%t20" src2="%t22" label="" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=br type=void dst="" src1="" src2="" label=".L111" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+block id=1 label=".L110" preds= succs=2
+  inst op=label type=void dst="" src1="" src2="" label=".L110" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+block id=2 label=".L111" preds=0,1 succs=
+  inst op=label type=void dst="" src1="" src2="" label=".L111" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+  inst op=ret type=i32 dst="" src1="%t23" src2="" label="" label2="" imm=0 lineno=239 tag=0 vuln_tags=0
+end func
+
+func name="__zcc_isnan" ret=i32 num_params=1 params=""
+block id=0 label="" preds= succs=2
+  inst op=const type=i32 dst="%t0" src1="" src2="" label="" label2="" imm=8 lineno=240 tag=0 vuln_tags=0
+  inst op=addr type=ptr dst="%t1" src1="%stack_-8" src2="" label="" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=addr type=ptr dst="%t2" src1="%t1" src2="" label="" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=addr type=ptr dst="%t3" src1="%stack_-16" src2="" label="" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=addr type=ptr dst="%t4" src1="%t3" src2="" label="" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=arg type=ptr dst="" src1="%t4" src2="" label="" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=arg type=ptr dst="" src1="%t2" src2="" label="" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=arg type=i32 dst="" src1="%t0" src2="" label="" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=call type=ptr dst="%t5" src1="" src2="" label="memcpy" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=load type=u64 dst="%t7" src1="%stack_-16" src2="" label="" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=const type=i32 dst="%t8" src1="" src2="" label="" label2="" imm=52 lineno=240 tag=0 vuln_tags=0
+  inst op=shr type=u64 dst="%t9" src1="%t7" src2="%t8" label="" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=const type=i32 dst="%t10" src1="" src2="" label="" label2="" imm=2047 lineno=240 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t11" src1="%t10" src2="" label="" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=and type=u64 dst="%t12" src1="%t9" src2="%t11" label="" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=const type=i32 dst="%t13" src1="" src2="" label="" label2="" imm=2047 lineno=240 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t14" src1="%t13" src2="" label="" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=eq type=i32 dst="%t15" src1="%t12" src2="%t14" label="" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=br_if type=void dst="" src1="%t15" src2="" label=".L113" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=load type=u64 dst="%t17" src1="%stack_-16" src2="" label="" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=const type=u64 dst="%t18" src1="" src2="" label="" label2="" imm=4503599627370495 lineno=240 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t19" src1="%t18" src2="" label="" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=and type=u64 dst="%t20" src1="%t17" src2="%t19" label="" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=const type=i32 dst="%t21" src1="" src2="" label="" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t22" src1="%t21" src2="" label="" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=ne type=i32 dst="%t23" src1="%t20" src2="%t22" label="" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=br type=void dst="" src1="" src2="" label=".L114" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+block id=1 label=".L113" preds= succs=2
+  inst op=label type=void dst="" src1="" src2="" label=".L113" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+block id=2 label=".L114" preds=0,1 succs=
+  inst op=label type=void dst="" src1="" src2="" label=".L114" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+  inst op=ret type=i32 dst="" src1="%t23" src2="" label="" label2="" imm=0 lineno=240 tag=0 vuln_tags=0
+end func
+
+func name="__zcc_isfinite" ret=i32 num_params=1 params=""
+block id=0 label="" preds= succs=
+  inst op=const type=i32 dst="%t0" src1="" src2="" label="" label2="" imm=8 lineno=241 tag=0 vuln_tags=0
+  inst op=addr type=ptr dst="%t1" src1="%stack_-8" src2="" label="" label2="" imm=0 lineno=241 tag=0 vuln_tags=0
+  inst op=addr type=ptr dst="%t2" src1="%t1" src2="" label="" label2="" imm=0 lineno=241 tag=0 vuln_tags=0
+  inst op=addr type=ptr dst="%t3" src1="%stack_-16" src2="" label="" label2="" imm=0 lineno=241 tag=0 vuln_tags=0
+  inst op=addr type=ptr dst="%t4" src1="%t3" src2="" label="" label2="" imm=0 lineno=241 tag=0 vuln_tags=0
+  inst op=arg type=ptr dst="" src1="%t4" src2="" label="" label2="" imm=0 lineno=241 tag=0 vuln_tags=0
+  inst op=arg type=ptr dst="" src1="%t2" src2="" label="" label2="" imm=0 lineno=241 tag=0 vuln_tags=0
+  inst op=arg type=i32 dst="" src1="%t0" src2="" label="" label2="" imm=0 lineno=241 tag=0 vuln_tags=0
+  inst op=call type=ptr dst="%t5" src1="" src2="" label="memcpy" label2="" imm=0 lineno=241 tag=0 vuln_tags=0
+  inst op=load type=u64 dst="%t7" src1="%stack_-16" src2="" label="" label2="" imm=0 lineno=241 tag=0 vuln_tags=0
+  inst op=const type=i32 dst="%t8" src1="" src2="" label="" label2="" imm=52 lineno=241 tag=0 vuln_tags=0
+  inst op=shr type=u64 dst="%t9" src1="%t7" src2="%t8" label="" label2="" imm=0 lineno=241 tag=0 vuln_tags=0
+  inst op=const type=i32 dst="%t10" src1="" src2="" label="" label2="" imm=2047 lineno=241 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t11" src1="%t10" src2="" label="" label2="" imm=0 lineno=241 tag=0 vuln_tags=0
+  inst op=and type=u64 dst="%t12" src1="%t9" src2="%t11" label="" label2="" imm=0 lineno=241 tag=0 vuln_tags=0
+  inst op=const type=i32 dst="%t13" src1="" src2="" label="" label2="" imm=2047 lineno=241 tag=0 vuln_tags=0
+  inst op=cast type=u64 dst="%t14" src1="%t13" src2="" label="" label2="" imm=0 lineno=241 tag=0 vuln_tags=0
+  inst op=ne type=i32 dst="%t15" src1="%t12" src2="%t14" label="" label2="" imm=0 lineno=241 tag=0 vuln_tags=0
+  inst op=ret type=i32 dst="" src1="%t15" src2="" label="" label2="" imm=0 lineno=241 tag=0 vuln_tags=0
+end func
+
+func name="main" ret=i32 num_params=0
+block id=0 label="" preds= succs=
+  inst op=const type=ptr dst="%t0" src1="" src2="" label="" label2="" imm=0 lineno=248 tag=0 vuln_tags=0
+  inst op=const_str type=ptr dst="%t0" src1=".LS100" src2="" label="" label2="" imm=0 lineno=248 tag=0 vuln_tags=0
+  inst op=arg type=ptr dst="" src1="%t0" src2="" label="" label2="" imm=0 lineno=248 tag=0 vuln_tags=0
+  inst op=call type=i32 dst="%t1" src1="" src2="" label="printf" label2="" imm=0 lineno=248 tag=0 vuln_tags=0
+  inst op=const type=i32 dst="%t2" src1="" src2="" label="" label2="" imm=0 lineno=249 tag=0 vuln_tags=0
+  inst op=ret type=i32 dst="" src1="%t2" src2="" label="" label2="" imm=0 lineno=249 tag=0 vuln_tags=0
+end func
+
