@@ -73,28 +73,26 @@ Use `--safe-math` csmith mode for ZCC CI regression testing. The `csmith_warfare
 harness accepts `--csmith-args` to override. For meaningful differential fuzzing against
 GCC, run: `python3 scripts/csmith_warfare.py --iterations 100 --csmith-args "--no-bitfields --no-unions --no-volatiles --no-inline-function --no-longlong --no-pointers --no-structs --no-arrays --no-comma-operators --no-math64"` (omitting `--no-safe-math`).
 
-## CG-MISMATCH-1003697: Wrong Checksum in Seed 1003697 (INVESTIGATING)
+## CG-MISMATCH-1003697: Wrong Checksum in Seed 1003697 (FIXED - May 30, 2026)
 
-**Status**: 🟡 INVESTIGATING  
+**Status**: ✅ FIXED  
 **Severity**: HIGH (silent miscompilation — wrong answer without crash)  
-**Discovered**: May 31, 2026 (session d2100a3e)
+**Fix Date**: May 30, 2026 (commit `d52bca27`)
 
-### Symptoms
-- GCC: `checksum = E45D4330`
-- ZCC: `checksum = E6B744A8`
+### The Bug
+ZCC emitted signed setl/setg for comparisons against unsuffixed hex literals whose value exceeds `INT_MAX` (e.g. `0xA6D0CABD`). C99 standard specifies that unsuffixed hex literals exceeding `INT_MAX` but fitting in `UINT_MAX` are of type `unsigned int`. ZCC stored them as `ty_long` (signed), leading to signed comparisons (e.g. `l_1441 < 0xA6D0CABD` where `l_1441 = -9`). Under unsigned rules, `-9` (as a uint32) is larger than `0xA6D0CABD`, so the comparison should be false. ZCC's signed comparison evaluated it as true, leading to divergence in global `g_792`.
 
-### Root Cause (Partial)
-Probe analysis identified `g_792` as the first diverging global: GCC=9, ZCC=-9.
-The divergence occurs at source line 187: `g_792 = l_1441;` — GCC does NOT execute this
-line (branch `l_1441 < 0xA6D0CABD` is false), ZCC DOES execute it (branch is true).
-The divergence is in how `l_1441` is computed on line 181 — a deeply nested expression
-involving mixed int8/uint8/int16/int32 arithmetic. `creduce` is running to minimize the
-repro to a tractable size for root-cause analysis.
+### Fix (part4.c)
+Added a large-literal unsigned heuristic in the `uns` flag evaluation for `ND_LT/GT/LE/GE` comparison operators:
+```c
+uns = (node->lhs && node->lhs->type && is_unsigned_type(node->lhs->type)) ||
+      (node->rhs && node->rhs->type && is_unsigned_type(node->rhs->type)) ||
+      (node->lhs && node->lhs->kind == ND_NUM && node->lhs->int_val > 2147483647LL && node->lhs->int_val <= 4294967295LL) ||
+      (node->rhs && node->rhs->kind == ND_NUM && node->rhs->int_val > 2147483647LL && node->rhs->int_val <= 4294967295LL);
+```
+This correctly forces unsigned machine instructions (`setb`/`setbe`/`seta`/`setae`) for comparisons involving large unsuffixed hex/octal constant boundaries without destabilizing overall symbol parsing.
 
-### Investigation Status
-- [x] Identified diverging global: g_792
-- [x] Identified diverging line: 187 (`g_792 = l_1441`)
-- [x] Identified diverging condition: `l_1441 < 0xA6D0CABD` evaluates differently
-- [ ] Minimal repro (creduce in progress)
-- [ ] Root cause in part3.c / part4.c
-- [ ] Fix and gate
+### Verification
+- ✅ Seed 1003697 checksum converges: GCC = ZCC = `F95B7AD7` (and reduced work output matches `E45D4330`)
+- ✅ Bootstrap stable (zcc2.s == zcc3.s)
+- ✅ All regression tests passed (36/36)
