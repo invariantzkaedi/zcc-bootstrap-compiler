@@ -49,6 +49,10 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from zcc_dream_mutations import MutationEngine, Mutation
+from zcc_criticality import (
+    topology_eta_search, universality_class, boltzmann_acceptance,
+)
+from zcc_cfg_extract import extract_cfg, cfg_spectral_dim, cfg_stats
 
 # ═══════════════════════════════════════════════════════════════════════
 # CONSTANTS
@@ -61,6 +65,11 @@ LINEAGE_DIR    = DREAM_DIR / "lineage"
 BLACKLIST_FILE = DREAM_DIR / "blacklist.json"
 BENCHMARK_FILE = REPO_ROOT / "benchmark_workload.c"
 GODS_EYE_WS    = "ws://127.0.0.1:8082/ws/dream_telemetry"
+
+# Wilson-Fisher fallback defaults — reproduce current behavior when CFG unavailable
+_WF_FALLBACK_NU    = 10.0 / 3.0   # 1/nu ≈ 0.3 = current sweep inclusion probability
+_WF_FALLBACK_BETA  = 0.5           # only active with --wf-acceptance flag
+_WF_FALLBACK_GAMMA = 1.75          # int(10/1.75) = 5 = current migration interval
 
 PARTS = ["part0_pp.c", "zcc_ast_bridge.h", "part1.c", "part2.c", "part3.c",
          "ir.h", "ir_emit_dispatch.h", "ir_bridge.h", "part4.c", "part5.c",
@@ -402,8 +411,9 @@ class Island:
     """
 
     def __init__(self, island_id: int, seed: int, parent_asm: str,
-                 zcc_pp_c: str, blacklist: set):
+                 zcc_pp_c: str, blacklist: set, sweep_prob: float = 0.3):
         self.island_id = island_id
+        self.sweep_prob = sweep_prob
         self.rng = random.Random(seed)
         self.state = IslandState(island_id=island_id)
         self.blacklist = blacklist
@@ -422,7 +432,8 @@ class Island:
 
     def step(self, mutation_engine: MutationEngine,
              max_mutations: int, force_sweep: bool,
-             dry_run: bool, tmpdir: str) -> CycleResult:
+             dry_run: bool, tmpdir: str,
+             wf_acceptance: bool = False, T_eff: float = 0.0) -> CycleResult:
         """Execute one dream cycle for this island."""
         t0 = time.time()
         gen = self.state.generation + 1
@@ -434,7 +445,7 @@ class Island:
         mutations = mutation_engine.dream(
             parent_lines,
             max_point_mutations=max_mutations,
-            include_sweeps=force_sweep or (self.rng.random() < 0.3),
+            include_sweeps=force_sweep or (self.rng.random() < self.sweep_prob),
             blacklist=self.blacklist,
         )
 
@@ -536,7 +547,10 @@ class Island:
             'score':      mutant_fitness['score']      - parent_fitness['score'],
         }
 
-        survived = delta['score'] < 0
+        if wf_acceptance and T_eff > 0:
+            survived = boltzmann_acceptance(delta['score'], T_eff)
+        else:
+            survived = delta['score'] < 0
 
         if survived:
             self.state.generation = gen
@@ -588,7 +602,7 @@ class DreamEngine:
     def __init__(self, seed: int = 42, max_mutations: int = 3,
                  n_islands: int = 1, force_sweep: bool = False,
                  aggressive: bool = False, visualize: bool = False,
-                 dry_run: bool = False):
+                 dry_run: bool = False, wf_acceptance: bool = False):
         self.seed         = seed
         self.rng          = random.Random(seed)
         self.max_mutations = max_mutations if not aggressive else 8
@@ -620,6 +634,15 @@ class DreamEngine:
 
         # Telemetry
         self.telem = HamiltonianTelemetry() if visualize else None
+
+        # Wilson-Fisher exponent-derived scheduling (fallback defaults)
+        self.wf_acceptance = wf_acceptance
+        self.wf_nu    = _WF_FALLBACK_NU
+        self.wf_beta  = _WF_FALLBACK_BETA
+        self.wf_gamma = _WF_FALLBACK_GAMMA
+        self.sweep_prob    = max(0.1, min(0.9, 1.0 / self.wf_nu))   # fallback: 0.3
+        self.migrate_every = max(3, int(10.0 / self.wf_gamma))       # fallback: 5
+        self.T_0 = 1.0  # initial Boltzmann temperature
 
     # ──────────────────────────────────────────────────────────────────
 
@@ -848,13 +871,48 @@ int main(void) {
         with tempfile.TemporaryDirectory(prefix='dream_canon_') as canon_tmp:
             _, zcc2_asm, zcc_pp_c = self._prepare_canonical(canon_tmp)
 
+            # ── Wilson-Fisher: extract CFG and compute exponents ──
+            try:
+                with open(zcc2_asm) as f:
+                    asm_lines = f.readlines()
+                cfg = extract_cfg(asm_lines)
+                stats = cfg_stats(cfg)
+                d_s = cfg_spectral_dim(cfg)
+                if stats['nodes'] > 500:
+                    sub_nodes = sorted(cfg.keys())[:500]
+                    sub_cfg = {n: [t for t in cfg[n] if t in sub_nodes]
+                               for n in sub_nodes if n in cfg}
+                    eta_c = topology_eta_search(sub_cfg, tol=1e-3,
+                                                max_sweeps=80, n_samples=3)
+                else:
+                    eta_c = topology_eta_search(cfg, tol=1e-3,
+                                                max_sweeps=100, n_samples=3)
+                uclass = universality_class(eta_c, d_s)
+                self.wf_nu    = uclass.nu
+                self.wf_beta  = uclass.beta
+                self.wf_gamma = uclass.gamma
+                self.sweep_prob    = max(0.1, min(0.9, 1.0 / self.wf_nu))
+                self.migrate_every = max(3, int(10.0 / self.wf_gamma))
+                print(f"  {_C}[WF]{_W} CFG: {stats['nodes']} nodes, "
+                      f"{stats['edges']} edges, d_s={d_s:.3f}")
+                print(f"  {_C}[WF]{_W} η_c={eta_c:.4f} │ class={uclass.label} │ "
+                      f"ν={uclass.nu:.3f} β={uclass.beta:.3f} γ={uclass.gamma:.3f}")
+                print(f"  {_C}[WF]{_W} sweep_prob={self.sweep_prob:.3f} │ "
+                      f"migrate_every={self.migrate_every} │ "
+                      f"T_decay=cycle^(-{self.wf_beta:.3f})")
+            except Exception as e:
+                print(f"  {_Y}[WF]{_W} CFG extraction failed ({e}), using fallbacks")
+                print(f"  {_Y}[WF]{_W} sweep_prob={self.sweep_prob:.3f} │ "
+                      f"migrate_every={self.migrate_every}")
+
             # Initialise islands
             print(f"  {_C}[INIT]{_W} Spawning {self.n_islands} island(s)…")
             islands = []
             for i in range(self.n_islands):
                 island_seed = self.rng.randint(0, 2**32)
                 with tempfile.TemporaryDirectory(prefix=f'island_init_{i}_') as it:
-                    isl = Island(i, island_seed, zcc2_asm, zcc_pp_c, self.blacklist)
+                    isl = Island(i, island_seed, zcc2_asm, zcc_pp_c,
+                                 self.blacklist, sweep_prob=self.sweep_prob)
                 islands.append(isl)
                 print(f"    Island {i}: score={isl.state.parent_score:.0f}")
 
@@ -874,12 +932,16 @@ int main(void) {
                     seed=self.rng.randint(0, 2**32))
 
                 with tempfile.TemporaryDirectory(prefix='dream_step_') as td:
+                    # Per-cycle T_eff decay: T_0 * (cycle+1)^(-β)
+                    T_eff = self.T_0 * max(1, cycle + 1) ** (-self.wf_beta)
                     result = island.step(
                         mutation_engine,
                         max_mutations=self.max_mutations,
                         force_sweep=self.force_sweep,
                         dry_run=self.dry_run,
-                        tmpdir=td)
+                        tmpdir=td,
+                        wf_acceptance=self.wf_acceptance,
+                        T_eff=T_eff)
 
                 self._print_result(result)
 
@@ -928,8 +990,8 @@ int main(void) {
                               f"(score={best.state.parent_score:.0f}) "
                               f"→ canonical zcc2 @ G{gen}\n")
 
-                    # Island cross-breeding (every 5 cycles with 2+ islands)
-                    if self.n_islands >= 2 and gen % 5 == 0:
+                    # Island cross-breeding (γ-derived interval with 2+ islands)
+                    if self.n_islands >= 2 and gen % self.migrate_every == 0:
                         self._crossbreed(islands, mutation_engine,
                                          zcc_pp_c, self.dry_run)
 
@@ -1052,6 +1114,9 @@ def main():
     p.add_argument('--dry-run',   action='store_true')
     p.add_argument('--reset',     action='store_true',
                    help='Clear dream state and restart from Genesis')
+    p.add_argument('--wf-acceptance', action='store_true',
+                   help='Enable Boltzmann acceptance with WF T_eff decay '
+                        '(default: greedy descent only)')
     args = p.parse_args()
 
     if args.reset:
@@ -1070,6 +1135,7 @@ def main():
         aggressive=args.aggressive,
         visualize=args.visualize,
         dry_run=args.dry_run,
+        wf_acceptance=args.wf_acceptance,
     ).run(num_cycles=args.cycles)
 
 
