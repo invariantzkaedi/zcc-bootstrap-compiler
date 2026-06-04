@@ -2924,6 +2924,9 @@ void codegen_expr(Compiler *cc, Node *node) {
     int cleanup_bytes;
     char args_ir_1d[2048];
     int arg_is_stack[64];
+    char callee_ir[32];
+
+    callee_ir[0] = '\0';
 
     /* System V AMD64 (Linux): 6 register args: RDI, RSI, RDX, RCX, R8, R9; 7th+
      * on stack */
@@ -3052,6 +3055,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     /* for indirect calls, evaluate callee first and save on stack */
     if (node->func_name[0] == 0 && node->lhs) {
       codegen_expr_checked(cc, node->lhs);
+      ir_save_result(callee_ir);
       push_reg(cc, "rax");
     }
 
@@ -3304,7 +3308,8 @@ void codegen_expr(Compiler *cc, Node *node) {
 
     {
       char *dst = ir_bridge_fresh_tmp();
-      ZCC_EMIT_CALL(ir_map_type(node->type), dst, node->func_name, node->line);
+      char *target = node->func_name[0] ? node->func_name : callee_ir;
+      ZCC_EMIT_CALL(ir_map_type(node->type), dst, target, node->line);
     }
 
     /* cleanup arguments left on stack AND the alignment pad */
