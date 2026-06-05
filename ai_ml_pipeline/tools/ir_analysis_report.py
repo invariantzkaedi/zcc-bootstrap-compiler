@@ -23,7 +23,7 @@ MODEL = "zkaedi-ir-telemetry"   # or llama3.2:3b for faster runs
 MAX_FUNC_LINES = 2000           # skip giants (sqlite3VdbeExec=61503 lines)
 MAX_LINES = 150                 # truncate per function for prompt budget
 TOP = 50                        # functions to analyze per run
-TIMEOUT = 90                    # seconds per function
+TIMEOUT = 120                    # seconds per function
 OUT = "report.md"
 
 SYSTEM = ("You are a ZCC IR expert. Analyze this intermediate representation. "
@@ -88,13 +88,10 @@ def _prime_eligible(funcs):
 # ── Original functions (unchanged) ──────────────────────────────────────────
 
 def norm(ir):
-    """Deterministic IR normalization — strips variable names, preserves structure."""
+    """Analysis-mode normalization — preserves register names for liveness tracking."""
     for p, r in [
-        (r'%t\d+',       '%tN'),
-        (r'%stack_-\d+', '%stack_-N'),
-        (r'\.L\d+',      '.LN'),
-        (r'imm=\d+',     'imm=N'),
-        (r'; line \d+',  '; line N'),
+        (r'; line \d+', ''),
+        (r'%stack_-(\d+)', r'%s\1'),
     ]:
         ir = re.sub(p, r, ir)
     return ir
