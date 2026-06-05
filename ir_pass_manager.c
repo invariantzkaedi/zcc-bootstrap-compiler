@@ -1150,6 +1150,9 @@ void ir_pm_run_default(void *mod_ptr, int verbose) {
 
     if (opt_dce) ir_pm_register(pm, "dce2", ir_pass_dce);
 
+    extern ir_pass_result_t zcc_pass_transient_locks(void *fn_ptr);
+    ir_pm_register(pm, "transient_lock_audit", zcc_pass_transient_locks);
+
     ir_pm_run(pm, mod);
     ir_pm_free(pm);
 }

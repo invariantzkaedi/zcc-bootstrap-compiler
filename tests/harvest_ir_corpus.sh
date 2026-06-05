@@ -22,7 +22,7 @@ for exp in "${EXPERIMENTS[@]}"; do
     echo "Processing: ${exp}.c"
     
     # Compile with telemetry
-    if ./zcc "${exp}.c" --ir --telemetry > "${OUTPUT_DIR}/${exp}_ir.jsonl" 2>&1; then
+    if ./zcc "${exp}.c" --ir --telemetry 2>&1 | grep -v -E "UserWarning|torch|bogus|ONLINE|ZCC:" > "${OUTPUT_DIR}/${exp}_ir.jsonl"; then
         # Count events
         lines=$(wc -l < "${OUTPUT_DIR}/${exp}_ir.jsonl")
         size=$(du -h "${OUTPUT_DIR}/${exp}_ir.jsonl" | cut -f1)

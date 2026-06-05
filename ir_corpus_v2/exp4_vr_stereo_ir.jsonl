@@ -1,5 +1,3930 @@
-{"deadlocks_healed":0,"event_type":"ir_pass_complete","gpu_temp_c":1810,"gpu_util_pct":1447,"h_t_state":-363.0,"ir_funcs":13,"ir_nodes_after":1447,"ir_nodes_before":1810,"ir_nodes_deleted":363,"ir_nodes_modified":0,"ir_pass":"dce","jit_latency_ms":0.0,"node_count":1447,"pass_name":"dce","swarm_cycles":0,"timestamp":1776318801,"vram_usage_mb":0.0}
-{"deadlocks_healed":0,"event_type":"ir_pass_complete","gpu_temp_c":1447,"gpu_util_pct":1447,"h_t_state":0.0,"ir_funcs":13,"ir_nodes_after":1447,"ir_nodes_before":1447,"ir_nodes_deleted":0,"ir_nodes_modified":0,"ir_pass":"const_fold","jit_latency_ms":0.0,"node_count":1447,"pass_name":"const_fold","swarm_cycles":0,"timestamp":1776318801,"vram_usage_mb":0.0}
-{"deadlocks_healed":0,"event_type":"ir_pass_complete","gpu_temp_c":1447,"gpu_util_pct":1447,"h_t_state":0.0,"ir_funcs":13,"ir_nodes_after":1447,"ir_nodes_before":1447,"ir_nodes_deleted":0,"ir_nodes_modified":130,"ir_pass":"strength_reduce","jit_latency_ms":0.0,"node_count":1447,"pass_name":"strength_reduce","swarm_cycles":0,"timestamp":1776318801,"vram_usage_mb":0.0}
-{"deadlocks_healed":0,"event_type":"ir_pass_complete","gpu_temp_c":1447,"gpu_util_pct":1252,"h_t_state":-195.0,"ir_funcs":13,"ir_nodes_after":1252,"ir_nodes_before":1447,"ir_nodes_deleted":195,"ir_nodes_modified":0,"ir_pass":"dce2","jit_latency_ms":0.0,"node_count":1252,"pass_name":"dce2","swarm_cycles":0,"timestamp":1776318801,"vram_usage_mb":0.0}
-{"deadlocks_healed":0,"event_type":"summary","gpu_temp_c":1810,"gpu_util_pct":1252,"h_t_state":-558.0,"ir_passes":"dce,const_fold,strength_reduce,dce2","ir_reduction_pct":30.8,"ir_total_funcs":13,"ir_total_nodes_after":1252,"ir_total_nodes_before":1810,"ir_type":"summary","jit_latency_ms":0.0,"swarm_cycles":1,"timestamp":1776318801,"vram_usage_mb":30.8}
+zcc: warning: using synthesized header stub for stdio.h
+pp_process_include: stdio.h added 87 macros, total is 109
+cc_func: vec3_create
+[telem] fn=vec3_create used_regs=0x00 src=computed
+cc_func: apply_barrel_distortion_simd
+[telem] fn=apply_barrel_distortion_simd used_regs=0x00 src=computed
+cc_func: vec3_add
+[telem] fn=vec3_add used_regs=0x00 src=computed
+cc_func: vec3_sub
+[telem] fn=vec3_sub used_regs=0x00 src=computed
+cc_func: vec3_scale
+[telem] fn=vec3_scale used_regs=0x00 src=computed
+cc_func: vec3_dot
+[telem] fn=vec3_dot used_regs=0x00 src=computed
+cc_func: vec3_length
+[telem] fn=vec3_length used_regs=0x00 src=computed
+cc_func: vec3_normalize
+[telem] fn=vec3_normalize used_regs=0x00 src=computed
+cc_func: ray_sphere_intersect
+[telem] fn=ray_sphere_intersect used_regs=0x00 src=computed
+[telem] fn=ray_sphere_intersect bb=126 used_regs=0x00 src=computed
+[telem] fn=ray_sphere_intersect bb=127 used_regs=0x00 src=computed
+cc_func: trace_ray
+[telem] fn=trace_ray used_regs=0x03 src=computed
+[telem] fn=trace_ray bb=129 used_regs=0x03 src=computed
+[telem] fn=trace_ray bb=133 used_regs=0x03 src=computed
+[telem] fn=trace_ray bb=132 used_regs=0x03 src=computed
+[telem] fn=trace_ray bb=131 used_regs=0x03 src=computed
+[telem] fn=trace_ray bb=130 used_regs=0x03 src=computed
+[telem] fn=trace_ray bb=134 used_regs=0x03 src=computed
+cc_func: render_eye
+[telem] fn=render_eye used_regs=0x03 src=computed
+[telem] fn=render_eye bb=140 used_regs=0x03 src=computed
+[telem] fn=render_eye bb=143 used_regs=0x03 src=computed
+[telem] fn=render_eye bb=146 used_regs=0x03 src=computed
+[telem] fn=render_eye bb=147 used_regs=0x03 src=computed
+[telem] fn=render_eye bb=145 used_regs=0x03 src=computed
+[telem] fn=render_eye bb=144 used_regs=0x03 src=computed
+[telem] fn=render_eye bb=142 used_regs=0x03 src=computed
+[telem] fn=render_eye bb=141 used_regs=0x03 src=computed
+cc_func: setup_vr_scene
+[telem] fn=setup_vr_scene used_regs=0x00 src=computed
+cc_func: main
+[telem] fn=main used_regs=0x1F src=computed
+[telem] fn=main bb=154 used_regs=0x1F src=computed
+[telem] fn=main bb=157 used_regs=0x1F src=computed
+[telem] fn=main bb=159 used_regs=0x1F src=computed
+[telem] fn=main bb=158 used_regs=0x1F src=computed
+[telem] fn=main bb=160 used_regs=0x1F src=computed
+[telem] fn=main bb=162 used_regs=0x1F src=computed
+[telem] fn=main bb=161 used_regs=0x1F src=computed
+[telem] fn=main bb=156 used_regs=0x1F src=computed
+[telem] fn=main bb=155 used_regs=0x1F src=computed
+[ZCC-SNAPSHOT] Pass symbolic_cfg: IR=b9292ea5ae6619ab CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass symbolic_cfg: IR=bb1308e6dacdb70b CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass symbolic_cfg: IR=1fe5f1108298c9c3 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass symbolic_cfg: IR=2e574d193c272cb6 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass symbolic_cfg: IR=f1aa752880dfff3c CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass symbolic_cfg: IR=adb8d787404d6031 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass symbolic_cfg: IR=01d667cf9b1d39b0 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass symbolic_cfg: IR=d489b581c1163460 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass symbolic_cfg: IR=25950eef07517a00 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass symbolic_cfg: IR=388a9a86261d7429 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass symbolic_cfg: IR=4ceb8242816bb2fc CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass symbolic_cfg: IR=5210f23aa66340d2 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass symbolic_cfg: IR=12811c601d22f153 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+  [IR Pass] symbolic_cfg      : 13 funcs, 1761 nodes -> 1761 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass const_fold: IR=b9292ea5ae6619ab CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass const_fold: IR=bb1308e6dacdb70b CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass const_fold: IR=1fe5f1108298c9c3 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass const_fold: IR=2e574d193c272cb6 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass const_fold: IR=f1aa752880dfff3c CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass const_fold: IR=adb8d787404d6031 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass const_fold: IR=01d667cf9b1d39b0 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass const_fold: IR=d489b581c1163460 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass const_fold: IR=25950eef07517a00 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass const_fold: IR=388a9a86261d7429 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass const_fold: IR=4ceb8242816bb2fc CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass const_fold: IR=5210f23aa66340d2 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass const_fold: IR=12811c601d22f153 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+  [IR Pass] const_fold        : 13 funcs, 1761 nodes -> 1761 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass strength_reduce: IR=b9292ea5ae6619ab CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass strength_reduce: IR=bb1308e6dacdb70b CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass strength_reduce: IR=1fe5f1108298c9c3 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass strength_reduce: IR=2e574d193c272cb6 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass strength_reduce: IR=f1aa752880dfff3c CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass strength_reduce: IR=adb8d787404d6031 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass strength_reduce: IR=01d667cf9b1d39b0 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass strength_reduce: IR=d489b581c1163460 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass strength_reduce: IR=25950eef07517a00 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass strength_reduce: IR=388a9a86261d7429 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass strength_reduce: IR=4ceb8242816bb2fc CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass strength_reduce: IR=5210f23aa66340d2 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass strength_reduce: IR=12811c601d22f153 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+  [IR Pass] strength_reduce   : 13 funcs, 1761 nodes -> 1761 nodes (0 deleted, 111 modified)
+[ZCC-SNAPSHOT] Pass dominance: IR=c26e05489d0c98d7 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass dominance: IR=bb1308e6dacdb70b CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass dominance: IR=d495a38ca64a00b2 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass dominance: IR=689ab1670098e2b1 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass dominance: IR=5817cea9700aac68 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass dominance: IR=32363d2705d452d1 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass dominance: IR=01d667cf9b1d39b0 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass dominance: IR=d489b581c1163460 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass dominance: IR=534c6affc9f08913 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass dominance: IR=8ee58e32b058b8b6 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass dominance: IR=ef785b46c2adff8f CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass dominance: IR=ec2c9844a69d458d CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass dominance: IR=3df51e8899f260fd CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+  [IR Pass] dominance         : 13 funcs, 1761 nodes -> 1761 nodes (0 deleted, 48 modified)
+[ZCC-SNAPSHOT] Pass ssa: IR=c26e05489d0c98d7 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[SSA] Full construction → destruction complete (0 Φ removed)
+[ZCC-SNAPSHOT] Pass ssa: IR=bb1308e6dacdb70b CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[SSA] Full construction → destruction complete (0 Φ removed)
+[ZCC-SNAPSHOT] Pass ssa: IR=d495a38ca64a00b2 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[SSA] Full construction → destruction complete (0 Φ removed)
+[ZCC-SNAPSHOT] Pass ssa: IR=689ab1670098e2b1 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[SSA] Full construction → destruction complete (0 Φ removed)
+[ZCC-SNAPSHOT] Pass ssa: IR=5817cea9700aac68 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[SSA] Full construction → destruction complete (0 Φ removed)
+[ZCC-SNAPSHOT] Pass ssa: IR=32363d2705d452d1 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[SSA] Full construction → destruction complete (0 Φ removed)
+[ZCC-SNAPSHOT] Pass ssa: IR=01d667cf9b1d39b0 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[SSA] Full construction → destruction complete (0 Φ removed)
+[ZCC-SNAPSHOT] Pass ssa: IR=d489b581c1163460 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[SSA] Full construction → destruction complete (0 Φ removed)
+[ZCC-SNAPSHOT] Pass ssa: IR=534c6affc9f08913 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[SSA] Full construction → destruction complete (0 Φ removed)
+[ZCC-SNAPSHOT] Pass ssa: IR=8ee58e32b058b8b6 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[SSA] Full construction → destruction complete (0 Φ removed)
+[ZCC-SNAPSHOT] Pass ssa: IR=ef785b46c2adff8f CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[SSA] Full construction → destruction complete (0 Φ removed)
+[ZCC-SNAPSHOT] Pass ssa: IR=ec2c9844a69d458d CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[SSA] Full construction → destruction complete (0 Φ removed)
+[ZCC-SNAPSHOT] Pass ssa: IR=3df51e8899f260fd CFG=0415ef81fb44596e DOM=617c690e6b873370 LIVE=0000000000000000
+[SSA] Full construction → destruction complete (0 Φ removed)
+  [IR Pass] ssa               : 13 funcs, 0 nodes -> 0 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass taint_propagate: IR=c26e05489d0c98d7 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass taint_propagate: IR=bb1308e6dacdb70b CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass taint_propagate: IR=d495a38ca64a00b2 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass taint_propagate: IR=689ab1670098e2b1 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass taint_propagate: IR=5817cea9700aac68 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass taint_propagate: IR=32363d2705d452d1 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass taint_propagate: IR=01d667cf9b1d39b0 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass taint_propagate: IR=d489b581c1163460 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass taint_propagate: IR=534c6affc9f08913 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass taint_propagate: IR=8ee58e32b058b8b6 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass taint_propagate: IR=ef785b46c2adff8f CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass taint_propagate: IR=ec2c9844a69d458d CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass taint_propagate: IR=3df51e8899f260fd CFG=0415ef81fb44596e DOM=617c690e6b873370 LIVE=0000000000000000
+  [IR Pass] taint_propagate   : 13 funcs, 1761 nodes -> 1761 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass auto_healer: IR=c26e05489d0c98d7 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass auto_healer: IR=bb1308e6dacdb70b CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass auto_healer: IR=d495a38ca64a00b2 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass auto_healer: IR=689ab1670098e2b1 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass auto_healer: IR=5817cea9700aac68 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass auto_healer: IR=32363d2705d452d1 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass auto_healer: IR=01d667cf9b1d39b0 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass auto_healer: IR=d489b581c1163460 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass auto_healer: IR=534c6affc9f08913 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass auto_healer: IR=8ee58e32b058b8b6 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass auto_healer: IR=ef785b46c2adff8f CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass auto_healer: IR=ec2c9844a69d458d CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass auto_healer: IR=3df51e8899f260fd CFG=0415ef81fb44596e DOM=617c690e6b873370 LIVE=0000000000000000
+  [IR Pass] auto_healer       : 13 funcs, 1761 nodes -> 1761 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass dce: IR=c26e05489d0c98d7 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  addr %stack_-8,  -> %t0
+  load %stack_-8,  -> %t1
+  addr %stack_-40,  -> %t2
+  store %t1,  -> %t2
+  addr %stack_-16,  -> %t3
+  load %stack_-16,  -> %t4
+  addr %stack_-40,  -> %t5
+  const 4,  -> %t6
+  copy %t5,  -> %t7
+  store %t4,  -> %t7
+  addr %stack_-24,  -> %t8
+  load %stack_-24,  -> %t9
+  addr %stack_-40,  -> %t10
+  const 8,  -> %t11
+  copy %t10,  -> %t12
+  store %t9,  -> %t12
+  addr %stack_-40,  -> %t13
+  load %stack_-40,  -> %t14
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: addr %stack_-8,  -> %t0
+[dce] deleted: addr %stack_-16,  -> %t3
+[dce] deleted: const 4,  -> %t6
+[dce] deleted: addr %stack_-24,  -> %t8
+[dce] deleted: const 8,  -> %t11
+[dce] deleted: addr %stack_-40,  -> %t13
+[dce] deleted: load %stack_-40,  -> %t14
+[ZCC-SNAPSHOT] Pass dce: IR=bb1308e6dacdb70b CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  addr %stack_-8,  -> %t0
+  load %stack_-8,  -> %t1
+  load %t1,  -> %t2
+  addr %stack_-8,  -> %t3
+  load %stack_-8,  -> %t4
+  load %t4,  -> %t5
+  mul f_lhs, f_rhs -> %t6
+  addr %stack_-16,  -> %t7
+  load %stack_-16,  -> %t8
+  load %t8,  -> %t9
+  addr %stack_-16,  -> %t10
+  load %stack_-16,  -> %t11
+  load %t11,  -> %t12
+  mul f_lhs, f_rhs -> %t13
+  add f_lhs, f_rhs -> %t14
+  addr %stack_-40,  -> %t15
+  store %t14,  -> %t15
+  addr %stack_-40,  -> %t16
+  load %stack_-40,  -> %t17
+  addr %stack_-40,  -> %t18
+  load %stack_-40,  -> %t19
+  mul f_lhs, f_rhs -> %t20
+  addr %stack_-48,  -> %t21
+  store %t20,  -> %t21
+  fconst ,  -> %t22
+  addr %stack_-24,  -> %t23
+  load %stack_-24,  -> %t24
+  addr %stack_-40,  -> %t25
+  load %stack_-40,  -> %t26
+  mul f_lhs, f_rhs -> %t27
+  add f_lhs, f_rhs -> %t28
+  addr %stack_-32,  -> %t29
+  load %stack_-32,  -> %t30
+  addr %stack_-48,  -> %t31
+  load %stack_-48,  -> %t32
+  mul f_lhs, f_rhs -> %t33
+  add f_lhs, f_rhs -> %t34
+  addr %stack_-56,  -> %t35
+  store %t34,  -> %t35
+  addr %stack_-8,  -> %t36
+  load %stack_-8,  -> %t37
+  addr %stack_-56,  -> %t38
+  load %stack_-56,  -> %t39
+  mul ca_lhs, ca_rhs -> %t41
+  addr %stack_-16,  -> %t42
+  load %stack_-16,  -> %t43
+  addr %stack_-56,  -> %t44
+  load %stack_-56,  -> %t45
+  mul ca_lhs, ca_rhs -> %t47
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: addr %stack_-8,  -> %t0
+[dce] deleted: load %t1,  -> %t2
+[dce] deleted: addr %stack_-8,  -> %t3
+[dce] deleted: load %t4,  -> %t5
+[dce] deleted: mul f_lhs, f_rhs -> %t6
+[dce] deleted: addr %stack_-16,  -> %t7
+[dce] deleted: load %t8,  -> %t9
+[dce] deleted: addr %stack_-16,  -> %t10
+[dce] deleted: load %t11,  -> %t12
+[dce] deleted: mul f_lhs, f_rhs -> %t13
+[dce] deleted: addr %stack_-40,  -> %t16
+[dce] deleted: load %stack_-40,  -> %t17
+[dce] deleted: addr %stack_-40,  -> %t18
+[dce] deleted: load %stack_-40,  -> %t19
+[dce] deleted: fconst ,  -> %t22
+[dce] deleted: addr %stack_-24,  -> %t23
+[dce] deleted: load %stack_-24,  -> %t24
+[dce] deleted: addr %stack_-40,  -> %t25
+[dce] deleted: load %stack_-40,  -> %t26
+[dce] deleted: mul f_lhs, f_rhs -> %t27
+[dce] deleted: add f_lhs, f_rhs -> %t28
+[dce] deleted: addr %stack_-32,  -> %t29
+[dce] deleted: load %stack_-32,  -> %t30
+[dce] deleted: addr %stack_-48,  -> %t31
+[dce] deleted: load %stack_-48,  -> %t32
+[dce] deleted: mul f_lhs, f_rhs -> %t33
+[dce] deleted: addr %stack_-8,  -> %t36
+[dce] deleted: load %stack_-8,  -> %t37
+[dce] deleted: addr %stack_-56,  -> %t38
+[dce] deleted: load %stack_-56,  -> %t39
+[dce] deleted: mul ca_lhs, ca_rhs -> %t41
+[dce] deleted: addr %stack_-16,  -> %t42
+[dce] deleted: load %stack_-16,  -> %t43
+[dce] deleted: addr %stack_-56,  -> %t44
+[dce] deleted: load %stack_-56,  -> %t45
+[dce] deleted: mul ca_lhs, ca_rhs -> %t47
+[ZCC-SNAPSHOT] Pass dce: IR=d495a38ca64a00b2 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  addr %stack_-16,  -> %t0
+  load %t0,  -> %t1
+  addr %stack_-32,  -> %t2
+  load %t2,  -> %t3
+  add f_lhs, f_rhs -> %t4
+  addr %stack_-48,  -> %t5
+  store %t4,  -> %t5
+  addr %stack_-16,  -> %t6
+  const 4,  -> %t7
+  copy %t6,  -> %t8
+  load %t8,  -> %t9
+  addr %stack_-32,  -> %t10
+  const 4,  -> %t11
+  copy %t10,  -> %t12
+  load %t12,  -> %t13
+  add f_lhs, f_rhs -> %t14
+  addr %stack_-48,  -> %t15
+  const 4,  -> %t16
+  copy %t15,  -> %t17
+  store %t14,  -> %t17
+  addr %stack_-16,  -> %t18
+  const 8,  -> %t19
+  copy %t18,  -> %t20
+  load %t20,  -> %t21
+  addr %stack_-32,  -> %t22
+  const 8,  -> %t23
+  copy %t22,  -> %t24
+  load %t24,  -> %t25
+  add f_lhs, f_rhs -> %t26
+  addr %stack_-48,  -> %t27
+  const 8,  -> %t28
+  copy %t27,  -> %t29
+  store %t26,  -> %t29
+  addr %stack_-48,  -> %t30
+  load %stack_-48,  -> %t31
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: load %t0,  -> %t1
+[dce] deleted: load %t2,  -> %t3
+[dce] deleted: const 4,  -> %t7
+[dce] deleted: load %t8,  -> %t9
+[dce] deleted: const 4,  -> %t11
+[dce] deleted: load %t12,  -> %t13
+[dce] deleted: const 4,  -> %t16
+[dce] deleted: const 8,  -> %t19
+[dce] deleted: load %t20,  -> %t21
+[dce] deleted: const 8,  -> %t23
+[dce] deleted: load %t24,  -> %t25
+[dce] deleted: const 8,  -> %t28
+[dce] deleted: addr %stack_-48,  -> %t30
+[dce] deleted: load %stack_-48,  -> %t31
+[ZCC-SNAPSHOT] Pass dce: IR=689ab1670098e2b1 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  addr %stack_-16,  -> %t0
+  load %t0,  -> %t1
+  addr %stack_-32,  -> %t2
+  load %t2,  -> %t3
+  sub f_lhs, f_rhs -> %t4
+  addr %stack_-48,  -> %t5
+  store %t4,  -> %t5
+  addr %stack_-16,  -> %t6
+  const 4,  -> %t7
+  copy %t6,  -> %t8
+  load %t8,  -> %t9
+  addr %stack_-32,  -> %t10
+  const 4,  -> %t11
+  copy %t10,  -> %t12
+  load %t12,  -> %t13
+  sub f_lhs, f_rhs -> %t14
+  addr %stack_-48,  -> %t15
+  const 4,  -> %t16
+  copy %t15,  -> %t17
+  store %t14,  -> %t17
+  addr %stack_-16,  -> %t18
+  const 8,  -> %t19
+  copy %t18,  -> %t20
+  load %t20,  -> %t21
+  addr %stack_-32,  -> %t22
+  const 8,  -> %t23
+  copy %t22,  -> %t24
+  load %t24,  -> %t25
+  sub f_lhs, f_rhs -> %t26
+  addr %stack_-48,  -> %t27
+  const 8,  -> %t28
+  copy %t27,  -> %t29
+  store %t26,  -> %t29
+  addr %stack_-48,  -> %t30
+  load %stack_-48,  -> %t31
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: load %t0,  -> %t1
+[dce] deleted: load %t2,  -> %t3
+[dce] deleted: const 4,  -> %t7
+[dce] deleted: load %t8,  -> %t9
+[dce] deleted: const 4,  -> %t11
+[dce] deleted: load %t12,  -> %t13
+[dce] deleted: const 4,  -> %t16
+[dce] deleted: const 8,  -> %t19
+[dce] deleted: load %t20,  -> %t21
+[dce] deleted: const 8,  -> %t23
+[dce] deleted: load %t24,  -> %t25
+[dce] deleted: const 8,  -> %t28
+[dce] deleted: addr %stack_-48,  -> %t30
+[dce] deleted: load %stack_-48,  -> %t31
+[ZCC-SNAPSHOT] Pass dce: IR=5817cea9700aac68 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  addr %stack_-16,  -> %t0
+  load %t0,  -> %t1
+  addr %stack_-24,  -> %t2
+  load %stack_-24,  -> %t3
+  mul f_lhs, f_rhs -> %t4
+  addr %stack_-40,  -> %t5
+  store %t4,  -> %t5
+  addr %stack_-16,  -> %t6
+  const 4,  -> %t7
+  copy %t6,  -> %t8
+  load %t8,  -> %t9
+  addr %stack_-24,  -> %t10
+  load %stack_-24,  -> %t11
+  mul f_lhs, f_rhs -> %t12
+  addr %stack_-40,  -> %t13
+  const 4,  -> %t14
+  copy %t13,  -> %t15
+  store %t12,  -> %t15
+  addr %stack_-16,  -> %t16
+  const 8,  -> %t17
+  copy %t16,  -> %t18
+  load %t18,  -> %t19
+  addr %stack_-24,  -> %t20
+  load %stack_-24,  -> %t21
+  mul f_lhs, f_rhs -> %t22
+  addr %stack_-40,  -> %t23
+  const 8,  -> %t24
+  copy %t23,  -> %t25
+  store %t22,  -> %t25
+  addr %stack_-40,  -> %t26
+  load %stack_-40,  -> %t27
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: load %t0,  -> %t1
+[dce] deleted: addr %stack_-24,  -> %t2
+[dce] deleted: load %stack_-24,  -> %t3
+[dce] deleted: const 4,  -> %t7
+[dce] deleted: load %t8,  -> %t9
+[dce] deleted: addr %stack_-24,  -> %t10
+[dce] deleted: load %stack_-24,  -> %t11
+[dce] deleted: const 4,  -> %t14
+[dce] deleted: const 8,  -> %t17
+[dce] deleted: load %t18,  -> %t19
+[dce] deleted: addr %stack_-24,  -> %t20
+[dce] deleted: load %stack_-24,  -> %t21
+[dce] deleted: const 8,  -> %t24
+[dce] deleted: addr %stack_-40,  -> %t26
+[dce] deleted: load %stack_-40,  -> %t27
+[ZCC-SNAPSHOT] Pass dce: IR=32363d2705d452d1 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  addr %stack_-16,  -> %t0
+  load %t0,  -> %t1
+  addr %stack_-32,  -> %t2
+  load %t2,  -> %t3
+  mul f_lhs, f_rhs -> %t4
+  addr %stack_-16,  -> %t5
+  const 4,  -> %t6
+  copy %t5,  -> %t7
+  load %t7,  -> %t8
+  addr %stack_-32,  -> %t9
+  const 4,  -> %t10
+  copy %t9,  -> %t11
+  load %t11,  -> %t12
+  mul f_lhs, f_rhs -> %t13
+  add f_lhs, f_rhs -> %t14
+  addr %stack_-16,  -> %t15
+  const 8,  -> %t16
+  copy %t15,  -> %t17
+  load %t17,  -> %t18
+  addr %stack_-32,  -> %t19
+  const 8,  -> %t20
+  copy %t19,  -> %t21
+  load %t21,  -> %t22
+  mul f_lhs, f_rhs -> %t23
+  add f_lhs, f_rhs -> %t24
+  ret %t24,  -> 
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: load %t0,  -> %t1
+[dce] deleted: load %t2,  -> %t3
+[dce] deleted: mul f_lhs, f_rhs -> %t4
+[dce] deleted: const 4,  -> %t6
+[dce] deleted: load %t7,  -> %t8
+[dce] deleted: const 4,  -> %t10
+[dce] deleted: load %t11,  -> %t12
+[dce] deleted: mul f_lhs, f_rhs -> %t13
+[dce] deleted: add f_lhs, f_rhs -> %t14
+[dce] deleted: const 8,  -> %t16
+[dce] deleted: load %t17,  -> %t18
+[dce] deleted: const 8,  -> %t20
+[dce] deleted: load %t21,  -> %t22
+[dce] deleted: mul f_lhs, f_rhs -> %t23
+[ZCC-SNAPSHOT] Pass dce: IR=01d667cf9b1d39b0 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  addr %stack_-16,  -> %t0
+  load %stack_-16,  -> %t1
+  addr %stack_-16,  -> %t2
+  load %stack_-16,  -> %t3
+  arg %t3,  -> 
+  arg %t1,  -> 
+  call ,  -> %t4
+  arg %t4,  -> 
+  call ,  -> %t5
+  ret %t5,  -> 
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: addr %stack_-16,  -> %t0
+[dce] deleted: addr %stack_-16,  -> %t2
+[ZCC-SNAPSHOT] Pass dce: IR=d489b581c1163460 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  addr %stack_-16,  -> %t0
+  load %stack_-16,  -> %t1
+  arg %t1,  -> 
+  call ,  -> %t2
+  addr %stack_-24,  -> %t3
+  store %t2,  -> %t3
+  addr %stack_-24,  -> %t4
+  load %stack_-24,  -> %t5
+  fconst ,  -> %t6
+  gt f_lhs, f_rhs -> %t7
+  br_if %t7,  -> 
+  fconst ,  -> %t8
+  addr %stack_-24,  -> %t9
+  load %stack_-24,  -> %t10
+  div f_lhs, f_rhs -> %t11
+  addr %stack_-16,  -> %t12
+  load %stack_-16,  -> %t13
+  arg %t13,  -> 
+  arg %t11,  -> 
+  call ,  -> %t14
+  br ,  -> 
+  label ,  -> 
+  addr %stack_-16,  -> %t15
+  load %stack_-16,  -> %t16
+  label ,  -> 
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: addr %stack_-16,  -> %t0
+[dce] deleted: addr %stack_-24,  -> %t4
+[dce] deleted: load %stack_-24,  -> %t5
+[dce] deleted: fconst ,  -> %t6
+[dce] deleted: fconst ,  -> %t8
+[dce] deleted: addr %stack_-24,  -> %t9
+[dce] deleted: load %stack_-24,  -> %t10
+[dce] deleted: addr %stack_-16,  -> %t12
+[dce] deleted: addr %stack_-16,  -> %t15
+[dce] deleted: load %stack_-16,  -> %t16
+[ZCC-SNAPSHOT] Pass dce: IR=534c6affc9f08913 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  addr %stack_-8,  -> %t0
+  load %stack_-8,  -> %t1
+  load %t1,  -> %t2
+  addr %stack_-48,  -> %t3
+  store %t2,  -> %t3
+  addr %stack_-16,  -> %t4
+  load %stack_-16,  -> %t5
+  load %t5,  -> %t6
+  addr %stack_-64,  -> %t7
+  store %t6,  -> %t7
+  addr %stack_-24,  -> %t8
+  load %stack_-24,  -> %t9
+  load %t9,  -> %t10
+  addr %stack_-88,  -> %t11
+  store %t10,  -> %t11
+  addr %stack_-88,  -> %t12
+  load %t12,  -> %t13
+  addr %stack_-48,  -> %t14
+  load %stack_-48,  -> %t15
+  arg %t15,  -> 
+  arg %t13,  -> 
+  call ,  -> %t16
+  addr %stack_-104,  -> %t17
+  store %t16,  -> %t17
+  addr %stack_-64,  -> %t18
+  load %stack_-64,  -> %t19
+  addr %stack_-64,  -> %t20
+  load %stack_-64,  -> %t21
+  arg %t21,  -> 
+  arg %t19,  -> 
+  call ,  -> %t22
+  addr %stack_-112,  -> %t23
+  store %t22,  -> %t23
+  fconst ,  -> %t24
+  addr %stack_-64,  -> %t25
+  load %stack_-64,  -> %t26
+  addr %stack_-104,  -> %t27
+  load %stack_-104,  -> %t28
+  arg %t28,  -> 
+  arg %t26,  -> 
+  call ,  -> %t29
+  mul f_lhs, f_rhs -> %t30
+  addr %stack_-120,  -> %t31
+  store %t30,  -> %t31
+  addr %stack_-104,  -> %t32
+  load %stack_-104,  -> %t33
+  addr %stack_-104,  -> %t34
+  load %stack_-104,  -> %t35
+  arg %t35,  -> 
+  arg %t33,  -> 
+  call ,  -> %t36
+  addr %stack_-88,  -> %t37
+  const 12,  -> %t38
+  copy %t37,  -> %t39
+  load %t39,  -> %t40
+  addr %stack_-88,  -> %t41
+  const 12,  -> %t42
+  copy %t41,  -> %t43
+  load %t43,  -> %t44
+  mul f_lhs, f_rhs -> %t45
+  sub f_lhs, f_rhs -> %t46
+  addr %stack_-128,  -> %t47
+  store %t46,  -> %t47
+  addr %stack_-120,  -> %t48
+  load %stack_-120,  -> %t49
+  addr %stack_-120,  -> %t50
+  load %stack_-120,  -> %t51
+  mul f_lhs, f_rhs -> %t52
+  fconst ,  -> %t53
+  addr %stack_-112,  -> %t54
+  load %stack_-112,  -> %t55
+  mul f_lhs, f_rhs -> %t56
+  addr %stack_-128,  -> %t57
+  load %stack_-128,  -> %t58
+  mul f_lhs, f_rhs -> %t59
+  sub f_lhs, f_rhs -> %t60
+  addr %stack_-136,  -> %t61
+  store %t60,  -> %t61
+  addr %stack_-136,  -> %t62
+  load %stack_-136,  -> %t63
+  fconst ,  -> %t64
+  lt f_lhs, f_rhs -> %t65
+  br_if %t65,  -> 
+  const ,  -> %t66
+  ret %t66,  -> 
+  label ,  -> 
+  addr %stack_-120,  -> %t67
+  load %stack_-120,  -> %t68
+  neg f_lhs,  -> %t69
+  addr %stack_-136,  -> %t70
+  load %stack_-136,  -> %t71
+  arg %t71,  -> 
+  call ,  -> %t72
+  sub f_lhs, f_rhs -> %t73
+  fconst ,  -> %t74
+  addr %stack_-112,  -> %t75
+  load %stack_-112,  -> %t76
+  mul f_lhs, f_rhs -> %t77
+  div f_lhs, f_rhs -> %t78
+  addr %stack_-144,  -> %t79
+  store %t78,  -> %t79
+  addr %stack_-144,  -> %t80
+  load %stack_-144,  -> %t81
+  fconst ,  -> %t82
+  lt f_lhs, f_rhs -> %t83
+  br_if %t83,  -> 
+  const ,  -> %t84
+  ret %t84,  -> 
+  label ,  -> 
+  addr %stack_-144,  -> %t85
+  load %stack_-144,  -> %t86
+  addr %stack_-32,  -> %t87
+  load %stack_-32,  -> %t88
+  store %t86,  -> %t88
+  const ,  -> %t89
+  ret %t89,  -> 
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: addr %stack_-8,  -> %t0
+[dce] deleted: addr %stack_-16,  -> %t4
+[dce] deleted: addr %stack_-24,  -> %t8
+[dce] deleted: addr %stack_-48,  -> %t14
+[dce] deleted: addr %stack_-64,  -> %t18
+[dce] deleted: addr %stack_-64,  -> %t20
+[dce] deleted: fconst ,  -> %t24
+[dce] deleted: addr %stack_-64,  -> %t25
+[dce] deleted: addr %stack_-104,  -> %t27
+[dce] deleted: addr %stack_-104,  -> %t32
+[dce] deleted: addr %stack_-104,  -> %t34
+[dce] deleted: const 12,  -> %t38
+[dce] deleted: load %t39,  -> %t40
+[dce] deleted: const 12,  -> %t42
+[dce] deleted: load %t43,  -> %t44
+[dce] deleted: mul f_lhs, f_rhs -> %t45
+[dce] deleted: addr %stack_-120,  -> %t48
+[dce] deleted: load %stack_-120,  -> %t49
+[dce] deleted: addr %stack_-120,  -> %t50
+[dce] deleted: load %stack_-120,  -> %t51
+[dce] deleted: mul f_lhs, f_rhs -> %t52
+[dce] deleted: fconst ,  -> %t53
+[dce] deleted: addr %stack_-112,  -> %t54
+[dce] deleted: load %stack_-112,  -> %t55
+[dce] deleted: mul f_lhs, f_rhs -> %t56
+[dce] deleted: addr %stack_-128,  -> %t57
+[dce] deleted: load %stack_-128,  -> %t58
+[dce] deleted: mul f_lhs, f_rhs -> %t59
+[dce] deleted: addr %stack_-136,  -> %t62
+[dce] deleted: load %stack_-136,  -> %t63
+[dce] deleted: fconst ,  -> %t64
+[dce] deleted: addr %stack_-120,  -> %t67
+[dce] deleted: load %stack_-120,  -> %t68
+[dce] deleted: neg f_lhs,  -> %t69
+[dce] deleted: addr %stack_-136,  -> %t70
+[dce] deleted: sub f_lhs, f_rhs -> %t73
+[dce] deleted: fconst ,  -> %t74
+[dce] deleted: addr %stack_-112,  -> %t75
+[dce] deleted: load %stack_-112,  -> %t76
+[dce] deleted: mul f_lhs, f_rhs -> %t77
+[dce] deleted: addr %stack_-144,  -> %t80
+[dce] deleted: load %stack_-144,  -> %t81
+[dce] deleted: fconst ,  -> %t82
+[dce] deleted: addr %stack_-144,  -> %t85
+[dce] deleted: addr %stack_-32,  -> %t87
+[ZCC-SNAPSHOT] Pass dce: IR=8ee58e32b058b8b6 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  addr %stack_-8,  -> %t0
+  load %stack_-8,  -> %t1
+  load %t1,  -> %t2
+  addr %stack_-72,  -> %t3
+  store %t2,  -> %t3
+  addr %stack_-16,  -> %t4
+  load %stack_-16,  -> %t5
+  load %t5,  -> %t6
+  addr %stack_-88,  -> %t7
+  store %t6,  -> %t7
+  fconst ,  -> %t8
+  addr %stack_-96,  -> %t9
+  store %t8,  -> %t9
+  const ,  -> %t10
+  store %t10,  -> %stack_-104
+  const ,  -> %t11
+  store %t11,  -> %stack_-112
+  label ,  -> 
+  load %stack_-112,  -> %t12
+  addr %stack_-32,  -> %t13
+  load %stack_-32,  -> %t14
+  lt %t12, %t14 -> %t15
+  br_if %t15,  -> 
+  addr %stack_-120,  -> %t16
+  addr %t16,  -> %t17
+  cast %t17,  -> %t18
+  addr %stack_-24,  -> %t19
+  load %stack_-24,  -> %t20
+  load %stack_-112,  -> %t21
+  mul %t21, 20 -> %t22
+  add %t20, %t22 -> %t23
+  addr %t23,  -> %t24
+  cast %t24,  -> %t25
+  addr %stack_-88,  -> %t26
+  addr %t26,  -> %t27
+  cast %t27,  -> %t28
+  addr %stack_-72,  -> %t29
+  addr %t29,  -> %t30
+  cast %t30,  -> %t31
+  arg %t31,  -> 
+  arg %t28,  -> 
+  arg %t25,  -> 
+  arg %t18,  -> 
+  call ,  -> %t32
+  br_if %t32,  -> 
+  addr %stack_-120,  -> %t33
+  load %stack_-120,  -> %t34
+  addr %stack_-96,  -> %t35
+  load %stack_-96,  -> %t36
+  lt f_lhs, f_rhs -> %t37
+  br_if %t37,  -> 
+  addr %stack_-120,  -> %t38
+  load %stack_-120,  -> %t39
+  addr %stack_-96,  -> %t40
+  store %t39,  -> %t40
+  load %stack_-112,  -> %t41
+  store %t41,  -> %stack_-104
+  label ,  -> 
+  label ,  -> 
+  label ,  -> 
+  br ,  -> 
+  label ,  -> 
+  load %stack_-104,  -> %t42
+  const ,  -> %t43
+  lt %t42, %t43 -> %t44
+  br_if %t44,  -> 
+  fconst ,  -> %t45
+  addr %stack_-88,  -> %t46
+  const 4,  -> %t47
+  copy %t46,  -> %t48
+  load %t48,  -> %t49
+  fconst ,  -> %t50
+  add f_lhs, f_rhs -> %t51
+  mul f_lhs, f_rhs -> %t52
+  addr %stack_-128,  -> %t53
+  store %t52,  -> %t53
+  fconst ,  -> %t54
+  addr %stack_-128,  -> %t55
+  load %stack_-128,  -> %t56
+  sub f_lhs, f_rhs -> %t57
+  fconst ,  -> %t58
+  mul f_lhs, f_rhs -> %t59
+  addr %stack_-128,  -> %t60
+  load %stack_-128,  -> %t61
+  fconst ,  -> %t62
+  mul f_lhs, f_rhs -> %t63
+  add f_lhs, f_rhs -> %t64
+  cast %t64,  -> %t65
+  addr %stack_-40,  -> %t66
+  load %stack_-40,  -> %t67
+  store %t65,  -> %t67
+  fconst ,  -> %t68
+  addr %stack_-128,  -> %t69
+  load %stack_-128,  -> %t70
+  sub f_lhs, f_rhs -> %t71
+  fconst ,  -> %t72
+  mul f_lhs, f_rhs -> %t73
+  addr %stack_-128,  -> %t74
+  load %stack_-128,  -> %t75
+  fconst ,  -> %t76
+  mul f_lhs, f_rhs -> %t77
+  add f_lhs, f_rhs -> %t78
+  cast %t78,  -> %t79
+  addr %stack_-48,  -> %t80
+  load %stack_-48,  -> %t81
+  store %t79,  -> %t81
+  fconst ,  -> %t82
+  addr %stack_-128,  -> %t83
+  load %stack_-128,  -> %t84
+  sub f_lhs, f_rhs -> %t85
+  fconst ,  -> %t86
+  mul f_lhs, f_rhs -> %t87
+  addr %stack_-128,  -> %t88
+  load %stack_-128,  -> %t89
+  fconst ,  -> %t90
+  mul f_lhs, f_rhs -> %t91
+  add f_lhs, f_rhs -> %t92
+  cast %t92,  -> %t93
+  addr %stack_-56,  -> %t94
+  load %stack_-56,  -> %t95
+  store %t93,  -> %t95
+  ret ,  -> 
+  label ,  -> 
+  addr %stack_-96,  -> %t96
+  load %stack_-96,  -> %t97
+  addr %stack_-88,  -> %t98
+  load %stack_-88,  -> %t99
+  arg %t99,  -> 
+  arg %t97,  -> 
+  call ,  -> %t100
+  addr %stack_-72,  -> %t101
+  load %stack_-72,  -> %t102
+  arg %t102,  -> 
+  arg %t100,  -> 
+  call ,  -> %t103
+  addr %stack_-144,  -> %t104
+  store %t103,  -> %t104
+  addr %stack_-24,  -> %t105
+  load %stack_-24,  -> %t106
+  load %stack_-104,  -> %t107
+  mul %t107, 20 -> %t108
+  add %t106, %t108 -> %t109
+  load %t109,  -> %t110
+  addr %stack_-144,  -> %t111
+  load %stack_-144,  -> %t112
+  arg %t112,  -> 
+  arg %t110,  -> 
+  call ,  -> %t113
+  arg %t113,  -> 
+  call ,  -> %t114
+  addr %stack_-160,  -> %t115
+  store %t114,  -> %t115
+  fconst ,  -> %t116
+  fconst ,  -> %t117
+  fconst ,  -> %t118
+  arg %t118,  -> 
+  arg %t117,  -> 
+  arg %t116,  -> 
+  call ,  -> %t119
+  arg %t119,  -> 
+  call ,  -> %t120
+  addr %stack_-176,  -> %t121
+  store %t120,  -> %t121
+  addr %stack_-176,  -> %t122
+  load %stack_-176,  -> %t123
+  addr %stack_-160,  -> %t124
+  load %stack_-160,  -> %t125
+  arg %t125,  -> 
+  arg %t123,  -> 
+  call ,  -> %t126
+  fconst ,  -> %t127
+  arg %t127,  -> 
+  arg %t126,  -> 
+  call ,  -> %t128
+  addr %stack_-184,  -> %t129
+  store %t128,  -> %t129
+  fconst ,  -> %t130
+  addr %stack_-192,  -> %t131
+  store %t130,  -> %t131
+  addr %stack_-192,  -> %t132
+  load %stack_-192,  -> %t133
+  addr %stack_-184,  -> %t134
+  load %stack_-184,  -> %t135
+  fconst ,  -> %t136
+  mul f_lhs, f_rhs -> %t137
+  add f_lhs, f_rhs -> %t138
+  addr %stack_-200,  -> %t139
+  store %t138,  -> %t139
+  addr %stack_-24,  -> %t140
+  load %stack_-24,  -> %t141
+  load %stack_-104,  -> %t142
+  mul %t142, 20 -> %t143
+  add %t141, %t143 -> %t144
+  const 16,  -> %t145
+  copy %t144,  -> %t146
+  load %t146,  -> %t147
+  cast %t147,  -> %t148
+  addr %stack_-200,  -> %t149
+  load %stack_-200,  -> %t150
+  mul f_lhs, f_rhs -> %t151
+  cast %t151,  -> %t152
+  addr %stack_-40,  -> %t153
+  load %stack_-40,  -> %t154
+  store %t152,  -> %t154
+  addr %stack_-24,  -> %t155
+  load %stack_-24,  -> %t156
+  load %stack_-104,  -> %t157
+  mul %t157, 20 -> %t158
+  add %t156, %t158 -> %t159
+  const 17,  -> %t160
+  copy %t159,  -> %t161
+  load %t161,  -> %t162
+  cast %t162,  -> %t163
+  addr %stack_-200,  -> %t164
+  load %stack_-200,  -> %t165
+  mul f_lhs, f_rhs -> %t166
+  cast %t166,  -> %t167
+  addr %stack_-48,  -> %t168
+  load %stack_-48,  -> %t169
+  store %t167,  -> %t169
+  addr %stack_-24,  -> %t170
+  load %stack_-24,  -> %t171
+  load %stack_-104,  -> %t172
+  mul %t172, 20 -> %t173
+  add %t171, %t173 -> %t174
+  const 18,  -> %t175
+  copy %t174,  -> %t176
+  load %t176,  -> %t177
+  cast %t177,  -> %t178
+  addr %stack_-200,  -> %t179
+  load %stack_-200,  -> %t180
+  mul f_lhs, f_rhs -> %t181
+  cast %t181,  -> %t182
+  addr %stack_-56,  -> %t183
+  load %stack_-56,  -> %t184
+  store %t182,  -> %t184
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: addr %stack_-8,  -> %t0
+[dce] deleted: addr %stack_-16,  -> %t4
+[dce] deleted: addr %stack_-32,  -> %t13
+[dce] deleted: addr %stack_-24,  -> %t19
+[dce] deleted: addr %stack_-120,  -> %t33
+[dce] deleted: load %stack_-120,  -> %t34
+[dce] deleted: addr %stack_-96,  -> %t35
+[dce] deleted: load %stack_-96,  -> %t36
+[dce] deleted: addr %stack_-120,  -> %t38
+[dce] deleted: fconst ,  -> %t45
+[dce] deleted: const 4,  -> %t47
+[dce] deleted: load %t48,  -> %t49
+[dce] deleted: fconst ,  -> %t50
+[dce] deleted: add f_lhs, f_rhs -> %t51
+[dce] deleted: fconst ,  -> %t54
+[dce] deleted: addr %stack_-128,  -> %t55
+[dce] deleted: load %stack_-128,  -> %t56
+[dce] deleted: sub f_lhs, f_rhs -> %t57
+[dce] deleted: fconst ,  -> %t58
+[dce] deleted: mul f_lhs, f_rhs -> %t59
+[dce] deleted: addr %stack_-128,  -> %t60
+[dce] deleted: load %stack_-128,  -> %t61
+[dce] deleted: fconst ,  -> %t62
+[dce] deleted: mul f_lhs, f_rhs -> %t63
+[dce] deleted: addr %stack_-40,  -> %t66
+[dce] deleted: fconst ,  -> %t68
+[dce] deleted: addr %stack_-128,  -> %t69
+[dce] deleted: load %stack_-128,  -> %t70
+[dce] deleted: sub f_lhs, f_rhs -> %t71
+[dce] deleted: fconst ,  -> %t72
+[dce] deleted: mul f_lhs, f_rhs -> %t73
+[dce] deleted: addr %stack_-128,  -> %t74
+[dce] deleted: load %stack_-128,  -> %t75
+[dce] deleted: fconst ,  -> %t76
+[dce] deleted: mul f_lhs, f_rhs -> %t77
+[dce] deleted: addr %stack_-48,  -> %t80
+[dce] deleted: fconst ,  -> %t82
+[dce] deleted: addr %stack_-128,  -> %t83
+[dce] deleted: load %stack_-128,  -> %t84
+[dce] deleted: sub f_lhs, f_rhs -> %t85
+[dce] deleted: fconst ,  -> %t86
+[dce] deleted: mul f_lhs, f_rhs -> %t87
+[dce] deleted: addr %stack_-128,  -> %t88
+[dce] deleted: load %stack_-128,  -> %t89
+[dce] deleted: fconst ,  -> %t90
+[dce] deleted: mul f_lhs, f_rhs -> %t91
+[dce] deleted: addr %stack_-56,  -> %t94
+[dce] deleted: addr %stack_-96,  -> %t96
+[dce] deleted: addr %stack_-88,  -> %t98
+[dce] deleted: addr %stack_-72,  -> %t101
+[dce] deleted: addr %stack_-24,  -> %t105
+[dce] deleted: addr %stack_-144,  -> %t111
+[dce] deleted: addr %stack_-176,  -> %t122
+[dce] deleted: addr %stack_-160,  -> %t124
+[dce] deleted: addr %stack_-192,  -> %t132
+[dce] deleted: load %stack_-192,  -> %t133
+[dce] deleted: addr %stack_-184,  -> %t134
+[dce] deleted: load %stack_-184,  -> %t135
+[dce] deleted: fconst ,  -> %t136
+[dce] deleted: mul f_lhs, f_rhs -> %t137
+[dce] deleted: addr %stack_-24,  -> %t140
+[dce] deleted: const 16,  -> %t145
+[dce] deleted: cast %t147,  -> %t148
+[dce] deleted: addr %stack_-200,  -> %t149
+[dce] deleted: load %stack_-200,  -> %t150
+[dce] deleted: addr %stack_-40,  -> %t153
+[dce] deleted: addr %stack_-24,  -> %t155
+[dce] deleted: const 17,  -> %t160
+[dce] deleted: cast %t162,  -> %t163
+[dce] deleted: addr %stack_-200,  -> %t164
+[dce] deleted: load %stack_-200,  -> %t165
+[dce] deleted: addr %stack_-48,  -> %t168
+[dce] deleted: addr %stack_-24,  -> %t170
+[dce] deleted: const 18,  -> %t175
+[dce] deleted: cast %t177,  -> %t178
+[dce] deleted: addr %stack_-200,  -> %t179
+[dce] deleted: load %stack_-200,  -> %t180
+[dce] deleted: addr %stack_-56,  -> %t183
+[ZCC-SNAPSHOT] Pass dce: IR=ef785b46c2adff8f CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  addr %stack_-8,  -> %t0
+  load %stack_-8,  -> %t1
+  load %t1,  -> %t2
+  addr %stack_-88,  -> %t3
+  store %t2,  -> %t3
+  addr %stack_-56,  -> %t4
+  load %stack_-56,  -> %t5
+  load %t5,  -> %t6
+  addr %stack_-96,  -> %t7
+  store %t6,  -> %t7
+  fconst ,  -> %t8
+  addr %stack_-112,  -> %t9
+  load %stack_-112,  -> %t10
+  cast %t10,  -> %t11
+  const ,  -> %t12
+  copy %t11,  -> %t13
+  cast %t13,  -> %t14
+  store %t8,  -> %t14
+  fconst ,  -> %t15
+  addr %stack_-112,  -> %t16
+  load %stack_-112,  -> %t17
+  cast %t17,  -> %t18
+  const ,  -> %t19
+  add %t18, %t19 -> %t20
+  cast %t20,  -> %t21
+  store %t15,  -> %t21
+  fconst ,  -> %t22
+  neg f_lhs,  -> %t23
+  addr %stack_-112,  -> %t24
+  load %stack_-112,  -> %t25
+  cast %t25,  -> %t26
+  const ,  -> %t27
+  add %t26, %t27 -> %t28
+  cast %t28,  -> %t29
+  store %t23,  -> %t29
+  fconst ,  -> %t30
+  addr %stack_-128,  -> %t31
+  load %stack_-128,  -> %t32
+  cast %t32,  -> %t33
+  const ,  -> %t34
+  copy %t33,  -> %t35
+  cast %t35,  -> %t36
+  store %t30,  -> %t36
+  fconst ,  -> %t37
+  addr %stack_-128,  -> %t38
+  load %stack_-128,  -> %t39
+  cast %t39,  -> %t40
+  const ,  -> %t41
+  add %t40, %t41 -> %t42
+  cast %t42,  -> %t43
+  store %t37,  -> %t43
+  fconst ,  -> %t44
+  addr %stack_-128,  -> %t45
+  load %stack_-128,  -> %t46
+  cast %t46,  -> %t47
+  const ,  -> %t48
+  add %t47, %t48 -> %t49
+  cast %t49,  -> %t50
+  store %t44,  -> %t50
+  fconst ,  -> %t51
+  addr %stack_-144,  -> %t52
+  load %stack_-144,  -> %t53
+  cast %t53,  -> %t54
+  const ,  -> %t55
+  copy %t54,  -> %t56
+  cast %t56,  -> %t57
+  store %t51,  -> %t57
+  fconst ,  -> %t58
+  addr %stack_-144,  -> %t59
+  load %stack_-144,  -> %t60
+  cast %t60,  -> %t61
+  const ,  -> %t62
+  add %t61, %t62 -> %t63
+  cast %t63,  -> %t64
+  store %t58,  -> %t64
+  fconst ,  -> %t65
+  addr %stack_-144,  -> %t66
+  load %stack_-144,  -> %t67
+  cast %t67,  -> %t68
+  const ,  -> %t69
+  add %t68, %t69 -> %t70
+  cast %t70,  -> %t71
+  store %t65,  -> %t71
+  addr %stack_-88,  -> %t72
+  const 28,  -> %t73
+  copy %t72,  -> %t74
+  load %t74,  -> %t75
+  cast %t75,  -> %t76
+  fconst ,  -> %t77
+  mul f_lhs, f_rhs -> %t78
+  fconst ,  -> %t79
+  cast %t79,  -> %t80
+  div f_lhs, f_rhs -> %t81
+  cast %t81,  -> %t82
+  addr %stack_-152,  -> %t83
+  store %t82,  -> %t83
+  fconst ,  -> %t84
+  addr %stack_-152,  -> %t85
+  load %stack_-152,  -> %t86
+  fconst ,  -> %t87
+  div f_lhs, f_rhs -> %t88
+  arg %t88,  -> 
+  call ,  -> %t89
+  mul f_lhs, f_rhs -> %t90
+  addr %stack_-160,  -> %t91
+  store %t90,  -> %t91
+  addr %stack_-160,  -> %t92
+  load %stack_-160,  -> %t93
+  addr %stack_-48,  -> %t94
+  load %stack_-48,  -> %t95
+  cast %t95,  -> %t96
+  addr %stack_-40,  -> %t97
+  load %stack_-40,  -> %t98
+  cast %t98,  -> %t99
+  div f_lhs, f_rhs -> %t100
+  mul f_lhs, f_rhs -> %t101
+  addr %stack_-168,  -> %t102
+  store %t101,  -> %t102
+  addr %stack_-96,  -> %t103
+  load %t103,  -> %t104
+  br_if %t104,  -> 
+  fconst ,  -> %t105
+  br ,  -> 
+  label ,  -> 
+  fconst ,  -> %t106
+  label ,  -> 
+  addr %stack_-176,  -> %t107
+  store %t106,  -> %t107
+  addr %stack_-96,  -> %t108
+  load %t108,  -> %t109
+  br_if %t109,  -> 
+  fconst ,  -> %t110
+  br ,  -> 
+  label ,  -> 
+  fconst ,  -> %t111
+  label ,  -> 
+  addr %stack_-184,  -> %t112
+  store %t111,  -> %t112
+  const ,  -> %t113
+  store %t113,  -> %stack_-192
+  label ,  -> 
+  load %stack_-192,  -> %t114
+  addr %stack_-40,  -> %t115
+  load %stack_-40,  -> %t116
+  lt %t114, %t116 -> %t117
+  br_if %t117,  -> 
+  const ,  -> %t118
+  store %t118,  -> %stack_-200
+  label ,  -> 
+  load %stack_-200,  -> %t119
+  addr %stack_-48,  -> %t120
+  load %stack_-48,  -> %t121
+  lt %t119, %t121 -> %t122
+  br_if %t122,  -> 
+  load %stack_-200,  -> %t123
+  cast %t123,  -> %t124
+  addr %stack_-48,  -> %t125
+  load %stack_-48,  -> %t126
+  const ,  -> %t127
+  sub %t126, %t127 -> %t128
+  cast %t128,  -> %t129
+  div f_lhs, f_rhs -> %t130
+  fconst ,  -> %t131
+  mul f_lhs, f_rhs -> %t132
+  fconst ,  -> %t133
+  sub f_lhs, f_rhs -> %t134
+  addr %stack_-208,  -> %t135
+  store %t134,  -> %t135
+  addr %stack_-40,  -> %t136
+  load %stack_-40,  -> %t137
+  const ,  -> %t138
+  sub %t137, %t138 -> %t139
+  load %stack_-192,  -> %t140
+  sub %t139, %t140 -> %t141
+  cast %t141,  -> %t142
+  addr %stack_-40,  -> %t143
+  load %stack_-40,  -> %t144
+  const ,  -> %t145
+  sub %t144, %t145 -> %t146
+  cast %t146,  -> %t147
+  div f_lhs, f_rhs -> %t148
+  fconst ,  -> %t149
+  mul f_lhs, f_rhs -> %t150
+  fconst ,  -> %t151
+  sub f_lhs, f_rhs -> %t152
+  addr %stack_-216,  -> %t153
+  store %t152,  -> %t153
+  addr %stack_-96,  -> %t154
+  load %t154,  -> %t155
+  br_if %t155,  -> 
+  addr %stack_-184,  -> %t156
+  load %stack_-184,  -> %t157
+  addr %stack_-176,  -> %t158
+  load %stack_-176,  -> %t159
+  addr %stack_-216,  -> %t160
+  addr %t160,  -> %t161
+  cast %t161,  -> %t162
+  addr %stack_-208,  -> %t163
+  addr %t163,  -> %t164
+  cast %t164,  -> %t165
+  arg %t165,  -> 
+  arg %t162,  -> 
+  arg %t159,  -> 
+  arg %t157,  -> 
+  call ,  -> %t166
+  label ,  -> 
+  addr %stack_-208,  -> %t167
+  load %stack_-208,  -> %t168
+  arg %t168,  -> 
+  call ,  -> %t169
+  fconst ,  -> %t170
+  gt f_lhs, f_rhs -> %t171
+  addr %stack_-216,  -> %t172
+  load %stack_-216,  -> %t173
+  arg %t173,  -> 
+  call ,  -> %t174
+  fconst ,  -> %t175
+  gt f_lhs, f_rhs -> %t176
+  br ,  -> 
+  label ,  -> 
+  label ,  -> 
+  br_if %t176,  -> 
+  const ,  -> %t177
+  cast %t177,  -> %t178
+  addr %stack_-32,  -> %t179
+  load %stack_-32,  -> %t180
+  load %stack_-192,  -> %t181
+  mul %t181, 1920 -> %t182
+  add %t180, %t182 -> %t183
+  load %t183,  -> %t184
+  load %stack_-200,  -> %t185
+  mul %t185, 3 -> %t186
+  add %t184, %t186 -> %t187
+  load %t187,  -> %t188
+  const ,  -> %t189
+  copy %t188,  -> %t190
+  store %t178,  -> %t190
+  const ,  -> %t191
+  cast %t191,  -> %t192
+  addr %stack_-32,  -> %t193
+  load %stack_-32,  -> %t194
+  load %stack_-192,  -> %t195
+  mul %t195, 1920 -> %t196
+  add %t194, %t196 -> %t197
+  load %t197,  -> %t198
+  load %stack_-200,  -> %t199
+  mul %t199, 3 -> %t200
+  add %t198, %t200 -> %t201
+  load %t201,  -> %t202
+  const ,  -> %t203
+  add %t202, %t203 -> %t204
+  store %t192,  -> %t204
+  const ,  -> %t205
+  cast %t205,  -> %t206
+  addr %stack_-32,  -> %t207
+  load %stack_-32,  -> %t208
+  load %stack_-192,  -> %t209
+  mul %t209, 1920 -> %t210
+  add %t208, %t210 -> %t211
+  load %t211,  -> %t212
+  load %stack_-200,  -> %t213
+  mul %t213, 3 -> %t214
+  add %t212, %t214 -> %t215
+  load %t215,  -> %t216
+  const ,  -> %t217
+  add %t216, %t217 -> %t218
+  store %t206,  -> %t218
+  br ,  -> 
+  label ,  -> 
+  addr %stack_-216,  -> %t219
+  load %stack_-216,  -> %t220
+  addr %stack_-160,  -> %t221
+  load %stack_-160,  -> %t222
+  mul f_lhs, f_rhs -> %t223
+  fconst ,  -> %t224
+  div f_lhs, f_rhs -> %t225
+  addr %stack_-144,  -> %t226
+  load %stack_-144,  -> %t227
+  arg %t227,  -> 
+  arg %t225,  -> 
+  call ,  -> %t228
+  addr %stack_-208,  -> %t229
+  load %stack_-208,  -> %t230
+  addr %stack_-168,  -> %t231
+  load %stack_-168,  -> %t232
+  mul f_lhs, f_rhs -> %t233
+  fconst ,  -> %t234
+  div f_lhs, f_rhs -> %t235
+  addr %stack_-128,  -> %t236
+  load %stack_-128,  -> %t237
+  arg %t237,  -> 
+  arg %t235,  -> 
+  call ,  -> %t238
+  addr %stack_-112,  -> %t239
+  load %stack_-112,  -> %t240
+  arg %t240,  -> 
+  arg %t238,  -> 
+  call ,  -> %t241
+  arg %t241,  -> 
+  arg %t228,  -> 
+  call ,  -> %t242
+  arg %t242,  -> 
+  call ,  -> %t243
+  addr %stack_-232,  -> %t244
+  store %t243,  -> %t244
+  addr %stack_-256,  -> %t245
+  addr %t245,  -> %t246
+  cast %t246,  -> %t247
+  addr %stack_-248,  -> %t248
+  addr %t248,  -> %t249
+  cast %t249,  -> %t250
+  addr %stack_-240,  -> %t251
+  addr %t251,  -> %t252
+  cast %t252,  -> %t253
+  addr %stack_-24,  -> %t254
+  load %stack_-24,  -> %t255
+  addr %stack_-16,  -> %t256
+  load %stack_-16,  -> %t257
+  cast %t257,  -> %t258
+  addr %stack_-232,  -> %t259
+  addr %t259,  -> %t260
+  cast %t260,  -> %t261
+  addr %stack_-88,  -> %t262
+  addr %t262,  -> %t263
+  cast %t263,  -> %t264
+  arg %t264,  -> 
+  arg %t261,  -> 
+  arg %t258,  -> 
+  arg %t255,  -> 
+  arg %t253,  -> 
+  arg %t250,  -> 
+  arg %t247,  -> 
+  call ,  -> %t265
+  addr %stack_-240,  -> %t266
+  load %stack_-240,  -> %t267
+  addr %stack_-32,  -> %t268
+  load %stack_-32,  -> %t269
+  load %stack_-192,  -> %t270
+  mul %t270, 1920 -> %t271
+  add %t269, %t271 -> %t272
+  load %t272,  -> %t273
+  load %stack_-200,  -> %t274
+  mul %t274, 3 -> %t275
+  add %t273, %t275 -> %t276
+  load %t276,  -> %t277
+  const ,  -> %t278
+  copy %t277,  -> %t279
+  store %t267,  -> %t279
+  addr %stack_-248,  -> %t280
+  load %stack_-248,  -> %t281
+  addr %stack_-32,  -> %t282
+  load %stack_-32,  -> %t283
+  load %stack_-192,  -> %t284
+  mul %t284, 1920 -> %t285
+  add %t283, %t285 -> %t286
+  load %t286,  -> %t287
+  load %stack_-200,  -> %t288
+  mul %t288, 3 -> %t289
+  add %t287, %t289 -> %t290
+  load %t290,  -> %t291
+  const ,  -> %t292
+  add %t291, %t292 -> %t293
+  store %t281,  -> %t293
+  addr %stack_-256,  -> %t294
+  load %stack_-256,  -> %t295
+  addr %stack_-32,  -> %t296
+  load %stack_-32,  -> %t297
+  load %stack_-192,  -> %t298
+  mul %t298, 1920 -> %t299
+  add %t297, %t299 -> %t300
+  load %t300,  -> %t301
+  load %stack_-200,  -> %t302
+  mul %t302, 3 -> %t303
+  add %t301, %t303 -> %t304
+  load %t304,  -> %t305
+  const ,  -> %t306
+  add %t305, %t306 -> %t307
+  store %t295,  -> %t307
+  label ,  -> 
+  br ,  -> 
+  label ,  -> 
+  label ,  -> 
+  br ,  -> 
+  label ,  -> 
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: addr %stack_-8,  -> %t0
+[dce] deleted: addr %stack_-56,  -> %t4
+[dce] deleted: addr %stack_-112,  -> %t9
+[dce] deleted: const ,  -> %t12
+[dce] deleted: addr %stack_-112,  -> %t16
+[dce] deleted: fconst ,  -> %t22
+[dce] deleted: addr %stack_-112,  -> %t24
+[dce] deleted: addr %stack_-128,  -> %t31
+[dce] deleted: const ,  -> %t34
+[dce] deleted: addr %stack_-128,  -> %t38
+[dce] deleted: addr %stack_-128,  -> %t45
+[dce] deleted: addr %stack_-144,  -> %t52
+[dce] deleted: const ,  -> %t55
+[dce] deleted: addr %stack_-144,  -> %t59
+[dce] deleted: addr %stack_-144,  -> %t66
+[dce] deleted: const 28,  -> %t73
+[dce] deleted: cast %t75,  -> %t76
+[dce] deleted: fconst ,  -> %t77
+[dce] deleted: mul f_lhs, f_rhs -> %t78
+[dce] deleted: cast %t79,  -> %t80
+[dce] deleted: fconst ,  -> %t84
+[dce] deleted: addr %stack_-152,  -> %t85
+[dce] deleted: load %stack_-152,  -> %t86
+[dce] deleted: fconst ,  -> %t87
+[dce] deleted: addr %stack_-160,  -> %t92
+[dce] deleted: load %stack_-160,  -> %t93
+[dce] deleted: addr %stack_-48,  -> %t94
+[dce] deleted: cast %t95,  -> %t96
+[dce] deleted: addr %stack_-40,  -> %t97
+[dce] deleted: cast %t98,  -> %t99
+[dce] deleted: div f_lhs, f_rhs -> %t100
+[dce] deleted: fconst ,  -> %t105
+[dce] deleted: fconst ,  -> %t110
+[dce] deleted: addr %stack_-40,  -> %t115
+[dce] deleted: addr %stack_-48,  -> %t120
+[dce] deleted: cast %t123,  -> %t124
+[dce] deleted: addr %stack_-48,  -> %t125
+[dce] deleted: cast %t128,  -> %t129
+[dce] deleted: div f_lhs, f_rhs -> %t130
+[dce] deleted: fconst ,  -> %t131
+[dce] deleted: mul f_lhs, f_rhs -> %t132
+[dce] deleted: fconst ,  -> %t133
+[dce] deleted: addr %stack_-40,  -> %t136
+[dce] deleted: cast %t141,  -> %t142
+[dce] deleted: addr %stack_-40,  -> %t143
+[dce] deleted: cast %t146,  -> %t147
+[dce] deleted: div f_lhs, f_rhs -> %t148
+[dce] deleted: fconst ,  -> %t149
+[dce] deleted: mul f_lhs, f_rhs -> %t150
+[dce] deleted: fconst ,  -> %t151
+[dce] deleted: addr %stack_-184,  -> %t156
+[dce] deleted: addr %stack_-176,  -> %t158
+[dce] deleted: addr %stack_-208,  -> %t167
+[dce] deleted: fconst ,  -> %t170
+[dce] deleted: gt f_lhs, f_rhs -> %t171
+[dce] deleted: addr %stack_-216,  -> %t172
+[dce] deleted: fconst ,  -> %t175
+[dce] deleted: addr %stack_-32,  -> %t179
+[dce] deleted: const ,  -> %t189
+[dce] deleted: addr %stack_-32,  -> %t193
+[dce] deleted: addr %stack_-32,  -> %t207
+[dce] deleted: addr %stack_-216,  -> %t219
+[dce] deleted: load %stack_-216,  -> %t220
+[dce] deleted: addr %stack_-160,  -> %t221
+[dce] deleted: load %stack_-160,  -> %t222
+[dce] deleted: mul f_lhs, f_rhs -> %t223
+[dce] deleted: fconst ,  -> %t224
+[dce] deleted: addr %stack_-144,  -> %t226
+[dce] deleted: addr %stack_-208,  -> %t229
+[dce] deleted: load %stack_-208,  -> %t230
+[dce] deleted: addr %stack_-168,  -> %t231
+[dce] deleted: load %stack_-168,  -> %t232
+[dce] deleted: mul f_lhs, f_rhs -> %t233
+[dce] deleted: fconst ,  -> %t234
+[dce] deleted: addr %stack_-128,  -> %t236
+[dce] deleted: addr %stack_-112,  -> %t239
+[dce] deleted: addr %stack_-24,  -> %t254
+[dce] deleted: addr %stack_-16,  -> %t256
+[dce] deleted: addr %stack_-240,  -> %t266
+[dce] deleted: addr %stack_-32,  -> %t268
+[dce] deleted: const ,  -> %t278
+[dce] deleted: addr %stack_-248,  -> %t280
+[dce] deleted: addr %stack_-32,  -> %t282
+[dce] deleted: addr %stack_-256,  -> %t294
+[dce] deleted: addr %stack_-32,  -> %t296
+[ZCC-SNAPSHOT] Pass dce: IR=ec2c9844a69d458d CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  const ,  -> %t0
+  addr %stack_-16,  -> %t1
+  load %stack_-16,  -> %t2
+  store %t0,  -> %t2
+  fconst ,  -> %t3
+  addr %stack_-8,  -> %t4
+  load %stack_-8,  -> %t5
+  const ,  -> %t6
+  const ,  -> %t7
+  copy %t5,  -> %t8
+  store %t3,  -> %t8
+  fconst ,  -> %t9
+  neg f_lhs,  -> %t10
+  addr %stack_-8,  -> %t11
+  load %stack_-8,  -> %t12
+  const ,  -> %t13
+  const ,  -> %t14
+  copy %t12,  -> %t15
+  const 4,  -> %t16
+  copy %t15,  -> %t17
+  store %t10,  -> %t17
+  fconst ,  -> %t18
+  neg f_lhs,  -> %t19
+  addr %stack_-8,  -> %t20
+  load %stack_-8,  -> %t21
+  const ,  -> %t22
+  const ,  -> %t23
+  copy %t21,  -> %t24
+  const 8,  -> %t25
+  copy %t24,  -> %t26
+  store %t19,  -> %t26
+  fconst ,  -> %t27
+  addr %stack_-8,  -> %t28
+  load %stack_-8,  -> %t29
+  const ,  -> %t30
+  const ,  -> %t31
+  copy %t29,  -> %t32
+  const 12,  -> %t33
+  copy %t32,  -> %t34
+  store %t27,  -> %t34
+  const ,  -> %t35
+  cast %t35,  -> %t36
+  addr %stack_-8,  -> %t37
+  load %stack_-8,  -> %t38
+  const ,  -> %t39
+  const ,  -> %t40
+  copy %t38,  -> %t41
+  const 16,  -> %t42
+  copy %t41,  -> %t43
+  store %t36,  -> %t43
+  const ,  -> %t44
+  cast %t44,  -> %t45
+  addr %stack_-8,  -> %t46
+  load %stack_-8,  -> %t47
+  const ,  -> %t48
+  const ,  -> %t49
+  copy %t47,  -> %t50
+  const 17,  -> %t51
+  copy %t50,  -> %t52
+  store %t45,  -> %t52
+  const ,  -> %t53
+  cast %t53,  -> %t54
+  addr %stack_-8,  -> %t55
+  load %stack_-8,  -> %t56
+  const ,  -> %t57
+  const ,  -> %t58
+  copy %t56,  -> %t59
+  const 18,  -> %t60
+  copy %t59,  -> %t61
+  store %t54,  -> %t61
+  fconst ,  -> %t62
+  addr %stack_-8,  -> %t63
+  load %stack_-8,  -> %t64
+  const ,  -> %t65
+  copy 20,  -> %t66
+  add %t64, %t66 -> %t67
+  store %t62,  -> %t67
+  fconst ,  -> %t68
+  addr %stack_-8,  -> %t69
+  load %stack_-8,  -> %t70
+  const ,  -> %t71
+  copy 20,  -> %t72
+  add %t70, %t72 -> %t73
+  const 4,  -> %t74
+  copy %t73,  -> %t75
+  store %t68,  -> %t75
+  fconst ,  -> %t76
+  neg f_lhs,  -> %t77
+  addr %stack_-8,  -> %t78
+  load %stack_-8,  -> %t79
+  const ,  -> %t80
+  copy 20,  -> %t81
+  add %t79, %t81 -> %t82
+  const 8,  -> %t83
+  copy %t82,  -> %t84
+  store %t77,  -> %t84
+  fconst ,  -> %t85
+  addr %stack_-8,  -> %t86
+  load %stack_-8,  -> %t87
+  const ,  -> %t88
+  copy 20,  -> %t89
+  add %t87, %t89 -> %t90
+  const 12,  -> %t91
+  copy %t90,  -> %t92
+  store %t85,  -> %t92
+  const ,  -> %t93
+  cast %t93,  -> %t94
+  addr %stack_-8,  -> %t95
+  load %stack_-8,  -> %t96
+  const ,  -> %t97
+  copy 20,  -> %t98
+  add %t96, %t98 -> %t99
+  const 16,  -> %t100
+  copy %t99,  -> %t101
+  store %t94,  -> %t101
+  const ,  -> %t102
+  cast %t102,  -> %t103
+  addr %stack_-8,  -> %t104
+  load %stack_-8,  -> %t105
+  const ,  -> %t106
+  copy 20,  -> %t107
+  add %t105, %t107 -> %t108
+  const 17,  -> %t109
+  copy %t108,  -> %t110
+  store %t103,  -> %t110
+  const ,  -> %t111
+  cast %t111,  -> %t112
+  addr %stack_-8,  -> %t113
+  load %stack_-8,  -> %t114
+  const ,  -> %t115
+  copy 20,  -> %t116
+  add %t114, %t116 -> %t117
+  const 18,  -> %t118
+  copy %t117,  -> %t119
+  store %t112,  -> %t119
+  fconst ,  -> %t120
+  neg f_lhs,  -> %t121
+  addr %stack_-8,  -> %t122
+  load %stack_-8,  -> %t123
+  const ,  -> %t124
+  mul %t124, 20 -> %t125
+  add %t123, %t125 -> %t126
+  store %t121,  -> %t126
+  fconst ,  -> %t127
+  addr %stack_-8,  -> %t128
+  load %stack_-8,  -> %t129
+  const ,  -> %t130
+  mul %t130, 20 -> %t131
+  add %t129, %t131 -> %t132
+  const 4,  -> %t133
+  copy %t132,  -> %t134
+  store %t127,  -> %t134
+  fconst ,  -> %t135
+  neg f_lhs,  -> %t136
+  addr %stack_-8,  -> %t137
+  load %stack_-8,  -> %t138
+  const ,  -> %t139
+  mul %t139, 20 -> %t140
+  add %t138, %t140 -> %t141
+  const 8,  -> %t142
+  copy %t141,  -> %t143
+  store %t136,  -> %t143
+  fconst ,  -> %t144
+  addr %stack_-8,  -> %t145
+  load %stack_-8,  -> %t146
+  const ,  -> %t147
+  mul %t147, 20 -> %t148
+  add %t146, %t148 -> %t149
+  const 12,  -> %t150
+  copy %t149,  -> %t151
+  store %t144,  -> %t151
+  const ,  -> %t152
+  cast %t152,  -> %t153
+  addr %stack_-8,  -> %t154
+  load %stack_-8,  -> %t155
+  const ,  -> %t156
+  mul %t156, 20 -> %t157
+  add %t155, %t157 -> %t158
+  const 16,  -> %t159
+  copy %t158,  -> %t160
+  store %t153,  -> %t160
+  const ,  -> %t161
+  cast %t161,  -> %t162
+  addr %stack_-8,  -> %t163
+  load %stack_-8,  -> %t164
+  const ,  -> %t165
+  mul %t165, 20 -> %t166
+  add %t164, %t166 -> %t167
+  const 17,  -> %t168
+  copy %t167,  -> %t169
+  store %t162,  -> %t169
+  const ,  -> %t170
+  cast %t170,  -> %t171
+  addr %stack_-8,  -> %t172
+  load %stack_-8,  -> %t173
+  const ,  -> %t174
+  mul %t174, 20 -> %t175
+  add %t173, %t175 -> %t176
+  const 18,  -> %t177
+  copy %t176,  -> %t178
+  store %t171,  -> %t178
+  fconst ,  -> %t179
+  addr %stack_-8,  -> %t180
+  load %stack_-8,  -> %t181
+  const ,  -> %t182
+  mul %t182, 20 -> %t183
+  add %t181, %t183 -> %t184
+  store %t179,  -> %t184
+  fconst ,  -> %t185
+  addr %stack_-8,  -> %t186
+  load %stack_-8,  -> %t187
+  const ,  -> %t188
+  mul %t188, 20 -> %t189
+  add %t187, %t189 -> %t190
+  const 4,  -> %t191
+  copy %t190,  -> %t192
+  store %t185,  -> %t192
+  fconst ,  -> %t193
+  neg f_lhs,  -> %t194
+  addr %stack_-8,  -> %t195
+  load %stack_-8,  -> %t196
+  const ,  -> %t197
+  mul %t197, 20 -> %t198
+  add %t196, %t198 -> %t199
+  const 8,  -> %t200
+  copy %t199,  -> %t201
+  store %t194,  -> %t201
+  fconst ,  -> %t202
+  addr %stack_-8,  -> %t203
+  load %stack_-8,  -> %t204
+  const ,  -> %t205
+  mul %t205, 20 -> %t206
+  add %t204, %t206 -> %t207
+  const 12,  -> %t208
+  copy %t207,  -> %t209
+  store %t202,  -> %t209
+  const ,  -> %t210
+  cast %t210,  -> %t211
+  addr %stack_-8,  -> %t212
+  load %stack_-8,  -> %t213
+  const ,  -> %t214
+  mul %t214, 20 -> %t215
+  add %t213, %t215 -> %t216
+  const 16,  -> %t217
+  copy %t216,  -> %t218
+  store %t211,  -> %t218
+  const ,  -> %t219
+  cast %t219,  -> %t220
+  addr %stack_-8,  -> %t221
+  load %stack_-8,  -> %t222
+  const ,  -> %t223
+  mul %t223, 20 -> %t224
+  add %t222, %t224 -> %t225
+  const 17,  -> %t226
+  copy %t225,  -> %t227
+  store %t220,  -> %t227
+  const ,  -> %t228
+  cast %t228,  -> %t229
+  addr %stack_-8,  -> %t230
+  load %stack_-8,  -> %t231
+  const ,  -> %t232
+  mul %t232, 20 -> %t233
+  add %t231, %t233 -> %t234
+  const 18,  -> %t235
+  copy %t234,  -> %t236
+  store %t229,  -> %t236
+  fconst ,  -> %t237
+  addr %stack_-8,  -> %t238
+  load %stack_-8,  -> %t239
+  const ,  -> %t240
+  mul %t240, 20 -> %t241
+  add %t239, %t241 -> %t242
+  store %t237,  -> %t242
+  fconst ,  -> %t243
+  addr %stack_-8,  -> %t244
+  load %stack_-8,  -> %t245
+  const ,  -> %t246
+  mul %t246, 20 -> %t247
+  add %t245, %t247 -> %t248
+  const 4,  -> %t249
+  copy %t248,  -> %t250
+  store %t243,  -> %t250
+  fconst ,  -> %t251
+  neg f_lhs,  -> %t252
+  addr %stack_-8,  -> %t253
+  load %stack_-8,  -> %t254
+  const ,  -> %t255
+  mul %t255, 20 -> %t256
+  add %t254, %t256 -> %t257
+  const 8,  -> %t258
+  copy %t257,  -> %t259
+  store %t252,  -> %t259
+  fconst ,  -> %t260
+  addr %stack_-8,  -> %t261
+  load %stack_-8,  -> %t262
+  const ,  -> %t263
+  mul %t263, 20 -> %t264
+  add %t262, %t264 -> %t265
+  const 12,  -> %t266
+  copy %t265,  -> %t267
+  store %t260,  -> %t267
+  const ,  -> %t268
+  cast %t268,  -> %t269
+  addr %stack_-8,  -> %t270
+  load %stack_-8,  -> %t271
+  const ,  -> %t272
+  mul %t272, 20 -> %t273
+  add %t271, %t273 -> %t274
+  const 16,  -> %t275
+  copy %t274,  -> %t276
+  store %t269,  -> %t276
+  const ,  -> %t277
+  cast %t277,  -> %t278
+  addr %stack_-8,  -> %t279
+  load %stack_-8,  -> %t280
+  const ,  -> %t281
+  mul %t281, 20 -> %t282
+  add %t280, %t282 -> %t283
+  const 17,  -> %t284
+  copy %t283,  -> %t285
+  store %t278,  -> %t285
+  const ,  -> %t286
+  cast %t286,  -> %t287
+  addr %stack_-8,  -> %t288
+  load %stack_-8,  -> %t289
+  const ,  -> %t290
+  mul %t290, 20 -> %t291
+  add %t289, %t291 -> %t292
+  const 18,  -> %t293
+  copy %t292,  -> %t294
+  store %t287,  -> %t294
+  fconst ,  -> %t295
+  addr %stack_-8,  -> %t296
+  load %stack_-8,  -> %t297
+  const ,  -> %t298
+  mul %t298, 20 -> %t299
+  add %t297, %t299 -> %t300
+  store %t295,  -> %t300
+  fconst ,  -> %t301
+  addr %stack_-8,  -> %t302
+  load %stack_-8,  -> %t303
+  const ,  -> %t304
+  mul %t304, 20 -> %t305
+  add %t303, %t305 -> %t306
+  const 4,  -> %t307
+  copy %t306,  -> %t308
+  store %t301,  -> %t308
+  fconst ,  -> %t309
+  neg f_lhs,  -> %t310
+  addr %stack_-8,  -> %t311
+  load %stack_-8,  -> %t312
+  const ,  -> %t313
+  mul %t313, 20 -> %t314
+  add %t312, %t314 -> %t315
+  const 8,  -> %t316
+  copy %t315,  -> %t317
+  store %t310,  -> %t317
+  fconst ,  -> %t318
+  addr %stack_-8,  -> %t319
+  load %stack_-8,  -> %t320
+  const ,  -> %t321
+  mul %t321, 20 -> %t322
+  add %t320, %t322 -> %t323
+  const 12,  -> %t324
+  copy %t323,  -> %t325
+  store %t318,  -> %t325
+  const ,  -> %t326
+  cast %t326,  -> %t327
+  addr %stack_-8,  -> %t328
+  load %stack_-8,  -> %t329
+  const ,  -> %t330
+  mul %t330, 20 -> %t331
+  add %t329, %t331 -> %t332
+  const 16,  -> %t333
+  copy %t332,  -> %t334
+  store %t327,  -> %t334
+  const ,  -> %t335
+  cast %t335,  -> %t336
+  addr %stack_-8,  -> %t337
+  load %stack_-8,  -> %t338
+  const ,  -> %t339
+  mul %t339, 20 -> %t340
+  add %t338, %t340 -> %t341
+  const 17,  -> %t342
+  copy %t341,  -> %t343
+  store %t336,  -> %t343
+  const ,  -> %t344
+  cast %t344,  -> %t345
+  addr %stack_-8,  -> %t346
+  load %stack_-8,  -> %t347
+  const ,  -> %t348
+  mul %t348, 20 -> %t349
+  add %t347, %t349 -> %t350
+  const 18,  -> %t351
+  copy %t350,  -> %t352
+  store %t345,  -> %t352
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: addr %stack_-16,  -> %t1
+[dce] deleted: addr %stack_-8,  -> %t4
+[dce] deleted: const ,  -> %t6
+[dce] deleted: const ,  -> %t7
+[dce] deleted: fconst ,  -> %t9
+[dce] deleted: addr %stack_-8,  -> %t11
+[dce] deleted: const ,  -> %t13
+[dce] deleted: const ,  -> %t14
+[dce] deleted: const 4,  -> %t16
+[dce] deleted: fconst ,  -> %t18
+[dce] deleted: addr %stack_-8,  -> %t20
+[dce] deleted: const ,  -> %t22
+[dce] deleted: const ,  -> %t23
+[dce] deleted: const 8,  -> %t25
+[dce] deleted: addr %stack_-8,  -> %t28
+[dce] deleted: const ,  -> %t30
+[dce] deleted: const ,  -> %t31
+[dce] deleted: const 12,  -> %t33
+[dce] deleted: addr %stack_-8,  -> %t37
+[dce] deleted: const ,  -> %t39
+[dce] deleted: const ,  -> %t40
+[dce] deleted: const 16,  -> %t42
+[dce] deleted: addr %stack_-8,  -> %t46
+[dce] deleted: const ,  -> %t48
+[dce] deleted: const ,  -> %t49
+[dce] deleted: const 17,  -> %t51
+[dce] deleted: addr %stack_-8,  -> %t55
+[dce] deleted: const ,  -> %t57
+[dce] deleted: const ,  -> %t58
+[dce] deleted: const 18,  -> %t60
+[dce] deleted: addr %stack_-8,  -> %t63
+[dce] deleted: const ,  -> %t65
+[dce] deleted: addr %stack_-8,  -> %t69
+[dce] deleted: const ,  -> %t71
+[dce] deleted: const 4,  -> %t74
+[dce] deleted: fconst ,  -> %t76
+[dce] deleted: addr %stack_-8,  -> %t78
+[dce] deleted: const ,  -> %t80
+[dce] deleted: const 8,  -> %t83
+[dce] deleted: addr %stack_-8,  -> %t86
+[dce] deleted: const ,  -> %t88
+[dce] deleted: const 12,  -> %t91
+[dce] deleted: addr %stack_-8,  -> %t95
+[dce] deleted: const ,  -> %t97
+[dce] deleted: const 16,  -> %t100
+[dce] deleted: addr %stack_-8,  -> %t104
+[dce] deleted: const ,  -> %t106
+[dce] deleted: const 17,  -> %t109
+[dce] deleted: addr %stack_-8,  -> %t113
+[dce] deleted: const ,  -> %t115
+[dce] deleted: const 18,  -> %t118
+[dce] deleted: fconst ,  -> %t120
+[dce] deleted: addr %stack_-8,  -> %t122
+[dce] deleted: addr %stack_-8,  -> %t128
+[dce] deleted: const 4,  -> %t133
+[dce] deleted: fconst ,  -> %t135
+[dce] deleted: addr %stack_-8,  -> %t137
+[dce] deleted: const 8,  -> %t142
+[dce] deleted: addr %stack_-8,  -> %t145
+[dce] deleted: const 12,  -> %t150
+[dce] deleted: addr %stack_-8,  -> %t154
+[dce] deleted: const 16,  -> %t159
+[dce] deleted: addr %stack_-8,  -> %t163
+[dce] deleted: const 17,  -> %t168
+[dce] deleted: addr %stack_-8,  -> %t172
+[dce] deleted: const 18,  -> %t177
+[dce] deleted: addr %stack_-8,  -> %t180
+[dce] deleted: addr %stack_-8,  -> %t186
+[dce] deleted: const 4,  -> %t191
+[dce] deleted: fconst ,  -> %t193
+[dce] deleted: addr %stack_-8,  -> %t195
+[dce] deleted: const 8,  -> %t200
+[dce] deleted: addr %stack_-8,  -> %t203
+[dce] deleted: const 12,  -> %t208
+[dce] deleted: addr %stack_-8,  -> %t212
+[dce] deleted: const 16,  -> %t217
+[dce] deleted: addr %stack_-8,  -> %t221
+[dce] deleted: const 17,  -> %t226
+[dce] deleted: addr %stack_-8,  -> %t230
+[dce] deleted: const 18,  -> %t235
+[dce] deleted: addr %stack_-8,  -> %t238
+[dce] deleted: addr %stack_-8,  -> %t244
+[dce] deleted: const 4,  -> %t249
+[dce] deleted: fconst ,  -> %t251
+[dce] deleted: addr %stack_-8,  -> %t253
+[dce] deleted: const 8,  -> %t258
+[dce] deleted: addr %stack_-8,  -> %t261
+[dce] deleted: const 12,  -> %t266
+[dce] deleted: addr %stack_-8,  -> %t270
+[dce] deleted: const 16,  -> %t275
+[dce] deleted: addr %stack_-8,  -> %t279
+[dce] deleted: const 17,  -> %t284
+[dce] deleted: addr %stack_-8,  -> %t288
+[dce] deleted: const 18,  -> %t293
+[dce] deleted: addr %stack_-8,  -> %t296
+[dce] deleted: addr %stack_-8,  -> %t302
+[dce] deleted: const 4,  -> %t307
+[dce] deleted: fconst ,  -> %t309
+[dce] deleted: addr %stack_-8,  -> %t311
+[dce] deleted: const 8,  -> %t316
+[dce] deleted: addr %stack_-8,  -> %t319
+[dce] deleted: const 12,  -> %t324
+[dce] deleted: addr %stack_-8,  -> %t328
+[dce] deleted: const 16,  -> %t333
+[dce] deleted: addr %stack_-8,  -> %t337
+[dce] deleted: const 17,  -> %t342
+[dce] deleted: addr %stack_-8,  -> %t346
+[dce] deleted: const 18,  -> %t351
+[ZCC-SNAPSHOT] Pass dce: IR=3df51e8899f260fd CFG=0415ef81fb44596e DOM=617c690e6b873370 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  const ,  -> %t0
+  store %t0,  -> %stack_-8
+  const ,  -> %t1
+  store %t1,  -> %stack_-16
+  const ,  -> %t2
+  cast %t2,  -> %t3
+  addr %stack_-24,  -> %t4
+  store %t3,  -> %t4
+  const ,  -> %t5
+  cast %t5,  -> %t6
+  addr %stack_-24,  -> %t7
+  store %t6,  -> %t7
+  const ,  -> %t8
+  cast %t8,  -> %t9
+  addr %stack_-24,  -> %t10
+  store %t9,  -> %t10
+  const ,  -> %t11
+  cast %t11,  -> %t12
+  addr %stack_-24,  -> %t13
+  store %t12,  -> %t13
+  const ,  -> %t14
+  cast %t14,  -> %t15
+  addr %stack_-24,  -> %t16
+  store %t15,  -> %t16
+  const ,  -> %t17
+  cast %t17,  -> %t18
+  addr %stack_-24,  -> %t19
+  store %t18,  -> %t19
+  const ,  -> %t20
+  cast %t20,  -> %t21
+  addr %stack_-24,  -> %t22
+  store %t21,  -> %t22
+  const ,  -> %t23
+  const_str .LS100,  -> %t23
+  addr %stderr,  -> %t24
+  load %stderr,  -> %t25
+  arg %t25,  -> 
+  arg %t23,  -> 
+  call ,  -> %t26
+  load %stack_-16,  -> %t27
+  load %stack_-8,  -> %t28
+  const ,  -> %t29
+  const_str .LS101,  -> %t29
+  addr %stderr,  -> %t30
+  load %stderr,  -> %t31
+  arg %t31,  -> 
+  arg %t29,  -> 
+  arg %t28,  -> 
+  arg %t27,  -> 
+  call ,  -> %t32
+  addr %stack_-24,  -> %t33
+  load %t33,  -> %t34
+  const ,  -> %t35
+  const_str .LS102,  -> %t35
+  addr %stderr,  -> %t36
+  load %stderr,  -> %t37
+  arg %t37,  -> 
+  arg %t35,  -> 
+  arg %t34,  -> 
+  call ,  -> %t38
+  addr %stack_-24,  -> %t39
+  load %t39,  -> %t40
+  const ,  -> %t41
+  const_str .LS103,  -> %t41
+  addr %stderr,  -> %t42
+  load %stderr,  -> %t43
+  arg %t43,  -> 
+  arg %t41,  -> 
+  arg %t40,  -> 
+  call ,  -> %t44
+  addr %stack_-24,  -> %t45
+  load %t45,  -> %t46
+  const ,  -> %t47
+  const_str .LS104,  -> %t47
+  addr %stderr,  -> %t48
+  load %stderr,  -> %t49
+  arg %t49,  -> 
+  arg %t47,  -> 
+  arg %t46,  -> 
+  call ,  -> %t50
+  addr %stack_-24,  -> %t51
+  load %t51,  -> %t52
+  br_if %t52,  -> 
+  const ,  -> %t53
+  const_str .LS106,  -> %t53
+  br ,  -> 
+  label ,  -> 
+  const ,  -> %t54
+  const_str .LS107,  -> %t54
+  cast %t54,  -> %t55
+  label ,  -> 
+  const ,  -> %t56
+  const_str .LS105,  -> %t56
+  addr %stderr,  -> %t57
+  load %stderr,  -> %t58
+  arg %t58,  -> 
+  arg %t56,  -> 
+  arg %t55,  -> 
+  call ,  -> %t59
+  addr %stack_-1843392,  -> %t60
+  addr %t60,  -> %t61
+  cast %t61,  -> %t62
+  addr %stack_-1843384,  -> %t63
+  load %stack_-1843384,  -> %t64
+  cast %t64,  -> %t65
+  arg %t65,  -> 
+  arg %t62,  -> 
+  call ,  -> %t66
+  addr %stack_-24,  -> %t67
+  load %t67,  -> %t68
+  cast %t68,  -> %t69
+  fconst ,  -> %t70
+  div f_lhs, f_rhs -> %t71
+  addr %stack_-1843400,  -> %t72
+  store %t71,  -> %t72
+  addr %stack_-1843400,  -> %t73
+  load %stack_-1843400,  -> %t74
+  fconst ,  -> %t75
+  div f_lhs, f_rhs -> %t76
+  addr %stack_-1843408,  -> %t77
+  store %t76,  -> %t77
+  addr %stack_-1843408,  -> %t78
+  load %stack_-1843408,  -> %t79
+  neg f_lhs,  -> %t80
+  addr %stack_-1843440,  -> %t81
+  store %t80,  -> %t81
+  fconst ,  -> %t82
+  addr %stack_-1843440,  -> %t83
+  const 4,  -> %t84
+  copy %t83,  -> %t85
+  store %t82,  -> %t85
+  fconst ,  -> %t86
+  addr %stack_-1843440,  -> %t87
+  const 8,  -> %t88
+  copy %t87,  -> %t89
+  store %t86,  -> %t89
+  fconst ,  -> %t90
+  addr %stack_-1843440,  -> %t91
+  const 12,  -> %t92
+  copy %t91,  -> %t93
+  store %t90,  -> %t93
+  fconst ,  -> %t94
+  addr %stack_-1843440,  -> %t95
+  const 12,  -> %t96
+  copy %t95,  -> %t97
+  const 4,  -> %t98
+  copy %t97,  -> %t99
+  store %t94,  -> %t99
+  fconst ,  -> %t100
+  addr %stack_-1843440,  -> %t101
+  const 12,  -> %t102
+  copy %t101,  -> %t103
+  const 8,  -> %t104
+  copy %t103,  -> %t105
+  store %t100,  -> %t105
+  fconst ,  -> %t106
+  addr %stack_-1843440,  -> %t107
+  const 12,  -> %t108
+  copy %t107,  -> %t109
+  const 12,  -> %t110
+  copy %t109,  -> %t111
+  store %t106,  -> %t111
+  addr %stack_-24,  -> %t112
+  load %t112,  -> %t113
+  cast %t113,  -> %t114
+  addr %stack_-1843440,  -> %t115
+  const 28,  -> %t116
+  copy %t115,  -> %t117
+  store %t114,  -> %t117
+  addr %stack_-1843408,  -> %t118
+  load %stack_-1843408,  -> %t119
+  addr %stack_-1843472,  -> %t120
+  store %t119,  -> %t120
+  fconst ,  -> %t121
+  addr %stack_-1843472,  -> %t122
+  const 4,  -> %t123
+  copy %t122,  -> %t124
+  store %t121,  -> %t124
+  fconst ,  -> %t125
+  addr %stack_-1843472,  -> %t126
+  const 8,  -> %t127
+  copy %t126,  -> %t128
+  store %t125,  -> %t128
+  fconst ,  -> %t129
+  addr %stack_-1843472,  -> %t130
+  const 12,  -> %t131
+  copy %t130,  -> %t132
+  store %t129,  -> %t132
+  fconst ,  -> %t133
+  addr %stack_-1843472,  -> %t134
+  const 12,  -> %t135
+  copy %t134,  -> %t136
+  const 4,  -> %t137
+  copy %t136,  -> %t138
+  store %t133,  -> %t138
+  fconst ,  -> %t139
+  addr %stack_-1843472,  -> %t140
+  const 12,  -> %t141
+  copy %t140,  -> %t142
+  const 8,  -> %t143
+  copy %t142,  -> %t144
+  store %t139,  -> %t144
+  fconst ,  -> %t145
+  addr %stack_-1843472,  -> %t146
+  const 12,  -> %t147
+  copy %t146,  -> %t148
+  const 12,  -> %t149
+  copy %t148,  -> %t150
+  store %t145,  -> %t150
+  addr %stack_-24,  -> %t151
+  load %t151,  -> %t152
+  cast %t152,  -> %t153
+  addr %stack_-1843472,  -> %t154
+  const 28,  -> %t155
+  copy %t154,  -> %t156
+  store %t153,  -> %t156
+  const ,  -> %t157
+  const_str .LS108,  -> %t157
+  addr %stderr,  -> %t158
+  load %stderr,  -> %t159
+  arg %t159,  -> 
+  arg %t157,  -> 
+  call ,  -> %t160
+  addr %stack_-24,  -> %t161
+  addr %t161,  -> %t162
+  cast %t162,  -> %t163
+  load %stack_-8,  -> %t164
+  load %stack_-16,  -> %t165
+  addr %stack_-921624,  -> %t166
+  load %stack_-921624,  -> %t167
+  cast %t167,  -> %t168
+  addr %stack_-1843392,  -> %t169
+  load %stack_-1843392,  -> %t170
+  addr %stack_-1843384,  -> %t171
+  load %stack_-1843384,  -> %t172
+  cast %t172,  -> %t173
+  addr %stack_-1843440,  -> %t174
+  addr %t174,  -> %t175
+  cast %t175,  -> %t176
+  arg %t176,  -> 
+  arg %t173,  -> 
+  arg %t170,  -> 
+  arg %t168,  -> 
+  arg %t165,  -> 
+  arg %t164,  -> 
+  arg %t163,  -> 
+  call ,  -> %t177
+  const ,  -> %t178
+  const_str .LS109,  -> %t178
+  addr %stderr,  -> %t179
+  load %stderr,  -> %t180
+  arg %t180,  -> 
+  arg %t178,  -> 
+  call ,  -> %t181
+  addr %stack_-24,  -> %t182
+  addr %t182,  -> %t183
+  cast %t183,  -> %t184
+  load %stack_-8,  -> %t185
+  load %stack_-16,  -> %t186
+  addr %stack_-1843224,  -> %t187
+  load %stack_-1843224,  -> %t188
+  cast %t188,  -> %t189
+  addr %stack_-1843392,  -> %t190
+  load %stack_-1843392,  -> %t191
+  addr %stack_-1843384,  -> %t192
+  load %stack_-1843384,  -> %t193
+  cast %t193,  -> %t194
+  addr %stack_-1843472,  -> %t195
+  addr %t195,  -> %t196
+  cast %t196,  -> %t197
+  arg %t197,  -> 
+  arg %t194,  -> 
+  arg %t191,  -> 
+  arg %t189,  -> 
+  arg %t186,  -> 
+  arg %t185,  -> 
+  arg %t184,  -> 
+  call ,  -> %t198
+  const ,  -> %t199
+  const_str .LS110,  -> %t199
+  addr %stderr,  -> %t200
+  load %stderr,  -> %t201
+  arg %t201,  -> 
+  arg %t199,  -> 
+  call ,  -> %t202
+  load %stack_-16,  -> %t203
+  load %stack_-8,  -> %t204
+  shl %t204, unused_rhs -> %t205
+  const ,  -> %t206
+  const_str .LS111,  -> %t206
+  arg %t206,  -> 
+  arg %t205,  -> 
+  arg %t203,  -> 
+  call ,  -> %t207
+  const ,  -> %t208
+  store %t208,  -> %stack_-1843480
+  label ,  -> 
+  load %stack_-1843480,  -> %t209
+  load %stack_-16,  -> %t210
+  lt %t209, %t210 -> %t211
+  br_if %t211,  -> 
+  const ,  -> %t212
+  store %t212,  -> %stack_-1843488
+  label ,  -> 
+  load %stack_-1843488,  -> %t213
+  load %stack_-8,  -> %t214
+  lt %t213, %t214 -> %t215
+  br_if %t215,  -> 
+  addr %stdout,  -> %t216
+  load %stdout,  -> %t217
+  const ,  -> %t218
+  const ,  -> %t219
+  addr %stack_-921624,  -> %t220
+  load %stack_-921624,  -> %t221
+  load %stack_-1843480,  -> %t222
+  mul %t222, 1920 -> %t223
+  add %t221, %t223 -> %t224
+  load %t224,  -> %t225
+  load %stack_-1843488,  -> %t226
+  mul %t226, 3 -> %t227
+  add %t225, %t227 -> %t228
+  load %t228,  -> %t229
+  arg %t229,  -> 
+  arg %t219,  -> 
+  arg %t218,  -> 
+  arg %t217,  -> 
+  call ,  -> %t230
+  label ,  -> 
+  br ,  -> 
+  label ,  -> 
+  const ,  -> %t231
+  store %t231,  -> %stack_-1843496
+  label ,  -> 
+  load %stack_-1843496,  -> %t232
+  load %stack_-8,  -> %t233
+  lt %t232, %t233 -> %t234
+  br_if %t234,  -> 
+  addr %stdout,  -> %t235
+  load %stdout,  -> %t236
+  const ,  -> %t237
+  const ,  -> %t238
+  addr %stack_-1843224,  -> %t239
+  load %stack_-1843224,  -> %t240
+  load %stack_-1843480,  -> %t241
+  mul %t241, 1920 -> %t242
+  add %t240, %t242 -> %t243
+  load %t243,  -> %t244
+  load %stack_-1843496,  -> %t245
+  mul %t245, 3 -> %t246
+  add %t244, %t246 -> %t247
+  load %t247,  -> %t248
+  arg %t248,  -> 
+  arg %t238,  -> 
+  arg %t237,  -> 
+  arg %t236,  -> 
+  call ,  -> %t249
+  label ,  -> 
+  br ,  -> 
+  label ,  -> 
+  label ,  -> 
+  br ,  -> 
+  label ,  -> 
+  const ,  -> %t250
+  const_str .LS112,  -> %t250
+  addr %stderr,  -> %t251
+  load %stderr,  -> %t252
+  arg %t252,  -> 
+  arg %t250,  -> 
+  call ,  -> %t253
+  load %stack_-16,  -> %t254
+  load %stack_-8,  -> %t255
+  shl %t255, unused_rhs -> %t256
+  const ,  -> %t257
+  const_str .LS113,  -> %t257
+  addr %stderr,  -> %t258
+  load %stderr,  -> %t259
+  arg %t259,  -> 
+  arg %t257,  -> 
+  arg %t256,  -> 
+  arg %t254,  -> 
+  call ,  -> %t260
+  addr %stack_-24,  -> %t261
+  load %t261,  -> %t262
+  fconst ,  -> %t263
+  addr %stack_-24,  -> %t264
+  load %t264,  -> %t265
+  cast %t265,  -> %t266
+  div f_lhs, f_rhs -> %t267
+  cast %t267,  -> %t268
+  const ,  -> %t269
+  const_str .LS114,  -> %t269
+  addr %stderr,  -> %t270
+  load %stderr,  -> %t271
+  arg %t271,  -> 
+  arg %t269,  -> 
+  arg %t268,  -> 
+  arg %t262,  -> 
+  call ,  -> %t272
+  const ,  -> %t273
+  ret %t273,  -> 
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: addr %stderr,  -> %t24
+[dce] deleted: addr %stderr,  -> %t30
+[dce] deleted: addr %stderr,  -> %t36
+[dce] deleted: addr %stderr,  -> %t42
+[dce] deleted: addr %stderr,  -> %t48
+[dce] deleted: const ,  -> %t53
+[dce] deleted: const_str .LS106,  -> %t53
+[dce] deleted: addr %stderr,  -> %t57
+[dce] deleted: addr %stack_-1843384,  -> %t63
+[dce] deleted: cast %t68,  -> %t69
+[dce] deleted: fconst ,  -> %t70
+[dce] deleted: addr %stack_-1843400,  -> %t73
+[dce] deleted: load %stack_-1843400,  -> %t74
+[dce] deleted: fconst ,  -> %t75
+[dce] deleted: addr %stack_-1843408,  -> %t78
+[dce] deleted: load %stack_-1843408,  -> %t79
+[dce] deleted: const 4,  -> %t84
+[dce] deleted: const 8,  -> %t88
+[dce] deleted: const 12,  -> %t92
+[dce] deleted: const 12,  -> %t96
+[dce] deleted: const 4,  -> %t98
+[dce] deleted: const 12,  -> %t102
+[dce] deleted: const 8,  -> %t104
+[dce] deleted: const 12,  -> %t108
+[dce] deleted: const 12,  -> %t110
+[dce] deleted: const 28,  -> %t116
+[dce] deleted: addr %stack_-1843408,  -> %t118
+[dce] deleted: const 4,  -> %t123
+[dce] deleted: const 8,  -> %t127
+[dce] deleted: const 12,  -> %t131
+[dce] deleted: const 12,  -> %t135
+[dce] deleted: const 4,  -> %t137
+[dce] deleted: const 12,  -> %t141
+[dce] deleted: const 8,  -> %t143
+[dce] deleted: const 12,  -> %t147
+[dce] deleted: const 12,  -> %t149
+[dce] deleted: const 28,  -> %t155
+[dce] deleted: addr %stderr,  -> %t158
+[dce] deleted: addr %stack_-921624,  -> %t166
+[dce] deleted: addr %stack_-1843392,  -> %t169
+[dce] deleted: addr %stack_-1843384,  -> %t171
+[dce] deleted: addr %stderr,  -> %t179
+[dce] deleted: addr %stack_-1843224,  -> %t187
+[dce] deleted: addr %stack_-1843392,  -> %t190
+[dce] deleted: addr %stack_-1843384,  -> %t192
+[dce] deleted: addr %stderr,  -> %t200
+[dce] deleted: addr %stdout,  -> %t216
+[dce] deleted: addr %stack_-921624,  -> %t220
+[dce] deleted: addr %stdout,  -> %t235
+[dce] deleted: addr %stack_-1843224,  -> %t239
+[dce] deleted: addr %stderr,  -> %t251
+[dce] deleted: addr %stderr,  -> %t258
+[dce] deleted: fconst ,  -> %t263
+[dce] deleted: cast %t265,  -> %t266
+[dce] deleted: addr %stderr,  -> %t270
+  [IR Pass] dce               : 13 funcs, 1761 nodes -> 1278 nodes (483 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass gvn: IR=b7499f60d4f18d68 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass gvn: IR=3516604f5706c644 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass gvn: IR=0afc37c1cb29acb3 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass gvn: IR=4587ffbd37ef7b98 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass gvn: IR=41a5909f32b69cc3 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass gvn: IR=a4881bde3f1d42f5 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass gvn: IR=d7ebb36ee5aa990e CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass gvn: IR=8a4d4e5cc5aedb61 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass gvn: IR=a2f2988bb5de11b8 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass gvn: IR=46e442c36130b9fa CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass gvn: IR=53a8fcb4d9ab9a04 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass gvn: IR=7ad930b0c7722f8d CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass gvn: IR=36e1a8ba405ff15d CFG=0415ef81fb44596e DOM=617c690e6b873370 LIVE=0000000000000000
+  [IR Pass] gvn               : 13 funcs, 1278 nodes -> 1278 nodes (0 deleted, 23 modified)
+[ZCC-SNAPSHOT] Pass coalesce_vload: IR=b7499f60d4f18d68 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass coalesce_vload: IR=f5463e3214107859 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass coalesce_vload: IR=867743f9da172769 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass coalesce_vload: IR=1f39d612669e6e9e CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass coalesce_vload: IR=9b95f6cdf4baf505 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass coalesce_vload: IR=a4881bde3f1d42f5 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass coalesce_vload: IR=d7ebb36ee5aa990e CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass coalesce_vload: IR=8a4d4e5cc5aedb61 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass coalesce_vload: IR=7fe77678e78e7b81 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass coalesce_vload: IR=78f638ee40ab11ca CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass coalesce_vload: IR=a92d2cc9c8a69372 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass coalesce_vload: IR=b523b52087c4b403 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass coalesce_vload: IR=36e1a8ba405ff15d CFG=0415ef81fb44596e DOM=617c690e6b873370 LIVE=0000000000000000
+  [IR Pass] coalesce_vload    : 13 funcs, 1278 nodes -> 1278 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass lower_float: IR=b7499f60d4f18d68 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass lower_float: IR=f5463e3214107859 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass lower_float: IR=867743f9da172769 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass lower_float: IR=1f39d612669e6e9e CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass lower_float: IR=9b95f6cdf4baf505 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass lower_float: IR=a4881bde3f1d42f5 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass lower_float: IR=d7ebb36ee5aa990e CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass lower_float: IR=8a4d4e5cc5aedb61 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass lower_float: IR=7fe77678e78e7b81 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass lower_float: IR=78f638ee40ab11ca CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass lower_float: IR=a92d2cc9c8a69372 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass lower_float: IR=b523b52087c4b403 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass lower_float: IR=36e1a8ba405ff15d CFG=0415ef81fb44596e DOM=617c690e6b873370 LIVE=0000000000000000
+  [IR Pass] lower_float       : 13 funcs, 1278 nodes -> 1278 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass warden: IR=b7499f60d4f18d68 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass warden: IR=f5463e3214107859 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass warden: IR=867743f9da172769 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass warden: IR=1f39d612669e6e9e CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass warden: IR=9b95f6cdf4baf505 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass warden: IR=a4881bde3f1d42f5 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass warden: IR=d7ebb36ee5aa990e CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass warden: IR=8a4d4e5cc5aedb61 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass warden: IR=7fe77678e78e7b81 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass warden: IR=78f638ee40ab11ca CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass warden: IR=a92d2cc9c8a69372 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass warden: IR=b523b52087c4b403 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass warden: IR=36e1a8ba405ff15d CFG=0415ef81fb44596e DOM=617c690e6b873370 LIVE=0000000000000000
+  [IR Pass] warden            : 13 funcs, 1278 nodes -> 1278 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass dce2: IR=b7499f60d4f18d68 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  load %stack_-8,  -> %t1
+  addr %stack_-40,  -> %t2
+  store %t1,  -> %t2
+  load %stack_-16,  -> %t4
+  addr %stack_-40,  -> %t5
+  copy %t5,  -> %t7
+  store %t4,  -> %t7
+  load %stack_-24,  -> %t9
+  addr %stack_-40,  -> %t10
+  copy %t10,  -> %t12
+  store %t9,  -> %t12
+[DCE-DEBUG] END FULL IR
+
+[ZCC-SNAPSHOT] Pass dce2: IR=f5463e3214107859 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  load %stack_-8,  -> %t1
+  load %stack_-8,  -> %t4
+  load %stack_-16,  -> %t8
+  load %stack_-16,  -> %t11
+  add f_lhs, f_rhs -> %t14
+  addr %stack_-40,  -> %t15
+  store %t14,  -> %t15
+  mul f_lhs, f_rhs -> %t20
+  addr %stack_-48,  -> %t21
+  store %t20,  -> %t21
+  copy %t14,  -> %t34
+  addr %stack_-56,  -> %t35
+  store %t34,  -> %t35
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: load %stack_-8,  -> %t1
+[dce] deleted: load %stack_-8,  -> %t4
+[dce] deleted: load %stack_-16,  -> %t8
+[dce] deleted: load %stack_-16,  -> %t11
+[ZCC-SNAPSHOT] Pass dce2: IR=867743f9da172769 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  addr %stack_-16,  -> %t0
+  addr %stack_-32,  -> %t2
+  add f_lhs, f_rhs -> %t4
+  addr %stack_-48,  -> %t5
+  store %t4,  -> %t5
+  addr %stack_-16,  -> %t6
+  copy %t6,  -> %t8
+  addr %stack_-32,  -> %t10
+  copy %t10,  -> %t12
+  copy %t4,  -> %t14
+  addr %stack_-48,  -> %t15
+  copy %t15,  -> %t17
+  store %t14,  -> %t17
+  addr %stack_-16,  -> %t18
+  copy %t18,  -> %t20
+  addr %stack_-32,  -> %t22
+  copy %t22,  -> %t24
+  copy %t4,  -> %t26
+  addr %stack_-48,  -> %t27
+  copy %t27,  -> %t29
+  store %t26,  -> %t29
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: addr %stack_-16,  -> %t0
+[dce] deleted: addr %stack_-32,  -> %t2
+[dce] deleted: copy %t6,  -> %t8
+[dce] deleted: copy %t10,  -> %t12
+[dce] deleted: copy %t18,  -> %t20
+[dce] deleted: copy %t22,  -> %t24
+[ZCC-SNAPSHOT] Pass dce2: IR=1f39d612669e6e9e CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  addr %stack_-16,  -> %t0
+  addr %stack_-32,  -> %t2
+  sub f_lhs, f_rhs -> %t4
+  addr %stack_-48,  -> %t5
+  store %t4,  -> %t5
+  addr %stack_-16,  -> %t6
+  copy %t6,  -> %t8
+  addr %stack_-32,  -> %t10
+  copy %t10,  -> %t12
+  copy %t4,  -> %t14
+  addr %stack_-48,  -> %t15
+  copy %t15,  -> %t17
+  store %t14,  -> %t17
+  addr %stack_-16,  -> %t18
+  copy %t18,  -> %t20
+  addr %stack_-32,  -> %t22
+  copy %t22,  -> %t24
+  copy %t4,  -> %t26
+  addr %stack_-48,  -> %t27
+  copy %t27,  -> %t29
+  store %t26,  -> %t29
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: addr %stack_-16,  -> %t0
+[dce] deleted: addr %stack_-32,  -> %t2
+[dce] deleted: copy %t6,  -> %t8
+[dce] deleted: copy %t10,  -> %t12
+[dce] deleted: copy %t18,  -> %t20
+[dce] deleted: copy %t22,  -> %t24
+[ZCC-SNAPSHOT] Pass dce2: IR=9b95f6cdf4baf505 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  addr %stack_-16,  -> %t0
+  mul f_lhs, f_rhs -> %t4
+  addr %stack_-40,  -> %t5
+  store %t4,  -> %t5
+  addr %stack_-16,  -> %t6
+  copy %t6,  -> %t8
+  copy %t4,  -> %t12
+  addr %stack_-40,  -> %t13
+  copy %t13,  -> %t15
+  store %t12,  -> %t15
+  addr %stack_-16,  -> %t16
+  copy %t16,  -> %t18
+  copy %t4,  -> %t22
+  addr %stack_-40,  -> %t23
+  copy %t23,  -> %t25
+  store %t22,  -> %t25
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: addr %stack_-16,  -> %t0
+[dce] deleted: copy %t6,  -> %t8
+[dce] deleted: copy %t16,  -> %t18
+[ZCC-SNAPSHOT] Pass dce2: IR=a4881bde3f1d42f5 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  addr %stack_-16,  -> %t0
+  addr %stack_-32,  -> %t2
+  addr %stack_-16,  -> %t5
+  copy %t5,  -> %t7
+  addr %stack_-32,  -> %t9
+  copy %t9,  -> %t11
+  addr %stack_-16,  -> %t15
+  copy %t15,  -> %t17
+  addr %stack_-32,  -> %t19
+  copy %t19,  -> %t21
+  add f_lhs, f_rhs -> %t24
+  ret %t24,  -> 
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: addr %stack_-16,  -> %t0
+[dce] deleted: addr %stack_-32,  -> %t2
+[dce] deleted: copy %t5,  -> %t7
+[dce] deleted: copy %t9,  -> %t11
+[dce] deleted: copy %t15,  -> %t17
+[dce] deleted: copy %t19,  -> %t21
+[ZCC-SNAPSHOT] Pass dce2: IR=d7ebb36ee5aa990e CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  load %stack_-16,  -> %t1
+  load %stack_-16,  -> %t3
+  arg %t3,  -> 
+  arg %t1,  -> 
+  call ,  -> %t4
+  arg %t4,  -> 
+  call ,  -> %t5
+  ret %t5,  -> 
+[DCE-DEBUG] END FULL IR
+
+[ZCC-SNAPSHOT] Pass dce2: IR=8a4d4e5cc5aedb61 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  load %stack_-16,  -> %t1
+  arg %t1,  -> 
+  call ,  -> %t2
+  addr %stack_-24,  -> %t3
+  store %t2,  -> %t3
+  gt f_lhs, f_rhs -> %t7
+  br_if %t7,  -> 
+  div f_lhs, f_rhs -> %t11
+  load %stack_-16,  -> %t13
+  arg %t13,  -> 
+  arg %t11,  -> 
+  call ,  -> %t14
+  br ,  -> 
+  label ,  -> 
+  label ,  -> 
+[DCE-DEBUG] END FULL IR
+
+[ZCC-SNAPSHOT] Pass dce2: IR=7fe77678e78e7b81 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  load %stack_-8,  -> %t1
+  load %t1,  -> %t2
+  addr %stack_-48,  -> %t3
+  store %t2,  -> %t3
+  load %stack_-16,  -> %t5
+  load %t5,  -> %t6
+  addr %stack_-64,  -> %t7
+  store %t6,  -> %t7
+  load %stack_-24,  -> %t9
+  load %t9,  -> %t10
+  addr %stack_-88,  -> %t11
+  store %t10,  -> %t11
+  addr %stack_-88,  -> %t12
+  load %t12,  -> %t13
+  load %stack_-48,  -> %t15
+  arg %t15,  -> 
+  arg %t13,  -> 
+  call ,  -> %t16
+  addr %stack_-104,  -> %t17
+  store %t16,  -> %t17
+  load %stack_-64,  -> %t19
+  load %stack_-64,  -> %t21
+  arg %t21,  -> 
+  arg %t19,  -> 
+  call ,  -> %t22
+  addr %stack_-112,  -> %t23
+  store %t22,  -> %t23
+  load %stack_-64,  -> %t26
+  load %stack_-104,  -> %t28
+  arg %t28,  -> 
+  arg %t26,  -> 
+  call ,  -> %t29
+  mul f_lhs, f_rhs -> %t30
+  addr %stack_-120,  -> %t31
+  store %t30,  -> %t31
+  load %stack_-104,  -> %t33
+  load %stack_-104,  -> %t35
+  arg %t35,  -> 
+  arg %t33,  -> 
+  call ,  -> %t36
+  addr %stack_-88,  -> %t37
+  copy %t37,  -> %t39
+  addr %stack_-88,  -> %t41
+  copy %t41,  -> %t43
+  sub f_lhs, f_rhs -> %t46
+  addr %stack_-128,  -> %t47
+  store %t46,  -> %t47
+  copy %t46,  -> %t60
+  addr %stack_-136,  -> %t61
+  store %t60,  -> %t61
+  lt f_lhs, f_rhs -> %t65
+  br_if %t65,  -> 
+  const ,  -> %t66
+  ret %t66,  -> 
+  label ,  -> 
+  load %stack_-136,  -> %t71
+  arg %t71,  -> 
+  call ,  -> %t72
+  div f_lhs, f_rhs -> %t78
+  addr %stack_-144,  -> %t79
+  store %t78,  -> %t79
+  lt f_lhs, f_rhs -> %t83
+  br_if %t83,  -> 
+  const ,  -> %t84
+  ret %t84,  -> 
+  label ,  -> 
+  load %stack_-144,  -> %t86
+  load %stack_-32,  -> %t88
+  store %t86,  -> %t88
+  const ,  -> %t89
+  ret %t89,  -> 
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: copy %t37,  -> %t39
+[dce] deleted: copy %t41,  -> %t43
+[ZCC-SNAPSHOT] Pass dce2: IR=78f638ee40ab11ca CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  load %stack_-8,  -> %t1
+  load %t1,  -> %t2
+  addr %stack_-72,  -> %t3
+  store %t2,  -> %t3
+  load %stack_-16,  -> %t5
+  load %t5,  -> %t6
+  addr %stack_-88,  -> %t7
+  store %t6,  -> %t7
+  fconst ,  -> %t8
+  addr %stack_-96,  -> %t9
+  store %t8,  -> %t9
+  const ,  -> %t10
+  store %t10,  -> %stack_-104
+  const ,  -> %t11
+  store %t11,  -> %stack_-112
+  label ,  -> 
+  load %stack_-112,  -> %t12
+  load %stack_-32,  -> %t14
+  lt %t12, %t14 -> %t15
+  br_if %t15,  -> 
+  addr %stack_-120,  -> %t16
+  addr %t16,  -> %t17
+  cast %t17,  -> %t18
+  load %stack_-24,  -> %t20
+  load %stack_-112,  -> %t21
+  mul %t21, 20 -> %t22
+  add %t20, %t22 -> %t23
+  addr %t23,  -> %t24
+  cast %t24,  -> %t25
+  addr %stack_-88,  -> %t26
+  addr %t26,  -> %t27
+  cast %t27,  -> %t28
+  addr %stack_-72,  -> %t29
+  addr %t29,  -> %t30
+  cast %t30,  -> %t31
+  arg %t31,  -> 
+  arg %t28,  -> 
+  arg %t25,  -> 
+  arg %t18,  -> 
+  call ,  -> %t32
+  br_if %t32,  -> 
+  lt f_lhs, f_rhs -> %t37
+  br_if %t37,  -> 
+  load %stack_-120,  -> %t39
+  addr %stack_-96,  -> %t40
+  store %t39,  -> %t40
+  load %stack_-112,  -> %t41
+  store %t41,  -> %stack_-104
+  label ,  -> 
+  label ,  -> 
+  label ,  -> 
+  br ,  -> 
+  label ,  -> 
+  load %stack_-104,  -> %t42
+  const ,  -> %t43
+  lt %t42, %t43 -> %t44
+  br_if %t44,  -> 
+  addr %stack_-88,  -> %t46
+  copy %t46,  -> %t48
+  mul f_lhs, f_rhs -> %t52
+  addr %stack_-128,  -> %t53
+  store %t52,  -> %t53
+  add f_lhs, f_rhs -> %t64
+  cast %t64,  -> %t65
+  load %stack_-40,  -> %t67
+  store %t65,  -> %t67
+  copy %t64,  -> %t78
+  cast %t78,  -> %t79
+  load %stack_-48,  -> %t81
+  store %t79,  -> %t81
+  copy %t64,  -> %t92
+  cast %t92,  -> %t93
+  load %stack_-56,  -> %t95
+  store %t93,  -> %t95
+  ret ,  -> 
+  label ,  -> 
+  load %stack_-96,  -> %t97
+  load %stack_-88,  -> %t99
+  arg %t99,  -> 
+  arg %t97,  -> 
+  call ,  -> %t100
+  load %stack_-72,  -> %t102
+  arg %t102,  -> 
+  arg %t100,  -> 
+  call ,  -> %t103
+  addr %stack_-144,  -> %t104
+  store %t103,  -> %t104
+  load %stack_-24,  -> %t106
+  load %stack_-104,  -> %t107
+  mul %t107, 20 -> %t108
+  add %t106, %t108 -> %t109
+  load %t109,  -> %t110
+  load %stack_-144,  -> %t112
+  arg %t112,  -> 
+  arg %t110,  -> 
+  call ,  -> %t113
+  arg %t113,  -> 
+  call ,  -> %t114
+  addr %stack_-160,  -> %t115
+  store %t114,  -> %t115
+  fconst ,  -> %t116
+  fconst ,  -> %t117
+  fconst ,  -> %t118
+  arg %t118,  -> 
+  arg %t117,  -> 
+  arg %t116,  -> 
+  call ,  -> %t119
+  arg %t119,  -> 
+  call ,  -> %t120
+  addr %stack_-176,  -> %t121
+  store %t120,  -> %t121
+  load %stack_-176,  -> %t123
+  load %stack_-160,  -> %t125
+  arg %t125,  -> 
+  arg %t123,  -> 
+  call ,  -> %t126
+  fconst ,  -> %t127
+  arg %t127,  -> 
+  arg %t126,  -> 
+  call ,  -> %t128
+  addr %stack_-184,  -> %t129
+  store %t128,  -> %t129
+  fconst ,  -> %t130
+  addr %stack_-192,  -> %t131
+  store %t130,  -> %t131
+  add f_lhs, f_rhs -> %t138
+  addr %stack_-200,  -> %t139
+  store %t138,  -> %t139
+  load %stack_-24,  -> %t141
+  load %stack_-104,  -> %t142
+  mul %t142, 20 -> %t143
+  add %t141, %t143 -> %t144
+  copy %t144,  -> %t146
+  load %t146,  -> %t147
+  mul f_lhs, f_rhs -> %t151
+  cast %t151,  -> %t152
+  load %stack_-40,  -> %t154
+  store %t152,  -> %t154
+  load %stack_-24,  -> %t156
+  load %stack_-104,  -> %t157
+  mul %t157, 20 -> %t158
+  add %t156, %t158 -> %t159
+  copy %t159,  -> %t161
+  load %t161,  -> %t162
+  copy %t151,  -> %t166
+  cast %t166,  -> %t167
+  load %stack_-48,  -> %t169
+  store %t167,  -> %t169
+  load %stack_-24,  -> %t171
+  load %stack_-104,  -> %t172
+  mul %t172, 20 -> %t173
+  add %t171, %t173 -> %t174
+  copy %t174,  -> %t176
+  load %t176,  -> %t177
+  copy %t151,  -> %t181
+  cast %t181,  -> %t182
+  load %stack_-56,  -> %t184
+  store %t182,  -> %t184
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: copy %t46,  -> %t48
+[dce] deleted: load %t146,  -> %t147
+[dce] deleted: load %t161,  -> %t162
+[dce] deleted: load %t176,  -> %t177
+[ZCC-SNAPSHOT] Pass dce2: IR=a92d2cc9c8a69372 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  load %stack_-8,  -> %t1
+  load %t1,  -> %t2
+  addr %stack_-88,  -> %t3
+  store %t2,  -> %t3
+  load %stack_-56,  -> %t5
+  load %t5,  -> %t6
+  addr %stack_-96,  -> %t7
+  store %t6,  -> %t7
+  fconst ,  -> %t8
+  load %stack_-112,  -> %t10
+  cast %t10,  -> %t11
+  copy %t11,  -> %t13
+  cast %t13,  -> %t14
+  store %t8,  -> %t14
+  fconst ,  -> %t15
+  load %stack_-112,  -> %t17
+  cast %t17,  -> %t18
+  const ,  -> %t19
+  add %t18, %t19 -> %t20
+  cast %t20,  -> %t21
+  store %t15,  -> %t21
+  neg f_lhs,  -> %t23
+  load %stack_-112,  -> %t25
+  cast %t25,  -> %t26
+  const ,  -> %t27
+  add %t26, %t27 -> %t28
+  cast %t28,  -> %t29
+  store %t23,  -> %t29
+  fconst ,  -> %t30
+  load %stack_-128,  -> %t32
+  cast %t32,  -> %t33
+  copy %t33,  -> %t35
+  cast %t35,  -> %t36
+  store %t30,  -> %t36
+  fconst ,  -> %t37
+  load %stack_-128,  -> %t39
+  cast %t39,  -> %t40
+  const ,  -> %t41
+  add %t40, %t41 -> %t42
+  cast %t42,  -> %t43
+  store %t37,  -> %t43
+  fconst ,  -> %t44
+  load %stack_-128,  -> %t46
+  cast %t46,  -> %t47
+  const ,  -> %t48
+  add %t47, %t48 -> %t49
+  cast %t49,  -> %t50
+  store %t44,  -> %t50
+  fconst ,  -> %t51
+  load %stack_-144,  -> %t53
+  cast %t53,  -> %t54
+  copy %t54,  -> %t56
+  cast %t56,  -> %t57
+  store %t51,  -> %t57
+  fconst ,  -> %t58
+  load %stack_-144,  -> %t60
+  cast %t60,  -> %t61
+  const ,  -> %t62
+  add %t61, %t62 -> %t63
+  cast %t63,  -> %t64
+  store %t58,  -> %t64
+  fconst ,  -> %t65
+  load %stack_-144,  -> %t67
+  cast %t67,  -> %t68
+  const ,  -> %t69
+  add %t68, %t69 -> %t70
+  cast %t70,  -> %t71
+  store %t65,  -> %t71
+  addr %stack_-88,  -> %t72
+  copy %t72,  -> %t74
+  load %t74,  -> %t75
+  fconst ,  -> %t79
+  div f_lhs, f_rhs -> %t81
+  cast %t81,  -> %t82
+  addr %stack_-152,  -> %t83
+  store %t82,  -> %t83
+  copy %t81,  -> %t88
+  arg %t88,  -> 
+  call ,  -> %t89
+  mul f_lhs, f_rhs -> %t90
+  addr %stack_-160,  -> %t91
+  store %t90,  -> %t91
+  load %stack_-48,  -> %t95
+  load %stack_-40,  -> %t98
+  copy %t90,  -> %t101
+  addr %stack_-168,  -> %t102
+  store %t101,  -> %t102
+  addr %stack_-96,  -> %t103
+  load %t103,  -> %t104
+  br_if %t104,  -> 
+  br ,  -> 
+  label ,  -> 
+  fconst ,  -> %t106
+  label ,  -> 
+  addr %stack_-176,  -> %t107
+  store %t106,  -> %t107
+  addr %stack_-96,  -> %t108
+  load %t108,  -> %t109
+  br_if %t109,  -> 
+  br ,  -> 
+  label ,  -> 
+  fconst ,  -> %t111
+  label ,  -> 
+  addr %stack_-184,  -> %t112
+  store %t111,  -> %t112
+  const ,  -> %t113
+  store %t113,  -> %stack_-192
+  label ,  -> 
+  load %stack_-192,  -> %t114
+  load %stack_-40,  -> %t116
+  lt %t114, %t116 -> %t117
+  br_if %t117,  -> 
+  const ,  -> %t118
+  store %t118,  -> %stack_-200
+  label ,  -> 
+  load %stack_-200,  -> %t119
+  load %stack_-48,  -> %t121
+  lt %t119, %t121 -> %t122
+  br_if %t122,  -> 
+  load %stack_-200,  -> %t123
+  load %stack_-48,  -> %t126
+  const ,  -> %t127
+  sub %t126, %t127 -> %t128
+  sub f_lhs, f_rhs -> %t134
+  addr %stack_-208,  -> %t135
+  store %t134,  -> %t135
+  load %stack_-40,  -> %t137
+  const ,  -> %t138
+  sub %t137, %t138 -> %t139
+  load %stack_-192,  -> %t140
+  sub %t139, %t140 -> %t141
+  load %stack_-40,  -> %t144
+  const ,  -> %t145
+  sub %t144, %t145 -> %t146
+  copy %t134,  -> %t152
+  addr %stack_-216,  -> %t153
+  store %t152,  -> %t153
+  addr %stack_-96,  -> %t154
+  load %t154,  -> %t155
+  br_if %t155,  -> 
+  load %stack_-184,  -> %t157
+  load %stack_-176,  -> %t159
+  addr %stack_-216,  -> %t160
+  addr %t160,  -> %t161
+  cast %t161,  -> %t162
+  addr %stack_-208,  -> %t163
+  addr %t163,  -> %t164
+  cast %t164,  -> %t165
+  arg %t165,  -> 
+  arg %t162,  -> 
+  arg %t159,  -> 
+  arg %t157,  -> 
+  call ,  -> %t166
+  label ,  -> 
+  load %stack_-208,  -> %t168
+  arg %t168,  -> 
+  call ,  -> %t169
+  load %stack_-216,  -> %t173
+  arg %t173,  -> 
+  call ,  -> %t174
+  gt f_lhs, f_rhs -> %t176
+  br ,  -> 
+  label ,  -> 
+  label ,  -> 
+  br_if %t176,  -> 
+  const ,  -> %t177
+  cast %t177,  -> %t178
+  load %stack_-32,  -> %t180
+  load %stack_-192,  -> %t181
+  mul %t181, 1920 -> %t182
+  add %t180, %t182 -> %t183
+  load %t183,  -> %t184
+  load %stack_-200,  -> %t185
+  mul %t185, 3 -> %t186
+  add %t184, %t186 -> %t187
+  load %t187,  -> %t188
+  copy %t188,  -> %t190
+  store %t178,  -> %t190
+  const ,  -> %t191
+  cast %t191,  -> %t192
+  load %stack_-32,  -> %t194
+  load %stack_-192,  -> %t195
+  mul %t195, 1920 -> %t196
+  add %t194, %t196 -> %t197
+  load %t197,  -> %t198
+  load %stack_-200,  -> %t199
+  mul %t199, 3 -> %t200
+  add %t198, %t200 -> %t201
+  load %t201,  -> %t202
+  const ,  -> %t203
+  add %t202, %t203 -> %t204
+  store %t192,  -> %t204
+  const ,  -> %t205
+  cast %t205,  -> %t206
+  load %stack_-32,  -> %t208
+  load %stack_-192,  -> %t209
+  mul %t209, 1920 -> %t210
+  add %t208, %t210 -> %t211
+  load %t211,  -> %t212
+  load %stack_-200,  -> %t213
+  mul %t213, 3 -> %t214
+  add %t212, %t214 -> %t215
+  load %t215,  -> %t216
+  const ,  -> %t217
+  add %t216, %t217 -> %t218
+  store %t206,  -> %t218
+  br ,  -> 
+  label ,  -> 
+  div f_lhs, f_rhs -> %t225
+  load %stack_-144,  -> %t227
+  arg %t227,  -> 
+  arg %t225,  -> 
+  call ,  -> %t228
+  copy %t225,  -> %t235
+  load %stack_-128,  -> %t237
+  arg %t237,  -> 
+  arg %t235,  -> 
+  call ,  -> %t238
+  load %stack_-112,  -> %t240
+  arg %t240,  -> 
+  arg %t238,  -> 
+  call ,  -> %t241
+  arg %t241,  -> 
+  arg %t228,  -> 
+  call ,  -> %t242
+  arg %t242,  -> 
+  call ,  -> %t243
+  addr %stack_-232,  -> %t244
+  store %t243,  -> %t244
+  addr %stack_-256,  -> %t245
+  addr %t245,  -> %t246
+  cast %t246,  -> %t247
+  addr %stack_-248,  -> %t248
+  addr %t248,  -> %t249
+  cast %t249,  -> %t250
+  addr %stack_-240,  -> %t251
+  addr %t251,  -> %t252
+  cast %t252,  -> %t253
+  load %stack_-24,  -> %t255
+  load %stack_-16,  -> %t257
+  cast %t257,  -> %t258
+  addr %stack_-232,  -> %t259
+  addr %t259,  -> %t260
+  cast %t260,  -> %t261
+  addr %stack_-88,  -> %t262
+  addr %t262,  -> %t263
+  cast %t263,  -> %t264
+  arg %t264,  -> 
+  arg %t261,  -> 
+  arg %t258,  -> 
+  arg %t255,  -> 
+  arg %t253,  -> 
+  arg %t250,  -> 
+  arg %t247,  -> 
+  call ,  -> %t265
+  load %stack_-240,  -> %t267
+  load %stack_-32,  -> %t269
+  load %stack_-192,  -> %t270
+  mul %t270, 1920 -> %t271
+  add %t269, %t271 -> %t272
+  load %t272,  -> %t273
+  load %stack_-200,  -> %t274
+  mul %t274, 3 -> %t275
+  add %t273, %t275 -> %t276
+  load %t276,  -> %t277
+  copy %t277,  -> %t279
+  store %t267,  -> %t279
+  load %stack_-248,  -> %t281
+  load %stack_-32,  -> %t283
+  load %stack_-192,  -> %t284
+  mul %t284, 1920 -> %t285
+  add %t283, %t285 -> %t286
+  load %t286,  -> %t287
+  load %stack_-200,  -> %t288
+  mul %t288, 3 -> %t289
+  add %t287, %t289 -> %t290
+  load %t290,  -> %t291
+  const ,  -> %t292
+  add %t291, %t292 -> %t293
+  store %t281,  -> %t293
+  load %stack_-256,  -> %t295
+  load %stack_-32,  -> %t297
+  load %stack_-192,  -> %t298
+  mul %t298, 1920 -> %t299
+  add %t297, %t299 -> %t300
+  load %t300,  -> %t301
+  load %stack_-200,  -> %t302
+  mul %t302, 3 -> %t303
+  add %t301, %t303 -> %t304
+  load %t304,  -> %t305
+  const ,  -> %t306
+  add %t305, %t306 -> %t307
+  store %t295,  -> %t307
+  label ,  -> 
+  br ,  -> 
+  label ,  -> 
+  label ,  -> 
+  br ,  -> 
+  label ,  -> 
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: load %t74,  -> %t75
+[dce] deleted: fconst ,  -> %t79
+[dce] deleted: load %stack_-48,  -> %t95
+[dce] deleted: load %stack_-40,  -> %t98
+[dce] deleted: load %stack_-200,  -> %t123
+[dce] deleted: sub %t126, %t127 -> %t128
+[dce] deleted: sub %t139, %t140 -> %t141
+[dce] deleted: sub %t144, %t145 -> %t146
+[ZCC-SNAPSHOT] Pass dce2: IR=b523b52087c4b403 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  const ,  -> %t0
+  load %stack_-16,  -> %t2
+  store %t0,  -> %t2
+  fconst ,  -> %t3
+  load %stack_-8,  -> %t5
+  copy %t5,  -> %t8
+  store %t3,  -> %t8
+  neg f_lhs,  -> %t10
+  load %stack_-8,  -> %t12
+  copy %t12,  -> %t15
+  copy %t15,  -> %t17
+  store %t10,  -> %t17
+  copy %t10,  -> %t19
+  load %stack_-8,  -> %t21
+  copy %t21,  -> %t24
+  copy %t24,  -> %t26
+  store %t19,  -> %t26
+  fconst ,  -> %t27
+  load %stack_-8,  -> %t29
+  copy %t29,  -> %t32
+  copy %t32,  -> %t34
+  store %t27,  -> %t34
+  const ,  -> %t35
+  cast %t35,  -> %t36
+  load %stack_-8,  -> %t38
+  copy %t38,  -> %t41
+  copy %t41,  -> %t43
+  store %t36,  -> %t43
+  const ,  -> %t44
+  cast %t44,  -> %t45
+  load %stack_-8,  -> %t47
+  copy %t47,  -> %t50
+  copy %t50,  -> %t52
+  store %t45,  -> %t52
+  const ,  -> %t53
+  cast %t53,  -> %t54
+  load %stack_-8,  -> %t56
+  copy %t56,  -> %t59
+  copy %t59,  -> %t61
+  store %t54,  -> %t61
+  fconst ,  -> %t62
+  load %stack_-8,  -> %t64
+  copy 20,  -> %t66
+  add %t64, %t66 -> %t67
+  store %t62,  -> %t67
+  fconst ,  -> %t68
+  load %stack_-8,  -> %t70
+  copy 20,  -> %t72
+  add %t70, %t72 -> %t73
+  copy %t73,  -> %t75
+  store %t68,  -> %t75
+  copy %t10,  -> %t77
+  load %stack_-8,  -> %t79
+  copy 20,  -> %t81
+  add %t79, %t81 -> %t82
+  copy %t82,  -> %t84
+  store %t77,  -> %t84
+  fconst ,  -> %t85
+  load %stack_-8,  -> %t87
+  copy 20,  -> %t89
+  add %t87, %t89 -> %t90
+  copy %t90,  -> %t92
+  store %t85,  -> %t92
+  const ,  -> %t93
+  cast %t93,  -> %t94
+  load %stack_-8,  -> %t96
+  copy 20,  -> %t98
+  add %t96, %t98 -> %t99
+  copy %t99,  -> %t101
+  store %t94,  -> %t101
+  const ,  -> %t102
+  cast %t102,  -> %t103
+  load %stack_-8,  -> %t105
+  copy 20,  -> %t107
+  add %t105, %t107 -> %t108
+  copy %t108,  -> %t110
+  store %t103,  -> %t110
+  const ,  -> %t111
+  cast %t111,  -> %t112
+  load %stack_-8,  -> %t114
+  copy 20,  -> %t116
+  add %t114, %t116 -> %t117
+  copy %t117,  -> %t119
+  store %t112,  -> %t119
+  copy %t10,  -> %t121
+  load %stack_-8,  -> %t123
+  const ,  -> %t124
+  mul %t124, 20 -> %t125
+  add %t123, %t125 -> %t126
+  store %t121,  -> %t126
+  fconst ,  -> %t127
+  load %stack_-8,  -> %t129
+  const ,  -> %t130
+  mul %t130, 20 -> %t131
+  add %t129, %t131 -> %t132
+  copy %t132,  -> %t134
+  store %t127,  -> %t134
+  copy %t10,  -> %t136
+  load %stack_-8,  -> %t138
+  const ,  -> %t139
+  mul %t139, 20 -> %t140
+  add %t138, %t140 -> %t141
+  copy %t141,  -> %t143
+  store %t136,  -> %t143
+  fconst ,  -> %t144
+  load %stack_-8,  -> %t146
+  const ,  -> %t147
+  mul %t147, 20 -> %t148
+  add %t146, %t148 -> %t149
+  copy %t149,  -> %t151
+  store %t144,  -> %t151
+  const ,  -> %t152
+  cast %t152,  -> %t153
+  load %stack_-8,  -> %t155
+  const ,  -> %t156
+  mul %t156, 20 -> %t157
+  add %t155, %t157 -> %t158
+  copy %t158,  -> %t160
+  store %t153,  -> %t160
+  const ,  -> %t161
+  cast %t161,  -> %t162
+  load %stack_-8,  -> %t164
+  const ,  -> %t165
+  mul %t165, 20 -> %t166
+  add %t164, %t166 -> %t167
+  copy %t167,  -> %t169
+  store %t162,  -> %t169
+  const ,  -> %t170
+  cast %t170,  -> %t171
+  load %stack_-8,  -> %t173
+  const ,  -> %t174
+  mul %t174, 20 -> %t175
+  add %t173, %t175 -> %t176
+  copy %t176,  -> %t178
+  store %t171,  -> %t178
+  fconst ,  -> %t179
+  load %stack_-8,  -> %t181
+  const ,  -> %t182
+  mul %t182, 20 -> %t183
+  add %t181, %t183 -> %t184
+  store %t179,  -> %t184
+  fconst ,  -> %t185
+  load %stack_-8,  -> %t187
+  const ,  -> %t188
+  mul %t188, 20 -> %t189
+  add %t187, %t189 -> %t190
+  copy %t190,  -> %t192
+  store %t185,  -> %t192
+  copy %t10,  -> %t194
+  load %stack_-8,  -> %t196
+  const ,  -> %t197
+  mul %t197, 20 -> %t198
+  add %t196, %t198 -> %t199
+  copy %t199,  -> %t201
+  store %t194,  -> %t201
+  fconst ,  -> %t202
+  load %stack_-8,  -> %t204
+  const ,  -> %t205
+  mul %t205, 20 -> %t206
+  add %t204, %t206 -> %t207
+  copy %t207,  -> %t209
+  store %t202,  -> %t209
+  const ,  -> %t210
+  cast %t210,  -> %t211
+  load %stack_-8,  -> %t213
+  const ,  -> %t214
+  mul %t214, 20 -> %t215
+  add %t213, %t215 -> %t216
+  copy %t216,  -> %t218
+  store %t211,  -> %t218
+  const ,  -> %t219
+  cast %t219,  -> %t220
+  load %stack_-8,  -> %t222
+  const ,  -> %t223
+  mul %t223, 20 -> %t224
+  add %t222, %t224 -> %t225
+  copy %t225,  -> %t227
+  store %t220,  -> %t227
+  const ,  -> %t228
+  cast %t228,  -> %t229
+  load %stack_-8,  -> %t231
+  const ,  -> %t232
+  mul %t232, 20 -> %t233
+  add %t231, %t233 -> %t234
+  copy %t234,  -> %t236
+  store %t229,  -> %t236
+  fconst ,  -> %t237
+  load %stack_-8,  -> %t239
+  const ,  -> %t240
+  mul %t240, 20 -> %t241
+  add %t239, %t241 -> %t242
+  store %t237,  -> %t242
+  fconst ,  -> %t243
+  load %stack_-8,  -> %t245
+  const ,  -> %t246
+  mul %t246, 20 -> %t247
+  add %t245, %t247 -> %t248
+  copy %t248,  -> %t250
+  store %t243,  -> %t250
+  copy %t10,  -> %t252
+  load %stack_-8,  -> %t254
+  const ,  -> %t255
+  mul %t255, 20 -> %t256
+  add %t254, %t256 -> %t257
+  copy %t257,  -> %t259
+  store %t252,  -> %t259
+  fconst ,  -> %t260
+  load %stack_-8,  -> %t262
+  const ,  -> %t263
+  mul %t263, 20 -> %t264
+  add %t262, %t264 -> %t265
+  copy %t265,  -> %t267
+  store %t260,  -> %t267
+  const ,  -> %t268
+  cast %t268,  -> %t269
+  load %stack_-8,  -> %t271
+  const ,  -> %t272
+  mul %t272, 20 -> %t273
+  add %t271, %t273 -> %t274
+  copy %t274,  -> %t276
+  store %t269,  -> %t276
+  const ,  -> %t277
+  cast %t277,  -> %t278
+  load %stack_-8,  -> %t280
+  const ,  -> %t281
+  mul %t281, 20 -> %t282
+  add %t280, %t282 -> %t283
+  copy %t283,  -> %t285
+  store %t278,  -> %t285
+  const ,  -> %t286
+  cast %t286,  -> %t287
+  load %stack_-8,  -> %t289
+  const ,  -> %t290
+  mul %t290, 20 -> %t291
+  add %t289, %t291 -> %t292
+  copy %t292,  -> %t294
+  store %t287,  -> %t294
+  fconst ,  -> %t295
+  load %stack_-8,  -> %t297
+  const ,  -> %t298
+  mul %t298, 20 -> %t299
+  add %t297, %t299 -> %t300
+  store %t295,  -> %t300
+  fconst ,  -> %t301
+  load %stack_-8,  -> %t303
+  const ,  -> %t304
+  mul %t304, 20 -> %t305
+  add %t303, %t305 -> %t306
+  copy %t306,  -> %t308
+  store %t301,  -> %t308
+  copy %t10,  -> %t310
+  load %stack_-8,  -> %t312
+  const ,  -> %t313
+  mul %t313, 20 -> %t314
+  add %t312, %t314 -> %t315
+  copy %t315,  -> %t317
+  store %t310,  -> %t317
+  fconst ,  -> %t318
+  load %stack_-8,  -> %t320
+  const ,  -> %t321
+  mul %t321, 20 -> %t322
+  add %t320, %t322 -> %t323
+  copy %t323,  -> %t325
+  store %t318,  -> %t325
+  const ,  -> %t326
+  cast %t326,  -> %t327
+  load %stack_-8,  -> %t329
+  const ,  -> %t330
+  mul %t330, 20 -> %t331
+  add %t329, %t331 -> %t332
+  copy %t332,  -> %t334
+  store %t327,  -> %t334
+  const ,  -> %t335
+  cast %t335,  -> %t336
+  load %stack_-8,  -> %t338
+  const ,  -> %t339
+  mul %t339, 20 -> %t340
+  add %t338, %t340 -> %t341
+  copy %t341,  -> %t343
+  store %t336,  -> %t343
+  const ,  -> %t344
+  cast %t344,  -> %t345
+  load %stack_-8,  -> %t347
+  const ,  -> %t348
+  mul %t348, 20 -> %t349
+  add %t347, %t349 -> %t350
+  copy %t350,  -> %t352
+  store %t345,  -> %t352
+[DCE-DEBUG] END FULL IR
+
+[ZCC-SNAPSHOT] Pass dce2: IR=36e1a8ba405ff15d CFG=0415ef81fb44596e DOM=617c690e6b873370 LIVE=0000000000000000
+
+[DCE-DEBUG] FULL IR BEFORE DCE:
+  const ,  -> %t0
+  store %t0,  -> %stack_-8
+  const ,  -> %t1
+  store %t1,  -> %stack_-16
+  const ,  -> %t2
+  cast %t2,  -> %t3
+  addr %stack_-24,  -> %t4
+  store %t3,  -> %t4
+  const ,  -> %t5
+  cast %t5,  -> %t6
+  addr %stack_-24,  -> %t7
+  store %t6,  -> %t7
+  const ,  -> %t8
+  cast %t8,  -> %t9
+  addr %stack_-24,  -> %t10
+  store %t9,  -> %t10
+  const ,  -> %t11
+  cast %t11,  -> %t12
+  addr %stack_-24,  -> %t13
+  store %t12,  -> %t13
+  const ,  -> %t14
+  cast %t14,  -> %t15
+  addr %stack_-24,  -> %t16
+  store %t15,  -> %t16
+  const ,  -> %t17
+  cast %t17,  -> %t18
+  addr %stack_-24,  -> %t19
+  store %t18,  -> %t19
+  const ,  -> %t20
+  cast %t20,  -> %t21
+  addr %stack_-24,  -> %t22
+  store %t21,  -> %t22
+  const ,  -> %t23
+  const_str .LS100,  -> %t23
+  load %stderr,  -> %t25
+  arg %t25,  -> 
+  arg %t23,  -> 
+  call ,  -> %t26
+  load %stack_-16,  -> %t27
+  load %stack_-8,  -> %t28
+  const ,  -> %t29
+  const_str .LS101,  -> %t29
+  load %stderr,  -> %t31
+  arg %t31,  -> 
+  arg %t29,  -> 
+  arg %t28,  -> 
+  arg %t27,  -> 
+  call ,  -> %t32
+  addr %stack_-24,  -> %t33
+  load %t33,  -> %t34
+  const ,  -> %t35
+  const_str .LS102,  -> %t35
+  load %stderr,  -> %t37
+  arg %t37,  -> 
+  arg %t35,  -> 
+  arg %t34,  -> 
+  call ,  -> %t38
+  addr %stack_-24,  -> %t39
+  load %t39,  -> %t40
+  const ,  -> %t41
+  const_str .LS103,  -> %t41
+  load %stderr,  -> %t43
+  arg %t43,  -> 
+  arg %t41,  -> 
+  arg %t40,  -> 
+  call ,  -> %t44
+  addr %stack_-24,  -> %t45
+  load %t45,  -> %t46
+  const ,  -> %t47
+  const_str .LS104,  -> %t47
+  load %stderr,  -> %t49
+  arg %t49,  -> 
+  arg %t47,  -> 
+  arg %t46,  -> 
+  call ,  -> %t50
+  addr %stack_-24,  -> %t51
+  load %t51,  -> %t52
+  br_if %t52,  -> 
+  br ,  -> 
+  label ,  -> 
+  const ,  -> %t54
+  const_str .LS107,  -> %t54
+  cast %t54,  -> %t55
+  label ,  -> 
+  const ,  -> %t56
+  const_str .LS105,  -> %t56
+  load %stderr,  -> %t58
+  arg %t58,  -> 
+  arg %t56,  -> 
+  arg %t55,  -> 
+  call ,  -> %t59
+  addr %stack_-1843392,  -> %t60
+  addr %t60,  -> %t61
+  cast %t61,  -> %t62
+  load %stack_-1843384,  -> %t64
+  cast %t64,  -> %t65
+  arg %t65,  -> 
+  arg %t62,  -> 
+  call ,  -> %t66
+  addr %stack_-24,  -> %t67
+  load %t67,  -> %t68
+  div f_lhs, f_rhs -> %t71
+  addr %stack_-1843400,  -> %t72
+  store %t71,  -> %t72
+  div f_lhs, f_rhs -> %t76
+  addr %stack_-1843408,  -> %t77
+  store %t76,  -> %t77
+  neg f_lhs,  -> %t80
+  addr %stack_-1843440,  -> %t81
+  store %t80,  -> %t81
+  fconst ,  -> %t82
+  addr %stack_-1843440,  -> %t83
+  copy %t83,  -> %t85
+  store %t82,  -> %t85
+  fconst ,  -> %t86
+  addr %stack_-1843440,  -> %t87
+  copy %t87,  -> %t89
+  store %t86,  -> %t89
+  fconst ,  -> %t90
+  addr %stack_-1843440,  -> %t91
+  copy %t91,  -> %t93
+  store %t90,  -> %t93
+  fconst ,  -> %t94
+  addr %stack_-1843440,  -> %t95
+  copy %t95,  -> %t97
+  copy %t97,  -> %t99
+  store %t94,  -> %t99
+  fconst ,  -> %t100
+  addr %stack_-1843440,  -> %t101
+  copy %t101,  -> %t103
+  copy %t103,  -> %t105
+  store %t100,  -> %t105
+  fconst ,  -> %t106
+  addr %stack_-1843440,  -> %t107
+  copy %t107,  -> %t109
+  copy %t109,  -> %t111
+  store %t106,  -> %t111
+  addr %stack_-24,  -> %t112
+  load %t112,  -> %t113
+  cast %t113,  -> %t114
+  addr %stack_-1843440,  -> %t115
+  copy %t115,  -> %t117
+  store %t114,  -> %t117
+  load %stack_-1843408,  -> %t119
+  addr %stack_-1843472,  -> %t120
+  store %t119,  -> %t120
+  fconst ,  -> %t121
+  addr %stack_-1843472,  -> %t122
+  copy %t122,  -> %t124
+  store %t121,  -> %t124
+  fconst ,  -> %t125
+  addr %stack_-1843472,  -> %t126
+  copy %t126,  -> %t128
+  store %t125,  -> %t128
+  fconst ,  -> %t129
+  addr %stack_-1843472,  -> %t130
+  copy %t130,  -> %t132
+  store %t129,  -> %t132
+  fconst ,  -> %t133
+  addr %stack_-1843472,  -> %t134
+  copy %t134,  -> %t136
+  copy %t136,  -> %t138
+  store %t133,  -> %t138
+  fconst ,  -> %t139
+  addr %stack_-1843472,  -> %t140
+  copy %t140,  -> %t142
+  copy %t142,  -> %t144
+  store %t139,  -> %t144
+  fconst ,  -> %t145
+  addr %stack_-1843472,  -> %t146
+  copy %t146,  -> %t148
+  copy %t148,  -> %t150
+  store %t145,  -> %t150
+  addr %stack_-24,  -> %t151
+  load %t151,  -> %t152
+  cast %t152,  -> %t153
+  addr %stack_-1843472,  -> %t154
+  copy %t154,  -> %t156
+  store %t153,  -> %t156
+  const ,  -> %t157
+  const_str .LS108,  -> %t157
+  load %stderr,  -> %t159
+  arg %t159,  -> 
+  arg %t157,  -> 
+  call ,  -> %t160
+  addr %stack_-24,  -> %t161
+  addr %t161,  -> %t162
+  cast %t162,  -> %t163
+  load %stack_-8,  -> %t164
+  load %stack_-16,  -> %t165
+  load %stack_-921624,  -> %t167
+  cast %t167,  -> %t168
+  load %stack_-1843392,  -> %t170
+  load %stack_-1843384,  -> %t172
+  cast %t172,  -> %t173
+  addr %stack_-1843440,  -> %t174
+  addr %t174,  -> %t175
+  cast %t175,  -> %t176
+  arg %t176,  -> 
+  arg %t173,  -> 
+  arg %t170,  -> 
+  arg %t168,  -> 
+  arg %t165,  -> 
+  arg %t164,  -> 
+  arg %t163,  -> 
+  call ,  -> %t177
+  const ,  -> %t178
+  const_str .LS109,  -> %t178
+  load %stderr,  -> %t180
+  arg %t180,  -> 
+  arg %t178,  -> 
+  call ,  -> %t181
+  addr %stack_-24,  -> %t182
+  addr %t182,  -> %t183
+  cast %t183,  -> %t184
+  load %stack_-8,  -> %t185
+  load %stack_-16,  -> %t186
+  load %stack_-1843224,  -> %t188
+  cast %t188,  -> %t189
+  load %stack_-1843392,  -> %t191
+  load %stack_-1843384,  -> %t193
+  cast %t193,  -> %t194
+  addr %stack_-1843472,  -> %t195
+  addr %t195,  -> %t196
+  cast %t196,  -> %t197
+  arg %t197,  -> 
+  arg %t194,  -> 
+  arg %t191,  -> 
+  arg %t189,  -> 
+  arg %t186,  -> 
+  arg %t185,  -> 
+  arg %t184,  -> 
+  call ,  -> %t198
+  const ,  -> %t199
+  const_str .LS110,  -> %t199
+  load %stderr,  -> %t201
+  arg %t201,  -> 
+  arg %t199,  -> 
+  call ,  -> %t202
+  load %stack_-16,  -> %t203
+  load %stack_-8,  -> %t204
+  shl %t204, unused_rhs -> %t205
+  const ,  -> %t206
+  const_str .LS111,  -> %t206
+  arg %t206,  -> 
+  arg %t205,  -> 
+  arg %t203,  -> 
+  call ,  -> %t207
+  const ,  -> %t208
+  store %t208,  -> %stack_-1843480
+  label ,  -> 
+  load %stack_-1843480,  -> %t209
+  load %stack_-16,  -> %t210
+  lt %t209, %t210 -> %t211
+  br_if %t211,  -> 
+  const ,  -> %t212
+  store %t212,  -> %stack_-1843488
+  label ,  -> 
+  load %stack_-1843488,  -> %t213
+  load %stack_-8,  -> %t214
+  lt %t213, %t214 -> %t215
+  br_if %t215,  -> 
+  load %stdout,  -> %t217
+  const ,  -> %t218
+  const ,  -> %t219
+  load %stack_-921624,  -> %t221
+  load %stack_-1843480,  -> %t222
+  mul %t222, 1920 -> %t223
+  add %t221, %t223 -> %t224
+  load %t224,  -> %t225
+  load %stack_-1843488,  -> %t226
+  mul %t226, 3 -> %t227
+  add %t225, %t227 -> %t228
+  load %t228,  -> %t229
+  arg %t229,  -> 
+  arg %t219,  -> 
+  arg %t218,  -> 
+  arg %t217,  -> 
+  call ,  -> %t230
+  label ,  -> 
+  br ,  -> 
+  label ,  -> 
+  const ,  -> %t231
+  store %t231,  -> %stack_-1843496
+  label ,  -> 
+  load %stack_-1843496,  -> %t232
+  load %stack_-8,  -> %t233
+  lt %t232, %t233 -> %t234
+  br_if %t234,  -> 
+  load %stdout,  -> %t236
+  const ,  -> %t237
+  const ,  -> %t238
+  load %stack_-1843224,  -> %t240
+  load %stack_-1843480,  -> %t241
+  mul %t241, 1920 -> %t242
+  add %t240, %t242 -> %t243
+  load %t243,  -> %t244
+  load %stack_-1843496,  -> %t245
+  mul %t245, 3 -> %t246
+  add %t244, %t246 -> %t247
+  load %t247,  -> %t248
+  arg %t248,  -> 
+  arg %t238,  -> 
+  arg %t237,  -> 
+  arg %t236,  -> 
+  call ,  -> %t249
+  label ,  -> 
+  br ,  -> 
+  label ,  -> 
+  label ,  -> 
+  br ,  -> 
+  label ,  -> 
+  const ,  -> %t250
+  const_str .LS112,  -> %t250
+  load %stderr,  -> %t252
+  arg %t252,  -> 
+  arg %t250,  -> 
+  call ,  -> %t253
+  load %stack_-16,  -> %t254
+  load %stack_-8,  -> %t255
+  shl %t255, unused_rhs -> %t256
+  const ,  -> %t257
+  const_str .LS113,  -> %t257
+  load %stderr,  -> %t259
+  arg %t259,  -> 
+  arg %t257,  -> 
+  arg %t256,  -> 
+  arg %t254,  -> 
+  call ,  -> %t260
+  addr %stack_-24,  -> %t261
+  load %t261,  -> %t262
+  addr %stack_-24,  -> %t264
+  load %t264,  -> %t265
+  div f_lhs, f_rhs -> %t267
+  cast %t267,  -> %t268
+  const ,  -> %t269
+  const_str .LS114,  -> %t269
+  load %stderr,  -> %t271
+  arg %t271,  -> 
+  arg %t269,  -> 
+  arg %t268,  -> 
+  arg %t262,  -> 
+  call ,  -> %t272
+  const ,  -> %t273
+  ret %t273,  -> 
+[DCE-DEBUG] END FULL IR
+
+[dce] deleted: load %t67,  -> %t68
+[dce] deleted: load %t264,  -> %t265
+  [IR Pass] dce2              : 13 funcs, 1278 nodes -> 1237 nodes (41 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass transient_lock_audit: IR=b7499f60d4f18d68 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass transient_lock_audit: IR=d350e27b15fd1832 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass transient_lock_audit: IR=71a005fcd1945c16 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass transient_lock_audit: IR=b7afbf2ee909cded CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass transient_lock_audit: IR=1547508dd23c271d CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass transient_lock_audit: IR=92ceb4ae2f683177 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass transient_lock_audit: IR=d7ebb36ee5aa990e CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass transient_lock_audit: IR=8a4d4e5cc5aedb61 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass transient_lock_audit: IR=4c2f106dc7686541 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass transient_lock_audit: IR=9d1a6e7d6737f9ec CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass transient_lock_audit: IR=ca31e98f1d4d148b CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass transient_lock_audit: IR=b523b52087c4b403 CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+[ZCC-SNAPSHOT] Pass transient_lock_audit: IR=9a6010a0c3443c79 CFG=0415ef81fb44596e DOM=617c690e6b873370 LIVE=0000000000000000
+  [IR Pass] transient_lock_audit: 13 funcs, 1237 nodes -> 1237 nodes (0 deleted, 0 modified)
+  [IR Pass] Pipeline complete: 1761 nodes -> 1237 nodes (total: 524 deleted, 182 modified)

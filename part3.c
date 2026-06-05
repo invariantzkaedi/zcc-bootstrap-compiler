@@ -3306,6 +3306,8 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
     int line;
     int i;
     int is_variadic = 0;
+    Type *temp_param_types[MAX_PARAMS];
+    char temp_param_names_buf[MAX_PARAMS][MAX_IDENT];
 
     line = cc->tk_line;
     func = node_new(cc, ND_FUNC_DEF, line);
@@ -3354,8 +3356,8 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
                 if (ptype->kind == TY_ARRAY) ptype = type_ptr(cc, ptype->base);
 
                 if (func->num_params < MAX_PARAMS) {
-                    func->param_types[func->num_params] = ptype;
-                    strncpy(func->param_names_buf[func->num_params], pname, MAX_IDENT - 1);
+                    temp_param_types[func->num_params] = ptype;
+                    strncpy(temp_param_names_buf[func->num_params], pname, MAX_IDENT - 1);
                     psym = scope_add_local(cc, pname, ptype);
                     func->num_params++;
                 }
@@ -3400,8 +3402,8 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
         struct FuncParams *fp = (struct FuncParams *)cc_alloc(cc, sizeof(struct FuncParams));
         int k;
         for (k = 0; k < func->num_params && k < MAX_PARAMS; k++) {
-            fp->types[k] = func->param_types[k];
-            strncpy(fp->names[k], func->param_names_buf[k], MAX_IDENT - 1);
+            fp->types[k] = temp_param_types[k];
+            strncpy(fp->names[k], temp_param_names_buf[k], MAX_IDENT - 1);
             fp->names[k][MAX_IDENT - 1] = '\0';
         }
         func->func_params = fp;
@@ -3422,7 +3424,7 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
         if (func->num_params > 0) {
             ftype->params = (Type **)cc_alloc(cc, sizeof(Type *) * func->num_params);
             for (int k = 0; k < func->num_params; k++) {
-                ftype->params[k] = func->param_types[k];
+                ftype->params[k] = temp_param_types[k];
             }
         }
         func->func_type = ftype;
