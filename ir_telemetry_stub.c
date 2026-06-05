@@ -60,9 +60,15 @@ void telemetry_emit_coverage(float coverage_pct) {
 }
 void telemetry_close(void) {
 }
-void zcc_pass_transient_locks(void) { /* G332 stub */ }
 #endif
 
 /* G332 — must be outside #ifndef ZCC_REAL_TELEMETRY so it links
    regardless of telemetry mode */
-void zcc_pass_transient_locks(void) {}
+
+/* G332 — outside ZCC_REAL_TELEMETRY guard, correct ir_pass_fn signature */
+#include "ir_pass_manager.h"
+ir_pass_result_t zcc_pass_transient_locks(void *fn_ptr) {
+    (void)fn_ptr;
+    ir_pass_result_t r = {0};
+    return r;
+}
