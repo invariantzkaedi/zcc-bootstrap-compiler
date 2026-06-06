@@ -1318,7 +1318,244 @@ class CounterfactualCalibrator:
         print()
 
 # --------------------------------------------------------------------
+# 8d. COUNTERFACTUAL POLICY OPTIMIZER (Level 15)
+#
+# Before deployment, evaluates 4 named policies across 100 Monte Carlo
+# simulated futures each.  Selects the policy with the best composite
+# score across three axes:
+#
+#   success_rate        — fraction of futures that would PASS under this policy
+#   risk_score          — expected failure weight (lower is better)
+#   recovery_readiness  — fraction of futures with a recovery path available
+#
+# Composite score:
+#   0.40 * success_rate + 0.35 * recovery_readiness + 0.25 * (1 - risk_score)
+#
+# Runs as a PRE-DEPLOYMENT step.  The selected policy and all simulation
+# results are written to scratch/policy_optimization_report.json.
+# The selected policy is available to downstream steps for audit/logging.
+# --------------------------------------------------------------------
+import random
+import math
+
+POLICIES = [
+    {
+        "name":               "conservative",
+        "risk_tolerance":     0.02,   # max acceptable failure rate
+        "governance_mode":    "strict",
+        "recovery_priority":  0.90,   # weight on recovery readiness
+        "description":        "Fail fast on any warning; maximize stability",
+    },
+    {
+        "name":               "balanced",
+        "risk_tolerance":     0.05,
+        "governance_mode":    "balanced",
+        "recovery_priority":  0.70,
+        "description":        "Standard constitutional thresholds",
+    },
+    {
+        "name":               "aggressive",
+        "risk_tolerance":     0.15,
+        "governance_mode":    "permissive",
+        "recovery_priority":  0.40,
+        "description":        "Optimise throughput, tolerate minor warnings",
+    },
+    {
+        "name":               "recovery_first",
+        "risk_tolerance":     0.08,
+        "governance_mode":    "balanced",
+        "recovery_priority":  0.95,
+        "description":        "Prioritise recovery readiness above deployment speed",
+    },
+]
+
+N_FUTURES = 100
+
+class CounterfactualPolicyOptimizer:
+    """
+    Evaluates POLICIES across N_FUTURES Monte Carlo simulated deployments
+    using the current model state as the probabilistic prior.
+
+    Simulation model (per future):
+      - asset_ok     ~ Bernoulli(p_asset)
+      - ws_ok        ~ Bernoulli(p_ws)
+      - shader_ok    ~ Bernoulli(p_shader)
+      - geo_drift    ~ Gaussian(mu_geo, sigma_geo)
+      - compiler_ok  ~ Bernoulli(p_compiler)
+
+    Priors are seeded from:
+      - model_base_rate_ema   (ForecastAccuracyTracker)
+      - counterfactual calibration accuracy rate
+      - current CAPABILITY_DRIFT observation
+    """
+    REPORT_FILE = "scratch/policy_optimization_report.json"
+
+    def __init__(self, model_base_rate: float,
+                 calibration_accuracy: float,
+                 current_capability_drift: float,
+                 rng_seed: int | None = None):
+        self.model_base_rate          = model_base_rate
+        self.calibration_accuracy     = calibration_accuracy
+        self.current_capability_drift = current_capability_drift
+        self._rng = random.Random(rng_seed)   # seeded for reproducibility
+
+        # Derive per-dimension priors from model state
+        # High EMA → system reliable → high probability of healthy state
+        base = model_base_rate
+        calib = calibration_accuracy  # e.g. 1.0 if 5/5 correct
+        self.priors = {
+            "p_asset":    min(0.999, base * 0.98 * calib),
+            "p_ws":       min(0.999, base * 0.97 * calib),
+            "p_shader":   min(0.999, base * 0.99 * calib),
+            "mu_geo":     current_capability_drift,
+            "sigma_geo":  max(0.005, current_capability_drift * 0.4),
+            "p_compiler": min(0.999, base * 0.98 * calib),
+        }
+
+    def _simulate_future(self, policy: dict) -> dict:
+        """
+        Simulate one possible deployment future under the given policy.
+        Returns: {passed, failure_weight, has_recovery}
+        """
+        p = self.priors
+        rng = self._rng
+
+        asset_ok    = rng.random() < p["p_asset"]
+        ws_ok       = rng.random() < p["p_ws"]
+        shader_ok   = rng.random() < p["p_shader"]
+        geo_drift   = max(0.0, rng.gauss(p["mu_geo"], p["sigma_geo"]))
+        compiler_ok = rng.random() < p["p_compiler"]
+
+        # Compute failure weight (0.0 = clean, 1.0 = total failure)
+        failure_weight = 0.0
+        failures = []
+        if not asset_ok:
+            failure_weight += 0.30
+            failures.append("asset")
+        if not ws_ok:
+            failure_weight += 0.25
+            failures.append("ws")
+        if not shader_ok:
+            failure_weight += 0.20
+            failures.append("shader")
+        geo_threshold = 0.10 if policy["governance_mode"] == "strict" else \
+                        0.15 if policy["governance_mode"] == "balanced" else 0.25
+        if geo_drift > geo_threshold:
+            failure_weight += 0.15
+            failures.append("geometry")
+        if not compiler_ok:
+            failure_weight += 0.35
+            failures.append("compiler")
+
+        # Policy pass/fail decision
+        passed = failure_weight <= policy["risk_tolerance"]
+
+        # Recovery readiness: available if recovery_priority > 0.7 AND
+        # failure_weight is non-zero but below 0.6 (recoverable range)
+        has_recovery = (
+            policy["recovery_priority"] >= 0.70
+            and 0 < failure_weight < 0.60
+        ) or (failure_weight == 0.0)
+
+        return {
+            "passed":         passed,
+            "failure_weight": round(failure_weight, 4),
+            "has_recovery":   has_recovery,
+            "failures":       failures,
+        }
+
+    def _evaluate_policy(self, policy: dict) -> dict:
+        """Run N_FUTURES simulations for one policy and aggregate metrics."""
+        results = [self._simulate_future(policy) for _ in range(N_FUTURES)]
+
+        success_rate       = sum(1 for r in results if r["passed"]) / N_FUTURES
+        mean_failure_weight = sum(r["failure_weight"] for r in results) / N_FUTURES
+        recovery_readiness = sum(1 for r in results if r["has_recovery"]) / N_FUTURES
+
+        # Composite score: higher is better
+        composite = (
+            0.40 * success_rate
+            + 0.35 * recovery_readiness
+            + 0.25 * (1.0 - mean_failure_weight)
+        )
+
+        return {
+            "policy":             policy["name"],
+            "description":        policy["description"],
+            "governance_mode":    policy["governance_mode"],
+            "risk_tolerance":     policy["risk_tolerance"],
+            "recovery_priority":  policy["recovery_priority"],
+            "success_rate":       round(success_rate, 4),
+            "mean_failure_weight": round(mean_failure_weight, 4),
+            "recovery_readiness": round(recovery_readiness, 4),
+            "composite_score":    round(composite, 4),
+        }
+
+    def optimize(self) -> dict:
+        """
+        Evaluate all POLICIES and return:
+          - results: per-policy metrics
+          - selected: the winning policy record
+          - priors: the probabilistic state used
+        """
+        results = [self._evaluate_policy(p) for p in POLICIES]
+        # Sort by composite score descending
+        results.sort(key=lambda r: r["composite_score"], reverse=True)
+        selected = results[0]
+
+        report = {
+            "generated_at":       time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "n_futures_per_policy": N_FUTURES,
+            "priors":             self.priors,
+            "policies_evaluated": results,
+            "selected_policy":    selected,
+            "composite_formula":  "0.40*success_rate + 0.35*recovery_readiness + 0.25*(1 - risk_score)",
+        }
+        try:
+            with open(self.REPORT_FILE, "w") as f:
+                json.dump(report, f, indent=2)
+        except Exception as e:
+            print(f"[POLICY OPT ERROR] Failed to write policy_optimization_report.json: {e}")
+
+        return report
+
+    def print_report(self, report: dict) -> None:
+        selected = report["selected_policy"]
+        results  = report["policies_evaluated"]
+        priors   = report["priors"]
+
+        print(f"{CYAN}{BOLD}=== COUNTERFACTUAL POLICY OPTIMIZER ==={RESET}")
+        print(f"  {DIM}Evaluating {len(POLICIES)} policies × {N_FUTURES} simulated futures{RESET}")
+        print(f"  {DIM}Priors  p_asset={priors['p_asset']:.3f}  p_ws={priors['p_ws']:.3f}  "
+              f"p_shader={priors['p_shader']:.3f}  p_compiler={priors['p_compiler']:.3f}{RESET}")
+        print()
+
+        # Table header
+        print(f"  {'Policy':<18} {'Success':>8} {'Recovery':>10} {'Risk':>8} {'Score':>8}")
+        print(f"  {'-'*18} {'-'*8} {'-'*10} {'-'*8} {'-'*8}")
+        for r in results:
+            marker = f" {GREEN}◀ SELECTED{RESET}" if r["policy"] == selected["policy"] else ""
+            print(f"  {r['policy']:<18} "
+                  f"{r['success_rate']:>7.1%} "
+                  f"{r['recovery_readiness']:>9.1%} "
+                  f"{r['mean_failure_weight']:>7.4f} "
+                  f"{r['composite_score']:>7.4f}"
+                  f"{marker}")
+        print()
+        print(f"  {BOLD}Selected:{RESET} {GREEN}{selected['policy'].upper()}{RESET}")
+        print(f"  Description     : {selected['description']}")
+        print(f"  Governance mode : {selected['governance_mode']}")
+        print(f"  Composite score : {selected['composite_score']:.4f}")
+        print(f"  Success rate    : {selected['success_rate']:.1%} across {N_FUTURES} futures")
+        print(f"  Recovery ready  : {selected['recovery_readiness']:.1%} of futures")
+        print(f"  Risk score      : {selected['mean_failure_weight']:.4f}")
+        print()
+        print(f"  {DIM}Full report: scratch/policy_optimization_report.json{RESET}")
+        print()
+
+# --------------------------------------------------------------------
 # 8c. GOVERNANCE ADVISOR (Level 14 — Adaptive Constitutional Intelligence)
+
 #
 # Reads from the learning layer (accuracy records, calibration records,
 # drift history) and proposes constitutional amendments as structured
@@ -1901,8 +2138,35 @@ async def main_coordination():
     if model_base_rate is not None:
         predicted_success_prob = 0.5 * predicted_success_prob + 0.5 * model_base_rate
         predicted_success_prob = round(min(0.999, max(0.10, predicted_success_prob)), 4)
-    
+
+    # 0. Counterfactual Policy Optimization (L15) — PRE-DEPLOYMENT
+    # Evaluate 4 policies × 100 simulated futures using live model state.
+    # Seeds: current EMA, counterfactual calibration accuracy, capability drift.
+    _calib_acc = 1.0   # start with perfect; degrade if overconfidence recorded
+    _calib_path = CounterfactualCalibrator.CALIB_FILE
+    if os.path.exists(_calib_path):
+        try:
+            with open(_calib_path, "r") as f:
+                _calib_data = json.load(f)
+            if isinstance(_calib_data, list) and _calib_data:
+                _n = len(_calib_data)
+                _correct = sum(1 for r in _calib_data if r.get("calibration") == "correct")
+                _calib_acc = _correct / _n
+        except Exception:
+            pass
+    _cap_drift = 0.05   # fallback if no live drift available yet
+    policy_optimizer = CounterfactualPolicyOptimizer(
+        model_base_rate=model_base_rate if model_base_rate is not None else predicted_success_prob,
+        calibration_accuracy=_calib_acc,
+        current_capability_drift=_cap_drift,
+        rng_seed=int(time.time()) % 100000,
+    )
+    policy_report = policy_optimizer.optimize()
+    selected_policy = policy_report["selected_policy"]
+    policy_optimizer.print_report(policy_report)
+
     # Parse CLI flags
+
     obj_name = "stable_visualizer_deployment"
     simulate_failure = None
     
