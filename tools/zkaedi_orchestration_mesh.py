@@ -1834,7 +1834,291 @@ class GovernanceAdvisor:
         print()
 
 # --------------------------------------------------------------------
+# 8e. CAUSAL ERROR ATTRIBUTOR (Level 16)
+#
+# After each run: collects observed signals, traces each to a likely
+# cause class, assigns causal weights, separates noise from systemic
+# drift, and recommends a targeted correction.
+#
+# Scoring formula (per cause class):
+#
+#   cause_score =
+#       0.35 * observed_failure_match    ← direct evidence from this run
+#     + 0.25 * historical_frequency      ← how often this cause has appeared
+#     + 0.20 * forecast_error_alignment  ← does this cause explain the miss?
+#     + 0.10 * policy_sensitivity        ← how policy-dependent is this cause?
+#     + 0.10 * recovery_failure_weight   ← gap between simulated & live recovery
+#
+# Output: scratch/causal_error_attribution.json
+# --------------------------------------------------------------------
+
+CAUSE_CLASSES = [
+    "asset_pipeline",       # GLB/LOD/catalogue/export failure
+    "workspace_integrity",  # missing dirs, stale manifests, bad paths
+    "shader_runtime",       # viewer/WebGL/material failure
+    "compiler_gate",        # syntax, import, build failure
+    "model_drift",          # EMA divergence, forecast miss
+    "governance_policy",    # policy selected but outcome degraded
+    "recovery_gap",         # failure recoverable in sim but not live
+]
+
+CAUSE_RECOMMENDED_ACTIONS = {
+    "asset_pipeline":      "Audit GLB/LOD pipeline and verify asset catalogue endpoints are reachable",
+    "workspace_integrity": "Rebuild golden baseline manifests and verify directory structure integrity",
+    "shader_runtime":      "Re-run shader guard hardening; verify USE_UV define and NaN containment",
+    "compiler_gate":       "Run make selfhost and verify all compiler smoke tests pass cleanly",
+    "model_drift":         "Increase calibration weight and reduce policy optimism; run additional gate cycles",
+    "governance_policy":   "Promote selected policy one tier toward conservative on next deployment",
+    "recovery_gap":        "Add live recovery probes to match simulation recovery readiness model",
+}
+
+# Agent names whose failure signals map to each cause class
+AGENT_CAUSE_MAP = {
+    "pre_asset_agent":      "asset_pipeline",
+    "pre_geometry_agent":   "workspace_integrity",
+    "pre_shader_agent":     "shader_runtime",
+    "micro_render_agent":   "shader_runtime",
+    "micro_camera_agent":   "workspace_integrity",
+    "micro_ws_agent":       "workspace_integrity",
+    "sub_visualizer_agent": "shader_runtime",
+    "sub_compiler_agent":   "compiler_gate",
+    "post_patch_agent":     "workspace_integrity",
+    "post_report_agent":    "governance_policy",
+}
+
+
+class CausalErrorAttributor:
+    """
+    Attributes the causal origin of prediction error and agent failures
+    to one of seven cause classes.  Distinguishes systemic drift from
+    per-run noise using a 5-component weighted scoring formula.
+
+    Reads:
+      - agent results (failed/warned agents from this run)
+      - scratch/forecast_accuracy.json  (prediction error history)
+      - scratch/policy_optimization_report.json  (selected policy state)
+      - scratch/causal_error_attribution.json    (historical cause frequency)
+
+    Writes:
+      scratch/causal_error_attribution.json  (appends this run)
+    """
+    REPORT_FILE = "scratch/causal_error_attribution.json"
+
+    def __init__(self):
+        self.history = self._load_history()
+
+    def _load_history(self) -> list:
+        if not os.path.exists(self.REPORT_FILE):
+            return []
+        try:
+            with open(self.REPORT_FILE, "r") as f:
+                data = json.load(f)
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
+
+    def _historical_frequency(self, cause: str) -> float:
+        """Fraction of historical runs where this cause was primary."""
+        if not self.history:
+            return 0.0
+        primary_count = sum(1 for r in self.history
+                            if r.get("primary_cause") == cause)
+        return primary_count / len(self.history)
+
+    def _observed_failure_match(self, cause: str, failed_agents: list,
+                                 prediction_error: float,
+                                 drift_report: dict) -> float:
+        """
+        How strongly does the observed run evidence match this cause?
+        0.0 = no match, 1.0 = full match.
+        """
+        if cause == "model_drift":
+            # Forecast miss IS the observed evidence for model_drift
+            return min(1.0, prediction_error)
+
+        if cause == "governance_policy":
+            # High capability drift with a policy in play signals policy mis-selection
+            cap_drift = drift_report.get("CAPABILITY_DRIFT", 0.0)
+            return min(1.0, cap_drift * 4.0)
+
+        if cause == "recovery_gap":
+            # Signalled when actual run has failures despite high sim recovery_readiness
+            has_live_failures = len(failed_agents) > 0
+            return 0.8 if has_live_failures else 0.0
+
+        # For pipeline causes: check if any mapped agent failed
+        matched = [a for a in failed_agents
+                   if AGENT_CAUSE_MAP.get(a) == cause]
+        if matched:
+            return min(1.0, 0.4 + 0.3 * len(matched))
+        return 0.0
+
+    def _forecast_error_alignment(self, cause: str,
+                                   prediction_error: float,
+                                   failed_agents: list) -> float:
+        """
+        How much does this cause explain the gap between predicted and actual?
+        """
+        if cause == "model_drift":
+            # The primary explanation for forecast error on clean runs
+            return min(1.0, prediction_error * (1.0 if not failed_agents else 0.5))
+        if cause in ("asset_pipeline", "shader_runtime", "compiler_gate"):
+            # Agent failures directly caused a worse-than-predicted outcome
+            matched = any(AGENT_CAUSE_MAP.get(a) == cause for a in failed_agents)
+            return 0.6 * prediction_error if matched else 0.0
+        if cause == "governance_policy":
+            # Partial alignment: policy mis-selection inflated error
+            return 0.3 * prediction_error
+        return 0.05 * prediction_error  # residual for unmatched causes
+
+    def _policy_sensitivity(self, cause: str) -> float:
+        """
+        How policy-sensitive is this cause? Read from policy_optimization_report.
+        """
+        path = CounterfactualPolicyOptimizer.REPORT_FILE
+        if not os.path.exists(path):
+            return 0.5  # neutral default
+        try:
+            with open(path, "r") as f:
+                pol = json.load(f)
+            selected = pol.get("selected_policy", {})
+            success_rate = selected.get("success_rate", 0.5)
+            gap = 1.0 - success_rate  # how far from ideal
+
+            if cause == "governance_policy":
+                return min(1.0, gap * 2.0)
+            if cause == "model_drift":
+                return min(1.0, gap * 1.5)
+            if cause == "recovery_gap":
+                return 1.0 - selected.get("recovery_readiness", 0.9)
+            return gap * 0.3
+        except Exception:
+            return 0.5
+
+    def _recovery_failure_weight(self, cause: str,
+                                  failed_agents: list) -> float:
+        """
+        Weight of unrecovered failures relevant to this cause.
+        """
+        if cause == "recovery_gap":
+            path = CounterfactualPolicyOptimizer.REPORT_FILE
+            if os.path.exists(path):
+                try:
+                    with open(path, "r") as f:
+                        pol = json.load(f)
+                    rr = pol.get("selected_policy", {}).get("recovery_readiness", 0.9)
+                    return 1.0 - rr
+                except Exception:
+                    pass
+            return 0.5
+        if failed_agents and AGENT_CAUSE_MAP.get(failed_agents[0]) == cause:
+            return 0.6
+        return 0.0
+
+    def _is_systemic(self, cause: str, raw_score: float) -> bool:
+        """
+        Systemic if this cause has appeared in >40% of historical runs
+        AND current raw score is above 0.2.
+        """
+        freq = self._historical_frequency(cause)
+        return freq > 0.40 and raw_score > 0.20
+
+    def attribute(self, run_id: str, failed_agents: list,
+                  prediction_error: float, drift_report: dict) -> dict:
+        """
+        Compute causal weights for all cause classes and return
+        a full attribution record.
+        """
+        raw_scores = {}
+        for cause in CAUSE_CLASSES:
+            ofm  = self._observed_failure_match(cause, failed_agents,
+                                                prediction_error, drift_report)
+            hf   = self._historical_frequency(cause)
+            fea  = self._forecast_error_alignment(cause, prediction_error,
+                                                   failed_agents)
+            ps   = self._policy_sensitivity(cause)
+            rfw  = self._recovery_failure_weight(cause, failed_agents)
+
+            score = (0.35 * ofm
+                   + 0.25 * hf
+                   + 0.20 * fea
+                   + 0.10 * ps
+                   + 0.10 * rfw)
+            raw_scores[cause] = round(score, 4)
+
+        # Normalise to sum=1 (causal weight distribution)
+        total = sum(raw_scores.values()) or 1.0
+        causal_weights = {c: round(s / total, 4) for c, s in raw_scores.items()}
+
+        # Primary cause: highest weight
+        primary_cause = max(causal_weights, key=causal_weights.get)
+        primary_weight = causal_weights[primary_cause]
+
+        # Systemic vs noise classification
+        systemic_causes = [c for c, s in raw_scores.items()
+                           if self._is_systemic(c, s)]
+        noise_causes    = [c for c in CAUSE_CLASSES if c not in systemic_causes]
+
+        record = {
+            "run_id":          run_id,
+            "timestamp":       time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "prediction_error": round(prediction_error, 4),
+            "failed_agents":   failed_agents,
+            "primary_cause":   primary_cause,
+            "confidence":      round(primary_weight, 4),
+            "causal_weights":  causal_weights,
+            "systemic_causes": systemic_causes,
+            "noise_causes":    noise_causes,
+            "recommended_action": CAUSE_RECOMMENDED_ACTIONS[primary_cause],
+        }
+
+        # Persist (append mode)
+        self.history.append(record)
+        try:
+            with open(self.REPORT_FILE, "w") as f:
+                json.dump(self.history, f, indent=2)
+        except Exception as e:
+            print(f"[CAUSAL ERROR] Failed to write causal_error_attribution.json: {e}")
+
+        return record
+
+    def print_report(self, record: dict) -> None:
+        weights = record["causal_weights"]
+        primary = record["primary_cause"]
+        systemic = record["systemic_causes"]
+
+        # Sort by weight descending for display
+        sorted_causes = sorted(weights.items(), key=lambda x: x[1], reverse=True)
+
+        print(f"{CYAN}{BOLD}=== CAUSAL ERROR ATTRIBUTION ==={RESET}")
+        print(f"  Run              : {record['run_id']}")
+        print(f"  Prediction error : {record['prediction_error']:.4f}")
+        print(f"  Failed agents    : {record['failed_agents'] or 'none'}")
+        print()
+        print(f"  {'Cause':<24} {'Weight':>8}   {'Signal'}")
+        print(f"  {'-'*24} {'-'*8}   {'-'*30}")
+        for cause, weight in sorted_causes:
+            bar = "█" * int(weight * 20)
+            is_primary = cause == primary
+            is_systemic = cause in systemic
+            tag = ""
+            if is_primary:
+                tag = f" {RED}◀ PRIMARY{RESET}"
+            elif is_systemic:
+                tag = f" {YELLOW}SYSTEMIC{RESET}"
+            print(f"  {cause:<24} {weight:>7.4f}   {bar}{tag}")
+        print()
+        print(f"  {BOLD}Primary cause{RESET}  : {RED}{primary}{RESET}")
+        print(f"  Confidence     : {record['confidence']:.2%}")
+        print(f"  Systemic       : {systemic or 'none'}")
+        print(f"  Action         : {record['recommended_action']}")
+        print()
+        print(f"  {DIM}Full record: scratch/causal_error_attribution.json{RESET}")
+        print()
+
+# --------------------------------------------------------------------
 # 9. SELF-EVOLVING GOVERNANCE & HEALTH SCORE
+
 
 # --------------------------------------------------------------------
 def compute_fabric_health_score(all_results):
@@ -2336,7 +2620,21 @@ async def main_coordination():
     gov_advisor.save_report(proposed_amendments)
     gov_advisor.print_report(proposed_amendments)
 
+    # 7. Causal Error Attribution — trace prediction error and agent failures
+    #    to probable cause classes using the 5-component scoring formula.
+    #    Uses live drift_report and the actual failed_agents list from this run.
+    failed_agent_names = [f["agent"] for f in failures]
+    causal_attributor = CausalErrorAttributor()
+    causal_record = causal_attributor.attribute(
+        run_id=run_id,
+        failed_agents=failed_agent_names,
+        prediction_error=prediction_error,
+        drift_report=drift_report,
+    )
+    causal_attributor.print_report(causal_record)
+
     if verdict["status"] == "RED" or failures:
+
 
         print(f"{RED}{BOLD}Omega Constitutional Gate BLOCKED Deployment.{RESET}")
         for f in verdict["failures"]:
