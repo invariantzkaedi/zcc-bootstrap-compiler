@@ -38,6 +38,8 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <time.h>
+#include <math.h>
 
 /* ── JSON helpers ────────────────────────────────────────────────────── */
 
@@ -102,6 +104,36 @@ static int find_json_string_scoped(const char *scope, const char *key,
     while (*p && *p != '"' && len < max - 1) out[len++] = *p++;
     out[len] = '\0';
     return 1;
+}
+
+static int find_json_double_scoped(const char *scope, const char *key, double *val) {
+    if (!scope) return 0;
+    const char *p = strstr(scope, key);
+    if (!p) return 0;
+    p += strlen(key);
+    p = strchr(p, ':');
+    if (!p) return 0;
+    p++;
+    while (*p && (*p == ' ' || *p == '\n' || *p == '\r' || *p == '\t')) p++;
+    *val = atof(p);
+    return 1;
+}
+
+static time_t parse_iso8601(const char *ts) {
+    struct tm t;
+    memset(&t, 0, sizeof(t));
+    int yr = 0, mo = 0, dy = 0, hr = 0, mn = 0, sc = 0;
+    if (sscanf(ts, "%d-%d-%dT%d:%d:%d", &yr, &mo, &dy, &hr, &mn, &sc) >= 6) {
+        t.tm_year = yr - 1900;
+        t.tm_mon = mo - 1;
+        t.tm_mday = dy;
+        t.tm_hour = hr;
+        t.tm_min = mn;
+        t.tm_sec = sc;
+        t.tm_isdst = -1;
+        return mktime(&t);
+    }
+    return 0;
 }
 
 /* ── Static genome ───────────────────────────────────────────────────── */
@@ -246,6 +278,15 @@ typedef struct {
     int  impact_score;
     char estimated_impact[16];  /* NONE / LOW / MEDIUM / HIGH */
 
+    /* Confidence vector */
+    int      confidence_score;      /* 0 - 100 */
+    char     confidence_class[16];  /* VERY_LOW / LOW / MEDIUM / HIGH / VERIFIED */
+    int      confidence_coverage;   /* 0 - 100 */
+    int      confidence_accuracy;   /* 0 - 100 */
+    int      confidence_strength;   /* 0 - 100 */
+    int      confidence_freshness;  /* 0 - 100 */
+    double   calibration_age_hours;
+
     /* Narrative */
     char attribution[512];
 } AttributionReport;
@@ -381,6 +422,15 @@ static void emit_attribution_json(const char *out_path,
     }
     fprintf(f, "  \"impact_score\": %d,\n",          rpt->impact_score);
     fprintf(f, "  \"estimated_impact\": \"%s\",\n",  rpt->estimated_impact);
+    fprintf(f, "  \"confidence\": {\n");
+    fprintf(f, "    \"score\": %d,\n",                 rpt->confidence_score);
+    fprintf(f, "    \"class\": \"%s\",\n",             rpt->confidence_class);
+    fprintf(f, "    \"coverage\": %d,\n",              rpt->confidence_coverage);
+    fprintf(f, "    \"accuracy\": %d,\n",              rpt->confidence_accuracy);
+    fprintf(f, "    \"sample_strength\": %d,\n",       rpt->confidence_strength);
+    fprintf(f, "    \"freshness\": %d,\n",             rpt->confidence_freshness);
+    fprintf(f, "    \"calibration_age_hours\": %.2f\n", rpt->calibration_age_hours);
+    fprintf(f, "  },\n");
     fprintf(f, "  \"attribution\": \"%s\"\n",        rpt->attribution);
     fprintf(f, "}\n");
     fclose(f);
@@ -396,6 +446,7 @@ int main(int argc, char **argv) {
     const char *version_a      = "A";
     const char *version_b      = "B";
     const char *out_path       = NULL;
+    const char *cal_report_path = NULL;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--static-a")  == 0 && i+1<argc) static_a_path  = argv[++i];
@@ -405,6 +456,7 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--version-a") == 0 && i+1<argc) version_a      = argv[++i];
         else if (strcmp(argv[i], "--version-b") == 0 && i+1<argc) version_b      = argv[++i];
         else if (strcmp(argv[i], "--out")        == 0 && i+1<argc) out_path       = argv[++i];
+        else if (strcmp(argv[i], "--calibration-report") == 0 && i+1<argc) cal_report_path = argv[++i];
     }
 
     if (!static_a_path || !static_b_path) {
@@ -412,6 +464,7 @@ int main(int argc, char **argv) {
                "  --static-a <genome_a.json> --static-b <genome_b.json> \\\n"
                "  [--runtime-a <runtime_a.json>] [--runtime-b <runtime_b.json>] \\\n"
                "  [--version-a <label>] [--version-b <label>] \\\n"
+               "  [--calibration-report <calibration_report.json>] \\\n"
                "  [--out <report.json>]\n");
         return 2;
     }
@@ -450,6 +503,71 @@ int main(int argc, char **argv) {
     /* ── Compute attribution ──────────────────────────────────────────── */
     AttributionReport rpt;
     compute_attribution(&ga, &gb, ra, rb, version_a, version_b, &rpt);
+
+    /* ── Compute confidence score ──────────────────────────────────────── */
+    rpt.confidence_score = 40;
+    strcpy(rpt.confidence_class, "LOW");
+    rpt.confidence_coverage = 0;
+    rpt.confidence_accuracy = 0;
+    rpt.confidence_strength = 0;
+    rpt.confidence_freshness = 0;
+    rpt.calibration_age_hours = -1.0;
+
+    if (cal_report_path) {
+        size_t cal_sz = 0;
+        uint8_t *cal_data = load_file(cal_report_path, &cal_sz);
+        if (cal_data) {
+            double f1 = 0.0, mean_err = 0.0;
+            int total_cases = 0;
+            char ts_str[64] = "";
+            
+            const char *metrics_block = strstr((const char *)cal_data, "\"metrics\"");
+            if (metrics_block) {
+                find_json_double_scoped(metrics_block, "\"f1_score\"", &f1);
+                find_json_double_scoped(metrics_block, "\"mean_deviation_score\"", &mean_err);
+                find_json_int_scoped(metrics_block, "\"total_cases\"", &total_cases);
+            }
+            find_json_string_scoped((const char *)cal_data, "\"timestamp\"", ts_str, sizeof(ts_str));
+            free(cal_data);
+            
+            if (total_cases > 0 && ts_str[0]) {
+                double coverage = (total_cases >= 5) ? 1.0 : (total_cases / 5.0);
+                double accuracy = f1 * (1.0 - (mean_err / 10.0));
+                if (accuracy < 0.0) accuracy = 0.0;
+                double strength = total_cases / (total_cases + 0.5);
+                
+                time_t cal_time = parse_iso8601(ts_str);
+                time_t cur_time = time(NULL);
+                double diff_sec = difftime(cur_time, cal_time);
+                double age_hours = diff_sec / 3600.0;
+                if (age_hours < 0.0) age_hours = 0.0;
+                
+                double freshness = exp(-0.0044 * age_hours);
+                if (freshness < 0.10) freshness = 0.10;
+                if (freshness > 1.0) freshness = 1.0;
+                
+                double aggregate = coverage * accuracy * strength * freshness * 100.0;
+                int score = (int)(aggregate + 0.5);
+                if (score > 100) score = 100;
+                if (score < 0) score = 0;
+                
+                rpt.confidence_score = score;
+                rpt.confidence_coverage = (int)(coverage * 100 + 0.5);
+                rpt.confidence_accuracy = (int)(accuracy * 100 + 0.5);
+                rpt.confidence_strength = (int)(strength * 100 + 0.5);
+                rpt.confidence_freshness = (int)(freshness * 100 + 0.5);
+                rpt.calibration_age_hours = age_hours;
+                
+                if      (score <= 30) strcpy(rpt.confidence_class, "VERY_LOW");
+                else if (score <= 55) strcpy(rpt.confidence_class, "LOW");
+                else if (score <= 75) strcpy(rpt.confidence_class, "MEDIUM");
+                else if (score <= 90) strcpy(rpt.confidence_class, "HIGH");
+                else                  strcpy(rpt.confidence_class, "VERIFIED");
+            }
+        } else {
+            fprintf(stderr, "warning: cannot open calibration-report %s, falling back to uncalibrated state.\n", cal_report_path);
+        }
+    }
 
     /* ── Print report ────────────────────────────────────────────────── */
     printf("=== ZCC Runtime Impact Attribution ===\n\n");
@@ -514,6 +632,16 @@ int main(int argc, char **argv) {
 
     printf("Impact Score:   %d\n", rpt.impact_score);
     printf("Estimated Impact: %s\n\n", rpt.estimated_impact);
+    printf("Confidence Score: %d%% (%s)\n", rpt.confidence_score, rpt.confidence_class);
+    if (rpt.calibration_age_hours >= 0.0) {
+        printf("  Coverage:       %d%%\n", rpt.confidence_coverage);
+        printf("  Accuracy:       %d%%\n", rpt.confidence_accuracy);
+        printf("  Strength:       %d%%\n", rpt.confidence_strength);
+        printf("  Freshness:      %d%% (Age: %.1f hours)\n", rpt.confidence_freshness, rpt.calibration_age_hours);
+    } else {
+        printf("  State:          UNCALIBRATED\n");
+    }
+    printf("\n");
     printf("Attribution:\n  %s\n", rpt.attribution);
 
     /* ── Optional JSON output ─────────────────────────────────────────── */
