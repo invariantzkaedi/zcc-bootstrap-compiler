@@ -133,8 +133,6 @@ struct Node {
     int num_params;
     Node *body;
     int stack_size;
-    Type *param_types[MAX_PARAMS];
-    char param_names_buf[MAX_PARAMS][MAX_IDENT];
     char member_name[MAX_IDENT];
     int member_offset;
     int member_size;
@@ -222,6 +220,7 @@ struct Compiler {
     int sret_offset;
     int used_regs_mask;
     int is_forced_mask;
+    int telemetry_depth;
 };
 
 /* ========================================================================= */

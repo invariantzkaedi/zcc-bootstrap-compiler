@@ -27,7 +27,7 @@ $(ZLD): $(ZLD_SRC)
 # ── Self-host zld with ZCC ─────────────────────────────────────────────────
 zld-zcc: $(ZLD_SRC)
 	@echo "=== Building zld with ZCC (self-hosting validation) ==="
-	../zcc $(ZLD_SRC) -o ../zld-zcc
+	../zcc --use-system-as $(ZLD_SRC) -o ../zld-zcc
 	@echo "    zld-zcc built"
 
 # ── Link zkernel with zld (replaces GNU ld) ────────────────────────────────
