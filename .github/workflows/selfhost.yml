@@ -21,6 +21,7 @@ jobs:
 
       - name: Build zcc from parts
         run: |
+          rm -f zcc.c
           make zcc
           echo "Stage 1: parts -> zcc.c -> zcc OK"
 
