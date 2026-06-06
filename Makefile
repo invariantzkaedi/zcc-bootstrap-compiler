@@ -56,12 +56,12 @@ zcc_fast: zcc.c $(PASSES)
 
 zcc2: zcc zcc.c
 	@echo "=== Stage 1: zcc compiles itself -> zcc2 ==="
-	./zcc zcc.c -o zcc2
+	./zcc -DZCC_REAL_TELEMETRY zcc.c -o zcc2
 	strip --strip-all zcc2
 
 zcc3: zcc2 zcc.c
 	@echo "=== Stage 2: zcc2 compiles itself -> zcc3 ==="
-	./zcc2 zcc.c -o zcc3
+	./zcc2 -DZCC_REAL_TELEMETRY zcc.c -o zcc3
 	strip --strip-all zcc3
 
 selfhost: zcc3
