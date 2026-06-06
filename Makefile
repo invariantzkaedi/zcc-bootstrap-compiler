@@ -21,7 +21,7 @@ COMPAT_SMOKE_SRCS = \
 	tests/regressions/t_zkaedi_rigging_regressions.c
 COMPAT_EXTENDED_SRCS = $(COMPAT_SMOKE_SRCS) raytracer.c
 
-.PHONY: all clean selfhost selfhost-fast compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test rust-front-smoke check-evm-lifter check-ir-vuln-tag check-forgezero-receipt
+.PHONY: all clean selfhost selfhost-fast compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test rust-front-smoke check-evm-lifter check-ir-vuln-tag check-forgezero-receipt verify-attestation
 
 .SECONDARY: zcc zcc2 zcc3
 
@@ -595,3 +595,10 @@ tools/zcc_topology_auditor: tools/zcc_topology_auditor.c tools/zcc_elf_parser.h 
 
 tools/zcc_zxr_verify: tools/zcc_zxr_verify.c tools/zcc_elf_parser.h tools/zcc_sha256.h
 	gcc -O2 -Wall -Itools tools/zcc_zxr_verify.c -o tools/zcc_zxr_verify -lm
+
+verify-attestation: auditor verifier
+	@echo "=== Running ZXR Attestation Pipeline Gate ==="
+	./tools/zcc_topology_auditor kernel/*.o --json > record_test.zxr
+	./tools/zcc_zxr_verify record_test.zxr kernel/*.o
+	@rm -f record_test.zxr
+	@echo "=== ZXR Attestation Pipeline Gate: VERIFIED ==="
