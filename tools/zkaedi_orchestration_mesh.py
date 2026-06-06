@@ -1318,7 +1318,287 @@ class CounterfactualCalibrator:
         print()
 
 # --------------------------------------------------------------------
+# 8c. GOVERNANCE ADVISOR (Level 14 — Adaptive Constitutional Intelligence)
+#
+# Reads from the learning layer (accuracy records, calibration records,
+# drift history) and proposes constitutional amendments as structured
+# SuggestedAmendment objects.
+#
+# INVARIANT: This class NEVER modifies constitution.yaml directly.
+#            Amendments are proposals only. Human approval is required.
+#
+# Architecture:
+#
+#   Constitution
+#         │
+#         ▼
+#   GovernanceAdvisor      ← reads calibration history + drift signals
+#         │
+#         ▼
+#   SuggestedAmendment     ← proposed_change, confidence, evidence_count
+#         │
+#         ▼
+#   governance_advisor_report.json
+#         │
+#         ▼
+#   Human Review           ← constitution.yaml updated only by human
+# --------------------------------------------------------------------
+
+class SuggestedAmendment:
+    """A single constitutional amendment proposal."""
+    def __init__(self, rule: str, current_value, proposed_value,
+                 direction: str, confidence: float,
+                 supporting_evidence: int, rationale: str):
+        self.rule               = rule
+        self.current_value      = current_value
+        self.proposed_value     = proposed_value
+        self.direction          = direction      # "relax" | "tighten" | "no_change"
+        self.confidence         = confidence     # 0.0 – 1.0
+        self.supporting_evidence = supporting_evidence  # number of data points
+        self.rationale          = rationale
+
+    def to_dict(self):
+        return {
+            "proposed_change":      self.rule,
+            "current_value":        self.current_value,
+            "proposed_value":       self.proposed_value,
+            "direction":            self.direction,
+            "confidence":           round(self.confidence, 4),
+            "supporting_evidence":  self.supporting_evidence,
+            "rationale":            self.rationale,
+            "status":               "PENDING_HUMAN_REVIEW"
+        }
+
+
+class GovernanceAdvisor:
+    """
+    Analyzes the calibration and drift history produced by the learning
+    layer and generates SuggestedAmendment proposals for human review.
+
+    Reads:
+      scratch/forecast_accuracy.json        — prediction error history
+      scratch/counterfactual_calibration.json — scenario calibration
+      scratch/divergence_report.json        — most recent drift snapshot
+      scratch/constitution.yaml             — current thresholds (read-only)
+
+    Writes:
+      scratch/governance_advisor_report.json  — structured proposals
+
+    NEVER writes to scratch/constitution.yaml.
+    """
+    REPORT_FILE = "scratch/governance_advisor_report.json"
+    # Minimum runs before advisor has enough evidence to propose anything
+    MIN_EVIDENCE_RUNS = 3
+
+    def __init__(self):
+        self.amendments: list[SuggestedAmendment] = []
+
+    def _load_accuracy_records(self) -> list:
+        path = ForecastAccuracyTracker.ACC_FILE
+        if not os.path.exists(path):
+            return []
+        try:
+            with open(path, "r") as f:
+                data = json.load(f)
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
+
+    def _load_calibration_records(self) -> list:
+        path = CounterfactualCalibrator.CALIB_FILE
+        if not os.path.exists(path):
+            return []
+        try:
+            with open(path, "r") as f:
+                data = json.load(f)
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
+
+    def _load_latest_drift(self) -> dict:
+        path = "scratch/divergence_report.json"
+        if not os.path.exists(path):
+            return {}
+        try:
+            with open(path, "r") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+
+    def _load_constitution_thresholds(self) -> dict:
+        """Read current thresholds from constitution.yaml (read-only)."""
+        path = "scratch/constitution.yaml"
+        if not os.path.exists(path):
+            return {}
+        try:
+            thresholds = {}
+            with open(path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if ":" in line and not line.startswith("#"):
+                        key, _, val = line.partition(":")
+                        try:
+                            thresholds[key.strip()] = float(val.strip())
+                        except ValueError:
+                            pass
+            return thresholds
+        except Exception:
+            return {}
+
+    def analyze(self, current_drift: dict | None = None) -> list[SuggestedAmendment]:
+        """
+        Run all advisory rules and return the list of SuggestedAmendment
+        proposals.  Call this after ForecastAccuracyTracker and
+        CounterfactualCalibrator have already run for the current cycle.
+        """
+        acc_records   = self._load_accuracy_records()
+        calib_records = self._load_calibration_records()
+        drift         = current_drift or self._load_latest_drift()
+        thresholds    = self._load_constitution_thresholds()
+        amendments    = []
+        n             = len(acc_records)
+
+        # ── Rule A: Prediction error converging → system well-calibrated
+        if n >= self.MIN_EVIDENCE_RUNS:
+            recent_errors = [r["prediction_error"] for r in acc_records[-5:]]
+            mean_recent = sum(recent_errors) / len(recent_errors)
+            if mean_recent < 0.05:
+                amendments.append(SuggestedAmendment(
+                    rule="max_allowed_capability_drift",
+                    current_value=thresholds.get("max_allowed_capability_drift", 0.10),
+                    proposed_value=round(thresholds.get("max_allowed_capability_drift", 0.10) * 1.10, 4),
+                    direction="relax",
+                    confidence=min(0.99, 0.70 + (n / 50.0)),
+                    supporting_evidence=n,
+                    rationale=(
+                        f"Prediction error has stabilised at {mean_recent:.4f} "
+                        f"over the last {len(recent_errors)} runs, indicating the "
+                        f"model is well-calibrated. Slight threshold relaxation "
+                        f"is appropriate to reduce false-alarm rate."
+                    )
+                ))
+
+        # ── Rule B: Prediction error diverging → tighten governance
+        if n >= self.MIN_EVIDENCE_RUNS:
+            recent_5 = [r["prediction_error"] for r in acc_records[-5:]]
+            older_5  = [r["prediction_error"] for r in acc_records[-10:-5]] if n >= 10 else recent_5
+            if sum(recent_5) / len(recent_5) > sum(older_5) / len(older_5) + 0.10:
+                amendments.append(SuggestedAmendment(
+                    rule="max_allowed_reality_drift",
+                    current_value=thresholds.get("max_allowed_reality_drift", 0.15),
+                    proposed_value=round(max(0.05, thresholds.get("max_allowed_reality_drift", 0.15) * 0.85), 4),
+                    direction="tighten",
+                    confidence=min(0.95, 0.60 + (n / 40.0)),
+                    supporting_evidence=n,
+                    rationale=(
+                        "Prediction error is trending upward over the last 5 runs "
+                        "compared to the prior 5 runs, indicating the model is "
+                        "losing calibration. Tightening the reality drift threshold "
+                        "will surface signals earlier."
+                    )
+                ))
+
+        # ── Rule C: Counterfactual overconfidence detected
+        overconf_count = sum(
+            1 for r in calib_records
+            if r.get("calibration") == "overconfident"
+        )
+        if overconf_count >= 3:
+            amendments.append(SuggestedAmendment(
+                rule="max_allowed_governance_drift",
+                current_value=thresholds.get("max_allowed_governance_drift", 0.10),
+                proposed_value=round(max(0.03, thresholds.get("max_allowed_governance_drift", 0.10) * 0.80), 4),
+                direction="tighten",
+                confidence=min(0.98, 0.65 + (overconf_count / 20.0)),
+                supporting_evidence=overconf_count,
+                rationale=(
+                    f"Counterfactual calibration has recorded {overconf_count} "
+                    f"overconfident predictions (model expected PASS, scenario was RED). "
+                    f"Tightening governance drift threshold reduces future blind spots."
+                )
+            ))
+
+        # ── Rule D: Capability drift consistently low → safe to relax
+        cap_drift_val = drift.get("CAPABILITY_DRIFT", None)
+        if cap_drift_val is not None and n >= self.MIN_EVIDENCE_RUNS:
+            all_drifts_low = cap_drift_val < 0.02
+            if all_drifts_low:
+                current_cap = thresholds.get("max_allowed_capability_drift", 0.10)
+                amendments.append(SuggestedAmendment(
+                    rule="max_allowed_capability_drift",
+                    current_value=current_cap,
+                    proposed_value=round(current_cap * 1.15, 4),
+                    direction="relax",
+                    confidence=0.75,
+                    supporting_evidence=n,
+                    rationale=(
+                        f"CAPABILITY_DRIFT is {cap_drift_val:.4f}, well below threshold. "
+                        f"Over {n} tracked runs no capability failures have been observed. "
+                        f"Threshold relaxation is warranted to reduce over-sensitivity."
+                    )
+                ))
+
+        # ── Rule E: No issues detected — constitution is well-calibrated
+        if not amendments and n >= self.MIN_EVIDENCE_RUNS:
+            amendments.append(SuggestedAmendment(
+                rule="all_thresholds",
+                current_value="stable",
+                proposed_value="no_change",
+                direction="no_change",
+                confidence=min(0.99, 0.80 + (n / 100.0)),
+                supporting_evidence=n,
+                rationale=(
+                    f"All drift domains stable, prediction error normal, "
+                    f"counterfactual calibration clean over {n} runs. "
+                    f"No constitutional amendment is recommended at this time."
+                )
+            ))
+
+        self.amendments = amendments
+        return amendments
+
+    def save_report(self, amendments: list[SuggestedAmendment]) -> None:
+        report = {
+            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "total_proposals": len(amendments),
+            "invariant": "This report is advisory only. constitution.yaml is NEVER modified automatically.",
+            "proposals": [a.to_dict() for a in amendments]
+        }
+        try:
+            with open(self.REPORT_FILE, "w") as f:
+                json.dump(report, f, indent=2)
+        except Exception as e:
+            print(f"[ADVISOR ERROR] Failed to write governance_advisor_report.json: {e}")
+
+    def print_report(self, amendments: list[SuggestedAmendment]) -> None:
+        print(f"{CYAN}{BOLD}=== GOVERNANCE ADVISOR REPORT ==={RESET}")
+        print(f"  {DIM}Invariant: constitution.yaml is NEVER modified automatically.{RESET}")
+        print(f"  {DIM}All proposals require human review before adoption.{RESET}")
+        print()
+        if not amendments:
+            print(f"  {DIM}No proposals generated (insufficient evidence or minimum run threshold not met).{RESET}")
+            print()
+            return
+        for i, a in enumerate(amendments, 1):
+            direction_color = {
+                "relax":     YELLOW,
+                "tighten":   RED,
+                "no_change": GREEN
+            }.get(a.direction, DIM)
+            print(f"  [{i}] {BOLD}{a.rule}{RESET}")
+            print(f"      Direction   : {direction_color}{a.direction.upper()}{RESET}")
+            print(f"      Current     : {a.current_value}")
+            print(f"      Proposed    : {a.proposed_value}")
+            print(f"      Confidence  : {a.confidence:.2%}")
+            print(f"      Evidence    : {a.supporting_evidence} data points")
+            print(f"      Rationale   : {a.rationale[:120]}{'...' if len(a.rationale) > 120 else ''}")
+            print()
+        print(f"  {DIM}Report written to scratch/governance_advisor_report.json{RESET}")
+        print()
+
+# --------------------------------------------------------------------
 # 9. SELF-EVOLVING GOVERNANCE & HEALTH SCORE
+
 # --------------------------------------------------------------------
 def compute_fabric_health_score(all_results):
     total = len(all_results)
@@ -1784,7 +2064,16 @@ async def main_coordination():
     cfcal_results = cfcal.run(timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
     cfcal.print_report(cfcal_results)
 
+    # 6. Governance Advisor — propose constitutional amendments for human review
+    #    Passes live drift_report so advisor doesn't need to re-read from disk.
+    #    INVARIANT: GovernanceAdvisor.analyze() never writes to constitution.yaml.
+    gov_advisor = GovernanceAdvisor()
+    proposed_amendments = gov_advisor.analyze(current_drift=drift_report)
+    gov_advisor.save_report(proposed_amendments)
+    gov_advisor.print_report(proposed_amendments)
+
     if verdict["status"] == "RED" or failures:
+
         print(f"{RED}{BOLD}Omega Constitutional Gate BLOCKED Deployment.{RESET}")
         for f in verdict["failures"]:
             print(f"  - Constitutional Breach: {f}")
