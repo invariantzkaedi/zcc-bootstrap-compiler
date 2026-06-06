@@ -62,13 +62,12 @@ void telemetry_close(void) {
 }
 #endif
 
-/* G332 — must be outside #ifndef ZCC_REAL_TELEMETRY so it links
-   regardless of telemetry mode */
 
-/* G332 — outside ZCC_REAL_TELEMETRY guard, correct ir_pass_fn signature */
+#ifndef ZCC_REAL_TELEMETRY
 #include "ir_pass_manager.h"
 ir_pass_result_t zcc_pass_transient_locks(void *fn_ptr) {
     (void)fn_ptr;
     ir_pass_result_t r = {0};
     return r;
 }
+#endif /* ZCC_REAL_TELEMETRY */
