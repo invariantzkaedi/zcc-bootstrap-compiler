@@ -1,0 +1,88 @@
+{
+  "schema": "zcc.hall_of_fame.v1",
+  "description": "ZCC Self-Host Hall of Fame — every verified observability milestone in chronological order",
+  "milestones": [
+    {
+      "tag": "v0.19-attestation",
+      "commit": null,
+      "date": "2026-05",
+      "selfhost": true,
+      "assembly_identical": true,
+      "gates_passed": 1,
+      "strata": ["D-19"],
+      "description": "Topology Auditor + Attestation. Introduced record.zxr, Merkle topology root, SHA-256 build identity.",
+      "key_artifact": "record.zxr"
+    },
+    {
+      "tag": "v0.20-fingerprint",
+      "commit": null,
+      "date": "2026-05",
+      "selfhost": true,
+      "assembly_identical": true,
+      "gates_passed": 2,
+      "strata": ["D-19", "D-20"],
+      "description": "Execution Fingerprint Engine. Introduced static instruction profile, register pressure analysis, stack growth model, control-flow root hash.",
+      "key_artifact": "execution_fingerprint.json"
+    },
+    {
+      "tag": "v0.21-replay",
+      "commit": "68d287ce",
+      "date": "2026-06",
+      "selfhost": true,
+      "assembly_identical": true,
+      "gates_passed": 3,
+      "strata": ["D-19", "D-20", "D-21"],
+      "description": "Replay Pack Engine. First portable build evidence capsule (.zrp): source, preprocessed, assembly, objects, topology, fingerprints, attestation in POSIX ustar format.",
+      "key_artifact": "kernel.zrp"
+    },
+    {
+      "tag": "v0.22-genome",
+      "commit": "23c5f292",
+      "date": "2026-06",
+      "selfhost": true,
+      "assembly_identical": true,
+      "gates_passed": 4,
+      "strata": ["D-19", "D-20", "D-21", "D-22"],
+      "description": "Genome Registry. Version-stamped topology snapshots enabling historical drift comparison.",
+      "key_artifact": "genomes/vN.N.json"
+    },
+    {
+      "tag": "v0.23-lineage",
+      "commit": "b87a7633",
+      "date": "2026-06",
+      "selfhost": true,
+      "assembly_identical": true,
+      "gates_passed": 5,
+      "strata": ["D-19", "D-20", "D-21", "D-22", "D-23"],
+      "description": "Lineage Engine + Time Machine. Point-to-point drift reconstruction across arbitrary version spans.",
+      "key_artifact": "lineage.json"
+    },
+    {
+      "tag": "v0.29-observability",
+      "commit": "e44e8273",
+      "date": "2026-06-06",
+      "selfhost": true,
+      "assembly_identical": true,
+      "gates_passed": 11,
+      "strata": ["D-19","D-20","D-21","D-22","D-23","D-24","D-25","D-26","D-27","D-28","D-29"],
+      "description": "Full observability milestone. Adds Stability Observatory (D-24), Topology Bisector (D-25), Cross-Compiler Genome (D-26), Sovereign Build Ledger (D-27), Runtime Behavioral Probe (D-28), Impact Attribution Engine + Function Heat Ranker (D-29). Closes the compiler observability arc: identity → behavior → reproducibility → history → prediction → localization → comparison → provenance → runtime fidelity → causality.",
+      "key_artifact": "genomes/golden/v0.29-observability.json",
+      "golden_genome": "genomes/golden/v0.29-observability.json",
+      "golden_runtime": "genomes/golden/v0.29-runtime.json",
+      "golden_attestation": "genomes/golden/v0.29-attestation.zxr",
+      "gate_evidence": {
+        "G1_selfhost": "SELF-HOST VERIFIED (assembly identical)",
+        "G2_attestation": "ZXR Attestation Pipeline Gate: VERIFIED",
+        "G3_replay_pack": "ZXR Replay Pack Gate: VERIFIED",
+        "G4_genome_diff": "ZXR Genome Diff Gate: VERIFIED",
+        "G5_lineage": "ZXR Compiler Lineage & Time Machine: VERIFIED",
+        "G6_stability": "ZXR Stability Observatory Gate: VERIFIED",
+        "G7_bisector": "ZXR Topology Bisector Gate: VERIFIED",
+        "G8_cross_genome": "ZXR Cross-Compiler Genome Gate: VERIFIED",
+        "G9_ledger": "Chain integrity: VERIFIED (0 errors)",
+        "G10_runtime_probe": "ZXR Runtime Behavioral Probe Gate: VERIFIED",
+        "G11_impact": "ZXR Runtime Impact Attribution Gate: VERIFIED"
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "schema": "zcc.runtime_genome.v1",
+  "observed_functions": 7,
+  "peak_call_depth": 6,
+  "total_calls": 73,
+  "table_overflow": false,
+  "functions": [
+    { "address": "0x61f95e5bf8f0", "calls": 50, "max_depth": 2 },
+    { "address": "0x61f95e5bf8b0", "calls": 8, "max_depth": 6 },
+    { "address": "0x61f95e5bfa10", "calls": 4, "max_depth": 3 },
+    { "address": "0x61f95e5bf960", "calls": 4, "max_depth": 5 },
+    { "address": "0x61f95e5bf9d0", "calls": 4, "max_depth": 4 },
+    { "address": "0x61f95e5bfa70", "calls": 2, "max_depth": 2 },
+    { "address": "0x61f95e5bf120", "calls": 1, "max_depth": 1 }
+  ]
+}

@@ -1,0 +1,154 @@
+
+Topology Summary
+----------------
+Objects:    2
+Functions:  43 (monitored nodes)
+Call Edges: 42
+
+Dependency Metrics & Criticality Scores
+---------------------------------------
+  Function Name            Fan-In  Fan-Out  Score
+  kmain                    1       11       18   
+  outb                     5       0        15   
+  pmm_free_blocks          4       0        13   
+  handle_interrupt         1       5        12   
+  pmm_bitmap               3       0        11   
+  vga_buffer               3       0        11   
+  cursor_row               3       0        11   
+  cli_native               2       0        9    
+  pmm_total_blocks         2       0        9    
+  inb                      2       0        9    
+  cursor_col               2       0        9    
+  idt                      2       0        9    
+  pmm_init                 0       3        8    
+  pmm_free_page            0       3        8    
+  kclear_screen            0       3        8    
+  kprint_char              0       3        8    
+  handle_exception_state   1       1        8    
+  isr13                    1       0        7    
+  pmm_alloc_page           0       2        7    
+  isr14                    1       0        7    
+  isr32                    1       0        7    
+  isr33                    1       0        7    
+  kwrite_serial            0       2        7    
+  kscroll                  0       2        7    
+  sti_native               1       0        7    
+  lidt_native              1       0        7    
+  isr0                     1       0        7    
+  isr8                     1       0        7    
+  tick_count               1       0        7    
+  __keymap__101            1       0        7    
+  kwrite_serial_hex        0       1        6    
+  exception_common_stub    0       1        6    
+  start64                  0       1        6    
+  idt_set_gate             0       1        6    
+  pic_remap                0       1        6    
+  isr_common_stub          0       1        6    
+  pmm_get_free_blocks      0       1        6    
+  kprint_dec               0       0        5    
+  _start                   0       0        5    
+  kprint_string            0       0        5    
+  kprint_hex               0       0        5    
+  setup_page_tables        0       0        5    
+  _kernel_end              1       0        2    
+
+Kernel Initialization Corridors
+-------------------------------
+  pmm_init ➔ pmm_free_blocks
+  pmm_free_page ➔ pmm_free_blocks
+  kclear_screen ➔ vga_buffer
+  kprint_char ➔ cursor_row
+  pmm_alloc_page ➔ pmm_free_blocks
+  kwrite_serial ➔ outb
+  kscroll ➔ vga_buffer
+  kwrite_serial_hex ➔ outb
+  exception_common_stub ➔ handle_exception_state ➔ cli_native
+  start64 ➔ kmain ➔ outb
+  idt_set_gate ➔ idt
+  pic_remap ➔ outb
+  isr_common_stub ➔ handle_interrupt ➔ outb
+  pmm_get_free_blocks ➔ pmm_free_blocks
+
+Initialization Corridor Node Verification
+-----------------------------------------
+  _start    : ABSENT
+  start64   : VERIFIED
+  kmain     : VERIFIED
+  pmm_init  : ABSENT
+
+Cross-Object Dependencies
+-------------------------
+  [EXPORT] setup_page_tables    (defined in kernel/boot.o)
+  [EXPORT] start64              (defined in kernel/boot.o)
+  [EXPORT] exception_common_stub (defined in kernel/boot.o)
+  [EXPORT] isr_common_stub      (defined in kernel/boot.o)
+  [EXPORT] _start               (defined in kernel/boot.o)
+  [EXPORT] outb                 (defined in kernel/boot.o)
+  [EXPORT] inb                  (defined in kernel/boot.o)
+  [EXPORT] lidt_native          (defined in kernel/boot.o)
+  [EXPORT] sti_native           (defined in kernel/boot.o)
+  [EXPORT] cli_native           (defined in kernel/boot.o)
+  [EXPORT] isr0                 (defined in kernel/boot.o)
+  [EXPORT] isr8                 (defined in kernel/boot.o)
+  [EXPORT] isr13                (defined in kernel/boot.o)
+  [EXPORT] isr14                (defined in kernel/boot.o)
+  [EXPORT] isr32                (defined in kernel/boot.o)
+  [EXPORT] isr33                (defined in kernel/boot.o)
+  [EXPORT] kscroll              (defined in kernel/kmain.o)
+  [EXPORT] pmm_init             (defined in kernel/kmain.o)
+  [EXPORT] pmm_alloc_page       (defined in kernel/kmain.o)
+  [EXPORT] pmm_free_page        (defined in kernel/kmain.o)
+  [EXPORT] pmm_get_free_blocks  (defined in kernel/kmain.o)
+  [EXPORT] kclear_screen        (defined in kernel/kmain.o)
+  [EXPORT] kprint_char          (defined in kernel/kmain.o)
+  [EXPORT] kprint_string        (defined in kernel/kmain.o)
+  [EXPORT] kprint_hex           (defined in kernel/kmain.o)
+  [EXPORT] kprint_dec           (defined in kernel/kmain.o)
+  [EXPORT] idt_set_gate         (defined in kernel/kmain.o)
+  [EXPORT] pic_remap            (defined in kernel/kmain.o)
+  [EXPORT] handle_interrupt     (defined in kernel/kmain.o)
+  [EXPORT] kwrite_serial        (defined in kernel/kmain.o)
+  [EXPORT] kwrite_serial_hex    (defined in kernel/kmain.o)
+  [EXPORT] handle_exception_state (defined in kernel/kmain.o)
+  [EXPORT] kmain                (defined in kernel/kmain.o)
+  [EXPORT] pmm_bitmap           (defined in kernel/kmain.o)
+  [EXPORT] pmm_free_blocks      (defined in kernel/kmain.o)
+  [EXPORT] pmm_total_blocks     (defined in kernel/kmain.o)
+  [EXPORT] vga_buffer           (defined in kernel/kmain.o)
+  [EXPORT] cursor_row           (defined in kernel/kmain.o)
+  [EXPORT] cursor_col           (defined in kernel/kmain.o)
+  [EXPORT] idt                  (defined in kernel/kmain.o)
+  [EXPORT] tick_count           (defined in kernel/kmain.o)
+  [EXPORT] __keymap__101        (defined in kernel/kmain.o)
+  [IMPORT] _kernel_end          (referenced but undefined)
+
+Orchestration Audit: Unresolved Imports
+--------------------------------------
+  [WARN] unresolved import: _kernel_end
+
+Orchestration Audit: Dead Code Detection (Orphans)
+--------------------------------------------------
+  [WARN] orphaned symbol: setup_page_tables    (defined in kernel/boot.o)
+  [WARN] orphaned symbol: start64              (defined in kernel/boot.o)
+  [WARN] orphaned symbol: exception_common_stub (defined in kernel/boot.o)
+  [WARN] orphaned symbol: isr_common_stub      (defined in kernel/boot.o)
+  [WARN] orphaned symbol: kscroll              (defined in kernel/kmain.o)
+  [WARN] orphaned symbol: pmm_init             (defined in kernel/kmain.o)
+  [WARN] orphaned symbol: pmm_alloc_page       (defined in kernel/kmain.o)
+  [WARN] orphaned symbol: pmm_free_page        (defined in kernel/kmain.o)
+  [WARN] orphaned symbol: pmm_get_free_blocks  (defined in kernel/kmain.o)
+  [WARN] orphaned symbol: kclear_screen        (defined in kernel/kmain.o)
+  [WARN] orphaned symbol: kprint_char          (defined in kernel/kmain.o)
+  [WARN] orphaned symbol: kprint_string        (defined in kernel/kmain.o)
+  [WARN] orphaned symbol: kprint_hex           (defined in kernel/kmain.o)
+  [WARN] orphaned symbol: kprint_dec           (defined in kernel/kmain.o)
+  [WARN] orphaned symbol: idt_set_gate         (defined in kernel/kmain.o)
+  [WARN] orphaned symbol: pic_remap            (defined in kernel/kmain.o)
+  [WARN] orphaned symbol: kwrite_serial        (defined in kernel/kmain.o)
+  [WARN] orphaned symbol: kwrite_serial_hex    (defined in kernel/kmain.o)
+  [INFO] 18 dead symbol(s) eligible for link-time elimination.
+
+Orchestration Audit: Cyclic Dependency Checker
+----------------------------------------------
+  [OK] Dependency graph is a Directed Acyclic Graph (DAG). No cycles detected.
+

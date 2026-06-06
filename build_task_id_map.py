@@ -63,7 +63,7 @@ def from_logs(log_dir: Path) -> dict:
                     tid = d.get("task_id") or d.get("id")
                     name = (d.get("asset") or d.get("name")
                             or d.get("target_name") or d.get("filename", "").replace(".glb",""))
-                    if tid and name and uuid_re.fullmatch(tid):
+                    if tid and name and isinstance(tid, str) and uuid_re.fullmatch(tid):
                         out[name] = tid
             except json.JSONDecodeError:
                 pass
@@ -78,7 +78,7 @@ def from_logs(log_dir: Path) -> dict:
                             tid = item.get("task_id") or item.get("id")
                             name = (item.get("asset") or item.get("target_name")
                                     or item.get("name"))
-                            if tid and name and uuid_re.fullmatch(tid):
+                            if tid and name and isinstance(tid, str) and uuid_re.fullmatch(tid):
                                 out[name] = tid
         except:
             pass

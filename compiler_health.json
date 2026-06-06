@@ -1,0 +1,30 @@
+{
+  "schema": "zcc.compiler_health.v1",
+  "gates": {
+    "selfhost":         "PASS",
+    "attestation":      "PASS",
+    "replay":           "PASS",
+    "lineage":          "PASS",
+    "stability":        "MONITOR",
+    "bisector":         "PASS",
+    "cross_genome":     "PASS",
+    "ledger_integrity": "VERIFIED",
+    "runtime_probe":    "PASS",
+    "impact":           "NONE"
+  },
+  "runtime": {
+    "observed_functions": 7,
+    "peak_call_depth":    6
+  },
+  "ledger": {
+    "entries":   3,
+    "integrity": "VERIFIED"
+  },
+  "golden_drift":    "IDENTICAL",
+  "stability_risk_pct": 30,
+  "drift_verdict":   "OVERREACH",
+  "gates_passed":    11,
+  "gates_total":     11,
+  "confidence":      99.0,
+  "verdict":         "HEALTHY"
+}

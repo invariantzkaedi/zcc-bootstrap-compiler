@@ -28,6 +28,13 @@ jobs:
         run: |
           make selfhost
 
+      - name: ZXR Attestation Loop Verification
+        run: |
+          make -C kernel kmain.o boot.o
+          make auditor verifier
+          ./tools/zcc_topology_auditor kernel/*.o --json > record.zxr
+          ./tools/zcc_zxr_verify record.zxr kernel/*.o
+
       - name: Upload assembly artifacts
         uses: actions/upload-artifact@v4
         with:
