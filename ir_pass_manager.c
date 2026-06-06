@@ -1157,12 +1157,5 @@ void ir_pm_run_default(void *mod_ptr, int verbose) {
     ir_pm_free(pm);
 }
 
-#ifndef ZCC_REAL_TELEMETRY
-__attribute__((weak)) ir_pass_result_t zcc_pass_transient_locks(void *fn_ptr) {
-    (void)fn_ptr;
-    ir_pass_result_t r = {0};
-    return r;
-}
-#endif /* ZCC_REAL_TELEMETRY */
 
 
