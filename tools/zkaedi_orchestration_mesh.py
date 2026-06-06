@@ -105,13 +105,54 @@ min_health_score: 90.0
                 pass
 
     def enforce(self, objective, divergence_report):
+        # 1. Load trust_factor from L17
+        trust_factor = 1.0
+        conf_file = "scratch/forecast_confidence.json"
+        if os.path.exists(conf_file):
+            try:
+                with open(conf_file, "r") as f:
+                    trust_factor = json.load(f).get("trust_factor", 1.0)
+            except Exception:
+                pass
+
+        # 2. Compute adaptive thresholds
+        adaptive_rules = {}
+        for k, v in self.rules.items():
+            if k == "min_health_score":
+                adaptive_rules[k] = round(100.0 - (100.0 - v) * trust_factor, 4)
+            else:
+                adaptive_rules[k] = round(v * trust_factor, 4)
+
+        # 3. Save to scratch/adaptive_thresholds.json
+        try:
+            with open("scratch/adaptive_thresholds.json", "w") as f:
+                json.dump({
+                    "trust_factor": round(trust_factor, 4),
+                    "original_thresholds": self.rules,
+                    "adaptive_thresholds": adaptive_rules,
+                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                }, f, indent=2)
+        except Exception:
+            pass
+
+        print(f"{CYAN}{BOLD}=== OMEGA ADAPTIVE THRESHOLD TUNING (LEVEL 18) ==={RESET}")
+        print(f"  Trust Factor: {trust_factor:.4f}")
+        for drift_name in divergence_report.keys():
+            limit_key = f"max_allowed_{drift_name.lower()}"
+            if limit_key in self.rules:
+                orig = self.rules[limit_key]
+                adap = adaptive_rules[limit_key]
+                print(f"  {limit_key:<28}: original={orig:.4f} → adaptive={adap:.4f}")
+        print()
+
+        # 4. Enforce thresholds
         failures = []
         for drift_name, drift_val in divergence_report.items():
             limit_key = f"max_allowed_{drift_name.lower()}"
-            if limit_key in self.rules:
-                limit = self.rules[limit_key]
+            if limit_key in adaptive_rules:
+                limit = adaptive_rules[limit_key]
                 if drift_val > limit:
-                    failures.append(f"{drift_name} ({drift_val:.4f}) exceeds threshold ({limit:.4f})")
+                    failures.append(f"{drift_name} ({drift_val:.4f}) exceeds adaptive threshold ({limit:.4f}, trust={trust_factor:.4f})")
         
         status = "GREEN" if not failures else "RED"
         return {"status": status, "failures": failures}
@@ -976,7 +1017,18 @@ def run_deployment_forecasting(env):
         predicted_risks.append("Missing golden baseline geometry parameters")
         recommended_actions.append("Initialize golden baseline geometry parameters")
         
+    model_base_rate = None
+    weights_file = "scratch/model_weights.json"
+    if os.path.exists(weights_file):
+        try:
+            with open(weights_file, "r") as f:
+                model_base_rate = json.load(f).get("base_rate_ema")
+        except Exception:
+            pass
+
     success_prob = 0.98 * history_success_rate
+    if model_base_rate is not None:
+        success_prob = 0.5 * success_prob + 0.5 * model_base_rate
     success_prob = min(0.999, max(0.10, success_prob))
     
     forecast = {
@@ -992,7 +1044,21 @@ def run_deployment_forecasting(env):
     except Exception as e:
         print(f"[FORECAST ERROR] Failed to write forecast: {e}")
         
+    trust_factor = 1.0
+    conf_file = "scratch/forecast_confidence.json"
+    if os.path.exists(conf_file):
+        try:
+            with open(conf_file, "r") as f:
+                trust_factor = json.load(f).get("trust_factor", 1.0)
+        except Exception:
+            pass
+
+    prediction = "PASS" if success_prob >= 0.5 else "RED"
+    raw_conf = success_prob if prediction == "PASS" else (1.0 - success_prob)
+    calibrated_conf = raw_conf * trust_factor
+
     print(f"{CYAN}{BOLD}[FORECAST] Predicted Deployment Success Probability: {success_prob * 100:.1f}%{RESET}")
+    print(f"{CYAN}{BOLD}[FORECAST] Raw Confidence: {raw_conf * 100:.1f}% | Calibrated Confidence: {calibrated_conf * 100:.1f}% (Trust Factor: {trust_factor:.4f}){RESET}")
     if predicted_risks:
         print(f"{YELLOW}[FORECAST] Predicted risks:{RESET}")
         for r in predicted_risks:
@@ -1195,6 +1261,106 @@ COUNTERFACTUAL_SCENARIOS = [
         "expected_gate": "RED",
     },
 ]
+
+class ForecastConfidenceCalibrator:
+    """
+    Level 17: Forecast Confidence Calibration
+    Tracks {prediction, confidence, actual} triples per run in scratch/forecast_confidence.json.
+    Penalizes confidence when confidence was high (e.g., confidence=0.95) but actual != predicted.
+    Adjusts a trust_factor dynamically so the model learns how much to trust itself.
+    """
+    CONF_FILE = "scratch/forecast_confidence.json"
+
+    def __init__(self):
+        self.trust_factor = 1.0
+        self.history = []
+        self._load()
+
+    def _load(self):
+        if os.path.exists(self.CONF_FILE):
+            try:
+                with open(self.CONF_FILE, "r") as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    self.trust_factor = data.get("trust_factor", 1.0)
+                    self.history = data.get("history", [])
+                else:
+                    self.trust_factor = 1.0
+                    self.history = []
+            except Exception:
+                self.trust_factor = 1.0
+                self.history = []
+
+    def _save(self):
+        try:
+            with open(self.CONF_FILE, "w") as f:
+                json.dump({
+                    "trust_factor": round(self.trust_factor, 4),
+                    "history": self.history
+                }, f, indent=2)
+        except Exception as e:
+            print(f"[CONFIDENCE ERROR] Failed to save forecast_confidence.json: {e}")
+
+    def record_run(self, run_id: str, predicted_success_prob: float, actual_verdict: str):
+        """
+        Records the run prediction, confidence, and actual outcome.
+        Applies a penalty to the trust_factor if there's a mismatch.
+        """
+        # 1. Determine prediction and raw confidence
+        prediction = "PASS" if predicted_success_prob >= 0.5 else "RED"
+        raw_confidence = predicted_success_prob if prediction == "PASS" else (1.0 - predicted_success_prob)
+        raw_confidence = round(raw_confidence, 4)
+
+        # 2. Compute calibrated confidence using current trust_factor
+        calibrated_confidence = round(raw_confidence * self.trust_factor, 4)
+
+        # 3. Determine actual outcome
+        actual = "PASS" if actual_verdict in ("PASS", "GREEN") else "RED"
+
+        # 4. Calculate error and adjustment
+        status = "correct" if prediction == actual else "incorrect"
+        penalty_applied = 0.0
+        reward_applied = 0.0
+
+        if status == "incorrect":
+            # Penalize confidence: higher confidence gets penalized more severely
+            penalty_applied = round(calibrated_confidence * 0.25, 4)
+            self.trust_factor = max(0.10, self.trust_factor - penalty_applied)
+        else:
+            # Reward correct prediction, especially if we were less confident
+            reward_applied = round((1.0 - calibrated_confidence) * 0.05, 4)
+            self.trust_factor = min(1.0, self.trust_factor + reward_applied)
+
+        # 5. Append to history
+        entry = {
+            "run_id": run_id,
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "prediction": prediction,
+            "raw_confidence": raw_confidence,
+            "calibrated_confidence": calibrated_confidence,
+            "actual": actual,
+            "status": status,
+            "penalty_applied": penalty_applied,
+            "reward_applied": reward_applied,
+            "trust_factor_after": round(self.trust_factor, 4)
+        }
+        self.history.append(entry)
+        self._save()
+        return entry
+
+    def print_report(self, entry: dict):
+        print(f"{CYAN}{BOLD}=== FORECAST CONFIDENCE CALIBRATION (LEVEL 17) ==={RESET}")
+        print(f"  {'Run ID':<26}: {entry['run_id']}")
+        print(f"  {'Prediction':<26}: {entry['prediction']} (raw conf: {entry['raw_confidence'] * 100:.1f}%)")
+        print(f"  {'Actual Outcome':<26}: {entry['actual']}")
+        print(f"  {'Status':<26}: {entry['status'].upper()}")
+        print(f"  {'Calibrated Confidence':<26}: {entry['calibrated_confidence'] * 100:.1f}%")
+        if entry['status'] == "incorrect":
+            print(f"  {RED}{'Penalty Applied':<26}: -{entry['penalty_applied']:.4f} (high confidence miss){RESET}")
+        else:
+            print(f"  {GREEN}{'Reward Applied':<26}: +{entry['reward_applied']:.4f}{RESET}")
+        print(f"  {'Current Trust Factor':<26}: {entry['trust_factor_after']:.4f}")
+        print(f"  {'Full log written to':<26}: {self.CONF_FILE}\n")
 
 class CounterfactualCalibrator:
     """
@@ -2418,10 +2584,6 @@ async def main_coordination():
     # Pre-execution forecasting (capture prediction before run)
     forecast = run_deployment_forecasting(env)
     predicted_success_prob = forecast["success_probability"]
-    # If model has a learned weight, blend it in
-    if model_base_rate is not None:
-        predicted_success_prob = 0.5 * predicted_success_prob + 0.5 * model_base_rate
-        predicted_success_prob = round(min(0.999, max(0.10, predicted_success_prob)), 4)
 
     # 0. Counterfactual Policy Optimization (L15) — PRE-DEPLOYMENT
     # Evaluate 4 policies × 100 simulated futures using live model state.
@@ -2598,6 +2760,15 @@ async def main_coordination():
         actual_health=score["fabric_health"]
     )
     accuracy_tracker.print_report(prediction_error)
+
+    # 4b. Forecast Confidence Calibration (Level 17)
+    conf_calibrator = ForecastConfidenceCalibrator()
+    conf_entry = conf_calibrator.record_run(
+        run_id=run_id,
+        predicted_success_prob=predicted_success_prob,
+        actual_verdict=verdict["status"]
+    )
+    conf_calibrator.print_report(conf_entry)
 
     # 5. Counterfactual Calibration — evaluate synthetic failure scenarios
     # Read the freshly updated EMA weight written by accuracy_tracker above
