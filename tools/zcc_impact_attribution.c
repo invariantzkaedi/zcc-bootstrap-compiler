@@ -291,11 +291,11 @@ static void compute_attribution(const StaticGenome *ga, const StaticGenome *gb,
     if (abs_int(rpt->register_drift_pct)    > 20) score += 3;
     if (abs_int(rpt->stack_drift_bytes)     > 64) score += 3;
     if (abs_int(rpt->instr_drift_pct)       > 15) score += 2;
-    if (rpt->topology_mutated)                    score += 2;
+    if (rpt->topology_mutated && abs_int(rpt->instr_drift_pct) > 10) score += 2;
     if (rpt->has_runtime) {
         if (abs_int(rpt->call_volume_change_pct) > 50) score += 3;
         if (abs_int(rpt->depth_change_frames)    >  3) score += 1;
-        if (rpt->hot_path_shifted)                     score += 1;
+        if (rpt->hot_path_shifted && abs_int(rpt->call_volume_change_pct) > 10) score += 1;
     }
     rpt->impact_score = score;
 
