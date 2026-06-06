@@ -420,7 +420,7 @@ static void ts_audit_exits(ts_ctx_t *ctx, ts_verdict_t *v) {
  * Entry Point
  * ═══════════════════════════════════════════════════════════════════════ */
 
-ir_pass_result_t zcc_pass_transient_locks(void *fn_ptr) {
+__attribute__((weak)) ir_pass_result_t zcc_pass_transient_locks(void *fn_ptr) {
     ir_func_t *fn = (ir_func_t *)fn_ptr;
     ir_pass_result_t r;
     ts_ctx_t *ctx;
