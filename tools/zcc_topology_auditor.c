@@ -332,14 +332,44 @@ static void populate_call_graph(CallGraph *cg, const char **files, int count) {
     }
 }
 
+static Elf64_Xword get_symbol_size(InputObj *o, Elf64_Sym *sym) {
+    if (sym->st_size > 0) {
+        return sym->st_size;
+    }
+    if (sym->st_shndx >= o->obj.ehdr->e_shnum) {
+        return 0;
+    }
+    Elf64_Addr next_val = 0;
+    int found_next = 0;
+    Elf64_Shdr *sec = &o->obj.shdrs[sym->st_shndx];
+    Elf64_Addr sec_limit = sec->sh_size;
+
+    for (int i = 0; i < o->obj.symcnt; i++) {
+        Elf64_Sym *s = &o->obj.symtab[i];
+        if (s->st_shndx == sym->st_shndx && ELF64_ST_TYPE(s->st_info) == STT_FUNC) {
+            if (s->st_value > sym->st_value) {
+                if (!found_next || s->st_value < next_val) {
+                    next_val = s->st_value;
+                    found_next = 1;
+                }
+            }
+        }
+    }
+    if (found_next) {
+        return next_val - sym->st_value;
+    }
+    return sec_limit - sym->st_value;
+}
+
 static void compute_function_hash(InputObj *o, Elf64_Sym *sym, char *output_hex) {
-    if (sym->st_size > 0 && sym->st_shndx < o->obj.ehdr->e_shnum) {
+    Elf64_Xword sym_size = get_symbol_size(o, sym);
+    if (sym_size > 0 && sym->st_shndx < o->obj.ehdr->e_shnum) {
         Elf64_Shdr *sec = &o->obj.shdrs[sym->st_shndx];
-        if (sec->sh_offset + sym->st_value + sym->st_size <= o->obj.size) {
+        if (sec->sh_offset + sym->st_value + sym_size <= o->obj.size) {
             const uint8_t *fn_code = o->obj.data + sec->sh_offset + sym->st_value;
             ZccSHA256_CTX ctx;
             zcc_sha256_init(&ctx);
-            zcc_sha256_update(&ctx, fn_code, sym->st_size);
+            zcc_sha256_update(&ctx, fn_code, sym_size);
             uint8_t hash[32];
             zcc_sha256_final(&ctx, hash);
             for (int i = 0; i < 32; i++) {
@@ -434,6 +464,317 @@ static void compute_domain_merkle_root(CallGraph *cg, const char *domain_name, c
         sprintf(output_hex + i * 2, "%02x", m_hash[i]);
     }
     output_hex[64] = '\0';
+}
+
+typedef struct {
+    int entrypoint_start; /* 1 if _start is entrypoint, 0 if main, -1 if none */
+    int reachable_functions;
+    int leaf_functions;
+    int branch_nodes;
+    int critical_path_depth;
+    char controlflow_root[65];
+
+    int mov_cnt;
+    int call_cnt;
+    int lea_cnt;
+    int cmp_cnt;
+    int jmp_cnt;
+    int ret_cnt;
+    char instruction_root[65];
+
+    int reg_counts[16];
+    char register_root[65];
+
+    int max_stack_frame;
+    int average_stack_frame;
+    int recursive_functions;
+    char stack_root[65];
+
+    int stability_score;
+} ExecutionFingerprint;
+
+static int detect_recursion_from(CallGraph *cg, int fn_idx, int target, uint8_t *visited) {
+    visited[fn_idx] = 1;
+    for (int i = 0; i < cg->edge_count; i++) {
+        if (cg->edges[i].src_fn_idx == fn_idx) {
+            int dest = cg->edges[i].dest_fn_idx;
+            if (dest == target) {
+                return 1;
+            }
+            if (!visited[dest]) {
+                if (detect_recursion_from(cg, dest, target, visited)) {
+                    return 1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+static int get_max_depth(CallGraph *cg, int fn_idx, uint8_t *visited) {
+    visited[fn_idx] = 1;
+    int max_sub_depth = 0;
+    for (int i = 0; i < cg->edge_count; i++) {
+        if (cg->edges[i].src_fn_idx == fn_idx) {
+            int dest = cg->edges[i].dest_fn_idx;
+            if (!visited[dest]) {
+                int d = get_max_depth(cg, dest, visited);
+                if (d > max_sub_depth) {
+                    max_sub_depth = d;
+                }
+            }
+        }
+    }
+    visited[fn_idx] = 0;
+    return 1 + max_sub_depth;
+}
+
+static void mark_reachable(CallGraph *cg, int fn_idx, uint8_t *visited) {
+    visited[fn_idx] = 1;
+    for (int i = 0; i < cg->edge_count; i++) {
+        if (cg->edges[i].src_fn_idx == fn_idx) {
+            int dest = cg->edges[i].dest_fn_idx;
+            if (!visited[dest]) {
+                mark_reachable(cg, dest, visited);
+            }
+        }
+    }
+}
+
+static void compute_execution_fingerprint(CallGraph *cg, ExecutionFingerprint *ef) {
+    memset(ef, 0, sizeof(ExecutionFingerprint));
+    ef->stability_score = 100;
+
+    int entry_idx = -1;
+    for (int i = 0; i < cg->func_count; i++) {
+        if (strcmp(cg->funcs[i].name, "_start") == 0) {
+            entry_idx = i;
+            ef->entrypoint_start = 1;
+            break;
+        }
+    }
+    if (entry_idx == -1) {
+        for (int i = 0; i < cg->func_count; i++) {
+            if (strcmp(cg->funcs[i].name, "main") == 0) {
+                entry_idx = i;
+                ef->entrypoint_start = 0;
+                break;
+            }
+        }
+    }
+    if (entry_idx == -1) {
+        ef->entrypoint_start = -1;
+    }
+
+    if (entry_idx != -1) {
+        uint8_t visited[MAX_FUNCTIONS];
+        memset(visited, 0, sizeof(visited));
+        mark_reachable(cg, entry_idx, visited);
+        for (int i = 0; i < cg->func_count; i++) {
+            if (visited[i]) ef->reachable_functions++;
+        }
+
+        memset(visited, 0, sizeof(visited));
+        ef->critical_path_depth = get_max_depth(cg, entry_idx, visited);
+    }
+
+    for (int i = 0; i < cg->func_count; i++) {
+        if (cg->funcs[i].is_imported) continue;
+        int out_degree = 0;
+        for (int j = 0; j < cg->edge_count; j++) {
+            if (cg->edges[j].src_fn_idx == i) {
+                out_degree++;
+            }
+        }
+        if (out_degree == 0) ef->leaf_functions++;
+        else if (out_degree > 1) ef->branch_nodes++;
+    }
+
+    {
+        char cf_buf[256];
+        sprintf(cf_buf, "entrypoint:%s,reachable:%d,leaf:%d,branch:%d,depth:%d",
+                ef->entrypoint_start == 1 ? "_start" : (ef->entrypoint_start == 0 ? "main" : "none"),
+                ef->reachable_functions, ef->leaf_functions, ef->branch_nodes, ef->critical_path_depth);
+        ZccSHA256_CTX ctx;
+        zcc_sha256_init(&ctx);
+        zcc_sha256_update(&ctx, (const uint8_t *)cf_buf, strlen(cf_buf));
+        uint8_t hash[32];
+        zcc_sha256_final(&ctx, hash);
+        for (int h = 0; h < 32; h++) sprintf(ef->controlflow_root + h * 2, "%02x", hash[h]);
+        ef->controlflow_root[64] = '\0';
+    }
+
+    long long total_stack_frame = 0;
+    int defined_funcs_with_size = 0;
+
+    for (int i = 0; i < cg->func_count; i++) {
+        FunctionNode *fn = &cg->funcs[i];
+        if (fn->is_imported || fn->obj_idx == -1) continue;
+
+        InputObj *o = &cg->objs[fn->obj_idx];
+        if (fn->sym_idx < 0 || fn->sym_idx >= o->obj.symcnt) continue;
+        Elf64_Sym *sym = &o->obj.symtab[fn->sym_idx];
+
+        Elf64_Xword sym_size = get_symbol_size(o, sym);
+        if (sym_size > 0 && sym->st_shndx < o->obj.ehdr->e_shnum) {
+            Elf64_Shdr *sec = &o->obj.shdrs[sym->st_shndx];
+            if (sec->sh_offset + sym->st_value + sym_size <= o->obj.size) {
+                const uint8_t *fn_code = o->obj.data + sec->sh_offset + sym->st_value;
+                int size = sym_size;
+
+                uint8_t rex = 0;
+                for (int ip = 0; ip < size; ip++) {
+                    uint8_t b = fn_code[ip];
+                    if ((b & 0xf0) == 0x40) {
+                        rex = b;
+                        continue;
+                    }
+                    if (b >= 0x50 && b <= 0x57) {
+                        int reg = b - 0x50;
+                        if (rex & 1) reg += 8;
+                        ef->reg_counts[reg]++;
+                        rex = 0;
+                    } else if (b >= 0x58 && b <= 0x5f) {
+                        int reg = b - 0x58;
+                        if (rex & 1) reg += 8;
+                        ef->reg_counts[reg]++;
+                        rex = 0;
+                    } else if (b >= 0xb8 && b <= 0xbf) {
+                        int reg = b - 0xb8;
+                        if (rex & 1) reg += 8;
+                        ef->reg_counts[reg]++;
+                        ef->mov_cnt++;
+                        rex = 0;
+                    } else if (b == 0xc3 || b == 0xc2) {
+                        ef->ret_cnt++;
+                        rex = 0;
+                    } else if (b == 0xe8) {
+                        ef->call_cnt++;
+                        rex = 0;
+                    } else if (b == 0x8d) {
+                        ef->lea_cnt++;
+                        if (ip + 1 < size) {
+                            uint8_t modrm = fn_code[ip + 1];
+                            int reg1 = (modrm >> 3) & 7;
+                            if (rex & 4) reg1 += 8;
+                            int reg2 = modrm & 7;
+                            if (rex & 1) reg2 += 8;
+                            ef->reg_counts[reg1]++;
+                            if ((modrm >> 6) == 3) ef->reg_counts[reg2]++;
+                        }
+                        rex = 0;
+                    } else if (b == 0x89 || b == 0x8b || b == 0xc7) {
+                        ef->mov_cnt++;
+                        if (ip + 1 < size) {
+                            uint8_t modrm = fn_code[ip + 1];
+                            int reg1 = (modrm >> 3) & 7;
+                            if (rex & 4) reg1 += 8;
+                            int reg2 = modrm & 7;
+                            if (rex & 1) reg2 += 8;
+                            ef->reg_counts[reg1]++;
+                            if ((modrm >> 6) == 3) ef->reg_counts[reg2]++;
+                        }
+                        rex = 0;
+                    } else if (b == 0x39 || b == 0x3b || b == 0x3d) {
+                        ef->cmp_cnt++;
+                        if (b != 0x3d && ip + 1 < size) {
+                            uint8_t modrm = fn_code[ip + 1];
+                            int reg1 = (modrm >> 3) & 7;
+                            if (rex & 4) reg1 += 8;
+                            int reg2 = modrm & 7;
+                            if (rex & 1) reg2 += 8;
+                            ef->reg_counts[reg1]++;
+                            if ((modrm >> 6) == 3) ef->reg_counts[reg2]++;
+                        }
+                        rex = 0;
+                    } else if (b == 0xe9 || b == 0xeb) {
+                        ef->jmp_cnt++;
+                        rex = 0;
+                    } else if (b == 0xff) {
+                        if (ip + 1 < size) {
+                            uint8_t modrm = fn_code[ip + 1];
+                            int op = (modrm >> 3) & 7;
+                            if (op == 2) ef->call_cnt++;
+                            else if (op == 4) ef->jmp_cnt++;
+                            int reg2 = modrm & 7;
+                            if (rex & 1) reg2 += 8;
+                            if ((modrm >> 6) == 3) ef->reg_counts[reg2]++;
+                        }
+                        rex = 0;
+                    }
+                }
+
+                int frame_size = 0;
+                for (int s = 0; s < size - 3 && s < 32; s++) {
+                    if (fn_code[s] == 0x48 && fn_code[s+1] == 0x83 && fn_code[s+2] == 0xec) {
+                        frame_size = fn_code[s+3];
+                        break;
+                    }
+                    if (s < size - 6 && fn_code[s] == 0x48 && fn_code[s+1] == 0x81 && fn_code[s+2] == 0xec) {
+                        frame_size = fn_code[s+3] | (fn_code[s+4] << 8) | (fn_code[s+5] << 16) | (fn_code[s+6] << 24);
+                        break;
+                    }
+                }
+                if (frame_size > ef->max_stack_frame) {
+                    ef->max_stack_frame = frame_size;
+                }
+                total_stack_frame += frame_size;
+                defined_funcs_with_size++;
+            }
+        }
+
+        uint8_t cyc_visited[MAX_FUNCTIONS];
+        memset(cyc_visited, 0, sizeof(cyc_visited));
+        if (detect_recursion_from(cg, i, i, cyc_visited)) {
+            ef->recursive_functions++;
+        }
+    }
+
+    if (defined_funcs_with_size > 0) {
+        ef->average_stack_frame = (int)(total_stack_frame / defined_funcs_with_size);
+    }
+
+    {
+        char ins_buf[256];
+        sprintf(ins_buf, "mov:%d,call:%d,lea:%d,cmp:%d,jmp:%d,ret:%d",
+                ef->mov_cnt, ef->call_cnt, ef->lea_cnt, ef->cmp_cnt, ef->jmp_cnt, ef->ret_cnt);
+        ZccSHA256_CTX ctx;
+        zcc_sha256_init(&ctx);
+        zcc_sha256_update(&ctx, (const uint8_t *)ins_buf, strlen(ins_buf));
+        uint8_t hash[32];
+        zcc_sha256_final(&ctx, hash);
+        for (int h = 0; h < 32; h++) sprintf(ef->instruction_root + h * 2, "%02x", hash[h]);
+        ef->instruction_root[64] = '\0';
+    }
+
+    {
+        char reg_buf[512];
+        sprintf(reg_buf, "rax:%d,rbx:%d,rcx:%d,rdx:%d,rsi:%d,rdi:%d,rbp:%d,rsp:%d,r8:%d,r9:%d,r10:%d,r11:%d,r12:%d,r13:%d,r14:%d,r15:%d",
+                ef->reg_counts[0], ef->reg_counts[3], ef->reg_counts[1], ef->reg_counts[2],
+                ef->reg_counts[6], ef->reg_counts[7], ef->reg_counts[5], ef->reg_counts[4],
+                ef->reg_counts[8], ef->reg_counts[9], ef->reg_counts[10], ef->reg_counts[11],
+                ef->reg_counts[12], ef->reg_counts[13], ef->reg_counts[14], ef->reg_counts[15]);
+        ZccSHA256_CTX ctx;
+        zcc_sha256_init(&ctx);
+        zcc_sha256_update(&ctx, (const uint8_t *)reg_buf, strlen(reg_buf));
+        uint8_t hash[32];
+        zcc_sha256_final(&ctx, hash);
+        for (int h = 0; h < 32; h++) sprintf(ef->register_root + h * 2, "%02x", hash[h]);
+        ef->register_root[64] = '\0';
+    }
+
+    {
+        char stk_buf[256];
+        sprintf(stk_buf, "max:%d,avg:%d,rec:%d",
+                ef->max_stack_frame, ef->average_stack_frame, ef->recursive_functions);
+        ZccSHA256_CTX ctx;
+        zcc_sha256_init(&ctx);
+        zcc_sha256_update(&ctx, (const uint8_t *)stk_buf, strlen(stk_buf));
+        uint8_t hash[32];
+        zcc_sha256_final(&ctx, hash);
+        for (int h = 0; h < 32; h++) sprintf(ef->stack_root + h * 2, "%02x", hash[h]);
+        ef->stack_root[64] = '\0';
+    }
 }
 
 static FILE *open_source_file(const char *obj_path) {
@@ -1341,6 +1682,53 @@ int main(int argc, char **argv) {
         printf("    \"general_root\": \"%s\",\n", general_root);
         printf("    \"topology_root\": \"%s\"\n", topology_root);
         printf("  },\n");
+        {
+            ExecutionFingerprint ef;
+            compute_execution_fingerprint(cg, &ef);
+            printf("  \"execution_fingerprint\": {\n");
+            printf("    \"entrypoint\": \"%s\",\n", ef.entrypoint_start == 1 ? "_start" : (ef.entrypoint_start == 0 ? "main" : "none"));
+            printf("    \"reachable_functions\": %d,\n", ef.reachable_functions);
+            printf("    \"leaf_functions\": %d,\n", ef.leaf_functions);
+            printf("    \"branch_nodes\": %d,\n", ef.branch_nodes);
+            printf("    \"critical_path_depth\": %d,\n", ef.critical_path_depth);
+            printf("    \"controlflow_root\": \"%s\",\n", ef.controlflow_root);
+            printf("    \"instruction_profile\": {\n");
+            printf("      \"mov\": %d,\n", ef.mov_cnt);
+            printf("      \"call\": %d,\n", ef.call_cnt);
+            printf("      \"lea\": %d,\n", ef.lea_cnt);
+            printf("      \"cmp\": %d,\n", ef.cmp_cnt);
+            printf("      \"jmp\": %d,\n", ef.jmp_cnt);
+            printf("      \"ret\": %d\n", ef.ret_cnt);
+            printf("    },\n");
+            printf("    \"instruction_root\": \"%s\",\n", ef.instruction_root);
+            printf("    \"register_profile\": {\n");
+            printf("      \"rax\": %d,\n", ef.reg_counts[0]);
+            printf("      \"rbx\": %d,\n", ef.reg_counts[3]);
+            printf("      \"rcx\": %d,\n", ef.reg_counts[1]);
+            printf("      \"rdx\": %d,\n", ef.reg_counts[2]);
+            printf("      \"rsi\": %d,\n", ef.reg_counts[6]);
+            printf("      \"rdi\": %d,\n", ef.reg_counts[7]);
+            printf("      \"rbp\": %d,\n", ef.reg_counts[5]);
+            printf("      \"rsp\": %d,\n", ef.reg_counts[4]);
+            printf("      \"r8\": %d,\n", ef.reg_counts[8]);
+            printf("      \"r9\": %d,\n", ef.reg_counts[9]);
+            printf("      \"r10\": %d,\n", ef.reg_counts[10]);
+            printf("      \"r11\": %d,\n", ef.reg_counts[11]);
+            printf("      \"r12\": %d,\n", ef.reg_counts[12]);
+            printf("      \"r13\": %d,\n", ef.reg_counts[13]);
+            printf("      \"r14\": %d,\n", ef.reg_counts[14]);
+            printf("      \"r15\": %d\n", ef.reg_counts[15]);
+            printf("    },\n");
+            printf("    \"register_root\": \"%s\",\n", ef.register_root);
+            printf("    \"stack_analysis\": {\n");
+            printf("      \"max_stack_frame\": %d,\n", ef.max_stack_frame);
+            printf("      \"average_stack_frame\": %d,\n", ef.average_stack_frame);
+            printf("      \"recursive_functions\": %d\n", ef.recursive_functions);
+            printf("    },\n");
+            printf("    \"stack_root\": \"%s\",\n", ef.stack_root);
+            printf("    \"stability_score\": %d\n", ef.stability_score);
+            printf("  },\n");
+        }
 
         printf("  \"convergence\": \"%s\"\n", unresolved_cnt == 0 ? "VERIFIED" : "DIVERGED");
         printf("}\n");
