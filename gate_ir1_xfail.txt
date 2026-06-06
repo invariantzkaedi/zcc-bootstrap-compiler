@@ -1,3 +1,4 @@
 # Known failures — tolerated
 xfail_compiler_passes
 xfail_part4
+smoke_part4
