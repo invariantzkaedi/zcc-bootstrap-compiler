@@ -294,7 +294,9 @@ typedef struct {
 static void compute_attribution(const StaticGenome *ga, const StaticGenome *gb,
                                  const RuntimeSummary *ra, const RuntimeSummary *rb,
                                  const char *ver_a, const char *ver_b,
-                                 AttributionReport *rpt) {
+                                 AttributionReport *rpt,
+                                 int t_reg, int t_stack, int t_instr,
+                                 int t_call, int t_depth, int t_topo_instr, int t_hot_call) {
     memset(rpt, 0, sizeof(AttributionReport));
 
     /* ── Static drift ────────────────────────────────────────────────── */
@@ -329,14 +331,14 @@ static void compute_attribution(const StaticGenome *ga, const StaticGenome *gb,
 
     /* ── Impact scoring ──────────────────────────────────────────────── */
     int score = 0;
-    if (abs_int(rpt->register_drift_pct)    > 20) score += 3;
-    if (abs_int(rpt->stack_drift_bytes)     > 64) score += 3;
-    if (abs_int(rpt->instr_drift_pct)       > 15) score += 2;
-    if (rpt->topology_mutated && abs_int(rpt->instr_drift_pct) > 10) score += 2;
+    if (abs_int(rpt->register_drift_pct)    > t_reg) score += 3;
+    if (abs_int(rpt->stack_drift_bytes)     > t_stack) score += 3;
+    if (abs_int(rpt->instr_drift_pct)       > t_instr) score += 2;
+    if (rpt->topology_mutated && abs_int(rpt->instr_drift_pct) > t_topo_instr) score += 2;
     if (rpt->has_runtime) {
-        if (abs_int(rpt->call_volume_change_pct) > 50) score += 3;
-        if (abs_int(rpt->depth_change_frames)    >  3) score += 1;
-        if (rpt->hot_path_shifted && abs_int(rpt->call_volume_change_pct) > 10) score += 1;
+        if (abs_int(rpt->call_volume_change_pct) > t_call) score += 3;
+        if (abs_int(rpt->depth_change_frames)    >  t_depth) score += 1;
+        if (rpt->hot_path_shifted && abs_int(rpt->call_volume_change_pct) > t_hot_call) score += 1;
     }
     rpt->impact_score = score;
 
@@ -388,7 +390,9 @@ static void emit_attribution_json(const char *out_path,
                                    const char *static_a_path,
                                    const char *static_b_path,
                                    const char *runtime_a_path,
-                                   const char *runtime_b_path) {
+                                   const char *runtime_b_path,
+                                   int t_reg, int t_stack, int t_instr,
+                                   int t_call, int t_depth, int t_topo_instr, int t_hot_call) {
     FILE *f = fopen(out_path, "w");
     if (!f) { fprintf(stderr, "warning: cannot write %s\n", out_path); return; }
 
@@ -420,6 +424,15 @@ static void emit_attribution_json(const char *out_path,
                 rpt->hot_path_shifted ? "true" : "false");
         fprintf(f, "  },\n");
     }
+    fprintf(f, "  \"thresholds\": {\n");
+    fprintf(f, "    \"register_drift_pct\": %d,\n", t_reg);
+    fprintf(f, "    \"stack_drift_bytes\": %d,\n", t_stack);
+    fprintf(f, "    \"instr_drift_pct\": %d,\n", t_instr);
+    fprintf(f, "    \"call_volume_change_pct\": %d,\n", t_call);
+    fprintf(f, "    \"depth_change_frames\": %d,\n", t_depth);
+    fprintf(f, "    \"topology_instr_drift_pct\": %d,\n", t_topo_instr);
+    fprintf(f, "    \"hot_path_call_drift_pct\": %d\n", t_hot_call);
+    fprintf(f, "  },\n");
     fprintf(f, "  \"impact_score\": %d,\n",          rpt->impact_score);
     fprintf(f, "  \"estimated_impact\": \"%s\",\n",  rpt->estimated_impact);
     fprintf(f, "  \"confidence\": {\n");
@@ -447,6 +460,7 @@ int main(int argc, char **argv) {
     const char *version_b      = "B";
     const char *out_path       = NULL;
     const char *cal_report_path = NULL;
+    const char *thresholds_path = NULL;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--static-a")  == 0 && i+1<argc) static_a_path  = argv[++i];
@@ -457,6 +471,7 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--version-b") == 0 && i+1<argc) version_b      = argv[++i];
         else if (strcmp(argv[i], "--out")        == 0 && i+1<argc) out_path       = argv[++i];
         else if (strcmp(argv[i], "--calibration-report") == 0 && i+1<argc) cal_report_path = argv[++i];
+        else if (strcmp(argv[i], "--thresholds") == 0 && i+1<argc) thresholds_path = argv[++i];
     }
 
     if (!static_a_path || !static_b_path) {
@@ -500,9 +515,36 @@ int main(int argc, char **argv) {
         else fprintf(stderr, "warning: cannot open runtime-b %s\n", runtime_b_path);
     }
 
+    /* ── Load dynamic thresholds if provided ─────────────────────────── */
+    int t_reg = 20;
+    int t_stack = 64;
+    int t_instr = 15;
+    int t_call = 50;
+    int t_depth = 3;
+    int t_topo_instr = 10;
+    int t_hot_call = 10;
+
+    if (thresholds_path) {
+        size_t thresh_sz = 0;
+        uint8_t *thresh_data = load_file(thresholds_path, &thresh_sz);
+        if (thresh_data) {
+            find_json_int_scoped((const char *)thresh_data, "\"register_drift_pct\"", &t_reg);
+            find_json_int_scoped((const char *)thresh_data, "\"stack_drift_bytes\"", &t_stack);
+            find_json_int_scoped((const char *)thresh_data, "\"instr_drift_pct\"", &t_instr);
+            find_json_int_scoped((const char *)thresh_data, "\"call_volume_change_pct\"", &t_call);
+            find_json_int_scoped((const char *)thresh_data, "\"depth_change_frames\"", &t_depth);
+            find_json_int_scoped((const char *)thresh_data, "\"topology_instr_drift_pct\"", &t_topo_instr);
+            find_json_int_scoped((const char *)thresh_data, "\"hot_path_call_drift_pct\"", &t_hot_call);
+            free(thresh_data);
+        } else {
+            fprintf(stderr, "warning: cannot open thresholds file %s, falling back to defaults.\n", thresholds_path);
+        }
+    }
+
     /* ── Compute attribution ──────────────────────────────────────────── */
     AttributionReport rpt;
-    compute_attribution(&ga, &gb, ra, rb, version_a, version_b, &rpt);
+    compute_attribution(&ga, &gb, ra, rb, version_a, version_b, &rpt,
+                        t_reg, t_stack, t_instr, t_call, t_depth, t_topo_instr, t_hot_call);
 
     /* ── Compute confidence score ──────────────────────────────────────── */
     rpt.confidence_score = 40;
@@ -607,26 +649,26 @@ int main(int argc, char **argv) {
 
     printf("  %-26s  %+7d%%  %6s\n", "Register Pressure",
            rpt.register_drift_pct,
-           abs_int(rpt.register_drift_pct) > 20 ? "+HIGH" : "-");
+           abs_int(rpt.register_drift_pct) > t_reg ? "+HIGH" : "-");
     printf("  %-26s  %+6d B  %6s\n", "Stack Frame",
            rpt.stack_drift_bytes,
-           abs_int(rpt.stack_drift_bytes) > 64 ? "+HIGH" : "-");
+           abs_int(rpt.stack_drift_bytes) > t_stack ? "+HIGH" : "-");
     printf("  %-26s  %+7d%%  %6s\n", "Instruction Volume",
            rpt.instr_drift_pct,
-           abs_int(rpt.instr_drift_pct) > 15 ? "+MED" : "-");
+           abs_int(rpt.instr_drift_pct) > t_instr ? "+MED" : "-");
     printf("  %-26s  %8s  %6s\n", "Topology Root",
            rpt.topology_mutated ? "CHANGED" : "stable",
-           rpt.topology_mutated ? "+MED" : "-");
+           (rpt.topology_mutated && abs_int(rpt.instr_drift_pct) > t_topo_instr) ? "+MED" : "-");
     if (rpt.has_runtime) {
         printf("  %-26s  %+7d%%  %6s\n", "Runtime Call Volume",
                rpt.call_volume_change_pct,
-               abs_int(rpt.call_volume_change_pct) > 50 ? "+HIGH" : "-");
+               abs_int(rpt.call_volume_change_pct) > t_call ? "+HIGH" : "-");
         printf("  %-26s  %+6d fr  %6s\n", "Call Depth",
                rpt.depth_change_frames,
-               abs_int(rpt.depth_change_frames) > 3 ? "+LOW" : "-");
+               abs_int(rpt.depth_change_frames) > t_depth ? "+LOW" : "-");
         printf("  %-26s  %8s  %6s\n", "Hot Path",
                rpt.hot_path_shifted ? "SHIFTED" : "stable",
-               rpt.hot_path_shifted ? "+LOW" : "-");
+               (rpt.hot_path_shifted && abs_int(rpt.call_volume_change_pct) > t_hot_call) ? "+LOW" : "-");
     }
     printf("\n");
 
@@ -648,7 +690,8 @@ int main(int argc, char **argv) {
     if (out_path) {
         emit_attribution_json(out_path, &rpt, version_a, version_b,
                               static_a_path, static_b_path,
-                              runtime_a_path, runtime_b_path);
+                              runtime_a_path, runtime_b_path,
+                              t_reg, t_stack, t_instr, t_call, t_depth, t_topo_instr, t_hot_call);
         printf("\nAttribution report written to: %s\n", out_path);
     }
 

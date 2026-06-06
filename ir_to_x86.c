@@ -202,6 +202,15 @@ static void load_address_ra(FILE *out, const char *src, const char *reg,
 static const char *callee_regs[5] = {"%r12", "%r13", "%r14", "%r15", "%rbx"};
 static const int   callee_flag[5] = {PREG_R12, PREG_R13, PREG_R14, PREG_R15, PREG_RBX};
 
+static int is_unsigned_comparison(ir_func_t *fn, ir_node_t *n) {
+    if (ir_type_unsigned(n->type)) return 1;
+    ir_node_t *def1 = ir_find_def(fn, n, n->src1);
+    ir_node_t *def2 = ir_find_def(fn, n, n->src2);
+    if (def1 && ir_type_unsigned(def1->type)) return 1;
+    if (def2 && ir_type_unsigned(def2->type)) return 1;
+    return 0;
+}
+
 /* ── Main lowering entry point ───────────────────────────────────────── */
 
 void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
@@ -380,12 +389,13 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                             int off2 = get_or_create_var(n->src2);
                             fprintf(out, "    cmpq %d(%%rbp), %%rax\n", off2);
                         }
+                        int is_uns = is_unsigned_comparison(fn, n);
                         if      (n->op == IR_EQ) fprintf(out, "    sete %%al\n");
                         else if (n->op == IR_NE) fprintf(out, "    setne %%al\n");
-                        else if (n->op == IR_LT) fprintf(out, "    setl %%al\n");
-                        else if (n->op == IR_LE) fprintf(out, "    setle %%al\n");
-                        else if (n->op == IR_GT) fprintf(out, "    setg %%al\n");
-                        else if (n->op == IR_GE) fprintf(out, "    setge %%al\n");
+                        else if (n->op == IR_LT) fprintf(out, is_uns ? "    setb %%al\n" : "    setl %%al\n");
+                        else if (n->op == IR_LE) fprintf(out, is_uns ? "    setbe %%al\n" : "    setle %%al\n");
+                        else if (n->op == IR_GT) fprintf(out, is_uns ? "    seta %%al\n" : "    setg %%al\n");
+                        else if (n->op == IR_GE) fprintf(out, is_uns ? "    setae %%al\n" : "    setge %%al\n");
                         fprintf(out, "    movzbq %%al, %%rax\n");
                     }
                     store_result(out, n->dst, "%rax", ra);

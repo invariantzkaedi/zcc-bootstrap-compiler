@@ -91,7 +91,17 @@
           1
         ],
         "credits": 15
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Ancient_Marble_Temple_UFO_LOD1.glb",
+          "vertices": 62430,
+          "triangles": 80000,
+          "vram_mb": 66.7,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Ancient_Overgrown_Jungle_UFO.glb",
@@ -185,7 +195,25 @@
           2
         ],
         "credits": 30
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Ancient_Overgrown_Jungle_UFO_LOD1.glb",
+          "vertices": 69314,
+          "triangles": 80000,
+          "vram_mb": 67.01,
+          "vram_saved_mb": 0.0
+        },
+        {
+          "level": 2,
+          "file": "Ancient_Overgrown_Jungle_UFO_LOD2.glb",
+          "vertices": 26167,
+          "triangles": 25000,
+          "vram_mb": 65.04,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Astral_Emperor_Crown.glb",
@@ -278,7 +306,17 @@
           1
         ],
         "credits": 15
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Astral_Emperor_Crown_LOD1.glb",
+          "vertices": 59112,
+          "triangles": 79999,
+          "vram_mb": 66.55,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "BioOrganic_Symbiote_Weapon.glb",
@@ -462,7 +500,17 @@
           1
         ],
         "credits": 15
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Biomechanical_Abyssal_UFO_LOD1.glb",
+          "vertices": 61882,
+          "triangles": 79999,
+          "vram_mb": 66.67,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Celestial_Nebula_UFO.glb",
@@ -555,7 +603,17 @@
           1
         ],
         "credits": 15
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Celestial_Nebula_UFO_LOD1.glb",
+          "vertices": 49714,
+          "triangles": 80000,
+          "vram_mb": 66.12,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Chrono_Lich_Phylactery.glb",
@@ -739,7 +797,17 @@
           1
         ],
         "credits": 15
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Combat_UFO_LOD1.glb",
+          "vertices": 25793,
+          "triangles": 22316,
+          "vram_mb": 33.1,
+          "vram_saved_mb": 7.59
+        }
+      ]
     },
     {
       "file": "Conductor_Automaton.glb",
@@ -833,7 +901,25 @@
           2
         ],
         "credits": 30
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Conductor_Automaton_LOD1.glb",
+          "vertices": 36269,
+          "triangles": 28271,
+          "vram_mb": 33.58,
+          "vram_saved_mb": 11.25
+        },
+        {
+          "level": 2,
+          "file": "Conductor_Automaton_LOD2.glb",
+          "vertices": 33525,
+          "triangles": 25300,
+          "vram_mb": 33.45,
+          "vram_saved_mb": 11.38
+        }
+      ]
     },
     {
       "file": "Cosmic_Atlantis_Environment.glb",
@@ -1108,7 +1194,17 @@
           1
         ],
         "credits": 15
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Cyber_Hive_Drone_UFO_LOD1.glb",
+          "vertices": 49924,
+          "triangles": 79999,
+          "vram_mb": 66.13,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Cyberpunk_Yakuza_UFO.glb",
@@ -1201,7 +1297,17 @@
           1
         ],
         "credits": 15
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Cyberpunk_Yakuza_UFO_LOD1.glb",
+          "vertices": 54677,
+          "triangles": 80000,
+          "vram_mb": 66.34,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Dark_Lord.glb",
@@ -1295,7 +1401,25 @@
           2
         ],
         "credits": 30
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Dark_Lord_LOD1.glb",
+          "vertices": 34244,
+          "triangles": 29853,
+          "vram_mb": 33.49,
+          "vram_saved_mb": 11.53
+        },
+        {
+          "level": 2,
+          "file": "Dark_Lord_LOD2.glb",
+          "vertices": 23822,
+          "triangles": 25000,
+          "vram_mb": 64.93,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Eldritch_Void_Watcher_UFO.glb",
@@ -1480,7 +1604,25 @@
           2
         ],
         "credits": 30
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Epic_Bitcoin_LOD1.glb",
+          "vertices": 47306,
+          "triangles": 79999,
+          "vram_mb": 66.01,
+          "vram_saved_mb": 0.0
+        },
+        {
+          "level": 2,
+          "file": "Epic_Bitcoin_LOD2.glb",
+          "vertices": 17618,
+          "triangles": 24999,
+          "vram_mb": 64.65,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Epic_Yeti.glb",
@@ -1574,7 +1716,25 @@
           2
         ],
         "credits": 30
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Epic_Yeti_LOD1.glb",
+          "vertices": 63604,
+          "triangles": 80000,
+          "vram_mb": 66.75,
+          "vram_saved_mb": 0.0
+        },
+        {
+          "level": 2,
+          "file": "Epic_Yeti_LOD2.glb",
+          "vertices": 23737,
+          "triangles": 24999,
+          "vram_mb": 64.93,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Ethereal_Crystal_Mothership.glb",
@@ -1667,7 +1827,17 @@
           1
         ],
         "credits": 15
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Ethereal_Crystal_Mothership_LOD1.glb",
+          "vertices": 72486,
+          "triangles": 79999,
+          "vram_mb": 67.16,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Fractal_Heart_Geometry.glb",
@@ -1852,7 +2022,25 @@
           2
         ],
         "credits": 30
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "FullBody_Kitsune_Masterpiece_LOD1.glb",
+          "vertices": 65427,
+          "triangles": 80000,
+          "vram_mb": 66.84,
+          "vram_saved_mb": 0.0
+        },
+        {
+          "level": 2,
+          "file": "FullBody_Kitsune_Masterpiece_LOD2.glb",
+          "vertices": 24975,
+          "triangles": 25000,
+          "vram_mb": 64.98,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Heavy_Metal_Apocalypse_UFO.glb",
@@ -1946,7 +2134,25 @@
           2
         ],
         "credits": 30
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Heavy_Metal_Apocalypse_UFO_LOD1.glb",
+          "vertices": 58646,
+          "triangles": 80000,
+          "vram_mb": 66.52,
+          "vram_saved_mb": 0.0
+        },
+        {
+          "level": 2,
+          "file": "Heavy_Metal_Apocalypse_UFO_LOD2.glb",
+          "vertices": 22275,
+          "triangles": 24999,
+          "vram_mb": 64.86,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Hyper_Geometry_Chrono_Disc.glb",
@@ -2131,7 +2337,25 @@
           2
         ],
         "credits": 30
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Kitsune_Anime_3D_LOD1.glb",
+          "vertices": 62859,
+          "triangles": 80000,
+          "vram_mb": 66.72,
+          "vram_saved_mb": 0.0
+        },
+        {
+          "level": 2,
+          "file": "Kitsune_Anime_3D_LOD2.glb",
+          "vertices": 23700,
+          "triangles": 25000,
+          "vram_mb": 64.92,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Legendary_Astral_Dragon.glb",
@@ -2224,7 +2448,17 @@
           1
         ],
         "credits": 15
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Legendary_Astral_Dragon_LOD1.glb",
+          "vertices": 52895,
+          "triangles": 80000,
+          "vram_mb": 66.26,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Legendary_Cyber_Seraphim.glb",
@@ -2318,7 +2552,25 @@
           2
         ],
         "credits": 30
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Legendary_Cyber_Seraphim_LOD1.glb",
+          "vertices": 64836,
+          "triangles": 80000,
+          "vram_mb": 66.81,
+          "vram_saved_mb": 0.0
+        },
+        {
+          "level": 2,
+          "file": "Legendary_Cyber_Seraphim_LOD2.glb",
+          "vertices": 25164,
+          "triangles": 25000,
+          "vram_mb": 64.99,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Leviathan_WorldEater.glb",
@@ -2412,7 +2664,25 @@
           2
         ],
         "credits": 30
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Leviathan_WorldEater_LOD1.glb",
+          "vertices": 71236,
+          "triangles": 79999,
+          "vram_mb": 67.1,
+          "vram_saved_mb": 0.0
+        },
+        {
+          "level": 2,
+          "file": "Leviathan_WorldEater_LOD2.glb",
+          "vertices": 26292,
+          "triangles": 24999,
+          "vram_mb": 65.04,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Locomotive.glb",
@@ -2505,7 +2775,17 @@
           1
         ],
         "credits": 15
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Locomotive_LOD1.glb",
+          "vertices": 60928,
+          "triangles": 80000,
+          "vram_mb": 66.63,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Necro_Politan_Ghost_UFO.glb",
@@ -2598,7 +2878,17 @@
           1
         ],
         "credits": 15
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Necro_Politan_Ghost_UFO_LOD1.glb",
+          "vertices": 54235,
+          "triangles": 80000,
+          "vram_mb": 66.32,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Nurse_Character_3D.glb",
@@ -2692,7 +2982,25 @@
           2
         ],
         "credits": 30
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Nurse_Character_3D_LOD1.glb",
+          "vertices": 50969,
+          "triangles": 79999,
+          "vram_mb": 66.17,
+          "vram_saved_mb": 0.0
+        },
+        {
+          "level": 2,
+          "file": "Nurse_Character_3D_LOD2.glb",
+          "vertices": 20495,
+          "triangles": 25000,
+          "vram_mb": 64.78,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Obsidian_World_Eater_Engine.glb",
@@ -2967,7 +3275,17 @@
           1
         ],
         "credits": 15
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Rocket_SportsCar_LOD1.glb",
+          "vertices": 66944,
+          "triangles": 80000,
+          "vram_mb": 66.9,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Solaris_Flare_UFO.glb",
@@ -3061,7 +3379,25 @@
           2
         ],
         "credits": 30
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Solaris_Flare_UFO_LOD1.glb",
+          "vertices": 51764,
+          "triangles": 80000,
+          "vram_mb": 66.21,
+          "vram_saved_mb": 0.0
+        },
+        {
+          "level": 2,
+          "file": "Solaris_Flare_UFO_LOD2.glb",
+          "vertices": 21247,
+          "triangles": 25000,
+          "vram_mb": 64.81,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Steampunk_Aether_UFO.glb",
@@ -3155,7 +3491,25 @@
           2
         ],
         "credits": 30
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Steampunk_Aether_UFO_LOD1.glb",
+          "vertices": 54757,
+          "triangles": 79999,
+          "vram_mb": 66.35,
+          "vram_saved_mb": 0.0
+        },
+        {
+          "level": 2,
+          "file": "Steampunk_Aether_UFO_LOD2.glb",
+          "vertices": 20753,
+          "triangles": 24999,
+          "vram_mb": 64.79,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Viking_Runestone_UFO.glb",
@@ -3248,7 +3602,17 @@
           1
         ],
         "credits": 15
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Viking_Runestone_UFO_LOD1.glb",
+          "vertices": 50677,
+          "triangles": 79999,
+          "vram_mb": 66.16,
+          "vram_saved_mb": 0.0
+        }
+      ]
     },
     {
       "file": "Volcanic_Spiked_UFO.glb",
@@ -3341,7 +3705,17 @@
           1
         ],
         "credits": 15
-      }
+      },
+      "lods": [
+        {
+          "level": 1,
+          "file": "Volcanic_Spiked_UFO_LOD1.glb",
+          "vertices": 51288,
+          "triangles": 80000,
+          "vram_mb": 66.19,
+          "vram_saved_mb": 0.0
+        }
+      ]
     }
   ],
   "count": 36,

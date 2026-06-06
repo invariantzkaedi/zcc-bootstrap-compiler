@@ -120,6 +120,10 @@ static void encode_movq(Segment *seg, int src_reg, int dst_reg, int is_mem_src, 
             seg_append(seg, &rex, 1);
             seg_append(seg, &opcode, 1);
             seg_append(seg, &modrm, 1);
+            if ((src_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d = (unsigned char)disp;
             seg_append(seg, &d, 1);
         } else {
@@ -127,6 +131,10 @@ static void encode_movq(Segment *seg, int src_reg, int dst_reg, int is_mem_src, 
             seg_append(seg, &rex, 1);
             seg_append(seg, &opcode, 1);
             seg_append(seg, &modrm, 1);
+            if ((src_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d[4];
             d[0] = disp & 0xFF;
             d[1] = (disp >> 8) & 0xFF;
@@ -141,6 +149,10 @@ static void encode_movq(Segment *seg, int src_reg, int dst_reg, int is_mem_src, 
             seg_append(seg, &rex, 1);
             seg_append(seg, &opcode, 1);
             seg_append(seg, &modrm, 1);
+            if ((dst_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d = (unsigned char)disp;
             seg_append(seg, &d, 1);
         } else {
@@ -148,6 +160,10 @@ static void encode_movq(Segment *seg, int src_reg, int dst_reg, int is_mem_src, 
             seg_append(seg, &rex, 1);
             seg_append(seg, &opcode, 1);
             seg_append(seg, &modrm, 1);
+            if ((dst_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d[4];
             d[0] = disp & 0xFF;
             d[1] = (disp >> 8) & 0xFF;
@@ -177,6 +193,10 @@ static void encode_leaq(Segment *seg, int src_reg, int dst_reg, long long disp) 
         seg_append(seg, &rex, 1);
         seg_append(seg, &opcode, 1);
         seg_append(seg, &modrm, 1);
+        if ((src_reg & 7) == 4) {
+            unsigned char sib = 0x24;
+            seg_append(seg, &sib, 1);
+        }
         unsigned char d = (unsigned char)disp;
         seg_append(seg, &d, 1);
     } else {
@@ -184,6 +204,10 @@ static void encode_leaq(Segment *seg, int src_reg, int dst_reg, long long disp) 
         seg_append(seg, &rex, 1);
         seg_append(seg, &opcode, 1);
         seg_append(seg, &modrm, 1);
+        if ((src_reg & 7) == 4) {
+            unsigned char sib = 0x24;
+            seg_append(seg, &sib, 1);
+        }
         unsigned char d[4];
         d[0] = disp & 0xFF;
         d[1] = (disp >> 8) & 0xFF;
@@ -287,6 +311,21 @@ static void encode_call(Segment *seg, const char *target) {
     
     unsigned char zero[4] = {0, 0, 0, 0};
     seg_append(seg, zero, 4);
+}
+
+/* CG-FNPTR-001 fix: register-indirect CALL via FF /2 (ModRM reg)
+ * Encodes: call *%rN  →  [REX.B] 0xFF 0xD0|(N&7)
+ * No relocation entry — address is in the register at runtime. */
+static void encode_call_indirect_reg(Segment *seg, int reg) {
+    if (reg & 8) {
+        /* REX.B needed for r8-r15 */
+        unsigned char rex = 0x41;
+        seg_append(seg, &rex, 1);
+    }
+    unsigned char ff  = 0xff;
+    unsigned char mrm = 0xd0 | (reg & 7); /* ModRM: mod=11, reg=2 (/2), rm=reg */
+    seg_append(seg, &ff,  1);
+    seg_append(seg, &mrm, 1);
 }
 
 static void encode_binop(Segment *seg, const char *op, int src_reg, int dst_reg) {
@@ -412,6 +451,10 @@ static void encode_movl(Segment *seg, int src_reg, int dst_reg, int is_mem_src, 
             if (rex != 0x40) seg_append(seg, &rex, 1);
             seg_append(seg, &opcode, 1);
             seg_append(seg, &modrm, 1);
+            if ((src_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d = (unsigned char)disp;
             seg_append(seg, &d, 1);
         } else {
@@ -419,6 +462,10 @@ static void encode_movl(Segment *seg, int src_reg, int dst_reg, int is_mem_src, 
             if (rex != 0x40) seg_append(seg, &rex, 1);
             seg_append(seg, &opcode, 1);
             seg_append(seg, &modrm, 1);
+            if ((src_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d[4];
             d[0] = disp & 0xFF; d[1] = (disp >> 8) & 0xFF;
             d[2] = (disp >> 16) & 0xFF; d[3] = (disp >> 24) & 0xFF;
@@ -431,6 +478,10 @@ static void encode_movl(Segment *seg, int src_reg, int dst_reg, int is_mem_src, 
             if (rex != 0x40) seg_append(seg, &rex, 1);
             seg_append(seg, &opcode, 1);
             seg_append(seg, &modrm, 1);
+            if ((dst_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d = (unsigned char)disp;
             seg_append(seg, &d, 1);
         } else {
@@ -438,6 +489,10 @@ static void encode_movl(Segment *seg, int src_reg, int dst_reg, int is_mem_src, 
             if (rex != 0x40) seg_append(seg, &rex, 1);
             seg_append(seg, &opcode, 1);
             seg_append(seg, &modrm, 1);
+            if ((dst_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d[4];
             d[0] = disp & 0xFF; d[1] = (disp >> 8) & 0xFF;
             d[2] = (disp >> 16) & 0xFF; d[3] = (disp >> 24) & 0xFF;
@@ -482,6 +537,10 @@ static void encode_movzwq(Segment *seg, int src_reg, int dst_reg, int is_mem_src
             seg_append(seg, &rex, 1);
             seg_append(seg, opcode, 2);
             seg_append(seg, &modrm, 1);
+            if ((src_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d = (unsigned char)disp;
             seg_append(seg, &d, 1);
         } else {
@@ -489,6 +548,10 @@ static void encode_movzwq(Segment *seg, int src_reg, int dst_reg, int is_mem_src
             seg_append(seg, &rex, 1);
             seg_append(seg, opcode, 2);
             seg_append(seg, &modrm, 1);
+            if ((src_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d[4];
             d[0] = disp & 0xFF; d[1] = (disp >> 8) & 0xFF;
             d[2] = (disp >> 16) & 0xFF; d[3] = (disp >> 24) & 0xFF;
@@ -548,6 +611,10 @@ static void encode_movb(Segment *seg, int src_reg, int dst_reg, int is_mem_src, 
             if (rex != 0x40 || dst_reg >= 4 || src_reg >= 4) seg_append(seg, &rex, 1);
             seg_append(seg, &opcode, 1);
             seg_append(seg, &modrm, 1);
+            if ((src_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d = (unsigned char)disp;
             seg_append(seg, &d, 1);
         } else {
@@ -555,6 +622,10 @@ static void encode_movb(Segment *seg, int src_reg, int dst_reg, int is_mem_src, 
             if (rex != 0x40 || dst_reg >= 4 || src_reg >= 4) seg_append(seg, &rex, 1);
             seg_append(seg, &opcode, 1);
             seg_append(seg, &modrm, 1);
+            if ((src_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d[4];
             d[0] = disp & 0xFF; d[1] = (disp >> 8) & 0xFF;
             d[2] = (disp >> 16) & 0xFF; d[3] = (disp >> 24) & 0xFF;
@@ -567,6 +638,10 @@ static void encode_movb(Segment *seg, int src_reg, int dst_reg, int is_mem_src, 
             if (rex != 0x40 || src_reg >= 4 || dst_reg >= 4) seg_append(seg, &rex, 1);
             seg_append(seg, &opcode, 1);
             seg_append(seg, &modrm, 1);
+            if ((dst_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d = (unsigned char)disp;
             seg_append(seg, &d, 1);
         } else {
@@ -574,6 +649,10 @@ static void encode_movb(Segment *seg, int src_reg, int dst_reg, int is_mem_src, 
             if (rex != 0x40 || src_reg >= 4 || dst_reg >= 4) seg_append(seg, &rex, 1);
             seg_append(seg, &opcode, 1);
             seg_append(seg, &modrm, 1);
+            if ((dst_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d[4];
             d[0] = disp & 0xFF; d[1] = (disp >> 8) & 0xFF;
             d[2] = (disp >> 16) & 0xFF; d[3] = (disp >> 24) & 0xFF;
@@ -611,6 +690,10 @@ static void encode_movw(Segment *seg, int src_reg, int dst_reg, int is_mem_src, 
             if (rex != 0x40) seg_append(seg, &rex, 1);
             seg_append(seg, &opcode, 1);
             seg_append(seg, &modrm, 1);
+            if ((src_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d = (unsigned char)disp;
             seg_append(seg, &d, 1);
         } else {
@@ -618,6 +701,10 @@ static void encode_movw(Segment *seg, int src_reg, int dst_reg, int is_mem_src, 
             if (rex != 0x40) seg_append(seg, &rex, 1);
             seg_append(seg, &opcode, 1);
             seg_append(seg, &modrm, 1);
+            if ((src_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d[4];
             d[0] = disp & 0xFF; d[1] = (disp >> 8) & 0xFF;
             d[2] = (disp >> 16) & 0xFF; d[3] = (disp >> 24) & 0xFF;
@@ -630,6 +717,10 @@ static void encode_movw(Segment *seg, int src_reg, int dst_reg, int is_mem_src, 
             if (rex != 0x40) seg_append(seg, &rex, 1);
             seg_append(seg, &opcode, 1);
             seg_append(seg, &modrm, 1);
+            if ((dst_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d = (unsigned char)disp;
             seg_append(seg, &d, 1);
         } else {
@@ -637,6 +728,10 @@ static void encode_movw(Segment *seg, int src_reg, int dst_reg, int is_mem_src, 
             if (rex != 0x40) seg_append(seg, &rex, 1);
             seg_append(seg, &opcode, 1);
             seg_append(seg, &modrm, 1);
+            if ((dst_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d[4];
             d[0] = disp & 0xFF; d[1] = (disp >> 8) & 0xFF;
             d[2] = (disp >> 16) & 0xFF; d[3] = (disp >> 24) & 0xFF;
@@ -665,6 +760,10 @@ static void encode_movswq(Segment *seg, int src_reg, int dst_reg, int is_mem_src
             seg_append(seg, &rex, 1);
             seg_append(seg, opcode, 2);
             seg_append(seg, &modrm, 1);
+            if ((src_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d = (unsigned char)disp;
             seg_append(seg, &d, 1);
         } else {
@@ -672,6 +771,10 @@ static void encode_movswq(Segment *seg, int src_reg, int dst_reg, int is_mem_src
             seg_append(seg, &rex, 1);
             seg_append(seg, opcode, 2);
             seg_append(seg, &modrm, 1);
+            if ((src_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d[4];
             d[0] = disp & 0xFF;
             d[1] = (disp >> 8) & 0xFF;
@@ -701,6 +804,10 @@ static void encode_movzbl(Segment *seg, int src_reg, int dst_reg, int is_mem_src
             if (rex != 0x40) seg_append(seg, &rex, 1);
             seg_append(seg, opcode, 2);
             seg_append(seg, &modrm, 1);
+            if ((src_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d = (unsigned char)disp;
             seg_append(seg, &d, 1);
         } else {
@@ -708,6 +815,10 @@ static void encode_movzbl(Segment *seg, int src_reg, int dst_reg, int is_mem_src
             if (rex != 0x40) seg_append(seg, &rex, 1);
             seg_append(seg, opcode, 2);
             seg_append(seg, &modrm, 1);
+            if ((src_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d[4];
             d[0] = disp & 0xFF;
             d[1] = (disp >> 8) & 0xFF;
@@ -737,6 +848,10 @@ static void encode_movzwl(Segment *seg, int src_reg, int dst_reg, int is_mem_src
             if (rex != 0x40) seg_append(seg, &rex, 1);
             seg_append(seg, opcode, 2);
             seg_append(seg, &modrm, 1);
+            if ((src_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d = (unsigned char)disp;
             seg_append(seg, &d, 1);
         } else {
@@ -744,6 +859,10 @@ static void encode_movzwl(Segment *seg, int src_reg, int dst_reg, int is_mem_src
             if (rex != 0x40) seg_append(seg, &rex, 1);
             seg_append(seg, opcode, 2);
             seg_append(seg, &modrm, 1);
+            if ((src_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d[4];
             d[0] = disp & 0xFF; d[1] = (disp >> 8) & 0xFF;
             d[2] = (disp >> 16) & 0xFF; d[3] = (disp >> 24) & 0xFF;
@@ -771,6 +890,10 @@ static void encode_movsbq(Segment *seg, int src_reg, int dst_reg, int is_mem_src
             seg_append(seg, &rex, 1);
             seg_append(seg, opcode, 2);
             seg_append(seg, &modrm, 1);
+            if ((src_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d = (unsigned char)disp;
             seg_append(seg, &d, 1);
         } else {
@@ -778,6 +901,10 @@ static void encode_movsbq(Segment *seg, int src_reg, int dst_reg, int is_mem_src
             seg_append(seg, &rex, 1);
             seg_append(seg, opcode, 2);
             seg_append(seg, &modrm, 1);
+            if ((src_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d[4];
             d[0] = disp & 0xFF;
             d[1] = (disp >> 8) & 0xFF;
@@ -807,6 +934,10 @@ static void encode_movzbq(Segment *seg, int src_reg, int dst_reg, int is_mem_src
             seg_append(seg, &rex, 1);
             seg_append(seg, opcode, 2);
             seg_append(seg, &modrm, 1);
+            if ((src_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d = (unsigned char)disp;
             seg_append(seg, &d, 1);
         } else {
@@ -814,6 +945,10 @@ static void encode_movzbq(Segment *seg, int src_reg, int dst_reg, int is_mem_src
             seg_append(seg, &rex, 1);
             seg_append(seg, opcode, 2);
             seg_append(seg, &modrm, 1);
+            if ((src_reg & 7) == 4) {
+                unsigned char sib = 0x24;
+                seg_append(seg, &sib, 1);
+            }
             unsigned char d[4];
             d[0] = disp & 0xFF;
             d[1] = (disp >> 8) & 0xFF;
@@ -1095,7 +1230,19 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
             }
         } else if (strcmp(mnemonic, "call") == 0) {
             char *target = args_start ? trim(args_start) : "";
-            encode_call(&text_seg, target);
+            /* CG-FNPTR-001: detect register-indirect call "call *%rN"
+             * These need FF/2 ModRM encoding, not a PLT32 relocation. */
+            if (target[0] == '*') {
+                int ireg = parse_reg(target + 1); /* skip '*', parse %rN */
+                if (ireg >= 0) {
+                    encode_call_indirect_reg(&text_seg, ireg);
+                } else {
+                    /* Memory-indirect or unrecognised form — fall back */
+                    encode_call(&text_seg, target);
+                }
+            } else {
+                encode_call(&text_seg, target);
+            }
         } else if (mnemonic[0] == 'j') {
             char *target = args_start ? trim(args_start) : "";
             encode_jump(&text_seg, mnemonic, target);
@@ -1498,7 +1645,7 @@ int main(int argc, char **argv) {
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--use-system-as") == 0) {
             use_system_as = 1;
-        } else if (strcmp(argv[i], "-c") == 0) {
+        } else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "-emit-obj") == 0) {
             compile_only = 1;
         } else if (strcmp(argv[i], "-o") == 0) {
             if (i + 1 < argc) {

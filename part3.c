@@ -934,7 +934,38 @@ Type *parse_type(Compiler *cc) {
 
 Node *parse_assign(Compiler *cc);
 
+static long long force_truncate(long long v, Type *type) {
+    if (!type) return v;
+    switch (type->kind) {
+        case TY_CHAR:      return (long long)(char)v;
+        case TY_UCHAR:     return (long long)(unsigned char)v;
+        case TY_SHORT:     return (long long)(short)v;
+        case TY_USHORT:    return (long long)(unsigned short)v;
+        case TY_INT:       return (long long)(int)v;
+        case TY_UINT:      return (long long)(unsigned int)v;
+        case TY_LONG:      return v;
+        case TY_ULONG:     return (long long)(unsigned long long)v;
+        case TY_LONGLONG:  return (long long)v;
+        case TY_ULONGLONG: return (long long)(unsigned long long)v;
+        default:           return v;
+    }
+}
+
+static long long eval_const_expr_raw(Node *n);
+
+static int is_unsigned_cmp(Node *n) {
+    if (!n) return 0;
+    return (n->lhs && n->lhs->type && is_unsigned_type(n->lhs->type)) ||
+           (n->rhs && n->rhs->type && is_unsigned_type(n->rhs->type));
+}
+
 static long long eval_const_expr(Node *n) {
+    if (!n) return 0;
+    long long val = eval_const_expr_raw(n);
+    return force_truncate(val, n->type);
+}
+
+static long long eval_const_expr_raw(Node *n) {
     if (!n) return 0;
     if (n->kind == ND_NUM) return n->int_val;
     if (n->kind == ND_ADD) return eval_const_expr(n->lhs) + eval_const_expr(n->rhs);
@@ -949,30 +980,141 @@ static long long eval_const_expr(Node *n) {
         return r ? eval_const_expr(n->lhs) % r : 0;
     }
     if (n->kind == ND_SHL) return eval_const_expr(n->lhs) << eval_const_expr(n->rhs);
-    if (n->kind == ND_SHR) return eval_const_expr(n->lhs) >> eval_const_expr(n->rhs);
+    if (n->kind == ND_SHR) {
+        /* CG-CFOLD-UNSIGNED-001: unsigned types must use logical (zero-filling)
+         * right shift, not arithmetic (sign-filling). Use unsigned long long.
+         * Matches the same kind set as node_type_unsigned() in part1.c. */
+        int lhs_kind = n->lhs && n->lhs->type ? n->lhs->type->kind : -1;
+        int is_unsigned = (lhs_kind == TY_UCHAR || lhs_kind == TY_USHORT ||
+                           lhs_kind == TY_UINT  || lhs_kind == TY_ULONG  ||
+                           lhs_kind == TY_ULONGLONG);
+        if (!is_unsigned && n->type) {
+            int tk = n->type->kind;
+            is_unsigned = (tk == TY_UCHAR || tk == TY_USHORT ||
+                           tk == TY_UINT  || tk == TY_ULONG  ||
+                           tk == TY_ULONGLONG);
+        }
+        if (is_unsigned)
+            return (long long)((unsigned long long)eval_const_expr(n->lhs) >>
+                               (unsigned long long)eval_const_expr(n->rhs));
+        return eval_const_expr(n->lhs) >> eval_const_expr(n->rhs);
+    }
     if (n->kind == ND_BAND) return eval_const_expr(n->lhs) & eval_const_expr(n->rhs);
     if (n->kind == ND_BOR) return eval_const_expr(n->lhs) | eval_const_expr(n->rhs);
     if (n->kind == ND_BXOR) return eval_const_expr(n->lhs) ^ eval_const_expr(n->rhs);
-    if (n->kind == ND_EQ)   return eval_const_expr(n->lhs) == eval_const_expr(n->rhs);
-    if (n->kind == ND_NE)   return eval_const_expr(n->lhs) != eval_const_expr(n->rhs);
-    if (n->kind == ND_LT)   return eval_const_expr(n->lhs) <  eval_const_expr(n->rhs);
-    if (n->kind == ND_LE)   return eval_const_expr(n->lhs) <= eval_const_expr(n->rhs);
-    if (n->kind == ND_GT)   return eval_const_expr(n->lhs) >  eval_const_expr(n->rhs);
-    if (n->kind == ND_GE)   return eval_const_expr(n->lhs) >= eval_const_expr(n->rhs);
+    if (n->kind == ND_EQ) {
+        if (is_unsigned_cmp(n))
+            return (unsigned long long)eval_const_expr(n->lhs) == (unsigned long long)eval_const_expr(n->rhs);
+        return eval_const_expr(n->lhs) == eval_const_expr(n->rhs);
+    }
+    if (n->kind == ND_NE) {
+        if (is_unsigned_cmp(n))
+            return (unsigned long long)eval_const_expr(n->lhs) != (unsigned long long)eval_const_expr(n->rhs);
+        return eval_const_expr(n->lhs) != eval_const_expr(n->rhs);
+    }
+    if (n->kind == ND_LT) {
+        if (is_unsigned_cmp(n))
+            return (unsigned long long)eval_const_expr(n->lhs) < (unsigned long long)eval_const_expr(n->rhs);
+        return eval_const_expr(n->lhs) < eval_const_expr(n->rhs);
+    }
+    if (n->kind == ND_LE) {
+        if (is_unsigned_cmp(n))
+            return (unsigned long long)eval_const_expr(n->lhs) <= (unsigned long long)eval_const_expr(n->rhs);
+        return eval_const_expr(n->lhs) <= eval_const_expr(n->rhs);
+    }
+    if (n->kind == ND_GT) {
+        if (is_unsigned_cmp(n))
+            return (unsigned long long)eval_const_expr(n->lhs) > (unsigned long long)eval_const_expr(n->rhs);
+        return eval_const_expr(n->lhs) > eval_const_expr(n->rhs);
+    }
+    if (n->kind == ND_GE) {
+        if (is_unsigned_cmp(n))
+            return (unsigned long long)eval_const_expr(n->lhs) >= (unsigned long long)eval_const_expr(n->rhs);
+        return eval_const_expr(n->lhs) >= eval_const_expr(n->rhs);
+    }
     if (n->kind == ND_LAND) return eval_const_expr(n->lhs) && eval_const_expr(n->rhs);
     if (n->kind == ND_LOR)  return eval_const_expr(n->lhs) || eval_const_expr(n->rhs);
-    if (n->kind == ND_CAST) return eval_const_expr(n->lhs);
-    /* Unary operators — critical for negative switch cases like case (-15): */
-    if (n->kind == ND_NEG)  return -eval_const_expr(n->lhs);
-    if (n->kind == ND_BNOT) return ~eval_const_expr(n->lhs);
+    if (n->kind == ND_CAST) {
+        /* CG-CFOLD-CAST-TRUNC-001: stripping ND_CAST without truncation bleeds
+         * 64-bit values through smaller-typed casts. Apply C-semantics truncation
+         * based on the target type so that, e.g., (unsigned int)(~462LL) correctly
+         * yields 4294966833, not 0xFFFFFFFFFFFFFE31. */
+        long long v = eval_const_expr(n->lhs);
+        if (!n->type) return v;
+        switch (n->type->kind) {
+            case TY_CHAR:      return (long long)(char)v;
+            case TY_UCHAR:     return (long long)(unsigned char)v;
+            case TY_SHORT:     return (long long)(short)v;
+            case TY_USHORT:    return (long long)(unsigned short)v;
+            case TY_INT:       return (long long)(int)v;
+            case TY_UINT:      return (long long)(unsigned int)v;
+            case TY_LONG:      return v;
+            case TY_ULONG:     return (long long)(unsigned long long)v;
+            case TY_LONGLONG:  return (long long)v;
+            case TY_ULONGLONG: return (long long)(unsigned long long)v;
+            default:           return v;
+        }
+    }
+    /* Unary operators — critical for negative switch cases like case (-15):
+     * CG-CFOLD-NEG-BNOT-UNSIGNED-002: for unsigned operand types, the result
+     * must wrap at the operand's bit width (e.g., -(9200u) = 4294958096, not -9200).
+     * Check lhs type and apply C-width truncation before returning. */
+    if (n->kind == ND_NEG) {
+        long long v = -eval_const_expr(n->lhs);
+        if (n->lhs && n->lhs->type) switch (n->lhs->type->kind) {
+            case TY_UCHAR:     return (long long)(unsigned char)v;
+            case TY_USHORT:    return (long long)(unsigned short)v;
+            case TY_UINT:      return (long long)(unsigned int)v;
+            case TY_ULONG:     return (long long)(unsigned long long)v;
+            case TY_ULONGLONG: return (long long)(unsigned long long)v;
+            default: break;
+        }
+        return v;
+    }
+    if (n->kind == ND_BNOT) {
+        long long v = ~eval_const_expr(n->lhs);
+        if (n->lhs && n->lhs->type) switch (n->lhs->type->kind) {
+            case TY_UCHAR:     return (long long)(unsigned char)v;
+            case TY_USHORT:    return (long long)(unsigned short)v;
+            case TY_UINT:      return (long long)(unsigned int)v;
+            case TY_ULONG:     return (long long)(unsigned long long)v;
+            case TY_ULONGLONG: return (long long)(unsigned long long)v;
+            default: break;
+        }
+        return v;
+    }
     if (n->kind == ND_LNOT) return !eval_const_expr(n->lhs);
     /* Relational and logical operators (commit 3cc64db6 — re-applied from history) */
-    if (n->kind == ND_EQ)   return eval_const_expr(n->lhs) == eval_const_expr(n->rhs);
-    if (n->kind == ND_NE)   return eval_const_expr(n->lhs) != eval_const_expr(n->rhs);
-    if (n->kind == ND_LT)   return eval_const_expr(n->lhs) <  eval_const_expr(n->rhs);
-    if (n->kind == ND_LE)   return eval_const_expr(n->lhs) <= eval_const_expr(n->rhs);
-    if (n->kind == ND_GT)   return eval_const_expr(n->lhs) >  eval_const_expr(n->rhs);
-    if (n->kind == ND_GE)   return eval_const_expr(n->lhs) >= eval_const_expr(n->rhs);
+    if (n->kind == ND_EQ) {
+        if (is_unsigned_cmp(n))
+            return (unsigned long long)eval_const_expr(n->lhs) == (unsigned long long)eval_const_expr(n->rhs);
+        return eval_const_expr(n->lhs) == eval_const_expr(n->rhs);
+    }
+    if (n->kind == ND_NE) {
+        if (is_unsigned_cmp(n))
+            return (unsigned long long)eval_const_expr(n->lhs) != (unsigned long long)eval_const_expr(n->rhs);
+        return eval_const_expr(n->lhs) != eval_const_expr(n->rhs);
+    }
+    if (n->kind == ND_LT) {
+        if (is_unsigned_cmp(n))
+            return (unsigned long long)eval_const_expr(n->lhs) < (unsigned long long)eval_const_expr(n->rhs);
+        return eval_const_expr(n->lhs) < eval_const_expr(n->rhs);
+    }
+    if (n->kind == ND_LE) {
+        if (is_unsigned_cmp(n))
+            return (unsigned long long)eval_const_expr(n->lhs) <= (unsigned long long)eval_const_expr(n->rhs);
+        return eval_const_expr(n->lhs) <= eval_const_expr(n->rhs);
+    }
+    if (n->kind == ND_GT) {
+        if (is_unsigned_cmp(n))
+            return (unsigned long long)eval_const_expr(n->lhs) > (unsigned long long)eval_const_expr(n->rhs);
+        return eval_const_expr(n->lhs) > eval_const_expr(n->rhs);
+    }
+    if (n->kind == ND_GE) {
+        if (is_unsigned_cmp(n))
+            return (unsigned long long)eval_const_expr(n->lhs) >= (unsigned long long)eval_const_expr(n->rhs);
+        return eval_const_expr(n->lhs) >= eval_const_expr(n->rhs);
+    }
     if (n->kind == ND_LAND) return eval_const_expr(n->lhs) && eval_const_expr(n->rhs);
     if (n->kind == ND_LOR)  return eval_const_expr(n->lhs) || eval_const_expr(n->rhs);
     /* Ternary constant folding — enables (expr==0 ? 1 : expr) denominator patterns */
@@ -1380,18 +1522,35 @@ Node *parse_primary(Compiler *cc) {
 
     if (cc->tk == TK_NUM) {
         n = node_num(cc, cc->tk_val, line);
-        if (cc->tk_text[0] == 'U') {
-             if (cc->tk_val <= 4294967295ULL) {
-                 n->type = cc->ty_uint;
-             } else {
-                 n->type = cc->ty_ulong;
-             }
-        }
+        int is_hex_or_oct = (cc->tk_text[2] == 'H');
         if (cc->tk_text[1] == 'L') {
              if (cc->tk_text[0] == 'U') {
                  n->type = cc->ty_ulong;
              } else {
                  n->type = cc->ty_long;
+             }
+        } else if (cc->tk_text[0] == 'U') {
+             if (cc->tk_val <= 4294967295ULL) {
+                 n->type = cc->ty_uint;
+             } else {
+                 n->type = cc->ty_ulong;
+             }
+        } else {
+             /* unsuffixed literal */
+             if (is_hex_or_oct) {
+                 if (cc->tk_val <= 2147483647LL) {
+                     n->type = cc->ty_int;
+                 } else if (cc->tk_val <= 4294967295ULL) {
+                     n->type = cc->ty_uint;
+                 } else {
+                     n->type = cc->ty_ulong;
+                 }
+             } else {
+                 if (cc->tk_val <= 2147483647LL) {
+                     n->type = cc->ty_int;
+                 } else {
+                     n->type = cc->ty_long;
+                 }
              }
         }
         next_token(cc);
@@ -3632,7 +3791,7 @@ typedef struct {
     int line;
     int col;
     int tk;
-    long tk_val;
+    long long tk_val;
     char tk_text[MAX_IDENT];
     char tk_str[MAX_STR];
     int tk_str_len;
@@ -3640,7 +3799,7 @@ typedef struct {
     int tk_col;
     int has_peek;
     int peek_tk;
-    long peek_val;
+    long long peek_val;
     char peek_text[MAX_IDENT];
     char peek_str[MAX_STR];
     int peek_str_len;

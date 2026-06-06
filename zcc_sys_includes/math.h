@@ -27,9 +27,15 @@ double ldexp(double x, int exp);
 double sinh(double x);
 double cosh(double x);
 double tanh(double x);
+#ifndef isnan
 int    isnan(double x);
+#endif
+#ifndef isinf
 int    isinf(double x);
+#endif
+#ifndef isfinite
 int    isfinite(double x);
+#endif
 /* Float variants — required by Csmith and general C code */
 float  ldexpf(float x, int exp);
 float  frexpf(float x, int *exp);

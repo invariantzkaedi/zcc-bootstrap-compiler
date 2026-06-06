@@ -9,7 +9,7 @@ LDFLAGS = -T linker.ld
 
 .PHONY: all clean stage2 stage3 test verify
 
-all: zkernel.elf
+all: zkernel.elf ../scratch/topology_styled.dot
 
 boot.o: boot.S
 	$(CC) $(CFLAGS_BOOT) boot.S -o boot.o
@@ -19,6 +19,12 @@ kmain.o: kmain.c
 
 zkernel.elf: boot.o kmain.o linker.ld
 	ld -T linker.ld -o zkernel.elf boot.o kmain.o
+
+../tools/zcc_topology_auditor: ../tools/zcc_topology_auditor.c ../tools/zcc_elf_parser.h ../tools/zcc_sha256.h
+	gcc -O2 -I../tools ../tools/zcc_topology_auditor.c -o ../tools/zcc_topology_auditor
+
+../scratch/topology_styled.dot: boot.o kmain.o ../tools/zcc_topology_auditor
+	../tools/zcc_topology_auditor --dot boot.o kmain.o > ../scratch/topology_styled.dot
 
 stage2: boot.o kmain.c linker.ld
 	$(ZCC2) $(CFLAGS_KMAIN) kmain.c -o kmain2.o

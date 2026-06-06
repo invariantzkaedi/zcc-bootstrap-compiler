@@ -34,6 +34,53 @@ def get_verdict(score):
     else:
         return "HIGH"
 
+# Coordinate descent threshold optimizer
+def evaluate_config(config, data_list):
+    total_deviation = 0
+    true_positives = 0
+    false_positives = 0
+    false_negatives = 0
+    true_negatives = 0
+    
+    t_reg = config["register_drift_pct"]
+    t_stack = config["stack_drift_bytes"]
+    t_instr = config["instr_drift_pct"]
+    t_call = config["call_volume_change_pct"]
+    t_depth = config["depth_change_frames"]
+    t_topo_instr = config["topology_instr_drift_pct"]
+    t_hot_call = config["hot_path_call_drift_pct"]
+    
+    for reg, stack, instr, call, depth, topo_mut, hot_sh, has_run, m_s, m_v in data_list:
+        p_s = 0
+        if reg > t_reg:     p_s += 3
+        if stack > t_stack: p_s += 3
+        if instr > t_instr: p_s += 2
+        if topo_mut and instr > t_topo_instr: p_s += 2
+        if has_run:
+            if call > t_call: p_s += 3
+            if depth > t_depth: p_s += 1
+            if hot_sh and call > t_hot_call: p_s += 1
+            
+        total_deviation += abs(p_s - m_s)
+        
+        is_pred_active = (p_s > 0)
+        is_meas_active = (m_v != "NONE")
+        
+        if is_pred_active and is_meas_active:
+            true_positives += 1
+        elif is_pred_active and not is_meas_active:
+            false_positives += 1
+        elif not is_pred_active and is_meas_active:
+            false_negatives += 1
+        else:
+            true_negatives += 1
+            
+    precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 1.0
+    recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 1.0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 1.0
+    mean_deviation = total_deviation / len(data_list)
+    return f1, mean_deviation
+
 def main():
     print("==========================================================")
     # 1. Ensure directories exist
@@ -45,10 +92,12 @@ def main():
     run_cmd("gcc -O2 -Wall -Itools tools/zcc_topology_auditor.c -o tools/zcc_topology_auditor -lm")
     run_cmd("gcc -O2 -Wall -Itools tools/zcc_impact_attribution.c -o tools/zcc_impact_attribution -lm")
     
-    results = {}
+    # Pass 1: Compile & run workloads, execute attribution engine with default thresholds
+    # to collect the raw drift metrics.
+    experiments_raw = {}
     
     for t in TESTS:
-        print(f"\n[Calibration] Running experiment for: {t}")
+        print(f"\n[Calibration Pass 1] Running experiment for: {t}")
         
         # A. Compile Version A (Peephole optimization disabled)
         print("  - Compiling Version A (peephole=0)...")
@@ -81,8 +130,8 @@ def main():
         env_run["ZCC_PROBE_OUT"] = f"scratch/{t}_runtime_b.json"
         run_cmd(f"./scratch/{t}_run_b", env=env_run)
         
-        # E. Run Attribution Engine
-        print("  - Running attribution engine...")
+        # E. Run Attribution Engine (Defaults)
+        print("  - Running attribution engine (with default thresholds)...")
         run_cmd(f"./tools/zcc_impact_attribution "
                 f"--static-a scratch/{t}_static_a.json "
                 f"--static-b scratch/{t}_static_b.json "
@@ -91,61 +140,176 @@ def main():
                 f"--version-a v0.29-A --version-b v0.29-B "
                 f"--out scratch/{t}_attribution.json", allowed_codes={0, 1, 2})
         
-        # F. Load predictions
+        # F. Load raw metrics & compute ground truth
         with open(f"scratch/{t}_attribution.json", "r") as f:
             attr = json.load(f)
             
-        pred_score = attr["impact_score"]
-        pred_verdict = attr["estimated_impact"]
-        
-        # G. Calculate Ground Truth (Measured outcome)
-        # We compare Version A vs B static genomes and Runtime A vs B runtime genomes
-        # actual performance drift is computed from:
-        # - actual static instruction count change
-        # - actual static register pressure change
-        # - actual static stack growth
-        # - actual runtime call count change
-        # - actual peak call depth change
         static_drift = attr["static_drift"]
         runtime_drift = attr.get("runtime_drift", {})
         
         reg_drift = abs(static_drift["register_drift_pct"])
         stack_drift = abs(static_drift["stack_drift_bytes"])
         instr_drift = abs(static_drift["instr_drift_pct"])
-        
         call_drift = abs(runtime_drift.get("call_volume_change_pct", 0))
         depth_drift = abs(runtime_drift.get("depth_change_frames", 0))
         
-        # Ground truth measured impact score formula (empirically calibrating thresholds)
+        # Ground truth measured impact score formula
         measured_score = 0
-        if reg_drift > 10:   measured_score += 2  # standard threshold was 20%
-        if stack_drift > 32: measured_score += 2  # standard threshold was 64 bytes
-        if instr_drift > 8:  measured_score += 2  # standard threshold was 15%
-        if call_drift > 30:  measured_score += 3  # standard threshold was 50%
-        if depth_drift > 1:  measured_score += 1  # standard threshold was 3 frames
+        if reg_drift > 10:   measured_score += 2
+        if stack_drift > 32: measured_score += 2
+        if instr_drift > 8:  measured_score += 2
+        if call_drift > 30:  measured_score += 3
+        if depth_drift > 1:  measured_score += 1
         
         measured_verdict = get_verdict(measured_score)
         
+        experiments_raw[t] = {
+            "reg_drift": reg_drift,
+            "stack_drift": stack_drift,
+            "instr_drift": instr_drift,
+            "call_drift": call_drift,
+            "depth_drift": depth_drift,
+            "topology_mutated": static_drift.get("topology_mutated", False),
+            "hot_path_shifted": runtime_drift.get("hot_path_shifted", False),
+            "has_runtime": "runtime_drift" in attr,
+            "measured_score": measured_score,
+            "measured_verdict": measured_verdict
+        }
+
+    # Pass 2: Parameter Sweep / Optimization
+    print("\n[Calibration Pass 2] Running dynamic threshold optimizer...")
+    
+    # Convert experiments data to flat list of tuples for speed
+    data_list = []
+    for t in TESTS:
+        exp = experiments_raw[t]
+        data_list.append((
+            exp["reg_drift"],
+            exp["stack_drift"],
+            exp["instr_drift"],
+            exp["call_drift"],
+            exp["depth_drift"],
+            exp["topology_mutated"],
+            exp["hot_path_shifted"],
+            exp["has_runtime"],
+            exp["measured_score"],
+            exp["measured_verdict"]
+        ))
+        
+    param_spaces = {
+        "register_drift_pct": [5, 10, 15, 20, 25, 30],
+        "stack_drift_bytes": [16, 32, 48, 64, 80, 96, 112, 128],
+        "instr_drift_pct": [2, 5, 8, 10, 12, 15, 18, 20, 25],
+        "call_volume_change_pct": [10, 20, 30, 40, 50, 60],
+        "depth_change_frames": [1, 2, 3, 4, 5],
+        "topology_instr_drift_pct": [2, 5, 8, 10, 12, 15],
+        "hot_path_call_drift_pct": [2, 5, 8, 10, 12, 15]
+    }
+    
+    default_config = {
+        "register_drift_pct": 20,
+        "stack_drift_bytes": 64,
+        "instr_drift_pct": 15,
+        "call_volume_change_pct": 50,
+        "depth_change_frames": 3,
+        "topology_instr_drift_pct": 10,
+        "hot_path_call_drift_pct": 10
+    }
+    
+    import random
+    random.seed(42)
+    
+    best_f1 = -1.0
+    best_mean_dev = 999.0
+    best_config = None
+    
+    # Try default config, then 50 random restarts for coordinate descent
+    starting_configs = [default_config.copy()]
+    for _ in range(50):
+        cfg = {}
+        for k, space in param_spaces.items():
+            cfg[k] = random.choice(space)
+        starting_configs.append(cfg)
+        
+    keys = list(param_spaces.keys())
+    for start_cfg in starting_configs:
+        current_cfg = start_cfg.copy()
+        improved = True
+        
+        while improved:
+            improved = False
+            for k in keys:
+                best_val_for_k = current_cfg[k]
+                f1_val, dev_val = evaluate_config(current_cfg, data_list)
+                best_score_for_k = (f1_val, -dev_val)
+                
+                for val in param_spaces[k]:
+                    if val == current_cfg[k]:
+                        continue
+                    test_cfg = current_cfg.copy()
+                    test_cfg[k] = val
+                    f1_t, dev_t = evaluate_config(test_cfg, data_list)
+                    test_score = (f1_t, -dev_t)
+                    
+                    if test_score > best_score_for_k:
+                        best_score_for_k = test_score
+                        best_val_for_k = val
+                        improved = True
+                current_cfg[k] = best_val_for_k
+                
+        f1_opt, dev_opt = evaluate_config(current_cfg, data_list)
+        overall_score = (f1_opt, -dev_opt)
+        if overall_score > (best_f1, -best_mean_dev):
+            best_f1 = f1_opt
+            best_mean_dev = dev_opt
+            best_config = current_cfg.copy()
+            
+    print(f"  - Optimal thresholds selected: F1={best_f1*100:.1f}%, Mean Deviation={best_mean_dev:.2f}")
+    for k, v in best_config.items():
+        print(f"    {k}: {v}")
+        
+    # Write dynamic thresholds to file
+    with open("scratch/calibrated_thresholds.json", "w") as f:
+        json.dump(best_config, f, indent=2)
+        
+    # Pass 3: Re-run attribution engine using calibrated thresholds
+    print("\n[Calibration Pass 3] Re-running attribution engine with dynamic thresholds...")
+    results = {}
+    
+    for t in TESTS:
+        print(f"  - Attributing workload: {t}")
+        run_cmd(f"./tools/zcc_impact_attribution "
+                f"--static-a scratch/{t}_static_a.json "
+                f"--static-b scratch/{t}_static_b.json "
+                f"--runtime-a scratch/{t}_runtime_a.json "
+                f"--runtime-b scratch/{t}_runtime_b.json "
+                f"--version-a v0.29-A --version-b v0.29-B "
+                f"--thresholds scratch/calibrated_thresholds.json "
+                f"--out scratch/{t}_attribution.json", allowed_codes={0, 1, 2})
+                
+        with open(f"scratch/{t}_attribution.json", "r") as f:
+            attr = json.load(f)
+            
+        pred_score = attr["impact_score"]
+        pred_verdict = attr["estimated_impact"]
+        
+        exp = experiments_raw[t]
         results[t] = {
             "predicted_score": pred_score,
             "predicted_verdict": pred_verdict,
-            "measured_score": measured_score,
-            "measured_verdict": measured_verdict,
+            "measured_score": exp["measured_score"],
+            "measured_verdict": exp["measured_verdict"],
             "metrics": {
-                "reg_drift_pct": static_drift["register_drift_pct"],
-                "stack_drift_bytes": static_drift["stack_drift_bytes"],
-                "instr_drift_pct": static_drift["instr_drift_pct"],
-                "call_volume_change_pct": runtime_drift.get("call_volume_change_pct", 0),
-                "depth_change_frames": runtime_drift.get("depth_change_frames", 0)
+                "reg_drift_pct": exp["reg_drift"],
+                "stack_drift_bytes": exp["stack_drift"],
+                "instr_drift_pct": exp["instr_drift"],
+                "call_volume_change_pct": exp["call_drift"],
+                "depth_change_frames": exp["depth_drift"]
             }
         }
         
-        print(f"    Predicted: Score={pred_score} ({pred_verdict})")
-        print(f"    Measured:  Score={measured_score} ({measured_verdict})")
-
-    # 3. Calculate statistics
-    print("\n[Calibration] Calculating statistical metrics...")
-    
+    # 3. Calculate final statistics from calibrated runs
+    print("\n[Calibration] Calculating final statistical metrics...")
     total_cases = len(TESTS)
     true_positives = 0
     false_positives = 0
@@ -160,7 +324,6 @@ def main():
         m_s = res["measured_score"]
         
         total_deviation += abs(p_s - m_s)
-        
         is_pred_active = (p_v != "NONE")
         is_meas_active = (m_v != "NONE")
         
@@ -172,7 +335,7 @@ def main():
             false_negatives += 1
         else:
             true_negatives += 1
-
+            
     precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 1.0
     recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 1.0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 1.0

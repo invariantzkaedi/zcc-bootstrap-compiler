@@ -55,6 +55,10 @@ class FuzzConfig:
     bias_sign_extension: float = 0.3   # Extra weight on CG-001 patterns
     bias_division: float = 0.2         # Extra weight on CG-002 patterns
     bias_shift: float = 0.2            # Extra weight on CG-003 patterns
+    bias_recursion: float = 0.40       # Probability of injecting recursive call site
+    bias_cross_call: float = 0.30      # Probability of cross-function call
+    bias_fn_ptr_dispatch: float = 0.25 # Probability of fn-ptr dispatch table in main
+    recursive_max_depth: int = 6       # Maximum recursion depth sentinel value
 
 
 @dataclass
@@ -298,37 +302,62 @@ class CGenerator:
         parts.append('')
 
         # Helper functions
-        n_funcs = self.rng.randint(1, self.config.max_functions)
+        n_funcs = self.rng.randint(2, max(2, self.config.max_functions))
         func_names = []
         for i in range(n_funcs):
             name = self.fresh_func()
             func_names.append(name)
 
-        # Forward declarations
+        # Forward declarations (full prototype so recursive calls resolve)
         for name in func_names:
-            parts.append(f'static int {name}();')  # simplified
+            parts.append(f'static int {name}(int a, int b, int c);')
         parts.append('')
 
         # Generate each function with simplified signature
         for name in func_names:
-            parts.append(self.gen_standalone_function(name))
+            others = [f for f in func_names if f != name]
+            parts.append(self.gen_standalone_function(name, others))
             parts.append('')
 
-        # Main: call all functions and checksum
+        # Dynamic function-pointer dispatch table
+        if self.config.use_recursion and \
+           self.rng.random() < self.config.bias_fn_ptr_dispatch and \
+           len(func_names) > 1:
+            parts.append('/* --- fn-ptr dispatch table --- */')
+            parts.append('typedef int (*fptr_t)(int, int, int);')
+            fn_init = ', '.join(func_names)
+            n = len(func_names)
+            parts.append(f'static fptr_t dispatch_table[{n}] = {{ {fn_init} }};')
+            parts.append('')
+
+        # Main: mix direct calls + optional dispatch-table invocation
         parts.append('int main(void) {')
         parts.append('    long checksum = 0;')
+        depth_seed = self.config.recursive_max_depth
         for name in func_names:
-            parts.append(f'    checksum += (long){name}(1, 2, 3);')
+            parts.append(f'    checksum += (long){name}({depth_seed}, 2, 3);')
+        # If dispatch table was emitted, exercise it
+        if 'dispatch_table' in '\n'.join(parts):
+            n = len(func_names)
+            parts.append(f'    {{ int _i; for (_i = 0; _i < {n}; _i++) {{')
+            parts.append(f'        checksum += (long)dispatch_table[_i & {n-1}]({depth_seed >> 1}, _i, _i ^ 3);')
+            parts.append('    } }')
         parts.append('    printf("CHECKSUM=%ld\\n", checksum);')
         parts.append('    return 0;')
         parts.append('}')
 
         return '\n'.join(parts)
 
-    def gen_standalone_function(self, name: str) -> str:
-        """Generate a function with fixed 3-int signature for simplicity."""
+    def gen_standalone_function(self, name: str, other_funcs: list = None) -> str:
+        """Generate a function with fixed 3-int signature.
+
+        'a' is repurposed as a recursion depth sentinel: functions guard
+        recursive calls with `if (a > 0)` so stack depth is bounded at
+        runtime to config.recursive_max_depth regardless of seed.
+        """
         lines = []
         lines.append(f'static int {name}(int a, int b, int c) {{')
+        other_funcs = other_funcs or []
 
         # Locals
         n_locals = self.rng.randint(2, 6)
@@ -340,8 +369,11 @@ class CGenerator:
             lines.append(f'    {vty} {vname} = ({vty})({expr});')
             local_names.append((vname, vty))
 
+        # Accumulator for recursive contributions
+        lines.append('    int _acc = 0;')
+
         # Mix in parameters
-        all_vars = local_names + [('a', 'int'), ('b', 'int'), ('c', 'int')]
+        all_vars = local_names + [('a', 'int'), ('b', 'int'), ('c', 'int'), ('_acc', 'int')]
 
         # Statements
         n_stmts = self.rng.randint(3, 10)
@@ -350,12 +382,37 @@ class CGenerator:
             for s in stmts:
                 lines.append(f'    {s}')
 
+        # ── Recursive self-call (depth-guarded by 'a') ──────────────────────
+        if self.config.use_recursion and \
+           self.rng.random() < self.config.bias_recursion:
+            expr_b = self.random_expr('int', 0)
+            expr_c = self.random_expr('int', 0)
+            lines.append(f'    if (a > 0) {{')
+            lines.append(f'        _acc += {name}(a - 1, ({expr_b}) ^ b, ({expr_c}) | c);')
+            lines.append( '    }')
+
+        # ── Cross-function call (dynamic dispatch simulation) ────────────────
+        if self.config.use_recursion and other_funcs and \
+           self.rng.random() < self.config.bias_cross_call:
+            callee = self.rng.choice(other_funcs)
+            expr_arg = self.random_expr('int', 0)
+            lines.append(f'    if (a > 1) {{')
+            lines.append(f'        _acc += {callee}(a - 1, ({expr_arg}) & 0xFF, b ^ c);')
+            lines.append( '    }')
+
+        # ── Mutual-recursion ping via function pointer ───────────────────────
+        if self.config.use_recursion and other_funcs and \
+           self.rng.random() < (self.config.bias_fn_ptr_dispatch * 0.5):
+            callee = self.rng.choice(other_funcs)
+            lines.append(f'    {{ typedef int (*fp_t)(int,int,int); fp_t _fp = {callee};')
+            lines.append(f'      if (a > 2) _acc += _fp(a - 2, c, b & 15); }}')
+
         # Return a combination
         if local_names:
             vars_sum = ' + '.join(f'(int){v}' for v, _ in local_names[:3])
-            lines.append(f'    return ({vars_sum}) + a + b + c;')
+            lines.append(f'    return ({vars_sum}) + a + b + c + _acc;')
         else:
-            lines.append('    return a + b + c;')
+            lines.append('    return a + b + c + _acc;')
 
         lines.append('}')
         return '\n'.join(lines)
@@ -363,7 +420,12 @@ class CGenerator:
 
 def compile_and_run(source: str, compiler: str, output: str,
                     timeout: int = 10, extra_flags: list = None) -> tuple[int, str, str]:
-    """Compile source and run the binary. Returns (rc, stdout, stderr)."""
+    """Compile source and run the binary. Returns (rc, stdout, stderr).
+
+    ZCC strategy: compile to .s via ZCC, then link with GCC (mirrors the
+    official test suite pipeline). This gives a proper _start/libc and
+    lets printf work without requiring ZLD to resolve external symbols.
+    """
     flags = extra_flags or []
 
     # Write source
@@ -372,20 +434,42 @@ def compile_and_run(source: str, compiler: str, output: str,
         f.write(source)
 
     # Compile
-    cmd = [compiler] + flags + ['-o', output, src_path]
     if compiler == 'gcc':
         cmd = ['gcc', '-O0', '-std=c99', '-w'] + ['-o', output, src_path, '-lm']
+        try:
+            comp = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if comp.returncode != 0:
+                return (-1, '', f'Compile error: {comp.stderr[:500]}')
+        except subprocess.TimeoutExpired:
+            return (-2, '', 'Compile timeout')
+        except FileNotFoundError:
+            return (-3, '', f'Compiler not found: {compiler}')
     else:
-        cmd = [compiler, src_path, '-o', output]
-
-    try:
-        comp = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        if comp.returncode != 0:
-            return (-1, '', f'Compile error: {comp.stderr[:500]}')
-    except subprocess.TimeoutExpired:
-        return (-2, '', 'Compile timeout')
-    except FileNotFoundError:
-        return (-3, '', f'Compiler not found: {compiler}')
+        # ZCC path: .c -> .s (ZCC codegen), then .s -> binary (GCC link)
+        asm_path = output + '.s'
+        try:
+            # Stage 1: ZCC compile to assembly
+            comp = subprocess.run(
+                [compiler, src_path, '-S', '-o', asm_path],
+                capture_output=True, text=True, timeout=30
+            )
+            if comp.returncode != 0 or not __import__('os').path.exists(asm_path):
+                return (-1, '', f'Compile error: {comp.stderr[:500]}')
+        except subprocess.TimeoutExpired:
+            return (-2, '', 'Compile timeout')
+        except FileNotFoundError:
+            return (-3, '', f'Compiler not found: {compiler}')
+        try:
+            # Stage 2: GCC link the ZCC-generated assembly
+            link = subprocess.run(
+                ['gcc', '-O0', '-fno-asynchronous-unwind-tables',
+                 '-o', output, asm_path, '-lm'],
+                capture_output=True, text=True, timeout=30
+            )
+            if link.returncode != 0:
+                return (-1, '', f'Link error: {link.stderr[:500]}')
+        except subprocess.TimeoutExpired:
+            return (-2, '', 'Link timeout')
 
     # Run
     try:

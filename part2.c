@@ -586,7 +586,7 @@ static int read_escape(Compiler *cc) {
 }
 
 static void lex_number(Compiler *cc, int c) {
-        long val;
+        long long val;
         int start;
         int is_float = 0;
         int i_look = 0;
@@ -643,10 +643,12 @@ static void lex_number(Compiler *cc, int c) {
 
         val = 0;
         start = cc->pos;
+        int is_hex_or_oct = 0;
         if (c == '0') {
             read_char(cc);
             if (peek_char(cc) == 'x' || peek_char(cc) == 'X') {
                 read_char(cc);
+                is_hex_or_oct = 1;
                 while (hex_val(peek_char(cc)) >= 0) {
                     val = val * 16 + hex_val(peek_char(cc));
                     read_char(cc);
@@ -654,6 +656,7 @@ static void lex_number(Compiler *cc, int c) {
             } else if (peek_char(cc) >= '0') {
                 if (peek_char(cc) <= '7') {
                     /* octal */
+                    is_hex_or_oct = 1;
                     while (peek_char(cc) >= '0') {
                         if (peek_char(cc) <= '7') {
                             val = val * 8 + (peek_char(cc) - '0');
@@ -683,6 +686,7 @@ static void lex_number(Compiler *cc, int c) {
         cc->tk_val = val;
         cc->tk_text[0] = is_uns ? 'U' : 0;
         cc->tk_text[1] = is_lng ? 'L' : 0;
+        cc->tk_text[2] = is_hex_or_oct ? 'H' : 0;
 }
 
 static void lex_char(Compiler *cc) {
@@ -1235,7 +1239,7 @@ void expect(Compiler *cc, int tk) {
 
 int peek_token(Compiler *cc) {
     int s_tk;
-    long s_val;
+    long long s_val;
     char s_text[MAX_IDENT];
     char s_str[MAX_STR];
     int s_slen;
