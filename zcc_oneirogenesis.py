@@ -259,7 +259,7 @@ class SelfHostGate:
         # symbol clashes that arise when linking zcc_pp.c with extra .c files
         zcc_full = str(REPO_ROOT / 'zcc.c')
         gate_src = zcc_full if os.path.exists(zcc_full) else zcc_pp_c
-        s3_p_args = [p for p in p_args if not p.endswith("codegen.c")]
+        s3_p_args = []  # zcc.c is self-contained; PASSES already baked in
 
         try:
             r = subprocess.run([mutant_bin, gate_src, '-o', s3_s],
