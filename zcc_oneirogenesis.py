@@ -499,7 +499,7 @@ class Island:
         try:
             r = subprocess.run(
                 ['gcc', '-no-pie', '-O0', '-w', '-fno-asynchronous-unwind-tables',
-                 '-Wa,--noexecstack', '-fno-unwind-tables',
+                 '-Wa,--noexecstack', '-fno-unwind-tables', '-Dmain=zcc_main',
                  '-o', mutant_bin, mutant_asm] + p_args + ['-lm'],
                 capture_output=True, timeout=60)
             if r.returncode != 0:
@@ -582,7 +582,7 @@ class Island:
         try:
             r = subprocess.run(
                 ['gcc', '-no-pie', '-O0', '-w', '-fno-asynchronous-unwind-tables',
-                 '-Wa,--noexecstack', '-fno-unwind-tables',
+                 '-Wa,--noexecstack', '-fno-unwind-tables', '-Dmain=zcc_main',
                  '-o', bin_path, asm_path] + p_args + ['-lm'],
                 capture_output=True, timeout=60)
             if r.returncode != 0:
@@ -1069,7 +1069,7 @@ int main(void) {
                         p_args = [str(REPO_ROOT / p) for p in PASSES]
                         subprocess.run(
                             ['gcc', '-no-pie', '-O0', '-w', '-fno-asynchronous-unwind-tables',
-                             '-Wa,--noexecstack', '-fno-unwind-tables',
+                             '-Wa,--noexecstack', '-fno-unwind-tables', '-Dmain=zcc_main',
                              '-o', str(REPO_ROOT / 'zcc2'), zcc2_asm] + p_args + ['-lm'],
                             capture_output=True, timeout=60)
                         print(f"\n  {_Y}[PROMOTE]{_W} Island {best.island_id} "
