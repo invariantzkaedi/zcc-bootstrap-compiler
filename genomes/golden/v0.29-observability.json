@@ -3,12 +3,12 @@
     "compiler": "zcc",
     "compiler_stage": "stage3",
     "version": "stage3",
-    "build_id": "375bf20ae68654e014cecbce67c59f1b0d9632339074ad9bcc4c3f060b762736",
+    "build_id": "7363556c16220bcd151302fe369a58ee4d470098818f31bf55d6a2dda15c5c8a",
     "source_status": "RESOLVED",
     "source_sha256": "b64e07f58bf2974cc6edaa9690e48bd53b4e49343bd73589a64db720d9f37ae2",
-    "object_sha256": "ba70fae9a99c71df609dbb7e709f69237f6dbee0386a0b51cc3eda14f517a0ec",
+    "object_sha256": "bc8201ad7fc8255045ef71a2b9ef73d91ffa4c73f1d18f208cb19a8f4e3a7a42",
     "topology_hash": "3ee19e412bd742da08e249925a0234ec1cd03bc7737edfc0e14406ba2ce24668",
-    "timestamp": "2026-06-06T11:13:09Z"
+    "timestamp": "2026-06-06T19:40:58Z"
   },
   "telemetry": {
     "compile_ms": 42,
@@ -336,7 +336,7 @@
       "section": ".text",
       "source": "kernel/kmain.c",
       "source_status": "RESOLVED",
-      "hash": "3533e59203c2dafdc11be93334e6032a4bdd35affd06e2d05000966bfe015ed0",
+      "hash": "488607c6d17f83c3f2b514a1da07d01d7b716479c2c39e8f7b7be0b88d90b2eb",
       "domain": "Interrupts",
       "criticality": 6,
       "is_exported": 1,
@@ -360,7 +360,7 @@
       "section": ".text",
       "source": "kernel/kmain.c",
       "source_status": "RESOLVED",
-      "hash": "feb9be0977111150664bedd5f0dad079b3a903cbe3ed74cf33149e185dc38cd0",
+      "hash": "810e13a93b200d1b87301249307126c958b5deb2ede0fe79132ce6e4345876b9",
       "domain": "Interrupts",
       "criticality": 12,
       "is_exported": 1,
@@ -408,7 +408,7 @@
       "section": ".text",
       "source": "kernel/kmain.c",
       "source_status": "RESOLVED",
-      "hash": "6d412e8de044f78458c7e718839b4c65c070ae02ba9eafa95297d916f3548ba4",
+      "hash": "d64b497fcc35dfd264814d81cbab4ecad730188badee3e167af905d8d701a77c",
       "domain": "Boot",
       "criticality": 18,
       "is_exported": 1,
@@ -808,13 +808,13 @@
     "writable_globals": 9
   },
   "merkle_topology": {
-    "boot_root": "768e86e19a3d8a9af66ec9d39d4bb2db74a138714f14a8404e69c7875d27f016",
+    "boot_root": "a21fef849db600bf798a3d519454d1cd05c8414ca927d22505f34e99cdc5b6c2",
     "memory_root": "918c3a64b5b3a9a4fb7e85b0c279b941d2d1452d645f434ddda10ee92810ff0b",
-    "interrupt_root": "eefacc20cd070ac68bddab8ea63993f4b6bda0a4ed3faa169f052145d74c81be",
+    "interrupt_root": "c4e8e60e56f20a611d63684ca18d0babf16d6ee91d25d4be126532b7ae756ee6",
     "io_serial_root": "f4b7eeea52e6b9edc581b6900105de457dbce0805d937e7f4ca6224011314842",
     "console_root": "e2300d2bc4321fe266985c74a41cc5a5e16795ca4feaa70181de29f903010379",
     "general_root": "e88d87f47bec07c5282cbdfa2f0800187ef815a84dd9e68aaa0fe2924f4cf765",
-    "topology_root": "b8c4030cab3b390cd8e23cb48951bce6aa6eede24f8d1a849a9f6a1aff4c0e38"
+    "topology_root": "83e91ecc26e852fc9e8b855a4dd32773370f97fe94d4b5118483181fa6cbd5a8"
   },
   "execution_fingerprint": {
     "entrypoint": "_start",
@@ -824,19 +824,19 @@
     "critical_path_depth": 1,
     "controlflow_root": "63a4f21f95649c49e4b29c0e6a1879ee18658d7e963970bd4be059e5dcbddef4",
     "instruction_profile": {
-      "mov": 389,
-      "call": 81,
+      "mov": 390,
+      "call": 82,
       "lea": 58,
       "cmp": 3407,
       "jmp": 48,
-      "ret": 39
+      "ret": 40
     },
-    "instruction_root": "541475fbd9456b3ba1e5d321162603ff1059d4fb4f178b8646b004b1f05d787a",
+    "instruction_root": "7c6c6a3763c282bc602abb3645c187990d9b59cb190ac603286f5b94c9ffa6d3",
     "register_profile": {
-      "rax": 712,
-      "rbx": 314,
+      "rax": 714,
+      "rbx": 315,
       "rcx": 106,
-      "rdx": 192,
+      "rdx": 191,
       "rsi": 72,
       "rdi": 172,
       "rbp": 110,
@@ -850,7 +850,7 @@
       "r14": 16,
       "r15": 23
     },
-    "register_root": "262ab87e07cb49def70af77f6bdc778fe92634964d416ed3eade5c634126673c",
+    "register_root": "04981710b683c9d11422af97493c1cbb3b98e6e41c165f412392a2b4ebbeb73f",
     "stack_analysis": {
       "max_stack_frame": 256,
       "average_stack_frame": 108,
