@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+numpy
+faiss-cpu
+pydantic
+onnx
+onnxruntime
+torch

@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+httpx
+numpy
+pydantic
+pyyaml
+protobuf

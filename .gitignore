@@ -32,6 +32,7 @@ tmp_zcc
 !README*.txt
 !gate_ir*_xfail.txt
 !BUILD.txt
+!requirements.txt
 !COMMANDS.md
 
 # Test binaries (no extension)
@@ -477,6 +478,9 @@ evm_jit/
 # ZKAEDI Ephemeral Data
 scratch/
 captures/
+mesh_system/*.pb
+mesh_system/*.jsonl
+mesh_system/*.log
 2026-*/
 dist/
 *.bin

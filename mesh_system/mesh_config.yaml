@@ -1,0 +1,25 @@
+# ZKAEDI Mesh System Configuration
+agents:
+  orchestrator:
+    port: 8000
+    host: "127.0.0.1"
+  agent_3d:
+    port: 8001
+    host: "127.0.0.1"
+  agent_semantic:
+    port: 8002
+    host: "127.0.0.1"
+  agent_network:
+    port: 8003
+    host: "127.0.0.1"
+
+hamiltonian:
+  eta: 0.15
+  gamma: 1.8
+  epsilon: 0.07
+  beta: 0.4
+  h_0: 1.0
+
+constitution:
+  drift_max_threshold: 10.0
+  trust_decay_rate: 0.05

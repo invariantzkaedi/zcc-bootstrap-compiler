@@ -356,6 +356,17 @@ void record_transform(const char *pass_name, uint64_t node_id, const char *trans
     ev->details[255] = '\0';
 }
 
+void zcc_oracle_log_event(const char *context, const char *title, const char *body) {
+    if (g_zxr_event_count >= MAX_ZXR_EVENTS) return;
+    ZxrEvent *ev = &g_zxr_events[g_zxr_event_count++];
+    strcpy(ev->event_type, "alert");
+    strncpy(ev->pass_name, context, 63);
+    ev->pass_name[63] = '\0';
+    ev->node_id = 0;
+    snprintf(ev->details, 255, "%s: %s", title, body);
+    ev->details[255] = '\0';
+}
+
 #define MAX_ZXR_PROOFS 65536
 static ZXRProof g_zxr_proofs[MAX_ZXR_PROOFS];
 static int g_zxr_proof_count = 0;
@@ -530,10 +541,24 @@ void zxr_emit_record(const char *source_filename, const char *zxr_output_filenam
         fprintf(f, "    {\n");
         fprintf(f, "      \"event\": \"%s\",\n", ev->event_type);
         fprintf(f, "      \"pass\": \"%s\"", ev->pass_name);
-        if (strcmp(ev->event_type, "transform") == 0) {
+        if (strcmp(ev->event_type, "transform") == 0 || strcmp(ev->event_type, "alert") == 0) {
             fprintf(f, ",\n");
             fprintf(f, "      \"node_id\": %llu,\n", (unsigned long long)ev->node_id);
-            fprintf(f, "      \"details\": \"%s\"\n", ev->details);
+            fprintf(f, "      \"details\": \"");
+            const char *d = ev->details;
+            while (*d) {
+                if (*d == '"') {
+                    fprintf(f, "\\\"");
+                } else if (*d == '\\') {
+                    fprintf(f, "\\\\");
+                } else if (*d == '\n') {
+                    fprintf(f, "\\n");
+                } else {
+                    fputc(*d, f);
+                }
+                d++;
+            }
+            fprintf(f, "\"\n");
         } else {
             fprintf(f, "\n");
         }
@@ -614,7 +639,7 @@ int zxr_replay_record(const char *zxr_input_filename) {
         uint64_t node_id = 0;
         char details[256] = {0};
 
-        if (strcmp(ev_type, "transform") == 0) {
+        if (strcmp(ev_type, "transform") == 0 || strcmp(ev_type, "alert") == 0) {
             p = strstr(p, "\"node_id\":");
             if (p) {
                 p += 10;
@@ -626,7 +651,22 @@ int zxr_replay_record(const char *zxr_input_filename) {
                 p += 10;
                 while (*p && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r' || *p == '"' || *p == ':')) p++;
                 idx = 0;
-                while (*p && *p != '"' && idx < 255) details[idx++] = *p++;
+                while (*p && idx < 255) {
+                    if (*p == '\\' && *(p+1) == '"') {
+                        details[idx++] = '"';
+                        p += 2;
+                    } else if (*p == '\\' && *(p+1) == '\\') {
+                        details[idx++] = '\\';
+                        p += 2;
+                    } else if (*p == '\\' && *(p+1) == 'n') {
+                        details[idx++] = '\n';
+                        p += 2;
+                    } else if (*p == '"') {
+                        break;
+                    } else {
+                        details[idx++] = *p++;
+                    }
+                }
                 details[idx] = '\0';
             }
         }

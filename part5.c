@@ -48,6 +48,7 @@ extern void zcc_oracle_log_sentinel(size_t idt_size, size_t gdt_size,
  * In disabled mode all fzr_* calls are zero-overhead no-ops.          */
 #include "forgezero_receipt.h"
 #include "src/zcc_oracle_substrate.h"
+#include "zcc_lucky_alert_injector.h"
 
 /* Manifold engine globals (defined in ir_pass_manager.c) */
 extern int  g_manifold_enabled;
@@ -1680,6 +1681,9 @@ int zcc_main(int argc, char **argv) {
 
   zcc_oracle_init(input_file);
   atexit(zcc_oracle_shutdown);
+  if (g_emit_zxr_path || g_replay_zxr_path || enable_telemetry_stdout) {
+      lucky_alert_emit(ALERT_TIP | ALERT_IMPORTANT | ALERT_WARNING | ALERT_NOTE | ALERT_CAUTION, "zcc_main");
+  }
 
   /* read source file */
   source = read_file(input_file, &source_len);
@@ -2158,7 +2162,7 @@ link_phase:
     if (compile_only) {
       sprintf(cmd, "gcc -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -c -o %s %s 2>&1", output_file, asm_file);
     } else if (strcmp(input_file, "zcc.c") == 0 || (strlen(input_file) >= 6 && strcmp(input_file + strlen(input_file) - 6, "/zcc.c") == 0)) {
-      sprintf(cmd, "gcc -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c -lm 2>&1", output_file, asm_file);
+      sprintf(cmd, "gcc -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c -lm 2>&1", output_file, asm_file);
     } else {
       sprintf(cmd, "gcc -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -o %s %s %s -lm -lpthread -ldl 2>&1", output_file, asm_file, extra_link_args);
     }

@@ -21,6 +21,12 @@ struct Mesh level_meshes[3] = {
     { {0,0,0}, {0,0,0}, 0, NULL }
 };
 
+double sqrt(double x);
+double floor(double x);
+double cos(double x);
+double sin(double x);
+double pow(double x, double y);   /* added for local_zoom calculation */
+
 #ifndef make_vec3
 #define make_vec3(xx, yy, zz, out) do { (out)->x = (xx); (out)->y = (yy); (out)->z = (zz); } while(0)
 #endif
@@ -47,11 +53,6 @@ void init_meshes() {
     level_meshes[1] = level_meshes[0];
     level_meshes[2] = level_meshes[0];
 }
-double sqrt(double x);
-double floor(double x);
-double cos(double x);
-double sin(double x);
-double pow(double x, double y);   /* added for local_zoom calculation */
 char *getenv(const char *name);
 int atoi(const char *nptr);
 

@@ -61,6 +61,44 @@ static inline float ease_cubic_in_out(float t) {
     }
 }
 
+static inline float cubic_bezier_x(float u, float x1, float x2) {
+    return 3.0f * (1.0f - u) * (1.0f - u) * u * x1 + 3.0f * (1.0f - u) * u * u * x2 + u * u * u;
+}
+
+static inline float cubic_bezier_y(float u, float y1, float y2) {
+    return 3.0f * (1.0f - u) * (1.0f - u) * u * y1 + 3.0f * (1.0f - u) * u * u * y2 + u * u * u;
+}
+
+static inline float ease_cubic_bezier(float t, float x1, float y1, float x2, float y2) {
+    if (t <= 0.0f) return 0.0f;
+    if (t >= 1.0f) return 1.0f;
+    
+    float u = t;
+    for (int i = 0; i < 8; i++) {
+        float x = cubic_bezier_x(u, x1, x2) - t;
+        float dx = 3.0f * (1.0f - 4.0f * u + 3.0f * u * u) * x1 + 3.0f * (2.0f * u - 3.0f * u * u) * x2 + 3.0f * u * u;
+        if (fabsf(dx) < 1e-6f) break;
+        u -= x / dx;
+    }
+    
+    if (u < 0.0f || u > 1.0f) {
+        float low = 0.0f, high = 1.0f;
+        u = t;
+        for (int i = 0; i < 12; i++) {
+            float x = cubic_bezier_x(u, x1, x2);
+            if (fabsf(x - t) < 1e-4f) break;
+            if (x < t) {
+                low = u;
+            } else {
+                high = u;
+            }
+            u = 0.5f * (low + high);
+        }
+    }
+    
+    return cubic_bezier_y(u, y1, y2);
+}
+
 // 2. Feature-Engineered Phasors (Phase Distortion, West-Coast Wavefolding, and Dynamic PWM)
 static inline float phasor_sine(float phase) {
     float p = phase - floorf(phase);

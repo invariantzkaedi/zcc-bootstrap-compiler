@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package zkaedi.prime;
+
+message PrimeVector {
+  double h = 1;              // Hamiltonian state
+  double h0 = 2;
+  double eta = 3;
+  double gamma = 4;
+  double epsilon = 5;
+  double beta = 6;
+  uint64 seed = 7;           // Lucky RNG
+  uint64 timestamp = 8;
+  repeated double history = 9; // Trajectory for forensic audit
+  map<string, double> metrics = 10; // Agent A/B/C scores
+  string context = 11;       // "mesh_orchestrator", "raytracer_evolve", etc.
+}
+
+message PrimeConsensus {
+  PrimeVector state = 1;
+  double consensus_score = 2;
+  double drift = 3;
+  uint32 jackpot = 4;        // 777-scaled reward
+  repeated string alerts = 5; // Ties into Lucky Alert Injector
+}

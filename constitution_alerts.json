@@ -1,0 +1,760 @@
+{
+  "alerts": [
+    {
+      "level": "TIP",
+      "id": 1,
+      "title": "Fast REPL Validation",
+      "body": "Test custom compiler additions in isolation by linking with `zjs` rather than compiling the entire ZCC toolchain. Execute `./zjs` to run the JS engine with direct bindings to the compiler parser logic."
+    },
+    {
+      "level": "TIP",
+      "id": 2,
+      "title": "Interactive GDB Watchpoints",
+      "body": "When tracking down mysterious memory mutations in the preprocessor's token stream, use GDB watchpoints on the target pointer address rather than conditional breakpoints to avoid slowing down execution."
+    },
+    {
+      "level": "TIP",
+      "id": 3,
+      "title": "Optimizing D3 Network Sim Tick Rates",
+      "body": "For large capability graphs in html_corpus_master_registry.html, set `simulation.alphaTarget(0)` after initial layout translation to allow the browser thread to enter low-energy idle modes."
+    },
+    {
+      "level": "TIP",
+      "id": 4,
+      "title": "Extracting Clean JS Snippets",
+      "body": "To validate JavaScript in embedded HTML files, write a script to scrape contents between `<script>` tags and run `node --check` to avoid runtime browser console errors."
+    },
+    {
+      "level": "TIP",
+      "id": 5,
+      "title": "Fast WSL Mount Path Check",
+      "body": "Use `wsl -e sh -c \"cd /mnt/g/zccMAIN/zcc && git status\"` to check file states directly inside the target environment, bypassing slow Windows disk mount abstractions."
+    },
+    {
+      "level": "TIP",
+      "id": 6,
+      "title": "Preserving Stack Register Alignment",
+      "body": "When generating assembly for System V AMD64 ABI indirect calls, verify that the `%rsp` stack pointer is aligned to a 16-byte boundary *before* loading call arguments."
+    },
+    {
+      "level": "TIP",
+      "id": 7,
+      "title": "Floating Point Parity Testing",
+      "body": "Check static evaluation discrepancies by compiling test_phase6_trapdoor_side_effect_abi.c with both ZCC and GCC, and diffing their output bytes."
+    },
+    {
+      "level": "TIP",
+      "id": 8,
+      "title": "Safe Macro Delimiter Stripping",
+      "body": "Ensure trailing CRLF whitespace characters are stripped from `#include` headers in part0_pp.c to prevent file system lookups from failing under WSL."
+    },
+    {
+      "level": "TIP",
+      "id": 9,
+      "title": "Leveraging C-Native SHA-256",
+      "body": "When signing artifacts, use the standalone `zcc_sha256_hash` function in `src/zcc_oracle_substrate.c` rather than linking to external libraries to maintain cross-platform hash identity."
+    },
+    {
+      "level": "TIP",
+      "id": 10,
+      "title": "Inline WebGL Geometry Auto-Framing",
+      "body": "Normalize vertex arrays using a scale factor of `3.0 / bounding_radius` to automatically frame custom 3D models in standard browser frustums."
+    },
+    {
+      "level": "TIP",
+      "id": 11,
+      "title": "WebAudio Diagnostic Equalizer",
+      "body": "Use the `AnalyserNode` FFT bins to verify the frequencies of generated signals when debugging quantum DNA synthesizers."
+    },
+    {
+      "level": "TIP",
+      "id": 12,
+      "title": "Quick Swarm Consent Audits",
+      "body": "Query local HTTP entry points concurrently using asynchronous Python libraries to verify WebGL context availability across multiple testing threads."
+    },
+    {
+      "level": "TIP",
+      "id": 13,
+      "title": "Resolving Token Fusion",
+      "body": "Insert explicit barrier checks inside `pp_peek` to prevent the compiler preprocessor from drawing characters past macro expansion boundaries."
+    },
+    {
+      "level": "TIP",
+      "id": 14,
+      "title": "Compiling Standalone Monoliths",
+      "body": "When building ZCC stage 3, pass an empty arguments list (`s3_p_args=[]`) to GCC since the compiler source has been concatenated into a single monolith."
+    },
+    {
+      "level": "TIP",
+      "id": 15,
+      "title": "Non-Destructive Indirect Call Resolution",
+      "body": "Read target function offsets from variables using `args_on_stack * 8 + current_push_offset` to prevent pointer adjustments from stomping surrounding local registers."
+    },
+    {
+      "level": "TIP",
+      "id": 16,
+      "title": "Hardening Shader Inputs",
+      "body": "Always wrap GLSL exponent functions with `max(0.0, base)` to prevent mathematical undefined behavior (NaN) on GPUs when compiling custom 3D engines."
+    },
+    {
+      "level": "TIP",
+      "id": 17,
+      "title": "Dynamic subst buffer allocations",
+      "body": "Reallocate string buffer limits dynamically when compiling macro bodies with arguments exceeding 8KB to avoid buffer overflows."
+    },
+    {
+      "level": "TIP",
+      "id": 18,
+      "title": "Verifying SQLite Initializers",
+      "body": "Validate that the static float calculator evaluates expressions like `1.0f/0.0f` correctly during AST generation to keep global limits aligned with GCC."
+    },
+    {
+      "level": "TIP",
+      "id": 19,
+      "title": "Profiling Linear Scan Spills",
+      "body": "Set `--emit-exec-record` to record interval spill metrics during register allocation to identify register pressure hotspots."
+    },
+    {
+      "level": "TIP",
+      "id": 20,
+      "title": "Mapping Shared Capabilities",
+      "body": "Highlight cross-domain technologies in network visualizations to identify codebases that overlap between DeFi protocols and WebAudio synthesizers."
+    },
+    {
+      "level": "TIP",
+      "id": 21,
+      "title": "Debugging SIGSEGV in stdout",
+      "body": "Ensure standard I/O streams are explicitly registered as 64-bit `void*` pointers in the global symbol scope of `part5.c` to prevent print crashes in stage 2 bootstraps."
+    },
+    {
+      "level": "TIP",
+      "id": 22,
+      "title": "Isolating Preprocessor RSS",
+      "body": "Measure memory consumption using the `--pp-only` flag to evaluate preprocessor allocations separately from static BSS compiler arrays."
+    },
+    {
+      "level": "TIP",
+      "id": 23,
+      "title": "Quick SVGs Extrusion Tests",
+      "body": "Execute `python tools/zkaedi_svg_extruder.py` to verify that 2D vector coordinates are mapped correctly into 3D polygon meshes."
+    },
+    {
+      "level": "TIP",
+      "id": 24,
+      "title": "Confirming Deterministic Replay",
+      "body": "Diff execution ledgers from consecutive compilation passes to verify that no ASLR-dependent addresses leak into the `.zxr` logs."
+    },
+    {
+      "level": "TIP",
+      "id": 25,
+      "title": "Diagnostic Logging via Printf",
+      "body": "When standard error streams are redirected to `/dev/null` inside testing harnesses, write compiler messages directly to stdout."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 1,
+      "title": "Phase 0 Compliance",
+      "body": "Complete the Phase 0 forensic chain ingestion protocol before modifying any file in the workspace. Verify that the current branch baseline is green using `make selfhost`."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 2,
+      "title": "Surgical Changes Only",
+      "body": "Limit edits in `part0_pp.c`, `part3.c`, and `part4.c` to less than 50 lines to prevent regressions in Macro, AST, and Codegen layers."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 3,
+      "title": "Exact Gate Reporting",
+      "body": "Never claim a validation gate passed without pasting the raw output in the commit body (e.g. `cmp zcc2.s zcc3.s` comparison results)."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 4,
+      "title": "Header Ingestion Order",
+      "body": "Order standard libraries (`stdio.h`, `stdlib.h`, `math.h`) above compiler-specific compatibility headers in custom files to avoid header pollution."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 5,
+      "title": "Static Compilation Bounds",
+      "body": "Set maximum token limits to 65,536 and coordinate node ranges statically to prevent dynamic memory leaks in compiler test passes."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 6,
+      "title": "Inter-op Validation Precedent",
+      "body": "Run both forward (ZCC lib + GCC main) and reverse (GCC lib + ZCC main) compilation configurations to confirm SysV AMD64 ABI compliance."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 7,
+      "title": "WebGL Context Resilience",
+      "body": "Check for `webglcontextlost` events in visualizations to handle browser VRAM exhaustion gracefully without freezing the browser interface."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 8,
+      "title": "Target Source Compilation",
+      "body": "Compile third-party code (like Lua and SQLite) directly from their source trees with ZCC set as the compiler rather than using pre-preprocessed amalgams."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 9,
+      "title": "Ring Buffer Thread Safety",
+      "body": "Keep all event logging in `src/zcc_oracle_substrate.c` bounded to a static pre-allocated ring buffer array to preserve thread safety."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 10,
+      "title": "Floating-Point Parsing in JS",
+      "body": "Add double-precision float parsing support to `zjs.c`'s lexer before exposing phase variables to JavaScript automation scripts."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 11,
+      "title": "D3 CDN Availability",
+      "body": "Ensure offline fallbacks are configured for D3.js imports in dashboards to guarantee UI rendering works in isolated environments."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 12,
+      "title": "Multi-Stage Self-Host Verification",
+      "body": "Run a full compiler bootstrap from scratch (`make clean && make selfhost`) when modifying core AST types to update all build stages."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 13,
+      "title": "Solidity Boundary Rules",
+      "body": "Check CVSS vulnerability metrics and reentrancy flags before executing automated exploit simulations in the EVM visualizer."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 14,
+      "title": "Maintaining Git Integrity",
+      "body": "Avoid git force-pushes or branch resets without documenting the current reflog snapshot in the session logs."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 15,
+      "title": "Classifying Aggregate Returns",
+      "body": "Ensure aggregates returning via SysV AMD64 ABI classification rules are correctly assigned to registers rather than default sret pointers."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 16,
+      "title": "Empty Line CFG Placeholders",
+      "body": "Do not skip empty lines in basic block assembly parsers; treat them as placeholding operations to keep pre- and post-optimization CFG topologies aligned."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 17,
+      "title": "Non-Destructive Stack Adjustments",
+      "body": "Restore the stack pointer exactly to its original value after indirect calls to prevent frame corruption in nested routines."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 18,
+      "title": "Reality Drift Enforcement",
+      "body": "Configure the compiler to halt compilation if reality drift metrics in `scratch/divergence_report.json` exceed limits set in the constitution."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 19,
+      "title": "Dynamic Scale Bounding",
+      "body": "Keep scale factors bounded above zero when mapping PCA coordinates to prevent visualizations from collapsing into a single point."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 20,
+      "title": "CSS Overlapping Guards",
+      "body": "Avoid CSS declarations that place WebGL canvases over interactive HTML overlays to prevent mouse click events from being blocked."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 21,
+      "title": "Bypassing WS telemetry failures",
+      "body": "Set fallback routes to log metrics locally when telemetry connections to ports like `8892` fail to prevent the dashboard from locking up."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 22,
+      "title": "Standalone SHA Implementation",
+      "body": "Write cryptographic hashing loops using pure C math blocks in `zcc_sha256.h` to maintain consistent output across WSL and native Windows."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 23,
+      "title": "Preserving docstrings",
+      "body": "Retain existing docstrings and licensing comments in source files when applying changes to preserve documentation history."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 24,
+      "title": "Direct API tool usage",
+      "body": "Use dedicated API tools (like `grep_search` and `view_file`) instead of running complex terminal scripts to keep operations clear."
+    },
+    {
+      "level": "IMPORTANT",
+      "id": 25,
+      "title": "Confirming Target Re-runs",
+      "body": "Run target harnesses (such as the 797-function regression suite) after making changes to the preprocessor or parser to verify no regressions were introduced."
+    },
+    {
+      "level": "WARNING",
+      "id": 1,
+      "title": "Stack Array Overflow Risk",
+      "body": "Declaring macro parameter arrays statically as `char[PP_MAX_PARAMS][1024]` can lead to stack overflows during large macro expansions."
+    },
+    {
+      "level": "WARNING",
+      "id": 2,
+      "title": "Registry Drift Alerts",
+      "body": "Adding files to `h:\\agents` without updating the index in `html_corpus_master_registry.html` will cause the Knowledge Drift metric to rise."
+    },
+    {
+      "level": "WARNING",
+      "id": 3,
+      "title": "Empty String Block Collapsing",
+      "body": "Skipping empty string placeholders in peephole assembly parsers causes preceding basic blocks to collapse, mutating the CFG topology."
+    },
+    {
+      "level": "WARNING",
+      "id": 4,
+      "title": "VRAM Leakage in WebGL Canvas",
+      "body": "Re-creating Three.js WebGL contexts inside hot reload loops without disposing of geometries and materials will lead to VRAM memory leaks."
+    },
+    {
+      "level": "WARNING",
+      "id": 5,
+      "title": "Incorrect Classifications in AMD64 ABI",
+      "body": "Failing to classify structures correctly before code generation can cause register values to stomp over memory arguments."
+    },
+    {
+      "level": "WARNING",
+      "id": 6,
+      "title": "Token Fusion during include propagation",
+      "body": "Missing check barriers inside include-path character sweeps can cause unexpected token combinations in target compilers."
+    },
+    {
+      "level": "WARNING",
+      "id": 7,
+      "title": "Stale Binary SIGSEGV",
+      "body": "Running `zcc2` compiled before introducing 64-bit standard stream symbols will cause segmentation faults in stream calls."
+    },
+    {
+      "level": "WARNING",
+      "id": 8,
+      "title": "Hardcoded Path Failures",
+      "body": "Hardcoding mount paths like `/mnt/d/` instead of dynamically detecting WSL path mappings will cause builds to fail on different systems."
+    },
+    {
+      "level": "WARNING",
+      "id": 9,
+      "title": "Global state collisions",
+      "body": "Declaring variables globally inside AST traversal functions without resetting them can lead to compiler collisions in multi-stage builds."
+    },
+    {
+      "level": "WARNING",
+      "id": 10,
+      "title": "Division-by-Zero in Static Evaluators",
+      "body": "Evaluating constant expressions containing divisions by zero without float checks can crash the AST generation phase."
+    },
+    {
+      "level": "WARNING",
+      "id": 11,
+      "title": "Silent Failures in telemetries",
+      "body": "Redirecting errors to `/dev/null` can mask failures in include directives, making it difficult to debug import bugs."
+    },
+    {
+      "level": "WARNING",
+      "id": 12,
+      "title": "Inconsistent SHA calculation",
+      "body": "Using platform-dependent APIs for hashing can generate different hashes for identical source files across platforms."
+    },
+    {
+      "level": "WARNING",
+      "id": 13,
+      "title": "Pointer Offset Stomping",
+      "body": "Loading indirect function call addresses with incorrect base displacements will corrupt variables in the current stack frame."
+    },
+    {
+      "level": "WARNING",
+      "id": 14,
+      "title": "Unhandled WebGL Context Loss",
+      "body": "Failing to catch WebGL context losses will leave visualizers with a blank black screen."
+    },
+    {
+      "level": "WARNING",
+      "id": 15,
+      "title": "Overriding local variables in scripts",
+      "body": "Injecting variables without scoping them inside loops can contaminate state variables."
+    },
+    {
+      "level": "WARNING",
+      "id": 16,
+      "title": "Missing bounds on ring buffers",
+      "body": "Logging execution steps without array bounds checking will cause stack overflows if compiling large projects."
+    },
+    {
+      "level": "WARNING",
+      "id": 17,
+      "title": "Non-ISO C initializers",
+      "body": "Using non-standard array initialization structures can cause compiler parsing errors in third-party libraries."
+    },
+    {
+      "level": "WARNING",
+      "id": 18,
+      "title": "Out-of-bounds array references in D3 zoom",
+      "body": "Reading zoom properties without checking if elements exist can cause browser scripts to crash."
+    },
+    {
+      "level": "WARNING",
+      "id": 19,
+      "title": "Standard headers pollution",
+      "body": "Defining names like `sinf` or `cosf` globally before loading standard headers can lead to compiler errors."
+    },
+    {
+      "level": "WARNING",
+      "id": 20,
+      "title": "Loss of Git history",
+      "body": "Performing branch resets or directory cleanups without verifying local changes can lead to unrecoverable work loss."
+    },
+    {
+      "level": "WARNING",
+      "id": 21,
+      "title": "Mismatched structures classification",
+      "body": "Returning aggregates using register layouts that mismatch target functions will corrupt CPU registers."
+    },
+    {
+      "level": "WARNING",
+      "id": 22,
+      "title": "Unregistered capabilities drift",
+      "body": "Deploying agents without listing their capabilities in the constitution will cause drift checks to fail."
+    },
+    {
+      "level": "WARNING",
+      "id": 23,
+      "title": "Static constant size limits",
+      "body": "Using static arrays for symbol tables can cause compilation to fail on large files."
+    },
+    {
+      "level": "WARNING",
+      "id": 24,
+      "title": "Missing WebGL support on headless systems",
+      "body": "Running selenium tests on head-less WSL environments without virtual display buffers will cause render failures."
+    },
+    {
+      "level": "WARNING",
+      "id": 25,
+      "title": "Memory alignment divergence",
+      "body": "Mismatching memory alignments on double variables can cause CPU faults on systems that require strict alignment."
+    },
+    {
+      "level": "NOTE",
+      "id": 1,
+      "title": "Visualizer Presets",
+      "body": "The compiler visualizer supports multiple color themes (glassmorphism, cyberpunk, dark mode) configurable in the styles panel."
+    },
+    {
+      "level": "NOTE",
+      "id": 2,
+      "title": "ASM File Outputs",
+      "body": "Compiling files with `zcc <file.c> -o <out.s>` outputs standard x86-64 assembly files."
+    },
+    {
+      "level": "NOTE",
+      "id": 3,
+      "title": "Standalone JS engine",
+      "body": "The `zjs` binary is a lightweight interpreter built on ZCC to run JS scripts without external runtime dependencies."
+    },
+    {
+      "level": "NOTE",
+      "id": 4,
+      "title": "Ring Buffer Size",
+      "body": "The global execution event ring buffer records up to 65,536 events before recycling slot allocations."
+    },
+    {
+      "level": "NOTE",
+      "id": 5,
+      "title": "SHA-256 Compatibility",
+      "body": "Standalone cryptographic modules calculate identical hash arrays across Linux and Windows platforms."
+    },
+    {
+      "level": "NOTE",
+      "id": 6,
+      "title": "SQLite nested parsing",
+      "body": "Fixed VLA null-pointer issues during SQL queries to stabilize SQLite amalgamation builds."
+    },
+    {
+      "level": "NOTE",
+      "id": 7,
+      "title": "Constant folding updates",
+      "body": "Modified constant folding steps to calculate static division logic before emitting code to object files."
+    },
+    {
+      "level": "NOTE",
+      "id": 8,
+      "title": "WSL root paths",
+      "body": "The default mount path for local workspace directories inside WSL is set under `/mnt/g/zccMAIN/zcc`."
+    },
+    {
+      "level": "NOTE",
+      "id": 9,
+      "title": "D3 zoom limits",
+      "body": "The interactive capability network graph supports zoom levels ranging from 0.1x to 8.0x."
+    },
+    {
+      "level": "NOTE",
+      "id": 10,
+      "title": "Target compile options",
+      "body": "Passing flags like `--emit-exec-record` enables event logging inside the compiler."
+    },
+    {
+      "level": "NOTE",
+      "id": 11,
+      "title": "Agent registries",
+      "body": "`zkaedi_orchestration_mesh.py` manages a system registry tracking 10 distinct agent roles."
+    },
+    {
+      "level": "NOTE",
+      "id": 12,
+      "title": "PCA normalization",
+      "body": "Embeddings are projected onto 3D visual bounds using principal component analysis."
+    },
+    {
+      "level": "NOTE",
+      "id": 13,
+      "title": "WebAudio routing",
+      "body": "Waveform visualizers process audio signals using WebAudio's AnalyserNode frequency bins."
+    },
+    {
+      "level": "NOTE",
+      "id": 14,
+      "title": "Basic block boundaries",
+      "body": "Labels and control-flow jumps force basic block splits inside ZCC's code generator."
+    },
+    {
+      "level": "NOTE",
+      "id": 15,
+      "title": "Target compiler version",
+      "body": "The current ZCC compiler version is tracked under `zcc_prime_1.1.0`."
+    },
+    {
+      "level": "NOTE",
+      "id": 16,
+      "title": "Output folder mappings",
+      "body": "WSL compilations write transient outputs to folders like `.compat_out/` and `.compat_logs/`."
+    },
+    {
+      "level": "NOTE",
+      "id": 17,
+      "title": "Code fixer targets",
+      "body": "The auto-code fixer analyzes and repairs structural anomalies in target JS/HTML scripts."
+    },
+    {
+      "level": "NOTE",
+      "id": 18,
+      "title": "Switch statement parsing",
+      "body": "Upgraded code generation for nested switch statements to ensure correct register assignments."
+    },
+    {
+      "level": "NOTE",
+      "id": 19,
+      "title": "Floating-point limits",
+      "body": "Emitting float values correctly translates expressions like `1.0f/0.0f` to standard IEEE 754 infinity bytes."
+    },
+    {
+      "level": "NOTE",
+      "id": 20,
+      "title": "Swarm render endpoints",
+      "body": "The renderer validation agent verifies HTTP endpoints using 3 parallel validation tasks."
+    },
+    {
+      "level": "NOTE",
+      "id": 21,
+      "title": "Preprocessor RSS threshold",
+      "body": "Adjusted preprocessor RSS thresholds to evaluate preprocessor memory separate from static BSS segments."
+    },
+    {
+      "level": "NOTE",
+      "id": 22,
+      "title": "Linker targets",
+      "body": "The linker script parses generated object layouts to output standard ELF executables."
+    },
+    {
+      "level": "NOTE",
+      "id": 23,
+      "title": "Dynamic array sizing",
+      "body": "The JS interpreter dynamically scales array structures when memory limits are reached."
+    },
+    {
+      "level": "NOTE",
+      "id": 24,
+      "title": "Selfhost comparisons",
+      "body": "Stage 2 and Stage 3 assembly outputs are compared using binary diff tools to ensure identical builds."
+    },
+    {
+      "level": "NOTE",
+      "id": 25,
+      "title": "Forensic chain commits",
+      "body": "Commits to the repository include verification gate reports to maintain a clean history."
+    },
+    {
+      "level": "CAUTION",
+      "id": 1,
+      "title": "Unsanitized Code Execution",
+      "body": "Running untested JavaScript files inside the JS REPL without sandboxing can expose local system files to execution risk."
+    },
+    {
+      "level": "CAUTION",
+      "id": 2,
+      "title": "Infinite Loops in Preprocessor Peeks",
+      "body": "Missing macro termination conditions in `pp_peek` will cause the preprocessor to loop infinitely, consuming CPU resources."
+    },
+    {
+      "level": "CAUTION",
+      "id": 3,
+      "title": "Stack Stomping in Indirect Calls",
+      "body": "Passing function arguments without adjusting the stack pointer for temporary slots can stomp variables in active frames."
+    },
+    {
+      "level": "CAUTION",
+      "id": 4,
+      "title": "VRAM Out-of-Memory Crashes",
+      "body": "Loading large 3D models with high vertex counts without cleaning up unused materials will crash the browser tab."
+    },
+    {
+      "level": "CAUTION",
+      "id": 5,
+      "title": "Incompatible Memory Alignment",
+      "body": "Compiling structures with unaligned pointers on target platforms can cause CPU execution faults."
+    },
+    {
+      "level": "CAUTION",
+      "id": 6,
+      "title": "Unlocked Systemic Drifts",
+      "body": "Allowing knowledge or capability drifts to exceed thresholds in `scratch/constitution.yaml` will block automated deployments."
+    },
+    {
+      "level": "CAUTION",
+      "id": 7,
+      "title": "Lost Preprocessor State",
+      "body": "Editing preprocessor files without testing stage-2 compiler bootstrap can break the build process."
+    },
+    {
+      "level": "CAUTION",
+      "id": 8,
+      "title": "Dangling Tooltip Elements",
+      "body": "Creating tooltip DOM elements inside mouseover events without cleaning them up on mouseout will clutter page markup."
+    },
+    {
+      "level": "CAUTION",
+      "id": 9,
+      "title": "Stale compiler executable usage",
+      "body": "Compiling files with stale compiler binaries can mask structural bugs in newer source code."
+    },
+    {
+      "level": "CAUTION",
+      "id": 10,
+      "title": "Undefined Behavior in float divisions",
+      "body": "Division by zero in static evaluations can emit incorrect data representations into object files."
+    },
+    {
+      "level": "CAUTION",
+      "id": 11,
+      "title": "Missing includes in FFI calls",
+      "body": "Failing to check standard includes when declaring external functions can lead to type mismatch crashes."
+    },
+    {
+      "level": "CAUTION",
+      "id": 12,
+      "title": "Registry synchronization failures",
+      "body": "Modifying filenames in the corpus without updating references in other tools will break automation scripts."
+    },
+    {
+      "level": "CAUTION",
+      "id": 13,
+      "title": "Git reflog corruption",
+      "body": "Performing hard resets in active workspaces without backing up untracked files can lead to data loss."
+    },
+    {
+      "level": "CAUTION",
+      "id": 14,
+      "title": "Mismatched System V ABI structures",
+      "body": "Passing complex structures across boundaries without AMD64 ABI classification will corrupt register values."
+    },
+    {
+      "level": "CAUTION",
+      "id": 15,
+      "title": "CSS Z-Index conflicts",
+      "body": "Giving WebGL canvases high CSS z-indices can render overlay controls non-interactive."
+    },
+    {
+      "level": "CAUTION",
+      "id": 16,
+      "title": "Telemetry websocket blocking",
+      "body": "Opening connection channels to WS ports without close timeouts can hang test runs on failure."
+    },
+    {
+      "level": "CAUTION",
+      "id": 17,
+      "title": "Out-of-bounds index references in AST",
+      "body": "Accessing AST node lists without bounds checking will cause memory segmentation faults."
+    },
+    {
+      "level": "CAUTION",
+      "id": 18,
+      "title": "Standard library name collisions",
+      "body": "Naming global variables after standard functions can cause linking errors."
+    },
+    {
+      "level": "CAUTION",
+      "id": 19,
+      "title": "Headless WebGL context failures",
+      "body": "Launching WebGL scripts in head-less WSL environments without display buffers will cause canvas initialization crashes."
+    },
+    {
+      "level": "CAUTION",
+      "id": 20,
+      "title": "Double-free bugs in token buffers",
+      "body": "Releasing token string allocations twice in preprocessor cleanup loops will corrupt the heap."
+    },
+    {
+      "level": "CAUTION",
+      "id": 21,
+      "title": "Missing error codes in replays",
+      "body": "Running replay verifications without verifying event hashes will pass tests even on corrupted builds."
+    },
+    {
+      "level": "CAUTION",
+      "id": 22,
+      "title": "CPU register corruption in code generation",
+      "body": "Using register values before verifying they are not allocated to other variables will corrupt computation states."
+    },
+    {
+      "level": "CAUTION",
+      "id": 23,
+      "title": "Static array overflows in symbols",
+      "body": "Bounding symbol names statically without string length validation will crash the parser."
+    },
+    {
+      "level": "CAUTION",
+      "id": 24,
+      "title": "Missing include path limits",
+      "body": "Allowing nested includes to recurse without depth validation can exhaust file descriptors."
+    },
+    {
+      "level": "CAUTION",
+      "id": 25,
+      "title": "Corrupted execution ledger files",
+      "body": "Writing JSON data to the `.zxr` ledger without character escaping can break parser read logic."
+    }
+  ],
+  "metadata": {
+    "total": 125,
+    "generated_by": "ZKAEDI PRIME Lucky Coupler",
+    "version": "1.1.0",
+    "timestamp": "2026-06-07"
+  }
+}

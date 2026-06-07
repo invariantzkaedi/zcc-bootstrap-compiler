@@ -162,5 +162,6 @@ void run_oracle_layout(void *cc);
 void run_oracle_determinism(void *cc, const char *input_file, const char *include_paths, const char *define_flags);
 void run_oracle_selfhost(void);
 void run_oracle_stack(void *cc, void *prog);
+void zcc_oracle_log_event(const char *context, const char *title, const char *body);
 
 #endif /* ZCC_ORACLE_SUBSTRATE_H */
