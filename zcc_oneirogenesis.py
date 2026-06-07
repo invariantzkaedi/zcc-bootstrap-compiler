@@ -89,7 +89,8 @@ PASSES = ["compiler_passes.c", "compiler_passes_ir.c", "ir_pass_manager.c",
           "src/zcc_oracle_substrate.c",
           "src/elf_emit.c", "src/codegen.c", "src/ir_serialization.c",
           "src/zcc_smt_prover.c", "src/gguf_emit.c", "src/zld.c",
-          "src/zcc_resource_oracle.c"]
+          "src/zcc_resource_oracle.c",
+          "ir_telemetry.c", "zcc_telemetry.c", "transient_state.c"]
 
 # ANSI colour palette
 _R = "\033[91m"; _G = "\033[92m"; _Y = "\033[93m"
@@ -259,7 +260,7 @@ class SelfHostGate:
         # symbol clashes that arise when linking zcc_pp.c with extra .c files
         zcc_full = str(REPO_ROOT / 'zcc.c')
         gate_src = zcc_full if os.path.exists(zcc_full) else zcc_pp_c
-        s3_p_args = [] if os.path.exists(zcc_full) else [p for p in p_args if not p.endswith("codegen.c")]
+        s3_p_args = [p for p in p_args if not p.endswith("codegen.c")]
 
         try:
             r = subprocess.run([mutant_bin, gate_src, '-o', s3_s],
@@ -277,7 +278,7 @@ class SelfHostGate:
         try:
             r = subprocess.run(
                 ['gcc', '-no-pie', '-O0', '-w', '-fno-asynchronous-unwind-tables',
-                 '-Wa,--noexecstack', '-fno-unwind-tables',
+                 '-Wa,--noexecstack', '-fno-unwind-tables', '-Dmain=zcc_main',
                  '-o', s3_bin, s3_s] + s3_p_args + ['-lm'],
                 capture_output=True, timeout=60)
             if r.returncode != 0:
