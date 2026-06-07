@@ -21,7 +21,7 @@ COMPAT_SMOKE_SRCS = \
 	tests/regressions/t_zkaedi_rigging_regressions.c
 COMPAT_EXTENDED_SRCS = $(COMPAT_SMOKE_SRCS) raytracer.c
 
-.PHONY: all clean selfhost selfhost-fast compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test rust-front-smoke check-evm-lifter check-ir-vuln-tag check-forgezero-receipt verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration
+.PHONY: all clean selfhost selfhost-fast compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test rust-front-smoke check-evm-lifter check-ir-vuln-tag check-forgezero-receipt verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration zjs test-zjs visualize-svg-diffs wasm-svg-bridge
 
 .SECONDARY: zcc zcc2 zcc3
 
@@ -69,6 +69,41 @@ selfhost: zcc3
 	./zcc  zcc.c -o zcc2.s
 	./zcc2 zcc.c -o zcc3.s
 	diff zcc2.s zcc3.s && echo "SELF-HOST VERIFIED (assembly identical)" || (echo "SELF-HOST FAILED (assembly diverged)"; diff zcc2.s zcc3.s | head -20; exit 1)
+
+zjs: zcc zjs.c test_evm_sprites.c zcc_svg.c
+	@echo "=== Compiling zjs, test_evm_sprites, and zcc_svg via ZCC ==="
+	./zcc zjs.c -DZJS_COMPILE -o zjs.s
+	./zcc test_evm_sprites.c -DZJS_COMPILE -o test_evm_sprites.s
+	./zcc zcc_svg.c -o zcc_svg.s
+	gcc -o zjs zjs.s test_evm_sprites.s zcc_svg.s -lm
+
+# === AUTOMATED ZJS + SVG BRIDGE TESTS ===
+test-zjs: zjs
+	@echo "=== ZJS + EVM VISUALIZER EDGE CASE AUTOMATION ==="
+	@python3 tests/run_edge_cases.py
+	@echo "777JACKPOT777 — ALL TESTS GREEN. SVG bridge rock solid."
+.PHONY: test-zjs
+
+visualize-svg-diffs: test-zjs
+	@echo "=== VISUAL SVG DIFF GENERATOR ==="
+	@cp zcc_sprites.svg tests/baseline.svg
+	@python3 tests/visualize_svg_diffs.py
+	@echo "777JACKPOT777 — SVG diffs rendered. Open browser tab."
+.PHONY: visualize-svg-diffs
+
+wasm-svg-bridge:
+	@echo "=== COMPILING WEBASSEMBLY SVG RENDERER ==="
+	emcc wasm_svg_bridge.c -o wasm_svg_bridge.wasm \
+		-s EXPORTED_FUNCTIONS='["_generate_svg","_set_phase","_get_phases"]' \
+		-s EXPORTED_RUNTIME_METHODS='["ccall","cwrap"]' \
+		-s MODULARIZE=1 -s EXPORT_NAME="createModule" \
+		-O3 -s ALLOW_MEMORY_GROWTH=1
+	@cp demo_sprites.html demo_sprites_wasm.html
+	@sed -i 's/zcc_sprites.svg/wasm_svg_bridge.wasm/g' demo_sprites_wasm.html
+	@echo "777JACKPOT777 — WASM SVG bridge ready. Open demo_sprites_wasm.html"
+.PHONY: wasm-svg-bridge
+
+
 
 
 selfhost-fast: zcc_fast
