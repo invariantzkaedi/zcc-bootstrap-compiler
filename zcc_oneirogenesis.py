@@ -626,8 +626,33 @@ class DreamEngine:
             print(f"  {_C}[RESUME]{_W} Gen {self.state.generation} │ "
                   f"Hash {self.state.parent_hash} │ "
                   f"{len(self.state.discovered_algorithms)} algorithms discovered")
+            # Restore thermodynamic variables with defaults for backwards compatibility
+            self.T_eff = data.get("T_eff", 1.0)
+            self.eta_c = data.get("eta_c", 0.4407)
+            self.phase = data.get("phase", "explore")
+            self.free_energy = data.get("free_energy", 0.0)
+            self.energy = data.get("energy", 0.0)
+            self.entropy = data.get("entropy", 0.0)
+            self.island_states = data.get("island_states", [])
         else:
             self.state = DreamState()
+            self.T_eff = 1.0
+            self.eta_c = 0.4407
+            self.phase = "explore"
+            self.free_energy = 0.0
+            self.energy = 0.0
+            self.entropy = 0.0
+            self.island_states = []
+
+        # Monkey-patch Island.__init__ to restore state on creation
+        original_island_init = Island.__init__
+        def patched_island_init(isl_self, island_id, seed, parent_asm, zcc_pp_c, blacklist, sweep_prob=0.3):
+            original_island_init(isl_self, island_id, seed, parent_asm, zcc_pp_c, blacklist, sweep_prob)
+            if hasattr(self, 'island_states') and island_id < len(self.island_states):
+                data_dict = self.island_states[island_id]
+                isl_self.state = IslandState(**{k: v for k, v in data_dict.items()
+                                                if k in IslandState.__dataclass_fields__})
+        Island.__init__ = patched_island_init
 
         # Mutation blacklist
         self.blacklist: set = set(self.state.blacklisted_fingerprints)
@@ -642,7 +667,11 @@ class DreamEngine:
         self.wf_gamma = _WF_FALLBACK_GAMMA
         self.sweep_prob    = max(0.1, min(0.9, 1.0 / self.wf_nu))   # fallback: 0.3
         self.migrate_every = max(3, int(10.0 / self.wf_gamma))       # fallback: 5
-        self.T_0 = 1.0  # initial Boltzmann temperature
+        
+        # Support continuous thermodynamic temperature decay across OOM restarts
+        self._start_gen = self.state.generation
+        self._T_0_base = 1.0
+        self.T_0 = 1.0  # initial Boltzmann temperature (plain float)
         
         # Thread safety locks and state for live update
         self._wf_lock = threading.Lock()
@@ -807,10 +836,41 @@ int main(void) {
         BENCHMARK_FILE.write_text(src)
         print(f"  {_C}[INIT]{_W} Created benchmark workload")
 
-    def save_state(self):
+    def save_state(self, T_eff=None, islands=None, result=None):
         self.state.blacklisted_fingerprints = list(self.blacklist)
+        state_dict = asdict(self.state)
+        
+        T_eff = T_eff if T_eff is not None else getattr(self, 'T_eff', 1.0)
+        islands = islands if islands is not None else getattr(self, 'islands', [])
+            
+        self.T_eff = T_eff
+        self.eta_c = getattr(self, "eta_c", 0.4407)
+        self.phase = getattr(self, "phase", "explore")
+        
+        if result and result.mutant_fitness:
+            self.free_energy = result.mutant_fitness.get("free_energy", result.mutant_fitness.get("score", 0.0))
+            self.energy = result.mutant_fitness.get("score", 0.0)
+            self.entropy = result.mutant_fitness.get("entropy", 0.0)
+        
+        state_dict["T_eff"] = self.T_eff
+        state_dict["eta_c"] = self.eta_c
+        state_dict["phase"] = self.phase
+        state_dict["free_energy"] = getattr(self, "free_energy", 0.0)
+        state_dict["energy"] = getattr(self, "energy", 0.0)
+        state_dict["entropy"] = getattr(self, "entropy", 0.0)
+            
+        if islands:
+            state_dict["island_states"] = [asdict(isl.state) for isl in islands]
+        else:
+            state_dict["island_states"] = getattr(self, "island_states", [])
+            
         with open(DREAM_DIR / "dream_state.json", 'w') as f:
-            json.dump(asdict(self.state), f, indent=2)
+            json.dump(state_dict, f, indent=2)
+
+    def _current_T(self, cycle: int) -> float:
+        """Compute temperature with continuous decay across OOM restarts."""
+        effective_cycle = cycle + self._start_gen
+        return self._T_0_base * max(1, effective_cycle) ** (-self.wf_beta)
 
     def _journal(self, gen: int, island_id: int, mutations: list,
                  delta: dict, fitness: dict, hash_id: str):
@@ -958,7 +1018,7 @@ int main(void) {
 
                 with tempfile.TemporaryDirectory(prefix='dream_step_') as td:
                     # Per-cycle T_eff decay: T_0 * (cycle+1)^(-β)
-                    T_eff = self.T_0 * max(1, cycle + 1) ** (-self.wf_beta)
+                    T_eff = self._current_T(cycle)
                     result = island.step(
                         mutation_engine,
                         max_mutations=self.max_mutations,
@@ -1025,7 +1085,7 @@ int main(void) {
                     self.state.total_regressions += 1
 
                 self.state.total_mutations_tried += len(result.mutations_applied)
-                self.save_state()
+                self.save_state(T_eff=T_eff, islands=islands, result=result)
 
         elapsed = time.time() - t_start
         self._print_summary(num_cycles, survived_total, rejected_total, elapsed, islands)
