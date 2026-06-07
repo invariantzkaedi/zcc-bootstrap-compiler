@@ -89,8 +89,7 @@ PASSES = ["compiler_passes.c", "compiler_passes_ir.c", "ir_pass_manager.c",
           "src/zcc_oracle_substrate.c",
           "src/elf_emit.c", "src/codegen.c", "src/ir_serialization.c",
           "src/zcc_smt_prover.c", "src/gguf_emit.c", "src/zld.c",
-          "src/zcc_resource_oracle.c",
-          "ir_telemetry.c", "zcc_telemetry.c", "transient_state.c"]
+          "src/zcc_resource_oracle.c"]
 
 # ANSI colour palette
 _R = "\033[91m"; _G = "\033[92m"; _Y = "\033[93m"
