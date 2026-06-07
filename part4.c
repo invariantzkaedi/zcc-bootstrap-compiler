@@ -1596,14 +1596,19 @@ void codegen_expr(Compiler *cc, Node *node) {
       int lhs_ok = 1, rhs_ok = 1;
       long long lhs_cv = eval_const_expr_p4(node->lhs, &lhs_ok);
       long long rhs_cv = eval_const_expr_p4(node->rhs, &rhs_ok);
-      if (lhs_ok && rhs_ok && rhs_cv != 0) {
-        /* CG-CFOLD-UNSIGNED-001: use unsigned arithmetic for unsigned types. */
-        int is_unsigned_div = node_type_unsigned(node);
-        long long result;
-        if (is_unsigned_div)
-            result = (long long)((unsigned long long)lhs_cv / (unsigned long long)rhs_cv);
-        else
-            result = lhs_cv / rhs_cv;
+      if (lhs_ok && rhs_ok) {
+        long long result = 0;
+        if (rhs_cv != 0) {
+          /* CG-CFOLD-UNSIGNED-001: use unsigned arithmetic for unsigned types. */
+          int is_unsigned_div = node_type_unsigned(node);
+          if (is_unsigned_div)
+              result = (long long)((unsigned long long)lhs_cv / (unsigned long long)rhs_cv);
+          else
+              result = lhs_cv / rhs_cv;
+        } else {
+          /* CG-SIGFPE-002: fold division by zero to 0 to avoid runtime SIGFPE */
+          result = 0;
+        }
         fprintf(cc->out, "    movq $%lld, %%rax\n", result);
         ir_emit_binary_op(ND_DIV, node->type, "$const_lhs", "$const_rhs", node->line);
         return;
@@ -1637,6 +1642,28 @@ void codegen_expr(Compiler *cc, Node *node) {
   case ND_MOD: {
     char lhs_ir[32];
     char rhs_ir[32];
+
+    if (!backend_ops) {
+      int lhs_ok = 1, rhs_ok = 1;
+      long long lhs_cv = eval_const_expr_p4(node->lhs, &lhs_ok);
+      long long rhs_cv = eval_const_expr_p4(node->rhs, &rhs_ok);
+      if (lhs_ok && rhs_ok) {
+        long long result = 0;
+        if (rhs_cv != 0) {
+          int is_unsigned_mod = node_type_unsigned(node);
+          if (is_unsigned_mod)
+              result = (long long)((unsigned long long)lhs_cv % (unsigned long long)rhs_cv);
+          else
+              result = lhs_cv % rhs_cv;
+        } else {
+          /* CG-SIGFPE-002: fold modulo by zero to 0 to avoid runtime SIGFPE */
+          result = 0;
+        }
+        fprintf(cc->out, "    movq $%lld, %%rax\n", result);
+        ir_emit_binary_op(ND_MOD, node->type, "$const_lhs", "$const_rhs", node->line);
+        return;
+      }
+    }
 
     if (node->rhs && node->rhs->kind == ND_NUM &&
         is_power_of_2_val(node->rhs->int_val)) {
@@ -4061,7 +4088,8 @@ static int ir_whitelisted(const char *name) {
       "validate_token_bounds", "validate_node", "validate_type", "bad_node_cutoff",
       "test_struct_tbaa", "test_cast_fallback", "gvn_test", "forward_test", "slf_sink", "slf_call_barrier", "loop_sum",
       /* Split Lexer Core (fortified and hardened) */
-      /* "lex_char", "lex_operator", "next_token", "read_char", "read_escape", "node_name", */
+      "read_char", "read_escape", "node_name", "lex_char", "lex_operator",
+      /* "next_token", */
       NULL
   };
   int i;

@@ -34,8 +34,8 @@ static uint32_t opt_constant_fold_pass(Function *fn) {
                             case OP_ADD: res = a + b; break;
                             case OP_SUB: res = a - b; break;
                             case OP_MUL: res = a * b; break;
-                            case OP_DIV: if (b == 0) ok = false; else res = a / b; break;
-                            case OP_MOD: if (b == 0) ok = false; else res = a % b; break;
+                            case OP_DIV: if (b == 0) res = 0; else res = a / b; break;
+                            case OP_MOD: if (b == 0) res = 0; else res = a % b; break;
                             case OP_BAND: res = a & b; break;
                             case OP_BOR: res = a | b; break;
                             case OP_BXOR: res = a ^ b; break;

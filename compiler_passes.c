@@ -1191,16 +1191,22 @@ static uint32_t constant_fold_pass(Function *fn) {
         }
         break;
       case OP_DIV:
-        if (d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST &&
-            d1->imm != 0) {
-          result = d0->imm / d1->imm;
+        if (d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+          if (d1->imm != 0) {
+            result = d0->imm / d1->imm;
+          } else {
+            result = 0; /* CG-SIGFPE-002: fold division by zero to 0 to prevent SIGFPE */
+          }
           goto fold_binary;
         }
         break;
       case OP_MOD:
-        if (d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST &&
-            d1->imm != 0) {
-          result = d0->imm % d1->imm;
+        if (d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+          if (d1->imm != 0) {
+            result = d0->imm % d1->imm;
+          } else {
+            result = 0; /* CG-SIGFPE-002: fold modulo by zero to 0 to prevent SIGFPE */
+          }
           goto fold_binary;
         }
         break;
@@ -4421,14 +4427,19 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     break;
   }
   case ZND_POST_INC: {
-    RegID alloca_r = get_or_create_var(ctx, node->lhs->name, 8);
-    if (!alloca_r)
+    if (!node->lhs)
+      return 0;
+    int old_want = ctx->want_address;
+    ctx->want_address = 1;
+    RegID addr_r = zcc_lower_expr(ctx, node->lhs);
+    ctx->want_address = old_want;
+    if (!addr_r)
       return 0;
     Instr *load_ins = calloc(1, sizeof(Instr));
     load_ins->id = ctx->next_instr_id++;
     load_ins->op = OP_LOAD;
     load_ins->dst = r;
-    load_ins->src[0] = alloca_r;
+    load_ins->src[0] = addr_r;
     load_ins->n_src = 1;
     load_ins->imm =
         (node->lhs && node->lhs->member_size > 0) ? node->lhs->member_size : 8;
@@ -4457,7 +4468,7 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     st->op = OP_STORE;
     st->dst = 0;
     st->src[0] = r_new;
-    st->src[1] = alloca_r;
+    st->src[1] = addr_r;
     st->n_src = 2;
     st->exec_freq = 1.0;
     st->imm =
@@ -4467,14 +4478,19 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     return r; /* return value before increment */
   }
   case ZND_POST_DEC: {
-    RegID alloca_r = get_or_create_var(ctx, node->lhs->name, 8);
-    if (!alloca_r)
+    if (!node->lhs)
+      return 0;
+    int old_want = ctx->want_address;
+    ctx->want_address = 1;
+    RegID addr_r = zcc_lower_expr(ctx, node->lhs);
+    ctx->want_address = old_want;
+    if (!addr_r)
       return 0;
     Instr *load_ins = calloc(1, sizeof(Instr));
     load_ins->id = ctx->next_instr_id++;
     load_ins->op = OP_LOAD;
     load_ins->dst = r;
-    load_ins->src[0] = alloca_r;
+    load_ins->src[0] = addr_r;
     load_ins->n_src = 1;
     load_ins->imm =
         (node->lhs && node->lhs->member_size > 0) ? node->lhs->member_size : 8;
@@ -4503,7 +4519,7 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     st->op = OP_STORE;
     st->dst = 0;
     st->src[0] = r_new;
-    st->src[1] = alloca_r;
+    st->src[1] = addr_r;
     st->n_src = 2;
     st->exec_freq = 1.0;
     st->imm =
@@ -4513,14 +4529,19 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     return r; /* return value before decrement */
   }
   case ZND_PRE_INC: {
-    RegID alloca_r = get_or_create_var(ctx, node->lhs->name, 8);
-    if (!alloca_r)
+    if (!node->lhs)
+      return 0;
+    int old_want = ctx->want_address;
+    ctx->want_address = 1;
+    RegID addr_r = zcc_lower_expr(ctx, node->lhs);
+    ctx->want_address = old_want;
+    if (!addr_r)
       return 0;
     Instr *load_ins = calloc(1, sizeof(Instr));
     load_ins->id = ctx->next_instr_id++;
     load_ins->op = OP_LOAD;
     load_ins->dst = r;
-    load_ins->src[0] = alloca_r;
+    load_ins->src[0] = addr_r;
     load_ins->n_src = 1;
     load_ins->imm =
         (node->lhs && node->lhs->member_size > 0) ? node->lhs->member_size : 8;
@@ -4549,7 +4570,7 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     st->op = OP_STORE;
     st->dst = 0;
     st->src[0] = r_new;
-    st->src[1] = alloca_r;
+    st->src[1] = addr_r;
     st->n_src = 2;
     st->exec_freq = 1.0;
     st->imm =
@@ -4559,14 +4580,19 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     return r_new; /* return value after increment */
   }
   case ZND_PRE_DEC: {
-    RegID alloca_r = get_or_create_var(ctx, node->lhs->name, 8);
-    if (!alloca_r)
+    if (!node->lhs)
+      return 0;
+    int old_want = ctx->want_address;
+    ctx->want_address = 1;
+    RegID addr_r = zcc_lower_expr(ctx, node->lhs);
+    ctx->want_address = old_want;
+    if (!addr_r)
       return 0;
     Instr *load_ins = calloc(1, sizeof(Instr));
     load_ins->id = ctx->next_instr_id++;
     load_ins->op = OP_LOAD;
     load_ins->dst = r;
-    load_ins->src[0] = alloca_r;
+    load_ins->src[0] = addr_r;
     load_ins->n_src = 1;
     load_ins->imm =
         (node->lhs && node->lhs->member_size > 0) ? node->lhs->member_size : 8;
@@ -4595,7 +4621,7 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     st->op = OP_STORE;
     st->dst = 0;
     st->src[0] = r_new;
-    st->src[1] = alloca_r;
+    st->src[1] = addr_r;
     st->n_src = 2;
     st->exec_freq = 1.0;
     st->imm =
@@ -5074,6 +5100,7 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
 
     ctx->cur_block = head;
     RegID cond_r = zcc_lower_expr(ctx, node->cond);
+    BlockID cond_end_blk = ctx->cur_block;
     Instr *cbr = calloc(1, sizeof(Instr));
     cbr->id = ctx->next_instr_id++;
     cbr->op = OP_CONDBR;
@@ -5084,14 +5111,14 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
     cbr->n_src = 3;
     cbr->exec_freq = 1.0;
     emit_instr(ctx, cbr);
-    fn->blocks[head]->succs[0] = body_blk;
-    fn->blocks[head]->succs[1] = exit_blk;
-    fn->blocks[head]->n_succs = 2;
-    fn->blocks[head]->branch_prob[0] = 0.9;
-    fn->blocks[head]->branch_prob[1] = 0.1;
-    fn->blocks[body_blk]->preds[0] = head;
+    fn->blocks[cond_end_blk]->succs[0] = body_blk;
+    fn->blocks[cond_end_blk]->succs[1] = exit_blk;
+    fn->blocks[cond_end_blk]->n_succs = 2;
+    fn->blocks[cond_end_blk]->branch_prob[0] = 0.9;
+    fn->blocks[cond_end_blk]->branch_prob[1] = 0.1;
+    fn->blocks[body_blk]->preds[0] = cond_end_blk;
     fn->blocks[body_blk]->n_preds = 1;
-    fn->blocks[exit_blk]->preds[0] = head;
+    fn->blocks[exit_blk]->preds[0] = cond_end_blk;
     fn->blocks[exit_blk]->n_preds = 1;
 
     ctx->loop_exit_stack[ctx->loop_depth] = exit_blk;
@@ -5174,6 +5201,7 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
                                   node->line_no);
       emit_instr(ctx, one);
     }
+    BlockID cond_end_blk = ctx->cur_block;
     Instr *cbr = calloc(1, sizeof(Instr));
     cbr->id = ctx->next_instr_id++;
     cbr->op = OP_CONDBR;
@@ -5184,14 +5212,14 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
     cbr->n_src = 3;
     cbr->exec_freq = 1.0;
     emit_instr(ctx, cbr);
-    fn->blocks[header]->succs[0] = body_blk;
-    fn->blocks[header]->succs[1] = exit_blk;
-    fn->blocks[header]->n_succs = 2;
-    fn->blocks[header]->branch_prob[0] = 0.9;
-    fn->blocks[header]->branch_prob[1] = 0.1;
-    fn->blocks[body_blk]->preds[0] = header;
+    fn->blocks[cond_end_blk]->succs[0] = body_blk;
+    fn->blocks[cond_end_blk]->succs[1] = exit_blk;
+    fn->blocks[cond_end_blk]->n_succs = 2;
+    fn->blocks[cond_end_blk]->branch_prob[0] = 0.9;
+    fn->blocks[cond_end_blk]->branch_prob[1] = 0.1;
+    fn->blocks[body_blk]->preds[0] = cond_end_blk;
     fn->blocks[body_blk]->n_preds = 1;
-    fn->blocks[exit_blk]->preds[fn->blocks[exit_blk]->n_preds++] = header;
+    fn->blocks[exit_blk]->preds[fn->blocks[exit_blk]->n_preds++] = cond_end_blk;
 
     ctx->loop_exit_stack[ctx->loop_depth] = exit_blk;
     ctx->loop_latch_stack[ctx->loop_depth] =
@@ -6703,6 +6731,15 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
     fprintf(stderr, "[Mem2Reg]   single-block allocas promoted: %u\n",
             mem2reg_count);
     licm_build_def_block(fn);
+    uint32_t post_folded = constant_fold_pass(fn);
+    uint32_t post_sr = opt_strength_reduction_pass(fn);
+    uint32_t post_cp = opt_copy_prop_pass(fn);
+    uint32_t post_p = opt_peephole_pass(fn);
+    if (post_folded > 0 || post_sr > 0 || post_cp > 0 || post_p > 0) {
+      fprintf(stderr, "[Post-Mem2Reg-Opts] Folded: %u | S-Reduce: %u | Copy-Prop: %u | Peephole: %u\n",
+              post_folded, post_sr, post_cp, post_p);
+      licm_build_def_block(fn);
+    }
     uint32_t dce_after = ssa_dce_pass(fn);
     fprintf(stderr,
             "[DCE->SSA]  instructions removed (after mem2reg): %u  blocks "
