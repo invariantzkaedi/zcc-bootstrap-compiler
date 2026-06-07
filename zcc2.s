@@ -1648,8 +1648,8 @@ node_compound_op:
     movq %rax, %r11
     jmp .Lir_b_3598_4
 .Lir_b_3598_1:
-    movq -480(%rbp), %rbx
     movq -488(%rbp), %r12
+    movq -480(%rbp), %rbx
     movq -496(%rbp), %r13
     movq -504(%rbp), %r14
     movq -512(%rbp), %r15
@@ -4411,8 +4411,8 @@ node_type_unsigned:
 .Lir_b_3637_21:
     movq %r11, %rax
     movq -912(%rbp), %rbx
-    movq -920(%rbp), %r12
     movq -928(%rbp), %r13
+    movq -920(%rbp), %r12
     movq -936(%rbp), %r14
     movq -944(%rbp), %r15
     jmp .Lfunc_end_3637
@@ -6916,8 +6916,7 @@ pp_add_macro:
     movq %r11, %rax
     movq $1, %rax
     pushq %rax
-    movq %r13, %rax
-    addq $16532, %rax
+    leaq 16532(%r13), %rax
     popq %r11
     movl %r11d, (%rax)
     movq %r11, %rax
@@ -10313,8 +10312,7 @@ pp_process_include:
     addq $270925824, %rax
     movslq (%rax), %rax
     pushq %rax
-    movq %r14, %rax
-    addq $270925824, %rax
+    leaq 270925824(%r14), %rax
     popq %r11
     movl %r11d, (%rax)
     movq %r11, %rax
@@ -22462,8 +22460,7 @@ zcc_preprocess:
     movq %rax, %r14
     leaq .LS235(%rip), %rax
     pushq %rax
-    movq %r14, %rax
-    addq $16520, %rax
+    leaq 16520(%r14), %rax
     movq (%rax), %rax
     movq %rax, %rdi
     popq %rsi
@@ -38767,8 +38764,8 @@ lookup_keyword_fallback:
     movq $38, %rbx
     movq %rbx, %rax
     movq -39360(%rbp), %rbx
-    movq -39368(%rbp), %r12
     movq -39376(%rbp), %r13
+    movq -39368(%rbp), %r12
     movq -39384(%rbp), %r14
     movq -39392(%rbp), %r15
     jmp .Lfunc_end_4666
@@ -44850,7 +44847,6 @@ is_space:
 .Lir_b_4670_0:
     leaq -8(%rbp), %rax
     movq %rax, -344(%rbp)
-    movq -344(%rbp), %rax
     movslq (%rax), %rax
     movq %rax, %rbx
 	.loc 1 6434
@@ -56749,8 +56745,8 @@ is_type_token:
     movq -1776(%rbp), %rbx
     movq -1784(%rbp), %r12
     movq -1792(%rbp), %r13
-    movq -1800(%rbp), %r14
     movq -1808(%rbp), %r15
+    movq -1800(%rbp), %r14
     jmp .Lfunc_end_5072
 .Lir_b_5072_21:
 	.loc 1 7982
@@ -69242,8 +69238,7 @@ parse_declarator:
     je .L5809
     movq %r14, %rax
     pushq %rax
-    movq %r13, %rax
-    addq $56, %rax
+    leaq 56(%r13), %rax
     movq (%rax), %rax
     pushq %rax
     movq %r13, %rax
@@ -79503,8 +79498,7 @@ parse_initializer_list:
     call parse_assign
     movq %rax, %rbx
 .L6276:
-    movq %r12, %rax
-    addq $344, %rax
+    leaq 344(%r12), %rax
     movslq (%rax), %rax
     pushq %rax
     movq %r13, %rax
@@ -91519,8 +91513,8 @@ zcc_init_list_begin:
     movq %r12, %rax
     jmp .Lfunc_end_6788
 .Lfunc_end_6788:
-    movq -24(%rbp), %r12
     movq %rbp, %rsp
+    movq -24(%rbp), %r12
     popq %rbp
     ret
     .text
@@ -176470,8 +176464,7 @@ rust_parse_stmt:
     movq $0, %rax
     movsbq %al, %rax
     pushq %rax
-    movq %r14, %rax
-    addq $12, %rax
+    leaq 12(%r14), %rax
     pushq %rax
     movq $127, %rax
     movq %rax, %r11
@@ -187077,8 +187070,7 @@ rust_typecheck_expr:
     movzbl %al, %eax
     cmpq $0, %rax
     je .L11952
-    movq %r13, %rax
-    addq $16596, %rax
+    leaq 16596(%r13), %rax
     pushq %rax
     movq %r12, %rax
     cltq
@@ -194068,8 +194060,7 @@ rust_backend_add_diag:
     leaq -40(%rbp), %rax
     movq (%rax), %rax
     pushq %rax
-    movq %r12, %rax
-    addq $300, %rax
+    leaq 300(%r12), %rax
     movq %rax, %rdi
     popq %rsi
     popq %rdx

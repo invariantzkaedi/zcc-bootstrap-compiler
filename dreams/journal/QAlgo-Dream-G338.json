@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G338",
+    "name": "Codegen Mutation G338 [schedule_load_sink]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-0",
+    "lineage_hash": "cd940c77d3e3f2a7",
+    "island_id": 0
+  },
+  "mutations": [
+    {
+      "name": "schedule_load_sink",
+      "category": "SCHEDULE",
+      "description": "Sink load of -480(%rbp) to %rbx past independent instruction",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -1.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": 0,
+    "inst_count_delta": 205357,
+    "score_delta": -0.8391160001046956,
+    "composite_score": 2278299.5228799996
+  },
+  "timestamp": "2026-06-07T10:45:52.987897+00:00",
+  "generation": 338
+}

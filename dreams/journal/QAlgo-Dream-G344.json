@@ -1,0 +1,47 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G344",
+    "name": "Codegen Mutation G344 [redundant_load_after_store]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-0",
+    "lineage_hash": "85c17a3a44317d9f",
+    "island_id": 0
+  },
+  "mutations": [
+    {
+      "name": "redundant_load_after_store",
+      "category": "PEEPHOLE",
+      "description": "Remove redundant load: %rax already has -872(%rbp)",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -2.5,
+      "fingerprint": ""
+    },
+    {
+      "name": "lea_optimization",
+      "category": "IDIOM",
+      "description": "Fuse mov+add \u2192 leaq $552(%r13), %rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -3.0,
+      "fingerprint": ""
+    },
+    {
+      "name": "schedule_load_sink",
+      "category": "SCHEDULE",
+      "description": "Sink load of -504(%rbp) to %r14 past independent instruction",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -1.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -41,
+    "inst_count_delta": 205350,
+    "score_delta": -5.902331999968737,
+    "composite_score": 2278235.315298
+  },
+  "timestamp": "2026-06-07T10:50:17.800386+00:00",
+  "generation": 344
+}

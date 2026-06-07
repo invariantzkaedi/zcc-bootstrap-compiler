@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G340",
+    "name": "Codegen Mutation G340 [schedule_load_sink]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-0",
+    "lineage_hash": "70a33122f072fd6b",
+    "island_id": 0
+  },
+  "mutations": [
+    {
+      "name": "schedule_load_sink",
+      "category": "SCHEDULE",
+      "description": "Sink load of -920(%rbp) to %r12 past independent instruction",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -1.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": 0,
+    "inst_count_delta": 205355,
+    "score_delta": -3.4619900002144277,
+    "composite_score": 2278277.4926559995
+  },
+  "timestamp": "2026-06-07T10:46:55.361866+00:00",
+  "generation": 340
+}

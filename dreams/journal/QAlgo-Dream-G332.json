@@ -1,0 +1,29 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G332",
+    "name": "Codegen Mutation G332 [lea_optimization]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-0",
+    "lineage_hash": "b2ad7ec3f62c252b",
+    "island_id": 0
+  },
+  "mutations": [
+    {
+      "name": "lea_optimization",
+      "category": "IDIOM",
+      "description": "Fuse mov+add \u2192 leaq $25300(%r12), %rax",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -3.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": -15,
+    "inst_count_delta": 205363,
+    "score_delta": -16.96827600011602,
+    "composite_score": 2278333.8514269996
+  },
+  "timestamp": "2026-06-07T09:44:22.168052+00:00",
+  "generation": 332
+}

@@ -1,0 +1,38 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G345",
+    "name": "Codegen Mutation G345 [schedule_load_sink]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-0",
+    "lineage_hash": "705b87021d036f22",
+    "island_id": 0
+  },
+  "mutations": [
+    {
+      "name": "schedule_load_sink",
+      "category": "SCHEDULE",
+      "description": "Sink load of -80(%rbp) to %r13 past independent instruction",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -1.0,
+      "fingerprint": ""
+    },
+    {
+      "name": "schedule_load_sink",
+      "category": "SCHEDULE",
+      "description": "Sink load of -624(%rbp) to %rbx past independent instruction",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -1.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": 0,
+    "inst_count_delta": 205350,
+    "score_delta": -2.4011980001814663,
+    "composite_score": 2278232.9140999997
+  },
+  "timestamp": "2026-06-07T10:50:45.583816+00:00",
+  "generation": 345
+}

@@ -1,0 +1,38 @@
+{
+  "algorithm_info": {
+    "id": "QAlgo-Dream-G331",
+    "name": "Codegen Mutation G331 [schedule_load_sink]",
+    "domain": "compiler_optimization",
+    "discovered_by": "ZCC Oneirogenesis v2 Island-0",
+    "lineage_hash": "1f2192398922b13f",
+    "island_id": 0
+  },
+  "mutations": [
+    {
+      "name": "schedule_load_sink",
+      "category": "SCHEDULE",
+      "description": "Sink load of -672(%rbp) to %rbx past independent instruction",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -1.0,
+      "fingerprint": ""
+    },
+    {
+      "name": "schedule_load_sink",
+      "category": "SCHEDULE",
+      "description": "Sink load of -39376(%rbp) to %r13 past independent instruction",
+      "is_sweep": false,
+      "sweep_count": 0,
+      "energy_delta": -1.0,
+      "fingerprint": ""
+    }
+  ],
+  "fitness_improvement": {
+    "asm_size_delta": 0,
+    "inst_count_delta": 205364,
+    "score_delta": -98.08526999969035,
+    "composite_score": 2278350.8197029997
+  },
+  "timestamp": "2026-06-07T09:43:53.649087+00:00",
+  "generation": 331
+}

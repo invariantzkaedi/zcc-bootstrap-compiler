@@ -1,16 +1,16 @@
 # ZCC Oneirogenesis v2 — Evolution Report
 
-**Generated**: 2026-06-01T08:09:17.071594+00:00
+**Generated**: 2026-06-07T10:50:45.603079+00:00
 
 ## Summary
 
 | Metric | Value |
 |--------|-------|
-| Global Generation | 10 |
-| Total Survived | 234 |
-| Total Rejected | 737 |
-| Algorithms Discovered | 131 |
-| Blacklisted Patterns | 53 |
+| Global Generation | 345 |
+| Total Survived | 188 |
+| Total Rejected | 447 |
+| Algorithms Discovered | 146 |
+| Blacklisted Patterns | 55 |
 
 ## Lineage
 
@@ -147,67 +147,21 @@
 | G0129 | I1 | `b26ccb31785b` | Remove dead movq to %rax (overwritten at +1) | -8.6 | 2026-04-20T13:46:14 |
 | G0130 | I4 | `327becb09e8d` | Swap independent pair to reduce WAR pipeline stall | -0.0 | 2026-04-20T13:46:20 |
 | G0131 | I4 | `5d660156d299` | Swap independent pair to reduce WAR pipeline stall | -0.8 | 2026-04-20T13:46:31 |
-| G0001 | I0 | `?` | cmpq_zero_to_testq, cmpq_zero_to_testq | -51.4 | N/A |
-| G0002 | I0 | `?` | cmpq_zero_to_testq | -1.9 | N/A |
-| G0001 | I2 | `?` | lea_optimization | -3.4 | N/A |
-| G0001 | I0 | `?` | lea_optimization | -5.9 | N/A |
-| G0002 | I2 | `?` | lea_optimization | -4.4 | N/A |
-| G0002 | I0 | `?` | lea_optimization | -7.8 | N/A |
-| G0001 | I0 | `?` | schedule_war_pair, lea_optimization | -8.3 | N/A |
-| G0001 | I2 | `?` | lea_optimization | -25.0 | N/A |
-| G0002 | I2 | `?` | lea_optimization | -7.9 | N/A |
-| G0003 | I2 | `?` | lea_optimization | -4.5 | N/A |
-| G0002 | I0 | `?` | lea_optimization | -2.1 | N/A |
-| G0001 | I1 | `?` | lea_optimization | -8.6 | N/A |
-| G0001 | I0 | `?` | unused_frame_save, unused_frame_save | -80.3 | N/A |
-| G0002 | I0 | `?` | unused_frame_save | -13.3 | N/A |
-| G0003 | I0 | `?` | unused_frame_save, unused_frame_save (+1) | -25.2 | N/A |
-| G0004 | I0 | `?` | unused_frame_save | -13.7 | N/A |
-| G0005 | I0 | `?` | unused_frame_save | -20.9 | N/A |
-| G0006 | I0 | `?` | unused_frame_save, unused_frame_save | -25.1 | N/A |
-| G0007 | I0 | `?` | unused_frame_save, unused_frame_save (+1) | -35.6 | N/A |
-| G0001 | I0 | `?` | unused_frame_save | -28.4 | N/A |
-| G0002 | I0 | `?` | unused_frame_save | -11.5 | N/A |
-| G0003 | I0 | `?` | unused_frame_save | -11.9 | N/A |
-| G0004 | I0 | `?` | unused_frame_save | -4.8 | N/A |
-| G0005 | I0 | `?` | unused_frame_save | -17.6 | N/A |
-| G0006 | I0 | `?` | unused_frame_save, unused_frame_save (+1) | -37.5 | N/A |
-| G0007 | I0 | `?` | unused_frame_save | -11.9 | N/A |
-| G0008 | I0 | `?` | unused_frame_save | -10.7 | N/A |
-| G0009 | I0 | `?` | unused_frame_save | -13.1 | N/A |
-| G0010 | I0 | `?` | unused_frame_save | -10.2 | N/A |
-| G0001 | I2 | `?` | unused_frame_save | -14.9 | N/A |
-| G0001 | I0 | `?` | unused_frame_save, unused_frame_save | -38.3 | N/A |
-| G0001 | I1 | `?` | unused_frame_save, unused_frame_save | -10.8 | N/A |
-| G0002 | I0 | `?` | unused_frame_save | -4.5 | N/A |
-| G0003 | I0 | `?` | unused_frame_save | -12.9 | N/A |
-| G0002 | I2 | `?` | unused_frame_save | -10.7 | N/A |
-| G0004 | I0 | `?` | unused_frame_save | -13.3 | N/A |
-| G0002 | I1 | `?` | unused_frame_save | -16.6 | N/A |
-| G0003 | I1 | `?` | unused_frame_save | -13.9 | N/A |
-| G0004 | I1 | `?` | unused_frame_save | -9.3 | N/A |
-| G0003 | I2 | `?` | unused_frame_save | -13.4 | N/A |
-| G0004 | I2 | `?` | unused_frame_save | -11.8 | N/A |
-| G0005 | I1 | `?` | unused_frame_save | -13.8 | N/A |
-| G0005 | I2 | `?` | unused_frame_save | -12.8 | N/A |
-| G0006 | I1 | `?` | unused_frame_save | -12.2 | N/A |
-| G0007 | I1 | `?` | unused_frame_save | -7.2 | N/A |
-| G0006 | I2 | `?` | unused_frame_save | -7.2 | N/A |
-| G0007 | I2 | `?` | unused_frame_save | -13.6 | N/A |
-| G0005 | I0 | `?` | unused_frame_save | -1.5 | N/A |
-| G0008 | I2 | `?` | unused_frame_save | -9.4 | N/A |
-| G0009 | I2 | `?` | unused_frame_save | -12.4 | N/A |
-| G0006 | I0 | `?` | unused_frame_save | -19.2 | N/A |
-| G0008 | I1 | `?` | unused_frame_save, unused_frame_save | -27.3 | N/A |
-| G0007 | I0 | `?` | unused_frame_save | -14.8 | N/A |
-| G0008 | I0 | `?` | unused_frame_save | -12.1 | N/A |
-| G0010 | I2 | `?` | unused_frame_save | -10.3 | N/A |
-| G0009 | I1 | `?` | unused_frame_save | -12.8 | N/A |
-| G0011 | I2 | `?` | unused_frame_save | -18.3 | N/A |
-| G0009 | I0 | `?` | unused_frame_save | -11.7 | N/A |
-| G0012 | I2 | `?` | unused_frame_save | -7.3 | N/A |
-| G0010 | I0 | `?` | unused_frame_save | -8.1 | N/A |
-| G0010 | I1 | `?` | unused_frame_save | -6.7 | N/A |
+| G0331 | I0 | `1f2192398922` | Sink load of -672(%rbp) to %rbx past independent instruction, Sink load of -39376(%rbp) to %r13 past independent instruction | -98.1 | 2026-06-07T09:43:53 |
+| G0332 | I0 | `b2ad7ec3f62c` | Fuse mov+add → leaq $25300(%r12), %rax | -17.0 | 2026-06-07T09:44:22 |
+| G0333 | I0 | `3f7ebe5fe95f` | Fuse mov+add → leaq $12(%r14), %rax, Sink load of -39368(%rbp) to %r12 past independent instruction | -3.1 | 2026-06-07T10:08:36 |
+| G0334 | I0 | `e17d77733766` | Fuse mov+add → leaq $300(%r12), %rax | -3.7 | 2026-06-07T10:08:59 |
+| G0335 | I0 | `23ac07f4ea1f` | Fuse mov+add → leaq $16596(%r13), %rax | -7.3 | 2026-06-07T10:38:57 |
+| G0336 | I0 | `a299f45454b8` | Fuse mov+add → leaq $344(%r12), %rax, Fuse mov+add → leaq $270925824(%r14), %rax (+1) | -15.6 | 2026-06-07T10:44:56 |
+| G0337 | I0 | `fb407a88210c` | Sink load of -1800(%rbp) to %r14 past independent instruction, Fuse mov+add → leaq $16520(%r14), %rax | -3.8 | 2026-06-07T10:45:25 |
+| G0338 | I0 | `cd940c77d3e3` | Sink load of -480(%rbp) to %rbx past independent instruction | -0.8 | 2026-06-07T10:45:52 |
+| G0339 | I0 | `62a2bfef06df` | Fuse mov+add → leaq $16532(%r13), %rax, Fuse mov+add → leaq $56(%r13), %rax (+1) | -18.6 | 2026-06-07T10:46:24 |
+| G0340 | I0 | `70a33122f072` | Sink load of -920(%rbp) to %r12 past independent instruction | -3.5 | 2026-06-07T10:46:55 |
+| G0341 | I0 | `3031a80322d0` | Fuse mov+add → leaq $144(%r12), %rax | -14.1 | 2026-06-07T10:47:24 |
+| G0342 | I0 | `90758d93f946` | Fuse mov+add → leaq $192(%r12), %rax, Sink load of -1600(%rbp) to %r13 past independent instruction (+1) | -20.4 | 2026-06-07T10:47:47 |
+| G0343 | I0 | `79b676930007` | Sink load of -752(%rbp) to %rbx past independent instruction, Sink load of -600(%rbp) to %r14 past independent instruction | -1.7 | 2026-06-07T10:48:33 |
+| G0344 | I0 | `85c17a3a4431` | Remove redundant load: %rax already has -872(%rbp), Fuse mov+add → leaq $552(%r13), %rax (+1) | -5.9 | 2026-06-07T10:50:17 |
+| G0345 | I0 | `705b87021d03` | Sink load of -80(%rbp) to %r13 past independent instruction, Sink load of -624(%rbp) to %rbx past independent instruction | -2.4 | 2026-06-07T10:50:45 |
 
 ## Discovered Algorithms
 
@@ -342,26 +296,25 @@
 - `QAlgo-Dream-G129` → [`QAlgo-Dream-G129.json`](journal/QAlgo-Dream-G129.json)
 - `QAlgo-Dream-G130` → [`QAlgo-Dream-G130.json`](journal/QAlgo-Dream-G130.json)
 - `QAlgo-Dream-G131` → [`QAlgo-Dream-G131.json`](journal/QAlgo-Dream-G131.json)
+- `QAlgo-Dream-G331` → [`QAlgo-Dream-G331.json`](journal/QAlgo-Dream-G331.json)
+- `QAlgo-Dream-G332` → [`QAlgo-Dream-G332.json`](journal/QAlgo-Dream-G332.json)
+- `QAlgo-Dream-G333` → [`QAlgo-Dream-G333.json`](journal/QAlgo-Dream-G333.json)
+- `QAlgo-Dream-G334` → [`QAlgo-Dream-G334.json`](journal/QAlgo-Dream-G334.json)
+- `QAlgo-Dream-G335` → [`QAlgo-Dream-G335.json`](journal/QAlgo-Dream-G335.json)
+- `QAlgo-Dream-G336` → [`QAlgo-Dream-G336.json`](journal/QAlgo-Dream-G336.json)
+- `QAlgo-Dream-G337` → [`QAlgo-Dream-G337.json`](journal/QAlgo-Dream-G337.json)
+- `QAlgo-Dream-G338` → [`QAlgo-Dream-G338.json`](journal/QAlgo-Dream-G338.json)
+- `QAlgo-Dream-G339` → [`QAlgo-Dream-G339.json`](journal/QAlgo-Dream-G339.json)
+- `QAlgo-Dream-G340` → [`QAlgo-Dream-G340.json`](journal/QAlgo-Dream-G340.json)
+- `QAlgo-Dream-G341` → [`QAlgo-Dream-G341.json`](journal/QAlgo-Dream-G341.json)
+- `QAlgo-Dream-G342` → [`QAlgo-Dream-G342.json`](journal/QAlgo-Dream-G342.json)
+- `QAlgo-Dream-G343` → [`QAlgo-Dream-G343.json`](journal/QAlgo-Dream-G343.json)
+- `QAlgo-Dream-G344` → [`QAlgo-Dream-G344.json`](journal/QAlgo-Dream-G344.json)
+- `QAlgo-Dream-G345` → [`QAlgo-Dream-G345.json`](journal/QAlgo-Dream-G345.json)
 
 ## Fitness History
 
 ```
-G0102 I4: score=1257409
-G0103 I0: score=1257419
-G0104 I2: score=1257409
-G0105 I1: score=1257409
-G0106 I4: score=1257408
-G0107 I1: score=1257401
-G0108 I4: score=1257390
-G0109 I1: score=1257399
-G0110 I3: score=1257409
-G0111 I4: score=1257389
-G0112 I2: score=1257401
-G0113 I4: score=1257389
-G0114 I1: score=1257399
-G0115 I2: score=1257399
-G0116 I3: score=1257408
-G0117 I4: score=1257380
 G0118 I4: score=1257379
 G0119 I0: score=1257418
 G0120 I2: score=1257388
@@ -376,4 +329,20 @@ G0128 I3: score=1257408
 G0129 I1: score=1257389
 G0130 I4: score=1257359
 G0131 I4: score=1257358
+G0330 I0: score=2240050
+G0331 I0: score=2278351
+G0332 I0: score=2278334
+G0333 I0: score=2278331
+G0334 I0: score=2278327
+G0335 I0: score=2278320
+G0336 I0: score=2278304
+G0337 I0: score=2278300
+G0338 I0: score=2278300
+G0339 I0: score=2278281
+G0340 I0: score=2278277
+G0341 I0: score=2278263
+G0342 I0: score=2278243
+G0343 I0: score=2278241
+G0344 I0: score=2278235
+G0345 I0: score=2278233
 ```
