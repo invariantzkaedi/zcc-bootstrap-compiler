@@ -259,8 +259,7 @@ class SelfHostGate:
         # symbol clashes that arise when linking zcc_pp.c with extra .c files
         zcc_full = str(REPO_ROOT / 'zcc.c')
         gate_src = zcc_full if os.path.exists(zcc_full) else zcc_pp_c
-        s3_p_args = []  # zcc.c is self-contained; PASSES already baked in
-
+        # Compile zcc.c to assembly for idempotency check (g_s3.s)
         try:
             r = subprocess.run([mutant_bin, gate_src, '-o', s3_s],
                                capture_output=True, timeout=timeout)
@@ -270,25 +269,17 @@ class SelfHostGate:
             return False, "mutant timeout"
         except FileNotFoundError:
             return False, f"binary missing: {mutant_bin}"
-
         if not os.path.exists(s3_s) or os.path.getsize(s3_s) == 0:
             return False, "empty assembly output"
-
+        # Compile zcc.c directly to ELF (mirrors: ./zcc2 zcc.c -o zcc3)
         try:
-            r = subprocess.run(
-                ['gcc', '-no-pie', '-O0', '-w', '-fno-asynchronous-unwind-tables',
-                 '-Wa,--noexecstack', '-fno-unwind-tables', '-Dmain=zcc_main',
-                 '-o', s3_bin, s3_s] + s3_p_args + ['-lm'],
-                capture_output=True, timeout=60)
+            r = subprocess.run([mutant_bin, gate_src, '-o', s3_bin],
+                               capture_output=True, timeout=timeout)
             if r.returncode != 0:
-                full_stderr = r.stderr.decode('utf-8', 'ignore').strip()
+                err = r.stderr.decode('utf-8', 'ignore').strip()
                 with open("dreams/last_assembler_error.txt", "w") as f:
-                    f.write(full_stderr)
-                import shutil
-                shutil.copy2(s3_s, "dreams/g_s3_fault.s")
-                lines = full_stderr.split('\n')
-                err_summary = '\n'.join(lines[:10])
-                return False, f"s3 link fail:\n{err_summary}"
+                    f.write(err)
+                return False, f"s3 elf fail:\n{err[:200]}"
         except subprocess.TimeoutExpired:
             return False, "s3 link timeout"
 
