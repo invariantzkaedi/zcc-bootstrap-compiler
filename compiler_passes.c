@@ -51,7 +51,7 @@ static const char *current_function_name = NULL;
 #define MAX_PREDS 2048
 #define MAX_INSTRS 65536 /* must exceed max RegID in any compiled function */
 #define MAX_BLOCKS                                                             \
-  8192 /* per-function block limit (parser/lexer can be large) */
+  32768 /* per-function block limit (parser/lexer can be large) */
 #define MAX_ALLOCS 256
 #define MAX_LOOPS 64
 #define MAX_LOOP_BLOCKS 256
@@ -368,8 +368,8 @@ static bool is_critical(const Instr *ins) {
  * ───────────────────────────────────────────────────────────────────────────
  */
 
-/* ── Block-membership bitset (MAX_BLOCKS=512 → 8 × 64-bit words) ── */
-#define BLKSET_WORDS 8
+/* ── Block-membership bitset dynamically sized based on MAX_BLOCKS ── */
+#define BLKSET_WORDS (MAX_BLOCKS / 64)
 typedef uint64_t BlkSet[BLKSET_WORDS];
 
 static inline void blkset_add(BlkSet bs, BlockID b) {
@@ -492,6 +492,8 @@ static void licm_compute_rpo(Function *fn) {
  * C.  Cooper et al. 2001 iterative dominator tree
  * ═════════════════════════════════════════════════════════════════ */
 static BlockID licm_intersect(BlockID b1, BlockID b2) {
+  if (b1 == NO_BLOCK) return b2;
+  if (b2 == NO_BLOCK) return b1;
   uint32_t f1 = licm_rpo_of[b1], f2 = licm_rpo_of[b2];
   while (f1 != f2) {
     while (f1 > f2) {
@@ -1952,11 +1954,20 @@ static void build_dominator_tree_pass(Function *fn) {
 }
 
 static bool dominates(BlockID *idom, int h, int b, int n_blocks) {
+  if (b == (int)NO_BLOCK || h == (int)NO_BLOCK)
+    return false;
   int cur = b;
   int depth = 0;
   while (cur != h && depth++ < n_blocks) {
-    if (idom[cur] == cur) break; /* reached root */
-    cur = idom[cur];
+    if (cur == (int)NO_BLOCK)
+      break;
+    if (idom[cur] == (BlockID)cur)
+      break; /* reached root */
+    if (idom[cur] == NO_BLOCK) {
+      cur = (int)NO_BLOCK;
+      break;
+    }
+    cur = (int)idom[cur];
   }
   return cur == h;
 }

@@ -138,7 +138,7 @@ void zcc_node_free(ZCCNode *z);
 
 /* IR build and pipeline. Implemented in compiler_passes.c. */
 struct Function;
-#define ZCC_PGO_MAX_BLOCKS 2048   /* must be >= MAX_BLOCKS in compiler_passes.c */
+#define ZCC_PGO_MAX_BLOCKS 32768   /* must be >= MAX_BLOCKS in compiler_passes.c */
 #define ZCC_BLOCK_NAME_LEN 64
 struct PassResult {
     unsigned int order[ZCC_PGO_MAX_BLOCKS];  /* block IDs in emission order */

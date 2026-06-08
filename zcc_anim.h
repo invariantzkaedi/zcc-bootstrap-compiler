@@ -61,42 +61,26 @@ static inline float ease_cubic_in_out(float t) {
     }
 }
 
-static inline float cubic_bezier_x(float u, float x1, float x2) {
-    return 3.0f * (1.0f - u) * (1.0f - u) * u * x1 + 3.0f * (1.0f - u) * u * u * x2 + u * u * u;
+static inline float ease_elastic_out(float t) {
+    if (t == 0.0f) return 0.0f;
+    if (t == 1.0f) return 1.0f;
+    float p = 0.3f;
+    return powf(2.0f, -10.0f * t) * sinf((t - p / 4.0f) * (2.0f * M_PI) / p) + 1.0f;
 }
 
-static inline float cubic_bezier_y(float u, float y1, float y2) {
-    return 3.0f * (1.0f - u) * (1.0f - u) * u * y1 + 3.0f * (1.0f - u) * u * u * y2 + u * u * u;
-}
-
-static inline float ease_cubic_bezier(float t, float x1, float y1, float x2, float y2) {
-    if (t <= 0.0f) return 0.0f;
-    if (t >= 1.0f) return 1.0f;
-    
-    float u = t;
-    for (int i = 0; i < 8; i++) {
-        float x = cubic_bezier_x(u, x1, x2) - t;
-        float dx = 3.0f * (1.0f - 4.0f * u + 3.0f * u * u) * x1 + 3.0f * (2.0f * u - 3.0f * u * u) * x2 + 3.0f * u * u;
-        if (fabsf(dx) < 1e-6f) break;
-        u -= x / dx;
+static inline float ease_bounce_out(float t) {
+    if (t < (1.0f / 2.75f)) {
+        return 7.5625f * t * t;
+    } else if (t < (2.0f / 2.75f)) {
+        float f = t - (1.5f / 2.75f);
+        return 7.5625f * f * f + 0.75f;
+    } else if (t < (2.5f / 2.75f)) {
+        float f = t - (2.25f / 2.75f);
+        return 7.5625f * f * f + 0.9375f;
+    } else {
+        float f = t - (2.625f / 2.75f);
+        return 7.5625f * f * f + 0.984375f;
     }
-    
-    if (u < 0.0f || u > 1.0f) {
-        float low = 0.0f, high = 1.0f;
-        u = t;
-        for (int i = 0; i < 12; i++) {
-            float x = cubic_bezier_x(u, x1, x2);
-            if (fabsf(x - t) < 1e-4f) break;
-            if (x < t) {
-                low = u;
-            } else {
-                high = u;
-            }
-            u = 0.5f * (low + high);
-        }
-    }
-    
-    return cubic_bezier_y(u, y1, y2);
 }
 
 // 2. Feature-Engineered Phasors (Phase Distortion, West-Coast Wavefolding, and Dynamic PWM)
@@ -144,6 +128,81 @@ static inline AnimVec3 anim_vec3_lerp(AnimVec3 a, AnimVec3 b, float t) {
 static inline void anim_path_interpolate(const AnimVec3* path_a, const AnimVec3* path_b, AnimVec3* dest, int num_points, float t) {
     for (int i = 0; i < num_points; i++) {
         dest[i] = anim_vec3_lerp(path_a[i], path_b[i], t);
+    }
+}
+
+static inline void anim_path_resample(const AnimVec3* src, int src_count, AnimVec3* dest, int dest_count) {
+    if (src_count <= 0 || dest_count <= 0) return;
+    if (src_count == 1) {
+        for (int i = 0; i < dest_count; i++) dest[i] = src[0];
+        return;
+    }
+    for (int i = 0; i < dest_count; i++) {
+        float progress = (float)i / (float)(dest_count - 1);
+        float raw_index = progress * (src_count - 1);
+        int idx1 = (int)floorf(raw_index);
+        int idx2 = idx1 + 1;
+        if (idx2 >= src_count) idx2 = src_count - 1;
+        float factor = raw_index - (float)idx1;
+        dest[i] = anim_vec3_lerp(src[idx1], src[idx2], factor);
+    }
+}
+
+// Verlet Physics Integration structures & updates
+typedef struct {
+    AnimVec3 pos;
+    AnimVec3 prev_pos;
+    AnimVec3 acc;
+    float mass;
+    int pinned;
+} AnimParticle;
+
+typedef struct {
+    int p1;
+    int p2;
+    float rest_len;
+    float stiffness;
+} AnimSpring;
+
+static inline void anim_physics_verlet_step(AnimParticle* p, float dt, float gravity_y, float drag) {
+    if (p->pinned) return;
+    AnimVec3 temp = p->pos;
+    float velocity_x = (p->pos.x - p->prev_pos.x) * drag;
+    float velocity_y = (p->pos.y - p->prev_pos.y) * drag;
+    float velocity_z = (p->pos.z - p->prev_pos.z) * drag;
+    
+    p->pos.x += velocity_x + p->acc.x * dt * dt;
+    p->pos.y += velocity_y + (p->acc.y + gravity_y) * dt * dt;
+    p->pos.z += velocity_z + p->acc.z * dt * dt;
+    
+    p->prev_pos = temp;
+    p->acc.x = 0.0f; p->acc.y = 0.0f; p->acc.z = 0.0f;
+}
+
+static inline void anim_physics_satisfy_spring(AnimParticle* particles, const AnimSpring* spring) {
+    AnimParticle* p1 = &particles[spring->p1];
+    AnimParticle* p2 = &particles[spring->p2];
+    
+    float dx = p2->pos.x - p1->pos.x;
+    float dy = p2->pos.y - p1->pos.y;
+    float dz = p2->pos.z - p1->pos.z;
+    float dist = sqrtf(dx * dx + dy * dy + dz * dz);
+    if (dist == 0.0f) dist = 0.0001f;
+    
+    float diff = (spring->rest_len - dist) / dist * spring->stiffness * 0.5f;
+    float offset_x = dx * diff;
+    float offset_y = dy * diff;
+    float offset_z = dz * diff;
+    
+    if (!p1->pinned) {
+        p1->pos.x -= offset_x;
+        p1->pos.y -= offset_y;
+        p1->pos.z -= offset_z;
+    }
+    if (!p2->pinned) {
+        p2->pos.x += offset_x;
+        p2->pos.y += offset_y;
+        p2->pos.z += offset_z;
     }
 }
 
@@ -585,6 +644,29 @@ static inline float sdCapsule(Vec3 p, Vec3 a, Vec3 b, float r) {
     return length(diff) - r;
 }
 
+static inline float sdGyroid(Vec3 p, float scale, float thickness, float bias) {
+    p.x *= scale; p.y *= scale; p.z *= scale;
+    float val = sinf(p.x) * cosf(p.y) + sinf(p.y) * cosf(p.z) + sinf(p.z) * cosf(p.x);
+    return fabsf(val - bias) / scale - thickness;
+}
+
+static inline float sdCylinder(Vec3 p, float r, float h) {
+    Vec2 d = { length((Vec3){p.x, p.z, 0.0f}) - r, fabsf(p.y) - h };
+    Vec2 max_d = { fmaxf(d.x, 0.0f), fmaxf(d.y, 0.0f) };
+    return length((Vec3){max_d.x, max_d.y, 0.0f}) + fminf(fmaxf(d.x, d.y), 0.0f);
+}
+
+static inline float sdCone(Vec3 p, float angle_rad, float h) {
+    float c = cosf(angle_rad);
+    float s = sinf(angle_rad);
+    Vec2 q = { length((Vec3){p.x, p.z, 0.0f}), p.y };
+    float d1 = q.y - h;
+    float d2 = q.x * c + q.y * s;
+    if (d1 > 0.0f && q.x < -d1 * s / c) return d1;
+    if (d2 > 0.0f && q.x > d2 * c) return d2;
+    return -d2;
+}
+
 // === Combinators ===
 static inline float sdUnion(float a, float b) {
     return fminf(a, b);
@@ -824,10 +906,10 @@ static inline Vec3 get_normal(Vec3 p, ChaosPhasor* ph, const ObjMesh* mesh) {
     return n;
 }
 
-static inline float ray_march(Ray r, ChaosPhasor* ph, const ObjMesh* mesh, Vec3* hit, Vec3* normal) {
+static inline float ray_march(Vec3 ro, Vec3 rd, ChaosPhasor* ph, const ObjMesh* mesh, Vec3* hit, Vec3* normal) {
     float depth = 0.0f;
     for (int i = 0; i < MAX_STEPS; ++i) {
-        Vec3 p = {r.ro.x + r.rd.x * depth, r.ro.y + r.rd.y * depth, r.ro.z + r.rd.z * depth};
+        Vec3 p = {ro.x + rd.x * depth, ro.y + rd.y * depth, ro.z + rd.z * depth};
         float dist = scene_sdf(p, ph, mesh);
         depth += dist;
         if (dist < SURF_DIST) {

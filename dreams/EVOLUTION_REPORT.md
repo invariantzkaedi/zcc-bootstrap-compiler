@@ -1,16 +1,16 @@
 # ZCC Oneirogenesis v2 — Evolution Report
 
-**Generated**: 2026-06-07T10:50:45.603079+00:00
+**Generated**: 2026-06-05T07:33:43.056176+00:00
 
 ## Summary
 
 | Metric | Value |
 |--------|-------|
-| Global Generation | 345 |
-| Total Survived | 188 |
-| Total Rejected | 447 |
-| Algorithms Discovered | 146 |
-| Blacklisted Patterns | 55 |
+| Global Generation | 290 |
+| Total Survived | 492 |
+| Total Rejected | 615 |
+| Algorithms Discovered | 290 |
+| Blacklisted Patterns | 53 |
 
 ## Lineage
 
@@ -147,21 +147,165 @@
 | G0129 | I1 | `b26ccb31785b` | Remove dead movq to %rax (overwritten at +1) | -8.6 | 2026-04-20T13:46:14 |
 | G0130 | I4 | `327becb09e8d` | Swap independent pair to reduce WAR pipeline stall | -0.0 | 2026-04-20T13:46:20 |
 | G0131 | I4 | `5d660156d299` | Swap independent pair to reduce WAR pipeline stall | -0.8 | 2026-04-20T13:46:31 |
-| G0331 | I0 | `1f2192398922` | Sink load of -672(%rbp) to %rbx past independent instruction, Sink load of -39376(%rbp) to %r13 past independent instruction | -98.1 | 2026-06-07T09:43:53 |
-| G0332 | I0 | `b2ad7ec3f62c` | Fuse mov+add → leaq $25300(%r12), %rax | -17.0 | 2026-06-07T09:44:22 |
-| G0333 | I0 | `3f7ebe5fe95f` | Fuse mov+add → leaq $12(%r14), %rax, Sink load of -39368(%rbp) to %r12 past independent instruction | -3.1 | 2026-06-07T10:08:36 |
-| G0334 | I0 | `e17d77733766` | Fuse mov+add → leaq $300(%r12), %rax | -3.7 | 2026-06-07T10:08:59 |
-| G0335 | I0 | `23ac07f4ea1f` | Fuse mov+add → leaq $16596(%r13), %rax | -7.3 | 2026-06-07T10:38:57 |
-| G0336 | I0 | `a299f45454b8` | Fuse mov+add → leaq $344(%r12), %rax, Fuse mov+add → leaq $270925824(%r14), %rax (+1) | -15.6 | 2026-06-07T10:44:56 |
-| G0337 | I0 | `fb407a88210c` | Sink load of -1800(%rbp) to %r14 past independent instruction, Fuse mov+add → leaq $16520(%r14), %rax | -3.8 | 2026-06-07T10:45:25 |
-| G0338 | I0 | `cd940c77d3e3` | Sink load of -480(%rbp) to %rbx past independent instruction | -0.8 | 2026-06-07T10:45:52 |
-| G0339 | I0 | `62a2bfef06df` | Fuse mov+add → leaq $16532(%r13), %rax, Fuse mov+add → leaq $56(%r13), %rax (+1) | -18.6 | 2026-06-07T10:46:24 |
-| G0340 | I0 | `70a33122f072` | Sink load of -920(%rbp) to %r12 past independent instruction | -3.5 | 2026-06-07T10:46:55 |
-| G0341 | I0 | `3031a80322d0` | Fuse mov+add → leaq $144(%r12), %rax | -14.1 | 2026-06-07T10:47:24 |
-| G0342 | I0 | `90758d93f946` | Fuse mov+add → leaq $192(%r12), %rax, Sink load of -1600(%rbp) to %r13 past independent instruction (+1) | -20.4 | 2026-06-07T10:47:47 |
-| G0343 | I0 | `79b676930007` | Sink load of -752(%rbp) to %rbx past independent instruction, Sink load of -600(%rbp) to %r14 past independent instruction | -1.7 | 2026-06-07T10:48:33 |
-| G0344 | I0 | `85c17a3a4431` | Remove redundant load: %rax already has -872(%rbp), Fuse mov+add → leaq $552(%r13), %rax (+1) | -5.9 | 2026-06-07T10:50:17 |
-| G0345 | I0 | `705b87021d03` | Sink load of -80(%rbp) to %r13 past independent instruction, Sink load of -624(%rbp) to %rbx past independent instruction | -2.4 | 2026-06-07T10:50:45 |
+| G0132 | I0 | `f1de63099e27` | Remove unused frame-save: %rax → -56(%rbp) (slot never loaded), Remove unused frame-save: %rax → -592(%rbp) (slot never loaded) | -26.1 | 2026-06-01T18:19:11 |
+| G0133 | I1 | `0e6a0cc13a82` | Remove unused frame-save: %rax → -64(%rbp) (slot never loaded) | -13.6 | 2026-06-01T18:19:33 |
+| G0134 | I0 | `55ebf57136a2` | Remove unused frame-save: %rax → -72(%rbp) (slot never loaded) | -1.8 | 2026-06-01T18:20:22 |
+| G0135 | I1 | `e664c3f34183` | Remove unused frame-save: %rax → -360(%rbp) (slot never loaded) | -12.2 | 2026-06-01T18:20:46 |
+| G0136 | I0 | `6e07a5de5ba4` | Sweep: remove ALL 396 jmp-to-next-label (branch straightening), Remove unused frame-save: %rax → -64(%rbp) (slot never loaded) (+1) | -5938.2 | 2026-06-01T18:21:30 |
+| G0137 | I1 | `f60c496fd176` | Sweep: remove ALL 396 jmp-to-next-label (branch straightening), Remove unused frame-save: %rax → -384(%rbp) (slot never loaded) (+2) | -5936.5 | 2026-06-01T18:21:51 |
+| G0138 | I0 | `0df69ccd9e18` | Remove unused frame-save: %rax → -520(%rbp) (slot never loaded) | -0.7 | 2026-06-01T18:22:31 |
+| G0139 | I1 | `9107064343a7` | Remove unused frame-save: %rax → -1368(%rbp) (slot never loaded) | -15.3 | 2026-06-01T18:22:51 |
+| G0140 | I2 | `e9f2d06922ae` | Sweep: remove ALL 396 jmp-to-next-label (branch straightening), Remove unused frame-save: %rax → -64(%rbp) (slot never loaded) | -5914.7 | 2026-06-01T18:23:10 |
+| G0141 | I1 | `657e9c95ef46` | Remove unused frame-save: %rax → -1184(%rbp) (slot never loaded) | -14.5 | 2026-06-01T18:23:53 |
+| G0142 | I0 | `b585124c8375` | Remove unused frame-save: %rax → -456(%rbp) (slot never loaded), Remove unused frame-save: %rax → -17168(%rbp) (slot never loaded) | -35.5 | 2026-06-01T18:24:33 |
+| G0143 | I1 | `22ab4d75d36e` | Remove unused frame-save: %rax → -440(%rbp) (slot never loaded) | -9.2 | 2026-06-01T18:24:53 |
+| G0144 | I2 | `6b32954e032f` | Remove unused frame-save: %rax → -624(%rbp) (slot never loaded) | -19.1 | 2026-06-01T18:25:12 |
+| G0145 | I1 | `d68217060ec7` | Remove unused frame-save: %rax → -592(%rbp) (slot never loaded), Remove unused frame-save: %rax → -504(%rbp) (slot never loaded) | -24.1 | 2026-06-01T18:25:31 |
+| G0146 | I0 | `83d2a630ba97` | Remove unused frame-save: %rax → -440(%rbp) (slot never loaded) | -14.8 | 2026-06-01T18:26:10 |
+| G0147 | I1 | `615b04db3c6f` | Remove unused frame-save: %rax → -1280(%rbp) (slot never loaded) | -16.4 | 2026-06-01T18:26:28 |
+| G0148 | I2 | `7ae9a589f81a` | Remove unused frame-save: %rax → -64(%rbp) (slot never loaded) | -9.3 | 2026-06-01T18:26:47 |
+| G0149 | I2 | `2da04c740186` | Remove unused frame-save: %rax → -560(%rbp) (slot never loaded) | -12.2 | 2026-06-01T18:27:41 |
+| G0150 | I2 | `52056e2559b4` | Remove unused frame-save: %rax → -520(%rbp) (slot never loaded) | -11.5 | 2026-06-01T18:28:02 |
+| G0151 | I0 | `79ec1d5358a8` | Remove unused frame-save: %rax → -1368(%rbp) (slot never loaded) | -11.3 | 2026-06-01T18:28:22 |
+| G0152 | I2 | `43fdef6f417a` | Remove unused frame-save: %rax → -464(%rbp) (slot never loaded) | -7.8 | 2026-06-01T18:29:22 |
+| G0153 | I1 | `25c38694eb1a` | Remove unused frame-save: %rax → -72(%rbp) (slot never loaded) | -7.9 | 2026-06-01T18:30:01 |
+| G0154 | I2 | `a044759a15e7` | Remove unused frame-save: %rax → -17168(%rbp) (slot never loaded) | -14.6 | 2026-06-01T18:30:21 |
+| G0155 | I0 | `4c194dea22c1` | Remove unused frame-save: %rax → -504(%rbp) (slot never loaded) | -8.6 | 2026-06-01T18:30:40 |
+| G0156 | I2 | `aed37add75d1` | Remove unused frame-save: %rax → -456(%rbp) (slot never loaded) | -14.5 | 2026-06-01T18:31:20 |
+| G0157 | I2 | `f3a389afe538` | Remove unused frame-save: %rax → -1280(%rbp) (slot never loaded) | -10.7 | 2026-06-01T18:32:16 |
+| G0158 | I0 | `cad97f45818a` | Remove unused frame-save: %rax → -1280(%rbp) (slot never loaded) | -16.2 | 2026-06-01T18:32:35 |
+| G0159 | I1 | `b8b31c5268f6` | Remove unused frame-save: %rax → -376(%rbp) (slot never loaded) | -11.6 | 2026-06-01T18:32:54 |
+| G0160 | I2 | `8e1b4bbb865b` | Remove unused frame-save: %rax → -64(%rbp) (slot never loaded) | -11.9 | 2026-06-01T18:33:12 |
+| G0161 | I2 | `9bc23e960157` | Remove unused frame-save: %rax → -1184(%rbp) (slot never loaded) | -12.6 | 2026-06-01T18:33:35 |
+| G0162 | I1 | `a7be926e2880` | Remove unused frame-save: %rax → -464(%rbp) (slot never loaded) | -10.4 | 2026-06-01T18:33:56 |
+| G0163 | I2 | `0fa9b1adf52c` | Remove unused frame-save: %rax → -1368(%rbp) (slot never loaded) | -10.1 | 2026-06-01T18:34:27 |
+| G0164 | I1 | `6367dbefd293` | Remove unused frame-save: %rax → -1136(%rbp) (slot never loaded) | -16.4 | 2026-06-01T18:35:04 |
+| G0165 | I2 | `07cb27472371` | Remove unused frame-save: %rax → -72(%rbp) (slot never loaded) | -12.5 | 2026-06-01T18:35:23 |
+| G0166 | I0 | `fb25e394c9a8` | Remove unused frame-save: %rax → -560(%rbp) (slot never loaded) | -11.1 | 2026-06-01T18:35:41 |
+| G0167 | I2 | `f0420f9926b1` | Remove unused frame-save: %rax → -504(%rbp) (slot never loaded) | -13.6 | 2026-06-01T18:36:18 |
+| G0168 | I1 | `bb88b3f6d57c` | Remove unused frame-save: %rax → -456(%rbp) (slot never loaded) | -9.7 | 2026-06-01T18:36:56 |
+| G0169 | I1 | `e7ed4414b478` | Remove unused frame-save: %rax → -384(%rbp) (slot never loaded) | -10.8 | 2026-06-01T18:37:58 |
+| G0170 | I0 | `45327ad238bb` | Remove unused frame-save: %rax → -376(%rbp) (slot never loaded) | -1.8 | 2026-06-01T18:38:19 |
+| G0171 | I1 | `6ea0bf7a385f` | Remove unused frame-save: %rax → -560(%rbp) (slot never loaded) | -14.0 | 2026-06-01T18:38:44 |
+| G0172 | I2 | `a0cf168c1c4a` | Remove unused frame-save: %rax → -72(%rbp) (slot never loaded) | -6.6 | 2026-06-01T18:39:06 |
+| G0173 | I0 | `93f0b52cd4a0` | Remove unused frame-save: %rax → -624(%rbp) (slot never loaded) | -20.1 | 2026-06-01T18:39:28 |
+| G0174 | I1 | `538a5422c6e8` | Remove unused frame-save: %rax → -520(%rbp) (slot never loaded) | -12.8 | 2026-06-01T18:39:50 |
+| G0175 | I0 | `f806ef785ae7` | Remove unused frame-save: %rax → -464(%rbp) (slot never loaded) | -7.8 | 2026-06-01T18:40:10 |
+| G0176 | I2 | `58cca0bdccda` | Remove unused frame-save: %rax → -440(%rbp) (slot never loaded) | -16.3 | 2026-06-01T18:40:29 |
+| G0177 | I1 | `9de2aa911e4a` | Remove unused frame-save: %rax → -17168(%rbp) (slot never loaded) | -12.1 | 2026-06-01T18:40:49 |
+| G0178 | I0 | `41e7ad38ea08` | Remove unused frame-save: %rax → -1184(%rbp) (slot never loaded) | -18.0 | 2026-06-01T18:41:13 |
+| G0179 | I0 | `4164cc80a913` | Remove unused frame-save: %rax → -17168(%rbp) (slot never loaded) | -5.4 | 2026-06-02T07:17:50 |
+| G0180 | I1 | `4164cc80a913` | Remove unused frame-save: %rax → -17168(%rbp) (slot never loaded) | -20.3 | 2026-06-02T07:18:12 |
+| G0181 | I0 | `b72bd343f63a` | Replace cmpq $0,%rax with testq %rax,%rax, Replace cmpq $0,%rax with testq %rax,%rax | -9.3 | 2026-06-02T08:30:57 |
+| G0182 | I2 | `1ceebffde2e5` | Replace cmpq $0,%rax with testq %rax,%rax, Replace cmpq $0,%rax with testq %rax,%rax | -5.1 | 2026-06-02T08:31:43 |
+| G0183 | I0 | `4022d7b27afe` | Replace cmpq $0,%rax with testq %rax,%rax | -1.9 | 2026-06-02T08:32:05 |
+| G0184 | I1 | `d8e286913967` | Replace cmpq $0,%rax with testq %rax,%rax | -3.5 | 2026-06-02T08:32:25 |
+| G0185 | I0 | `b72bd343f63a` | Replace cmpq $0,%rax with testq %rax,%rax, Replace cmpq $0,%rax with testq %rax,%rax | -7.6 | 2026-06-02T08:34:36 |
+| G0186 | I1 | `d0777c523400` | Replace cmpq $0,%rax with testq %rax,%rax | -8.5 | 2026-06-02T08:35:01 |
+| G0187 | I2 | `fa12589d2b9c` | Replace cmpq $0,%rax with testq %rax,%rax, Replace cmpq $0,%rax with testq %rax,%rax | -31.4 | 2026-06-02T08:35:27 |
+| G0188 | I2 | `5fc1c930fc0a` | Replace cmpq $0,%rax with testq %rax,%rax | -1.4 | 2026-06-02T08:36:36 |
+| G0189 | I0 | `dff3c423dbee` | Replace cmpq $0,%rax with testq %rax,%rax, Replace cmpq $0,%rax with testq %rax,%rax | -16.2 | 2026-06-02T08:36:58 |
+| G0190 | I1 | `d0ae88870d4f` | Swap independent pair to reduce WAR pipeline stall, Replace cmpq $0,%rax with testq %rax,%rax (+1) | -10.6 | 2026-06-02T08:37:19 |
+| G0191 | I2 | `ed9761a65823` | Replace cmpq $0,%rax with testq %rax,%rax, Fuse mov+add → leaq $140(%r12), %rax (+1) | -11.7 | 2026-06-02T08:38:49 |
+| G0192 | I1 | `df4b3355eee7` | Replace cmpq $0,%rax with testq %rax,%rax, Fuse mov+add → leaq $216(%r14), %rax | -2.6 | 2026-06-02T08:39:37 |
+| G0193 | I0 | `e961a89a9cc2` | Fuse mov+add → leaq $24(%r14), %rax, Fuse mov+add → leaq $6849216(%r12), %rax | -11.7 | 2026-06-02T08:40:22 |
+| G0194 | I1 | `32669b811be3` | Fuse mov+add → leaq $52(%r14), %rax, Fuse mov+add → leaq $24(%r12), %rax (+1) | -17.5 | 2026-06-02T08:40:45 |
+| G0195 | I0 | `e9d8b2a97305` | Fuse mov+add → leaq $56(%rbx), %rax, Replace cmpq $0,%rax with testq %rax,%rax (+1) | -1.5 | 2026-06-02T08:43:51 |
+| G0196 | I1 | `7fa3beac1e04` | Fuse mov+add → leaq $24(%r12), %rax | -0.3 | 2026-06-02T08:44:17 |
+| G0197 | I0 | `d008daf78322` | Replace cmpq $0,%rax with testq %rax,%rax | -2.0 | 2026-06-02T08:45:02 |
+| G0198 | I1 | `57b233ff0c2d` | Replace cmpq $0,%rax with testq %rax,%rax, Replace cmpq $0,%rax with testq %rax,%rax | -6.2 | 2026-06-02T08:45:25 |
+| G0199 | I2 | `fdb7c60edd88` | Replace cmpq $0,%rax with testq %rax,%rax, Replace cmpq $0,%rax with testq %rax,%rax (+1) | -0.1 | 2026-06-02T08:46:50 |
+| G0200 | I0 | `57f2212b6495` | Fuse mov+add → leaq $16520(%r14), %rax, Replace cmpq $0,%rax with testq %rax,%rax (+1) | -14.2 | 2026-06-02T08:47:10 |
+| G0201 | I1 | `730ce903129b` | Replace cmpq $0,%rax with testq %rax,%rax, Replace cmpq $0,%rax with testq %rax,%rax | -1.6 | 2026-06-02T08:47:34 |
+| G0202 | I2 | `5b5e56c652ed` | Replace cmpq $0,%rax with testq %rax,%rax, Fuse mov+add → leaq $128(%r12), %rax (+1) | -10.1 | 2026-06-02T08:50:14 |
+| G0203 | I2 | `24c1a694d557` | Fuse mov+add → leaq $52(%r13), %rax | -10.3 | 2026-06-02T08:51:22 |
+| G0204 | I1 | `eb53573a088f` | Fuse mov+add → leaq $16520(%r13), %rax, Fuse mov+add → leaq $128(%r15), %rax (+1) | -15.5 | 2026-06-02T08:53:13 |
+| G0205 | I0 | `07d11e8b41f0` | Fuse mov+add → leaq $136(%r13), %rax, Replace cmpq $0,%rax with testq %rax,%rax (+1) | -4.6 | 2026-06-02T08:53:55 |
+| G0206 | I2 | `e37c556fb3f8` | Replace cmpq $0,%rax with testq %rax,%rax | -2.4 | 2026-06-02T08:54:37 |
+| G0207 | I0 | `036699ff137e` | Replace cmpq $0,%rax with testq %rax,%rax, Fuse mov+add → leaq $24(%r12), %rax | -3.4 | 2026-06-02T08:57:11 |
+| G0208 | I2 | `b1a5f0c2d521` | Fuse mov+add → leaq $16528(%r13), %rax | -7.5 | 2026-06-02T08:57:54 |
+| G0209 | I0 | `daa4666c491f` | Fuse mov+add → leaq $18344(%r12), %rax | -13.7 | 2026-06-02T08:58:17 |
+| G0210 | I2 | `c7670aff6018` | Replace cmpq $0,%rax with testq %rax,%rax, Fuse mov+add → leaq $272(%r12), %rax (+1) | -3.0 | 2026-06-02T08:59:02 |
+| G0211 | I2 | `d6e256fe8557` | Fuse mov+add → leaq $300(%r12), %rax | -6.5 | 2026-06-02T09:01:23 |
+| G0212 | I2 | `d274e53854da` | Replace cmpq $0,%rax with testq %rax,%rax, Fuse mov+add → leaq $140(%r12), %rax (+1) | -7.3 | 2026-06-02T09:02:33 |
+| G0213 | I1 | `7e017b458e80` | Fuse mov+add → leaq $536(%r13), %rax | -3.8 | 2026-06-02T09:03:20 |
+| G0214 | I2 | `b6a3127c6303` | Fuse mov+add → leaq $26344(%r12), %rax, Fuse mov+add → leaq $260(%r12), %rax | -20.3 | 2026-06-02T09:03:43 |
+| G0215 | I1 | `5e56c4d844f0` | Replace cmpq $0,%rax with testq %rax,%rax, Fuse mov+add → leaq $16520(%r13), %rax | -1.8 | 2026-06-02T09:04:29 |
+| G0216 | I1 | `49c77802b853` | Replace cmpq $0,%rax with testq %rax,%rax, Fuse mov+add → leaq $128(%r13), %rax (+1) | -13.1 | 2026-06-02T09:05:39 |
+| G0217 | I0 | `05b525ab9db6` | Swap independent pair to reduce WAR pipeline stall, Fuse mov+add → leaq $18312(%r14), %rax (+1) | -2.8 | 2026-06-02T09:06:23 |
+| G0218 | I1 | `a3dfb08118b7` | Replace cmpq $0,%rax with testq %rax,%rax | -3.7 | 2026-06-02T09:06:46 |
+| G0219 | I2 | `cf90f0d78eb8` | Replace cmpq $0,%rax with testq %rax,%rax, Replace cmpq $0,%rax with testq %rax,%rax | -1.2 | 2026-06-02T09:07:06 |
+| G0220 | I0 | `cb16b18b414a` | Replace cmpq $0,%rax with testq %rax,%rax | -3.3 | 2026-06-02T09:07:27 |
+| G0221 | I1 | `072d97b6bda4` | Replace cmpq $0,%rax with testq %rax,%rax, Fuse mov+add → leaq $16520(%r13), %rax | -7.2 | 2026-06-02T09:07:50 |
+| G0222 | I0 | `e75786ac3f6e` | Replace cmpq $0,%rax with testq %rax,%rax, Replace cmpq $0,%rax with testq %rax,%rax | -2.1 | 2026-06-03T09:43:31 |
+| G0223 | I1 | `8d9d0592ba6b` | Replace cmpq $0,%rax with testq %rax,%rax | -2.6 | 2026-06-03T09:43:54 |
+| G0224 | I0 | `1be1c08595de` | Sink load of -648(%rbp) to %r12 past independent instruction | -3.0 | 2026-06-03T09:44:38 |
+| G0225 | I1 | `b92b1a153a79` | Sink load of -2272(%rbp) to %r13 past independent instruction | -1.2 | 2026-06-03T09:45:00 |
+| G0226 | I2 | `a2a72c6588c9` | Fuse mov+add → leaq $24(%r14), %rax | -11.9 | 2026-06-03T09:45:23 |
+| G0227 | I0 | `6ae328b985dd` | Fuse mov+add → leaq $20(%r12), %rax, Fuse mov+add → leaq $200(%r13), %rax | -19.9 | 2026-06-03T09:45:45 |
+| G0228 | I1 | `9a27a8526367` | Fuse mov+add → leaq $24(%r14), %rax, Fuse mov+add → leaq $6849024(%r12), %rax (+1) | -17.2 | 2026-06-03T09:46:07 |
+| G0229 | I2 | `3c01d715abf1` | Sink load of -39376(%rbp) to %r13 past independent instruction | -4.1 | 2026-06-03T09:46:29 |
+| G0230 | I1 | `3027dada8ae7` | Sink load of -1792(%rbp) to %r13 past independent instruction, Sink load of -40(%rbp) to %r13 past independent instruction (+1) | -8.6 | 2026-06-03T09:47:13 |
+| G0231 | I0 | `5b8e8e9faebb` | Fuse mov+add → leaq $192(%r14), %rax, Sink load of -432(%rbp) to %r13 past independent instruction (+1) | -16.5 | 2026-06-03T09:47:58 |
+| G0232 | I1 | `930d637efb08` | Sink load of -640(%rbp) to %r13 past independent instruction, Fuse mov+add → leaq $18128(%r13), %rax (+1) | -9.0 | 2026-06-03T09:49:25 |
+| G0233 | I2 | `94b7e94e7747` | Sink load of -48(%rbp) to %r15 past independent instruction, Fuse mov+add → leaq $24(%r12), %rax (+1) | -8.7 | 2026-06-03T09:49:47 |
+| G0234 | I0 | `03e7c687c116` | Fuse mov+add → leaq $48(%r13), %rax, Fuse mov+add → leaq $12(%r14), %rax (+1) | -26.7 | 2026-06-03T09:50:09 |
+| G0235 | I1 | `4c560e2abe74` | Sink load of -488(%rbp) to %r12 past independent instruction, Fuse mov+add → leaq $26328(%r12), %rax | -7.9 | 2026-06-03T09:50:31 |
+| G0236 | I1 | `b54a57da11cf` | Sink load of -72(%rbp) to %r13 past independent instruction | -0.3 | 2026-06-03T09:51:36 |
+| G0237 | I2 | `7fc4b6d44ebd` | Fuse mov+add → leaq $24(%r13), %rax, Swap independent pair to reduce WAR pipeline stall | -9.0 | 2026-06-03T09:51:57 |
+| G0238 | I0 | `eb6a45b9f870` | Fuse mov+add → leaq $224(%r14), %rax | -8.1 | 2026-06-03T09:53:24 |
+| G0239 | I1 | `dfe1b577001b` | Sink load of -920(%rbp) to %r14 past independent instruction, Fuse mov+add → leaq $140(%r12), %rax | -0.5 | 2026-06-03T09:53:46 |
+| G0240 | I1 | `e077ad516b3f` | Sink load of -24(%rbp) to %r13 past independent instruction, Sink load of -32(%rbp) to %r14 past independent instruction (+1) | -19.3 | 2026-06-03T09:54:51 |
+| G0241 | I2 | `a232062f69fd` | Reorder 3-instruction window to reduce WAR pipeline stall, Remove redundant load: %rax already has -344(%rbp) (+1) | -12.3 | 2026-06-03T09:55:15 |
+| G0242 | I0 | `c16f7896e952` | Fuse mov+add → leaq $64(%r13), %rax, Sink load of -632(%rbp) to %r14 past independent instruction (+1) | -7.9 | 2026-06-03T09:55:37 |
+| G0243 | I1 | `ec72a61abf25` | Fuse mov+add → leaq $368(%r13), %rax, Sink load of -816(%rbp) to %rbx past independent instruction | -8.5 | 2026-06-03T09:55:59 |
+| G0244 | I2 | `7bab3d5f9006` | Sink load of -48(%rbp) to %r12 past independent instruction, Fuse mov+add → leaq $32(%r13), %rax | -6.3 | 2026-06-03T09:56:21 |
+| G0245 | I0 | `4806a68b7092` | Fuse mov+add → leaq $136(%r12), %rax, Sink load of -39376(%rbp) to %r13 past independent instruction | -9.0 | 2026-06-03T09:56:43 |
+| G0246 | I1 | `57e7e7ca827e` | Sink load of -584(%rbp) to %r14 past independent instruction, Fuse mov+add → leaq $140(%r12), %rax | -9.2 | 2026-06-03T09:57:05 |
+| G0247 | I1 | `e39307e0917d` | Sink load of -520(%rbp) to %r14 past independent instruction, Sink load of -584(%rbp) to %r12 past independent instruction (+1) | -5.7 | 2026-06-03T09:58:11 |
+| G0248 | I2 | `ffc40cccc19e` | Sink load of -144(%rbp) to %r14 past independent instruction, Sink load of -40(%rbp) to %r13 past independent instruction (+1) | -1.1 | 2026-06-03T09:58:33 |
+| G0249 | I2 | `9b51f22f3692` | Fuse mov+add → leaq $300(%r12), %rax, Fuse mov+add → leaq $300(%r12), %rax (+1) | -10.7 | 2026-06-03T10:00:43 |
+| G0250 | I0 | `f3a201cdb919` | Fuse mov+add → leaq $132(%r12), %rax | -8.1 | 2026-06-03T10:01:05 |
+| G0251 | I1 | `09885ed4e33f` | Fuse mov+add → leaq $4(%r12), %rax, Sink load of -39376(%rbp) to %r13 past independent instruction (+1) | -12.6 | 2026-06-03T10:01:29 |
+| G0252 | I1 | `06278056378b` | Swap independent pair to reduce WAR pipeline stall | -5.0 | 2026-06-04T00:30:39 |
+| G0253 | I2 | `90839c7084b2` | Sink load of -5776(%rbp) to %rbx past independent instruction, Fuse mov+add → leaq $308(%r13), %rax | -38.5 | 2026-06-04T00:31:02 |
+| G0254 | I0 | `705dc751e170` | Sink load of -648(%rbp) to %r12 past independent instruction | -9.4 | 2026-06-04T00:31:26 |
+| G0255 | I0 | `d4e9d84b6f82` | Fuse mov+add → leaq $24(%r12), %rax, Fuse mov+add → leaq $128(%r12), %rax | -7.2 | 2026-06-04T00:32:38 |
+| G0256 | I1 | `9cfe4d9126c8` | Fuse mov+add → leaq $24(%r14), %rax, Fuse mov+add → leaq $6849024(%r12), %rax (+1) | -22.6 | 2026-06-04T00:33:02 |
+| G0257 | I0 | `dfcc83a5eb6a` | Sink load of -696(%rbp) to %r14 past independent instruction | -9.8 | 2026-06-04T00:33:50 |
+| G0258 | I1 | `56094ddf11a5` | Sink load of -96(%rbp) to %rbx past independent instruction, Fuse mov+add → leaq $56(%rbx), %rax | -9.3 | 2026-06-04T00:35:26 |
+| G0259 | I1 | `f57d2aa64095` | Fuse mov+add → leaq $104(%r12), %rax, Sink load of -496(%rbp) to %rbx past independent instruction (+1) | -3.4 | 2026-06-04T00:36:43 |
+| G0260 | I0 | `0cea4a5b9269` | Sink load of -34592(%rbp) to %r13 past independent instruction, Fuse mov+add → leaq $24(%r14), %rax (+1) | -4.2 | 2026-06-04T00:43:57 |
+| G0261 | I0 | `0ec21c6a9c6c` | Fuse mov+add → leaq $32(%r15), %rax | -5.6 | 2026-06-04T00:46:37 |
+| G0262 | I0 | `4d87a65cdf68` | Fuse mov+add → leaq $24(%r13), %rax, Sink load of -632(%rbp) to %r14 past independent instruction | -9.3 | 2026-06-04T01:14:27 |
+| G0263 | I2 | `90839c7084b2` | Sink load of -5776(%rbp) to %rbx past independent instruction, Fuse mov+add → leaq $308(%r13), %rax | -5.9 | 2026-06-04T01:15:14 |
+| G0264 | I1 | `21fe9425278d` | Fuse mov+add → leaq $200(%r13), %rax, Fuse mov+add → leaq $20(%r12), %rax (+1) | -4.3 | 2026-06-04T01:17:13 |
+| G0265 | I0 | `91a5e4d98857` | Fuse mov+add → leaq $192(%r13), %rax | -1.4 | 2026-06-04T01:18:03 |
+| G0266 | I1 | `f4f9411cc2ab` | Sink load of -648(%rbp) to %r14 past independent instruction, Sink load of -440(%rbp) to %r14 past independent instruction (+1) | -9.3 | 2026-06-04T01:18:27 |
+| G0267 | I2 | `942757ae8cbe` | Sink load of -936(%rbp) to %r14 past independent instruction, Fuse mov+add → leaq $25300(%r12), %rax (+1) | -2.0 | 2026-06-04T01:18:52 |
+| G0268 | I1 | `c1d57d026684` | Sink load of -64(%rbp) to %r12 past independent instruction, Sink load of -39384(%rbp) to %r14 past independent instruction | -0.0 | 2026-06-04T01:19:51 |
+| G0269 | I2 | `7d598b66057e` | Fuse mov+add → leaq $264(%r12), %rax | -13.6 | 2026-06-04T01:20:16 |
+| G0270 | I0 | `46eadb81e4d8` | Sink load of -48(%rbp) to %r12 past independent instruction, Fuse mov+add → leaq $192(%r14), %rax | -12.0 | 2026-06-04T01:20:41 |
+| G0271 | I1 | `b51a7ad873a5` | Fuse mov+add → leaq $18308(%r12), %rax, Fuse mov+add → leaq $156(%r13), %rax (+1) | -13.5 | 2026-06-04T01:21:10 |
+| G0272 | I2 | `a1aa7f6b9457` | Sink load of -40(%rbp) to %r12 past independent instruction, Sink load of -39368(%rbp) to %r12 past independent instruction (+1) | -8.6 | 2026-06-04T01:21:34 |
+| G0273 | I0 | `cc715bad53c9` | Sink load of -24(%rbp) to %r13 past independent instruction, Sink load of -584(%rbp) to %r14 past independent instruction (+1) | -5.3 | 2026-06-04T01:21:58 |
+| G0274 | I1 | `5e3084bc51f2` | Sink load of -32(%rbp) to %r12 past independent instruction, Fuse mov+add → leaq $264(%r12), %rax | -12.1 | 2026-06-04T01:22:24 |
+| G0275 | I2 | `288ff4e03256` | Sink load of -32(%rbp) to %r12 past independent instruction, Fuse mov+add → leaq $6849024(%r12), %rax | -8.0 | 2026-06-04T01:24:03 |
+| G0276 | I0 | `e597f91702a8` | Fuse mov+add → leaq $16(%r13), %rax, Sink load of -48(%rbp) to %r12 past independent instruction (+1) | -6.1 | 2026-06-04T01:24:29 |
+| G0277 | I0 | `a089c257e806` | Sink load of -48(%rbp) to %r13 past independent instruction, Fuse mov+add → leaq $336(%r13), %rax (+1) | -17.1 | 2026-06-04T01:28:34 |
+| G0278 | I2 | `f6225f6cc5dc` | Fuse mov+add → leaq $32(%r13), %rax, Sink load of -39368(%rbp) to %r12 past independent instruction (+1) | -10.4 | 2026-06-04T01:35:25 |
+| G0279 | I1 | `e813cb4a1497` | Fuse mov+add → leaq $128(%r12), %rax, Sink load of -656(%rbp) to %r13 past independent instruction (+1) | -8.5 | 2026-06-04T01:36:15 |
+| G0280 | I0 | `ba7fb26e12e9` | Swap independent pair to reduce WAR pipeline stall | -20.3 | 2026-06-05T03:01:54 |
+| G0281 | I0 | `95fe7793adc0` | Fuse mov+add → leaq $140(%r12), %rax, Remove unused frame-save: %rax → -504(%rbp) (slot never loaded) | -17.2 | 2026-06-05T03:02:27 |
+| G0282 | I0 | `d08efb32c8cd` | Remove unused frame-save: %rax → -624(%rbp) (slot never loaded), Remove unused frame-save: %rax → -376(%rbp) (slot never loaded) | -13.9 | 2026-06-05T03:02:57 |
+| G0283 | I0 | `fd5362f60daf` | Remove unused frame-save: %rax → -72(%rbp) (slot never loaded) | -25.6 | 2026-06-05T03:03:24 |
+| G0284 | I0 | `feebb93986ec` | Fuse mov+add → leaq $144(%r12), %rax | -2.4 | 2026-06-05T03:03:56 |
+| G0285 | I0 | `060b79847f27` | Swap independent pair to reduce WAR pipeline stall, Remove unused frame-save: %rax → -520(%rbp) (slot never loaded) | -51.2 | 2026-06-05T03:04:25 |
+| G0286 | I0 | `ac580364f80d` | Remove unused frame-save: %rax → -440(%rbp) (slot never loaded) | +40.6 | 2026-06-05T03:04:52 |
+| G0287 | I0 | `ad4f35fa65f8` | Fuse mov+add → leaq $140(%r12), %rax | -28.7 | 2026-06-05T03:05:22 |
+| G0288 | I0 | `8adbc9bf156a` | Fuse mov+add → leaq $64(%r14), %rax, Fuse mov+add → leaq $25812(%r12), %rax | -47.6 | 2026-06-05T03:05:47 |
+| G0289 | I0 | `6cd668d607c8` | Fuse mov+add → leaq $24(%r12), %rax | +29.6 | 2026-06-05T03:07:01 |
+| G0290 | I0 | `ba7fb26e12e9` | Swap independent pair to reduce WAR pipeline stall | -2.5 | 2026-06-05T07:33:40 |
 
 ## Discovered Algorithms
 
@@ -296,53 +440,197 @@
 - `QAlgo-Dream-G129` → [`QAlgo-Dream-G129.json`](journal/QAlgo-Dream-G129.json)
 - `QAlgo-Dream-G130` → [`QAlgo-Dream-G130.json`](journal/QAlgo-Dream-G130.json)
 - `QAlgo-Dream-G131` → [`QAlgo-Dream-G131.json`](journal/QAlgo-Dream-G131.json)
-- `QAlgo-Dream-G331` → [`QAlgo-Dream-G331.json`](journal/QAlgo-Dream-G331.json)
-- `QAlgo-Dream-G332` → [`QAlgo-Dream-G332.json`](journal/QAlgo-Dream-G332.json)
-- `QAlgo-Dream-G333` → [`QAlgo-Dream-G333.json`](journal/QAlgo-Dream-G333.json)
-- `QAlgo-Dream-G334` → [`QAlgo-Dream-G334.json`](journal/QAlgo-Dream-G334.json)
-- `QAlgo-Dream-G335` → [`QAlgo-Dream-G335.json`](journal/QAlgo-Dream-G335.json)
-- `QAlgo-Dream-G336` → [`QAlgo-Dream-G336.json`](journal/QAlgo-Dream-G336.json)
-- `QAlgo-Dream-G337` → [`QAlgo-Dream-G337.json`](journal/QAlgo-Dream-G337.json)
-- `QAlgo-Dream-G338` → [`QAlgo-Dream-G338.json`](journal/QAlgo-Dream-G338.json)
-- `QAlgo-Dream-G339` → [`QAlgo-Dream-G339.json`](journal/QAlgo-Dream-G339.json)
-- `QAlgo-Dream-G340` → [`QAlgo-Dream-G340.json`](journal/QAlgo-Dream-G340.json)
-- `QAlgo-Dream-G341` → [`QAlgo-Dream-G341.json`](journal/QAlgo-Dream-G341.json)
-- `QAlgo-Dream-G342` → [`QAlgo-Dream-G342.json`](journal/QAlgo-Dream-G342.json)
-- `QAlgo-Dream-G343` → [`QAlgo-Dream-G343.json`](journal/QAlgo-Dream-G343.json)
-- `QAlgo-Dream-G344` → [`QAlgo-Dream-G344.json`](journal/QAlgo-Dream-G344.json)
-- `QAlgo-Dream-G345` → [`QAlgo-Dream-G345.json`](journal/QAlgo-Dream-G345.json)
+- `QAlgo-Dream-G132` → [`QAlgo-Dream-G132.json`](journal/QAlgo-Dream-G132.json)
+- `QAlgo-Dream-G133` → [`QAlgo-Dream-G133.json`](journal/QAlgo-Dream-G133.json)
+- `QAlgo-Dream-G134` → [`QAlgo-Dream-G134.json`](journal/QAlgo-Dream-G134.json)
+- `QAlgo-Dream-G135` → [`QAlgo-Dream-G135.json`](journal/QAlgo-Dream-G135.json)
+- `QAlgo-Dream-G136` → [`QAlgo-Dream-G136.json`](journal/QAlgo-Dream-G136.json)
+- `QAlgo-Dream-G137` → [`QAlgo-Dream-G137.json`](journal/QAlgo-Dream-G137.json)
+- `QAlgo-Dream-G138` → [`QAlgo-Dream-G138.json`](journal/QAlgo-Dream-G138.json)
+- `QAlgo-Dream-G139` → [`QAlgo-Dream-G139.json`](journal/QAlgo-Dream-G139.json)
+- `QAlgo-Dream-G140` → [`QAlgo-Dream-G140.json`](journal/QAlgo-Dream-G140.json)
+- `QAlgo-Dream-G141` → [`QAlgo-Dream-G141.json`](journal/QAlgo-Dream-G141.json)
+- `QAlgo-Dream-G142` → [`QAlgo-Dream-G142.json`](journal/QAlgo-Dream-G142.json)
+- `QAlgo-Dream-G143` → [`QAlgo-Dream-G143.json`](journal/QAlgo-Dream-G143.json)
+- `QAlgo-Dream-G144` → [`QAlgo-Dream-G144.json`](journal/QAlgo-Dream-G144.json)
+- `QAlgo-Dream-G145` → [`QAlgo-Dream-G145.json`](journal/QAlgo-Dream-G145.json)
+- `QAlgo-Dream-G146` → [`QAlgo-Dream-G146.json`](journal/QAlgo-Dream-G146.json)
+- `QAlgo-Dream-G147` → [`QAlgo-Dream-G147.json`](journal/QAlgo-Dream-G147.json)
+- `QAlgo-Dream-G148` → [`QAlgo-Dream-G148.json`](journal/QAlgo-Dream-G148.json)
+- `QAlgo-Dream-G149` → [`QAlgo-Dream-G149.json`](journal/QAlgo-Dream-G149.json)
+- `QAlgo-Dream-G150` → [`QAlgo-Dream-G150.json`](journal/QAlgo-Dream-G150.json)
+- `QAlgo-Dream-G151` → [`QAlgo-Dream-G151.json`](journal/QAlgo-Dream-G151.json)
+- `QAlgo-Dream-G152` → [`QAlgo-Dream-G152.json`](journal/QAlgo-Dream-G152.json)
+- `QAlgo-Dream-G153` → [`QAlgo-Dream-G153.json`](journal/QAlgo-Dream-G153.json)
+- `QAlgo-Dream-G154` → [`QAlgo-Dream-G154.json`](journal/QAlgo-Dream-G154.json)
+- `QAlgo-Dream-G155` → [`QAlgo-Dream-G155.json`](journal/QAlgo-Dream-G155.json)
+- `QAlgo-Dream-G156` → [`QAlgo-Dream-G156.json`](journal/QAlgo-Dream-G156.json)
+- `QAlgo-Dream-G157` → [`QAlgo-Dream-G157.json`](journal/QAlgo-Dream-G157.json)
+- `QAlgo-Dream-G158` → [`QAlgo-Dream-G158.json`](journal/QAlgo-Dream-G158.json)
+- `QAlgo-Dream-G159` → [`QAlgo-Dream-G159.json`](journal/QAlgo-Dream-G159.json)
+- `QAlgo-Dream-G160` → [`QAlgo-Dream-G160.json`](journal/QAlgo-Dream-G160.json)
+- `QAlgo-Dream-G161` → [`QAlgo-Dream-G161.json`](journal/QAlgo-Dream-G161.json)
+- `QAlgo-Dream-G162` → [`QAlgo-Dream-G162.json`](journal/QAlgo-Dream-G162.json)
+- `QAlgo-Dream-G163` → [`QAlgo-Dream-G163.json`](journal/QAlgo-Dream-G163.json)
+- `QAlgo-Dream-G164` → [`QAlgo-Dream-G164.json`](journal/QAlgo-Dream-G164.json)
+- `QAlgo-Dream-G165` → [`QAlgo-Dream-G165.json`](journal/QAlgo-Dream-G165.json)
+- `QAlgo-Dream-G166` → [`QAlgo-Dream-G166.json`](journal/QAlgo-Dream-G166.json)
+- `QAlgo-Dream-G167` → [`QAlgo-Dream-G167.json`](journal/QAlgo-Dream-G167.json)
+- `QAlgo-Dream-G168` → [`QAlgo-Dream-G168.json`](journal/QAlgo-Dream-G168.json)
+- `QAlgo-Dream-G169` → [`QAlgo-Dream-G169.json`](journal/QAlgo-Dream-G169.json)
+- `QAlgo-Dream-G170` → [`QAlgo-Dream-G170.json`](journal/QAlgo-Dream-G170.json)
+- `QAlgo-Dream-G171` → [`QAlgo-Dream-G171.json`](journal/QAlgo-Dream-G171.json)
+- `QAlgo-Dream-G172` → [`QAlgo-Dream-G172.json`](journal/QAlgo-Dream-G172.json)
+- `QAlgo-Dream-G173` → [`QAlgo-Dream-G173.json`](journal/QAlgo-Dream-G173.json)
+- `QAlgo-Dream-G174` → [`QAlgo-Dream-G174.json`](journal/QAlgo-Dream-G174.json)
+- `QAlgo-Dream-G175` → [`QAlgo-Dream-G175.json`](journal/QAlgo-Dream-G175.json)
+- `QAlgo-Dream-G176` → [`QAlgo-Dream-G176.json`](journal/QAlgo-Dream-G176.json)
+- `QAlgo-Dream-G177` → [`QAlgo-Dream-G177.json`](journal/QAlgo-Dream-G177.json)
+- `QAlgo-Dream-G178` → [`QAlgo-Dream-G178.json`](journal/QAlgo-Dream-G178.json)
+- `QAlgo-Dream-G179` → [`QAlgo-Dream-G179.json`](journal/QAlgo-Dream-G179.json)
+- `QAlgo-Dream-G180` → [`QAlgo-Dream-G180.json`](journal/QAlgo-Dream-G180.json)
+- `QAlgo-Dream-G181` → [`QAlgo-Dream-G181.json`](journal/QAlgo-Dream-G181.json)
+- `QAlgo-Dream-G182` → [`QAlgo-Dream-G182.json`](journal/QAlgo-Dream-G182.json)
+- `QAlgo-Dream-G183` → [`QAlgo-Dream-G183.json`](journal/QAlgo-Dream-G183.json)
+- `QAlgo-Dream-G184` → [`QAlgo-Dream-G184.json`](journal/QAlgo-Dream-G184.json)
+- `QAlgo-Dream-G185` → [`QAlgo-Dream-G185.json`](journal/QAlgo-Dream-G185.json)
+- `QAlgo-Dream-G186` → [`QAlgo-Dream-G186.json`](journal/QAlgo-Dream-G186.json)
+- `QAlgo-Dream-G187` → [`QAlgo-Dream-G187.json`](journal/QAlgo-Dream-G187.json)
+- `QAlgo-Dream-G188` → [`QAlgo-Dream-G188.json`](journal/QAlgo-Dream-G188.json)
+- `QAlgo-Dream-G189` → [`QAlgo-Dream-G189.json`](journal/QAlgo-Dream-G189.json)
+- `QAlgo-Dream-G190` → [`QAlgo-Dream-G190.json`](journal/QAlgo-Dream-G190.json)
+- `QAlgo-Dream-G191` → [`QAlgo-Dream-G191.json`](journal/QAlgo-Dream-G191.json)
+- `QAlgo-Dream-G192` → [`QAlgo-Dream-G192.json`](journal/QAlgo-Dream-G192.json)
+- `QAlgo-Dream-G193` → [`QAlgo-Dream-G193.json`](journal/QAlgo-Dream-G193.json)
+- `QAlgo-Dream-G194` → [`QAlgo-Dream-G194.json`](journal/QAlgo-Dream-G194.json)
+- `QAlgo-Dream-G195` → [`QAlgo-Dream-G195.json`](journal/QAlgo-Dream-G195.json)
+- `QAlgo-Dream-G196` → [`QAlgo-Dream-G196.json`](journal/QAlgo-Dream-G196.json)
+- `QAlgo-Dream-G197` → [`QAlgo-Dream-G197.json`](journal/QAlgo-Dream-G197.json)
+- `QAlgo-Dream-G198` → [`QAlgo-Dream-G198.json`](journal/QAlgo-Dream-G198.json)
+- `QAlgo-Dream-G199` → [`QAlgo-Dream-G199.json`](journal/QAlgo-Dream-G199.json)
+- `QAlgo-Dream-G200` → [`QAlgo-Dream-G200.json`](journal/QAlgo-Dream-G200.json)
+- `QAlgo-Dream-G201` → [`QAlgo-Dream-G201.json`](journal/QAlgo-Dream-G201.json)
+- `QAlgo-Dream-G202` → [`QAlgo-Dream-G202.json`](journal/QAlgo-Dream-G202.json)
+- `QAlgo-Dream-G203` → [`QAlgo-Dream-G203.json`](journal/QAlgo-Dream-G203.json)
+- `QAlgo-Dream-G204` → [`QAlgo-Dream-G204.json`](journal/QAlgo-Dream-G204.json)
+- `QAlgo-Dream-G205` → [`QAlgo-Dream-G205.json`](journal/QAlgo-Dream-G205.json)
+- `QAlgo-Dream-G206` → [`QAlgo-Dream-G206.json`](journal/QAlgo-Dream-G206.json)
+- `QAlgo-Dream-G207` → [`QAlgo-Dream-G207.json`](journal/QAlgo-Dream-G207.json)
+- `QAlgo-Dream-G208` → [`QAlgo-Dream-G208.json`](journal/QAlgo-Dream-G208.json)
+- `QAlgo-Dream-G209` → [`QAlgo-Dream-G209.json`](journal/QAlgo-Dream-G209.json)
+- `QAlgo-Dream-G210` → [`QAlgo-Dream-G210.json`](journal/QAlgo-Dream-G210.json)
+- `QAlgo-Dream-G211` → [`QAlgo-Dream-G211.json`](journal/QAlgo-Dream-G211.json)
+- `QAlgo-Dream-G212` → [`QAlgo-Dream-G212.json`](journal/QAlgo-Dream-G212.json)
+- `QAlgo-Dream-G213` → [`QAlgo-Dream-G213.json`](journal/QAlgo-Dream-G213.json)
+- `QAlgo-Dream-G214` → [`QAlgo-Dream-G214.json`](journal/QAlgo-Dream-G214.json)
+- `QAlgo-Dream-G215` → [`QAlgo-Dream-G215.json`](journal/QAlgo-Dream-G215.json)
+- `QAlgo-Dream-G216` → [`QAlgo-Dream-G216.json`](journal/QAlgo-Dream-G216.json)
+- `QAlgo-Dream-G217` → [`QAlgo-Dream-G217.json`](journal/QAlgo-Dream-G217.json)
+- `QAlgo-Dream-G218` → [`QAlgo-Dream-G218.json`](journal/QAlgo-Dream-G218.json)
+- `QAlgo-Dream-G219` → [`QAlgo-Dream-G219.json`](journal/QAlgo-Dream-G219.json)
+- `QAlgo-Dream-G220` → [`QAlgo-Dream-G220.json`](journal/QAlgo-Dream-G220.json)
+- `QAlgo-Dream-G221` → [`QAlgo-Dream-G221.json`](journal/QAlgo-Dream-G221.json)
+- `QAlgo-Dream-G222` → [`QAlgo-Dream-G222.json`](journal/QAlgo-Dream-G222.json)
+- `QAlgo-Dream-G223` → [`QAlgo-Dream-G223.json`](journal/QAlgo-Dream-G223.json)
+- `QAlgo-Dream-G224` → [`QAlgo-Dream-G224.json`](journal/QAlgo-Dream-G224.json)
+- `QAlgo-Dream-G225` → [`QAlgo-Dream-G225.json`](journal/QAlgo-Dream-G225.json)
+- `QAlgo-Dream-G226` → [`QAlgo-Dream-G226.json`](journal/QAlgo-Dream-G226.json)
+- `QAlgo-Dream-G227` → [`QAlgo-Dream-G227.json`](journal/QAlgo-Dream-G227.json)
+- `QAlgo-Dream-G228` → [`QAlgo-Dream-G228.json`](journal/QAlgo-Dream-G228.json)
+- `QAlgo-Dream-G229` → [`QAlgo-Dream-G229.json`](journal/QAlgo-Dream-G229.json)
+- `QAlgo-Dream-G230` → [`QAlgo-Dream-G230.json`](journal/QAlgo-Dream-G230.json)
+- `QAlgo-Dream-G231` → [`QAlgo-Dream-G231.json`](journal/QAlgo-Dream-G231.json)
+- `QAlgo-Dream-G232` → [`QAlgo-Dream-G232.json`](journal/QAlgo-Dream-G232.json)
+- `QAlgo-Dream-G233` → [`QAlgo-Dream-G233.json`](journal/QAlgo-Dream-G233.json)
+- `QAlgo-Dream-G234` → [`QAlgo-Dream-G234.json`](journal/QAlgo-Dream-G234.json)
+- `QAlgo-Dream-G235` → [`QAlgo-Dream-G235.json`](journal/QAlgo-Dream-G235.json)
+- `QAlgo-Dream-G236` → [`QAlgo-Dream-G236.json`](journal/QAlgo-Dream-G236.json)
+- `QAlgo-Dream-G237` → [`QAlgo-Dream-G237.json`](journal/QAlgo-Dream-G237.json)
+- `QAlgo-Dream-G238` → [`QAlgo-Dream-G238.json`](journal/QAlgo-Dream-G238.json)
+- `QAlgo-Dream-G239` → [`QAlgo-Dream-G239.json`](journal/QAlgo-Dream-G239.json)
+- `QAlgo-Dream-G240` → [`QAlgo-Dream-G240.json`](journal/QAlgo-Dream-G240.json)
+- `QAlgo-Dream-G241` → [`QAlgo-Dream-G241.json`](journal/QAlgo-Dream-G241.json)
+- `QAlgo-Dream-G242` → [`QAlgo-Dream-G242.json`](journal/QAlgo-Dream-G242.json)
+- `QAlgo-Dream-G243` → [`QAlgo-Dream-G243.json`](journal/QAlgo-Dream-G243.json)
+- `QAlgo-Dream-G244` → [`QAlgo-Dream-G244.json`](journal/QAlgo-Dream-G244.json)
+- `QAlgo-Dream-G245` → [`QAlgo-Dream-G245.json`](journal/QAlgo-Dream-G245.json)
+- `QAlgo-Dream-G246` → [`QAlgo-Dream-G246.json`](journal/QAlgo-Dream-G246.json)
+- `QAlgo-Dream-G247` → [`QAlgo-Dream-G247.json`](journal/QAlgo-Dream-G247.json)
+- `QAlgo-Dream-G248` → [`QAlgo-Dream-G248.json`](journal/QAlgo-Dream-G248.json)
+- `QAlgo-Dream-G249` → [`QAlgo-Dream-G249.json`](journal/QAlgo-Dream-G249.json)
+- `QAlgo-Dream-G250` → [`QAlgo-Dream-G250.json`](journal/QAlgo-Dream-G250.json)
+- `QAlgo-Dream-G251` → [`QAlgo-Dream-G251.json`](journal/QAlgo-Dream-G251.json)
+- `QAlgo-Dream-G252` → [`QAlgo-Dream-G252.json`](journal/QAlgo-Dream-G252.json)
+- `QAlgo-Dream-G253` → [`QAlgo-Dream-G253.json`](journal/QAlgo-Dream-G253.json)
+- `QAlgo-Dream-G254` → [`QAlgo-Dream-G254.json`](journal/QAlgo-Dream-G254.json)
+- `QAlgo-Dream-G255` → [`QAlgo-Dream-G255.json`](journal/QAlgo-Dream-G255.json)
+- `QAlgo-Dream-G256` → [`QAlgo-Dream-G256.json`](journal/QAlgo-Dream-G256.json)
+- `QAlgo-Dream-G257` → [`QAlgo-Dream-G257.json`](journal/QAlgo-Dream-G257.json)
+- `QAlgo-Dream-G258` → [`QAlgo-Dream-G258.json`](journal/QAlgo-Dream-G258.json)
+- `QAlgo-Dream-G259` → [`QAlgo-Dream-G259.json`](journal/QAlgo-Dream-G259.json)
+- `QAlgo-Dream-G260` → [`QAlgo-Dream-G260.json`](journal/QAlgo-Dream-G260.json)
+- `QAlgo-Dream-G261` → [`QAlgo-Dream-G261.json`](journal/QAlgo-Dream-G261.json)
+- `QAlgo-Dream-G262` → [`QAlgo-Dream-G262.json`](journal/QAlgo-Dream-G262.json)
+- `QAlgo-Dream-G263` → [`QAlgo-Dream-G263.json`](journal/QAlgo-Dream-G263.json)
+- `QAlgo-Dream-G264` → [`QAlgo-Dream-G264.json`](journal/QAlgo-Dream-G264.json)
+- `QAlgo-Dream-G265` → [`QAlgo-Dream-G265.json`](journal/QAlgo-Dream-G265.json)
+- `QAlgo-Dream-G266` → [`QAlgo-Dream-G266.json`](journal/QAlgo-Dream-G266.json)
+- `QAlgo-Dream-G267` → [`QAlgo-Dream-G267.json`](journal/QAlgo-Dream-G267.json)
+- `QAlgo-Dream-G268` → [`QAlgo-Dream-G268.json`](journal/QAlgo-Dream-G268.json)
+- `QAlgo-Dream-G269` → [`QAlgo-Dream-G269.json`](journal/QAlgo-Dream-G269.json)
+- `QAlgo-Dream-G270` → [`QAlgo-Dream-G270.json`](journal/QAlgo-Dream-G270.json)
+- `QAlgo-Dream-G271` → [`QAlgo-Dream-G271.json`](journal/QAlgo-Dream-G271.json)
+- `QAlgo-Dream-G272` → [`QAlgo-Dream-G272.json`](journal/QAlgo-Dream-G272.json)
+- `QAlgo-Dream-G273` → [`QAlgo-Dream-G273.json`](journal/QAlgo-Dream-G273.json)
+- `QAlgo-Dream-G274` → [`QAlgo-Dream-G274.json`](journal/QAlgo-Dream-G274.json)
+- `QAlgo-Dream-G275` → [`QAlgo-Dream-G275.json`](journal/QAlgo-Dream-G275.json)
+- `QAlgo-Dream-G276` → [`QAlgo-Dream-G276.json`](journal/QAlgo-Dream-G276.json)
+- `QAlgo-Dream-G277` → [`QAlgo-Dream-G277.json`](journal/QAlgo-Dream-G277.json)
+- `QAlgo-Dream-G278` → [`QAlgo-Dream-G278.json`](journal/QAlgo-Dream-G278.json)
+- `QAlgo-Dream-G279` → [`QAlgo-Dream-G279.json`](journal/QAlgo-Dream-G279.json)
+- `QAlgo-Dream-G280` → [`QAlgo-Dream-G280.json`](journal/QAlgo-Dream-G280.json)
+- `QAlgo-Dream-G281` → [`QAlgo-Dream-G281.json`](journal/QAlgo-Dream-G281.json)
+- `QAlgo-Dream-G282` → [`QAlgo-Dream-G282.json`](journal/QAlgo-Dream-G282.json)
+- `QAlgo-Dream-G283` → [`QAlgo-Dream-G283.json`](journal/QAlgo-Dream-G283.json)
+- `QAlgo-Dream-G284` → [`QAlgo-Dream-G284.json`](journal/QAlgo-Dream-G284.json)
+- `QAlgo-Dream-G285` → [`QAlgo-Dream-G285.json`](journal/QAlgo-Dream-G285.json)
+- `QAlgo-Dream-G286` → [`QAlgo-Dream-G286.json`](journal/QAlgo-Dream-G286.json)
+- `QAlgo-Dream-G287` → [`QAlgo-Dream-G287.json`](journal/QAlgo-Dream-G287.json)
+- `QAlgo-Dream-G288` → [`QAlgo-Dream-G288.json`](journal/QAlgo-Dream-G288.json)
+- `QAlgo-Dream-G289` → [`QAlgo-Dream-G289.json`](journal/QAlgo-Dream-G289.json)
+- `QAlgo-Dream-G290` → [`QAlgo-Dream-G290.json`](journal/QAlgo-Dream-G290.json)
 
 ## Fitness History
 
 ```
-G0118 I4: score=1257379
-G0119 I0: score=1257418
-G0120 I2: score=1257388
-G0121 I4: score=1257360
-G0122 I1: score=1257398
-G0123 I2: score=1257378
-G0124 I3: score=1257408
-G0125 I4: score=1257359
-G0126 I1: score=1257398
-G0127 I2: score=1257368
-G0128 I3: score=1257408
-G0129 I1: score=1257389
-G0130 I4: score=1257359
-G0131 I4: score=1257358
-G0330 I0: score=2240050
-G0331 I0: score=2278351
-G0332 I0: score=2278334
-G0333 I0: score=2278331
-G0334 I0: score=2278327
-G0335 I0: score=2278320
-G0336 I0: score=2278304
-G0337 I0: score=2278300
-G0338 I0: score=2278300
-G0339 I0: score=2278281
-G0340 I0: score=2278277
-G0341 I0: score=2278263
-G0342 I0: score=2278243
-G0343 I0: score=2278241
-G0344 I0: score=2278235
-G0345 I0: score=2278233
+G0261 I0: score=2238017
+G0262 I0: score=2238032
+G0263 I2: score=2238036
+G0264 I1: score=2238037
+G0265 I0: score=2238031
+G0266 I1: score=2238028
+G0267 I2: score=2238034
+G0268 I1: score=2238028
+G0269 I2: score=2238020
+G0270 I0: score=2238019
+G0271 I1: score=2238014
+G0272 I2: score=2238012
+G0273 I0: score=2238014
+G0274 I1: score=2238002
+G0275 I2: score=2238004
+G0276 I0: score=2238008
+G0277 I0: score=2237991
+G0278 I2: score=2237993
+G0279 I1: score=2237994
+G0280 I0: score=2113548
+G0281 I0: score=2113531
+G0282 I0: score=2113517
+G0283 I0: score=2113491
+G0284 I0: score=2113489
+G0285 I0: score=2113438
+G0286 I0: score=2113478
+G0287 I0: score=2113450
+G0288 I0: score=2113402
+G0289 I0: score=2113432
+G0290 I0: score=2113517
 ```

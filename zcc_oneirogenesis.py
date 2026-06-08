@@ -50,7 +50,8 @@ from typing import Optional
 
 from zcc_dream_mutations import MutationEngine, Mutation
 from zcc_criticality import (
-    topology_eta_search, universality_class, boltzmann_acceptance,
+    topology_eta_search, prime_free_energy, SpectralArrestDetector,
+    relaxation_phase, universality_class, boltzmann_acceptance,
 )
 from zcc_cfg_extract import extract_cfg, cfg_spectral_dim, cfg_stats
 
@@ -65,11 +66,6 @@ LINEAGE_DIR    = DREAM_DIR / "lineage"
 BLACKLIST_FILE = DREAM_DIR / "blacklist.json"
 BENCHMARK_FILE = REPO_ROOT / "benchmark_workload.c"
 GODS_EYE_WS    = "ws://127.0.0.1:8082/ws/dream_telemetry"
-
-# Wilson-Fisher fallback defaults — reproduce current behavior when CFG unavailable
-_WF_FALLBACK_NU    = 10.0 / 3.0   # 1/nu ≈ 0.3 = current sweep inclusion probability
-_WF_FALLBACK_BETA  = 0.5           # only active with --wf-acceptance flag
-_WF_FALLBACK_GAMMA = 1.75          # int(10/1.75) = 5 = current migration interval
 
 PARTS = ["part0_pp.c", "zcc_ast_bridge.h", "part1.c", "part2.c", "part3.c",
          "ir.h", "ir_emit_dispatch.h", "ir_bridge.h", "part4.c", "part5.c",
@@ -87,9 +83,9 @@ PASSES = ["compiler_passes.c", "compiler_passes_ir.c", "ir_pass_manager.c",
           "src/evm/yul_frontend.c", "src/gfx/sdf_compiler.c",
           "src/gfx/mesh_warden.c", "src/evm/evm_symbolic_harness.c",
           "src/zcc_oracle_substrate.c",
-          "src/elf_emit.c", "src/codegen.c", "src/ir_serialization.c",
+          "src/elf_emit.c", "src/ir_serialization.c",
           "src/zcc_smt_prover.c", "src/gguf_emit.c", "src/zld.c",
-          "src/zcc_resource_oracle.c"]
+          "src/zcc_resource_oracle.c", "transient_state.c"]
 
 # ANSI colour palette
 _R = "\033[91m"; _G = "\033[92m"; _Y = "\033[93m"
@@ -224,7 +220,7 @@ class FitnessOracle:
             samples.sort()
             fitness['benchmark_time_ns'] = samples[len(samples) // 2]  # median
 
-        # Composite score: weighted sum (lower is better)
+        # Composite score: weighted sum (lower is better) — LEGACY
         fitness['score'] = (
             fitness['inst_count']     * 10.0 * cls.W_INSTR +
             fitness['asm_size']       * 1.0  * cls.W_SIZE +
@@ -232,6 +228,14 @@ class FitnessOracle:
             fitness['stack_depth_sum'] * 0.5 * cls.W_STACK +
             fitness['benchmark_time_ns'] / 1e6
         )
+
+        # Free energy: F = E - TS (Wilson-Fisher universal fitness)
+        # eta and T are injected via class-level defaults or overridden
+        eta = getattr(cls, '_eta_c', 0.4407)
+        T_eff = getattr(cls, '_T_eff', 1.0)
+        fitness['free_energy'] = prime_free_energy(fitness, eta, T_eff)
+        fitness['eta_c'] = eta
+
         return fitness
 
 
@@ -259,7 +263,8 @@ class SelfHostGate:
         # symbol clashes that arise when linking zcc_pp.c with extra .c files
         zcc_full = str(REPO_ROOT / 'zcc.c')
         gate_src = zcc_full if os.path.exists(zcc_full) else zcc_pp_c
-        # Compile zcc.c to assembly for idempotency check (g_s3.s)
+        s3_p_args = [p for p in p_args if not p.endswith("codegen.c")]
+
         try:
             r = subprocess.run([mutant_bin, gate_src, '-o', s3_s],
                                capture_output=True, timeout=timeout)
@@ -269,17 +274,25 @@ class SelfHostGate:
             return False, "mutant timeout"
         except FileNotFoundError:
             return False, f"binary missing: {mutant_bin}"
+
         if not os.path.exists(s3_s) or os.path.getsize(s3_s) == 0:
             return False, "empty assembly output"
-        # Compile zcc.c directly to ELF (mirrors: ./zcc2 zcc.c -o zcc3)
+
         try:
-            r = subprocess.run([mutant_bin, gate_src, '-o', s3_bin],
-                               capture_output=True, timeout=timeout)
+            r = subprocess.run(
+                ['gcc', '-no-pie', '-O0', '-w', '-fno-asynchronous-unwind-tables',
+                 '-Wa,--noexecstack', '-fno-unwind-tables',
+                 '-o', s3_bin, s3_s] + s3_p_args + ['-lm'],
+                capture_output=True, timeout=60)
             if r.returncode != 0:
-                err = r.stderr.decode('utf-8', 'ignore').strip()
+                full_stderr = r.stderr.decode('utf-8', 'ignore').strip()
                 with open("dreams/last_assembler_error.txt", "w") as f:
-                    f.write(err)
-                return False, f"s3 elf fail:\n{err[:200]}"
+                    f.write(full_stderr)
+                import shutil
+                shutil.copy2(s3_s, "dreams/g_s3_fault.s")
+                lines = full_stderr.split('\n')
+                err_summary = '\n'.join(lines[:10])
+                return False, f"s3 link fail:\n{err_summary}"
         except subprocess.TimeoutExpired:
             return False, "s3 link timeout"
 
@@ -336,8 +349,10 @@ class HamiltonianTelemetry:
     def set_baseline(self, score: float):
         self._baseline_score = max(score, 1.0)
 
-    def emit(self, result: CycleResult, island_id: int = 0):
-        """Non-blocking dual-emit — UDP datagram to both telemetry channels."""
+    def emit(self, result: CycleResult, island_id: int = 0,
+             eta_c: float = 0.0, phase: str = "", spectral_gap: float = 0.0):
+        """Non-blocking dual-emit — UDP datagram to both telemetry channels.
+        Now includes Wilson-Fisher criticality fields."""
         try:
             parent_score = result.parent_fitness.get('score', self._baseline_score)
             mutant_score = result.mutant_fitness.get('score', parent_score)
@@ -366,6 +381,12 @@ class HamiltonianTelemetry:
                 "state_vector": [round(sv0, 6), round(sv1, 6)],
                 "hamiltonian_energy": round(
                     (mutant_score - baseline) / baseline, 6),
+                # Wilson-Fisher criticality fields
+                "eta_c": round(eta_c, 4),
+                "free_energy": round(result.mutant_fitness.get('free_energy', 0), 4),
+                "delta_free_energy": round(result.delta.get('free_energy', 0), 4),
+                "spectral_gap": round(spectral_gap, 6),
+                "phase": phase,
                 "elapsed_s": round(result.elapsed_s, 2),
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
@@ -383,6 +404,10 @@ class HamiltonianTelemetry:
                 "mutations": len(result.mutations_applied),
                 "elapsed": round(result.elapsed_s, 2),
                 "survived": result.survived,
+                "eta_c": round(eta_c, 4),
+                "free_energy": round(result.mutant_fitness.get('free_energy', 0), 4),
+                "phase": phase,
+                "spectral_gap": round(spectral_gap, 6),
                 "ts": datetime.now(timezone.utc).isoformat(),
             }).encode()
             self._gods_sock.sendto(gods_pkt, (self.host, self.GODS_EYE_PORT))
@@ -402,9 +427,8 @@ class Island:
     """
 
     def __init__(self, island_id: int, seed: int, parent_asm: str,
-                 zcc_pp_c: str, blacklist: set, sweep_prob: float = 0.3):
+                 zcc_pp_c: str, blacklist: set):
         self.island_id = island_id
-        self.sweep_prob = sweep_prob
         self.rng = random.Random(seed)
         self.state = IslandState(island_id=island_id)
         self.blacklist = blacklist
@@ -419,12 +443,12 @@ class Island:
 
         # Measure initial fitness
         with tempfile.TemporaryDirectory(prefix='island_init_') as td:
-            self.state.parent_score = self._build_and_score(island_asm, td)
+            self.parent_fitness = self._build_and_measure(island_asm, td)
+            self.state.parent_score = self.parent_fitness['score']
 
     def step(self, mutation_engine: MutationEngine,
              max_mutations: int, force_sweep: bool,
-             dry_run: bool, tmpdir: str,
-             wf_acceptance: bool = False, T_eff: float = 0.0) -> CycleResult:
+             dry_run: bool, tmpdir: str) -> CycleResult:
         """Execute one dream cycle for this island."""
         t0 = time.time()
         gen = self.state.generation + 1
@@ -436,8 +460,7 @@ class Island:
         mutations = mutation_engine.dream(
             parent_lines,
             max_point_mutations=max_mutations,
-            include_sweeps=force_sweep or (self.rng.random() < self.sweep_prob),
-            blacklist=self.blacklist,
+            include_sweeps=force_sweep or (self.rng.random() < 0.3),
         )
 
         # Filter blacklisted fingerprints
@@ -463,9 +486,7 @@ class Island:
         n_pt = self.rng.randint(1, max(1, min(len(points), max_mutations)))
         selected.extend(self.rng.sample(points, min(len(points), n_pt)))
 
-        parent_fitness = {'score': self.state.parent_score,
-                          'asm_size': os.path.getsize(self.state.parent_asm_path),
-                          'bin_size': 0, 'inst_count': 0}
+        parent_fitness = self.parent_fitness
 
         if dry_run:
             return CycleResult(
@@ -489,7 +510,7 @@ class Island:
         try:
             r = subprocess.run(
                 ['gcc', '-no-pie', '-O0', '-w', '-fno-asynchronous-unwind-tables',
-                 '-Wa,--noexecstack', '-fno-unwind-tables', '-Dmain=zcc_main',
+                 '-Wa,--noexecstack', '-fno-unwind-tables',
                  '-o', mutant_bin, mutant_asm] + p_args + ['-lm'],
                 capture_output=True, timeout=60)
             if r.returncode != 0:
@@ -536,16 +557,20 @@ class Island:
             'asm_size':   mutant_fitness['asm_size']   - parent_fitness['asm_size'],
             'inst_count': mutant_fitness['inst_count'] - parent_fitness.get('inst_count', 0),
             'score':      mutant_fitness['score']      - parent_fitness['score'],
+            'free_energy': mutant_fitness.get('free_energy', 0) -
+                           parent_fitness.get('free_energy', 0),
         }
 
-        if wf_acceptance and T_eff > 0:
-            survived = boltzmann_acceptance(delta['score'], T_eff)
-        else:
-            survived = delta['score'] < 0
+        # Wilson-Fisher: Boltzmann acceptance on free energy delta
+        # Falls back to greedy (T=0) if free_energy not available
+        delta_F = delta.get('free_energy', delta['score'])
+        T_eff = getattr(FitnessOracle, '_T_eff', 1.0)
+        survived = boltzmann_acceptance(delta_F, T_eff)
 
         if survived:
             self.state.generation = gen
             self.state.parent_score = mutant_fitness['score']
+            self.parent_fitness = mutant_fitness
             self.state.survived += 1
             shutil.copy2(mutant_asm, self.state.parent_asm_path)
             self.state.lineage.append({
@@ -565,23 +590,26 @@ class Island:
             delta=delta, elapsed_s=time.time() - t0,
         )
 
-    def _build_and_score(self, asm_path: str, tmpdir: str) -> float:
-        """Build + score an assembly file. Returns composite score."""
+    def _build_and_measure(self, asm_path: str, tmpdir: str) -> dict:
+        """Build + measure an assembly file. Returns fitness dict."""
         bin_path = os.path.join(tmpdir, 'init_bin')
         p_args = [str(REPO_ROOT / p) for p in PASSES]
         try:
             r = subprocess.run(
                 ['gcc', '-no-pie', '-O0', '-w', '-fno-asynchronous-unwind-tables',
-                 '-Wa,--noexecstack', '-fno-unwind-tables', '-Dmain=zcc_main',
+                 '-Wa,--noexecstack', '-fno-unwind-tables',
                  '-o', bin_path, asm_path] + p_args + ['-lm'],
                 capture_output=True, timeout=60)
             if r.returncode != 0:
-                return float('inf')
+                return {'score': float('inf'), 'free_energy': float('inf'), 'asm_size': 0, 'inst_count': 0}
         except Exception:
-            return float('inf')
+            return {'score': float('inf'), 'free_energy': float('inf'), 'asm_size': 0, 'inst_count': 0}
 
-        fit = FitnessOracle.measure(bin_path, str(BENCHMARK_FILE), asm_path, tmpdir)
-        return fit['score']
+        return FitnessOracle.measure(bin_path, str(BENCHMARK_FILE), asm_path, tmpdir)
+
+    def _build_and_score(self, asm_path: str, tmpdir: str) -> float:
+        """Build + score an assembly file. Returns composite score."""
+        return self._build_and_measure(asm_path, tmpdir)['score']
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -593,7 +621,7 @@ class DreamEngine:
     def __init__(self, seed: int = 42, max_mutations: int = 3,
                  n_islands: int = 1, force_sweep: bool = False,
                  aggressive: bool = False, visualize: bool = False,
-                 dry_run: bool = False, wf_acceptance: bool = False):
+                 dry_run: bool = False):
         self.seed         = seed
         self.rng          = random.Random(seed)
         self.max_mutations = max_mutations if not aggressive else 8
@@ -617,33 +645,8 @@ class DreamEngine:
             print(f"  {_C}[RESUME]{_W} Gen {self.state.generation} │ "
                   f"Hash {self.state.parent_hash} │ "
                   f"{len(self.state.discovered_algorithms)} algorithms discovered")
-            # Restore thermodynamic variables with defaults for backwards compatibility
-            self.T_eff = data.get("T_eff", 1.0)
-            self.eta_c = data.get("eta_c", 0.4407)
-            self.phase = data.get("phase", "explore")
-            self.free_energy = data.get("free_energy", 0.0)
-            self.energy = data.get("energy", 0.0)
-            self.entropy = data.get("entropy", 0.0)
-            self.island_states = data.get("island_states", [])
         else:
             self.state = DreamState()
-            self.T_eff = 1.0
-            self.eta_c = 0.4407
-            self.phase = "explore"
-            self.free_energy = 0.0
-            self.energy = 0.0
-            self.entropy = 0.0
-            self.island_states = []
-
-        # Monkey-patch Island.__init__ to restore state on creation
-        original_island_init = Island.__init__
-        def patched_island_init(isl_self, island_id, seed, parent_asm, zcc_pp_c, blacklist, sweep_prob=0.3):
-            original_island_init(isl_self, island_id, seed, parent_asm, zcc_pp_c, blacklist, sweep_prob)
-            if hasattr(self, 'island_states') and island_id < len(self.island_states):
-                data_dict = self.island_states[island_id]
-                isl_self.state = IslandState(**{k: v for k, v in data_dict.items()
-                                                if k in IslandState.__dataclass_fields__})
-        Island.__init__ = patched_island_init
 
         # Mutation blacklist
         self.blacklist: set = set(self.state.blacklisted_fingerprints)
@@ -651,57 +654,13 @@ class DreamEngine:
         # Telemetry
         self.telem = HamiltonianTelemetry() if visualize else None
 
-        # Wilson-Fisher exponent-derived scheduling (fallback defaults)
-        self.wf_acceptance = wf_acceptance
-        self.wf_nu    = _WF_FALLBACK_NU
-        self.wf_beta  = _WF_FALLBACK_BETA
-        self.wf_gamma = _WF_FALLBACK_GAMMA
-        self.sweep_prob    = max(0.1, min(0.9, 1.0 / self.wf_nu))   # fallback: 0.3
-        self.migrate_every = max(3, int(10.0 / self.wf_gamma))       # fallback: 5
-        
-        # Support continuous thermodynamic temperature decay across OOM restarts
-        self._start_gen = self.state.generation
-        self._T_0_base = 1.0
-        self.T_0 = 1.0  # initial Boltzmann temperature (plain float)
-        
-        # Thread safety locks and state for live update
-        self._wf_lock = threading.Lock()
-        self._wf_ready = threading.Event()
-        self._wf_applied = False
-
-    # ──────────────────────────────────────────────────────────────────
-
-    def _async_extract_cfg_and_exponents(self, zcc2_asm: str):
-        """Runs CFG analysis and exponent search asynchronously."""
-        try:
-            with open(zcc2_asm) as f:
-                asm_lines = f.readlines()
-            cfg = extract_cfg(asm_lines)
-            stats = cfg_stats(cfg)
-            
-            # Use a conservative subgraph size of 150 nodes to keep the 
-            # background CPU overhead minimal while maintaining structural signal.
-            if stats['nodes'] > 150:
-                sub_nodes = sorted(cfg.keys())[:150]
-                sub_cfg = {n: [t for t in cfg[n] if t in sub_nodes]
-                           for n in sub_nodes if n in cfg}
-            else:
-                sub_cfg = cfg
-
-            d_s = cfg_spectral_dim(sub_cfg)
-            eta_c = topology_eta_search(sub_cfg, tol=1e-2, max_sweeps=25, n_samples=3)
-            uclass = universality_class(eta_c, d_s)
-            
-            with self._wf_lock:
-                self.wf_nu    = uclass.nu
-                self.wf_beta  = uclass.beta
-                self.wf_gamma = uclass.gamma
-                self.sweep_prob    = max(0.1, min(0.9, 1.0 / self.wf_nu))
-                self.migrate_every = max(3, int(10.0 / self.wf_gamma))
-                self._wf_ready.set()
-        except Exception as e:
-            # Fallback values remain active in case of unexpected errors
-            pass
+        # ── Wilson-Fisher criticality state ──
+        self.eta_c: float = 0.4407       # Default: 2D Ising
+        self.T_eff: float = 1.0          # Effective temperature
+        self.spectral_detector = SpectralArrestDetector(window=10, threshold=0.01)
+        self._fitness_scores: list = []  # For relaxation_phase()
+        self._phase: str = "explore"     # Current phase
+        self._uclass = None              # Universality class info
 
     # ──────────────────────────────────────────────────────────────────
 
@@ -827,41 +786,10 @@ int main(void) {
         BENCHMARK_FILE.write_text(src)
         print(f"  {_C}[INIT]{_W} Created benchmark workload")
 
-    def save_state(self, T_eff=None, islands=None, result=None):
+    def save_state(self):
         self.state.blacklisted_fingerprints = list(self.blacklist)
-        state_dict = asdict(self.state)
-        
-        T_eff = T_eff if T_eff is not None else getattr(self, 'T_eff', 1.0)
-        islands = islands if islands is not None else getattr(self, 'islands', [])
-            
-        self.T_eff = T_eff
-        self.eta_c = getattr(self, "eta_c", 0.4407)
-        self.phase = getattr(self, "phase", "explore")
-        
-        if result and result.mutant_fitness:
-            self.free_energy = result.mutant_fitness.get("free_energy", result.mutant_fitness.get("score", 0.0))
-            self.energy = result.mutant_fitness.get("score", 0.0)
-            self.entropy = result.mutant_fitness.get("entropy", 0.0)
-        
-        state_dict["T_eff"] = self.T_eff
-        state_dict["eta_c"] = self.eta_c
-        state_dict["phase"] = self.phase
-        state_dict["free_energy"] = getattr(self, "free_energy", 0.0)
-        state_dict["energy"] = getattr(self, "energy", 0.0)
-        state_dict["entropy"] = getattr(self, "entropy", 0.0)
-            
-        if islands:
-            state_dict["island_states"] = [asdict(isl.state) for isl in islands]
-        else:
-            state_dict["island_states"] = getattr(self, "island_states", [])
-            
         with open(DREAM_DIR / "dream_state.json", 'w') as f:
-            json.dump(state_dict, f, indent=2)
-
-    def _current_T(self, cycle: int) -> float:
-        """Compute temperature with continuous decay across OOM restarts."""
-        effective_cycle = cycle + self._start_gen
-        return self._T_0_base * max(1, effective_cycle) ** (-self.wf_beta)
+            json.dump(asdict(self.state), f, indent=2)
 
     def _journal(self, gen: int, island_id: int, mutations: list,
                  delta: dict, fitness: dict, hash_id: str):
@@ -961,14 +889,48 @@ int main(void) {
         with tempfile.TemporaryDirectory(prefix='dream_canon_') as canon_tmp:
             _, zcc2_asm, zcc_pp_c = self._prepare_canonical(canon_tmp)
 
-            # ── Wilson-Fisher: extract CFG and compute exponents asynchronously ──
-            self._wf_applied = False
-            self._extractor_thread = threading.Thread(
-                target=self._async_extract_cfg_and_exponents,
-                args=(zcc2_asm,),
-                daemon=True
-            )
-            self._extractor_thread.start()
+            # ── Wilson-Fisher: extract CFG and compute η_c ──
+            print(f"  {_C}[WF]{_W} Extracting CFG from parent assembly…")
+            try:
+                with open(zcc2_asm) as f:
+                    asm_lines = f.readlines()
+                cfg = extract_cfg(asm_lines)
+                stats = cfg_stats(cfg)
+                print(f"  {_C}[WF]{_W} CFG: {stats['nodes']} nodes, "
+                      f"{stats['edges']} edges, avg_degree={stats['avg_degree']}")
+
+                # Compute spectral dimension
+                d_s = cfg_spectral_dim(cfg)
+                print(f"  {_C}[WF]{_W} Spectral dimension: d_s={d_s:.3f}")
+
+                # Search for η_c (use subset for speed if graph is large)
+                if stats['nodes'] > 500:
+                    # Subsample: take first 500 nodes for tractability
+                    sub_nodes = sorted(cfg.keys())[:500]
+                    sub_cfg = {n: [t for t in cfg[n] if t in sub_nodes]
+                               for n in sub_nodes if n in cfg}
+                    self.eta_c = topology_eta_search(sub_cfg, tol=1e-3,
+                                                     max_sweeps=80, n_samples=3)
+                else:
+                    self.eta_c = topology_eta_search(cfg, tol=1e-3,
+                                                     max_sweeps=100, n_samples=3)
+
+                # Classify universality class
+                self._uclass = universality_class(self.eta_c, d_s)
+                print(f"  {_C}[WF]{_W} η_c={self.eta_c:.4f} │ "
+                      f"class={self._uclass.label} │ "
+                      f"ν={self._uclass.nu:.3f} β={self._uclass.beta:.3f} "
+                      f"γ={self._uclass.gamma:.3f}")
+
+                # Inject η_c into FitnessOracle class-level state
+                FitnessOracle._eta_c = self.eta_c
+                FitnessOracle._T_eff = self.T_eff
+
+            except Exception as e:
+                print(f"  {_Y}[WF]{_W} CFG extraction failed ({e}), using defaults")
+                self.eta_c = 0.4407
+                FitnessOracle._eta_c = self.eta_c
+                FitnessOracle._T_eff = self.T_eff
 
             # Initialise islands
             print(f"  {_C}[INIT]{_W} Spawning {self.n_islands} island(s)…")
@@ -976,10 +938,10 @@ int main(void) {
             for i in range(self.n_islands):
                 island_seed = self.rng.randint(0, 2**32)
                 with tempfile.TemporaryDirectory(prefix=f'island_init_{i}_') as it:
-                    isl = Island(i, island_seed, zcc2_asm, zcc_pp_c,
-                                 self.blacklist, sweep_prob=self.sweep_prob)
+                    isl = Island(i, island_seed, zcc2_asm, zcc_pp_c, self.blacklist)
                 islands.append(isl)
-                print(f"    Island {i}: score={isl.state.parent_score:.0f}")
+                print(f"    Island {i}: score={isl.state.parent_score:.0f} "
+                      f"F={getattr(isl, '_last_fe', '?')}")
 
             # Baseline for Hamiltonian telemetry
             if self.telem:
@@ -988,19 +950,20 @@ int main(void) {
             survived_total = 0; rejected_total = 0
             t_start = time.time()
 
-            print(f"\n  {_B}═══ DREAMING ════════════════════════════════════════{_W}\n")
+            print(f"\n  {_B}═══ DREAMING ════════════════════════════════════════{_W}")
+            print(f"  {_B}    η_c={self.eta_c:.4f}  T={self.T_eff:.2f}  "
+                  f"class={self._uclass.label if self._uclass else '?'}{_W}\n")
 
             for cycle in range(num_cycles):
-                # Thread-safe live parameter swap
-                if self._wf_ready.is_set() and not self._wf_applied:
-                    with self._wf_lock:
-                        for isl in islands:
-                            isl.sweep_prob = self.sweep_prob
-                        self._wf_applied = True
-                        print(f"\n  {_C}[WF-ASYNC]{_W} Swapped live exponents: "
-                              f"sweep_prob={self.sweep_prob:.3f} │ "
-                              f"migrate_every={self.migrate_every} │ "
-                              f"T_decay=cycle^(-{self.wf_beta:.3f})\n")
+                # ── Relaxation phase: modulate mutation aggressiveness ──
+                self._phase = relaxation_phase(self._fitness_scores,
+                                               tau=5.0)
+                if self._phase == "explore":
+                    cycle_max_muts = self.max_mutations + 2
+                    cycle_force_sweep = True
+                else:
+                    cycle_max_muts = max(1, self.max_mutations - 1)
+                    cycle_force_sweep = self.force_sweep
 
                 # Round-robin across islands
                 island = islands[cycle % self.n_islands]
@@ -1008,22 +971,42 @@ int main(void) {
                     seed=self.rng.randint(0, 2**32))
 
                 with tempfile.TemporaryDirectory(prefix='dream_step_') as td:
-                    # Per-cycle T_eff decay: T_0 * (cycle+1)^(-β)
-                    T_eff = self._current_T(cycle)
                     result = island.step(
                         mutation_engine,
-                        max_mutations=self.max_mutations,
-                        force_sweep=self.force_sweep,
+                        max_mutations=cycle_max_muts,
+                        force_sweep=cycle_force_sweep,
                         dry_run=self.dry_run,
-                        tmpdir=td,
-                        wf_acceptance=self.wf_acceptance,
-                        T_eff=T_eff)
+                        tmpdir=td)
 
                 self._print_result(result)
 
-                # Emit telemetry
+                # Emit telemetry (with criticality fields)
                 if self.telem:
-                    self.telem.emit(result, island.island_id)
+                    self.telem.emit(result, island.island_id,
+                                    eta_c=self.eta_c,
+                                    phase=self._phase,
+                                    spectral_gap=self.spectral_detector.spectral_gap)
+
+                # ── Spectral arrest: track convergence ──
+                if result.mutant_fitness:
+                    fv = [
+                        result.mutant_fitness.get('inst_count', 0),
+                        result.mutant_fitness.get('branch_density', 0),
+                        result.mutant_fitness.get('stack_depth_sum', 0),
+                        result.mutant_fitness.get('asm_size', 0),
+                    ]
+                    self.spectral_detector.record(fv)
+                    self._fitness_scores.append(
+                        result.mutant_fitness.get('free_energy',
+                            result.mutant_fitness.get('score', 0)))
+
+                    if (not self.dry_run and cycle > 20 and
+                            self.spectral_detector.arrested()):
+                        print(f"\n  {_C}[WF]{_W} {_G}SPECTRAL ARREST{_W} — "
+                              f"fixed point reached at cycle {cycle+1}")
+                        print(f"      gap={self.spectral_detector.spectral_gap:.6f}  "
+                              f"phase={self._phase}")
+                        # Don't break — log it but keep going if cycles remain
 
                 if result.survived:
                     survived_total += 1
@@ -1059,15 +1042,15 @@ int main(void) {
                         p_args = [str(REPO_ROOT / p) for p in PASSES]
                         subprocess.run(
                             ['gcc', '-no-pie', '-O0', '-w', '-fno-asynchronous-unwind-tables',
-                             '-Wa,--noexecstack', '-fno-unwind-tables', '-Dmain=zcc_main',
+                             '-Wa,--noexecstack', '-fno-unwind-tables',
                              '-o', str(REPO_ROOT / 'zcc2'), zcc2_asm] + p_args + ['-lm'],
                             capture_output=True, timeout=60)
                         print(f"\n  {_Y}[PROMOTE]{_W} Island {best.island_id} "
                               f"(score={best.state.parent_score:.0f}) "
                               f"→ canonical zcc2 @ G{gen}\n")
 
-                    # Island cross-breeding (γ-derived interval with 2+ islands)
-                    if self.n_islands >= 2 and gen % self.migrate_every == 0:
+                    # Island cross-breeding (every 5 cycles with 2+ islands)
+                    if self.n_islands >= 2 and gen % 5 == 0:
                         self._crossbreed(islands, mutation_engine,
                                          zcc_pp_c, self.dry_run)
 
@@ -1076,7 +1059,7 @@ int main(void) {
                     self.state.total_regressions += 1
 
                 self.state.total_mutations_tried += len(result.mutations_applied)
-                self.save_state(T_eff=T_eff, islands=islands, result=result)
+                self.save_state()
 
         elapsed = time.time() - t_start
         self._print_summary(num_cycles, survived_total, rejected_total, elapsed, islands)
@@ -1190,9 +1173,6 @@ def main():
     p.add_argument('--dry-run',   action='store_true')
     p.add_argument('--reset',     action='store_true',
                    help='Clear dream state and restart from Genesis')
-    p.add_argument('--wf-acceptance', action='store_true',
-                   help='Enable Boltzmann acceptance with WF T_eff decay '
-                        '(default: greedy descent only)')
     args = p.parse_args()
 
     if args.reset:
@@ -1211,7 +1191,6 @@ def main():
         aggressive=args.aggressive,
         visualize=args.visualize,
         dry_run=args.dry_run,
-        wf_acceptance=args.wf_acceptance,
     ).run(num_cycles=args.cycles)
 
 

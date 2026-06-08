@@ -356,6 +356,10 @@ int main() {
 EOF
 test_file "alloc_pattern" "$TESTDIR/t_alloc_pattern.c" 0
 
+step "Category 10b: C99 Compound Literals"
+test_file "c99_compound_literal" "tests/test_zcc_c99.c" 0
+test_file "c99_compound_literal_param" "tests/test_zcc_c99_param.c" 0
+
 # ══════════════════════════════════════════════════════════════════
 # CATEGORY 11: Full Selfhost (unless --quick)
 # ══════════════════════════════════════════════════════════════════

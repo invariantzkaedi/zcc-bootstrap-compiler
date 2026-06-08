@@ -1,3 +1,21 @@
+/* Standard C library compatibility prototypes for ZCC compiler */
+extern float sinf(float x);
+extern float cosf(float x);
+extern float tanf(float x);
+extern float acosf(float x);
+extern float atan2f(float y, float x);
+extern float sqrtf(float x);
+extern float floorf(float x);
+extern float fabsf(float x);
+extern float fmodf(float x, float y);
+extern float powf(float x, float y);
+extern float logf(float x);
+extern float fmaxf(float x, float y);
+extern float fminf(float x, float y);
+extern double fmod(double x, double y);
+extern int rand(void);
+extern void srand(unsigned int seed);
+
 #include "zcc_svg.h"
 #include "zcc_anim.h"
 #include <stdio.h>
@@ -49,7 +67,7 @@ int main() {
     char* values_list = (char*)malloc(2 * 1024 * 1024);
     values_list[0] = '\0';
     
-    int num_frames = 15;
+    int num_frames = 30;
     ChaosPhasor ph;
     chaos_phasor_init(&ph, 120.0); // 120.0 BPM Suno beat!
 
@@ -64,6 +82,17 @@ int main() {
         // Advance phasor stage
         ph.phase = (double)f / (double)num_frames;
         
+        // 3D Orbiting camera path calculation
+        float angle = (float)f / (float)num_frames * 2.0f * M_PI;
+        Vec3 ro = { 55.0f * sinf(angle), 18.0f * cosf(angle * 0.5f), 55.0f * cosf(angle) };
+        Vec3 target = { 0.0f, 0.0f, 0.0f };
+        Vec3 up = { 0.0f, 1.0f, 0.0f };
+
+        // Construct camera orthonormal basis
+        Vec3 z_axis = anim_vec3_normalize(anim_vec3_sub(ro, target)); // points from target to camera (Z+)
+        Vec3 x_axis = anim_vec3_normalize(anim_vec3_cross(up, z_axis)); // points right (X+)
+        Vec3 y_axis = anim_vec3_cross(z_axis, x_axis); // points up (Y+)
+
         // Raymarch the entire SDF screen at this time slice
         SVGPath* path = svg_path_create();
         Vec3 light_dir = {0.6f, 0.8f, -0.4f};
@@ -74,12 +103,18 @@ int main() {
 
         for (int y = 0; y < height; y += grid_step) {
             for (int x = 0; x < width; x += grid_step) {
-                Vec3 ro = {0.0f, 0.0f, 60.0f}; // Position camera
-                Vec3 rd = {(x - width / 2.0f) / (float)width, (y - height / 2.0f) / (float)height * -1.0f, -1.0f};
-                normalize(&rd);
+                // Compute normalized screen coordinates uv in [-1, 1]
+                float uv_x = (x - width / 2.0f) / (width / 2.0f);
+                float uv_y = (height / 2.0f - y) / (height / 2.0f);
+                
+                // Ray direction rd = normalize(uv_x * x_axis + uv_y * y_axis - z_axis)
+                Vec3 rd = anim_vec3_normalize(anim_vec3_add(
+                    anim_vec3_add(anim_vec3_scale(x_axis, uv_x), anim_vec3_scale(y_axis, uv_y)),
+                    anim_vec3_scale(z_axis, -1.0f)
+                ));
                 
                 Vec3 hit, normal;
-                float d = ray_march((Ray){ro, rd}, &ph, &mesh, &hit, &normal);
+                float d = ray_march(ro, rd, &ph, &mesh, &hit, &normal);
                 
                 if (d < MAX_DIST) {
                     float shade = fmaxf(0.15f, dot(normal, light_dir));

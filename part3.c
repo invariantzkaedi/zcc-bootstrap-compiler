@@ -2733,7 +2733,7 @@ Node *parse_assign(Compiler *cc) {
             ca = node_new(cc, ND_COMPOUND_ASSIGN, line);
             ca->compound_op = op;
             ca->lhs = n;
-            ca->rhs = parse_assign(cc);
+            ca->rhs = ensure_type(cc, parse_assign(cc), n->type);
             ca->type = n->type;
             return ca;
         }
@@ -4459,5 +4459,670 @@ Node* zcc_build_initializer(Compiler* cc, ZccInitNode* root, Type* target_type) 
     zcc_rust_free_init_tree(root);
     return final_node;
 }
-
 /* ZKAEDI FORCE RENDER CACHE INVALIDATION */
+
+typedef enum {
+    LATTICE_TOP,
+    LATTICE_CONST,
+    LATTICE_BOT
+} LatticeKind;
+
+typedef struct {
+    LatticeKind kind;
+    long long val;
+} LatticeVal;
+
+typedef struct {
+    Symbol *sym;
+    LatticeVal val;
+} SymLatticeEntry;
+
+#define LATTICE_HASH_SIZE 16384
+static SymLatticeEntry sym_lattice_hash[LATTICE_HASH_SIZE];
+
+static int hash_sym(Symbol *sym) {
+    unsigned long long addr = (unsigned long long)sym;
+    return (int)((addr ^ (addr >> 16)) % LATTICE_HASH_SIZE);
+}
+
+static LatticeVal get_sym_lattice(Symbol *sym) {
+    LatticeVal bot = {LATTICE_BOT, 0};
+    if (!sym) return bot;
+    int h = hash_sym(sym);
+    int i = h;
+    while (1) {
+        if (sym_lattice_hash[i].sym == sym) {
+            return sym_lattice_hash[i].val;
+        }
+        if (sym_lattice_hash[i].sym == NULL) {
+            LatticeVal top = {LATTICE_TOP, 0};
+            return top;
+        }
+        i = (i + 1) % LATTICE_HASH_SIZE;
+        if (i == h) return bot;
+    }
+}
+
+static void set_sym_lattice(Symbol *sym, LatticeVal val) {
+    if (!sym) return;
+    int h = hash_sym(sym);
+    int i = h;
+    while (1) {
+        if (sym_lattice_hash[i].sym == sym) {
+            sym_lattice_hash[i].val = val;
+            return;
+        }
+        if (sym_lattice_hash[i].sym == NULL) {
+            sym_lattice_hash[i].sym = sym;
+            sym_lattice_hash[i].val = val;
+            return;
+        }
+        i = (i + 1) % LATTICE_HASH_SIZE;
+        if (i == h) return;
+    }
+}
+
+static LatticeVal meet(LatticeVal a, LatticeVal b) {
+    if (a.kind == LATTICE_BOT || b.kind == LATTICE_BOT) {
+        LatticeVal r = {LATTICE_BOT, 0};
+        return r;
+    }
+    if (a.kind == LATTICE_TOP) return b;
+    if (b.kind == LATTICE_TOP) return a;
+    if (a.val == b.val) return a;
+    LatticeVal r = {LATTICE_BOT, 0};
+    return r;
+}
+
+typedef struct {
+    Symbol *sym;
+    int assign_count;
+    int addr_taken;
+} SymStats;
+
+#define STATS_HASH_SIZE 16384
+static SymStats sym_stats_hash[STATS_HASH_SIZE];
+
+static int hash_stats_sym(Symbol *sym) {
+    unsigned long long addr = (unsigned long long)sym;
+    return (int)((addr ^ (addr >> 16)) % STATS_HASH_SIZE);
+}
+
+static SymStats *get_sym_stats(Symbol *sym) {
+    if (!sym) return NULL;
+    int h = hash_stats_sym(sym);
+    int i = h;
+    while (1) {
+        if (sym_stats_hash[i].sym == sym) {
+            return &sym_stats_hash[i];
+        }
+        if (sym_stats_hash[i].sym == NULL) {
+            sym_stats_hash[i].sym = sym;
+            sym_stats_hash[i].assign_count = 0;
+            sym_stats_hash[i].addr_taken = 0;
+            return &sym_stats_hash[i];
+        }
+        i = (i + 1) % STATS_HASH_SIZE;
+        if (i == h) return NULL;
+    }
+}
+
+typedef struct {
+    Node *caller;
+    Node *callee;
+    Node *call_node;
+} CallSite;
+
+#define MAX_CALL_SITES 8192
+static CallSite call_sites[MAX_CALL_SITES];
+static int num_call_sites = 0;
+
+#define MAX_FUNCTIONS 2048
+static Node *functions[MAX_FUNCTIONS];
+static int num_functions = 0;
+
+static Symbol *func_param_syms[MAX_FUNCTIONS][MAX_PARAMS];
+static int func_param_syms_initialized = 0;
+
+static Node *find_function_def(const char *name) {
+    for (int i = 0; i < num_functions; i++) {
+        if (strcmp(functions[i]->func_def_name, name) == 0) {
+            return functions[i];
+        }
+    }
+    return NULL;
+}
+
+static Symbol *find_param_sym_in_node(Node *n, const char *name) {
+    if (!n) return NULL;
+    if (n->kind == ND_VAR && strcmp(n->name, name) == 0 && n->sym) {
+        return n->sym;
+    }
+    Symbol *s = find_param_sym_in_node(n->lhs, name);
+    if (s) return s;
+    s = find_param_sym_in_node(n->rhs, name);
+    if (s) return s;
+    s = find_param_sym_in_node(n->cond, name);
+    if (s) return s;
+    s = find_param_sym_in_node(n->then_body, name);
+    if (s) return s;
+    s = find_param_sym_in_node(n->else_body, name);
+    if (s) return s;
+    s = find_param_sym_in_node(n->init, name);
+    if (s) return s;
+    s = find_param_sym_in_node(n->inc, name);
+    if (s) return s;
+    s = find_param_sym_in_node(n->body, name);
+    if (s) return s;
+    s = find_param_sym_in_node(n->case_body, name);
+    if (s) return s;
+    
+    if (n->kind == ND_CALL && n->num_args > 0) {
+        for (int i = 0; i < n->num_args; i++) {
+            s = find_param_sym_in_node(n->args[i], name);
+            if (s) return s;
+        }
+    }
+    if (n->kind == ND_BLOCK && n->num_stmts > 0) {
+        for (int i = 0; i < n->num_stmts; i++) {
+            s = find_param_sym_in_node(n->stmts[i], name);
+            if (s) return s;
+        }
+    }
+    if (n->kind == ND_SWITCH && n->num_cases > 0) {
+        for (int i = 0; i < n->num_cases; i++) {
+            s = find_param_sym_in_node(n->cases[i], name);
+            if (s) return s;
+        }
+        s = find_param_sym_in_node(n->default_case, name);
+        if (s) return s;
+    }
+    return NULL;
+}
+
+static void initialize_param_syms(void) {
+    if (func_param_syms_initialized) return;
+    memset(func_param_syms, 0, sizeof(func_param_syms));
+    for (int i = 0; i < num_functions; i++) {
+        Node *func = functions[i];
+        if (func->func_params) {
+            for (int k = 0; k < func->num_params && k < MAX_PARAMS; k++) {
+                func_param_syms[i][k] = find_param_sym_in_node(func->body, func->func_params->names[k]);
+            }
+        }
+    }
+    func_param_syms_initialized = 1;
+}
+
+static void icp_collect_calls(Node *n, Node *current_func) {
+    if (!n) return;
+    
+    if (n->kind == ND_CALL) {
+        Node *callee = find_function_def(n->func_name);
+        if (callee && num_call_sites < MAX_CALL_SITES) {
+            call_sites[num_call_sites].caller = current_func;
+            call_sites[num_call_sites].callee = callee;
+            call_sites[num_call_sites].call_node = n;
+            num_call_sites++;
+        }
+    }
+    
+    icp_collect_calls(n->lhs, current_func);
+    icp_collect_calls(n->rhs, current_func);
+    icp_collect_calls(n->cond, current_func);
+    icp_collect_calls(n->then_body, current_func);
+    icp_collect_calls(n->else_body, current_func);
+    icp_collect_calls(n->init, current_func);
+    icp_collect_calls(n->inc, current_func);
+    icp_collect_calls(n->body, current_func);
+    icp_collect_calls(n->case_body, current_func);
+    
+    if (n->kind == ND_CALL && n->num_args > 0) {
+        for (int i = 0; i < n->num_args; i++) {
+            icp_collect_calls(n->args[i], current_func);
+        }
+    }
+    if (n->kind == ND_BLOCK && n->num_stmts > 0) {
+        for (int i = 0; i < n->num_stmts; i++) {
+            icp_collect_calls(n->stmts[i], current_func);
+        }
+    }
+    if (n->kind == ND_SWITCH && n->num_cases > 0) {
+        for (int i = 0; i < n->num_cases; i++) {
+            icp_collect_calls(n->cases[i], current_func);
+        }
+        icp_collect_calls(n->default_case, current_func);
+    }
+}
+
+static void scan_sym_stats(Node *n) {
+    if (!n) return;
+    
+    if (n->kind == ND_ASSIGN || n->kind == ND_COMPOUND_ASSIGN) {
+        Node *lhs = n->lhs;
+        while (lhs && lhs->kind == ND_CAST) lhs = lhs->lhs;
+        if (lhs && lhs->kind == ND_VAR && lhs->sym) {
+            SymStats *stats = get_sym_stats(lhs->sym);
+            if (stats) {
+                if (n->kind == ND_COMPOUND_ASSIGN) {
+                    stats->assign_count += 2;
+                } else {
+                    stats->assign_count++;
+                }
+            }
+        }
+    }
+    else if (n->kind == ND_PRE_INC || n->kind == ND_PRE_DEC ||
+             n->kind == ND_POST_INC || n->kind == ND_POST_DEC) {
+        Node *lhs = n->lhs;
+        while (lhs && lhs->kind == ND_CAST) lhs = lhs->lhs;
+        if (lhs && lhs->kind == ND_VAR && lhs->sym) {
+            SymStats *stats = get_sym_stats(lhs->sym);
+            if (stats) stats->assign_count += 2;
+        }
+    }
+    else if (n->kind == ND_ADDR) {
+        Node *lhs = n->lhs;
+        while (lhs && lhs->kind == ND_CAST) lhs = lhs->lhs;
+        if (lhs && lhs->kind == ND_VAR && lhs->sym) {
+            SymStats *stats = get_sym_stats(lhs->sym);
+            if (stats) stats->addr_taken = 1;
+        }
+    }
+    
+    scan_sym_stats(n->lhs);
+    scan_sym_stats(n->rhs);
+    scan_sym_stats(n->cond);
+    scan_sym_stats(n->then_body);
+    scan_sym_stats(n->else_body);
+    scan_sym_stats(n->init);
+    scan_sym_stats(n->inc);
+    scan_sym_stats(n->body);
+    scan_sym_stats(n->case_body);
+    
+    if (n->kind == ND_CALL && n->num_args > 0) {
+        for (int i = 0; i < n->num_args; i++) {
+            scan_sym_stats(n->args[i]);
+        }
+    }
+    if (n->kind == ND_BLOCK && n->num_stmts > 0) {
+        for (int i = 0; i < n->num_stmts; i++) {
+            scan_sym_stats(n->stmts[i]);
+        }
+    }
+    if (n->kind == ND_SWITCH && n->num_cases > 0) {
+        for (int i = 0; i < n->num_cases; i++) {
+            scan_sym_stats(n->cases[i]);
+        }
+        scan_sym_stats(n->default_case);
+    }
+}
+
+static LatticeVal icp_eval_expr(Node *n) {
+    LatticeVal bot = {LATTICE_BOT, 0};
+    if (!n) return bot;
+    
+    if (n->kind == ND_NUM) {
+        LatticeVal r = {LATTICE_CONST, n->int_val};
+        return r;
+    }
+    
+    if (n->kind == ND_VAR && n->sym) {
+        return get_sym_lattice(n->sym);
+    }
+    
+    if (n->kind == ND_CAST) {
+        return icp_eval_expr(n->lhs);
+    }
+    
+    if (n->kind == ND_ADD || n->kind == ND_SUB || n->kind == ND_MUL ||
+        n->kind == ND_DIV || n->kind == ND_MOD || n->kind == ND_SHL ||
+        n->kind == ND_SHR || n->kind == ND_BAND || n->kind == ND_BOR ||
+        n->kind == ND_BXOR || n->kind == ND_EQ || n->kind == ND_NE ||
+        n->kind == ND_LT || n->kind == ND_LE || n->kind == ND_GT ||
+        n->kind == ND_GE || n->kind == ND_LAND || n->kind == ND_LOR) {
+        
+        LatticeVal lhs_val = icp_eval_expr(n->lhs);
+        LatticeVal rhs_val = icp_eval_expr(n->rhs);
+        
+        if (lhs_val.kind == LATTICE_BOT || rhs_val.kind == LATTICE_BOT) {
+            LatticeVal bot = {LATTICE_BOT, 0};
+            return bot;
+        }
+        if (lhs_val.kind == LATTICE_TOP || rhs_val.kind == LATTICE_TOP) {
+            LatticeVal top = {LATTICE_TOP, 0};
+            return top;
+        }
+        
+        long long v1 = lhs_val.val;
+        long long v2 = rhs_val.val;
+        long long res = 0;
+        switch (n->kind) {
+            case ND_ADD: res = v1 + v2; break;
+            case ND_SUB: res = v1 - v2; break;
+            case ND_MUL: res = v1 * v2; break;
+            case ND_DIV: res = (v2 != 0) ? (v1 / v2) : 0; break;
+            case ND_MOD: res = (v2 != 0) ? (v1 % v2) : 0; break;
+            case ND_SHL: res = v1 << v2; break;
+            case ND_SHR: res = v1 >> v2; break;
+            case ND_BAND: res = v1 & v2; break;
+            case ND_BOR: res = v1 | v2; break;
+            case ND_BXOR: res = v1 ^ v2; break;
+            case ND_EQ: res = v1 == v2; break;
+            case ND_NE: res = v1 != v2; break;
+            case ND_LT: res = v1 < v2; break;
+            case ND_LE: res = v1 <= v2; break;
+            case ND_GT: res = v1 > v2; break;
+            case ND_GE: res = v1 >= v2; break;
+            case ND_LAND: res = v1 && v2; break;
+            case ND_LOR: res = v1 || v2; break;
+        }
+        LatticeVal r = {LATTICE_CONST, res};
+        return r;
+    }
+    
+    return bot;
+}
+
+static Node *solver_worklist[MAX_FUNCTIONS];
+static int worklist_head = 0;
+static int worklist_tail = 0;
+static int in_worklist[MAX_FUNCTIONS];
+
+static void add_to_worklist(Node *func) {
+    int idx = -1;
+    for (int i = 0; i < num_functions; i++) {
+        if (functions[i] == func) { idx = i; break; }
+    }
+    if (idx == -1) return;
+    if (in_worklist[idx]) return;
+    solver_worklist[worklist_tail] = func;
+    worklist_tail = (worklist_tail + 1) % MAX_FUNCTIONS;
+    in_worklist[idx] = 1;
+}
+
+static Node *pop_worklist(void) {
+    if (worklist_head == worklist_tail) return NULL;
+    Node *func = solver_worklist[worklist_head];
+    worklist_head = (worklist_head + 1) % MAX_FUNCTIONS;
+    for (int i = 0; i < num_functions; i++) {
+        if (functions[i] == func) { in_worklist[i] = 0; break; }
+    }
+    return func;
+}
+
+static void init_local_lattices(Node *n) {
+    if (!n) return;
+    if (n->kind == ND_VAR && n->sym && n->sym->is_local) {
+        SymStats *stats = get_sym_stats(n->sym);
+        if (stats && (stats->assign_count > 1 || stats->addr_taken)) {
+            LatticeVal bot = {LATTICE_BOT, 0};
+            set_sym_lattice(n->sym, bot);
+        }
+    }
+    init_local_lattices(n->lhs);
+    init_local_lattices(n->rhs);
+    init_local_lattices(n->cond);
+    init_local_lattices(n->then_body);
+    init_local_lattices(n->else_body);
+    init_local_lattices(n->init);
+    init_local_lattices(n->inc);
+    init_local_lattices(n->body);
+    init_local_lattices(n->case_body);
+    
+    if (n->kind == ND_CALL && n->num_args > 0) {
+        for (int i = 0; i < n->num_args; i++) {
+            init_local_lattices(n->args[i]);
+        }
+    }
+    if (n->kind == ND_BLOCK && n->num_stmts > 0) {
+        for (int i = 0; i < n->num_stmts; i++) {
+            init_local_lattices(n->stmts[i]);
+        }
+    }
+    if (n->kind == ND_SWITCH && n->num_cases > 0) {
+        for (int i = 0; i < n->num_cases; i++) {
+            init_local_lattices(n->cases[i]);
+        }
+        init_local_lattices(n->default_case);
+    }
+}
+
+static void propagate_local_assignments(Node *n, Node *current_func) {
+    if (!n) return;
+    
+    if (n->kind == ND_ASSIGN) {
+        Node *lhs = n->lhs;
+        while (lhs && lhs->kind == ND_CAST) lhs = lhs->lhs;
+        if (lhs && lhs->kind == ND_VAR && lhs->sym && lhs->sym->is_local) {
+            SymStats *stats = get_sym_stats(lhs->sym);
+            if (stats && stats->assign_count <= 1 && stats->addr_taken == 0) {
+                LatticeVal rhs_val = icp_eval_expr(n->rhs);
+                LatticeVal cur_val = get_sym_lattice(lhs->sym);
+                
+                LatticeVal new_val = meet(cur_val, rhs_val);
+                if (new_val.kind != cur_val.kind ||
+                    (new_val.kind == LATTICE_CONST && new_val.val != cur_val.val)) {
+                    set_sym_lattice(lhs->sym, new_val);
+                    add_to_worklist(current_func);
+                }
+            }
+        }
+    }
+    
+    propagate_local_assignments(n->lhs, current_func);
+    propagate_local_assignments(n->rhs, current_func);
+    propagate_local_assignments(n->cond, current_func);
+    propagate_local_assignments(n->then_body, current_func);
+    propagate_local_assignments(n->else_body, current_func);
+    propagate_local_assignments(n->init, current_func);
+    propagate_local_assignments(n->inc, current_func);
+    propagate_local_assignments(n->body, current_func);
+    propagate_local_assignments(n->case_body, current_func);
+    
+    if (n->kind == ND_CALL && n->num_args > 0) {
+        for (int i = 0; i < n->num_args; i++) {
+            propagate_local_assignments(n->args[i], current_func);
+        }
+    }
+    if (n->kind == ND_BLOCK && n->num_stmts > 0) {
+        for (int i = 0; i < n->num_stmts; i++) {
+            propagate_local_assignments(n->stmts[i], current_func);
+        }
+    }
+    if (n->kind == ND_SWITCH && n->num_cases > 0) {
+        for (int i = 0; i < n->num_cases; i++) {
+            propagate_local_assignments(n->cases[i], current_func);
+        }
+        propagate_local_assignments(n->default_case, current_func);
+    }
+}
+
+static void rewrite_constant_vars_rec(Node *n, int is_lvalue) {
+    if (!n) return;
+    
+    if (n->kind == ND_VAR && n->sym && !is_lvalue) {
+        LatticeVal lv = get_sym_lattice(n->sym);
+        if (lv.kind == LATTICE_CONST) {
+            fprintf(stderr, "[ICP] Rewrote parameter/variable '%s' to constant %lld\n", n->name, lv.val);
+            n->kind = ND_NUM;
+            n->int_val = lv.val;
+            n->lhs = NULL;
+            n->rhs = NULL;
+            return;
+        }
+    }
+    
+    if (n->kind == ND_ASSIGN || n->kind == ND_COMPOUND_ASSIGN) {
+        rewrite_constant_vars_rec(n->lhs, 1);
+        rewrite_constant_vars_rec(n->rhs, 0);
+        return;
+    }
+    
+    if (n->kind == ND_PRE_INC || n->kind == ND_PRE_DEC ||
+        n->kind == ND_POST_INC || n->kind == ND_POST_DEC ||
+        n->kind == ND_ADDR) {
+        rewrite_constant_vars_rec(n->lhs, 1);
+        return;
+    }
+    
+    if (n->kind == ND_DEREF) {
+        rewrite_constant_vars_rec(n->lhs, 0);
+        return;
+    }
+    
+    if (n->kind == ND_MEMBER) {
+        rewrite_constant_vars_rec(n->lhs, is_lvalue);
+        return;
+    }
+    
+    rewrite_constant_vars_rec(n->lhs, is_lvalue);
+    rewrite_constant_vars_rec(n->rhs, is_lvalue);
+    rewrite_constant_vars_rec(n->cond, 0);
+    rewrite_constant_vars_rec(n->then_body, 0);
+    rewrite_constant_vars_rec(n->else_body, 0);
+    rewrite_constant_vars_rec(n->init, 0);
+    rewrite_constant_vars_rec(n->inc, 0);
+    rewrite_constant_vars_rec(n->body, 0);
+    rewrite_constant_vars_rec(n->case_body, 0);
+    
+    if (n->kind == ND_CALL && n->num_args > 0) {
+        for (int i = 0; i < n->num_args; i++) {
+            rewrite_constant_vars_rec(n->args[i], 0);
+        }
+    }
+    if (n->kind == ND_BLOCK && n->num_stmts > 0) {
+        for (int i = 0; i < n->num_stmts; i++) {
+            rewrite_constant_vars_rec(n->stmts[i], 0);
+        }
+    }
+    if (n->kind == ND_SWITCH && n->num_cases > 0) {
+        for (int i = 0; i < n->num_cases; i++) {
+            rewrite_constant_vars_rec(n->cases[i], 0);
+        }
+        rewrite_constant_vars_rec(n->default_case, 0);
+    }
+}
+
+static void rewrite_constant_vars(Node *n) {
+    rewrite_constant_vars_rec(n, 0);
+}
+
+void run_interprocedural_constant_propagation(Compiler *cc, Node *prog) {
+    // 1. Reset state
+    memset(sym_lattice_hash, 0, sizeof(sym_lattice_hash));
+    memset(sym_stats_hash, 0, sizeof(sym_stats_hash));
+    num_functions = 0;
+    num_call_sites = 0;
+    func_param_syms_initialized = 0;
+    worklist_head = 0;
+    worklist_tail = 0;
+    memset(in_worklist, 0, sizeof(in_worklist));
+    
+    // 2. Collect functions
+    Node *n = prog;
+    while (n) {
+        if (n->kind == ND_FUNC_DEF) {
+            if (num_functions < MAX_FUNCTIONS) {
+                functions[num_functions++] = n;
+            }
+        }
+        n = n->next;
+    }
+    
+    // 3. Initialize parameter symbols cache
+    initialize_param_syms();
+    
+    // 4. Collect calls, count symbol stats, and scan for modified variables/parameters
+    for (int i = 0; i < num_functions; i++) {
+        icp_collect_calls(functions[i]->body, functions[i]);
+        scan_sym_stats(functions[i]->body);
+    }
+    
+    // 5. Initialize lattices for function parameters
+    for (int i = 0; i < num_functions; i++) {
+        Node *func = functions[i];
+        int is_static = func->is_static;
+        int is_main = (strcmp(func->func_def_name, "main") == 0);
+        
+        for (int k = 0; k < func->num_params && k < MAX_PARAMS; k++) {
+            Symbol *s = func_param_syms[i][k];
+            if (!s) continue;
+            
+            SymStats *stats = get_sym_stats(s);
+            if (stats && (stats->assign_count > 0 || stats->addr_taken)) {
+                LatticeVal bot = {LATTICE_BOT, 0};
+                set_sym_lattice(s, bot);
+            } else if (is_main || !is_static) {
+                LatticeVal bot = {LATTICE_BOT, 0};
+                set_sym_lattice(s, bot);
+            } else {
+                LatticeVal top = {LATTICE_TOP, 0};
+                set_sym_lattice(s, top);
+            }
+        }
+        
+        // Initialize lattices of all other local variables in the function body
+        init_local_lattices(func->body);
+    }
+    
+    // 6. Push all functions to worklist
+    for (int i = 0; i < num_functions; i++) {
+        add_to_worklist(functions[i]);
+    }
+    
+    // 7. Solver Loop
+    int solver_iters = 0;
+    while (1) {
+        Node *func = pop_worklist();
+        if (!func) break;
+        
+        solver_iters++;
+        if (solver_iters > 30000) {
+            fprintf(stderr, "[ICP Warning] Iteration limit reached!\n");
+            break;
+        }
+        
+        // Propagate local assignments inside `func`
+        propagate_local_assignments(func->body, func);
+        
+        // Propagate argument constants across call sites
+        for (int i = 0; i < num_call_sites; i++) {
+            CallSite *cs = &call_sites[i];
+            if (cs->caller != func) continue;
+            
+            Node *call = cs->call_node;
+            Node *callee = cs->callee;
+            
+            int callee_idx = -1;
+            for (int f = 0; f < num_functions; f++) {
+                if (functions[f] == callee) { callee_idx = f; break; }
+            }
+            if (callee_idx == -1) continue;
+            
+            for (int k = 0; k < call->num_args && k < callee->num_params && k < MAX_PARAMS; k++) {
+                Symbol *param_sym = func_param_syms[callee_idx][k];
+                if (!param_sym) continue;
+                
+                LatticeVal current_param_val = get_sym_lattice(param_sym);
+                if (current_param_val.kind == LATTICE_BOT) continue;
+                
+                LatticeVal arg_val = icp_eval_expr(call->args[k]);
+                LatticeVal new_param_val = meet(current_param_val, arg_val);
+                
+                if (new_param_val.kind != current_param_val.kind ||
+                    (new_param_val.kind == LATTICE_CONST && new_param_val.val != current_param_val.val)) {
+                    set_sym_lattice(param_sym, new_param_val);
+                    add_to_worklist(callee);
+                }
+            }
+        }
+    }
+    
+    fprintf(stderr, "[ICP] Interprocedural & local constant propagation completed. Solver iterations: %d\n", solver_iters);
+    
+    // 8. Rewrite AST nodes using solved lattice values
+    for (int i = 0; i < num_functions; i++) {
+        rewrite_constant_vars(functions[i]->body);
+    }
+}

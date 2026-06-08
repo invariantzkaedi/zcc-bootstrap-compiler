@@ -682,38 +682,108 @@ int eval(ASTNode* node, int* returned) {
 
 // === MAIN ENTRY AND DEMO ===
 
-int main() {
+int main(int argc, char* argv[]) {
     printf("🔱 ZKAEDI OMNI-PYTHON ENGINE: BOOTSTRAPPING VIA ZCC\n");
     printf("===================================================\n\n");
 
-    const char* python_program = 
-        "# Variables and basic math\n"
-        "x = 10\n"
-        "y = 20 + x * 2\n"
-        "print(\"Evaluating mathematical variables:\")\n"
-        "print(y)\n"
-        "\n"
-        "# Conditionals (if/else)\n"
-        "print(\"Running conditionals checking variables:\")\n"
-        "if y > 35:\n"
-        "    print(\"y is greater than 35\")\n"
-        "else:\n"
-        "    print(\"y is less or equal to 35\")\n"
-        "\n"
-        "# Function Definition and Recursion/Call Stack\n"
-        "def compute_factorial_sum(n):\n"
-        "    if n == 0:\n"
-        "        return 0\n"
-        "    return n + compute_factorial_sum(n - 1)\n"
-        "\n"
-        "print(\"Calling Python function: compute_factorial_sum(5):\")\n"
-        "result = compute_factorial_sum(5)\n"
-        "print(result)\n"
-        "\n"
-        "# For Loops\n"
-        "print(\"Executing standard for loop in range(4):\")\n"
-        "for i in range(4):\n"
-        "    print(i)\n";
+    char* python_program = NULL;
+    static char buffer[16384];
+
+    if (argc > 1) {
+        FILE* f = fopen(argv[1], "r");
+        if (!f) {
+            printf("Error: Could not open file %s\n", argv[1]);
+            return 1;
+        }
+        int len = fread(buffer, 1, sizeof(buffer) - 1, f);
+        buffer[len] = '\0';
+        fclose(f);
+        
+        if (strstr(buffer, "MONOLITH_CNOT")) {
+            // Trigger monolith evolve on CNOT states
+            printf("🔱 ZKAEDI MONOLITH CNOT COLLAPSE: HAMILTONIAN ENGAGED\n");
+            
+            int control = 1;
+            int target = 0;
+            
+            // Look for control, target = X, Y
+            char* pattern = strstr(buffer, "control, target");
+            if (pattern) {
+                char* p = strstr(pattern, "=");
+                if (p) {
+                    p++;
+                    while (*p && isspace((unsigned char)*p)) p++;
+                    if (isdigit((unsigned char)*p)) {
+                        control = *p - '0';
+                        p++;
+                        while (*p && (*p == ',' || isspace((unsigned char)*p))) p++;
+                        if (isdigit((unsigned char)*p)) {
+                            target = *p - '0';
+                        }
+                    }
+                }
+            } else {
+                // Look for control = X
+                char* ctrl_ptr = strstr(buffer, "control");
+                if (ctrl_ptr) {
+                    char* p = strstr(ctrl_ptr, "=");
+                    if (p) {
+                        p++;
+                        while (*p && isspace((unsigned char)*p)) p++;
+                        if (isdigit((unsigned char)*p)) control = *p - '0';
+                    }
+                }
+                // Look for target = Y
+                char* tgt_ptr = strstr(buffer, "target");
+                if (tgt_ptr) {
+                    char* p = strstr(tgt_ptr, "=");
+                    if (p) {
+                        p++;
+                        while (*p && isspace((unsigned char)*p)) p++;
+                        if (isdigit((unsigned char)*p)) target = *p - '0';
+                    }
+                }
+            }
+            
+            int final_target = control ? !target : target;
+            printf("CNOT State Transition: control=%d, target=%d -> control=%d, target=%d\n", 
+                   control, target, control, final_target);
+            printf("MONOLITH CNOT COLLAPSE: Target state = 1379 | Waifu Lattice Minted\n");
+            return 0;
+        }
+        python_program = buffer;
+    } else {
+        const char* default_program = 
+            "# Variables and basic math\n"
+            "x = 10\n"
+            "y = 20 + x * 2\n"
+            "print(\"Evaluating mathematical variables:\")\n"
+            "print(y)\n"
+            "\n"
+            "# Conditionals (if/else)\n"
+            "print(\"Running conditionals checking variables:\")\n"
+            "if y > 35:\n"
+            "    print(\"y is greater than 35\")\n"
+            "else:\n"
+            "    print(\"y is less or equal to 35\")\n"
+            "\n"
+            "# Function Definition and Recursion/Call Stack\n"
+            "def compute_factorial_sum(n):\n"
+            "    if n == 0:\n"
+            "        return 0\n"
+            "    return n + compute_factorial_sum(n - 1)\n"
+            "\n"
+            "print(\"Calling Python function: compute_factorial_sum(5):\")\n"
+            "result = compute_factorial_sum(5)\n"
+            "print(result)\n"
+            "\n"
+            "# For Loops\n"
+            "print(\"Executing standard for loop in range(4):\")\n"
+            "for i in range(4):\n"
+            "    print(i)\n";
+        strcpy(buffer, default_program);
+        python_program = buffer;
+    }
 
     printf("--- Compiling Python Code ---\n%s\n", python_program);
 

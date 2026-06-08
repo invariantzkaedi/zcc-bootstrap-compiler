@@ -3932,7 +3932,26 @@ static void compute_liveness(Node *n) {
 static int allocate_registers(Node *func) {
   int count = 0;
   int i, j, r;
-  int param_limit = -(func->num_params * 8);
+  int param_limit = 0;
+  Type *ret_type = func->func_type ? func->func_type->ret : NULL;
+  if (ret_type && (ret_type->kind == TY_STRUCT || ret_type->kind == TY_UNION)) {
+    abi_class_t eb[2];
+    classify_aggregate(ret_type, eb);
+    if (eb[0] == CLASS_MEMORY) {
+      param_limit -= 8;
+    }
+  }
+  if (func->func_params) {
+    int p_idx;
+    for (p_idx = 0; p_idx < func->num_params; p_idx++) {
+      Type *ptype = func->func_params->types[p_idx];
+      int sz = type_size(ptype);
+      int slots = (sz + 7) / 8;
+      param_limit -= (slots * 8);
+    }
+  } else {
+    param_limit -= (func->num_params * 8);
+  }
   char *active_regs[5];
   int active_ends[5];
   int used_regs_bitmask = 0;
@@ -4099,6 +4118,65 @@ static int ir_whitelisted(const char *name) {
   return 0;
 }
 
+static Symbol *adjusted_syms[1024];
+static int num_adjusted = 0;
+
+static void adjust_sym(Compiler *cc, Symbol *sym, Node *func, int parser_param_limit, int shift, int *param_offsets) {
+  if (!sym || !sym->is_local) return;
+  for (int i = 0; i < num_adjusted; i++) {
+    if (adjusted_syms[i] == sym) return;
+  }
+  if (num_adjusted < 1024) {
+    adjusted_syms[num_adjusted++] = sym;
+  }
+  if (sym->stack_offset >= parser_param_limit && sym->stack_offset < 0) {
+    int temp_offset = 0;
+    for (int p_idx = 0; p_idx < func->num_params; p_idx++) {
+      Type *ptype = func->func_params->types[p_idx];
+      int sz = type_size(ptype);
+      int slots = (sz + 7) / 8;
+      temp_offset -= (slots * 8);
+      if (sym->stack_offset == temp_offset || (sym->name[0] && strcmp(sym->name, func->func_params->names[p_idx]) == 0)) {
+        sym->stack_offset = param_offsets[p_idx];
+        break;
+      }
+    }
+  } else if (sym->stack_offset < parser_param_limit) {
+    sym->stack_offset -= shift;
+  }
+}
+
+static void traverse_and_adjust_node(Node *n, Compiler *cc, Node *func, int parser_param_limit, int shift, int *param_offsets) {
+  if (!n) return;
+  if (n->kind == ND_VAR && n->sym) {
+    adjust_sym(cc, n->sym, func, parser_param_limit, shift, param_offsets);
+  }
+  traverse_and_adjust_node(n->lhs, cc, func, parser_param_limit, shift, param_offsets);
+  traverse_and_adjust_node(n->rhs, cc, func, parser_param_limit, shift, param_offsets);
+  traverse_and_adjust_node(n->cond, cc, func, parser_param_limit, shift, param_offsets);
+  traverse_and_adjust_node(n->then_body, cc, func, parser_param_limit, shift, param_offsets);
+  traverse_and_adjust_node(n->else_body, cc, func, parser_param_limit, shift, param_offsets);
+  traverse_and_adjust_node(n->init, cc, func, parser_param_limit, shift, param_offsets);
+  traverse_and_adjust_node(n->inc, cc, func, parser_param_limit, shift, param_offsets);
+  if (n->stmts) {
+    for (int i = 0; i < n->num_stmts; i++) {
+      traverse_and_adjust_node(n->stmts[i], cc, func, parser_param_limit, shift, param_offsets);
+    }
+  }
+  if (n->args) {
+    for (int i = 0; i < n->num_args; i++) {
+      traverse_and_adjust_node(n->args[i], cc, func, parser_param_limit, shift, param_offsets);
+    }
+  }
+  if (n->cases) {
+    for (int i = 0; i < n->num_cases; i++) {
+      traverse_and_adjust_node(n->cases[i], cc, func, parser_param_limit, shift, param_offsets);
+    }
+  }
+  traverse_and_adjust_node(n->default_case, cc, func, parser_param_limit, shift, param_offsets);
+  traverse_and_adjust_node(n->case_body, cc, func, parser_param_limit, shift, param_offsets);
+}
+
 void codegen_func(Compiler *cc, Node *func) {
   char *argregs[6];
   int i;
@@ -4107,6 +4185,55 @@ void codegen_func(Compiler *cc, Node *func) {
 
   if (!func)
     return;
+
+  int parser_param_space = 0;
+  if (func->func_params) {
+    for (int p_idx = 0; p_idx < func->num_params; p_idx++) {
+      Type *ptype = func->func_params->types[p_idx];
+      int sz = type_size(ptype);
+      int slots = (sz + 7) / 8;
+      parser_param_space += (slots * 8);
+    }
+  } else {
+    parser_param_space = func->num_params * 8;
+  }
+  
+  int actual_param_space = 0;
+  Type *ret_type = func->func_type ? func->func_type->ret : NULL;
+  if (ret_type && (ret_type->kind == TY_STRUCT || ret_type->kind == TY_UNION)) {
+      abi_class_t eb[2];
+      classify_aggregate(ret_type, eb);
+      if (eb[0] == CLASS_MEMORY) {
+          actual_param_space += 8;
+      }
+  }
+  actual_param_space += parser_param_space;
+  
+  int shift = actual_param_space - parser_param_space;
+  int param_offsets[64];
+  int current_param_offset = 0;
+  if (ret_type && (ret_type->kind == TY_STRUCT || ret_type->kind == TY_UNION)) {
+      abi_class_t eb[2];
+      classify_aggregate(ret_type, eb);
+      if (eb[0] == CLASS_MEMORY) {
+          current_param_offset -= 8;
+      }
+  }
+  for (int p_idx = 0; p_idx < func->num_params && p_idx < 64; p_idx++) {
+      Type *ptype = func->func_params->types[p_idx];
+      int sz = type_size(ptype);
+      int slots = (sz + 7) / 8;
+      current_param_offset -= (slots * 8);
+      param_offsets[p_idx] = current_param_offset;
+  }
+  
+  if (shift > 0) {
+      num_adjusted = 0;
+      int parser_param_limit = -parser_param_space;
+      traverse_and_adjust_node(func->body, cc, func, parser_param_limit, shift, param_offsets);
+      func->stack_size += shift;
+  }
+
   fprintf(stderr, "cc_func: %s\n", func->func_def_name);
   cc->used_regs_mask = allocate_registers(func);
   cc->is_forced_mask = 0;
@@ -5121,6 +5248,8 @@ static void fold_constants(Compiler *cc, Node *node) {
   }
 }
 
+extern void run_interprocedural_constant_propagation(Compiler *cc, Node *prog);
+
 void codegen_program(Compiler *cc, Node *prog) {
   Node *n;
   int i;
@@ -5131,7 +5260,10 @@ void codegen_program(Compiler *cc, Node *prog) {
   if (!prog)
     return;
 
+  run_interprocedural_constant_propagation(cc, prog);
+
   /* Linux: avoid "missing .note.GNU-stack" linker warning */
+
   if (!backend_ops) fprintf(cc->out, "    .section .note.GNU-stack,\"\",@progbits\n");
   if (cc->filename) {
     fprintf(cc->out, "    .file 1 \"%s\"\n", cc->filename);

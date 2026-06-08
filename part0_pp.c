@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#define PP_MAX_MACROS 16384 /* raised: SQLite; inactive slots reclaimed */
+#define PP_MAX_MACROS 8192 /* raised: SQLite */
 #define PP_MAX_PARAMS 128  /* raised: SQLite */
 static int _warned_pp_max_params = 0;
 #define PP_MAX_BODY 65536
@@ -151,40 +151,11 @@ static const char *zcc_stddef_text =
     "typedef unsigned char uint8_t;\n"
     "typedef short int16_t;\n"
     "typedef unsigned short uint16_t;\n"
-    "#define INT8_MIN   (-128)\n"
-    "#define INT8_MAX   127\n"
-    "#define INT16_MIN  (-32768)\n"
-    "#define INT16_MAX  32767\n"
-    "#define INT32_MIN  (-2147483647-1)\n"
-    "#define INT32_MAX  2147483647\n"
-    "#define INT64_MIN  (-9223372036854775807LL-1LL)\n"
-    "#define INT64_MAX  9223372036854775807LL\n"
-    "#define UINT8_MAX  255\n"
-    "#define UINT16_MAX 65535\n"
-    "#define UINT32_MAX 4294967295U\n"
-    "#define UINT64_MAX 18446744073709551615ULL\n"
-    "#define FLT_MAX    3.40282347e+38F\n"
-    "#define DBL_MAX    1.7976931348623157e+308\n"
-    "double ldexp(double x, int exp);\n"
-    "float ldexpf(float x, int exp);\n"
-    "double fabs(double x);\n"
-    "float fabsf(float x);\n"
     "typedef unsigned long size_t;\n"
     "typedef long ssize_t;\n"
     "typedef long ptrdiff_t;\n"
     "typedef long intptr_t;\n"
     "typedef unsigned long uintptr_t;\n"
-    "typedef unsigned int mode_t;\n"
-    "typedef unsigned int uid_t;\n"
-    "typedef unsigned int gid_t;\n"
-    "typedef int pid_t;\n"
-    "typedef long time_t;\n"
-    "struct tm { int tm_sec; int tm_min; int tm_hour; int tm_mday; int tm_mon; int tm_year; int tm_wday; int tm_yday; int tm_isdst; long tm_gmtoff; const char *tm_zone; };\n"
-    "typedef int pthread_mutexattr_t;\n"
-    "typedef unsigned long long __uint128_t;\n"
-    "typedef long long __int128_t;\n"
-    "typedef unsigned long long __uint128;\n"
-    "typedef long long __int128;\n"
     "/* PP-STUB-024: signal.h / setjmp.h / stdint primitives for Lua internals "
     "*/\n"
     "typedef int sig_atomic_t;\n"
@@ -231,8 +202,6 @@ static const char *zcc_stddef_text =
     "char *strerror(int errnum);\n"
     "char *strdup(const char *s);\n"
     "int __builtin_popcount(unsigned int x);\n"
-    "static int __zcc_clzll(unsigned long long x){ int n = 0; if(x == 0) return 64; if((x & 0xFFFFFFFF00000000ULL) == 0){ n += 32; x <<= 32; } if((x & 0xFFFF000000000000ULL) == 0){ n += 16; x <<= 16; } if((x & 0xFF00000000000000ULL) == 0){ n += 8; x <<= 8; } if((x & 0xF000000000000000ULL) == 0){ n += 4; x <<= 4; } if((x & 0xC000000000000000ULL) == 0){ n += 2; x <<= 2; } if((x & 0x8000000000000000ULL) == 0){ n += 1; } return n; }\n"
-    "#define __builtin_clzll(x) __zcc_clzll(x)\n"
     "typedef int bool;\n"
     "int getchar(void);\n"
     "int putchar(int c);\n"
@@ -269,52 +238,12 @@ static const char *zcc_stddef_text =
     "#define MAP_FAILED ((void *)-1)\n"
     "#define PATH_MAX 4096\n"
     "int snprintf(char *str, size_t size, const char *format, ...);\n"
-    "extern int *__errno_location(void);\n"
-    "#define errno (*__errno_location())\n"
-    "#define EEXIST 17\n"
-    "#define ENOENT 2\n"
-    "#define ENOSPC 28\n"
-    "#define EACCES 13\n"
-    "#define EISDIR 21\n"
-    "#define O_EXCL 128\n"
-    "#define F_OK 0\n"
-    "#define X_OK 1\n"
-    "#define W_OK 2\n"
-    "#define R_OK 4\n"
-    "#define F_RDLCK 0\n"
-    "#define F_WRLCK 1\n"
-    "#define F_UNLCK 2\n"
-    "#define F_GETLK 5\n"
-    "#define F_SETLK 6\n"
-    "#define F_SETLKW 7\n"
-    "#define _SC_PAGESIZE 30\n"
-    "#define MAP_SHARED 1\n"
-    "#define S_IFMT 0170000\n"
-    "#define S_IFDIR 0040000\n"
-    "#define S_IFREG 0100000\n"
-    "#define S_ISDIR(m) (((m) & 0170000) == 0040000)\n"
-    "#define S_ISREG(m) (((m) & 0170000) == 0100000)\n"
-    "#define S_ISLNK(m) (((m) & 0170000) == 0120000)\n"
-    "#define RTLD_NOW 2\n"
-    "#define RTLD_GLOBAL 256\n"
-    "#define PTHREAD_MUTEX_RECURSIVE 1\n"
-    "#define INFINITY (1.0f/0.0f)\n"
-    "#define NAN (0.0f/0.0f)\n"
-    "#define FLT_MIN 1.17549435e-38f\n"
-    "#define DBL_MIN 2.2250738585072014e-308\n"
-    "#define FLT_EPSILON 1.19209290e-07f\n"
-    "#define DBL_EPSILON 2.2204460492503131e-16\n"
+    "extern int errno;\n"
     "#define EINTR 4\n"
     "int sem_init(sem_t *sem, int pshared, unsigned int value);\n"
     "int sem_wait(sem_t *sem);\n"
     "int sem_post(sem_t *sem);\n"
     "int execvp(const char *file, char *const argv[]);\n"
-    "static inline int __zcc_isinf(double x){ unsigned long long b; memcpy(&b,&x,8); return ((b>>52)&0x7FF)==0x7FF && (b&0x000FFFFFFFFFFFFFULL)==0; }\n"
-    "static inline int __zcc_isnan(double x){ unsigned long long b; memcpy(&b,&x,8); return ((b>>52)&0x7FF)==0x7FF && (b&0x000FFFFFFFFFFFFFULL)!=0; }\n"
-    "static inline int __zcc_isfinite(double x){ unsigned long long b; memcpy(&b,&x,8); return ((b>>52)&0x7FF)!=0x7FF; }\n"
-    "#define isinf(x) __zcc_isinf((double)(x))\n"
-    "#define isnan(x) __zcc_isnan((double)(x))\n"
-    "#define isfinite(x) __zcc_isfinite((double)(x))\n"
     "#endif\n";
 
 static void pp_emit(PPState *state, char c) {
@@ -341,6 +270,7 @@ static void pp_drain_frames(PPState *state) {
                   (state->input_stack[state->input_depth - 1].expanding_macro == NULL);
     if (!can_pop)
       break;
+
     if (state->alloc_buf)
       free(state->alloc_buf);
     state->input_depth--;
@@ -493,25 +423,6 @@ static void pp_undef_macro(PPState *state, const char *name) {
 
 static PPMacro *pp_add_macro(PPState *state, const char *name) {
   PPMacro *m_macro;
-  int i;
-  /* PP-MACRO-SLOT-001: Reuse the most recently undef'd slot for this name
-   * before appending a new entry. This prevents silent table exhaustion
-   * caused by high #undef/#define churn in large TUs like SQLite. */
-  for (i = state->num_macros - 1; i >= 0; i--) {
-    if (!state->macros[i].active && strcmp(state->macros[i].name, name) == 0) {
-      m_macro = &state->macros[i];
-      /* body is still alloc'd from the prior definition — reuse it */
-      if (!m_macro->body) {
-        m_macro->body_cap = 256;
-        m_macro->body = (char *)calloc(1, m_macro->body_cap);
-      }
-      m_macro->body[0] = 0;
-      m_macro->num_params = 0;
-      m_macro->is_function_like = 0;
-      m_macro->active = 1;
-      return m_macro;
-    }
-  }
   if (state->num_macros >= PP_MAX_MACROS)
     return 0;
   m_macro = &state->macros[state->num_macros++];
@@ -732,10 +643,7 @@ static int is_stddef_stub(const char *path) {
          strcmp(base, "inttypes.h") == 0 || strcmp(base, "stdint.h") == 0 ||
          strcmp(base, "semaphore.h") == 0 || strcmp(base, "signal.h") == 0 ||
          strcmp(base, "stdbool.h") == 0 || strcmp(base, "assert.h") == 0 ||
-         strcmp(base, "types.h") == 0 || strcmp(base, "ctype.h") == 0 ||
-         strcmp(base, "stat.h") == 0 || strcmp(base, "ioctl.h") == 0 ||
-         strcmp(base, "mman.h") == 0 || strcmp(base, "float.h") == 0 ||
-         strcmp(base, "limits.h") == 0;
+         strcmp(base, "types.h") == 0;
 }
 
 /* PP-INCLUDE-022: Resolve an include path via -I search and relative lookup.
@@ -1495,8 +1403,8 @@ static void pp_expand_ident(PPState *state, const char *ident) {
           /* generic safety net for skipped/unsupported attributes to prevent
            * preprocessing errors */
           char buf[128];
-snprintf(buf, sizeof(buf), " __zcc_attr_%s__ ", an);
-pp_emit_str(state, buf, (int)strlen(buf));
+          sprintf(buf, " __zcc_attr_%s__ ", an);
+          pp_emit_str(state, buf, (int)strlen(buf));
         }
       }
     }
@@ -1520,22 +1428,6 @@ pp_emit_str(state, buf, (int)strlen(buf));
     }
     return;
   }
-  if (strcmp(ident, "__LINE__") == 0) {
-    char buf[32];
-    sprintf(buf, "%d", state->line);
-    pp_emit_str(state, buf, (int)strlen(buf));
-    return;
-  }
-  if (strcmp(ident, "__FILE__") == 0) {
-    const char *fname = state->filename ? state->filename : "main";
-    size_t len = strlen(fname) + 3; /* '"' + fname + '"' + '\0' */
-    char *buf = malloc(len);
-    if (!buf) return; /* OOM — caller decides */
-    snprintf(buf, len, "\"%s\"", fname);
-    pp_emit_str(state, buf, (int)(len - 1));
-    free(buf);
-    return;
-}
 
   m = pp_find_macro(state, ident);
   if (!m) {
@@ -1583,13 +1475,6 @@ pp_emit_str(state, buf, (int)strlen(buf));
     pp_emit_str(state, ident, strlen(ident));
     return;
   }
-
-  /* PP-HIDE-001: Lock the current frame depth during arg collection.
-   * Without this, a frame that ends exactly at ')' drains prematurely
-   * via pp_next(), which corrupts the hide-set by allowing the outer
-   * macro's frame to vanish before parent_num_blocked is applied. */
-  int old_arg_barrier = state->pop_barrier;
-  state->pop_barrier = state->input_depth;
   pp_next(state); /* consume '(' */
 
   /* parse arguments */
@@ -1725,7 +1610,6 @@ pp_emit_str(state, buf, (int)strlen(buf));
     }
     pp_next(state);
   }
-  state->pop_barrier = old_arg_barrier; /* PP-HIDE-001: restore after arg collect */
 
   /* strip leading/trailing spaces from arguments */
   for (i = 0; i < p_count; i++) {
@@ -1918,6 +1802,7 @@ pp_emit_str(state, buf, (int)strlen(buf));
       state->blocked_macros[bi] = parent_blocked[bi];
     }
   }
+
   /* Standard C preprocessor hide-set logic */
   pp_push_input(state, subst, subst, m);
 
@@ -2030,7 +1915,6 @@ static void pp_parse_target_depth(PPState *state, int target_depth) {
 
     if (c == '#') {
       pp_next(state);
-      pp_skip_whitespace(state);
       pp_parse_directive(state);
       continue;
     }

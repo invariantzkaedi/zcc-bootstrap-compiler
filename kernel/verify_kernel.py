@@ -2,6 +2,7 @@ import sys
 import os
 import time
 import subprocess
+import tempfile
 
 def main():
     if len(sys.argv) < 2:
@@ -13,12 +14,8 @@ def main():
         print(f"Error: kernel ELF '{elf_path}' not found.")
         sys.exit(1)
 
-    log_path = "serial.log"
-    if os.path.exists(log_path):
-        try:
-            os.remove(log_path)
-        except Exception:
-            pass
+    with tempfile.NamedTemporaryFile(suffix='.txt', delete=False) as tf:
+        log_path = tf.name
 
     print(f"🚀 Booting {elf_path} in QEMU...")
 
@@ -38,6 +35,10 @@ def main():
     except Exception as e:
         print(f"❌ Failed to launch QEMU: {e}")
         print("Please verify that QEMU is installed under WSL via: sudo apt install -y qemu-system-x86")
+        try:
+            os.remove(log_path)
+        except Exception:
+            pass
         sys.exit(1)
 
     start_time = time.time()
@@ -46,29 +47,30 @@ def main():
 
     print("⏳ Waiting for COM1 serial handshake marker...")
 
-    while time.time() - start_time < timeout:
-        # Check if subprocess exited prematurely
-        exit_code = proc.poll()
-        if exit_code is not None:
-            # Subprocess terminated unexpectedly
-            break
-
-        # Read accumulated serial logs
-        if os.path.exists(log_path):
-            with open(log_path, "r", errors="ignore") as f:
-                content = f.read()
-                if "[ZKAEDI_V2_BOOT_SUCCESS]" in content:
-                    success = True
-                    break
-
-        time.sleep(0.1)
-
-    # Clean up QEMU process
-    proc.terminate()
     try:
-        proc.wait(timeout=2.0)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+        while time.time() - start_time < timeout:
+            # Check if subprocess exited prematurely
+            exit_code = proc.poll()
+            if exit_code is not None:
+                # Subprocess terminated unexpectedly
+                break
+
+            # Read accumulated serial logs
+            if os.path.exists(log_path):
+                with open(log_path, "r", errors="ignore") as f:
+                    content = f.read()
+                    if "[ZKAEDI_V2_BOOT_SUCCESS]" in content:
+                        success = True
+                        break
+
+            time.sleep(0.1)
+    finally:
+        # Clean up QEMU process under all conditions
+        proc.terminate()
+        try:
+            proc.wait(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            proc.kill()
 
     # Read final logs
     logs = ""
