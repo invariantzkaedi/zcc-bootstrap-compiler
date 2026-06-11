@@ -598,7 +598,7 @@ static void layout(void) {
                 }
             }
             OutSection *sec = get_out_section(oname, SHF_ALLOC);
-            uint64_t sec_align = sec->align ? sec->align : 16;
+            uint64_t sec_align = 0x1000; /* force page alignment for PT_LOAD boundary safety */
             base = ALIGN_UP(prev_end, sec_align);
         }
         
@@ -730,7 +730,10 @@ static void layout(void) {
             }
 
             /* finalize output section VMA and size */
-            OutSection *out = get_out_section(oname, SHF_ALLOC);
+            uint64_t final_flags = SHF_ALLOC;
+            if (strcmp(oname, ".bss") == 0 || strcmp(oname, ".data") == 0) final_flags |= SHF_WRITE;
+            if (strcmp(oname, ".text") == 0) final_flags |= SHF_EXECINSTR;
+            OutSection *out = get_out_section(oname, final_flags);
             out->vma = original_base;
             out->lma = original_base;
             out->size = cursor - original_base;
@@ -874,8 +877,11 @@ static void copy_sections(void) {
     }
 
     /* finalize sizes from actual copy */
-    for (i = 0; i < g_nout; i++)
-        g_out[i].size = g_out[i].buf_used;
+    for (i = 0; i < g_nout; i++) {
+        if (g_out[i].buf_used > g_out[i].size) {
+            g_out[i].size = g_out[i].buf_used;
+        }
+    }
 }
 
 /* ── Apply relocations ──────────────────────────────────────────────────── */
@@ -1028,6 +1034,7 @@ static void write_output(const char *path) {
 
     for (i = 0; i < g_nout; i++) {
         OutSection *s = &g_out[i];
+        printf("DEBUG ZLD: write_output inspecting section '%s', size=0x%llx, flags=0x%llx\n", s->name, (unsigned long long)s->size, (unsigned long long)s->flags);
         if (!(s->flags & SHF_ALLOC)) continue;
         if (s->size == 0) continue;
 
@@ -1054,6 +1061,7 @@ static void write_output(const char *path) {
     rx_file_off = data_offset;
     if (rx_count > 0) {
         rx_vaddr = rx_sections[0]->vma;
+        rx_file_off = ALIGN_UP(headers_size, 0x1000) + (rx_vaddr & 0xFFF);
         for (i = 0; i < rx_count; i++) {
             OutSection *s = rx_sections[i];
             uint64_t sec_end = s->vma + s->size;
@@ -1077,11 +1085,14 @@ static void write_output(const char *path) {
                (unsigned long long)rx_vaddr, (unsigned long long)rx_memsz,
                (unsigned long long)rx_filesz, (int)rx_flags);
         ph_idx++;
+    } else {
+        rx_file_off = ALIGN_UP(headers_size, 0x1000);
+        rx_filesz = 0;
     }
 
-    rw_file_off = ALIGN_UP(rx_file_off + rx_filesz, 0x1000);
     if (rw_count > 0) {
         rw_vaddr = rw_sections[0]->vma;
+        rw_file_off = ALIGN_UP(rx_file_off + rx_filesz, 0x1000) + (rw_vaddr & 0xFFF);
         for (i = 0; i < rw_count; i++) {
             OutSection *s = rw_sections[i];
             uint64_t sec_end = s->vma + s->size;

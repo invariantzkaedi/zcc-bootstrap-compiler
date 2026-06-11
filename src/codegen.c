@@ -1367,15 +1367,40 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                     long long disp1 = 0;
                     if (parse_mem_operand(op1, &reg1, &disp1)) is_mem1 = 1;
                     if (is_mem1) {
-                        /* movslq (reg1), reg2 -> 48 63 with ModRM */
                         unsigned char rex = 0x48;
                         unsigned char opcode = 0x63;
-                        unsigned char modrm = ((reg2 & 7) << 3) | (reg1 & 7);
-                        if (reg1 & 8) rex |= 0x01;
-                        if (reg2 & 8) rex |= 0x04;
-                        seg_append(&text_seg, &rex, 1);
-                        seg_append(&text_seg, &opcode, 1);
-                        seg_append(&text_seg, &modrm, 1);
+                        unsigned char modrm;
+                        if (disp1 == 0 && (reg1 & 7) != 5) {
+                            modrm = (0x00 << 6) | ((reg2 & 7) << 3) | (reg1 & 7);
+                            if (reg1 & 8) rex |= 0x01;
+                            if (reg2 & 8) rex |= 0x04;
+                            seg_append(&text_seg, &rex, 1);
+                            seg_append(&text_seg, &opcode, 1);
+                            seg_append(&text_seg, &modrm, 1);
+                            if ((reg1 & 7) == 4) { unsigned char sib = 0x24; seg_append(&text_seg, &sib, 1); }
+                        } else if (disp1 >= -128 && disp1 <= 127) {
+                            modrm = (0x01 << 6) | ((reg2 & 7) << 3) | (reg1 & 7);
+                            if (reg1 & 8) rex |= 0x01;
+                            if (reg2 & 8) rex |= 0x04;
+                            seg_append(&text_seg, &rex, 1);
+                            seg_append(&text_seg, &opcode, 1);
+                            seg_append(&text_seg, &modrm, 1);
+                            if ((reg1 & 7) == 4) { unsigned char sib = 0x24; seg_append(&text_seg, &sib, 1); }
+                            unsigned char d = (unsigned char)disp1;
+                            seg_append(&text_seg, &d, 1);
+                        } else {
+                            modrm = (0x02 << 6) | ((reg2 & 7) << 3) | (reg1 & 7);
+                            if (reg1 & 8) rex |= 0x01;
+                            if (reg2 & 8) rex |= 0x04;
+                            seg_append(&text_seg, &rex, 1);
+                            seg_append(&text_seg, &opcode, 1);
+                            seg_append(&text_seg, &modrm, 1);
+                            if ((reg1 & 7) == 4) { unsigned char sib = 0x24; seg_append(&text_seg, &sib, 1); }
+                            unsigned char d[4];
+                            d[0] = disp1 & 0xFF; d[1] = (disp1 >> 8) & 0xFF;
+                            d[2] = (disp1 >> 16) & 0xFF; d[3] = (disp1 >> 24) & 0xFF;
+                            seg_append(&text_seg, d, 4);
+                        }
                     } else {
                         encode_movslq(&text_seg, reg1, reg2);
                     }

@@ -729,10 +729,14 @@ static void layout(void) {
             }
 
             /* finalize output section VMA and size */
-            OutSection *out = get_out_section(oname, SHF_ALLOC);
+            uint64_t final_flags = SHF_ALLOC;
+            if (strcmp(oname, ".bss") == 0 || strcmp(oname, ".data") == 0) final_flags |= SHF_WRITE;
+            if (strcmp(oname, ".text") == 0) final_flags |= SHF_EXECINSTR;
+            OutSection *out = get_out_section(oname, final_flags);
             out->vma = original_base;
             out->lma = original_base;
             out->size = cursor - original_base;
+            printf("DEBUG: finalized %s: vma=0x%llx, size=0x%llx, flags=0x%llx\n", oname, (unsigned long long)out->vma, (unsigned long long)out->size, (unsigned long long)out->flags);
         }
     }
 }

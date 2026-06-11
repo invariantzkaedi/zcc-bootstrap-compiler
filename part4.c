@@ -3228,9 +3228,20 @@ void codegen_expr(Compiler *cc, Node *node) {
                 pop_reg(cc, argregs[gp_idx]);
                 gp_idx++;
               }
-          }
         }
       }
+    }
+
+    /* ZCAEDI PRIME FIX: Restore stack pointer to remove leaked temporaries BEFORE call */
+    int expected_depth = stack_depth_at_reservation;
+    if (node->func_name[0] == 0 && node->lhs) {
+        expected_depth++; /* callee pointer was pushed */
+    }
+    if (cc->stack_depth > expected_depth) {
+        int leaked = cc->stack_depth - expected_depth;
+        fprintf(cc->out, "    addq $%d, %%rsp\n", leaked * 8);
+        cc->stack_depth = expected_depth;
+    }
       if (has_sret) {
           int sret_offset = (cc->stack_depth - sret_stack_depth) * 8 - sret_size;
           fprintf(cc->out, "    leaq %d(%%rsp), %%rdi\n", sret_offset);
