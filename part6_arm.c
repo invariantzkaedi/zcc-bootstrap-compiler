@@ -33,17 +33,17 @@ static void thumb_emit_prologue(Compiler *cc, Node *func) {
     if (stack_size <= 508 && (stack_size % 4 == 0)) {
         fprintf(cc->out, "    sub sp, #%d\n", stack_size);
     } else {
-        fprintf(cc->out, "    ldr r3, =%d\n", stack_size);
+        fprintf(cc->out, "    ldr r5, =%d\n", stack_size);
         fprintf(cc->out, "    mov r4, sp\n");
-        fprintf(cc->out, "    subs r4, r4, r3\n");
+        fprintf(cc->out, "    subs r4, r4, r5\n");
         fprintf(cc->out, "    mov sp, r4\n");
     }
 
     int i;
     for (i = 0; i < func->num_params && i < 4; i++) {
-        fprintf(cc->out, "    ldr r3, =%d\n", -(i * 4 + 8));
-        fprintf(cc->out, "    adds r3, r7, r3\n");
-        fprintf(cc->out, "    str r%d, [r3]\n", i);
+        fprintf(cc->out, "    ldr r4, =%d\n", -(i * 4 + 8));
+        fprintf(cc->out, "    adds r4, r7, r4\n");
+        fprintf(cc->out, "    str r%d, [r4]\n", i);
     }
 }
 

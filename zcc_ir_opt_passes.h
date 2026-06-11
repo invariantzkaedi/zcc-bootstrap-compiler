@@ -40,7 +40,17 @@ static uint32_t opt_constant_fold_pass(Function *fn) {
                             case OP_BOR: res = a | b; break;
                             case OP_BXOR: res = a ^ b; break;
                             case OP_SHL: res = a << b; break;
-                            case OP_SHR: res = (uint64_t)a >> b; break;
+                            case OP_SHR:
+                                if (ins->ir_type == IR_TY_U32) {
+                                    res = (int64_t)((uint32_t)a >> b);
+                                } else if (ins->ir_type == IR_TY_U64) {
+                                    res = (int64_t)((uint64_t)a >> b);
+                                } else if (ins->ir_type == IR_TY_I32) {
+                                    res = (int64_t)((int32_t)a >> b);
+                                } else {
+                                    res = a >> b;
+                                }
+                                break;
                             case OP_EQ: res = (a == b); break;
                             case OP_NE: res = (a != b); break;
                             case OP_LT: res = (a < b); break;
@@ -140,6 +150,26 @@ static uint32_t opt_copy_prop_pass(Function *fn) {
     return count;
 }
 
+static RegID opt_create_const(Function *fn, Block *blk, uint32_t block_idx, Instr *ins, int64_t val) {
+    RegID new_reg = fn->n_regs++;
+    Instr *new_const = calloc(1, sizeof(Instr));
+    new_const->op = OP_CONST;
+    new_const->dst = new_reg;
+    new_const->imm = val;
+    new_const->n_src = 0;
+    
+    new_const->next = ins;
+    new_const->prev = ins->prev;
+    if (ins->prev) ins->prev->next = new_const;
+    else blk->head = new_const;
+    ins->prev = new_const;
+    blk->n_instrs++;
+    
+    fn->def_of[new_reg] = new_const;
+    fn->def_block[new_reg] = block_idx;
+    return new_reg;
+}
+
 static uint32_t opt_strength_reduction_pass(Function *fn) {
     uint32_t count = 0;
     licm_build_def_block(fn);
@@ -166,30 +196,26 @@ static uint32_t opt_strength_reduction_pass(Function *fn) {
                     count++;
                 } else if (d1 && d1->op == OP_CONST && opt_is_power_of_2(d1->imm)) {
                     ins->op = OP_SHL;
-                    d1->imm = opt_log2_exact(d1->imm); 
-                    // Warning: d1 might be shared. It's safer if we just overwrite d1's imm 
-                    // if it's uniquely used, but ZCC IR constants are often pooled or generated per-use.
-                    // Given ZCC architecture, it's ok.
+                    ins->src[1] = opt_create_const(fn, blk, bi, ins, opt_log2_exact(d1->imm));
                     count++;
                 } else if (d0 && d0->op == OP_CONST && opt_is_power_of_2(d0->imm)) {
                     ins->op = OP_SHL;
                     ins->src[0] = ins->src[1]; // SHL takes value in 0, shift in 1
-                    ins->src[1] = d0->dst;
-                    d0->imm = opt_log2_exact(d0->imm);
+                    ins->src[1] = opt_create_const(fn, blk, bi, ins, opt_log2_exact(d0->imm));
                     count++;
                 }
-            } else if (ins->op == OP_DIV && ins->n_src == 2) {
+            } else if (ins->op == OP_DIV && ins->n_src == 2 && (ins->ir_type == IR_TY_U32 || ins->ir_type == IR_TY_U64)) {
                 Instr *d1 = fn->def_of[ins->src[1]];
                 if (d1 && d1->op == OP_CONST && opt_is_power_of_2(d1->imm)) {
                     ins->op = OP_SHR;
-                    d1->imm = opt_log2_exact(d1->imm);
+                    ins->src[1] = opt_create_const(fn, blk, bi, ins, opt_log2_exact(d1->imm));
                     count++;
                 }
-            } else if (ins->op == OP_MOD && ins->n_src == 2) {
+            } else if (ins->op == OP_MOD && ins->n_src == 2 && (ins->ir_type == IR_TY_U32 || ins->ir_type == IR_TY_U64)) {
                 Instr *d1 = fn->def_of[ins->src[1]];
                 if (d1 && d1->op == OP_CONST && opt_is_power_of_2(d1->imm)) {
                     ins->op = OP_BAND;
-                    d1->imm = d1->imm - 1;
+                    ins->src[1] = opt_create_const(fn, blk, bi, ins, d1->imm - 1);
                     count++;
                 }
             }
@@ -313,8 +339,9 @@ static uint32_t opt_peephole_pass(Function *fn) {
 
             // Comparison Identities: x == x -> CONST 1, x != x -> CONST 0, etc.
             if ((ins->op == OP_EQ || ins->op == OP_NE || ins->op == OP_LT || ins->op == OP_LE || ins->op == OP_GT || ins->op == OP_GE) && ins->n_src == 2 && ins->src[0] == ins->src[1]) {
+                Opcode orig_op = ins->op;
                 ins->op = OP_CONST;
-                ins->imm = (ins->op == OP_EQ || ins->op == OP_LE || ins->op == OP_GE) ? 1 : 0;
+                ins->imm = (orig_op == OP_EQ || orig_op == OP_LE || orig_op == OP_GE) ? 1 : 0;
                 ins->n_src = 0;
                 count++;
             }
