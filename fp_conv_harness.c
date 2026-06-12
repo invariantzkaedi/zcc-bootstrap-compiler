@@ -1,61 +1,132 @@
-/* Proves ZCC's unconditional signed FP conversion miscompiles unsigned values.
- * Oracle = the CPU. We emit BOTH sequences as inline asm and compare to the
- * C-correct answer that gcc produces. */
+/* fp_conv_harness.c — compiler regression test for floating-point conversions.
+ * Exits with 0 on success, and non-zero on failure. */
 #include <stdio.h>
 #include <stdint.h>
-#include <string.h>
 
-/* what ZCC emits for (double)u : cvtsi2sdq (SIGNED) */
-static double zcc_u64_to_double(uint64_t u){
-    double r;
-    __asm__("cvtsi2sdq %1, %0" : "=x"(r) : "r"(u));   /* signed conversion */
-    return r;
-}
-/* what's CORRECT for (double)u : unsigned conversion (gcc picks this) */
-static double correct_u64_to_double(uint64_t u){
-    return (double)u;   /* let gcc emit the right thing */
+static double u64_to_double(uint64_t u) {
+    return (double)u;
 }
 
-/* what ZCC emits for (unsigned)d : cvttsd2si (SIGNED truncation) */
-static uint64_t zcc_double_to_u64(double d){
-    uint64_t r;
-    __asm__("cvttsd2si %1, %0" : "=r"(r) : "x"(d));   /* signed truncation */
-    return r;
+static float u64_to_float(uint64_t u) {
+    return (float)u;
 }
-static uint64_t correct_double_to_u64(double d){
+
+static uint64_t double_to_u64(double d) {
     return (uint64_t)d;
 }
 
-int main(void){
+static uint64_t float_to_u64(float f) {
+    return (uint64_t)f;
+}
+
+static uint32_t double_to_u32(double d) {
+    return (uint32_t)d;
+}
+
+int main(void) {
     int fails = 0;
 
-    printf("=== (double)unsigned : signed cvtsi2sd vs correct ===\n");
-    uint64_t cases1[] = { 0, 100, 0x7FFFFFFFFFFFFFFFULL,
-                          0x8000000000000000ULL,            /* MSB set */
-                          0xFFFFFFFFFFFFFFFFULL };           /* UINT64_MAX */
-    for (size_t i=0;i<sizeof(cases1)/sizeof(*cases1);i++){
-        double z = zcc_u64_to_double(cases1[i]);
-        double c = correct_u64_to_double(cases1[i]);
-        int ok = (z==c);
-        if(!ok) fails++;
-        printf("  u=%-20llu  zcc=%-24g correct=%-24g %s\n",
-               (unsigned long long)cases1[i], z, c, ok?"OK":"** MISCOMPILE **");
+    printf("=== Test 1: Explicit cast uint64_t -> double ===\n");
+    struct {
+        uint64_t u;
+        double expected;
+    } cases1[] = {
+        { 0ULL, 0.0 },
+        { 100ULL, 100.0 },
+        { 9223372036854775807ULL, 9223372036854775808.0 },
+        { 9223372036854775808ULL, 9223372036854775808.0 },
+        { 18446744073709551615ULL, 18446744073709551616.0 }
+    };
+    for (int i = 0; i < 5; i++) {
+        double r = u64_to_double(cases1[i].u);
+        int ok = (r == cases1[i].expected);
+        if (!ok) fails++;
+        printf("  u=%-20llu  got=%-24g expected=%-24g %s\n",
+               (unsigned long long)cases1[i].u, r, cases1[i].expected, ok ? "OK" : "FAIL");
     }
 
-    printf("\n=== (unsigned)double : signed cvttsd2si vs correct ===\n");
-    double cases2[] = { 0.0, 100.5, 2147483647.0,
-                        9223372036854775808.0,    /* 2^63, doesn't fit signed */
-                        18446744073709551615.0 };  /* near UINT64_MAX */
-    for (size_t i=0;i<sizeof(cases2)/sizeof(*cases2);i++){
-        uint64_t z = zcc_double_to_u64(cases2[i]);
-        uint64_t c = correct_double_to_u64(cases2[i]);
-        int ok = (z==c);
-        if(!ok) fails++;
-        printf("  d=%-22g  zcc=%-22llu correct=%-22llu %s\n",
-               cases2[i], (unsigned long long)z, (unsigned long long)c,
-               ok?"OK":"** MISCOMPILE **");
+    printf("\n=== Test 2: Explicit cast uint64_t -> float ===\n");
+    struct {
+        uint64_t u;
+        float expected;
+    } cases2[] = {
+        { 0ULL, 0.0f },
+        { 100ULL, 100.0f },
+        { 9223372036854775808ULL, 9223372036854775808.0f },
+        { 18446744073709551615ULL, 18446744073709551616.0f }
+    };
+    for (int i = 0; i < 4; i++) {
+        float r = u64_to_float(cases2[i].u);
+        int ok = (r == cases2[i].expected);
+        if (!ok) fails++;
+        printf("  u=%-20llu  got=%-24g expected=%-24g %s\n",
+               (unsigned long long)cases2[i].u, r, cases2[i].expected, ok ? "OK" : "FAIL");
     }
 
-    printf("\n=== %d miscompile(s) demonstrated on real hardware ===\n", fails);
+    printf("\n=== Test 3: Explicit cast double/float -> uint64_t ===\n");
+    struct {
+        double d;
+        uint64_t expected;
+    } cases3[] = {
+        { 0.0, 0ULL },
+        { 100.5, 100ULL },
+        { 2147483647.0, 2147483647ULL },
+        { 9223372036854775808.0, 9223372036854775808ULL },
+        { 10000000000000000000.0, 10000000000000000000ULL }
+    };
+    for (int i = 0; i < 5; i++) {
+        uint64_t r = double_to_u64(cases3[i].d);
+        int ok = (r == cases3[i].expected);
+        if (!ok) fails++;
+        printf("  d=%-22g  got=%-22llu expected=%-22llu %s\n",
+               cases3[i].d, (unsigned long long)r, (unsigned long long)cases3[i].expected, ok ? "OK" : "FAIL");
+    }
+
+    printf("\n=== Test 4: Implicit conversions in binary operators ===\n");
+    uint64_t u = 9223372036854775808ULL;
+    
+    double add_l = u + 1.0;
+    int add_l_ok = (add_l == 9223372036854775808.0);
+    if (!add_l_ok) fails++;
+    printf("  u + 1.0            got=%-24g expected=%-24g %s\n",
+           add_l, 9223372036854775808.0, add_l_ok ? "OK" : "FAIL");
+
+    double add_r = 1.0 + u;
+    int add_r_ok = (add_r == 9223372036854775808.0);
+    if (!add_r_ok) fails++;
+    printf("  1.0 + u            got=%-24g expected=%-24g %s\n",
+           add_r, 9223372036854775808.0, add_r_ok ? "OK" : "FAIL");
+
+    double mul_l = u * 2.0;
+    int mul_l_ok = (mul_l == 18446744073709551616.0);
+    if (!mul_l_ok) fails++;
+    printf("  u * 2.0            got=%-24g expected=%-24g %s\n",
+           mul_l, 18446744073709551616.0, mul_l_ok ? "OK" : "FAIL");
+
+    int lt = (u < 0.0);
+    int lt_ok = (lt == 0);
+    if (!lt_ok) fails++;
+    printf("  u < 0.0            got=%-24d expected=%-24d %s\n",
+           lt, 0, lt_ok ? "OK" : "FAIL");
+
+    printf("\n=== Test 5: Explicit cast double -> uint32_t ===\n");
+    struct {
+        double d;
+        uint32_t expected;
+    } cases5[] = {
+        { 0.0, 0U },
+        { 100.5, 100U },
+        { 3000000000.0, 3000000000U },
+        { 10000000000.0, 1410065408U }
+    };
+    for (int i = 0; i < 4; i++) {
+        uint32_t r = double_to_u32(cases5[i].d);
+        int ok = (r == cases5[i].expected);
+        if (!ok) fails++;
+        printf("  d=%-22g  got=%-22u expected=%-22u %s\n",
+               cases5[i].d, r, cases5[i].expected, ok ? "OK" : "FAIL");
+    }
+
+    printf("\n=== Final: %d failure(s) ===\n", fails);
     return fails;
 }

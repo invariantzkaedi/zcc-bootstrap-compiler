@@ -56,6 +56,105 @@ static int new_label(Compiler *cc) {
   return l;
 }
 
+static void emit_cvtsi2fd(Compiler *cc, Type *int_type, int is_f32, const char *target_xmm) {
+    if (int_type && is_unsigned_type(int_type)) {
+        if (type_size(int_type) == 8) {
+            int l1 = new_label(cc);
+            int l2 = new_label(cc);
+            fprintf(cc->out, "    testq %%rax, %%rax\n");
+            fprintf(cc->out, "    js .L%d\n", l1);
+            if (is_f32) fprintf(cc->out, "    cvtsi2ssq %%rax, %%%s\n", target_xmm);
+            else        fprintf(cc->out, "    cvtsi2sdq %%rax, %%%s\n", target_xmm);
+            fprintf(cc->out, "    jmp .L%d\n", l2);
+            fprintf(cc->out, ".L%d:\n", l1);
+            fprintf(cc->out, "    movq %%rax, %%rdx\n");
+            fprintf(cc->out, "    shrq $1, %%rdx\n");
+            fprintf(cc->out, "    andl $1, %%eax\n");
+            fprintf(cc->out, "    orq %%rax, %%rdx\n");
+            if (is_f32) {
+                fprintf(cc->out, "    cvtsi2ssq %%rdx, %%%s\n", target_xmm);
+                fprintf(cc->out, "    addss %%%s, %%%s\n", target_xmm, target_xmm);
+            } else {
+                fprintf(cc->out, "    cvtsi2sdq %%rdx, %%%s\n", target_xmm);
+                fprintf(cc->out, "    addsd %%%s, %%%s\n", target_xmm, target_xmm);
+            }
+            fprintf(cc->out, ".L%d:\n", l2);
+            return;
+        } else {
+            /* 32-bit unsigned or smaller: zero-extend eax to rax, then convert signed 64-bit */
+            if (type_size(int_type) == 4) {
+                fprintf(cc->out, "    movl %%eax, %%eax\n");
+            } else if (type_size(int_type) == 2) {
+                fprintf(cc->out, "    movzwl %%ax, %%eax\n");
+            } else if (type_size(int_type) == 1) {
+                fprintf(cc->out, "    movzbl %%al, %%eax\n");
+            }
+            if (is_f32) fprintf(cc->out, "    cvtsi2ssq %%rax, %%%s\n", target_xmm);
+            else        fprintf(cc->out, "    cvtsi2sdq %%rax, %%%s\n", target_xmm);
+            return;
+        }
+    }
+    /* Signed or default: */
+    if (is_f32) {
+        if (int_type && type_size(int_type) == 4) {
+            fprintf(cc->out, "    cvtsi2ssl %%eax, %%%s\n", target_xmm);
+        } else {
+            fprintf(cc->out, "    cvtsi2ssq %%rax, %%%s\n", target_xmm);
+        }
+    } else {
+        if (int_type && type_size(int_type) == 4) {
+            fprintf(cc->out, "    movslq %%eax, %%rax\n"); /* ensure sign-extended */
+        }
+        fprintf(cc->out, "    cvtsi2sdq %%rax, %%%s\n", target_xmm);
+    }
+}
+
+static void emit_cvttfd2si(Compiler *cc, Type *int_type, int is_f32) {
+    if (int_type && is_unsigned_type(int_type) && type_size(int_type) == 8) {
+        /* unsigned 64-bit float/double to int conversion */
+        int l1 = new_label(cc);
+        int l2 = new_label(cc);
+        int lbl_two63 = cc->str_label_count++;
+        
+        /* emit double literal for 2^63 (9223372036854775808.0) */
+        unsigned long long two63_bits = 0x43e0000000000000ULL;
+        fprintf(cc->out, "    .section .rodata\n");
+        fprintf(cc->out, "    .p2align 3\n");
+        fprintf(cc->out, ".LC_two63_%d:\n", lbl_two63);
+        fprintf(cc->out, "    .quad %llu\n", two63_bits);
+        fprintf(cc->out, "    .text\n");
+        
+        if (is_f32) {
+            fprintf(cc->out, "    movd %%eax, %%xmm0\n");
+            fprintf(cc->out, "    cvtss2sd %%xmm0, %%xmm0\n");
+        } else {
+            fprintf(cc->out, "    movq %%rax, %%xmm0\n");
+        }
+        fprintf(cc->out, "    movsd .LC_two63_%d(%%rip), %%xmm1\n", lbl_two63);
+        fprintf(cc->out, "    ucomisd %%xmm1, %%xmm0\n");
+        fprintf(cc->out, "    jae .L%d\n", l1);
+        fprintf(cc->out, "    cvttsd2si %%xmm0, %%rax\n");
+        fprintf(cc->out, "    jmp .L%d\n", l2);
+        fprintf(cc->out, ".L%d:\n", l1);
+        fprintf(cc->out, "    subsd %%xmm1, %%xmm0\n");
+        fprintf(cc->out, "    cvttsd2si %%xmm0, %%rax\n");
+        fprintf(cc->out, "    movabsq $0x8000000000000000, %%rdx\n");
+        fprintf(cc->out, "    xorq %%rdx, %%rax\n");
+        fprintf(cc->out, ".L%d:\n", l2);
+        return;
+    }
+    
+    /* Default signed or 32-bit truncation */
+    if (is_f32) {
+        fprintf(cc->out, "    movd %%eax, %%xmm0\n");
+        fprintf(cc->out, "    cvttss2si %%xmm0, %%rax\n");
+    } else {
+        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
+        fprintf(cc->out, "    cvttsd2si %%xmm0, %%rax\n");
+    }
+}
+
+
 static int is_power_of_2_val(long long val) {
   return val > 0 && (val & (val - 1)) == 0;
 }
@@ -1262,8 +1361,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       int is_f32 = (node->type->kind == TY_FLOAT);
       codegen_expr_checked(cc, node->lhs);
       if (!is_float_type(node->lhs->type)) {
-        if (is_f32) fprintf(cc->out, "    cvtsi2ssl %%eax, %%xmm0\n");
-        else        fprintf(cc->out, "    cvtsi2sdq %%rax, %%xmm0\n");
+        emit_cvtsi2fd(cc, node->lhs->type, is_f32, "xmm0");
       } else {
         if (is_f32) fprintf(cc->out, "    movd %%eax, %%xmm0\n");
         else        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
@@ -1273,8 +1371,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       else        fprintf(cc->out, "    movsd %%xmm0, (%%rsp)\n");
       codegen_expr_checked(cc, node->rhs);
       if (!is_float_type(node->rhs->type)) {
-        if (is_f32) fprintf(cc->out, "    cvtsi2ssl %%eax, %%xmm0\n");
-        else        fprintf(cc->out, "    cvtsi2sdq %%rax, %%xmm0\n");
+        emit_cvtsi2fd(cc, node->rhs->type, is_f32, "xmm0");
       } else {
         if (is_f32) fprintf(cc->out, "    movd %%eax, %%xmm0\n");
         else        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
@@ -1347,8 +1444,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       int is_f32 = (node->type->kind == TY_FLOAT);
       codegen_expr_checked(cc, node->lhs);
       if (!is_float_type(node->lhs->type)) {
-        if (is_f32) fprintf(cc->out, "    cvtsi2ssl %%eax, %%xmm0\n");
-        else        fprintf(cc->out, "    cvtsi2sdq %%rax, %%xmm0\n");
+        emit_cvtsi2fd(cc, node->lhs->type, is_f32, "xmm0");
       } else {
         if (is_f32) fprintf(cc->out, "    movd %%eax, %%xmm0\n");
         else        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
@@ -1358,8 +1454,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       else        fprintf(cc->out, "    movsd %%xmm0, (%%rsp)\n");
       codegen_expr_checked(cc, node->rhs);
       if (!is_float_type(node->rhs->type)) {
-        if (is_f32) fprintf(cc->out, "    cvtsi2ssl %%eax, %%xmm0\n");
-        else        fprintf(cc->out, "    cvtsi2sdq %%rax, %%xmm0\n");
+        emit_cvtsi2fd(cc, node->rhs->type, is_f32, "xmm0");
       } else {
         if (is_f32) fprintf(cc->out, "    movd %%eax, %%xmm0\n");
         else        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
@@ -1438,8 +1533,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       int is_f32 = (node->type->kind == TY_FLOAT);
       codegen_expr_checked(cc, node->lhs);
       if (!is_float_type(node->lhs->type)) {
-        if (is_f32) fprintf(cc->out, "    cvtsi2ssl %%eax, %%xmm0\n");
-        else        fprintf(cc->out, "    cvtsi2sdq %%rax, %%xmm0\n");
+        emit_cvtsi2fd(cc, node->lhs->type, is_f32, "xmm0");
       } else {
         if (is_f32) fprintf(cc->out, "    movd %%eax, %%xmm0\n");
         else        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
@@ -1449,8 +1543,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       else        fprintf(cc->out, "    movsd %%xmm0, (%%rsp)\n");
       codegen_expr_checked(cc, node->rhs);
       if (!is_float_type(node->rhs->type)) {
-        if (is_f32) fprintf(cc->out, "    cvtsi2ssl %%eax, %%xmm0\n");
-        else        fprintf(cc->out, "    cvtsi2sdq %%rax, %%xmm0\n");
+        emit_cvtsi2fd(cc, node->rhs->type, is_f32, "xmm0");
       } else {
         if (is_f32) fprintf(cc->out, "    movd %%eax, %%xmm0\n");
         else        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
@@ -1540,8 +1633,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       int is_f32 = (node->type->kind == TY_FLOAT);
       codegen_expr_checked(cc, node->lhs);
       if (!is_float_type(node->lhs->type)) {
-        if (is_f32) fprintf(cc->out, "    cvtsi2ssl %%eax, %%xmm0\n");
-        else        fprintf(cc->out, "    cvtsi2sdq %%rax, %%xmm0\n");
+        emit_cvtsi2fd(cc, node->lhs->type, is_f32, "xmm0");
       } else {
         if (is_f32) fprintf(cc->out, "    movd %%eax, %%xmm0\n");
         else        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
@@ -1551,8 +1643,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       else        fprintf(cc->out, "    movsd %%xmm0, (%%rsp)\n");
       codegen_expr_checked(cc, node->rhs);
       if (!is_float_type(node->rhs->type)) {
-        if (is_f32) fprintf(cc->out, "    cvtsi2ssl %%eax, %%xmm0\n");
-        else        fprintf(cc->out, "    cvtsi2sdq %%rax, %%xmm0\n");
+        emit_cvtsi2fd(cc, node->rhs->type, is_f32, "xmm0");
       } else {
         if (is_f32) fprintf(cc->out, "    movd %%eax, %%xmm0\n");
         else        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
@@ -1801,7 +1892,6 @@ void codegen_expr(Compiler *cc, Node *node) {
   }
 
   case ND_SHR: {
-    printf("ZCC:AST ND_SHR line=%d, lhs_kind=%d, type_size=%d, lhs_type_size=%d\n", node->line, node->lhs ? node->lhs->kind : -1, node->type ? node->type->size : -1, node->lhs && node->lhs->type ? node->lhs->type->size : -1);
     char lhs_ir[32];
     char rhs_ir[32];
     codegen_expr_checked(cc, node->lhs);
@@ -1944,8 +2034,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       /* If either operand is float, compare as float (ucomiss) */
       codegen_expr_checked(cc, node->lhs);
       if (!node->lhs->type || !is_float_type(node->lhs->type)) {
-        if (is_f32) fprintf(cc->out, "    cvtsi2ssl %%eax, %%xmm0\n");
-        else        fprintf(cc->out, "    cvtsi2sdq %%rax, %%xmm0\n");
+        emit_cvtsi2fd(cc, node->lhs->type, is_f32, "xmm0");
       } else {
         if (is_f32) fprintf(cc->out, "    movd %%eax, %%xmm0\n");
         else        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
@@ -1955,8 +2044,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       else        fprintf(cc->out, "    movsd %%xmm0, (%%rsp)\n");
       codegen_expr_checked(cc, node->rhs);
       if (!node->rhs->type || !is_float_type(node->rhs->type)) {
-        if (is_f32) fprintf(cc->out, "    cvtsi2ssl %%eax, %%xmm0\n");
-        else        fprintf(cc->out, "    cvtsi2sdq %%rax, %%xmm0\n");
+        emit_cvtsi2fd(cc, node->rhs->type, is_f32, "xmm0");
       } else {
         if (is_f32) fprintf(cc->out, "    movd %%eax, %%xmm0\n");
         else        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
@@ -2392,7 +2480,6 @@ void codegen_expr(Compiler *cc, Node *node) {
     return;
 
   case ND_CAST: {
-    printf("ZCC:AST ND_CAST line=%d, target_size=%d, lhs_kind=%d, lhs_type_size=%d\n", node->line, node->cast_type ? node->cast_type->size : -1, node->lhs ? node->lhs->kind : -1, node->lhs && node->lhs->type ? node->lhs->type->size : -1);
     char src_ir[32];
     if (!node->lhs) {
       error_at(cc, node->line, "codegen_expr: ND_CAST null lhs");
@@ -2430,13 +2517,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       case 1:
         if (node->lhs && node->lhs->type && is_float_type(node->lhs->type)) {
             /* float/double -> char/uchar: truncating convert first, then narrow */
-            if (node->lhs->type->kind == TY_FLOAT) {
-                fprintf(cc->out, "    movd %%eax, %%xmm0\n");
-                fprintf(cc->out, "    cvttss2si %%xmm0, %%rax\n");
-            } else {
-                fprintf(cc->out, "    movq %%rax, %%xmm0\n");
-                fprintf(cc->out, "    cvttsd2si %%xmm0, %%rax\n");
-            }
+            emit_cvttfd2si(cc, node->cast_type, node->lhs->type->kind == TY_FLOAT);
         }
         if (node->cast_type->kind == TY_UCHAR)
           fprintf(cc->out, "    movzbl %%al, %%eax\n");
@@ -2446,13 +2527,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       case 2:
         if (node->lhs && node->lhs->type && is_float_type(node->lhs->type)) {
             /* float/double -> short/ushort: truncating convert first, then narrow */
-            if (node->lhs->type->kind == TY_FLOAT) {
-                fprintf(cc->out, "    movd %%eax, %%xmm0\n");
-                fprintf(cc->out, "    cvttss2si %%xmm0, %%rax\n");
-            } else {
-                fprintf(cc->out, "    movq %%rax, %%xmm0\n");
-                fprintf(cc->out, "    cvttsd2si %%xmm0, %%rax\n");
-            }
+            emit_cvttfd2si(cc, node->cast_type, node->lhs->type->kind == TY_FLOAT);
         }
         if (node->cast_type->kind == TY_USHORT)
           fprintf(cc->out, "    movzwl %%ax, %%eax\n");
@@ -2462,14 +2537,10 @@ void codegen_expr(Compiler *cc, Node *node) {
       case 4:
         if (node->cast_type && !is_float_type(node->cast_type) && node->lhs && node->lhs->type && is_float_type(node->lhs->type)) {
             /* float/double -> int32: convert via SSE */
-            fprintf(cc->out, "    movq %%rax, %%xmm0\n");
-            if (node->lhs->type->kind == TY_FLOAT)
-                fprintf(cc->out, "    cvttss2si %%xmm0, %%rax\n");
-            else
-                fprintf(cc->out, "    cvttsd2si %%xmm0, %%rax\n");
+            emit_cvttfd2si(cc, node->cast_type, node->lhs->type->kind == TY_FLOAT);
         } else if (node->cast_type->kind == TY_FLOAT && node->lhs && node->lhs->type && !is_float_type(node->lhs->type)) {
             /* int -> float: */
-            fprintf(cc->out, "    cvtsi2ssq %%rax, %%xmm0\n");
+            emit_cvtsi2fd(cc, node->lhs->type, 1, "xmm0");
             fprintf(cc->out, "    movd %%xmm0, %%eax\n");
         } else if (node->cast_type->kind == TY_UINT || node->cast_type->kind == TY_ULONG) {
             if (!backend_ops) fprintf(cc->out, "    movl %%eax, %%eax\n");
@@ -2483,27 +2554,10 @@ void codegen_expr(Compiler *cc, Node *node) {
         break;
       case 8:
         if (node->cast_type && is_float_type(node->cast_type) && node->lhs && node->lhs->type && !is_float_type(node->lhs->type)) {
-            if (is_unsigned_type(node->lhs->type)) {
-                fprintf(cc->out, "    testq %%rax, %%rax\n");
-                fprintf(cc->out, "    js 1f\n");
-                fprintf(cc->out, "    cvtsi2sdq %%rax, %%xmm0\n");
-                fprintf(cc->out, "    jmp 2f\n");
-                fprintf(cc->out, "1:\n");
-                if (backend_ops) fprintf(cc->out, "    mov r2, r0\n");
-      else fprintf(cc->out, "    movq %%rax, %%rdx\n");
-                fprintf(cc->out, "    shrq $1, %%rdx\n");
-                fprintf(cc->out, "    andl $1, %%eax\n");
-                fprintf(cc->out, "    orq %%rax, %%rdx\n");
-                fprintf(cc->out, "    cvtsi2sdq %%rdx, %%xmm0\n");
-                fprintf(cc->out, "    addsd %%xmm0, %%xmm0\n");
-                fprintf(cc->out, "2:\n");
-            } else {
-                fprintf(cc->out, "    cvtsi2sdq %%rax, %%xmm0\n");
-            }
+            emit_cvtsi2fd(cc, node->lhs->type, node->cast_type->kind == TY_FLOAT, "xmm0");
             fprintf(cc->out, "    movq %%xmm0, %%rax\n");
         } else if (node->cast_type && !is_float_type(node->cast_type) && node->lhs && node->lhs->type && is_float_type(node->lhs->type)) {
-            fprintf(cc->out, "    movq %%rax, %%xmm0\n");
-            fprintf(cc->out, "    cvttsd2si %%xmm0, %%rax\n");
+            emit_cvttfd2si(cc, node->cast_type, node->lhs->type->kind == TY_FLOAT);
         } else if (src_size == 4 && !is_pointer(node->lhs ? node->lhs->type : 0)
                    && !(node->lhs && node->lhs->type &&
                         (node->lhs->type->kind == TY_ARRAY ||
@@ -3209,11 +3263,9 @@ void codegen_expr(Compiler *cc, Node *node) {
           if (fp_idx < 8) {
             fprintf(cc->out, "    popq %%rax\n");
             cc->stack_depth--;
-            if (callee_ftype->params[i]->kind == TY_FLOAT) {
-              fprintf(cc->out, "    cvtsi2ss %%eax, %%xmm%d\n", fp_idx);
-            } else {
-              fprintf(cc->out, "    cvtsi2sd %%rax, %%xmm%d\n", fp_idx);
-            }
+            char xmm_name[16];
+            sprintf(xmm_name, "xmm%d", fp_idx);
+            emit_cvtsi2fd(cc, atype, callee_ftype->params[i]->kind == TY_FLOAT, xmm_name);
             fp_idx++;
           }
         } else {
