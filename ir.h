@@ -226,6 +226,7 @@ typedef struct {
     char       end_label[64]; /* .Lfunc_end_N convergence label            */
     
     int        num_params;
+    int        stack_size;    /* AST-computed frame size in bytes          */
     char       param_names[8][IR_NAME_MAX]; /* SystemV up to 6 in regs, keep 8 safe */
 } ir_func_t;
 

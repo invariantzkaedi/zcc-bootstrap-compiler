@@ -85,6 +85,8 @@ static ir_type_t ir_map_type(Type *ty) {
     case TY_ULONG:      return IR_TY_U64;
     case TY_LONGLONG:   return IR_TY_I64;
     case TY_ULONGLONG:  return IR_TY_U64;
+    case TY_FLOAT:      return IR_TY_F32;
+    case TY_DOUBLE:     return IR_TY_F64;
     default:            break;
     }
 
@@ -128,7 +130,8 @@ static char *ir_var_name(Node *node) {
 static void ir_bridge_func_begin(Node *func) {
     ir_tmp_counter = 0;
     ir_last_result[0] = 0;
-    ZCC_IR_FUNC_BEGIN(func->func_def_name, ir_map_type(func->func_type->ret), func->num_params);
+    fprintf(stderr, "DEBUG FUNC BEGIN: %s, ret type kind = %d, mapped = %d\n", func->func_def_name, func->func_type ? (func->func_type->ret ? func->func_type->ret->kind : -1) : -2, ir_map_type(func->func_type ? func->func_type->ret : 0));
+    ZCC_IR_FUNC_BEGIN(func->func_def_name, ir_map_type(func->func_type->ret), func->num_params, func->stack_size);
 }
 
 static void ir_bridge_func_end(void) {
@@ -177,6 +180,13 @@ static void ir_emit_binary_op(int nd_kind, Type *ty, char *lhs_tmp,
     op = ir_map_binop(nd_kind);
     if (op == IR_NOP) return;  /* not a binary op */
 
+    if (is_float_type(ty)) {
+        if (op == IR_ADD)      op = IR_FADD;
+        else if (op == IR_SUB) op = IR_FSUB;
+        else if (op == IR_MUL) op = IR_FMUL;
+        else if (op == IR_DIV) op = IR_FDIV;
+    }
+
     dst = ir_bridge_fresh_tmp();
     ZCC_EMIT_BINARY(op, ir_map_type(ty), dst, lhs_tmp, rhs_tmp, line);
 }
@@ -184,7 +194,8 @@ static void ir_emit_binary_op(int nd_kind, Type *ty, char *lhs_tmp,
 static void ir_emit_var_load(Node *node) {
     char *vname = ir_var_name(node);
     char *dst = ir_bridge_fresh_tmp();
-    if (node->type && (node->type->kind == TY_ARRAY || node->type->kind == TY_STRUCT || node->type->kind == TY_UNION)) {
+    Type *t = (node->sym && node->sym->type) ? node->sym->type : node->type;
+    if (t && (t->kind == TY_ARRAY || t->kind == TY_STRUCT || t->kind == TY_UNION)) {
         ZCC_EMIT_UNARY(IR_ADDR, ir_map_type(node->type), dst, vname, node->line);
     } else {
         ZCC_EMIT_LOAD(ir_map_type(node->type), dst, vname, node->line);

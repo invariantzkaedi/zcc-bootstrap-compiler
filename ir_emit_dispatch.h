@@ -38,9 +38,10 @@ static void ZCC_IR_INIT(void) {
     if (g_emit_ir) g_ir_module = ir_module_create();
 }
 
-static void ZCC_IR_FUNC_BEGIN(const char *fname, ir_type_t ret_ty, int num_params) {
+static void ZCC_IR_FUNC_BEGIN(const char *fname, ir_type_t ret_ty, int num_params, int stack_size) {
     if (g_emit_ir) {
         g_ir_cur_func = ir_func_create(g_ir_module, fname, ret_ty, num_params);
+        if (g_ir_cur_func) g_ir_cur_func->stack_size = stack_size;
     }
 }
 
@@ -128,27 +129,27 @@ static void ZCC_EMIT_ARG(ir_type_t ty, const char *val, int line) {
     }
 }
 
-static void ZCC_EMIT_FCONST(const char *dst, long bits, int line) {
+static void ZCC_EMIT_FCONST(ir_type_t ty, const char *dst, long bits, int line) {
     if (g_emit_ir && g_ir_cur_func) {
-        ir_emit(g_ir_cur_func, IR_FCONST, IR_TY_F64, dst, 0, 0, 0, bits, line);
+        ir_emit(g_ir_cur_func, IR_FCONST, ty, dst, 0, 0, 0, bits, line);
     }
 }
 
-static void ZCC_EMIT_FBINARY(ir_op_t op, const char *dst, const char *s1, const char *s2, int line) {
+static void ZCC_EMIT_FBINARY(ir_op_t op, ir_type_t ty, const char *dst, const char *s1, const char *s2, int line) {
     if (g_emit_ir && g_ir_cur_func) {
-        ir_emit(g_ir_cur_func, op, IR_TY_F64, dst, s1, s2, 0, 0, line);
+        ir_emit(g_ir_cur_func, op, ty, dst, s1, s2, 0, 0, line);
     }
 }
 
-static void ZCC_EMIT_ITOF(const char *dst, const char *src, int line) {
+static void ZCC_EMIT_ITOF(ir_type_t ty, const char *dst, const char *src, int line) {
     if (g_emit_ir && g_ir_cur_func) {
-        ir_emit(g_ir_cur_func, IR_ITOF, IR_TY_F64, dst, src, 0, 0, 0, line);
+        ir_emit(g_ir_cur_func, IR_ITOF, ty, dst, src, 0, 0, 0, line);
     }
 }
 
-static void ZCC_EMIT_FTOI(const char *dst, const char *src, int line) {
+static void ZCC_EMIT_FTOI(ir_type_t ty, const char *dst, const char *src, int line) {
     if (g_emit_ir && g_ir_cur_func) {
-        ir_emit(g_ir_cur_func, IR_FTOI, IR_TY_I64, dst, src, 0, 0, 0, line);
+        ir_emit(g_ir_cur_func, IR_FTOI, ty, dst, src, 0, 0, 0, line);
     }
 }
 

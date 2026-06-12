@@ -674,7 +674,7 @@ void codegen_addr(Compiler *cc, Node *node) {
       char c_tmp[32];
       sprintf(off_str, "%d", node->member_offset);
       sprintf(c_tmp, "%%t%d", ir_tmp_counter++);
-      ZCC_EMIT_UNARY(IR_CONST, IR_TY_I64, c_tmp, off_str, node->line);
+      ZCC_EMIT_CONST(IR_TY_I64, c_tmp, node->member_offset, node->line);
 
       char *dst = ir_bridge_fresh_tmp();
       ZCC_EMIT_BINARY(IR_ADD, IR_TY_PTR, dst, lhs_ir, c_tmp, node->line);
@@ -697,6 +697,59 @@ static int ptr_elem_size(Type *type) {
 /* ---------------------------------------------------------------- */
 /* Expression codegen — result in %rax                               */
 /* ---------------------------------------------------------------- */
+
+static void emit_ir_inc_dec(Compiler *cc, Node *lhs, int is_inc, int is_post, int line) {
+    if (!g_emit_ir || !g_ir_cur_func) return;
+    if (!lhs || !lhs->type) return;
+    
+    codegen_addr_checked(cc, lhs);
+    char lhs_addr[32];
+    ir_save_result(lhs_addr);
+    
+    char val_tmp[32];
+    {
+        char *tmp = ir_bridge_fresh_tmp();
+        int i;
+        for (i = 0; tmp[i]; i++) val_tmp[i] = tmp[i];
+        val_tmp[i] = 0;
+    }
+    ZCC_EMIT_LOAD(ir_map_type(lhs->type), val_tmp, lhs_addr, line);
+    
+    int esz = 1;
+    if (is_pointer(lhs->type))
+        esz = ptr_elem_size(lhs->type);
+    char esz_tmp[32];
+    {
+        char *tmp = ir_bridge_fresh_tmp();
+        int i;
+        for (i = 0; tmp[i]; i++) esz_tmp[i] = tmp[i];
+        esz_tmp[i] = 0;
+    }
+    ZCC_EMIT_CONST(IR_TY_I64, esz_tmp, esz, line);
+    
+    char new_val_tmp[32];
+    {
+        char *tmp = ir_bridge_fresh_tmp();
+        int i;
+        for (i = 0; tmp[i]; i++) new_val_tmp[i] = tmp[i];
+        new_val_tmp[i] = 0;
+    }
+    ir_op_t op;
+    if (is_float_type(lhs->type)) {
+        op = is_inc ? IR_FADD : IR_FSUB;
+    } else {
+        op = is_inc ? IR_ADD : IR_SUB;
+    }
+    ZCC_EMIT_BINARY(op, ir_map_type(lhs->type), new_val_tmp, val_tmp, esz_tmp, line);
+    
+    ZCC_EMIT_STORE(ir_map_type(lhs->type), lhs_addr, new_val_tmp, line);
+    
+    const char *res_tmp = is_post ? val_tmp : new_val_tmp;
+    int i;
+    for (i = 0; res_tmp[i]; i++)
+        ir_last_result[i] = res_tmp[i];
+    ir_last_result[i] = 0;
+}
 
 void codegen_expr(Compiler *cc, Node *node) {
   if (!node)
@@ -792,9 +845,16 @@ void codegen_expr(Compiler *cc, Node *node) {
     /* Satisfy IR subsystem sequence */
     {
       char *dst = ir_bridge_fresh_tmp();
-      long long flit_bits;
-      memcpy(&flit_bits, &node->f_val, sizeof(double));
-      ZCC_EMIT_FCONST(dst, flit_bits, node->line);
+      if (node->type && node->type->kind == TY_FLOAT) {
+        float fv = (float)node->f_val;
+        unsigned int fbits;
+        memcpy(&fbits, &fv, sizeof(float));
+        ZCC_EMIT_FCONST(IR_TY_F32, dst, (long)fbits, node->line);
+      } else {
+        unsigned long long bits;
+        memcpy(&bits, &node->f_val, sizeof(double));
+        ZCC_EMIT_FCONST(IR_TY_F64, dst, (long)bits, node->line);
+      }
     }
     return;
   }
@@ -845,7 +905,12 @@ void codegen_expr(Compiler *cc, Node *node) {
     {
       char *vname = ir_var_name(node);
       char *dst = ir_bridge_fresh_tmp();
-      ZCC_EMIT_LOAD(ir_map_type(node->type), dst, vname, node->line);
+      Type *t = (node->sym && node->sym->type) ? node->sym->type : node->type;
+      if (t && (t->kind == TY_ARRAY || t->kind == TY_STRUCT || t->kind == TY_UNION || t->kind == TY_FUNC)) {
+        ZCC_EMIT_UNARY(IR_ADDR, ir_map_type(node->type), dst, vname, node->line);
+      } else {
+        ZCC_EMIT_LOAD(ir_map_type(node->type), dst, vname, node->line);
+      }
     }
     return;
 
@@ -1360,8 +1425,12 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (node->type && is_float_type(node->type)) {
       int is_f32 = (node->type->kind == TY_FLOAT);
       codegen_expr_checked(cc, node->lhs);
+      ir_save_result(lhs_ir);
       if (!is_float_type(node->lhs->type)) {
         emit_cvtsi2fd(cc, node->lhs->type, is_f32, "xmm0");
+        char *dst = ir_bridge_fresh_tmp();
+        ZCC_EMIT_ITOF(ir_map_type(node->type), dst, lhs_ir, node->line);
+        strcpy(lhs_ir, dst);
       } else {
         if (is_f32) fprintf(cc->out, "    movd %%eax, %%xmm0\n");
         else        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
@@ -1370,8 +1439,12 @@ void codegen_expr(Compiler *cc, Node *node) {
       if (is_f32) fprintf(cc->out, "    movss %%xmm0, (%%rsp)\n");
       else        fprintf(cc->out, "    movsd %%xmm0, (%%rsp)\n");
       codegen_expr_checked(cc, node->rhs);
+      ir_save_result(rhs_ir);
       if (!is_float_type(node->rhs->type)) {
         emit_cvtsi2fd(cc, node->rhs->type, is_f32, "xmm0");
+        char *dst = ir_bridge_fresh_tmp();
+        ZCC_EMIT_ITOF(ir_map_type(node->type), dst, rhs_ir, node->line);
+        strcpy(rhs_ir, dst);
       } else {
         if (is_f32) fprintf(cc->out, "    movd %%eax, %%xmm0\n");
         else        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
@@ -1381,7 +1454,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       fprintf(cc->out, "    addq $8, %%rsp\n");
       if (is_f32) { fprintf(cc->out, "    addss %%xmm1, %%xmm0\n"); fprintf(cc->out, "    movd %%xmm0, %%eax\n"); }
       else        { fprintf(cc->out, "    addsd %%xmm1, %%xmm0\n"); fprintf(cc->out, "    movq %%xmm0, %%rax\n"); }
-      ir_emit_binary_op(ND_ADD, node->type, "f_lhs", "f_rhs", node->line);
+      ir_emit_binary_op(ND_ADD, node->type, lhs_ir, rhs_ir, node->line);
       return;
     }
     codegen_expr_checked(cc, node->lhs);
@@ -1443,8 +1516,12 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (node->type && is_float_type(node->type)) {
       int is_f32 = (node->type->kind == TY_FLOAT);
       codegen_expr_checked(cc, node->lhs);
+      ir_save_result(lhs_ir);
       if (!is_float_type(node->lhs->type)) {
         emit_cvtsi2fd(cc, node->lhs->type, is_f32, "xmm0");
+        char *dst = ir_bridge_fresh_tmp();
+        ZCC_EMIT_ITOF(ir_map_type(node->type), dst, lhs_ir, node->line);
+        strcpy(lhs_ir, dst);
       } else {
         if (is_f32) fprintf(cc->out, "    movd %%eax, %%xmm0\n");
         else        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
@@ -1453,8 +1530,12 @@ void codegen_expr(Compiler *cc, Node *node) {
       if (is_f32) fprintf(cc->out, "    movss %%xmm0, (%%rsp)\n");
       else        fprintf(cc->out, "    movsd %%xmm0, (%%rsp)\n");
       codegen_expr_checked(cc, node->rhs);
+      ir_save_result(rhs_ir);
       if (!is_float_type(node->rhs->type)) {
         emit_cvtsi2fd(cc, node->rhs->type, is_f32, "xmm0");
+        char *dst = ir_bridge_fresh_tmp();
+        ZCC_EMIT_ITOF(ir_map_type(node->type), dst, rhs_ir, node->line);
+        strcpy(rhs_ir, dst);
       } else {
         if (is_f32) fprintf(cc->out, "    movd %%eax, %%xmm0\n");
         else        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
@@ -1465,7 +1546,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       /* note: subsd/subss operand order: xmm1 -= xmm0, then copy to xmm0 */
       if (is_f32) { fprintf(cc->out, "    subss %%xmm0, %%xmm1\n"); fprintf(cc->out, "    movaps %%xmm1, %%xmm0\n"); fprintf(cc->out, "    movd %%xmm0, %%eax\n"); }
       else        { fprintf(cc->out, "    subsd %%xmm0, %%xmm1\n"); fprintf(cc->out, "    movsd %%xmm1, %%xmm0\n"); fprintf(cc->out, "    movq %%xmm0, %%rax\n"); }
-      ir_emit_binary_op(ND_SUB, node->type, "f_lhs", "f_rhs", node->line);
+      ir_emit_binary_op(ND_SUB, node->type, lhs_ir, rhs_ir, node->line);
       return;
     }
     codegen_expr_checked(cc, node->lhs);
@@ -1532,8 +1613,12 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (node->type && is_float_type(node->type)) {
       int is_f32 = (node->type->kind == TY_FLOAT);
       codegen_expr_checked(cc, node->lhs);
+      ir_save_result(lhs_ir);
       if (!is_float_type(node->lhs->type)) {
         emit_cvtsi2fd(cc, node->lhs->type, is_f32, "xmm0");
+        char *dst = ir_bridge_fresh_tmp();
+        ZCC_EMIT_ITOF(ir_map_type(node->type), dst, lhs_ir, node->line);
+        strcpy(lhs_ir, dst);
       } else {
         if (is_f32) fprintf(cc->out, "    movd %%eax, %%xmm0\n");
         else        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
@@ -1542,8 +1627,12 @@ void codegen_expr(Compiler *cc, Node *node) {
       if (is_f32) fprintf(cc->out, "    movss %%xmm0, (%%rsp)\n");
       else        fprintf(cc->out, "    movsd %%xmm0, (%%rsp)\n");
       codegen_expr_checked(cc, node->rhs);
+      ir_save_result(rhs_ir);
       if (!is_float_type(node->rhs->type)) {
         emit_cvtsi2fd(cc, node->rhs->type, is_f32, "xmm0");
+        char *dst = ir_bridge_fresh_tmp();
+        ZCC_EMIT_ITOF(ir_map_type(node->type), dst, rhs_ir, node->line);
+        strcpy(rhs_ir, dst);
       } else {
         if (is_f32) fprintf(cc->out, "    movd %%eax, %%xmm0\n");
         else        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
@@ -1553,7 +1642,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       fprintf(cc->out, "    addq $8, %%rsp\n");
       if (is_f32) { fprintf(cc->out, "    mulss %%xmm1, %%xmm0\n"); fprintf(cc->out, "    movd %%xmm0, %%eax\n"); }
       else        { fprintf(cc->out, "    mulsd %%xmm1, %%xmm0\n"); fprintf(cc->out, "    movq %%xmm0, %%rax\n"); }
-      ir_emit_binary_op(ND_MUL, node->type, "f_lhs", "f_rhs", node->line);
+      ir_emit_binary_op(ND_MUL, node->type, lhs_ir, rhs_ir, node->line);
       return;
     }
     if (!backend_ops) {
@@ -1632,8 +1721,12 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (node->type && is_float_type(node->type)) {
       int is_f32 = (node->type->kind == TY_FLOAT);
       codegen_expr_checked(cc, node->lhs);
+      ir_save_result(lhs_ir);
       if (!is_float_type(node->lhs->type)) {
         emit_cvtsi2fd(cc, node->lhs->type, is_f32, "xmm0");
+        char *dst = ir_bridge_fresh_tmp();
+        ZCC_EMIT_ITOF(ir_map_type(node->type), dst, lhs_ir, node->line);
+        strcpy(lhs_ir, dst);
       } else {
         if (is_f32) fprintf(cc->out, "    movd %%eax, %%xmm0\n");
         else        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
@@ -1642,8 +1735,12 @@ void codegen_expr(Compiler *cc, Node *node) {
       if (is_f32) fprintf(cc->out, "    movss %%xmm0, (%%rsp)\n");
       else        fprintf(cc->out, "    movsd %%xmm0, (%%rsp)\n");
       codegen_expr_checked(cc, node->rhs);
+      ir_save_result(rhs_ir);
       if (!is_float_type(node->rhs->type)) {
         emit_cvtsi2fd(cc, node->rhs->type, is_f32, "xmm0");
+        char *dst = ir_bridge_fresh_tmp();
+        ZCC_EMIT_ITOF(ir_map_type(node->type), dst, rhs_ir, node->line);
+        strcpy(rhs_ir, dst);
       } else {
         if (is_f32) fprintf(cc->out, "    movd %%eax, %%xmm0\n");
         else        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
@@ -1654,7 +1751,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       /* divss/divsd: dividend xmm1, divisor xmm0 -> result in xmm1 */
       if (is_f32) { fprintf(cc->out, "    divss %%xmm0, %%xmm1\n"); fprintf(cc->out, "    movaps %%xmm1, %%xmm0\n"); fprintf(cc->out, "    movd %%xmm0, %%eax\n"); }
       else        { fprintf(cc->out, "    divsd %%xmm0, %%xmm1\n"); fprintf(cc->out, "    movsd %%xmm1, %%xmm0\n"); fprintf(cc->out, "    movq %%xmm0, %%rax\n"); }
-      ir_emit_binary_op(ND_DIV, node->type, "f_lhs", "f_rhs", node->line);
+      ir_emit_binary_op(ND_DIV, node->type, lhs_ir, rhs_ir, node->line);
       return;
     }
 
@@ -1928,6 +2025,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     }
     if (node->type && is_float_type(node->type)) {
       codegen_expr_checked(cc, node->lhs);
+      ir_save_result(src_ir);
       /* CG-FLOAT-008b: flip sign bit at the correct width.
        * ty_float value lives in low 32 of %rax — flip bit 31 only.
        * ty_double value lives in full 64 of %rax — flip bit 63. */
@@ -1940,7 +2038,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       }
       {
         char *dst = ir_bridge_fresh_tmp();
-        ZCC_EMIT_UNARY(IR_NEG, ir_map_type(node->type), dst, "f_lhs", node->line);
+        ZCC_EMIT_UNARY(IR_NEG, ir_map_type(node->type), dst, src_ir, node->line);
       }
       return;
     }
@@ -2033,8 +2131,12 @@ void codegen_expr(Compiler *cc, Node *node) {
                     node->rhs->type->kind == TY_FLOAT);
       /* If either operand is float, compare as float (ucomiss) */
       codegen_expr_checked(cc, node->lhs);
+      ir_save_result(lhs_ir);
       if (!node->lhs->type || !is_float_type(node->lhs->type)) {
         emit_cvtsi2fd(cc, node->lhs->type, is_f32, "xmm0");
+        char *dst = ir_bridge_fresh_tmp();
+        ZCC_EMIT_ITOF(is_f32 ? IR_TY_F32 : IR_TY_F64, dst, lhs_ir, node->line);
+        strcpy(lhs_ir, dst);
       } else {
         if (is_f32) fprintf(cc->out, "    movd %%eax, %%xmm0\n");
         else        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
@@ -2043,8 +2145,12 @@ void codegen_expr(Compiler *cc, Node *node) {
       if (is_f32) fprintf(cc->out, "    movss %%xmm0, (%%rsp)\n");
       else        fprintf(cc->out, "    movsd %%xmm0, (%%rsp)\n");
       codegen_expr_checked(cc, node->rhs);
+      ir_save_result(rhs_ir);
       if (!node->rhs->type || !is_float_type(node->rhs->type)) {
         emit_cvtsi2fd(cc, node->rhs->type, is_f32, "xmm0");
+        char *dst = ir_bridge_fresh_tmp();
+        ZCC_EMIT_ITOF(is_f32 ? IR_TY_F32 : IR_TY_F64, dst, rhs_ir, node->line);
+        strcpy(rhs_ir, dst);
       } else {
         if (is_f32) fprintf(cc->out, "    movd %%eax, %%xmm0\n");
         else        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
@@ -2076,7 +2182,7 @@ void codegen_expr(Compiler *cc, Node *node) {
         break;
       }
       fprintf(cc->out, "    movzbl %%al, %%eax\n");
-      ir_emit_binary_op(node->kind, is_f32 ? cc->ty_float : cc->ty_double, "f_lhs", "f_rhs", node->line);
+      ir_emit_binary_op(node->kind, is_f32 ? cc->ty_float : cc->ty_double, lhs_ir, rhs_ir, node->line);
       return;
     }
 
@@ -2430,7 +2536,12 @@ void codegen_expr(Compiler *cc, Node *node) {
       }
       {
         char *dst = ir_bridge_fresh_tmp();
-        ZCC_EMIT_LOAD(ir_map_type(node->type), dst, deref_addr, node->line);
+        Type *t = node->type;
+        if (t && (t->kind == TY_ARRAY || t->kind == TY_STRUCT || t->kind == TY_UNION || t->kind == TY_FUNC)) {
+            ZCC_EMIT_UNARY(IR_COPY, ir_map_type(node->type), dst, deref_addr, node->line);
+        } else {
+            ZCC_EMIT_LOAD(ir_map_type(node->type), dst, deref_addr, node->line);
+        }
       }
     }
     return;
@@ -2474,7 +2585,12 @@ void codegen_expr(Compiler *cc, Node *node) {
       }
       {
         char *dst = ir_bridge_fresh_tmp();
-        ZCC_EMIT_LOAD(ir_map_type(node->type), dst, member_addr, node->line);
+        Type *t = node->type;
+        if (t && (t->kind == TY_ARRAY || t->kind == TY_STRUCT || t->kind == TY_UNION || t->kind == TY_FUNC)) {
+            ZCC_EMIT_UNARY(IR_COPY, ir_map_type(node->type), dst, member_addr, node->line);
+        } else {
+            ZCC_EMIT_LOAD(ir_map_type(node->type), dst, member_addr, node->line);
+        }
       }
     }
     return;
@@ -2578,7 +2694,15 @@ void codegen_expr(Compiler *cc, Node *node) {
     }
     {
       char *dst = ir_bridge_fresh_tmp();
-      ZCC_EMIT_UNARY(IR_CAST, ir_map_type(node->type), dst, src_ir, node->line);
+      ir_op_t op = IR_CAST;
+      if (node->lhs && node->lhs->type && node->cast_type) {
+        if (!is_float_type(node->lhs->type) && is_float_type(node->cast_type)) {
+          op = IR_ITOF;
+        } else if (is_float_type(node->lhs->type) && !is_float_type(node->cast_type)) {
+          op = IR_FTOI;
+        }
+      }
+      ZCC_EMIT_UNARY(op, ir_map_type(node->type), dst, src_ir, node->line);
     }
     return;
   }
@@ -2587,11 +2711,19 @@ void codegen_expr(Compiler *cc, Node *node) {
     char ternary_cond_ir[32];
     char ternary_lbl1[32];
     char ternary_lbl2[32];
+    char ternary_res[32];
     if (!node->cond || !node->then_body || !node->else_body) {
       error_at(cc, node->line,
                "codegen_expr: ND_TERNARY missing cond/then/else");
       fprintf(cc->out, "    movq $0, %%rax\n");
       return;
+    }
+    {
+        char *tmp = ir_bridge_fresh_tmp();
+        int i;
+        for (i = 0; tmp[i]; i++)
+            ternary_res[i] = tmp[i];
+        ternary_res[i] = 0;
     }
     lbl1 = new_label(cc);
     lbl2 = new_label(cc);
@@ -2622,6 +2754,11 @@ void codegen_expr(Compiler *cc, Node *node) {
     sprintf(ternary_lbl1, ".L%d", lbl1);
     ZCC_EMIT_BR_IF(ternary_cond_ir, ternary_lbl1, node->line);
     codegen_expr_checked(cc, node->then_body);
+    {
+        char then_res[32];
+        ir_save_result(then_res);
+        ZCC_EMIT_UNARY(IR_COPY, ir_map_type(node->type), ternary_res, then_res, node->line);
+    }
     if (backend_ops) emit_label_fmt(cc, lbl2, FMT_JMP);
     else emit_label_fmt(cc, lbl2, FMT_JMP);
     sprintf(ternary_lbl2, ".L%d", lbl2);
@@ -2629,8 +2766,19 @@ void codegen_expr(Compiler *cc, Node *node) {
     fprintf(cc->out, ".L%d:\n", lbl1);
     ZCC_EMIT_LABEL(ternary_lbl1, node->line);
     codegen_expr_checked(cc, node->else_body);
+    {
+        char else_res[32];
+        ir_save_result(else_res);
+        ZCC_EMIT_UNARY(IR_COPY, ir_map_type(node->type), ternary_res, else_res, node->line);
+    }
     fprintf(cc->out, ".L%d:\n", lbl2);
     ZCC_EMIT_LABEL(ternary_lbl2, node->line);
+    {
+        int i;
+        for (i = 0; ternary_res[i]; i++)
+            ir_last_result[i] = ternary_res[i];
+        ir_last_result[i] = 0;
+    }
     return;
   }
 
@@ -2640,6 +2788,10 @@ void codegen_expr(Compiler *cc, Node *node) {
     return;
 
   case ND_PRE_INC:
+    if (g_emit_ir) {
+      emit_ir_inc_dec(cc, node->lhs, 1, 0, node->line);
+      return;
+    }
     if (node->lhs && node->lhs->kind == ND_VAR && node->lhs->sym &&
         node->lhs->sym->assigned_reg) {
       char *reg = node->lhs->sym->assigned_reg;
@@ -2739,6 +2891,10 @@ void codegen_expr(Compiler *cc, Node *node) {
     return;
 
   case ND_PRE_DEC:
+    if (g_emit_ir) {
+      emit_ir_inc_dec(cc, node->lhs, 0, 0, node->line);
+      return;
+    }
     if (node->lhs && node->lhs->kind == ND_VAR && node->lhs->sym &&
         node->lhs->sym->assigned_reg) {
       char *reg = node->lhs->sym->assigned_reg;
@@ -2838,6 +2994,10 @@ void codegen_expr(Compiler *cc, Node *node) {
     return;
 
   case ND_POST_INC:
+    if (g_emit_ir) {
+      emit_ir_inc_dec(cc, node->lhs, 1, 1, node->line);
+      return;
+    }
     if (node->lhs && node->lhs->kind == ND_VAR && node->lhs->sym &&
         node->lhs->sym->assigned_reg) {
       char *reg = node->lhs->sym->assigned_reg;
@@ -2918,6 +3078,10 @@ void codegen_expr(Compiler *cc, Node *node) {
     return;
 
   case ND_POST_DEC:
+    if (g_emit_ir) {
+      emit_ir_inc_dec(cc, node->lhs, 0, 1, node->line);
+      return;
+    }
     if (node->lhs && node->lhs->kind == ND_VAR && node->lhs->sym &&
         node->lhs->sym->assigned_reg) {
       char *reg = node->lhs->sym->assigned_reg;
@@ -3401,6 +3565,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     {
       char *dst = ir_bridge_fresh_tmp();
       char *target = node->func_name[0] ? node->func_name : callee_ir;
+      fprintf(stderr, "DEBUG CALL SITE: %s, type kind = %d, mapped = %d\n", target, node->type ? node->type->kind : -1, ir_map_type(node->type));
       ZCC_EMIT_CALL(ir_map_type(node->type), dst, target, node->line);
     }
 

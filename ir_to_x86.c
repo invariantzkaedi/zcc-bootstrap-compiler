@@ -70,6 +70,17 @@ static int get_or_create_var(const char *name) {
 
 /* ── Register-aware operand helpers ──────────────────────────────────── */
 
+static int is_constant_num(const char *src) {
+    if (!src || src[0] == '\0') return 0;
+    int i = 0;
+    if (src[0] == '-' || src[0] == '+') i++;
+    if (src[i] == '\0') return 0;
+    for (; src[i]; i++) {
+        if (src[i] < '0' || src[i] > '9') return 0;
+    }
+    return 1;
+}
+
 /*
  * Emit code to load operand `src` into x86 register `dst_reg`.
  * If `src` has a physical register assigned by the allocator, emit a
@@ -79,6 +90,10 @@ static int get_or_create_var(const char *name) {
  */
 static void load_operand(FILE *out, const char *src, const char *dst_reg,
                          const RegAllocator *ra) {
+    if (is_constant_num(src)) {
+        fprintf(out, "    movq $%s, %s\n", src, dst_reg);
+        return;
+    }
     if (ra) {
         PhysReg pr = ra_get(ra, src);
         if (pr != PREG_NONE) {
@@ -112,36 +127,40 @@ static void store_result(FILE *out, const char *dst, const char *src_reg,
     fprintf(out, "    movq %s, %d(%%rbp)\n", src_reg, off);
 }
 
-static void load_operand_xmm(FILE *out, const char *src, const char *dst_reg, const RegAllocator *ra) {
+static void load_operand_xmm(FILE *out, const char *src, const char *dst_reg, ir_type_t ty, const RegAllocator *ra) {
+    int is_f32 = (ty == IR_TY_F32);
+    const char *mov_op = is_f32 ? "movss" : "movsd";
     if (ra) {
         PhysReg pr = ra_get(ra, src);
         if (pr != PREG_NONE) {
             const char *pname = preg_name(pr);
             if (strcmp(pname, dst_reg + 1) != 0) {
-                if (pr >= PREG_XMM0) fprintf(out, "    movsd %%%s, %s\n", pname, dst_reg);
+                if (pr >= PREG_XMM0) fprintf(out, "    %s %%%s, %s\n", mov_op, pname, dst_reg);
                 else                 fprintf(out, "    movq %%%s, %s\n", pname, dst_reg);
             }
             return;
         }
     }
     int off = get_or_create_var(src);
-    fprintf(out, "    movsd %d(%%rbp), %s\n", off, dst_reg);
+    fprintf(out, "    %s %d(%%rbp), %s\n", mov_op, off, dst_reg);
 }
 
-static void store_result_xmm(FILE *out, const char *dst, const char *src_reg, const RegAllocator *ra) {
+static void store_result_xmm(FILE *out, const char *dst, const char *src_reg, ir_type_t ty, const RegAllocator *ra) {
+    int is_f32 = (ty == IR_TY_F32);
+    const char *mov_op = is_f32 ? "movss" : "movsd";
     if (ra) {
         PhysReg pr = ra_get(ra, dst);
         if (pr != PREG_NONE) {
             const char *pname = preg_name(pr);
             if (strcmp(pname, src_reg + 1) != 0) {
-                if (pr >= PREG_XMM0) fprintf(out, "    movsd %s, %%%s\n", src_reg, pname);
+                if (pr >= PREG_XMM0) fprintf(out, "    %s %s, %%%s\n", mov_op, src_reg, pname);
                 else                 fprintf(out, "    movq %s, %%%s\n", src_reg, pname);
             }
             return;
         }
     }
     int off = get_or_create_var(dst);
-    fprintf(out, "    movsd %s, %d(%%rbp)\n", src_reg, off);
+    fprintf(out, "    %s %s, %d(%%rbp)\n", mov_op, src_reg, off);
 }
 
 /*
@@ -154,6 +173,10 @@ static void store_result_xmm(FILE *out, const char *dst, const char *src_reg, co
  */
 static void emit_src2(FILE *out, const char *mnemonic, const char *src2,
                       const RegAllocator *ra) {
+    if (is_constant_num(src2)) {
+        fprintf(out, "    %s $%s, %%rax\n", mnemonic, src2);
+        return;
+    }
     if (ra) {
         PhysReg pr = ra_get(ra, src2);
         if (pr != PREG_NONE) {
@@ -211,7 +234,145 @@ static int is_unsigned_comparison(ir_func_t *fn, ir_node_t *n) {
     return 0;
 }
 
+static void lower_cvtsi2fd(FILE *out, ir_type_t src_ty, int is_f32, const char *target_xmm, int fn_id, int *lbl_counter) {
+    int is_unsigned = ir_type_unsigned(src_ty);
+    int src_size = ir_type_bytes(src_ty);
+    
+    if (is_unsigned) {
+        if (src_size == 8) {
+            int l1 = (*lbl_counter)++;
+            int l2 = (*lbl_counter)++;
+            fprintf(out, "    testq %%rax, %%rax\n");
+            fprintf(out, "    js .L_itof_%d_%d\n", fn_id, l1);
+            if (is_f32) fprintf(out, "    cvtsi2ssq %%rax, %%%s\n", target_xmm);
+            else        fprintf(out, "    cvtsi2sdq %%rax, %%%s\n", target_xmm);
+            fprintf(out, "    jmp .L_itof_%d_%d\n", fn_id, l2);
+            fprintf(out, ".L_itof_%d_%d:\n", fn_id, l1);
+            fprintf(out, "    movq %%rax, %%rdx\n");
+            fprintf(out, "    shrq $1, %%rdx\n");
+            fprintf(out, "    andl $1, %%eax\n");
+            fprintf(out, "    orq %%rax, %%rdx\n");
+            if (is_f32) {
+                fprintf(out, "    cvtsi2ssq %%rdx, %%%s\n", target_xmm);
+                fprintf(out, "    addss %%%s, %%%s\n", target_xmm, target_xmm);
+            } else {
+                fprintf(out, "    cvtsi2sdq %%rdx, %%%s\n", target_xmm);
+                fprintf(out, "    addsd %%%s, %%%s\n", target_xmm, target_xmm);
+            }
+            fprintf(out, ".L_itof_%d_%d:\n", fn_id, l2);
+            return;
+        } else {
+            if (src_size == 4) {
+                fprintf(out, "    movl %%eax, %%eax\n");
+            } else if (src_size == 2) {
+                fprintf(out, "    movzwl %%ax, %%eax\n");
+            } else if (src_size == 1) {
+                fprintf(out, "    movzbl %%al, %%eax\n");
+            }
+            if (is_f32) fprintf(out, "    cvtsi2ssq %%rax, %%%s\n", target_xmm);
+            else        fprintf(out, "    cvtsi2sdq %%rax, %%%s\n", target_xmm);
+            return;
+        }
+    }
+    
+    if (is_f32) {
+        if (src_size == 4) {
+            fprintf(out, "    cvtsi2ssl %%eax, %%%s\n", target_xmm);
+        } else {
+            fprintf(out, "    cvtsi2ssq %%rax, %%%s\n", target_xmm);
+        }
+    } else {
+        if (src_size == 4) {
+            fprintf(out, "    movslq %%eax, %%rax\n");
+        }
+        fprintf(out, "    cvtsi2sdq %%rax, %%%s\n", target_xmm);
+    }
+}
+
+static void lower_cvttfd2si(FILE *out, ir_type_t dst_ty, int is_f32, const char *src_xmm, int fn_id, int *lbl_counter) {
+    int is_unsigned = ir_type_unsigned(dst_ty);
+    int dst_size = ir_type_bytes(dst_ty);
+    
+    if (is_unsigned && dst_size == 8) {
+        int l1 = (*lbl_counter)++;
+        int l2 = (*lbl_counter)++;
+        int lbl_two63 = (*lbl_counter)++;
+        unsigned long long two63_bits = 0x43e0000000000000ULL;
+        fprintf(out, "    .section .rodata\n");
+        fprintf(out, "    .p2align 3\n");
+        fprintf(out, ".LC_two63_%d_%d:\n", fn_id, lbl_two63);
+        fprintf(out, "    .quad %llu\n", two63_bits);
+        fprintf(out, "    .text\n");
+        
+        if (is_f32) {
+            fprintf(out, "    cvtss2sd %%%s, %%xmm0\n", src_xmm);
+        } else {
+            if (strcmp(src_xmm, "xmm0") != 0) {
+                fprintf(out, "    movsd %%%s, %%xmm0\n", src_xmm);
+            }
+        }
+        fprintf(out, "    movsd .LC_two63_%d_%d(%%rip), %%xmm1\n", fn_id, lbl_two63);
+        fprintf(out, "    ucomisd %%xmm1, %%xmm0\n");
+        fprintf(out, "    jae .L_ftoi_%d_%d\n", fn_id, l1);
+        fprintf(out, "    cvttsd2si %%xmm0, %%rax\n");
+        fprintf(out, "    jmp .L_ftoi_%d_%d\n", fn_id, l2);
+        fprintf(out, ".L_ftoi_%d_%d:\n", fn_id, l1);
+        fprintf(out, "    subsd %%xmm1, %%xmm0\n");
+        fprintf(out, "    cvttsd2si %%xmm0, %%rax\n");
+        fprintf(out, "    movabsq $0x8000000000000000, %%rdx\n");
+        fprintf(out, "    xorq %%rdx, %%rax\n");
+        fprintf(out, ".L_ftoi_%d_%d:\n", fn_id, l2);
+        return;
+    }
+    
+    if (is_f32) {
+        fprintf(out, "    cvttss2si %%%s, %%rax\n", src_xmm);
+    } else {
+        fprintf(out, "    cvttsd2si %%%s, %%rax\n", src_xmm);
+    }
+}
+
 /* ── Main lowering entry point ───────────────────────────────────────── */
+
+static int get_param_is_float(ir_func_t *fn, int pnum) {
+    char stack_name[32];
+    sprintf(stack_name, "%%stack_%d", -8 * (pnum + 1));
+    ir_node_t *n = fn->head;
+    while (n) {
+        if (n->flags & IRF_DEAD) {
+            n = n->next;
+            continue;
+        }
+        if (n->op == IR_ADDR) {
+            n = n->next;
+            continue;
+        }
+        if (strcmp(n->dst, stack_name) == 0 ||
+            strcmp(n->src1, stack_name) == 0 ||
+            strcmp(n->src2, stack_name) == 0) {
+            if (n->type == IR_TY_F32 || n->type == IR_TY_F64) {
+                return 1;
+            }
+            return 0;
+        }
+        n = n->next;
+    }
+    return 0;
+}
+
+static ir_type_t get_operand_type(ir_func_t *fn, ir_node_t *n, const char *src) {
+    if (!src || src[0] == '\0') return IR_TY_VOID;
+    if (strncmp(src, "%stack_", 7) == 0) {
+        int stack_idx = atoi(src + 7);
+        int pnum = (-stack_idx / 8) - 1;
+        if (pnum >= 0 && pnum < fn->num_params) {
+            return get_param_is_float(fn, pnum) ? IR_TY_F64 : IR_TY_I64;
+        }
+    }
+    ir_node_t *def = ir_find_def(fn, n, src);
+    if (def) return def->type;
+    return IR_TY_VOID;
+}
 
 void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
     int i;
@@ -225,31 +386,42 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
         int stack_size;
         int arg_idx;
         int call_padding = 0;
+        int gp_arg_idx = 0;
+        int fp_arg_idx = 0;
+        int stack_arg_idx = 0;
 
         num_vars = 0;
         {
-            int min_stack_off = -8 * fn->num_params;
-            ir_node_t *scan = fn->head;
-            while (scan) {
-                if (scan->flags & IRF_DEAD) {
+            /* Use the AST-computed stack size directly if available.
+             * It accounts for the full extent of all local arrays and structs,
+             * which basic block register/var scans cannot see (as they only
+             * observe base pointers/accesses). CG-IR-FRAME-001. */
+            if (fn->stack_size > 0) {
+                next_offset_from_rbp = -(fn->stack_size) - 8;
+            } else {
+                int min_stack_off = -8 * fn->num_params;
+                ir_node_t *scan = fn->head;
+                while (scan) {
+                    if (scan->flags & IRF_DEAD) {
+                        scan = scan->next;
+                        continue;
+                    }
+                    if (strncmp(scan->dst, "%stack_", 7) == 0) {
+                        int off = atoi(scan->dst + 7);
+                        if (off < min_stack_off) min_stack_off = off;
+                    }
+                    if (strncmp(scan->src1, "%stack_", 7) == 0) {
+                        int off = atoi(scan->src1 + 7);
+                        if (off < min_stack_off) min_stack_off = off;
+                    }
+                    if (strncmp(scan->src2, "%stack_", 7) == 0) {
+                        int off = atoi(scan->src2 + 7);
+                        if (off < min_stack_off) min_stack_off = off;
+                    }
                     scan = scan->next;
-                    continue;
                 }
-                if (strncmp(scan->dst, "%stack_", 7) == 0) {
-                    int off = atoi(scan->dst + 7);
-                    if (off < min_stack_off) min_stack_off = off;
-                }
-                if (strncmp(scan->src1, "%stack_", 7) == 0) {
-                    int off = atoi(scan->src1 + 7);
-                    if (off < min_stack_off) min_stack_off = off;
-                }
-                if (strncmp(scan->src2, "%stack_", 7) == 0) {
-                    int off = atoi(scan->src2 + 7);
-                    if (off < min_stack_off) min_stack_off = off;
-                }
-                scan = scan->next;
+                next_offset_from_rbp = min_stack_off - 8;
             }
-            next_offset_from_rbp = min_stack_off - 8;
         }
 
         /* ── Pass 0: Run linear scan register allocator ── */
@@ -303,12 +475,32 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
         }
         
         /* Store incoming parameters into their stack slots */
+        int gp_param_idx = 0;
+        int fp_param_idx = 0;
+        int caller_stack_off = 16;
         for (int pnum = 0; pnum < fn->num_params; pnum++) {
             char param_name[32];
             sprintf(param_name, "%%stack_%d", -8 * (pnum + 1));
             int stack_off = get_or_create_var(param_name);
-            if (pnum < 6) {
-                fprintf(out, "    movq %s, %d(%%rbp)\n", arg_regs[pnum], stack_off);
+            int is_flt = get_param_is_float(fn, pnum);
+            if (is_flt) {
+                if (fp_param_idx < 8) {
+                    fprintf(out, "    movsd %%xmm%d, %d(%%rbp)\n", fp_param_idx, stack_off);
+                    fp_param_idx++;
+                } else {
+                    fprintf(out, "    movq %d(%%rbp), %%rax\n", caller_stack_off);
+                    fprintf(out, "    movq %%rax, %d(%%rbp)\n", stack_off);
+                    caller_stack_off += 8;
+                }
+            } else {
+                if (gp_param_idx < 6) {
+                    fprintf(out, "    movq %s, %d(%%rbp)\n", arg_regs[gp_param_idx], stack_off);
+                    gp_param_idx++;
+                } else {
+                    fprintf(out, "    movq %d(%%rbp), %%rax\n", caller_stack_off);
+                    fprintf(out, "    movq %%rax, %d(%%rbp)\n", stack_off);
+                    caller_stack_off += 8;
+                }
             }
         }
 
@@ -340,13 +532,7 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                 case IR_OR:
                 case IR_XOR:
                 case IR_SHL:
-                case IR_SHR:
-                case IR_EQ:
-                case IR_NE:
-                case IR_LT:
-                case IR_LE:
-                case IR_GT:
-                case IR_GE: {
+                case IR_SHR: {
                     load_operand(out, n->src1, "%rax", ra);
 
                     if (n->op == IR_ADD)        emit_src2(out, "addq",  n->src2, ra);
@@ -375,7 +561,42 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                             else if (n->type == IR_TY_I8) fprintf(out, "    sarb %%cl, %%al\n");
                             else fprintf(out, "    sarq %%cl, %%rax\n");
                         }
+                    }
+                    store_result(out, n->dst, "%rax", ra);
+                    break;
+                }
+                case IR_EQ:
+                case IR_NE:
+                case IR_LT:
+                case IR_LE:
+                case IR_GT:
+                case IR_GE: {
+                    ir_type_t op_ty = get_operand_type(fn, n, n->src1);
+                    if (op_ty == IR_TY_VOID) {
+                        op_ty = get_operand_type(fn, n, n->src2);
+                    }
+                    if (op_ty == IR_TY_F32 || op_ty == IR_TY_F64) {
+                        int is_f32 = (op_ty == IR_TY_F32);
+                        const char *op_ucomi = is_f32 ? "ucomiss" : "ucomisd";
+                        load_operand_xmm(out, n->src1, "%xmm1", op_ty, ra);
+                        load_operand_xmm(out, n->src2, "%xmm0", op_ty, ra);
+                        fprintf(out, "    %s %%xmm0, %%xmm1\n", op_ucomi);
+                        if (n->op == IR_EQ) {
+                            fprintf(out, "    sete %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
+                        } else if (n->op == IR_NE) {
+                            fprintf(out, "    setne %%al\n    setp %%r11b\n    orb %%r11b, %%al\n");
+                        } else if (n->op == IR_LT) {
+                            fprintf(out, "    setb %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
+                        } else if (n->op == IR_LE) {
+                            fprintf(out, "    setbe %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
+                        } else if (n->op == IR_GT) {
+                            fprintf(out, "    seta %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
+                        } else if (n->op == IR_GE) {
+                            fprintf(out, "    setae %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
+                        }
+                        fprintf(out, "    movzbq %%al, %%rax\n");
                     } else {
+                        load_operand(out, n->src1, "%rax", ra);
                         /* comparison: src2 as memory operand or reg */
                         if (ra) {
                             PhysReg pr2 = ra_get(ra, n->src2);
@@ -459,9 +680,9 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                 }
                 case IR_LOAD: {
                     load_address_ra(out, n->src1, "%rax", ra);
-                    if (n->type == IR_TY_I32 || n->type == IR_TY_U32) {
+                    if (n->type == IR_TY_I32 || n->type == IR_TY_U32 || n->type == IR_TY_F32) {
                         fprintf(out, "    movl (%%rax), %%eax\n");
-                        if (!ir_type_unsigned(n->type)) fprintf(out, "    movslq %%eax, %%rax\n");
+                        if (n->type != IR_TY_F32 && !ir_type_unsigned(n->type)) fprintf(out, "    movslq %%eax, %%rax\n");
                     } else if (n->type == IR_TY_I8 || n->type == IR_TY_U8) {
                         fprintf(out, "    movzbl (%%rax), %%eax\n");
                         if (!ir_type_unsigned(n->type)) fprintf(out, "    movsbq %%al, %%rax\n");
@@ -495,7 +716,7 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                     /* src1 = value, dst = address */
                     load_operand(out, n->src1, "%rcx", ra);
                     load_address_ra(out, n->dst, "%rax", ra);
-                    if (n->type == IR_TY_I32 || n->type == IR_TY_U32)
+                    if (n->type == IR_TY_I32 || n->type == IR_TY_U32 || n->type == IR_TY_F32)
                         fprintf(out, "    movl %%ecx, (%%rax)\n");
                     else if (n->type == IR_TY_I16 || n->type == IR_TY_U16)
                         fprintf(out, "    movw %%cx, (%%rax)\n");
@@ -513,16 +734,52 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                 }
                 case IR_COPY:
                 case IR_CAST: {
-                    load_operand(out, n->src1, "%rax", ra);
-                    if (n->op == IR_CAST) {
-                        if (n->type == IR_TY_I8) fprintf(out, "    movsbl %%al, %%eax\n    movsbq %%al, %%rax\n");
-                        else if (n->type == IR_TY_U8) fprintf(out, "    movzbl %%al, %%eax\n");
-                        else if (n->type == IR_TY_I16) fprintf(out, "    movswl %%ax, %%eax\n    movswq %%ax, %%rax\n");
-                        else if (n->type == IR_TY_U16) fprintf(out, "    movzwl %%ax, %%eax\n");
-                        else if (n->type == IR_TY_I32) fprintf(out, "    movslq %%eax, %%rax\n");
-                        else if (n->type == IR_TY_U32) fprintf(out, "    movl %%eax, %%eax\n");
+                    ir_type_t src_ty = IR_TY_VOID;
+                    if (n->src1[0] != '\0') {
+                        if (strncmp(n->src1, "%stack_", 7) == 0) {
+                            int stack_idx = atoi(n->src1 + 7);
+                            int pnum = (-stack_idx / 8) - 1;
+                            if (pnum >= 0 && pnum < fn->num_params) {
+                                src_ty = get_param_is_float(fn, pnum) ? IR_TY_F64 : IR_TY_I64;
+                            }
+                        } else {
+                            ir_node_t *def = ir_find_def(fn, n, n->src1);
+                            if (def) src_ty = def->type;
+                        }
                     }
-                    store_result(out, n->dst, "%rax", ra);
+                    int is_src_flt = (src_ty == IR_TY_F32 || src_ty == IR_TY_F64);
+                    int is_dst_flt = (n->type == IR_TY_F32 || n->type == IR_TY_F64);
+
+                    if (is_dst_flt || is_src_flt) {
+                        if (is_dst_flt && is_src_flt) {
+                            load_operand_xmm(out, n->src1, "%xmm0", src_ty, ra);
+                            if (src_ty == IR_TY_F32 && n->type == IR_TY_F64) {
+                                fprintf(out, "    cvtss2sd %%xmm0, %%xmm0\n");
+                            } else if (src_ty == IR_TY_F64 && n->type == IR_TY_F32) {
+                                fprintf(out, "    cvtsd2ss %%xmm0, %%xmm0\n");
+                            }
+                            store_result_xmm(out, n->dst, "%xmm0", n->type, ra);
+                        } else if (is_dst_flt) {
+                            load_operand(out, n->src1, "%rax", ra);
+                            lower_cvtsi2fd(out, src_ty, n->type == IR_TY_F32, "xmm0", fn->id, &fn->lbl_counter);
+                            store_result_xmm(out, n->dst, "%xmm0", n->type, ra);
+                        } else {
+                            load_operand_xmm(out, n->src1, "%xmm0", src_ty, ra);
+                            lower_cvttfd2si(out, n->type, src_ty == IR_TY_F32, "xmm0", fn->id, &fn->lbl_counter);
+                            store_result(out, n->dst, "%rax", ra);
+                        }
+                    } else {
+                        load_operand(out, n->src1, "%rax", ra);
+                        if (n->op == IR_CAST) {
+                            if (n->type == IR_TY_I8) fprintf(out, "    movsbl %%al, %%eax\n    movsbq %%al, %%rax\n");
+                            else if (n->type == IR_TY_U8) fprintf(out, "    movzbl %%al, %%eax\n");
+                            else if (n->type == IR_TY_I16) fprintf(out, "    movswl %%ax, %%eax\n    movswq %%ax, %%rax\n");
+                            else if (n->type == IR_TY_U16) fprintf(out, "    movzwl %%ax, %%eax\n");
+                            else if (n->type == IR_TY_I32) fprintf(out, "    movslq %%eax, %%rax\n");
+                            else if (n->type == IR_TY_U32) fprintf(out, "    movl %%eax, %%eax\n");
+                        }
+                        store_result(out, n->dst, "%rax", ra);
+                    }
                     break;
                 }
                 case IR_LABEL: {
@@ -541,53 +798,89 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                 }
                 case IR_ARG: {
                     if (arg_idx == 0) {
-                        int total_args = 0;
+                        int sim_gp = 0;
+                        int sim_fp = 0;
+                        int sim_stack = 0;
                         ir_node_t *scan = n;
                         while (scan && scan->op == IR_ARG) {
-                            total_args++;
+                            int is_flt = (scan->type == IR_TY_F32 || scan->type == IR_TY_F64);
+                            if (is_flt) {
+                                if (sim_fp < 8) sim_fp++;
+                                else            sim_stack++;
+                            } else {
+                                if (sim_gp < 6) sim_gp++;
+                                else            sim_stack++;
+                            }
                             scan = scan->next;
                         }
-                        if (total_args > 6 && (total_args - 6) % 2 != 0) {
+                        if (sim_stack % 2 != 0) {
                             call_padding = 8;
                         } else {
                             call_padding = 0;
                         }
-                        // [FIX]: Pre-allocate exact stack frame for all args > 6
-                        int alloc_size = (total_args > 6 ? (total_args - 6) * 8 : 0) + call_padding;
+                        int alloc_size = sim_stack * 8 + call_padding;
                         if (alloc_size > 0) {
                             fprintf(out, "    subq $%d, %%rsp\n", alloc_size);
                         }
+                        gp_arg_idx = 0;
+                        fp_arg_idx = 0;
+                        stack_arg_idx = 0;
                     }
-                    
-                    load_operand(out, n->src1, "%rax", ra);
-                    
-                    if (arg_idx < 6) {
-                        fprintf(out, "    movq %%rax, %s\n", arg_regs[arg_idx]);
+
+                    int is_flt = (n->type == IR_TY_F32 || n->type == IR_TY_F64);
+                    fprintf(stderr, "DEBUG LOWER ARG: %s, type = %d, is_flt = %d, gp_idx = %d, fp_idx = %d\n", n->src1, n->type, is_flt, gp_arg_idx, fp_arg_idx);
+                    if (is_flt) {
+                        if (fp_arg_idx < 8) {
+                            char xmm_reg[16];
+                            sprintf(xmm_reg, "%%xmm%d", fp_arg_idx);
+                            load_operand_xmm(out, n->src1, xmm_reg, n->type, ra);
+                            fp_arg_idx++;
+                        } else {
+                            load_operand(out, n->src1, "%rax", ra);
+                            int offset = stack_arg_idx * 8;
+                            fprintf(out, "    movq %%rax, %d(%%rsp)\n", offset);
+                            stack_arg_idx++;
+                        }
                     } else {
-                        // [FIX]: Map stack args to precise offsets (0, 8, 16...)
-                        int offset = (arg_idx - 6) * 8;
-                        fprintf(out, "    movq %%rax, %d(%%rsp)\n", offset);
+                        if (gp_arg_idx < 6) {
+                            load_operand(out, n->src1, "%rax", ra);
+                            fprintf(out, "    movq %%rax, %s\n", arg_regs[gp_arg_idx]);
+                            gp_arg_idx++;
+                        } else {
+                            load_operand(out, n->src1, "%rax", ra);
+                            int offset = stack_arg_idx * 8;
+                            fprintf(out, "    movq %%rax, %d(%%rsp)\n", offset);
+                            stack_arg_idx++;
+                        }
                     }
                     arg_idx++;
                     break;
                 }
                 case IR_CALL: {
-                    fprintf(out, "    movb $0, %%al\n");
+                    int val_al = fp_arg_idx > 8 ? 8 : fp_arg_idx;
+                    fprintf(out, "    movb $%d, %%al\n", val_al);
                     if (n->label[0] == '%') {
                         load_operand(out, n->label, "%r10", ra);
                         fprintf(out, "    call *%%r10\n"); /* Task 3: call not callq */
                     } else {
                         fprintf(out, "    call %s\n", n->label); /* Task 3: call not callq */
                     }
-                    if (arg_idx > 6 || call_padding > 0) {
-                        int cleanup_size = (arg_idx > 6 ? (arg_idx - 6) * 8 : 0) + call_padding;
+                    int cleanup_size = stack_arg_idx * 8 + call_padding;
+                    if (cleanup_size > 0) {
                         fprintf(out, "    addq $%d, %%rsp\n", cleanup_size);
                     }
                     if (n->dst[0] != '\0' && n->dst[0] != '-') {
-                        store_result(out, n->dst, "%rax", ra);
+                        if (n->type == IR_TY_F32 || n->type == IR_TY_F64) {
+                            store_result_xmm(out, n->dst, "%xmm0", n->type, ra);
+                        } else {
+                            store_result(out, n->dst, "%rax", ra);
+                        }
                     }
                     arg_idx = 0;
                     call_padding = 0;
+                    gp_arg_idx = 0;
+                    fp_arg_idx = 0;
+                    stack_arg_idx = 0;
                     break;
                 }
                 case IR_RET: {
@@ -595,11 +888,15 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                     if (n->flags & IRF_RET_IMM) {
                         fprintf(out, "    movq $%ld, %%rax\n", n->imm);
                     } else if (n->src1[0] != '\0' && n->src1[0] != '-') {
-                        load_operand(out, n->src1, "%rax", ra);
-                        if (n->type == IR_TY_I8) fprintf(out, "    movsbl %%al, %%eax\n    movsbq %%al, %%rax\n");
-                        else if (n->type == IR_TY_U8) fprintf(out, "    movzbl %%al, %%eax\n");
-                        else if (n->type == IR_TY_I16) fprintf(out, "    movswl %%ax, %%eax\n    movswq %%ax, %%rax\n");
-                        else if (n->type == IR_TY_U16) fprintf(out, "    movzwl %%ax, %%eax\n");
+                        if (n->type == IR_TY_F32 || n->type == IR_TY_F64) {
+                            load_operand_xmm(out, n->src1, "%xmm0", n->type, ra);
+                        } else {
+                            load_operand(out, n->src1, "%rax", ra);
+                            if (n->type == IR_TY_I8) fprintf(out, "    movsbl %%al, %%eax\n    movsbq %%al, %%rax\n");
+                            else if (n->type == IR_TY_U8) fprintf(out, "    movzbl %%al, %%eax\n");
+                            else if (n->type == IR_TY_I16) fprintf(out, "    movswl %%ax, %%eax\n    movswq %%ax, %%rax\n");
+                            else if (n->type == IR_TY_U16) fprintf(out, "    movzwl %%ax, %%eax\n");
+                        }
                     }
                     fprintf(out, "    jmp %s\n", fn->end_label);
                     has_ret = 1;
@@ -614,36 +911,46 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                 case IR_FSUB:
                 case IR_FMUL:
                 case IR_FDIV: {
-                    load_operand_xmm(out, n->src1, "%xmm0", ra);
+                    int is_f32 = (n->type == IR_TY_F32);
+                    const char *op_suffix = is_f32 ? "ss" : "sd";
+                    load_operand_xmm(out, n->src1, "%xmm0", n->type, ra);
                     if (ra) {
                         PhysReg pr2 = ra_get(ra, n->src2);
                         if (pr2 != PREG_NONE && pr2 >= PREG_XMM0) {
-                            if      (n->op == IR_FADD) fprintf(out, "    addsd %%%s, %%xmm0\n", preg_name(pr2));
-                            else if (n->op == IR_FSUB) fprintf(out, "    subsd %%%s, %%xmm0\n", preg_name(pr2));
-                            else if (n->op == IR_FMUL) fprintf(out, "    mulsd %%%s, %%xmm0\n", preg_name(pr2));
-                            else                       fprintf(out, "    divsd %%%s, %%xmm0\n", preg_name(pr2));
-                            store_result_xmm(out, n->dst, "%xmm0", ra);
+                            if      (n->op == IR_FADD) fprintf(out, "    add%s %%%s, %%xmm0\n", op_suffix, preg_name(pr2));
+                            else if (n->op == IR_FSUB) fprintf(out, "    sub%s %%%s, %%xmm0\n", op_suffix, preg_name(pr2));
+                            else if (n->op == IR_FMUL) fprintf(out, "    mul%s %%%s, %%xmm0\n", op_suffix, preg_name(pr2));
+                            else                       fprintf(out, "    div%s %%%s, %%xmm0\n", op_suffix, preg_name(pr2));
+                            store_result_xmm(out, n->dst, "%xmm0", n->type, ra);
                             break;
                         }
                     }
                     /* memory operand fallback */
                     int off2 = get_or_create_var(n->src2);
-                    if      (n->op == IR_FADD) fprintf(out, "    addsd %d(%%rbp), %%xmm0\n", off2);
-                    else if (n->op == IR_FSUB) fprintf(out, "    subsd %d(%%rbp), %%xmm0\n", off2);
-                    else if (n->op == IR_FMUL) fprintf(out, "    mulsd %d(%%rbp), %%xmm0\n", off2);
-                    else                       fprintf(out, "    divsd %d(%%rbp), %%xmm0\n", off2);
-                    store_result_xmm(out, n->dst, "%xmm0", ra);
+                    if      (n->op == IR_FADD) fprintf(out, "    add%s %d(%%rbp), %%xmm0\n", op_suffix, off2);
+                    else if (n->op == IR_FSUB) fprintf(out, "    sub%s %d(%%rbp), %%xmm0\n", op_suffix, off2);
+                    else if (n->op == IR_FMUL) fprintf(out, "    mul%s %d(%%rbp), %%xmm0\n", op_suffix, off2);
+                    else                       fprintf(out, "    div%s %d(%%rbp), %%xmm0\n", op_suffix, off2);
+                    store_result_xmm(out, n->dst, "%xmm0", n->type, ra);
                     break;
                 }
                 case IR_ITOF: {
                     load_operand(out, n->src1, "%rax", ra);
-                    fprintf(out, "    cvtsi2sdq %%rax, %%xmm0\n");
-                    store_result_xmm(out, n->dst, "%xmm0", ra);
+                    ir_type_t src_ty = IR_TY_I64;
+                    if (n->src1[0] != '\0') {
+                        ir_node_t *def = ir_find_def(fn, n, n->src1);
+                        if (def) src_ty = def->type;
+                    }
+                    lower_cvtsi2fd(out, src_ty, n->type == IR_TY_F32, "xmm0", fn->id, &fn->lbl_counter);
+                    store_result_xmm(out, n->dst, "%xmm0", n->type, ra);
                     break;
                 }
                 case IR_FTOI: {
-                    load_operand_xmm(out, n->src1, "%xmm0", ra);
-                    fprintf(out, "    cvttsd2si %%xmm0, %%rax\n");
+                    ir_type_t src_ty = IR_TY_F64;
+                    ir_node_t *def = ir_find_def(fn, n, n->src1);
+                    if (def) src_ty = def->type;
+                    load_operand_xmm(out, n->src1, "%xmm0", src_ty, ra);
+                    lower_cvttfd2si(out, n->type, src_ty == IR_TY_F32, "xmm0", fn->id, &fn->lbl_counter);
                     store_result(out, n->dst, "%rax", ra);
                     break;
                 }
