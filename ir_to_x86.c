@@ -275,16 +275,16 @@ static void lower_cvtsi2fd(FILE *out, ir_type_t src_ty, int is_f32, const char *
         }
     }
     
+    if (src_size == 1) {
+        fprintf(out, "    movsbq %%al, %%rax\n");
+    } else if (src_size == 2) {
+        fprintf(out, "    movswq %%ax, %%rax\n");
+    } else if (src_size == 4) {
+        fprintf(out, "    movslq %%eax, %%rax\n");
+    }
     if (is_f32) {
-        if (src_size == 4) {
-            fprintf(out, "    cvtsi2ssl %%eax, %%%s\n", target_xmm);
-        } else {
-            fprintf(out, "    cvtsi2ssq %%rax, %%%s\n", target_xmm);
-        }
+        fprintf(out, "    cvtsi2ssq %%rax, %%%s\n", target_xmm);
     } else {
-        if (src_size == 4) {
-            fprintf(out, "    movslq %%eax, %%rax\n");
-        }
         fprintf(out, "    cvtsi2sdq %%rax, %%%s\n", target_xmm);
     }
 }
@@ -296,13 +296,6 @@ static void lower_cvttfd2si(FILE *out, ir_type_t dst_ty, int is_f32, const char 
     if (is_unsigned && dst_size == 8) {
         int l1 = (*lbl_counter)++;
         int l2 = (*lbl_counter)++;
-        int lbl_two63 = (*lbl_counter)++;
-        unsigned long long two63_bits = 0x43e0000000000000ULL;
-        fprintf(out, "    .section .rodata\n");
-        fprintf(out, "    .p2align 3\n");
-        fprintf(out, ".LC_two63_%d_%d:\n", fn_id, lbl_two63);
-        fprintf(out, "    .quad %llu\n", two63_bits);
-        fprintf(out, "    .text\n");
         
         if (is_f32) {
             fprintf(out, "    cvtss2sd %%%s, %%xmm0\n", src_xmm);
@@ -311,7 +304,7 @@ static void lower_cvttfd2si(FILE *out, ir_type_t dst_ty, int is_f32, const char 
                 fprintf(out, "    movsd %%%s, %%xmm0\n", src_xmm);
             }
         }
-        fprintf(out, "    movsd .LC_two63_%d_%d(%%rip), %%xmm1\n", fn_id, lbl_two63);
+        fprintf(out, "    movsd .Lf64_u64bias(%%rip), %%xmm1\n");
         fprintf(out, "    ucomisd %%xmm1, %%xmm0\n");
         fprintf(out, "    jae .L_ftoi_%d_%d\n", fn_id, l1);
         fprintf(out, "    cvttsd2si %%xmm0, %%rax\n");

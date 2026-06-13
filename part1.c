@@ -1027,6 +1027,26 @@ struct Node *node_arg(struct Node *n, int i) {
     return n->args[i];
 }
 int node_num_args(struct Node *n) { return n ? n->num_args : 0; }
+int node_is_float(struct Node *n) {
+    if (!n) return 0;
+    if (!n->type) {
+        return 0;
+    }
+    return (n->type->kind == TY_FLOAT || n->type->kind == TY_DOUBLE);
+}
+long long node_float_bits(struct Node *n) {
+    if (!n) return 0;
+    if (n->type && n->type->kind == TY_FLOAT) {
+        float fv = (float)n->f_val;
+        unsigned int fbits;
+        memcpy(&fbits, &fv, sizeof(float));
+        return (long long)fbits;
+    } else {
+        unsigned long long bits;
+        memcpy(&bits, &n->f_val, sizeof(double));
+        return (long long)bits;
+    }
+}
 struct Node **node_cases(struct Node *n) { return n ? n->cases : NULL; }
 int node_num_cases(struct Node *n) { return n ? n->num_cases : 0; }
 struct Node *node_default_case(struct Node *n) { return n ? n->default_case : NULL; }

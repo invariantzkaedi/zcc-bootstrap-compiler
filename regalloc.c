@@ -263,7 +263,7 @@ static void chaitin_briggs(RegAllocator *ra, const ir_func_t *fn) {
                 while(alias[v] != v) v = alias[v];
                 if (u != v && ra->intervals[u].is_float == ra->intervals[v].is_float && !adj[u*N + v]) {
                     /* Briggs conservative coalescing check */
-                    int K = ra->intervals[u].is_float ? 8 : 7;
+                    int K = 7;
                     int significant_neighbors = 0;
                     for (int k = 0; k < N; k++) {
                         if (k == u || k == v) continue;
@@ -298,8 +298,8 @@ static void chaitin_briggs(RegAllocator *ra, const ir_func_t *fn) {
     while (nodes_left > 0) {
         int target = -1;
         for (i = 0; i < N; i++) {
-            if (removed[i]) continue;
-            int K = ra->intervals[i].is_float ? 8 : 7;
+             if (removed[i]) continue;
+             int K = 7;
             if (degree[i] < K) {
                 if (target == -1 || strcmp(ra->intervals[i].name, ra->intervals[target].name) < 0) {
                     target = i;
@@ -356,11 +356,11 @@ static void chaitin_briggs(RegAllocator *ra, const ir_func_t *fn) {
      * caller-saved scratch — prefer them last to minimize push/pop in hot
      * paths, but keep them after all callee-saved to maintain the canon. */
     PhysReg gpr_colors[7] = {PREG_RBX, PREG_R12, PREG_R13, PREG_R14, PREG_R15, PREG_R10, PREG_R11};
-    PhysReg xmm_colors[8] = {PREG_XMM0, PREG_XMM1, PREG_XMM2, PREG_XMM3, PREG_XMM4, PREG_XMM5, PREG_XMM6, PREG_XMM7};
+    PhysReg xmm_colors[7] = {PREG_XMM1, PREG_XMM2, PREG_XMM3, PREG_XMM4, PREG_XMM5, PREG_XMM6, PREG_XMM7};
 
     while (stack_top > 0) {
         int target = stack[--stack_top];
-        int K = ra->intervals[target].is_float ? 8 : 7;
+        int K = 7;
         int used_colors = 0;
 
         for (j = 0; j < N; j++) {

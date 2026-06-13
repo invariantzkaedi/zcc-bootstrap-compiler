@@ -4945,8 +4945,13 @@ static void rewrite_constant_vars_rec(Node *n, int is_lvalue) {
         LatticeVal lv = get_sym_lattice(n->sym);
         if (lv.kind == LATTICE_CONST) {
             fprintf(stderr, "[ICP] Rewrote parameter/variable '%s' to constant %lld\n", n->name, lv.val);
-            n->kind = ND_NUM;
-            n->int_val = lv.val;
+            if (n->type && (n->type->kind == TY_FLOAT || n->type->kind == TY_DOUBLE)) {
+                n->kind = ND_FLIT;
+                n->f_val = (double)lv.val;
+            } else {
+                n->kind = ND_NUM;
+                n->int_val = lv.val;
+            }
             n->lhs = NULL;
             n->rhs = NULL;
             return;

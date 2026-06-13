@@ -10,6 +10,8 @@
 #include "ir_emit_dispatch.h"
 #include "ir_bridge.h"
 
+static int g_in_ast_codegen = 0;
+
 /* Forward declaration — defined ~4200 lines below, used in ND_DIV const-fold guard */
 static long long eval_const_expr_p4(Node *elem, int *ok);
 
@@ -95,16 +97,19 @@ static void emit_cvtsi2fd(Compiler *cc, Type *int_type, int is_f32, const char *
         }
     }
     /* Signed or default: */
+    if (int_type) {
+        int sz = type_size(int_type);
+        if (sz == 1) {
+            fprintf(cc->out, "    movsbq %%al, %%rax\n");
+        } else if (sz == 2) {
+            fprintf(cc->out, "    movswq %%ax, %%rax\n");
+        } else if (sz == 4) {
+            fprintf(cc->out, "    movslq %%eax, %%rax\n");
+        }
+    }
     if (is_f32) {
-        if (int_type && type_size(int_type) == 4) {
-            fprintf(cc->out, "    cvtsi2ssl %%eax, %%%s\n", target_xmm);
-        } else {
-            fprintf(cc->out, "    cvtsi2ssq %%rax, %%%s\n", target_xmm);
-        }
+        fprintf(cc->out, "    cvtsi2ssq %%rax, %%%s\n", target_xmm);
     } else {
-        if (int_type && type_size(int_type) == 4) {
-            fprintf(cc->out, "    movslq %%eax, %%rax\n"); /* ensure sign-extended */
-        }
         fprintf(cc->out, "    cvtsi2sdq %%rax, %%%s\n", target_xmm);
     }
 }
@@ -114,15 +119,6 @@ static void emit_cvttfd2si(Compiler *cc, Type *int_type, int is_f32) {
         /* unsigned 64-bit float/double to int conversion */
         int l1 = new_label(cc);
         int l2 = new_label(cc);
-        int lbl_two63 = cc->str_label_count++;
-        
-        /* emit double literal for 2^63 (9223372036854775808.0) */
-        unsigned long long two63_bits = 0x43e0000000000000ULL;
-        fprintf(cc->out, "    .section .rodata\n");
-        fprintf(cc->out, "    .p2align 3\n");
-        fprintf(cc->out, ".LC_two63_%d:\n", lbl_two63);
-        fprintf(cc->out, "    .quad %llu\n", two63_bits);
-        fprintf(cc->out, "    .text\n");
         
         if (is_f32) {
             fprintf(cc->out, "    movd %%eax, %%xmm0\n");
@@ -130,7 +126,7 @@ static void emit_cvttfd2si(Compiler *cc, Type *int_type, int is_f32) {
         } else {
             fprintf(cc->out, "    movq %%rax, %%xmm0\n");
         }
-        fprintf(cc->out, "    movsd .LC_two63_%d(%%rip), %%xmm1\n", lbl_two63);
+        fprintf(cc->out, "    movsd .Lf64_u64bias(%%rip), %%xmm1\n");
         fprintf(cc->out, "    ucomisd %%xmm1, %%xmm0\n");
         fprintf(cc->out, "    jae .L%d\n", l1);
         fprintf(cc->out, "    cvttsd2si %%xmm0, %%rax\n");
@@ -2788,7 +2784,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     return;
 
   case ND_PRE_INC:
-    if (g_emit_ir) {
+    if (g_emit_ir && !g_in_ast_codegen) {
       emit_ir_inc_dec(cc, node->lhs, 1, 0, node->line);
       return;
     }
@@ -2891,7 +2887,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     return;
 
   case ND_PRE_DEC:
-    if (g_emit_ir) {
+    if (g_emit_ir && !g_in_ast_codegen) {
       emit_ir_inc_dec(cc, node->lhs, 0, 0, node->line);
       return;
     }
@@ -2994,7 +2990,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     return;
 
   case ND_POST_INC:
-    if (g_emit_ir) {
+    if (g_emit_ir && !g_in_ast_codegen) {
       emit_ir_inc_dec(cc, node->lhs, 1, 1, node->line);
       return;
     }
@@ -3078,7 +3074,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     return;
 
   case ND_POST_DEC:
-    if (g_emit_ir) {
+    if (g_emit_ir && !g_in_ast_codegen) {
       emit_ir_inc_dec(cc, node->lhs, 0, 1, node->line);
       return;
     }
@@ -4335,7 +4331,7 @@ static int ir_whitelisted(const char *name) {
       "validate_token_bounds", "validate_node", "validate_type", "bad_node_cutoff",
       "test_struct_tbaa", "test_cast_fallback", "gvn_test", "forward_test", "slf_sink", "slf_call_barrier", "loop_sum",
       /* Split Lexer Core (fortified and hardened) */
-      "read_char", "read_escape", "node_name", "lex_char", "lex_operator",
+      /* "read_char", "read_escape", "node_name", "lex_char", "lex_operator", */
       /* "next_token", */
       NULL
   };
@@ -4620,7 +4616,8 @@ void codegen_func(Compiler *cc, Node *func) {
   } /* end !backend_ops block */
 
   int ir_ok = 0;
-  if (getenv("ZCC_IR_BACKEND") || getenv("ZCC_IR_LOWER") || ir_whitelisted(func->func_def_name)) {
+  if ((getenv("ZCC_IR_BACKEND") || getenv("ZCC_IR_LOWER") || ir_whitelisted(func->func_def_name))
+      && strcmp(func->func_def_name, "main") != 0) {
     if (zcc_run_passes_emit_body_pgo && zcc_node_from) {
       void *ir_ast = zcc_node_from((void *)func->body);
       if (ir_ast) {
@@ -4643,7 +4640,9 @@ void codegen_func(Compiler *cc, Node *func) {
     }
   }
   if (!ir_ok) {
+    g_in_ast_codegen = 1;
     codegen_stmt(cc, func->body);
+    g_in_ast_codegen = 0;
   }
 
   if (backend_ops && backend_ops->emit_epilogue) {
@@ -5551,9 +5550,13 @@ void codegen_program(Compiler *cc, Node *prog) {
     emit_strings(cc);
   }
 
+  fprintf(cc->out, "    .section .rodata\n");
+  fprintf(cc->out, "    .align 8\n");
+  fprintf(cc->out, ".Lf64_u64bias:\n");
+  fprintf(cc->out, "    .quad 0x43e0000000000000\n"); /* 2^63 double */
+
   /* CG-FLOAT-011: emit float/double 1.0 constants used by ++/-- on float types */
   if (!backend_ops) {
-    fprintf(cc->out, "    .section .rodata\n");
     fprintf(cc->out, "    .align 4\n");
     fprintf(cc->out, ".Lf32_one:\n");
     fprintf(cc->out, "    .long 0x3F800000\n");   /* 1.0f IEEE-754 */
@@ -5587,8 +5590,11 @@ void codegen_emit_globals_and_strings(Compiler *cc) {
   if (cc->num_strings > 0) {
     emit_strings(cc);
   }
+  fprintf(cc->out, "    .section .rodata\n");
+  fprintf(cc->out, "    .align 8\n");
+  fprintf(cc->out, ".Lf64_u64bias:\n");
+  fprintf(cc->out, "    .quad 0x43e0000000000000\n"); /* 2^63 double */
   if (!backend_ops) {
-    fprintf(cc->out, "    .section .rodata\n");
     fprintf(cc->out, "    .align 4\n");
     fprintf(cc->out, ".Lf32_one:\n");
     fprintf(cc->out, "    .long 0x3F800000\n");   /* 1.0f IEEE-754 */

@@ -63,6 +63,12 @@ int           node_is_char_or_void_ptr_cast(struct Node *n);
 int           node_rhs_ptr_size(struct Node *n);
 int           node_is_array(struct Node *n);
 int           node_is_func(struct Node *n);
+int           node_is_float(struct Node *n);
+long long     node_float_bits(struct Node *n);
+int           node_type_size(struct Node *n);
+int           node_type_unsigned(struct Node *n);
+
+
 
 /* ZCCNode: IR-bridge AST (scalars + control flow only). Same as compiler_passes.c internal type. */
 enum {
@@ -127,6 +133,12 @@ struct ZCCNode {
     int       is_func;      /* 1 if variable has TY_FUNC type */
     int       is_char_or_void_cast;
     int       line_no;     /* source line for DWARF (from node_line_no) */
+    int       is_float;
+    int       src_is_float;
+    int       src_size;
+    int       dst_size;
+    int       src_unsigned;
+    int       dst_unsigned;
     char     *asm_string;
 };
 

@@ -1968,6 +1968,8 @@ char *zcc_preprocess(const char *source, int source_len, const char *filename,
     strcpy(m->body, "1");
     m = pp_add_macro(state, "__thread");
     strcpy(m->body, "");
+    m = pp_add_macro(state, "__SIZE_TYPE__");
+    strcpy(m->body, "unsigned long");
     /* PP-HEADERS-023A: C99 <limits.h> predefined — must be in macro table
      * (not only in zcc_stddef_text) so #if defined(LLONG_MAX) works before
      * any #include fires. These duplicate the zcc_stddef_text entries
