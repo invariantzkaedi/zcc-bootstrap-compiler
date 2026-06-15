@@ -6,7 +6,7 @@ import os
 def run_zjs_test():
     print("ZKAEDI PRIME TEST HARNESS LAUNCHED")
     proc = subprocess.Popen(
-        ['/mnt/g/zccMAIN/zcc/zjs'],
+        ['./zjs'],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
