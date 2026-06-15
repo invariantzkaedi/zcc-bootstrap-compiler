@@ -594,7 +594,7 @@ static void encode_movzwq(Segment *seg, int src_reg, int dst_reg, int is_mem_src
 static void encode_movslq(Segment *seg, int src_reg, int dst_reg) {
     unsigned char rex = 0x48;
     unsigned char opcode = 0x63;
-    unsigned char modrm = 0x00 | ((dst_reg & 7) << 3) | (src_reg & 7);
+    unsigned char modrm = 0xc0 | ((dst_reg & 7) << 3) | (src_reg & 7);
     if (src_reg & 8) rex |= 0x01;
     if (dst_reg & 8) rex |= 0x04;
     seg_append(seg, &rex, 1);
