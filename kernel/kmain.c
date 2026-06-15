@@ -20,20 +20,183 @@ static unsigned char pmm_bitmap[4096];
 static unsigned long long pmm_total_blocks = 32768;
 static unsigned long long pmm_free_blocks = 32768;
 
-void pmm_init(unsigned long kernel_end_addr) {
+extern unsigned long read_cr3(void);
+extern void invlpg_native(unsigned long vaddr);
+
+void *pmm_alloc_page(void);
+void pmm_free_page(void *addr);
+void kprint_string(const char *s);
+void kprint_hex(unsigned long long val);
+void kprint_dec(long long val);
+void kwrite_serial(const char *msg);
+void kwrite_serial_hex(unsigned long long val);
+
+
+struct multiboot2_info_header {
+    unsigned int total_size;
+    unsigned int reserved;
+};
+
+struct multiboot2_tag {
+    unsigned int type;
+    unsigned int size;
+};
+
+struct multiboot2_tag_mmap {
+    unsigned int type;
+    unsigned int size;
+    unsigned int entry_size;
+    unsigned int entry_version;
+};
+
+struct multiboot2_mmap_entry {
+    unsigned long long addr;
+    unsigned long long len;
+    unsigned int type;
+    unsigned int zero;
+};
+
+
+void kmemset(void *ptr, int val, int len) {
+    unsigned char *p = (unsigned char *)ptr;
+    int i;
+    for (i = 0; i < len; i++) {
+        p[i] = (unsigned char)val;
+    }
+}
+
+void map_page(unsigned long vaddr, unsigned long paddr, unsigned long flags) {
+    unsigned long cr3 = read_cr3();
+    unsigned long *pml4 = (unsigned long *)(cr3 & ~0xFFFL);
+
+    unsigned int pml4_idx = (vaddr >> 39) & 0x1FF;
+    unsigned int pdpt_idx = (vaddr >> 30) & 0x1FF;
+    unsigned int pd_idx = (vaddr >> 21) & 0x1FF;
+    unsigned int pt_idx = (vaddr >> 12) & 0x1FF;
+
+    kwrite_serial("map_page: cr3=0x"); kwrite_serial_hex(cr3);
+    kwrite_serial(" pml4=0x"); kwrite_serial_hex((unsigned long)pml4);
+    kwrite_serial("\n");
+
+    /* PML4 Entry */
+    if ((pml4[pml4_idx] & 1) == 0) {
+        void *new_pdpt = pmm_alloc_page();
+        kmemset(new_pdpt, 0, 4096);
+        pml4[pml4_idx] = (unsigned long)new_pdpt | 3; /* Present + ReadWrite */
+    }
+    unsigned long *pdpt = (unsigned long *)(pml4[pml4_idx] & ~0xFFFL);
+    kwrite_serial("map_page: pdpt=0x"); kwrite_serial_hex((unsigned long)pdpt);
+    kwrite_serial(" pml4_idx="); kwrite_serial_hex(pml4_idx);
+    kwrite_serial(" val=0x"); kwrite_serial_hex(pml4[pml4_idx]);
+    kwrite_serial("\n");
+
+    /* PDPT Entry */
+    if ((pdpt[pdpt_idx] & 1) == 0) {
+        void *new_pd = pmm_alloc_page();
+        kmemset(new_pd, 0, 4096);
+        pdpt[pdpt_idx] = (unsigned long)new_pd | 3; /* Present + ReadWrite */
+    }
+    unsigned long *pd = (unsigned long *)(pdpt[pdpt_idx] & ~0xFFFL);
+    kwrite_serial("map_page: pd=0x"); kwrite_serial_hex((unsigned long)pd);
+    kwrite_serial(" pdpt_idx="); kwrite_serial_hex(pdpt_idx);
+    kwrite_serial(" val=0x"); kwrite_serial_hex(pdpt[pdpt_idx]);
+    kwrite_serial("\n");
+
+    /* PD Entry */
+    if ((pd[pd_idx] & 1) == 0) {
+        void *new_pt = pmm_alloc_page();
+        kmemset(new_pt, 0, 4096);
+        pd[pd_idx] = (unsigned long)new_pt | 3; /* Present + ReadWrite */
+    } else if ((pd[pd_idx] & 0x80) != 0) {
+        kwrite_serial("map_page: pd entry is huge page!\n");
+        return;
+    }
+    unsigned long *pt = (unsigned long *)(pd[pd_idx] & ~0xFFFL);
+    kwrite_serial("map_page: pt=0x"); kwrite_serial_hex((unsigned long)pt);
+    kwrite_serial(" pd_idx="); kwrite_serial_hex(pd_idx);
+    kwrite_serial(" val=0x"); kwrite_serial_hex(pd[pd_idx]);
+    kwrite_serial("\n");
+
+    /* PT Entry */
+    pt[pt_idx] = paddr | flags;
+    kwrite_serial("map_page: pt_idx="); kwrite_serial_hex(pt_idx);
+    kwrite_serial(" pt_entry=0x"); kwrite_serial_hex(pt[pt_idx]);
+    kwrite_serial("\n");
+
+    /* Invalidate TLB entry for this page */
+    invlpg_native(vaddr);
+}
+
+
+void pmm_init(unsigned long kernel_end_addr, unsigned long magic, unsigned long addr) {
     unsigned long long i;
     unsigned long long kernel_end_block;
     
-    /* Initially mark all blocks as free (0) */
+    /* Initially mark all blocks as allocated (reserved) */
     for (i = 0; i < 4096; i++) {
-        pmm_bitmap[i] = 0;
+        pmm_bitmap[i] = 0xFF;
+    }
+    pmm_free_blocks = 0;
+
+    int parsed_mmap = 0;
+    if (magic == 0x36d76289 && addr != 0) {
+        struct multiboot2_info_header *info = (struct multiboot2_info_header *)addr;
+        char *ptr = (char *)(addr + 8);
+        char *end_ptr = (char *)(addr + info->total_size);
+
+        while (ptr < end_ptr) {
+            struct multiboot2_tag *tag = (struct multiboot2_tag *)ptr;
+            if (tag->type == 0 && tag->size == 8) {
+                break;
+            }
+
+            if (tag->type == 6) {
+                struct multiboot2_tag_mmap *mmap_tag = (struct multiboot2_tag_mmap *)tag;
+                char *entry_ptr = (char *)ptr + 16;
+                char *entries_end = (char *)ptr + tag->size;
+
+                while (entry_ptr < entries_end) {
+                    struct multiboot2_mmap_entry *entry = (struct multiboot2_mmap_entry *)entry_ptr;
+                    
+                    if (entry->type == 1) {
+                        unsigned long long start_addr = entry->addr;
+                        unsigned long long end_addr = entry->addr + entry->len;
+
+                        unsigned long long start_block = (start_addr + 4095) / 4096;
+                        unsigned long long end_block = end_addr / 4096;
+
+                        for (i = start_block; i < end_block && i < pmm_total_blocks; i++) {
+                            if ((pmm_bitmap[i / 8] & (1 << (i % 8))) != 0) {
+                                pmm_bitmap[i / 8] &= ~(1 << (i % 8));
+                                pmm_free_blocks++;
+                            }
+                        }
+                    }
+                    entry_ptr += mmap_tag->entry_size;
+                }
+                parsed_mmap = 1;
+                break;
+            }
+            ptr += ((tag->size + 7) & ~7);
+        }
+    }
+
+    if (!parsed_mmap) {
+        for (i = 0; i < 4096; i++) {
+            pmm_bitmap[i] = 0;
+        }
+        pmm_free_blocks = pmm_total_blocks;
     }
     
-    /* Mark everything below 1MB (256 blocks) as reserved (1) */
+    /* Mark everything below 1MB (256 blocks) as reserved */
     for (i = 0; i < 256; i++) {
-        pmm_bitmap[i / 8] |= (1 << (i % 8));
+        if (i < pmm_total_blocks) {
+            if ((pmm_bitmap[i / 8] & (1 << (i % 8))) == 0) {
+                pmm_bitmap[i / 8] |= (1 << (i % 8));
+                pmm_free_blocks--;
+            }
+        }
     }
-    pmm_free_blocks -= 256;
     
     /* Calculate block index of kernel end address */
     kernel_end_block = (kernel_end_addr + 4095) / 4096;
@@ -43,8 +206,10 @@ void pmm_init(unsigned long kernel_end_addr) {
     
     /* Mark kernel space (from 1MB to kernel_end_block) as reserved */
     for (i = 256; i < kernel_end_block && i < pmm_total_blocks; i++) {
-        pmm_bitmap[i / 8] |= (1 << (i % 8));
-        pmm_free_blocks--;
+        if ((pmm_bitmap[i / 8] & (1 << (i % 8))) == 0) {
+            pmm_bitmap[i / 8] |= (1 << (i % 8));
+            pmm_free_blocks--;
+        }
     }
     
     /* Mark blocks beyond 128MB as allocated to prevent out-of-bounds allocations */
@@ -350,7 +515,7 @@ void handle_exception_state(struct interrupt_frame *frame) {
     }
 }
 
-void kmain(void) {
+void kmain(unsigned long magic, unsigned long addr) {
     /* 1. Initialize COM1 port */
     outb(0x3F8 + 1, 0x00);    /* Disable all interrupts */
     outb(0x3F8 + 3, 0x80);    /* Enable DLAB */
@@ -368,9 +533,23 @@ void kmain(void) {
     kprint_string("[SYSTEM] VGA Monitor identity mapped at 0xB8000.\n");
     kprint_string("[SYSTEM] Display Engine loaded cleanly. No varargs overhead.\n");
 
+    /* Log multiboot detection */
+    if (magic == 0x36d76289) {
+        kprint_string("[SYSTEM] Multiboot2 detected at physical address: 0x");
+        kprint_hex(addr);
+        kprint_string("\n");
+        kwrite_serial("[SYSTEM] Multiboot2 detected\n");
+    } else {
+        kprint_string("[SYSTEM] Legacy boot / no Multiboot2 signature. Using fallback map.\n");
+        kwrite_serial("[SYSTEM] Legacy boot fallback\n");
+    }
+
     /* 3. Physical Memory Manager Setup & Self-Test */
     kprint_string("[SYSTEM] PMM: Initializing Page Frame Allocator...\n");
-    pmm_init((unsigned long)&_kernel_end);
+    kwrite_serial("[SYSTEM] PMM: _kernel_end address = 0x");
+    kwrite_serial_hex((unsigned long)&_kernel_end_asm);
+    kwrite_serial("\n");
+    pmm_init((unsigned long)&_kernel_end_asm, magic, addr);
     kprint_string("[SYSTEM] PMM: Free blocks managed: ");
     kprint_dec(pmm_get_free_blocks());
     kprint_string(" (");
@@ -395,7 +574,36 @@ void kmain(void) {
         kprint_string("\n");
     }
 
-    /* 4. Interrupt Descriptors Setup */
+    /* 4. Page table mapping test */
+    kprint_string("[SYSTEM] Paging: Running page mapping self-test...\n");
+    {
+        void *phys_page = pmm_alloc_page();
+        if (phys_page) {
+            kwrite_serial("Test: phys_page=0x"); kwrite_serial_hex((unsigned long)phys_page); kwrite_serial("\n");
+            map_page(0x8000000, (unsigned long)phys_page, 3);
+            
+            volatile int *vptr = (volatile int *)0x8000000;
+            *vptr = 0xDEADC0DE;
+            kwrite_serial("Test: wrote 0xDEADC0DE to 0x8000000\n");
+            
+            volatile int *pptr = (volatile int *)phys_page;
+            kwrite_serial("Test: read from 0x8000000 = 0x"); kwrite_serial_hex(*vptr); kwrite_serial("\n");
+            kwrite_serial("Test: read from phys_page = 0x"); kwrite_serial_hex(*pptr); kwrite_serial("\n");
+            
+            if (*pptr == 0xDEADC0DE) {
+                kprint_string("[SYSTEM] Paging: Dynamic page mapping VERIFIED successfully!\n");
+                kwrite_serial("[SYSTEM] Paging: Page map success\n");
+            } else {
+                kprint_string("[SYSTEM] Paging: Dynamic page mapping FAILED!\n");
+                kwrite_serial("[SYSTEM] Paging: Page map failure\n");
+            }
+            pmm_free_page(phys_page);
+        } else {
+            kprint_string("[SYSTEM] Paging: Failed to allocate physical page for test!\n");
+        }
+    }
+
+    /* 5. Interrupt Descriptors Setup */
     pic_remap();
     kprint_string("[SYSTEM] 8259 PIC remapped to vectors 32-47.\n");
 
@@ -424,13 +632,13 @@ void kmain(void) {
     }
     kprint_string("[SYSTEM] 64-bit IDT descriptors registered.\n");
 
-    /* 5. Programmable Interval Timer Setup (100 Hz) */
+    /* 6. Programmable Interval Timer Setup (100 Hz) */
     outb(0x43, 0x36);         /* Mode 3: Square Wave */
     outb(0x40, 0x9C);         /* Divisor low: 0x9C */
     outb(0x40, 0x2E);         /* Divisor high: 0x2E */
     kprint_string("[SYSTEM] PIT scheduled for 100 Hz clock ticks.\n");
 
-    /* 6. Enable CPU Interrupts & Run E2E Diagnostics */
+    /* 7. Enable CPU Interrupts & Run E2E Diagnostics */
     sti_native();
     kwrite_serial("[ZKAEDI_V2_BOOT_SUCCESS]\n");
     kprint_string("[SYSTEM] interrupts active. Clock loop online. Boot successful.\n\n");

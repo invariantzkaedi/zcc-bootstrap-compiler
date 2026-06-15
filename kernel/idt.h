@@ -28,7 +28,7 @@ struct interrupt_frame {
 } __attribute__((packed));
 
 /* Linker image boundary marker */
-extern unsigned char _kernel_end[];
+extern unsigned char _kernel_end_asm[];
 
 /* PIC Register Ports & Command Values */
 #define PIC1          0x20

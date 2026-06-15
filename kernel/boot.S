@@ -32,6 +32,9 @@ pd:
 stack_bottom:
     .skip 16384             # 16KB stack
 stack_top:
+.global _kernel_end_asm
+_kernel_end_asm:
+
 
 .section .text
 .global _start
@@ -40,8 +43,14 @@ _start:
     cli
     cld
     
+    # Save multiboot arguments in registers that won't be clobbered
+    # (These will automatically map to %rdi and %rsi in 64-bit mode)
+    movl %eax, %edi          # edi = magic
+    movl %ebx, %esi          # esi = addr
+    
     # Set up stack pointer
     movl $stack_top, %esp
+
     
     # Transition to 64-bit Long Mode:
     # 1. Set up Page Tables
@@ -76,7 +85,6 @@ _start:
     jmp .halt
 
 setup_page_tables:
-    # Identity map first 2MB using a single 2MB huge page.
     # PML4[0] points to PDPT
     movl $pdpt, %eax
     orl $3, %eax             # Present + ReadWrite
@@ -87,11 +95,18 @@ setup_page_tables:
     orl $3, %eax             # Present + ReadWrite
     movl %eax, pdpt
     
-    # PD[0] is a 2MB huge page mapping 0 to 2MB
-    movl $0, %eax
+    # Map first 128MB (64 entries of 2MB huge pages) in pd
+    movl $0, %ecx            # Index
+.map_loop:
+    movl %ecx, %eax
+    shll $21, %eax           # Address = index * 2MB
     orl $0x83, %eax          # Present + ReadWrite + HugePage (PS = bit 7)
-    movl %eax, pd
+    movl %eax, pd(,%ecx,8)
+    incl %ecx
+    cmpl $64, %ecx
+    jl .map_loop
     ret
+
 
 .code64
 start64:
@@ -127,6 +142,18 @@ inb:
     ret
 
 # --- Interrupt Loaders ---
+.global read_cr3
+.type read_cr3, @function
+read_cr3:
+    movq %cr3, %rax
+    ret
+
+.global invlpg_native
+.type invlpg_native, @function
+invlpg_native:
+    invlpg (%rdi)
+    ret
+
 .global lidt_native
 .type lidt_native, @function
 lidt_native:

@@ -121,3 +121,43 @@ Additionally, float/double instructions (such as `movss`, `movsd`, `cvtss2sd`, `
 - ✅ Stage 2/Stage 3 bootstrap remains completely byte-identical (`SELF-HOST VERIFIED`).
 - ✅ Golden ABI lane differential fuzzer campaign passes 31/31 test shapes compiling directly to ELF objects (`zcc -c`).
 
+## CG-FRONTEND-ASM-001: Silent Elision of Inline Assembly Statements (OPEN)
+
+**Status**: 🔴 OPEN — Known Limitation  
+**Severity**: HIGH (silent code-elision — no diagnostic emitted, statement ignored)  
+**Discovered**: June 15, 2026 (session 7d20bba7)
+
+### The Bug
+ZCC silently accepts `__asm__ __volatile__`, `asm`, or `__asm__` syntax in source code (presumably parsing it as a statement without returning syntax errors) but completely discards the block during code generation. It emits no compiler warning, diagnostic, or assembly instructions for the inline assembly blocks.
+
+For example, compiling:
+```c
+int main() {
+    asm("nop");
+    asm volatile("mov $42, %rax");
+    return 0;
+}
+```
+yields:
+```assembly
+main:
+    pushq %rbp
+    movq %rsp, %rbp
+    subq $256, %rsp
+    movq $0, %rax
+    jmp .Lfunc_end_100
+```
+This is a critical silent failure mode, whose risk/severity profile depends entirely on the presence of output operands:
+- **Asm with output operands (`: "=r"(var)`)**: The compiler silently elides the statement, leaving `var` holding whatever uninitialized/garbage value happens to be in the allocated register. This causes severe, hard-to-diagnose data corruptions downstream (as seen in `read_cr3()` where the returned PML4 base pointer resolved to the end of BSS).
+- **Side-effect-only asm with no output operands (`hlt`, `nop`, `cli`/`sti`, memory barriers)**: The instruction simply vanishes. The correctness of subsequent computations is preserved, but CPU power state, execution timing, or interrupt synchronization behavior is altered.
+
+### Affected Code
+- `kernel/kmain.c`: The infinite halt loops (`__asm__ __volatile__("hlt");`) at lines 514 and 656 are silently skipped. Since these are side-effect-only statements inside infinite loops, the omission results in a busy-wait loop rather than low-power CPU halting, which is functionally benign.
+- `src/zkernel/main.c` / `src/zkernel/uart.c`: Handled similarly under old kernel source structures.
+
+### Non-Fix Rationale / Workaround
+Properly supporting GCC-style inline assembly (parsing inline constraint lists, register allocations, clobber lists, and splicing template strings into output assembly) requires a major frontend parsing and register-mapping extension. 
+For low-level operations (like `read_cr3` and `invlpg`), the pragmatic workaround is to encapsulate the operations in native `.S` assembly files (e.g. `kernel/boot.S`), export them as functions, and declare them as `extern` in C.
+
+
+
