@@ -12,6 +12,18 @@
 
 #include <stdio.h>
 
+float zcc_test_fn1(float x);
+float zcc_test_fn2(float x);
+float zcc_test_fn3(float x);
+float zcc_test_fn4(float x);
+float zcc_test_fn5(float x);
+float zcc_test_fn6(float x);
+float zcc_test_fn7(float x, float y);
+float zcc_test_fn8(float x, float y);
+float zcc_test_fn9(float x, float y, float t);
+int zcc_test_fn10(int x);
+
+
 #ifndef RAND_MAX
 #define RAND_MAX 2147483647
 #endif
@@ -352,5 +364,18 @@ int main(void) {
     fprintf(stderr, "Bitfield compression: %.1f%% of uncompressed size\n",
             (float)(sizeof(Voxel) * 100) / (float)(sizeof(unsigned) + sizeof(unsigned)));
     free(framebuffer);
+    fprintf(stderr, "ZCC Extra Pass Verification: fn10(100)=%d\n", zcc_test_fn10(100));
     return 0;
 }
+
+
+float zcc_test_fn1(float x) { return x * 2.0f; }
+float zcc_test_fn2(float x) { return x + 1.0f; }
+float zcc_test_fn3(float x) { return x - 1.0f; }
+float zcc_test_fn4(float x) { return x * x; }
+float zcc_test_fn5(float x) { return x * x * x; }
+float zcc_test_fn6(float x) { return x > 0.0f ? x : 0.0f; }
+float zcc_test_fn7(float x, float y) { return x > y ? x : y; }
+float zcc_test_fn8(float x, float y) { return x < y ? x : y; }
+float zcc_test_fn9(float x, float y, float t) { return x + (y - x) * t; }
+int zcc_test_fn10(int x) { return x + 42; }

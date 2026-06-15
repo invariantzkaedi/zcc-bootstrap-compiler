@@ -2,7 +2,7 @@
   "kind": "fortify-signing-status",
   "status": "skipped",
   "signer": "",
-  "subject": "/mnt/g/zcc/fortify_zcc_clean/artifacts/fortify-layout.subject.json",
+  "subject": "/mnt/h/__DOWNLOADS/zcc_github_upload/fortify_zcc_clean/artifacts/fortify-layout.subject.json",
   "required": false,
   "signature": null,
   "certificate": null

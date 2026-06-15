@@ -1927,6 +1927,7 @@ int zcc_main(int argc, char **argv) {
   cc->filename = input_file;
 
   init_compiler(cc);
+  { extern Compiler *g_cc; g_cc = cc; }
 
   /* generate asm file name */
   strncpy(asm_file, output_file, 250);

@@ -394,6 +394,9 @@
         let currentMesh = null;
         
         function loadAsset(assetName) {
+            if (assetName.startsWith('/assets/')) {
+                assetName = assetName.substring(8);
+            }
             if (currentMesh) {
                 scene.remove(currentMesh);
                 // VRAM Leak Prevention: Properly dispose of massive geometries and materials
@@ -731,16 +734,23 @@
         // --------------------------------------------------------------------
         // ZKAEDI SUNO INJECTOR WEBSOCKET BRIDGE
         // --------------------------------------------------------------------
-        const ws = new WebSocket('ws://localhost:8892');
+        const ws = new WebSocket('ws://localhost:8043');
         
         ws.onopen = () => {
-            console.log("[ZKAEDI HUD] Telemetry Link Established.");
-            document.getElementById('telemetry-status').innerHTML = 'STATUS: <span style="color:#ff007f;">HAMILTONIAN SYNC ACTIVE</span>';
+            console.log("[ZKAEDI HUD] Telemetry Link Established (FHN chaos mapped).");
+            document.getElementById('telemetry-status').innerHTML = 'STATUS: <span style="color:#00ffcc;">HAMILTONIAN SYNC ACTIVE</span>';
         };
 
         ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
+                
+                // Map FHN fields if received
+                if (data.src === "FHN") {
+                    data.bass = Math.abs(data.x) * 0.4;
+                    data.treble = Math.abs(data.y) * 0.4;
+                    data.phase = data.t;
+                }
                 
                 // We use bass to amplify the underlying energy field
                 const baseEnergy = 0.8;

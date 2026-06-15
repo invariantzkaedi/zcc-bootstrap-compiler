@@ -1,16 +1,11 @@
 {
   "algorithm": "sha256",
-  "count": 3,
+  "count": 2,
   "files": [
     {
       "bytes": 55,
       "path": "layout-core-freeze.json",
       "sha256": "2ef970db89d4064deba61f789ba0c7ba6aca1a685b8c8bec649c4878c2e399be"
-    },
-    {
-      "bytes": 539,
-      "path": "layout-fuzz/manifest.example.json",
-      "sha256": "63467068110f5564b87b759dd56eeaa590e28a20a04f3251dff61450aba4531c"
     },
     {
       "bytes": 496,
@@ -19,5 +14,5 @@
     }
   ],
   "kind": "fortify-artifact-hashes",
-  "root": "/mnt/g/zcc/fortify_zcc_clean/artifacts"
+  "root": "/mnt/h/__DOWNLOADS/zcc_github_upload/fortify_zcc_clean/artifacts"
 }

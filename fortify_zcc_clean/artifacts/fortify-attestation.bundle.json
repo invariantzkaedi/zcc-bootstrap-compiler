@@ -1,17 +1,12 @@
 {
   "artifact_hashes": {
     "algorithm": "sha256",
-    "count": 3,
+    "count": 2,
     "files": [
       {
         "bytes": 55,
         "path": "layout-core-freeze.json",
         "sha256": "2ef970db89d4064deba61f789ba0c7ba6aca1a685b8c8bec649c4878c2e399be"
-      },
-      {
-        "bytes": 539,
-        "path": "layout-fuzz/manifest.example.json",
-        "sha256": "63467068110f5564b87b759dd56eeaa590e28a20a04f3251dff61450aba4531c"
       },
       {
         "bytes": 496,
@@ -20,10 +15,10 @@
       }
     ],
     "kind": "fortify-artifact-hashes",
-    "root": "/mnt/g/zcc/fortify_zcc_clean/artifacts"
+    "root": "/mnt/h/__DOWNLOADS/zcc_github_upload/fortify_zcc_clean/artifacts"
   },
   "certificate": null,
-  "created_at": "2026-04-25T03:46:48.478329+00:00",
+  "created_at": "2026-06-13T01:06:40.104118+00:00",
   "host": {
     "machine": "x86_64",
     "platform": "Linux-6.6.123.2-microsoft-standard-WSL2+-x86_64-with-glibc2.39",
@@ -38,17 +33,17 @@
     "signature": null,
     "signer": "",
     "status": "skipped",
-    "subject": "/mnt/g/zcc/fortify_zcc_clean/artifacts/fortify-layout.subject.json"
+    "subject": "/mnt/h/__DOWNLOADS/zcc_github_upload/fortify_zcc_clean/artifacts/fortify-layout.subject.json"
   },
   "signing_status_file": {
-    "bytes": 226,
-    "path": "/mnt/g/zcc/fortify_zcc_clean/artifacts/fortify-signing-status.json",
-    "sha256": "3fcbf590a9da1727cae4de3f6c94c036295d16a9a66792c8b7738458d899394f"
+    "bytes": 252,
+    "path": "/mnt/h/__DOWNLOADS/zcc_github_upload/fortify_zcc_clean/artifacts/fortify-signing-status.json",
+    "sha256": "7bf9fb1470aabed3bf29d4954dc7dfc9840c93cbf1237db2250e96fe655f709f"
   },
   "status": "pass",
   "subject": {
-    "bytes": 1380,
-    "path": "/mnt/g/zcc/fortify_zcc_clean/artifacts/fortify-layout.subject.json",
-    "sha256": "f5118e8f84f4239fd7c8bcb95fa253ba0894bd05efc99bb1dd14a57042c7dfe1"
+    "bytes": 1255,
+    "path": "/mnt/h/__DOWNLOADS/zcc_github_upload/fortify_zcc_clean/artifacts/fortify-layout.subject.json",
+    "sha256": "75cc2027eb6ef31026f75fda0a9629839158d430613342adba5f75bf4210086e"
   }
 }

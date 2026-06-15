@@ -28,10 +28,17 @@ def parse_asm(asm_file):
                 current_fn = line[:-1]
                 mask = 0
             elif current_fn:
-                # Find all xmm registers
-                for m in re.finditer(r"%xmm(\d+)", line):
-                    reg_num = int(m.group(1))
-                    mask |= (1 << reg_num)
+                # Find all GPR callee-saved registers
+                if re.search(r"%r12([dbw])?\b", line):
+                    mask |= (1 << 0)
+                if re.search(r"%r13([dbw])?\b", line):
+                    mask |= (1 << 1)
+                if re.search(r"%r14([dbw])?\b", line):
+                    mask |= (1 << 2)
+                if re.search(r"%r15([dbw])?\b", line):
+                    mask |= (1 << 3)
+                if re.search(r"%(rbx|ebx|bx|bl|bh)\b", line):
+                    mask |= (1 << 4)
     if current_fn:
         asm_usage[current_fn] = mask
     return asm_usage

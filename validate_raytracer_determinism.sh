@@ -4,16 +4,19 @@ set -e
 echo "=== Compiling Compiler (Make Selfhost) ==="
 make selfhost
 
-echo "=== Building ZCC3 Binary ==="
-gcc -O0 -w -fno-asynchronous-unwind-tables -o zcc3 zcc3.s compiler_passes.c compiler_passes_ir.c -lm
+# make selfhost already compiles the correct zcc3 binary with all passes.
+# We do not need to manually link zcc3.s with an incomplete set of passes.
+
 
 echo "=== Compiling Raytracer with ZCC2 ==="
 ZCC_EMIT_TELEMETRY=1 ./zcc2 raytracer.c -o raytracer2.s 2> telem2.log
-gcc -O0 -w -fno-asynchronous-unwind-tables -o r2 raytracer2.s -lm
+./zcc2 models_data.c -o models_data2.s
+gcc -O0 -w -fno-asynchronous-unwind-tables -o r2 raytracer2.s models_data2.s -lm
 
 echo "=== Compiling Raytracer with ZCC3 ==="
 ZCC_EMIT_TELEMETRY=1 ./zcc3 raytracer.c -o raytracer3.s 2> telem3.log
-gcc -O0 -w -fno-asynchronous-unwind-tables -o r3 raytracer3.s -lm
+./zcc3 models_data.c -o models_data3.s
+gcc -O0 -w -fno-asynchronous-unwind-tables -o r3 raytracer3.s models_data3.s -lm
 
 echo "=== Verifying Raytracer Assembly Parity ==="
 if cmp -s raytracer2.s raytracer3.s; then
@@ -24,8 +27,8 @@ else
 fi
 
 echo "=== Tracing Raytracer Execution (PPM and Binary Parity) ==="
-./r2 > out2.ppm
-./r3 > out3.ppm
+WIDTH=160 HEIGHT=90 ./r2 > out2.ppm
+WIDTH=160 HEIGHT=90 ./r3 > out3.ppm
 
 if cmp -s out2.ppm out3.ppm; then
     echo "SUCCESS: out2.ppm and out3.ppm match identically"

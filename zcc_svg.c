@@ -350,7 +350,11 @@ ZccSvgNode* svg_script(void) { return svg_create_node("script"); }
 ZccSvgNode* svg_set(void) { return svg_create_node("set"); }
 ZccSvgNode* svg_stop(void) { return svg_create_node("stop"); }
 ZccSvgNode* svg_style(void) { return svg_create_node("style"); }
-ZccSvgNode* svg_svg(void) { return svg_create_node("svg"); }
+ZccSvgNode* svg_svg(void) {
+    ZccSvgNode* n = svg_create_node("svg");
+    svg_set_attr(n, "xmlns", "http://www.w3.org/2000/svg");
+    return n;
+}
 ZccSvgNode* svg_switch(void) { return svg_create_node("switch"); }
 ZccSvgNode* svg_symbol(void) { return svg_create_node("symbol"); }
 ZccSvgNode* svg_text(void) { return svg_create_node("text"); }

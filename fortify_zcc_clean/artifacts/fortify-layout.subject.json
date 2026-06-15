@@ -1,17 +1,12 @@
 {
   "artifact_hashes": {
     "algorithm": "sha256",
-    "count": 3,
+    "count": 2,
     "files": [
       {
         "bytes": 55,
         "path": "layout-core-freeze.json",
         "sha256": "2ef970db89d4064deba61f789ba0c7ba6aca1a685b8c8bec649c4878c2e399be"
-      },
-      {
-        "bytes": 539,
-        "path": "layout-fuzz/manifest.example.json",
-        "sha256": "63467068110f5564b87b759dd56eeaa590e28a20a04f3251dff61450aba4531c"
       },
       {
         "bytes": 496,
@@ -20,12 +15,12 @@
       }
     ],
     "kind": "fortify-artifact-hashes",
-    "root": "/mnt/g/zcc/fortify_zcc_clean/artifacts"
+    "root": "/mnt/h/__DOWNLOADS/zcc_github_upload/fortify_zcc_clean/artifacts"
   },
-  "count": 3,
-  "created_at": "2026-04-25T03:46:48.309836+00:00",
+  "count": 2,
+  "created_at": "2026-06-13T01:06:36.873807+00:00",
   "git": {
-    "commit": "ad82cb929f64b56cfe5b8b4b5c0b9105645b8fa3"
+    "commit": "ee84d8b954bf176e18b8b726949387d579b4c62d"
   },
   "host": {
     "machine": "x86_64",
@@ -34,7 +29,7 @@
   },
   "kind": "fortify-layout",
   "policy": {
-    "path": "/mnt/g/zcc/fortify_zcc_clean/.zcc-fortify-policy.json",
+    "path": "/mnt/h/__DOWNLOADS/zcc_github_upload/fortify_zcc_clean/.zcc-fortify-policy.json",
     "sha256": "e00fb999a66bd046f9eb4bd245264cb8190b28725a97703d3471ed9c52a93a7a"
   },
   "reports": {

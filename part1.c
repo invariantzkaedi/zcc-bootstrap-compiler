@@ -79,7 +79,8 @@ enum {
     TK_LPAREN, TK_RPAREN, TK_LBRACE, TK_RBRACE,
     TK_LBRACKET, TK_RBRACKET,
     TK_SEMI, TK_COMMA, TK_ELLIPSIS,
-    TK_HASH
+    TK_HASH,
+    TK_ALIGNOF, TK_STATIC_ASSERT
 };
 
 /* ================================================================ */
@@ -1394,6 +1395,7 @@ static int is_type_token(Compiler *cc);
 int peek_token(Compiler *cc);
 void error(Compiler *cc, char *msg);
 void error_at(Compiler *cc, int line, char *msg);
+void warning_at(Compiler *cc, int line, char *msg);
 void classify_aggregate(Type *agg, abi_class_t eb[2]);
 int rust_frontend_compile_file(const char *filename, const char *source, int source_len, int dump_ast, int dump_ast_with_symbols, int dump_symbol_table, int dump_ir, int strict_let_annotations, int strict_function_signatures);
 int rust_backend_bridge_compile_file(const char *filename, const char *source, int source_len, const char *output_file, int compile_only, int strict_let_annotations, int strict_function_signatures);

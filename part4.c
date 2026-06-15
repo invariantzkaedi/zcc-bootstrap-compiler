@@ -5335,12 +5335,21 @@ static void fold_constants(Compiler *cc, Node *node) {
         res = v1 - v2;
       else if (node->kind == ND_MUL)
         res = v1 * v2;
-      else if (node->kind == ND_DIV && v2 != 0)
-        res = is_unsigned ? u1 / u2 : v1 / v2;
-      else if (node->kind == ND_MOD && v2 != 0)
-        res = is_unsigned ? u1 % u2 : v1 % v2;
-      else
-        return;
+      else if (node->kind == ND_DIV) {
+        if (v2 == 0) {
+            warning_at(cc, node->line, "division by zero in constant expression");
+            res = 0;
+        } else {
+            res = is_unsigned ? u1 / u2 : v1 / v2;
+        }
+      } else if (node->kind == ND_MOD) {
+        if (v2 == 0) {
+            warning_at(cc, node->line, "division by zero in constant expression");
+            res = 0;
+        } else {
+            res = is_unsigned ? u1 % u2 : v1 % v2;
+        }
+      }
       if (node->type && !node_type_unsigned(node)) {
           if (node->type->size == 4) res = (long long)(int)res;
           else if (node->type->size == 1) res = (long long)(char)res;

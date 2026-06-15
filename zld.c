@@ -19,7 +19,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include <assert.h>
+
+static int g_verbose = 0;
 
 /* ── ELF-64 structures (inline — no elf.h dependency) ─────────────────── */
 
@@ -370,7 +371,9 @@ static void parse_ld_script(const char *path) {
                         /* Save this alignment for cur_out */
                         OutSection *os = get_out_section(cur_out, SHF_ALLOC);
                         os->align = align_val;
-                        printf("zld: parsed section '%s' explicit alignment: %llu\n", cur_out, (unsigned long long)align_val);
+                        if (g_verbose) {
+                            printf("zld: parsed section '%s' explicit alignment: %llu\n", cur_out, (unsigned long long)align_val);
+                        }
                     }
                 }
                 continue;
@@ -381,7 +384,7 @@ static void parse_ld_script(const char *path) {
         }
 
         /* "symbol_name = ...;" inside SECTIONS block */
-        if (in_sections && p[0] != '.' && isalpha((unsigned char)p[0])) {
+        if (in_sections && p[0] != '.' && ((p[0] >= 'a' && p[0] <= 'z') || (p[0] >= 'A' && p[0] <= 'Z') || p[0] == '_')) {
             char *start = p;
             while (*p && *p != '=' && *p != ';' && *p != '\n') p++;
             if (*p == '=') {
@@ -412,7 +415,9 @@ static void parse_ld_script(const char *path) {
                     strncpy(ls->val_str, expr_buf, sizeof(ls->val_str)-1);
                     ls->resolved = 0;
                     ls->value = 0;
-                    printf("zld: registered linker script symbol '%s' = '%s'\n", ls->name, ls->val_str);
+                    if (g_verbose) {
+                        printf("zld: registered linker script symbol '%s' = '%s'\n", ls->name, ls->val_str);
+                    }
                 }
                 if (*p) p++;
                 continue;
@@ -598,6 +603,12 @@ static void layout(void) {
             }
             OutSection *sec = get_out_section(oname, SHF_ALLOC);
             uint64_t sec_align = sec->align ? sec->align : 16;
+            /* If we transition from RX to RW (e.g. to .data/.bss), force page alignment for segment boundary safety.
+             * Note: This dynamic adjustment applies only to implicit layout (when base == 0).
+             * Explicit linker script directives (e.g. '. = ADDR;') bypass this and are respected exactly as specified. */
+            if (strcmp(oname, ".data") == 0 || strcmp(oname, ".bss") == 0) {
+                if (sec_align < 0x1000) sec_align = 0x1000;
+            }
             base = ALIGN_UP(prev_end, sec_align);
         }
         
@@ -637,9 +648,11 @@ static void layout(void) {
                             gs->obj_idx = obj_i_c;
                             gs->sym_idx = si;
 
-                            printf("zld: allocated COMMON symbol '%s' in .bss at VMA 0x%llx (size %llu, align %llu)\n",
-                                   name, (unsigned long long)common_cursor,
-                                   (unsigned long long)sym->st_size, (unsigned long long)align);
+                            if (g_verbose) {
+                                printf("zld: allocated COMMON symbol '%s' in .bss at VMA 0x%llx (size %llu, align %llu)\n",
+                                       name, (unsigned long long)common_cursor,
+                                       (unsigned long long)sym->st_size, (unsigned long long)align);
+                            }
 
                             common_cursor += sym->st_size;
                         }
@@ -736,7 +749,6 @@ static void layout(void) {
             out->vma = original_base;
             out->lma = original_base;
             out->size = cursor - original_base;
-            printf("DEBUG: finalized %s: vma=0x%llx, size=0x%llx, flags=0x%llx\n", oname, (unsigned long long)out->vma, (unsigned long long)out->size, (unsigned long long)out->flags);
         }
     }
 }
@@ -826,7 +838,9 @@ static void collect_symbols(void) {
             if (!gs) gs = add_sym(ls->name);
             gs->value = val;
             gs->defined = 1;
-            printf("zld: resolved linker script symbol '%s' = 0x%llx\n", gs->name, (unsigned long long)val);
+            if (g_verbose) {
+                printf("zld: resolved linker script symbol '%s' = 0x%llx\n", gs->name, (unsigned long long)val);
+            }
         }
     }
 
@@ -877,8 +891,11 @@ static void copy_sections(void) {
     }
 
     /* finalize sizes from actual copy */
-    for (i = 0; i < g_nout; i++)
-        g_out[i].size = g_out[i].buf_used;
+    for (i = 0; i < g_nout; i++) {
+        if (g_out[i].buf_used > g_out[i].size) {
+            g_out[i].size = g_out[i].buf_used;
+        }
+    }
 }
 
 /* ── Apply relocations ──────────────────────────────────────────────────── */
@@ -1018,7 +1035,7 @@ static void write_output(const char *path) {
     uint64_t rx_filesz = 0;
     uint64_t rx_memsz = 0;
     uint32_t rx_flags = PF_R;
-    uint64_t rw_file_off;
+    uint64_t rw_file_off = 0;
     uint64_t rw_vaddr = 0;
     uint64_t rw_filesz = 0;
     uint64_t rw_memsz = 0;
@@ -1031,6 +1048,9 @@ static void write_output(const char *path) {
 
     for (i = 0; i < g_nout; i++) {
         OutSection *s = &g_out[i];
+        if (g_verbose) {
+            printf("DEBUG ZLD: write_output inspecting section '%s', size=0x%llx, flags=0x%llx\n", s->name, (unsigned long long)s->size, (unsigned long long)s->flags);
+        }
         if (!(s->flags & SHF_ALLOC)) continue;
         if (s->size == 0) continue;
 
@@ -1057,6 +1077,7 @@ static void write_output(const char *path) {
     rx_file_off = data_offset;
     if (rx_count > 0) {
         rx_vaddr = rx_sections[0]->vma;
+        rx_file_off = ALIGN_UP(headers_size, 0x1000) + (rx_vaddr & 0xFFF);
         for (i = 0; i < rx_count; i++) {
             OutSection *s = rx_sections[i];
             uint64_t sec_end = s->vma + s->size;
@@ -1076,15 +1097,20 @@ static void write_output(const char *path) {
         phdrs[ph_idx].p_filesz = rx_filesz;
         phdrs[ph_idx].p_memsz  = rx_memsz;
         phdrs[ph_idx].p_align  = 0x1000;
-        printf("zld segment: RX_SEG, VMA=0x%llx, memsz=0x%llx, filesz=0x%llx, flags=%d\n",
-               (unsigned long long)rx_vaddr, (unsigned long long)rx_memsz,
-               (unsigned long long)rx_filesz, (int)rx_flags);
+        if (g_verbose) {
+            printf("zld segment: RX_SEG, VMA=0x%llx, memsz=0x%llx, filesz=0x%llx, flags=%d\n",
+                   (unsigned long long)rx_vaddr, (unsigned long long)rx_memsz,
+                   (unsigned long long)rx_filesz, (int)rx_flags);
+        }
         ph_idx++;
+    } else {
+        rx_file_off = ALIGN_UP(headers_size, 0x1000);
+        rx_filesz = 0;
     }
 
-    rw_file_off = ALIGN_UP(rx_file_off + rx_filesz, 0x1000);
     if (rw_count > 0) {
         rw_vaddr = rw_sections[0]->vma;
+        rw_file_off = ALIGN_UP(rx_file_off + rx_filesz, 0x1000) + (rw_vaddr & 0xFFF);
         for (i = 0; i < rw_count; i++) {
             OutSection *s = rw_sections[i];
             uint64_t sec_end = s->vma + s->size;
@@ -1107,9 +1133,11 @@ static void write_output(const char *path) {
         phdrs[ph_idx].p_filesz = rw_filesz;
         phdrs[ph_idx].p_memsz  = rw_memsz;
         phdrs[ph_idx].p_align  = 0x1000;
-        printf("zld segment: RW_SEG, VMA=0x%llx, memsz=0x%llx, filesz=0x%llx, flags=%d\n",
-               (unsigned long long)rw_vaddr, (unsigned long long)rw_memsz,
-               (unsigned long long)rw_filesz, (int)rw_flags);
+        if (g_verbose) {
+            printf("zld segment: RW_SEG, VMA=0x%llx, memsz=0x%llx, filesz=0x%llx, flags=%d\n",
+                   (unsigned long long)rw_vaddr, (unsigned long long)rw_memsz,
+                   (unsigned long long)rw_filesz, (int)rw_flags);
+        }
         ph_idx++;
     }
 
@@ -1124,9 +1152,11 @@ static void write_output(const char *path) {
         phdrs[ph_idx].p_filesz = note_sec->size;
         phdrs[ph_idx].p_memsz  = note_sec->size;
         phdrs[ph_idx].p_align  = 4;
-        printf("zld segment: PT_NOTE, VMA=0x%llx, memsz=0x%llx, filesz=0x%llx, flags=%d\n",
-               (unsigned long long)note_sec->vma, (unsigned long long)note_sec->size,
-               (unsigned long long)note_sec->size, (int)PF_R);
+        if (g_verbose) {
+            printf("zld segment: PT_NOTE, VMA=0x%llx, memsz=0x%llx, filesz=0x%llx, flags=%d\n",
+                   (unsigned long long)note_sec->vma, (unsigned long long)note_sec->size,
+                   (unsigned long long)note_sec->size, (int)PF_R);
+        }
         ph_idx++;
     }
 
@@ -1187,8 +1217,10 @@ static void write_output(const char *path) {
     while (cur_pos < next_page) { fputc(0, f); cur_pos++; }
 
     fclose(f);
-    printf("zld: wrote %s (entry=0x%llx, %d segments)\n",
-           path, (unsigned long long)g_entry, phnum);
+    if (g_verbose) {
+        printf("zld: wrote %s (entry=0x%llx, %d segments)\n",
+               path, (unsigned long long)g_entry, phnum);
+    }
 }
 
 
@@ -1199,11 +1231,16 @@ int main(int argc, char *argv[]) {
     int ninput = 0;
     int i;
 
+    char *env_verb = getenv("ZLD_VERBOSE");
+    g_verbose = env_verb ? atoi(env_verb) : 0;
+
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-T") == 0 && i+1 < argc) {
             ld_script = argv[++i];
         } else if (strcmp(argv[i], "-o") == 0 && i+1 < argc) {
             strncpy(g_output, argv[++i], sizeof(g_output)-1);
+        } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--verbose") == 0) {
+            g_verbose = 1;
         } else if (argv[i][0] != '-') {
             if (ninput >= MAX_INPUTS) die("too many inputs");
             inputs[ninput++] = argv[i];
@@ -1213,11 +1250,13 @@ int main(int argc, char *argv[]) {
     }
 
     if (!ninput) {
-        fprintf(stderr, "usage: zld [-T linker.ld] [-o output] file.o...\n");
+        fprintf(stderr, "usage: zld [-T linker.ld] [-o output] [-v|--verbose] file.o...\n");
         return 1;
     }
 
-    printf("[zld] Initiating static link campaign: output=%s\n", g_output);
+    if (g_verbose) {
+        printf("[zld] Initiating static link campaign: output=%s\n", g_output);
+    }
     if (ld_script) {
         parse_ld_script(ld_script);
     } else {

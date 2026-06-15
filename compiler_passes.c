@@ -3344,6 +3344,7 @@ static ZCCNode *zcc_node_from_expr(struct Node *n) {
   z->kind = zk;
   z->line_no = node_line_no(n);
   z->is_float = node_is_float(n);
+  z->dst_size = node_type_size(n);
   switch (zk) {
   case ZND_NUM:
     if (node_kind(n) == ZCC_ND_FLIT) {
@@ -3844,6 +3845,8 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     load_ins->src[0] = ptr_r;
     load_ins->n_src = 1;
     load_ins->imm = (node->member_size > 0) ? (int64_t)node->member_size : 8;
+    load_ins->is_float = node->is_float;
+    load_ins->dst_size = node->dst_size;
     load_ins->exec_freq = 1.0;
     emit_instr(ctx, load_ins);
     return val_r;
@@ -3882,6 +3885,8 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     load_ins->src[0] = addr_r;
     load_ins->n_src = 1;
     load_ins->imm = (node->member_size > 0) ? (int64_t)node->member_size : 8;
+    load_ins->is_float = node->is_float;
+    load_ins->dst_size = node->dst_size;
     load_ins->exec_freq = 1.0;
     emit_instr(ctx, load_ins);
     
@@ -4198,6 +4203,7 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     ins = make_instr_imm(ctx->next_instr_id++, OP_CONST, r, node->int_val,
                          node->line_no);
     ins->is_float = node->is_float;
+    ins->dst_size = node->dst_size;
     break;
   case ZND_STR: {
     char lab[32];
@@ -4234,7 +4240,9 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
       load_ins->dst = val_r;
       load_ins->src[0] = r;
       load_ins->n_src = 1;
-      load_ins->imm = 8;
+      load_ins->imm = node->member_size > 0 ? node->member_size : 8;
+      load_ins->is_float = node->is_float;
+      load_ins->dst_size = node->dst_size;
       load_ins->exec_freq = 1.0;
       emit_instr(ctx, load_ins);
       return val_r;
@@ -4249,6 +4257,8 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
       ins->src[0] = alloca_r;
       ins->n_src = 1;
       ins->imm = node->member_size > 0 ? node->member_size : 8;
+      ins->is_float = node->is_float;
+      ins->dst_size = node->dst_size;
       ins->exec_freq = 1.0;
     }
     break;
@@ -4265,6 +4275,8 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     ins->src[1] = rh;
     ins->n_src = 2;
     ins->exec_freq = 1.0;
+    ins->is_float = node->is_float;
+    ins->dst_size = node->dst_size;
     break;
   }
   case ZND_SUB: {
@@ -4279,6 +4291,8 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     ins->src[1] = rh;
     ins->n_src = 2;
     ins->exec_freq = 1.0;
+    ins->is_float = node->is_float;
+    ins->dst_size = node->dst_size;
     break;
   }
   case ZND_MOD: {
@@ -4307,6 +4321,8 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     ins->src[1] = rh;
     ins->n_src = 2;
     ins->exec_freq = 1.0;
+    ins->is_float = node->is_float;
+    ins->dst_size = node->dst_size;
     break;
   }
   case ZND_DIV: {
@@ -4322,6 +4338,8 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     ins->n_src = 2;
     ins->exec_freq = 1.0;
     ins->line_no = node->line_no;
+    ins->is_float = node->is_float;
+    ins->dst_size = node->dst_size;
     break;
   }
   case ZND_NEG: {
@@ -4341,6 +4359,8 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     ins->n_src = 2;
     ins->exec_freq = 1.0;
     ins->line_no = node->line_no;
+    ins->is_float = node->is_float;
+    ins->dst_size = node->dst_size;
     break;
   }
   case ZND_BOR: {
@@ -4477,6 +4497,7 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     ins->src[1] = rh;
     ins->n_src = 2;
     ins->is_float = node->lhs ? node->lhs->is_float : 0;
+    ins->src_size = node->lhs ? node->lhs->dst_size : 8;
     ins->exec_freq = 1.0;
     ins->line_no = node->line_no;
     break;
@@ -4702,6 +4723,7 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     ins->op = OP_CALL;
     ins->dst = r;
     ins->is_float = node->is_float;
+    ins->dst_size = node->dst_size;
     if (node->func_name && node->func_name[0]) {
       strncpy(ins->call_name, node->func_name, sizeof(ins->call_name) - 1);
       ins->call_name[sizeof(ins->call_name) - 1] = '\0';
@@ -5544,6 +5566,7 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
     ret->op = OP_RET;
     ret->dst = 0;
     ret->is_float = node->lhs ? node->lhs->is_float : 0;
+    ret->dst_size = node->lhs ? node->lhs->dst_size : 8;
     ret->src[0] = val_r;
     ret->n_src = 1;
     ret->exec_freq = 1.0;
@@ -7454,83 +7477,130 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
     break;
   }
   case OP_ADD: {
-    /* CG-IR-017: addl for I32/U32, addq for I64/U64 */
-    ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);
-    if (ins->ir_type == IR_TY_I32 || ins->ir_type == IR_TY_U32) {
-      fprintf(f, "    movq ");
-      ir_asm_emit_src_operand(ctx, ins->src[1]);
-      fprintf(f, ", %%rcx\n");
-      fprintf(f, "    addl %%ecx, %%eax\n");
+    if (ins->is_float) {
+      int is_f32 = (ins->dst_size == 4);
+      ir_asm_load_to_xmm(ctx, ins->src[0], 0, is_f32);
+      ir_asm_load_to_xmm(ctx, ins->src[1], 1, is_f32);
+      if (is_f32) {
+        fprintf(f, "    addss %%xmm1, %%xmm0\n");
+      } else {
+        fprintf(f, "    addsd %%xmm1, %%xmm0\n");
+      }
+      ir_asm_store_xmm0_to(ctx, ins->dst, is_f32);
     } else {
-      fprintf(f, "    addq ");
-      ir_asm_emit_src_operand(ctx, ins->src[1]);
-      fprintf(f, ", %%rax\n");
+      /* CG-IR-017: addl for I32/U32, addq for I64/U64 */
+      ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);
+      if (ins->ir_type == IR_TY_I32 || ins->ir_type == IR_TY_U32) {
+        fprintf(f, "    movq ");
+        ir_asm_emit_src_operand(ctx, ins->src[1]);
+        fprintf(f, ", %%rcx\n");
+        fprintf(f, "    addl %%ecx, %%eax\n");
+      } else {
+        fprintf(f, "    addq ");
+        ir_asm_emit_src_operand(ctx, ins->src[1]);
+        fprintf(f, ", %%rax\n");
+      }
+      ir_asm_store_rax_to(ctx, ins->dst);
     }
-    ir_asm_store_rax_to(ctx, ins->dst);
     break;
   }
   case OP_SUB: {
-    /* CG-IR-017: subl for I32/U32, subq for I64/U64 */
-    ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);
-    if (ins->ir_type == IR_TY_I32 || ins->ir_type == IR_TY_U32) {
-      fprintf(f, "    movq ");
-      ir_asm_emit_src_operand(ctx, ins->src[1]);
-      fprintf(f, ", %%rcx\n");
-      fprintf(f, "    subl %%ecx, %%eax\n");
+    if (ins->is_float) {
+      int is_f32 = (ins->dst_size == 4);
+      ir_asm_load_to_xmm(ctx, ins->src[0], 0, is_f32);
+      ir_asm_load_to_xmm(ctx, ins->src[1], 1, is_f32);
+      if (is_f32) {
+        fprintf(f, "    subss %%xmm1, %%xmm0\n");
+      } else {
+        fprintf(f, "    subsd %%xmm1, %%xmm0\n");
+      }
+      ir_asm_store_xmm0_to(ctx, ins->dst, is_f32);
     } else {
-      fprintf(f, "    subq ");
-      ir_asm_emit_src_operand(ctx, ins->src[1]);
-      fprintf(f, ", %%rax\n");
+      /* CG-IR-017: subl for I32/U32, subq for I64/U64 */
+      ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);
+      if (ins->ir_type == IR_TY_I32 || ins->ir_type == IR_TY_U32) {
+        fprintf(f, "    movq ");
+        ir_asm_emit_src_operand(ctx, ins->src[1]);
+        fprintf(f, ", %%rcx\n");
+        fprintf(f, "    subl %%ecx, %%eax\n");
+      } else {
+        fprintf(f, "    subq ");
+        ir_asm_emit_src_operand(ctx, ins->src[1]);
+        fprintf(f, ", %%rax\n");
+      }
+      ir_asm_store_rax_to(ctx, ins->dst);
     }
-    ir_asm_store_rax_to(ctx, ins->dst);
     break;
   }
   case OP_MUL: {
-    /* CG-IR-017: imull for I32/U32, imulq for I64/U64 */
-    ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);
-    fprintf(f, "    movq ");
-    ir_asm_emit_src_operand(ctx, ins->src[1]);
-    fprintf(f, ", %%rcx\n");
-    if (ins->ir_type == IR_TY_I32 || ins->ir_type == IR_TY_U32)
-      fprintf(f, "    imull %%ecx, %%eax\n");
-    else
-      fprintf(f, "    imulq %%rcx, %%rax\n");
-    ir_asm_store_rax_to(ctx, ins->dst);
+    if (ins->is_float) {
+      int is_f32 = (ins->dst_size == 4);
+      ir_asm_load_to_xmm(ctx, ins->src[0], 0, is_f32);
+      ir_asm_load_to_xmm(ctx, ins->src[1], 1, is_f32);
+      if (is_f32) {
+        fprintf(f, "    mulss %%xmm1, %%xmm0\n");
+      } else {
+        fprintf(f, "    mulsd %%xmm1, %%xmm0\n");
+      }
+      ir_asm_store_xmm0_to(ctx, ins->dst, is_f32);
+    } else {
+      /* CG-IR-017: imull for I32/U32, imulq for I64/U64 */
+      ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);
+      fprintf(f, "    movq ");
+      ir_asm_emit_src_operand(ctx, ins->src[1]);
+      fprintf(f, ", %%rcx\n");
+      if (ins->ir_type == IR_TY_I32 || ins->ir_type == IR_TY_U32)
+        fprintf(f, "    imull %%ecx, %%eax\n");
+      else
+        fprintf(f, "    imulq %%rcx, %%rax\n");
+      ir_asm_store_rax_to(ctx, ins->dst);
+    }
     break;
   }
   case OP_DIV: {
-    /* CG-IR-015: select instruction width from ir_type.
-     * Bug: cqo sign-extends rax→rdx:rax in 64-bit; for 32-bit int operands
-     * that corrupts the dividend.  Fix: use cltd/idivl for I32, plain
-     * xor+divl for U32, xor+divq for U64, cqo/idivq for I64 (default). */
-    ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);
-    if (ins->ir_type == IR_TY_I32) {
-      fprintf(f, "    cltd\n");              /* sign-extend eax → edx:eax    */
-      fprintf(f, "    movq ");
-      ir_asm_emit_src_operand(ctx, ins->src[1]);
-      fprintf(f, ", %%rcx\n");
-      fprintf(f, "    idivl %%ecx\n");
-    } else if (ins->ir_type == IR_TY_U32) {
-      fprintf(f, "    movl %%eax, %%eax\n"); /* zero upper 32 bits of rax    */
-      fprintf(f, "    xorl %%edx, %%edx\n");
-      fprintf(f, "    movq ");
-      ir_asm_emit_src_operand(ctx, ins->src[1]);
-      fprintf(f, ", %%rcx\n");
-      fprintf(f, "    divl %%ecx\n");
-    } else if (ins->ir_type == IR_TY_U64) {
-      fprintf(f, "    xorl %%edx, %%edx\n");
-      fprintf(f, "    movq ");
-      ir_asm_emit_src_operand(ctx, ins->src[1]);
-      fprintf(f, ", %%rcx\n");
-      fprintf(f, "    divq %%rcx\n");
-    } else {                                /* IR_TY_I64 — original path     */
-      fprintf(f, "    cqo\n");
-      fprintf(f, "    movq ");
-      ir_asm_emit_src_operand(ctx, ins->src[1]);
-      fprintf(f, ", %%rcx\n");
-      fprintf(f, "    idivq %%rcx\n");
+    if (ins->is_float) {
+      int is_f32 = (ins->dst_size == 4);
+      ir_asm_load_to_xmm(ctx, ins->src[0], 0, is_f32);
+      ir_asm_load_to_xmm(ctx, ins->src[1], 1, is_f32);
+      if (is_f32) {
+        fprintf(f, "    divss %%xmm1, %%xmm0\n");
+      } else {
+        fprintf(f, "    divsd %%xmm1, %%xmm0\n");
+      }
+      ir_asm_store_xmm0_to(ctx, ins->dst, is_f32);
+    } else {
+      /* CG-IR-015: select instruction width from ir_type.
+       * Bug: cqo sign-extends rax→rdx:rax in 64-bit; for 32-bit int operands
+       * that corrupts the dividend.  Fix: use cltd/idivl for I32, plain
+       * xor+divl for U32, xor+divq for U64, cqo/idivq for I64 (default). */
+      ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);
+      if (ins->ir_type == IR_TY_I32) {
+        fprintf(f, "    cltd\n");              /* sign-extend eax → edx:eax    */
+        fprintf(f, "    movl ");
+        ir_asm_emit_src_operand(ctx, ins->src[1]);
+        fprintf(f, ", %%ecx\n");
+        fprintf(f, "    idivl %%ecx\n");
+      } else if (ins->ir_type == IR_TY_U32) {
+        fprintf(f, "    xorl %%edx, %%edx\n");
+        fprintf(f, "    movl ");
+        ir_asm_emit_src_operand(ctx, ins->src[1]);
+        fprintf(f, ", %%ecx\n");
+        fprintf(f, "    divl %%ecx\n");
+      } else if (ins->ir_type == IR_TY_U64) {
+        fprintf(f, "    xorl %%edx, %%edx\n");
+        fprintf(f, "    movq ");
+        ir_asm_emit_src_operand(ctx, ins->src[1]);
+        fprintf(f, ", %%rcx\n");
+        fprintf(f, "    divq %%rcx\n");
+      } else {                                /* IR_TY_I64 — original path     */
+        fprintf(f, "    cqo\n");
+        fprintf(f, "    movq ");
+        ir_asm_emit_src_operand(ctx, ins->src[1]);
+        fprintf(f, ", %%rcx\n");
+        fprintf(f, "    idivq %%rcx\n");
+      }
+      ir_asm_store_rax_to(ctx, ins->dst);
     }
-    ir_asm_store_rax_to(ctx, ins->dst);
     break;
   }
   case OP_MOD: {
@@ -7540,17 +7610,16 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
     ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);
     if (ins->ir_type == IR_TY_I32) {
       fprintf(f, "    cltd\n");
-      fprintf(f, "    movq ");
+      fprintf(f, "    movl ");
       ir_asm_emit_src_operand(ctx, ins->src[1]);
-      fprintf(f, ", %%rcx\n");
+      fprintf(f, ", %%ecx\n");
       fprintf(f, "    idivl %%ecx\n");
       fprintf(f, "    movl %%edx, %%eax\n");
     } else if (ins->ir_type == IR_TY_U32) {
-      fprintf(f, "    movl %%eax, %%eax\n");
       fprintf(f, "    xorl %%edx, %%edx\n");
-      fprintf(f, "    movq ");
+      fprintf(f, "    movl ");
       ir_asm_emit_src_operand(ctx, ins->src[1]);
-      fprintf(f, ", %%rcx\n");
+      fprintf(f, ", %%ecx\n");
       fprintf(f, "    divl %%ecx\n");
       fprintf(f, "    movl %%edx, %%eax\n");
     } else if (ins->ir_type == IR_TY_U64) {
@@ -7655,8 +7724,8 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
         else             fprintf(f, "    movswq %lld(%%rax), %%rax\n", (long long)disp);
         break;
       case 4:
-        if (is_unsigned) fprintf(f, "    movl %lld(%%rax), %%eax\n", (long long)disp);
-        else             fprintf(f, "    movslq %lld(%%rax), %%rax\n", (long long)disp);
+        if (is_unsigned || ins->is_float) fprintf(f, "    movl %lld(%%rax), %%eax\n", (long long)disp);
+        else                              fprintf(f, "    movslq %lld(%%rax), %%rax\n", (long long)disp);
         break;
       default:
         fprintf(f, "    movq %lld(%%rax), %%rax\n", (long long)disp);
@@ -7673,8 +7742,8 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
         else             fprintf(f, "    movswq (%%rax), %%rax\n");
         break;
       case 4:
-        if (is_unsigned) fprintf(f, "    movl (%%rax), %%eax\n"); /* zero-extends to rax */
-        else             fprintf(f, "    movslq (%%rax), %%rax\n");
+        if (is_unsigned || ins->is_float) fprintf(f, "    movl (%%rax), %%eax\n"); /* zero-extends to rax */
+        else                              fprintf(f, "    movslq (%%rax), %%rax\n");
         break;
       default:
         fprintf(f, "    movq (%%rax), %%rax\n");
@@ -7754,7 +7823,7 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
   case OP_RET:
     if (ins->n_src >= 1) {
       if (ins->is_float) {
-        ir_asm_load_to_xmm(ctx, ins->src[0], 0, 0);
+        ir_asm_load_to_xmm(ctx, ins->src[0], 0, ins->dst_size == 4);
       } else {
         ir_asm_load_to_rax(ctx, ins->src[0]);
       }
@@ -7788,9 +7857,14 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
   case OP_LT: {
     /* CG-IR-017 */
     if (ins->is_float) {
-      ir_asm_load_to_xmm(ctx, ins->src[0], 1, 0);
-      ir_asm_load_to_xmm(ctx, ins->src[1], 0, 0);
-      fprintf(f, "    ucomisd %%xmm0, %%xmm1\n");
+      int is_f32 = (ins->src_size == 4);
+      ir_asm_load_to_xmm(ctx, ins->src[0], 1, is_f32);
+      ir_asm_load_to_xmm(ctx, ins->src[1], 0, is_f32);
+      if (is_f32) {
+        fprintf(f, "    ucomiss %%xmm0, %%xmm1\n");
+      } else {
+        fprintf(f, "    ucomisd %%xmm0, %%xmm1\n");
+      }
       fprintf(f, "    setb %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
       fprintf(f, "    movzbl %%al, %%eax\n");
     } else {
@@ -7816,9 +7890,14 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
   case OP_EQ: {
     /* CG-IR-017 */
     if (ins->is_float) {
-      ir_asm_load_to_xmm(ctx, ins->src[0], 1, 0);
-      ir_asm_load_to_xmm(ctx, ins->src[1], 0, 0);
-      fprintf(f, "    ucomisd %%xmm0, %%xmm1\n");
+      int is_f32 = (ins->src_size == 4);
+      ir_asm_load_to_xmm(ctx, ins->src[0], 1, is_f32);
+      ir_asm_load_to_xmm(ctx, ins->src[1], 0, is_f32);
+      if (is_f32) {
+        fprintf(f, "    ucomiss %%xmm0, %%xmm1\n");
+      } else {
+        fprintf(f, "    ucomisd %%xmm0, %%xmm1\n");
+      }
       fprintf(f, "    sete %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
       fprintf(f, "    movzbl %%al, %%eax\n");
     } else {
@@ -7844,9 +7923,14 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
   case OP_NE: {
     /* CG-IR-017 */
     if (ins->is_float) {
-      ir_asm_load_to_xmm(ctx, ins->src[0], 1, 0);
-      ir_asm_load_to_xmm(ctx, ins->src[1], 0, 0);
-      fprintf(f, "    ucomisd %%xmm0, %%xmm1\n");
+      int is_f32 = (ins->src_size == 4);
+      ir_asm_load_to_xmm(ctx, ins->src[0], 1, is_f32);
+      ir_asm_load_to_xmm(ctx, ins->src[1], 0, is_f32);
+      if (is_f32) {
+        fprintf(f, "    ucomiss %%xmm0, %%xmm1\n");
+      } else {
+        fprintf(f, "    ucomisd %%xmm0, %%xmm1\n");
+      }
       fprintf(f, "    setne %%al\n    setp %%r11b\n    orb %%r11b, %%al\n");
       fprintf(f, "    movzbl %%al, %%eax\n");
     } else {
@@ -7872,9 +7956,14 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
   case OP_GT: {
     /* CG-IR-017 */
     if (ins->is_float) {
-      ir_asm_load_to_xmm(ctx, ins->src[0], 1, 0);
-      ir_asm_load_to_xmm(ctx, ins->src[1], 0, 0);
-      fprintf(f, "    ucomisd %%xmm0, %%xmm1\n");
+      int is_f32 = (ins->src_size == 4);
+      ir_asm_load_to_xmm(ctx, ins->src[0], 1, is_f32);
+      ir_asm_load_to_xmm(ctx, ins->src[1], 0, is_f32);
+      if (is_f32) {
+        fprintf(f, "    ucomiss %%xmm0, %%xmm1\n");
+      } else {
+        fprintf(f, "    ucomisd %%xmm0, %%xmm1\n");
+      }
       fprintf(f, "    seta %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
       fprintf(f, "    movzbl %%al, %%eax\n");
     } else {
@@ -7900,9 +7989,14 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
   case OP_GE: {
     /* CG-IR-017 */
     if (ins->is_float) {
-      ir_asm_load_to_xmm(ctx, ins->src[0], 1, 0);
-      ir_asm_load_to_xmm(ctx, ins->src[1], 0, 0);
-      fprintf(f, "    ucomisd %%xmm0, %%xmm1\n");
+      int is_f32 = (ins->src_size == 4);
+      ir_asm_load_to_xmm(ctx, ins->src[0], 1, is_f32);
+      ir_asm_load_to_xmm(ctx, ins->src[1], 0, is_f32);
+      if (is_f32) {
+        fprintf(f, "    ucomiss %%xmm0, %%xmm1\n");
+      } else {
+        fprintf(f, "    ucomisd %%xmm0, %%xmm1\n");
+      }
       fprintf(f, "    setae %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
       fprintf(f, "    movzbl %%al, %%eax\n");
     } else {
@@ -7928,9 +8022,14 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
   case OP_LE: {
     /* CG-IR-017 */
     if (ins->is_float) {
-      ir_asm_load_to_xmm(ctx, ins->src[0], 1, 0);
-      ir_asm_load_to_xmm(ctx, ins->src[1], 0, 0);
-      fprintf(f, "    ucomisd %%xmm0, %%xmm1\n");
+      int is_f32 = (ins->src_size == 4);
+      ir_asm_load_to_xmm(ctx, ins->src[0], 1, is_f32);
+      ir_asm_load_to_xmm(ctx, ins->src[1], 0, is_f32);
+      if (is_f32) {
+        fprintf(f, "    ucomiss %%xmm0, %%xmm1\n");
+      } else {
+        fprintf(f, "    ucomisd %%xmm0, %%xmm1\n");
+      }
       fprintf(f, "    setbe %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
       fprintf(f, "    movzbl %%al, %%eax\n");
     } else {
@@ -8197,7 +8296,9 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
     for (int i = 0; i < na; i++) {
       if (!arg_is_stack[i]) {
         if (ins->call_args_is_float[i]) {
-          ir_asm_load_to_xmm(ctx, ins->call_args[i], fp_reg_idx, 0);
+          RegID arg_r = ins->call_args[i];
+          int is_f32 = (arg_r < MAX_INSTRS && ctx->fn->def_of[arg_r] && ctx->fn->def_of[arg_r]->dst_size == 4);
+          ir_asm_load_to_xmm(ctx, arg_r, fp_reg_idx, is_f32);
           fp_reg_idx++;
         } else {
           ir_asm_load_to_rax(ctx, ins->call_args[i]);
@@ -8223,7 +8324,7 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
     /* Store return value */
     if (ins->dst) {
       if (ins->is_float) {
-        ir_asm_store_xmm0_to(ctx, ins->dst, 0);
+        ir_asm_store_xmm0_to(ctx, ins->dst, ins->dst_size == 4);
       } else {
         ir_asm_store_rax_to(ctx, ins->dst);
       }

@@ -101,6 +101,14 @@ def start_server():
     global httpd
     os.chdir(REPO_ROOT)
     socketserver.TCPServer.allow_reuse_address = True
+    SilentHandler.extensions_map.update({
+        '.js': 'application/javascript',
+        '.css': 'text/css',
+        '.html': 'text/html',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.svg': 'image/svg+xml',
+    })
     httpd = socketserver.TCPServer((HOST, PORT), SilentHandler)
     log("SERVER", f"Listening at {CYAN}http://{HOST}:{PORT}{RESET}", GREEN)
     httpd.serve_forever()

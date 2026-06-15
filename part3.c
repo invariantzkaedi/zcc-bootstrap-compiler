@@ -11,6 +11,17 @@
 static Type *find_struct(Compiler *cc, char *tag);
 static char g_current_namespace[1024] = {0};
 
+static void zcc_validate_alignof_operand(Compiler *cc, Type *t) {
+    if (!t) return;
+    if (t->kind == TY_FUNC) {
+        error(cc, "_Alignof cannot be applied to a function type");
+    } else if (t->kind == TY_VOID) {
+        error(cc, "_Alignof cannot be applied to an incomplete type 'void'");
+    } else if ((t->kind == TY_STRUCT || t->kind == TY_UNION) && !t->is_complete) {
+        error(cc, "_Alignof cannot be applied to an incomplete struct/union type");
+    }
+}
+
 static void resolve_cpp_identifiers(Compiler *cc) {
     while (cc->tk == TK_IDENT && peek_token(cc) == TK_COLON_COLON) {
         char merged_name[MAX_IDENT * 2];
@@ -239,6 +250,25 @@ static long long parse_const_expr_unary(Compiler *cc) {
             long long v = parse_const_expr(cc);
             expect(cc, TK_RPAREN);
             return v;
+        } else {
+            return 8;
+        }
+    }
+    if (cc->tk == TK_ALIGNOF) {
+        next_token(cc);
+        if (cc->tk == TK_LPAREN) {
+            next_token(cc);
+            if (is_type_token(cc)) {
+                Type *st = parse_type(cc);
+                char dummy[128];
+                st = parse_declarator(cc, st, dummy);
+                expect(cc, TK_RPAREN);
+                zcc_validate_alignof_operand(cc, st);
+                return type_align(st);
+            }
+            parse_const_expr(cc);
+            expect(cc, TK_RPAREN);
+            return 8;
         } else {
             return 8;
         }
@@ -1718,6 +1748,53 @@ Node *parse_primary(Compiler *cc) {
             return n;
         }
     }
+    if (cc->tk == TK_ALIGNOF) {
+        int pk;
+        int is_type_in_parens;
+        next_token(cc);
+        if (cc->tk == TK_LPAREN) {
+            pk = peek_token(cc);
+            is_type_in_parens = 0;
+            if (pk >= TK_INT) {
+                if (pk <= TK_INLINE || pk == TK_STRUCT ||
+                    pk == TK_UNION || pk == TK_ENUM) {
+                    is_type_in_parens = 1;
+                }
+            }
+            if (!is_type_in_parens && pk == TK_IDENT) {
+                Symbol *sz_sym;
+                sz_sym = scope_find(cc, cc->peek_text);
+                if (sz_sym && sz_sym->is_typedef) is_type_in_parens = 1;
+            }
+            if (is_type_in_parens) {
+                Type *st;
+                char dummy[MAX_IDENT];
+                next_token(cc);  /* skip ( */
+                st = parse_type(cc);
+                st = parse_declarator(cc, st, dummy);
+                expect(cc, TK_RPAREN);
+                zcc_validate_alignof_operand(cc, st);
+                n = node_num(cc, type_align(st), line);
+                return n;
+            }
+            /* _Alignof(expr) */
+            {
+                Node *expr;
+                next_token(cc); /* skip ( */
+                expr = parse_unary(cc);
+                expect(cc, TK_RPAREN);
+                if (expr) zcc_validate_alignof_operand(cc, expr->type);
+                n = node_num(cc, type_align(expr->type), line);
+                return n;
+            }
+        } else {
+            Node *expr;
+            expr = parse_unary(cc);
+            if (expr) zcc_validate_alignof_operand(cc, expr->type);
+            n = node_num(cc, type_align(expr->type), line);
+            return n;
+        }
+    }
 
     /* fallthrough — unexpected token */
     {
@@ -2146,6 +2223,49 @@ Node *parse_unary(Compiler *cc) {
             }
         }
         if (sz == 0 && t) sz = type_size(t);
+        if (sz == 0) sz = 8;
+        n = node_num(cc, sz, line);
+        n->type = cc->ty_ulong;
+        return n;
+    }
+    if (cc->tk == TK_ALIGNOF) {
+        Type *t = 0;
+        int sz = 0;
+        int is_type = 0;
+        next_token(cc);
+        if (cc->tk == TK_LPAREN) {
+            int pk = peek_token(cc);
+            if ((pk >= TK_INT && pk <= TK_DOUBLE) || (pk >= TK_STATIC && pk <= TK_INLINE) || pk == TK_STRUCT || pk == TK_UNION || pk == TK_ENUM || pk == TK_TYPEDEF) {
+                is_type = 1;
+            } else if (pk == TK_IDENT) {
+                Symbol *sym = scope_find(cc, cc->peek_text);
+                if (sym && sym->is_typedef) is_type = 1;
+            }
+        }
+        
+        if (is_type) {
+            char dummy[MAX_IDENT];
+            next_token(cc);
+            t = parse_type(cc);
+            t = parse_declarator(cc, t, dummy);
+            expect(cc, TK_RPAREN);
+        } else {
+            Node *expr_n;
+            if (cc->tk == TK_LPAREN) {
+                next_token(cc);
+                expr_n = parse_expr(cc);
+                expect(cc, TK_RPAREN);
+            } else {
+                expr_n = parse_unary(cc);
+            }
+            if (expr_n && expr_n->type) {
+                t = expr_n->type;
+            }
+        }
+        if (t) {
+            zcc_validate_alignof_operand(cc, t);
+            sz = type_align(t);
+        }
         if (sz == 0) sz = 8;
         n = node_num(cc, sz, line);
         n->type = cc->ty_ulong;
@@ -2986,6 +3106,25 @@ static void emit_local_initializer(Compiler *cc, Node *block, int *cnt, int *cap
 Node *parse_stmt_internal(Compiler *cc) {
     int line;
     line = cc->tk_line;
+
+    if (cc->tk == TK_STATIC_ASSERT) {
+        extern void zcc_handle_static_assert(Node *condition, const char *message, int loc);
+        next_token(cc);
+        expect(cc, TK_LPAREN);
+        Node *cond = parse_expr(cc);
+        expect(cc, TK_COMMA);
+        char *msg = 0;
+        if (cc->tk == TK_STR) {
+            msg = cc_strdup(cc, cc->tk_str);
+            next_token(cc);
+        } else {
+            error(cc, "expected string literal for static assertion message");
+        }
+        expect(cc, TK_RPAREN);
+        expect(cc, TK_SEMI);
+        zcc_handle_static_assert(cond, msg, line);
+        return node_new(cc, ND_NOP, line);
+    }
 
     if (cc->tk == TK_USING) {
         while (cc->tk != TK_SEMI && cc->tk != TK_EOF) {
@@ -3884,6 +4023,25 @@ Node *parse_program(Compiler *cc) {
         top_count++;
         prev_pos = cc->pos;
         line = cc->tk_line;
+
+        if (cc->tk == TK_STATIC_ASSERT) {
+            extern void zcc_handle_static_assert(Node *condition, const char *message, int loc);
+            next_token(cc);
+            expect(cc, TK_LPAREN);
+            Node *cond = parse_expr(cc);
+            expect(cc, TK_COMMA);
+            char *msg = 0;
+            if (cc->tk == TK_STR) {
+                msg = cc_strdup(cc, cc->tk_str);
+                next_token(cc);
+            } else {
+                error(cc, "expected string literal for static assertion message");
+            }
+            expect(cc, TK_RPAREN);
+            expect(cc, TK_SEMI);
+            zcc_handle_static_assert(cond, msg, line);
+            continue;
+        }
 
         if (cc->tk == TK_IDENT && peek_token(cc) == TK_COLON_COLON) {
             next_token(cc); /* consume class name */
@@ -5058,7 +5216,7 @@ void run_interprocedural_constant_propagation(Compiler *cc, Node *prog) {
             if (stats && (stats->assign_count > 0 || stats->addr_taken)) {
                 LatticeVal bot = {LATTICE_BOT, 0};
                 set_sym_lattice(s, bot);
-            } else if (is_main || !is_static) {
+            } else if (is_main || (!is_static && !getenv("ZCC_ICP_CLOSED_WORLD"))) {
                 LatticeVal bot = {LATTICE_BOT, 0};
                 set_sym_lattice(s, bot);
             } else {
