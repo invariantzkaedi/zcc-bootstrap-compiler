@@ -1726,32 +1726,161 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
         } else if (strncmp(mnemonic, "set", 3) == 0 && strlen(mnemonic) <= 5) {
             encode_set(&text_seg, mnemonic);
             matched = 1;
-        } else if (strcmp(mnemonic, "idivq") == 0) {
+        } else if (strcmp(mnemonic, "idivq") == 0 || strcmp(mnemonic, "idivl") == 0 ||
+                   strcmp(mnemonic, "idivw") == 0 || strcmp(mnemonic, "idivb") == 0) {
             char *op = args_start ? trim(args_start) : "";
             int reg = parse_reg(op);
             if (reg < 0) {
-                fprintf(stderr, "assembler error: invalid register '%s' in idivq\n", op);
+                fprintf(stderr, "assembler error: invalid register '%s' in %s\n", op, mnemonic);
                 exit(1);
             }
-            encode_idivq(&text_seg, reg);
+            char size_char = mnemonic[4];
+            unsigned char prefix = 0;
+            unsigned char rex = 0;
+            unsigned char opcode = 0;
+            unsigned char modrm = 0xf8 | (reg & 7);
+            
+            if (size_char == 'w') {
+                prefix = 0x66;
+            }
+            
+            if (size_char == 'q') {
+                rex = 0x48;
+            } else if (reg & 8) {
+                rex = 0x40;
+            } else if (size_char == 'b' && (reg == 4 || reg == 5 || reg == 6 || reg == 7)) {
+                rex = 0x40;
+            }
+            
+            if (reg & 8) rex |= 0x01;
+            
+            if (size_char == 'b') {
+                opcode = 0xf6;
+            } else {
+                opcode = 0xf7;
+            }
+            
+            if (prefix) seg_append(&text_seg, &prefix, 1);
+            if (rex) seg_append(&text_seg, &rex, 1);
+            seg_append(&text_seg, &opcode, 1);
+            seg_append(&text_seg, &modrm, 1);
             matched = 1;
-        } else if (strcmp(mnemonic, "divq") == 0) {
+        } else if (strcmp(mnemonic, "divq") == 0 || strcmp(mnemonic, "divl") == 0 ||
+                   strcmp(mnemonic, "divw") == 0 || strcmp(mnemonic, "divb") == 0) {
             char *op = args_start ? trim(args_start) : "";
             int reg = parse_reg(op);
             if (reg < 0) {
-                fprintf(stderr, "assembler error: invalid register '%s' in divq\n", op);
+                fprintf(stderr, "assembler error: invalid register '%s' in %s\n", op, mnemonic);
                 exit(1);
             }
-            encode_divq(&text_seg, reg);
+            char size_char = mnemonic[3];
+            unsigned char prefix = 0;
+            unsigned char rex = 0;
+            unsigned char opcode = 0;
+            unsigned char modrm = 0xf0 | (reg & 7);
+            
+            if (size_char == 'w') {
+                prefix = 0x66;
+            }
+            
+            if (size_char == 'q') {
+                rex = 0x48;
+            } else if (reg & 8) {
+                rex = 0x40;
+            } else if (size_char == 'b' && (reg == 4 || reg == 5 || reg == 6 || reg == 7)) {
+                rex = 0x40;
+            }
+            
+            if (reg & 8) rex |= 0x01;
+            
+            if (size_char == 'b') {
+                opcode = 0xf6;
+            } else {
+                opcode = 0xf7;
+            }
+            
+            if (prefix) seg_append(&text_seg, &prefix, 1);
+            if (rex) seg_append(&text_seg, &rex, 1);
+            seg_append(&text_seg, &opcode, 1);
+            seg_append(&text_seg, &modrm, 1);
             matched = 1;
-        } else if (strcmp(mnemonic, "negq") == 0) {
+        } else if (strcmp(mnemonic, "negq") == 0 || strcmp(mnemonic, "negl") == 0 ||
+                   strcmp(mnemonic, "negw") == 0 || strcmp(mnemonic, "negb") == 0) {
             char *op = args_start ? trim(args_start) : "";
             int reg = parse_reg(op);
             if (reg < 0) {
-                fprintf(stderr, "assembler error: invalid register '%s' in negq\n", op);
+                fprintf(stderr, "assembler error: invalid register '%s' in %s\n", op, mnemonic);
                 exit(1);
             }
-            encode_negq(&text_seg, reg);
+            char size_char = mnemonic[3];
+            unsigned char prefix = 0;
+            unsigned char rex = 0;
+            unsigned char opcode = 0;
+            unsigned char modrm = 0xd8 | (reg & 7);
+            
+            if (size_char == 'w') {
+                prefix = 0x66;
+            }
+            
+            if (size_char == 'q') {
+                rex = 0x48;
+            } else if (reg & 8) {
+                rex = 0x40;
+            } else if (size_char == 'b' && (reg == 4 || reg == 5 || reg == 6 || reg == 7)) {
+                rex = 0x40;
+            }
+            
+            if (reg & 8) rex |= 0x01;
+            
+            if (size_char == 'b') {
+                opcode = 0xf6;
+            } else {
+                opcode = 0xf7;
+            }
+            
+            if (prefix) seg_append(&text_seg, &prefix, 1);
+            if (rex) seg_append(&text_seg, &rex, 1);
+            seg_append(&text_seg, &opcode, 1);
+            seg_append(&text_seg, &modrm, 1);
+            matched = 1;
+        } else if (strcmp(mnemonic, "notq") == 0 || strcmp(mnemonic, "notl") == 0 ||
+                   strcmp(mnemonic, "notw") == 0 || strcmp(mnemonic, "notb") == 0) {
+            char *op = args_start ? trim(args_start) : "";
+            int reg = parse_reg(op);
+            if (reg < 0) {
+                fprintf(stderr, "assembler error: invalid register '%s' in %s\n", op, mnemonic);
+                exit(1);
+            }
+            char size_char = mnemonic[3];
+            unsigned char prefix = 0;
+            unsigned char rex = 0;
+            unsigned char opcode = 0;
+            unsigned char modrm = 0xd0 | (reg & 7);
+            
+            if (size_char == 'w') {
+                prefix = 0x66;
+            }
+            
+            if (size_char == 'q') {
+                rex = 0x48;
+            } else if (reg & 8) {
+                rex = 0x40;
+            } else if (size_char == 'b' && (reg == 4 || reg == 5 || reg == 6 || reg == 7)) {
+                rex = 0x40;
+            }
+            
+            if (reg & 8) rex |= 0x01;
+            
+            if (size_char == 'b') {
+                opcode = 0xf6;
+            } else {
+                opcode = 0xf7;
+            }
+            
+            if (prefix) seg_append(&text_seg, &prefix, 1);
+            if (rex) seg_append(&text_seg, &rex, 1);
+            seg_append(&text_seg, &opcode, 1);
+            seg_append(&text_seg, &modrm, 1);
             matched = 1;
         }
         /* 2-operand instructions */
@@ -2122,27 +2251,98 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                     } else {
                         encode_binop(&text_seg, mnemonic, reg1, reg2);
                     }
-                } else if (strcmp(mnemonic, "sarq") == 0 || strcmp(mnemonic, "shlq") == 0 || strcmp(mnemonic, "shrq") == 0) {
+                } else if (strcmp(mnemonic, "sarq") == 0 || strcmp(mnemonic, "shlq") == 0 || strcmp(mnemonic, "shrq") == 0 ||
+                           strcmp(mnemonic, "sarl") == 0 || strcmp(mnemonic, "shll") == 0 || strcmp(mnemonic, "shrl") == 0 ||
+                           strcmp(mnemonic, "sarw") == 0 || strcmp(mnemonic, "shlw") == 0 || strcmp(mnemonic, "shrw") == 0 ||
+                           strcmp(mnemonic, "sarb") == 0 || strcmp(mnemonic, "shlb") == 0 || strcmp(mnemonic, "shrb") == 0) {
+                    char size_char = mnemonic[strlen(mnemonic) - 1];
                     if (op1[0] == '$') {
                         long long imm = strtoll(op1 + 1, NULL, 0);
-                        unsigned char rex = 0x48;
-                        unsigned char opcode = 0xc1;
+                        unsigned char prefix = 0;
+                        unsigned char rex = 0;
+                        unsigned char opcode = 0;
                         unsigned char modrm;
+                        
+                        if (size_char == 'w') {
+                            prefix = 0x66;
+                        }
+                        
+                        if (size_char == 'q') {
+                            rex = 0x48;
+                        } else if (reg2 & 8) {
+                            rex = 0x40;
+                        } else if (size_char == 'b' && (reg2 == 4 || reg2 == 5 || reg2 == 6 || reg2 == 7)) {
+                            rex = 0x40;
+                        }
+                        
                         if (reg2 & 8) rex |= 0x01;
-                        if (strcmp(mnemonic, "sarq") == 0) {
+                        
+                        if (size_char == 'b') {
+                            opcode = 0xc0;
+                        } else {
+                            opcode = 0xc1;
+                        }
+                        
+                        int shift_type = 0;
+                        if (strncmp(mnemonic, "sar", 3) == 0) shift_type = 2;
+                        else if (strncmp(mnemonic, "shr", 3) == 0) shift_type = 1;
+                        
+                        if (shift_type == 2) {
                             modrm = 0xf8 | (reg2 & 7);
-                        } else if (strcmp(mnemonic, "shrq") == 0) {
+                        } else if (shift_type == 1) {
                             modrm = 0xe8 | (reg2 & 7);
                         } else {
                             modrm = 0xe0 | (reg2 & 7);
                         }
-                        seg_append(&text_seg, &rex, 1);
+                        
+                        if (prefix) seg_append(&text_seg, &prefix, 1);
+                        if (rex) seg_append(&text_seg, &rex, 1);
                         seg_append(&text_seg, &opcode, 1);
                         seg_append(&text_seg, &modrm, 1);
                         unsigned char b = (unsigned char)imm;
                         seg_append(&text_seg, &b, 1);
                     } else {
-                        encode_shift(&text_seg, mnemonic, reg2);
+                        unsigned char prefix = 0;
+                        unsigned char rex = 0;
+                        unsigned char opcode = 0;
+                        unsigned char modrm;
+                        
+                        if (size_char == 'w') {
+                            prefix = 0x66;
+                        }
+                        
+                        if (size_char == 'q') {
+                            rex = 0x48;
+                        } else if (reg2 & 8) {
+                            rex = 0x40;
+                        } else if (size_char == 'b' && (reg2 == 4 || reg2 == 5 || reg2 == 6 || reg2 == 7)) {
+                            rex = 0x40;
+                        }
+                        
+                        if (reg2 & 8) rex |= 0x01;
+                        
+                        if (size_char == 'b') {
+                            opcode = 0xd2;
+                        } else {
+                            opcode = 0xd3;
+                        }
+                        
+                        int shift_type = 0;
+                        if (strncmp(mnemonic, "sar", 3) == 0) shift_type = 2;
+                        else if (strncmp(mnemonic, "shr", 3) == 0) shift_type = 1;
+                        
+                        if (shift_type == 2) {
+                            modrm = 0xf8 | (reg2 & 7);
+                        } else if (shift_type == 1) {
+                            modrm = 0xe8 | (reg2 & 7);
+                        } else {
+                            modrm = 0xe0 | (reg2 & 7);
+                        }
+                        
+                        if (prefix) seg_append(&text_seg, &prefix, 1);
+                        if (rex) seg_append(&text_seg, &rex, 1);
+                        seg_append(&text_seg, &opcode, 1);
+                        seg_append(&text_seg, &modrm, 1);
                     }
                 } else if (strcmp(mnemonic, "cmpl") == 0) {
                     if (op1[0] == '$') {
