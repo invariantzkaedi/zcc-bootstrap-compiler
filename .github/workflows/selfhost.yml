@@ -40,6 +40,11 @@ jobs:
         run: |
           make -C kernel verify
 
+      - name: Standalone and Self-Hosted ZLD Linker Verification
+        run: |
+          make -C kernel verify-zld-full
+          make -C kernel verify-zld-selfhost
+
 
       - name: Upload assembly artifacts
         uses: actions/upload-artifact@v4

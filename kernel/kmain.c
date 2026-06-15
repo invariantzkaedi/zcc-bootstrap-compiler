@@ -548,6 +548,10 @@ void kmain(unsigned long magic, unsigned long addr) {
     kprint_string("[SYSTEM] PMM: Initializing Page Frame Allocator...\n");
     kwrite_serial("[SYSTEM] PMM: _kernel_end address = 0x");
     kwrite_serial_hex((unsigned long)&_kernel_end_asm);
+    kwrite_serial("\n[SYSTEM] PMM: idt address = 0x");
+    kwrite_serial_hex((unsigned long)idt);
+    kwrite_serial("\n[SYSTEM] PMM: pmm_bitmap address = 0x");
+    kwrite_serial_hex((unsigned long)pmm_bitmap);
     kwrite_serial("\n");
     pmm_init((unsigned long)&_kernel_end_asm, magic, addr);
     kprint_string("[SYSTEM] PMM: Free blocks managed: ");

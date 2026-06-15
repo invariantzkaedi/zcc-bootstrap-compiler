@@ -133,11 +133,6 @@ typedef struct {
 #define ELF64_ST_TYPE(i) ((i) & 0xf)
 
 /* ── Limits ────────────────────────────────────────────────────────────── */
-#define MAX_INPUTS     32
-#define MAX_SECTIONS   256
-#define MAX_SYMBOLS    4096
-#define MAX_RELOCS     8192
-#define MAX_LD_RULES   64
 #define ALIGN_UP(x,a)  (((x) + (a) - 1) & ~((a) - 1))
 
 /* ── Linker script rule ────────────────────────────────────────────────── */
@@ -187,17 +182,24 @@ typedef struct {
     uint64_t  buf_size;
     uint64_t  buf_used;
     /* contributions: which (obj,shndx) map to which offset */
-    struct { int obj; uint32_t shndx; uint64_t off; } contrib[MAX_SECTIONS];
+    struct { int obj; uint32_t shndx; uint64_t off; } *contrib;
     int contrib_cnt;
+    int contrib_cap;
 } OutSection;
 
 /* ── Linker state ──────────────────────────────────────────────────────── */
-static ObjFile   g_objs[MAX_INPUTS];
+static ObjFile   *g_objs = NULL;
+static int       g_objs_cap = 0;
 static int       g_nobj = 0;
-static GlobalSym g_syms[MAX_SYMBOLS];
+
+static GlobalSym *g_syms = NULL;
+static int       g_syms_cap = 0;
 static int       g_nsym = 0;
-static LdRule    g_rules[MAX_LD_RULES];
+
+static LdRule    *g_rules = NULL;
+static int       g_rules_cap = 0;
 static int       g_nrules = 0;
+
 static uint64_t  g_entry = 0;
 static char      g_entry_name[64] = "_start";
 static char      g_output[256] = "a.out";
@@ -212,7 +214,8 @@ typedef struct {
     int resolved;
 } LdSymbol;
 
-static LdSymbol g_ld_syms[64];
+static LdSymbol *g_ld_syms = NULL;
+static int      g_ld_syms_cap = 0;
 static int      g_nld_syms = 0;
 
 static OutSection *get_out_section(const char *name, uint64_t flags);
@@ -233,6 +236,74 @@ static void *xcalloc(size_t n, size_t sz) {
     void *p = calloc(n, sz);
     if (!p) die("out of memory");
     return p;
+}
+
+static void *xrealloc(void *ptr, size_t sz) {
+    void *p = realloc(ptr, sz);
+    if (!p) die("out of memory");
+    return p;
+}
+
+static void cleanup_linker_state(void) {
+    int i;
+    if (g_objs) {
+        for (i = 0; i < g_nobj; i++) {
+            if (g_objs[i].data) {
+                free(g_objs[i].data);
+            }
+            if (g_objs[i].section_vma) {
+                free(g_objs[i].section_vma);
+            }
+        }
+        free(g_objs);
+        g_objs = NULL;
+    }
+    g_nobj = 0;
+    g_objs_cap = 0;
+
+    if (g_syms) {
+        free(g_syms);
+        g_syms = NULL;
+    }
+    g_nsym = 0;
+    g_syms_cap = 0;
+
+    if (g_rules) {
+        free(g_rules);
+        g_rules = NULL;
+    }
+    g_nrules = 0;
+    g_rules_cap = 0;
+
+    if (g_ld_syms) {
+        free(g_ld_syms);
+        g_ld_syms = NULL;
+    }
+    g_nld_syms = 0;
+    g_ld_syms_cap = 0;
+
+    for (i = 0; i < g_nout; i++) {
+        if (g_out[i].buf) {
+            free(g_out[i].buf);
+            g_out[i].buf = NULL;
+        }
+        if (g_out[i].contrib) {
+            free(g_out[i].contrib);
+            g_out[i].contrib = NULL;
+        }
+    }
+    memset(g_out, 0, sizeof(g_out));
+    g_nout = 0;
+}
+
+static LdRule *add_rule(void) {
+    if (g_nrules >= g_rules_cap) {
+        int old_cap = g_rules_cap;
+        g_rules_cap = g_rules_cap ? g_rules_cap * 2 : 16;
+        g_rules = xrealloc(g_rules, g_rules_cap * sizeof(LdRule));
+        memset(g_rules + old_cap, 0, (g_rules_cap - old_cap) * sizeof(LdRule));
+    }
+    return &g_rules[g_nrules++];
 }
 
 static uint8_t *read_file(const char *path, size_t *sz) {
@@ -264,6 +335,96 @@ static int sec_match(const char *name, const char *pattern) {
 }
 
 /* ── Parse linker script (minimal subset) ──────────────────────────────── */
+static void validate_ld_script(const char *src) {
+    const char *p = src;
+    int brace_level = 0;
+    int paren_level = 0;
+    int line_num = 1;
+
+    while (*p) {
+        if (*p == '\n') {
+            line_num++;
+        }
+
+        /* skip whitespace and comments */
+        if (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') {
+            p++;
+            continue;
+        }
+        if (p[0] == '/' && p[1] == '*') {
+            p += 2;
+            while (*p && !(p[0] == '*' && p[1] == '/')) {
+                if (*p == '\n') line_num++;
+                p++;
+            }
+            if (*p) p += 2;
+            continue;
+        }
+
+        /* Track braces and parentheses */
+        if (*p == '{') {
+            brace_level++;
+            p++;
+            continue;
+        }
+        if (*p == '}') {
+            brace_level--;
+            if (brace_level < 0) {
+                fprintf(stderr, "zld: error: linker script line %d: mismatched closing brace '}'\n", line_num);
+                exit(1);
+            }
+            p++;
+            continue;
+        }
+        if (*p == '(') {
+            paren_level++;
+            p++;
+            continue;
+        }
+        if (*p == ')') {
+            paren_level--;
+            if (paren_level < 0) {
+                fprintf(stderr, "zld: error: linker script line %d: mismatched closing parenthesis ')'\n", line_num);
+                exit(1);
+            }
+            p++;
+            continue;
+        }
+
+        /* Check for words/identifiers */
+        if ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || *p == '_') {
+            const char *start = p;
+            while ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || (*p >= '0' && *p <= '9') || *p == '_') {
+                p++;
+            }
+            size_t len = (size_t)(p - start);
+            char word[64];
+            if (len >= sizeof(word)) len = sizeof(word) - 1;
+            strncpy(word, start, len);
+            word[len] = '\0';
+
+            /* If it's a known unsupported directive, warn */
+            if (strcmp(word, "OUTPUT_FORMAT") == 0 || strcmp(word, "OUTPUT_ARCH") == 0 ||
+                strcmp(word, "PHDRS") == 0 || strcmp(word, "SEARCH_DIR") == 0 ||
+                strcmp(word, "ASSERT") == 0 || strcmp(word, "PROVIDE") == 0) {
+                fprintf(stderr, "zld: warning: ignoring unsupported linker script directive '%s' at line %d\n", word, line_num);
+            }
+            continue;
+        }
+
+        p++;
+    }
+
+    if (brace_level != 0) {
+        fprintf(stderr, "zld: error: linker script has mismatched opening braces '{' (nesting depth %d)\n", brace_level);
+        exit(1);
+    }
+    if (paren_level != 0) {
+        fprintf(stderr, "zld: error: linker script has mismatched opening parentheses '(' (nesting depth %d)\n", paren_level);
+        exit(1);
+    }
+}
+
 /*
  * Parses:
  *   ENTRY(_start)
@@ -278,6 +439,7 @@ static int sec_match(const char *name, const char *pattern) {
 static void parse_ld_script(const char *path) {
     size_t sz;
     char *src = (char *)read_file(path, &sz);
+    validate_ld_script(src);
     char *p = src;
     uint64_t cur_addr = 0;
     int in_sections = 0;
@@ -409,15 +571,19 @@ static void parse_ld_script(const char *path) {
                 while (i >= 0 && (expr_buf[i] == ' ' || expr_buf[i] == '\t' || expr_buf[i] == '\r' || expr_buf[i] == '\n')) expr_buf[i--] = 0;
                 
                 /* Register this custom symbol */
-                if (g_nld_syms < 64) {
-                    LdSymbol *ls = &g_ld_syms[g_nld_syms++];
-                    strncpy(ls->name, sym_name, sizeof(ls->name)-1);
-                    strncpy(ls->val_str, expr_buf, sizeof(ls->val_str)-1);
-                    ls->resolved = 0;
-                    ls->value = 0;
-                    if (g_verbose) {
-                        printf("zld: registered linker script symbol '%s' = '%s'\n", ls->name, ls->val_str);
-                    }
+                if (g_nld_syms >= g_ld_syms_cap) {
+                    int old_cap = g_ld_syms_cap;
+                    g_ld_syms_cap = g_ld_syms_cap ? g_ld_syms_cap * 2 : 16;
+                    g_ld_syms = xrealloc(g_ld_syms, g_ld_syms_cap * sizeof(LdSymbol));
+                    memset(g_ld_syms + old_cap, 0, (g_ld_syms_cap - old_cap) * sizeof(LdSymbol));
+                }
+                LdSymbol *ls = &g_ld_syms[g_nld_syms++];
+                strncpy(ls->name, sym_name, sizeof(ls->name)-1);
+                strncpy(ls->val_str, expr_buf, sizeof(ls->val_str)-1);
+                ls->resolved = 0;
+                ls->value = 0;
+                if (g_verbose) {
+                    printf("zld: registered linker script symbol '%s' = '%s'\n", ls->name, ls->val_str);
                 }
                 if (*p) p++;
                 continue;
@@ -451,22 +617,18 @@ static void parse_ld_script(const char *path) {
                     /* strip leading dot from *(./pat) */
                     if (tok[0] == '.') {
                         /* e.g. ".text*" */
-                        if (g_nrules < MAX_LD_RULES) {
-                            LdRule *r = &g_rules[g_nrules++];
-                            strncpy(r->out_name, cur_out, sizeof(r->out_name)-1);
-                            strncpy(r->in_pattern, tok, sizeof(r->in_pattern)-1);
-                            r->addr = has_pending_addr ? cur_addr : 0;
-                            r->has_addr = has_pending_addr;
-                        }
+                        LdRule *r = add_rule();
+                        strncpy(r->out_name, cur_out, sizeof(r->out_name)-1);
+                        strncpy(r->in_pattern, tok, sizeof(r->in_pattern)-1);
+                        r->addr = has_pending_addr ? cur_addr : 0;
+                        r->has_addr = has_pending_addr;
                     } else if (strcmp(tok, "COMMON") == 0) {
                         /* map COMMON to .bss */
-                        if (g_nrules < MAX_LD_RULES) {
-                            LdRule *r = &g_rules[g_nrules++];
-                            strncpy(r->out_name, cur_out, sizeof(r->out_name)-1);
-                            strncpy(r->in_pattern, "COMMON", sizeof(r->in_pattern)-1);
-                            r->addr = has_pending_addr ? cur_addr : 0;
-                            r->has_addr = has_pending_addr;
-                        }
+                        LdRule *r = add_rule();
+                        strncpy(r->out_name, cur_out, sizeof(r->out_name)-1);
+                        strncpy(r->in_pattern, "COMMON", sizeof(r->in_pattern)-1);
+                        r->addr = has_pending_addr ? cur_addr : 0;
+                        r->has_addr = has_pending_addr;
                     }
                     tok = strtok(NULL, " \t");
                 }
@@ -585,8 +747,15 @@ static GlobalSym *add_sym(const char *name);
 static void layout(void) {
     static const char *out_order[] = { ".text", ".rodata", ".note", ".data", ".bss", NULL };
     int oi;
-    char laid_out[MAX_INPUTS][MAX_SECTIONS];
-    memset(laid_out, 0, sizeof(laid_out));
+    int max_shnum = 0;
+    int i;
+    for (i = 0; i < g_nobj; i++) {
+        if (g_objs[i].ehdr->e_shnum > max_shnum) {
+            max_shnum = g_objs[i].ehdr->e_shnum;
+        }
+    }
+    int stride = max_shnum > 0 ? max_shnum : 1;
+    char *laid_out = xcalloc(g_nobj * stride, sizeof(char));
 
     for (oi = 0; out_order[oi]; oi++) {
         const char *oname = out_order[oi];
@@ -673,7 +842,7 @@ static void layout(void) {
                     for (si = 0; si < o->ehdr->e_shnum; si++) {
                         Elf64_Shdr *sh = &o->shdrs[si];
                         if (sh->sh_type == SHT_NULL) continue;
-                        if (laid_out[obj_i][si]) continue;
+                        if (laid_out[obj_i * stride + si]) continue;
 
                         /* Also allow non-alloc sections to be laid out if explicitly requested in linker script */
                         if (!(sh->sh_flags & SHF_ALLOC)) {
@@ -688,17 +857,21 @@ static void layout(void) {
                                 cursor = ALIGN_UP(cursor, align);
                                 o->section_vma[si] = cursor;
                                 cursor += sh->sh_size;
-                                laid_out[obj_i][si] = 1;
+                                laid_out[obj_i * stride + si] = 1;
 
                                 /* record contribution */
                                 uint64_t f = sh->sh_flags & (SHF_ALLOC | SHF_WRITE | SHF_EXECINSTR);
                                 OutSection *out = get_out_section(oname, f);
-                                if (out->contrib_cnt < MAX_SECTIONS) {
-                                    out->contrib[out->contrib_cnt].obj   = obj_i;
-                                    out->contrib[out->contrib_cnt].shndx = si;
-                                    out->contrib[out->contrib_cnt].off   = o->section_vma[si] - original_base;
-                                    out->contrib_cnt++;
+                                if (out->contrib_cnt >= out->contrib_cap) {
+                                    int old_cap = out->contrib_cap;
+                                    out->contrib_cap = out->contrib_cap ? out->contrib_cap * 2 : 16;
+                                    out->contrib = xrealloc(out->contrib, out->contrib_cap * sizeof(*out->contrib));
+                                    memset(out->contrib + old_cap, 0, (out->contrib_cap - old_cap) * sizeof(*out->contrib));
                                 }
+                                out->contrib[out->contrib_cnt].obj   = obj_i;
+                                out->contrib[out->contrib_cnt].shndx = si;
+                                out->contrib[out->contrib_cnt].off   = o->section_vma[si] - original_base;
+                                out->contrib_cnt++;
                                 if (align > out->align) out->align = align;
                             }
                         }
@@ -714,7 +887,7 @@ static void layout(void) {
                     Elf64_Shdr *sh = &o->shdrs[si];
                     if (!(sh->sh_flags & SHF_ALLOC)) continue;
                     if (sh->sh_type == SHT_NULL) continue;
-                    if (laid_out[obj_i][si]) continue;
+                    if (laid_out[obj_i * stride + si]) continue;
 
                     const char *sname = sh_name(o, si);
                     const char *mapped = match_section(sname, 0);
@@ -725,17 +898,21 @@ static void layout(void) {
                         cursor = ALIGN_UP(cursor, align);
                         o->section_vma[si] = cursor;
                         cursor += sh->sh_size;
-                        laid_out[obj_i][si] = 1;
+                        laid_out[obj_i * stride + si] = 1;
 
                         /* record contribution */
                         uint64_t f = sh->sh_flags & (SHF_ALLOC | SHF_WRITE | SHF_EXECINSTR);
                         OutSection *out = get_out_section(oname, f);
-                        if (out->contrib_cnt < MAX_SECTIONS) {
-                            out->contrib[out->contrib_cnt].obj   = obj_i;
-                            out->contrib[out->contrib_cnt].shndx = si;
-                            out->contrib[out->contrib_cnt].off   = o->section_vma[si] - original_base;
-                            out->contrib_cnt++;
+                        if (out->contrib_cnt >= out->contrib_cap) {
+                            int old_cap = out->contrib_cap;
+                            out->contrib_cap = out->contrib_cap ? out->contrib_cap * 2 : 16;
+                            out->contrib = xrealloc(out->contrib, out->contrib_cap * sizeof(*out->contrib));
+                            memset(out->contrib + old_cap, 0, (out->contrib_cap - old_cap) * sizeof(*out->contrib));
                         }
+                        out->contrib[out->contrib_cnt].obj   = obj_i;
+                        out->contrib[out->contrib_cnt].shndx = si;
+                        out->contrib[out->contrib_cnt].off   = o->section_vma[si] - original_base;
+                        out->contrib_cnt++;
                         if (align > out->align) out->align = align;
                     }
                 }
@@ -751,6 +928,7 @@ static void layout(void) {
             out->size = cursor - original_base;
         }
     }
+    free(laid_out);
 }
 
 /* ── Resolve global symbols ─────────────────────────────────────────────── */
@@ -762,7 +940,12 @@ static GlobalSym *find_sym(const char *name) {
 }
 
 static GlobalSym *add_sym(const char *name) {
-    if (g_nsym >= MAX_SYMBOLS) die("too many symbols");
+    if (g_nsym >= g_syms_cap) {
+        int old_cap = g_syms_cap;
+        g_syms_cap = g_syms_cap ? g_syms_cap * 2 : 256;
+        g_syms = xrealloc(g_syms, g_syms_cap * sizeof(GlobalSym));
+        memset(g_syms + old_cap, 0, (g_syms_cap - old_cap) * sizeof(GlobalSym));
+    }
     GlobalSym *s = &g_syms[g_nsym++];
     memset(s, 0, sizeof(*s));
     strncpy(s->name, name, sizeof(s->name)-1);
@@ -903,7 +1086,7 @@ static uint64_t resolve_sym_value(ObjFile *o, uint32_t sym_idx) {
     Elf64_Sym *sym = &o->symtab[sym_idx];
     const char *name = o->strtab + sym->st_name;
 
-    if (strcmp(name, "_kernel_end") == 0 || strcmp(name, "__kernel_end") == 0) {
+    if (strcmp(name, "_kernel_end") == 0 || strcmp(name, "__kernel_end") == 0 || strcmp(name, "_kernel_end_asm") == 0) {
         uint64_t end_va = 0x100000;
         int s;
         for (s = 0; s < g_nout; s++) {
@@ -1229,18 +1412,8 @@ int zld_link(const char **obj_files, int obj_count, const char *out_path, const 
     char *env_verb = getenv("ZLD_VERBOSE");
     g_verbose = env_verb ? atoi(env_verb) : 0;
 
-    /* Reset global state */
-    g_nobj = 0;
-    g_nsym = 0;
-    g_nrules = 0;
-    g_entry = 0;
-    strcpy(g_entry_name, "_start");
-    strcpy(g_output, "a.out");
-    g_nout = 0;
-    memset(g_objs, 0, sizeof(g_objs));
-    memset(g_syms, 0, sizeof(g_syms));
-    memset(g_rules, 0, sizeof(g_rules));
-    memset(g_out, 0, sizeof(g_out));
+    /* Reset and initialize global state */
+    cleanup_linker_state();
 
     if (g_verbose) {
         printf("[zld] Initiating static link campaign: output=%s\n", out_path);
@@ -1251,25 +1424,26 @@ int zld_link(const char **obj_files, int obj_count, const char *out_path, const 
         /* Default hardcoded layout rules */
         LdRule *r;
         strncpy(g_entry_name, "_start", sizeof(g_entry_name)-1);
-        r = &g_rules[g_nrules++];
+        r = add_rule();
         strcpy(r->out_name, ".text"); strcpy(r->in_pattern, ".text*");
         r->addr = 0x100000; r->has_addr = 1;
-        r = &g_rules[g_nrules++];
+        r = add_rule();
         strcpy(r->out_name, ".text"); strcpy(r->in_pattern, ".multiboot");
         r->addr = 0x100000; r->has_addr = 1;
-        r = &g_rules[g_nrules++];
+        r = add_rule();
         strcpy(r->out_name, ".rodata"); strcpy(r->in_pattern, ".rodata*");
         r->addr = 0; r->has_addr = 0;
-        r = &g_rules[g_nrules++];
+        r = add_rule();
         strcpy(r->out_name, ".data"); strcpy(r->in_pattern, ".data*");
         r->addr = 0; r->has_addr = 0;
-        r = &g_rules[g_nrules++];
+        r = add_rule();
         strcpy(r->out_name, ".bss"); strcpy(r->in_pattern, ".bss*");
         r->addr = 0; r->has_addr = 0;
     }
 
     g_nobj = obj_count;
-    if (g_nobj > MAX_INPUTS) g_nobj = MAX_INPUTS;
+    g_objs_cap = g_nobj;
+    g_objs = xcalloc(g_objs_cap, sizeof(ObjFile));
     for (i = 0; i < g_nobj; i++) {
         load_obj(obj_files[i], i);
     }
@@ -1281,22 +1455,7 @@ int zld_link(const char **obj_files, int obj_count, const char *out_path, const 
     write_output(out_path);
 
     /* Free allocated memory to avoid leaks on repeat calls */
-    for (i = 0; i < g_nout; i++) {
-        if (g_out[i].buf) {
-            free(g_out[i].buf);
-            g_out[i].buf = NULL;
-        }
-    }
-    for (i = 0; i < g_nobj; i++) {
-        if (g_objs[i].data) {
-            free(g_objs[i].data);
-            g_objs[i].data = NULL;
-        }
-        if (g_objs[i].section_vma) {
-            free(g_objs[i].section_vma);
-            g_objs[i].section_vma = NULL;
-        }
-    }
+    cleanup_linker_state();
 
     return 0;
 }
