@@ -69,6 +69,23 @@ static int parse_reg(const char *s) {
     if (strcmp(s, "%r13") == 0 || strcmp(s, "%r13d") == 0 || strcmp(s, "%r13w") == 0 || strcmp(s, "%r13b") == 0) return 13;
     if (strcmp(s, "%r14") == 0 || strcmp(s, "%r14d") == 0 || strcmp(s, "%r14w") == 0 || strcmp(s, "%r14b") == 0) return 14;
     if (strcmp(s, "%r15") == 0 || strcmp(s, "%r15d") == 0 || strcmp(s, "%r15w") == 0 || strcmp(s, "%r15b") == 0) return 15;
+    if (strcmp(s, "%xmm0") == 0) return 16;
+    if (strcmp(s, "%xmm1") == 0) return 17;
+    if (strcmp(s, "%xmm2") == 0) return 18;
+    if (strcmp(s, "%xmm3") == 0) return 19;
+    if (strcmp(s, "%xmm4") == 0) return 20;
+    if (strcmp(s, "%xmm5") == 0) return 21;
+    if (strcmp(s, "%xmm6") == 0) return 22;
+    if (strcmp(s, "%xmm7") == 0) return 23;
+    if (strcmp(s, "%xmm8") == 0) return 24;
+    if (strcmp(s, "%xmm9") == 0) return 25;
+    if (strcmp(s, "%xmm10") == 0) return 26;
+    if (strcmp(s, "%xmm11") == 0) return 27;
+    if (strcmp(s, "%xmm12") == 0) return 28;
+    if (strcmp(s, "%xmm13") == 0) return 29;
+    if (strcmp(s, "%xmm14") == 0) return 30;
+    if (strcmp(s, "%xmm15") == 0) return 31;
+    if (strcmp(s, "%rip") == 0) return 32;
     return -1;
 }
 
@@ -84,6 +101,15 @@ static int parse_mem_operand(const char *s, int *reg, long long *disp) {
         reg_name[len] = '\0';
         *reg = parse_reg(reg_name);
         
+        if (*reg == -1) {
+            fprintf(stderr, "assembler error: invalid base register in memory operand '%s'\n", s);
+            exit(1);
+        }
+        if (*reg == 32) {
+            fprintf(stderr, "assembler error: %%rip is not supported as a base register in memory operand '%s' (must be rip-relative only)\n", s);
+            exit(1);
+        }
+        
         if (paren == s) {
             *disp = 0;
         } else {
@@ -92,7 +118,7 @@ static int parse_mem_operand(const char *s, int *reg, long long *disp) {
             if (disp_len >= 63) disp_len = 63;
             strncpy(disp_str, s, disp_len);
             disp_str[disp_len] = '\0';
-            *disp = atoll(disp_str);
+            *disp = strtoll(disp_str, NULL, 0);
         }
         return 1;
     }
@@ -964,6 +990,374 @@ static void encode_movzbq(Segment *seg, int src_reg, int dst_reg, int is_mem_src
     }
 }
 
+static int is_reg_64(const char *s) {
+    if (s[0] == '%') {
+        if (s[1] == 'r') {
+            int len = strlen(s);
+            if (s[len-1] == 'd' || s[len-1] == 'w' || s[len-1] == 'b') return 0;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void encode_sse_binop(Segment *seg, const char *prefix_bytes, int num_prefixes, unsigned char opcode, int reg_src, int reg_dst) {
+    int i;
+    for (i = 0; i < num_prefixes; i++) {
+        unsigned char p = prefix_bytes[i];
+        seg_append(seg, &p, 1);
+    }
+    
+    int hw_src = reg_src & 15;
+    int hw_dst = reg_dst & 15;
+    
+    unsigned char rex = 0x40;
+    int need_rex = 0;
+    if (hw_src & 8) {
+        rex |= 0x01;
+        need_rex = 1;
+    }
+    if (hw_dst & 8) {
+        rex |= 0x04;
+        need_rex = 1;
+    }
+    if (need_rex) {
+        seg_append(seg, &rex, 1);
+    }
+    
+    unsigned char escape = 0x0f;
+    seg_append(seg, &escape, 1);
+    seg_append(seg, &opcode, 1);
+    
+    unsigned char modrm = 0xc0 | ((hw_dst & 7) << 3) | (hw_src & 7);
+    seg_append(seg, &modrm, 1);
+}
+
+static void encode_sse_mem(Segment *seg, const char *prefix_bytes, int num_prefixes, unsigned char opcode, int reg_gp, int reg_xmm, int is_load, long long disp) {
+    int i;
+    for (i = 0; i < num_prefixes; i++) {
+        unsigned char p = prefix_bytes[i];
+        seg_append(seg, &p, 1);
+    }
+    
+    int hw_gp = reg_gp & 15;
+    int hw_xmm = reg_xmm & 15;
+    
+    unsigned char rex = 0x40;
+    int need_rex = 0;
+    if (hw_gp & 8) {
+        rex |= 0x01;
+        need_rex = 1;
+    }
+    if (hw_xmm & 8) {
+        rex |= 0x04;
+        need_rex = 1;
+    }
+    if (need_rex) {
+        seg_append(seg, &rex, 1);
+    }
+    
+    unsigned char escape = 0x0f;
+    seg_append(seg, &escape, 1);
+    seg_append(seg, &opcode, 1);
+    
+    unsigned char modrm;
+    if (disp >= -128 && disp <= 127) {
+        modrm = (0x01 << 6) | ((hw_xmm & 7) << 3) | (hw_gp & 7);
+        seg_append(seg, &modrm, 1);
+        if ((hw_gp & 7) == 4) {
+            unsigned char sib = 0x24;
+            seg_append(seg, &sib, 1);
+        }
+        unsigned char d = (unsigned char)disp;
+        seg_append(seg, &d, 1);
+    } else {
+        modrm = (0x02 << 6) | ((hw_xmm & 7) << 3) | (hw_gp & 7);
+        seg_append(seg, &modrm, 1);
+        if ((hw_gp & 7) == 4) {
+            unsigned char sib = 0x24;
+            seg_append(seg, &sib, 1);
+        }
+        unsigned char d[4];
+        d[0] = disp & 0xFF;
+        d[1] = (disp >> 8) & 0xFF;
+        d[2] = (disp >> 16) & 0xFF;
+        d[3] = (disp >> 24) & 0xFF;
+        seg_append(seg, d, 4);
+    }
+}
+
+static void encode_sse_rip(Segment *seg, const char *prefix_bytes, int num_prefixes, unsigned char opcode, int reg_xmm, const char *label_name) {
+    int i;
+    for (i = 0; i < num_prefixes; i++) {
+        unsigned char p = prefix_bytes[i];
+        seg_append(seg, &p, 1);
+    }
+    
+    int hw_xmm = reg_xmm & 15;
+    unsigned char rex = 0x40;
+    int need_rex = 0;
+    if (hw_xmm & 8) {
+        rex |= 0x04;
+        need_rex = 1;
+    }
+    if (need_rex) {
+        seg_append(seg, &rex, 1);
+    }
+    
+    unsigned char escape = 0x0f;
+    seg_append(seg, &escape, 1);
+    seg_append(seg, &opcode, 1);
+    
+    unsigned char modrm = 0x05 | ((hw_xmm & 7) << 3);
+    seg_append(seg, &modrm, 1);
+    
+    Reloc r;
+    r.offset = seg->size;
+    strcpy(r.target_name, label_name);
+    r.type = R_X86_64_PC32;
+    r.addend = -4;
+    relocs[reloc_count++] = r;
+    
+    unsigned char zero[4] = {0, 0, 0, 0};
+    seg_append(seg, zero, 4);
+}
+
+static void encode_movq_xmm(Segment *seg, int reg1, int reg2) {
+    unsigned char p66 = 0x66;
+    seg_append(seg, &p66, 1);
+    
+    unsigned char rex = 0x48;
+    int hw1 = reg1 & 15;
+    int hw2 = reg2 & 15;
+    
+    if (reg1 < 16 && reg2 >= 16) {
+        if (hw1 & 8) rex |= 0x01;
+        if (hw2 & 8) rex |= 0x04;
+        seg_append(seg, &rex, 1);
+        unsigned char op[2] = {0x0f, 0x6e};
+        seg_append(seg, op, 2);
+        unsigned char modrm = 0xc0 | ((hw2 & 7) << 3) | (hw1 & 7);
+        seg_append(seg, &modrm, 1);
+    } else if (reg1 >= 16 && reg2 < 16) {
+        if (hw1 & 8) rex |= 0x01;
+        if (hw2 & 8) rex |= 0x04;
+        seg_append(seg, &rex, 1);
+        unsigned char op[2] = {0x0f, 0x7e};
+        seg_append(seg, op, 2);
+        unsigned char modrm = 0xc0 | ((hw2 & 7) << 3) | (hw1 & 7);
+        seg_append(seg, &modrm, 1);
+    }
+}
+
+static void encode_movd_xmm(Segment *seg, int reg1, int reg2) {
+    unsigned char p66 = 0x66;
+    seg_append(seg, &p66, 1);
+    
+    unsigned char rex = 0x40;
+    int hw1 = reg1 & 15;
+    int hw2 = reg2 & 15;
+    int need_rex = 0;
+    
+    if (reg1 < 16 && reg2 >= 16) {
+        if (hw1 & 8) { rex |= 0x01; need_rex = 1; }
+        if (hw2 & 8) { rex |= 0x04; need_rex = 1; }
+        if (need_rex) seg_append(seg, &rex, 1);
+        unsigned char op[2] = {0x0f, 0x6e};
+        seg_append(seg, op, 2);
+        unsigned char modrm = 0xc0 | ((hw2 & 7) << 3) | (hw1 & 7);
+        seg_append(seg, &modrm, 1);
+    } else if (reg1 >= 16 && reg2 < 16) {
+        if (hw1 & 8) { rex |= 0x01; need_rex = 1; }
+        if (hw2 & 8) { rex |= 0x04; need_rex = 1; }
+        if (need_rex) seg_append(seg, &rex, 1);
+        unsigned char op[2] = {0x0f, 0x7e};
+        seg_append(seg, op, 2);
+        unsigned char modrm = 0xc0 | ((hw2 & 7) << 3) | (hw1 & 7);
+        seg_append(seg, &modrm, 1);
+    }
+}
+
+static void encode_cvtt_to_si(Segment *seg, const char *pref, int n_pref, unsigned char opcode, int reg_xmm, int reg_gp, int use_rex_w) {
+    int i;
+    for (i = 0; i < n_pref; i++) {
+        unsigned char p = pref[i];
+        seg_append(seg, &p, 1);
+    }
+    
+    int hw_gp = reg_gp & 15;
+    int hw_xmm = reg_xmm & 15;
+    
+    unsigned char rex = use_rex_w ? 0x48 : 0x40;
+    int need_rex = use_rex_w;
+    
+    if (hw_xmm & 8) {
+        rex |= 0x01;
+        need_rex = 1;
+    }
+    if (hw_gp & 8) {
+        rex |= 0x04;
+        need_rex = 1;
+    }
+    
+    if (need_rex) {
+        seg_append(seg, &rex, 1);
+    }
+    
+    unsigned char escape = 0x0f;
+    seg_append(seg, &escape, 1);
+    seg_append(seg, &opcode, 1);
+    
+    unsigned char modrm = 0xc0 | ((hw_gp & 7) << 3) | (hw_xmm & 7);
+    seg_append(seg, &modrm, 1);
+}
+
+static void encode_cvtt_to_si_mem(Segment *seg, const char *pref, int n_pref, unsigned char opcode, int reg_gp_base, int reg_gp_dst, int use_rex_w, long long disp) {
+    int i;
+    for (i = 0; i < n_pref; i++) {
+        unsigned char p = pref[i];
+        seg_append(seg, &p, 1);
+    }
+    
+    int hw_gp_base = reg_gp_base & 15;
+    int hw_gp_dst = reg_gp_dst & 15;
+    
+    unsigned char rex = use_rex_w ? 0x48 : 0x40;
+    int need_rex = use_rex_w;
+    
+    if (hw_gp_base & 8) {
+        rex |= 0x01;
+        need_rex = 1;
+    }
+    if (hw_gp_dst & 8) {
+        rex |= 0x04;
+        need_rex = 1;
+    }
+    
+    if (need_rex) {
+        seg_append(seg, &rex, 1);
+    }
+    
+    unsigned char escape = 0x0f;
+    seg_append(seg, &escape, 1);
+    seg_append(seg, &opcode, 1);
+    
+    unsigned char modrm;
+    if (disp >= -128 && disp <= 127) {
+        modrm = (0x01 << 6) | ((hw_gp_dst & 7) << 3) | (hw_gp_base & 7);
+        seg_append(seg, &modrm, 1);
+        if ((hw_gp_base & 7) == 4) {
+            unsigned char sib = 0x24;
+            seg_append(seg, &sib, 1);
+        }
+        unsigned char d = (unsigned char)disp;
+        seg_append(seg, &d, 1);
+    } else {
+        modrm = (0x02 << 6) | ((hw_gp_dst & 7) << 3) | (hw_gp_base & 7);
+        seg_append(seg, &modrm, 1);
+        if ((hw_gp_base & 7) == 4) {
+            unsigned char sib = 0x24;
+            seg_append(seg, &sib, 1);
+        }
+        unsigned char d[4];
+        d[0] = disp & 0xFF;
+        d[1] = (disp >> 8) & 0xFF;
+        d[2] = (disp >> 16) & 0xFF;
+        d[3] = (disp >> 24) & 0xFF;
+        seg_append(seg, d, 4);
+    }
+}
+
+static void encode_cvtsi_to_xmm(Segment *seg, const char *pref, int n_pref, unsigned char opcode, int reg_gp, int reg_xmm, int use_rex_w) {
+    int i;
+    for (i = 0; i < n_pref; i++) {
+        unsigned char p = pref[i];
+        seg_append(seg, &p, 1);
+    }
+    
+    int hw_gp = reg_gp & 15;
+    int hw_xmm = reg_xmm & 15;
+    
+    unsigned char rex = use_rex_w ? 0x48 : 0x40;
+    int need_rex = use_rex_w;
+    
+    if (hw_gp & 8) {
+        rex |= 0x01;
+        need_rex = 1;
+    }
+    if (hw_xmm & 8) {
+        rex |= 0x04;
+        need_rex = 1;
+    }
+    
+    if (need_rex) {
+        seg_append(seg, &rex, 1);
+    }
+    
+    unsigned char escape = 0x0f;
+    seg_append(seg, &escape, 1);
+    seg_append(seg, &opcode, 1);
+    
+    unsigned char modrm = 0xc0 | ((hw_xmm & 7) << 3) | (hw_gp & 7);
+    seg_append(seg, &modrm, 1);
+}
+
+static void encode_cvtsi_to_xmm_mem(Segment *seg, const char *pref, int n_pref, unsigned char opcode, int reg_gp_base, int reg_xmm, int use_rex_w, long long disp) {
+    int i;
+    for (i = 0; i < n_pref; i++) {
+        unsigned char p = pref[i];
+        seg_append(seg, &p, 1);
+    }
+    
+    int hw_gp_base = reg_gp_base & 15;
+    int hw_xmm = reg_xmm & 15;
+    
+    unsigned char rex = use_rex_w ? 0x48 : 0x40;
+    int need_rex = use_rex_w;
+    
+    if (hw_gp_base & 8) {
+        rex |= 0x01;
+        need_rex = 1;
+    }
+    if (hw_xmm & 8) {
+        rex |= 0x04;
+        need_rex = 1;
+    }
+    
+    if (need_rex) {
+        seg_append(seg, &rex, 1);
+    }
+    
+    unsigned char escape = 0x0f;
+    seg_append(seg, &escape, 1);
+    seg_append(seg, &opcode, 1);
+    
+    unsigned char modrm;
+    if (disp >= -128 && disp <= 127) {
+        modrm = (0x01 << 6) | ((hw_xmm & 7) << 3) | (hw_gp_base & 7);
+        seg_append(seg, &modrm, 1);
+        if ((hw_gp_base & 7) == 4) {
+            unsigned char sib = 0x24;
+            seg_append(seg, &sib, 1);
+        }
+        unsigned char d = (unsigned char)disp;
+        seg_append(seg, &d, 1);
+    } else {
+        modrm = (0x02 << 6) | ((hw_xmm & 7) << 3) | (hw_gp_base & 7);
+        seg_append(seg, &modrm, 1);
+        if ((hw_gp_base & 7) == 4) {
+            unsigned char sib = 0x24;
+            seg_append(seg, &sib, 1);
+        }
+        unsigned char d[4];
+        d[0] = disp & 0xFF;
+        d[1] = (disp >> 8) & 0xFF;
+        d[2] = (disp >> 16) & 0xFF;
+        d[3] = (disp >> 24) & 0xFF;
+        seg_append(seg, d, 4);
+    }
+}
+
 /* Trim helper */
 static char *trim(char *s) {
     char *end;
@@ -1190,76 +1584,175 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
         }
 
         /* 0-operand instructions */
+        int matched = 0;
+        /* 0-operand instructions */
         if (strcmp(mnemonic, "ret") == 0) {
             unsigned char b = 0xc3;
             seg_append(&text_seg, &b, 1);
+            matched = 1;
         } else if (strcmp(mnemonic, "leave") == 0) {
             unsigned char b = 0xc9;
             seg_append(&text_seg, &b, 1);
+            matched = 1;
         } else if (strcmp(mnemonic, "cqto") == 0 || strcmp(mnemonic, "cqo") == 0) {
             unsigned char b[2] = {0x48, 0x99};
             seg_append(&text_seg, b, 2);
+            matched = 1;
         } else if (strcmp(mnemonic, "cltq") == 0) {
             unsigned char b[2] = {0x48, 0x98};
             seg_append(&text_seg, b, 2);
+            matched = 1;
         }
         /* 1-operand instructions */
         else if (strcmp(mnemonic, "pushq") == 0) {
             char *op = args_start ? trim(args_start) : "";
-            int reg = parse_reg(op);
-            if (reg == 5) {
-                unsigned char b = 0x55;
-                seg_append(&text_seg, &b, 1);
-            } else if (reg >= 0) {
-                unsigned char rex = 0x40 | (reg >> 3);
-                unsigned char opcode = 0x50 | (reg & 7);
-                if (rex != 0x40) seg_append(&text_seg, &rex, 1);
-                seg_append(&text_seg, &opcode, 1);
+            int is_mem = 0;
+            int reg = -1;
+            long long disp = 0;
+            if (parse_mem_operand(op, &reg, &disp)) {
+                is_mem = 1;
+            } else {
+                reg = parse_reg(op);
             }
+            if (reg < 0) {
+                fprintf(stderr, "assembler error: invalid register/operand '%s' in pushq\n", op);
+                exit(1);
+            }
+            if (is_mem) {
+                unsigned char rex = 0x40;
+                if (reg & 8) rex |= 0x01; /* REX.B */
+                unsigned char opcode = 0xff;
+                unsigned char modrm;
+                if (disp >= -128 && disp <= 127) {
+                    modrm = (0x01 << 6) | (6 << 3) | (reg & 7);
+                    if (rex != 0x40) seg_append(&text_seg, &rex, 1);
+                    seg_append(&text_seg, &opcode, 1);
+                    seg_append(&text_seg, &modrm, 1);
+                    if ((reg & 7) == 4) { unsigned char sib = 0x24; seg_append(&text_seg, &sib, 1); }
+                    unsigned char d = (unsigned char)disp;
+                    seg_append(&text_seg, &d, 1);
+                } else {
+                    modrm = (0x02 << 6) | (6 << 3) | (reg & 7);
+                    if (rex != 0x40) seg_append(&text_seg, &rex, 1);
+                    seg_append(&text_seg, &opcode, 1);
+                    seg_append(&text_seg, &modrm, 1);
+                    if ((reg & 7) == 4) { unsigned char sib = 0x24; seg_append(&text_seg, &sib, 1); }
+                    unsigned char d[4];
+                    d[0] = disp & 0xFF; d[1] = (disp >> 8) & 0xFF;
+                    d[2] = (disp >> 16) & 0xFF; d[3] = (disp >> 24) & 0xFF;
+                    seg_append(&text_seg, d, 4);
+                }
+            } else {
+                if (reg == 5) {
+                    unsigned char b = 0x55;
+                    seg_append(&text_seg, &b, 1);
+                } else {
+                    unsigned char rex = 0x40 | (reg >> 3);
+                    unsigned char opcode = 0x50 | (reg & 7);
+                    if (rex != 0x40) seg_append(&text_seg, &rex, 1);
+                    seg_append(&text_seg, &opcode, 1);
+                }
+            }
+            matched = 1;
         } else if (strcmp(mnemonic, "popq") == 0) {
             char *op = args_start ? trim(args_start) : "";
-            int reg = parse_reg(op);
-            if (reg == 5) {
-                unsigned char b = 0x5d;
-                seg_append(&text_seg, &b, 1);
-            } else if (reg >= 0) {
-                unsigned char rex = 0x40 | (reg >> 3);
-                unsigned char opcode = 0x58 | (reg & 7);
-                if (rex != 0x40) seg_append(&text_seg, &rex, 1);
-                seg_append(&text_seg, &opcode, 1);
+            int is_mem = 0;
+            int reg = -1;
+            long long disp = 0;
+            if (parse_mem_operand(op, &reg, &disp)) {
+                is_mem = 1;
+            } else {
+                reg = parse_reg(op);
             }
-        } else if (strcmp(mnemonic, "call") == 0) {
+            if (reg < 0) {
+                fprintf(stderr, "assembler error: invalid register/operand '%s' in popq\n", op);
+                exit(1);
+            }
+            if (is_mem) {
+                unsigned char rex = 0x40;
+                if (reg & 8) rex |= 0x01; /* REX.B */
+                unsigned char opcode = 0x8f;
+                unsigned char modrm;
+                if (disp >= -128 && disp <= 127) {
+                    modrm = (0x01 << 6) | (0 << 3) | (reg & 7);
+                    if (rex != 0x40) seg_append(&text_seg, &rex, 1);
+                    seg_append(&text_seg, &opcode, 1);
+                    seg_append(&text_seg, &modrm, 1);
+                    if ((reg & 7) == 4) { unsigned char sib = 0x24; seg_append(&text_seg, &sib, 1); }
+                    unsigned char d = (unsigned char)disp;
+                    seg_append(&text_seg, &d, 1);
+                } else {
+                    modrm = (0x02 << 6) | (0 << 3) | (reg & 7);
+                    if (rex != 0x40) seg_append(&text_seg, &rex, 1);
+                    seg_append(&text_seg, &opcode, 1);
+                    seg_append(&text_seg, &modrm, 1);
+                    if ((reg & 7) == 4) { unsigned char sib = 0x24; seg_append(&text_seg, &sib, 1); }
+                    unsigned char d[4];
+                    d[0] = disp & 0xFF; d[1] = (disp >> 8) & 0xFF;
+                    d[2] = (disp >> 16) & 0xFF; d[3] = (disp >> 24) & 0xFF;
+                    seg_append(&text_seg, d, 4);
+                }
+            } else {
+                if (reg == 5) {
+                    unsigned char b = 0x5d;
+                    seg_append(&text_seg, &b, 1);
+                } else {
+                    unsigned char rex = 0x40 | (reg >> 3);
+                    unsigned char opcode = 0x58 | (reg & 7);
+                    if (rex != 0x40) seg_append(&text_seg, &rex, 1);
+                    seg_append(&text_seg, &opcode, 1);
+                }
+            }
+            matched = 1;
+        } else if (strcmp(mnemonic, "call") == 0 || strcmp(mnemonic, "callq") == 0) {
             char *target = args_start ? trim(args_start) : "";
             /* CG-FNPTR-001: detect register-indirect call "call *%rN"
              * These need FF/2 ModRM encoding, not a PLT32 relocation. */
             if (target[0] == '*') {
                 int ireg = parse_reg(target + 1); /* skip '*', parse %rN */
-                if (ireg >= 0) {
-                    encode_call_indirect_reg(&text_seg, ireg);
-                } else {
-                    /* Memory-indirect or unrecognised form — fall back */
-                    encode_call(&text_seg, target);
+                if (ireg == -1) {
+                    fprintf(stderr, "assembler error: invalid register '%s' in indirect call\n", target);
+                    exit(1);
                 }
+                encode_call_indirect_reg(&text_seg, ireg);
             } else {
                 encode_call(&text_seg, target);
             }
+            matched = 1;
         } else if (mnemonic[0] == 'j') {
             char *target = args_start ? trim(args_start) : "";
             encode_jump(&text_seg, mnemonic, target);
+            matched = 1;
         } else if (strncmp(mnemonic, "set", 3) == 0 && strlen(mnemonic) <= 5) {
             encode_set(&text_seg, mnemonic);
+            matched = 1;
         } else if (strcmp(mnemonic, "idivq") == 0) {
             char *op = args_start ? trim(args_start) : "";
             int reg = parse_reg(op);
+            if (reg < 0) {
+                fprintf(stderr, "assembler error: invalid register '%s' in idivq\n", op);
+                exit(1);
+            }
             encode_idivq(&text_seg, reg);
+            matched = 1;
         } else if (strcmp(mnemonic, "divq") == 0) {
             char *op = args_start ? trim(args_start) : "";
             int reg = parse_reg(op);
+            if (reg < 0) {
+                fprintf(stderr, "assembler error: invalid register '%s' in divq\n", op);
+                exit(1);
+            }
             encode_divq(&text_seg, reg);
+            matched = 1;
         } else if (strcmp(mnemonic, "negq") == 0) {
             char *op = args_start ? trim(args_start) : "";
             int reg = parse_reg(op);
+            if (reg < 0) {
+                fprintf(stderr, "assembler error: invalid register '%s' in negq\n", op);
+                exit(1);
+            }
             encode_negq(&text_seg, reg);
+            matched = 1;
         }
         /* 2-operand instructions */
         else if (args_start) {
@@ -1273,9 +1766,37 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                 int reg1 = parse_reg(op1);
                 int reg2 = parse_reg(op2);
                 
+                if (op1[0] == '%' && reg1 == -1) {
+                    fprintf(stderr, "assembler error: invalid register '%s' in %s\n", op1, mnemonic);
+                    exit(1);
+                }
+                if (op2[0] == '%' && reg2 == -1) {
+                    fprintf(stderr, "assembler error: invalid register '%s' in %s\n", op2, mnemonic);
+                    exit(1);
+                }
+                
                 if (strcmp(mnemonic, "movq") == 0) {
-                    if (op1[0] == '$') {
-                        long long imm = atoll(op1 + 1);
+                    if ((reg1 >= 16 && reg1 <= 31) || (reg2 >= 16 && reg2 <= 31)) {
+                        int is_mem1 = 0, is_mem2 = 0;
+                        long long disp1 = 0, disp2 = 0;
+                        if (parse_mem_operand(op1, &reg1, &disp1)) is_mem1 = 1;
+                        if (parse_mem_operand(op2, &reg2, &disp2)) is_mem2 = 1;
+                        
+                        if (is_mem1) {
+                            encode_sse_mem(&text_seg, "\xF3", 1, 0x7E, reg1, reg2, 1, disp1);
+                        } else if (is_mem2) {
+                            encode_sse_mem(&text_seg, "\x66", 1, 0xD6, reg2, reg1, 0, disp2);
+                        } else {
+                            if (reg1 < 16 && reg2 >= 16) {
+                                encode_movq_xmm(&text_seg, reg1, reg2);
+                            } else if (reg1 >= 16 && reg2 < 16) {
+                                encode_movq_xmm(&text_seg, reg1, reg2);
+                            } else {
+                                encode_sse_binop(&text_seg, "\xF3", 1, 0x7E, reg1, reg2);
+                            }
+                        }
+                    } else if (op1[0] == '$') {
+                        long long imm = strtoll(op1 + 1, NULL, 0);
                         encode_movq_imm(&text_seg, imm, reg2);
                     } else if (strstr(op1, "(%rip)")) {
                         char lbl[128];
@@ -1296,9 +1817,107 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                         if (parse_mem_operand(op2, &reg2, &disp2)) is_mem2 = 1;
                         encode_movq(&text_seg, reg1, reg2, is_mem1, is_mem2, is_mem1 ? disp1 : disp2);
                     }
+                    matched = 1;
+                } else if (strcmp(mnemonic, "movabsq") == 0 || strcmp(mnemonic, "movabs") == 0) {
+                    if (op1[0] == '$') {
+                        long long imm = strtoll(op1 + 1, NULL, 0);
+                        unsigned char rex = 0x48;
+                        if (reg2 & 8) rex |= 0x01;
+                        unsigned char opcode = 0xb8 | (reg2 & 7);
+                        seg_append(&text_seg, &rex, 1);
+                        seg_append(&text_seg, &opcode, 1);
+                        unsigned char b[8];
+                        b[0] = imm & 0xFF;
+                        b[1] = (imm >> 8) & 0xFF;
+                        b[2] = (imm >> 16) & 0xFF;
+                        b[3] = (imm >> 24) & 0xFF;
+                        b[4] = (imm >> 32) & 0xFF;
+                        b[5] = (imm >> 40) & 0xFF;
+                        b[6] = (imm >> 48) & 0xFF;
+                        b[7] = (imm >> 56) & 0xFF;
+                        seg_append(&text_seg, b, 8);
+                    } else {
+                        fprintf(stderr, "assembler error: movabsq requires an immediate source operand\n");
+                        exit(1);
+                    }
+                    matched = 1;
+                } else if (strcmp(mnemonic, "movd") == 0) {
+                    if ((reg1 >= 16 && reg1 <= 31) || (reg2 >= 16 && reg2 <= 31)) {
+                        int is_mem1 = 0, is_mem2 = 0;
+                        long long disp1 = 0, disp2 = 0;
+                        if (parse_mem_operand(op1, &reg1, &disp1)) is_mem1 = 1;
+                        if (parse_mem_operand(op2, &reg2, &disp2)) is_mem2 = 1;
+                        
+                        if (is_mem1) {
+                            encode_sse_mem(&text_seg, "\x66", 1, 0x6E, reg1, reg2, 1, disp1);
+                        } else if (is_mem2) {
+                            encode_sse_mem(&text_seg, "\x66", 1, 0x7E, reg2, reg1, 0, disp2);
+                        } else {
+                            encode_movd_xmm(&text_seg, reg1, reg2);
+                        }
+                    } else {
+                        fprintf(stderr, "assembler error: movd requires an xmm register\n");
+                        exit(1);
+                    }
+                    matched = 1;
+                } else if (strcmp(mnemonic, "movss") == 0 || strcmp(mnemonic, "movsd") == 0) {
+                    const char *pref = (strcmp(mnemonic, "movss") == 0) ? "\xF3" : "\xF2";
+                    if (strstr(op1, "(%rip)")) {
+                        char lbl[128];
+                        char *rip = strstr(op1, "(%rip)");
+                        *rip = '\0';
+                        strcpy(lbl, trim(op1));
+                        encode_sse_rip(&text_seg, pref, 1, 0x10, reg2, lbl);
+                    } else if (strstr(op2, "(%rip)")) {
+                        char lbl[128];
+                        char *rip = strstr(op2, "(%rip)");
+                        *rip = '\0';
+                        strcpy(lbl, trim(op2));
+                        encode_sse_rip(&text_seg, pref, 1, 0x11, reg1, lbl);
+                    } else {
+                        int is_mem1 = 0, is_mem2 = 0;
+                        long long disp1 = 0, disp2 = 0;
+                        if (parse_mem_operand(op1, &reg1, &disp1)) is_mem1 = 1;
+                        if (parse_mem_operand(op2, &reg2, &disp2)) is_mem2 = 1;
+                        
+                        if (is_mem1) {
+                            encode_sse_mem(&text_seg, pref, 1, 0x10, reg1, reg2, 1, disp1);
+                        } else if (is_mem2) {
+                            encode_sse_mem(&text_seg, pref, 1, 0x11, reg2, reg1, 0, disp2);
+                        } else {
+                            encode_sse_binop(&text_seg, pref, 1, 0x10, reg1, reg2);
+                        }
+                    }
+                } else if (strcmp(mnemonic, "movaps") == 0) {
+                    if (strstr(op1, "(%rip)")) {
+                        char lbl[128];
+                        char *rip = strstr(op1, "(%rip)");
+                        *rip = '\0';
+                        strcpy(lbl, trim(op1));
+                        encode_sse_rip(&text_seg, "", 0, 0x28, reg2, lbl);
+                    } else if (strstr(op2, "(%rip)")) {
+                        char lbl[128];
+                        char *rip = strstr(op2, "(%rip)");
+                        *rip = '\0';
+                        strcpy(lbl, trim(op2));
+                        encode_sse_rip(&text_seg, "", 0, 0x29, reg1, lbl);
+                    } else {
+                        int is_mem1 = 0, is_mem2 = 0;
+                        long long disp1 = 0, disp2 = 0;
+                        if (parse_mem_operand(op1, &reg1, &disp1)) is_mem1 = 1;
+                        if (parse_mem_operand(op2, &reg2, &disp2)) is_mem2 = 1;
+                        
+                        if (is_mem1) {
+                            encode_sse_mem(&text_seg, "", 0, 0x28, reg1, reg2, 1, disp1);
+                        } else if (is_mem2) {
+                            encode_sse_mem(&text_seg, "", 0, 0x29, reg2, reg1, 0, disp2);
+                        } else {
+                            encode_sse_binop(&text_seg, "", 0, 0x28, reg1, reg2);
+                        }
+                    }
                 } else if (strcmp(mnemonic, "movl") == 0) {
                     if (op1[0] == '$') {
-                        long long imm = atoll(op1 + 1);
+                        long long imm = strtoll(op1 + 1, NULL, 0);
                         encode_movl_imm(&text_seg, imm, reg2);
                     } else {
                         int is_mem1 = 0, is_mem2 = 0;
@@ -1404,12 +2023,75 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                     } else {
                         encode_movslq(&text_seg, reg1, reg2);
                     }
+                } else if (strcmp(mnemonic, "addss") == 0 || strcmp(mnemonic, "addsd") == 0 ||
+                           strcmp(mnemonic, "subss") == 0 || strcmp(mnemonic, "subsd") == 0 ||
+                           strcmp(mnemonic, "mulss") == 0 || strcmp(mnemonic, "mulsd") == 0 ||
+                           strcmp(mnemonic, "divss") == 0 || strcmp(mnemonic, "divsd") == 0 ||
+                           strcmp(mnemonic, "cvtsd2ss") == 0 || strcmp(mnemonic, "cvtss2sd") == 0) {
+                    const char *pref = (strcmp(mnemonic, "addss") == 0 || strcmp(mnemonic, "subss") == 0 ||
+                                        strcmp(mnemonic, "mulss") == 0 || strcmp(mnemonic, "divss") == 0 ||
+                                        strcmp(mnemonic, "cvtss2sd") == 0) ? "\xF3" : "\xF2";
+                    unsigned char opcode = 0x58;
+                    if (strcmp(mnemonic, "addss") == 0 || strcmp(mnemonic, "addsd") == 0) opcode = 0x58;
+                    else if (strcmp(mnemonic, "subss") == 0 || strcmp(mnemonic, "subsd") == 0) opcode = 0x5C;
+                    else if (strcmp(mnemonic, "mulss") == 0 || strcmp(mnemonic, "mulsd") == 0) opcode = 0x59;
+                    else if (strcmp(mnemonic, "divss") == 0 || strcmp(mnemonic, "divsd") == 0) opcode = 0x5E;
+                    else if (strcmp(mnemonic, "cvtsd2ss") == 0 || strcmp(mnemonic, "cvtss2sd") == 0) opcode = 0x5A;
+                    
+                    int is_mem1 = 0;
+                    long long disp1 = 0;
+                    if (parse_mem_operand(op1, &reg1, &disp1)) is_mem1 = 1;
+                    
+                    if (is_mem1) {
+                        encode_sse_mem(&text_seg, pref, 1, opcode, reg1, reg2, 1, disp1);
+                    } else {
+                        encode_sse_binop(&text_seg, pref, 1, opcode, reg1, reg2);
+                    }
+                } else if (strcmp(mnemonic, "ucomiss") == 0 || strcmp(mnemonic, "ucomisd") == 0) {
+                    const char *pref = (strcmp(mnemonic, "ucomiss") == 0) ? "" : "\x66";
+                    int n_pref = (strcmp(mnemonic, "ucomiss") == 0) ? 0 : 1;
+                    unsigned char opcode = 0x2E;
+                    int is_mem1 = 0;
+                    long long disp1 = 0;
+                    if (parse_mem_operand(op1, &reg1, &disp1)) is_mem1 = 1;
+                    
+                    if (is_mem1) {
+                        encode_sse_mem(&text_seg, pref, n_pref, opcode, reg1, reg2, 1, disp1);
+                    } else {
+                        encode_sse_binop(&text_seg, pref, n_pref, opcode, reg1, reg2);
+                    }
+                } else if (strcmp(mnemonic, "cvttss2si") == 0 || strcmp(mnemonic, "cvttss2siq") == 0 ||
+                           strcmp(mnemonic, "cvttsd2si") == 0 || strcmp(mnemonic, "cvttsd2siq") == 0) {
+                    const char *pref = (strncmp(mnemonic, "cvttss", 6) == 0) ? "\xF3" : "\xF2";
+                    int use_rex_w = (strstr(mnemonic, "siq") != NULL) || is_reg_64(op2);
+                    int is_mem1 = 0;
+                    long long disp1 = 0;
+                    if (parse_mem_operand(op1, &reg1, &disp1)) is_mem1 = 1;
+                    
+                    if (is_mem1) {
+                        encode_cvtt_to_si_mem(&text_seg, pref, 1, 0x2C, reg1, reg2, use_rex_w, disp1);
+                    } else {
+                        encode_cvtt_to_si(&text_seg, pref, 1, 0x2C, reg1, reg2, use_rex_w);
+                    }
+                } else if (strcmp(mnemonic, "cvtsi2ss") == 0 || strcmp(mnemonic, "cvtsi2ssq") == 0 || strcmp(mnemonic, "cvtsi2ssl") == 0 ||
+                           strcmp(mnemonic, "cvtsi2sd") == 0 || strcmp(mnemonic, "cvtsi2sdq") == 0 || strcmp(mnemonic, "cvtsi2sdl") == 0) {
+                    const char *pref = (strstr(mnemonic, "2ss") != NULL) ? "\xF3" : "\xF2";
+                    int use_rex_w = (strstr(mnemonic, "q") != NULL) || is_reg_64(op1);
+                    int is_mem1 = 0;
+                    long long disp1 = 0;
+                    if (parse_mem_operand(op1, &reg1, &disp1)) is_mem1 = 1;
+                    
+                    if (is_mem1) {
+                        encode_cvtsi_to_xmm_mem(&text_seg, pref, 1, 0x2A, reg1, reg2, use_rex_w, disp1);
+                    } else {
+                        encode_cvtsi_to_xmm(&text_seg, pref, 1, 0x2A, reg1, reg2, use_rex_w);
+                    }
                 } else if (strcmp(mnemonic, "addq") == 0 || strcmp(mnemonic, "subq") == 0 ||
                            strcmp(mnemonic, "cmpq") == 0 || strcmp(mnemonic, "imulq") == 0 ||
                            strcmp(mnemonic, "andq") == 0 || strcmp(mnemonic, "orq") == 0 ||
                            strcmp(mnemonic, "xorq") == 0) {
                     if (op1[0] == '$') {
-                        long long imm = atoll(op1 + 1);
+                        long long imm = strtoll(op1 + 1, NULL, 0);
                         unsigned char rex = 0x48;
                         unsigned char opcode = 0x81;
                         unsigned char modrm = 0xc0;
@@ -1442,7 +2124,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                     }
                 } else if (strcmp(mnemonic, "sarq") == 0 || strcmp(mnemonic, "shlq") == 0 || strcmp(mnemonic, "shrq") == 0) {
                     if (op1[0] == '$') {
-                        long long imm = atoll(op1 + 1);
+                        long long imm = strtoll(op1 + 1, NULL, 0);
                         unsigned char rex = 0x48;
                         unsigned char opcode = 0xc1;
                         unsigned char modrm;
@@ -1464,7 +2146,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                     }
                 } else if (strcmp(mnemonic, "cmpl") == 0) {
                     if (op1[0] == '$') {
-                        long long imm = atoll(op1 + 1);
+                        long long imm = strtoll(op1 + 1, NULL, 0);
                         unsigned char rex = 0x40;
                         unsigned char opcode = 0x81;
                         unsigned char modrm = 0xf8 | (reg2 & 7);
@@ -1496,8 +2178,60 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                         seg_append(&text_seg, &opcode, 1);
                         seg_append(&text_seg, &modrm, 1);
                     }
+                } else if (strcmp(mnemonic, "xorl") == 0 || strcmp(mnemonic, "andl") == 0 || strcmp(mnemonic, "orl") == 0) {
+                    if (op1[0] == '$') {
+                        long long imm = strtoll(op1 + 1, NULL, 0);
+                        unsigned char rex = 0x40;
+                        unsigned char opcode = 0x81;
+                        unsigned char modrm = 0xc0;
+                        if (strcmp(mnemonic, "orl") == 0) modrm = 0xc8;
+                        else if (strcmp(mnemonic, "andl") == 0) modrm = 0xe0;
+                        else if (strcmp(mnemonic, "xorl") == 0) modrm = 0xf0;
+                        modrm |= (reg2 & 7);
+                        if (reg2 & 8) rex |= 0x01;
+                        
+                        if (imm >= -128 && imm <= 127) {
+                            opcode = 0x83;
+                            if (rex != 0x40) seg_append(&text_seg, &rex, 1);
+                            seg_append(&text_seg, &opcode, 1);
+                            seg_append(&text_seg, &modrm, 1);
+                            unsigned char b = (unsigned char)imm;
+                            seg_append(&text_seg, &b, 1);
+                        } else {
+                            if (rex != 0x40) seg_append(&text_seg, &rex, 1);
+                            seg_append(&text_seg, &opcode, 1);
+                            seg_append(&text_seg, &modrm, 1);
+                            unsigned char b[4];
+                            b[0] = imm & 0xFF;
+                            b[1] = (imm >> 8) & 0xFF;
+                            b[2] = (imm >> 16) & 0xFF;
+                            b[3] = (imm >> 24) & 0xFF;
+                            seg_append(&text_seg, b, 4);
+                        }
+                    } else {
+                        unsigned char rex = 0x40;
+                        unsigned char opcode = 0x31;
+                        if (strcmp(mnemonic, "orl") == 0) opcode = 0x09;
+                        else if (strcmp(mnemonic, "andl") == 0) opcode = 0x21;
+                        else if (strcmp(mnemonic, "xorl") == 0) opcode = 0x31;
+                        unsigned char modrm = 0xc0 | ((reg1 & 7) << 3) | (reg2 & 7);
+                        if (reg1 & 8) rex |= 0x04;
+                        if (reg2 & 8) rex |= 0x01;
+                        if (rex != 0x40) seg_append(&text_seg, &rex, 1);
+                        seg_append(&text_seg, &opcode, 1);
+                        seg_append(&text_seg, &modrm, 1);
+                    }
+                } else {
+                    fprintf(stderr, "assembler error: unrecognized 2-operand instruction '%s'\n", mnemonic);
+                    exit(1);
                 }
+                matched = 1;
             }
+        }
+        
+        if (!matched) {
+            fprintf(stderr, "assembler error: unrecognized instruction '%s' with args '%s'\n", mnemonic, args_start ? args_start : "");
+            exit(1);
         }
     }
     fclose(in);

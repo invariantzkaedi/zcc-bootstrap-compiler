@@ -96,3 +96,28 @@ This correctly forces unsigned machine instructions (`setb`/`setbe`/`seta`/`seta
 - ✅ Seed 1003697 checksum converges: GCC = ZCC = `F95B7AD7` (and reduced work output matches `E45D4330`)
 - ✅ Bootstrap stable (zcc2.s == zcc3.s)
 - ✅ All regression tests passed (36/36)
+
+## CG-ASM-XMM-001: Built-in Assembler Silent Miscompilation of SSE Register Operands (RESOLVED)
+
+**Status**: ✅ RESOLVED (Fixed via XMM & SSE support, memory push/pop, and strict mnemonic verification)  
+**Severity**: CRITICAL (Score 8.2, CWE-682 — Silent Data Corruption)  
+**Fix Date**: June 15, 2026  
+
+### The Bug
+ZCC's built-in assembler (implemented in `src/codegen.c`) contained a register parser (`parse_reg`) that lacked support for `%xmm0`–`%xmm15` registers. When compiling code containing float/double SSE operands with direct object output (`zcc -c file.c -o file.o`), the assembler failed to parse the `%xmm` registers, returning `-1` as the register ID.
+
+Because the binary instruction encoder applied a bitwise mask `reg & 7` to encode register parameters in instructions, `-1 & 7 = 7`, which silently mapped the register reference to register index 7 (corresponding to `%r15`/`%r15d`). 
+
+Additionally, float/double instructions (such as `movss`, `movsd`, `cvtss2sd`, `ucomiss`, `ucomisd`, etc.) were entirely unrecognized by the built-in assembler's parser and were skipped without emitting a compilation error. This led to silent binary generation of corrupted instruction streams.
+
+### Resolution
+- **Extended `parse_reg`**: Added full mapping for `%xmm0`–`%xmm15` (returning 16–31) and `%rip` (returning 32).
+- **Added SSE instruction and memory encoders**: Implemented encoding for SSE binary and memory operations (`movss`, `movsd`, `cvttss2si`, etc.).
+- **Added memory operand pushq/popq**: Enabled `pushq mem` / `popq mem` support inside the built-in assembler.
+- **Implemented `movabsq`/`movabs`**: Encoded full 64-bit immediate loads into GP registers.
+- **Strict Error Handling**: Added a compilation abort trigger if any parsed register evaluates to `-1` or if the instruction mnemonic is unrecognized, severing silent miscompilation cascades.
+
+### Verification
+- ✅ Stage 2/Stage 3 bootstrap remains completely byte-identical (`SELF-HOST VERIFIED`).
+- ✅ Golden ABI lane differential fuzzer campaign passes 31/31 test shapes compiling directly to ELF objects (`zcc -c`).
+
