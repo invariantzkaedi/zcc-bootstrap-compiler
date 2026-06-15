@@ -17,7 +17,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y gcc make python3
+          sudo apt-get install -y gcc make python3 qemu-system-x86
 
       - name: Build zcc from parts
         run: |
@@ -35,6 +35,11 @@ jobs:
           make auditor verifier
           ./tools/zcc_topology_auditor kernel/*.o --json > record.zxr
           ./tools/zcc_zxr_verify record.zxr kernel/*.o
+
+      - name: Link and verify zkernel boot (QEMU)
+        run: |
+          make -C kernel verify
+
 
       - name: Upload assembly artifacts
         uses: actions/upload-artifact@v4
