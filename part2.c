@@ -287,9 +287,27 @@ Symbol *scope_find_local(Compiler *cc, char *name) {
 }
 
 Symbol *scope_add(Compiler *cc, char *name, Type *type) {
+    if (!type) {
+        error(cc, "symbol declared with NULL type");
+        exit(1);
+    }
+    Symbol *existing = NULL;
+    if (name && name[0] != '\0') {
+        existing = scope_find_local(cc, name);
+        if (existing) {
+            if (cc->current_scope->parent == 0) {
+                return existing;
+            }
+            char err_msg[256];
+            sprintf(err_msg, "redefinition of symbol '%s' in same scope", name);
+            error(cc, err_msg);
+            exit(1);
+        }
+    }
     Symbol *sym;
     sym = (Symbol *)cc_alloc(cc, sizeof(Symbol));
     strncpy(sym->name, name, MAX_IDENT - 1);
+    sym->name[MAX_IDENT - 1] = '\0';
     sym->type = type;
     sym->stack_offset = 0;
     sym->next = cc->current_scope->symbols;
