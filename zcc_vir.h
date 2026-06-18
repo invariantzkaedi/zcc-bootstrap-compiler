@@ -57,6 +57,19 @@ typedef struct {
     float max_y;
 } SdfBounds;
 
+typedef enum {
+    VIR_PASS_OK,
+    VIR_PASS_NO_CHANGE,
+    VIR_PASS_ERROR
+} VirPassResult;
+
+typedef enum {
+    VIR_PASS_DEGENERATE = 0,
+    VIR_PASS_EXPAND_ARCS,
+    VIR_PASS_COMPUTE_BOUNDS,
+    VIR_PASS_CANONICALIZE
+} VirPass;
+
 
 /**
  * Creates an empty Vector IR path container.
@@ -81,8 +94,10 @@ int vir_path_add_close(VirPath *path);
  * Optimization passes:
  * Strips degenerate nodes (zero-length segments, null moves) to simplify geometry.
  */
-void vir_path_optimize_degenerate(VirPath *path);
-void vir_path_expand_arcs(VirPath *path);
+VirPassResult vir_path_optimize_degenerate(VirPath *path);
+VirPassResult vir_path_expand_arcs(VirPath *path);
+VirPassResult vir_path_canonicalize(VirPath *path);
+VirPassResult vir_path_compute_bounds_pass(VirPath *path);
 void vir_path_invalidate_bounds(VirPath *path);
 
 /**
@@ -113,5 +128,7 @@ void sdf_seed_free(SdfSeed *seed);
 
 SdfBounds sdf_seed_compute_bounds(const SdfSeed *seed);
 char* sdf_seed_to_glsl(const SdfSeed *seed);
+
+int vir_run_passes(VirPath *path, const VirPass *passes, size_t count);
 
 #endif

@@ -52,7 +52,10 @@ static void test_vir_degenerate_removal() {
         vir_path_add_line_to(path, 20.0f, 20.0f);
         vir_path_add_line_to(path, 20.0f, 20.0f); // Degenerate line to same point
 
-        vir_path_optimize_degenerate(path);
+        VirPassResult r1 = vir_path_optimize_degenerate(path);
+        assert(r1 == VIR_PASS_OK);
+        VirPassResult r2 = vir_path_optimize_degenerate(path);
+        assert(r2 == VIR_PASS_NO_CHANGE);
 
         assert(path->count == 2);
         assert(path->segments[0].op == VIR_MOVE);
@@ -70,7 +73,10 @@ static void test_vir_degenerate_removal() {
         vir_path_add_cubic_to(path, 5.0f, 5.0f, 5.0f, 5.0f, 5.0f, 5.0f); // Degenerate cubic
         vir_path_add_cubic_to(path, 6.0f, 6.0f, 7.0f, 7.0f, 8.0f, 8.0f); // Non-degenerate cubic
 
-        vir_path_optimize_degenerate(path);
+        VirPassResult r1 = vir_path_optimize_degenerate(path);
+        assert(r1 == VIR_PASS_OK);
+        VirPassResult r2 = vir_path_optimize_degenerate(path);
+        assert(r2 == VIR_PASS_NO_CHANGE);
 
         assert(path->count == 2);
         assert(path->segments[0].op == VIR_MOVE);
@@ -89,7 +95,10 @@ static void test_vir_degenerate_removal() {
         vir_path_add_line_to(path, 0.0f, 0.0f); // Degenerate, already at 0,0
         vir_path_add_line_to(path, 0.0f, 5.0f); // Non-degenerate
 
-        vir_path_optimize_degenerate(path);
+        VirPassResult r1 = vir_path_optimize_degenerate(path);
+        assert(r1 == VIR_PASS_OK);
+        VirPassResult r2 = vir_path_optimize_degenerate(path);
+        assert(r2 == VIR_PASS_NO_CHANGE);
 
         assert(path->count == 4);
         assert(path->segments[0].op == VIR_MOVE);
@@ -292,7 +301,10 @@ static void test_vir_arc_ingestion_and_expansion() {
         assert(fabsf(max_y - 50.0f) < EPSILON);
 
         // Expand arc pass
-        vir_path_expand_arcs(path);
+        VirPassResult r1 = vir_path_expand_arcs(path);
+        assert(r1 == VIR_PASS_OK);
+        VirPassResult r2 = vir_path_expand_arcs(path);
+        assert(r2 == VIR_PASS_NO_CHANGE);
 
         // Verify the VIR_ARC segment was expanded to VIR_CUBIC segments
         assert(path->count > 2);
@@ -430,6 +442,80 @@ static void test_sdf_to_glsl_compilation() {
     printf("[+] test_sdf_to_glsl_compilation PASSED.\n");
 }
 
+static void test_vir_pass_canonicalize() {
+    printf("[*] Running test_vir_pass_canonicalize...\n");
+
+    VirPath *path = vir_path_create();
+    ZccSvgError err = {0};
+    ZccSvgStatus st = zcc_svg_parse_to_vir("M 0 0 L 30 60 A 50 50 0 0 1 50 50 Z", path, &err);
+    assert(st == ZCC_SVG_OK);
+
+    VirPassResult r1 = vir_path_canonicalize(path);
+    assert(r1 == VIR_PASS_OK);
+    VirPassResult r2 = vir_path_canonicalize(path);
+    assert(r2 == VIR_PASS_NO_CHANGE);
+
+    // Verify all segments are only MOVE, CUBIC, or CLOSE
+    for (size_t i = 0; i < path->count; i++) {
+        assert(path->segments[i].op != VIR_ARC);
+        assert(path->segments[i].op != VIR_LINE);
+        assert(path->segments[i].op == VIR_MOVE || path->segments[i].op == VIR_CUBIC || path->segments[i].op == VIR_CLOSE);
+    }
+
+    // Verify line elevation math
+    // The first line was from (0,0) to (30,60).
+    // It should be elevated to a CUBIC segment.
+    assert(path->segments[1].op == VIR_CUBIC);
+    // Control point 1: 0 + 1/3 * 30 = 10, 0 + 1/3 * 60 = 20
+    assert(fabsf(path->segments[1].coords[0] - 10.0f) < EPSILON);
+    assert(fabsf(path->segments[1].coords[1] - 20.0f) < EPSILON);
+    // Control point 2: 0 + 2/3 * 30 = 20, 0 + 2/3 * 60 = 40
+    assert(fabsf(path->segments[1].coords[2] - 20.0f) < EPSILON);
+    assert(fabsf(path->segments[1].coords[3] - 40.0f) < EPSILON);
+    // End point: 30, 60
+    assert(fabsf(path->segments[1].coords[4] - 30.0f) < EPSILON);
+    assert(fabsf(path->segments[1].coords[5] - 60.0f) < EPSILON);
+
+    vir_path_free(path);
+    printf("[+] test_vir_pass_canonicalize PASSED.\n");
+}
+
+static void test_vir_pass_manager() {
+    printf("[*] Running test_vir_pass_manager...\n");
+
+    VirPath *path = vir_path_create();
+    ZccSvgError err = {0};
+    ZccSvgStatus st = zcc_svg_parse_to_vir("M 0 0 L 0 0 A 50 50 0 0 1 50 50 Z", path, &err);
+    assert(st == ZCC_SVG_OK);
+
+    assert(path->count == 4);
+    assert(path->bounds_valid == 0);
+
+    VirPass passes[] = {
+        VIR_PASS_DEGENERATE,
+        VIR_PASS_EXPAND_ARCS,
+        VIR_PASS_COMPUTE_BOUNDS
+    };
+
+    int res = vir_run_passes(path, passes, 3);
+    assert(res == 1);
+
+    assert(path->bounds_valid == 1);
+    assert(path->count > 2);
+    
+    for (size_t i = 0; i < path->count; i++) {
+        assert(path->segments[i].op != VIR_ARC);
+        assert(path->segments[i].op != VIR_LINE);
+    }
+
+    VirPass invalid_passes[] = { (VirPass)9999 };
+    int invalid_res = vir_run_passes(path, invalid_passes, 1);
+    assert(invalid_res == 0);
+
+    vir_path_free(path);
+    printf("[+] test_vir_pass_manager PASSED.\n");
+}
+
 int main() {
     printf("=== ZCC Vector IR (VIR) Test Harness ===\n");
     test_vir_path_creation_and_growth();
@@ -441,6 +527,8 @@ int main() {
     test_vir_arc_ingestion_and_expansion();
     test_vir_backend_diversification();
     test_sdf_to_glsl_compilation();
+    test_vir_pass_canonicalize();
+    test_vir_pass_manager();
     printf("777JACKPOT777 — ALL VIR CORE TESTS GREEN.\n");
     return 0;
 }

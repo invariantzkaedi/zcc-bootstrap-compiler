@@ -145,12 +145,14 @@ int vir_path_add_close(VirPath *path) {
     return 1;
 }
 
-void vir_path_optimize_degenerate(VirPath *path) {
-    if (!path || path->count == 0) return;
+VirPassResult vir_path_optimize_degenerate(VirPath *path) {
+    if (!path) return VIR_PASS_ERROR;
+    if (path->count == 0) return VIR_PASS_NO_CHANGE;
 
     size_t write_idx = 0;
     float cx = 0.0f, cy = 0.0f;
     float start_x = 0.0f, start_y = 0.0f;
+    int changed = 0;
 
     for (size_t i = 0; i < path->count; i++) {
         VirSegment *s = &path->segments[i];
@@ -166,6 +168,7 @@ void vir_path_optimize_degenerate(VirPath *path) {
             float target_y = s->coords[1];
             if (fabsf(target_x - cx) < 1e-5f && fabsf(target_y - cy) < 1e-5f) {
                 keep = 0;
+                changed = 1;
             } else {
                 cx = target_x;
                 cy = target_y;
@@ -179,6 +182,7 @@ void vir_path_optimize_degenerate(VirPath *path) {
                 fabsf(x2 - cx) < 1e-5f && fabsf(y2 - cy) < 1e-5f &&
                 fabsf(target_x - cx) < 1e-5f && fabsf(target_y - cy) < 1e-5f) {
                 keep = 0;
+                changed = 1;
             } else {
                 cx = target_x;
                 cy = target_y;
@@ -197,6 +201,7 @@ void vir_path_optimize_degenerate(VirPath *path) {
     }
     path->count = write_idx;
     vir_path_invalidate_bounds(path);
+    return changed ? VIR_PASS_OK : VIR_PASS_NO_CHANGE;
 }
 
 void vir_path_compute_bounds(const VirPath *path, float *min_x, float *min_y, float *max_x, float *max_y) {
@@ -393,8 +398,9 @@ static void emit_arc_generic(
     }
 }
 
-void vir_path_expand_arcs(VirPath *path) {
-    if (!path || path->count == 0) return;
+VirPassResult vir_path_expand_arcs(VirPath *path) {
+    if (!path) return VIR_PASS_ERROR;
+    if (path->count == 0) return VIR_PASS_NO_CHANGE;
 
     int has_arcs = 0;
     for (size_t i = 0; i < path->count; i++) {
@@ -403,9 +409,10 @@ void vir_path_expand_arcs(VirPath *path) {
             break;
         }
     }
-    if (!has_arcs) return;
+    if (!has_arcs) return VIR_PASS_NO_CHANGE;
 
     VirPath *new_path = vir_path_create();
+    if (!new_path) return VIR_PASS_ERROR;
     new_path->metadata = path->metadata;
 
     float cx = 0.0f, cy = 0.0f;
@@ -462,6 +469,7 @@ void vir_path_expand_arcs(VirPath *path) {
 
     vir_path_free(new_path);
     vir_path_invalidate_bounds(path);
+    return VIR_PASS_OK;
 }
 
 void vir_path_to_builder(const VirPath *path, SvgPathBuilder *out) {
@@ -1062,4 +1070,115 @@ char* sdf_seed_to_glsl(const SdfSeed *seed) {
     strcpy(buf + len, footer);
 
     return buf;
+}
+
+VirPassResult vir_path_canonicalize(VirPath *path) {
+    if (!path) return VIR_PASS_ERROR;
+    if (path->count == 0) return VIR_PASS_NO_CHANGE;
+
+    // First ensure arcs are expanded
+    VirPassResult arc_res = vir_path_expand_arcs(path);
+    if (arc_res == VIR_PASS_ERROR) return VIR_PASS_ERROR;
+
+    // Check if there are any VIR_LINE segments
+    int has_lines = 0;
+    for (size_t i = 0; i < path->count; i++) {
+        if (path->segments[i].op == VIR_LINE) {
+            has_lines = 1;
+            break;
+        }
+    }
+
+    // If no lines and no arc changes, return NO_CHANGE
+    if (!has_lines && arc_res == VIR_PASS_NO_CHANGE) {
+        return VIR_PASS_NO_CHANGE;
+    }
+
+    // Create a new path to collect the canonical cubics
+    VirPath *new_path = vir_path_create();
+    if (!new_path) return VIR_PASS_ERROR;
+    new_path->metadata = path->metadata;
+
+    float cx = 0.0f, cy = 0.0f;
+    float start_x = 0.0f, start_y = 0.0f;
+
+    for (size_t i = 0; i < path->count; i++) {
+        VirSegment *s = &path->segments[i];
+        if (s->op == VIR_MOVE) {
+            cx = s->coords[0];
+            cy = s->coords[1];
+            start_x = cx;
+            start_y = cy;
+            vir_path_add_move_to(new_path, cx, cy);
+        } else if (s->op == VIR_LINE) {
+            float tx = s->coords[0];
+            float ty = s->coords[1];
+            float c1x = cx + (1.0f / 3.0f) * (tx - cx);
+            float c1y = cy + (1.0f / 3.0f) * (ty - cy);
+            float c2x = cx + (2.0f / 3.0f) * (tx - cx);
+            float c2y = cy + (2.0f / 3.0f) * (ty - cy);
+            vir_path_add_cubic_to(new_path, c1x, c1y, c2x, c2y, tx, ty);
+            cx = tx;
+            cy = ty;
+        } else if (s->op == VIR_CUBIC) {
+            cx = s->coords[4];
+            cy = s->coords[5];
+            vir_path_add_cubic_to(new_path, s->coords[0], s->coords[1], s->coords[2], s->coords[3], cx, cy);
+        } else if (s->op == VIR_CLOSE) {
+            cx = start_x;
+            cy = start_y;
+            vir_path_add_close(new_path);
+        }
+    }
+
+    VirSegment *tmp_segs = path->segments;
+    path->segments = new_path->segments;
+    new_path->segments = tmp_segs;
+
+    size_t tmp_count = path->count;
+    path->count = new_path->count;
+    new_path->count = tmp_count;
+
+    size_t tmp_cap = path->capacity;
+    path->capacity = new_path->capacity;
+    new_path->capacity = tmp_cap;
+
+    vir_path_free(new_path);
+    vir_path_invalidate_bounds(path);
+    return VIR_PASS_OK;
+}
+
+VirPassResult vir_path_compute_bounds_pass(VirPath *path) {
+    if (!path) return VIR_PASS_ERROR;
+    if (path->bounds_valid) return VIR_PASS_NO_CHANGE;
+    float min_x, min_y, max_x, max_y;
+    vir_path_compute_bounds(path, &min_x, &min_y, &max_x, &max_y);
+    return VIR_PASS_OK;
+}
+
+int vir_run_passes(VirPath *path, const VirPass *passes, size_t count) {
+    if (!path || !passes) return 0;
+    for (size_t i = 0; i < count; i++) {
+        VirPassResult res = VIR_PASS_NO_CHANGE;
+        switch (passes[i]) {
+            case VIR_PASS_DEGENERATE:
+                res = vir_path_optimize_degenerate(path);
+                break;
+            case VIR_PASS_EXPAND_ARCS:
+                res = vir_path_expand_arcs(path);
+                break;
+            case VIR_PASS_COMPUTE_BOUNDS:
+                res = vir_path_compute_bounds_pass(path);
+                break;
+            case VIR_PASS_CANONICALIZE:
+                res = vir_path_canonicalize(path);
+                break;
+            default:
+                return 0;
+        }
+        if (res == VIR_PASS_ERROR) {
+            return 0;
+        }
+    }
+    return 1;
 }
