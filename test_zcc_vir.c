@@ -317,6 +317,83 @@ static void test_vir_arc_ingestion_and_expansion() {
     printf("[+] test_vir_arc_ingestion_and_expansion PASSED.\n");
 }
 
+static void test_vir_backend_diversification() {
+    printf("[*] Running test_vir_backend_diversification...\n");
+
+    // Case 1: Simple shape to check SVG and SDF serialization
+    {
+        VirPath *path = vir_path_create();
+        ZccSvgError err = {0};
+        // Close does not meet start (from 10,10 to 0,0) -> should insert SDF line from 10,10 to 0,0
+        ZccSvgStatus st = zcc_svg_parse_to_vir("M 0 0 L 10 0 L 10 10 Z", path, &err);
+        assert(st == ZCC_SVG_OK);
+
+        // Verify SVG path data serialization
+        char *svg_data = vir_to_svg_path_data(path);
+        assert(svg_data != NULL);
+        assert(strcmp(svg_data, "M0.00,0.00 L10.00,0.00 L10.00,10.00 Z") == 0);
+        free(svg_data);
+
+        // Verify SDF seed generation
+        SdfSeed *seed = vir_to_sdf_seed(path);
+        assert(seed != NULL);
+        // We have 3 segments: (0,0 -> 10,0), (10,0 -> 10,10), and the closing line (10,10 -> 0,0)
+        assert(seed->count == 3);
+        assert(seed->segments[0].op == SDF_LINE);
+        assert(fabsf(seed->segments[0].points[0] - 0.0f) < EPSILON);
+        assert(fabsf(seed->segments[0].points[1] - 0.0f) < EPSILON);
+        assert(fabsf(seed->segments[0].points[2] - 10.0f) < EPSILON);
+        assert(fabsf(seed->segments[0].points[3] - 0.0f) < EPSILON);
+
+        assert(seed->segments[1].op == SDF_LINE);
+        assert(fabsf(seed->segments[1].points[0] - 10.0f) < EPSILON);
+        assert(fabsf(seed->segments[1].points[1] - 0.0f) < EPSILON);
+        assert(fabsf(seed->segments[1].points[2] - 10.0f) < EPSILON);
+        assert(fabsf(seed->segments[1].points[3] - 10.0f) < EPSILON);
+
+        assert(seed->segments[2].op == SDF_LINE);
+        assert(fabsf(seed->segments[2].points[0] - 10.0f) < EPSILON);
+        assert(fabsf(seed->segments[2].points[1] - 10.0f) < EPSILON);
+        assert(fabsf(seed->segments[2].points[2] - 0.0f) < EPSILON);
+        assert(fabsf(seed->segments[2].points[3] - 0.0f) < EPSILON);
+
+        sdf_seed_free(seed);
+        vir_path_free(path);
+    }
+
+    // Case 2: Path containing arcs and curves
+    {
+        VirPath *path = vir_path_create();
+        ZccSvgError err = {0};
+        // 90-degree circular arc segment (radius 50) from (0,0) to (50,50)
+        ZccSvgStatus st = zcc_svg_parse_to_vir("M 0 0 A 50 50 0 0 1 50 50", path, &err);
+        assert(st == ZCC_SVG_OK);
+
+        // Serialize directly: SVG data should contain 'A' command
+        char *svg_data = vir_to_svg_path_data(path);
+        assert(svg_data != NULL);
+        assert(strstr(svg_data, "A50.00,50.00 0.00 0 1 50.00,50.00") != NULL);
+        free(svg_data);
+
+        // SDF seed generation should expand the arc into cubics
+        SdfSeed *seed = vir_to_sdf_seed(path);
+        assert(seed != NULL);
+        assert(seed->count > 0);
+        for (size_t i = 0; i < seed->count; i++) {
+            assert(seed->segments[i].op == SDF_CUBIC);
+        }
+        // Verify final point matches (50, 50)
+        size_t last = seed->count - 1;
+        assert(fabsf(seed->segments[last].points[6] - 50.0f) < EPSILON);
+        assert(fabsf(seed->segments[last].points[7] - 50.0f) < EPSILON);
+
+        sdf_seed_free(seed);
+        vir_path_free(path);
+    }
+
+    printf("[+] test_vir_backend_diversification PASSED.\n");
+}
+
 int main() {
     printf("=== ZCC Vector IR (VIR) Test Harness ===\n");
     test_vir_path_creation_and_growth();
@@ -326,6 +403,7 @@ int main() {
     test_extreme_and_overflow_vir();
     test_vir_metadata_and_bounds_caching();
     test_vir_arc_ingestion_and_expansion();
+    test_vir_backend_diversification();
     printf("777JACKPOT777 — ALL VIR CORE TESTS GREEN.\n");
     return 0;
 }

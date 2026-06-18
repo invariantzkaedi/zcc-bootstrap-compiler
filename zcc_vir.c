@@ -1,5 +1,7 @@
 #include "zcc_vir.h"
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 #include <math.h>
 
 #define ZCC_VIR_MAX_SEGMENTS 100000
@@ -735,4 +737,207 @@ ZccSvgStatus zcc_svg_parse_to_vir(const char *d, VirPath *out, ZccSvgError *err)
         err->offset = ZCC_SVG_OFFSET(d, p);
     }
     return ZCC_SVG_OK;
+}
+
+char* vir_to_svg_path_data(const VirPath *path) {
+    if (!path) return NULL;
+    size_t capacity = path->count * 128 + 32;
+    char *buf = (char*)malloc(capacity);
+    if (!buf) return NULL;
+    buf[0] = '\0';
+    size_t len = 0;
+
+    for (size_t i = 0; i < path->count; i++) {
+        const VirSegment *s = &path->segments[i];
+        char temp[256];
+        int n = 0;
+        if (s->op == VIR_MOVE) {
+            n = sprintf(temp, "M%.2f,%.2f ", s->coords[0], s->coords[1]);
+        } else if (s->op == VIR_LINE) {
+            n = sprintf(temp, "L%.2f,%.2f ", s->coords[0], s->coords[1]);
+        } else if (s->op == VIR_CUBIC) {
+            n = sprintf(temp, "C%.2f,%.2f %.2f,%.2f %.2f,%.2f ",
+                s->coords[0], s->coords[1],
+                s->coords[2], s->coords[3],
+                s->coords[4], s->coords[5]);
+        } else if (s->op == VIR_ARC) {
+            n = sprintf(temp, "A%.2f,%.2f %.2f %.0f %.0f %.2f,%.2f ",
+                s->coords[0], s->coords[1],
+                s->coords[2],
+                s->coords[3], s->coords[4],
+                s->coords[5], s->coords[6]);
+        } else if (s->op == VIR_CLOSE) {
+            n = sprintf(temp, "Z ");
+        }
+
+        if (n > 0) {
+            if (len + n >= capacity) {
+                capacity = (len + n) * 2;
+                char *new_buf = (char*)realloc(buf, capacity);
+                if (!new_buf) {
+                    free(buf);
+                    return NULL;
+                }
+                buf = new_buf;
+            }
+            strcpy(buf + len, temp);
+            len += n;
+        }
+    }
+
+    if (len > 0 && buf[len - 1] == ' ') {
+        buf[len - 1] = '\0';
+    }
+    return buf;
+}
+
+static VirPath* vir_path_clone(const VirPath *src) {
+    if (!src) return NULL;
+    VirPath *dest = (VirPath*)calloc(1, sizeof(VirPath));
+    if (!dest) return NULL;
+    dest->capacity = src->count > 0 ? src->count : 16;
+    dest->segments = (VirSegment*)calloc(dest->capacity, sizeof(VirSegment));
+    if (!dest->segments) {
+        free(dest);
+        return NULL;
+    }
+    dest->count = src->count;
+    if (src->count > 0) {
+        memcpy(dest->segments, src->segments, src->count * sizeof(VirSegment));
+    }
+    dest->metadata = src->metadata;
+    dest->bounds_valid = src->bounds_valid;
+    dest->min_x = src->min_x;
+    dest->min_y = src->min_y;
+    dest->max_x = src->max_x;
+    dest->max_y = src->max_y;
+    return dest;
+}
+
+static int sdf_seed_ensure_capacity(SdfSeed *seed, size_t *capacity) {
+    if (seed->count >= *capacity) {
+        size_t new_cap = *capacity == 0 ? 16 : *capacity * 2;
+        SdfSeedSegment *new_segs = (SdfSeedSegment*)realloc(seed->segments, new_cap * sizeof(SdfSeedSegment));
+        if (!new_segs) return 0;
+        seed->segments = new_segs;
+        *capacity = new_cap;
+    }
+    return 1;
+}
+
+static int sdf_seed_add_line(SdfSeed *seed, size_t *capacity, float x0, float y0, float x1, float y1) {
+    if (!sdf_seed_ensure_capacity(seed, capacity)) return 0;
+    SdfSeedSegment *seg = &seed->segments[seed->count++];
+    seg->op = SDF_LINE;
+    seg->points[0] = x0;
+    seg->points[1] = y0;
+    seg->points[2] = x1;
+    seg->points[3] = y1;
+    seg->points[4] = 0.0f;
+    seg->points[5] = 0.0f;
+    seg->points[6] = 0.0f;
+    seg->points[7] = 0.0f;
+    return 1;
+}
+
+static int sdf_seed_add_cubic(SdfSeed *seed, size_t *capacity, float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3) {
+    if (!sdf_seed_ensure_capacity(seed, capacity)) return 0;
+    SdfSeedSegment *seg = &seed->segments[seed->count++];
+    seg->op = SDF_CUBIC;
+    seg->points[0] = x0;
+    seg->points[1] = y0;
+    seg->points[2] = x1;
+    seg->points[3] = y1;
+    seg->points[4] = x2;
+    seg->points[5] = y2;
+    seg->points[6] = x3;
+    seg->points[7] = y3;
+    return 1;
+}
+
+SdfSeed* vir_to_sdf_seed(const VirPath *path) {
+    if (!path) return NULL;
+
+    VirPath *expanded = vir_path_clone(path);
+    if (!expanded) return NULL;
+    vir_path_expand_arcs(expanded);
+
+    SdfSeed *seed = (SdfSeed*)malloc(sizeof(SdfSeed));
+    if (!seed) {
+        vir_path_free(expanded);
+        return NULL;
+    }
+    seed->count = 0;
+    size_t capacity = expanded->count;
+    if (capacity < 16) capacity = 16;
+    seed->segments = (SdfSeedSegment*)calloc(capacity, sizeof(SdfSeedSegment));
+    if (!seed->segments) {
+        free(seed);
+        vir_path_free(expanded);
+        return NULL;
+    }
+
+    float cx = 0.0f, cy = 0.0f;
+    float start_x = 0.0f, start_y = 0.0f;
+    int has_subpath_start = 0;
+
+    for (size_t i = 0; i < expanded->count; i++) {
+        const VirSegment *s = &expanded->segments[i];
+        if (s->op == VIR_MOVE) {
+            cx = s->coords[0];
+            cy = s->coords[1];
+            start_x = cx;
+            start_y = cy;
+            has_subpath_start = 1;
+        } else if (s->op == VIR_LINE) {
+            float tx = s->coords[0];
+            float ty = s->coords[1];
+            if (has_subpath_start) {
+                if (!sdf_seed_add_line(seed, &capacity, cx, cy, tx, ty)) {
+                    sdf_seed_free(seed);
+                    vir_path_free(expanded);
+                    return NULL;
+                }
+            }
+            cx = tx;
+            cy = ty;
+        } else if (s->op == VIR_CUBIC) {
+            float c1x = s->coords[0];
+            float c1y = s->coords[1];
+            float c2x = s->coords[2];
+            float c2y = s->coords[3];
+            float tx  = s->coords[4];
+            float ty  = s->coords[5];
+            if (has_subpath_start) {
+                if (!sdf_seed_add_cubic(seed, &capacity, cx, cy, c1x, c1y, c2x, c2y, tx, ty)) {
+                    sdf_seed_free(seed);
+                    vir_path_free(expanded);
+                    return NULL;
+                }
+            }
+            cx = tx;
+            cy = ty;
+        } else if (s->op == VIR_CLOSE) {
+            if (has_subpath_start) {
+                if (fabsf(cx - start_x) > 1e-5f || fabsf(cy - start_y) > 1e-5f) {
+                    if (!sdf_seed_add_line(seed, &capacity, cx, cy, start_x, start_y)) {
+                        sdf_seed_free(seed);
+                        vir_path_free(expanded);
+                        return NULL;
+                    }
+                }
+            }
+            cx = start_x;
+            cy = start_y;
+        }
+    }
+
+    vir_path_free(expanded);
+    return seed;
+}
+
+void sdf_seed_free(SdfSeed *seed) {
+    if (!seed) return;
+    if (seed->segments) free(seed->segments);
+    free(seed);
 }

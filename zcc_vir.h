@@ -35,6 +35,22 @@ typedef struct {
     float max_y;
 } VirPath;
 
+typedef enum {
+    SDF_LINE = 0,
+    SDF_CUBIC
+} SdfSeedOp;
+
+typedef struct {
+    SdfSeedOp op;
+    float points[8];
+} SdfSeedSegment;
+
+typedef struct {
+    SdfSeedSegment *segments;
+    size_t count;
+} SdfSeed;
+
+
 /**
  * Creates an empty Vector IR path container.
  */
@@ -83,5 +99,9 @@ ZccSvgStatus zcc_svg_parse_to_vir(
     VirPath *out,
     ZccSvgError *err
 );
+
+char* vir_to_svg_path_data(const VirPath *path);
+SdfSeed* vir_to_sdf_seed(const VirPath *path);
+void sdf_seed_free(SdfSeed *seed);
 
 #endif
