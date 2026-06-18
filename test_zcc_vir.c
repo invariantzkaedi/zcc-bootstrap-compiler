@@ -1367,6 +1367,108 @@ static void test_vir_compilation_caching() {
     printf("[+] test_vir_compilation_caching PASSED.\n");
 }
 
+static void test_vir_artifact_manifest() {
+    printf("[*] Running test_vir_artifact_manifest...\n");
+
+    size_t reg_count;
+    VirPassDescriptor *registry = vir_pipeline_get_default_registry(&reg_count);
+    VirPipelineStats stats;
+
+    /* Build and fully converge a path. */
+    VirPath *path = vir_path_create();
+    vir_path_add_move_to(path, 10.0f, 20.0f);
+    vir_path_add_line_to(path, 50.0f, 20.0f);
+    vir_path_add_line_to(path, 50.0f, 60.0f);
+    vir_path_add_close(path);
+
+    VirPass goal[] = { VIR_PASS_LOCALIZE };
+    vir_run_pipeline_with_deps(path, registry, reg_count, goal, 1, &stats);
+
+    /* --- Manifest capture --- */
+    VirArtifactManifest m = vir_path_manifest(path, 1e-3f);
+
+    assert(m.canonical_fingerprint != 0 && "fingerprint must be non-zero");
+    assert(m.state_flags == path->state_flags && "state_flags mismatch");
+    assert(m.segment_count == (uint32_t)path->count && "segment_count mismatch");
+    assert(m.schema_version != 0 && "schema_version must be non-zero");
+    /* Exact bounds should be populated (localize requires exact_bounds). */
+    assert((m.state_flags & VIR_STATE_EXACT_BOUNDS) && "expected exact bounds set");
+    assert(m.min_x <= m.max_x && "bounds sanity: min_x <= max_x");
+    assert(m.min_y <= m.max_y && "bounds sanity: min_y <= max_y");
+
+    /* --- Positive verification --- */
+    assert(vir_manifest_verify(path, &m, 1e-3f) == 1 && "verify must pass on unchanged path");
+
+    /* --- Negative verification: mutate path then verify should fail --- */
+    vir_path_add_line_to(path, 30.0f, 90.0f); /* alters segment_count */
+    assert(vir_manifest_verify(path, &m, 1e-3f) == 0 && "verify must fail after mutation");
+
+    /* --- NULL safety --- */
+    assert(vir_manifest_verify(NULL,  &m,   1e-3f) == 0);
+    assert(vir_manifest_verify(path,  NULL, 1e-3f) == 0);
+
+    vir_path_free(path);
+    printf("[+] test_vir_artifact_manifest PASSED.\n");
+}
+
+static void test_vir_execution_plan() {
+    printf("[*] Running test_vir_execution_plan...\n");
+
+    size_t reg_count;
+    VirPassDescriptor *registry = vir_pipeline_get_default_registry(&reg_count);
+
+    /* --- 1. Already-converged path: plan should be empty (nothing to do). --- */
+    VirPath *ready = vir_path_create();
+    vir_path_add_move_to(ready, 0.0f, 0.0f);
+    vir_path_add_line_to(ready, 1.0f, 0.0f);
+    vir_path_add_close(ready);
+    {
+        VirPipelineStats stats;
+        VirPass goal[] = { VIR_PASS_LOCALIZE };
+        vir_run_pipeline_with_deps(ready, registry, reg_count, goal, 1, &stats);
+    }
+    VirExecutionPlan plan_a;
+    int ok_a = vir_build_execution_plan(ready, registry, reg_count,
+                                        ready->state_flags, &plan_a);
+    assert(ok_a == 1 && "build_plan must succeed for already-satisfied state");
+    assert(plan_a.count == 0 && "plan must be empty when path already satisfies target");
+    assert(plan_a.current_state == ready->state_flags);
+    vir_path_free(ready);
+
+    /* --- 2. Raw path: plan for LOCALIZE must list prerequisite passes. --- */
+    VirPath *raw = vir_path_create();
+    vir_path_add_move_to(raw, 5.0f, 5.0f);
+    vir_path_add_cubic_to(raw, 10.0f, 0.0f, 20.0f, 0.0f, 25.0f, 5.0f);
+    vir_path_add_close(raw);
+
+    VirExecutionPlan plan_b;
+    uint32_t target = VIR_STATE_LOCALIZED;
+    int ok_b = vir_build_execution_plan(raw, registry, reg_count, target, &plan_b);
+    assert(ok_b == 1 && "build_plan must succeed for reachable target state");
+    assert(plan_b.count > 0 && "plan must contain passes for a raw path");
+    assert(plan_b.target_state  == target        && "target_state captured correctly");
+    assert(plan_b.current_state == raw->state_flags && "current_state captured correctly");
+
+    /* --- 3. Execute the plan and confirm path reaches the target state. --- */
+    VirPipelineStats exec_stats;
+    int executed = vir_execute_plan(raw, &plan_b, registry, reg_count, &exec_stats);
+    assert(executed == 1 && "execute_plan must succeed");
+    assert((raw->state_flags & target) == target && "path must reach target state after execute");
+
+    /* --- 4. Execute a zero-count plan: should succeed trivially. --- */
+    VirExecutionPlan empty_plan;
+    memset(&empty_plan, 0, sizeof(empty_plan));
+    VirPipelineStats empty_stats;
+    assert(vir_execute_plan(raw, &empty_plan, registry, reg_count, &empty_stats) == 1);
+
+    /* --- NULL safety --- */
+    assert(vir_build_execution_plan(NULL, registry, reg_count, target, &plan_b) == 0);
+    assert(vir_execute_plan(NULL, &plan_b, registry, reg_count, &exec_stats)   == 0);
+
+    vir_path_free(raw);
+    printf("[+] test_vir_execution_plan PASSED.\n");
+}
+
 int main() {
     setbuf(stdout, NULL);
     printf("=== ZCC Vector IR (VIR) Test Harness ===\n");
@@ -1393,6 +1495,8 @@ int main() {
     test_vir_pass_graph_exporter();
     test_vir_exact_bounds_solving();
     test_vir_registry_validation();
+    test_vir_artifact_manifest();
+    test_vir_execution_plan();
     /* NOTE: vir_cache_shutdown() is NOT called here.
      * test_vir_compilation_caching() initialises the cache with
      * vir_cache_init() and owns the shutdown at the end of that test.

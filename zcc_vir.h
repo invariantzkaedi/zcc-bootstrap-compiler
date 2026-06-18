@@ -259,4 +259,66 @@ VirRegistryValidationResult vir_validate_registry(
     VirRegistryValidationError *err
 );
 
+/* ── Artifact Manifest ─────────────────────────────────────────────────────
+ * A self-describing identity envelope that binds a canonical fingerprint to
+ * the full convergence state of a VirPath at capture time.  Used for cache
+ * validation, provenance tracking, and regression comparisons.           */
+
+typedef struct {
+    uint64_t canonical_fingerprint; /* FNV-1a over localized geometry         */
+    uint32_t schema_version;        /* VIR_CACHE_SCHEMA_VERSION at capture    */
+    uint32_t state_flags;           /* path->state_flags at capture time      */
+    uint32_t segment_count;         /* path->count at capture time            */
+    /* Exact bounds — populated only when VIR_STATE_EXACT_BOUNDS is set in
+     * state_flags; otherwise all four fields are 0.0f.                       */
+    float    min_x;
+    float    min_y;
+    float    max_x;
+    float    max_y;
+} VirArtifactManifest;
+
+/* Capture the full identity envelope for a path.
+ * Uses vir_path_canonical_fingerprint internally (zero-allocation fast-path
+ * when path is already VIR_STATE_LOCALIZED).
+ * Bounds are copied from path->min_x/y/max_x/y only when VIR_STATE_EXACT_BOUNDS
+ * is set; otherwise they are zero-filled — manifest generation is non-mutating. */
+VirArtifactManifest vir_path_manifest(const VirPath *path, float epsilon);
+
+/* Verify a live path against a previously captured manifest.
+ * Checks: fingerprint, schema_version, state_flags, segment_count, bounds.
+ * Returns 1 if all fields agree, 0 on the first mismatch.                   */
+int vir_manifest_verify(const VirPath *path,
+                        const VirArtifactManifest *manifest,
+                        float epsilon);
+
+/* ── Execution Plan ────────────────────────────────────────────────────────
+ * A dependency-resolved, ordered list of passes required to bring a path
+ * to a target state.  Building a plan does NOT mutate the path.           */
+
+#define VIR_EXECUTION_PLAN_MAX 32
+
+typedef struct {
+    VirPass  passes[VIR_EXECUTION_PLAN_MAX]; /* ordered pass sequence        */
+    size_t   count;                          /* number of passes in plan     */
+    uint32_t target_state;   /* the requested convergence state mask         */
+    uint32_t current_state;  /* path->state_flags at plan-build time         */
+} VirExecutionPlan;
+
+/* Build a dependency-resolved execution plan without mutating the path.
+ * Returns 1 on success; 0 if target_state cannot be satisfied by registry
+ * or if plan capacity (VIR_EXECUTION_PLAN_MAX) is exceeded.               */
+int vir_build_execution_plan(const VirPath *path,
+                             const VirPassDescriptor *registry,
+                             size_t registry_count,
+                             uint32_t target_state,
+                             VirExecutionPlan *out);
+
+/* Execute a pre-built plan against a path.
+ * Returns 1 if every pass in the plan succeeds; 0 on the first failure.   */
+int vir_execute_plan(VirPath *path,
+                     const VirExecutionPlan *plan,
+                     const VirPassDescriptor *registry,
+                     size_t registry_count,
+                     VirPipelineStats *stats);
+
 #endif

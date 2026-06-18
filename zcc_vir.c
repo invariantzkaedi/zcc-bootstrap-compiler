@@ -1832,9 +1832,176 @@ uint64_t vir_path_fingerprint(const VirPath *path, float epsilon) {
     return vir_path_canonical_fingerprint(path, epsilon);
 }
 
+/* ── Artifact Manifest ───────────────────────────────────────────────────── */
+
+VirArtifactManifest vir_path_manifest(const VirPath *path, float epsilon) {
+    VirArtifactManifest m;
+    memset(&m, 0, sizeof(m));
+    if (!path) return m;
+
+    m.canonical_fingerprint = vir_path_canonical_fingerprint(path, epsilon);
+    m.schema_version        = VIR_CACHE_SCHEMA_VERSION;
+    m.state_flags           = path->state_flags;
+    m.segment_count         = (uint32_t)path->count;
+
+    /* Copy exact bounds only when already computed — non-mutating. */
+    if (path->state_flags & VIR_STATE_EXACT_BOUNDS) {
+        m.min_x = path->min_x;
+        m.min_y = path->min_y;
+        m.max_x = path->max_x;
+        m.max_y = path->max_y;
+    }
+    return m;
+}
+
+int vir_manifest_verify(const VirPath *path,
+                        const VirArtifactManifest *manifest,
+                        float epsilon) {
+    if (!path || !manifest) return 0;
+
+    VirArtifactManifest live = vir_path_manifest(path, epsilon);
+
+    if (live.canonical_fingerprint != manifest->canonical_fingerprint) return 0;
+    if (live.schema_version        != manifest->schema_version)        return 0;
+    if (live.state_flags           != manifest->state_flags)           return 0;
+    if (live.segment_count         != manifest->segment_count)         return 0;
+    /* Bounds only compared when the manifest captured them. */
+    if (manifest->state_flags & VIR_STATE_EXACT_BOUNDS) {
+        if (live.min_x != manifest->min_x) return 0;
+        if (live.min_y != manifest->min_y) return 0;
+        if (live.max_x != manifest->max_x) return 0;
+        if (live.max_y != manifest->max_y) return 0;
+    }
+    return 1;
+}
+
+/* ── Execution Plan ─────────────────────────────────────────────────────── */
+
+/* Internal: collect passes required to produce a single state flag into out,
+ * respecting dependencies recursively.  Mirrors schedule_and_run_pass but is
+ * completely read-only — never calls run() and never touches path->state_flags.
+ * sim_flags tracks what state flags would be produced by already-collected passes
+ * so we avoid collecting duplicates.                                           */
+static int collect_deps_for_state(
+    uint32_t flag,
+    uint32_t *sim_flags,
+    const VirPassDescriptor *registry,
+    size_t registry_count,
+    int *in_stack,
+    VirExecutionPlan *out
+) {
+    /* Already satisfied by original path state or previously collected passes. */
+    if (*sim_flags & flag) return 1;
+
+    /* Find the registry entry that produces this flag. */
+    const VirPassDescriptor *provider = NULL;
+    size_t provider_index = 0;
+    for (size_t j = 0; j < registry_count; j++) {
+        if (registry[j].produced_state & flag) {
+            provider = &registry[j];
+            provider_index = j;
+            break;
+        }
+    }
+    if (!provider) return 0; /* Unsatisfiable — no producer in registry. */
+
+    /* Cycle guard. */
+    if (in_stack[provider_index]) return 0;
+    in_stack[provider_index] = 1;
+
+    /* Recurse for each prerequisite the provider requires. */
+    if (provider->required_state) {
+        uint32_t prereqs = provider->required_state & ~(*sim_flags);
+        for (size_t bit = 0; bit < 32; bit++) {
+            uint32_t prereq_flag = 1U << bit;
+            if (prereqs & prereq_flag) {
+                if (!collect_deps_for_state(prereq_flag, sim_flags,
+                                            registry, registry_count,
+                                            in_stack, out)) {
+                    in_stack[provider_index] = 0;
+                    return 0;
+                }
+            }
+        }
+    }
+
+    /* Append this pass if it hasn't already been added. */
+    int already = 0;
+    for (size_t k = 0; k < out->count; k++) {
+        if (out->passes[k] == provider->pass_id) { already = 1; break; }
+    }
+    if (!already) {
+        if (out->count >= VIR_EXECUTION_PLAN_MAX) {
+            in_stack[provider_index] = 0;
+            return 0; /* Plan capacity exceeded. */
+        }
+        out->passes[out->count++] = provider->pass_id;
+        *sim_flags |= provider->produced_state;
+    }
+
+    in_stack[provider_index] = 0;
+    return 1;
+}
+
+int vir_build_execution_plan(const VirPath *path,
+                             const VirPassDescriptor *registry,
+                             size_t registry_count,
+                             uint32_t target_state,
+                             VirExecutionPlan *out) {
+    if (!path || !registry || !out) return 0;
+
+    memset(out, 0, sizeof(*out));
+    out->target_state  = target_state;
+    out->current_state = path->state_flags;
+
+    /* Nothing to do — path already satisfies the target state. */
+    if ((path->state_flags & target_state) == target_state) return 1;
+
+    int *in_stack = (int*)calloc(registry_count, sizeof(int));
+    if (!in_stack) return 0;
+
+    /* sim_flags starts from the path's current state and grows as passes
+     * are appended to the plan.                                          */
+    uint32_t sim_flags = path->state_flags;
+    uint32_t missing   = target_state & ~sim_flags;
+
+    for (size_t bit = 0; bit < 32; bit++) {
+        uint32_t flag = 1U << bit;
+        if (missing & flag) {
+            if (!collect_deps_for_state(flag, &sim_flags,
+                                        registry, registry_count,
+                                        in_stack, out)) {
+                free(in_stack);
+                return 0;
+            }
+        }
+    }
+
+    free(in_stack);
+    return 1;
+}
+
+int vir_execute_plan(VirPath *path,
+                     const VirExecutionPlan *plan,
+                     const VirPassDescriptor *registry,
+                     size_t registry_count,
+                     VirPipelineStats *stats) {
+    if (!path || !plan || !registry || !stats) return 0;
+    memset(stats, 0, sizeof(*stats));
+    if (plan->count == 0) return 1; /* Nothing to run. */
+
+    return vir_run_pipeline_with_deps(path,
+                                      (VirPassDescriptor *)registry,
+                                      registry_count,
+                                      plan->passes,
+                                      plan->count,
+                                      stats);
+}
+
 int vir_run_passes(VirPath *path, const VirPass *passes, size_t count) {
     if (!path || !passes) return 0;
     for (size_t i = 0; i < count; i++) {
+
         VirPassResult res = VIR_PASS_NO_CHANGE;
         switch (passes[i]) {
             case VIR_PASS_DEGENERATE:
