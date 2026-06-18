@@ -1747,6 +1747,95 @@ static void test_vir_cache_record_header() {
     printf("[+] test_vir_cache_record_header PASSED.\n");
 }
 
+static void test_vir_artifact_blob() {
+    printf("[*] Running test_vir_artifact_blob...\n");
+
+    /* --- NULL inputs / Invalid arguments --- */
+    void *buf = NULL;
+    size_t size = 0;
+    assert(vir_artifact_serialize(NULL, &buf, &size) == 0);
+
+    VirPath *empty_path = vir_path_create();
+    assert(vir_artifact_serialize(empty_path, NULL, &size) == 0);
+    assert(vir_artifact_serialize(empty_path, &buf, NULL) == 0);
+    vir_path_free(empty_path);
+
+    assert(vir_artifact_deserialize(NULL, 100) == NULL);
+    assert(vir_artifact_deserialize(buf, 0) == NULL);
+    assert(vir_artifact_validate(NULL, 100) == 0);
+
+    /* --- Positive Flow: Serialize -> Validate -> Deserialize --- */
+    VirPath *path = vir_path_create();
+    assert(vir_path_add_move_to(path, 10.0f, 20.0f) == 1);
+    assert(vir_path_add_line_to(path, 30.0f, 40.0f) == 1);
+    assert(vir_path_add_close(path) == 1);
+    path->state_flags = VIR_STATE_ARCS_EXPANDED | VIR_STATE_CANONICALIZED | VIR_STATE_EXACT_BOUNDS;
+    path->min_x = 10.0f; path->min_y = 20.0f;
+    path->max_x = 30.0f; path->max_y = 40.0f;
+    path->bounds_valid = 1;
+
+    void *buffer = NULL;
+    size_t buffer_size = 0;
+    assert(vir_artifact_serialize(path, &buffer, &buffer_size) == 1);
+    assert(buffer != NULL);
+    assert(buffer_size == sizeof(VirCacheRecordHeader) + 3 * sizeof(VirSegment));
+
+    assert(vir_artifact_validate(buffer, buffer_size) == 1);
+
+    VirPath *deserialized = vir_artifact_deserialize(buffer, buffer_size);
+    assert(deserialized != NULL);
+    assert(deserialized->count == path->count);
+    assert(deserialized->state_flags == path->state_flags);
+    assert(deserialized->bounds_valid == 1);
+    assert(deserialized->min_x == path->min_x);
+    assert(deserialized->min_y == path->min_y);
+    assert(deserialized->max_x == path->max_x);
+    assert(deserialized->max_y == path->max_y);
+
+    /* Segments check */
+    for (size_t i = 0; i < path->count; i++) {
+        assert(deserialized->segments[i].op == path->segments[i].op);
+        for (int c = 0; c < 8; c++) {
+            assert(deserialized->segments[i].coords[c] == path->segments[i].coords[c]);
+        }
+    }
+
+    assert(vir_paths_equivalent(path, deserialized, 1e-5f) == 1);
+    assert(vir_path_canonical_fingerprint(path, 1e-3f) == vir_path_canonical_fingerprint(deserialized, 1e-3f));
+
+    /* --- Negative Checks: Tampering & Size mismatch --- */
+    /* Truncated size validation */
+    assert(vir_artifact_validate(buffer, buffer_size - 1) == 0);
+    assert(vir_artifact_deserialize(buffer, buffer_size - 1) == NULL);
+
+    /* Magic mismatch */
+    uint8_t *tampered = (uint8_t *)malloc(buffer_size);
+    memcpy(tampered, buffer, buffer_size);
+    tampered[0] ^= 0xFF; /* corrupt magic */
+    assert(vir_artifact_validate(tampered, buffer_size) == 0);
+    assert(vir_artifact_deserialize(tampered, buffer_size) == NULL);
+
+    /* Schema version mismatch */
+    memcpy(tampered, buffer, buffer_size);
+    tampered[4] ^= 0xFF; /* corrupt version */
+    assert(vir_artifact_validate(tampered, buffer_size) == 0);
+    assert(vir_artifact_deserialize(tampered, buffer_size) == NULL);
+
+    /* CRC32 mismatch */
+    memcpy(tampered, buffer, buffer_size);
+    tampered[44] ^= 0xFF; /* corrupt CRC32 (last 4 bytes of 48-byte header) */
+    assert(vir_artifact_validate(tampered, buffer_size) == 0);
+    assert(vir_artifact_deserialize(tampered, buffer_size) == NULL);
+
+    /* Clean up */
+    free(tampered);
+    free(buffer);
+    vir_path_free(path);
+    vir_path_free(deserialized);
+
+    printf("[+] test_vir_artifact_blob PASSED.\n");
+}
+
 int main() {
     setbuf(stdout, NULL);
     printf("=== ZCC Vector IR (VIR) Test Harness ===\n");
@@ -1779,6 +1868,7 @@ int main() {
     test_vir_state_flags_stringify();
     test_vir_geometry_metrics();
     test_vir_cache_record_header();
+    test_vir_artifact_blob();
     /* NOTE: vir_cache_shutdown() is NOT called here.
      * test_vir_compilation_caching() initialises the cache with
      * vir_cache_init() and owns the shutdown at the end of that test.

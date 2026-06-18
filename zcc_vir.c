@@ -3083,3 +3083,109 @@ VirRegistryValidationResult vir_validate_registry(
     return VIR_REGISTRY_OK;
 }
 
+/* ── Artifact Blob Serialization ─────────────────────────────────────────── */
+
+int vir_artifact_serialize(const VirPath *path,
+                            void **out_buffer,
+                            size_t *out_size) {
+    if (!path || !out_buffer || !out_size) {
+        return 0;
+    }
+
+    size_t payload_size = path->count * sizeof(VirSegment);
+    size_t total_size = sizeof(VirCacheRecordHeader) + payload_size;
+
+    uint8_t *buf = (uint8_t *)malloc(total_size);
+    if (!buf) {
+        return 0;
+    }
+
+    VirCacheRecordHeader hdr = vir_cache_record_header_init(path, (uint32_t)payload_size);
+
+    memcpy(buf, &hdr, sizeof(VirCacheRecordHeader));
+    if (payload_size > 0 && path->segments) {
+        memcpy(buf + sizeof(VirCacheRecordHeader), path->segments, payload_size);
+    }
+
+    *out_buffer = buf;
+    *out_size = total_size;
+    return 1;
+}
+
+int vir_artifact_validate(const void *buffer,
+                          size_t size) {
+    if (!buffer) {
+        return 0;
+    }
+    if (size < sizeof(VirCacheRecordHeader)) {
+        return 0;
+    }
+
+    const VirCacheRecordHeader *hdr = (const VirCacheRecordHeader *)buffer;
+
+    if (!vir_cache_record_header_validate(hdr)) {
+        return 0;
+    }
+
+    if (size != sizeof(VirCacheRecordHeader) + hdr->payload_size) {
+        return 0;
+    }
+
+    if (hdr->segment_count > UINT32_MAX / sizeof(VirSegment)) {
+        return 0;
+    }
+
+    if (hdr->payload_size != hdr->segment_count * sizeof(VirSegment)) {
+        return 0;
+    }
+
+    return 1;
+}
+
+VirPath *vir_artifact_deserialize(const void *buffer,
+                                  size_t size) {
+    if (!vir_artifact_validate(buffer, size)) {
+        return NULL;
+    }
+
+    const VirCacheRecordHeader *hdr = (const VirCacheRecordHeader *)buffer;
+    uint32_t seg_count = hdr->segment_count;
+
+    VirPath *path = vir_path_create();
+    if (!path) {
+        return NULL;
+    }
+
+    if (seg_count > 0) {
+        if (seg_count > path->capacity) {
+            VirSegment *new_segs = (VirSegment*)realloc(path->segments, seg_count * sizeof(VirSegment));
+            if (!new_segs) {
+                vir_path_free(path);
+                return NULL;
+            }
+            path->segments = new_segs;
+            path->capacity = seg_count;
+        }
+
+        const VirSegment *src = (const VirSegment *)((const uint8_t *)buffer + sizeof(VirCacheRecordHeader));
+        memcpy(path->segments, src, seg_count * sizeof(VirSegment));
+    }
+
+    path->count = seg_count;
+    path->state_flags = hdr->state_flags;
+
+    path->min_x = hdr->min_x;
+    path->min_y = hdr->min_y;
+    path->max_x = hdr->max_x;
+    path->max_y = hdr->max_y;
+
+    if (hdr->state_flags & (VIR_STATE_BOUNDS_VALID | VIR_STATE_EXACT_BOUNDS)) {
+        path->bounds_valid = 1;
+    } else {
+        path->bounds_valid = 0;
+    }
+
+    return path;
+}
+
+

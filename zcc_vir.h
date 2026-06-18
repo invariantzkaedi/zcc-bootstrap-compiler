@@ -415,4 +415,31 @@ VirCacheRecordHeader vir_cache_record_header_init(const VirPath *path,
  * Returns 1 if all checks pass, 0 on the first failure.                   */
 int vir_cache_record_header_validate(const VirCacheRecordHeader *hdr);
 
+/* ── Artifact Blob Serialization ───────────────────────────────────────────
+ * Contiguous versioned binary serialization layer for VirPath objects.      */
+
+typedef struct {
+    VirCacheRecordHeader header;
+    uint8_t *payload;            /* view of contiguous payload following header */
+} VirArtifactBlob;
+
+/* Serialize a VirPath into a malloc-owned binary buffer.
+ * The buffer contains the VirCacheRecordHeader followed by the VirSegment array.
+ * Returns 1 on success; 0 on invalid arguments or allocation failure.       */
+int vir_artifact_serialize(const VirPath *path,
+                            void **out_buffer,
+                            size_t *out_size);
+
+/* Deserialize a binary buffer back into a VirPath.
+ * Verifies buffer integrity using vir_artifact_validate before allocating.
+ * Returns a new malloc-owned VirPath on success; NULL on failure.           */
+VirPath *vir_artifact_deserialize(const void *buffer,
+                                  size_t size);
+
+/* Validate a serialized binary buffer.
+ * Checks magic, version, CRC32, payload_size, and overall size specs.
+ * Returns 1 if valid; 0 on failure.                                         */
+int vir_artifact_validate(const void *buffer,
+                          size_t size);
+
 #endif
