@@ -3188,4 +3188,148 @@ VirPath *vir_artifact_deserialize(const void *buffer,
     return path;
 }
 
+/* ── Content-Addressable Repository (Tier 1) ───────────────────────────────── */
+
+#ifdef _WIN32
+#include <direct.h>
+#define mkdir_compat(path) _mkdir(path)
+#else
+#include <sys/stat.h>
+#include <sys/types.h>
+#define mkdir_compat(path) mkdir(path, 0755)
+#endif
+
+static void vir_mkdir_p(const char *path) {
+    char tmp[1024];
+    snprintf(tmp, sizeof(tmp), "%s", path);
+    size_t len = strlen(tmp);
+    if (len == 0) return;
+    if (tmp[len - 1] == '/' || tmp[len - 1] == '\\') {
+        tmp[len - 1] = 0;
+    }
+    for (char *p = tmp + 1; *p; p++) {
+        if (*p == '/' || *p == '\\') {
+            char c = *p;
+            *p = 0;
+            mkdir_compat(tmp);
+            *p = c;
+        }
+    }
+    mkdir_compat(tmp);
+}
+
+static void vir_repository_resolve_path(const char *repo_path, uint64_t fingerprint, char *out_path, size_t max_len) {
+    uint8_t prefix = (uint8_t)((fingerprint >> 56) & 0xFF);
+    uint64_t suffix = fingerprint & 0x00FFFFFFFFFFFFFFULL;
+    snprintf(out_path, max_len, "%s/v%d/%02x/%014lx.vir", repo_path, VIR_CACHE_SCHEMA_VERSION, prefix, (unsigned long)suffix);
+}
+
+static void vir_repository_ensure_dir(const char *repo_path, uint64_t fingerprint) {
+    char dir_path[1024];
+    uint8_t prefix = (uint8_t)((fingerprint >> 56) & 0xFF);
+    snprintf(dir_path, sizeof(dir_path), "%s/v%d/%02x", repo_path, VIR_CACHE_SCHEMA_VERSION, prefix);
+    vir_mkdir_p(dir_path);
+}
+
+int vir_repository_exists(const char *repo_path, uint64_t fingerprint) {
+    if (!repo_path) return 0;
+    char file_path[1024];
+    vir_repository_resolve_path(repo_path, fingerprint, file_path, sizeof(file_path));
+    FILE *f = fopen(file_path, "rb");
+    if (!f) return 0;
+    fclose(f);
+    return 1;
+}
+
+int vir_repository_store(const char *repo_path, const VirPath *path) {
+    if (!repo_path || !path) return 0;
+
+    uint64_t fingerprint = vir_path_canonical_fingerprint(path, 1e-3f);
+
+    /* Check if already present to avoid redundant writes */
+    if (vir_repository_exists(repo_path, fingerprint)) {
+        return 1;
+    }
+
+    void *buf = NULL;
+    size_t size = 0;
+    if (!vir_artifact_serialize(path, &buf, &size)) {
+        return 0;
+    }
+
+    vir_repository_ensure_dir(repo_path, fingerprint);
+
+    char file_path[1024];
+    vir_repository_resolve_path(repo_path, fingerprint, file_path, sizeof(file_path));
+
+    FILE *f = fopen(file_path, "wb");
+    if (!f) {
+        free(buf);
+        return 0;
+    }
+
+    size_t written = fwrite(buf, 1, size, f);
+    fclose(f);
+    free(buf);
+
+    return written == size ? 1 : 0;
+}
+
+VirPath *vir_repository_load(const char *repo_path, uint64_t fingerprint) {
+    if (!repo_path) return NULL;
+
+    char file_path[1024];
+    vir_repository_resolve_path(repo_path, fingerprint, file_path, sizeof(file_path));
+
+    FILE *f = fopen(file_path, "rb");
+    if (!f) return NULL;
+
+    if (fseek(f, 0, SEEK_END) != 0) {
+        fclose(f);
+        return NULL;
+    }
+    long size = ftell(f);
+    if (size < 0) {
+        fclose(f);
+        return NULL;
+    }
+    if (fseek(f, 0, SEEK_SET) != 0) {
+        fclose(f);
+        return NULL;
+    }
+
+    void *buf = malloc(size);
+    if (!buf) {
+        fclose(f);
+        return NULL;
+    }
+
+    size_t read_bytes = fread(buf, 1, size, f);
+    fclose(f);
+
+    if (read_bytes != (size_t)size) {
+        free(buf);
+        return NULL;
+    }
+
+    VirPath *path = vir_artifact_deserialize(buf, read_bytes);
+    free(buf);
+    return path;
+}
+
+int vir_repository_remove(const char *repo_path, uint64_t fingerprint) {
+    if (!repo_path) return 0;
+
+    char file_path[1024];
+    vir_repository_resolve_path(repo_path, fingerprint, file_path, sizeof(file_path));
+
+    /* If file does not exist, removal is functionally successful (already absent). */
+    FILE *f = fopen(file_path, "rb");
+    if (!f) return 1;
+    fclose(f);
+
+    return remove(file_path) == 0 ? 1 : 0;
+}
+
+
 

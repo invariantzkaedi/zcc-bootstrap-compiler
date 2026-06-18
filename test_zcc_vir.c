@@ -1836,6 +1836,76 @@ static void test_vir_artifact_blob() {
     printf("[+] test_vir_artifact_blob PASSED.\n");
 }
 
+static void test_vir_repository_store() {
+    printf("[*] Running test_vir_repository_store...\n");
+
+    const char *repo = "./test_repo";
+
+    VirPath *path = vir_path_create();
+    assert(vir_path_add_move_to(path, 5.0f, 10.0f) == 1);
+    assert(vir_path_add_line_to(path, 15.0f, 20.0f) == 1);
+    assert(vir_path_add_close(path) == 1);
+    path->state_flags = VIR_STATE_LOCALIZED | VIR_STATE_EXACT_BOUNDS;
+    path->min_x = 5.0f; path->min_y = 10.0f;
+    path->max_x = 15.0f; path->max_y = 20.0f;
+    path->bounds_valid = 1;
+
+    uint64_t fp = vir_path_canonical_fingerprint(path, 1e-3f);
+    assert(fp != 0);
+
+    /* Clean up any leftover from previous runs */
+    vir_repository_remove(repo, fp);
+
+    assert(vir_repository_exists(repo, fp) == 0);
+    assert(vir_repository_load(repo, fp) == NULL);
+
+    /* Store the path */
+    assert(vir_repository_store(repo, path) == 1);
+    assert(vir_repository_exists(repo, fp) == 1);
+
+    /* Redundant store returns 1 successfully */
+    assert(vir_repository_store(repo, path) == 1);
+
+    /* Load the path */
+    VirPath *loaded = vir_repository_load(repo, fp);
+    assert(loaded != NULL);
+    assert(loaded->count == path->count);
+    assert(loaded->state_flags == path->state_flags);
+    assert(loaded->bounds_valid == 1);
+    assert(loaded->min_x == path->min_x);
+    assert(loaded->min_y == path->min_y);
+    assert(loaded->max_x == path->max_x);
+    assert(loaded->max_y == path->max_y);
+
+    assert(vir_paths_equivalent(path, loaded, 1e-5f) == 1);
+    assert(vir_path_canonical_fingerprint(loaded, 1e-3f) == fp);
+
+    /* Clean up the loaded path */
+    vir_path_free(loaded);
+
+    /* Version isolation check with unrelated fingerprint */
+    assert(vir_repository_exists(repo, fp ^ 0x1) == 0);
+    assert(vir_repository_load(repo, fp ^ 0x1) == NULL);
+
+    /* Remove the path */
+    assert(vir_repository_remove(repo, fp) == 1);
+    assert(vir_repository_exists(repo, fp) == 0);
+    assert(vir_repository_load(repo, fp) == NULL);
+
+    /* Redundant remove is safe and returns 1 */
+    assert(vir_repository_remove(repo, fp) == 1);
+
+    /* Cleanup test folders */
+#ifdef _WIN32
+    system("rmdir /s /q test_repo");
+#else
+    system("rm -rf ./test_repo");
+#endif
+
+    vir_path_free(path);
+    printf("[+] test_vir_repository_store PASSED.\n");
+}
+
 int main() {
     setbuf(stdout, NULL);
     printf("=== ZCC Vector IR (VIR) Test Harness ===\n");
@@ -1869,6 +1939,7 @@ int main() {
     test_vir_geometry_metrics();
     test_vir_cache_record_header();
     test_vir_artifact_blob();
+    test_vir_repository_store();
     /* NOTE: vir_cache_shutdown() is NOT called here.
      * test_vir_compilation_caching() initialises the cache with
      * vir_cache_init() and owns the shutdown at the end of that test.
@@ -1878,4 +1949,3 @@ int main() {
     printf("777JACKPOT777 — ALL VIR CORE TESTS GREEN.\n");
     return 0;
 }
-

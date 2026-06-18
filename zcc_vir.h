@@ -442,4 +442,31 @@ VirPath *vir_artifact_deserialize(const void *buffer,
 int vir_artifact_validate(const void *buffer,
                           size_t size);
 
+/* ── Content-Addressable Repository (Tier 1) ─────────────────────────────────
+ * Storage and retrieval of serialized VIR artifacts keyed by their canonical
+ * fingerprint and partitioned under the active VIR_CACHE_SCHEMA_VERSION.    */
+
+/* Check if an artifact with the given fingerprint exists in the repository.
+ * Returns 1 if present and valid; 0 if missing or corrupted.               */
+int vir_repository_exists(const char *repo_path,
+                          uint64_t fingerprint);
+
+/* Serialize and write a VirPath to the content-addressable repository.
+ * Uses vir_path_canonical_fingerprint (epsilon = 1e-3f) to compute key identity.
+ * Creates necessary directories recursively.
+ * Returns 1 on success; 0 on failure.                                      */
+int vir_repository_store(const char *repo_path,
+                         const VirPath *path);
+
+/* Read and deserialize a VirPath from the repository using its fingerprint.
+ * Validates header integrity before path allocation.
+ * Returns a new malloc-owned VirPath on success; NULL on miss or validation failure. */
+VirPath *vir_repository_load(const char *repo_path,
+                             uint64_t fingerprint);
+
+/* Remove an artifact from the repository by its fingerprint.
+ * Returns 1 if successful or if file already absent; 0 on delete failure.   */
+int vir_repository_remove(const char *repo_path,
+                          uint64_t fingerprint);
+
 #endif
