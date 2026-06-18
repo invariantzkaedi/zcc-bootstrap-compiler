@@ -1204,6 +1204,63 @@ static void test_vir_path_fingerprint() {
     printf("[+] test_vir_path_fingerprint PASSED.\n");
 }
 
+static void test_vir_canonical_fingerprint() {
+    printf("[*] Running test_vir_canonical_fingerprint...\n");
+
+    VirPath *path_raw = vir_path_create();
+    VirPath *path_pre = vir_path_create();
+    ZccSvgError err = {0};
+
+    // 1. Ingest identical paths
+    ZccSvgStatus st1 = zcc_svg_parse_to_vir("M 10 20 L 30 40 Z", path_raw, &err);
+    ZccSvgStatus st2 = zcc_svg_parse_to_vir("M 10 20 L 30 40 Z", path_pre, &err);
+    assert(st1 == ZCC_SVG_OK);
+    assert(st2 == ZCC_SVG_OK);
+
+    // 2. Pre-compile/localize path_pre
+    size_t registry_count = 0;
+    VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
+    assert(registry != NULL);
+    VirPipelineStats stats = {0};
+    VirPass target_passes[] = { VIR_PASS_LOCALIZE };
+    int ok = vir_run_pipeline_with_deps(path_pre, registry, registry_count, target_passes, 1, &stats);
+    assert(ok == 1);
+    assert(path_pre->state_flags & VIR_STATE_LOCALIZED);
+
+    // Record path_pre state and pointers to verify zero mutation/allocation side-effect
+    VirSegment *orig_segments = path_pre->segments;
+    size_t orig_count = path_pre->count;
+    size_t orig_capacity = path_pre->capacity;
+    uint32_t orig_flags = path_pre->state_flags;
+
+    // 3. Compute fingerprints
+    uint64_t fp_raw = vir_path_canonical_fingerprint(path_raw, 1e-3f);
+    uint64_t fp_pre = vir_path_canonical_fingerprint(path_pre, 1e-3f);
+
+    assert(fp_raw != 0);
+    assert(fp_raw == fp_pre);
+
+    // Verify path_pre remains unchanged (no new allocation, no flag changes)
+    assert(path_pre->segments == orig_segments);
+    assert(path_pre->count == orig_count);
+    assert(path_pre->capacity == orig_capacity);
+    assert(path_pre->state_flags == orig_flags);
+
+    // 4. Translate path_raw to verify translation invariance
+    VirPath *path_trans = vir_path_create();
+    ZccSvgStatus st3 = zcc_svg_parse_to_vir("M 110 220 L 130 240 Z", path_trans, &err);
+    assert(st3 == ZCC_SVG_OK);
+
+    uint64_t fp_trans = vir_path_canonical_fingerprint(path_trans, 1e-3f);
+    assert(fp_raw == fp_trans);
+
+    vir_path_free(path_raw);
+    vir_path_free(path_pre);
+    vir_path_free(path_trans);
+
+    printf("[+] test_vir_canonical_fingerprint PASSED.\n");
+}
+
 static void test_vir_compilation_caching() {
     printf("[*] Running test_vir_compilation_caching...\n");
 
@@ -1315,6 +1372,7 @@ int main() {
     printf("=== ZCC Vector IR (VIR) Test Harness ===\n");
     test_vir_path_equivalence();
     test_vir_path_fingerprint();
+    test_vir_canonical_fingerprint();
     test_vir_compilation_caching();
     test_vir_path_normalization();
     test_vir_path_creation_and_growth();
@@ -1335,6 +1393,8 @@ int main() {
     test_vir_pass_graph_exporter();
     test_vir_exact_bounds_solving();
     test_vir_registry_validation();
+    vir_cache_shutdown();
     printf("777JACKPOT777 — ALL VIR CORE TESTS GREEN.\n");
     return 0;
 }
+

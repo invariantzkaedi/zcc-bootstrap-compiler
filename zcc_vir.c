@@ -1008,7 +1008,7 @@ static VirCacheEntry* cache_find_slot(uint64_t key, size_t segment_count, uint32
 SdfSeed* vir_to_sdf_seed(const VirPath *path) {
     if (!path) return NULL;
 
-    uint64_t fp = vir_path_fingerprint(path, 1e-3f);
+    uint64_t fp = vir_path_canonical_fingerprint(path, 1e-3f);
     VirCacheEntry *entry = cache_find_slot(fp, path->count, path->state_flags, 0);
     if (entry && entry->sdf_seed) {
         g_cache_stats.hits++;
@@ -1758,50 +1758,56 @@ int vir_paths_equivalent(const VirPath *a, const VirPath *b, float epsilon) {
     return equivalent;
 }
 
-uint64_t vir_path_fingerprint(const VirPath *path, float epsilon) {
+uint64_t vir_path_canonical_fingerprint(const VirPath *path, float epsilon) {
     if (!path) return 0;
     if (epsilon <= 0.0f) epsilon = 1e-3f;
 
-    VirPath *cp = vir_path_create();
-    if (!cp) return 0;
+    const VirPath *target = path;
+    VirPath *cp = NULL;
 
-    for (size_t i = 0; i < path->count; i++) {
-        VirSegment s = path->segments[i];
-        if (s.op == VIR_MOVE) {
-            vir_path_add_move_to(cp, s.coords[0], s.coords[1]);
-        } else if (s.op == VIR_LINE) {
-            vir_path_add_line_to(cp, s.coords[0], s.coords[1]);
-        } else if (s.op == VIR_CUBIC) {
-            vir_path_add_cubic_to(cp, s.coords[0], s.coords[1], s.coords[2], s.coords[3], s.coords[4], s.coords[5]);
-        } else if (s.op == VIR_ARC) {
-            vir_path_add_arc_to(cp, s.coords[0], s.coords[1], s.coords[2], s.coords[3], s.coords[4], s.coords[5], s.coords[6]);
-        } else if (s.op == VIR_CLOSE) {
-            vir_path_add_close(cp);
+    if (!(path->state_flags & VIR_STATE_LOCALIZED)) {
+        cp = vir_path_create();
+        if (!cp) return 0;
+
+        for (size_t i = 0; i < path->count; i++) {
+            VirSegment s = path->segments[i];
+            if (s.op == VIR_MOVE) {
+                vir_path_add_move_to(cp, s.coords[0], s.coords[1]);
+            } else if (s.op == VIR_LINE) {
+                vir_path_add_line_to(cp, s.coords[0], s.coords[1]);
+            } else if (s.op == VIR_CUBIC) {
+                vir_path_add_cubic_to(cp, s.coords[0], s.coords[1], s.coords[2], s.coords[3], s.coords[4], s.coords[5]);
+            } else if (s.op == VIR_ARC) {
+                vir_path_add_arc_to(cp, s.coords[0], s.coords[1], s.coords[2], s.coords[3], s.coords[4], s.coords[5], s.coords[6]);
+            } else if (s.op == VIR_CLOSE) {
+                vir_path_add_close(cp);
+            }
         }
-    }
 
-    size_t registry_count = 0;
-    VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
+        size_t registry_count = 0;
+        VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
 
-    VirPipelineStats stats = {0};
-    VirPass target_passes[] = { VIR_PASS_LOCALIZE };
+        VirPipelineStats stats = {0};
+        VirPass target_passes[] = { VIR_PASS_LOCALIZE };
 
-    int ok = vir_run_pipeline_with_deps(cp, registry, registry_count, target_passes, 1, &stats);
-    if (!ok) {
-        vir_path_free(cp);
-        return 0;
+        int ok = vir_run_pipeline_with_deps(cp, registry, registry_count, target_passes, 1, &stats);
+        if (!ok) {
+            vir_path_free(cp);
+            return 0;
+        }
+        target = cp;
     }
 
     uint64_t hash = 14695981039346656037ULL;
     uint64_t schema_ver = VIR_CACHE_SCHEMA_VERSION;
     fnv1a_64_update(&hash, &schema_ver, sizeof(schema_ver));
-    uint64_t count_val = (uint64_t)cp->count;
+    uint64_t count_val = (uint64_t)target->count;
     fnv1a_64_update(&hash, &count_val, sizeof(count_val));
-    uint64_t state_val = (uint64_t)cp->state_flags;
+    uint64_t state_val = (uint64_t)target->state_flags;
     fnv1a_64_update(&hash, &state_val, sizeof(state_val));
 
-    for (size_t i = 0; i < cp->count; i++) {
-        VirSegment *seg = &cp->segments[i];
+    for (size_t i = 0; i < target->count; i++) {
+        VirSegment *seg = &target->segments[i];
         uint32_t op_val = (uint32_t)seg->op;
         fnv1a_64_update(&hash, &op_val, sizeof(op_val));
 
@@ -1816,8 +1822,14 @@ uint64_t vir_path_fingerprint(const VirPath *path, float epsilon) {
         }
     }
 
-    vir_path_free(cp);
+    if (cp) {
+        vir_path_free(cp);
+    }
     return hash;
+}
+
+uint64_t vir_path_fingerprint(const VirPath *path, float epsilon) {
+    return vir_path_canonical_fingerprint(path, epsilon);
 }
 
 int vir_run_passes(VirPath *path, const VirPass *passes, size_t count) {

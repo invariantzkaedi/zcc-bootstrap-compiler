@@ -137,6 +137,7 @@ VirPassResult vir_path_normalize(VirPath *path);
 VirPassResult vir_path_localize(VirPath *path);
 int vir_paths_equivalent(const VirPath *a, const VirPath *b, float epsilon);
 uint64_t vir_path_fingerprint(const VirPath *path, float epsilon);
+uint64_t vir_path_canonical_fingerprint(const VirPath *path, float epsilon);
 void vir_path_invalidate_bounds(VirPath *path);
 
 void vir_cache_init(void);
