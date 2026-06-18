@@ -1485,3 +1485,152 @@ int vir_run_pipeline_with_deps(
 
     return 1;
 }
+
+int vir_prepare_backend(
+    VirPath *path,
+    VirPassDescriptor *registry,
+    size_t registry_count,
+    VirBackend backend,
+    VirPipelineStats *stats
+) {
+    if (!path || !registry || !stats) return 0;
+
+    uint32_t target_state = 0;
+    switch (backend) {
+        case VIR_BACKEND_SVG:
+            target_state = VIR_STATE_CLEAN;
+            break;
+        case VIR_BACKEND_SDF:
+            target_state = VIR_STATE_ARCS_EXPANDED;
+            break;
+        case VIR_BACKEND_GLSL:
+            target_state = VIR_STATE_ARCS_EXPANDED | VIR_STATE_CANONICALIZED | VIR_STATE_BOUNDS_VALID;
+            break;
+        default:
+            return 0;
+    }
+
+    if ((path->state_flags & target_state) == target_state) {
+        memset(stats, 0, sizeof(VirPipelineStats));
+        return 1;
+    }
+
+    uint32_t missing = target_state & ~path->state_flags;
+    VirPass passes_to_run[16];
+    size_t pass_count = 0;
+
+    for (size_t flag_bit = 0; flag_bit < 32; flag_bit++) {
+        uint32_t flag = 1U << flag_bit;
+        if (missing & flag) {
+            for (size_t i = 0; i < registry_count; i++) {
+                if (registry[i].produced_state & flag) {
+                    int duplicate = 0;
+                    for (size_t k = 0; k < pass_count; k++) {
+                        if (passes_to_run[k] == registry[i].pass_id) {
+                            duplicate = 1;
+                            break;
+                        }
+                    }
+                    if (!duplicate && pass_count < 16) {
+                        passes_to_run[pass_count++] = registry[i].pass_id;
+                    }
+                }
+            }
+        }
+    }
+
+    if (pass_count > 0) {
+        return vir_run_pipeline_with_deps(path, registry, registry_count, passes_to_run, pass_count, stats);
+    }
+
+    return 1;
+}
+
+char* vir_pipeline_to_dot(
+    VirPassDescriptor *registry,
+    size_t registry_count
+) {
+    if (!registry || registry_count == 0) return NULL;
+
+    size_t capacity = 4096;
+    char *buf = (char*)malloc(capacity);
+    if (!buf) return NULL;
+
+    buf[0] = '\0';
+    size_t len = sprintf(buf, "digraph VIR_Pipeline {\n"
+                              "  node [shape=box, style=filled, color=lightgray];\n"
+                              "  edge [fontsize=10];\n\n");
+
+    for (size_t i = 0; i < registry_count; i++) {
+        char node_line[256];
+        int n = sprintf(node_line, "  %s [label=\"%s\\nruns: %llu\\nmutations: %llu\\nfailures: %llu\"];\n",
+                        registry[i].name, registry[i].name,
+                        (unsigned long long)registry[i].runs,
+                        (unsigned long long)registry[i].mutations,
+                        (unsigned long long)registry[i].failures);
+        if (len + n + 256 >= capacity) {
+            capacity *= 2;
+            char *new_buf = (char*)realloc(buf, capacity);
+            if (!new_buf) { free(buf); return NULL; }
+            buf = new_buf;
+        }
+        strcpy(buf + len, node_line);
+        len += n;
+    }
+
+    for (size_t i = 0; i < registry_count; i++) {
+        VirPassDescriptor *p = &registry[i];
+        if (p->required_state != 0) {
+            for (size_t bit = 0; bit < 32; bit++) {
+                uint32_t flag = 1U << bit;
+                if (p->required_state & flag) {
+                    for (size_t j = 0; j < registry_count; j++) {
+                        if (registry[j].produced_state & flag) {
+                            char edge_line[256];
+                            int n = sprintf(edge_line, "  %s -> %s [label=\"requires flag 0x%X\"];\n",
+                                            registry[j].name, p->name, flag);
+                            if (len + n + 256 >= capacity) {
+                                capacity *= 2;
+                                char *new_buf = (char*)realloc(buf, capacity);
+                                if (!new_buf) { free(buf); return NULL; }
+                                buf = new_buf;
+                            }
+                            strcpy(buf + len, edge_line);
+                            len += n;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    for (size_t i = 0; i < registry_count; i++) {
+        VirPassDescriptor *p = &registry[i];
+        if (p->invalidated_state != 0) {
+            for (size_t bit = 0; bit < 32; bit++) {
+                uint32_t flag = 1U << bit;
+                if (p->invalidated_state & flag) {
+                    for (size_t j = 0; j < registry_count; j++) {
+                        if (registry[j].produced_state & flag) {
+                            char edge_line[256];
+                            int n = sprintf(edge_line, "  %s -> %s [color=red, style=dashed, label=\"invalidates flag 0x%X\"];\n",
+                                            p->name, registry[j].name, flag);
+                            if (len + n + 256 >= capacity) {
+                                capacity *= 2;
+                                char *new_buf = (char*)realloc(buf, capacity);
+                                if (!new_buf) { free(buf); return NULL; }
+                                buf = new_buf;
+                            }
+                            strcpy(buf + len, edge_line);
+                            len += n;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    strcpy(buf + len, "}\n");
+    return buf;
+}
+

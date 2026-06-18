@@ -777,6 +777,145 @@ static void test_vir_pass_dependency_graph() {
     printf("[+] test_vir_pass_dependency_graph PASSED.\n");
 }
 
+static void test_vir_backend_planner() {
+    printf("[*] Running test_vir_backend_planner...\n");
+
+    size_t registry_count = 0;
+    VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
+    assert(registry != NULL);
+    assert(registry_count == 4);
+
+    // 1. Prepare SVG backend (target state clean -> 0)
+    {
+        VirPath *path = vir_path_create();
+        ZccSvgError err = {0};
+        ZccSvgStatus st = zcc_svg_parse_to_vir("M 0 0 L 10 10 A 50 50 0 0 1 50 50", path, &err);
+        assert(st == ZCC_SVG_OK);
+
+        vir_pipeline_reset_telemetry(registry, registry_count);
+
+        VirPipelineStats stats = {0};
+        int res = vir_prepare_backend(path, registry, registry_count, VIR_BACKEND_SVG, &stats);
+        assert(res == 1);
+        // Prerequisite is clean, which path has initially (state_flags = 0). So 0 passes run.
+        assert(stats.total_passes == 0);
+        assert(stats.mutations == 0);
+
+        vir_path_free(path);
+    }
+
+    // 2. Prepare SDF backend (target state: ARCS_EXPANDED)
+    {
+        VirPath *path = vir_path_create();
+        ZccSvgError err = {0};
+        ZccSvgStatus st = zcc_svg_parse_to_vir("M 0 0 L 10 10 A 50 50 0 0 1 50 50", path, &err);
+        assert(st == ZCC_SVG_OK);
+
+        vir_pipeline_reset_telemetry(registry, registry_count);
+
+        VirPipelineStats stats = {0};
+        int res = vir_prepare_backend(path, registry, registry_count, VIR_BACKEND_SDF, &stats);
+        assert(res == 1);
+        // Should auto-schedule expand_arcs pass
+        assert(stats.total_passes == 1);
+        assert(stats.mutations == 1);
+        assert(path->state_flags & VIR_STATE_ARCS_EXPANDED);
+
+        // Run preparation again on fully prepared path - should skip
+        VirPipelineStats stats2 = {0};
+        res = vir_prepare_backend(path, registry, registry_count, VIR_BACKEND_SDF, &stats2);
+        assert(res == 1);
+        assert(stats2.total_passes == 0);
+
+        vir_path_free(path);
+    }
+
+    // 3. Prepare GLSL backend (target state: ARCS_EXPANDED | CANONICALIZED | BOUNDS_VALID)
+    {
+        VirPath *path = vir_path_create();
+        ZccSvgError err = {0};
+        ZccSvgStatus st = zcc_svg_parse_to_vir("M 0 0 L 10 10 A 50 50 0 0 1 50 50 Z", path, &err);
+        assert(st == ZCC_SVG_OK);
+
+        vir_pipeline_reset_telemetry(registry, registry_count);
+
+        VirPipelineStats stats = {0};
+        int res = vir_prepare_backend(path, registry, registry_count, VIR_BACKEND_GLSL, &stats);
+        assert(res == 1);
+        // Target state requires expand_arcs, canonicalize, and bounds.
+        assert(stats.total_passes == 3);
+        assert(stats.mutations == 3);
+        assert((path->state_flags & (VIR_STATE_ARCS_EXPANDED | VIR_STATE_CANONICALIZED | VIR_STATE_BOUNDS_VALID)) ==
+               (VIR_STATE_ARCS_EXPANDED | VIR_STATE_CANONICALIZED | VIR_STATE_BOUNDS_VALID));
+
+        // Preparing again should skip
+        VirPipelineStats stats2 = {0};
+        res = vir_prepare_backend(path, registry, registry_count, VIR_BACKEND_GLSL, &stats2);
+        assert(res == 1);
+        assert(stats2.total_passes == 0);
+
+        vir_path_free(path);
+    }
+
+    printf("[+] test_vir_backend_planner PASSED.\n");
+}
+
+static void test_vir_pass_graph_exporter() {
+    printf("[*] Running test_vir_pass_graph_exporter...\n");
+
+    size_t registry_count = 0;
+    VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
+    assert(registry != NULL);
+    assert(registry_count == 4);
+
+    // Populate telemetry by running some passes
+    VirPath *path = vir_path_create();
+    ZccSvgError err = {0};
+    ZccSvgStatus st = zcc_svg_parse_to_vir("M 0 0 L 0 0 A 50 50 0 0 1 50 50 Z", path, &err);
+    assert(st == ZCC_SVG_OK);
+
+    vir_pipeline_reset_telemetry(registry, registry_count);
+
+    VirPass passes[] = {
+        VIR_PASS_DEGENERATE,
+        VIR_PASS_EXPAND_ARCS,
+        VIR_PASS_CANONICALIZE,
+        VIR_PASS_COMPUTE_BOUNDS
+    };
+
+    VirPipelineStats stats = {0};
+    int res = vir_run_pipeline_with_deps(path, registry, registry_count, passes, 4, &stats);
+    assert(res == 1);
+
+    char *dot = vir_pipeline_to_dot(registry, registry_count);
+    assert(dot != NULL);
+
+    // Verify format
+    assert(strstr(dot, "digraph VIR_Pipeline {") != NULL);
+    assert(strstr(dot, "degenerate") != NULL);
+    assert(strstr(dot, "expand_arcs") != NULL);
+    assert(strstr(dot, "bounds") != NULL);
+    assert(strstr(dot, "canonicalize") != NULL);
+
+    // Check node label telemetry formatting
+    assert(strstr(dot, "runs:") != NULL);
+    assert(strstr(dot, "mutations:") != NULL);
+    assert(strstr(dot, "failures:") != NULL);
+
+    // Check dependency edges
+    assert(strstr(dot, "-> canonicalize [label=\"requires flag") != NULL);
+
+    // Check invalidation edges
+    assert(strstr(dot, "color=red") != NULL);
+    assert(strstr(dot, "style=dashed") != NULL);
+    assert(strstr(dot, "invalidates flag") != NULL);
+
+    free(dot);
+    vir_path_free(path);
+
+    printf("[+] test_vir_pass_graph_exporter PASSED.\n");
+}
+
 int main() {
     printf("=== ZCC Vector IR (VIR) Test Harness ===\n");
     test_vir_path_creation_and_growth();
@@ -793,6 +932,8 @@ int main() {
     test_vir_pipeline_telemetry();
     test_vir_fixed_point_pipeline();
     test_vir_pass_dependency_graph();
+    test_vir_backend_planner();
+    test_vir_pass_graph_exporter();
     printf("777JACKPOT777 — ALL VIR CORE TESTS GREEN.\n");
     return 0;
 }

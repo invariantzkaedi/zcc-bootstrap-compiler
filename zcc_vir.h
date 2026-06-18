@@ -190,4 +190,23 @@ int vir_run_pipeline_with_deps(
     VirPipelineStats *stats
 );
 
+typedef enum {
+    VIR_BACKEND_SVG,
+    VIR_BACKEND_SDF,
+    VIR_BACKEND_GLSL
+} VirBackend;
+
+int vir_prepare_backend(
+    VirPath *path,
+    VirPassDescriptor *registry,
+    size_t registry_count,
+    VirBackend backend,
+    VirPipelineStats *stats
+);
+
+char* vir_pipeline_to_dot(
+    VirPassDescriptor *registry,
+    size_t registry_count
+);
+
 #endif
