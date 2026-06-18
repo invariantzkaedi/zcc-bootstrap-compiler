@@ -2000,6 +2000,57 @@ int vir_execute_plan(VirPath *path,
 
 /* ── Provenance Receipt ───────────────────────────────────────────────────── */
 
+/* ── State Flag Diagnostics ────────────────────────────────────────────── */
+
+const char *vir_state_flag_name(uint32_t flag) {
+    switch (flag) {
+        case VIR_STATE_DEGENERATE_FREE: return "DEGENERATE_FREE";
+        case VIR_STATE_ARCS_EXPANDED:   return "ARCS_EXPANDED";
+        case VIR_STATE_CANONICALIZED:   return "CANONICALIZED";
+        case VIR_STATE_BOUNDS_VALID:    return "BOUNDS_VALID";
+        case VIR_STATE_EXACT_BOUNDS:    return "EXACT_BOUNDS";
+        case VIR_STATE_NORMALIZED:      return "NORMALIZED";
+        case VIR_STATE_LOCALIZED:       return "LOCALIZED";
+        default:                        return "UNKNOWN";
+    }
+}
+
+char *vir_state_flags_to_string(uint32_t flags) {
+    if (flags == 0) {
+        char *s = (char *)malloc(6); /* "CLEAN" + NUL */
+        if (s) strcpy(s, "CLEAN");
+        return s;
+    }
+
+    /* Two-pass: measure total length, then allocate and fill. */
+    size_t total = 0;
+    int first = 1;
+    for (size_t bit = 0; bit < 32; bit++) {
+        uint32_t f = 1U << bit;
+        if (flags & f) {
+            const char *name = vir_state_flag_name(f);
+            if (!first) total += 3; /* " | " */
+            total += strlen(name);
+            first = 0;
+        }
+    }
+
+    char *out = (char *)malloc(total + 1);
+    if (!out) return NULL;
+    out[0] = '\0';
+
+    first = 1;
+    for (size_t bit = 0; bit < 32; bit++) {
+        uint32_t f = 1U << bit;
+        if (flags & f) {
+            if (!first) strcat(out, " | ");
+            strcat(out, vir_state_flag_name(f));
+            first = 0;
+        }
+    }
+    return out;
+}
+
 char *vir_pipeline_provenance_json(const VirPath        *path,
                                    const VirPipelineStats *stats,
                                    const VirCacheStats    *cache) {
@@ -2021,12 +2072,17 @@ char *vir_pipeline_provenance_json(const VirPath        *path,
         bmax_x = m.max_x; bmax_y = m.max_y;
     }
 
+    /* Build state_names string for inclusion in JSON. */
+    char *state_names = vir_state_flags_to_string(m.state_flags);
+    if (!state_names) return NULL;
+
     /* Two-pass: dry-run with NULL to measure, then allocate and format. */
     int needed = snprintf(NULL, 0,
         "{\n"
         "  \"canonical_fingerprint\": \"0x%016llx\",\n"
         "  \"schema_version\": %u,\n"
         "  \"state_flags\": %u,\n"
+        "  \"state_names\": \"%s\",\n"
         "  \"segment_count\": %u,\n"
         "  \"bounds\": {\n"
         "    \"min_x\": %.6g,\n"
@@ -2049,6 +2105,7 @@ char *vir_pipeline_provenance_json(const VirPath        *path,
         (unsigned long long)m.canonical_fingerprint,
         m.schema_version,
         m.state_flags,
+        state_names,
         m.segment_count,
         (double)bmin_x, (double)bmin_y,
         (double)bmax_x, (double)bmax_y,
@@ -2061,15 +2118,16 @@ char *vir_pipeline_provenance_json(const VirPath        *path,
         (unsigned long long)c->evictions
     );
 
-    if (needed < 0) return NULL;
+    if (needed < 0) { free(state_names); return NULL; }
     char *out = (char *)malloc((size_t)needed + 1);
-    if (!out) return NULL;
+    if (!out) { free(state_names); return NULL; }
 
     snprintf(out, (size_t)needed + 1,
         "{\n"
         "  \"canonical_fingerprint\": \"0x%016llx\",\n"
         "  \"schema_version\": %u,\n"
         "  \"state_flags\": %u,\n"
+        "  \"state_names\": \"%s\",\n"
         "  \"segment_count\": %u,\n"
         "  \"bounds\": {\n"
         "    \"min_x\": %.6g,\n"
@@ -2092,6 +2150,7 @@ char *vir_pipeline_provenance_json(const VirPath        *path,
         (unsigned long long)m.canonical_fingerprint,
         m.schema_version,
         m.state_flags,
+        state_names,
         m.segment_count,
         (double)bmin_x, (double)bmin_y,
         (double)bmax_x, (double)bmax_y,
@@ -2104,6 +2163,7 @@ char *vir_pipeline_provenance_json(const VirPath        *path,
         (unsigned long long)c->evictions
     );
 
+    free(state_names);
     return out;
 }
 
@@ -2551,8 +2611,9 @@ char* vir_pipeline_to_dot(
                     for (size_t j = 0; j < registry_count; j++) {
                         if (registry[j].produced_state & flag) {
                             char edge_line[256];
-                            int n = sprintf(edge_line, "  %s -> %s [label=\"requires flag 0x%X\"];\n",
-                                            registry[j].name, p->name, flag);
+                            int n = sprintf(edge_line, "  %s -> %s [label=\"requires %s\"];\n",
+                                            registry[j].name, p->name,
+                                            vir_state_flag_name(flag));
                             if (len + n + 256 >= capacity) {
                                 capacity *= 2;
                                 char *new_buf = (char*)realloc(buf, capacity);
@@ -2577,8 +2638,9 @@ char* vir_pipeline_to_dot(
                     for (size_t j = 0; j < registry_count; j++) {
                         if (registry[j].produced_state & flag) {
                             char edge_line[256];
-                            int n = sprintf(edge_line, "  %s -> %s [color=red, style=dashed, label=\"invalidates flag 0x%X\"];\n",
-                                            p->name, registry[j].name, flag);
+                            int n = sprintf(edge_line, "  %s -> %s [color=red, style=dashed, label=\"invalidates %s\"];\n",
+                                            p->name, registry[j].name,
+                                            vir_state_flag_name(flag));
                             if (len + n + 256 >= capacity) {
                                 capacity *= 2;
                                 char *new_buf = (char*)realloc(buf, capacity);

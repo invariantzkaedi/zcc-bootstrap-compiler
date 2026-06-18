@@ -332,4 +332,20 @@ char *vir_pipeline_provenance_json(const VirPath        *path,
                                    const VirPipelineStats *stats,
                                    const VirCacheStats    *cache);
 
+/* ── State Flag Diagnostics ─────────────────────────────────────────────────
+ * Human-readable names for VirPathStateFlags bitmasks.                      */
+
+/* Return the literal name of a single power-of-two state flag, e.g.
+ * VIR_STATE_CANONICALIZED → "CANONICALIZED".
+ * Returns "UNKNOWN" for unrecognised bits.
+ * The returned string is a string literal — do NOT free it.                 */
+const char *vir_state_flag_name(uint32_t flag);
+
+/* Build a pipe-separated string of all set flag names in `flags`, e.g.
+ * "ARCS_EXPANDED | CANONICALIZED | EXACT_BOUNDS | LOCALIZED".
+ * Returns "CLEAN" when flags == 0.
+ * The returned string is malloc-owned — the caller must free() it.
+ * Returns NULL only on allocation failure.                                  */
+char *vir_state_flags_to_string(uint32_t flags);
+
 #endif

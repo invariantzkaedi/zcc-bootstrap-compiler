@@ -903,12 +903,12 @@ static void test_vir_pass_graph_exporter() {
     assert(strstr(dot, "failures:") != NULL);
 
     // Check dependency edges
-    assert(strstr(dot, "-> canonicalize [label=\"requires flag") != NULL);
+    assert(strstr(dot, "-> canonicalize [label=\"requires ") != NULL);
 
     // Check invalidation edges
     assert(strstr(dot, "color=red") != NULL);
     assert(strstr(dot, "style=dashed") != NULL);
-    assert(strstr(dot, "invalidates flag") != NULL);
+    assert(strstr(dot, "invalidates ") != NULL);
 
     free(dot);
     vir_path_free(path);
@@ -1535,6 +1535,75 @@ static void test_vir_pipeline_provenance() {
     printf("[+] test_vir_pipeline_provenance PASSED.\n");
 }
 
+static void test_vir_state_flags_stringify() {
+    printf("[*] Running test_vir_state_flags_stringify...\n");
+
+    /* --- vir_state_flag_name: single known flags --- */
+    assert(strcmp(vir_state_flag_name(VIR_STATE_DEGENERATE_FREE), "DEGENERATE_FREE") == 0);
+    assert(strcmp(vir_state_flag_name(VIR_STATE_ARCS_EXPANDED),   "ARCS_EXPANDED")   == 0);
+    assert(strcmp(vir_state_flag_name(VIR_STATE_CANONICALIZED),   "CANONICALIZED")   == 0);
+    assert(strcmp(vir_state_flag_name(VIR_STATE_BOUNDS_VALID),    "BOUNDS_VALID")    == 0);
+    assert(strcmp(vir_state_flag_name(VIR_STATE_EXACT_BOUNDS),    "EXACT_BOUNDS")    == 0);
+    assert(strcmp(vir_state_flag_name(VIR_STATE_NORMALIZED),      "NORMALIZED")      == 0);
+    assert(strcmp(vir_state_flag_name(VIR_STATE_LOCALIZED),       "LOCALIZED")       == 0);
+
+    /* --- vir_state_flag_name: unknown bit returns "UNKNOWN" --- */
+    assert(strcmp(vir_state_flag_name(0x80000000U), "UNKNOWN") == 0);
+    /* Zero is not a power-of-two flag — also UNKNOWN */
+    assert(strcmp(vir_state_flag_name(0), "UNKNOWN") == 0);
+
+    /* --- vir_state_flags_to_string: CLEAN when flags == 0 --- */
+    char *s_clean = vir_state_flags_to_string(0);
+    assert(s_clean != NULL);
+    assert(strcmp(s_clean, "CLEAN") == 0);
+    free(s_clean);
+
+    /* --- vir_state_flags_to_string: single flag --- */
+    char *s_single = vir_state_flags_to_string(VIR_STATE_CANONICALIZED);
+    assert(s_single != NULL);
+    assert(strcmp(s_single, "CANONICALIZED") == 0);
+    free(s_single);
+
+    /* --- vir_state_flags_to_string: combined flags --- */
+    uint32_t combo = VIR_STATE_CANONICALIZED | VIR_STATE_EXACT_BOUNDS | VIR_STATE_LOCALIZED;
+    char *s_combo = vir_state_flags_to_string(combo);
+    assert(s_combo != NULL);
+    /* All three names must be present. */
+    assert(strstr(s_combo, "CANONICALIZED") != NULL);
+    assert(strstr(s_combo, "EXACT_BOUNDS")  != NULL);
+    assert(strstr(s_combo, "LOCALIZED")     != NULL);
+    /* Separator must be present. */
+    assert(strstr(s_combo, " | ") != NULL);
+    free(s_combo);
+
+    /* --- vir_state_flags_to_string: unknown bit produces "UNKNOWN" --- */
+    char *s_unk = vir_state_flags_to_string(0x80000000U);
+    assert(s_unk != NULL);
+    assert(strcmp(s_unk, "UNKNOWN") == 0);
+    free(s_unk);
+
+    /* --- provenance JSON now includes state_names field --- */
+    VirPath *path = vir_path_create();
+    vir_path_add_move_to(path, 0.0f, 0.0f);
+    vir_path_add_line_to(path, 5.0f, 5.0f);
+    vir_path_add_close(path);
+
+    size_t reg_count;
+    VirPassDescriptor *registry = vir_pipeline_get_default_registry(&reg_count);
+    VirPipelineStats stats;
+    VirPass goal[] = { VIR_PASS_LOCALIZE };
+    vir_run_pipeline_with_deps(path, registry, reg_count, goal, 1, &stats);
+
+    char *json = vir_pipeline_provenance_json(path, &stats, NULL);
+    assert(json != NULL);
+    assert(strstr(json, "\"state_names\"") != NULL);
+    assert(strstr(json, "LOCALIZED") != NULL); /* path reached LOCALIZED */
+    free(json);
+
+    vir_path_free(path);
+    printf("[+] test_vir_state_flags_stringify PASSED.\n");
+}
+
 int main() {
     setbuf(stdout, NULL);
     printf("=== ZCC Vector IR (VIR) Test Harness ===\n");
@@ -1564,6 +1633,7 @@ int main() {
     test_vir_artifact_manifest();
     test_vir_execution_plan();
     test_vir_pipeline_provenance();
+    test_vir_state_flags_stringify();
     /* NOTE: vir_cache_shutdown() is NOT called here.
      * test_vir_compilation_caching() initialises the cache with
      * vir_cache_init() and owns the shutdown at the end of that test.
