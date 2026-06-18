@@ -941,3 +941,125 @@ void sdf_seed_free(SdfSeed *seed) {
     if (seed->segments) free(seed->segments);
     free(seed);
 }
+
+SdfBounds sdf_seed_compute_bounds(const SdfSeed *seed) {
+    SdfBounds b = {0.0f, 0.0f, 0.0f, 0.0f};
+    if (!seed || seed->count == 0) return b;
+
+    float mix = 1e9f, miy = 1e9f;
+    float max_val_x = -1e9f, max_val_y = -1e9f;
+    int has_points = 0;
+
+    #define UPDATE_BOUNDS(x, y) do { \
+        if ((x) < mix) mix = (x); \
+        if ((y) < miy) miy = (y); \
+        if ((x) > max_val_x) max_val_x = (x); \
+        if ((y) > max_val_y) max_val_y = (y); \
+        has_points = 1; \
+    } while(0)
+
+    for (size_t i = 0; i < seed->count; i++) {
+        const SdfSeedSegment *seg = &seed->segments[i];
+        if (seg->op == SDF_LINE) {
+            UPDATE_BOUNDS(seg->points[0], seg->points[1]);
+            UPDATE_BOUNDS(seg->points[2], seg->points[3]);
+        } else if (seg->op == SDF_CUBIC) {
+            UPDATE_BOUNDS(seg->points[0], seg->points[1]);
+            UPDATE_BOUNDS(seg->points[2], seg->points[3]);
+            UPDATE_BOUNDS(seg->points[4], seg->points[5]);
+            UPDATE_BOUNDS(seg->points[6], seg->points[7]);
+        }
+    }
+    #undef UPDATE_BOUNDS
+
+    if (has_points) {
+        b.min_x = mix;
+        b.min_y = miy;
+        b.max_x = max_val_x;
+        b.max_y = max_val_y;
+    }
+    return b;
+}
+
+char* sdf_seed_to_glsl(const SdfSeed *seed) {
+    if (!seed) return NULL;
+
+    size_t capacity = 1024 + seed->count * 256;
+    char *buf = (char*)malloc(capacity);
+    if (!buf) return NULL;
+
+    buf[0] = '\0';
+    size_t len = 0;
+
+    const char *header =
+        "// GLSL Signed Distance Field (SDF) representation generated from SdfSeed\n\n"
+        "float sdLine(vec2 p, vec2 a, vec2 b) {\n"
+        "    vec2 pa = p - a, ba = b - a;\n"
+        "    float h = clamp(dot(pa, ba)/dot(ba, ba), 0.0, 1.0);\n"
+        "    return length(pa - ba*h);\n"
+        "}\n\n"
+        "float sdCubicBezier(vec2 p, vec2 p0, vec2 p1, vec2 p2, vec2 p3) {\n"
+        "    float d = 1e9;\n"
+        "    vec2 prev = p0;\n"
+        "    for (int i = 1; i <= 10; i++) {\n"
+        "        float t = float(i) / 10.0;\n"
+        "        float mt = 1.0 - t;\n"
+        "        vec2 curr = mt*mt*mt*p0 + 3.0*mt*mt*t*p1 + 3.0*mt*t*t*p2 + t*t*t*p3;\n"
+        "        vec2 pa = p - prev, ba = curr - prev;\n"
+        "        float h = clamp(dot(pa, ba)/dot(ba, ba), 0.0, 1.0);\n"
+        "        d = min(d, length(pa - ba*h));\n"
+        "        prev = curr;\n"
+        "    }\n"
+        "    return d;\n"
+        "}\n\n"
+        "float sdf_shape(vec2 p) {\n"
+        "    float d = 1e9;\n";
+
+    strcpy(buf, header);
+    len = strlen(header);
+
+    for (size_t i = 0; i < seed->count; i++) {
+        const SdfSeedSegment *seg = &seed->segments[i];
+        char temp[512];
+        int n = 0;
+        if (seg->op == SDF_LINE) {
+            n = sprintf(temp, "    d = min(d, sdLine(p, vec2(%.4f, %.4f), vec2(%.4f, %.4f)));\n",
+                seg->points[0], seg->points[1],
+                seg->points[2], seg->points[3]);
+        } else if (seg->op == SDF_CUBIC) {
+            n = sprintf(temp, "    d = min(d, sdCubicBezier(p, vec2(%.4f, %.4f), vec2(%.4f, %.4f), vec2(%.4f, %.4f), vec2(%.4f, %.4f)));\n",
+                seg->points[0], seg->points[1],
+                seg->points[2], seg->points[3],
+                seg->points[4], seg->points[5],
+                seg->points[6], seg->points[7]);
+        }
+
+        if (n > 0) {
+            if (len + n + 64 >= capacity) {
+                capacity = (len + n) * 2;
+                char *new_buf = (char*)realloc(buf, capacity);
+                if (!new_buf) {
+                    free(buf);
+                    return NULL;
+                }
+                buf = new_buf;
+            }
+            strcpy(buf + len, temp);
+            len += n;
+        }
+    }
+
+    const char *footer = "    return d;\n}\n";
+    if (len + strlen(footer) >= capacity) {
+        capacity = len + strlen(footer) + 16;
+        char *new_buf = (char*)realloc(buf, capacity);
+        if (!new_buf) {
+            free(buf);
+            return NULL;
+        }
+        buf = new_buf;
+    }
+    strcpy(buf + len, footer);
+
+    return buf;
+}

@@ -50,6 +50,13 @@ typedef struct {
     size_t count;
 } SdfSeed;
 
+typedef struct {
+    float min_x;
+    float min_y;
+    float max_x;
+    float max_y;
+} SdfBounds;
+
 
 /**
  * Creates an empty Vector IR path container.
@@ -103,5 +110,8 @@ ZccSvgStatus zcc_svg_parse_to_vir(
 char* vir_to_svg_path_data(const VirPath *path);
 SdfSeed* vir_to_sdf_seed(const VirPath *path);
 void sdf_seed_free(SdfSeed *seed);
+
+SdfBounds sdf_seed_compute_bounds(const SdfSeed *seed);
+char* sdf_seed_to_glsl(const SdfSeed *seed);
 
 #endif

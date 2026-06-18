@@ -394,6 +394,42 @@ static void test_vir_backend_diversification() {
     printf("[+] test_vir_backend_diversification PASSED.\n");
 }
 
+static void test_sdf_to_glsl_compilation() {
+    printf("[*] Running test_sdf_to_glsl_compilation...\n");
+
+    VirPath *path = vir_path_create();
+    ZccSvgError err = {0};
+    ZccSvgStatus st = zcc_svg_parse_to_vir("M 0 0 L 10 20 C 30 40 50 60 70 80", path, &err);
+    assert(st == ZCC_SVG_OK);
+
+    SdfSeed *seed = vir_to_sdf_seed(path);
+    assert(seed != NULL);
+
+    // Verify SdfBounds computation
+    SdfBounds b = sdf_seed_compute_bounds(seed);
+    assert(fabsf(b.min_x - 0.0f) < EPSILON);
+    assert(fabsf(b.min_y - 0.0f) < EPSILON);
+    assert(fabsf(b.max_x - 70.0f) < EPSILON);
+    assert(fabsf(b.max_y - 80.0f) < EPSILON);
+
+    // Compile to GLSL code
+    char *glsl = sdf_seed_to_glsl(seed);
+    assert(glsl != NULL);
+
+    // Verify the GLSL contains shader code and the coordinates
+    assert(strstr(glsl, "float sdLine(vec2 p, vec2 a, vec2 b)") != NULL);
+    assert(strstr(glsl, "float sdCubicBezier(vec2 p, vec2 p0, vec2 p1, vec2 p2, vec2 p3)") != NULL);
+    assert(strstr(glsl, "float sdf_shape(vec2 p)") != NULL);
+    assert(strstr(glsl, "sdLine(p, vec2(0.0000, 0.0000), vec2(10.0000, 20.0000))") != NULL);
+    assert(strstr(glsl, "sdCubicBezier(p, vec2(10.0000, 20.0000), vec2(30.0000, 40.0000), vec2(50.0000, 60.0000), vec2(70.0000, 80.0000))") != NULL);
+
+    free(glsl);
+    sdf_seed_free(seed);
+    vir_path_free(path);
+
+    printf("[+] test_sdf_to_glsl_compilation PASSED.\n");
+}
+
 int main() {
     printf("=== ZCC Vector IR (VIR) Test Harness ===\n");
     test_vir_path_creation_and_growth();
@@ -404,6 +440,7 @@ int main() {
     test_vir_metadata_and_bounds_caching();
     test_vir_arc_ingestion_and_expansion();
     test_vir_backend_diversification();
+    test_sdf_to_glsl_compilation();
     printf("777JACKPOT777 — ALL VIR CORE TESTS GREEN.\n");
     return 0;
 }
