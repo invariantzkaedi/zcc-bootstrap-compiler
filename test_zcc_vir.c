@@ -954,6 +954,104 @@ static void test_vir_exact_bounds_solving() {
     printf("[+] test_vir_exact_bounds_solving PASSED.\n");
 }
 
+static void test_vir_registry_validation() {
+    printf("[*] Running test_vir_registry_validation...\n");
+
+    size_t registry_count = 0;
+    VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
+    assert(registry != NULL);
+    assert(registry_count == 5);
+
+    // 1. Valid default registry test
+    {
+        VirRegistryValidationError err = {0};
+        VirRegistryValidationResult res = vir_validate_registry(registry, registry_count, &err);
+        assert(res == VIR_REGISTRY_OK);
+        assert(err.status == VIR_REGISTRY_OK);
+    }
+
+    // 2. Duplicate Pass ID test
+    {
+        VirPassDescriptor temp[10];
+        memcpy(temp, registry, registry_count * sizeof(VirPassDescriptor));
+        temp[registry_count - 1].pass_id = temp[0].pass_id;
+
+        VirRegistryValidationError err = {0};
+        VirRegistryValidationResult res = vir_validate_registry(temp, registry_count, &err);
+        assert(res == VIR_REGISTRY_ERR_DUPLICATE_PASS);
+        assert(err.status == VIR_REGISTRY_ERR_DUPLICATE_PASS);
+        assert(err.pass_id == temp[0].pass_id);
+    }
+
+    // 3. Duplicate Producer test
+    {
+        VirPassDescriptor temp[10];
+        memcpy(temp, registry, registry_count * sizeof(VirPassDescriptor));
+        temp[0].produced_state = 1U << 15;
+        temp[1].produced_state = 1U << 15;
+
+        VirRegistryValidationError err = {0};
+        VirRegistryValidationResult res = vir_validate_registry(temp, registry_count, &err);
+        assert(res == VIR_REGISTRY_ERR_DUPLICATE_PRODUCER);
+        assert(err.status == VIR_REGISTRY_ERR_DUPLICATE_PRODUCER);
+        assert(err.state_mask == (1U << 15));
+    }
+
+    // 4. Orphan Required State test
+    {
+        VirPassDescriptor temp[10];
+        memcpy(temp, registry, registry_count * sizeof(VirPassDescriptor));
+        temp[0].required_state = 1U << 29;
+
+        VirRegistryValidationError err = {0};
+        VirRegistryValidationResult res = vir_validate_registry(temp, registry_count, &err);
+        assert(res == VIR_REGISTRY_ERR_ORPHAN_REQUIRED_STATE);
+        assert(err.status == VIR_REGISTRY_ERR_ORPHAN_REQUIRED_STATE);
+        assert(err.state_mask == (1U << 29));
+    }
+
+    // 5. Invalid Invalidation test
+    {
+        VirPassDescriptor temp[10];
+        memcpy(temp, registry, registry_count * sizeof(VirPassDescriptor));
+        temp[0].invalidated_state = 1U << 28;
+
+        VirRegistryValidationError err = {0};
+        VirRegistryValidationResult res = vir_validate_registry(temp, registry_count, &err);
+        assert(res == VIR_REGISTRY_ERR_INVALID_INVALIDATION);
+        assert(err.status == VIR_REGISTRY_ERR_INVALID_INVALIDATION);
+        assert(err.state_mask == (1U << 28));
+    }
+
+    // 6. Self-conflict test
+    {
+        VirPassDescriptor temp[10];
+        memcpy(temp, registry, registry_count * sizeof(VirPassDescriptor));
+        temp[1].required_state = 1U << 1;
+        temp[1].invalidated_state = 1U << 1;
+
+        VirRegistryValidationError err = {0};
+        VirRegistryValidationResult res = vir_validate_registry(temp, registry_count, &err);
+        assert(res == VIR_REGISTRY_ERR_INVALID_INVALIDATION);
+        assert(err.status == VIR_REGISTRY_ERR_INVALID_INVALIDATION);
+        assert(err.state_mask == (1U << 1));
+    }
+
+    // 7. Cycle test
+    {
+        VirPassDescriptor temp[2] = {
+            { VIR_PASS_DEGENERATE, "degenerate", NULL, 0, 0, 0, 1U << 11, 1U << 10, 0 },
+            { VIR_PASS_EXPAND_ARCS, "expand_arcs", NULL, 0, 0, 0, 1U << 10, 1U << 11, 0 }
+        };
+        VirRegistryValidationError err = {0};
+        VirRegistryValidationResult res = vir_validate_registry(temp, 2, &err);
+        assert(res == VIR_REGISTRY_ERR_CYCLE);
+        assert(err.status == VIR_REGISTRY_ERR_CYCLE);
+    }
+
+    printf("[+] test_vir_registry_validation PASSED.\n");
+}
+
 int main() {
     printf("=== ZCC Vector IR (VIR) Test Harness ===\n");
     test_vir_path_creation_and_growth();
@@ -973,6 +1071,7 @@ int main() {
     test_vir_backend_planner();
     test_vir_pass_graph_exporter();
     test_vir_exact_bounds_solving();
+    test_vir_registry_validation();
     printf("777JACKPOT777 — ALL VIR CORE TESTS GREEN.\n");
     return 0;
 }

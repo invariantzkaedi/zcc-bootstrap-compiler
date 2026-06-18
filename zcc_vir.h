@@ -212,4 +212,28 @@ char* vir_pipeline_to_dot(
     size_t registry_count
 );
 
+typedef enum {
+    VIR_REGISTRY_OK = 0,
+    VIR_REGISTRY_ERR_NULL,
+    VIR_REGISTRY_ERR_DUPLICATE_PASS,
+    VIR_REGISTRY_ERR_DUPLICATE_PRODUCER,
+    VIR_REGISTRY_ERR_ORPHAN_REQUIRED_STATE,
+    VIR_REGISTRY_ERR_UNREACHABLE_PASS,
+    VIR_REGISTRY_ERR_INVALID_INVALIDATION,
+    VIR_REGISTRY_ERR_CYCLE
+} VirRegistryValidationResult;
+
+typedef struct {
+    VirRegistryValidationResult status;
+    const char *message;
+    VirPass pass_id;
+    uint32_t state_mask;
+} VirRegistryValidationError;
+
+VirRegistryValidationResult vir_validate_registry(
+    const VirPassDescriptor *registry,
+    size_t registry_count,
+    VirRegistryValidationError *err
+);
+
 #endif

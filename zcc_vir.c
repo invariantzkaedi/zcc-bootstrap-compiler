@@ -1777,3 +1777,226 @@ char* vir_pipeline_to_dot(
     return buf;
 }
 
+static int check_cycle_dfs(
+    size_t u,
+    const VirPassDescriptor *registry,
+    size_t registry_count,
+    int *colors
+) {
+    colors[u] = 1; // GRAY
+    for (size_t v = 0; v < registry_count; v++) {
+        if (v != u) {
+            // Edge from u -> v if u produces a flag required by v
+            if ((registry[u].produced_state & registry[v].required_state) != 0) {
+                if (colors[v] == 1) {
+                    return 1; // Cycle detected
+                } else if (colors[v] == 0) {
+                    if (check_cycle_dfs(v, registry, registry_count, colors)) {
+                        return 1;
+                    }
+                }
+            }
+        }
+    }
+    colors[u] = 2; // BLACK
+    return 0;
+}
+
+static int is_state_satisfiable(
+    uint32_t target_state,
+    const VirPassDescriptor *registry,
+    size_t registry_count,
+    int *visited,
+    uint32_t *resolving
+) {
+    if (target_state == 0) return 1;
+
+    for (size_t bit = 0; bit < 32; bit++) {
+        uint32_t flag = 1U << bit;
+        if (target_state & flag) {
+            size_t provider_idx = (size_t)-1;
+            for (size_t i = 0; i < registry_count; i++) {
+                if (registry[i].produced_state & flag) {
+                    provider_idx = i;
+                    break;
+                }
+            }
+            if (provider_idx == (size_t)-1) {
+                return 0; // Orphan state
+            }
+
+            if (resolving[provider_idx]) {
+                return 0; // Cycle/self-dependency
+            }
+
+            if (!visited[provider_idx]) {
+                resolving[provider_idx] = 1;
+                if (!is_state_satisfiable(registry[provider_idx].required_state, registry, registry_count, visited, resolving)) {
+                    resolving[provider_idx] = 0;
+                    return 0;
+                }
+                resolving[provider_idx] = 0;
+                visited[provider_idx] = 1;
+            }
+        }
+    }
+    return 1;
+}
+
+VirRegistryValidationResult vir_validate_registry(
+    const VirPassDescriptor *registry,
+    size_t registry_count,
+    VirRegistryValidationError *err
+) {
+    if (err) {
+        memset(err, 0, sizeof(VirRegistryValidationError));
+    }
+
+    if (!registry && registry_count > 0) {
+        if (err) {
+            err->status = VIR_REGISTRY_ERR_NULL;
+            err->message = "Null registry pointer with non-zero registry count.";
+        }
+        return VIR_REGISTRY_ERR_NULL;
+    }
+
+    // 1. Duplicate Pass ID Check
+    for (size_t i = 0; i < registry_count; i++) {
+        for (size_t j = i + 1; j < registry_count; j++) {
+            if (registry[i].pass_id == registry[j].pass_id) {
+                if (err) {
+                    err->status = VIR_REGISTRY_ERR_DUPLICATE_PASS;
+                    err->message = "Duplicate pass_id registered.";
+                    err->pass_id = registry[i].pass_id;
+                }
+                return VIR_REGISTRY_ERR_DUPLICATE_PASS;
+            }
+        }
+    }
+
+    // 2. Duplicate State Producer Check
+    uint32_t produced_all = 0;
+    for (size_t i = 0; i < registry_count; i++) {
+        uint32_t p = registry[i].produced_state;
+        if (p != 0) {
+            uint32_t intersect = produced_all & p;
+            if (intersect != 0) {
+                if (err) {
+                    err->status = VIR_REGISTRY_ERR_DUPLICATE_PRODUCER;
+                    err->message = "State flag has multiple producer passes.";
+                    err->pass_id = registry[i].pass_id;
+                    err->state_mask = intersect;
+                }
+                return VIR_REGISTRY_ERR_DUPLICATE_PRODUCER;
+            }
+            produced_all |= p;
+        }
+    }
+
+    // 3. Orphan Required State Check
+    for (size_t i = 0; i < registry_count; i++) {
+        uint32_t req = registry[i].required_state;
+        if (req != 0) {
+            uint32_t missing = req & ~produced_all;
+            if (missing != 0) {
+                if (err) {
+                    err->status = VIR_REGISTRY_ERR_ORPHAN_REQUIRED_STATE;
+                    err->message = "Required state has no registered producer pass.";
+                    err->pass_id = registry[i].pass_id;
+                    err->state_mask = missing;
+                }
+                return VIR_REGISTRY_ERR_ORPHAN_REQUIRED_STATE;
+            }
+        }
+    }
+
+    // 4. Invalid Invalidation Check
+    for (size_t i = 0; i < registry_count; i++) {
+        uint32_t inv = registry[i].invalidated_state;
+        if (inv != 0) {
+            uint32_t invalid_bits = inv & ~produced_all;
+            if (invalid_bits != 0) {
+                if (err) {
+                    err->status = VIR_REGISTRY_ERR_INVALID_INVALIDATION;
+                    err->message = "Pass invalidates a state flag that is not produced by any pass.";
+                    err->pass_id = registry[i].pass_id;
+                    err->state_mask = invalid_bits;
+                }
+                return VIR_REGISTRY_ERR_INVALID_INVALIDATION;
+            }
+        }
+    }
+
+    // 5. Pass requiring or producing state it also invalidates (self-conflict check)
+    for (size_t i = 0; i < registry_count; i++) {
+        uint32_t self_conflict_req = registry[i].required_state & registry[i].invalidated_state;
+        uint32_t self_conflict_prod = registry[i].produced_state & registry[i].invalidated_state;
+        uint32_t conflict = self_conflict_req | self_conflict_prod;
+        if (conflict != 0) {
+            if (err) {
+                err->status = VIR_REGISTRY_ERR_INVALID_INVALIDATION;
+                err->message = "Pass has a self-conflict (requires or produces a state it invalidates).";
+                err->pass_id = registry[i].pass_id;
+                err->state_mask = conflict;
+            }
+            return VIR_REGISTRY_ERR_INVALID_INVALIDATION;
+        }
+    }
+
+    // 6. Dependency Graph Cycle Check (DFS)
+    int *colors = (int*)calloc(registry_count, sizeof(int));
+    if (!colors) {
+        return VIR_REGISTRY_ERR_NULL;
+    }
+    for (size_t i = 0; i < registry_count; i++) {
+        if (colors[i] == 0) {
+            if (check_cycle_dfs(i, registry, registry_count, colors)) {
+                if (err) {
+                    err->status = VIR_REGISTRY_ERR_CYCLE;
+                    err->message = "Cyclic dependency detected in pass dependency graph.";
+                    err->pass_id = registry[i].pass_id;
+                }
+                free(colors);
+                return VIR_REGISTRY_ERR_CYCLE;
+            }
+        }
+    }
+    free(colors);
+
+    // 7. Backend-required states satisfiability check
+    uint32_t backends_to_check[] = {
+        VIR_STATE_CLEAN, // SVG (0)
+        VIR_STATE_ARCS_EXPANDED, // SDF (2)
+        VIR_STATE_ARCS_EXPANDED | VIR_STATE_CANONICALIZED | VIR_STATE_EXACT_BOUNDS // GLSL (22)
+    };
+    for (size_t b = 0; b < 3; b++) {
+        uint32_t target = backends_to_check[b];
+        int *visited = (int*)calloc(registry_count, sizeof(int));
+        uint32_t *resolving = (uint32_t*)calloc(registry_count, sizeof(uint32_t));
+        if (!visited || !resolving) {
+            if (visited) free(visited);
+            if (resolving) free(resolving);
+            return VIR_REGISTRY_ERR_NULL;
+        }
+
+        if (!is_state_satisfiable(target, registry, registry_count, visited, resolving)) {
+            if (err) {
+                err->status = VIR_REGISTRY_ERR_UNREACHABLE_PASS;
+                err->message = "Backend required states are unsatisfiable / unreachable.";
+                err->state_mask = target;
+            }
+            free(visited);
+            free(resolving);
+            return VIR_REGISTRY_ERR_UNREACHABLE_PASS;
+        }
+        free(visited);
+        free(resolving);
+    }
+
+    if (err) {
+        err->status = VIR_REGISTRY_OK;
+        err->message = "Registry passed validation successfully.";
+    }
+    return VIR_REGISTRY_OK;
+}
+
