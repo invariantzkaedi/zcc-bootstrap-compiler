@@ -1687,6 +1687,66 @@ static void test_vir_geometry_metrics() {
     printf("[+] test_vir_geometry_metrics PASSED.\n");
 }
 
+static void test_vir_cache_record_header() {
+    printf("[*] Running test_vir_cache_record_header...\n");
+
+    /* --- Struct size must be exactly 48 bytes (natural alignment, no pad) --- */
+    assert(sizeof(VirCacheRecordHeader) == 48);
+
+    /* --- NULL path: header must still pass validate (zero fingerprint valid) --- */
+    VirCacheRecordHeader null_hdr = vir_cache_record_header_init(NULL, 0);
+    assert(null_hdr.magic          == VIR_CACHE_RECORD_MAGIC);
+    assert(null_hdr.schema_version == VIR_CACHE_SCHEMA_VERSION);
+    assert(null_hdr.payload_size   == 0);
+    assert(vir_cache_record_header_validate(&null_hdr) == 1);
+
+    /* --- NULL pointer to validate: must return 0 --- */
+    assert(vir_cache_record_header_validate(NULL) == 0);
+
+    /* --- Valid converged path: header validates and fields are coherent --- */
+    VirPath *path = vir_path_create();
+    vir_path_add_move_to(path, 0.0f, 0.0f);
+    vir_path_add_line_to(path, 5.0f, 5.0f);
+    vir_path_add_close(path);
+
+    size_t reg_count;
+    VirPassDescriptor *registry = vir_pipeline_get_default_registry(&reg_count);
+    VirPipelineStats stats;
+    VirPass goal[] = { VIR_PASS_LOCALIZE };
+    vir_run_pipeline_with_deps(path, registry, reg_count, goal, 1, &stats);
+
+    VirCacheRecordHeader hdr = vir_cache_record_header_init(path, 1024);
+    assert(hdr.magic          == VIR_CACHE_RECORD_MAGIC);
+    assert(hdr.schema_version == VIR_CACHE_SCHEMA_VERSION);
+    assert(hdr.payload_size   == 1024);
+    assert(hdr.segment_count  == (uint32_t)path->count);
+    assert(hdr.canonical_fingerprint != 0);
+    assert(vir_cache_record_header_validate(&hdr) == 1);
+
+    /* --- Tamper: magic → validate must fail --- */
+    VirCacheRecordHeader bad_magic = hdr;
+    bad_magic.magic = 0xDEADBEEFU;
+    assert(vir_cache_record_header_validate(&bad_magic) == 0);
+
+    /* --- Tamper: schema_version → validate must fail --- */
+    VirCacheRecordHeader bad_ver = hdr;
+    bad_ver.schema_version = hdr.schema_version + 1;
+    assert(vir_cache_record_header_validate(&bad_ver) == 0);
+
+    /* --- Tamper: payload_size mutation breaks CRC → validate must fail --- */
+    VirCacheRecordHeader bad_crc = hdr;
+    bad_crc.payload_size ^= 0x1;
+    assert(vir_cache_record_header_validate(&bad_crc) == 0);
+
+    /* --- Tamper: fingerprint mutation breaks CRC → validate must fail --- */
+    VirCacheRecordHeader bad_fp = hdr;
+    bad_fp.canonical_fingerprint ^= 0x1;
+    assert(vir_cache_record_header_validate(&bad_fp) == 0);
+
+    vir_path_free(path);
+    printf("[+] test_vir_cache_record_header PASSED.\n");
+}
+
 int main() {
     setbuf(stdout, NULL);
     printf("=== ZCC Vector IR (VIR) Test Harness ===\n");
@@ -1718,6 +1778,7 @@ int main() {
     test_vir_pipeline_provenance();
     test_vir_state_flags_stringify();
     test_vir_geometry_metrics();
+    test_vir_cache_record_header();
     /* NOTE: vir_cache_shutdown() is NOT called here.
      * test_vir_compilation_caching() initialises the cache with
      * vir_cache_init() and owns the shutdown at the end of that test.

@@ -58,6 +58,10 @@ typedef struct {
     float max_y;
 } SdfBounds;
 
+/* Cache schema version — fold into fingerprint and record headers so that
+ * stale cached artifacts are rejected when the pipeline evolves.          */
+#define VIR_CACHE_SCHEMA_VERSION 1
+
 typedef enum {
     VIR_STATE_CLEAN             = 0,
     VIR_STATE_DEGENERATE_FREE   = 1 << 0,
@@ -373,5 +377,42 @@ typedef struct {
  * Safe to call on any VirPath regardless of convergence state.
  * Returns a zero-filled VirGeometryMetrics when path is NULL.             */
 VirGeometryMetrics vir_path_compute_metrics(const VirPath *path);
+
+/* ── Cache Record Header ────────────────────────────────────────────────────
+ * A fixed-size, self-validating envelope for persistent VIR cache artifacts.
+ * The header is naturally aligned (no padding) and sized at exactly 48 bytes.
+ * It can prefix any serialized VIR artifact blob on disk or in shared memory.*/
+
+/* Magic constant — "VIRC" in little-endian. */
+#define VIR_CACHE_RECORD_MAGIC 0x43524956U
+
+typedef struct {
+    uint32_t magic;              /* VIR_CACHE_RECORD_MAGIC                   */
+    uint32_t schema_version;     /* VIR_CACHE_SCHEMA_VERSION at capture       */
+    uint64_t canonical_fingerprint; /* vir_path_canonical_fingerprint result  */
+    uint32_t state_flags;        /* path->state_flags at serialization time   */
+    uint32_t segment_count;      /* path->count at serialization time         */
+    float    min_x;              /* exact bounds — 0.0f when EXACT_BOUNDS absent */
+    float    min_y;
+    float    max_x;
+    float    max_y;
+    uint32_t payload_size;       /* byte size of the artifact blob after header */
+    uint32_t header_crc32;       /* CRC32 (IEEE 802.3) over all preceding fields */
+} VirCacheRecordHeader;
+
+/* Populate a VirCacheRecordHeader from a VirPath.
+ * Uses vir_path_manifest internally — path is never mutated.
+ * payload_size is the caller-declared byte size of the artifact blob that
+ * will follow the header on disk / in the cache stream.
+ * Computes header_crc32 over all fields except itself.                     */
+VirCacheRecordHeader vir_cache_record_header_init(const VirPath *path,
+                                                   uint32_t payload_size);
+
+/* Validate a previously written VirCacheRecordHeader.
+ * Checks: magic == VIR_CACHE_RECORD_MAGIC,
+ *         schema_version == VIR_CACHE_SCHEMA_VERSION,
+ *         header_crc32 matches recomputed CRC over preceding fields.
+ * Returns 1 if all checks pass, 0 on the first failure.                   */
+int vir_cache_record_header_validate(const VirCacheRecordHeader *hdr);
 
 #endif
