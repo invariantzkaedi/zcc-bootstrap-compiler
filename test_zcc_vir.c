@@ -516,6 +516,75 @@ static void test_vir_pass_manager() {
     printf("[+] test_vir_pass_manager PASSED.\n");
 }
 
+static void test_vir_pipeline_telemetry() {
+    printf("[*] Running test_vir_pipeline_telemetry...\n");
+
+    size_t registry_count = 0;
+    VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
+    assert(registry != NULL);
+    assert(registry_count == 4);
+
+    VirPath *path = vir_path_create();
+    ZccSvgError err = {0};
+    ZccSvgStatus st = zcc_svg_parse_to_vir("M 0 0 L 0 0 A 50 50 0 0 1 50 50 Z", path, &err);
+    assert(st == ZCC_SVG_OK);
+
+    vir_pipeline_reset_telemetry(registry, registry_count);
+    for (size_t i = 0; i < registry_count; i++) {
+        assert(registry[i].runs == 0);
+        assert(registry[i].mutations == 0);
+        assert(registry[i].failures == 0);
+    }
+
+    VirPass passes[] = {
+        VIR_PASS_DEGENERATE,
+        VIR_PASS_EXPAND_ARCS,
+        VIR_PASS_CANONICALIZE,
+        VIR_PASS_COMPUTE_BOUNDS
+    };
+
+    VirPipelineStats stats = {0};
+    int res = vir_run_pipeline(path, registry, registry_count, passes, 4, &stats);
+    assert(res == 1);
+
+    assert(stats.total_passes == 4);
+    assert(stats.mutations == 3);
+    assert(stats.no_change == 1);
+    assert(stats.failures == 0);
+
+    // Verify individual descriptor counters
+    // degenerate: optimized out the degenerate L 0 0 -> OK (mutation)
+    assert(registry[0].runs == 1);
+    assert(registry[0].mutations == 1);
+    assert(registry[0].failures == 0);
+
+    // expand_arcs: expanded the arc to cubics -> OK (mutation)
+    assert(registry[1].runs == 1);
+    assert(registry[1].mutations == 1);
+    assert(registry[1].failures == 0);
+
+    // bounds: calculated bounds for the first time -> OK (mutation)
+    assert(registry[2].runs == 1);
+    assert(registry[2].mutations == 1);
+    assert(registry[2].failures == 0);
+
+    // canonicalize: since degenerate L 0 0 was removed and arcs were already expanded,
+    // there are no lines or arcs left, so canonicalize is a no-change
+    assert(registry[3].runs == 1);
+    assert(registry[3].mutations == 0);
+    assert(registry[3].failures == 0);
+
+    vir_pipeline_reset_telemetry(registry, registry_count);
+    for (size_t i = 0; i < registry_count; i++) {
+        assert(registry[i].runs == 0);
+        assert(registry[i].mutations == 0);
+        assert(registry[i].failures == 0);
+    }
+
+    vir_path_free(path);
+    printf("[+] test_vir_pipeline_telemetry PASSED.\n");
+}
+
 int main() {
     printf("=== ZCC Vector IR (VIR) Test Harness ===\n");
     test_vir_path_creation_and_growth();
@@ -529,6 +598,7 @@ int main() {
     test_sdf_to_glsl_compilation();
     test_vir_pass_canonicalize();
     test_vir_pass_manager();
+    test_vir_pipeline_telemetry();
     printf("777JACKPOT777 — ALL VIR CORE TESTS GREEN.\n");
     return 0;
 }

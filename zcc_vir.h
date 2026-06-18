@@ -70,6 +70,22 @@ typedef enum {
     VIR_PASS_CANONICALIZE
 } VirPass;
 
+typedef struct {
+    VirPass pass_id;
+    const char *name;
+    VirPassResult (*run)(VirPath *);
+    uint64_t runs;
+    uint64_t mutations;
+    uint64_t failures;
+} VirPassDescriptor;
+
+typedef struct {
+    uint64_t total_passes;
+    uint64_t mutations;
+    uint64_t no_change;
+    uint64_t failures;
+} VirPipelineStats;
+
 
 /**
  * Creates an empty Vector IR path container.
@@ -130,5 +146,17 @@ SdfBounds sdf_seed_compute_bounds(const SdfSeed *seed);
 char* sdf_seed_to_glsl(const SdfSeed *seed);
 
 int vir_run_passes(VirPath *path, const VirPass *passes, size_t count);
+
+VirPassDescriptor* vir_pipeline_get_default_registry(size_t *out_count);
+void vir_pipeline_reset_telemetry(VirPassDescriptor *registry, size_t count);
+
+int vir_run_pipeline(
+    VirPath *path,
+    VirPassDescriptor *registry,
+    size_t registry_count,
+    const VirPass *passes,
+    size_t pass_count,
+    VirPipelineStats *stats
+);
 
 #endif

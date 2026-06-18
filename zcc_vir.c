@@ -1182,3 +1182,95 @@ int vir_run_passes(VirPath *path, const VirPass *passes, size_t count) {
     }
     return 1;
 }
+
+static const char* vir_pass_result_to_str(VirPassResult res) {
+    switch (res) {
+        case VIR_PASS_OK: return "OK";
+        case VIR_PASS_NO_CHANGE: return "NO_CHANGE";
+        case VIR_PASS_ERROR: return "ERROR";
+        default: return "UNKNOWN";
+    }
+}
+
+static VirPassDescriptor default_registry[] = {
+    { VIR_PASS_DEGENERATE, "degenerate", vir_path_optimize_degenerate, 0, 0, 0 },
+    { VIR_PASS_EXPAND_ARCS, "expand_arcs", vir_path_expand_arcs, 0, 0, 0 },
+    { VIR_PASS_COMPUTE_BOUNDS, "bounds", vir_path_compute_bounds_pass, 0, 0, 0 },
+    { VIR_PASS_CANONICALIZE, "canonicalize", vir_path_canonicalize, 0, 0, 0 }
+};
+
+VirPassDescriptor* vir_pipeline_get_default_registry(size_t *out_count) {
+    if (out_count) {
+        *out_count = sizeof(default_registry) / sizeof(default_registry[0]);
+    }
+    return default_registry;
+}
+
+void vir_pipeline_reset_telemetry(VirPassDescriptor *registry, size_t count) {
+    if (!registry) return;
+    for (size_t i = 0; i < count; i++) {
+        registry[i].runs = 0;
+        registry[i].mutations = 0;
+        registry[i].failures = 0;
+    }
+}
+
+int vir_run_pipeline(
+    VirPath *path,
+    VirPassDescriptor *registry,
+    size_t registry_count,
+    const VirPass *passes,
+    size_t pass_count,
+    VirPipelineStats *stats
+) {
+    if (!path || !registry || !passes || !stats) return 0;
+
+    memset(stats, 0, sizeof(VirPipelineStats));
+
+    printf("\nPipeline Execution\n\n");
+    printf("%-25sResult\n", "Pass");
+    printf("------------------------------------------\n");
+
+    for (size_t i = 0; i < pass_count; i++) {
+        VirPass requested = passes[i];
+        VirPassDescriptor *desc = NULL;
+        for (size_t j = 0; j < registry_count; j++) {
+            if (registry[j].pass_id == requested) {
+                desc = &registry[j];
+                break;
+            }
+        }
+
+        if (!desc) {
+            printf("%-25sERROR (Pass not found in registry)\n", "unknown");
+            stats->failures++;
+            return 0;
+        }
+
+        desc->runs++;
+        stats->total_passes++;
+
+        VirPassResult res = desc->run(path);
+        printf("%-25s%s\n", desc->name, vir_pass_result_to_str(res));
+
+        if (res == VIR_PASS_OK) {
+            desc->mutations++;
+            stats->mutations++;
+        } else if (res == VIR_PASS_NO_CHANGE) {
+            stats->no_change++;
+        } else if (res == VIR_PASS_ERROR) {
+            desc->failures++;
+            stats->failures++;
+            printf("\nMutations: %llu\nFailures : %llu\n",
+                (unsigned long long)stats->mutations,
+                (unsigned long long)stats->failures);
+            return 0;
+        }
+    }
+
+    printf("\nMutations: %llu\nFailures : %llu\n",
+        (unsigned long long)stats->mutations,
+        (unsigned long long)stats->failures);
+
+    return 1;
+}
