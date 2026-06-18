@@ -522,7 +522,7 @@ static void test_vir_pipeline_telemetry() {
     size_t registry_count = 0;
     VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
     assert(registry != NULL);
-    assert(registry_count == 5);
+    assert(registry_count == 7);
 
     VirPath *path = vir_path_create();
     ZccSvgError err = {0};
@@ -591,7 +591,7 @@ static void test_vir_fixed_point_pipeline() {
     size_t registry_count = 0;
     VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
     assert(registry != NULL);
-    assert(registry_count == 5);
+    assert(registry_count == 7);
 
     VirPath *path = vir_path_create();
     ZccSvgError err = {0};
@@ -646,7 +646,7 @@ static void test_vir_pass_dependency_graph() {
     size_t registry_count = 0;
     VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
     assert(registry != NULL);
-    assert(registry_count == 5);
+    assert(registry_count == 7);
 
     // 1. Prerequisite Auto-scheduling:
     // canonicalize requires ARCS_EXPANDED.
@@ -783,7 +783,7 @@ static void test_vir_backend_planner() {
     size_t registry_count = 0;
     VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
     assert(registry != NULL);
-    assert(registry_count == 5);
+    assert(registry_count == 7);
 
     // 1. Prepare SVG backend (target state clean -> 0)
     {
@@ -842,11 +842,11 @@ static void test_vir_backend_planner() {
         VirPipelineStats stats = {0};
         int res = vir_prepare_backend(path, registry, registry_count, VIR_BACKEND_GLSL, &stats);
         assert(res == 1);
-        // Target state requires expand_arcs, canonicalize, and bounds.
-        assert(stats.total_passes == 3);
-        assert(stats.mutations == 3);
-        assert((path->state_flags & (VIR_STATE_ARCS_EXPANDED | VIR_STATE_CANONICALIZED | VIR_STATE_EXACT_BOUNDS)) ==
-               (VIR_STATE_ARCS_EXPANDED | VIR_STATE_CANONICALIZED | VIR_STATE_EXACT_BOUNDS));
+        // Target state requires expand_arcs, canonicalize, normalize, exact_bounds, and localize.
+        assert(stats.total_passes == 5);
+        assert(stats.mutations == 4);
+        assert((path->state_flags & (VIR_STATE_ARCS_EXPANDED | VIR_STATE_CANONICALIZED | VIR_STATE_EXACT_BOUNDS | VIR_STATE_LOCALIZED)) ==
+               (VIR_STATE_ARCS_EXPANDED | VIR_STATE_CANONICALIZED | VIR_STATE_EXACT_BOUNDS | VIR_STATE_LOCALIZED));
 
         // Preparing again should skip
         VirPipelineStats stats2 = {0};
@@ -866,7 +866,7 @@ static void test_vir_pass_graph_exporter() {
     size_t registry_count = 0;
     VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
     assert(registry != NULL);
-    assert(registry_count == 5);
+    assert(registry_count == 7);
 
     // Populate telemetry by running some passes
     VirPath *path = vir_path_create();
@@ -960,7 +960,7 @@ static void test_vir_registry_validation() {
     size_t registry_count = 0;
     VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
     assert(registry != NULL);
-    assert(registry_count == 5);
+    assert(registry_count == 7);
 
     // 1. Valid default registry test
     {
@@ -1052,8 +1052,271 @@ static void test_vir_registry_validation() {
     printf("[+] test_vir_registry_validation PASSED.\n");
 }
 
+static void test_vir_path_normalization() {
+    printf("[*] Running test_vir_path_normalization...\n");
+
+    size_t registry_count = 0;
+    VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
+    assert(registry != NULL);
+    assert(registry_count == 7);
+
+    VirPath *path = vir_path_create();
+    ZccSvgError err = {0};
+    ZccSvgStatus st = zcc_svg_parse_to_vir("M 10 20 L 30 40", path, &err);
+    assert(st == ZCC_SVG_OK);
+    assert(path->state_flags == 0);
+
+    vir_pipeline_reset_telemetry(registry, registry_count);
+    VirPipelineStats stats = {0};
+    VirPass passes[] = { VIR_PASS_LOCALIZE };
+    
+    int res = vir_run_pipeline_with_deps(path, registry, registry_count, passes, 1, &stats);
+    assert(res == 1);
+    assert(stats.total_passes >= 5);
+
+    assert(path->state_flags & VIR_STATE_NORMALIZED);
+    assert(path->state_flags & VIR_STATE_LOCALIZED);
+    assert(fabsf(path->min_x - 0.0f) < 1e-5f);
+    assert(fabsf(path->min_y - 0.0f) < 1e-5f);
+    assert(fabsf(path->max_x - 20.0f) < 1e-5f);
+    assert(fabsf(path->max_y - 20.0f) < 1e-5f);
+
+    assert(path->count == 2);
+    assert(path->segments[0].op == VIR_MOVE);
+    assert(fabsf(path->segments[0].coords[0] - 0.0f) < 1e-5f);
+    assert(fabsf(path->segments[0].coords[1] - 0.0f) < 1e-5f);
+    assert(path->segments[1].op == VIR_CUBIC);
+    assert(fabsf(path->segments[1].coords[0] - 6.66667f) < 1e-4f);
+    assert(fabsf(path->segments[1].coords[1] - 6.66667f) < 1e-4f);
+    assert(fabsf(path->segments[1].coords[2] - 13.33333f) < 1e-4f);
+    assert(fabsf(path->segments[1].coords[3] - 13.33333f) < 1e-4f);
+    assert(fabsf(path->segments[1].coords[4] - 20.0f) < 1e-4f);
+    assert(fabsf(path->segments[1].coords[5] - 20.0f) < 1e-4f);
+
+    VirPassResult r_loc = vir_path_localize(path);
+    assert(r_loc == VIR_PASS_NO_CHANGE);
+
+    VirPassResult r_norm = vir_path_normalize(path);
+    assert(r_norm == VIR_PASS_NO_CHANGE);
+
+    vir_path_free(path);
+    printf("[+] test_vir_path_normalization PASSED.\n");
+}
+
+static void test_vir_path_equivalence() {
+    printf("[*] Running test_vir_path_equivalence...\n");
+
+    VirPath *path1 = vir_path_create();
+    VirPath *path2 = vir_path_create();
+    ZccSvgError err = {0};
+
+    ZccSvgStatus st1 = zcc_svg_parse_to_vir("M 10 20 L 30 40 Z", path1, &err);
+    ZccSvgStatus st2 = zcc_svg_parse_to_vir("M 10 20 L 30 40 Z M 30 40 Z", path2, &err);
+    assert(st1 == ZCC_SVG_OK);
+    assert(st2 == ZCC_SVG_OK);
+
+    int eq = vir_paths_equivalent(path1, path2, 1e-3f);
+    assert(eq == 1);
+
+    vir_path_free(path1);
+    vir_path_free(path2);
+
+    path1 = vir_path_create();
+    path2 = vir_path_create();
+    st1 = zcc_svg_parse_to_vir("M 10 20 L 30 40", path1, &err);
+    st2 = zcc_svg_parse_to_vir("M 100 200 L 120 220", path2, &err);
+    assert(st1 == ZCC_SVG_OK);
+    assert(st2 == ZCC_SVG_OK);
+
+    eq = vir_paths_equivalent(path1, path2, 1e-3f);
+    assert(eq == 1);
+
+    vir_path_free(path1);
+    vir_path_free(path2);
+
+    path1 = vir_path_create();
+    path2 = vir_path_create();
+    st1 = zcc_svg_parse_to_vir("M 10 20 L 30 40", path1, &err);
+    st2 = zcc_svg_parse_to_vir("M 10 20 L 50 60", path2, &err);
+    assert(st1 == ZCC_SVG_OK);
+    assert(st2 == ZCC_SVG_OK);
+
+    eq = vir_paths_equivalent(path1, path2, 1e-3f);
+    assert(eq == 0);
+
+    vir_path_free(path1);
+    vir_path_free(path2);
+
+    printf("[+] test_vir_path_equivalence PASSED.\n");
+}
+
+static void test_vir_path_fingerprint() {
+    printf("[*] Running test_vir_path_fingerprint...\n");
+
+    VirPath *path1 = vir_path_create();
+    VirPath *path2 = vir_path_create();
+    ZccSvgError err = {0};
+
+    // Case 1: Identical geometry, structurally different initial paths
+    ZccSvgStatus st1 = zcc_svg_parse_to_vir("M 10 20 L 30 40 Z", path1, &err);
+    ZccSvgStatus st2 = zcc_svg_parse_to_vir("M 10 20 L 30 40 Z M 30 40 Z", path2, &err);
+    assert(st1 == ZCC_SVG_OK);
+    assert(st2 == ZCC_SVG_OK);
+
+    uint64_t fp1 = vir_path_fingerprint(path1, 1e-3f);
+    uint64_t fp2 = vir_path_fingerprint(path2, 1e-3f);
+    assert(fp1 != 0);
+    assert(fp1 == fp2);
+
+    vir_path_free(path1);
+    vir_path_free(path2);
+
+    // Case 2: Translated equivalent coordinates
+    path1 = vir_path_create();
+    path2 = vir_path_create();
+    st1 = zcc_svg_parse_to_vir("M 10 20 L 30 40", path1, &err);
+    st2 = zcc_svg_parse_to_vir("M 100 200 L 120 220", path2, &err);
+    assert(st1 == ZCC_SVG_OK);
+    assert(st2 == ZCC_SVG_OK);
+
+    fp1 = vir_path_fingerprint(path1, 1e-3f);
+    fp2 = vir_path_fingerprint(path2, 1e-3f);
+    assert(fp1 == fp2);
+
+    vir_path_free(path1);
+    vir_path_free(path2);
+
+    // Case 3: Distinct paths
+    path1 = vir_path_create();
+    path2 = vir_path_create();
+    st1 = zcc_svg_parse_to_vir("M 10 20 L 30 40", path1, &err);
+    st2 = zcc_svg_parse_to_vir("M 10 20 L 50 60", path2, &err);
+    assert(st1 == ZCC_SVG_OK);
+    assert(st2 == ZCC_SVG_OK);
+
+    fp1 = vir_path_fingerprint(path1, 1e-3f);
+    fp2 = vir_path_fingerprint(path2, 1e-3f);
+    assert(fp1 != fp2);
+
+    vir_path_free(path1);
+    vir_path_free(path2);
+
+    printf("[+] test_vir_path_fingerprint PASSED.\n");
+}
+
+static void test_vir_compilation_caching() {
+    printf("[*] Running test_vir_compilation_caching...\n");
+
+    vir_cache_init();
+    vir_cache_clear();
+    vir_cache_reset_stats();
+
+    VirCacheStats st0 = vir_cache_get_stats();
+    assert(st0.hits == 0);
+    assert(st0.misses == 0);
+    assert(st0.evictions == 0);
+
+    VirPath *path1 = vir_path_create();
+    VirPath *path2 = vir_path_create();
+    ZccSvgError err = {0};
+
+    ZccSvgStatus st1 = zcc_svg_parse_to_vir("M 10 20 C 15 25, 25 35, 30 40", path1, &err);
+    ZccSvgStatus st2 = zcc_svg_parse_to_vir("M 10 20 C 15 25, 25 35, 30 40", path2, &err);
+    assert(st1 == ZCC_SVG_OK);
+    assert(st2 == ZCC_SVG_OK);
+
+    size_t registry_count = 0;
+    VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
+    VirPipelineStats stats1 = {0};
+    VirPass passes[] = { VIR_PASS_EXACT_BOUNDS };
+    int ok1 = vir_run_pipeline_with_deps(path1, registry, registry_count, passes, 1, &stats1);
+    assert(ok1 == 1);
+    assert(path1->bounds_valid);
+
+    VirCacheStats st1_stat = vir_cache_get_stats();
+    assert(st1_stat.misses == 1);
+    assert(st1_stat.hits == 0);
+
+    VirPipelineStats stats2 = {0};
+    int ok2 = vir_run_pipeline_with_deps(path2, registry, registry_count, passes, 1, &stats2);
+    assert(ok2 == 1);
+    assert(path2->bounds_valid);
+    assert(fabsf(path1->min_x - path2->min_x) < 1e-5f);
+    assert(fabsf(path1->min_y - path2->min_y) < 1e-5f);
+    assert(fabsf(path1->max_x - path2->max_x) < 1e-5f);
+    assert(fabsf(path1->max_y - path2->max_y) < 1e-5f);
+
+    VirCacheStats st2_stat = vir_cache_get_stats();
+    printf("[DEBUG-TEST] st2_stat: hits=%llu, misses=%llu, evictions=%llu\n", (unsigned long long)st2_stat.hits, (unsigned long long)st2_stat.misses, (unsigned long long)st2_stat.evictions);
+    assert(st2_stat.misses == 1);
+    assert(st2_stat.hits == 1);
+
+    SdfSeed *seed1 = vir_to_sdf_seed(path1);
+    assert(seed1 != NULL);
+
+    VirCacheStats st3_stat = vir_cache_get_stats();
+    printf("[DEBUG-TEST] st3_stat: hits=%llu, misses=%llu\n", (unsigned long long)st3_stat.hits, (unsigned long long)st3_stat.misses);
+    assert(st3_stat.misses == 2);
+    assert(st3_stat.hits == 2);
+
+    SdfSeed *seed2 = vir_to_sdf_seed(path2);
+    assert(seed2 != NULL);
+    assert(seed1->count == seed2->count);
+    for (size_t i = 0; i < seed1->count; i++) {
+        assert(seed1->segments[i].op == seed2->segments[i].op);
+        for (int c = 0; c < 8; c++) {
+            assert(fabsf(seed1->segments[i].points[c] - seed2->segments[i].points[c]) < 1e-5f);
+        }
+    }
+
+    VirCacheStats st4_stat = vir_cache_get_stats();
+    printf("[DEBUG-TEST] st4_stat: hits=%llu, misses=%llu\n", (unsigned long long)st4_stat.hits, (unsigned long long)st4_stat.misses);
+    assert(st4_stat.misses == 2);
+    assert(st4_stat.hits == 4);
+
+    char *glsl1 = sdf_seed_to_glsl(seed1);
+    assert(glsl1 != NULL);
+
+    VirCacheStats st5_stat = vir_cache_get_stats();
+    printf("[DEBUG-TEST] st5_stat: hits=%llu, misses=%llu\n", (unsigned long long)st5_stat.hits, (unsigned long long)st5_stat.misses);
+    assert(st5_stat.misses == 3);
+    assert(st5_stat.hits == 4);
+
+    char *glsl2 = sdf_seed_to_glsl(seed2);
+    assert(glsl2 != NULL);
+    assert(strcmp(glsl1, glsl2) == 0);
+
+    VirCacheStats st6_stat = vir_cache_get_stats();
+    printf("[DEBUG-TEST] st6_stat: hits=%llu, misses=%llu\n", (unsigned long long)st6_stat.hits, (unsigned long long)st6_stat.misses);
+    assert(st6_stat.misses == 3);
+    assert(st6_stat.hits == 5);
+
+    // Test stats reset
+    vir_cache_reset_stats();
+    VirCacheStats st_reset = vir_cache_get_stats();
+    assert(st_reset.hits == 0);
+    assert(st_reset.misses == 0);
+    assert(st_reset.evictions == 0);
+
+    free(glsl1);
+    free(glsl2);
+    sdf_seed_free(seed1);
+    sdf_seed_free(seed2);
+    vir_path_free(path1);
+    vir_path_free(path2);
+
+    vir_cache_shutdown();
+
+    printf("[+] test_vir_compilation_caching PASSED.\n");
+}
+
 int main() {
+    setbuf(stdout, NULL);
     printf("=== ZCC Vector IR (VIR) Test Harness ===\n");
+    test_vir_path_equivalence();
+    test_vir_path_fingerprint();
+    test_vir_compilation_caching();
+    test_vir_path_normalization();
     test_vir_path_creation_and_growth();
     test_vir_degenerate_removal();
     test_vir_bounds_propagation();

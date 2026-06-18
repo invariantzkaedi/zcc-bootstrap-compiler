@@ -64,7 +64,9 @@ typedef enum {
     VIR_STATE_ARCS_EXPANDED     = 1 << 1,
     VIR_STATE_CANONICALIZED     = 1 << 2,
     VIR_STATE_BOUNDS_VALID      = 1 << 3,
-    VIR_STATE_EXACT_BOUNDS      = 1 << 4
+    VIR_STATE_EXACT_BOUNDS      = 1 << 4,
+    VIR_STATE_NORMALIZED        = 1 << 5,
+    VIR_STATE_LOCALIZED         = 1 << 6
 } VirPathStateFlags;
 
 typedef enum {
@@ -78,7 +80,9 @@ typedef enum {
     VIR_PASS_EXPAND_ARCS,
     VIR_PASS_COMPUTE_BOUNDS,
     VIR_PASS_CANONICALIZE,
-    VIR_PASS_EXACT_BOUNDS
+    VIR_PASS_EXACT_BOUNDS,
+    VIR_PASS_NORMALIZE,
+    VIR_PASS_LOCALIZE
 } VirPass;
 
 typedef struct {
@@ -129,7 +133,24 @@ VirPassResult vir_path_expand_arcs(VirPath *path);
 VirPassResult vir_path_canonicalize(VirPath *path);
 VirPassResult vir_path_compute_bounds_pass(VirPath *path);
 VirPassResult vir_path_compute_exact_bounds_pass(VirPath *path);
+VirPassResult vir_path_normalize(VirPath *path);
+VirPassResult vir_path_localize(VirPath *path);
+int vir_paths_equivalent(const VirPath *a, const VirPath *b, float epsilon);
+uint64_t vir_path_fingerprint(const VirPath *path, float epsilon);
 void vir_path_invalidate_bounds(VirPath *path);
+
+void vir_cache_init(void);
+void vir_cache_clear(void);
+void vir_cache_shutdown(void);
+
+typedef struct {
+    uint64_t hits;
+    uint64_t misses;
+    uint64_t evictions;
+} VirCacheStats;
+
+VirCacheStats vir_cache_get_stats(void);
+void vir_cache_reset_stats(void);
 
 /**
  * Bounding Box pass:
@@ -220,7 +241,8 @@ typedef enum {
     VIR_REGISTRY_ERR_ORPHAN_REQUIRED_STATE,
     VIR_REGISTRY_ERR_UNREACHABLE_PASS,
     VIR_REGISTRY_ERR_INVALID_INVALIDATION,
-    VIR_REGISTRY_ERR_CYCLE
+    VIR_REGISTRY_ERR_CYCLE,
+    VIR_REGISTRY_ERR_STATE_ALIAS
 } VirRegistryValidationResult;
 
 typedef struct {

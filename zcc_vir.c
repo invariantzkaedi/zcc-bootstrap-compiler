@@ -31,6 +31,22 @@ static void skip_spaces_and_commas(const char **p) {
     }
 }
 
+static int64_t quantize_coord(float val, float epsilon) {
+    double scaled = (double)val / (double)epsilon;
+    double rounded = round(scaled);
+    if (rounded == -0.0) rounded = 0.0;
+    return (int64_t)rounded;
+}
+
+static void fnv1a_64_update(uint64_t *hash, const void *data, size_t size) {
+    const uint8_t *bytes = (const uint8_t *)data;
+    const uint64_t prime = 1099511628211ULL;
+    for (size_t i = 0; i < size; i++) {
+        *hash ^= bytes[i];
+        *hash *= prime;
+    }
+}
+
 static int zcc_parse_double(const char **p, double *out) {
     skip_spaces_and_commas(p);
     if (!is_number_start(**p)) return 0;
@@ -867,8 +883,138 @@ static int sdf_seed_add_cubic(SdfSeed *seed, size_t *capacity, float x0, float y
     return 1;
 }
 
+void sdf_seed_free(SdfSeed *seed);
+
+#define VIR_CACHE_SCHEMA_VERSION 1
+
+typedef struct {
+    uint64_t key;
+    int occupied;
+    int has_bounds;
+    float min_x;
+    float min_y;
+    float max_x;
+    float max_y;
+    SdfSeed *sdf_seed;
+    char *glsl_shader;
+    
+    // Collision hardening metadata
+    size_t segment_count;
+    uint32_t state_flags;
+} VirCacheEntry;
+
+#define VIR_CACHE_SIZE 1024
+static VirCacheEntry g_vir_cache[VIR_CACHE_SIZE];
+static int g_vir_cache_initialized = 0;
+static VirCacheStats g_cache_stats = {0, 0, 0};
+
+void vir_cache_init(void) {
+    if (!g_vir_cache_initialized) {
+        memset(g_vir_cache, 0, sizeof(g_vir_cache));
+        g_vir_cache_initialized = 1;
+        memset(&g_cache_stats, 0, sizeof(g_cache_stats));
+    }
+}
+
+void vir_cache_clear(void) {
+    if (!g_vir_cache_initialized) return;
+    for (int i = 0; i < VIR_CACHE_SIZE; i++) {
+        if (g_vir_cache[i].occupied) {
+            if (g_vir_cache[i].sdf_seed) {
+                sdf_seed_free(g_vir_cache[i].sdf_seed);
+            }
+            if (g_vir_cache[i].glsl_shader) {
+                free(g_vir_cache[i].glsl_shader);
+            }
+        }
+    }
+    memset(g_vir_cache, 0, sizeof(g_vir_cache));
+    memset(&g_cache_stats, 0, sizeof(g_cache_stats));
+}
+
+void vir_cache_shutdown(void) {
+    vir_cache_clear();
+    g_vir_cache_initialized = 0;
+}
+
+VirCacheStats vir_cache_get_stats(void) {
+    return g_cache_stats;
+}
+
+void vir_cache_reset_stats(void) {
+    memset(&g_cache_stats, 0, sizeof(g_cache_stats));
+}
+
+static SdfSeed* sdf_seed_clone(const SdfSeed *src) {
+    if (!src) return NULL;
+    SdfSeed *dest = (SdfSeed*)malloc(sizeof(SdfSeed));
+    if (!dest) return NULL;
+    dest->count = src->count;
+    dest->segments = (SdfSeedSegment*)calloc(src->count, sizeof(SdfSeedSegment));
+    if (!dest->segments) {
+        free(dest);
+        return NULL;
+    }
+    memcpy(dest->segments, src->segments, src->count * sizeof(SdfSeedSegment));
+    return dest;
+}
+
+static VirCacheEntry* cache_find_slot(uint64_t key, size_t segment_count, uint32_t state_flags, int create_if_missing) {
+    vir_cache_init();
+    size_t idx = (size_t)(key % VIR_CACHE_SIZE);
+    size_t start = idx;
+    do {
+        if (!g_vir_cache[idx].occupied) {
+            if (create_if_missing) {
+                g_vir_cache[idx].key = key;
+                g_vir_cache[idx].occupied = 1;
+                g_vir_cache[idx].segment_count = segment_count;
+                g_vir_cache[idx].state_flags = state_flags;
+                return &g_vir_cache[idx];
+            }
+            return NULL;
+        }
+        if (g_vir_cache[idx].key == key &&
+            g_vir_cache[idx].segment_count == segment_count &&
+            g_vir_cache[idx].state_flags == state_flags) {
+            return &g_vir_cache[idx];
+        }
+        idx = (idx + 1) % VIR_CACHE_SIZE;
+    } while (idx != start);
+
+    if (create_if_missing) {
+        if (g_vir_cache[start].occupied) {
+            g_cache_stats.evictions++;
+        }
+        if (g_vir_cache[start].sdf_seed) {
+            sdf_seed_free(g_vir_cache[start].sdf_seed);
+            g_vir_cache[start].sdf_seed = NULL;
+        }
+        if (g_vir_cache[start].glsl_shader) {
+            free(g_vir_cache[start].glsl_shader);
+            g_vir_cache[start].glsl_shader = NULL;
+        }
+        g_vir_cache[start].key = key;
+        g_vir_cache[start].segment_count = segment_count;
+        g_vir_cache[start].state_flags = state_flags;
+        g_vir_cache[start].has_bounds = 0;
+        g_vir_cache[start].sdf_seed = NULL;
+        g_vir_cache[start].glsl_shader = NULL;
+        return &g_vir_cache[start];
+    }
+    return NULL;
+}
+
 SdfSeed* vir_to_sdf_seed(const VirPath *path) {
     if (!path) return NULL;
+
+    uint64_t fp = vir_path_fingerprint(path, 1e-3f);
+    VirCacheEntry *entry = cache_find_slot(fp, path->count, path->state_flags, 0);
+    if (entry && entry->sdf_seed) {
+        g_cache_stats.hits++;
+        return sdf_seed_clone(entry->sdf_seed);
+    }
+    g_cache_stats.misses++;
 
     VirPath *expanded = vir_path_clone(path);
     if (!expanded) return NULL;
@@ -914,14 +1060,11 @@ SdfSeed* vir_to_sdf_seed(const VirPath *path) {
             cx = tx;
             cy = ty;
         } else if (s->op == VIR_CUBIC) {
-            float c1x = s->coords[0];
-            float c1y = s->coords[1];
-            float c2x = s->coords[2];
-            float c2y = s->coords[3];
-            float tx  = s->coords[4];
-            float ty  = s->coords[5];
+            float x1 = s->coords[0], y1 = s->coords[1];
+            float x2 = s->coords[2], y2 = s->coords[3];
+            float tx = s->coords[4], ty = s->coords[5];
             if (has_subpath_start) {
-                if (!sdf_seed_add_cubic(seed, &capacity, cx, cy, c1x, c1y, c2x, c2y, tx, ty)) {
+                if (!sdf_seed_add_cubic(seed, &capacity, cx, cy, x1, y1, x2, y2, tx, ty)) {
                     sdf_seed_free(seed);
                     vir_path_free(expanded);
                     return NULL;
@@ -931,7 +1074,7 @@ SdfSeed* vir_to_sdf_seed(const VirPath *path) {
             cy = ty;
         } else if (s->op == VIR_CLOSE) {
             if (has_subpath_start) {
-                if (fabsf(cx - start_x) > 1e-5f || fabsf(cy - start_y) > 1e-5f) {
+                if (cx != start_x || cy != start_y) {
                     if (!sdf_seed_add_line(seed, &capacity, cx, cy, start_x, start_y)) {
                         sdf_seed_free(seed);
                         vir_path_free(expanded);
@@ -945,6 +1088,15 @@ SdfSeed* vir_to_sdf_seed(const VirPath *path) {
     }
 
     vir_path_free(expanded);
+
+    entry = cache_find_slot(fp, path->count, path->state_flags, 1);
+    if (entry) {
+        if (entry->sdf_seed) {
+            sdf_seed_free(entry->sdf_seed);
+        }
+        entry->sdf_seed = sdf_seed_clone(seed);
+    }
+
     return seed;
 }
 
@@ -993,8 +1145,39 @@ SdfBounds sdf_seed_compute_bounds(const SdfSeed *seed) {
     return b;
 }
 
+static uint64_t sdf_seed_fingerprint(const SdfSeed *seed) {
+    if (!seed) return 0;
+    uint64_t hash = 14695981039346656037ULL;
+    uint64_t schema_ver = VIR_CACHE_SCHEMA_VERSION;
+    fnv1a_64_update(&hash, &schema_ver, sizeof(schema_ver));
+    uint64_t state_val = 0;
+    fnv1a_64_update(&hash, &state_val, sizeof(state_val));
+    uint64_t count_val = (uint64_t)seed->count;
+    fnv1a_64_update(&hash, &count_val, sizeof(count_val));
+    for (size_t i = 0; i < seed->count; i++) {
+        const SdfSeedSegment *seg = &seed->segments[i];
+        uint32_t op_val = (uint32_t)seg->op;
+        fnv1a_64_update(&hash, &op_val, sizeof(op_val));
+
+        int num_points = seg->op == SDF_LINE ? 4 : 8;
+        for (int c = 0; c < num_points; c++) {
+            int64_t q = quantize_coord(seg->points[c], 1e-4f);
+            fnv1a_64_update(&hash, &q, sizeof(q));
+        }
+    }
+    return hash;
+}
+
 char* sdf_seed_to_glsl(const SdfSeed *seed) {
     if (!seed) return NULL;
+
+    uint64_t fp = sdf_seed_fingerprint(seed);
+    VirCacheEntry *entry = cache_find_slot(fp, seed->count, 0, 0);
+    if (entry && entry->glsl_shader) {
+        g_cache_stats.hits++;
+        return strdup(entry->glsl_shader);
+    }
+    g_cache_stats.misses++;
 
     size_t capacity = 1024 + seed->count * 256;
     char *buf = (char*)malloc(capacity);
@@ -1047,8 +1230,8 @@ char* sdf_seed_to_glsl(const SdfSeed *seed) {
         }
 
         if (n > 0) {
-            if (len + n + 64 >= capacity) {
-                capacity = (len + n) * 2;
+            if (len + n >= capacity) {
+                capacity = len + n + 256;
                 char *new_buf = (char*)realloc(buf, capacity);
                 if (!new_buf) {
                     free(buf);
@@ -1072,6 +1255,14 @@ char* sdf_seed_to_glsl(const SdfSeed *seed) {
         buf = new_buf;
     }
     strcpy(buf + len, footer);
+
+    entry = cache_find_slot(fp, seed->count, 0, 1);
+    if (entry) {
+        if (entry->glsl_shader) {
+            free(entry->glsl_shader);
+        }
+        entry->glsl_shader = strdup(buf);
+    }
 
     return buf;
 }
@@ -1194,6 +1385,30 @@ static void solve_bezier_extrema(float p0, float p1, float p2, float p3, float r
     }
 }
 
+static uint64_t hash_normalized_path(const VirPath *path) {
+    uint64_t hash = 14695981039346656037ULL;
+    uint64_t schema_version = VIR_CACHE_SCHEMA_VERSION;
+    fnv1a_64_update(&hash, &schema_version, sizeof(schema_version));
+    uint64_t state_flags_val = (uint64_t)path->state_flags;
+    fnv1a_64_update(&hash, &state_flags_val, sizeof(state_flags_val));
+    fnv1a_64_update(&hash, &path->count, sizeof(path->count));
+    for (size_t i = 0; i < path->count; i++) {
+        const VirSegment *seg = &path->segments[i];
+        uint32_t op_val = (uint32_t)seg->op;
+        fnv1a_64_update(&hash, &op_val, sizeof(op_val));
+
+        int num_coords = 0;
+        if (seg->op == VIR_MOVE || seg->op == VIR_LINE) num_coords = 2;
+        else if (seg->op == VIR_CUBIC) num_coords = 6;
+        else if (seg->op == VIR_ARC) num_coords = 7;
+
+        for (int c = 0; c < num_coords; c++) {
+            fnv1a_64_update(&hash, &seg->coords[c], sizeof(seg->coords[c]));
+        }
+    }
+    return hash;
+}
+
 VirPassResult vir_path_compute_exact_bounds_pass(VirPath *path) {
     if (!path) return VIR_PASS_ERROR;
     if (path->bounds_valid && (path->state_flags & VIR_STATE_EXACT_BOUNDS)) {
@@ -1209,6 +1424,21 @@ VirPassResult vir_path_compute_exact_bounds_pass(VirPath *path) {
         path->state_flags |= (VIR_STATE_BOUNDS_VALID | VIR_STATE_EXACT_BOUNDS);
         return VIR_PASS_OK;
     }
+
+    uint32_t input_state_flags = path->state_flags;
+    uint64_t raw_hash = hash_normalized_path(path);
+    VirCacheEntry *entry = cache_find_slot(raw_hash, path->count, input_state_flags, 0);
+    if (entry && entry->has_bounds) {
+        path->min_x = entry->min_x;
+        path->min_y = entry->min_y;
+        path->max_x = entry->max_x;
+        path->max_y = entry->max_y;
+        path->bounds_valid = 1;
+        path->state_flags |= (VIR_STATE_BOUNDS_VALID | VIR_STATE_EXACT_BOUNDS);
+        g_cache_stats.hits++;
+        return VIR_PASS_OK;
+    }
+    g_cache_stats.misses++;
 
     float mix = 1e9f, miy = 1e9f;
     float max_val_x = -1e9f, max_val_y = -1e9f;
@@ -1295,7 +1525,299 @@ VirPassResult vir_path_compute_exact_bounds_pass(VirPath *path) {
     path->bounds_valid = 1;
     path->state_flags |= (VIR_STATE_BOUNDS_VALID | VIR_STATE_EXACT_BOUNDS);
 
+    entry = cache_find_slot(raw_hash, path->count, input_state_flags, 1);
+    if (entry) {
+        entry->has_bounds = 1;
+        entry->min_x = path->min_x;
+        entry->min_y = path->min_y;
+        entry->max_x = path->max_x;
+        entry->max_y = path->max_y;
+    }
+
     return VIR_PASS_OK;
+}
+
+VirPassResult vir_path_normalize(VirPath *path) {
+    if (!path) return VIR_PASS_ERROR;
+    if (path->count == 0) {
+        return VIR_PASS_NO_CHANGE;
+    }
+
+    // Checking prerequisites: structural normalization requires canonicalized
+    if (!(path->state_flags & VIR_STATE_CANONICALIZED)) {
+        return VIR_PASS_ERROR;
+    }
+
+    if (path->state_flags & VIR_STATE_NORMALIZED) {
+        return VIR_PASS_NO_CHANGE;
+    }
+
+    VirSegment *new_segs = (VirSegment*)calloc(path->count, sizeof(VirSegment));
+    if (!new_segs) return VIR_PASS_ERROR;
+
+    size_t new_count = 0;
+    int subpath_has_geometry = 0;
+    int pending_move = 0;
+    VirSegment pending_move_seg;
+
+    for (size_t i = 0; i < path->count; i++) {
+        VirSegment *s = &path->segments[i];
+        if (s->op == VIR_MOVE) {
+            pending_move_seg = *s;
+            pending_move = 1;
+        } else if (s->op == VIR_CLOSE) {
+            if (subpath_has_geometry) {
+                if (new_count > 0 && new_segs[new_count - 1].op == VIR_CLOSE) {
+                    continue;
+                }
+                new_segs[new_count++] = *s;
+                subpath_has_geometry = 0;
+            }
+        } else {
+            if (pending_move) {
+                new_segs[new_count++] = pending_move_seg;
+                pending_move = 0;
+                subpath_has_geometry = 0;
+            }
+            new_segs[new_count++] = *s;
+            subpath_has_geometry = 1;
+        }
+    }
+
+    int mutated = (new_count != path->count);
+    if (!mutated) {
+        for (size_t i = 0; i < new_count; i++) {
+            if (new_segs[i].op != path->segments[i].op ||
+                memcmp(new_segs[i].coords, path->segments[i].coords, sizeof(float) * 8) != 0) {
+                mutated = 1;
+                break;
+            }
+        }
+    }
+
+    if (!mutated) {
+        free(new_segs);
+        path->state_flags |= VIR_STATE_NORMALIZED;
+        return VIR_PASS_NO_CHANGE;
+    }
+
+    free(path->segments);
+    path->segments = new_segs;
+    path->count = new_count;
+    path->state_flags |= VIR_STATE_NORMALIZED;
+    vir_path_invalidate_bounds(path);
+
+    return VIR_PASS_OK;
+}
+
+VirPassResult vir_path_localize(VirPath *path) {
+    if (!path) return VIR_PASS_ERROR;
+    if (path->count == 0) {
+        return VIR_PASS_NO_CHANGE;
+    }
+
+    // Localize requires exact bounds
+    if (!path->bounds_valid || !(path->state_flags & VIR_STATE_EXACT_BOUNDS)) {
+        return VIR_PASS_ERROR;
+    }
+
+    float dx = -path->min_x;
+    float dy = -path->min_y;
+
+    if (fabsf(dx) < 1e-5f && fabsf(dy) < 1e-5f) {
+        if (path->state_flags & VIR_STATE_LOCALIZED) {
+            return VIR_PASS_NO_CHANGE;
+        }
+        path->min_x = 0.0f;
+        path->min_y = 0.0f;
+        path->state_flags |= VIR_STATE_LOCALIZED;
+        return VIR_PASS_OK;
+    }
+
+    for (size_t i = 0; i < path->count; i++) {
+        VirSegment *s = &path->segments[i];
+        switch (s->op) {
+            case VIR_MOVE:
+            case VIR_LINE:
+                s->coords[0] += dx;
+                s->coords[1] += dy;
+                break;
+            case VIR_CUBIC:
+                s->coords[0] += dx;
+                s->coords[1] += dy;
+                s->coords[2] += dx;
+                s->coords[3] += dy;
+                s->coords[4] += dx;
+                s->coords[5] += dy;
+                break;
+            case VIR_ARC:
+                s->coords[5] += dx;
+                s->coords[6] += dy;
+                break;
+            case VIR_CLOSE:
+            default:
+                break;
+        }
+    }
+
+    path->min_x = 0.0f;
+    path->min_y = 0.0f;
+    path->max_x += dx;
+    path->max_y += dy;
+    path->state_flags |= VIR_STATE_LOCALIZED;
+
+    return VIR_PASS_OK;
+}
+
+int vir_paths_equivalent(const VirPath *a, const VirPath *b, float epsilon) {
+    if (!a || !b) return 0;
+
+    VirPath *cp_a = vir_path_create();
+    VirPath *cp_b = vir_path_create();
+    if (!cp_a || !cp_b) {
+        if (cp_a) vir_path_free(cp_a);
+        if (cp_b) vir_path_free(cp_b);
+        return 0;
+    }
+
+    for (size_t i = 0; i < a->count; i++) {
+        VirSegment s = a->segments[i];
+        if (s.op == VIR_MOVE) {
+            vir_path_add_move_to(cp_a, s.coords[0], s.coords[1]);
+        } else if (s.op == VIR_LINE) {
+            vir_path_add_line_to(cp_a, s.coords[0], s.coords[1]);
+        } else if (s.op == VIR_CUBIC) {
+            vir_path_add_cubic_to(cp_a, s.coords[0], s.coords[1], s.coords[2], s.coords[3], s.coords[4], s.coords[5]);
+        } else if (s.op == VIR_ARC) {
+            vir_path_add_arc_to(cp_a, s.coords[0], s.coords[1], s.coords[2], s.coords[3], s.coords[4], s.coords[5], s.coords[6]);
+        } else if (s.op == VIR_CLOSE) {
+            vir_path_add_close(cp_a);
+        }
+    }
+    for (size_t i = 0; i < b->count; i++) {
+        VirSegment s = b->segments[i];
+        if (s.op == VIR_MOVE) {
+            vir_path_add_move_to(cp_b, s.coords[0], s.coords[1]);
+        } else if (s.op == VIR_LINE) {
+            vir_path_add_line_to(cp_b, s.coords[0], s.coords[1]);
+        } else if (s.op == VIR_CUBIC) {
+            vir_path_add_cubic_to(cp_b, s.coords[0], s.coords[1], s.coords[2], s.coords[3], s.coords[4], s.coords[5]);
+        } else if (s.op == VIR_ARC) {
+            vir_path_add_arc_to(cp_b, s.coords[0], s.coords[1], s.coords[2], s.coords[3], s.coords[4], s.coords[5], s.coords[6]);
+        } else if (s.op == VIR_CLOSE) {
+            vir_path_add_close(cp_b);
+        }
+    }
+
+    size_t registry_count = 0;
+    VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
+
+    VirPipelineStats stats_a = {0};
+    VirPipelineStats stats_b = {0};
+    VirPass target_passes[] = { VIR_PASS_LOCALIZE };
+
+    int ok_a = vir_run_pipeline_with_deps(cp_a, registry, registry_count, target_passes, 1, &stats_a);
+    int ok_b = vir_run_pipeline_with_deps(cp_b, registry, registry_count, target_passes, 1, &stats_b);
+
+    if (!ok_a || !ok_b) {
+        vir_path_free(cp_a);
+        vir_path_free(cp_b);
+        return 0;
+    }
+
+    if (cp_a->count != cp_b->count) {
+        vir_path_free(cp_a);
+        vir_path_free(cp_b);
+        return 0;
+    }
+
+    int equivalent = 1;
+    for (size_t i = 0; i < cp_a->count; i++) {
+        VirSegment *sa = &cp_a->segments[i];
+        VirSegment *sb = &cp_b->segments[i];
+        if (sa->op != sb->op) {
+            equivalent = 0;
+            break;
+        }
+        int num_coords = 0;
+        if (sa->op == VIR_MOVE || sa->op == VIR_LINE) num_coords = 2;
+        else if (sa->op == VIR_CUBIC) num_coords = 6;
+        else if (sa->op == VIR_ARC) num_coords = 7;
+
+        for (int c = 0; c < num_coords; c++) {
+            if (fabsf(sa->coords[c] - sb->coords[c]) > epsilon) {
+                equivalent = 0;
+                break;
+            }
+        }
+        if (!equivalent) break;
+    }
+
+    vir_path_free(cp_a);
+    vir_path_free(cp_b);
+    return equivalent;
+}
+
+uint64_t vir_path_fingerprint(const VirPath *path, float epsilon) {
+    if (!path) return 0;
+    if (epsilon <= 0.0f) epsilon = 1e-3f;
+
+    VirPath *cp = vir_path_create();
+    if (!cp) return 0;
+
+    for (size_t i = 0; i < path->count; i++) {
+        VirSegment s = path->segments[i];
+        if (s.op == VIR_MOVE) {
+            vir_path_add_move_to(cp, s.coords[0], s.coords[1]);
+        } else if (s.op == VIR_LINE) {
+            vir_path_add_line_to(cp, s.coords[0], s.coords[1]);
+        } else if (s.op == VIR_CUBIC) {
+            vir_path_add_cubic_to(cp, s.coords[0], s.coords[1], s.coords[2], s.coords[3], s.coords[4], s.coords[5]);
+        } else if (s.op == VIR_ARC) {
+            vir_path_add_arc_to(cp, s.coords[0], s.coords[1], s.coords[2], s.coords[3], s.coords[4], s.coords[5], s.coords[6]);
+        } else if (s.op == VIR_CLOSE) {
+            vir_path_add_close(cp);
+        }
+    }
+
+    size_t registry_count = 0;
+    VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
+
+    VirPipelineStats stats = {0};
+    VirPass target_passes[] = { VIR_PASS_LOCALIZE };
+
+    int ok = vir_run_pipeline_with_deps(cp, registry, registry_count, target_passes, 1, &stats);
+    if (!ok) {
+        vir_path_free(cp);
+        return 0;
+    }
+
+    uint64_t hash = 14695981039346656037ULL;
+    uint64_t schema_ver = VIR_CACHE_SCHEMA_VERSION;
+    fnv1a_64_update(&hash, &schema_ver, sizeof(schema_ver));
+    uint64_t count_val = (uint64_t)cp->count;
+    fnv1a_64_update(&hash, &count_val, sizeof(count_val));
+    uint64_t state_val = (uint64_t)cp->state_flags;
+    fnv1a_64_update(&hash, &state_val, sizeof(state_val));
+
+    for (size_t i = 0; i < cp->count; i++) {
+        VirSegment *seg = &cp->segments[i];
+        uint32_t op_val = (uint32_t)seg->op;
+        fnv1a_64_update(&hash, &op_val, sizeof(op_val));
+
+        int num_coords = 0;
+        if (seg->op == VIR_MOVE || seg->op == VIR_LINE) num_coords = 2;
+        else if (seg->op == VIR_CUBIC) num_coords = 6;
+        else if (seg->op == VIR_ARC) num_coords = 7;
+
+        for (int c = 0; c < num_coords; c++) {
+            int64_t q = quantize_coord(seg->coords[c], epsilon);
+            fnv1a_64_update(&hash, &q, sizeof(q));
+        }
+    }
+
+    vir_path_free(cp);
+    return hash;
 }
 
 int vir_run_passes(VirPath *path, const VirPass *passes, size_t count) {
@@ -1318,6 +1840,12 @@ int vir_run_passes(VirPath *path, const VirPass *passes, size_t count) {
             case VIR_PASS_EXACT_BOUNDS:
                 res = vir_path_compute_exact_bounds_pass(path);
                 break;
+            case VIR_PASS_NORMALIZE:
+                res = vir_path_normalize(path);
+                break;
+            case VIR_PASS_LOCALIZE:
+                res = vir_path_localize(path);
+                break;
             default:
                 return 0;
         }
@@ -1339,15 +1867,19 @@ static const char* vir_pass_result_to_str(VirPassResult res) {
 
 static VirPassDescriptor default_registry[] = {
     { VIR_PASS_DEGENERATE, "degenerate", vir_path_optimize_degenerate, 0, 0, 0,
-      VIR_STATE_CLEAN, VIR_STATE_DEGENERATE_FREE, VIR_STATE_BOUNDS_VALID | VIR_STATE_CANONICALIZED | VIR_STATE_EXACT_BOUNDS },
+      VIR_STATE_CLEAN, VIR_STATE_DEGENERATE_FREE, VIR_STATE_BOUNDS_VALID | VIR_STATE_CANONICALIZED | VIR_STATE_EXACT_BOUNDS | VIR_STATE_NORMALIZED | VIR_STATE_LOCALIZED },
     { VIR_PASS_EXPAND_ARCS, "expand_arcs", vir_path_expand_arcs, 0, 0, 0,
-      VIR_STATE_CLEAN, VIR_STATE_ARCS_EXPANDED, VIR_STATE_BOUNDS_VALID | VIR_STATE_CANONICALIZED | VIR_STATE_EXACT_BOUNDS },
+      VIR_STATE_CLEAN, VIR_STATE_ARCS_EXPANDED, VIR_STATE_BOUNDS_VALID | VIR_STATE_CANONICALIZED | VIR_STATE_EXACT_BOUNDS | VIR_STATE_NORMALIZED | VIR_STATE_LOCALIZED },
     { VIR_PASS_COMPUTE_BOUNDS, "bounds", vir_path_compute_bounds_pass, 0, 0, 0,
       VIR_STATE_CLEAN, VIR_STATE_BOUNDS_VALID, 0 },
     { VIR_PASS_CANONICALIZE, "canonicalize", vir_path_canonicalize, 0, 0, 0,
-      VIR_STATE_ARCS_EXPANDED, VIR_STATE_CANONICALIZED, VIR_STATE_BOUNDS_VALID | VIR_STATE_EXACT_BOUNDS },
+      VIR_STATE_ARCS_EXPANDED, VIR_STATE_CANONICALIZED, VIR_STATE_BOUNDS_VALID | VIR_STATE_EXACT_BOUNDS | VIR_STATE_NORMALIZED | VIR_STATE_LOCALIZED },
+    { VIR_PASS_NORMALIZE, "normalize", vir_path_normalize, 0, 0, 0,
+      VIR_STATE_CANONICALIZED, VIR_STATE_NORMALIZED, VIR_STATE_BOUNDS_VALID | VIR_STATE_EXACT_BOUNDS | VIR_STATE_LOCALIZED },
     { VIR_PASS_EXACT_BOUNDS, "exact_bounds", vir_path_compute_exact_bounds_pass, 0, 0, 0,
-      VIR_STATE_CANONICALIZED, VIR_STATE_EXACT_BOUNDS, 0 }
+      VIR_STATE_NORMALIZED, VIR_STATE_EXACT_BOUNDS, 0 },
+    { VIR_PASS_LOCALIZE, "localize", vir_path_localize, 0, 0, 0,
+      VIR_STATE_EXACT_BOUNDS, VIR_STATE_LOCALIZED, 0 }
 };
 
 VirPassDescriptor* vir_pipeline_get_default_registry(size_t *out_count) {
@@ -1647,7 +2179,7 @@ int vir_prepare_backend(
             target_state = VIR_STATE_ARCS_EXPANDED;
             break;
         case VIR_BACKEND_GLSL:
-            target_state = VIR_STATE_ARCS_EXPANDED | VIR_STATE_CANONICALIZED | VIR_STATE_EXACT_BOUNDS;
+            target_state = VIR_STATE_ARCS_EXPANDED | VIR_STATE_CANONICALIZED | VIR_STATE_EXACT_BOUNDS | VIR_STATE_LOCALIZED;
             break;
         default:
             return 0;
@@ -1773,6 +2305,24 @@ char* vir_pipeline_to_dot(
         }
     }
 
+    char stats_line[256];
+    int n = sprintf(stats_line, "\n  subgraph cluster_cache {\n"
+                                "    label=\"Cache Telemetry\";\n"
+                                "    color=blue;\n"
+                                "    cache_stats [shape=Mrecord, label=\"{Hits: %llu|Misses: %llu|Evictions: %llu}\", style=filled, fillcolor=lightblue];\n"
+                                "  }\n",
+                    (unsigned long long)g_cache_stats.hits,
+                    (unsigned long long)g_cache_stats.misses,
+                    (unsigned long long)g_cache_stats.evictions);
+    if (len + n + 256 >= capacity) {
+        capacity *= 2;
+        char *new_buf = (char*)realloc(buf, capacity);
+        if (!new_buf) { free(buf); return NULL; }
+        buf = new_buf;
+    }
+    strcpy(buf + len, stats_line);
+    len += n;
+
     strcpy(buf + len, "}\n");
     return buf;
 }
@@ -1850,6 +2400,39 @@ VirRegistryValidationResult vir_validate_registry(
 ) {
     if (err) {
         memset(err, 0, sizeof(VirRegistryValidationError));
+    }
+
+    // 0. State Alias Check
+    uint32_t known_flags[] = {
+        VIR_STATE_DEGENERATE_FREE,
+        VIR_STATE_ARCS_EXPANDED,
+        VIR_STATE_CANONICALIZED,
+        VIR_STATE_BOUNDS_VALID,
+        VIR_STATE_EXACT_BOUNDS,
+        VIR_STATE_NORMALIZED,
+        VIR_STATE_LOCALIZED
+    };
+    size_t num_flags = sizeof(known_flags) / sizeof(known_flags[0]);
+    for (size_t i = 0; i < num_flags; i++) {
+        uint32_t f = known_flags[i];
+        if (f == 0 || (f & (f - 1)) != 0) {
+            if (err) {
+                err->status = VIR_REGISTRY_ERR_STATE_ALIAS;
+                err->message = "State flag is not a unique single-bit power of two.";
+                err->state_mask = f;
+            }
+            return VIR_REGISTRY_ERR_STATE_ALIAS;
+        }
+        for (size_t j = i + 1; j < num_flags; j++) {
+            if (f == known_flags[j]) {
+                if (err) {
+                    err->status = VIR_REGISTRY_ERR_STATE_ALIAS;
+                    err->message = "Duplicate state flag bit/definition detected (alias).";
+                    err->state_mask = f;
+                }
+                return VIR_REGISTRY_ERR_STATE_ALIAS;
+            }
+        }
     }
 
     if (!registry && registry_count > 0) {
@@ -1967,7 +2550,7 @@ VirRegistryValidationResult vir_validate_registry(
     uint32_t backends_to_check[] = {
         VIR_STATE_CLEAN, // SVG (0)
         VIR_STATE_ARCS_EXPANDED, // SDF (2)
-        VIR_STATE_ARCS_EXPANDED | VIR_STATE_CANONICALIZED | VIR_STATE_EXACT_BOUNDS // GLSL (22)
+        VIR_STATE_ARCS_EXPANDED | VIR_STATE_CANONICALIZED | VIR_STATE_EXACT_BOUNDS | VIR_STATE_LOCALIZED // GLSL
     };
     for (size_t b = 0; b < 3; b++) {
         uint32_t target = backends_to_check[b];
