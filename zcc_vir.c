@@ -199,8 +199,10 @@ VirPassResult vir_path_optimize_degenerate(VirPath *path) {
             write_idx++;
         }
     }
-    path->count = write_idx;
-    vir_path_invalidate_bounds(path);
+    if (changed) {
+        path->count = write_idx;
+        vir_path_invalidate_bounds(path);
+    }
     return changed ? VIR_PASS_OK : VIR_PASS_NO_CHANGE;
 }
 
@@ -1273,4 +1275,78 @@ int vir_run_pipeline(
         (unsigned long long)stats->failures);
 
     return 1;
+}
+
+int vir_run_pipeline_until_stable(
+    VirPath *path,
+    VirPassDescriptor *registry,
+    size_t registry_count,
+    const VirPass *passes,
+    size_t pass_count,
+    VirPipelineStats *stats,
+    size_t max_iterations
+) {
+    if (!path || !registry || !passes || !stats || max_iterations == 0) return 0;
+
+    memset(stats, 0, sizeof(VirPipelineStats));
+
+    size_t iterations = 0;
+    while (iterations < max_iterations) {
+        iterations++;
+        int iteration_changed = 0;
+
+        printf("\nPipeline Iteration %zu\n", iterations);
+        printf("%-25sResult\n", "Pass");
+        printf("------------------------------------------\n");
+
+        for (size_t i = 0; i < pass_count; i++) {
+            VirPass requested = passes[i];
+            VirPassDescriptor *desc = NULL;
+            for (size_t j = 0; j < registry_count; j++) {
+                if (registry[j].pass_id == requested) {
+                    desc = &registry[j];
+                    break;
+                }
+            }
+
+            if (!desc) {
+                printf("%-25sERROR (Pass not found in registry)\n", "unknown");
+                stats->failures++;
+                return 0;
+            }
+
+            desc->runs++;
+            stats->total_passes++;
+
+            VirPassResult res = desc->run(path);
+            printf("%-25s%s\n", desc->name, vir_pass_result_to_str(res));
+
+            if (res == VIR_PASS_OK) {
+                desc->mutations++;
+                stats->mutations++;
+                iteration_changed = 1;
+            } else if (res == VIR_PASS_NO_CHANGE) {
+                stats->no_change++;
+            } else if (res == VIR_PASS_ERROR) {
+                desc->failures++;
+                stats->failures++;
+                printf("\nMutations: %llu\nFailures : %llu\n",
+                    (unsigned long long)stats->mutations,
+                    (unsigned long long)stats->failures);
+                return 0;
+            }
+        }
+
+        if (!iteration_changed) {
+            printf("\nConvergence reached in %zu iterations.\n", iterations);
+            printf("Total Passes : %llu\n", (unsigned long long)stats->total_passes);
+            printf("Mutations    : %llu\n", (unsigned long long)stats->mutations);
+            printf("No Change    : %llu\n", (unsigned long long)stats->no_change);
+            printf("Failures     : %llu\n", (unsigned long long)stats->failures);
+            return (int)iterations;
+        }
+    }
+
+    printf("\nFailed to converge within limit of %zu iterations.\n", max_iterations);
+    return 0;
 }

@@ -159,4 +159,14 @@ int vir_run_pipeline(
     VirPipelineStats *stats
 );
 
+int vir_run_pipeline_until_stable(
+    VirPath *path,
+    VirPassDescriptor *registry,
+    size_t registry_count,
+    const VirPass *passes,
+    size_t pass_count,
+    VirPipelineStats *stats,
+    size_t max_iterations
+);
+
 #endif

@@ -585,6 +585,61 @@ static void test_vir_pipeline_telemetry() {
     printf("[+] test_vir_pipeline_telemetry PASSED.\n");
 }
 
+static void test_vir_fixed_point_pipeline() {
+    printf("[*] Running test_vir_fixed_point_pipeline...\n");
+
+    size_t registry_count = 0;
+    VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
+    assert(registry != NULL);
+    assert(registry_count == 4);
+
+    VirPath *path = vir_path_create();
+    ZccSvgError err = {0};
+    ZccSvgStatus st = zcc_svg_parse_to_vir("M 0 0 L 0 0 A 50 50 0 0 1 50 50 Z", path, &err);
+    assert(st == ZCC_SVG_OK);
+
+    vir_pipeline_reset_telemetry(registry, registry_count);
+
+    VirPass passes[] = {
+        VIR_PASS_DEGENERATE,
+        VIR_PASS_EXPAND_ARCS,
+        VIR_PASS_CANONICALIZE,
+        VIR_PASS_COMPUTE_BOUNDS
+    };
+
+    VirPipelineStats stats = {0};
+    int iterations = vir_run_pipeline_until_stable(path, registry, registry_count, passes, 4, &stats, 10);
+    assert(iterations == 2);
+
+    assert(stats.total_passes == 8);
+    assert(stats.mutations == 3);
+    assert(stats.no_change == 5);
+    assert(stats.failures == 0);
+
+    // Verify idempotency: running again on the stable path should converge in exactly 1 iteration
+    VirPipelineStats stats2 = {0};
+    int iterations2 = vir_run_pipeline_until_stable(path, registry, registry_count, passes, 4, &stats2, 10);
+    assert(iterations2 == 1);
+    assert(stats2.total_passes == 4);
+    assert(stats2.mutations == 0);
+    assert(stats2.no_change == 4);
+    assert(stats2.failures == 0);
+
+    // Verify iteration cap: setting max_iterations = 1 on a path that needs 2 should return 0 (not stabilized)
+    vir_path_free(path);
+
+    path = vir_path_create();
+    st = zcc_svg_parse_to_vir("M 0 0 L 0 0 A 50 50 0 0 1 50 50 Z", path, &err);
+    assert(st == ZCC_SVG_OK);
+
+    VirPipelineStats stats3 = {0};
+    int iterations3 = vir_run_pipeline_until_stable(path, registry, registry_count, passes, 4, &stats3, 1);
+    assert(iterations3 == 0);
+
+    vir_path_free(path);
+    printf("[+] test_vir_fixed_point_pipeline PASSED.\n");
+}
+
 int main() {
     printf("=== ZCC Vector IR (VIR) Test Harness ===\n");
     test_vir_path_creation_and_growth();
@@ -599,6 +654,7 @@ int main() {
     test_vir_pass_canonicalize();
     test_vir_pass_manager();
     test_vir_pipeline_telemetry();
+    test_vir_fixed_point_pipeline();
     printf("777JACKPOT777 — ALL VIR CORE TESTS GREEN.\n");
     return 0;
 }
