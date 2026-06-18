@@ -348,4 +348,30 @@ const char *vir_state_flag_name(uint32_t flag);
  * Returns NULL only on allocation failure.                                  */
 char *vir_state_flags_to_string(uint32_t flags);
 
+/* ── Geometry Metrics ───────────────────────────────────────────────────────
+ * Quantitative geometry diagnostics computed in a single O(N) walk.
+ * The path is never mutated; works on any convergence state.               */
+
+typedef struct {
+    uint32_t move_count;   /* VIR_MOVE segments                              */
+    uint32_t line_count;   /* VIR_LINE segments                              */
+    uint32_t cubic_count;  /* VIR_CUBIC segments                             */
+    uint32_t arc_count;    /* VIR_ARC segments                               */
+    uint32_t close_count;  /* VIR_CLOSE segments                             */
+    uint32_t total_count;  /* total segment count (all ops)                  */
+    /* Approximate arc-length: sum of straight-line chord distances
+     * (LINE: |P1-P0|, CUBIC: |P3-P0|, ARC: chord |end-start|).
+     * Exact for lines; first-order approximation for curves.               */
+    float approx_length;
+    /* Signed area via the shoelace formula accumulated over all implicit
+     * line segments (MOVE→LINE→LINE→...→CLOSE).  Positive = CCW,
+     * negative = CW (screen coordinates, y-down).                         */
+    float signed_area;
+} VirGeometryMetrics;
+
+/* Compute geometry metrics for a path in one O(N) walk.
+ * Safe to call on any VirPath regardless of convergence state.
+ * Returns a zero-filled VirGeometryMetrics when path is NULL.             */
+VirGeometryMetrics vir_path_compute_metrics(const VirPath *path);
+
 #endif

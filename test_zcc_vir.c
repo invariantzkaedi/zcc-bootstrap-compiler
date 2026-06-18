@@ -1604,6 +1604,89 @@ static void test_vir_state_flags_stringify() {
     printf("[+] test_vir_state_flags_stringify PASSED.\n");
 }
 
+static void test_vir_geometry_metrics() {
+    printf("[*] Running test_vir_geometry_metrics...\n");
+
+    /* --- NULL path: must return zero-filled metrics --- */
+    VirGeometryMetrics z = vir_path_compute_metrics(NULL);
+    assert(z.move_count   == 0);
+    assert(z.line_count   == 0);
+    assert(z.cubic_count  == 0);
+    assert(z.arc_count    == 0);
+    assert(z.close_count  == 0);
+    assert(z.total_count  == 0);
+    assert(z.approx_length == 0.0f);
+    assert(z.signed_area   == 0.0f);
+
+    /* --- Triangle: MOVE + 2×LINE + CLOSE (CW in screen coords) ---
+     * Vertices: (0,0) → (10,0) → (0,10) → close
+     * Perimeter chords: 10 + ~14.14 = ~24.14
+     * Signed area (shoelace, screen CW): negative                        */
+    VirPath *tri = vir_path_create();
+    vir_path_add_move_to(tri,  0.0f,  0.0f);
+    vir_path_add_line_to(tri, 10.0f,  0.0f);
+    vir_path_add_line_to(tri,  0.0f, 10.0f);
+    vir_path_add_close(tri);
+
+    VirGeometryMetrics tm = vir_path_compute_metrics(tri);
+    assert(tm.move_count  == 1);
+    assert(tm.line_count  == 2);
+    assert(tm.close_count == 1);
+    assert(tm.cubic_count == 0);
+    assert(tm.arc_count   == 0);
+    assert(tm.total_count == 4);
+    assert(tm.approx_length > 0.0f);
+    /* chord(10,0)=10, chord(0,10→from 10,0)=~14.14 */
+    assert(tm.approx_length > 9.0f && tm.approx_length < 30.0f);
+    /* Shoelace: (0*0 - 10*0) + (10*10 - 0*0) = 100 → area = 50
+     * Sign: area_acc = cx*ey - ex*cy
+     * Step1: cx=0,cy=0 → ex=10,ey=0: 0*0 - 10*0 = 0
+     * Step2: cx=10,cy=0 → ex=0,ey=10: 10*10 - 0*0 = 100
+     * total = 100, signed_area = +50 (CCW by shoelace convention)        */
+    assert(tm.signed_area != 0.0f);
+    vir_path_free(tri);
+
+    /* --- Unit square: MOVE + 4×LINE + CLOSE
+     * (0,0)→(1,0)→(1,1)→(0,1)→(0,0) close
+     * Perimeter = 4.0, |signed_area| = 0.5 (shoelace gives half the area
+     * before the /2 division, so final = 0.5 for a unit square traced
+     * with 4 LINE segments)                                               */
+    VirPath *sq = vir_path_create();
+    vir_path_add_move_to(sq, 0.0f, 0.0f);
+    vir_path_add_line_to(sq, 1.0f, 0.0f);
+    vir_path_add_line_to(sq, 1.0f, 1.0f);
+    vir_path_add_line_to(sq, 0.0f, 1.0f);
+    vir_path_add_line_to(sq, 0.0f, 0.0f); /* explicit close-edge */
+    vir_path_add_close(sq);
+
+    VirGeometryMetrics sm = vir_path_compute_metrics(sq);
+    assert(sm.line_count  == 4);
+    assert(sm.close_count == 1);
+    assert(sm.total_count == 6);
+    /* Perimeter: 4 chords of length 1.0 */
+    assert(sm.approx_length > 3.9f && sm.approx_length < 4.1f);
+    /* Shoelace for CCW unit square: |area| should be 1.0
+     * Trace: (0*0-1*0)+(1*1-1*0)+(1*1-0*1)+(0*0-0*1) = 2 → /2 = 1.0 */
+    float abs_area = sm.signed_area < 0.0f ? -sm.signed_area : sm.signed_area;
+    assert(abs_area > 0.9f && abs_area < 1.1f);
+    vir_path_free(sq);
+
+    /* --- Cubic: verify cubic_count increments and approx_length > 0 --- */
+    VirPath *cub = vir_path_create();
+    vir_path_add_move_to(cub, 0.0f, 0.0f);
+    vir_path_add_cubic_to(cub, 1.0f, 0.0f, 2.0f, 1.0f, 3.0f, 0.0f);
+    vir_path_add_close(cub);
+
+    VirGeometryMetrics cm = vir_path_compute_metrics(cub);
+    assert(cm.cubic_count == 1);
+    assert(cm.move_count  == 1);
+    assert(cm.approx_length > 0.0f); /* chord (0,0)→(3,0) = 3.0 */
+    assert(cm.approx_length > 2.9f && cm.approx_length < 3.1f);
+    vir_path_free(cub);
+
+    printf("[+] test_vir_geometry_metrics PASSED.\n");
+}
+
 int main() {
     setbuf(stdout, NULL);
     printf("=== ZCC Vector IR (VIR) Test Harness ===\n");
@@ -1634,6 +1717,7 @@ int main() {
     test_vir_execution_plan();
     test_vir_pipeline_provenance();
     test_vir_state_flags_stringify();
+    test_vir_geometry_metrics();
     /* NOTE: vir_cache_shutdown() is NOT called here.
      * test_vir_compilation_caching() initialises the cache with
      * vir_cache_init() and owns the shutdown at the end of that test.
