@@ -522,7 +522,7 @@ static void test_vir_pipeline_telemetry() {
     size_t registry_count = 0;
     VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
     assert(registry != NULL);
-    assert(registry_count == 4);
+    assert(registry_count == 5);
 
     VirPath *path = vir_path_create();
     ZccSvgError err = {0};
@@ -591,7 +591,7 @@ static void test_vir_fixed_point_pipeline() {
     size_t registry_count = 0;
     VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
     assert(registry != NULL);
-    assert(registry_count == 4);
+    assert(registry_count == 5);
 
     VirPath *path = vir_path_create();
     ZccSvgError err = {0};
@@ -646,7 +646,7 @@ static void test_vir_pass_dependency_graph() {
     size_t registry_count = 0;
     VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
     assert(registry != NULL);
-    assert(registry_count == 4);
+    assert(registry_count == 5);
 
     // 1. Prerequisite Auto-scheduling:
     // canonicalize requires ARCS_EXPANDED.
@@ -783,7 +783,7 @@ static void test_vir_backend_planner() {
     size_t registry_count = 0;
     VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
     assert(registry != NULL);
-    assert(registry_count == 4);
+    assert(registry_count == 5);
 
     // 1. Prepare SVG backend (target state clean -> 0)
     {
@@ -845,8 +845,8 @@ static void test_vir_backend_planner() {
         // Target state requires expand_arcs, canonicalize, and bounds.
         assert(stats.total_passes == 3);
         assert(stats.mutations == 3);
-        assert((path->state_flags & (VIR_STATE_ARCS_EXPANDED | VIR_STATE_CANONICALIZED | VIR_STATE_BOUNDS_VALID)) ==
-               (VIR_STATE_ARCS_EXPANDED | VIR_STATE_CANONICALIZED | VIR_STATE_BOUNDS_VALID));
+        assert((path->state_flags & (VIR_STATE_ARCS_EXPANDED | VIR_STATE_CANONICALIZED | VIR_STATE_EXACT_BOUNDS)) ==
+               (VIR_STATE_ARCS_EXPANDED | VIR_STATE_CANONICALIZED | VIR_STATE_EXACT_BOUNDS));
 
         // Preparing again should skip
         VirPipelineStats stats2 = {0};
@@ -866,7 +866,7 @@ static void test_vir_pass_graph_exporter() {
     size_t registry_count = 0;
     VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
     assert(registry != NULL);
-    assert(registry_count == 4);
+    assert(registry_count == 5);
 
     // Populate telemetry by running some passes
     VirPath *path = vir_path_create();
@@ -916,6 +916,44 @@ static void test_vir_pass_graph_exporter() {
     printf("[+] test_vir_pass_graph_exporter PASSED.\n");
 }
 
+static void test_vir_exact_bounds_solving() {
+    printf("[*] Running test_vir_exact_bounds_solving...\n");
+
+    size_t registry_count = 0;
+    VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
+    assert(registry != NULL);
+
+    VirPath *path = vir_path_create();
+    ZccSvgError err = {0};
+    // Parse the curve: M 0 0 C 10 100, 40 -50, 50 50
+    ZccSvgStatus st = zcc_svg_parse_to_vir("M 0 0 C 10 100, 40 -50, 50 50", path, &err);
+    assert(st == ZCC_SVG_OK);
+
+    // Compute simple bounds first
+    float min_x, min_y, max_x, max_y;
+    vir_path_compute_bounds(path, &min_x, &min_y, &max_x, &max_y);
+    // Control-polygon bounds should include control points y1=100 and y2=-50
+    assert(fabsf(min_y - (-50.0f)) < EPSILON);
+    assert(fabsf(max_y - 100.0f) < EPSILON);
+
+    // Now run the exact_bounds pass
+    vir_pipeline_reset_telemetry(registry, registry_count);
+    VirPipelineStats stats = {0};
+    VirPass passes[] = { VIR_PASS_EXACT_BOUNDS };
+    int res = vir_run_pipeline_with_deps(path, registry, registry_count, passes, 1, &stats);
+    assert(res == 1);
+
+    // The exact bounds should be tighter: min_y = 0.0f, max_y = 50.0f
+    assert(path->state_flags & VIR_STATE_EXACT_BOUNDS);
+    assert(fabsf(path->min_x - 0.0f) < EPSILON);
+    assert(fabsf(path->max_x - 50.0f) < EPSILON);
+    assert(fabsf(path->min_y - 0.0f) < EPSILON);
+    assert(fabsf(path->max_y - 50.0f) < EPSILON);
+
+    vir_path_free(path);
+    printf("[+] test_vir_exact_bounds_solving PASSED.\n");
+}
+
 int main() {
     printf("=== ZCC Vector IR (VIR) Test Harness ===\n");
     test_vir_path_creation_and_growth();
@@ -934,6 +972,7 @@ int main() {
     test_vir_pass_dependency_graph();
     test_vir_backend_planner();
     test_vir_pass_graph_exporter();
+    test_vir_exact_bounds_solving();
     printf("777JACKPOT777 — ALL VIR CORE TESTS GREEN.\n");
     return 0;
 }

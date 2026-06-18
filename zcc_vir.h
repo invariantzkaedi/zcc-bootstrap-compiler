@@ -63,7 +63,8 @@ typedef enum {
     VIR_STATE_DEGENERATE_FREE   = 1 << 0,
     VIR_STATE_ARCS_EXPANDED     = 1 << 1,
     VIR_STATE_CANONICALIZED     = 1 << 2,
-    VIR_STATE_BOUNDS_VALID      = 1 << 3
+    VIR_STATE_BOUNDS_VALID      = 1 << 3,
+    VIR_STATE_EXACT_BOUNDS      = 1 << 4
 } VirPathStateFlags;
 
 typedef enum {
@@ -76,7 +77,8 @@ typedef enum {
     VIR_PASS_DEGENERATE = 0,
     VIR_PASS_EXPAND_ARCS,
     VIR_PASS_COMPUTE_BOUNDS,
-    VIR_PASS_CANONICALIZE
+    VIR_PASS_CANONICALIZE,
+    VIR_PASS_EXACT_BOUNDS
 } VirPass;
 
 typedef struct {
@@ -126,6 +128,7 @@ VirPassResult vir_path_optimize_degenerate(VirPath *path);
 VirPassResult vir_path_expand_arcs(VirPath *path);
 VirPassResult vir_path_canonicalize(VirPath *path);
 VirPassResult vir_path_compute_bounds_pass(VirPath *path);
+VirPassResult vir_path_compute_exact_bounds_pass(VirPath *path);
 void vir_path_invalidate_bounds(VirPath *path);
 
 /**

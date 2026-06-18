@@ -52,7 +52,7 @@ static int zcc_is_valid_coord(double v) {
 void vir_path_invalidate_bounds(VirPath *path) {
     if (path) {
         path->bounds_valid = 0;
-        path->state_flags &= ~VIR_STATE_BOUNDS_VALID;
+        path->state_flags &= ~(VIR_STATE_BOUNDS_VALID | VIR_STATE_EXACT_BOUNDS);
         path->min_x = 0.0f;
         path->min_y = 0.0f;
         path->max_x = 0.0f;
@@ -1160,6 +1160,144 @@ VirPassResult vir_path_compute_bounds_pass(VirPath *path) {
     return VIR_PASS_OK;
 }
 
+static float eval_bezier(float p0, float p1, float p2, float p3, float t) {
+    float mt = 1.0f - t;
+    return mt * mt * mt * p0 + 3.0f * mt * mt * t * p1 + 3.0f * mt * t * t * p2 + t * t * t * p3;
+}
+
+static void solve_bezier_extrema(float p0, float p1, float p2, float p3, float roots[2], int *num_roots) {
+    *num_roots = 0;
+    float A = 3.0f * (-p0 + 3.0f * p1 - 3.0f * p2 + p3);
+    float B = 6.0f * (p0 - 2.0f * p1 + p2);
+    float C = 3.0f * (-p0 + p1);
+
+    if (fabsf(A) < 1e-6f) {
+        if (fabsf(B) > 1e-6f) {
+            float t = -C / B;
+            if (t > 0.0f && t < 1.0f) {
+                roots[(*num_roots)++] = t;
+            }
+        }
+    } else {
+        float disc = B * B - 4.0f * A * C;
+        if (disc >= 0.0f) {
+            float sqrt_disc = sqrtf(disc);
+            float t1 = (-B - sqrt_disc) / (2.0f * A);
+            float t2 = (-B + sqrt_disc) / (2.0f * A);
+            if (t1 > 0.0f && t1 < 1.0f) {
+                roots[(*num_roots)++] = t1;
+            }
+            if (t2 > 0.0f && t2 < 1.0f) {
+                roots[(*num_roots)++] = t2;
+            }
+        }
+    }
+}
+
+VirPassResult vir_path_compute_exact_bounds_pass(VirPath *path) {
+    if (!path) return VIR_PASS_ERROR;
+    if (path->bounds_valid && (path->state_flags & VIR_STATE_EXACT_BOUNDS)) {
+        return VIR_PASS_NO_CHANGE;
+    }
+
+    if (path->count == 0) {
+        path->min_x = 0.0f;
+        path->min_y = 0.0f;
+        path->max_x = 0.0f;
+        path->max_y = 0.0f;
+        path->bounds_valid = 1;
+        path->state_flags |= (VIR_STATE_BOUNDS_VALID | VIR_STATE_EXACT_BOUNDS);
+        return VIR_PASS_OK;
+    }
+
+    float mix = 1e9f, miy = 1e9f;
+    float max_val_x = -1e9f, max_val_y = -1e9f;
+    int has_points = 0;
+
+    #define UPDATE_BOUNDS(x, y) do { \
+        if ((x) < mix) mix = (x); \
+        if ((y) < miy) miy = (y); \
+        if ((x) > max_val_x) max_val_x = (x); \
+        if ((y) > max_val_y) max_val_y = (y); \
+        has_points = 1; \
+    } while(0)
+
+    float cx = 0.0f, cy = 0.0f;
+    float start_x = 0.0f, start_y = 0.0f;
+
+    for (size_t i = 0; i < path->count; i++) {
+        VirSegment *s = &path->segments[i];
+        if (s->op == VIR_MOVE) {
+            cx = s->coords[0];
+            cy = s->coords[1];
+            start_x = cx;
+            start_y = cy;
+            UPDATE_BOUNDS(cx, cy);
+        } else if (s->op == VIR_LINE) {
+            float tx = s->coords[0];
+            float ty = s->coords[1];
+            UPDATE_BOUNDS(tx, ty);
+            cx = tx;
+            cy = ty;
+        } else if (s->op == VIR_CUBIC) {
+            float x1 = s->coords[0], y1 = s->coords[1];
+            float x2 = s->coords[2], y2 = s->coords[3];
+            float tx = s->coords[4], ty = s->coords[5];
+
+            UPDATE_BOUNDS(cx, cy);
+            UPDATE_BOUNDS(tx, ty);
+
+            // Solve X extrema
+            float x_roots[2];
+            int num_x_roots = 0;
+            solve_bezier_extrema(cx, x1, x2, tx, x_roots, &num_x_roots);
+            for (int k = 0; k < num_x_roots; k++) {
+                float val_x = eval_bezier(cx, x1, x2, tx, x_roots[k]);
+                float val_y = eval_bezier(cy, y1, y2, ty, x_roots[k]);
+                UPDATE_BOUNDS(val_x, val_y);
+            }
+
+            // Solve Y extrema
+            float y_roots[2];
+            int num_y_roots = 0;
+            solve_bezier_extrema(cy, y1, y2, ty, y_roots, &num_y_roots);
+            for (int k = 0; k < num_y_roots; k++) {
+                float val_x = eval_bezier(cx, x1, x2, tx, y_roots[k]);
+                float val_y = eval_bezier(cy, y1, y2, ty, y_roots[k]);
+                UPDATE_BOUNDS(val_x, val_y);
+            }
+
+            cx = tx;
+            cy = ty;
+        } else if (s->op == VIR_CLOSE) {
+            UPDATE_BOUNDS(start_x, start_y);
+            cx = start_x;
+            cy = start_y;
+        } else if (s->op == VIR_ARC) {
+            UPDATE_BOUNDS(s->coords[5], s->coords[6]);
+            cx = s->coords[5];
+            cy = s->coords[6];
+        }
+    }
+    #undef UPDATE_BOUNDS
+
+    if (has_points) {
+        path->min_x = mix;
+        path->min_y = miy;
+        path->max_x = max_val_x;
+        path->max_y = max_val_y;
+    } else {
+        path->min_x = 0.0f;
+        path->min_y = 0.0f;
+        path->max_x = 0.0f;
+        path->max_y = 0.0f;
+    }
+    path->bounds_valid = 1;
+    path->state_flags |= (VIR_STATE_BOUNDS_VALID | VIR_STATE_EXACT_BOUNDS);
+
+    return VIR_PASS_OK;
+}
+
 int vir_run_passes(VirPath *path, const VirPass *passes, size_t count) {
     if (!path || !passes) return 0;
     for (size_t i = 0; i < count; i++) {
@@ -1176,6 +1314,9 @@ int vir_run_passes(VirPath *path, const VirPass *passes, size_t count) {
                 break;
             case VIR_PASS_CANONICALIZE:
                 res = vir_path_canonicalize(path);
+                break;
+            case VIR_PASS_EXACT_BOUNDS:
+                res = vir_path_compute_exact_bounds_pass(path);
                 break;
             default:
                 return 0;
@@ -1198,13 +1339,15 @@ static const char* vir_pass_result_to_str(VirPassResult res) {
 
 static VirPassDescriptor default_registry[] = {
     { VIR_PASS_DEGENERATE, "degenerate", vir_path_optimize_degenerate, 0, 0, 0,
-      VIR_STATE_CLEAN, VIR_STATE_DEGENERATE_FREE, VIR_STATE_BOUNDS_VALID | VIR_STATE_CANONICALIZED },
+      VIR_STATE_CLEAN, VIR_STATE_DEGENERATE_FREE, VIR_STATE_BOUNDS_VALID | VIR_STATE_CANONICALIZED | VIR_STATE_EXACT_BOUNDS },
     { VIR_PASS_EXPAND_ARCS, "expand_arcs", vir_path_expand_arcs, 0, 0, 0,
-      VIR_STATE_CLEAN, VIR_STATE_ARCS_EXPANDED, VIR_STATE_BOUNDS_VALID | VIR_STATE_CANONICALIZED },
+      VIR_STATE_CLEAN, VIR_STATE_ARCS_EXPANDED, VIR_STATE_BOUNDS_VALID | VIR_STATE_CANONICALIZED | VIR_STATE_EXACT_BOUNDS },
     { VIR_PASS_COMPUTE_BOUNDS, "bounds", vir_path_compute_bounds_pass, 0, 0, 0,
       VIR_STATE_CLEAN, VIR_STATE_BOUNDS_VALID, 0 },
     { VIR_PASS_CANONICALIZE, "canonicalize", vir_path_canonicalize, 0, 0, 0,
-      VIR_STATE_ARCS_EXPANDED, VIR_STATE_CANONICALIZED, VIR_STATE_BOUNDS_VALID }
+      VIR_STATE_ARCS_EXPANDED, VIR_STATE_CANONICALIZED, VIR_STATE_BOUNDS_VALID | VIR_STATE_EXACT_BOUNDS },
+    { VIR_PASS_EXACT_BOUNDS, "exact_bounds", vir_path_compute_exact_bounds_pass, 0, 0, 0,
+      VIR_STATE_CANONICALIZED, VIR_STATE_EXACT_BOUNDS, 0 }
 };
 
 VirPassDescriptor* vir_pipeline_get_default_registry(size_t *out_count) {
@@ -1504,7 +1647,7 @@ int vir_prepare_backend(
             target_state = VIR_STATE_ARCS_EXPANDED;
             break;
         case VIR_BACKEND_GLSL:
-            target_state = VIR_STATE_ARCS_EXPANDED | VIR_STATE_CANONICALIZED | VIR_STATE_BOUNDS_VALID;
+            target_state = VIR_STATE_ARCS_EXPANDED | VIR_STATE_CANONICALIZED | VIR_STATE_EXACT_BOUNDS;
             break;
         default:
             return 0;
