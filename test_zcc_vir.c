@@ -1469,6 +1469,72 @@ static void test_vir_execution_plan() {
     printf("[+] test_vir_execution_plan PASSED.\n");
 }
 
+static void test_vir_pipeline_provenance() {
+    printf("[*] Running test_vir_pipeline_provenance...\n");
+
+    size_t reg_count;
+    VirPassDescriptor *registry = vir_pipeline_get_default_registry(&reg_count);
+
+    /* Build and converge a path to LOCALIZED so all manifest fields are populated. */
+    VirPath *path = vir_path_create();
+    vir_path_add_move_to(path,  0.0f,  0.0f);
+    vir_path_add_line_to(path, 10.0f,  0.0f);
+    vir_path_add_line_to(path, 10.0f, 10.0f);
+    vir_path_add_close(path);
+
+    VirPipelineStats stats;
+    VirPass goal[] = { VIR_PASS_LOCALIZE };
+    vir_run_pipeline_with_deps(path, registry, reg_count, goal, 1, &stats);
+
+    VirCacheStats cache = { .hits = 3, .misses = 1, .evictions = 0 };
+
+    /* --- Primary emission --- */
+    char *json = vir_pipeline_provenance_json(path, &stats, &cache);
+    assert(json != NULL && "provenance JSON must not be NULL");
+    assert(strlen(json) > 0 && "provenance JSON must be non-empty");
+
+    /* Key field presence checks (substring validation). */
+    assert(strstr(json, "\"canonical_fingerprint\"") != NULL);
+    assert(strstr(json, "\"state_flags\"")           != NULL);
+    assert(strstr(json, "\"segment_count\"")         != NULL);
+    assert(strstr(json, "\"bounds\"")                != NULL);
+    assert(strstr(json, "\"min_x\"")                 != NULL);
+    assert(strstr(json, "\"max_x\"")                 != NULL);
+    assert(strstr(json, "\"pipeline\"")              != NULL);
+    assert(strstr(json, "\"total_passes\"")          != NULL);
+    assert(strstr(json, "\"mutations\"")             != NULL);
+    assert(strstr(json, "\"cache\"")                 != NULL);
+    assert(strstr(json, "\"hits\"")                  != NULL);
+    assert(strstr(json, "\"misses\"")                != NULL);
+    assert(strstr(json, "\"evictions\"")             != NULL);
+    /* Fingerprint must be non-zero hex string ("0x" prefix present). */
+    assert(strstr(json, "\"0x")                     != NULL);
+    /* Cache hit count 3 must appear somewhere in the JSON. */
+    assert(strstr(json, "\"hits\": 3")               != NULL);
+    free(json);
+
+    /* --- NULL stats tolerance --- */
+    char *json_nostats = vir_pipeline_provenance_json(path, NULL, &cache);
+    assert(json_nostats != NULL);
+    assert(strstr(json_nostats, "\"total_passes\": 0") != NULL);
+    free(json_nostats);
+
+    /* --- NULL cache tolerance --- */
+    char *json_nocache = vir_pipeline_provenance_json(path, &stats, NULL);
+    assert(json_nocache != NULL);
+    assert(strstr(json_nocache, "\"hits\": 0") != NULL);
+    free(json_nocache);
+
+    /* --- NULL path tolerance --- */
+    char *json_nopath = vir_pipeline_provenance_json(NULL, NULL, NULL);
+    assert(json_nopath != NULL);
+    assert(strstr(json_nopath, "\"canonical_fingerprint\": \"0x0000000000000000\"") != NULL);
+    free(json_nopath);
+
+    vir_path_free(path);
+    printf("[+] test_vir_pipeline_provenance PASSED.\n");
+}
+
 int main() {
     setbuf(stdout, NULL);
     printf("=== ZCC Vector IR (VIR) Test Harness ===\n");
@@ -1497,6 +1563,7 @@ int main() {
     test_vir_registry_validation();
     test_vir_artifact_manifest();
     test_vir_execution_plan();
+    test_vir_pipeline_provenance();
     /* NOTE: vir_cache_shutdown() is NOT called here.
      * test_vir_compilation_caching() initialises the cache with
      * vir_cache_init() and owns the shutdown at the end of that test.

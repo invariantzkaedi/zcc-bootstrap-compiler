@@ -321,4 +321,15 @@ int vir_execute_plan(VirPath *path,
                      size_t registry_count,
                      VirPipelineStats *stats);
 
+/* ── Provenance Receipt ─────────────────────────────────────────────────────
+ * Emit a malloc-owned JSON string capturing the canonical identity of a path
+ * together with pipeline execution and cache telemetry.
+ *
+ * NULL stats or NULL cache are tolerated — those sections are zero-filled.
+ * The caller must free() the returned string.
+ * Returns NULL only on allocation failure.                                  */
+char *vir_pipeline_provenance_json(const VirPath        *path,
+                                   const VirPipelineStats *stats,
+                                   const VirCacheStats    *cache);
+
 #endif

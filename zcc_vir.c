@@ -1998,7 +1998,117 @@ int vir_execute_plan(VirPath *path,
                                       stats);
 }
 
+/* ── Provenance Receipt ───────────────────────────────────────────────────── */
+
+char *vir_pipeline_provenance_json(const VirPath        *path,
+                                   const VirPipelineStats *stats,
+                                   const VirCacheStats    *cache) {
+    /* Capture identity via manifest (non-mutating). */
+    VirArtifactManifest m;
+    memset(&m, 0, sizeof(m));
+    if (path) m = vir_path_manifest(path, 1e-3f);
+
+    /* Zero-fill optional sections when caller passes NULL. */
+    VirPipelineStats zstats; memset(&zstats, 0, sizeof(zstats));
+    VirCacheStats    zcache; memset(&zcache, 0, sizeof(zcache));
+    const VirPipelineStats *p = stats ? stats : &zstats;
+    const VirCacheStats    *c = cache ? cache : &zcache;
+
+    /* Bounds section — only meaningful when VIR_STATE_EXACT_BOUNDS is set. */
+    float bmin_x = 0.0f, bmin_y = 0.0f, bmax_x = 0.0f, bmax_y = 0.0f;
+    if (m.state_flags & VIR_STATE_EXACT_BOUNDS) {
+        bmin_x = m.min_x; bmin_y = m.min_y;
+        bmax_x = m.max_x; bmax_y = m.max_y;
+    }
+
+    /* Two-pass: dry-run with NULL to measure, then allocate and format. */
+    int needed = snprintf(NULL, 0,
+        "{\n"
+        "  \"canonical_fingerprint\": \"0x%016llx\",\n"
+        "  \"schema_version\": %u,\n"
+        "  \"state_flags\": %u,\n"
+        "  \"segment_count\": %u,\n"
+        "  \"bounds\": {\n"
+        "    \"min_x\": %.6g,\n"
+        "    \"min_y\": %.6g,\n"
+        "    \"max_x\": %.6g,\n"
+        "    \"max_y\": %.6g\n"
+        "  },\n"
+        "  \"pipeline\": {\n"
+        "    \"total_passes\": %llu,\n"
+        "    \"mutations\": %llu,\n"
+        "    \"no_change\": %llu,\n"
+        "    \"failures\": %llu\n"
+        "  },\n"
+        "  \"cache\": {\n"
+        "    \"hits\": %llu,\n"
+        "    \"misses\": %llu,\n"
+        "    \"evictions\": %llu\n"
+        "  }\n"
+        "}",
+        (unsigned long long)m.canonical_fingerprint,
+        m.schema_version,
+        m.state_flags,
+        m.segment_count,
+        (double)bmin_x, (double)bmin_y,
+        (double)bmax_x, (double)bmax_y,
+        (unsigned long long)p->total_passes,
+        (unsigned long long)p->mutations,
+        (unsigned long long)p->no_change,
+        (unsigned long long)p->failures,
+        (unsigned long long)c->hits,
+        (unsigned long long)c->misses,
+        (unsigned long long)c->evictions
+    );
+
+    if (needed < 0) return NULL;
+    char *out = (char *)malloc((size_t)needed + 1);
+    if (!out) return NULL;
+
+    snprintf(out, (size_t)needed + 1,
+        "{\n"
+        "  \"canonical_fingerprint\": \"0x%016llx\",\n"
+        "  \"schema_version\": %u,\n"
+        "  \"state_flags\": %u,\n"
+        "  \"segment_count\": %u,\n"
+        "  \"bounds\": {\n"
+        "    \"min_x\": %.6g,\n"
+        "    \"min_y\": %.6g,\n"
+        "    \"max_x\": %.6g,\n"
+        "    \"max_y\": %.6g\n"
+        "  },\n"
+        "  \"pipeline\": {\n"
+        "    \"total_passes\": %llu,\n"
+        "    \"mutations\": %llu,\n"
+        "    \"no_change\": %llu,\n"
+        "    \"failures\": %llu\n"
+        "  },\n"
+        "  \"cache\": {\n"
+        "    \"hits\": %llu,\n"
+        "    \"misses\": %llu,\n"
+        "    \"evictions\": %llu\n"
+        "  }\n"
+        "}",
+        (unsigned long long)m.canonical_fingerprint,
+        m.schema_version,
+        m.state_flags,
+        m.segment_count,
+        (double)bmin_x, (double)bmin_y,
+        (double)bmax_x, (double)bmax_y,
+        (unsigned long long)p->total_passes,
+        (unsigned long long)p->mutations,
+        (unsigned long long)p->no_change,
+        (unsigned long long)p->failures,
+        (unsigned long long)c->hits,
+        (unsigned long long)c->misses,
+        (unsigned long long)c->evictions
+    );
+
+    return out;
+}
+
 int vir_run_passes(VirPath *path, const VirPass *passes, size_t count) {
+
     if (!path || !passes) return 0;
     for (size_t i = 0; i < count; i++) {
 
