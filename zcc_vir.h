@@ -8,18 +8,31 @@ typedef enum {
     VIR_MOVE = 0,
     VIR_LINE,
     VIR_CUBIC,
+    VIR_ARC,
     VIR_CLOSE
 } VirOp;
 
 typedef struct {
+    uint32_t source_id;
+    uint32_t path_id;
+    uint32_t flags;
+} VirMetadata;
+
+typedef struct {
     VirOp op;
-    float coords[6]; // Space for up to 6 coordinates (Cubic Bezier control/end points)
+    float coords[8]; // Space for up to 8 coordinates (Cubic control points or Arc parameters)
 } VirSegment;
 
 typedef struct {
     VirSegment *segments;
     size_t count;
     size_t capacity;
+    VirMetadata metadata;
+    int bounds_valid;
+    float min_x;
+    float min_y;
+    float max_x;
+    float max_y;
 } VirPath;
 
 /**
@@ -38,6 +51,7 @@ void vir_path_free(VirPath *path);
 int vir_path_add_move_to(VirPath *path, float x, float y);
 int vir_path_add_line_to(VirPath *path, float x, float y);
 int vir_path_add_cubic_to(VirPath *path, float x1, float y1, float x2, float y2, float x, float y);
+int vir_path_add_arc_to(VirPath *path, float rx, float ry, float rotx, float fa, float fs, float x, float y);
 int vir_path_add_close(VirPath *path);
 
 /**
@@ -45,6 +59,8 @@ int vir_path_add_close(VirPath *path);
  * Strips degenerate nodes (zero-length segments, null moves) to simplify geometry.
  */
 void vir_path_optimize_degenerate(VirPath *path);
+void vir_path_expand_arcs(VirPath *path);
+void vir_path_invalidate_bounds(VirPath *path);
 
 /**
  * Bounding Box pass:

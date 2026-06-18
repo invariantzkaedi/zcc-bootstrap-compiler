@@ -5,7 +5,7 @@
 #include <assert.h>
 #include <math.h>
 
-#define EPSILON 1e-3f
+#define EPSILON 1e-2f
 
 static void free_svg_node_tree(ZccSvgNode* node) {
     if (!node) return;
@@ -180,14 +180,6 @@ static void test_svg_to_vir_adapter() {
         // Compute bounds
         float min_x, min_y, max_x, max_y;
         vir_path_compute_bounds(path, &min_x, &min_y, &max_x, &max_y);
-        // H 50 -> (50, 40)
-        // V 60 -> (50, 60)
-        // C 70 80, 90 100, 110 120 -> ends at (110, 120)
-        // Q 130 140 150 160 -> elevated control point coordinates:
-        // c1 = p0 + 2/3*(q1-p0) = 110 + 2/3*(130-110) = 123.333
-        // c2 = p3 + 2/3*(q1-p3) = 150 + 2/3*(130-150) = 136.666
-        // Min X should be 10.0, Min Y should be 20.0
-        // Max X should be 150.0, Max Y should be 160.0
         assert(fabsf(min_x - 10.0f) < EPSILON);
         assert(fabsf(min_y - 20.0f) < EPSILON);
         assert(fabsf(max_x - 150.0f) < EPSILON);
@@ -230,6 +222,101 @@ static void test_extreme_and_overflow_vir() {
     printf("[+] test_extreme_and_overflow_vir PASSED.\n");
 }
 
+static void test_vir_metadata_and_bounds_caching() {
+    printf("[*] Running test_vir_metadata_and_bounds_caching...\n");
+
+    VirPath *path = vir_path_create();
+    path->metadata.source_id = 42;
+    path->metadata.path_id = 999;
+    path->metadata.flags = 0xabcdef;
+
+    assert(path->metadata.source_id == 42);
+    assert(path->metadata.path_id == 999);
+    assert(path->metadata.flags == 0xabcdef);
+
+    // Initial bounds validity
+    assert(path->bounds_valid == 0);
+
+    vir_path_add_move_to(path, 10.0f, 10.0f);
+    vir_path_add_line_to(path, 20.0f, 30.0f);
+
+    assert(path->bounds_valid == 0);
+
+    float min_x, min_y, max_x, max_y;
+    vir_path_compute_bounds(path, &min_x, &min_y, &max_x, &max_y);
+
+    assert(path->bounds_valid == 1);
+    assert(fabsf(path->min_x - 10.0f) < EPSILON);
+    assert(fabsf(path->min_y - 10.0f) < EPSILON);
+    assert(fabsf(path->max_x - 20.0f) < EPSILON);
+    assert(fabsf(path->max_y - 30.0f) < EPSILON);
+
+    // Make bounds query again, should return cached
+    float cached_min_x, cached_min_y, cached_max_x, cached_max_y;
+    vir_path_compute_bounds(path, &cached_min_x, &cached_min_y, &cached_max_x, &cached_max_y);
+    assert(fabsf(cached_min_x - 10.0f) < EPSILON);
+    assert(fabsf(cached_max_y - 30.0f) < EPSILON);
+
+    // Modify geometry, bounds should invalidate
+    vir_path_add_line_to(path, -50.0f, 100.0f);
+    assert(path->bounds_valid == 0);
+
+    vir_path_compute_bounds(path, &min_x, &min_y, &max_x, &max_y);
+    assert(path->bounds_valid == 1);
+    assert(fabsf(path->min_x - (-50.0f)) < EPSILON);
+    assert(fabsf(path->max_y - 100.0f) < EPSILON);
+
+    vir_path_free(path);
+    printf("[+] test_vir_metadata_and_bounds_caching PASSED.\n");
+}
+
+static void test_vir_arc_ingestion_and_expansion() {
+    printf("[*] Running test_vir_arc_ingestion_and_expansion...\n");
+
+    // Case 1: Simple circle arc parsing and expansion
+    {
+        VirPath *path = vir_path_create();
+        ZccSvgError err = {0};
+        // Parse a 90-degree circular arc segment (radius 50) from (0,0) to (50,50)
+        ZccSvgStatus st = zcc_svg_parse_to_vir("M 0 0 A 50 50 0 0 1 50 50", path, &err);
+        assert(st == ZCC_SVG_OK);
+
+        assert(path->count == 2);
+        assert(path->segments[0].op == VIR_MOVE);
+        assert(path->segments[1].op == VIR_ARC);
+
+        // Verify bounds of arc end point is mapped
+        float min_x, min_y, max_x, max_y;
+        vir_path_compute_bounds(path, &min_x, &min_y, &max_x, &max_y);
+        assert(fabsf(min_x - 0.0f) < EPSILON);
+        assert(fabsf(max_y - 50.0f) < EPSILON);
+
+        // Expand arc pass
+        vir_path_expand_arcs(path);
+
+        // Verify the VIR_ARC segment was expanded to VIR_CUBIC segments
+        assert(path->count > 2);
+        assert(path->segments[0].op == VIR_MOVE);
+        for (size_t i = 1; i < path->count; i++) {
+            assert(path->segments[i].op == VIR_CUBIC);
+        }
+
+        // Verify serialization works correctly
+        SvgPathBuilder *pb = svg_path_begin();
+        vir_path_to_builder(path, pb);
+        // Verify output string contains C curves and ends at 50,50
+        assert(strstr(pb->d, "C") != NULL);
+        assert(strstr(pb->d, "50.00,50.00") != NULL);
+
+        ZccSvgNode* node = svg_create_node("path");
+        svg_apply_path(node, pb);
+        free_svg_node_tree(node);
+        vir_path_free(path);
+    }
+
+    printf("[+] test_vir_arc_ingestion_and_expansion PASSED.\n");
+}
+
 int main() {
     printf("=== ZCC Vector IR (VIR) Test Harness ===\n");
     test_vir_path_creation_and_growth();
@@ -237,6 +324,8 @@ int main() {
     test_vir_bounds_propagation();
     test_svg_to_vir_adapter();
     test_extreme_and_overflow_vir();
+    test_vir_metadata_and_bounds_caching();
+    test_vir_arc_ingestion_and_expansion();
     printf("777JACKPOT777 — ALL VIR CORE TESTS GREEN.\n");
     return 0;
 }

@@ -47,11 +47,22 @@ static int zcc_is_valid_coord(double v) {
     return isfinite(v) && (fabs(v) <= ZCC_VIR_MAX_COORD_ABS);
 }
 
+void vir_path_invalidate_bounds(VirPath *path) {
+    if (path) {
+        path->bounds_valid = 0;
+        path->min_x = 0.0f;
+        path->min_y = 0.0f;
+        path->max_x = 0.0f;
+        path->max_y = 0.0f;
+    }
+}
+
 VirPath* vir_path_create(void) {
     VirPath *p = (VirPath*)calloc(1, sizeof(VirPath));
     p->capacity = 16;
     p->segments = (VirSegment*)calloc(p->capacity, sizeof(VirSegment));
     p->count = 0;
+    p->bounds_valid = 0;
     return p;
 }
 
@@ -81,6 +92,7 @@ int vir_path_add_move_to(VirPath *path, float x, float y) {
     s->op = VIR_MOVE;
     s->coords[0] = x;
     s->coords[1] = y;
+    vir_path_invalidate_bounds(path);
     return 1;
 }
 
@@ -90,6 +102,7 @@ int vir_path_add_line_to(VirPath *path, float x, float y) {
     s->op = VIR_LINE;
     s->coords[0] = x;
     s->coords[1] = y;
+    vir_path_invalidate_bounds(path);
     return 1;
 }
 
@@ -103,6 +116,22 @@ int vir_path_add_cubic_to(VirPath *path, float x1, float y1, float x2, float y2,
     s->coords[3] = y2;
     s->coords[4] = x;
     s->coords[5] = y;
+    vir_path_invalidate_bounds(path);
+    return 1;
+}
+
+int vir_path_add_arc_to(VirPath *path, float rx, float ry, float rotx, float fa, float fs, float x, float y) {
+    if (!vir_path_ensure_capacity(path)) return 0;
+    VirSegment *s = &path->segments[path->count++];
+    s->op = VIR_ARC;
+    s->coords[0] = rx;
+    s->coords[1] = ry;
+    s->coords[2] = rotx;
+    s->coords[3] = fa;
+    s->coords[4] = fs;
+    s->coords[5] = x;
+    s->coords[6] = y;
+    vir_path_invalidate_bounds(path);
     return 1;
 }
 
@@ -110,6 +139,7 @@ int vir_path_add_close(VirPath *path) {
     if (!vir_path_ensure_capacity(path)) return 0;
     VirSegment *s = &path->segments[path->count++];
     s->op = VIR_CLOSE;
+    vir_path_invalidate_bounds(path);
     return 1;
 }
 
@@ -164,6 +194,7 @@ void vir_path_optimize_degenerate(VirPath *path) {
         }
     }
     path->count = write_idx;
+    vir_path_invalidate_bounds(path);
 }
 
 void vir_path_compute_bounds(const VirPath *path, float *min_x, float *min_y, float *max_x, float *max_y) {
@@ -172,6 +203,14 @@ void vir_path_compute_bounds(const VirPath *path, float *min_x, float *min_y, fl
         if (min_y) *min_y = 0;
         if (max_x) *max_x = 0;
         if (max_y) *max_y = 0;
+        return;
+    }
+
+    if (path->bounds_valid) {
+        *min_x = path->min_x;
+        *min_y = path->min_y;
+        *max_x = path->max_x;
+        *max_y = path->max_y;
         return;
     }
 
@@ -195,31 +234,270 @@ void vir_path_compute_bounds(const VirPath *path, float *min_x, float *min_y, fl
             UPDATE_BOUNDS(s->coords[0], s->coords[1]);
             UPDATE_BOUNDS(s->coords[2], s->coords[3]);
             UPDATE_BOUNDS(s->coords[4], s->coords[5]);
+        } else if (s->op == VIR_ARC) {
+            UPDATE_BOUNDS(s->coords[5], s->coords[6]);
         }
     }
     #undef UPDATE_BOUNDS
 
+    float final_min_x = 0.0f, final_min_y = 0.0f, final_max_x = 0.0f, final_max_y = 0.0f;
     if (has_points) {
-        *min_x = mix;
-        *min_y = miy;
-        *max_x = max_val_x;
-        *max_y = max_val_y;
-    } else {
-        *min_x = 0; *min_y = 0; *max_x = 0; *max_y = 0;
+        final_min_x = mix;
+        final_min_y = miy;
+        final_max_x = max_val_x;
+        final_max_y = max_val_y;
     }
+
+    VirPath *mutable_path = (VirPath*)path;
+    mutable_path->min_x = final_min_x;
+    mutable_path->min_y = final_min_y;
+    mutable_path->max_x = final_max_x;
+    mutable_path->max_y = final_max_y;
+    mutable_path->bounds_valid = 1;
+
+    *min_x = final_min_x;
+    *min_y = final_min_y;
+    *max_x = final_max_x;
+    *max_y = final_max_y;
+}
+
+static float nsvg_sqr(float x) { return x * x; }
+static float nsvg_vmag(float x, float y) { return sqrtf(x * x + y * y); }
+static float nsvg_vecrat(float ux, float uy, float vx, float vy) {
+    float mag_u = nsvg_vmag(ux, uy);
+    float mag_v = nsvg_vmag(vx, vy);
+    if (mag_u < 1e-6f || mag_v < 1e-6f) return 1.0f;
+    return (ux * vx + uy * vy) / (mag_u * mag_v);
+}
+static float nsvg_vecang(float ux, float uy, float vx, float vy) {
+    float r = nsvg_vecrat(ux, uy, vx, vy);
+    if (r < -1.0f) r = -1.0f;
+    if (r > 1.0f) r = 1.0f;
+    return ((ux * vy < uy * vx) ? -1.0f : 1.0f) * acosf(r);
+}
+
+static void nsvg_xformPoint(float* dx, float* dy, float x, float y, float* t) {
+    *dx = x * t[0] + y * t[2] + t[4];
+    *dy = x * t[1] + y * t[3] + t[5];
+}
+static void nsvg_xformVec(float* dx, float* dy, float x, float y, float* t) {
+    *dx = x * t[0] + y * t[2];
+    *dy = x * t[1] + y * t[3];
+}
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+static void emit_arc_generic(
+    void *target,
+    int is_builder,
+    float cx, float cy,
+    float rx, float ry,
+    float rotx,
+    float fa, float fs,
+    float x2, float y2
+) {
+    float x1 = cx;
+    float y1 = cy;
+    float dx = x1 - x2;
+    float dy = y1 - y2;
+    float d = sqrtf(dx * dx + dy * dy);
+
+    if (d < 1e-6f || rx < 1e-6f || ry < 1e-6f) {
+        if (is_builder) {
+            svg_path_line_to((SvgPathBuilder*)target, x2, y2);
+        } else {
+            vir_path_add_line_to((VirPath*)target, x2, y2);
+        }
+        return;
+    }
+
+    float rotx_rad = rotx / 180.0f * (float)M_PI;
+    float sinrx = sinf(rotx_rad);
+    float cosrx = cosf(rotx_rad);
+
+    float x1p = cosrx * dx / 2.0f + sinrx * dy / 2.0f;
+    float y1p = -sinrx * dx / 2.0f + cosrx * dy / 2.0f;
+    float lambda = nsvg_sqr(x1p) / nsvg_sqr(rx) + nsvg_sqr(y1p) / nsvg_sqr(ry);
+
+    if (lambda > 1.0f) {
+        float s_val = sqrtf(lambda);
+        rx *= s_val;
+        ry *= s_val;
+    }
+
+    float sa = nsvg_sqr(rx) * nsvg_sqr(ry) - nsvg_sqr(rx) * nsvg_sqr(y1p) - nsvg_sqr(ry) * nsvg_sqr(x1p);
+    float sb = nsvg_sqr(rx) * nsvg_sqr(y1p) + nsvg_sqr(ry) * nsvg_sqr(x1p);
+    float s_val = 0.0f;
+    if (sa < 0.0f) sa = 0.0f;
+    if (sb > 0.0f) s_val = sqrtf(sa / sb);
+    if (fa == fs) s_val = -s_val;
+    float cxp = s_val * rx * y1p / ry;
+    float cyp = s_val * -ry * x1p / rx;
+
+    float center_x = (x1 + x2) / 2.0f + cosrx * cxp - sinrx * cyp;
+    float center_y = (y1 + y2) / 2.0f + sinrx * cxp + cosrx * cyp;
+
+    float ux = (x1p - cxp) / rx;
+    float uy = (y1p - cyp) / ry;
+    float vx = (-x1p - cxp) / rx;
+    float vy = (-y1p - cyp) / ry;
+    float a1 = nsvg_vecang(1.0f, 0.0f, ux, uy);
+    float da = nsvg_vecang(ux, uy, vx, vy);
+
+    if (fs == 0.0f && da > 0.0f) {
+        da -= 2.0f * (float)M_PI;
+    } else if (fs == 1.0f && da < 0.0f) {
+        da += 2.0f * (float)M_PI;
+    }
+
+    float t[6];
+    t[0] = cosrx; t[1] = sinrx;
+    t[2] = -sinrx; t[3] = cosrx;
+    t[4] = center_x; t[5] = center_y;
+
+    int ndivs = (int)(fabsf(da) / ((float)M_PI * 0.5f) + 1.0f);
+    float hda = (da / (float)ndivs) / 2.0f;
+    if (hda < 1e-3f && hda > -1e-3f) {
+        hda *= 0.5f;
+    } else {
+        hda = (1.0f - cosf(hda)) / sinf(hda);
+    }
+    float kappa = fabsf(4.0f / 3.0f * hda);
+    if (da < 0.0f) kappa = -kappa;
+
+    float px = x1, py = y1;
+    float ptanx = 0.0f, ptany = 0.0f;
+
+    for (int i = 0; i <= ndivs; i++) {
+        float a = a1 + da * ((float)i / (float)ndivs);
+        float c_a = cosf(a);
+        float s_a = sinf(a);
+        float x, y, tanx, tany;
+        nsvg_xformPoint(&x, &y, c_a * rx, s_a * ry, t);
+        nsvg_xformVec(&tanx, &tany, -s_a * rx * kappa, c_a * ry * kappa, t);
+        if (i > 0) {
+            if (is_builder) {
+                svg_path_cubic_to((SvgPathBuilder*)target, px + ptanx, py + ptany, x - tanx, y - tany, x, y);
+            } else {
+                vir_path_add_cubic_to((VirPath*)target, px + ptanx, py + ptany, x - tanx, y - tany, x, y);
+            }
+        }
+        px = x;
+        py = y;
+        ptanx = tanx;
+        ptany = tany;
+    }
+}
+
+void vir_path_expand_arcs(VirPath *path) {
+    if (!path || path->count == 0) return;
+
+    int has_arcs = 0;
+    for (size_t i = 0; i < path->count; i++) {
+        if (path->segments[i].op == VIR_ARC) {
+            has_arcs = 1;
+            break;
+        }
+    }
+    if (!has_arcs) return;
+
+    VirPath *new_path = vir_path_create();
+    new_path->metadata = path->metadata;
+
+    float cx = 0.0f, cy = 0.0f;
+    float start_x = 0.0f, start_y = 0.0f;
+
+    for (size_t i = 0; i < path->count; i++) {
+        VirSegment *s = &path->segments[i];
+        if (s->op == VIR_ARC) {
+            float rx = s->coords[0];
+            float ry = s->coords[1];
+            float rotx = s->coords[2];
+            float fa = s->coords[3];
+            float fs = s->coords[4];
+            float x2 = s->coords[5];
+            float y2 = s->coords[6];
+
+            emit_arc_generic(new_path, 0, cx, cy, rx, ry, rotx, fa, fs, x2, y2);
+            cx = x2;
+            cy = y2;
+        } else {
+            if (s->op == VIR_MOVE) {
+                cx = s->coords[0];
+                cy = s->coords[1];
+                start_x = cx;
+                start_y = cy;
+                vir_path_add_move_to(new_path, cx, cy);
+            } else if (s->op == VIR_LINE) {
+                cx = s->coords[0];
+                cy = s->coords[1];
+                vir_path_add_line_to(new_path, cx, cy);
+            } else if (s->op == VIR_CUBIC) {
+                cx = s->coords[4];
+                cy = s->coords[5];
+                vir_path_add_cubic_to(new_path, s->coords[0], s->coords[1], s->coords[2], s->coords[3], cx, cy);
+            } else if (s->op == VIR_CLOSE) {
+                cx = start_x;
+                cy = start_y;
+                vir_path_add_close(new_path);
+            }
+        }
+    }
+
+    VirSegment *tmp_segs = path->segments;
+    path->segments = new_path->segments;
+    new_path->segments = tmp_segs;
+
+    size_t tmp_count = path->count;
+    path->count = new_path->count;
+    new_path->count = tmp_count;
+
+    size_t tmp_cap = path->capacity;
+    path->capacity = new_path->capacity;
+    new_path->capacity = tmp_cap;
+
+    vir_path_free(new_path);
+    vir_path_invalidate_bounds(path);
 }
 
 void vir_path_to_builder(const VirPath *path, SvgPathBuilder *out) {
     if (!path || !out) return;
+    float cx = 0.0f, cy = 0.0f;
+    float start_x = 0.0f, start_y = 0.0f;
+
     for (size_t i = 0; i < path->count; i++) {
         const VirSegment *s = &path->segments[i];
         if (s->op == VIR_MOVE) {
-            svg_path_move_to(out, s->coords[0], s->coords[1]);
+            cx = s->coords[0];
+            cy = s->coords[1];
+            start_x = cx;
+            start_y = cy;
+            svg_path_move_to(out, cx, cy);
         } else if (s->op == VIR_LINE) {
-            svg_path_line_to(out, s->coords[0], s->coords[1]);
+            cx = s->coords[0];
+            cy = s->coords[1];
+            svg_path_line_to(out, cx, cy);
         } else if (s->op == VIR_CUBIC) {
-            svg_path_cubic_to(out, s->coords[0], s->coords[1], s->coords[2], s->coords[3], s->coords[4], s->coords[5]);
+            cx = s->coords[4];
+            cy = s->coords[5];
+            svg_path_cubic_to(out, s->coords[0], s->coords[1], s->coords[2], s->coords[3], cx, cy);
+        } else if (s->op == VIR_ARC) {
+            float rx = s->coords[0];
+            float ry = s->coords[1];
+            float rotx = s->coords[2];
+            float fa = s->coords[3];
+            float fs = s->coords[4];
+            float x2 = s->coords[5];
+            float y2 = s->coords[6];
+
+            emit_arc_generic(out, 1, cx, cy, rx, ry, rotx, fa, fs, x2, y2);
+            cx = x2;
+            cy = y2;
         } else if (s->op == VIR_CLOSE) {
+            cx = start_x;
+            cy = start_y;
             svg_path_close(out);
         }
     }
@@ -415,8 +693,32 @@ ZccSvgStatus zcc_svg_parse_to_vir(const char *d, VirPath *out, ZccSvgError *err)
             cmd = '\0'; // Require explicit command next
 
         } else if (cmd == 'A' || cmd == 'a') {
-            return zcc_svg_fail(err, ZCC_SVG_ERR_UNSUPPORTED_ARC,
-                "Unsupported SVG elliptical arc command", ZCC_SVG_OFFSET(d, cmd_ptr));
+            double rx, ry, rotx, fa, fs, x, y;
+            if (!zcc_parse_double(&p, &rx) || !zcc_parse_double(&p, &ry) ||
+                !zcc_parse_double(&p, &rotx) || !zcc_parse_double(&p, &fa) ||
+                !zcc_parse_double(&p, &fs) || !zcc_parse_double(&p, &x) ||
+                !zcc_parse_double(&p, &y)) {
+                return zcc_svg_fail(err, ZCC_SVG_ERR_BAD_NUMBER, "Expected 7 parameters for arc command", ZCC_SVG_OFFSET(d, p));
+            }
+            if (!zcc_is_valid_coord(rx) || !zcc_is_valid_coord(ry) ||
+                !zcc_is_valid_coord(rotx) || !zcc_is_valid_coord(fa) ||
+                !zcc_is_valid_coord(fs) || !zcc_is_valid_coord(x) ||
+                !zcc_is_valid_coord(y)) {
+                return zcc_svg_fail(err, ZCC_SVG_ERR_BAD_NUMBER, "Coordinate not finite or out of range", ZCC_SVG_OFFSET(d, p));
+            }
+            if (cmd == 'a') {
+                x += cx;
+                y += cy;
+            }
+            if (!zcc_is_valid_coord(x) || !zcc_is_valid_coord(y)) {
+                return zcc_svg_fail(err, ZCC_SVG_ERR_BAD_NUMBER, "Coordinate overflow", ZCC_SVG_OFFSET(d, p));
+            }
+
+            if (!vir_path_add_arc_to(out, (float)rx, (float)ry, (float)rotx, (float)fa, (float)fs, (float)x, (float)y)) {
+                return zcc_svg_fail(err, ZCC_SVG_ERR_PATH_OVERFLOW, "VirPath capacity exceeded", ZCC_SVG_OFFSET(d, p));
+            }
+            cx = x;
+            cy = y;
 
         } else if (cmd == 'S' || cmd == 's' || cmd == 'T' || cmd == 't') {
             return zcc_svg_fail(err, ZCC_SVG_ERR_UNSUPPORTED_COMMAND,
