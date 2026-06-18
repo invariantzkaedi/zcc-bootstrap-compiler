@@ -446,6 +446,24 @@ int vir_artifact_validate(const void *buffer,
  * Storage and retrieval of serialized VIR artifacts keyed by their canonical
  * fingerprint and partitioned under the active VIR_CACHE_SCHEMA_VERSION.    */
 
+typedef struct {
+    uint64_t fingerprint;
+    uint32_t schema_version;
+    uint32_t state_flags;
+    uint32_t segment_count;
+    uint64_t payload_size;
+    uint64_t file_size;
+    uint64_t created_at;
+    uint64_t last_accessed_at;
+    char path[260];
+} VirRepositoryEntry;
+
+typedef struct {
+    uint64_t artifact_count;
+    uint64_t total_bytes;
+    uint64_t schema_version;
+} VirRepositoryStats;
+
 /* Check if an artifact with the given fingerprint exists in the repository.
  * Returns 1 if present and valid; 0 if missing or corrupted.               */
 int vir_repository_exists(const char *repo_path,
@@ -468,5 +486,32 @@ VirPath *vir_repository_load(const char *repo_path,
  * Returns 1 if successful or if file already absent; 0 on delete failure.   */
 int vir_repository_remove(const char *repo_path,
                           uint64_t fingerprint);
+
+/* Enumerate all valid entries in the repository for the active schema.
+ * Reallocates out_entries buffer; caller must free() the returned pointer.
+ * Returns 1 on success; 0 on allocation or system failure.                  */
+int vir_repository_enumerate(const char *repo_path,
+                             VirRepositoryEntry **out_entries,
+                             size_t *out_count);
+
+/* Query repository entry metadata for a specific fingerprint.
+ * Returns 1 if found and populated; 0 on miss or error.                     */
+int vir_repository_query(const char *repo_path,
+                         uint64_t fingerprint,
+                         VirRepositoryEntry *out);
+
+/* Compute aggregated statistics for the active repository schema version.   */
+VirRepositoryStats vir_repository_stats(const char *repo_path);
+
+/* ── Semantic Artifact Verification ────────────────────────────────────────
+ * Upgrades validation from "well-formed blob" to "truthful artifact" by
+ * verifying FNV-1a fingerprint, bounds consistency, and dependency flags.  */
+
+/* Verify semantic integrity of a serialized buffer.
+ * Reconstructs path and validates identity, bounds, and flags.
+ * Returns 1 if valid and semantic checks pass; 0 otherwise.                 */
+int vir_artifact_verify_integrity(const void *buffer,
+                                  size_t size,
+                                  float epsilon);
 
 #endif

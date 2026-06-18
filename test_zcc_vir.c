@@ -1906,6 +1906,207 @@ static void test_vir_repository_store() {
     printf("[+] test_vir_repository_store PASSED.\n");
 }
 
+static uint32_t test_crc32_ieee(const void *data, size_t len) {
+    static const uint32_t table[256] = {
+        0x00000000,0x77073096,0xEE0E612C,0x990951BA,0x076DC419,0x706AF48F,
+        0xE963A535,0x9E6495A3,0x0EDB8832,0x79DCB8A4,0xE0D5E91B,0x97D2D988,
+        0x09B64C2B,0x7EB17CBF,0xE7B82D09,0x90BF1CBF,0x1DB71064,0x6AB020F2,
+        0xF3B97148,0x84BE41DE,0x1ADAD47D,0x6DDDE4EB,0xF4D4B551,0x83D385C7,
+        0x136C9856,0x646BA8C0,0xFD62F97A,0x8A65C9EC,0x14015C4F,0x63066CD9,
+        0xFA0F3D63,0x8D080DF5,0x3B6E20C8,0x4C69105E,0xD56041E4,0xA2677172,
+        0x3C03E4D1,0x4B04D447,0xD20D85FD,0xA50AB56B,0x35B5A8FA,0x42B2986C,
+        0xDBBBC9D6,0xACBCF940,0x32D86CE3,0x45DF5C75,0xDCD60DCF,0xABD13D59,
+        0x26D930AC,0x51DE003A,0xC8D75180,0xBFD06116,0x21B4F928,0x56B3C9BE,
+        0xCFBA9599,0xB8BDA50F,0x2802B89E,0x5F058808,0xC60CD9B2,0xB10BE924,
+        0x2F6F7C87,0x58684C11,0xC1611DAB,0xB6662D3D,0x76DC4190,0x01DB7106,
+        0x98D220BC,0xEFD5102A,0x71B18589,0x06B6B51F,0x9FBFE4A5,0xE8B8D433,
+        0x7807C9A2,0x0F00F934,0x9609A88E,0xE10E9818,0x7F6AD9BB,0x086D3D2D,
+        0x91646C97,0xE6635C01,0x6B6B51F4,0x1C6C6162,0x856530D8,0xF262004E,
+        0x6C0695ED,0x1B01A57B,0x8208F4C1,0xF50FC457,0x65B0D9C6,0x12B7E950,
+        0x8BBEB8EA,0xFCB9887C,0x62DD1D7F,0x15DA2D49,0x8CD37CF3,0xFBD44C65,
+        0x4DB26158,0x3AB551CE,0xA3BC0074,0xD4BB30E2,0x4ADFA541,0x3DD895D7,
+        0xA4D1C46D,0xD3D6F4FB,0x4369E96A,0x346ED9FC,0xAD678846,0xDA60B8D0,
+        0x44042D73,0x33031DE5,0xAA0A4C5F,0xDD0D7CC9,0x5005713C,0x270241AA,
+        0xBE0B1010,0xC90C2086,0x5768B525,0x206F85B3,0xB966D409,0xCE61E49F,
+        0x5EDEF90E,0x29D9C998,0xB0D09822,0xC7D7A8B4,0x59B33D17,0x2EB40D81,
+        0xB7BD5C3B,0xC0BA6CAD,0xEDB88320,0x9ABFB3B6,0x03B6E20C,0x74B1D29A,
+        0xEAD54739,0x9DD277AF,0x04DB2615,0x73DC1683,0xE3630B12,0x94643B84,
+        0x0D6D6A3E,0x7A6A5AA8,0xE40ECF0B,0x9309FF9D,0x0A00AE27,0x7D079EB1,
+        0xF00F9344,0x8708A3D2,0x1E01F268,0x6906C2FE,0xF762575D,0x806567CB,
+        0x196C3671,0x6E6B06E7,0xFED41B76,0x89D32BE0,0x10DA7A5A,0x67DD4ACC,
+        0xF9B9DF6F,0x8EBEEFF9,0x17B7BE43,0x60B08ED5,0xD6D6A3E8,0xA1D1937E,
+        0x38D8C2C4,0x4FDFF252,0xD1BB67F1,0xA6BC5767,0x3FB506DD,0x48B2364B,
+        0xD80D2BDA,0xAF0A1B4C,0x36034AF6,0x41047A60,0xDF60EFC3,0xA8670955,
+        0x316658EF,0x46616879,0xB40BBE37,0xC30C8EA1,0x5A05DF1B,0x2D02EF8D
+    };
+    const uint8_t *p = (const uint8_t *)data;
+    uint32_t crc = 0xFFFFFFFFU;
+    for (size_t i = 0; i < len; i++)
+        crc = table[(crc ^ p[i]) & 0xFF] ^ (crc >> 8);
+    return crc ^ 0xFFFFFFFFU;
+}
+
+static void test_vir_repository_catalog() {
+    printf("[*] Running test_vir_repository_catalog...\n");
+
+    const char *repo = "./test_catalog_repo";
+
+    /* Clean up any leftovers */
+#ifdef _WIN32
+    system("rmdir /s /q test_catalog_repo 2>nul");
+#else
+    system("rm -rf ./test_catalog_repo");
+#endif
+
+    /* Enumerate an empty repo directory — should return 1 successfully with count 0 */
+    VirRepositoryEntry *empty_entries = NULL;
+    size_t empty_count = 999;
+    assert(vir_repository_enumerate(repo, &empty_entries, &empty_count) == 1);
+    assert(empty_count == 0);
+    assert(empty_entries == NULL);
+
+    /* Construct path 1: M 10 20 L 30 40 Z */
+    VirPath *path1 = vir_path_create();
+    assert(vir_path_add_move_to(path1, 10.0f, 20.0f) == 1);
+    assert(vir_path_add_line_to(path1, 30.0f, 40.0f) == 1);
+    assert(vir_path_add_close(path1) == 1);
+    path1->state_flags = VIR_STATE_LOCALIZED | VIR_STATE_EXACT_BOUNDS | VIR_STATE_NORMALIZED | VIR_STATE_CANONICALIZED | VIR_STATE_ARCS_EXPANDED | VIR_STATE_DEGENERATE_FREE | VIR_STATE_BOUNDS_VALID;
+    path1->min_x = 10.0f; path1->min_y = 20.0f;
+    path1->max_x = 30.0f; path1->max_y = 40.0f;
+    path1->bounds_valid = 1;
+
+    uint64_t fp1 = vir_path_canonical_fingerprint(path1, 1e-3f);
+    assert(fp1 != 0);
+
+    /* Construct path 2: M 0 0 C 10 20 30 40 50 60 Z */
+    VirPath *path2 = vir_path_create();
+    assert(vir_path_add_move_to(path2, 0.0f, 0.0f) == 1);
+    assert(vir_path_add_cubic_to(path2, 10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f) == 1);
+    assert(vir_path_add_close(path2) == 1);
+    path2->state_flags = VIR_STATE_ARCS_EXPANDED | VIR_STATE_DEGENERATE_FREE;
+    path2->bounds_valid = 0;
+
+    uint64_t fp2 = vir_path_canonical_fingerprint(path2, 1e-3f);
+    assert(fp2 != 0);
+    assert(fp1 != fp2);
+
+    /* Store both in repo */
+    assert(vir_repository_store(repo, path1) == 1);
+    assert(vir_repository_store(repo, path2) == 1);
+
+    /* Enumerate repo */
+    VirRepositoryEntry *entries = NULL;
+    size_t count = 0;
+    assert(vir_repository_enumerate(repo, &entries, &count) == 1);
+    assert(count == 2);
+    assert(entries != NULL);
+
+    int found1 = 0, found2 = 0;
+    for (size_t i = 0; i < count; i++) {
+        if (entries[i].fingerprint == fp1) {
+            found1 = 1;
+            assert(entries[i].schema_version == VIR_CACHE_SCHEMA_VERSION);
+            assert(entries[i].state_flags == path1->state_flags);
+            assert(entries[i].segment_count == path1->count);
+            assert(entries[i].file_size == sizeof(VirCacheRecordHeader) + path1->count * sizeof(VirSegment));
+        } else if (entries[i].fingerprint == fp2) {
+            found2 = 1;
+            assert(entries[i].schema_version == VIR_CACHE_SCHEMA_VERSION);
+            assert(entries[i].state_flags == path2->state_flags);
+            assert(entries[i].segment_count == path2->count);
+            assert(entries[i].file_size == sizeof(VirCacheRecordHeader) + path2->count * sizeof(VirSegment));
+        }
+    }
+    assert(found1 == 1);
+    assert(found2 == 1);
+
+    /* Query path1 individually */
+    VirRepositoryEntry q1;
+    assert(vir_repository_query(repo, fp1, &q1) == 1);
+    assert(q1.fingerprint == fp1);
+    assert(q1.state_flags == path1->state_flags);
+    assert(q1.segment_count == path1->count);
+    assert(q1.file_size == sizeof(VirCacheRecordHeader) + path1->count * sizeof(VirSegment));
+    assert(q1.created_at != 0);
+
+    /* Query non-existent fingerprint */
+    VirRepositoryEntry q_dummy;
+    assert(vir_repository_query(repo, fp1 ^ 0x12345ULL, &q_dummy) == 0);
+
+    /* Check Stats */
+    VirRepositoryStats rstats = vir_repository_stats(repo);
+    assert(rstats.artifact_count == 2);
+    assert(rstats.schema_version == VIR_CACHE_SCHEMA_VERSION);
+    assert(rstats.total_bytes == entries[0].file_size + entries[1].file_size);
+
+    /* Free entries array */
+    free(entries);
+
+    /* ── Tier 3 Semantic Integrity Verification ── */
+    void *buf1 = NULL;
+    size_t size1 = 0;
+    assert(vir_artifact_serialize(path1, &buf1, &size1) == 1);
+    assert(buf1 != NULL);
+
+    /* Positive check: original path1 buffer must verify successfully */
+    assert(vir_artifact_verify_integrity(buf1, size1, 1e-3f) == 1);
+
+    /* Negative check 1: Tamper with canonical_fingerprint */
+    {
+        uint8_t *tampered = (uint8_t *)malloc(size1);
+        memcpy(tampered, buf1, size1);
+        VirCacheRecordHeader *thdr = (VirCacheRecordHeader *)tampered;
+        thdr->canonical_fingerprint ^= 0xFFFFFFFF12345678ULL;
+        /* Recompute CRC so envelope passes structural validate */
+        thdr->header_crc32 = test_crc32_ieee(thdr, offsetof(VirCacheRecordHeader, header_crc32));
+
+        assert(vir_artifact_validate(tampered, size1) == 1); /* structurally valid */
+        assert(vir_artifact_verify_integrity(tampered, size1, 1e-3f) == 0); /* semantically invalid */
+        free(tampered);
+    }
+
+    /* Negative check 2: Tamper with bounds (when EXACT_BOUNDS is set) */
+    {
+        uint8_t *tampered = (uint8_t *)malloc(size1);
+        memcpy(tampered, buf1, size1);
+        VirCacheRecordHeader *thdr = (VirCacheRecordHeader *)tampered;
+        thdr->min_x += 10.0f; /* distort bounds */
+        /* Recompute CRC */
+        thdr->header_crc32 = test_crc32_ieee(thdr, offsetof(VirCacheRecordHeader, header_crc32));
+
+        assert(vir_artifact_validate(tampered, size1) == 1); /* structurally valid */
+        assert(vir_artifact_verify_integrity(tampered, size1, 1e-3f) == 0); /* semantically invalid */
+        free(tampered);
+    }
+
+    /* Negative check 3: Inconsistent state flags (set LOCALIZED without EXACT_BOUNDS) */
+    {
+        uint8_t *tampered = (uint8_t *)malloc(size1);
+        memcpy(tampered, buf1, size1);
+        VirCacheRecordHeader *thdr = (VirCacheRecordHeader *)tampered;
+        thdr->state_flags = VIR_STATE_LOCALIZED; /* missing EXACT_BOUNDS, NORMALIZED, etc. */
+        /* Recompute CRC */
+        thdr->header_crc32 = test_crc32_ieee(thdr, offsetof(VirCacheRecordHeader, header_crc32));
+
+        assert(vir_artifact_validate(tampered, size1) == 1); /* structurally valid */
+        assert(vir_artifact_verify_integrity(tampered, size1, 1e-3f) == 0); /* semantically invalid */
+        free(tampered);
+    }
+
+    /* Clean up memory & disk */
+    free(buf1);
+    vir_path_free(path1);
+    vir_path_free(path2);
+
+#ifdef _WIN32
+    system("rmdir /s /q test_catalog_repo 2>nul");
+#else
+    system("rm -rf ./test_catalog_repo");
+#endif
+
+    printf("[+] test_vir_repository_catalog PASSED.\n");
+}
+
 int main() {
     setbuf(stdout, NULL);
     printf("=== ZCC Vector IR (VIR) Test Harness ===\n");
@@ -1940,6 +2141,7 @@ int main() {
     test_vir_cache_record_header();
     test_vir_artifact_blob();
     test_vir_repository_store();
+    test_vir_repository_catalog();
     /* NOTE: vir_cache_shutdown() is NOT called here.
      * test_vir_compilation_caching() initialises the cache with
      * vir_cache_init() and owns the shutdown at the end of that test.

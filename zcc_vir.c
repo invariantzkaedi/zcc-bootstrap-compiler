@@ -3331,5 +3331,283 @@ int vir_repository_remove(const char *repo_path, uint64_t fingerprint) {
     return remove(file_path) == 0 ? 1 : 0;
 }
 
+#include <dirent.h>
+#include <errno.h>
+
+int vir_repository_enumerate(const char *repo_path,
+                             VirRepositoryEntry **out_entries,
+                             size_t *out_count) {
+    if (!repo_path || !out_entries || !out_count) {
+        return 0;
+    }
+
+    *out_entries = NULL;
+    *out_count = 0;
+
+    char v_dir_path[1024];
+    snprintf(v_dir_path, sizeof(v_dir_path), "%s/v%d", repo_path, VIR_CACHE_SCHEMA_VERSION);
+
+    DIR *vdir = opendir(v_dir_path);
+    if (!vdir) {
+        if (errno == ENOENT) {
+            return 1;
+        }
+        return 0;
+    }
+
+    size_t capacity = 16;
+    VirRepositoryEntry *entries = (VirRepositoryEntry *)malloc(capacity * sizeof(VirRepositoryEntry));
+    if (!entries) {
+        closedir(vdir);
+        return 0;
+    }
+    size_t count = 0;
+
+    struct dirent *v_entry;
+    while ((v_entry = readdir(vdir)) != NULL) {
+        if (strcmp(v_entry->d_name, ".") == 0 || strcmp(v_entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        /* Subdirectories must be 2-hex prefixes */
+        if (strlen(v_entry->d_name) != 2) {
+            continue;
+        }
+        char c0 = v_entry->d_name[0];
+        char c1 = v_entry->d_name[1];
+        if (!((c0 >= '0' && c0 <= '9') || (c0 >= 'a' && c0 <= 'f') || (c0 >= 'A' && c0 <= 'F'))) continue;
+        if (!((c1 >= '0' && c1 <= '9') || (c1 >= 'a' && c1 <= 'f') || (c1 >= 'A' && c1 <= 'F'))) continue;
+
+        char subdir_path[1024];
+        snprintf(subdir_path, sizeof(subdir_path), "%s/%s", v_dir_path, v_entry->d_name);
+
+        struct stat sub_st;
+        if (stat(subdir_path, &sub_st) != 0 || !S_ISDIR(sub_st.st_mode)) {
+            continue;
+        }
+
+        DIR *sdir = opendir(subdir_path);
+        if (!sdir) {
+            continue;
+        }
+
+        struct dirent *s_entry;
+        while ((s_entry = readdir(sdir)) != NULL) {
+            if (strcmp(s_entry->d_name, ".") == 0 || strcmp(s_entry->d_name, "..") == 0) {
+                continue;
+            }
+
+            /* Check suffix .vir */
+            size_t name_len = strlen(s_entry->d_name);
+            if (name_len < 5 || strcmp(s_entry->d_name + name_len - 4, ".vir") != 0) {
+                continue;
+            }
+
+            char file_path[1024];
+            snprintf(file_path, sizeof(file_path), "%s/%s", subdir_path, s_entry->d_name);
+
+            struct stat file_st;
+            if (stat(file_path, &file_st) != 0 || !S_ISREG(file_st.st_mode)) {
+                continue;
+            }
+
+            FILE *f = fopen(file_path, "rb");
+            if (!f) {
+                continue;
+            }
+
+            VirCacheRecordHeader hdr;
+            size_t read_bytes = fread(&hdr, 1, sizeof(VirCacheRecordHeader), f);
+            fclose(f);
+
+            if (read_bytes != sizeof(VirCacheRecordHeader)) {
+                continue;
+            }
+
+            if (!vir_cache_record_header_validate(&hdr)) {
+                continue;
+            }
+
+            /* Add entry */
+            if (count >= capacity) {
+                size_t new_cap = capacity * 2;
+                VirRepositoryEntry *new_entries = (VirRepositoryEntry *)realloc(entries, new_cap * sizeof(VirRepositoryEntry));
+                if (!new_entries) {
+                    free(entries);
+                    closedir(sdir);
+                    closedir(vdir);
+                    return 0;
+                }
+                entries = new_entries;
+                capacity = new_cap;
+            }
+
+            VirRepositoryEntry *e = &entries[count];
+            e->fingerprint = hdr.canonical_fingerprint;
+            e->schema_version = hdr.schema_version;
+            e->state_flags = hdr.state_flags;
+            e->segment_count = hdr.segment_count;
+            e->payload_size = hdr.payload_size;
+            e->file_size = (uint64_t)file_st.st_size;
+            e->created_at = (uint64_t)file_st.st_mtime;
+            e->last_accessed_at = (uint64_t)file_st.st_atime;
+            snprintf(e->path, sizeof(e->path), "%s", file_path);
+
+            count++;
+        }
+        closedir(sdir);
+    }
+    closedir(vdir);
+
+    if (count == 0) {
+        free(entries);
+        *out_entries = NULL;
+        *out_count = 0;
+    } else {
+        *out_entries = entries;
+        *out_count = count;
+    }
+
+    return 1;
+}
+
+int vir_repository_query(const char *repo_path,
+                         uint64_t fingerprint,
+                         VirRepositoryEntry *out) {
+    if (!repo_path || !out) {
+        return 0;
+    }
+
+    char file_path[1024];
+    vir_repository_resolve_path(repo_path, fingerprint, file_path, sizeof(file_path));
+
+    struct stat file_st;
+    if (stat(file_path, &file_st) != 0 || !S_ISREG(file_st.st_mode)) {
+        return 0;
+    }
+
+    FILE *f = fopen(file_path, "rb");
+    if (!f) {
+        return 0;
+    }
+
+    VirCacheRecordHeader hdr;
+    size_t read_bytes = fread(&hdr, 1, sizeof(VirCacheRecordHeader), f);
+    fclose(f);
+
+    if (read_bytes != sizeof(VirCacheRecordHeader)) {
+        return 0;
+    }
+
+    if (!vir_cache_record_header_validate(&hdr)) {
+        return 0;
+    }
+
+    out->fingerprint = hdr.canonical_fingerprint;
+    out->schema_version = hdr.schema_version;
+    out->state_flags = hdr.state_flags;
+    out->segment_count = hdr.segment_count;
+    out->payload_size = hdr.payload_size;
+    out->file_size = (uint64_t)file_st.st_size;
+    out->created_at = (uint64_t)file_st.st_mtime;
+    out->last_accessed_at = (uint64_t)file_st.st_atime;
+    snprintf(out->path, sizeof(out->path), "%s", file_path);
+
+    return 1;
+}
+
+VirRepositoryStats vir_repository_stats(const char *repo_path) {
+    VirRepositoryStats stats = {0, 0, VIR_CACHE_SCHEMA_VERSION};
+
+    VirRepositoryEntry *entries = NULL;
+    size_t count = 0;
+    if (vir_repository_enumerate(repo_path, &entries, &count)) {
+        stats.artifact_count = (uint64_t)count;
+        for (size_t i = 0; i < count; i++) {
+            stats.total_bytes += entries[i].file_size;
+        }
+        if (entries) {
+            free(entries);
+        }
+    }
+    return stats;
+}
+
+static int check_state_flags_consistency(uint32_t flags) {
+    if (flags & VIR_STATE_LOCALIZED) {
+        if (!(flags & VIR_STATE_EXACT_BOUNDS) || !(flags & VIR_STATE_BOUNDS_VALID)) return 0;
+    }
+    if (flags & VIR_STATE_EXACT_BOUNDS) {
+        if (!(flags & VIR_STATE_NORMALIZED)) return 0;
+    }
+    if (flags & VIR_STATE_NORMALIZED) {
+        if (!(flags & VIR_STATE_CANONICALIZED)) return 0;
+    }
+    if (flags & VIR_STATE_CANONICALIZED) {
+        if (!(flags & VIR_STATE_ARCS_EXPANDED)) return 0;
+    }
+    if (flags & VIR_STATE_ARCS_EXPANDED) {
+        if (!(flags & VIR_STATE_DEGENERATE_FREE)) return 0;
+    }
+    return 1;
+}
+
+int vir_artifact_verify_integrity(const void *buffer,
+                                  size_t size,
+                                  float epsilon) {
+    if (!buffer || size < sizeof(VirCacheRecordHeader)) {
+        return 0;
+    }
+
+    if (!vir_artifact_validate(buffer, size)) {
+        return 0;
+    }
+
+    const VirCacheRecordHeader *hdr = (const VirCacheRecordHeader *)buffer;
+
+    if (!check_state_flags_consistency(hdr->state_flags)) {
+        return 0;
+    }
+
+    VirPath *path = vir_artifact_deserialize(buffer, size);
+    if (!path) {
+        return 0;
+    }
+
+    uint64_t recomputed_fp = vir_path_canonical_fingerprint(path, epsilon);
+    if (recomputed_fp != hdr->canonical_fingerprint) {
+        vir_path_free(path);
+        return 0;
+    }
+
+    if (hdr->state_flags & VIR_STATE_EXACT_BOUNDS) {
+        VirPath *clone = vir_path_clone(path);
+        if (!clone) {
+            vir_path_free(path);
+            return 0;
+        }
+        vir_path_invalidate_bounds(clone);
+        vir_path_compute_exact_bounds_pass(clone);
+
+        if (fabsf(clone->min_x - hdr->min_x) > epsilon ||
+            fabsf(clone->min_y - hdr->min_y) > epsilon ||
+            fabsf(clone->max_x - hdr->max_x) > epsilon ||
+            fabsf(clone->max_y - hdr->max_y) > epsilon) {
+            vir_path_free(clone);
+            vir_path_free(path);
+            return 0;
+        }
+        vir_path_free(clone);
+    } else {
+        if (hdr->min_x != 0.0f || hdr->min_y != 0.0f || hdr->max_x != 0.0f || hdr->max_y != 0.0f) {
+            vir_path_free(path);
+            return 0;
+        }
+    }
+
+    vir_path_free(path);
+    return 1;
+}
+
 
 
