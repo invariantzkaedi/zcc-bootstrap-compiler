@@ -1393,7 +1393,12 @@ int main() {
     test_vir_pass_graph_exporter();
     test_vir_exact_bounds_solving();
     test_vir_registry_validation();
-    vir_cache_shutdown();
+    /* NOTE: vir_cache_shutdown() is NOT called here.
+     * test_vir_compilation_caching() initialises the cache with
+     * vir_cache_init() and owns the shutdown at the end of that test.
+     * Calling shutdown a second time here would be a phantom lifecycle
+     * violation — the guard in vir_cache_clear() makes it safe but
+     * semantically wrong and misleading. */
     printf("777JACKPOT777 — ALL VIR CORE TESTS GREEN.\n");
     return 0;
 }

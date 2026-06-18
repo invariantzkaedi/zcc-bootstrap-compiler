@@ -20,6 +20,7 @@ void svg_add_child(ZccSvgNode* parent, ZccSvgNode* child);
 void svg_set_attr(ZccSvgNode* node, const char* attr_name, const char* attr_val);
 void svg_set_content(ZccSvgNode* node, const char* text);
 char* svg_to_string(ZccSvgNode* root);
+void svg_free_node_tree(ZccSvgNode* node);
 
 /* Base64 & ASCII Utility Functions */
 char* base64_encode(const unsigned char* data, size_t input_length);
@@ -28,6 +29,7 @@ char* svg_to_base64(ZccSvgNode* root);
 char* svg_to_data_uri(ZccSvgNode* root);
 char* svg_to_html_uri(ZccSvgNode* root);
 char* hexdump_to_ascii(const unsigned char* data, size_t len);
+char* hexdump_to_svg(const unsigned char* data, size_t len);
 
 /* Path Builder Utility */
 typedef struct SvgPathBuilder {

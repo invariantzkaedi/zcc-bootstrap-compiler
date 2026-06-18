@@ -81,6 +81,19 @@ char* svg_to_string(ZccSvgNode* root) {
     return out;
 }
 
+/* Recursively frees all nodes in a ZccSvgNode tree, including
+ * their siblings (next chain) and children, plus heap-allocated
+ * attributes and content strings.  Callers are responsible for
+ * calling this on any root they own after they are done with it. */
+void svg_free_node_tree(ZccSvgNode* node) {
+    if (!node) return;
+    svg_free_node_tree(node->children);
+    svg_free_node_tree(node->next);
+    if (node->attributes) free(node->attributes);
+    if (node->content) free(node->content);
+    free(node);
+}
+
 /* Base64 & ASCII Utility Implementations */
 static const char b64_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -677,6 +690,10 @@ static void render_layout_to_nodes(LayoutNode* l, ZccSvgNode* parent_svg) {
         svg_set_attr(txt2, "text-anchor", "middle");
         svg_set_content(txt2, details);
         svg_add_child(group, txt2);
+    } else {
+        /* txt2 was allocated but there is no detail text for this
+         * node — free it here rather than leaving a phantom. */
+        svg_free_node_tree(txt2);
     }
 
     svg_add_child(parent_svg, group);
@@ -733,6 +750,9 @@ char* svg_render_ast(struct ZCCNode* root) {
 
     char* svg_str = svg_to_string(svg);
     free_layout_tree(l);
+    /* Free the internally-constructed ZccSvgNode DOM; the serialised
+     * string (svg_str) is what the caller owns and must free. */
+    svg_free_node_tree(svg);
     return svg_str;
 }
 

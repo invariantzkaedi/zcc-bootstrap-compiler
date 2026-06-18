@@ -7,14 +7,8 @@
 
 #define EPSILON 0.001
 
-static void free_svg_node_tree(ZccSvgNode* node) {
-    if (!node) return;
-    free_svg_node_tree(node->children);
-    free_svg_node_tree(node->next);
-    if (node->attributes) free(node->attributes);
-    if (node->content) free(node->content);
-    free(node);
-}
+/* Use the public destructor from zcc_svg.h — no local duplicate needed. */
+#define free_svg_node_tree svg_free_node_tree
 
 static void test_successful_parsing() {
     printf("[*] Running test_successful_parsing...\n");

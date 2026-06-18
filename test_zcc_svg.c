@@ -329,5 +329,8 @@ int main() {
 
     free(svg_str);
     free(values_attr);
+    /* Free the entire ZccSvgNode tree (svg root + all children) that
+     * was built above.  Previously this was never released. */
+    svg_free_node_tree(svg);
     return 0;
 }
