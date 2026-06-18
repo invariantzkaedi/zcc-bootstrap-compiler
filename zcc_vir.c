@@ -3609,5 +3609,273 @@ int vir_artifact_verify_integrity(const void *buffer,
     return 1;
 }
 
+/* ── Backend Output Cache (Tier 4) ────────────────────────────────────────── */
+
+static void vir_backend_resolve_path(const char *repo_path, uint64_t fingerprint, VirBackendArtifactKind kind, char *out_path, size_t max_len) {
+    uint8_t prefix = (uint8_t)((fingerprint >> 56) & 0xFF);
+    uint64_t suffix = fingerprint & 0x00FFFFFFFFFFFFFFULL;
+    const char *ext = "";
+    switch (kind) {
+        case VIR_BACKEND_ARTIFACT_SVG: ext = "svg"; break;
+        case VIR_BACKEND_ARTIFACT_SDF: ext = "sdf"; break;
+        case VIR_BACKEND_ARTIFACT_GLSL: ext = "glsl"; break;
+    }
+    snprintf(out_path, max_len, "%s/v%d/%02x/%014lx.%s", repo_path, VIR_CACHE_SCHEMA_VERSION, prefix, (unsigned long)suffix, ext);
+}
+
+int vir_repository_backend_exists(const char *repo_path, uint64_t fingerprint, VirBackendArtifactKind kind) {
+    if (!repo_path) return 0;
+    char file_path[1024];
+    vir_backend_resolve_path(repo_path, fingerprint, kind, file_path, sizeof(file_path));
+    FILE *f = fopen(file_path, "rb");
+    if (!f) return 0;
+    fclose(f);
+    return 1;
+}
+
+int vir_repository_store_backend_output(const char *repo_path,
+                                        uint64_t fingerprint,
+                                        VirBackendArtifactKind kind,
+                                        const void *payload,
+                                        size_t payload_size) {
+    if (!repo_path || !payload) return 0;
+
+    char dir_path[1024];
+    uint8_t prefix = (uint8_t)((fingerprint >> 56) & 0xFF);
+    snprintf(dir_path, sizeof(dir_path), "%s/v%d/%02x", repo_path, VIR_CACHE_SCHEMA_VERSION, prefix);
+    vir_mkdir_p(dir_path);
+
+    char file_path[1024];
+    vir_backend_resolve_path(repo_path, fingerprint, kind, file_path, sizeof(file_path));
+
+    FILE *f = fopen(file_path, "wb");
+    if (!f) return 0;
+
+    size_t written = fwrite(payload, 1, payload_size, f);
+    fclose(f);
+
+    return written == payload_size ? 1 : 0;
+}
+
+void *vir_repository_load_backend_output(const char *repo_path,
+                                         uint64_t fingerprint,
+                                         VirBackendArtifactKind kind,
+                                         size_t *out_size) {
+    if (!repo_path || !out_size) return NULL;
+
+    char file_path[1024];
+    vir_backend_resolve_path(repo_path, fingerprint, kind, file_path, sizeof(file_path));
+
+    FILE *f = fopen(file_path, "rb");
+    if (!f) return NULL;
+
+    if (fseek(f, 0, SEEK_END) != 0) {
+        fclose(f);
+        return NULL;
+    }
+    long size = ftell(f);
+    if (size < 0) {
+        fclose(f);
+        return NULL;
+    }
+    if (fseek(f, 0, SEEK_SET) != 0) {
+        fclose(f);
+        return NULL;
+    }
+
+    void *buf = malloc((size_t)size + 1); /* +1 byte for safety (NUL terminator if string) */
+    if (!buf) {
+        fclose(f);
+        return NULL;
+    }
+
+    size_t read_bytes = fread(buf, 1, (size_t)size, f);
+    fclose(f);
+
+    if (read_bytes != (size_t)size) {
+        free(buf);
+        return NULL;
+    }
+
+    ((char *)buf)[size] = '\0'; /* safely terminate */
+    *out_size = (size_t)size;
+    return buf;
+}
+
+/* ── Repository Garbage Collection & Pruning (Tier 5) ─────────────────────── */
+
+#include <time.h>
+
+typedef struct {
+    char path[1024];
+    uint64_t size;
+    uint64_t time;
+} GcFileRecord;
+
+static int compare_gc_records(const void *a, const void *b) {
+    const GcFileRecord *ra = (const GcFileRecord *)a;
+    const GcFileRecord *rb = (const GcFileRecord *)b;
+    if (ra->time < rb->time) return -1;
+    if (ra->time > rb->time) return 1;
+    return 0;
+}
+
+int vir_repository_gc(const char *repo_path,
+                      uint64_t max_bytes,
+                      uint64_t max_age_seconds) {
+    if (!repo_path) return -1;
+
+    char v_dir_path[1024];
+    snprintf(v_dir_path, sizeof(v_dir_path), "%s/v%d", repo_path, VIR_CACHE_SCHEMA_VERSION);
+
+    DIR *vdir = opendir(v_dir_path);
+    if (!vdir) {
+        if (errno == ENOENT) {
+            return 0; /* Nothing to GC */
+        }
+        return -1;
+    }
+
+    size_t capacity = 32;
+    GcFileRecord *files = malloc(capacity * sizeof(GcFileRecord));
+    if (!files) {
+        closedir(vdir);
+        return -1;
+    }
+    size_t count = 0;
+    int deleted_count = 0;
+    uint64_t total_remaining_size = 0;
+    time_t now = time(NULL);
+
+    struct dirent *v_entry;
+    while ((v_entry = readdir(vdir)) != NULL) {
+        if (strcmp(v_entry->d_name, ".") == 0 || strcmp(v_entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        /* Subdirectories must be 2-hex prefixes */
+        if (strlen(v_entry->d_name) != 2) {
+            continue;
+        }
+
+        char subdir_path[1024];
+        snprintf(subdir_path, sizeof(subdir_path), "%s/%s", v_dir_path, v_entry->d_name);
+
+        struct stat sub_st;
+        if (stat(subdir_path, &sub_st) != 0 || !S_ISDIR(sub_st.st_mode)) {
+            continue;
+        }
+
+        DIR *sdir = opendir(subdir_path);
+        if (!sdir) {
+            continue;
+        }
+
+        struct dirent *s_entry;
+        while ((s_entry = readdir(sdir)) != NULL) {
+            if (strcmp(s_entry->d_name, ".") == 0 || strcmp(s_entry->d_name, "..") == 0) {
+                continue;
+            }
+
+            char file_path[1024];
+            snprintf(file_path, sizeof(file_path), "%s/%s", subdir_path, s_entry->d_name);
+
+            struct stat file_st;
+            if (stat(file_path, &file_st) != 0 || !S_ISREG(file_st.st_mode)) {
+                continue;
+            }
+
+            /* Age-based check first */
+            if (max_age_seconds > 0) {
+                uint64_t mtime = (uint64_t)file_st.st_mtime;
+                if ((uint64_t)now > mtime && ((uint64_t)now - mtime) > max_age_seconds) {
+                    if (remove(file_path) == 0) {
+                        deleted_count++;
+                    }
+                    continue;
+                }
+            }
+
+            /* Add to array */
+            if (count >= capacity) {
+                size_t new_cap = capacity * 2;
+                GcFileRecord *new_files = realloc(files, new_cap * sizeof(GcFileRecord));
+                if (!new_files) {
+                    free(files);
+                    closedir(sdir);
+                    closedir(vdir);
+                    return -1;
+                }
+                files = new_files;
+                capacity = new_cap;
+            }
+
+            GcFileRecord *rec = &files[count];
+            snprintf(rec->path, sizeof(rec->path), "%s", file_path);
+            rec->size = (uint64_t)file_st.st_size;
+
+            /* LRU key: st_atime, fallback to st_mtime if needed */
+            uint64_t atime = (uint64_t)file_st.st_atime;
+            uint64_t mtime = (uint64_t)file_st.st_mtime;
+            rec->time = (atime > mtime) ? atime : mtime;
+
+            total_remaining_size += rec->size;
+            count++;
+        }
+        closedir(sdir);
+    }
+    closedir(vdir);
+
+    /* Enforce size budget */
+    if (max_bytes > 0 && total_remaining_size > max_bytes) {
+        /* Sort files oldest first */
+        qsort(files, count, sizeof(GcFileRecord), compare_gc_records);
+
+        for (size_t i = 0; i < count; i++) {
+            if (total_remaining_size <= max_bytes) {
+                break;
+            }
+            if (remove(files[i].path) == 0) {
+                deleted_count++;
+                total_remaining_size -= files[i].size;
+            }
+        }
+    }
+
+    free(files);
+    return deleted_count;
+}
+
+int vir_repository_prune_schema(const char *repo_path, uint32_t obsolete_schema_version) {
+    if (!repo_path) return 0;
+
+    char obsolete_path[1024];
+    snprintf(obsolete_path, sizeof(obsolete_path), "%s/v%u", repo_path, obsolete_schema_version);
+
+    /* Check if directory exists first */
+    DIR *d = opendir(obsolete_path);
+    if (!d) {
+        return 1; /* Already deleted or does not exist */
+    }
+    closedir(d);
+
+    char cmd[2048];
+#ifdef _WIN32
+    /* Convert forward slashes to backslashes for cmd.exe rmdir */
+    char win_path[1024];
+    size_t i;
+    for (i = 0; obsolete_path[i] && i < sizeof(win_path) - 1; i++) {
+        if (obsolete_path[i] == '/') win_path[i] = '\\';
+        else win_path[i] = obsolete_path[i];
+    }
+    win_path[i] = '\0';
+    snprintf(cmd, sizeof(cmd), "rmdir /s /q \"%s\"", win_path);
+#else
+    snprintf(cmd, sizeof(cmd), "rm -rf \"%s\"", obsolete_path);
+#endif
+
+    return system(cmd) == 0 ? 1 : 0;
+}
+
 
 

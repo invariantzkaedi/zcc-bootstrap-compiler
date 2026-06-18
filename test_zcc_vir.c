@@ -4,6 +4,18 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <math.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <time.h>
+#include <dirent.h>
+
+#ifdef _WIN32
+#include <sys/utime.h>
+#define utimbuf _utimbuf
+#define utime _utime
+#else
+#include <utime.h>
+#endif
 
 #define EPSILON 1e-2f
 
@@ -2107,6 +2119,271 @@ static void test_vir_repository_catalog() {
     printf("[+] test_vir_repository_catalog PASSED.\n");
 }
 
+static void test_resolve_path_helper(const char *repo_path, uint64_t fingerprint, char *out_path, size_t max_len) {
+    uint8_t prefix = (uint8_t)((fingerprint >> 56) & 0xFF);
+    uint64_t suffix = fingerprint & 0x00FFFFFFFFFFFFFFULL;
+    snprintf(out_path, max_len, "%s/v%d/%02x/%014lx.vir", repo_path, VIR_CACHE_SCHEMA_VERSION, prefix, (unsigned long)suffix);
+}
+
+static void test_resolve_backend_path_helper(const char *repo_path, uint64_t fingerprint, VirBackendArtifactKind kind, char *out_path, size_t max_len) {
+    uint8_t prefix = (uint8_t)((fingerprint >> 56) & 0xFF);
+    uint64_t suffix = fingerprint & 0x00FFFFFFFFFFFFFFULL;
+    const char *ext = "";
+    switch (kind) {
+        case VIR_BACKEND_ARTIFACT_SVG: ext = "svg"; break;
+        case VIR_BACKEND_ARTIFACT_SDF: ext = "sdf"; break;
+        case VIR_BACKEND_ARTIFACT_GLSL: ext = "glsl"; break;
+    }
+    snprintf(out_path, max_len, "%s/v%d/%02x/%014lx.%s", repo_path, VIR_CACHE_SCHEMA_VERSION, prefix, (unsigned long)suffix, ext);
+}
+
+static void test_vir_backend_output_cache() {
+    printf("[*] Running test_vir_backend_output_cache...\n");
+
+    const char *repo = "./test_backend_cache_repo";
+    uint64_t fp = 0xabcdef12345678ULL;
+
+    /* Clean up any leftovers */
+#ifdef _WIN32
+    system("rmdir /s /q test_backend_cache_repo 2>nul");
+#else
+    system("rm -rf ./test_backend_cache_repo");
+#endif
+
+    /* Check initially not exists */
+    assert(vir_repository_backend_exists(repo, fp, VIR_BACKEND_ARTIFACT_SVG) == 0);
+    assert(vir_repository_backend_exists(repo, fp, VIR_BACKEND_ARTIFACT_GLSL) == 0);
+
+    /* Test SVG Caching */
+    const char *svg_payload = "<svg><path d=\"M10 20\"/></svg>";
+    size_t svg_size = strlen(svg_payload);
+    assert(vir_repository_store_backend_output(repo, fp, VIR_BACKEND_ARTIFACT_SVG, svg_payload, svg_size) == 1);
+    assert(vir_repository_backend_exists(repo, fp, VIR_BACKEND_ARTIFACT_SVG) == 1);
+
+    size_t loaded_svg_size = 0;
+    char *loaded_svg = (char *)vir_repository_load_backend_output(repo, fp, VIR_BACKEND_ARTIFACT_SVG, &loaded_svg_size);
+    assert(loaded_svg != NULL);
+    assert(loaded_svg_size == svg_size);
+    assert(strcmp(loaded_svg, svg_payload) == 0);
+    free(loaded_svg);
+
+    /* Test GLSL Caching */
+    const char *glsl_payload = "void main() { gl_FragColor = vec4(1.0); }";
+    size_t glsl_size = strlen(glsl_payload);
+    assert(vir_repository_store_backend_output(repo, fp, VIR_BACKEND_ARTIFACT_GLSL, glsl_payload, glsl_size) == 1);
+    assert(vir_repository_backend_exists(repo, fp, VIR_BACKEND_ARTIFACT_GLSL) == 1);
+
+    size_t loaded_glsl_size = 0;
+    char *loaded_glsl = (char *)vir_repository_load_backend_output(repo, fp, VIR_BACKEND_ARTIFACT_GLSL, &loaded_glsl_size);
+    assert(loaded_glsl != NULL);
+    assert(loaded_glsl_size == glsl_size);
+    assert(strcmp(loaded_glsl, glsl_payload) == 0);
+    free(loaded_glsl);
+
+    /* Test SDF Caching with generic binary data */
+    const unsigned char sdf_payload[] = { 0x01, 0x02, 0x00, 0xff, 0xaa, 0x55 };
+    size_t sdf_size = sizeof(sdf_payload);
+    assert(vir_repository_store_backend_output(repo, fp, VIR_BACKEND_ARTIFACT_SDF, sdf_payload, sdf_size) == 1);
+    assert(vir_repository_backend_exists(repo, fp, VIR_BACKEND_ARTIFACT_SDF) == 1);
+
+    size_t loaded_sdf_size = 0;
+    unsigned char *loaded_sdf = (unsigned char *)vir_repository_load_backend_output(repo, fp, VIR_BACKEND_ARTIFACT_SDF, &loaded_sdf_size);
+    assert(loaded_sdf != NULL);
+    assert(loaded_sdf_size == sdf_size);
+    assert(memcmp(loaded_sdf, sdf_payload, sdf_size) == 0);
+    free(loaded_sdf);
+
+    /* Clean up */
+#ifdef _WIN32
+    system("rmdir /s /q test_backend_cache_repo 2>nul");
+#else
+    system("rm -rf ./test_backend_cache_repo");
+#endif
+
+    printf("[+] test_vir_backend_output_cache PASSED.\n");
+}
+
+static void test_vir_repository_gc_and_lifecycle() {
+    printf("[*] Running test_vir_repository_gc_and_lifecycle...\n");
+
+#ifdef _WIN32
+    const char *repo = "./test_gc_lifecycle_repo";
+    system("rmdir /s /q test_gc_lifecycle_repo 2>nul");
+#else
+    const char *repo = "/tmp/test_gc_lifecycle_repo";
+    system("rm -rf /tmp/test_gc_lifecycle_repo");
+#endif
+
+    /* Construct 3 distinct paths to write to repository */
+    VirPath *path1 = vir_path_create();
+    assert(vir_path_add_move_to(path1, 10.0f, 20.0f) == 1);
+    assert(vir_path_add_line_to(path1, 30.0f, 40.0f) == 1);
+    assert(vir_path_add_close(path1) == 1);
+    path1->state_flags = VIR_STATE_LOCALIZED;
+
+    VirPath *path2 = vir_path_create();
+    assert(vir_path_add_move_to(path2, 50.0f, 60.0f) == 1);
+    assert(vir_path_add_line_to(path2, 70.0f, 80.0f) == 1);
+    assert(vir_path_add_close(path2) == 1);
+    path2->state_flags = VIR_STATE_LOCALIZED;
+
+    VirPath *path3 = vir_path_create();
+    assert(vir_path_add_move_to(path3, 100.0f, 110.0f) == 1);
+    assert(vir_path_add_line_to(path3, 120.0f, 130.0f) == 1);
+    assert(vir_path_add_close(path3) == 1);
+    path3->state_flags = VIR_STATE_LOCALIZED;
+
+    uint64_t fp1 = vir_path_canonical_fingerprint(path1, 1e-3f);
+    uint64_t fp2 = vir_path_canonical_fingerprint(path2, 1e-3f);
+    uint64_t fp3 = vir_path_canonical_fingerprint(path3, 1e-3f);
+
+    /* Store all 3 paths */
+    assert(vir_repository_store(repo, path1) == 1);
+    assert(vir_repository_store(repo, path2) == 1);
+    assert(vir_repository_store(repo, path3) == 1);
+
+    /* Store 3 backend outputs */
+    const char *payload = "dummy glsl source code";
+    size_t payload_size = strlen(payload);
+    assert(vir_repository_store_backend_output(repo, fp1, VIR_BACKEND_ARTIFACT_GLSL, payload, payload_size) == 1);
+    assert(vir_repository_store_backend_output(repo, fp2, VIR_BACKEND_ARTIFACT_GLSL, payload, payload_size) == 1);
+    assert(vir_repository_store_backend_output(repo, fp3, VIR_BACKEND_ARTIFACT_GLSL, payload, payload_size) == 1);
+
+    /* Resolve file paths to update their timestamps */
+    char p1_path[1024], p2_path[1024], p3_path[1024];
+    char b1_path[1024], b2_path[1024], b3_path[1024];
+    test_resolve_path_helper(repo, fp1, p1_path, sizeof(p1_path));
+    test_resolve_path_helper(repo, fp2, p2_path, sizeof(p2_path));
+    test_resolve_path_helper(repo, fp3, p3_path, sizeof(p3_path));
+    test_resolve_backend_path_helper(repo, fp1, VIR_BACKEND_ARTIFACT_GLSL, b1_path, sizeof(b1_path));
+    test_resolve_backend_path_helper(repo, fp2, VIR_BACKEND_ARTIFACT_GLSL, b2_path, sizeof(b2_path));
+    test_resolve_backend_path_helper(repo, fp3, VIR_BACKEND_ARTIFACT_GLSL, b3_path, sizeof(b3_path));
+
+    /* Check that all files exist */
+    assert(vir_repository_exists(repo, fp1) == 1);
+    assert(vir_repository_exists(repo, fp2) == 1);
+    assert(vir_repository_exists(repo, fp3) == 1);
+    assert(vir_repository_backend_exists(repo, fp1, VIR_BACKEND_ARTIFACT_GLSL) == 1);
+    assert(vir_repository_backend_exists(repo, fp2, VIR_BACKEND_ARTIFACT_GLSL) == 1);
+    assert(vir_repository_backend_exists(repo, fp3, VIR_BACKEND_ARTIFACT_GLSL) == 1);
+
+    time_t now = time(NULL);
+
+    /* ── Test age-based GC ──
+     * We will set the modified/accessed time of file 1 (both path and backend) to now - 100 seconds.
+     * We will call GC with max_age_seconds = 50.
+     * Both files for fp1 should be removed, while files for fp2 and fp3 should remain. */
+    struct utimbuf ut;
+    ut.actime = now - 100;
+    ut.modtime = now - 100;
+    assert(utime(p1_path, &ut) == 0);
+    assert(utime(b1_path, &ut) == 0);
+
+    /* Make sure fp2 and fp3 have modtime == now (so they won't be age-evicted) */
+    ut.actime = now;
+    ut.modtime = now;
+    assert(utime(p2_path, &ut) == 0);
+    assert(utime(b2_path, &ut) == 0);
+    assert(utime(p3_path, &ut) == 0);
+    assert(utime(b3_path, &ut) == 0);
+
+    int gc_deleted = vir_repository_gc(repo, 0, 50);
+    assert(gc_deleted == 2); /* fp1 path and backend should be deleted */
+
+    assert(vir_repository_exists(repo, fp1) == 0);
+    assert(vir_repository_backend_exists(repo, fp1, VIR_BACKEND_ARTIFACT_GLSL) == 0);
+    assert(vir_repository_exists(repo, fp2) == 1);
+    assert(vir_repository_backend_exists(repo, fp2, VIR_BACKEND_ARTIFACT_GLSL) == 1);
+    assert(vir_repository_exists(repo, fp3) == 1);
+    assert(vir_repository_backend_exists(repo, fp3, VIR_BACKEND_ARTIFACT_GLSL) == 1);
+
+    /* ── Test LRU size budget GC ──
+     * Currently we have fp2 and fp3 files remaining.
+     * Let's set different access/modified times:
+     * - fp2 files: now - 30 seconds
+     * - fp3 files: now */
+    ut.actime = now - 30;
+    ut.modtime = now - 30;
+    assert(utime(p2_path, &ut) == 0);
+    assert(utime(b2_path, &ut) == 0);
+
+    ut.actime = now;
+    ut.modtime = now;
+    assert(utime(p3_path, &ut) == 0);
+    assert(utime(b3_path, &ut) == 0);
+
+    /* Total size of remaining repo can be measured by counting sizes of:
+     * p2_path, b2_path, p3_path, b3_path. Let's do a stat of each to get exactly what they total to. */
+    struct stat st_p2, st_b2, st_p3, st_b3;
+    assert(stat(p2_path, &st_p2) == 0);
+    assert(stat(b2_path, &st_b2) == 0);
+    assert(stat(p3_path, &st_p3) == 0);
+    assert(stat(b3_path, &st_b3) == 0);
+
+    uint64_t size_fp2 = st_p2.st_size + st_b2.st_size;
+    uint64_t size_fp3 = st_p3.st_size + st_b3.st_size;
+
+    /* If we set budget specifically to keep fp3 but delete fp2. */
+    uint64_t budget = size_fp3 + 2; /* fp3 fits, fp2 does not */
+    int gc_lru_deleted = vir_repository_gc(repo, budget, 0);
+    assert(gc_lru_deleted >= 1);
+
+    /* fp2 files should be evicted, fp3 files should remain */
+    assert(vir_repository_exists(repo, fp2) == 0);
+    assert(vir_repository_backend_exists(repo, fp2, VIR_BACKEND_ARTIFACT_GLSL) == 0);
+    assert(vir_repository_exists(repo, fp3) == 1);
+    assert(vir_repository_backend_exists(repo, fp3, VIR_BACKEND_ARTIFACT_GLSL) == 1);
+
+    /* ── Test Obsolete Schema Pruning ──
+     * We create a dummy version directory, e.g., repo/v99
+     * And write a dummy file inside it.
+     * Then we prune schema version 99. */
+    char dummy_schema_dir[1024];
+    snprintf(dummy_schema_dir, sizeof(dummy_schema_dir), "%s/v99", repo);
+#ifdef _WIN32
+    system("mkdir test_gc_lifecycle_repo\\v99 2>nul");
+#else
+    char mkdir_cmd[1024];
+    snprintf(mkdir_cmd, sizeof(mkdir_cmd), "mkdir -p %s", dummy_schema_dir);
+    system(mkdir_cmd);
+#endif
+
+    char dummy_file_path[1024];
+    snprintf(dummy_file_path, sizeof(dummy_file_path), "%s/dummy.txt", dummy_schema_dir);
+    FILE *df = fopen(dummy_file_path, "w");
+    assert(df != NULL);
+    fprintf(df, "dummy version content");
+    fclose(df);
+
+    /* Assert it exists */
+    DIR *d = opendir(dummy_schema_dir);
+    assert(d != NULL);
+    closedir(d);
+
+    /* Prune schema 99 */
+    assert(vir_repository_prune_schema(repo, 99) == 1);
+
+    /* Assert it no longer exists */
+    d = opendir(dummy_schema_dir);
+    assert(d == NULL);
+
+    /* Clean up memory */
+    vir_path_free(path1);
+    vir_path_free(path2);
+    vir_path_free(path3);
+
+    /* Clean up directory */
+#ifdef _WIN32
+    system("rmdir /s /q test_gc_lifecycle_repo 2>nul");
+#else
+    char rm_cmd[1024];
+    snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf %s", repo);
+    system(rm_cmd);
+#endif
+
+    printf("[+] test_vir_repository_gc_and_lifecycle PASSED.\n");
+}
+
 int main() {
     setbuf(stdout, NULL);
     printf("=== ZCC Vector IR (VIR) Test Harness ===\n");
@@ -2142,6 +2419,8 @@ int main() {
     test_vir_artifact_blob();
     test_vir_repository_store();
     test_vir_repository_catalog();
+    test_vir_backend_output_cache();
+    test_vir_repository_gc_and_lifecycle();
     /* NOTE: vir_cache_shutdown() is NOT called here.
      * test_vir_compilation_caching() initialises the cache with
      * vir_cache_init() and owns the shutdown at the end of that test.

@@ -514,4 +514,51 @@ int vir_artifact_verify_integrity(const void *buffer,
                                   size_t size,
                                   float epsilon);
 
+/* ── Backend Output Cache (Tier 4) ──────────────────────────────────────────
+ * Caching and reuse of compiled backend outputs keyed by path fingerprint.  */
+
+typedef enum {
+    VIR_BACKEND_ARTIFACT_SVG,
+    VIR_BACKEND_ARTIFACT_SDF,
+    VIR_BACKEND_ARTIFACT_GLSL
+} VirBackendArtifactKind;
+
+/* Check if a backend artifact exists in the repository.
+ * Returns 1 if present; 0 otherwise.                                       */
+int vir_repository_backend_exists(const char *repo_path,
+                                  uint64_t fingerprint,
+                                  VirBackendArtifactKind kind);
+
+/* Store a compiled backend output payload.
+ * Returns 1 on success; 0 on failure.                                      */
+int vir_repository_store_backend_output(const char *repo_path,
+                                        uint64_t fingerprint,
+                                        VirBackendArtifactKind kind,
+                                        const void *payload,
+                                        size_t payload_size);
+
+/* Load a compiled backend output payload.
+ * The returned buffer is malloc-owned; caller must free().
+ * Returns a pointer to the buffer on success; NULL on miss or failure.     */
+void *vir_repository_load_backend_output(const char *repo_path,
+                                         uint64_t fingerprint,
+                                         VirBackendArtifactKind kind,
+                                         size_t *out_size);
+
+/* ── Repository Garbage Collection & Pruning (Tier 5) ───────────────────────
+ * Managed lifecycle controls to prevent infinite growth.                   */
+
+/* Perform garbage collection on the active repository schema folder.
+ * Deletes files older than max_age_seconds (if > 0).
+ * Enforces max_bytes budget by evicting oldest accessed files (LRU).
+ * Returns the count of pruned files on success; -1 on system failure.      */
+int vir_repository_gc(const char *repo_path,
+                      uint64_t max_bytes,
+                      uint64_t max_age_seconds);
+
+/* Recursively prune/delete an obsolete schema version folder.
+ * Returns 1 on success; 0 on failure.                                      */
+int vir_repository_prune_schema(const char *repo_path,
+                                uint32_t obsolete_schema_version);
+
 #endif
