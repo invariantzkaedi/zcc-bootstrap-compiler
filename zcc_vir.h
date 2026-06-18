@@ -29,6 +29,7 @@ typedef struct {
     size_t capacity;
     VirMetadata metadata;
     int bounds_valid;
+    uint32_t state_flags;
     float min_x;
     float min_y;
     float max_x;
@@ -58,6 +59,14 @@ typedef struct {
 } SdfBounds;
 
 typedef enum {
+    VIR_STATE_CLEAN             = 0,
+    VIR_STATE_DEGENERATE_FREE   = 1 << 0,
+    VIR_STATE_ARCS_EXPANDED     = 1 << 1,
+    VIR_STATE_CANONICALIZED     = 1 << 2,
+    VIR_STATE_BOUNDS_VALID      = 1 << 3
+} VirPathStateFlags;
+
+typedef enum {
     VIR_PASS_OK,
     VIR_PASS_NO_CHANGE,
     VIR_PASS_ERROR
@@ -77,6 +86,9 @@ typedef struct {
     uint64_t runs;
     uint64_t mutations;
     uint64_t failures;
+    uint32_t required_state;
+    uint32_t produced_state;
+    uint32_t invalidated_state;
 } VirPassDescriptor;
 
 typedef struct {
@@ -167,6 +179,15 @@ int vir_run_pipeline_until_stable(
     size_t pass_count,
     VirPipelineStats *stats,
     size_t max_iterations
+);
+
+int vir_run_pipeline_with_deps(
+    VirPath *path,
+    VirPassDescriptor *registry,
+    size_t registry_count,
+    const VirPass *passes,
+    size_t pass_count,
+    VirPipelineStats *stats
 );
 
 #endif

@@ -52,6 +52,7 @@ static int zcc_is_valid_coord(double v) {
 void vir_path_invalidate_bounds(VirPath *path) {
     if (path) {
         path->bounds_valid = 0;
+        path->state_flags &= ~VIR_STATE_BOUNDS_VALID;
         path->min_x = 0.0f;
         path->min_y = 0.0f;
         path->max_x = 0.0f;
@@ -263,6 +264,7 @@ void vir_path_compute_bounds(const VirPath *path, float *min_x, float *min_y, fl
     mutable_path->max_x = final_max_x;
     mutable_path->max_y = final_max_y;
     mutable_path->bounds_valid = 1;
+    mutable_path->state_flags |= VIR_STATE_BOUNDS_VALID;
 
     *min_x = final_min_x;
     *min_y = final_min_y;
@@ -1152,7 +1154,7 @@ VirPassResult vir_path_canonicalize(VirPath *path) {
 
 VirPassResult vir_path_compute_bounds_pass(VirPath *path) {
     if (!path) return VIR_PASS_ERROR;
-    if (path->bounds_valid) return VIR_PASS_NO_CHANGE;
+    if (path->bounds_valid && (path->state_flags & VIR_STATE_BOUNDS_VALID)) return VIR_PASS_NO_CHANGE;
     float min_x, min_y, max_x, max_y;
     vir_path_compute_bounds(path, &min_x, &min_y, &max_x, &max_y);
     return VIR_PASS_OK;
@@ -1195,10 +1197,14 @@ static const char* vir_pass_result_to_str(VirPassResult res) {
 }
 
 static VirPassDescriptor default_registry[] = {
-    { VIR_PASS_DEGENERATE, "degenerate", vir_path_optimize_degenerate, 0, 0, 0 },
-    { VIR_PASS_EXPAND_ARCS, "expand_arcs", vir_path_expand_arcs, 0, 0, 0 },
-    { VIR_PASS_COMPUTE_BOUNDS, "bounds", vir_path_compute_bounds_pass, 0, 0, 0 },
-    { VIR_PASS_CANONICALIZE, "canonicalize", vir_path_canonicalize, 0, 0, 0 }
+    { VIR_PASS_DEGENERATE, "degenerate", vir_path_optimize_degenerate, 0, 0, 0,
+      VIR_STATE_CLEAN, VIR_STATE_DEGENERATE_FREE, VIR_STATE_BOUNDS_VALID | VIR_STATE_CANONICALIZED },
+    { VIR_PASS_EXPAND_ARCS, "expand_arcs", vir_path_expand_arcs, 0, 0, 0,
+      VIR_STATE_CLEAN, VIR_STATE_ARCS_EXPANDED, VIR_STATE_BOUNDS_VALID | VIR_STATE_CANONICALIZED },
+    { VIR_PASS_COMPUTE_BOUNDS, "bounds", vir_path_compute_bounds_pass, 0, 0, 0,
+      VIR_STATE_CLEAN, VIR_STATE_BOUNDS_VALID, 0 },
+    { VIR_PASS_CANONICALIZE, "canonicalize", vir_path_canonicalize, 0, 0, 0,
+      VIR_STATE_ARCS_EXPANDED, VIR_STATE_CANONICALIZED, VIR_STATE_BOUNDS_VALID }
 };
 
 VirPassDescriptor* vir_pipeline_get_default_registry(size_t *out_count) {
@@ -1349,4 +1355,133 @@ int vir_run_pipeline_until_stable(
 
     printf("\nFailed to converge within limit of %zu iterations.\n", max_iterations);
     return 0;
+}
+
+static int schedule_and_run_pass(
+    VirPath *path,
+    VirPassDescriptor *registry,
+    size_t registry_count,
+    VirPass requested,
+    VirPipelineStats *stats,
+    int *visited
+) {
+    size_t pass_index = (size_t)-1;
+    for (size_t i = 0; i < registry_count; i++) {
+        if (registry[i].pass_id == requested) {
+            pass_index = i;
+            break;
+        }
+    }
+    if (pass_index == (size_t)-1) {
+        printf("Pass not found in registry: %d\n", requested);
+        return 0;
+    }
+
+    if (visited[pass_index]) {
+        printf("Circular dependency detected for pass %d!\n", requested);
+        return 0;
+    }
+    visited[pass_index] = 1;
+
+    VirPassDescriptor *desc = &registry[pass_index];
+
+    // Check if the produced_state flags are already fully satisfied.
+    if (desc->produced_state != 0 && (path->state_flags & desc->produced_state) == desc->produced_state) {
+        printf("%-25sSKIPPED (already satisfied)\n", desc->name);
+        stats->no_change++;
+        visited[pass_index] = 0;
+        return 1;
+    }
+
+    // Resolve required prerequisites recursively
+    if (desc->required_state != 0) {
+        uint32_t missing = desc->required_state & ~path->state_flags;
+        if (missing != 0) {
+            for (size_t flag_bit = 0; flag_bit < 32; flag_bit++) {
+                uint32_t flag = 1U << flag_bit;
+                if (missing & flag) {
+                    VirPassDescriptor *provider = NULL;
+                    for (size_t j = 0; j < registry_count; j++) {
+                        if (registry[j].produced_state & flag) {
+                            provider = &registry[j];
+                            break;
+                        }
+                    }
+                    if (provider) {
+                        if (!schedule_and_run_pass(path, registry, registry_count, provider->pass_id, stats, visited)) {
+                            visited[pass_index] = 0;
+                            return 0;
+                        }
+                    } else {
+                        printf("No provider pass found for state flag 0x%X required by %s!\n", flag, desc->name);
+                        visited[pass_index] = 0;
+                        return 0;
+                    }
+                }
+            }
+        }
+    }
+
+    // Execute the pass
+    desc->runs++;
+    stats->total_passes++;
+
+    VirPassResult res = desc->run(path);
+    printf("%-25s%s\n", desc->name, vir_pass_result_to_str(res));
+
+    if (res == VIR_PASS_OK) {
+        desc->mutations++;
+        stats->mutations++;
+        path->state_flags &= ~desc->invalidated_state;
+        path->state_flags |= desc->produced_state;
+    } else if (res == VIR_PASS_NO_CHANGE) {
+        stats->no_change++;
+        path->state_flags |= desc->produced_state;
+    } else if (res == VIR_PASS_ERROR) {
+        desc->failures++;
+        stats->failures++;
+        visited[pass_index] = 0;
+        return 0;
+    }
+
+    visited[pass_index] = 0;
+    return 1;
+}
+
+int vir_run_pipeline_with_deps(
+    VirPath *path,
+    VirPassDescriptor *registry,
+    size_t registry_count,
+    const VirPass *passes,
+    size_t pass_count,
+    VirPipelineStats *stats
+) {
+    if (!path || !registry || !passes || !stats) return 0;
+
+    memset(stats, 0, sizeof(VirPipelineStats));
+
+    int *visited = (int*)calloc(registry_count, sizeof(int));
+    if (!visited) return 0;
+
+    printf("\nPipeline Execution (with dependencies)\n\n");
+    printf("%-25sResult\n", "Pass");
+    printf("------------------------------------------\n");
+
+    for (size_t i = 0; i < pass_count; i++) {
+        if (!schedule_and_run_pass(path, registry, registry_count, passes[i], stats, visited)) {
+            free(visited);
+            printf("\nMutations: %llu\nFailures : %llu\n",
+                (unsigned long long)stats->mutations,
+                (unsigned long long)stats->failures);
+            return 0;
+        }
+    }
+
+    free(visited);
+
+    printf("\nMutations: %llu\nFailures : %llu\n",
+        (unsigned long long)stats->mutations,
+        (unsigned long long)stats->failures);
+
+    return 1;
 }

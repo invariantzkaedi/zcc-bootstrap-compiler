@@ -640,6 +640,143 @@ static void test_vir_fixed_point_pipeline() {
     printf("[+] test_vir_fixed_point_pipeline PASSED.\n");
 }
 
+static void test_vir_pass_dependency_graph() {
+    printf("[*] Running test_vir_pass_dependency_graph...\n");
+
+    size_t registry_count = 0;
+    VirPassDescriptor *registry = vir_pipeline_get_default_registry(&registry_count);
+    assert(registry != NULL);
+    assert(registry_count == 4);
+
+    // 1. Prerequisite Auto-scheduling:
+    // canonicalize requires ARCS_EXPANDED.
+    // If we run canonicalize on a path with arcs, it should auto-schedule expand_arcs.
+    {
+        VirPath *path = vir_path_create();
+        ZccSvgError err = {0};
+        ZccSvgStatus st = zcc_svg_parse_to_vir("M 0 0 L 10 10 A 50 50 0 0 1 50 50", path, &err);
+        assert(st == ZCC_SVG_OK);
+        assert(path->state_flags == 0);
+
+        vir_pipeline_reset_telemetry(registry, registry_count);
+
+        VirPass passes[] = { VIR_PASS_CANONICALIZE };
+        VirPipelineStats stats = {0};
+        int res = vir_run_pipeline_with_deps(path, registry, registry_count, passes, 1, &stats);
+        assert(res == 1);
+
+        // expand_arcs must run and mutate (1 runs, 1 mutations)
+        assert(registry[1].runs == 1);
+        assert(registry[1].mutations == 1);
+
+        // canonicalize must run and mutate (1 runs, 1 mutations)
+        assert(registry[3].runs == 1);
+        assert(registry[3].mutations == 1);
+
+        assert(stats.total_passes == 2);
+        assert(stats.mutations == 2);
+        assert(path->state_flags & VIR_STATE_ARCS_EXPANDED);
+        assert(path->state_flags & VIR_STATE_CANONICALIZED);
+
+        vir_path_free(path);
+    }
+
+    // 2. Redundancy Pruning (skipping already satisfied states):
+    // If we run bounds twice, the second execution should be skipped.
+    {
+        VirPath *path = vir_path_create();
+        ZccSvgError err = {0};
+        ZccSvgStatus st = zcc_svg_parse_to_vir("M 0 0 L 10 10", path, &err);
+        assert(st == ZCC_SVG_OK);
+
+        vir_pipeline_reset_telemetry(registry, registry_count);
+
+        VirPass passes[] = { VIR_PASS_COMPUTE_BOUNDS };
+        VirPipelineStats stats1 = {0};
+        int res1 = vir_run_pipeline_with_deps(path, registry, registry_count, passes, 1, &stats1);
+        assert(res1 == 1);
+        assert(stats1.total_passes == 1);
+        assert(stats1.mutations == 1);
+        assert(registry[2].runs == 1);
+
+        // Second run
+        VirPipelineStats stats2 = {0};
+        int res2 = vir_run_pipeline_with_deps(path, registry, registry_count, passes, 1, &stats2);
+        assert(res2 == 1);
+        // Should skip the pass entirely
+        assert(stats2.total_passes == 0);
+        assert(stats2.no_change == 1);
+        // registry runs count should remain 1
+        assert(registry[2].runs == 1);
+
+        vir_path_free(path);
+    }
+
+    // 3. Invalidation Propagation:
+    // degenerate invalidates BOUNDS_VALID.
+    // If we compute bounds, degenerate (with a change), and then bounds, it should recompute bounds.
+    {
+        VirPath *path = vir_path_create();
+        ZccSvgError err = {0};
+        ZccSvgStatus st = zcc_svg_parse_to_vir("M 0 0 L 0 0 L 10 10", path, &err);
+        assert(st == ZCC_SVG_OK);
+
+        vir_pipeline_reset_telemetry(registry, registry_count);
+
+        // Run bounds first
+        VirPass passes_b[] = { VIR_PASS_COMPUTE_BOUNDS };
+        VirPipelineStats stats_b1 = {0};
+        vir_run_pipeline_with_deps(path, registry, registry_count, passes_b, 1, &stats_b1);
+        assert(path->state_flags & VIR_STATE_BOUNDS_VALID);
+
+        // Run degenerate, which mutates the path (removes L 0 0) and invalidates BOUNDS_VALID
+        VirPass passes_d[] = { VIR_PASS_DEGENERATE };
+        VirPipelineStats stats_d = {0};
+        vir_run_pipeline_with_deps(path, registry, registry_count, passes_d, 1, &stats_d);
+        assert(stats_d.mutations == 1);
+        assert(!(path->state_flags & VIR_STATE_BOUNDS_VALID));
+
+        // Run bounds again, it should execute again because BOUNDS_VALID was invalidated
+        VirPipelineStats stats_b2 = {0};
+        vir_run_pipeline_with_deps(path, registry, registry_count, passes_b, 1, &stats_b2);
+        assert(stats_b2.total_passes == 1);
+        assert(stats_b2.mutations == 1);
+        assert(path->state_flags & VIR_STATE_BOUNDS_VALID);
+
+        vir_path_free(path);
+    }
+
+    // 4. State Convergence:
+    // Run degenerate, expand_arcs, canonicalize, bounds.
+    // The final state flags should converge to all four.
+    {
+        VirPath *path = vir_path_create();
+        ZccSvgError err = {0};
+        ZccSvgStatus st = zcc_svg_parse_to_vir("M 0 0 L 0 0 A 50 50 0 0 1 50 50 Z", path, &err);
+        assert(st == ZCC_SVG_OK);
+
+        vir_pipeline_reset_telemetry(registry, registry_count);
+
+        VirPass passes[] = {
+            VIR_PASS_DEGENERATE,
+            VIR_PASS_EXPAND_ARCS,
+            VIR_PASS_CANONICALIZE,
+            VIR_PASS_COMPUTE_BOUNDS
+        };
+
+        VirPipelineStats stats = {0};
+        int res = vir_run_pipeline_with_deps(path, registry, registry_count, passes, 4, &stats);
+        assert(res == 1);
+
+        uint32_t expected = VIR_STATE_DEGENERATE_FREE | VIR_STATE_ARCS_EXPANDED | VIR_STATE_CANONICALIZED | VIR_STATE_BOUNDS_VALID;
+        assert(path->state_flags == expected);
+
+        vir_path_free(path);
+    }
+
+    printf("[+] test_vir_pass_dependency_graph PASSED.\n");
+}
+
 int main() {
     printf("=== ZCC Vector IR (VIR) Test Harness ===\n");
     test_vir_path_creation_and_growth();
@@ -655,6 +792,7 @@ int main() {
     test_vir_pass_manager();
     test_vir_pipeline_telemetry();
     test_vir_fixed_point_pipeline();
+    test_vir_pass_dependency_graph();
     printf("777JACKPOT777 — ALL VIR CORE TESTS GREEN.\n");
     return 0;
 }
