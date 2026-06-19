@@ -46,6 +46,14 @@ static bool zcc_is_const_expr(Node *n) {
         case ND_LNOT:
         case ND_CAST:
             return zcc_is_const_expr(n->lhs);
+        case ND_MEMBER:
+            /* member_offset is precomputed at parse time from struct layout.
+             * Recognizing ND_MEMBER as const enables the classic offsetof(T,f)
+             * macro pattern: ((unsigned long)&(((T*)0)->f)) → const. */
+            return true;
+        case ND_SIZEOF:
+            /* sizeof is always a compile-time integer constant. */
+            return true;
         default:
             return false;
     }

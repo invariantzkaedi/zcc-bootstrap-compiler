@@ -1174,6 +1174,29 @@ static long long eval_const_expr_raw(Node *n) {
     /* Enum constants (global only — local vars are NOT constants) */
     if (n->kind == ND_VAR && n->sym && n->sym->is_enum_const && !n->sym->is_local)
         return n->sym->enum_val;
+    /* offsetof macro constant folding (PARSER-OFFSETOF-001)
+     * The traditional offsetof(T,f) macro expands to:
+     *   ((unsigned long) & (((T*)0)->f))
+     * which parses as:
+     *   ND_CAST(ND_ADDR(ND_MEMBER(ND_DEREF(ND_CAST(T*, ND_NUM(0))), member_offset)))
+     *
+     * Since member_offset is precomputed by recompute_struct_layout and stored
+     * directly on the ND_MEMBER node, fold:
+     *   ND_MEMBER                → n->member_offset  (address relative to base)
+     *   ND_ADDR(ND_MEMBER)       → n->lhs->member_offset
+     *   ND_ADDR(ND_DEREF(x))     → eval(x)  (addr-of-deref cancels out)
+     *   ND_DEREF(...)            → eval inner (address through null ptr = offset)
+     */
+    if (n->kind == ND_MEMBER)
+        return (long long)n->member_offset;
+    if (n->kind == ND_ADDR) {
+        if (n->lhs && n->lhs->kind == ND_MEMBER)
+            return (long long)n->lhs->member_offset;
+        if (n->lhs && n->lhs->kind == ND_DEREF)
+            return eval_const_expr(n->lhs->lhs); /* &(*p) == p */
+    }
+    if (n->kind == ND_DEREF)
+        return eval_const_expr(n->lhs); /* *(base+offset) folded through null-ptr */
     return 0; /* Fallback for unsupported complex compile-time bounds */
 }
 
@@ -3131,7 +3154,7 @@ Node *parse_stmt_internal(Compiler *cc) {
         extern void zcc_handle_static_assert(Node *condition, const char *message, int loc);
         next_token(cc);
         expect(cc, TK_LPAREN);
-        Node *cond = parse_expr(cc);
+        Node *cond = parse_assign(cc);
         expect(cc, TK_COMMA);
         char *msg = 0;
         if (cc->tk == TK_STR) {
@@ -4089,7 +4112,7 @@ Node *parse_program(Compiler *cc) {
             extern void zcc_handle_static_assert(Node *condition, const char *message, int loc);
             next_token(cc);
             expect(cc, TK_LPAREN);
-            Node *cond = parse_expr(cc);
+            Node *cond = parse_assign(cc);
             expect(cc, TK_COMMA);
             char *msg = 0;
             if (cc->tk == TK_STR) {

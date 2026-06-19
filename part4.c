@@ -316,9 +316,9 @@ void classify_aggregate(Type *agg, abi_class_t eb[2]) {
         return;
     }
 
-    /* SysV §3.2.3 step 1: unaligned aggregates (straddling boundary) go to MEMORY.
-     * ZCC currently does not support __attribute__((packed)) straddling boundaries,
-     * so we let the per-field classification handle the aggregate correctly. */
+    /* SysV §3.2.3 step 1: aggregates with unaligned fields classify as MEMORY.
+     * Packed straddling fields are handled by classify_field(): if a field's
+     * offset violates its natural alignment, the full aggregate is forced MEMORY. */
 
     if (agg->kind == TY_STRUCT || agg->kind == TY_UNION) {
         StructField *f;
