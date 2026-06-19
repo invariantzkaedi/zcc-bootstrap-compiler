@@ -2663,7 +2663,18 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (is_zcc_c || is_out_s) {
+    int has_trace_abi = 0;
+    int has_emit_gguf = 0;
+    for (i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--trace-abi") == 0) {
+            has_trace_abi = 1;
+        }
+        if (strcmp(argv[i], "--emit-gguf") == 0) {
+            has_emit_gguf = 1;
+        }
+    }
+
+    if (is_zcc_c || is_out_s || has_trace_abi || has_emit_gguf) {
         return zcc_main(argc, argv);
     }
 

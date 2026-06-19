@@ -1270,6 +1270,7 @@ int zcc_main(int argc, char **argv) {
   int oracle_determinism_mode = 0;
   int oracle_selfhost_mode = 0;
   int oracle_stack_mode = 0;
+  int trace_abi_mode = 0;
   char *g_emit_ir_graph_path = NULL;
   char *g_emit_ir_pre_path = NULL;
   int g_free_emit_ir_pre_path = 0;
@@ -1406,6 +1407,8 @@ int zcc_main(int argc, char **argv) {
       oracle_selfhost_mode = 1;
     } else if (strcmp(argv[i], "--oracle-stack") == 0) {
       oracle_stack_mode = 1;
+    } else if (strcmp(argv[i], "--trace-abi") == 0) {
+      trace_abi_mode = 1;
     } else if (strcmp(argv[i], "--telemetry") == 0) {
       enable_telemetry_stdout = 1;
     } else if (strcmp(argv[i], "--emit-ir-graph") == 0) {
@@ -1606,10 +1609,10 @@ int zcc_main(int argc, char **argv) {
   }
 
   if (g_run_zld) {
-    extern int zld_link(const char **obj_files, int obj_count, const char *out_path, const char *script_path);
+    extern int zld_link(const char **obj_files, int obj_count, const char *out_path, const char *script_path, const char *tensor_attest_bin_path, const char *tensor_note_json_path);
     if (!output_file) output_file = "zkernel.elf";
     if (!g_zld_script) g_zld_script = "linker.ld";
-    return zld_link(g_zld_objs, g_zld_obj_count, output_file, g_zld_script);
+    return zld_link(g_zld_objs, g_zld_obj_count, output_file, g_zld_script, NULL, NULL);
   }
 
   /* Stderr policy: open by default, --quiet silences.
@@ -1959,7 +1962,7 @@ int zcc_main(int argc, char **argv) {
   }
 
   /* lex first token */
-  if (!enable_telemetry_stdout) printf("[Phase 1] Lexical Array Bootstrap... OK\n");
+  if (!enable_telemetry_stdout && !trace_abi_mode) printf("[Phase 1] Lexical Array Bootstrap... OK\n");
   long p1_start = clock();
   next_token(cc);
   long p1_end = clock();
@@ -1969,7 +1972,7 @@ int zcc_main(int argc, char **argv) {
   zcc_oracle_log_pass("lexer", "_global", (double)(p1_end - p1_start) * 1000.0 / CLOCKS_PER_SEC, 0, 0, 0, 0);
 
   /* parse */
-  if (!enable_telemetry_stdout) printf("[Phase 2] AST Topological Generation... ");
+  if (!enable_telemetry_stdout && !trace_abi_mode) printf("[Phase 2] AST Topological Generation... ");
   long p2_start = clock();
   prog = parse_program(cc);
   long p2_end = clock();
@@ -1984,8 +1987,8 @@ int zcc_main(int argc, char **argv) {
   zcc_oracle_log_sentinel(10, 10, 2, 16, 8, 4096);
 
   if (cc->errors > 0) {
-    if (!enable_telemetry_stdout) printf("\033[0;31mFAILED\033[0m\n");
-    if (!enable_telemetry_stdout) printf("zcc: %d error(s)\n", cc->errors);
+    if (!enable_telemetry_stdout && !trace_abi_mode) printf("\033[0;31mFAILED\033[0m\n");
+    if (!enable_telemetry_stdout && !trace_abi_mode) printf("zcc: %d error(s)\n", cc->errors);
     fclose(cc->out);
     free(source);
     free(cc);
@@ -1993,7 +1996,7 @@ int zcc_main(int argc, char **argv) {
     return 1;
   }
 
-  if (!enable_telemetry_stdout) printf("OK\n");
+  if (!enable_telemetry_stdout && !trace_abi_mode) printf("OK\n");
 
   if (g_emit_gguf) {
     extern int zcc_emit_gguf(void *cc, const char *out_path, int quantize_type);
@@ -2007,6 +2010,15 @@ int zcc_main(int argc, char **argv) {
 
   if (oracle_abi_mode) {
     run_oracle_abi(cc, prog);
+    fclose(cc->out);
+    free(source);
+    free(cc);
+    ir_telem_shutdown();
+    return 0;
+  }
+  if (trace_abi_mode) {
+    extern void run_abi_trace(void *cc, void *prog);
+    run_abi_trace(cc, prog);
     fclose(cc->out);
     free(source);
     free(cc);

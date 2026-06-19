@@ -21,6 +21,8 @@
 #include <stdint.h>
 
 static int g_verbose = 0;
+static uint8_t *g_attest_data = NULL;
+static size_t   g_attest_sz = 0;
 
 /* ── ELF-64 structures (inline — no elf.h dependency) ─────────────────── */
 
@@ -39,6 +41,7 @@ static int g_verbose = 0;
 #define SHT_SYMTAB   2
 #define SHT_STRTAB   3
 #define SHT_RELA     4
+#define SHT_NOTE     7
 #define SHT_NOBITS   8  /* BSS */
 #define SHF_ALLOC    0x2
 #define SHF_EXECINSTR 0x4
@@ -204,7 +207,7 @@ static uint64_t  g_entry = 0;
 static char      g_entry_name[64] = "_start";
 static char      g_output[256] = "a.out";
 
-static OutSection g_out[8];  /* .text .rodata .data .bss */
+static OutSection g_out[32];  /* .text .rodata .data .bss */
 static int        g_nout = 0;
 
 typedef struct {
@@ -246,6 +249,12 @@ static void *xrealloc(void *ptr, size_t sz) {
 
 static void cleanup_linker_state(void) {
     int i;
+    if (g_attest_data) {
+        free(g_attest_data);
+        g_attest_data = NULL;
+    }
+    g_attest_sz = 0;
+
     if (g_objs) {
         for (i = 0; i < g_nobj; i++) {
             if (g_objs[i].data) {
@@ -689,7 +698,7 @@ static OutSection *get_out_section(const char *name, uint64_t flags) {
             return &g_out[i];
         }
     }
-    if (g_nout >= 8) die("too many output sections");
+    if (g_nout >= 32) die("too many output sections");
     OutSection *s = &g_out[g_nout++];
     memset(s, 0, sizeof(*s));
     strncpy(s->name, name, sizeof(s->name)-1);
@@ -722,12 +731,15 @@ static const char *match_section(const char *secname, int is_common) {
             return g_rules[i].out_name;
     }
     /* fallback: hardcoded defaults */
+    if (strcmp(secname, ".note.zcc.tensor") == 0) return ".note.zcc.tensor";
+    if (strcmp(secname, ".zcc_tensor_attest") == 0) return ".zcc_tensor_attest";
     if (strncmp(secname, ".text", 5) == 0 || strncmp(secname, ".multiboot", 10) == 0)
         return ".text";
     if (strncmp(secname, ".rodata", 7) == 0) return ".rodata";
     if (strncmp(secname, ".note", 5) == 0)   return ".note";
     if (strncmp(secname, ".data", 5) == 0)   return ".data";
     if (strncmp(secname, ".bss", 4) == 0 || is_common) return ".bss";
+    if (strncmp(secname, ".debug_", 7) == 0) return secname;
     return NULL; /* discard */
 }
 
@@ -745,7 +757,7 @@ static GlobalSym *add_sym(const char *name);
 
 /* ── Layout pass: assign VMAs to all input sections ─────────────────────── */
 static void layout(void) {
-    static const char *out_order[] = { ".text", ".rodata", ".note", ".data", ".bss", NULL };
+    static const char *out_order[] = { ".text", ".rodata", ".note", ".note.zcc.tensor", ".zcc_tensor_attest", ".data", ".bss", NULL };
     int oi;
     int max_shnum = 0;
     int i;
@@ -926,8 +938,116 @@ static void layout(void) {
             out->vma = original_base;
             out->lma = original_base;
             out->size = cursor - original_base;
+
+            if (strcmp(oname, ".note.zcc.tensor") == 0 && g_attest_data) {
+                cursor = ALIGN_UP(cursor, 4);
+                out->vma = cursor;
+                out->lma = cursor;
+                out->align = 4;
+                cursor += 88;
+                out->size = 88;
+            }
+            if (strcmp(oname, ".zcc_tensor_attest") == 0 && g_attest_data) {
+                cursor = ALIGN_UP(cursor, 32);
+                out->vma = cursor;
+                out->lma = cursor;
+                out->align = 32;
+                cursor += g_attest_sz;
+                out->size = g_attest_sz;
+            }
         }
     }
+
+    /* 3. Collect and lay out non-alloc sections (debug sections, etc.) */
+    {
+        char debug_secs[32][64];
+        int debug_sec_cnt = 0;
+        int k, dbg_obj_i;
+
+        for (dbg_obj_i = 0; dbg_obj_i < g_nobj; dbg_obj_i++) {
+            ObjFile *o = &g_objs[dbg_obj_i];
+            uint32_t si;
+            for (si = 0; si < o->ehdr->e_shnum; si++) {
+                Elf64_Shdr *sh = &o->shdrs[si];
+                if (!(sh->sh_flags & SHF_ALLOC) && sh->sh_type != SHT_NULL) {
+                    const char *sname = sh_name(o, si);
+                    if (strncmp(sname, ".debug_", 7) == 0) {
+                        int found = 0;
+                        for (k = 0; k < debug_sec_cnt; k++) {
+                            if (strcmp(debug_secs[k], sname) == 0) {
+                                found = 1;
+                                break;
+                            }
+                        }
+                        if (!found && debug_sec_cnt < 32) {
+                            strncpy(debug_secs[debug_sec_cnt], sname, 63);
+                            debug_secs[debug_sec_cnt][63] = '\0';
+                            debug_sec_cnt++;
+                        }
+                    }
+                }
+            }
+        }
+
+        for (k = 0; k < debug_sec_cnt; k++) {
+            const char *oname = debug_secs[k];
+            uint64_t base = 0;
+            int prev_s;
+            uint64_t prev_end = 0x100000;
+            for (prev_s = 0; prev_s < g_nout; prev_s++) {
+                if (g_out[prev_s].size > 0 && g_out[prev_s].vma + g_out[prev_s].size > prev_end) {
+                    prev_end = g_out[prev_s].vma + g_out[prev_s].size;
+                }
+            }
+            OutSection *sec = get_out_section(oname, 0);
+            uint64_t sec_align = sec->align ? sec->align : 8;
+            base = ALIGN_UP(prev_end, sec_align);
+
+            {
+                uint64_t original_base = base;
+                uint64_t cursor = base;
+
+                for (dbg_obj_i = 0; dbg_obj_i < g_nobj; dbg_obj_i++) {
+                    ObjFile *o = &g_objs[dbg_obj_i];
+                    uint32_t si;
+                    for (si = 0; si < o->ehdr->e_shnum; si++) {
+                        Elf64_Shdr *sh = &o->shdrs[si];
+                        if (sh->sh_type == SHT_NULL) continue;
+                        if (laid_out[dbg_obj_i * stride + si]) continue;
+
+                        const char *sname = sh_name(o, si);
+                        if (strcmp(sname, oname) == 0) {
+                            uint64_t align = sh->sh_addralign ? sh->sh_addralign : 1;
+                            cursor = ALIGN_UP(cursor, align);
+                            o->section_vma[si] = cursor;
+                            cursor += sh->sh_size;
+                            laid_out[dbg_obj_i * stride + si] = 1;
+
+                            OutSection *out = get_out_section(oname, 0);
+                            if (out->contrib_cnt >= out->contrib_cap) {
+                                int old_cap = out->contrib_cap;
+                                out->contrib_cap = out->contrib_cap ? out->contrib_cap * 2 : 16;
+                                out->contrib = xrealloc(out->contrib, out->contrib_cap * sizeof(*out->contrib));
+                                memset(out->contrib + old_cap, 0, (out->contrib_cap - old_cap) * sizeof(*out->contrib));
+                            }
+                            out->contrib[out->contrib_cnt].obj   = dbg_obj_i;
+                            out->contrib[out->contrib_cnt].shndx = si;
+                            out->contrib[out->contrib_cnt].off   = o->section_vma[si] - original_base;
+                            out->contrib_cnt++;
+                            if (align > out->align) out->align = align;
+                        }
+                    }
+                }
+                {
+                    OutSection *out = get_out_section(oname, 0);
+                    out->vma = original_base;
+                    out->lma = original_base;
+                    out->size = cursor - original_base;
+                }
+            }
+        }
+    }
+
     free(laid_out);
 }
 
@@ -953,7 +1073,28 @@ static GlobalSym *add_sym(const char *name) {
 }
 
 static void collect_symbols(void) {
-    int oi;
+    int oi, i;
+
+    /* Pre-collect undefined __start_ and __stop_ symbols so they are registered in g_syms */
+    for (oi = 0; oi < g_nobj; oi++) {
+        ObjFile *o = &g_objs[oi];
+        uint32_t si;
+        if (!o->symtab) continue;
+        for (si = 0; si < o->symcnt; si++) {
+            Elf64_Sym *sym = &o->symtab[si];
+            int bind = ELF64_ST_BIND(sym->st_info);
+            if (bind != STB_GLOBAL && bind != STB_WEAK) continue;
+            if (sym->st_shndx != SHN_UNDEF) continue;
+
+            const char *name = o->strtab + sym->st_name;
+            if (strncmp(name, "__start_", 8) == 0 || strncmp(name, "__stop_", 7) == 0) {
+                GlobalSym *gs = find_sym(name);
+                if (!gs) {
+                    add_sym(name);
+                }
+            }
+        }
+    }
 
     /* Standard symbol collection pass */
     for (oi = 0; oi < g_nobj; oi++) {
@@ -1027,6 +1168,52 @@ static void collect_symbols(void) {
         }
     }
 
+    /* resolve __start_ / __stop_ section symbols */
+    for (i = 0; i < g_nsym; i++) {
+        GlobalSym *gs = &g_syms[i];
+        if (!gs->defined) {
+            if (strncmp(gs->name, "__start_", 8) == 0) {
+                const char *sec_name = gs->name + 8;
+                int s;
+                for (s = 0; s < g_nout; s++) {
+                    const char *out_name = g_out[s].name;
+                    int match = 0;
+                    if (strcmp(out_name, sec_name) == 0) match = 1;
+                    else if (out_name[0] == '.' && strcmp(out_name + 1, sec_name) == 0) match = 1;
+                    else if (out_name[0] == '.' && sec_name[0] == '_' && strcmp(out_name + 1, sec_name + 1) == 0) match = 1;
+                    
+                    if (match) {
+                        gs->value = g_out[s].vma;
+                        gs->defined = 1;
+                        if (g_verbose) {
+                            printf("zld: resolved section start symbol '%s' = 0x%llx\n", gs->name, (unsigned long long)gs->value);
+                        }
+                        break;
+                    }
+                }
+            } else if (strncmp(gs->name, "__stop_", 7) == 0) {
+                const char *sec_name = gs->name + 7;
+                int s;
+                for (s = 0; s < g_nout; s++) {
+                    const char *out_name = g_out[s].name;
+                    int match = 0;
+                    if (strcmp(out_name, sec_name) == 0) match = 1;
+                    else if (out_name[0] == '.' && strcmp(out_name + 1, sec_name) == 0) match = 1;
+                    else if (out_name[0] == '.' && sec_name[0] == '_' && strcmp(out_name + 1, sec_name + 1) == 0) match = 1;
+                    
+                    if (match) {
+                        gs->value = g_out[s].vma + g_out[s].size;
+                        gs->defined = 1;
+                        if (g_verbose) {
+                            printf("zld: resolved section stop symbol '%s' = 0x%llx\n", gs->name, (unsigned long long)gs->value);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     /* resolve entry point */
     GlobalSym *entry_sym = find_sym(g_entry_name);
     if (entry_sym && entry_sym->defined) {
@@ -1071,6 +1258,42 @@ static void copy_sections(void) {
                 outsec_append(out, sec_data, sh->sh_size, 1);
             }
         }
+    }
+
+    if (g_attest_data) {
+        /* 1. Append custom note to .note.zcc.tensor section */
+        OutSection *note_out = get_out_section(".note.zcc.tensor", SHF_ALLOC);
+        uint64_t aligned_used = ALIGN_UP(note_out->buf_used, 4);
+        if (aligned_used > note_out->buf_used) {
+            outsec_append(note_out, NULL, aligned_used - note_out->buf_used, 4);
+        }
+        
+        {
+            uint32_t namesz = 4;
+            uint32_t descsz = 72;
+            uint32_t type = 0x7cc;
+            char name[4] = "ZCC";
+            
+            uint8_t desc[72];
+            memset(desc, 0, 72);
+            /* desc contains manifest_sha256 (32) + gguf_sha256 (32) + record_count (4) + policy_version (4) */
+            memcpy(desc, g_attest_data + 16, 32);       /* manifest_sha256 */
+            memcpy(desc + 32, g_attest_data + 48, 32);  /* gguf_sha256 */
+            uint32_t record_count = *(uint32_t *)(g_attest_data + 12);
+            uint32_t policy_version = 1;
+            memcpy(desc + 64, &record_count, 4);
+            memcpy(desc + 68, &policy_version, 4);
+            
+            outsec_append(note_out, (uint8_t *)&namesz, 4, 4);
+            outsec_append(note_out, (uint8_t *)&descsz, 4, 4);
+            outsec_append(note_out, (uint8_t *)&type, 4, 4);
+            outsec_append(note_out, (uint8_t *)name, 4, 4);
+            outsec_append(note_out, desc, 72, 4);
+        }
+        
+        /* 2. Populate .zcc_tensor_attest section */
+        OutSection *attest_out = get_out_section(".zcc_tensor_attest", SHF_ALLOC);
+        outsec_append(attest_out, g_attest_data, g_attest_sz, 32);
     }
 
     /* finalize sizes from actual copy */
@@ -1200,9 +1423,9 @@ static void apply_relocations(void) {
 /* ── Write ELF-64 executable ────────────────────────────────────────────── */
 static void write_output(const char *path) {
     FILE *f = fopen(path, "wb");
-    OutSection *rx_sections[8];
+    OutSection *rx_sections[32];
     int rx_count = 0;
-    OutSection *rw_sections[8];
+    OutSection *rw_sections[32];
     int rw_count = 0;
     OutSection *note_sec = NULL;
     int i;
@@ -1237,7 +1460,7 @@ static void write_output(const char *path) {
         if (!(s->flags & SHF_ALLOC)) continue;
         if (s->size == 0) continue;
 
-        if (strcmp(s->name, ".note") == 0) {
+        if (strcmp(s->name, ".note") == 0 || strcmp(s->name, ".note.zcc.tensor") == 0) {
             note_sec = s;
         }
 
@@ -1399,6 +1622,114 @@ static void write_output(const char *path) {
     next_page = ALIGN_UP(cur_pos, 0x1000);
     while (cur_pos < next_page) { fputc(0, f); cur_pos++; }
 
+    {
+        /* Write debug sections and Section Header Table (SHT) */
+        uint64_t *debug_file_offsets = xmalloc(g_nout * sizeof(uint64_t));
+        char *shstrtab_buf = xmalloc(4096);
+        size_t shstrtab_len = 0;
+        uint32_t *name_offsets = xmalloc(g_nout * sizeof(uint32_t));
+        uint32_t shstrtab_name_offset = 0;
+        uint64_t shstrtab_offset = 0;
+        uint64_t sht_offset = 0;
+        int shnum = g_nout + 2;
+        Elf64_Shdr *shdrs = xcalloc(shnum, sizeof(Elf64_Shdr));
+
+        for (i = 0; i < (int)g_nout; i++) {
+            debug_file_offsets[i] = 0;
+        }
+
+        for (i = 0; i < (int)g_nout; i++) {
+            OutSection *sec = &g_out[i];
+            if (sec->flags & SHF_ALLOC) continue;
+
+            {
+                uint64_t align = sec->align ? sec->align : 8;
+                cur_pos = (uint64_t)ftell(f);
+                uint64_t expected = ALIGN_UP(cur_pos, align);
+                while (cur_pos < expected) { fputc(0, f); cur_pos++; }
+
+                debug_file_offsets[i] = expected;
+                if (sec->buf_used > 0) {
+                    fwrite(sec->buf, 1, sec->buf_used, f);
+                }
+            }
+        }
+
+        /* Build .shstrtab */
+        shstrtab_buf[shstrtab_len++] = '\0';
+        for (i = 0; i < (int)g_nout; i++) {
+            name_offsets[i] = (uint32_t)shstrtab_len;
+            strcpy(shstrtab_buf + shstrtab_len, g_out[i].name);
+            shstrtab_len += strlen(g_out[i].name) + 1;
+        }
+        shstrtab_name_offset = (uint32_t)shstrtab_len;
+        strcpy(shstrtab_buf + shstrtab_len, ".shstrtab");
+        shstrtab_len += strlen(".shstrtab") + 1;
+
+        /* Write .shstrtab */
+        cur_pos = (uint64_t)ftell(f);
+        shstrtab_offset = ALIGN_UP(cur_pos, 8);
+        while (cur_pos < shstrtab_offset) { fputc(0, f); cur_pos++; }
+        fwrite(shstrtab_buf, 1, shstrtab_len, f);
+
+        /* Write section headers */
+        cur_pos = (uint64_t)ftell(f);
+        sht_offset = ALIGN_UP(cur_pos, 8);
+        while (cur_pos < sht_offset) { fputc(0, f); cur_pos++; }
+
+        /* shdrs[0] is NULL */
+        for (i = 0; i < (int)g_nout; i++) {
+            OutSection *sec = &g_out[i];
+            Elf64_Shdr *sh = &shdrs[i + 1];
+            sh->sh_name = name_offsets[i];
+            if (strcmp(sec->name, ".bss") == 0) {
+                sh->sh_type = SHT_NOBITS;
+            } else {
+                sh->sh_type = SHT_PROGBITS;
+            }
+            sh->sh_flags = sec->flags;
+            sh->sh_addr = sec->vma;
+            sh->sh_size = sec->size;
+            sh->sh_addralign = sec->align ? sec->align : 8;
+
+            if (sec->flags & SHF_ALLOC) {
+                if (strcmp(sec->name, ".note") == 0 || strcmp(sec->name, ".note.zcc.tensor") == 0) {
+                    sh->sh_type = SHT_NOTE;
+                    sh->sh_offset = rx_file_off + (sec->vma - rx_vaddr);
+                } else if (sec->flags & SHF_WRITE) {
+                    sh->sh_offset = rw_file_off + (sec->vma - rw_vaddr);
+                } else {
+                    sh->sh_offset = rx_file_off + (sec->vma - rx_vaddr);
+                }
+            } else {
+                sh->sh_offset = debug_file_offsets[i];
+            }
+        }
+
+        /* .shstrtab header */
+        shdrs[g_nout + 1].sh_name = shstrtab_name_offset;
+        shdrs[g_nout + 1].sh_type = SHT_STRTAB;
+        shdrs[g_nout + 1].sh_flags = 0;
+        shdrs[g_nout + 1].sh_addr = 0;
+        shdrs[g_nout + 1].sh_offset = shstrtab_offset;
+        shdrs[g_nout + 1].sh_size = shstrtab_len;
+        shdrs[g_nout + 1].sh_addralign = 8;
+
+        fwrite(shdrs, sizeof(Elf64_Shdr), shnum, f);
+
+        /* Rewrite ELF header with section table offset */
+        ehdr.e_shoff = sht_offset;
+        ehdr.e_shnum = (Elf64_Half)shnum;
+        ehdr.e_shstrndx = (Elf64_Half)(g_nout + 1);
+
+        fseek(f, 0, SEEK_SET);
+        fwrite(&ehdr, 1, sizeof(ehdr), f);
+
+        free(debug_file_offsets);
+        free(shstrtab_buf);
+        free(name_offsets);
+        free(shdrs);
+    }
     fclose(f);
     if (g_verbose) {
         printf("zld: wrote %s (entry=0x%llx, %d segments)\n",
@@ -1407,13 +1738,34 @@ static void write_output(const char *path) {
 }
 
 /* ── zld_link ───────────────────────────────────────────────────────────── */
-int zld_link(const char **obj_files, int obj_count, const char *out_path, const char *script_path) {
+int zld_link(const char **obj_files, int obj_count, const char *out_path, const char *script_path, const char *tensor_attest_bin_path, const char *tensor_note_json_path) {
     int i;
     char *env_verb = getenv("ZLD_VERBOSE");
     g_verbose = env_verb ? atoi(env_verb) : 0;
 
     /* Reset and initialize global state */
     cleanup_linker_state();
+
+    if (tensor_attest_bin_path) {
+        g_attest_data = read_file(tensor_attest_bin_path, &g_attest_sz);
+        if (g_attest_sz < 96) {
+            die("tensor attestation file too small");
+        }
+        uint64_t magic = *(uint64_t *)(g_attest_data);
+        uint32_t version = *(uint32_t *)(g_attest_data + 8);
+        if (magic != 0x5453415f43435aULL) {
+            die("invalid tensor attestation file magic");
+        }
+        if (version != 1) {
+            die("unsupported tensor attestation version");
+        }
+    }
+
+    if (tensor_note_json_path) {
+        if (g_verbose) {
+            printf("[zld] Ingested tensor note JSON path (JSON parsing bypassed): %s\n", tensor_note_json_path);
+        }
+    }
 
     if (g_verbose) {
         printf("[zld] Initiating static link campaign: output=%s\n", out_path);

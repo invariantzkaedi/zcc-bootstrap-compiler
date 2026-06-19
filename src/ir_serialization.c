@@ -576,6 +576,41 @@ int ir_serialize_json(const ir_module_t *mod, const char *out_filename, const ch
         dom_cfg_t cfg;
         memset(&cfg, 0, sizeof(dom_cfg_t));
         dom_build_cfg(&cfg, fn);
+        dom_compute_idom(&cfg);
+        dom_build_tree(&cfg);
+
+        df_set_t *df_sets = (df_set_t *)calloc(cfg.block_count, sizeof(df_set_t));
+        for (i = 0; i < cfg.block_count; i++) {
+            df_sets[i].capacity = 8;
+            df_sets[i].frontier = (int *)malloc(df_sets[i].capacity * sizeof(int));
+            df_sets[i].count = 0;
+        }
+
+        for (int b = 0; b < cfg.block_count; b++) {
+            if (cfg.blocks[b].pred_count > 1) {
+                for (j = 0; j < cfg.blocks[b].pred_count; j++) {
+                    int runner = cfg.blocks[b].pred[j];
+                    while (runner != -1 && runner != cfg.blocks[b].idom) {
+                        df_set_t *set = &df_sets[runner];
+                        int found = 0;
+                        for (int k = 0; k < set->count; k++) {
+                            if (set->frontier[k] == b) {
+                                found = 1;
+                                break;
+                            }
+                        }
+                        if (!found) {
+                            if (set->count >= set->capacity) {
+                                set->capacity *= 2;
+                                set->frontier = (int *)realloc(set->frontier, set->capacity * sizeof(int));
+                            }
+                            set->frontier[set->count++] = b;
+                        }
+                        runner = cfg.blocks[runner].idom;
+                    }
+                }
+            }
+        }
 
         for (i = 0; i < cfg.block_count; i++) {
             dom_bb_t *bb = &cfg.blocks[i];
@@ -589,6 +624,12 @@ int ir_serialize_json(const ir_module_t *mod, const char *out_filename, const ch
             fprintf(fp, " succs=");
             for (j = 0; j < bb->succ_count; j++) {
                 fprintf(fp, "%d%s", bb->succ[j], (j + 1 < bb->succ_count) ? "," : "");
+            }
+            if (df_sets && df_sets[i].count > 0) {
+                fprintf(fp, " df=");
+                for (j = 0; j < df_sets[i].count; j++) {
+                    fprintf(fp, "%d%s", df_sets[i].frontier[j], (j + 1 < df_sets[i].count) ? "," : "");
+                }
             }
             fprintf(fp, "\n");
 
@@ -625,6 +666,12 @@ int ir_serialize_json(const ir_module_t *mod, const char *out_filename, const ch
                 if (n == bb->last) break;
                 n = n->next;
             }
+        }
+        if (df_sets) {
+            for (int k = 0; k < cfg.block_count; k++) {
+                free(df_sets[k].frontier);
+            }
+            free(df_sets);
         }
         fprintf(fp, "end func\n\n");
     }

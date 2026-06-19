@@ -121,6 +121,7 @@ class DreamState:
     total_mutations_tried: int = 0
     total_mutations_survived: int = 0
     total_regressions: int = 0
+    total_fitness_rejections: int = 0   # bucket 5: gate-pass, delta>=0
     lineage: list = field(default_factory=list)
     fitness_history: list = field(default_factory=list)
     discovered_algorithms: list = field(default_factory=list)
@@ -289,7 +290,7 @@ class SelfHostGate:
                 with open("dreams/last_assembler_error.txt", "w") as f:
                     f.write(full_stderr)
                 import shutil
-                shutil.copy2(s3_s, "dreams/g_s3_fault.s")
+                shutil.copyfile(s3_s, "dreams/g_s3_fault.s")
                 lines = full_stderr.split('\n')
                 err_summary = '\n'.join(lines[:10])
                 return False, f"s3 link fail:\n{err_summary}"
@@ -438,7 +439,7 @@ class Island:
 
         # Each island gets its own copy of parent assembly
         island_asm = str(DREAM_DIR / f"island_{island_id}_parent.s")
-        shutil.copy2(parent_asm, island_asm)
+        shutil.copyfile(parent_asm, island_asm)
         self.state.parent_asm_path = island_asm
 
         # Measure initial fitness
@@ -572,7 +573,7 @@ class Island:
             self.state.parent_score = mutant_fitness['score']
             self.parent_fitness = mutant_fitness
             self.state.survived += 1
-            shutil.copy2(mutant_asm, self.state.parent_asm_path)
+            shutil.copyfile(mutant_asm, self.state.parent_asm_path)
             self.state.lineage.append({
                 'generation': gen,
                 'mutations': [m.name for m in selected],
@@ -947,7 +948,9 @@ int main(void) {
             if self.telem:
                 self.telem.set_baseline(islands[0].state.parent_score)
 
-            survived_total = 0; rejected_total = 0
+            survived_total = 0
+            rejected_total = 0           # buckets 1-4 (pre-/at-gate failure)
+            fitness_rejected_total = 0   # bucket 5 (gate pass, delta >= 0)
             t_start = time.time()
 
             print(f"\n  {_B}═══ DREAMING ════════════════════════════════════════{_W}")
@@ -1037,7 +1040,7 @@ int main(void) {
                     # Promote best island asm to canonical zcc2.s periodically
                     if gen % 10 == 0:
                         best = min(islands, key=lambda i: i.state.parent_score)
-                        shutil.copy2(best.state.parent_asm_path, zcc2_asm)
+                        shutil.copyfile(best.state.parent_asm_path, zcc2_asm)
                         # Rebuild canonical zcc2 binary
                         p_args = [str(REPO_ROOT / p) for p in PASSES]
                         subprocess.run(
@@ -1054,15 +1057,22 @@ int main(void) {
                         self._crossbreed(islands, mutation_engine,
                                          zcc_pp_c, self.dry_run)
 
-                elif "DRY RUN" not in result.error and not result.self_host_passed:
+                elif "DRY RUN" in result.error:
+                    pass  # dry-run cycle, no accounting
+                elif not result.self_host_passed:
                     rejected_total += 1
                     self.state.total_regressions += 1
+                else:
+                    # bucket 5: built + bootstrapped, but delta_score >= 0
+                    fitness_rejected_total += 1
+                    self.state.total_fitness_rejections += 1
 
                 self.state.total_mutations_tried += len(result.mutations_applied)
                 self.save_state()
 
         elapsed = time.time() - t_start
-        self._print_summary(num_cycles, survived_total, rejected_total, elapsed, islands)
+        self._print_summary(num_cycles, survived_total, rejected_total,
+                            fitness_rejected_total, elapsed, islands)
 
     def _crossbreed(self, islands: list, engine: MutationEngine,
                     zcc_pp_c: str, dry_run: bool):
@@ -1081,7 +1091,7 @@ int main(void) {
               f"{la[0] if la else '?'} ✕ {lb[0] if lb else '?'}")
 
     def _print_summary(self, num_cycles: int, survived: int, rejected: int,
-                       elapsed: float, islands: list):
+                       fitness_rejected: int, elapsed: float, islands: list):
         print()
         print(f"  {_B}═══════════════════════════════════════════════════════{_W}")
         print(f"  {_B}                 DREAM SESSION COMPLETE{_W}")
@@ -1089,6 +1099,10 @@ int main(void) {
         print(f"  Cycles:          {num_cycles}")
         print(f"  Evolved:         {_G}{survived}{_W}")
         print(f"  Rejected:        {_R}{rejected}{_W}")
+        print(f"  Fitness-reject:  {_Y}{fitness_rejected}{_W}")
+        accounted = survived + rejected + fitness_rejected
+        if accounted != num_cycles:
+            print(f"  {_R}! accounting drift: {num_cycles - accounted} cycle(s) unexplained{_W}")
         print(f"  Global Gen:      {self.state.generation}")
         print(f"  Time:            {elapsed:.1f}s  ({num_cycles/max(elapsed,1):.2f} cycles/s)")
         print(f"  Algorithms:      {len(self.state.discovered_algorithms)} discovered")
@@ -1114,8 +1128,11 @@ int main(void) {
             f.write(f"## Summary\n\n")
             f.write(f"| Metric | Value |\n|--------|-------|\n")
             f.write(f"| Global Generation | {self.state.generation} |\n")
-            f.write(f"| Total Survived | {self.state.total_mutations_survived} |\n")
-            f.write(f"| Total Rejected | {self.state.total_regressions} |\n")
+            f.write(f"| Surviving cycles (= generation) | {self.state.generation} |\n")
+            f.write(f"| Mutations inside surviving cycles | {self.state.total_mutations_survived} |\n")
+            f.write(f"| Hard-rejected cycles (bucket 1-4) | {self.state.total_regressions} |\n")
+            f.write(f"| Fitness-rejected cycles (bucket 5) | {self.state.total_fitness_rejections} |\n")
+            f.write(f"| Mutations tried total | {self.state.total_mutations_tried} |\n")
             f.write(f"| Algorithms Discovered | {len(self.state.discovered_algorithms)} |\n")
             f.write(f"| Blacklisted Patterns | {len(self.blacklist)} |\n\n")
             f.write(f"## Lineage\n\n")
