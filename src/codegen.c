@@ -1598,6 +1598,14 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
             unsigned char b[2] = {0x48, 0x99};
             seg_append(&text_seg, b, 2);
             matched = 1;
+        } else if (strcmp(mnemonic, "cltd") == 0 || strcmp(mnemonic, "cdq") == 0) {
+            unsigned char b = 0x99;
+            seg_append(&text_seg, &b, 1);
+            matched = 1;
+        } else if (strcmp(mnemonic, "hlt") == 0) {
+            unsigned char b = 0xf4;
+            seg_append(&text_seg, &b, 1);
+            matched = 1;
         } else if (strcmp(mnemonic, "cltq") == 0) {
             unsigned char b[2] = {0x48, 0x98};
             seg_append(&text_seg, b, 2);
@@ -2588,7 +2596,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
 #undef main
 #endif
 
-extern int zld_link(const char **obj_files, int obj_count, const char *out_path, const char *script_path);
+extern int zld_link(const char **obj_files, int obj_count, const char *out_path, const char *script_path, const char *tensor_attest_bin_path, const char *tensor_note_json_path, const char *build_attest_bin_path);
 
 int main(int argc, char **argv) {
     int i;
@@ -2832,7 +2840,7 @@ int main(int argc, char **argv) {
                 }
             }
 
-            int link_ret = zld_link(link_objs, link_obj_count, out_filename, ld_script);
+            int link_ret = zld_link(link_objs, link_obj_count, out_filename, ld_script, NULL, NULL, NULL);
             remove(temp_o_filename);
 
             if (link_ret != 0) {
@@ -2847,7 +2855,7 @@ int main(int argc, char **argv) {
         if (!out_filename) {
             out_filename = "a.out";
         }
-        int link_ret = zld_link(obj_files, obj_count, out_filename, ld_script);
+        int link_ret = zld_link(obj_files, obj_count, out_filename, ld_script, NULL, NULL, NULL);
         if (link_ret != 0) {
             fprintf(stderr, "zcc: static linking failed with error code %d\n", link_ret);
             return link_ret;

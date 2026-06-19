@@ -152,6 +152,55 @@ static uint64_t compute_nbytes(uint32_t dtype, uint32_t rank, const uint64_t *sh
     return 0;
 }
 
+static void compute_merkle_root(const uint8_t *leaf_hashes, uint32_t leaf_count, uint8_t *root_out) {
+    if (leaf_count == 0) {
+        memset(root_out, 0, 32);
+        return;
+    }
+    if (leaf_count == 1) {
+        memcpy(root_out, leaf_hashes, 32);
+        return;
+    }
+
+    uint32_t level_size = leaf_count;
+    uint8_t *level = malloc(level_size * 32);
+    if (!level) {
+        memset(root_out, 0, 32);
+        return;
+    }
+    memcpy(level, leaf_hashes, level_size * 32);
+
+    while (level_size > 1) {
+        uint32_t next_level_size = (level_size + 1) / 2;
+        uint8_t *next_level = malloc(next_level_size * 32);
+        if (!next_level) {
+            free(level);
+            memset(root_out, 0, 32);
+            return;
+        }
+        uint32_t i;
+        for (i = 0; i < level_size; i += 2) {
+            ZccSHA256_CTX ctx;
+            zcc_sha256_init(&ctx);
+            zcc_sha256_update(&ctx, level + i * 32, 32);
+            if (i + 1 < level_size) {
+                zcc_sha256_update(&ctx, level + (i + 1) * 32, 32);
+            } else {
+                uint8_t zero_hash[32];
+                memset(zero_hash, 0, 32);
+                zcc_sha256_update(&ctx, zero_hash, 32);
+            }
+            zcc_sha256_final(&ctx, next_level + (i / 2) * 32);
+        }
+        free(level);
+        level = next_level;
+        level_size = next_level_size;
+    }
+
+    memcpy(root_out, level, 32);
+    free(level);
+}
+
 int zcc_verify_tensor_manifest(
     const void *elf_attest_base,
     size_t elf_attest_size,
@@ -160,6 +209,7 @@ int zcc_verify_tensor_manifest(
 ) {
     if (!report) return -1;
     memset(report, 0, sizeof(*report));
+    uint8_t buf[4096];
 
     if (!elf_attest_base || elf_attest_size < sizeof(ZccTensorAttestHeader)) {
         report->status = ZCC_TENSOR_ERR_LAYOUT_NONCANONICAL;
@@ -184,7 +234,7 @@ int zcc_verify_tensor_manifest(
         return -1;
     }
 
-    /* Compute GGUF file SHA-256 */
+    /* Open GGUF to compute Merkle tree root and full SHA-256 */
     FILE *f = fopen(gguf_path, "rb");
     if (!f) {
         report->status = ZCC_TENSOR_ERR_MISSING;
@@ -192,22 +242,101 @@ int zcc_verify_tensor_manifest(
         return -1;
     }
 
-    ZccSHA256_CTX sha_ctx;
-    zcc_sha256_init(&sha_ctx);
-    uint8_t buf[4096];
-    size_t n;
-    while ((n = fread(buf, 1, sizeof(buf), f)) > 0) {
-        zcc_sha256_update(&sha_ctx, buf, n);
+    uint32_t leaf_size = hdr->leaf_size ? hdr->leaf_size : 1024 * 1024;
+    fseek(f, 0, SEEK_END);
+    long file_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    uint32_t expected_leaf_count = (file_size + leaf_size - 1) / leaf_size;
+    if (expected_leaf_count != hdr->leaf_count) {
+        fclose(f);
+        report->status = ZCC_TENSOR_ERR_COUNT_MISMATCH;
+        snprintf(report->error_msg, sizeof(report->error_msg), "Merkle leaf count mismatch: expected %u, got %u", hdr->leaf_count, expected_leaf_count);
+        return -1;
     }
+
+    uint8_t *computed_leaf_hashes = calloc(expected_leaf_count, 32);
+    if (!computed_leaf_hashes) {
+        fclose(f);
+        report->status = ZCC_TENSOR_ERR_LAYOUT_NONCANONICAL;
+        snprintf(report->error_msg, sizeof(report->error_msg), "Failed to allocate memory for leaf hashes");
+        return -1;
+    }
+
+    ZccSHA256_CTX global_sha_ctx;
+    zcc_sha256_init(&global_sha_ctx);
+
+    uint8_t *leaf_buf = malloc(leaf_size);
+    if (!leaf_buf) {
+        free(computed_leaf_hashes);
+        fclose(f);
+        report->status = ZCC_TENSOR_ERR_LAYOUT_NONCANONICAL;
+        snprintf(report->error_msg, sizeof(report->error_msg), "Failed to allocate memory for leaf buffer");
+        return -1;
+    }
+
+    uint32_t leaf_idx = 0;
+    size_t bytes_read;
+    while ((bytes_read = fread(leaf_buf, 1, leaf_size, f)) > 0) {
+        zcc_sha256_update(&global_sha_ctx, leaf_buf, bytes_read);
+
+        ZccSHA256_CTX leaf_sha_ctx;
+        zcc_sha256_init(&leaf_sha_ctx);
+        zcc_sha256_update(&leaf_sha_ctx, leaf_buf, bytes_read);
+        zcc_sha256_final(&leaf_sha_ctx, computed_leaf_hashes + leaf_idx * 32);
+
+        leaf_idx++;
+    }
+    free(leaf_buf);
+
     uint8_t actual_gguf_sha[32];
-    zcc_sha256_final(&sha_ctx, actual_gguf_sha);
+    zcc_sha256_final(&global_sha_ctx, actual_gguf_sha);
 
     if (memcmp(actual_gguf_sha, hdr->gguf_sha256, 32) != 0) {
+        free(computed_leaf_hashes);
         fclose(f);
         report->status = ZCC_TENSOR_ERR_SHA256_MISMATCH;
         snprintf(report->error_msg, sizeof(report->error_msg), "GGUF SHA-256 mismatch");
         return -1;
     }
+
+    uint8_t actual_merkle_root[32];
+    compute_merkle_root(computed_leaf_hashes, expected_leaf_count, actual_merkle_root);
+
+    if (memcmp(actual_merkle_root, hdr->merkle_root, 32) != 0) {
+        free(computed_leaf_hashes);
+        fclose(f);
+        report->status = ZCC_TENSOR_ERR_SHA256_MISMATCH;
+        snprintf(report->error_msg, sizeof(report->error_msg), "GGUF Merkle root mismatch");
+        return -1;
+    }
+
+    if (hdr->leaf_hashes_size > 0 && hdr->leaf_hashes_offset > 0) {
+        const uint8_t *embedded_leaf_hashes = (const uint8_t *)elf_attest_base + hdr->leaf_hashes_offset;
+        if (hdr->leaf_hashes_offset + hdr->leaf_hashes_size > elf_attest_size) {
+            free(computed_leaf_hashes);
+            fclose(f);
+            report->status = ZCC_TENSOR_ERR_LAYOUT_NONCANONICAL;
+            snprintf(report->error_msg, sizeof(report->error_msg), "Embedded leaf hashes offset/size out of bounds");
+            return -1;
+        }
+        if (hdr->leaf_hashes_size != expected_leaf_count * 32) {
+            free(computed_leaf_hashes);
+            fclose(f);
+            report->status = ZCC_TENSOR_ERR_LAYOUT_NONCANONICAL;
+            snprintf(report->error_msg, sizeof(report->error_msg), "Embedded leaf hashes size mismatch");
+            return -1;
+        }
+        if (memcmp(computed_leaf_hashes, embedded_leaf_hashes, expected_leaf_count * 32) != 0) {
+            free(computed_leaf_hashes);
+            fclose(f);
+            report->status = ZCC_TENSOR_ERR_SHA256_MISMATCH;
+            snprintf(report->error_msg, sizeof(report->error_msg), "Individual leaf hash mismatch against embedded attestation");
+            return -1;
+        }
+    }
+
+    free(computed_leaf_hashes);
 
     /* Rewind GGUF to read metadata & tensor headers */
     fseek(f, 0, SEEK_SET);

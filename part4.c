@@ -1043,6 +1043,37 @@ void codegen_expr(Compiler *cc, Node *node) {
       fprintf(cc->out, "    movq $0, %%rax\n");
       return;
     }
+    if ((node->compound_op == ND_DIV || node->compound_op == ND_MOD) && !backend_ops) {
+      int rhs_ok = 1;
+      long long rhs_cv = eval_const_expr_p4(node->rhs, &rhs_ok);
+      if (rhs_ok && rhs_cv == 0) {
+        int is_err = (getenv("ZCC_ERROR_DIVZERO_PROVEN") != NULL);
+        int closed_world = (getenv("ZCC_ICP_CLOSED_WORLD") != NULL);
+        if (is_err || closed_world) {
+          zcc_divzero_report(node->line, node->compound_op == ND_MOD);
+          if (node->lhs->kind == ND_VAR && node->lhs->sym && node->lhs->sym->assigned_reg) {
+            char *reg = node->lhs->sym->assigned_reg;
+            fprintf(cc->out, "    # CG-SIGFPE-003: compound assignment division/modulo by zero elided\n");
+            fprintf(cc->out, "    movq $0, %s\n", reg);
+            fprintf(cc->out, "    movq $0, %%rax\n");
+          } else {
+            codegen_addr_checked(cc, node->lhs);
+            fprintf(cc->out, "    # CG-SIGFPE-003: compound assignment division/modulo by zero elided\n");
+            if (node->lhs->type) {
+              int sz = type_size(node->lhs->type);
+              if (sz == 1)      fprintf(cc->out, "    movb $0, (%%rax)\n");
+              else if (sz == 2) fprintf(cc->out, "    movw $0, (%%rax)\n");
+              else if (sz == 4) fprintf(cc->out, "    movl $0, (%%rax)\n");
+              else              fprintf(cc->out, "    movq $0, (%%rax)\n");
+            } else {
+              fprintf(cc->out, "    movq $0, (%%rax)\n");
+            }
+            fprintf(cc->out, "    movq $0, %%rax\n");
+          }
+          return;
+        }
+      }
+    }
     if (node->lhs->kind == ND_VAR && node->lhs->sym &&
         node->lhs->sym->assigned_reg) {
       char *reg = node->lhs->sym->assigned_reg;
@@ -1780,22 +1811,29 @@ void codegen_expr(Compiler *cc, Node *node) {
       int lhs_ok = 1, rhs_ok = 1;
       long long lhs_cv = eval_const_expr_p4(node->lhs, &lhs_ok);
       long long rhs_cv = eval_const_expr_p4(node->rhs, &rhs_ok);
-      if (lhs_ok && rhs_ok) {
+      if (lhs_ok && rhs_ok && rhs_cv != 0) {
         long long result = 0;
-        if (rhs_cv != 0) {
-          /* CG-CFOLD-UNSIGNED-001: use unsigned arithmetic for unsigned types. */
-          int is_unsigned_div = node_type_unsigned(node);
-          if (is_unsigned_div)
-              result = (long long)((unsigned long long)lhs_cv / (unsigned long long)rhs_cv);
-          else
-              result = lhs_cv / rhs_cv;
-        } else {
-          /* CG-SIGFPE-002: fold division by zero to 0 to avoid runtime SIGFPE */
-          result = 0;
-        }
+        /* CG-CFOLD-UNSIGNED-001: use unsigned arithmetic for unsigned types. */
+        int is_unsigned_div = node_type_unsigned(node);
+        if (is_unsigned_div)
+            result = (long long)((unsigned long long)lhs_cv / (unsigned long long)rhs_cv);
+        else
+            result = lhs_cv / rhs_cv;
         fprintf(cc->out, "    movq $%lld, %%rax\n", result);
         ir_emit_binary_op(ND_DIV, node->type, "$const_lhs", "$const_rhs", node->line);
         return;
+      } else if (rhs_ok && rhs_cv == 0) {
+        int is_err = (getenv("ZCC_ERROR_DIVZERO_PROVEN") != NULL);
+        int closed_world = (getenv("ZCC_ICP_CLOSED_WORLD") != NULL);
+        if (is_err || closed_world) {
+          zcc_divzero_report(node->line, 0);
+          codegen_expr_checked(cc, node->lhs);
+          fprintf(cc->out, "    # CG-SIGFPE-003: division by zero elided\n");
+          fprintf(cc->out, "    movq $0, %%rax\n");
+          ir_save_result(lhs_ir);
+          ir_emit_binary_op(ND_DIV, node->type, lhs_ir, "$const_zero", node->line);
+          return;
+        }
       }
     }
     codegen_expr_checked(cc, node->lhs);
@@ -1831,21 +1869,28 @@ void codegen_expr(Compiler *cc, Node *node) {
       int lhs_ok = 1, rhs_ok = 1;
       long long lhs_cv = eval_const_expr_p4(node->lhs, &lhs_ok);
       long long rhs_cv = eval_const_expr_p4(node->rhs, &rhs_ok);
-      if (lhs_ok && rhs_ok) {
+      if (lhs_ok && rhs_ok && rhs_cv != 0) {
         long long result = 0;
-        if (rhs_cv != 0) {
-          int is_unsigned_mod = node_type_unsigned(node);
-          if (is_unsigned_mod)
-              result = (long long)((unsigned long long)lhs_cv % (unsigned long long)rhs_cv);
-          else
-              result = lhs_cv % rhs_cv;
-        } else {
-          /* CG-SIGFPE-002: fold modulo by zero to 0 to avoid runtime SIGFPE */
-          result = 0;
-        }
+        int is_unsigned_mod = node_type_unsigned(node);
+        if (is_unsigned_mod)
+            result = (long long)((unsigned long long)lhs_cv % (unsigned long long)rhs_cv);
+        else
+            result = lhs_cv % rhs_cv;
         fprintf(cc->out, "    movq $%lld, %%rax\n", result);
         ir_emit_binary_op(ND_MOD, node->type, "$const_lhs", "$const_rhs", node->line);
         return;
+      } else if (rhs_ok && rhs_cv == 0) {
+        int is_err = (getenv("ZCC_ERROR_DIVZERO_PROVEN") != NULL);
+        int closed_world = (getenv("ZCC_ICP_CLOSED_WORLD") != NULL);
+        if (is_err || closed_world) {
+          zcc_divzero_report(node->line, 1);
+          codegen_expr_checked(cc, node->lhs);
+          fprintf(cc->out, "    # CG-SIGFPE-003: modulo by zero elided\n");
+          fprintf(cc->out, "    movq $0, %%rax\n");
+          ir_save_result(lhs_ir);
+          ir_emit_binary_op(ND_MOD, node->type, lhs_ir, "$const_zero", node->line);
+          return;
+        }
       }
     }
 
@@ -3586,6 +3631,141 @@ void codegen_expr(Compiler *cc, Node *node) {
   }
 }
 
+static int node_has_label(Node *node) {
+  int i;
+  if (!node) return 0;
+  if (node->kind == ND_LABEL) return 1;
+  if (node_has_label(node->lhs)) return 1;
+  if (node_has_label(node->rhs)) return 1;
+  if (node_has_label(node->cond)) return 1;
+  if (node_has_label(node->then_body)) return 1;
+  if (node_has_label(node->else_body)) return 1;
+  if (node_has_label(node->init)) return 1;
+  if (node_has_label(node->inc)) return 1;
+  if (node_has_label(node->body)) return 1;
+  if (node->stmts) {
+    for (i = 0; i < node->num_stmts; i++) {
+      if (node_has_label(node->stmts[i])) return 1;
+    }
+  }
+  if (node->cases) {
+    for (i = 0; i < node->num_cases; i++) {
+      if (node_has_label(node->cases[i])) return 1;
+    }
+  }
+  if (node_has_label(node->default_case)) return 1;
+  if (node_has_label(node->case_body)) return 1;
+  return 0;
+}
+
+static int node_has_side_effects(Node *node) {
+  int i;
+  if (!node) return 0;
+  if (is_bad_ptr(node)) return 0;
+  if (node->magic != 0xC0FFEEBAD1234567ULL) return 0;
+
+  switch (node->kind) {
+    case ND_ASSIGN:
+    case ND_COMPOUND_ASSIGN:
+    case ND_PRE_INC:
+    case ND_PRE_DEC:
+    case ND_POST_INC:
+    case ND_POST_DEC:
+    case ND_CALL:
+    case ND_ASM:
+    case ND_VA_ARG:
+    case ND_DIV:
+    case ND_MOD:
+    case ND_FDIV:
+    case ND_DEREF:
+    case ND_RETURN:
+    case ND_GOTO:
+    case ND_GOTO_COMPUTED:
+    case ND_BREAK:
+    case ND_CONTINUE:
+    case ND_LABEL:
+    case ND_SWITCH:
+    case ND_CASE:
+    case ND_DEFAULT:
+      return 1;
+    default:
+      break;
+  }
+
+  if (node_has_side_effects(node->lhs)) return 1;
+  if (node_has_side_effects(node->rhs)) return 1;
+  if (node_has_side_effects(node->cond)) return 1;
+  if (node_has_side_effects(node->then_body)) return 1;
+  if (node_has_side_effects(node->else_body)) return 1;
+  if (node_has_side_effects(node->init)) return 1;
+  if (node_has_side_effects(node->inc)) return 1;
+  if (node_has_side_effects(node->body)) return 1;
+
+  if (node->stmts) {
+    for (i = 0; i < node->num_stmts; i++) {
+      if (node_has_side_effects(node->stmts[i])) return 1;
+    }
+  }
+  if (node->cases) {
+    for (i = 0; i < node->num_cases; i++) {
+      if (node_has_side_effects(node->cases[i])) return 1;
+    }
+  }
+  if (node_has_side_effects(node->default_case)) return 1;
+  if (node_has_side_effects(node->case_body)) return 1;
+
+  return 0;
+}
+
+static void codegen_stmt_dce(Compiler *cc, Node *node, int *terminated) {
+  if (!node) return;
+
+  if (node->kind == ND_LABEL) {
+    *terminated = 0;
+  }
+
+  if (!*terminated) {
+    codegen_stmt(cc, node);
+    if (node->kind == ND_RETURN || node->kind == ND_GOTO || node->kind == ND_GOTO_COMPUTED || node->kind == ND_BREAK || node->kind == ND_CONTINUE) {
+      *terminated = 1;
+    }
+    return;
+  }
+
+  /* If terminated, we only compile if it contains a label. */
+  if (!node_has_label(node)) {
+    return;
+  }
+
+  if (node->kind == ND_BLOCK) {
+    int i;
+    for (i = 0; i < node->num_stmts; i++) {
+      codegen_stmt_dce(cc, node->stmts[i], terminated);
+    }
+  } else if (node->kind == ND_IF) {
+    int then_term = *terminated;
+    int else_term = *terminated;
+    codegen_stmt_dce(cc, node->then_body, &then_term);
+    if (node->else_body) {
+      codegen_stmt_dce(cc, node->else_body, &else_term);
+      *terminated = then_term && else_term;
+    } else {
+      *terminated = 0;
+    }
+  } else if (node->kind == ND_WHILE || node->kind == ND_FOR) {
+    int body_term = *terminated;
+    codegen_stmt_dce(cc, node->body, &body_term);
+    *terminated = 0;
+  } else if (node->kind == ND_SWITCH) {
+    int body_term = *terminated;
+    codegen_stmt_dce(cc, node->body, &body_term);
+    *terminated = 0;
+  } else {
+    codegen_stmt(cc, node);
+    *terminated = 0;
+  }
+}
+
 /* ================================================================ */
 /* STATEMENT CODEGEN                                                 */
 /* ================================================================ */
@@ -3684,6 +3864,7 @@ void codegen_stmt(Compiler *cc, Node *node) {
   case ND_BLOCK: {
     int i;
     int nst;
+    int terminated = 0;
     if (!node->stmts) {
       error_at(cc, node->line, "codegen_stmt: ND_BLOCK null stmts");
       return;
@@ -3694,12 +3875,33 @@ void codegen_stmt(Compiler *cc, Node *node) {
       return;
     }
     for (i = 0; i < nst; i++) {
-      codegen_stmt(cc, node->stmts[i]);
+      codegen_stmt_dce(cc, node->stmts[i], &terminated);
     }
     return;
   }
 
   case ND_IF: {
+    int cond_ok = 1;
+    long long cond_val = eval_const_expr_p4(node->cond, &cond_ok);
+    if (cond_ok) {
+      if (cond_val) {
+        codegen_stmt(cc, node->then_body);
+        if (node->else_body && node_has_label(node->else_body)) {
+          int terminated = 1;
+          codegen_stmt_dce(cc, node->else_body, &terminated);
+        }
+      } else {
+        if (node->then_body && node_has_label(node->then_body)) {
+          int terminated = 1;
+          codegen_stmt_dce(cc, node->then_body, &terminated);
+        }
+        if (node->else_body) {
+          codegen_stmt(cc, node->else_body);
+        }
+      }
+      return;
+    }
+
     char cond_ir[32];
     char ir_lbl[32];
     lbl1 = new_label(cc);
@@ -3751,6 +3953,16 @@ void codegen_stmt(Compiler *cc, Node *node) {
   }
 
   case ND_WHILE: {
+    int cond_ok = 1;
+    long long cond_val = eval_const_expr_p4(node->cond, &cond_ok);
+    if (cond_ok && cond_val == 0) {
+      if (node->body && node_has_label(node->body)) {
+        int terminated = 1;
+        codegen_stmt_dce(cc, node->body, &terminated);
+      }
+      return;
+    }
+
     char cond_ir[32];
     char ir_lbl[32];
     lbl1 = new_label(cc); /* loop start */
@@ -3783,6 +3995,22 @@ void codegen_stmt(Compiler *cc, Node *node) {
   }
 
   case ND_FOR: {
+    int cond_ok = 1;
+    long long cond_val = 1;
+    if (node->cond) {
+      cond_val = eval_const_expr_p4(node->cond, &cond_ok);
+    }
+    if (cond_ok && cond_val == 0) {
+      if (node->init) {
+        codegen_stmt(cc, node->init);
+      }
+      if (node->body && node_has_label(node->body)) {
+        int terminated = 1;
+        codegen_stmt_dce(cc, node->body, &terminated);
+      }
+      return;
+    }
+
     char cond_ir[32];
     char ir_lbl[32];
     lbl1 = new_label(cc); /* loop start */
@@ -4068,6 +4296,13 @@ void codegen_stmt(Compiler *cc, Node *node) {
               node ? (void *)node : (void *)0);
       error_at(cc, 0, badmsg);
       fprintf(cc->out, "    movq $0, %%rax\n");
+      return;
+    }
+    if (!node_has_side_effects(node)) {
+      if (node_has_label(node)) {
+        int terminated = 1;
+        codegen_stmt_dce(cc, node, &terminated);
+      }
       return;
     }
     codegen_expr_checked(cc, node);
@@ -4733,7 +4968,8 @@ static long long eval_const_expr_p4_raw(Node *elem, int *ok) {
     }
     if (elem->kind == ND_NUM) return elem->int_val;
     if (elem->kind == ND_ADD || elem->kind == ND_SUB ||
-        elem->kind == ND_MUL || elem->kind == ND_DIV) {
+        elem->kind == ND_MUL || elem->kind == ND_DIV ||
+        elem->kind == ND_MOD) {
         /* CG-GINIT-FLOAT-002: float/double arithmetic in static initializers
            must use actual FP ops, not integer ops on raw bits.
            Also fixes silent div/0 return 0 without *ok=0. */
@@ -4779,17 +5015,32 @@ static long long eval_const_expr_p4_raw(Node *elem, int *ok) {
         if (elem->kind == ND_ADD) return eval_const_expr_p4(elem->lhs, ok) + eval_const_expr_p4(elem->rhs, ok);
         if (elem->kind == ND_SUB) return eval_const_expr_p4(elem->lhs, ok) - eval_const_expr_p4(elem->rhs, ok);
         if (elem->kind == ND_MUL) return eval_const_expr_p4(elem->lhs, ok) * eval_const_expr_p4(elem->rhs, ok);
-        {   /* ND_DIV integer: CG-SIGFPE-002 zero-denominator guard */
+        if (elem->kind == ND_DIV || elem->kind == ND_MOD) {
             long long r = eval_const_expr_p4(elem->rhs, ok);
-            if (!r) {
-                extern Compiler *g_cc;
-                if (g_cc) {
-                    fprintf(stderr, "%s:%d: warning: division by zero proven at compile time (CG-SIGFPE-002): divisor evaluates to 0\n",
-                        g_cc->filename ? g_cc->filename : "<unknown>", elem->line);
+            if (r == 0) {
+                int is_err = (getenv("ZCC_ERROR_DIVZERO_PROVEN") != NULL);
+                int closed_world = (getenv("ZCC_ICP_CLOSED_WORLD") != NULL);
+                if (is_err || closed_world) {
+                    zcc_divzero_report(elem->line, elem->kind == ND_MOD);
+                    return 0;
+                } else {
+                    *ok = 0;
+                    return 0;
                 }
-                *ok = 0; return 0;
             }
-            return eval_const_expr_p4(elem->lhs, ok) / r;
+            long long l = eval_const_expr_p4(elem->lhs, ok);
+            if (!*ok) return 0;
+            int lhs_kind = elem->lhs && elem->lhs->type ? elem->lhs->type->kind : -1;
+            int is_unsigned = (lhs_kind == TY_UCHAR || lhs_kind == TY_USHORT ||
+                               lhs_kind == TY_UINT  || lhs_kind == TY_ULONG  ||
+                               lhs_kind == TY_ULONGLONG);
+            if (elem->kind == ND_DIV) {
+                return is_unsigned ? (long long)((unsigned long long)l / (unsigned long long)r)
+                                   : (l / r);
+            } else {
+                return is_unsigned ? (long long)((unsigned long long)l % (unsigned long long)r)
+                                   : (l % r);
+            }
         }
     }
     if (elem->kind == ND_BOR) return eval_const_expr_p4(elem->lhs, ok) | eval_const_expr_p4(elem->rhs, ok);
@@ -4940,11 +5191,15 @@ static long long eval_const_expr_p4_raw(Node *elem, int *ok) {
      *   ND_ADDR(ND_DEREF(x))       → eval(x)  (addr-of-deref identity)
      *   ND_DEREF(x)                → eval(x)  (null-ptr deref through offset)
      */
-    if (elem->kind == ND_MEMBER)
+    if (elem->kind == ND_MEMBER) {
+        eval_const_expr_p4(elem->lhs, ok);
         return (long long)elem->member_offset;
+    }
     if (elem->kind == ND_ADDR) {
-        if (elem->lhs && elem->lhs->kind == ND_MEMBER)
+        if (elem->lhs && elem->lhs->kind == ND_MEMBER) {
+            eval_const_expr_p4(elem->lhs->lhs, ok);
             return (long long)elem->lhs->member_offset;
+        }
         if (elem->lhs && elem->lhs->kind == ND_DEREF)
             return eval_const_expr_p4(elem->lhs->lhs, ok); /* &(*p) == p */
     }
@@ -5431,15 +5686,27 @@ static void fold_constants(Compiler *cc, Node *node) {
         res = v1 * v2;
       else if (node->kind == ND_DIV) {
         if (v2 == 0) {
-            warning_at(cc, node->line, "division by zero in constant expression");
-            res = 0;
+            int is_err = (getenv("ZCC_ERROR_DIVZERO_PROVEN") != NULL);
+            int closed_world = (getenv("ZCC_ICP_CLOSED_WORLD") != NULL);
+            if (is_err || closed_world) {
+                zcc_divzero_report(node->line, 0);
+                res = 0;
+            } else {
+                return;
+            }
         } else {
             res = is_unsigned ? u1 / u2 : v1 / v2;
         }
       } else if (node->kind == ND_MOD) {
         if (v2 == 0) {
-            warning_at(cc, node->line, "division by zero in constant expression");
-            res = 0;
+            int is_err = (getenv("ZCC_ERROR_DIVZERO_PROVEN") != NULL);
+            int closed_world = (getenv("ZCC_ICP_CLOSED_WORLD") != NULL);
+            if (is_err || closed_world) {
+                zcc_divzero_report(node->line, 1);
+                res = 0;
+            } else {
+                return;
+            }
         } else {
             res = is_unsigned ? u1 % u2 : v1 % v2;
         }
@@ -5517,41 +5784,47 @@ static void fold_constants(Compiler *cc, Node *node) {
   if (node->kind == ND_IF) {
     if (node->cond && node->cond->kind == ND_NUM) {
       if (node->cond->int_val == 0) {
-        /* condition is false: replace with else body or empty block */
-        if (node->else_body) {
-          Node *tgt = node->else_body;
-          unsigned long long save_magic = node->magic;
-          unsigned long long save_alloc_id = node->alloc_id;
-          *node = *tgt;
-          node->magic = save_magic;
-          node->alloc_id = save_alloc_id;
-        } else {
-          node->kind = ND_BLOCK;
-          node->num_stmts = 0;
-          node->stmts = (Node **)cc_alloc(cc, sizeof(Node *));
+        if (!node->then_body || !node_has_label(node->then_body)) {
+          /* condition is false: replace with else body or empty block */
+          if (node->else_body) {
+            Node *tgt = node->else_body;
+            unsigned long long save_magic = node->magic;
+            unsigned long long save_alloc_id = node->alloc_id;
+            *node = *tgt;
+            node->magic = save_magic;
+            node->alloc_id = save_alloc_id;
+          } else {
+            node->kind = ND_BLOCK;
+            node->num_stmts = 0;
+            node->stmts = (Node **)cc_alloc(cc, sizeof(Node *));
+          }
         }
       } else {
-        /* condition is true: replace with then body */
-        if (node->then_body) {
-          Node *tgt = node->then_body;
-          unsigned long long save_magic = node->magic;
-          unsigned long long save_alloc_id = node->alloc_id;
-          *node = *tgt;
-          node->magic = save_magic;
-          node->alloc_id = save_alloc_id;
-        } else {
-          node->kind = ND_BLOCK;
-          node->num_stmts = 0;
-          node->stmts = (Node **)cc_alloc(cc, sizeof(Node *));
+        if (!node->else_body || !node_has_label(node->else_body)) {
+          /* condition is true: replace with then body */
+          if (node->then_body) {
+            Node *tgt = node->then_body;
+            unsigned long long save_magic = node->magic;
+            unsigned long long save_alloc_id = node->alloc_id;
+            *node = *tgt;
+            node->magic = save_magic;
+            node->alloc_id = save_alloc_id;
+          } else {
+            node->kind = ND_BLOCK;
+            node->num_stmts = 0;
+            node->stmts = (Node **)cc_alloc(cc, sizeof(Node *));
+          }
         }
       }
     }
   } else if (node->kind == ND_WHILE) {
     if (node->cond && node->cond->kind == ND_NUM && node->cond->int_val == 0) {
-      /* while (0): unreachable loop, collapse entirely */
-      node->kind = ND_BLOCK;
-      node->num_stmts = 0;
-      node->stmts = (Node **)cc_alloc(cc, sizeof(Node *));
+      if (!node->body || !node_has_label(node->body)) {
+        /* while (0): unreachable loop, collapse entirely */
+        node->kind = ND_BLOCK;
+        node->num_stmts = 0;
+        node->stmts = (Node **)cc_alloc(cc, sizeof(Node *));
+      }
     }
   } else if (node->kind == ND_TERNARY) {
     if (node->cond && node->cond->kind == ND_NUM) {

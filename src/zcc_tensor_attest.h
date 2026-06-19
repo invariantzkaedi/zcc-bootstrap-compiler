@@ -14,11 +14,17 @@ typedef struct __attribute__((packed)) {
     uint32_t gguf_version;
     uint32_t flags;
     uint32_t record_count;
+    uint32_t leaf_count;
+    uint32_t leaf_size;
+    uint32_t tree_depth;
     uint8_t  manifest_sha256[32];
     uint8_t  gguf_sha256[32];
+    uint8_t  merkle_root[32];
     uint64_t records_offset;
     uint64_t records_size;
-    uint8_t  reserved[20]; /* Pad to 128 bytes (multiple of 32) */
+    uint64_t leaf_hashes_offset;
+    uint64_t leaf_hashes_size;
+    uint8_t  reserved[24]; /* Pad to 192 bytes (multiple of 32) */
 } ZccTensorAttestHeader;
 
 typedef struct __attribute__((packed)) {

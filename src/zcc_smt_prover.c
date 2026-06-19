@@ -3,8 +3,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdint.h>
+#include <stdbool.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include "../prelude.h"
 
 int g_emit_smt_proofs = 0;
 char g_smt_proofs_dir[256] = "/tmp/zcc_proofs";
@@ -219,5 +222,140 @@ void smt_prove_push_lea_pop_triad(
 
     fprintf(f, "(check-sat)\n");
     fprintf(f, "(get-model)\n");
+    fclose(f);
+}
+
+static const char *op_to_smt_fun(int op) {
+    switch(op) {
+        case OP_ADD: return "bvadd";
+        case OP_SUB: return "bvsub";
+        case OP_MUL: return "bvmul";
+        case OP_DIV: return "bvudiv";
+        case OP_MOD: return "bvurem";
+        case OP_BAND: return "bvand";
+        case OP_BOR: return "bvor";
+        case OP_BXOR: return "bvxor";
+        case OP_BNOT: return "bvnot";
+        case OP_SHL: return "bvshl";
+        case OP_SHR: return "bvlshr";
+        default: return NULL;
+    }
+}
+
+static void print_hex64(FILE *f, long long val) {
+    fprintf(f, "#x%016llx", (unsigned long long)val);
+}
+
+void smt_prove_ir_strength_reduction(
+    const char *opt_name,
+    int op_before,
+    int op_after,
+    long long val_before,
+    long long val_after,
+    int bit_width,
+    size_t instr_id
+) {
+    FILE *f = start_smt_file(opt_name, instr_id);
+    if (!f) return;
+
+    fprintf(f, "; --- IR STRENGTH REDUCTION PROOF ---\n");
+    fprintf(f, "(declare-fun x () (_ BitVec 64))\n\n");
+
+    fprintf(f, "; Pre-optimization:\n");
+    const char *smt_op_before = op_to_smt_fun(op_before);
+    if (smt_op_before) {
+        fprintf(f, "(define-fun pre () (_ BitVec 64) (%s x ", smt_op_before);
+        print_hex64(f, val_before);
+        fprintf(f, "))\n");
+    } else {
+        fprintf(f, "(define-fun pre () (_ BitVec 64) x)\n");
+    }
+
+    fprintf(f, "\n; Post-optimization:\n");
+    const char *smt_op_after = op_to_smt_fun(op_after);
+    if (op_after == OP_ADD && val_after == 0) {
+        fprintf(f, "(define-fun post () (_ BitVec 64) (bvadd x x))\n");
+    } else if (smt_op_after) {
+        fprintf(f, "(define-fun post () (_ BitVec 64) (%s x ", smt_op_after);
+        print_hex64(f, val_after);
+        fprintf(f, "))\n");
+    } else {
+        fprintf(f, "(define-fun post () (_ BitVec 64) x)\n");
+    }
+
+    fprintf(f, "\n; Equivalence Target:\n");
+    fprintf(f, "(assert (not (= pre post)))\n\n");
+    fprintf(f, "(check-sat)\n");
+    fclose(f);
+}
+
+void smt_prove_ir_peephole(
+    const char *opt_name,
+    int op_before,
+    int op_after,
+    long long val_before,
+    long long val_after,
+    int has_val_before,
+    int has_val_after,
+    int bit_width,
+    size_t instr_id
+) {
+    FILE *f = start_smt_file(opt_name, instr_id);
+    if (!f) return;
+
+    fprintf(f, "; --- IR PEEPHOLE PROOF ---\n");
+    fprintf(f, "(declare-fun x () (_ BitVec 64))\n\n");
+
+    fprintf(f, "; Pre-optimization:\n");
+    const char *smt_op_before = op_to_smt_fun(op_before);
+    if (op_before == OP_SUB && !has_val_before) {
+        fprintf(f, "(define-fun pre () (_ BitVec 64) (bvsub x x))\n");
+    } else if (op_before == OP_BXOR && !has_val_before) {
+        fprintf(f, "(define-fun pre () (_ BitVec 64) (bvxor x x))\n");
+    } else if (op_before == OP_BAND && !has_val_before) {
+        fprintf(f, "(define-fun pre () (_ BitVec 64) (bvand x x))\n");
+    } else if (op_before == OP_BOR && !has_val_before) {
+        fprintf(f, "(define-fun pre () (_ BitVec 64) (bvor x x))\n");
+    } else if (op_before == OP_EQ && !has_val_before) {
+        fprintf(f, "(define-fun pre () (_ BitVec 64) (ite (= x x) #x0000000000000001 #x0000000000000000))\n");
+    } else if (op_before == OP_NE && !has_val_before) {
+        fprintf(f, "(define-fun pre () (_ BitVec 64) (ite (not (= x x)) #x0000000000000001 #x0000000000000000))\n");
+    } else if (op_before == OP_LT && !has_val_before) {
+        fprintf(f, "(define-fun pre () (_ BitVec 64) (ite (bvslt x x) #x0000000000000001 #x0000000000000000))\n");
+    } else if (op_before == OP_LE && !has_val_before) {
+        fprintf(f, "(define-fun pre () (_ BitVec 64) (ite (bvsle x x) #x0000000000000001 #x0000000000000000))\n");
+    } else if (op_before == OP_GT && !has_val_before) {
+        fprintf(f, "(define-fun pre () (_ BitVec 64) (ite (bvsgt x x) #x0000000000000001 #x0000000000000000))\n");
+    } else if (op_before == OP_GE && !has_val_before) {
+        fprintf(f, "(define-fun pre () (_ BitVec 64) (ite (bvsge x x) #x0000000000000001 #x0000000000000000))\n");
+    } else if (smt_op_before) {
+        fprintf(f, "(define-fun pre () (_ BitVec 64) (%s x ", smt_op_before);
+        print_hex64(f, val_before);
+        fprintf(f, "))\n");
+    } else {
+        fprintf(f, "(define-fun pre () (_ BitVec 64) x)\n");
+    }
+
+    fprintf(f, "\n; Post-optimization:\n");
+    const char *smt_op_after = op_to_smt_fun(op_after);
+    if (op_after == OP_CONST) {
+        fprintf(f, "(define-fun post () (_ BitVec 64) ");
+        print_hex64(f, val_after);
+        fprintf(f, ")\n");
+    } else if (op_after == OP_BNOT) {
+        fprintf(f, "(define-fun post () (_ BitVec 64) (bvnot x))\n");
+    } else if (op_after == OP_COPY) {
+        fprintf(f, "(define-fun post () (_ BitVec 64) x)\n");
+    } else if (smt_op_after && has_val_after) {
+        fprintf(f, "(define-fun post () (_ BitVec 64) (%s x ", smt_op_after);
+        print_hex64(f, val_after);
+        fprintf(f, "))\n");
+    } else {
+        fprintf(f, "(define-fun post () (_ BitVec 64) x)\n");
+    }
+
+    fprintf(f, "\n; Equivalence Target:\n");
+    fprintf(f, "(assert (not (= pre post)))\n\n");
+    fprintf(f, "(check-sat)\n");
     fclose(f);
 }

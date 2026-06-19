@@ -280,6 +280,35 @@ def main():
         canonical_json = json.dumps(json_records, sort_keys=True, separators=(',', ':')).encode()
         manifest_sha256_bytes = hashlib.sha256(canonical_json).digest()
 
+        # Compute Merkle Tree (1 MiB leaves)
+        leaf_size_val = 1024 * 1024
+        leaves = []
+        with open(gguf_path, "rb") as f_merkle:
+            while True:
+                chunk = f_merkle.read(leaf_size_val)
+                if not chunk:
+                    break
+                leaves.append(hashlib.sha256(chunk).digest())
+
+        leaf_count_val = len(leaves)
+
+        def get_merkle_root(leaf_list):
+            if not leaf_list:
+                return b'\x00' * 32, 0
+            curr = list(leaf_list)
+            depth = 0
+            while len(curr) > 1:
+                nxt = []
+                if len(curr) % 2 != 0:
+                    curr.append(b'\x00' * 32)
+                for idx in range(0, len(curr), 2):
+                    nxt.append(hashlib.sha256(curr[idx] + curr[idx+1]).digest())
+                curr = nxt
+                depth += 1
+            return curr[0], depth
+
+        merkle_root_bytes, tree_depth_val = get_merkle_root(leaves)
+
         # Build Binary Attestation Payload
         magic_val = 0x5453415f43435a
         schema_version_val = args.schema_version
@@ -287,22 +316,31 @@ def main():
         gguf_version_val = version
         flags_val = args.flags
         record_count_val = len(records)
-        records_offset_val = 128  # Size of header
+        
+        records_offset_val = 192  # Size of header
         records_size_val = len(records) * 256  # Size of each record = 256 bytes
+        leaf_hashes_offset_val = records_offset_val + records_size_val
+        leaf_hashes_size_val = len(leaves) * 32
 
         header_bin = struct.pack(
-            "<QIIIII32s32sQQ20s",
+            "<QIIIIIIII32s32s32sQQQQ24s",
             magic_val,
             schema_version_val,
             verifier_version_val,
             gguf_version_val,
             flags_val,
             record_count_val,
+            leaf_count_val,
+            leaf_size_val,
+            tree_depth_val,
             manifest_sha256_bytes,
             gguf_sha256_bytes,
+            merkle_root_bytes,
             records_offset_val,
             records_size_val,
-            b'\x00' * 20
+            leaf_hashes_offset_val,
+            leaf_hashes_size_val,
+            b'\x00' * 24
         )
 
         records_bin_list = []
@@ -330,6 +368,8 @@ def main():
             out_bin.write(header_bin)
             for r_bin in records_bin_list:
                 out_bin.write(r_bin)
+            for leaf_hash in leaves:
+                out_bin.write(leaf_hash)
 
         # Write JSON file
         json_attest = {
@@ -339,18 +379,24 @@ def main():
             "gguf_version": gguf_version_val,
             "flags": flags_val,
             "record_count": record_count_val,
+            "leaf_count": leaf_count_val,
+            "leaf_size": leaf_size_val,
+            "tree_depth": tree_depth_val,
             "manifest_sha256": manifest_sha256_bytes.hex(),
             "gguf_sha256": gguf_sha256_bytes.hex(),
+            "merkle_root": merkle_root_bytes.hex(),
+            "leaf_hashes": [lh.hex() for lh in leaves],
             "records": json_records
         }
         with open(args.emit_json, "w") as out_json:
             json.dump(json_attest, out_json, indent=2)
 
         print(f"Successfully wrote GGUF attestation:")
-        print(f"  Binary: {args.emit_bin} ({len(header_bin) + len(records_bin_list)*256} bytes)")
+        print(f"  Binary: {args.emit_bin} ({len(header_bin) + len(records_bin_list)*256 + len(leaves)*32} bytes)")
         print(f"  JSON:   {args.emit_json}")
         print(f"  Manifest SHA-256: {manifest_sha256_bytes.hex()}")
         print(f"  GGUF SHA-256:     {gguf_sha256_bytes.hex()}")
+        print(f"  Merkle Root:      {merkle_root_bytes.hex()}")
 
 if __name__ == '__main__':
     main()

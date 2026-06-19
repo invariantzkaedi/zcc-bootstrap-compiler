@@ -5059,8 +5059,20 @@ static LatticeVal icp_eval_expr(Node *n) {
             case ND_ADD: res = v1 + v2; break;
             case ND_SUB: res = v1 - v2; break;
             case ND_MUL: res = v1 * v2; break;
-            case ND_DIV: res = (v2 != 0) ? (v1 / v2) : 0; break;
-            case ND_MOD: res = (v2 != 0) ? (v1 % v2) : 0; break;
+            case ND_DIV:
+                if (v2 == 0) {
+                    LatticeVal bot = {LATTICE_BOT, 0};
+                    return bot;
+                }
+                res = v1 / v2;
+                break;
+            case ND_MOD:
+                if (v2 == 0) {
+                    LatticeVal bot = {LATTICE_BOT, 0};
+                    return bot;
+                }
+                res = v1 % v2;
+                break;
             case ND_SHL: res = v1 << v2; break;
             case ND_SHR: res = v1 >> v2; break;
             case ND_BAND: res = v1 & v2; break;

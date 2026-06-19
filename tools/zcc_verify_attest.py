@@ -118,14 +118,16 @@ def main():
         print(f"ZCC_TENSOR_ERR_MISSING: {err}")
         sys.exit(1)
 
-    if len(attest_data) < 128:
+    if len(attest_data) < 192:
         print("ZCC_TENSOR_ERR_LAYOUT_NONCANONICAL: Attestation header too small")
         sys.exit(1)
 
     # 2. Parse Attestation Header
-    magic, schema_version, verifier_version, gguf_version, flags, record_count, manifest_sha256, gguf_sha256, records_offset, records_size, reserved = struct.unpack(
-        "<QIIIII32s32sQQ20s",
-        attest_data[:128]
+    (magic, schema_version, verifier_version, gguf_version, flags, record_count,
+     leaf_count, leaf_size, tree_depth, manifest_sha256, gguf_sha256, merkle_root,
+     records_offset, records_size, leaf_hashes_offset, leaf_hashes_size, reserved) = struct.unpack(
+        "<QIIIIIIII32s32s32sQQQQ24s",
+        attest_data[:192]
     )
 
     if magic != 0x5453415f43435a:
@@ -146,8 +148,12 @@ def main():
     print(f"  Verifier Version: {verifier_version}")
     print(f"  Expected GGUF Version: {gguf_version}")
     print(f"  Flags: {flags}")
+    print(f"  Leaf Count: {leaf_count}")
+    print(f"  Leaf Size: {leaf_size}")
+    print(f"  Tree Depth: {tree_depth}")
     print(f"  Manifest SHA-256: {manifest_sha256.hex()}")
     print(f"  Expected GGUF SHA-256: {gguf_sha256.hex()}")
+    print(f"  Expected Merkle Root:  {merkle_root.hex()}")
 
     # 3. Parse Records
     records = []
@@ -182,14 +188,16 @@ def main():
         print(f"ZCC_TENSOR_ERR_MISSING: GGUF file {gguf_path} not found")
         sys.exit(1)
 
-    # Compute actual GGUF file hash
+    # Compute actual GGUF file hash and leaf hashes for Merkle verification
     sha256_full = hashlib.sha256()
+    actual_leaves = []
     with open(gguf_path, "rb") as f:
         while True:
-            chunk = f.read(1024 * 1024)
+            chunk = f.read(leaf_size)
             if not chunk:
                 break
             sha256_full.update(chunk)
+            actual_leaves.append(hashlib.sha256(chunk).digest())
     actual_gguf_sha256 = sha256_full.digest()
 
     if actual_gguf_sha256 != gguf_sha256:
@@ -199,6 +207,51 @@ def main():
         sys.exit(1)
 
     print("✅ GGUF cryptographic file signature matches ELF attestation.")
+
+    if len(actual_leaves) != leaf_count:
+        print("ZCC_TENSOR_ERR_COUNT_MISMATCH: GGUF Merkle leaf count mismatch!")
+        print(f"  Expected: {leaf_count}")
+        print(f"  Got:      {len(actual_leaves)}")
+        sys.exit(1)
+
+    def get_merkle_root(leaf_list):
+        if not leaf_list:
+            return b'\x00' * 32, 0
+        curr = list(leaf_list)
+        depth = 0
+        while len(curr) > 1:
+            nxt = []
+            if len(curr) % 2 != 0:
+                curr.append(b'\x00' * 32)
+            for idx in range(0, len(curr), 2):
+                nxt.append(hashlib.sha256(curr[idx] + curr[idx+1]).digest())
+            curr = nxt
+            depth += 1
+        return curr[0], depth
+
+    actual_merkle_root, actual_depth = get_merkle_root(actual_leaves)
+
+    if actual_merkle_root != merkle_root:
+        print("ZCC_TENSOR_ERR_SHA256_MISMATCH: GGUF Merkle root mismatch!")
+        print(f"  Expected: {merkle_root.hex()}")
+        print(f"  Got:      {actual_merkle_root.hex()}")
+        sys.exit(1)
+
+    print("✅ GGUF Merkle tree root matches ELF attestation.")
+
+    if leaf_hashes_size > 0 and leaf_hashes_offset > 0:
+        if leaf_hashes_offset + leaf_hashes_size > len(attest_data):
+            print("ZCC_TENSOR_ERR_LAYOUT_NONCANONICAL: Embedded leaf hashes offset out of bounds")
+            sys.exit(1)
+        if leaf_hashes_size != leaf_count * 32:
+            print("ZCC_TENSOR_ERR_LAYOUT_NONCANONICAL: Embedded leaf hashes size mismatch")
+            sys.exit(1)
+        embedded_leaf_hashes_bytes = attest_data[leaf_hashes_offset : leaf_hashes_offset + leaf_hashes_size]
+        actual_leaf_hashes_bytes = b"".join(actual_leaves)
+        if actual_leaf_hashes_bytes != embedded_leaf_hashes_bytes:
+            print("ZCC_TENSOR_ERR_SHA256_MISMATCH: Individual leaf hash mismatch!")
+            sys.exit(1)
+        print("✅ Individual leaf hashes match embedded attestation leaf hashes.")
 
     # 5. Verify individual tensors
     with open(gguf_path, "rb") as f:

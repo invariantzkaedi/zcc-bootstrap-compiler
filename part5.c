@@ -1424,6 +1424,9 @@ int zcc_main(int argc, char **argv) {
        * Without this, non-static function params are initialized to BOT (conservative).
        * Use only for single-TU / whole-program analysis. */
       setenv("ZCC_ICP_CLOSED_WORLD", "1", 1);
+    } else if (strcmp(argv[i], "--error-divzero-proven") == 0) {
+      /* Fail compilation on compile-time proven division or modulo by zero */
+      setenv("ZCC_ERROR_DIVZERO_PROVEN", "1", 1);
     } else if (strcmp(argv[i], "--telemetry") == 0) {
       enable_telemetry_stdout = 1;
     } else if (strcmp(argv[i], "--emit-ir-graph") == 0) {
@@ -1664,6 +1667,7 @@ int zcc_main(int argc, char **argv) {
     printf("  --memory-trace      enable full symbolic memory dump\n");
     printf("  --abi             force full ABI reconstruction\n");
     printf("  --release <ticket> run Courtroom Release Gate-Zero\n");
+    printf("  --error-divzero-proven fail compilation on proven div/mod by zero\n");
     printf("  -c                compile only (C path)\n");
     printf("  --telemetry       enable compiler phase telemetry stdout dump\n");
     printf("  -q, --quiet       suppress diagnostics output\n");

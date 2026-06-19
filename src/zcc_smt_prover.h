@@ -27,4 +27,26 @@ void smt_prove_push_lea_pop_triad(
     size_t line_index
 );
 
+void smt_prove_ir_strength_reduction(
+    const char *opt_name,
+    int op_before,
+    int op_after,
+    long long val_before,
+    long long val_after,
+    int bit_width,
+    size_t instr_id
+);
+
+void smt_prove_ir_peephole(
+    const char *opt_name,
+    int op_before,
+    int op_after,
+    long long val_before,
+    long long val_after,
+    int has_val_before,
+    int has_val_after,
+    int bit_width,
+    size_t instr_id
+);
+
 #endif /* ZCC_SMT_PROVER_H */

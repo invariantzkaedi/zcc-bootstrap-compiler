@@ -42,9 +42,15 @@ verify: stage2 stage3
 	python3 verify_kernel.py zkernel-stage2.elf
 	@echo "=== Verifying Stage 3 zkernel ==="
 	python3 verify_kernel.py zkernel-stage3.elf
+	@echo "=== Extracting raw binary payloads ==="
+	objcopy -O binary zkernel-stage2.elf stage2_zkernel.bin
+	objcopy -O binary zkernel-stage3.elf stage3_zkernel.bin
+	@echo "=== Verifying raw binary SHA-256 identity ==="
+	sha256sum stage2_zkernel.bin stage3_zkernel.bin
+	@cmp stage2_zkernel.bin stage3_zkernel.bin && echo "=== Binary identity verified: Stage 2 and Stage 3 match byte-for-byte! ==="
 	@echo "=== Boot Parity Verification Successful ==="
 
 clean:
-	rm -f *.o *.elf
+	rm -f *.o *.elf *.bin
 
 include Makefile.zld

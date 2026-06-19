@@ -1411,4 +1411,23 @@ int rust_resolve_names(RustResolveContext *ctx);
 int rust_typecheck(RustTypecheckContext *ctx);
 int rust_lower_to_ir(RustLowerContext *ctx);
 
+const char *zcc_current_filename(void) {
+    extern Compiler *g_cc;
+    return (g_cc && g_cc->filename) ? g_cc->filename : "<unknown>";
+}
+
+void zcc_divzero_report(int line, int is_mod) {
+    extern Compiler *g_cc;
+    int is_err = (getenv("ZCC_ERROR_DIVZERO_PROVEN") != NULL);
+    const char *op = is_mod ? "modulo" : "division";
+    const char *type_str = is_err ? "error" : "warning";
+    if (g_cc) {
+        if (is_err) g_cc->errors++;
+        fprintf(stderr, "%s:%d: %s: %s by zero proven at compile time (CG-SIGFPE-003): divisor evaluates to 0\n",
+                g_cc->filename ? g_cc->filename : "<unknown>", line, type_str, op);
+    } else {
+        fprintf(stderr, "<unknown>:%d: %s: %s by zero proven at compile time (CG-SIGFPE-003): divisor evaluates to 0\n", line, type_str, op);
+    }
+}
+
 /* ZKAEDI FORCE RENDER CACHE INVALIDATION */

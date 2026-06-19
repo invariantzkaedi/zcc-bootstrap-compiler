@@ -34,6 +34,9 @@ struct Node;
 
 #include "zcc_ast_bridge.h"
 
+extern const char *zcc_current_filename(void);
+extern void zcc_divzero_report(int line, int is_mod);
+
 /* When set (ZCC_PGO_DEBUG_MAIN=1 and emitting main), OP_LOAD in
  * ir_asm_lower_insn logs block/dst/src0/slot to stderr for crash triage. */
 static int s_debug_main_emit = 0;
@@ -1203,20 +1206,32 @@ static uint32_t constant_fold_pass(Function *fn) {
         if (d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
           if (d1->imm != 0) {
             result = d0->imm / d1->imm;
+            goto fold_binary;
           } else {
-            result = 0; /* CG-SIGFPE-002: fold division by zero to 0 to prevent SIGFPE */
+            int is_err = (getenv("ZCC_ERROR_DIVZERO_PROVEN") != NULL);
+            int closed_world = (getenv("ZCC_ICP_CLOSED_WORLD") != NULL);
+            if (is_err || closed_world) {
+              zcc_divzero_report(ins->line_no, 0);
+              result = 0;
+              goto fold_binary;
+            }
           }
-          goto fold_binary;
         }
         break;
       case OP_MOD:
         if (d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
           if (d1->imm != 0) {
             result = d0->imm % d1->imm;
+            goto fold_binary;
           } else {
-            result = 0; /* CG-SIGFPE-002: fold modulo by zero to 0 to prevent SIGFPE */
+            int is_err = (getenv("ZCC_ERROR_DIVZERO_PROVEN") != NULL);
+            int closed_world = (getenv("ZCC_ICP_CLOSED_WORLD") != NULL);
+            if (is_err || closed_world) {
+              zcc_divzero_report(ins->line_no, 1);
+              result = 0;
+              goto fold_binary;
+            }
           }
-          goto fold_binary;
         }
         break;
       case OP_BAND:

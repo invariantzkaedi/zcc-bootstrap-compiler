@@ -67,6 +67,7 @@ int           node_is_float(struct Node *n);
 long long     node_float_bits(struct Node *n);
 int           node_type_size(struct Node *n);
 int           node_type_unsigned(struct Node *n);
+const char   *zcc_current_filename(void);
 
 
 

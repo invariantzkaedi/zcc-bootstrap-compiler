@@ -1855,3 +1855,288 @@ void run_oracle_stack(void *cc_ptr, void *prog_ptr) {
     printf("}\n");
 }
 
+extern int type_size(Type *t);
+extern int type_align(Type *t);
+extern int is_float_type(Type *t);
+extern void classify_aggregate(Type *agg, abi_class_t eb[2]);
+
+static void get_type_name(Type *ty, char *buf, int max_len) {
+    if (!ty) {
+        snprintf(buf, max_len, "unknown");
+        return;
+    }
+    switch (ty->kind) {
+        case TY_VOID: snprintf(buf, max_len, "void"); break;
+        case TY_INT: snprintf(buf, max_len, "int"); break;
+        case TY_CHAR: snprintf(buf, max_len, "char"); break;
+        case TY_SHORT: snprintf(buf, max_len, "short"); break;
+        case TY_LONG: snprintf(buf, max_len, "long"); break;
+        case TY_LONGLONG: snprintf(buf, max_len, "long long"); break;
+        case TY_UINT: snprintf(buf, max_len, "unsigned int"); break;
+        case TY_UCHAR: snprintf(buf, max_len, "unsigned char"); break;
+        case TY_USHORT: snprintf(buf, max_len, "unsigned short"); break;
+        case TY_ULONG: snprintf(buf, max_len, "unsigned long"); break;
+        case TY_ULONGLONG: snprintf(buf, max_len, "unsigned long long"); break;
+        case TY_FLOAT: snprintf(buf, max_len, "float"); break;
+        case TY_DOUBLE: snprintf(buf, max_len, "double"); break;
+        case TY_STRUCT: snprintf(buf, max_len, "struct %s", ty->tag[0] ? ty->tag : "S"); break;
+        case TY_UNION: snprintf(buf, max_len, "union %s", ty->tag[0] ? ty->tag : "U"); break;
+        case TY_ENUM: snprintf(buf, max_len, "enum %s", ty->tag[0] ? ty->tag : "E"); break;
+        case TY_PTR: {
+            char base_buf[256];
+            get_type_name(ty->base, base_buf, sizeof(base_buf));
+            snprintf(buf, max_len, "%s*", base_buf);
+            break;
+        }
+        case TY_ARRAY: {
+            char base_buf[256];
+            get_type_name(ty->base, base_buf, sizeof(base_buf));
+            snprintf(buf, max_len, "%s[%d]", base_buf, ty->array_len);
+            break;
+        }
+        default: snprintf(buf, max_len, "unknown"); break;
+    }
+}
+
+void run_abi_trace(void *cc_ptr, void *prog_ptr) {
+    Compiler *cc = (Compiler *)cc_ptr;
+    int first_func = 1;
+    
+    printf("[\n");
+    for (int i = 0; i < cc->num_globals; i++) {
+        Node *g = cc->globals[i];
+        if (g && g->kind == ND_FUNC_DEF) {
+            if (!first_func) {
+                printf(",\n");
+            }
+            first_func = 0;
+            
+            printf("  {\n");
+            printf("    \"function\": \"%s\",\n", g->func_def_name);
+            
+            /* 1. Lower return type */
+            Type *ret_ty = g->func_type ? g->func_type->ret : NULL;
+            char ret_ctype[256];
+            get_type_name(ret_ty, ret_ctype, sizeof(ret_ctype));
+            
+            int sret_active = 0;
+            abi_class_t ret_classes_val[2];
+            ret_classes_val[0] = ret_classes_val[1] = CLASS_NO_CLASS;
+            
+            printf("    \"return\": {\n");
+            printf("      \"ctype\": \"%s\",\n", ret_ctype);
+            printf("      \"classes\": [");
+            if (ret_ty && ret_ty->kind != TY_VOID) {
+                if (ret_ty->kind == TY_STRUCT || ret_ty->kind == TY_UNION) {
+                    classify_aggregate(ret_ty, ret_classes_val);
+                    if (ret_classes_val[0] == CLASS_MEMORY) {
+                        sret_active = 1;
+                        printf("\"MEMORY\"");
+                    } else {
+                        int ret_size = type_size(ret_ty);
+                        int ret_eightbytes = (ret_size + 7) / 8;
+                        for (int chunk = 0; chunk < ret_eightbytes; chunk++) {
+                            if (chunk > 0) printf(", ");
+                            if (ret_classes_val[chunk] == CLASS_INTEGER) printf("\"INTEGER\"");
+                            else if (ret_classes_val[chunk] == CLASS_SSE) printf("\"SSE\"");
+                            else printf("\"NO_CLASS\"");
+                        }
+                    }
+                } else if (is_float_type(ret_ty)) {
+                    printf("\"SSE\"");
+                } else {
+                    printf("\"INTEGER\"");
+                }
+            } else {
+                printf("\"NO_CLASS\"");
+            }
+            printf("],\n");
+            
+            printf("      \"mechanism\": \"%s\",\n", sret_active ? "hidden_sret" : "direct");
+            if (sret_active) {
+                printf("      \"sret_register\": \"rdi\",\n");
+                printf("      \"user_arg_shift\": 1\n");
+            } else {
+                printf("      \"sret_register\": null,\n");
+                printf("      \"user_arg_shift\": 0\n");
+            }
+            printf("    },\n");
+            
+            /* 2. Lower arguments */
+            printf("    \"args\": [\n");
+            
+            int gp_regs_used = sret_active ? 1 : 0;
+            int sse_regs_used = 0;
+            int stack_bytes = 0;
+            
+            char *gp_names[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
+            char *sse_names[] = {"xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"};
+            
+            int gp_consumed[6] = {0};
+            int sse_consumed[8] = {0};
+            
+            if (sret_active) {
+                gp_consumed[0] = 1; /* rdi is consumed for sret */
+            }
+            
+            for (int p = 0; p < g->num_params; p++) {
+                Type *param_ty = (g->func_params && p < MAX_PARAMS) ? g->func_params->types[p] : NULL;
+                if (!param_ty) continue;
+                
+                char param_ctype[256];
+                get_type_name(param_ty, param_ctype, sizeof(param_ctype));
+                
+                int param_sz = type_size(param_ty);
+                int param_align = type_align(param_ty);
+                
+                if (p > 0) printf(",\n");
+                printf("      {\n");
+                printf("        \"index\": %d,\n", p);
+                
+                char pname[128];
+                if (g->func_params && p < MAX_PARAMS && g->func_params->names[p][0]) {
+                    snprintf(pname, sizeof(pname), "%s", g->func_params->names[p]);
+                } else {
+                    snprintf(pname, sizeof(pname), "__arg%d", p);
+                }
+                printf("        \"name\": \"%s\",\n", pname);
+                printf("        \"ctype\": \"%s\",\n", param_ctype);
+                printf("        \"size\": %d,\n", param_sz);
+                printf("        \"align\": %d,\n", param_align);
+                
+                int is_mem = 0;
+                abi_class_t classes_val[2];
+                classes_val[0] = classes_val[1] = CLASS_NO_CLASS;
+                
+                printf("        \"classes\": [");
+                if (param_ty->kind == TY_STRUCT || param_ty->kind == TY_UNION) {
+                    if (param_sz > 16 || param_sz == 0 || param_align == 0) {
+                        is_mem = 1;
+                        printf("\"MEMORY\"");
+                    } else {
+                        classify_aggregate(param_ty, classes_val);
+                        if (classes_val[0] == CLASS_MEMORY) {
+                            is_mem = 1;
+                            printf("\"MEMORY\"");
+                        } else {
+                            int num_eightbytes = (param_sz + 7) / 8;
+                            for (int chunk = 0; chunk < num_eightbytes; chunk++) {
+                                if (chunk > 0) printf(", ");
+                                if (classes_val[chunk] == CLASS_INTEGER) printf("\"INTEGER\"");
+                                else if (classes_val[chunk] == CLASS_SSE) printf("\"SSE\"");
+                                else printf("\"NO_CLASS\"");
+                            }
+                        }
+                    }
+                } else if (is_float_type(param_ty)) {
+                    printf("\"SSE\"");
+                } else {
+                    printf("\"INTEGER\"");
+                }
+                printf("],\n");
+                
+                int on_stack = 0;
+                int stack_offset = 0;
+                int stack_padding_before = 0;
+                
+                int chunk_gp_needed = 0;
+                int chunk_sse_needed = 0;
+                int num_chunks = 1;
+                
+                if (!is_mem) {
+                    if (param_ty->kind == TY_STRUCT || param_ty->kind == TY_UNION) {
+                        num_chunks = (param_sz + 7) / 8;
+                        for (int chunk = 0; chunk < num_chunks; chunk++) {
+                            if (classes_val[chunk] == CLASS_INTEGER) chunk_gp_needed++;
+                            else if (classes_val[chunk] == CLASS_SSE) chunk_sse_needed++;
+                        }
+                    } else if (is_float_type(param_ty)) {
+                        chunk_sse_needed = 1;
+                    } else {
+                        chunk_gp_needed = 1;
+                    }
+                    
+                    if (gp_regs_used + chunk_gp_needed <= 6 && sse_regs_used + chunk_sse_needed <= 8) {
+                        printf("        \"location\": ");
+                        if (num_chunks == 2) {
+                            printf("[");
+                            for (int chunk = 0; chunk < 2; chunk++) {
+                                if (chunk > 0) printf(", ");
+                                if (classes_val[chunk] == CLASS_INTEGER) {
+                                    printf("\"%s\"", gp_names[gp_regs_used]);
+                                    gp_consumed[gp_regs_used] = 1;
+                                    gp_regs_used++;
+                                } else {
+                                    printf("\"%s\"", sse_names[sse_regs_used]);
+                                    sse_consumed[sse_regs_used] = 1;
+                                    sse_regs_used++;
+                                }
+                            }
+                            printf("]\n");
+                        } else {
+                            if (chunk_sse_needed) {
+                                printf("\"%s\"\n", sse_names[sse_regs_used]);
+                                sse_consumed[sse_regs_used] = 1;
+                                sse_regs_used++;
+                            } else {
+                                printf("\"%s\"\n", gp_names[gp_regs_used]);
+                                gp_consumed[gp_regs_used] = 1;
+                                gp_regs_used++;
+                            }
+                        }
+                    } else {
+                        on_stack = 1;
+                    }
+                } else {
+                    on_stack = 1;
+                }
+                
+                if (on_stack) {
+                    int align_val = (param_align > 8) ? param_align : 8;
+                    stack_padding_before = (align_val - (stack_bytes % align_val)) % align_val;
+                    stack_offset = stack_bytes + stack_padding_before;
+                    stack_bytes = stack_offset + param_sz;
+                    
+                    printf("        \"location\": \"stack\",\n");
+                    printf("        \"stack_offset\": %d,\n", stack_offset);
+                    printf("        \"stack_padding_before\": %d\n", stack_padding_before);
+                }
+                
+                printf("      }");
+            }
+            printf("\n    ],\n");
+            
+            /* 3. Register state */
+            printf("    \"register_state\": {\n");
+            
+            printf("      \"gp_used\": [");
+            int first_gp = 1;
+            for (int r = 0; r < 6; r++) {
+                if (gp_consumed[r]) {
+                    if (!first_gp) printf(", ");
+                    first_gp = 0;
+                    printf("\"%s\"", gp_names[r]);
+                }
+            }
+            printf("],\n");
+            
+            printf("      \"sse_used\": [");
+            int first_sse = 1;
+            for (int r = 0; r < 8; r++) {
+                if (sse_consumed[r]) {
+                    if (!first_sse) printf(", ");
+                    first_sse = 0;
+                    printf("\"%s\"", sse_names[r]);
+                }
+            }
+            printf("],\n");
+            
+            printf("      \"stack_bytes\": %d\n", stack_bytes);
+            printf("    }\n");
+            printf("  }");
+        }
+    }
+    printf("\n]\n");
+}
+
+

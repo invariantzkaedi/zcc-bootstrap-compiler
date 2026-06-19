@@ -2,6 +2,8 @@
 #ifndef ZCC_IR_OPT_PASSES_H
 #define ZCC_IR_OPT_PASSES_H
 
+#include "src/zcc_smt_prover.h"
+
 static bool opt_is_power_of_2(int64_t v) { return v > 0 && (v & (v - 1)) == 0; }
 static int opt_log2_exact(int64_t v) { int n = 0; while (v > 1) { v >>= 1; n++; } return n; }
 
@@ -187,35 +189,60 @@ static uint32_t opt_strength_reduction_pass(Function *fn) {
                 Instr *d1 = fn->def_of[ins->src[1]];
                 
                 if (d1 && d1->op == OP_CONST && d1->imm == 2) {
+                    if (g_emit_smt_proofs) {
+                        smt_prove_ir_strength_reduction("ir_mul2_add", OP_MUL, OP_ADD, 2, 0, 64, ins->dst);
+                    }
                     ins->op = OP_ADD;
                     ins->src[1] = ins->src[0]; 
                     count++;
                 } else if (d0 && d0->op == OP_CONST && d0->imm == 2) {
+                    if (g_emit_smt_proofs) {
+                        smt_prove_ir_strength_reduction("ir_mul2_add_comm", OP_MUL, OP_ADD, 2, 0, 64, ins->dst);
+                    }
                     ins->op = OP_ADD;
                     ins->src[0] = ins->src[1]; 
                     count++;
                 } else if (d1 && d1->op == OP_CONST && opt_is_power_of_2(d1->imm)) {
+                    int64_t imm = d1->imm;
+                    int64_t shift = opt_log2_exact(imm);
+                    if (g_emit_smt_proofs) {
+                        smt_prove_ir_strength_reduction("ir_mul_shl", OP_MUL, OP_SHL, imm, shift, 64, ins->dst);
+                    }
                     ins->op = OP_SHL;
-                    ins->src[1] = opt_create_const(fn, blk, bi, ins, opt_log2_exact(d1->imm));
+                    ins->src[1] = opt_create_const(fn, blk, bi, ins, shift);
                     count++;
                 } else if (d0 && d0->op == OP_CONST && opt_is_power_of_2(d0->imm)) {
+                    int64_t imm = d0->imm;
+                    int64_t shift = opt_log2_exact(imm);
+                    if (g_emit_smt_proofs) {
+                        smt_prove_ir_strength_reduction("ir_mul_shl_comm", OP_MUL, OP_SHL, imm, shift, 64, ins->dst);
+                    }
                     ins->op = OP_SHL;
                     ins->src[0] = ins->src[1]; // SHL takes value in 0, shift in 1
-                    ins->src[1] = opt_create_const(fn, blk, bi, ins, opt_log2_exact(d0->imm));
+                    ins->src[1] = opt_create_const(fn, blk, bi, ins, shift);
                     count++;
                 }
             } else if (ins->op == OP_DIV && ins->n_src == 2 && (ins->ir_type == IR_TY_U32 || ins->ir_type == IR_TY_U64)) {
                 Instr *d1 = fn->def_of[ins->src[1]];
                 if (d1 && d1->op == OP_CONST && opt_is_power_of_2(d1->imm)) {
+                    int64_t imm = d1->imm;
+                    int64_t shift = opt_log2_exact(imm);
+                    if (g_emit_smt_proofs) {
+                        smt_prove_ir_strength_reduction("ir_div_shr", OP_DIV, OP_SHR, imm, shift, 64, ins->dst);
+                    }
                     ins->op = OP_SHR;
-                    ins->src[1] = opt_create_const(fn, blk, bi, ins, opt_log2_exact(d1->imm));
+                    ins->src[1] = opt_create_const(fn, blk, bi, ins, shift);
                     count++;
                 }
             } else if (ins->op == OP_MOD && ins->n_src == 2 && (ins->ir_type == IR_TY_U32 || ins->ir_type == IR_TY_U64)) {
                 Instr *d1 = fn->def_of[ins->src[1]];
                 if (d1 && d1->op == OP_CONST && opt_is_power_of_2(d1->imm)) {
+                    int64_t imm = d1->imm;
+                    if (g_emit_smt_proofs) {
+                        smt_prove_ir_strength_reduction("ir_mod_band", OP_MOD, OP_BAND, imm, imm - 1, 64, ins->dst);
+                    }
                     ins->op = OP_BAND;
-                    ins->src[1] = opt_create_const(fn, blk, bi, ins, d1->imm - 1);
+                    ins->src[1] = opt_create_const(fn, blk, bi, ins, imm - 1);
                     count++;
                 }
             }
@@ -235,6 +262,9 @@ static uint32_t opt_peephole_pass(Function *fn) {
             
             // Algebraic Identities: x - x -> CONST 0, x ^ x -> CONST 0
             if ((ins->op == OP_SUB || ins->op == OP_BXOR) && ins->n_src == 2 && ins->src[0] == ins->src[1]) {
+                if (g_emit_smt_proofs) {
+                    smt_prove_ir_peephole("ir_peep_self_zero", ins->op, OP_CONST, 0, 0, 0, 1, 64, ins->dst);
+                }
                 ins->op = OP_CONST;
                 ins->imm = 0;
                 ins->n_src = 0;
@@ -244,6 +274,9 @@ static uint32_t opt_peephole_pass(Function *fn) {
 
             // Algebraic Identities: x & x -> COPY x, x | x -> COPY x
             if ((ins->op == OP_BAND || ins->op == OP_BOR) && ins->n_src == 2 && ins->src[0] == ins->src[1]) {
+                if (g_emit_smt_proofs) {
+                    smt_prove_ir_peephole("ir_peep_self_copy", ins->op, OP_COPY, 0, 0, 0, 0, 64, ins->dst);
+                }
                 ins->op = OP_COPY;
                 ins->n_src = 1;
                 count++;
@@ -257,11 +290,17 @@ static uint32_t opt_peephole_pass(Function *fn) {
                 
                 if (d1 && d1->op == OP_CONST && d1->imm == 0) {
                     if (ins->op != OP_SHL && ins->op != OP_SHR) { // EXPLICIT FIX: Do not convert SHL/SHR by 0 to OP_COPY
+                        if (g_emit_smt_proofs) {
+                            smt_prove_ir_peephole("ir_peep_op_zero", ins->op, OP_COPY, 0, 0, 1, 0, 64, ins->dst);
+                        }
                         ins->op = OP_COPY;
                         ins->n_src = 1; // Drop the 0
                         count++;
                     }
                 } else if (ins->op != OP_SUB && ins->op != OP_SHL && ins->op != OP_SHR && d0 && d0->op == OP_CONST && d0->imm == 0) {
+                    if (g_emit_smt_proofs) {
+                        smt_prove_ir_peephole("ir_peep_zero_op", ins->op, OP_COPY, 0, 0, 1, 0, 64, ins->dst);
+                    }
                     ins->op = OP_COPY;
                     ins->src[0] = ins->src[1];
                     ins->n_src = 1;
@@ -275,10 +314,16 @@ static uint32_t opt_peephole_pass(Function *fn) {
                 Instr *d0 = fn->def_of[ins->src[0]];
                 
                 if (d1 && d1->op == OP_CONST && d1->imm == 1) {
+                    if (g_emit_smt_proofs) {
+                        smt_prove_ir_peephole("ir_peep_op_one", ins->op, OP_COPY, 1, 0, 1, 0, 64, ins->dst);
+                    }
                     ins->op = OP_COPY;
                     ins->n_src = 1;
                     count++;
                 } else if (ins->op == OP_MUL && d0 && d0->op == OP_CONST && d0->imm == 1) {
+                    if (g_emit_smt_proofs) {
+                        smt_prove_ir_peephole("ir_peep_one_mul", ins->op, OP_COPY, 1, 0, 1, 0, 64, ins->dst);
+                    }
                     ins->op = OP_COPY;
                     ins->src[0] = ins->src[1];
                     ins->n_src = 1;
@@ -292,15 +337,24 @@ static uint32_t opt_peephole_pass(Function *fn) {
                 Instr *d0 = fn->def_of[ins->src[0]];
                 if ((d1 && d1->op == OP_CONST && d1->imm == 0) || 
                     (d0 && d0->op == OP_CONST && d0->imm == 0)) {
+                    if (g_emit_smt_proofs) {
+                        smt_prove_ir_peephole("ir_peep_op_zero_const", ins->op, OP_CONST, 0, 0, 1, 1, 64, ins->dst);
+                    }
                     ins->op = OP_CONST;
                     ins->imm = 0;
                     ins->n_src = 0;
                     count++;
                 } else if (d1 && d1->op == OP_CONST && d1->imm == -1) { // BAND x, -1 -> COPY x
+                    if (g_emit_smt_proofs) {
+                        smt_prove_ir_peephole("ir_peep_band_neg1", ins->op, OP_COPY, -1, 0, 1, 0, 64, ins->dst);
+                    }
                     ins->op = OP_COPY;
                     ins->n_src = 1;
                     count++;
                 } else if (d0 && d0->op == OP_CONST && d0->imm == -1) { // BAND -1, x -> COPY x
+                    if (g_emit_smt_proofs) {
+                        smt_prove_ir_peephole("ir_peep_neg1_band", ins->op, OP_COPY, -1, 0, 1, 0, 64, ins->dst);
+                    }
                     ins->op = OP_COPY;
                     ins->src[0] = ins->src[1];
                     ins->n_src = 1;
@@ -314,6 +368,9 @@ static uint32_t opt_peephole_pass(Function *fn) {
                 Instr *d0 = fn->def_of[ins->src[0]];
                 if ((d1 && d1->op == OP_CONST && d1->imm == -1) || 
                     (d0 && d0->op == OP_CONST && d0->imm == -1)) {
+                    if (g_emit_smt_proofs) {
+                        smt_prove_ir_peephole("ir_peep_bor_neg1", ins->op, OP_CONST, -1, -1, 1, 1, 64, ins->dst);
+                    }
                     ins->op = OP_CONST;
                     ins->imm = -1;
                     ins->n_src = 0;
@@ -326,10 +383,16 @@ static uint32_t opt_peephole_pass(Function *fn) {
                 Instr *d1 = fn->def_of[ins->src[1]];
                 Instr *d0 = fn->def_of[ins->src[0]];
                 if (d1 && d1->op == OP_CONST && d1->imm == -1) {
+                    if (g_emit_smt_proofs) {
+                        smt_prove_ir_peephole("ir_peep_bxor_neg1", ins->op, OP_BNOT, -1, 0, 1, 0, 64, ins->dst);
+                    }
                     ins->op = OP_BNOT;
                     ins->n_src = 1;
                     count++;
                 } else if (d0 && d0->op == OP_CONST && d0->imm == -1) {
+                    if (g_emit_smt_proofs) {
+                        smt_prove_ir_peephole("ir_peep_neg1_bxor", ins->op, OP_BNOT, -1, 0, 1, 0, 64, ins->dst);
+                    }
                     ins->op = OP_BNOT;
                     ins->src[0] = ins->src[1];
                     ins->n_src = 1;
@@ -340,6 +403,9 @@ static uint32_t opt_peephole_pass(Function *fn) {
             // Comparison Identities: x == x -> CONST 1, x != x -> CONST 0, etc.
             if ((ins->op == OP_EQ || ins->op == OP_NE || ins->op == OP_LT || ins->op == OP_LE || ins->op == OP_GT || ins->op == OP_GE) && ins->n_src == 2 && ins->src[0] == ins->src[1]) {
                 Opcode orig_op = ins->op;
+                if (g_emit_smt_proofs) {
+                    smt_prove_ir_peephole("ir_peep_cmp_self", ins->op, OP_CONST, 0, (orig_op == OP_EQ || orig_op == OP_LE || orig_op == OP_GE) ? 1 : 0, 0, 1, 64, ins->dst);
+                }
                 ins->op = OP_CONST;
                 ins->imm = (orig_op == OP_EQ || orig_op == OP_LE || orig_op == OP_GE) ? 1 : 0;
                 ins->n_src = 0;
@@ -350,6 +416,9 @@ static uint32_t opt_peephole_pass(Function *fn) {
             if ((ins->op == OP_SHL || ins->op == OP_SHR) && ins->n_src == 2) {
                 Instr *d1 = fn->def_of[ins->src[1]];
                 if (d1 && d1->op == OP_CONST && d1->imm == 0) {
+                    if (g_emit_smt_proofs) {
+                        smt_prove_ir_peephole("ir_peep_shift_zero", ins->op, OP_COPY, 0, 0, 1, 0, 64, ins->dst);
+                    }
                     ins->op = OP_COPY;
                     ins->n_src = 1;
                     count++;
