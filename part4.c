@@ -4919,6 +4919,34 @@ static long long eval_const_expr_p4_raw(Node *elem, int *ok) {
             return (long long)bits;
         }
     }
+    /* HYGIENE-OFFSETOF-001: mirror PARSER-OFFSETOF-001 folds into the p4 evaluator.
+     * Enables offsetof macro / __builtin_offsetof in global initializers, array
+     * sizes, and any context that routes through eval_const_expr_p4.
+     *
+     * The offsetof macro expansion produces:
+     *   ND_CAST(ND_ADDR(ND_MEMBER(ND_DEREF(ND_CAST(T*, ND_NUM(0))), member_offset)))
+     *
+     * member_offset is precomputed at parse time by recompute_struct_layout.
+     *
+     * Folds:
+     *   ND_MEMBER                  → elem->member_offset
+     *   ND_ADDR(ND_MEMBER)         → elem->lhs->member_offset
+     *   ND_ADDR(ND_DEREF(x))       → eval(x)  (addr-of-deref identity)
+     *   ND_DEREF(x)                → eval(x)  (null-ptr deref through offset)
+     */
+    if (elem->kind == ND_MEMBER)
+        return (long long)elem->member_offset;
+    if (elem->kind == ND_ADDR) {
+        if (elem->lhs && elem->lhs->kind == ND_MEMBER)
+            return (long long)elem->lhs->member_offset;
+        if (elem->lhs && elem->lhs->kind == ND_DEREF)
+            return eval_const_expr_p4(elem->lhs->lhs, ok); /* &(*p) == p */
+    }
+    if (elem->kind == ND_DEREF)
+        return eval_const_expr_p4(elem->lhs, ok); /* *(null+offset) => offset */
+    /* Enum constants in global initializer contexts */
+    if (elem->kind == ND_VAR && elem->sym && elem->sym->is_enum_const && !elem->sym->is_local)
+        return elem->sym->enum_val;
     *ok = 0;
     return 0;
 }
@@ -4996,61 +5024,71 @@ static void emit_global_init_list(Compiler *cc, Type *type, Node *init_list, int
     if (type->kind == TY_ARRAY) {
         Type *elem_type = type->base;
         int elem_size = type_size(elem_type);
+        int array_end = base_offset + type->array_len * elem_size;
+
         for (int i = 0; i < type->array_len; i++) {
-            int expected_end = base_offset + (i + 1) * elem_size;
-            if (i < init_list->num_args) {
-                Node *elem = init_list->args[i];
-                if (elem->kind == ND_INIT_LIST) {
-                    emit_global_init_list(cc, elem_type, elem, base_offset + i * elem_size, emitted);
-                } else if (elem_type->kind == TY_STRUCT || elem_type->kind == TY_UNION || elem_type->kind == TY_ARRAY) {
-                    Node dummy;
-                    memset(&dummy, 0, sizeof(Node));
-                    dummy.kind = ND_INIT_LIST;
-                    dummy.args = (Node **)cc_alloc(cc, sizeof(Node *));
-                    dummy.args[0] = elem;
-                    dummy.num_args = 1;
-                    emit_global_init_list(cc, elem_type, &dummy, base_offset + i * elem_size, emitted);
+            int elem_start = base_offset + i * elem_size;
+
+            /* Once we've emitted all explicit initializers, break and emit the
+             * remaining tail as a single coalesced .zero (CG-EXP3-001). */
+            if (i >= init_list->num_args) break;
+
+            Node *elem = init_list->args[i];
+            /* Emit any gap before this element */
+            if (*emitted < elem_start) {
+                fprintf(cc->out, "    .zero %d\n", elem_start - *emitted);
+                *emitted = elem_start;
+            }
+
+            if (elem->kind == ND_INIT_LIST) {
+                emit_global_init_list(cc, elem_type, elem, elem_start, emitted);
+            } else if (elem_type->kind == TY_STRUCT || elem_type->kind == TY_UNION || elem_type->kind == TY_ARRAY) {
+                Node dummy;
+                memset(&dummy, 0, sizeof(Node));
+                dummy.kind = ND_INIT_LIST;
+                dummy.args = (Node **)cc_alloc(cc, sizeof(Node *));
+                dummy.args[0] = elem;
+                dummy.num_args = 1;
+                emit_global_init_list(cc, elem_type, &dummy, elem_start, emitted);
+            } else {
+                while (elem && elem->kind == ND_CAST) elem = elem->lhs;
+                int const_ok = 1;
+                long long const_val = eval_const_expr_p4(elem, &const_ok);
+                if (const_ok) {
+                    if (elem_size == 1) fprintf(cc->out, "    .byte %lld\n", const_val);
+                    else if (elem_size == 2) fprintf(cc->out, "    .short %lld\n", const_val);
+                    else if (elem_size == 4) fprintf(cc->out, "    .long %lld\n", const_val);
+                    else fprintf(cc->out, "    .quad %lld\n", const_val);
+                } else if (elem->kind == ND_STR) {
+                    if (elem_size == 4) fprintf(cc->out, "    .long .Lstr_%d\n", elem->str_id);
+                    else fprintf(cc->out, "    .quad .Lstr_%d\n", elem->str_id);
+                } else if (elem->kind == ND_ADDR_LABEL) {
+                    if (elem_size == 4) fprintf(cc->out, "    .long .Luser_%s_%s\n", cc->current_func, elem->label_name);
+                    else fprintf(cc->out, "    .quad .Luser_%s_%s\n", cc->current_func, elem->label_name);
                 } else {
-                    while (elem && elem->kind == ND_CAST) elem = elem->lhs;
-                    int const_ok = 1;
-                    long long const_val = eval_const_expr_p4(elem, &const_ok);
-                    if (*emitted < base_offset + i * elem_size) {
-                        fprintf(cc->out, "    .zero %d\n", (base_offset + i * elem_size) - *emitted);
-                        *emitted = base_offset + i * elem_size;
-                    }
-                    if (const_ok) {
-                        if (elem_size == 1) fprintf(cc->out, "    .byte %lld\n", const_val);
-                        else if (elem_size == 2) fprintf(cc->out, "    .short %lld\n", const_val);
-                        else if (elem_size == 4) fprintf(cc->out, "    .long %lld\n", const_val);
-                        else fprintf(cc->out, "    .quad %lld\n", const_val);
-                    } else if (elem->kind == ND_STR) {
-                        if (elem_size == 4) fprintf(cc->out, "    .long .Lstr_%d\n", elem->str_id);
-                        else fprintf(cc->out, "    .quad .Lstr_%d\n", elem->str_id);
-                    } else if (elem->kind == ND_ADDR_LABEL) {
-                        if (elem_size == 4) fprintf(cc->out, "    .long .Luser_%s_%s\n", cc->current_func, elem->label_name);
-                        else fprintf(cc->out, "    .quad .Luser_%s_%s\n", cc->current_func, elem->label_name);
-                    } else {
-                        char *g_name = NULL;
-                        long long g_off = 0;
-                        if (resolve_global_addr(elem, &g_name, &g_off)) {
-                            if (g_off == 0) {
-                                if (elem_size == 4) fprintf(cc->out, "    .long %s\n", g_name);
-                                else fprintf(cc->out, "    .quad %s\n", g_name);
-                            } else {
-                                if (elem_size == 4) fprintf(cc->out, "    .long %s + %lld\n", g_name, g_off);
-                                else fprintf(cc->out, "    .quad %s + %lld\n", g_name, g_off);
-                            }
+                    char *g_name = NULL;
+                    long long g_off = 0;
+                    if (resolve_global_addr(elem, &g_name, &g_off)) {
+                        if (g_off == 0) {
+                            if (elem_size == 4) fprintf(cc->out, "    .long %s\n", g_name);
+                            else fprintf(cc->out, "    .quad %s\n", g_name);
                         } else {
-                            fprintf(cc->out, "    .zero %d\n", elem_size);
+                            if (elem_size == 4) fprintf(cc->out, "    .long %s + %lld\n", g_name, g_off);
+                            else fprintf(cc->out, "    .quad %s + %lld\n", g_name, g_off);
                         }
+                    } else {
+                        fprintf(cc->out, "    .zero %d\n", elem_size);
                     }
-                    *emitted += elem_size;
                 }
+                *emitted += elem_size;
             }
-            if (*emitted < expected_end) {
-                fprintf(cc->out, "    .zero %d\n", expected_end - *emitted);
-                *emitted = expected_end;
-            }
+        }
+
+        /* CG-EXP3-001: Coalesce remaining uninitialized elements into a single
+         * .zero directive instead of N individual .zero 4 lines. */
+        if (*emitted < array_end) {
+            fprintf(cc->out, "    .zero %d\n", array_end - *emitted);
+            *emitted = array_end;
         }
     } else if (type->kind == TY_STRUCT || type->kind == TY_UNION) {
         StructField *f = type->fields;
@@ -5135,9 +5173,19 @@ static void emit_global_var(Compiler *cc, Node *gvar) {
     size = 8;
     
   if (gvar->initializer) {
+    /* CG-EXP3-ALIGN-001: compute p2align from type alignment instead of
+     * hardcoding 3 (8-byte) for all global vars. char/short/int/etc. get
+     * correct alignment; over-alignment is wasteful for packed data. */
+    int talign = type_align(gvar->type);
+    int p2a = 0;
+    if (talign >= 16) p2a = 4;
+    else if (talign >= 8) p2a = 3;
+    else if (talign >= 4) p2a = 2;
+    else if (talign >= 2) p2a = 1;
+    else p2a = 0;
     /* initialized data goes in .data */
     fprintf(cc->out, "    .data\n");
-    fprintf(cc->out, "    .p2align 3\n");
+    fprintf(cc->out, "    .p2align %d\n", p2a);
     if (!gvar->is_static) {
       fprintf(cc->out, "    .globl %s\n", gvar->name);
     }
@@ -5248,11 +5296,14 @@ static void emit_global_var(Compiler *cc, Node *gvar) {
         }
   } else {
     /* tentative definitions and uninitialized data */
+    /* CG-EXP3-ALIGN-001: use type alignment for .comm, not hardcoded 8 */
+    int bss_align = type_align(gvar->type);
+    if (bss_align < 1) bss_align = 1;
     if (gvar->is_static) {
         fprintf(cc->out, "    .local %s\n", gvar->name);
-        fprintf(cc->out, "    .comm %s, %d, 8\n", gvar->name, size);
+        fprintf(cc->out, "    .comm %s, %d, %d\n", gvar->name, size, bss_align);
     } else {
-        fprintf(cc->out, "    .comm %s, %d, 8\n", gvar->name, size);
+        fprintf(cc->out, "    .comm %s, %d, %d\n", gvar->name, size, bss_align);
     }
   }
 }
