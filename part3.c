@@ -847,13 +847,14 @@ Type *parse_type(Compiler *cc) {
     int is_typedef_kw = 0;
     int is_static = 0;
     int is_extern = 0;
+    int is_volatile_qual = 0;  /* CG-VOLATILE-001: track volatile qualifier */
 
     /* storage class / qualifiers / basic types */
     for (;;) {
         if (cc->tk == TK_STATIC) { is_static = 1; next_token(cc); }
         else if (cc->tk == TK_EXTERN) { is_extern = 1; next_token(cc); }
         else if (cc->tk == TK_CONST) { next_token(cc); }
-        else if (cc->tk == TK_VOLATILE) { next_token(cc); }
+        else if (cc->tk == TK_VOLATILE) { is_volatile_qual = 1; next_token(cc); }  /* CG-VOLATILE-001 */
         else if (cc->tk == TK_INLINE) { next_token(cc); }
         else if (cc->tk == TK_AUTO) { next_token(cc); }
         else if (cc->tk == TK_REGISTER) { next_token(cc); }
@@ -951,7 +952,18 @@ Type *parse_type(Compiler *cc) {
 
     /* skip trailing const/volatile (e.g. 'char const *') */
     while (cc->tk == TK_CONST || cc->tk == TK_VOLATILE) {
+        if (cc->tk == TK_VOLATILE) is_volatile_qual = 1; /* CG-VOLATILE-001 */
         next_token(cc);
+    }
+
+    /* CG-VOLATILE-001: stamp volatile qualifier onto the resolved type.
+     * We clone shared singleton types (ty_int etc.) before modifying to
+     * avoid corrupting all int variables globally. */
+    if (is_volatile_qual && type) {
+        Type *vt = (Type *)cc_alloc(cc, sizeof(Type));
+        *vt = *type;
+        vt->is_volatile = 1;
+        type = vt;
     }
 
     cc->current_is_static = is_static;
@@ -5010,6 +5022,10 @@ static LatticeVal icp_eval_expr(Node *n) {
     }
     
     if (n->kind == ND_VAR && n->sym) {
+        /* CG-VOLATILE-001: volatile reads are opaque to ICP — their value may
+         * change at any time (signal handler, MMIO, other thread). Return
+         * LATTICE_BOT so the solver never propagates a stale constant. */
+        if (n->sym->type && n->sym->type->is_volatile) return bot;
         return get_sym_lattice(n->sym);
     }
     
@@ -5137,6 +5153,11 @@ static void propagate_local_assignments(Node *n, Node *current_func) {
         Node *lhs = n->lhs;
         while (lhs && lhs->kind == ND_CAST) lhs = lhs->lhs;
         if (lhs && lhs->kind == ND_VAR && lhs->sym && lhs->sym->is_local) {
+            /* CG-VOLATILE-001: never enter a volatile symbol into the ICP lattice.
+             * Volatile writes must always reach memory — if ICP marks the symbol
+             * LATTICE_CONST, a later read could be folded away, silently skipping
+             * the required memory access. */
+            if (lhs->sym->type && lhs->sym->type->is_volatile) goto icp_assign_done;
             SymStats *stats = get_sym_stats(lhs->sym);
             if (stats && stats->assign_count <= 1 && stats->addr_taken == 0) {
                 LatticeVal rhs_val = icp_eval_expr(n->rhs);
@@ -5150,6 +5171,7 @@ static void propagate_local_assignments(Node *n, Node *current_func) {
                 }
             }
         }
+        icp_assign_done:;
     }
     
     propagate_local_assignments(n->lhs, current_func);

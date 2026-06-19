@@ -836,6 +836,7 @@ struct Type {
     int is_packed;   /* __attribute__((packed)) — suppress field alignment */
     int explicit_align; /* __attribute__((aligned(N))) — override total align, 0 = none */
     int is_tbfp;     /* transparent bitfield packing (tbfp) marker */
+    int is_volatile; /* volatile qualifier — force memory access, no register caching */
 };
 
 struct StringEntry {

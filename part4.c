@@ -4276,14 +4276,20 @@ static int allocate_registers(Node *func) {
     }
 
     int allocated = -1;
-    for (r = 0; r < 5; r++) {
-      if (!active_regs[r]) {
-        allocated = r;
-        active_regs[r] = get_callee_reg(r);
-        active_ends[r] = sym->live_end;
-        sym->assigned_reg = get_callee_reg(r);
-        used_regs_bitmask |= (1 << r);
-        break;
+    /* CG-VOLATILE-001: never register-allocate volatile locals — they must always
+     * reside in a stack slot so memory stores are always emitted and visible to
+     * signal handlers and other threads. */
+    int is_vol = (sym->type && sym->type->is_volatile);
+    if (!is_vol) {
+      for (r = 0; r < 5; r++) {
+        if (!active_regs[r]) {
+          allocated = r;
+          active_regs[r] = get_callee_reg(r);
+          active_ends[r] = sym->live_end;
+          sym->assigned_reg = get_callee_reg(r);
+          used_regs_bitmask |= (1 << r);
+          break;
+        }
       }
     }
 
