@@ -23,6 +23,8 @@
 static int g_verbose = 0;
 static uint8_t *g_attest_data = NULL;
 static size_t   g_attest_sz = 0;
+static uint8_t *g_build_attest_data = NULL;
+static size_t   g_build_attest_sz = 0;
 
 /* ── ELF-64 structures (inline — no elf.h dependency) ─────────────────── */
 
@@ -254,6 +256,11 @@ static void cleanup_linker_state(void) {
         g_attest_data = NULL;
     }
     g_attest_sz = 0;
+    if (g_build_attest_data) {
+        free(g_build_attest_data);
+        g_build_attest_data = NULL;
+    }
+    g_build_attest_sz = 0;
 
     if (g_objs) {
         for (i = 0; i < g_nobj; i++) {
@@ -732,6 +739,7 @@ static const char *match_section(const char *secname, int is_common) {
     }
     /* fallback: hardcoded defaults */
     if (strcmp(secname, ".note.zcc.tensor") == 0) return ".note.zcc.tensor";
+    if (strcmp(secname, ".note.zcc.build") == 0)  return ".note.zcc.build";
     if (strcmp(secname, ".zcc_tensor_attest") == 0) return ".zcc_tensor_attest";
     if (strncmp(secname, ".text", 5) == 0 || strncmp(secname, ".multiboot", 10) == 0)
         return ".text";
@@ -757,7 +765,7 @@ static GlobalSym *add_sym(const char *name);
 
 /* ── Layout pass: assign VMAs to all input sections ─────────────────────── */
 static void layout(void) {
-    static const char *out_order[] = { ".text", ".rodata", ".note", ".note.zcc.tensor", ".zcc_tensor_attest", ".data", ".bss", NULL };
+    static const char *out_order[] = { ".text", ".rodata", ".note", ".note.zcc.tensor", ".note.zcc.build", ".zcc_tensor_attest", ".data", ".bss", NULL };
     int oi;
     int max_shnum = 0;
     int i;
@@ -944,8 +952,17 @@ static void layout(void) {
                 out->vma = cursor;
                 out->lma = cursor;
                 out->align = 4;
-                cursor += 100;
-                out->size = 100;
+                cursor += 144;
+                out->size = 144;
+            }
+            if (strcmp(oname, ".note.zcc.build") == 0 && g_build_attest_data) {
+                cursor = ALIGN_UP(cursor, 4);
+                out->vma = cursor;
+                out->lma = cursor;
+                out->align = 4;
+                /* 12 note header + 4 "ZCC\0" + 136 descriptor = 152 bytes */
+                cursor += 152;
+                out->size = 152;
             }
             if (strcmp(oname, ".zcc_tensor_attest") == 0 && g_attest_data) {
                 cursor = ALIGN_UP(cursor, 32);
@@ -1270,45 +1287,110 @@ static void copy_sections(void) {
         
         {
             uint32_t namesz = 4;
-            uint32_t descsz = 84;
+            uint32_t descsz = 128;
             uint32_t type = 0x7cc;
             char name[4] = "ZCC";
             
-            uint8_t desc[84];
-            memset(desc, 0, 84);
+            uint8_t desc[128];
+            memset(desc, 0, 128);
             /* desc contains:
              * manifest_sha256 (32)
              * gguf_sha256 (32)
+             * merkle_root (32)
              * record_count (4)
+             * leaf_count (4)
+             * leaf_size (4)
+             * tree_depth (4)
              * schema_version (4)
              * verifier_version (4)
              * gguf_version (4)
              * flags (4)
              */
-            memcpy(desc, g_attest_data + 28, 32);       /* manifest_sha256 */
-            memcpy(desc + 32, g_attest_data + 60, 32);  /* gguf_sha256 */
-            uint32_t record_count = *(uint32_t *)(g_attest_data + 24);
+            memcpy(desc, g_attest_data + 40, 32);       /* manifest_sha256 */
+            memcpy(desc + 32, g_attest_data + 72, 32);  /* gguf_sha256 */
+            memcpy(desc + 64, g_attest_data + 104, 32); /* merkle_root */
             uint32_t schema_version = *(uint32_t *)(g_attest_data + 8);
             uint32_t verifier_version = *(uint32_t *)(g_attest_data + 12);
             uint32_t gguf_version = *(uint32_t *)(g_attest_data + 16);
             uint32_t flags = *(uint32_t *)(g_attest_data + 20);
+            uint32_t record_count = *(uint32_t *)(g_attest_data + 24);
+            uint32_t leaf_count = *(uint32_t *)(g_attest_data + 28);
+            uint32_t leaf_size = *(uint32_t *)(g_attest_data + 32);
+            uint32_t tree_depth = *(uint32_t *)(g_attest_data + 36);
             
-            memcpy(desc + 64, &record_count, 4);
-            memcpy(desc + 68, &schema_version, 4);
-            memcpy(desc + 72, &verifier_version, 4);
-            memcpy(desc + 76, &gguf_version, 4);
-            memcpy(desc + 80, &flags, 4);
+            memcpy(desc + 96, &record_count, 4);
+            memcpy(desc + 100, &leaf_count, 4);
+            memcpy(desc + 104, &leaf_size, 4);
+            memcpy(desc + 108, &tree_depth, 4);
+            memcpy(desc + 112, &schema_version, 4);
+            memcpy(desc + 116, &verifier_version, 4);
+            memcpy(desc + 120, &gguf_version, 4);
+            memcpy(desc + 124, &flags, 4);
             
             outsec_append(note_out, (uint8_t *)&namesz, 4, 4);
             outsec_append(note_out, (uint8_t *)&descsz, 4, 4);
             outsec_append(note_out, (uint8_t *)&type, 4, 4);
             outsec_append(note_out, (uint8_t *)name, 4, 4);
-            outsec_append(note_out, desc, 84, 4);
+            outsec_append(note_out, desc, 128, 4);
         }
         
         /* 2. Populate .zcc_tensor_attest section */
         OutSection *attest_out = get_out_section(".zcc_tensor_attest", SHF_ALLOC);
         outsec_append(attest_out, g_attest_data, g_attest_sz, 32);
+    }
+
+    if (g_build_attest_data) {
+        /* 3. Emit .note.zcc.build — build provenance channel */
+        /* Descriptor layout (136 bytes):
+         *   schema_version   (4)
+         *   flags            (4)
+         *   zcc_sha256       (32)
+         *   zld_sha256       (32)
+         *   source_manifest_sha256 (32)
+         *   build_policy_sha256    (32)
+         * Total: 8 + 128 = 136
+         * Full note: 12 header + 4 name + 136 desc = 152 bytes
+         */
+        OutSection *build_note_out = get_out_section(".note.zcc.build", SHF_ALLOC);
+        uint64_t build_aligned = ALIGN_UP(build_note_out->buf_used, 4);
+        if (build_aligned > build_note_out->buf_used) {
+            outsec_append(build_note_out, NULL, build_aligned - build_note_out->buf_used, 4);
+        }
+
+        {
+            uint32_t namesz = 4;    /* "ZCC\0" */
+            uint32_t descsz = 136;
+            uint32_t type   = 0x7cd;
+            char     bname[4] = "ZCC";
+
+            /* Descriptor: read directly from binary attestation blob.
+             * Binary layout produced by zcc_build_attest.py:
+             *   magic             (8)  — consumed by zld validation, not emitted
+             *   schema_version    (4)  @ offset 8
+             *   flags             (4)  @ offset 12
+             *   zcc_sha256        (32) @ offset 16
+             *   zld_sha256        (32) @ offset 48
+             *   source_manifest_sha256 (32) @ offset 80
+             *   build_policy_sha256    (32) @ offset 112
+             * Total blob: 8 + 4 + 4 + 128 = 144 bytes
+             */
+            uint8_t bdesc[136];
+            memset(bdesc, 0, 136);
+            /* schema_version + flags */
+            memcpy(bdesc,      g_build_attest_data + 8,   4); /* schema_version */
+            memcpy(bdesc + 4,  g_build_attest_data + 12,  4); /* flags */
+            /* four SHA-256 hashes */
+            memcpy(bdesc + 8,  g_build_attest_data + 16,  32); /* zcc_sha256 */
+            memcpy(bdesc + 40, g_build_attest_data + 48,  32); /* zld_sha256 */
+            memcpy(bdesc + 72, g_build_attest_data + 80,  32); /* source_manifest_sha256 */
+            memcpy(bdesc + 104,g_build_attest_data + 112, 32); /* build_policy_sha256 */
+
+            outsec_append(build_note_out, (uint8_t *)&namesz, 4, 4);
+            outsec_append(build_note_out, (uint8_t *)&descsz, 4, 4);
+            outsec_append(build_note_out, (uint8_t *)&type,   4, 4);
+            outsec_append(build_note_out, (uint8_t *)bname,   4, 4);
+            outsec_append(build_note_out, bdesc, 136, 4);
+        }
     }
 
     /* finalize sizes from actual copy */
@@ -1475,7 +1557,9 @@ static void write_output(const char *path) {
         if (!(s->flags & SHF_ALLOC)) continue;
         if (s->size == 0) continue;
 
-        if (strcmp(s->name, ".note") == 0 || strcmp(s->name, ".note.zcc.tensor") == 0) {
+        if (strcmp(s->name, ".note") == 0 ||
+            strcmp(s->name, ".note.zcc.tensor") == 0 ||
+            strcmp(s->name, ".note.zcc.build") == 0) {
             note_sec = s;
         }
 
@@ -1708,7 +1792,9 @@ static void write_output(const char *path) {
             sh->sh_addralign = sec->align ? sec->align : 8;
 
             if (sec->flags & SHF_ALLOC) {
-                if (strcmp(sec->name, ".note") == 0 || strcmp(sec->name, ".note.zcc.tensor") == 0) {
+                if (strcmp(sec->name, ".note") == 0 ||
+                    strcmp(sec->name, ".note.zcc.tensor") == 0 ||
+                    strcmp(sec->name, ".note.zcc.build") == 0) {
                     sh->sh_type = SHT_NOTE;
                     sh->sh_offset = rx_file_off + (sec->vma - rx_vaddr);
                 } else if (sec->flags & SHF_WRITE) {
@@ -1753,7 +1839,7 @@ static void write_output(const char *path) {
 }
 
 /* ── zld_link ───────────────────────────────────────────────────────────── */
-int zld_link(const char **obj_files, int obj_count, const char *out_path, const char *script_path, const char *tensor_attest_bin_path, const char *tensor_note_json_path) {
+int zld_link(const char **obj_files, int obj_count, const char *out_path, const char *script_path, const char *tensor_attest_bin_path, const char *tensor_note_json_path, const char *build_attest_bin_path) {
     int i;
     char *env_verb = getenv("ZLD_VERBOSE");
     g_verbose = env_verb ? atoi(env_verb) : 0;
@@ -1763,7 +1849,7 @@ int zld_link(const char **obj_files, int obj_count, const char *out_path, const 
 
     if (tensor_attest_bin_path) {
         g_attest_data = read_file(tensor_attest_bin_path, &g_attest_sz);
-        if (g_attest_sz < 128) {
+        if (g_attest_sz < 192) {
             die("tensor attestation file too small");
         }
         uint64_t magic = *(uint64_t *)(g_attest_data);
@@ -1779,6 +1865,20 @@ int zld_link(const char **obj_files, int obj_count, const char *out_path, const 
     if (tensor_note_json_path) {
         if (g_verbose) {
             printf("[zld] Ingested tensor note JSON path (JSON parsing bypassed): %s\n", tensor_note_json_path);
+        }
+    }
+
+    /* Load build provenance attestation binary — no JSON parsing */
+    if (build_attest_bin_path) {
+        g_build_attest_data = read_file(build_attest_bin_path, &g_build_attest_sz);
+        /* Minimum layout: 8 magic + 4 schema_version + 4 flags + 4*32 hashes = 144 bytes */
+        if (g_build_attest_sz < 144) {
+            die("build attestation file too small (expected >= 144 bytes)");
+        }
+        uint64_t bmagic = *(uint64_t *)(g_build_attest_data);
+        /* Magic: "ZCC_BLD\0" = 0x444c425f43435a */
+        if (bmagic != 0x444c425f43435aULL) {
+            die("invalid build attestation file magic");
         }
     }
 

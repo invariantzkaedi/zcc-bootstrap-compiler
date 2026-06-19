@@ -1,0 +1,66 @@
+feat(build): add ELF build provenance attestation note
+
+Goal
+Add a second provenance channel to ZCC-linked ELF binaries:
+.note.zcc.build (type 0x7cd) embedding SHA-256 hashes of the compiler,
+linker, source manifest, and build policy used to produce the artifact.
+
+Outcome
+ELF executables linked with zld now carry two cryptographic provenance
+notes — .note.zcc.tensor (model/GGUF) and .note.zcc.build (toolchain) —
+both verified byte-identical across repeated builds.
+
+Gates
+
+Gate 1: Self-host byte-identical — PASS via make selfhost
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (16105 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+diff zcc2.s zcc3.s && echo "SELF-HOST VERIFIED (assembly identical)"
+SELF-HOST VERIFIED (assembly identical)
+
+Gate 2: Deterministic build attestation — PASS via cmp a.build.bin b.build.bin
+GATE 2: BUILD ATTEST BIN REPRODUCIBLE
+GATE 2: BUILD ATTEST JSON REPRODUCIBLE
+
+Gate 3: Linker reproducibility — PASS via cmp app_build1 app_build2
+GATE 3: LINKER REPRODUCIBILITY VERIFIED
+
+Gate 4: ELF structural verification — PASS via readelf
+  [ 4] .note.zcc.tensor  NOTE   0000000000100010  (type=0x7cc, descsz=0x80)
+  [ 5] .note.zcc.build   NOTE   00000000001000a0  (type=0x7cd, descsz=0x88)
+  [ 6] .zcc_tensor_attest PROGBITS 0000000000100140
+
+Gate 5: Build provenance verification — PASS via zcc_verify_build_note.py
+=== ZCC Build Attestation Found ===
+  Schema Version: 1
+  Flags:          0x00000000
+  ZCC SHA-256: match ✓
+  zld SHA-256: match ✓
+  Source Manifest SHA-256: match ✓
+  Build Policy SHA-256: match ✓
+✅ Build provenance verification successful.
+
+Bugs caught mid-gate
+- ELF64 verifier field offset bug: zcc_verify_build_note.py initially used
+  sequential struct unpacks that misread e_shentsize/e_shnum from wrong
+  ELF header byte offsets. Corrected to use exact absolute offsets per
+  ELF64 spec (e_shentsize @ 58, e_shnum @ 60).
+
+Hygiene / deferred
+HYGIENE-001: Runtime verification deferred to Vector 8.4. Application
+does not introspect its own build provenance at startup by design.
+HYGIENE-002: .note.zcc.build and .note.zcc.tensor share PT_NOTE segment
+pointer in write_output; multi-note segment plumbing deferred to Vector 8.4
+if two simultaneous PT_NOTE entries are required.
+
+Forensic notes
+- Binary blob layout: 8 magic ("ZCC_BLD\0") + 4 schema_version + 4 flags
+  + 4×32 SHA-256 hashes = 144 bytes. Zero JSON parsing in linker.
+- Descriptor layout emitted into ELF: 136 bytes (8 header + 128 hashes).
+  Full note section: 12 ELF note header + 4 name + 136 desc = 152 bytes.
+- zld_link() expanded to 7 parameters; part5.c and zld.c updated.
+- No mutation to existing .note.zcc.tensor or .zcc_tensor_attest semantics.

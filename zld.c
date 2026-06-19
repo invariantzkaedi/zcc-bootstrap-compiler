@@ -9,7 +9,8 @@
 int main(int argc, char *argv[]) {
     char *ld_script = NULL;
     const char *tensor_attest_bin = NULL;
-    const char *tensor_note_json = NULL;
+    const char *tensor_note_json  = NULL;
+    const char *build_attest_bin  = NULL;
     const char **obj_files = NULL;
     int obj_count = 0;
     int obj_cap = 0;
@@ -28,6 +29,8 @@ int main(int argc, char *argv[]) {
             tensor_attest_bin = argv[++i];
         } else if (strcmp(argv[i], "--tensor-note-json") == 0 && i + 1 < argc) {
             tensor_note_json = argv[++i];
+        } else if (strcmp(argv[i], "--build-attest-bin") == 0 && i + 1 < argc) {
+            build_attest_bin = argv[++i];
         } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--verbose") == 0) {
             g_verbose = 1;
         } else if (argv[i][0] != '-') {
@@ -40,13 +43,17 @@ int main(int argc, char *argv[]) {
     }
 
     if (!obj_count) {
-        fprintf(stderr, "usage: zld [-T linker.ld] [-o output] [--tensor-attest-bin file.bin] [--tensor-note-json file.json] [-v|--verbose] file.o...\n");
+        fprintf(stderr, "usage: zld [-T linker.ld] [-o output] "
+                "[--tensor-attest-bin file.bin] [--tensor-note-json file.json] "
+                "[--build-attest-bin build.bin] [-v|--verbose] file.o...\n");
         if (obj_files) free(obj_files);
         return 1;
     }
 
-    zld_link(obj_files, obj_count, g_output, ld_script, tensor_attest_bin, tensor_note_json);
+    zld_link(obj_files, obj_count, g_output, ld_script,
+             tensor_attest_bin, tensor_note_json, build_attest_bin);
 
     free(obj_files);
     return 0;
 }
+

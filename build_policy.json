@@ -1,0 +1,9 @@
+{
+  "policy_name": "zcc_default_build",
+  "schema_version": 1,
+  "allowed_targets": ["x86_64-linux-gnu", "x86_64-freestanding"],
+  "optimization_level": 0,
+  "debug": false,
+  "reproducible": true,
+  "notes": "Default build policy for deterministic ZCC build provenance attestation."
+}

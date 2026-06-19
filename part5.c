@@ -1609,10 +1609,10 @@ int zcc_main(int argc, char **argv) {
   }
 
   if (g_run_zld) {
-    extern int zld_link(const char **obj_files, int obj_count, const char *out_path, const char *script_path, const char *tensor_attest_bin_path, const char *tensor_note_json_path);
+    extern int zld_link(const char **obj_files, int obj_count, const char *out_path, const char *script_path, const char *tensor_attest_bin_path, const char *tensor_note_json_path, const char *build_attest_bin_path);
     if (!output_file) output_file = "zkernel.elf";
     if (!g_zld_script) g_zld_script = "linker.ld";
-    return zld_link(g_zld_objs, g_zld_obj_count, output_file, g_zld_script, NULL, NULL);
+    return zld_link(g_zld_objs, g_zld_obj_count, output_file, g_zld_script, NULL, NULL, NULL);
   }
 
   /* Stderr policy: open by default, --quiet silences.
