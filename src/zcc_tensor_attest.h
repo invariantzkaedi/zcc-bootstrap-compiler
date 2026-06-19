@@ -9,12 +9,16 @@
 
 typedef struct __attribute__((packed)) {
     uint64_t magic;
-    uint32_t version;
+    uint32_t schema_version;
+    uint32_t verifier_version;
+    uint32_t gguf_version;
+    uint32_t flags;
     uint32_t record_count;
     uint8_t  manifest_sha256[32];
     uint8_t  gguf_sha256[32];
     uint64_t records_offset;
     uint64_t records_size;
+    uint8_t  reserved[20]; /* Pad to 128 bytes (multiple of 32) */
 } ZccTensorAttestHeader;
 
 typedef struct __attribute__((packed)) {

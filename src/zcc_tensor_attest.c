@@ -173,9 +173,14 @@ int zcc_verify_tensor_manifest(
         snprintf(report->error_msg, sizeof(report->error_msg), "Invalid magic: 0x%llx", (unsigned long long)hdr->magic);
         return -1;
     }
-    if (hdr->version != ZCC_TENSOR_ATTEST_VERSION) {
+    if (hdr->schema_version != ZCC_TENSOR_ATTEST_VERSION) {
         report->status = ZCC_TENSOR_ERR_LAYOUT_NONCANONICAL;
-        snprintf(report->error_msg, sizeof(report->error_msg), "Unsupported version: %u", hdr->version);
+        snprintf(report->error_msg, sizeof(report->error_msg), "Unsupported schema version: %u", hdr->schema_version);
+        return -1;
+    }
+    if (hdr->verifier_version != 1) {
+        report->status = ZCC_TENSOR_ERR_LAYOUT_NONCANONICAL;
+        snprintf(report->error_msg, sizeof(report->error_msg), "Unsupported verifier version: %u", hdr->verifier_version);
         return -1;
     }
 
@@ -224,6 +229,13 @@ int zcc_verify_tensor_manifest(
         fclose(f);
         report->status = ZCC_TENSOR_ERR_LAYOUT_NONCANONICAL;
         snprintf(report->error_msg, sizeof(report->error_msg), "Invalid GGUF magic");
+        return -1;
+    }
+
+    if (version_val != hdr->gguf_version) {
+        fclose(f);
+        report->status = ZCC_TENSOR_ERR_LAYOUT_NONCANONICAL;
+        snprintf(report->error_msg, sizeof(report->error_msg), "GGUF version mismatch: expected %u, got %u", hdr->gguf_version, version_val);
         return -1;
     }
 

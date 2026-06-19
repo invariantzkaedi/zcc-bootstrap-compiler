@@ -944,8 +944,8 @@ static void layout(void) {
                 out->vma = cursor;
                 out->lma = cursor;
                 out->align = 4;
-                cursor += 88;
-                out->size = 88;
+                cursor += 100;
+                out->size = 100;
             }
             if (strcmp(oname, ".zcc_tensor_attest") == 0 && g_attest_data) {
                 cursor = ALIGN_UP(cursor, 32);
@@ -1270,25 +1270,40 @@ static void copy_sections(void) {
         
         {
             uint32_t namesz = 4;
-            uint32_t descsz = 72;
+            uint32_t descsz = 84;
             uint32_t type = 0x7cc;
             char name[4] = "ZCC";
             
-            uint8_t desc[72];
-            memset(desc, 0, 72);
-            /* desc contains manifest_sha256 (32) + gguf_sha256 (32) + record_count (4) + policy_version (4) */
-            memcpy(desc, g_attest_data + 16, 32);       /* manifest_sha256 */
-            memcpy(desc + 32, g_attest_data + 48, 32);  /* gguf_sha256 */
-            uint32_t record_count = *(uint32_t *)(g_attest_data + 12);
-            uint32_t policy_version = 1;
+            uint8_t desc[84];
+            memset(desc, 0, 84);
+            /* desc contains:
+             * manifest_sha256 (32)
+             * gguf_sha256 (32)
+             * record_count (4)
+             * schema_version (4)
+             * verifier_version (4)
+             * gguf_version (4)
+             * flags (4)
+             */
+            memcpy(desc, g_attest_data + 28, 32);       /* manifest_sha256 */
+            memcpy(desc + 32, g_attest_data + 60, 32);  /* gguf_sha256 */
+            uint32_t record_count = *(uint32_t *)(g_attest_data + 24);
+            uint32_t schema_version = *(uint32_t *)(g_attest_data + 8);
+            uint32_t verifier_version = *(uint32_t *)(g_attest_data + 12);
+            uint32_t gguf_version = *(uint32_t *)(g_attest_data + 16);
+            uint32_t flags = *(uint32_t *)(g_attest_data + 20);
+            
             memcpy(desc + 64, &record_count, 4);
-            memcpy(desc + 68, &policy_version, 4);
+            memcpy(desc + 68, &schema_version, 4);
+            memcpy(desc + 72, &verifier_version, 4);
+            memcpy(desc + 76, &gguf_version, 4);
+            memcpy(desc + 80, &flags, 4);
             
             outsec_append(note_out, (uint8_t *)&namesz, 4, 4);
             outsec_append(note_out, (uint8_t *)&descsz, 4, 4);
             outsec_append(note_out, (uint8_t *)&type, 4, 4);
             outsec_append(note_out, (uint8_t *)name, 4, 4);
-            outsec_append(note_out, desc, 72, 4);
+            outsec_append(note_out, desc, 84, 4);
         }
         
         /* 2. Populate .zcc_tensor_attest section */
@@ -1748,7 +1763,7 @@ int zld_link(const char **obj_files, int obj_count, const char *out_path, const 
 
     if (tensor_attest_bin_path) {
         g_attest_data = read_file(tensor_attest_bin_path, &g_attest_sz);
-        if (g_attest_sz < 96) {
+        if (g_attest_sz < 128) {
             die("tensor attestation file too small");
         }
         uint64_t magic = *(uint64_t *)(g_attest_data);
