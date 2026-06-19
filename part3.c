@@ -1003,11 +1003,31 @@ static long long eval_const_expr_raw(Node *n) {
     if (n->kind == ND_MUL) return eval_const_expr(n->lhs) * eval_const_expr(n->rhs);
     if (n->kind == ND_DIV) {
         long long r = eval_const_expr(n->rhs);
-        return r ? eval_const_expr(n->lhs) / r : 0;
+        if (!r) {
+            /* CG-SIGFPE-002: divisor is proven zero at constant-fold time.
+             * The ICP oracle may have rewritten a variable to 0 before reaching here.
+             * Emit diagnostic; return 0 (safe sentinel, not emitted to code). */
+            extern Compiler *g_cc;
+            if (g_cc) {
+                fprintf(stderr, "%s:%d: warning: division by zero proven at compile time (CG-SIGFPE-002): divisor evaluates to 0\n",
+                    g_cc->filename ? g_cc->filename : "<unknown>", n->line);
+            }
+            return 0;
+        }
+        return eval_const_expr(n->lhs) / r;
     }
     if (n->kind == ND_MOD) {
         long long r = eval_const_expr(n->rhs);
-        return r ? eval_const_expr(n->lhs) % r : 0;
+        if (!r) {
+            /* CG-SIGFPE-002: modulo by proven zero — same diagnostic path */
+            extern Compiler *g_cc;
+            if (g_cc) {
+                fprintf(stderr, "%s:%d: warning: modulo by zero proven at compile time (CG-SIGFPE-002): divisor evaluates to 0\n",
+                    g_cc->filename ? g_cc->filename : "<unknown>", n->line);
+            }
+            return 0;
+        }
+        return eval_const_expr(n->lhs) % r;
     }
     if (n->kind == ND_SHL) return eval_const_expr(n->lhs) << eval_const_expr(n->rhs);
     if (n->kind == ND_SHR) {

@@ -4773,7 +4773,18 @@ static long long eval_const_expr_p4_raw(Node *elem, int *ok) {
         if (elem->kind == ND_ADD) return eval_const_expr_p4(elem->lhs, ok) + eval_const_expr_p4(elem->rhs, ok);
         if (elem->kind == ND_SUB) return eval_const_expr_p4(elem->lhs, ok) - eval_const_expr_p4(elem->rhs, ok);
         if (elem->kind == ND_MUL) return eval_const_expr_p4(elem->lhs, ok) * eval_const_expr_p4(elem->rhs, ok);
-        { long long r = eval_const_expr_p4(elem->rhs, ok); if (r) return eval_const_expr_p4(elem->lhs, ok) / r; *ok = 0; return 0; }
+        {   /* ND_DIV integer: CG-SIGFPE-002 zero-denominator guard */
+            long long r = eval_const_expr_p4(elem->rhs, ok);
+            if (!r) {
+                extern Compiler *g_cc;
+                if (g_cc) {
+                    fprintf(stderr, "%s:%d: warning: division by zero proven at compile time (CG-SIGFPE-002): divisor evaluates to 0\n",
+                        g_cc->filename ? g_cc->filename : "<unknown>", elem->line);
+                }
+                *ok = 0; return 0;
+            }
+            return eval_const_expr_p4(elem->lhs, ok) / r;
+        }
     }
     if (elem->kind == ND_BOR) return eval_const_expr_p4(elem->lhs, ok) | eval_const_expr_p4(elem->rhs, ok);
     if (elem->kind == ND_BAND) return eval_const_expr_p4(elem->lhs, ok) & eval_const_expr_p4(elem->rhs, ok);
