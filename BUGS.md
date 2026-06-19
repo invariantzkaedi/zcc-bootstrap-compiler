@@ -121,11 +121,20 @@ Additionally, float/double instructions (such as `movss`, `movsd`, `cvtss2sd`, `
 - ✅ Stage 2/Stage 3 bootstrap remains completely byte-identical (`SELF-HOST VERIFIED`).
 - ✅ Golden ABI lane differential fuzzer campaign passes 31/31 test shapes compiling directly to ELF objects (`zcc -c`).
 
-## CG-FRONTEND-ASM-001: Silent Elision of Inline Assembly Statements (OPEN)
+## CG-FRONTEND-ASM-001: Silent Elision of Inline Assembly Statements (CLOSED — 11e7e144)
 
-**Status**: 🔴 OPEN — Known Limitation  
+**Status**: ✅ CLOSED — Fixed in commit `11e7e144`  
 **Severity**: HIGH (silent code-elision — no diagnostic emitted, statement ignored)  
-**Discovered**: June 15, 2026 (session 7d20bba7)
+**Discovered**: June 15, 2026 (session 7d20bba7)  
+**Fixed**: June 19, 2026 (commit `11e7e144`)
+
+### Resolution
+Two-layer silent elision removed:
+1. `part0_pp.c`: Removed `#define __asm__(x)` / `#define asm(a,b,c,d,e)` empty macro erasures from stddef stub — asm strings now reach the parser.
+2. `part3.c`: Replaced `return ND_NOP` fallback with full `ND_ASM` node creation + capability tier classification.
+3. `part4.c`: Tier-aware emission — Tier 0/1 (zero-operand) emits verbatim; Tier 3 (constraints) warns or errors under `--error-unsupported-asm`.
+
+New CLI flags: `--error-unsupported-asm`, `--asm-report`.
 
 ### The Bug
 ZCC silently accepts `__asm__ __volatile__`, `asm`, or `__asm__` syntax in source code (presumably parsing it as a statement without returning syntax errors) but completely discards the block during code generation. It emits no compiler warning, diagnostic, or assembly instructions for the inline assembly blocks.
