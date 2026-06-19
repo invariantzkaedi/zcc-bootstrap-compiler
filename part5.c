@@ -1416,6 +1416,14 @@ int zcc_main(int argc, char **argv) {
       oracle_stack_mode = 1;
     } else if (strcmp(argv[i], "--trace-abi") == 0) {
       trace_abi_mode = 1;
+    } else if (strcmp(argv[i], "--trace-constprop") == 0) {
+      /* ICP Oracle: emit proven constant lattice entries after ICP solve (CG-SIGFPE-002 substrate) */
+      setenv("ZCC_TRACE_CONSTPROP", "1", 1);
+    } else if (strcmp(argv[i], "--icp-closed-world") == 0) {
+      /* ICP Oracle: assert no external callers; enable full inter-TU propagation.
+       * Without this, non-static function params are initialized to BOT (conservative).
+       * Use only for single-TU / whole-program analysis. */
+      setenv("ZCC_ICP_CLOSED_WORLD", "1", 1);
     } else if (strcmp(argv[i], "--telemetry") == 0) {
       enable_telemetry_stdout = 1;
     } else if (strcmp(argv[i], "--emit-ir-graph") == 0) {
@@ -2107,6 +2115,25 @@ int zcc_main(int argc, char **argv) {
   extern unsigned long long next_alloc_id;
   zcc_telem_phase(4, "codegen", (cc->errors > 0) ? "FAILED" : "OK", p4_us, "bytes_emitted", next_alloc_id * 8, "stack_size_max", 512, "errors", cc->errors);
   zcc_oracle_log_pass("codegen", "_global", (double)(p4_end - p4_start) * 1000.0 / CLOCKS_PER_SEC, 0, 0, 0, 0);
+
+  /* HYGIENE-ASM-001: emit --asm-report JSON to stderr after codegen */
+  if (cc->asm_report) {
+    int total = cc->asm_report_passthrough + cc->asm_report_warn + cc->asm_report_unsupported;
+    /* Tier split: passthrough = tier0+1, warn = tier2 (warn-only), unsupported = tier3 (strict) */
+    fprintf(stderr,
+      "{\n"
+      "  \"asm_blocks\": %d,\n"
+      "  \"tier0_passthrough\": %d,\n"
+      "  \"tier2_warn\": %d,\n"
+      "  \"tier3_unsupported\": %d,\n"
+      "  \"file\": \"%s\"\n"
+      "}\n",
+      total,
+      cc->asm_report_passthrough,
+      cc->asm_report_warn,
+      cc->asm_report_unsupported,
+      cc->filename ? cc->filename : "<unknown>");
+  }
 
   if (cc->errors > 0) {
     if (!enable_telemetry_stdout) printf("\033[0;31mFAILED (codegen error(s) detected)\033[0m\n");

@@ -5324,6 +5324,30 @@ void run_interprocedural_constant_propagation(Compiler *cc, Node *prog) {
     }
     
     fprintf(stderr, "[ICP] Interprocedural & local constant propagation completed. Solver iterations: %d\n", solver_iters);
+
+    /* ICP Oracle: --trace-constprop  (CG-SIGFPE-002 substrate)
+     * Emit one JSON object per proven constant parameter/variable to stderr.
+     * Format:
+     *   {"function":"<fn>","symbol":"<name>","known_constant":<val>,"confidence":"proven"}
+     * Controlled by ZCC_TRACE_CONSTPROP env var (set by --trace-constprop in part5.c).
+     */
+    if (getenv("ZCC_TRACE_CONSTPROP")) {
+        int cp_count = 0;
+        fprintf(stderr, "[ICP-ORACLE] proven constants:\n");
+        for (int _hi = 0; _hi < LATTICE_HASH_SIZE; _hi++) {
+            SymLatticeEntry *_e = &sym_lattice_hash[_hi];
+            if (!_e->sym) continue;
+            if (_e->val.kind != LATTICE_CONST) continue;
+            fprintf(stderr,
+                "{\"symbol\":\"%s\","
+                "\"known_constant\":%lld,"
+                "\"confidence\":\"proven\"}\n",
+                _e->sym->name,
+                _e->val.val);
+            cp_count++;
+        }
+        fprintf(stderr, "[ICP-ORACLE] total proven constants: %d\n", cp_count);
+    }
     
     // 8. Rewrite AST nodes using solved lattice values
     for (int i = 0; i < num_functions; i++) {

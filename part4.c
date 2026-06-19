@@ -4040,15 +4040,18 @@ void codegen_stmt(Compiler *cc, Node *node) {
       /* Passthrough: emit the asm string verbatim */
       fprintf(cc->out, "    %s\n", astr);
       ZCC_EMIT_ASM(astr, node->line);
+      if (cc->asm_report) cc->asm_report_passthrough++; /* HYGIENE-ASM-001 */
     } else {
       /* Warn for constraint/clobber forms */
       if (cc->error_unsupported_asm) {
         fprintf(stderr, "%s:%d: error: unsupported inline asm (tier %d, constraints/clobbers not modeled): %s\n",
                 cc->filename ? cc->filename : "<unknown>", node->line, tier, astr);
         cc->errors++;
+        if (cc->asm_report) cc->asm_report_unsupported++; /* HYGIENE-ASM-001 */
       } else {
         fprintf(stderr, "%s:%d: warning: inline asm with constraints/clobbers not fully supported (tier %d): %s\n",
                 cc->filename ? cc->filename : "<unknown>", node->line, tier, astr);
+        if (cc->asm_report) cc->asm_report_warn++; /* HYGIENE-ASM-001 */
       }
       /* Emit as asm comment so it is visible but not executable */
       if (astr && astr[0])
