@@ -40,11 +40,32 @@ During local scope initialization of multidimensional arrays (e.g. `int local_ma
 ### Resolution Strategy
 Fixed surgically in `part3.c` without altering `part4.c` ABI behavior by unrolling dimensions to scalar boundaries and mapping to explicitly emitted `ND_CAST` proxy pointers, ensuring pointer arithmetic correctly maps out exactly `1 x scalar` boundaries rather than dimensional decays.
 
-## CG-SIGFPE-002: Runtime SIGFPE from Variable-Denominator Division in --no-safe-math Programs (OPEN)
+## CG-SIGFPE-002: Runtime SIGFPE from Variable-Denominator Division (PARTIALLY CLOSED)
 
-**Status**: 🔴 OPEN — Known Limitation  
-**Severity**: LOW (only affects `--no-safe-math` Csmith programs with provably-zero variable denominators)  
+**Status**: 🟡 PARTIALLY CLOSED — Constant-fold + ICP-proven paths diagnosed (`532bb4ae`)  
+**Severity**: LOW (remaining: opaque runtime variable denominators only)  
 **Discovered**: May 31, 2026 (session d2100a3e)
+
+### Phase 2 Resolution (commit `532bb4ae`, June 19, 2026)
+
+Three diagnostic layers now active:
+
+| Layer | Guard Location | Trigger |
+|---|---|---|
+| Codegen binary-op fold | `part4.c:5377` (existing `warning_at`) | `1/0`, `x/0` after codegen fold |
+| Parse-time case/array | `part3.c:1004` (new CG-SIGFPE-002) | `case (1/0):`, `int a[1/0]` |
+| Static init global fold | `part4.c:4776` (new CG-SIGFPE-002) | `int g = 1/0;` in global scope |
+| ICP-proven zero | ICP rewrite → hits above layers | `div_probe(0)` with `--icp-closed-world` |
+
+**New CLI flags (commit `a62e8f97`)**: `--trace-constprop`, `--icp-closed-world`  
+**ICP Oracle proof**: `{"symbol":"x","known_constant":0,"confidence":"proven"}`
+
+### Remaining Open Scope (→ CG-SIGFPE-003)
+
+Runtime variable-denominator division where the denominator is not proven at
+compile time. Requires either:
+- Full interprocedural constant propagation feedback into codegen (not yet)
+- Or runtime zero-check emission (explicitly deferred — masks real bugs)
 
 ### The Pattern
 Csmith programs generated with `--no-safe-math` contain raw `/` operators on variables
@@ -59,19 +80,19 @@ Seeds where ZCC crashes with exit code 136 (SIGFPE): 2915565, 5655137, 999611, 6
 seed=42, 100 iterations).
 
 ### Root Cause
-ZCC lacks **interprocedural constant propagation**. A variable initialized to zero and
-passed as a function parameter remains opaque to the callee — ZCC cannot prove it is zero
-and therefore emits live division. GCC inlines or traces the value interprocedurally.
+ZCC lacks full **interprocedural constant propagation → codegen feedback**. The ICP
+solver can now *prove* x=0 via `--icp-closed-world`, but does not yet feed that proof
+back into the division emitter to suppress or guard the `idiv`. The oracle substrate
+exists (commit `a62e8f97`); the codegen feedback loop is the next phase.
 
 ### Non-Fix Rationale
 Adding a runtime zero-check before every `idiv`/`divl`/`divq` would silently suppress
 real division-by-zero crashes in production code and is the wrong fix. The proper fix is
-a local/interprocedural constant propagation pass, which is deferred as a future milestone.
+feeding ICP-proven constants into the codegen path to elide the division entirely.
 
 ### Workaround
-Use `--safe-math` csmith mode for ZCC CI regression testing. The `csmith_warfare.py`
-harness accepts `--csmith-args` to override. For meaningful differential fuzzing against
-GCC, run: `python3 scripts/csmith_warfare.py --iterations 100 --csmith-args "--no-bitfields --no-unions --no-volatiles --no-inline-function --no-longlong --no-pointers --no-structs --no-arrays --no-comma-operators --no-math64"` (omitting `--no-safe-math`).
+Use `--safe-math` csmith mode for ZCC CI regression testing. For differential fuzzing:
+`python3 scripts/csmith_warfare.py --iterations 100 --csmith-args "..."` (omitting `--no-safe-math`).
 
 ## CG-MISMATCH-1003697: Wrong Checksum in Seed 1003697 (FIXED - May 30, 2026)
 
