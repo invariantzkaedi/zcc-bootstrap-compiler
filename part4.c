@@ -4028,11 +4028,34 @@ void codegen_stmt(Compiler *cc, Node *node) {
   case ND_NOP:
     return;
 
-  case ND_ASM:
-    fprintf(cc->out, "    %s\n", node->asm_string);
-    ZCC_EMIT_ASM(node->asm_string, node->line);
-    /* Note: IR backend handles this via ZCC_ND_ASM -> OP_ASM translation if enabled */
+  case ND_ASM: {
+    /* CG-FRONTEND-ASM-001: tier-aware inline asm handler.
+     * Tier 0/1 = zero-operand passthrough: emit directly.
+     * Tier 2   = clobbers: warn, emit as comment.
+     * Tier 3   = constraints: warn or error, emit as comment.
+     */
+    int tier = node->asm_tier;
+    const char *astr = node->asm_string ? node->asm_string : "";
+    if (tier <= 1 && astr && astr[0]) {
+      /* Passthrough: emit the asm string verbatim */
+      fprintf(cc->out, "    %s\n", astr);
+      ZCC_EMIT_ASM(astr, node->line);
+    } else {
+      /* Warn for constraint/clobber forms */
+      if (cc->error_unsupported_asm) {
+        fprintf(stderr, "%s:%d: error: unsupported inline asm (tier %d, constraints/clobbers not modeled): %s\n",
+                cc->filename ? cc->filename : "<unknown>", node->line, tier, astr);
+        cc->errors++;
+      } else {
+        fprintf(stderr, "%s:%d: warning: inline asm with constraints/clobbers not fully supported (tier %d): %s\n",
+                cc->filename ? cc->filename : "<unknown>", node->line, tier, astr);
+      }
+      /* Emit as asm comment so it is visible but not executable */
+      if (astr && astr[0])
+        fprintf(cc->out, "    /* asm tier=%d (unsupported): %s */\n", tier, astr);
+    }
     return;
+  }
 
   default: {
     /* expression statement */

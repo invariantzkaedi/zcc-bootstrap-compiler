@@ -112,8 +112,10 @@ static const char *zcc_stddef_text =
     "#define __declspec(x)\n"
     "#define __cdecl\n"
     "#define __stdcall\n"
-    "#define __asm__(a,b,c,d,e)\n"
-    "#define asm(a,b,c,d,e)\n"
+    /* CG-FRONTEND-ASM-001: __asm__ and asm NOT macro-erased here.
+     * Letting TK_ASM reach the parser so part3.c can classify and
+     * emit ND_ASM nodes with tier-based diagnostics. */
+
     "typedef struct { unsigned int gp_offset; unsigned int fp_offset; void "
     "*overflow_arg_area; void *reg_save_area; } __va_list_struct[1];\n"
     "#define __builtin_va_list __va_list_struct\n"
@@ -139,7 +141,8 @@ static const char *zcc_stddef_text =
     "#define __restrict\n"
     "#define __restrict__\n"
     "#define __extension__\n"
-    "#define __asm__(x)\n"
+    /* CG-FRONTEND-ASM-001: __asm__(x) single-arg form also not erased. */
+
     "#define assert(x)\n"
     "#define offsetof(t, m) ((unsigned long)&(((t*)0)->m))\n"
     "typedef int int32_t;\n"

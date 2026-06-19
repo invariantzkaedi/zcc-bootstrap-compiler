@@ -954,6 +954,7 @@ struct Node {
 
     /* ND_ASM */
     char *asm_string;
+    int   asm_tier;   /* CG-FRONTEND-ASM-001: 0=passthrough,1=volatile,2=clobbers,3=constraints */
 
     /* linked list for top-level */
     Node *next;
@@ -1221,6 +1222,12 @@ struct Compiler {
     int used_regs_mask;     /* for telemetry tracking */
     int is_forced_mask;     /* 1 if 0x1F was forced (CG-IR-011) */
     int telemetry_depth;    /* depth tracking for telemetry logging */
+    /* CG-FRONTEND-ASM-001: inline asm diagnostic policy flags */
+    int error_unsupported_asm; /* --error-unsupported-asm: fail on unsupported asm */
+    int asm_report;            /* --asm-report: emit JSON asm capability report */
+    int asm_report_passthrough; /* counters for --asm-report */
+    int asm_report_warn;
+    int asm_report_unsupported;
 };
 
 typedef struct TargetBackend {

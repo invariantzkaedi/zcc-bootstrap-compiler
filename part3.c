@@ -3136,30 +3136,71 @@ Node *parse_stmt_internal(Compiler *cc) {
         return node_new(cc, ND_NOP, line);
     }
 
-    /* Skip __asm__(...) / asm(...) / __asm(...) statements */
+    /* CG-FRONTEND-ASM-001: capture __asm__(...) / asm(...) statements.
+     * Previously returned ND_NOP (silent elision). Now creates ND_ASM node
+     * with the raw string and a capability tier so codegen can
+     *   (a) emit zero-operand asm directly (Tier 0/1)
+     *   (b) warn for constraint/clobber forms (Tier 2+)
+     *   (c) error under --error-unsupported-asm (Tier 3+)
+     *
+     * Tier classification:
+     *   0  = no operands, no clobbers — passthrough safe (nop/pause/hlt)
+     *   1  = volatile qualifier only — passthrough safe
+     *   2  = clobbers present ("eax","ebx"...) — warn
+     *   3  = output/input operand constraints — warn or error
+     */
     if (cc->tk == TK_ASM || (cc->tk == TK_IDENT && (
         strcmp(cc->tk_text, "__asm__") == 0 ||
         strcmp(cc->tk_text, "asm") == 0 ||
         strcmp(cc->tk_text, "__asm") == 0))) {
+        char asm_buf[512];
+        int asm_tier = 0;
+        int i = 0;
+        Node *asmn;
         next_token(cc); /* consume asm keyword */
         /* skip optional volatile qualifier */
         if (cc->tk == TK_IDENT && (strcmp(cc->tk_text, "__volatile__") == 0 ||
             strcmp(cc->tk_text, "volatile") == 0)) {
+            asm_tier = (asm_tier < 1) ? 1 : asm_tier;
             next_token(cc);
         }
-        if (cc->tk == TK_VOLATILE) next_token(cc);
+        if (cc->tk == TK_VOLATILE) {
+            asm_tier = (asm_tier < 1) ? 1 : asm_tier;
+            next_token(cc);
+        }
+        /* Extract string from ("...") */
         if (cc->tk == TK_LPAREN) {
             int depth = 1;
+            int colon_count = 0;
             next_token(cc);
+            /* Grab first string literal as the asm template */
+            if (cc->tk == TK_STR && cc->tk_str) {
+                int slen = 0;
+                const char *s = cc->tk_str;
+                while (s[slen] && slen < 511) { asm_buf[i++] = s[slen++]; }
+                asm_buf[i] = 0;
+                next_token(cc);
+            }
+            /* Scan for colons (constraint/clobber indicators) and close paren */
             while (depth > 0 && cc->tk != TK_EOF) {
                 if (cc->tk == TK_LPAREN) depth++;
-                else if (cc->tk == TK_RPAREN) depth--;
-                if (depth > 0) next_token(cc);
+                else if (cc->tk == TK_RPAREN) { depth--; if (depth == 0) break; }
+                else if (cc->tk == TK_COLON) { colon_count++; }
+                next_token(cc);
             }
             if (cc->tk == TK_RPAREN) next_token(cc);
+            /* Upgrade tier based on colon count:
+             *  1 colon = output constraints (Tier 3)
+             *  2 colons = input constraints (Tier 3)
+             *  3 colons = clobbers (Tier 2) */
+            if (colon_count >= 1) asm_tier = (asm_tier < 3) ? 3 : asm_tier;
+            else if (colon_count == 0 && i > 0) asm_tier = (asm_tier < 1) ? 1 : asm_tier;
         }
         if (cc->tk == TK_SEMI) next_token(cc);
-        return node_new(cc, ND_NOP, line);
+        asmn = node_new(cc, ND_ASM, line);
+        asmn->asm_string = cc_strdup(cc, asm_buf);
+        asmn->asm_tier   = asm_tier;
+        return asmn;
     }
 
     /* block */

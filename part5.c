@@ -1353,6 +1353,13 @@ int zcc_main(int argc, char **argv) {
       g_emit_anomalies = 1;
       g_security_476 = 1;
       g_security_787 = 1;
+    } else if (strcmp(argv[i], "--error-unsupported-asm") == 0) {
+      /* CG-FRONTEND-ASM-001: treat unsupported inline asm as a hard error */
+      /* stored temporarily; applied to cc after allocation */
+      setenv("ZCC_ERROR_UNSUPPORTED_ASM", "1", 1);
+    } else if (strcmp(argv[i], "--asm-report") == 0) {
+      /* CG-FRONTEND-ASM-001: emit JSON asm capability report after compilation */
+      setenv("ZCC_ASM_REPORT", "1", 1);
     } else if (strcmp(argv[i], "--decompile") == 0) {
       decompile_mode = 1;
       i++;
@@ -1931,6 +1938,9 @@ int zcc_main(int argc, char **argv) {
 
   init_compiler(cc);
   { extern Compiler *g_cc; g_cc = cc; }
+  /* CG-FRONTEND-ASM-001: apply asm diagnostic policy from CLI/env */
+  if (getenv("ZCC_ERROR_UNSUPPORTED_ASM")) cc->error_unsupported_asm = 1;
+  if (getenv("ZCC_ASM_REPORT"))           cc->asm_report = 1;
 
   /* generate asm file name */
   strncpy(asm_file, output_file, 250);
