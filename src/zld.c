@@ -1524,7 +1524,11 @@ static void write_output(const char *path) {
     int rx_count = 0;
     OutSection *rw_sections[32];
     int rw_count = 0;
-    OutSection *note_sec = NULL;
+    /* Multi-note PT_NOTE span: track first and last note sections by VMA.
+     * A single PT_NOTE phdr spans from note_first->vma to
+     * note_last->vma + note_last->size, covering all adjacent note sections. */
+    OutSection *note_first = NULL;
+    OutSection *note_last  = NULL;
     int i;
     int phnum = 0;
     uint64_t ehdr_size;
@@ -1560,7 +1564,9 @@ static void write_output(const char *path) {
         if (strcmp(s->name, ".note") == 0 ||
             strcmp(s->name, ".note.zcc.tensor") == 0 ||
             strcmp(s->name, ".note.zcc.build") == 0) {
-            note_sec = s;
+            /* Expand the note span to cover this section */
+            if (!note_first || s->vma < note_first->vma) note_first = s;
+            if (!note_last  || s->vma > note_last->vma)  note_last  = s;
         }
 
         if (s->flags & SHF_WRITE) {
@@ -1572,7 +1578,7 @@ static void write_output(const char *path) {
 
     if (rx_count > 0) phnum++;
     if (rw_count > 0) phnum++;
-    if (note_sec) phnum++;
+    if (note_first) phnum++;  /* one spanning PT_NOTE covers all note sections */
 
     ehdr_size = sizeof(Elf64_Ehdr);
     phdr_size = sizeof(Elf64_Phdr);
@@ -1646,21 +1652,31 @@ static void write_output(const char *path) {
         ph_idx++;
     }
 
-    if (note_sec) {
-        uint64_t note_file_off = rx_file_off + (note_sec->vma - rx_vaddr);
+    if (note_first) {
+        /* Spanning PT_NOTE: covers note_first->vma through note_last->vma+size.
+         * This is the standard single-phdr multi-note encoding:
+         *   p_vaddr  = start of first note section
+         *   p_filesz = end of last note section - start of first
+         * Both sections must be contiguous in the layout (guaranteed by
+         * out_order[]: .note.zcc.tensor immediately precedes .note.zcc.build). */
+        uint64_t span_vma   = note_first->vma;
+        uint64_t span_end   = note_last->vma + note_last->size;
+        uint64_t span_size  = span_end - span_vma;
+        uint64_t note_file_off = rx_file_off + (span_vma - rx_vaddr);
         memset(&phdrs[ph_idx], 0, sizeof(Elf64_Phdr));
         phdrs[ph_idx].p_type   = PT_NOTE;
         phdrs[ph_idx].p_flags  = PF_R;
         phdrs[ph_idx].p_offset = note_file_off;
-        phdrs[ph_idx].p_vaddr  = note_sec->vma;
-        phdrs[ph_idx].p_paddr  = note_sec->vma;
-        phdrs[ph_idx].p_filesz = note_sec->size;
-        phdrs[ph_idx].p_memsz  = note_sec->size;
+        phdrs[ph_idx].p_vaddr  = span_vma;
+        phdrs[ph_idx].p_paddr  = span_vma;
+        phdrs[ph_idx].p_filesz = span_size;
+        phdrs[ph_idx].p_memsz  = span_size;
         phdrs[ph_idx].p_align  = 4;
         if (g_verbose) {
-            printf("zld segment: PT_NOTE, VMA=0x%llx, memsz=0x%llx, filesz=0x%llx, flags=%d\n",
-                   (unsigned long long)note_sec->vma, (unsigned long long)note_sec->size,
-                   (unsigned long long)note_sec->size, (int)PF_R);
+            printf("zld segment: PT_NOTE (spanning), VMA=0x%llx, span=0x%llx"
+                   " [%s..%s], flags=%d\n",
+                   (unsigned long long)span_vma, (unsigned long long)span_size,
+                   note_first->name, note_last->name, (int)PF_R);
         }
         ph_idx++;
     }
