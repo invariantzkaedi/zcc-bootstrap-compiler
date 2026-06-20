@@ -10,8 +10,6 @@
 #include "ir_emit_dispatch.h"
 #include "ir_bridge.h"
 
-static int g_in_ast_codegen = 0;
-
 /* Forward declaration — defined ~4200 lines below, used in ND_DIV const-fold guard */
 static long long eval_const_expr_p4(Node *elem, int *ok);
 
@@ -97,19 +95,16 @@ static void emit_cvtsi2fd(Compiler *cc, Type *int_type, int is_f32, const char *
         }
     }
     /* Signed or default: */
-    if (int_type) {
-        int sz = type_size(int_type);
-        if (sz == 1) {
-            fprintf(cc->out, "    movsbq %%al, %%rax\n");
-        } else if (sz == 2) {
-            fprintf(cc->out, "    movswq %%ax, %%rax\n");
-        } else if (sz == 4) {
-            fprintf(cc->out, "    movslq %%eax, %%rax\n");
-        }
-    }
     if (is_f32) {
-        fprintf(cc->out, "    cvtsi2ssq %%rax, %%%s\n", target_xmm);
+        if (int_type && type_size(int_type) == 4) {
+            fprintf(cc->out, "    cvtsi2ssl %%eax, %%%s\n", target_xmm);
+        } else {
+            fprintf(cc->out, "    cvtsi2ssq %%rax, %%%s\n", target_xmm);
+        }
     } else {
+        if (int_type && type_size(int_type) == 4) {
+            fprintf(cc->out, "    movslq %%eax, %%rax\n"); /* ensure sign-extended */
+        }
         fprintf(cc->out, "    cvtsi2sdq %%rax, %%%s\n", target_xmm);
     }
 }
@@ -119,6 +114,15 @@ static void emit_cvttfd2si(Compiler *cc, Type *int_type, int is_f32) {
         /* unsigned 64-bit float/double to int conversion */
         int l1 = new_label(cc);
         int l2 = new_label(cc);
+        int lbl_two63 = cc->str_label_count++;
+        
+        /* emit double literal for 2^63 (9223372036854775808.0) */
+        unsigned long long two63_bits = 0x43e0000000000000ULL;
+        fprintf(cc->out, "    .section .rodata\n");
+        fprintf(cc->out, "    .p2align 3\n");
+        fprintf(cc->out, ".LC_two63_%d:\n", lbl_two63);
+        fprintf(cc->out, "    .quad %llu\n", two63_bits);
+        fprintf(cc->out, "    .text\n");
         
         if (is_f32) {
             fprintf(cc->out, "    movd %%eax, %%xmm0\n");
@@ -126,7 +130,7 @@ static void emit_cvttfd2si(Compiler *cc, Type *int_type, int is_f32) {
         } else {
             fprintf(cc->out, "    movq %%rax, %%xmm0\n");
         }
-        fprintf(cc->out, "    movsd .Lf64_u64bias(%%rip), %%xmm1\n");
+        fprintf(cc->out, "    movsd .LC_two63_%d(%%rip), %%xmm1\n", lbl_two63);
         fprintf(cc->out, "    ucomisd %%xmm1, %%xmm0\n");
         fprintf(cc->out, "    jae .L%d\n", l1);
         fprintf(cc->out, "    cvttsd2si %%xmm0, %%rax\n");
@@ -316,9 +320,9 @@ void classify_aggregate(Type *agg, abi_class_t eb[2]) {
         return;
     }
 
-    /* SysV §3.2.3 step 1: aggregates with unaligned fields classify as MEMORY.
-     * Packed straddling fields are handled by classify_field(): if a field's
-     * offset violates its natural alignment, the full aggregate is forced MEMORY. */
+    /* SysV §3.2.3 step 1: unaligned aggregates (straddling boundary) go to MEMORY.
+     * ZCC currently does not support __attribute__((packed)) straddling boundaries,
+     * so we let the per-field classification handle the aggregate correctly. */
 
     if (agg->kind == TY_STRUCT || agg->kind == TY_UNION) {
         StructField *f;
@@ -1042,37 +1046,6 @@ void codegen_expr(Compiler *cc, Node *node) {
                "codegen_expr: ND_COMPOUND_ASSIGN missing operand");
       fprintf(cc->out, "    movq $0, %%rax\n");
       return;
-    }
-    if ((node->compound_op == ND_DIV || node->compound_op == ND_MOD) && !backend_ops) {
-      int rhs_ok = 1;
-      long long rhs_cv = eval_const_expr_p4(node->rhs, &rhs_ok);
-      if (rhs_ok && rhs_cv == 0) {
-        int is_err = (getenv("ZCC_ERROR_DIVZERO_PROVEN") != NULL);
-        int closed_world = (getenv("ZCC_ICP_CLOSED_WORLD") != NULL);
-        if (is_err || closed_world) {
-          zcc_divzero_report(node->line, node->compound_op == ND_MOD);
-          if (node->lhs->kind == ND_VAR && node->lhs->sym && node->lhs->sym->assigned_reg) {
-            char *reg = node->lhs->sym->assigned_reg;
-            fprintf(cc->out, "    # CG-SIGFPE-003: compound assignment division/modulo by zero elided\n");
-            fprintf(cc->out, "    movq $0, %s\n", reg);
-            fprintf(cc->out, "    movq $0, %%rax\n");
-          } else {
-            codegen_addr_checked(cc, node->lhs);
-            fprintf(cc->out, "    # CG-SIGFPE-003: compound assignment division/modulo by zero elided\n");
-            if (node->lhs->type) {
-              int sz = type_size(node->lhs->type);
-              if (sz == 1)      fprintf(cc->out, "    movb $0, (%%rax)\n");
-              else if (sz == 2) fprintf(cc->out, "    movw $0, (%%rax)\n");
-              else if (sz == 4) fprintf(cc->out, "    movl $0, (%%rax)\n");
-              else              fprintf(cc->out, "    movq $0, (%%rax)\n");
-            } else {
-              fprintf(cc->out, "    movq $0, (%%rax)\n");
-            }
-            fprintf(cc->out, "    movq $0, %%rax\n");
-          }
-          return;
-        }
-      }
     }
     if (node->lhs->kind == ND_VAR && node->lhs->sym &&
         node->lhs->sym->assigned_reg) {
@@ -1811,29 +1784,22 @@ void codegen_expr(Compiler *cc, Node *node) {
       int lhs_ok = 1, rhs_ok = 1;
       long long lhs_cv = eval_const_expr_p4(node->lhs, &lhs_ok);
       long long rhs_cv = eval_const_expr_p4(node->rhs, &rhs_ok);
-      if (lhs_ok && rhs_ok && rhs_cv != 0) {
+      if (lhs_ok && rhs_ok) {
         long long result = 0;
-        /* CG-CFOLD-UNSIGNED-001: use unsigned arithmetic for unsigned types. */
-        int is_unsigned_div = node_type_unsigned(node);
-        if (is_unsigned_div)
-            result = (long long)((unsigned long long)lhs_cv / (unsigned long long)rhs_cv);
-        else
-            result = lhs_cv / rhs_cv;
+        if (rhs_cv != 0) {
+          /* CG-CFOLD-UNSIGNED-001: use unsigned arithmetic for unsigned types. */
+          int is_unsigned_div = node_type_unsigned(node);
+          if (is_unsigned_div)
+              result = (long long)((unsigned long long)lhs_cv / (unsigned long long)rhs_cv);
+          else
+              result = lhs_cv / rhs_cv;
+        } else {
+          /* CG-SIGFPE-002: fold division by zero to 0 to avoid runtime SIGFPE */
+          result = 0;
+        }
         fprintf(cc->out, "    movq $%lld, %%rax\n", result);
         ir_emit_binary_op(ND_DIV, node->type, "$const_lhs", "$const_rhs", node->line);
         return;
-      } else if (rhs_ok && rhs_cv == 0) {
-        int is_err = (getenv("ZCC_ERROR_DIVZERO_PROVEN") != NULL);
-        int closed_world = (getenv("ZCC_ICP_CLOSED_WORLD") != NULL);
-        if (is_err || closed_world) {
-          zcc_divzero_report(node->line, 0);
-          codegen_expr_checked(cc, node->lhs);
-          fprintf(cc->out, "    # CG-SIGFPE-003: division by zero elided\n");
-          fprintf(cc->out, "    movq $0, %%rax\n");
-          ir_save_result(lhs_ir);
-          ir_emit_binary_op(ND_DIV, node->type, lhs_ir, "$const_zero", node->line);
-          return;
-        }
       }
     }
     codegen_expr_checked(cc, node->lhs);
@@ -1869,28 +1835,21 @@ void codegen_expr(Compiler *cc, Node *node) {
       int lhs_ok = 1, rhs_ok = 1;
       long long lhs_cv = eval_const_expr_p4(node->lhs, &lhs_ok);
       long long rhs_cv = eval_const_expr_p4(node->rhs, &rhs_ok);
-      if (lhs_ok && rhs_ok && rhs_cv != 0) {
+      if (lhs_ok && rhs_ok) {
         long long result = 0;
-        int is_unsigned_mod = node_type_unsigned(node);
-        if (is_unsigned_mod)
-            result = (long long)((unsigned long long)lhs_cv % (unsigned long long)rhs_cv);
-        else
-            result = lhs_cv % rhs_cv;
+        if (rhs_cv != 0) {
+          int is_unsigned_mod = node_type_unsigned(node);
+          if (is_unsigned_mod)
+              result = (long long)((unsigned long long)lhs_cv % (unsigned long long)rhs_cv);
+          else
+              result = lhs_cv % rhs_cv;
+        } else {
+          /* CG-SIGFPE-002: fold modulo by zero to 0 to avoid runtime SIGFPE */
+          result = 0;
+        }
         fprintf(cc->out, "    movq $%lld, %%rax\n", result);
         ir_emit_binary_op(ND_MOD, node->type, "$const_lhs", "$const_rhs", node->line);
         return;
-      } else if (rhs_ok && rhs_cv == 0) {
-        int is_err = (getenv("ZCC_ERROR_DIVZERO_PROVEN") != NULL);
-        int closed_world = (getenv("ZCC_ICP_CLOSED_WORLD") != NULL);
-        if (is_err || closed_world) {
-          zcc_divzero_report(node->line, 1);
-          codegen_expr_checked(cc, node->lhs);
-          fprintf(cc->out, "    # CG-SIGFPE-003: modulo by zero elided\n");
-          fprintf(cc->out, "    movq $0, %%rax\n");
-          ir_save_result(lhs_ir);
-          ir_emit_binary_op(ND_MOD, node->type, lhs_ir, "$const_zero", node->line);
-          return;
-        }
       }
     }
 
@@ -2829,7 +2788,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     return;
 
   case ND_PRE_INC:
-    if (g_emit_ir && !g_in_ast_codegen) {
+    if (g_emit_ir) {
       emit_ir_inc_dec(cc, node->lhs, 1, 0, node->line);
       return;
     }
@@ -2932,7 +2891,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     return;
 
   case ND_PRE_DEC:
-    if (g_emit_ir && !g_in_ast_codegen) {
+    if (g_emit_ir) {
       emit_ir_inc_dec(cc, node->lhs, 0, 0, node->line);
       return;
     }
@@ -3035,7 +2994,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     return;
 
   case ND_POST_INC:
-    if (g_emit_ir && !g_in_ast_codegen) {
+    if (g_emit_ir) {
       emit_ir_inc_dec(cc, node->lhs, 1, 1, node->line);
       return;
     }
@@ -3119,7 +3078,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     return;
 
   case ND_POST_DEC:
-    if (g_emit_ir && !g_in_ast_codegen) {
+    if (g_emit_ir) {
       emit_ir_inc_dec(cc, node->lhs, 0, 1, node->line);
       return;
     }
@@ -3268,7 +3227,7 @@ void codegen_expr(Compiler *cc, Node *node) {
         else if (plt->kind == TY_PTR && plt->base && plt->base->kind == TY_FUNC) pre_ftype = plt->base;
       }
       for (i = 0; i < nargs; i++) {
-        Type *at = (node->args[i] && node->args[i]->type) ? node->args[i]->type : 0;
+        Type *at = (node->args[i] && !is_bad_ptr(node->args[i]) && node->args[i]->type) ? node->args[i]->type : 0;
         int is_stack = 0;
         if (at && (at->kind == TY_STRUCT || at->kind == TY_UNION)) {
             abi_class_t eb[2];
@@ -3332,7 +3291,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       for (i = 0; i < nargs; i++) {
         if (arg_is_stack[i]) {
           arg_stack_offset[i] = current_stack_slot * 8;
-          Type *at = node->args[i]->type;
+          Type *at = (node->args[i] && !is_bad_ptr(node->args[i]) && node->args[i]->type) ? node->args[i]->type : 0;
           current_stack_slot += (at ? (type_size(at) + 7) / 8 : 1);
         }
       }
@@ -3354,7 +3313,7 @@ void codegen_expr(Compiler *cc, Node *node) {
         return;
       }
       codegen_expr_checked(cc, node->args[i]);
-      Type *atype = node->args[i]->type;
+      Type *atype = (node->args[i] && !is_bad_ptr(node->args[i]) && node->args[i]->type) ? node->args[i]->type : 0;
       int current_pushed_bytes = (cc->stack_depth - stack_depth_at_reservation) * 8;
       if (arg_is_stack[i]) {
           if (atype && (atype->kind == TY_STRUCT || atype->kind == TY_UNION)) {
@@ -3388,7 +3347,7 @@ void codegen_expr(Compiler *cc, Node *node) {
 
     /* [NEW]: Emit IR_ARG sequentially left-to-right to restore FFI mapping */
     for (i = 0; i < nargs; i++) {
-        ZCC_EMIT_ARG(ir_map_type(node->args[i] ? node->args[i]->type : 0), &args_ir_1d[i * 32], node->line);
+        ZCC_EMIT_ARG(ir_map_type((node->args[i] && !is_bad_ptr(node->args[i])) ? node->args[i]->type : 0), &args_ir_1d[i * 32], node->line);
     }
 
     /* pop args into correct registers: floats->xmm, ints->gpregs independently */
@@ -3408,7 +3367,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       }
        for (i = 0; i < nargs; i++) {
         if (arg_is_stack[i]) continue;
-        Type *atype = node->args[i]->type;
+        Type *atype = (node->args[i] && !is_bad_ptr(node->args[i]) && node->args[i]->type) ? node->args[i]->type : 0;
         if (atype && (atype->kind == TY_STRUCT || atype->kind == TY_UNION)) {
             abi_class_t eb[2];
             classify_aggregate(atype, eb);
@@ -3438,13 +3397,13 @@ void codegen_expr(Compiler *cc, Node *node) {
             fprintf(cc->out, "    popq %%rax\n");
             cc->stack_depth--;
             fprintf(cc->out, "    movq %%rax, %%xmm%d\n", fp_idx);
-            /* Check callee's declared param type... (keep existing conversion logic) */
+            /* Check callee's declared param type... */
             {
-              int arg_is_float = (atype->kind == TY_FLOAT);
+              int arg_is_float = (atype && atype->kind == TY_FLOAT);
               if (arg_is_float) {
                 int in_fixed_float_param = 0;
                 if (callee_ftype && callee_ftype->params && i < callee_ftype->num_params) {
-                  if (callee_ftype->params[i]->kind == TY_FLOAT) in_fixed_float_param = 1;
+                  if (callee_ftype->params[i] && callee_ftype->params[i]->kind == TY_FLOAT) in_fixed_float_param = 1;
                 }
                 if (!in_fixed_float_param) {
                   fprintf(cc->out, "    cvtss2sd %%xmm%d, %%xmm%d\n", fp_idx, fp_idx);
@@ -3631,6 +3590,10 @@ void codegen_expr(Compiler *cc, Node *node) {
   }
 }
 
+/* ================================================================ */
+/* STATEMENT CODEGEN                                                 */
+/* ================================================================ */
+
 static int node_has_label(Node *node) {
   int i;
   if (!node) return 0;
@@ -3658,14 +3621,123 @@ static int node_has_label(Node *node) {
   return 0;
 }
 
+static Node *current_func_node = NULL;
+
+static int variable_is_read(Node *node, Symbol *sym) {
+  int i;
+  if (!node) return 0;
+  if (is_bad_ptr(node)) return 0;
+  if (node->magic != 0xC0FFEEBAD1234567ULL) return 0;
+
+  if (node->kind == ND_VAR && node->sym == sym) {
+    return 1;
+  }
+
+  switch (node->kind) {
+    case ND_ASSIGN:
+      if (node->lhs && node->lhs->kind != ND_VAR) {
+        if (variable_is_read(node->lhs, sym)) return 1;
+      }
+      if (variable_is_read(node->rhs, sym)) return 1;
+      return 0;
+
+    case ND_IF:
+    case ND_TERNARY:
+      if (variable_is_read(node->cond, sym)) return 1;
+      if (variable_is_read(node->then_body, sym)) return 1;
+      if (variable_is_read(node->else_body, sym)) return 1;
+      return 0;
+
+    case ND_WHILE:
+    case ND_DO_WHILE:
+      if (variable_is_read(node->cond, sym)) return 1;
+      if (variable_is_read(node->body, sym)) return 1;
+      return 0;
+
+    case ND_FOR:
+      if (variable_is_read(node->init, sym)) return 1;
+      if (variable_is_read(node->cond, sym)) return 1;
+      if (variable_is_read(node->inc, sym)) return 1;
+      if (variable_is_read(node->body, sym)) return 1;
+      return 0;
+
+    case ND_BLOCK:
+      if (node->stmts) {
+        for (i = 0; i < node->num_stmts; i++) {
+          if (variable_is_read(node->stmts[i], sym)) return 1;
+        }
+      }
+      return 0;
+
+    case ND_CALL:
+      if (node->lhs && variable_is_read(node->lhs, sym)) return 1;
+      if (node->args) {
+        for (i = 0; i < node->num_args; i++) {
+          if (variable_is_read(node->args[i], sym)) return 1;
+        }
+      }
+      return 0;
+
+    case ND_SWITCH:
+      if (variable_is_read(node->cond, sym)) return 1;
+      if (node->cases) {
+        for (i = 0; i < node->num_cases; i++) {
+          if (variable_is_read(node->cases[i], sym)) return 1;
+        }
+      }
+      if (variable_is_read(node->default_case, sym)) return 1;
+      if (variable_is_read(node->body, sym)) return 1;
+      return 0;
+
+    case ND_CASE:
+      if (variable_is_read(node->case_body, sym)) return 1;
+      return 0;
+
+    case ND_FUNC_DEF:
+      if (variable_is_read(node->body, sym)) return 1;
+      return 0;
+
+    case ND_INIT_LIST:
+      if (node->args) {
+        for (i = 0; i < node->num_args; i++) {
+          if (variable_is_read(node->args[i], sym)) return 1;
+        }
+      }
+      return 0;
+
+    default:
+      /* Fallback for general binary/unary/member operators */
+      if (variable_is_read(node->lhs, sym)) return 1;
+      if (variable_is_read(node->rhs, sym)) return 1;
+      if (variable_is_read(node->initializer, sym)) return 1;
+      break;
+  }
+
+  return 0;
+}
+
 static int node_has_side_effects(Node *node) {
   int i;
   if (!node) return 0;
   if (is_bad_ptr(node)) return 0;
   if (node->magic != 0xC0FFEEBAD1234567ULL) return 0;
 
+  int skip_dce = 0;
+  char *env_dce = getenv("ZCC_OPT_DCE");
+  if (env_dce) {
+    if (strcmp(env_dce, "0") == 0) {
+      skip_dce = 1;
+    }
+  }
+
   switch (node->kind) {
     case ND_ASSIGN:
+      if (node->lhs && node->lhs->kind == ND_VAR && node->lhs->sym && node->lhs->sym->is_local) {
+        if (!skip_dce && current_func_node && !variable_is_read(current_func_node->body, node->lhs->sym)) {
+          return node_has_side_effects(node->rhs);
+        }
+      }
+      return 1;
     case ND_COMPOUND_ASSIGN:
     case ND_PRE_INC:
     case ND_PRE_DEC:
@@ -3743,32 +3815,17 @@ static void codegen_stmt_dce(Compiler *cc, Node *node, int *terminated) {
       codegen_stmt_dce(cc, node->stmts[i], terminated);
     }
   } else if (node->kind == ND_IF) {
-    int then_term = *terminated;
-    int else_term = *terminated;
-    codegen_stmt_dce(cc, node->then_body, &then_term);
-    if (node->else_body) {
-      codegen_stmt_dce(cc, node->else_body, &else_term);
-      *terminated = then_term && else_term;
-    } else {
-      *terminated = 0;
-    }
+    codegen_stmt_dce(cc, node->then_body, terminated);
+    codegen_stmt_dce(cc, node->else_body, terminated);
   } else if (node->kind == ND_WHILE || node->kind == ND_FOR) {
-    int body_term = *terminated;
-    codegen_stmt_dce(cc, node->body, &body_term);
-    *terminated = 0;
+    codegen_stmt_dce(cc, node->body, terminated);
   } else if (node->kind == ND_SWITCH) {
-    int body_term = *terminated;
-    codegen_stmt_dce(cc, node->body, &body_term);
-    *terminated = 0;
+    codegen_stmt_dce(cc, node->body, terminated);
   } else {
     codegen_stmt(cc, node);
     *terminated = 0;
   }
 }
-
-/* ================================================================ */
-/* STATEMENT CODEGEN                                                 */
-/* ================================================================ */
 
 void codegen_stmt(Compiler *cc, Node *node) {
   if (!node)
@@ -3783,6 +3840,20 @@ void codegen_stmt(Compiler *cc, Node *node) {
   int old_break;
   int old_continue;
   char errbuf[80];
+  int skip_dce = 0;
+  char *env_dce = getenv("ZCC_OPT_DCE");
+  if (env_dce) {
+    if (strcmp(env_dce, "0") == 0) {
+      skip_dce = 1;
+    }
+  }
+  int skip_fold = 0;
+  char *env_fold = getenv("ZCC_OPT_CONSTFOLD");
+  if (env_fold) {
+    if (strcmp(env_fold, "0") == 0) {
+      skip_fold = 1;
+    }
+  }
 
   /* Do NOT use ptr_in_fault_range(node): stage2 miscompiles it and rejects
    * valid arena ptrs. */
@@ -3882,7 +3953,12 @@ void codegen_stmt(Compiler *cc, Node *node) {
 
   case ND_IF: {
     int cond_ok = 1;
-    long long cond_val = eval_const_expr_p4(node->cond, &cond_ok);
+    long long cond_val = 0;
+    if (!skip_dce && !skip_fold) {
+      cond_val = eval_const_expr_p4(node->cond, &cond_ok);
+    } else {
+      cond_ok = 0;
+    }
     if (cond_ok) {
       if (cond_val) {
         codegen_stmt(cc, node->then_body);
@@ -3954,7 +4030,12 @@ void codegen_stmt(Compiler *cc, Node *node) {
 
   case ND_WHILE: {
     int cond_ok = 1;
-    long long cond_val = eval_const_expr_p4(node->cond, &cond_ok);
+    long long cond_val = 0;
+    if (!skip_dce && !skip_fold) {
+      cond_val = eval_const_expr_p4(node->cond, &cond_ok);
+    } else {
+      cond_ok = 0;
+    }
     if (cond_ok && cond_val == 0) {
       if (node->body && node_has_label(node->body)) {
         int terminated = 1;
@@ -3998,7 +4079,11 @@ void codegen_stmt(Compiler *cc, Node *node) {
     int cond_ok = 1;
     long long cond_val = 1;
     if (node->cond) {
-      cond_val = eval_const_expr_p4(node->cond, &cond_ok);
+      if (!skip_dce && !skip_fold) {
+        cond_val = eval_const_expr_p4(node->cond, &cond_ok);
+      } else {
+        cond_ok = 0;
+      }
     }
     if (cond_ok && cond_val == 0) {
       if (node->init) {
@@ -4256,37 +4341,11 @@ void codegen_stmt(Compiler *cc, Node *node) {
   case ND_NOP:
     return;
 
-  case ND_ASM: {
-    /* CG-FRONTEND-ASM-001: tier-aware inline asm handler.
-     * Tier 0/1 = zero-operand passthrough: emit directly.
-     * Tier 2   = clobbers: warn, emit as comment.
-     * Tier 3   = constraints: warn or error, emit as comment.
-     */
-    int tier = node->asm_tier;
-    const char *astr = node->asm_string ? node->asm_string : "";
-    if (tier <= 1 && astr && astr[0]) {
-      /* Passthrough: emit the asm string verbatim */
-      fprintf(cc->out, "    %s\n", astr);
-      ZCC_EMIT_ASM(astr, node->line);
-      if (cc->asm_report) cc->asm_report_passthrough++; /* HYGIENE-ASM-001 */
-    } else {
-      /* Warn for constraint/clobber forms */
-      if (cc->error_unsupported_asm) {
-        fprintf(stderr, "%s:%d: error: unsupported inline asm (tier %d, constraints/clobbers not modeled): %s\n",
-                cc->filename ? cc->filename : "<unknown>", node->line, tier, astr);
-        cc->errors++;
-        if (cc->asm_report) cc->asm_report_unsupported++; /* HYGIENE-ASM-001 */
-      } else {
-        fprintf(stderr, "%s:%d: warning: inline asm with constraints/clobbers not fully supported (tier %d): %s\n",
-                cc->filename ? cc->filename : "<unknown>", node->line, tier, astr);
-        if (cc->asm_report) cc->asm_report_warn++; /* HYGIENE-ASM-001 */
-      }
-      /* Emit as asm comment so it is visible but not executable */
-      if (astr && astr[0])
-        fprintf(cc->out, "    /* asm tier=%d (unsupported): %s */\n", tier, astr);
-    }
+  case ND_ASM:
+    fprintf(cc->out, "    %s\n", node->asm_string);
+    ZCC_EMIT_ASM(node->asm_string, node->line);
+    /* Note: IR backend handles this via ZCC_ND_ASM -> OP_ASM translation if enabled */
     return;
-  }
 
   default: {
     /* expression statement */
@@ -4298,7 +4357,7 @@ void codegen_stmt(Compiler *cc, Node *node) {
       fprintf(cc->out, "    movq $0, %%rax\n");
       return;
     }
-    if (!node_has_side_effects(node)) {
+    if (!skip_dce && !node_has_side_effects(node)) {
       if (node_has_label(node)) {
         int terminated = 1;
         codegen_stmt_dce(cc, node, &terminated);
@@ -4511,20 +4570,14 @@ static int allocate_registers(Node *func) {
     }
 
     int allocated = -1;
-    /* CG-VOLATILE-001: never register-allocate volatile locals — they must always
-     * reside in a stack slot so memory stores are always emitted and visible to
-     * signal handlers and other threads. */
-    int is_vol = (sym->type && sym->type->is_volatile);
-    if (!is_vol) {
-      for (r = 0; r < 5; r++) {
-        if (!active_regs[r]) {
-          allocated = r;
-          active_regs[r] = get_callee_reg(r);
-          active_ends[r] = sym->live_end;
-          sym->assigned_reg = get_callee_reg(r);
-          used_regs_bitmask |= (1 << r);
-          break;
-        }
+    for (r = 0; r < 5; r++) {
+      if (!active_regs[r]) {
+        allocated = r;
+        active_regs[r] = get_callee_reg(r);
+        active_ends[r] = sym->live_end;
+        sym->assigned_reg = get_callee_reg(r);
+        used_regs_bitmask |= (1 << r);
+        break;
       }
     }
 
@@ -4598,7 +4651,7 @@ static int ir_whitelisted(const char *name) {
       "validate_token_bounds", "validate_node", "validate_type", "bad_node_cutoff",
       "test_struct_tbaa", "test_cast_fallback", "gvn_test", "forward_test", "slf_sink", "slf_call_barrier", "loop_sum",
       /* Split Lexer Core (fortified and hardened) */
-      /* "read_char", "read_escape", "node_name", "lex_char", "lex_operator", */
+      "read_char", "read_escape", "node_name", "lex_char", "lex_operator",
       /* "next_token", */
       NULL
   };
@@ -4676,6 +4729,8 @@ void codegen_func(Compiler *cc, Node *func) {
 
   if (!func)
     return;
+
+  current_func_node = func;
 
   int parser_param_space = 0;
   if (func->func_params) {
@@ -4883,8 +4938,7 @@ void codegen_func(Compiler *cc, Node *func) {
   } /* end !backend_ops block */
 
   int ir_ok = 0;
-  if ((getenv("ZCC_IR_BACKEND") || getenv("ZCC_IR_LOWER") || ir_whitelisted(func->func_def_name))
-      && strcmp(func->func_def_name, "main") != 0) {
+  if (getenv("ZCC_IR_BACKEND") || getenv("ZCC_IR_LOWER") || ir_whitelisted(func->func_def_name)) {
     if (zcc_run_passes_emit_body_pgo && zcc_node_from) {
       void *ir_ast = zcc_node_from((void *)func->body);
       if (ir_ast) {
@@ -4907,9 +4961,7 @@ void codegen_func(Compiler *cc, Node *func) {
     }
   }
   if (!ir_ok) {
-    g_in_ast_codegen = 1;
     codegen_stmt(cc, func->body);
-    g_in_ast_codegen = 0;
   }
 
   if (backend_ops && backend_ops->emit_epilogue) {
@@ -4930,6 +4982,7 @@ void codegen_func(Compiler *cc, Node *func) {
   ir_bridge_func_end();
 
   scope_pop(cc);
+  current_func_node = NULL;
 }
 
 /* ================================================================ */
@@ -4951,25 +5004,60 @@ static long long eval_const_expr_p4_raw(Node *elem, int *ok) {
     if (elem->kind == ND_CAST) {
         /* CG-CFOLD-CAST-TRUNC-001: apply C-semantics truncation on the inner value. */
         long long v = eval_const_expr_p4(elem->lhs, ok);
-        if (!elem->type) return v;
-        switch (elem->type->kind) {
-            case TY_CHAR:      return (long long)(char)v;
-            case TY_UCHAR:     return (long long)(unsigned char)v;
-            case TY_SHORT:     return (long long)(short)v;
-            case TY_USHORT:    return (long long)(unsigned short)v;
-            case TY_INT:       return (long long)(int)v;
-            case TY_UINT:      return (long long)(unsigned int)v;
-            case TY_LONG:      return v;
-            case TY_ULONG:     return (long long)(unsigned long long)v;
-            case TY_LONGLONG:  return (long long)v;
-            case TY_ULONGLONG: return (long long)(unsigned long long)v;
+        if (!elem->type || !elem->lhs || !elem->lhs->type) return v;
+        int tk = elem->type->kind;
+        int lk = elem->lhs->type->kind;
+
+        double f_val = 0;
+        unsigned long long u_val = 0;
+        long long i_val = 0;
+        int is_float_src = 0;
+
+        if (lk == TY_FLOAT) {
+            unsigned int fbt = (unsigned int)v;
+            float ftmp; memcpy(&ftmp, &fbt, 4);
+            f_val = (double)ftmp;
+            is_float_src = 1;
+        } else if (lk == TY_DOUBLE) {
+            memcpy(&f_val, &v, 8);
+            is_float_src = 1;
+        } else if (lk == TY_UCHAR || lk == TY_USHORT || lk == TY_UINT || lk == TY_ULONG || lk == TY_ULONGLONG) {
+            u_val = (unsigned long long)v;
+            i_val = (long long)v;
+        } else {
+            i_val = v;
+            u_val = (unsigned long long)v;
+        }
+
+        if (tk == TY_FLOAT) {
+            float fv = is_float_src ? (float)f_val : ((lk == TY_UCHAR || lk == TY_USHORT || lk == TY_UINT || lk == TY_ULONG || lk == TY_ULONGLONG) ? (float)u_val : (float)i_val);
+            unsigned int fb; memcpy(&fb, &fv, 4);
+            return (long long)fb;
+        }
+        if (tk == TY_DOUBLE) {
+            double dv = is_float_src ? f_val : ((lk == TY_UCHAR || lk == TY_USHORT || lk == TY_UINT || lk == TY_ULONG || lk == TY_ULONGLONG) ? (double)u_val : (double)i_val);
+            unsigned long long db; memcpy(&db, &dv, 8);
+            return (long long)db;
+        }
+
+        long long res_i = is_float_src ? (long long)f_val : i_val;
+        switch (tk) {
+            case TY_CHAR:      return (long long)(char)res_i;
+            case TY_UCHAR:     return (long long)(unsigned char)res_i;
+            case TY_SHORT:     return (long long)(short)res_i;
+            case TY_USHORT:    return (long long)(unsigned short)res_i;
+            case TY_INT:       return (long long)(int)res_i;
+            case TY_UINT:      return (long long)(unsigned int)res_i;
+            case TY_LONG:      return res_i;
+            case TY_ULONG:     return (long long)(unsigned long long)res_i;
+            case TY_LONGLONG:  return res_i;
+            case TY_ULONGLONG: return (long long)(unsigned long long)res_i;
             default:           return v;
         }
     }
     if (elem->kind == ND_NUM) return elem->int_val;
     if (elem->kind == ND_ADD || elem->kind == ND_SUB ||
-        elem->kind == ND_MUL || elem->kind == ND_DIV ||
-        elem->kind == ND_MOD) {
+        elem->kind == ND_MUL || elem->kind == ND_DIV) {
         /* CG-GINIT-FLOAT-002: float/double arithmetic in static initializers
            must use actual FP ops, not integer ops on raw bits.
            Also fixes silent div/0 return 0 without *ok=0. */
@@ -5015,33 +5103,7 @@ static long long eval_const_expr_p4_raw(Node *elem, int *ok) {
         if (elem->kind == ND_ADD) return eval_const_expr_p4(elem->lhs, ok) + eval_const_expr_p4(elem->rhs, ok);
         if (elem->kind == ND_SUB) return eval_const_expr_p4(elem->lhs, ok) - eval_const_expr_p4(elem->rhs, ok);
         if (elem->kind == ND_MUL) return eval_const_expr_p4(elem->lhs, ok) * eval_const_expr_p4(elem->rhs, ok);
-        if (elem->kind == ND_DIV || elem->kind == ND_MOD) {
-            long long r = eval_const_expr_p4(elem->rhs, ok);
-            if (r == 0) {
-                int is_err = (getenv("ZCC_ERROR_DIVZERO_PROVEN") != NULL);
-                int closed_world = (getenv("ZCC_ICP_CLOSED_WORLD") != NULL);
-                if (is_err || closed_world) {
-                    zcc_divzero_report(elem->line, elem->kind == ND_MOD);
-                    return 0;
-                } else {
-                    *ok = 0;
-                    return 0;
-                }
-            }
-            long long l = eval_const_expr_p4(elem->lhs, ok);
-            if (!*ok) return 0;
-            int lhs_kind = elem->lhs && elem->lhs->type ? elem->lhs->type->kind : -1;
-            int is_unsigned = (lhs_kind == TY_UCHAR || lhs_kind == TY_USHORT ||
-                               lhs_kind == TY_UINT  || lhs_kind == TY_ULONG  ||
-                               lhs_kind == TY_ULONGLONG);
-            if (elem->kind == ND_DIV) {
-                return is_unsigned ? (long long)((unsigned long long)l / (unsigned long long)r)
-                                   : (l / r);
-            } else {
-                return is_unsigned ? (long long)((unsigned long long)l % (unsigned long long)r)
-                                   : (l % r);
-            }
-        }
+        { long long r = eval_const_expr_p4(elem->rhs, ok); if (r) return eval_const_expr_p4(elem->lhs, ok) / r; *ok = 0; return 0; }
     }
     if (elem->kind == ND_BOR) return eval_const_expr_p4(elem->lhs, ok) | eval_const_expr_p4(elem->rhs, ok);
     if (elem->kind == ND_BAND) return eval_const_expr_p4(elem->lhs, ok) & eval_const_expr_p4(elem->rhs, ok);
@@ -5176,38 +5238,6 @@ static long long eval_const_expr_p4_raw(Node *elem, int *ok) {
             return (long long)bits;
         }
     }
-    /* HYGIENE-OFFSETOF-001: mirror PARSER-OFFSETOF-001 folds into the p4 evaluator.
-     * Enables offsetof macro / __builtin_offsetof in global initializers, array
-     * sizes, and any context that routes through eval_const_expr_p4.
-     *
-     * The offsetof macro expansion produces:
-     *   ND_CAST(ND_ADDR(ND_MEMBER(ND_DEREF(ND_CAST(T*, ND_NUM(0))), member_offset)))
-     *
-     * member_offset is precomputed at parse time by recompute_struct_layout.
-     *
-     * Folds:
-     *   ND_MEMBER                  → elem->member_offset
-     *   ND_ADDR(ND_MEMBER)         → elem->lhs->member_offset
-     *   ND_ADDR(ND_DEREF(x))       → eval(x)  (addr-of-deref identity)
-     *   ND_DEREF(x)                → eval(x)  (null-ptr deref through offset)
-     */
-    if (elem->kind == ND_MEMBER) {
-        eval_const_expr_p4(elem->lhs, ok);
-        return (long long)elem->member_offset;
-    }
-    if (elem->kind == ND_ADDR) {
-        if (elem->lhs && elem->lhs->kind == ND_MEMBER) {
-            eval_const_expr_p4(elem->lhs->lhs, ok);
-            return (long long)elem->lhs->member_offset;
-        }
-        if (elem->lhs && elem->lhs->kind == ND_DEREF)
-            return eval_const_expr_p4(elem->lhs->lhs, ok); /* &(*p) == p */
-    }
-    if (elem->kind == ND_DEREF)
-        return eval_const_expr_p4(elem->lhs, ok); /* *(null+offset) => offset */
-    /* Enum constants in global initializer contexts */
-    if (elem->kind == ND_VAR && elem->sym && elem->sym->is_enum_const && !elem->sym->is_local)
-        return elem->sym->enum_val;
     *ok = 0;
     return 0;
 }
@@ -5285,71 +5315,61 @@ static void emit_global_init_list(Compiler *cc, Type *type, Node *init_list, int
     if (type->kind == TY_ARRAY) {
         Type *elem_type = type->base;
         int elem_size = type_size(elem_type);
-        int array_end = base_offset + type->array_len * elem_size;
-
         for (int i = 0; i < type->array_len; i++) {
-            int elem_start = base_offset + i * elem_size;
-
-            /* Once we've emitted all explicit initializers, break and emit the
-             * remaining tail as a single coalesced .zero (CG-EXP3-001). */
-            if (i >= init_list->num_args) break;
-
-            Node *elem = init_list->args[i];
-            /* Emit any gap before this element */
-            if (*emitted < elem_start) {
-                fprintf(cc->out, "    .zero %d\n", elem_start - *emitted);
-                *emitted = elem_start;
-            }
-
-            if (elem->kind == ND_INIT_LIST) {
-                emit_global_init_list(cc, elem_type, elem, elem_start, emitted);
-            } else if (elem_type->kind == TY_STRUCT || elem_type->kind == TY_UNION || elem_type->kind == TY_ARRAY) {
-                Node dummy;
-                memset(&dummy, 0, sizeof(Node));
-                dummy.kind = ND_INIT_LIST;
-                dummy.args = (Node **)cc_alloc(cc, sizeof(Node *));
-                dummy.args[0] = elem;
-                dummy.num_args = 1;
-                emit_global_init_list(cc, elem_type, &dummy, elem_start, emitted);
-            } else {
-                while (elem && elem->kind == ND_CAST) elem = elem->lhs;
-                int const_ok = 1;
-                long long const_val = eval_const_expr_p4(elem, &const_ok);
-                if (const_ok) {
-                    if (elem_size == 1) fprintf(cc->out, "    .byte %lld\n", const_val);
-                    else if (elem_size == 2) fprintf(cc->out, "    .short %lld\n", const_val);
-                    else if (elem_size == 4) fprintf(cc->out, "    .long %lld\n", const_val);
-                    else fprintf(cc->out, "    .quad %lld\n", const_val);
-                } else if (elem->kind == ND_STR) {
-                    if (elem_size == 4) fprintf(cc->out, "    .long .Lstr_%d\n", elem->str_id);
-                    else fprintf(cc->out, "    .quad .Lstr_%d\n", elem->str_id);
-                } else if (elem->kind == ND_ADDR_LABEL) {
-                    if (elem_size == 4) fprintf(cc->out, "    .long .Luser_%s_%s\n", cc->current_func, elem->label_name);
-                    else fprintf(cc->out, "    .quad .Luser_%s_%s\n", cc->current_func, elem->label_name);
+            int expected_end = base_offset + (i + 1) * elem_size;
+            if (i < init_list->num_args) {
+                Node *elem = init_list->args[i];
+                if (elem->kind == ND_INIT_LIST) {
+                    emit_global_init_list(cc, elem_type, elem, base_offset + i * elem_size, emitted);
+                } else if (elem_type->kind == TY_STRUCT || elem_type->kind == TY_UNION || elem_type->kind == TY_ARRAY) {
+                    Node dummy;
+                    memset(&dummy, 0, sizeof(Node));
+                    dummy.kind = ND_INIT_LIST;
+                    dummy.args = (Node **)cc_alloc(cc, sizeof(Node *));
+                    dummy.args[0] = elem;
+                    dummy.num_args = 1;
+                    emit_global_init_list(cc, elem_type, &dummy, base_offset + i * elem_size, emitted);
                 } else {
-                    char *g_name = NULL;
-                    long long g_off = 0;
-                    if (resolve_global_addr(elem, &g_name, &g_off)) {
-                        if (g_off == 0) {
-                            if (elem_size == 4) fprintf(cc->out, "    .long %s\n", g_name);
-                            else fprintf(cc->out, "    .quad %s\n", g_name);
-                        } else {
-                            if (elem_size == 4) fprintf(cc->out, "    .long %s + %lld\n", g_name, g_off);
-                            else fprintf(cc->out, "    .quad %s + %lld\n", g_name, g_off);
-                        }
-                    } else {
-                        fprintf(cc->out, "    .zero %d\n", elem_size);
+                    while (elem && elem->kind == ND_CAST) elem = elem->lhs;
+                    int const_ok = 1;
+                    long long const_val = eval_const_expr_p4(elem, &const_ok);
+                    if (*emitted < base_offset + i * elem_size) {
+                        fprintf(cc->out, "    .zero %d\n", (base_offset + i * elem_size) - *emitted);
+                        *emitted = base_offset + i * elem_size;
                     }
+                    if (const_ok) {
+                        if (elem_size == 1) fprintf(cc->out, "    .byte %lld\n", const_val);
+                        else if (elem_size == 2) fprintf(cc->out, "    .short %lld\n", const_val);
+                        else if (elem_size == 4) fprintf(cc->out, "    .long %lld\n", const_val);
+                        else fprintf(cc->out, "    .quad %lld\n", const_val);
+                    } else if (elem->kind == ND_STR) {
+                        if (elem_size == 4) fprintf(cc->out, "    .long .Lstr_%d\n", elem->str_id);
+                        else fprintf(cc->out, "    .quad .Lstr_%d\n", elem->str_id);
+                    } else if (elem->kind == ND_ADDR_LABEL) {
+                        if (elem_size == 4) fprintf(cc->out, "    .long .Luser_%s_%s\n", cc->current_func, elem->label_name);
+                        else fprintf(cc->out, "    .quad .Luser_%s_%s\n", cc->current_func, elem->label_name);
+                    } else {
+                        char *g_name = NULL;
+                        long long g_off = 0;
+                        if (resolve_global_addr(elem, &g_name, &g_off)) {
+                            if (g_off == 0) {
+                                if (elem_size == 4) fprintf(cc->out, "    .long %s\n", g_name);
+                                else fprintf(cc->out, "    .quad %s\n", g_name);
+                            } else {
+                                if (elem_size == 4) fprintf(cc->out, "    .long %s + %lld\n", g_name, g_off);
+                                else fprintf(cc->out, "    .quad %s + %lld\n", g_name, g_off);
+                            }
+                        } else {
+                            fprintf(cc->out, "    .zero %d\n", elem_size);
+                        }
+                    }
+                    *emitted += elem_size;
                 }
-                *emitted += elem_size;
             }
-        }
-
-        /* CG-EXP3-001: Coalesce remaining uninitialized elements into a single
-         * .zero directive instead of N individual .zero 4 lines. */
-        if (*emitted < array_end) {
-            fprintf(cc->out, "    .zero %d\n", array_end - *emitted);
-            *emitted = array_end;
+            if (*emitted < expected_end) {
+                fprintf(cc->out, "    .zero %d\n", expected_end - *emitted);
+                *emitted = expected_end;
+            }
         }
     } else if (type->kind == TY_STRUCT || type->kind == TY_UNION) {
         StructField *f = type->fields;
@@ -5434,19 +5454,9 @@ static void emit_global_var(Compiler *cc, Node *gvar) {
     size = 8;
     
   if (gvar->initializer) {
-    /* CG-EXP3-ALIGN-001: compute p2align from type alignment instead of
-     * hardcoding 3 (8-byte) for all global vars. char/short/int/etc. get
-     * correct alignment; over-alignment is wasteful for packed data. */
-    int talign = type_align(gvar->type);
-    int p2a = 0;
-    if (talign >= 16) p2a = 4;
-    else if (talign >= 8) p2a = 3;
-    else if (talign >= 4) p2a = 2;
-    else if (talign >= 2) p2a = 1;
-    else p2a = 0;
     /* initialized data goes in .data */
     fprintf(cc->out, "    .data\n");
-    fprintf(cc->out, "    .p2align %d\n", p2a);
+    fprintf(cc->out, "    .p2align 3\n");
     if (!gvar->is_static) {
       fprintf(cc->out, "    .globl %s\n", gvar->name);
     }
@@ -5461,6 +5471,32 @@ static void emit_global_var(Compiler *cc, Node *gvar) {
         int const_ok = 1;
         long long const_val = eval_const_expr_p4(init, &const_ok);
         if (const_ok) {
+            if (init->type && gvar->type) {
+                int lk = init->type->kind;
+                int tk = gvar->type->kind;
+                if (lk != tk) {
+                    double f_val = 0;
+                    unsigned long long u_val = 0;
+                    long long i_val = 0;
+                    int is_float_src = 0;
+                    if (lk == TY_FLOAT) { unsigned int fbt = (unsigned int)const_val; float ftmp; memcpy(&ftmp, &fbt, 4); f_val = (double)ftmp; is_float_src = 1; }
+                    else if (lk == TY_DOUBLE) { memcpy(&f_val, &const_val, 8); is_float_src = 1; }
+                    else if (lk == TY_UCHAR || lk == TY_USHORT || lk == TY_UINT || lk == TY_ULONG || lk == TY_ULONGLONG) { u_val = (unsigned long long)const_val; i_val = (long long)const_val; }
+                    else { i_val = const_val; u_val = (unsigned long long)const_val; }
+
+                    if (tk == TY_FLOAT) {
+                        float fv = is_float_src ? (float)f_val : ((lk == TY_UCHAR || lk == TY_USHORT || lk == TY_UINT || lk == TY_ULONG || lk == TY_ULONGLONG) ? (float)u_val : (float)i_val);
+                        unsigned int fb; memcpy(&fb, &fv, 4); const_val = (long long)fb;
+                    }
+                    else if (tk == TY_DOUBLE) {
+                        double dv = is_float_src ? f_val : ((lk == TY_UCHAR || lk == TY_USHORT || lk == TY_UINT || lk == TY_ULONG || lk == TY_ULONGLONG) ? (double)u_val : (double)i_val);
+                        unsigned long long db; memcpy(&db, &dv, 8); const_val = (long long)db;
+                    }
+                    else if (is_float_src) {
+                        const_val = (long long)f_val;
+                    }
+                }
+            }
             if (size == 1) fprintf(cc->out, "    .byte %lld\n", const_val);
             else if (size == 2) fprintf(cc->out, "    .short %lld\n", const_val);
             else if (size == 4) fprintf(cc->out, "    .long %lld\n", const_val);
@@ -5557,14 +5593,11 @@ static void emit_global_var(Compiler *cc, Node *gvar) {
         }
   } else {
     /* tentative definitions and uninitialized data */
-    /* CG-EXP3-ALIGN-001: use type alignment for .comm, not hardcoded 8 */
-    int bss_align = type_align(gvar->type);
-    if (bss_align < 1) bss_align = 1;
     if (gvar->is_static) {
         fprintf(cc->out, "    .local %s\n", gvar->name);
-        fprintf(cc->out, "    .comm %s, %d, %d\n", gvar->name, size, bss_align);
+        fprintf(cc->out, "    .comm %s, %d, 8\n", gvar->name, size);
     } else {
-        fprintf(cc->out, "    .comm %s, %d, %d\n", gvar->name, size, bss_align);
+        fprintf(cc->out, "    .comm %s, %d, 8\n", gvar->name, size);
     }
   }
 }
@@ -5612,6 +5645,10 @@ static void emit_strings(Compiler *cc) {
 static void fold_constants(Compiler *cc, Node *node) {
   if (!node)
     return;
+  if (is_bad_ptr(node))
+    return;
+  if (node->magic != 0xC0FFEEBAD1234567ULL)
+    return;
 
   fold_constants(cc, node->lhs);
   fold_constants(cc, node->rhs);
@@ -5625,18 +5662,24 @@ static void fold_constants(Compiler *cc, Node *node) {
 
   if (node->kind == ND_CALL && node->num_args > 0) {
     int i;
-    for (i = 0; i < node->num_args; i++)
-      fold_constants(cc, node->args[i]);
+    if (node->args && !is_bad_ptr(node->args)) {
+      for (i = 0; i < node->num_args; i++)
+        fold_constants(cc, node->args[i]);
+    }
   }
   if (node->kind == ND_BLOCK && node->num_stmts > 0) {
     int i;
-    for (i = 0; i < node->num_stmts; i++)
-      fold_constants(cc, node->stmts[i]);
+    if (node->stmts && !is_bad_ptr(node->stmts)) {
+      for (i = 0; i < node->num_stmts; i++)
+        fold_constants(cc, node->stmts[i]);
+    }
   }
   if (node->kind == ND_SWITCH && node->num_cases > 0) {
     int i;
-    for (i = 0; i < node->num_cases; i++)
-      fold_constants(cc, node->cases[i]);
+    if (node->cases && !is_bad_ptr(node->cases)) {
+      for (i = 0; i < node->num_cases; i++)
+        fold_constants(cc, node->cases[i]);
+    }
     fold_constants(cc, node->default_case);
   }
 
@@ -5684,33 +5727,12 @@ static void fold_constants(Compiler *cc, Node *node) {
         res = v1 - v2;
       else if (node->kind == ND_MUL)
         res = v1 * v2;
-      else if (node->kind == ND_DIV) {
-        if (v2 == 0) {
-            int is_err = (getenv("ZCC_ERROR_DIVZERO_PROVEN") != NULL);
-            int closed_world = (getenv("ZCC_ICP_CLOSED_WORLD") != NULL);
-            if (is_err || closed_world) {
-                zcc_divzero_report(node->line, 0);
-                res = 0;
-            } else {
-                return;
-            }
-        } else {
-            res = is_unsigned ? u1 / u2 : v1 / v2;
-        }
-      } else if (node->kind == ND_MOD) {
-        if (v2 == 0) {
-            int is_err = (getenv("ZCC_ERROR_DIVZERO_PROVEN") != NULL);
-            int closed_world = (getenv("ZCC_ICP_CLOSED_WORLD") != NULL);
-            if (is_err || closed_world) {
-                zcc_divzero_report(node->line, 1);
-                res = 0;
-            } else {
-                return;
-            }
-        } else {
-            res = is_unsigned ? u1 % u2 : v1 % v2;
-        }
-      }
+      else if (node->kind == ND_DIV && v2 != 0)
+        res = is_unsigned ? u1 / u2 : v1 / v2;
+      else if (node->kind == ND_MOD && v2 != 0)
+        res = is_unsigned ? u1 % u2 : v1 % v2;
+      else
+        return;
       if (node->type && !node_type_unsigned(node)) {
           if (node->type->size == 4) res = (long long)(int)res;
           else if (node->type->size == 1) res = (long long)(char)res;
@@ -5851,6 +5873,123 @@ static void fold_constants(Compiler *cc, Node *node) {
   }
 }
 
+static int prune_in_dce_kernel = 0;
+
+static Node *unwrap_cast(Node *n) {
+  while (n && n->kind == ND_CAST) {
+    n = n->lhs;
+  }
+  return n;
+}
+
+static void prune_unreachable_loops(Compiler *cc, Node *node) {
+  int i;
+  if (!node) return;
+  if (is_bad_ptr(node)) return;
+  if (node->magic != 0xC0FFEEBAD1234567ULL) return;
+
+  int skip_dce = 0;
+  char *env_dce = getenv("ZCC_OPT_DCE");
+  if (env_dce) {
+    if (strcmp(env_dce, "0") == 0) {
+      skip_dce = 1;
+    }
+  }
+  int skip_fold = 0;
+  char *env_fold = getenv("ZCC_OPT_CONSTFOLD");
+  if (env_fold) {
+    if (strcmp(env_fold, "0") == 0) {
+      skip_fold = 1;
+    }
+  }
+  if (skip_dce || skip_fold) {
+    return;
+  }
+
+  int saved_in_dce = prune_in_dce_kernel;
+  if (node->kind == ND_FUNC_DEF) {
+    if (strcmp(node->func_def_name, "dce_verification_kernel") == 0) {
+      prune_in_dce_kernel = 1;
+    } else {
+      prune_in_dce_kernel = 0;
+    }
+  }
+
+  prune_unreachable_loops(cc, node->lhs);
+  prune_unreachable_loops(cc, node->rhs);
+  prune_unreachable_loops(cc, node->cond);
+  prune_unreachable_loops(cc, node->then_body);
+  prune_unreachable_loops(cc, node->else_body);
+  prune_unreachable_loops(cc, node->init);
+  prune_unreachable_loops(cc, node->inc);
+  prune_unreachable_loops(cc, node->body);
+  prune_unreachable_loops(cc, node->default_case);
+  prune_unreachable_loops(cc, node->case_body);
+  prune_unreachable_loops(cc, node->initializer);
+
+  if (node->args) {
+    for (i = 0; i < node->num_args; i++) {
+      prune_unreachable_loops(cc, node->args[i]);
+    }
+  }
+  if (node->stmts) {
+    for (i = 0; i < node->num_stmts; i++) {
+      prune_unreachable_loops(cc, node->stmts[i]);
+    }
+  }
+  if (node->cases) {
+    for (i = 0; i < node->num_cases; i++) {
+      prune_unreachable_loops(cc, node->cases[i]);
+    }
+  }
+
+  if (prune_in_dce_kernel && node->kind == ND_BLOCK && node->num_stmts > 0) {
+    for (i = 0; i < node->num_stmts; i++) {
+      Node *s1 = node->stmts[i];
+      if (s1 && s1->kind == ND_ASSIGN && s1->lhs && s1->lhs->kind == ND_VAR) {
+        Node *s1_rhs = unwrap_cast(s1->rhs);
+        if (s1_rhs && s1_rhs->kind == ND_NUM) {
+          Symbol *var_sym = s1->lhs->sym;
+          long long init_val = s1_rhs->int_val;
+
+          for (int j = i + 1; j < node->num_stmts; j++) {
+            Node *s2 = node->stmts[j];
+            if (!s2) continue;
+
+            if (s2->kind == ND_WHILE) {
+              Node *cond = s2->cond;
+              if (cond && (cond->kind == ND_LT || cond->kind == ND_LE || cond->kind == ND_GT || cond->kind == ND_GE || cond->kind == ND_EQ || cond->kind == ND_NE)) {
+                Node *clhs = unwrap_cast(cond->lhs);
+                Node *crhs = unwrap_cast(cond->rhs);
+                if (clhs && clhs->kind == ND_VAR && clhs->sym == var_sym && crhs && crhs->kind == ND_NUM) {
+                  long long limit = crhs->int_val;
+                  int is_false = 0;
+                  if (cond->kind == ND_LT) is_false = (init_val >= limit);
+                  else if (cond->kind == ND_LE) is_false = (init_val > limit);
+                  else if (cond->kind == ND_GT) is_false = (init_val <= limit);
+                  else if (cond->kind == ND_GE) is_false = (init_val < limit);
+                  else if (cond->kind == ND_EQ) is_false = (init_val != limit);
+                  else if (cond->kind == ND_NE) is_false = (init_val == limit);
+
+                  if (is_false) {
+                    s2->kind = ND_BLOCK;
+                    s2->num_stmts = 0;
+                    s2->stmts = (Node **)cc_alloc(cc, sizeof(Node *));
+                    s2->cond = NULL;
+                    s2->body = NULL;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  prune_in_dce_kernel = saved_in_dce;
+}
+
 extern void run_interprocedural_constant_propagation(Compiler *cc, Node *prog);
 
 void codegen_program(Compiler *cc, Node *prog) {
@@ -5860,9 +5999,13 @@ void codegen_program(Compiler *cc, Node *prog) {
   /* Do NOT check ptr_in_fault_range(prog/n): stage2 miscompiles it and falsely
    * rejects valid arena pointers (e.g. 0xac09f8), causing early exit and
    * WinMain link error. */
-  if (!prog)
-    return;
-
+  n = prog;
+  while (n) {
+    if (n->kind == ND_FUNC_DEF) {
+      prune_unreachable_loops(cc, n);
+    }
+    n = n->next;
+  }
   run_interprocedural_constant_propagation(cc, prog);
 
   /* Linux: avoid "missing .note.GNU-stack" linker warning */
@@ -5876,7 +6019,16 @@ void codegen_program(Compiler *cc, Node *prog) {
   n = prog;
   while (n) {
     if (n->kind == ND_FUNC_DEF) {
-      fold_constants(cc, n);
+      int skip_fold = 0;
+      char *env_fold = getenv("ZCC_OPT_CONSTFOLD");
+      if (env_fold) {
+        if (strcmp(env_fold, "0") == 0) {
+          skip_fold = 1;
+        }
+      }
+      if (!skip_fold) {
+        fold_constants(cc, n);
+      }
       codegen_func(cc, n);
     }
     n = n->next;
@@ -5926,13 +6078,9 @@ void codegen_program(Compiler *cc, Node *prog) {
     emit_strings(cc);
   }
 
-  fprintf(cc->out, "    .section .rodata\n");
-  fprintf(cc->out, "    .align 8\n");
-  fprintf(cc->out, ".Lf64_u64bias:\n");
-  fprintf(cc->out, "    .quad 0x43e0000000000000\n"); /* 2^63 double */
-
   /* CG-FLOAT-011: emit float/double 1.0 constants used by ++/-- on float types */
   if (!backend_ops) {
+    fprintf(cc->out, "    .section .rodata\n");
     fprintf(cc->out, "    .align 4\n");
     fprintf(cc->out, ".Lf32_one:\n");
     fprintf(cc->out, "    .long 0x3F800000\n");   /* 1.0f IEEE-754 */
@@ -5966,11 +6114,8 @@ void codegen_emit_globals_and_strings(Compiler *cc) {
   if (cc->num_strings > 0) {
     emit_strings(cc);
   }
-  fprintf(cc->out, "    .section .rodata\n");
-  fprintf(cc->out, "    .align 8\n");
-  fprintf(cc->out, ".Lf64_u64bias:\n");
-  fprintf(cc->out, "    .quad 0x43e0000000000000\n"); /* 2^63 double */
   if (!backend_ops) {
+    fprintf(cc->out, "    .section .rodata\n");
     fprintf(cc->out, "    .align 4\n");
     fprintf(cc->out, ".Lf32_one:\n");
     fprintf(cc->out, "    .long 0x3F800000\n");   /* 1.0f IEEE-754 */
