@@ -247,6 +247,27 @@ static long long parse_const_expr_unary(Compiler *cc) {
                 expect(cc, TK_RPAREN);
                 return type_size(st);
             }
+            /* sizeof(expr) — handle identifier with optional [] subscript */
+            if (cc->tk == TK_IDENT) {
+                Symbol *sym = scope_find(cc, cc->tk_text);
+                if (sym && sym->type) {
+                    Type *t = sym->type;
+                    next_token(cc); /* consume identifier */
+                    /* Peel array subscripts: sizeof(arr[0]) → sizeof(element) */
+                    while (cc->tk == TK_LBRACKET) {
+                        next_token(cc); /* consume [ */
+                        parse_const_expr(cc); /* consume index expression */
+                        expect(cc, TK_RBRACKET); /* consume ] */
+                        if (t->kind == TY_ARRAY && t->base) {
+                            t = t->base;
+                        } else if (t->kind == TY_PTR && t->base) {
+                            t = t->base;
+                        }
+                    }
+                    expect(cc, TK_RPAREN);
+                    return type_size(t);
+                }
+            }
             long long v = parse_const_expr(cc);
             expect(cc, TK_RPAREN);
             return v;
