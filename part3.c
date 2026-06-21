@@ -2991,6 +2991,35 @@ static Node *parse_initializer_list(Compiler *cc, int *out_count) {
         Node *item = NULL;
         if (cc->tk == TK_LBRACE) {
             item = parse_initializer_list(cc, NULL);
+        } else if (cc->tk == TK_DOT) {
+            /* C99 designated initializer: .field = value
+             * Consume the designator and parse the value.
+             * Note: fields are assumed to be in declaration order. */
+            next_token(cc); /* consume '.' */
+            if (cc->tk == TK_IDENT) {
+                next_token(cc); /* consume field name */
+            }
+            if (cc->tk == TK_ASSIGN) {
+                next_token(cc); /* consume '=' */
+            }
+            if (cc->tk == TK_LBRACE) {
+                item = parse_initializer_list(cc, NULL);
+            } else {
+                item = parse_assign(cc);
+            }
+        } else if (cc->tk == TK_LBRACKET) {
+            /* C99 array designated initializer: [index] = value */
+            next_token(cc); /* consume '[' */
+            parse_assign(cc); /* consume index expr */
+            expect(cc, TK_RBRACKET);
+            if (cc->tk == TK_ASSIGN) {
+                next_token(cc); /* consume '=' */
+            }
+            if (cc->tk == TK_LBRACE) {
+                item = parse_initializer_list(cc, NULL);
+            } else {
+                item = parse_assign(cc);
+            }
         } else {
             item = parse_assign(cc);
         }
