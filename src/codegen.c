@@ -4,6 +4,17 @@
 #include <string.h>
 #include <ctype.h>
 
+#ifndef __GNUC_MINOR__
+int __builtin_popcount(unsigned int x) {
+    int count = 0;
+    while (x) {
+        count += (x & 1);
+        x >>= 1;
+    }
+    return count;
+}
+#endif
+
 /* Declare original main from part5.c */
 extern int zcc_main(int argc, char **argv);
 
@@ -22,7 +33,10 @@ typedef struct {
 
 static void seg_append(Segment *seg, const unsigned char *bytes, size_t size) {
     if (seg->size + size > seg->cap) {
-        seg->cap = seg->cap ? seg->cap * 2 : 4096;
+        if (!seg->cap) seg->cap = 4096;
+        while (seg->size + size > seg->cap) {
+            seg->cap *= 2;
+        }
         seg->data = (unsigned char *)realloc(seg->data, seg->cap);
     }
     memcpy(seg->data + seg->size, bytes, size);
@@ -38,7 +52,7 @@ typedef struct {
     size_t size; /* for COMMON */
 } Label;
 
-static Label labels[4096];
+static Label labels[131072];
 static size_t label_count = 0;
 
 /* Relocation tracking */
@@ -49,8 +63,16 @@ typedef struct {
     long long addend;
 } Reloc;
 
-static Reloc relocs[4096];
+static Reloc relocs[131072];
 static size_t reloc_count = 0;
+
+static void add_reloc(Reloc r) {
+    if (reloc_count >= 131072) {
+        fprintf(stderr, "error: assembler relocation table limit exceeded (max 131072)\n");
+        exit(1);
+    }
+    relocs[reloc_count++] = r;
+}
 
 static int parse_reg(const char *s) {
     if (strcmp(s, "%rax") == 0 || strcmp(s, "%eax") == 0 || strcmp(s, "%ax") == 0 || strcmp(s, "%al") == 0) return 0;
@@ -259,6 +281,56 @@ static void encode_movq_imm(Segment *seg, long long imm, int dst_reg) {
     seg_append(seg, d, 4);
 }
 
+static void encode_movq_imm_mem(Segment *seg, long long imm, int base_reg, long long disp) {
+    unsigned char rex = 0x48;
+    unsigned char opcode = 0xc7;
+    unsigned char modrm;
+    if (base_reg & 8) rex |= 0x01;
+    
+    if (disp == 0 && (base_reg & 7) != 5) {
+        modrm = (0x00 << 6) | (0 << 3) | (base_reg & 7);
+        seg_append(seg, &rex, 1);
+        seg_append(seg, &opcode, 1);
+        seg_append(seg, &modrm, 1);
+        if ((base_reg & 7) == 4) {
+            unsigned char sib = 0x24;
+            seg_append(seg, &sib, 1);
+        }
+    } else if (disp >= -128 && disp <= 127) {
+        modrm = (0x01 << 6) | (0 << 3) | (base_reg & 7);
+        seg_append(seg, &rex, 1);
+        seg_append(seg, &opcode, 1);
+        seg_append(seg, &modrm, 1);
+        if ((base_reg & 7) == 4) {
+            unsigned char sib = 0x24;
+            seg_append(seg, &sib, 1);
+        }
+        unsigned char d = (unsigned char)disp;
+        seg_append(seg, &d, 1);
+    } else {
+        modrm = (0x02 << 6) | (0 << 3) | (base_reg & 7);
+        seg_append(seg, &rex, 1);
+        seg_append(seg, &opcode, 1);
+        seg_append(seg, &modrm, 1);
+        if ((base_reg & 7) == 4) {
+            unsigned char sib = 0x24;
+            seg_append(seg, &sib, 1);
+        }
+        unsigned char d[4];
+        d[0] = disp & 0xFF;
+        d[1] = (disp >> 8) & 0xFF;
+        d[2] = (disp >> 16) & 0xFF;
+        d[3] = (disp >> 24) & 0xFF;
+        seg_append(seg, d, 4);
+    }
+    unsigned char imm_bytes[4];
+    imm_bytes[0] = imm & 0xFF;
+    imm_bytes[1] = (imm >> 8) & 0xFF;
+    imm_bytes[2] = (imm >> 16) & 0xFF;
+    imm_bytes[3] = (imm >> 24) & 0xFF;
+    seg_append(seg, imm_bytes, 4);
+}
+
 static void encode_rip_relative(Segment *seg, const char *label_name, int reg, int is_load) {
     unsigned char rex = 0x48;
     unsigned char opcode = (is_load == 2) ? 0x8d : (is_load ? 0x8b : 0x89);
@@ -274,7 +346,7 @@ static void encode_rip_relative(Segment *seg, const char *label_name, int reg, i
     strcpy(r.target_name, label_name);
     r.type = R_X86_64_PC32;
     r.addend = -4;
-    relocs[reloc_count++] = r;
+    add_reloc(r);
     
     unsigned char zero[4] = {0, 0, 0, 0};
     seg_append(seg, zero, 4);
@@ -287,26 +359,26 @@ static void encode_jump(Segment *seg, const char *mnemonic, const char *target_l
     if (strcmp(mnemonic, "jmp") == 0) {
         bytes[0] = 0xe9;
         size = 1;
-    } else if (strcmp(mnemonic, "je") == 0) {
+    } else if (strcmp(mnemonic, "je") == 0 || strcmp(mnemonic, "jz") == 0) {
         bytes[0] = 0x0f; bytes[1] = 0x84; size = 2;
-    } else if (strcmp(mnemonic, "jne") == 0) {
+    } else if (strcmp(mnemonic, "jne") == 0 || strcmp(mnemonic, "jnz") == 0) {
         bytes[0] = 0x0f; bytes[1] = 0x85; size = 2;
     } else if (strcmp(mnemonic, "jl") == 0) {
         bytes[0] = 0x0f; bytes[1] = 0x8c; size = 2;
     } else if (strcmp(mnemonic, "jle") == 0) {
-        bytes[0] = 0x0f; bytes[1] = 0x8d; size = 2;
+        bytes[0] = 0x0f; bytes[1] = 0x8e; size = 2;
     } else if (strcmp(mnemonic, "jg") == 0) {
         bytes[0] = 0x0f; bytes[1] = 0x8f; size = 2;
     } else if (strcmp(mnemonic, "jge") == 0) {
-        bytes[0] = 0x0f; bytes[1] = 0x8e; size = 2;
+        bytes[0] = 0x0f; bytes[1] = 0x8d; size = 2;
     } else if (strcmp(mnemonic, "jb") == 0) {
         bytes[0] = 0x0f; bytes[1] = 0x82; size = 2;
     } else if (strcmp(mnemonic, "jbe") == 0) {
-        bytes[0] = 0x0f; bytes[1] = 0x83; size = 2;
+        bytes[0] = 0x0f; bytes[1] = 0x86; size = 2;
     } else if (strcmp(mnemonic, "ja") == 0) {
         bytes[0] = 0x0f; bytes[1] = 0x87; size = 2;
     } else if (strcmp(mnemonic, "jae") == 0) {
-        bytes[0] = 0x0f; bytes[1] = 0x86; size = 2;
+        bytes[0] = 0x0f; bytes[1] = 0x83; size = 2;
     }
     
     if (size > 0) {
@@ -317,7 +389,7 @@ static void encode_jump(Segment *seg, const char *mnemonic, const char *target_l
         strcpy(r.target_name, target_label);
         r.type = R_X86_64_PC32;
         r.addend = -4;
-        relocs[reloc_count++] = r;
+        add_reloc(r);
         
         unsigned char zero[4] = {0, 0, 0, 0};
         seg_append(seg, zero, 4);
@@ -333,7 +405,7 @@ static void encode_call(Segment *seg, const char *target) {
     strcpy(r.target_name, target);
     r.type = R_X86_64_PLT32;
     r.addend = -4;
-    relocs[reloc_count++] = r;
+    add_reloc(r);
     
     unsigned char zero[4] = {0, 0, 0, 0};
     seg_append(seg, zero, 4);
@@ -549,6 +621,56 @@ static void encode_movl_imm(Segment *seg, long long imm, int dst_reg) {
     seg_append(seg, d, 4);
 }
 
+static void encode_movl_imm_mem(Segment *seg, long long imm, int base_reg, long long disp) {
+    unsigned char rex = 0x40;
+    unsigned char opcode = 0xc7;
+    unsigned char modrm;
+    if (base_reg & 8) rex |= 0x01;
+    
+    if (disp == 0 && (base_reg & 7) != 5) {
+        modrm = (0x00 << 6) | (0 << 3) | (base_reg & 7);
+        if (rex != 0x40) seg_append(seg, &rex, 1);
+        seg_append(seg, &opcode, 1);
+        seg_append(seg, &modrm, 1);
+        if ((base_reg & 7) == 4) {
+            unsigned char sib = 0x24;
+            seg_append(seg, &sib, 1);
+        }
+    } else if (disp >= -128 && disp <= 127) {
+        modrm = (0x01 << 6) | (0 << 3) | (base_reg & 7);
+        if (rex != 0x40) seg_append(seg, &rex, 1);
+        seg_append(seg, &opcode, 1);
+        seg_append(seg, &modrm, 1);
+        if ((base_reg & 7) == 4) {
+            unsigned char sib = 0x24;
+            seg_append(seg, &sib, 1);
+        }
+        unsigned char d = (unsigned char)disp;
+        seg_append(seg, &d, 1);
+    } else {
+        modrm = (0x02 << 6) | (0 << 3) | (base_reg & 7);
+        if (rex != 0x40) seg_append(seg, &rex, 1);
+        seg_append(seg, &opcode, 1);
+        seg_append(seg, &modrm, 1);
+        if ((base_reg & 7) == 4) {
+            unsigned char sib = 0x24;
+            seg_append(seg, &sib, 1);
+        }
+        unsigned char d[4];
+        d[0] = disp & 0xFF;
+        d[1] = (disp >> 8) & 0xFF;
+        d[2] = (disp >> 16) & 0xFF;
+        d[3] = (disp >> 24) & 0xFF;
+        seg_append(seg, d, 4);
+    }
+    unsigned char imm_bytes[4];
+    imm_bytes[0] = imm & 0xFF;
+    imm_bytes[1] = (imm >> 8) & 0xFF;
+    imm_bytes[2] = (imm >> 16) & 0xFF;
+    imm_bytes[3] = (imm >> 24) & 0xFF;
+    seg_append(seg, imm_bytes, 4);
+}
+
 static void encode_movzwq(Segment *seg, int src_reg, int dst_reg, int is_mem_src, long long disp) {
     unsigned char rex = 0x48;
     unsigned char opcode[2] = {0x0f, 0xb7};
@@ -607,13 +729,13 @@ static void encode_set(Segment *seg, const char *mnemonic) {
     if (strcmp(mnemonic, "sete") == 0) bytes[1] = 0x94;
     else if (strcmp(mnemonic, "setne") == 0) bytes[1] = 0x95;
     else if (strcmp(mnemonic, "setl") == 0) bytes[1] = 0x9c;
-    else if (strcmp(mnemonic, "setle") == 0) bytes[1] = 0x9d;
+    else if (strcmp(mnemonic, "setle") == 0) bytes[1] = 0x9e;
     else if (strcmp(mnemonic, "setg") == 0) bytes[1] = 0x9f;
-    else if (strcmp(mnemonic, "setge") == 0) bytes[1] = 0x9e;
+    else if (strcmp(mnemonic, "setge") == 0) bytes[1] = 0x9d;
     else if (strcmp(mnemonic, "setb") == 0) bytes[1] = 0x92;
-    else if (strcmp(mnemonic, "setbe") == 0) bytes[1] = 0x93;
+    else if (strcmp(mnemonic, "setbe") == 0) bytes[1] = 0x96;
     else if (strcmp(mnemonic, "seta") == 0) bytes[1] = 0x97;
-    else if (strcmp(mnemonic, "setae") == 0) bytes[1] = 0x96;
+    else if (strcmp(mnemonic, "setae") == 0) bytes[1] = 0x93;
     seg_append(seg, bytes, 3);
 }
 
@@ -1117,7 +1239,7 @@ static void encode_sse_rip(Segment *seg, const char *prefix_bytes, int num_prefi
     strcpy(r.target_name, label_name);
     r.type = R_X86_64_PC32;
     r.addend = -4;
-    relocs[reloc_count++] = r;
+    add_reloc(r);
     
     unsigned char zero[4] = {0, 0, 0, 0};
     seg_append(seg, zero, 4);
@@ -1379,7 +1501,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
     }
     Segment text_seg = { NULL, 0, 0 };
     Segment data_seg = { NULL, 0, 0 };
-    char line[1024];
+    char line[65536];
     int current_segment = 1; /* 1 = .text, 2 = .data */
 
     label_count = 0;
@@ -1414,6 +1536,10 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                 }
             }
             if (idx == 9999) {
+                if (label_count >= 131072) {
+                    fprintf(stderr, "error: assembler label table limit exceeded (max 131072)\n");
+                    exit(1);
+                }
                 idx = label_count++;
                 strcpy(labels[idx].name, lbl_name);
                 labels[idx].is_global = 0;
@@ -1431,7 +1557,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
             
             if (strcmp(dir, ".text") == 0) {
                 current_segment = 1;
-            } else if (strcmp(dir, ".data") == 0 || strcmp(dir, ".section") == 0 || strcmp(dir, ".rodata") == 0) {
+            } else if (strcmp(dir, ".data") == 0 || strcmp(dir, ".section") == 0 || strcmp(dir, ".rodata") == 0 || strcmp(dir, ".bss") == 0) {
                 current_segment = 2;
             } else if (strcmp(dir, ".globl") == 0 || strcmp(dir, ".global") == 0) {
                 char name[128];
@@ -1447,6 +1573,10 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                     }
                 }
                 if (!found) {
+                    if (label_count >= 131072) {
+                        fprintf(stderr, "error: assembler label table limit exceeded (max 131072)\n");
+                        exit(1);
+                    }
                     size_t idx = label_count++;
                     strcpy(labels[idx].name, gname);
                     labels[idx].is_global = 1;
@@ -1468,6 +1598,10 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                         align = atoll(comma2 + 1);
                     } else {
                         size = atoll(comma1 + 1);
+                    }
+                    if (label_count >= 131072) {
+                        fprintf(stderr, "error: assembler label table limit exceeded (max 131072)\n");
+                        exit(1);
                     }
                     size_t idx = label_count++;
                     strcpy(labels[idx].name, name);
@@ -1496,7 +1630,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                     strcpy(r.target_name, target);
                     r.type = R_X86_64_64;
                     r.addend = 0;
-                    relocs[reloc_count++] = r;
+                    add_reloc(r);
                     unsigned char zero[8] = {0,0,0,0,0,0,0,0};
                     seg_append(&data_seg, zero, 8);
                 } else {
@@ -1593,6 +1727,10 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
         } else if (strcmp(mnemonic, "leave") == 0) {
             unsigned char b = 0xc9;
             seg_append(&text_seg, &b, 1);
+            matched = 1;
+        } else if (strcmp(mnemonic, "rep") == 0 && args_start && strcmp(trim(args_start), "movsb") == 0) {
+            unsigned char b[2] = {0xf3, 0xa4};
+            seg_append(&text_seg, b, 2);
             matched = 1;
         } else if (strcmp(mnemonic, "cqto") == 0 || strcmp(mnemonic, "cqo") == 0) {
             unsigned char b[2] = {0x48, 0x99};
@@ -1934,7 +2072,13 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                         }
                     } else if (op1[0] == '$') {
                         long long imm = strtoll(op1 + 1, NULL, 0);
-                        encode_movq_imm(&text_seg, imm, reg2);
+                        int reg2_base = 0;
+                        long long disp2 = 0;
+                        if (parse_mem_operand(op2, &reg2_base, &disp2)) {
+                            encode_movq_imm_mem(&text_seg, imm, reg2_base, disp2);
+                        } else {
+                            encode_movq_imm(&text_seg, imm, reg2);
+                        }
                     } else if (strstr(op1, "(%rip)")) {
                         char lbl[128];
                         char *rip = strstr(op1, "(%rip)");
@@ -2055,7 +2199,13 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                 } else if (strcmp(mnemonic, "movl") == 0) {
                     if (op1[0] == '$') {
                         long long imm = strtoll(op1 + 1, NULL, 0);
-                        encode_movl_imm(&text_seg, imm, reg2);
+                        int reg2_base = 0;
+                        long long disp2 = 0;
+                        if (parse_mem_operand(op2, &reg2_base, &disp2)) {
+                            encode_movl_imm_mem(&text_seg, imm, reg2_base, disp2);
+                        } else {
+                            encode_movl_imm(&text_seg, imm, reg2);
+                        }
                     } else {
                         int is_mem1 = 0, is_mem2 = 0;
                         long long disp1 = 0, disp2 = 0;
@@ -2229,32 +2379,60 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                            strcmp(mnemonic, "xorq") == 0) {
                     if (op1[0] == '$') {
                         long long imm = strtoll(op1 + 1, NULL, 0);
-                        unsigned char rex = 0x48;
-                        unsigned char opcode = 0x81;
-                        unsigned char modrm = 0xc0;
-                        if (strcmp(mnemonic, "addq") == 0) modrm = 0xc0;
-                        else if (strcmp(mnemonic, "subq") == 0) modrm = 0xe8;
-                        else if (strcmp(mnemonic, "cmpq") == 0) modrm = 0xf8;
-                        modrm |= (reg2 & 7);
-                        if (reg2 & 8) rex |= 0x01;
-                        
-                        if (imm >= -128 && imm <= 127) {
-                            opcode = 0x83;
-                            seg_append(&text_seg, &rex, 1);
-                            seg_append(&text_seg, &opcode, 1);
-                            seg_append(&text_seg, &modrm, 1);
-                            unsigned char b = (unsigned char)imm;
-                            seg_append(&text_seg, &b, 1);
+                        if (strcmp(mnemonic, "imulq") == 0) {
+                            unsigned char rex = 0x48;
+                            unsigned char opcode = 0x69;
+                            unsigned char modrm = 0xc0 | ((reg2 & 7) << 3) | (reg2 & 7);
+                            if (reg2 & 8) {
+                                rex |= 0x01; // REX.B
+                                rex |= 0x04; // REX.R
+                            }
+                            if (imm >= -128 && imm <= 127) {
+                                opcode = 0x6b;
+                                seg_append(&text_seg, &rex, 1);
+                                seg_append(&text_seg, &opcode, 1);
+                                seg_append(&text_seg, &modrm, 1);
+                                unsigned char b = (unsigned char)imm;
+                                seg_append(&text_seg, &b, 1);
+                            } else {
+                                seg_append(&text_seg, &rex, 1);
+                                seg_append(&text_seg, &opcode, 1);
+                                seg_append(&text_seg, &modrm, 1);
+                                unsigned char b[4];
+                                b[0] = imm & 0xFF;
+                                b[1] = (imm >> 8) & 0xFF;
+                                b[2] = (imm >> 16) & 0xFF;
+                                b[3] = (imm >> 24) & 0xFF;
+                                seg_append(&text_seg, b, 4);
+                            }
                         } else {
-                            seg_append(&text_seg, &rex, 1);
-                            seg_append(&text_seg, &opcode, 1);
-                            seg_append(&text_seg, &modrm, 1);
-                            unsigned char b[4];
-                            b[0] = imm & 0xFF;
-                            b[1] = (imm >> 8) & 0xFF;
-                            b[2] = (imm >> 16) & 0xFF;
-                            b[3] = (imm >> 24) & 0xFF;
-                            seg_append(&text_seg, b, 4);
+                            unsigned char rex = 0x48;
+                            unsigned char opcode = 0x81;
+                            unsigned char modrm = 0xc0;
+                            if (strcmp(mnemonic, "addq") == 0) modrm = 0xc0;
+                            else if (strcmp(mnemonic, "subq") == 0) modrm = 0xe8;
+                            else if (strcmp(mnemonic, "cmpq") == 0) modrm = 0xf8;
+                            modrm |= (reg2 & 7);
+                            if (reg2 & 8) rex |= 0x01;
+                            
+                            if (imm >= -128 && imm <= 127) {
+                                opcode = 0x83;
+                                seg_append(&text_seg, &rex, 1);
+                                seg_append(&text_seg, &opcode, 1);
+                                seg_append(&text_seg, &modrm, 1);
+                                unsigned char b = (unsigned char)imm;
+                                seg_append(&text_seg, &b, 1);
+                            } else {
+                                seg_append(&text_seg, &rex, 1);
+                                seg_append(&text_seg, &opcode, 1);
+                                seg_append(&text_seg, &modrm, 1);
+                                unsigned char b[4];
+                                b[0] = imm & 0xFF;
+                                b[1] = (imm >> 8) & 0xFF;
+                                b[2] = (imm >> 16) & 0xFF;
+                                b[3] = (imm >> 24) & 0xFF;
+                                seg_append(&text_seg, b, 4);
+                            }
                         }
                     } else {
                         encode_binop(&text_seg, mnemonic, reg1, reg2);
@@ -2352,12 +2530,15 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                         seg_append(&text_seg, &opcode, 1);
                         seg_append(&text_seg, &modrm, 1);
                     }
-                } else if (strcmp(mnemonic, "cmpl") == 0) {
+                } else if (strcmp(mnemonic, "addl") == 0 || strcmp(mnemonic, "subl") == 0 || strcmp(mnemonic, "cmpl") == 0) {
                     if (op1[0] == '$') {
                         long long imm = strtoll(op1 + 1, NULL, 0);
                         unsigned char rex = 0x40;
                         unsigned char opcode = 0x81;
-                        unsigned char modrm = 0xf8 | (reg2 & 7);
+                        unsigned char modrm = 0xc0;
+                        if (strcmp(mnemonic, "addl") == 0) modrm = 0xc0 | (reg2 & 7);
+                        else if (strcmp(mnemonic, "subl") == 0) modrm = 0xe8 | (reg2 & 7);
+                        else if (strcmp(mnemonic, "cmpl") == 0) modrm = 0xf8 | (reg2 & 7);
                         if (reg2 & 8) rex |= 0x01;
                         
                         if (imm >= -128 && imm <= 127) {
@@ -2378,7 +2559,10 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                         }
                     } else {
                         unsigned char rex = 0x40;
-                        unsigned char opcode = 0x39;
+                        unsigned char opcode = 0x01;
+                        if (strcmp(mnemonic, "addl") == 0) opcode = 0x01;
+                        else if (strcmp(mnemonic, "subl") == 0) opcode = 0x29;
+                        else if (strcmp(mnemonic, "cmpl") == 0) opcode = 0x39;
                         unsigned char modrm = 0xc0 | ((reg1 & 7) << 3) | (reg2 & 7);
                         if (reg1 & 8) rex |= 0x04;
                         if (reg2 & 8) rex |= 0x01;
@@ -2429,6 +2613,72 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                         seg_append(&text_seg, &opcode, 1);
                         seg_append(&text_seg, &modrm, 1);
                     }
+                } else if (strcmp(mnemonic, "xorb") == 0 || strcmp(mnemonic, "andb") == 0 || strcmp(mnemonic, "orb") == 0 ||
+                           strcmp(mnemonic, "addb") == 0 || strcmp(mnemonic, "subb") == 0 || strcmp(mnemonic, "cmpb") == 0) {
+                    if (op1[0] == '$') {
+                        long long imm = strtoll(op1 + 1, NULL, 0);
+                        unsigned char rex = 0x40;
+                        unsigned char opcode = 0x80;
+                        unsigned char modrm = 0xc0;
+                        if (strcmp(mnemonic, "addb") == 0) modrm = 0xc0;
+                        else if (strcmp(mnemonic, "orb") == 0) modrm = 0xc8;
+                        else if (strcmp(mnemonic, "subb") == 0) modrm = 0xe8;
+                        else if (strcmp(mnemonic, "andb") == 0) modrm = 0xe0;
+                        else if (strcmp(mnemonic, "xorb") == 0) modrm = 0xf0;
+                        else if (strcmp(mnemonic, "cmpb") == 0) modrm = 0xf8;
+                        modrm |= (reg2 & 7);
+                        if (reg2 & 8) rex |= 0x01;
+                        if (reg2 == 4 || reg2 == 5 || reg2 == 6 || reg2 == 7) rex |= 0x40;
+                        
+                        if (rex != 0x40 || (reg2 == 4 || reg2 == 5 || reg2 == 6 || reg2 == 7)) {
+                            seg_append(&text_seg, &rex, 1);
+                        }
+                        seg_append(&text_seg, &opcode, 1);
+                        seg_append(&text_seg, &modrm, 1);
+                        unsigned char b = (unsigned char)imm;
+                        seg_append(&text_seg, &b, 1);
+                    } else {
+                        unsigned char rex = 0x40;
+                        unsigned char opcode = 0x30;
+                        if (strcmp(mnemonic, "addb") == 0) opcode = 0x00;
+                        else if (strcmp(mnemonic, "orb") == 0) opcode = 0x08;
+                        else if (strcmp(mnemonic, "subb") == 0) opcode = 0x28;
+                        else if (strcmp(mnemonic, "andb") == 0) opcode = 0x20;
+                        else if (strcmp(mnemonic, "xorb") == 0) opcode = 0x30;
+                        else if (strcmp(mnemonic, "cmpb") == 0) opcode = 0x38;
+                        unsigned char modrm = 0xc0 | ((reg1 & 7) << 3) | (reg2 & 7);
+                        if (reg1 & 8) rex |= 0x04;
+                        if (reg2 & 8) rex |= 0x01;
+                        if (reg1 == 4 || reg1 == 5 || reg1 == 6 || reg1 == 7 ||
+                            reg2 == 4 || reg2 == 5 || reg2 == 6 || reg2 == 7) {
+                            rex |= 0x40;
+                        }
+                        if (rex != 0x40 || (rex & 0x40)) {
+                            seg_append(&text_seg, &rex, 1);
+                        }
+                        seg_append(&text_seg, &opcode, 1);
+                        seg_append(&text_seg, &modrm, 1);
+                    }
+                } else if (strcmp(mnemonic, "testq") == 0) {
+                    /* testq %rSrc, %rDst — REX.W 0x85 ModRM(11,src,dst) */
+                    unsigned char rex = 0x48;
+                    unsigned char opcode = 0x85;
+                    if (reg1 & 8) rex |= 0x04;
+                    if (reg2 & 8) rex |= 0x01;
+                    unsigned char modrm = 0xc0 | ((reg1 & 7) << 3) | (reg2 & 7);
+                    seg_append(&text_seg, &rex, 1);
+                    seg_append(&text_seg, &opcode, 1);
+                    seg_append(&text_seg, &modrm, 1);
+                } else if (strcmp(mnemonic, "testl") == 0) {
+                    /* testl %eSrc, %eDst — [REX] 0x85 ModRM(11,src,dst) */
+                    unsigned char rex = 0x40;
+                    unsigned char opcode = 0x85;
+                    if (reg1 & 8) rex |= 0x04;
+                    if (reg2 & 8) rex |= 0x01;
+                    unsigned char modrm = 0xc0 | ((reg1 & 7) << 3) | (reg2 & 7);
+                    if (rex != 0x40) seg_append(&text_seg, &rex, 1);
+                    seg_append(&text_seg, &opcode, 1);
+                    seg_append(&text_seg, &modrm, 1);
                 } else {
                     fprintf(stderr, "assembler error: unrecognized 2-operand instruction '%s'\n", mnemonic);
                     exit(1);
@@ -2460,8 +2710,8 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
             if (!found) {
                 /* Add external target as an undefined global symbol */
                 size_t idx;
-                if (label_count >= 4096) {
-                    fprintf(stderr, "error: assembler label table limit exceeded (max 4096)\n");
+                if (label_count >= 131072) {
+                    fprintf(stderr, "error: assembler label table limit exceeded (max 131072)\n");
                     free(text_seg.data);
                     free(data_seg.data);
                     return -1;
@@ -2601,17 +2851,20 @@ extern int zld_link(const char **obj_files, int obj_count, const char *out_path,
 int main(int argc, char **argv) {
     int i;
     int use_system_as = 0;
+    int native_elf = 0;
     int compile_only = 0;
     char *input_c_file = NULL;
     char *out_filename = NULL;
     char *ld_script = NULL;
-    const char *obj_files[128];
+    const char *obj_files[2048];
     int obj_count = 0;
 
     /* Parse arguments */
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--use-system-as") == 0) {
             use_system_as = 1;
+        } else if (strcmp(argv[i], "--native-elf") == 0) {
+            native_elf = 1;
         } else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "-emit-obj") == 0) {
             compile_only = 1;
         } else if (strcmp(argv[i], "-o") == 0) {
@@ -2629,7 +2882,7 @@ int main(int argc, char **argv) {
             if (len > 2 && strcmp(argv[i] + len - 2, ".c") == 0) {
                 input_c_file = argv[i];
             } else if (len > 2 && strcmp(argv[i] + len - 2, ".o") == 0) {
-                if (obj_count < 128) {
+                if (obj_count < 2048) {
                     obj_files[obj_count++] = argv[i];
                 }
             }
@@ -2682,7 +2935,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (is_zcc_c || is_out_s || has_trace_abi || has_emit_gguf) {
+    if ((is_zcc_c && !native_elf) || is_out_s || has_trace_abi || has_emit_gguf) {
         return zcc_main(argc, argv);
     }
 
@@ -2831,11 +3084,11 @@ int main(int argc, char **argv) {
             }
 
             /* 3. Link utilizing zld */
-            const char *link_objs[128];
+            const char *link_objs[2048];
             int link_obj_count = 0;
             link_objs[link_obj_count++] = temp_o_filename;
             for (i = 0; i < obj_count; i++) {
-                if (link_obj_count < 128) {
+                if (link_obj_count < 2048) {
                     link_objs[link_obj_count++] = obj_files[i];
                 }
             }

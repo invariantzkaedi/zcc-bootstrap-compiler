@@ -44,14 +44,14 @@ void jit_emit_memory_op(JITBuffer* buf, ir_node_t* node, MemoryModelV2* mem) {
             }
         }
         // Direct addressed load
-        uint8_t load[] = {0x48, 0x8b, 0x80}; // mov rax, [rax + offset]
+        uint8_t load[7] = {0x48, 0x8b, 0x80, 0, 0, 0, 0}; // mov rax, [rax + offset]
         uint32_t off32 = (uint32_t)offset;
         memcpy(load+3, &off32, 4);
         jit_emit(buf, load, 7);
     }
     else if (node->op == IR_STORE) {
         // Symmetric direct store path
-        uint8_t store[] = {0x48, 0x89, 0x80}; // mov [rax + offset], rax
+        uint8_t store[7] = {0x48, 0x89, 0x80, 0, 0, 0, 0}; // mov [rax + offset], rax
         uint32_t off32 = (uint32_t)node->imm;
         memcpy(store+3, &off32, 4);
         jit_emit(buf, store, 7);
