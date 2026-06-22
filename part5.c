@@ -79,6 +79,7 @@ extern FILE *open_memstream(char **ptr, size_t *sizeloc);
 char *g_in_mem_asm_buf = NULL;
 size_t g_in_mem_asm_size = 0;
 int g_use_in_mem_asm = 0;
+int g_ir_primary = 0;
 
 #ifndef PPCONFIG_DEF
 #define PPCONFIG_DEF
@@ -1258,7 +1259,7 @@ int zcc_main(int argc, char **argv) {
 
   char smt_out_file[256];
   smt_out_file[0] = '\0';
-  int g_ir_primary = 0;
+  g_ir_primary = 0;
 
   /* ForgeZero audit export flags (non-blocking; disabled by default) */
   int audit_export_mode = 0;           /* 0=off, 1=stdout, 2=file */
