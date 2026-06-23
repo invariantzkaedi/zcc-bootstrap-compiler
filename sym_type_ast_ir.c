@@ -638,6 +638,8 @@ int type_sizeof_recursive(Type *ty) {
     return 4;
   case ZCC_TY_DOUBLE:
     return 8;
+  case ZCC_TY_LONGDOUBLE:
+    return 16;
   case ZCC_TY_PTR:
     return 8; /* LP64 */
   case ZCC_TY_ENUM:
@@ -683,6 +685,8 @@ int type_alignof_recursive(Type *ty) {
     return 4;
   case ZCC_TY_DOUBLE:
     return 8;
+  case ZCC_TY_LONGDOUBLE:
+    return 16;
   case ZCC_TY_PTR:
     return 8;
   case ZCC_TY_ENUM:

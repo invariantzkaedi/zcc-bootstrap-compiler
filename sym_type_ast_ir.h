@@ -138,6 +138,7 @@ extern void zcc_coverage_hit(const char *tag, const char *file, int line);
 #define ZCC_TY_STRUCT TY_STRUCT
 #define ZCC_TY_UNION TY_UNION
 #define ZCC_TY_ENUM TY_ENUM
+#define ZCC_TY_LONGDOUBLE TY_LONGDOUBLE
 #else
 /*
  * Standalone smoke-test ordering (compact, self-consistent).
@@ -163,6 +164,7 @@ extern void zcc_coverage_hit(const char *tag, const char *file, int line);
 #define ZCC_TY_STRUCT 16
 #define ZCC_TY_UNION 17
 #define ZCC_TY_ENUM 18
+#define ZCC_TY_LONGDOUBLE 19
 #endif /* ZCC_CONCAT_BUILD */
 
 /*

@@ -115,6 +115,7 @@ static void init_compiler(Compiler *cc) {
   cc->ty_ulonglong = type_new(cc, TY_ULONGLONG);
   cc->ty_float = type_new(cc, TY_FLOAT);
   cc->ty_double = type_new(cc, TY_DOUBLE);
+  cc->ty_longdouble = type_new(cc, TY_LONGDOUBLE);
 
   /* init lexer */
   cc->line = 1;
@@ -455,15 +456,56 @@ static void init_compiler(Compiler *cc) {
 
       /* Math functions — return double */
       ft = type_func(cc, cc->ty_double);
+      ft->num_params = 1;
+      ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
+      ft->params[0] = cc->ty_double;
       sym = scope_add(cc, "log", ft); sym->is_global = 1;
       ft = type_func(cc, cc->ty_double);
+      ft->num_params = 1;
+      ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
+      ft->params[0] = cc->ty_double;
       sym = scope_add(cc, "cos", ft); sym->is_global = 1;
       ft = type_func(cc, cc->ty_double);
+      ft->num_params = 1;
+      ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
+      ft->params[0] = cc->ty_double;
       sym = scope_add(cc, "exp", ft); sym->is_global = 1;
       ft = type_func(cc, cc->ty_double);
+      ft->num_params = 1;
+      ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
+      ft->params[0] = cc->ty_double;
       sym = scope_add(cc, "fabs", ft); sym->is_global = 1;
       ft = type_func(cc, cc->ty_double);
+      ft->num_params = 1;
+      ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
+      ft->params[0] = cc->ty_double;
       sym = scope_add(cc, "sqrt", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_float);
+      ft->num_params = 1;
+      ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
+      ft->params[0] = cc->ty_float;
+      sym = scope_add(cc, "sinf", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_float);
+      ft->num_params = 1;
+      ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
+      ft->params[0] = cc->ty_float;
+      sym = scope_add(cc, "cosf", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_float);
+      ft->num_params = 2;
+      ft->params = (Type **)cc_alloc(cc, sizeof(Type *) * 2);
+      ft->params[0] = cc->ty_float;
+      ft->params[1] = cc->ty_float;
+      sym = scope_add(cc, "powf", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_float);
+      ft->num_params = 1;
+      ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
+      ft->params[0] = cc->ty_float;
+      sym = scope_add(cc, "fabsf", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_float);
+      ft->num_params = 1;
+      ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
+      ft->params[0] = cc->ty_float;
+      sym = scope_add(cc, "sqrtf", ft); sym->is_global = 1;
 
       /* snprintf — returns int, variadic */
       ft = type_func(cc, cc->ty_int);

@@ -121,7 +121,8 @@ enum {
     TY_VOID = 0, TY_CHAR, TY_UCHAR, TY_SHORT, TY_USHORT,
     TY_INT, TY_UINT, TY_LONG, TY_ULONG,
     TY_LONGLONG, TY_ULONGLONG, TY_FLOAT, TY_DOUBLE,
-    TY_PTR, TY_ARRAY, TY_FUNC, TY_STRUCT, TY_UNION, TY_ENUM
+    TY_PTR, TY_ARRAY, TY_FUNC, TY_STRUCT, TY_UNION, TY_ENUM,
+    TY_LONGDOUBLE
 };
 
 typedef enum {
@@ -1169,6 +1170,7 @@ struct Compiler {
     Type *ty_ulonglong;
     Type *ty_float;
     Type *ty_double;
+    Type *ty_longdouble;
 
     /* scope */
     Scope *current_scope;

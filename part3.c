@@ -894,7 +894,10 @@ Type *parse_type(Compiler *cc) {
 
     if (is_void) { type = cc->ty_void; }
     else if (is_float) { type = cc->ty_float; }
-    else if (is_double) { type = cc->ty_double; }
+    else if (is_double) {
+        if (is_long > 0) type = cc->ty_longdouble;
+        else type = cc->ty_double;
+    }
     else if (is_char) {
         if (is_unsigned) { type = cc->ty_uchar; } else { type = cc->ty_char; }
     }
@@ -1667,6 +1670,8 @@ Node *parse_primary(Compiler *cc) {
         n = node_flit(cc, cc->tk_fval, line);
         if (cc->tk_text[0] == 'F') {
             n->type = cc->ty_float;
+        } else if (cc->tk_text[0] == 'L') {
+            n->type = cc->ty_longdouble;
         }
         next_token(cc);
         return n;

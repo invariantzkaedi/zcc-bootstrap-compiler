@@ -379,6 +379,14 @@ void codegen_load(Compiler *cc, Type *type) {
     fprintf(cc->out, "    movq %%xmm0, %%rax\n");
     return;
   }
+  if (type->kind == TY_LONGDOUBLE) {
+    fprintf(cc->out, "    fldt (%%rax)\n");
+    fprintf(cc->out, "    subq $8, %%rsp\n");
+    fprintf(cc->out, "    fstpl (%%rsp)\n");
+    fprintf(cc->out, "    movq (%%rsp), %%rax\n");
+    fprintf(cc->out, "    addq $8, %%rsp\n");
+    return;
+  }
   switch (type->size) {
   case 1:
     if (is_unsigned_type(type))
@@ -437,6 +445,15 @@ void codegen_store(Compiler *cc, Type *type) {
       else fprintf(cc->out, "    movq %%r11, (%%rax)\n");
     if (backend_ops) fprintf(cc->out, "    mov r0, r1\n");
       else fprintf(cc->out, "    movq %%r11, %%rax\n");
+    return;
+  }
+  if (type->kind == TY_LONGDOUBLE) {
+    fprintf(cc->out, "    subq $8, %%rsp\n");
+    fprintf(cc->out, "    movq %%r11, (%%rsp)\n");
+    fprintf(cc->out, "    fldl (%%rsp)\n");
+    fprintf(cc->out, "    fstpt (%%rax)\n");
+    fprintf(cc->out, "    addq $8, %%rsp\n");
+    fprintf(cc->out, "    movq %%r11, %%rax\n");
     return;
   }
   if (type->kind == TY_STRUCT || type->kind == TY_UNION || type->size > 8) {
@@ -2508,7 +2525,13 @@ void codegen_expr(Compiler *cc, Node *node) {
         fprintf(cc->out, "    movq 16(%%rcx), %%rsi\n");
         fprintf(cc->out, "    movslq %%edx, %%rax\n");
         fprintf(cc->out, "    addq %%rax, %%rsi\n");
-        fprintf(cc->out, "    movq (%%rsi), %%rax\n");
+        if (node->type && node->type->kind == TY_FLOAT) {
+            fprintf(cc->out, "    movss (%%rsi), %%xmm0\n");
+            fprintf(cc->out, "    movd %%xmm0, %%eax\n");
+        } else {
+            fprintf(cc->out, "    movsd (%%rsi), %%xmm0\n");
+            fprintf(cc->out, "    movq %%xmm0, %%rax\n");
+        }
         /* Increment fp_offset by 16 */
         fprintf(cc->out, "    addl $16, %%edx\n");
         fprintf(cc->out, "    movl %%edx, 4(%%rcx)\n");
@@ -2532,7 +2555,15 @@ void codegen_expr(Compiler *cc, Node *node) {
     /* Slow path: fetch from overflow_arg_area */
     emit_label_fmt(cc, lbl_overflow, FMT_DEF);
     fprintf(cc->out, "    movq 8(%%rcx), %%rsi\n");
-    fprintf(cc->out, "    movq (%%rsi), %%rax\n");
+    if (fp && node->type && node->type->kind == TY_FLOAT) {
+        fprintf(cc->out, "    movss (%%rsi), %%xmm0\n");
+        fprintf(cc->out, "    movd %%xmm0, %%eax\n");
+    } else if (fp) {
+        fprintf(cc->out, "    movsd (%%rsi), %%xmm0\n");
+        fprintf(cc->out, "    movq %%xmm0, %%rax\n");
+    } else {
+        fprintf(cc->out, "    movq (%%rsi), %%rax\n");
+    }
 
     /* Increment overflow_arg_area by 8 (even for floats, stack passing is 8-aligned) */
     fprintf(cc->out, "    leaq 8(%%rsi), %%rdi\n");
@@ -3247,6 +3278,52 @@ void codegen_expr(Compiler *cc, Node *node) {
     nargs = node->num_args;
     if (nargs < 0 || nargs > 64) {
       error_at(cc, node->line, "call node bad num_args");
+      return;
+    }
+
+    if (!backend_ops && node->func_name[0] && nargs == 1 &&
+        (strcmp(node->func_name, "sqrt") == 0 ||
+         strcmp(node->func_name, "sqrtf") == 0 ||
+         strcmp(node->func_name, "fabs") == 0 ||
+         strcmp(node->func_name, "fabsf") == 0)) {
+      codegen_expr_checked(cc, node->args[0]);
+      if (strcmp(node->func_name, "sqrtf") == 0) {
+        if (node->args[0] && node->args[0]->type && node->args[0]->type->kind == TY_FLOAT) {
+          fprintf(cc->out, "    movd %%eax, %%xmm0\n");
+        } else {
+          fprintf(cc->out, "    movq %%rax, %%xmm0\n");
+          fprintf(cc->out, "    cvtsd2ss %%xmm0, %%xmm0\n");
+        }
+        fprintf(cc->out, "    sqrtss %%xmm0, %%xmm0\n");
+        fprintf(cc->out, "    movd %%xmm0, %%eax\n");
+      } else if (strcmp(node->func_name, "sqrt") == 0) {
+        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
+        fprintf(cc->out, "    sqrtsd %%xmm0, %%xmm0\n");
+        fprintf(cc->out, "    movq %%xmm0, %%rax\n");
+      } else if (strcmp(node->func_name, "fabsf") == 0) {
+        if (node->args[0] && node->args[0]->type && node->args[0]->type->kind == TY_FLOAT) {
+          fprintf(cc->out, "    movd %%eax, %%xmm0\n");
+        } else {
+          fprintf(cc->out, "    movq %%rax, %%xmm0\n");
+          fprintf(cc->out, "    cvtsd2ss %%xmm0, %%xmm0\n");
+        }
+        fprintf(cc->out, "    pxor %%xmm1, %%xmm1\n");
+        fprintf(cc->out, "    pcmpeqd %%xmm1, %%xmm1\n");
+        fprintf(cc->out, "    psrld $1, %%xmm1\n");
+        fprintf(cc->out, "    andps %%xmm1, %%xmm0\n");
+        fprintf(cc->out, "    movd %%xmm0, %%eax\n");
+      } else {
+        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
+        fprintf(cc->out, "    pxor %%xmm1, %%xmm1\n");
+        fprintf(cc->out, "    pcmpeqd %%xmm1, %%xmm1\n");
+        fprintf(cc->out, "    psrlq $1, %%xmm1\n");
+        fprintf(cc->out, "    andpd %%xmm1, %%xmm0\n");
+        fprintf(cc->out, "    movq %%xmm0, %%rax\n");
+      }
+      {
+        char *dst = ir_bridge_fresh_tmp();
+        ZCC_EMIT_CALL(ir_map_type(node->type), dst, node->func_name, node->line);
+      }
       return;
     }
 
@@ -5070,6 +5147,150 @@ void codegen_func(Compiler *cc, Node *func) {
 /* ================================================================ */
 
 static long long eval_const_expr_p4_raw(Node *elem, int *ok);
+static long long eval_const_expr_p4(Node *elem, int *ok);
+
+static double det_fabs_d(double x) {
+    return (x < 0.0) ? -x : x;
+}
+
+static double det_sqrt_d(double x) {
+    int i;
+    double g;
+    if (x < 0.0) return 0.0;
+    if (x == 0.0) return 0.0;
+    g = (x > 1.0) ? x : 1.0;
+    for (i = 0; i < 20; i++) g = 0.5 * (g + x / g);
+    return g;
+}
+
+static double det_reduce_pi(double x) {
+    const double pi = 3.14159265358979323846;
+    const double two_pi = 6.28318530717958647692;
+    while (x > pi) x -= two_pi;
+    while (x < -pi) x += two_pi;
+    return x;
+}
+
+static double det_sin_d(double x) {
+    double x2, x3, x5, x7;
+    x = det_reduce_pi(x);
+    x2 = x * x;
+    x3 = x2 * x;
+    x5 = x3 * x2;
+    x7 = x5 * x2;
+    return x - (x3 / 6.0) + (x5 / 120.0) - (x7 / 5040.0);
+}
+
+static double det_cos_d(double x) {
+    double x2, x4, x6;
+    x = det_reduce_pi(x);
+    x2 = x * x;
+    x4 = x2 * x2;
+    x6 = x4 * x2;
+    return 1.0 - (x2 / 2.0) + (x4 / 24.0) - (x6 / 720.0);
+}
+
+static int det_to_integer_exp(double x, int *out_exp) {
+    long long k;
+    if (!out_exp) return 0;
+    k = (long long)x;
+    if ((double)k != x) return 0;
+    *out_exp = (int)k;
+    return 1;
+}
+
+static double det_pow_int_d(double base, int exp) {
+    double result = 1.0;
+    int e = exp;
+    int neg = 0;
+    if (e < 0) {
+        neg = 1;
+        e = -e;
+    }
+    while (e > 0) {
+        if (e & 1) result *= base;
+        base *= base;
+        e >>= 1;
+    }
+    if (neg) result = 1.0 / result;
+    return result;
+}
+
+static int eval_const_call_math(Node *elem, long long *out_bits) {
+    long long arg0_bits, arg1_bits;
+    double arg0, arg1, out;
+    int ok0, ok1, iexp;
+    if (!elem || !out_bits) return 0;
+    if (elem->kind != ND_CALL || !elem->func_name[0]) return 0;
+
+    if ((strcmp(elem->func_name, "sqrt") == 0 || strcmp(elem->func_name, "sqrtf") == 0 ||
+         strcmp(elem->func_name, "sinf") == 0 || strcmp(elem->func_name, "cosf") == 0 ||
+         strcmp(elem->func_name, "fabs") == 0 || strcmp(elem->func_name, "fabsf") == 0) &&
+        elem->num_args == 1 && elem->args && elem->args[0]) {
+        ok0 = 1;
+        arg0_bits = eval_const_expr_p4(elem->args[0], &ok0);
+        if (!ok0) return 0;
+        if (elem->args[0]->type && elem->args[0]->type->kind == TY_FLOAT) {
+            unsigned int fb = (unsigned int)arg0_bits;
+            float fv;
+            memcpy(&fv, &fb, sizeof(float));
+            arg0 = (double)fv;
+        } else {
+            memcpy(&arg0, &arg0_bits, sizeof(double));
+        }
+
+        if (strcmp(elem->func_name, "sqrt") == 0 || strcmp(elem->func_name, "sqrtf") == 0) out = det_sqrt_d(arg0);
+        else if (strcmp(elem->func_name, "sinf") == 0) out = det_sin_d(arg0);
+        else if (strcmp(elem->func_name, "cosf") == 0) out = det_cos_d(arg0);
+        else out = det_fabs_d(arg0);
+
+        if (elem->type && elem->type->kind == TY_FLOAT) {
+            float f = (float)out;
+            unsigned int bits;
+            memcpy(&bits, &f, sizeof(float));
+            *out_bits = (long long)bits;
+        } else {
+            unsigned long long bits;
+            memcpy(&bits, &out, sizeof(double));
+            *out_bits = (long long)bits;
+        }
+        return 1;
+    }
+
+    if (strcmp(elem->func_name, "powf") == 0 && elem->num_args == 2 && elem->args && elem->args[0] && elem->args[1]) {
+        ok0 = 1; ok1 = 1;
+        arg0_bits = eval_const_expr_p4(elem->args[0], &ok0);
+        arg1_bits = eval_const_expr_p4(elem->args[1], &ok1);
+        if (!ok0 || !ok1) return 0;
+        if (elem->args[0]->type && elem->args[0]->type->kind == TY_FLOAT) {
+            unsigned int fb = (unsigned int)arg0_bits;
+            float fv;
+            memcpy(&fv, &fb, sizeof(float));
+            arg0 = (double)fv;
+        } else {
+            memcpy(&arg0, &arg0_bits, sizeof(double));
+        }
+        if (elem->args[1]->type && elem->args[1]->type->kind == TY_FLOAT) {
+            unsigned int fb = (unsigned int)arg1_bits;
+            float fv;
+            memcpy(&fv, &fb, sizeof(float));
+            arg1 = (double)fv;
+        } else {
+            memcpy(&arg1, &arg1_bits, sizeof(double));
+        }
+        if (!det_to_integer_exp(arg1, &iexp)) return 0;
+        out = det_pow_int_d(arg0, iexp);
+        {
+            float f = (float)out;
+            unsigned int bits;
+            memcpy(&bits, &f, sizeof(float));
+            *out_bits = (long long)bits;
+        }
+        return 1;
+    }
+
+    return 0;
+}
 
 static long long eval_const_expr_p4(Node *elem, int *ok) {
     if (!elem) { *ok = 0; return 0; }
@@ -5079,6 +5300,19 @@ static long long eval_const_expr_p4(Node *elem, int *ok) {
 
 static long long eval_const_expr_p4_raw(Node *elem, int *ok) {
     if (!elem) { *ok = 0; return 0; }
+    if (elem->kind == ND_FLIT) {
+        *ok = 1;
+        if (elem->type && elem->type->kind == TY_FLOAT) {
+            float fv = (float)elem->f_val;
+            unsigned int bits;
+            memcpy(&bits, &fv, sizeof(float));
+            return (long long)bits;
+        } else {
+            unsigned long long bits;
+            memcpy(&bits, &elem->f_val, sizeof(double));
+            return (long long)bits;
+        }
+    }
     if (elem->kind == ND_CAST) {
         /* CG-CFOLD-CAST-TRUNC-001: apply C-semantics truncation on the inner value. */
         long long v = eval_const_expr_p4(elem->lhs, ok);
@@ -5132,6 +5366,12 @@ static long long eval_const_expr_p4_raw(Node *elem, int *ok) {
             case TY_ULONGLONG: return (long long)(unsigned long long)res_i;
             default:           return v;
         }
+    }
+    if (elem->kind == ND_CALL) {
+        long long call_bits = 0;
+        if (eval_const_call_math(elem, &call_bits)) { *ok = 1; return call_bits; }
+        *ok = 0;
+        return 0;
     }
     if (elem->kind == ND_NUM) return elem->int_val;
     if (elem->kind == ND_ADD || elem->kind == ND_SUB ||
@@ -5744,6 +5984,19 @@ static void fold_constants(Compiler *cc, Node *node) {
       for (i = 0; i < node->num_args; i++)
         fold_constants(cc, node->args[i]);
     }
+    {
+      int ok = 1;
+      long long bits = eval_const_expr_p4(node, &ok);
+      if (ok && node->type && is_float_type(node->type)) {
+        /* Store folded IEEE-754 payload in int_val; codegen paths already
+           treat ND_NUM+float type as raw float/double bit-pattern. */
+        node->kind = ND_NUM;
+        node->int_val = bits;
+        node->lhs = 0;
+        node->rhs = 0;
+        node->num_args = 0;
+      }
+    }
   }
   if (node->kind == ND_BLOCK && node->num_stmts > 0) {
     int i;
@@ -6202,4 +6455,3 @@ void codegen_emit_globals_and_strings(Compiler *cc) {
     fprintf(cc->out, "    .quad 0x3FF0000000000000\n"); /* 1.0 double */
   }
 }
-

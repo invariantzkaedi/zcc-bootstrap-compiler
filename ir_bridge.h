@@ -87,6 +87,7 @@ static ir_type_t ir_map_type(Type *ty) {
     case TY_ULONGLONG:  return IR_TY_U64;
     case TY_FLOAT:      return IR_TY_F32;
     case TY_DOUBLE:     return IR_TY_F64;
+    case TY_LONGDOUBLE: return IR_TY_F64; /* TODO: add IR_TY_F80 once IR schema supports x87 precision */
     default:            break;
     }
 

@@ -122,6 +122,7 @@ Type *type_new(Compiler *cc, int kind) {
     else if (kind == TY_LONG || kind == TY_ULONG || kind == TY_LONGLONG || kind == TY_ULONGLONG) { t->size = 8; t->align = 8; }
     else if (kind == TY_FLOAT) { t->size = 4; t->align = 4; }
     else if (kind == TY_DOUBLE) { t->size = 8; t->align = 8; }
+    else if (kind == TY_LONGDOUBLE) { t->size = 16; t->align = 16; }
     else if (kind == TY_PTR) { t->size = 8; t->align = 8; }
     else if (kind == TY_ENUM) { t->size = 4; t->align = 4; }
     else { t->size = 0; t->align = 1; }
@@ -185,6 +186,7 @@ int is_float_type(Type *t) {
     if (!t) return 0;
     if (t->kind == TY_FLOAT) return 1;
     if (t->kind == TY_DOUBLE) return 1;
+    if (t->kind == TY_LONGDOUBLE) return 1;
     return 0;
 }
 
