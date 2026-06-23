@@ -5418,17 +5418,29 @@ static long long eval_const_expr_p4_raw(Node *elem, int *ok) {
             }
         }
         /* Integer path */
-        if (elem->kind == ND_ADD) return eval_const_expr_p4(elem->lhs, ok) + eval_const_expr_p4(elem->rhs, ok);
-        if (elem->kind == ND_SUB) return eval_const_expr_p4(elem->lhs, ok) - eval_const_expr_p4(elem->rhs, ok);
-        if (elem->kind == ND_MUL) return eval_const_expr_p4(elem->lhs, ok) * eval_const_expr_p4(elem->rhs, ok);
-        { long long r = eval_const_expr_p4(elem->rhs, ok); if (r) return eval_const_expr_p4(elem->lhs, ok) / r; *ok = 0; return 0; }
+        {
+            int lok = 1, rok = 1;
+            long long lv = eval_const_expr_p4(elem->lhs, &lok);
+            long long rv = eval_const_expr_p4(elem->rhs, &rok);
+            if (!lok || !rok) { *ok = 0; return 0; }
+            if (elem->kind == ND_ADD) return lv + rv;
+            if (elem->kind == ND_SUB) return lv - rv;
+            if (elem->kind == ND_MUL) return lv * rv;
+            if (rv) return lv / rv;
+            *ok = 0; return 0;
+        }
     }
-    if (elem->kind == ND_BOR) return eval_const_expr_p4(elem->lhs, ok) | eval_const_expr_p4(elem->rhs, ok);
-    if (elem->kind == ND_BAND) return eval_const_expr_p4(elem->lhs, ok) & eval_const_expr_p4(elem->rhs, ok);
-    if (elem->kind == ND_BXOR) return eval_const_expr_p4(elem->lhs, ok) ^ eval_const_expr_p4(elem->rhs, ok);
-    if (elem->kind == ND_SHL) return eval_const_expr_p4(elem->lhs, ok) << eval_const_expr_p4(elem->rhs, ok);
-    if (elem->kind == ND_SHR) {
-        /* CG-CFOLD-UNSIGNED-001: unsigned types need logical right shift. */
+    if (elem->kind == ND_BOR || elem->kind == ND_BAND || elem->kind == ND_BXOR || elem->kind == ND_SHL || elem->kind == ND_SHR) {
+        int lok = 1, rok = 1;
+        long long lv = eval_const_expr_p4(elem->lhs, &lok);
+        long long rv = eval_const_expr_p4(elem->rhs, &rok);
+        if (!lok || !rok) { *ok = 0; return 0; }
+        if (elem->kind == ND_BOR) return lv | rv;
+        if (elem->kind == ND_BAND) return lv & rv;
+        if (elem->kind == ND_BXOR) return lv ^ rv;
+        if (elem->kind == ND_SHL) return lv << rv;
+        
+        /* ND_SHR path */
         int lhs_kind = elem->lhs && elem->lhs->type ? elem->lhs->type->kind : -1;
         int is_unsigned = (lhs_kind == TY_UCHAR || lhs_kind == TY_USHORT ||
                            lhs_kind == TY_UINT  || lhs_kind == TY_ULONG  ||
@@ -5440,9 +5452,8 @@ static long long eval_const_expr_p4_raw(Node *elem, int *ok) {
                            tk == TY_ULONGLONG);
         }
         if (is_unsigned)
-            return (long long)((unsigned long long)eval_const_expr_p4(elem->lhs, ok) >>
-                               (unsigned long long)eval_const_expr_p4(elem->rhs, ok));
-        return eval_const_expr_p4(elem->lhs, ok) >> eval_const_expr_p4(elem->rhs, ok);
+            return (long long)((unsigned long long)lv >> (unsigned long long)rv);
+        return lv >> rv;
     }
     if (elem->kind == ND_NEG) {
         /* CG-GINIT-FLOAT-001/002: float negation — handle both direct
@@ -5507,42 +5518,51 @@ static long long eval_const_expr_p4_raw(Node *elem, int *ok) {
     }
     if (elem->kind == ND_LNOT) return !eval_const_expr_p4(elem->lhs, ok);
     /* Relational + logical ops — needed for ternary denominator patterns */
-    if (elem->kind == ND_EQ) {
-        if (is_unsigned_cmp(elem))
-            return (unsigned long long)eval_const_expr_p4(elem->lhs, ok) == (unsigned long long)eval_const_expr_p4(elem->rhs, ok);
-        return eval_const_expr_p4(elem->lhs, ok) == eval_const_expr_p4(elem->rhs, ok);
+    if (elem->kind == ND_EQ || elem->kind == ND_NE || elem->kind == ND_LT ||
+        elem->kind == ND_LE || elem->kind == ND_GT || elem->kind == ND_GE ||
+        elem->kind == ND_LAND || elem->kind == ND_LOR) {
+        int lok = 1, rok = 1;
+        long long lv = eval_const_expr_p4(elem->lhs, &lok);
+        long long rv = eval_const_expr_p4(elem->rhs, &rok);
+        if (!lok || !rok) { *ok = 0; return 0; }
+        if (elem->kind == ND_EQ) {
+            if (is_unsigned_cmp(elem)) return (unsigned long long)lv == (unsigned long long)rv;
+            return lv == rv;
+        }
+        if (elem->kind == ND_NE) {
+            if (is_unsigned_cmp(elem)) return (unsigned long long)lv != (unsigned long long)rv;
+            return lv != rv;
+        }
+        if (elem->kind == ND_LT) {
+            if (is_unsigned_cmp(elem)) return (unsigned long long)lv < (unsigned long long)rv;
+            return lv < rv;
+        }
+        if (elem->kind == ND_LE) {
+            if (is_unsigned_cmp(elem)) return (unsigned long long)lv <= (unsigned long long)rv;
+            return lv <= rv;
+        }
+        if (elem->kind == ND_GT) {
+            if (is_unsigned_cmp(elem)) return (unsigned long long)lv > (unsigned long long)rv;
+            return lv > rv;
+        }
+        if (elem->kind == ND_GE) {
+            if (is_unsigned_cmp(elem)) return (unsigned long long)lv >= (unsigned long long)rv;
+            return lv >= rv;
+        }
+        if (elem->kind == ND_LAND) return lv && rv;
+        if (elem->kind == ND_LOR)  return lv || rv;
     }
-    if (elem->kind == ND_NE) {
-        if (is_unsigned_cmp(elem))
-            return (unsigned long long)eval_const_expr_p4(elem->lhs, ok) != (unsigned long long)eval_const_expr_p4(elem->rhs, ok);
-        return eval_const_expr_p4(elem->lhs, ok) != eval_const_expr_p4(elem->rhs, ok);
-    }
-    if (elem->kind == ND_LT) {
-        if (is_unsigned_cmp(elem))
-            return (unsigned long long)eval_const_expr_p4(elem->lhs, ok) < (unsigned long long)eval_const_expr_p4(elem->rhs, ok);
-        return eval_const_expr_p4(elem->lhs, ok) < eval_const_expr_p4(elem->rhs, ok);
-    }
-    if (elem->kind == ND_LE) {
-        if (is_unsigned_cmp(elem))
-            return (unsigned long long)eval_const_expr_p4(elem->lhs, ok) <= (unsigned long long)eval_const_expr_p4(elem->rhs, ok);
-        return eval_const_expr_p4(elem->lhs, ok) <= eval_const_expr_p4(elem->rhs, ok);
-    }
-    if (elem->kind == ND_GT) {
-        if (is_unsigned_cmp(elem))
-            return (unsigned long long)eval_const_expr_p4(elem->lhs, ok) > (unsigned long long)eval_const_expr_p4(elem->rhs, ok);
-        return eval_const_expr_p4(elem->lhs, ok) > eval_const_expr_p4(elem->rhs, ok);
-    }
-    if (elem->kind == ND_GE) {
-        if (is_unsigned_cmp(elem))
-            return (unsigned long long)eval_const_expr_p4(elem->lhs, ok) >= (unsigned long long)eval_const_expr_p4(elem->rhs, ok);
-        return eval_const_expr_p4(elem->lhs, ok) >= eval_const_expr_p4(elem->rhs, ok);
-    }
-    if (elem->kind == ND_LAND) return eval_const_expr_p4(elem->lhs, ok) && eval_const_expr_p4(elem->rhs, ok);
-    if (elem->kind == ND_LOR)  return eval_const_expr_p4(elem->lhs, ok) || eval_const_expr_p4(elem->rhs, ok);
     /* Ternary constant folding — closes seed498: INT_MIN / (cond==0 ? 1 : cond) */
-    if (elem->kind == ND_TERNARY && elem->cond && elem->then_body && elem->else_body)
-        return eval_const_expr_p4(elem->cond, ok) ? eval_const_expr_p4(elem->then_body, ok)
-                                                   : eval_const_expr_p4(elem->else_body, ok);
+    if (elem->kind == ND_TERNARY && elem->cond && elem->then_body && elem->else_body) {
+        int cok = 1;
+        long long cv = eval_const_expr_p4(elem->cond, &cok);
+        if (!cok) { *ok = 0; return 0; }
+        int bok = 1;
+        long long bv = cv ? eval_const_expr_p4(elem->then_body, &bok)
+                          : eval_const_expr_p4(elem->else_body, &bok);
+        if (!bok) { *ok = 0; return 0; }
+        return bv;
+    }
     /* CG-GINIT-FLOAT-001: float/double literals in aggregate initializers */
     if (elem->kind == ND_FLIT) {
         if (elem->type && elem->type->kind == TY_FLOAT) {

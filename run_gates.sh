@@ -1,4 +1,4 @@
-cd /mnt/g/zccMAIN/zcc
+cd "$(dirname "$0")"
 echo "--- Phase 2 Gate ---"
 grep 'getchar\|putchar' part0_pp.c
 
