@@ -13,6 +13,8 @@ extern int g_ir_primary;
 
 /* Forward declaration — defined ~4200 lines below, used in ND_DIV const-fold guard */
 static long long eval_const_expr_p4(Node *elem, int *ok);
+long long force_truncate(long long v, Type *type);
+int is_unsigned_cmp(Node *n);
 
 #ifdef __clang__
 #pragma clang diagnostic ignored "-Wdangling-else"

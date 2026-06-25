@@ -68,6 +68,7 @@ static const char *g_emit_zxr_path = NULL;
 static const char *g_replay_zxr_path = NULL;
 
 static int         g_emit_gguf = 0;
+extern void zcc_serialize_ast_json(FILE *out, Compiler *cc, Node *prog);
 static const char *g_gguf_out_path = NULL;
 static int         g_quantize_type = 0;
 
@@ -1272,6 +1273,8 @@ int zcc_main(int argc, char **argv) {
   strcat(include_paths, ".:./include");  /* default paths */
 
   int pp_only = 0;
+  int dump_ast_json = 0;
+  const char *frontend_dump_flag_name = 0;
 
   int zcc_verbose_flag = 0;
 
@@ -1331,6 +1334,8 @@ int zcc_main(int argc, char **argv) {
       compile_only = 1;
     } else if (strcmp(argv[i], "--pp-only") == 0) {
       pp_only = 1;
+    } else if (strcmp(argv[i], "--dump-ast-json") == 0) {
+      dump_ast_json = 1;
     } else if (strcmp(argv[i], "--dump-rust-ast") == 0) {
       dump_rust_ast = 1;
     } else if (strcmp(argv[i], "--dump-rust-ast-with-symbols") == 0) {
@@ -1695,6 +1700,7 @@ int zcc_main(int argc, char **argv) {
     printf("Usage: zcc <input.{c|rs}> [-o output] [options]\n");
     printf("Options:\n");
     printf("  --pp-only         print preprocessed C source and exit\n");
+    printf("  --dump-ast-json   parse C and print deterministic AST JSON\n");
     printf("  --dump-rust-ast   parse Rust and print deterministic AST\n");
     printf("  --dump-rust-ast-with-symbols   parse Rust and print AST with symbol ids\n");
     printf("  --dump-rust-symbol-table   parse Rust and print flat resolver symbol table\n");
@@ -1946,8 +1952,11 @@ int zcc_main(int argc, char **argv) {
       source_len = pp_len;
     }
   } else {
-    if (pp_only) {
-      printf("zcc: --pp-only is only valid for C sources\n");
+    if (pp_only || dump_ast_json) {
+      if (pp_only && dump_ast_json) frontend_dump_flag_name = "--pp-only and --dump-ast-json";
+      else if (pp_only) frontend_dump_flag_name = "--pp-only";
+      else frontend_dump_flag_name = "--dump-ast-json";
+      printf("zcc: %s can only be used with C sources\n", frontend_dump_flag_name);
       free(source);
       return 1;
     }
@@ -1997,37 +2006,39 @@ int zcc_main(int argc, char **argv) {
   if (getenv("ZCC_ERROR_UNSUPPORTED_ASM")) cc->error_unsupported_asm = 1;
   if (getenv("ZCC_ASM_REPORT"))           cc->asm_report = 1;
 
-  /* generate asm file name */
-  strncpy(asm_file, output_file, 250);
-  al = 0;
-  while (asm_file[al])
-    al++;
-
   stop_at_asm = 0;
-  if (al >= 2 && asm_file[al - 2] == '.' && asm_file[al - 1] == 's') {
-    stop_at_asm = 1;
-  } else {
-    asm_file[al] = '.';
-    asm_file[al + 1] = 's';
-    asm_file[al + 2] = 0;
-  }
+  if (!dump_ast_json) {
+    /* generate asm file name */
+    strncpy(asm_file, output_file, 250);
+    al = 0;
+    while (asm_file[al])
+      al++;
 
-  /* open output */
-  if (g_use_in_mem_asm) {
-    cc->out = open_memstream(&g_in_mem_asm_buf, &g_in_mem_asm_size);
-  } else {
-    cc->out = fopen(asm_file, "w");
-  }
-  if (!cc->out) {
-    if (!enable_telemetry_stdout) printf("zcc: cannot write '%s'\n", asm_file);
-    free(source);
-    free(cc);
-    ir_telem_shutdown();
-    return 1;
+    if (al >= 2 && asm_file[al - 2] == '.' && asm_file[al - 1] == 's') {
+      stop_at_asm = 1;
+    } else {
+      asm_file[al] = '.';
+      asm_file[al + 1] = 's';
+      asm_file[al + 2] = 0;
+    }
+
+    /* open output */
+    if (g_use_in_mem_asm) {
+      cc->out = open_memstream(&g_in_mem_asm_buf, &g_in_mem_asm_size);
+    } else {
+      cc->out = fopen(asm_file, "w");
+    }
+    if (!cc->out) {
+      if (!enable_telemetry_stdout) printf("zcc: cannot write '%s'\n", asm_file);
+      free(source);
+      free(cc);
+      ir_telem_shutdown();
+      return 1;
+    }
   }
 
   /* lex first token */
-  if (!enable_telemetry_stdout && !trace_abi_mode) printf("[Phase 1] Lexical Array Bootstrap... OK\n");
+  if (!enable_telemetry_stdout && !trace_abi_mode && !dump_ast_json) printf("[Phase 1] Lexical Array Bootstrap... OK\n");
   long p1_start = clock();
   next_token(cc);
   long p1_end = clock();
@@ -2037,7 +2048,7 @@ int zcc_main(int argc, char **argv) {
   zcc_oracle_log_pass("lexer", "_global", (double)(p1_end - p1_start) * 1000.0 / CLOCKS_PER_SEC, 0, 0, 0, 0);
 
   /* parse */
-  if (!enable_telemetry_stdout && !trace_abi_mode) printf("[Phase 2] AST Topological Generation... ");
+  if (!enable_telemetry_stdout && !trace_abi_mode && !dump_ast_json) printf("[Phase 2] AST Topological Generation... ");
   long p2_start = clock();
   prog = parse_program(cc);
   long p2_end = clock();
@@ -2052,16 +2063,24 @@ int zcc_main(int argc, char **argv) {
   zcc_oracle_log_sentinel(10, 10, 2, 16, 8, 4096);
 
   if (cc->errors > 0) {
-    if (!enable_telemetry_stdout && !trace_abi_mode) printf("\033[0;31mFAILED\033[0m\n");
-    if (!enable_telemetry_stdout && !trace_abi_mode) printf("zcc: %d error(s)\n", cc->errors);
-    fclose(cc->out);
+    if (!enable_telemetry_stdout && !trace_abi_mode && !dump_ast_json) printf("\033[0;31mFAILED\033[0m\n");
+    if (!enable_telemetry_stdout && !trace_abi_mode && !dump_ast_json) printf("zcc: %d error(s)\n", cc->errors);
+    if (cc->out) fclose(cc->out);
     free(source);
     free(cc);
     ir_telem_shutdown();
     return 1;
   }
 
-  if (!enable_telemetry_stdout && !trace_abi_mode) printf("OK\n");
+  if (!enable_telemetry_stdout && !trace_abi_mode && !dump_ast_json) printf("OK\n");
+
+  if (dump_ast_json) {
+    zcc_serialize_ast_json(stdout, cc, prog);
+    free(source);
+    free(cc);
+    ir_telem_shutdown();
+    return 0;
+  }
 
   if (g_emit_gguf) {
     extern int zcc_emit_gguf(void *cc, const char *out_path, int quantize_type);
