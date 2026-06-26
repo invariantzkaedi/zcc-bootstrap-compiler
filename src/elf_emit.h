@@ -114,7 +114,55 @@ typedef struct {
 #define R_X86_64_64     1
 #define R_X86_64_PC32    2
 #define R_X86_64_PLT32   4
+#define R_X86_64_32      10
 #define R_X86_64_32S     11
+
+
+/* DWARF-4 Constants */
+#define DW_TAG_compile_unit      0x11
+#define DW_TAG_subprogram        0x2e
+#define DW_TAG_variable          0x34
+
+#define DW_CHILDREN_no           0x00
+#define DW_CHILDREN_yes          0x01
+
+#define DW_AT_name               0x03
+#define DW_AT_stmt_list          0x10
+#define DW_AT_low_pc             0x11
+#define DW_AT_high_pc            0x12
+#define DW_AT_language           0x13
+#define DW_AT_decl_file          0x3a
+#define DW_AT_decl_line          0x3b
+#define DW_AT_producer           0x25
+
+#define DW_FORM_addr             0x01
+#define DW_FORM_data2            0x05
+#define DW_FORM_data1            0x0b
+#define DW_FORM_strp             0x0e
+#define DW_FORM_sec_offset       0x17
+
+#define DW_LNS_copy              0x01
+#define DW_LNS_advance_pc        0x02
+#define DW_LNS_advance_line      0x03
+#define DW_LNS_set_file          0x04
+
+typedef struct {
+    int file_idx;
+    char path[512];
+} AssemblerFile;
+
+typedef struct {
+    size_t address;
+    int file_idx;
+    int line;
+} AssemblerLoc;
+
+extern AssemblerFile g_asm_files[512];
+extern size_t g_asm_file_count;
+
+extern AssemblerLoc g_asm_locs[131072];
+extern size_t g_asm_loc_count;
+
 
 /* Emitter API */
 int elf_emit_obj(const char *out_filename,

@@ -24,6 +24,17 @@ extern char *g_in_mem_asm_buf;
 extern size_t g_in_mem_asm_size;
 extern int g_use_in_mem_asm;
 
+AssemblerFile g_asm_files[512];
+size_t g_asm_file_count = 0;
+
+AssemblerLoc g_asm_locs[131072];
+size_t g_asm_loc_count = 0;
+
+int g_current_file_idx = 1;
+int g_current_line = 1;
+int g_loc_pending = 0;
+
+
 /* Segment structure */
 typedef struct {
     unsigned char *data;
@@ -1491,13 +1502,30 @@ static char *trim(char *s) {
     return s;
 }
 
+static char **g_direct_asm_lines = NULL;
+static size_t g_direct_asm_line_count = 0;
+static size_t g_direct_asm_line_cap = 0;
+
+void zcc_direct_assemble_line(const char *line) {
+    if (g_direct_asm_line_count >= g_direct_asm_line_cap) {
+        g_direct_asm_line_cap = g_direct_asm_line_cap ? g_direct_asm_line_cap * 2 : 1024;
+        g_direct_asm_lines = (char **)realloc(g_direct_asm_lines, g_direct_asm_line_cap * sizeof(char *));
+    }
+    g_direct_asm_lines[g_direct_asm_line_count++] = strdup(line);
+}
+
 /* Two-Pass Assembler Core */
 static int assemble(const char *in_s_filename, const char *out_o_filename, const char *in_mem_buf, size_t mem_buf_len) {
     FILE *in = NULL;
-    if (in_mem_buf) {
-        in = fmemopen((void *)in_mem_buf, mem_buf_len, "r");
-    } else {
-        in = fopen(in_s_filename, "r");
+    if (!g_direct_asm_lines) {
+        if (in_mem_buf) {
+            in = fmemopen((void *)in_mem_buf, mem_buf_len, "r");
+        } else if (in_s_filename) {
+            in = fopen(in_s_filename, "r");
+        }
+        if (!in) {
+            return -1;
+        }
     }
     Segment text_seg = { NULL, 0, 0 };
     Segment data_seg = { NULL, 0, 0 };
@@ -1506,13 +1534,23 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
 
     label_count = 0;
     reloc_count = 0;
-
-    if (!in) {
-        return -1;
-    }
+    g_asm_file_count = 0;
+    g_asm_loc_count = 0;
+    g_current_file_idx = 1;
+    g_current_line = 1;
+    g_loc_pending = 0;
 
     /* Pass 1: Parse and encode */
-    while (fgets(line, sizeof(line), in)) {
+    size_t line_idx = 0;
+    while (1) {
+        if (g_direct_asm_lines && line_idx < g_direct_asm_line_count) {
+            strncpy(line, g_direct_asm_lines[line_idx++], sizeof(line) - 1);
+            line[sizeof(line) - 1] = '\0';
+        } else if (in) {
+            if (!fgets(line, sizeof(line), in)) break;
+        } else {
+            break;
+        }
         char *p = strchr(line, '#');
         if (p) *p = '\0';
         p = strchr(line, ';');
@@ -1671,6 +1709,33 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                         free(zeros);
                     }
                 }
+            } else if (strcmp(dir, ".file") == 0) {
+                int idx = 0;
+                char path[512];
+                char *arg = p + 5;
+                if (sscanf(arg, "%d", &idx) == 1) {
+                    char *quote = strchr(arg, '"');
+                    if (quote) {
+                        char *end_quote = strchr(quote + 1, '"');
+                        if (end_quote) {
+                            *end_quote = '\0';
+                            strcpy(path, quote + 1);
+                            if (g_asm_file_count < 512) {
+                                g_asm_files[g_asm_file_count].file_idx = idx;
+                                strcpy(g_asm_files[g_asm_file_count].path, path);
+                                g_asm_file_count++;
+                            }
+                        }
+                    }
+                }
+            } else if (strcmp(dir, ".loc") == 0) {
+                int f_idx = 0;
+                int l_no = 0;
+                if (sscanf(p + 4, "%d %d", &f_idx, &l_no) == 2) {
+                    g_current_file_idx = f_idx;
+                    g_current_line = l_no;
+                    g_loc_pending = 1;
+                }
             } else if (strcmp(dir, ".ascii") == 0 || strcmp(dir, ".asciz") == 0 || strcmp(dir, ".string") == 0) {
                 char *str_start = strchr(p, '"');
                 if (str_start) {
@@ -1702,6 +1767,16 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
         }
 
         /* Instruction parsing */
+        if (g_loc_pending) {
+            if (g_asm_loc_count < 131072) {
+                g_asm_locs[g_asm_loc_count].address = text_seg.size;
+                g_asm_locs[g_asm_loc_count].file_idx = g_current_file_idx;
+                g_asm_locs[g_asm_loc_count].line = g_current_line;
+                g_asm_loc_count++;
+            }
+            g_loc_pending = 0;
+        }
+
         char mnemonic[64];
         char *args_start = NULL;
         char *space = strchr(p, ' ');
@@ -2410,7 +2485,10 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                             unsigned char opcode = 0x81;
                             unsigned char modrm = 0xc0;
                             if (strcmp(mnemonic, "addq") == 0) modrm = 0xc0;
+                            else if (strcmp(mnemonic, "orq") == 0)  modrm = 0xc8;
+                            else if (strcmp(mnemonic, "andq") == 0) modrm = 0xe0;
                             else if (strcmp(mnemonic, "subq") == 0) modrm = 0xe8;
+                            else if (strcmp(mnemonic, "xorq") == 0) modrm = 0xf0;
                             else if (strcmp(mnemonic, "cmpq") == 0) modrm = 0xf8;
                             modrm |= (reg2 & 7);
                             if (reg2 & 8) rex |= 0x01;
@@ -2692,7 +2770,19 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
             exit(1);
         }
     }
-    fclose(in);
+    if (in) {
+        fclose(in);
+    }
+    if (g_direct_asm_lines) {
+        size_t li;
+        for (li = 0; li < g_direct_asm_line_count; li++) {
+            free(g_direct_asm_lines[li]);
+        }
+        free(g_direct_asm_lines);
+        g_direct_asm_lines = NULL;
+        g_direct_asm_line_count = 0;
+        g_direct_asm_line_cap = 0;
+    }
     printf("codegen: PASS 1 DONE, text_seg.size=%d, data_seg.size=%d, labels=%d, relocs=%d\n", (int)text_seg.size, (int)data_seg.size, (int)label_count, (int)reloc_count);
 
     /* Pass 1.5: Register external symbols that were called but not defined */

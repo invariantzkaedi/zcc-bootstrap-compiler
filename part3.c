@@ -3170,34 +3170,61 @@ static void emit_local_initializer(Compiler *cc, Node *block, int *cnt, int *cap
         }
     } else if (curr_type->kind == TY_STRUCT || curr_type->kind == TY_UNION) {
         StructField *f = curr_type->fields;
-        for (int i = 0; i < init_list->num_args && f != NULL; i++, f = f->next) {
+        int i = 0;
+        while (i < init_list->num_args && f != NULL) {
+            /* Skip anonymous bitfields (e.g. :0 or :5): they do not
+             * consume an initializer slot. */
+            if (f->name[0] == '\0' && f->type->kind != TY_STRUCT && f->type->kind != TY_UNION) {
+                f = f->next;
+                continue;
+            }
+
             Node *item = init_list->args[i];
+            i++;
+
             if (item->kind == ND_INIT_LIST) {
                 emit_local_initializer(cc, block, cnt, cap, base_var, f->type, item, offset + f->offset);
             } else {
-                /* Cast base to char* so byte offset is not double-scaled */
-                Node *cast_base = node_new(cc, ND_CAST, cc->line);
-                cast_base->lhs = base_var;
-                cast_base->cast_type = type_ptr(cc, cc->ty_char);
-                cast_base->type = type_ptr(cc, cc->ty_char);
+                Node *target;
+                if (f->is_bitfield) {
+                    /* CG-BITFIELD-001: emit ND_MEMBER so part4.c:1028 (read-modify-write
+                     * bitfield insert) is reached. ND_DEREF lhs silently bypasses it.
+                     * Use a fresh ND_VAR per field (same sym) to avoid aliasing. */
+                    Node *fresh_var = node_new(cc, ND_VAR, cc->line);
+                    *fresh_var = *base_var;   /* copy all fields including sym, name, type */
+                    target = node_new(cc, ND_MEMBER, cc->line);
+                    target->lhs = fresh_var;  /* fresh var pointing to the struct symbol */
+                    target->type = f->type;
+                    target->is_bitfield   = 1;
+                    target->bit_offset    = f->bit_offset;
+                    target->bit_size      = f->bit_size;
+                    target->member_offset = f->offset;       /* byte offset of storage unit */
+                    target->member_size   = type_size(f->type); /* storage unit width */
+                } else {
+                    /* Cast base to char* so byte offset is not double-scaled */
+                    Node *cast_base = node_new(cc, ND_CAST, cc->line);
+                    cast_base->lhs = base_var;
+                    cast_base->cast_type = type_ptr(cc, cc->ty_char);
+                    cast_base->type = type_ptr(cc, cc->ty_char);
 
-                Node *add = node_new(cc, ND_ADD, cc->line);
-                add->lhs = cast_base;
-                add->rhs = node_num(cc, offset + f->offset, cc->line);
-                add->type = type_ptr(cc, cc->ty_char);
+                    Node *add = node_new(cc, ND_ADD, cc->line);
+                    add->lhs = cast_base;
+                    add->rhs = node_num(cc, offset + f->offset, cc->line);
+                    add->type = type_ptr(cc, cc->ty_char);
 
-                /* Cast result back to field type* for correct deref */
-                Node *cast_back = node_new(cc, ND_CAST, cc->line);
-                cast_back->lhs = add;
-                cast_back->cast_type = type_ptr(cc, f->type);
-                cast_back->type = type_ptr(cc, f->type);
-                
-                Node *deref = node_new(cc, ND_DEREF, cc->line);
-                deref->lhs = cast_back;
-                deref->type = f->type;
+                    /* Cast result back to field type* for correct deref */
+                    Node *cast_back = node_new(cc, ND_CAST, cc->line);
+                    cast_back->lhs = add;
+                    cast_back->cast_type = type_ptr(cc, f->type);
+                    cast_back->type = type_ptr(cc, f->type);
+                    
+                    target = node_new(cc, ND_DEREF, cc->line);
+                    target->lhs = cast_back;
+                    target->type = f->type;
+                }
                 
                 Node *asgn = node_new(cc, ND_ASSIGN, cc->line);
-                asgn->lhs = deref;
+                asgn->lhs = target;
                 asgn->rhs = ensure_type(cc, item, f->type);
                 asgn->type = f->type;
                 
@@ -3209,6 +3236,7 @@ static void emit_local_initializer(Compiler *cc, Node *block, int *cnt, int *cap
                 }
                 block->stmts[(*cnt)++] = asgn;
             }
+            f = f->next;
         }
     }
 }

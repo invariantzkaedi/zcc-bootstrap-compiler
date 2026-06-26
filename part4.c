@@ -26,7 +26,43 @@ int setenv(const char *name, const char *value, int overwrite);
 int unsetenv(const char *name);
 #endif
 
+static char *g_dbg_files[512];
+static int g_dbg_file_count = 0;
+static int g_dbg_last_line = -1;
+static char *g_dbg_last_file = NULL;
+
+void zcc_debug_loc(Compiler *cc, int line) {
+    if (!cc || !cc->out || line <= 0) return;
+    char *fn = cc->filename;
+    if (!fn) fn = "<unknown>";
+    
+    int file_idx = -1;
+    for (int i = 0; i < g_dbg_file_count; i++) {
+        if (strcmp(g_dbg_files[i], fn) == 0) {
+            file_idx = i + 1;
+            break;
+        }
+    }
+    if (file_idx == -1) {
+        if (g_dbg_file_count < 512) {
+            g_dbg_files[g_dbg_file_count] = strdup(fn);
+            file_idx = g_dbg_file_count + 1;
+            g_dbg_file_count++;
+            fprintf(cc->out, "    .file %d \"%s\"\n", file_idx, fn);
+        } else {
+            file_idx = 1;
+        }
+    }
+    
+    if (line != g_dbg_last_line || fn != g_dbg_last_file) {
+        fprintf(cc->out, "    .loc %d %d\n", file_idx, line);
+        g_dbg_last_line = line;
+        g_dbg_last_file = fn;
+    }
+}
+
 static void push_reg(Compiler *cc, char *reg) {
+
   if (backend_ops) {
       if (strcmp(reg, "rax") == 0) reg = "r0";
       else if (strcmp(reg, "r11") == 0) reg = "r1";
@@ -786,6 +822,7 @@ static void emit_ir_inc_dec(Compiler *cc, Node *lhs, int is_inc, int is_post, in
 void codegen_expr(Compiler *cc, Node *node) {
   if (!node)
     return;
+  zcc_debug_loc(cc, node->line);
 
   if (cc) {
   }
@@ -999,9 +1036,24 @@ void codegen_expr(Compiler *cc, Node *node) {
       }
       long long mask_val = (1ULL << node->lhs->bit_size) - 1;
       long long shift_mask = ~(mask_val << node->lhs->bit_offset);
-      fprintf(cc->out, "    movq $%lld, %%rcx\n", shift_mask);
+      /* CG-BITFIELD-001: use movabsq for immediates that may not fit in
+       * sign-extended imm32. E.g. shift_mask=0xFFFFFFFF00000000 (-4294967296)
+       * cannot be encoded as movq $imm32 — GAS silently truncates to 0.
+       * Similarly mask_val=0xFFFFFFFF sign-extends to -1 (all-ones) in andq
+       * $imm32 form, turning the mask-and into a no-op. */
+      if (shift_mask >= -2147483648LL && shift_mask <= 2147483647LL) {
+        fprintf(cc->out, "    movq $%lld, %%rcx\n", shift_mask);
+      } else {
+        fprintf(cc->out, "    movabsq $%lld, %%rcx\n", shift_mask);
+      }
       fprintf(cc->out, "    andq %%rcx, %%r10\n");
-      fprintf(cc->out, "    andq $%lld, %%r11\n", mask_val);
+      if (mask_val >= -2147483648LL && mask_val <= 2147483647LL) {
+        fprintf(cc->out, "    andq $%lld, %%r11\n", mask_val);
+      } else {
+        /* mask_val doesn't fit in imm32; load into %rcx then and */
+        fprintf(cc->out, "    movabsq $%lld, %%rcx\n", mask_val);
+        fprintf(cc->out, "    andq %%rcx, %%r11\n");
+      }
       fprintf(cc->out, "    shlq $%d, %%r11\n", node->lhs->bit_offset);
       fprintf(cc->out, "    orq %%r11, %%r10\n");
       switch (node->lhs->member_size) {
@@ -3960,6 +4012,7 @@ static void codegen_stmt_dce(Compiler *cc, Node *node, int *terminated) {
 void codegen_stmt(Compiler *cc, Node *node) {
   if (!node)
     return;
+  zcc_debug_loc(cc, node->line);
 
   if (cc) {
   }
@@ -6348,6 +6401,9 @@ extern void run_interprocedural_constant_propagation(Compiler *cc, Node *prog);
 void codegen_program(Compiler *cc, Node *prog) {
   Node *n;
   int i;
+  g_dbg_file_count = 0;
+  g_dbg_last_line = -1;
+  g_dbg_last_file = NULL;
 
   /* Do NOT check ptr_in_fault_range(prog/n): stage2 miscompiles it and falsely
    * rejects valid arena pointers (e.g. 0xac09f8), causing early exit and

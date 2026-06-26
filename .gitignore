@@ -133,6 +133,8 @@ sqlite3_bt.log
 zcc
 zcc2
 zcc3
+zld
+zld-zcc
 zcc.c
 zcc_amal.c
 *.o

@@ -748,6 +748,7 @@ static const char *match_section(const char *secname, int is_common) {
     if (strncmp(secname, ".data", 5) == 0)   return ".data";
     if (strncmp(secname, ".bss", 4) == 0 || is_common) return ".bss";
     if (strncmp(secname, ".debug_", 7) == 0) return secname;
+    if (strncmp(secname, ".rela.debug_", 12) == 0) return secname;
     return NULL; /* discard */
 }
 
@@ -988,7 +989,7 @@ static void layout(void) {
                 Elf64_Shdr *sh = &o->shdrs[si];
                 if (!(sh->sh_flags & SHF_ALLOC) && sh->sh_type != SHT_NULL) {
                     const char *sname = sh_name(o, si);
-                    if (strncmp(sname, ".debug_", 7) == 0) {
+                    if (strncmp(sname, ".debug_", 7) == 0 || strncmp(sname, ".rela.debug_", 12) == 0) {
                         int found = 0;
                         for (k = 0; k < debug_sec_cnt; k++) {
                             if (strcmp(debug_secs[k], sname) == 0) {
@@ -999,6 +1000,9 @@ static void layout(void) {
                         if (!found && debug_sec_cnt < 32) {
                             strncpy(debug_secs[debug_sec_cnt], sname, 63);
                             debug_secs[debug_sec_cnt][63] = '\0';
+                            if (g_verbose) {
+                                printf("DEBUG ZLD LAYOUT: collected non-alloc section '%s'\n", debug_secs[debug_sec_cnt]);
+                            }
                             debug_sec_cnt++;
                         }
                     }
@@ -1402,6 +1406,16 @@ static void copy_sections(void) {
 }
 
 /* ── Apply relocations ──────────────────────────────────────────────────── */
+static OutSection *find_out_section(const char *name) {
+    int i;
+    for (i = 0; i < g_nout; i++) {
+        if (strcmp(g_out[i].name, name) == 0) {
+            return &g_out[i];
+        }
+    }
+    return NULL;
+}
+
 static uint64_t resolve_sym_value(ObjFile *o, uint32_t sym_idx) {
     Elf64_Sym *sym = &o->symtab[sym_idx];
     const char *name = o->strtab + sym->st_name;
@@ -1419,6 +1433,22 @@ static uint64_t resolve_sym_value(ObjFile *o, uint32_t sym_idx) {
 
     if (sym->st_shndx == SHN_ABS)
         return sym->st_value;
+    if (ELF64_ST_TYPE(sym->st_info) == 3) { /* STT_SECTION */
+        if (sym->st_shndx < o->ehdr->e_shnum) {
+            uint64_t val = o->section_vma[sym->st_shndx];
+            Elf64_Shdr *sh = &o->shdrs[sym->st_shndx];
+            if (!(sh->sh_flags & SHF_ALLOC)) {
+                const char *secname = sh_name(o, sym->st_shndx);
+                const char *out_name = match_section(secname, 0);
+                OutSection *out = find_out_section(out_name);
+                if (out) {
+                    val -= out->vma;
+                }
+            }
+            return val;
+        }
+        return 0;
+    }
     if (sym->st_shndx == SHN_UNDEF || sym->st_shndx == SHN_COMMON) {
         /* global/common symbol lookup */
         GlobalSym *gs = find_sym(name);
@@ -1427,7 +1457,17 @@ static uint64_t resolve_sym_value(ObjFile *o, uint32_t sym_idx) {
         exit(1);
     }
     if (sym->st_shndx < o->ehdr->e_shnum) {
-        return sym->st_value + o->section_vma[sym->st_shndx];
+        uint64_t val = sym->st_value + o->section_vma[sym->st_shndx];
+        Elf64_Shdr *sh = &o->shdrs[sym->st_shndx];
+        if (!(sh->sh_flags & SHF_ALLOC)) {
+            const char *secname = sh_name(o, sym->st_shndx);
+            const char *out_name = match_section(secname, 0);
+            OutSection *out = find_out_section(out_name);
+            if (out) {
+                val -= out->vma;
+            }
+        }
+        return val;
     }
     return sym->st_value;
 }
@@ -1453,6 +1493,11 @@ static void apply_relocations(void) {
 
             /* target section */
             uint32_t target_shndx = sh->sh_info;
+            if (g_verbose) {
+                printf("DEBUG ZLD RELOC SECTION: name=%s, target_shndx=%u, target_name=%s, target_vma=0x%llx\n",
+                       sh_name(o, si), target_shndx, sh_name(o, target_shndx),
+                       (unsigned long long)o->section_vma[target_shndx]);
+            }
             if (!o->section_vma[target_shndx]) continue; /* not mapped */
 
             Elf64_Rela *relas = (Elf64_Rela *)(o->data + sh->sh_offset);
@@ -1467,6 +1512,12 @@ static void apply_relocations(void) {
                 uint64_t S = resolve_sym_value(o, sym_idx);
                 int64_t  A = r->r_addend;
                 uint64_t P = o->section_vma[target_shndx] + r->r_offset;
+
+                if (g_verbose) {
+                    printf("DEBUG ZLD RELOC: type=%d, sym_idx=%u, S=0x%llx, A=%lld, P=0x%llx, target_sec=%s\n",
+                           (int)rtype, sym_idx, (unsigned long long)S, (long long)A, (unsigned long long)P,
+                           sh_name(o, target_shndx));
+                }
 
                 uint8_t *loc = find_vma_in_buf(P);
                 if (!loc) {
@@ -1799,6 +1850,9 @@ static void write_output(const char *path) {
             sh->sh_name = name_offsets[i];
             if (strcmp(sec->name, ".bss") == 0) {
                 sh->sh_type = SHT_NOBITS;
+            } else if (strncmp(sec->name, ".rela", 5) == 0) {
+                sh->sh_type = SHT_RELA;
+                sh->sh_entsize = sizeof(Elf64_Rela);
             } else {
                 sh->sh_type = SHT_PROGBITS;
             }
@@ -1820,6 +1874,17 @@ static void write_output(const char *path) {
                 }
             } else {
                 sh->sh_offset = debug_file_offsets[i];
+                if (strncmp(sec->name, ".rela.", 6) == 0) {
+                    const char *target_name = sec->name + 5; /* skip ".rela" */
+                    int t;
+                    sh->sh_flags = 0x40; /* SHF_INFO_LINK */
+                    for (t = 0; t < g_nout; t++) {
+                        if (strcmp(g_out[t].name, target_name) == 0) {
+                            sh->sh_info = t + 1;
+                            break;
+                        }
+                    }
+                }
             }
         }
 
