@@ -6,7 +6,7 @@ endif
 FAST_CFLAGS = -O2 -DNDEBUG -w -fno-asynchronous-unwind-tables -g0 -DZCC_REAL_TELEMETRY
 FORTIFY_PACK_DIR ?= fortify_zcc_clean
 
-PARTS = part1.c part0_pp.c part2.c part3.c ir.h ir_emit_dispatch.h ir_bridge.h sym_type_ast_ir.c part4.c zcc_ast_serializer.c part5.c part7_rust.c part6_arm.c ir.c ir_to_x86.c regalloc.c ir_telemetry_stub.c forgezero_receipt_stub.c zcc_layout.c zcc_layout_dump.c zcc_static_assert.c
+PARTS = part1.c part0_pp.c part2.c part3.c ir.h ir_emit_dispatch.h sym_type_ast_ir.c part4.c zcc_ast_serializer.c part5.c part7_rust.c part6_arm.c ir.c ir_to_x86.c regalloc.c ir_telemetry_stub.c forgezero_receipt_stub.c zcc_layout.c zcc_layout_dump.c zcc_static_assert.c
 PASSES = compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c ir_telemetry.c zcc_telemetry.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c
 COMPAT_SMOKE_SRCS = \
 	exp1_raytracer_simd.c \
@@ -21,7 +21,7 @@ COMPAT_SMOKE_SRCS = \
 	tests/regressions/t_zkaedi_rigging_regressions.c
 COMPAT_EXTENDED_SRCS = $(COMPAT_SMOKE_SRCS) raytracer.c
 
-.PHONY: all clean selfhost selfhost-fast compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test rust-front-smoke check-evm-lifter check-ir-vuln-tag check-forgezero-receipt verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration zjs test-zjs visualize-svg-diffs wasm-svg-bridge test_zcc_dag abi-lanes
+.PHONY: all clean selfhost selfhost-fast compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test rust-front-smoke check-evm-lifter check-ir-vuln-tag check-forgezero-receipt check-ir-bridge-guard verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration zjs test-zjs visualize-svg-diffs wasm-svg-bridge test_zcc_dag abi-lanes
 
 .SECONDARY: zcc zcc2 zcc3
 
@@ -256,10 +256,10 @@ pp-crlf-gate: zcc_fast
 	@diff .compat_out/pp_crlf_probe_lf.norm.s .compat_out/pp_crlf_probe_crlf.norm.s > .compat_logs/pp_crlf_probe.diff
 	@echo "PP CRLF GATE VERIFIED"
 
-fortify-ad: selfhost-fast compat-extended pp-crlf-gate compat-report
+fortify-ad: selfhost-fast compat-extended pp-crlf-gate check-ir-bridge-guard compat-report
 	@echo "FORTIFY A+D COMPLETE"
 
-fortify-ci: selfhost-fast compat-extended pp-crlf-gate compat-report-ci
+fortify-ci: selfhost-fast compat-extended pp-crlf-gate check-ir-bridge-guard compat-report-ci
 	@echo "FORTIFY CI COMPLETE"
 
 # External fortify pack wiring (CI/tooling only; no compiler source integration yet).
@@ -423,6 +423,16 @@ check-forgezero-receipt:
 	    src/evm/memory_v2.c src/evm/abi_extractor.c $(LDFLAGS)
 	@echo "=== Running ForgeZero Audit Receipt tests ==="
 	/tmp/test_forgezero_receipt
+
+# ─── IR Bridge Guard Rejection Tests ─────────────────────────────────
+check-ir-bridge-guard:
+	@echo "=== ir_bridge.h guard rejection test (expect FAILURE) ==="
+	@if $(CC) $(CFLAGS) -I. -fsyntax-only tests/test_ir_bridge_guard.c 2>/dev/null; then \
+	  echo "FAIL: ir_bridge.h compiled WITHOUT ZCC_IR_BRIDGE_ALLOWED — guard regressed"; \
+	  exit 1; \
+	else \
+	  echo "PASS: guard correctly rejected unsanctioned inclusion"; \
+	fi
 
 asan: zcc.c $(PASSES)
 	$(CC) -fsanitize=address -O0 -g -Dmain=zcc_main -o zcc_asan zcc.c $(PASSES) $(LDFLAGS)
@@ -913,5 +923,6 @@ abi-lanes: zcc
 	python3 tools/abi_packed_lane_gen.py --out /tmp/abi_packed_cases --run --zcc $(CURDIR)/zcc
 	@echo "=== Running Bitfield ABI Lane (16/16) ==="
 	python3 tools/abi_bitfield_lane_gen.py --out /tmp/abi_bitfield_cases --run --zcc $(CURDIR)/zcc
+
 
 

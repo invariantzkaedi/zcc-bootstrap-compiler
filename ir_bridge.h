@@ -12,7 +12,13 @@
 /*   - No designated initializers, no compound literals              */
 /* ================================================================ */
 
-#ifndef ZCC_IR_BRIDGE_H
+#ifndef ZCC_IR_BRIDGE_ALLOWED
+#error "ir_bridge.h is a header-hosted implementation file with mutable file-scope state. It may only be included inside part4.c, wrapped in #define/#undef ZCC_IR_BRIDGE_ALLOWED."
+#endif
+
+#ifdef ZCC_IR_BRIDGE_H
+#error "ir_bridge.h included twice in one translation unit — its static state would be duplicated."
+#else
 #define ZCC_IR_BRIDGE_H
 
 /* ── IR Temporary Name Generator ─────────────────────────────────── */
@@ -203,4 +209,5 @@ static void ir_emit_var_load(Node *node) {
     }
 }
 
+#undef ZCC_IR_BRIDGE_ALLOWED
 #endif /* ZCC_IR_BRIDGE_H */

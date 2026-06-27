@@ -8,7 +8,9 @@
 #endif
 
 #include "ir_emit_dispatch.h"
+#define ZCC_IR_BRIDGE_ALLOWED 1
 #include "ir_bridge.h"
+#undef ZCC_IR_BRIDGE_ALLOWED
 extern int g_ir_primary;
 
 /* Forward declaration — defined ~4200 lines below, used in ND_DIV const-fold guard */
