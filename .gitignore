@@ -124,6 +124,8 @@ sqlite3_bt.log
 *_SAVE.c
 *_BROKEN.c
 *_PATCHED.c
+*.orig
+*.pre-*
 *.IR_VERIFIEDnode_modules/
 *.exe
 *.o
@@ -500,10 +502,23 @@ mega_corpus/
 # Local build artifacts & binaries
 *.mp4
 a_gcc
+a_gcc_*
+a_zcc
+a_zcc_*
 zcc_gcc
 zcc_stage2_gcc
 repro_gcc_*
 repro_zcc_*
+mismatch_seed*
+doom_corpus.jsonl
+doom_ir_clean.jsonl
+fleet_ir.json
+hello_ir.json
+mega_oracle_validated.jsonl
+mega_scored_corpus.jsonl
+zcc_mega_corpus_v2.jsonl
+tripo_lod.jsonl
+dreams/island_*
 repro0
 t_sret_large
 t_variadic_sum
@@ -572,24 +587,6 @@ zcc_backup
 out.ir.json
 out.json
 hello_ir.json
-pp_sqlite.c
-scratch_mode_t.c
-seed_*.c
-source.c
-ctimetest*.c
-check_*.sh
-export_graphics.sh
-Makefile.dbg
-.tmp_test_dir/
-.wrangler/
-*.elf
-*.uf2
-cr_gcc
-cr_zcc
-zcc_backup
-out.ir.json
-out.json
-hello_ir.json
 idx
 pp_sqlite.c
 scratch_mode_t.c
@@ -599,3 +596,39 @@ ctimetest*.c
 check_*.sh
 export_graphics.sh
 Makefile.dbg
+kernel/*.elfinfo
+kernel/*.dis
+
+# gcov coverage metrics & files
+*.gcov
+*.gcda
+*.gcno
+zcc_cov.c
+
+# Root-level repro & probe scratch C files
+/repro_*.c
+/probe_*.c
+/pp.c
+
+# Compiled experiment binaries (no extension) at root
+/exp[0-9]*
+/raytracer
+
+# Heavy benchmark datasets & corpora
+juliet_train_subset/
+olympics_batches/
+olympics_corpus/
+olympics_coverage/
+benchmark_history.jsonl
+
+# Generated reports & heavy 3D outputs
+system_benchmark_report.*
+point_cloud_output.obj
+
+# build/test artifacts (generated, reproducible)
+.compat_logs/
+.compat_out/
+abi_bitfield_cases/
+abi_lane_cases/
+gods_eye/corpus/
+zjs

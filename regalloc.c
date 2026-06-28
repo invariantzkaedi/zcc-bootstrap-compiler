@@ -18,6 +18,52 @@
 #include <string.h>
 #include <stdio.h>
 
+/* ── ZKAEDI PRIME Hamiltonian Heuristic engine ──────────────────────── */
+
+typedef struct {
+    double eta;     /* n: learning rate / evolution step */
+    double gamma;   /* y: non-linear scaling factor */
+    double epsilon; /* e: stochastic injection weight */
+    double beta;    /* B: entropy scaling */
+} ZkaediPrimeParams;
+
+static unsigned long long zkaedi_prng_state = 0x777A6B61656469ULL;
+
+static void zcc_prime_init_seed(unsigned long long seed) {
+    zkaedi_prng_state = seed ^ 0x9E3779B97F4A7C15ULL;
+}
+
+static double deterministic_random_double(void) {
+    zkaedi_prng_state ^= zkaedi_prng_state >> 12;
+    zkaedi_prng_state ^= zkaedi_prng_state << 25;
+    zkaedi_prng_state ^= zkaedi_prng_state >> 27;
+    return (zkaedi_prng_state * 2.3283064365386963e-10) * 0.5;
+}
+
+static double deterministic_normal_distribution(double std_dev) {
+    double u1 = deterministic_random_double();
+    if (u1 <= 1e-7) u1 = 1e-7;
+    return std_dev * (1.0 - (u1 * 2.0));
+}
+
+static double fast_sigmoid(double x) {
+    double abs_x = (x < 0.0) ? -x : x;
+    return x / (1.0 + abs_x);
+}
+
+static double absolute_val(double x) {
+    return (x < 0.0) ? -x : x;
+}
+
+static double zcc_prime_compute_state(double h_prev, double h_0, const ZkaediPrimeParams *params) {
+    if (!params) return h_prev;
+    double evolution = params->eta * h_prev * fast_sigmoid(params->gamma * h_prev);
+    double std_dev = 1.0 + (params->beta * absolute_val(h_prev));
+    double noise = params->epsilon * deterministic_normal_distribution(std_dev);
+    return h_0 + evolution + noise;
+}
+
+
 /* ── Physical register table ─────────────────────────────────────────── */
 
 static const char *preg_names[PREG_COUNT] = {
@@ -308,23 +354,31 @@ static void chaitin_briggs(RegAllocator *ra, const ir_func_t *fn) {
         }
 
         if (target == -1) {
-            /* Spill: pick node with highest degree / lowest cost (cost = loop_depth_weight + ref_count) */
-            int max_num = -1;
-            int max_den = 1;
+            /* Spill: pick node with highest degree / lowest cost via ZKAEDI PRIME Hamiltonian */
+            ZkaediPrimeParams params;
+            params.eta = 0.1;
+            params.gamma = 0.5;
+            params.epsilon = 0.05;
+            params.beta = 0.2;
+            
+            zcc_prime_init_seed(0x777A6B61656469ULL);
+            
+            double max_val = -1.0;
             for (i = 0; i < N; i++) {
                 if (!removed[i]) {
-                    int num = degree[i];
-                    int den = ra->intervals[i].loop_depth_weight;
-                    if (den <= 0) den = ra->intervals[i].ref_count;
-                    if (den <= 0) den = 1;
-                    if (max_num == -1 || num * max_den > max_num * den) {
-                        max_num = num;
-                        max_den = den;
+                    double num = (double)degree[i];
+                    double h_prev = (double)ra->intervals[i].loop_depth_weight;
+                    double h_0 = (double)ra->intervals[i].ref_count;
+                    double den = zcc_prime_compute_state(h_prev, h_0, &params);
+                    if (den <= 0.0) den = 1.0;
+                    
+                    double val = num / den;
+                    if (max_val < 0.0 || val > max_val) {
+                        max_val = val;
                         target = i;
-                    } else if (num * max_den == max_num * den) {
+                    } else if (val == max_val) {
                         if (target == -1 || strcmp(ra->intervals[i].name, ra->intervals[target].name) < 0) {
-                            max_num = num;
-                            max_den = den;
+                            max_val = val;
                             target = i;
                         }
                     }

@@ -1,0 +1,18 @@
+name: zkaedi-compiler-ci
+on: [push, pull_request]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc make
+
+      - name: Run ZCC Compiler Gates
+        run: |
+          chmod +x run_gates.sh
+          chmod +x gate_ir1.sh
+          ./run_gates.sh

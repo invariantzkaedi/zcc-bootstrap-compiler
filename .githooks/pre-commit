@@ -1,0 +1,4 @@
+#!/bin/sh
+# git pre-commit hook to reject binaries/large files at root
+command -v python3 >/dev/null 2>&1 && PYTHON=python3 || PYTHON=python
+$PYTHON tools/pre-commit-binary-tripwire.py
