@@ -29,7 +29,7 @@ typedef ir_pass_result_t (*ir_pass_fn)(void *fn_ptr);
 ir_pass_result_t ir_pass_lower_float(void *fn);
 
 /* ── Pass registry ───────────────────────────────────────────────────── */
-#define IR_PM_MAX_PASSES 16
+#define IR_PM_MAX_PASSES 24
 
 typedef struct {
     const char    *name;        /* human-readable: "dce", "constfold" */

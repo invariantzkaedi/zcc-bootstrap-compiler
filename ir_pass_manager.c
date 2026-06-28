@@ -101,11 +101,13 @@ static ir_pass_result_t ir_pass_dce(void *fn_ptr) {
     memset(&r, 0, sizeof(r));
     r.nodes_before = count_nodes(fn);
 
-    fprintf(stderr, "\n[DCE-DEBUG] FULL IR BEFORE DCE:\n");
-    for (n = fn->head; n; n = n->next) {
-        fprintf(stderr, "  %s %s, %s -> %s\n", ir_op_name(n->op), n->src1, n->src2, n->dst);
+    if (getenv("ZCC_OPT_DCE_VERBOSE")) {
+        fprintf(stderr, "\n[DCE-DEBUG] FULL IR BEFORE DCE:\n");
+        for (n = fn->head; n; n = n->next) {
+            fprintf(stderr, "  %s %s, %s -> %s\n", ir_op_name(n->op), n->src1, n->src2, n->dst);
+        }
+        fprintf(stderr, "[DCE-DEBUG] END FULL IR\n\n");
     }
-    fprintf(stderr, "[DCE-DEBUG] END FULL IR\n\n");
 
     do {
         pass_deleted = 0;
@@ -138,8 +140,8 @@ static ir_pass_result_t ir_pass_dce(void *fn_ptr) {
                     if (n == fn->tail) {
                         fn->tail = prev;
                     }
-                    // DEBUG PRINT
-                    fprintf(stderr, "[dce] deleted: %s %s, %s -> %s\n", ir_op_name(n->op), n->src1, n->src2, n->dst);
+                    if (getenv("ZCC_OPT_DCE_VERBOSE"))
+                        fprintf(stderr, "[dce] deleted: %s %s, %s -> %s\n", ir_op_name(n->op), n->src1, n->src2, n->dst);
                     
                     free(n);
                     fn->node_count--;
@@ -1032,6 +1034,186 @@ static void ir_snapshot_state(ir_func_t *fn, const char *pass_name) {
             pass_name, fn->name, ir_hash, cfg_hash, dom_hash, live_hash);
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+ * PASS: Copy/Constant Propagation (CCP)
+ * ════════════════════════════════════════════════════════════════════════
+ * Block-local pass (resets at every IR_LABEL).  For each function, runs
+ * to a fixpoint:
+ *
+ *   1. Constant propagation through copies:
+ *      If  IR_COPY dst, src  and  src is a known integer constant,
+ *      rewrite to  IR_CONST dst  with that immediate and record dst
+ *      as that constant.
+ *
+ *   2. Copy propagation:
+ *      Track  IR_COPY dst, src  (non-constant) as alias dst→src.
+ *      Rewrite uses (src1, src2, IR_STORE dst) of aliased names to
+ *      their ultimate source.  Chains are resolved transitively with
+ *      a hop-limit cycle guard.
+ *
+ * Correctness constraints:
+ *   - Both maps are reset at every IR_LABEL (block-local; no CFG analysis
+ *     needed — safe for post-SSA/post-GVN forwarding copies).
+ *   - IR_PHI nodes are skipped (their phi_ops array is not touched here).
+ *   - Only USE sites are rewritten; definition sites keep producing their
+ *     original value until DCE removes them.
+ *   - tag, vuln_tags, and flags are preserved; tag is cleared to
+ *     IR_TAG_NONE when converting IR_COPY → IR_CONST, matching the
+ *     conservative style in ir_pass_const_fold.
+ */
+
+#define CCP_COPY_MAP_MAX 1024
+#define CCP_CYCLE_GUARD  64
+
+typedef struct {
+    char from[IR_NAME_MAX];
+    char to[IR_NAME_MAX];
+} ccp_copy_entry_t;
+
+static ccp_copy_entry_t s_copy_map[CCP_COPY_MAP_MAX];
+static int s_copy_map_count;
+
+static void copy_map_clear(void) {
+    s_copy_map_count = 0;
+}
+
+static void copy_map_add(const char *from, const char *to) {
+    int i;
+    for (i = 0; i < s_copy_map_count; i++) {
+        if (strcmp(s_copy_map[i].from, from) == 0) {
+            strncpy(s_copy_map[i].to, to, IR_NAME_MAX - 1);
+            s_copy_map[i].to[IR_NAME_MAX - 1] = '\0';
+            return;
+        }
+    }
+    if (s_copy_map_count >= CCP_COPY_MAP_MAX) return;
+    strncpy(s_copy_map[s_copy_map_count].from, from, IR_NAME_MAX - 1);
+    s_copy_map[s_copy_map_count].from[IR_NAME_MAX - 1] = '\0';
+    strncpy(s_copy_map[s_copy_map_count].to, to, IR_NAME_MAX - 1);
+    s_copy_map[s_copy_map_count].to[IR_NAME_MAX - 1] = '\0';
+    s_copy_map_count++;
+}
+
+/* Resolve alias chain to ultimate source.  Returns name itself if no alias. */
+static const char *copy_map_resolve(const char *name) {
+    int hops = 0;
+    int i;
+    const char *cur = name;
+    while (hops < CCP_CYCLE_GUARD) {
+        int found = 0;
+        for (i = 0; i < s_copy_map_count; i++) {
+            if (strcmp(s_copy_map[i].from, cur) == 0) {
+                cur = s_copy_map[i].to;
+                found = 1;
+                break;
+            }
+        }
+        if (!found) break;
+        hops++;
+    }
+    return cur;
+}
+
+static ir_pass_result_t ir_pass_copy_const_prop(void *fn_ptr) {
+    ir_func_t *fn = (ir_func_t *)fn_ptr;
+    ir_pass_result_t r;
+    ir_node_t *n;
+    int modified = 0;
+    int changed;
+
+    memset(&r, 0, sizeof(r));
+    r.nodes_before = count_nodes(fn);
+
+    do {
+        changed = 0;
+        cmap_clear();
+        copy_map_clear();
+
+        for (n = fn->head; n; n = n->next) {
+
+            /* Reset both maps at every basic-block boundary */
+            if (n->op == IR_LABEL) {
+                cmap_clear();
+                copy_map_clear();
+                continue;
+            }
+
+            /* Skip PHI nodes — phi_ops array is not rewritten here */
+            if (n->op == IR_PHI) continue;
+
+            /* Track IR_CONST definitions */
+            if (n->op == IR_CONST && n->dst[0]) {
+                cmap_add(n->dst, n->imm);
+                continue;
+            }
+
+            /* Handle IR_COPY */
+            if (n->op == IR_COPY && n->src1[0] && n->dst[0]) {
+                long cv;
+                /* 1. Constant propagation through copy */
+                if (cmap_get(n->src1, &cv)) {
+                    n->op    = IR_CONST;
+                    n->imm   = cv;
+                    n->src1[0] = '\0';
+                    n->src2[0] = '\0';
+                    n->tag   = IR_TAG_NONE;
+                    cmap_add(n->dst, cv);
+                    modified++;
+                    changed = 1;
+                } else {
+                    /* 2. Copy propagation — resolve src1 through alias chain */
+                    const char *res = copy_map_resolve(n->src1);
+                    if (strcmp(res, n->src1) != 0) {
+                        strncpy(n->src1, res, IR_NAME_MAX - 1);
+                        n->src1[IR_NAME_MAX - 1] = '\0';
+                        modified++;
+                        changed = 1;
+                    }
+                    /* Record alias dst → (resolved) src1 */
+                    copy_map_add(n->dst, n->src1);
+                }
+                continue;
+            }
+
+            /* Rewrite USE sites: src1, src2, and IR_STORE address (dst) */
+            if (n->src1[0]) {
+                const char *res = copy_map_resolve(n->src1);
+                if (strcmp(res, n->src1) != 0) {
+                    strncpy(n->src1, res, IR_NAME_MAX - 1);
+                    n->src1[IR_NAME_MAX - 1] = '\0';
+                    modified++;
+                    changed = 1;
+                }
+            }
+            if (n->src2[0]) {
+                const char *res = copy_map_resolve(n->src2);
+                if (strcmp(res, n->src2) != 0) {
+                    strncpy(n->src2, res, IR_NAME_MAX - 1);
+                    n->src2[IR_NAME_MAX - 1] = '\0';
+                    modified++;
+                    changed = 1;
+                }
+            }
+            /* IR_STORE: dst is the address operand — it is a USE */
+            if (n->op == IR_STORE && n->dst[0]) {
+                const char *res = copy_map_resolve(n->dst);
+                if (strcmp(res, n->dst) != 0) {
+                    strncpy(n->dst, res, IR_NAME_MAX - 1);
+                    n->dst[IR_NAME_MAX - 1] = '\0';
+                    modified++;
+                    changed = 1;
+                }
+            }
+        }
+    } while (changed);
+
+    r.nodes_after    = r.nodes_before; /* CCP mutates nodes, does not delete */
+    r.nodes_deleted  = 0;
+    r.nodes_modified = modified;
+    r.changed        = modified > 0;
+    return r;
+}
+
 /* ── Registry API ────────────────────────────────────────────────────── */
 
 static ir_pass_manager_t *ir_pm_create(void) {
@@ -1143,6 +1325,7 @@ void ir_pm_run_default(void *mod_ptr, int verbose) {
     if (opt_dce) ir_pm_register(pm, "dce", ir_pass_dce);
 
     if (opt_constfold) ir_pm_register(pm, "gvn", ir_pass_gvn);
+    if (opt_constfold) ir_pm_register(pm, "copy_const_prop", ir_pass_copy_const_prop);
     if (opt_constfold) ir_pm_register(pm, "coalesce_vload", ir_pass_coalesce_vload);
 
     ir_pm_register(pm, "lower_float", ir_pass_lower_float);

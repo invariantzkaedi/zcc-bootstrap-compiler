@@ -21,7 +21,7 @@ COMPAT_SMOKE_SRCS = \
 	tests/regressions/t_zkaedi_rigging_regressions.c
 COMPAT_EXTENDED_SRCS = $(COMPAT_SMOKE_SRCS) raytracer.c
 
-.PHONY: all clean selfhost selfhost-fast compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test rust-front-smoke check-evm-lifter check-ir-vuln-tag check-forgezero-receipt check-ir-bridge-guard verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration zjs test-zjs visualize-svg-diffs wasm-svg-bridge test_zcc_dag abi-lanes
+.PHONY: all clean selfhost selfhost-fast compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test rust-front-smoke check-evm-lifter check-ir-vuln-tag check-forgezero-receipt check-ir-bridge-guard check-copy-const-prop verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration zjs test-zjs visualize-svg-diffs wasm-svg-bridge test_zcc_dag abi-lanes
 
 .SECONDARY: zcc zcc2 zcc3
 
@@ -433,6 +433,31 @@ check-ir-bridge-guard:
 	else \
 	  echo "PASS: guard correctly rejected unsanctioned inclusion"; \
 	fi
+
+# ─── Copy/Constant Propagation Pass Tests ────────────────────────────
+# Tests ir_pass_copy_const_prop: constant propagation through IR_COPY,
+# copy alias propagation, block-boundary reset, and dead-copy removal.
+# Compiled directly with GCC; does NOT depend on the ZCC self-hosting path.
+# A minimal source list is used to avoid PARTS-dependent translation units.
+# tests/test_copy_const_prop_stubs.c provides no-op stubs for the few
+# PARTS symbols referenced (but not exercised) by zcc_oracle_substrate.c.
+check-copy-const-prop:
+	@echo "=== Building Copy/Constant Propagation test binary ==="
+	$(CC) $(CFLAGS) -I. \
+	    -o /tmp/test_copy_const_prop \
+	    tests/test_copy_const_prop.c \
+	    tests/test_copy_const_prop_stubs.c \
+	    ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c \
+	    ir_symbolic_cfg.c ir_dominance.c ir_ssa.c \
+	    evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c \
+	    ir.c src/ir_lower_float.c \
+	    src/evm/memory_v2.c src/evm/abi_extractor.c \
+	    ir_telemetry.c zcc_telemetry.c \
+	    src/zcc_oracle_substrate.c \
+	    transient_state.c \
+	    $(LDFLAGS)
+	@echo "=== Running Copy/Constant Propagation tests ==="
+	/tmp/test_copy_const_prop
 
 asan: zcc.c $(PASSES)
 	$(CC) -fsanitize=address -O0 -g -Dmain=zcc_main -o zcc_asan zcc.c $(PASSES) $(LDFLAGS)
