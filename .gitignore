@@ -544,6 +544,7 @@ zcc_pp.c
 *.glb
 *.ppm
 *.ir
+*.obj
 node_modules/
 *.gguf
 *.pt
