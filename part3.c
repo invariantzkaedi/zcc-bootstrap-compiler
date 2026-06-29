@@ -5113,7 +5113,11 @@ static LatticeVal icp_eval_expr(Node *n) {
     }
     
     if (n->kind == ND_CAST) {
-        return icp_eval_expr(n->lhs);
+        LatticeVal val = icp_eval_expr(n->lhs);
+        if (val.kind == LATTICE_CONST) {
+            val.val = force_truncate(val.val, n->type);
+        }
+        return val;
     }
     
     if (n->kind == ND_ADD || n->kind == ND_SUB || n->kind == ND_MUL ||
@@ -5256,6 +5260,9 @@ static void propagate_local_assignments(Node *n, Node *current_func) {
             SymStats *stats = get_sym_stats(lhs->sym);
             if (stats && stats->assign_count <= 1 && stats->addr_taken == 0) {
                 LatticeVal rhs_val = icp_eval_expr(n->rhs);
+                if (rhs_val.kind == LATTICE_CONST && lhs->sym->type) {
+                    rhs_val.val = force_truncate(rhs_val.val, lhs->sym->type);
+                }
                 LatticeVal cur_val = get_sym_lattice(lhs->sym);
                 
                 LatticeVal new_val = meet(cur_val, rhs_val);
