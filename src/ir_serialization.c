@@ -70,6 +70,7 @@ struct Type {
     int is_packed;
     int explicit_align;
     int is_tbfp;
+    int is_volatile;
 };
 
 struct StringEntry {
@@ -151,6 +152,7 @@ struct Node {
     int bit_offset;
     int bit_size;
     char *asm_string;
+    int asm_tier;
     Node *next;
 };
 
@@ -192,6 +194,7 @@ struct Compiler {
     Type *ty_ulonglong;
     Type *ty_float;
     Type *ty_double;
+    Type *ty_longdouble;
     Scope *current_scope;
     StringEntry strings[MAX_STRINGS];
     int num_strings;
@@ -221,6 +224,11 @@ struct Compiler {
     int used_regs_mask;
     int is_forced_mask;
     int telemetry_depth;
+    int error_unsupported_asm;
+    int asm_report;
+    int asm_report_passthrough;
+    int asm_report_warn;
+    int asm_report_unsupported;
 };
 
 /* ========================================================================= */
@@ -562,7 +570,7 @@ int ir_serialize_json(const ir_module_t *mod, const char *out_filename, const ch
         ir_func_t *fn = mod->funcs[f_idx];
         char esc[256];
         escape_string(esc, fn->name);
-        fprintf(fp, "func name=\"%s\" ret=%s num_params=%d", esc, ir_type_name(fn->ret_type), fn->num_params);
+        fprintf(fp, "func name=\"%s\" ret=%s num_params=%d id=%d stack_size=%d", esc, ir_type_name(fn->ret_type), fn->num_params, fn->id, fn->stack_size);
         if (fn->num_params > 0) {
             fprintf(fp, " params=");
             for (j = 0; j < fn->num_params; j++) {
@@ -911,6 +919,8 @@ int ir_deserialize_json(ir_module_t *mod, const char *in_filename, struct Compil
             char fn_ret_str[256];
             find_arg(p, "ret=", fn_ret_str);
             int fn_num_params = (int)find_arg_int(p, "num_params=", 0);
+            int fn_id = (int)find_arg_int(p, "id=", 0);
+            int fn_stack_size = (int)find_arg_int(p, "stack_size=", 0);
 
             ir_type_t fn_ret = IR_TY_VOID;
             for (int t = 0; t < 12; t++) {
@@ -921,6 +931,9 @@ int ir_deserialize_json(ir_module_t *mod, const char *in_filename, struct Compil
             }
 
             curr_fn = ir_func_create(mod, fn_name, fn_ret, fn_num_params);
+            curr_fn->id = fn_id;
+            curr_fn->stack_size = fn_stack_size;
+            sprintf(curr_fn->end_label, ".Lfunc_end_%d", fn_id);
 
             char params_str[4096];
             if (find_arg(p, "params=", params_str)) {
