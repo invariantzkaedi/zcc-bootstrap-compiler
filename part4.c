@@ -4987,7 +4987,9 @@ void codegen_func(Compiler *cc, Node *func) {
   
   if (shift > 0) {
       num_adjusted = 0;
-      int parser_param_limit = -parser_param_space;
+      /* CG-ABI-STRUCT-002: include the sret slot (-8B) in the boundary so
+       * trailing memory-class struct params are not misclassified as locals. */
+      int parser_param_limit = -actual_param_space;
       traverse_and_adjust_node(func->body, cc, func, parser_param_limit, shift, param_offsets);
       func->stack_size += shift;
   }
