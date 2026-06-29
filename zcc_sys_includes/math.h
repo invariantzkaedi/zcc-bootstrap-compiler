@@ -67,4 +67,8 @@ double fmin(double x, double y);
 double fmax(double x, double y);
 float  fminf(float x, float y);
 float  fmaxf(float x, float y);
+double copysign(double x, double y);
+float  copysignf(float x, float y);
+double nextafter(double x, double y);
+float  nextafterf(float x, float y);
 #endif

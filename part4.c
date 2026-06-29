@@ -5215,8 +5215,8 @@ static double det_fabs_d(double x) {
 static double det_sqrt_d(double x) {
     int i;
     double g;
-    if (x < 0.0) return 0.0;
-    if (x == 0.0) return 0.0;
+    if (x < 0.0) return 0.0/0.0;
+    if (x == 0.0) return x;
     g = (x > 1.0) ? x : 1.0;
     for (i = 0; i < 20; i++) g = 0.5 * (g + x / g);
     return g;
