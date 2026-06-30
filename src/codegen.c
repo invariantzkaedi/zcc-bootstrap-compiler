@@ -2422,6 +2422,19 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                     } else {
                         encode_sse_binop(&text_seg, pref, n_pref, opcode, reg1, reg2);
                     }
+                } else if (strcmp(mnemonic, "pxor") == 0) {
+                    const char *pref = "\x66";
+                    int n_pref = 1;
+                    unsigned char opcode = 0xEF;
+                    int is_mem1 = 0;
+                    long long disp1 = 0;
+                    if (parse_mem_operand(op1, &reg1, &disp1)) is_mem1 = 1;
+                    
+                    if (is_mem1) {
+                        encode_sse_mem(&text_seg, pref, n_pref, opcode, reg1, reg2, 1, disp1);
+                    } else {
+                        encode_sse_binop(&text_seg, pref, n_pref, opcode, reg1, reg2);
+                    }
                 } else if (strcmp(mnemonic, "cvttss2si") == 0 || strcmp(mnemonic, "cvttss2siq") == 0 ||
                            strcmp(mnemonic, "cvttsd2si") == 0 || strcmp(mnemonic, "cvttsd2siq") == 0) {
                     const char *pref = (strncmp(mnemonic, "cvttss", 6) == 0) ? "\xF3" : "\xF2";

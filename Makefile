@@ -21,7 +21,7 @@ COMPAT_SMOKE_SRCS = \
 	tests/regressions/t_zkaedi_rigging_regressions.c
 COMPAT_EXTENDED_SRCS = $(COMPAT_SMOKE_SRCS) raytracer.c
 
-.PHONY: all clean selfhost selfhost-fast compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test rust-front-smoke check-evm-lifter check-ir-vuln-tag check-forgezero-receipt check-ir-bridge-guard check-copy-const-prop verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration zjs test-zjs visualize-svg-diffs wasm-svg-bridge test_zcc_dag abi-lanes
+.PHONY: all clean selfhost selfhost-fast compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test test-float rust-front-smoke check-evm-lifter check-ir-vuln-tag check-forgezero-receipt check-ir-bridge-guard check-copy-const-prop verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration zjs test-zjs visualize-svg-diffs wasm-svg-bridge test_zcc_dag abi-lanes
 
 .SECONDARY: zcc zcc2 zcc3
 
@@ -379,7 +379,17 @@ fortify-recursive-ci:
 supercharge-ad: selfhost-fast compat-smoke
 	@echo "SUPERCHARGE A+D COMPLETE"
 
-test: zcc
+test-float: zcc
+	@echo "=== Running Float Probes Correctness Gates ==="
+	./zcc probe_float_cmp.c -o /tmp/probe_float_cmp.s && gcc -fno-pie -no-pie -o /tmp/probe_float_cmp /tmp/probe_float_cmp.s -lm && /tmp/probe_float_cmp
+	./zcc probe_float_cmp_v2.c -o /tmp/probe_float_cmp_v2.s && gcc -fno-pie -no-pie -o /tmp/probe_float_cmp_v2 /tmp/probe_float_cmp_v2.s -lm && /tmp/probe_float_cmp_v2
+	./zcc probe_neg_zero_truth.c -o /tmp/probe_neg_zero_truth.s && gcc -fno-pie -no-pie -o /tmp/probe_neg_zero_truth /tmp/probe_neg_zero_truth.s -lm && /tmp/probe_neg_zero_truth
+	./zcc probe_float_surface.c -o /tmp/probe_float_surface.s && gcc -fno-pie -no-pie -o /tmp/probe_float_surface /tmp/probe_float_surface.s -lm && /tmp/probe_float_surface
+	./zcc fp_conv_harness.c -o /tmp/fp_conv_harness.s && gcc -fno-pie -no-pie -o /tmp/fp_conv_harness /tmp/fp_conv_harness.s -lm && /tmp/fp_conv_harness
+	./zcc probe_static_init_alldouble.c -o /tmp/probe_static_init_alldouble.s && gcc -fno-pie -no-pie -o /tmp/probe_static_init_alldouble /tmp/probe_static_init_alldouble.s -lm && /tmp/probe_static_init_alldouble
+	@echo "=== Float Probes: ALL PASS ==="
+
+test: zcc test-float
 	bash zcc_test_suite.sh --quick
 
 # ─── EVM Lifter Scaffold Tests ───────────────────────────────────────

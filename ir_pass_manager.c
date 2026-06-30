@@ -396,7 +396,7 @@ static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
                 if (n->op == IR_FADD) f_res = f1 + f2;
                 else if (n->op == IR_FSUB) f_res = f1 - f2;
                 else if (n->op == IR_FMUL) f_res = f1 * f2;
-                else if (n->op == IR_FDIV) { if (f2 == 0.0) continue; f_res = f1 / f2; }
+                else if (n->op == IR_FDIV) { f_res = f1 / f2; }
                 
                 n->op = IR_FCONST;
                 n->imm = double_to_long(f_res);
@@ -681,7 +681,7 @@ static unsigned long long gvn_hash_node(ir_node_t *n) {
 static int gvn_is_pure(ir_op_t op) {
     switch (op) {
     case IR_ADD: case IR_SUB: case IR_MUL: case IR_DIV: case IR_MOD:
-    case IR_NEG:
+    case IR_NEG: case IR_FNEG:
     case IR_AND: case IR_OR:  case IR_XOR: case IR_NOT:
     case IR_SHL: case IR_SHR:
     case IR_EQ:  case IR_NE:  case IR_LT:  case IR_LE:

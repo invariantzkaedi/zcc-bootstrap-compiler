@@ -226,6 +226,7 @@ static void insert_phis_at_frontiers(ir_func_t *fn, dom_cfg_t *cfg, df_set_t *df
 
                 ir_node_t *phi = calloc(1, sizeof(ir_node_t));
                 phi->op = IR_PHI;
+                phi->type = n->type;
                 strncpy(phi->dst, n->dst, IR_NAME_MAX-1);
                 phi->phi_count = 0;
                 phi->phi_capacity = MAX_PHI_PREDS;

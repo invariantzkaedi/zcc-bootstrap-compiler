@@ -2124,7 +2124,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       }
       {
         char *dst = ir_bridge_fresh_tmp();
-        ZCC_EMIT_UNARY(IR_NEG, ir_map_type(node->type), dst, src_ir, node->line);
+        ZCC_EMIT_UNARY(IR_FNEG, ir_map_type(node->type), dst, src_ir, node->line);
       }
       return;
     }

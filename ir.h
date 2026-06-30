@@ -103,6 +103,7 @@ typedef enum {
     IR_FDIV,        /* dst = src1 /f src2  (double div)                    */
     IR_ITOF,        /* dst = (double)src1  (signed int64 to double)        */
     IR_FTOI,        /* dst = (int64)src1   (double to signed int64)        */
+    IR_FNEG,        /* dst = -f src1       (double negation)               */
     IR_ASM,         /* dst = asm_string                                    */
 
     /* Vector Operations */

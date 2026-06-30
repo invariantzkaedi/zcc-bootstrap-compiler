@@ -671,6 +671,17 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                     store_result(out, n->dst, "%rax", ra);
                     break;
                 }
+                case IR_FNEG: {
+                    load_operand(out, n->src1, "%rax", ra);
+                    if (n->type == IR_TY_F32) {
+                        fprintf(out, "    xorl $2147483648, %%eax\n");
+                    } else {
+                        fprintf(out, "    movabsq $-9223372036854775808, %%r11\n");
+                        fprintf(out, "    xorq %%r11, %%rax\n");
+                    }
+                    store_result(out, n->dst, "%rax", ra);
+                    break;
+                }
                 case IR_LOAD: {
                     load_address_ra(out, n->src1, "%rax", ra);
                     if (n->type == IR_TY_I32 || n->type == IR_TY_U32 || n->type == IR_TY_F32) {

@@ -71,6 +71,7 @@ static const char *OP_NAMES[] = {
     "fdiv",
     "itof",
     "ftoi",
+    "fneg",
     "asm",
     "vload",
     "vextract"
