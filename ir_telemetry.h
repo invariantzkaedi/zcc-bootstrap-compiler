@@ -47,6 +47,12 @@ void zcc_telem_phase(int phase, const char *phase_name, const char *status, int 
                      const char *metric_key2, long long metric_val2,
                      const char *metric_key3, long long metric_val3);
 
+/* Vector 10: Autonomous Compiler Telemetry Constellation */
+void ir_telem_log_opt(const char *pass_name, int duration_us, int nodes_before, int nodes_after, int deleted, int modified);
+void ir_telem_log_cfg(int block_id, int n_preds, const int *preds, int n_succs, const int *succs, int inst_count, double weight);
+void ir_telem_log_regalloc(const char *func_name, int live_ranges, int coloring_loops, int spills, int peak_pressure);
+void ir_telem_flush_observatory(const char *func_name);
+
 #endif /* ZCC_IR_TELEMETRY_H */
 
 

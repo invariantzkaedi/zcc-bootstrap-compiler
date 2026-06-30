@@ -86,6 +86,8 @@ static const char *OP_NAMES[] = {
     "fcmp_ule",
     "fcmp_ugt",
     "fcmp_uge",
+    "fpext",
+    "fptrunc",
     "asm",
     "vload",
     "vextract"

@@ -2435,6 +2435,97 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                     } else {
                         encode_sse_binop(&text_seg, pref, n_pref, opcode, reg1, reg2);
                     }
+                } else if (strcmp(mnemonic, "pcmpeqd") == 0) {
+                    const char *pref = "\x66";
+                    int n_pref = 1;
+                    unsigned char opcode = 0x76;
+                    int is_mem1 = 0;
+                    long long disp1 = 0;
+                    if (parse_mem_operand(op1, &reg1, &disp1)) is_mem1 = 1;
+                    
+                    if (is_mem1) {
+                        encode_sse_mem(&text_seg, pref, n_pref, opcode, reg1, reg2, 1, disp1);
+                    } else {
+                        encode_sse_binop(&text_seg, pref, n_pref, opcode, reg1, reg2);
+                    }
+                } else if (strcmp(mnemonic, "psrld") == 0) {
+                    if (op1[0] == '$') {
+                        long long imm = strtoll(op1 + 1, NULL, 0);
+                        unsigned char pref = 0x66;
+                        seg_append(&text_seg, &pref, 1);
+                        int hw_dst = reg2 & 15;
+                        unsigned char rex = 0x40;
+                        int need_rex = 0;
+                        if (hw_dst & 8) {
+                            rex |= 0x01;
+                            need_rex = 1;
+                        }
+                        if (need_rex) {
+                            seg_append(&text_seg, &rex, 1);
+                        }
+                        unsigned char escape = 0x0f;
+                        seg_append(&text_seg, &escape, 1);
+                        unsigned char opcode = 0x72;
+                        seg_append(&text_seg, &opcode, 1);
+                        unsigned char modrm = 0xc0 | (2 << 3) | (hw_dst & 7);
+                        seg_append(&text_seg, &modrm, 1);
+                        unsigned char imm_val = (unsigned char)imm;
+                        seg_append(&text_seg, &imm_val, 1);
+                    } else {
+                        fprintf(stderr, "assembler error: psrld only supports immediate shift\n");
+                        exit(1);
+                    }
+                } else if (strcmp(mnemonic, "psrlq") == 0) {
+                    if (op1[0] == '$') {
+                        long long imm = strtoll(op1 + 1, NULL, 0);
+                        unsigned char pref = 0x66;
+                        seg_append(&text_seg, &pref, 1);
+                        int hw_dst = reg2 & 15;
+                        unsigned char rex = 0x40;
+                        int need_rex = 0;
+                        if (hw_dst & 8) {
+                            rex |= 0x01;
+                            need_rex = 1;
+                        }
+                        if (need_rex) {
+                            seg_append(&text_seg, &rex, 1);
+                        }
+                        unsigned char escape = 0x0f;
+                        seg_append(&text_seg, &escape, 1);
+                        unsigned char opcode = 0x73;
+                        seg_append(&text_seg, &opcode, 1);
+                        unsigned char modrm = 0xc0 | (2 << 3) | (hw_dst & 7);
+                        seg_append(&text_seg, &modrm, 1);
+                        unsigned char imm_val = (unsigned char)imm;
+                        seg_append(&text_seg, &imm_val, 1);
+                    } else {
+                        fprintf(stderr, "assembler error: psrlq only supports immediate shift\n");
+                        exit(1);
+                    }
+                } else if (strcmp(mnemonic, "andps") == 0) {
+                    const char *pref = "";
+                    int n_pref = 0;
+                    unsigned char opcode = 0x54;
+                    int is_mem1 = 0;
+                    long long disp1 = 0;
+                    if (parse_mem_operand(op1, &reg1, &disp1)) is_mem1 = 1;
+                    if (is_mem1) {
+                        encode_sse_mem(&text_seg, pref, n_pref, opcode, reg1, reg2, 1, disp1);
+                    } else {
+                        encode_sse_binop(&text_seg, pref, n_pref, opcode, reg1, reg2);
+                    }
+                } else if (strcmp(mnemonic, "andpd") == 0) {
+                    const char *pref = "\x66";
+                    int n_pref = 1;
+                    unsigned char opcode = 0x54;
+                    int is_mem1 = 0;
+                    long long disp1 = 0;
+                    if (parse_mem_operand(op1, &reg1, &disp1)) is_mem1 = 1;
+                    if (is_mem1) {
+                        encode_sse_mem(&text_seg, pref, n_pref, opcode, reg1, reg2, 1, disp1);
+                    } else {
+                        encode_sse_binop(&text_seg, pref, n_pref, opcode, reg1, reg2);
+                    }
                 } else if (strcmp(mnemonic, "cvttss2si") == 0 || strcmp(mnemonic, "cvttss2siq") == 0 ||
                            strcmp(mnemonic, "cvttsd2si") == 0 || strcmp(mnemonic, "cvttsd2siq") == 0) {
                     const char *pref = (strncmp(mnemonic, "cvttss", 6) == 0) ? "\xF3" : "\xF2";

@@ -60,6 +60,18 @@ void telemetry_emit_coverage(float coverage_pct) {
 }
 void telemetry_close(void) {
 }
+void ir_telem_log_opt(const char *pass_name, int duration_us, int nodes_before, int nodes_after, int deleted, int modified) {
+    (void)pass_name; (void)duration_us; (void)nodes_before; (void)nodes_after; (void)deleted; (void)modified;
+}
+void ir_telem_log_cfg(int block_id, int n_preds, const int *preds, int n_succs, const int *succs, int inst_count, double weight) {
+    (void)block_id; (void)n_preds; (void)preds; (void)n_succs; (void)succs; (void)inst_count; (void)weight;
+}
+void ir_telem_log_regalloc(const char *func_name, int live_ranges, int coloring_loops, int spills, int peak_pressure) {
+    (void)func_name; (void)live_ranges; (void)coloring_loops; (void)spills; (void)peak_pressure;
+}
+void ir_telem_flush_observatory(const char *func_name) {
+    (void)func_name;
+}
 #endif
 
 

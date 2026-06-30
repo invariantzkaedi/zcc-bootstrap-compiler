@@ -320,6 +320,42 @@ static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
             continue;
         }
 
+        /* Check unary ops with one known constant operand */
+        if (n->src1[0] && !n->src2[0]) {
+            long v1;
+            if (cmap_get(n->src1, &v1)) {
+                if (n->op == IR_FPEXT) {
+                    n->op = IR_FCONST;
+                    n->imm = v1;
+                    n->src1[0] = '\0';
+                    cmap_add(n->dst, n->imm);
+                    modified++;
+                    continue;
+                } else if (n->op == IR_FPTRUNC) {
+                    double d = long_to_double(v1);
+                    float f = (float)d;
+                    double d_rounded = (double)f;
+                    long rounded_bits = double_to_long(d_rounded);
+                    n->op = IR_FCONST;
+                    n->imm = rounded_bits;
+                    n->src1[0] = '\0';
+                    cmap_add(n->dst, n->imm);
+                    modified++;
+                    continue;
+                } else if (n->op == IR_FNEG) {
+                    double d = long_to_double(v1);
+                    double neg_d = -d;
+                    long neg_bits = double_to_long(neg_d);
+                    n->op = IR_FCONST;
+                    n->imm = neg_bits;
+                    n->src1[0] = '\0';
+                    cmap_add(n->dst, n->imm);
+                    modified++;
+                    continue;
+                }
+            }
+        }
+
         /* Check binary ops with two known constant operands */
         if (n->src1[0] && n->src2[0]) {
             long v1, v2, result;
@@ -727,6 +763,7 @@ static int gvn_is_pure(ir_op_t op) {
     case IR_CAST:
     case IR_FADD: case IR_FSUB: case IR_FMUL: case IR_FDIV:
     case IR_ITOF: case IR_FTOI:
+    case IR_FPEXT: case IR_FPTRUNC:
     case IR_FCMP_OEQ: case IR_FCMP_ONE: case IR_FCMP_OLT: case IR_FCMP_OLE:
     case IR_FCMP_OGT: case IR_FCMP_OGE: case IR_FCMP_ORD: case IR_FCMP_UNO:
     case IR_FCMP_UEQ: case IR_FCMP_UNE: case IR_FCMP_ULT: case IR_FCMP_ULE:

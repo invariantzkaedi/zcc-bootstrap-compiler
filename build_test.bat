@@ -128,7 +128,7 @@ echo [GATE-4] Checking for d3dx12.h helper header ...
 if not exist "include\d3dx12.h" (
     echo [INFO] d3dx12.h absent ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â fetching from DirectX-Graphics-Samples ...
     powershell -Command ^
-        "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/microsoft/DirectX-Graphics-Samples/master/Samples/Desktop/D3D12HelloWorld/src/HelloTexture/d3dx12.h' -OutFile 'include\d3dx12.h'"
+        "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/microsoft/DirectX-Graphics-Samples/master/Libraries/D3D12RaytracingFallback/Include/d3dx12.h' -OutFile 'include\d3dx12.h'"
     if !errorlevel! neq 0 (
         echo [FATAL] d3dx12.h download failed. Check network or place manually at include\d3dx12.h
         goto :BUILD_FAIL
@@ -235,6 +235,10 @@ cl.exe ^
     /MD ^
     /O2 ^
     /Zi ^
+    /GS ^
+    /sdl ^
+    /guard:cf ^
+    /D_CRT_SECURE_NO_WARNINGS ^
     /I "include" ^
     /I "directstorage\native\include" ^
     /Fo"bin\\" ^
@@ -242,7 +246,11 @@ cl.exe ^
     /Fd"bin\zkaedi_fleet_viewer.pdb" ^
     "src\zkaedi_d3d12_viewer.cpp" ^
     d3d12.lib dxgi.lib user32.lib dstorage.lib ^
-    /link /LIBPATH:"directstorage\native\lib\x64"
+    /link /LIBPATH:"directstorage\native\lib\x64" ^
+    /DYNAMICBASE ^
+    /NXCOMPAT ^
+    /HIGHENTROPYVA ^
+    /GUARD:CF
 
 if %errorlevel% neq 0 (
     echo.

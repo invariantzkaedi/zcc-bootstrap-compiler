@@ -5109,6 +5109,10 @@ static LatticeVal icp_eval_expr(Node *n) {
          * change at any time (signal handler, MMIO, other thread). Return
          * LATTICE_BOT so the solver never propagates a stale constant. */
         if (n->sym->type && n->sym->type->is_volatile) return bot;
+        /* If it is a global variable, it is not tracked by the ICP lattice.
+         * Return LATTICE_BOT to prevent it from decaying to LATTICE_TOP (which would
+         * cause it to be silently elided in meet() operations). */
+        if (!n->sym->is_local) return bot;
         return get_sym_lattice(n->sym);
     }
     
@@ -5379,6 +5383,46 @@ static void rewrite_constant_vars(Node *n) {
     rewrite_constant_vars_rec(n, 0);
 }
 
+static int func_addr_taken[MAX_FUNCTIONS];
+
+static void mark_addr_taken_funcs(Node *n) {
+    if (!n) return;
+    if (n->kind == ND_VAR) {
+        for (int i = 0; i < num_functions; i++) {
+            if (strcmp(functions[i]->func_def_name, n->name) == 0) {
+                func_addr_taken[i] = 1;
+                break;
+            }
+        }
+    }
+    mark_addr_taken_funcs(n->lhs);
+    mark_addr_taken_funcs(n->rhs);
+    mark_addr_taken_funcs(n->cond);
+    mark_addr_taken_funcs(n->then_body);
+    mark_addr_taken_funcs(n->else_body);
+    mark_addr_taken_funcs(n->init);
+    mark_addr_taken_funcs(n->inc);
+    mark_addr_taken_funcs(n->body);
+    mark_addr_taken_funcs(n->case_body);
+    mark_addr_taken_funcs(n->initializer);
+    if ((n->kind == ND_CALL || n->kind == ND_INIT_LIST) && n->num_args > 0) {
+        for (int i = 0; i < n->num_args; i++) {
+            mark_addr_taken_funcs(n->args[i]);
+        }
+    }
+    if (n->kind == ND_BLOCK && n->num_stmts > 0) {
+        for (int i = 0; i < n->num_stmts; i++) {
+            mark_addr_taken_funcs(n->stmts[i]);
+        }
+    }
+    if (n->kind == ND_SWITCH && n->num_cases > 0) {
+        for (int i = 0; i < n->num_cases; i++) {
+            mark_addr_taken_funcs(n->cases[i]);
+        }
+        mark_addr_taken_funcs(n->default_case);
+    }
+}
+
 void run_interprocedural_constant_propagation(Compiler *cc, Node *prog) {
     // 1. Reset state
     memset(sym_lattice_hash, 0, sizeof(sym_lattice_hash));
@@ -5401,6 +5445,18 @@ void run_interprocedural_constant_propagation(Compiler *cc, Node *prog) {
         n = n->next;
     }
     
+    // Mark functions whose addresses are taken
+    memset(func_addr_taken, 0, sizeof(func_addr_taken));
+    Node *curr = prog;
+    while (curr) {
+        if (curr->kind == ND_FUNC_DEF) {
+            mark_addr_taken_funcs(curr->body);
+        } else if (curr->kind == ND_GLOBAL_VAR) {
+            mark_addr_taken_funcs(curr->initializer);
+        }
+        curr = curr->next;
+    }
+    
     // 3. Initialize parameter symbols cache
     initialize_param_syms();
     
@@ -5415,6 +5471,7 @@ void run_interprocedural_constant_propagation(Compiler *cc, Node *prog) {
         Node *func = functions[i];
         int is_static = func->is_static;
         int is_main = (strcmp(func->func_def_name, "main") == 0);
+        int addr_taken = func_addr_taken[i];
         
         for (int k = 0; k < func->num_params && k < MAX_PARAMS; k++) {
             Symbol *s = func_param_syms[i][k];
@@ -5424,7 +5481,7 @@ void run_interprocedural_constant_propagation(Compiler *cc, Node *prog) {
             if (stats && (stats->assign_count > 0 || stats->addr_taken)) {
                 LatticeVal bot = {LATTICE_BOT, 0};
                 set_sym_lattice(s, bot);
-            } else if (is_main || (!is_static && !getenv("ZCC_ICP_CLOSED_WORLD"))) {
+            } else if (is_main || addr_taken || (!is_static && !getenv("ZCC_ICP_CLOSED_WORLD"))) {
                 LatticeVal bot = {LATTICE_BOT, 0};
                 set_sym_lattice(s, bot);
             } else {

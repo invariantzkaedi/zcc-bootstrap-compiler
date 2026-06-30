@@ -75,8 +75,15 @@ def main():
     os.environ["ZCC_EMIT_TELEMETRY"] = "1"
     start_time = time.time()
     
-    # We pass extra link flags matching the SystemV ABI targets
-    rc, stdout, stderr = run_cmd("./zcc sqlite3_functest.c -o sqlite3_zcc /usr/lib/x86_64-linux-gnu/libsqlite3.so.0 -lpthread -ldl -lm")
+    # Compile to assembly first to bypass zld static freestanding limitations
+    rc, stdout, stderr = run_cmd("./zcc sqlite3_functest.c -o sqlite3_functest.s")
+    if rc == 0:
+        # Link assembly using gcc to include standard dynamic library libc
+        rc_link, l_out, l_err = run_cmd("gcc sqlite3_functest.s -o sqlite3_zcc /usr/lib/x86_64-linux-gnu/libsqlite3.so.0 -lpthread -ldl -lm")
+        if rc_link != 0:
+            rc = rc_link
+            stdout += "\n" + l_out
+            stderr += "\n" + l_err
     duration = time.time() - start_time
     
     if rc != 0:

@@ -119,12 +119,12 @@ A complete real-time diagnostics visualization subsystem:
 
 ## 🔱 CORE ROADMAP & MILESTONES
 
-| Milestone | Target | Focus Vector | Invariant |
-|-----------|--------|--------------|-----------|
-| **Milestone 1** | `zkernel` Multiboot | Vector 3 (Kernel Boot) | GRUB/QEMU bootable, Stage 2 == Stage 3 identical |
-| **Milestone 2** | `zld` ELF Emission | Vector 7 (Direct Linker) | Direct `.o` object generation without `as` |
-| **Milestone 3** | IR Replay Engine | Vector 1 (IR Archeology) | `replay-ir(serialize-ir(x)) == x` assembly |
-| **Milestone 4** | Csmith Hardening | Vector 4 (Fuzzing Warfare) | 1,000,000 runs with zero undetected divergences |
+| Milestone | Target | Focus Vector | Invariant | Status |
+|-----------|--------|--------------|-----------|--------|
+| **Milestone 1** | `zkernel` Multiboot | Vector 3 (Kernel Boot) | GRUB/QEMU bootable, Stage 2 == Stage 3 identical | **COMPLETED** |
+| **Milestone 2** | `zld` ELF Emission | Vector 7 (Direct Linker) | Direct `.o` object generation without `as` | **COMPLETED** |
+| **Milestone 3** | IR Replay Engine | Vector 1 (IR Archeology) | `replay-ir(serialize-ir(x)) == x` assembly | **COMPLETED** |
+| **Milestone 4** | Csmith Hardening | Vector 4 (Fuzzing Warfare) | 1,000,000 runs with zero undetected divergences | **ACTIVE** |
 
 ---
 

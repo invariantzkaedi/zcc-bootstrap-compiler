@@ -2742,23 +2742,25 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (node->cast_type) {
       int src_size = node->lhs && node->lhs->type ? type_size(node->lhs->type) : 4;
 
-      /* ---- float <-> double conversions (must precede size switch) ---- */
       if (node->lhs && node->lhs->type && is_float_type(node->lhs->type) && is_float_type(node->cast_type)) {
+        ir_op_t op = IR_CAST;
         if (node->lhs->type->kind == TY_FLOAT && node->cast_type->kind == TY_DOUBLE) {
           /* float -> double: rax holds 32-bit IEEE float in low bits */
           fprintf(cc->out, "    movd %%eax, %%xmm0\n");
           fprintf(cc->out, "    cvtss2sd %%xmm0, %%xmm0\n");
           fprintf(cc->out, "    movq %%xmm0, %%rax\n");
+          op = IR_FPEXT;
         } else if (node->lhs->type->kind == TY_DOUBLE && node->cast_type->kind == TY_FLOAT) {
           /* double -> float: rax holds 64-bit IEEE double */
           fprintf(cc->out, "    movq %%rax, %%xmm0\n");
           fprintf(cc->out, "    cvtsd2ss %%xmm0, %%xmm0\n");
           fprintf(cc->out, "    movd %%xmm0, %%eax\n");
+          op = IR_FPTRUNC;
         }
         /* else same-type cast: no-op */
         {
           char *dst = ir_bridge_fresh_tmp();
-          ZCC_EMIT_UNARY(IR_CAST, ir_map_type(node->type), dst, src_ir, node->line);
+          ZCC_EMIT_UNARY(op, ir_map_type(node->type), dst, src_ir, node->line);
         }
         return;
       }
@@ -4149,12 +4151,28 @@ void codegen_stmt(Compiler *cc, Node *node) {
         codegen_stmt(cc, node->then_body);
         if (node->else_body && node_has_label(node->else_body)) {
           int terminated = 1;
+          int end_lbl = new_label(cc);
+          char ir_lbl[32];
+          sprintf(ir_lbl, ".L%d", end_lbl);
+          if (backend_ops) fprintf(cc->out, "    b .L%d\n", end_lbl);
+          else fprintf(cc->out, "    jmp .L%d\n", end_lbl);
+          ZCC_EMIT_BR(ir_lbl, node->line);
           codegen_stmt_dce(cc, node->else_body, &terminated);
+          emit_label_fmt(cc, end_lbl, FMT_DEF);
+          ZCC_EMIT_LABEL(ir_lbl, node->line);
         }
       } else {
         if (node->then_body && node_has_label(node->then_body)) {
           int terminated = 1;
+          int else_lbl = new_label(cc);
+          char ir_lbl[32];
+          sprintf(ir_lbl, ".L%d", else_lbl);
+          if (backend_ops) fprintf(cc->out, "    b .L%d\n", else_lbl);
+          else fprintf(cc->out, "    jmp .L%d\n", else_lbl);
+          ZCC_EMIT_BR(ir_lbl, node->line);
           codegen_stmt_dce(cc, node->then_body, &terminated);
+          emit_label_fmt(cc, else_lbl, FMT_DEF);
+          ZCC_EMIT_LABEL(ir_lbl, node->line);
         }
         if (node->else_body) {
           codegen_stmt(cc, node->else_body);
@@ -4228,7 +4246,15 @@ void codegen_stmt(Compiler *cc, Node *node) {
     if (cond_ok && cond_val == 0) {
       if (node->body && node_has_label(node->body)) {
         int terminated = 1;
+        int end_lbl = new_label(cc);
+        char ir_lbl[32];
+        sprintf(ir_lbl, ".L%d", end_lbl);
+        if (backend_ops) fprintf(cc->out, "    b .L%d\n", end_lbl);
+        else fprintf(cc->out, "    jmp .L%d\n", end_lbl);
+        ZCC_EMIT_BR(ir_lbl, node->line);
         codegen_stmt_dce(cc, node->body, &terminated);
+        emit_label_fmt(cc, end_lbl, FMT_DEF);
+        ZCC_EMIT_LABEL(ir_lbl, node->line);
       }
       return;
     }
@@ -4286,7 +4312,15 @@ void codegen_stmt(Compiler *cc, Node *node) {
       }
       if (node->body && node_has_label(node->body)) {
         int terminated = 1;
+        int end_lbl = new_label(cc);
+        char ir_lbl[32];
+        sprintf(ir_lbl, ".L%d", end_lbl);
+        if (backend_ops) fprintf(cc->out, "    b .L%d\n", end_lbl);
+        else fprintf(cc->out, "    jmp .L%d\n", end_lbl);
+        ZCC_EMIT_BR(ir_lbl, node->line);
         codegen_stmt_dce(cc, node->body, &terminated);
+        emit_label_fmt(cc, end_lbl, FMT_DEF);
+        ZCC_EMIT_LABEL(ir_lbl, node->line);
       }
       return;
     }

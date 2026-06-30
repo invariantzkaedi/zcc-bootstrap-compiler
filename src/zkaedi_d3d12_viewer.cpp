@@ -92,16 +92,26 @@ void StepFHNSolver(FHNSolverState& s, float dt, int boneCount, float epsilon = 0
 }
 
 // Build joint world and inverse-transpose matrices from FHN membrane potentials
-void BuildJointMatricesFromFHN(const FHNSolverState& s, ZkaediJointTransform* joints, int boneCount) {
+void BuildJointMatricesFromFHN(const FHNSolverState& s, ZkaediJointTransform* joints, const XMFLOAT3* translations, int boneCount) {
     for (int i = 0; i < boneCount; ++i) {
         float rotAngle = s.v[i] * 0.3f;
         XMMATRIX rotMatrix = XMMatrixRotationY(rotAngle);
+        XMMATRIX jointWorld;
+
+        if (translations) {
+            XMFLOAT3 T = translations[i];
+            XMMATRIX tMat = XMMatrixTranslation(-T.x, -T.y, -T.z);
+            XMMATRIX tInvMat = XMMatrixTranslation(T.x, T.y, T.z);
+            jointWorld = tMat * rotMatrix * tInvMat;
+        } else {
+            jointWorld = rotMatrix;
+        }
 
         XMVECTOR det;
-        XMMATRIX invRotMatrix = XMMatrixInverse(&det, rotMatrix);
-        XMMATRIX invTranspose = XMMatrixTranspose(invRotMatrix);
+        XMMATRIX invJointWorld = XMMatrixInverse(&det, jointWorld);
+        XMMATRIX invTranspose = XMMatrixTranspose(invJointWorld);
 
-        XMStoreFloat4x4(&joints[i].WorldMatrix, rotMatrix);
+        XMStoreFloat4x4(&joints[i].WorldMatrix, jointWorld);
         XMStoreFloat4x4(&joints[i].InverseTransposeMatrix, invTranspose);
     }
 }
@@ -161,6 +171,7 @@ struct D3D12Context {
     void* skinningBufferMapped = nullptr;
     FHNSolverState fhnState = {};
     bool jointsUseU16 = false;
+    XMFLOAT3 jointTranslations[MaxBones] = {};
 
     ID3D12Resource* skinningCbuffer = nullptr;
     void* skinningCbufferMapped = nullptr;
@@ -192,6 +203,7 @@ struct D3D12Context {
     XMFLOAT3 meshCenter = { 0.0f, 0.0f, 0.0f };
     float meshRadius = 1.0f;
     float cameraAngle = 0.0f;
+    float cameraDistanceScale = 4.5f; // Default zoom scale (supports wide slot machines)
 };
 
 // Global Context Pointer
@@ -1374,8 +1386,27 @@ primitive_found:;
         if (ctx->activeBoneCount > D3D12Context::MaxBones) {
             ctx->activeBoneCount = D3D12Context::MaxBones;
         }
+        for (UINT i = 0; i < ctx->activeBoneCount; ++i) {
+            cgltf_node* jointNode = data->skins[0].joints[i];
+            XMFLOAT3 translation = { 0.0f, 0.0f, 0.0f };
+            if (jointNode) {
+                if (jointNode->has_translation) {
+                    translation.x = jointNode->translation[0];
+                    translation.y = jointNode->translation[1];
+                    translation.z = jointNode->translation[2];
+                } else if (jointNode->has_matrix) {
+                    translation.x = jointNode->matrix[12];
+                    translation.y = jointNode->matrix[13];
+                    translation.z = jointNode->matrix[14];
+                }
+            }
+            ctx->jointTranslations[i] = translation;
+        }
     } else {
         ctx->activeBoneCount = 0;
+        for (int i = 0; i < D3D12Context::MaxBones; ++i) {
+            ctx->jointTranslations[i] = { 0.0f, 0.0f, 0.0f };
+        }
     }
 
     if (!g_fleet.empty()) {
@@ -1559,6 +1590,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 g_pendingPrevAsset = true;
             } else if (wParam == VK_RIGHT) {
                 g_pendingNextAsset = true;
+            } else if (wParam == VK_UP) {
+                if (g_ctx) {
+                    g_ctx->cameraDistanceScale -= 0.2f;
+                    if (g_ctx->cameraDistanceScale < 0.5f) g_ctx->cameraDistanceScale = 0.5f;
+                }
+            } else if (wParam == VK_DOWN) {
+                if (g_ctx) {
+                    g_ctx->cameraDistanceScale += 0.2f;
+                    if (g_ctx->cameraDistanceScale > 15.0f) g_ctx->cameraDistanceScale = 15.0f;
+                }
             }
             break;
         }
@@ -1847,10 +1888,12 @@ bool CreateSkinningBuffer(D3D12Context* ctx) {
         return false;
     }
 
-    // Initialize FHN solver state values for healthy excitation dynamics
+    // Initialize FHN solver state values directly on the active limit cycle
+    // (avoids critical slowing down near the quiescent fixed point and starts spinning immediately)
     for (int i = 0; i < 128; ++i) {
-        ctx->fhnState.v[i] = -1.0f + 0.012f * (i % 8);
-        ctx->fhnState.w[i] = -0.5f + 0.008f * (i % 8);
+        float angle = i * 0.35f;
+        ctx->fhnState.v[i] = 1.2f * sinf(angle);
+        ctx->fhnState.w[i] = 0.6f * cosf(angle);
     }
     ctx->fhnState.time = 0.0f;
 
@@ -2308,7 +2351,7 @@ void RenderFrame(D3D12Context* ctx) {
                       + " | Active Bones: " + std::to_string(ctx->activeBoneCount) + ").");
         }
         ZkaediJointTransform* mappedJoints = (ZkaediJointTransform*)ctx->skinningBufferMapped;
-        BuildJointMatricesFromFHN(ctx->fhnState, mappedJoints, ctx->activeBoneCount);
+        BuildJointMatricesFromFHN(ctx->fhnState, mappedJoints, ctx->jointTranslations, ctx->activeBoneCount);
 
         struct SkinningConstants { uint32_t BoneCount; float pad[3]; };
         SkinningConstants* cbufData = (SkinningConstants*)ctx->skinningCbufferMapped;
@@ -2353,7 +2396,7 @@ void RenderFrame(D3D12Context* ctx) {
     // 3. Compute Frame Camera Rotations (Dynamic Orbital Camera)
     ctx->cameraAngle += 0.005f; // Rotate slowly around Y axis
     
-    float distance = ctx->meshRadius * 2.5f;
+    float distance = ctx->meshRadius * ctx->cameraDistanceScale;
     float camX = ctx->meshCenter.x + distance * sinf(ctx->cameraAngle);
     float camY = ctx->meshCenter.y + ctx->meshRadius * 0.8f; // Look slightly down
     float camZ = ctx->meshCenter.z + distance * cosf(ctx->cameraAngle);
@@ -2556,19 +2599,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         freopen_s(&fDummy, "CONOUT$", "w", stderr);
     }
 
-    // Open clean persistent global log file stream
-    errno_t err = fopen_s(&g_logFile, "C:\\Users\\zkaed\\.gemini\\antigravity\\zkaedi_fleet_viewer_run.log", "w");
+    // Dynamically retrieve executable directory for local log creation (CG-LOG-001)
+    wchar_t exePath[512] = {0};
+    GetModuleFileNameW(nullptr, exePath, 512);
+    std::wstring pathStr(exePath);
+    size_t lastSlash = pathStr.find_last_of(L"\\/");
+    std::wstring logPath = (lastSlash != std::wstring::npos) ? (pathStr.substr(0, lastSlash) + L"\\zkaedi_fleet_viewer_run.log") : L"zkaedi_fleet_viewer_run.log";
+
+    errno_t err = _wfopen_s(&g_logFile, logPath.c_str(), L"w");
     if (err != 0) {
-        FILE* errFile = nullptr;
-        fopen_s(&errFile, "C:\\Users\\zkaed\\zkaedi_log_error.txt", "w");
-        if (errFile) {
-            fprintf(errFile, "fopen_s failed! errno: %d\n", err);
-            fclose(errFile);
-        }
-        char errBuf[256];
-        sprintf_s(errBuf, "[FATAL ERROR] fopen_s failed to create log file! errno: %d\n", err);
-        OutputDebugStringA(errBuf);
-        std::cerr << errBuf;
+        wchar_t errBuf[256];
+        swprintf_s(errBuf, L"[FATAL ERROR] _wfopen_s failed to create log file! Path: %s | errno: %d\n", logPath.c_str(), err);
+        OutputDebugStringW(errBuf);
     }
 
     std::cout << "=========================================================================\n";

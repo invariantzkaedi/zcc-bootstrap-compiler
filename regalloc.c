@@ -464,10 +464,41 @@ static void chaitin_briggs(RegAllocator *ra, const ir_func_t *fn) {
 
 /* ── Public entry point ──────────────────────────────────────────────── */
 
+#include "ir_telemetry.h"
+
 void ra_run(RegAllocator *ra, const ir_func_t *fn) {
     build_intervals(ra, fn);
     if (ra->num_intervals > 0)
         chaitin_briggs(ra, fn);
+
+    // Calculate register allocation telemetry metrics
+    int peak_pressure = 0;
+    int max_end = 0;
+    for (int i = 0; i < ra->num_intervals; i++) {
+        if (ra->intervals[i].end > max_end) {
+            max_end = ra->intervals[i].end;
+        }
+    }
+    for (int pos = 0; pos <= max_end; pos++) {
+        int active = 0;
+        for (int i = 0; i < ra->num_intervals; i++) {
+            if (ra->intervals[i].start <= pos && pos <= ra->intervals[i].end) {
+                active++;
+            }
+        }
+        if (active > peak_pressure) {
+            peak_pressure = active;
+        }
+    }
+
+    int spills = 0;
+    for (int i = 0; i < ra->num_intervals; i++) {
+        if (ra->intervals[i].assigned == PREG_NONE) {
+            spills++;
+        }
+    }
+
+    ir_telem_log_regalloc(fn->name, ra->num_intervals, 1, spills, peak_pressure);
 }
 
 /* ── Query API ───────────────────────────────────────────────────────── */

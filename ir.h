@@ -118,6 +118,8 @@ typedef enum {
     IR_FCMP_ULE,    /* unordered less-than-or-equal */
     IR_FCMP_UGT,    /* unordered greater-than */
     IR_FCMP_UGE,    /* unordered greater-than-or-equal */
+    IR_FPEXT,       /* dst = (double)src1 (float to double extension)      */
+    IR_FPTRUNC,     /* dst = (float)src1  (double to float truncation)     */
     IR_ASM,         /* dst = asm_string                                    */
 
     /* Vector Operations */

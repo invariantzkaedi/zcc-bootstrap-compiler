@@ -135,6 +135,7 @@ typedef struct Instr {
   bool dead;        /* marked by DCE                       */
   int is_float;
   bool escape;      /* marked by escape analysis           */
+  bool is_param;    /* true if this is a parameter alloca  */
   double exec_freq; /* from PGO profile                    */
   int line_no;      /* source line for DWARF .loc (0 = none) */
   IRType ir_type;   /* CG-IR-015: value type for width-sensitive lowering     */

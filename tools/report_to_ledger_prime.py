@@ -13,16 +13,12 @@ def score_finding(text):
     return s,("LEGENDARY" if s>=7 else "EPIC" if s>=5 else "RARE" if s>=3 else "COMMON")
 def parse_report(text):
     entries=[]
-    for sec in re.split(r"
-## ","
-"+text):
+    for sec in re.split(r"\n## ", "\n"+text):
         if not sec.strip(): continue
         lines=sec.strip().splitlines()
         m=re.match(r"^(.+?)\s+\((\d+)\s+nodes?\)",lines[0].strip())
         if not m: continue
-        content="
-".join(lines[1:]).strip("
-- ")
+        content="\n".join(lines[1:]).strip("\n- ")
         while content.endswith("---"): content=content[:-3].strip()
         status="TIMEOUT" if "**TIMEOUT**" in content else "ERROR" if "**ERROR**" in content else "EMPTY" if not content else "OK"
         entries.append({"name":m.group(1).strip(),"line_count":int(m.group(2)),"content":content,"status":status})
@@ -64,12 +60,10 @@ def main():
             if a.verbose: print(f"  DUP   {name:<45}")
             continue
         rec={"name":name,"line_count":lc,"tier":tier,"score":score,"content_hash":ch,"ingested_at":now,"raw_analysis":content[:500]}
-        with open(lp,"a",encoding="utf-8") as f: f.write(json.dumps(rec)+"
-")
+        with open(lp,"a",encoding="utf-8") as f: f.write(json.dumps(rec)+"\n")
         ledger[name]=rec; ing+=1
         if a.verbose: print(f"  PASS  {name:<45} [tier={tier} score={score}]")
-    print(f"
-{'='*52}")
+    print(f"\n{'='*52}")
     print(f"  Ingested: {ing}  Timeout: {skip_s}  Low-tier: {skip_t}  Dup: {skip_d}")
     tc={}
     for e in ledger.values(): tc[e.get("tier","COMMON")]=tc.get(e.get("tier","COMMON"),0)+1

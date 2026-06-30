@@ -389,6 +389,10 @@ test-float: zcc
 	./zcc probe_static_init_alldouble.c -o /tmp/probe_static_init_alldouble.s && gcc -fno-pie -no-pie -o /tmp/probe_static_init_alldouble /tmp/probe_static_init_alldouble.s -lm && /tmp/probe_static_init_alldouble
 	./zcc probe_nan_cmp.c -o /tmp/probe_nan_cmp.s && gcc -fno-pie -no-pie -o /tmp/probe_nan_cmp /tmp/probe_nan_cmp.s -lm && /tmp/probe_nan_cmp
 	ZCC_IR_BACKEND=1 ./zcc probe_nan_cmp.c -o /tmp/probe_nan_cmp_ir.s && gcc -fno-pie -no-pie -o /tmp/probe_nan_cmp_ir /tmp/probe_nan_cmp_ir.s -lm && /tmp/probe_nan_cmp_ir
+	./zcc probe_float_cast.c -o /tmp/probe_float_cast.s && gcc -fno-pie -no-pie -o /tmp/probe_float_cast /tmp/probe_float_cast.s -lm && /tmp/probe_float_cast
+	ZCC_IR_BACKEND=1 ./zcc probe_float_cast.c -o /tmp/probe_float_cast_ir.s && gcc -fno-pie -no-pie -o /tmp/probe_float_cast_ir /tmp/probe_float_cast_ir.s -lm && /tmp/probe_float_cast_ir
+	./zcc probes/probe_long_double.c -o /tmp/probe_long_double.s && gcc -fno-pie -no-pie -o /tmp/probe_long_double /tmp/probe_long_double.s -lm && /tmp/probe_long_double
+	ZCC_IR_BACKEND=1 ./zcc probes/probe_long_double.c -o /tmp/probe_long_double_ir.s && gcc -fno-pie -no-pie -o /tmp/probe_long_double_ir /tmp/probe_long_double_ir.s -lm && /tmp/probe_long_double_ir
 	@echo "=== Float Probes: ALL PASS ==="
 
 test: zcc test-float

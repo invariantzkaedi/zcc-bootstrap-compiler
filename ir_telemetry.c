@@ -243,4 +243,147 @@ void zcc_telem_phase(int phase, const char *phase_name, const char *status, int 
     send_envelope(body);
 }
 
+#define MAX_LOGGED_PASSES 64
+#define MAX_LOGGED_BLOCKS 256
+
+typedef struct {
+    char pass_name[64];
+    int duration_us;
+    int nodes_before;
+    int nodes_after;
+    int deleted;
+    int modified;
+} TelemPassOpt;
+
+typedef struct {
+    int id;
+    int preds[16];
+    int n_preds;
+    int succs[16];
+    int n_succs;
+    int inst_count;
+    double weight;
+} TelemBlockCfg;
+
+static TelemPassOpt s_opts[MAX_LOGGED_PASSES];
+static int s_num_opts = 0;
+
+static TelemBlockCfg s_blocks[MAX_LOGGED_BLOCKS];
+static int s_num_blocks = 0;
+
+static char s_ra_func_name[64] = "";
+static int s_ra_live_ranges = 0;
+static int s_ra_coloring_loops = 0;
+static int s_ra_spills = 0;
+static int s_ra_peak_pressure = 0;
+
+static int is_telem_active(void) {
+    return s_enabled || s_stdout_enabled || (getenv("ZCC_EMIT_TELEMETRY") && getenv("ZCC_EMIT_TELEMETRY")[0] != '0');
+}
+
+void ir_telem_log_opt(const char *pass_name, int duration_us, int nodes_before, int nodes_after, int deleted, int modified) {
+    if (!is_telem_active()) return;
+    if (s_num_opts >= MAX_LOGGED_PASSES) return;
+    TelemPassOpt *opt = &s_opts[s_num_opts++];
+    strncpy(opt->pass_name, pass_name, sizeof(opt->pass_name) - 1);
+    opt->pass_name[sizeof(opt->pass_name) - 1] = '\0';
+    opt->duration_us = duration_us;
+    opt->nodes_before = nodes_before;
+    opt->nodes_after = nodes_after;
+    opt->deleted = deleted;
+    opt->modified = modified;
+}
+
+void ir_telem_log_cfg(int block_id, int n_preds, const int *preds, int n_succs, const int *succs, int inst_count, double weight) {
+    if (!is_telem_active()) return;
+    if (s_num_blocks >= MAX_LOGGED_BLOCKS) return;
+    TelemBlockCfg *b = &s_blocks[s_num_blocks++];
+    b->id = block_id;
+    b->n_preds = n_preds > 16 ? 16 : n_preds;
+    for (int i = 0; i < b->n_preds; i++) b->preds[i] = preds[i];
+    b->n_succs = n_succs > 16 ? 16 : n_succs;
+    for (int i = 0; i < b->n_succs; i++) b->succs[i] = succs[i];
+    b->inst_count = inst_count;
+    b->weight = weight;
+}
+
+void ir_telem_log_regalloc(const char *func_name, int live_ranges, int coloring_loops, int spills, int peak_pressure) {
+    if (!is_telem_active()) return;
+    strncpy(s_ra_func_name, func_name, sizeof(s_ra_func_name) - 1);
+    s_ra_func_name[sizeof(s_ra_func_name) - 1] = '\0';
+    s_ra_live_ranges = live_ranges;
+    s_ra_coloring_loops = coloring_loops;
+    s_ra_spills = spills;
+    s_ra_peak_pressure = peak_pressure;
+}
+
+void ir_telem_flush_observatory(const char *func_name) {
+    if (!is_telem_active()) return;
+    FILE *f = fopen("zcc_observatory_data.json", "w");
+    if (!f) return;
+
+    fprintf(f, "{\n");
+    fprintf(f, "  \"function_name\": \"%s\",\n", func_name);
+    
+    // Write passes
+    fprintf(f, "  \"passes\": [\n");
+    for (int i = 0; i < s_num_opts; i++) {
+        TelemPassOpt *opt = &s_opts[i];
+        fprintf(f, "    {\n");
+        fprintf(f, "      \"pass_name\": \"%s\",\n", opt->pass_name);
+        fprintf(f, "      \"duration_us\": %d,\n", opt->duration_us);
+        fprintf(f, "      \"nodes_before\": %d,\n", opt->nodes_before);
+        fprintf(f, "      \"nodes_after\": %d,\n", opt->nodes_after);
+        fprintf(f, "      \"nodes_deleted\": %d,\n", opt->deleted);
+        fprintf(f, "      \"nodes_modified\": %d\n", opt->modified);
+        fprintf(f, "    }%s\n", (i == s_num_opts - 1) ? "" : ",");
+    }
+    fprintf(f, "  ],\n");
+
+    // Write CFG
+    fprintf(f, "  \"cfg\": {\n");
+    fprintf(f, "    \"blocks\": [\n");
+    for (int i = 0; i < s_num_blocks; i++) {
+        TelemBlockCfg *b = &s_blocks[i];
+        fprintf(f, "      {\n");
+        fprintf(f, "        \"id\": %d,\n", b->id);
+        fprintf(f, "        \"preds\": [");
+        for (int p = 0; p < b->n_preds; p++) {
+            fprintf(f, "%d%s", b->preds[p], (p == b->n_preds - 1) ? "" : ", ");
+        }
+        fprintf(f, "],\n");
+        fprintf(f, "        \"succs\": [");
+        for (int s = 0; s < b->n_succs; s++) {
+            fprintf(f, "%d%s", b->succs[s], (s == b->n_succs - 1) ? "" : ", ");
+        }
+        fprintf(f, "],\n");
+        fprintf(f, "        \"inst_count\": %d,\n", b->inst_count);
+        fprintf(f, "        \"weight\": %.3f\n", b->weight);
+        fprintf(f, "      }%s\n", (i == s_num_blocks - 1) ? "" : ",");
+    }
+    fprintf(f, "    ]\n");
+    fprintf(f, "  },\n");
+
+    // Write RegAlloc
+    fprintf(f, "  \"register_allocation\": {\n");
+    fprintf(f, "    \"func_name\": \"%s\",\n", s_ra_func_name);
+    fprintf(f, "    \"live_ranges\": %d,\n", s_ra_live_ranges);
+    fprintf(f, "    \"coloring_loops\": %d,\n", s_ra_coloring_loops);
+    fprintf(f, "    \"spills\": %d,\n", s_ra_spills);
+    fprintf(f, "    \"peak_pressure\": %d\n", s_ra_peak_pressure);
+    fprintf(f, "  }\n");
+    fprintf(f, "}\n");
+
+    fclose(f);
+
+    // Reset counters for next function compilation
+    s_num_opts = 0;
+    s_num_blocks = 0;
+    s_ra_func_name[0] = '\0';
+    s_ra_live_ranges = 0;
+    s_ra_coloring_loops = 0;
+    s_ra_spills = 0;
+    s_ra_peak_pressure = 0;
+}
+
 

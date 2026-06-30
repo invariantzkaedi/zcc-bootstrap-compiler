@@ -1036,7 +1036,7 @@ int node_is_float(struct Node *n) {
     if (!n->type) {
         return 0;
     }
-    return (n->type->kind == TY_FLOAT || n->type->kind == TY_DOUBLE);
+    return (n->type->kind == TY_FLOAT || n->type->kind == TY_DOUBLE || n->type->kind == TY_LONGDOUBLE);
 }
 long long node_float_bits(struct Node *n) {
     if (!n) return 0;

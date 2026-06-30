@@ -756,6 +756,18 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                     store_result(out, n->dst, "%rax", ra);
                     break;
                 }
+                case IR_FPEXT: {
+                    load_operand_xmm(out, n->src1, "%xmm0", IR_TY_F32, ra);
+                    fprintf(out, "    cvtss2sd %%xmm0, %%xmm0\n");
+                    store_result_xmm(out, n->dst, "%xmm0", IR_TY_F64, ra);
+                    break;
+                }
+                case IR_FPTRUNC: {
+                    load_operand_xmm(out, n->src1, "%xmm0", IR_TY_F64, ra);
+                    fprintf(out, "    cvtsd2ss %%xmm0, %%xmm0\n");
+                    store_result_xmm(out, n->dst, "%xmm0", IR_TY_F32, ra);
+                    break;
+                }
                 case IR_COPY:
                 case IR_CAST: {
                     ir_type_t src_ty = IR_TY_VOID;

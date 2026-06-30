@@ -62,18 +62,17 @@ ZCC is compiled by concatenating discrete parts inside the `Makefile` before inv
 
 ## Known Open Items
 
-- LICM pass commented out in run_all_passes
-- src/ tree partial cleanup: 9 byte-identical duplicates removed; 10 diverged duplicates and 39 unique files still under review
 - 43 GLB fleet assets (~546MB) tracked in git history; pending move to HF/R2 plus filter-repo
-- ZKAEDI-MINI v7 retrain pending (v7 hallucinated due to dataset loading error)
+- DPO Model Alignment convergence (Initial baseline audited and failed training-health gate; requires retraining with increased step/LR budget)
 
 ## Suggested Next Steps
 
-- [x] Re-add rust-front-smoke as required status check on main (was removed during initial setup since the workflow did not yet exist on main; now it does)
+- [x] Re-add rust-front-smoke as required status check on main
 - [x] Re-enable LICM pass (Confirmed enabled in run_all_passes)
-- [x] Resolve src/ diverged duplicates (Checked: no duplicates between root and src/ remain)
-- [x] ASan run to confirm SARIF CWE-416/415 findings (Run completed, no UAF/Double-Free detected; LeakSanitizer only)
-- GLB extraction and history rewrite
+- [x] Resolve src/ diverged duplicates (Checked: no duplicates remain)
+- [x] ASan run to confirm SARIF CWE-416/415 findings (Run completed, no UAF/Double-Free detected)
+- [ ] GLB extraction and history rewrite
+- [ ] DPO Model Alignment Retrain (increase update budget, lr to 1e-5-5e-5, max_length=1024)
 
 ---
 

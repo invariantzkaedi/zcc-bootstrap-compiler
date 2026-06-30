@@ -189,6 +189,7 @@ typedef struct Instr {
   int src_unsigned;
   int dst_unsigned;
   bool escape;      /* marked by escape analysis           */
+  bool is_param;    /* true if this is a parameter alloca  */
   double exec_freq; /* from PGO profile                    */
   int line_no;      /* source line for DWARF .loc (0 = none) */
   IRType ir_type;   /* CG-IR-015: value type for width-sensitive lowering     */
@@ -353,6 +354,8 @@ static RegID wl_pop(RegWorklist *wl) {
 
 /* Determine if an instruction is a critical side-effect anchor */
 static bool is_critical(const Instr *ins) {
+  if (ins->op == OP_ALLOCA && ins->is_param)
+    return true;
   return ins->op == OP_STORE || ins->op == OP_CALL || ins->op == OP_RET ||
          ins->op == OP_BR || ins->op == OP_CONDBR;
 }
@@ -6688,9 +6691,32 @@ static uint32_t redundant_load_elim_pass(Function *fn) {
 }
 
 #include "zcc_ir_opt_passes.h"
+#include "ir_telemetry.h"
+#include <sys/time.h>
+
+static int count_ir_nodes(Function *fn) {
+  int count = 0;
+  for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
+    Block *b = fn->blocks[bi];
+    if (!b) continue;
+    for (Instr *ins = b->head; ins; ins = ins->next) {
+      count++;
+    }
+  }
+  return count;
+}
+
+static long long get_time_us(void) {
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return (long long)tv.tv_sec * 1000000 + tv.tv_usec;
+}
 
 void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
                     int num_params) {
+  long long t_start, t_end;
+  int n_before, n_after;
+
   if (!ir_validate(fn)) {
     fprintf(stderr,
             "[run_all_passes] IR validation failed; continuing anyway.\n");
@@ -6710,7 +6736,10 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   }
 
   /* Prerequisite: reachability */
+  t_start = get_time_us();
   compute_reachability(fn);
+  t_end = get_time_us();
+  ir_telem_log_opt("compute_reachability", (int)(t_end - t_start), 0, 0, 0, 0);
 
   /* CG-IR: Mark parameter allocas as escaping so they are not promoted by
    * Mem2Reg */
@@ -6722,6 +6751,7 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
         if (ins->op == OP_ALLOCA) {
           if (p_count < num_params) {
             ins->escape = true;
+            ins->is_param = true;
             p_count++;
           }
         }
@@ -6734,7 +6764,10 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   {
     const char *env = getenv("ZCC_PGO_INSTRUMENT");
     if (env && env[0] == '1') {
+      t_start = get_time_us();
       uint32_t n = pgo_instrument_pass(fn);
+      t_end = get_time_us();
+      ir_telem_log_opt("pgo_instrument", (int)(t_end - t_start), 0, 0, n, 0);
       fprintf(stderr, "[PGO-Instr] injected %u probe instructions\n", n);
     }
   }
@@ -6744,15 +6777,43 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   licm_build_def_block(fn);
 
   /* ── Pass 0: Constant folding (exposes more dead code for DCE) ── */
+  n_before = count_ir_nodes(fn);
+  t_start = get_time_us();
   uint32_t folded = constant_fold_pass(fn);
+  t_end = get_time_us();
+  n_after = count_ir_nodes(fn);
+  ir_telem_log_opt("constant_fold", (int)(t_end - t_start), n_before, n_after, folded, 0);
 
   // NEW IR OPTIMIZATION PASSES
+  n_before = count_ir_nodes(fn);
+  t_start = get_time_us();
   uint32_t opt_sr = opt_strength_reduction_pass(fn);
+  t_end = get_time_us();
+  n_after = count_ir_nodes(fn);
+  ir_telem_log_opt("strength_reduction", (int)(t_end - t_start), n_before, n_after, opt_sr, 0);
+
+  n_before = count_ir_nodes(fn);
+  t_start = get_time_us();
   uint32_t opt_cp = opt_copy_prop_pass(fn);
+  t_end = get_time_us();
+  n_after = count_ir_nodes(fn);
+  ir_telem_log_opt("copy_propagation", (int)(t_end - t_start), n_before, n_after, opt_cp, 0);
+
+  n_before = count_ir_nodes(fn);
+  t_start = get_time_us();
   uint32_t opt_p = opt_peephole_pass(fn);
+  t_end = get_time_us();
+  n_after = count_ir_nodes(fn);
+  ir_telem_log_opt("peephole_opts", (int)(t_end - t_start), n_before, n_after, opt_p, 0);
+
   uint32_t opt_cp2 = 0;
   if (opt_p > 0) {
+    n_before = count_ir_nodes(fn);
+    t_start = get_time_us();
     opt_cp2 = opt_copy_prop_pass(fn);
+    t_end = get_time_us();
+    n_after = count_ir_nodes(fn);
+    ir_telem_log_opt("copy_propagation_2", (int)(t_end - t_start), n_before, n_after, opt_cp2, 0);
   }
 
   if (folded > 0 || opt_sr > 0 || opt_cp > 0 || opt_p > 0 || opt_cp2 > 0) {
@@ -6764,7 +6825,13 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   }
 
   /* ── Pass 0b: Redundant Load Elimination ── */
+  n_before = count_ir_nodes(fn);
+  t_start = get_time_us();
   uint32_t rle_count = redundant_load_elim_pass(fn);
+  t_end = get_time_us();
+  n_after = count_ir_nodes(fn);
+  ir_telem_log_opt("redundant_load_elim", (int)(t_end - t_start), n_before, n_after, rle_count, 0);
+
   if (rle_count > 0) {
     fprintf(stderr, "[RLE]       redundant loads eliminated: %u\n", rle_count);
     /* RLE produces COPYs — propagate them, then rebuild def chains */
@@ -6773,14 +6840,26 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   }
 
   /* Address-Mode Folding (AMF) Pattern A Pass */
+  n_before = count_ir_nodes(fn);
+  t_start = get_time_us();
   uint32_t amf_count = opt_address_mode_folding_pass(fn);
+  t_end = get_time_us();
+  n_after = count_ir_nodes(fn);
+  ir_telem_log_opt("address_mode_folding", (int)(t_end - t_start), n_before, n_after, amf_count, 0);
+
   if (amf_count > 0) {
     fprintf(stderr, "[AMF]       address modes folded: %u\n", amf_count);
     licm_build_def_block(fn);
   }
 
   /* ── Pass 1: SSA-form DCE ── */
+  n_before = count_ir_nodes(fn);
+  t_start = get_time_us();
   uint32_t dce_removed = ssa_dce_pass(fn);
+  t_end = get_time_us();
+  n_after = count_ir_nodes(fn);
+  ir_telem_log_opt("ssa_dce_1", (int)(t_end - t_start), n_before, n_after, dce_removed, 0);
+
   uint32_t dce_total   = dce_removed;
 #ifdef ZCC_DCE_VERBOSE
   fprintf(stderr, "[DCE->SSA]  instructions removed: %u  blocks removed: %u\n",
@@ -6791,13 +6870,25 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   compute_reachability(fn);
 
   /* ── Pass 2: LICM (Loop-Invariant Code Motion) ── */
+  n_before = count_ir_nodes(fn);
+  t_start = get_time_us();
   uint32_t licm_hoisted = licm_pass(fn);
+  t_end = get_time_us();
+  n_after = count_ir_nodes(fn);
+  ir_telem_log_opt("licm_hoist", (int)(t_end - t_start), n_before, n_after, licm_hoisted, 0);
+
   if (licm_hoisted > 0)
     fprintf(stderr, "[LICM]      instructions hoisted: %u\n", licm_hoisted);
 
   /* ── Pass 3: SSA-form DCE again (cleanup after LICM) ── */
   licm_build_def_block(fn);
+  n_before = count_ir_nodes(fn);
+  t_start = get_time_us();
   dce_removed = ssa_dce_pass(fn);
+  t_end = get_time_us();
+  n_after = count_ir_nodes(fn);
+  ir_telem_log_opt("ssa_dce_2", (int)(t_end - t_start), n_before, n_after, dce_removed, 0);
+
   dce_total  += dce_removed;
 #ifdef ZCC_DCE_VERBOSE
   fprintf(stderr, "[DCE->SSA]  instructions removed: %u  blocks removed: %u\n",
@@ -6816,14 +6907,24 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
     fprintf(stderr, "[run_all_passes] OOM escape ctx\n");
     return;
   }
+  t_start = get_time_us();
   uint32_t promoted = escape_analysis_pass(fn, ea_ctx);
+  t_end = get_time_us();
+  ir_telem_log_opt("escape_analysis", (int)(t_end - t_start), 0, 0, promoted, 0);
+
   fprintf(stderr,
           "[EscapeAna] allocations promoted to stack: %u  (of %u total)\n",
           promoted, ea_ctx->n_allocs);
 
   /* ── Pass 4b: Scalar promotion (mem2reg) — single-block allocas to vregs ──
    */
+  n_before = count_ir_nodes(fn);
+  t_start = get_time_us();
   uint32_t mem2reg_count = scalar_promotion_pass(fn, ea_ctx);
+  t_end = get_time_us();
+  n_after = count_ir_nodes(fn);
+  ir_telem_log_opt("scalar_promotion", (int)(t_end - t_start), n_before, n_after, mem2reg_count, 0);
+
   if (mem2reg_count > 0) {
     fprintf(stderr, "[Mem2Reg]   single-block allocas promoted: %u\n",
             mem2reg_count);
@@ -6847,14 +6948,26 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   free(ea_ctx);
 
   /* ── Pass 4c: Local Stack Alias Analysis Pass (annotation-only) ── */
+  t_start = get_time_us();
   local_stack_alias_pass(fn);
+  t_end = get_time_us();
+  ir_telem_log_opt("local_stack_alias", (int)(t_end - t_start), 0, 0, 0, 0);
 
   /* ── Pass 4d: GVN Dominator Tree Construction Pass (annotation-only) ── */
+  t_start = get_time_us();
   build_dominator_tree_pass(fn);
   detect_loop_structure_pass(fn, licm_idom);
+  t_end = get_time_us();
+  ir_telem_log_opt("dominator_loop_tree", (int)(t_end - t_start), 0, 0, 0, 0);
 
   /* ── Pass 4e: Global Value Numbering (GVN) Pass ── */
+  n_before = count_ir_nodes(fn);
+  t_start = get_time_us();
   uint32_t gvn_ops = global_value_numbering_pass(fn);
+  t_end = get_time_us();
+  n_after = count_ir_nodes(fn);
+  ir_telem_log_opt("global_value_numbering", (int)(t_end - t_start), n_before, n_after, gvn_ops, 0);
+
   if (gvn_ops > 0) {
     opt_copy_prop_pass(fn);
     licm_build_def_block(fn);
@@ -6871,8 +6984,12 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
         fprintf(stderr, "[PGO-BLOCK] %s n_succs=2 (profile-ready)\n", b->name);
     }
   }
-  if (profile_path && profile_path[0])
+  if (profile_path && profile_path[0]) {
+    t_start = get_time_us();
     apply_profile_to_function(fn, profile_path);
+    t_end = get_time_us();
+    ir_telem_log_opt("apply_pgo_profile", (int)(t_end - t_start), 0, 0, 0, 0);
+  }
   /* Optional: write current branch_probs for PGO round-trip. First function
    * truncates, rest append. */
   {
@@ -6892,7 +7009,11 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
       }
     }
   }
+  t_start = get_time_us();
   result->n_blocks = pgo_reorder_pass(fn, result->order);
+  t_end = get_time_us();
+  ir_telem_log_opt("pgo_block_reorder", (int)(t_end - t_start), 0, 0, 0, 0);
+
   result->licm_hoisted = fn->stats.licm_hoisted;
   result->dce_instrs_removed = fn->stats.dce_instrs_removed;
   for (uint32_t i = 0; i < result->n_blocks; i++) {
@@ -6908,6 +7029,33 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   }
   fprintf(stderr, "[PGO-BBR]   blocks in emission order: %u\n",
           result->n_blocks);
+
+  // Log CFG Topology
+  for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
+    Block *b = fn->blocks[bi];
+    if (!b) continue;
+
+    int preds[16];
+    int n_preds = 0;
+    for (uint32_t p = 0; p < b->n_preds && p < 16; p++) {
+      preds[n_preds++] = (int)b->preds[p];
+    }
+
+    int succs[16];
+    int n_succs = 0;
+    for (uint32_t s = 0; s < b->n_succs && s < 16; s++) {
+      succs[n_succs++] = (int)b->succs[s];
+    }
+
+    int inst_count = 0;
+    for (Instr *ins = b->head; ins; ins = ins->next) {
+      inst_count++;
+    }
+
+    ir_telem_log_cfg(b->id, n_preds, preds, n_succs, succs, inst_count, b->exec_freq);
+  }
+
+  ir_telem_flush_observatory(current_function_name ? current_function_name : "unknown");
 }
 
 /* ── Linear Scan Register Allocation ───────────────────────────────────────
