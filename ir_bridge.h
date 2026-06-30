@@ -192,6 +192,12 @@ static void ir_emit_binary_op(int nd_kind, Type *ty, char *lhs_tmp,
         else if (op == IR_SUB) op = IR_FSUB;
         else if (op == IR_MUL) op = IR_FMUL;
         else if (op == IR_DIV) op = IR_FDIV;
+        else if (op == IR_EQ)  op = IR_FCMP_OEQ;
+        else if (op == IR_NE)  op = IR_FCMP_UNE;
+        else if (op == IR_LT)  op = IR_FCMP_OLT;
+        else if (op == IR_LE)  op = IR_FCMP_OLE;
+        else if (op == IR_GT)  op = IR_FCMP_OGT;
+        else if (op == IR_GE)  op = IR_FCMP_OGE;
     }
 
     dst = ir_bridge_fresh_tmp();

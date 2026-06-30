@@ -104,6 +104,20 @@ typedef enum {
     IR_ITOF,        /* dst = (double)src1  (signed int64 to double)        */
     IR_FTOI,        /* dst = (int64)src1   (double to signed int64)        */
     IR_FNEG,        /* dst = -f src1       (double negation)               */
+    IR_FCMP_OEQ,    /* ordered equal */
+    IR_FCMP_ONE,    /* ordered not-equal (NaN -> false) */
+    IR_FCMP_OLT,    /* ordered less-than */
+    IR_FCMP_OLE,    /* ordered less-than-or-equal */
+    IR_FCMP_OGT,    /* ordered greater-than */
+    IR_FCMP_OGE,    /* ordered greater-than-or-equal */
+    IR_FCMP_ORD,    /* ordered (no NaNs) */
+    IR_FCMP_UNO,    /* unordered (has NaNs) */
+    IR_FCMP_UEQ,    /* unordered equal */
+    IR_FCMP_UNE,    /* unordered not-equal (NaN -> true) */
+    IR_FCMP_ULT,    /* unordered less-than */
+    IR_FCMP_ULE,    /* unordered less-than-or-equal */
+    IR_FCMP_UGT,    /* unordered greater-than */
+    IR_FCMP_UGE,    /* unordered greater-than-or-equal */
     IR_ASM,         /* dst = asm_string                                    */
 
     /* Vector Operations */
