@@ -69,6 +69,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     /* Satisfy IR subsystem sequence */
     {
       char *dst = ir_bridge_fresh_tmp();
+      ZCC_EMIT_FCONST(ir_map_type(node->type), dst, (long)bits, node->line);
     }
     return;
   }

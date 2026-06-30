@@ -302,7 +302,7 @@ static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
 
     for (n = fn->head; n; n = n->next) {
         /* Track constants */
-        if (n->op == IR_CONST && n->dst[0]) {
+        if ((n->op == IR_CONST || n->op == IR_FCONST) && n->dst[0]) {
             if (n->tag == IR_TAG_TRUNCATED_WIDE_CONST || n->tag == IR_TAG_NONE) {
                 /* For now, just add as 64-bit if not explicit 256-bit. 
                    Wait, EVM PUSH32 sets TRUNCATED_WIDE_CONST but we want to load imm256! */
@@ -438,6 +438,44 @@ static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
                 case IR_LE:  result = (v1 <= v2) ? 1 : 0; break;
                 case IR_GT:  result = (v1 > v2)  ? 1 : 0; break;
                 case IR_GE:  result = (v1 >= v2) ? 1 : 0; break;
+                case IR_FCMP_OEQ:
+                case IR_FCMP_ONE:
+                case IR_FCMP_OLT:
+                case IR_FCMP_OLE:
+                case IR_FCMP_OGT:
+                case IR_FCMP_OGE:
+                case IR_FCMP_ORD:
+                case IR_FCMP_UNO:
+                case IR_FCMP_UEQ:
+                case IR_FCMP_UNE:
+                case IR_FCMP_ULT:
+                case IR_FCMP_ULE:
+                case IR_FCMP_UGT:
+                case IR_FCMP_UGE: {
+                    double f1 = long_to_double(v1);
+                    double f2 = long_to_double(v2);
+                    int nan1 = (f1 != f1);
+                    int nan2 = (f2 != f2);
+                    int is_nan = nan1 || nan2;
+                    switch (n->op) {
+                    case IR_FCMP_OEQ: result = (!is_nan && f1 == f2) ? 1 : 0; break;
+                    case IR_FCMP_UNE: result = (is_nan || f1 != f2) ? 1 : 0; break;
+                    case IR_FCMP_OLT: result = (!is_nan && f1 < f2) ? 1 : 0; break;
+                    case IR_FCMP_OLE: result = (!is_nan && f1 <= f2) ? 1 : 0; break;
+                    case IR_FCMP_OGT: result = (!is_nan && f1 > f2) ? 1 : 0; break;
+                    case IR_FCMP_OGE: result = (!is_nan && f1 >= f2) ? 1 : 0; break;
+                    case IR_FCMP_ORD: result = (!is_nan) ? 1 : 0; break;
+                    case IR_FCMP_UNO: result = (is_nan) ? 1 : 0; break;
+                    case IR_FCMP_UEQ: result = (is_nan || f1 == f2) ? 1 : 0; break;
+                    case IR_FCMP_ONE: result = (!is_nan && f1 != f2) ? 1 : 0; break;
+                    case IR_FCMP_ULT: result = (is_nan || f1 < f2) ? 1 : 0; break;
+                    case IR_FCMP_ULE: result = (is_nan || f1 <= f2) ? 1 : 0; break;
+                    case IR_FCMP_UGT: result = (is_nan || f1 > f2) ? 1 : 0; break;
+                    case IR_FCMP_UGE: result = (is_nan || f1 >= f2) ? 1 : 0; break;
+                    default: result = 0; break;
+                    }
+                    break;
+                }
                 default: continue;
                 }
             }
@@ -689,6 +727,10 @@ static int gvn_is_pure(ir_op_t op) {
     case IR_CAST:
     case IR_FADD: case IR_FSUB: case IR_FMUL: case IR_FDIV:
     case IR_ITOF: case IR_FTOI:
+    case IR_FCMP_OEQ: case IR_FCMP_ONE: case IR_FCMP_OLT: case IR_FCMP_OLE:
+    case IR_FCMP_OGT: case IR_FCMP_OGE: case IR_FCMP_ORD: case IR_FCMP_UNO:
+    case IR_FCMP_UEQ: case IR_FCMP_UNE: case IR_FCMP_ULT: case IR_FCMP_ULE:
+    case IR_FCMP_UGT: case IR_FCMP_UGE:
         return 1;
     default:
         return 0;

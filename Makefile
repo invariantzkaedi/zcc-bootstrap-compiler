@@ -387,6 +387,8 @@ test-float: zcc
 	./zcc probe_float_surface.c -o /tmp/probe_float_surface.s && gcc -fno-pie -no-pie -o /tmp/probe_float_surface /tmp/probe_float_surface.s -lm && /tmp/probe_float_surface
 	./zcc fp_conv_harness.c -o /tmp/fp_conv_harness.s && gcc -fno-pie -no-pie -o /tmp/fp_conv_harness /tmp/fp_conv_harness.s -lm && /tmp/fp_conv_harness
 	./zcc probe_static_init_alldouble.c -o /tmp/probe_static_init_alldouble.s && gcc -fno-pie -no-pie -o /tmp/probe_static_init_alldouble /tmp/probe_static_init_alldouble.s -lm && /tmp/probe_static_init_alldouble
+	./zcc probe_nan_cmp.c -o /tmp/probe_nan_cmp.s && gcc -fno-pie -no-pie -o /tmp/probe_nan_cmp /tmp/probe_nan_cmp.s -lm && /tmp/probe_nan_cmp
+	ZCC_IR_BACKEND=1 ./zcc probe_nan_cmp.c -o /tmp/probe_nan_cmp_ir.s && gcc -fno-pie -no-pie -o /tmp/probe_nan_cmp_ir /tmp/probe_nan_cmp_ir.s -lm && /tmp/probe_nan_cmp_ir
 	@echo "=== Float Probes: ALL PASS ==="
 
 test: zcc test-float

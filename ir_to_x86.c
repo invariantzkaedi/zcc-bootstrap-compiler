@@ -564,54 +564,74 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                 case IR_LE:
                 case IR_GT:
                 case IR_GE: {
+                    load_operand(out, n->src1, "%rax", ra);
+                    /* comparison: src2 as memory operand or reg */
+                    if (ra) {
+                        PhysReg pr2 = ra_get(ra, n->src2);
+                        if (pr2 != PREG_NONE)
+                            fprintf(out, "    cmpq %%%s, %%rax\n", preg_name(pr2));
+                        else {
+                            int off2 = get_or_create_var(n->src2);
+                            fprintf(out, "    cmpq %d(%%rbp), %%rax\n", off2);
+                        }
+                    } else {
+                        int off2 = get_or_create_var(n->src2);
+                        fprintf(out, "    cmpq %d(%%rbp), %%rax\n", off2);
+                    }
+                    int is_uns = is_unsigned_comparison(fn, n);
+                    if      (n->op == IR_EQ) fprintf(out, "    sete %%al\n");
+                    else if (n->op == IR_NE) fprintf(out, "    setne %%al\n");
+                    else if (n->op == IR_LT) fprintf(out, is_uns ? "    setb %%al\n" : "    setl %%al\n");
+                    else if (n->op == IR_LE) fprintf(out, is_uns ? "    setbe %%al\n" : "    setle %%al\n");
+                    else if (n->op == IR_GT) fprintf(out, is_uns ? "    seta %%al\n" : "    setg %%al\n");
+                    else if (n->op == IR_GE) fprintf(out, is_uns ? "    setae %%al\n" : "    setge %%al\n");
+                    fprintf(out, "    movzbq %%al, %%rax\n");
+                    store_result(out, n->dst, "%rax", ra);
+                    break;
+                }
+                case IR_FCMP_OEQ:
+                case IR_FCMP_ONE:
+                case IR_FCMP_OLT:
+                case IR_FCMP_OLE:
+                case IR_FCMP_OGT:
+                case IR_FCMP_OGE:
+                case IR_FCMP_ORD:
+                case IR_FCMP_UNO:
+                case IR_FCMP_UEQ:
+                case IR_FCMP_UNE:
+                case IR_FCMP_ULT:
+                case IR_FCMP_ULE:
+                case IR_FCMP_UGT:
+                case IR_FCMP_UGE: {
                     ir_type_t op_ty = get_operand_type(fn, n, n->src1);
                     if (op_ty == IR_TY_VOID) {
                         op_ty = get_operand_type(fn, n, n->src2);
                     }
-                    if (op_ty == IR_TY_F32 || op_ty == IR_TY_F64) {
-                        int is_f32 = (op_ty == IR_TY_F32);
-                        const char *op_ucomi = is_f32 ? "ucomiss" : "ucomisd";
-                        load_operand_xmm(out, n->src1, "%xmm1", op_ty, ra);
-                        load_operand_xmm(out, n->src2, "%xmm0", op_ty, ra);
-                        fprintf(out, "    %s %%xmm0, %%xmm1\n", op_ucomi);
-                        if (n->op == IR_EQ) {
-                            fprintf(out, "    sete %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
-                        } else if (n->op == IR_NE) {
-                            fprintf(out, "    setne %%al\n    setp %%r11b\n    orb %%r11b, %%al\n");
-                        } else if (n->op == IR_LT) {
-                            fprintf(out, "    setb %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
-                        } else if (n->op == IR_LE) {
-                            fprintf(out, "    setbe %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
-                        } else if (n->op == IR_GT) {
-                            fprintf(out, "    seta %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
-                        } else if (n->op == IR_GE) {
-                            fprintf(out, "    setae %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
-                        }
-                        fprintf(out, "    movzbq %%al, %%rax\n");
-                    } else {
-                        load_operand(out, n->src1, "%rax", ra);
-                        /* comparison: src2 as memory operand or reg */
-                        if (ra) {
-                            PhysReg pr2 = ra_get(ra, n->src2);
-                            if (pr2 != PREG_NONE)
-                                fprintf(out, "    cmpq %%%s, %%rax\n", preg_name(pr2));
-                            else {
-                                int off2 = get_or_create_var(n->src2);
-                                fprintf(out, "    cmpq %d(%%rbp), %%rax\n", off2);
-                            }
-                        } else {
-                            int off2 = get_or_create_var(n->src2);
-                            fprintf(out, "    cmpq %d(%%rbp), %%rax\n", off2);
-                        }
-                        int is_uns = is_unsigned_comparison(fn, n);
-                        if      (n->op == IR_EQ) fprintf(out, "    sete %%al\n");
-                        else if (n->op == IR_NE) fprintf(out, "    setne %%al\n");
-                        else if (n->op == IR_LT) fprintf(out, is_uns ? "    setb %%al\n" : "    setl %%al\n");
-                        else if (n->op == IR_LE) fprintf(out, is_uns ? "    setbe %%al\n" : "    setle %%al\n");
-                        else if (n->op == IR_GT) fprintf(out, is_uns ? "    seta %%al\n" : "    setg %%al\n");
-                        else if (n->op == IR_GE) fprintf(out, is_uns ? "    setae %%al\n" : "    setge %%al\n");
-                        fprintf(out, "    movzbq %%al, %%rax\n");
+                    if (op_ty == IR_TY_VOID) {
+                        op_ty = IR_TY_F64;
                     }
+                    int is_f32 = (op_ty == IR_TY_F32);
+                    const char *op_ucomi = is_f32 ? "ucomiss" : "ucomisd";
+                    load_operand_xmm(out, n->src1, "%xmm1", op_ty, ra);
+                    load_operand_xmm(out, n->src2, "%xmm0", op_ty, ra);
+                    fprintf(out, "    %s %%xmm0, %%xmm1\n", op_ucomi);
+                    switch (n->op) {
+                    case IR_FCMP_OEQ: fprintf(out, "    sete %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n"); break;
+                    case IR_FCMP_UNE: fprintf(out, "    setne %%al\n    setp %%r11b\n    orb %%r11b, %%al\n"); break;
+                    case IR_FCMP_OLT: fprintf(out, "    setb %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n"); break;
+                    case IR_FCMP_OLE: fprintf(out, "    setbe %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n"); break;
+                    case IR_FCMP_OGT: fprintf(out, "    seta %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n"); break;
+                    case IR_FCMP_OGE: fprintf(out, "    setae %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n"); break;
+                    case IR_FCMP_ORD: fprintf(out, "    setnp %%al\n"); break;
+                    case IR_FCMP_UNO: fprintf(out, "    setp %%al\n"); break;
+                    case IR_FCMP_UEQ: fprintf(out, "    sete %%al\n    setp %%r11b\n    orb %%r11b, %%al\n"); break;
+                    case IR_FCMP_ONE: fprintf(out, "    setne %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n"); break;
+                    case IR_FCMP_ULT: fprintf(out, "    setb %%al\n    setp %%r11b\n    orb %%r11b, %%al\n"); break;
+                    case IR_FCMP_ULE: fprintf(out, "    setbe %%al\n    setp %%r11b\n    orb %%r11b, %%al\n"); break;
+                    case IR_FCMP_UGT: fprintf(out, "    seta %%al\n    setp %%r11b\n    orb %%r11b, %%al\n"); break;
+                    case IR_FCMP_UGE: fprintf(out, "    setae %%al\n    setp %%r11b\n    orb %%r11b, %%al\n"); break;
+                    }
+                    fprintf(out, "    movzbq %%al, %%rax\n");
                     store_result(out, n->dst, "%rax", ra);
                     break;
                 }
