@@ -22,10 +22,12 @@ SVG_MAX_PRIMITIVES_LIMIT = 512
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html>
 <head>
-    <title>ZCC Remediated SDF Raymarcher — SVG & WebGL Hybrid Edition</title>
+    <title>ZCC Remediated SDF Raymarcher — Progressive Multi-Backend Edition</title>
     <style>
-        body, html { margin: 0; padding: 0; overflow: hidden; background: #08080a; font-family: 'Courier New', monospace; color: #fff; }
-        #canvas { width: 100vw; height: 100vh; display: none; }
+        body, html { margin: 0; padding: 0; overflow: hidden; background: #05070d; font-family: 'Courier New', monospace; color: #fff; }
+        #canvas, #canvas-2d { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+        #canvas { display: none; }
+        #canvas-2d { display: block; }
         #ui { position: absolute; top: 20px; left: 20px; z-index: 10; background: rgba(10, 10, 15, 0.95); padding: 20px; border: 1px solid #00ffcc; border-radius: 8px; box-shadow: 0 0 20px rgba(0, 255, 204, 0.25); width: 280px; max-height: 90vh; overflow-y: auto; }
         h1 { font-size: 14px; margin: 0 0 12px 0; color: #00ffcc; text-shadow: 0 0 8px #00ffcc; text-transform: uppercase; letter-spacing: 1px; }
         p { margin: 4px 0; font-size: 11px; color: #888; }
@@ -34,7 +36,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         input[type=range] { width: 100%; accent-color: #ff00aa; background: #222; border-radius: 3px; height: 6px; outline: none; }
         button { width: 100%; background: #00ffcc; border: none; color: #000; padding: 8px; border-radius: 4px; font-family: monospace; font-size: 12px; cursor: pointer; margin-top: 10px; font-weight: bold; }
         button:hover { background: #33ffdd; }
-        #fps { position: absolute; bottom: 20px; right: 20px; background: rgba(5,5,5,0.8); border: 1px solid #333; padding: 5px 10px; font-size: 12px; color: #00ffcc; border-radius: 3px; display: none; }
+        #fps { position: absolute; bottom: 20px; right: 20px; background: rgba(5,5,5,0.8); border: 1px solid #333; padding: 5px 10px; font-size: 12px; color: #00ffcc; border-radius: 3px; display: none; z-index: 10; }
         #error-log { color: #ff3333; font-size: 11px; margin-top: 10px; word-break: break-all; white-space: pre-wrap; font-family: monospace; }
         .group-bound { fill: none; stroke: #00ffff; stroke-opacity: 0.16; stroke-width: 1.5; }
         .prim-element { stroke: #ffffff; stroke-opacity: 0.25; }
@@ -45,16 +47,25 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <h1>ZCC SDF Hybrid</h1>
         <p>Asset: __ASSET_NAME__</p>
         <p>Primitives: __NUM_PRIMITIVES__ Hybrid</p>
-        <p>Resolution: Infinite</p>
         <p>WebGL Risk: <span id="risk-badge" style="__RISK_BADGE_STYLE__">__RISK_LEVEL__</span></p>
         <p id="risk-reason" style="font-size: 10px; color: #aaa; margin-top: 4px;">__RISK_REASON__</p>
         <p id="svg-warning" style="font-size: 10px; color: #ff00aa; margin-top: 4px; font-weight: bold;">__SVG_WARNING__</p>
         
         <div id="error-log"></div>
 
-        <!-- SVG view controls -->
+        <!-- Backend Selection -->
+        <div class="control-group">
+            <label for="select-backend">Renderer Backend:</label>
+            <select id="select-backend" style="width: 100%; background: #222; color: #fff; border: 1px solid #00ffcc; border-radius: 4px; padding: 5px; font-family: monospace; font-size: 11px;">
+                <option value="svg">SVG Safe (Static)</option>
+                <option value="canvas2d" selected>Canvas2D (Interactive Orbit)</option>
+                <option value="webgl">WebGL Raymarch (High-Detail)</option>
+            </select>
+        </div>
+
+        <!-- SVG / Canvas2D view controls -->
         <div id="svg-controls">
-            <div class="control-group">
+            <div class="control-group" id="proj-selector-group" style="display: none;">
                 <label for="select-projection">Projection View:</label>
                 <select id="select-projection" style="width: 100%; background: #222; color: #fff; border: 1px solid #00ffcc; border-radius: 4px; padding: 5px; font-family: monospace; font-size: 11px;">
                     <option value="xy" selected>XY View (Front)</option>
@@ -82,7 +93,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             </div>
         </div>
 
-        <div class="control-group">
+        <div class="control-group" id="webgl-start-group" style="display: none;">
             <button id="btn-pause-render" style="background: #00ffcc; color: #000; font-weight: bold; padding: 10px;">START WEBGL SDF</button>
         </div>
 
@@ -175,7 +186,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     
     <div id="fps">FPS: --</div>
     
-    <div id="svg-preview-container" style="width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; background: #05070d;">
+    <div id="svg-preview-container" style="width: 100vw; height: 100vh; display: none; align-items: center; justify-content: center; background: #05070d; position: absolute; top: 0; left: 0; z-index: 1;">
         <svg id="svg-preview" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" style="max-width: 100%; max-height: 100%; display: block;">
             <rect width="100%" height="100%" fill="#05070d"/>
             <g id="svg-elements">
@@ -184,6 +195,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </svg>
     </div>
 
+    <canvas id="canvas-2d"></canvas>
     <canvas id="canvas"></canvas>
     
     <script>
@@ -604,11 +616,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         `;
 
         const canvas = document.getElementById('canvas');
+        const canvas2d = document.getElementById('canvas-2d');
+        const ctx2d = canvas2d.getContext('2d');
         const errorLog = document.getElementById('error-log');
         const svgPreviewContainer = document.getElementById('svg-preview-container');
         const svgControls = document.getElementById('svg-controls');
         const webglControls = document.getElementById('webgl-controls');
         const fpsCounter = document.getElementById('fps');
+        const projSelectorGroup = document.getElementById('proj-selector-group');
+        const webglStartGroup = document.getElementById('webgl-start-group');
         
         let gl = null;
         let maxRenderPixels = 57600;
@@ -618,9 +634,124 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const primitivesData = __JS_PRIMITIVES__;
         const groupsData = __JS_GROUPS__;
         const boundingRadius = __BOUNDING_RADIUS__;
+        const palette = __JS_PALETTE__;
+        const webglRiskLevel = "__RISK_LEVEL__".toLowerCase();
+        
         const width = 1200, height = 800;
         const scale = 0.42 * Math.min(width, height) / Math.max(1e-6, boundingRadius);
 
+        // Canvas2D Interactive Orbit Parameters
+        let theta = 0.5, phi = 0.3, dist = 5.0;
+        let isDragging = false;
+        let lastMouseX = 0, lastMouseY = 0;
+
+        function resizeCanvas2d() {
+            canvas2d.width = window.innerWidth;
+            canvas2d.height = window.innerHeight;
+            renderCanvas2d();
+        }
+        window.addEventListener('resize', resizeCanvas2d);
+
+        // Mouse interaction for Canvas2D
+        canvas2d.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+        });
+        window.addEventListener('mouseup', () => { isDragging = false; });
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const dx = e.clientX - lastMouseX;
+            const dy = e.clientY - lastMouseY;
+            theta -= dx * 0.007;
+            phi = Math.max(-Math.PI/2 + 0.05, Math.min(Math.PI/2 - 0.05, phi + dy * 0.007));
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            renderCanvas2d();
+        });
+        canvas2d.addEventListener('wheel', (e) => {
+            dist = Math.max(1.0, Math.min(20.0, dist + e.deltaY * 0.005));
+            renderCanvas2d();
+        });
+
+        // Touch interaction for Canvas2D
+        canvas2d.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                isDragging = true;
+                lastMouseX = e.touches[0].clientX;
+                lastMouseY = e.touches[0].clientY;
+            }
+        });
+        canvas2d.addEventListener('touchmove', (e) => {
+            if (!isDragging || e.touches.length !== 1) return;
+            const dx = e.touches[0].clientX - lastMouseX;
+            const dy = e.touches[0].clientY - lastMouseY;
+            theta -= dx * 0.007;
+            phi = Math.max(-Math.PI/2 + 0.05, Math.min(Math.PI/2 - 0.05, phi + dy * 0.007));
+            lastMouseX = e.touches[0].clientX;
+            lastMouseY = e.touches[0].clientY;
+            renderCanvas2d();
+        });
+        canvas2d.addEventListener('touchend', () => { isDragging = false; });
+
+        // Backend switching controller
+        const selectBackend = document.getElementById('select-backend');
+        let activeBackend = 'canvas2d'; // Default backend on load
+
+        selectBackend.addEventListener('change', (e) => {
+            setBackend(e.target.value);
+        });
+
+        function setBackend(backend) {
+            activeBackend = backend;
+            if (backend === 'svg') {
+                svgPreviewContainer.style.display = 'flex';
+                canvas2d.style.display = 'none';
+                canvas.style.display = 'none';
+                projSelectorGroup.style.display = 'block';
+                svgControls.style.display = 'block';
+                webglStartGroup.style.display = 'none';
+                webglControls.style.display = 'none';
+                fpsCounter.style.display = 'none';
+                if (!paused) pauseRender();
+            } else if (backend === 'canvas2d') {
+                svgPreviewContainer.style.display = 'none';
+                canvas2d.style.display = 'block';
+                canvas.style.display = 'none';
+                projSelectorGroup.style.display = 'none';
+                svgControls.style.display = 'block';
+                webglStartGroup.style.display = 'none';
+                webglControls.style.display = 'none';
+                fpsCounter.style.display = 'none';
+                if (!paused) pauseRender();
+                resizeCanvas2d();
+            } else if (backend === 'webgl') {
+                if (webglRiskLevel === 'high') {
+                    const proceed = confirm("Warning: High WebGL Risk. Shader is large and may freeze your browser for a few seconds. Continue?");
+                    if (!proceed) {
+                        selectBackend.value = 'canvas2d';
+                        setBackend('canvas2d');
+                        return;
+                    }
+                }
+                
+                svgPreviewContainer.style.display = 'none';
+                canvas2d.style.display = 'none';
+                canvas.style.display = 'block';
+                projSelectorGroup.style.display = 'none';
+                svgControls.style.display = 'none';
+                webglStartGroup.style.display = 'block';
+                fpsCounter.style.display = 'none';
+                
+                // Show WebGL start rendering controls
+                if (webglInitialized) {
+                    webglControls.style.display = 'block';
+                    fpsCounter.style.display = 'block';
+                }
+            }
+        }
+
+        // SVG static projection mapping
         function project(p, mode) {
             let x_val = p[0], y_val = p[1], z_val = p[2];
             let x2d = 0, y2d = 0;
@@ -677,30 +808,260 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             });
         }
 
+        // Oriented Box corners calculator
+        function getBoxCorners(p) {
+            const c = p.center;
+            const ax0 = p.axis0;
+            const ax1 = p.axis1;
+            const ax2 = p.axis2;
+            const ext = p.extents;
+            
+            const corners = [];
+            for (let i = 0; i < 8; i++) {
+                const sign0 = (i & 1) ? 1 : -1;
+                const sign1 = (i & 2) ? 1 : -1;
+                const sign2 = (i & 4) ? 1 : -1;
+                
+                const x = c[0] + sign0 * ext[0] * ax0[0] + sign1 * ext[1] * ax1[0] + sign2 * ext[2] * ax2[0];
+                const y = c[1] + sign0 * ext[0] * ax0[1] + sign1 * ext[1] * ax1[1] + sign2 * ext[2] * ax2[1];
+                const z = c[2] + sign0 * ext[0] * ax0[2] + sign1 * ext[1] * ax1[2] + sign2 * ext[2] * ax2[2];
+                corners.push([x, y, z]);
+            }
+            return corners;
+        }
+
+        // Canvas2D Interactive Orbit Projection & Paint Loop
+        function renderCanvas2d() {
+            if (activeBackend !== 'canvas2d') return;
+            const w = canvas2d.width;
+            const h = canvas2d.height;
+            const ctx = ctx2d;
+            
+            ctx.fillStyle = '#05070d';
+            ctx.fillRect(0, 0, w, h);
+            
+            // Orbit camera computation
+            const ro = [
+                dist * Math.cos(theta) * Math.cos(phi),
+                dist * Math.sin(phi),
+                dist * Math.sin(theta) * Math.cos(phi)
+            ];
+            const target = [0.0, 0.0, 0.0];
+            
+            let cz = [target[0] - ro[0], target[1] - ro[1], target[2] - ro[2]];
+            const cz_len = Math.sqrt(cz[0]*cz[0] + cz[1]*cz[1] + cz[2]*cz[2]) || 1;
+            cz = [cz[0]/cz_len, cz[1]/cz_len, cz[2]/cz_len];
+            
+            let cx_dir = [ -cz[2], 0, cz[0] ];
+            const cx_len = Math.sqrt(cx_dir[0]*cx_dir[0] + cx_dir[2]*cx_dir[2]) || 1;
+            cx_dir = [cx_dir[0]/cx_len, 0, cx_dir[2]/cx_len];
+            
+            const cy_dir = [
+                cz[1]*cx_dir[2] - cz[2]*cx_dir[1],
+                cz[2]*cx_dir[0] - cz[0]*cx_dir[2],
+                cz[0]*cx_dir[1] - cz[1]*cx_dir[0]
+            ];
+            
+            const fov_scale = 1.25;
+            const view_scale = 0.5 * Math.min(w, h);
+            
+            function project3d(p) {
+                const lp = [p[0] - ro[0], p[1] - ro[1], p[2] - ro[2]];
+                const px = lp[0]*cx_dir[0] + lp[1]*cx_dir[1] + lp[2]*cx_dir[2];
+                const py = lp[0]*cy_dir[0] + lp[1]*cy_dir[1] + lp[2]*cy_dir[2];
+                const pz = lp[0]*cz[0] + lp[1]*cz[1] + lp[2]*cz[2];
+                
+                if (pz <= 0.05) return null;
+                
+                const screen_x = w * 0.5 + (px / pz) * fov_scale * view_scale;
+                const screen_y = h * 0.5 - (py / pz) * fov_scale * view_scale;
+                return [screen_x, screen_y, pz];
+            }
+            
+            // Gather all items based on toggles
+            const items = [];
+            
+            primitivesData.forEach((p, idx) => {
+                if (p.type === 'sphere' && !chkSpheres.checked) return;
+                if (p.type === 'capsule' && !chkCapsules.checked) return;
+                if (p.type === 'box' && !chkBoxes.checked) return;
+                
+                if (p.type === 'sphere') {
+                    const proj = project3d(p.center);
+                    if (proj) {
+                        items.push({
+                            type: 'sphere',
+                            depth: proj[2],
+                            proj: proj,
+                            prim: p,
+                            idx: idx
+                        });
+                    }
+                } else if (p.type === 'capsule') {
+                    const proj_a = project3d(p.a);
+                    const proj_b = project3d(p.b);
+                    if (proj_a && proj_b) {
+                        items.push({
+                            type: 'capsule',
+                            depth: (proj_a[2] + proj_b[2]) * 0.5,
+                            proj_a: proj_a,
+                            proj_b: proj_b,
+                            prim: p,
+                            idx: idx
+                        });
+                    }
+                } else if (p.type === 'box') {
+                    const corners = getBoxCorners(p);
+                    const proj_corners = [];
+                    let sum_pz = 0;
+                    let visible = true;
+                    for (let i = 0; i < 8; i++) {
+                        const proj = project3d(corners[i]);
+                        if (!proj) {
+                            visible = false;
+                            break;
+                        }
+                        proj_corners.push(proj);
+                        sum_pz += proj[2];
+                    }
+                    if (visible) {
+                        items.push({
+                            type: 'box',
+                            depth: sum_pz / 8,
+                            proj_corners: proj_corners,
+                            prim: p,
+                            idx: idx
+                        });
+                    }
+                }
+            });
+            
+            if (chkGroups.checked) {
+                groupsData.forEach((g, idx) => {
+                    const proj = project3d(g.center);
+                    if (proj) {
+                        items.push({
+                            type: 'group',
+                            depth: proj[2],
+                            proj: proj,
+                            group: g,
+                            idx: idx
+                        });
+                    }
+                });
+            }
+            
+            // Depth-sort back to front (descending pz)
+            items.sort((a, b) => b.depth - a.depth);
+            
+            // Draw items sequentially
+            items.forEach(item => {
+                if (item.type === 'sphere') {
+                    const [cx, cy, pz] = item.proj;
+                    const r_3d = item.prim.radius;
+                    const r_2d = (r_3d / pz) * fov_scale * view_scale;
+                    
+                    const col = palette[item.prim.cluster % palette.length];
+                    const r_val = Math.floor(col[0] * 255);
+                    const g_val = Math.floor(col[1] * 255);
+                    const b_val = Math.floor(col[2] * 255);
+                    
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, Math.max(1, r_2d), 0, 2 * Math.PI);
+                    
+                    const grad = ctx.createRadialGradient(
+                        cx - r_2d * 0.3, cy - r_2d * 0.3, r_2d * 0.05,
+                        cx, cy, r_2d
+                    );
+                    grad.addColorStop(0, '#ffffff');
+                    grad.addColorStop(0.2, `rgb(${Math.min(255, r_val + 60)}, ${Math.min(255, g_val + 60)}, ${Math.min(255, b_val + 60)})`);
+                    grad.addColorStop(0.8, `rgb(${r_val}, ${g_val}, ${b_val})`);
+                    grad.addColorStop(1, `rgb(${Math.floor(r_val * 0.3)}, ${Math.floor(g_val * 0.3)}, ${Math.floor(b_val * 0.3)})`);
+                    
+                    ctx.fillStyle = grad;
+                    ctx.fill();
+                } else if (item.type === 'capsule') {
+                    const [ax, ay, az] = item.proj_a;
+                    const [bx, by, bz] = item.proj_b;
+                    const avg_pz = item.depth;
+                    const r_3d = item.prim.radius;
+                    const r_2d = (r_3d / avg_pz) * fov_scale * view_scale;
+                    
+                    const col = palette[item.prim.cluster % palette.length];
+                    const r_val = Math.floor(col[0] * 255);
+                    const g_val = Math.floor(col[1] * 255);
+                    const b_val = Math.floor(col[2] * 255);
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(ax, ay);
+                    ctx.lineTo(bx, by);
+                    ctx.strokeStyle = `rgba(${r_val}, ${g_val}, ${b_val}, 0.75)`;
+                    ctx.lineWidth = Math.max(2, r_2d * 2);
+                    ctx.lineCap = 'round';
+                    ctx.stroke();
+                } else if (item.type === 'box') {
+                    const corners = item.proj_corners;
+                    const col = palette[item.prim.cluster % palette.length];
+                    const r_val = Math.floor(col[0] * 255);
+                    const g_val = Math.floor(col[1] * 255);
+                    const b_val = Math.floor(col[2] * 255);
+                    
+                    const edges = [
+                        [0, 1], [1, 3], [3, 2], [2, 0],
+                        [4, 5], [5, 7], [7, 6], [6, 4],
+                        [0, 4], [1, 5], [2, 6], [3, 7]
+                    ];
+                    
+                    ctx.strokeStyle = `rgba(${r_val}, ${g_val}, ${b_val}, 0.65)`;
+                    ctx.lineWidth = 1.5;
+                    edges.forEach(([u, v]) => {
+                        ctx.beginPath();
+                        ctx.moveTo(corners[u][0], corners[u][1]);
+                        ctx.lineTo(corners[v][0], corners[v][1]);
+                        ctx.stroke();
+                    });
+                } else if (item.type === 'group') {
+                    const [cx, cy, pz] = item.proj;
+                    const r_3d = item.group.radius;
+                    const r_2d = (r_3d / pz) * fov_scale * view_scale;
+                    
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, Math.max(1, r_2d), 0, 2 * Math.PI);
+                    ctx.strokeStyle = 'rgba(0, 255, 204, 0.16)';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+            });
+        }
+
         const chkGroups = document.getElementById('chk-svg-groups');
         const chkSpheres = document.getElementById('chk-svg-spheres');
         const chkCapsules = document.getElementById('chk-svg-capsules');
         const chkBoxes = document.getElementById('chk-svg-boxes');
 
-        chkGroups.addEventListener('change', (e) => {
+        chkGroups.addEventListener('change', () => {
             document.querySelectorAll('.group-bound').forEach(el => {
-                el.style.display = e.target.checked ? 'inline' : 'none';
+                el.style.display = chkGroups.checked ? 'inline' : 'none';
             });
+            renderCanvas2d();
         });
-        chkSpheres.addEventListener('change', (e) => {
+        chkSpheres.addEventListener('change', () => {
             document.querySelectorAll('.prim-sphere').forEach(el => {
-                el.style.display = e.target.checked ? 'inline' : 'none';
+                el.style.display = chkSpheres.checked ? 'inline' : 'none';
             });
+            renderCanvas2d();
         });
-        chkCapsules.addEventListener('change', (e) => {
+        chkCapsules.addEventListener('change', () => {
             document.querySelectorAll('.prim-capsule').forEach(el => {
-                el.style.display = e.target.checked ? 'inline' : 'none';
+                el.style.display = chkCapsules.checked ? 'inline' : 'none';
             });
+            renderCanvas2d();
         });
-        chkBoxes.addEventListener('change', (e) => {
+        chkBoxes.addEventListener('change', () => {
             document.querySelectorAll('.prim-box').forEach(el => {
-                el.style.display = e.target.checked ? 'inline' : 'none';
+                el.style.display = chkBoxes.checked ? 'inline' : 'none';
             });
+            renderCanvas2d();
         });
 
         function createShader(gl, type, source) {
@@ -885,15 +1246,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const pauseRenderBtn = document.getElementById('btn-pause-render');
         pauseRenderBtn.addEventListener('click', () => {
             if (!webglInitialized) {
-                // Switch DOM layers from SVG preview to WebGL canvas
-                svgPreviewContainer.style.display = 'none';
-                canvas.style.display = 'block';
-                svgControls.style.display = 'none';
-                webglControls.style.display = 'block';
-                fpsCounter.style.display = 'block';
-                
                 const ok = initWebGL();
                 if (!ok) return;
+                webglControls.style.display = 'block';
+                fpsCounter.style.display = 'block';
             }
             paused = !paused;
             if (paused) {
@@ -944,21 +1300,56 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             if (paused) drawFrame(performance.now());
         });
 
+        // WebGL Mouse interaction with dynamic low-res scaling on drag
         let mouse = [0.5, 0.5];
+        let isWebGLDragging = false;
+        
         window.addEventListener('mousemove', (e) => {
             mouse = [e.clientX / window.innerWidth, 1.0 - (e.clientY / window.innerHeight)];
-            if (paused) drawFrame(performance.now());
+            if (paused && webglInitialized) drawFrame(performance.now());
+        });
+
+        canvas.addEventListener('mousedown', () => {
+            isWebGLDragging = true;
+            maxRenderPixels = 14400; // Low-res 160x90 mapping during rotation drag
+            resize();
+            if (paused && webglInitialized) drawFrame(performance.now());
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isWebGLDragging) {
+                isWebGLDragging = false;
+                maxRenderPixels = parseInt(resSelect.value);
+                resize();
+                if (paused && webglInitialized) drawFrame(performance.now());
+            }
+        });
+
+        canvas.addEventListener('touchstart', () => {
+            isWebGLDragging = true;
+            maxRenderPixels = 14400;
+            resize();
+            if (paused && webglInitialized) drawFrame(performance.now());
+        });
+
+        window.addEventListener('touchend', () => {
+            if (isWebGLDragging) {
+                isWebGLDragging = false;
+                maxRenderPixels = parseInt(resSelect.value);
+                resize();
+                if (paused && webglInitialized) drawFrame(performance.now());
+            }
         });
 
         const resSelect = document.getElementById('select-resolution');
         resSelect.addEventListener('change', (e) => {
             maxRenderPixels = parseInt(e.target.value);
             resize();
-            if (paused) drawFrame(performance.now());
+            if (paused && webglInitialized) drawFrame(performance.now());
         });
 
         debugSelect.addEventListener('change', () => {
-            if (paused) drawFrame(performance.now());
+            if (paused && webglInitialized) drawFrame(performance.now());
         });
 
         function degradeQuality() {
@@ -978,28 +1369,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         function resize() {
             const cssWidth = Math.max(1, window.innerWidth);
             const cssHeight = Math.max(1, window.innerHeight);
-            const scale = Math.min(1, Math.sqrt(maxRenderPixels / (cssWidth * cssHeight)));
-            canvas.width = Math.max(1, Math.floor(cssWidth * scale));
-            canvas.height = Math.max(1, Math.floor(cssHeight * scale));
-            gl.viewport(0, 0, canvas.width, canvas.height);
+            const scaleFactor = Math.min(1, Math.sqrt(maxRenderPixels / (cssWidth * cssHeight)));
+            canvas.width = Math.max(1, Math.floor(cssWidth * scaleFactor));
+            canvas.height = Math.max(1, Math.floor(cssHeight * scaleFactor));
+            if (gl) gl.viewport(0, 0, canvas.width, canvas.height);
         }
         window.addEventListener('resize', resize);
         resize();
 
-        canvas.addEventListener('webglcontextlost', e => {
-            e.preventDefault();
-            paused = true;
-            pauseRenderBtn.textContent = 'START RENDER';
-            pauseRenderBtn.style.background = '#ff00aa';
-            pauseRenderBtn.style.color = '#fff';
-            errorLog.textContent = 'WebGL context lost; rendering paused.';
-        });
-
-        canvas.addEventListener('webglcontextrestored', () => {
-            errorLog.textContent = 'WebGL context restored. Please reload page or restart render.';
-        });
-
-        // Web Audio API FFT setup with MP3 & Mic support (256 FFT size for 128 frequency bins, 16 bins per band)
+        // Web Audio API FFT setup with MP3 & Mic support
         let audioCtx = null;
         let analyser = null;
         let dataArray = null;
@@ -1093,7 +1471,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 });
         });
 
-        const fpsCounter = document.getElementById('fps');
         let lastTime = 0;
         let frameCount = 0;
 
@@ -1101,13 +1478,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             if (!webglInitialized) return;
             if (audioActive && analyser) {
                 analyser.getByteFrequencyData(dataArray);
-                const binWidth = Math.floor(dataArray.length / 8); // 128 / 8 = 16 bins per band
+                const binWidth = Math.floor(dataArray.length / 8);
                 for (let i = 0; i < 8; i++) {
                     let sum = 0;
                     for (let j = 0; j < binWidth; j++) {
                         sum += dataArray[i * binWidth + j];
                     }
-                    fftBands[i] = (sum / binWidth) / 255.0; // scale 0-1
+                    fftBands[i] = (sum / binWidth) / 255.0;
                 }
             } else {
                 fftBands.fill(0.0);
@@ -1135,20 +1512,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             const delta = time - lastFrameTime;
             lastFrameTime = time;
 
-            // Frame watchdog: check if frame took > 250ms
             if (delta > 250) {
                 slowFrameCount++;
                 if (slowFrameCount >= 2) {
                     const isLowest = (maxRenderPixels === 57600 && u_maxSteps === 32 && u_enableAO === 0 && u_enableShadow === 0);
                     if (isLowest) {
                         paused = true;
-                        pauseRenderBtn.textContent = 'START RENDER';
-                        pauseRenderBtn.style.background = '#ff00aa';
-                        pauseRenderBtn.style.color = '#fff';
-                        errorLog.textContent = 'Warning: GPU remains pinned even at lowest settings. Rendering paused to prevent lockup.';
+                        pauseRenderBtn.textContent = 'START WEBGL SDF';
+                        pauseRenderBtn.style.background = '#00ffcc';
+                        pauseRenderBtn.style.color = '#000';
+                        errorLog.textContent = 'Warning: GPU pinned. Raymarching paused.';
                     } else {
                         degradeQuality();
-                        errorLog.textContent = 'Performance warning: Settings automatically degraded to safe mode.';
+                        errorLog.textContent = 'Warning: Settings degraded due to GPU pressure.';
                     }
                     slowFrameCount = 0;
                 }
@@ -1157,8 +1533,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }
 
             frameCount++;
-            let fpsLastTime = lastTime;
-            if (time - fpsLastTime >= 1000) {
+            if (time - lastTime >= 1000) {
                 fpsCounter.textContent = `FPS: ${frameCount}`;
                 frameCount = 0;
                 lastTime = time;
@@ -1169,17 +1544,34 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 requestAnimationFrame(render);
             }
         }
-        
+
+        function pauseRender() {
+            paused = true;
+            pauseRenderBtn.textContent = 'START WEBGL SDF';
+            pauseRenderBtn.style.background = '#00ffcc';
+            pauseRenderBtn.style.color = '#000';
+        }
 
         const screenshotBtn = document.getElementById('btn-screenshot');
         screenshotBtn.addEventListener('click', () => {
-            drawFrame(performance.now());
-            const dataURL = canvas.toDataURL('image/png');
-            const link = document.createElement('a');
-            link.download = 'zcc_sdf_screenshot.png';
-            link.href = dataURL;
-            link.click();
+            if (activeBackend === 'webgl') {
+                drawFrame(performance.now());
+                const dataURL = canvas.toDataURL('image/png');
+                const link = document.createElement('a');
+                link.download = 'zcc_sdf_screenshot.png';
+                link.href = dataURL;
+                link.click();
+            } else if (activeBackend === 'canvas2d') {
+                const dataURL = canvas2d.toDataURL('image/png');
+                const link = document.createElement('a');
+                link.download = 'zcc_sdf_screenshot.png';
+                link.href = dataURL;
+                link.click();
+            }
         });
+
+        // Initialize to Canvas2D Orbit Preview on load
+        setBackend('canvas2d');
     </script>
 </body>
 </html>
@@ -2674,6 +3066,7 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_r
 
     js_primitives = json.dumps(clean_obj(primitives))
     js_groups = json.dumps(clean_obj(groups))
+    js_palette = json.dumps(clean_obj(palette))
 
     # Badge background and foreground styling
     badge_bg = "#00ffcc" if risk_level == "low" else ("#ffaa00" if risk_level == "medium" else "#ff00aa")
@@ -2691,6 +3084,7 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_r
     html_content = html_content.replace("__SVG_ELEMENTS__", svg_elements_str)
     html_content = html_content.replace("__JS_PRIMITIVES__", js_primitives)
     html_content = html_content.replace("__JS_GROUPS__", js_groups)
+    html_content = html_content.replace("__JS_PALETTE__", js_palette)
     html_content = html_content.replace("__BOUNDING_RADIUS__", str(bounding_radius))
 
     html_content = html_content.replace("__ZONE_FUNCTIONS__", zone_glsl_definitions)
