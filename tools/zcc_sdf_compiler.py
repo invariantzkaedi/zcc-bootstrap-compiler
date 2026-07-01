@@ -205,8 +205,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 return d * scale;
             }
 
-            // High-fidelity visual distance field (analytic + local residual correction)
-            float mapDVisual(vec3 p) {
+            // Unified visual and safe distance evaluator to halve evaluation overhead and prevent GPU TDR freezes
+            void mapDDouble(vec3 p, out float dist_v, out float dist_safe) {
                 float scale;
                 vec3 q = applyWarp(p, scale);
 
@@ -214,29 +214,29 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 __SDF_CODE_D__
                 float base = d * scale;
 
-                // Residual lookup in the warped domain q!
+                dist_v = base;
+                dist_safe = base;
+
                 vec3 uv = q * (0.5 / __BOUND_RADIUS__) + 0.5;
                 if (all(greaterThanEqual(uv, vec3(0.0))) && all(lessThanEqual(uv, vec3(1.0)))) {
-                    base += texture(u_residualSDF, uv).r * scale;
+                    float r_val = texture(u_residualSDF, uv).r * scale;
+                    dist_v += r_val;
+                    dist_safe += r_val - texture(u_errorSDF, uv).r * scale;
                 }
-                return base;
+            }
+
+            // High-fidelity visual distance field (analytic + local residual correction)
+            float mapDVisual(vec3 p) {
+                float dist_v, dist_safe;
+                mapDDouble(p, dist_v, dist_safe);
+                return dist_v;
             }
 
             // Safe, conservative distance field for sphere-tracing step bounds
             float mapDSafe(vec3 p) {
-                float scale;
-                vec3 q = applyWarp(p, scale);
-
-                float d = 1e5;
-                __SDF_CODE_D__
-                float base = d * scale;
-
-                vec3 uv = q * (0.5 / __BOUND_RADIUS__) + 0.5;
-                if (all(greaterThanEqual(uv, vec3(0.0))) && all(lessThanEqual(uv, vec3(1.0)))) {
-                    base += texture(u_residualSDF, uv).r * scale;
-                    base -= texture(u_errorSDF, uv).r * scale;
-                }
-                return base;
+                float dist_v, dist_safe;
+                mapDDouble(p, dist_v, dist_safe);
+                return dist_safe;
             }
 
             // Interface matching legacy mapD (defaults to high-fidelity visual)
@@ -380,7 +380,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     float t = max(tmin, 0.0);
                     bool is_left = (u_debugMode == 10 && gl_FragCoord.x < 0.5 * u_resolution.x);
                     
-                    for (int i = 0; i < 128; i++) { // Detail tracing
+                    for (int i = 0; i < 80; i++) { // Detail tracing optimized to 80 steps
                         march_steps = i;
                         p = ro + rd * t;
                         
@@ -391,8 +391,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                             dist = mapDAnalytic(p);
                             dist_v = dist;
                         } else {
-                            dist = mapDSafe(p);
-                            dist_v = mapDVisual(p);
+                            mapDDouble(p, dist_v, dist);
                         }
                         
                         if (dist_v < 0.0008) {
