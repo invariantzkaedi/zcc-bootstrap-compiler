@@ -25,8 +25,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <title>ZCC Remediated SDF Raymarcher — Progressive Multi-Backend Edition</title>
     <style>
         body, html { margin: 0; padding: 0; overflow: hidden; background: #05070d; font-family: 'Courier New', monospace; color: #fff; }
-        #canvas, #canvas-2d { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
-        #canvas { display: none; }
+        #canvas, #canvas-2d, #webgl-lite-canvas { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+        #canvas, #webgl-lite-canvas { display: none; }
         #canvas-2d { display: block; }
         #ui { position: absolute; top: 20px; left: 20px; z-index: 10; background: rgba(10, 10, 15, 0.95); padding: 20px; border: 1px solid #00ffcc; border-radius: 8px; box-shadow: 0 0 20px rgba(0, 255, 204, 0.25); width: 280px; max-height: 90vh; overflow-y: auto; }
         h1 { font-size: 14px; margin: 0 0 12px 0; color: #00ffcc; text-shadow: 0 0 8px #00ffcc; text-transform: uppercase; letter-spacing: 1px; }
@@ -59,6 +59,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <select id="select-backend" style="width: 100%; background: #222; color: #fff; border: 1px solid #00ffcc; border-radius: 4px; padding: 5px; font-family: monospace; font-size: 11px;">
                 <option value="svg">SVG Safe (Static)</option>
                 <option value="canvas2d" selected>Canvas2D (Interactive Orbit)</option>
+                <option value="webgl-lite">WebGL Lite (Fixed GPU Impostor)</option>
                 <option value="webgl">WebGL Raymarch (High-Detail)</option>
             </select>
         </div>
@@ -196,6 +197,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </div>
 
     <canvas id="canvas-2d"></canvas>
+    <canvas id="webgl-lite-canvas"></canvas>
     <canvas id="canvas"></canvas>
     
     <script>
@@ -613,7 +615,236 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
                 fragColor = vec4(pow(color, vec3(1.0/2.2)), 1.0);
             }
-        `;
+        `;        // WebGL Lite (Fixed-Shader Impostor GPU) Backend
+        const WebGLLiteBackend = (() => {
+            let gl = null;
+            let program = null;
+            let buffer = null;
+            let positionLoc = -1;
+            let colorLoc = -1;
+
+            function createShader(gl, type, source) {
+                const s = gl.createShader(type);
+                gl.shaderSource(s, source);
+                gl.compileShader(s);
+                if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+                    const log = gl.getShaderInfoLog(s);
+                    gl.deleteShader(s);
+                    throw new Error("WebGL Lite shader compile failed: " + log);
+                }
+                return s;
+            }
+
+            function init(canvas) {
+                gl = canvas.getContext("webgl2", {
+                    antialias: true,
+                    alpha: false,
+                    powerPreference: "low-power"
+                });
+                if (!gl) {
+                    throw new Error("WebGL2 context unavailable for WebGL Lite");
+                }
+
+                const vsSource = `#version 300 es
+                    in vec2 a_position;
+                    in vec4 a_color;
+                    out vec4 v_color;
+                    void main() {
+                        v_color = a_color;
+                        gl_Position = vec4(a_position, 0.0, 1.0);
+                    }
+                `;
+
+                const fsSource = `#version 300 es
+                    precision highp float;
+                    in vec4 v_color;
+                    out vec4 fragColor;
+                    void main() {
+                        fragColor = v_color;
+                    }
+                `;
+
+                const vs = createShader(gl, gl.VERTEX_SHADER, vsSource);
+                const fs = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+
+                program = gl.createProgram();
+                gl.attachShader(program, vs);
+                gl.attachShader(program, fs);
+                gl.linkProgram(program);
+
+                gl.deleteShader(vs);
+                gl.deleteShader(fs);
+
+                if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                    throw new Error("WebGL Lite link failed: " + gl.getProgramInfoLog(program));
+                }
+
+                positionLoc = gl.getAttribLocation(program, "a_position");
+                colorLoc = gl.getAttribLocation(program, "a_color");
+                buffer = gl.createBuffer();
+
+                gl.clearColor(0.02, 0.025, 0.04, 1.0);
+            }
+
+            function projectPoint(p, camera, aspect) {
+                const [x, y, z] = p;
+                const ct = Math.cos(camera.theta);
+                const st = Math.sin(camera.theta);
+                const cp = Math.cos(camera.phi);
+                const sp = Math.sin(camera.phi);
+
+                // Rotations
+                const x1 = ct * x + st * z;
+                const z1 = -st * x + ct * z;
+                const y2 = cp * y - sp * z1;
+                const z2 = sp * y + cp * z1 + camera.distance;
+
+                const fov_scale = 1.25;
+                const scale_z = fov_scale / Math.max(0.05, z2);
+                const sx = x1 * scale_z / aspect;
+                const sy = y2 * scale_z;
+
+                return { x: sx, y: sy, z: z2, scale: scale_z };
+            }
+
+            function pushVertex(out, x, y, color) {
+                out.push(x, y, color[0], color[1], color[2], color[3]);
+            }
+
+            function pushLine(out, a, b, width, aspect, color) {
+                const dx = b.x - a.x;
+                const dy = b.y - a.y;
+                const len = Math.hypot(dx * aspect, dy) || 1.0;
+
+                const nx = -dy / len * width / aspect;
+                const ny = dx / len * width;
+
+                pushVertex(out, a.x + nx, a.y + ny, color);
+                pushVertex(out, a.x - nx, a.y - ny, color);
+                pushVertex(out, b.x + nx, b.y + ny, color);
+
+                pushVertex(out, b.x + nx, b.y + ny, color);
+                pushVertex(out, a.x - nx, a.y - ny, color);
+                pushVertex(out, b.x - nx, b.y - ny, color);
+            }
+
+            function pushCircle(out, c, radius, aspect, color, segments = 16) {
+                for (let i = 0; i < segments; i++) {
+                    const a0 = (i / segments) * Math.PI * 2.0;
+                    const a1 = ((i + 1) / segments) * Math.PI * 2.0;
+
+                    pushVertex(out, c.x, c.y, color);
+                    pushVertex(out, c.x + Math.cos(a0) * radius / aspect, c.y + Math.sin(a0) * radius, color);
+                    pushVertex(out, c.x + Math.cos(a1) * radius / aspect, c.y + Math.sin(a1) * radius, color);
+                }
+            }
+
+            function boxCorners(prim) {
+                const c = prim.center;
+                const e = prim.extents;
+                const ax0 = prim.axis0;
+                const ax1 = prim.axis1;
+                const ax2 = prim.axis2;
+                const corners = [];
+
+                for (const sx of [-1, 1]) {
+                    for (const sy of [-1, 1]) {
+                        for (const sz of [-1, 1]) {
+                            corners.push([
+                                c[0] + sx * e[0] * ax0[0] + sy * e[1] * ax1[0] + sz * e[2] * ax2[0],
+                                c[1] + sx * e[0] * ax0[1] + sy * e[1] * ax1[1] + sz * e[2] * ax2[1],
+                                c[2] + sx * e[0] * ax0[2] + sy * e[1] * ax1[2] + sz * e[2] * ax2[2]
+                            ]);
+                        }
+                    }
+                }
+                return corners;
+            }
+
+            function render(canvas, primitives, camera, palette, chkSpheres, chkCapsules, chkBoxes) {
+                const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+                const w = Math.floor(canvas.clientWidth * dpr);
+                const h = Math.floor(canvas.clientHeight * dpr);
+
+                if (canvas.width !== w || canvas.height !== h) {
+                    canvas.width = w;
+                    canvas.height = h;
+                    gl.viewport(0, 0, w, h);
+                }
+
+                const aspect = w / Math.max(1, h);
+                const verts = [];
+
+                gl.clear(gl.COLOR_BUFFER_BIT);
+
+                // Sort back-to-front by projected Z
+                const drawList = [];
+                primitives.forEach((p, idx) => {
+                    if (p.type === 'sphere' && !chkSpheres) return;
+                    if (p.type === 'capsule' && !chkCapsules) return;
+                    if (p.type === 'box' && !chkBoxes) return;
+
+                    const center = p.type === 'sphere' ? p.center :
+                                   (p.type === 'capsule' ? [
+                                       (p.a[0] + p.b[0]) * 0.5,
+                                       (p.a[1] + p.b[1]) * 0.5,
+                                       (p.a[2] + p.b[2]) * 0.5
+                                   ] : p.center);
+
+                    const proj = projectPoint(center, camera, aspect);
+                    drawList.push({ prim: p, z: proj.z, idx });
+                });
+
+                drawList.sort((a, b) => b.z - a.z);
+
+                drawList.forEach(item => {
+                    const p = item.prim;
+                    const col = palette[p.cluster % palette.length];
+                    const color = [col[0], col[1], col[2], 0.68];
+
+                    if (p.type === 'sphere') {
+                        const c = projectPoint(p.center, camera, aspect);
+                        const radius = p.radius * c.scale;
+                        pushCircle(verts, c, radius, aspect, color, 16);
+                    } else if (p.type === 'capsule') {
+                        const a = projectPoint(p.a, camera, aspect);
+                        const b = projectPoint(p.b, camera, aspect);
+                        const width = Math.max(0.003, p.radius * 0.5 * (a.scale + b.scale));
+                        pushLine(verts, a, b, width, aspect, color);
+                    } else if (p.type === 'box') {
+                        const corners = boxCorners(p).map(pt => projectPoint(pt, camera, aspect));
+                        const edges = [
+                            [0,1], [0,2], [0,4],
+                            [3,1], [3,2], [3,7],
+                            [5,1], [5,4], [5,7],
+                            [6,2], [6,4], [6,7]
+                        ];
+                        const wireColor = [color[0], color[1], color[2], 0.85];
+                        for (const [i, j] of edges) {
+                            pushLine(verts, corners[i], corners[j], 0.0025, wireColor);
+                        }
+                    }
+                });
+
+                if (verts.length === 0) return;
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.DYNAMIC_DRAW);
+
+                gl.useProgram(program);
+
+                const stride = 6 * 4;
+                gl.enableVertexAttribArray(positionLoc);
+                gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, stride, 0);
+
+                gl.enableVertexAttribArray(colorLoc);
+                gl.vertexAttribPointer(colorLoc, 4, gl.FLOAT, false, stride, 2 * 4);
+
+                gl.drawArrays(gl.TRIANGLES, 0, verts.length / 6);
+            }
+
+            return { init, render };
+        })();
 
         const canvas = document.getElementById('canvas');
         const canvas2d = document.getElementById('canvas-2d');
@@ -629,6 +860,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         let gl = null;
         let maxRenderPixels = 57600;
         let webglInitialized = false;
+        let webglLiteInitialized = false;
         let program, resLoc, mouseLoc, timeLoc, blendLoc, jiggleLoc, glowLoc, specularLoc, fftBandsLoc, debugLoc, maxStepsLoc, enableAOLoc, enableShadowLoc;
 
         const primitivesData = __JS_PRIMITIVES__;
@@ -636,6 +868,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const boundingRadius = __BOUNDING_RADIUS__;
         const palette = __JS_PALETTE__;
         const webglRiskLevel = "__RISK_LEVEL__".toLowerCase();
+        const svgMaxPrimitives = 512;
         
         const width = 1200, height = 800;
         const scale = 0.42 * Math.min(width, height) / Math.max(1e-6, boundingRadius);
@@ -648,9 +881,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         function resizeCanvas2d() {
             canvas2d.width = window.innerWidth;
             canvas2d.height = window.innerHeight;
-            renderCanvas2d();
+            triggerActiveRender();
         }
         window.addEventListener('resize', resizeCanvas2d);
+
+        function triggerActiveRender() {
+            if (activeBackend === 'canvas2d') {
+                renderCanvas2d();
+            } else if (activeBackend === 'webgl-lite') {
+                renderWebglLite();
+            }
+        }
 
         // Mouse interaction for Canvas2D
         canvas2d.addEventListener('mousedown', (e) => {
@@ -667,11 +908,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             phi = Math.max(-Math.PI/2 + 0.05, Math.min(Math.PI/2 - 0.05, phi + dy * 0.007));
             lastMouseX = e.clientX;
             lastMouseY = e.clientY;
-            renderCanvas2d();
+            triggerActiveRender();
         });
         canvas2d.addEventListener('wheel', (e) => {
             dist = Math.max(1.0, Math.min(20.0, dist + e.deltaY * 0.005));
-            renderCanvas2d();
+            triggerActiveRender();
         });
 
         // Touch interaction for Canvas2D
@@ -690,9 +931,62 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             phi = Math.max(-Math.PI/2 + 0.05, Math.min(Math.PI/2 - 0.05, phi + dy * 0.007));
             lastMouseX = e.touches[0].clientX;
             lastMouseY = e.touches[0].clientY;
-            renderCanvas2d();
+            triggerActiveRender();
         });
         canvas2d.addEventListener('touchend', () => { isDragging = false; });
+
+        // Mouse and touch interaction for WebGL Lite Canvas
+        const liteCanvas = document.getElementById('webgl-lite-canvas');
+        liteCanvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+        });
+        liteCanvas.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const dx = e.clientX - lastMouseX;
+            const dy = e.clientY - lastMouseY;
+            theta -= dx * 0.007;
+            phi = Math.max(-Math.PI/2 + 0.05, Math.min(Math.PI/2 - 0.05, phi + dy * 0.007));
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            triggerActiveRender();
+        });
+        liteCanvas.addEventListener('wheel', (e) => {
+            dist = Math.max(1.0, Math.min(20.0, dist + e.deltaY * 0.005));
+            triggerActiveRender();
+        });
+        liteCanvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                isDragging = true;
+                lastMouseX = e.touches[0].clientX;
+                lastMouseY = e.touches[0].clientY;
+            }
+        });
+        liteCanvas.addEventListener('touchmove', (e) => {
+            if (!isDragging || e.touches.length !== 1) return;
+            const dx = e.touches[0].clientX - lastMouseX;
+            const dy = e.touches[0].clientY - lastMouseY;
+            theta -= dx * 0.007;
+            phi = Math.max(-Math.PI/2 + 0.05, Math.min(Math.PI/2 - 0.05, phi + dy * 0.007));
+            lastMouseX = e.touches[0].clientX;
+            lastMouseY = e.touches[0].clientY;
+            triggerActiveRender();
+        });
+        liteCanvas.addEventListener('touchend', () => { isDragging = false; });
+
+        function renderWebglLite() {
+            if (activeBackend !== 'webgl-lite' || !webglLiteInitialized) return;
+            const chkSpheres = document.getElementById('chk-svg-spheres').checked;
+            const chkCapsules = document.getElementById('chk-svg-capsules').checked;
+            const chkBoxes = document.getElementById('chk-svg-boxes').checked;
+            
+            WebGLLiteBackend.render(liteCanvas, primitivesData, {
+                theta: theta,
+                phi: phi,
+                distance: dist
+            }, palette, chkSpheres, chkCapsules, chkBoxes);
+        }
 
         // Backend switching controller
         const selectBackend = document.getElementById('select-backend');
@@ -704,9 +998,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         function setBackend(backend) {
             activeBackend = backend;
+            const liteCanvas = document.getElementById('webgl-lite-canvas');
+            
             if (backend === 'svg') {
                 svgPreviewContainer.style.display = 'flex';
                 canvas2d.style.display = 'none';
+                liteCanvas.style.display = 'none';
                 canvas.style.display = 'none';
                 projSelectorGroup.style.display = 'block';
                 svgControls.style.display = 'block';
@@ -717,6 +1014,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             } else if (backend === 'canvas2d') {
                 svgPreviewContainer.style.display = 'none';
                 canvas2d.style.display = 'block';
+                liteCanvas.style.display = 'none';
                 canvas.style.display = 'none';
                 projSelectorGroup.style.display = 'none';
                 svgControls.style.display = 'block';
@@ -725,6 +1023,31 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 fpsCounter.style.display = 'none';
                 if (!paused) pauseRender();
                 resizeCanvas2d();
+            } else if (backend === 'webgl-lite') {
+                svgPreviewContainer.style.display = 'none';
+                canvas2d.style.display = 'none';
+                liteCanvas.style.display = 'block';
+                canvas.style.display = 'none';
+                projSelectorGroup.style.display = 'none';
+                svgControls.style.display = 'block';
+                webglStartGroup.style.display = 'none';
+                webglControls.style.display = 'none';
+                fpsCounter.style.display = 'none';
+                if (!paused) pauseRender();
+                
+                if (!webglLiteInitialized) {
+                    try {
+                        WebGLLiteBackend.init(liteCanvas);
+                        webglLiteInitialized = true;
+                    } catch (err) {
+                        errorLog.textContent = 'WebGL Lite Init Failed: ' + err.message;
+                        console.error(err);
+                        selectBackend.value = 'canvas2d';
+                        setBackend('canvas2d');
+                        return;
+                    }
+                }
+                renderWebglLite();
             } else if (backend === 'webgl') {
                 if (webglRiskLevel === 'high') {
                     const proceed = confirm("Warning: High WebGL Risk. Shader is large and may freeze your browser for a few seconds. Continue?");
@@ -1043,25 +1366,25 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             document.querySelectorAll('.group-bound').forEach(el => {
                 el.style.display = chkGroups.checked ? 'inline' : 'none';
             });
-            renderCanvas2d();
+            triggerActiveRender();
         });
         chkSpheres.addEventListener('change', () => {
             document.querySelectorAll('.prim-sphere').forEach(el => {
                 el.style.display = chkSpheres.checked ? 'inline' : 'none';
             });
-            renderCanvas2d();
+            triggerActiveRender();
         });
         chkCapsules.addEventListener('change', () => {
             document.querySelectorAll('.prim-capsule').forEach(el => {
                 el.style.display = chkCapsules.checked ? 'inline' : 'none';
             });
-            renderCanvas2d();
+            triggerActiveRender();
         });
         chkBoxes.addEventListener('change', () => {
             document.querySelectorAll('.prim-box').forEach(el => {
                 el.style.display = chkBoxes.checked ? 'inline' : 'none';
             });
-            renderCanvas2d();
+            triggerActiveRender();
         });
 
         function createShader(gl, type, source) {
@@ -3178,6 +3501,19 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_r
             "hierarchical_grouping_seconds": t_group,
             "coarse_sdf_bake_seconds": t_bake,
             "residual_field_bake_seconds": t_residual
+        },
+        "viewer": {
+            "default_backend": "canvas2d",
+            "available_backends": ["svg", "canvas2d", "webgl-lite", "webgl-full"],
+            "webgl_lite_fixed_shader": True,
+            "webgl_lite_lazy": True,
+            "webgl_full_lazy": True,
+            "webgl_full_risk": risk_level,
+            "risk_reasons": [risk_reason] if risk_reason else [],
+            "shader_length": len(fs_estimated_len) if isinstance(fs_estimated_len, str) else fs_estimated_len,
+            "max_primitives_per_group": max_prims_per_group,
+            "svg_primitive_limit": 512,
+            "svg_truncated": svg_truncated
         },
         "residual_validation": validation_stats["validation_stats"],
         "signed_offset_validation": validation_stats["signed_offset_validation"],
