@@ -95,8 +95,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const canvas = document.getElementById('canvas');
         const errorLog = document.getElementById('error-log');
         
-        // Assert WebGL2 context exclusively
-        const gl = canvas.getContext('webgl2');
+        // Use a low-overhead context; this shader is intentionally compute-heavy.
+        const gl = canvas.getContext('webgl2', {
+            antialias: false,
+            powerPreference: 'high-performance',
+            preserveDrawingBuffer: false,
+            desynchronized: true
+        });
+        const MAX_RENDER_PIXELS = 640 * 360;
         if (!gl) {
             errorLog.textContent = 'Error: WebGL2 context not available.';
             throw new Error('WebGL2 context not available');
@@ -315,7 +321,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
                 float res = 1.0;
                 float t = mint;
-                for (int i = 0; i < 24; i++) {
+                for (int i = 0; i < 12; i++) {
                     float hd = is_left ? mapDAnalytic(ro + rd * t) : mapD(ro + rd * t);
                     if (hd < 0.001) return 0.0;
                     res = min(res, k * hd / t);
@@ -332,9 +338,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 vec3 b = cross(n, t);
                 float occ = 0.0;
                 float sca = 1.0;
-                for (int i = 0; i < 5; i++) {
+                for (int i = 0; i < 3; i++) {
                     float fi = float(i);
-                    float hr = 0.01 + 0.12 * fi / 4.0;
+                    float hr = 0.01 + 0.12 * fi / 2.0;
                     float angle = fi * 2.39996; // Golden angle
                     vec3 dir = normalize(n + 0.4 * (cos(angle)*t + sin(angle)*b));
                     float dd = is_left ? mapDAnalytic(p + dir * hr) : mapD(p + dir * hr);
@@ -380,7 +386,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     float t = max(tmin, 0.0);
                     bool is_left = (u_debugMode == 10 && gl_FragCoord.x < 0.5 * u_resolution.x);
                     
-                    for (int i = 0; i < 80; i++) { // Detail tracing optimized to 80 steps
+                    for (int i = 0; i < 48; i++) { // Bounded tracing: prevents GPU watchdog stalls
                         march_steps = i;
                         p = ro + rd * t;
                         
@@ -401,7 +407,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         
                         float step_d;
                         if (is_left) {
-                            step_d = dist;
+                            step_d = max(dist, 0.0002);
                         } else {
                             if (dist > 0.0002) {
                                 step_d = dist;
@@ -457,7 +463,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                             color = vec3(coarse);
                         } else if (u_debugMode == 3) {
                             // Step count heatmap (blue=cheap, red=expensive)
-                            float stepsNorm = float(march_steps) / 128.0;
+                            float stepsNorm = float(march_steps) / 48.0;
                             color = mix(vec3(0.0, 0.2, 1.0), vec3(1.0, 0.0, 0.0), stepsNorm);
                         } else if (u_debugMode == 4) {
                             // Eikonal stress (green=healthy, red=stressed)
@@ -496,7 +502,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 
                 // Raymiss step heatmap visualization
                 if (!hit && u_debugMode == 3) {
-                    float stepsNorm = float(march_steps) / 128.0;
+                    float stepsNorm = float(march_steps) / 48.0;
                     color = mix(vec3(0.0, 0.2, 1.0), vec3(1.0, 0.0, 0.0), stepsNorm);
                 }
 
@@ -631,8 +637,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         });
 
         function resize() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            const cssWidth = Math.max(1, window.innerWidth);
+            const cssHeight = Math.max(1, window.innerHeight);
+            const scale = Math.min(1, Math.sqrt(MAX_RENDER_PIXELS / (cssWidth * cssHeight)));
+            canvas.width = Math.max(1, Math.floor(cssWidth * scale));
+            canvas.height = Math.max(1, Math.floor(cssHeight * scale));
             gl.viewport(0, 0, canvas.width, canvas.height);
         }
         window.addEventListener('resize', resize);
