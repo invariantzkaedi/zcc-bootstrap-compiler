@@ -480,8 +480,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         float diffuse = max(dot(n, l), 0.0);
                         float specular = pow(max(dot(r, v), 0.0), u_specularPower);
                         
-                        float ao = (u_enableAO == 1) ? getAO(p, n, is_left) : 1.0;
-                        float shadow = (u_enableShadow == 1) ? getShadow(p + n * 0.005, l, 0.015, 4.0, 16.0, is_left) : 1.0;
+                        float ao = 1.0;
+                        if (u_enableAO == 1) {
+                            ao = getAO(p, n, is_left);
+                        }
+                        float shadow = 1.0;
+                        if (u_enableShadow == 1) {
+                            shadow = getShadow(p + n * 0.005, l, 0.015, 4.0, 16.0, is_left);
+                        }
                         
                         vec3 baseCol = map_res.yzw;
                         
