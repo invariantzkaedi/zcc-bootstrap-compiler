@@ -9,6 +9,15 @@ import random
 import warnings
 import base64
 
+# WebGL Shader Compiler Risk Boundaries and Safety Ceilings
+WEBGL_SHADER_RISK_LOW_MAX = 45 * 1024
+WEBGL_SHADER_RISK_MED_MAX = 52 * 1024
+WEBGL_GROUP_PRIMS_HIGH = 24
+WEBGL_COMPILER_SAFETY_CEILING = 55 * 1024
+
+# SVG Node Count Guardrail Limits
+SVG_MAX_PRIMITIVES_LIMIT = 512
+
 # WebGL2 Exclusivity Raymarching Template with Audio, UI uniforms, and modular zone functions
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html>
@@ -39,6 +48,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <p>Resolution: Infinite</p>
         <p>WebGL Risk: <span id="risk-badge" style="__RISK_BADGE_STYLE__">__RISK_LEVEL__</span></p>
         <p id="risk-reason" style="font-size: 10px; color: #aaa; margin-top: 4px;">__RISK_REASON__</p>
+        <p id="svg-warning" style="font-size: 10px; color: #ff00aa; margin-top: 4px; font-weight: bold;">__SVG_WARNING__</p>
         
         <div id="error-log"></div>
 
@@ -177,21 +187,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <canvas id="canvas"></canvas>
     
     <script>
-        const canvas = document.getElementById('canvas');
-        const errorLog = document.getElementById('error-log');
-        
-        // Use a low-overhead context; this shader is intentionally compute-heavy.
-        const gl = canvas.getContext('webgl2', {
-            antialias: false,
-            powerPreference: 'high-performance',
-            preserveDrawingBuffer: false,
-            desynchronized: true
-        });
-        let maxRenderPixels = 57600;
-        if (!gl) {
-            errorLog.textContent = 'Error: WebGL2 context not available.';
-            throw new Error('WebGL2 context not available');
-        }
+
 
         const vsSource = `#version 300 es
             in vec2 position;
@@ -2356,7 +2352,7 @@ def generate_zone_glsl(groups, palette):
         
     return "\n\n".join(zone_funcs)
 
-def emit_svg_proxy(output_file, primitives, groups, palette, bounding_radius, quality_name, risk_level, risk_reason):
+def emit_svg_proxy(output_file, primitives, groups, palette, bounding_radius, quality_name, risk_level, risk_reason, truncated_msg=""):
     svg_path = output_file.replace(".html", ".svg")
     width, height = 1200, 800
     scale = 0.42 * min(width, height) / max(1e-6, bounding_radius)
@@ -2382,6 +2378,9 @@ def emit_svg_proxy(output_file, primitives, groups, palette, bounding_radius, qu
     # Risk badge in SVG text
     risk_color = "#00ffcc" if risk_level == "low" else ("#ffaa00" if risk_level == "medium" else "#ff00aa")
     lines.append(f'<text x="24" y="84" fill="{risk_color}">WebGL Risk: {risk_level.upper()} ({risk_reason})</text>')
+
+    if truncated_msg:
+        lines.append(f'<text x="24" y="108" fill="#ff00aa">⚠ {truncated_msg}</text>')
 
     # Group bounds
     for g in groups:
@@ -2596,19 +2595,29 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_r
         val_pts, groups, res_b64, err_b64, bounding_radius, blend_radius=0.12, resolution=res_res_actual, eps_ratio=eps_ratio
     )
 
-    # Determine compile-time risk level & reason
+    # Determine compile-time risk level & reason using named safety constants
     risk_level = "low"
     risk_reason = "Shader size is small and primitive count is low."
-    if fs_estimated_len > 45000:
+    if fs_estimated_len > WEBGL_SHADER_RISK_LOW_MAX:
         risk_level = "medium"
         risk_reason = "Shader size is close to WebGL2 driver compiling budget."
-    if fs_estimated_len > 52000 or max_prims_per_group > 24:
+    if fs_estimated_len > WEBGL_SHADER_RISK_MED_MAX or max_prims_per_group > WEBGL_GROUP_PRIMS_HIGH:
         risk_level = "high"
         risk_reason = "Pathological asset size or group primitives count. WebGL compilation may take a few seconds."
 
+    # SVG Node Count Guardrail Truncation
+    svg_primitives = primitives
+    svg_truncated = False
+    truncated_msg = ""
+    if len(primitives) > SVG_MAX_PRIMITIVES_LIMIT:
+        svg_primitives = primitives[:SVG_MAX_PRIMITIVES_LIMIT]
+        svg_truncated = True
+        truncated_msg = f"SVG preview truncated: {SVG_MAX_PRIMITIVES_LIMIT} / {len(primitives)} primitives shown to prevent DOM lag."
+        print(f"[ZCC SDF Compiler] WARNING: SVG preview primitive count ({len(primitives)}) exceeds limit of {SVG_MAX_PRIMITIVES_LIMIT}. Truncating.")
+
     # Emit static SVG proxy file
     svg_path, svg_content = emit_svg_proxy(
-        output_file, primitives, groups, palette, bounding_radius, quality, risk_level, risk_reason
+        output_file, svg_primitives, groups, palette, bounding_radius, quality, risk_level, risk_reason, truncated_msg
     )
     print(f"[ZCC SDF Compiler] Emitting SVG static proxy to {svg_path}...")
 
@@ -2627,8 +2636,8 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_r
         cx, cy = project(g["center"])
         r = float(g["radius"]) * scale
         svg_elements.append(f'<circle id="svg-group-{idx}" class="group-bound" cx="{cx:.2f}" cy="{cy:.2f}" r="{r:.2f}"/>')
-    # Primitives
-    for idx, p in enumerate(primitives):
+    # Primitives (truncated if above cap)
+    for idx, p in enumerate(svg_primitives):
         col = palette[p["cluster_idx"] % len(palette)]
         color = f'rgb({int(col[0]*255)},{int(col[1]*255)},{int(col[2]*255)})'
         if p["type"] == "sphere":
@@ -2678,6 +2687,7 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_r
     html_content = html_content.replace("__RISK_LEVEL__", risk_level.upper())
     html_content = html_content.replace("__RISK_REASON__", risk_reason)
     html_content = html_content.replace("__RISK_BADGE_STYLE__", badge_style)
+    html_content = html_content.replace("__SVG_WARNING__", truncated_msg if svg_truncated else "")
     html_content = html_content.replace("__SVG_ELEMENTS__", svg_elements_str)
     html_content = html_content.replace("__JS_PRIMITIVES__", js_primitives)
     html_content = html_content.replace("__JS_GROUPS__", js_groups)
