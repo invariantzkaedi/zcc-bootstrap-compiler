@@ -1207,13 +1207,9 @@ static uint32_t constant_fold_pass(Function *fn) {
         break;
       case OP_DIV:
         if (!ins->is_float && d1 && d1->op == OP_CONST && d1->imm == 0) {
-          int is_err = (getenv("ZCC_ERROR_DIVZERO_PROVEN") != NULL);
-          int closed_world = (getenv("ZCC_ICP_CLOSED_WORLD") != NULL);
-          if (is_err || closed_world) {
-            zcc_divzero_report(ins->line_no, 0);
-            result = 0;
-            goto fold_binary;
-          }
+          zcc_divzero_report(ins->line_no, 0);
+          result = 0;
+          goto fold_binary;
         }
         if (d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
           if (d1->imm != 0) {
@@ -1224,13 +1220,9 @@ static uint32_t constant_fold_pass(Function *fn) {
         break;
       case OP_MOD:
         if (!ins->is_float && d1 && d1->op == OP_CONST && d1->imm == 0) {
-          int is_err = (getenv("ZCC_ERROR_DIVZERO_PROVEN") != NULL);
-          int closed_world = (getenv("ZCC_ICP_CLOSED_WORLD") != NULL);
-          if (is_err || closed_world) {
-            zcc_divzero_report(ins->line_no, 1);
-            result = 0;
-            goto fold_binary;
-          }
+          zcc_divzero_report(ins->line_no, 1);
+          result = 0;
+          goto fold_binary;
         }
         if (d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
           if (d1->imm != 0) {
@@ -7067,6 +7059,9 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
 #define N_PHYS_REGS 7
 static const char *const phys_reg_name[N_PHYS_REGS] = {
     "rbx", "r10", "r11", "r12", "r13", "r14", "r15"};
+/* Keep in sync with phys_reg_name above. */
+static const char *const phys_reg_name32[N_PHYS_REGS] = {
+    "ebx", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d"};
 #define PHYS_CALLEE_SAVED_MASK                                                 \
   ((1 << 0) | (1 << 3) | (1 << 4) | (1 << 5) | (1 << 6)) /* rbx, r12-r15 */
 static const int callee_saved_push_order[5] = {0, 3, 4, 5,
@@ -7450,6 +7445,22 @@ static void ir_asm_load_to_rcx(IRAsmCtx *ctx, RegID r) {
     fprintf(f, "    movq %d(%%rbp), %%rcx\n", slot);
 }
 
+static void ir_asm_load_to_rcx_typed(IRAsmCtx *ctx, RegID r, IRType t) {
+  FILE *f = ctx->out;
+  int slot;
+  int p = ir_asm_vreg_location(ctx, r, &slot);
+  if (p >= 0) {
+    if (t == IR_TY_I32 || t == IR_TY_U32)
+      fprintf(f, "    movl %%%s, %%ecx\n", phys_reg_name32[p]);
+    else
+      fprintf(f, "    movq %%%s, %%rcx\n", phys_reg_name[p]);
+  } else if (t == IR_TY_I32 || t == IR_TY_U32) {
+    fprintf(f, "    movl %d(%%rbp), %%ecx\n", slot);
+  } else {
+    fprintf(f, "    movq %d(%%rbp), %%rcx\n", slot);
+  }
+}
+
 static void ir_asm_load_to_xmm(IRAsmCtx *ctx, RegID r, int xmm_idx, int is_f32) {
   FILE *f = ctx->out;
   int slot;
@@ -7741,15 +7752,11 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
       ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);
       if (ins->ir_type == IR_TY_I32) {
         fprintf(f, "    cltd\n");              /* sign-extend eax → edx:eax    */
-        fprintf(f, "    movl ");
-        ir_asm_emit_src_operand(ctx, ins->src[1]);
-        fprintf(f, ", %%ecx\n");
+        ir_asm_load_to_rcx_typed(ctx, ins->src[1], ins->ir_type);
         fprintf(f, "    idivl %%ecx\n");
       } else if (ins->ir_type == IR_TY_U32) {
         fprintf(f, "    xorl %%edx, %%edx\n");
-        fprintf(f, "    movl ");
-        ir_asm_emit_src_operand(ctx, ins->src[1]);
-        fprintf(f, ", %%ecx\n");
+        ir_asm_load_to_rcx_typed(ctx, ins->src[1], ins->ir_type);
         fprintf(f, "    divl %%ecx\n");
       } else if (ins->ir_type == IR_TY_U64) {
         fprintf(f, "    xorl %%edx, %%edx\n");
@@ -7775,16 +7782,12 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
     ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);
     if (ins->ir_type == IR_TY_I32) {
       fprintf(f, "    cltd\n");
-      fprintf(f, "    movl ");
-      ir_asm_emit_src_operand(ctx, ins->src[1]);
-      fprintf(f, ", %%ecx\n");
+      ir_asm_load_to_rcx_typed(ctx, ins->src[1], ins->ir_type);
       fprintf(f, "    idivl %%ecx\n");
       fprintf(f, "    movl %%edx, %%eax\n");
     } else if (ins->ir_type == IR_TY_U32) {
       fprintf(f, "    xorl %%edx, %%edx\n");
-      fprintf(f, "    movl ");
-      ir_asm_emit_src_operand(ctx, ins->src[1]);
-      fprintf(f, ", %%ecx\n");
+      ir_asm_load_to_rcx_typed(ctx, ins->src[1], ins->ir_type);
       fprintf(f, "    divl %%ecx\n");
       fprintf(f, "    movl %%edx, %%eax\n");
     } else if (ins->ir_type == IR_TY_U64) {

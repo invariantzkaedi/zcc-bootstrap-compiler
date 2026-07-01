@@ -212,6 +212,19 @@ static int log2_of(long long val) {
   return n;
 }
 
+static void emit_ir_const_result(Type *type, long long value, int line) {
+  char *dst = ir_bridge_fresh_tmp();
+  ZCC_EMIT_CONST(ir_map_type(type), dst, value, line);
+}
+
+static void emit_zero_result(Compiler *cc, Type *type, int line) {
+  if (backend_ops)
+    fprintf(cc->out, "    mov r0, #0\n");
+  else
+    fprintf(cc->out, "    movq $0, %%rax\n");
+  emit_ir_const_result(type, 0, line);
+}
+
 /* Emit efficient pointer-scale for r11: shlq for power-of-2 sizes, imulq otherwise.
  * Oneirogenesis confirmed 371 surviving shlq substitutions — wire it into the codegen. */
 #define EMIT_PTR_SCALE_R11(cc, esz) do { \
@@ -1811,10 +1824,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       long long rhs_cv = eval_const_expr_p4(node->rhs, &rhs_ok);
       if (rhs_ok && rhs_cv == 0) {
         zcc_divzero_report(node->line, 0);
-        if (!backend_ops) {
-          fprintf(cc->out, "    movq $0, %%rax\n");
-        }
-        ir_emit_binary_op(ND_DIV, node->type, "$const_lhs", "$const_rhs", node->line);
+        emit_zero_result(cc, node->type, node->line);
         return;
       }
     }
@@ -1899,10 +1909,12 @@ void codegen_expr(Compiler *cc, Node *node) {
           /* CG-SIGFPE-002: fold division by zero to 0 to avoid runtime SIGFPE */
           result = 0;
         }
-        if (!backend_ops) {
+        if (backend_ops) {
+          fprintf(cc->out, "    mov r0, #%lld\n", result);
+        } else {
           fprintf(cc->out, "    movq $%lld, %%rax\n", result);
         }
-        ir_emit_binary_op(ND_DIV, node->type, "$const_lhs", "$const_rhs", node->line);
+        emit_ir_const_result(node->type, result, node->line);
         return;
       }
     }
@@ -1940,10 +1952,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       long long rhs_cv = eval_const_expr_p4(node->rhs, &rhs_ok);
       if (rhs_ok && rhs_cv == 0) {
         zcc_divzero_report(node->line, 1);
-        if (!backend_ops) {
-          fprintf(cc->out, "    movq $0, %%rax\n");
-        }
-        ir_emit_binary_op(ND_MOD, node->type, "$const_lhs", "$const_rhs", node->line);
+        emit_zero_result(cc, node->type, node->line);
         return;
       }
     }
@@ -1964,10 +1973,12 @@ void codegen_expr(Compiler *cc, Node *node) {
           /* CG-SIGFPE-002: fold modulo by zero to 0 to avoid runtime SIGFPE */
           result = 0;
         }
-        if (!backend_ops) {
+        if (backend_ops) {
+          fprintf(cc->out, "    mov r0, #%lld\n", result);
+        } else {
           fprintf(cc->out, "    movq $%lld, %%rax\n", result);
         }
-        ir_emit_binary_op(ND_MOD, node->type, "$const_lhs", "$const_rhs", node->line);
+        emit_ir_const_result(node->type, result, node->line);
         return;
       }
     }
