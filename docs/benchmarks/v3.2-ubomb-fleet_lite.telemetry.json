@@ -1,0 +1,49 @@
+{
+  "source": "fleet_lite.glb",
+  "num_spheres": 64,
+  "num_samples": 15000,
+  "total_elapsed_seconds": 3.1981940269470215,
+  "parser": {
+    "num_accessors_read": 38,
+    "samples_requested": 15000,
+    "samples_written": 14941,
+    "read_calls": 100,
+    "bytes_read": 179292,
+    "avg_read_bytes": 1792
+  },
+  "passes": {
+    "stream_parser_seconds": 0.4649934768676758,
+    "kmeans_clustering_seconds": 0.7174229621887207,
+    "pca_classification_seconds": 0.05883502960205078,
+    "hierarchical_grouping_seconds": 0.003281116485595703,
+    "coarse_sdf_bake_seconds": 0.004268646240234375,
+    "residual_field_bake_seconds": 1.871448040008545
+  },
+  "residual_validation": {
+    "heldout_samples": 2989,
+    "analytic_mean_abs": 0.10085051506757736,
+    "analytic_p95_abs": 0.13532553613185883,
+    "visual_mean_abs": 0.02472355216741562,
+    "visual_p95_abs": 0.09108728915452957,
+    "visual_max_abs": 0.09251244366168976,
+    "bound_violation_rate": 0.0,
+    "max_bound_violation": 0.0,
+    "p95_bound_margin": 0.14654715359210968
+  },
+  "eikonal_validation": {
+    "mean_stress": 0.44049835205078125,
+    "p95_stress": 0.8330260515213013,
+    "max_stress": 0.9995226263999939
+  },
+  "residual_ablation": {
+    "analytic_p95_abs_error": 0.13532553613185883,
+    "visual_p95_abs_error": 0.09108728915452957,
+    "residual_improvement_ratio": 0.32690243276940933
+  },
+  "certificate": {
+    "status": "empirical_certificate",
+    "claim": "Empirical coverage verified with zero out-of-sample safety violations under CPU validation.",
+    "violation_rate": 0.0,
+    "heldout_samples": 2989
+  }
+}

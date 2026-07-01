@@ -1560,28 +1560,93 @@ def bake_coarse_sdf_b64(groups, bounding_radius, resolution=32):
     grid = min_d.reshape(resolution, resolution, resolution)
     return base64.b64encode(grid.tobytes()).decode('ascii'), resolution
 
+def estimate_analytic_gradients(points, groups, blend_radius, h=1e-3):
+    """
+    Estimates the normalized gradient vector of the analytic SDF at the given points
+    using central differences.
+    """
+    N = points.shape[0]
+    
+    # Offsets in each dimension
+    dx = np.zeros_like(points)
+    dx[:, 0] = h
+    dy = np.zeros_like(points)
+    dy[:, 1] = h
+    dz = np.zeros_like(points)
+    dz[:, 2] = h
+    
+    # Evaluate at offset coordinates
+    d_x_plus  = eval_analytic_sdf_cpu(points + dx, groups, blend_radius)
+    d_x_minus = eval_analytic_sdf_cpu(points - dx, groups, blend_radius)
+    d_y_plus  = eval_analytic_sdf_cpu(points + dy, groups, blend_radius)
+    d_y_minus = eval_analytic_sdf_cpu(points - dy, groups, blend_radius)
+    d_z_plus  = eval_analytic_sdf_cpu(points + dz, groups, blend_radius)
+    d_z_minus = eval_analytic_sdf_cpu(points - dz, groups, blend_radius)
+    
+    gx = (d_x_plus - d_x_minus) / (2.0 * h)
+    gy = (d_y_plus - d_y_minus) / (2.0 * h)
+    gz = (d_z_plus - d_z_minus) / (2.0 * h)
+    
+    g = np.stack([gx, gy, gz], axis=1)
+    g_lens = np.linalg.norm(g, axis=1)
+    
+    # Avoid division by zero: default to up-vector for zero/tiny gradients
+    zero_mask = g_lens < 1e-8
+    g_lens[zero_mask] = 1.0
+    g[zero_mask] = np.array([0.0, 1.0, 0.0])
+    
+    return g / g_lens[:, np.newaxis]
+
 def bake_residual_and_error(groups, bounding_radius, sampled_points, blend_radius, resolution=32):
     """
-    Bakes a robust residual correction field R and conservative local error bounds E.
+    Bakes a robust signed-distance residual correction field R and conservative local error bounds E
+    using surface-offset signed sampling.
     """
     R_grid = np.zeros((resolution, resolution, resolution), dtype=np.float32)
     E_grid = np.zeros((resolution, resolution, resolution), dtype=np.float32)
     
     voxel_residuals = {}
+    N = len(sampled_points)
+    if N == 0:
+        return (
+            base64.b64encode(R_grid.tobytes()).decode('ascii'),
+            base64.b64encode(E_grid.tobytes()).decode('ascii'),
+            resolution
+        )
+        
+    # 1. Compute offsets using estimated analytic SDF gradients (normals)
+    voxel_size = 2.0 * bounding_radius / resolution
+    eps = 0.5 * voxel_size
     
-    # Vectorized CPU evaluation sweep
-    d_a = eval_analytic_sdf_cpu(sampled_points, groups, blend_radius)
-    residuals = -d_a
+    normals = estimate_analytic_gradients(sampled_points, groups, blend_radius)
     
-    # Map to voxel coordinates in a vectorized pass
-    v_coors = ((sampled_points + bounding_radius) * (resolution / (2.0 * bounding_radius))).astype(int)
-    v_coors = np.clip(v_coors, 0, resolution - 1)
+    pts_plus = sampled_points + eps * normals
+    pts_minus = sampled_points - eps * normals
     
-    for i in range(len(sampled_points)):
-        key = (v_coors[i, 0], v_coors[i, 1], v_coors[i, 2])
+    # 2. Evaluate analytic distances in a single vectorized pass
+    all_pts = np.vstack([sampled_points, pts_plus, pts_minus])
+    d_a_all = eval_analytic_sdf_cpu(all_pts, groups, blend_radius)
+    
+    d_a_surface = d_a_all[:N]
+    d_a_plus = d_a_all[N:2*N]
+    d_a_minus = d_a_all[2*N:]
+    
+    # 3. Form unified signed distance residuals
+    r_surface = -d_a_surface
+    r_plus = eps - d_a_plus
+    r_minus = -eps - d_a_minus
+    
+    all_residuals = np.concatenate([r_surface, r_plus, r_minus])
+    
+    # 4. Map points to voxel coordinates
+    v_coors_all = ((all_pts + bounding_radius) * (resolution / (2.0 * bounding_radius))).astype(int)
+    v_coors_all = np.clip(v_coors_all, 0, resolution - 1)
+    
+    for i in range(len(all_pts)):
+        key = (v_coors_all[i, 0], v_coors_all[i, 1], v_coors_all[i, 2])
         if key not in voxel_residuals:
             voxel_residuals[key] = []
-        voxel_residuals[key].append(residuals[i])
+        voxel_residuals[key].append(all_residuals[i])
         
     for x in range(resolution):
         for y in range(resolution):
