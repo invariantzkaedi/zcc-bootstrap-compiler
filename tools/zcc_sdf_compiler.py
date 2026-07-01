@@ -560,6 +560,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }
         `;
 
+        let webglInitialized = false;
+        let program, resLoc, mouseLoc, timeLoc, blendLoc, jiggleLoc, glowLoc, specularLoc, fftBandsLoc, debugLoc, maxStepsLoc, enableAOLoc, enableShadowLoc;
+
         function createShader(gl, type, source) {
             const shader = gl.createShader(type);
             gl.shaderSource(shader, source);
@@ -573,112 +576,130 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             return shader;
         }
 
-        const program = gl.createProgram();
-        const vs = createShader(gl, gl.VERTEX_SHADER, vsSource);
-        const fs = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
-        gl.attachShader(program, vs);
-        gl.attachShader(program, fs);
-        gl.linkProgram(program);
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-            const log = gl.getProgramInfoLog(program);
-            errorLog.textContent = 'Program Link Error: ' + log;
-            const lines = fsSource.split('\\n');
-            const annotated = lines.map((l, i) => `${String(i+1).padStart(4)}: ${l}`).join('\\n');
-            console.error('Annotated fragment shader:\\n' + annotated);
-            throw new Error(log);
+        function initWebGL() {
+            if (webglInitialized) return true;
+            try {
+                errorLog.textContent = 'Decoding coarse/residual SDF texture arrays...';
+                
+                // Upload baked Coarse SDF 3D Texture
+                const coarseSdfB64 = "__COARSE_SDF_B64__";
+                const coarseSdfRes = __COARSE_SDF_RES__;
+                const coarseBytes = Uint8Array.from(atob(coarseSdfB64), c => c.charCodeAt(0));
+                const coarseData = new Float32Array(coarseBytes.buffer);
+
+                // Upload baked Residual SDF 3D Texture
+                const residualSdfB64 = "__RESIDUAL_SDF_B64__";
+                const residualSdfRes = __RESIDUAL_SDF_RES__;
+                const residualBytes = Uint8Array.from(atob(residualSdfB64), c => c.charCodeAt(0));
+                const residualData = new Float32Array(residualBytes.buffer);
+
+                // Upload baked Error Bound SDF 3D Texture
+                const errorSdfB64 = "__ERROR_SDF_B64__";
+                const errorBytes = Uint8Array.from(atob(errorSdfB64), c => c.charCodeAt(0));
+                const errorData = new Float32Array(errorBytes.buffer);
+
+                errorLog.textContent = 'Compiling shaders...';
+                program = gl.createProgram();
+                const vs = createShader(gl, gl.VERTEX_SHADER, vsSource);
+                const fs = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+                gl.attachShader(program, vs);
+                gl.attachShader(program, fs);
+                
+                errorLog.textContent = 'Linking WebGL program...';
+                gl.linkProgram(program);
+                if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                    const log = gl.getProgramInfoLog(program);
+                    errorLog.textContent = 'Program Link Error: ' + log;
+                    const lines = fsSource.split('\\n');
+                    const annotated = lines.map((l, i) => `${String(i+1).padStart(4)}: ${l}`).join('\\n');
+                    console.error('Annotated fragment shader:\\n' + annotated);
+                    throw new Error(log);
+                }
+                gl.useProgram(program);
+
+                const hasFloatLinear = gl.getExtension('OES_texture_float_linear');
+                const filterMode = hasFloatLinear ? gl.LINEAR : gl.NEAREST;
+                if (!hasFloatLinear) {
+                    console.warn('OES_texture_float_linear not supported. Falling back to NEAREST filtering.');
+                }
+
+                const coarseTex = gl.createTexture();
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_3D, coarseTex);
+                gl.texImage3D(gl.TEXTURE_3D, 0, gl.R32F,
+                    coarseSdfRes, coarseSdfRes, coarseSdfRes,
+                    0, gl.RED, gl.FLOAT, coarseData);
+                gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, filterMode);
+                gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, filterMode);
+                gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+                gl.uniform1i(gl.getUniformLocation(program, 'u_coarseSDF'), 0);
+
+                const residualTex = gl.createTexture();
+                gl.activeTexture(gl.TEXTURE1);
+                gl.bindTexture(gl.TEXTURE_3D, residualTex);
+                gl.texImage3D(gl.TEXTURE_3D, 0, gl.R32F,
+                    residualSdfRes, residualSdfRes, residualSdfRes,
+                    0, gl.RED, gl.FLOAT, residualData);
+                gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, filterMode);
+                gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, filterMode);
+                gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+                gl.uniform1i(gl.getUniformLocation(program, 'u_residualSDF'), 1);
+
+                const errorTex = gl.createTexture();
+                gl.activeTexture(gl.TEXTURE2);
+                gl.bindTexture(gl.TEXTURE_3D, errorTex);
+                gl.texImage3D(gl.TEXTURE_3D, 0, gl.R32F,
+                    residualSdfRes, residualSdfRes, residualSdfRes,
+                    0, gl.RED, gl.FLOAT, errorData);
+                gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+                gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+                gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+                gl.uniform1i(gl.getUniformLocation(program, 'u_errorSDF'), 2);
+
+                let err = gl.getError();
+                if (err !== gl.NO_ERROR) {
+                    errorLog.textContent += `\\nWebGL Error during texture upload: ${err}`;
+                    console.error('WebGL Error during texture upload:', err);
+                }
+
+                const positionLoc = gl.getAttribLocation(program, 'position');
+                const buffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                    -1, -1,  1, -1, -1,  1,
+                    -1,  1,  1, -1,  1,  1
+                ]), gl.STATIC_DRAW);
+                gl.enableVertexAttribArray(positionLoc);
+                gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
+
+                resLoc = gl.getUniformLocation(program, 'u_resolution');
+                mouseLoc = gl.getUniformLocation(program, 'u_mouse');
+                timeLoc = gl.getUniformLocation(program, 'u_time');
+                blendLoc = gl.getUniformLocation(program, 'u_blendRadius');
+                jiggleLoc = gl.getUniformLocation(program, 'u_jiggle');
+                glowLoc = gl.getUniformLocation(program, 'u_glow');
+                specularLoc = gl.getUniformLocation(program, 'u_specularPower');
+                fftBandsLoc = gl.getUniformLocation(program, 'u_fftBands');
+                debugLoc = gl.getUniformLocation(program, 'u_debugMode');
+                maxStepsLoc = gl.getUniformLocation(program, 'u_maxSteps');
+                enableAOLoc = gl.getUniformLocation(program, 'u_enableAO');
+                enableShadowLoc = gl.getUniformLocation(program, 'u_enableShadow');
+
+                webglInitialized = true;
+                errorLog.textContent = 'Render resources compiled and loaded successfully.';
+                return true;
+            } catch (e) {
+                errorLog.textContent = 'WebGL Initialization Failed: ' + e.message;
+                console.error('WebGL Initialization Failed:', e);
+                return false;
+            }
         }
-        gl.useProgram(program);
-
-        // Upload baked Coarse SDF 3D Texture
-        const coarseSdfB64 = "__COARSE_SDF_B64__";
-        const coarseSdfRes = __COARSE_SDF_RES__;
-        const coarseBytes = Uint8Array.from(atob(coarseSdfB64), c => c.charCodeAt(0));
-        const coarseData = new Float32Array(coarseBytes.buffer);
-
-        const hasFloatLinear = gl.getExtension('OES_texture_float_linear');
-        const filterMode = hasFloatLinear ? gl.LINEAR : gl.NEAREST;
-        if (!hasFloatLinear) {
-            console.warn('OES_texture_float_linear not supported. Falling back to NEAREST filtering.');
-        }
-
-        const coarseTex = gl.createTexture();
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_3D, coarseTex);
-        gl.texImage3D(gl.TEXTURE_3D, 0, gl.R32F,
-            coarseSdfRes, coarseSdfRes, coarseSdfRes,
-            0, gl.RED, gl.FLOAT, coarseData);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, filterMode);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, filterMode);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
-        gl.uniform1i(gl.getUniformLocation(program, 'u_coarseSDF'), 0);
-
-        // Upload baked Residual SDF 3D Texture
-        const residualSdfB64 = "__RESIDUAL_SDF_B64__";
-        const residualSdfRes = __RESIDUAL_SDF_RES__;
-        const residualBytes = Uint8Array.from(atob(residualSdfB64), c => c.charCodeAt(0));
-        const residualData = new Float32Array(residualBytes.buffer);
-
-        const residualTex = gl.createTexture();
-        gl.activeTexture(gl.TEXTURE1);
-        gl.bindTexture(gl.TEXTURE_3D, residualTex);
-        gl.texImage3D(gl.TEXTURE_3D, 0, gl.R32F,
-            residualSdfRes, residualSdfRes, residualSdfRes,
-            0, gl.RED, gl.FLOAT, residualData);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, filterMode);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, filterMode);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
-        gl.uniform1i(gl.getUniformLocation(program, 'u_residualSDF'), 1);
-
-        // Upload baked Error Bound SDF 3D Texture
-        const errorSdfB64 = "__ERROR_SDF_B64__";
-        const errorBytes = Uint8Array.from(atob(errorSdfB64), c => c.charCodeAt(0));
-        const errorData = new Float32Array(errorBytes.buffer);
-
-        const errorTex = gl.createTexture();
-        gl.activeTexture(gl.TEXTURE2);
-        gl.bindTexture(gl.TEXTURE_3D, errorTex);
-        gl.texImage3D(gl.TEXTURE_3D, 0, gl.R32F,
-            residualSdfRes, residualSdfRes, residualSdfRes,
-            0, gl.RED, gl.FLOAT, errorData);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
-        gl.uniform1i(gl.getUniformLocation(program, 'u_errorSDF'), 2);
-
-        let err = gl.getError();
-        if (err !== gl.NO_ERROR) {
-            errorLog.textContent += `\\nWebGL Error during texture upload: ${err}`;
-            console.error('WebGL Error during texture upload:', err);
-        }
-
-        const positionLoc = gl.getAttribLocation(program, 'position');
-        const buffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-            -1, -1,  1, -1, -1,  1,
-            -1,  1,  1, -1,  1,  1
-        ]), gl.STATIC_DRAW);
-        gl.enableVertexAttribArray(positionLoc);
-        gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
-
-        const resLoc = gl.getUniformLocation(program, 'u_resolution');
-        const mouseLoc = gl.getUniformLocation(program, 'u_mouse');
-        const timeLoc = gl.getUniformLocation(program, 'u_time');
-        const blendLoc = gl.getUniformLocation(program, 'u_blendRadius');
-        const jiggleLoc = gl.getUniformLocation(program, 'u_jiggle');
-        const glowLoc = gl.getUniformLocation(program, 'u_glow');
-        const specularLoc = gl.getUniformLocation(program, 'u_specularPower');
-        const fftBandsLoc = gl.getUniformLocation(program, 'u_fftBands');
-        const debugLoc = gl.getUniformLocation(program, 'u_debugMode');
-        const maxStepsLoc = gl.getUniformLocation(program, 'u_maxSteps');
-        const enableAOLoc = gl.getUniformLocation(program, 'u_enableAO');
-        const enableShadowLoc = gl.getUniformLocation(program, 'u_enableShadow');
 
         const debugSelect = document.getElementById('select-debug');
         const blendSlider = document.getElementById('slider-blend');
@@ -700,6 +721,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         const pauseRenderBtn = document.getElementById('btn-pause-render');
         pauseRenderBtn.addEventListener('click', () => {
+            if (!webglInitialized) {
+                const ok = initWebGL();
+                if (!ok) return;
+            }
             paused = !paused;
             if (paused) {
                 pauseRenderBtn.textContent = 'START RENDER';
@@ -903,6 +928,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         let frameCount = 0;
 
         function drawFrame(time) {
+            if (!webglInitialized) return;
             if (audioActive && analyser) {
                 analyser.getByteFrequencyData(dataArray);
                 const binWidth = Math.floor(dataArray.length / 8); // 128 / 8 = 16 bins per band
@@ -2280,6 +2306,9 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_r
     # Precise compiled fragment shader size estimate check
     GLSL_STAGE_LIMIT = 65535
     fs_estimated_len = len(sdf_code_str) + len(sdf_code_str_d) + len(zone_glsl_definitions) + 8000
+    if fs_estimated_len > 55000:
+        raise ValueError(f"Estimated fragment shader size ({fs_estimated_len} bytes) exceeds the WebGL2 compiler safety ceiling of 55KB. "
+                         f"Please compile with a lower sphere count K (e.g. --k {num_spheres // 2} or legacy K argument) to prevent browser freezes.")
     max_prims_per_group = max(len(g["primitives"]) for g in groups)
     
     print(f"[ZCC SDF Telemetry] Generated Shader Length: {fs_estimated_len} bytes")
