@@ -13,7 +13,7 @@ import base64
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html>
 <head>
-    <title>ZCC Remediated SDF Raymarcher — V2.8 HARDENED EDITION</title>
+    <title>ZCC Remediated SDF Raymarcher — V3.1 HYBRID EDITION</title>
     <style>
         body, html { margin: 0; padding: 0; overflow: hidden; background: #08080a; font-family: 'Courier New', monospace; color: #fff; }
         #canvas { width: 100vw; height: 100vh; display: block; }
@@ -31,7 +31,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
     <div id="ui">
-        <h1>ZCC SDF V2.8</h1>
+        <h1>ZCC SDF V3.1</h1>
         <p>Asset: fleet_lite.glb</p>
         <p>Primitives: __NUM_PRIMITIVES__ Hybrid</p>
         <p>Resolution: Infinite</p>
@@ -48,6 +48,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 <option value="4">Eikonal Stress</option>
                 <option value="5">Ambient Occlusion</option>
                 <option value="6">Shadow Maps</option>
+                <option value="7">Residual Correction Map</option>
+                <option value="8">Error Bound Map</option>
+                <option value="9">Safe-step Ratio Map</option>
+                <option value="10">Splitscreen Comparison</option>
             </select>
         </div>
 
@@ -71,7 +75,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <input type="range" id="slider-specular" min="8.0" max="128.0" step="4.0" value="32.0">
         </div>
 
-        <button id="btn-audio">ACTIVATE MICROPHONE FFT</button>
+        <div class="control-group">
+            <label for="input-audio">Upload MP3/Audio File:</label>
+            <input type="file" id="input-audio" accept="audio/*" style="width: 100%; background: #222; color: #fff; border: 1px solid #ff00aa; border-radius: 4px; padding: 5px; font-family: monospace; font-size: 11px; box-sizing: border-box;">
+        </div>
+
+        <div class="control-group" style="display: flex; gap: 10px;">
+            <button id="btn-play" style="margin-top: 0; width: 50%;">PLAY</button>
+            <button id="btn-audio" style="margin-top: 0; width: 50%;">MIC FFT</button>
+        </div>
+
+        <audio id="audio-player" style="display: none;"></audio>
     </div>
     
     <div id="fps">FPS: --</div>
@@ -114,6 +128,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             uniform int u_debugMode; // Viewport debug modes selector
 
             uniform highp sampler3D u_coarseSDF;
+            uniform highp sampler3D u_residualSDF;
+            uniform highp sampler3D u_errorSDF;
 
             // Stabilized smooth minimum for vec4 (distance + color)
             vec4 sminVal(vec4 a, vec4 b, float k) {
@@ -166,58 +182,90 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             // Modular Zone Functions (Emitted dynamically to relieve register pressure)
             __ZONE_FUNCTIONS__
 
-            // Fast distance-only evaluation (skips color interpolations to relieve register pressure)
-            float mapD(vec3 p) {
-                // Coarse SDF is baked in normalized world space before audio scale/jiggle.
-                // Returning coarse before warp is intentional for conservative far-field steps.
-                vec3 coarse_uv = p * (0.5 / __BOUND_RADIUS__) + 0.5;
-                if (all(greaterThanEqual(coarse_uv, vec3(0.0))) && all(lessThanEqual(coarse_uv, vec3(1.0)))) {
-                    float coarse = texture(u_coarseSDF, coarse_uv).r;
-                    if (coarse > u_blendRadius + 0.15) {
-                        return coarse;
-                    }
-                }
-
+            // Dynamic domain warp helper
+            vec3 applyWarp(vec3 p, out float out_scale) {
                 float jiggle = u_jiggle + u_fftBands[0] * 1.5;
                 float wave = sin(p.y * 10.0 + u_time * 6.0) * 0.015 * jiggle;
                 p.x += wave;
                 p.z += cos(p.y * 8.0 + u_time * 5.0) * 0.012 * jiggle;
                 
-                float scale = 1.0 + u_fftBands[1] * 0.15;
-                p /= scale;
+                out_scale = 1.0 + u_fftBands[1] * 0.15;
+                p /= out_scale;
+                return p;
+            }
+
+            // Pure analytic skeleton distance field (pre-residual, pre-warp check)
+            float mapDAnalytic(vec3 p) {
+                float scale;
+                vec3 q = applyWarp(p, scale);
 
                 float d = 1e5;
                 __SDF_CODE_D__
                 
-                return d * scale; // Identical scale warp behavior
+                return d * scale;
             }
 
-            // Compiled geometry map function (returns vec4: x=distance, yzw=color)
-            vec4 map(vec3 p) {
-                // Coarse SDF is baked in normalized world space before audio scale/jiggle.
-                // Returning coarse before warp is intentional for conservative far-field steps.
-                vec3 coarse_uv = p * (0.5 / __BOUND_RADIUS__) + 0.5;
-                if (all(greaterThanEqual(coarse_uv, vec3(0.0))) && all(lessThanEqual(coarse_uv, vec3(1.0)))) {
-                    float coarse = texture(u_coarseSDF, coarse_uv).r;
-                    if (coarse > u_blendRadius + 0.15) {
-                        return vec4(coarse, 0.0, 0.0, 0.0);
-                    }
-                }
+            // High-fidelity visual distance field (analytic + local residual correction)
+            float mapDVisual(vec3 p) {
+                float scale;
+                vec3 q = applyWarp(p, scale);
 
-                // u_fftBands[0] modulates the procedural jiggle intensity
-                float jiggle = u_jiggle + u_fftBands[0] * 1.5;
-                float wave = sin(p.y * 10.0 + u_time * 6.0) * 0.015 * jiggle;
-                p.x += wave;
-                p.z += cos(p.y * 8.0 + u_time * 5.0) * 0.012 * jiggle;
-                
-                // u_fftBands[1] modulates the scale pulse
-                float scale = 1.0 + u_fftBands[1] * 0.15;
-                p /= scale;
+                float d = 1e5;
+                __SDF_CODE_D__
+                float base = d * scale;
+
+                // Residual lookup in the warped domain q!
+                vec3 uv = q * (0.5 / __BOUND_RADIUS__) + 0.5;
+                if (all(greaterThanEqual(uv, vec3(0.0))) && all(lessThanEqual(uv, vec3(1.0)))) {
+                    base += texture(u_residualSDF, uv).r * scale;
+                }
+                return base;
+            }
+
+            // Safe, conservative distance field for sphere-tracing step bounds
+            float mapDSafe(vec3 p) {
+                float scale;
+                vec3 q = applyWarp(p, scale);
+
+                float d = 1e5;
+                __SDF_CODE_D__
+                float base = d * scale;
+
+                vec3 uv = q * (0.5 / __BOUND_RADIUS__) + 0.5;
+                if (all(greaterThanEqual(uv, vec3(0.0))) && all(lessThanEqual(uv, vec3(1.0)))) {
+                    base += texture(u_residualSDF, uv).r * scale;
+                    base -= texture(u_errorSDF, uv).r * scale;
+                }
+                return base;
+            }
+
+            // Interface matching legacy mapD (defaults to high-fidelity visual)
+            float mapD(vec3 p) {
+                return mapDVisual(p);
+            }
+
+            // Pure analytic skeleton color field (pre-residual)
+            vec4 mapAnalytic(vec3 p) {
+                float scale;
+                vec3 q = applyWarp(p, scale);
 
                 vec4 d = vec4(1e5, 0.0, 0.0, 0.0);
                 __SDF_CODE__
                 
-                d.x *= scale; // Identical scale warp behavior
+                d.x *= scale;
+                return d;
+            }
+
+            // High-fidelity color field
+            vec4 map(vec3 p) {
+                float scale;
+                vec3 q = applyWarp(p, scale);
+
+                vec4 d = mapAnalytic(p);
+                vec3 uv = q * (0.5 / __BOUND_RADIUS__) + 0.5;
+                if (all(greaterThanEqual(uv, vec3(0.0))) && all(lessThanEqual(uv, vec3(1.0)))) {
+                    d.x += texture(u_residualSDF, uv).r * scale;
+                }
                 return d;
             }
 
@@ -235,19 +283,28 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }
 
             // Optimized tetrahedron normal estimation (4 mapD() calls vs 6)
-            vec3 getNormal(vec3 p) {
+            vec3 getNormal(vec3 p, bool is_left) {
                 const float h = 0.0005;
                 const vec2 k = vec2(1.0, -1.0);
-                vec3 g = k.xyy * mapD(p + k.xyy*h) +
-                         k.yyx * mapD(p + k.yyx*h) +
-                         k.yxy * mapD(p + k.yxy*h) +
-                         k.xxx * mapD(p + k.xxx*h);
+                float d1, d2, d3, d4;
+                if (is_left) {
+                    d1 = mapDAnalytic(p + k.xyy*h);
+                    d2 = mapDAnalytic(p + k.yyx*h);
+                    d3 = mapDAnalytic(p + k.yxy*h);
+                    d4 = mapDAnalytic(p + k.xxx*h);
+                } else {
+                    d1 = mapD(p + k.xyy*h);
+                    d2 = mapD(p + k.yyx*h);
+                    d3 = mapD(p + k.yxy*h);
+                    d4 = mapD(p + k.xxx*h);
+                }
+                vec3 g = k.xyy * d1 + k.yyx * d2 + k.yxy * d3 + k.xxx * d4;
                 float g2 = dot(g, g);
                 return g2 > 1e-12 ? g * inversesqrt(g2) : vec3(0.0, 1.0, 0.0);
             }
 
             // Soft shadow tracing with bounding sphere ray reject
-            float getShadow(vec3 ro, vec3 rd, float mint, float maxt, float k) {
+            float getShadow(vec3 ro, vec3 rd, float mint, float maxt, float k, bool is_left) {
                 vec3 oc = ro;
                 float b = dot(oc, rd);
                 float c = dot(oc, oc) - __BOUND_RADIUS_SQR__;
@@ -259,7 +316,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 float res = 1.0;
                 float t = mint;
                 for (int i = 0; i < 24; i++) {
-                    float hd = mapD(ro + rd * t);
+                    float hd = is_left ? mapDAnalytic(ro + rd * t) : mapD(ro + rd * t);
                     if (hd < 0.001) return 0.0;
                     res = min(res, k * hd / t);
                     t += clamp(hd, 0.01, 0.15);
@@ -269,8 +326,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }
 
             // Cone-hemisphere ambient occlusion (robust golden-angle spread)
-            float getAO(vec3 p, vec3 n) {
-                // Robust tangent frame: choose hint axis farthest from normal
+            float getAO(vec3 p, vec3 n, bool is_left) {
                 vec3 hint = abs(n.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
                 vec3 t = normalize(cross(n, hint));
                 vec3 b = cross(n, t);
@@ -281,7 +337,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     float hr = 0.01 + 0.12 * fi / 4.0;
                     float angle = fi * 2.39996; // Golden angle
                     vec3 dir = normalize(n + 0.4 * (cos(angle)*t + sin(angle)*b));
-                    float dd = mapD(p + dir * hr);
+                    float dd = is_left ? mapDAnalytic(p + dir * hr) : mapD(p + dir * hr);
                     occ += -(dd - hr) * sca;
                     sca *= 0.95;
                 }
@@ -322,22 +378,52 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 float tmin = 0.0, tmax = 0.0;
                 if (intersectBoundingSphere(ro, rd, tmin, tmax)) {
                     float t = max(tmin, 0.0);
+                    bool is_left = (u_debugMode == 10 && gl_FragCoord.x < 0.5 * u_resolution.x);
                     
                     for (int i = 0; i < 128; i++) { // Detail tracing
                         march_steps = i;
                         p = ro + rd * t;
-                        float dist = mapD(p); // March using fast distance-only pathway
-                        if (dist < 0.0008) {
+                        
+                        float dist;
+                        float dist_v;
+                        
+                        if (is_left) {
+                            dist = mapDAnalytic(p);
+                            dist_v = dist;
+                        } else {
+                            dist = mapDSafe(p);
+                            dist_v = mapDVisual(p);
+                        }
+                        
+                        if (dist_v < 0.0008) {
                             hit = true;
                             break;
                         }
-                        t += max(dist * 0.95, 0.0002); // Safety step floor
+                        
+                        float step_d;
+                        if (is_left) {
+                            step_d = dist;
+                        } else {
+                            if (dist > 0.0002) {
+                                step_d = dist;
+                            } else if (dist_v > 0.05) {
+                                step_d = dist_v * 0.25;
+                            } else {
+                                step_d = 0.0002;
+                            }
+                        }
+                        t += step_d * 0.95;
                         if (t > tmax) break;
                     }
 
                     if (hit) {
-                        map_res = map(p); // Evaluate color exactly once on hit
-                        vec3 n = getNormal(p);
+                        if (is_left) {
+                            map_res = mapAnalytic(p);
+                        } else {
+                            map_res = map(p); // Evaluate corrected color on hit
+                        }
+                        
+                        vec3 n = getNormal(p, is_left);
                         vec3 l = normalize(vec3(2.5, 4.0, 3.0));
                         vec3 r = reflect(-l, n);
                         vec3 v = -rd;
@@ -345,8 +431,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         float diffuse = max(dot(n, l), 0.0);
                         float specular = pow(max(dot(r, v), 0.0), u_specularPower);
                         
-                        float ao = getAO(p, n);
-                        float shadow = getShadow(p + n * 0.005, l, 0.015, 4.0, 16.0);
+                        float ao = getAO(p, n, is_left);
+                        float shadow = getShadow(p + n * 0.005, l, 0.015, 4.0, 16.0, is_left);
                         
                         vec3 baseCol = map_res.yzw;
                         
@@ -384,8 +470,29 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         } else if (u_debugMode == 6) {
                             // Shadow only
                             color = vec3(shadow);
+                        } else if (u_debugMode == 7) {
+                            // Residual correction (Red=positive, Blue=negative)
+                            vec3 uv_res = p * (0.5 / __BOUND_RADIUS__) + 0.5;
+                            float r_val = texture(u_residualSDF, uv_res).r;
+                            color = r_val > 0.0 ? vec3(r_val * 10.0, 0.0, 0.0) : vec3(0.0, 0.0, -r_val * 10.0);
+                        } else if (u_debugMode == 8) {
+                            // Error bound (Green=confident, Red=uncertain)
+                            vec3 uv_err = p * (0.5 / __BOUND_RADIUS__) + 0.5;
+                            float e_val = texture(u_errorSDF, uv_err).r;
+                            color = mix(vec3(0.0, 1.0, 0.0), vec3(1.0, 0.0, 0.0), clamp(e_val * 20.0, 0.0, 1.0));
+                        } else if (u_debugMode == 9) {
+                            // Safe-step ratio
+                            float dv = is_left ? mapDAnalytic(p) : mapDVisual(p);
+                            float ds = is_left ? dv : mapDSafe(p);
+                            float ratio = ds / max(dv, 1e-5);
+                            color = mix(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), clamp(ratio, 0.0, 1.0));
                         }
                     }
+                }
+                
+                // Splitscreen dividing line
+                if (u_debugMode == 10 && abs(gl_FragCoord.x - 0.5 * u_resolution.x) < 1.5) {
+                    color = vec3(1.0, 0.0, 0.66); // Neon pink divide line
                 }
                 
                 // Raymiss step heatmap visualization
@@ -427,7 +534,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
         gl.useProgram(program);
 
-        // Upload baked Coarse SDF 3D Texture (RTX 5070 GDDR7 672 GB/s pipeline target)
+        // Upload baked Coarse SDF 3D Texture
         const coarseSdfB64 = "__COARSE_SDF_B64__";
         const coarseSdfRes = __COARSE_SDF_RES__;
         const coarseBytes = Uint8Array.from(atob(coarseSdfB64), c => c.charCodeAt(0));
@@ -439,15 +546,49 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         gl.texImage3D(gl.TEXTURE_3D, 0, gl.R32F,
             coarseSdfRes, coarseSdfRes, coarseSdfRes,
             0, gl.RED, gl.FLOAT, coarseData);
-            
-        // Native WebGL2 LINEAR sampling support
         gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
-        
         gl.uniform1i(gl.getUniformLocation(program, 'u_coarseSDF'), 0);
+
+        // Upload baked Residual SDF 3D Texture
+        const residualSdfB64 = "__RESIDUAL_SDF_B64__";
+        const residualSdfRes = __RESIDUAL_SDF_RES__;
+        const residualBytes = Uint8Array.from(atob(residualSdfB64), c => c.charCodeAt(0));
+        const residualData = new Float32Array(residualBytes.buffer);
+
+        const residualTex = gl.createTexture();
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_3D, residualTex);
+        gl.texImage3D(gl.TEXTURE_3D, 0, gl.R32F,
+            residualSdfRes, residualSdfRes, residualSdfRes,
+            0, gl.RED, gl.FLOAT, residualData);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+        gl.uniform1i(gl.getUniformLocation(program, 'u_residualSDF'), 1);
+
+        // Upload baked Error Bound SDF 3D Texture
+        const errorSdfB64 = "__ERROR_SDF_B64__";
+        const errorBytes = Uint8Array.from(atob(errorSdfB64), c => c.charCodeAt(0));
+        const errorData = new Float32Array(errorBytes.buffer);
+
+        const errorTex = gl.createTexture();
+        gl.activeTexture(gl.TEXTURE2);
+        gl.bindTexture(gl.TEXTURE_3D, errorTex);
+        gl.texImage3D(gl.TEXTURE_3D, 0, gl.R32F,
+            residualSdfRes, residualSdfRes, residualSdfRes,
+            0, gl.RED, gl.FLOAT, errorData);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+        gl.uniform1i(gl.getUniformLocation(program, 'u_errorSDF'), 2);
 
         const positionLoc = gl.getAttribLocation(program, 'position');
         const buffer = gl.createBuffer();
@@ -498,27 +639,93 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         window.addEventListener('resize', resize);
         resize();
 
-        // Web Audio API FFT setup (256 FFT size for 128 frequency bins, 16 bins per band)
+        // Web Audio API FFT setup with MP3 & Mic support (256 FFT size for 128 frequency bins, 16 bins per band)
         let audioCtx = null;
         let analyser = null;
         let dataArray = null;
         let audioActive = false;
         let fftBands = new Float32Array(8);
+        let audioSource = null;
 
-        document.getElementById('btn-audio').addEventListener('click', () => {
-            if (audioActive) return;
+        const audioInput = document.getElementById('input-audio');
+        const playBtn = document.getElementById('btn-play');
+        const micBtn = document.getElementById('btn-audio');
+        const audioPlayer = document.getElementById('audio-player');
+
+        function initAudioContext() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 256;
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        let currentAudioURL = null;
+        audioInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            if (currentAudioURL) {
+                URL.revokeObjectURL(currentAudioURL);
+            }
+            currentAudioURL = URL.createObjectURL(file);
+            audioPlayer.src = currentAudioURL;
+            initAudioContext();
+            
+            if (!audioSource) {
+                audioSource = audioCtx.createMediaElementSource(audioPlayer);
+                audioSource.connect(analyser);
+                analyser.connect(audioCtx.destination);
+            }
+            
+            audioPlayer.play();
+            audioActive = true;
+            playBtn.textContent = 'PAUSE';
+            playBtn.style.background = '#00ffcc';
+            playBtn.style.color = '#000';
+            
+            micBtn.textContent = 'MIC FFT';
+            micBtn.style.background = '#ff00aa';
+            micBtn.style.color = '#fff';
+        });
+
+        playBtn.addEventListener('click', () => {
+            initAudioContext();
+            if (audioPlayer.src) {
+                if (audioPlayer.paused) {
+                    audioPlayer.play();
+                    playBtn.textContent = 'PAUSE';
+                    playBtn.style.background = '#00ffcc';
+                    playBtn.style.color = '#000';
+                } else {
+                    audioPlayer.pause();
+                    playBtn.textContent = 'PLAY';
+                    playBtn.style.background = '#ff00aa';
+                    playBtn.style.color = '#fff';
+                }
+                audioActive = true;
+            }
+        });
+
+        micBtn.addEventListener('click', () => {
+            initAudioContext();
             navigator.mediaDevices.getUserMedia({ audio: true, video: false })
                 .then(stream => {
-                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                    const source = audioCtx.createMediaStreamSource(stream);
-                    analyser = audioCtx.createAnalyser();
-                    analyser.fftSize = 256;
-                    source.connect(analyser);
-                    dataArray = new Uint8Array(analyser.frequencyBinCount);
+                    const micSource = audioCtx.createMediaStreamSource(stream);
+                    micSource.connect(analyser);
                     audioActive = true;
-                    document.getElementById('btn-audio').textContent = 'AUDIO ACTIVE';
-                    document.getElementById('btn-audio').style.background = '#00ffcc';
-                    document.getElementById('btn-audio').style.color = '#000';
+                    micBtn.textContent = 'MIC ACTIVE';
+                    micBtn.style.background = '#00ffcc';
+                    micBtn.style.color = '#000';
+                    
+                    audioPlayer.pause();
+                    playBtn.textContent = 'PLAY';
+                    playBtn.style.background = '#ff00aa';
+                    playBtn.style.color = '#fff';
                 })
                 .catch(err => {
                     console.warn('Audio input acquisition failed:', err);
@@ -1062,6 +1269,103 @@ def classify_cluster_primitive(pts):
         radius = max(radius, 0.02)
         return {"type": "sphere", "center": center, "radius": radius}
 
+def sd_sphere_cpu(p, center, r):
+    return np.linalg.norm(p - center) - r
+
+def sd_capsule_cpu(p, a, b, r):
+    pa = p - a
+    ba = b - a
+    h = np.clip(np.dot(pa, ba) / max(np.dot(ba, ba), 1e-12), 0.0, 1.0)
+    return np.linalg.norm(pa - ba * h) - r
+
+def sd_box_cpu(p, center, ax0, ax1, ax2, ext):
+    lp = p - center
+    q = np.abs(np.array([
+        np.dot(lp, ax0),
+        np.dot(lp, ax1),
+        np.dot(lp, ax2)
+    ])) - ext
+    return np.linalg.norm(np.maximum(q, 0.0)) + min(max(q[0], max(q[1], q[2])), 0.0)
+
+def smin_float_cpu(a, b, k):
+    if k <= 1e-5:
+        return min(a, b)
+    h = np.clip(0.5 + 0.5 * (b - a) / k, 0.0, 1.0)
+    return (1.0 - h) * b + h * a - k * h * (1.0 - h)
+
+def eval_analytic_sdf_cpu(points, groups, blend_radius):
+    """Python-side CPU evaluator mirroring GLSL output values, vectorized for speed"""
+    N = points.shape[0]
+    d = np.full(N, 1e5, dtype=np.float32)
+    
+    for group in groups:
+        g_center = group["center"].astype(np.float32)
+        g_radius = float(group["radius"])
+        
+        g_dist = np.linalg.norm(points - g_center, axis=1) - g_radius
+        w = -(g_dist - (blend_radius + 0.05))
+        active_mask = w > 0.0
+        
+        if np.any(active_mask):
+            active_pts = points[active_mask]
+            z_d = np.full(len(active_pts), 1e5, dtype=np.float32)
+            is_first = True
+            
+            for prim in group["primitives"]:
+                if prim["type"] == "sphere":
+                    c = prim["center"].astype(np.float32)
+                    r = float(prim["radius"])
+                    dist = np.linalg.norm(active_pts - c, axis=1) - r
+                elif prim["type"] == "capsule":
+                    a = prim["a"].astype(np.float32)
+                    b = prim["b"].astype(np.float32)
+                    r = float(prim["radius"])
+                    
+                    pa = active_pts - a
+                    ba = b - a
+                    ba_lensq = np.dot(ba, ba)
+                    if ba_lensq > 1e-8:
+                        h = np.clip(np.dot(pa, ba) / ba_lensq, 0.0, 1.0)
+                        proj = a + h[:, np.newaxis] * ba
+                        dist = np.linalg.norm(active_pts - proj, axis=1) - r
+                    else:
+                        dist = np.linalg.norm(active_pts - a, axis=1) - r
+                elif prim["type"] == "box":
+                    c = prim["center"].astype(np.float32)
+                    ax0 = prim["axis0"].astype(np.float32)
+                    ax1 = prim["axis1"].astype(np.float32)
+                    ax2 = prim["axis2"].astype(np.float32)
+                    ext = prim["extents"].astype(np.float32)
+                    
+                    lp = active_pts - c
+                    qp = np.stack([
+                        lp @ ax0,
+                        lp @ ax1,
+                        lp @ ax2
+                    ], axis=1)
+                    q = np.abs(qp) - ext
+                    max_q = np.maximum(q, 0.0)
+                    dist = np.linalg.norm(max_q, axis=1) + np.minimum(np.max(q, axis=1), 0.0)
+                else:
+                    dist = np.full(len(active_pts), 1e5, dtype=np.float32)
+                    
+                if is_first:
+                    z_d = dist
+                    is_first = False
+                else:
+                    h = np.clip(0.5 + 0.5 * (dist - z_d) / blend_radius, 0.0, 1.0)
+                    z_d = h * z_d + (1.0 - h) * dist - blend_radius * h * (1.0 - h)
+            
+            current_d = d[active_mask]
+            h = np.clip(0.5 + 0.5 * (z_d - current_d) / blend_radius, 0.0, 1.0)
+            d[active_mask] = h * current_d + (1.0 - h) * z_d - blend_radius * h * (1.0 - h)
+            
+        inactive_mask = ~active_mask
+        if np.any(inactive_mask):
+            d[inactive_mask] = np.minimum(d[inactive_mask], g_dist[inactive_mask])
+            
+    return d
+
 def evaluate_primitive_fit_error(prim, pts):
     """Calculates cluster reconstruction metrics (mean distance, p95 distance, max distance)"""
     if len(pts) == 0:
@@ -1235,15 +1539,11 @@ def bake_coarse_sdf_b64(groups, bounding_radius, resolution=32):
     """
     Bakes a coarse SDF onto a resolution³ grid at compile time.
     Returns base64-encoded float32 binary for upload as a WebGL3D texture.
-    On RTX 5070 (672 GB/s GDDR7): one texture fetch replaces all zone bounding tests.
-    Cost: resolution³ × 4 bytes = 32³ × 4 = 131 KB
     """
     MAX_BAKE_RESOLUTION = 48
     resolution = min(resolution, MAX_BAKE_RESOLUTION)
     
     grid = np.full((resolution, resolution, resolution), 1e5, dtype=np.float32)
-    
-    # Direct mgrid allocation (single allocation, no intermediate arrays)
     pts = np.mgrid[
         -bounding_radius:bounding_radius:resolution*1j,
         -bounding_radius:bounding_radius:resolution*1j,
@@ -1259,6 +1559,128 @@ def bake_coarse_sdf_b64(groups, bounding_radius, resolution=32):
         
     grid = min_d.reshape(resolution, resolution, resolution)
     return base64.b64encode(grid.tobytes()).decode('ascii'), resolution
+
+def bake_residual_and_error(groups, bounding_radius, sampled_points, blend_radius, resolution=32):
+    """
+    Bakes a robust residual correction field R and conservative local error bounds E.
+    """
+    R_grid = np.zeros((resolution, resolution, resolution), dtype=np.float32)
+    E_grid = np.zeros((resolution, resolution, resolution), dtype=np.float32)
+    
+    voxel_residuals = {}
+    
+    # Vectorized CPU evaluation sweep
+    d_a = eval_analytic_sdf_cpu(sampled_points, groups, blend_radius)
+    residuals = -d_a
+    
+    # Map to voxel coordinates in a vectorized pass
+    v_coors = ((sampled_points + bounding_radius) * (resolution / (2.0 * bounding_radius))).astype(int)
+    v_coors = np.clip(v_coors, 0, resolution - 1)
+    
+    for i in range(len(sampled_points)):
+        key = (v_coors[i, 0], v_coors[i, 1], v_coors[i, 2])
+        if key not in voxel_residuals:
+            voxel_residuals[key] = []
+        voxel_residuals[key].append(residuals[i])
+        
+    for x in range(resolution):
+        for y in range(resolution):
+            for z in range(resolution):
+                key = (x, y, z)
+                if key in voxel_residuals:
+                    vals = np.array(voxel_residuals[key])
+                    med = np.median(vals)
+                    R_grid[x, y, z] = med
+                    E_grid[x, y, z] = np.percentile(np.abs(vals - med), 95) + 0.002
+                else:
+                    R_grid[x, y, z] = 0.0
+                    E_grid[x, y, z] = 0.0
+                    
+    # Neighbor diffusion fill
+    R_filled = R_grid.copy()
+    E_filled = E_grid.copy()
+    
+    for x in range(resolution):
+        for y in range(resolution):
+            for z in range(resolution):
+                if (x, y, z) not in voxel_residuals:
+                    neighbors = []
+                    for dx in [-1, 0, 1]:
+                        for dy in [-1, 0, 1]:
+                            for dz in [-1, 0, 1]:
+                                nx, ny, nz = x + dx, y + dy, z + dz
+                                if 0 <= nx < resolution and 0 <= ny < resolution and 0 <= nz < resolution:
+                                    if (nx, ny, nz) in voxel_residuals:
+                                        neighbors.append((R_grid[nx, ny, nz], E_grid[nx, ny, nz]))
+                    if neighbors:
+                        R_filled[x, y, z] = np.mean([n[0] for n in neighbors])
+                        E_filled[x, y, z] = np.max([n[1] for n in neighbors])
+                    else:
+                        R_filled[x, y, z] = 0.0
+                        E_filled[x, y, z] = 0.05  # Conservative fallback safety margin for empty cells
+                        
+    # Max filter error dilation
+    E_dilated = E_filled.copy()
+    for x in range(1, resolution - 1):
+        for y in range(1, resolution - 1):
+            for z in range(1, resolution - 1):
+                val = np.max(E_filled[x-1:x+2, y-1:y+2, z-1:z+2])
+                E_dilated[x, y, z] = val
+                
+    return (
+        base64.b64encode(R_filled.tobytes()).decode('ascii'),
+        base64.b64encode(E_dilated.tobytes()).decode('ascii'),
+        resolution
+    )
+
+def validate_residual_bounds(val_pts, groups, R_bytes_b64, E_bytes_b64, bounding_radius, blend_radius, resolution):
+    """
+    Computes visual errors, bound values, and violations on held-out samples.
+    """
+    N = len(val_pts)
+    if N == 0:
+        return {}
+        
+    d_a = eval_analytic_sdf_cpu(val_pts, groups, blend_radius)
+    
+    # Map points to voxel indices
+    v_coors = ((val_pts + bounding_radius) * (resolution / (2.0 * bounding_radius))).astype(int)
+    v_coors = np.clip(v_coors, 0, resolution - 1)
+    
+    # Decode R and E grids
+    R_bytes = base64.b64decode(R_bytes_b64)
+    R_grid = np.frombuffer(R_bytes, dtype=np.float32).reshape(resolution, resolution, resolution)
+    
+    E_bytes = base64.b64decode(E_bytes_b64)
+    E_grid = np.frombuffer(E_bytes, dtype=np.float32).reshape(resolution, resolution, resolution)
+    
+    # Sample R and E grids
+    sampled_R = np.array([R_grid[v_coors[i, 0], v_coors[i, 1], v_coors[i, 2]] for i in range(N)])
+    sampled_E = np.array([E_grid[v_coors[i, 0], v_coors[i, 1], v_coors[i, 2]] for i in range(N)])
+    
+    d_visual = d_a + sampled_R
+    
+    # Validation errors (absolute surface deviation: target is 0.0)
+    analytic_errors = np.abs(d_a)
+    visual_errors = np.abs(d_visual)
+    
+    # Check bounds coverage: we expect visual_errors <= sampled_E
+    violations = visual_errors > sampled_E
+    violation_rate = float(np.mean(violations))
+    max_violation = float(np.max(visual_errors - sampled_E)) if np.any(violations) else 0.0
+    p95_margin = float(np.percentile(sampled_E - visual_errors, 95))
+    
+    return {
+        "heldout_samples": N,
+        "analytic_mean_abs": float(np.mean(analytic_errors)),
+        "analytic_p95_abs": float(np.percentile(analytic_errors, 95)),
+        "visual_mean_abs": float(np.mean(visual_errors)),
+        "visual_p95_abs": float(np.percentile(visual_errors, 95)),
+        "visual_max_abs": float(np.max(visual_errors)),
+        "bound_violation_rate": violation_rate,
+        "max_bound_violation": max_violation,
+        "p95_bound_margin": p95_margin
+    }
 
 def generate_zone_glsl(groups, palette):
     """Emits individual zone functions to relieve register pressure on Blackwell cuda cores"""
@@ -1330,7 +1752,7 @@ def generate_zone_glsl(groups, palette):
         
     return "\n\n".join(zone_funcs)
 
-def _run_compilation(input_file, output_file, num_spheres, num_samples):
+def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_res, residual_res):
     """Core compilation run wrapping file execution"""
     t_start = time.time()
     
@@ -1378,7 +1800,6 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples):
         for i in range(num_spheres):
             cluster_pts = sampled_points[labels == i]
             if len(cluster_pts) == 0:
-                # Fallback center directly if cluster is empty to prevent NaN calculations
                 prim = {
                     "type": "sphere",
                     "center": centers[i].copy(),
@@ -1390,7 +1811,7 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples):
                 prim = classify_cluster_primitive(cluster_pts)
                 if "center" not in prim:
                     prim["center"] = centers[i].copy()
-                prim["cluster_idx"] = i # Track original index for stable colors
+                prim["cluster_idx"] = i
                 prim["fit_error"] = evaluate_primitive_fit_error(prim, cluster_pts)
             primitives.append(prim)
     t_pca = time.time() - t0
@@ -1461,8 +1882,29 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples):
     print("[ZCC SDF Compiler] Baking Coarse 3D SDF Texture...")
     t0 = time.time()
     with MemoryTelemetry("Coarse SDF Bake", warn_mb=50, abort_mb=100) as tm_bake:
-        coarse_b64, coarse_res = bake_coarse_sdf_b64(groups, bounding_radius, resolution=32)
+        coarse_b64, coarse_res_actual = bake_coarse_sdf_b64(groups, bounding_radius, resolution=coarse_res)
     t_bake = time.time() - t0
+
+    # 80/20 train/held-out validation split
+    rng = np.random.default_rng(42)
+    shuffled_indices = rng.permutation(len(sampled_points))
+    split_idx = int(0.8 * len(sampled_points))
+    bake_pts = sampled_points[shuffled_indices[:split_idx]]
+    val_pts = sampled_points[shuffled_indices[split_idx:]]
+
+    # Bake Residual and Error bound 3D grids (V3.1)
+    print("[ZCC SDF Compiler] Baking V3.1 Residual and Error fields...")
+    t0 = time.time()
+    with MemoryTelemetry("Residual Field Bake", warn_mb=50, abort_mb=100) as tm_res:
+        res_b64, err_b64, res_res_actual = bake_residual_and_error(
+            groups, bounding_radius, bake_pts, blend_radius=0.12, resolution=residual_res
+        )
+    t_residual = time.time() - t0
+
+    # Validate residual bounds on heldout validation set
+    validation_stats = validate_residual_bounds(
+        val_pts, groups, res_b64, err_b64, bounding_radius, blend_radius=0.12, resolution=res_res_actual
+    )
 
     print(f"[ZCC SDF Compiler] Emitting WebGL compilation target to {output_file}...")
     html_content = HTML_TEMPLATE
@@ -1475,7 +1917,10 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples):
     html_content = html_content.replace("__BOUND_RADIUS__", fmt_glsl(bounding_radius))
     html_content = html_content.replace("__BOUND_RADIUS_SQR__", fmt_glsl(bounding_radius_sqr))
     html_content = html_content.replace("__COARSE_SDF_B64__", coarse_b64)
-    html_content = html_content.replace("__COARSE_SDF_RES__", str(coarse_res))
+    html_content = html_content.replace("__COARSE_SDF_RES__", str(coarse_res_actual))
+    html_content = html_content.replace("__RESIDUAL_SDF_B64__", res_b64)
+    html_content = html_content.replace("__ERROR_SDF_B64__", err_b64)
+    html_content = html_content.replace("__RESIDUAL_SDF_RES__", str(res_res_actual))
 
     out_dir = os.path.dirname(os.path.abspath(output_file))
     if out_dir:
@@ -1490,7 +1935,7 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples):
     
     # Export primitives JSON manifest
     primitives_data = {
-        "version": "2.8",
+        "version": "3.1",
         "source": input_file,
         "normalization": {
             "centroid": centroid.tolist(),
@@ -1523,7 +1968,8 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples):
                 }
             }
             for p in primitives
-        ]
+        ],
+        "residual_validation": validation_stats
     }
     with open(manifest_path, "w", encoding="utf-8") as f_manifest:
         json.dump(primitives_data, f_manifest, indent=2)
@@ -1540,8 +1986,10 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples):
             "kmeans_clustering_seconds": t_kmeans,
             "pca_classification_seconds": t_pca,
             "hierarchical_grouping_seconds": t_group,
-            "coarse_sdf_bake_seconds": t_bake
-        }
+            "coarse_sdf_bake_seconds": t_bake,
+            "residual_field_bake_seconds": t_residual
+        },
+        "residual_validation": validation_stats
     }
     with open(telemetry_path, "w", encoding="utf-8") as f_telemetry:
         json.dump(telemetry_data, f_telemetry, indent=2)
@@ -1553,37 +2001,85 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples):
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: python3 zcc_sdf_compiler.py <input.glb> <output.html> [num_spheres]")
+        print("Usage: python3 zcc_sdf_compiler.py <input.glb> <output.html> [num_spheres] [--quality quality] [--k k] [--samples samples]")
         sys.exit(1)
         
     input_file = sys.argv[1]
     output_file = sys.argv[2]
     
-    num_spheres = 64
-    if len(sys.argv) >= 4:
-        try:
-            num_spheres = int(sys.argv[3])
-        except ValueError:
-            print(f"[ZCC] Error: num_spheres must be an integer, got '{sys.argv[3]}'")
-            sys.exit(1)
-            
-        if not (1 <= num_spheres <= 256):
-            print(f"[ZCC] Error: num_spheres must be between 1 and 256, got {num_spheres}")
-            sys.exit(1)
-        
-    # Adaptive Degradation Schedules
-    SAMPLE_SCHEDULE = [15000, 8000, 4000, 2000]
-    K_SCHEDULE = [num_spheres, min(48, num_spheres), min(32, num_spheres), min(16, num_spheres)]
+    # Defaults
+    quality = "balanced"
+    k_override = None
+    samples_override = None
+    coarse_res_override = None
+    residual_res_override = None
     
-    for num_samples, k_actual in zip(SAMPLE_SCHEDULE, K_SCHEDULE):
-        ok, est, avail = preflight_memory_check(num_samples, k_actual)
+    # Legacy K positional argument checks
+    legacy_k = None
+    if len(sys.argv) >= 4 and not sys.argv[3].startswith("--"):
+        try:
+            legacy_k = int(sys.argv[3])
+        except ValueError:
+            pass
+            
+    # Process override flags
+    args = sys.argv[3:] if len(sys.argv) >= 4 else []
+    for i in range(len(args)):
+        if args[i] == "--quality" and i + 1 < len(args):
+            quality = args[i + 1]
+        elif args[i] == "--k" and i + 1 < len(args):
+            k_override = int(args[i + 1])
+        elif args[i] == "--samples" and i + 1 < len(args):
+            samples_override = int(args[i + 1])
+        elif args[i] == "--coarse_res" and i + 1 < len(args):
+            coarse_res_override = int(args[i + 1])
+        elif args[i] == "--residual_res" and i + 1 < len(args):
+            residual_res_override = int(args[i + 1])
+            
+    # Quality Presets Ladder
+    presets = {
+        "draft": {"k": 32, "samples": 4000, "coarse_res": 16, "residual_res": 16},
+        "balanced": {"k": 64, "samples": 15000, "coarse_res": 32, "residual_res": 32},
+        "high": {"k": 128, "samples": 30000, "coarse_res": 32, "residual_res": 32},
+        "ultra": {"k": 256, "samples": 50000, "coarse_res": 48, "residual_res": 48}
+    }
+    
+    if quality not in presets:
+        print(f"[ZCC] Error: Unknown quality preset '{quality}'. Available presets: {list(presets.keys())}")
+        sys.exit(1)
+        
+    config = presets[quality]
+    num_spheres = legacy_k if legacy_k is not None else config["k"]
+    num_samples = config["samples"]
+    coarse_res = config["coarse_res"]
+    residual_res = config["residual_res"]
+    
+    if k_override is not None:
+        num_spheres = k_override
+    if samples_override is not None:
+        num_samples = samples_override
+    if coarse_res_override is not None:
+        coarse_res = coarse_res_override
+    if residual_res_override is not None:
+        residual_res = residual_res_override
+        
+    if not (1 <= num_spheres <= 256):
+        print(f"[ZCC] Error: num_spheres must be between 1 and 256, got {num_spheres}")
+        sys.exit(1)
+        
+    # Adaptive Degradation Schedule
+    SAMPLE_SCHEDULE = [num_samples, max(2000, num_samples // 2), max(1000, num_samples // 4)]
+    K_SCHEDULE = [num_spheres, max(16, num_spheres // 2), max(8, num_spheres // 4)]
+    
+    for ns, k_act in zip(SAMPLE_SCHEDULE, K_SCHEDULE):
+        ok, est, avail = preflight_memory_check(ns, k_act)
         if not ok:
-            print(f"[ZCC] Downgrading: K={k_actual} samples={num_samples} requires too much memory. Retrying next tier...")
+            print(f"[ZCC] Downgrading: K={k_act} samples={ns} exceeds memory limit. Retrying...")
             continue
             
         try:
-            print(f"[ZCC] Launching: K={k_actual}, samples={num_samples}")
-            _run_compilation(input_file, output_file, k_actual, num_samples)
+            print(f"[ZCC] Launching: K={k_act}, samples={ns}, quality={quality}, coarse_res={coarse_res}, residual_res={residual_res}")
+            _run_compilation(input_file, output_file, k_act, ns, coarse_res, residual_res)
             return
         except Exception as e:
             import traceback
@@ -1592,7 +2088,7 @@ def main():
             gc.collect()
             continue
             
-    raise RuntimeError("[ZCC] All adaptive compilation tiers exhausted due to memory limits.")
+    raise RuntimeError("[ZCC] All adaptive compilation presets exhausted.")
 
 if __name__ == "__main__":
     main()
