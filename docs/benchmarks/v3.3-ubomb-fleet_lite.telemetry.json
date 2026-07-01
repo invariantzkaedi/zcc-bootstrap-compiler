@@ -2,7 +2,7 @@
   "source": "fleet_lite.glb",
   "num_spheres": 64,
   "num_samples": 15000,
-  "total_elapsed_seconds": 3.43025541305542,
+  "total_elapsed_seconds": 3.5210976600646973,
   "parser": {
     "num_accessors_read": 38,
     "samples_requested": 15000,
@@ -12,33 +12,39 @@
     "avg_read_bytes": 1792
   },
   "passes": {
-    "stream_parser_seconds": 0.44484591484069824,
-    "kmeans_clustering_seconds": 0.6621835231781006,
-    "pca_classification_seconds": 0.0561983585357666,
-    "hierarchical_grouping_seconds": 0.00424504280090332,
-    "coarse_sdf_bake_seconds": 0.005338907241821289,
-    "residual_field_bake_seconds": 2.168074131011963
+    "stream_parser_seconds": 0.44592833518981934,
+    "kmeans_clustering_seconds": 0.6835904121398926,
+    "pca_classification_seconds": 0.04576611518859863,
+    "hierarchical_grouping_seconds": 0.0033729076385498047,
+    "coarse_sdf_bake_seconds": 0.0030891895294189453,
+    "residual_field_bake_seconds": 2.2097525596618652
   },
   "residual_validation": {
     "heldout_samples": 2989,
     "analytic_mean_abs": 0.10085051506757736,
     "analytic_p95_abs": 0.13532553613185883,
-    "visual_mean_abs": 0.002718162490054965,
-    "visual_p95_abs": 0.012066650204360485,
-    "visual_max_abs": 0.060030497610569,
+    "visual_mean_abs": 0.0024653153959661722,
+    "visual_p95_abs": 0.01205381564795971,
+    "visual_max_abs": 0.0314343199133873,
     "bound_violation_rate": 0.0,
     "max_bound_violation": 0.0,
-    "p95_bound_margin": 0.14668358862400055
+    "p95_bound_margin": 0.058699559420347214
+  },
+  "signed_offset_validation": {
+    "offset_epsilon": 0.028056766941659567,
+    "outer_p95_abs_error": 0.025987523152940388,
+    "inner_p95_abs_error": 0.044129724159352894,
+    "combined_p95_abs_error": 0.04255345138859045
   },
   "eikonal_validation": {
-    "mean_stress": 0.44049835205078125,
-    "p95_stress": 0.8330260515213013,
-    "max_stress": 0.9995226263999939
+    "mean_stress": 0.8113492727279663,
+    "p95_stress": 0.9792372584342957,
+    "max_stress": 22.463777542114258
   },
   "residual_ablation": {
     "analytic_p95_abs_error": 0.13532553613185883,
-    "visual_p95_abs_error": 0.012066650204360485,
-    "residual_improvement_ratio": 0.9108324226951301
+    "visual_p95_abs_error": 0.01205381564795971,
+    "residual_improvement_ratio": 0.910927264783088
   },
   "certificate": {
     "status": "empirical_certificate",

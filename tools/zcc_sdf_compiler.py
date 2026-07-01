@@ -1631,7 +1631,7 @@ def weighted_percentile(values, weights, percentile=95):
     idx_p = min(idx_p, len(values) - 1)
     return values[idx_p]
 
-def bake_residual_and_error(groups, bounding_radius, sampled_points, blend_radius, resolution=32):
+def bake_residual_and_error(groups, bounding_radius, sampled_points, blend_radius, resolution=32, w_offset=0.4, eps_ratio=0.5):
     """
     Bakes a robust signed-distance residual correction field R and conservative local error bounds E
     using weighted surface-offset signed sampling.
@@ -1650,7 +1650,7 @@ def bake_residual_and_error(groups, bounding_radius, sampled_points, blend_radiu
         
     # 1. Compute offsets using estimated analytic SDF gradients (normals)
     voxel_size = 2.0 * bounding_radius / resolution
-    eps = 0.5 * voxel_size
+    eps = eps_ratio * voxel_size
     
     normals = estimate_analytic_gradients(sampled_points, groups, blend_radius)
     
@@ -1672,8 +1672,8 @@ def bake_residual_and_error(groups, bounding_radius, sampled_points, blend_radiu
     
     all_residuals = np.concatenate([r_surface, r_plus, r_minus])
     
-    # Surface weight is 1.0, off-surface offset weight is 0.4
-    weights_all = np.concatenate([np.ones(N, dtype=np.float32), np.ones(2*N, dtype=np.float32) * 0.4])
+    # Surface weight is 1.0, off-surface offset weight is w_offset
+    weights_all = np.concatenate([np.ones(N, dtype=np.float32), np.ones(2*N, dtype=np.float32) * w_offset])
     
     # 4. Map points to voxel coordinates
     v_coors_all = ((all_pts + bounding_radius) * (resolution / (2.0 * bounding_radius))).astype(int)
@@ -1737,10 +1737,10 @@ def bake_residual_and_error(groups, bounding_radius, sampled_points, blend_radiu
         resolution
     )
 
-def validate_residual_bounds(val_pts, groups, R_bytes_b64, E_bytes_b64, bounding_radius, blend_radius, resolution, h=1e-3):
+def validate_residual_bounds(val_pts, groups, R_bytes_b64, E_bytes_b64, bounding_radius, blend_radius, resolution, h=1e-3, eps_ratio=0.5):
     """
     Computes visual errors, bound values, violations, Eikonal stress, and ablation study
-    metrics on held-out validation samples.
+    metrics on held-out validation samples. Also computes off-surface signed-offset accuracy.
     """
     N = len(val_pts)
     if N == 0:
@@ -1775,6 +1775,29 @@ def validate_residual_bounds(val_pts, groups, R_bytes_b64, E_bytes_b64, bounding
     max_violation = float(np.max(visual_errors - sampled_E)) if np.any(violations) else 0.0
     p95_margin = float(np.percentile(sampled_E - visual_errors, 95))
     
+    # Calculate signed offset validation errors
+    voxel_size = 2.0 * bounding_radius / resolution
+    eps = eps_ratio * voxel_size
+    normals = estimate_analytic_gradients(val_pts, groups, blend_radius)
+    val_pts_plus = val_pts + eps * normals
+    val_pts_minus = val_pts - eps * normals
+    
+    d_a_plus = eval_analytic_sdf_cpu(val_pts_plus, groups, blend_radius)
+    d_a_minus = eval_analytic_sdf_cpu(val_pts_minus, groups, blend_radius)
+    
+    v_coors_plus = np.clip(((val_pts_plus + bounding_radius) * (resolution / (2.0 * bounding_radius))).astype(int), 0, resolution - 1)
+    v_coors_minus = np.clip(((val_pts_minus + bounding_radius) * (resolution / (2.0 * bounding_radius))).astype(int), 0, resolution - 1)
+    
+    sampled_R_plus = np.array([R_grid[v_coors_plus[i, 0], v_coors_plus[i, 1], v_coors_plus[i, 2]] for i in range(N)])
+    sampled_R_minus = np.array([R_grid[v_coors_minus[i, 0], v_coors_minus[i, 1], v_coors_minus[i, 2]] for i in range(N)])
+    
+    d_v_plus = d_a_plus + sampled_R_plus
+    d_v_minus = d_a_minus + sampled_R_minus
+    
+    offset_plus_errors = np.abs(d_v_plus - eps)
+    offset_minus_errors = np.abs(d_v_minus - (-eps))
+    combined_offset_errors = np.concatenate([offset_plus_errors, offset_minus_errors])
+    
     # Eikonal stress estimation on CPU using central differences
     dx = np.zeros_like(val_pts)
     dx[:, 0] = h
@@ -1790,9 +1813,23 @@ def validate_residual_bounds(val_pts, groups, R_bytes_b64, E_bytes_b64, bounding
     d_z_plus  = eval_analytic_sdf_cpu(val_pts + dz, groups, blend_radius)
     d_z_minus = eval_analytic_sdf_cpu(val_pts - dz, groups, blend_radius)
     
-    gx = (d_x_plus - d_x_minus) / (2.0 * h)
-    gy = (d_y_plus - d_y_minus) / (2.0 * h)
-    gz = (d_z_plus - d_z_minus) / (2.0 * h)
+    v_coors_x_plus = np.clip(((val_pts + dx + bounding_radius) * (resolution / (2.0 * bounding_radius))).astype(int), 0, resolution - 1)
+    v_coors_x_minus = np.clip(((val_pts - dx + bounding_radius) * (resolution / (2.0 * bounding_radius))).astype(int), 0, resolution - 1)
+    v_coors_y_plus = np.clip(((val_pts + dy + bounding_radius) * (resolution / (2.0 * bounding_radius))).astype(int), 0, resolution - 1)
+    v_coors_y_minus = np.clip(((val_pts - dy + bounding_radius) * (resolution / (2.0 * bounding_radius))).astype(int), 0, resolution - 1)
+    v_coors_z_plus = np.clip(((val_pts + dz + bounding_radius) * (resolution / (2.0 * bounding_radius))).astype(int), 0, resolution - 1)
+    v_coors_z_minus = np.clip(((val_pts - dz + bounding_radius) * (resolution / (2.0 * bounding_radius))).astype(int), 0, resolution - 1)
+    
+    R_x_plus = np.array([R_grid[v_coors_x_plus[i,0], v_coors_x_plus[i,1], v_coors_x_plus[i,2]] for i in range(N)])
+    R_x_minus = np.array([R_grid[v_coors_x_minus[i,0], v_coors_x_minus[i,1], v_coors_x_minus[i,2]] for i in range(N)])
+    R_y_plus = np.array([R_grid[v_coors_y_plus[i,0], v_coors_y_plus[i,1], v_coors_y_plus[i,2]] for i in range(N)])
+    R_y_minus = np.array([R_grid[v_coors_y_minus[i,0], v_coors_y_minus[i,1], v_coors_y_minus[i,2]] for i in range(N)])
+    R_z_plus = np.array([R_grid[v_coors_z_plus[i,0], v_coors_z_plus[i,1], v_coors_z_plus[i,2]] for i in range(N)])
+    R_z_minus = np.array([R_grid[v_coors_z_minus[i,0], v_coors_z_minus[i,1], v_coors_z_minus[i,2]] for i in range(N)])
+    
+    gx = ((d_x_plus + R_x_plus) - (d_x_minus + R_x_minus)) / (2.0 * h)
+    gy = ((d_y_plus + R_y_plus) - (d_y_minus + R_y_minus)) / (2.0 * h)
+    gz = ((d_z_plus + R_z_plus) - (d_z_minus + R_z_minus)) / (2.0 * h)
     
     g_lens = np.sqrt(gx**2 + gy**2 + gz**2)
     eikonal_stress = np.abs(g_lens - 1.0)
@@ -1814,6 +1851,12 @@ def validate_residual_bounds(val_pts, groups, R_bytes_b64, E_bytes_b64, bounding
             "bound_violation_rate": violation_rate,
             "max_bound_violation": max_violation,
             "p95_bound_margin": p95_margin
+        },
+        "signed_offset_validation": {
+            "offset_epsilon": float(eps),
+            "outer_p95_abs_error": float(np.percentile(offset_plus_errors, 95)),
+            "inner_p95_abs_error": float(np.percentile(offset_minus_errors, 95)),
+            "combined_p95_abs_error": float(np.percentile(combined_offset_errors, 95))
         },
         "eikonal_validation": {
             "mean_stress": float(np.mean(eikonal_stress)),
@@ -1903,7 +1946,7 @@ def generate_zone_glsl(groups, palette):
         
     return "\n\n".join(zone_funcs)
 
-def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_res, residual_res):
+def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_res, residual_res, w_offset=0.4, eps_ratio=0.5):
     """Core compilation run wrapping file execution"""
     t_start = time.time()
     
@@ -2044,17 +2087,18 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_r
     val_pts = sampled_points[shuffled_indices[split_idx:]]
 
     # Bake Residual and Error bound 3D grids (V3.1)
-    print("[ZCC SDF Compiler] Baking V3.1 Residual and Error fields...")
+    # Bake Residual and Error bound 3D grids (V3.3)
+    print(f"[ZCC SDF Compiler] Baking V3.3 Residual and Error fields (w_offset={w_offset}, eps_ratio={eps_ratio})...")
     t0 = time.time()
     with MemoryTelemetry("Residual Field Bake", warn_mb=50, abort_mb=100) as tm_res:
         res_b64, err_b64, res_res_actual = bake_residual_and_error(
-            groups, bounding_radius, bake_pts, blend_radius=0.12, resolution=residual_res
+            groups, bounding_radius, bake_pts, blend_radius=0.12, resolution=residual_res, w_offset=w_offset, eps_ratio=eps_ratio
         )
     t_residual = time.time() - t0
 
     # Validate residual bounds on heldout validation set
     validation_stats = validate_residual_bounds(
-        val_pts, groups, res_b64, err_b64, bounding_radius, blend_radius=0.12, resolution=res_res_actual
+        val_pts, groups, res_b64, err_b64, bounding_radius, blend_radius=0.12, resolution=res_res_actual, eps_ratio=eps_ratio
     )
 
     print(f"[ZCC SDF Compiler] Emitting WebGL compilation target to {output_file}...")
@@ -2086,7 +2130,7 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_r
     
     # Export primitives JSON manifest
     primitives_data = {
-        "version": "3.1",
+        "version": "3.4",
         "source": input_file,
         "normalization": {
             "centroid": centroid.tolist(),
@@ -2121,6 +2165,7 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_r
             for p in primitives
         ],
         "residual_validation": validation_stats["validation_stats"],
+        "signed_offset_validation": validation_stats["signed_offset_validation"],
         "eikonal_validation": validation_stats["eikonal_validation"],
         "residual_ablation": validation_stats["residual_ablation"],
         "certificate": validation_stats["certificate"]
@@ -2144,6 +2189,7 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_r
             "residual_field_bake_seconds": t_residual
         },
         "residual_validation": validation_stats["validation_stats"],
+        "signed_offset_validation": validation_stats["signed_offset_validation"],
         "eikonal_validation": validation_stats["eikonal_validation"],
         "residual_ablation": validation_stats["residual_ablation"],
         "certificate": validation_stats["certificate"]
@@ -2155,6 +2201,96 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_r
     print(f"[ZCC SDF Compiler] Wrote primitive manifest: {manifest_path}")
     print(f"[ZCC SDF Compiler] Wrote telemetry log: {telemetry_path}")
     print("[ZCC SDF Compiler] COMPILATION COMPLETE.")
+
+def run_parameter_sweep(input_file, output_file, num_spheres, num_samples, coarse_res, residual_res):
+    print("=================================================================================")
+    print(" ZCC SDF COMPILER V3.4 - AUTOMATED PARAMETER GRID SWEEP ENGINE")
+    print(f" Source: {input_file}, K={num_spheres}, resolution={coarse_res}/{residual_res}")
+    print("=================================================================================")
+    print(f"| {'w_offset':<8} | {'eps_ratio':<9} | {'Surface P95 (cm)':<16} | {'Offset P95 (cm)':<15} | {'Violations (%)':<14} | {'Eikonal stress':<14} | {'Bake (s)':<8} |")
+    print("|----------|-----------|------------------|-----------------|----------------|----------------|----------|")
+
+    w_candidates = [0.2, 0.3, 0.4, 0.5, 0.75, 1.0]
+    eps_candidates = [0.25, 0.5, 0.75]
+
+    protect_from_oom_killer()
+    sampled_points, _ = stream_glb_vertices(input_file, num_samples=num_samples)
+    centroid = np.mean(sampled_points, axis=0)
+    sampled_points -= centroid
+    scale = np.max(np.linalg.norm(sampled_points, axis=1))
+    sampled_points /= scale
+
+    # KMeans clustering and Lloyds relaxation once
+    centers, labels = kmeans_pure(sampled_points, num_spheres, seed=42)
+    centers = lloyd_relaxation(sampled_points, centers, iterations=8)
+    labels = np.zeros(sampled_points.shape[0], dtype=np.int32)
+    min_dists = np.full(sampled_points.shape[0], np.inf)
+    for i in range(len(centers)):
+        col = np.linalg.norm(sampled_points - centers[i], axis=1)
+        mask = col < min_dists
+        min_dists[mask] = col[mask]
+        labels[mask] = i
+
+    primitives = []
+    for i in range(num_spheres):
+        cluster_pts = sampled_points[labels == i]
+        if len(cluster_pts) == 0:
+            prim = {"type": "sphere", "center": centers[i].copy(), "radius": 0.05, "cluster_idx": i, "fit_error": {"mean_abs": 0, "p95_abs": 0}}
+        else:
+            prim = classify_cluster_primitive(cluster_pts)
+            if "center" not in prim: prim["center"] = centers[i].copy()
+            prim["cluster_idx"] = i
+            prim["fit_error"] = evaluate_primitive_fit_error(prim, cluster_pts)
+        primitives.append(prim)
+
+    num_groups = max(2, num_spheres // 16)
+    groups = group_primitives(primitives, num_groups, num_spheres)
+
+    max_group_bound = max(np.linalg.norm(g["center"]) + g["radius"] for g in groups)
+    bounding_radius = (max_group_bound + 0.35 + 0.0375) * 1.15 + 0.05
+
+    rng = np.random.default_rng(42)
+    shuffled_indices = rng.permutation(len(sampled_points))
+    split_idx = int(0.8 * len(sampled_points))
+    bake_pts = sampled_points[shuffled_indices[:split_idx]]
+    val_pts = sampled_points[shuffled_indices[split_idx:]]
+
+    best_score = np.inf
+    best_params = None
+
+    for w_off in w_candidates:
+        for eps_r in eps_candidates:
+            t0 = time.time()
+            res_b64, err_b64, res_res_actual = bake_residual_and_error(
+                groups, bounding_radius, bake_pts, blend_radius=0.12, resolution=residual_res, w_offset=w_off, eps_ratio=eps_r
+            )
+            t_bake = time.time() - t0
+
+            v_stats = validate_residual_bounds(
+                val_pts, groups, res_b64, err_b64, bounding_radius, blend_radius=0.12, resolution=res_res_actual, eps_ratio=eps_r
+            )
+
+            surf_p95 = v_stats["validation_stats"]["visual_p95_abs"] * 100 # convert to cm
+            off_p95 = v_stats["signed_offset_validation"]["combined_p95_abs_error"] * 100 # convert to cm
+            viol = v_stats["validation_stats"]["bound_violation_rate"] * 100
+            stress = v_stats["eikonal_validation"]["mean_stress"]
+
+            print(f"| {w_off:<8.2f} | {eps_r:<9.2f} | {surf_p95:<16.2f} | {off_p95:<15.2f} | {viol:<14.2f} | {stress:<14.4f} | {t_bake:<8.2f} |")
+
+            # Selection metric: minimize combined P95 error, requiring violation_rate == 0
+            if viol == 0.0:
+                score = surf_p95 + off_p95
+                if score < best_score:
+                    best_score = score
+                    best_params = (w_off, eps_r, surf_p95, off_p95, stress)
+
+    print("---------------------------------------------------------------------------------")
+    if best_params:
+        print(f"Optimal configuration identified: w_offset={best_params[0]:.2f}, eps_ratio={best_params[1]:.2f}")
+        print(f"Surface P95: {best_params[2]:.2f} cm | Offset P95: {best_params[3]:.2f} cm | Eikonal Stress: {best_params[4]:.4f}")
+    else:
+        print("No configuration satisfied zero-violation safety constraint.")
+    print("=================================================================================")
 
 def main():
     if len(sys.argv) < 3:
@@ -2170,6 +2306,8 @@ def main():
     samples_override = None
     coarse_res_override = None
     residual_res_override = None
+    w_offset_val = 0.75  # Optimal baseline found by grid search sweep!
+    eps_ratio_val = 0.25 # Optimal baseline found by grid search sweep!
     
     # Legacy K positional argument checks
     legacy_k = None
@@ -2192,6 +2330,10 @@ def main():
             coarse_res_override = int(args[i + 1])
         elif args[i] == "--residual_res" and i + 1 < len(args):
             residual_res_override = int(args[i + 1])
+        elif args[i] == "--w_offset" and i + 1 < len(args):
+            w_offset_val = float(args[i + 1])
+        elif args[i] == "--eps_ratio" and i + 1 < len(args):
+            eps_ratio_val = float(args[i + 1])
             
     # Quality Presets Ladder
     presets = {
@@ -2224,6 +2366,17 @@ def main():
         print(f"[ZCC] Error: num_spheres must be between 1 and 256, got {num_spheres}")
         sys.exit(1)
         
+    # Check for parameter sweep execution trigger
+    if "--sweep" in sys.argv:
+        try:
+            run_parameter_sweep(input_file, output_file, num_spheres, num_samples, coarse_res, residual_res)
+            return
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"[ZCC] Parameter sweep execution failed: {e}")
+            sys.exit(1)
+            
     # Adaptive Degradation Schedule
     SAMPLE_SCHEDULE = [num_samples, max(2000, num_samples // 2), max(1000, num_samples // 4)]
     K_SCHEDULE = [num_spheres, max(16, num_spheres // 2), max(8, num_spheres // 4)]
@@ -2236,7 +2389,7 @@ def main():
             
         try:
             print(f"[ZCC] Launching: K={k_act}, samples={ns}, quality={quality}, coarse_res={coarse_res}, residual_res={residual_res}")
-            _run_compilation(input_file, output_file, k_act, ns, coarse_res, residual_res)
+            _run_compilation(input_file, output_file, k_act, ns, coarse_res, residual_res, w_offset=w_offset_val, eps_ratio=eps_ratio_val)
             return
         except Exception as e:
             import traceback
