@@ -1597,10 +1597,44 @@ def estimate_analytic_gradients(points, groups, blend_radius, h=1e-3):
     
     return g / g_lens[:, np.newaxis]
 
+def weighted_median(values, weights):
+    """
+    Computes the weighted median of a 1D numpy array.
+    """
+    if len(values) == 0:
+        return 0.0
+    idx = np.argsort(values)
+    values = values[idx]
+    weights = weights[idx]
+    
+    cumsum_weights = np.cumsum(weights)
+    cutoff = cumsum_weights[-1] / 2.0
+    
+    median_idx = np.searchsorted(cumsum_weights, cutoff)
+    median_idx = min(median_idx, len(values) - 1)
+    return values[median_idx]
+
+def weighted_percentile(values, weights, percentile=95):
+    """
+    Computes the weighted percentile of a 1D numpy array.
+    """
+    if len(values) == 0:
+        return 0.0
+    idx = np.argsort(values)
+    values = values[idx]
+    weights = weights[idx]
+    
+    cumsum_weights = np.cumsum(weights)
+    cutoff = (percentile / 100.0) * cumsum_weights[-1]
+    
+    idx_p = np.searchsorted(cumsum_weights, cutoff)
+    idx_p = min(idx_p, len(values) - 1)
+    return values[idx_p]
+
 def bake_residual_and_error(groups, bounding_radius, sampled_points, blend_radius, resolution=32):
     """
     Bakes a robust signed-distance residual correction field R and conservative local error bounds E
-    using surface-offset signed sampling.
+    using weighted surface-offset signed sampling.
     """
     R_grid = np.zeros((resolution, resolution, resolution), dtype=np.float32)
     E_grid = np.zeros((resolution, resolution, resolution), dtype=np.float32)
@@ -1638,6 +1672,9 @@ def bake_residual_and_error(groups, bounding_radius, sampled_points, blend_radiu
     
     all_residuals = np.concatenate([r_surface, r_plus, r_minus])
     
+    # Surface weight is 1.0, off-surface offset weight is 0.4
+    weights_all = np.concatenate([np.ones(N, dtype=np.float32), np.ones(2*N, dtype=np.float32) * 0.4])
+    
     # 4. Map points to voxel coordinates
     v_coors_all = ((all_pts + bounding_radius) * (resolution / (2.0 * bounding_radius))).astype(int)
     v_coors_all = np.clip(v_coors_all, 0, resolution - 1)
@@ -1646,17 +1683,19 @@ def bake_residual_and_error(groups, bounding_radius, sampled_points, blend_radiu
         key = (v_coors_all[i, 0], v_coors_all[i, 1], v_coors_all[i, 2])
         if key not in voxel_residuals:
             voxel_residuals[key] = []
-        voxel_residuals[key].append(all_residuals[i])
+        voxel_residuals[key].append((all_residuals[i], weights_all[i]))
         
     for x in range(resolution):
         for y in range(resolution):
             for z in range(resolution):
                 key = (x, y, z)
                 if key in voxel_residuals:
-                    vals = np.array(voxel_residuals[key])
-                    med = np.median(vals)
+                    pairs = voxel_residuals[key]
+                    vals = np.array([p[0] for p in pairs])
+                    w = np.array([p[1] for p in pairs])
+                    med = weighted_median(vals, w)
                     R_grid[x, y, z] = med
-                    E_grid[x, y, z] = np.percentile(np.abs(vals - med), 95) + 0.002
+                    E_grid[x, y, z] = weighted_percentile(np.abs(vals - med), w, 95) + 0.002
                 else:
                     R_grid[x, y, z] = 0.0
                     E_grid[x, y, z] = 0.0
