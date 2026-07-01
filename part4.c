@@ -99,6 +99,7 @@ static int new_label(Compiler *cc) {
 }
 
 static void emit_cvtsi2fd(Compiler *cc, Type *int_type, int is_f32, const char *target_xmm) {
+    if (backend_ops) return;
     if (int_type && is_unsigned_type(int_type)) {
         if (type_size(int_type) == 8) {
             int l1 = new_label(cc);
@@ -1805,12 +1806,14 @@ void codegen_expr(Compiler *cc, Node *node) {
       fprintf(cc->out, "    movq $0, %%rax\n");
       return;
     }
-    if (!backend_ops && node->type && !is_float_type(node->type)) {
+    if (node->type && !is_float_type(node->type)) {
       int rhs_ok = 1;
       long long rhs_cv = eval_const_expr_p4(node->rhs, &rhs_ok);
       if (rhs_ok && rhs_cv == 0) {
         zcc_divzero_report(node->line, 0);
-        fprintf(cc->out, "    movq $0, %%rax\n");
+        if (!backend_ops) {
+          fprintf(cc->out, "    movq $0, %%rax\n");
+        }
         ir_emit_binary_op(ND_DIV, node->type, "$const_lhs", "$const_rhs", node->line);
         return;
       }
@@ -1859,13 +1862,15 @@ void codegen_expr(Compiler *cc, Node *node) {
       ir_save_result(lhs_ir);
       shift = log2_of(node->rhs->int_val);
       if (node->type && is_unsigned_type(node->type)) {
-        fprintf(cc->out, "    shrq $%d, %%rax\n", shift);
+        if (!backend_ops) fprintf(cc->out, "    shrq $%d, %%rax\n", shift);
       } else {
-        fprintf(cc->out, "    movq %%rax, %%rcx\n");
-        fprintf(cc->out, "    sarq $63, %%rcx\n");
-        fprintf(cc->out, "    andq $%lld, %%rcx\n", (1LL << shift) - 1);
-        fprintf(cc->out, "    addq %%rcx, %%rax\n");
-        fprintf(cc->out, "    sarq $%d, %%rax\n", shift);
+        if (!backend_ops) {
+          fprintf(cc->out, "    movq %%rax, %%rcx\n");
+          fprintf(cc->out, "    sarq $63, %%rcx\n");
+          fprintf(cc->out, "    andq $%lld, %%rcx\n", (1LL << shift) - 1);
+          fprintf(cc->out, "    addq %%rcx, %%rax\n");
+          fprintf(cc->out, "    sarq $%d, %%rax\n", shift);
+        }
       }
       snprintf(rhs_val_str, 32, "$%lld", node->rhs->int_val);
       ir_emit_binary_op(ND_DIV, node->type, lhs_ir, rhs_val_str, node->line);
@@ -1877,7 +1882,7 @@ void codegen_expr(Compiler *cc, Node *node) {
        on x86. GCC folds this at compile time; ZCC must too when both sides
        are compile-time constants (e.g. Csmith seed498).
        NOTE: float path has already returned above, so this is integers only. */
-    if (!backend_ops) {
+    {
       int lhs_ok = 1, rhs_ok = 1;
       long long lhs_cv = eval_const_expr_p4(node->lhs, &lhs_ok);
       long long rhs_cv = eval_const_expr_p4(node->rhs, &rhs_ok);
@@ -1894,7 +1899,9 @@ void codegen_expr(Compiler *cc, Node *node) {
           /* CG-SIGFPE-002: fold division by zero to 0 to avoid runtime SIGFPE */
           result = 0;
         }
-        fprintf(cc->out, "    movq $%lld, %%rax\n", result);
+        if (!backend_ops) {
+          fprintf(cc->out, "    movq $%lld, %%rax\n", result);
+        }
         ir_emit_binary_op(ND_DIV, node->type, "$const_lhs", "$const_rhs", node->line);
         return;
       }
@@ -1928,18 +1935,20 @@ void codegen_expr(Compiler *cc, Node *node) {
     char lhs_ir[32];
     char rhs_ir[32];
 
-    if (!backend_ops && node->type && !is_float_type(node->type)) {
+    if (node->type && !is_float_type(node->type)) {
       int rhs_ok = 1;
       long long rhs_cv = eval_const_expr_p4(node->rhs, &rhs_ok);
       if (rhs_ok && rhs_cv == 0) {
         zcc_divzero_report(node->line, 1);
-        fprintf(cc->out, "    movq $0, %%rax\n");
+        if (!backend_ops) {
+          fprintf(cc->out, "    movq $0, %%rax\n");
+        }
         ir_emit_binary_op(ND_MOD, node->type, "$const_lhs", "$const_rhs", node->line);
         return;
       }
     }
 
-    if (!backend_ops) {
+    {
       int lhs_ok = 1, rhs_ok = 1;
       long long lhs_cv = eval_const_expr_p4(node->lhs, &lhs_ok);
       long long rhs_cv = eval_const_expr_p4(node->rhs, &rhs_ok);
@@ -1955,7 +1964,9 @@ void codegen_expr(Compiler *cc, Node *node) {
           /* CG-SIGFPE-002: fold modulo by zero to 0 to avoid runtime SIGFPE */
           result = 0;
         }
-        fprintf(cc->out, "    movq $%lld, %%rax\n", result);
+        if (!backend_ops) {
+          fprintf(cc->out, "    movq $%lld, %%rax\n", result);
+        }
         ir_emit_binary_op(ND_MOD, node->type, "$const_lhs", "$const_rhs", node->line);
         return;
       }
@@ -1969,7 +1980,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       ir_save_result(lhs_ir);
       mask = node->rhs->int_val - 1;
       if (node->type && is_unsigned_type(node->type)) {
-        fprintf(cc->out, "    andq $%lld, %%rax\n", mask);
+        if (!backend_ops) fprintf(cc->out, "    andq $%lld, %%rax\n", mask);
         snprintf(rhs_val_str, 32, "$%lld", node->rhs->int_val);
         ir_emit_binary_op(ND_MOD, node->type, lhs_ir, rhs_val_str, node->line);
         return;
