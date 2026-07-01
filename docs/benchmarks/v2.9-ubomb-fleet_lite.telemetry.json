@@ -1,0 +1,21 @@
+{
+  "source": "fleet_lite.glb",
+  "num_spheres": 64,
+  "num_samples": 15000,
+  "total_elapsed_seconds": 1.2957208156585693,
+  "parser": {
+    "num_accessors_read": 38,
+    "samples_requested": 15000,
+    "samples_written": 14941,
+    "read_calls": 100,
+    "bytes_read": 179292,
+    "avg_read_bytes": 1792
+  },
+  "passes": {
+    "stream_parser_seconds": 0.4793407917022705,
+    "kmeans_clustering_seconds": 0.7156777381896973,
+    "pca_classification_seconds": 0.06052517890930176,
+    "hierarchical_grouping_seconds": 0.003543853759765625,
+    "coarse_sdf_bake_seconds": 0.0054628849029541016
+  }
+}
