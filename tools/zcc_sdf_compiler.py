@@ -56,14 +56,37 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
 
         <div class="control-group">
+            <button id="btn-pause-render" style="background: #ff00aa; color: #fff; font-weight: bold; padding: 10px;">START RENDER</button>
+        </div>
+
+        <div class="control-group">
             <label for="select-resolution">Resolution Limit:</label>
             <select id="select-resolution" style="width: 100%; background: #222; color: #fff; border: 1px solid #ff00aa; border-radius: 4px; padding: 5px; font-family: monospace; font-size: 11px;">
-                <option value="57600">Low (320x180)</option>
-                <option value="129600" selected>Medium (480x270)</option>
+                <option value="57600" selected>Low (320x180)</option>
+                <option value="129600">Medium (480x270)</option>
                 <option value="230400">High (640x360)</option>
                 <option value="921600">Ultra (1280x720)</option>
                 <option value="2073600">Full (1920x1080)</option>
             </select>
+        </div>
+
+        <div class="control-group">
+            <label for="select-quality">Raymarch Quality:</label>
+            <select id="select-quality" style="width: 100%; background: #222; color: #fff; border: 1px solid #ff00aa; border-radius: 4px; padding: 5px; font-family: monospace; font-size: 11px;">
+                <option value="32">Safe (32 steps)</option>
+                <option value="48" selected>Balanced (48 steps)</option>
+                <option value="80">High (80 steps)</option>
+            </select>
+        </div>
+
+        <div class="control-group" style="display: flex; justify-content: space-between; align-items: center;">
+            <label style="display: inline-block; margin-bottom: 0;">Ambient Occlusion:</label>
+            <input type="checkbox" id="chk-ao" style="accent-color: #ff00aa;">
+        </div>
+
+        <div class="control-group" style="display: flex; justify-content: space-between; align-items: center;">
+            <label style="display: inline-block; margin-bottom: 0;">Soft Shadows:</label>
+            <input type="checkbox" id="chk-shadow" style="accent-color: #ff00aa;">
         </div>
 
         <div class="control-group">
@@ -117,7 +140,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             preserveDrawingBuffer: false,
             desynchronized: true
         });
-        let maxRenderPixels = 129600;
+        let maxRenderPixels = 57600;
         if (!gl) {
             errorLog.textContent = 'Error: WebGL2 context not available.';
             throw new Error('WebGL2 context not available');
@@ -147,6 +170,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             uniform float u_specularPower;
             uniform float u_fftBands[8]; // 8 frequency bands
             uniform int u_debugMode; // Viewport debug modes selector
+            uniform int u_maxSteps;
+            uniform int u_enableAO;
+            uniform int u_enableShadow;
 
             uniform highp sampler3D u_coarseSDF;
             uniform highp sampler3D u_residualSDF;
@@ -240,9 +266,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
                 vec3 uv = q * (0.5 / __BOUND_RADIUS__) + 0.5;
                 if (all(greaterThanEqual(uv, vec3(0.0))) && all(lessThanEqual(uv, vec3(1.0)))) {
-                    float r_val = texture(u_residualSDF, uv).r * scale;
-                    dist_v += r_val;
-                    dist_safe += r_val - texture(u_errorSDF, uv).r * scale;
+                    if (base < 0.05) {
+                        float r_val = texture(u_residualSDF, uv).r * scale;
+                        dist_v += r_val;
+                        dist_safe += r_val - texture(u_errorSDF, uv).r * scale;
+                    }
                 }
             }
 
@@ -401,7 +429,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     float t = max(tmin, 0.0);
                     bool is_left = (u_debugMode == 10 && gl_FragCoord.x < 0.5 * u_resolution.x);
                     
-                    for (int i = 0; i < 48; i++) { // Bounded tracing: prevents GPU watchdog stalls
+                    for (int i = 0; i < 128; i++) {
+                        if (i >= u_maxSteps) break;
                         march_steps = i;
                         p = ro + rd * t;
                         
@@ -451,8 +480,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         float diffuse = max(dot(n, l), 0.0);
                         float specular = pow(max(dot(r, v), 0.0), u_specularPower);
                         
-                        float ao = getAO(p, n, is_left);
-                        float shadow = getShadow(p + n * 0.005, l, 0.015, 4.0, 16.0, is_left);
+                        float ao = (u_enableAO == 1) ? getAO(p, n, is_left) : 1.0;
+                        float shadow = (u_enableShadow == 1) ? getShadow(p + n * 0.005, l, 0.015, 4.0, 16.0, is_left) : 1.0;
                         
                         vec3 baseCol = map_res.yzw;
                         
@@ -560,14 +589,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const coarseBytes = Uint8Array.from(atob(coarseSdfB64), c => c.charCodeAt(0));
         const coarseData = new Float32Array(coarseBytes.buffer);
 
+        const hasFloatLinear = gl.getExtension('OES_texture_float_linear');
+        const filterMode = hasFloatLinear ? gl.LINEAR : gl.NEAREST;
+        if (!hasFloatLinear) {
+            console.warn('OES_texture_float_linear not supported. Falling back to NEAREST filtering.');
+        }
+
         const coarseTex = gl.createTexture();
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_3D, coarseTex);
         gl.texImage3D(gl.TEXTURE_3D, 0, gl.R32F,
             coarseSdfRes, coarseSdfRes, coarseSdfRes,
             0, gl.RED, gl.FLOAT, coarseData);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, filterMode);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, filterMode);
         gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
@@ -585,8 +620,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         gl.texImage3D(gl.TEXTURE_3D, 0, gl.R32F,
             residualSdfRes, residualSdfRes, residualSdfRes,
             0, gl.RED, gl.FLOAT, residualData);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, filterMode);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, filterMode);
         gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
@@ -610,6 +645,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
         gl.uniform1i(gl.getUniformLocation(program, 'u_errorSDF'), 2);
 
+        let err = gl.getError();
+        if (err !== gl.NO_ERROR) {
+            errorLog.textContent += `\\nWebGL Error during texture upload: ${err}`;
+            console.error('WebGL Error during texture upload:', err);
+        }
+
         const positionLoc = gl.getAttribLocation(program, 'position');
         const buffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -629,6 +670,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const specularLoc = gl.getUniformLocation(program, 'u_specularPower');
         const fftBandsLoc = gl.getUniformLocation(program, 'u_fftBands');
         const debugLoc = gl.getUniformLocation(program, 'u_debugMode');
+        const maxStepsLoc = gl.getUniformLocation(program, 'u_maxSteps');
+        const enableAOLoc = gl.getUniformLocation(program, 'u_enableAO');
+        const enableShadowLoc = gl.getUniformLocation(program, 'u_enableShadow');
 
         const debugSelect = document.getElementById('select-debug');
         const blendSlider = document.getElementById('slider-blend');
@@ -641,21 +685,94 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const glowVal = document.getElementById('val-glow');
         const specVal = document.getElementById('val-specular');
 
-        blendSlider.addEventListener('input', (e) => blendVal.textContent = parseFloat(e.target.value).toFixed(2));
-        jiggleSlider.addEventListener('input', (e) => jiggleVal.textContent = parseFloat(e.target.value).toFixed(1));
-        glowSlider.addEventListener('input', (e) => glowVal.textContent = parseFloat(e.target.value).toFixed(1));
-        specSlider.addEventListener('input', (e) => specVal.textContent = parseFloat(e.target.value).toFixed(1));
+        let paused = true;
+        let u_maxSteps = 48;
+        let u_enableAO = 0;
+        let u_enableShadow = 0;
+        let lastFrameTime = performance.now();
+        let slowFrameCount = 0;
+
+        const pauseRenderBtn = document.getElementById('btn-pause-render');
+        pauseRenderBtn.addEventListener('click', () => {
+            paused = !paused;
+            if (paused) {
+                pauseRenderBtn.textContent = 'START RENDER';
+                pauseRenderBtn.style.background = '#ff00aa';
+                pauseRenderBtn.style.color = '#fff';
+            } else {
+                pauseRenderBtn.textContent = 'PAUSE RENDER';
+                pauseRenderBtn.style.background = '#00ffcc';
+                pauseRenderBtn.style.color = '#000';
+                lastFrameTime = performance.now();
+                requestAnimationFrame(render);
+            }
+        });
+
+        const qualSelect = document.getElementById('select-quality');
+        qualSelect.addEventListener('change', (e) => {
+            u_maxSteps = parseInt(e.target.value);
+            if (paused) drawFrame(performance.now());
+        });
+
+        const aoChk = document.getElementById('chk-ao');
+        aoChk.addEventListener('change', (e) => {
+            u_enableAO = e.target.checked ? 1 : 0;
+            if (paused) drawFrame(performance.now());
+        });
+
+        const shadowChk = document.getElementById('chk-shadow');
+        shadowChk.addEventListener('change', (e) => {
+            u_enableShadow = e.target.checked ? 1 : 0;
+            if (paused) drawFrame(performance.now());
+        });
+
+        blendSlider.addEventListener('input', (e) => {
+            blendVal.textContent = parseFloat(e.target.value).toFixed(2);
+            if (paused) drawFrame(performance.now());
+        });
+        jiggleSlider.addEventListener('input', (e) => {
+            jiggleVal.textContent = parseFloat(e.target.value).toFixed(1);
+            if (paused) drawFrame(performance.now());
+        });
+        glowSlider.addEventListener('input', (e) => {
+            glowVal.textContent = parseFloat(e.target.value).toFixed(1);
+            if (paused) drawFrame(performance.now());
+        });
+        specSlider.addEventListener('input', (e) => {
+            specVal.textContent = parseFloat(e.target.value).toFixed(1);
+            if (paused) drawFrame(performance.now());
+        });
 
         let mouse = [0.5, 0.5];
         window.addEventListener('mousemove', (e) => {
             mouse = [e.clientX / window.innerWidth, 1.0 - (e.clientY / window.innerHeight)];
+            if (paused) drawFrame(performance.now());
         });
 
         const resSelect = document.getElementById('select-resolution');
         resSelect.addEventListener('change', (e) => {
             maxRenderPixels = parseInt(e.target.value);
             resize();
+            if (paused) drawFrame(performance.now());
         });
+
+        debugSelect.addEventListener('change', () => {
+            if (paused) drawFrame(performance.now());
+        });
+
+        function degradeQuality() {
+            if (maxRenderPixels > 57600) {
+                maxRenderPixels = 57600;
+                resSelect.value = "57600";
+            }
+            u_maxSteps = 32;
+            qualSelect.value = "32";
+            u_enableAO = 0;
+            u_enableShadow = 0;
+            aoChk.checked = false;
+            shadowChk.checked = false;
+            resize();
+        }
 
         function resize() {
             const cssWidth = Math.max(1, window.innerWidth);
@@ -667,6 +784,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
         window.addEventListener('resize', resize);
         resize();
+
+        canvas.addEventListener('webglcontextlost', e => {
+            e.preventDefault();
+            paused = true;
+            pauseRenderBtn.textContent = 'START RENDER';
+            pauseRenderBtn.style.background = '#ff00aa';
+            pauseRenderBtn.style.color = '#fff';
+            errorLog.textContent = 'WebGL context lost; rendering paused.';
+        });
+
+        canvas.addEventListener('webglcontextrestored', () => {
+            errorLog.textContent = 'WebGL context restored. Please reload page or restart render.';
+        });
 
         // Web Audio API FFT setup with MP3 & Mic support (256 FFT size for 128 frequency bins, 16 bins per band)
         let audioCtx = null;
@@ -791,22 +921,56 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             gl.uniform1f(specularLoc, parseFloat(specSlider.value));
             gl.uniform1fv(fftBandsLoc, fftBands);
             gl.uniform1i(debugLoc, parseInt(debugSelect.value));
+            gl.uniform1i(maxStepsLoc, u_maxSteps);
+            gl.uniform1i(enableAOLoc, u_enableAO);
+            gl.uniform1i(enableShadowLoc, u_enableShadow);
 
             gl.drawArrays(gl.TRIANGLES, 0, 6);
         }
 
         function render(time) {
+            if (paused) return;
+            const delta = time - lastFrameTime;
+            lastFrameTime = time;
+
+            // Frame watchdog: check if frame took > 250ms
+            if (delta > 250) {
+                slowFrameCount++;
+                if (slowFrameCount >= 2) {
+                    const isLowest = (maxRenderPixels === 57600 && u_maxSteps === 32 && u_enableAO === 0 && u_enableShadow === 0);
+                    if (isLowest) {
+                        paused = true;
+                        pauseRenderBtn.textContent = 'START RENDER';
+                        pauseRenderBtn.style.background = '#ff00aa';
+                        pauseRenderBtn.style.color = '#fff';
+                        errorLog.textContent = 'Warning: GPU remains pinned even at lowest settings. Rendering paused to prevent lockup.';
+                    } else {
+                        degradeQuality();
+                        errorLog.textContent = 'Performance warning: Settings automatically degraded to safe mode.';
+                    }
+                    slowFrameCount = 0;
+                }
+            } else {
+                slowFrameCount = Math.max(0, slowFrameCount - 1);
+            }
+
             frameCount++;
-            if (time - lastTime >= 1000) {
+            let fpsLastTime = lastTime;
+            if (time - fpsLastTime >= 1000) {
                 fpsCounter.textContent = `FPS: ${frameCount}`;
                 frameCount = 0;
                 lastTime = time;
             }
 
             drawFrame(time);
-            requestAnimationFrame(render);
+            if (!paused) {
+                requestAnimationFrame(render);
+            }
         }
-        requestAnimationFrame(render);
+        
+        // Clear with background color instead of running fragment shader on load
+        gl.clearColor(0.03, 0.03, 0.05, 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
 
         const screenshotBtn = document.getElementById('btn-screenshot');
         screenshotBtn.addEventListener('click', () => {
@@ -1989,7 +2153,7 @@ def generate_zone_glsl(groups, palette):
         
     return "\n\n".join(zone_funcs)
 
-def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_res, residual_res, w_offset=0.4, eps_ratio=0.5):
+def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_res, residual_res, w_offset=0.4, eps_ratio=0.5, quality="balanced"):
     """Core compilation run wrapping file execution"""
     t_start = time.time()
     
@@ -2110,6 +2274,23 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_r
     # Precise compiled fragment shader size estimate check
     GLSL_STAGE_LIMIT = 65535
     fs_estimated_len = len(sdf_code_str) + len(sdf_code_str_d) + len(zone_glsl_definitions) + 8000
+    max_prims_per_group = max(len(g["primitives"]) for g in groups)
+    
+    print(f"[ZCC SDF Telemetry] Generated Shader Length: {fs_estimated_len} bytes")
+    print(f"[ZCC SDF Telemetry] Primitive Count: {num_spheres}")
+    print(f"[ZCC SDF Telemetry] Group Count: {num_groups}")
+    print(f"[ZCC SDF Telemetry] Max Primitives Per Group: {max_prims_per_group}")
+    print(f"[ZCC SDF Telemetry] Bounding Radius: {bounding_radius:.4f}")
+    print(f"[ZCC SDF Telemetry] Quality Preset: {quality}")
+    print(f"[ZCC SDF Telemetry] Default Max Steps: 48")
+    print(f"[ZCC SDF Telemetry] Default AO Enabled: 0")
+    print(f"[ZCC SDF Telemetry] Default Shadow Enabled: 0")
+    print(f"[ZCC SDF Telemetry] Default Resolution Limit: 57600 (Low)")
+    print(f"[ZCC SDF Telemetry] Coarse SDF Resolution: {coarse_res}")
+    
+    cost_factor = num_spheres * max_prims_per_group
+    if cost_factor > 1500 or fs_estimated_len > 60000:
+        print(f"[ZCC SDF Telemetry] WARNING: Estimated pixel shader execution cost is HIGH ({cost_factor} complexity factor).")
     if fs_estimated_len > GLSL_STAGE_LIMIT:
         print(f"[ZCC] WARNING: Fragment shader ~{fs_estimated_len} chars may exceed "
               f"WebGL2 limit of {GLSL_STAGE_LIMIT} on some drivers. "
@@ -2223,6 +2404,14 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_r
         "num_samples": num_samples,
         "total_elapsed_seconds": time.time() - t_start,
         "parser": parser_stats,
+        "defaults": {
+            "quality_preset": quality,
+            "max_steps": 48,
+            "enable_ao": 0,
+            "enable_shadow": 0,
+            "resolution_limit": 57600,
+            "coarse_sdf_resolution": coarse_res
+        },
         "passes": {
             "stream_parser_seconds": t_parser,
             "kmeans_clustering_seconds": t_kmeans,
@@ -2432,7 +2621,7 @@ def main():
             
         try:
             print(f"[ZCC] Launching: K={k_act}, samples={ns}, quality={quality}, coarse_res={coarse_res}, residual_res={residual_res}")
-            _run_compilation(input_file, output_file, k_act, ns, coarse_res, residual_res, w_offset=w_offset_val, eps_ratio=eps_ratio_val)
+            _run_compilation(input_file, output_file, k_act, ns, coarse_res, residual_res, w_offset=w_offset_val, eps_ratio=eps_ratio_val, quality=quality)
             return
         except Exception as e:
             import traceback
