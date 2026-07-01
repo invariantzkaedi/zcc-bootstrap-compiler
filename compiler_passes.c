@@ -1206,34 +1206,36 @@ static uint32_t constant_fold_pass(Function *fn) {
         }
         break;
       case OP_DIV:
+        if (!ins->is_float && d1 && d1->op == OP_CONST && d1->imm == 0) {
+          int is_err = (getenv("ZCC_ERROR_DIVZERO_PROVEN") != NULL);
+          int closed_world = (getenv("ZCC_ICP_CLOSED_WORLD") != NULL);
+          if (is_err || closed_world) {
+            zcc_divzero_report(ins->line_no, 0);
+            result = 0;
+            goto fold_binary;
+          }
+        }
         if (d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
           if (d1->imm != 0) {
             result = d0->imm / d1->imm;
             goto fold_binary;
-          } else {
-            int is_err = (getenv("ZCC_ERROR_DIVZERO_PROVEN") != NULL);
-            int closed_world = (getenv("ZCC_ICP_CLOSED_WORLD") != NULL);
-            if (is_err || closed_world) {
-              zcc_divzero_report(ins->line_no, 0);
-              result = 0;
-              goto fold_binary;
-            }
           }
         }
         break;
       case OP_MOD:
+        if (!ins->is_float && d1 && d1->op == OP_CONST && d1->imm == 0) {
+          int is_err = (getenv("ZCC_ERROR_DIVZERO_PROVEN") != NULL);
+          int closed_world = (getenv("ZCC_ICP_CLOSED_WORLD") != NULL);
+          if (is_err || closed_world) {
+            zcc_divzero_report(ins->line_no, 1);
+            result = 0;
+            goto fold_binary;
+          }
+        }
         if (d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
           if (d1->imm != 0) {
             result = d0->imm % d1->imm;
             goto fold_binary;
-          } else {
-            int is_err = (getenv("ZCC_ERROR_DIVZERO_PROVEN") != NULL);
-            int closed_world = (getenv("ZCC_ICP_CLOSED_WORLD") != NULL);
-            if (is_err || closed_world) {
-              zcc_divzero_report(ins->line_no, 1);
-              result = 0;
-              goto fold_binary;
-            }
           }
         }
         break;

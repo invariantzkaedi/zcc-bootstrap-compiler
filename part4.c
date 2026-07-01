@@ -17,6 +17,7 @@ extern int g_ir_primary;
 static long long eval_const_expr_p4(Node *elem, int *ok);
 long long force_truncate(long long v, Type *type);
 int is_unsigned_cmp(Node *n);
+extern void zcc_divzero_report(int line, int is_mod);
 
 #ifdef __clang__
 #pragma clang diagnostic ignored "-Wdangling-else"
@@ -1804,6 +1805,16 @@ void codegen_expr(Compiler *cc, Node *node) {
       fprintf(cc->out, "    movq $0, %%rax\n");
       return;
     }
+    if (!backend_ops && node->type && !is_float_type(node->type)) {
+      int rhs_ok = 1;
+      long long rhs_cv = eval_const_expr_p4(node->rhs, &rhs_ok);
+      if (rhs_ok && rhs_cv == 0) {
+        zcc_divzero_report(node->line, 0);
+        fprintf(cc->out, "    movq $0, %%rax\n");
+        ir_emit_binary_op(ND_DIV, node->type, "$const_lhs", "$const_rhs", node->line);
+        return;
+      }
+    }
     if (node->type && is_float_type(node->type)) {
       int is_f32 = (node->type->kind == TY_FLOAT);
       codegen_expr_checked(cc, node->lhs);
@@ -1916,6 +1927,17 @@ void codegen_expr(Compiler *cc, Node *node) {
   case ND_MOD: {
     char lhs_ir[32];
     char rhs_ir[32];
+
+    if (!backend_ops && node->type && !is_float_type(node->type)) {
+      int rhs_ok = 1;
+      long long rhs_cv = eval_const_expr_p4(node->rhs, &rhs_ok);
+      if (rhs_ok && rhs_cv == 0) {
+        zcc_divzero_report(node->line, 1);
+        fprintf(cc->out, "    movq $0, %%rax\n");
+        ir_emit_binary_op(ND_MOD, node->type, "$const_lhs", "$const_rhs", node->line);
+        return;
+      }
+    }
 
     if (!backend_ops) {
       int lhs_ok = 1, rhs_ok = 1;
