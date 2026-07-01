@@ -1,0 +1,33 @@
+{
+  "source": "fleet_lite.glb",
+  "num_spheres": 64,
+  "num_samples": 15000,
+  "total_elapsed_seconds": 2.018022298812866,
+  "parser": {
+    "num_accessors_read": 38,
+    "samples_requested": 15000,
+    "samples_written": 14941,
+    "read_calls": 100,
+    "bytes_read": 179292,
+    "avg_read_bytes": 1792
+  },
+  "passes": {
+    "stream_parser_seconds": 0.4555530548095703,
+    "kmeans_clustering_seconds": 0.6875457763671875,
+    "pca_classification_seconds": 0.058724164962768555,
+    "hierarchical_grouping_seconds": 0.0033288002014160156,
+    "coarse_sdf_bake_seconds": 0.0050694942474365234,
+    "residual_field_bake_seconds": 0.7527165412902832
+  },
+  "residual_validation": {
+    "heldout_samples": 2989,
+    "analytic_mean_abs": 0.10085051506757736,
+    "analytic_p95_abs": 0.13532553613185883,
+    "visual_mean_abs": 0.0023909190203994513,
+    "visual_p95_abs": 0.014045601710677147,
+    "visual_max_abs": 0.028964512050151825,
+    "bound_violation_rate": 0.0,
+    "max_bound_violation": 0.0,
+    "p95_bound_margin": 0.030802201479673386
+  }
+}
