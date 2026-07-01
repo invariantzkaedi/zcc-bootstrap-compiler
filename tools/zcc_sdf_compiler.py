@@ -56,6 +56,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
 
         <div class="control-group">
+            <label for="select-resolution">Resolution Limit:</label>
+            <select id="select-resolution" style="width: 100%; background: #222; color: #fff; border: 1px solid #ff00aa; border-radius: 4px; padding: 5px; font-family: monospace; font-size: 11px;">
+                <option value="57600">Low (320x180)</option>
+                <option value="129600" selected>Medium (480x270)</option>
+                <option value="230400">High (640x360)</option>
+                <option value="921600">Ultra (1280x720)</option>
+                <option value="2073600">Full (1920x1080)</option>
+            </select>
+        </div>
+
+        <div class="control-group">
             <label for="slider-blend">Blend Radius (smin): <span id="val-blend">0.12</span></label>
             <input type="range" id="slider-blend" min="0.01" max="0.35" step="0.01" value="0.12">
         </div>
@@ -106,7 +117,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             preserveDrawingBuffer: false,
             desynchronized: true
         });
-        const MAX_RENDER_PIXELS = 640 * 360;
+        let maxRenderPixels = 129600;
         if (!gl) {
             errorLog.textContent = 'Error: WebGL2 context not available.';
             throw new Error('WebGL2 context not available');
@@ -640,10 +651,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             mouse = [e.clientX / window.innerWidth, 1.0 - (e.clientY / window.innerHeight)];
         });
 
+        const resSelect = document.getElementById('select-resolution');
+        resSelect.addEventListener('change', (e) => {
+            maxRenderPixels = parseInt(e.target.value);
+            resize();
+        });
+
         function resize() {
             const cssWidth = Math.max(1, window.innerWidth);
             const cssHeight = Math.max(1, window.innerHeight);
-            const scale = Math.min(1, Math.sqrt(MAX_RENDER_PIXELS / (cssWidth * cssHeight)));
+            const scale = Math.min(1, Math.sqrt(maxRenderPixels / (cssWidth * cssHeight)));
             canvas.width = Math.max(1, Math.floor(cssWidth * scale));
             canvas.height = Math.max(1, Math.floor(cssHeight * scale));
             gl.viewport(0, 0, canvas.width, canvas.height);
