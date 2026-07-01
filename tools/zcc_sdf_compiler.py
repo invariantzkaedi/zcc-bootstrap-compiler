@@ -84,6 +84,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <button id="btn-play" style="margin-top: 0; width: 50%;">PLAY</button>
             <button id="btn-audio" style="margin-top: 0; width: 50%;">MIC FFT</button>
         </div>
+        
+        <div class="control-group">
+            <button id="btn-screenshot" style="background: #00ffcc; color: #000; font-weight: bold; margin-top: 5px;">TAKE SCREENSHOT</button>
+        </div>
 
         <audio id="audio-player" style="display: none;"></audio>
     </div>
@@ -745,14 +749,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         let lastTime = 0;
         let frameCount = 0;
 
-        function render(time) {
-            frameCount++;
-            if (time - lastTime >= 1000) {
-                fpsCounter.textContent = `FPS: ${frameCount}`;
-                frameCount = 0;
-                lastTime = time;
-            }
-
+        function drawFrame(time) {
             if (audioActive && analyser) {
                 analyser.getByteFrequencyData(dataArray);
                 const binWidth = Math.floor(dataArray.length / 8); // 128 / 8 = 16 bins per band
@@ -779,9 +776,30 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             gl.uniform1i(debugLoc, parseInt(debugSelect.value));
 
             gl.drawArrays(gl.TRIANGLES, 0, 6);
+        }
+
+        function render(time) {
+            frameCount++;
+            if (time - lastTime >= 1000) {
+                fpsCounter.textContent = `FPS: ${frameCount}`;
+                frameCount = 0;
+                lastTime = time;
+            }
+
+            drawFrame(time);
             requestAnimationFrame(render);
         }
         requestAnimationFrame(render);
+
+        const screenshotBtn = document.getElementById('btn-screenshot');
+        screenshotBtn.addEventListener('click', () => {
+            drawFrame(performance.now());
+            const dataURL = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = 'zcc_sdf_screenshot.png';
+            link.href = dataURL;
+            link.click();
+        });
     </script>
 </body>
 </html>
