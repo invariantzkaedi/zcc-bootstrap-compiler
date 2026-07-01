@@ -13,120 +13,167 @@ import base64
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html>
 <head>
-    <title>ZCC Remediated SDF Raymarcher — V3.1 HYBRID EDITION</title>
+    <title>ZCC Remediated SDF Raymarcher — SVG & WebGL Hybrid Edition</title>
     <style>
         body, html { margin: 0; padding: 0; overflow: hidden; background: #08080a; font-family: 'Courier New', monospace; color: #fff; }
-        #canvas { width: 100vw; height: 100vh; display: block; }
-        #ui { position: absolute; top: 20px; left: 20px; z-index: 10; background: rgba(10, 10, 15, 0.95); padding: 20px; border: 1px solid #ff00aa; border-radius: 8px; box-shadow: 0 0 20px rgba(255, 0, 170, 0.25); width: 280px; }
-        h1 { font-size: 14px; margin: 0 0 12px 0; color: #ff00aa; text-shadow: 0 0 8px #ff00aa; text-transform: uppercase; letter-spacing: 1px; }
+        #canvas { width: 100vw; height: 100vh; display: none; }
+        #ui { position: absolute; top: 20px; left: 20px; z-index: 10; background: rgba(10, 10, 15, 0.95); padding: 20px; border: 1px solid #00ffcc; border-radius: 8px; box-shadow: 0 0 20px rgba(0, 255, 204, 0.25); width: 280px; max-height: 90vh; overflow-y: auto; }
+        h1 { font-size: 14px; margin: 0 0 12px 0; color: #00ffcc; text-shadow: 0 0 8px #00ffcc; text-transform: uppercase; letter-spacing: 1px; }
         p { margin: 4px 0; font-size: 11px; color: #888; }
         .control-group { margin: 14px 0; }
         label { display: block; font-size: 11px; margin-bottom: 4px; color: #00ffcc; }
         input[type=range] { width: 100%; accent-color: #ff00aa; background: #222; border-radius: 3px; height: 6px; outline: none; }
-        button { width: 100%; background: #ff00aa; border: none; color: #fff; padding: 8px; border-radius: 4px; font-family: monospace; font-size: 12px; cursor: pointer; margin-top: 10px; font-weight: bold; }
-        button:hover { background: #ff33bb; }
-        #fps { position: absolute; bottom: 20px; right: 20px; background: rgba(5,5,5,0.8); border: 1px solid #333; padding: 5px 10px; font-size: 12px; color: #00ffcc; border-radius: 3px; }
+        button { width: 100%; background: #00ffcc; border: none; color: #000; padding: 8px; border-radius: 4px; font-family: monospace; font-size: 12px; cursor: pointer; margin-top: 10px; font-weight: bold; }
+        button:hover { background: #33ffdd; }
+        #fps { position: absolute; bottom: 20px; right: 20px; background: rgba(5,5,5,0.8); border: 1px solid #333; padding: 5px 10px; font-size: 12px; color: #00ffcc; border-radius: 3px; display: none; }
         #error-log { color: #ff3333; font-size: 11px; margin-top: 10px; word-break: break-all; white-space: pre-wrap; font-family: monospace; }
+        .group-bound { fill: none; stroke: #00ffff; stroke-opacity: 0.16; stroke-width: 1.5; }
+        .prim-element { stroke: #ffffff; stroke-opacity: 0.25; }
     </style>
 </head>
 <body>
     <div id="ui">
-        <h1>ZCC SDF V3.1</h1>
-        <p>Asset: fleet_lite.glb</p>
+        <h1>ZCC SDF Hybrid</h1>
+        <p>Asset: __ASSET_NAME__</p>
         <p>Primitives: __NUM_PRIMITIVES__ Hybrid</p>
         <p>Resolution: Infinite</p>
+        <p>WebGL Risk: <span id="risk-badge" style="__RISK_BADGE_STYLE__">__RISK_LEVEL__</span></p>
+        <p id="risk-reason" style="font-size: 10px; color: #aaa; margin-top: 4px;">__RISK_REASON__</p>
         
         <div id="error-log"></div>
 
-        <div class="control-group">
-            <label for="select-debug">Render Mode:</label>
-            <select id="select-debug" style="width: 100%; background: #222; color: #fff; border: 1px solid #ff00aa; border-radius: 4px; padding: 5px; font-family: monospace; font-size: 11px;">
-                <option value="0">Beauty Render</option>
-                <option value="1">Distance Bands</option>
-                <option value="2">Coarse SDF Grid</option>
-                <option value="3">Step Count Heatmap</option>
-                <option value="4">Eikonal Stress</option>
-                <option value="5">Ambient Occlusion</option>
-                <option value="6">Shadow Maps</option>
-                <option value="7">Residual Correction Map</option>
-                <option value="8">Error Bound Map</option>
-                <option value="9">Safe-step Ratio Map</option>
-                <option value="10">Splitscreen Comparison</option>
-            </select>
+        <!-- SVG view controls -->
+        <div id="svg-controls">
+            <div class="control-group">
+                <label for="select-projection">Projection View:</label>
+                <select id="select-projection" style="width: 100%; background: #222; color: #fff; border: 1px solid #00ffcc; border-radius: 4px; padding: 5px; font-family: monospace; font-size: 11px;">
+                    <option value="xy" selected>XY View (Front)</option>
+                    <option value="xz">XZ View (Top)</option>
+                    <option value="yz">YZ View (Side)</option>
+                    <option value="iso">Isometric View</option>
+                </select>
+            </div>
+            
+            <div class="control-group" style="display: flex; justify-content: space-between; align-items: center;">
+                <label style="display: inline-block; margin-bottom: 0;">Show Group Bounds:</label>
+                <input type="checkbox" id="chk-svg-groups" checked style="accent-color: #00ffcc;">
+            </div>
+            <div class="control-group" style="display: flex; justify-content: space-between; align-items: center;">
+                <label style="display: inline-block; margin-bottom: 0;">Show Spheres:</label>
+                <input type="checkbox" id="chk-svg-spheres" checked style="accent-color: #00ffcc;">
+            </div>
+            <div class="control-group" style="display: flex; justify-content: space-between; align-items: center;">
+                <label style="display: inline-block; margin-bottom: 0;">Show Capsules:</label>
+                <input type="checkbox" id="chk-svg-capsules" checked style="accent-color: #00ffcc;">
+            </div>
+            <div class="control-group" style="display: flex; justify-content: space-between; align-items: center;">
+                <label style="display: inline-block; margin-bottom: 0;">Show Boxes:</label>
+                <input type="checkbox" id="chk-svg-boxes" checked style="accent-color: #00ffcc;">
+            </div>
         </div>
 
         <div class="control-group">
-            <button id="btn-pause-render" style="background: #ff00aa; color: #fff; font-weight: bold; padding: 10px;">START RENDER</button>
+            <button id="btn-pause-render" style="background: #00ffcc; color: #000; font-weight: bold; padding: 10px;">START WEBGL SDF</button>
         </div>
 
-        <div class="control-group">
-            <label for="select-resolution">Resolution Limit:</label>
-            <select id="select-resolution" style="width: 100%; background: #222; color: #fff; border: 1px solid #ff00aa; border-radius: 4px; padding: 5px; font-family: monospace; font-size: 11px;">
-                <option value="57600" selected>Low (320x180)</option>
-                <option value="129600">Medium (480x270)</option>
-                <option value="230400">High (640x360)</option>
-                <option value="921600">Ultra (1280x720)</option>
-                <option value="2073600">Full (1920x1080)</option>
-            </select>
-        </div>
+        <!-- WebGL-only controls (hidden initially) -->
+        <div id="webgl-controls" style="display: none;">
+            <div class="control-group">
+                <label for="select-debug">Render Mode:</label>
+                <select id="select-debug" style="width: 100%; background: #222; color: #fff; border: 1px solid #ff00aa; border-radius: 4px; padding: 5px; font-family: monospace; font-size: 11px;">
+                    <option value="0">Beauty Render</option>
+                    <option value="1">Distance Bands</option>
+                    <option value="2">Coarse SDF Grid</option>
+                    <option value="3">Step Count Heatmap</option>
+                    <option value="4">Eikonal Stress</option>
+                    <option value="5">Ambient Occlusion</option>
+                    <option value="6">Shadow Maps</option>
+                    <option value="7">Residual Correction Map</option>
+                    <option value="8">Error Bound Map</option>
+                    <option value="9">Safe-step Ratio Map</option>
+                    <option value="10">Splitscreen Comparison</option>
+                </select>
+            </div>
 
-        <div class="control-group">
-            <label for="select-quality">Raymarch Quality:</label>
-            <select id="select-quality" style="width: 100%; background: #222; color: #fff; border: 1px solid #ff00aa; border-radius: 4px; padding: 5px; font-family: monospace; font-size: 11px;">
-                <option value="32">Safe (32 steps)</option>
-                <option value="48" selected>Balanced (48 steps)</option>
-                <option value="80">High (80 steps)</option>
-            </select>
-        </div>
+            <div class="control-group">
+                <label for="select-resolution">Resolution Limit:</label>
+                <select id="select-resolution" style="width: 100%; background: #222; color: #fff; border: 1px solid #ff00aa; border-radius: 4px; padding: 5px; font-family: monospace; font-size: 11px;">
+                    <option value="57600" selected>Low (320x180)</option>
+                    <option value="129600">Medium (480x270)</option>
+                    <option value="230400">High (640x360)</option>
+                    <option value="921600">Ultra (1280x720)</option>
+                    <option value="2073600">Full (1920x1080)</option>
+                </select>
+            </div>
 
-        <div class="control-group" style="display: flex; justify-content: space-between; align-items: center;">
-            <label style="display: inline-block; margin-bottom: 0;">Ambient Occlusion:</label>
-            <input type="checkbox" id="chk-ao" style="accent-color: #ff00aa;">
-        </div>
+            <div class="control-group">
+                <label for="select-quality">Raymarch Quality:</label>
+                <select id="select-quality" style="width: 100%; background: #222; color: #fff; border: 1px solid #ff00aa; border-radius: 4px; padding: 5px; font-family: monospace; font-size: 11px;">
+                    <option value="32">Safe (32 steps)</option>
+                    <option value="48" selected>Balanced (48 steps)</option>
+                    <option value="80">High (80 steps)</option>
+                </select>
+            </div>
 
-        <div class="control-group" style="display: flex; justify-content: space-between; align-items: center;">
-            <label style="display: inline-block; margin-bottom: 0;">Soft Shadows:</label>
-            <input type="checkbox" id="chk-shadow" style="accent-color: #ff00aa;">
-        </div>
+            <div class="control-group" style="display: flex; justify-content: space-between; align-items: center;">
+                <label style="display: inline-block; margin-bottom: 0;">Ambient Occlusion:</label>
+                <input type="checkbox" id="chk-ao" style="accent-color: #ff00aa;">
+            </div>
 
-        <div class="control-group">
-            <label for="slider-blend">Blend Radius (smin): <span id="val-blend">0.12</span></label>
-            <input type="range" id="slider-blend" min="0.01" max="0.35" step="0.01" value="0.12">
-        </div>
+            <div class="control-group" style="display: flex; justify-content: space-between; align-items: center;">
+                <label style="display: inline-block; margin-bottom: 0;">Soft Shadows:</label>
+                <input type="checkbox" id="chk-shadow" style="accent-color: #ff00aa;">
+            </div>
 
-        <div class="control-group">
-            <label for="slider-jiggle">Jiggle Intensity: <span id="val-jiggle">0.8</span></label>
-            <input type="range" id="slider-jiggle" min="0.0" max="2.5" step="0.1" value="0.8">
-        </div>
+            <div class="control-group">
+                <label for="slider-blend">Blend Radius (smin): <span id="val-blend">0.12</span></label>
+                <input type="range" id="slider-blend" min="0.01" max="0.35" step="0.01" value="0.12">
+            </div>
 
-        <div class="control-group">
-            <label for="slider-glow">Neon Glow: <span id="val-glow">1.2</span></label>
-            <input type="range" id="slider-glow" min="0.5" max="4.0" step="0.1" value="1.2">
-        </div>
+            <div class="control-group">
+                <label for="slider-jiggle">Jiggle Intensity: <span id="val-jiggle">0.8</span></label>
+                <input type="range" id="slider-jiggle" min="0.0" max="2.5" step="0.1" value="0.8">
+            </div>
 
-        <div class="control-group">
-            <label for="slider-specular">Specular Gloss: <span id="val-specular">32.0</span></label>
-            <input type="range" id="slider-specular" min="8.0" max="128.0" step="4.0" value="32.0">
-        </div>
+            <div class="control-group">
+                <label for="slider-glow">Neon Glow: <span id="val-glow">1.2</span></label>
+                <input type="range" id="slider-glow" min="0.5" max="4.0" step="0.1" value="1.2">
+            </div>
 
-        <div class="control-group">
-            <label for="input-audio">Upload MP3/Audio File:</label>
-            <input type="file" id="input-audio" accept="audio/*" style="width: 100%; background: #222; color: #fff; border: 1px solid #ff00aa; border-radius: 4px; padding: 5px; font-family: monospace; font-size: 11px; box-sizing: border-box;">
-        </div>
+            <div class="control-group">
+                <label for="slider-specular">Specular Gloss: <span id="val-specular">32.0</span></label>
+                <input type="range" id="slider-specular" min="8.0" max="128.0" step="4.0" value="32.0">
+            </div>
 
-        <div class="control-group" style="display: flex; gap: 10px;">
-            <button id="btn-play" style="margin-top: 0; width: 50%;">PLAY</button>
-            <button id="btn-audio" style="margin-top: 0; width: 50%;">MIC FFT</button>
-        </div>
-        
-        <div class="control-group">
-            <button id="btn-screenshot" style="background: #00ffcc; color: #000; font-weight: bold; margin-top: 5px;">TAKE SCREENSHOT</button>
-        </div>
+            <div class="control-group">
+                <label for="input-audio">Upload MP3/Audio File:</label>
+                <input type="file" id="input-audio" accept="audio/*" style="width: 100%; background: #222; color: #fff; border: 1px solid #ff00aa; border-radius: 4px; padding: 5px; font-family: monospace; font-size: 11px; box-sizing: border-box;">
+            </div>
 
-        <audio id="audio-player" style="display: none;"></audio>
+            <div class="control-group" style="display: flex; gap: 10px;">
+                <button id="btn-play" style="margin-top: 0; width: 50%; background: #ff00aa; color: #fff;">PLAY</button>
+                <button id="btn-audio" style="margin-top: 0; width: 50%; background: #ff00aa; color: #fff;">MIC FFT</button>
+            </div>
+            
+            <div class="control-group">
+                <button id="btn-screenshot" style="background: #00ffcc; color: #000; font-weight: bold; margin-top: 5px;">TAKE SCREENSHOT</button>
+            </div>
+
+            <audio id="audio-player" style="display: none;"></audio>
+        </div>
     </div>
     
     <div id="fps">FPS: --</div>
+    
+    <div id="svg-preview-container" style="width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; background: #05070d;">
+        <svg id="svg-preview" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" style="max-width: 100%; max-height: 100%; display: block;">
+            <rect width="100%" height="100%" fill="#05070d"/>
+            <g id="svg-elements">
+                __SVG_ELEMENTS__
+            </g>
+        </svg>
+    </div>
+
     <canvas id="canvas"></canvas>
     
     <script>
@@ -560,8 +607,105 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }
         `;
 
+        const canvas = document.getElementById('canvas');
+        const errorLog = document.getElementById('error-log');
+        const svgPreviewContainer = document.getElementById('svg-preview-container');
+        const svgControls = document.getElementById('svg-controls');
+        const webglControls = document.getElementById('webgl-controls');
+        const fpsCounter = document.getElementById('fps');
+        
+        let gl = null;
+        let maxRenderPixels = 57600;
         let webglInitialized = false;
         let program, resLoc, mouseLoc, timeLoc, blendLoc, jiggleLoc, glowLoc, specularLoc, fftBandsLoc, debugLoc, maxStepsLoc, enableAOLoc, enableShadowLoc;
+
+        const primitivesData = __JS_PRIMITIVES__;
+        const groupsData = __JS_GROUPS__;
+        const boundingRadius = __BOUNDING_RADIUS__;
+        const width = 1200, height = 800;
+        const scale = 0.42 * Math.min(width, height) / Math.max(1e-6, boundingRadius);
+
+        function project(p, mode) {
+            let x_val = p[0], y_val = p[1], z_val = p[2];
+            let x2d = 0, y2d = 0;
+            if (mode === 'xy') {
+                x2d = x_val;
+                y2d = y_val;
+            } else if (mode === 'xz') {
+                x2d = x_val;
+                y2d = z_val;
+            } else if (mode === 'yz') {
+                x2d = y_val;
+                y2d = z_val;
+            } else if (mode === 'iso') {
+                x2d = (x_val - z_val) * Math.cos(Math.PI / 6);
+                y2d = y_val - (x_val + z_val) * Math.sin(Math.PI / 6);
+            }
+            const cx = width * 0.5 + x2d * scale;
+            const cy = height * 0.5 - y2d * scale;
+            return [cx, cy];
+        }
+
+        const selectProj = document.getElementById('select-projection');
+        selectProj.addEventListener('change', (e) => {
+            updateProjection(e.target.value);
+        });
+
+        function updateProjection(mode) {
+            primitivesData.forEach((p, idx) => {
+                const el = document.getElementById(`svg-prim-${idx}`);
+                if (!el) return;
+                if (p.type === 'sphere') {
+                    const [cx, cy] = project(p.center, mode);
+                    el.setAttribute('cx', cx.toFixed(2));
+                    el.setAttribute('cy', cy.toFixed(2));
+                } else if (p.type === 'capsule') {
+                    const [ax, ay] = project(p.a, mode);
+                    const [bx, by] = project(p.b, mode);
+                    el.setAttribute('d', `M${ax.toFixed(2)},${ay.toFixed(2)} L${bx.toFixed(2)},${by.toFixed(2)}`);
+                } else if (p.type === 'box') {
+                    const [cx, cy] = project(p.center, mode);
+                    const ex = p.extents[0] * scale;
+                    const ey = p.extents[1] * scale;
+                    el.setAttribute('x', (cx - ex).toFixed(2));
+                    el.setAttribute('y', (cy - ey).toFixed(2));
+                }
+            });
+            
+            groupsData.forEach((g, idx) => {
+                const el = document.getElementById(`svg-group-${idx}`);
+                if (!el) return;
+                const [cx, cy] = project(g.center, mode);
+                el.setAttribute('cx', cx.toFixed(2));
+                el.setAttribute('cy', cy.toFixed(2));
+            });
+        }
+
+        const chkGroups = document.getElementById('chk-svg-groups');
+        const chkSpheres = document.getElementById('chk-svg-spheres');
+        const chkCapsules = document.getElementById('chk-svg-capsules');
+        const chkBoxes = document.getElementById('chk-svg-boxes');
+
+        chkGroups.addEventListener('change', (e) => {
+            document.querySelectorAll('.group-bound').forEach(el => {
+                el.style.display = e.target.checked ? 'inline' : 'none';
+            });
+        });
+        chkSpheres.addEventListener('change', (e) => {
+            document.querySelectorAll('.prim-sphere').forEach(el => {
+                el.style.display = e.target.checked ? 'inline' : 'none';
+            });
+        });
+        chkCapsules.addEventListener('change', (e) => {
+            document.querySelectorAll('.prim-capsule').forEach(el => {
+                el.style.display = e.target.checked ? 'inline' : 'none';
+            });
+        });
+        chkBoxes.addEventListener('change', (e) => {
+            document.querySelectorAll('.prim-box').forEach(el => {
+                el.style.display = e.target.checked ? 'inline' : 'none';
+            });
+        });
 
         function createShader(gl, type, source) {
             const shader = gl.createShader(type);
@@ -579,6 +723,29 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         function initWebGL() {
             if (webglInitialized) return true;
             try {
+                gl = canvas.getContext('webgl2', {
+                    antialias: false,
+                    powerPreference: 'high-performance',
+                    preserveDrawingBuffer: false,
+                    desynchronized: true
+                });
+                if (!gl) {
+                    throw new Error('WebGL2 context not available');
+                }
+                
+                canvas.addEventListener('webglcontextlost', e => {
+                    e.preventDefault();
+                    paused = true;
+                    pauseRenderBtn.textContent = 'START WEBGL SDF';
+                    pauseRenderBtn.style.background = '#00ffcc';
+                    pauseRenderBtn.style.color = '#000';
+                    errorLog.textContent = 'WebGL context lost; rendering paused.';
+                });
+
+                canvas.addEventListener('webglcontextrestored', () => {
+                    errorLog.textContent = 'WebGL context restored. Please reload page or restart render.';
+                });
+                
                 errorLog.textContent = 'Decoding coarse/residual SDF texture arrays...';
                 
                 // Upload baked Coarse SDF 3D Texture
@@ -722,18 +889,25 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const pauseRenderBtn = document.getElementById('btn-pause-render');
         pauseRenderBtn.addEventListener('click', () => {
             if (!webglInitialized) {
+                // Switch DOM layers from SVG preview to WebGL canvas
+                svgPreviewContainer.style.display = 'none';
+                canvas.style.display = 'block';
+                svgControls.style.display = 'none';
+                webglControls.style.display = 'block';
+                fpsCounter.style.display = 'block';
+                
                 const ok = initWebGL();
                 if (!ok) return;
             }
             paused = !paused;
             if (paused) {
-                pauseRenderBtn.textContent = 'START RENDER';
-                pauseRenderBtn.style.background = '#ff00aa';
-                pauseRenderBtn.style.color = '#fff';
-            } else {
-                pauseRenderBtn.textContent = 'PAUSE RENDER';
+                pauseRenderBtn.textContent = 'START WEBGL SDF';
                 pauseRenderBtn.style.background = '#00ffcc';
                 pauseRenderBtn.style.color = '#000';
+            } else {
+                pauseRenderBtn.textContent = 'PAUSE WEBGL SDF';
+                pauseRenderBtn.style.background = '#ff00aa';
+                pauseRenderBtn.style.color = '#fff';
                 lastFrameTime = performance.now();
                 requestAnimationFrame(render);
             }
@@ -1000,9 +1174,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }
         }
         
-        // Clear with background color instead of running fragment shader on load
-        gl.clearColor(0.03, 0.03, 0.05, 1.0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
 
         const screenshotBtn = document.getElementById('btn-screenshot');
         screenshotBtn.addEventListener('click', () => {
@@ -2185,6 +2356,71 @@ def generate_zone_glsl(groups, palette):
         
     return "\n\n".join(zone_funcs)
 
+def emit_svg_proxy(output_file, primitives, groups, palette, bounding_radius, quality_name, risk_level, risk_reason):
+    svg_path = output_file.replace(".html", ".svg")
+    width, height = 1200, 800
+    scale = 0.42 * min(width, height) / max(1e-6, bounding_radius)
+
+    def project(p):
+        x = width * 0.5 + float(p[0]) * scale
+        y = height * 0.5 - float(p[1]) * scale
+        return x, y
+
+    lines = []
+    lines.append(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}">')
+    lines.append('<rect width="100%" height="100%" fill="#05070d"/>')
+    lines.append('<style>')
+    lines.append('text{font-family:monospace;font-size:14px}')
+    lines.append('.group{fill:none;stroke:#00ffff;stroke-opacity:.16;stroke-width:1.5}')
+    lines.append('.prim{stroke:#ffffff;stroke-opacity:.25}')
+    lines.append('</style>')
+
+    # HUD info
+    lines.append(f'<text x="24" y="36" fill="#00ffcc">ZCC SDF SVG Proxy — {quality_name.upper()}</text>')
+    lines.append(f'<text x="24" y="60" fill="#888">primitives={len(primitives)} groups={len(groups)} bound={bounding_radius:.3f}</text>')
+    
+    # Risk badge in SVG text
+    risk_color = "#00ffcc" if risk_level == "low" else ("#ffaa00" if risk_level == "medium" else "#ff00aa")
+    lines.append(f'<text x="24" y="84" fill="{risk_color}">WebGL Risk: {risk_level.upper()} ({risk_reason})</text>')
+
+    # Group bounds
+    for g in groups:
+        cx, cy = project(g["center"])
+        r = float(g["radius"]) * scale
+        lines.append(f'<circle class="group" cx="{cx:.2f}" cy="{cy:.2f}" r="{r:.2f}"/>')
+
+    # Primitives
+    for p in primitives:
+        col = palette[p["cluster_idx"] % len(palette)]
+        color = f'rgb({int(col[0]*255)},{int(col[1]*255)},{int(col[2]*255)})'
+
+        if p["type"] == "sphere":
+            cx, cy = project(p["center"])
+            r = max(1.5, float(p["radius"]) * scale)
+            lines.append(f'<circle class="prim" cx="{cx:.2f}" cy="{cy:.2f}" r="{r:.2f}" fill="{color}" fill-opacity="0.65"/>')
+
+        elif p["type"] == "capsule":
+            ax, ay = project(p["a"])
+            bx, by = project(p["b"])
+            sw = max(1.5, float(p["radius"]) * 2.0 * scale)
+            lines.append(f'<path class="prim" d="M{ax:.2f},{ay:.2f} L{bx:.2f},{by:.2f}" stroke="{color}" stroke-width="{sw:.2f}" stroke-linecap="round" fill="none" opacity="0.7"/>')
+
+        elif p["type"] == "box":
+            cx, cy = project(p["center"])
+            ex = max(1.5, float(p["extents"][0]) * scale)
+            ey = max(1.5, float(p["extents"][1]) * scale)
+            lines.append(f'<rect class="prim" x="{cx-ex:.2f}" y="{cy-ey:.2f}" width="{2*ex:.2f}" height="{2*ey:.2f}" fill="{color}" fill-opacity="0.5"/>')
+
+    lines.append('</svg>')
+
+    svg = "\n".join(lines)
+    svg_dir = os.path.dirname(os.path.abspath(svg_path))
+    if svg_dir:
+        os.makedirs(svg_dir, exist_ok=True)
+    with open(svg_path, "w", encoding="utf-8") as f:
+        f.write(svg)
+    return svg_path, svg
+
 def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_res, residual_res, w_offset=0.4, eps_ratio=0.5, quality="balanced"):
     """Core compilation run wrapping file execution"""
     t_start = time.time()
@@ -2360,9 +2596,93 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_r
         val_pts, groups, res_b64, err_b64, bounding_radius, blend_radius=0.12, resolution=res_res_actual, eps_ratio=eps_ratio
     )
 
+    # Determine compile-time risk level & reason
+    risk_level = "low"
+    risk_reason = "Shader size is small and primitive count is low."
+    if fs_estimated_len > 45000:
+        risk_level = "medium"
+        risk_reason = "Shader size is close to WebGL2 driver compiling budget."
+    if fs_estimated_len > 52000 or max_prims_per_group > 24:
+        risk_level = "high"
+        risk_reason = "Pathological asset size or group primitives count. WebGL compilation may take a few seconds."
+
+    # Emit static SVG proxy file
+    svg_path, svg_content = emit_svg_proxy(
+        output_file, primitives, groups, palette, bounding_radius, quality, risk_level, risk_reason
+    )
+    print(f"[ZCC SDF Compiler] Emitting SVG static proxy to {svg_path}...")
+
+    # Generate inline SVG elements for default front XY projection
+    width, height = 1200, 800
+    scale = 0.42 * min(width, height) / max(1e-6, bounding_radius)
+
+    def project(p):
+        x = width * 0.5 + float(p[0]) * scale
+        y = height * 0.5 - float(p[1]) * scale
+        return x, y
+
+    svg_elements = []
+    # Group bounds
+    for idx, g in enumerate(groups):
+        cx, cy = project(g["center"])
+        r = float(g["radius"]) * scale
+        svg_elements.append(f'<circle id="svg-group-{idx}" class="group-bound" cx="{cx:.2f}" cy="{cy:.2f}" r="{r:.2f}"/>')
+    # Primitives
+    for idx, p in enumerate(primitives):
+        col = palette[p["cluster_idx"] % len(palette)]
+        color = f'rgb({int(col[0]*255)},{int(col[1]*255)},{int(col[2]*255)})'
+        if p["type"] == "sphere":
+            cx, cy = project(p["center"])
+            r = max(1.5, float(p["radius"]) * scale)
+            svg_elements.append(f'<circle id="svg-prim-{idx}" class="prim-element prim-sphere" cx="{cx:.2f}" cy="{cy:.2f}" r="{r:.2f}" fill="{color}" fill-opacity="0.65"/>')
+        elif p["type"] == "capsule":
+            ax, ay = project(p["a"])
+            bx, by = project(p["b"])
+            sw = max(1.5, float(p["radius"]) * 2.0 * scale)
+            svg_elements.append(f'<path id="svg-prim-{idx}" class="prim-element prim-capsule" d="M{ax:.2f},{ay:.2f} L{bx:.2f},{by:.2f}" stroke="{color}" stroke-width="{sw:.2f}" stroke-linecap="round" fill="none" opacity="0.7"/>')
+        elif p["type"] == "box":
+            cx, cy = project(p["center"])
+            ex = max(1.5, float(p["extents"][0]) * scale)
+            ey = max(1.5, float(p["extents"][1]) * scale)
+            svg_elements.append(f'<rect id="svg-prim-{idx}" class="prim-element prim-box" x="{cx-ex:.2f}" y="{cy-ey:.2f}" width="{2*ex:.2f}" height="{2*ey:.2f}" fill="{color}" fill-opacity="0.5"/>')
+            
+    svg_elements_str = "\n        ".join(svg_elements)
+
+    # Clean object function for JSON serialization
+    def clean_obj(obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, (np.floating, np.integer)):
+            return obj.item()
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+        elif isinstance(obj, dict):
+            return {k: clean_obj(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [clean_obj(v) for v in obj]
+        else:
+            return obj
+
+    js_primitives = json.dumps(clean_obj(primitives))
+    js_groups = json.dumps(clean_obj(groups))
+
+    # Badge background and foreground styling
+    badge_bg = "#00ffcc" if risk_level == "low" else ("#ffaa00" if risk_level == "medium" else "#ff00aa")
+    badge_fg = "#000" if risk_level == "low" else "#fff"
+    badge_style = f"background: {badge_bg}; color: {badge_fg}; font-weight: bold; padding: 2px 6px; border-radius: 3px;"
+
     print(f"[ZCC SDF Compiler] Emitting WebGL compilation target to {output_file}...")
     html_content = HTML_TEMPLATE
+    html_content = html_content.replace("__ASSET_NAME__", os.path.basename(input_file))
     html_content = html_content.replace("__NUM_PRIMITIVES__", str(num_spheres))
+    html_content = html_content.replace("__RISK_LEVEL__", risk_level.upper())
+    html_content = html_content.replace("__RISK_REASON__", risk_reason)
+    html_content = html_content.replace("__RISK_BADGE_STYLE__", badge_style)
+    html_content = html_content.replace("__SVG_ELEMENTS__", svg_elements_str)
+    html_content = html_content.replace("__JS_PRIMITIVES__", js_primitives)
+    html_content = html_content.replace("__JS_GROUPS__", js_groups)
+    html_content = html_content.replace("__BOUNDING_RADIUS__", str(bounding_radius))
+
     html_content = html_content.replace("__ZONE_FUNCTIONS__", zone_glsl_definitions)
     html_content = html_content.replace("__SDF_CODE__", sdf_code_str)
     html_content = html_content.replace("__SDF_CODE_D__", sdf_code_str_d)
