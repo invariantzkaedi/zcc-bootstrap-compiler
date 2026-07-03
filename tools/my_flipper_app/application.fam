@@ -1,0 +1,8 @@
+App(
+    appid="my_flipper_app",
+    name="My App",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="my_flipper_app_main",
+    stack_size=2 * 1024,
+    fap_category="Tools",
+)
