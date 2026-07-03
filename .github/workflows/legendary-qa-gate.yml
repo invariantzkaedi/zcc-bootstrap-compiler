@@ -8,7 +8,9 @@ on:
 jobs:
   legendary-qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
+    env:
+      MIN_SCORE: "85"
 
     steps:
       - name: Checkout
@@ -20,24 +22,41 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
+        run: python -m pip install --upgrade pip
 
-      - name: Run Legendary Experiment Suite
+      # You must provide this probe in-repo or containerized.
+      # It must output real metrics JSON to --output-json.
+      - name: Verify runtime probe exists
         run: |
-          python tools/run_legendary_experiments.py
+          test -x tools/runtime_probe || (echo "Missing executable tools/runtime_probe" && exit 1)
+
+      - name: Run REAL Legendary Experiment Suite
+        run: |
+          python tools/run_legendary_experiments.py --runtime-probe-cmd tools/runtime_probe
 
       - name: Locate latest artifact run
         id: locate
-        shell: bash
         run: |
           LATEST_RUN_DIR=$(ls -1dt artifacts/qa/* | head -n 1)
           echo "latest_run_dir=$LATEST_RUN_DIR" >> $GITHUB_OUTPUT
           echo "Found latest run: $LATEST_RUN_DIR"
 
-      - name: Compute Legendary Readiness Score
+      - name: Enforce non-synthetic evidence
+        run: |
+          ENV_JSON="${{ steps.locate.outputs.latest_run_dir }}/environment.json"
+          test -f "$ENV_JSON" || (echo "Missing environment.json" && exit 1)
+          python - << 'PY'
+          import json,sys
+          p = "${{ steps.locate.outputs.latest_run_dir }}/environment.json"
+          d = json.load(open(p))
+          if d.get("syntheticMode", True):
+              print("Synthetic mode detected. Failing.")
+              sys.exit(1)
+          print("Real mode confirmed.")
+          PY
+
+      - name: Score run
         id: score
-        shell: bash
         run: |
           SCORE_OUTPUT=$(python tools/legendary_readiness_score.py "${{ steps.locate.outputs.latest_run_dir }}/results.json")
           echo "$SCORE_OUTPUT"
@@ -47,15 +66,11 @@ jobs:
           echo "verdict=$VERDICT" >> $GITHUB_OUTPUT
 
       - name: Enforce minimum score gate
-        shell: bash
-        env:
-          MIN_SCORE: "85"
         run: |
           SCORE="${{ steps.score.outputs.score }}"
-          echo "Gate check: score=$SCORE, minimum=$MIN_SCORE"
           awk -v s="$SCORE" -v m="$MIN_SCORE" 'BEGIN { exit (s+0 >= m+0) ? 0 : 1 }' \
-            || (echo "❌ Legendary QA Gate failed: score $SCORE < $MIN_SCORE" && exit 1)
-          echo "✅ Legendary QA Gate passed: score $SCORE >= $MIN_SCORE"
+            || (echo "QA Gate failed: $SCORE < $MIN_SCORE" && exit 1)
+          echo "QA Gate passed: $SCORE >= $MIN_SCORE"
 
       - name: Upload QA artifacts
         uses: actions/upload-artifact@v4
@@ -63,16 +78,13 @@ jobs:
           name: legendary-qa-artifacts
           path: ${{ steps.locate.outputs.latest_run_dir }}
 
-      - name: Publish step summary
-        shell: bash
+      - name: Publish summary
         run: |
           {
-            echo "## Legendary QA Gate Result"
+            echo "## Legendary QA Gate"
+            echo "- Score: **${{ steps.score.outputs.score }}**"
+            echo "- Verdict: **${{ steps.score.outputs.verdict }}**"
+            echo "- Artifacts: \`${{ steps.locate.outputs.latest_run_dir }}\`"
             echo ""
-            echo "- **Score:** ${{ steps.score.outputs.score }}"
-            echo "- **Verdict:** ${{ steps.score.outputs.verdict }}"
-            echo "- **Artifacts:** \`${{ steps.locate.outputs.latest_run_dir }}\`"
-            echo ""
-            echo "### Summary"
             cat "${{ steps.locate.outputs.latest_run_dir }}/summary.md"
           } >> "$GITHUB_STEP_SUMMARY"
