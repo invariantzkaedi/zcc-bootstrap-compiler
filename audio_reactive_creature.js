@@ -751,6 +751,7 @@ function solveRigModifiers(timestamp) {
       }
     });
   });
+  state._lastSolvedModifiers = allModifiers;
 }
 
 // Apply solved transforms to SVG rig elements
@@ -1173,19 +1174,24 @@ document.addEventListener("DOMContentLoaded", () => {
   window.engine = {
     rig: {
       get nodes() {
-        if (!state.nodePoses) return [];
-        return Object.entries(state.nodePoses).map(([id, p]) => ({
-          id: id,
-          tx: p.x,
-          ty: p.y,
-          r: p.rotate || 0,
-          s: p.scale || 1,
-          em: p.emissive || 0
+        return Object.entries(rigNodePoses || {}).map(([id, p]) => ({
+          id,
+          tx: p.tx ?? 0,
+          ty: p.ty ?? 0,
+          r: p.r ?? 0,
+          s: p.s ?? 1,
+          em: p.em ?? 0
         }));
       }
     },
     get activeModifiers() {
-      return state.activeModifierStack || [];
+      return (state._lastSolvedModifiers || []).map(m => ({
+        id: m.id,
+        pr: m.pr ?? 0,
+        bm: m.bm ?? "add",
+        t: m.t || [],
+        p: m.p || {}
+      }));
     },
     audio: {
       get isBeat() { return state.isBeat; },
@@ -1197,6 +1203,14 @@ document.addEventListener("DOMContentLoaded", () => {
     runtimeFlags: {
       get degradationLock() { return false; },
       get criticalError() { return !state.svgVerified; }
+    },
+    poseHash() {
+      const pose = Object.entries(rigNodePoses || {});
+      let s = "";
+      for (const [id, p] of pose) s += `${id}:${(p.tx||0).toFixed(3)}:${(p.ty||0).toFixed(3)}:${(p.r||0).toFixed(3)}:${(p.s||1).toFixed(4)}:${(p.em||0).toFixed(4)}|`;
+      let h = 2166136261 >>> 0;
+      for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+      return (h >>> 0).toString(16);
     }
   };
 });
