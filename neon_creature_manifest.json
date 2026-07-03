@@ -1,0 +1,340 @@
+{
+  "schema": "zkaedi.audio_sprite.v1.1",
+  "spriteId": "neon-creature-runtime",
+  "viewBox": [0, 0, 1000, 1000],
+  "transparentBackground": true,
+  "coordinateSpace": "svg-viewbox",
+
+  "fit": {
+    "mode": "contain",
+    "paddingPercent": 10,
+    "preserveAspectRatio": "xMidYMid meet",
+    "allowNonUniformScale": false
+  },
+
+  "legacyAliases": {
+    "body": "torso",
+    "head": "head_root",
+    "tail": "tail_root"
+  },
+
+  "joints": {
+    "neck": [520, 380],
+    "torso_center": [500, 680],
+
+    "ear_left_root": [330, 340],
+    "ear_right_root": [650, 420],
+
+    "shoulder_left": [550, 680],
+    "shoulder_right": [550, 680],
+    "elbow_left": [550, 780],
+    "elbow_right": [550, 780],
+    "wrist_left": [550, 880],
+    "wrist_right": [550, 880],
+
+    "hip_left": [330, 680],
+    "hip_right": [330, 680],
+    "ankle_left": [330, 880],
+    "ankle_right": [330, 880],
+
+    "tail_root_joint": [180, 680],
+    "tail_mid_joint": [115, 755],
+    "tail_tip_joint": [80, 800],
+
+    "eye_left_center": [525, 340],
+    "eye_right_center": [525, 340],
+    "pupil_left_center": [525, 340],
+    "pupil_right_center": [525, 340]
+  },
+
+  "nodes": {
+    "creature_root": {
+      "role": "root",
+      "parent": null,
+      "anchor": [500, 900],
+      "idle": {
+        "property": "translateY",
+        "range": [-6, 6],
+        "periodMs": 3000
+      },
+      "beat": {
+        "property": "translateY",
+        "range": [0, -10],
+        "attackMs": 60,
+        "releaseMs": 220
+      }
+    },
+
+    "torso": {
+      "role": "bass_pulse",
+      "parent": "creature_root",
+      "anchor": [500, 680],
+      "band": "bass",
+      "property": "scaleXY",
+      "range": {
+        "x": [1, 1.03],
+        "y": [1, 0.98]
+      },
+      "attackMs": 70,
+      "releaseMs": 240
+    },
+
+    "head_root": {
+      "role": "head_nod",
+      "parent": "creature_root",
+      "anchor": [520, 380],
+      "band": "lowMid",
+      "property": "rotate",
+      "range": [-2.5, 2.5],
+      "attackMs": 110,
+      "releaseMs": 260,
+      "beatTranslateY": [-4, 3]
+    },
+
+    "ear_left": {
+      "role": "ear_sway",
+      "parent": "head_root",
+      "anchor": [330, 340],
+      "band": "mid",
+      "property": "rotate",
+      "range": [-4, 4],
+      "beatRange": [-7, 2],
+      "attackMs": 90,
+      "releaseMs": 320
+    },
+
+    "ear_right": {
+      "role": "ear_sway",
+      "parent": "head_root",
+      "anchor": [650, 420],
+      "band": "mid",
+      "property": "rotate",
+      "range": [4, -4],
+      "beatRange": [7, -2],
+      "attackMs": 90,
+      "releaseMs": 320
+    },
+
+    "tail_root": {
+      "role": "tail_wave_root",
+      "parent": "creature_root",
+      "anchor": [180, 680],
+      "band": "mid",
+      "property": "rotate",
+      "range": [-5, 5],
+      "phase": 0,
+      "attackMs": 110,
+      "releaseMs": 280
+    },
+
+    "tail_mid": {
+      "role": "tail_wave_mid",
+      "parent": "tail_root",
+      "anchor": [115, 755],
+      "band": "mid",
+      "property": "rotate",
+      "range": [-7, 7],
+      "phase": 0.5,
+      "attackMs": 110,
+      "releaseMs": 280
+    },
+
+    "tail_tip": {
+      "role": "tail_wave_tip",
+      "parent": "tail_mid",
+      "anchor": [80, 800],
+      "band": "highMid",
+      "property": "rotate",
+      "range": [-9, 9],
+      "phase": 1,
+      "attackMs": 110,
+      "releaseMs": 280
+    },
+
+    "arm_left_upper": {
+      "role": "arm_dance",
+      "parent": "torso",
+      "anchor": [550, 680],
+      "band": "mid",
+      "property": "rotate",
+      "range": [-5, 5]
+    },
+
+    "arm_left_lower": {
+      "role": "forearm_dance",
+      "parent": "arm_left_upper",
+      "anchor": [550, 780],
+      "band": "mid",
+      "property": "rotate",
+      "range": [-3, 3]
+    },
+
+    "paw_left": {
+      "role": "paw",
+      "parent": "arm_left_lower",
+      "anchor": [550, 880],
+      "inheritOnly": true
+    },
+
+    "arm_right_upper": {
+      "role": "arm_dance",
+      "parent": "torso",
+      "anchor": [550, 680],
+      "band": "mid",
+      "property": "rotate",
+      "range": [5, -5]
+    },
+
+    "arm_right_lower": {
+      "role": "forearm_dance",
+      "parent": "arm_right_upper",
+      "anchor": [550, 780],
+      "band": "mid",
+      "property": "rotate",
+      "range": [3, -3]
+    },
+
+    "paw_right": {
+      "role": "paw",
+      "parent": "arm_right_lower",
+      "anchor": [550, 880],
+      "inheritOnly": true
+    },
+
+    "leg_left": {
+      "role": "leg_bounce",
+      "parent": "torso",
+      "anchor": [330, 680],
+      "band": "bass",
+      "property": "translateY",
+      "range": [0, -3]
+    },
+
+    "foot_left": {
+      "role": "foot",
+      "parent": "leg_left",
+      "anchor": [330, 880],
+      "inheritOnly": true
+    },
+
+    "leg_right": {
+      "role": "leg_bounce",
+      "parent": "torso",
+      "anchor": [330, 680],
+      "band": "bass",
+      "property": "translateY",
+      "range": [0, -3]
+    },
+
+    "foot_right": {
+      "role": "foot",
+      "parent": "leg_right",
+      "anchor": [330, 880],
+      "inheritOnly": true
+    },
+
+    "pupil_left": {
+      "role": "pupil_dilation",
+      "parent": "head_root",
+      "anchor": [525, 340],
+      "band": "bass",
+      "property": "scale",
+      "range": [1, 1.08],
+      "attackMs": 90,
+      "releaseMs": 220
+    },
+
+    "pupil_right": {
+      "role": "pupil_dilation",
+      "parent": "head_root",
+      "anchor": [525, 340],
+      "band": "bass",
+      "property": "scale",
+      "range": [1, 1.08],
+      "attackMs": 90,
+      "releaseMs": 220
+    },
+
+    "eyelid_left": {
+      "role": "blink",
+      "parent": "head_root",
+      "anchor": [525, 340],
+      "trigger": "rareBeat",
+      "property": "blink",
+      "durationMs": 110,
+      "cooldownMs": 2200
+    },
+
+    "eyelid_right": {
+      "role": "blink",
+      "parent": "head_root",
+      "anchor": [525, 340],
+      "trigger": "rareBeat",
+      "property": "blink",
+      "durationMs": 110,
+      "cooldownMs": 2200
+    },
+
+    "glow_back": {
+      "role": "glow",
+      "parent": "creature_root",
+      "anchor": [500, 500],
+      "band": "full",
+      "property": "opacity",
+      "range": [0.35, 0.95],
+      "beatBurst": 1,
+      "attackMs": 65,
+      "releaseMs": 260
+    },
+
+    "scale_detail": {
+      "role": "detail",
+      "parent": "torso",
+      "anchor": [500, 680],
+      "inheritOnly": true
+    },
+
+    "highlight_detail": {
+      "role": "detail",
+      "parent": "head_root",
+      "anchor": [520, 380],
+      "inheritOnly": true
+    },
+
+    "fx_particles": {
+      "role": "particles",
+      "parent": "creature_root",
+      "anchor": [500, 900],
+      "enabledByDefault": false,
+      "maxActive": 12,
+      "trigger": "strongBeat"
+    }
+  },
+
+  "audio": {
+    "fftSize": 2048,
+    "smoothingTimeConstant": 0.84,
+    "bands": {
+      "subBass": [20, 60],
+      "bass": [60, 180],
+      "lowMid": [180, 500],
+      "mid": [500, 2000],
+      "highMid": [2000, 6000],
+      "treble": [6000, 16000]
+    },
+    "beat": {
+      "sourceBand": "bass",
+      "rollingWindowMs": 900,
+      "sensitivity": 1.28,
+      "cooldownMs": 170,
+      "minimumEnergy": 0.12
+    }
+  },
+
+  "palette": {
+    "cyan": "#19F6FF",
+    "teal": "#00CBB7",
+    "magenta": "#FF4FD8",
+    "dark": "#06131B"
+  }
+}
