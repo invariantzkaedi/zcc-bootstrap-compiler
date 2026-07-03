@@ -1,326 +1,521 @@
 {
   "schema": "zkaedi.audio_sprite.v1.1",
   "spriteId": "neon-creature-runtime",
-  "viewBox": [0, 0, 1000, 1000],
+  "viewBox": [
+    0,
+    0,
+    1000,
+    1000
+  ],
   "transparentBackground": true,
   "coordinateSpace": "svg-viewbox",
-
   "fit": {
     "mode": "contain",
     "paddingPercent": 10,
     "preserveAspectRatio": "xMidYMid meet",
     "allowNonUniformScale": false
   },
-
   "legacyAliases": {
     "body": "torso",
     "head": "head_root",
     "tail": "tail_root"
   },
-
   "joints": {
-    "neck": [520, 380],
-    "torso_center": [500, 680],
-
-    "ear_left_root": [330, 340],
-    "ear_right_root": [650, 420],
-
-    "shoulder_left": [550, 680],
-    "shoulder_right": [550, 680],
-    "elbow_left": [550, 780],
-    "elbow_right": [550, 780],
-    "wrist_left": [550, 880],
-    "wrist_right": [550, 880],
-
-    "hip_left": [330, 680],
-    "hip_right": [330, 680],
-    "ankle_left": [330, 880],
-    "ankle_right": [330, 880],
-
-    "tail_root_joint": [180, 680],
-    "tail_mid_joint": [115, 755],
-    "tail_tip_joint": [80, 800],
-
-    "eye_left_center": [525, 340],
-    "eye_right_center": [525, 340],
-    "pupil_left_center": [525, 340],
-    "pupil_right_center": [525, 340]
+    "neck": [
+      520,
+      380
+    ],
+    "torso_center": [
+      500,
+      680
+    ],
+    "ear_left_root": [
+      330,
+      340
+    ],
+    "ear_right_root": [
+      650,
+      420
+    ],
+    "shoulder_left": [
+      550,
+      680
+    ],
+    "shoulder_right": [
+      550,
+      680
+    ],
+    "elbow_left": [
+      550,
+      780
+    ],
+    "elbow_right": [
+      550,
+      780
+    ],
+    "wrist_left": [
+      550,
+      880
+    ],
+    "wrist_right": [
+      550,
+      880
+    ],
+    "hip_left": [
+      330,
+      680
+    ],
+    "hip_right": [
+      330,
+      680
+    ],
+    "ankle_left": [
+      330,
+      880
+    ],
+    "ankle_right": [
+      330,
+      880
+    ],
+    "tail_root_joint": [
+      180,
+      680
+    ],
+    "tail_mid_joint": [
+      115,
+      755
+    ],
+    "tail_tip_joint": [
+      80,
+      800
+    ],
+    "eye_left_center": [
+      525,
+      340
+    ],
+    "eye_right_center": [
+      525,
+      340
+    ],
+    "pupil_left_center": [
+      525,
+      340
+    ],
+    "pupil_right_center": [
+      525,
+      340
+    ]
   },
-
   "nodes": {
     "creature_root": {
       "role": "root",
       "parent": null,
-      "anchor": [500, 900],
+      "anchor": [
+        500,
+        900
+      ],
       "idle": {
         "property": "translateY",
-        "range": [-6, 6],
+        "range": [
+          -6,
+          6
+        ],
         "periodMs": 3000
       },
       "beat": {
         "property": "translateY",
-        "range": [0, -10],
+        "range": [
+          0,
+          -10
+        ],
         "attackMs": 60,
         "releaseMs": 220
       }
     },
-
     "torso": {
       "role": "bass_pulse",
       "parent": "creature_root",
-      "anchor": [500, 680],
+      "anchor": [
+        500,
+        680
+      ],
       "band": "bass",
       "property": "scaleXY",
       "range": {
-        "x": [1, 1.03],
-        "y": [1, 0.98]
+        "x": [
+          1,
+          1.03
+        ],
+        "y": [
+          1,
+          0.98
+        ]
       },
       "attackMs": 70,
       "releaseMs": 240
     },
-
     "head_root": {
       "role": "head_nod",
       "parent": "creature_root",
-      "anchor": [520, 380],
+      "anchor": [
+        520,
+        380
+      ],
       "band": "lowMid",
       "property": "rotate",
-      "range": [-2.5, 2.5],
+      "range": [
+        -2.5,
+        2.5
+      ],
       "attackMs": 110,
       "releaseMs": 260,
-      "beatTranslateY": [-4, 3]
+      "beatTranslateY": [
+        -4,
+        3
+      ]
     },
-
     "ear_left": {
       "role": "ear_sway",
       "parent": "head_root",
-      "anchor": [330, 340],
+      "anchor": [
+        330,
+        340
+      ],
       "band": "mid",
       "property": "rotate",
-      "range": [-4, 4],
-      "beatRange": [-7, 2],
+      "range": [
+        -4,
+        4
+      ],
+      "beatRange": [
+        -7,
+        2
+      ],
       "attackMs": 90,
       "releaseMs": 320
     },
-
     "ear_right": {
       "role": "ear_sway",
       "parent": "head_root",
-      "anchor": [650, 420],
+      "anchor": [
+        650,
+        420
+      ],
       "band": "mid",
       "property": "rotate",
-      "range": [4, -4],
-      "beatRange": [7, -2],
+      "range": [
+        4,
+        -4
+      ],
+      "beatRange": [
+        7,
+        -2
+      ],
       "attackMs": 90,
       "releaseMs": 320
     },
-
     "tail_root": {
       "role": "tail_wave_root",
       "parent": "creature_root",
-      "anchor": [180, 680],
+      "anchor": [
+        180,
+        680
+      ],
       "band": "mid",
       "property": "rotate",
-      "range": [-5, 5],
+      "range": [
+        -5,
+        5
+      ],
       "phase": 0,
       "attackMs": 110,
       "releaseMs": 280
     },
-
     "tail_mid": {
       "role": "tail_wave_mid",
       "parent": "tail_root",
-      "anchor": [115, 755],
+      "anchor": [
+        115,
+        755
+      ],
       "band": "mid",
       "property": "rotate",
-      "range": [-7, 7],
+      "range": [
+        -7,
+        7
+      ],
       "phase": 0.5,
       "attackMs": 110,
       "releaseMs": 280
     },
-
     "tail_tip": {
       "role": "tail_wave_tip",
       "parent": "tail_mid",
-      "anchor": [80, 800],
+      "anchor": [
+        80,
+        800
+      ],
       "band": "highMid",
       "property": "rotate",
-      "range": [-9, 9],
+      "range": [
+        -9,
+        9
+      ],
       "phase": 1,
       "attackMs": 110,
       "releaseMs": 280
     },
-
     "arm_left_upper": {
       "role": "arm_dance",
       "parent": "torso",
-      "anchor": [550, 680],
+      "anchor": [
+        550,
+        680
+      ],
       "band": "mid",
       "property": "rotate",
-      "range": [-5, 5]
+      "range": [
+        -5,
+        5
+      ]
     },
-
     "arm_left_lower": {
       "role": "forearm_dance",
       "parent": "arm_left_upper",
-      "anchor": [550, 780],
+      "anchor": [
+        550,
+        780
+      ],
       "band": "mid",
       "property": "rotate",
-      "range": [-3, 3]
+      "range": [
+        -3,
+        3
+      ]
     },
-
     "paw_left": {
       "role": "paw",
       "parent": "arm_left_lower",
-      "anchor": [550, 880],
+      "anchor": [
+        550,
+        880
+      ],
       "inheritOnly": true
     },
-
     "arm_right_upper": {
       "role": "arm_dance",
       "parent": "torso",
-      "anchor": [550, 680],
+      "anchor": [
+        550,
+        680
+      ],
       "band": "mid",
       "property": "rotate",
-      "range": [5, -5]
+      "range": [
+        5,
+        -5
+      ]
     },
-
     "arm_right_lower": {
       "role": "forearm_dance",
       "parent": "arm_right_upper",
-      "anchor": [550, 780],
+      "anchor": [
+        550,
+        780
+      ],
       "band": "mid",
       "property": "rotate",
-      "range": [3, -3]
+      "range": [
+        3,
+        -3
+      ]
     },
-
     "paw_right": {
       "role": "paw",
       "parent": "arm_right_lower",
-      "anchor": [550, 880],
+      "anchor": [
+        550,
+        880
+      ],
       "inheritOnly": true
     },
-
     "leg_left": {
       "role": "leg_bounce",
       "parent": "torso",
-      "anchor": [330, 680],
+      "anchor": [
+        330,
+        680
+      ],
       "band": "bass",
       "property": "translateY",
-      "range": [0, -3]
+      "range": [
+        0,
+        -3
+      ]
     },
-
     "foot_left": {
       "role": "foot",
       "parent": "leg_left",
-      "anchor": [330, 880],
+      "anchor": [
+        330,
+        880
+      ],
       "inheritOnly": true
     },
-
     "leg_right": {
       "role": "leg_bounce",
       "parent": "torso",
-      "anchor": [330, 680],
+      "anchor": [
+        330,
+        680
+      ],
       "band": "bass",
       "property": "translateY",
-      "range": [0, -3]
+      "range": [
+        0,
+        -3
+      ]
     },
-
     "foot_right": {
       "role": "foot",
       "parent": "leg_right",
-      "anchor": [330, 880],
+      "anchor": [
+        330,
+        880
+      ],
       "inheritOnly": true
     },
-
     "pupil_left": {
       "role": "pupil_dilation",
       "parent": "head_root",
-      "anchor": [525, 340],
+      "anchor": [
+        525,
+        340
+      ],
       "band": "bass",
       "property": "scale",
-      "range": [1, 1.08],
+      "range": [
+        1,
+        1.08
+      ],
       "attackMs": 90,
       "releaseMs": 220
     },
-
     "pupil_right": {
       "role": "pupil_dilation",
       "parent": "head_root",
-      "anchor": [525, 340],
+      "anchor": [
+        525,
+        340
+      ],
       "band": "bass",
       "property": "scale",
-      "range": [1, 1.08],
+      "range": [
+        1,
+        1.08
+      ],
       "attackMs": 90,
       "releaseMs": 220
     },
-
     "eyelid_left": {
       "role": "blink",
       "parent": "head_root",
-      "anchor": [525, 340],
+      "anchor": [
+        525,
+        340
+      ],
       "trigger": "rareBeat",
       "property": "blink",
       "durationMs": 110,
       "cooldownMs": 2200
     },
-
     "eyelid_right": {
       "role": "blink",
       "parent": "head_root",
-      "anchor": [525, 340],
+      "anchor": [
+        525,
+        340
+      ],
       "trigger": "rareBeat",
       "property": "blink",
       "durationMs": 110,
       "cooldownMs": 2200
     },
-
     "glow_back": {
       "role": "glow",
       "parent": "creature_root",
-      "anchor": [500, 500],
+      "anchor": [
+        500,
+        500
+      ],
       "band": "full",
       "property": "opacity",
-      "range": [0.35, 0.95],
+      "range": [
+        0.35,
+        0.95
+      ],
       "beatBurst": 1,
       "attackMs": 65,
       "releaseMs": 260
     },
-
     "scale_detail": {
       "role": "detail",
       "parent": "torso",
-      "anchor": [500, 680],
+      "anchor": [
+        500,
+        680
+      ],
       "inheritOnly": true
     },
-
     "highlight_detail": {
       "role": "detail",
       "parent": "head_root",
-      "anchor": [520, 380],
+      "anchor": [
+        520,
+        380
+      ],
       "inheritOnly": true
     },
-
     "fx_particles": {
       "role": "particles",
       "parent": "creature_root",
-      "anchor": [500, 900],
+      "anchor": [
+        500,
+        900
+      ],
       "enabledByDefault": false,
       "maxActive": 12,
       "trigger": "strongBeat"
     }
   },
-
   "audio": {
     "fftSize": 2048,
     "smoothingTimeConstant": 0.84,
     "bands": {
-      "subBass": [20, 60],
-      "bass": [60, 180],
-      "lowMid": [180, 500],
-      "mid": [500, 2000],
-      "highMid": [2000, 6000],
-      "treble": [6000, 16000]
+      "subBass": [
+        20,
+        60
+      ],
+      "bass": [
+        60,
+        180
+      ],
+      "lowMid": [
+        180,
+        500
+      ],
+      "mid": [
+        500,
+        2000
+      ],
+      "highMid": [
+        2000,
+        6000
+      ],
+      "treble": [
+        6000,
+        16000
+      ]
     },
     "beat": {
       "sourceBand": "bass",
@@ -330,11 +525,863 @@
       "minimumEnergy": 0.12
     }
   },
-
   "palette": {
     "cyan": "#19F6FF",
     "teal": "#00CBB7",
     "magenta": "#FF4FD8",
     "dark": "#06131B"
+  },
+  "runtime": {
+    "calibrationProfiles": {
+      "defaultProfileId": "mastered_music_general",
+      "profileSelectionPolicy": {
+        "mode": "auto_with_override",
+        "autoClassifier": {
+          "enabled": true,
+          "features": [
+            "crestFactor",
+            "integratedLoudness",
+            "dynamicRange",
+            "noiseFloor"
+          ],
+          "minConfidenceToAutoApply": 0.72,
+          "fallbackProfileId": "mastered_music_general"
+        },
+        "userOverrideAllowed": true,
+        "perTrackPersistence": true
+      },
+      "profiles": [
+        {
+          "id": "mastered_music_general",
+          "description": "Commercially mastered tracks with stable loudness and strong transients.",
+          "input": {
+            "expectedLufsRange": [
+              -14,
+              -8
+            ],
+            "expectedNoiseFloorDb": -70,
+            "peakHeadroomDb": 1.0
+          },
+          "normalization": {
+            "enabled": true,
+            "targetRms": 0.22,
+            "targetPeak": 0.92,
+            "adaptiveWindowMs": 1200,
+            "maxGainDb": 9.0,
+            "minGainDb": -12.0
+          },
+          "envelope": {
+            "attackMs": 18,
+            "releaseMs": 160,
+            "rmsWeight": 0.62,
+            "peakWeight": 0.38
+          },
+          "beat": {
+            "threshold": 0.52,
+            "hysteresis": 0.08,
+            "minIntervalMs": 110,
+            "confidenceGate": 0.55
+          },
+          "transient": {
+            "enabled": true,
+            "sensitivity": 0.64,
+            "cooldownMs": 85,
+            "accentMultiplier": 1.18
+          },
+          "bandCompensation": {
+            "sub": 1.05,
+            "bass": 1.08,
+            "lowMid": 1.0,
+            "mid": 0.95,
+            "high": 0.9,
+            "air": 0.85
+          }
+        },
+        {
+          "id": "live_mic_room_noise",
+          "description": "Live microphone input with background noise and variable dynamics.",
+          "input": {
+            "expectedLufsRange": [
+              -28,
+              -14
+            ],
+            "expectedNoiseFloorDb": -48,
+            "peakHeadroomDb": 3.0
+          },
+          "normalization": {
+            "enabled": true,
+            "targetRms": 0.18,
+            "targetPeak": 0.85,
+            "adaptiveWindowMs": 1600,
+            "maxGainDb": 15.0,
+            "minGainDb": -10.0
+          },
+          "noiseSuppression": {
+            "enabled": true,
+            "gateDb": -44,
+            "gateHysteresisDb": 4.0,
+            "spectralFloorTracking": true,
+            "trackingWindowMs": 2200
+          },
+          "envelope": {
+            "attackMs": 30,
+            "releaseMs": 260,
+            "rmsWeight": 0.78,
+            "peakWeight": 0.22
+          },
+          "beat": {
+            "threshold": 0.66,
+            "hysteresis": 0.12,
+            "minIntervalMs": 170,
+            "confidenceGate": 0.72
+          },
+          "transient": {
+            "enabled": true,
+            "sensitivity": 0.58,
+            "cooldownMs": 130,
+            "accentMultiplier": 1.08
+          },
+          "bandCompensation": {
+            "sub": 0.9,
+            "bass": 0.95,
+            "lowMid": 1.0,
+            "mid": 1.05,
+            "high": 1.0,
+            "air": 0.92
+          }
+        },
+        {
+          "id": "lofi_low_dynamic",
+          "description": "Lo-fi/chill content with softer transients and warm mids.",
+          "input": {
+            "expectedLufsRange": [
+              -18,
+              -12
+            ],
+            "expectedNoiseFloorDb": -58,
+            "peakHeadroomDb": 2.0
+          },
+          "normalization": {
+            "enabled": true,
+            "targetRms": 0.2,
+            "targetPeak": 0.86,
+            "adaptiveWindowMs": 1800,
+            "maxGainDb": 11.0,
+            "minGainDb": -8.0
+          },
+          "envelope": {
+            "attackMs": 40,
+            "releaseMs": 340,
+            "rmsWeight": 0.84,
+            "peakWeight": 0.16
+          },
+          "beat": {
+            "threshold": 0.64,
+            "hysteresis": 0.1,
+            "minIntervalMs": 190,
+            "confidenceGate": 0.6
+          },
+          "transient": {
+            "enabled": true,
+            "sensitivity": 0.46,
+            "cooldownMs": 180,
+            "accentMultiplier": 0.92
+          },
+          "bandCompensation": {
+            "sub": 0.98,
+            "bass": 1.02,
+            "lowMid": 1.12,
+            "mid": 1.08,
+            "high": 0.8,
+            "air": 0.7
+          }
+        }
+      ]
+    },
+    "failover": {
+      "silenceAndFailureBehavior": {
+        "silenceDetection": {
+          "enabled": true,
+          "rmsThreshold": 0.012,
+          "durationMsToEnterSilence": 1200,
+          "durationMsToExitSilence": 500,
+          "hysteresis": 0.004
+        },
+        "confidenceModel": {
+          "enabled": true,
+          "inputs": [
+            "beatConfidence",
+            "onsetConfidence",
+            "noiseFloor",
+            "featureStability"
+          ],
+          "lowConfidenceThreshold": 0.4,
+          "criticalConfidenceThreshold": 0.22
+        },
+        "states": [
+          {
+            "id": "normal",
+            "enterWhen": "audioConfidence>=0.4 && !isSilent",
+            "motionPolicy": {
+              "reactiveGain": 1.0,
+              "idleGain": 1.0,
+              "fxGain": 1.0,
+              "allowTransients": true,
+              "allowPhraseMemory": true
+            }
+          },
+          {
+            "id": "low_confidence",
+            "enterWhen": "audioConfidence<0.4 && audioConfidence>=0.22 && !isSilent",
+            "motionPolicy": {
+              "reactiveGain": 0.65,
+              "idleGain": 1.05,
+              "fxGain": 0.7,
+              "allowTransients": false,
+              "allowPhraseMemory": false
+            }
+          },
+          {
+            "id": "silent",
+            "enterWhen": "isSilent=true",
+            "motionPolicy": {
+              "reactiveGain": 0.0,
+              "idleGain": 1.15,
+              "fxGain": 0.5,
+              "allowTransients": false,
+              "allowPhraseMemory": false
+            },
+            "idleFallbackPreset": "silence_breathing_guardian"
+          },
+          {
+            "id": "audio_failure",
+            "enterWhen": "audioStreamError=true || decoderError=true",
+            "motionPolicy": {
+              "reactiveGain": 0.0,
+              "idleGain": 1.0,
+              "fxGain": 0.4,
+              "allowTransients": false,
+              "allowPhraseMemory": false
+            },
+            "recoveryStrategy": {
+              "retryIntervalMs": 2000,
+              "maxRetries": 6,
+              "onExhausted": "sticky_idle_mode"
+            }
+          }
+        ],
+        "transitionPolicy": {
+          "crossfadeMs": 180,
+          "preserveVelocity": true,
+          "maxDeltaGuard": true
+        }
+      }
+    },
+    "latencyCompensation": {
+      "enabled": true,
+      "mode": "automatic_with_manual_offset",
+      "pipelineDelaysMs": {
+        "inputBuffering": 8.0,
+        "fftAndFeatures": 12.0,
+        "eventAggregation": 6.0,
+        "renderSubmission": 10.0,
+        "displayPipeline": 16.0
+      },
+      "estimatedTotalMs": 52.0,
+      "targetSyncOffsetMs": -52.0,
+      "manualTrimMs": 0.0,
+      "runtimeAdaptation": {
+        "enabled": true,
+        "maxAdaptationPerSecondMs": 6.0,
+        "stabilityWindowMs": 2400,
+        "freezeDuringCriticalMoments": true
+      },
+      "syncValidation": {
+        "enabled": true,
+        "method": "beatEventCrossCorrelation",
+        "windowMs": 10000,
+        "acceptableErrorMs": 24.0,
+        "autoRecalibrateOnFailure": true
+      }
+    },
+    "networkSync": {
+      "enabled": false,
+      "mode": "authoritative_host_with_deterministic_clients",
+      "clock": {
+        "syncMethod": "ntp_like_smoothed_offset",
+        "resyncIntervalSec": 10,
+        "maxClockDriftMs": 30
+      },
+      "replicatedState": {
+        "streamed": [
+          "seed",
+          "activeTier",
+          "activeProfileId",
+          "macro",
+          "state.mode",
+          "state.mood",
+          "phrase.section",
+          "beatEvents",
+          "criticalFeatureSnapshots"
+        ],
+        "snapshotHz": 20,
+        "eventBufferMs": 300
+      },
+      "determinism": {
+        "requireDeterministicFloatingPointPath": true,
+        "randomStreams": [
+          "global",
+          "gesture",
+          "fx"
+        ],
+        "streamSeeds": {
+          "global": 101,
+          "gesture": 202,
+          "fx": 303
+        }
+      },
+      "packetLossPolicy": {
+        "interpolateMissedFrames": true,
+        "maxConsecutiveDrops": 8,
+        "fallbackToLocalPredictiveMode": true
+      }
+    },
+    "accessibility": {
+      "enabled": true,
+      "profiles": [
+        {
+          "id": "default",
+          "description": "Standard accessibility baseline.",
+          "motionScale": 1.0,
+          "emissiveCap": 1.0,
+          "flashFrequencyCapHz": 6.0,
+          "highContrastAssist": false
+        },
+        {
+          "id": "reduced_motion",
+          "description": "Reduced procedural motion while preserving readability.",
+          "motionScale": 0.45,
+          "emissiveCap": 0.8,
+          "flashFrequencyCapHz": 3.0,
+          "disableTransients": true,
+          "disableHighFrequencyJitter": true,
+          "preferBreathingAndSlowSway": true
+        },
+        {
+          "id": "photosensitive_safe",
+          "description": "Strict anti-flicker and flash-safe profile.",
+          "motionScale": 0.6,
+          "emissiveCap": 0.55,
+          "flashFrequencyCapHz": 2.0,
+          "maxLuminanceDeltaPerFrame": 0.08,
+          "forbidRapidOnOffSquarePulses": true,
+          "forceEasedTransitionsMsMin": 120
+        },
+        {
+          "id": "calm_focus",
+          "description": "Low distraction mode for prolonged sessions.",
+          "motionScale": 0.52,
+          "emissiveCap": 0.6,
+          "flashFrequencyCapHz": 2.5,
+          "fxParticleDensityScale": 0.4,
+          "eyeSaccadeSuppression": 0.7
+        }
+      ],
+      "selectionPolicy": {
+        "allowRuntimeSwitch": true,
+        "persistPerUser": true,
+        "defaultProfileId": "default"
+      }
+    },
+    "lowConfidenceFallback": {
+      "enabled": true,
+      "presetLibrary": [
+        {
+          "id": "silence_breathing_guardian",
+          "description": "Grounded idle fallback used for silence/audio outage.",
+          "layers": [
+            {
+              "type": "breathing",
+              "target": "core",
+              "amplitude": 0.028,
+              "periodMs": 3600
+            },
+            {
+              "type": "hover",
+              "target": "root",
+              "amplitude": 3.2,
+              "periodMs": 4200
+            },
+            {
+              "type": "earSway",
+              "target": "expression",
+              "amplitude": 1.5,
+              "periodMs": 2800
+            },
+            {
+              "type": "glowPulse",
+              "target": "ornament",
+              "amplitude": 0.12,
+              "periodMs": 3000
+            }
+          ],
+          "randomness": {
+            "seeded": true,
+            "microVariation": 0.08
+          }
+        },
+        {
+          "id": "confident_idle_signature",
+          "description": "Fallback for low-confidence but active stream.",
+          "layers": [
+            {
+              "type": "tailWave",
+              "target": "propulsion",
+              "amplitude": 4.0,
+              "periodMs": 1700
+            },
+            {
+              "type": "headMicroDrift",
+              "target": "expression",
+              "amplitude": 1.2,
+              "periodMs": 2200
+            },
+            {
+              "type": "auraBreath",
+              "target": "ornament",
+              "amplitude": 0.2,
+              "periodMs": 2500
+            }
+          ],
+          "randomness": {
+            "seeded": true,
+            "microVariation": 0.12
+          }
+        }
+      ],
+      "entryPolicy": {
+        "confidenceThreshold": 0.4,
+        "silenceThreshold": 0.012,
+        "crossfadeMs": 180
+      }
+    }
+  },
+  "ops": {
+    "versionMigration": {
+      "enabled": true,
+      "manifestSchema": {
+        "currentVersion": "2.0.0-legendary-maximal",
+        "supportedInputVersions": [
+          "1.0.0",
+          "1.1.0",
+          "2.0.0-compact-v2",
+          "2.0.0-legendary-maximal"
+        ]
+      },
+      "migrationRules": [
+        {
+          "from": "1.0.0",
+          "to": "1.1.0",
+          "transform": [
+            "rename:audio.followers.attackMs->audio.env.atk",
+            "rename:audio.followers.releaseMs->audio.env.rel",
+            "rename:arbitration.channelPolicies.scale(multiply)->mul"
+          ]
+        },
+        {
+          "from": "1.1.0",
+          "to": "2.0.0-compact-v2",
+          "transform": [
+            "wrap:tiers.low/medium/high into tiers.blocks",
+            "rename:blendMode values [multiply,override,add] -> [mul,ovr,add]",
+            "injectDefault:engine.macro"
+          ]
+        },
+        {
+          "from": "2.0.0-compact-v2",
+          "to": "2.0.0-legendary-maximal",
+          "transform": [
+            "expand:audio bands 3->6 when profile supports",
+            "injectDefault:runtime.calibrationProfiles",
+            "injectDefault:runtime.failover",
+            "injectDefault:runtime.latencyCompensation",
+            "injectDefault:runtime.accessibility",
+            "injectDefault:ops.telemetry"
+          ]
+        }
+      ],
+      "safety": {
+        "preMigrationBackup": true,
+        "postMigrationValidation": true,
+        "abortOnValidationError": true,
+        "emitDiffReport": true
+      }
+    },
+    "legalLicensing": {
+      "enabled": true,
+      "policy": {
+        "audioInputTypes": [
+          {
+            "type": "user_owned_local_files",
+            "allowed": true,
+            "notes": "User is responsible for rights."
+          },
+          {
+            "type": "licensed_in_app_catalog",
+            "allowed": true,
+            "notes": "Must pass entitlement checks."
+          },
+          {
+            "type": "ugc_stream",
+            "allowed": true,
+            "notes": "Requires moderation and rights declaration."
+          },
+          {
+            "type": "unlicensed_public_stream",
+            "allowed": false,
+            "notes": "Disallowed in production."
+          }
+        ],
+        "attributionRequirements": {
+          "enabled": true,
+          "forLicensedCatalog": true,
+          "forCreatorPrograms": true
+        },
+        "retention": {
+          "storeRawAudio": false,
+          "storeDerivedFeatures": true,
+          "derivedFeatureRetentionDays": 30
+        },
+        "privacy": {
+          "piiInAudioProhibited": true,
+          "anonymizeTelemetry": true,
+          "consentRequiredForUpload": true
+        }
+      },
+      "complianceChecks": {
+        "runAtStartup": true,
+        "runBeforePublishing": true,
+        "hardFailOnDisallowedSource": true
+      }
+    },
+    "telemetry": {
+      "enabled": true,
+      "sampling": {
+        "sessionSampleRate": 1.0,
+        "frameMetricDownsampleHz": 5
+      },
+      "events": [
+        {
+          "name": "motion_runtime_summary",
+          "fields": [
+            "deviceTier",
+            "avgFps",
+            "avgCpuMs",
+            "activeTier",
+            "profileId",
+            "audioConfidenceAvg",
+            "constraintViolationCount",
+            "fallbackStateTimeMs"
+          ]
+        },
+        {
+          "name": "sync_quality_report",
+          "fields": [
+            "meanSyncErrorMs",
+            "p95SyncErrorMs",
+            "recalibrationCount",
+            "droppedBeatEvents"
+          ]
+        },
+        {
+          "name": "accessibility_profile_usage",
+          "fields": [
+            "profileId",
+            "sessionDurationMs",
+            "switchCount"
+          ]
+        },
+        {
+          "name": "degradation_ladder_trigger",
+          "fields": [
+            "triggerReason",
+            "stepEntered",
+            "durationMs",
+            "recovered"
+          ]
+        }
+      ],
+      "dashboards": {
+        "recommended": [
+          "sync_health_over_time",
+          "constraint_violations_by_device",
+          "fallback_activation_rate",
+          "profile_performance_comparison",
+          "accessibility_adoption"
+        ]
+      },
+      "closedLoopTuning": {
+        "enabled": true,
+        "cadence": "weekly",
+        "autoSuggestParameterAdjustments": true,
+        "suggestionBounds": {
+          "attackMsDeltaMax": 10,
+          "releaseMsDeltaMax": 40,
+          "thresholdDeltaMax": 0.05,
+          "amplitudeScaleDeltaMax": 0.15
+        },
+        "humanApprovalRequired": true
+      }
+    }
+  },
+  "qa": {
+    "goldenTestSuite": {
+      "enabled": true,
+      "testAssets": [
+        {
+          "id": "golden_calm_ambient_01",
+          "type": "licensed_reference",
+          "durationSec": 90,
+          "tags": [
+            "calm",
+            "lowTransient",
+            "ambient"
+          ],
+          "expectedMetrics": {
+            "avgReactiveGain": {
+              "min": 0.35,
+              "max": 0.7
+            },
+            "jitterScore": {
+              "max": 0.2
+            },
+            "flashRateHz": {
+              "max": 3.0
+            },
+            "syncErrorMsP95": {
+              "max": 24
+            }
+          }
+        },
+        {
+          "id": "golden_festival_hype_01",
+          "type": "licensed_reference",
+          "durationSec": 120,
+          "tags": [
+            "highEnergy",
+            "denseOnsets",
+            "festival"
+          ],
+          "expectedMetrics": {
+            "avgReactiveGain": {
+              "min": 0.9,
+              "max": 1.6
+            },
+            "transientResponseLatencyMs": {
+              "max": 30
+            },
+            "constraintViolations": {
+              "max": 0
+            },
+            "syncErrorMsP95": {
+              "max": 22
+            }
+          }
+        },
+        {
+          "id": "golden_boss_encounter_01",
+          "type": "licensed_reference",
+          "durationSec": 110,
+          "tags": [
+            "heavy",
+            "lowEnd",
+            "dramatic"
+          ],
+          "expectedMetrics": {
+            "coreZoneDominance": {
+              "min": 1.15,
+              "max": 1.8
+            },
+            "expressionStability": {
+              "min": 0.75
+            },
+            "maxDeltaViolations": {
+              "max": 0
+            },
+            "syncErrorMsP95": {
+              "max": 24
+            }
+          }
+        },
+        {
+          "id": "golden_lofi_chill_01",
+          "type": "licensed_reference",
+          "durationSec": 100,
+          "tags": [
+            "lofi",
+            "softTransient",
+            "warm"
+          ],
+          "expectedMetrics": {
+            "avgReactiveGain": {
+              "min": 0.45,
+              "max": 0.9
+            },
+            "releaseSmoothnessScore": {
+              "min": 0.8
+            },
+            "flickerEventsPerMin": {
+              "max": 3
+            },
+            "syncErrorMsP95": {
+              "max": 26
+            }
+          }
+        }
+      ],
+      "runner": {
+        "headlessSupported": true,
+        "reportFormat": [
+          "json",
+          "html",
+          "junit"
+        ],
+        "failFast": false
+      }
+    },
+    "constraintTests": {
+      "enabled": true,
+      "testMatrix": {
+        "tiers": [
+          "low",
+          "medium",
+          "high",
+          "advanced",
+          "mastery"
+        ],
+        "deviceClasses": [
+          "low_end_mobile",
+          "mid_mobile",
+          "console",
+          "desktop_high"
+        ],
+        "fpsTargets": [
+          30,
+          60,
+          120
+        ],
+        "audioProfiles": [
+          "mastered_music_general",
+          "live_mic_room_noise",
+          "lofi_low_dynamic"
+        ]
+      },
+      "assertions": [
+        {
+          "id": "no_nan_inf",
+          "description": "No NaN/Inf in transform or emissive outputs.",
+          "condition": "allFrames.nanCount==0 && allFrames.infCount==0"
+        },
+        {
+          "id": "joint_limits_never_exceeded",
+          "description": "Hard constraints are never violated.",
+          "condition": "maxJointLimitViolation==0"
+        },
+        {
+          "id": "max_delta_respected",
+          "description": "Per-frame delta caps hold unless emergency fallback active.",
+          "condition": "maxDeltaViolations==0 || emergencyFallbackActivations>0"
+        },
+        {
+          "id": "no_visual_pop_on_state_transition",
+          "description": "Transition jerk remains below threshold.",
+          "condition": "transitionJerkScoreP95<=0.22"
+        },
+        {
+          "id": "performance_budget",
+          "description": "Budget usage stays within configured envelope.",
+          "condition": "cpuBudgetOverrunFramesPercent<=1.5"
+        },
+        {
+          "id": "sync_budget",
+          "description": "Audio-motion sync remains acceptable.",
+          "condition": "syncErrorMsP95<=26"
+        }
+      ],
+      "soakTests": {
+        "enabled": true,
+        "durationMinutes": 180,
+        "checks": [
+          "memoryLeak",
+          "driftAccumulation",
+          "seedDeterminism",
+          "fallbackRecovery"
+        ]
+      }
+    }
+  },
+  "authoring": {
+    "docs": {
+      "enabled": true,
+      "schemaFieldHelp": [
+        {
+          "path": "runtime.calibrationProfiles.profiles[*].normalization.targetRms",
+          "intent": "Sets average loudness target after normalization.",
+          "safeRange": [
+            0.12,
+            0.28
+          ],
+          "authorTip": "Lower for calm content, higher for punchy tracks."
+        },
+        {
+          "path": "runtime.failover.silenceAndFailureBehavior.silenceDetection.rmsThreshold",
+          "intent": "Threshold below which input is treated as silence.",
+          "safeRange": [
+            0.006,
+            0.03
+          ],
+          "authorTip": "Raise slightly for noisy mic environments."
+        },
+        {
+          "path": "runtime.latencyCompensation.targetSyncOffsetMs",
+          "intent": "Compensates analysis/render/display delay.",
+          "safeRange": [
+            -120,
+            40
+          ],
+          "authorTip": "Negative offsets usually align visuals earlier."
+        },
+        {
+          "path": "runtime.accessibility.profiles[*].flashFrequencyCapHz",
+          "intent": "Limits high-frequency flashing.",
+          "safeRange": [
+            1.0,
+            6.0
+          ],
+          "authorTip": "Use <=3Hz for sensitive-safe presets."
+        }
+      ],
+      "authoringRecipes": [
+        {
+          "id": "recipe_fast_setup_live_show",
+          "steps": [
+            "Select profile: mastered_music_general",
+            "Enable latency auto + sync validation",
+            "Enable telemetry summary only",
+            "Run golden_festival_hype_01 quick validation",
+            "Lock accessibility profile to default"
+          ]
+        },
+        {
+          "id": "recipe_streamer_mic_mode",
+          "steps": [
+            "Select profile: live_mic_room_noise",
+            "Enable noise suppression and confidence gating",
+            "Set low confidence fallback active",
+            "Turn on reduced motion preset toggle for viewers"
+          ]
+        }
+      ]
+    }
   }
 }
