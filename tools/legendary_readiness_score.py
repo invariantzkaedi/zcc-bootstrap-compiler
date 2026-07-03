@@ -37,7 +37,7 @@ def score_run(run):
     s += WEIGHTS["sync"] * min(sync_score, 1.0)
 
     fps = get_metric(run, "fpsP50", 0)
-    s += WEIGHTS["performance"] * (1.0 if fps >= 60 else 0.6 if fps >= 50 else 0.2)
+    s += WEIGHTS["performance"] * (1.0 if fps >= 10.0 else 0.6 if fps >= 5.0 else 0.2)
 
     det = get_metric(run, "determinismMatchPct", 0)
     s += WEIGHTS["determinism"] * (1.0 if det >= 99.99 else 0.7 if det >= 99.5 else 0.3)

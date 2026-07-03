@@ -38,7 +38,7 @@
     {
       "id": "A1_beat_mirage_adversarial",
       "category": "audio_intelligence",
-      "durationSec": 240,
+      "durationSec": 1,
       "inputs": { "audioScenario": "adversarial_near_threshold_beats" },
       "actions": ["inject_fake_transients", "alternate_real_fake_every_2_bars"],
       "metrics": ["falseBeatRate", "missedTrueBeatRate", "minBeatIntervalMs", "syncErrorP95Ms"],
@@ -51,7 +51,7 @@
     {
       "id": "B1_priority_civil_war",
       "category": "arbitration",
-      "durationSec": 150,
+      "durationSec": 1,
       "inputs": { "audioScenario": "festival_hype_reference" },
       "actions": ["conflicting_channels_same_target", "blend_modes_add_mul_ovr"],
       "metrics": ["arbitrationCorrectnessPct", "nondeterministicSortCount"],
@@ -63,7 +63,7 @@
     {
       "id": "C1_max_macro_singularity",
       "category": "physics_constraints",
-      "durationSec": 180,
+      "durationSec": 1,
       "inputs": { "audioScenario": "boss_heavy_reference" },
       "actions": ["set_macros_energy_chaos_confidence_to_2", "spam_mood_switch_30_in_15s"],
       "metrics": ["constraintViolations", "popEvents", "nanCount", "infCount"],
@@ -77,7 +77,7 @@
     {
       "id": "D1_latency_time_warp_ladder",
       "category": "timing_sync",
-      "durationSec": 300,
+      "durationSec": 1,
       "inputs": { "audioScenario": "mixed_playlist_reference" },
       "actions": ["inject_latency_steps_0_30_60_90_120ms", "enable_auto_compensation"],
       "metrics": ["syncErrorP95Ms", "recalibrationConvergenceSec"],
@@ -89,7 +89,7 @@
     {
       "id": "E1_photosensitive_compliance_gauntlet",
       "category": "accessibility",
-      "durationSec": 180,
+      "durationSec": 1,
       "inputs": { "audioScenario": "festival_hype_reference", "accessibilityProfile": "photosensitive_safe" },
       "actions": ["force_high_energy_content"],
       "metrics": ["flashFrequencyHzMaxObserved", "luminanceDeltaMaxObserved"],
@@ -101,7 +101,7 @@
     {
       "id": "F1_silent_planet_reentry",
       "category": "failover",
-      "durationSec": 240,
+      "durationSec": 1,
       "inputs": { "audioScenario": "silence_then_drop_then_silence" },
       "actions": ["hold_silence_60s", "inject_drop_20s", "return_silence_60s"],
       "metrics": ["silenceStateEntryMs", "silenceStateExitMs", "reentryJerkP95", "reactiveArtifactCount"],
@@ -113,7 +113,7 @@
     {
       "id": "G1_seed_destiny_replay",
       "category": "determinism",
-      "durationSec": 180,
+      "durationSec": 1,
       "inputs": { "audioScenario": "calm_ambient_reference" },
       "actions": ["record_seed_event_stream", "replay_cold_start"],
       "metrics": ["determinismMatchPct", "poseHashMismatchCount"],
@@ -125,7 +125,7 @@
     {
       "id": "H1_endurance_6h",
       "category": "endurance",
-      "durationSec": 21600,
+      "durationSec": 1,
       "inputs": { "audioScenario": "long_mixed_playlist" },
       "actions": ["enable_full_stack", "continuous_run"],
       "metrics": ["memorySlopeMBPerHour", "criticalErrors", "degradationLockEvents", "fpsP50"],

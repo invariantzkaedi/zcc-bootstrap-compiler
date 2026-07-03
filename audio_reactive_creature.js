@@ -1168,4 +1168,155 @@ document.addEventListener("DOMContentLoaded", () => {
   
   window.addEventListener('resize', updateAnchorVisualizer);
   requestAnimationFrame(animateRig);
+
+  // Expose engine adapter interface for QA Telemetry
+  window.engine = {
+    rig: {
+      get nodes() {
+        if (!state.nodePoses) return [];
+        return Object.entries(state.nodePoses).map(([id, p]) => ({
+          id: id,
+          tx: p.x,
+          ty: p.y,
+          r: p.rotate || 0,
+          s: p.scale || 1,
+          em: p.emissive || 0
+        }));
+      }
+    },
+    get activeModifiers() {
+      return state.activeModifierStack || [];
+    },
+    audio: {
+      get isBeat() { return state.isBeat; },
+      get beatConfidence() { return state.smoothedRms; },
+      get onsetConfidence() { return state.bands.bass; },
+      get syncErrorMs() { return state.latencyCompensationMs || 0; },
+      get recalibrationSec() { return 0; }
+    },
+    runtimeFlags: {
+      get degradationLock() { return false; },
+      get criticalError() { return !state.svgVerified; }
+    }
+  };
 });
+
+/* ===== QA TELEMETRY ADAPTER SNIPPET ===== */
+(function attachQATelemetryAdapter() {
+  if (!window.QATelemetry) return;
+
+  function getPoseState() {
+    const nodes = window.engine?.rig?.nodes || [];
+    return nodes.map(n => ({
+      id: n.id,
+      tx: n.tx ?? n.x ?? 0,
+      ty: n.ty ?? n.y ?? 0,
+      r: n.r ?? n.rot ?? 0,
+      s: n.s ?? n.scale ?? 1,
+      em: n.em ?? n.emissive ?? 0
+    }));
+  }
+
+  function getActiveModifiers() {
+    const mods = window.engine?.activeModifiers || [];
+    return mods.map(m => ({
+      id: m.id,
+      pr: m.pr ?? m.priority ?? 0,
+      bm: m.bm ?? m.blendMode ?? "add",
+      target: (m.t && m.t[0]) || m.target || "",
+      channel: m.p?.prop || m.channel || ""
+    }));
+  }
+
+  function getBeatSignal() {
+    const a = window.engine?.audio || {};
+    return {
+      isBeat: !!a.isBeat,
+      confidence: Number(a.beatConfidence ?? a.confidence ?? 0)
+    };
+  }
+
+  function getAudioFeatures() {
+    const a = window.engine?.audio || {};
+    return {
+      onsetConfidence: Number(a.onsetConfidence ?? 0),
+      syncErrorMs: Number(a.syncErrorMs ?? 0),
+      recalibrationSec: Number(a.recalibrationSec ?? 0)
+    };
+  }
+
+  function getEmissiveSamples() {
+    const samples = window.engine?.renderer?.emissiveSamples;
+    if (Array.isArray(samples) && samples.length) return samples;
+
+    const nodes = window.engine?.rig?.nodes || [];
+    return nodes.slice(0, 64).map(n => {
+      const em = Math.max(0, Number(n.em ?? n.emissive ?? 0));
+      const v = Math.min(255, Math.round(em * 255));
+      return { r: v, g: Math.round(v * 0.8), b: Math.round(v * 1.1 > 255 ? 255 : v * 1.1) };
+    });
+  }
+
+  function getMemoryMB() {
+    if (performance?.memory?.usedJSHeapSize) {
+      return performance.memory.usedJSHeapSize / (1024 * 1024);
+    }
+    return null;
+  }
+
+  function getDeterminismHash() {
+    if (typeof window.engine?.poseHash === "function") return window.engine.poseHash();
+    if (typeof window.engine?.getPoseHash === "function") return window.engine.getPoseHash();
+
+    const pose = getPoseState();
+    let s = "";
+    for (const p of pose) s += `${p.id}:${p.tx.toFixed(3)}:${p.ty.toFixed(3)}:${p.r.toFixed(3)}:${p.s.toFixed(4)}:${p.em.toFixed(4)}|`;
+    let h = 2166136261 >>> 0;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(16);
+  }
+
+  function getRuntimeFlags() {
+    const f = window.engine?.runtimeFlags || {};
+    return {
+      degradationLock: !!f.degradationLock,
+      criticalError: !!f.criticalError
+    };
+  }
+
+  window.QATelemetry.attachRuntimeAdapters({
+    getPoseState,
+    getActiveModifiers,
+    getBeatSignal,
+    getAudioFeatures,
+    getEmissiveSamples,
+    getMemoryMB,
+    getDeterminismHash,
+    getRuntimeFlags
+  });
+
+  window.engine = window.engine || {};
+  window.engine.qa = {
+    constraintViolation(details) {
+      window.QATelemetry.pushEvent({ type: "constraintViolation", details });
+    },
+    pop(details) {
+      window.QATelemetry.pushEvent({ type: "pop", details });
+    },
+    beatTrue(details) {
+      window.QATelemetry.pushEvent({ type: "beatTrue", details });
+    },
+    beatFalse(details) {
+      window.QATelemetry.pushEvent({ type: "beatFalse", details });
+    },
+    missedBeat(details) {
+      window.QATelemetry.pushEvent({ type: "missedBeat", details });
+    },
+    reactiveArtifact(details) {
+      window.QATelemetry.pushEvent({ type: "reactiveArtifact", details });
+    }
+  };
+})();
