@@ -1,0 +1,18 @@
+# PRIME solver corrigendum gate — the physics defends itself on every push.
+# Fails if: v2 scar+noise < 60/60, median > 2.0x optimal, or the
+# recursion-only NEGATIVE CONTROL starts "working" (>2/60 = tampered physics).
+name: prime-gauntlet
+on:
+  push:
+    paths: ['tools/prime/**', '.github/workflows/prime-gauntlet.yml']
+  pull_request:
+    paths: ['tools/prime/**', '.github/workflows/prime-gauntlet.yml']
+jobs:
+  gauntlet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install numpy
+      - run: python tools/prime/zkaedi_prime.py --gauntlet --n 60 --seed 7000
