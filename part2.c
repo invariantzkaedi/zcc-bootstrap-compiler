@@ -860,6 +860,42 @@ static int lex_ident(Compiler *cc) {
             }
             /* ATTR-UNKNOWN-001: preprocessor emits __zcc_attr_packed__ for __attribute__((packed)).
              * Set the pending flag and loop to the next real token. */
+            if (strncmp(ident_buf, "__zcc_pragma_pack_", 18) == 0) {
+                if (strcmp(ident_buf, "__zcc_pragma_pack_pop__") == 0) {
+                    if (cc->pragma_pack_stack_ptr > 0) {
+                        cc->pragma_pack_stack_ptr--;
+                        cc->current_pragma_pack = cc->pragma_pack_stack[cc->pragma_pack_stack_ptr];
+                    } else {
+                        cc->current_pragma_pack = 0;
+                    }
+                } else if (strncmp(ident_buf, "__zcc_pragma_pack_push_", 23) == 0) {
+                    int val = 0;
+                    for (int i = 23; ident_buf[i] && ident_buf[i] != '_'; i++) {
+                        if (ident_buf[i] >= '0' && ident_buf[i] <= '9') {
+                            val = val * 10 + (ident_buf[i] - '0');
+                        }
+                    }
+                    if (cc->pragma_pack_stack_ptr < 64) {
+                        cc->pragma_pack_stack[cc->pragma_pack_stack_ptr++] = cc->current_pragma_pack;
+                    }
+                    cc->current_pragma_pack = val;
+                } else if (strcmp(ident_buf, "__zcc_pragma_pack_push__") == 0) {
+                    if (cc->pragma_pack_stack_ptr < 64) {
+                        cc->pragma_pack_stack[cc->pragma_pack_stack_ptr++] = cc->current_pragma_pack;
+                    }
+                } else if (strcmp(ident_buf, "__zcc_pragma_pack_reset__") == 0) {
+                    cc->current_pragma_pack = 0;
+                } else {
+                    int val = 0;
+                    for (int i = 18; ident_buf[i] && ident_buf[i] != '_'; i++) {
+                        if (ident_buf[i] >= '0' && ident_buf[i] <= '9') {
+                            val = val * 10 + (ident_buf[i] - '0');
+                        }
+                    }
+                    cc->current_pragma_pack = val;
+                }
+                return 0;
+            }
             if (strncmp(ident_buf, "__zcc_attr_", 11) == 0) {
                 if (strcmp(ident_buf, "__zcc_attr_packed__") == 0) {
                     cc->pending_packed = 1;

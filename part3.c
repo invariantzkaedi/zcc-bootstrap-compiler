@@ -90,7 +90,7 @@ static void register_struct(Compiler *cc, Type *t) {
 Type *parse_type(Compiler *cc);
 Type *parse_declarator(Compiler *cc, Type *base, char *name_out);
 static void parse_or_skip_gcc_attributes(Compiler *cc, Type *dtype);
-static void inject_attribute_parser(Compiler *cc, Type *dtype);
+static Type *inject_attribute_parser(Compiler *cc, Type *dtype);
 static long long parse_const_expr_ternary(Compiler *cc);
 static Node *ensure_type(Compiler *cc, Node *n, Type *ty);
 static long long parse_const_expr_lor(Compiler *cc);
@@ -422,6 +422,7 @@ static Type *parse_struct_or_union(Compiler *cc, int is_union) {
     }
 
     if (stype) {
+        stype->pragma_pack = cc->current_pragma_pack;
         if (local_is_packed) stype->is_packed = 1;
         if (local_explicit_align > 0) {
             stype->explicit_align = local_explicit_align;
@@ -617,7 +618,12 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
             field->bit_size = 0;
 
             falign = type_align(ftype);
-            if (stype && stype->is_packed) falign = 1;
+            if (stype) {
+                if (stype->pragma_pack > 0 && falign > stype->pragma_pack) {
+                    falign = stype->pragma_pack;
+                }
+                if (stype->is_packed && ftype->explicit_align == 0) falign = 1;
+            }
             if (falign > max_align) max_align = falign;
 
             if (is_union) {
@@ -630,12 +636,16 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
             } else {
                 if (is_bf) {
                     int fsize = type_size(ftype);
+                    int packing_active = (stype && (stype->is_packed || (stype->pragma_pack > 0 && stype->pragma_pack < 8)));
                     if (bf_active && fsize == bf_unit_size && bf_size > 0 && bf_current_bit + bf_size <= fsize * 8) {
                         field->offset = bf_unit_offset;
                         field->is_bitfield = 1;
                         field->bit_offset = bf_current_bit;
                         field->bit_size = bf_size;
                         bf_current_bit += bf_size;
+                        if (packing_active) {
+                            offset = bf_unit_offset + (bf_current_bit + 7) / 8;
+                        }
                     } else {
                         bf_active = 1;
                         bf_unit_size = fsize;
@@ -650,7 +660,11 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
                             field->bit_offset = 0;
                             field->bit_size = bf_size;
                             bf_current_bit = bf_size;
-                            offset += fsize;
+                            if (packing_active) {
+                                offset = bf_unit_offset + (bf_current_bit + 7) / 8;
+                            } else {
+                                offset += fsize;
+                            }
                         } else {
                             bf_active = 0;
                             bf_unit_size = 0;
@@ -700,7 +714,12 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
                 field2->bit_size = 0;
 
                 falign2 = type_align(ftype2);
-                if (stype && stype->is_packed) falign2 = 1;
+                if (stype) {
+                    if (stype->pragma_pack > 0 && falign2 > stype->pragma_pack) {
+                        falign2 = stype->pragma_pack;
+                    }
+                    if (stype->is_packed && ftype2->explicit_align == 0) falign2 = 1;
+                }
                 if (falign2 > max_align) max_align = falign2;
 
                 if (is_union) {
@@ -713,12 +732,16 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
                 } else {
                     if (is_bf2) {
                         int fsize2 = type_size(ftype2);
+                        int packing_active2 = (stype && (stype->is_packed || (stype->pragma_pack > 0 && stype->pragma_pack < 8)));
                         if (bf_active && fsize2 == bf_unit_size && bf_size2 > 0 && bf_current_bit + bf_size2 <= fsize2 * 8) {
                             field2->offset = bf_unit_offset;
                             field2->is_bitfield = 1;
                             field2->bit_offset = bf_current_bit;
                             field2->bit_size = bf_size2;
                             bf_current_bit += bf_size2;
+                            if (packing_active2) {
+                                offset = bf_unit_offset + (bf_current_bit + 7) / 8;
+                            }
                         } else {
                             bf_active = 1;
                             bf_unit_size = fsize2;
@@ -733,7 +756,11 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
                                 field2->bit_offset = 0;
                                 field2->bit_size = bf_size2;
                                 bf_current_bit = bf_size2;
-                                offset += fsize2;
+                                if (packing_active2) {
+                                    offset = bf_unit_offset + (bf_current_bit + 7) / 8;
+                                } else {
+                                    offset += fsize2;
+                                }
                             } else {
                                 bf_active = 0;
                                 bf_unit_size = 0;
@@ -767,7 +794,7 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
         if (stype->explicit_align > 0) {
             final_align = stype->explicit_align;
         } else if (stype->is_packed) {
-            final_align = 1;
+            if (max_align == 1) final_align = 1;
         }
         
         /* align total size */
@@ -918,12 +945,12 @@ Type *parse_type(Compiler *cc) {
         if (cc->tk == TK_STRUCT) {
             next_token(cc);
             type = parse_struct_or_union(cc, 0);
-            inject_attribute_parser(cc, type);
+            type = inject_attribute_parser(cc, type);
         }
         else if (cc->tk == TK_UNION) {
             next_token(cc);
             type = parse_struct_or_union(cc, 1);
-            inject_attribute_parser(cc, type);
+            type = inject_attribute_parser(cc, type);
         }
         else if (cc->tk == TK_ENUM) {
             next_token(cc);
@@ -1350,7 +1377,10 @@ static void recompute_struct_layout(Type *stype) {
     while (field) {
         Type *ftype = field->type;
         int falign = type_align(ftype);
-        if (stype->is_packed) falign = 1;
+        if (stype->pragma_pack > 0 && falign > stype->pragma_pack) {
+            falign = stype->pragma_pack;
+        }
+        if (stype->is_packed && ftype->explicit_align == 0) falign = 1;
         if (falign > max_align) max_align = falign;
         
         if (is_union) {
@@ -1360,10 +1390,14 @@ static void recompute_struct_layout(Type *stype) {
             if (field->is_bitfield) {
                 int bf_size = field->bit_size;
                 int fsize = type_size(ftype);
+                int packing_active = (stype->is_packed || (stype->pragma_pack > 0 && stype->pragma_pack < 8));
                 if (bf_active && fsize == bf_unit_size && bf_size > 0 && bf_current_bit + bf_size <= fsize * 8) {
                     field->offset = bf_unit_offset;
                     field->bit_offset = bf_current_bit;
                     bf_current_bit += bf_size;
+                    if (packing_active) {
+                        offset = bf_unit_offset + (bf_current_bit + 7) / 8;
+                    }
                 } else {
                     bf_active = 1;
                     bf_unit_size = fsize;
@@ -1376,7 +1410,11 @@ static void recompute_struct_layout(Type *stype) {
                         field->offset = bf_unit_offset;
                         field->bit_offset = 0;
                         bf_current_bit = bf_size;
-                        offset += fsize;
+                        if (packing_active) {
+                            offset = bf_unit_offset + (bf_current_bit + 7) / 8;
+                        } else {
+                            offset += fsize;
+                        }
                     } else {
                         bf_active = 0;
                         bf_unit_size = 0;
@@ -1405,7 +1443,7 @@ static void recompute_struct_layout(Type *stype) {
     if (stype->explicit_align > 0) {
         final_align = stype->explicit_align;
     } else if (stype->is_packed) {
-        final_align = 1;
+        if (max_align == 1) final_align = 1;
     }
     
     if (final_align > 1) {
@@ -1414,24 +1452,39 @@ static void recompute_struct_layout(Type *stype) {
     stype->align = final_align;
 }
 
-static void inject_attribute_parser(Compiler *cc, Type *dtype) {
-    int was_packed = dtype ? dtype->is_packed : 0;
-    int was_explicit = dtype ? dtype->explicit_align : 0;
+static Type *inject_attribute_parser(Compiler *cc, Type *dtype) {
+    if (!dtype) return NULL;
+    int was_packed = dtype->is_packed;
+    int was_explicit = dtype->explicit_align;
 
-    if (cc->pending_packed) {
-        if (dtype) dtype->is_packed = 1;
-        cc->pending_packed = 0;
-    }
-    if (cc->pending_aligned_n > 0) {
-        if (dtype) {
+    int needs_pack = cc->pending_packed;
+    int needs_align = (cc->pending_aligned_n > 0);
+    int has_attr = (cc->tk == TK_IDENT &&
+                    (strcmp(cc->tk_text, "__attribute__") == 0 || strcmp(cc->tk_text, "__attribute") == 0));
+
+    if (needs_pack || needs_align || has_attr) {
+        if (dtype == cc->ty_void || dtype == cc->ty_char || dtype == cc->ty_uchar ||
+            dtype == cc->ty_short || dtype == cc->ty_ushort || dtype == cc->ty_int ||
+            dtype == cc->ty_uint || dtype == cc->ty_long || dtype == cc->ty_ulong ||
+            dtype == cc->ty_longlong || dtype == cc->ty_ulonglong ||
+            dtype == cc->ty_float || dtype == cc->ty_double || dtype == cc->ty_longdouble) {
+            Type *nt = type_new(cc, dtype->kind);
+            *nt = *dtype;
+            dtype = nt;
+        }
+
+        if (needs_pack) {
+            dtype->is_packed = 1;
+            cc->pending_packed = 0;
+        }
+        if (needs_align) {
             dtype->explicit_align = cc->pending_aligned_n;
             dtype->align = cc->pending_aligned_n;
+            cc->pending_aligned_n = 0;
         }
-        cc->pending_aligned_n = 0;
-    }
-    if (cc->tk == TK_IDENT &&
-        (strcmp(cc->tk_text, "__attribute__") == 0 || strcmp(cc->tk_text, "__attribute") == 0)) {
-        parse_or_skip_gcc_attributes(cc, dtype);
+        if (has_attr) {
+            parse_or_skip_gcc_attributes(cc, dtype);
+        }
     }
 
     if (dtype && dtype->is_complete) {
@@ -1439,6 +1492,7 @@ static void inject_attribute_parser(Compiler *cc, Type *dtype) {
             recompute_struct_layout(dtype);
         }
     }
+    return dtype;
 }
 
 Type *parse_declarator(Compiler *cc, Type *base, char *name_out) {
@@ -1458,7 +1512,7 @@ Type *parse_declarator(Compiler *cc, Type *base, char *name_out) {
     }
 
     /* attributes on pointers/declarator before identifier name */
-    inject_attribute_parser(cc, type);
+    type = inject_attribute_parser(cc, type);
 
     /* name */
     resolve_cpp_identifiers(cc);
@@ -1537,7 +1591,7 @@ Type *parse_declarator(Compiler *cc, Type *base, char *name_out) {
                 expect(cc, TK_RPAREN);
                 type = ftype;
             }
-            inject_attribute_parser(cc, type);
+            type = inject_attribute_parser(cc, type);
             return inject_base_type(cc, inner, type);
         }
     }
@@ -1612,7 +1666,7 @@ Type *parse_declarator(Compiler *cc, Type *base, char *name_out) {
         type = ftype;
     }
 
-    inject_attribute_parser(cc, type);
+    type = inject_attribute_parser(cc, type);
     return type;
 }
 

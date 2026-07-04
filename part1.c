@@ -836,6 +836,7 @@ struct Type {
     int is_complete;
     int is_packed;   /* __attribute__((packed)) — suppress field alignment */
     int explicit_align; /* __attribute__((aligned(N))) — override total align, 0 = none */
+    int pragma_pack;    /* active pragma pack value when struct defined, 0 = none */
     int is_tbfp;     /* transparent bitfield packing (tbfp) marker */
     int is_volatile; /* volatile qualifier — force memory access, no register caching */
 };
@@ -1219,6 +1220,10 @@ struct Compiler {
     int pending_packed;     /* __attribute__((packed)) seen before struct keyword */
     int pending_aligned_n;  /* __attribute__((aligned(N))) value, 0 = none */
     int pending_tbfp;       /* transparent bitfield packing flag, consumed by parse_struct_or_union */
+    /* pragma pack stack state */
+    int pragma_pack_stack[64];
+    int pragma_pack_stack_ptr;
+    int current_pragma_pack;
     int debug_abi_classes;  /* -fdebug-abi-classes flag */
     int abi_scratch_offset; /* %rbp-relative offset to 16-byte aggregate return scratch (CG-IR-019) */
     int sret_offset;        /* %rbp-relative offset to the hidden struct return pointer */

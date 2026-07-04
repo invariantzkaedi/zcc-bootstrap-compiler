@@ -1416,6 +1416,53 @@ static void pp_parse_directive(PPState *state) {
       char msg[8192];
       pp_read_line(state, msg, 8192);
       fprintf(stderr, "zcc preprocessor error: #error %s\n", msg);
+    } else if (strcmp(dir, "pragma") == 0) {
+      char prag_line[4096];
+      pp_read_line(state, prag_line, 4096);
+      /* Parse '#pragma pack...' */
+      char *p = prag_line;
+      while (*p == ' ' || *p == '\t') p++;
+      if (strncmp(p, "pack", 4) == 0) {
+        p += 4;
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p == '(') {
+          p++;
+          while (*p == ' ' || *p == '\t') p++;
+          if (strncmp(p, "push", 4) == 0) {
+            p += 4;
+            while (*p == ' ' || *p == '\t') p++;
+            int val = 0;
+            if (*p == ',') {
+              p++;
+              while (*p == ' ' || *p == '\t') p++;
+              while (*p >= '0' && *p <= '9') {
+                val = val * 10 + (*p - '0');
+                p++;
+              }
+            }
+            char emit_buf[128];
+            if (val > 0) {
+              sprintf(emit_buf, " __zcc_pragma_pack_push_%d__ ", val);
+            } else {
+              sprintf(emit_buf, " __zcc_pragma_pack_push__ ");
+            }
+            pp_emit_str(state, emit_buf, (int)strlen(emit_buf));
+          } else if (strncmp(p, "pop", 3) == 0) {
+            pp_emit_str(state, " __zcc_pragma_pack_pop__ ", 25);
+          } else if (*p >= '0' && *p <= '9') {
+            int val = 0;
+            while (*p >= '0' && *p <= '9') {
+              val = val * 10 + (*p - '0');
+              p++;
+            }
+            char emit_buf[128];
+            sprintf(emit_buf, " __zcc_pragma_pack_%d__ ", val);
+            pp_emit_str(state, emit_buf, (int)strlen(emit_buf));
+          } else if (*p == ')') {
+            pp_emit_str(state, " __zcc_pragma_pack_reset__ ", 27);
+          }
+        }
+      }
     } else {
       pp_read_line(state, dir, 16384);
     }
