@@ -1408,6 +1408,11 @@ int zcc_main(int argc, char **argv) {
     } else if (strcmp(argv[i], "--asm-report") == 0) {
       /* CG-FRONTEND-ASM-001: emit JSON asm capability report after compilation */
       setenv("ZCC_ASM_REPORT", "1", 1);
+    } else if (strcmp(argv[i], "--safe-div") == 0) {
+      /* CG-SIGFPE-003: emit runtime zero-guard before every idiv/divl/divq
+       * where the denominator is not ICP-proven nonzero. Default off.
+       * Enable for csmith warfare to suppress spurious SIGFPE on UB inputs. */
+      setenv("ZCC_SAFE_DIV", "1", 1);
     } else if (strcmp(argv[i], "--decompile") == 0) {
       decompile_mode = 1;
       i++;
@@ -2005,6 +2010,7 @@ int zcc_main(int argc, char **argv) {
   /* CG-FRONTEND-ASM-001: apply asm diagnostic policy from CLI/env */
   if (getenv("ZCC_ERROR_UNSUPPORTED_ASM")) cc->error_unsupported_asm = 1;
   if (getenv("ZCC_ASM_REPORT"))           cc->asm_report = 1;
+  if (getenv("ZCC_SAFE_DIV"))             cc->safe_div = 1; /* CG-SIGFPE-003 */
 
   stop_at_asm = 0;
   if (!dump_ast_json) {

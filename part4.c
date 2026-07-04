@@ -1926,6 +1926,29 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rax");
+    /* CG-SIGFPE-003: --safe-div: emit runtime zero-guard around idiv/divl/divq.
+     * Denominator is in %%r11. UB (C std 6.5.5p5) -- fold result to 0. */
+    if (cc->safe_div && !backend_ops) {
+      int lbl = cc->label_count++;
+      fprintf(cc->out, "    testq %%r11, %%r11\n");
+      fprintf(cc->out, "    jne .Lsdiv%d\n", lbl);
+      fprintf(cc->out, "    xorl %%eax, %%eax\n");
+      fprintf(cc->out, "    xorl %%edx, %%edx\n");
+      fprintf(cc->out, "    jmp .Lsdivend%d\n", lbl);
+      fprintf(cc->out, ".Lsdiv%d:\n", lbl);
+      if (node_type_unsigned(node)) {
+        if (node->type && type_size(node->type) <= 4)
+          fprintf(cc->out, "    xorl %%edx, %%edx\n    divl %%r11d\n");
+        else
+          fprintf(cc->out, "    xorq %%rdx, %%rdx\n    divq %%r11\n");
+      } else {
+        if (node->type && type_size(node->type) <= 4)
+          fprintf(cc->out, "    cltd\n    idivl %%r11d\n");
+        else
+          fprintf(cc->out, "    cqo\n    idivq %%r11\n");
+      }
+      fprintf(cc->out, ".Lsdivend%d:\n", lbl);
+    } else {
     if (node_type_unsigned(node)) {
       if (node->type && type_size(node->type) <= 4) {
         if (!backend_ops) fprintf(cc->out, "    xorl %%edx, %%edx\n    divl %%r11d\n");
@@ -1939,6 +1962,7 @@ void codegen_expr(Compiler *cc, Node *node) {
         if (!backend_ops) fprintf(cc->out, "    cqo\n    idivq %%r11\n");
       }
     }
+    } /* end safe_div else */
     ir_emit_binary_op(ND_DIV, node->type, lhs_ir, rhs_ir, node->line);
     return;
   }
@@ -2006,6 +2030,30 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rax");
+    /* CG-SIGFPE-003: --safe-div: zero-guard for ND_MOD. Result is %%rdx. */
+    if (cc->safe_div && !backend_ops) {
+      int lbl = cc->label_count++;
+      fprintf(cc->out, "    testq %%r11, %%r11\n");
+      fprintf(cc->out, "    jne .Lsmod%d\n", lbl);
+      fprintf(cc->out, "    xorl %%eax, %%eax\n");
+      fprintf(cc->out, "    xorl %%edx, %%edx\n");
+      fprintf(cc->out, "    jmp .Lsmodend%d\n", lbl);
+      fprintf(cc->out, ".Lsmod%d:\n", lbl);
+      if (node_type_unsigned(node)) {
+        if (node->type && type_size(node->type) <= 4)
+          fprintf(cc->out, "    xorl %%edx, %%edx\n    divl %%r11d\n");
+        else
+          fprintf(cc->out, "    xorq %%rdx, %%rdx\n    divq %%r11\n");
+      } else {
+        if (node->type && type_size(node->type) <= 4)
+          fprintf(cc->out, "    cltd\n    idivl %%r11d\n");
+        else
+          fprintf(cc->out, "    cqo\n    idivq %%r11\n");
+      }
+      /* MOD result is in %%rdx */
+      fprintf(cc->out, "    movq %%rdx, %%rax\n");
+      fprintf(cc->out, ".Lsmodend%d:\n", lbl);
+    } else {
     if (node_type_unsigned(node)) {
       if (node->type && type_size(node->type) <= 4) {
         if (!backend_ops) fprintf(cc->out, "    xorl %%edx, %%edx\n    divl %%r11d\n");
@@ -2023,6 +2071,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       if (backend_ops) fprintf(cc->out, "    mov r0, r2\n");
       else fprintf(cc->out, "    movq %%rdx, %%rax\n");
     }
+    } /* end safe_div else */
     ir_emit_binary_op(ND_MOD, node->type, lhs_ir, rhs_ir, node->line);
     return;
   }

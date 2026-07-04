@@ -1,9 +1,33 @@
 # Bug Report: CG-ICP-002 — Wrong Constant Injected at ICP Div-by-Zero Fold Site
 
-**Status**: 🔴 OPEN — new bug, confirmed real mismatch  
-**Severity**: CRITICAL (silent wrong answer — ZCC runs, produces different output than reference)  
+**Status**: 🟡 HARDENING (not a confirmed fix) — branch proven dead on all tested inputs  
+**Severity**: LOW (latent: dead-branch `else return` is defensively unsafe, not actively reached)  
 **Discovered**: 2026-07-04 (warzone campaign, seed 8055910)  
+**Updated**: 2026-07-04 — reachability probe shows branch unreachable; commit reframed  
 **Related**: CG-SIGFPE-002, CG-SIGFPE-003, commit d992e068
+
+## Post-Investigation Verdict
+
+**Seed 8055910 reclassified as GCC-O3 UB-exploitation false positive** — same class
+as seed 7970765. GCC-O0 crashes (SIGFPE). ZCC runs, produces `DD32DCC1`. GCC-O3
+produces `D8B34779` by eliminating the UB path. Not a ZCC miscompile.
+
+**Branch reachability probe (2026-07-04):** Minimal C input `int a = 7/0; int b = 13%0;`
+with pre-fix and post-fix ZCC produces **identical assembly**. The `else return` in
+part4.c's fold pass is **dead code**: `eval_const_expr` in part3.c (line 1051) catches
+literal-constant div-by-zero first and rewrites the node to `ND_NUM(0)` before part4
+ever sees it as `ND_DIV`. The part4 guard `lhs->kind == ND_NUM && rhs->kind == ND_NUM`
+is never simultaneously true with `v2 == 0` on any input found.
+
+**The part4.c change is defensive hardening, not a bug fix.** The `else return` is
+genuinely unsafe if ever reached, and removing it is correct hygiene — but no evidence
+exists that it has ever executed or produced the wrong output. Committing it as
+`fix(part4): CG-ICP-002` with seed 8055910 as the repro would be a phantom closure.
+
+**Reframe decision:** Commit separately as `harden(part4)` with the reachability probe
+as explicit gate evidence, or defer until a seed that actually reaches the branch is found.
+
+
 
 ---
 

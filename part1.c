@@ -1231,6 +1231,8 @@ struct Compiler {
     int asm_report_passthrough; /* counters for --asm-report */
     int asm_report_warn;
     int asm_report_unsupported;
+    /* CG-SIGFPE-003: --safe-div emits runtime zero-guard before idiv/divl/divq */
+    int safe_div;
 };
 
 typedef struct TargetBackend {
