@@ -1906,7 +1906,11 @@ void codegen_expr(Compiler *cc, Node *node) {
           else
               result = lhs_cv / rhs_cv;
         } else {
-          /* CG-SIGFPE-002: fold division by zero to 0 to avoid runtime SIGFPE */
+          /* CG-SIGFPE-002 / CG-ICP-002: dead code -- part3.c eval_const_expr
+             intercepts literal-constant zero-denominators and rewrites the node
+             to ND_NUM(0) before codegen sees it as ND_DIV. This else is
+             belt-and-suspenders: if reached, make it loud. */
+          zcc_divzero_report(node->line, 0);
           result = 0;
         }
         if (backend_ops) {
@@ -1994,7 +1998,11 @@ void codegen_expr(Compiler *cc, Node *node) {
           else
               result = lhs_cv % rhs_cv;
         } else {
-          /* CG-SIGFPE-002: fold modulo by zero to 0 to avoid runtime SIGFPE */
+          /* CG-SIGFPE-002 / CG-ICP-002: dead code -- part3.c eval_const_expr
+             intercepts literal-constant zero-denominators and rewrites the node
+             to ND_MOD(0) before codegen sees it as ND_MOD. This else is
+             belt-and-suspenders: if reached, make it loud. */
+          zcc_divzero_report(node->line, 1);
           result = 0;
         }
         if (backend_ops) {
