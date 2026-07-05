@@ -9,11 +9,17 @@ const outPath = resolve(specRoot, 'artifacts', 'boundary-matrix.json');
 const map = JSON.parse(readFileSync(mapPath, 'utf8')) as Record<string, string>;
 const matrix = Object.entries(map)
   .sort(([a], [b]) => a.localeCompare(b))
-  .map(([boundary_id, rule_id]) => ({
-    boundary_id,
-    rule_id,
-    family: rule_id.split('-')[1] ?? 'unknown',
-  }));
+  .map(([boundary_id, rule_id]) => {
+    if (!/^ZCC-[A-Z]+-\d{3}$/.test(rule_id)) {
+      throw new Error(`Invalid rule id in boundary matrix: ${rule_id}`);
+    }
+
+    return {
+      boundary_id,
+      rule_id,
+      family: rule_id.split('-')[1],
+    };
+  });
 
 mkdirSync(dirname(outPath), { recursive: true });
 writeFileSync(outPath, JSON.stringify(matrix, null, 2) + '\n');

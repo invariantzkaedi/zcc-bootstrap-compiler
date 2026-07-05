@@ -6,10 +6,9 @@ const specRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const mapPath = resolve(specRoot, 'rule-id-map.json');
 
 const map = JSON.parse(readFileSync(mapPath, 'utf8')) as Record<string, string>;
-const keys = Object.keys(map).sort();
-const values = Object.values(map);
+const boundaryCount = Object.keys(map).length;
 
-if (keys.length === 0) {
+if (boundaryCount === 0) {
   throw new Error('rule-id-map.json is empty');
 }
 
@@ -27,4 +26,4 @@ for (const [boundaryId, ruleId] of Object.entries(map)) {
   seen.add(ruleId);
 }
 
-console.log(`Validated ${keys.length} boundary-to-rule mappings.`);
+console.log(`Validated ${boundaryCount} boundary-to-rule mappings.`);
