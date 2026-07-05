@@ -105,6 +105,8 @@ fuzz_*/
 failures/
 harness/
 scripts/
+!spec/scripts/
+!spec/scripts/**
 audit/
 diag_*/
 

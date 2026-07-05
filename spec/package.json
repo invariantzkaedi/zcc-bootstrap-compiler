@@ -1,0 +1,17 @@
+{
+  "name": "zcc-spec",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  },
+  "scripts": {
+    "validate:boundaries": "tsx scripts/validate-boundaries.ts",
+    "validate:workflows": "tsx scripts/validate-workflows.ts",
+    "generate:boundary-matrix": "tsx scripts/generate-boundary-matrix.ts",
+    "emit:evidence": "tsx scripts/emit-evidence.ts"
+  }
+}
