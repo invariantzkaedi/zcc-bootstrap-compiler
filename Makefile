@@ -989,7 +989,7 @@ workflows-validate:
 boundaries-matrix:
 	pnpm --dir spec exec tsx scripts/generate-boundary-matrix.ts
 
-boundaries-test:
+boundaries-test: zcc
 	cd spec && bash tests/boundary/run-all.sh
 
 evidence-report:
