@@ -65,10 +65,19 @@ zcc3: zcc2 zcc.c
 	strip --strip-all zcc3 || true
 
 selfhost: zcc3
+	@echo "=== Checking Workspace Lexicons ==="
+	@if [ ! -f docs/lexicon/actionable-lexicon.md ] || \
+	    [ ! -f docs/lexicon/influence-lexicon.md ] || \
+	    [ ! -f docs/lexicon/jsonl-cheat-guide.md ] || \
+	    [ ! -f .github/copilot-instructions.md ]; then \
+	  echo "ERROR: Workspace lexicon or session instructions are missing!"; \
+	  exit 1; \
+	fi
 	@echo "=== Verify: zcc2.s == zcc3.s (codegen parity) ==="
 	./zcc  zcc.c -o zcc2.s
 	./zcc2 zcc.c -o zcc3.s
 	diff zcc2.s zcc3.s && echo "SELF-HOST VERIFIED (assembly identical)" || (echo "SELF-HOST FAILED (assembly diverged)"; diff zcc2.s zcc3.s | head -20; exit 1)
+
 
 zjs: zcc zjs.c test_evm_sprites.c zcc_svg.c
 	@echo "=== Compiling zjs, test_evm_sprites, and zcc_svg via ZCC ==="
