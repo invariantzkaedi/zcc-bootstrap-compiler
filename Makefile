@@ -274,7 +274,7 @@ fortify-ci: selfhost-fast compat-extended pp-crlf-gate check-ir-bridge-guard com
 	@echo "FORTIFY CI COMPLETE"
 
 # External fortify pack wiring (CI/tooling only; no compiler source integration yet).
-fortify-pack-init:
+fortify-pack-init: verify-lexicon
 	@test -d "$(FORTIFY_PACK_DIR)" || (echo "Missing $(FORTIFY_PACK_DIR). Extract fortify_zcc_clean.zip first."; exit 2)
 	@bash -lc "cd '$(FORTIFY_PACK_DIR)' && if [ ! -f fortify-verify-policy.json ] && [ -f fortify-verify-policy.example.json ]; then cp fortify-verify-policy.example.json fortify-verify-policy.json; echo 'Wrote fortify-verify-policy.json from example'; else echo 'fortify-verify-policy.json already present'; fi"
 
@@ -980,7 +980,7 @@ abi-lanes: zcc
 # === BOUNDARY CONTRACT PACK ===
 .PHONY: boundaries-validate boundaries-matrix boundaries-test evidence-report workflows-validate
 
-boundaries-validate:
+boundaries-validate: verify-lexicon
 	pnpm --dir spec exec tsx scripts/validate-boundaries.ts
 
 workflows-validate:
