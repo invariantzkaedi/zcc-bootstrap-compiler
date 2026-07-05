@@ -635,3 +635,11 @@ abi_bitfield_cases/
 abi_lane_cases/
 gods_eye/corpus/
 zjs
+
+# keep broad docs ignore if needed, but allow lexicon + copilot instructions
+!docs/
+docs/*
+!docs/lexicon/
+!.github/
+!.github/copilot-instructions.md
+

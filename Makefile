@@ -21,7 +21,7 @@ COMPAT_SMOKE_SRCS = \
 	tests/regressions/t_zkaedi_rigging_regressions.c
 COMPAT_EXTENDED_SRCS = $(COMPAT_SMOKE_SRCS) raytracer.c
 
-.PHONY: all clean selfhost selfhost-fast compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test test-float rust-front-smoke check-evm-lifter check-ir-vuln-tag check-forgezero-receipt check-ir-bridge-guard check-copy-const-prop verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration zjs test-zjs visualize-svg-diffs wasm-svg-bridge test_zcc_dag abi-lanes
+.PHONY: all clean selfhost selfhost-fast verify-lexicon compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test test-float rust-front-smoke check-evm-lifter check-ir-vuln-tag check-forgezero-receipt check-ir-bridge-guard check-copy-const-prop verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration zjs test-zjs visualize-svg-diffs wasm-svg-bridge test_zcc_dag abi-lanes
 
 .SECONDARY: zcc zcc2 zcc3
 
@@ -33,7 +33,17 @@ zcc_ast_bridge_constants.h zcc_ast_bridge_asserts.inc: part1.c sync_bridge.py
 zcc.c: $(PARTS) zcc_ast_bridge_constants.h zcc_ast_bridge_asserts.inc
 	cat $(PARTS) > zcc.c
 
-zcc: zcc.c $(PASSES)
+verify-lexicon:
+	@echo "=== Checking Workspace Lexicons ==="
+	@if [ ! -f docs/lexicon/actionable-lexicon.md ] || \
+	    [ ! -f docs/lexicon/influence-lexicon.md ] || \
+	    [ ! -f docs/lexicon/jsonl-cheat-guide.md ] || \
+	    [ ! -f .github/copilot-instructions.md ]; then \
+	  echo "ERROR: Workspace lexicon or session instructions are missing!"; \
+	  exit 1; \
+	fi
+
+zcc: verify-lexicon zcc.c $(PASSES)
 	# Tripwire: reject hand-edited zcc.c — parts are the source of truth.
 	# Bypass with: ZCC_MUTATION_SANDBOX=1 make zcc  (Oneirogenesis daemon)
 	# or:          touch .mutation_sandbox && make zcc
@@ -50,7 +60,7 @@ zcc: zcc.c $(PASSES)
 	$(CC) $(CFLAGS) -Dmain=zcc_main -o zcc zcc.c $(PASSES) $(LDFLAGS)
 	@if [ "$(NO_STRIP)" != "1" ]; then strip --strip-all zcc; fi
 
-zcc_fast: zcc.c $(PASSES)
+zcc_fast: verify-lexicon zcc.c $(PASSES)
 	$(CC) $(FAST_CFLAGS) -Dmain=zcc_main -o zcc_fast zcc.c $(PASSES) $(LDFLAGS)
 	@if [ "$(NO_STRIP)" != "1" ]; then strip --strip-all zcc_fast; fi
 
@@ -64,11 +74,12 @@ zcc3: zcc2 zcc.c
 	./zcc2 zcc.c -o zcc3
 	strip --strip-all zcc3 || true
 
-selfhost: zcc3
+selfhost: verify-lexicon zcc3
 	@echo "=== Verify: zcc2.s == zcc3.s (codegen parity) ==="
 	./zcc  zcc.c -o zcc2.s
 	./zcc2 zcc.c -o zcc3.s
 	diff zcc2.s zcc3.s && echo "SELF-HOST VERIFIED (assembly identical)" || (echo "SELF-HOST FAILED (assembly diverged)"; diff zcc2.s zcc3.s | head -20; exit 1)
+
 
 zjs: zcc zjs.c test_evm_sprites.c zcc_svg.c
 	@echo "=== Compiling zjs, test_evm_sprites, and zcc_svg via ZCC ==="
@@ -263,7 +274,7 @@ fortify-ci: selfhost-fast compat-extended pp-crlf-gate check-ir-bridge-guard com
 	@echo "FORTIFY CI COMPLETE"
 
 # External fortify pack wiring (CI/tooling only; no compiler source integration yet).
-fortify-pack-init:
+fortify-pack-init: verify-lexicon
 	@test -d "$(FORTIFY_PACK_DIR)" || (echo "Missing $(FORTIFY_PACK_DIR). Extract fortify_zcc_clean.zip first."; exit 2)
 	@bash -lc "cd '$(FORTIFY_PACK_DIR)' && if [ ! -f fortify-verify-policy.json ] && [ -f fortify-verify-policy.example.json ]; then cp fortify-verify-policy.example.json fortify-verify-policy.json; echo 'Wrote fortify-verify-policy.json from example'; else echo 'fortify-verify-policy.json already present'; fi"
 
@@ -969,7 +980,7 @@ abi-lanes: zcc
 # === BOUNDARY CONTRACT PACK ===
 .PHONY: boundaries-validate boundaries-matrix boundaries-test evidence-report workflows-validate
 
-boundaries-validate:
+boundaries-validate: verify-lexicon
 	pnpm --dir spec exec tsx scripts/validate-boundaries.ts
 
 workflows-validate:
@@ -978,7 +989,7 @@ workflows-validate:
 boundaries-matrix:
 	pnpm --dir spec exec tsx scripts/generate-boundary-matrix.ts
 
-boundaries-test:
+boundaries-test: zcc
 	cd spec && bash tests/boundary/run-all.sh
 
 evidence-report:
