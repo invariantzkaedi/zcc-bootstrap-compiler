@@ -966,4 +966,26 @@ abi-lanes: zcc
 	python3 tools/abi_bitfield_lane_gen.py --out /tmp/abi_bitfield_cases --run --zcc $(CURDIR)/zcc
 
 
+# === BOUNDARY CONTRACT PACK ===
+.PHONY: boundaries-validate boundaries-matrix boundaries-test evidence-report workflows-validate
+
+boundaries-validate:
+	pnpm --dir spec exec tsx scripts/validate-boundaries.ts
+
+workflows-validate:
+	pnpm --dir spec exec tsx scripts/validate-workflows.ts
+
+boundaries-matrix:
+	pnpm --dir spec exec tsx scripts/generate-boundary-matrix.ts
+
+boundaries-test:
+	cd spec && bash tests/boundary/run-all.sh
+
+evidence-report:
+ifndef RUN_ID
+ifndef ALL_RUNS
+	$(error RUN_ID is required (e.g., make evidence-report RUN_ID=<run-id>) or use ALL_RUNS=1)
+endif
+endif
+	pnpm --dir spec exec tsx scripts/emit-evidence.ts --report $(if $(RUN_ID),--run-id $(RUN_ID)) $(if $(ALL_RUNS),--all-runs)
 

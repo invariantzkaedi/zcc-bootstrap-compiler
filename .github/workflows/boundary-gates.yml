@@ -1,0 +1,41 @@
+name: ZCC Boundary Contract Gates
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  boundary-enforcement:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install dependencies
+        working-directory: spec
+        run: pnpm install --frozen-lockfile
+
+      - name: Install GCC and Build Essentials
+        run: sudo apt-get update && sudo apt-get install -y gcc make
+
+      - name: Run Schema Validations
+        run: |
+          make boundaries-validate
+          make workflows-validate
+          make boundaries-matrix
+
+      - name: Execute 10 Boundary Critical Tests
+        run: make boundaries-test
+
+      - name: Generate and Check Evidence Report
+        run: make evidence-report ALL_RUNS=1

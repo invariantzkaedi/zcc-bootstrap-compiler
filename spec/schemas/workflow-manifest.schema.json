@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://zcc.dev/schemas/workflow-manifest.schema.json",
+  "title": "ZCC Workflow Vocabulary Manifest",
+  "description": "Schema for the workflow vocabulary manifest row in the ZCC contract pack",
+  "type": "object",
+  "required": ["record_type", "schema_version", "title", "columns", "row_count"],
+  "properties": {
+    "record_type": { "const": "workflow_vocabulary_manifest" },
+    "schema_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "title": { "type": "string" },
+    "columns": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 5,
+      "maxItems": 5
+    },
+    "column_descriptions": { "type": "object" },
+    "row_count": { "type": "integer", "minimum": 0 },
+    "usage": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}
