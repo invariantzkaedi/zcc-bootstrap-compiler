@@ -1,0 +1,1 @@
+phi must appear before non-phi

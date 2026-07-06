@@ -1,0 +1,18 @@
+func @p05(i32 %n) -> i32 {
+bb0:
+  %z = const i32 0
+  jmp bb1
+
+bb1:
+  %i = phi i32 [bb0: %z], [bb2: %inext]
+  %c = icmp ne i32 %i, %n
+  br i1 %c, bb2, bb3
+
+bb2:
+  %one = const i32 1
+  %inext = add i32 %i, %one
+  jmp bb1
+
+bb3:
+  ret i32 %i
+}

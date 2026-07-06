@@ -1,0 +1,7 @@
+func @p11(i32 %x) -> i32 {
+bb0:
+  %c0 = copy i32 %x
+  %c1 = copy i32 %c0
+  %c2 = copy i32 %c1
+  ret i32 %c2
+}

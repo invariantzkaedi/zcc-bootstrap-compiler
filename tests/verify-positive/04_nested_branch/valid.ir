@@ -1,0 +1,15 @@
+func @p04(i1 %c1, i1 %c2) -> i32 {
+bb0:
+  br i1 %c1, bb1, bb2
+bb1:
+  br i1 %c2, bb3, bb4
+bb2:
+  %v2 = const i32 2
+  ret i32 %v2
+bb3:
+  %v3 = const i32 3
+  ret i32 %v3
+bb4:
+  %v4 = const i32 4
+  ret i32 %v4
+}

@@ -1,0 +1,11 @@
+func @p07(i32 %x) -> i32 {
+bb0:
+  %c1 = const i32 1
+  %c0 = const i32 0
+  %l = shl i32 %x, %c1
+  %r = shr i32 %l, %c1
+  %a = and i32 %r, %x
+  %o = or i32 %a, %c0
+  %q = xor i32 %o, %c0
+  ret i32 %q
+}

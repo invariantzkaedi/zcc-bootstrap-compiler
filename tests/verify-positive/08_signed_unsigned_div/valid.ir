@@ -1,0 +1,9 @@
+func @p08(i32 %x, i32 %y) -> i32 {
+bb0:
+  %one = const i32 1
+  %ys = add i32 %y, %one
+  %a = sdiv i32 %x, %ys
+  %b = udiv i32 %x, %ys
+  %r = add i32 %a, %b
+  ret i32 %r
+}

@@ -1,0 +1,13 @@
+func @helper(i32 %x) -> i32 {
+bb0:
+  %k = const i32 5
+  %r = add i32 %x, %k
+  ret i32 %r
+}
+
+func @main(i32 %y) -> i32 {
+bb0:
+  %k = const i32 3
+  %r = add i32 %y, %k
+  ret i32 %r
+}

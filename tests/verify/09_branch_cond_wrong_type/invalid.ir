@@ -1,0 +1,10 @@
+func @v09(i32 %x) -> i32 {
+bb0:
+  br i32 %x, bb1, bb2
+bb1:
+  %a = const i32 1
+  ret i32 %a
+bb2:
+  %b = const i32 2
+  ret i32 %b
+}

@@ -1,0 +1,6 @@
+func @v08(i32 %arg0) -> i32 {
+bb0:
+  %r1 = add i32 %arg0, %arg0
+  %r1 = sub i32 %arg0, %arg0
+  ret i32 %r1
+}

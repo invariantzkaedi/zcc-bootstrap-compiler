@@ -1,0 +1,5 @@
+func @p01() -> i32 {
+bb0:
+  %k = const i32 0
+  ret i32 %k
+}

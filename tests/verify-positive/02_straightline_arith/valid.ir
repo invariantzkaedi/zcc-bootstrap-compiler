@@ -1,0 +1,6 @@
+func @p02(i32 %a, i32 %b) -> i32 {
+bb0:
+  %x = add i32 %a, %b
+  %y = mul i32 %x, %b
+  ret i32 %y
+}

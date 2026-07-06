@@ -1,0 +1,106 @@
+name: IR Opt Quality Gate (Correctness + Perf)
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ir-opt-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  correctness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build compiler tools
+        run: |
+          set -euo pipefail
+          make clean
+          make all OUT=build/cand
+
+      - name: Expose binaries
+        run: |
+          set -euo pipefail
+          mkdir -p .ci/bin
+          cp -f build/cand/zcc-opt .ci/bin/zcc-opt
+          cp -f build/cand/zcc-verify .ci/bin/zcc-verify
+          chmod +x .ci/bin/zcc-opt .ci/bin/zcc-verify
+          echo "$PWD/.ci/bin" >> $GITHUB_PATH
+
+      - name: Run verifier negative
+        run: make -C tests/verify test-negative
+
+      - name: Run verifier positive
+        run: make -C tests/verify-positive test-positive
+
+      - name: Run InstCombine normalized
+        run: make -C tests/opt/instcombine test-normalized
+
+      - name: Run SCCP normalized
+        run: make -C tests/opt/sccp test-normalized
+
+      - name: Collect IR artifacts
+        if: always()
+        run: |
+          set -euo pipefail
+          bash scripts/ci/collect_ir_artifacts.sh out/ir-artifacts
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: correctness-artifacts-${{ github.run_id }}
+          path: out/ir-artifacts
+          if-no-files-found: ignore
+
+  perf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    needs: correctness
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install perf deps
+        run: |
+          set -euo pipefail
+          python3 -m pip install --upgrade pip
+          pip install scipy==1.14.1
+
+      - name: Build baseline and candidate
+        run: |
+          set -euo pipefail
+          make clean
+          make all OUT=build/base BASELINE=1
+          make all OUT=build/cand
+
+      - name: Run robust benchmark harness
+        run: |
+          set -euo pipefail
+          chmod +x scripts/bench/run_robust_benchmarks.sh
+          scripts/bench/run_robust_benchmarks.sh             --base build/base/zcc-opt             --cand build/cand/zcc-opt             --suite benchmarks/list.txt             --warmup 3             --runs 25             --trim 0.10             --out out/bench
+
+      - name: Evaluate statistical thresholds
+        run: |
+          set -euo pipefail
+          python3 scripts/bench/evaluate_robust_thresholds.py             --summary out/bench/summary.json             --max-compile-overhead-pct 8.0             --min-runtime-geomean-pct 3.0             --max-regressed-benches 2             --per-bench-regress-pct -2.0             --alpha 0.05
+
+      - name: Generate PR summary markdown
+        if: always()
+        run: python3 scripts/bench/render_summary_md.py --summary out/bench/summary.json --out out/bench/summary.md
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-artifacts-${{ github.run_id }}
+          path: out/bench
+          if-no-files-found: warn

@@ -1,0 +1,11 @@
+func @p10(i32 %a, i32 %b) -> i32 {
+bb0:
+  %eq = icmp eq i32 %a, %b
+  br i1 %eq, bb1, bb2
+bb1:
+  %x = const i32 1
+  ret i32 %x
+bb2:
+  %y = const i32 0
+  ret i32 %y
+}
