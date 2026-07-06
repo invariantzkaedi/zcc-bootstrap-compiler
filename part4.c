@@ -221,7 +221,7 @@ static void emit_zero_result(Compiler *cc, Type *type, int line) {
   if (backend_ops)
     fprintf(cc->out, "    mov r0, #0\n");
   else
-    fprintf(cc->out, "    movq $0, %%rax\n");
+    fprintf(cc->out, "    xorl %%eax, %%eax\n");
   emit_ir_const_result(type, 0, line);
 }
 
@@ -902,6 +902,14 @@ void codegen_expr(Compiler *cc, Node *node) {
           ZCC_EMIT_CONST(ir_map_type(node->type), dst, node->int_val, node->line);
         }
         return;
+    }
+    if (node->int_val == 0) {
+      fprintf(cc->out, "    xorl %%eax, %%eax\n");
+      {
+        char *dst = ir_bridge_fresh_tmp();
+        ZCC_EMIT_CONST(ir_map_type(node->type), dst, 0, node->line);
+      }
+      return;
     }
     if (node->int_val >= -2147483648) {
       if (node->int_val <= 2147483647) {

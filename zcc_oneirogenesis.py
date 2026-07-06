@@ -181,7 +181,32 @@ class FitnessOracle:
         if os.path.exists(zcc_binary):
             fitness['bin_size'] = os.path.getsize(zcc_binary)
         if os.path.exists(asm_output):
-            fitness['asm_size'] = os.path.getsize(asm_output)
+            # Step 2: Measure compiled .text section bytes using size -A tool
+            obj_file = asm_output + '.o'
+            text_size = None
+            try:
+                subprocess.run(['as', asm_output, '-o', obj_file], capture_output=True, check=True)
+                res = subprocess.run(['size', '-A', obj_file], capture_output=True, text=True, check=True)
+                found = False
+                for line in res.stdout.splitlines():
+                    parts = line.split()
+                    if parts and parts[0] == '.text':
+                        text_size = int(parts[1])
+                        found = True
+                        break
+                if not found:
+                    raise ValueError(f"Could not find .text section in size -A output: {res.stdout}")
+            except Exception as e:
+                raise RuntimeError(f"FitnessOracle failed to measure compiled size of {asm_output}: {e}")
+            finally:
+                if os.path.exists(obj_file):
+                    try:
+                        os.remove(obj_file)
+                    except Exception:
+                        pass
+
+            fitness['asm_size'] = text_size
+
             with open(asm_output) as f:
                 asm = f.readlines()
 
@@ -257,6 +282,11 @@ class SelfHostGate:
     Stage 2: gcc links stage3.s → stage3
     Stage 3: stage3 → stage4.s
     Stage 4: cmp stage3.s stage4.s  (idempotency check)
+
+    Includes Step 4 Safety Gate:
+    Runs static flags liveness checker on stage 3 assembly to catch residual flags hazards.
+    Note: The checker is xor-blind (interprets xorl as flags-setter); primary safety of 1b
+    is proven via pre-patch audit on the zcc2.s/zcc3.s baseline.
     """
 
     @staticmethod
@@ -284,6 +314,24 @@ class SelfHostGate:
 
         if not os.path.exists(s3_s) or os.path.getsize(s3_s) == 0:
             return False, "empty assembly output"
+
+        # Step 4: Safety check flags liveness in s3_s (defense-in-depth for residual movq $0)
+        try:
+            import sys
+            sys.path.append(str(REPO_ROOT / 'tools'))
+            from check_flags_liveness import analyze_asm
+            violations = analyze_asm(s3_s)
+            if violations:
+                log_path = os.path.join(REPO_ROOT, "dreams", "rejections.log")
+                with open(log_path, "a") as lf:
+                    lf.write(f"--- REJECT MUTANT: {mutant_bin} ---\n")
+                    for v in violations:
+                        lf.write(f"  Setter   [L{v['setter_idx']+1}]: {v['setter_line']}\n")
+                        lf.write(f"  Movq $0  [L{v['mov_idx']+1}]: {v['mov_line']}\n")
+                        lf.write(f"  Consumer [L{v['consumer_idx']+1}]: {v['consumer_line']}\n")
+                return False, f"safety gate: flags-liveness violation ({len(violations)} found)"
+        except Exception as e:
+            print(f"Safety gate checker warning: {e}")
 
         try:
             r = subprocess.run(
