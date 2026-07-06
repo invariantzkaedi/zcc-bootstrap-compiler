@@ -1,0 +1,15 @@
+# QEC-VOP Policy-as-Code Configuration
+# Version: 1.1.0
+
+# Required Check Thresholds
+determinism_drift_critical: 0
+mutation_kill_rate_min: 0.90
+signature_spike_wow_pct: 50
+stale_incident_days_high: 7
+windows_days: [7, 14, 30]
+
+# Anomaly Detection Settings
+anomaly:
+  zscore_warn: 2.0
+  zscore_critical: 3.0
+  min_points: 7

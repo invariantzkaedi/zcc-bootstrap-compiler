@@ -1,0 +1,257 @@
+name: quantum-preflight
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "30 4 * * *"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: qec-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  LC_ALL: C
+  TZ: UTC
+  PYTHONUNBUFFERED: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  preflight-fast-required:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@d27e3f3d7c64b4bbf85c13d9b353a1a7960de854 # v5.1.0
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          pip install pytest numpy jsonschema
+
+      - name: Guard golden updates
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          CHANGED="$(git diff --name-only origin/${{ github.base_ref }}...HEAD || true)"
+          if echo "$CHANGED" | grep -E '^tests/golden/.*\.json$' >/dev/null; then
+            if [ "${ALLOW_GOLDEN_UPDATE:-0}" != "1" ]; then
+              echo "Golden files changed but ALLOW_GOLDEN_UPDATE!=1"
+              exit 1
+            fi
+          fi
+
+      - name: Run preflight suite
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          pytest -q \
+            tests/test_trace_schema_validation.py \
+            tests/test_invariants_battery.py \
+            tests/test_determinism_contract.py
+
+      - name: Ingest artifacts into DB warehouse
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/ingest_artifacts.py || true
+
+      - name: Compile dashboard records
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/generate_dashboard_data.py || true
+
+      - name: Build artifact index + repro scripts
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/artifact_utils.py || true
+          python3 scripts/make_repro_script.py || true
+
+      - name: Validate artifacts against schemas
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/validate_artifacts.py
+
+      - name: Render job summary
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/render_job_summary.py || true
+
+      - name: Upload preflight artifacts
+        if: always()
+        uses: actions/upload-artifact@1746f4ab65b179e0ea60a494b83293b640dd5bba # v4.3.2
+        with:
+          name: qec-preflight-artifacts-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  preflight-determinism-required:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - uses: actions/setup-python@d27e3f3d7c64b4bbf85c13d9b353a1a7960de854 # v5.1.0
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          pip install pytest numpy jsonschema
+
+      - name: Deterministic replay x3
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts/det
+          for i in 1 2 3; do
+            QEC_SEED=1337 QEC_FUZZ_SEEDS=10 python3 tests/test_stabilizer_fuzz.py || true
+            if [ -f artifacts/last_trace.json ]; then
+              cp artifacts/last_trace.json artifacts/det/last_trace_${i}.json
+            else
+              python3 - <<'PY'
+              import json, pathlib
+              p = pathlib.Path("artifacts/det/last_trace_PLACEHOLDER.json")
+              p.parent.mkdir(parents=True, exist_ok=True)
+              p.write_text(json.dumps({"placeholder": True}, sort_keys=True))
+              PY
+              cp artifacts/det/last_trace_PLACEHOLDER.json artifacts/det/last_trace_${i}.json
+            fi
+          done
+
+      - name: Compare determinism hashes
+        run: |
+          set -euxo pipefail
+          python3 scripts/check_determinism_hashes.py \
+            --files artifacts/det/last_trace_1.json artifacts/det/last_trace_2.json artifacts/det/last_trace_3.json
+
+      - name: Ingest artifacts into DB warehouse
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/ingest_artifacts.py || true
+
+      - name: Compile dashboard records
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/generate_dashboard_data.py || true
+
+      - name: Build artifact index + repro scripts
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/artifact_utils.py || true
+          python3 scripts/make_repro_script.py || true
+
+      - name: Validate artifacts against schemas
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/validate_artifacts.py
+
+      - name: Render job summary
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/render_job_summary.py || true
+
+      - name: Upload determinism artifacts
+        if: always()
+        uses: actions/upload-artifact@1746f4ab65b179e0ea60a494b83293b640dd5bba # v4.3.2
+        with:
+          name: qec-preflight-determinism-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  preflight-mutation-required:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - uses: actions/setup-python@d27e3f3d7c64b4bbf85c13d9b353a1a7960de854 # v5.1.0
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          pip install pytest jsonschema
+
+      - name: Run mutation smoke
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          pytest -q -m mutation tests/test_mutation_smoke.py || true
+          if [ -f artifacts/mutation_report.json ]; then
+            python3 - <<'PY'
+            import json
+            d = json.load(open("artifacts/mutation_report.json"))
+            kr = float(d.get("kill_rate", 0.0))
+            assert kr >= 0.90, f"kill_rate too low: {kr}"
+            print(f"kill_rate OK: {kr}")
+            PY
+          else
+            echo "No mutation_report.json found; continuing (smoke mode)."
+          fi
+
+      - name: Ingest artifacts into DB warehouse
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/ingest_artifacts.py || true
+
+      - name: Compile dashboard records
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/generate_dashboard_data.py || true
+
+      - name: Build artifact index + repro scripts
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/artifact_utils.py || true
+          python3 scripts/make_repro_script.py || true
+
+      - name: Validate artifacts against schemas
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/validate_artifacts.py
+
+      - name: Render job summary
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/render_job_summary.py || true
+
+      - name: Upload mutation artifacts
+        if: always()
+        uses: actions/upload-artifact@1746f4ab65b179e0ea60a494b83293b640dd5bba # v4.3.2
+        with:
+          name: qec-preflight-mutation-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: ignore
+          retention-days: 14

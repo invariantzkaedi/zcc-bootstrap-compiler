@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/qec_failure_schema.json",
+  "title": "QEC Failure Artifact",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "timestamp_utc",
+    "test_name",
+    "failure_type",
+    "seed",
+    "n_qubits",
+    "gate_sequence",
+    "input_pauli",
+    "expected",
+    "actual",
+    "repro",
+    "tool_versions"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^1\\.0\\.0$" },
+    "timestamp_utc": { "type": "string", "format": "date-time" },
+    "test_name": { "type": "string", "minLength": 1 },
+    "failure_type": {
+      "type": "string",
+      "enum": [
+        "math_rule_mismatch",
+        "indexing_mismatch",
+        "decoder_tiebreak_mismatch",
+        "serialization_mismatch",
+        "numeric_tolerance_mismatch",
+        "unknown"
+      ]
+    },
+    "seed": { "type": "integer", "minimum": 0 },
+    "n_qubits": { "type": "integer", "minimum": 1 },
+    "gate_sequence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["gate", "qubits"],
+        "properties": {
+          "gate": { "type": "string", "enum": ["H", "S", "CNOT", "CZ"] },
+          "qubits": {
+            "type": "array",
+            "items": { "type": "integer", "minimum": 0 },
+            "minItems": 1,
+            "maxItems": 2
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "input_pauli": {
+      "type": "object",
+      "required": ["x_bits", "z_bits"],
+      "properties": {
+        "x_bits": { "type": "array", "items": { "type": "integer", "enum": [0,1] } },
+        "z_bits": { "type": "array", "items": { "type": "integer", "enum": [0,1] } },
+        "phase_bit": { "type": "integer", "enum": [0,1] }
+      },
+      "additionalProperties": false
+    },
+    "expected": { "type": "object" },
+    "actual": { "type": "object" },
+    "minimized_gate_sequence": {
+      "type": "array",
+      "items": { "$ref": "#/properties/gate_sequence/items" }
+    },
+    "repro": {
+      "type": "object",
+      "required": ["command", "env"],
+      "properties": {
+        "command": { "type": "string" },
+        "env": { "type": "object", "additionalProperties": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "tool_versions": {
+      "type": "object",
+      "required": ["python", "pytest"],
+      "properties": {
+        "python": { "type": "string" },
+        "pytest": { "type": "string" },
+        "compiler": { "type": "string" },
+        "git_commit": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

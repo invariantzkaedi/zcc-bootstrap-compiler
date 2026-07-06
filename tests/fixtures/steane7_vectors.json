@@ -1,0 +1,14 @@
+[
+  {
+    "name": "x_q0",
+    "error": {"type":"X","qubit":0},
+    "expected_syndrome": [1,0,0,0,0,0],
+    "expected_decode": "X@0"
+  },
+  {
+    "name": "z_q3",
+    "error": {"type":"Z","qubit":3},
+    "expected_syndrome": [0,0,0,1,0,0],
+    "expected_decode": "Z@3"
+  }
+]

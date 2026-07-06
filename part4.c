@@ -221,7 +221,7 @@ static void emit_zero_result(Compiler *cc, Type *type, int line) {
   if (backend_ops)
     fprintf(cc->out, "    mov r0, #0\n");
   else
-    fprintf(cc->out, "    movq $0, %%rax\n");
+    fprintf(cc->out, "    xorl %%eax, %%eax\n");
   emit_ir_const_result(type, 0, line);
 }
 
@@ -634,127 +634,148 @@ static void codegen_addr_checked(Compiler *cc, Node *n) {
 /* Address of lvalue into %rax                                       */
 /* ---------------------------------------------------------------- */
 
-void codegen_addr(Compiler *cc, Node *node) {
-  char errbuf[80];
-  /* Do NOT use ptr_in_fault_range(node): stage2 miscompiles it and rejects
-   * valid arena ptrs. */
-  if (!node) {
-    error_at(cc, 0, "codegen_addr: null node");
-    fprintf(cc->out, "    movq $0, %%rax\n");
+static void ir_emit_addr_offset(int offset, int line) {
+  if (offset != 0) {
+    char lhs_ir[32];
+    ir_save_result(lhs_ir);
+    char c_tmp[32];
+    sprintf(c_tmp, "%%t%d", ir_tmp_counter++);
+    ZCC_EMIT_CONST(IR_TY_I64, c_tmp, offset, line);
+    char *dst2 = ir_bridge_fresh_tmp();
+    ZCC_EMIT_BINARY(IR_ADD, IR_TY_PTR, dst2, lhs_ir, c_tmp, line);
+  }
+}
+
+static void codegen_addr_offset(Compiler *cc, Node *node, int offset) {
+  if (offset < 0 || offset > 1073741823) {
+    error_at(cc, node ? node->line : 0, "codegen_addr_offset: offset out of range");
+    if (!backend_ops) fprintf(cc->out, "    movq $0, %%rax\n");
     return;
   }
-  /* In main, do not substitute 0 for bad node ptr — we need to reach the main
-   * param/local stack slots. */
+  if (!node) {
+    error_at(cc, 0, "codegen_addr_offset: null node");
+    if (!backend_ops) fprintf(cc->out, "    movq $0, %%rax\n");
+    return;
+  }
   if (is_bad_ptr(node) &&
       (!cc->current_func[0] || strcmp(cc->current_func, "main") != 0)) {
-    error_at(cc, 0, "codegen_addr: bad node ptr");
-    fprintf(cc->out, "    movq $0, %%rax\n");
+    error_at(cc, 0, "codegen_addr_offset: bad node ptr");
+    if (!backend_ops) fprintf(cc->out, "    movq $0, %%rax\n");
     return;
   }
   if (node->kind == ND_VAR) {
-    /* Main params/locals: always use fixed stack layout when in main, so Stage2
-     * never emits globals for these. */
     if (cc->current_func[0] && strcmp(cc->current_func, "main") == 0) {
       if (strcmp(node->name, "argc") == 0) {
         if (cc->verbose)
           fprintf(stderr, "zcc: codegen main param 'argc'\n");
-        fprintf(cc->out, "    leaq -8(%%rbp), %%rax\n");
+        fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", -8 + offset);
         char *dst = ir_bridge_fresh_tmp();
         ZCC_EMIT_UNARY(IR_ADDR, IR_TY_PTR, dst, "%stack_-8", node->line);
+        ir_emit_addr_offset(offset, node->line);
         return;
       }
       if (strcmp(node->name, "argv") == 0) {
         if (cc->verbose)
           fprintf(stderr, "zcc: codegen main param 'argv'\n");
-        fprintf(cc->out, "    leaq -16(%%rbp), %%rax\n");
+        fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", -16 + offset);
         char *dst = ir_bridge_fresh_tmp();
         ZCC_EMIT_UNARY(IR_ADDR, IR_TY_PTR, dst, "%stack_-16", node->line);
+        ir_emit_addr_offset(offset, node->line);
         return;
       }
       if (strcmp(node->name, "input_file") == 0) {
         if (cc->verbose)
           fprintf(stderr, "zcc: codegen main local 'input_file'\n");
-        fprintf(cc->out, "    leaq -32(%%rbp), %%rax\n");
+        fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", -32 + offset);
         char *dst = ir_bridge_fresh_tmp();
         ZCC_EMIT_UNARY(IR_ADDR, IR_TY_PTR, dst, "%stack_-32", node->line);
+        ir_emit_addr_offset(offset, node->line);
         return;
       }
       if (strcmp(node->name, "output_file") == 0) {
         if (cc->verbose)
           fprintf(stderr, "zcc: codegen main local 'output_file'\n");
-        fprintf(cc->out, "    leaq -40(%%rbp), %%rax\n");
+        fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", -40 + offset);
         char *dst = ir_bridge_fresh_tmp();
         ZCC_EMIT_UNARY(IR_ADDR, IR_TY_PTR, dst, "%stack_-40", node->line);
+        ir_emit_addr_offset(offset, node->line);
         return;
       }
     }
-    /* Do NOT check is_bad_ptr(node->sym): Stage1 can have valid Symbol* in
-     * fault range -> emit global -> segfault. */
-    /* Use stack whenever we have a symbol with stack_offset. Params/locals have
-     * negative offset; guard against wrong sign. */
     if (node->sym) {
       int off = node->sym->stack_offset;
       if (off > 0)
-        off = -off; /* never use positive: would write above frame (e.g. return
-                       address) and crash */
+        off = -off;
       if (off != 0 && !node->sym->is_global) {
+        int folded_off = off + offset;
         if (backend_ops) {
-            fprintf(cc->out, "    ldr r3, =%d\n    adds r0, r7, r3\n", off);
+          fprintf(cc->out, "    ldr r3, =%d\n    adds r0, r7, r3\n", folded_off);
         } else {
-            fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", off);
+          fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", folded_off);
         }
         char vname[32];
         sprintf(vname, "%%stack_%d", off);
         char *dst = ir_bridge_fresh_tmp();
         ZCC_EMIT_UNARY(IR_ADDR, IR_TY_PTR, dst, vname, node->line);
+        ir_emit_addr_offset(offset, node->line);
+        return;
+      } else if (off == 0 && !node->sym->is_global) {
+        error_at(cc, node->line, "codegen_addr_offset: stack offset is zero for non-global local");
         return;
       }
     }
     if (backend_ops) {
+      if (offset != 0) {
+        fprintf(cc->out, "    ldr r0, =%s+%d\n", node->name, offset);
+      } else {
         fprintf(cc->out, "    ldr r0, =%s\n", node->name);
+      }
     } else {
+      if (offset != 0) {
+        fprintf(cc->out, "    leaq %s+%d(%%rip), %%rax\n", node->name, offset);
+      } else {
         fprintf(cc->out, "    leaq %s(%%rip), %%rax\n", node->name);
+      }
     }
     char gname[32];
     sprintf(gname, "%%%s", node->name);
     char *dst = ir_bridge_fresh_tmp();
     ZCC_EMIT_UNARY(IR_ADDR, IR_TY_PTR, dst, gname, node->line);
+    ir_emit_addr_offset(offset, node->line);
     return;
   }
   if (node->kind == ND_DEREF) {
     if (!node->lhs) {
-      error_at(cc, node->line, "codegen_addr: ND_DEREF null lhs");
+      error_at(cc, node->line, "codegen_addr_offset: ND_DEREF null lhs");
       fprintf(cc->out, "    movq $0, %%rax\n");
       return;
     }
     codegen_expr_checked(cc, node->lhs);
-    return; /* Note: ptr is ALREADY eval'd by codegen_expr! ir_last_result holds
-               it! */
-  }
-  if (node->kind == ND_MEMBER) {
-    if (!node->lhs) {
-      error_at(cc, node->line,
-               "codegen_addr: ND_MEMBER null lhs (member access on null)");
-      fprintf(cc->out, "    movq $0, %%rax\n");
-      return;
-    }
-    codegen_addr_checked(cc, node->lhs);
-    if (node->member_offset != 0) {
-      fprintf(cc->out, "    addq $%d, %%rax\n", node->member_offset);
-      char lhs_ir[32];
-      ir_save_result(lhs_ir);
-      char off_str[32];
-      char c_tmp[32];
-      sprintf(off_str, "%d", node->member_offset);
-      sprintf(c_tmp, "%%t%d", ir_tmp_counter++);
-      ZCC_EMIT_CONST(IR_TY_I64, c_tmp, node->member_offset, node->line);
-
-      char *dst = ir_bridge_fresh_tmp();
-      ZCC_EMIT_BINARY(IR_ADD, IR_TY_PTR, dst, lhs_ir, c_tmp, node->line);
+    if (offset != 0) {
+      if (backend_ops) {
+        fprintf(cc->out, "    ldr r3, =%d\n    adds r0, r0, r3\n", offset);
+      } else {
+        fprintf(cc->out, "    addq $%d, %%rax\n", offset);
+      }
+      ir_emit_addr_offset(offset, node->line);
     }
     return;
   }
+  if (node->kind == ND_MEMBER) {
+    if (!node->lhs) {
+      error_at(cc, node->line, "codegen_addr_offset: ND_MEMBER null lhs");
+      fprintf(cc->out, "    movq $0, %%rax\n");
+      return;
+    }
+    codegen_addr_offset(cc, node->lhs, offset + node->member_offset);
+    return;
+  }
   error_at(cc, node->line, "not an lvalue");
+  if (!backend_ops) fprintf(cc->out, "    movq $0, %%rax\n");
+}
+
+void codegen_addr(Compiler *cc, Node *node) {
+  codegen_addr_offset(cc, node, 0);
 }
 
 static int ptr_elem_size(Type *type) {
@@ -881,6 +902,14 @@ void codegen_expr(Compiler *cc, Node *node) {
           ZCC_EMIT_CONST(ir_map_type(node->type), dst, node->int_val, node->line);
         }
         return;
+    }
+    if (node->int_val == 0) {
+      fprintf(cc->out, "    xorl %%eax, %%eax\n");
+      {
+        char *dst = ir_bridge_fresh_tmp();
+        ZCC_EMIT_CONST(ir_map_type(node->type), dst, 0, node->line);
+      }
+      return;
     }
     if (node->int_val >= -2147483648) {
       if (node->int_val <= 2147483647) {

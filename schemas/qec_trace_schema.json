@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/qec_trace_schema.json",
+  "title": "QEC Trace Artifact",
+  "type": "object",
+  "required": ["schema_version", "trace_id", "n_qubits", "steps"],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^1\\.0\\.0$" },
+    "trace_id": { "type": "string" },
+    "seed": { "type": "integer", "minimum": 0 },
+    "n_qubits": { "type": "integer", "minimum": 1 },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["index", "gate", "qubits", "frame_before", "frame_after"],
+        "properties": {
+          "index": { "type": "integer", "minimum": 0 },
+          "gate": { "type": "string" },
+          "qubits": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+          "frame_before": {
+            "type": "object",
+            "required": ["x_bits", "z_bits"],
+            "properties": {
+              "x_bits": { "type": "array", "items": { "type": "integer", "enum": [0,1] } },
+              "z_bits": { "type": "array", "items": { "type": "integer", "enum": [0,1] } }
+            },
+            "additionalProperties": false
+          },
+          "frame_after": {
+            "type": "object",
+            "required": ["x_bits", "z_bits"],
+            "properties": {
+              "x_bits": { "type": "array", "items": { "type": "integer", "enum": [0,1] } },
+              "z_bits": { "type": "array", "items": { "type": "integer", "enum": [0,1] } }
+            },
+            "additionalProperties": false
+          },
+          "syndrome": { "type": "array", "items": { "type": "number" } },
+          "correction": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
