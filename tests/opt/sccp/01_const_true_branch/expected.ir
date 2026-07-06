@@ -1,0 +1,12 @@
+func @s01() -> i32 {
+bb0:
+  %c1 = const i1 1
+  jmp bb1
+
+bb1:
+  %v1 = const i32 42
+  jmp bb3
+
+bb3:
+  ret i32 %v1
+}

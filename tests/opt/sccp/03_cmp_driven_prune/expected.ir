@@ -1,0 +1,11 @@
+func @s03(i32 %arg0) -> i32 {
+bb0:
+  %z0 = const i32 0
+  %c0 = const i32 0
+  %eq = const i1 1
+  jmp bb1
+
+bb1:
+  %a = const i32 1
+  ret i32 %a
+}

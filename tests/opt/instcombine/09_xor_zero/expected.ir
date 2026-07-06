@@ -1,0 +1,6 @@
+func @t09(i32 %arg0) -> i32 {
+bb0:
+  %c0 = const i32 0
+  %r0 = copy i32 %arg0
+  ret i32 %r0
+}

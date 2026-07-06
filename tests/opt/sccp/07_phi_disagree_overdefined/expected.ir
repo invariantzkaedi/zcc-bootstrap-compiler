@@ -1,0 +1,18 @@
+func @s07(i1 %cond) -> i32 {
+bb0:
+  br i1 %cond, bb1, bb2
+
+bb1:
+  %x1 = const i32 1
+  jmp bb3
+
+bb2:
+  %x2 = const i32 2
+  jmp bb3
+
+bb3:
+  %p0 = phi i32 [bb1: %x1], [bb2: %x2]
+  %k0 = const i32 0
+  %r0 = add i32 %p0, %k0
+  ret i32 %r0
+}

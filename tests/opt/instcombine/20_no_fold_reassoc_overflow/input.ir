@@ -1,0 +1,8 @@
+func @t20(i32 %arg0) -> i32 {
+bb0:
+  %cA = const i32 2147483647
+  %cB = const i32 1
+  %t0 = add i32 %arg0, %cA
+  %r0 = add i32 %t0, %cB
+  ret i32 %r0
+}

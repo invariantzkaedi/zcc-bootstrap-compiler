@@ -1,0 +1,8 @@
+func @t14(i32 %arg0) -> i32 {
+bb0:
+  %c2 = const i32 2
+  %c4 = const i32 4
+  %t0 = mul i32 %arg0, %c2
+  %r0 = mul i32 %t0, %c4
+  ret i32 %r0
+}

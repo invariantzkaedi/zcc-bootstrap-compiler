@@ -1,0 +1,17 @@
+func @s02() -> i32 {
+bb0:
+  %c0 = const i1 0
+  br i1 %c0, bb1, bb2
+
+bb1:
+  %v1 = const i32 100
+  jmp bb3
+
+bb2:
+  %v2 = const i32 5
+  jmp bb3
+
+bb3:
+  %p0 = phi i32 [bb1: %v1], [bb2: %v2]
+  ret i32 %p0
+}

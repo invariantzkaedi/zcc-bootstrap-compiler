@@ -1,0 +1,8 @@
+func @s08() -> i32 {
+bb0:
+  %a = const i32 4
+  %b = const i32 6
+  %c = const i32 10
+  %d = const i32 60
+  ret i32 %d
+}

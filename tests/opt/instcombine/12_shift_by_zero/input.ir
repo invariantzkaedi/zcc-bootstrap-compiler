@@ -1,0 +1,8 @@
+func @t12(i32 %arg0) -> i32 {
+bb0:
+  %c0 = const i32 0
+  %r0 = shl i32 %arg0, %c0
+  %r1 = shr i32 %r0, %c0
+  %r2 = ashr i32 %r1, %c0
+  ret i32 %r2
+}

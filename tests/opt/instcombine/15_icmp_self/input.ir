@@ -1,0 +1,7 @@
+func @t15(i32 %arg0) -> i32 {
+bb0:
+  %e = icmp eq i32 %arg0, %arg0
+  %n = icmp ne i32 %arg0, %arg0
+  %r = add i32 %e, %n
+  ret i32 %r
+}

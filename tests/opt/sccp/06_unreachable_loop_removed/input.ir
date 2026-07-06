@@ -1,0 +1,13 @@
+func @s06() -> i32 {
+bb0:
+  %c0 = const i1 0
+  br i1 %c0, bb1, bb2
+
+bb1:
+  %i0 = const i32 0
+  jmp bb1
+
+bb2:
+  %retv = const i32 3
+  ret i32 %retv
+}

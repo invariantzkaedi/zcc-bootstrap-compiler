@@ -1,0 +1,8 @@
+func @t12(i32 %arg0) -> i32 {
+bb0:
+  %c0 = const i32 0
+  %r0 = copy i32 %arg0
+  %r1 = copy i32 %r0
+  %r2 = copy i32 %r1
+  ret i32 %r2
+}

@@ -1,0 +1,14 @@
+func @s04() -> i32 {
+bb0:
+  %c1 = const i1 1
+  jmp bb1
+
+bb1:
+  %x1 = const i32 9
+  jmp bb3
+
+bb3:
+  %k1 = const i32 1
+  %r0 = const i32 10
+  ret i32 %r0
+}

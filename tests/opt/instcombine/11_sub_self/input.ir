@@ -1,0 +1,5 @@
+func @t11(i32 %arg0) -> i32 {
+bb0:
+  %r0 = sub i32 %arg0, %arg0
+  ret i32 %r0
+}

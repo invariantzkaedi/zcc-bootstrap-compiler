@@ -1,0 +1,6 @@
+func @t05(i32 %arg0) -> i32 {
+bb0:
+  %c1 = const i32 1
+  %r0 = sdiv i32 %arg0, %c1
+  ret i32 %r0
+}

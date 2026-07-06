@@ -1,0 +1,9 @@
+func @t13(i32 %arg0) -> i32 {
+bb0:
+  %c5 = const i32 5
+  %c3 = const i32 3
+  %t0 = add i32 %arg0, %c5
+  %c8 = const i32 8
+  %r0 = add i32 %arg0, %c8
+  ret i32 %r0
+}
