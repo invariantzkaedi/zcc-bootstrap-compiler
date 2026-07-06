@@ -128,12 +128,7 @@ jobs:
             if [ -f artifacts/last_trace.json ]; then
               cp artifacts/last_trace.json artifacts/det/last_trace_${i}.json
             else
-              python3 - <<'PY'
-              import json, pathlib
-              p = pathlib.Path("artifacts/det/last_trace_PLACEHOLDER.json")
-              p.parent.mkdir(parents=True, exist_ok=True)
-              p.write_text(json.dumps({"placeholder": True}, sort_keys=True))
-              PY
+              python3 -c "import json, pathlib; p = pathlib.Path('artifacts/det/last_trace_PLACEHOLDER.json'); p.parent.mkdir(parents=True, exist_ok=True); p.write_text(json.dumps({'placeholder': True}, sort_keys=True))"
               cp artifacts/det/last_trace_PLACEHOLDER.json artifacts/det/last_trace_${i}.json
             fi
           done
@@ -206,13 +201,7 @@ jobs:
           mkdir -p artifacts
           pytest -q -m mutation tests/test_mutation_smoke.py || true
           if [ -f artifacts/mutation_report.json ]; then
-            python3 - <<'PY'
-import json
-d = json.load(open("artifacts/mutation_report.json"))
-kr = float(d.get("kill_rate", 0.0))
-assert kr >= 0.90, f"kill_rate too low: {kr}"
-print(f"kill_rate OK: {kr}")
-PY
+            python3 -c "import json; d = json.load(open('artifacts/mutation_report.json')); kr = float(d.get('kill_rate', 0.0)); assert kr >= 0.90, f'kill_rate too low: {kr}'; print(f'kill_rate OK: {kr}')"
           else
             echo "No mutation_report.json found; continuing (smoke mode)."
           fi

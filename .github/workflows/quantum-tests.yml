@@ -139,13 +139,7 @@ jobs:
           set -euxo pipefail
           pytest -q -m mutation tests/test_mutation_smoke.py || true
           if [ -f artifacts/mutation_report.json ]; then
-            python3 - <<'PY'
-import json
-d=json.load(open("artifacts/mutation_report.json"))
-kr=float(d.get("kill_rate",0))
-assert kr >= 0.90, f"kill_rate too low: {kr}"
-print("kill_rate OK", kr)
-PY
+            python3 -c "import json; d=json.load(open('artifacts/mutation_report.json')); kr=float(d.get('kill_rate',0)); assert kr >= 0.90, f'kill_rate too low: {kr}'; print('kill_rate OK', kr)"
           fi
       - name: Render job summary
         if: always()
