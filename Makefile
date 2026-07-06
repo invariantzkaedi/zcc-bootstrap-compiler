@@ -1000,3 +1000,18 @@ endif
 endif
 	pnpm --dir spec exec tsx scripts/emit-evidence.ts --report $(if $(RUN_ID),--run-id $(RUN_ID)) $(if $(ALL_RUNS),--all-runs)
 
+qec-max-fast:
+	python3 -m pytest -q tests/test_trace_schema_validation.py tests/test_invariants_battery.py tests/test_determinism_contract.py
+
+qec-max-determinism:
+	QEC_SEED=1337 QEC_FUZZ_SEEDS=10 python3 tests/test_stabilizer_fuzz.py
+	QEC_SEED=1337 QEC_FUZZ_SEEDS=10 python3 tests/test_stabilizer_fuzz.py
+	QEC_SEED=1337 QEC_FUZZ_SEEDS=10 python3 tests/test_stabilizer_fuzz.py
+
+qec-max-summary:
+	python3 scripts/artifact_utils.py || true
+	python3 scripts/make_repro_script.py || true
+	python3 scripts/validate_artifacts.py
+	python3 scripts/render_job_summary.py || true
+
+
