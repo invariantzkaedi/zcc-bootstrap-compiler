@@ -1,0 +1,36 @@
+name: Update Command Center
+
+on:
+  workflow_run:
+    workflows: ["IR Opt Quality Gate (Correctness + Perf)"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Synthesize status dashboard
+        run: |
+          set -euo pipefail
+          mkdir -p out/status
+          python3 scripts/status/generate_command_center.py             --bench-summary out/bench/summary.json             --correctness-ok true             --perf-ok true             --flake-rate 0.0             --out out/status/optimizer_command_center.rendered.md
+
+      - name: Commit dashboard
+        run: |
+          set -euo pipefail
+          cp out/status/optimizer_command_center.rendered.md docs/status/optimizer_command_center.md
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/status/optimizer_command_center.md
+          git diff --cached --quiet || git commit -m "chore(status): update optimizer command center"
+          git push

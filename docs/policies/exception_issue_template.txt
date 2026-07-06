@@ -1,0 +1,13 @@
+Title: MERGE EXCEPTION: <short reason>
+
+Reason/Urgency:
+Failed required checks:
+Risk assessment:
+Why delay is worse than risk:
+Rollback target (commit/tag):
+Rollback steps:
+Owner:
+Follow-up remediation issue:
+Approvers:
+- Release Manager:
+- Compiler/Security Lead:

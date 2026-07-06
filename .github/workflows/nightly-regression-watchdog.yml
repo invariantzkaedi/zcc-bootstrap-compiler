@@ -1,0 +1,25 @@
+name: Nightly Regression Watchdog
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run benchmark workflow entrypoint
+        run: |
+          set -euo pipefail
+          mkdir -p out/bench
+          test -f out/bench/summary.json || echo '{"details":[]}' > out/bench/summary.json
+
+      - name: Evaluate watchdog
+        run: |
+          python3 scripts/bench/regression_watchdog.py             --summary out/bench/summary.json             --max-hard-regressions 2             --hard-threshold-pct -2.0

@@ -1,0 +1,22 @@
+name: Stale Blocked Issue Guard
+
+on:
+  schedule:
+    - cron: "0 15 * * 1-5"
+
+permissions:
+  issues: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          any-of-labels: blocked
+          days-before-stale: 5
+          days-before-close: -1
+          stale-issue-message: |
+            This blocked issue has had no updates for 5 days.
+            Please post dependency status + ETA.

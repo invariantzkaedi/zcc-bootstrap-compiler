@@ -1,0 +1,16 @@
+compiler:
+  - "src/ir/**"
+  - "src/verifier/**"
+optimizer:
+  - "src/opt/**"
+perf:
+  - "scripts/bench/**"
+  - "benchmarks/**"
+ci:
+  - ".github/workflows/**"
+infra:
+  - "scripts/ci/**"
+qa:
+  - "tests/**"
+release:
+  - "docs/releases/**"

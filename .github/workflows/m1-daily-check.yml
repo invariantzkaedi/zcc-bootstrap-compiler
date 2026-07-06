@@ -1,0 +1,37 @@
+name: M1 Daily Check
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 14 * * 1-5"
+
+jobs:
+  m1:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          make all OUT=build/cand
+
+      - name: Expose tools
+        run: |
+          set -euo pipefail
+          mkdir -p .ci/bin
+          cp -f build/cand/zcc-opt .ci/bin/zcc-opt
+          cp -f build/cand/zcc-verify .ci/bin/zcc-verify
+          chmod +x .ci/bin/zcc-opt .ci/bin/zcc-verify
+          echo "$PWD/.ci/bin" >> $GITHUB_PATH
+
+      - name: Run M1 suites
+        run: |
+          set -euo pipefail
+          make -C tests/verify test-negative
+          make -C tests/verify-positive test-positive
+          make -C tests/opt/instcombine test-normalized
+          make -C tests/opt/sccp test-normalized
