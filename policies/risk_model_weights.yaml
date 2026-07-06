@@ -1,0 +1,5 @@
+base_risk: 20
+ci_weight: 20
+critical_weight: 30
+fail_multiplier: 5
+max_fail_impact: 30

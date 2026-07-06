@@ -106,6 +106,32 @@
         }
       },
       "required": ["highest_risk_metric", "highest_breach_probability", "metrics"]
+    },
+    "incident_intelligence": {
+      "type": "object",
+      "properties": {
+        "pressure_index": { "type": "integer" },
+        "hot_subsystems": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "subsystem": { "type": "string" },
+              "incident_count": { "type": "integer" },
+              "recurrence": { "type": "integer" },
+              "severity_score": { "type": "integer" }
+            }
+          }
+        }
+      }
+    },
+    "executive_snapshot": {
+      "type": "object",
+      "properties": {
+        "compliance_status": { "type": "string" },
+        "highest_breach_probability": { "type": "number" },
+        "pass_rate_trend": { "type": "string" }
+      }
     }
   },
   "required": ["generated_at_utc", "schema_version", "stats", "windows", "top_signatures", "new_signatures_this_week", "promotion_readiness", "alerts"],

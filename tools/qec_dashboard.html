@@ -160,6 +160,18 @@
       <div class="metric-label" id="highest-risk-metric">No risk outlook computed.</div>
     </div>
     
+    <div class="card">
+      <h2>Incident Intelligence</h2>
+      <div class="metric" id="pressure-index">--</div>
+      <div class="metric-label" id="hot-subsystem-list">Hot subsystems: none</div>
+    </div>
+    
+    <div class="card">
+      <h2>Executive Snapshot</h2>
+      <div class="metric" id="compliance-status">--</div>
+      <div class="metric-label" id="executive-summary">Pass rate trend: --</div>
+    </div>
+    
     <div class="card" style="grid-column: span 3;">
       <h2>Recent Failures Log</h2>
       <table id="fails-table">
@@ -206,6 +218,47 @@
           } else {
             probText.className = 'metric badge badge-high';
           }
+        }
+        
+        // Handle incident intelligence optionally
+        if (data.incident_intelligence) {
+          const pressure = data.incident_intelligence.pressure_index;
+          const pressureText = document.getElementById('pressure-index');
+          pressureText.textContent = pressure + '/100';
+          
+          if (pressure < 35) {
+            pressureText.className = 'metric badge badge-low';
+          } else if (pressure < 70) {
+            pressureText.className = 'metric badge badge-med';
+          } else {
+            pressureText.className = 'metric badge badge-high';
+          }
+          
+          const subs = data.incident_intelligence.hot_subsystems;
+          const subText = document.getElementById('hot-subsystem-list');
+          if (subs && subs.length > 0) {
+            subText.innerHTML = 'Hot subsystems: ' + subs.slice(0, 2).map(s => `<span style="color:var(--accent)">${s.subsystem}</span> (${s.severity_score})`).join(', ');
+          } else {
+            subText.textContent = 'No hot subsystems identified.';
+          }
+        }
+        
+        // Handle executive snapshot optionally
+        if (data.executive_snapshot) {
+          const compliance = data.executive_snapshot.compliance_status;
+          const compText = document.getElementById('compliance-status');
+          compText.textContent = compliance;
+          
+          if (compliance === 'PASS') {
+            compText.className = 'metric badge badge-low';
+          } else if (compliance === 'FAIL') {
+            compText.className = 'metric badge badge-high';
+          } else {
+            compText.className = 'metric badge badge-med';
+          }
+          
+          const execSummary = document.getElementById('executive-summary');
+          execSummary.innerHTML = `Pass rate: <span style="color:var(--accent)">${data.executive_snapshot.pass_rate_trend}</span> | Max breach: <span style="color:var(--accent)">${Math.round(data.executive_snapshot.highest_breach_probability * 100)}%</span>`;
         }
         
         const tbody = document.querySelector('#fails-table tbody');

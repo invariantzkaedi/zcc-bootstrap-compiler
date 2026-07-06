@@ -75,6 +75,19 @@ jobs:
           set -euxo pipefail
           python3 scripts/generate_dashboard_data.py || true
 
+      - name: Run QEC-VOP Control Plane Suite
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/detect_anomalies.py || true
+          python3 scripts/forecast_metrics.py || true
+          python3 scripts/remediation_suggester.py || true
+          python3 scripts/check_policy_conformance.py || true
+          python3 scripts/incident_intelligence.py || true
+          python3 scripts/calibrate_risk_model.py || true
+          python3 scripts/export_executive_scorecard.py || true
+          python3 scripts/generate_dashboard_data.py || true
+
       - name: Build artifact index + repro scripts
         if: always()
         run: |

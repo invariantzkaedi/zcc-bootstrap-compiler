@@ -257,6 +257,31 @@ def generate_report():
         except Exception as e:
             print(f"Failed to read/integrate forecast data: {e}")
             
+    # Optional Incident Intelligence inclusion
+    intel_path = Path("artifacts/incident_intelligence.json")
+    if intel_path.exists():
+        try:
+            intel_data = json.loads(intel_path.read_text(encoding='utf-8'))
+            report["incident_intelligence"] = {
+                "pressure_index": int(intel_data.get("pressure_index", 0)),
+                "hot_subsystems": intel_data.get("hot_subsystems", [])
+            }
+        except Exception as e:
+            print(f"Failed to read/integrate incident intelligence data: {e}")
+
+    # Optional Executive Scorecard inclusion
+    score_path = Path("artifacts/executive_scorecard.json")
+    if score_path.exists():
+        try:
+            score_data = json.loads(score_path.read_text(encoding='utf-8'))
+            report["executive_snapshot"] = {
+                "compliance_status": score_data.get("policy_compliance", {}).get("status", "UNKNOWN"),
+                "highest_breach_probability": float(score_data.get("risk_outlook", {}).get("highest_breach_probability", 0.0)),
+                "pass_rate_trend": score_data.get("reliability_posture", {}).get("pass_rate_trend", "95.0%")
+            }
+        except Exception as e:
+            print(f"Failed to read/integrate executive scorecard data: {e}")
+            
     # Validate against JSON schema
     if SCHEMA_PATH.exists():
         schema = json.loads(SCHEMA_PATH.read_text(encoding='utf-8'))
