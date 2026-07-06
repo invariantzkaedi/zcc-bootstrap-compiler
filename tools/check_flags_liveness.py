@@ -21,10 +21,10 @@ FLAG_SETTERS_RE = re.compile(
 )
 
 FLAG_CONSUMERS_RE = re.compile(
-    r'^(j[znspcoe]\w*|set[a-z]{1,2}|cmov[a-z]{1,2}|adc|sbb|pushfq|lahf)$'
+    r'^(j[znspcoeaglb]\w*|set[a-z]{1,2}|cmov[a-z]{1,2}|adc|sbb|pushfq?|lahf)$'
 )
 
-def analyze_asm(filepath):
+def analyze_asm(filepath, mode="mov-zero-only", debug=False):
     with open(filepath, 'r') as f:
         lines = f.readlines()
     
@@ -73,7 +73,7 @@ def analyze_asm(filepath):
             active_movs = []
             
         # Check for movq $0
-        elif re.match(r'^movq\s+\$0,\s*(%[re]?[a-z]{2,3})\s*$', stripped):
+        elif re.match(r'^movq\s+\$0,\s*(%[a-z0-9]+)\s*$', stripped):
             if flags_state:
                 active_movs.append((idx, stripped))
                 
@@ -99,5 +99,5 @@ if __name__ == '__main__':
             print(f"  Consumer [L{v['consumer_idx']+1}]: {v['consumer_line']}")
         sys.exit(1)
     else:
-        print("Verification OK: 0 flags-liveness violations.")
+        print("All flag liveness checks passed.")
         sys.exit(0)

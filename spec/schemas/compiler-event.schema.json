@@ -1,0 +1,143 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://zcc.dev/schemas/compiler-event.schema.json",
+  "title": "ZCC Compiler Evidence Event",
+  "description": "Schema for a single evidence ledger event emitted during compiler runs",
+  "type": "object",
+  "required": [
+    "event_id", "timestamp", "workflow_stage",
+    "rule_ids", "source_hash", "target", "result"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "pattern": "^evt_[a-f0-9]{8,}$",
+      "description": "Unique event identifier"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of the event"
+    },
+    "workflow_stage": {
+      "type": "string",
+      "enum": ["tokenize", "parse", "compile", "lower", "emit", "link", "execute", "bootstrap", "verify"],
+      "description": "Workflow vocabulary label for the active compiler stage"
+    },
+    "rule_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^ZCC-(FE|IR|TOOL|API|DIST|SEC|ARC|STOR|HUM|GEN)-\\d{3}$"
+      },
+      "minItems": 1,
+      "description": "Boundary rule IDs being verified"
+    },
+    "source_hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "SHA-256 hash of the source input"
+    },
+    "target": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Target triple or platform identifier"
+    },
+    "result": {
+      "type": "string",
+      "enum": ["pass", "fail", "skip", "error", "waived_fail", "expired_waiver"],
+      "description": "Test outcome"
+    },
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "tests": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Test fixture names executed"
+        },
+        "artifact_hash": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$",
+              "description": "SHA-256 hash of the produced artifact"
+            },
+            {
+              "type": "object",
+              "required": ["exists"],
+              "properties": {
+                "exists": { "const": false }
+              },
+              "additionalProperties": false,
+              "description": "Artifact missing"
+            }
+          ]
+        },
+        "command": {
+          "type": "string",
+          "description": "Exact command that was executed"
+        },
+        "stdout_digest": {
+          "type": "string",
+          "description": "SHA-256 of stdout output"
+        },
+        "exit_code": {
+          "type": "integer",
+          "description": "Process exit code"
+        },
+        "waiver_id": {
+          "type": "string",
+          "description": "ID of the waiver for a known failure"
+        },
+        "owner": {
+          "type": "string",
+          "description": "Owner of the waiver"
+        },
+        "expiry": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Expiry date of the waiver (ISO 8601)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "duration_ms": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Execution duration in milliseconds"
+    },
+    "hostname": {
+      "type": "string",
+      "description": "Machine hostname for reproducibility"
+    },
+    "environment": {
+      "type": "object",
+      "description": "Environment provenance metadata",
+      "properties": {
+        "git_sha": { "type": "string" },
+        "is_dirty": { "type": "boolean" },
+        "tool_versions": { "type": "object", "additionalProperties": { "type": "string" } },
+        "env_vars": { "type": "object", "additionalProperties": { "type": "string" } }
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "result": { "const": "waived_fail" } },
+        "required": ["result"]
+      },
+      "then": {
+        "required": ["evidence"],
+        "properties": {
+          "evidence": {
+            "required": ["waiver_id", "owner", "expiry"]
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

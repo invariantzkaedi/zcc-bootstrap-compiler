@@ -24,6 +24,21 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --upgrade pip
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright
+        run: |
+          npm install playwright
+          npx playwright install chromium --with-deps
+
+      - name: Start local HTTP Server
+        run: |
+          python3 -m http.server 8080 &
+          sleep 3
+
       # You must provide this probe in-repo or containerized.
       # It must output real metrics JSON to --output-json.
       - name: Verify runtime probe exists

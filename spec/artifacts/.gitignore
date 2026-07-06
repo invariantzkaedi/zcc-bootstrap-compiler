@@ -1,0 +1,4 @@
+# Evidence artifacts — generated per-run, not committed
+evidence/*.jsonl
+boundary-matrix.md
+boundary-matrix.json

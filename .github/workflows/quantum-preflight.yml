@@ -21,6 +21,7 @@ env:
   TZ: UTC
   PYTHONUNBUFFERED: "1"
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PIP_BREAK_SYSTEM_PACKAGES: "1"
 
 jobs:
   preflight-fast-required:
@@ -31,7 +32,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@d27e3f3d7c64b4bbf85c13d9b353a1a7960de854 # v5.1.0
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
@@ -57,7 +58,7 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p artifacts
-          pytest -q \
+          python3 -m pytest -q \
             tests/test_trace_schema_validation.py \
             tests/test_invariants_battery.py \
             tests/test_determinism_contract.py
@@ -108,7 +109,7 @@ jobs:
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
-      - uses: actions/setup-python@d27e3f3d7c64b4bbf85c13d9b353a1a7960de854 # v5.1.0
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
@@ -127,12 +128,7 @@ jobs:
             if [ -f artifacts/last_trace.json ]; then
               cp artifacts/last_trace.json artifacts/det/last_trace_${i}.json
             else
-              python3 - <<'PY'
-              import json, pathlib
-              p = pathlib.Path("artifacts/det/last_trace_PLACEHOLDER.json")
-              p.parent.mkdir(parents=True, exist_ok=True)
-              p.write_text(json.dumps({"placeholder": True}, sort_keys=True))
-              PY
+              python3 -c "import json, pathlib; p = pathlib.Path('artifacts/det/last_trace_PLACEHOLDER.json'); p.parent.mkdir(parents=True, exist_ok=True); p.write_text(json.dumps({'placeholder': True}, sort_keys=True))"
               cp artifacts/det/last_trace_PLACEHOLDER.json artifacts/det/last_trace_${i}.json
             fi
           done
@@ -189,7 +185,7 @@ jobs:
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
-      - uses: actions/setup-python@d27e3f3d7c64b4bbf85c13d9b353a1a7960de854 # v5.1.0
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
@@ -203,15 +199,9 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p artifacts
-          pytest -q -m mutation tests/test_mutation_smoke.py || true
+          python3 -m pytest -q -m mutation tests/test_mutation_smoke.py || true
           if [ -f artifacts/mutation_report.json ]; then
-            python3 - <<'PY'
-            import json
-            d = json.load(open("artifacts/mutation_report.json"))
-            kr = float(d.get("kill_rate", 0.0))
-            assert kr >= 0.90, f"kill_rate too low: {kr}"
-            print(f"kill_rate OK: {kr}")
-            PY
+            python3 -c "import json; d = json.load(open('artifacts/mutation_report.json')); kr = float(d.get('kill_rate', 0.0)); assert kr >= 0.90, f'kill_rate too low: {kr}'; print(f'kill_rate OK: {kr}')"
           else
             echo "No mutation_report.json found; continuing (smoke mode)."
           fi

@@ -1,0 +1,110 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://zcc.dev/schemas/boundary-rule.schema.json",
+  "title": "ZCC Boundary Rule",
+  "description": "Schema for a single boundary engineering rule in the ZCC contract pack",
+  "oneOf": [
+    { "$ref": "#/definitions/manifest" },
+    { "$ref": "#/definitions/rule" }
+  ],
+  "definitions": {
+    "manifest": {
+      "type": "object",
+      "required": ["record_type", "schema_version", "title", "record_count"],
+      "properties": {
+        "record_type": { "const": "boundary_cheatsheet_manifest" },
+        "schema_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+        "title": { "type": "string", "minLength": 1 },
+        "record_count": { "type": "integer", "minimum": 0 },
+        "scope_counts": { "type": "object" },
+        "scope_prefixes": { "type": "object" },
+        "rule_id_format": { "type": "string" },
+        "fields": { "type": "array", "items": { "type": "string" } },
+        "usage": { "type": "array", "items": { "type": "string" } },
+        "tailoring": { "type": "string" },
+        "scopes": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "rule": {
+      "type": "object",
+      "required": [
+        "record_type", "id", "rule_id", "scope", "boundary",
+        "rule", "invariant", "reject_or_block", "evidence",
+        "deterministic_test", "failure_response", "tags", "priority"
+      ],
+      "properties": {
+        "record_type": { "const": "boundary_rule" },
+        "id": {
+          "type": "string",
+          "pattern": "^boundary-\\d{3}$",
+          "description": "Original sequential ID from source cheatsheet"
+        },
+        "rule_id": {
+          "type": "string",
+          "pattern": "^ZCC-(FE|IR|TOOL|API|DIST|SEC|ARC|STOR|HUM|GEN)-\\d{3}$",
+          "description": "Stable scoped rule identifier"
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "compiler.frontend", "compiler.ir", "toolchain",
+            "api", "distributed", "security", "storage",
+            "archive", "human", "general"
+          ]
+        },
+        "boundary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The boundary crossing being governed (A → B)"
+        },
+        "rule": {
+          "type": "string",
+          "minLength": 10,
+          "description": "The enforceable rule statement"
+        },
+        "invariant": {
+          "type": "string",
+          "minLength": 10,
+          "description": "The property that must always hold"
+        },
+        "reject_or_block": {
+          "type": "string",
+          "minLength": 5,
+          "description": "Conditions that must trigger rejection or blocking"
+        },
+        "evidence": {
+          "type": "string",
+          "minLength": 5,
+          "description": "Proof artifacts required before claiming boundary is safe"
+        },
+        "deterministic_test": {
+          "type": "string",
+          "minLength": 5,
+          "description": "Required implementation metadata: how to test this boundary"
+        },
+        "failure_response": {
+          "type": "string",
+          "minLength": 5,
+          "description": "Required implementation metadata: what to do on failure"
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["critical", "high", "medium"],
+          "description": "Implementation priority for milestone tracking"
+        },
+        "test_fixture": {
+          "type": "string",
+          "description": "Path to existing test fixture in the repo (relative to repo root)"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

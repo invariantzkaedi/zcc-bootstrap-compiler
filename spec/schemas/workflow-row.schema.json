@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://zcc.dev/schemas/workflow-row.schema.json",
+  "title": "ZCC Workflow Vocabulary Row",
+  "description": "Schema for a single workflow vocabulary row in the ZCC contract pack",
+  "type": "object",
+  "required": ["record_type", "row", "ingestion", "analysis", "kinematics", "rendering", "verification"],
+  "properties": {
+    "record_type": { "const": "workflow_vocabulary_row" },
+    "row": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 200,
+      "description": "Sequential row number"
+    },
+    "ingestion": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*$",
+      "description": "Input acquisition vocabulary term"
+    },
+    "analysis": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*$",
+      "description": "Analysis/measurement vocabulary term"
+    },
+    "kinematics": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*$",
+      "description": "Motion/transformation vocabulary term"
+    },
+    "rendering": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*$",
+      "description": "Visual output/encoding vocabulary term"
+    },
+    "verification": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*$",
+      "description": "Testing/attestation vocabulary term"
+    }
+  },
+  "additionalProperties": false
+}
