@@ -1,0 +1,31 @@
+# Global fallback
+* @izkaedi-ui
+
+# CI/workflow governance
+.github/workflows/* @izkaedi-ui
+
+# Verification schemas and artifacts tooling
+schemas/* @izkaedi-ui
+scripts/validate_artifacts.py @izkaedi-ui
+scripts/check_determinism_hashes.py @izkaedi-ui
+scripts/render_job_summary.py @izkaedi-ui
+scripts/artifact_utils.py @izkaedi-ui
+scripts/make_repro_script.py @izkaedi-ui
+scripts/golden_semantic_diff.py @izkaedi-ui
+
+# QEC verification tests and harness
+tests/test_trace_schema_validation.py @izkaedi-ui
+tests/test_determinism_contract.py @izkaedi-ui
+tests/test_invariants_battery.py @izkaedi-ui
+tests/test_flake_sentinel.py @izkaedi-ui
+tests/test_mutation_smoke.py @izkaedi-ui
+tests/_failure_emit_helper.py @izkaedi-ui
+
+# Golden fixtures must be explicitly reviewed
+tests/golden/** @izkaedi-ui
+
+# Policy docs
+docs/merge_policy.md @izkaedi-ui
+docs/qec_forensics_playbook.md @izkaedi-ui
+docs/qec_golden_update_policy.md @izkaedi-ui
+docs/qec_mutation_strategy.md @izkaedi-ui

@@ -7,6 +7,14 @@ on:
     - cron: "0 4 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: qec-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   LC_ALL: C
   TZ: UTC
@@ -17,11 +25,11 @@ jobs:
   qec-fast-required:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@d27e3f3d7c64b4bbf85c13d9b353a1a7960de854 # v5.1.0
         with:
           python-version: "3.11"
 
@@ -65,17 +73,18 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@1746f4ab65b179e0ea60a494b83293b640dd5bba # v4.3.2
         with:
           name: quantum-artifacts-${{ github.run_id }}
           path: artifacts/
           if-no-files-found: ignore
+          retention-days: 14
 
   qec-determinism-required:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/setup-python@d27e3f3d7c64b4bbf85c13d9b353a1a7960de854 # v5.1.0
         with:
           python-version: "3.11"
       - name: Install deps
@@ -98,17 +107,18 @@ jobs:
         run: python3 scripts/render_job_summary.py || true
       - name: Upload determinism artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@1746f4ab65b179e0ea60a494b83293b640dd5bba # v4.3.2
         with:
           name: determinism-artifacts-${{ github.run_id }}
           path: artifacts/
           if-no-files-found: ignore
+          retention-days: 14
 
   qec-mutation-required:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/setup-python@d27e3f3d7c64b4bbf85c13d9b353a1a7960de854 # v5.1.0
         with:
           python-version: "3.11"
       - name: Install deps
@@ -119,7 +129,6 @@ jobs:
         run: |
           set -euxo pipefail
           pytest -q -m mutation tests/test_mutation_smoke.py || true
-          # If you emit mutation_report.json, enforce threshold:
           if [ -f artifacts/mutation_report.json ]; then
             python3 - <<'PY'
             import json
@@ -134,8 +143,9 @@ jobs:
         run: python3 scripts/render_job_summary.py || true
       - name: Upload mutation artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@1746f4ab65b179e0ea60a494b83293b640dd5bba # v4.3.2
         with:
           name: mutation-artifacts-${{ github.run_id }}
           path: artifacts/
           if-no-files-found: ignore
+          retention-days: 14

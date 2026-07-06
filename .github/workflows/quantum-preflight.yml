@@ -7,6 +7,14 @@ on:
   schedule:
     - cron: "30 4 * * *"
 
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: qec-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   LC_ALL: C
   TZ: UTC
@@ -18,11 +26,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@d27e3f3d7c64b4bbf85c13d9b353a1a7960de854 # v5.1.0
         with:
           python-version: "3.11"
 
@@ -74,19 +82,20 @@ jobs:
 
       - name: Upload preflight artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@1746f4ab65b179e0ea60a494b83293b640dd5bba # v4.3.2
         with:
           name: qec-preflight-artifacts-${{ github.run_id }}
           path: artifacts/
           if-no-files-found: ignore
+          retention-days: 14
 
   preflight-determinism-required:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@d27e3f3d7c64b4bbf85c13d9b353a1a7960de854 # v5.1.0
         with:
           python-version: "3.11"
 
@@ -105,7 +114,6 @@ jobs:
             if [ -f artifacts/last_trace.json ]; then
               cp artifacts/last_trace.json artifacts/det/last_trace_${i}.json
             else
-              # fallback placeholder to keep determinism checker explicit
               python3 - <<'PY'
               import json, pathlib
               p = pathlib.Path("artifacts/det/last_trace_PLACEHOLDER.json")
@@ -143,19 +151,20 @@ jobs:
 
       - name: Upload determinism artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@1746f4ab65b179e0ea60a494b83293b640dd5bba # v4.3.2
         with:
           name: qec-preflight-determinism-${{ github.run_id }}
           path: artifacts/
           if-no-files-found: ignore
+          retention-days: 14
 
   preflight-mutation-required:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@d27e3f3d7c64b4bbf85c13d9b353a1a7960de854 # v5.1.0
         with:
           python-version: "3.11"
 
@@ -170,7 +179,6 @@ jobs:
           set -euxo pipefail
           mkdir -p artifacts
           pytest -q -m mutation tests/test_mutation_smoke.py || true
-
           if [ -f artifacts/mutation_report.json ]; then
             python3 - <<'PY'
             import json
@@ -204,8 +212,9 @@ jobs:
 
       - name: Upload mutation artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@1746f4ab65b179e0ea60a494b83293b640dd5bba # v4.3.2
         with:
           name: qec-preflight-mutation-${{ github.run_id }}
           path: artifacts/
           if-no-files-found: ignore
+          retention-days: 14
