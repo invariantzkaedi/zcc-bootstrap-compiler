@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZKAEDI &#x00B7; ZKP Dream Miner &#x00B7; Oneirogenesis</title>
+<meta name="description" content="Real-time ZK proof miner driven by audio frequency analysis and ZCC Oneirogenesis dream state.">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#020810;--panel:rgba(2,12,28,0.94);--border:#0d2440;
+  --cyan:#00f5ff;--magenta:#ff00ff;--gold:#ffd700;
+  --green:#00ff88;--red:#ff2244;--dim:#1a3a5c;--text:#b0d4f0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Share Tech Mono',monospace;min-height:100vh;overflow-x:hidden}
+#stars{position:fixed;inset:0;z-index:0;pointer-events:none}
+#app{position:relative;z-index:1;display:grid;grid-template-rows:auto 1fr auto;min-height:100vh;padding:12px;gap:10px}
+header{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;border:1px solid var(--cyan);background:var(--panel);border-radius:6px;box-shadow:0 0 18px #00f5ff44}
+h1{font-family:'Orbitron',sans-serif;font-size:clamp(12px,1.9vw,19px);color:var(--cyan);letter-spacing:.15em;text-shadow:0 0 12px #00f5ff88}
+#status-bar{display:flex;gap:12px;font-size:11px;align-items:center;flex-wrap:wrap}
+.stat-pill{background:var(--border);border:1px solid var(--dim);padding:3px 10px;border-radius:3px;display:flex;flex-direction:column;align-items:center}
+.stat-pill span:first-child{color:var(--cyan);font-size:9px;letter-spacing:.1em}
+.stat-pill span:last-child{color:var(--gold);font-size:13px;font-weight:bold}
+main{display:grid;grid-template-columns:300px 1fr 270px;gap:10px}
+@media(max-width:1100px){main{grid-template-columns:1fr 1fr}#right-col{grid-column:1/-1}}
+@media(max-width:700px){main{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:14px;display:flex;flex-direction:column;gap:10px;overflow:hidden}
+.ptitle{font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:.18em;color:var(--cyan);border-bottom:1px solid var(--border);padding-bottom:6px;text-shadow:0 0 10px #00f5ff66}
+.ptitle.m{color:var(--magenta);text-shadow:0 0 10px #ff00ff66}
+.ptitle.g{color:var(--green);text-shadow:0 0 10px #00ff8866}
+.btn{font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:.1em;padding:7px 12px;border-radius:4px;cursor:pointer;border:1px solid;transition:all .2s;text-align:center}
+.bc{background:#001a2e;border-color:var(--cyan);color:var(--cyan)}
+.bm{background:#1a002e;border-color:var(--magenta);color:var(--magenta)}
+.bg{background:#00150a;border-color:var(--green);color:var(--green)}
+.btn:hover{opacity:.82;transform:scale(1.03)}
+.btn:active{transform:scale(.96)}
+.btn:disabled{opacity:.3;cursor:not-allowed;transform:none}
+#file-drop{border:2px dashed var(--dim);border-radius:5px;padding:18px;text-align:center;font-size:11px;color:var(--dim);cursor:pointer;transition:all .3s}
+#file-drop.drag{border-color:var(--cyan);color:var(--cyan)}
+#file-drop.loaded{border-color:var(--green);color:var(--green)}
+#file-input{display:none}
+#vis-canvas{width:100%;height:140px;border:1px solid var(--dim);border-radius:4px;background:#000;display:block}
+.freq-row{display:flex;align-items:center;gap:8px;font-size:10px}
+.fl{width:68px;color:#6090b0;flex-shrink:0}
+.fbg{flex:1;height:9px;background:var(--border);border-radius:2px;overflow:hidden}
+.ff{height:100%;border-radius:2px;transition:width .06s linear;will-change:width}
+.fv{width:34px;text-align:right;color:var(--gold);font-size:9px}
+#energy-canvas{width:100%;flex:1;min-height:240px;border:1px solid var(--dim);border-radius:4px;background:#000;display:block}
+.dkv{display:grid;grid-template-columns:110px 1fr;gap:3px 8px;font-size:10px}
+.dk{color:#5080a0}.dv{color:var(--text);word-break:break-all}.dv.h{color:var(--gold)}
+#mutation-list,#proof-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:5px;scrollbar-width:thin;scrollbar-color:var(--dim) transparent}
+#mutation-list{max-height:300px}
+#proof-list{max-height:360px}
+.mut-e{background:rgba(0,30,60,.6);border-left:2px solid var(--cyan);padding:5px 8px;border-radius:2px;font-size:9px;animation:fi .3s ease}
+.mut-e.pos{border-color:var(--green)}.mut-e.neg{border-color:var(--red)}
+.mh{color:var(--cyan);font-size:9px;letter-spacing:.06em}
+.mut-e.pos .mh{color:var(--green)}.mut-e.neg .mh{color:var(--red)}
+.proof-e{background:rgba(0,20,10,.8);border:1px solid rgba(0,255,136,.15);border-radius:3px;padding:6px 8px;font-size:9px;animation:fi .25s ease}
+.pid{color:var(--green);font-size:10px}.phash{color:#0080aa;word-break:break-all;font-size:8px}.pmeta{color:#4a7a60;font-size:8px;margin-top:2px}
+@keyframes fi{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}}
+#beat-flash{position:fixed;inset:0;pointer-events:none;z-index:999;opacity:0;background:radial-gradient(ellipse at center,rgba(0,245,255,.09) 0%,transparent 70%);transition:opacity .04s}
+#ws-dot{width:8px;height:8px;border-radius:50%;background:var(--red);display:inline-block;transition:background .5s;box-shadow:0 0 6px var(--red)}
+#ws-dot.on{background:var(--green);box-shadow:0 0 6px var(--green)}
+.ring-wrap{display:flex;align-items:center;gap:12px}
+svg.rsvg{width:70px;height:70px;flex-shrink:0}
+footer{border:1px solid var(--border);background:var(--panel);border-radius:6px;padding:7px 16px;display:flex;align-items:center;justify-content:space-between;font-size:9px;color:#3a6080}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--dim);border-radius:2px}
+</style>
+</head>
+<body>
+<canvas id="stars"></canvas>
+<div id="beat-flash"></div>
+<div id="app">
+
+<header>
+  <h1>&#x2B21; ZKAEDI &#x00B7; ZKP DREAM MINER &#x00B7; ONEIROGENESIS v2</h1>
+  <div id="status-bar">
+    <div class="stat-pill"><span>GENERATION</span><span id="hdr-gen">&#x2014;</span></div>
+    <div class="stat-pill"><span>PROOFS MINED</span><span id="hdr-proofs">0</span></div>
+    <div class="stat-pill"><span>BEAT RATE</span><span id="hdr-bpm">&#x2014;</span></div>
+    <div class="stat-pill"><span>AUDIO ENERGY</span><span id="hdr-energy">0%</span></div>
+    <div class="stat-pill"><span>PHASE</span><span id="hdr-phase" style="color:var(--magenta)">&#x2014;</span></div>
+    <div style="display:flex;align-items:center;gap:5px;font-size:10px">
+      <span id="ws-dot"></span><span id="ws-label">OFFLINE</span>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- LEFT: Audio + Freq -->
+<div style="display:flex;flex-direction:column;gap:10px">
+  <div class="panel">
+    <div class="ptitle">&#x25C8; AUDIO SOURCE &#x00B7; SUNO</div>
+    <div id="file-drop" role="button" tabindex="0">
+      Drop Suno MP3 here<br><small>or click to browse</small>
+    </div>
+    <input type="file" id="file-input" accept="audio/*">
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn bc" id="bplay" disabled>&#x25B6; PLAY</button>
+      <button class="btn bm" id="bmic">&#x23FA; MIC</button>
+      <button class="btn bg" id="bmine" disabled>&#x2B21; MINE</button>
+    </div>
+    <canvas id="vis-canvas" width="560" height="140"></canvas>
+    <div id="tinfo" style="font-size:9px;color:#3a6080">No track loaded</div>
+  </div>
+  <div class="panel">
+    <div class="ptitle">&#x25C8; FREQUENCY BANDS</div>
+    <div id="fbands" style="display:flex;flex-direction:column;gap:6px"></div>
+  </div>
+</div>
+
+<!-- CENTER: Energy Field + Dream State -->
+<div style="display:flex;flex-direction:column;gap:10px">
+  <div class="panel" style="flex:1">
+    <div class="ptitle m">&#x25C8; HAMILTONIAN ENERGY FIELD &#160; &#x03B7;=0.40 &#x03B3;=0.30 &#x03B5;=0.05</div>
+    <canvas id="energy-canvas" width="580" height="260"></canvas>
+    <div style="display:flex;gap:14px;font-size:9px;color:#4a7090;flex-wrap:wrap">
+      <span>FREE ENERGY <span id="fe" style="color:var(--green)">&#x2014;</span></span>
+      <span>SCORE &#x0394; <span id="sdelta" style="color:var(--red)">&#x2014;</span></span>
+      <span>COMPOSITE <span id="cscore" style="color:var(--gold)">&#x2014;</span></span>
+      <span>&#x03B7;<sub>c</sub> <span id="etac" style="color:var(--magenta)">&#x2014;</span></span>
+      <span>SPECTRAL GAP <span id="sgap" style="color:var(--cyan)">&#x2014;</span></span>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="ptitle">&#x25C8; DREAM STATE &#x00B7; ZCC ONEIROGENESIS v2</div>
+    <div class="dkv">
+      <span class="dk">generation</span><span class="dv h" id="ds-gen">&#x2014;</span>
+      <span class="dk">survived</span><span class="dv" id="ds-surv">&#x2014;</span>
+      <span class="dk">tried</span><span class="dv" id="ds-tried">&#x2014;</span>
+      <span class="dk">regressions</span><span class="dv" id="ds-reg">&#x2014;</span>
+      <span class="dk">fit_rejected</span><span class="dv" id="ds-frej">&#x2014;</span>
+      <span class="dk">parent_hash</span><span class="dv" id="ds-hash">&#x2014;</span>
+      <span class="dk">asm_size</span><span class="dv" id="ds-asm">&#x2014;</span>
+      <span class="dk">bin_size</span><span class="dv" id="ds-bin">&#x2014;</span>
+      <span class="dk">last_mutation</span><span class="dv h" id="ds-lmut">&#x2014;</span>
+      <span class="dk">island_id</span><span class="dv" id="ds-isl">&#x2014;</span>
+      <span class="dk">phase</span><span class="dv" id="ds-phase">&#x2014;</span>
+    </div>
+    <canvas id="score-trend" width="260" height="36" style="width:100%;border:1px solid #0d2440;border-radius:3px;background:#000;margin-top:4px"></canvas>
+  </div>
+</div>
+
+<!-- RIGHT: Proofs + Mutations -->
+<div id="right-col" style="display:flex;flex-direction:column;gap:10px">
+  <div class="panel" style="flex:1">
+    <div class="ptitle g">&#x25C8; ZKP PROOF LEDGER</div>
+    <div class="ring-wrap">
+      <svg class="rsvg" viewBox="0 0 70 70">
+        <circle cx="35" cy="35" r="28" fill="none" stroke="#0d2440" stroke-width="6"/>
+        <circle id="rc" cx="35" cy="35" r="28" fill="none" stroke="#00ff88" stroke-width="6"
+                stroke-dasharray="175.9" stroke-dashoffset="175.9" stroke-linecap="round"
+                transform="rotate(-90 35 35)" style="transition:stroke-dashoffset .5s ease"/>
+        <text x="35" y="40" text-anchor="middle" fill="#00ff88"
+              font-family="Orbitron,sans-serif" font-size="11" font-weight="700" id="rt">0</text>
+      </svg>
+      <div style="font-size:9px;color:#3a6080;line-height:1.7">
+        Proofs mined this session<br>
+        <span>Pedersen commitment<br>audio &#x00D7; dream &#x00D7; timestamp</span>
+      </div>
+    </div>
+    <div id="proof-list"></div>
+  </div>
+  <div class="panel" style="flex:1">
+    <div class="ptitle m">&#x25C8; MUTATION STREAM</div>
+    <div id="mutation-list"></div>
+  </div>
+</div>
+
+</main>
+
+<footer>
+  <span>ZCC ONEIROGENESIS v2 &#x00B7; Island Model &#x00B7; Hamiltonian Telemetry &#x00B7; Bridge ws://127.0.0.1:8091 &#x00B7; HTTP :8090</span>
+  <span id="ftime">&#x2014;</span>
+</footer>
+
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+//  CONFIG  (matches zkaedi_zkp_server.py defaults)
+// ─────────────────────────────────────────────────────────────
+const HTTP_BASE = 'http://localhost:8090';
+const WS_URL    = 'ws://127.0.0.1:8091';
+
+// ─────────────────────────────────────────────────────────────
+//  STARS
+// ─────────────────────────────────────────────────────────────
+(function(){
+  const c=document.getElementById('stars'),ctx=c.getContext('2d');
+  let W,H,S=[];
+  function rsz(){
+    W=c.width=innerWidth;H=c.height=innerHeight;
+    S=Array.from({length:200},()=>({
+      x:Math.random()*W,y:Math.random()*H,
+      r:Math.random()*1.3+.15,a:Math.random(),
+      d:(Math.random()-.5)*.003
+    }));
+  }
+  window.addEventListener('resize',rsz);rsz();
+  (function drw(){
+    ctx.clearRect(0,0,W,H);
+    S.forEach(s=>{
+      s.a=Math.max(.04,Math.min(1,s.a+s.d));
+      if(s.a<=.04||s.a>=1)s.d*=-1;
+      ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
+      ctx.fillStyle='rgba(180,220,255,'+s.a+')';ctx.fill();
+    });
+    requestAnimationFrame(drw);
+  })();
+})();
+
+// ─────────────────────────────────────────────────────────────
+//  FREQUENCY BANDS
+// ─────────────────────────────────────────────────────────────
+const BANDS=[
+  {l:'Sub-Bass',r:[20,60],c:'#ff00ff'},
+  {l:'Bass',r:[60,250],c:'#cc00ff'},
+  {l:'Low-Mid',r:[250,500],c:'#0088ff'},
+  {l:'Mid',r:[500,2000],c:'#00ccff'},
+  {l:'Hi-Mid',r:[2000,4000],c:'#00ffcc'},
+  {l:'Treble',r:[4000,16000],c:'#ffd700'},
+];
+(function buildMeters(){
+  const el=document.getElementById('fbands');
+  BANDS.forEach((b,i)=>{
+    const row=document.createElement('div');
+    row.className='freq-row';
+    row.innerHTML='<span class="fl">'+b.l+'</span>'+
+      '<div class="fbg"><div class="ff" id="fb'+i+'" style="width:0%;background:'+b.c+'"></div></div>'+
+      '<span class="fv" id="fv'+i+'">0</span>';
+    el.appendChild(row);
+  });
+})();
+
+// ─────────────────────────────────────────────────────────────
+//  AUDIO ENGINE
+// ─────────────────────────────────────────────────────────────
+let audioCtx,analyser,srcNode,micStream,mediaEl;
+let isPlaying=false,isMining=false,isMic=false;
+let dataArr,bufLen;
+let audioEnergy=0,beatSamples=[],lastBeat=0,lastBpmUp=0;
+const THRESH=0.68;
+
+function initA(){
+  if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  analyser=audioCtx.createAnalyser();
+  analyser.fftSize=2048;
+  analyser.smoothingTimeConstant=0.82;
+  bufLen=analyser.frequencyBinCount;
+  dataArr=new Uint8Array(bufLen);
+  analyser.connect(audioCtx.destination);
+}
+
+function bandV(lo,hi){
+  if(!analyser)return 0;
+  analyser.getByteFrequencyData(dataArr);
+  const nyq=audioCtx.sampleRate/2;
+  const iL=Math.floor(lo/nyq*bufLen),iH=Math.floor(hi/nyq*bufLen);
+  let s=0,n=0;
+  for(let i=iL;i<=iH&&i<bufLen;i++){s+=dataArr[i];n++;}
+  return n?s/n/255:0;
+}
+
+function loadFile(file){
+  if(!file)return;
+  initA();
+  if(mediaEl){mediaEl.pause();mediaEl.src='';}
+  mediaEl=new Audio();
+  mediaEl.src=URL.createObjectURL(file);
+  if(srcNode)srcNode.disconnect();
+  srcNode=audioCtx.createMediaElementSource(mediaEl);
+  srcNode.connect(analyser);
+  const fd=document.getElementById('file-drop');
+  fd.textContent='\uD83C\uDFB5 '+file.name;fd.className='loaded';
+  document.getElementById('tinfo').textContent=file.name+' \u00b7 '+(file.size/1048576).toFixed(2)+' MB';
+  document.getElementById('bplay').disabled=false;
+  document.getElementById('bmine').disabled=false;
+}
+
+(function setupDrop(){
+  const fd=document.getElementById('file-drop');
+  const fi=document.getElementById('file-input');
+  fd.addEventListener('click',()=>fi.click());
+  fd.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ')fi.click();});
+  fi.addEventListener('change',e=>loadFile(e.target.files[0]));
+  fd.addEventListener('dragover',e=>{e.preventDefault();fd.className='drag';});
+  fd.addEventListener('dragleave',()=>fd.className='');
+  fd.addEventListener('drop',e=>{e.preventDefault();fd.className='';loadFile(e.dataTransfer.files[0]);});
+})();
+
+document.getElementById('bplay').addEventListener('click',function(){
+  if(!mediaEl)return;audioCtx.resume();
+  if(isPlaying){mediaEl.pause();isPlaying=false;this.textContent='\u25B6 PLAY';}
+  else{mediaEl.play();isPlaying=true;this.textContent='\u23F8 PAUSE';}
+});
+
+document.getElementById('bmic').addEventListener('click',async function(){
+  if(isMic){
+    if(micStream)micStream.getTracks().forEach(t=>t.stop());
+    if(srcNode)srcNode.disconnect();
+    isMic=false;this.textContent='\u23FA MIC';
+    document.getElementById('bmine').disabled=true;return;
+  }
+  try{
+    initA();
+    micStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+    if(srcNode)srcNode.disconnect();
+    srcNode=audioCtx.createMediaStreamSource(micStream);
+    srcNode.connect(analyser);
+    isMic=true;this.textContent='\u23F9 STOP MIC';
+    document.getElementById('bmine').disabled=false;
+  }catch(err){alert('Mic denied: '+err.message);}
+});
+
+document.getElementById('bmine').addEventListener('click',function(){
+  isMining=!isMining;
+  this.textContent=isMining?'\u2B21 MINING\u2026':'\u2B21 MINE';
+  this.style.background=isMining?'#001a00':'';
+});
+
+// ─────────────────────────────────────────────────────────────
+//  WAVEFORM VISUALISER
+// ─────────────────────────────────────────────────────────────
+const vc=document.getElementById('vis-canvas'),vx=vc.getContext('2d');
+(function drawVis(){
+  const W=vc.width,H=vc.height;
+  vx.clearRect(0,0,W,H);
+  if(analyser){
+    analyser.getByteTimeDomainData(dataArr);
+    vx.lineWidth=1.6;vx.strokeStyle='#00f5ff';
+    vx.shadowColor='#00f5ff';vx.shadowBlur=8;
+    vx.beginPath();
+    const sw=W/bufLen;let x=0;
+    for(let i=0;i<bufLen;i++){
+      const v=dataArr[i]/128-1;
+      const y=H/2+v*H/2*.88;
+      i===0?vx.moveTo(x,y):vx.lineTo(x,y);x+=sw;
+    }
+    vx.stroke();vx.shadowBlur=0;
+  }else{
+    const t=Date.now()/1200;
+    vx.strokeStyle='rgba(0,245,255,0.15)';vx.lineWidth=1;
+    vx.beginPath();
+    for(let x=0;x<W;x++){
+      const y=H/2+Math.sin(x*.04+t)*10;
+      x===0?vx.moveTo(x,y):vx.lineTo(x,y);
+    }
+    vx.stroke();
+  }
+  requestAnimationFrame(drawVis);
+})();
+
+// ─────────────────────────────────────────────────────────────
+//  HAMILTONIAN ENERGY FIELD
+// ─────────────────────────────────────────────────────────────
+const ec=document.getElementById('energy-canvas'),ex=ec.getContext('2d');
+const GW=48,GH=30;
+let H_f=Array.from({length:GH},()=>new Float32Array(GW));
+for(let y=0;y<GH;y++)for(let x=0;x<GW;x++)H_f[y][x]=(Math.random()-.5)*.4;
+
+// Injected from WS telemetry
+let wsEtaC=0.4407,wsPhase='';
+
+function stepField(){
+  const eta=0.40,gamma=0.30,beta=0.10,eps=0.05;
+  const kick=audioEnergy*2.2;
+  const N=Array.from({length:GH},()=>new Float32Array(GW));
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const h=H_f[y][x];
+    const sig=1/(1+Math.exp(-gamma*h));
+    const noise=(Math.random()-.5)*(1+beta*Math.abs(h))*eps;
+    const raw=h+eta*h*sig+noise+(kick>0.08?(Math.random()-.5)*kick*0.35:0);
+    // Clamp to prevent field divergence (NaN free energy)
+    N[y][x]=Math.max(-8,Math.min(8,raw));
+  }
+  H_f=N;
+  let fe=0;for(let y=0;y<GH;y++)for(let x=0;x<GW;x++)fe+=H_f[y][x]*H_f[y][x];
+  document.getElementById('fe').textContent=(fe/GW/GH).toFixed(4);
+}
+
+function drawField(){
+  const W=ec.width,H=ec.height,cw=W/GW,ch=H/GH;
+  let mn=Infinity,mx=-Infinity;
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){const v=H_f[y][x];if(v<mn)mn=v;if(v>mx)mx=v;}
+  const rng=mx-mn||1;
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const n=(H_f[y][x]-mn)/rng;
+    ex.fillStyle='hsl('+(n*300)+',100%,'+(18+n*58)+'%)';
+    ex.fillRect(x*cw,y*ch,cw+.5,ch+.5);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  ZKP MINER
+// ─────────────────────────────────────────────────────────────
+let proofCount=0;
+
+async function sha256hex(s){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+async function mineProof(bv,gen,bpm){
+  const nonce=Date.now().toString(16)+Math.random().toString(36).slice(2,10);
+  const input=gen+'|'+bpm.toFixed(1)+'|'+bv.map(v=>v.toFixed(3)).join(',')+nonce;
+  const commitment=await sha256hex(input);
+  const witness=await sha256hex('zkp_witness:'+commitment);
+  proofCount++;
+  document.getElementById('hdr-proofs').textContent=proofCount;
+  document.getElementById('rt').textContent=proofCount;
+  const pct=Math.min(proofCount/100,1);
+  document.getElementById('rc').setAttribute('stroke-dashoffset',(175.9-pct*175.9).toFixed(1));
+  return{id:proofCount,comm:commitment.slice(0,20)+'...',wit:witness.slice(0,14)+'...',
+         gen,bpm:bpm.toFixed(0),en:audioEnergy.toFixed(3),ts:Date.now()};
+}
+
+function addProof(p){
+  const d=document.createElement('div');d.className='proof-e';
+  d.innerHTML='<div class="pid">PROOF #'+p.id+' \u00b7 GEN '+p.gen+'</div>'+
+    '<div class="phash">'+p.comm+'</div>'+
+    '<div class="pmeta">BPM\u2248'+p.bpm+' \u00b7 \u03b5='+p.en+' \u00b7 '+new Date(p.ts).toISOString().slice(11,19)+'</div>';
+  const l=document.getElementById('proof-list');
+  l.prepend(d);if(l.children.length>40)l.lastChild.remove();
+}
+
+// ─────────────────────────────────────────────────────────────
+//  DREAM STATE  (HTTP poll + WS push)
+// ─────────────────────────────────────────────────────────────
+let DS={generation:0,parent_hash:'',total_mutations_survived:0,
+        total_mutations_tried:0,total_regressions:0};
+let lastLinGen=-1;
+
+function drawScoreTrend(scores){
+  const c=document.getElementById('score-trend');
+  if(!c||!scores||scores.length<2)return;
+  const W=c.width,H=c.height,ctx=c.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+  const mn=Math.min(...scores),mx=Math.max(...scores),rng=mx-mn||1;
+  ctx.lineWidth=1.5;ctx.strokeStyle='#00f5ff';ctx.shadowColor='#00f5ff';ctx.shadowBlur=4;
+  ctx.beginPath();
+  scores.forEach((v,i)=>{
+    const x=i/(scores.length-1)*W;
+    const y=H-((v-mn)/rng)*(H-4)-2;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.stroke();ctx.shadowBlur=0;
+  // mark last point
+  const lx=W,ly=H-((scores[scores.length-1]-mn)/rng)*(H-4)-2;
+  ctx.beginPath();ctx.arc(lx-1,ly,2.5,0,Math.PI*2);
+  ctx.fillStyle='#00ff88';ctx.fill();
+}
+
+function applyDreamState(d){
+  if ((d.generation != null && d.generation < DS.generation) || 
+      (d.parent_hash && DS.parent_hash && d.parent_hash !== DS.parent_hash)) {
+    proofCount = 0;
+    lastLinGen = -1;
+    document.getElementById('proof-list').innerHTML = '';
+    document.getElementById('mutation-list').innerHTML = '';
+    document.getElementById('hdr-proofs').textContent = '0';
+    document.getElementById('rt').textContent = '0';
+    document.getElementById('rc').setAttribute('stroke-dashoffset', '175.9');
+  }
+  DS=Object.assign(DS,d);
+  // Must use .bind(document) — unbound getElementById throws TypeError: Illegal invocation
+  const g=document.getElementById.bind(document);
+  g('ds-gen').textContent   = d.generation!=null?d.generation:'--';
+  g('ds-surv').textContent  = d.total_mutations_survived!=null?d.total_mutations_survived:'--';
+  g('ds-tried').textContent = d.total_mutations_tried!=null?d.total_mutations_tried:'--';
+  g('ds-reg').textContent   = d.total_regressions!=null?d.total_regressions:'--';
+  g('ds-hash').textContent  = (d.parent_hash||'--').slice(0,16);
+  g('hdr-gen').textContent  = d.generation!=null?d.generation:'--';
+  if(d.total_fitness_rejections!=null) g('ds-frej').textContent=d.total_fitness_rejections;
+  if(d.parent_asm_size!=null)          g('ds-asm').textContent=d.parent_asm_size.toLocaleString()+' B';
+  if(d.parent_bin_size!=null)          g('ds-bin').textContent=d.parent_bin_size.toLocaleString()+' B';
+  if(d.island_id!=null)      g('ds-isl').textContent=d.island_id;
+  if(d.delta_score!=null)    g('sdelta').textContent=d.delta_score.toFixed(4);
+  if(d.mutations!=null){
+    const muts=Array.isArray(d.mutations)?d.mutations:[];
+    g('ds-lmut').textContent=(muts[0]||'--').slice(0,42);
+  }
+  if(d.phase)                {g('ds-phase').textContent=d.phase;g('hdr-phase').textContent=d.phase;wsPhase=d.phase;}
+  if(d.eta_c!=null)          {g('etac').textContent=d.eta_c.toFixed(4);wsEtaC=d.eta_c;}
+  if(d.spectral_gap!=null)   g('sgap').textContent=d.spectral_gap.toFixed(6);
+  if(d.free_energy!=null)    g('fe').textContent=d.free_energy.toFixed(4);
+  if(d.recent_scores)        drawScoreTrend(d.recent_scores);
+}
+
+
+async function pollDreamState(){
+  try{
+    const r=await fetch(HTTP_BASE+'/dreams/dream_state.json?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok)return;
+    const d=await r.json();
+    // pick last lineage entry
+    const lin=d.lineage||[];
+    const last=lin.length?lin[lin.length-1]:{};
+    // compute recent_scores client-side from fitness_history (last 20 entries)
+    const fh=d.fitness_history||[];
+    const recentScores=fh.slice(-20).map(e=>e.score||0);
+    const payload=Object.assign({},d,{
+      island_id:                  last.island_id,
+      delta_score:                last.delta_score,
+      mutations:                  last.mutations,
+      recent_scores:              recentScores,
+      total_fitness_rejections:   d.total_fitness_rejections||0,
+      parent_asm_size:            d.parent_asm_size||0,
+      parent_bin_size:            d.parent_bin_size||0,
+    });
+    applyDreamState(payload);
+    // populate mutation stream for every new lineage entry seen
+    lin.slice(-5).forEach(entry=>{
+      if(entry.generation!=null&&entry.generation!==lastLinGen){
+        lastLinGen=entry.generation;addMutation(entry);
+      }
+    });
+  }catch(e){}
+
+  try{
+    const gen=DS.generation||0;
+    const jr=await fetch(HTTP_BASE+'/dreams/journal/QAlgo-Dream-G'+gen+'.json?t='+Date.now(),{cache:'no-store'});
+    if(jr.ok){
+      const jd=await jr.json();
+      const fi=jd.fitness_improvement||{};
+      if(fi.composite_score!=null)document.getElementById('cscore').textContent=fi.composite_score.toFixed(0);
+    }
+  }catch(e){}
+}
+
+
+function addMutation(lin){
+  const d=document.createElement('div');
+  const delta=lin.delta_score||0;
+  d.className='mut-e '+(delta<0?'pos':'neg');
+  const muts=Array.isArray(lin.mutations)?lin.mutations:[];
+  d.innerHTML='<div class="mh">GEN '+(lin.generation||lin.gen||'?')+
+    ' \u00b7 ISL '+(lin.island_id!=null?lin.island_id:lin.island||'?')+
+    ' \u00b7 \u0394'+delta.toFixed(3)+'</div>'+
+    muts.slice(0,2).map(m=>'<div>'+(typeof m==='string'?m:JSON.stringify(m)).slice(0,52)+'</div>').join('');
+  const l=document.getElementById('mutation-list');
+  l.prepend(d);if(l.children.length>30)l.lastChild.remove();
+}
+
+// ─────────────────────────────────────────────────────────────
+//  WEBSOCKET  (bridge server on port 8091)
+// ─────────────────────────────────────────────────────────────
+let ws2,wsT;
+
+function connectWS(){
+  try{
+    ws2=new WebSocket(WS_URL);
+    ws2.onopen=()=>{
+      setWS(true);clearTimeout(wsT);
+      console.log('[ZKP] WS connected to',WS_URL);
+    };
+    ws2.onclose=()=>{
+      setWS(false);wsT=setTimeout(connectWS,5000);
+    };
+    ws2.onerror=()=>ws2.close();
+    ws2.onmessage=function(e){
+      try{
+        const d=JSON.parse(e.data);
+
+        if(d.type==='dream_cycle'){
+          if (d.generation != null && d.generation < DS.generation) {
+            proofCount = 0;
+            lastLinGen = -1;
+            document.getElementById('proof-list').innerHTML = '';
+            document.getElementById('mutation-list').innerHTML = '';
+            document.getElementById('hdr-proofs').textContent = '0';
+            document.getElementById('rt').textContent = '0';
+            document.getElementById('rc').setAttribute('stroke-dashoffset', '175.9');
+            DS.generation = d.generation;
+          }
+          // Real-time telemetry from oneirogenesis UDP
+          document.getElementById('hdr-gen').textContent=d.generation||'--';
+          document.getElementById('sdelta').textContent=d.delta_score!=null?d.delta_score.toFixed(4):'--';
+          if(d.eta_c!=null)document.getElementById('etac').textContent=d.eta_c.toFixed(4);
+          if(d.free_energy!=null)document.getElementById('fe').textContent=d.free_energy.toFixed(4);
+          if(d.spectral_gap!=null)document.getElementById('sgap').textContent=d.spectral_gap.toFixed(6);
+          if(d.phase){document.getElementById('hdr-phase').textContent=d.phase;wsPhase=d.phase;}
+          // Build a lineage-like entry for mutation display
+          addMutation({
+            generation:d.generation,island_id:d.island_id,
+            delta_score:d.delta_score,
+            mutations:Array.isArray(d.mutations)?d.mutations:
+              (d.mutation_classes?d.mutation_classes.map(c=>'['+c+'] x'+d.mutations):[])
+          });
+        }
+
+        if(d.type==='dream_state_update'){
+          // File-watcher push: full dream state snapshot
+          applyDreamState(d);
+          addMutation({
+            generation:d.generation,island_id:d.island_id,
+            delta_score:d.delta_score,mutations:d.mutations
+          });
+        }
+
+      }catch(x){console.warn('[ZKP] WS parse error',x);}
+    };
+  }catch(x){setWS(false);wsT=setTimeout(connectWS,7000);}
+}
+
+function setWS(on){
+  document.getElementById('ws-dot').className=on?'on':'';
+  document.getElementById('ws-label').textContent=on?'LIVE':'OFFLINE';
+}
+
+connectWS();
+
+// ─────────────────────────────────────────────────────────────
+//  MAIN LOOP
+// ─────────────────────────────────────────────────────────────
+let pcool=0;
+let bv=BANDS.map(()=>0);
+
+async function mainLoop(){
+  const now=Date.now();
+
+  if(analyser){
+    bv=BANDS.map(b=>bandV(b.r[0],b.r[1]));
+    bv.forEach((v,i)=>{
+      document.getElementById('fb'+i).style.width=(v*100).toFixed(1)+'%';
+      document.getElementById('fv'+i).textContent=(v*100).toFixed(0);
+    });
+    const bass=bv[0]*.4+bv[1]*.6,high=bv[4]*.3+bv[5]*.7;
+    audioEnergy=Math.max(0,Math.min(1,bass*.6+high*.4));
+
+    if(audioEnergy>THRESH&&now-lastBeat>280){
+      const iv=now-lastBeat;lastBeat=now;
+      beatSamples.push(60000/iv);if(beatSamples.length>8)beatSamples.shift();
+      const bf=document.getElementById('beat-flash');
+      bf.style.opacity='1';setTimeout(()=>{bf.style.opacity='0';},75);
+    }
+    if(now-lastBpmUp>1000&&beatSamples.length){
+      lastBpmUp=now;
+      const bpm=beatSamples.reduce((a,b)=>a+b,0)/beatSamples.length;
+      document.getElementById('hdr-bpm').textContent=bpm.toFixed(0)+'bpm';
+    }
+    document.getElementById('hdr-energy').textContent=(audioEnergy*100).toFixed(1)+'%';
+  }
+
+  stepField();drawField();
+
+  if(isMining&&analyser&&pcool<=0){
+    const bpm=beatSamples.length?beatSamples.reduce((a,b)=>a+b,0)/beatSamples.length:0;
+    const p=await mineProof(bv,DS.generation||0,bpm);addProof(p);pcool=10;
+  }
+  if(pcool>0)pcool--;
+
+  document.getElementById('ftime').textContent=new Date().toISOString().replace('T',' ').slice(0,19)+' UTC';
+  requestAnimationFrame(mainLoop);
+}
+mainLoop();
+setInterval(pollDreamState,3000);
+pollDreamState();
+</script>
+</body>
+</html>
