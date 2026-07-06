@@ -1,0 +1,21 @@
+name: ProjectV2 Status Sync (PR lifecycle)
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, review_requested, closed]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync PR status field
+        env:
+          GH_TOKEN: ${{ secrets.PROJECTV2_TOKEN }}
+          OWNER: your-org-or-user
+          PROJECT_NUMBER: "1"
+          PR_NODE_ID: ${{ github.event.pull_request.node_id }}
+          PR_MERGED: ${{ github.event.pull_request.merged }}
+          PR_STATE: ${{ github.event.pull_request.state }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/projectv2_pr_status_sync.py

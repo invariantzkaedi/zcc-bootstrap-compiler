@@ -1,0 +1,30 @@
+name: ProjectV2 Auto Add + Field Routing
+
+on:
+  issues:
+    types: [opened, edited, labeled]
+  pull_request:
+    types: [opened, reopened, ready_for_review, labeled]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  route:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add/update item in ProjectV2
+        env:
+          GH_TOKEN: ${{ secrets.PROJECTV2_TOKEN }}
+          OWNER: your-org-or-user
+          PROJECT_NUMBER: "1"
+          REPO: ${{ github.repository }}
+          NODE_ID: ${{ github.event.issue.node_id || github.event.pull_request.node_id }}
+          IS_PR: ${{ github.event.pull_request.number && 'true' || 'false' }}
+          TITLE: ${{ github.event.issue.title || github.event.pull_request.title }}
+          LABELS_JSON: ${{ toJson(github.event.issue.labels || github.event.pull_request.labels) }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/projectv2_route.py

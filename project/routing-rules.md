@@ -1,0 +1,15 @@
+Routing rules implemented:
+- Labels:
+  - perf -> Track=Performance
+  - ci -> Track=Tooling/CI
+  - optimizer -> Track=Optimizer
+  - default -> Track=Compiler Core
+- blocked label -> Priority=P0
+- title contains verifier|sccp|instcombine -> Priority=P1
+- meta label -> Priority=P3
+- PR items -> Type=PR
+- Issue items -> Type=Issue
+- default Status=Todo
+- PR lifecycle sync:
+  - open/reopened/ready_for_review -> Review
+  - closed (merged or not) -> Done

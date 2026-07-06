@@ -1,0 +1,308 @@
+Title,Body,Labels,Milestone
+"Implement IR verifier core (CFG/SSA/PHI/terminators)","## Summary
+Implement the IR verifier runtime (not just headers) for:
+- verify_cfg
+- verify_ssa
+- verify_phi_wellformed
+- verify_terminators
+- verify_function_ir aggregator
+
+## Scope
+- Enforce invariants:
+  - every BB ends with exactly one terminator
+  - successor/predecessor consistency
+  - entry BB has no predecessors
+  - no undefined vreg uses
+  - no multi-def per SSA value
+  - PHI arity == predecessor count
+  - PHI incoming preds are unique and valid
+  - PHI incoming type compatibility
+  - branch condition type correctness
+  - return type correctness
+
+## Acceptance Criteria
+- [ ] tests/verify negative suite passes
+- [ ] tests/verify-positive suite passes
+- [ ] valid IR exits 0, invalid exits non-zero
+- [ ] diagnostics include function + block context","compiler;optimizer;infra","M1 Correctness Foundation"
+"Add stable verifier error codes and structured diagnostics","## Summary
+Introduce stable verifier error IDs for CI-safe matching and triage.
+
+## Proposed IDs
+- E_TERM_001 missing terminator
+- E_TERM_002 multiple terminators
+- E_CFG_001 unknown successor block
+- E_CFG_002 entry has predecessors
+- E_CFG_003 pred/succ mismatch
+- E_SSA_001 undefined value use
+- E_SSA_002 multiple defs of SSA value
+- E_PHI_001 arity mismatch
+- E_PHI_002 unknown phi predecessor
+- E_PHI_003 duplicate phi predecessor
+- E_PHI_004 incoming type mismatch
+- E_PHI_005 phi ordering violation
+- E_TYPE_001 branch condition not i1
+- E_TYPE_002 return type mismatch
+
+## Acceptance Criteria
+- [ ] each verifier error emits stable ID
+- [ ] fixture substring matching remains stable
+- [ ] docs updated","compiler;infra","M1 Correctness Foundation"
+"Implement InstCombine MVP rule set (15 rules)","## Summary
+Implement the initial 15 InstCombine rules defined in roadmap/tests.
+
+## Constraints
+- Integer-safe only
+- No FP folds unless fast-math explicitly enabled
+- Respect overflow policy in reassociation
+
+## Acceptance Criteria
+- [ ] tests/opt/instcombine normalized suite passes
+- [ ] no verifier regressions
+- [ ] def-use integrity rebuilt after rewrites
+- [ ] metrics row emitted","compiler;optimizer","M1 Correctness Foundation"
+"Expand InstCombine with additional safe canonicalization rules","## Summary
+Add next safe rules after MVP stability:
+- or x,x -> x
+- and x,x -> x
+- compare operand canonicalization
+- copy-chain simplifications
+
+## Acceptance Criteria
+- [ ] add >=10 new golden tests
+- [ ] no verifier regressions
+- [ ] performance within thresholds","compiler;optimizer","M3 Optimization Depth"
+"Implement SCCP MVP (lattice + executable edge engine)","## Summary
+Implement SCCP:
+- lattice UNDEF/CONST/OVERDEFINED
+- CFG edge executability worklist
+- SSA value worklist
+- constant-driven branch pruning
+- constant materialization rewrite
+
+## Acceptance Criteria
+- [ ] tests/opt/sccp normalized suite passes
+- [ ] branch pruning works for const conditions
+- [ ] PHI meets only executable preds
+- [ ] unknown conditions do not over-prune
+- [ ] verifier passes post-transform","compiler;optimizer","M1 Correctness Foundation"
+"Implement CFG simplify pass (unreachable removal + PHI cleanup)","## Summary
+Implement cleanup pass for:
+- remove unreachable blocks
+- repair pred/succ lists
+- drop PHI incomings from removed preds
+- optional trivial jump block collapse
+
+## Acceptance Criteria
+- [ ] SCCP+cfg_simplify fixtures pass
+- [ ] no dangling edges
+- [ ] PHI repaired
+- [ ] verifier passes","compiler;optimizer","M1 Correctness Foundation"
+"Add pass CLI flags and staged optimization pipelines","## Summary
+Expose:
+- --pass=instcombine
+- --pass=sccp
+- --pass=cfg_simplify
+- --verify-ir
+- --opt-pipeline=stage1|stage2
+
+## Acceptance Criteria
+- [ ] CLI docs updated
+- [ ] deterministic execution
+- [ ] verify-ir pre/post mutating passes","compiler;infra","M1 Correctness Foundation"
+"Add optimization metrics sink and CSV output","## Summary
+Emit pass/function metrics:
+- pass, function
+- instr before/after
+- blocks before/after
+- time_us
+- changed
+
+CLI:
+--opt-metrics-out <path>
+
+## Acceptance Criteria
+- [ ] opt_metrics.csv produced local+CI
+- [ ] populated for instcombine/sccp/cfg_simplify","perf;infra;optimizer","M2 Measurable Perf Gate"
+"Add robust benchmark harness (warmups, repeated runs, trimming)","## Summary
+Baseline vs candidate benchmark harness with:
+- compile samples
+- runtime warmup
+- repeated runs
+- trimmed means
+- geomean summary
+
+Outputs:
+- out/bench/raw/samples.csv
+- out/bench/summary.json
+- out/bench/summary.md
+
+## Acceptance Criteria
+- [ ] runs in CI
+- [ ] stable schema
+- [ ] runtime+compile deltas reported","perf;ci;infra","M2 Measurable Perf Gate"
+"Implement statistical perf gate evaluator (Mann-Whitney + thresholds)","## Summary
+Gate on:
+- compile overhead threshold
+- runtime geomean threshold
+- per-benchmark regression threshold
+- significance check
+
+## Acceptance Criteria
+- [ ] non-zero on policy violation
+- [ ] clear failure diagnostics","perf;ci","M2 Measurable Perf Gate"
+"Harden IR correctness CI workflow and artifact uploads","## Summary
+Finalize correctness workflow:
+- verifier negative
+- verifier positive
+- instcombine normalized
+- sccp normalized
+- always upload artifacts
+
+## Acceptance Criteria
+- [ ] branch-blocking workflow
+- [ ] complete triage artifacts uploaded","ci;infra","M1 Correctness Foundation"
+"Add performance gate workflow for PR benchmarking","## Summary
+PR workflow:
+- build baseline + candidate
+- run robust harness
+- evaluate thresholds
+- upload summaries/artifacts
+
+## Acceptance Criteria
+- [ ] runs on PR
+- [ ] configurable thresholds
+- [ ] summary markdown generated","ci;perf","M2 Measurable Perf Gate"
+"Improve artifact collection for failed optimization/verifier tests","## Summary
+Ensure failed jobs include:
+- raw/normalized IR expected vs actual
+- verifier stderr
+- benchmark summaries (when perf fails)
+
+## Acceptance Criteria
+- [ ] one artifact bundle sufficient for triage","infra;ci","M2 Measurable Perf Gate"
+"Implement IR clone/remap utility layer for unroll/inline","## Summary
+Implement:
+- reg old->new mapping
+- bb old->new mapping
+- clone instruction with remap
+- clone block with remap
+- PHI incoming repair helpers
+
+## Acceptance Criteria
+- [ ] unit tests for remap correctness
+- [ ] verifier passes on cloned graphs","compiler;optimizer","M4 Phase-3/4 Readiness"
+"Add SSA update helpers (incremental + full rebuild fallback)","## Summary
+Utilities for SSA consistency:
+- incremental def-use updates
+- full rebuild fallback
+- debug assertions
+
+## Acceptance Criteria
+- [ ] pass-selectable incremental/full mode
+- [ ] no stale use chains","compiler;infra","M4 Phase-3/4 Readiness"
+"Implement loop canonical-form validator for transform eligibility","## Summary
+Checks:
+- natural reducible loop
+- preheader
+- single latch
+- bounded body
+- constant tripcount (for unroll)
+
+## Acceptance Criteria
+- [ ] explicit reject reason codes
+- [ ] tests for accept/reject paths","compiler;optimizer","M4 Phase-3/4 Readiness"
+"Implement loop unroll MVP behind feature flag","## Summary
+Conservative unroll:
+- constant trip loops (2..8)
+- body cap <= 40
+- no nested loops/calls in MVP
+- strict CFG/PHI repair
+
+Flag:
+--enable-unroll-mvp
+
+## Acceptance Criteria
+- [ ] unroll tests pass
+- [ ] verifier passes post-unroll
+- [ ] controlled code-size growth","compiler;optimizer;perf","M4 Phase-3/4 Readiness"
+"Implement function inline MVP behind feature flag","## Summary
+Conservative inline:
+- direct call only
+- leaf/small callee
+- no varargs/recursion/indirect calls
+- caller/module growth caps
+
+Flag:
+--enable-inline-mvp
+
+## Acceptance Criteria
+- [ ] inline tests pass
+- [ ] verifier passes post-inline
+- [ ] growth caps enforced","compiler;optimizer;perf","M4 Phase-3/4 Readiness"
+"Define and implement benchmark baseline pinning strategy","## Summary
+Pin baseline artifact/tag for stable perf comparisons.
+
+## Acceptance Criteria
+- [ ] explicit baseline update procedure
+- [ ] workflow uses pinned baseline","perf;release;infra","M2 Measurable Perf Gate"
+"Add optimization release checklist and rollback playbook","## Summary
+Create release docs:
+- checklist
+- known limitations
+- rollback steps
+- escalation ownership
+
+## Acceptance Criteria
+- [ ] docs in docs/releases
+- [ ] linked from RFC","release;ops","M4 Phase-3/4 Readiness"
+"Add ownership matrix and weekly optimization status template","## Summary
+Document ownership and weekly status template.
+
+## Acceptance Criteria
+- [ ] committed docs
+- [ ] adopted in team updates","ops;infra","M3 Optimization Depth"
+"Benchmark flake audit + noise control hardening","## Summary
+Reduce perf CI flake via:
+- env pinning
+- warmups
+- sample tuning
+- trim calibration
+- optional CPU affinity
+
+## Acceptance Criteria
+- [ ] flake rate measured
+- [ ] target flake rate achieved","perf;ci","M2 Measurable Perf Gate"
+"Add mixed optimization pipeline regression tests","## Summary
+Add interaction tests:
+- instcombine+sccp+cfg_simplify
+- PHI cleanup after pruning
+- constant exposure chains
+
+## Acceptance Criteria
+- [ ] >=20 mixed fixtures
+- [ ] deterministic outputs","compiler;optimizer;qa","M3 Optimization Depth"
+"Add iterative pass loop with budget guards","## Summary
+Bounded iterative pipeline:
+- stop on no-change
+- max iterations
+- compile-time budget cutoff
+
+## Acceptance Criteria
+- [ ] deterministic stop reasons logged
+- [ ] no compile-time blowups","compiler;optimizer;perf","M3 Optimization Depth"
+"Meta: Stage 1/2 optimization rollout completion gate","## Summary
+Track completion of staged rollout readiness.
+
+## Checklist
+- [ ] verifier core complete
+- [ ] instcombine MVP complete
+- [ ] sccp MVP complete
+- [ ] cfg simplify complete
+- [ ] correctness workflow required
+- [ ] perf workflow required
+- [ ] baseline pinning active
+- [ ] release + rollback docs complete
+
+## Exit
+Two consecutive weeks of stable CI.","meta;release;tracking","M4 Phase-3/4 Readiness"
