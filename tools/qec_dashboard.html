@@ -14,6 +14,9 @@
       --text-muted: #9c8fb3;
       --accent: #d88dfc;
       --glow: rgba(216, 141, 252, 0.25);
+      --green: #8dfca2;
+      --yellow: #fce88d;
+      --red: #fc8d8d;
     }
     
     body {
@@ -87,6 +90,33 @@
       font-size: 0.9rem;
     }
     
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    
+    .badge-low {
+      background: rgba(141, 252, 162, 0.15);
+      color: var(--green);
+      border: 1px solid rgba(141, 252, 162, 0.3);
+    }
+    
+    .badge-med {
+      background: rgba(252, 232, 141, 0.15);
+      color: var(--yellow);
+      border: 1px solid rgba(252, 232, 141, 0.3);
+    }
+    
+    .badge-high {
+      background: rgba(252, 141, 141, 0.15);
+      color: var(--red);
+      border: 1px solid rgba(252, 141, 141, 0.3);
+    }
+    
     table {
       width: 100%;
       border-collapse: collapse;
@@ -124,7 +154,13 @@
       <div class="metric-label">De-duplicated mathematical mutation signatures</div>
     </div>
     
-    <div class="card" style="grid-column: span 2;">
+    <div class="card">
+      <h2>Forecast & Breach Risk</h2>
+      <div class="metric" id="highest-breach-prob">--</div>
+      <div class="metric-label" id="highest-risk-metric">No risk outlook computed.</div>
+    </div>
+    
+    <div class="card" style="grid-column: span 3;">
       <h2>Recent Failures Log</h2>
       <table id="fails-table">
         <thead>
@@ -151,6 +187,26 @@
       .then(data => {
         document.getElementById('total-fails').textContent = data.stats.total_fails || 0;
         document.getElementById('unique-sigs').textContent = data.stats.unique_sigs || 0;
+        
+        // Handle forecast optionally
+        if (data.forecast) {
+          const prob = data.forecast.highest_breach_probability;
+          const pct = Math.round(prob * 100) + '%';
+          const metricText = document.getElementById('highest-risk-metric');
+          const probText = document.getElementById('highest-breach-prob');
+          
+          probText.textContent = pct;
+          metricText.innerHTML = `Highest risk: <span style="color:var(--accent)">${data.forecast.highest_risk_metric}</span>`;
+          
+          // Badge color class
+          if (prob < 0.20) {
+            probText.className = 'metric badge badge-low';
+          } else if (prob < 0.50) {
+            probText.className = 'metric badge badge-med';
+          } else {
+            probText.className = 'metric badge badge-high';
+          }
+        }
         
         const tbody = document.querySelector('#fails-table tbody');
         if (data.recent_failures && data.recent_failures.length > 0) {

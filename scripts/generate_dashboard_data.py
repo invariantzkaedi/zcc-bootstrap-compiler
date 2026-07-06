@@ -239,6 +239,24 @@ def generate_report():
         "runs": recent_runs
     }
     
+    # Optional forecast inclusion
+    fc_path = Path("artifacts/forecast_report.json")
+    if fc_path.exists():
+        try:
+            fc_data = json.loads(fc_path.read_text(encoding='utf-8'))
+            sum_data = fc_data.get("summary", {})
+            fcs = fc_data.get("forecasts", [])
+            metrics_dict = {}
+            for fc in fcs:
+                metrics_dict[fc["metric"]] = fc["forecast_values"]
+            report["forecast"] = {
+                "highest_risk_metric": sum_data.get("highest_risk_metric", "none"),
+                "highest_breach_probability": float(sum_data.get("highest_breach_probability", 0.0)),
+                "metrics": metrics_dict
+            }
+        except Exception as e:
+            print(f"Failed to read/integrate forecast data: {e}")
+            
     # Validate against JSON schema
     if SCHEMA_PATH.exists():
         schema = json.loads(SCHEMA_PATH.read_text(encoding='utf-8'))

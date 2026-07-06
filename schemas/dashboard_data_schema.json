@@ -89,6 +89,23 @@
           "fast_suite_seconds": { "type": "number" }
         }
       }
+    },
+    "forecast": {
+      "type": "object",
+      "properties": {
+        "highest_risk_metric": { "type": "string" },
+        "highest_breach_probability": { "type": "number" },
+        "metrics": {
+          "type": "object",
+          "properties": {
+            "pass_rate": { "type": "array", "items": { "type": "number" } },
+            "mutation_kill_rate": { "type": "array", "items": { "type": "number" } },
+            "open_incident_backlog": { "type": "array", "items": { "type": "number" } },
+            "signature_volume": { "type": "array", "items": { "type": "number" } }
+          }
+        }
+      },
+      "required": ["highest_risk_metric", "highest_breach_probability", "metrics"]
     }
   },
   "required": ["generated_at_utc", "schema_version", "stats", "windows", "top_signatures", "new_signatures_this_week", "promotion_readiness", "alerts"],
