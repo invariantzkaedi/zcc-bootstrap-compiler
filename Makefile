@@ -21,11 +21,17 @@ COMPAT_SMOKE_SRCS = \
 	tests/regressions/t_zkaedi_rigging_regressions.c
 COMPAT_EXTENDED_SRCS = $(COMPAT_SMOKE_SRCS) raytracer.c
 
-.PHONY: all clean selfhost selfhost-fast verify-lexicon compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test test-float rust-front-smoke check-evm-lifter check-ir-vuln-tag check-forgezero-receipt check-ir-bridge-guard check-copy-const-prop verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration zjs test-zjs visualize-svg-diffs wasm-svg-bridge test_zcc_dag abi-lanes
+.PHONY: all clean selfhost selfhost-fast verify-lexicon compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test test-float rust-front-smoke check-evm-lifter check-ir-vuln-tag check-forgezero-receipt check-ir-bridge-guard check-copy-const-prop verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration zjs test-zjs visualize-svg-diffs wasm-svg-bridge test_zcc_dag abi-lanes zcc-opt zcc-verify
 
 .SECONDARY: zcc zcc2 zcc3
 
-all: zcc
+all: zcc zcc-opt zcc-verify
+	@if [ -n "$(OUT)" ]; then \
+		mkdir -p $(OUT); \
+		cp -f zcc $(OUT)/zcc; \
+		cp -f zcc-opt $(OUT)/zcc-opt; \
+		cp -f zcc-verify $(OUT)/zcc-verify; \
+	fi
 
 zcc_ast_bridge_constants.h zcc_ast_bridge_asserts.inc: part1.c sync_bridge.py
 	python3 sync_bridge.py part1.c zcc_ast_bridge_constants.h zcc_ast_bridge_asserts.inc
@@ -1041,3 +1047,13 @@ max-all: max-quality max-perf max-audit max-report
 
 max-all-with-day1: max-day1 max-all
 	@echo "MAX ALL + DAY1 COMPLETE ✅"
+
+OPT_SRCS = src/opt/zcc_opt_main.c src/opt/ir_parser.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c
+
+zcc-opt: $(OPT_SRCS)
+	$(CC) $(CFLAGS) -Iinclude -I. -o zcc-opt $(OPT_SRCS) $(LDFLAGS)
+
+VERIFY_SRCS = src/opt/zcc_verify_main.c src/opt/ir_parser.c src/opt/ir_verify.c
+
+zcc-verify: $(VERIFY_SRCS)
+	$(CC) $(CFLAGS) -Iinclude -I. -o zcc-verify $(VERIFY_SRCS) $(LDFLAGS)

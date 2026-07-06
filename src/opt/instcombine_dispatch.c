@@ -1,3 +1,27 @@
+#include "zcc_ir.h"
+#include <stdbool.h>
+
+typedef struct {
+    Function *fn;
+    Instr *it;
+} ICtx;
+
+bool ic_rule_add_zero(ICtx *c);
+bool ic_rule_sub_zero(ICtx *c);
+bool ic_rule_mul_one(ICtx *c);
+bool ic_rule_mul_zero(ICtx *c);
+bool ic_rule_div_one(ICtx *c);
+bool ic_rule_and_zero(ICtx *c);
+bool ic_rule_and_allones(ICtx *c);
+bool ic_rule_or_zero(ICtx *c);
+bool ic_rule_xor_zero(ICtx *c);
+bool ic_rule_xor_self(ICtx *c);
+bool ic_rule_sub_self(ICtx *c);
+bool ic_rule_shift_by_zero(ICtx *c);
+bool ic_rule_reassoc_add_consts(ICtx *c);
+bool ic_rule_reassoc_mul_consts(ICtx *c);
+bool ic_rule_icmp_self(ICtx *c);
+
 typedef bool (*IcRuleFn)(ICtx*);
 
 static IcRuleFn kRules[] = {

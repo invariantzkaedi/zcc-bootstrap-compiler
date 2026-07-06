@@ -1,3 +1,5 @@
+#include <stdint.h>
+#include <stdbool.h>
 #define MAX_OPERANDS 4
 #define MAX_CALL_ARGS 16
 #define MAX_PHI_SOURCES 32
@@ -197,6 +199,8 @@ typedef struct Block {
 } Block;
 
 typedef struct Function {
+  char name[NAME_LEN];
+  char ret_type[16];
   Block *blocks[MAX_BLOCKS];
   uint32_t n_blocks;
   BlockID entry;

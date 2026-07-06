@@ -1,0 +1,3 @@
+wsl make all OUT=build/cand
+wsl bash scripts/max/full_quality_gate_local.sh
+wsl make selfhost

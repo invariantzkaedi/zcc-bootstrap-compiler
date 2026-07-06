@@ -4,7 +4,10 @@
 #include <stdbool.h>
 
 typedef struct Function Function;
-typedef struct Module Module;
+typedef struct Module {
+    Function *funcs[100];
+    int n_funcs;
+} Module;
 
 typedef struct VerifyError {
     const char *kind;      // "CFG", "SSA", "PHI", "DOM", ...

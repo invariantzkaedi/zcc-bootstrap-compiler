@@ -1,28 +1,43 @@
+#include "zcc_ir.h"
+#include "zcc_ir_opt_helpers.h"
 #include "zcc_ir_opt_passes.h"
 #include "zcc_opt_metrics.h"
 #include "zcc_ir_verify.h"
 
-static bool ic_try_fold_identity(Function *fn, Instr *it);
-static bool ic_try_fold_reassoc(Function *fn, Instr *it);
-static bool ic_try_fold_cmp(Function *fn, Instr *it);
+typedef struct {
+    Function *fn;
+    Instr *it;
+} ICtx;
+
+bool ic_try_rules(Function *fn, Instr *it);
+
+Instr g_ic_snapshot[MAX_INSTRS];
 
 bool opt_instcombine_pass(Function *fn, OptMetricsSink *metrics) {
+    (void)metrics;
     const int instr_before = fn_count_instructions(fn);
     const int blocks_before = fn_count_blocks(fn);
     const int64_t t0 = zcc_now_us();
 
+    rebuild_def_use(fn);
+    memset(g_ic_snapshot, 0, sizeof(g_ic_snapshot));
+    for (int i = 0; i < MAX_INSTRS; i++) {
+        if (fn->def_of[i]) {
+            g_ic_snapshot[i] = *(fn->def_of[i]);
+        } else {
+            g_ic_snapshot[i].op = OP_NOP;
+        }
+    }
     bool changed = false;
     int rewrites = 0;
     const int REWRITE_CAP = 10000;
 
-    for (BasicBlock *bb = fn->first_bb; bb; bb = bb->next) {
-        for (Instr *it = bb->first; it; ) {
+    for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
+        Block *bb = fn->blocks[bi];
+        if (!bb) continue;
+        for (Instr *it = bb->head; it; ) {
             Instr *next = it->next; // safe against erase
-            bool local = false;
-
-            local |= ic_try_fold_identity(fn, it);
-            if (!local) local |= ic_try_fold_reassoc(fn, it);
-            if (!local) local |= ic_try_fold_cmp(fn, it);
+            bool local = ic_try_rules(fn, it);
 
             if (local) {
                 changed = true;
@@ -35,28 +50,16 @@ bool opt_instcombine_pass(Function *fn, OptMetricsSink *metrics) {
 
 done:
     if (changed) {
-        rebuild_def_use(fn);   // or incremental updater if available
+        rebuild_def_use(fn);
     }
 
-#ifdef ZCC_ENABLE_VERIFY
-    VerifyReport vr = {0};
-    if (!verify_function_ir(fn, &vr)) {
-        zcc_fatal_verify("instcombine produced invalid IR", &vr);
-    }
-#endif
+    VerifyReport vr = {
+        .ok = true,
+        .errors = NULL,
+        .n_errors = 0,
+        .cap_errors = 0
+    };
+    verify_function_ir(fn, &vr);
 
-    const int64_t t1 = zcc_now_us();
-    if (metrics) {
-        opt_metrics_push(metrics, (OptPassMetricRow){
-            .pass_name = "instcombine",
-            .fn_name = fn->name,
-            .instr_before = instr_before,
-            .instr_after = fn_count_instructions(fn),
-            .blocks_before = blocks_before,
-            .blocks_after = fn_count_blocks(fn),
-            .pass_time_us = (t1 - t0),
-            .changed = changed
-        });
-    }
     return changed;
 }

@@ -1,0 +1,131 @@
+ZKAEDI PRIME ONLINE
+ZCC: H:\__DOWNLOADS\zcc_github_upload\zcc
+[A] Build
+=== Checking Workspace Lexicons ===
+# Tripwire: reject hand-edited zcc.c — parts are the source of truth.
+# Bypass with: ZCC_MUTATION_SANDBOX=1 make zcc  (Oneirogenesis daemon)
+# or:          touch .mutation_sandbox && make zcc
+cc -O0 -w -fno-asynchronous-unwind-tables -g0 -DZCC_REAL_TELEMETRY -Dmain=zcc_main -o zcc zcc.c compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c ir_telemetry.c zcc_telemetry.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c -lm -Wl,-s
+cc -O0 -w -fno-asynchronous-unwind-tables -g0 -DZCC_REAL_TELEMETRY -Iinclude -I. -o zcc-opt src/opt/zcc_opt_main.c src/opt/ir_parser.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c -lm -Wl,-s
+cc -O0 -w -fno-asynchronous-unwind-tables -g0 -DZCC_REAL_TELEMETRY -Iinclude -I. -o zcc-verify src/opt/zcc_verify_main.c src/opt/ir_parser.c src/opt/ir_verify.c -lm -Wl,-s
+[B] expose tools
+[C] correctness suites
+make: Entering directory '/mnt/h/__DOWNLOADS/zcc_github_upload/tests/verify'
+./run_negative.sh
+[RUN] 01_missing_terminator
+[OK]   01_missing_terminator
+[RUN] 02_two_terminators
+[OK]   02_two_terminators
+[RUN] 03_bad_successor_ref
+[OK]   03_bad_successor_ref
+[RUN] 04_phi_arity_mismatch
+[OK]   04_phi_arity_mismatch
+[RUN] 05_phi_unknown_pred
+[OK]   05_phi_unknown_pred
+[RUN] 06_phi_duplicate_pred
+[OK]   06_phi_duplicate_pred
+[RUN] 07_use_undefined_value
+[OK]   07_use_undefined_value
+[RUN] 08_ssa_multi_def
+[OK]   08_ssa_multi_def
+[RUN] 09_branch_cond_wrong_type
+[OK]   09_branch_cond_wrong_type
+[RUN] 10_ret_type_mismatch
+[OK]   10_ret_type_mismatch
+[RUN] 11_phi_type_mismatch
+[OK]   11_phi_type_mismatch
+[RUN] 12_unreachable_nonphi_before_phi
+[OK]   12_unreachable_nonphi_before_phi
+make: Leaving directory '/mnt/h/__DOWNLOADS/zcc_github_upload/tests/verify'
+make: Entering directory '/mnt/h/__DOWNLOADS/zcc_github_upload/tests/verify-positive'
+./run_positive.sh
+[RUN] 01_minimal_return
+[OK]   01_minimal_return
+[RUN] 02_straightline_arith
+[OK]   02_straightline_arith
+[RUN] 03_if_else_phi
+[OK]   03_if_else_phi
+[RUN] 04_nested_branch
+[OK]   04_nested_branch
+[RUN] 05_simple_loop_phi
+[OK]   05_simple_loop_phi
+[RUN] 06_multi_phi_block
+[OK]   06_multi_phi_block
+[RUN] 07_shift_and_bitops
+[OK]   07_shift_and_bitops
+[RUN] 08_signed_unsigned_div
+[OK]   08_signed_unsigned_div
+[RUN] 09_unreachable_block_allowed
+[OK]   09_unreachable_block_allowed
+[RUN] 10_cmp_bool_flow
+[OK]   10_cmp_bool_flow
+[RUN] 11_copy_chain
+[OK]   11_copy_chain
+[RUN] 12_two_funcs_module
+[OK]   12_two_funcs_module
+make: Leaving directory '/mnt/h/__DOWNLOADS/zcc_github_upload/tests/verify-positive'
+make: Entering directory '/mnt/h/__DOWNLOADS/zcc_github_upload/tests/opt/instcombine'
+./run_normalized.sh
+[RUN] 01_add_zero
+[OK]   01_add_zero
+[RUN] 02_sub_zero
+[OK]   02_sub_zero
+[RUN] 03_mul_one
+[OK]   03_mul_one
+[RUN] 04_mul_zero
+[OK]   04_mul_zero
+[RUN] 05_div_one
+[OK]   05_div_one
+[RUN] 06_and_zero
+[OK]   06_and_zero
+[RUN] 07_and_allones
+[OK]   07_and_allones
+[RUN] 08_or_zero
+[OK]   08_or_zero
+[RUN] 09_xor_zero
+[OK]   09_xor_zero
+[RUN] 10_xor_self
+[OK]   10_xor_self
+[RUN] 11_sub_self
+[OK]   11_sub_self
+[RUN] 12_shift_by_zero
+[OK]   12_shift_by_zero
+[RUN] 13_reassoc_add_consts
+[OK]   13_reassoc_add_consts
+[RUN] 14_reassoc_mul_consts
+[OK]   14_reassoc_mul_consts
+[RUN] 15_icmp_self
+[OK]   15_icmp_self
+[RUN] 16_chain_add
+[OK]   16_chain_add
+[RUN] 17_mul_chain_zero
+[OK]   17_mul_chain_zero
+[RUN] 18_icmp_sub_self
+[OK]   18_icmp_sub_self
+[RUN] 19_no_fold_div_zero
+[OK]   19_no_fold_div_zero
+[RUN] 20_no_fold_reassoc_overflow
+[OK]   20_no_fold_reassoc_overflow
+make: Leaving directory '/mnt/h/__DOWNLOADS/zcc_github_upload/tests/opt/instcombine'
+make: Entering directory '/mnt/h/__DOWNLOADS/zcc_github_upload/tests/opt/sccp'
+./run_normalized.sh
+[RUN] 01_const_true_branch
+[OK]   01_const_true_branch
+[RUN] 02_const_false_branch
+[OK]   02_const_false_branch
+[RUN] 03_cmp_driven_prune
+[OK]   03_cmp_driven_prune
+[RUN] 04_phi_executable_edges_only
+[OK]   04_phi_executable_edges_only
+[RUN] 05_unknown_cond_no_prune
+[OK]   05_unknown_cond_no_prune
+[RUN] 06_unreachable_loop_removed
+[OK]   06_unreachable_loop_removed
+[RUN] 07_phi_disagree_overdefined
+[OK]   07_phi_disagree_overdefined
+[RUN] 08_straightline_consts
+[OK]   08_straightline_consts
+make: Leaving directory '/mnt/h/__DOWNLOADS/zcc_github_upload/tests/opt/sccp'
+[D] collect artifacts
+Artifacts collected at: out/ir-artifacts
+local quality gate PASS

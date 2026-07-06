@@ -57,6 +57,8 @@ def normalize_lines(lines: List[str]) -> List[str]:
             return map_v(mm.group(0))
         line3 = VREG_RE.sub(vr_sub, line2)
 
+        if not line3.endswith('\n'):
+            line3 += '\n'
         out.append(line3)
 
     return out

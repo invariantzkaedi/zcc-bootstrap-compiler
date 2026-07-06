@@ -3,8 +3,28 @@
 // - Skip FP unless fast-math mode exists.
 // - Helper API names are illustrative; adapt to your IR.
 
+#include <stddef.h>
 #include "zcc_ir.h"
 #include "zcc_ir_opt_helpers.h"
+
+extern Instr g_ic_snapshot[MAX_INSTRS];
+
+static inline Instr* ic_snapshot_def_of(int reg) {
+    if (reg <= 0 || reg >= MAX_INSTRS || g_ic_snapshot[reg].op == OP_NOP) return NULL;
+    return &g_ic_snapshot[reg];
+}
+
+static inline bool ic_snapshot_reg_is_const(int reg, int64_t *out) {
+    Instr *d = ic_snapshot_def_of(reg);
+    if (d && d->op == OP_CONST) {
+        *out = d->imm;
+        return true;
+    }
+    return false;
+}
+
+#define def_of(fn, reg) ic_snapshot_def_of(reg)
+#define reg_is_const(fn, reg, out) ic_snapshot_reg_is_const(reg, out)
 
 typedef struct {
     Function *fn;
@@ -171,20 +191,22 @@ bool ic_rule_reassoc_add_consts(ICtx *c) {
 
     int64_t c2;
     if (!reg_is_const(c->fn, it->src2, &c2)) return false;
+    if (c2 == 0) return false;
 
     Instr *d = def_of(c->fn, it->src1);
     if (!d || d->op != OP_ADD) return false;
 
     int64_t c1;
     if (!reg_is_const(c->fn, d->src2, &c1)) return false;
+    if (c1 == 0) return false;
 
     if (will_overflow_add(it->ty, c1, c2)) return false; // policy gate
 
     int64_t sum = c1 + c2;
-    int csum = make_const(c->fn, it->ty, sum);
+    int csum = make_const(c->fn, it->ty, sum, it);
 
     // rewrite current inst: add d->src1, csum
-    it->src1 = d->src1;
+    it->src1 = resolve_copy(c->fn, d->src1);
     it->src2 = csum;
     return true;
 }
@@ -196,19 +218,21 @@ bool ic_rule_reassoc_mul_consts(ICtx *c) {
 
     int64_t c2;
     if (!reg_is_const(c->fn, it->src2, &c2)) return false;
+    if (c2 == 0 || c2 == 1) return false;
 
     Instr *d = def_of(c->fn, it->src1);
     if (!d || d->op != OP_MUL) return false;
 
     int64_t c1;
     if (!reg_is_const(c->fn, d->src2, &c1)) return false;
+    if (c1 == 0 || c1 == 1) return false;
 
     if (will_overflow_mul(it->ty, c1, c2)) return false; // policy gate
 
     int64_t prod = c1 * c2;
-    int cprod = make_const(c->fn, it->ty, prod);
+    int cprod = make_const(c->fn, it->ty, prod, it);
 
-    it->src1 = d->src1;
+    it->src1 = resolve_copy(c->fn, d->src1);
     it->src2 = cprod;
     return true;
 }
