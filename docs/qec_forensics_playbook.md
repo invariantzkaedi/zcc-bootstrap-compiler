@@ -1,5 +1,7 @@
 # QEC Forensics Playbook
 
+**QEC-VOP (QEC Verification Operations Platform): a deterministic, policy-enforced verification operations platform.**
+
 Version: 1.0.0  
 Audience: Compiler/QEC contributors, CI triage owners  
 Scope: Stabilizer validation failures, decoder mismatches, determinism drift
