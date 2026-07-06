@@ -31,7 +31,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@d27e3f3d7c64b4bbf85c13d9b353a1a7960de854 # v5.1.0
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
@@ -108,7 +108,7 @@ jobs:
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
-      - uses: actions/setup-python@d27e3f3d7c64b4bbf85c13d9b353a1a7960de854 # v5.1.0
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
@@ -189,7 +189,7 @@ jobs:
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
-      - uses: actions/setup-python@d27e3f3d7c64b4bbf85c13d9b353a1a7960de854 # v5.1.0
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
