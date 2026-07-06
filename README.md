@@ -292,6 +292,29 @@ ZCC enforces the following design limitations:
 
 ---
 
+## 🔱 QEC-VOP Quick Start
+
+**QEC-VOP (QEC Verification Operations Platform): a deterministic, policy-enforced verification operations platform.**
+
+**QEC-VOP: deterministic verification control plane**
+
+Initialize and verify the verification control plane:
+```bash
+# 1. Ingest generated test artifacts
+python3 scripts/ingest_artifacts.py
+
+# 2. Compile dashboard report
+python3 scripts/generate_dashboard_data.py
+
+# 3. Synchronize open incidents from tracker
+python3 scripts/sync_incidents.py --dry-run
+
+# 4. View visual report locally
+# Open tools/qec_dashboard.html in a web browser
+```
+
+---
+
 ## 🔱 Related Projects
 
 * [**zcc-compiler-bug-corpus**](https://huggingface.co/datasets/zkaedi/zcc-compiler-bug-corpus) — Curated database of codegen defects and fixes categorized by CWE classifications.

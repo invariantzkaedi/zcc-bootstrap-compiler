@@ -2,6 +2,8 @@
 
 **QEC-VOP (QEC Verification Operations Platform): a deterministic, policy-enforced verification operations platform.**
 
+**QEC-VOP: deterministic verification control plane**
+
 Version: 1.0.0  
 Applies to: `main` and protected release branches
 

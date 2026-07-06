@@ -3,6 +3,7 @@ name: quantum-preflight
 on:
   pull_request:
   push:
+    branches: [main]
   workflow_dispatch:
   schedule:
     - cron: "30 4 * * *"
@@ -60,6 +61,18 @@ jobs:
             tests/test_trace_schema_validation.py \
             tests/test_invariants_battery.py \
             tests/test_determinism_contract.py
+
+      - name: Ingest artifacts into DB warehouse
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/ingest_artifacts.py || true
+
+      - name: Compile dashboard records
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/generate_dashboard_data.py || true
 
       - name: Build artifact index + repro scripts
         if: always()
@@ -130,6 +143,18 @@ jobs:
           python3 scripts/check_determinism_hashes.py \
             --files artifacts/det/last_trace_1.json artifacts/det/last_trace_2.json artifacts/det/last_trace_3.json
 
+      - name: Ingest artifacts into DB warehouse
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/ingest_artifacts.py || true
+
+      - name: Compile dashboard records
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/generate_dashboard_data.py || true
+
       - name: Build artifact index + repro scripts
         if: always()
         run: |
@@ -190,6 +215,18 @@ jobs:
           else
             echo "No mutation_report.json found; continuing (smoke mode)."
           fi
+
+      - name: Ingest artifacts into DB warehouse
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/ingest_artifacts.py || true
+
+      - name: Compile dashboard records
+        if: always()
+        run: |
+          set -euxo pipefail
+          python3 scripts/generate_dashboard_data.py || true
 
       - name: Build artifact index + repro scripts
         if: always()
