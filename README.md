@@ -284,7 +284,7 @@ ZCC's development is backed by a compiler bug corpus containing ground-truth fix
 ## 🔱 Known Constraints & Limitations
 
 ZCC enforces the following design limitations:
-* **No Preprocessor**: Input source must be preprocessed prior to compilation.
+* **Integrated Preprocessor**: Supports standard macro expansion, header file inclusions, and conditional compilation directive parsing.
 * **No Inline Assembly**: C-native inline assembly statements are unsupported.
 * **Unsupported C Features**: Bitfields in structures, variable-length arrays (VLAs), and certain C11 keywords (`_Atomic`, `_Generic`, `_Complex`) are not supported.
 * **Linkage Boundaries**: Expects single-file compilation (concatenated sources).
