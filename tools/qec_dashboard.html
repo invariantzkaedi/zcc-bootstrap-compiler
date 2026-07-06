@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QEC-VOP Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #09080d;
+      --panel-bg: rgba(22, 19, 31, 0.7);
+      --border: rgba(156, 143, 179, 0.15);
+      --text: #f0eaf7;
+      --text-muted: #9c8fb3;
+      --accent: #d88dfc;
+      --glow: rgba(216, 141, 252, 0.25);
+    }
+    
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Outfit', sans-serif;
+      margin: 0;
+      padding: 2rem;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 800;
+      margin: 0 0 0.5rem 0;
+      background: linear-gradient(135deg, #f0eaf7 30%, #d88dfc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    
+    .subtitle {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      margin-bottom: 2.5rem;
+    }
+    
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+      width: 100%;
+      max-width: 1200px;
+    }
+    
+    .card {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(10px);
+      transition: all 0.3s ease;
+    }
+    
+    .card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 4px 30px var(--glow);
+    }
+    
+    h2 {
+      margin-top: 0;
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: var(--text);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    
+    .metric {
+      font-size: 2.5rem;
+      font-weight: 800;
+      color: var(--accent);
+      margin: 1rem 0;
+    }
+    
+    .metric-label {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+    }
+    
+    th, td {
+      text-align: left;
+      padding: 0.6rem;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    th {
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+  </style>
+</head>
+<body>
+  <h1>QEC-VOP Control Plane</h1>
+  <div class="subtitle">Deterministic Verification Operations & attestation analytics</div>
+  
+  <div class="grid">
+    <div class="card">
+      <h2>Failure Index Stats</h2>
+      <div class="metric" id="total-fails">0</div>
+      <div class="metric-label">Total unique failures logged in warehouse</div>
+    </div>
+    
+    <div class="card">
+      <h2>Unique Signatures</h2>
+      <div class="metric" id="unique-sigs">0</div>
+      <div class="metric-label">De-duplicated mathematical mutation signatures</div>
+    </div>
+    
+    <div class="card" style="grid-column: span 2;">
+      <h2>Recent Failures Log</h2>
+      <table id="fails-table">
+        <thead>
+          <tr>
+            <th>Seed</th>
+            <th>Qubits</th>
+            <th>Type</th>
+            <th>Signature</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td colspan="4" style="color: var(--text-muted)">No failures registered in current baseline matrix.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  
+  <script>
+    // Fetch dashboard data
+    fetch('../artifacts/dashboard_data.json')
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById('total-fails').textContent = data.stats.total_fails || 0;
+        document.getElementById('unique-sigs').textContent = data.stats.unique_sigs || 0;
+        
+        const tbody = document.querySelector('#fails-table tbody');
+        if (data.recent_failures && data.recent_failures.length > 0) {
+          tbody.innerHTML = '';
+          data.recent_failures.forEach(f => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${f.seed}</td>
+              <td>${f.n_qubits}</td>
+              <td>${f.failure_type}</td>
+              <td style="color:var(--accent)">${(f.signature || '').slice(0, 16)}</td>
+            `;
+            tbody.appendChild(tr);
+          });
+        }
+      })
+      .catch(() => console.log("Dashboard data not generated yet. Run scripts/generate_dashboard_data.py"));
+  </script>
+</body>
+</html>
