@@ -31,6 +31,7 @@ Usage:
 
 import argparse
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -38,6 +39,11 @@ import shutil
 import socket
 import subprocess
 import sys
+if sys.stdout and getattr(sys.stdout, 'encoding', '').lower() != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except AttributeError:
+        pass
 import time
 import tempfile
 import random
@@ -83,9 +89,9 @@ PASSES = ["compiler_passes.c", "compiler_passes_ir.c", "ir_pass_manager.c",
           "src/evm/yul_frontend.c", "src/gfx/sdf_compiler.c",
           "src/gfx/mesh_warden.c", "src/evm/evm_symbolic_harness.c",
           "src/zcc_oracle_substrate.c",
-          "src/elf_emit.c", "src/ir_serialization.c",
+          "src/elf_emit.c", "src/codegen.c", "src/ir_serialization.c",
           "src/zcc_smt_prover.c", "src/gguf_emit.c", "src/zld.c",
-          "src/zcc_resource_oracle.c", "transient_state.c"]
+          "src/zcc_resource_oracle.c", "transient_state.c", "zcc_lucky_alert_injector.c"]
 
 # ANSI colour palette
 _R = "\033[91m"; _G = "\033[92m"; _Y = "\033[93m"
@@ -264,7 +270,7 @@ class SelfHostGate:
         # symbol clashes that arise when linking zcc_pp.c with extra .c files
         zcc_full = str(REPO_ROOT / 'zcc.c')
         gate_src = zcc_full if os.path.exists(zcc_full) else zcc_pp_c
-        s3_p_args = [p for p in p_args if not p.endswith("codegen.c")]
+        s3_p_args = p_args
 
         try:
             r = subprocess.run([mutant_bin, gate_src, '-o', s3_s],
@@ -397,7 +403,8 @@ class HamiltonianTelemetry:
             self._sock.sendto(pkt, (self.host, self.port))
 
             # Gods Eye channel (port 41337)
-            gods_pkt = json.dumps({
+            gods_payload = {
+                "type": "dream_cycle",
                 "gen": result.generation,
                 "island": island_id,
                 "score": round(mutant_score, 2),
@@ -410,8 +417,11 @@ class HamiltonianTelemetry:
                 "phase": phase,
                 "spectral_gap": round(spectral_gap, 6),
                 "ts": datetime.now(timezone.utc).isoformat(),
-            }).encode()
-            self._gods_sock.sendto(gods_pkt, (self.host, self.GODS_EYE_PORT))
+            }
+            body = json.dumps(gods_payload, separators=(',', ':'), sort_keys=True)
+            sig = hmac.new(b"zkaedi-local-dev-secret", body.encode('utf-8'), hashlib.sha256).hexdigest()
+            envelope = json.dumps({"_body": body, "_sig": sig}, separators=(',', ':'))
+            self._gods_sock.sendto(envelope.encode('utf-8'), (self.host, self.GODS_EYE_PORT))
         except Exception:
             pass  # Never block on telemetry
 
@@ -683,24 +693,24 @@ class DreamEngine:
                 # Concatenate parts first
                 print(f"  {_Y}[AUTO]{_W} Concatenating parts → zcc.c…")
                 # Order matters: part0_pp must come before headers/part1
-                with open(zcc_c, 'w') as out:
+                with open(zcc_c, 'w', encoding='utf-8', errors='ignore') as out:
                     for p in PARTS:
                         pf = REPO_ROOT / p
                         if pf.exists():
-                            with open(pf) as f:
+                            with open(pf, encoding='utf-8', errors='ignore') as f:
                                 out.write(f.read())
                         else:
                             print(f"  {_Y}[WARN]{_W} Missing part: {p}")
             # Strip _Static_assert lines
             zcc_pp_tmp = zcc_pp_c + '.tmp'
-            with open(zcc_c) as fin, open(zcc_pp_tmp, 'w') as fout:
+            with open(zcc_c, encoding='utf-8', errors='ignore') as fin, open(zcc_pp_tmp, 'w', encoding='utf-8', errors='ignore') as fout:
                 for line in fin:
                     if not line.startswith('_Static_assert'):
                         fout.write(line)
             # Inline bridge headers, strip system includes
             ast_bridge_zcc  = str(REPO_ROOT / 'zcc_ast_bridge_zcc.h')
             ir_bridge_zcc   = str(REPO_ROOT / 'zcc_ir_bridge_zcc.h')
-            with open(zcc_pp_tmp) as fin, open(zcc_pp_c, 'w') as fout:
+            with open(zcc_pp_tmp, encoding='utf-8', errors='ignore') as fin, open(zcc_pp_c, 'w', encoding='utf-8', errors='ignore') as fout:
                 # Inject the bridge guard so ZCC's own preprocessor skips
                 # all five `#ifndef ZCC_AST_BRIDGE_H / #include "part1.c"`
                 # blocks. Without this fix, node_kind and every other
@@ -710,11 +720,11 @@ class DreamEngine:
                 for line in fin:
                     if line.startswith('#include "zcc_ast_bridge.h"'):
                         if os.path.exists(ast_bridge_zcc):
-                            fout.write(open(ast_bridge_zcc).read())
+                            fout.write(open(ast_bridge_zcc, encoding='utf-8', errors='ignore').read())
                         continue
                     if line.startswith('#include "zcc_ir_bridge.h"'):
                         if os.path.exists(ir_bridge_zcc):
-                            fout.write(open(ir_bridge_zcc).read())
+                            fout.write(open(ir_bridge_zcc, encoding='utf-8', errors='ignore').read())
                         continue
                     if line.startswith('#include <') and '>' in line:
                         continue   # drop system headers

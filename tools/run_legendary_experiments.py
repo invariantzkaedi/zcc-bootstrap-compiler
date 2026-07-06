@@ -53,7 +53,11 @@ def run_runtime_probe(runtime_cmd: str, exp: dict, seed: int, out_dir: Path) -> 
     ]
     # support quoted command
     if os.name == "nt":
-        cmd_str = " ".join(f'"{c}"' if " " in c or "\\" in c or "/" in c else c for c in cmd)
+        def esc(x):
+            if " " in x or "\\" in x or "/" in x or '"' in x:
+                return '"' + x.replace('"', '\\"') + '"'
+            return x
+        cmd_str = " ".join(esc(c) for c in cmd)
         result = subprocess.run(cmd_str, shell=True, capture_output=True, text=True)
     else:
         result = subprocess.run(cmd, capture_output=True, text=True)
