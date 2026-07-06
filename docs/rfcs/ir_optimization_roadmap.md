@@ -402,3 +402,262 @@ All tunables should be CLI flags for quick experimentation.
 
 Proceed with phased implementation.  
 Do **not** start unroll/inline before SCCP + utility layer + verifier are stable.
+
+---
+
+## 14) Staged Execution Program (Timeline & Project Board Map)
+
+### 14.1 Weekly Execution Tracks
+- **T1 Core Compiler** (verifier, instcombine, sccp, cfg simplify)
+- **T2 Tooling/CI** (tests, runners, artifacts, gating)
+- **T3 Performance** (bench harness, stats, thresholds)
+- **T4 Release/Ops** (docs, changelog, rollback, ownership)
+
+---
+
+### 14.2 Week 1 (Foundation must-pass)
+
+#### W1-D1
+- Implement verifier MVP:
+  - `verify_terminators`
+  - `verify_cfg`
+- Wire `zcc-verify` CLI exit contract.
+- Goal: negative tests 01–03 pass.
+
+#### W1-D2
+- Implement:
+  - `verify_phi_wellformed`
+  - `verify_ssa` (undef + multi-def)
+- Goal: all negative + positive verifier suites pass.
+
+#### W1-D3
+- Land InstCombine 15 rules.
+- Hook def-use rebuild after rewrites.
+- Goal: instcombine normalized suite green.
+
+#### W1-D4
+- Implement SCCP lattice + worklists + branch executability.
+- Materialize constants pass.
+- Goal: SCCP tests 01–05 green.
+
+#### W1-D5
+- Implement `cfg_simplify` unreachable cleanup + PHI incoming cleanup.
+- Goal: SCCP full suite green; correctness workflow fully green.
+
+**Week 1 Exit Criteria**
+- [ ] verifier positive+negative pass
+- [ ] instcombine suite pass
+- [ ] sccp suite pass
+- [ ] `.github/workflows/ir-opt-quality-gate.yml` passing
+
+---
+
+### 14.3 Week 2 (Hardening + measurability)
+
+#### W2-D1
+- Add stable verifier error codes:
+  - `E_CFG_*`, `E_SSA_*`, `E_PHI_*`, `E_TERM_*`
+- Include function/bb/inst context in stderr.
+
+#### W2-D2
+- Add pass metrics emission:
+  - `--opt-metrics-out opt_metrics.csv`
+- Row fields: pass/fn/instr_before/after/blocks_before/after/time_us/changed.
+
+#### W2-D3
+- Integrate robust benchmark scripts in CI.
+- Produce:
+  - `out/bench/summary.json`
+  - `out/bench/summary.md`
+
+#### W2-D4
+- Threshold gate v1 (lenient):
+  - compile overhead <= 12%
+  - runtime geomean >= 0%
+- Run 10 PR replays (or repeated CI runs) to estimate flake rate.
+
+#### W2-D5
+- Tighten artifact collection and failure summaries.
+- Goal: on failure, one-click diagnosis from uploaded artifacts.
+
+**Week 2 Exit Criteria**
+- [ ] deterministic diagnostics
+- [ ] metrics generated on every run
+- [ ] perf workflow stable (low flake)
+- [ ] artifact triage complete
+
+---
+
+### 14.4 Week 3 (Optimization depth)
+
+#### W3-D1
+- Expand InstCombine safely (+5 rules):
+  - `or x,x -> x`
+  - `and x,x -> x`
+  - canonical compare operand ordering
+  - identity chains cleanup
+- Add 10 new tests.
+
+#### W3-D2
+- SCCP+DCE interplay:
+  - remove dead side-effect-free defs after propagation.
+- Add mixed pipeline tests.
+
+#### W3-D3
+- CFG simplify:
+  - trivial jump block elimination
+  - straight-line block merge (legal cases)
+- Add PHI repair regression tests.
+
+#### W3-D4
+- Add pass manager iterative budget loop (max 3 iterations).
+- Add compile-time budget stop condition.
+
+#### W3-D5
+- Benchmark recalibration:
+  - move gate toward target:
+    - compile <= 8%
+    - runtime >= +3%
+
+**Week 3 Exit Criteria**
+- [ ] improved optimization delta
+- [ ] no correctness regressions
+- [ ] tightened perf thresholds passing
+
+---
+
+### 14.5 Week 4 (Phase-3 infra readiness for unroll/inlining)
+
+#### W4-D1
+- Implement `zcc_ir_clone` utilities:
+  - reg map, bb map
+  - clone instr/block with remap
+
+#### W4-D2
+- Implement PHI repair helpers and SSA update utilities.
+- Add dedicated clone/remap correctness tests.
+
+#### W4-D3
+- Add loop canonical-form validator.
+- Reject unsupported loops with reason codes.
+
+#### W4-D4
+- MVP unroll behind flag:
+  - constant tripcount <= 8
+  - body <= 40
+  - no calls
+- Add 6 unroll tests.
+
+#### W4-D5
+- MVP inline behind flag:
+  - direct leaf small functions only
+  - growth budget caps
+- Add 6 inline tests.
+
+**Week 4 Exit Criteria**
+- [ ] clone/remap infra validated
+- [ ] unroll/inline MVP compile-safe behind flags
+- [ ] verifier catches malformed transformed IR
+
+---
+
+### 14.6 GitHub Project board map (columns + issues)
+
+#### Column: Backlog
+- [ ] Implement verifier core (`verify_cfg`, `verify_ssa`, `verify_phi`, `verify_terminators`)
+- [ ] Wire `zcc-verify` CLI + stable exit contract
+- [ ] Implement InstCombine 15-rule MVP
+- [ ] Implement SCCP lattice engine
+- [ ] Implement CFG simplify unreachable cleanup
+- [ ] Add metrics sink + CSV output
+- [ ] Add robust benchmark harness + summary JSON
+- [ ] Add statistical threshold evaluator
+- [ ] Add clone/remap utilities
+- [ ] Add loop canonical form validator
+- [ ] Add unroll MVP (flagged)
+- [ ] Add inline MVP (flagged)
+
+#### Column: Ready
+- [ ] Verifier error code taxonomy
+- [ ] Artifact collector improvements
+- [ ] CI PR summary rendering
+- [ ] Baseline pinning strategy docs
+- [ ] Ownership map docs
+
+#### Column: In Progress
+- (move max 2/team at once)
+
+#### Column: Review
+- Requires:
+  - tests green
+  - verifier enabled in debug pass
+  - artifacts attached
+
+#### Column: Done
+- Only after:
+  - merged
+  - CI green
+  - docs updated
+
+---
+
+### 14.7 Ownership model (RACI-lite)
+- **Compiler Lead (A):** verifier correctness, pass semantics
+- **Optimization Engineer (R):** instcombine, sccp, cfg simplify
+- **Infra Engineer (R):** CI workflows, artifacts, scripts
+- **Perf Engineer (R):** benchmark harness, thresholds, statistics
+- **Release Manager (A):** gating policy, tag, rollback docs
+- **QA/Compiler Validation (C):** fixture quality, flake audits
+
+---
+
+### 14.8 Definition of Done (per issue)
+1. Code merged
+2. Unit/golden tests added
+3. Negative tests added when applicable
+4. CI green (correctness + perf if relevant)
+5. Metrics captured
+6. Docs updated (RFC/changelog)
+7. Rollback note if behavior-changing
+
+---
+
+### 14.9 Risk matrix + trigger actions
+- **R1 CI flakiness > 5%**: increase runs, stronger trimming, isolate noisy benches
+- **R2 Compile overhead breaches**: cap iterations/rewrite counts, optimize hot pass paths
+- **R3 Incorrect transforms**: auto-enable verify-before/after, bisect via pass toggles
+- **R4 Benchmark regressions concentrated in few tests**: per-benchmark blocklist for investigation (temporary), root cause ticket mandatory
+
+---
+
+### 14.10 Branch/PR strategy
+- `feature/verifier-core`
+- `feature/instcombine-mvp`
+- `feature/sccp-mvp`
+- `feature/cfg-simplify`
+- `feature/metrics-and-bench`
+- `feature/clone-remap-infra`
+- `feature/unroll-mvp`
+- `feature/inline-mvp`
+
+PR size target: **<800 LOC** changed when possible.
+
+---
+
+### 14.11 Milestone gates
+- **M1: Correctness Foundation**: verifier + instcombine + sccp + cfg simplify + suites (target date: end Week 1)
+- **M2: Measurable Performance Gate**: robust bench in CI + thresholds (target date: end Week 2)
+- **M3: Optimization Depth**: expanded rules + iterative loop + tightened thresholds (target date: end Week 3)
+- **M4: Phase-3/4 Readiness**: clone/remap + flagged unroll/inline MVP (target date: end Week 4)
+
+---
+
+### 14.12 Weekly reporting template
+- Completed:
+- In progress:
+- Blockers:
+- Correctness status (pass/fail + counts):
+- Perf status (compile overhead %, runtime geomean %):
+- Flake rate:
+- Next week commitments:
+
