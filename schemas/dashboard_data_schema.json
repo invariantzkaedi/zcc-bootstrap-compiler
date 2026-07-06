@@ -1,0 +1,112 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QEC Dashboard Data Schema",
+  "type": "object",
+  "properties": {
+    "generated_at_utc": { "type": "string" },
+    "schema_version": { "type": "string" },
+    "stats": {
+      "type": "object",
+      "properties": {
+        "total_fails": { "type": "integer" },
+        "unique_sigs": { "type": "integer" }
+      },
+      "required": ["total_fails", "unique_sigs"]
+    },
+    "windows": {
+      "type": "object",
+      "properties": {
+        "days_7": { "$ref": "#/definitions/WindowMetrics" },
+        "days_14": { "$ref": "#/definitions/WindowMetrics" },
+        "days_30": { "$ref": "#/definitions/WindowMetrics" }
+      },
+      "required": ["days_7", "days_14", "days_30"]
+    },
+    "top_signatures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "signature": { "type": "string" },
+          "occurrences": { "type": "integer" },
+          "run_span": { "type": "integer" }
+        },
+        "required": ["signature", "occurrences", "run_span"]
+      }
+    },
+    "new_signatures_this_week": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "promotion_readiness": {
+      "type": "object",
+      "properties": {
+        "stable_14d": { "type": "boolean" },
+        "kill_rate_ok": { "type": "boolean" },
+        "no_stale_survivors": { "type": "boolean" },
+        "recommendation": { "type": "string" }
+      },
+      "required": ["stable_14d", "kill_rate_ok", "no_stale_survivors", "recommendation"]
+    },
+    "alerts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string" },
+          "severity": { "type": "string", "enum": ["critical", "high", "medium", "low"] },
+          "value": { "type": "number" },
+          "threshold": { "type": "number" }
+        },
+        "required": ["code", "severity", "value", "threshold"]
+      }
+    },
+    "recent_failures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "seed": { "type": "integer" },
+          "test_name": { "type": "string" },
+          "failure_type": { "type": "string" },
+          "n_qubits": { "type": "integer" },
+          "original_length": { "type": "integer" },
+          "minimized_length": { "type": "integer" },
+          "timestamp": { "type": "string" },
+          "signature": { "type": "string" }
+        }
+      }
+    },
+    "runs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "run_id": { "type": "string" },
+          "timestamp": { "type": "string" },
+          "status": { "type": "string" },
+          "kill_rate": { "type": "number" },
+          "fast_suite_seconds": { "type": "number" }
+        }
+      }
+    }
+  },
+  "required": ["generated_at_utc", "schema_version", "stats", "windows", "top_signatures", "new_signatures_this_week", "promotion_readiness", "alerts"],
+  "definitions": {
+    "WindowMetrics": {
+      "type": "object",
+      "properties": {
+        "pass_rate": { "type": ["number", "null"] },
+        "determinism_drifts": { "type": "integer" },
+        "kill_rate_min": { "type": ["number", "null"] },
+        "kill_rate_avg": { "type": ["number", "null"] },
+        "kill_rate_max": { "type": ["number", "null"] },
+        "unique_signatures": { "type": "integer" },
+        "incidents_open": { "type": "integer" },
+        "incidents_closed": { "type": "integer" },
+        "mttr_hours": { "type": ["number", "null"] }
+      },
+      "required": ["pass_rate", "determinism_drifts", "kill_rate_min", "kill_rate_avg", "kill_rate_max", "unique_signatures", "incidents_open", "incidents_closed", "mttr_hours"]
+    }
+  }
+}
