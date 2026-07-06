@@ -1,0 +1,20 @@
+[
+  {
+    "name": "x_error_q0",
+    "error_type": 1,
+    "expected_error_code": 1,
+    "description": "Inject X-type fault and verify decoder resolves to X-correction"
+  },
+  {
+    "name": "z_error_q4",
+    "error_type": 2,
+    "expected_error_code": 2,
+    "description": "Inject Z-type fault and verify decoder resolves to Z-correction"
+  },
+  {
+    "name": "y_error_q7",
+    "error_type": 3,
+    "expected_error_code": 3,
+    "description": "Inject Y-type fault and verify decoder resolves to composite Y-correction"
+  }
+]

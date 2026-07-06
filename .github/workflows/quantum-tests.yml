@@ -1,0 +1,194 @@
+name: quantum-tests
+
+on:
+  pull_request:
+  push:
+  schedule:
+    - cron: "0 4 * * *" # nightly UTC
+  workflow_dispatch:
+
+concurrency:
+  group: quantum-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUNBUFFERED: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  fast-pr:
+    name: fast-pr (required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11"]
+        cc: ["gcc", "clang"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Python test deps
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements-test.txt ]; then
+            pip install -r requirements-test.txt
+          else
+            pip install pytest numpy
+          fi
+
+      - name: Build C unit tests (matrix compiler)
+        env:
+          CC: ${{ matrix.cc }}
+        run: |
+          set -euxo pipefail
+          $CC --version
+          $CC -o tests/test_zqec_props tests/test_zqec_props.c src/ir_to_zqec.c -lm -Isrc -I.
+          ./tests/test_zqec_props
+
+          if [ -f tests/test_syndrome_decode.c ]; then
+            $CC -o tests/test_syndrome_decode tests/test_syndrome_decode.c src/ir_to_zqec.c -lm -Isrc -I.
+            ./tests/test_syndrome_decode
+          fi
+
+      - name: Run deterministic oracle + small fuzz + metamorphic + golden
+        run: |
+          set -euxo pipefail
+          pytest -q tests/test_quantum_stabilizers.py
+          if [ -f tests/test_stabilizer_fuzz.py ]; then
+            QEC_FUZZ_SEEDS=100 pytest -q tests/test_stabilizer_fuzz.py
+          fi
+          if [ -f tests/test_metamorphic_ir.py ]; then
+            pytest -q tests/test_metamorphic_ir.py
+          fi
+          if [ -f tests/test_golden_traces.py ]; then
+            pytest -q tests/test_golden_traces.py
+          fi
+
+      - name: Enforce 2-minute target note
+        run: |
+          echo "fast-pr target budget: <=2 min median (tracked externally in repo metrics)."
+
+  sanitizer-debug:
+    name: sanitizer-debug (required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event_name != 'schedule'
+    strategy:
+      fail-fast: false
+      matrix:
+        san: ["address", "undefined"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang make
+
+      - name: Build + run C tests with ${{ matrix.san }}
+        env:
+          CC: clang
+        run: |
+          set -euxo pipefail
+          SAN_FLAG=""
+          if [ "${{ matrix.san }}" = "address" ]; then
+            SAN_FLAG="-fsanitize=address"
+          else
+            SAN_FLAG="-fsanitize=undefined"
+          fi
+
+          CFLAGS="-O1 -g -fno-omit-frame-pointer ${SAN_FLAG}"
+
+          $CC $CFLAGS -o tests/test_zqec_props_san tests/test_zqec_props.c src/ir_to_zqec.c -lm -Isrc -I.
+          ./tests/test_zqec_props_san
+
+          if [ -f tests/test_syndrome_decode.c ]; then
+            $CC $CFLAGS -o tests/test_syndrome_decode_san tests/test_syndrome_decode.c src/ir_to_zqec.c -lm -Isrc -I.
+            ./tests/test_syndrome_decode_san
+          fi
+
+  nightly-deep:
+    name: nightly-deep
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements-test.txt ]; then
+            pip install -r requirements-test.txt
+          else
+            pip install pytest numpy
+          fi
+
+      - name: Run deep tableau + closure + fixtures + noise/fault campaigns
+        id: deep-tests
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+
+          if [ -f tests/test_tableau_crosscheck.py ]; then
+            pytest -q tests/test_tableau_crosscheck.py
+          fi
+
+          if [ -f tests/test_clifford_closure.py ]; then
+            QEC_FUZZ_SEEDS=1000 pytest -q tests/test_clifford_closure.py
+          fi
+
+          if [ -f tests/test_stabilizer_fuzz.py ]; then
+            QEC_FUZZ_SEEDS=1000 pytest -q tests/test_stabilizer_fuzz.py
+          fi
+
+          if [ -f tests/test_steane7_fixtures.py ]; then
+            pytest -q tests/test_steane7_fixtures.py
+          fi
+
+          if [ -f tests/test_distance3_fixtures.py ]; then
+            pytest -q tests/test_distance3_fixtures.py
+          fi
+
+          if [ -f tests/test_noise_sweeps.py ]; then
+            pytest -q tests/test_noise_sweeps.py
+          fi
+
+          if [ -f tests/test_fault_injection_e2e.py ]; then
+            pytest -q tests/test_fault_injection_e2e.py
+          fi
+
+      - name: Collect failure context (seed/trace placeholders)
+        if: failure()
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          # If your tests emit these files, they'll be uploaded.
+          # Recommended outputs from failing tests:
+          # - artifacts/failing_seed.txt
+          # - artifacts/failing_circuit.json
+          # - artifacts/failing_syndrome_trace.json
+          # - artifacts/failing_correction.json
+          ls -la artifacts || true
+
+      - name: Upload nightly artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-deep-artifacts
+          path: artifacts/
+          if-no-files-found: ignore

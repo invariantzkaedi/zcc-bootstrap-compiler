@@ -11,6 +11,15 @@ typedef struct {
     double fidelity;                   // logical qubit fidelity after correction
 } QECState;
 
+typedef struct {
+    int n_qubits;
+    char x[32];
+    char z[32];
+} pauli_vec_t;
+
+void prop_cnot(pauli_vec_t *p, int control, int target);
+void prop_cz(pauli_vec_t *p, int a, int b);
+
 void qec_init(QECState *qec);
 void qec_measure_syndrome(QECState *qec, ir_node_t *insn, double H_field[32][32]);
 void qec_apply_correction(QECState *qec, ir_node_t *insn, FILE *out);
