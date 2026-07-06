@@ -58,7 +58,7 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p artifacts
-          pytest -q \
+          python3 -m pytest -q \
             tests/test_trace_schema_validation.py \
             tests/test_invariants_battery.py \
             tests/test_determinism_contract.py
@@ -199,7 +199,7 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p artifacts
-          pytest -q -m mutation tests/test_mutation_smoke.py || true
+          python3 -m pytest -q -m mutation tests/test_mutation_smoke.py || true
           if [ -f artifacts/mutation_report.json ]; then
             python3 -c "import json; d = json.load(open('artifacts/mutation_report.json')); kr = float(d.get('kill_rate', 0.0)); assert kr >= 0.90, f'kill_rate too low: {kr}'; print(f'kill_rate OK: {kr}')"
           else
