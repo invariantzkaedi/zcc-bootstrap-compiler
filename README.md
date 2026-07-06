@@ -107,7 +107,7 @@ gcc -o hello hello.s
 * **Statements**: Block scopes, selection statements (`if`/`else`, `switch`/`case`/`default`), iteration statements (`while`, `do`/`while`, `for`), jump statements (`break`, `continue`, `return`, `goto`), and labeled statements.
 * **Expressions**: Complete arithmetic/logical/comparison operators, assignment operator variants, pre/post increment and decrement, ternary operator (`?:`), comma operator, `sizeof`, casting operators, member accesses (`.`, `->`), array subscripting (`[]`), function calls, and variadic function macros (`va_list`, `va_start`, `va_arg`).
 * **Storage Classes**: Local/global variables, `static`, `extern`, string literals, and forward declarations.
-* *Note on Preprocessing*: ZCC is designed as a pure compiler frontend and backend. It does not include a preprocessor. Standard preprocessors (such as `gcc -E` or `cpp`) must be invoked before compilation.
+* **Integrated Preprocessing**: ZCC includes an integrated preprocessor (`part0_pp.c`) that automatically processes macro expansions, conditional directives, and header inclusions during compilation.
 
 ---
 
@@ -120,6 +120,7 @@ ZCC compiles single-translation-unit C source files. The compiler is composed of
 │                    zcc.c (concatenated)                  │
 │                                                         │
 │  part1.c ─── Type system, symbols, scopes, allocators   │
+│  part0_pp.c ── C preprocessor and header inclusion      │
 │  part2.c ─── Lexical scanner (tokenizer)                │
 │  part3.c ─── Recursive descent parser                   │
 │  ir.h    ─── IR Instruction definitions                 │
@@ -256,6 +257,7 @@ ZCC's development is backed by a compiler bug corpus containing ground-truth fix
 | Component | Lines | Description |
 | :--- | :--- | :--- |
 | **part1.c** | ~1,200 | Type systems, symbols, scopes, memory allocators |
+| **part0_pp.c** | ~2,200 | C macro preprocessor and header inclusion resolver |
 | **part2.c** | ~800 | Lexical scanner, token mappings, escapes |
 | **part3.c** | ~1,500 | Recursive descent parser for statements & expressions |
 | **part4.c** | ~2,700 | Code generation, System V calling conventions |
@@ -266,7 +268,7 @@ ZCC's development is backed by a compiler bug corpus containing ground-truth fix
 | **ir_to_x86.c** | ~300 | IR-to-assembly translator |
 | **compiler_passes.c** | ~7,317 | Optimization passes and block layout emitter |
 | **compiler_passes_ir.c**| ~570 | IR helper utilities |
-| **Total** | **~16,300** | Full compiled footprint |
+| **Total** | **~18,500** | Full compiled footprint |
 
 ---
 
@@ -284,7 +286,6 @@ ZCC's development is backed by a compiler bug corpus containing ground-truth fix
 ## 🔱 Known Constraints & Limitations
 
 ZCC enforces the following design limitations:
-* **Integrated Preprocessor**: Supports standard macro expansion, header file inclusions, and conditional compilation directive parsing.
 * **No Inline Assembly**: C-native inline assembly statements are unsupported.
 * **Unsupported C Features**: Bitfields in structures, variable-length arrays (VLAs), and certain C11 keywords (`_Atomic`, `_Generic`, `_Complex`) are not supported.
 * **Linkage Boundaries**: Expects single-file compilation (concatenated sources).
