@@ -1,0 +1,63 @@
+{
+  "owner": "your-org-or-user",
+  "project_number": 1,
+  "project_id": "PVT_xxx",
+  "project_title": "Compiler Optimization Rollout",
+  "fields": {
+    "Status": {
+      "id": "PVTF_xxx",
+      "options": {
+        "Todo": "PVTFSO_x1",
+        "In Progress": "PVTFSO_x2",
+        "Review": "PVTFSO_x3",
+        "Blocked": "PVTFSO_x4",
+        "Done": "PVTFSO_x5"
+      }
+    },
+    "Track": {
+      "id": "PVTF_xxx",
+      "options": {
+        "Compiler Core": "PVTFSO_y1",
+        "Optimizer": "PVTFSO_y2",
+        "Tooling/CI": "PVTFSO_y3",
+        "Performance": "PVTFSO_y4",
+        "Release/Ops": "PVTFSO_y5"
+      }
+    },
+    "Milestone": {
+      "id": "PVTF_xxx",
+      "options": {
+        "M1": "PVTFSO_m1",
+        "M2": "PVTFSO_m2",
+        "M3": "PVTFSO_m3",
+        "M4": "PVTFSO_m4"
+      }
+    },
+    "Priority": {
+      "id": "PVTF_xxx",
+      "options": {
+        "P0": "PVTFSO_p0",
+        "P1": "PVTFSO_p1",
+        "P2": "PVTFSO_p2",
+        "P3": "PVTFSO_p3"
+      }
+    },
+    "Size": {
+      "id": "PVTF_xxx",
+      "options": {
+        "XS": "PVTFSO_s0",
+        "S": "PVTFSO_s1",
+        "M": "PVTFSO_s2",
+        "L": "PVTFSO_s3",
+        "XL": "PVTFSO_s4"
+      }
+    },
+    "Type": {
+      "id": "PVTF_xxx",
+      "options": {
+        "Issue": "PVTFSO_t1",
+        "PR": "PVTFSO_t2"
+      }
+    }
+  }
+}

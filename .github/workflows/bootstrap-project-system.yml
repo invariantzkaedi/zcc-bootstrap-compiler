@@ -1,0 +1,107 @@
+name: Bootstrap Project System (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      owner:
+        description: "GitHub owner/org that owns ProjectV2"
+        required: true
+        type: string
+      repo:
+        description: "Repository name"
+        required: true
+        type: string
+      project_number:
+        description: "ProjectV2 number"
+        required: true
+        type: string
+      create_issues:
+        description: "Create roadmap issues from CSV"
+        required: true
+        type: boolean
+        default: true
+      validate_only:
+        description: "Only validate wiring (no creates)"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.PROJECTV2_TOKEN }}
+      OWNER: ${{ github.event.inputs.owner }}
+      REPO: ${{ github.event.inputs.repo }}
+      OWNER_REPO: ${{ github.event.inputs.owner }}/${{ github.event.inputs.repo }}
+      PROJECT_NUMBER: ${{ github.event.inputs.project_number }}
+      CREATE_ISSUES: ${{ github.event.inputs.create_issues }}
+      VALIDATE_ONLY: ${{ github.event.inputs.validate_only }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Preflight GH auth
+        run: |
+          set -euo pipefail
+          gh auth status
+
+      - name: Ensure scripts executable
+        run: |
+          set -euo pipefail
+          chmod +x project/*.sh || true
+
+      - name: Create labels
+        if: ${{ github.event.inputs.validate_only != 'true' }}
+        run: |
+          set -euo pipefail
+          bash project/create_labels.sh "$OWNER_REPO"
+
+      - name: Create milestones
+        if: ${{ github.event.inputs.validate_only != 'true' }}
+        run: |
+          set -euo pipefail
+          bash project/create_milestones.sh "$OWNER_REPO"
+
+      - name: Create issues from CSV
+        if: ${{ github.event.inputs.validate_only != 'true' && github.event.inputs.create_issues == 'true' }}
+        run: |
+          set -euo pipefail
+          bash project/create_issues_from_csv.sh "$OWNER_REPO" project/issues_import.csv
+
+      - name: Validate ProjectV2 fields + token scope
+        run: |
+          set -euo pipefail
+          python3 project/validate_projectv2_setup.py             --owner "$OWNER"             --project-number "$PROJECT_NUMBER"
+
+      - name: Generate routing config snapshot
+        run: |
+          set -euo pipefail
+          python3 project/export_projectv2_field_ids.py             --owner "$OWNER"             --project-number "$PROJECT_NUMBER"             --out .github/projectv2_field_ids.json
+          cat .github/projectv2_field_ids.json
+
+      - name: Commit field-id snapshot
+        if: ${{ github.event.inputs.validate_only != 'true' }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/projectv2_field_ids.json
+          git diff --cached --quiet || git commit -m "chore(project): snapshot ProjectV2 field IDs"
+          git push
+
+      - name: Print next-step instructions
+        run: |
+          echo "Bootstrap completed for ${OWNER_REPO}"
+          echo "Next:"
+          echo "1) Ensure auto routing workflow uses OWNER=${OWNER}, PROJECT_NUMBER=${PROJECT_NUMBER}"
+          echo "2) Open test issue+PR and confirm project auto-add + field routing"
