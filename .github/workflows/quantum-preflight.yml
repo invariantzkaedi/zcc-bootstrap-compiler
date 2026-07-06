@@ -1,0 +1,37 @@
+name: quantum-preflight
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest numpy jsonschema
+
+      - name: Run preflight tests
+        run: |
+          set -euxo pipefail
+          QEC_FUZZ_SEEDS=50 pytest -q \
+            tests/test_trace_schema_validation.py \
+            tests/test_invariants_battery.py \
+            tests/test_determinism_contract.py
+
+      - name: Upload preflight artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qec-preflight-artifacts
+          path: artifacts/
+          if-no-files-found: ignore

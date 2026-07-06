@@ -75,6 +75,9 @@ class Tableau:
                     expected = 1 if (j - n == i) else 0
                     if prod != expected: return False
         return True
+
+    def check_canonical_commutation(self):
+        return self.is_valid_symplectic()
         
     def stabilizer_rank(self):
         # Compute GF(2) rank of the bottom n rows (the stabilizers)
