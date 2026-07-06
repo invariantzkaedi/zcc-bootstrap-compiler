@@ -172,23 +172,17 @@ jobs:
             pytest -q tests/test_fault_injection_e2e.py
           fi
 
-      - name: Collect failure context (seed/trace placeholders)
-        if: failure()
+      - name: Build artifact index + repro scripts
+        if: always()
         run: |
           set -euxo pipefail
-          mkdir -p artifacts
-          # If your tests emit these files, they'll be uploaded.
-          # Recommended outputs from failing tests:
-          # - artifacts/failing_seed.txt
-          # - artifacts/failing_circuit.json
-          # - artifacts/failing_syndrome_trace.json
-          # - artifacts/failing_correction.json
-          ls -la artifacts || true
+          python3 scripts/artifact_utils.py || true
+          python3 scripts/make_repro_script.py || true
 
       - name: Upload nightly artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nightly-deep-artifacts
+          name: quantum-artifacts-${{ github.run_id }}
           path: artifacts/
           if-no-files-found: ignore
