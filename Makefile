@@ -1014,4 +1014,30 @@ qec-max-summary:
 	python3 scripts/validate_artifacts.py
 	python3 scripts/render_job_summary.py || true
 
+.PHONY: max-day1 max-quality max-perf max-audit max-report max-all max-all-with-day1
 
+OWNER_REPO ?= izkaedi-ui/ZCC
+BASE ?= build/base/zcc-opt
+CAND ?= build/cand/zcc-opt
+SUITE ?= benchmarks/list.txt
+
+max-day1:
+	bash scripts/max/day1_operator.sh $(OWNER_REPO)
+
+max-quality:
+	bash scripts/max/full_quality_gate_local.sh
+
+max-perf:
+	BASE=$(BASE) CAND=$(CAND) SUITE=$(SUITE) bash scripts/max/full_perf_gate_local.sh
+
+max-audit:
+	bash scripts/max/hardening_audit.sh $(OWNER_REPO)
+
+max-report:
+	bash scripts/max/weekly_ops_report.sh out/ops/weekly_report.md
+
+max-all: max-quality max-perf max-audit max-report
+	@echo "MAX ALL COMPLETE ✅"
+
+max-all-with-day1: max-day1 max-all
+	@echo "MAX ALL + DAY1 COMPLETE ✅"
