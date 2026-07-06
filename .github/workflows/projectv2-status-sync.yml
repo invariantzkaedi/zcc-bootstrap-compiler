@@ -8,10 +8,11 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Sync PR status field
         env:
-          GH_TOKEN: ${{ secrets.PROJECTV2_TOKEN }}
-          OWNER: your-org-or-user
+          GH_TOKEN: ${{ secrets.PROJECTV2_TOKEN || secrets.GITHUB_TOKEN }}
+          OWNER: izkaedi-ui
           PROJECT_NUMBER: "1"
           PR_NODE_ID: ${{ github.event.pull_request.node_id }}
           PR_MERGED: ${{ github.event.pull_request.merged }}
