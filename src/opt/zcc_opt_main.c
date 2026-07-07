@@ -14,6 +14,8 @@ bool opt_instcombine_pass(Function *fn, OptMetricsSink *metrics);
 bool opt_sccp_pass(Function *fn, OptMetricsSink *metrics);
 bool opt_cfg_simplify_pass(Function *fn, OptMetricsSink *metrics);
 void licm_build_def_block(Function *fn);
+bool opt_loop_unroll_mvp_pass(Function *fn, OptMetricsSink *metrics);
+bool opt_inline_mvp_pass(Module *m, Function *fn, OptMetricsSink *metrics);
 
 enum PassKind {
     PASS_INSTCOMBINE,
@@ -29,6 +31,9 @@ int main(int argc, char **argv) {
     const char *outfile = NULL;
     const char *metrics_path = NULL;
 
+    bool enable_unroll_mvp = false;
+    bool enable_inline_mvp = false;
+
     for (int i = 1; i < argc; i++) {
         if (strncmp(argv[i], "--pass=", 7) == 0) {
             const char *pname = argv[i] + 7;
@@ -41,6 +46,10 @@ int main(int argc, char **argv) {
             } else if (strcmp(pname, "loop") == 0) {
                 passes[n_passes++] = PASS_LOOP;
             }
+        } else if (strcmp(argv[i], "--enable-unroll-mvp") == 0) {
+            enable_unroll_mvp = true;
+        } else if (strcmp(argv[i], "--enable-inline-mvp") == 0) {
+            enable_inline_mvp = true;
         } else if (strcmp(argv[i], "--opt-metrics-out") == 0 && i + 1 < argc) {
             metrics_path = argv[i+1];
             i++;
@@ -83,6 +92,13 @@ int main(int argc, char **argv) {
     // Run passes
     for (int f = 0; f < m->n_funcs; f++) {
         Function *fn = m->funcs[f];
+        extern void load_func_reg_info(Function *fn);
+        load_func_reg_info(fn);
+        
+        if (enable_inline_mvp) {
+            opt_inline_mvp_pass(m, fn, &metrics_sink);
+        }
+
         for (int p = 0; p < n_passes; p++) {
             switch (passes[p]) {
                 case PASS_INSTCOMBINE:
@@ -99,6 +115,9 @@ int main(int argc, char **argv) {
                     int loop_iter = 0;
                     while (changed && loop_iter < 10) {
                         changed = false;
+                        if (enable_unroll_mvp) {
+                            if (opt_loop_unroll_mvp_pass(fn, &metrics_sink)) changed = true;
+                        }
                         if (opt_sccp_pass(fn, &metrics_sink)) changed = true;
                         if (opt_instcombine_pass(fn, &metrics_sink)) changed = true;
                         if (opt_cfg_simplify_pass(fn, &metrics_sink)) changed = true;

@@ -26,6 +26,34 @@ char g_reg_types[MAX_INSTRS][16];
 bool g_reg_is_param[MAX_INSTRS];
 char g_fn_ret_type[16];
 
+typedef struct {
+    Function *fn;
+    char reg_types[MAX_INSTRS][16];
+    bool reg_is_param[MAX_INSTRS];
+} FuncRegInfo;
+
+static FuncRegInfo g_func_reg_info[MAX_FUNCS_PER_MOD];
+static int g_n_func_reg_info = 0;
+
+void save_func_reg_info(Function *fn) {
+    if (g_n_func_reg_info >= MAX_FUNCS_PER_MOD) return;
+    g_func_reg_info[g_n_func_reg_info].fn = fn;
+    memcpy(g_func_reg_info[g_n_func_reg_info].reg_types, g_reg_types, sizeof(g_reg_types));
+    memcpy(g_func_reg_info[g_n_func_reg_info].reg_is_param, g_reg_is_param, sizeof(g_reg_is_param));
+    g_n_func_reg_info++;
+}
+
+void load_func_reg_info(Function *fn) {
+    for (int i = 0; i < g_n_func_reg_info; i++) {
+        if (g_func_reg_info[i].fn == fn) {
+            memcpy(g_reg_types, g_func_reg_info[i].reg_types, sizeof(g_reg_types));
+            memcpy(g_reg_is_param, g_func_reg_info[i].reg_is_param, sizeof(g_reg_is_param));
+            return;
+        }
+    }
+}
+
+
 typedef enum {
     TOK_EOF,
     TOK_FUNC,
@@ -60,6 +88,7 @@ typedef enum {
     TOK_COLON,    // :
     TOK_COMMA,    // ,
     TOK_EQ,       // =
+    TOK_CALL,     // call
 } TokenKind;
 
 typedef struct {
@@ -149,6 +178,7 @@ static void next_token(const char **p, Token *tok, int *line) {
         else if (strcmp(tok->text, "neg") == 0) tok->kind = TOK_NEG;
         else if (strcmp(tok->text, "load") == 0) tok->kind = TOK_LOAD;
         else if (strcmp(tok->text, "store") == 0) tok->kind = TOK_STORE;
+        else if (strcmp(tok->text, "call") == 0) tok->kind = TOK_CALL;
         else tok->kind = TOK_IDENT;
         return;
     }
@@ -395,6 +425,29 @@ Module *parse_ir_module(const char *filename) {
                             next_token(&p, &tok, &line);
                         }
                     }
+                } else if (strcmp(op_tok.text, "call") == 0) {
+                    inst->op = OP_CALL;
+                    if (tok.text[0] == '@') {
+                        strcpy(inst->call_name, tok.text + 1);
+                    } else {
+                        strcpy(inst->call_name, tok.text);
+                    }
+                    next_token(&p, &tok, &line); // '('
+                    if (tok.kind == TOK_LPAREN) {
+                        next_token(&p, &tok, &line);
+                        while (tok.kind != TOK_RPAREN) {
+                            char arg_type[16];
+                            strcpy(arg_type, tok.text);
+                            next_token(&p, &tok, &line); // %x
+                            RegID arg_reg = get_or_create_reg(&fctx, tok.text, arg_type, false);
+                            inst->call_args[inst->n_call_args++] = arg_reg;
+                            next_token(&p, &tok, &line); // ',' or ')'
+                            if (tok.kind == TOK_COMMA) {
+                                next_token(&p, &tok, &line);
+                            }
+                        }
+                        next_token(&p, &tok, &line); // Consume ')'
+                    }
                 } else {
                     // Binary or unary operations
                     if (strcmp(op_tok.text, "add") == 0) inst->op = OP_ADD;
@@ -449,7 +502,7 @@ Module *parse_ir_module(const char *filename) {
                     }
                 }
             } else {
-                // Non-definition instructions: jmp, br, ret, store
+                // Non-definition instructions: jmp, br, ret, store, call
                 Token op_tok = tok;
                 next_token(&p, &tok, &line);
 
@@ -502,6 +555,30 @@ Module *parse_ir_module(const char *filename) {
                     inst->src[1] = get_or_create_reg(&fctx, tok.text, NULL, false);
                     inst->n_src = 2;
                     next_token(&p, &tok, &line);
+                } else if (op_tok.kind == TOK_CALL) {
+                    inst->op = OP_CALL;
+                    inst->dst = 0;
+                    if (tok.text[0] == '@') {
+                        strcpy(inst->call_name, tok.text + 1);
+                    } else {
+                        strcpy(inst->call_name, tok.text);
+                    }
+                    next_token(&p, &tok, &line); // '('
+                    if (tok.kind == TOK_LPAREN) {
+                        next_token(&p, &tok, &line);
+                        while (tok.kind != TOK_RPAREN) {
+                            char arg_type[16];
+                            strcpy(arg_type, tok.text);
+                            next_token(&p, &tok, &line);
+                            RegID arg_reg = get_or_create_reg(&fctx, tok.text, arg_type, false);
+                            inst->call_args[inst->n_call_args++] = arg_reg;
+                            next_token(&p, &tok, &line);
+                            if (tok.kind == TOK_COMMA) {
+                                next_token(&p, &tok, &line);
+                            }
+                        }
+                        next_token(&p, &tok, &line); // Consume ')'
+                    }
                 } else {
                     fprintf(stderr, "Line %d: Unknown instruction %s\n", op_tok.line, op_tok.text);
                     exit(1);
@@ -528,6 +605,7 @@ Module *parse_ir_module(const char *filename) {
 
         // Initialize verification globals for this function
         init_reg_types(&fctx);
+        save_func_reg_info(fn);
         fn->n_regs = fctx.n_regs;
 
         // Build CFG successor/predecessor edges
@@ -629,6 +707,14 @@ void print_ir_instr(FILE *out, Instr *it) {
                 if (i < it->n_phi - 1) fprintf(out, ", ");
             }
             fprintf(out, "\n");
+        } else if (it->op == OP_CALL) {
+            fprintf(out, "call %s @%s(", ty_name, it->call_name);
+            for (uint32_t i = 0; i < it->n_call_args; i++) {
+                const char *arg_ty = g_reg_types[it->call_args[i]][0] ? g_reg_types[it->call_args[i]] : "i32";
+                fprintf(out, "%s %%r%d", arg_ty, it->call_args[i]);
+                if (i < it->n_call_args - 1) fprintf(out, ", ");
+            }
+            fprintf(out, ")\n");
         } else {
             const char *op_name = "unknown";
             bool is_cmp = false;
@@ -672,7 +758,15 @@ void print_ir_instr(FILE *out, Instr *it) {
             fprintf(out, "\n");
         }
     } else {
-        if (it->op == OP_BR) {
+        if (it->op == OP_CALL) {
+            fprintf(out, "  call @%s(", it->call_name);
+            for (uint32_t i = 0; i < it->n_call_args; i++) {
+                const char *arg_ty = g_reg_types[it->call_args[i]][0] ? g_reg_types[it->call_args[i]] : "i32";
+                fprintf(out, "%s %%r%d", arg_ty, it->call_args[i]);
+                if (i < it->n_call_args - 1) fprintf(out, ", ");
+            }
+            fprintf(out, ")\n");
+        } else if (it->op == OP_BR) {
             fprintf(out, "  jmp bb%d\n", it->src[0]);
         } else if (it->op == OP_CONDBR) {
             const char *cond_ty = g_reg_types[it->src[0]][0] ? g_reg_types[it->src[0]] : "i1";

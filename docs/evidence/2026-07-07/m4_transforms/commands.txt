@@ -1,0 +1,6 @@
+# Commands executed for M4 verification
+
+make zcc-opt
+python3 tests/opt/test_transform_fuzz.py
+make selfhost
+make compat-smoke

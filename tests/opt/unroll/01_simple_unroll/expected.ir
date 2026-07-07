@@ -1,0 +1,49 @@
+func @t_unroll() -> i32 {
+bb0:
+  %r1 = const i32 0
+  jmp bb4
+
+bb1:
+
+bb2:
+
+bb3:
+  ret i32 %r22
+
+bb4_clone:
+  %r7 = const i32 0
+  %r8 = const i32 3
+  %r9 = const i1 1
+  jmp bb8
+
+bb5_clone:
+  %r12 = const i32 1
+  %r13 = const i32 3
+  %r14 = const i1 1
+  jmp bb9
+
+bb6_clone:
+  %r17 = const i32 2
+  %r18 = const i32 3
+  %r19 = const i1 1
+  jmp bb10
+
+bb7_clone:
+  %r22 = const i32 3
+  jmp bb3
+
+bb8_clone:
+  %r10 = const i32 1
+  %r11 = const i32 1
+  jmp bb5
+
+bb9_clone:
+  %r15 = const i32 1
+  %r16 = const i32 2
+  jmp bb6
+
+bb10_clone:
+  %r20 = const i32 1
+  %r21 = const i32 3
+  jmp bb7
+}

@@ -14,6 +14,9 @@ __attribute__((weak)) int fn_max_register(const Function *fn) {
     (void)fn;
     return MAX_INSTRS - 1;
 }
+__attribute__((weak)) void load_func_reg_info(Function *fn) {
+    (void)fn;
+}
 
 static void report_error(VerifyReport *out, const char *kind, int bb_id, int inst_id, int reg_id, const char *msg) {
     out->ok = false;
@@ -150,7 +153,7 @@ bool verify_ssa(Function *fn, VerifyReport *out) {
     // First pass: verify single definition per SSA register
     for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
         Block *bb = fn->blocks[bi];
-        if (!bb) continue;
+        if (!bb || !bb->reachable) continue;
 
         for (Instr *it = bb->head; it; it = it->next) {
             if (it->dst != 0) {
@@ -171,7 +174,7 @@ bool verify_ssa(Function *fn, VerifyReport *out) {
     // Second pass: verify all register uses are defined
     for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
         Block *bb = fn->blocks[bi];
-        if (!bb) continue;
+        if (!bb || !bb->reachable) continue;
 
         for (Instr *it = bb->head; it; it = it->next) {
             // Check standard operands
@@ -231,7 +234,7 @@ bool verify_phi_wellformed(Function *fn, VerifyReport *out) {
     bool ok = true;
     for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
         Block *bb = fn->blocks[bi];
-        if (!bb) continue;
+        if (!bb || !bb->reachable) continue;
 
         bool seen_non_phi = false;
         for (Instr *it = bb->head; it; it = it->next) {
@@ -291,6 +294,8 @@ bool verify_phi_wellformed(Function *fn, VerifyReport *out) {
 }
 
 bool verify_function_ir(Function *fn, VerifyReport *out) {
+    extern void load_func_reg_info(Function *fn);
+    load_func_reg_info(fn);
     bool ok = true;
     ok &= verify_terminators(fn, out);
     ok &= verify_cfg(fn, out);

@@ -1,0 +1,25 @@
+func @callee() -> i32 {
+bb0:
+  %r2 = const i32 1
+  %r3 = add i32 %r1, %r2
+  ret i32 %r3
+}
+func @caller() -> i32 {
+bb0:
+  %r1 = const i32 0
+  jmp bb1
+
+bb1:
+  %r2 = phi i32 [bb0: %r1], [bb2: %r3]
+  %r4 = const i32 3
+  %r5 = icmp lt i1 %r2, %r4
+  br i1 %r5, bb2, bb3
+
+bb2:
+  %r6 = call i32 @callee(i32 %r2)
+  %r3 = copy i32 %r6
+  jmp bb1
+
+bb3:
+  ret i32 %r2
+}

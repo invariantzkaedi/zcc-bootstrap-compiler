@@ -1,0 +1,16 @@
+func @t_unroll() -> i32 {
+bb0:
+  %zero = const i32 0
+  jmp bb1
+bb1:
+  %i = phi i32 [bb0: %zero], [bb2: %i_next]
+  %limit = const i32 3
+  %cond = icmp lt i32 %i, %limit
+  br i1 %cond, bb2, bb3
+bb2:
+  %one = const i32 1
+  %i_next = add i32 %i, %one
+  jmp bb1
+bb3:
+  ret i32 %i
+}

@@ -1,0 +1,14 @@
+func @callee(i32 %arg0) -> i32 {
+bb0:
+  %one = const i32 1
+  %res = add i32 %arg0, %one
+  ret i32 %res
+}
+
+func @caller(i32 %x) -> i32 {
+bb0:
+  %ten = const i32 10
+  %y = call i32 @callee(i32 %x)
+  %final = add i32 %y, %ten
+  ret i32 %final
+}

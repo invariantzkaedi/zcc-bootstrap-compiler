@@ -1,0 +1,23 @@
+func @callee(i32 %arg0) -> i32 {
+bb0:
+  %one = const i32 1
+  %res = add i32 %arg0, %one
+  ret i32 %res
+}
+
+func @caller() -> i32 {
+bb0:
+  %zero = const i32 0
+  jmp bb1
+bb1:
+  %i = phi i32 [bb0: %zero], [bb2: %i_next]
+  %limit = const i32 3
+  %cond = icmp lt i32 %i, %limit
+  br i1 %cond, bb2, bb3
+bb2:
+  %y = call i32 @callee(i32 %i)
+  %i_next = copy i32 %y
+  jmp bb1
+bb3:
+  ret i32 %i
+}

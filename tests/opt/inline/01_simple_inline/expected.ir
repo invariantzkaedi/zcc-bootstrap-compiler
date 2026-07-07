@@ -1,0 +1,20 @@
+func @callee(i32 %r1) -> i32 {
+bb0:
+  %r2 = const i32 1
+  %r3 = add i32 %r1, %r2
+  ret i32 %r3
+}
+func @caller(i32 %r1) -> i32 {
+bb0:
+  %r2 = const i32 10
+  jmp bb2
+
+bb1_split:
+  %r4 = add i32 %r6, %r2
+  ret i32 %r4
+
+bb2_clone:
+  %r5 = const i32 1
+  %r6 = add i32 %r1, %r5
+  jmp bb1
+}

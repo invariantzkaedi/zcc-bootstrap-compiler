@@ -5,44 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-static void rebuild_preds_succs(Function *fn) {
-    for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
-        Block *bb = fn->blocks[bi];
-        if (!bb) continue;
-        bb->n_succs = 0;
-        bb->n_preds = 0;
-    }
-
-    for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
-        Block *bb = fn->blocks[bi];
-        if (!bb) continue;
-        Instr *t = bb->tail;
-        if (!t) continue;
-
-        if (t->op == OP_BR) {
-            BlockID dest = t->src[0];
-            if (dest < fn->n_blocks && fn->blocks[dest]) {
-                bb->succs[bb->n_succs++] = dest;
-                Block *dest_bb = fn->blocks[dest];
-                dest_bb->preds[dest_bb->n_preds++] = bi;
-            }
-        } else if (t->op == OP_CONDBR) {
-            BlockID dest1 = t->src[1];
-            BlockID dest2 = t->src[2];
-            if (dest1 < fn->n_blocks && fn->blocks[dest1]) {
-                bb->succs[bb->n_succs++] = dest1;
-                Block *dest_bb1 = fn->blocks[dest1];
-                dest_bb1->preds[dest_bb1->n_preds++] = bi;
-            }
-            if (dest2 < fn->n_blocks && fn->blocks[dest2]) {
-                bb->succs[bb->n_succs++] = dest2;
-                Block *dest_bb2 = fn->blocks[dest2];
-                dest_bb2->preds[dest_bb2->n_preds++] = bi;
-            }
-        }
-    }
-}
+#include "clone_remap.h"
 
 bool opt_cfg_simplify_pass(Function *fn, OptMetricsSink *metrics) {
     const int instr_before = fn_count_instructions(fn);
