@@ -104,7 +104,7 @@ bool opt_cfg_simplify_pass(Function *fn, OptMetricsSink *metrics) {
                 PhiSource new_phi[MAX_PHI_SOURCES];
                 for (uint32_t i = 0; i < it->n_phi; i++) {
                     BlockID pred_id = it->phi[i].block;
-                    if (pred_id < fn->n_blocks && fn->blocks[pred_id]) {
+                    if (pred_id < fn->n_blocks && fn->blocks[pred_id] && reachable[pred_id]) {
                         new_phi[new_n_phi++] = it->phi[i];
                     }
                 }

@@ -13,11 +13,13 @@ void print_ir_function(FILE *out, Function *fn);
 bool opt_instcombine_pass(Function *fn, OptMetricsSink *metrics);
 bool opt_sccp_pass(Function *fn, OptMetricsSink *metrics);
 bool opt_cfg_simplify_pass(Function *fn, OptMetricsSink *metrics);
+void licm_build_def_block(Function *fn);
 
 enum PassKind {
     PASS_INSTCOMBINE,
     PASS_SCCP,
-    PASS_CFG_SIMPLIFY
+    PASS_CFG_SIMPLIFY,
+    PASS_LOOP
 };
 
 int main(int argc, char **argv) {
@@ -36,6 +38,8 @@ int main(int argc, char **argv) {
                 passes[n_passes++] = PASS_SCCP;
             } else if (strcmp(pname, "cfg_simplify") == 0) {
                 passes[n_passes++] = PASS_CFG_SIMPLIFY;
+            } else if (strcmp(pname, "loop") == 0) {
+                passes[n_passes++] = PASS_LOOP;
             }
         } else if (strcmp(argv[i], "--opt-metrics-out") == 0 && i + 1 < argc) {
             metrics_path = argv[i+1];
@@ -90,6 +94,21 @@ int main(int argc, char **argv) {
                 case PASS_CFG_SIMPLIFY:
                     opt_cfg_simplify_pass(fn, &metrics_sink);
                     break;
+                case PASS_LOOP: {
+                    bool changed = true;
+                    int loop_iter = 0;
+                    while (changed && loop_iter < 10) {
+                        changed = false;
+                        if (opt_sccp_pass(fn, &metrics_sink)) changed = true;
+                        if (opt_instcombine_pass(fn, &metrics_sink)) changed = true;
+                        if (opt_cfg_simplify_pass(fn, &metrics_sink)) changed = true;
+                        if (changed) {
+                            licm_build_def_block(fn);
+                        }
+                        loop_iter++;
+                    }
+                    break;
+                }
             }
         }
     }
@@ -98,7 +117,10 @@ int main(int argc, char **argv) {
     report.ok = true;
     report.n_errors = 0;
     if (!verify_module_ir(m, &report)) {
-        fprintf(stderr, "Optimized IR verification failed!\n");
+        fprintf(stderr, "Optimized IR verification failed! Dumping optimized IR:\n");
+        for (int f = 0; f < m->n_funcs; f++) {
+            print_ir_function(stderr, m->funcs[f]);
+        }
         if (metrics_sink.rows) free(metrics_sink.rows);
         free_ir_module(m);
         return 1;

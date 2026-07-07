@@ -6945,10 +6945,36 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
     }
 #ifndef ZCC_BASELINE
     if (fn->n_blocks > 2 && strcmp(fn->name, "main") != 0) {
-        opt_sccp_pass(fn, NULL);
-        opt_instcombine_pass(fn, NULL);
-        opt_cfg_simplify_pass(fn, NULL);
-        licm_build_def_block(fn);
+        uint64_t t_start_pass = get_time_us();
+        uint32_t iter = 0;
+        const uint32_t MAX_ITER = 1;
+        const uint64_t TIME_BUDGET_US = 5000;
+        bool changed = true;
+        const char *stop_reason = "fixpoint";
+
+        while (changed) {
+            if (iter >= MAX_ITER) {
+                stop_reason = "max_iterations";
+                break;
+            }
+            uint64_t t_current = get_time_us();
+            if (t_current - t_start_pass >= TIME_BUDGET_US) {
+                stop_reason = "time_budget";
+                break;
+            }
+
+            changed = false;
+            iter++;
+
+            if (opt_sccp_pass(fn, NULL)) changed = true;
+            if (opt_instcombine_pass(fn, NULL)) changed = true;
+            if (opt_cfg_simplify_pass(fn, NULL)) changed = true;
+            if (changed) {
+                licm_build_def_block(fn);
+            }
+        }
+        fprintf(stderr, "[PassLoop] fn=%s finished in %u iterations, stopped due to: %s\n",
+                fn->name, iter, stop_reason);
     }
 #endif
     uint32_t dce_after = ssa_dce_pass(fn);
