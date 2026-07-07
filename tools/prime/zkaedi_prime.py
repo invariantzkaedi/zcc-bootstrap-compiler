@@ -394,7 +394,7 @@ def run_gauntlet(n_mazes=60, size=25, seed0=7000, verbose=True):
          lambda mz, sd: solve_zkaedi_prime_v3(mz, eps=0.05, seed=sd)),
         ("v1 full PRIME  (baseline)",
          lambda mz, sd: solve_zkaedi_prime(mz, seed=sd)),
-        ("NEG CONTROL recursion-only",
+        ("NEG CONTROL v2 (scars and noise disabled)",
          lambda mz, sd: solve_zkaedi_prime_v2(mz, eta=0.4, eps=0.0, kick=0.0,
                                               seed=sd)),
     ]
@@ -425,7 +425,7 @@ def run_gauntlet(n_mazes=60, size=25, seed0=7000, verbose=True):
                   f"{f'{pr:.2f}x' if pr else '---':>6}")
     v2 = results["v2 scar+noise  (eta=0, eps=.05)"]
     v3 = results["v3 backtrack   (eps=.05)"]
-    neg = results["NEG CONTROL recursion-only"]
+    neg = results["NEG CONTROL v2 (scars and noise disabled)"]
     ok = (v2[0] == n_mazes and v2[2] <= 2.0
           and v3[0] == n_mazes and v3[3] <= 1.3      # v3 simple path near-optimal
           and neg[0] <= 2)
