@@ -499,7 +499,11 @@ def run_sweep(n_mazes=40, seed0=7000, verbose=True):
                 "v3_moves_opt": v3_moves_opt,
                 "v3_path_opt": v3_path_opt
             })
-    return table
+    ok = all(row["v3_pct"] == 1.0 and row["v3_path_opt"] <= 1.3 for row in table)
+    if verbose:
+        print("SWEEP GATES:", "PASS" if ok else "FAIL",
+              "(v3 solves 100% and simple path <=1.3x optimal across all configurations)")
+    return {"table": table, "_gates_pass": ok}
 
 
 if __name__ == "__main__":
@@ -515,8 +519,8 @@ if __name__ == "__main__":
         r = run_gauntlet(a.n, a.size, a.seed)
         raise SystemExit(0 if r["_gates_pass"] else 1)
     if a.sweep:
-        run_sweep(n_mazes=40, seed0=a.seed)
-        raise SystemExit(0)
+        r = run_sweep(n_mazes=40, seed0=a.seed)
+        raise SystemExit(0 if r["_gates_pass"] else 1)
     mz = make_maze(a.size, 0)
     fn = {"v1": solve_zkaedi_prime, "v2": solve_zkaedi_prime_v2,
           "v3": solve_zkaedi_prime_v3}[a.solver]
