@@ -38,7 +38,22 @@ total forward+backtrack moves) is only marginally better than v2 because the
 body must physically retrace. eps still earns its ~15% via tie-breaking; eta
 still buys nothing for navigation (default 0.0 in v3).
 
+v3 SWEEP (9-cell parameter sweep: 3 sizes x 3 densities, 40 mazes each)
+------------------------------------------------------------------------
+| size | density | v2 solved | v2 moves | v3 solved | v3 moves | v3 path  |
+|------|---------|-----------|----------|-----------|----------|----------|
+| 15   | 0.25    | 40/40     | 1.14x    | 40/40     | 1.14x    | 1.07x    |
+| 15   | 0.35    | 40/40     | 1.50x    | 40/40     | 1.80x    | 1.07x    |
+| 15   | 0.45    | 40/40     | 1.64x    | 40/40     | 1.61x    | 1.07x    |
+| 25   | 0.25    | 40/40     | 1.25x    | 40/40     | 1.25x    | 1.13x    |
+| 25   | 0.35    | 40/40     | 2.22x    | 40/40     | 2.55x    | 1.15x    |
+| 25   | 0.45    | 40/40     | 2.09x    | 40/40     | 2.25x    | 1.06x    |
+| 35   | 0.25    | 40/40     | 1.34x    | 40/40     | 1.35x    | 1.17x    |
+| 35   | 0.35    | 40/40     | 2.33x    | 40/40     | 2.76x    | 1.19x    |
+| 35   | 0.45    | 40/40     | 2.35x    | 40/40     | 2.46x    | 1.08x    |
+
 Run the gauntlet:  python zkaedi_prime.py --gauntlet
+Run the sweep:     python zkaedi_prime.py --sweep
 """
 
 from __future__ import annotations
@@ -55,7 +70,7 @@ __version__ = "3.0.0"
 __all__ = [
     "Maze", "Solution", "hamiltonian_field", "make_maze", "bfs_len",
     "solve_zkaedi_prime", "solve_zkaedi_prime_v2", "solve_zkaedi_prime_v3",
-    "run_gauntlet",
+    "run_gauntlet", "run_sweep",
 ]
 
 _MOVES = ((0, 1), (1, 0), (0, -1), (-1, 0))
@@ -415,9 +430,75 @@ def run_gauntlet(n_mazes=60, size=25, seed0=7000, verbose=True):
     return results
 
 
+def run_sweep(n_mazes=40, seed0=7000, verbose=True):
+    """Run a 9-cell parameter sweep across sizes (15, 25, 35) and densities (0.25, 0.35, 0.45)."""
+    sizes = [15, 25, 35]
+    densities = [0.25, 0.35, 0.45]
+    if verbose:
+        print(f"Running sweep: {len(sizes)} sizes x {len(densities)} densities, {n_mazes} mazes each (seed0={seed0})")
+        print(f"| {'size':<4s} | {'density':<7s} | {'v2 solved':<9s} | {'v2 moves':<8s} | {'v3 solved':<9s} | {'v3 moves':<8s} | {'v3 path':<8s} |")
+        print(f"|{'-'*6}|{'-'*9}|{'-'*11}|{'-'*10}|{'-'*11}|{'-'*10}|{'-'*10}|")
+    
+    table = []
+    for size in sizes:
+        for density in densities:
+            pool = []
+            s = 0
+            while len(pool) < n_mazes:
+                mz = make_maze(size, s, wall_density=density)
+                L = bfs_len(mz)
+                if L is not None:
+                    pool.append((mz, L))
+                s += 1
+            
+            # v2 scar+noise (eta=0, eps=0.05)
+            v2_solved, v2_ratios = [], []
+            for i, (mz, L) in enumerate(pool):
+                sol = solve_zkaedi_prime_v2(mz, eta=0.0, eps=0.05, seed=seed0 + i)
+                if sol is not None:
+                    v2_solved.append(sol.steps)
+                    v2_ratios.append(sol.steps / L)
+            
+            # v3 backtrack (eps=0.05)
+            v3_solved, v3_ratios, v3_path_ratios = [], [], []
+            for i, (mz, L) in enumerate(pool):
+                sol = solve_zkaedi_prime_v3(mz, eps=0.05, seed=seed0 + i)
+                if sol is not None:
+                    v3_solved.append(sol.steps)
+                    v3_ratios.append(sol.steps / L)
+                    pl = sol.meta.get("path_len")
+                    v3_path_ratios.append(pl / L if pl is not None else (sol.steps / L))
+            
+            v2_pct = len(v2_solved) / n_mazes
+            v3_pct = len(v3_solved) / n_mazes
+            v2_moves_opt = np.median(v2_ratios) if v2_ratios else 0.0
+            v3_moves_opt = np.median(v3_ratios) if v3_ratios else 0.0
+            v3_path_opt = np.median(v3_path_ratios) if v3_path_ratios else 0.0
+            
+            if verbose:
+                print(f"| {size:<4d} | {density:<7.2f} | "
+                      f"{len(v2_solved):2d}/{n_mazes} ({v2_pct*100:3.0f}%) | "
+                      f"{v2_moves_opt:.2f}x      | "
+                      f"{len(v3_solved):2d}/{n_mazes} ({v3_pct*100:3.0f}%) | "
+                      f"{v3_moves_opt:.2f}x      | "
+                      f"{v3_path_opt:.2f}x      |")
+            
+            table.append({
+                "size": size,
+                "density": density,
+                "v2_pct": v2_pct,
+                "v2_moves_opt": v2_moves_opt,
+                "v3_pct": v3_pct,
+                "v3_moves_opt": v3_moves_opt,
+                "v3_path_opt": v3_path_opt
+            })
+    return table
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="ZKAEDI PRIME solver + gauntlet")
     ap.add_argument("--gauntlet", action="store_true")
+    ap.add_argument("--sweep", action="store_true")
     ap.add_argument("--n", type=int, default=60)
     ap.add_argument("--size", type=int, default=25)
     ap.add_argument("--seed", type=int, default=7000)
@@ -426,6 +507,9 @@ if __name__ == "__main__":
     if a.gauntlet:
         r = run_gauntlet(a.n, a.size, a.seed)
         raise SystemExit(0 if r["_gates_pass"] else 1)
+    if a.sweep:
+        run_sweep(n_mazes=40, seed0=a.seed)
+        raise SystemExit(0)
     mz = make_maze(a.size, 0)
     fn = {"v1": solve_zkaedi_prime, "v2": solve_zkaedi_prime_v2,
           "v3": solve_zkaedi_prime_v3}[a.solver]
