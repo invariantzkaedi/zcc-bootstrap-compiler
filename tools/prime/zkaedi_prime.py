@@ -199,24 +199,19 @@ def solve_zkaedi_prime_v2(self_or_maze, maze: Maze = None, eta: float = 0.4,
                           gamma: float = 0.3, beta: float = 0.1,
                           eps: Optional[float] = None,
                           sigma: Optional[float] = None, kick: float = 2.0,
-                          seed: Optional[int] = None,
+                          decay: float = 1.0, seed: Optional[int] = None,
                           max_steps: int = 50000) -> Optional[Solution]:
     """ZKAEDI PRIME v2 — scarred-field corrigendum.
 
-    The field remembers: on departing a cell, `H_base[x, y] += kick`
-    permanently raises its energy. This tabu/ant-trail memory is the
-    navigation algorithm — it breaks every greedy oscillation trap.
+    Evolves a scalar energy field H over the maze grid each step; the
+    walker greedily moves to the lowest-energy open neighbor. A separate,
+    optionally-decaying "scar" layer records visited cells (repulsive by
+    default via positive `kick`), letting recently-visited cells become
+    attractive again over time as the scar fades -- this discourages
+    short-cycle stalling without permanently corrupting the static field.
 
-    MEASURED (60 BFS-solvable 25x25 mazes, wall density 0.32):
-        scar only  (eta=0, eps=0)   : 60/60, median 90 steps
-        scar+noise (eta=0, eps=.05) : 60/60, median 79 steps, 1.6x optimal
-        scar+PRIME (eta=.4, eps=.05): 60/60, median 83 steps
-        recursion-only NEGATIVE CONTROL (kick=0, eps=0): 0/60 — expected;
-        eta provides zero navigational lift and is retained here as a
-        field-shaping option only (attractor sharpening; keep eta < 1.05).
-
-    Navigation power = scar memory + eps tie-breaking noise.
-    Deterministic given (maze, seed).
+    One equation, two regimes:
+    eta shapes fields; scars + eps navigate.
     """
     if maze is None:
         maze = self_or_maze
@@ -224,31 +219,76 @@ def solve_zkaedi_prime_v2(self_or_maze, maze: Maze = None, eta: float = 0.4,
     start_time = time.time()
     rng = np.random.default_rng(seed)
 
-    H_base = hamiltonian_field(maze).copy()
-    H = H_base.copy()
-    path = [maze.start]
-    x, y = maze.start
-    goal = maze.end
-    n, m = maze.size
+    # Input validation
+    for name, val in (("eta", eta), ("gamma", gamma), ("beta", beta),
+                      ("eps", eps), ("kick", kick)):
+        if not isinstance(val, (int, float)) or isinstance(val, bool):
+            raise TypeError(f"{name} must be numeric, got {type(val).__name__}")
+        if val < 0:
+            raise ValueError(f"{name} must be non-negative, got {val}")
 
-    for _t in range(max_steps):
+    if not isinstance(decay, (int, float)) or isinstance(decay, bool) or not (0.0 < decay <= 1.0):
+        raise ValueError(f"decay must be in (0, 1], got {decay!r}")
+
+    if not isinstance(max_steps, int) or isinstance(max_steps, bool) or max_steps <= 0:
+        raise ValueError(f"max_steps must be a positive int, got {max_steps!r}")
+
+    try:
+        n, m = maze.size
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise ValueError(f"maze.size must unpack to (n, m): {exc}")
+
+    H_static = hamiltonian_field(maze).copy()
+    if H_static.shape != (n, m):
+        raise ValueError(f"hamiltonian_field(maze) shape {H_static.shape} does not match maze.size {(n, m)}")
+
+    try:
+        x, y = maze.start
+        goal = maze.end
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise ValueError(f"maze.start/maze.end must be (row, col) pairs: {exc}")
+
+    scars = np.zeros_like(H_static)
+    H = H_static.copy()
+    path = [(x, y)]
+
+    for t in range(max_steps):
         if (x, y) == goal:
+            elapsed = time.time() - start_time
             return Solution(path=path, steps=len(path) - 1,
-                            time_taken=time.time() - start_time,
+                            time_taken=elapsed,
                             optimal=False, algorithm="ZKAEDI_PRIME_V2",
-                            meta={"eta": eta, "eps": eps, "kick": kick})
-        H_base[x, y] += kick               # the scar IS the algorithm
-        H = _prime_step(H, H_base, eta, gamma, beta, eps, rng)
-        best = None
+                            meta={"eta": eta, "eps": eps, "kick": kick, "decay": decay})
+
+        # 1. Decay the scar layer only, then imprint the current cell.
+        if decay != 1.0:
+            scars *= decay
+        scars[x, y] += kick
+
+        H_base = H_static + scars
+
+        # 2. Evolve the field with overflow-safe nonlinearity.
+        clipped_H = np.clip(H, -500.0, 500.0)
+        sigmoid = 1.0 / (1.0 + np.exp(-gamma * clipped_H))
+        
+        noise_scale = 1.0 + beta * np.minimum(np.abs(H), 100.0)
+        noise = rng.normal(0.0, noise_scale)
+        H = H_base + eta * H * sigmoid + eps * noise
+
+        # 3. Move to the lowest-energy open, in-bounds neighbor.
+        best_move = None
         for dx, dy in _MOVES:
             nx, ny = x + dx, y + dy
             if 0 <= nx < n and 0 <= ny < m and maze.grid[nx][ny] == 1:
-                if best is None or H[nx, ny] < best[0]:
-                    best = (H[nx, ny], (nx, ny))
-        if best is None:
+                if best_move is None or H[nx, ny] < best_move[0]:
+                    best_move = (H[nx, ny], (nx, ny))
+
+        if best_move is None:
             break
-        x, y = best[1]
+
+        x, y = best_move[1]
         path.append((x, y))
+
     return None
 
 
