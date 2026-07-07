@@ -87,7 +87,14 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x scripts/bench/run_robust_benchmarks.sh
-          scripts/bench/run_robust_benchmarks.sh             --base build/base/zcc-opt             --cand build/cand/zcc-opt             --suite benchmarks/list.txt             --warmup 3             --runs 25             --trim 0.10             --out out/bench
+          scripts/bench/run_robust_benchmarks.sh \
+            --base build/base/zcc \
+            --cand build/cand/zcc \
+            --suite benchmarks/list.txt \
+            --warmup 3 \
+            --runs 25 \
+            --trim 0.10 \
+            --out out/bench
 
       - name: Evaluate statistical thresholds
         run: |

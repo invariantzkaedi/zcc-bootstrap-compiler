@@ -4,12 +4,13 @@
 #include <string.h>
 #include <sys/time.h>
 #include <stddef.h>
+#include "zcc_opt_metrics.h"
 
-int g_emit_smt_proofs = 0;
-void smt_prove_ir_strength_reduction(const char *name, int op1, int op2, long long int val1, long long int val2, int width, size_t reg) {
+__attribute__((weak)) int g_emit_smt_proofs = 0;
+__attribute__((weak)) void smt_prove_ir_strength_reduction(const char *name, int op1, int op2, long long int val1, long long int val2, int width, size_t reg) {
     (void)name; (void)op1; (void)op2; (void)val1; (void)val2; (void)width; (void)reg;
 }
-void smt_prove_ir_peephole(const char *name, int op1, int op2, long long int val1, long long int val2, int check1, int check2, int width, size_t reg) {
+__attribute__((weak)) void smt_prove_ir_peephole(const char *name, int op1, int op2, long long int val1, long long int val2, int check1, int check2, int width, size_t reg) {
     (void)name; (void)op1; (void)op2; (void)val1; (void)val2; (void)check1; (void)check2; (void)width; (void)reg;
 }
 
@@ -282,4 +283,55 @@ void licm_build_def_block(Function *fn) {
             }
         }
     }
+}
+
+void opt_metrics_init(OptMetricsSink *s) {
+    s->rows = NULL;
+    s->n_rows = 0;
+    s->cap_rows = 0;
+}
+
+void opt_metrics_push(OptMetricsSink *s, OptPassMetricRow row) {
+    if (s->n_rows >= s->cap_rows) {
+        s->cap_rows = s->cap_rows == 0 ? 16 : s->cap_rows * 2;
+        s->rows = realloc(s->rows, s->cap_rows * sizeof(OptPassMetricRow));
+    }
+    s->rows[s->n_rows++] = row;
+}
+
+void opt_metrics_dump_csv(const OptMetricsSink *s, const char *path) {
+    FILE *f = fopen(path, "w");
+    if (!f) {
+        fprintf(stderr, "Failed to open metrics file %s\n", path);
+        return;
+    }
+    fprintf(f, "pass,function,instructions_before,instructions_after,blocks_before,blocks_after,time_us,changed\n");
+    for (int i = 0; i < s->n_rows; i++) {
+        OptPassMetricRow r = s->rows[i];
+        fprintf(f, "%s,%s,%d,%d,%d,%d,%lld,%d\n",
+            r.pass_name ? r.pass_name : "",
+            r.fn_name ? r.fn_name : "",
+            r.instr_before,
+            r.instr_after,
+            r.blocks_before,
+            r.blocks_after,
+            (long long)r.pass_time_us,
+            r.changed ? 1 : 0);
+    }
+    fclose(f);
+}
+
+int fn_max_register(const Function *fn) {
+    int max_reg = 0;
+    for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
+        Block *bb = fn->blocks[bi];
+        if (!bb) continue;
+        for (Instr *ins = bb->head; ins; ins = ins->next) {
+            if (ins->dst > max_reg && ins->dst < MAX_INSTRS) max_reg = ins->dst;
+            for (int i = 0; i < 2; i++) {
+                if (ins->src[i] > max_reg && ins->src[i] < MAX_INSTRS) max_reg = ins->src[i];
+            }
+        }
+    }
+    return max_reg;
 }

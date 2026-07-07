@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${BASE:=build/base/zcc-opt}"
-: "${CAND:=build/cand/zcc-opt}"
+: "${BASE:=build/base/zcc}"
+: "${CAND:=build/cand/zcc}"
 : "${SUITE:=benchmarks/list.txt}"
 
 echo "[1/5] build baseline/candidate"

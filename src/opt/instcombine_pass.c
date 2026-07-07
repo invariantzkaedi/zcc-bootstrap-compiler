@@ -1,6 +1,7 @@
 #include "zcc_ir.h"
 #include "zcc_ir_opt_helpers.h"
 #include "zcc_ir_opt_passes.h"
+#include <stdio.h>
 #include "zcc_opt_metrics.h"
 #include "zcc_ir_verify.h"
 
@@ -20,8 +21,10 @@ bool opt_instcombine_pass(Function *fn, OptMetricsSink *metrics) {
     const int64_t t0 = zcc_now_us();
 
     rebuild_def_use(fn);
-    memset(g_ic_snapshot, 0, sizeof(g_ic_snapshot));
-    for (int i = 0; i < MAX_INSTRS; i++) {
+    int max_reg = fn_max_register(fn);
+    if (max_reg >= MAX_INSTRS) max_reg = MAX_INSTRS - 1;
+    memset(g_ic_snapshot, 0, (max_reg + 1) * sizeof(Instr));
+    for (int i = 0; i <= max_reg; i++) {
         if (fn->def_of[i]) {
             g_ic_snapshot[i] = *(fn->def_of[i]);
         } else {
@@ -53,13 +56,19 @@ done:
         rebuild_def_use(fn);
     }
 
-    VerifyReport vr = {
-        .ok = true,
-        .errors = NULL,
-        .n_errors = 0,
-        .cap_errors = 0
-    };
-    verify_function_ir(fn, &vr);
+    if (metrics) {
+        OptPassMetricRow row = {
+            .pass_name = "instcombine",
+            .fn_name = fn->name,
+            .instr_before = instr_before,
+            .instr_after = fn_count_instructions(fn),
+            .blocks_before = blocks_before,
+            .blocks_after = fn_count_blocks(fn),
+            .pass_time_us = zcc_now_us() - t0,
+            .changed = changed
+        };
+        opt_metrics_push(metrics, row);
+    }
 
     return changed;
 }

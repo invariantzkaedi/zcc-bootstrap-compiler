@@ -270,6 +270,7 @@ typedef struct Function {
     uint32_t licm_preheaders_inserted;
     uint32_t pgo_blocks_reordered;
   } stats;
+  char name[64];
 } Function;
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -5605,6 +5606,9 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
 Function *zcc_ast_to_ir(ZCCNode *body_ast, const char *func_name) {
   current_function_name = func_name;
   Function *fn = calloc(1, sizeof(Function));
+  if (func_name) {
+    strncpy(fn->name, func_name, sizeof(fn->name) - 1);
+  }
   LowerCtx ctx;
   memset(&ctx, 0, sizeof(ctx));
   ctx.fn = fn;
@@ -6706,6 +6710,12 @@ static long long get_time_us(void) {
   return (long long)tv.tv_sec * 1000000 + tv.tv_usec;
 }
 
+#ifndef ZCC_BASELINE
+bool opt_instcombine_pass(Function *fn, void *metrics);
+bool opt_sccp_pass(Function *fn, void *metrics);
+bool opt_cfg_simplify_pass(Function *fn, void *metrics);
+#endif
+
 void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
                     int num_params) {
   long long t_start, t_end;
@@ -6817,6 +6827,7 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
         folded, opt_sr, opt_cp, opt_p, opt_cp2);
     licm_build_def_block(fn);
   }
+
 
   /* ── Pass 0b: Redundant Load Elimination ── */
   n_before = count_ir_nodes(fn);
@@ -6932,6 +6943,14 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
               post_folded, post_sr, post_cp, post_p);
       licm_build_def_block(fn);
     }
+#ifndef ZCC_BASELINE
+    if (fn->n_blocks > 2 && strcmp(fn->name, "main") != 0) {
+        opt_sccp_pass(fn, NULL);
+        opt_instcombine_pass(fn, NULL);
+        opt_cfg_simplify_pass(fn, NULL);
+        licm_build_def_block(fn);
+    }
+#endif
     uint32_t dce_after = ssa_dce_pass(fn);
     fprintf(stderr,
             "[DCE->SSA]  instructions removed (after mem2reg): %u  blocks "

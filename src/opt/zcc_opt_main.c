@@ -1,5 +1,6 @@
 #include "../prelude.h"
 #include "zcc_ir_verify.h"
+#include "zcc_opt_metrics.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,9 +10,9 @@ void free_ir_module(Module *m);
 void print_ir_function(FILE *out, Function *fn);
 
 // Declarations of optimization passes
-bool opt_instcombine_pass(Function *fn, void *metrics);
-bool opt_sccp_pass(Function *fn, void *metrics);
-bool opt_cfg_simplify_pass(Function *fn, void *metrics);
+bool opt_instcombine_pass(Function *fn, OptMetricsSink *metrics);
+bool opt_sccp_pass(Function *fn, OptMetricsSink *metrics);
+bool opt_cfg_simplify_pass(Function *fn, OptMetricsSink *metrics);
 
 enum PassKind {
     PASS_INSTCOMBINE,
@@ -24,6 +25,7 @@ int main(int argc, char **argv) {
     int n_passes = 0;
     const char *infile = NULL;
     const char *outfile = NULL;
+    const char *metrics_path = NULL;
 
     for (int i = 1; i < argc; i++) {
         if (strncmp(argv[i], "--pass=", 7) == 0) {
@@ -35,6 +37,9 @@ int main(int argc, char **argv) {
             } else if (strcmp(pname, "cfg_simplify") == 0) {
                 passes[n_passes++] = PASS_CFG_SIMPLIFY;
             }
+        } else if (strcmp(argv[i], "--opt-metrics-out") == 0 && i + 1 < argc) {
+            metrics_path = argv[i+1];
+            i++;
         } else if (strcmp(argv[i], "-o") == 0 && i + 1 < argc) {
             outfile = argv[i+1];
             i++;
@@ -44,7 +49,7 @@ int main(int argc, char **argv) {
     }
 
     if (!infile) {
-        fprintf(stderr, "Usage: %s [--pass=passname] <file.ir> [-o outfile]\n", argv[0]);
+        fprintf(stderr, "Usage: %s [--pass=passname] [--opt-metrics-out path] <file.ir> [-o outfile]\n", argv[0]);
         return 1;
     }
 
@@ -68,19 +73,22 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    OptMetricsSink metrics_sink;
+    opt_metrics_init(&metrics_sink);
+
     // Run passes
     for (int f = 0; f < m->n_funcs; f++) {
         Function *fn = m->funcs[f];
         for (int p = 0; p < n_passes; p++) {
             switch (passes[p]) {
                 case PASS_INSTCOMBINE:
-                    opt_instcombine_pass(fn, NULL);
+                    opt_instcombine_pass(fn, &metrics_sink);
                     break;
                 case PASS_SCCP:
-                    opt_sccp_pass(fn, NULL);
+                    opt_sccp_pass(fn, &metrics_sink);
                     break;
                 case PASS_CFG_SIMPLIFY:
-                    opt_cfg_simplify_pass(fn, NULL);
+                    opt_cfg_simplify_pass(fn, &metrics_sink);
                     break;
             }
         }
@@ -91,6 +99,7 @@ int main(int argc, char **argv) {
     report.n_errors = 0;
     if (!verify_module_ir(m, &report)) {
         fprintf(stderr, "Optimized IR verification failed!\n");
+        if (metrics_sink.rows) free(metrics_sink.rows);
         free_ir_module(m);
         return 1;
     }
@@ -101,6 +110,7 @@ int main(int argc, char **argv) {
         out = fopen(outfile, "w");
         if (!out) {
             fprintf(stderr, "Failed to open output file %s\n", outfile);
+            if (metrics_sink.rows) free(metrics_sink.rows);
             free_ir_module(m);
             return 1;
         }
@@ -114,6 +124,14 @@ int main(int argc, char **argv) {
         fclose(out);
     }
 
+    if (metrics_path) {
+        opt_metrics_dump_csv(&metrics_sink, metrics_path);
+    }
+    if (metrics_sink.rows) {
+        free(metrics_sink.rows);
+    }
+
     free_ir_module(m);
     return 0;
 }
+

@@ -21,5 +21,4 @@ for d in s.get("details", []):
         f"| {d['benchmark']} | {d.get('compile_overhead_pct',0):.2f} | "
         f"{d.get('runtime_delta_pct',0):.2f} | {d.get('runtime_pvalue_mannwhitney',1.0):.4f} |"
     )
-pathlib.Path(args.out).write_text("
-".join(lines), encoding="utf-8")
+pathlib.Path(args.out).write_text("\n".join(lines), encoding="utf-8")

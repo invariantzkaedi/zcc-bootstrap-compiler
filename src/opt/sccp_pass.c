@@ -1,11 +1,12 @@
 #include "zcc_ir.h"
 #include "zcc_ir_opt_helpers.h"
 #include "zcc_ir_opt_passes.h"
+#include "zcc_opt_metrics.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-extern bool g_reg_is_param[MAX_INSTRS];
+__attribute__((weak)) bool g_reg_is_param[MAX_INSTRS];
 
 typedef enum {
     LATTICE_TOP,
@@ -18,9 +19,22 @@ typedef struct {
     int64_t val;
 } SccpValue;
 
-bool opt_sccp_pass(Function *fn, void *metrics) {
-    (void)metrics;
+bool opt_sccp_pass(Function *fn, OptMetricsSink *metrics) {
+    const int instr_before = fn_count_instructions(fn);
+    const int blocks_before = fn_count_blocks(fn);
+    const int64_t t0 = zcc_now_us();
     bool changed = false;
+
+    // Walk instructions to populate parameter registers for compiler-pass invocation
+    for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
+        Block *bb = fn->blocks[bi];
+        if (!bb) continue;
+        for (Instr *ins = bb->head; ins; ins = ins->next) {
+            if (ins->is_param && ins->dst < MAX_INSTRS) {
+                g_reg_is_param[ins->dst] = true;
+            }
+        }
+    }
 
     // Allocate lattice value table for all registers
     SccpValue *lat = calloc(MAX_INSTRS, sizeof(SccpValue));
@@ -30,12 +44,13 @@ bool opt_sccp_pass(Function *fn, void *metrics) {
     // Entry block is reachable
     bb_reach[0] = true;
 
+    int max_reg = fn_max_register(fn);
+    if (max_reg >= MAX_INSTRS) max_reg = MAX_INSTRS - 1;
+
     // Mark parameter registers as BOTTOM (overdefined)
-    for (int i = 1; i < MAX_INSTRS; i++) {
+    for (int i = 1; i <= max_reg; i++) {
         if (g_reg_is_param[i]) {
             lat[i].state = LATTICE_BOTTOM;
-        } else {
-            lat[i].state = LATTICE_TOP;
         }
     }
 
@@ -162,6 +177,10 @@ bool opt_sccp_pass(Function *fn, void *metrics) {
                         bb_reach[dest] = true;
                         iter_changed = true;
                     }
+                } else {
+                    if (it->dst != 0 && it->dst < MAX_INSTRS) {
+                        lat[it->dst].state = LATTICE_BOTTOM;
+                    }
                 }
 
                 if (it->dst != 0 && it->dst < MAX_INSTRS) {
@@ -180,10 +199,11 @@ bool opt_sccp_pass(Function *fn, void *metrics) {
 
         for (Instr *it = bb->head; it; it = it->next) {
             if (it->dst != 0 && it->dst < MAX_INSTRS) {
-                if (lat[it->dst].state == LATTICE_CONSTANT && it->op != OP_CONST && it->op != OP_PHI) {
+                if (lat[it->dst].state == LATTICE_CONSTANT && it->op != OP_CONST) {
                     it->op = OP_CONST;
                     it->imm = lat[it->dst].val;
                     it->n_src = 0;
+                    it->n_phi = 0;
                     changed = true;
                 }
             }
@@ -214,6 +234,20 @@ bool opt_sccp_pass(Function *fn, void *metrics) {
     // Call cfg simplify at the end to clean up unreachable blocks
     if (opt_cfg_simplify_pass(fn, NULL)) {
         changed = true;
+    }
+
+    if (metrics) {
+        OptPassMetricRow row = {
+            .pass_name = "sccp",
+            .fn_name = fn->name,
+            .instr_before = instr_before,
+            .instr_after = fn_count_instructions(fn),
+            .blocks_before = blocks_before,
+            .blocks_after = fn_count_blocks(fn),
+            .pass_time_us = zcc_now_us() - t0,
+            .changed = changed
+        };
+        opt_metrics_push(metrics, row);
     }
 
     return changed;

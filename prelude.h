@@ -136,6 +136,11 @@ typedef struct Instr {
   /* Metadata */
   bool dead;        /* marked by DCE                       */
   int is_float;
+  int src_is_float;
+  int src_size;
+  int dst_size;
+  int src_unsigned;
+  int dst_unsigned;
   bool escape;      /* marked by escape analysis           */
   bool is_param;    /* true if this is a parameter alloca  */
   double exec_freq; /* from PGO profile                    */
@@ -199,8 +204,6 @@ typedef struct Block {
 } Block;
 
 typedef struct Function {
-  char name[NAME_LEN];
-  char ret_type[16];
   Block *blocks[MAX_BLOCKS];
   uint32_t n_blocks;
   BlockID entry;
@@ -220,4 +223,6 @@ typedef struct Function {
     uint32_t licm_preheaders_inserted;
     uint32_t pgo_blocks_reordered;
   } stats;
+  char name[NAME_LEN];
+  char ret_type[16];
 } Function;

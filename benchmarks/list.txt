@@ -1,6 +1,6 @@
 # one benchmark source path per line
-benchmarks/cases/fib.zc
-benchmarks/cases/matmul_small.zc
-benchmarks/cases/branchy.zc
-benchmarks/cases/bitmix.zc
-benchmarks/cases/loop_sum.zc
+benchmarks/cases/fib.c
+benchmarks/cases/matmul_small.c
+benchmarks/cases/branchy.c
+benchmarks/cases/bitmix.c
+benchmarks/cases/loop_sum.c

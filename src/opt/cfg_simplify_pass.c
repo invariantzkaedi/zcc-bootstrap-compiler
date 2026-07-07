@@ -1,12 +1,15 @@
 #include "zcc_ir.h"
 #include "zcc_ir_opt_helpers.h"
 #include "zcc_ir_opt_passes.h"
+#include "zcc_opt_metrics.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-bool opt_cfg_simplify_pass(Function *fn, void *metrics) {
-    (void)metrics;
+bool opt_cfg_simplify_pass(Function *fn, OptMetricsSink *metrics) {
+    const int instr_before = fn_count_instructions(fn);
+    const int blocks_before = fn_count_blocks(fn);
+    const int64_t t0 = zcc_now_us();
     bool changed = false;
 
     // 1. Compute reachability from entry block (0)
@@ -43,8 +46,9 @@ bool opt_cfg_simplify_pass(Function *fn, void *metrics) {
                 free(it);
                 it = next;
             }
-            free(bb);
-            fn->blocks[bi] = NULL;
+            bb->head = bb->tail = NULL;
+            bb->n_instrs = 0;
+            bb->reachable = false;
             changed = true;
         }
     }
@@ -128,5 +132,20 @@ bool opt_cfg_simplify_pass(Function *fn, void *metrics) {
     if (changed) {
         rebuild_def_use(fn);
     }
+
+    if (metrics) {
+        OptPassMetricRow row = {
+            .pass_name = "cfg_simplify",
+            .fn_name = fn->name,
+            .instr_before = instr_before,
+            .instr_after = fn_count_instructions(fn),
+            .blocks_before = blocks_before,
+            .blocks_after = fn_count_blocks(fn),
+            .pass_time_us = zcc_now_us() - t0,
+            .changed = changed
+        };
+        opt_metrics_push(metrics, row);
+    }
+
     return changed;
 }

@@ -44,6 +44,7 @@ pin_env() {
   export MKL_NUM_THREADS=1
   export VECLIB_MAXIMUM_THREADS=1
   export NUMEXPR_NUM_THREADS=1
+  export ZCC_IR_BACKEND=1
 }
 
 run_variant() {
@@ -52,11 +53,11 @@ run_variant() {
 
   while IFS= read -r bench || [[ -n "$bench" ]]; do
     [[ -z "$bench" || "$bench" =~ ^# ]] && continue
-    bname="$(basename "$bench" .zc)"
+    bname="$(basename "$bench" .c)"
     exe="$OUT/raw/${bname}.${variant}.out"
 
     for ((i=0;i<5;i++)); do
-      c_us="$(time_us "$bin" "$bench" -o "$exe")"
+      c_us="$(time_us "$bin" "$bench" -o "$exe" --use-system-as)"
       echo "${bname},${variant},${c_us}," >> "$OUT/raw/samples.csv"
     done
 

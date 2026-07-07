@@ -22,6 +22,7 @@ bool is_all_ones_for_type(IRType ty, int64_t k);
 void rebuild_def_use(Function *fn);
 int fn_count_instructions(const Function *fn);
 int fn_count_blocks(const Function *fn);
+int fn_max_register(const Function *fn);
 void licm_build_def_block(Function *fn);
 
 #endif
