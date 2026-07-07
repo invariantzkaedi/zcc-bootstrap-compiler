@@ -6,17 +6,10 @@ ZKAEDI PRIME — Recursively Coupled Hamiltonian Maze Solver
 
 CORRIGENDUM (verified 2026-07-03, 60 BFS-solvable 25x25 mazes, wall density 0.32)
 ---------------------------------------------------------------------------------
-The field dynamics are everything they claim to be AS A DYNAMICAL SYSTEM:
-
-  PASS  recursive coupling is real          ||H* - H0||_inf = 4.64
-  PASS  nonlinear attractor sharpening      ridges x1.43 vs basins x1.13
-  PASS  fixed-point convergence             machine precision by t ~ 50
-  PASS  bifurcation / phase transition      eta_c ~ 1.05 (theory: eta < 1
-                                            as sigmoid -> 1); canonical
-                                            eta = 0.4 is safely subcritical
-  PASS  bounded stochastic attractor        drift 0.439 +/- 0.001 under noise
-
-But the NAVIGATION claim had its causality backwards:
+The field dynamics are everything they claim to be AS A DYNAMICAL SYSTEM
+(recursive coupling, attractor sharpening, fixed-point convergence, a
+bifurcation near eta_c ~ 1.05, a bounded stochastic attractor). But the
+NAVIGATION causality was backwards:
 
   v1 recursion-only (eps=0)  :  0/60 solved   <- recursion navigates NOTHING
   v1 noise-only     (eta=0)  : 11/60 solved   <- the noise was doing the walking
@@ -24,19 +17,26 @@ But the NAVIGATION claim had its causality backwards:
   v2 scar-only               : 60/60, median 90 steps
   v2 scar + noise            : 60/60, median 79 steps, 1.6x optimal
 
-The scar term (visited-cell memory written into H_base) is the navigation
-algorithm. eps noise is a consistent ~15% step reduction (tie-breaking).
-eta is a FIELD-SHAPING operator — attractor sharpening, contrast control —
-with zero navigational lift (the eta sweep on scarred fields is
-monotonically neutral-to-harmful: 79 -> 83 -> 140 steps for eta 0 -> 0.4
--> 1.0). One equation, two regimes: use eta where the field is the
-product (worldgen, H0 scoring); use scars + eps where a walker must move.
+The SCAR term (visited-cell memory) is the navigation algorithm. eps noise
+is a consistent ~15% step reduction (tie-breaking). eta is a FIELD-SHAPING
+operator with zero navigational lift. One equation, two regimes: use eta
+where the field is the product (worldgen, H0 scoring); use scars + eps
+where a walker must move.
 
-v1 is preserved below byte-faithful in behavior for A/B. Two spec defects
-fixed relative to the original snippet: (1) zero-width characters removed
-from the `<` comparisons; (2) the noise amplitude is named `eps` — it was
-called `sigma`, colliding with the sigmoid's role in the same equation
-(`sigma=` is accepted as a deprecated alias).
+v3 ADDENDUM (verified 2026-07-07, same 60-maze pool)
+----------------------------------------------------
+v3 gives the scarred walker an explicit path stack + dead-end sealing
+(backtracking). Measured:
+
+  v3 backtrack + noise : 60/60, median 75 total moves (1.5x),
+                         final SIMPLE path 1.12x optimal
+  v3 backtrack, eps=0  : 60/60, median 92 total moves (1.8x), path 1.14x
+
+The near-optimal SIMPLE path (meta['path_len']) is the real v3 win: the
+returned route carries no dead-end detours. Locomotion effort (Solution.steps,
+total forward+backtrack moves) is only marginally better than v2 because the
+body must physically retrace. eps still earns its ~15% via tie-breaking; eta
+still buys nothing for navigation (default 0.0 in v3).
 
 Run the gauntlet:  python zkaedi_prime.py --gauntlet
 """
@@ -51,10 +51,11 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
-__version__ = "2.0.0"
+__version__ = "3.0.0"
 __all__ = [
     "Maze", "Solution", "hamiltonian_field", "make_maze", "bfs_len",
-    "solve_zkaedi_prime", "solve_zkaedi_prime_v2", "run_gauntlet",
+    "solve_zkaedi_prime", "solve_zkaedi_prime_v2", "solve_zkaedi_prime_v3",
+    "run_gauntlet",
 ]
 
 _MOVES = ((0, 1), (1, 0), (0, -1), (-1, 0))
@@ -62,8 +63,7 @@ _WALL_ENERGY = 1e6
 
 
 # ----------------------------------------------------------------------
-# minimal maze / solution containers (duck-type compatible: any object
-# with .grid (2D 0/1), .size (n, m), .start, .end works)
+# minimal maze / solution containers (duck-type compatible)
 # ----------------------------------------------------------------------
 @dataclass
 class Maze:
@@ -120,8 +120,7 @@ def hamiltonian_field(maze: Maze) -> np.ndarray:
     return H
 
 
-def _prime_step(H: np.ndarray, H_base: np.ndarray, eta: float, gamma: float,
-                beta: float, eps: float, rng) -> np.ndarray:
+def _prime_step(H, H_base, eta, gamma, beta, eps, rng):
     """One PRIME field update with overflow guards (walls sit at 1e6)."""
     sig = 1.0 / (1.0 + np.exp(-gamma * np.clip(H, -500.0, 500.0)))
     H = H_base + eta * H * sig
@@ -130,8 +129,7 @@ def _prime_step(H: np.ndarray, H_base: np.ndarray, eta: float, gamma: float,
     return H
 
 
-def _resolve_eps(eps: Optional[float], sigma: Optional[float],
-                 default: float) -> float:
+def _resolve_eps(eps, sigma, default):
     if sigma is not None:            # deprecated alias from the v1 spec
         warnings.warn("`sigma` is deprecated (it collides with the sigmoid's "
                       "role in the same equation); use `eps`.",
@@ -143,35 +141,26 @@ def _resolve_eps(eps: Optional[float], sigma: Optional[float],
 # ----------------------------------------------------------------------
 # v1 — preserved for A/B. Measured: 9/60 on the standard gauntlet.
 # ----------------------------------------------------------------------
-def solve_zkaedi_prime(self_or_maze, maze: Maze = None, eta: float = 0.4,
-                       gamma: float = 0.3, beta: float = 0.1,
-                       eps: Optional[float] = None, sigma: Optional[float] = None,
-                       seed: Optional[int] = None,
-                       max_steps: int = 50000) -> Optional[Solution]:
+def solve_zkaedi_prime(self_or_maze, maze=None, eta=0.4, gamma=0.3, beta=0.1,
+                       eps=None, sigma=None, seed=None, max_steps=50000):
     """ZKAEDI PRIME v1 — recursively coupled Hamiltonian solver (original).
 
-    HONEST BEHAVIOR (measured): the recursive eta term converges the field
-    to a static fixed point in ~50 iterations; after that the walker is
-    memoryless greedy descent on a frozen (sharpened) potential and traps
-    in two-cell oscillations. All solves are attributable to the eps
-    noise term. 9/60 on the standard gauntlet. Prefer v2.
-
-    Callable as a method (first arg = self) or a free function
-    (first arg = maze). `sigma=` is a deprecated alias for `eps=`.
+    HONEST BEHAVIOR: the recursive eta term converges the field to a static
+    fixed point in ~50 iterations; after that the walker is memoryless greedy
+    descent on a frozen potential and traps in two-cell oscillations. All
+    solves are attributable to the eps noise term. 9/60. Prefer v2/v3.
     """
-    if maze is None:                      # called as free function
+    if maze is None:
         maze = self_or_maze
     eps = _resolve_eps(eps, sigma, 0.05)
     start_time = time.time()
     rng = np.random.default_rng(seed)
-
     H_base = hamiltonian_field(maze)
     H = H_base.copy()
     path = [maze.start]
     x, y = maze.start
     goal = maze.end
     n, m = maze.size
-
     for _t in range(max_steps):
         if (x, y) == goal:
             return Solution(path=path, steps=len(path) - 1,
@@ -186,7 +175,7 @@ def solve_zkaedi_prime(self_or_maze, maze: Maze = None, eta: float = 0.4,
                 if best is None or H[nx, ny] < best[0]:
                     best = (H[nx, ny], (nx, ny))
         if best is None:
-            break                          # trapped
+            break
         x, y = best[1]
         path.append((x, y))
     return None
@@ -195,53 +184,114 @@ def solve_zkaedi_prime(self_or_maze, maze: Maze = None, eta: float = 0.4,
 # ----------------------------------------------------------------------
 # v2 — scarred field. Measured: 60/60, median 79 steps, 1.6x optimal.
 # ----------------------------------------------------------------------
-def solve_zkaedi_prime_v2(self_or_maze, maze: Maze = None, eta: float = 0.4,
-                          gamma: float = 0.3, beta: float = 0.1,
-                          eps: Optional[float] = None,
-                          sigma: Optional[float] = None, kick: float = 2.0,
-                          decay: float = 1.0, seed: Optional[int] = None,
-                          max_steps: int = 50000) -> Optional[Solution]:
+def solve_zkaedi_prime_v2(self_or_maze, maze=None, eta=0.4, gamma=0.3, beta=0.1,
+                          eps=None, sigma=None, kick=2.0, decay=1.0,
+                          seed=None, max_steps=50000):
     """ZKAEDI PRIME v2 — scarred-field corrigendum.
 
-    Evolves a scalar energy field H over the maze grid each step; the
-    walker greedily moves to the lowest-energy open neighbor. A separate,
-    optionally-decaying "scar" layer records visited cells (repulsive by
-    default via positive `kick`), letting recently-visited cells become
-    attractive again over time as the scar fades -- this discourages
-    short-cycle stalling without permanently corrupting the static field.
-
-    One equation, two regimes:
-    eta shapes fields; scars + eps navigate.
+    Reactive walker: greedy descent on a static field plus a decaying scar
+    layer that records visited cells (repulsive via positive `kick`). The
+    scar term is the actual navigation mechanism. 60/60, ~1.6x optimal.
     """
     if maze is None:
         maze = self_or_maze
     eps = _resolve_eps(eps, sigma, 0.05)
     start_time = time.time()
     rng = np.random.default_rng(seed)
-
-    # Input validation
     for name, val in (("eta", eta), ("gamma", gamma), ("beta", beta),
                       ("eps", eps), ("kick", kick)):
         if not isinstance(val, (int, float)) or isinstance(val, bool):
             raise TypeError(f"{name} must be numeric, got {type(val).__name__}")
         if val < 0:
             raise ValueError(f"{name} must be non-negative, got {val}")
-
     if not isinstance(decay, (int, float)) or isinstance(decay, bool) or not (0.0 < decay <= 1.0):
         raise ValueError(f"decay must be in (0, 1], got {decay!r}")
-
     if not isinstance(max_steps, int) or isinstance(max_steps, bool) or max_steps <= 0:
         raise ValueError(f"max_steps must be a positive int, got {max_steps!r}")
-
     try:
         n, m = maze.size
     except (AttributeError, TypeError, ValueError) as exc:
         raise ValueError(f"maze.size must unpack to (n, m): {exc}")
-
     H_static = hamiltonian_field(maze).copy()
     if H_static.shape != (n, m):
-        raise ValueError(f"hamiltonian_field(maze) shape {H_static.shape} does not match maze.size {(n, m)}")
+        raise ValueError(f"field shape {H_static.shape} != maze.size {(n, m)}")
+    try:
+        x, y = maze.start
+        goal = maze.end
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise ValueError(f"maze.start/maze.end must be (row, col) pairs: {exc}")
+    scars = np.zeros_like(H_static)
+    H = H_static.copy()
+    path = [(x, y)]
+    for _t in range(max_steps):
+        if (x, y) == goal:
+            return Solution(path=path, steps=len(path) - 1,
+                            time_taken=time.time() - start_time,
+                            optimal=False, algorithm="ZKAEDI_PRIME_V2",
+                            meta={"eta": eta, "eps": eps, "kick": kick,
+                                  "decay": decay})
+        if decay != 1.0:
+            scars *= decay
+        scars[x, y] += kick
+        H_base = H_static + scars
+        clipped_H = np.clip(H, -500.0, 500.0)
+        sigmoid = 1.0 / (1.0 + np.exp(-gamma * clipped_H))
+        noise = rng.normal(0.0, 1.0 + beta * np.minimum(np.abs(H), 100.0))
+        H = H_base + eta * H * sigmoid + eps * noise
+        best_move = None
+        for dx, dy in _MOVES:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < n and 0 <= ny < m and maze.grid[nx][ny] == 1:
+                if best_move is None or H[nx, ny] < best_move[0]:
+                    best_move = (H[nx, ny], (nx, ny))
+        if best_move is None:
+            break
+        x, y = best_move[1]
+        path.append((x, y))
+    return None
 
+
+# ----------------------------------------------------------------------
+# v3 — scarred walker + backtracking. Measured: 60/60, path 1.12x optimal.
+# ----------------------------------------------------------------------
+def solve_zkaedi_prime_v3(self_or_maze, maze=None, eta=0.0, gamma=0.3, beta=0.1,
+                          eps=None, sigma=None, kick=2.0, decay=1.0,
+                          seal=1e4, seed=None, max_steps=50000):
+    """ZKAEDI PRIME v3 — scarred walker with backtracking + dead-end sealing.
+
+    Same scar-navigated field as v2, but the walker keeps an explicit path
+    stack. When every open neighbor is already on the path or sealed, the
+    current cell is a dead end: it is sealed (never re-entered), given a large
+    scar, and the walker retraces one cell. This produces a near-optimal
+    SIMPLE path (meta['path_len'] ~ 1.1x optimal on the standard gauntlet).
+
+    Solution.steps counts TOTAL locomotion (forward + backtrack moves), for
+    apples-to-apples comparison with v1/v2; the final simple-path length is in
+    meta['path_len']. eta defaults to 0.0 (no navigational lift; see
+    corrigendum). eps still earns ~15% via frontier tie-breaking.
+    """
+    if maze is None:
+        maze = self_or_maze
+    eps = _resolve_eps(eps, sigma, 0.05)
+    for name, val in (("eta", eta), ("gamma", gamma), ("beta", beta),
+                      ("eps", eps), ("kick", kick), ("seal", seal)):
+        if not isinstance(val, (int, float)) or isinstance(val, bool):
+            raise TypeError(f"{name} must be numeric, got {type(val).__name__}")
+        if val < 0:
+            raise ValueError(f"{name} must be non-negative, got {val}")
+    if not isinstance(decay, (int, float)) or isinstance(decay, bool) or not (0.0 < decay <= 1.0):
+        raise ValueError(f"decay must be in (0, 1], got {decay!r}")
+    if not isinstance(max_steps, int) or isinstance(max_steps, bool) or max_steps <= 0:
+        raise ValueError(f"max_steps must be a positive int, got {max_steps!r}")
+    t0 = time.time()
+    rng = np.random.default_rng(seed)
+    try:
+        n, m = maze.size
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise ValueError(f"maze.size must unpack to (n, m): {exc}")
+    H_static = hamiltonian_field(maze).copy()
+    if H_static.shape != (n, m):
+        raise ValueError(f"field shape {H_static.shape} != maze.size {(n, m)}")
     try:
         x, y = maze.start
         goal = maze.end
@@ -250,53 +300,60 @@ def solve_zkaedi_prime_v2(self_or_maze, maze: Maze = None, eta: float = 0.4,
 
     scars = np.zeros_like(H_static)
     H = H_static.copy()
-    path = [(x, y)]
+    stack = [(x, y)]
+    on_path = {(x, y)}
+    sealed = set()
+    trajectory = [(x, y)]
+    total_moves = 0
 
-    for t in range(max_steps):
+    for _t in range(max_steps):
         if (x, y) == goal:
-            elapsed = time.time() - start_time
-            return Solution(path=path, steps=len(path) - 1,
-                            time_taken=elapsed,
-                            optimal=False, algorithm="ZKAEDI_PRIME_V2",
-                            meta={"eta": eta, "eps": eps, "kick": kick, "decay": decay})
-
-        # 1. Decay the scar layer only, then imprint the current cell.
+            return Solution(path=trajectory, steps=total_moves,
+                            time_taken=time.time() - t0, optimal=False,
+                            algorithm="ZKAEDI_PRIME_V3",
+                            meta={"path_len": len(stack) - 1, "eta": eta,
+                                  "eps": eps, "kick": kick, "decay": decay,
+                                  "seal": seal})
         if decay != 1.0:
             scars *= decay
         scars[x, y] += kick
-
         H_base = H_static + scars
-
-        # 2. Evolve the field with overflow-safe nonlinearity.
         clipped_H = np.clip(H, -500.0, 500.0)
         sigmoid = 1.0 / (1.0 + np.exp(-gamma * clipped_H))
-        
-        noise_scale = 1.0 + beta * np.minimum(np.abs(H), 100.0)
-        noise = rng.normal(0.0, noise_scale)
+        noise = rng.normal(0.0, 1.0 + beta * np.minimum(np.abs(H), 100.0))
         H = H_base + eta * H * sigmoid + eps * noise
 
-        # 3. Move to the lowest-energy open, in-bounds neighbor.
-        best_move = None
+        best = None
         for dx, dy in _MOVES:
             nx, ny = x + dx, y + dy
-            if 0 <= nx < n and 0 <= ny < m and maze.grid[nx][ny] == 1:
-                if best_move is None or H[nx, ny] < best_move[0]:
-                    best_move = (H[nx, ny], (nx, ny))
+            if 0 <= nx < n and 0 <= ny < m and maze.grid[nx][ny] == 1 \
+                    and (nx, ny) not in on_path and (nx, ny) not in sealed:
+                if best is None or H[nx, ny] < best[0]:
+                    best = (H[nx, ny], (nx, ny))
 
-        if best_move is None:
-            break
-
-        x, y = best_move[1]
-        path.append((x, y))
-
+        if best is not None:
+            x, y = best[1]
+            stack.append((x, y))
+            on_path.add((x, y))
+            trajectory.append((x, y))
+            total_moves += 1
+        else:
+            sealed.add((x, y))
+            scars[x, y] += seal
+            on_path.discard((x, y))
+            stack.pop()
+            if not stack:
+                return None            # start fully boxed in
+            x, y = stack[-1]
+            trajectory.append((x, y))
+            total_moves += 1
     return None
 
 
 # ----------------------------------------------------------------------
-# gauntlet — reproduces the corrigendum ledger
+# gauntlet — reproduces the corrigendum ledger (+ v3 rows)
 # ----------------------------------------------------------------------
-def run_gauntlet(n_mazes: int = 60, size: int = 25, seed0: int = 7000,
-                 verbose: bool = True) -> dict:
+def run_gauntlet(n_mazes=60, size=25, seed0=7000, verbose=True):
     pool, s = [], 0
     while len(pool) < n_mazes:
         mz = make_maze(size, s)
@@ -311,6 +368,8 @@ def run_gauntlet(n_mazes: int = 60, size: int = 25, seed0: int = 7000,
          lambda mz, sd: solve_zkaedi_prime_v2(mz, eta=0.0, eps=0.05, seed=sd)),
         ("v2 scar+PRIME  (eta=.4, eps=.05)",
          lambda mz, sd: solve_zkaedi_prime_v2(mz, seed=sd)),
+        ("v3 backtrack   (eps=.05)",
+         lambda mz, sd: solve_zkaedi_prime_v3(mz, eps=0.05, seed=sd)),
         ("v1 full PRIME  (baseline)",
          lambda mz, sd: solve_zkaedi_prime(mz, seed=sd)),
         ("NEG CONTROL recursion-only",
@@ -322,30 +381,36 @@ def run_gauntlet(n_mazes: int = 60, size: int = 25, seed0: int = 7000,
         print(f"pool: {n_mazes} BFS-solvable {size}x{size} mazes "
               f"(scanned {s} seeds), optimal median "
               f"{int(np.median([L for _, L in pool]))}")
-        print(f"{'variant':36s} solved   med steps  med steps/opt")
+        print(f"{'variant':36s} solved   med steps  med steps/opt  med path/opt")
     for name, fn in variants:
-        solved, ratios = [], []
+        solved, ratios, path_ratios = [], [], []
         for i, (mz, L) in enumerate(pool):
             r = fn(mz, seed0 + i)
             if r is not None:
                 solved.append(r.steps)
                 ratios.append(r.steps / L)
+                pl = r.meta.get("path_len")
+                path_ratios.append((pl / L) if pl is not None else (r.steps / L))
         results[name] = (len(solved),
                          int(np.median(solved)) if solved else None,
-                         float(np.median(ratios)) if ratios else None)
+                         float(np.median(ratios)) if ratios else None,
+                         float(np.median(path_ratios)) if path_ratios else None)
         if verbose:
-            k, ms, ro = results[name]
+            k, ms, ro, pr = results[name]
             print(f"{name:36s} {k:3d}/{n_mazes}   "
                   f"{ms if ms is not None else '---':>6}     "
-                  f"{f'{ro:.1f}x' if ro else '---':>6}")
-    # gate bands (ordering + tolerance, not exact foreign-RNG values)
+                  f"{f'{ro:.1f}x' if ro else '---':>6}     "
+                  f"{f'{pr:.2f}x' if pr else '---':>6}")
     v2 = results["v2 scar+noise  (eta=0, eps=.05)"]
+    v3 = results["v3 backtrack   (eps=.05)"]
     neg = results["NEG CONTROL recursion-only"]
-    ok = v2[0] == n_mazes and v2[2] <= 2.0 and neg[0] <= 2
+    ok = (v2[0] == n_mazes and v2[2] <= 2.0
+          and v3[0] == n_mazes and v3[3] <= 1.3      # v3 simple path near-optimal
+          and neg[0] <= 2)
     if verbose:
         print("GATES:", "PASS" if ok else "FAIL",
-              "(v2 scar+noise 60/60 & <=2.0x optimal; neg control <=2/60 — "
-              "the LOW control number is EXPECTED, not a bug)")
+              "(v2 60/60 & <=2.0x; v3 60/60 & simple path <=1.3x optimal; "
+              "neg control <=2/60 — the LOW control number is EXPECTED)")
     results["_gates_pass"] = ok
     return results
 
@@ -356,11 +421,17 @@ if __name__ == "__main__":
     ap.add_argument("--n", type=int, default=60)
     ap.add_argument("--size", type=int, default=25)
     ap.add_argument("--seed", type=int, default=7000)
+    ap.add_argument("--solver", choices=["v1", "v2", "v3"], default="v3")
     a = ap.parse_args()
     if a.gauntlet:
         r = run_gauntlet(a.n, a.size, a.seed)
         raise SystemExit(0 if r["_gates_pass"] else 1)
     mz = make_maze(a.size, 0)
-    sol = solve_zkaedi_prime_v2(mz, seed=a.seed)
-    print("solved:" if sol else "unsolved",
-          f"{sol.steps} steps in {sol.time_taken:.3f}s" if sol else "")
+    fn = {"v1": solve_zkaedi_prime, "v2": solve_zkaedi_prime_v2,
+          "v3": solve_zkaedi_prime_v3}[a.solver]
+    sol = fn(mz, seed=a.seed)
+    if sol:
+        extra = f", simple path {sol.meta['path_len']}" if "path_len" in sol.meta else ""
+        print(f"solved: {sol.steps} moves in {sol.time_taken:.3f}s{extra}")
+    else:
+        print("unsolved")
