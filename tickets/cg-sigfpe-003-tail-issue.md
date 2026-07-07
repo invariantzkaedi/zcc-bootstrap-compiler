@@ -1,6 +1,6 @@
 # Bug Report: CG-SIGFPE-003 (Tail) — Runtime Variable-Denominator SIGFPE
 
-**Status**: 🔴 OPEN — runtime variable-denominator case unresolved  
+**Status**: ✅ RESOLVED in commit 68914f27 (runtime variable-denominator case resolved via --safe-div)  
 **Severity**: HIGH (15.5% crash rate on --no-safe-math Csmith corpus)  
 **Discovered**: 2026-07-04 (warzone campaign, 200 seeds)  
 **Depends on**: CG-SIGFPE-002 (partial close), ICP codegen feedback (d992e068)

@@ -155,8 +155,8 @@ total       : 200
 
 **Final stamp**: 2026-07-04 04:29 PDT — all gates measured, evidence on disk.
 
-**M4 MILESTONE STATUS: BLOCKED** — CG-SIGFPE-003 tail (runtime variable denominator) must be resolved before declaring M4 complete at full `--no-safe-math` parity.
+**M4 MILESTONE STATUS: RESOLVED** — CG-SIGFPE-003 tail was resolved in commit 68914f27 and validated under safe-div.
 
 ---
 
-*Generated: 2026-07-04 by warzone sweep*
+*Generated: 2026-07-04 by warzone sweep (updated 2026-07-07)*
