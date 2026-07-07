@@ -265,6 +265,78 @@ int main() {
 EOF
 test_file "pointer_deref" "$TESTDIR/t_ptr.c" 42
 
+# ── Pointer SSA Regression & Safety Verification Checks ──
+
+# Negative safety test: pointer escapes via call
+cat > "$TESTDIR/t_ptr_escape_call.c" << 'EOF'
+int global_val = 0;
+void escape_func(int *p) {
+    global_val = *p;
+}
+int main() {
+    int a = 99;
+    int *p = &a;
+    escape_func(p);
+    return global_val;
+}
+EOF
+test_file "pointer_escape_call" "$TESTDIR/t_ptr_escape_call.c" 99
+
+# Negative safety test: pointer escapes via return
+cat > "$TESTDIR/t_ptr_escape_ret.c" << 'EOF'
+int* escape_ret(int *p) {
+    return p;
+}
+int main() {
+    int a = 77;
+    int *p = &a;
+    int *q = escape_ret(p);
+    return *q;
+}
+EOF
+test_file "pointer_escape_ret" "$TESTDIR/t_ptr_escape_ret.c" 77
+
+# Negative safety test: pointer escapes via store
+cat > "$TESTDIR/t_ptr_escape_store.c" << 'EOF'
+int *global_ptr;
+int main() {
+    int a = 88;
+    int *p = &a;
+    global_ptr = p;
+    return *global_ptr;
+}
+EOF
+test_file "pointer_escape_store" "$TESTDIR/t_ptr_escape_store.c" 88
+
+# Negative safety test: ambiguous PHI points-to set (>1 target)
+cat > "$TESTDIR/t_ptr_ambiguous.c" << 'EOF'
+int main() {
+    int a = 10;
+    int b = 20;
+    int *p;
+    if (a < b) {
+        p = &a;
+    } else {
+        p = &b;
+    }
+    return *p;
+}
+EOF
+test_file "pointer_ambiguous" "$TESTDIR/t_ptr_ambiguous.c" 10
+
+# Determinism test: verify pointer rewrite compile runs are identical
+./zcc2 "$TESTDIR/t_ptr.c" -o "$TESTDIR/t_ptr_det1.s" 2>/dev/null
+./zcc2 "$TESTDIR/t_ptr.c" -o "$TESTDIR/t_ptr_det2.s" 2>/dev/null
+if ! diff "$TESTDIR/t_ptr_det1.s" "$TESTDIR/t_ptr_det2.s" >/dev/null; then
+    fail "pointer_rewrite: determinism check failed (assembly mismatch)"
+fi
+
+# Pass interaction test: verify rewrite enables Mem2Reg promotion of x
+ZCC_IR_BACKEND=1 ./zcc2 "$TESTDIR/t_ptr.c" -o "$TESTDIR/pointer_deref_ir_check.s" 2>/dev/null
+if grep -q "movslq" "$TESTDIR/pointer_deref_ir_check.s"; then
+    fail "pointer_rewrite: pass interaction failed (indirect load was not promoted to register)"
+fi
+
 cat > "$TESTDIR/t_ptr_arith.c" << 'EOF'
 int arr[5];
 int main() {

@@ -88,6 +88,44 @@ uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
         }
     }
 
+    /* Compute escaped allocas */
+    bool *escaped = calloc(MAX_INSTRS, sizeof(bool));
+    if (escaped) {
+        for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
+            Block *blk = fn->blocks[bi];
+            if (!blk->reachable) continue;
+            for (Instr *ins = blk->head; ins; ins = ins->next) {
+                if (ins->op == OP_CALL) {
+                    for (uint32_t s = 0; s < ins->n_src; s++) {
+                        RegID arg = ins->src[s];
+                        if (arg < MAX_INSTRS) {
+                            RegID base = points_to[arg];
+                            if (base != 0 && base < MAX_INSTRS) {
+                                escaped[base] = true;
+                            }
+                        }
+                    }
+                } else if (ins->op == OP_RET && ins->n_src >= 1) {
+                    RegID ret_val = ins->src[0];
+                    if (ret_val < MAX_INSTRS) {
+                        RegID base = points_to[ret_val];
+                        if (base != 0 && base < MAX_INSTRS) {
+                            escaped[base] = true;
+                        }
+                    }
+                } else if (ins->op == OP_STORE && ins->n_src >= 2) {
+                    RegID val_reg = ins->src[0];
+                    if (val_reg < MAX_INSTRS) {
+                        RegID val_base = points_to[val_reg];
+                        if (val_base != 0 && val_base < MAX_INSTRS) {
+                            escaped[val_base] = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /* Rewrite indirect load/store instructions */
     uint32_t rewrites = 0;
     for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
@@ -98,7 +136,7 @@ uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
                 RegID ptr_reg = ins->src[0];
                 if (ptr_reg < MAX_INSTRS) {
                     RegID base = points_to[ptr_reg];
-                    if (base != 0 && base != AMBIGUOUS && base < MAX_INSTRS) {
+                    if (base != 0 && base != AMBIGUOUS && base < MAX_INSTRS && (!escaped || !escaped[base])) {
                         ins->src[0] = base;
                         rewrites++;
                     }
@@ -107,7 +145,7 @@ uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
                 RegID ptr_reg = ins->src[1];
                 if (ptr_reg < MAX_INSTRS) {
                     RegID base = points_to[ptr_reg];
-                    if (base != 0 && base != AMBIGUOUS && base < MAX_INSTRS) {
+                    if (base != 0 && base != AMBIGUOUS && base < MAX_INSTRS && (!escaped || !escaped[base])) {
                         ins->src[1] = base;
                         rewrites++;
                     }
@@ -116,6 +154,7 @@ uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
         }
     }
 
+    free(escaped);
     free(points_to);
     free(mem_points_to);
     return rewrites;
