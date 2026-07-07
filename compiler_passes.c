@@ -6690,6 +6690,7 @@ static uint32_t redundant_load_elim_pass(Function *fn) {
 
 #include "zcc_ir_opt_passes.h"
 #include "ir_telemetry.h"
+#include "src/opt/pointer_ssa.h"
 #include <sys/time.h>
 
 static int count_ir_nodes(Function *fn) {
@@ -6904,6 +6905,9 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
             dce_total, dce_total - dce_removed, dce_removed);
 
   compute_reachability(fn);
+
+  /* Pointer SSA / Points-To Analysis & Rewrite Pass */
+  opt_pointer_ssa_rewrite_pass(fn);
 
   /* ── Pass 4: Escape Analysis (heap: large ctx; safe under deep ZCC stack) ──
    */
