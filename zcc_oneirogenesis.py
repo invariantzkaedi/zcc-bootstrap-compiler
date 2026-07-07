@@ -91,7 +91,11 @@ PASSES = ["compiler_passes.c", "compiler_passes_ir.c", "ir_pass_manager.c",
           "src/zcc_oracle_substrate.c",
           "src/elf_emit.c", "src/codegen.c", "src/ir_serialization.c",
           "src/zcc_smt_prover.c", "src/gguf_emit.c", "src/zld.c",
-          "src/zcc_resource_oracle.c", "transient_state.c", "zcc_lucky_alert_injector.c"]
+          "src/zcc_resource_oracle.c", "transient_state.c", "zcc_lucky_alert_injector.c",
+          "src/opt/ir_verify.c", "src/opt/zcc_ir_opt_helpers.c", "src/opt/instcombine_pass.c",
+          "src/opt/instcombine_rules.c", "src/opt/instcombine_dispatch.c", "src/opt/sccp_pass.c",
+          "src/opt/cfg_simplify_pass.c", "src/opt/clone_remap.c", "src/opt/loop_validator.c",
+          "src/opt/loop_unroll_pass.c", "src/opt/inline_pass.c", "src/opt/pointer_ssa.c"]
 
 # ANSI colour palette
 _R = "\033[91m"; _G = "\033[92m"; _Y = "\033[93m"
@@ -319,7 +323,10 @@ class SelfHostGate:
         try:
             import sys
             sys.path.append(str(REPO_ROOT / 'tools'))
-            from check_flags_liveness import analyze_asm
+            try:
+                from tools.check_flags_liveness import analyze_asm
+            except ImportError:
+                from check_flags_liveness import analyze_asm
             violations = analyze_asm(s3_s)
             if violations:
                 log_path = os.path.join(REPO_ROOT, "dreams", "rejections.log")
@@ -337,6 +344,7 @@ class SelfHostGate:
             r = subprocess.run(
                 ['gcc', '-no-pie', '-O0', '-w', '-fno-asynchronous-unwind-tables',
                  '-Wa,--noexecstack', '-fno-unwind-tables',
+                 '-Iinclude', '-I.',
                  '-o', s3_bin, s3_s] + s3_p_args + ['-lm'],
                 capture_output=True, timeout=60)
             if r.returncode != 0:
@@ -570,6 +578,7 @@ class Island:
             r = subprocess.run(
                 ['gcc', '-no-pie', '-O0', '-w', '-fno-asynchronous-unwind-tables',
                  '-Wa,--noexecstack', '-fno-unwind-tables',
+                 '-Iinclude', '-I.',
                  '-o', mutant_bin, mutant_asm] + p_args + ['-lm'],
                 capture_output=True, timeout=60)
             if r.returncode != 0:
@@ -657,6 +666,7 @@ class Island:
             r = subprocess.run(
                 ['gcc', '-no-pie', '-O0', '-w', '-fno-asynchronous-unwind-tables',
                  '-Wa,--noexecstack', '-fno-unwind-tables',
+                 '-Iinclude', '-I.',
                  '-o', bin_path, asm_path] + p_args + ['-lm'],
                 capture_output=True, timeout=60)
             if r.returncode != 0:
@@ -1104,6 +1114,7 @@ int main(void) {
                         subprocess.run(
                             ['gcc', '-no-pie', '-O0', '-w', '-fno-asynchronous-unwind-tables',
                              '-Wa,--noexecstack', '-fno-unwind-tables',
+                             '-Iinclude', '-I.',
                              '-o', str(REPO_ROOT / 'zcc2'), zcc2_asm] + p_args + ['-lm'],
                             capture_output=True, timeout=60)
                         print(f"\n  {_Y}[PROMOTE]{_W} Island {best.island_id} "
