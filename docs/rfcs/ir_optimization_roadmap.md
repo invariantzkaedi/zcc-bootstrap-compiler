@@ -602,6 +602,7 @@ Do **not** start unroll/inline before SCCP + utility layer + verifier are stable
 ---
 
 ### 14.7 Ownership model (RACI-lite)
+See the full matrix and status templates in [optimizer_ownership_matrix.md](../releases/optimizer_ownership_matrix.md):
 - **Compiler Lead (A):** verifier correctness, pass semantics
 - **Optimization Engineer (R):** instcombine, sccp, cfg simplify
 - **Infra Engineer (R):** CI workflows, artifacts, scripts
@@ -612,6 +613,7 @@ Do **not** start unroll/inline before SCCP + utility layer + verifier are stable
 ---
 
 ### 14.8 Definition of Done (per issue)
+For releases, refer to [optimizer_release_checklist.md](../releases/optimizer_release_checklist.md) and [optimizer_rollback_playbook.md](../releases/optimizer_rollback_playbook.md):
 1. Code merged
 2. Unit/golden tests added
 3. Negative tests added when applicable
