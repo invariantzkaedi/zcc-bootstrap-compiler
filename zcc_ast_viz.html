@@ -2063,5 +2063,38 @@ d3s.onload=()=>{
 d3s.onerror=()=>showError('D3 load failed — check network');
 document.head.appendChild(d3s);
 </script>
+    <!-- 🔱 ZKAEDI SECURE BADGE -->
+    <style>
+        .zk-badge {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(7, 3, 18, 0.9);
+            border: 1px solid #00ffcc;
+            border-radius: 8px;
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            color: #00ffcc;
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.25);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            z-index: 10000;
+            backdrop-filter: blur(8px);
+            pointer-events: none;
+            animation: zk-pulse 2s infinite alternate;
+        }
+        @keyframes zk-pulse {
+            0% { box-shadow: 0 0 8px rgba(0, 255, 204, 0.2); border-color: rgba(0, 255, 204, 0.4); }
+            100% { box-shadow: 0 0 20px rgba(0, 255, 204, 0.6); border-color: #00ffcc; }
+        }
+    </style>
+    <div class="zk-badge">
+        <span>🔱</span>
+        <span>ZCC SELF-HOST APPROVED</span>
+    </div>
 </body>
 </html>
