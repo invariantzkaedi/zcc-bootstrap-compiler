@@ -332,9 +332,13 @@ if ! diff "$TESTDIR/t_ptr_det1.s" "$TESTDIR/t_ptr_det2.s" >/dev/null; then
 fi
 
 # Pass interaction test: verify rewrite enables Mem2Reg promotion of x
-ZCC_IR_BACKEND=1 ./zcc2 "$TESTDIR/t_ptr.c" -o "$TESTDIR/pointer_deref_ir_check.s" 2>/dev/null
+ZCC_IR_BACKEND=1 ./zcc2 "$TESTDIR/t_ptr.c" -o "$TESTDIR/pointer_deref_ir_check.s" 2>"$TESTDIR/pointer_deref_ir_check.log"
 if grep -q "movslq" "$TESTDIR/pointer_deref_ir_check.s"; then
     fail "pointer_rewrite: pass interaction failed (indirect load was not promoted to register)"
+fi
+# IR-level assertion check: verify exactly 2 indirect instructions were rewritten
+if ! grep -q "\[PointerSSA\] rewrote 2 indirect instructions" "$TESTDIR/pointer_deref_ir_check.log"; then
+    fail "pointer_rewrite: IR assertion failed (did not log exactly 2 rewrites)"
 fi
 
 cat > "$TESTDIR/t_ptr_arith.c" << 'EOF'

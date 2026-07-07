@@ -6907,7 +6907,10 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   compute_reachability(fn);
 
   /* Pointer SSA / Points-To Analysis & Rewrite Pass */
-  opt_pointer_ssa_rewrite_pass(fn);
+  uint32_t ptr_rewrites = opt_pointer_ssa_rewrite_pass(fn);
+  if (ptr_rewrites > 0) {
+    fprintf(stderr, "[PointerSSA] rewrote %u indirect instructions\n", ptr_rewrites);
+  }
 
   /* ── Pass 4: Escape Analysis (heap: large ctx; safe under deep ZCC stack) ──
    */
