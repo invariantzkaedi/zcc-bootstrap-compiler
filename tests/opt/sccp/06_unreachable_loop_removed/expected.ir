@@ -3,6 +3,8 @@ bb0:
   %c0 = const i1 0
   jmp bb2
 
+bb1:
+
 bb2:
   %retv = const i32 3
   ret i32 %retv

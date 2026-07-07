@@ -8,4 +8,6 @@ bb0:
 bb1:
   %a = const i32 1
   ret i32 %a
+
+bb2:
 }

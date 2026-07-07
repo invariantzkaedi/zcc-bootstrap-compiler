@@ -7,6 +7,9 @@ bb1:
   %v1 = const i32 42
   jmp bb3
 
+bb2:
+
 bb3:
-  ret i32 %v1
+  %p0 = const i32 42
+  ret i32 %p0
 }

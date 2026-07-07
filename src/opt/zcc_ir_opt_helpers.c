@@ -300,12 +300,20 @@ void opt_metrics_push(OptMetricsSink *s, OptPassMetricRow row) {
 }
 
 void opt_metrics_dump_csv(const OptMetricsSink *s, const char *path) {
-    FILE *f = fopen(path, "w");
+    int write_header = 1;
+    FILE *check = fopen(path, "r");
+    if (check) {
+        write_header = 0;
+        fclose(check);
+    }
+    FILE *f = fopen(path, "a");
     if (!f) {
         fprintf(stderr, "Failed to open metrics file %s\n", path);
         return;
     }
-    fprintf(f, "pass,function,instructions_before,instructions_after,blocks_before,blocks_after,time_us,changed\n");
+    if (write_header) {
+        fprintf(f, "pass,function,instructions_before,instructions_after,blocks_before,blocks_after,time_us,changed\n");
+    }
     for (int i = 0; i < s->n_rows; i++) {
         OptPassMetricRow r = s->rows[i];
         fprintf(f, "%s,%s,%d,%d,%d,%d,%lld,%d\n",

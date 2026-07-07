@@ -14,7 +14,7 @@ for d in "$ROOT"/*/; do
   actn="${d}/actual.norm.ir"
 
   echo "[RUN] $(basename "$d")"
-  zcc-opt --pass=instcombine "${d}/input.ir" -o "$actual"
+  zcc-opt --pass=instcombine --opt-metrics-out "$ROOT/../../../opt_metrics.csv" "${d}/input.ir" -o "$actual"
 
   python3 "$NORM" "${d}/expected.ir" > "$expn"
   python3 "$NORM" "$actual" > "$actn"

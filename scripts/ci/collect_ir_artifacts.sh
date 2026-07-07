@@ -48,4 +48,6 @@ for d in tests/opt/sccp/*/; do
   copy_if_exists "${d}/actual.norm.ir" "${OUT_DIR}/sccp/${base}/actual.norm.ir"
 done
 
+copy_if_exists "opt_metrics.csv" "${OUT_DIR}/opt_metrics.csv"
+
 echo "Artifacts collected at: $OUT_DIR"
