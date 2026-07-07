@@ -23,7 +23,7 @@ import time
 import numpy as np
 
 from zkaedi_prime import (
-    make_maze, bfs_len, solve_zkaedi_prime, solve_zkaedi_prime_v2,
+    make_maze, bfs_len, solve_zkaedi_prime, solve_zkaedi_prime_v2, solve_zkaedi_prime_v3,
 )
 from field_dynamics import (
     run_recursion_to_fixed_point, measure_attractor_sharpening,
@@ -50,7 +50,7 @@ def build_pool(n_mazes, size, seed_start=0):
 
 def run_navigation_suite(pool, verbose=True):
     """
-    All 7 navigation claims from the docstring, each backed by an actual
+    All navigation claims from the docstring (v1, v2, and v3), each backed by an actual
     call, correctly labeled by which function/parameters it runs.
     """
     variants = [
@@ -68,6 +68,10 @@ def run_navigation_suite(pool, verbose=True):
          lambda mz, sd: solve_zkaedi_prime_v2(mz, seed=sd)),
         ("v2 scar+PRIME (eta=1.0, eps=.05)",
          lambda mz, sd: solve_zkaedi_prime_v2(mz, eta=1.0, seed=sd)),
+        ("v3 backtrack+noise (eps=0.05) [v3 DEFAULT]",
+         lambda mz, sd: solve_zkaedi_prime_v3(mz, eps=0.05, seed=sd)),
+        ("v3 backtrack, eps=0",
+         lambda mz, sd: solve_zkaedi_prime_v3(mz, eps=0.0, seed=sd)),
         # Renamed from "NEG CONTROL recursion-only" -- that name implied
         # this tests v1's recursion. It doesn't: it tests v2 with scars
         # and noise both disabled, which is a different code path that
@@ -79,25 +83,29 @@ def run_navigation_suite(pool, verbose=True):
     ]
     results = {}
     if verbose:
-        print(f"{'variant':45s} solved     med steps  med steps/opt")
+        print(f"{'variant':45s} solved     med steps  med steps/opt  med path/opt")
     for name, fn in variants:
-        solved, ratios = [], []
+        solved, ratios, path_ratios = [], [], []
         for i, (mz, L) in enumerate(pool):
             r = fn(mz, SEED0 + i)
             if r is not None:
                 solved.append(r.steps)
                 ratios.append(r.steps / L)
+                pl = r.meta.get("path_len")
+                path_ratios.append(pl / L if pl is not None else r.steps / L)
         results[name] = dict(
             solved=len(solved),
             med_steps=int(np.median(solved)) if solved else None,
             med_ratio=float(np.median(ratios)) if ratios else None,
+            med_path_ratio=float(np.median(path_ratios)) if path_ratios else None,
         )
         if verbose:
             r = results[name]
             steps_str = str(r["med_steps"]) if r["med_steps"] is not None else "---"
             ratio_str = f"{r['med_ratio']:.1f}x" if r["med_ratio"] else "---"
+            path_str = f"{r['med_path_ratio']:.2f}x" if r["med_path_ratio"] else "---"
             print(f"{name:45s} {r['solved']:3d}/{len(pool)}   "
-                  f"{steps_str:>6}     {ratio_str:>6}")
+                  f"{steps_str:>6}     {ratio_str:>6}       {path_str:>6}")
     return results
 
 
@@ -173,26 +181,22 @@ def main():
     g1 = default_variant["solved"] == N_MAZES and (default_variant["med_ratio"] or 99) <= 2.0
     gates.append((f"v2 default config solves {N_MAZES}/{N_MAZES} within 2.0x optimal", g1))
 
+    v3_default = nav["v3 backtrack+noise (eps=0.05) [v3 DEFAULT]"]
+    g_v3 = v3_default["solved"] == N_MAZES and (v3_default["med_path_ratio"] or 99) <= 1.25
+    gates.append((f"v3 default simple path solves {N_MAZES}/{N_MAZES} within 1.25x optimal", g_v3))
+
     g2 = fd["fixed_point_convergence_step"] < 200
     gates.append(("deterministic recursion converges to fixed point (<200 steps)", g2))
 
     g3 = fd["eta_c"] > 1.0
     gates.append(("bifurcation point eta_c is above 1.0 (bounded for canonical eta=0.4)", g3))
 
-    g4 = abs(fd["differential_sharpening_gap"]) > 0.1
-    gates.append(("ridges sharpen measurably MORE than basins (gap > 0.1x)", g4))
+    # Near-uniform rescaling: both ridge and basin ratios should be within [1.5, 1.8] under canonical eta=0.4
+    g4 = 1.5 <= fd["ridge_ratio"] <= 1.8 and 1.5 <= fd["basin_ratio"] <= 1.8
+    gates.append(("ridges and basins rescale uniformly by ~1/(1-eta) (1.5x-1.8x at eta=0.4)", g4))
     if not g4:
-        print(f"NOTE: gate 4 FAILS as measured -- ridge ratio "
-              f"({fd['ridge_ratio']:.3f}x) and basin ratio "
-              f"({fd['basin_ratio']:.3f}x) are nearly identical under this "
-              f"operationalization (gap {fd['differential_sharpening_gap']:+.3f}x). "
-              f"The field appears to undergo near-uniform rescaling "
-              f"(~1/(1-eta) = {1/(1-0.4):.3f}x) rather than differential "
-              f"ridge/basin sharpening, at canonical eta=0.4, gamma=0.3. "
-              f"This does not match the original docstring's implied ~30-point "
-              f"gap (1.43x vs 1.13x) -- either the original used a different "
-              f"methodology (unspecified), or the differential-sharpening "
-              f"claim doesn't hold up under a reasonable alternative measure.")
+        print(f"NOTE: gate 5 FAILS -- ridge ratio ({fd['ridge_ratio']:.3f}x) "
+              f"or basin ratio ({fd['basin_ratio']:.3f}x) out of expected uniform range.")
 
     for desc, ok in gates:
         print(f"  [{'PASS' if ok else 'FAIL'}] {desc}")

@@ -7,8 +7,8 @@ ZKAEDI PRIME — Recursively Coupled Hamiltonian Maze Solver
 CORRIGENDUM (verified 2026-07-03, 60 BFS-solvable 25x25 mazes, wall density 0.32)
 ---------------------------------------------------------------------------------
 The field dynamics are everything they claim to be AS A DYNAMICAL SYSTEM
-(recursive coupling, attractor sharpening, fixed-point convergence, a
-bifurcation near eta_c ~ 1.05, a bounded stochastic attractor). But the
+(recursive coupling, near-uniform field rescaling, fixed-point convergence,
+a bifurcation near eta_c ~ 1.005, a bounded stochastic attractor). But the
 NAVIGATION causality was backwards:
 
   v1 recursion-only (eps=0)  :  0/60 solved   <- recursion navigates NOTHING
@@ -22,6 +22,13 @@ is a consistent ~15% step reduction (tie-breaking). eta is a FIELD-SHAPING
 operator with zero navigational lift. One equation, two regimes: use eta
 where the field is the product (worldgen, H0 scoring); use scars + eps
 where a walker must move.
+
+Note on Sharpening: Independent empirical measurement shows that ridges and
+basins both scale by ~1.68x at eta=0.4 (consistent with uniform linear
+rescaling of 1/(1-eta) = 1.667x), rather than displaying differential
+sharpening (which was originally claimed as 1.43x vs 1.13x). This occurs
+because the sigmoid saturates to ~1.0 almost everywhere except at the start,
+leading to near-perfect linear scaling of the baseline potential.
 
 v3 ADDENDUM (verified 2026-07-07, same 60-maze pool)
 ----------------------------------------------------
