@@ -2794,6 +2794,14 @@ static int rust_backend_emit_runtime_stmt_list(FILE *out, RustParser *p, const R
     return 0;
 }
 
+static int rust_backend_stmt_list_ends_with_return(const RustStmt *st) {
+    if (!st) return 0;
+    while (st->next) {
+        st = st->next;
+    }
+    return (st->kind == RUST_STMT_RETURN);
+}
+
 static int rust_backend_emit_runtime_function(FILE *out, RustParser *p, const RustAst *ast, const RustFunction *fn, int *label_id) {
     RustBackendSlot slots[256];
     int slot_count = 0;
@@ -2816,8 +2824,7 @@ static int rust_backend_emit_runtime_function(FILE *out, RustParser *p, const Ru
     }
     if (rust_backend_collect_runtime_slots_from_stmt_list(p, slots, &slot_count, &next_off, fn->body_head) != 0) return 1;
     stack_bytes = slot_count * 4;
-    if (stack_bytes <= 0) stack_bytes = 16;
-    else {
+    if (stack_bytes > 0) {
         int rem = stack_bytes % 16;
         if (rem != 0) stack_bytes += 16 - rem;
     }
@@ -2825,7 +2832,9 @@ static int rust_backend_emit_runtime_function(FILE *out, RustParser *p, const Ru
     fprintf(out, "%s:\n", fn_label);
     fprintf(out, "    pushq %%rbp\n");
     fprintf(out, "    movq %%rsp, %%rbp\n");
-    fprintf(out, "    subq $%d, %%rsp\n", stack_bytes);
+    if (stack_bytes > 0) {
+        fprintf(out, "    subq $%d, %%rsp\n", stack_bytes);
+    }
     for (pi = 0; pi < fn->num_params; pi++) {
         if (pi < 6) {
             fprintf(out, "    movl %s, %d(%%rbp)\n", arg_regs[pi], slots[pi].offset);
@@ -2836,9 +2845,11 @@ static int rust_backend_emit_runtime_function(FILE *out, RustParser *p, const Ru
         }
     }
     if (rust_backend_emit_runtime_stmt_list(out, p, ast, fn->body_head, slots, slot_count, label_id) != 0) return 1;
-    fprintf(out, "    movl $0, %%eax\n");
-    fprintf(out, "    leave\n");
-    fprintf(out, "    ret\n");
+    if (!rust_backend_stmt_list_ends_with_return(fn->body_head)) {
+        fprintf(out, "    movl $0, %%eax\n");
+        fprintf(out, "    leave\n");
+        fprintf(out, "    ret\n");
+    }
     return 0;
 }
 
@@ -2859,6 +2870,7 @@ static int rust_backend_emit_runtime_program(FILE *out, RustParser *p, const Rus
         if (rust_backend_emit_runtime_function(out, p, ast, fn, &label_id) != 0) return 1;
         fn = fn->next;
     }
+    fprintf(out, "    .section .note.GNU-stack,\"\",@progbits\n");
     return 0;
 }
 
