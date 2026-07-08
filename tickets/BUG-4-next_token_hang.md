@@ -28,10 +28,10 @@ When `zcc_lower_stmt` translates this into IR:
 
 Due to a bug in `compute_reachability` and `ir_build_blocks_from_instructions`, the CFG edge from the false-branch of the inner `if` to `lbl2`, and subsequently to `lbl1`, is not properly tracked. As a result, the optimizer considers the block containing `cc->pos++; cc->col++;` to be unreachable dead code. The generated assembly jumps directly from the `if` failure back to the loop condition (`jmp 429997`), skipping the iterator increment and causing an infinite loop.
 
-## Resolution
-As deferred in the **CG-IR-012** incident, we have confirmed that `next_token` triggers complex reachability bugs in the experimental IR backend. We have removed `next_token` from the `ir_whitelisted` array in `part4.c`.
+## Resolution (SUPERSEDED — See Closure)
+As deferred in the **CG-IR-012** incident, we originally confirmed that `next_token` triggered reachability bugs (which turned out to be GVN loop optimization invalidation bugs). We temporarily removed `next_token` from the `ir_whitelisted` array in `part4.c` as a workaround.
 
-By routing `next_token` back to the stable AST-to-x86 compilation path, the control flow generates correctly without intermediate block-folding deletions.
+By routing `next_token` back to the stable AST-to-x86 compilation path, the control flow generated correctly without intermediate block-folding deletions.
 
 ## Verification
 `make selfhost` now passes.
