@@ -3275,6 +3275,376 @@ static int rust_backend_extract_const_main(RustParser *p, RustAst *ast, long lon
     return 0;
 }
 
+/* ================================================================ */
+/* RUST → IR BRIDGE                                                 */
+/*                                                                   */
+/* Emit ZCC SSA IR from the Rust AST, mirroring the existing         */
+/* rust_backend_emit_runtime_* functions but targeting the IR layer   */
+/* instead of x86-64 assembly. This routes Rust programs through     */
+/* the same optimization pipeline (DCE, constant folding, mem2reg,   */
+/* LICM) as C programs.                                              */
+/*                                                                   */
+/* Activation: --rust-backend-ir flag in part5.c                     */
+/* ================================================================ */
+
+static int rust_ir_tmp_counter;
+static char rust_ir_tmp_buf[32];
+static char rust_ir_last[32];
+
+static char *rust_ir_fresh(void) {
+    sprintf(rust_ir_tmp_buf, "%%rt%d", rust_ir_tmp_counter++);
+    { int i; for (i = 0; rust_ir_tmp_buf[i]; i++) rust_ir_last[i] = rust_ir_tmp_buf[i]; rust_ir_last[i] = 0; }
+    return rust_ir_tmp_buf;
+}
+
+static void rust_ir_save(char *dst) {
+    int i; for (i = 0; rust_ir_last[i]; i++) dst[i] = rust_ir_last[i]; dst[i] = 0;
+}
+
+static int rust_ir_label_counter;
+
+/* Map Rust token operator to IR opcode */
+static ir_op_t rust_ir_map_binop(int op) {
+    switch (op) {
+    case RUST_TK_PLUS:  return IR_ADD;
+    case RUST_TK_MINUS: return IR_SUB;
+    case RUST_TK_STAR:  return IR_MUL;
+    case RUST_TK_SLASH: return IR_DIV;
+    case RUST_TK_EQ:    return IR_EQ;
+    case RUST_TK_NE:    return IR_NE;
+    case RUST_TK_LT:    return IR_LT;
+    case RUST_TK_LE:    return IR_LE;
+    case RUST_TK_GT:    return IR_GT;
+    case RUST_TK_GE:    return IR_GE;
+    default:            return IR_NOP;
+    }
+}
+
+/* Forward declarations */
+static int rust_ir_emit_expr(const RustAst *ast, const RustExpr *e,
+                              const RustBackendSlot *slots, int slot_count);
+static int rust_ir_emit_stmt_list(const RustAst *ast, const RustStmt *st,
+                                   RustBackendSlot *slots, int slot_count);
+
+/* ── Expression IR emission ──────────────────────────────────────── */
+static int rust_ir_emit_expr(const RustAst *ast, const RustExpr *e,
+                              const RustBackendSlot *slots, int slot_count) {
+    if (!e) return 1;
+
+    if (e->kind == RUST_EXPR_NUM) {
+        char *dst = rust_ir_fresh();
+        ZCC_EMIT_CONST(IR_TY_I32, dst, (long)e->num, e->line);
+        return 0;
+    }
+
+    if (e->kind == RUST_EXPR_BOOL) {
+        char *dst = rust_ir_fresh();
+        ZCC_EMIT_CONST(IR_TY_I32, dst, e->bool_val ? 1 : 0, e->line);
+        return 0;
+    }
+
+    if (e->kind == RUST_EXPR_IDENT) {
+        int off;
+        char slot_name[32];
+        char *dst;
+        if (!rust_backend_find_slot(slots, slot_count, e->symbol_id, &off, 0))
+            return 1;
+        sprintf(slot_name, "%%rs%d", off < 0 ? -off : off);
+        dst = rust_ir_fresh();
+        ZCC_EMIT_LOAD(IR_TY_I32, dst, slot_name, e->line);
+        return 0;
+    }
+
+    if (e->kind == RUST_EXPR_UNARY) {
+        /* !expr → (expr == 0) */
+        char lhs_tmp[32];
+        char zero_tmp[32];
+        char *dst;
+        if (e->op != RUST_TK_BANG) return 1;
+        if (rust_ir_emit_expr(ast, e->lhs, slots, slot_count) != 0) return 1;
+        rust_ir_save(lhs_tmp);
+        dst = rust_ir_fresh();
+        ZCC_EMIT_CONST(IR_TY_I32, dst, 0, e->line);
+        rust_ir_save(zero_tmp);
+        dst = rust_ir_fresh();
+        ZCC_EMIT_BINARY(IR_EQ, IR_TY_I32, dst, lhs_tmp, zero_tmp, e->line);
+        return 0;
+    }
+
+    if (e->kind == RUST_EXPR_BINARY) {
+        /* Short-circuit && and || */
+        if (e->op == RUST_TK_LAND) {
+            int id = rust_ir_label_counter++;
+            char lbl_false[32], lbl_end[32];
+            char lhs_tmp[32];
+            char *dst;
+            sprintf(lbl_false, ".Lri_and_f_%d", id);
+            sprintf(lbl_end, ".Lri_and_e_%d", id);
+            /* eval lhs */
+            if (rust_ir_emit_expr(ast, e->lhs, slots, slot_count) != 0) return 1;
+            rust_ir_save(lhs_tmp);
+            /* branch: if lhs == 0 goto false */
+            dst = rust_ir_fresh();
+            ZCC_EMIT_CONST(IR_TY_I32, dst, 0, e->line);
+            { char z[32]; rust_ir_save(z);
+              char *cmp = rust_ir_fresh();
+              ZCC_EMIT_BINARY(IR_EQ, IR_TY_I32, cmp, lhs_tmp, z, e->line);
+              ZCC_EMIT_BR_IF(cmp, lbl_false, e->line);
+            }
+            /* eval rhs */
+            if (rust_ir_emit_expr(ast, e->rhs, slots, slot_count) != 0) return 1;
+            rust_ir_save(lhs_tmp);
+            /* branch: if rhs == 0 goto false */
+            dst = rust_ir_fresh();
+            ZCC_EMIT_CONST(IR_TY_I32, dst, 0, e->line);
+            { char z[32]; rust_ir_save(z);
+              char *cmp = rust_ir_fresh();
+              ZCC_EMIT_BINARY(IR_EQ, IR_TY_I32, cmp, lhs_tmp, z, e->line);
+              ZCC_EMIT_BR_IF(cmp, lbl_false, e->line);
+            }
+            /* true path: result = 1 */
+            dst = rust_ir_fresh();
+            ZCC_EMIT_CONST(IR_TY_I32, dst, 1, e->line);
+            ZCC_EMIT_BR(lbl_end, e->line);
+            /* false path: result = 0 */
+            ZCC_EMIT_LABEL(lbl_false, e->line);
+            dst = rust_ir_fresh();
+            ZCC_EMIT_CONST(IR_TY_I32, dst, 0, e->line);
+            ZCC_EMIT_LABEL(lbl_end, e->line);
+            return 0;
+        }
+
+        if (e->op == RUST_TK_LOR) {
+            int id = rust_ir_label_counter++;
+            char lbl_true[32], lbl_end[32];
+            char lhs_tmp[32];
+            char *dst;
+            sprintf(lbl_true, ".Lri_or_t_%d", id);
+            sprintf(lbl_end, ".Lri_or_e_%d", id);
+            /* eval lhs */
+            if (rust_ir_emit_expr(ast, e->lhs, slots, slot_count) != 0) return 1;
+            rust_ir_save(lhs_tmp);
+            ZCC_EMIT_BR_IF(lhs_tmp, lbl_true, e->line);
+            /* eval rhs */
+            if (rust_ir_emit_expr(ast, e->rhs, slots, slot_count) != 0) return 1;
+            rust_ir_save(lhs_tmp);
+            ZCC_EMIT_BR_IF(lhs_tmp, lbl_true, e->line);
+            /* false path */
+            dst = rust_ir_fresh();
+            ZCC_EMIT_CONST(IR_TY_I32, dst, 0, e->line);
+            ZCC_EMIT_BR(lbl_end, e->line);
+            /* true path */
+            ZCC_EMIT_LABEL(lbl_true, e->line);
+            dst = rust_ir_fresh();
+            ZCC_EMIT_CONST(IR_TY_I32, dst, 1, e->line);
+            ZCC_EMIT_LABEL(lbl_end, e->line);
+            return 0;
+        }
+
+        /* Standard binary ops */
+        {
+            char lhs_tmp[32];
+            ir_op_t op;
+            char *dst;
+            if (rust_ir_emit_expr(ast, e->lhs, slots, slot_count) != 0) return 1;
+            rust_ir_save(lhs_tmp);
+            if (rust_ir_emit_expr(ast, e->rhs, slots, slot_count) != 0) return 1;
+            op = rust_ir_map_binop(e->op);
+            if (op == IR_NOP) return 1;
+            { char rhs_tmp[32]; rust_ir_save(rhs_tmp);
+              dst = rust_ir_fresh();
+              ZCC_EMIT_BINARY(op, IR_TY_I32, dst, lhs_tmp, rhs_tmp, e->line);
+            }
+            return 0;
+        }
+    }
+
+    if (e->kind == RUST_EXPR_CALL) {
+        const RustFunction *callee;
+        char fn_label[64];
+        int ai;
+        char *dst;
+        if (!ast || e->call_callee_symbol_id == RUST_SYMBOL_INVALID) return 1;
+        callee = rust_backend_find_function_by_symbol_in_ast(ast, e->call_callee_symbol_id);
+        if (!callee) return 1;
+        /* emit args */
+        for (ai = 0; ai < e->call_arg_count; ai++) {
+            char arg_tmp[32];
+            if (rust_ir_emit_expr(ast, e->call_args[ai], slots, slot_count) != 0) return 1;
+            rust_ir_save(arg_tmp);
+            ZCC_EMIT_ARG(IR_TY_I32, arg_tmp, e->line);
+        }
+        rust_backend_runtime_function_label(fn_label, (int)sizeof(fn_label), callee);
+        dst = rust_ir_fresh();
+        ZCC_EMIT_CALL(IR_TY_I32, dst, fn_label, e->line);
+        return 0;
+    }
+
+    return 1; /* unsupported expression */
+}
+
+/* ── Statement list IR emission ──────────────────────────────────── */
+static int rust_ir_emit_stmt_list(const RustAst *ast, const RustStmt *st,
+                                   RustBackendSlot *slots, int slot_count) {
+    while (st) {
+        if (st->kind == RUST_STMT_LET) {
+            int off;
+            char slot_name[32];
+            if (!rust_backend_find_slot(slots, slot_count, st->symbol_id, &off, 0))
+                return 1;
+            sprintf(slot_name, "%%rs%d", off < 0 ? -off : off);
+            if (st->expr) {
+                char val_tmp[32];
+                if (rust_ir_emit_expr(ast, st->expr, slots, slot_count) != 0) return 1;
+                rust_ir_save(val_tmp);
+                ZCC_EMIT_STORE(IR_TY_I32, slot_name, val_tmp, st->line);
+            }
+        } else if (st->kind == RUST_STMT_ASSIGN) {
+            int off;
+            char slot_name[32];
+            char val_tmp[32];
+            if (st->symbol_id == RUST_SYMBOL_INVALID) return 1;
+            if (!rust_backend_find_slot(slots, slot_count, st->symbol_id, &off, 0))
+                return 1;
+            sprintf(slot_name, "%%rs%d", off < 0 ? -off : off);
+            if (rust_ir_emit_expr(ast, st->expr, slots, slot_count) != 0) return 1;
+            rust_ir_save(val_tmp);
+            ZCC_EMIT_STORE(IR_TY_I32, slot_name, val_tmp, st->line);
+        } else if (st->kind == RUST_STMT_RETURN) {
+            char val_tmp[32];
+            if (rust_ir_emit_expr(ast, st->expr, slots, slot_count) != 0) return 1;
+            rust_ir_save(val_tmp);
+            ZCC_EMIT_RET(IR_TY_I32, val_tmp, st->line);
+        } else if (st->kind == RUST_STMT_IF) {
+            int id = rust_ir_label_counter++;
+            char lbl_else[32], lbl_end[32];
+            char cond_tmp[32];
+            sprintf(lbl_else, ".Lri_else_%d", id);
+            sprintf(lbl_end, ".Lri_endif_%d", id);
+            /* condition */
+            if (rust_ir_emit_expr(ast, st->cond, slots, slot_count) != 0) return 1;
+            rust_ir_save(cond_tmp);
+            /* invert: if cond == 0 goto else */
+            { char *z = rust_ir_fresh();
+              char zero_tmp[32];
+              char *cmp;
+              ZCC_EMIT_CONST(IR_TY_I32, z, 0, st->line);
+              rust_ir_save(zero_tmp);
+              cmp = rust_ir_fresh();
+              ZCC_EMIT_BINARY(IR_EQ, IR_TY_I32, cmp, cond_tmp, zero_tmp, st->line);
+              ZCC_EMIT_BR_IF(cmp, lbl_else, st->line);
+            }
+            /* then */
+            if (rust_ir_emit_stmt_list(ast, st->then_head, slots, slot_count) != 0) return 1;
+            ZCC_EMIT_BR(lbl_end, st->line);
+            /* else */
+            ZCC_EMIT_LABEL(lbl_else, st->line);
+            if (st->else_head) {
+                if (rust_ir_emit_stmt_list(ast, st->else_head, slots, slot_count) != 0) return 1;
+            }
+            ZCC_EMIT_LABEL(lbl_end, st->line);
+        } else if (st->kind == RUST_STMT_WHILE) {
+            int id = rust_ir_label_counter++;
+            char lbl_start[32], lbl_end[32];
+            char cond_tmp[32];
+            sprintf(lbl_start, ".Lri_wstart_%d", id);
+            sprintf(lbl_end, ".Lri_wend_%d", id);
+            ZCC_EMIT_LABEL(lbl_start, st->line);
+            /* condition */
+            if (rust_ir_emit_expr(ast, st->cond, slots, slot_count) != 0) return 1;
+            rust_ir_save(cond_tmp);
+            /* if cond == 0 goto end */
+            { char *z = rust_ir_fresh();
+              char zero_tmp[32];
+              char *cmp;
+              ZCC_EMIT_CONST(IR_TY_I32, z, 0, st->line);
+              rust_ir_save(zero_tmp);
+              cmp = rust_ir_fresh();
+              ZCC_EMIT_BINARY(IR_EQ, IR_TY_I32, cmp, cond_tmp, zero_tmp, st->line);
+              ZCC_EMIT_BR_IF(cmp, lbl_end, st->line);
+            }
+            /* body */
+            if (rust_ir_emit_stmt_list(ast, st->body_head, slots, slot_count) != 0) return 1;
+            ZCC_EMIT_BR(lbl_start, st->line);
+            ZCC_EMIT_LABEL(lbl_end, st->line);
+        } else if (st->kind == RUST_STMT_EXPR) {
+            if (rust_ir_emit_expr(ast, st->expr, slots, slot_count) != 0) return 1;
+        } else {
+            return 1; /* unsupported statement */
+        }
+        st = st->next;
+    }
+    return 0;
+}
+
+/* ── Function IR emission ────────────────────────────────────────── */
+static int rust_ir_emit_function(const RustAst *ast, const RustFunction *fn) {
+    RustBackendSlot slots[256];
+    int slot_count = 0;
+    int next_off = -4;
+    int pi;
+    char fn_label[64];
+
+    if (!fn) return 1;
+
+    /* Collect parameter slots */
+    for (pi = 0; pi < fn->num_params; pi++) {
+        if (slot_count >= 256) return 1;
+        slots[slot_count].symbol_id = fn->param_symbol_ids[pi];
+        slots[slot_count].offset = next_off;
+        slots[slot_count].kind = 1;
+        slot_count++;
+        next_off -= 4;
+    }
+    /* Collect local variable slots */
+    { RustParser tmp_p;
+      memset(&tmp_p, 0, sizeof(tmp_p));
+      if (rust_backend_collect_runtime_slots_from_stmt_list(&tmp_p, slots, &slot_count, &next_off, fn->body_head) != 0) return 1;
+    }
+
+    rust_ir_tmp_counter = 0;
+    rust_ir_last[0] = 0;
+
+    rust_backend_runtime_function_label(fn_label, (int)sizeof(fn_label), fn);
+    ZCC_IR_FUNC_BEGIN(fn_label, IR_TY_I32, fn->num_params, slot_count * 4);
+
+    /* Emit parameter stores: copy arg regs to local slots */
+    for (pi = 0; pi < fn->num_params; pi++) {
+        char param_name[32], slot_name[32];
+        sprintf(param_name, "%%rp%d", pi);
+        sprintf(slot_name, "%%rs%d", slots[pi].offset < 0 ? -slots[pi].offset : slots[pi].offset);
+        /* The IR backend handles parameter binding via IR_ARG at call sites.
+         * Here we just allocate the slot and store from the implicit param. */
+        ZCC_EMIT_STORE(IR_TY_I32, slot_name, param_name, fn->name_line);
+    }
+
+    /* Emit body */
+    if (rust_ir_emit_stmt_list(ast, fn->body_head, slots, slot_count) != 0) return 1;
+
+    /* Fallback return if function doesn't end with return */
+    if (!rust_backend_stmt_list_ends_with_return(fn->body_head)) {
+        char *z = rust_ir_fresh();
+        ZCC_EMIT_CONST(IR_TY_I32, z, 0, fn->name_line);
+        ZCC_EMIT_RET(IR_TY_I32, z, fn->name_line);
+    }
+
+    ZCC_IR_FUNC_END();
+    return 0;
+}
+
+/* ── Program IR emission ─────────────────────────────────────────── */
+static int rust_ir_emit_program(const RustAst *ast) {
+    const RustFunction *fn;
+    if (!ast) return 1;
+    rust_ir_label_counter = 0;
+    fn = ast->functions;
+    while (fn) {
+        if (rust_ir_emit_function(ast, fn) != 0) return 1;
+        fn = fn->next;
+    }
+    return 0;
+}
+
 int rust_backend_bridge_compile_file(const char *filename, const char *source, int source_len, const char *output_file, int compile_only, int strict_let_annotations, int strict_function_signatures) {
     RustParser p;
     RustAst *ast;
@@ -3394,6 +3764,90 @@ int rust_backend_bridge_compile_file(const char *filename, const char *source, i
             return 1;
         }
     }
+    free(tctx.symbol_types);
+    free(rctx.symbols);
+    return 0;
+}
+
+/* ================================================================ */
+/* Rust → IR Bridge Entry Point                                      */
+/*                                                                   */
+/* Called from part5.c when --rust-backend-ir is set.                 */
+/* Performs: parse → resolve → typecheck → IR emit (via ZCC_EMIT_*)  */
+/* IR text is dumped to stderr for inspection; IR module is left in   */
+/* g_ir_module for the caller to further process or discard.          */
+/* ================================================================ */
+int rust_backend_ir_compile_file(const char *filename, const char *source, int source_len, int strict_let_annotations, int strict_function_signatures) {
+    RustParser p;
+    RustAst *ast;
+    RustResolveContext rctx;
+    RustTypecheckContext tctx;
+
+    memset(&p, 0, sizeof(p));
+    p.filename = filename;
+    p.src = source;
+    p.len = source_len;
+    p.line = 1;
+    p.col = 1;
+
+    ast = rust_parse_program_internal(&p);
+    if (p.num_diags > 0) {
+        rust_print_diags(filename, p.diags, p.num_diags);
+        return 1;
+    }
+
+    memset(&rctx, 0, sizeof(rctx));
+    rctx.filename = filename;
+    rctx.ast = ast;
+    rctx.diags = p.diags;
+    rctx.num_diags = &p.num_diags;
+    rctx.max_diags = 256;
+    if (rust_resolve_names(&rctx) != 0) {
+        rust_print_diags(filename, p.diags, p.num_diags);
+        free(rctx.symbols);
+        return 1;
+    }
+
+    memset(&tctx, 0, sizeof(tctx));
+    tctx.filename = filename;
+    tctx.ast = ast;
+    tctx.diags = p.diags;
+    tctx.num_diags = &p.num_diags;
+    tctx.max_diags = 256;
+    tctx.symbols = rctx.symbols;
+    tctx.symbol_count = rctx.symbol_count;
+    tctx.symbol_types_len = rctx.symbol_count + 1;
+    tctx.symbol_types = (int *)calloc((size_t)tctx.symbol_types_len, sizeof(int));
+    tctx.strict_let_annotations = strict_let_annotations;
+    tctx.strict_function_signatures = strict_function_signatures;
+    if (!tctx.symbol_types) {
+        rust_print_diags(filename, p.diags, p.num_diags);
+        free(rctx.symbols);
+        return 1;
+    }
+    if (rust_typecheck(&tctx) != 0) {
+        rust_print_diags(filename, p.diags, p.num_diags);
+        free(tctx.symbol_types);
+        free(rctx.symbols);
+        return 1;
+    }
+
+    /* Initialize IR module */
+    g_emit_ir = 1;
+    if (!g_ir_module) g_ir_module = ir_module_create();
+
+    /* Emit IR from Rust AST */
+    if (rust_ir_emit_program(ast) != 0) {
+        free(tctx.symbol_types);
+        free(rctx.symbols);
+        return 1;
+    }
+
+    /* Dump IR text to stderr for inspection */
+    if (g_ir_module) {
+        ir_module_emit_text(g_ir_module, stderr);
+    }
+
     free(tctx.symbol_types);
     free(rctx.symbols);
     return 0;

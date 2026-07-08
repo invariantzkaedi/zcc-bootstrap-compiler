@@ -1286,6 +1286,7 @@ int zcc_main(int argc, char **argv) {
   int dump_rust_symbol_table = 0;
   int dump_rust_ir = 0;
   int rust_backend_v1 = 0;
+  int rust_backend_ir = 0;
   int rust_strict_let_annotations = 0;
   int rust_strict_function_signatures = 0;
   int rust_dump_mode = 0;
@@ -1346,6 +1347,8 @@ int zcc_main(int argc, char **argv) {
       dump_rust_ir = 1;
     } else if (strcmp(argv[i], "--rust-backend-v1") == 0) {
       rust_backend_v1 = 1;
+    } else if (strcmp(argv[i], "--rust-backend-ir") == 0) {
+      rust_backend_ir = 1;
     } else if (strcmp(argv[i], "--rust-strict-let-annotations") == 0) {
       rust_strict_let_annotations = 1;
     } else if (strcmp(argv[i], "--rust-strict-function-signatures") == 0) {
@@ -1971,6 +1974,15 @@ int zcc_main(int argc, char **argv) {
         free(source);
         return 1;
       }
+    } else if (rust_backend_ir) {
+      /* Rust → IR bridge: parse/resolve/typecheck/emit-IR all in part7_rust.c */
+      if (rust_backend_ir_compile_file(input_file, source, source_len, rust_strict_let_annotations, rust_strict_function_signatures) != 0) {
+        free(source);
+        return 1;
+      }
+      if (!enable_telemetry_stdout) printf("[OK] Rust IR bridge emission completed.\n");
+      free(source);
+      return 0;
     } else if (rust_backend_v1) {
       if (rust_backend_bridge_compile_file(input_file, source, source_len, output_file, compile_only, rust_strict_let_annotations, rust_strict_function_signatures) != 0) {
         free(source);
