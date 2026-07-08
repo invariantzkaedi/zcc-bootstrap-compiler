@@ -1,0 +1,11 @@
+# Compilation, selfhost bootstrap verification
+make clean && make selfhost
+
+# Running the 82 Rust differential tests
+python3 /mnt/c/Users/zkaed/.gemini/antigravity-ide/brain/7ea2e456-3514-4c39-9709-1e00d934872e/scratch/diff_test_rust_ir.py
+
+# Running the standard ZCC test suite
+make test
+
+# Running the cross-compiler smoke test
+make compat-smoke

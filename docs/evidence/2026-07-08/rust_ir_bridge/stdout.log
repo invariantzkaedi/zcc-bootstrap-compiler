@@ -1,0 +1,19 @@
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (18166 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+diff zcc2.s zcc3.s && echo "SELF-HOST VERIFIED (assembly identical)"
+SELF-HOST VERIFIED (assembly identical)
+
+Starting verification of 82 Rust test files...
+Verification completed: PASSED=82, FAILED=0
+
+make test:
+=== Running Float Probes Correctness Gates ===
+=== Float Probes: ALL PASS ===
+ALL TESTS PASSED: PASS: 33  FAIL: 0  SKIP: 3
+
+make compat-smoke:
+COMPAT SMOKE COMPLETE
