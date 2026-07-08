@@ -2859,13 +2859,6 @@ static int rust_backend_emit_runtime_function(FILE *out, RustParser *p, const Ru
 static int rust_ir_whitelisted(const char *name) {
     if (!name) return 0;
     if (getenv("ZCC_IR_BACKEND") || getenv("ZCC_IR_LOWER")) return 1;
-    static const char *wl[] = {
-        "main", "helper"
-    };
-    int i;
-    for (i = 0; i < sizeof(wl)/sizeof(wl[0]); i++) {
-        if (strcmp(name, wl[i]) == 0) return 1;
-    }
     return 0;
 }
 

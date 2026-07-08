@@ -129,7 +129,7 @@ def main() -> int:
         print("expected --pp-only on Rust source to fail")
         print(pp_bad.stdout)
         return 1
-    if "--pp-only is only valid for C sources" not in pp_bad.stdout:
+    if "--pp-only can only be used with C sources" not in pp_bad.stdout:
         print("missing clear --pp-only rejection message")
         print(pp_bad.stdout)
         return 1
