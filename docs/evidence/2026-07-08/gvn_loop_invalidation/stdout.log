@@ -1,0 +1,14 @@
+=== make selfhost output ===
+SELF-HOST VERIFIED (assembly identical)
+
+=== GVN Kill Log Output (tail gvn_new.log) ===
+[GVN-LOOP-KILL] block 68 is loop header, killed load dst=337 base=319 offset=16 due to loop stores
+[GVN-LOOP-KILL] block 68 is loop header, killed load dst=322 base=319 offset=20 due to loop stores
+[GVN-LOOP-KILL] block 68 is loop header, killed load dst=319 base=10 offset=0 due to loop stores
+
+=== make compat-smoke output ===
+COMPAT SMOKE COMPLETE
+
+=== make test output ===
+PASS: 33  FAIL: 0  SKIP: 3
+ALL TESTS PASSED

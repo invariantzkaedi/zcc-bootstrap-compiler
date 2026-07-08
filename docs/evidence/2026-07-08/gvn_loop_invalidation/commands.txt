@@ -1,0 +1,7 @@
+make zcc
+env ZCC_DEBUG_GVN=1 ./zcc part2.c -o /tmp/part2.s 2> /tmp/gvn_new.log
+make zcc2
+timeout 10 ./zcc2 test_line_comment.c -o /tmp/test_line_comment2.s
+make selfhost
+make compat-smoke
+make test

@@ -84,8 +84,20 @@ Missing pieces:
    coordinate slot_base offsets, do not collide with AST locals (CG-IR-008:
    "AST/IR stack slot collision" is the documented failure).
 5. **Determinism.** Eviction ties must break deterministically (vreg order),
-   or Gate 1 byte-identity fails intermittently. See
-   FORENSIC_024_REGALLOC_DETERMINISM.md.
+   or Gate 1 byte-identity fails intermittently. Additionally, the spill/
+   eviction cost metric MUST use integer arithmetic only — FORENSIC_024
+   item B documents a prior spill metric using `double` division causing
+   sub-ULP nondeterminism; the established fix pattern is integer
+   cross-multiplication. `live_interval_compare` already has total-order
+   tie-breakers (start → end → vreg) from FORENSIC_024 item C; preserve them.
+6. **Spilling may not be sufficient for next_token.** BUG-4
+   (tickets/BUG-4-next_token_hang.md) documents a SECOND independent root
+   cause for the same hang: a CFG reachability bug where `goto` inside
+   nested ifs causes compute_reachability / ir_build_blocks_from_instructions
+   to mark the loop-increment block (`cc->pos++`) unreachable, deleting it
+   and producing an infinite loop. If Step 3 hangs AFTER spilling is
+   verified via Step 2, check the BUG-4 pattern FIRST (look for missing
+   increment blocks in the zcc2.s diff) before suspecting the spill code.
 
 ## De-risking sequence (each step is a cheap, committable checkpoint)
 - **Step 1 — Flag-gated landing.** Implement behind `ZCC_IR_SPILL=1`
@@ -136,6 +148,8 @@ focused sessions and at least one zcc2.s-diff debugging round.
   emission changes; land sequentially for clean bisection
 - Downstream unblocks: Rust v2 `match` lowering (large switch dispatch —
   same pressure shape as `next_token`); roadmap item #5 (allocator upgrade)
+- BUG-4: `tickets/BUG-4-next_token_hang.md` — second root cause (CFG
+  reachability with goto-in-nested-if); may re-manifest at Step 3
 
 ## Notes
 - Prerequisite state: `spill-work` @ `30195bd6` — selfhost GREEN, tests

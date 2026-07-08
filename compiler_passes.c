@@ -6367,12 +6367,127 @@ static bool is_gvn_pure(Opcode op) {
   }
 }
 
+static void gvn_invalidate_loop_variant_loads(Function *fn, BlockID bid) {
+  Block *hdr = fn->blocks[bid];
+  if (!hdr || !hdr->is_loop_header)
+    return;
+
+  bool in_body[MAX_BLOCKS];
+  memset(in_body, 0, sizeof(in_body));
+  in_body[bid] = true;
+
+  int body_queue[MAX_BLOCKS];
+  int q_head = 0;
+  int q_tail = 0;
+
+  for (uint32_t pi = 0; pi < hdr->n_preds; pi++) {
+    BlockID pred_id = hdr->preds[pi];
+    if (licm_dominates(bid, pred_id)) {
+      if (!in_body[pred_id]) {
+        in_body[pred_id] = true;
+        body_queue[q_tail++] = (int)pred_id;
+      }
+    }
+  }
+
+  while (q_head < q_tail) {
+    int curr = body_queue[q_head++];
+    Block *curr_blk = fn->blocks[curr];
+    if (!curr_blk) continue;
+    for (uint32_t pi = 0; pi < curr_blk->n_preds; pi++) {
+      BlockID pred_id = curr_blk->preds[pi];
+      if (!in_body[pred_id]) {
+        in_body[pred_id] = true;
+        body_queue[q_tail++] = (int)pred_id;
+      }
+    }
+  }
+
+  typedef struct {
+    RegID base;
+    int64_t offset;
+    bool has_cast;
+  } LoopStore;
+  LoopStore stores[1024];
+  int n_stores = 0;
+  bool clobber_all = false;
+
+  for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
+    if (in_body[bi] && fn->blocks[bi]) {
+      for (Instr *ins = fn->blocks[bi]->head; ins; ins = ins->next) {
+        if (ins->dead || ins->op == OP_NOP)
+          continue;
+        if (ins->op == OP_CALL) {
+          clobber_all = true;
+          break;
+        }
+        if (ins->op == OP_STORE && ins->n_src >= 2) {
+          if (n_stores >= 1024) {
+            clobber_all = true;
+            break;
+          }
+          LoopStore *ls = &stores[n_stores++];
+          ls->base = trace_address_root_offset(fn, ins->src[1], &ls->offset, &ls->has_cast);
+          if (ins->amf.folded) {
+            ls->offset += ins->amf.disp;
+          }
+        }
+      }
+      if (clobber_all) break;
+    }
+  }
+
+  for (int gvni = 0; gvni < GVN_TABLE_SIZE; gvni++) {
+    if (gvn_table[gvni].occupied && gvn_table[gvni].valid && gvn_table[gvni].op == OP_LOAD) {
+      bool must_kill = false;
+      if (clobber_all) {
+        must_kill = true;
+      } else {
+        for (int si = 0; si < n_stores; si++) {
+          LoopStore *ls = &stores[si];
+          if (ls->has_cast || gvn_table[gvni].sbt_has_cast) {
+            must_kill = true;
+            break;
+          }
+          RegID store_base_vn = vn_of[ls->base];
+          RegID load_base_vn = vn_of[gvn_table[gvni].sbt_base];
+          if (store_base_vn == load_base_vn) {
+            if (ls->offset == gvn_table[gvni].sbt_offset) {
+              must_kill = true;
+              break;
+            }
+          } else {
+            Instr *db1 = fn->def_of[ls->base];
+            Instr *db2 = fn->def_of[gvn_table[gvni].sbt_base];
+            bool distinct_allocas = (db1 && db2 && db1->op == OP_ALLOCA && db2->op == OP_ALLOCA && ls->base != gvn_table[gvni].sbt_base);
+            if (!distinct_allocas) {
+              must_kill = true;
+              break;
+            }
+          }
+        }
+      }
+      if (must_kill) {
+        if (getenv("ZCC_DEBUG_GVN")) {
+          fprintf(stderr, "[GVN-LOOP-KILL] block %u is loop header, killed load dst=%u base=%u offset=%ld due to loop stores\n",
+                  bid, gvn_table[gvni].dst_reg, gvn_table[gvni].sbt_base, gvn_table[gvni].sbt_offset);
+        }
+        gvn_table[gvni].valid = false;
+      }
+    }
+  }
+}
+
 static void gvn_walk_domtree(Function *fn, BlockID bid, uint32_t *eliminated) {
   Block *blk = fn->blocks[bid];
   if (!blk || !blk->reachable)
     return;
 
   gvn_scope_push(bid);
+
+  if (blk->is_loop_header) {
+    gvn_invalidate_loop_variant_loads(fn, bid);
+  }
 
   for (Instr *ins = blk->head; ins; ins = ins->next) {
     if (ins->dead || ins->op == OP_NOP)

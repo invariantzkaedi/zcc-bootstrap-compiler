@@ -5028,7 +5028,7 @@ static int ir_whitelisted(const char *name) {
       "test_struct_tbaa", "test_cast_fallback", "gvn_test", "forward_test", "slf_sink", "slf_call_barrier", "loop_sum",
       /* Split Lexer Core (fortified and hardened) */
       "read_char", "read_escape", "node_name", "lex_char", "lex_operator",
-      /* "next_token", */
+      "next_token",
       NULL
   };
   int i;
