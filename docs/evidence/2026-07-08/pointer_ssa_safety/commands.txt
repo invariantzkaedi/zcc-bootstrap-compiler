@@ -1,0 +1,3 @@
+wsl make zcc
+wsl make selfhost
+wsl make test

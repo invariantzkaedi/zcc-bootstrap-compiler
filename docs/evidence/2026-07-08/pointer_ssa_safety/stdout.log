@@ -1,0 +1,14 @@
+=== Bootstrapping Verification ===
+SELF-HOST VERIFIED (assembly identical)
+
+=== Test Suite Run ===
+Category 3: Pointers and Memory
+  [PASS] pointer_deref
+  [PASS] pointer_rewrite: determinism check passed
+  [PASS] pointer_rewrite: pass interaction passed
+  [PASS] pointer_rewrite: IR assertion passed (logged exactly 2 rewrites)
+  ...
+══════════════════════════════════════════════════
+  PASS: 33  FAIL: 0  SKIP: 3
+══════════════════════════════════════════════════
+ALL TESTS PASSED

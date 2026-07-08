@@ -35,8 +35,28 @@ uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
             for (Instr *ins = blk->head; ins; ins = ins->next) {
                 RegID target = 0;
 
-                if (ins->op == OP_COPY || ins->op == OP_GEP) {
+                if (ins->op == OP_COPY) {
                     if (ins->src[0] < MAX_INSTRS) {
+                        target = points_to[ins->src[0]];
+                    }
+                } else if (ins->op == OP_GEP) {
+                    bool safe_gep = true;
+                    if (ins->n_src > 1) {
+                        RegID idx_reg = ins->src[1];
+                        if (idx_reg < MAX_INSTRS) {
+                            Instr *idx_def = fn->def_of[idx_reg];
+                            if (idx_def && idx_def->op == OP_CONST) {
+                                if (idx_def->imm != 0) {
+                                    safe_gep = false;
+                                }
+                            } else {
+                                safe_gep = false;
+                            }
+                        } else {
+                            safe_gep = false;
+                        }
+                    }
+                    if (safe_gep && ins->src[0] < MAX_INSTRS) {
                         target = points_to[ins->src[0]];
                     }
                 } else if (ins->op == OP_PHI) {
@@ -125,7 +145,6 @@ uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
             }
         }
     }
-
     /* Rewrite indirect load/store instructions */
     uint32_t rewrites = 0;
     for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
