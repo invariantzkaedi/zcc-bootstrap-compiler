@@ -92,4 +92,8 @@ Result: gcc-built selfhost PASS, zcc2.s=3.6MB generated clean,
 Pattern: 5 fixes, 5 reverts. All correct under gcc, all hang self-hosted.
 FINAL VERDICT: next_token requires full spill-to-stack IR support.
 No further liveness fixes should be attempted without spill implementation.
-Status: PERMANENTLY DEFERRED — open CG-IR-013 for spill support.
+Status: RESOLVED
+
+## Closure — 2026-07-08
+Resolved by GVN loop-invalidation fix in `compiler_passes.c` (commit `fd59202f` / `spill-work` branch).
+The hang was diagnosed not as register pressure but as a GVN loop backedge defect that optimized away updates to the pointer-offset variable `cc->pos` in the comments loop. Under the GVN loop-invalidation fix, the loop variable reload is preserved, allowing `next_token` to compile and execute successfully under the IR backend.

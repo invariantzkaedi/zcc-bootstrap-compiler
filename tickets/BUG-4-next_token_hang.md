@@ -40,3 +40,7 @@ By routing `next_token` back to the stable AST-to-x86 compilation path, the cont
 - The `run_gates.sh` test suite passes.
 
 **Verdict**: The fixed-point gate is GREEN. Binary parity achieved.
+
+## Closure — 2026-07-08
+Resolved by GVN loop-invalidation fix in `compiler_passes.c` (commit `fd59202f` / `spill-work` branch). `next_token` was successfully whitelisted and compiles to a byte-identical self-host Stage 3.
+Status: RESOLVED
