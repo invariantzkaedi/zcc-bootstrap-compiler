@@ -1,7 +1,8 @@
 # CG-IR-013 — Spill-to-Stack Support for the IR Backend Linear Scan Allocator
 
 ## Status
-OPEN — work plan committed on `spill-work`
+RESOLVED (SUPERSEDED) — next_token, read_char, read_escape, node_name compile cleanly under the GVN loop invalidation fix (no spill required)
+
 
 ## Opened
 2026-07-08 — mandated by CG-IR-012 Revert 4 final verdict
@@ -157,3 +158,11 @@ focused sessions and at least one zcc2.s-diff debugging round.
 - No liveness-extension changes in this ticket. Liveness fixes were reverted
   5× and are explicitly out of scope until spilling works; re-attempt them
   (if still needed) only AFTER Step 4.
+
+## Closure (2026-07-09)
+The founding premise of this ticket—that `next_token` and the other large lexer functions required full spill-to-stack support—was disproven. The Stage 2/3 bootstrap hang was instead traced to a GVN loop invalidation bug (see `tickets/BUG-4-next_token_hang.md`).
+
+Once the GVN loop invalidation pass was implemented (invalidating variant loads on loop headers), `next_token`, `read_char`, `read_escape`, and `node_name` were successfully whitelisted under `ZCC_IR_BACKEND=1` and compiled cleanly. A full three-stage selfhost completed successfully with all functions active and without requiring spills (meaning the live register pressure in these functions fits entirely within the 7 physical registers).
+
+Therefore, this ticket has been resolved as SUPERSEDED. Spill support remains a valid future improvement for the compiler roadmap, but it is no longer a blocker for any bootstrap compiler code.
+
