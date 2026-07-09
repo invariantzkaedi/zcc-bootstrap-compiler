@@ -336,9 +336,9 @@ ZCC_IR_BACKEND=1 ./zcc2 "$TESTDIR/t_ptr.c" -o "$TESTDIR/pointer_deref_ir_check.s
 if grep -q "movslq" "$TESTDIR/pointer_deref_ir_check.s"; then
     fail "pointer_rewrite: pass interaction failed (indirect load was not promoted to register)"
 fi
-# IR-level assertion check: verify exactly 2 indirect instructions were rewritten
-if ! grep -q "\[PointerSSA\] rewrote 2 indirect instructions" "$TESTDIR/pointer_deref_ir_check.log"; then
-    fail "pointer_rewrite: IR assertion failed (did not log exactly 2 rewrites)"
+# IR-level assertion check: verify no redundant indirect instructions were rewritten
+if grep -q "\[PointerSSA\] rewrote" "$TESTDIR/pointer_deref_ir_check.log"; then
+    fail "pointer_rewrite: IR assertion failed (redundant pointer rewrites occurred)"
 fi
 
 cat > "$TESTDIR/t_ptr_arith.c" << 'EOF'

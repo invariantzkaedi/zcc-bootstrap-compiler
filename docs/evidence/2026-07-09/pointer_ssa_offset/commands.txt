@@ -1,0 +1,8 @@
+# Command Execution Order for pointer_ssa offset-aware points-to pass
+1. make zcc
+2. ZCC_IR_BACKEND=1 ./zcc /tmp/test_ptr_rewrite.c -o /tmp/test_ptr_rewrite.s
+3. gcc scratch_test_harness.c /tmp/test_ptr_rewrite.s -o /tmp/test_harness
+4. /tmp/test_harness
+5. make selfhost
+6. cmp zcc2.s zcc3.s
+7. make test

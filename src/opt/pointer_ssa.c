@@ -1,16 +1,49 @@
 #include "pointer_ssa.h"
 #include "zcc_ir.h"
+#include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #define AMBIGUOUS 65537
 
+typedef struct {
+    RegID base;
+    int64_t offset;
+} BaseOffsetKey;
+
+static int get_or_create_mem_location(RegID base, int64_t offset, BaseOffsetKey *locations, int *n_locations) {
+    for (int i = 0; i < *n_locations; i++) {
+        if (locations[i].base == base && locations[i].offset == offset) {
+            return i;
+        }
+    }
+    if (*n_locations >= 1024) {
+        return -1;
+    }
+    int id = (*n_locations)++;
+    locations[id].base = base;
+    locations[id].offset = offset;
+    return id;
+}
+
 uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
-    /* Allocate points_to and mem_points_to maps */
-    RegID *points_to = calloc(MAX_INSTRS, sizeof(RegID));
-    RegID *mem_points_to = calloc(MAX_INSTRS, sizeof(RegID));
-    if (!points_to || !mem_points_to) {
-        free(points_to);
-        free(mem_points_to);
+    /* We choose Option (b): extend OP_LOAD/OP_STORE with address-mode folding displacement (amf.disp).
+     * This avoids inserting new instructions and is fully handled during assembly generation. */
+
+    RegID *points_to_base = calloc(MAX_INSTRS, sizeof(RegID));
+    int64_t *points_to_offset = calloc(MAX_INSTRS, sizeof(int64_t));
+
+    BaseOffsetKey *mem_locations = calloc(1024, sizeof(BaseOffsetKey));
+    int n_mem_locations = 0;
+    RegID *mem_points_to_base = calloc(1024, sizeof(RegID));
+    int64_t *mem_points_to_offset = calloc(1024, sizeof(int64_t));
+
+    if (!points_to_base || !points_to_offset || !mem_locations || !mem_points_to_base || !mem_points_to_offset) {
+        free(points_to_base);
+        free(points_to_offset);
+        free(mem_locations);
+        free(mem_points_to_base);
+        free(mem_points_to_offset);
         return 0;
     }
 
@@ -20,12 +53,13 @@ uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
         if (!blk->reachable) continue;
         for (Instr *ins = blk->head; ins; ins = ins->next) {
             if (ins->op == OP_ALLOCA && ins->dst < MAX_INSTRS) {
-                points_to[ins->dst] = ins->dst;
+                points_to_base[ins->dst] = ins->dst;
+                points_to_offset[ins->dst] = 0;
             }
         }
     }
 
-    /* Forward propagate points-to sets */
+    /* Forward propagate points-to sets with constant offsets */
     bool changed = true;
     while (changed) {
         changed = false;
@@ -33,76 +67,105 @@ uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
             Block *blk = fn->blocks[bi];
             if (!blk->reachable) continue;
             for (Instr *ins = blk->head; ins; ins = ins->next) {
-                RegID target = 0;
+                RegID target_base = 0;
+                int64_t target_offset = 0;
 
                 if (ins->op == OP_COPY) {
                     if (ins->src[0] < MAX_INSTRS) {
-                        target = points_to[ins->src[0]];
+                        target_base = points_to_base[ins->src[0]];
+                        target_offset = points_to_offset[ins->src[0]];
                     }
                 } else if (ins->op == OP_GEP) {
-                    bool safe_gep = true;
-                    if (ins->n_src > 1) {
-                        RegID idx_reg = ins->src[1];
-                        if (idx_reg < MAX_INSTRS) {
-                            Instr *idx_def = fn->def_of[idx_reg];
-                            if (idx_def && idx_def->op == OP_CONST) {
-                                if (idx_def->imm != 0) {
-                                    safe_gep = false;
+                    if (ins->src[0] < MAX_INSTRS) {
+                        RegID base = points_to_base[ins->src[0]];
+                        int64_t offset = points_to_offset[ins->src[0]];
+                        if (base != 0 && base != AMBIGUOUS) {
+                            if (ins->n_src > 1) {
+                                RegID idx_reg = ins->src[1];
+                                if (idx_reg < MAX_INSTRS) {
+                                    Instr *idx_def = fn->def_of[idx_reg];
+                                    if (idx_def && idx_def->op == OP_CONST) {
+                                        target_base = base;
+                                        target_offset = offset + idx_def->imm;
+                                    } else {
+                                        target_base = AMBIGUOUS;
+                                    }
+                                } else {
+                                    target_base = AMBIGUOUS;
                                 }
                             } else {
-                                safe_gep = false;
+                                target_base = base;
+                                target_offset = offset;
                             }
-                        } else {
-                            safe_gep = false;
                         }
                     }
-                    if (safe_gep && ins->src[0] < MAX_INSTRS) {
-                        target = points_to[ins->src[0]];
-                    }
                 } else if (ins->op == OP_PHI) {
-                    target = 0;
+                    target_base = 0;
+                    target_offset = 0;
                     for (uint32_t p = 0; p < ins->n_phi; p++) {
                         RegID phi_reg = ins->phi[p].reg;
                         if (phi_reg < MAX_INSTRS) {
-                            RegID src_target = points_to[phi_reg];
-                            if (target == 0) {
-                                target = src_target;
-                            } else if (src_target != 0 && target != src_target) {
-                                target = AMBIGUOUS;
+                            RegID src_base = points_to_base[phi_reg];
+                            int64_t src_offset = points_to_offset[phi_reg];
+                            if (src_base != 0) {
+                                if (target_base == 0) {
+                                    target_base = src_base;
+                                    target_offset = src_offset;
+                                } else if (target_base != AMBIGUOUS) {
+                                    if (src_base != target_base || src_offset != target_offset) {
+                                        target_base = AMBIGUOUS;
+                                    }
+                                }
                             }
                         }
                     }
                 } else if (ins->op == OP_LOAD && ins->n_src >= 1) {
                     RegID ptr_reg = ins->src[0];
                     if (ptr_reg < MAX_INSTRS) {
-                        RegID base = points_to[ptr_reg];
-                        if (base != 0 && base != AMBIGUOUS && base < MAX_INSTRS) {
-                            target = mem_points_to[base];
+                        RegID base = points_to_base[ptr_reg];
+                        int64_t offset = points_to_offset[ptr_reg];
+                        if (base != 0 && base != AMBIGUOUS) {
+                            int loc_id = get_or_create_mem_location(base, offset, mem_locations, &n_mem_locations);
+                            if (loc_id >= 0) {
+                                target_base = mem_points_to_base[loc_id];
+                                target_offset = mem_points_to_offset[loc_id];
+                            }
                         }
                     }
                 } else if (ins->op == OP_STORE && ins->n_src >= 2) {
                     RegID ptr_reg = ins->src[1];
                     RegID val_reg = ins->src[0];
                     if (ptr_reg < MAX_INSTRS && val_reg < MAX_INSTRS) {
-                        RegID base = points_to[ptr_reg];
-                        if (base != 0 && base != AMBIGUOUS && base < MAX_INSTRS) {
-                            RegID stored_val = points_to[val_reg];
-                            if (stored_val != 0) {
-                                if (mem_points_to[base] == 0) {
-                                    mem_points_to[base] = stored_val;
-                                    changed = true;
-                                } else if (mem_points_to[base] != stored_val && mem_points_to[base] != AMBIGUOUS) {
-                                    mem_points_to[base] = AMBIGUOUS;
-                                    changed = true;
+                        RegID base = points_to_base[ptr_reg];
+                        int64_t offset = points_to_offset[ptr_reg];
+                        if (base != 0 && base != AMBIGUOUS) {
+                            RegID stored_base = points_to_base[val_reg];
+                            int64_t stored_offset = points_to_offset[val_reg];
+                            if (stored_base != 0) {
+                                int loc_id = get_or_create_mem_location(base, offset, mem_locations, &n_mem_locations);
+                                if (loc_id >= 0) {
+                                    if (mem_points_to_base[loc_id] == 0) {
+                                        mem_points_to_base[loc_id] = stored_base;
+                                        mem_points_to_offset[loc_id] = stored_offset;
+                                        changed = true;
+                                    } else if (mem_points_to_base[loc_id] != AMBIGUOUS) {
+                                        if (mem_points_to_base[loc_id] != stored_base || mem_points_to_offset[loc_id] != stored_offset) {
+                                            mem_points_to_base[loc_id] = AMBIGUOUS;
+                                            changed = true;
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 }
 
-                if (ins->dst && ins->dst < MAX_INSTRS && target != 0 && points_to[ins->dst] != target) {
-                    points_to[ins->dst] = target;
-                    changed = true;
+                if (ins->dst && ins->dst < MAX_INSTRS && target_base != 0) {
+                    if (points_to_base[ins->dst] != target_base || points_to_offset[ins->dst] != target_offset) {
+                        points_to_base[ins->dst] = target_base;
+                        points_to_offset[ins->dst] = target_offset;
+                        changed = true;
+                    }
                 }
             }
         }
@@ -119,8 +182,8 @@ uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
                     for (uint32_t s = 0; s < ins->n_src; s++) {
                         RegID arg = ins->src[s];
                         if (arg < MAX_INSTRS) {
-                            RegID base = points_to[arg];
-                            if (base != 0 && base < MAX_INSTRS) {
+                            RegID base = points_to_base[arg];
+                            if (base != 0 && base != AMBIGUOUS && base < MAX_INSTRS) {
                                 escaped[base] = true;
                             }
                         }
@@ -128,16 +191,16 @@ uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
                 } else if (ins->op == OP_RET && ins->n_src >= 1) {
                     RegID ret_val = ins->src[0];
                     if (ret_val < MAX_INSTRS) {
-                        RegID base = points_to[ret_val];
-                        if (base != 0 && base < MAX_INSTRS) {
+                        RegID base = points_to_base[ret_val];
+                        if (base != 0 && base != AMBIGUOUS && base < MAX_INSTRS) {
                             escaped[base] = true;
                         }
                     }
                 } else if (ins->op == OP_STORE && ins->n_src >= 2) {
                     RegID val_reg = ins->src[0];
                     if (val_reg < MAX_INSTRS) {
-                        RegID val_base = points_to[val_reg];
-                        if (val_base != 0 && val_base < MAX_INSTRS) {
+                        RegID val_base = points_to_base[val_reg];
+                        if (val_base != 0 && val_base != AMBIGUOUS && val_base < MAX_INSTRS) {
                             escaped[val_base] = true;
                         }
                     }
@@ -145,6 +208,7 @@ uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
             }
         }
     }
+
     /* Rewrite indirect load/store instructions */
     uint32_t rewrites = 0;
     for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
@@ -154,18 +218,26 @@ uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
             if (ins->op == OP_LOAD && ins->n_src >= 1) {
                 RegID ptr_reg = ins->src[0];
                 if (ptr_reg < MAX_INSTRS) {
-                    RegID base = points_to[ptr_reg];
-                    if (base != 0 && base != AMBIGUOUS && base < MAX_INSTRS && (!escaped || !escaped[base])) {
+                    RegID base = points_to_base[ptr_reg];
+                    int64_t offset = points_to_offset[ptr_reg];
+                    if (base != 0 && base != AMBIGUOUS && base < MAX_INSTRS && ptr_reg != base && (!escaped || !escaped[base])) {
                         ins->src[0] = base;
+                        ins->amf.folded = true;
+                        ins->amf.base = base;
+                        ins->amf.disp = offset;
                         rewrites++;
                     }
                 }
             } else if (ins->op == OP_STORE && ins->n_src >= 2) {
                 RegID ptr_reg = ins->src[1];
                 if (ptr_reg < MAX_INSTRS) {
-                    RegID base = points_to[ptr_reg];
-                    if (base != 0 && base != AMBIGUOUS && base < MAX_INSTRS && (!escaped || !escaped[base])) {
+                    RegID base = points_to_base[ptr_reg];
+                    int64_t offset = points_to_offset[ptr_reg];
+                    if (base != 0 && base != AMBIGUOUS && base < MAX_INSTRS && ptr_reg != base && (!escaped || !escaped[base])) {
                         ins->src[1] = base;
+                        ins->amf.folded = true;
+                        ins->amf.base = base;
+                        ins->amf.disp = offset;
                         rewrites++;
                     }
                 }
@@ -174,7 +246,10 @@ uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
     }
 
     free(escaped);
-    free(points_to);
-    free(mem_points_to);
+    free(points_to_base);
+    free(points_to_offset);
+    free(mem_locations);
+    free(mem_points_to_base);
+    free(mem_points_to_offset);
     return rewrites;
 }

@@ -1695,20 +1695,18 @@ uint32_t escape_analysis_pass(Function *fn, EscapeCtx *ctx) {
       }
 
       /* E4: any load/store with displacement or sbt_offset makes alloca escaping */
-      if (!is_compiler_func(current_function_name)) {
-        if (ins->op == OP_LOAD && ins->n_src >= 1) {
-          AllocaID aid = ea_alloc_of(ctx, ins->src[0]);
-          if (aid != NO_ALLOC) {
-            if ((ins->amf.folded && ins->amf.disp != 0) || ins->sbt_offset != 0) {
-              ctx->allocs[aid].escapes = true;
-            }
+      if (ins->op == OP_LOAD && ins->n_src >= 1) {
+        AllocaID aid = ea_alloc_of(ctx, ins->src[0]);
+        if (aid != NO_ALLOC) {
+          if ((ins->amf.folded && ins->amf.disp != 0) || ins->sbt_offset != 0) {
+            ctx->allocs[aid].escapes = true;
           }
-        } else if (ins->op == OP_STORE && ins->n_src >= 2) {
-          AllocaID aid = ea_alloc_of(ctx, ins->src[1]);
-          if (aid != NO_ALLOC) {
-            if ((ins->amf.folded && ins->amf.disp != 0) || ins->sbt_offset != 0) {
-              ctx->allocs[aid].escapes = true;
-            }
+        }
+      } else if (ins->op == OP_STORE && ins->n_src >= 2) {
+        AllocaID aid = ea_alloc_of(ctx, ins->src[1]);
+        if (aid != NO_ALLOC) {
+          if ((ins->amf.folded && ins->amf.disp != 0) || ins->sbt_offset != 0) {
+            ctx->allocs[aid].escapes = true;
           }
         }
       }
