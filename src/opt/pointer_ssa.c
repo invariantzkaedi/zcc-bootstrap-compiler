@@ -11,6 +11,12 @@ typedef struct {
     int64_t offset;
 } BaseOffsetKey;
 
+/*
+ * Retrieve or allocate a tracking slot for the memory location (base, offset).
+ * If the 1024 capacity limit is reached, it returns -1. In this case, points-to
+ * propagation for values loaded from/stored to this location degrades conservatively
+ * (resulting in no points-to targets for those loads, skipping rewrites but maintaining safety).
+ */
 static int get_or_create_mem_location(RegID base, int64_t offset, BaseOffsetKey *locations, int *n_locations) {
     for (int i = 0; i < *n_locations; i++) {
         if (locations[i].base == base && locations[i].offset == offset) {
@@ -85,8 +91,30 @@ uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
                                 if (idx_reg < MAX_INSTRS) {
                                     Instr *idx_def = fn->def_of[idx_reg];
                                     if (idx_def && idx_def->op == OP_CONST) {
-                                        target_base = base;
-                                        target_offset = offset + idx_def->imm;
+                                        // Reject GEP offset accumulation on signed overflow
+                                        if ((idx_def->imm > 0 && offset > INT64_MAX - idx_def->imm) ||
+                                            (idx_def->imm < 0 && offset < INT64_MIN - idx_def->imm)) {
+                                            target_base = AMBIGUOUS;
+                                        } else {
+                                            int64_t next_offset = offset + idx_def->imm;
+                                            // Reject if offset is negative or exceeds alloca size boundary
+                                            bool bounds_ok = true;
+                                            if (base < MAX_INSTRS) {
+                                                Instr *alloca_ins = fn->def_of[base];
+                                                if (alloca_ins && alloca_ins->op == OP_ALLOCA) {
+                                                    int64_t alloca_size = alloca_ins->imm;
+                                                    if (next_offset < 0 || next_offset >= alloca_size) {
+                                                        bounds_ok = false;
+                                                    }
+                                                }
+                                            }
+                                            if (bounds_ok) {
+                                                target_base = base;
+                                                target_offset = next_offset;
+                                            } else {
+                                                target_base = AMBIGUOUS;
+                                            }
+                                        }
                                     } else {
                                         target_base = AMBIGUOUS;
                                     }
@@ -96,6 +124,72 @@ uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
                             } else {
                                 target_base = base;
                                 target_offset = offset;
+                            }
+                        }
+                    }
+                } else if (ins->op == OP_ADD) {
+                    if (ins->src[0] < MAX_INSTRS && ins->n_src > 1 && ins->src[1] < MAX_INSTRS) {
+                        RegID r0 = ins->src[0];
+                        RegID r1 = ins->src[1];
+                        RegID base0 = points_to_base[r0];
+                        RegID base1 = points_to_base[r1];
+                        if (base0 != 0 && base1 != 0) {
+                            target_base = AMBIGUOUS;
+                        } else if (base0 != 0 && base0 != AMBIGUOUS) {
+                            Instr *def1 = fn->def_of[r1];
+                            if (def1 && def1->op == OP_CONST) {
+                                int64_t offset = points_to_offset[r0];
+                                int64_t imm = def1->imm;
+                                if ((imm > 0 && offset > INT64_MAX - imm) ||
+                                    (imm < 0 && offset < INT64_MIN - imm)) {
+                                    target_base = AMBIGUOUS;
+                                } else {
+                                    int64_t next_offset = offset + imm;
+                                    bool bounds_ok = true;
+                                    if (base0 < MAX_INSTRS) {
+                                        Instr *alloca_ins = fn->def_of[base0];
+                                        if (alloca_ins && alloca_ins->op == OP_ALLOCA) {
+                                            int64_t alloca_size = alloca_ins->imm;
+                                            if (next_offset < 0 || next_offset >= alloca_size) {
+                                                bounds_ok = false;
+                                            }
+                                        }
+                                    }
+                                    if (bounds_ok) {
+                                        target_base = base0;
+                                        target_offset = next_offset;
+                                    } else {
+                                        target_base = AMBIGUOUS;
+                                    }
+                                }
+                            }
+                        } else if (base1 != 0 && base1 != AMBIGUOUS) {
+                            Instr *def0 = fn->def_of[r0];
+                            if (def0 && def0->op == OP_CONST) {
+                                int64_t offset = points_to_offset[r1];
+                                int64_t imm = def0->imm;
+                                if ((imm > 0 && offset > INT64_MAX - imm) ||
+                                    (imm < 0 && offset < INT64_MIN - imm)) {
+                                    target_base = AMBIGUOUS;
+                                } else {
+                                    int64_t next_offset = offset + imm;
+                                    bool bounds_ok = true;
+                                    if (base1 < MAX_INSTRS) {
+                                        Instr *alloca_ins = fn->def_of[base1];
+                                        if (alloca_ins && alloca_ins->op == OP_ALLOCA) {
+                                            int64_t alloca_size = alloca_ins->imm;
+                                            if (next_offset < 0 || next_offset >= alloca_size) {
+                                                bounds_ok = false;
+                                            }
+                                        }
+                                    }
+                                    if (bounds_ok) {
+                                        target_base = base1;
+                                        target_offset = next_offset;
+                                    } else {
+                                        target_base = AMBIGUOUS;
+                                    }
+                                }
                             }
                         }
                     }

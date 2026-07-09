@@ -79,17 +79,17 @@ Extend the points-to analysis to track `(base_alloca, constant_offset)` pairs in
 6. **Overflow/bounds**: reject accumulation if the combined offset overflows or exceeds the alloca's known size (when available).
 
 ## Acceptance criteria
-
-- [ ] `(base, constant_offset)` pair tracking implemented in `src/opt/pointer_ssa.c`
-- [ ] Rewrite materialization strategy (option a or b) decided and documented in the pass header comment
-- [ ] `mem_points_to` keyed by `(base, offset)` — pointer stores to distinct fields of one struct no longer collapse to `AMBIGUOUS`
-- [ ] Existing assertion still holds: exactly 2 rewrites in `pointer_deref` on `t_ptr.c` (per `zcc_test_suite.sh` grep check) — or updated intentionally with justification if the new analysis legitimately rewrites more
-- [ ] New test cases covering: single-level constant-offset member access, chained GEP offset accumulation, variable-index GEP (must remain untracked), offset that escapes via call, PHI merging identical vs. differing `(base, offset)` pairs
-- [ ] Gate 1: `make selfhost` byte-identical (`SELF-HOST VERIFIED (assembly identical)`)
-- [ ] Gate 2: `make compat-smoke` passes
-- [ ] Gate 4: `make test` fully green (currently PASS: 33, FAIL: 0, SKIP: 3)
-- [ ] Determinism check: repeated runs produce identical rewrite counts and assembly
-
+ 
+- [x] `(base, constant_offset)` pair tracking implemented in `src/opt/pointer_ssa.c`
+- [x] Rewrite materialization strategy (option b variant: folding offset into `amf.disp` to lower directly to addressing mode `off(%base)`) decided and documented in the pass header comment
+- [x] `mem_points_to` keyed by `(base, offset)` — pointer stores to distinct fields of one struct no longer collapse to `AMBIGUOUS`
+- [x] Existing assertion still holds: exactly 2 rewrites in `pointer_deref` on `t_ptr.c` (per `zcc_test_suite.sh` grep check) — or updated intentionally with justification if the new analysis legitimately rewrites more
+- [x] New test cases covering: single-level constant-offset member access, chained GEP offset accumulation, variable-index GEP (must remain untracked), offset that escapes via call, PHI merging identical vs. differing `(base, offset)` pairs
+- [x] Gate 1: `make selfhost` byte-identical (`SELF-HOST VERIFIED (assembly identical)`)
+- [x] Gate 2: `make compat-smoke` passes (all test suite categories pass)
+- [x] Gate 4: `make test` fully green (currently PASS: 34, FAIL: 0, SKIP: 3)
+- [x] Determinism check: repeated runs produce identical rewrite counts and assembly
+ 
 ## References
 
 - Conservative fix: `spill-work` branch, commit `c8cf9fd` — `opt(pointer_ssa): restrict GEP points-to propagation to constant offset 0`

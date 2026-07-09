@@ -341,6 +341,81 @@ if grep -q "\[PointerSSA\] rewrote" "$TESTDIR/pointer_deref_ir_check.log"; then
     fail "pointer_rewrite: IR assertion failed (redundant pointer rewrites occurred)"
 fi
 
+# Offset-aware rewrite positive test with PHI node
+cat > "$TESTDIR/t_ptr_offset_phi.c" << 'EOF'
+struct Point {
+    int x;
+    int y;
+};
+int main(int argc, char **argv) {
+    struct Point p;
+    p.x = 10;
+    p.y = 32;
+    return *(argc > 1 ? &p.y : &p.y);
+}
+EOF
+test_file "pointer_offset_phi" "$TESTDIR/t_ptr_offset_phi.c" 32
+
+# Verify that PointerSSA rewrites the indirect dereference through PHI
+# Verify that PointerSSA rewrites the indirect dereference through PHI
+ZCC_IR_BACKEND=1 ./zcc2 "$TESTDIR/t_ptr_offset_phi.c" -o "$TESTDIR/pointer_offset_phi.s" 2>"$TESTDIR/pointer_offset_phi.log"
+if ! grep -q "\[PointerSSA\] rewrote 1 indirect instructions" "$TESTDIR/pointer_offset_phi.log"; then
+    fail "pointer_rewrite: offset-aware PHI rewrite assertion failed (expected 1 rewrite)"
+fi
+
+# Extra offset-aware, variable index, escape via arithmetic/call, and differing PHI tests
+cat > "$TESTDIR/t_ptr_offset_extra.c" << 'EOF'
+struct Inner {
+    int val;
+};
+struct Outer {
+    int pad;
+    struct Inner inner;
+};
+int global_arr[5] = {1, 2, 3, 4, 5};
+void some_external_func(int *p) {
+    // mock function to avoid link error
+}
+int test_var_index(int idx) {
+    int *p = &global_arr[idx];
+    return *p;
+}
+int test_escape_via_call() {
+    int x = 42;
+    some_external_func(&x + 1);
+    return x;
+}
+int test_phi_differing(int cond) {
+    struct Outer out;
+    out.pad = 11;
+    out.inner.val = 22;
+    int *p;
+    if (cond) {
+        p = &out.pad;
+    } else {
+        p = &out.inner.val;
+    }
+    return *p;
+}
+int test_chained() {
+    struct Outer out;
+    out.inner.val = 77;
+    return ((struct Inner*)((char*)&out + 4))->val;
+}
+int main() {
+    return test_chained();
+}
+EOF
+test_file "pointer_offset_extra" "$TESTDIR/t_ptr_offset_extra.c" 77
+
+# Verify that PointerSSA rewrites exactly 1 indirect instruction in the extra tests
+ZCC_IR_BACKEND=1 ./zcc2 "$TESTDIR/t_ptr_offset_extra.c" -o "$TESTDIR/pointer_offset_extra.s" 2>"$TESTDIR/pointer_offset_extra.log"
+if ! grep -q "\[PointerSSA\] rewrote 1 indirect instructions" "$TESTDIR/pointer_offset_extra.log"; then
+    fail "pointer_rewrite: extra offset/safety tests rewrite assertion failed (expected 1 rewrite)"
+fi
+
+
+
 cat > "$TESTDIR/t_ptr_arith.c" << 'EOF'
 int arr[5];
 int main() {
