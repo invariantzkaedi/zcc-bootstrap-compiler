@@ -214,4 +214,6 @@ hypotheses about forensic work:
 ## Error-Learner Corpus Entries
 * **E-LEARN-001 (Blender glTF Import/Export API):** Plausible API deprecation asserted from training data must be refuted by RNA poll (e.g. `import_scene.gltf` exists / `wm.gltf_import` is missing on Blender 4.0.2).
 * **E-LEARN-002 (Blender Ops hasattr Check):** Calling `hasattr` on `bpy.ops` (or any sub-namespace like `bpy.ops.wm`) always returns `True` due to lazy attribute resolution. It is a non-discriminating probe; verify operator existence via direct polling (e.g. `hasattr(bpy.ops.wm, 'gltf_import')` is `True` even if the operator is missing).
+* **E-LEARN-003 (Blender CLI Exit Code):** Blender headlessly (`blender -b`) catches Python exceptions but still exits with code `0`. Always pass `--python-exit-code 1` on the command line to ensure assertion failures or exceptions return a non-zero exit code to the shell.
+
 
