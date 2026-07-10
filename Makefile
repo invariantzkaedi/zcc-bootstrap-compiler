@@ -564,23 +564,46 @@ swarm-fuzz: zcc
 	@echo "🔱 ZKAEDI SWARMDECOMPILE INITIATED"
 	@mkdir -p swarm_out corpus evm_decomp
 	@gcc -O2 tools/evm_fuzzer/swarm_fuzzer.c -o tools/evm_fuzzer/swarm_fuzzer
-	@for i in $$(seq 1 5000); do \
+	@PASSED=0; FAILED=0; TOTAL=0; LOG=swarm_fuzz_results.tsv; : > $$LOG; \
+	for i in $$(seq 1 5000); do \
 		./tools/evm_fuzzer/swarm_fuzzer $$i > swarm_out/contract_$$i.bin 2>/dev/null; \
-		./zcc --decompile swarm_out/contract_$$i.bin -o evm_decomp/contract_$$i.c || true; \
-	done
-	@echo "Generating HTML report..."
-	@python3 tools/evm_fuzzer/report_gen.py swarm_out evm_decomp report.html
-	@echo "✅ SwarmDecompile complete: 5000 contracts | Check report.html"
+		TOTAL=$$((TOTAL+1)); \
+		./zcc --decompile swarm_out/contract_$$i.bin -o evm_decomp/contract_$$i.c >/dev/null 2>&1; RC=$$?; \
+		if [ $$RC -eq 0 ]; then \
+			PASSED=$$((PASSED+1)); printf "contract_%d\tPASS\n" $$i >> $$LOG; \
+		else \
+			FAILED=$$((FAILED+1)); printf "contract_%d\tFAIL\t%d\n" $$i $$RC >> $$LOG; \
+		fi; \
+	done; \
+	echo "SWARM-FUZZ SUMMARY: TOTAL=$$TOTAL PASSED=$$PASSED FAILED=$$FAILED"; \
+	python3 tools/evm_fuzzer/report_gen.py swarm_out evm_decomp report.html; \
+	if [ $$FAILED -eq 0 ]; then \
+		echo "✅ SwarmDecompile complete: $$PASSED contracts passed | Check report.html"; exit 0; \
+	else \
+		echo "❌ SwarmDecompile failed: $$FAILED contracts failed | Check report.html"; exit 1; \
+	fi
 
 swarm-jit: zcc
 	@echo "🔱 ZKAEDI SWARM-JIT INITIATED"
 	@mkdir -p swarm_out evm_jit
 	@gcc -O2 tools/evm_fuzzer/swarm_fuzzer.c -o tools/evm_fuzzer/swarm_fuzzer
-	@for i in $$(seq 1 5000); do \
+	@PASSED=0; FAILED=0; TOTAL=0; LOG=swarm_jit_results.tsv; : > $$LOG; \
+	for i in $$(seq 1 5000); do \
 		./tools/evm_fuzzer/swarm_fuzzer $$i > swarm_out/contract_$$i.bin 2>/dev/null; \
-		./zcc --jit swarm_out/contract_$$i.bin -o evm_jit/contract_$$i.bin || true; \
-	done
-	@echo "✅ SwarmJIT complete: 5000 contracts jitted | Output in evm_jit/"
+		TOTAL=$$((TOTAL+1)); \
+		./zcc --jit swarm_out/contract_$$i.bin -o evm_jit/contract_$$i.bin >/dev/null 2>&1; RC=$$?; \
+		if [ $$RC -eq 0 ]; then \
+			PASSED=$$((PASSED+1)); printf "contract_%d\tPASS\n" $$i >> $$LOG; \
+		else \
+			FAILED=$$((FAILED+1)); printf "contract_%d\tFAIL\t%d\n" $$i $$RC >> $$LOG; \
+		fi; \
+	done; \
+	echo "SWARM-JIT SUMMARY: TOTAL=$$TOTAL PASSED=$$PASSED FAILED=$$FAILED"; \
+	if [ $$FAILED -eq 0 ]; then \
+		echo "✅ SwarmJIT complete: $$PASSED contracts jitted | Output in evm_jit/"; exit 0; \
+	else \
+		echo "❌ SwarmJIT failed: $$FAILED contracts failed | Output in evm_jit/"; exit 1; \
+	fi
 
 swarm-prove: zcc
 	@echo "🔱 Running symbolic proofs on swarm..."
