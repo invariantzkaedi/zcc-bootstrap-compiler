@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ZCC Nebula Control Center</title>
+  <link rel="stylesheet" href="animations.css" />
+  <style>
+    :root {
+      --bg: #04040a;
+      --panel: rgba(8, 10, 20, 0.72);
+      --line: rgba(0, 255, 204, 0.14);
+      --text: #e8f8ff;
+      --muted: #8091a8;
+      --cyan: #00ffcc;
+      --pink: #ff007f;
+      --violet: #9b5de5;
+      --amber: #ffaa00;
+      --green: #00ff88;
+      --red: #ff3366;
+      --shadow: 0 0 30px rgba(0, 255, 204, 0.08);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      min-height: 100%;
+      background: radial-gradient(circle at top, #0d1024 0%, var(--bg) 55%, #020206 100%);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      overflow-x: hidden;
+    }
+
+    body {
+      position: relative;
+    }
+
+    #bg {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0.6;
+    }
+
+    .shell {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: 280px 1fr 320px;
+      grid-template-rows: auto 1fr;
+      gap: 16px;
+      min-height: 100vh;
+      padding: 16px;
+    }
+
+    .panel {
+      position: relative;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font: 700 11px/1 monospace;
+      color: var(--cyan);
+    }
+
+    .brand {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 20px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: clamp(28px, 5vw, 56px);
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+    }
+
+    .brand .sub {
+      margin-top: 10px;
+      color: var(--muted);
+      max-width: 72ch;
+      line-height: 1.5;
+    }
+
+    .brand-right {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr) 320px;
+      gap: 16px;
+      grid-column: 1 / -1;
+      min-height: calc(100vh - 112px);
+    }
+
+    .sidebar,
+    .inspector {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-height: 0;
+    }
+
+    .center {
+      display: grid;
+      grid-template-rows: 1fr 320px;
+      gap: 16px;
+      min-height: 0;
+    }
+
+    .nav-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px;
+    }
+
+    .nav-item {
+      padding: 12px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.05);
+      cursor: pointer;
+      background: rgba(255,255,255,0.02);
+      transition: transform .2s ease, border-color .2s ease, background .2s ease;
+    }
+
+    .nav-item:hover {
+      transform: translateX(4px);
+      border-color: rgba(0,255,204,.3);
+      background: rgba(0,255,204,.05);
+    }
+
+    .nav-item.active {
+      border-color: rgba(255,0,127,.35);
+      background: rgba(255,0,127,.08);
+    }
+
+    .nav-title {
+      font: 800 13px/1.2 Inter, sans-serif;
+      margin-bottom: 4px;
+    }
+
+    .nav-meta {
+      color: var(--muted);
+      font: 600 11px/1.4 monospace;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 12px;
+    }
+
+    .tool-btn {
+      appearance: none;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font: 700 11px/1 monospace;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .tool-btn:hover {
+      border-color: rgba(0,255,204,.3);
+      color: var(--cyan);
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 1.3fr 1fr;
+      gap: 16px;
+      min-height: 0;
+    }
+
+    .inner {
+      padding: 14px;
+    }
+
+    .project-galaxy {
+      position: relative;
+      min-height: 520px;
+      overflow: hidden;
+    }
+
+    .galaxy-canvas {
+      position: absolute;
+      inset: 0;
+      opacity: 0.55;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(0,255,204,.08), transparent 20%),
+        radial-gradient(circle at 80% 30%, rgba(255,0,127,.08), transparent 18%),
+        radial-gradient(circle at 55% 75%, rgba(155,93,229,.08), transparent 24%);
+    }
+
+    .project-grid {
+      position: relative;
+      z-index: 1;
+      padding: 16px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .project-card {
+      min-height: 150px;
+      padding: 14px;
+      border-radius: 16px;
+      background: rgba(10, 12, 24, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .project-card:hover {
+      border-color: var(--cyan);
+      box-shadow: 0 0 20px rgba(0, 255, 204, 0.1);
+    }
+
+    .project-card .title {
+      font: 900 18px/1.1 Inter, sans-serif;
+      margin-bottom: 6px;
+    }
+
+    .project-card .desc {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      margin-bottom: 10px;
+    }
+
+    .project-card .foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+      font: 700 11px/1 monospace;
+      color: var(--muted);
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font: 800 10px/1 monospace;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .status.green { color: var(--green); border: 1px solid rgba(0,255,136,.25); background: rgba(0,255,136,.08); }
+    .status.amber { color: var(--amber); border: 1px solid rgba(255,170,0,.25); background: rgba(255,170,0,.08); }
+    .status.red   { color: var(--red);   border: 1px solid rgba(255,51,102,.25); background: rgba(255,51,102,.08); }
+
+    .lab {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-height: 320px;
+    }
+
+    .ast-frame {
+      min-height: 290px;
+      position: relative;
+    }
+
+    .ast-frame iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #000;
+    }
+
+    .radar-wrap {
+      min-height: 260px;
+      padding: 14px;
+    }
+
+    .radar {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: 50%;
+      margin: 0 auto;
+      background:
+        radial-gradient(circle at center, rgba(0,255,204,.08), transparent 35%),
+        radial-gradient(circle at center, rgba(255,255,255,.03), transparent 60%);
+      border: 1px solid rgba(0,255,204,.2);
+      overflow: hidden;
+    }
+
+    .radar::before {
+      content: "";
+      position: absolute;
+      inset: 10%;
+      border-radius: 50%;
+      border: 1px solid rgba(0,255,204,.08);
+    }
+
+    .radar::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent 49%, rgba(0,255,204,.12) 50%, transparent 51%);
+      animation: radarSweep 4.8s linear infinite;
+      transform-origin: center;
+    }
+
+    .artifact-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 14px;
+    }
+
+    .artifact {
+      padding: 12px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .artifact:hover {
+      border-color: var(--cyan);
+      background: rgba(0,255,204,0.02);
+    }
+
+    .artifact .name {
+      font: 700 12px/1.3 monospace;
+      color: var(--cyan);
+      margin-bottom: 5px;
+    }
+
+    .artifact .meta {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .footer-strip {
+      grid-column: 1 / -1;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .metric-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .metric {
+      min-width: 130px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.05);
+      font: 700 11px/1.35 monospace;
+      color: var(--muted);
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 5px;
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .tiny {
+      color: var(--muted);
+      font: 600 11px/1.4 monospace;
+    }
+
+    /* Modal Command Palette */
+    .cmd-palette {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 2, 5, 0.85);
+      backdrop-filter: blur(10px);
+      z-index: 1000000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .cmd-box {
+      width: 500px;
+      background: #090b14;
+      border: 1px solid var(--cyan);
+      border-radius: 12px;
+      box-shadow: 0 0 35px rgba(0, 255, 204, 0.2);
+      overflow: hidden;
+    }
+
+    .cmd-input {
+      width: 100%;
+      background: transparent;
+      border: 0;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      color: var(--cyan);
+      padding: 14px;
+      font-family: monospace;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .cmd-list {
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .cmd-item {
+      padding: 10px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 12px;
+      color: var(--muted);
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .cmd-item:hover, .cmd-item.active {
+      background: rgba(0, 255, 204, 0.08);
+      color: var(--cyan);
+    }
+
+    @media (max-width: 1200px) {
+      .shell, .layout {
+        grid-template-columns: 1fr;
+      }
+      .center {
+        grid-template-rows: auto auto;
+      }
+    }
+  </style>
+</head>
+<body class="bg-drift ambient-scanlines">
+  <canvas id="bg"></canvas>
+
+  <div class="shell">
+    <header class="panel brand glass hologram float-panel section-enter">
+      <div>
+        <h1>ZCC<br><span style="color:var(--cyan)">Nebula</span></h1>
+        <div class="sub">
+          An immersive control center for compiler debugging, project intelligence,
+          verification radar, artifact history, and showcase demos.
+        </div>
+      </div>
+
+      <div class="brand-right">
+        <span class="pill status green" id="tag-selfhost">SELF-HOST VERIFIED</span>
+        <span class="pill status amber" id="tag-projects">PROJECTS ONLINE</span>
+        <span class="pill status green" id="tag-artifacts">ARTIFACTS SYNCED</span>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <section class="panel glass float-panel">
+          <div class="panel-header">Navigation</div>
+          <div class="nav-list">
+            <div class="nav-item active project-star" id="nav-galaxy">
+              <div class="nav-title">Projects Galaxy</div>
+              <div class="nav-meta">constellation · details · commands</div>
+            </div>
+            <div class="nav-item project-star" id="nav-radar">
+              <div class="nav-title">Verification Radar</div>
+              <div class="nav-meta">selfhost · regression · fuzz · parity</div>
+            </div>
+            <div class="nav-item project-star" id="nav-vault">
+              <div class="nav-title">Artifact Vault</div>
+              <div class="nav-meta">reports · scorecards · plan · anomalies</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel glass float-panel">
+          <div class="panel-header">Quick Actions</div>
+          <div class="toolbar">
+            <button class="tool-btn" id="btn-open-ast">Open AST Lab</button>
+            <button class="tool-btn" id="btn-verify">Refresh Radar</button>
+            <button class="tool-btn" id="btn-scan">Scan Artifacts</button>
+            <button class="tool-btn" id="btn-luck">Lucky Mode</button>
+          </div>
+        </section>
+
+        <section class="panel glass">
+          <div class="panel-header">Live Metrics</div>
+          <div class="artifact-list">
+            <div class="metric">Self-host<strong id="m-selfhost">PASS</strong></div>
+            <div class="metric">Regression<strong id="m-reg">34 / 37</strong></div>
+            <div class="metric">Fuzz Runs<strong id="m-fuzz">53 / 53</strong></div>
+            <div class="metric">Active Opts<strong id="m-opts">GVN, SSA</strong></div>
+          </div>
+        </section>
+      </aside>
+
+      <main class="center">
+        <!-- PROJECTS GALAXY BOARD -->
+        <section class="panel glass project-galaxy project-orbit">
+          <div class="panel-header">
+            <span>Projects Galaxy</span>
+            <span class="tiny" id="galaxy-subtitle">interactive telemetry constellation</span>
+          </div>
+          <div class="galaxy-canvas"></div>
+          <div class="project-grid" id="project-grid">
+            <!-- Populated dynamically -->
+          </div>
+        </section>
+
+        <!-- COMPILER LAB -->
+        <section class="panel glass lab float-panel">
+          <div class="panel-header">
+            <span>Compiler Lab</span>
+            <span class="tiny">interactive AST node bajar</span>
+          </div>
+          <div class="ast-frame">
+            <iframe src="zcc_ast_viz.html" title="ZCC AST Live Visualizer" id="ast-iframe"></iframe>
+          </div>
+        </section>
+      </main>
+
+      <aside class="inspector">
+        <section class="panel glass radar-wrap float-panel">
+          <div class="panel-header">Verification Radar</div>
+          <div class="radar" id="radar-container">
+            <div class="radar-arm" style="position:absolute; inset:0; border-radius:50%;"></div>
+            <div class="radar-blip" style="position:absolute; left:60%; top:28%; width:10px; height:10px; border-radius:50%; background:var(--green);" title="Self-host pass"></div>
+            <div class="radar-blip" style="position:absolute; left:35%; top:55%; width:8px; height:8px; border-radius:50%; background:var(--amber); animation-delay:.6s;" title="Regression warning"></div>
+            <div class="radar-blip" style="position:absolute; left:68%; top:62%; width:8px; height:8px; border-radius:50%; background:var(--pink); animation-delay:1.2s;" title="Fuzz pass"></div>
+          </div>
+        </section>
+
+        <section class="panel glass">
+          <div class="panel-header">Artifact Vault</div>
+          <div class="artifact-list" id="artifact-list">
+            <!-- Populated dynamically -->
+          </div>
+        </section>
+
+        <section class="panel glass">
+          <div class="panel-header">Showcase Dock</div>
+          <div class="artifact-list" id="showcase-list">
+            <!-- Populated dynamically -->
+          </div>
+        </section>
+      </aside>
+
+      <footer class="panel glass footer-strip">
+        <div class="metric-row">
+          <div class="metric">Status<strong id="stat-status">Operational</strong></div>
+          <div class="metric">Last Commit<strong id="stat-commit">a6b55070</strong></div>
+          <div class="metric">Mode<strong id="stat-mode">Showcase</strong></div>
+        </div>
+        <div class="tiny">
+          ZCC Nebula · dark glass · compiler cockpit · evidence-first · screenshot-ready
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Command Palette Modal -->
+  <div class="cmd-palette" id="cmd-palette">
+    <div class="cmd-box">
+      <input type="text" class="cmd-input" id="cmd-input" placeholder="Type a command or search..." autocomplete="off">
+      <div class="cmd-list" id="cmd-list">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <script src="motion.js"></script>
+  <script>
+    // Configuration mapping
+    const STATIC_ROUTES = {
+      "projects": "#project-grid",
+      "radar": "#radar-container",
+      "vault": "#artifact-list",
+      "ast": "#ast-iframe"
+    };
+
+    const commands = [
+      { id: "open-ast", label: "Open Compiler Lab", action: () => openAstLab() },
+      { id: "refresh-radar", label: "Refresh Verification Radar", action: () => refreshRadar() },
+      { id: "scan-vault", label: "Scan Artifact Vault", action: () => scanVault() },
+      { id: "lucky-mode", label: "Toggle Lucky Theme Mode", action: () => toggleLuckyMode() },
+      { id: "goto-galaxy", label: "Navigate to Projects Galaxy", action: () => document.getElementById("nav-galaxy").click() }
+    ];
+
+    // Dom cache
+    const cmdPalette = document.getElementById("cmd-palette");
+    const cmdInput = document.getElementById("cmd-input");
+    const cmdList = document.getElementById("cmd-list");
+
+    // Command palette handlers
+    function openPalette() {
+      cmdPalette.style.display = "flex";
+      cmdInput.value = "";
+      renderCommands("");
+      cmdInput.focus();
+    }
+
+    function closePalette() {
+      cmdPalette.style.display = "none";
+    }
+
+    function renderCommands(query) {
+      cmdList.innerHTML = "";
+      const filtered = commands.filter(c => c.label.toLowerCase().includes(query.toLowerCase()));
+      filtered.forEach((c, idx) => {
+        const item = document.createElement("div");
+        item.className = "cmd-item" + (idx === 0 ? " active" : "");
+        item.innerText = c.label;
+        item.addEventListener("click", () => {
+          c.action();
+          closePalette();
+        });
+        cmdList.appendChild(item);
+      });
+    }
+
+    cmdInput.addEventListener("input", (e) => {
+      renderCommands(e.target.value);
+    });
+
+    cmdPalette.addEventListener("click", (e) => {
+      if (e.target === cmdPalette) closePalette();
+    });
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closePalette();
+    });
+
+    ZCCMotion.attachCommandPalette(openPalette);
+
+    // Live data binding
+    async function fetchArtifact(apiRoute, fallbackPath) {
+      try {
+        const res = await fetch(apiRoute);
+        if (!res.ok) throw new Error("API failed");
+        return await res.json();
+      } catch (e) {
+        try {
+          const res = await fetch(fallbackPath);
+          return await res.json();
+        } catch (err) {
+          console.warn(`Failed to fetch artifact from routes: ${apiRoute}, ${fallbackPath}`);
+          return null;
+        }
+      }
+    }
+
+    async function initDashboard() {
+      // 1. Fetch dashboard main data
+      const data = await fetchArtifact("/api/dashboard-data", "./artifacts/dashboard_data.json");
+      if (data) {
+        bindMainData(data);
+      }
+
+      // 2. Fetch executive snapshot / scorecard
+      const card = await fetchArtifact("/api/executive-scorecard", "./artifacts/executive_scorecard.json");
+      if (card) {
+        bindScorecard(card);
+      }
+
+      // 3. Fetch remediation plan / tickets
+      const plan = await fetchArtifact("/api/remediation-plan", "./artifacts/remediation_plan.json");
+      if (plan) {
+        bindRemediation(plan);
+      }
+    }
+
+    function bindMainData(data) {
+      // Bind compiler status strip
+      if (data.compiler) {
+        document.getElementById("stat-commit").innerText = data.compiler.commit || "a6b55070";
+        document.getElementById("stat-status").innerText = data.compiler.selfhost_status === "PASS" ? "Operational" : "Degraded";
+      }
+
+      // Bind metrics
+      if (data.metrics) {
+        const reg = data.metrics.regression_tests;
+        if (reg) {
+          document.getElementById("m-reg").innerText = `${reg.passed} / ${reg.total}`;
+        }
+        const fuzz = data.metrics.fuzz_runs;
+        if (fuzz) {
+          document.getElementById("m-fuzz").innerText = `${fuzz.passed} / ${fuzz.total}`;
+        }
+        const opts = data.metrics.optimizations;
+        if (opts) {
+          document.getElementById("m-opts").innerText = `GVN, SSA, ${opts.licm === "enabled" ? "LICM" : ""}`;
+        }
+      }
+
+      // Bind Projects Galaxy cards
+      const grid = document.getElementById("project-grid");
+      if (data.projects) {
+        grid.innerHTML = "";
+        data.projects.forEach(p => {
+          const card = document.createElement("div");
+          card.className = "project-card glass";
+          
+          const title = document.createElement("div");
+          title.className = "title";
+          title.innerText = p.name;
+          card.appendChild(title);
+
+          const desc = document.createElement("div");
+          desc.className = "desc";
+          desc.innerText = p.description;
+          card.appendChild(desc);
+
+          const foot = document.createElement("div");
+          foot.className = "foot";
+          
+          const statSpan = document.createElement("span");
+          statSpan.className = `status ${p.status === "PASS" ? "green" : "amber"}`;
+          statSpan.innerText = p.status.toLowerCase();
+          foot.appendChild(statSpan);
+
+          const cmdSpan = document.createElement("span");
+          cmdSpan.innerText = p.commands ? p.commands[0] : "";
+          foot.appendChild(cmdSpan);
+
+          card.appendChild(foot);
+          grid.appendChild(card);
+
+          // Attach tilt and clicks
+          ZCCMotion.attachTilt(card, 5);
+          card.addEventListener("click", () => {
+            ZCCMotion.toast(`Selected Project: ${p.name}`, "info");
+            document.getElementById("galaxy-subtitle").innerText = `selected: ${p.name} (files: ${p.files.join(", ")})`;
+          });
+        });
+      }
+
+      // Bind Showcase List
+      const showcaseList = document.getElementById("showcase-list");
+      if (data.showcase) {
+        showcaseList.innerHTML = "";
+        data.showcase.forEach(s => {
+          const art = document.createElement("div");
+          art.className = "artifact";
+          
+          const name = document.createElement("div");
+          name.className = "name";
+          name.innerText = s.title;
+          art.appendChild(name);
+
+          const meta = document.createElement("div");
+          meta.className = "meta";
+          meta.innerText = s.description;
+          art.appendChild(meta);
+
+          art.addEventListener("click", () => {
+            ZCCMotion.toast(`Routing to showcase page: ${s.title}`, "success");
+            // If it's the compiler lab visualizer, navigate AST Iframe
+            if (s.path === "zcc_ast_viz.html") {
+              openAstLab();
+            } else {
+              window.open(s.path, "_blank");
+            }
+          });
+
+          showcaseList.appendChild(art);
+        });
+      }
+    }
+
+    function bindScorecard(card) {
+      // Bind scorecard summaries if any
+    }
+
+    function bindRemediation(plan) {
+      // Render active tickets in the Artifact list
+      const list = document.getElementById("artifact-list");
+      list.innerHTML = "";
+      if (plan.recommendations) {
+        plan.recommendations.forEach(r => {
+          const art = document.createElement("div");
+          art.className = "artifact";
+
+          const name = document.createElement("div");
+          name.className = "name";
+          name.innerText = `${r.id} : Priority ${r.priority_score}`;
+          art.appendChild(name);
+
+          const meta = document.createElement("div");
+          meta.className = "meta";
+          meta.innerText = r.title;
+          art.appendChild(meta);
+
+          art.addEventListener("click", () => {
+            ZCCMotion.toast(`Remediation selected: ${r.id}`, "info");
+          });
+
+          list.appendChild(art);
+        });
+      }
+    }
+
+    // Action Methods
+    function openAstLab() {
+      ZCCMotion.toast("Opening Compiler Lab", "info");
+      document.querySelector(".lab").scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    // Interactive radar sweeper particle trigger
+    function refreshRadar() {
+      ZCCMotion.toast("Verification radar refreshed", "success");
+      ZCCMotion.pulse(document.getElementById("radar-container"));
+      ZCCMotion.burstAtPoint(window.innerWidth * 0.83, window.innerHeight * 0.24, "#00ffcc", 22);
+    }
+
+    function scanVault() {
+      ZCCMotion.toast("Artifact scan complete", "success");
+      ZCCMotion.pulse(document.getElementById("artifact-list"));
+      initDashboard();
+    }
+
+    function toggleLuckyMode() {
+      ZCCMotion.toast("Lucky mode engaged ✨", "success");
+      document.body.classList.toggle("bg-drift");
+      ZCCMotion.burstOrigin(window.innerWidth / 2, 120, "#ffaa00");
+    }
+
+    // UI event bindings
+    document.getElementById("btn-open-ast").addEventListener("click", openAstLab);
+    document.getElementById("btn-verify").addEventListener("click", refreshRadar);
+    document.getElementById("btn-scan").addEventListener("click", scanVault);
+    document.getElementById("btn-luck").addEventListener("click", toggleLuckyMode);
+
+    // Nav-item selection bindings
+    document.querySelectorAll(".nav-item").forEach(item => {
+      item.addEventListener("click", () => {
+        document.querySelectorAll(".nav-item").forEach(i => i.classList.remove("active"));
+        item.classList.add("active");
+        ZCCMotion.toast(`Selected Navigation: ${item.querySelector(".nav-title").innerText}`, "info");
+      });
+    });
+
+    // Run constellation background animation
+    const canvas = document.getElementById("bg");
+    const ctx = canvas.getContext("2d");
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resizeCanvas();
+    window.addEventListener("resize", resizeCanvas);
+
+    const particles = [];
+    for(let i=0; i<40; i++) {
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.3,
+        vy: (Math.random() - 0.5) * 0.3,
+        r: Math.random() * 2 + 1
+      });
+    }
+
+    function animateBg() {
+      ctx.clearRect(0,0, canvas.width, canvas.height);
+      ctx.fillStyle = "rgba(0, 255, 204, 0.15)";
+      particles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        if(p.x < 0 || p.x > canvas.width) p.vx *= -1;
+        if(p.y < 0 || p.y > canvas.height) p.vy *= -1;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      requestAnimationFrame(animateBg);
+    }
+    animateBg();
+
+    // Initial load
+    initDashboard();
+  </script>
+</body>
+</html>

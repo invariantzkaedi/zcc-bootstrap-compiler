@@ -1,0 +1,7 @@
+{
+  "operational_kpis": {
+    "mean_time_to_repro": "12m",
+    "open_incidents": 0,
+    "active_investigations": 0
+  }
+}

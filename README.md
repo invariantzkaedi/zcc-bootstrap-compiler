@@ -70,6 +70,30 @@ target binary ──> Returns exit code 42
 
 ---
 
+## 🔱 ZCC Nebula: Systems Observatory Control Center
+
+ZCC Nebula is an immersive, browser-based control center that unifies compiler debugging, project metrics, verification gates, and visual showcases into a single interactive dashboard cockpit.
+
+### Features
+* **Projects Galaxy**: Visualizes all ZCC subsystems (Compiler Core, Verification Radar, Artifact Vault, Showcase Demos) as an interactive orbit constellation showing real-time command, file, and artifact mappings.
+* **Compiler Lab**: A live AST-to-IR lowering lab with a two-pane comparative diff, lowering events timeline, interactive path tracing, and complexity heat mapping.
+* **Verification Radar**: Cinematic verification radar sweep displaying active test gates, fuzzer statuses, and telemetry warnings loaded directly from generated JSON artifacts.
+* **Artifact Vault**: Provenance-first index of generated reports, scorecard metrics, and active remediation plans.
+* **Showcase Dock**: Immediate launch gateway for sibling dashboards and visualizers (e.g. Heist live RPC dashboard, Audio-Reactive Web Audio visualizer, etc.).
+
+### How to Run Locally
+1. Start the control center host server:
+   ```bash
+   python3 serve_dashboard.py
+   ```
+2. Open [http://localhost:8081](http://localhost:8081) in your browser.
+3. Access sub-components directly:
+   * `/` or `/index.html` — ZCC Nebula Control Center
+   * `/ast` — Compiler Lab AST Visualizer
+   * `/api/dashboard-data` — Telemetry JSON API
+
+---
+
 ## 🔱 Quick Start
 
 ### 1. Build and Bootstrap

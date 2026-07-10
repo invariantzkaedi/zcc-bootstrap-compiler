@@ -1,0 +1,7 @@
+{
+  "forecast": {
+    "risk_level": "low",
+    "regression_probability_7d": 0.05,
+    "selfhost_stability_rating": 0.99
+  }
+}

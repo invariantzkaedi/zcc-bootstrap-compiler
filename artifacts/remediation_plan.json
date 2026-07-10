@@ -1,0 +1,19 @@
+{
+  "recommendations": [
+    {
+      "id": "REC-001",
+      "title": "Migrate remaining 43 GLB fleet assets (~546MB) out of git history to HuggingFace/R2",
+      "priority_score": 95
+    },
+    {
+      "id": "REC-002",
+      "title": "Optimize GVN loop validation checks for nested-if block increment updates",
+      "priority_score": 85
+    },
+    {
+      "id": "REC-003",
+      "title": "Retrain DPO Model Alignment with increased step/LR budget to pass validation gate",
+      "priority_score": 75
+    }
+  ]
+}

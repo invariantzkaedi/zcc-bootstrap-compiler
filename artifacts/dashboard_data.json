@@ -1,0 +1,210 @@
+{
+  "alerts": [],
+  "executive_snapshot": {
+    "compliance_status": "UNKNOWN",
+    "highest_breach_probability": 0.0,
+    "pass_rate_trend": "95.0%"
+  },
+  "forecast": {
+    "highest_breach_probability": 0.0,
+    "highest_risk_metric": "none",
+    "metrics": {}
+  },
+  "generated_at_utc": "2026-07-10T11:50:33.629290+00:00",
+  "incident_intelligence": {
+    "hot_subsystems": [],
+    "pressure_index": 0
+  },
+  "new_signatures_this_week": [],
+  "projects": [
+    {
+      "artifacts": [
+        "artifacts/dashboard_data.json"
+      ],
+      "category": "compiler",
+      "commands": [
+        "make selfhost",
+        "make test"
+      ],
+      "description": "AST, parser, IR, backend, and self-host pipeline.",
+      "files": [
+        "zcc_ast_viz.html",
+        "Makefile",
+        "part3.c",
+        "part4.c"
+      ],
+      "id": "compiler-core",
+      "last_verified": "2026-07-10T11:50:33.629390+00:00",
+      "name": "Compiler Core",
+      "showcase_value": 10,
+      "status": "PASS"
+    },
+    {
+      "artifacts": [
+        "artifacts/executive_scorecard.json",
+        "artifacts/policy_check_report.json"
+      ],
+      "category": "verification",
+      "commands": [
+        "python3 scripts/generate_dashboard_data.py"
+      ],
+      "description": "Reads generated dashboard artifacts and shows gate health, anomalies, and scorecards.",
+      "files": [
+        "scripts/generate_dashboard_data.py"
+      ],
+      "id": "verification-radar",
+      "last_verified": "2026-07-10T11:50:33.629427+00:00",
+      "name": "Verification Radar",
+      "showcase_value": 9,
+      "status": "PASS"
+    },
+    {
+      "artifacts": [
+        "artifacts/"
+      ],
+      "category": "ops",
+      "commands": [
+        "python3 scripts/export_executive_scorecard.py"
+      ],
+      "description": "Browse reports, repro scripts, scorecards, and evidence snapshots.",
+      "files": [
+        "artifacts/"
+      ],
+      "id": "artifact-vault",
+      "last_verified": "2026-07-10T11:50:33.629450+00:00",
+      "name": "Artifact Vault",
+      "showcase_value": 8,
+      "status": "PASS"
+    },
+    {
+      "artifacts": [],
+      "category": "visual",
+      "commands": [
+        "python3 serve_dashboard.py"
+      ],
+      "description": "Visual demos, SVG rigs, GLB dashboards, and audio-reactive playgrounds.",
+      "files": [
+        "zcc_ast_viz.html",
+        "dashboard_hamiltonian_visualizer.html",
+        "heist_dashboard.html",
+        "audio_reactive_creature.html"
+      ],
+      "id": "showcase-demos",
+      "last_verified": "2026-07-10T11:50:33.629467+00:00",
+      "name": "Showcase Demos",
+      "showcase_value": 10,
+      "status": "PASS"
+    }
+  ],
+  "promotion_readiness": {
+    "kill_rate_ok": false,
+    "no_stale_survivors": true,
+    "recommendation": "monitor",
+    "stable_14d": true
+  },
+  "recent_failures": [],
+  "runs": [
+    {
+      "fast_suite_seconds": 15.72,
+      "kill_rate": 0.95,
+      "run_id": "run_20260706121258",
+      "status": "success",
+      "timestamp": "2026-07-06 19:12:58"
+    },
+    {
+      "fast_suite_seconds": 15.72,
+      "kill_rate": 0.95,
+      "run_id": "run_20260706052854",
+      "status": "success",
+      "timestamp": "2026-07-06 12:28:54"
+    },
+    {
+      "fast_suite_seconds": 15.72,
+      "kill_rate": 0.95,
+      "run_id": "run_20260706043244",
+      "status": "success",
+      "timestamp": "2026-07-06 11:32:44"
+    }
+  ],
+  "schema_version": "1.0.0",
+  "showcase": [
+    {
+      "description": "Interactive AST + pseudo-IR explorer",
+      "kind": "compiler",
+      "path": "zcc_ast_viz.html",
+      "title": "AST Live Visualizer"
+    },
+    {
+      "description": "3D GLB viewer with shader deformation",
+      "kind": "visual",
+      "path": "dashboard_hamiltonian_visualizer.html",
+      "title": "Hamiltonian Dashboard"
+    },
+    {
+      "description": "Live RPC dashboard with terminal feed",
+      "kind": "ops",
+      "path": "heist_dashboard.html",
+      "title": "Heist Dashboard"
+    },
+    {
+      "description": "Audio-reactive SVG rig visualizer",
+      "kind": "visual",
+      "path": "audio_reactive_creature.html",
+      "title": "Audio Reactive Creature"
+    }
+  ],
+  "stats": {
+    "total_fails": 0,
+    "unique_sigs": 0
+  },
+  "top_signatures": [],
+  "ui_hints": {
+    "accent_mode": "nebula",
+    "default_tab": "projects",
+    "hero_stat": "selfhost"
+  },
+  "verification_summary": {
+    "fuzz_passed": 53,
+    "fuzz_total": 53,
+    "ir_parity": "PASS",
+    "regression_passed": 34,
+    "regression_total": 34,
+    "selfhost_stage2": "PASS",
+    "selfhost_stage3": "PASS"
+  },
+  "windows": {
+    "days_14": {
+      "determinism_drifts": 0,
+      "incidents_closed": 0,
+      "incidents_open": 0,
+      "kill_rate_avg": null,
+      "kill_rate_max": null,
+      "kill_rate_min": null,
+      "mttr_hours": null,
+      "pass_rate": 1.0,
+      "unique_signatures": 0
+    },
+    "days_30": {
+      "determinism_drifts": 0,
+      "incidents_closed": 0,
+      "incidents_open": 0,
+      "kill_rate_avg": null,
+      "kill_rate_max": null,
+      "kill_rate_min": null,
+      "mttr_hours": null,
+      "pass_rate": 1.0,
+      "unique_signatures": 0
+    },
+    "days_7": {
+      "determinism_drifts": 0,
+      "incidents_closed": 0,
+      "incidents_open": 0,
+      "kill_rate_avg": null,
+      "kill_rate_max": null,
+      "kill_rate_min": null,
+      "mttr_hours": null,
+      "pass_rate": 1.0,
+      "unique_signatures": 0
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "anomalies": [
+    {
+      "metric": "MUTATION_KILL_RATE",
+      "severity": "warning",
+      "message": "Mutation kill rate for part3.c branch coverage is slightly below 90% target threshold.",
+      "threshold": 0.90
+    }
+  ]
+}

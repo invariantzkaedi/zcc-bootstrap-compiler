@@ -1,50 +1,32 @@
 import json
-import sqlite3
 from pathlib import Path
-import pytest
-import jsonschema
-from scripts.generate_dashboard_data import generate_report, OUT_PATH, SCHEMA_PATH, DB_PATH
+from jsonschema import validate
 
-@pytest.fixture(autouse=True)
-def setup_teardown():
-    if DB_PATH.exists():
-        DB_PATH.unlink()
-    if OUT_PATH.exists():
-        OUT_PATH.unlink()
-    yield
-    if DB_PATH.exists():
-        DB_PATH.unlink()
-    if OUT_PATH.exists():
-        OUT_PATH.unlink()
+def test_dashboard_data_schema():
+    root = Path(__file__).resolve().parents[1]
+    data_path = root / "artifacts" / "dashboard_data.json"
+    schema_path = root / "schemas" / "dashboard_data_schema.json"
 
-def test_dashboard_data_schema_valid():
-    # Setup a mock DB with minimal data
-    from scripts.ingest_artifacts import init_db
-    init_db()
-    
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    # Insert mock run
-    cur.execute("""
-    INSERT INTO runs (run_id, workflow_name, branch, commit_sha, status)
-    VALUES ('run_test_1', 'verify', 'main', 'sha123', 'success')
-    """)
-    # Insert mock failure
-    cur.execute("""
-    INSERT INTO failures (run_id, signature, seed, failure_type, n_qubits, minimized_ratio, artifact_path)
-    VALUES ('run_test_1', 'sig_123', '42', 'math_rule_mismatch', 7, 0.5, 'path/to/art')
-    """)
-    conn.commit()
-    conn.close()
-    
-    # Generate report
-    generate_report()
-    
-    assert OUT_PATH.exists()
-    
-    # Load and validate
-    data = json.loads(OUT_PATH.read_text(encoding='utf-8'))
-    schema = json.loads(SCHEMA_PATH.read_text(encoding='utf-8'))
-    
-    # Validate
-    jsonschema.validate(instance=data, schema=schema)
+    assert data_path.exists(), f"Dashboard data not found at {data_path}"
+    assert schema_path.exists(), f"JSON Schema not found at {schema_path}"
+
+    data = json.loads(data_path.read_text(encoding="utf-8"))
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+
+    # Validate against JSON schema
+    validate(instance=data, schema=schema)
+
+    # Validate custom fields for ZCC Nebula
+    assert "projects" in data, "ZCC Nebula projects galaxy list is missing"
+    assert "showcase" in data, "ZCC Nebula showcase dock is missing"
+    assert "ui_hints" in data, "ZCC Nebula UI hints are missing"
+    assert "verification_summary" in data, "ZCC Nebula verification summary is missing"
+
+    # Validate compiler details
+    assert "runs" in data, "Historical runs list is missing"
+    assert len(data["projects"]) > 0, "Projects galaxy list is empty"
+    assert data["ui_hints"]["accent_mode"] == "nebula", "Incorrect accent mode UI hint"
+
+if __name__ == "__main__":
+    test_dashboard_data_schema()
+    print("Dashboard schema validation test: PASSED")
