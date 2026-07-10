@@ -13,7 +13,7 @@ ALLOWED_ROOT_NAMES = {
     "CODEOWNERS",
     "Dockerfile",
     "LICENSE",
-    "char"  # wait, is 'char' tracked? Let's see
+    "char"  # tracked empty file — origin: see git log -- char
 }
 
 ALLOWED_EXTENSIONS = {
