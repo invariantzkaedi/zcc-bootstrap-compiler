@@ -4,9 +4,15 @@ import os
 import json
 import urllib.parse
 
+import platform
+
 PORT = 8081
 BASE_DIR = Path(__file__).resolve().parent
-ASSETS_PATH = Path(r"d:\meshy_3d")  # existing local asset mount
+
+if platform.system() == "Windows":
+    ASSETS_PATH = Path(r"d:\meshy_3d")  # existing local asset mount
+else:
+    ASSETS_PATH = Path("/mnt/d/meshy_3d")  # WSL mount path
 
 # Core files the control center can use
 STATIC_ROUTES = {
