@@ -509,7 +509,7 @@ ir-verify: zcc2
 	@echo "[IR-VERIFY] Stage 2 IR emission..."
 	ZCC_EMIT_IR=1 ./zcc2 -DZCC_REAL_TELEMETRY zcc.c -o zcc_ir_stage2.s
 	@echo "[IR-VERIFY] Linking IR stage 2 binary..."
-	gcc zcc_ir_stage2.s $(PASSES) -o zcc_ir_stage2 -lm
+	gcc -O0 -w -Iinclude -I. zcc_ir_stage2.s $(PASSES) -o zcc_ir_stage2 -lm
 	@echo "[IR-VERIFY] Stage 3 via IR path..."
 	ZCC_EMIT_IR=1 ./zcc_ir_stage2 -DZCC_REAL_TELEMETRY zcc.c -o zcc_ir_stage3.s
 
@@ -584,10 +584,26 @@ swarm-jit: zcc
 
 swarm-prove: zcc
 	@echo "🔱 Running symbolic proofs on swarm..."
-	@for f in evm_decomp/*.c; do \
-		./zcc --prove $${f%.c}.bin "no-revert" >/dev/null 2>&1 || true; \
-	done
-	@echo "✅ SwarmProve complete."
+	@CORPUS=swarm_out; PROP=no-revert; LOG=swarm_prove_results.tsv; \
+	PROVED=0; VIOLATED=0; ERROR=0; TOTAL=0; : > $$LOG; \
+	for f in $$CORPUS/*.bin; do \
+		[ -e "$$f" ] || { echo "FATAL: corpus empty: $$CORPUS/*.bin"; exit 3; }; \
+		TOTAL=$$((TOTAL+1)); \
+		OUT=$$(./zcc --prove "$$f" "$$PROP" 2>&1); RC=$$?; \
+		if [ $$RC -eq 0 ] && echo "$$OUT" | grep -q "HOLD"; then \
+			PROVED=$$((PROVED+1)); printf "%s\tHOLD\t%d\n" "$$f" $$RC >> $$LOG; \
+		elif echo "$$OUT" | grep -qi "violat"; then \
+			VIOLATED=$$((VIOLATED+1)); printf "%s\tVIOLATED\t%d\n" "$$f" $$RC >> $$LOG; \
+		else \
+			ERROR=$$((ERROR+1)); printf "%s\tERROR\t%d\n" "$$f" $$RC >> $$LOG; \
+		fi; \
+	done; \
+	echo "SWARM-PROVE SUMMARY: TOTAL=$$TOTAL PROVED=$$PROVED VIOLATED=$$VIOLATED ERROR=$$ERROR"; \
+	if [ $$TOTAL -gt 0 ] && [ $$ERROR -eq 0 ] && [ $$((PROVED+VIOLATED)) -eq $$TOTAL ]; then \
+		echo "SWARM-PROVE EXIT=0 (results: $$LOG)"; exit 0; \
+	else \
+		echo "SWARM-PROVE EXIT=1 (results: $$LOG)"; exit 1; \
+	fi
 
 swarm-memory: zcc
 	@echo "🔱 Memory Model v2 Swarm"
@@ -643,7 +659,22 @@ jit-memory-opt:
 
 proof-export:
 	@echo "🔱 Formal Proof Export"
-	@find mega_corpus -name '*.bin' | xargs -P12 -I{} sh -c './zcc --prove "{}" no-revert --export smt2 >/dev/null 2>&1' || true
+	@PROVED=0; UNKNOWN=0; ERRORS=0; TOTAL=0; LOG=proof_export_results.tsv; : > $$LOG; \
+	for f in $$(find mega_corpus -name '*.bin' 2>/dev/null); do \
+		TOTAL=$$((TOTAL+1)); \
+		OUT=$$(./zcc --prove "$$f" no-revert --export smt2 2>&1); RC=$$?; \
+		if [ $$RC -eq 0 ] && echo "$$OUT" | grep -q "HOLD"; then \
+			PROVED=$$((PROVED+1)); printf "%s\tHOLD\t%d\n" "$$f" $$RC >> $$LOG; \
+		elif echo "$$OUT" | grep -qi "UNKNOWN"; then \
+			UNKNOWN=$$((UNKNOWN+1)); printf "%s\tUNKNOWN\t%d\n" "$$f" $$RC >> $$LOG; \
+		else \
+			ERRORS=$$((ERRORS+1)); printf "%s\tERROR\t%d\n" "$$f" $$RC >> $$LOG; \
+		fi; \
+	done; \
+	echo "PROOF-EXPORT SUMMARY: TOTAL=$$TOTAL PROVED=$$PROVED UNKNOWN=$$UNKNOWN ERROR=$$ERRORS"; \
+	[ $$TOTAL -eq 0 ] && { echo "WARNING: no mega_corpus contracts found"; exit 0; }; \
+	[ $$ERRORS -eq 0 ] || { echo "PROOF-EXPORT EXIT=1"; exit 1; }; \
+	echo "PROOF-EXPORT EXIT=0 (results: $$LOG)"
 
 v1.1-plan:
 	@cat docs/ZCC_V1.1_ROADMAP.md

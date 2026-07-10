@@ -54,7 +54,21 @@ bool prove_property(ir_func_t* func, const char* property) {
 
     // Lightweight built-in checks first
     if (strcmp(property, "no-revert") == 0) {
-        return true; // extend with real solver later
+        /* SOUND-BUT-INCOMPLETE syntactic check (replaces vacuous stub that
+         * returned true unconditionally — see FORENSIC note in git log).
+         * The lifter tags every REVERT and INVALID with IR_TAG_EVM_BARRIER
+         * (evm_lifter.c: case EVM_REVERT / EVM_INVALID). If zero barrier
+         * nodes exist in the lifted body, no revert-class instruction can
+         * execute -> HOLD is sound. If any exist, proving no-revert needs
+         * path-condition analysis we do not yet have -> report UNKNOWN,
+         * never HOLD. */
+        int barriers = 0;
+        for (ir_node_t* n = func->head; n; n = n->next)
+            if (n->tag == IR_TAG_EVM_BARRIER) barriers++;
+        if (barriers == 0) return true;   /* HOLD (syntactic) */
+        fprintf(stderr, "[PROVE] no-revert: %d barrier op(s) present; "
+                        "path analysis required\n", barriers);
+        return false;                     /* UNKNOWN, not HOLD */
     }
     return false;
 }

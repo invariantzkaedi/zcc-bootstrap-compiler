@@ -16,3 +16,31 @@ jobs:
           chmod +x run_gates.sh
           chmod +x gate_ir1.sh
           ./run_gates.sh
+
+  bootstrap-hash:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain
+        run: sudo apt-get update && sudo apt-get install -y gcc make
+      - name: Log + drift-check bootstrap hash
+        run: bash scripts/log_bootstrap_hash.sh   # exits 1 on unexplained drift
+      - name: Persist ledger
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bootstrap-baselines
+          path: BOOTSTRAP_BASELINES.tsv
+
+  swarm-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y gcc make python3
+      - run: make swarm-fuzz          # populates swarm_out/
+      - run: make swarm-prove         # hardened gate: nonzero on any ERROR/VIOLATED
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: swarm-prove-results
+          path: swarm_prove_results.tsv

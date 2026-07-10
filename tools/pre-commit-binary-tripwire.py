@@ -19,7 +19,7 @@ ALLOWED_ROOT_NAMES = {
 ALLOWED_EXTENSIONS = {
     ".c", ".h", ".py", ".md", ".txt", ".json", ".yaml", ".yml",
     ".sh", ".bat", ".patch", ".gitignore", ".gitattributes", ".xml",
-    ".html", ".js"
+    ".html", ".js", ".tsv"
 }
 
 def is_binary(filepath):
