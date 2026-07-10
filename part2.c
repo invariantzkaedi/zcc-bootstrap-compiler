@@ -1251,7 +1251,7 @@ again:
 #define MAX_KNOWN_TOKEN  128
 
 /* Human-readable token name for error messages (index = enum value from part1). */
-static const char *token_name(int t) {
+const char *token_name(int t) {
     static const char *names[] = {
         "EOF", "NUM", "STR", "CHAR_LIT", "IDENT", "FLIT",
         "INT", "CHAR", "VOID", "LONG", "SHORT", "UNSIGNED", "SIGNED", "FLOAT", "DOUBLE",
