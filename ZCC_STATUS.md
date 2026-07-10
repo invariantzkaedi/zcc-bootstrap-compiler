@@ -20,7 +20,7 @@ Generation 2 — supersedes generation 1 below
 | Compiler config            | md5(zcc2.s)                      | Notes                         |
 | -------------------------- | -------------------------------- | ----------------------------- |
 | C-only (pre-rust merge)    | bbe72c8e677d4270bca32db48897e956 | locked Apr 28 on main b69147d |
-| C + Rust v1 (current main) | d2f21eb54e2d3a74a074aca63c86e491 | locked Jun 14 with page-aligned ZLD |
+| C + Rust v1 (current main) | ba289f82c08fbcf57a052bd9aaa703ef | locked Jul 10 on GCC 13.3.0 / WSL2 + sandbox (supersedes Jun 14 ZLD baseline) |
 
 If a future bootstrap produces a different hash, either codegen drifted (regression) or new compilation units were added (intentional). Use this table as the first line of forensic defense.
 

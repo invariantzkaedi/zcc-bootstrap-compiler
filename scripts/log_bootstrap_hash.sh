@@ -11,7 +11,7 @@ BUILD_LOG=$(mktemp)
 make selfhost >"$BUILD_LOG" 2>&1 || { echo "SELFHOST FAILED — cannot baseline"; cat "$BUILD_LOG"; exit 2; }
 
 HASH=$(md5sum zcc2.s | cut -d' ' -f1)
-COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "nogit")
+COMMIT=$(git rev-parse --short=8 HEAD 2>/dev/null || echo "nogit")
 CC_ID=$( ${CC:-gcc} --version | head -1 )
 UNAME=$(uname -srm)
 ELISIONS=$(grep -oE '[0-9]+ elided' "$BUILD_LOG" | head -1 | grep -oE '[0-9]+' || echo "?")
