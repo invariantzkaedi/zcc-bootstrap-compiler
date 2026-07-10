@@ -4917,6 +4917,15 @@
             "date": "2026-07-10",
             "script": "scripts/build_lua.sh",
             "notes": "LUA_USE_JUMPTABLE=0 due to no computed gotos support; __builtin_expect shimmed"
+        },
+        {
+            "artifact": "sqlite3_zcc.s",
+            "md5": "9898ebaa8634e4cfdc52ec7102212cc3",
+            "source": "sqlite3_zcc.c",
+            "toolchain": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0 | Linux 6.6.123.2-microsoft-standard-WSL2+",
+            "date": "2026-07-10",
+            "script": "scripts/fetch_sqlite.sh",
+            "notes": "Exact ZCC offsets evaluated and patched (zErrMsg=8, aTempReg=232, sLastToken=288, tail=136); linked with GCC and tested clean."
         }
     ],
     "evidence_binaries": {
