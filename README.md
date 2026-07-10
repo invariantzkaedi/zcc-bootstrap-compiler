@@ -34,8 +34,9 @@ zcc --prove contract.bin "no-revert"
 | **Fuzz Suite** | Pass (53/53 fuzzing test cases) |
 | **SQLite 3.45.0** | Pass (Full transactional SQL integrity verified) |
 | **Lua 5.4.6** | Pass (100% compliance on the core `testes/all.lua` VM test suite) |
+| **DOOM 1.10** | Pass (reproduction: `scripts/build_doom.sh`, md5=`7eb2e949`) |
 | **IR Backend Tests** | Pass (21/21 passes verified) |
-| **Peephole Elisions** | 16,067 redundant instructions optimized during self-host compilation |
+| **Peephole Elisions** | 18,140 redundant instructions optimized during self-host compilation |
 
 ### SQLite Integration & Compliance
 ZCC compiles SQLite 3.45.0 (approx. 85,000 lines of amalgamated source) out of the box. The resulting binary successfully performs complete SQL transactional workflows:
