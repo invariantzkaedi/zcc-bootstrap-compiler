@@ -510,6 +510,9 @@ healed_payloads/
 mega_corpus/
 
 # Local build artifacts & binaries
+lua_zcc.c
+lua.s
+lua_elf
 *.mp4
 a_gcc
 a_gcc_*

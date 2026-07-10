@@ -14,13 +14,14 @@ Generation 2 — supersedes generation 1 below
 | Tripwire (zcc.c == cat of PARTS) | Active |
 | Rust Frontend (v1) | Merged (PR #7) |
 | make rust-front-smoke | All checks passed (~40s) |
+| 191-file C Regression Corpus | Patched passes 170/191 (21 pre-existing failures, unchanged from prior baseline; 4 additional passes gained from part3.c fix, see tests/regressions/test_tm_conflict.c) |
 
 ## Bootstrap Baselines (drift detectors)
 
 | Compiler config            | md5(zcc2.s)                      | Notes                         |
 | -------------------------- | -------------------------------- | ----------------------------- |
 | C-only (pre-rust merge)    | bbe72c8e677d4270bca32db48897e956 | locked Apr 28 on main b69147d |
-| C + Rust v1 (current main) | ba289f82c08fbcf57a052bd9aaa703ef | locked Jul 10 on GCC 13.3.0 / WSL2 + sandbox (supersedes Jun 14 ZLD baseline) |
+| C + Rust v1 (current main) | bfafec62c1f82b1c888341b3ab8a969b | locked Jul 10 on GCC 13.3.0 / WSL2 + sandbox (post-Lua fix) |
 
 If a future bootstrap produces a different hash, either codegen drifted (regression) or new compilation units were added (intentional). Use this table as the first line of forensic defense.
 

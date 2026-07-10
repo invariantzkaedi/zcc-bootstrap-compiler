@@ -57,7 +57,10 @@ static int is_type_token(Compiler *cc) {
     if (cc->tk == TK_IDENT) {
         Symbol *sym;
         sym = scope_find(cc, cc->tk_text);
-        if (sym && sym->is_typedef) return 1;
+        if (sym) {
+            if (sym->is_typedef) return 1;
+            return 0;
+        }
         if (g_current_namespace[0]) {
             char lookup_tag[MAX_IDENT * 2];
             sprintf(lookup_tag, "%.120s_%.120s", g_current_namespace, cc->tk_text);
@@ -1934,7 +1937,7 @@ Node *parse_primary(Compiler *cc) {
     /* fallthrough — unexpected token */
     {
         char buf[256];
-        sprintf(buf, "unexpected token %d in expression", cc->tk);
+        sprintf(buf, "unexpected token %d (%s) in expression (text='%s' line=%d col=%d)", cc->tk, token_name(cc->tk), cc->tk_text, cc->tk_line, cc->tk_col);
         error(cc, buf);
         next_token(cc);
         n = node_num(cc, 0, line);

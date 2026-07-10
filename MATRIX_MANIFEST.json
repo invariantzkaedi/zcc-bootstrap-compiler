@@ -4908,6 +4908,15 @@
             "date": "2026-07-10",
             "script": "scripts/build_doom.sh",
             "notes": "9 zcc-compat patches applied (F1-F9); see script header for root causes"
+        },
+        {
+            "artifact": "lua.s",
+            "md5": "dbca31acf090e9c4d91a98d425defc1e",
+            "source": "lua_zcc.c",
+            "toolchain": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0 | Linux 6.6.123.2-microsoft-standard-WSL2+",
+            "date": "2026-07-10",
+            "script": "scripts/build_lua.sh",
+            "notes": "LUA_USE_JUMPTABLE=0 due to no computed gotos support; __builtin_expect shimmed"
         }
     ]
 }

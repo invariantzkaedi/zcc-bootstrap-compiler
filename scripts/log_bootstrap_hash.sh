@@ -19,13 +19,15 @@ rm -f "$BUILD_LOG"
 DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 KEY="${CC_ID}|${UNAME}"
 
+COMMENT="${1:-}"
+
 if [ ! -f "$LEDGER" ]; then
-  printf "date\tcommit\tmd5_zcc2s\telisions\ttoolchain\tuname\n" > "$LEDGER"
+  printf "date\tcommit\tmd5_zcc2s\telisions\ttoolchain\tuname\tcomment\n" > "$LEDGER"
 fi
 
 # Drift check against last row with same toolchain key
 PRIOR=$(awk -F'\t' -v k="$KEY" 'NR>1 && ($5"|"$6)==k {h=$3} END{print h}' "$LEDGER" || true)
-printf "%s\t%s\t%s\t%s\t%s\t%s\n" "$DATE" "$COMMIT" "$HASH" "$ELISIONS" "$CC_ID" "$UNAME" >> "$LEDGER"
+printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$DATE" "$COMMIT" "$HASH" "$ELISIONS" "$CC_ID" "$UNAME" "$COMMENT" >> "$LEDGER"
 
 echo "BOOTSTRAP HASH: $HASH  commit=$COMMIT  elisions=$ELISIONS"
 echo "TOOLCHAIN: $CC_ID | $UNAME"
