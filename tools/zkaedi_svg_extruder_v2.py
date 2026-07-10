@@ -47,7 +47,13 @@ def parse_svg_to_polygons(path_d):
     if current_poly:
         polygons.append(current_poly)
         
-    return polygons
+    cleaned_polygons = []
+    for poly in polygons:
+        if len(poly) > 1 and np.linalg.norm(np.array(poly[0]) - np.array(poly[-1])) < 1e-3:
+            poly.pop()
+        if len(poly) >= 3:
+            cleaned_polygons.append(poly)
+    return cleaned_polygons
 
 def earcut_triangulate(polygons):
     if not polygons:
@@ -188,44 +194,57 @@ def reward_jackpot(verts_count: int, faces_count: int, ghost_count: int = 32, se
     return "🎰 LUCKY COUPLER + SWEEP PROTOCOL = eternal flow"
 
 if __name__ == "__main__":
+    import argparse
     tools_dir = os.path.dirname(os.path.abspath(__file__))
     zcc_root = os.path.dirname(tools_dir)
     svg_file = os.path.join(zcc_root, 'YETIIII.txt')
     pos_out = os.path.join(tools_dir, 'proxy_verts.bin')
     faces_out = os.path.join(tools_dir, 'proxy_faces.bin')
     ghost_out = os.path.join(tools_dir, 'proxy_ghost.bin')
-    
+
+    parser = argparse.ArgumentParser(description="ZCC SVG 3D Extruder Tool")
+    parser.add_argument('--input', default=svg_file, help="Input SVG/TXT file path")
+    parser.add_argument('--output-verts', default=pos_out, help="Output binary verts path")
+    parser.add_argument('--output-faces', default=faces_out, help="Output binary faces path")
+    parser.add_argument('--output-ghost', default=ghost_out, help="Output binary ghost path")
+    parser.add_argument('--output-glb', default=None, help="Optional output standard GLB path")
+    parser.add_argument('--depth', type=float, default=50.0, help="Extrusion depth")
+    parser.add_argument('--path-index', type=int, default=6, help="Path index to select in the SVG file")
+    parser.add_argument('--watertight', action='store_true', help="Repair normal orientations and force watertightness")
+    args = parser.parse_args()
+
     try:
         # Clear existing read-only locks before sweeping
-        for f in [pos_out, faces_out, ghost_out]:
+        for f in [args.output_verts, args.output_faces, args.output_ghost]:
             if os.path.exists(f):
                 os.chmod(f, 0o666)
                 os.remove(f)
 
-        with open(svg_file, 'r', encoding='utf-8') as f:
+        with open(args.input, 'r', encoding='utf-8') as f:
             data = f.read()
             
         if len(data) > 500_000:
             sys.exit("[-] FATAL: SVG too thicc")
             
-        paths = re.findall(r'<path d="([^"]+)"', data)
+        paths = re.findall(r'<path[^>]*\s+d="([^"]+)"', data)
         
         if not paths:
             print("[-] No SVG paths found.")
             sys.exit(1)
             
-        target_path = paths[6] if len(paths) > 6 else paths[0]
+        idx = args.path_index
+        target_path = paths[idx] if len(paths) > idx else paths[0]
         
         polygons = parse_svg_to_polygons(target_path)
         verts_2d, faces_2d, _ = earcut_triangulate(polygons)
-        verts_3d, faces_3d = extrude_mesh_clean(verts_2d, faces_2d, polygons, depth=50.0)
+        verts_3d, faces_3d = extrude_mesh_clean(verts_2d, faces_2d, polygons, depth=args.depth)
         
         if len(verts_3d) * 3 % 3 != 0:
             raise RuntimeError("ZKAEDI rhythm broken — verts not divisible by 3")
 
         np.testing.assert_array_equal(verts_3d.shape[1], 3)
         
-        generate_zkaedi_proxy_textures(verts_3d, faces_3d, pos_out, faces_out)
+        generate_zkaedi_proxy_textures(verts_3d, faces_3d, args.output_verts, args.output_faces)
         
         if alerting:
             alerting.emit_alert("INFO", "ZKAEDI_PIPELINE_SYNC", "main", f"Proxy textures built. {len(verts_3d)} verts.")
@@ -233,14 +252,29 @@ if __name__ == "__main__":
         svg_hash = hashlib.sha256(data.encode()).hexdigest()[:16]
         unknown_active = False
         try:
-            unknown_active = unknowncode_seed(svg_hash, depth=50.0)
+            unknown_active = unknowncode_seed(svg_hash, depth=args.depth)
         except Exception as e:
             print(f"[-] SWEEP GLITCH: {e}")
         
         msg = reward_jackpot(len(verts_3d), len(faces_3d), ghost_count=32, sentient=unknown_active)
         print(msg)
+
+        if args.output_glb:
+            import trimesh
+            mesh = trimesh.Trimesh(vertices=verts_3d, faces=faces_3d, process=True)
+            if args.watertight:
+                trimesh.repair.fix_normals(mesh)
+                trimesh.repair.fill_holes(mesh)
+                trimesh.repair.fix_inversion(mesh)
+                trimesh.repair.fix_winding(mesh)
+            
+            if os.path.dirname(args.output_glb):
+                os.makedirs(os.path.dirname(os.path.abspath(args.output_glb)), exist_ok=True)
+            mesh.export(args.output_glb, file_type='glb')
+            print(f"[ZCC-3D] Watertight GLB exported successfully: {args.output_glb} (watertight={mesh.is_watertight})")
         
     except Exception as e:
         if alerting:
             alerting.emit_alert("ERROR", "ZKAEDI_SWEEP_GLITCH", "main", str(e))
         print(f"[-] SWEEP GLITCH: {e}")
+        sys.exit(1)

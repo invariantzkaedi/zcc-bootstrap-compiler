@@ -3135,7 +3135,7 @@ def emit_svg_proxy(output_file, primitives, groups, palette, bounding_radius, qu
         f.write(svg)
     return svg_path, svg
 
-def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_res, residual_res, w_offset=0.4, eps_ratio=0.5, quality="balanced"):
+def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_res, residual_res, w_offset=0.4, eps_ratio=0.5, quality="balanced", output_glb=None):
     """Core compilation run wrapping file execution"""
     t_start = time.time()
     
@@ -3527,6 +3527,45 @@ def _run_compilation(input_file, output_file, num_spheres, num_samples, coarse_r
     print(f"[ZCC SDF Compiler] Dynamic Bounding Radius: {fmt_glsl(bounding_radius)} (Square: {fmt_glsl(bounding_radius_sqr)})")
     print(f"[ZCC SDF Compiler] Wrote primitive manifest: {manifest_path}")
     print(f"[ZCC SDF Compiler] Wrote telemetry log: {telemetry_path}")
+    
+    if output_glb:
+        print(f"[ZCC SDF Compiler] Reconstructing watertight GLB mesh via Marching Cubes...")
+        try:
+            import trimesh
+            import skimage.measure
+            
+            res_map = {"draft": 48, "balanced": 64, "high": 96, "ultra": 128}
+            resolution = res_map.get(quality, 64)
+            
+            x = np.linspace(-1.25, 1.25, resolution, dtype=np.float32)
+            y = np.linspace(-1.25, 1.25, resolution, dtype=np.float32)
+            z = np.linspace(-1.25, 1.25, resolution, dtype=np.float32)
+            X, Y, Z = np.meshgrid(x, y, z, indexing='ij')
+            grid_pts = np.stack([X.ravel(), Y.ravel(), Z.ravel()], axis=1)
+            
+            # evaluate using blend radius (w_offset)
+            sdf_vals = eval_analytic_sdf_cpu(grid_pts, groups, blend_radius=w_offset)
+            volume = sdf_vals.reshape(resolution, resolution, resolution)
+            
+            # Apply Marching Cubes
+            verts, faces, normals, values = skimage.measure.marching_cubes(volume, level=0.0)
+            
+            # Scale back
+            verts_scaled = -1.25 + verts * (2.5 / (resolution - 1))
+            
+            mesh = trimesh.Trimesh(vertices=verts_scaled, faces=faces, process=False)
+            trimesh.repair.fix_normals(mesh)
+            trimesh.repair.fill_holes(mesh)
+            trimesh.repair.fix_inversion(mesh)
+            trimesh.repair.fix_winding(mesh)
+            
+            if os.path.dirname(output_glb):
+                os.makedirs(os.path.dirname(os.path.abspath(output_glb)), exist_ok=True)
+            mesh.export(output_glb, file_type='glb')
+            print(f"[ZCC SDF Compiler] Watertight GLB reconstructed and saved: {output_glb} (watertight={mesh.is_watertight})")
+        except Exception as ex:
+            print(f"[ZCC SDF Compiler] Mesh reconstruction failed: {ex}")
+
     print("[ZCC SDF Compiler] COMPILATION COMPLETE.")
 
 def run_parameter_sweep(input_file, output_file, num_spheres, num_samples, coarse_res, residual_res):
@@ -3635,6 +3674,7 @@ def main():
     residual_res_override = None
     w_offset_val = 0.75  # Optimal baseline found by grid search sweep!
     eps_ratio_val = 0.25 # Optimal baseline found by grid search sweep!
+    output_glb_val = None
     
     # Legacy K positional argument checks
     legacy_k = None
@@ -3661,6 +3701,8 @@ def main():
             w_offset_val = float(args[i + 1])
         elif args[i] == "--eps_ratio" and i + 1 < len(args):
             eps_ratio_val = float(args[i + 1])
+        elif args[i] == "--output-glb" and i + 1 < len(args):
+            output_glb_val = args[i + 1]
             
     # Quality Presets Ladder
     presets = {
@@ -3716,7 +3758,7 @@ def main():
             
         try:
             print(f"[ZCC] Launching: K={k_act}, samples={ns}, quality={quality}, coarse_res={coarse_res}, residual_res={residual_res}")
-            _run_compilation(input_file, output_file, k_act, ns, coarse_res, residual_res, w_offset=w_offset_val, eps_ratio=eps_ratio_val, quality=quality)
+            _run_compilation(input_file, output_file, k_act, ns, coarse_res, residual_res, w_offset=w_offset_val, eps_ratio=eps_ratio_val, quality=quality, output_glb=output_glb_val)
             return
         except Exception as e:
             import traceback

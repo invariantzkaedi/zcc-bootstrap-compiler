@@ -6,3 +6,9 @@ pydantic
 onnx
 onnxruntime
 torch
+trimesh
+scipy
+rtree
+joblib
+svgpathtools
+mapbox-earcut
