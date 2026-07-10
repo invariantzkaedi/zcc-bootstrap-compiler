@@ -1,0 +1,35 @@
+{
+  "adjustments": {
+    "base_risk": 0,
+    "ci_weight": 0,
+    "critical_weight": 0,
+    "fail_multiplier": 0,
+    "max_fail_impact": 0
+  },
+  "current_weights": {
+    "base_risk": 20,
+    "ci_weight": 20,
+    "critical_weight": 30,
+    "fail_multiplier": 5,
+    "max_fail_impact": 30
+  },
+  "generated_at_utc": "2026-07-06T19:13:07.796367+00:00",
+  "metrics": {
+    "false_negatives": 0,
+    "false_positive_rate": 0.0,
+    "false_positives": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "total_evaluated_prs": 0,
+    "true_negatives": 0,
+    "true_positives": 0
+  },
+  "recommendation": "Proposed weights generated at policies/proposed_risk_model_weights.yaml",
+  "suggested_weights": {
+    "base_risk": 20,
+    "ci_weight": 20,
+    "critical_weight": 30,
+    "fail_multiplier": 5,
+    "max_fail_impact": 30
+  }
+}
