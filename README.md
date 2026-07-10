@@ -9,7 +9,7 @@ ZCC is a robust, production-capable Systems-C compiler and EVM (Ethereum Virtual
 ## 🔱 Key Capabilities
 
 * **256-bit EVM Lifter**: Complete translation of EVM bytecode with full instruction compliance.
-* **SwarmDecompile**: An automated decompilation engine that has fuzzed and verified 5,000+ smart contracts.
+* **SwarmDecompile**: An automated decompilation engine that has fuzzed and verified 5,000+ smart contracts (achieving 91% PARTIAL / 9% SUCCESS decompilation parity).
 * **Native x86-64 JIT Backend**: High-performance execution engine for compiled target binaries.
 * **Symbolic Verification**: Formal validation capabilities (`--prove no-revert`) to mathematically assert instruction safety.
 * **Systems Bootstrap Capability**: Successfully compiles itself (self-hosting), Lua 5.4.6, SQLite 3.45.0, and DOOM 1.10.

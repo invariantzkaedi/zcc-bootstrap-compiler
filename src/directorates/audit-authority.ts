@@ -16,7 +16,7 @@ export class AuditAuthority {
   private ledgerPath = path.join(__dirname, "../../sovereign_audit_ledger.jsonl");
   private lastHash = "0000000000000000000000000000000000000000000000000000000000000000";
   private indexCount = 0;
-  private GENESIS_SECRET_SEED = "zkaedi-sovereign-genesis-seed-v1";
+  private GENESIS_DECORATIVE_SEED = "zkaedi-sovereign-genesis-seed-v1";
 
   constructor() {
     this.initializeAndVerifyLedger();
