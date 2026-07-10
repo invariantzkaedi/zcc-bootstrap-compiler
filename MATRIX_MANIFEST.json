@@ -4898,5 +4898,16 @@
         "zcc-libc\\sys\\uio.h": "edec06c752063c1ee8601f537458ef7604f4b0154863001481bb5179d0906d7e867bd85dadf9016b3280120069e50ab37c6f930c74872c1b0d9a9558e409bd54",
         "_sweep_output\\B2_VALIDATION.md": "c760a10a3d45880936e079c81dd187b1046f75dc8bb046619eedb2070f36b2e110fe114c910b11524aefcfb8a8555e593a63a5e880900341a59c2d63c314c6fe",
         "_sweep_output\\B3_VALIDATION.md": "41a654f430ad3597e71c9497b00cccab5ea34cad3adbf098510aa532319d466979d90636533ab2bd09ff74d6afa79cda5b09dbdd0278bbcd0af58ae4abbdf40c"
-    }
+    },
+    "compilation_evidence": [
+        {
+            "artifact": "doom.s",
+            "md5": "7eb2e949c91d7d0097390f9b451b6a08",
+            "source": "src/doom_pp_clean.c",
+            "toolchain": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0 | Linux 6.6.123.2-microsoft-standard-WSL2+",
+            "date": "2026-07-10",
+            "script": "scripts/build_doom.sh",
+            "notes": "9 zcc-compat patches applied (F1-F9); see script header for root causes"
+        }
+    ]
 }

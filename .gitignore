@@ -118,6 +118,14 @@ sqlite3_gcc
 sqlite3_test
 sqlite_functest
 sqlite3_bt.log
+# DOOM build byproducts — regenerate via scripts/build_doom.sh
+doom_zcc.c
+doom.s
+doom_corpus.jsonl
+mega_scored_corpus.jsonl
+out_doom.ir
+out_zcc3.ir
+
 
 # Backup files
 *.bak
