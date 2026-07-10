@@ -63,8 +63,8 @@ class CustomHandler(CORSRequestHandler):
 
         # Mount /assets/ to local asset directory
         if "/assets/" in path:
-            idx = path.find("/assets/")
-            rel = path[idx + len("/assets/"):].lstrip("/")
+            parts = path.split("/assets/")
+            rel = parts[-1].lstrip("/")
             resolved = ASSETS_PATH / rel
             print(f"[ZCC] /assets/ {path} -> {resolved}")
             return str(resolved)
