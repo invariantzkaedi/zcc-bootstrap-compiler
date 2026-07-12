@@ -14,7 +14,8 @@ from train_hf_dpo_adamw import (
     generate_dpo_attestation,
     get_relative_safe_path,
     write_atomic_json,
-    write_atomic_binary
+    write_atomic_binary,
+    normalize_scalar_metric
 )
 import zkaedi_model_registry as reg
 
@@ -28,8 +29,46 @@ class TestDPOHardening(unittest.TestCase):
         import shutil
         shutil.rmtree(self.test_dir)
 
+    def test_normalize_scalar_metric(self):
+        # 1. Normal numbers
+        self.assertEqual(normalize_scalar_metric("m", 4.2), 4.2)
+        # 2. Single element tensor
+        self.assertEqual(normalize_scalar_metric("m", torch.tensor(1.5)), 1.5)
+        # 3. Single element numpy array
+        self.assertEqual(normalize_scalar_metric("m", np.array([2.5])), 2.5)
+        # 4. Multi element tensor should raise ValueError
+        with self.assertRaises(ValueError):
+            normalize_scalar_metric("m", torch.tensor([1.0, 2.0]))
+        # 5. Multi element numpy array should raise ValueError
+        with self.assertRaises(ValueError):
+            normalize_scalar_metric("m", np.array([1.0, 2.0]))
+        # 6. Arbitrary objects should return None
+        self.assertIsNone(normalize_scalar_metric("m", "unknown"))
+
+    def test_get_relative_safe_path_fail_closed(self):
+        base_dir = Path(self.test_dir) / "workspace"
+        base_dir.mkdir()
+        
+        # Inside workspace
+        inside_path = base_dir / "data.parquet"
+        with open(inside_path, "w") as f:
+            f.write("test")
+            
+        rel = get_relative_safe_path(inside_path, base_dir)
+        self.assertEqual(rel, "data.parquet")
+        
+        # Outside workspace
+        outside_dir = Path(self.test_dir) / "secret_zone"
+        outside_dir.mkdir()
+        outside_path = outside_dir / "secret.parquet"
+        with open(outside_path, "w") as f:
+            f.write("secret")
+            
+        with self.assertRaises(ValueError) as ctx:
+            get_relative_safe_path(outside_path, base_dir)
+        self.assertIn("Path is outside the declared safe workspace", str(ctx.exception))
+
     def test_tripwire_normal_logs_pass(self):
-        # Normal training metrics should pass without raising
         logs = {"loss": 0.5, "rewards/margins": 0.2, "epoch": 1.0}
         control = TrainerControl()
         self.callback.on_log(None, None, control, logs=logs)
@@ -68,7 +107,6 @@ class TestDPOHardening(unittest.TestCase):
         self.assertTrue(control.should_training_stop)
 
     def test_tripwire_nonnumeric_metric_ignored(self):
-        # Non-numeric objects shouldn't crash the loop or trip it unless they are Real or Tensor
         logs = {"loss": 0.5, "unrelated_str": "some_value"}
         control = TrainerControl()
         self.callback.on_log(None, None, control, logs=logs)
@@ -91,7 +129,6 @@ class TestDPOHardening(unittest.TestCase):
         self.assertTrue(control.should_training_stop)
 
     def test_tripwire_negative_margin_saturation_fails(self):
-        # Margins below -15 should trigger safety aborts
         logs = {"loss": 0.5, "rewards/margins": -16.5}
         control = TrainerControl()
         with self.assertRaises(ValueError) as ctx:
@@ -121,7 +158,7 @@ class TestDPOHardening(unittest.TestCase):
         }
         write_atomic_json(manifest_file, manifest_data)
         
-        # Calculate manifest hash to bind with attestation
+        # Calculate manifest hash
         manifest_sha256 = reg.get_file_sha256(manifest_file)
         
         # Keygen for signing

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 r"""
 ZKAEDI PRIME Security Hardened - AdamW Baseline HF DPO Training Engine
-Version: 2.3-VERIFIED-20260712
+Version: 2.4-VERIFIED-20260712
 Author: ZKAEDI PRIME Security Testing Orchestrator (self-audit)
 
 SECURITY NOTES (MANDATORY READING BEFORE EXECUTION):
@@ -48,37 +48,102 @@ logger = logging.getLogger("zkaedi_dpo_hardened")
 
 
 def write_atomic_json(target_path: Path, data: dict) -> None:
-    """Atomic write for JSON payloads using fsync and temporary replacement."""
+    """Atomic write for JSON payloads using fsync, directory fsync, and temporary replacement."""
     target_path = Path(target_path)
     parent = target_path.parent
     parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", dir=str(parent), delete=False, encoding="utf-8") as f:
-        temp_path = Path(f.name)
-        json.dump(data, f, indent=2)
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(temp_path, target_path)
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile("w", dir=str(parent), delete=False, encoding="utf-8") as f:
+            temp_path = Path(f.name)
+            json.dump(data, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        # Replace
+        os.replace(temp_path, target_path)
+        temp_path = None
+        # Fsync parent directory for power-loss metadata durability (wrapped gracefully for Windows/etc.)
+        try:
+            dir_fd = os.open(str(parent), os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except OSError:
+            pass
+    finally:
+        if temp_path is not None and temp_path.exists():
+            temp_path.unlink(missing_ok=True)
 
 
 def write_atomic_binary(target_path: Path, data: bytes) -> None:
-    """Atomic write for raw signatures using fsync and temporary replacement."""
+    """Atomic write for raw signatures using fsync, directory fsync, and temporary replacement."""
     target_path = Path(target_path)
     parent = target_path.parent
     parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("wb", dir=str(parent), delete=False) as f:
-        temp_path = Path(f.name)
-        f.write(data)
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(temp_path, target_path)
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile("wb", dir=str(parent), delete=False) as f:
+            temp_path = Path(f.name)
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp_path, target_path)
+        temp_path = None
+        # Fsync parent directory
+        try:
+            dir_fd = os.open(str(parent), os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except OSError:
+            pass
+    finally:
+        if temp_path is not None and temp_path.exists():
+            temp_path.unlink(missing_ok=True)
 
 
 def get_relative_safe_path(path: Path, base_dir: Path) -> str:
-    """Redacts absolute system path leaks by resolving paths relative to safe workspace base."""
+    """Redacts absolute system path leaks by resolving paths relative to safe workspace base.
+    Fails closed if the path lies outside the safe workspace.
+    """
+    resolved_path = path.resolve()
+    resolved_base = base_dir.resolve()
     try:
-        return str(path.resolve().relative_to(base_dir.resolve()))
-    except ValueError:
-        return path.name
+        return resolved_path.relative_to(resolved_base).as_posix()
+    except ValueError as exc:
+        raise ValueError(
+            f"Path is outside the declared safe workspace: {resolved_path.name}"
+        ) from exc
+
+
+def normalize_scalar_metric(name: str, value: Any) -> Optional[float]:
+    """Safely normalizes values to floats from scalars, numpy values, or single-element tensors.
+    Raises ValueError on non-scalar / multi-element metrics.
+    """
+    if isinstance(value, numbers.Real):
+        return float(value)
+
+    if torch.is_tensor(value):
+        if value.numel() != 1:
+            raise ValueError(
+                f"Metric '{name}' must be scalar; received {value.numel()} values"
+            )
+        return float(value.detach().cpu().item())
+
+    try:
+        import numpy as np
+        if isinstance(value, np.ndarray):
+            if value.size != 1:
+                raise ValueError(
+                    f"Metric '{name}' must be scalar; received {value.size} values"
+                )
+            return float(value.item())
+    except ImportError:
+        pass
+
+    return None
 
 
 class DPOSTripwireCallback(TrainerCallback):
@@ -88,10 +153,10 @@ class DPOSTripwireCallback(TrainerCallback):
             # 1. NaN/Inf Checks (supporting tensors, numpy, float, and nonnumeric edge cases)
             for k, v in logs.items():
                 is_nan_inf = False
-                if isinstance(v, numbers.Real) and not math.isfinite(float(v)):
-                    is_nan_inf = True
-                elif torch.is_tensor(v) and v.numel() == 1 and not torch.isfinite(v).item():
-                    is_nan_inf = True
+                val_norm = normalize_scalar_metric(k, v)
+                if val_norm is not None:
+                    if not math.isfinite(val_norm):
+                        is_nan_inf = True
                 
                 if is_nan_inf:
                     logger.error(f"[ZKAEDI SEC] TRIPWIRE TRIGGERED: NaN/Inf detected in metric '{k}'!")
@@ -101,14 +166,14 @@ class DPOSTripwireCallback(TrainerCallback):
             # 2. Margin Saturation Check
             margin = logs.get("rewards/margins")
             if margin is not None:
-                # Handle tensor margin values
-                margin_val = margin.item() if torch.is_tensor(margin) else float(margin)
-                if abs(margin_val) > 10.0:
-                    logger.warning(f"[ZKAEDI SEC] Margin saturation warning: {margin_val:.4f}")
-                    if abs(margin_val) > 15.0:
-                        logger.error(f"[ZKAEDI SEC] TRIPWIRE TRIGGERED: Margin exceeds critical safety boundary of 15.0!")
-                        control.should_training_stop = True
-                        raise ValueError(f"Training aborted due to preference margin saturation: {margin_val:.4f}")
+                margin_val = normalize_scalar_metric("rewards/margins", margin)
+                if margin_val is not None:
+                    if abs(margin_val) > 10.0:
+                        logger.warning(f"[ZKAEDI SEC] Margin saturation warning: {margin_val:.4f}")
+                        if abs(margin_val) > 15.0:
+                            logger.error(f"[ZKAEDI SEC] TRIPWIRE TRIGGERED: Margin exceeds critical safety boundary of 15.0!")
+                            control.should_training_stop = True
+                            raise ValueError(f"Training aborted due to preference margin saturation: {margin_val:.4f}")
 
 
 def format_dpo(sample):
@@ -147,6 +212,18 @@ def generate_dpo_attestation(
     script_hash = get_file_sha256(script_path)
     ds_hash = get_file_sha256(dataset_path)
     
+    # Try resolving the base model allow-list entry digest for reproducibility
+    base_model_hash = "unknown"
+    try:
+        from zkaedi_model_registry import load_registry
+        registry = load_registry(verify_signature=False)
+        for m_name, m_info in registry.get("models", {}).items():
+            if m_name == base_model:
+                base_model_hash = m_info.get("combined_sha256", "unknown")
+                break
+    except Exception:
+        pass
+
     try:
         import trl
         trl_version = trl.__version__
@@ -173,7 +250,10 @@ def generate_dpo_attestation(
             "train_samples": num_train_samples,
             "eval_samples": num_eval_samples
         },
-        "base_model": base_model,
+        "base_model": {
+            "identity": base_model,
+            "allow_list_sha256": base_model_hash
+        },
         "training_config": training_config or {},
         "model_payload_sha256": model_payload_sha256,
         "training_manifest": {
@@ -356,7 +436,7 @@ def main():
     model_payload_sha256, files_dict = get_model_hashes(checkpoint_dir)
     logger.info(f"[ZKAEDI SEC] Model payload weights cryptographically hashed: {model_payload_sha256}")
 
-    # Determine artifact type (PEFT adapter assertion)
+    # Determine adapter vs model type
     is_peft = False
     try:
         from peft import PeftModel
@@ -370,7 +450,7 @@ def main():
     import uuid
     attestation_id = str(uuid.uuid4())
 
-    # Optional: write integrity manifest containing mutual binding token
+    # Optional: write integrity manifest
     manifest_file = checkpoint_dir / "training_manifest.json"
     manifest_data = {
         "model_name": args.model_name,
@@ -389,11 +469,11 @@ def main():
     }
     write_atomic_json(manifest_file, manifest_data)
 
-    # Calculate manifest sha256 for attestation cryptographic binding
+    # Calculate manifest sha256
     from zkaedi_model_registry import get_file_sha256
     manifest_sha256 = get_file_sha256(manifest_file)
 
-    # Password extraction (SEC-03 warning)
+    # Password extraction
     pwd = None
     if args.password:
         logger.warning("[ZKAEDI SEC] WARNING: Passing password via plaintext CLI arguments is deprecated and insecure. Use --prompt-password or environment-based key managers.")
@@ -415,7 +495,7 @@ def main():
         "bf16": training_args.bf16
     }
 
-    # Generate and sign attestation (atomically written and mutually bound)
+    # Generate and sign attestation
     generate_dpo_attestation(
         script_path=Path(__file__).resolve(),
         dataset_path=dataset_path,
@@ -433,19 +513,43 @@ def main():
         manifest_sha256=manifest_sha256
     )
 
-    # Final release-bundle digest verification
+    # Compute complete final release-bundle digest of checkpoint directory
     final_bundle_hash, final_bundle_files = get_model_hashes(checkpoint_dir)
-    logger.info(f"[ZKAEDI SEC] Final release-bundle digest computed: {final_bundle_hash}")
+    
+    # REL-02: Write detached release receipt outside checkpoint_dir
+    receipt_data = {
+        "artifact": "checkpoint",
+        "bundle_sha256": final_bundle_hash,
+        "files": final_bundle_files,
+        "attestation_id": attestation_id,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    receipt_path = output_dir / "release_receipt.json"
+    write_atomic_json(receipt_path, receipt_data)
+    logger.info(f"[ZKAEDI SEC] Detached release receipt written atomically to: {receipt_path}")
+    
+    # Sign the detached receipt if private key is active
+    if attestation_key:
+        from zkaedi_model_registry import sign_registry
+        try:
+            receipt_sig = sign_registry(receipt_data, attestation_key, password=pwd)
+            receipt_sig_path = receipt_path.with_suffix(receipt_path.suffix + ".sig")
+            write_atomic_binary(receipt_sig_path, receipt_sig)
+            logger.info(f"[ZKAEDI SEC] Detached release receipt signed: {receipt_sig_path}")
+        except Exception as e:
+            logger.error(f"Failed to sign detached release receipt: {e}")
+            sys.exit(1)
 
     if args.register:
         try:
             from zkaedi_model_registry import register_model
             reg_name = args.adapter_name or checkpoint_dir.name
+            reg_desc = f"DPO {artifact_type} trained on dataset {dataset_path.name}. Release receipt bundle hash: {final_bundle_hash}"
             register_model(
                 model_name=reg_name,
                 model_path=str(checkpoint_dir),
                 author="DPO Training Engine",
-                description=f"DPO adapter trained on dataset {dataset_path.name}",
+                description=reg_desc,
                 sign=args.sign,
                 private_key_path=args.private_key,
                 password=pwd
