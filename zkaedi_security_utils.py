@@ -220,27 +220,30 @@ def safe_quantize_model(
     model, tokenizer = load_model_hardened(model_path)
 
     # 2. Validate output path
-    output_path = validate_safe_path(output_dir, must_exist=False, description="quantized model output")
+    output_path = validate_safe_path(output_dir, must_exist=False, description="quantized output")
     output_path.mkdir(parents=True, exist_ok=True)
 
     try:
         import bitsandbytes as bnb
-        from bitsandbytes.nn import Linear8bitLt, Linear4bit
     except ImportError:
         raise ImportError(
             "[ZKAEDI SEC] bitsandbytes is not installed. "
             "Install with: pip install bitsandbytes"
         )
 
-    # 3. Quantization logic
-    if bits == 8:
-        print("[ZKAEDI SEC] Applying 8-bit quantization (Linear8bitLt)...")
-        quantized_model = _replace_with_8bit(model)
-    elif bits == 4:
-        print("[ZKAEDI SEC] Applying 4-bit quantization (Linear4bit)...")
-        quantized_model = _replace_with_4bit(model)
-    else:
-        raise ValueError(f"[ZKAEDI SEC] Unsupported bits value: {bits}. Use 4 or 8.")
+    # 3. Quantization logic with robust try/except
+    try:
+        if bits == 8:
+            print("[ZKAEDI SEC] Applying 8-bit quantization (Linear8bitLt)...")
+            quantized_model = _replace_with_8bit(model)
+        elif bits == 4:
+            print("[ZKAEDI SEC] Applying 4-bit quantization (Linear4bit)...")
+            quantized_model = _replace_with_4bit(model)
+        else:
+            raise ValueError(f"Unsupported bits value: {bits}. Use 4 or 8.")
+    except Exception as e:
+        print(f"[ZKAEDI SEC] Quantization failed: {e}", file=sys.stderr)
+        raise
 
     # 4. Move to target device if requested
     if device == "auto":
@@ -257,8 +260,9 @@ def safe_quantize_model(
     with open(output_path / "quantization_provenance.json", "w") as f:
         json.dump(provenance, f, indent=2)
 
-    print(f"[ZKAEDI SEC] Quantization complete. Model saved to: {output_path}")
+    print(f"[ZKAEDI SEC] Quantization complete → {output_path}")
     return output_path
+
 
 
 def _replace_with_8bit(model: torch.nn.Module) -> torch.nn.Module:
