@@ -13,57 +13,12 @@ import torch
 import pandas as pd
 
 
-try:
-    from transformers import __version__ as TRANSFORMERS_VERSION
-    from packaging import version
-    if version.parse(TRANSFORMERS_VERSION) < version.parse("5.3.0"):
-        print("[ZKAEDI SEC] FATAL: transformers version < 5.3.0 detected. CVE-2026-4372 RCE risk. Upgrade immediately.", file=sys.stderr)
-        sys.exit(2)
-except ImportError:
-    TRANSFORMERS_VERSION = "unknown"
+from zkaedi_security_utils import (
+    validate_safe_path,
+    load_model_hardened,
+    scan_for_known_cves,
+)
 
-SAFE_BASE_DIR = Path("/mnt/h")
-
-def validate_safe_path(user_path: str, description: str = "path", must_exist: bool = False) -> Path:
-    try:
-        p = Path(user_path).expanduser().resolve(strict=False)
-    except Exception as e:
-        raise ValueError(f"Invalid {description}: {e}") from e
-
-    if not p.is_absolute():
-        p = (Path.cwd() / p).resolve(strict=False)
-
-    if not str(p).startswith(str(SAFE_BASE_DIR.resolve())):
-        raise ValueError(f"[ZKAEDI SEC] Path traversal / unsafe location blocked for {description}")
-
-    if must_exist and not p.exists():
-        raise FileNotFoundError(f"Required {description} does not exist: {p}")
-
-    return p
-
-def load_model_hardened(model_name_or_path: str, revision: str = "main"):
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-    model_load_kwargs = {
-        "trust_remote_code": False,
-        "use_safetensors": True,
-    }
-
-    p = Path(model_name_or_path)
-    if p.exists() or "/" in model_name_or_path or "\\" in model_name_or_path:
-        model_load_kwargs.pop("revision", None)
-    else:
-        model_load_kwargs["revision"] = revision
-
-    try:
-        model = AutoModelForCausalLM.from_pretrained(model_name_or_path, **model_load_kwargs)
-        tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=False)
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-        model.eval()
-        return model, tokenizer
-    except Exception as e:
-        print(f"[ZKAEDI SEC] Hardened model load FAILED: {type(e).__name__}", file=sys.stderr)
-        raise
 
 
 def is_finite(val):
@@ -313,7 +268,9 @@ def recompute_eval_metrics(model_path, base_model, dataset_path, split_manifest_
     }
 
 def main():
+    scan_for_known_cves()
     parser = argparse.ArgumentParser(description="Hardened DPO Validator")
+
     parser.add_argument("state_path", help="Path to trainer_state.json")
     parser.add_argument("--out", default="validate_verdict.json", help="Path to output verdict JSON file")
     parser.add_argument("--min-eval-records", type=int, default=3, help="Minimum evaluation records required")
@@ -333,11 +290,12 @@ def main():
     
     # === SECURITY: Path validation (fail-closed) ===
     try:
-        args.dataset_path = str(validate_safe_path(args.dataset_path, "dataset", must_exist=True))
+        args.dataset_path = str(validate_safe_path(args.dataset_path, description="dataset", must_exist=True))
         if args.model_path:
-            args.model_path = str(validate_safe_path(args.model_path, "model checkpoint", must_exist=True))
+            args.model_path = str(validate_safe_path(args.model_path, description="model checkpoint", must_exist=True))
         if args.split_manifest and args.split_manifest != "UNKNOWN":
-            args.split_manifest = str(validate_safe_path(args.split_manifest, "split manifest", must_exist=True))
+            args.split_manifest = str(validate_safe_path(args.split_manifest, description="split manifest", must_exist=True))
+
     except (ValueError, FileNotFoundError) as e:
         print(f"[ZKAEDI SEC] SECURITY BLOCK: {e}")
         sys.exit(1)

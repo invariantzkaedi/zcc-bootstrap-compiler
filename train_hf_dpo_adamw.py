@@ -32,19 +32,16 @@ from typing import Optional
 
 import torch
 from datasets import load_dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer
-
-# Attempt import; fail fast if vulnerable version detected at runtime
-try:
-    from transformers import __version__ as TRANSFORMERS_VERSION
-    from packaging import version
-    if version.parse(TRANSFORMERS_VERSION) < version.parse("5.3.0"):
-        print("[ZKAEDI SEC] FATAL: transformers version < 5.3.0 detected. CVE-2026-4372 RCE risk. Upgrade immediately.", file=sys.stderr)
-        sys.exit(2)
-except ImportError:
-    TRANSFORMERS_VERSION = "unknown"
+from transformers import AutoModelForCausalLM, AutoTokenizer, __version__ as TRANSFORMERS_VERSION
 
 from trl import DPOTrainer, DPOConfig
+from zkaedi_security_utils import (
+    validate_safe_path,
+
+    load_model_hardened,
+    scan_for_known_cves,
+)
+
 
 # Configure secure logging (no secrets, redact paths in prod)
 logging.basicConfig(
@@ -54,32 +51,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("zkaedi_dpo_hardened")
 
-SAFE_BASE_DIR = Path("/mnt/h")  # Adjust for your ZKAEDI mount / sovereign storage root
-# For broader compatibility, you can pass --safe-base-dir or read from env ZKAEDI_SAFE_BASE
 
-
-def validate_safe_path(user_path: str, description: str = "path", must_exist: bool = False) -> Path:
-    """
-    Security: Prevent path traversal and enforce allow-listed base directory.
-    Raises ValueError on violation (fail-closed).
-    """
-    try:
-        p = Path(user_path).expanduser().resolve(strict=False)
-    except Exception as e:
-        raise ValueError(f"Invalid {description}: {e}") from e
-
-    if not p.is_absolute():
-        p = (Path.cwd() / p).resolve(strict=False)
-
-    # Enforce within safe base (customize per ZKAEDI node policy)
-    if not str(p).startswith(str(SAFE_BASE_DIR.resolve())):
-        logger.error(f"SECURITY VIOLATION: {description} '{user_path}' resolved outside safe base {SAFE_BASE_DIR}")
-        raise ValueError(f"Path traversal / unsafe location blocked for {description}")
-
-    if must_exist and not p.exists():
-        raise FileNotFoundError(f"Required {description} does not exist: {p}")
-
-    return p
 
 
 def format_dpo(sample):
@@ -95,7 +67,9 @@ def format_dpo(sample):
 
 
 def main():
+    scan_for_known_cves()
     parser = argparse.ArgumentParser(
+
         description="ZKAEDI PRIME Hardened AdamW HF DPO Training Engine (CVE-2026-4372 mitigated)",
         epilog="Run only with verified local models or pinned HF revisions after transformers>=5.3.0 upgrade."
     )
@@ -120,9 +94,10 @@ def main():
 
     # === SECURITY: Path validation (fail-closed) ===
     try:
-        dataset_path = validate_safe_path(dataset_path, "dataset", must_exist=True)
-        output_dir = validate_safe_path(output_path, "output-dir", must_exist=False)
+        dataset_path = validate_safe_path(dataset_path, description="dataset", must_exist=True)
+        output_dir = validate_safe_path(output_path, description="output-dir", must_exist=False)
         output_dir.mkdir(parents=True, exist_ok=True)
+
     except (ValueError, FileNotFoundError) as e:
         logger.error(f"SECURITY BLOCK: {e}")
         sys.exit(1)
@@ -160,27 +135,12 @@ def main():
 
     # === CRITICAL SECURITY: Model loading with CVE-2026-4372 mitigations ===
     logger.info("[ZKAEDI SEC] Loading model with hardened parameters (trust_remote_code=False, revision pinned, safetensors)...")
-    model_load_kwargs = {
-        "trust_remote_code": False,      # Defense-in-depth (CVE still requires >=5.3.0)
-        "use_safetensors": True,         # Prefer safe format, avoid pickle risks
-        "revision": args.model_revision, # Pin for reproducibility & supply chain integrity
-        # torch_dtype=torch.float16,     # Uncomment for GPU; keep default for CPU
-        # device_map="cpu",              # Explicit if needed beyond use_cpu in trainer
-    }
-
-    # If model_name looks like local path (contains / or exists), treat as local to avoid any HF Hub call
-    model_name_or_path = args.model_name
-    if "/" in model_name_or_path or Path(model_name_or_path).exists():
-        logger.info("[ZKAEDI SEC] Detected local model path - bypassing HF Hub entirely (sovereign best practice)")
-        model_load_kwargs.pop("revision", None)  # revision irrelevant for local
-
     try:
-        model = AutoModelForCausalLM.from_pretrained(model_name_or_path, **model_load_kwargs)
-        tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=False)
-        tokenizer.pad_token = tokenizer.eos_token
+        model, tokenizer = load_model_hardened(args.model_name, revision=args.model_revision)
     except Exception as e:
-        logger.error(f"Model load FAILED. Possible vulnerable transformers, poisoned repo, or missing local files: {type(e).__name__}")
+        logger.error(f"Model load FAILED: {type(e).__name__}")
         sys.exit(1)
+
 
     logger.info("[ZKAEDI SEC] Constructing DPOConfig (AdamW + hardened defaults)...")
     training_args = DPOConfig(
