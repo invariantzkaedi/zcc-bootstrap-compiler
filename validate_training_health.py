@@ -294,7 +294,7 @@ def main():
         if args.model_path:
             args.model_path = str(validate_safe_path(args.model_path, description="model checkpoint", must_exist=True))
         if args.split_manifest and args.split_manifest != "UNKNOWN":
-            args.split_manifest = str(validate_safe_path(args.split_manifest, description="split manifest", must_exist=True))
+            args.split_manifest = str(validate_safe_path(args.split_manifest, description="split manifest", must_exist=False))
 
     except (ValueError, FileNotFoundError) as e:
         print(f"[ZKAEDI SEC] SECURITY BLOCK: {e}")
