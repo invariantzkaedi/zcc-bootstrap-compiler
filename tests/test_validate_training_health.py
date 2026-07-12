@@ -55,7 +55,9 @@ class TestValidatorHardening(unittest.TestCase):
         if args:
             cmd.extend(args)
             
-        res = subprocess.run(cmd, capture_output=True, text=True)
+        env = os.environ.copy()
+        env["ZKAEDI_SAFE_BASE"] = "/"
+        res = subprocess.run(cmd, capture_output=True, text=True, env=env)
         
         # Try to read verdict
         verdict = None
