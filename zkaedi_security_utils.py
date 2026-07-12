@@ -112,7 +112,7 @@ def load_model_hardened(
     """
     if enforce_allow_list:
         from zkaedi_model_registry import is_model_allowed, verify_model_integrity
-        resolved_pubkey_path = os.environ.get("ZKAEDI_REGISTRY_PUBKEY") or public_key_path
+        resolved_pubkey_path = public_key_path or os.environ.get("ZKAEDI_REGISTRY_PUBKEY")
         req_verify_sig = not allow_unsigned_registry
         if req_verify_sig and not resolved_pubkey_path:
             raise ValueError("public_key_path must be provided or ZKAEDI_REGISTRY_PUBKEY set when allow_unsigned_registry is False")
@@ -420,7 +420,7 @@ def load_gptq_model_hardened(
 
     if enforce_allow_list:
         from zkaedi_model_registry import verify_model_integrity
-        resolved_pubkey_path = os.environ.get("ZKAEDI_REGISTRY_PUBKEY") or public_key_path
+        resolved_pubkey_path = public_key_path or os.environ.get("ZKAEDI_REGISTRY_PUBKEY")
         req_verify_sig = not allow_unsigned_registry
         if req_verify_sig and not resolved_pubkey_path:
             raise ValueError("public_key_path must be provided or ZKAEDI_REGISTRY_PUBKEY set when allow_unsigned_registry is False")

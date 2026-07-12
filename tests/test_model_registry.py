@@ -1,7 +1,7 @@
 import os
 import sys
 import time
-
+import socket
 import json
 import shutil
 import tempfile
@@ -345,7 +345,7 @@ class TestModelRegistry(unittest.TestCase):
         # Write stale lock data with a demonstrably dead PID on the same host
         stale_data = {
             "pid": 999999, # Dead PID
-            "hostname": sys.modules['socket'].gethostname(),
+            "hostname": socket.gethostname(),
             "owner_token": "deadtoken",
             "acquired_at": time.time(),
             "lease_duration": 15.0
@@ -676,7 +676,7 @@ class TestModelRegistry(unittest.TestCase):
         # Create a lock file owned by a live PID (ours) with expired lease
         lock_data = {
             "pid": os.getpid(),
-            "hostname": sys.modules["socket"].gethostname(),
+            "hostname": socket.gethostname(),
             "owner_token": "some-token",
             "acquired_at": time.time() - 100.0,
             "lease_duration": 10.0
@@ -689,7 +689,7 @@ class TestModelRegistry(unittest.TestCase):
         with self.assertRaises(TimeoutError):
             with lock:
                 pass
-
+ 
     def test_stale_lock_deletion_race(self):
         db_dir = reg._get_db_dir()
         db_dir.mkdir(parents=True, exist_ok=True)
@@ -698,7 +698,7 @@ class TestModelRegistry(unittest.TestCase):
         # Setup lock that looks stale (dead PID on same host)
         lock_data = {
             "pid": 999999,  # hopefully dead PID
-            "hostname": sys.modules["socket"].gethostname(),
+            "hostname": socket.gethostname(),
             "owner_token": "stale-token",
             "acquired_at": time.time(),
             "lease_duration": 15.0
@@ -780,6 +780,20 @@ class TestModelRegistry(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             verify_release_receipt(bad_receipt, pub_key, safe_base=trusted_base)
         self.assertIn("escapes trusted safe base", str(ctx.exception))
+
+    def test_signed_write_succeeds_on_valid_state(self):
+        priv = os.path.join(self.test_dir, "pk.pem")
+        pub = os.path.join(self.test_dir, "pub.pem")
+        reg.generate_ed25519_keypair(priv, pub)
+        model_dir = Path(self.test_dir) / "m"
+        model_dir.mkdir()
+        (model_dir / "model.safetensors").write_text("weights")
+        reg.register_model("m1", str(model_dir), sign=True, private_key_path=priv)
+        
+        # Second signed write over untampered state MUST succeed
+        reg.register_model("m2", str(model_dir), sign=True, private_key_path=priv)
+        loaded = reg.load_registry(verify_signature=True, public_key_path=pub)
+        self.assertIn("m2", loaded["models"])
 
 
 if __name__ == "__main__":

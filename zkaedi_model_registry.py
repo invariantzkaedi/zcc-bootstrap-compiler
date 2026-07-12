@@ -175,7 +175,7 @@ def _get_signature_path(registry_path: Path) -> Path:
     return registry_path.with_suffix(registry_path.suffix + ".sig")
 
 
-def load_registry(verify_signature: bool = False, public_key_path: Optional[str] = None) -> Dict[str, Any]:
+def load_registry(verify_signature: bool = False, public_key_path: Optional[str | bytes | Any] = None) -> Dict[str, Any]:
     """Loads the model registry database. Optionally verifies its Ed25519 signature."""
     reg_path = get_registry_path()
     db_dir = _get_db_dir()
@@ -598,7 +598,11 @@ def sign_registry(data: Dict[str, Any], private_key_path: str, password: Optiona
     return private_key.sign(canonical_json)
 
 
-def verify_registry_signature(data: Dict[str, Any], signature: bytes, public_key_path: str) -> bool:
+def verify_registry_signature(
+    data: Dict[str, Any],
+    signature: bytes,
+    public_key_path: str | bytes | ed25519.Ed25519PublicKey,
+) -> bool:
     """Verifies the registry signature using Ed25519."""
     try:
         from cryptography.hazmat.primitives import serialization
@@ -609,9 +613,14 @@ def verify_registry_signature(data: Dict[str, Any], signature: bytes, public_key
 
     canonical_json = json.dumps(data, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
-    pub_path = validate_safe_path(public_key_path, must_exist=True, description="public key path")
-    with open(pub_path, "rb") as f:
-        public_key = serialization.load_pem_public_key(f.read())
+    if isinstance(public_key_path, ed25519.Ed25519PublicKey):
+        public_key = public_key_path
+    elif isinstance(public_key_path, bytes):
+        public_key = serialization.load_pem_public_key(public_key_path)
+    else:
+        pub_path = validate_safe_path(public_key_path, must_exist=True, description="public key path")
+        with open(pub_path, "rb") as f:
+            public_key = serialization.load_pem_public_key(f.read())
 
     if not isinstance(public_key, ed25519.Ed25519PublicKey):
         raise ValueError("[ZKAEDI REG] Public key must be an Ed25519 key.")
@@ -659,8 +668,6 @@ def register_model(
             current_file = db_dir / "current"
             if current_file.exists():
                 from cryptography.hazmat.primitives import serialization
-                import tempfile
-                import os
                 
                 priv_path = validate_safe_path(private_key_path, must_exist=True, description="private key path")
                 password_bytes = password.encode("utf-8") if password else None
@@ -668,24 +675,10 @@ def register_model(
                     private_key = serialization.load_pem_private_key(f.read(), password=password_bytes)
                 public_key = private_key.public_key()
                 
-                with tempfile.NamedTemporaryFile("wb", delete=False) as tmp_pub_file:
-                    tmp_pub_file.write(
-                        public_key.public_bytes(
-                            encoding=serialization.Encoding.PEM,
-                            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-                        )
-                    )
-                    tmp_pub_path = tmp_pub_file.name
-                    
                 try:
-                    registry_data = load_registry(verify_signature=True, public_key_path=tmp_pub_path)
+                    registry_data = load_registry(verify_signature=True, public_key_path=public_key)
                 except Exception as e:
                     raise ValueError(f"Refusing to sign over unverified registry state: {e}")
-                finally:
-                    try:
-                        os.unlink(tmp_pub_path)
-                    except Exception:
-                        pass
             else:
                 registry_data = load_registry()
         else:
@@ -729,8 +722,6 @@ def deregister_model(
             current_file = db_dir / "current"
             if current_file.exists():
                 from cryptography.hazmat.primitives import serialization
-                import tempfile
-                import os
                 
                 priv_path = validate_safe_path(private_key_path, must_exist=True, description="private key path")
                 password_bytes = password.encode("utf-8") if password else None
@@ -738,24 +729,10 @@ def deregister_model(
                     private_key = serialization.load_pem_private_key(f.read(), password=password_bytes)
                 public_key = private_key.public_key()
                 
-                with tempfile.NamedTemporaryFile("wb", delete=False) as tmp_pub_file:
-                    tmp_pub_file.write(
-                        public_key.public_bytes(
-                            encoding=serialization.Encoding.PEM,
-                            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-                        )
-                    )
-                    tmp_pub_path = tmp_pub_file.name
-                    
                 try:
-                    registry_data = load_registry(verify_signature=True, public_key_path=tmp_pub_path)
+                    registry_data = load_registry(verify_signature=True, public_key_path=public_key)
                 except Exception as e:
                     raise ValueError(f"Refusing to sign over unverified registry state: {e}")
-                finally:
-                    try:
-                        os.unlink(tmp_pub_path)
-                    except Exception:
-                        pass
             else:
                 registry_data = load_registry()
         else:
