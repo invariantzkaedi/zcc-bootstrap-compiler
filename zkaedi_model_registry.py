@@ -22,38 +22,135 @@ from zkaedi_security_utils import validate_safe_path
 
 import time
 
+def is_pid_alive(pid: int) -> bool:
+    """Checks if a process with the given PID is currently running."""
+    if pid <= 0:
+        return False
+    import os
+    import sys
+    try:
+        if sys.platform != "win32":
+            os.kill(pid, 0)
+            return True
+        else:
+            import ctypes
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+            if handle:
+                ctypes.windll.kernel32.CloseHandle(handle)
+                return True
+            return False
+    except OSError:
+        return False
+
+
 class RegistryLock:
     def __init__(self, lock_path: Path, timeout: float = 10.0):
+        import uuid
         self.lock_path = lock_path
         self.timeout = timeout
         self.acquired = False
+        self.owner_token = uuid.uuid4().hex
         
     def __enter__(self):
         import os
+        import socket
+        import json
+        
+        lock_dir = self.lock_path.parent
+        lock_dir.mkdir(parents=True, exist_ok=True)
+        
         start_time = time.time()
+        lease_duration = 15.0
+        
+        my_lock_data = {
+            "pid": os.getpid(),
+            "hostname": socket.gethostname(),
+            "owner_token": self.owner_token,
+            "acquired_at": time.time(),
+            "lease_duration": lease_duration
+        }
+        
         while time.time() - start_time < self.timeout:
             try:
-                # Attempt to create the lock file exclusively
+                # Attempt to create lock exclusively
                 fd = os.open(self.lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-                os.close(fd)
+                try:
+                    with os.fdopen(fd, "w", encoding="utf-8") as f:
+                        json.dump(my_lock_data, f)
+                except Exception as e:
+                    try:
+                        os.unlink(self.lock_path)
+                    except Exception:
+                        pass
+                    raise e
                 self.acquired = True
                 return self
             except FileExistsError:
+                # Check for stale lock
+                try:
+                    with open(self.lock_path, "r", encoding="utf-8") as f:
+                        lock_data = json.load(f)
+                    
+                    pid = lock_data.get("pid", 0)
+                    hostname = lock_data.get("hostname", "")
+                    acquired_at = lock_data.get("acquired_at", 0.0)
+                    duration = lock_data.get("lease_duration", lease_duration)
+                    
+                    is_stale_pid = (hostname == socket.gethostname() and not is_pid_alive(pid))
+                    is_lease_expired = (time.time() > acquired_at + duration)
+                    
+                    if is_stale_pid or is_lease_expired:
+                        try:
+                            os.unlink(self.lock_path)
+                            time.sleep(0.02)
+                            continue
+                        except Exception:
+                            pass
+                except Exception:
+                    # Handle partially-written / corrupt lock files
+                    try:
+                        st = os.stat(self.lock_path)
+                        if time.time() - st.st_mtime > 2.0:
+                            try:
+                                os.unlink(self.lock_path)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+                
                 time.sleep(0.05)
-        raise TimeoutError("Failed to acquire registry write lock within timeout")
+        raise TimeoutError(f"Failed to acquire registry write lock within {self.timeout}s")
         
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.acquired:
+            import json
             try:
-                self.lock_path.unlink(missing_ok=True)
+                if self.lock_path.exists():
+                    try:
+                        with open(self.lock_path, "r", encoding="utf-8") as f:
+                            lock_data = json.load(f)
+                        if lock_data.get("owner_token") == self.owner_token:
+                            self.lock_path.unlink(missing_ok=True)
+                    except Exception:
+                        self.lock_path.unlink(missing_ok=True)
             except Exception:
                 pass
+            self.acquired = False
 
 
 def get_registry_path() -> Path:
     """Locate the centralized registry file path under validated safe bases."""
     registry_file = Path(__file__).resolve().parent / "zkaedi_model_registry.json"
     return validate_safe_path(str(registry_file), must_exist=False, description="model registry database")
+
+
+def _get_db_dir() -> Path:
+    """Resolve directory-based database location matching registry path."""
+    path = get_registry_path()
+    if path.suffix == ".json":
+        return path.with_name(path.stem)
+    return path
 
 
 def _get_signature_path(registry_path: Path) -> Path:
@@ -64,98 +161,159 @@ def _get_signature_path(registry_path: Path) -> Path:
 def load_registry(verify_signature: bool = False, public_key_path: Optional[str] = None) -> Dict[str, Any]:
     """Loads the model registry database. Optionally verifies its Ed25519 signature."""
     reg_path = get_registry_path()
-    if not reg_path.exists():
+    db_dir = _get_db_dir()
+    
+    current_file = db_dir / "current"
+    generations_dir = db_dir / "generations"
+    
+    if not current_file.exists():
+        # Fallback migration path from old flat JSON file
+        if reg_path.exists() and reg_path.is_file():
+            try:
+                with open(reg_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                return data
+            except Exception:
+                pass
         return {"models": {}, "generation": 0}
-
-    # Load with retry logic to avoid race conditions (SEC-11)
-    for attempt in range(3):
+        
+    lock_path = db_dir / "write.lock"
+    
+    for attempt in range(5):
         try:
-            with open(reg_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if "models" not in data:
-                    data["models"] = {}
-                if "generation" not in data:
-                    data["generation"] = 0
+            gen_id_str = current_file.read_text(encoding="utf-8").strip()
+            gen_json_path = generations_dir / f"{gen_id_str}.json"
+            gen_sig_path = generations_dir / f"{gen_id_str}.sig"
             
+            if not gen_json_path.exists():
+                raise FileNotFoundError(f"Generation JSON file not found: {gen_json_path}")
+                
+            with open(gen_json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                
+            if "models" not in data:
+                data["models"] = {}
+            if "generation" not in data:
+                data["generation"] = int(gen_id_str)
+                
             if verify_signature:
                 if not public_key_path:
                     raise ValueError("[ZKAEDI REG] public_key_path is required when verify_signature=True")
-
-                sig_path = _get_signature_path(reg_path)
-                if not sig_path.exists():
-                    raise FileNotFoundError(f"[ZKAEDI REG] Signature file not found: {sig_path}")
-
-                with open(sig_path, "rb") as f:
+                if not gen_sig_path.exists():
+                    raise FileNotFoundError(f"[ZKAEDI REG] Signature file not found: {gen_sig_path}")
+                with open(gen_sig_path, "rb") as f:
                     signature = f.read()
-
                 if not verify_registry_signature(data, signature, public_key_path):
                     raise ValueError("[ZKAEDI REG] Registry signature verification failed!")
-
-                print("[ZKAEDI REG] Registry signature verified successfully.")
+                    
             return data
+            
+        except (json.JSONDecodeError, FileNotFoundError) as e:
+            if lock_path.exists() and attempt < 4:
+                time.sleep(0.05)
+                continue
+            raise e
         except Exception as e:
-            if attempt == 2:
-                # Raise on third failure (fail-closed)
-                raise e
-            time.sleep(0.05)
-
+            raise e
+            
     return {"models": {}, "generation": 0}
 
 
-def save_registry(
+def _save_registry_unlocked(
     data: Dict[str, Any],
     sign: bool = False,
     private_key_path: Optional[str] = None,
     password: Optional[str] = None,
 ) -> None:
-    """Saves the model registry database atomically with staging and cleanup."""
+    """Saves the model registry database using immutable generations layout."""
     import tempfile
     import os
-    reg_path = get_registry_path()
-    parent = reg_path.parent
-    validate_safe_path(str(parent), must_exist=True, description="registry parent directory")
     
-    temp_reg_path = None
+    db_dir = _get_db_dir()
+    db_dir.mkdir(parents=True, exist_ok=True)
+    
+    generations_dir = db_dir / "generations"
+    generations_dir.mkdir(parents=True, exist_ok=True)
+    
+    current_file = db_dir / "current"
+    current_gen = 0
+    if current_file.exists():
+        try:
+            current_gen = int(current_file.read_text(encoding="utf-8").strip())
+        except Exception:
+            pass
+            
+    next_gen = current_gen + 1
+    data["generation"] = next_gen
+    
+    gen_json_path = generations_dir / f"{next_gen}.json"
+    gen_sig_path = generations_dir / f"{next_gen}.sig"
+    
+    temp_json_path = None
     temp_sig_path = None
-    sig_path = _get_signature_path(reg_path)
     
     try:
-        # Write JSON to temporary file
-        with tempfile.NamedTemporaryFile("w", dir=str(parent), delete=False, encoding="utf-8") as f:
-            temp_reg_path = Path(f.name)
+        with tempfile.NamedTemporaryFile("w", dir=str(generations_dir), delete=False, encoding="utf-8") as f:
+            temp_json_path = Path(f.name)
             json.dump(data, f, indent=2)
             f.flush()
             os.fsync(f.fileno())
             
-        # Write signature to temporary file if signing is requested
         if sign:
             if not private_key_path:
                 raise ValueError("[ZKAEDI REG] private_key_path is required when sign=True")
             signature = sign_registry(data, private_key_path, password=password)
-            with tempfile.NamedTemporaryFile("wb", dir=str(parent), delete=False) as f:
+            with tempfile.NamedTemporaryFile("wb", dir=str(generations_dir), delete=False) as f:
                 temp_sig_path = Path(f.name)
                 f.write(signature)
                 f.flush()
                 os.fsync(f.fileno())
                 
-        # Perform atomic replacements
-        os.replace(temp_reg_path, reg_path)
-        temp_reg_path = None
+        os.replace(temp_json_path, gen_json_path)
+        temp_json_path = None
         
         if sign:
-            os.replace(temp_sig_path, sig_path)
+            os.replace(temp_sig_path, gen_sig_path)
             temp_sig_path = None
-            print(f"[ZKAEDI REG] Registry signed and saved to {sig_path}")
         else:
-            # Atomic signature removal for unsigned registry saves (SEC-12)
             try:
-                sig_path.unlink(missing_ok=True)
+                gen_sig_path.unlink(missing_ok=True)
             except Exception:
                 pass
-            
-        # Best-effort directory fsync
+                
+        temp_current_path = None
         try:
-            dir_fd = os.open(str(parent), os.O_RDONLY)
+            with tempfile.NamedTemporaryFile("w", dir=str(db_dir), delete=False, encoding="utf-8") as f:
+                temp_current_path = Path(f.name)
+                f.write(f"{next_gen}\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_current_path, current_file)
+            temp_current_path = None
+        finally:
+            if temp_current_path is not None and temp_current_path.exists():
+                temp_current_path.unlink(missing_ok=True)
+                
+        try:
+            get_registry_path().unlink(missing_ok=True)
+            _get_signature_path(get_registry_path()).unlink(missing_ok=True)
+        except Exception:
+            pass
+            
+        try:
+            for filepath in generations_dir.glob("*"):
+                try:
+                    name_stem = filepath.stem
+                    gen_num = int(name_stem)
+                    if gen_num < next_gen - 4:
+                        filepath.unlink(missing_ok=True)
+                except ValueError:
+                    pass
+        except Exception:
+            pass
+            
+        try:
+            dir_fd = os.open(str(generations_dir), os.O_RDONLY)
             try:
                 os.fsync(dir_fd)
             finally:
@@ -164,10 +322,23 @@ def save_registry(
             pass
             
     finally:
-        if temp_reg_path is not None and temp_reg_path.exists():
-            temp_reg_path.unlink(missing_ok=True)
+        if temp_json_path is not None and temp_json_path.exists():
+            temp_json_path.unlink(missing_ok=True)
         if temp_sig_path is not None and temp_sig_path.exists():
             temp_sig_path.unlink(missing_ok=True)
+
+
+def save_registry(
+    data: Dict[str, Any],
+    sign: bool = False,
+    private_key_path: Optional[str] = None,
+    password: Optional[str] = None,
+) -> None:
+    """Saves the model registry database atomically with serializing write lock."""
+    db_dir = _get_db_dir()
+    lock_path = db_dir / "write.lock"
+    with RegistryLock(lock_path):
+        _save_registry_unlocked(data, sign=sign, private_key_path=private_key_path, password=password)
 
 
 # =============================================================================
@@ -350,7 +521,8 @@ def register_model(
     print(f"[ZKAEDI REG] Hashing model assets at: {validated_path}")
     combined_sha256, files_dict = get_model_hashes(validated_path)
     
-    lock_path = get_registry_path().with_suffix(".lock")
+    db_dir = _get_db_dir()
+    lock_path = db_dir / "write.lock"
     with RegistryLock(lock_path):
         registry_data = load_registry()
         
@@ -370,7 +542,7 @@ def register_model(
         }
         
         registry_data["models"][model_name] = entry
-        save_registry(registry_data, sign=sign, private_key_path=private_key_path, password=password)
+        _save_registry_unlocked(registry_data, sign=sign, private_key_path=private_key_path, password=password)
     
     print(f"[ZKAEDI REG] Successfully registered model '{model_name}' (Hash: {combined_sha256[:16]}...)")
     return entry
@@ -383,7 +555,8 @@ def deregister_model(
     password: Optional[str] = None,
 ) -> bool:
     """Removes a model entry from the registry allow-list."""
-    lock_path = get_registry_path().with_suffix(".lock")
+    db_dir = _get_db_dir()
+    lock_path = db_dir / "write.lock"
     with RegistryLock(lock_path):
         registry_data = load_registry()
         if model_name in registry_data["models"]:
@@ -392,7 +565,7 @@ def deregister_model(
             registry_data["generation"] = initial_gen + 1
             
             del registry_data["models"][model_name]
-            save_registry(registry_data, sign=sign, private_key_path=private_key_path, password=password)
+            _save_registry_unlocked(registry_data, sign=sign, private_key_path=private_key_path, password=password)
             print(f"[ZKAEDI REG] Removed model '{model_name}' from the registry.")
             return True
     return False

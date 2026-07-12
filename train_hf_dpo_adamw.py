@@ -282,22 +282,27 @@ def generate_dpo_attestation(
             raise e
 
 
-def verify_release_receipt(receipt_path: Path, public_key_path: Path) -> bool:
+def verify_release_receipt(receipt_path: Path, public_key_path: Path, safe_base: Optional[Path] = None) -> bool:
     """Verifies a detached release receipt signature, checks file digests, and validates bundle integrity (REL-03)."""
     from zkaedi_model_registry import verify_registry_signature, get_model_hashes
+    from zkaedi_security_utils import validate_safe_path
     
-    sig_path = receipt_path.with_suffix(receipt_path.suffix + ".sig")
-    if not sig_path.exists():
-        raise FileNotFoundError(f"Release receipt signature not found: {sig_path}")
-        
-    with open(receipt_path, "r", encoding="utf-8") as f:
+    # 1. Path Containment check for paths (SEC-17)
+    # Validate receipt file, public key, and signature file against safe base
+    validated_receipt = validate_safe_path(str(receipt_path), must_exist=True, description="receipt path")
+    validated_public_key = validate_safe_path(str(public_key_path), must_exist=True, description="public key path")
+    
+    sig_path = Path(str(validated_receipt) + ".sig")
+    validated_sig_path = validate_safe_path(str(sig_path), must_exist=True, description="receipt signature path")
+    
+    with open(validated_receipt, "r", encoding="utf-8") as f:
         receipt_data = json.load(f)
         
-    with open(sig_path, "rb") as f:
+    with open(validated_sig_path, "rb") as f:
         signature = f.read()
         
-    # 1. Verify signature
-    if not verify_registry_signature(receipt_data, signature, str(public_key_path)):
+    # Verify signature
+    if not verify_registry_signature(receipt_data, signature, str(validated_public_key)):
         raise ValueError("Release receipt signature verification failed")
         
     # 2. Recalculate and verify files in receipt
@@ -305,7 +310,7 @@ def verify_release_receipt(receipt_path: Path, public_key_path: Path) -> bool:
     if Path(rel_art_path).is_absolute():
         raise ValueError("Absolute artifact paths are not permitted in release receipts")
         
-    receipt_root = receipt_path.parent.resolve()
+    receipt_root = validated_receipt.parent.resolve()
     checkpoint_dir = (receipt_root / rel_art_path).resolve()
     
     try:
@@ -313,12 +318,12 @@ def verify_release_receipt(receipt_path: Path, public_key_path: Path) -> bool:
     except ValueError as exc:
         raise ValueError("Receipt artifact path escapes the release directory") from exc
         
-    if not checkpoint_dir.exists():
-        raise FileNotFoundError(f"Checkpoint directory not found: {checkpoint_dir}")
+    # Validate artifact directory against safe base
+    validated_checkpoint_dir = validate_safe_path(str(checkpoint_dir), must_exist=True, description="artifact directory")
 
         
     # 3. Recalculate file digests
-    actual_bundle_hash, actual_files = get_model_hashes(checkpoint_dir)
+    actual_bundle_hash, actual_files = get_model_hashes(validated_checkpoint_dir)
     
     # 4. Compare expected files and hashes
     expected_files = receipt_data.get("files", {})
@@ -336,7 +341,7 @@ def verify_release_receipt(receipt_path: Path, public_key_path: Path) -> bool:
         raise ValueError("Bundle aggregate hash mismatch")
         
     # 6. Cross-check attestation_id with dpo_security_attestation.json inside checkpoint (REL-03)
-    attestation_file = checkpoint_dir / "dpo_security_attestation.json"
+    attestation_file = validated_checkpoint_dir / "dpo_security_attestation.json"
     if not attestation_file.exists():
         raise FileNotFoundError(f"Attestation document not found inside checkpoint: {attestation_file}")
     with open(attestation_file, "r", encoding="utf-8") as f:

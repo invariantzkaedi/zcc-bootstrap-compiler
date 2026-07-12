@@ -1,5 +1,7 @@
 import os
 import sys
+import time
+
 import json
 import shutil
 import tempfile
@@ -181,7 +183,9 @@ class TestModelRegistry(unittest.TestCase):
         self.assertIn("signed-model", registry["models"])
         
         # Modify the signature file (tampering)
-        sig_path = reg._get_signature_path(reg.get_registry_path())
+        db_dir = reg._get_db_dir()
+        gen_id = (db_dir / "current").read_text(encoding="utf-8").strip()
+        sig_path = db_dir / "generations" / f"{gen_id}.sig"
         with open(sig_path, "wb") as f:
             f.write(b"invalid signature bytes")
             
@@ -321,6 +325,136 @@ class TestModelRegistry(unittest.TestCase):
         load_model_hardened(str(model_dir), enforce_allow_list=True)
         mock_model.from_pretrained.assert_called_once()
         mock_tokenizer.from_pretrained.assert_called_once()
+
+    def test_lock_timeout_behavior(self):
+        # Acquire lock once manually
+        lock_path = Path(self.test_dir) / "test.lock"
+        lock1 = reg.RegistryLock(lock_path)
+        lock1.__enter__()
+        
+        # Second lock attempt should timeout
+        lock2 = reg.RegistryLock(lock_path, timeout=0.1)
+        with self.assertRaises(TimeoutError):
+            lock2.__enter__()
+            
+        lock1.__exit__(None, None, None)
+
+    def test_stale_lock_recovery_dead_pid(self):
+        import json
+        lock_path = Path(self.test_dir) / "stale.lock"
+        # Write stale lock data with a demonstrably dead PID on the same host
+        stale_data = {
+            "pid": 999999, # Dead PID
+            "hostname": sys.modules['socket'].gethostname(),
+            "owner_token": "deadtoken",
+            "acquired_at": time.time(),
+            "lease_duration": 15.0
+        }
+        with open(lock_path, "w", encoding="utf-8") as f:
+            json.dump(stale_data, f)
+            
+        # Reclaiming/acquiring should succeed without TimeoutError by breaking stale lock
+        lock = reg.RegistryLock(lock_path, timeout=0.5)
+        lock.__enter__()
+        self.assertTrue(lock.acquired)
+        lock.__exit__(None, None, None)
+
+    def test_stale_lock_recovery_expired_lease(self):
+        import json
+        lock_path = Path(self.test_dir) / "expired.lock"
+        # Write lock data that has expired lease duration
+        expired_data = {
+            "pid": os.getpid(),
+            "hostname": sys.modules['socket'].gethostname(),
+            "owner_token": "expiredtoken",
+            "acquired_at": time.time() - 30.0, # 30 seconds ago
+            "lease_duration": 15.0
+        }
+        with open(lock_path, "w", encoding="utf-8") as f:
+            json.dump(expired_data, f)
+            
+        # Reclaiming/acquiring should succeed without TimeoutError
+        lock = reg.RegistryLock(lock_path, timeout=0.5)
+        lock.__enter__()
+        self.assertTrue(lock.acquired)
+        lock.__exit__(None, None, None)
+
+    def test_lock_ownership_token_safety(self):
+        import json
+        lock_path = Path(self.test_dir) / "token.lock"
+        lock1 = reg.RegistryLock(lock_path)
+        lock1.__enter__()
+        
+        # Manually alter the owner_token in the lock file to simulate another process taking it
+        with open(lock_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        data["owner_token"] = "different_token"
+        with open(lock_path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+            
+        # Exiting lock1 should NOT delete the lock file because token mismatch
+        lock1.__exit__(None, None, None)
+        self.assertTrue(lock_path.exists())
+        
+        # Clean up
+        lock_path.unlink(missing_ok=True)
+
+    def test_crash_atomic_recovery_fallback(self):
+        # Verify that if a new generation JSON is written but current pointer is NOT updated (simulating crash),
+        # readers correctly read the previous valid generation.
+        db_dir = reg._get_db_dir()
+        db_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Setup initial generation 1
+        data1 = {"models": {"model1": {}}, "generation": 1}
+        reg._save_registry_unlocked(data1)
+        
+        # Stage generation 2 manually inside generations dir, but do not update "current" pointer
+        generations_dir = db_dir / "generations"
+        with open(generations_dir / "2.json", "w") as f:
+            json.dump({"models": {"model2": {}}, "generation": 2}, f)
+            
+        # Load registry should still read generation 1 (fallback)
+        loaded = reg.load_registry()
+        self.assertEqual(loaded["generation"], 1)
+        self.assertIn("model1", loaded["models"])
+        self.assertNotIn("model2", loaded["models"])
+
+    def test_concurrency_lost_updates(self):
+        # Simulate two concurrent threads/processes modifying the registry simultaneously
+        import threading
+        
+        # Create a mock model directory
+        model_dir = Path(self.test_dir) / "concurrent_model"
+        model_dir.mkdir(exist_ok=True)
+        with open(model_dir / "model.safetensors", "w") as f:
+            f.write("weights")
+            
+        def worker(worker_id):
+            reg.register_model(
+                model_name=f"worker-model-{worker_id}",
+                model_path=str(model_dir),
+                author=f"Worker {worker_id}"
+            )
+            
+        # Start concurrent threads to write simultaneously
+        threads = []
+        for i in range(5):
+            t = threading.Thread(target=worker, args=(i,))
+            threads.append(t)
+            t.start()
+            
+        for t in threads:
+            t.join()
+            
+        # Verify that all 5 models exist in the registry (no lost updates!)
+        loaded = reg.load_registry()
+        for i in range(5):
+            self.assertIn(f"worker-model-{i}", loaded["models"])
+
+
+if __name__ == "__main__":
+    unittest.main()
 
 
 
