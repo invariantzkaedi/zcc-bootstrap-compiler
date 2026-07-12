@@ -310,6 +310,101 @@ class TestDPOHardening(unittest.TestCase):
         hash_b, _ = reg.get_model_hashes(dir_b)
         self.assertNotEqual(hash_a, hash_b)
 
+    def test_release_receipt_containment_check(self):
+        # Setup a receipt with an escaping path
+        priv_key_path = os.path.join(self.test_dir, "private_key.pem")
+        pub_key_path = os.path.join(self.test_dir, "public_key.pem")
+        reg.generate_ed25519_keypair(priv_key_path, pub_key_path)
+        
+        receipt_data = {
+            "artifact": "checkpoint",
+            "relative_artifact_path": "../escaping-dir", # Escaping receipt root
+            "bundle_sha256": "hash",
+            "files": {},
+            "attestation_id": "test-uuid",
+            "timestamp": "2026-07-12T12:00:00Z"
+        }
+        receipt_path = Path(self.test_dir) / "release_receipt.json"
+        write_atomic_json(receipt_path, receipt_data)
+        
+        receipt_sig = reg.sign_registry(receipt_data, priv_key_path)
+        write_atomic_binary(receipt_path.with_suffix(receipt_path.suffix + ".sig"), receipt_sig)
+        
+        with self.assertRaises(ValueError) as ctx:
+            verify_release_receipt(receipt_path, Path(pub_key_path))
+        self.assertIn("escapes the release directory", str(ctx.exception))
+
+    def test_symlink_rejection_in_bundle(self):
+        dir_sym = Path(self.test_dir) / "dir_sym"
+        dir_sym.mkdir()
+        
+        # Create a file
+        target_file = Path(self.test_dir) / "target.txt"
+        with open(target_file, "w") as f:
+            f.write("content")
+            
+        # Create a symlink pointing to it
+        symlink_path = dir_sym / "link.txt"
+        symlink_path.symlink_to(target_file)
+        
+        with self.assertRaises(ValueError) as ctx:
+            reg.get_model_hashes(dir_sym)
+        self.assertIn("Symlink not permitted", str(ctx.exception))
+
+    @patch("train_hf_dpo_adamw.load_model_hardened")
+    @patch("train_hf_dpo_adamw.load_dataset")
+    @patch("train_hf_dpo_adamw.DPOTrainer")
+    def test_successful_release_mode_flow(self, mock_trainer, mock_dataset, mock_load_model):
+        priv_key_path = os.path.join(self.test_dir, "private_key.pem")
+        pub_key_path = os.path.join(self.test_dir, "public_key.pem")
+        reg.generate_ed25519_keypair(priv_key_path, pub_key_path)
+        
+        # Mock base model directory
+        base_dir = Path(self.test_dir) / "gpt2-base"
+        base_dir.mkdir()
+        with open(base_dir / "config.json", "w") as f:
+            f.write('{"vocab_size": 50257}')
+            
+        # Register base model in mock registry
+        reg.register_model(
+            model_name="gpt2-base",
+            model_path=str(base_dir),
+            author="Base Provider",
+            description="Verified base model",
+            sign=True,
+            private_key_path=priv_key_path
+        )
+        
+        # Setup dummy parquet dataset
+        dummy_parquet = Path(self.test_dir) / "train_maxed_validated.parquet"
+        with open(dummy_parquet, "w") as f:
+            f.write("dummy parquet content")
+            
+        # Mock loader outputs
+        mock_load_model.return_value = (MagicMock(), MagicMock())
+        mock_dataset.return_value = MagicMock()
+        
+        # Setup CLI arguments
+        with patch("sys.argv", [
+            "train_hf_dpo_adamw.py",
+            "--mode", "release",
+            "--dataset", str(dummy_parquet),
+            "--model-name", str(base_dir),
+
+            "--public-key", pub_key_path,
+            "--sign",
+            "--private-key", priv_key_path,
+            "--register",
+            "--artifact-name", "dpo-release-model",
+            "--safe-base-dir", self.test_dir,
+            "--output-dir", os.path.join(self.test_dir, "outputs")
+        ]), patch("zkaedi_model_registry.register_model") as mock_register:
+            from train_hf_dpo_adamw import main as dpo_main
+            dpo_main()
+            
+            # Assert that register_model was successfully invoked
+            mock_register.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

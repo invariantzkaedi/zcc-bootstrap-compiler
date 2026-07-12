@@ -20,6 +20,35 @@ from datetime import datetime, timezone
 
 from zkaedi_security_utils import validate_safe_path
 
+import time
+
+class RegistryLock:
+    def __init__(self, lock_path: Path, timeout: float = 10.0):
+        self.lock_path = lock_path
+        self.timeout = timeout
+        self.acquired = False
+        
+    def __enter__(self):
+        import os
+        start_time = time.time()
+        while time.time() - start_time < self.timeout:
+            try:
+                # Attempt to create the lock file exclusively
+                fd = os.open(self.lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.close(fd)
+                self.acquired = True
+                return self
+            except FileExistsError:
+                time.sleep(0.05)
+        raise TimeoutError("Failed to acquire registry write lock within timeout")
+        
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.acquired:
+            try:
+                self.lock_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+
 
 def get_registry_path() -> Path:
     """Locate the centralized registry file path under validated safe bases."""
@@ -36,34 +65,41 @@ def load_registry(verify_signature: bool = False, public_key_path: Optional[str]
     """Loads the model registry database. Optionally verifies its Ed25519 signature."""
     reg_path = get_registry_path()
     if not reg_path.exists():
-        return {"models": {}}
+        return {"models": {}, "generation": 0}
 
-    try:
-        with open(reg_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            if "models" not in data:
-                data["models"] = {}
-    except Exception:
-        # Fail-closed: return empty if corrupted/unreadable
-        return {"models": {}}
+    # Load with retry logic to avoid race conditions (SEC-11)
+    for attempt in range(3):
+        try:
+            with open(reg_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if "models" not in data:
+                    data["models"] = {}
+                if "generation" not in data:
+                    data["generation"] = 0
+            
+            if verify_signature:
+                if not public_key_path:
+                    raise ValueError("[ZKAEDI REG] public_key_path is required when verify_signature=True")
 
-    if verify_signature:
-        if not public_key_path:
-            raise ValueError("[ZKAEDI REG] public_key_path is required when verify_signature=True")
+                sig_path = _get_signature_path(reg_path)
+                if not sig_path.exists():
+                    raise FileNotFoundError(f"[ZKAEDI REG] Signature file not found: {sig_path}")
 
-        sig_path = _get_signature_path(reg_path)
-        if not sig_path.exists():
-            raise FileNotFoundError(f"[ZKAEDI REG] Signature file not found: {sig_path}")
+                with open(sig_path, "rb") as f:
+                    signature = f.read()
 
-        with open(sig_path, "rb") as f:
-            signature = f.read()
+                if not verify_registry_signature(data, signature, public_key_path):
+                    raise ValueError("[ZKAEDI REG] Registry signature verification failed!")
 
-        if not verify_registry_signature(data, signature, public_key_path):
-            raise ValueError("[ZKAEDI REG] Registry signature verification failed!")
+                print("[ZKAEDI REG] Registry signature verified successfully.")
+            return data
+        except Exception as e:
+            if attempt == 2:
+                # Raise on third failure (fail-closed)
+                raise e
+            time.sleep(0.05)
 
-        print("[ZKAEDI REG] Registry signature verified successfully.")
-
-    return data
+    return {"models": {}, "generation": 0}
 
 
 def save_registry(
@@ -110,6 +146,12 @@ def save_registry(
             os.replace(temp_sig_path, sig_path)
             temp_sig_path = None
             print(f"[ZKAEDI REG] Registry signed and saved to {sig_path}")
+        else:
+            # Atomic signature removal for unsigned registry saves (SEC-12)
+            try:
+                sig_path.unlink(missing_ok=True)
+            except Exception:
+                pass
             
         # Best-effort directory fsync
         try:
@@ -155,6 +197,11 @@ def get_model_hashes(model_path: Path) -> Tuple[str, Dict[str, str]]:
     files_hashes = {}
     combined_hasher = hashlib.sha256()
     for f in sorted(model_path.rglob("*")):
+        # Explicitly reject symlinks in release artifacts (SEC-14)
+        if f.is_symlink():
+            rel_path = f.relative_to(model_path).as_posix()
+            raise ValueError(f"Symlink not permitted in release artifact: {rel_path}")
+            
         if f.is_file():
             # Exclude provenance metadata itself to prevent circular hashing
             if f.name == "quantization_provenance.json":
@@ -303,21 +350,27 @@ def register_model(
     print(f"[ZKAEDI REG] Hashing model assets at: {validated_path}")
     combined_sha256, files_dict = get_model_hashes(validated_path)
     
-    registry_data = load_registry()
-    
-    entry = {
-        "name": model_name,
-        "path": str(validated_path),
-        "author": author,
-        "description": description,
-        "combined_sha256": combined_sha256,
-        "files": files_dict,
-        "registered_at": datetime.now(timezone.utc).isoformat(),
-        "metadata": metadata or {},
-    }
-    
-    registry_data["models"][model_name] = entry
-    save_registry(registry_data, sign=sign, private_key_path=private_key_path, password=password)
+    lock_path = get_registry_path().with_suffix(".lock")
+    with RegistryLock(lock_path):
+        registry_data = load_registry()
+        
+        # Concurrency generation increment (lost update check)
+        initial_gen = registry_data.get("generation", 0)
+        registry_data["generation"] = initial_gen + 1
+        
+        entry = {
+            "name": model_name,
+            "path": str(validated_path),
+            "author": author,
+            "description": description,
+            "combined_sha256": combined_sha256,
+            "files": files_dict,
+            "registered_at": datetime.now(timezone.utc).isoformat(),
+            "metadata": metadata or {},
+        }
+        
+        registry_data["models"][model_name] = entry
+        save_registry(registry_data, sign=sign, private_key_path=private_key_path, password=password)
     
     print(f"[ZKAEDI REG] Successfully registered model '{model_name}' (Hash: {combined_sha256[:16]}...)")
     return entry
@@ -330,12 +383,18 @@ def deregister_model(
     password: Optional[str] = None,
 ) -> bool:
     """Removes a model entry from the registry allow-list."""
-    registry_data = load_registry()
-    if model_name in registry_data["models"]:
-        del registry_data["models"][model_name]
-        save_registry(registry_data, sign=sign, private_key_path=private_key_path, password=password)
-        print(f"[ZKAEDI REG] Removed model '{model_name}' from the registry.")
-        return True
+    lock_path = get_registry_path().with_suffix(".lock")
+    with RegistryLock(lock_path):
+        registry_data = load_registry()
+        if model_name in registry_data["models"]:
+            # Concurrency generation increment
+            initial_gen = registry_data.get("generation", 0)
+            registry_data["generation"] = initial_gen + 1
+            
+            del registry_data["models"][model_name]
+            save_registry(registry_data, sign=sign, private_key_path=private_key_path, password=password)
+            print(f"[ZKAEDI REG] Removed model '{model_name}' from the registry.")
+            return True
     return False
 
 

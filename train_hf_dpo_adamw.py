@@ -302,9 +302,20 @@ def verify_release_receipt(receipt_path: Path, public_key_path: Path) -> bool:
         
     # 2. Recalculate and verify files in receipt
     rel_art_path = receipt_data.get("relative_artifact_path", "checkpoint")
-    checkpoint_dir = (receipt_path.parent / rel_art_path).resolve()
+    if Path(rel_art_path).is_absolute():
+        raise ValueError("Absolute artifact paths are not permitted in release receipts")
+        
+    receipt_root = receipt_path.parent.resolve()
+    checkpoint_dir = (receipt_root / rel_art_path).resolve()
+    
+    try:
+        checkpoint_dir.relative_to(receipt_root)
+    except ValueError as exc:
+        raise ValueError("Receipt artifact path escapes the release directory") from exc
+        
     if not checkpoint_dir.exists():
         raise FileNotFoundError(f"Checkpoint directory not found: {checkpoint_dir}")
+
         
     # 3. Recalculate file digests
     actual_bundle_hash, actual_files = get_model_hashes(checkpoint_dir)
