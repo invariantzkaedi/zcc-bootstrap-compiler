@@ -289,5 +289,39 @@ class TestModelRegistry(unittest.TestCase):
         # Verify it was added to registry allow-list
         self.assertTrue(reg.is_model_allowed("auto-registered-quantized"))
 
+    @unittest.mock.patch("zkaedi_security_utils.AutoModelForCausalLM")
+    @unittest.mock.patch("zkaedi_security_utils.AutoTokenizer")
+    def test_unregistered_model_enforce_allow_list(self, mock_tokenizer, mock_model):
+        from zkaedi_security_utils import load_model_hardened
+        
+        # Create a mock model directory
+        model_dir = Path(self.test_dir) / "unregistered_consistent_model"
+        model_dir.mkdir(exist_ok=True)
+        weights_file = model_dir / "model.safetensors"
+        with open(weights_file, "w") as f:
+            f.write("weights content")
+        config_file = model_dir / "config.json"
+        with open(config_file, "w") as f:
+            f.write('{"vocab_size": 32000}')
+            
+        # Since it is NOT in the registry, verify that load_model_hardened with enforce_allow_list=True fails
+        with self.assertRaises(ValueError) as ctx:
+            load_model_hardened(str(model_dir), enforce_allow_list=True)
+        self.assertIn("integrity verification failed", str(ctx.exception))
+        
+        # Register the model to the allow-list registry
+        reg.register_model(
+            model_name="registered-consistent-model",
+            model_path=str(model_dir),
+            author="Anunnaki-Security",
+            description="Signed testing model"
+        )
+        
+        # Verify it now passes verification and successfully loads (meaning it calls from_pretrained)
+        load_model_hardened(str(model_dir), enforce_allow_list=True)
+        mock_model.from_pretrained.assert_called_once()
+        mock_tokenizer.from_pretrained.assert_called_once()
+
+
 
 
