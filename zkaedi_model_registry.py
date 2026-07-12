@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """
 ZKAEDI PRIME Model Registry & Cryptographic Allow-list
-Version: 1.0
+Version: 1.1
 
-Manages registration, allow-list checking, and cryptographic validation
-for LLM weights and adapters in the sovereign ZKAEDI PRIME swarm.
+Manages registration, allow-list checking, cryptographic validation,
+and Ed25519 signature verification for LLM weights and adapters.
 """
 
 from __future__ import annotations
 
+import sys
 import json
 import hashlib
+import argparse
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, List
 from datetime import datetime, timezone
@@ -20,13 +22,17 @@ from zkaedi_security_utils import validate_safe_path
 
 def get_registry_path() -> Path:
     """Locate the centralized registry file path under validated safe bases."""
-    # Place registry in the same folder as this module, validated as safe
     registry_file = Path(__file__).resolve().parent / "zkaedi_model_registry.json"
     return validate_safe_path(str(registry_file), must_exist=False, description="model registry database")
 
 
-def load_registry() -> Dict[str, Any]:
-    """Loads the model registry database."""
+def _get_signature_path(registry_path: Path) -> Path:
+    """Returns the matching .sig file path for the registry."""
+    return registry_path.with_suffix(registry_path.suffix + ".sig")
+
+
+def load_registry(verify_signature: bool = False, public_key_path: Optional[str] = None) -> Dict[str, Any]:
+    """Loads the model registry database. Optionally verifies its Ed25519 signature."""
     reg_path = get_registry_path()
     if not reg_path.exists():
         return {"models": {}}
@@ -36,21 +42,55 @@ def load_registry() -> Dict[str, Any]:
             data = json.load(f)
             if "models" not in data:
                 data["models"] = {}
-            return data
     except Exception:
         # Fail-closed: return empty if corrupted/unreadable
         return {"models": {}}
 
+    if verify_signature:
+        if not public_key_path:
+            raise ValueError("[ZKAEDI REG] public_key_path is required when verify_signature=True")
 
-def save_registry(data: Dict[str, Any]) -> None:
-    """Saves the model registry database."""
+        sig_path = _get_signature_path(reg_path)
+        if not sig_path.exists():
+            raise FileNotFoundError(f"[ZKAEDI REG] Signature file not found: {sig_path}")
+
+        with open(sig_path, "rb") as f:
+            signature = f.read()
+
+        if not verify_registry_signature(data, signature, public_key_path):
+            raise ValueError("[ZKAEDI REG] Registry signature verification failed!")
+
+        print("[ZKAEDI REG] Registry signature verified successfully.")
+
+    return data
+
+
+def save_registry(
+    data: Dict[str, Any],
+    sign: bool = False,
+    private_key_path: Optional[str] = None,
+) -> None:
+    """Saves the model registry database. Optionally signs it using Ed25519."""
     reg_path = get_registry_path()
-    # Ensure parent directory is validated and exists
     validate_safe_path(str(reg_path.parent), must_exist=True, description="registry parent directory")
     
     with open(reg_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
+    if sign:
+        if not private_key_path:
+            raise ValueError("[ZKAEDI REG] private_key_path is required when sign=True")
+        
+        signature = sign_registry(data, private_key_path)
+        sig_path = _get_signature_path(reg_path)
+        with open(sig_path, "wb") as f:
+            f.write(signature)
+        print(f"[ZKAEDI REG] Registry signed and saved to {sig_path}")
+
+
+# =============================================================================
+# CRYPTOGRAPHIC UTILITIES
+# =============================================================================
 
 def get_file_sha256(file_path: Path) -> str:
     """Computes the SHA-256 hash of a single file."""
@@ -87,16 +127,114 @@ def get_model_hashes(model_path: Path) -> Tuple[str, Dict[str, str]]:
     return combined_hasher.hexdigest(), files_hashes
 
 
+# =============================================================================
+# REGISTRY SIGNING (Ed25519)
+# =============================================================================
+
+def generate_ed25519_keypair(private_key_path: str, public_key_path: str) -> None:
+    """Generates a new Ed25519 keypair for registry signing."""
+    try:
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import ed25519
+    except ImportError:
+        raise ImportError("[ZKAEDI REG] 'cryptography' package is required for keypair generation.")
+
+    private_key = ed25519.Ed25519PrivateKey.generate()
+    public_key = private_key.public_key()
+
+    # Validate key save paths
+    priv_path = validate_safe_path(private_key_path, must_exist=False, description="private key path")
+    pub_path = validate_safe_path(public_key_path, must_exist=False, description="public key path")
+
+    # Save private key
+    with open(priv_path, "wb") as f:
+        f.write(
+            private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption(),
+            )
+        )
+
+    # Save public key
+    with open(pub_path, "wb") as f:
+        f.write(
+            public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            )
+        )
+
+    print(f"[ZKAEDI REG] Ed25519 keypair generated successfully.")
+    print(f"Private key: {priv_path}")
+    print(f"Public key:  {pub_path}")
+
+
+def sign_registry(data: Dict[str, Any], private_key_path: str) -> bytes:
+    """
+    Signs the registry data using Ed25519.
+    Returns the raw signature bytes.
+    """
+    try:
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import ed25519
+    except ImportError:
+        raise ImportError("[ZKAEDI REG] 'cryptography' package is required for registry signing.")
+
+    # Canonical JSON (sorted keys for determinism)
+    canonical_json = json.dumps(data, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+    priv_path = validate_safe_path(private_key_path, must_exist=True, description="private key path")
+    with open(priv_path, "rb") as f:
+        private_key = serialization.load_pem_private_key(f.read(), password=None)
+
+    if not isinstance(private_key, ed25519.Ed25519PrivateKey):
+        raise ValueError("[ZKAEDI REG] Private key must be an Ed25519 key.")
+
+    return private_key.sign(canonical_json)
+
+
+def verify_registry_signature(data: Dict[str, Any], signature: bytes, public_key_path: str) -> bool:
+    """Verifies the registry signature using Ed25519."""
+    try:
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import ed25519
+        from cryptography.exceptions import InvalidSignature
+    except ImportError:
+        raise ImportError("[ZKAEDI REG] 'cryptography' package is required for registry verification.")
+
+    canonical_json = json.dumps(data, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+    pub_path = validate_safe_path(public_key_path, must_exist=True, description="public key path")
+    with open(pub_path, "rb") as f:
+        public_key = serialization.load_pem_public_key(f.read())
+
+    if not isinstance(public_key, ed25519.Ed25519PublicKey):
+        raise ValueError("[ZKAEDI REG] Public key must be an Ed25519 key.")
+
+    try:
+        public_key.verify(signature, canonical_json)
+        return True
+    except InvalidSignature:
+        return False
+
+
+# =============================================================================
+# REGISTRY CORE MANAGEMENT
+# =============================================================================
+
 def register_model(
     model_name: str,
     model_path: str,
     author: str = "unknown",
     description: str = "",
+    sign: bool = False,
+    private_key_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Registers a model directory or file in the allow-list registry.
     
-    Calculates cryptographic hashes and records metadata.
+    Calculates cryptographic hashes, records metadata, and optionally signs.
     """
     if not model_name or not isinstance(model_name, str):
         raise ValueError("model_name must be a non-empty string")
@@ -119,36 +257,45 @@ def register_model(
     }
     
     registry_data["models"][model_name] = entry
-    save_registry(registry_data)
+    save_registry(registry_data, sign=sign, private_key_path=private_key_path)
     
     print(f"[ZKAEDI REG] Successfully registered model '{model_name}' (Hash: {combined_sha256[:16]}...)")
     return entry
 
 
-def deregister_model(model_name: str) -> bool:
+def deregister_model(
+    model_name: str,
+    sign: bool = False,
+    private_key_path: Optional[str] = None,
+) -> bool:
     """Removes a model entry from the registry allow-list."""
     registry_data = load_registry()
     if model_name in registry_data["models"]:
         del registry_data["models"][model_name]
-        save_registry(registry_data)
+        save_registry(registry_data, sign=sign, private_key_path=private_key_path)
         print(f"[ZKAEDI REG] Removed model '{model_name}' from the registry.")
         return True
     return False
 
 
-def list_registered_models() -> Dict[str, Dict[str, Any]]:
+def list_registered_models(
+    verify_signature: bool = False,
+    public_key_path: Optional[str] = None,
+) -> Dict[str, Dict[str, Any]]:
     """Lists all registered models in the database."""
-    return load_registry().get("models", {})
+    return load_registry(verify_signature=verify_signature, public_key_path=public_key_path).get("models", {})
 
 
-def is_model_allowed(model_name_or_hash: str) -> bool:
-    """
-    Checks if a model's name or its combined SHA-256 hash is in the allow-list.
-    """
+def is_model_allowed(
+    model_name_or_hash: str,
+    verify_signature: bool = False,
+    public_key_path: Optional[str] = None,
+) -> bool:
+    """Checks if a model's name or combined SHA-256 hash is in the allow-list."""
     if not model_name_or_hash:
         return False
         
-    models = list_registered_models()
+    models = list_registered_models(verify_signature=verify_signature, public_key_path=public_key_path)
     if model_name_or_hash in models:
         return True
         
@@ -160,7 +307,11 @@ def is_model_allowed(model_name_or_hash: str) -> bool:
     return False
 
 
-def verify_model_integrity(model_path: str) -> Tuple[bool, List[str]]:
+def verify_model_integrity(
+    model_path: str,
+    verify_signature: bool = False,
+    public_key_path: Optional[str] = None,
+) -> Tuple[bool, List[str]]:
     """
     Verifies that all files in the model path match their registered hashes.
     
@@ -172,7 +323,7 @@ def verify_model_integrity(model_path: str) -> Tuple[bool, List[str]]:
     # Compute current hashes
     current_combined, current_files = get_model_hashes(validated_path)
     
-    models = list_registered_models()
+    models = list_registered_models(verify_signature=verify_signature, public_key_path=public_key_path)
     
     # Try to find corresponding entry by path or combined hash
     matched_entry: Optional[Dict[str, Any]] = None
@@ -204,3 +355,97 @@ def verify_model_integrity(model_path: str) -> Tuple[bool, List[str]]:
             errors.append(f"Untracked file found in model directory: {rel_path}")
             
     return len(errors) == 0, errors
+
+
+# =============================================================================
+# COMMAND LINE INTERFACE (CLI)
+# =============================================================================
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="ZKAEDI PRIME sovereign model registry command-line utility."
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # Keygen Command
+    keygen_parser = subparsers.add_parser("keygen", help="Generate Ed25519 keypair for registry signing")
+    keygen_parser.add_argument("--private-key", required=True, help="Path to save private key file")
+    keygen_parser.add_argument("--public-key", required=True, help="Path to save public key file")
+
+    # Register Command
+    reg_parser = subparsers.add_parser("register", help="Register a model in the allow-list")
+    reg_parser.add_argument("--name", required=True, help="Model name identifier")
+    reg_parser.add_argument("--path", required=True, help="Path to the model directory or weight file")
+    reg_parser.add_argument("--author", default="unknown", help="Author metadata")
+    reg_parser.add_argument("--description", default="", help="Description metadata")
+    reg_parser.add_argument("--sign", action="store_true", help="Sign the registry after update")
+    reg_parser.add_argument("--private-key", help="Path to Ed25519 private key (required for sign)")
+
+    # Deregister Command
+    dereg_parser = subparsers.add_parser("deregister", help="Deregister a model from the allow-list")
+    dereg_parser.add_argument("--name", required=True, help="Model name identifier")
+    dereg_parser.add_argument("--sign", action="store_true", help="Sign the registry after update")
+    dereg_parser.add_argument("--private-key", help="Path to Ed25519 private key (required for sign)")
+
+    # List Command
+    subparsers.add_parser("list", help="List all registered models")
+
+    # Verify Command
+    ver_parser = subparsers.add_parser("verify", help="Verify a model directory integrity against the registry")
+    ver_parser.add_argument("--path", required=True, help="Path to the model directory to verify")
+    ver_parser.add_argument("--verify-sig", action="store_true", help="Enforce registry signature verification")
+    ver_parser.add_argument("--public-key", help="Path to Ed25519 public key (required for signature verification)")
+
+    args = parser.parse_args()
+
+    try:
+        if args.command == "keygen":
+            generate_ed25519_keypair(args.private_key, args.public_key)
+            
+        elif args.command == "register":
+            if args.sign and not args.private_key:
+                reg_parser.error("--private-key is required when --sign is set.")
+            register_model(
+                model_name=args.name,
+                model_path=args.path,
+                author=args.author,
+                description=args.description,
+                sign=args.sign,
+                private_key_path=args.private_key
+            )
+            
+        elif args.command == "deregister":
+            if args.sign and not args.private_key:
+                dereg_parser.error("--private-key is required when --sign is set.")
+            deregister_model(args.name, sign=args.sign, private_key_path=args.private_key)
+            
+        elif args.command == "list":
+            models = list_registered_models()
+            if not models:
+                print("Registry is empty.")
+            else:
+                print(json.dumps(models, indent=2))
+                
+        elif args.command == "verify":
+            if args.verify_sig and not args.public_key:
+                ver_parser.error("--public-key is required when --verify-sig is set.")
+            valid, errors = verify_model_integrity(
+                args.path,
+                verify_signature=args.verify_sig,
+                public_key_path=args.public_key
+            )
+            if valid:
+                print("[+] Integrity check passed: Model matches registry entry precisely.")
+            else:
+                print("[-] Integrity verification FAILED:")
+                for err in errors:
+                    print(f"  - {err}")
+                sys.exit(1)
+                
+    except Exception as e:
+        print(f"Error executing command '{args.command}': {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

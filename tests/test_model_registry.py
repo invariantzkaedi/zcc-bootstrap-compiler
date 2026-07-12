@@ -152,3 +152,65 @@ class TestModelRegistry(unittest.TestCase):
             load_model_hardened("unregistered-name", enforce_allow_list=True)
         self.assertIn("is not in the allow-list", str(ctx.exception))
 
+    def test_signature_verification(self):
+        priv_key_path = os.path.join(self.test_dir, "private_key.pem")
+        pub_key_path = os.path.join(self.test_dir, "public_key.pem")
+        
+        # Generate keypair
+        reg.generate_ed25519_keypair(priv_key_path, pub_key_path)
+        self.assertTrue(os.path.exists(priv_key_path))
+        self.assertTrue(os.path.exists(pub_key_path))
+        
+        # Create a mock model directory
+        model_dir = Path(self.test_dir) / "mock_model"
+        model_dir.mkdir(exist_ok=True)
+        weights_file = model_dir / "model.safetensors"
+        with open(weights_file, "w") as f:
+            f.write("weights content")
+            
+        # Register model with signature
+        reg.register_model(
+            model_name="signed-model",
+            model_path=str(model_dir),
+            sign=True,
+            private_key_path=priv_key_path
+        )
+        
+        # Verify loading with signature check
+        registry = reg.load_registry(verify_signature=True, public_key_path=pub_key_path)
+        self.assertIn("signed-model", registry["models"])
+        
+        # Modify the signature file (tampering)
+        sig_path = reg._get_signature_path(reg.get_registry_path())
+        with open(sig_path, "wb") as f:
+            f.write(b"invalid signature bytes")
+            
+        with self.assertRaises(ValueError) as ctx:
+            reg.load_registry(verify_signature=True, public_key_path=pub_key_path)
+        self.assertIn("Registry signature verification failed", str(ctx.exception))
+
+    def test_cli_commands(self):
+        priv_key_path = os.path.join(self.test_dir, "private_key.pem")
+        pub_key_path = os.path.join(self.test_dir, "public_key.pem")
+        
+        # Keygen via CLI main
+        with unittest.mock.patch("sys.argv", ["zkaedi_model_registry.py", "keygen", "--private-key", priv_key_path, "--public-key", pub_key_path]):
+            reg.main()
+        self.assertTrue(os.path.exists(priv_key_path))
+        
+        # Create mock model
+        model_dir = Path(self.test_dir) / "mock_model"
+        model_dir.mkdir(exist_ok=True)
+        weights_file = model_dir / "model.safetensors"
+        with open(weights_file, "w") as f:
+            f.write("weights content")
+            
+        # Register via CLI
+        with unittest.mock.patch("sys.argv", ["zkaedi_model_registry.py", "register", "--name", "cli-model", "--path", str(model_dir), "--sign", "--private-key", priv_key_path]):
+            reg.main()
+            
+        # Verify via CLI
+        with unittest.mock.patch("sys.argv", ["zkaedi_model_registry.py", "verify", "--path", str(model_dir), "--verify-sig", "--public-key", pub_key_path]):
+            reg.main()
+
+
