@@ -20,6 +20,18 @@ from datetime import datetime, timezone
 
 from zkaedi_security_utils import validate_safe_path
 
+class RegistrySignatureMissingError(ValueError):
+    pass
+
+class RegistrySignatureValidationError(ValueError):
+    pass
+
+class ModelNotInRegistryError(ValueError):
+    pass
+
+class ModelIntegrityMismatchError(ValueError):
+    pass
+
 import time
 
 if TYPE_CHECKING:
@@ -274,10 +286,10 @@ def load_registry(verify_signature: bool = False, public_key_path: Optional[str 
                         if verify_signature:
                             legacy_sig = _get_signature_path(reg_path)
                             if not legacy_sig.exists():
-                                raise FileNotFoundError(f"[ZKAEDI REG] Legacy registry signature missing: {legacy_sig}")
+                                raise RegistrySignatureMissingError(f"[ZKAEDI REG] Legacy registry signature missing: {legacy_sig}")
                             signature = legacy_sig.read_bytes()
                             if not verify_registry_signature(data, signature, public_key_path):
-                                raise ValueError("[ZKAEDI REG] Legacy registry signature verification failed!")
+                                raise RegistrySignatureValidationError("[ZKAEDI REG] Legacy registry signature verification failed!")
                         
                         db_dir.mkdir(parents=True, exist_ok=True)
                         generations_dir.mkdir(parents=True, exist_ok=True)
@@ -398,11 +410,11 @@ def load_registry(verify_signature: bool = False, public_key_path: Optional[str 
                 if not public_key_path:
                     raise ValueError("[ZKAEDI REG] public_key_path is required when verify_signature=True")
                 if not gen_sig_path.exists():
-                    raise FileNotFoundError(f"[ZKAEDI REG] Signature file not found: {gen_sig_path}")
+                    raise RegistrySignatureMissingError(f"[ZKAEDI REG] Signature file not found: {gen_sig_path}")
                 with open(gen_sig_path, "rb") as f:
                     signature = f.read()
                 if not verify_registry_signature(data, signature, public_key_path):
-                    raise ValueError("[ZKAEDI REG] Registry signature verification failed!")
+                    raise RegistrySignatureValidationError("[ZKAEDI REG] Registry signature verification failed!")
                     
             return data
             
@@ -560,6 +572,9 @@ def save_registry(
 
 def get_file_sha256(file_path: Path) -> str:
     """Computes the SHA-256 hash of a single file."""
+    if hasattr(hashlib, "file_digest"):
+        with open(file_path, "rb") as f:
+            return hashlib.file_digest(f, "sha256").hexdigest()
     h = hashlib.sha256()
     with open(file_path, "rb") as f:
         for chunk in iter(lambda: f.read(8192), b""):
@@ -578,8 +593,7 @@ def get_model_hashes(model_path: Path) -> Tuple[str, Dict[str, str]]:
         file_hash = get_file_sha256(model_path)
         return file_hash, {model_path.name: file_hash}
         
-    files_hashes = {}
-    combined_hasher = hashlib.sha256()
+    files_to_hash = []
     for f in sorted(model_path.rglob("*")):
         # Explicitly reject symlinks in release artifacts (SEC-14)
         if f.is_symlink():
@@ -591,14 +605,44 @@ def get_model_hashes(model_path: Path) -> Tuple[str, Dict[str, str]]:
             if f.name == "quantization_provenance.json":
                 continue
             rel_path = f.relative_to(model_path).as_posix()
-            f_hash = get_file_sha256(f)
-            files_hashes[rel_path] = f_hash
-            
-            # Deterministic framed encoding including path (REL-05)
-            combined_hasher.update(rel_path.encode("utf-8"))
-            combined_hasher.update(b"\0")
-            combined_hasher.update(f_hash.encode("ascii"))
-            combined_hasher.update(b"\n")
+            files_to_hash.append((rel_path, f))
+
+    # Sort files_to_hash by relative path to maintain determinism
+    files_to_hash.sort(key=lambda x: x[0])
+
+    files_hashes = {}
+    from concurrent.futures import ThreadPoolExecutor
+    import os
+
+    def hash_single_file(item):
+        rel_p, abs_p = item
+        return rel_p, get_file_sha256(abs_p)
+
+    max_workers = min(len(files_to_hash), 4)
+    if hasattr(os, "cpu_count"):
+        cpus = os.cpu_count()
+        if cpus:
+            max_workers = min(max_workers, cpus)
+    max_workers = max(1, max_workers)
+
+    if max_workers > 1:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            results = executor.map(hash_single_file, files_to_hash)
+            for rel_p, f_hash in results:
+                files_hashes[rel_p] = f_hash
+    else:
+        for item in files_to_hash:
+            rel_p, f_hash = hash_single_file(item)
+            files_hashes[rel_p] = f_hash
+
+    combined_hasher = hashlib.sha256()
+    for rel_p, _ in files_to_hash:
+        f_hash = files_hashes[rel_p]
+        # Deterministic framed encoding including path (REL-05)
+        combined_hasher.update(rel_p.encode("utf-8"))
+        combined_hasher.update(b"\0")
+        combined_hasher.update(f_hash.encode("ascii"))
+        combined_hasher.update(b"\n")
             
     return combined_hasher.hexdigest(), files_hashes
 
@@ -742,6 +786,20 @@ def register_model(
     
     print(f"[ZKAEDI REG] Hashing model assets at: {validated_path}")
     combined_sha256, files_dict = get_model_hashes(validated_path)
+    
+    if len(files_dict) == 0:
+        raise ValueError("Cannot register an empty file set")
+        
+    total_size = 0
+    for rel_path in files_dict:
+        file_p = validated_path / rel_path
+        size = file_p.stat().st_size
+        if size == 0:
+            raise ValueError(f"Cannot register a zero-byte file: {rel_path}")
+        total_size += size
+        
+    if total_size == 0:
+        raise ValueError("Cannot register an empty file set")
     
     db_dir = _get_db_dir()
     lock_path = db_dir / "write.lock"

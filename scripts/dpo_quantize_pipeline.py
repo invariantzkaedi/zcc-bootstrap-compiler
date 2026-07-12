@@ -13,6 +13,12 @@ from pathlib import Path
 # Ensure we can import from project root
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
+try:
+    import omnicatch
+    omnicatch.ascend()
+except ImportError:
+    pass
+
 from zkaedi_security_utils import (
     scan_for_known_cves,
     validate_safe_path,

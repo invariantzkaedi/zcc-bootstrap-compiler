@@ -111,7 +111,14 @@ def load_model_hardened(
     Default allow_unsigned_registry=False mandates registry signature verification to prevent unauthorized allow-list tampering.
     """
     if enforce_allow_list:
-        from zkaedi_model_registry import is_model_allowed, verify_model_integrity
+        from zkaedi_model_registry import (
+            is_model_allowed,
+            verify_model_integrity,
+            RegistrySignatureMissingError,
+            RegistrySignatureValidationError,
+            ModelNotInRegistryError,
+            ModelIntegrityMismatchError
+        )
         resolved_pubkey_path = public_key_path or os.environ.get("ZKAEDI_REGISTRY_PUBKEY")
         req_verify_sig = not allow_unsigned_registry
         if req_verify_sig and not resolved_pubkey_path:
@@ -119,24 +126,28 @@ def load_model_hardened(
 
         p_res = Path(model_name_or_path)
         if p_res.exists():
+            # Vacuous loader check: check if weight assets exist
+            weight_suffixes = {".safetensors", ".bin", ".pt"}
+            has_weights = any(f.suffix in weight_suffixes for f in p_res.rglob("*") if f.is_file())
+            if not has_weights:
+                raise ModelIntegrityMismatchError("Model directory contains no weights (.safetensors, .bin, .pt)")
+
             try:
                 is_valid, errors = verify_model_integrity(
                     str(p_res),
                     verify_signature=req_verify_sig,
                     public_key_path=resolved_pubkey_path
                 )
-            except FileNotFoundError as e:
-                raise ValueError(f"no-signature-present: Registry is not signed but signature verification is required: {e}")
-            except ValueError as e:
-                if "Registry signature verification failed" in str(e):
-                    raise ValueError(f"signature-invalid: Registry signature verification failed: {e}")
-                raise
+            except RegistrySignatureMissingError as e:
+                raise RegistrySignatureMissingError(f"no-signature-present: Registry is not signed but signature verification is required: {e}")
+            except RegistrySignatureValidationError as e:
+                raise RegistrySignatureValidationError(f"signature-invalid: Registry signature verification failed: {e}")
 
             if not is_valid:
                 if any("No registry entry found" in err for err in errors):
-                    raise ValueError(f"no-registry-entry: Model directory not found in allow-list: {errors}")
+                    raise ModelNotInRegistryError(f"no-registry-entry: Model directory not found in allow-list: {errors}")
                 else:
-                    raise ValueError(f"hash-mismatch: Model integrity check failed: {errors}")
+                    raise ModelIntegrityMismatchError(f"hash-mismatch: Model integrity check failed: {errors}")
         else:
             try:
                 allowed = is_model_allowed(
@@ -144,15 +155,13 @@ def load_model_hardened(
                     verify_signature=req_verify_sig,
                     public_key_path=resolved_pubkey_path
                 )
-            except FileNotFoundError as e:
-                raise ValueError(f"no-signature-present: Registry is not signed but signature verification is required: {e}")
-            except ValueError as e:
-                if "Registry signature verification failed" in str(e):
-                    raise ValueError(f"signature-invalid: Registry signature verification failed: {e}")
-                raise
+            except RegistrySignatureMissingError as e:
+                raise RegistrySignatureMissingError(f"no-signature-present: Registry is not signed but signature verification is required: {e}")
+            except RegistrySignatureValidationError as e:
+                raise RegistrySignatureValidationError(f"signature-invalid: Registry signature verification failed: {e}")
 
             if not allowed:
-                raise ValueError(f"no-registry-entry: Model '{model_name_or_path}' is not in the allow-list.")
+                raise ModelNotInRegistryError(f"no-registry-entry: Model '{model_name_or_path}' is not in the allow-list.")
 
     model_load_kwargs: Dict[str, Any] = {
         "trust_remote_code": False,
@@ -419,7 +428,19 @@ def load_gptq_model_hardened(
     validated_path = validate_safe_path(model_path, must_exist=True, description="GPTQ model")
 
     if enforce_allow_list:
-        from zkaedi_model_registry import verify_model_integrity
+        from zkaedi_model_registry import (
+            verify_model_integrity,
+            RegistrySignatureMissingError,
+            RegistrySignatureValidationError,
+            ModelNotInRegistryError,
+            ModelIntegrityMismatchError
+        )
+        # Vacuous loader check: check if weight assets exist
+        weight_suffixes = {".safetensors", ".bin", ".pt"}
+        has_weights = any(f.suffix in weight_suffixes for f in validated_path.rglob("*") if f.is_file())
+        if not has_weights:
+            raise ModelIntegrityMismatchError("Model directory contains no weights (.safetensors, .bin, .pt)")
+
         resolved_pubkey_path = public_key_path or os.environ.get("ZKAEDI_REGISTRY_PUBKEY")
         req_verify_sig = not allow_unsigned_registry
         if req_verify_sig and not resolved_pubkey_path:
@@ -431,18 +452,16 @@ def load_gptq_model_hardened(
                 verify_signature=req_verify_sig,
                 public_key_path=resolved_pubkey_path
             )
-        except FileNotFoundError as e:
-            raise ValueError(f"no-signature-present: Registry is not signed but signature verification is required: {e}")
-        except ValueError as e:
-            if "Registry signature verification failed" in str(e):
-                raise ValueError(f"signature-invalid: Registry signature verification failed: {e}")
-            raise
+        except RegistrySignatureMissingError as e:
+            raise RegistrySignatureMissingError(f"no-signature-present: Registry is not signed but signature verification is required: {e}")
+        except RegistrySignatureValidationError as e:
+            raise RegistrySignatureValidationError(f"signature-invalid: Registry signature verification failed: {e}")
 
         if not is_valid:
             if any("No registry entry found" in err for err in errors):
-                raise ValueError(f"no-registry-entry: Model directory not found in allow-list: {errors}")
+                raise ModelNotInRegistryError(f"no-registry-entry: Model directory not found in allow-list: {errors}")
             else:
-                raise ValueError(f"hash-mismatch: Model integrity check failed: {errors}")
+                raise ModelIntegrityMismatchError(f"hash-mismatch: Model integrity check failed: {errors}")
 
     # Verify quantize_config.json
     config_info = verify_gptq_config_integrity(str(validated_path), expected_config_hash=expected_config_hash)

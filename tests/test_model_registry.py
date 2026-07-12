@@ -280,6 +280,14 @@ class TestModelRegistry(unittest.TestCase):
 
         output_dir = Path(self.test_dir) / "quantized_model_out"
         
+        # Configure model save_pretrained to write dummy file to avoid empty file set ValueError
+        model_instance = mock_model.from_pretrained.return_value
+        def mock_save_pretrained(path, *args, **kwargs):
+            Path(path).mkdir(parents=True, exist_ok=True)
+            (Path(path) / "model.safetensors").write_text("quantized weights content")
+        model_instance.save_pretrained.side_effect = mock_save_pretrained
+        model_instance.to.return_value.save_pretrained.side_effect = mock_save_pretrained
+        
         # Call safe_quantize_model with register=True
         safe_quantize_model(
             model_path=str(model_dir),
@@ -898,6 +906,98 @@ class TestModelRegistry(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             reg.load_registry(verify_signature=True, public_key_path=pub_key_path)
         self.assertIn("Legacy registry generation must be a non-negative integer", str(ctx.exception))
+
+    def test_registration_rejects_empty_directory(self):
+        empty_dir = Path(self.test_dir) / "empty_model"
+        empty_dir.mkdir()
+        with self.assertRaises(ValueError) as ctx:
+            reg.register_model(model_name="empty-model", model_path=str(empty_dir))
+        self.assertIn("Cannot register an empty file set", str(ctx.exception))
+
+    def test_registration_rejects_zero_byte_weights(self):
+        zero_dir = Path(self.test_dir) / "zero_model"
+        zero_dir.mkdir()
+        (zero_dir / "model.safetensors").write_text("")
+        with self.assertRaises(ValueError) as ctx:
+            reg.register_model(model_name="zero-model", model_path=str(zero_dir))
+        self.assertIn("Cannot register a zero-byte file", str(ctx.exception))
+
+    def test_loader_rejects_vacuous_allowlist(self):
+        dummy_dir = Path(self.test_dir) / "dummy_model"
+        dummy_dir.mkdir()
+        (dummy_dir / "config.json").write_text('{"vocab_size": 32000}')
+        
+        db = reg.load_registry()
+        db["models"]["dummy-model"] = {
+            "name": "dummy-model",
+            "path": str(dummy_dir),
+            "combined_sha256": "dummyhash",
+            "files": {"config.json": "dummyhash"}
+        }
+        reg.save_registry(db)
+        
+        from zkaedi_security_utils import load_model_hardened
+        from zkaedi_model_registry import ModelIntegrityMismatchError
+        
+        with self.assertRaises(ModelIntegrityMismatchError) as ctx:
+            load_model_hardened(str(dummy_dir), enforce_allow_list=True, allow_unsigned_registry=True)
+        self.assertIn("Model directory contains no weights", str(ctx.exception))
+
+    def test_typed_exception_taxonomy(self):
+        from zkaedi_model_registry import (
+            RegistrySignatureMissingError,
+            RegistrySignatureValidationError
+        )
+        
+        db_dir = reg._get_db_dir()
+        db_dir.mkdir(parents=True, exist_ok=True)
+        current_file = db_dir / "current"
+        current_file.write_text("1\n")
+        
+        generations_dir = db_dir / "generations"
+        generations_dir.mkdir(parents=True, exist_ok=True)
+        
+        with open(generations_dir / "1.json", "w", encoding="utf-8") as f:
+            json.dump({"models": {}, "generation": 1}, f)
+            
+        with self.assertRaises(RegistrySignatureMissingError):
+            reg.load_registry(verify_signature=True, public_key_path="dummy_pubkey_path")
+            
+        with open(generations_dir / "1.sig", "wb") as f:
+            f.write(b"bad_signature_bytes")
+            
+        priv = os.path.join(self.test_dir, "temp_pk.pem")
+        pub = os.path.join(self.test_dir, "temp_pub.pem")
+        reg.generate_ed25519_keypair(priv, pub)
+        
+        with self.assertRaises(RegistrySignatureValidationError):
+            reg.load_registry(verify_signature=True, public_key_path=pub)
+
+    def test_parallel_hashing_determinism(self):
+        import hashlib
+        # Create a model directory with multiple files of different sizes
+        model_dir = Path(self.test_dir) / "parallel_model"
+        model_dir.mkdir()
+        (model_dir / "a.safetensors").write_text("a" * 1024)
+        (model_dir / "b.bin").write_text("b" * 2048)
+        (model_dir / "c.pt").write_text("c" * 512)
+        
+        # Compute combined hash
+        combined_sha256, files_dict = reg.get_model_hashes(model_dir)
+        
+        # Verify result format
+        self.assertEqual(len(files_dict), 3)
+        self.assertIn("a.safetensors", files_dict)
+        self.assertIn("b.bin", files_dict)
+        self.assertIn("c.pt", files_dict)
+        
+        # Verify hashes are correct
+        self.assertEqual(files_dict["a.safetensors"], hashlib.sha256(b"a" * 1024).hexdigest())
+        
+        # Re-compute hashes and ensure they match perfectly (determinism check)
+        combined_sha256_2, files_dict_2 = reg.get_model_hashes(model_dir)
+        self.assertEqual(combined_sha256, combined_sha256_2)
+        self.assertEqual(files_dict, files_dict_2)
 
 
 if __name__ == "__main__":

@@ -22,6 +22,12 @@ import getpass
 import tempfile
 import os
 
+try:
+    import omnicatch
+    omnicatch.ascend()
+except ImportError:
+    pass
+
 # Fix transformers v5 compatibility with llm_blender
 try:
     import transformers.utils.hub
