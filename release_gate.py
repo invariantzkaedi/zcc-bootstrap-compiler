@@ -7,6 +7,9 @@ import os
 import shutil
 import sys
 from pathlib import Path
+import omnicatch
+
+omnicatch.ascend()
 
 from error_handling import run_bounded_subprocess
 

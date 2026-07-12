@@ -3,7 +3,11 @@ from __future__ import annotations
 import enum
 import logging
 import math
+import os
 import subprocess
+import tempfile
+from pathlib import Path
+import omnicatch
 
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 logger = logging.getLogger("bonus_error_handler")
@@ -19,69 +23,40 @@ import threading
 
 def run_bounded_subprocess(cmd: list[str], timeout_sec: int = 5, max_stdout_bytes: int = 65536, max_stderr_bytes: int = 65536) -> tuple[int, str, str]:
     """
-    Treats all subprocesses as hostile. Applies strict timeouts and incremental output capture limits.
+    Delegates to omnicatch.run_verified to execute the subprocess under evidence-discipline.
     """
-    try:
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-        
-        stdout_chunks = []
-        stderr_chunks = []
-        stdout_len = 0
-        stderr_len = 0
-        limit_exceeded = False
-        limit_reason = ""
-        
-        def read_stream(stream, chunks_list, counter_ref, max_bytes, stream_name):
-            nonlocal limit_exceeded, limit_reason
-            while True:
-                chunk = stream.read(4096)
-                if not chunk:
-                    break
-                counter_ref[0] += len(chunk)
-                if counter_ref[0] > max_bytes:
-                    if not limit_exceeded:
-                        limit_exceeded = True
-                        limit_reason = f"{stream_name}_limit_exceeded"
-                        process.kill()
-                    break
-                chunks_list.append(chunk)
+    with tempfile.NamedTemporaryFile("w", suffix=".log", delete=False) as log_f:
+        log_path = log_f.name
 
-        stdout_count = [0]
-        stderr_count = [0]
+    try:
+        res = omnicatch.run_verified(cmd, timeout=timeout_sec, log=log_path)
         
-        t_out = threading.Thread(target=read_stream, args=(process.stdout, stdout_chunks, stdout_count, max_stdout_bytes, "stdout"))
-        t_err = threading.Thread(target=read_stream, args=(process.stderr, stderr_chunks, stderr_count, max_stderr_bytes, "stderr"))
+        # Read the captured stdout+stderr log
+        output = Path(log_path).read_text(encoding="utf-8", errors="replace")
         
-        t_out.start()
-        t_err.start()
-        
-        try:
-            process.wait(timeout=timeout_sec)
-        except subprocess.TimeoutExpired:
-            process.kill()
+        # Enforce size capping post-execution (containment check)
+        size = Path(log_path).stat().st_size
+        if size > (max_stdout_bytes + max_stderr_bytes):
+            logger.error(f"PROCESS OUTPUT LIMIT EXCEEDED: size={size}")
+            return -3, "", "output_limit_exceeded"
+
+        if res.timed_out:
             logger.error(f"PROCESS TIMEOUT EXCEEDED: {cmd}")
             return -1, "", "TIMEOUT_EXCEEDED"
             
-        t_out.join()
-        t_err.join()
-        
-        if limit_exceeded:
-            logger.error(f"PROCESS OUTPUT LIMIT EXCEEDED: {limit_reason}")
-            return -3, "", limit_reason
-            
-        stdout_str = b"".join(stdout_chunks).decode("utf-8", errors="replace")
-        stderr_str = b"".join(stderr_chunks).decode("utf-8", errors="replace")
-            
-        return process.returncode, stdout_str, stderr_str
+        return res.exit_code, output, ""
 
     except Exception as e:
         logger.error(f"SUBPROCESS FAULT: {e!s}")
         return -2, "", str(e)
+    finally:
+        try:
+            os.unlink(log_path)
+        except OSError:
+            pass
 
+
+@omnicatch.finite(check_args=False)
 def validate_energy_output(stdout: str) -> float | None:
     """
     Treats mathematical results as hostile. Ensures the returned energy is finite and bounded.
