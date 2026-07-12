@@ -2,7 +2,7 @@
   "validator": {
     "schema_version": "1.2.0",
     "script_version": "v1.2-hardened",
-    "script_sha256": "e59b653e4c54086bc54bec21c3fc797fa1091d9771e17ffef820731dfd093156"
+    "script_sha256": "0b2880c98c4f98a52dd15f95152fdc053256f2c09d2c25b0897ef4390f1c2681"
   },
   "task_id": "DPO-ALIGN-RETRAIN-002",
   "status": "pass",
