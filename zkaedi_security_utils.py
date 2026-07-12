@@ -324,8 +324,88 @@ def _replace_with_4bit(model: torch.nn.Module) -> torch.nn.Module:
 
 
 # =============================================================================
+# GPTQ SECURE MODEL LOADER
+# =============================================================================
+
+def load_gptq_model_hardened(
+    model_path: str,
+    device: str = "auto",
+    use_safetensors: bool = True,
+    disable_exllama: bool = True,
+    disable_exllamav2: bool = True,
+    use_triton: bool = False,
+) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
+    """
+    Secure loader for pre-quantized GPTQ models.
+
+    Security Properties:
+    - Calls scan_for_known_cves() before loading
+    - Enforces path validation via validate_safe_path()
+    - Sets trust_remote_code=False
+    - Disables potentially risky custom kernels by default (ExLlama, Triton)
+    - Prefers safetensors format
+
+    Note:
+    - This function only *loads* already-quantized GPTQ models.
+    - It does **not** perform GPTQ quantization itself.
+    """
+    scan_for_known_cves()
+
+    print(f"[ZKAEDI SEC] Loading GPTQ model from: {model_path}")
+
+    validated_path = validate_safe_path(
+        model_path, must_exist=True, description="GPTQ model directory"
+    )
+
+    try:
+        from auto_gptq import AutoGPTQForCausalLM
+    except ImportError:
+        raise ImportError(
+            "[ZKAEDI SEC] auto-gptq is not installed. "
+            "Install with: pip install auto-gptq"
+        )
+
+    if device == "auto":
+        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+
+    try:
+        model = AutoGPTQForCausalLM.from_quantized(
+            str(validated_path),
+            device=device,
+            use_safetensors=use_safetensors,
+            trust_remote_code=False,
+            use_triton=use_triton,
+            disable_exllama=disable_exllama,
+            disable_exllamav2=disable_exllamav2,
+        )
+
+        tokenizer = AutoTokenizer.from_pretrained(
+            str(validated_path),
+            trust_remote_code=False
+        )
+
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+
+        model.eval()
+        print(f"[ZKAEDI SEC] GPTQ model loaded successfully on device: {device}")
+        return model, tokenizer
+
+    except Exception as e:
+        print(f"[ZKAEDI SEC] Failed to load GPTQ model: {e}", file=sys.stderr)
+        raise RuntimeError(f"GPTQ model loading failed from {validated_path}") from e
+
+
+def is_gptq_model(model_path: str) -> bool:
+    """Quick check if a directory contains a GPTQ-quantized model."""
+    path = Path(model_path)
+    return (path / "quantize_config.json").exists()
+
+
+# =============================================================================
 # SELF TEST
 # =============================================================================
+
 
 if __name__ == "__main__":
     print("ZKAEDI PRIME Security Utilities v2.3.1 loaded successfully.")
