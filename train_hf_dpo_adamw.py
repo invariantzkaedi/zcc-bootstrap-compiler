@@ -88,22 +88,46 @@ def generate_dpo_attestation(
     files_dict: Dict[str, str],
     private_key_path: Optional[str] = None,
     password: Optional[str] = None,
+    num_train_samples: Optional[int] = None,
+    num_eval_samples: Optional[int] = None,
+    training_config: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Generates a cryptographically signed DPO training attestation receipt."""
+    import uuid
+    import secrets
     from zkaedi_model_registry import get_file_sha256
     
     script_hash = get_file_sha256(script_path)
     ds_hash = get_file_sha256(dataset_path)
     
+    try:
+        import trl
+        trl_version = trl.__version__
+    except Exception:
+        trl_version = "unknown"
+
     attestation = {
         "attestation_type": "ZKAEDI_DPO_TRAINING_ATTESTATION",
+        "attestation_id": str(uuid.uuid4()),
+        "nonce": secrets.token_hex(16),
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "environment": {
+            "python_version": sys.version.split()[0],
+            "torch_version": torch.__version__,
+            "transformers_version": TRANSFORMERS_VERSION,
+            "trl_version": trl_version,
+            "cuda_available": torch.cuda.is_available(),
+            "cuda_device_count": torch.cuda.device_count()
+        },
         "script_sha256": script_hash,
         "dataset": {
             "path": str(dataset_path),
-            "sha256": ds_hash
+            "sha256": ds_hash,
+            "train_samples": num_train_samples,
+            "eval_samples": num_eval_samples
         },
         "base_model": base_model,
+        "training_config": training_config or {},
         "adapter": {
             "path": str(adapter_dir),
             "combined_sha256": combined_hash,
@@ -119,14 +143,27 @@ def generate_dpo_attestation(
     if private_key_path:
         from zkaedi_model_registry import sign_registry
         try:
+            # Sign the attestation file
             signature = sign_registry(attestation, private_key_path, password=password)
             sig_path = att_path.with_suffix(att_path.suffix + ".sig")
             with open(sig_path, "wb") as f:
                 f.write(signature)
             print(f"[ZKAEDI SEC] Attestation signed and saved to: {sig_path}")
+            
+            # Sign the training manifest file if it exists
+            manifest_file = adapter_dir / "training_manifest.json"
+            if manifest_file.exists():
+                with open(manifest_file, "r") as mf:
+                    manifest_data = json.load(mf)
+                manifest_sig = sign_registry(manifest_data, private_key_path, password=password)
+                manifest_sig_path = manifest_file.with_suffix(manifest_file.suffix + ".sig")
+                with open(manifest_sig_path, "wb") as f:
+                    f.write(manifest_sig)
+                print(f"[ZKAEDI SEC] Training manifest signed and saved to: {manifest_sig_path}")
         except Exception as e:
-            print(f"[ZKAEDI SEC] Failed to sign attestation: {e}", file=sys.stderr)
+            print(f"[ZKAEDI SEC] Failed to sign attestation/manifest: {e}", file=sys.stderr)
             raise e
+
 
 
 def main():
@@ -286,6 +323,20 @@ def main():
     elif args.password:
         pwd = args.password
 
+    # Extract training hyperparameters
+    config_dict = {
+        "learning_rate": training_args.learning_rate,
+        "lr_scheduler_type": training_args.lr_scheduler_type,
+        "weight_decay": training_args.weight_decay,
+        "seed": training_args.seed,
+        "max_steps": training_args.max_steps,
+        "per_device_train_batch_size": training_args.per_device_train_batch_size,
+        "gradient_accumulation_steps": training_args.gradient_accumulation_steps,
+        "optim": training_args.optim,
+        "fp16": training_args.fp16,
+        "bf16": training_args.bf16
+    }
+
     # Generate and sign attestation
     generate_dpo_attestation(
         script_path=Path(__file__).resolve(),
@@ -295,8 +346,12 @@ def main():
         combined_hash=combined_hash,
         files_dict=files_dict,
         private_key_path=args.private_key,
-        password=pwd
+        password=pwd,
+        num_train_samples=len(train_dataset),
+        num_eval_samples=len(eval_dataset),
+        training_config=config_dict
     )
+
 
     if args.register:
         try:

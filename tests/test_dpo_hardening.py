@@ -75,6 +75,12 @@ class TestDPOHardening(unittest.TestCase):
         adapter_dir = Path(self.test_dir) / "adapter"
         adapter_dir.mkdir()
         
+        # Create a mock training manifest file in the adapter directory
+        manifest_file = adapter_dir / "training_manifest.json"
+        manifest_data = {"test_metric": 42}
+        with open(manifest_file, "w") as f:
+            json.dump(manifest_data, f)
+        
         # Keygen for signing
         priv_key_path = os.path.join(self.test_dir, "private_key.pem")
         pub_key_path = os.path.join(self.test_dir, "public_key.pem")
@@ -87,7 +93,10 @@ class TestDPOHardening(unittest.TestCase):
             base_model="gpt2-safe",
             adapter_dir=adapter_dir,
             combined_hash="combined_adapter_hash",
-            files_dict={"weights.safetensors": "weights_hash"}
+            files_dict={"weights.safetensors": "weights_hash"},
+            num_train_samples=100,
+            num_eval_samples=20,
+            training_config={"learning_rate": 2e-5}
         )
         
         att_json = adapter_dir / "dpo_security_attestation.json"
@@ -96,6 +105,13 @@ class TestDPOHardening(unittest.TestCase):
             att_data = json.load(f)
             self.assertEqual(att_data["base_model"], "gpt2-safe")
             self.assertEqual(att_data["adapter"]["combined_sha256"], "combined_adapter_hash")
+            self.assertEqual(att_data["dataset"]["train_samples"], 100)
+            self.assertEqual(att_data["dataset"]["eval_samples"], 20)
+            self.assertEqual(att_data["training_config"]["learning_rate"], 2e-5)
+            self.assertIn("attestation_id", att_data)
+            self.assertIn("nonce", att_data)
+            self.assertIn("environment", att_data)
+            self.assertIn("torch_version", att_data["environment"])
 
         # Test generate attestation with signing
         generate_dpo_attestation(
@@ -105,7 +121,10 @@ class TestDPOHardening(unittest.TestCase):
             adapter_dir=adapter_dir,
             combined_hash="combined_adapter_hash",
             files_dict={"weights.safetensors": "weights_hash"},
-            private_key_path=priv_key_path
+            private_key_path=priv_key_path,
+            num_train_samples=100,
+            num_eval_samples=20,
+            training_config={"learning_rate": 2e-5}
         )
         
         sig_file = adapter_dir / "dpo_security_attestation.json.sig"
@@ -116,9 +135,18 @@ class TestDPOHardening(unittest.TestCase):
         with open(att_json, "r") as f:
             signed_att_data = json.load(f)
             
-        # Verify signature
+        # Verify attestation signature
         valid = reg.verify_registry_signature(signed_att_data, signature, pub_key_path)
         self.assertTrue(valid)
+
+        # Verify training manifest signature file was created and signed
+        manifest_sig_file = manifest_file.with_suffix(manifest_file.suffix + ".sig")
+        self.assertTrue(manifest_sig_file.exists())
+        with open(manifest_sig_file, "rb") as f:
+            m_signature = f.read()
+        m_valid = reg.verify_registry_signature(manifest_data, m_signature, pub_key_path)
+        self.assertTrue(m_valid)
+
 
 
 
