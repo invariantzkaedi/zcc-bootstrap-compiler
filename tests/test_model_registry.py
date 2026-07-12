@@ -365,7 +365,7 @@ class TestModelRegistry(unittest.TestCase):
         # Write lock data that has expired lease duration
         expired_data = {
             "pid": os.getpid(),
-            "hostname": sys.modules['socket'].gethostname(),
+            "hostname": "other-host",
             "owner_token": "expiredtoken",
             "acquired_at": time.time() - 30.0, # 30 seconds ago
             "lease_duration": 15.0
@@ -607,7 +607,179 @@ class TestModelRegistry(unittest.TestCase):
             allow_unsigned_registry=False
         )
         mock_model.from_pretrained.assert_called_once()
+        mock_model.from_pretrained.assert_called_once()
         mock_tokenizer.from_pretrained.assert_called_once()
+
+    def test_verified_migration_signed_legacy(self):
+        priv_key_path = os.path.join(self.test_dir, "private_key.pem")
+        pub_key_path = os.path.join(self.test_dir, "public_key.pem")
+        reg.generate_ed25519_keypair(priv_key_path, pub_key_path)
+        
+        legacy_data = {"models": {"legacy-model": {"name": "legacy-model"}}, "generation": 0}
+        
+        # Write legacy flat json database
+        with open(self.mock_registry_file, "w", encoding="utf-8") as f:
+            json.dump(legacy_data, f)
+            
+        # Write legacy signature
+        legacy_sig = reg._get_signature_path(self.mock_registry_file)
+        signature = reg.sign_registry(legacy_data, priv_key_path)
+        with open(legacy_sig, "wb") as f:
+            f.write(signature)
+            
+        # Load registry with verify_signature=True
+        loaded = reg.load_registry(verify_signature=True, public_key_path=pub_key_path)
+        self.assertIn("legacy-model", loaded["models"])
+        self.assertEqual(loaded["generation"], 0)
+        
+        # Verify legacy files were cleaned up, and generations structure exists
+        self.assertFalse(self.mock_registry_file.exists())
+        self.assertFalse(legacy_sig.exists())
+        
+        db_dir = reg._get_db_dir()
+        current_file = db_dir / "current"
+        self.assertTrue(current_file.exists())
+        self.assertEqual(current_file.read_text(encoding="utf-8").strip(), "0")
+        
+        gen_json = db_dir / "generations" / "0.json"
+        gen_sig = db_dir / "generations" / "0.sig"
+        self.assertTrue(gen_json.exists())
+        self.assertTrue(gen_sig.exists())
+
+    def test_unsigned_legacy_migration_rejection(self):
+        # 1. No signature file present
+        legacy_data = {"models": {"legacy-model": {"name": "legacy-model"}}, "generation": 0}
+        with open(self.mock_registry_file, "w", encoding="utf-8") as f:
+            json.dump(legacy_data, f)
+            
+        pub_key_path = os.path.join(self.test_dir, "public_key.pem")
+        # Generate arbitrary keys just for verification call
+        priv_key_path = os.path.join(self.test_dir, "private_key.pem")
+        reg.generate_ed25519_keypair(priv_key_path, pub_key_path)
+        
+        with self.assertRaises(Exception):
+            reg.load_registry(verify_signature=True, public_key_path=pub_key_path)
+            
+        # 2. Tampered signature file present
+        legacy_sig = reg._get_signature_path(self.mock_registry_file)
+        with open(legacy_sig, "wb") as f:
+            f.write(b"bad signature bytes")
+            
+        with self.assertRaises(ValueError):
+            reg.load_registry(verify_signature=True, public_key_path=pub_key_path)
+
+    def test_live_pid_lease_expiry_not_stale(self):
+        db_dir = reg._get_db_dir()
+        db_dir.mkdir(parents=True, exist_ok=True)
+        lock_path = db_dir / "write.lock"
+        
+        # Create a lock file owned by a live PID (ours) with expired lease
+        lock_data = {
+            "pid": os.getpid(),
+            "hostname": sys.modules["socket"].gethostname(),
+            "owner_token": "some-token",
+            "acquired_at": time.time() - 100.0,
+            "lease_duration": 10.0
+        }
+        with open(lock_path, "w", encoding="utf-8") as f:
+            json.dump(lock_data, f)
+            
+        # Try to acquire lock - should fail with TimeoutError because process is still alive
+        lock = reg.RegistryLock(lock_path, timeout=0.2)
+        with self.assertRaises(TimeoutError):
+            with lock:
+                pass
+
+    def test_stale_lock_deletion_race(self):
+        db_dir = reg._get_db_dir()
+        db_dir.mkdir(parents=True, exist_ok=True)
+        lock_path = db_dir / "write.lock"
+        
+        # Setup lock that looks stale (dead PID on same host)
+        lock_data = {
+            "pid": 999999,  # hopefully dead PID
+            "hostname": sys.modules["socket"].gethostname(),
+            "owner_token": "stale-token",
+            "acquired_at": time.time(),
+            "lease_duration": 15.0
+        }
+        with open(lock_path, "w", encoding="utf-8") as f:
+            json.dump(lock_data, f)
+            
+        # If the lock file is replaced with a different owner token, breaking it should return False
+        with open(lock_path, "w", encoding="utf-8") as f:
+            json.dump({"owner_token": "active-token"}, f)
+        res = reg._safe_break_stale_lock(lock_path, "stale-token")
+        self.assertFalse(res)
+        
+        # Verify the file still exists and contains the active token
+        with open(lock_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        self.assertEqual(data["owner_token"], "active-token")
+
+    def test_corrupt_lock_exit_unlink_prevention(self):
+        db_dir = reg._get_db_dir()
+        db_dir.mkdir(parents=True, exist_ok=True)
+        lock_path = db_dir / "write.lock"
+        
+        # Setup lock file with bad/corrupt JSON
+        with open(lock_path, "w") as f:
+            f.write("{invalid_json:}")
+            
+        # Instantiate RegistryLock, simulate it was acquired and try to exit
+        lock = reg.RegistryLock(lock_path)
+        lock.acquired = True
+        
+        # Call __exit__ -> it should handle parse error and NOT delete the lock
+        lock.__exit__(None, None, None)
+        self.assertTrue(lock_path.exists())
+
+    def test_generation_pointer_mismatch(self):
+        db_dir = reg._get_db_dir()
+        db_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Write generation 2 json, but set generation inside json to 1
+        generations_dir = db_dir / "generations"
+        generations_dir.mkdir(parents=True, exist_ok=True)
+        with open(generations_dir / "2.json", "w", encoding="utf-8") as f:
+            json.dump({"models": {}, "generation": 1}, f)
+            
+        current_file = db_dir / "current"
+        current_file.write_text("2\n")
+        
+        # load_registry should raise ValueError due to mismatch
+        with self.assertRaises(ValueError) as ctx:
+            reg.load_registry()
+        self.assertIn("Registry generation does not match current pointer", str(ctx.exception))
+
+    def test_safe_base_explicit_enforcement(self):
+        from train_hf_dpo_adamw import verify_release_receipt
+        
+        # Define trusted base directory inside test dir
+        trusted_base = Path(self.test_dir) / "safe_base"
+        trusted_base.mkdir(exist_ok=True)
+        
+        # Create a receipt that resides OUTSIDE the trusted base
+        bad_receipt = Path(self.test_dir) / "escaped_receipt.json"
+        receipt_data = {
+            "relative_artifact_path": "checkpoint",
+            "files": {"model.safetensors": "hash"},
+            "bundle_sha256": "bundlehash"
+        }
+        with open(bad_receipt, "w") as f:
+            json.dump(receipt_data, f)
+            
+        pub_key = Path(self.test_dir) / "public_key.pem"
+        with open(pub_key, "w") as f:
+            f.write("pubkey")
+            
+        with open(Path(str(bad_receipt) + ".sig"), "wb") as f:
+            f.write(b"sigbytes")
+            
+        # verify_release_receipt passing trusted_base as safe_base should raise ValueError
+        with self.assertRaises(ValueError) as ctx:
+            verify_release_receipt(bad_receipt, pub_key, safe_base=trusted_base)
+        self.assertIn("escapes trusted safe base", str(ctx.exception))
 
 
 if __name__ == "__main__":

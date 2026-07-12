@@ -44,6 +44,22 @@ def is_pid_alive(pid: int) -> bool:
         return False
 
 
+def _safe_break_stale_lock(lock_path: Path, expected_token: str) -> bool:
+    """Safely unlinks a stale lock file only if its token matches expected_token."""
+    import json
+    try:
+        if not lock_path.exists():
+            return True
+        with open(lock_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if data.get("owner_token") == expected_token:
+            lock_path.unlink(missing_ok=True)
+            return True
+    except Exception:
+        pass
+    return False
+
+
 class RegistryLock:
     def __init__(self, lock_path: Path, timeout: float = 10.0):
         import uuid
@@ -61,7 +77,7 @@ class RegistryLock:
         lock_dir.mkdir(parents=True, exist_ok=True)
         
         start_time = time.time()
-        lease_duration = 15.0
+        lease_duration = 60.0  # Safe duration tolerating clock drifts
         
         my_lock_data = {
             "pid": os.getpid(),
@@ -97,16 +113,19 @@ class RegistryLock:
                     acquired_at = lock_data.get("acquired_at", 0.0)
                     duration = lock_data.get("lease_duration", lease_duration)
                     
-                    is_stale_pid = (hostname == socket.gethostname() and not is_pid_alive(pid))
-                    is_lease_expired = (time.time() > acquired_at + duration)
+                    is_same_host = (hostname == socket.gethostname())
+                    if is_same_host:
+                        # Same host: stale only if the PID is dead (REL-11)
+                        is_stale = not is_pid_alive(pid)
+                    else:
+                        # Different host: stale if the lease duration has expired
+                        is_stale = (time.time() > acquired_at + duration)
                     
-                    if is_stale_pid or is_lease_expired:
-                        try:
-                            os.unlink(self.lock_path)
+                    if is_stale:
+                        # Safely break lock revalidating token (REL-12)
+                        if _safe_break_stale_lock(self.lock_path, lock_data.get("owner_token")):
                             time.sleep(0.02)
                             continue
-                        except Exception:
-                            pass
                 except Exception:
                     # Handle partially-written / corrupt lock files
                     try:
@@ -127,14 +146,12 @@ class RegistryLock:
             import json
             try:
                 if self.lock_path.exists():
-                    try:
-                        with open(self.lock_path, "r", encoding="utf-8") as f:
-                            lock_data = json.load(f)
-                        if lock_data.get("owner_token") == self.owner_token:
-                            self.lock_path.unlink(missing_ok=True)
-                    except Exception:
+                    with open(self.lock_path, "r", encoding="utf-8") as f:
+                        lock_data = json.load(f)
+                    if lock_data.get("owner_token") == self.owner_token:
                         self.lock_path.unlink(missing_ok=True)
             except Exception:
+                # REL-13: Do not delete lock on read/parse failure
                 pass
             self.acquired = False
 
@@ -169,12 +186,107 @@ def load_registry(verify_signature: bool = False, public_key_path: Optional[str]
     if not current_file.exists():
         # Fallback migration path from old flat JSON file
         if reg_path.exists() and reg_path.is_file():
-            try:
-                with open(reg_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                return data
-            except Exception:
-                pass
+            # Perform atomic migration under write lock (REL-10)
+            lock_path = db_dir / "write.lock"
+            with RegistryLock(lock_path):
+                if not current_file.exists():
+                    try:
+                        with open(reg_path, "r", encoding="utf-8") as f:
+                            data = json.load(f)
+                            
+                        # If verification requested, verify legacy before migration (SEC-18)
+                        if verify_signature:
+                            if not public_key_path:
+                                raise ValueError("[ZKAEDI REG] public_key_path is required when verify_signature=True")
+                            legacy_sig = _get_signature_path(reg_path)
+                            if not legacy_sig.exists():
+                                raise FileNotFoundError(f"[ZKAEDI REG] Legacy registry signature missing: {legacy_sig}")
+                            signature = legacy_sig.read_bytes()
+                            if not verify_registry_signature(data, signature, public_key_path):
+                                raise ValueError("[ZKAEDI REG] Legacy registry signature verification failed!")
+                        
+                        gen_num = data.get("generation", 0)
+                        
+                        db_dir.mkdir(parents=True, exist_ok=True)
+                        generations_dir.mkdir(parents=True, exist_ok=True)
+                        
+                        gen_json_path = generations_dir / f"{gen_num}.json"
+                        gen_sig_path = generations_dir / f"{gen_num}.sig"
+                        
+                        with open(reg_path, "rb") as sf:
+                            json_bytes = sf.read()
+                            
+                        import tempfile
+                        import os
+                        
+                        temp_json = None
+                        temp_sig = None
+                        try:
+                            with tempfile.NamedTemporaryFile("wb", dir=str(generations_dir), delete=False) as tf:
+                                temp_json = Path(tf.name)
+                                tf.write(json_bytes)
+                                tf.flush()
+                                os.fsync(tf.fileno())
+                                
+                            legacy_sig = _get_signature_path(reg_path)
+                            if legacy_sig.exists():
+                                with tempfile.NamedTemporaryFile("wb", dir=str(generations_dir), delete=False) as tf:
+                                    temp_sig = Path(tf.name)
+                                    tf.write(legacy_sig.read_bytes())
+                                    tf.flush()
+                                    os.fsync(tf.fileno())
+                                    
+                            os.replace(temp_json, gen_json_path)
+                            temp_json = None
+                            
+                            if temp_sig is not None:
+                                os.replace(temp_sig, gen_sig_path)
+                                temp_sig = None
+                                
+                            try:
+                                dir_fd = os.open(str(generations_dir), os.O_RDONLY)
+                                try:
+                                    os.fsync(dir_fd)
+                                finally:
+                                    os.close(dir_fd)
+                            except OSError:
+                                pass
+                                
+                            temp_current = None
+                            try:
+                                with tempfile.NamedTemporaryFile("w", dir=str(db_dir), delete=False, encoding="utf-8") as tf:
+                                    temp_current = Path(tf.name)
+                                    tf.write(f"{gen_num}\n")
+                                    tf.flush()
+                                    os.fsync(tf.fileno())
+                                os.replace(temp_current, current_file)
+                                temp_current = None
+                            finally:
+                                if temp_current is not None and temp_current.exists():
+                                    temp_current.unlink(missing_ok=True)
+                                    
+                            try:
+                                dir_fd = os.open(str(db_dir), os.O_RDONLY)
+                                try:
+                                    os.fsync(dir_fd)
+                                finally:
+                                    os.close(dir_fd)
+                            except OSError:
+                                pass
+                                
+                            reg_path.unlink(missing_ok=True)
+                            _get_signature_path(reg_path).unlink(missing_ok=True)
+                        finally:
+                            if temp_json is not None and temp_json.exists():
+                                temp_json.unlink(missing_ok=True)
+                            if temp_sig is not None and temp_sig.exists():
+                                temp_sig.unlink(missing_ok=True)
+                                
+                        return data
+                    except Exception as e:
+                        if verify_signature:
+                            raise e
+                        
         return {"models": {}, "generation": 0}
         
     lock_path = db_dir / "write.lock"
@@ -195,6 +307,12 @@ def load_registry(verify_signature: bool = False, public_key_path: Optional[str]
                 data["models"] = {}
             if "generation" not in data:
                 data["generation"] = int(gen_id_str)
+                
+            # SEC-19: confirm pointer/generation consistency before signature verification
+            pointer_generation = int(gen_id_str)
+            document_generation = data.get("generation")
+            if document_generation is not None and document_generation != pointer_generation:
+                raise ValueError("Registry generation does not match current pointer")
                 
             if verify_signature:
                 if not public_key_path:
@@ -281,6 +399,16 @@ def _save_registry_unlocked(
             except Exception:
                 pass
                 
+        # Durability fsync of generations directory (REL-14)
+        try:
+            dir_fd = os.open(str(generations_dir), os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except OSError:
+            pass
+            
         temp_current_path = None
         try:
             with tempfile.NamedTemporaryFile("w", dir=str(db_dir), delete=False, encoding="utf-8") as f:
@@ -312,8 +440,9 @@ def _save_registry_unlocked(
         except Exception:
             pass
             
+        # Durability fsync of parent db_dir (REL-14)
         try:
-            dir_fd = os.open(str(generations_dir), os.O_RDONLY)
+            dir_fd = os.open(str(db_dir), os.O_RDONLY)
             try:
                 os.fsync(dir_fd)
             finally:

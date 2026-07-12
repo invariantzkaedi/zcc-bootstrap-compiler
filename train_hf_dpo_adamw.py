@@ -36,7 +36,10 @@ from zkaedi_security_utils import (
     validate_safe_path,
     load_model_hardened,
     scan_for_known_cves,
+    get_safe_bases,
 )
+
+SAFE_BASE_DIR = get_safe_bases()[0]
 
 # Configure secure logging (no secrets, redact paths in prod)
 logging.basicConfig(
@@ -287,14 +290,25 @@ def verify_release_receipt(receipt_path: Path, public_key_path: Path, safe_base:
     from zkaedi_model_registry import verify_registry_signature, get_model_hashes
     from zkaedi_security_utils import validate_safe_path
     
+    extra_bases = [Path(safe_base)] if safe_base else None
+    
     # 1. Path Containment check for paths (SEC-17)
     # Validate receipt file, public key, and signature file against safe base
-    validated_receipt = validate_safe_path(str(receipt_path), must_exist=True, description="receipt path")
-    validated_public_key = validate_safe_path(str(public_key_path), must_exist=True, description="public key path")
+    validated_receipt = validate_safe_path(str(receipt_path), must_exist=True, extra_safe_bases=extra_bases, description="receipt path")
+    validated_public_key = validate_safe_path(str(public_key_path), must_exist=True, extra_safe_bases=extra_bases, description="public key path")
     
     sig_path = Path(str(validated_receipt) + ".sig")
-    validated_sig_path = validate_safe_path(str(sig_path), must_exist=True, description="receipt signature path")
+    validated_sig_path = validate_safe_path(str(sig_path), must_exist=True, extra_safe_bases=extra_bases, description="receipt signature path")
     
+    # Resolve and check safe_base explicitly if provided
+    if safe_base:
+        trusted_base = Path(safe_base).resolve()
+        for p in (validated_receipt, validated_public_key, validated_sig_path):
+            try:
+                p.resolve().relative_to(trusted_base)
+            except ValueError as exc:
+                raise ValueError(f"Path {p} escapes trusted safe base {trusted_base}") from exc
+                
     with open(validated_receipt, "r", encoding="utf-8") as f:
         receipt_data = json.load(f)
         
@@ -319,7 +333,14 @@ def verify_release_receipt(receipt_path: Path, public_key_path: Path, safe_base:
         raise ValueError("Receipt artifact path escapes the release directory") from exc
         
     # Validate artifact directory against safe base
-    validated_checkpoint_dir = validate_safe_path(str(checkpoint_dir), must_exist=True, description="artifact directory")
+    validated_checkpoint_dir = validate_safe_path(str(checkpoint_dir), must_exist=True, extra_safe_bases=extra_bases, description="artifact directory")
+    
+    if safe_base:
+        trusted_base = Path(safe_base).resolve()
+        try:
+            validated_checkpoint_dir.resolve().relative_to(trusted_base)
+        except ValueError as exc:
+            raise ValueError(f"Path {validated_checkpoint_dir} escapes trusted safe base {trusted_base}") from exc
 
         
     # 3. Recalculate file digests
@@ -659,7 +680,7 @@ def main():
     if args.mode == "release":
         logger.info("[ZKAEDI SEC] Running mandatory release receipt verification gate...")
         try:
-            verify_release_receipt(receipt_path, Path(args.public_key))
+            verify_release_receipt(receipt_path, Path(args.public_key), safe_base=SAFE_BASE_DIR)
             logger.info("[ZKAEDI SEC] Mandatory verification gate: PASSED (Signature, file digests, and bundle hash matching precisely)")
         except Exception as e:
             logger.error(f"[ZKAEDI SEC] Mandatory verification gate FAILED: {e}")
@@ -668,7 +689,7 @@ def main():
         # Dev mode best-effort verification if keys are passed
         logger.info("[ZKAEDI SEC] Running dev mode best-effort release receipt verification gate...")
         try:
-            verify_release_receipt(receipt_path, Path(args.public_key))
+            verify_release_receipt(receipt_path, Path(args.public_key), safe_base=SAFE_BASE_DIR)
             logger.info("[ZKAEDI SEC] Dev verification gate: PASSED")
         except Exception as e:
             logger.warning(f"[ZKAEDI SEC] Dev verification gate FAILED: {e}")
