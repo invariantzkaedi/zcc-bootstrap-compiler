@@ -432,7 +432,7 @@ def run_gauntlet(n_mazes=60, size=25, seed0=7000, verbose=True):
     if verbose:
         print("GATES:", "PASS" if ok else "FAIL",
               "(v2 60/60 & <=2.0x; v3 60/60 & simple path <=1.3x optimal; "
-              "neg control <=2/60 — the LOW control number is EXPECTED)")
+              "neg control <=2/60)")
     results["_gates_pass"] = ok
     return results
 
