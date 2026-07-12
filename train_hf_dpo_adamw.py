@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 r"""
 ZKAEDI PRIME Security Hardened - AdamW Baseline HF DPO Training Engine
-Version: 2.2-VERIFIED-20260712
+Version: 2.3-VERIFIED-20260712
 Author: ZKAEDI PRIME Security Testing Orchestrator (self-audit)
 
 SECURITY NOTES (MANDATORY READING BEFORE EXECUTION):
@@ -19,6 +19,10 @@ import json
 import logging
 import sys
 import getpass
+import tempfile
+import os
+import math
+import numbers
 from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone
@@ -43,28 +47,68 @@ logging.basicConfig(
 logger = logging.getLogger("zkaedi_dpo_hardened")
 
 
+def write_atomic_json(target_path: Path, data: dict) -> None:
+    """Atomic write for JSON payloads using fsync and temporary replacement."""
+    target_path = Path(target_path)
+    parent = target_path.parent
+    parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", dir=str(parent), delete=False, encoding="utf-8") as f:
+        temp_path = Path(f.name)
+        json.dump(data, f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(temp_path, target_path)
+
+
+def write_atomic_binary(target_path: Path, data: bytes) -> None:
+    """Atomic write for raw signatures using fsync and temporary replacement."""
+    target_path = Path(target_path)
+    parent = target_path.parent
+    parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("wb", dir=str(parent), delete=False) as f:
+        temp_path = Path(f.name)
+        f.write(data)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(temp_path, target_path)
+
+
+def get_relative_safe_path(path: Path, base_dir: Path) -> str:
+    """Redacts absolute system path leaks by resolving paths relative to safe workspace base."""
+    try:
+        return str(path.resolve().relative_to(base_dir.resolve()))
+    except ValueError:
+        return path.name
+
+
 class DPOSTripwireCallback(TrainerCallback):
     """Real-time DPO stability checks for gradient explosions, NaNs, and margin saturation."""
     def on_log(self, args, state, control, logs=None, **kwargs):
         if logs is not None:
-            # 1. NaN/Inf Checks
+            # 1. NaN/Inf Checks (supporting tensors, numpy, float, and nonnumeric edge cases)
             for k, v in logs.items():
-                if isinstance(v, float):
-                    val_tensor = torch.tensor(v)
-                    if torch.isinf(val_tensor) or torch.isnan(val_tensor):
-                        logger.error(f"[ZKAEDI SEC] TRIPWIRE TRIGGERED: NaN/Inf detected in metric '{k}'!")
-                        control.should_training_stop = True
-                        raise ValueError(f"Training aborted due to NaN/Inf in metric '{k}'")
+                is_nan_inf = False
+                if isinstance(v, numbers.Real) and not math.isfinite(float(v)):
+                    is_nan_inf = True
+                elif torch.is_tensor(v) and v.numel() == 1 and not torch.isfinite(v).item():
+                    is_nan_inf = True
+                
+                if is_nan_inf:
+                    logger.error(f"[ZKAEDI SEC] TRIPWIRE TRIGGERED: NaN/Inf detected in metric '{k}'!")
+                    control.should_training_stop = True
+                    raise ValueError(f"Training aborted due to NaN/Inf in metric '{k}'")
 
             # 2. Margin Saturation Check
             margin = logs.get("rewards/margins")
             if margin is not None:
-                if abs(margin) > 10.0:
-                    logger.warning(f"[ZKAEDI SEC] Margin saturation warning: {margin:.4f}")
-                    if abs(margin) > 15.0:
+                # Handle tensor margin values
+                margin_val = margin.item() if torch.is_tensor(margin) else float(margin)
+                if abs(margin_val) > 10.0:
+                    logger.warning(f"[ZKAEDI SEC] Margin saturation warning: {margin_val:.4f}")
+                    if abs(margin_val) > 15.0:
                         logger.error(f"[ZKAEDI SEC] TRIPWIRE TRIGGERED: Margin exceeds critical safety boundary of 15.0!")
                         control.should_training_stop = True
-                        raise ValueError(f"Training aborted due to preference margin saturation: {margin:.4f}")
+                        raise ValueError(f"Training aborted due to preference margin saturation: {margin_val:.4f}")
 
 
 def format_dpo(sample):
@@ -83,14 +127,17 @@ def generate_dpo_attestation(
     script_path: Path,
     dataset_path: Path,
     base_model: str,
-    adapter_dir: Path,
-    combined_hash: str,
+    checkpoint_dir: Path,
+    model_payload_sha256: str,
     files_dict: Dict[str, str],
+    safe_base_dir: Path,
     private_key_path: Optional[str] = None,
     password: Optional[str] = None,
     num_train_samples: Optional[int] = None,
     num_eval_samples: Optional[int] = None,
     training_config: Optional[Dict[str, Any]] = None,
+    attestation_id: Optional[str] = None,
+    manifest_sha256: Optional[str] = None,
 ) -> None:
     """Generates a cryptographically signed DPO training attestation receipt."""
     import uuid
@@ -108,7 +155,7 @@ def generate_dpo_attestation(
 
     attestation = {
         "attestation_type": "ZKAEDI_DPO_TRAINING_ATTESTATION",
-        "attestation_id": str(uuid.uuid4()),
+        "attestation_id": attestation_id or str(uuid.uuid4()),
         "nonce": secrets.token_hex(16),
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "environment": {
@@ -121,24 +168,27 @@ def generate_dpo_attestation(
         },
         "script_sha256": script_hash,
         "dataset": {
-            "path": str(dataset_path),
+            "path": get_relative_safe_path(dataset_path, safe_base_dir),
             "sha256": ds_hash,
             "train_samples": num_train_samples,
             "eval_samples": num_eval_samples
         },
         "base_model": base_model,
         "training_config": training_config or {},
-        "adapter": {
-            "path": str(adapter_dir),
-            "combined_sha256": combined_hash,
+        "model_payload_sha256": model_payload_sha256,
+        "training_manifest": {
+            "sha256": manifest_sha256 or "unknown",
+            "relative_path": "training_manifest.json"
+        },
+        "checkpoint": {
+            "path": get_relative_safe_path(checkpoint_dir, safe_base_dir),
             "files": files_dict
         }
     }
     
-    att_path = adapter_dir / "dpo_security_attestation.json"
-    with open(att_path, "w", encoding="utf-8") as f:
-        json.dump(attestation, f, indent=2)
-    print(f"[ZKAEDI SEC] Attestation written to: {att_path}")
+    att_path = checkpoint_dir / "dpo_security_attestation.json"
+    write_atomic_json(att_path, attestation)
+    print(f"[ZKAEDI SEC] Attestation written atomically to: {att_path}")
     
     if private_key_path:
         from zkaedi_model_registry import sign_registry
@@ -146,24 +196,21 @@ def generate_dpo_attestation(
             # Sign the attestation file
             signature = sign_registry(attestation, private_key_path, password=password)
             sig_path = att_path.with_suffix(att_path.suffix + ".sig")
-            with open(sig_path, "wb") as f:
-                f.write(signature)
+            write_atomic_binary(sig_path, signature)
             print(f"[ZKAEDI SEC] Attestation signed and saved to: {sig_path}")
             
             # Sign the training manifest file if it exists
-            manifest_file = adapter_dir / "training_manifest.json"
+            manifest_file = checkpoint_dir / "training_manifest.json"
             if manifest_file.exists():
                 with open(manifest_file, "r") as mf:
                     manifest_data = json.load(mf)
                 manifest_sig = sign_registry(manifest_data, private_key_path, password=password)
                 manifest_sig_path = manifest_file.with_suffix(manifest_file.suffix + ".sig")
-                with open(manifest_sig_path, "wb") as f:
-                    f.write(manifest_sig)
+                write_atomic_binary(manifest_sig_path, manifest_sig)
                 print(f"[ZKAEDI SEC] Training manifest signed and saved to: {manifest_sig_path}")
         except Exception as e:
             print(f"[ZKAEDI SEC] Failed to sign attestation/manifest: {e}", file=sys.stderr)
             raise e
-
 
 
 def main():
@@ -186,12 +233,18 @@ def main():
     # Registration & signing arguments
     parser.add_argument("--sign", action="store_true", help="Sign DPO attestation and registry entries")
     parser.add_argument("--private-key", help="Path to Ed25519 private key (required for sign)")
-    parser.add_argument("--password", help="Passphrase for private key decryption")
+    parser.add_argument("--password", help="[DEPRECATED/INSECURE] Passphrase for private key decryption")
     parser.add_argument("--prompt-password", action="store_true", help="Prompt for private key passphrase")
     parser.add_argument("--register", action="store_true", help="Register the DPO adapter to allow-list")
     parser.add_argument("--adapter-name", help="Registered name for the DPO adapter")
 
     args = parser.parse_args()
+
+    # === SECURITY: signing flag semantics (SEC-01) ===
+    if args.sign and not args.private_key:
+        parser.error("--private-key is required when --sign is enabled")
+    
+    attestation_key = args.private_key if args.sign else None
 
     global SAFE_BASE_DIR
     SAFE_BASE_DIR = Path(args.safe_base_dir).resolve()
@@ -287,41 +340,66 @@ def main():
         logger.error(f"Training halted by safety tripwire: {e}")
         sys.exit(2)
 
-    logger.info("[ZKAEDI SEC] Saving hardened adapter...")
-    adapter_dir = output_dir / "adapter"
-    adapter_dir.mkdir(exist_ok=True)
+    logger.info("[ZKAEDI SEC] Saving hardened checkpoint...")
+    checkpoint_dir = output_dir / "checkpoint"
+    checkpoint_dir.mkdir(exist_ok=True)
     
     # Enforce safe_serialization=True
-    model.save_pretrained(adapter_dir, safe_serialization=True)
-    tokenizer.save_pretrained(adapter_dir)
+    model.save_pretrained(checkpoint_dir, safe_serialization=True)
+    tokenizer.save_pretrained(checkpoint_dir)
 
     # Post-save validations
     scan_for_known_cves()
-    validate_safe_path(str(adapter_dir), must_exist=True, description="saved adapter directory")
+    validate_safe_path(str(checkpoint_dir), must_exist=True, description="saved checkpoint directory")
     
     from zkaedi_model_registry import get_model_hashes
-    combined_hash, files_dict = get_model_hashes(adapter_dir)
-    logger.info(f"[ZKAEDI SEC] Saved adapter cryptographically hashed: {combined_hash}")
+    model_payload_sha256, files_dict = get_model_hashes(checkpoint_dir)
+    logger.info(f"[ZKAEDI SEC] Model payload weights cryptographically hashed: {model_payload_sha256}")
 
-    # Optional: write integrity manifest
-    manifest_file = adapter_dir / "training_manifest.json"
-    with open(manifest_file, "w") as mf:
-        json.dump({
-            "model_name": args.model_name,
-            "revision": args.model_revision,
-            "transformers_version": TRANSFORMERS_VERSION,
-            "dataset": str(dataset_path),
-            "train_samples": len(train_dataset),
-            "eval_samples": len(eval_dataset),
-            "security_note": "Saved in safe tensors format. Hashed and ready for swarm ingestion."
-        }, mf, indent=2)
+    # Determine artifact type (PEFT adapter assertion)
+    is_peft = False
+    try:
+        from peft import PeftModel
+        if isinstance(model, PeftModel):
+            is_peft = True
+    except ImportError:
+        pass
+    artifact_type = "PEFT_adapter" if is_peft else "fine_tuned_model"
 
-    # Password extraction
+    # UUID replay protection / detection token
+    import uuid
+    attestation_id = str(uuid.uuid4())
+
+    # Optional: write integrity manifest containing mutual binding token
+    manifest_file = checkpoint_dir / "training_manifest.json"
+    manifest_data = {
+        "model_name": args.model_name,
+        "revision": args.model_revision,
+        "transformers_version": TRANSFORMERS_VERSION,
+        "dataset": {
+            "path": get_relative_safe_path(dataset_path, SAFE_BASE_DIR),
+            "logical_name": dataset_path.stem
+        },
+        "train_samples": len(train_dataset),
+        "eval_samples": len(eval_dataset),
+        "model_payload_sha256": model_payload_sha256,
+        "artifact_type": artifact_type,
+        "attestation_id": attestation_id,
+        "security_note": "Saved in safe tensors format. Hashed and ready for swarm ingestion."
+    }
+    write_atomic_json(manifest_file, manifest_data)
+
+    # Calculate manifest sha256 for attestation cryptographic binding
+    from zkaedi_model_registry import get_file_sha256
+    manifest_sha256 = get_file_sha256(manifest_file)
+
+    # Password extraction (SEC-03 warning)
     pwd = None
-    if args.prompt_password:
-        pwd = getpass.getpass("Enter private key passphrase: ")
-    elif args.password:
+    if args.password:
+        logger.warning("[ZKAEDI SEC] WARNING: Passing password via plaintext CLI arguments is deprecated and insecure. Use --prompt-password or environment-based key managers.")
         pwd = args.password
+    elif args.prompt_password:
+        pwd = getpass.getpass("Enter private key passphrase: ")
 
     # Extract training hyperparameters
     config_dict = {
@@ -337,41 +415,47 @@ def main():
         "bf16": training_args.bf16
     }
 
-    # Generate and sign attestation
+    # Generate and sign attestation (atomically written and mutually bound)
     generate_dpo_attestation(
         script_path=Path(__file__).resolve(),
         dataset_path=dataset_path,
         base_model=args.model_name,
-        adapter_dir=adapter_dir,
-        combined_hash=combined_hash,
+        checkpoint_dir=checkpoint_dir,
+        model_payload_sha256=model_payload_sha256,
         files_dict=files_dict,
-        private_key_path=args.private_key,
+        safe_base_dir=SAFE_BASE_DIR,
+        private_key_path=attestation_key,
         password=pwd,
         num_train_samples=len(train_dataset),
         num_eval_samples=len(eval_dataset),
-        training_config=config_dict
+        training_config=config_dict,
+        attestation_id=attestation_id,
+        manifest_sha256=manifest_sha256
     )
 
+    # Final release-bundle digest verification
+    final_bundle_hash, final_bundle_files = get_model_hashes(checkpoint_dir)
+    logger.info(f"[ZKAEDI SEC] Final release-bundle digest computed: {final_bundle_hash}")
 
     if args.register:
         try:
             from zkaedi_model_registry import register_model
-            reg_name = args.adapter_name or adapter_dir.name
+            reg_name = args.adapter_name or checkpoint_dir.name
             register_model(
                 model_name=reg_name,
-                model_path=str(adapter_dir),
+                model_path=str(checkpoint_dir),
                 author="DPO Training Engine",
                 description=f"DPO adapter trained on dataset {dataset_path.name}",
                 sign=args.sign,
                 private_key_path=args.private_key,
                 password=pwd
             )
-            logger.info(f"[ZKAEDI SEC] Adapter model '{reg_name}' registered successfully.")
+            logger.info(f"[ZKAEDI SEC] Checkpoint model '{reg_name}' registered successfully.")
         except Exception as e:
             logger.error(f"Registry auto-registration failed: {e}")
             sys.exit(1)
 
-    logger.info(f"[ZKAEDI SEC] Training complete. Adapter + manifest + attestation saved to {adapter_dir}")
+    logger.info(f"[ZKAEDI SEC] Training complete. Checkpoint + manifest + attestation saved to {checkpoint_dir}")
 
 
 if __name__ == "__main__":

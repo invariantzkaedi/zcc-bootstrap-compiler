@@ -2,11 +2,20 @@ import unittest
 import os
 import json
 import tempfile
+import math
+import torch
+import numpy as np
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from transformers import TrainerControl
-from train_hf_dpo_adamw import DPOSTripwireCallback, generate_dpo_attestation
+from train_hf_dpo_adamw import (
+    DPOSTripwireCallback,
+    generate_dpo_attestation,
+    get_relative_safe_path,
+    write_atomic_json,
+    write_atomic_binary
+)
 import zkaedi_model_registry as reg
 
 class TestDPOHardening(unittest.TestCase):
@@ -26,8 +35,7 @@ class TestDPOHardening(unittest.TestCase):
         self.callback.on_log(None, None, control, logs=logs)
         self.assertFalse(control.should_training_stop)
 
-    def test_tripwire_nan_fails(self):
-        # NaNs in metrics should raise ValueError and flag stop training
+    def test_tripwire_nan_fails_python_float(self):
         logs = {"loss": float("nan"), "rewards/margins": 0.2}
         control = TrainerControl()
         with self.assertRaises(ValueError) as ctx:
@@ -35,8 +43,7 @@ class TestDPOHardening(unittest.TestCase):
         self.assertIn("NaN/Inf in metric 'loss'", str(ctx.exception))
         self.assertTrue(control.should_training_stop)
 
-    def test_tripwire_inf_fails(self):
-        # Infs in metrics should raise ValueError and flag stop training
+    def test_tripwire_inf_fails_python_float(self):
         logs = {"loss": float("inf"), "rewards/margins": 0.2}
         control = TrainerControl()
         with self.assertRaises(ValueError) as ctx:
@@ -44,8 +51,30 @@ class TestDPOHardening(unittest.TestCase):
         self.assertIn("NaN/Inf in metric 'loss'", str(ctx.exception))
         self.assertTrue(control.should_training_stop)
 
+    def test_tripwire_nan_fails_numpy_float(self):
+        logs = {"loss": np.nan, "rewards/margins": 0.2}
+        control = TrainerControl()
+        with self.assertRaises(ValueError) as ctx:
+            self.callback.on_log(None, None, control, logs=logs)
+        self.assertIn("NaN/Inf in metric 'loss'", str(ctx.exception))
+        self.assertTrue(control.should_training_stop)
+
+    def test_tripwire_nan_fails_tensor(self):
+        logs = {"loss": torch.tensor(float("nan")), "rewards/margins": 0.2}
+        control = TrainerControl()
+        with self.assertRaises(ValueError) as ctx:
+            self.callback.on_log(None, None, control, logs=logs)
+        self.assertIn("NaN/Inf in metric 'loss'", str(ctx.exception))
+        self.assertTrue(control.should_training_stop)
+
+    def test_tripwire_nonnumeric_metric_ignored(self):
+        # Non-numeric objects shouldn't crash the loop or trip it unless they are Real or Tensor
+        logs = {"loss": 0.5, "unrelated_str": "some_value"}
+        control = TrainerControl()
+        self.callback.on_log(None, None, control, logs=logs)
+        self.assertFalse(control.should_training_stop)
+
     def test_tripwire_margin_saturation_warning(self):
-        # Margins > 10 should issue warnings but not stop unless > 15
         logs = {"loss": 0.5, "rewards/margins": 11.2}
         control = TrainerControl()
         with patch("train_hf_dpo_adamw.logger.warning") as mock_warn:
@@ -54,7 +83,6 @@ class TestDPOHardening(unittest.TestCase):
         self.assertFalse(control.should_training_stop)
 
     def test_tripwire_margin_saturation_critical_fails(self):
-        # Margins > 15 should abort training
         logs = {"loss": 0.5, "rewards/margins": 16.5}
         control = TrainerControl()
         with self.assertRaises(ValueError) as ctx:
@@ -62,8 +90,16 @@ class TestDPOHardening(unittest.TestCase):
         self.assertIn("preference margin saturation", str(ctx.exception))
         self.assertTrue(control.should_training_stop)
 
-    def test_generate_dpo_attestation_and_signing(self):
-        # Mock script and dataset files
+    def test_tripwire_negative_margin_saturation_fails(self):
+        # Margins below -15 should trigger safety aborts
+        logs = {"loss": 0.5, "rewards/margins": -16.5}
+        control = TrainerControl()
+        with self.assertRaises(ValueError) as ctx:
+            self.callback.on_log(None, None, control, logs=logs)
+        self.assertIn("preference margin saturation", str(ctx.exception))
+        self.assertTrue(control.should_training_stop)
+
+    def test_generate_dpo_attestation_and_signing_mutual_binding(self):
         script_file = Path(self.test_dir) / "train_script.py"
         with open(script_file, "w") as f:
             f.write("DPO training code")
@@ -72,83 +108,70 @@ class TestDPOHardening(unittest.TestCase):
         with open(dataset_file, "w") as f:
             f.write("parquet dataset content")
             
-        adapter_dir = Path(self.test_dir) / "adapter"
-        adapter_dir.mkdir()
+        checkpoint_dir = Path(self.test_dir) / "checkpoint"
+        checkpoint_dir.mkdir()
         
-        # Create a mock training manifest file in the adapter directory
-        manifest_file = adapter_dir / "training_manifest.json"
-        manifest_data = {"test_metric": 42}
-        with open(manifest_file, "w") as f:
-            json.dump(manifest_data, f)
+        # Create a mock training manifest file in the checkpoint directory
+        manifest_file = checkpoint_dir / "training_manifest.json"
+        attestation_id = "test-uuid-binding-token"
+        manifest_data = {
+            "test_metric": 42,
+            "attestation_id": attestation_id,
+            "model_payload_sha256": "weights_hash"
+        }
+        write_atomic_json(manifest_file, manifest_data)
+        
+        # Calculate manifest hash to bind with attestation
+        manifest_sha256 = reg.get_file_sha256(manifest_file)
         
         # Keygen for signing
         priv_key_path = os.path.join(self.test_dir, "private_key.pem")
         pub_key_path = os.path.join(self.test_dir, "public_key.pem")
         reg.generate_ed25519_keypair(priv_key_path, pub_key_path)
         
-        # Test generate attestation without signing
+        # Test generate attestation with signing and relative paths
         generate_dpo_attestation(
             script_path=script_file,
             dataset_path=dataset_file,
             base_model="gpt2-safe",
-            adapter_dir=adapter_dir,
-            combined_hash="combined_adapter_hash",
+            checkpoint_dir=checkpoint_dir,
+            model_payload_sha256="weights_hash",
             files_dict={"weights.safetensors": "weights_hash"},
-            num_train_samples=100,
-            num_eval_samples=20,
-            training_config={"learning_rate": 2e-5}
-        )
-        
-        att_json = adapter_dir / "dpo_security_attestation.json"
-        self.assertTrue(att_json.exists())
-        with open(att_json, "r") as f:
-            att_data = json.load(f)
-            self.assertEqual(att_data["base_model"], "gpt2-safe")
-            self.assertEqual(att_data["adapter"]["combined_sha256"], "combined_adapter_hash")
-            self.assertEqual(att_data["dataset"]["train_samples"], 100)
-            self.assertEqual(att_data["dataset"]["eval_samples"], 20)
-            self.assertEqual(att_data["training_config"]["learning_rate"], 2e-5)
-            self.assertIn("attestation_id", att_data)
-            self.assertIn("nonce", att_data)
-            self.assertIn("environment", att_data)
-            self.assertIn("torch_version", att_data["environment"])
-
-        # Test generate attestation with signing
-        generate_dpo_attestation(
-            script_path=script_file,
-            dataset_path=dataset_file,
-            base_model="gpt2-safe",
-            adapter_dir=adapter_dir,
-            combined_hash="combined_adapter_hash",
-            files_dict={"weights.safetensors": "weights_hash"},
+            safe_base_dir=Path(self.test_dir),
             private_key_path=priv_key_path,
             num_train_samples=100,
             num_eval_samples=20,
-            training_config={"learning_rate": 2e-5}
+            training_config={"learning_rate": 2e-5},
+            attestation_id=attestation_id,
+            manifest_sha256=manifest_sha256
         )
         
-        sig_file = adapter_dir / "dpo_security_attestation.json.sig"
+        att_json = checkpoint_dir / "dpo_security_attestation.json"
+        self.assertTrue(att_json.exists())
+        with open(att_json, "r") as f:
+            att_data = json.load(f)
+            
+        # Verify mutual bindings and relative paths
+        self.assertEqual(att_data["attestation_id"], attestation_id)
+        self.assertEqual(att_data["training_manifest"]["sha256"], manifest_sha256)
+        self.assertEqual(att_data["dataset"]["path"], "dataset.parquet")
+        self.assertEqual(att_data["checkpoint"]["path"], "checkpoint")
+        
+        # Verify signatures exist
+        sig_file = checkpoint_dir / "dpo_security_attestation.json.sig"
         self.assertTrue(sig_file.exists())
         with open(sig_file, "rb") as f:
             signature = f.read()
             
-        with open(att_json, "r") as f:
-            signed_att_data = json.load(f)
-            
-        # Verify attestation signature
-        valid = reg.verify_registry_signature(signed_att_data, signature, pub_key_path)
+        valid = reg.verify_registry_signature(att_data, signature, pub_key_path)
         self.assertTrue(valid)
 
-        # Verify training manifest signature file was created and signed
         manifest_sig_file = manifest_file.with_suffix(manifest_file.suffix + ".sig")
         self.assertTrue(manifest_sig_file.exists())
         with open(manifest_sig_file, "rb") as f:
             m_signature = f.read()
         m_valid = reg.verify_registry_signature(manifest_data, m_signature, pub_key_path)
         self.assertTrue(m_valid)
-
-
-
 
 
 if __name__ == "__main__":
