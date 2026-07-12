@@ -65,7 +65,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from types import TracebackType
-from typing import (Any, Callable, Iterable, Optional, Sequence, Tuple,
+import re
+from typing import (Any, Callable, Iterable, Optional, Pattern, Sequence, Tuple,
                     Type, Union)
 
 __all__ = [
@@ -113,6 +114,31 @@ class HangError(OmniError):
 class FabricationError(OmniError):
     """A result was claimed without a logged exit code. By protocol: fabricated."""
 
+
+_SECRET_PATTERNS: list[Pattern[str]] = [
+    re.compile(r"sk-[a-zA-Z0-9]{20,}", re.IGNORECASE),           # OpenAI-style
+    re.compile(r"0x[0-9a-fA-F]{64}"),                            # Private keys
+    re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----.*?-----END .*?PRIVATE KEY-----", re.DOTALL),
+    re.compile(r"(?i)(api[_-]?key|secret|token|password)\s*[:=]\s*['\"]?[A-Za-z0-9_\-]{8,}"),
+    re.compile(r"/home/[^/]+/\.ssh/"),                           # SSH paths
+]
+
+def _redact_secrets(text: str) -> str:
+    if not text:
+        return text
+    redacted = text
+    for pattern in _SECRET_PATTERNS:
+        redacted = pattern.sub("[REDACTED]", redacted)
+    return redacted
+
+def _redact_data(val: Any) -> Any:
+    if isinstance(val, str):
+        return _redact_secrets(val)
+    if isinstance(val, dict):
+        return {k: _redact_data(v) for k, v in val.items()}
+    if isinstance(val, (list, tuple, set)):
+        return type(val)(_redact_data(item) for item in val)
+    return val
 
 def _secure_path(p: Path, *, allowed_roots: Optional[Sequence[Path]] = None) -> Path:
     """Resolve, validate absolute path, prevent symlink escape.
@@ -201,7 +227,17 @@ def _emit(ev: OmniEvent) -> None:
     """Write an event to the ledger. Failure here falls back to raw stderr —
     the catcher itself is not allowed to fail silently."""
     _EVENT_COUNTS[ev.kind] = _EVENT_COUNTS.get(ev.kind, 0) + 1
+    
+    # Redact secrets (mitigates MEDIUM-002)
+    ev.message = _redact_secrets(ev.message)
+    if ev.traceback_str:
+        ev.traceback_str = _redact_secrets(ev.traceback_str)
+    if ev.data:
+        ev.data = _redact_data(ev.data)
+        
     line = json.dumps(asdict(ev), default=repr, ensure_ascii=False)
+    line = _redact_secrets(line)
+    
     try:
         with _LEDGER_LOCK:
             lp = ledger_path()
@@ -210,8 +246,9 @@ def _emit(ev: OmniEvent) -> None:
             with open(lp, "a", encoding="utf-8") as f:
                 f.write(line + "\n")
     except Exception:  # noqa: BLE001 — last-resort channel, deliberately broad
-        sys.__stderr__.write("OMNICATCH-LEDGER-FAIL " + line + "\n")
-        sys.__stderr__.write(traceback.format_exc())
+        fallback_line = _redact_secrets(line)
+        sys.__stderr__.write("OMNICATCH-LEDGER-FAIL " + fallback_line + "\n")
+        sys.__stderr__.write(_redact_secrets(traceback.format_exc()))
     lvl = {"INFO": logging.INFO, "WARN": logging.WARNING,
            "ERROR": logging.ERROR, "FATAL": logging.CRITICAL}.get(
         ev.severity, logging.ERROR)

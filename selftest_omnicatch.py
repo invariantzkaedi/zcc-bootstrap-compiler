@@ -228,6 +228,40 @@ def test_tier3e_run_verified():
     print("[+] Run Verified verified.")
 
 
+def test_redaction():
+    print("[*] Testing Tier 3 (Hardenings): Secret Redaction...")
+    
+    secret_msg = "Attempting to authenticate with sk-aBcD1234567890123456"
+    secret_trace = "Stack trace with private key 0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+    secret_data = {
+        "ssh_path": "/home/user/.ssh/id_rsa",
+        "nested": {"key": "secret: my_password123"}
+    }
+    
+    ev = omnicatch.OmniEvent(
+        kind="redaction_test",
+        severity="ERROR",
+        message=secret_msg,
+        traceback_str=secret_trace,
+        data=secret_data
+    )
+    omnicatch._emit(ev)
+    
+    p = omnicatch.ledger_path()
+    found = False
+    with open(p, "r", encoding="utf-8") as f:
+        for line in f:
+            if "redaction_test" in line:
+                found = True
+                assert "sk-" not in line, "Secret sk-key was not redacted!"
+                assert "0x1234" not in line, "Secret private key was not redacted!"
+                assert ".ssh" not in line, "Secret SSH path was not redacted!"
+                assert "my_password" not in line, "Secret password was not redacted!"
+                assert "[REDACTED]" in line, "[REDACTED] marker missing!"
+    assert found, "Redaction test event not found in ledger"
+    print("[+] Secret Redaction verified.")
+
+
 def main():
     print("=== OMNICATCH SELF-TEST START ===")
     test_tier1_and_2()
@@ -236,6 +270,7 @@ def main():
     test_tier3c_swallow_audit()
     test_tier3d_watchdog()
     test_tier3e_run_verified()
+    test_redaction()
     
     print("\n=== FINAL LEDGER KINDS ===")
     print(read_ledger_kinds())
