@@ -44,6 +44,45 @@ def is_pid_alive(pid: int) -> bool:
         return False
 
 
+def validate_generation_value(raw_generation: Any) -> int:
+    """Validates and returns the generation as a safe non-negative integer (SEC-22 / SEC-23)."""
+    if type(raw_generation) is not int:
+        try:
+            if isinstance(raw_generation, str):
+                raw_generation = raw_generation.strip()
+            generation = int(raw_generation)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Invalid registry generation value: {raw_generation}") from exc
+    else:
+        generation = raw_generation
+        
+    if generation < 0:
+        raise ValueError(f"Registry generation must be non-negative: {generation}")
+    return generation
+
+
+def _restore_quarantine_no_clobber(quarantine_path: Path, lock_path: Path) -> None:
+    """Restores a quarantined lock file back to the active lock_path without clobbering an existing active lock."""
+    import os
+    try:
+        if hasattr(os, "link"):
+            try:
+                os.link(str(quarantine_path), str(lock_path))
+                quarantine_path.unlink(missing_ok=True)
+            except FileExistsError:
+                # Another owner acquired the active lock; clean up quarantine
+                quarantine_path.unlink(missing_ok=True)
+        else:
+            # Windows/non-POSIX fallback: os.rename raises FileExistsError on Windows if dst exists
+            try:
+                os.rename(str(quarantine_path), str(lock_path))
+            except FileExistsError:
+                # Another owner acquired the active lock; clean up quarantine
+                quarantine_path.unlink(missing_ok=True)
+    except Exception:
+        quarantine_path.unlink(missing_ok=True)
+
+
 def _safe_break_stale_lock(lock_path: Path, expected_token: str) -> bool:
     """Atomically breaks a stale lock using quarantine rename to prevent races (REL-17)."""
     import uuid
@@ -67,18 +106,12 @@ def _safe_break_stale_lock(lock_path: Path, expected_token: str) -> bool:
             quarantine_path.unlink(missing_ok=True)
             return True
         else:
-            # Token changed: restore original lock file
-            try:
-                os.rename(str(quarantine_path), str(lock_path))
-            except Exception:
-                quarantine_path.unlink(missing_ok=True)
+            # Token changed: restore original lock file without clobbering
+            _restore_quarantine_no_clobber(quarantine_path, lock_path)
             return False
     except Exception:
-        # Restore on any parse failure to be safe
-        try:
-            os.rename(str(quarantine_path), str(lock_path))
-        except Exception:
-            quarantine_path.unlink(missing_ok=True)
+        # Restore on any parse failure to be safe without clobbering
+        _restore_quarantine_no_clobber(quarantine_path, lock_path)
         return False
 
 
@@ -114,9 +147,15 @@ class RegistryLock:
                 # Attempt to create lock exclusively
                 fd = os.open(self.lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
                 try:
-                    # Write entire metadata in a single os.write system call (REL-15)
+                    # Write entire metadata in a single checked os.write system call (REL-15)
                     json_bytes = json.dumps(my_lock_data).encode("utf-8")
-                    os.write(fd, json_bytes)
+                    view = memoryview(json_bytes)
+                    while view:
+                        written = os.write(fd, view)
+                        if written <= 0:
+                            raise OSError("Failed to write lock metadata")
+                        view = view[written:]
+                    os.fsync(fd)
                 finally:
                     os.close(fd)
                 self.acquired = True
@@ -146,17 +185,8 @@ class RegistryLock:
                             time.sleep(0.02)
                             continue
                 except Exception:
-                    # Handle partially-written / corrupt lock files
-                    try:
-                        st = os.stat(self.lock_path)
-                        # Only break unparseable locks if they have timed out completely (REL-15)
-                        if time.time() - st.st_mtime > self.timeout:
-                            try:
-                                os.unlink(self.lock_path)
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
+                    # Fail closed for corrupt/unparseable lock files. Remove automatic deletion.
+                    pass
                 
                 time.sleep(0.05)
         raise TimeoutError(f"Failed to acquire registry write lock within {self.timeout}s")
@@ -214,7 +244,8 @@ def load_registry(verify_signature: bool = False, public_key_path: Optional[str 
                         with open(reg_path, "r", encoding="utf-8") as f:
                             data = json.load(f)
                             
-                        # If verification requested, verify legacy before migration (SEC-18)
+                        # SEC-23: Legacy generation type and range validation
+                        was_injected = False
                         if verify_signature:
                             if not public_key_path:
                                 raise ValueError("[ZKAEDI REG] public_key_path is required when verify_signature=True")
@@ -222,7 +253,24 @@ def load_registry(verify_signature: bool = False, public_key_path: Optional[str 
                             # SEC-20: require legacy document to contain generation field for signature checks
                             if "generation" not in data:
                                 raise ValueError("[ZKAEDI REG] Legacy registry document is missing 'generation' field; signature verification cannot proceed")
+                            
+                            legacy_gen = data["generation"]
+                            if type(legacy_gen) is not int or legacy_gen < 0:
+                                raise ValueError("Legacy registry generation must be a non-negative integer")
+                            gen_num = legacy_gen
+                        else:
+                            if "generation" in data:
+                                legacy_gen = data["generation"]
+                                if type(legacy_gen) is not int or legacy_gen < 0:
+                                    raise ValueError("Legacy registry generation must be a non-negative integer")
+                                gen_num = legacy_gen
+                            else:
+                                gen_num = 0
+                                data["generation"] = gen_num
+                                was_injected = True
                                 
+                        # If verification requested, verify legacy signature before migration (SEC-18)
+                        if verify_signature:
                             legacy_sig = _get_signature_path(reg_path)
                             if not legacy_sig.exists():
                                 raise FileNotFoundError(f"[ZKAEDI REG] Legacy registry signature missing: {legacy_sig}")
@@ -230,16 +278,11 @@ def load_registry(verify_signature: bool = False, public_key_path: Optional[str 
                             if not verify_registry_signature(data, signature, public_key_path):
                                 raise ValueError("[ZKAEDI REG] Legacy registry signature verification failed!")
                         
-                        was_injected = False
-                        if "generation" not in data:
-                            data["generation"] = 0
-                            was_injected = True
-                            
-                        gen_num = data["generation"]
-                        
                         db_dir.mkdir(parents=True, exist_ok=True)
                         generations_dir.mkdir(parents=True, exist_ok=True)
                         
+                        # SEC-22: Validate generation value before constructing filesystem paths
+                        gen_num = validate_generation_value(gen_num)
                         gen_json_path = generations_dir / f"{gen_num}.json"
                         gen_sig_path = generations_dir / f"{gen_num}.sig"
                         
@@ -327,8 +370,10 @@ def load_registry(verify_signature: bool = False, public_key_path: Optional[str 
     for attempt in range(5):
         try:
             gen_id_str = current_file.read_text(encoding="utf-8").strip()
-            gen_json_path = generations_dir / f"{gen_id_str}.json"
-            gen_sig_path = generations_dir / f"{gen_id_str}.sig"
+            # SEC-22: Validate generation value before path construction
+            generation = validate_generation_value(gen_id_str)
+            gen_json_path = generations_dir / f"{generation}.json"
+            gen_sig_path = generations_dir / f"{generation}.sig"
             
             if not gen_json_path.exists():
                 raise FileNotFoundError(f"Generation JSON file not found: {gen_json_path}")
@@ -343,8 +388,8 @@ def load_registry(verify_signature: bool = False, public_key_path: Optional[str 
             if "generation" not in data:
                 raise ValueError("Registry generation document is missing 'generation'")
                 
-            pointer_generation = int(gen_id_str)
-            document_generation = data["generation"]
+            pointer_generation = generation
+            document_generation = validate_generation_value(data["generation"])
             if document_generation != pointer_generation:
                 raise ValueError("Registry generation does not match current pointer")
                 
@@ -391,11 +436,14 @@ def _save_registry_unlocked(
     current_gen = 0
     if current_file.exists():
         try:
-            current_gen = int(current_file.read_text(encoding="utf-8").strip())
+            # SEC-22: Validate generation value from current pointer file
+            current_gen = validate_generation_value(current_file.read_text(encoding="utf-8").strip())
         except Exception:
             pass
             
     next_gen = current_gen + 1
+    # SEC-22: Validate next generation value before use
+    next_gen = validate_generation_value(next_gen)
     data["generation"] = next_gen
     
     gen_json_path = generations_dir / f"{next_gen}.json"
@@ -466,7 +514,8 @@ def _save_registry_unlocked(
             for filepath in generations_dir.glob("*"):
                 try:
                     name_stem = filepath.stem
-                    gen_num = int(name_stem)
+                    # SEC-22: Validate generation value for filename cleanup safety
+                    gen_num = validate_generation_value(name_stem)
                     if gen_num < next_gen - 4:
                         filepath.unlink(missing_ok=True)
                 except ValueError:

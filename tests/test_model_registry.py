@@ -815,9 +815,13 @@ class TestModelRegistry(unittest.TestCase):
         # Manually backdate the mtime of the unparseable lock file to make it look old
         os.utime(lock_path, (time.time() - 20.0, time.time() - 20.0))
         
-        # Try to acquire again - it should successfully recover the stale unparseable lock
-        with reg.RegistryLock(lock_path, timeout=0.1):
-            self.assertTrue(lock_path.exists())
+        # Under REL-15 fail-closed, unparseable locks are NOT automatically deleted even if old.
+        # It must still timeout and fail closed.
+        lock2 = reg.RegistryLock(lock_path, timeout=0.1)
+        with self.assertRaises(TimeoutError):
+            with lock2:
+                pass
+        self.assertTrue(lock_path.exists())
 
     def test_legacy_migration_signed_no_generation_raises(self):
         priv_key_path = os.path.join(self.test_dir, "private_key.pem")
@@ -856,6 +860,44 @@ class TestModelRegistry(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             reg.load_registry()
         self.assertIn("Registry generation document is missing 'generation'", str(ctx.exception))
+
+    def test_generation_path_escape_and_validation(self):
+        db_dir = reg._get_db_dir()
+        db_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Test 1: Invalid string pointer raises ValueError
+        current_file = db_dir / "current"
+        current_file.write_text("../escaped\n")
+        with self.assertRaises(ValueError) as ctx:
+            reg.load_registry()
+        self.assertIn("Invalid registry generation value", str(ctx.exception))
+        
+        # Test 2: Negative generation raises ValueError
+        current_file.write_text("-5\n")
+        with self.assertRaises(ValueError) as ctx:
+            reg.load_registry()
+        self.assertIn("Registry generation must be non-negative", str(ctx.exception))
+        
+        # Test 3: Invalid type in legacy migration raises ValueError (SEC-23)
+        # Unlink active current pointer file to force legacy migration path
+        current_file.unlink(missing_ok=True)
+        
+        priv_key_path = os.path.join(self.test_dir, "private_key.pem")
+        pub_key_path = os.path.join(self.test_dir, "public_key.pem")
+        reg.generate_ed25519_keypair(priv_key_path, pub_key_path)
+        
+        invalid_legacy_data = {"models": {}, "generation": "../escape"}
+        with open(self.mock_registry_file, "w", encoding="utf-8") as f:
+            json.dump(invalid_legacy_data, f)
+            
+        legacy_sig = reg._get_signature_path(self.mock_registry_file)
+        signature = reg.sign_registry(invalid_legacy_data, priv_key_path)
+        with open(legacy_sig, "wb") as f:
+            f.write(signature)
+            
+        with self.assertRaises(ValueError) as ctx:
+            reg.load_registry(verify_signature=True, public_key_path=pub_key_path)
+        self.assertIn("Legacy registry generation must be a non-negative integer", str(ctx.exception))
 
 
 if __name__ == "__main__":
