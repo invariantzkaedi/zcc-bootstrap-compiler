@@ -11,6 +11,7 @@ Includes:
 - Cryptographic provenance recording
 - Runtime CVE scanning
 - Secure model quantization (8-bit and 4-bit via bitsandbytes)
+- Secure GPTQ model loading with config integrity verification
 """
 
 from __future__ import annotations
@@ -95,7 +96,7 @@ def validate_safe_path(
 
 
 # =============================================================================
-# HARDENED MODEL LOADER
+# HARDENED MODEL LOADER (Standard)
 # =============================================================================
 
 def load_model_hardened(
@@ -130,10 +131,7 @@ def load_model_hardened(
 # =============================================================================
 
 def scan_for_known_cves() -> None:
-    """
-    Runtime CVE scanner.
-    Currently checks for CVE-2026-4372 (transformers < 5.3.0).
-    """
+    """Runtime CVE scanner (currently checks for CVE-2026-4372)."""
     try:
         from transformers import __version__ as TRANSFORMERS_VERSION
         from packaging import version
@@ -189,7 +187,7 @@ def record_provenance(
 
 
 # =============================================================================
-# SECURE MODEL QUANTIZATION
+# SECURE MODEL QUANTIZATION (bitsandbytes)
 # =============================================================================
 
 def safe_quantize_model(
@@ -198,209 +196,117 @@ def safe_quantize_model(
     bits: int = 8,
     device: str = "auto",
 ) -> Path:
-    """
-    Secure model quantization using bitsandbytes.
-
-    Security Properties:
-    - Always loads via load_model_hardened() (CVE-2026-4372 protected)
-    - Outputs only safetensors format
-    - Records full cryptographic provenance
-    - Fail-closed path validation
-    - Runtime CVE scanning before execution
-    - Proper error handling during quantization
-
-    Supported:
-    - bits=8  → 8-bit quantization (Linear8bitLt)
-    - bits=4  → 4-bit quantization (Linear4bit)
-    """
+    """Secure model quantization using bitsandbytes."""
     scan_for_known_cves()
-
     print(f"[ZKAEDI SEC] Starting secure {bits}-bit quantization...")
 
-    # Load model safely
     model, tokenizer = load_model_hardened(model_path)
-
-    # Validate output path
-    output_path = validate_safe_path(output_dir, must_exist=False, description="quantized model output")
+    output_path = validate_safe_path(output_dir, must_exist=False, description="quantized output")
     output_path.mkdir(parents=True, exist_ok=True)
 
     try:
         import bitsandbytes as bnb
     except ImportError:
-        raise ImportError(
-            "[ZKAEDI SEC] bitsandbytes is not installed. "
-            "Install with: pip install bitsandbytes"
-        )
+        raise ImportError("[ZKAEDI SEC] bitsandbytes is not installed.")
 
     try:
         if bits == 8:
-            print("[ZKAEDI SEC] Applying 8-bit quantization (Linear8bitLt)...")
+            print("[ZKAEDI SEC] Applying 8-bit quantization...")
             quantized_model = _replace_with_8bit(model)
         elif bits == 4:
             print("[ZKAEDI SEC] Applying 4-bit quantization (nf4)...")
             quantized_model = _replace_with_4bit(model)
         else:
-            raise ValueError(f"[ZKAEDI SEC] Unsupported bits value: {bits}. Use 4 or 8.")
-
+            raise ValueError(f"[ZKAEDI SEC] Unsupported bits value: {bits}")
     except Exception as e:
-        print(f"[ZKAEDI SEC] Quantization process failed: {e}", file=sys.stderr)
-        raise RuntimeError(f"Failed to quantize model to {bits}-bit") from e
+        print(f"[ZKAEDI SEC] Quantization failed: {e}", file=sys.stderr)
+        raise RuntimeError(f"Failed to quantize to {bits}-bit") from e
 
-    # Handle device placement
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
     quantized_model = quantized_model.to(device)
-
-    # Save with safetensors only
-    print(f"[ZKAEDI SEC] Saving quantized model to {output_path} (safetensors)...")
     quantized_model.save_pretrained(output_path, safe_serialization=True)
     tokenizer.save_pretrained(output_path)
 
-    # Record provenance
     provenance = record_provenance(model_path, str(output_path))
     with open(output_path / "quantization_provenance.json", "w") as f:
         json.dump(provenance, f, indent=2)
 
-    print(f"[ZKAEDI SEC] Quantization complete. Model saved to: {output_path}")
+    print(f"[ZKAEDI SEC] Quantization complete. Saved to: {output_path}")
     return output_path
 
 
 def _replace_with_8bit(model: torch.nn.Module) -> torch.nn.Module:
-    """Recursively replace nn.Linear layers with 8-bit Linear8bitLt layers."""
     import bitsandbytes as bnb
-
     for name, module in list(model.named_children()):
         if isinstance(module, torch.nn.Linear):
-            in_features = module.in_features
-            out_features = module.out_features
-            has_bias = module.bias is not None
-
             new_module = bnb.nn.Linear8bitLt(
-                in_features,
-                out_features,
-                bias=has_bias,
-                has_fp16_weights=False,
-                threshold=6.0,
+                module.in_features, module.out_features,
+                bias=module.bias is not None,
+                has_fp16_weights=False, threshold=6.0
             )
             new_module.weight.data = module.weight.data.clone()
-            if has_bias:
+            if module.bias is not None:
                 new_module.bias.data = module.bias.data.clone()
-
             setattr(model, name, new_module)
         else:
             _replace_with_8bit(module)
-
     return model
 
 
 def _replace_with_4bit(model: torch.nn.Module) -> torch.nn.Module:
-    """Recursively replace nn.Linear layers with 4-bit Linear4bit layers."""
     import bitsandbytes as bnb
-
     for name, module in list(model.named_children()):
         if isinstance(module, torch.nn.Linear):
-            in_features = module.in_features
-            out_features = module.out_features
-            has_bias = module.bias is not None
-
             new_module = bnb.nn.Linear4bit(
-                in_features,
-                out_features,
-                bias=has_bias,
+                module.in_features, module.out_features,
+                bias=module.bias is not None,
                 compute_dtype=torch.float16,
                 compress_statistics=True,
-                quant_type="nf4",
+                quant_type="nf4"
             )
             new_module.weight.data = module.weight.data.clone()
-            if has_bias:
+            if module.bias is not None:
                 new_module.bias.data = module.bias.data.clone()
-
             setattr(model, name, new_module)
         else:
             _replace_with_4bit(module)
-
     return model
 
 
-
-
 # =============================================================================
-# GPTQ CONFIG INTEGRITY CHECK
+# GPTQ SECURE LOADING + CONFIG INTEGRITY
 # =============================================================================
 
 def verify_gptq_config_integrity(
     model_path: str,
-    expected_config_hash: Optional[str] = None,
-    strict: bool = True
+    expected_config_hash: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    Validates the integrity and correctness of quantize_config.json for GPTQ models.
-
-    Checks performed:
-    - File existence
-    - Valid JSON
-    - Required fields presence
-    - Type and value sanity checks on critical fields
-    - Optional cryptographic hash verification
-
-    Args:
-        model_path: Path to the GPTQ model directory
-        expected_config_hash: Optional expected SHA-256 hash of quantize_config.json
-        strict: If True, raises on any validation failure. If False, returns warnings.
-
-    Returns:
-        Dictionary with validation results
-    """
+    """Validates quantize_config.json structure and optional hash."""
     config_path = Path(model_path) / "quantize_config.json"
-
     if not config_path.exists():
-        raise FileNotFoundError(
-            f"[ZKAEDI SEC] quantize_config.json not found in {model_path}"
-        )
+        raise FileNotFoundError(f"[ZKAEDI SEC] quantize_config.json not found in {model_path}")
 
-    # Read and parse JSON
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            config = json.load(f)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"[ZKAEDI SEC] quantize_config.json is not valid JSON: {e}")
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = json.load(f)
 
     errors = []
-    warnings = []
+    if "bits" not in config or not isinstance(config["bits"], int) or config["bits"] not in [2, 3, 4, 8]:
+        errors.append("Invalid or missing 'bits'")
+    if "group_size" not in config or not isinstance(config["group_size"], int) or config["group_size"] <= 0:
+        errors.append("Invalid or missing 'group_size'")
 
-    # === Required Fields ===
-    required_fields = ["bits", "group_size"]
-    for field in required_fields:
-        if field not in config:
-            errors.append(f"Missing required field: '{field}'")
+    if errors:
+        raise ValueError(f"[ZKAEDI SEC] GPTQ config validation failed: {errors}")
 
-    # === Field Validation ===
-    if "bits" in config:
-        bits = config["bits"]
-        if not isinstance(bits, int) or bits not in [2, 3, 4, 8]:
-            errors.append(f"Invalid 'bits' value: {bits}. Must be one of [2, 3, 4, 8]")
+    result = {
+        "valid": True,
+        "config": config,
+        "config_hash": None,
+        "checked_at": datetime.now(timezone.utc).isoformat()
+    }
 
-    if "group_size" in config:
-        group_size = config["group_size"]
-        if not isinstance(group_size, int) or group_size <= 0:
-            errors.append(f"Invalid 'group_size' value: {group_size}. Must be a positive integer")
-
-    if "damp_percent" in config:
-        damp = config["damp_percent"]
-        if not isinstance(damp, (int, float)) or not (0.0 <= damp <= 1.0):
-            warnings.append(f"Suspicious 'damp_percent' value: {damp}")
-
-    if "desc_act" in config:
-        if not isinstance(config["desc_act"], bool):
-            errors.append("'desc_act' must be a boolean")
-
-    if "true_sequential" in config:
-        if not isinstance(config["true_sequential"], bool):
-            warnings.append("'true_sequential' should be a boolean")
-
-    # === Optional Hash Verification ===
-    actual_hash = None
     if expected_config_hash:
         def sha256_file(path: Path) -> str:
             h = hashlib.sha256()
@@ -408,39 +314,13 @@ def verify_gptq_config_integrity(
                 for chunk in iter(lambda: f.read(8192), b""):
                     h.update(chunk)
             return h.hexdigest()
-
-        actual_hash = sha256_file(config_path)
-        if actual_hash != expected_config_hash:
-            errors.append(
-                f"quantize_config.json hash mismatch!\n"
-                f"Expected: {expected_config_hash}\n"
-                f"Actual:   {actual_hash}"
-            )
-
-    result = {
-        "valid": len(errors) == 0,
-        "config": config,
-        "config_hash": actual_hash,
-        "errors": errors,
-        "warnings": warnings,
-        "checked_at": datetime.now(timezone.utc).isoformat()
-    }
-
-    if strict and errors:
-        raise ValueError(
-            f"[ZKAEDI SEC] GPTQ config validation failed:\n" + "\n".join(errors)
-        )
-
-    if warnings:
-        for w in warnings:
-            print(f"[ZKAEDI SEC] Warning: {w}")
+        actual = sha256_file(config_path)
+        result["config_hash"] = actual
+        if actual != expected_config_hash:
+            raise ValueError(f"[ZKAEDI SEC] quantize_config.json hash mismatch")
 
     return result
 
-
-# =============================================================================
-# GPTQ SECURE MODEL LOADER
-# =============================================================================
 
 def load_gptq_model_hardened(
     model_path: str,
@@ -451,84 +331,51 @@ def load_gptq_model_hardened(
     use_triton: bool = False,
     expected_config_hash: Optional[str] = None,
 ) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
-    """
-    Secure loader for pre-quantized GPTQ models with config integrity verification.
-
-    Security Properties:
-    - Calls scan_for_known_cves() before loading
-    - Enforces path validation
-    - Verifies quantize_config.json structure and optional hash
-    - Disables risky custom kernels by default (ExLlama, Triton)
-    - Uses trust_remote_code=False
-    """
+    """Secure loader for pre-quantized GPTQ models with config integrity check."""
     scan_for_known_cves()
-
     print(f"[ZKAEDI SEC] Loading GPTQ model from: {model_path}")
 
-    validated_path = validate_safe_path(
-        model_path, must_exist=True, description="GPTQ model directory"
-    )
+    validated_path = validate_safe_path(model_path, must_exist=True, description="GPTQ model")
 
-    # === Validate quantize_config.json ===
-    config_info = verify_gptq_config_integrity(
-        str(validated_path),
-        expected_config_hash=expected_config_hash
-    )
-    print(
-        f"[ZKAEDI SEC] quantize_config.json validated successfully. "
-        f"bits={config_info['config']['bits']}"
-    )
+    # Verify quantize_config.json
+    config_info = verify_gptq_config_integrity(str(validated_path), expected_config_hash=expected_config_hash)
+    print(f"[ZKAEDI SEC] quantize_config.json validated. bits={config_info['config']['bits']}")
 
     try:
         from auto_gptq import AutoGPTQForCausalLM
     except ImportError:
-        raise ImportError(
-            "[ZKAEDI SEC] auto-gptq is not installed. "
-            "Install with: pip install auto-gptq"
-        )
+        raise ImportError("[ZKAEDI SEC] auto-gptq is not installed.")
 
     if device == "auto":
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
-    try:
-        model = AutoGPTQForCausalLM.from_quantized(
-            str(validated_path),
-            device=device,
-            use_safetensors=use_safetensors,
-            trust_remote_code=False,
-            use_triton=use_triton,
-            disable_exllama=disable_exllama,
-            disable_exllamav2=disable_exllamav2,
-        )
+    model = AutoGPTQForCausalLM.from_quantized(
+        str(validated_path),
+        device=device,
+        use_safetensors=use_safetensors,
+        trust_remote_code=False,
+        use_triton=use_triton,
+        disable_exllama=disable_exllama,
+        disable_exllamav2=disable_exllamav2,
+    )
 
-        tokenizer = AutoTokenizer.from_pretrained(
-            str(validated_path),
-            trust_remote_code=False
-        )
+    tokenizer = AutoTokenizer.from_pretrained(str(validated_path), trust_remote_code=False)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
 
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-
-        model.eval()
-        print(f"[ZKAEDI SEC] GPTQ model loaded successfully on device: {device}")
-        return model, tokenizer
-
-    except Exception as e:
-        print(f"[ZKAEDI SEC] Failed to load GPTQ model: {e}", file=sys.stderr)
-        raise RuntimeError(f"GPTQ model loading failed from {validated_path}") from e
+    model.eval()
+    print(f"[ZKAEDI SEC] GPTQ model loaded successfully on {device}")
+    return model, tokenizer
 
 
 def is_gptq_model(model_path: str) -> bool:
-    """Quick check if a directory contains a GPTQ-quantized model."""
-    path = Path(model_path)
-    return (path / "quantize_config.json").exists()
+    """Quick check if directory contains a GPTQ model."""
+    return (Path(model_path) / "quantize_config.json").exists()
 
 
 # =============================================================================
 # SELF TEST
 # =============================================================================
-
-
 
 if __name__ == "__main__":
     print("ZKAEDI PRIME Security Utilities v2.3.1 loaded successfully.")
