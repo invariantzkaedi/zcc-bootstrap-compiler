@@ -524,8 +524,44 @@ def register_model(
     db_dir = _get_db_dir()
     lock_path = db_dir / "write.lock"
     with RegistryLock(lock_path):
-        registry_data = load_registry()
-        
+        if sign:
+            if not private_key_path:
+                raise ValueError("[ZKAEDI REG] private_key_path is required when sign=True")
+            current_file = db_dir / "current"
+            if current_file.exists():
+                from cryptography.hazmat.primitives import serialization
+                import tempfile
+                import os
+                
+                priv_path = validate_safe_path(private_key_path, must_exist=True, description="private key path")
+                password_bytes = password.encode("utf-8") if password else None
+                with open(priv_path, "rb") as f:
+                    private_key = serialization.load_pem_private_key(f.read(), password=password_bytes)
+                public_key = private_key.public_key()
+                
+                with tempfile.NamedTemporaryFile("wb", delete=False) as tmp_pub_file:
+                    tmp_pub_file.write(
+                        public_key.public_bytes(
+                            encoding=serialization.Encoding.PEM,
+                            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+                        )
+                    )
+                    tmp_pub_path = tmp_pub_file.name
+                    
+                try:
+                    registry_data = load_registry(verify_signature=True, public_key_path=tmp_pub_path)
+                except Exception as e:
+                    raise ValueError(f"Refusing to sign over unverified registry state: {e}")
+                finally:
+                    try:
+                        os.unlink(tmp_pub_path)
+                    except Exception:
+                        pass
+            else:
+                registry_data = load_registry()
+        else:
+            registry_data = load_registry()
+            
         # Concurrency generation increment (lost update check)
         initial_gen = registry_data.get("generation", 0)
         registry_data["generation"] = initial_gen + 1
@@ -558,7 +594,44 @@ def deregister_model(
     db_dir = _get_db_dir()
     lock_path = db_dir / "write.lock"
     with RegistryLock(lock_path):
-        registry_data = load_registry()
+        if sign:
+            if not private_key_path:
+                raise ValueError("[ZKAEDI REG] private_key_path is required when sign=True")
+            current_file = db_dir / "current"
+            if current_file.exists():
+                from cryptography.hazmat.primitives import serialization
+                import tempfile
+                import os
+                
+                priv_path = validate_safe_path(private_key_path, must_exist=True, description="private key path")
+                password_bytes = password.encode("utf-8") if password else None
+                with open(priv_path, "rb") as f:
+                    private_key = serialization.load_pem_private_key(f.read(), password=password_bytes)
+                public_key = private_key.public_key()
+                
+                with tempfile.NamedTemporaryFile("wb", delete=False) as tmp_pub_file:
+                    tmp_pub_file.write(
+                        public_key.public_bytes(
+                            encoding=serialization.Encoding.PEM,
+                            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+                        )
+                    )
+                    tmp_pub_path = tmp_pub_file.name
+                    
+                try:
+                    registry_data = load_registry(verify_signature=True, public_key_path=tmp_pub_path)
+                except Exception as e:
+                    raise ValueError(f"Refusing to sign over unverified registry state: {e}")
+                finally:
+                    try:
+                        os.unlink(tmp_pub_path)
+                    except Exception:
+                        pass
+            else:
+                registry_data = load_registry()
+        else:
+            registry_data = load_registry()
+
         if model_name in registry_data["models"]:
             # Concurrency generation increment
             initial_gen = registry_data.get("generation", 0)

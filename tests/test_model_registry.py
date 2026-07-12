@@ -135,7 +135,7 @@ class TestModelRegistry(unittest.TestCase):
             
         # Try loading unregistered model with enforce_allow_list=True -> should fail
         with self.assertRaises(ValueError) as ctx:
-            load_model_hardened(str(model_dir), enforce_allow_list=True)
+            load_model_hardened(str(model_dir), enforce_allow_list=True, allow_unsigned_registry=True)
         self.assertIn("No registry entry found", str(ctx.exception))
         
         # Register model
@@ -147,11 +147,11 @@ class TestModelRegistry(unittest.TestCase):
         )
         
         # Load registered model with enforce_allow_list=True -> should succeed (mocked load)
-        load_model_hardened(str(model_dir), enforce_allow_list=True)
+        load_model_hardened(str(model_dir), enforce_allow_list=True, allow_unsigned_registry=True)
         
         # Try loading unregistered model name -> should fail
         with self.assertRaises(ValueError) as ctx:
-            load_model_hardened("unregistered-name", enforce_allow_list=True)
+            load_model_hardened("unregistered-name", enforce_allow_list=True, allow_unsigned_registry=True)
         self.assertIn("is not in the allow-list", str(ctx.exception))
 
     def test_signature_verification(self):
@@ -310,8 +310,8 @@ class TestModelRegistry(unittest.TestCase):
             
         # Since it is NOT in the registry, verify that load_model_hardened with enforce_allow_list=True fails
         with self.assertRaises(ValueError) as ctx:
-            load_model_hardened(str(model_dir), enforce_allow_list=True)
-        self.assertIn("integrity verification failed", str(ctx.exception))
+            load_model_hardened(str(model_dir), enforce_allow_list=True, allow_unsigned_registry=True)
+        self.assertIn("no-registry-entry", str(ctx.exception))
         
         # Register the model to the allow-list registry
         reg.register_model(
@@ -322,7 +322,7 @@ class TestModelRegistry(unittest.TestCase):
         )
         
         # Verify it now passes verification and successfully loads (meaning it calls from_pretrained)
-        load_model_hardened(str(model_dir), enforce_allow_list=True)
+        load_model_hardened(str(model_dir), enforce_allow_list=True, allow_unsigned_registry=True)
         mock_model.from_pretrained.assert_called_once()
         mock_tokenizer.from_pretrained.assert_called_once()
 
@@ -451,6 +451,163 @@ class TestModelRegistry(unittest.TestCase):
         loaded = reg.load_registry()
         for i in range(5):
             self.assertIn(f"worker-model-{i}", loaded["models"])
+
+    @unittest.mock.patch("zkaedi_security_utils.AutoModelForCausalLM")
+    @unittest.mock.patch("zkaedi_security_utils.AutoTokenizer")
+    def test_enforcement_rejects_unsigned_registry(self, mock_tokenizer, mock_model):
+        from zkaedi_security_utils import load_model_hardened
+        
+        # Create public/private key paths
+        priv_key_path = os.path.join(self.test_dir, "private_key.pem")
+        pub_key_path = os.path.join(self.test_dir, "public_key.pem")
+        reg.generate_ed25519_keypair(priv_key_path, pub_key_path)
+        
+        # Create a mock model directory
+        model_dir = Path(self.test_dir) / "test_unsigned_model"
+        model_dir.mkdir(exist_ok=True)
+        with open(model_dir / "model.safetensors", "w") as f:
+            f.write("weights")
+        with open(model_dir / "config.json", "w") as f:
+            f.write('{"vocab_size": 32000}')
+            
+        # Register WITHOUT signing
+        reg.register_model(
+            model_name="unsigned-model",
+            model_path=str(model_dir),
+            sign=False
+        )
+        
+        # Call load_model_hardened with enforce_allow_list=True and verify it raises no-signature-present error
+        with self.assertRaises(ValueError) as ctx:
+            load_model_hardened(
+                str(model_dir),
+                enforce_allow_list=True,
+                public_key_path=pub_key_path,
+                allow_unsigned_registry=False
+            )
+        self.assertIn("no-signature-present", str(ctx.exception))
+
+    @unittest.mock.patch("zkaedi_security_utils.AutoModelForCausalLM")
+    @unittest.mock.patch("zkaedi_security_utils.AutoTokenizer")
+    def test_enforcement_rejects_tampered_registry(self, mock_tokenizer, mock_model):
+        from zkaedi_security_utils import load_model_hardened
+        import json
+        
+        priv_key_path = os.path.join(self.test_dir, "private_key.pem")
+        pub_key_path = os.path.join(self.test_dir, "public_key.pem")
+        reg.generate_ed25519_keypair(priv_key_path, pub_key_path)
+        
+        model_dir = Path(self.test_dir) / "test_tampered_model"
+        model_dir.mkdir(exist_ok=True)
+        with open(model_dir / "model.safetensors", "w") as f:
+            f.write("weights")
+        with open(model_dir / "config.json", "w") as f:
+            f.write('{"vocab_size": 32000}')
+            
+        # Register WITH signing
+        reg.register_model(
+            model_name="tampered-model",
+            model_path=str(model_dir),
+            sign=True,
+            private_key_path=priv_key_path
+        )
+        
+        # Now tamper the JSON file directly (leave .sig stale)
+        db_dir = reg._get_db_dir()
+        current_file = db_dir / "current"
+        gen_id_str = current_file.read_text(encoding="utf-8").strip()
+        gen_json_path = db_dir / "generations" / f"{gen_id_str}.json"
+        
+        with open(gen_json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        data["models"]["malicious-entry"] = {"name": "malicious"}
+        with open(gen_json_path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+            
+        # Verify it raises signature-invalid error
+        with self.assertRaises(ValueError) as ctx:
+            load_model_hardened(
+                str(model_dir),
+                enforce_allow_list=True,
+                public_key_path=pub_key_path,
+                allow_unsigned_registry=False
+            )
+        self.assertIn("signature-invalid", str(ctx.exception))
+
+    def test_signed_write_refuses_tampered_state(self):
+        import json
+        priv_key_path = os.path.join(self.test_dir, "private_key.pem")
+        pub_key_path = os.path.join(self.test_dir, "public_key.pem")
+        reg.generate_ed25519_keypair(priv_key_path, pub_key_path)
+        
+        model_dir = Path(self.test_dir) / "test_launder_model"
+        model_dir.mkdir(exist_ok=True)
+        with open(model_dir / "model.safetensors", "w") as f:
+            f.write("weights")
+            
+        # Register WITH signing
+        reg.register_model(
+            model_name="launder-model",
+            model_path=str(model_dir),
+            sign=True,
+            private_key_path=priv_key_path
+        )
+        
+        # Tamper the JSON file directly (leave .sig stale)
+        db_dir = reg._get_db_dir()
+        current_file = db_dir / "current"
+        gen_id_str = current_file.read_text(encoding="utf-8").strip()
+        gen_json_path = db_dir / "generations" / f"{gen_id_str}.json"
+        
+        with open(gen_json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        data["models"]["malicious-entry"] = {"name": "malicious"}
+        with open(gen_json_path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+            
+        # Attempt another register_model with sign=True -> must refuse to launder
+        with self.assertRaises(ValueError) as ctx:
+            reg.register_model(
+                model_name="new-model",
+                model_path=str(model_dir),
+                sign=True,
+                private_key_path=priv_key_path
+            )
+        self.assertIn("Refusing to sign over unverified registry state", str(ctx.exception))
+
+    @unittest.mock.patch("zkaedi_security_utils.AutoModelForCausalLM")
+    @unittest.mock.patch("zkaedi_security_utils.AutoTokenizer")
+    def test_enforcement_passes_valid_signed_registry(self, mock_tokenizer, mock_model):
+        from zkaedi_security_utils import load_model_hardened
+        
+        priv_key_path = os.path.join(self.test_dir, "private_key.pem")
+        pub_key_path = os.path.join(self.test_dir, "public_key.pem")
+        reg.generate_ed25519_keypair(priv_key_path, pub_key_path)
+        
+        model_dir = Path(self.test_dir) / "test_valid_signed_model"
+        model_dir.mkdir(exist_ok=True)
+        with open(model_dir / "model.safetensors", "w") as f:
+            f.write("weights")
+        with open(model_dir / "config.json", "w") as f:
+            f.write('{"vocab_size": 32000}')
+            
+        # Register WITH signing
+        reg.register_model(
+            model_name="valid-signed-model",
+            model_path=str(model_dir),
+            sign=True,
+            private_key_path=priv_key_path
+        )
+        
+        # Verify it succeeds
+        load_model_hardened(
+            str(model_dir),
+            enforce_allow_list=True,
+            public_key_path=pub_key_path,
+            allow_unsigned_registry=False
+        )
+        mock_model.from_pretrained.assert_called_once()
+        mock_tokenizer.from_pretrained.assert_called_once()
 
 
 if __name__ == "__main__":

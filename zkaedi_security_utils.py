@@ -100,19 +100,59 @@ def validate_safe_path(
 # =============================================================================
 
 def load_model_hardened(
-    model_name_or_path: str, revision: str = "main", enforce_allow_list: bool = False
+    model_name_or_path: str,
+    revision: str = "main",
+    enforce_allow_list: bool = False,
+    public_key_path: Optional[str] = None,
+    allow_unsigned_registry: bool = False,
 ) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
-    """CVE-2026-4372 hardened model loader."""
+    """
+    CVE-2026-4372 hardened model loader.
+    Default allow_unsigned_registry=False mandates registry signature verification to prevent unauthorized allow-list tampering.
+    """
     if enforce_allow_list:
         from zkaedi_model_registry import is_model_allowed, verify_model_integrity
+        resolved_pubkey_path = os.environ.get("ZKAEDI_REGISTRY_PUBKEY") or public_key_path
+        req_verify_sig = not allow_unsigned_registry
+        if req_verify_sig and not resolved_pubkey_path:
+            raise ValueError("public_key_path must be provided or ZKAEDI_REGISTRY_PUBKEY set when allow_unsigned_registry is False")
+
         p_res = Path(model_name_or_path)
         if p_res.exists():
-            is_valid, errors = verify_model_integrity(str(p_res))
+            try:
+                is_valid, errors = verify_model_integrity(
+                    str(p_res),
+                    verify_signature=req_verify_sig,
+                    public_key_path=resolved_pubkey_path
+                )
+            except FileNotFoundError as e:
+                raise ValueError(f"no-signature-present: Registry is not signed but signature verification is required: {e}")
+            except ValueError as e:
+                if "Registry signature verification failed" in str(e):
+                    raise ValueError(f"signature-invalid: Registry signature verification failed: {e}")
+                raise
+
             if not is_valid:
-                raise ValueError(f"[ZKAEDI SEC] Model integrity verification failed: {errors}")
+                if any("No registry entry found" in err for err in errors):
+                    raise ValueError(f"no-registry-entry: Model directory not found in allow-list: {errors}")
+                else:
+                    raise ValueError(f"hash-mismatch: Model integrity check failed: {errors}")
         else:
-            if not is_model_allowed(model_name_or_path):
-                raise ValueError(f"[ZKAEDI SEC] Model '{model_name_or_path}' is not in the allow-list.")
+            try:
+                allowed = is_model_allowed(
+                    model_name_or_path,
+                    verify_signature=req_verify_sig,
+                    public_key_path=resolved_pubkey_path
+                )
+            except FileNotFoundError as e:
+                raise ValueError(f"no-signature-present: Registry is not signed but signature verification is required: {e}")
+            except ValueError as e:
+                if "Registry signature verification failed" in str(e):
+                    raise ValueError(f"signature-invalid: Registry signature verification failed: {e}")
+                raise
+
+            if not allowed:
+                raise ValueError(f"no-registry-entry: Model '{model_name_or_path}' is not in the allow-list.")
 
     model_load_kwargs: Dict[str, Any] = {
         "trust_remote_code": False,
@@ -366,8 +406,13 @@ def load_gptq_model_hardened(
     use_triton: bool = False,
     expected_config_hash: Optional[str] = None,
     enforce_allow_list: bool = False,
+    public_key_path: Optional[str] = None,
+    allow_unsigned_registry: bool = False,
 ) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
-    """Secure loader for pre-quantized GPTQ models with config integrity check."""
+    """
+    Secure loader for pre-quantized GPTQ models with config integrity check.
+    Default allow_unsigned_registry=False mandates registry signature verification to prevent unauthorized allow-list tampering.
+    """
     scan_for_known_cves()
     print(f"[ZKAEDI SEC] Loading GPTQ model from: {model_path}")
 
@@ -375,9 +420,29 @@ def load_gptq_model_hardened(
 
     if enforce_allow_list:
         from zkaedi_model_registry import verify_model_integrity
-        is_valid, errors = verify_model_integrity(str(validated_path))
+        resolved_pubkey_path = os.environ.get("ZKAEDI_REGISTRY_PUBKEY") or public_key_path
+        req_verify_sig = not allow_unsigned_registry
+        if req_verify_sig and not resolved_pubkey_path:
+            raise ValueError("public_key_path must be provided or ZKAEDI_REGISTRY_PUBKEY set when allow_unsigned_registry is False")
+
+        try:
+            is_valid, errors = verify_model_integrity(
+                str(validated_path),
+                verify_signature=req_verify_sig,
+                public_key_path=resolved_pubkey_path
+            )
+        except FileNotFoundError as e:
+            raise ValueError(f"no-signature-present: Registry is not signed but signature verification is required: {e}")
+        except ValueError as e:
+            if "Registry signature verification failed" in str(e):
+                raise ValueError(f"signature-invalid: Registry signature verification failed: {e}")
+            raise
+
         if not is_valid:
-            raise ValueError(f"[ZKAEDI SEC] GPTQ model integrity verification failed: {errors}")
+            if any("No registry entry found" in err for err in errors):
+                raise ValueError(f"no-registry-entry: Model directory not found in allow-list: {errors}")
+            else:
+                raise ValueError(f"hash-mismatch: Model integrity check failed: {errors}")
 
     # Verify quantize_config.json
     config_info = verify_gptq_config_integrity(str(validated_path), expected_config_hash=expected_config_hash)
