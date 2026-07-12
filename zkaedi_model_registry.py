@@ -137,8 +137,8 @@ class RegistryLock:
                         # Same host: stale only if the PID is dead (REL-11)
                         is_stale = not is_pid_alive(pid)
                     else:
-                        # Cross-host: stale if the lease duration has expired (REL-16 / lease duration check)
-                        is_stale = (time.time() - acquired_at > duration)
+                        # Cross-host: no automatic reclamation to prevent split-brain theft (REL-16)
+                        is_stale = False
                     
                     if is_stale:
                         # Safely break lock using atomic quarantine rename (REL-17)
