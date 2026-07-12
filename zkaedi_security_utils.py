@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ZKAEDI PRIME Security Utilities
-Version: 2.3
+Version: 2.3.1
 
 Centralized, battle-tested security primitives for sovereign AI systems.
 
@@ -10,7 +10,7 @@ Includes:
 - Fail-closed path validation
 - Cryptographic provenance recording
 - Runtime CVE scanning
-- Secure model quantization (4-bit and 8-bit bitsandbytes)
+- Secure model quantization (8-bit and 4-bit via bitsandbytes)
 """
 
 from __future__ import annotations
@@ -207,20 +207,21 @@ def safe_quantize_model(
     - Records full cryptographic provenance
     - Fail-closed path validation
     - Runtime CVE scanning before execution
+    - Proper error handling during quantization
 
     Supported:
     - bits=8  → 8-bit quantization (Linear8bitLt)
-    - bits=4  → 4-bit quantization (Linear4bit) - requires bitsandbytes >= 0.40.0
+    - bits=4  → 4-bit quantization (Linear4bit)
     """
     scan_for_known_cves()
 
     print(f"[ZKAEDI SEC] Starting secure {bits}-bit quantization...")
 
-    # 1. Load model safely
+    # Load model safely
     model, tokenizer = load_model_hardened(model_path)
 
-    # 2. Validate output path
-    output_path = validate_safe_path(output_dir, must_exist=False, description="quantized output")
+    # Validate output path
+    output_path = validate_safe_path(output_dir, must_exist=False, description="quantized model output")
     output_path.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -231,47 +232,46 @@ def safe_quantize_model(
             "Install with: pip install bitsandbytes"
         )
 
-    # 3. Quantization logic with robust try/except
     try:
         if bits == 8:
             print("[ZKAEDI SEC] Applying 8-bit quantization (Linear8bitLt)...")
             quantized_model = _replace_with_8bit(model)
         elif bits == 4:
-            print("[ZKAEDI SEC] Applying 4-bit quantization (Linear4bit)...")
+            print("[ZKAEDI SEC] Applying 4-bit quantization (nf4)...")
             quantized_model = _replace_with_4bit(model)
         else:
-            raise ValueError(f"Unsupported bits value: {bits}. Use 4 or 8.")
-    except Exception as e:
-        print(f"[ZKAEDI SEC] Quantization failed: {e}", file=sys.stderr)
-        raise
+            raise ValueError(f"[ZKAEDI SEC] Unsupported bits value: {bits}. Use 4 or 8.")
 
-    # 4. Move to target device if requested
+    except Exception as e:
+        print(f"[ZKAEDI SEC] Quantization process failed: {e}", file=sys.stderr)
+        raise RuntimeError(f"Failed to quantize model to {bits}-bit") from e
+
+    # Handle device placement
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
+
     quantized_model = quantized_model.to(device)
 
-    # 5. Save with safetensors only
+    # Save with safetensors only
     print(f"[ZKAEDI SEC] Saving quantized model to {output_path} (safetensors)...")
     quantized_model.save_pretrained(output_path, safe_serialization=True)
     tokenizer.save_pretrained(output_path)
 
-    # 6. Record provenance
+    # Record provenance
     provenance = record_provenance(model_path, str(output_path))
     with open(output_path / "quantization_provenance.json", "w") as f:
         json.dump(provenance, f, indent=2)
 
-    print(f"[ZKAEDI SEC] Quantization complete → {output_path}")
+    print(f"[ZKAEDI SEC] Quantization complete. Model saved to: {output_path}")
     return output_path
 
 
-
 def _replace_with_8bit(model: torch.nn.Module) -> torch.nn.Module:
-    """Recursively replace nn.Linear layers with 8-bit versions."""
+    """Recursively replace nn.Linear layers with 8-bit Linear8bitLt layers."""
     import bitsandbytes as bnb
 
-    for name, module in model.named_children():
+    for name, module in list(model.named_children()):
         if isinstance(module, torch.nn.Linear):
-            # Create 8-bit linear layer
             in_features = module.in_features
             out_features = module.out_features
             has_bias = module.bias is not None
@@ -280,11 +280,9 @@ def _replace_with_8bit(model: torch.nn.Module) -> torch.nn.Module:
                 in_features,
                 out_features,
                 bias=has_bias,
-                has_fp16_weights=False,  # More memory efficient
+                has_fp16_weights=False,
                 threshold=6.0,
             )
-
-            # Copy weights
             new_module.weight.data = module.weight.data.clone()
             if has_bias:
                 new_module.bias.data = module.bias.data.clone()
@@ -297,10 +295,10 @@ def _replace_with_8bit(model: torch.nn.Module) -> torch.nn.Module:
 
 
 def _replace_with_4bit(model: torch.nn.Module) -> torch.nn.Module:
-    """Recursively replace nn.Linear layers with 4-bit versions."""
+    """Recursively replace nn.Linear layers with 4-bit Linear4bit layers."""
     import bitsandbytes as bnb
 
-    for name, module in model.named_children():
+    for name, module in list(model.named_children()):
         if isinstance(module, torch.nn.Linear):
             in_features = module.in_features
             out_features = module.out_features
@@ -312,9 +310,8 @@ def _replace_with_4bit(model: torch.nn.Module) -> torch.nn.Module:
                 bias=has_bias,
                 compute_dtype=torch.float16,
                 compress_statistics=True,
-                quant_type="nf4",  # or "fp4"
+                quant_type="nf4",
             )
-
             new_module.weight.data = module.weight.data.clone()
             if has_bias:
                 new_module.bias.data = module.bias.data.clone()
@@ -331,5 +328,5 @@ def _replace_with_4bit(model: torch.nn.Module) -> torch.nn.Module:
 # =============================================================================
 
 if __name__ == "__main__":
-    print("ZKAEDI PRIME Security Utilities v2.3 loaded successfully.")
+    print("ZKAEDI PRIME Security Utilities v2.3.1 loaded successfully.")
     scan_for_known_cves()
