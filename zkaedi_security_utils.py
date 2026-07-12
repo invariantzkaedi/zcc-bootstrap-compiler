@@ -100,9 +100,20 @@ def validate_safe_path(
 # =============================================================================
 
 def load_model_hardened(
-    model_name_or_path: str, revision: str = "main"
+    model_name_or_path: str, revision: str = "main", enforce_allow_list: bool = False
 ) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
     """CVE-2026-4372 hardened model loader."""
+    if enforce_allow_list:
+        from zkaedi_model_registry import is_model_allowed, verify_model_integrity
+        p_res = Path(model_name_or_path)
+        if p_res.exists():
+            is_valid, errors = verify_model_integrity(str(p_res))
+            if not is_valid:
+                raise ValueError(f"[ZKAEDI SEC] Model integrity verification failed: {errors}")
+        else:
+            if not is_model_allowed(model_name_or_path):
+                raise ValueError(f"[ZKAEDI SEC] Model '{model_name_or_path}' is not in the allow-list.")
+
     model_load_kwargs: Dict[str, Any] = {
         "trust_remote_code": False,
         "use_safetensors": True,
@@ -330,12 +341,19 @@ def load_gptq_model_hardened(
     disable_exllamav2: bool = True,
     use_triton: bool = False,
     expected_config_hash: Optional[str] = None,
+    enforce_allow_list: bool = False,
 ) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
     """Secure loader for pre-quantized GPTQ models with config integrity check."""
     scan_for_known_cves()
     print(f"[ZKAEDI SEC] Loading GPTQ model from: {model_path}")
 
     validated_path = validate_safe_path(model_path, must_exist=True, description="GPTQ model")
+
+    if enforce_allow_list:
+        from zkaedi_model_registry import verify_model_integrity
+        is_valid, errors = verify_model_integrity(str(validated_path))
+        if not is_valid:
+            raise ValueError(f"[ZKAEDI SEC] GPTQ model integrity verification failed: {errors}")
 
     # Verify quantize_config.json
     config_info = verify_gptq_config_integrity(str(validated_path), expected_config_hash=expected_config_hash)
