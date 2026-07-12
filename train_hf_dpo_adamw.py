@@ -21,6 +21,14 @@ import sys
 import getpass
 import tempfile
 import os
+
+# Fix transformers v5 compatibility with llm_blender
+try:
+    import transformers.utils.hub
+    if not hasattr(transformers.utils.hub, "TRANSFORMERS_CACHE"):
+        transformers.utils.hub.TRANSFORMERS_CACHE = os.getenv("HF_HOME", os.path.expanduser("~/.cache/huggingface/hub"))
+except ImportError:
+    pass
 import math
 import numbers
 from pathlib import Path
