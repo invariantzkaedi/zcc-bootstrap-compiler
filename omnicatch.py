@@ -81,66 +81,6 @@ __all__ = [
 # --------------------------------------------------------------------------
 
 _LEDGER_LOCK = threading.Lock()
-_LEDGER_PATH = Path(os.environ.get(
-    "OMNICATCH_LEDGER",
-    Path.home() / ".omnicatch" / "ledger.jsonl"
-))
-_INSTALLED = False
-_PRIOR_HOOKS: dict = {}
-_EVENT_COUNTS: dict = {}
-_START_MONO = time.monotonic()
-
-log = logging.getLogger("omnicatch")
-if not log.handlers:
-    _h = logging.StreamHandler(sys.stderr)
-    _h.setFormatter(logging.Formatter(
-        "%(asctime)s.%(msecs)03d OMNICATCH %(levelname)s %(message)s",
-        datefmt="%H:%M:%S"))
-    log.addHandler(_h)
-    log.setLevel(logging.INFO)
-
-
-def ledger_path() -> Path:
-    return _LEDGER_PATH
-
-
-@dataclass
-class OmniEvent:
-    kind: str                      # e.g. "exception", "silent_noop", "hang"
-    severity: str                  # "INFO" | "WARN" | "ERROR" | "FATAL"
-    message: str
-    where: str = ""                # module:func:line or thread name
-    traceback_str: str = ""
-    data: dict = field(default_factory=dict)
-    ts_wall: float = field(default_factory=time.time)
-    ts_mono: float = field(default_factory=lambda: time.monotonic() - _START_MONO)
-    thread: str = field(default_factory=lambda: threading.current_thread().name)
-    pid: int = field(default_factory=os.getpid)
-
-
-def _emit(ev: OmniEvent) -> None:
-    """Write an event to the ledger. Failure here falls back to raw stderr —
-    the catcher itself is not allowed to fail silently."""
-    _EVENT_COUNTS[ev.kind] = _EVENT_COUNTS.get(ev.kind, 0) + 1
-    line = json.dumps(asdict(ev), default=repr, ensure_ascii=False)
-    try:
-        with _LEDGER_LOCK:
-            _LEDGER_PATH.parent.mkdir(parents=True, exist_ok=True)
-            with open(_LEDGER_PATH, "a", encoding="utf-8") as f:
-                f.write(line + "\n")
-    except Exception:  # noqa: BLE001 — last-resort channel, deliberately broad
-        sys.__stderr__.write("OMNICATCH-LEDGER-FAIL " + line + "\n")
-        sys.__stderr__.write(traceback.format_exc())
-    lvl = {"INFO": logging.INFO, "WARN": logging.WARNING,
-           "ERROR": logging.ERROR, "FATAL": logging.CRITICAL}.get(
-        ev.severity, logging.ERROR)
-    log.log(lvl, "[%s] %s%s", ev.kind, ev.message,
-            f" @ {ev.where}" if ev.where else "")
-
-
-def _tb_str(exc: BaseException) -> str:
-    return "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
-
 
 # --------------------------------------------------------------------------
 # Custom exception taxonomy — precise names, precise meanings.
@@ -172,6 +112,118 @@ class HangError(OmniError):
 
 class FabricationError(OmniError):
     """A result was claimed without a logged exit code. By protocol: fabricated."""
+
+
+def _secure_path(p: Path, *, allowed_roots: Optional[Sequence[Path]] = None) -> Path:
+    """Resolve, validate absolute path, prevent symlink escape.
+    Used to harden OMNICATCH_LEDGER against HIGH-001."""
+    p = p.expanduser().resolve(strict=False)
+    if not p.is_absolute():
+        raise ValidationError(f"OMNICATCH_LEDGER must be absolute: {p}")
+    if allowed_roots:
+        ok = False
+        for root in allowed_roots:
+            try:
+                p.relative_to(root.expanduser().resolve())
+                ok = True
+                break
+            except ValueError:
+                continue
+        if not ok:
+            raise ValidationError(f"OMNICATCH_LEDGER escapes allowed roots: {p}")
+    return p
+
+
+def _harden_permissions(path: Path, mode: int = 0o700) -> None:
+    """Best-effort chmod. Ignores PermissionError (already stricter or root)."""
+    try:
+        if path.is_dir():
+            os.chmod(path, mode)
+        elif path.is_file():
+            os.chmod(path, 0o600)
+    except (PermissionError, FileNotFoundError):
+        pass
+
+
+# ZKAEDI hardening: enforce controlled default under ~/.zkaedi/ledger
+if "OMNICATCH_LEDGER" not in os.environ:
+    _LEDGER_PATH = Path.home() / ".zkaedi" / "ledger" / "prime_ledger.jsonl"
+else:
+    import tempfile
+    allowed = [
+        Path.home() / ".zkaedi",
+        Path.home() / ".omnicatch",
+        Path("/tmp"),
+        Path(tempfile.gettempdir())
+    ]
+    _LEDGER_PATH = _secure_path(
+        Path(os.environ["OMNICATCH_LEDGER"]),
+        allowed_roots=allowed
+    )
+
+_LEDGER_PATH.parent.mkdir(parents=True, exist_ok=True)
+_harden_permissions(_LEDGER_PATH.parent)
+
+_INSTALLED = False
+_PRIOR_HOOKS: dict = {}
+_EVENT_COUNTS: dict = {}
+_START_MONO = time.monotonic()
+
+log = logging.getLogger("omnicatch")
+if not log.handlers:
+    _h = logging.StreamHandler(sys.stderr)
+    _h.setFormatter(logging.Formatter(
+        "%(asctime)s.%(msecs)03d OMNICATCH %(levelname)s %(message)s",
+        datefmt="%H:%M:%S"))
+    log.addHandler(_h)
+    log.setLevel(logging.INFO)
+
+
+def ledger_path() -> Path:
+    return _secure_path(_LEDGER_PATH)
+
+
+@dataclass
+class OmniEvent:
+    kind: str                      # e.g. "exception", "silent_noop", "hang"
+    severity: str                  # "INFO" | "WARN" | "ERROR" | "FATAL"
+    message: str
+    where: str = ""                # module:func:line or thread name
+    traceback_str: str = ""
+    data: dict = field(default_factory=dict)
+    ts_wall: float = field(default_factory=time.time)
+    ts_mono: float = field(default_factory=lambda: time.monotonic() - _START_MONO)
+    thread: str = field(default_factory=lambda: threading.current_thread().name)
+    pid: int = field(default_factory=os.getpid)
+
+
+def _emit(ev: OmniEvent) -> None:
+    """Write an event to the ledger. Failure here falls back to raw stderr —
+    the catcher itself is not allowed to fail silently."""
+    _EVENT_COUNTS[ev.kind] = _EVENT_COUNTS.get(ev.kind, 0) + 1
+    line = json.dumps(asdict(ev), default=repr, ensure_ascii=False)
+    try:
+        with _LEDGER_LOCK:
+            lp = ledger_path()
+            lp.parent.mkdir(parents=True, exist_ok=True)
+            _harden_permissions(lp.parent)
+            with open(lp, "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+    except Exception:  # noqa: BLE001 — last-resort channel, deliberately broad
+        sys.__stderr__.write("OMNICATCH-LEDGER-FAIL " + line + "\n")
+        sys.__stderr__.write(traceback.format_exc())
+    lvl = {"INFO": logging.INFO, "WARN": logging.WARNING,
+           "ERROR": logging.ERROR, "FATAL": logging.CRITICAL}.get(
+        ev.severity, logging.ERROR)
+    log.log(lvl, "[%s] %s%s", ev.kind, ev.message,
+            f" @ {ev.where}" if ev.where else "")
+
+
+def _tb_str(exc: BaseException) -> str:
+    return "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+
+
+# Custom exception taxonomy moved to the top of the file to support path validation.
 
 
 # --------------------------------------------------------------------------
@@ -299,9 +351,11 @@ def ascend(*,
 
     # 7. faulthandler — the only thing that speaks after a segfault.
     fh_path = Path(faulthandler_log) if faulthandler_log else \
-        _LEDGER_PATH.parent / "faulthandler.log"
+        ledger_path().parent / "faulthandler.log"
     fh_path.parent.mkdir(parents=True, exist_ok=True)
+    _harden_permissions(fh_path.parent)
     fh_file = open(fh_path, "a")          # kept open for process lifetime
+    _harden_permissions(fh_path)
     faulthandler.enable(file=fh_file, all_threads=True)
     _PRIOR_HOOKS["faulthandler_file"] = fh_file
 
@@ -309,7 +363,7 @@ def ascend(*,
     atexit.register(_exit_report)
 
     _emit(OmniEvent("ascend", "INFO",
-                    f"all hooks installed; ledger={_LEDGER_PATH}"))
+                    f"all hooks installed; ledger={ledger_path()}"))
 
 
 def descend() -> None:
@@ -747,8 +801,10 @@ def run_verified(cmd: Sequence[str] | str, *,
     if timeout <= 0:
         raise ValidationError("run_verified: timeout must be > 0 "
                               "(unbounded subprocesses are how hangs are born)")
+    # NOTE: Callers must still sanitize cmd construction (see INTEGRATION_GUIDE.md)
     log_p = Path(log)
     log_p.parent.mkdir(parents=True, exist_ok=True)
+    _harden_permissions(log_p.parent)
     cmd_str = cmd if isinstance(cmd, str) else " ".join(map(str, cmd))
     t0 = time.monotonic()
     timed_out = False
