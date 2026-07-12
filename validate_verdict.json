@@ -1,0 +1,59 @@
+{
+  "validator": {
+    "schema_version": "1.2.0",
+    "script_version": "v1.2-hardened",
+    "script_sha256": "e59b653e4c54086bc54bec21c3fc797fa1091d9771e17ffef820731dfd093156"
+  },
+  "task_id": "DPO-ALIGN-RETRAIN-002",
+  "status": "pass",
+  "training_health_gate": {
+    "status": "PASS",
+    "metrics": {
+      "final_step": 25,
+      "final_training_loss": 0.20632469654083252,
+      "last_k_training_margin_median": 6.8072428703308105,
+      "recent_margin_slope": 0.2391402626396122,
+      "recent_margin_slope_p_value": 0.006455635763347745,
+      "all_values_finite": true,
+      "global_step_consistent": true,
+      "warnings": []
+    }
+  },
+  "held_out_alignment_gate": {
+    "status": "PASS",
+    "metrics": {
+      "final_eval_step": 25,
+      "eval_preference_margin_mean": 10.119412353515626,
+      "eval_preference_margin_median": 9.160858154296875,
+      "eval_positive_margin_rate": 1.0,
+      "eval_loss": 0.0017500185565595603,
+      "min_eval_records_satisfied": true,
+      "eval_conflicts": []
+    },
+    "minimum_eval_records": 3,
+    "assurance_level": "STANDARD"
+  },
+  "provenance_gate": {
+    "status": "PASS",
+    "required_fields_complete": true,
+    "split_overlap_count": 0,
+    "manifest_details": {
+      "path": "/mnt/h/__DOWNLOADS/zcc_github_upload/splits/dpo_v1_manifest.json",
+      "sha256": "1eee85ccf4a93eddd4064111141e195b211c9e80149817db141d82971d94ab1c",
+      "train_count": 458,
+      "eval_count": 25,
+      "overlap_count": 0,
+      "verified": true,
+      "error": null
+    }
+  },
+  "release_verdict": "METRIC_GATES_PASSED",
+  "provenance": {
+    "dataset_hash": "sha256:d3b07384a86b",
+    "checkpoint_digest": "sha256:88fa12ca7a86b",
+    "model_identity": "gemma-2-2b",
+    "seed": "42",
+    "evaluator_identity": "zkaedi_oracle",
+    "split_manifest_path": "/mnt/h/__DOWNLOADS/zcc_github_upload/splits/dpo_v1_manifest.json"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "promotion_allowed": true,
+  "failure_reasons": [],
+  "requirements": {
+    "validator_exit_code": 0,
+    "release_verdict": "METRIC_GATES_PASSED",
+    "provenance_gate": "PASS",
+    "split_overlap_count": 0,
+    "checkpoint_digest_verified": true,
+    "required_artifacts_complete": true
+  }
+}
