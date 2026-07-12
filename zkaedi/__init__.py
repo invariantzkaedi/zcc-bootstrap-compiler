@@ -197,7 +197,7 @@ def _patch_subprocess() -> None:
                     "cmd": cmd_repr,
                     "exit": getattr(exc, "returncode", None),
                     "duration_s": round(time.time() - t0, 4),
-                    "verdict": "UNVERIFIED",
+                    "verdict": "FAIL" if getattr(exc, "returncode", None) is not None else "UNVERIFIED",
                     "error": f"{type(exc).__name__}: {exc}",
                 }
             )

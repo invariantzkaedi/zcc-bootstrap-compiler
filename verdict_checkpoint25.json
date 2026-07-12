@@ -1,0 +1,18 @@
+{
+  "target_environment": "WSL Ubuntu",
+  "target_suite": {
+    "collected": 80,
+    "passed": 80,
+    "failed": 0,
+    "warnings": 6
+  },
+  "windows_diagnostic": {
+    "collected": 80,
+    "passed": 51,
+    "failed": 29,
+    "release_gate": false
+  },
+  "verdict": "PASS_WITH_DOCUMENTED_LIMITATIONS",
+  "production_ready": false,
+  "reason": "Target tests passed, but provenance/signature evidence, warning disposition, and multi-process ledger behavior are not established."
+}
