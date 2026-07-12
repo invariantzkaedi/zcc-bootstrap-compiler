@@ -403,8 +403,208 @@ def is_gptq_model(model_path: str) -> bool:
 
 
 # =============================================================================
+# GPTQ CONFIG INTEGRITY CHECK
+# =============================================================================
+
+def verify_gptq_config_integrity(
+    model_path: str,
+    expected_config_hash: Optional[str] = None,
+    strict: bool = True
+) -> Dict[str, Any]:
+    """
+    Validates the integrity and correctness of quantize_config.json for GPTQ models.
+
+    Checks performed:
+    - File existence
+    - Valid JSON
+    - Required fields presence
+    - Type and value sanity checks on critical fields
+    - Optional cryptographic hash verification
+
+    Args:
+        model_path: Path to the GPTQ model directory
+        expected_config_hash: Optional expected SHA-256 hash of quantize_config.json
+        strict: If True, raises on any validation failure. If False, returns warnings.
+
+    Returns:
+        Dictionary with validation results
+    """
+    config_path = Path(model_path) / "quantize_config.json"
+
+    if not config_path.exists():
+        raise FileNotFoundError(
+            f"[ZKAEDI SEC] quantize_config.json not found in {model_path}"
+        )
+
+    # Read and parse JSON
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = json.load(f)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"[ZKAEDI SEC] quantize_config.json is not valid JSON: {e}")
+
+    errors = []
+    warnings = []
+
+    # === Required Fields ===
+    required_fields = ["bits", "group_size"]
+    for field in required_fields:
+        if field not in config:
+            errors.append(f"Missing required field: '{field}'")
+
+    # === Field Validation ===
+    if "bits" in config:
+        bits = config["bits"]
+        if not isinstance(bits, int) or bits not in [2, 3, 4, 8]:
+            errors.append(f"Invalid 'bits' value: {bits}. Must be one of [2, 3, 4, 8]")
+
+    if "group_size" in config:
+        group_size = config["group_size"]
+        if not isinstance(group_size, int) or group_size <= 0:
+            errors.append(f"Invalid 'group_size' value: {group_size}. Must be a positive integer")
+
+    if "damp_percent" in config:
+        damp = config["damp_percent"]
+        if not isinstance(damp, (int, float)) or not (0.0 <= damp <= 1.0):
+            warnings.append(f"Suspicious 'damp_percent' value: {damp}")
+
+    if "desc_act" in config:
+        if not isinstance(config["desc_act"], bool):
+            errors.append("'desc_act' must be a boolean")
+
+    if "true_sequential" in config:
+        if not isinstance(config["true_sequential"], bool):
+            warnings.append("'true_sequential' should be a boolean")
+
+    # === Optional Hash Verification ===
+    actual_hash = None
+    if expected_config_hash:
+        def sha256_file(path: Path) -> str:
+            h = hashlib.sha256()
+            with open(path, "rb") as f:
+                for chunk in iter(lambda: f.read(8192), b""):
+                    h.update(chunk)
+            return h.hexdigest()
+
+        actual_hash = sha256_file(config_path)
+        if actual_hash != expected_config_hash:
+            errors.append(
+                f"quantize_config.json hash mismatch!\n"
+                f"Expected: {expected_config_hash}\n"
+                f"Actual:   {actual_hash}"
+            )
+
+    result = {
+        "valid": len(errors) == 0,
+        "config": config,
+        "config_hash": actual_hash,
+        "errors": errors,
+        "warnings": warnings,
+        "checked_at": datetime.now(timezone.utc).isoformat()
+    }
+
+    if strict and errors:
+        raise ValueError(
+            f"[ZKAEDI SEC] GPTQ config validation failed:\n" + "\n".join(errors)
+        )
+
+    if warnings:
+        for w in warnings:
+            print(f"[ZKAEDI SEC] Warning: {w}")
+
+    return result
+
+
+# =============================================================================
+# GPTQ SECURE MODEL LOADER
+# =============================================================================
+
+def load_gptq_model_hardened(
+    model_path: str,
+    device: str = "auto",
+    use_safetensors: bool = True,
+    disable_exllama: bool = True,
+    disable_exllamav2: bool = True,
+    use_triton: bool = False,
+    expected_config_hash: Optional[str] = None,
+) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
+    """
+    Secure loader for pre-quantized GPTQ models with config integrity verification.
+
+    Security Properties:
+    - Calls scan_for_known_cves() before loading
+    - Enforces path validation
+    - Verifies quantize_config.json structure and optional hash
+    - Disables risky custom kernels by default (ExLlama, Triton)
+    - Uses trust_remote_code=False
+    """
+    scan_for_known_cves()
+
+    print(f"[ZKAEDI SEC] Loading GPTQ model from: {model_path}")
+
+    validated_path = validate_safe_path(
+        model_path, must_exist=True, description="GPTQ model directory"
+    )
+
+    # === Validate quantize_config.json ===
+    config_info = verify_gptq_config_integrity(
+        str(validated_path),
+        expected_config_hash=expected_config_hash
+    )
+    print(
+        f"[ZKAEDI SEC] quantize_config.json validated successfully. "
+        f"bits={config_info['config']['bits']}"
+    )
+
+    try:
+        from auto_gptq import AutoGPTQForCausalLM
+    except ImportError:
+        raise ImportError(
+            "[ZKAEDI SEC] auto-gptq is not installed. "
+            "Install with: pip install auto-gptq"
+        )
+
+    if device == "auto":
+        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+
+    try:
+        model = AutoGPTQForCausalLM.from_quantized(
+            str(validated_path),
+            device=device,
+            use_safetensors=use_safetensors,
+            trust_remote_code=False,
+            use_triton=use_triton,
+            disable_exllama=disable_exllama,
+            disable_exllamav2=disable_exllamav2,
+        )
+
+        tokenizer = AutoTokenizer.from_pretrained(
+            str(validated_path),
+            trust_remote_code=False
+        )
+
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+
+        model.eval()
+        print(f"[ZKAEDI SEC] GPTQ model loaded successfully on device: {device}")
+        return model, tokenizer
+
+    except Exception as e:
+        print(f"[ZKAEDI SEC] Failed to load GPTQ model: {e}", file=sys.stderr)
+        raise RuntimeError(f"GPTQ model loading failed from {validated_path}") from e
+
+
+def is_gptq_model(model_path: str) -> bool:
+    """Quick check if a directory contains a GPTQ-quantized model."""
+    path = Path(model_path)
+    return (path / "quantize_config.json").exists()
+
+
+# =============================================================================
 # SELF TEST
 # =============================================================================
+
 
 
 if __name__ == "__main__":
