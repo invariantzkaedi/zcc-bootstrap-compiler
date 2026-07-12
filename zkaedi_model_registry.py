@@ -45,19 +45,41 @@ def is_pid_alive(pid: int) -> bool:
 
 
 def _safe_break_stale_lock(lock_path: Path, expected_token: str) -> bool:
-    """Safely unlinks a stale lock file only if its token matches expected_token."""
+    """Atomically breaks a stale lock using quarantine rename to prevent races (REL-17)."""
+    import uuid
     import json
+    import os
+    if not lock_path.exists():
+        return True
+    
+    quarantine_path = lock_path.with_name(f"write.lock.quar.{uuid.uuid4().hex}")
     try:
-        if not lock_path.exists():
-            return True
-        with open(lock_path, "r", encoding="utf-8") as f:
+        # Atomically move lock file to quarantine path
+        os.rename(str(lock_path), str(quarantine_path))
+    except Exception:
+        # If lock was already renamed, deleted or acquired, we lost the race
+        return False
+        
+    try:
+        with open(quarantine_path, "r", encoding="utf-8") as f:
             data = json.load(f)
         if data.get("owner_token") == expected_token:
-            lock_path.unlink(missing_ok=True)
+            quarantine_path.unlink(missing_ok=True)
             return True
+        else:
+            # Token changed: restore original lock file
+            try:
+                os.rename(str(quarantine_path), str(lock_path))
+            except Exception:
+                quarantine_path.unlink(missing_ok=True)
+            return False
     except Exception:
-        pass
-    return False
+        # Restore on any parse failure to be safe
+        try:
+            os.rename(str(quarantine_path), str(lock_path))
+        except Exception:
+            quarantine_path.unlink(missing_ok=True)
+        return False
 
 
 class RegistryLock:
@@ -92,14 +114,11 @@ class RegistryLock:
                 # Attempt to create lock exclusively
                 fd = os.open(self.lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
                 try:
-                    with os.fdopen(fd, "w", encoding="utf-8") as f:
-                        json.dump(my_lock_data, f)
-                except Exception as e:
-                    try:
-                        os.unlink(self.lock_path)
-                    except Exception:
-                        pass
-                    raise e
+                    # Write entire metadata in a single os.write system call (REL-15)
+                    json_bytes = json.dumps(my_lock_data).encode("utf-8")
+                    os.write(fd, json_bytes)
+                finally:
+                    os.close(fd)
                 self.acquired = True
                 return self
             except FileExistsError:
@@ -118,11 +137,11 @@ class RegistryLock:
                         # Same host: stale only if the PID is dead (REL-11)
                         is_stale = not is_pid_alive(pid)
                     else:
-                        # Different host: stale if the lease duration has expired
-                        is_stale = (time.time() > acquired_at + duration)
+                        # Cross-host: stale if the lease duration has expired (REL-16 / lease duration check)
+                        is_stale = (time.time() - acquired_at > duration)
                     
                     if is_stale:
-                        # Safely break lock revalidating token (REL-12)
+                        # Safely break lock using atomic quarantine rename (REL-17)
                         if _safe_break_stale_lock(self.lock_path, lock_data.get("owner_token")):
                             time.sleep(0.02)
                             continue
@@ -130,7 +149,8 @@ class RegistryLock:
                     # Handle partially-written / corrupt lock files
                     try:
                         st = os.stat(self.lock_path)
-                        if time.time() - st.st_mtime > 2.0:
+                        # Only break unparseable locks if they have timed out completely (REL-15)
+                        if time.time() - st.st_mtime > self.timeout:
                             try:
                                 os.unlink(self.lock_path)
                             except Exception:
@@ -198,6 +218,11 @@ def load_registry(verify_signature: bool = False, public_key_path: Optional[str 
                         if verify_signature:
                             if not public_key_path:
                                 raise ValueError("[ZKAEDI REG] public_key_path is required when verify_signature=True")
+                            
+                            # SEC-20: require legacy document to contain generation field for signature checks
+                            if "generation" not in data:
+                                raise ValueError("[ZKAEDI REG] Legacy registry document is missing 'generation' field; signature verification cannot proceed")
+                                
                             legacy_sig = _get_signature_path(reg_path)
                             if not legacy_sig.exists():
                                 raise FileNotFoundError(f"[ZKAEDI REG] Legacy registry signature missing: {legacy_sig}")
@@ -205,7 +230,12 @@ def load_registry(verify_signature: bool = False, public_key_path: Optional[str 
                             if not verify_registry_signature(data, signature, public_key_path):
                                 raise ValueError("[ZKAEDI REG] Legacy registry signature verification failed!")
                         
-                        gen_num = data.get("generation", 0)
+                        was_injected = False
+                        if "generation" not in data:
+                            data["generation"] = 0
+                            was_injected = True
+                            
+                        gen_num = data["generation"]
                         
                         db_dir.mkdir(parents=True, exist_ok=True)
                         generations_dir.mkdir(parents=True, exist_ok=True)
@@ -213,8 +243,11 @@ def load_registry(verify_signature: bool = False, public_key_path: Optional[str 
                         gen_json_path = generations_dir / f"{gen_num}.json"
                         gen_sig_path = generations_dir / f"{gen_num}.sig"
                         
-                        with open(reg_path, "rb") as sf:
-                            json_bytes = sf.read()
+                        if was_injected:
+                            json_bytes = json.dumps(data, indent=2).encode("utf-8")
+                        else:
+                            with open(reg_path, "rb") as sf:
+                                json_bytes = sf.read()
                             
                         import tempfile
                         import os
@@ -229,7 +262,7 @@ def load_registry(verify_signature: bool = False, public_key_path: Optional[str 
                                 os.fsync(tf.fileno())
                                 
                             legacy_sig = _get_signature_path(reg_path)
-                            if legacy_sig.exists():
+                            if legacy_sig.exists() and verify_signature:
                                 with tempfile.NamedTemporaryFile("wb", dir=str(generations_dir), delete=False) as tf:
                                     temp_sig = Path(tf.name)
                                     tf.write(legacy_sig.read_bytes())
@@ -284,8 +317,8 @@ def load_registry(verify_signature: bool = False, public_key_path: Optional[str 
                                 
                         return data
                     except Exception as e:
-                        if verify_signature:
-                            raise e
+                        # Fail-closed migration exception: do not swallow legacy migration failures (REL-18 / SEC-21)
+                        raise e
                         
         return {"models": {}, "generation": 0}
         
@@ -305,13 +338,14 @@ def load_registry(verify_signature: bool = False, public_key_path: Optional[str 
                 
             if "models" not in data:
                 data["models"] = {}
-            if "generation" not in data:
-                data["generation"] = int(gen_id_str)
                 
-            # SEC-19: confirm pointer/generation consistency before signature verification
+            # SEC-19: confirm pointer/generation consistency before signature verification, reject missing generation
+            if "generation" not in data:
+                raise ValueError("Registry generation document is missing 'generation'")
+                
             pointer_generation = int(gen_id_str)
-            document_generation = data.get("generation")
-            if document_generation is not None and document_generation != pointer_generation:
+            document_generation = data["generation"]
+            if document_generation != pointer_generation:
                 raise ValueError("Registry generation does not match current pointer")
                 
             if verify_signature:

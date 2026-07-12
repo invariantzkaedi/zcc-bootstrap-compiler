@@ -367,17 +367,17 @@ class TestModelRegistry(unittest.TestCase):
             "pid": os.getpid(),
             "hostname": "other-host",
             "owner_token": "expiredtoken",
-            "acquired_at": time.time() - 30.0, # 30 seconds ago
+            "acquired_at": time.time() - 100.0, # 100 seconds ago
             "lease_duration": 15.0
         }
         with open(lock_path, "w", encoding="utf-8") as f:
             json.dump(expired_data, f)
             
-        # Reclaiming/acquiring should succeed without TimeoutError
-        lock = reg.RegistryLock(lock_path, timeout=0.5)
-        lock.__enter__()
-        self.assertTrue(lock.acquired)
-        lock.__exit__(None, None, None)
+        # Reclaiming/acquiring should fail with TimeoutError (operator recovery mandated for cross-host)
+        lock = reg.RegistryLock(lock_path, timeout=0.1)
+        with self.assertRaises(TimeoutError):
+            with lock:
+                pass
 
     def test_lock_ownership_token_safety(self):
         import json
@@ -794,6 +794,68 @@ class TestModelRegistry(unittest.TestCase):
         reg.register_model("m2", str(model_dir), sign=True, private_key_path=priv)
         loaded = reg.load_registry(verify_signature=True, public_key_path=pub)
         self.assertIn("m2", loaded["models"])
+
+    def test_unparseable_lock_expiry(self):
+        db_dir = reg._get_db_dir()
+        db_dir.mkdir(parents=True, exist_ok=True)
+        lock_path = db_dir / "write.lock"
+        
+        # Write unparseable lock data
+        with open(lock_path, "w") as f:
+            f.write("{invalid_json:}")
+            
+        # Try to acquire lock with short timeout (timeout = 0.2s)
+        # Since lock file was just written (mtime is fresh), it should NOT be deleted and we should timeout
+        lock = reg.RegistryLock(lock_path, timeout=0.1)
+        with self.assertRaises(TimeoutError):
+            with lock:
+                pass
+        self.assertTrue(lock_path.exists())
+        
+        # Manually backdate the mtime of the unparseable lock file to make it look old
+        os.utime(lock_path, (time.time() - 20.0, time.time() - 20.0))
+        
+        # Try to acquire again - it should successfully recover the stale unparseable lock
+        with reg.RegistryLock(lock_path, timeout=0.1):
+            self.assertTrue(lock_path.exists())
+
+    def test_legacy_migration_signed_no_generation_raises(self):
+        priv_key_path = os.path.join(self.test_dir, "private_key.pem")
+        pub_key_path = os.path.join(self.test_dir, "public_key.pem")
+        reg.generate_ed25519_keypair(priv_key_path, pub_key_path)
+        
+        # Legacy data without generation field
+        legacy_data = {"models": {"legacy-model": {"name": "legacy-model"}}}
+        with open(self.mock_registry_file, "w", encoding="utf-8") as f:
+            json.dump(legacy_data, f)
+            
+        legacy_sig = reg._get_signature_path(self.mock_registry_file)
+        signature = reg.sign_registry(legacy_data, priv_key_path)
+        with open(legacy_sig, "wb") as f:
+            f.write(signature)
+            
+        # Loading with verify_signature=True must raise ValueError due to missing generation (SEC-20)
+        with self.assertRaises(ValueError) as ctx:
+            reg.load_registry(verify_signature=True, public_key_path=pub_key_path)
+        self.assertIn("Legacy registry document is missing 'generation' field", str(ctx.exception))
+
+    def test_registry_missing_generation_raises(self):
+        db_dir = reg._get_db_dir()
+        db_dir.mkdir(parents=True, exist_ok=True)
+        generations_dir = db_dir / "generations"
+        generations_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Write generation 1 json without the generation field
+        with open(generations_dir / "1.json", "w", encoding="utf-8") as f:
+            json.dump({"models": {}}, f)
+            
+        current_file = db_dir / "current"
+        current_file.write_text("1\n")
+        
+        # Reading should raise ValueError (SEC-19)
+        with self.assertRaises(ValueError) as ctx:
+            reg.load_registry()
+        self.assertIn("Registry generation document is missing 'generation'", str(ctx.exception))
 
 
 if __name__ == "__main__":
