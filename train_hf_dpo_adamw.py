@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 r"""
 ZKAEDI PRIME Security Hardened - AdamW Baseline HF DPO Training Engine
-Version: 2.4-VERIFIED-20260712
+Version: 2.5-RELEASE-20260712
 Author: ZKAEDI PRIME Security Testing Orchestrator (self-audit)
 
 SECURITY NOTES (MANDATORY READING BEFORE EXECUTION):
@@ -24,7 +24,7 @@ import os
 import math
 import numbers
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from datetime import datetime, timezone
 
 import torch
@@ -192,6 +192,7 @@ def generate_dpo_attestation(
     script_path: Path,
     dataset_path: Path,
     base_model: str,
+    base_model_hash: str,
     checkpoint_dir: Path,
     model_payload_sha256: str,
     files_dict: Dict[str, str],
@@ -211,18 +212,6 @@ def generate_dpo_attestation(
     
     script_hash = get_file_sha256(script_path)
     ds_hash = get_file_sha256(dataset_path)
-    
-    # Try resolving the base model allow-list entry digest for reproducibility
-    base_model_hash = "unknown"
-    try:
-        from zkaedi_model_registry import load_registry
-        registry = load_registry(verify_signature=False)
-        for m_name, m_info in registry.get("models", {}).items():
-            if m_name == base_model:
-                base_model_hash = m_info.get("combined_sha256", "unknown")
-                break
-    except Exception:
-        pass
 
     try:
         import trl
@@ -293,6 +282,50 @@ def generate_dpo_attestation(
             raise e
 
 
+def verify_release_receipt(receipt_path: Path, public_key_path: Path) -> bool:
+    """Verifies a detached release receipt signature, checks file digests, and validates bundle integrity (REL-03)."""
+    from zkaedi_model_registry import verify_registry_signature, get_model_hashes
+    
+    sig_path = receipt_path.with_suffix(receipt_path.suffix + ".sig")
+    if not sig_path.exists():
+        raise FileNotFoundError(f"Release receipt signature not found: {sig_path}")
+        
+    with open(receipt_path, "r", encoding="utf-8") as f:
+        receipt_data = json.load(f)
+        
+    with open(sig_path, "rb") as f:
+        signature = f.read()
+        
+    # 1. Verify signature
+    if not verify_registry_signature(receipt_data, signature, str(public_key_path)):
+        raise ValueError("Release receipt signature verification failed")
+        
+    # 2. Recalculate and verify files in receipt
+    checkpoint_dir = receipt_path.parent / "checkpoint"
+    if not checkpoint_dir.exists():
+        raise FileNotFoundError(f"Checkpoint directory not found: {checkpoint_dir}")
+        
+    # 3. Recalculate file digests
+    actual_bundle_hash, actual_files = get_model_hashes(checkpoint_dir)
+    
+    # 4. Compare expected files and hashes
+    expected_files = receipt_data.get("files", {})
+    if set(expected_files.keys()) != set(actual_files.keys()):
+        raise ValueError(
+            f"Release bundle file mismatch. Expected: {list(expected_files.keys())}, Actual: {list(actual_files.keys())}"
+        )
+        
+    for rel_path, expected_hash in expected_files.items():
+        if actual_files[rel_path] != expected_hash:
+            raise ValueError(f"File integrity mismatch for '{rel_path}'")
+            
+    # 5. Verify bundle sha256
+    if receipt_data.get("bundle_sha256") != actual_bundle_hash:
+        raise ValueError("Bundle aggregate hash mismatch")
+        
+    return True
+
+
 def main():
     scan_for_known_cves()
     parser = argparse.ArgumentParser(
@@ -309,6 +342,8 @@ def main():
                         help="Output directory (will be created under safe base if relative)")
     parser.add_argument("--safe-base-dir", type=str, default="/mnt/h",
                         help="Root directory allowed for all filesystem operations (ZKAEDI policy)")
+    parser.add_argument("--public-key", required=True,
+                        help="Path to Ed25519 public key for registry verification (required to verify base model allow-list)")
     
     # Registration & signing arguments
     parser.add_argument("--sign", action="store_true", help="Sign DPO attestation and registry entries")
@@ -316,7 +351,7 @@ def main():
     parser.add_argument("--password", help="[DEPRECATED/INSECURE] Passphrase for private key decryption")
     parser.add_argument("--prompt-password", action="store_true", help="Prompt for private key passphrase")
     parser.add_argument("--register", action="store_true", help="Register the DPO adapter to allow-list")
-    parser.add_argument("--adapter-name", help="Registered name for the DPO adapter")
+    parser.add_argument("--artifact-name", help="Registered name identifier for the DPO artifact")
 
     args = parser.parse_args()
 
@@ -340,6 +375,40 @@ def main():
     except (ValueError, FileNotFoundError) as e:
         logger.error(f"SECURITY BLOCK: {e}")
         sys.exit(1)
+
+    # === SECURITY: Base Model allow-list & integrity verification (SEC-06) ===
+    base_model_hash = "unknown"
+    logger.info("[ZKAEDI SEC] Resolving base model allow-list hash (verify_signature=True)...")
+    try:
+        from zkaedi_model_registry import load_registry, verify_model_integrity
+        # Load registry with mandatory signature checking
+        registry = load_registry(verify_signature=True, public_key_path=args.public_key)
+        
+        p_base = Path(args.model_name)
+        if p_base.exists():
+            # Verify base model directory files strictly against allowlist
+            is_valid, errors = verify_model_integrity(str(p_base), verify_signature=True, public_key_path=args.public_key)
+            if not is_valid:
+                raise ValueError(f"Integrity verification failed: {errors}")
+            
+            # Extract combined hash of local path from registry
+            resolved_abs_base = p_base.resolve()
+            for entry in registry.get("models", {}).values():
+                entry_path = Path(entry.get("path", "")).resolve()
+                if entry_path == resolved_abs_base:
+                    base_model_hash = entry.get("combined_sha256", "unknown")
+                    break
+        else:
+            # Check by identifier in allow-list
+            if args.model_name in registry.get("models", {}):
+                base_model_hash = registry["models"][args.model_name].get("combined_sha256", "unknown")
+    except Exception as e:
+        logger.error(f"[ZKAEDI SEC] Base model allow-list verification failed: {e}")
+        sys.exit(3)
+
+    if base_model_hash == "unknown":
+        logger.error(f"[ZKAEDI SEC] FAIL: Base model '{args.model_name}' has no verified allow-list digest!")
+        sys.exit(3)
 
     logger.info(f"[ZKAEDI SEC] transformers=={TRANSFORMERS_VERSION} (post-CVE-2026-4372 required)")
 
@@ -500,6 +569,7 @@ def main():
         script_path=Path(__file__).resolve(),
         dataset_path=dataset_path,
         base_model=args.model_name,
+        base_model_hash=base_model_hash,
         checkpoint_dir=checkpoint_dir,
         model_payload_sha256=model_payload_sha256,
         files_dict=files_dict,
@@ -516,7 +586,7 @@ def main():
     # Compute complete final release-bundle digest of checkpoint directory
     final_bundle_hash, final_bundle_files = get_model_hashes(checkpoint_dir)
     
-    # REL-02: Write detached release receipt outside checkpoint_dir
+    # Write detached release receipt outside checkpoint_dir
     receipt_data = {
         "artifact": "checkpoint",
         "bundle_sha256": final_bundle_hash,
@@ -540,11 +610,28 @@ def main():
             logger.error(f"Failed to sign detached release receipt: {e}")
             sys.exit(1)
 
+    # Mandatory receipt verification gate (REL-03)
+    if attestation_key and args.public_key:
+        logger.info("[ZKAEDI SEC] Running mandatory release receipt verification gate...")
+        try:
+            verify_release_receipt(receipt_path, Path(args.public_key))
+            logger.info("[ZKAEDI SEC] Mandatory verification gate: PASSED (Signature, file digests, and bundle hash matching precisely)")
+        except Exception as e:
+            logger.error(f"[ZKAEDI SEC] Mandatory verification gate FAILED: {e}")
+            sys.exit(1)
+
     if args.register:
         try:
             from zkaedi_model_registry import register_model
-            reg_name = args.adapter_name or checkpoint_dir.name
-            reg_desc = f"DPO {artifact_type} trained on dataset {dataset_path.name}. Release receipt bundle hash: {final_bundle_hash}"
+            reg_name = args.artifact_name or checkpoint_dir.name
+            reg_desc = f"DPO {artifact_type} trained on dataset {dataset_path.name}"
+            # Structured metadata registration (SEC-07)
+            meta = {
+                "artifact_type": artifact_type,
+                "release_bundle_sha256": final_bundle_hash,
+                "release_receipt_path": get_relative_safe_path(receipt_path, SAFE_BASE_DIR),
+                "attestation_id": attestation_id
+            }
             register_model(
                 model_name=reg_name,
                 model_path=str(checkpoint_dir),
@@ -552,7 +639,8 @@ def main():
                 description=reg_desc,
                 sign=args.sign,
                 private_key_path=args.private_key,
-                password=pwd
+                password=pwd,
+                metadata=meta
             )
             logger.info(f"[ZKAEDI SEC] Checkpoint model '{reg_name}' registered successfully.")
         except Exception as e:

@@ -245,6 +245,7 @@ def register_model(
     sign: bool = False,
     private_key_path: Optional[str] = None,
     password: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Registers a model directory or file in the allow-list registry.
@@ -269,6 +270,7 @@ def register_model(
         "combined_sha256": combined_sha256,
         "files": files_dict,
         "registered_at": datetime.now(timezone.utc).isoformat(),
+        "metadata": metadata or {},
     }
     
     registry_data["models"][model_name] = entry
