@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ZKAEDI PRIME Model Registry & Cryptographic Allow-list
-Version: 1.1
+Version: 1.2
 
 Manages registration, allow-list checking, cryptographic validation,
 and Ed25519 signature verification for LLM weights and adapters.
@@ -13,6 +13,7 @@ import sys
 import json
 import hashlib
 import argparse
+import getpass
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, List
 from datetime import datetime, timezone
@@ -69,6 +70,7 @@ def save_registry(
     data: Dict[str, Any],
     sign: bool = False,
     private_key_path: Optional[str] = None,
+    password: Optional[str] = None,
 ) -> None:
     """Saves the model registry database. Optionally signs it using Ed25519."""
     reg_path = get_registry_path()
@@ -81,7 +83,7 @@ def save_registry(
         if not private_key_path:
             raise ValueError("[ZKAEDI REG] private_key_path is required when sign=True")
         
-        signature = sign_registry(data, private_key_path)
+        signature = sign_registry(data, private_key_path, password=password)
         sig_path = _get_signature_path(reg_path)
         with open(sig_path, "wb") as f:
             f.write(signature)
@@ -131,7 +133,11 @@ def get_model_hashes(model_path: Path) -> Tuple[str, Dict[str, str]]:
 # REGISTRY SIGNING (Ed25519)
 # =============================================================================
 
-def generate_ed25519_keypair(private_key_path: str, public_key_path: str) -> None:
+def generate_ed25519_keypair(
+    private_key_path: str,
+    public_key_path: str,
+    password: Optional[str] = None,
+) -> None:
     """Generates a new Ed25519 keypair for registry signing."""
     try:
         from cryptography.hazmat.primitives import serialization
@@ -146,13 +152,19 @@ def generate_ed25519_keypair(private_key_path: str, public_key_path: str) -> Non
     priv_path = validate_safe_path(private_key_path, must_exist=False, description="private key path")
     pub_path = validate_safe_path(public_key_path, must_exist=False, description="public key path")
 
+    # Encryption configuration
+    if password:
+        enc_alg = serialization.BestAvailableEncryption(password.encode("utf-8"))
+    else:
+        enc_alg = serialization.NoEncryption()
+
     # Save private key
     with open(priv_path, "wb") as f:
         f.write(
             private_key.private_bytes(
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.NoEncryption(),
+                encryption_algorithm=enc_alg,
             )
         )
 
@@ -170,7 +182,7 @@ def generate_ed25519_keypair(private_key_path: str, public_key_path: str) -> Non
     print(f"Public key:  {pub_path}")
 
 
-def sign_registry(data: Dict[str, Any], private_key_path: str) -> bytes:
+def sign_registry(data: Dict[str, Any], private_key_path: str, password: Optional[str] = None) -> bytes:
     """
     Signs the registry data using Ed25519.
     Returns the raw signature bytes.
@@ -185,8 +197,10 @@ def sign_registry(data: Dict[str, Any], private_key_path: str) -> bytes:
     canonical_json = json.dumps(data, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
     priv_path = validate_safe_path(private_key_path, must_exist=True, description="private key path")
+    
+    password_bytes = password.encode("utf-8") if password else None
     with open(priv_path, "rb") as f:
-        private_key = serialization.load_pem_private_key(f.read(), password=None)
+        private_key = serialization.load_pem_private_key(f.read(), password=password_bytes)
 
     if not isinstance(private_key, ed25519.Ed25519PrivateKey):
         raise ValueError("[ZKAEDI REG] Private key must be an Ed25519 key.")
@@ -230,6 +244,7 @@ def register_model(
     description: str = "",
     sign: bool = False,
     private_key_path: Optional[str] = None,
+    password: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Registers a model directory or file in the allow-list registry.
@@ -257,7 +272,7 @@ def register_model(
     }
     
     registry_data["models"][model_name] = entry
-    save_registry(registry_data, sign=sign, private_key_path=private_key_path)
+    save_registry(registry_data, sign=sign, private_key_path=private_key_path, password=password)
     
     print(f"[ZKAEDI REG] Successfully registered model '{model_name}' (Hash: {combined_sha256[:16]}...)")
     return entry
@@ -267,12 +282,13 @@ def deregister_model(
     model_name: str,
     sign: bool = False,
     private_key_path: Optional[str] = None,
+    password: Optional[str] = None,
 ) -> bool:
     """Removes a model entry from the registry allow-list."""
     registry_data = load_registry()
     if model_name in registry_data["models"]:
         del registry_data["models"][model_name]
-        save_registry(registry_data, sign=sign, private_key_path=private_key_path)
+        save_registry(registry_data, sign=sign, private_key_path=private_key_path, password=password)
         print(f"[ZKAEDI REG] Removed model '{model_name}' from the registry.")
         return True
     return False
@@ -371,6 +387,8 @@ def main() -> None:
     keygen_parser = subparsers.add_parser("keygen", help="Generate Ed25519 keypair for registry signing")
     keygen_parser.add_argument("--private-key", required=True, help="Path to save private key file")
     keygen_parser.add_argument("--public-key", required=True, help="Path to save public key file")
+    keygen_parser.add_argument("--password", help="Passphrase for private key encryption")
+    keygen_parser.add_argument("--prompt-password", action="store_true", help="Prompt for private key passphrase")
 
     # Register Command
     reg_parser = subparsers.add_parser("register", help="Register a model in the allow-list")
@@ -380,12 +398,16 @@ def main() -> None:
     reg_parser.add_argument("--description", default="", help="Description metadata")
     reg_parser.add_argument("--sign", action="store_true", help="Sign the registry after update")
     reg_parser.add_argument("--private-key", help="Path to Ed25519 private key (required for sign)")
+    reg_parser.add_argument("--password", help="Passphrase for private key decryption")
+    reg_parser.add_argument("--prompt-password", action="store_true", help="Prompt for private key passphrase")
 
     # Deregister Command
     dereg_parser = subparsers.add_parser("deregister", help="Deregister a model from the allow-list")
     dereg_parser.add_argument("--name", required=True, help="Model name identifier")
     dereg_parser.add_argument("--sign", action="store_true", help="Sign the registry after update")
     dereg_parser.add_argument("--private-key", help="Path to Ed25519 private key (required for sign)")
+    dereg_parser.add_argument("--password", help="Passphrase for private key decryption")
+    dereg_parser.add_argument("--prompt-password", action="store_true", help="Prompt for private key passphrase")
 
     # List Command
     subparsers.add_parser("list", help="List all registered models")
@@ -398,26 +420,41 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    # Password extraction helper
+    def get_pwd(cli_args, parser_obj) -> Optional[str]:
+        if getattr(cli_args, "prompt_password", False):
+            return getpass.getpass("Enter private key passphrase: ")
+        return getattr(cli_args, "password", None)
+
     try:
         if args.command == "keygen":
-            generate_ed25519_keypair(args.private_key, args.public_key)
+            pwd = get_pwd(args, keygen_parser)
+            generate_ed25519_keypair(args.private_key, args.public_key, password=pwd)
             
         elif args.command == "register":
             if args.sign and not args.private_key:
                 reg_parser.error("--private-key is required when --sign is set.")
+            pwd = get_pwd(args, reg_parser)
             register_model(
                 model_name=args.name,
                 model_path=args.path,
                 author=args.author,
                 description=args.description,
                 sign=args.sign,
-                private_key_path=args.private_key
+                private_key_path=args.private_key,
+                password=pwd
             )
             
         elif args.command == "deregister":
             if args.sign and not args.private_key:
                 dereg_parser.error("--private-key is required when --sign is set.")
-            deregister_model(args.name, sign=args.sign, private_key_path=args.private_key)
+            pwd = get_pwd(args, dereg_parser)
+            deregister_model(
+                model_name=args.name,
+                sign=args.sign,
+                private_key_path=args.private_key,
+                password=pwd
+            )
             
         elif args.command == "list":
             models = list_registered_models()

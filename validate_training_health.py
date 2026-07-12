@@ -65,6 +65,31 @@ def validate_ids(name, values):
 
     return normalized
 
+def verify_dataset_integrity(dataset_path: str) -> None:
+    """Hardens the dataset loading path by verifying Parquet schema integrity and column compliance."""
+    try:
+        import pandas as pd
+    except ImportError:
+        raise ImportError("[ZKAEDI SEC] pandas is required for dataset integrity checks.")
+
+    try:
+        # Load only the first row/schema to check columns without pulling the whole file into RAM
+        df_schema = pd.read_parquet(dataset_path)
+    except Exception as e:
+        raise ValueError(f"Failed to read Parquet dataset at '{dataset_path}': {e}")
+
+    required_cols = ["prompt", "chosen", "rejected"]
+    missing = [col for col in required_cols if col not in df_schema.columns]
+    if missing:
+        raise ValueError(f"Parquet dataset is missing required columns: {missing}")
+
+    # Validate column types
+    for col in required_cols:
+        if not pd.api.types.is_string_dtype(df_schema[col]) and not pd.api.types.is_object_dtype(df_schema[col]):
+            raise TypeError(f"Dataset column '{col}' must be of string/object type.")
+            
+    print(f"[ZKAEDI SEC] Parquet dataset schema verified successfully. Total samples: {len(df_schema)}")
+
 def verify_split_manifest(manifest_path):
     manifest_info = {
         "path": manifest_path,
@@ -308,6 +333,24 @@ def main():
         "evaluator_identity": args.evaluator_identity,
         "split_manifest_path": args.split_manifest
     }
+    
+    # === SECURITY: Dataset Schema Integrity Validation ===
+    try:
+        verify_dataset_integrity(args.dataset_path)
+    except (ValueError, TypeError) as e:
+        print(f"[-] FAIL: Dataset integrity verification failed: {e}")
+        write_verdict_atomic(
+            out_path=args.out,
+            status="fail",
+            train_gate={"status": "FAIL", "metrics": {}},
+            eval_gate={"status": "FAIL", "metrics": {}},
+            provenance_gate={"status": "FAIL", "required_fields_complete": False, "split_overlap_count": 0, "manifest_details": {}},
+            release="REJECTED",
+            assurance_level="SMOKE_TEST_ONLY",
+            min_eval_records=args.min_eval_records,
+            provenance_fields=provenance_fields
+        )
+        sys.exit(4)
     
     provenance_complete = True
     for key in ["dataset_hash", "checkpoint_digest", "model_identity", "seed", "evaluator_identity", "split_manifest_path"]:

@@ -206,6 +206,11 @@ def safe_quantize_model(
     output_dir: str,
     bits: int = 8,
     device: str = "auto",
+    register: bool = False,
+    model_name: Optional[str] = None,
+    sign: bool = False,
+    private_key_path: Optional[str] = None,
+    password: Optional[str] = None,
 ) -> Path:
     """Secure model quantization using bitsandbytes."""
     scan_for_known_cves()
@@ -245,6 +250,25 @@ def safe_quantize_model(
         json.dump(provenance, f, indent=2)
 
     print(f"[ZKAEDI SEC] Quantization complete. Saved to: {output_path}")
+
+    if register:
+        try:
+            from zkaedi_model_registry import register_model
+            reg_name = model_name or output_path.name
+            register_model(
+                model_name=reg_name,
+                model_path=str(output_path),
+                author="safe_quantize_model",
+                description=f"Auto-registered quantized {bits}-bit model.",
+                sign=sign,
+                private_key_path=private_key_path,
+                password=password
+            )
+            print(f"[ZKAEDI SEC] Model '{reg_name}' registered successfully.")
+        except Exception as e:
+            print(f"[ZKAEDI SEC] Registry auto-registration failed: {e}", file=sys.stderr)
+            raise e
+
     return output_path
 
 

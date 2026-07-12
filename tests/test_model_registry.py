@@ -213,4 +213,81 @@ class TestModelRegistry(unittest.TestCase):
         with unittest.mock.patch("sys.argv", ["zkaedi_model_registry.py", "verify", "--path", str(model_dir), "--verify-sig", "--public-key", pub_key_path]):
             reg.main()
 
+    def test_encrypted_private_key(self):
+        priv_key_path = os.path.join(self.test_dir, "enc_private_key.pem")
+        pub_key_path = os.path.join(self.test_dir, "enc_public_key.pem")
+        password = "secure_password"
+        
+        # 1. Generate encrypted keypair
+        reg.generate_ed25519_keypair(priv_key_path, pub_key_path, password=password)
+        self.assertTrue(os.path.exists(priv_key_path))
+        self.assertTrue(os.path.exists(pub_key_path))
+        
+        # Create a mock model directory
+        model_dir = Path(self.test_dir) / "mock_model_enc"
+        model_dir.mkdir(exist_ok=True)
+        weights_file = model_dir / "model.safetensors"
+        with open(weights_file, "w") as f:
+            f.write("weights content")
+            
+        # 2. Register model with signed encrypted key (needs correct password)
+        reg.register_model(
+            model_name="enc-model",
+            model_path=str(model_dir),
+            sign=True,
+            private_key_path=priv_key_path,
+            password=password
+        )
+        
+        # Verify loading with signature check
+        registry = reg.load_registry(verify_signature=True, public_key_path=pub_key_path)
+        self.assertIn("enc-model", registry["models"])
+        
+        # 3. Trying to register/sign with wrong password should fail decryption
+        with self.assertRaises(Exception):
+            reg.register_model(
+                model_name="another-model",
+                model_path=str(model_dir),
+                sign=True,
+                private_key_path=priv_key_path,
+                password="wrong_password"
+            )
+
+    @unittest.mock.patch("zkaedi_security_utils.AutoModelForCausalLM")
+    @unittest.mock.patch("zkaedi_security_utils.AutoTokenizer")
+    def test_quantize_autoregistration(self, mock_tokenizer, mock_model):
+        from zkaedi_security_utils import safe_quantize_model
+        
+        # Create a mock model directory
+        model_dir = Path(self.test_dir) / "mock_model_for_quant"
+        model_dir.mkdir(exist_ok=True)
+        weights_file = model_dir / "model.safetensors"
+        with open(weights_file, "w") as f:
+            f.write("weights content")
+        config_file = model_dir / "config.json"
+        with open(config_file, "w") as f:
+            f.write('{"vocab_size": 32000}')
+            
+        # Mock bitsandbytes modules
+        import sys
+        from unittest.mock import MagicMock
+        sys.modules['bitsandbytes'] = MagicMock()
+        sys.modules['bitsandbytes.nn'] = MagicMock()
+
+        output_dir = Path(self.test_dir) / "quantized_model_out"
+        
+        # Call safe_quantize_model with register=True
+        safe_quantize_model(
+            model_path=str(model_dir),
+            output_dir=str(output_dir),
+            bits=8,
+            device="cpu",
+            register=True,
+            model_name="auto-registered-quantized"
+        )
+        
+        # Verify it was added to registry allow-list
+        self.assertTrue(reg.is_model_allowed("auto-registered-quantized"))
+
+
 
