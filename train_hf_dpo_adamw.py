@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 r"""
 ZKAEDI PRIME Security Hardened - AdamW Baseline HF DPO Training Engine
-Version: 2.5-RELEASE-20260712
+Version: 2.6-RELEASE-20260712
 Author: ZKAEDI PRIME Security Testing Orchestrator (self-audit)
 
 SECURITY NOTES (MANDATORY READING BEFORE EXECUTION):
@@ -301,7 +301,8 @@ def verify_release_receipt(receipt_path: Path, public_key_path: Path) -> bool:
         raise ValueError("Release receipt signature verification failed")
         
     # 2. Recalculate and verify files in receipt
-    checkpoint_dir = receipt_path.parent / "checkpoint"
+    rel_art_path = receipt_data.get("relative_artifact_path", "checkpoint")
+    checkpoint_dir = (receipt_path.parent / rel_art_path).resolve()
     if not checkpoint_dir.exists():
         raise FileNotFoundError(f"Checkpoint directory not found: {checkpoint_dir}")
         
@@ -323,6 +324,15 @@ def verify_release_receipt(receipt_path: Path, public_key_path: Path) -> bool:
     if receipt_data.get("bundle_sha256") != actual_bundle_hash:
         raise ValueError("Bundle aggregate hash mismatch")
         
+    # 6. Cross-check attestation_id with dpo_security_attestation.json inside checkpoint (REL-03)
+    attestation_file = checkpoint_dir / "dpo_security_attestation.json"
+    if not attestation_file.exists():
+        raise FileNotFoundError(f"Attestation document not found inside checkpoint: {attestation_file}")
+    with open(attestation_file, "r", encoding="utf-8") as f:
+        attestation_data = json.load(f)
+    if attestation_data.get("attestation_id") != receipt_data.get("attestation_id"):
+        raise ValueError("Cross-check failed: attestation_id mismatch between receipt and attestation document")
+        
     return True
 
 
@@ -332,6 +342,8 @@ def main():
         description="ZKAEDI PRIME Hardened AdamW HF DPO Training Engine (CVE-2026-4372 mitigated)",
         epilog="Run only with verified local models or pinned HF revisions after transformers>=5.3.0 upgrade."
     )
+    parser.add_argument("--mode", type=str, choices=["dev", "release"], default="dev",
+                        help="Execution mode: 'dev' for rapid prototyping (unsigned), 'release' for strict cryptographic verification.")
     parser.add_argument("--dataset", type=str, default="/mnt/h/agents/train_maxed_validated.parquet",
                         help="Path to local parquet DPO dataset (must be under safe base)")
     parser.add_argument("--model-name", type=str, default="gpt2",
@@ -342,8 +354,7 @@ def main():
                         help="Output directory (will be created under safe base if relative)")
     parser.add_argument("--safe-base-dir", type=str, default="/mnt/h",
                         help="Root directory allowed for all filesystem operations (ZKAEDI policy)")
-    parser.add_argument("--public-key", required=True,
-                        help="Path to Ed25519 public key for registry verification (required to verify base model allow-list)")
+    parser.add_argument("--public-key", help="Path to Ed25519 public key for registry verification")
     
     # Registration & signing arguments
     parser.add_argument("--sign", action="store_true", help="Sign DPO attestation and registry entries")
@@ -354,6 +365,22 @@ def main():
     parser.add_argument("--artifact-name", help="Registered name identifier for the DPO artifact")
 
     args = parser.parse_args()
+
+    # === SECURITY: mode validation gates (SEC-09 & SEC-10) ===
+    if args.mode == "release":
+        if not args.sign:
+            parser.error("In release mode, --sign is required to establish cryptographic provenance.")
+        if not args.private_key:
+            parser.error("In release mode, --private-key is required to sign release artifacts.")
+        if not args.public_key:
+            parser.error("In release mode, --public-key is required to verify signatures.")
+        p_base = Path(args.model_name)
+        if not p_base.exists() or not p_base.is_dir():
+            parser.error("In release mode, --model-name must be an existing local directory containing pre-downloaded model weights.")
+    else:
+        # Development mode blocks auto-registration
+        if args.register:
+            parser.error("Auto-registration is blocked in development mode. Set --mode release to register artifacts.")
 
     # === SECURITY: signing flag semantics (SEC-01) ===
     if args.sign and not args.private_key:
@@ -378,16 +405,17 @@ def main():
 
     # === SECURITY: Base Model allow-list & integrity verification (SEC-06) ===
     base_model_hash = "unknown"
-    logger.info("[ZKAEDI SEC] Resolving base model allow-list hash (verify_signature=True)...")
+    logger.info("[ZKAEDI SEC] Resolving base model allow-list hash...")
     try:
         from zkaedi_model_registry import load_registry, verify_model_integrity
-        # Load registry with mandatory signature checking
-        registry = load_registry(verify_signature=True, public_key_path=args.public_key)
+        # Load registry with signature checking if public key is passed
+        verify_sig = (args.public_key is not None) or (args.mode == "release")
+        registry = load_registry(verify_signature=verify_sig, public_key_path=args.public_key)
         
         p_base = Path(args.model_name)
         if p_base.exists():
             # Verify base model directory files strictly against allowlist
-            is_valid, errors = verify_model_integrity(str(p_base), verify_signature=True, public_key_path=args.public_key)
+            is_valid, errors = verify_model_integrity(str(p_base), verify_signature=verify_sig, public_key_path=args.public_key)
             if not is_valid:
                 raise ValueError(f"Integrity verification failed: {errors}")
             
@@ -589,6 +617,7 @@ def main():
     # Write detached release receipt outside checkpoint_dir
     receipt_data = {
         "artifact": "checkpoint",
+        "relative_artifact_path": "checkpoint",
         "bundle_sha256": final_bundle_hash,
         "files": final_bundle_files,
         "attestation_id": attestation_id,
@@ -610,8 +639,8 @@ def main():
             logger.error(f"Failed to sign detached release receipt: {e}")
             sys.exit(1)
 
-    # Mandatory receipt verification gate (REL-03)
-    if attestation_key and args.public_key:
+    # Mandatory receipt verification gate (REL-03 / SEC-09)
+    if args.mode == "release":
         logger.info("[ZKAEDI SEC] Running mandatory release receipt verification gate...")
         try:
             verify_release_receipt(receipt_path, Path(args.public_key))
@@ -619,6 +648,14 @@ def main():
         except Exception as e:
             logger.error(f"[ZKAEDI SEC] Mandatory verification gate FAILED: {e}")
             sys.exit(1)
+    elif attestation_key and args.public_key:
+        # Dev mode best-effort verification if keys are passed
+        logger.info("[ZKAEDI SEC] Running dev mode best-effort release receipt verification gate...")
+        try:
+            verify_release_receipt(receipt_path, Path(args.public_key))
+            logger.info("[ZKAEDI SEC] Dev verification gate: PASSED")
+        except Exception as e:
+            logger.warning(f"[ZKAEDI SEC] Dev verification gate FAILED: {e}")
 
     if args.register:
         try:

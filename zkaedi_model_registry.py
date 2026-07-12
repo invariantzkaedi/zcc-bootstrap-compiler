@@ -72,22 +72,60 @@ def save_registry(
     private_key_path: Optional[str] = None,
     password: Optional[str] = None,
 ) -> None:
-    """Saves the model registry database. Optionally signs it using Ed25519."""
+    """Saves the model registry database atomically with staging and cleanup."""
+    import tempfile
+    import os
     reg_path = get_registry_path()
-    validate_safe_path(str(reg_path.parent), must_exist=True, description="registry parent directory")
+    parent = reg_path.parent
+    validate_safe_path(str(parent), must_exist=True, description="registry parent directory")
     
-    with open(reg_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-
-    if sign:
-        if not private_key_path:
-            raise ValueError("[ZKAEDI REG] private_key_path is required when sign=True")
+    temp_reg_path = None
+    temp_sig_path = None
+    sig_path = _get_signature_path(reg_path)
+    
+    try:
+        # Write JSON to temporary file
+        with tempfile.NamedTemporaryFile("w", dir=str(parent), delete=False, encoding="utf-8") as f:
+            temp_reg_path = Path(f.name)
+            json.dump(data, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+            
+        # Write signature to temporary file if signing is requested
+        if sign:
+            if not private_key_path:
+                raise ValueError("[ZKAEDI REG] private_key_path is required when sign=True")
+            signature = sign_registry(data, private_key_path, password=password)
+            with tempfile.NamedTemporaryFile("wb", dir=str(parent), delete=False) as f:
+                temp_sig_path = Path(f.name)
+                f.write(signature)
+                f.flush()
+                os.fsync(f.fileno())
+                
+        # Perform atomic replacements
+        os.replace(temp_reg_path, reg_path)
+        temp_reg_path = None
         
-        signature = sign_registry(data, private_key_path, password=password)
-        sig_path = _get_signature_path(reg_path)
-        with open(sig_path, "wb") as f:
-            f.write(signature)
-        print(f"[ZKAEDI REG] Registry signed and saved to {sig_path}")
+        if sign:
+            os.replace(temp_sig_path, sig_path)
+            temp_sig_path = None
+            print(f"[ZKAEDI REG] Registry signed and saved to {sig_path}")
+            
+        # Best-effort directory fsync
+        try:
+            dir_fd = os.open(str(parent), os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except OSError:
+            pass
+            
+    finally:
+        if temp_reg_path is not None and temp_reg_path.exists():
+            temp_reg_path.unlink(missing_ok=True)
+        if temp_sig_path is not None and temp_sig_path.exists():
+            temp_sig_path.unlink(missing_ok=True)
 
 
 # =============================================================================
@@ -124,7 +162,12 @@ def get_model_hashes(model_path: Path) -> Tuple[str, Dict[str, str]]:
             rel_path = f.relative_to(model_path).as_posix()
             f_hash = get_file_sha256(f)
             files_hashes[rel_path] = f_hash
-            combined_hasher.update(f_hash.encode())
+            
+            # Deterministic framed encoding including path (REL-05)
+            combined_hasher.update(rel_path.encode("utf-8"))
+            combined_hasher.update(b"\0")
+            combined_hasher.update(f_hash.encode("ascii"))
+            combined_hasher.update(b"\n")
             
     return combined_hasher.hexdigest(), files_hashes
 

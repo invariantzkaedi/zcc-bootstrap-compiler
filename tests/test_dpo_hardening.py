@@ -22,11 +22,25 @@ import zkaedi_model_registry as reg
 
 class TestDPOHardening(unittest.TestCase):
     def setUp(self):
-        os.environ["ZKAEDI_SAFE_BASE"] = "/"
+        # We need mock safe bases since temporary dir might be outside /mnt/h on standard systems.
         self.test_dir = tempfile.mkdtemp(prefix="zcc_dpo_test_")
+        self.old_env = os.environ.get("ZKAEDI_SAFE_BASE")
+        os.environ["ZKAEDI_SAFE_BASE"] = self.test_dir
         self.callback = DPOSTripwireCallback()
+        
+        # Override registry location inside the temp dir to avoid modifying real data (TEST-03)
+        self.mock_registry_file = Path(self.test_dir) / "zkaedi_model_registry.json"
+        self._old_get_registry_path = reg.get_registry_path
+        reg.get_registry_path = lambda: self.mock_registry_file
 
     def tearDown(self):
+        # Restore mock get_registry_path
+        reg.get_registry_path = self._old_get_registry_path
+        if self.old_env is not None:
+            os.environ["ZKAEDI_SAFE_BASE"] = self.old_env
+        else:
+            os.environ.pop("ZKAEDI_SAFE_BASE", None)
+            
         import shutil
         shutil.rmtree(self.test_dir)
 
@@ -51,8 +65,8 @@ class TestDPOHardening(unittest.TestCase):
         rel = get_relative_safe_path(inside_path, base_dir)
         self.assertEqual(rel, "data.parquet")
         
-        outside_dir = Path(self.test_dir) / "secret_zone"
-        outside_dir.mkdir()
+        outside_dir = Path(tempfile.gettempdir()) / "secret_zone"
+        outside_dir.mkdir(exist_ok=True)
         outside_path = outside_dir / "secret.parquet"
         with open(outside_path, "w") as f:
             f.write("secret")
@@ -149,6 +163,12 @@ class TestDPOHardening(unittest.TestCase):
         with open(weights_file, "w") as f:
             f.write("weights content")
             
+        # Write dummy attestation inside checkpoint
+        attestation_file = checkpoint_dir / "dpo_security_attestation.json"
+        att_id = "test-uuid-attestation"
+        with open(attestation_file, "w") as f:
+            json.dump({"attestation_id": att_id}, f)
+            
         # Calculate file lists and digests
         final_bundle_hash, final_bundle_files = reg.get_model_hashes(checkpoint_dir)
         
@@ -159,9 +179,10 @@ class TestDPOHardening(unittest.TestCase):
         
         receipt_data = {
             "artifact": "checkpoint",
+            "relative_artifact_path": "checkpoint",
             "bundle_sha256": final_bundle_hash,
             "files": final_bundle_files,
-            "attestation_id": "test-uuid-attestation",
+            "attestation_id": att_id,
             "timestamp": "2026-07-12T12:00:00Z"
         }
         receipt_path = Path(self.test_dir) / "release_receipt.json"
@@ -199,15 +220,11 @@ class TestDPOHardening(unittest.TestCase):
         with self.assertRaises(ValueError):
             verify_release_receipt(receipt_path, Path(pub_key_path))
 
-
     def test_base_model_allowlist_enforcement(self):
         # 1. Setup signed model registry allowlist
         priv_key_path = os.path.join(self.test_dir, "private_key.pem")
         pub_key_path = os.path.join(self.test_dir, "public_key.pem")
         reg.generate_ed25519_keypair(priv_key_path, pub_key_path)
-        
-        # Configure registry path env
-        os.environ["ZKAEDI_SAFE_BASE"] = "/"
         
         # Mock register a base model
         base_dir = Path(self.test_dir) / "gpt2-base"
@@ -227,11 +244,10 @@ class TestDPOHardening(unittest.TestCase):
         # Test 2. Resolve known allowlisted base model identifier -> passes
         with patch("sys.argv", [
             "train_hf_dpo_adamw.py",
-            "--dataset", str(Path(self.test_dir) / "dummy.parquet"), # not needed for parsing check
+            "--dataset", str(Path(self.test_dir) / "dummy.parquet"), 
             "--model-name", "gpt2-base",
             "--public-key", pub_key_path
         ]):
-            # Verify load_registry(verify_signature=True) does not crash on verified database
             registry = reg.load_registry(verify_signature=True, public_key_path=pub_key_path)
             self.assertIn("gpt2-base", registry["models"])
             
@@ -242,10 +258,57 @@ class TestDPOHardening(unittest.TestCase):
                 "--model-name", "unregistered-wild-model",
                 "--public-key", pub_key_path
             ]):
-                # If verify_signature=True is enforced and registry doesn't have it, it should fail
                 registry = reg.load_registry(verify_signature=True, public_key_path=pub_key_path)
                 if "unregistered-wild-model" not in registry["models"]:
                     raise ValueError("Base model has no verified allow-list digest")
+
+    def test_release_mode_gates(self):
+        priv_key_path = os.path.join(self.test_dir, "private_key.pem")
+        pub_key_path = os.path.join(self.test_dir, "public_key.pem")
+        reg.generate_ed25519_keypair(priv_key_path, pub_key_path)
+        
+        import sys
+        # 1. Unsigned release run -> should fail parsing
+        with patch("sys.argv", [
+            "train_hf_dpo_adamw.py",
+            "--mode", "release",
+            "--model-name", "gpt2",
+            "--public-key", pub_key_path
+        ]):
+            with self.assertRaises(SystemExit):
+                from train_hf_dpo_adamw import main as dpo_main
+                dpo_main()
+                
+        # 2. Remote base model in release run -> should fail parsing
+        with patch("sys.argv", [
+            "train_hf_dpo_adamw.py",
+            "--mode", "release",
+            "--sign",
+            "--private-key", priv_key_path,
+            "--public-key", pub_key_path,
+            "--model-name", "gpt2-remote-hub" # Not a local directory
+        ]):
+            with self.assertRaises(SystemExit):
+                from train_hf_dpo_adamw import main as dpo_main
+                dpo_main()
+
+    def test_aggregate_directory_hash_framed_paths(self):
+        # Setup two directories with identical file content but different paths
+        dir_a = Path(self.test_dir) / "dir_a"
+        dir_a.mkdir()
+        with open(dir_a / "file1.txt", "w") as f:
+            f.write("content")
+            
+        dir_b = Path(self.test_dir) / "dir_b"
+        dir_b.mkdir()
+        with open(dir_b / "different_name.txt", "w") as f:
+            f.write("content")
+            
+        # Prior combined hash would treat them identically since file contents are identical.
+        # Now, framed encoding ensures path names are part of the digest, making them distinct!
+        hash_a, _ = reg.get_model_hashes(dir_a)
+        hash_b, _ = reg.get_model_hashes(dir_b)
+        self.assertNotEqual(hash_a, hash_b)
 
 
 if __name__ == "__main__":
