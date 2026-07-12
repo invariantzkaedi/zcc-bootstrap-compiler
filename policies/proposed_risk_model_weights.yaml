@@ -1,5 +1,5 @@
-base_risk: 20
-ci_weight: 20
-critical_weight: 30
+base_risk: 22
+ci_weight: 22
+critical_weight: 33
 fail_multiplier: 5
-max_fail_impact: 30
+max_fail_impact: 33
