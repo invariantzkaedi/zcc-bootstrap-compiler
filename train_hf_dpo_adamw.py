@@ -32,12 +32,12 @@ except ImportError:
 import math
 import numbers
 from pathlib import Path
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 
 import torch
 from datasets import load_dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback, __version__ as TRANSFORMERS_VERSION
+from transformers import TrainerCallback, __version__ as TRANSFORMERS_VERSION
 
 from trl import DPOTrainer, DPOConfig
 from zkaedi_security_utils import (
@@ -182,7 +182,7 @@ class DPOSTripwireCallback(TrainerCallback):
                     if abs(margin_val) > 10.0:
                         logger.warning(f"[ZKAEDI SEC] Margin saturation warning: {margin_val:.4f}")
                         if abs(margin_val) > 15.0:
-                            logger.error(f"[ZKAEDI SEC] TRIPWIRE TRIGGERED: Margin exceeds critical safety boundary of 15.0!")
+                            logger.error("[ZKAEDI SEC] TRIPWIRE TRIGGERED: Margin exceeds critical safety boundary of 15.0!")
                             control.should_training_stop = True
                             raise ValueError(f"Training aborted due to preference margin saturation: {margin_val:.4f}")
 

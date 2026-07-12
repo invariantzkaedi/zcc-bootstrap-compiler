@@ -261,7 +261,7 @@ def safe_quantize_model(
     output_path.mkdir(parents=True, exist_ok=True)
 
     try:
-        import bitsandbytes as bnb
+        import bitsandbytes as bnb  # noqa: F401
     except ImportError:
         raise ImportError("[ZKAEDI SEC] bitsandbytes is not installed.")
 
@@ -392,7 +392,7 @@ def verify_gptq_config_integrity(
         actual = sha256_file(config_path)
         result["config_hash"] = actual
         if actual != expected_config_hash:
-            raise ValueError(f"[ZKAEDI SEC] quantize_config.json hash mismatch")
+            raise ValueError("[ZKAEDI SEC] quantize_config.json hash mismatch")
 
     return result
 

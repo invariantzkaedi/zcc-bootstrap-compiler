@@ -1,0 +1,1 @@
+{"severity": "ERROR", "event": "ZKAEDI_SWEEP_GLITCH", "component": "main", "action": "zero-size array to reduction operation maximum which has no identity", "timestamp_utc": "2026-07-10T14:14:45.964155Z"}

@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "bundle_hash": "sha256:1f28d15620e5a0821fdf2d8bde35c7c8ae37dd944aec065c8e459d188652ddb8",
+  "excluded_from_bundle_hash": [
+    "release_artifacts/manifest.json"
+  ],
+  "artifacts": [
+    {
+      "path": "release_artifacts/alert_1783346559_manifest_missing.json",
+      "sha256": "sha256:cc48322d5fb48681d4bfcc417bb9e1e6c32c06698cf9e24be4920267fbc6dafa"
+    },
+    {
+      "path": "release_artifacts/alert_1783717840_ZKAEDI_SWEEP_GLITCH.json",
+      "sha256": "sha256:8e40e0f371b561a5a6cd6855723ae5285aefc1025d650b80c9501dd52ad48d26"
+    },
+    {
+      "path": "release_artifacts/alert_1783717982_ZKAEDI_PIPELINE_SYNC.json",
+      "sha256": "sha256:d13c6c77b76d042d8598903f099c75759578fbf9317c3dffad8fee94369a765e"
+    },
+    {
+      "path": "release_artifacts/alert_1783717982_ZKAEDI_UNKNOWNCODE_JACKPOT.json",
+      "sha256": "sha256:36214f772fb00209e506fb847c57f63b1326d7d6ea9c62d3292b5e310b7b0ef8"
+    },
+    {
+      "path": "release_artifacts/alert_1783718030_ZKAEDI_PIPELINE_SYNC.json",
+      "sha256": "sha256:5cb952ac47d3178887a13f20bd8722659feb0568cab75066d44b97fa8ae3442a"
+    },
+    {
+      "path": "release_artifacts/alert_1783718030_ZKAEDI_UNKNOWNCODE_JACKPOT.json",
+      "sha256": "sha256:447fcf603b82c3e25d2bb82930f83e0f5b87078409376284b2949d8e089e8683"
+    },
+    {
+      "path": "release_artifacts/alert_1783718058_ZKAEDI_PIPELINE_SYNC.json",
+      "sha256": "sha256:b3e23d51f2fa0c6d9aa07366e600d778ee0f09f867aca762c619a8773b07ce98"
+    },
+    {
+      "path": "release_artifacts/alert_1783718058_ZKAEDI_UNKNOWNCODE_JACKPOT.json",
+      "sha256": "sha256:9390d3659e1bb3bd3d92a36d59db6ef389d3778abf509acfd5716e92b8056af7"
+    },
+    {
+      "path": "release_artifacts/alert_1783718085_ZKAEDI_SWEEP_GLITCH.json",
+      "sha256": "sha256:284454d6977b8d83b89776e2afedc839b6da6347381ef09d124b68ea4c59e857"
+    },
+    {
+      "path": "release_artifacts/alert_1783718115_ZKAEDI_PIPELINE_SYNC.json",
+      "sha256": "sha256:05ead3a8e715e330bbe39b3c1193a92fca3e8ce5949bff994e2c854958246292"
+    },
+    {
+      "path": "release_artifacts/alert_1783718115_ZKAEDI_UNKNOWNCODE_JACKPOT.json",
+      "sha256": "sha256:fd6b9ffa470f24b65d28cde5b2a8b84a2067e62325866479777ef71cb52397d4"
+    },
+    {
+      "path": "release_artifacts/alert_1783718141_ZKAEDI_PIPELINE_SYNC.json",
+      "sha256": "sha256:10bdc3c08d70405e7cfe7f1eab64b82dc996751a525b88efdba3d1b7818bc017"
+    },
+    {
+      "path": "release_artifacts/alert_1783718141_ZKAEDI_UNKNOWNCODE_JACKPOT.json",
+      "sha256": "sha256:93bba7e9d59ab829cd1df5684213dae7659eed699d3e4dc67241301a14fb438e"
+    }
+  ]
+}

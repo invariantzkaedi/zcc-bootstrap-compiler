@@ -15,12 +15,15 @@ import hashlib
 import argparse
 import getpass
 from pathlib import Path
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Optional, Dict, Any, Tuple, List, TYPE_CHECKING
 from datetime import datetime, timezone
 
 from zkaedi_security_utils import validate_safe_path
 
 import time
+
+if TYPE_CHECKING:
+    from cryptography.hazmat.primitives.asymmetric import ed25519
 
 def is_pid_alive(pid: int) -> bool:
     """Checks if a process with the given PID is currently running."""
@@ -168,8 +171,6 @@ class RegistryLock:
                     
                     pid = lock_data.get("pid", 0)
                     hostname = lock_data.get("hostname", "")
-                    acquired_at = lock_data.get("acquired_at", 0.0)
-                    duration = lock_data.get("lease_duration", lease_duration)
                     
                     is_same_host = (hostname == socket.gethostname())
                     if is_same_host:
@@ -650,7 +651,7 @@ def generate_ed25519_keypair(
             )
         )
 
-    print(f"[ZKAEDI REG] Ed25519 keypair generated successfully.")
+    print("[ZKAEDI REG] Ed25519 keypair generated successfully.")
     print(f"Private key: {priv_path}")
     print(f"Public key:  {pub_path}")
 
