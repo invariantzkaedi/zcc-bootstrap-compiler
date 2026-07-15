@@ -1189,19 +1189,19 @@ static uint32_t constant_fold_pass(Function *fn) {
 
       switch (ins->op) {
       case OP_ADD:
-        if (d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
           result = d0->imm + d1->imm;
           goto fold_binary;
         }
         break;
       case OP_SUB:
-        if (d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
           result = d0->imm - d1->imm;
           goto fold_binary;
         }
         break;
       case OP_MUL:
-        if (d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
           result = d0->imm * d1->imm;
           goto fold_binary;
         }
@@ -1212,7 +1212,7 @@ static uint32_t constant_fold_pass(Function *fn) {
           result = 0;
           goto fold_binary;
         }
-        if (d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
           if (d1->imm != 0) {
             result = d0->imm / d1->imm;
             goto fold_binary;
@@ -1225,7 +1225,7 @@ static uint32_t constant_fold_pass(Function *fn) {
           result = 0;
           goto fold_binary;
         }
-        if (d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
           if (d1->imm != 0) {
             result = d0->imm % d1->imm;
             goto fold_binary;
@@ -1267,37 +1267,37 @@ static uint32_t constant_fold_pass(Function *fn) {
         }
         break;
       case OP_LT:
-        if (d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
           result = d0->imm < d1->imm ? 1 : 0;
           goto fold_binary;
         }
         break;
       case OP_EQ:
-        if (d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
           result = (d0->imm == d1->imm) ? 1 : 0;
           goto fold_binary;
         }
         break;
       case OP_NE:
-        if (d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
           result = (d0->imm != d1->imm) ? 1 : 0;
           goto fold_binary;
         }
         break;
       case OP_GT:
-        if (d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
           result = (d0->imm > d1->imm) ? 1 : 0;
           goto fold_binary;
         }
         break;
       case OP_GE:
-        if (d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
           result = (d0->imm >= d1->imm) ? 1 : 0;
           goto fold_binary;
         }
         break;
       case OP_LE:
-        if (d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
           result = (d0->imm <= d1->imm) ? 1 : 0;
           goto fold_binary;
         }
@@ -4356,7 +4356,15 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
   case ZND_NEG: {
     RegID l = zcc_lower_expr(ctx, node->lhs);
     RegID zero_r = ctx->next_reg++;
-    Instr *c0 = make_instr_imm(ctx->next_instr_id++, OP_CONST, zero_r, 0,
+    int64_t imm_val = 0;
+    if (node->is_float) {
+      if (node->dst_size == 4) {
+        imm_val = (int64_t)0x80000000LL;
+      } else {
+        imm_val = (int64_t)0x8000000000000000ULL;
+      }
+    }
+    Instr *c0 = make_instr_imm(ctx->next_instr_id++, OP_CONST, zero_r, imm_val,
                                node->line_no);
     emit_instr(ctx, c0);
     ins = calloc(1, sizeof(Instr));
@@ -4860,9 +4868,9 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     load_ins->dst = load_r;
     load_ins->src[0] = addr_r;
     load_ins->n_src = 1;
-    load_ins->imm = 8;
-    if (node->lhs && node->lhs->kind == ZND_DEREF && node->lhs->member_size > 0)
-      load_ins->imm = node->lhs->member_size;
+    load_ins->imm = (node->lhs && node->lhs->member_size > 0) ? node->lhs->member_size : 8;
+    load_ins->is_float = node->is_float;
+    load_ins->dst_size = node->dst_size;
     load_ins->exec_freq = 1.0;
     emit_instr(ctx, load_ins);
 
@@ -4896,6 +4904,8 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     add_ins->src[0] = load_r;
     add_ins->src[1] = rhs_r;
     add_ins->n_src = 2;
+    add_ins->is_float = node->is_float;
+    add_ins->dst_size = node->dst_size;
     add_ins->exec_freq = 1.0;
     emit_instr(ctx, add_ins);
 
@@ -4906,10 +4916,9 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     st->src[0] = sum_r;
     st->src[1] = addr_r;
     st->n_src = 2;
+    st->is_float = node->is_float;
     st->exec_freq = 1.0;
-    st->imm = 8;
-    if (node->lhs && node->lhs->kind == ZND_DEREF && node->lhs->member_size > 0)
-      st->imm = node->lhs->member_size;
+    st->imm = (node->lhs && node->lhs->member_size > 0) ? node->lhs->member_size : 8;
     emit_instr(ctx, st);
     return sum_r;
   }
@@ -4986,72 +4995,7 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
     return;
   }
   case ZND_COMPOUND_ASSIGN: {
-    if (!node->lhs || !node->rhs)
-      return;
-    RegID addr_r;
-    ctx->want_address = 1;
-    addr_r = zcc_lower_expr(ctx, node->lhs);
-    ctx->want_address = 0;
-    if (!addr_r)
-      return;
-
-    RegID load_r = ctx->next_reg++;
-    Instr *load_ins = calloc(1, sizeof(Instr));
-    load_ins->id = ctx->next_instr_id++;
-    load_ins->op = OP_LOAD;
-    load_ins->dst = load_r;
-    load_ins->src[0] = addr_r;
-    load_ins->n_src = 1;
-    load_ins->imm = 8;
-    if (node->lhs && node->lhs->member_size > 0)
-      load_ins->imm = node->lhs->member_size;
-    load_ins->exec_freq = 1.0;
-    emit_instr(ctx, load_ins);
-
-    RegID rhs_r = zcc_lower_expr(ctx, node->rhs);
-    RegID sum_r = ctx->next_reg++;
-    Instr *add_ins = calloc(1, sizeof(Instr));
-    add_ins->id = ctx->next_instr_id++;
-
-    if (node->compound_op == ZND_SUB)
-      add_ins->op = OP_SUB;
-    else if (node->compound_op == ZND_MUL)
-      add_ins->op = OP_MUL;
-    else if (node->compound_op == ZND_DIV)
-      add_ins->op = OP_DIV;
-    else if (node->compound_op == ZND_MOD)
-      add_ins->op = OP_MOD;
-    else if (node->compound_op == ZND_BAND)
-      add_ins->op = OP_BAND;
-    else if (node->compound_op == ZND_BOR)
-      add_ins->op = OP_BOR;
-    else if (node->compound_op == ZND_BXOR)
-      add_ins->op = OP_BXOR;
-    else if (node->compound_op == ZND_SHL)
-      add_ins->op = OP_SHL;
-    else if (node->compound_op == ZND_SHR)
-      add_ins->op = OP_SHR;
-    else
-      add_ins->op = OP_ADD;
-
-    add_ins->dst = sum_r;
-    add_ins->src[0] = load_r;
-    add_ins->src[1] = rhs_r;
-    add_ins->n_src = 2;
-    add_ins->exec_freq = 1.0;
-    emit_instr(ctx, add_ins);
-
-    Instr *st = calloc(1, sizeof(Instr));
-    st->id = ctx->next_instr_id++;
-    st->op = OP_STORE;
-    st->dst = 0;
-    st->src[0] = sum_r;
-    st->src[1] = addr_r;
-    st->n_src = 2;
-    st->exec_freq = 1.0;
-    st->imm =
-        (node->lhs && node->lhs->member_size > 0) ? node->lhs->member_size : 8;
-    emit_instr(ctx, st);
+    (void)zcc_lower_expr(ctx, node);
     return;
   }
   case ZND_IF: {
@@ -6653,6 +6597,9 @@ static void gvn_walk_domtree(Function *fn, BlockID bid, uint32_t *eliminated) {
           ins->src[0] = entry->dst_reg;
           ins->n_src  = 1;
           ins->imm    = 0;
+          if (ins->src[0] < MAX_INSTRS && fn->def_of[ins->src[0]]) {
+            ins->src_is_float = fn->def_of[ins->src[0]]->is_float;
+          }
           vn_of[ins->dst] = vn_of[entry->dst_reg];
           (*eliminated)++;
           if (getenv("ZCC_DEBUG_GVN")) {
@@ -6761,6 +6708,9 @@ static uint32_t redundant_load_elim_pass(Function *fn) {
           ins->src[0] = avail[found].val;
           ins->n_src = 1;
           ins->imm = 0;
+          if (ins->src[0] < MAX_INSTRS && fn->def_of[ins->src[0]]) {
+            ins->src_is_float = fn->def_of[ins->src[0]]->is_float;
+          }
           eliminated++;
         } else {
           /* Record this load for future matches */
@@ -8198,7 +8148,7 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
       } else {
         fprintf(f, "    ucomisd %%xmm0, %%xmm1\n");
       }
-      fprintf(f, "    setb %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
+      fprintf(f, "    setb %%al\n    setnp %%cl\n    andb %%cl, %%al\n");
       fprintf(f, "    movzbl %%al, %%eax\n");
     } else {
       ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);
@@ -8231,7 +8181,7 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
       } else {
         fprintf(f, "    ucomisd %%xmm0, %%xmm1\n");
       }
-      fprintf(f, "    sete %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
+      fprintf(f, "    sete %%al\n    setnp %%cl\n    andb %%cl, %%al\n");
       fprintf(f, "    movzbl %%al, %%eax\n");
     } else {
       ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);
@@ -8297,7 +8247,7 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
       } else {
         fprintf(f, "    ucomisd %%xmm0, %%xmm1\n");
       }
-      fprintf(f, "    seta %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
+      fprintf(f, "    seta %%al\n    setnp %%cl\n    andb %%cl, %%al\n");
       fprintf(f, "    movzbl %%al, %%eax\n");
     } else {
       ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);
@@ -8330,7 +8280,7 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
       } else {
         fprintf(f, "    ucomisd %%xmm0, %%xmm1\n");
       }
-      fprintf(f, "    setae %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
+      fprintf(f, "    setae %%al\n    setnp %%cl\n    andb %%cl, %%al\n");
       fprintf(f, "    movzbl %%al, %%eax\n");
     } else {
       ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);
@@ -8363,7 +8313,7 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
       } else {
         fprintf(f, "    ucomisd %%xmm0, %%xmm1\n");
       }
-      fprintf(f, "    setbe %%al\n    setnp %%r11b\n    andb %%r11b, %%al\n");
+      fprintf(f, "    setbe %%al\n    setnp %%cl\n    andb %%cl, %%al\n");
       fprintf(f, "    movzbl %%al, %%eax\n");
     } else {
       ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);

@@ -3,6 +3,8 @@
 #define ZCC_IR_OPT_PASSES_H
 
 #include "src/zcc_smt_prover.h"
+#include <stdlib.h>
+
 
 static bool opt_is_power_of_2(int64_t v) { return v > 0 && (v & (v - 1)) == 0; }
 static int opt_log2_exact(int64_t v) { int n = 0; while (v > 1) { v >>= 1; n++; } return n; }
@@ -183,6 +185,7 @@ static uint32_t opt_strength_reduction_pass(Function *fn) {
         if (!blk || !blk->reachable) continue;
         for (Instr *ins = blk->head; ins; ins = ins->next) {
             if (ins->dead) continue;
+            if (ins->is_float) continue;
             
             if (ins->op == OP_MUL && ins->n_src == 2) {
                 Instr *d0 = fn->def_of[ins->src[0]];
@@ -259,6 +262,7 @@ static uint32_t opt_peephole_pass(Function *fn) {
         if (!blk || !blk->reachable) continue;
         for (Instr *ins = blk->head; ins; ins = ins->next) {
             if (ins->dead) continue;
+            if (ins->is_float) continue;
             
             // Algebraic Identities: x - x -> CONST 0, x ^ x -> CONST 0
             if ((ins->op == OP_SUB || ins->op == OP_BXOR) && ins->n_src == 2 && ins->src[0] == ins->src[1]) {
