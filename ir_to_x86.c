@@ -328,6 +328,15 @@ static void lower_cvttfd2si(FILE *out, ir_type_t dst_ty, int is_f32, const char 
 /* ── Main lowering entry point ───────────────────────────────────────── */
 
 static int get_param_is_float(ir_func_t *fn, int pnum) {
+    if (pnum >= 0 && pnum < 8) {
+        ir_type_t ty = fn->param_types[pnum];
+        if (ty == IR_TY_F32 || ty == IR_TY_F64) {
+            return 1;
+        }
+        if (ty != IR_TY_VOID) {
+            return 0;
+        }
+    }
     char stack_name[32];
     sprintf(stack_name, "%%stack_%d", -8 * (pnum + 1));
     ir_node_t *n = fn->head;

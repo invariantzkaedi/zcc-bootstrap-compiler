@@ -285,6 +285,29 @@ static long double_to_long(double d) {
     return u.l;
 }
 
+static float long_to_float(long l) {
+    union { unsigned int u; float f; } u;
+    u.u = (unsigned int)l;
+    return u.f;
+}
+
+static long float_to_long(float f) {
+    union { float f; unsigned int u; } u;
+    u.f = f;
+    return (long)u.u;
+}
+
+static ir_type_t find_reg_type(ir_func_t *fn, const char *reg) {
+    ir_node_t *curr;
+    if (!reg || reg[0] == '\0') return IR_TY_VOID;
+    for (curr = fn->head; curr; curr = curr->next) {
+        if (strcmp(curr->dst, reg) == 0) {
+            return curr->type;
+        }
+    }
+    return IR_TY_VOID;
+}
+
 static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
     ir_func_t *fn = (ir_func_t *)fn_ptr;
     ir_pass_result_t r;
@@ -325,8 +348,10 @@ static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
             long v1;
             if (cmap_get(n->src1, &v1)) {
                 if (n->op == IR_FPEXT) {
+                    float f = long_to_float(v1);
+                    double d = (double)f;
                     n->op = IR_FCONST;
-                    n->imm = v1;
+                    n->imm = double_to_long(d);
                     n->src1[0] = '\0';
                     cmap_add(n->dst, n->imm);
                     modified++;
@@ -334,20 +359,22 @@ static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
                 } else if (n->op == IR_FPTRUNC) {
                     double d = long_to_double(v1);
                     float f = (float)d;
-                    double d_rounded = (double)f;
-                    long rounded_bits = double_to_long(d_rounded);
                     n->op = IR_FCONST;
-                    n->imm = rounded_bits;
+                    n->imm = float_to_long(f);
                     n->src1[0] = '\0';
                     cmap_add(n->dst, n->imm);
                     modified++;
                     continue;
                 } else if (n->op == IR_FNEG) {
-                    double d = long_to_double(v1);
-                    double neg_d = -d;
-                    long neg_bits = double_to_long(neg_d);
-                    n->op = IR_FCONST;
-                    n->imm = neg_bits;
+                    if (n->type == IR_TY_F32) {
+                        float f = long_to_float(v1);
+                        n->op = IR_FCONST;
+                        n->imm = float_to_long(-f);
+                    } else {
+                        double d = long_to_double(v1);
+                        n->op = IR_FCONST;
+                        n->imm = double_to_long(-d);
+                    }
                     n->src1[0] = '\0';
                     cmap_add(n->dst, n->imm);
                     modified++;
@@ -426,16 +453,27 @@ static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
                     continue;
                 }
             } else if (n->op == IR_FADD || n->op == IR_FSUB || n->op == IR_FMUL || n->op == IR_FDIV) {
-                double f1 = long_to_double(v1);
-                double f2 = long_to_double(v2);
-                double f_res = 0.0;
-                if (n->op == IR_FADD) f_res = f1 + f2;
-                else if (n->op == IR_FSUB) f_res = f1 - f2;
-                else if (n->op == IR_FMUL) f_res = f1 * f2;
-                else if (n->op == IR_FDIV) { f_res = f1 / f2; }
-                
-                n->op = IR_FCONST;
-                n->imm = double_to_long(f_res);
+                if (n->type == IR_TY_F32) {
+                    float f1 = long_to_float(v1);
+                    float f2 = long_to_float(v2);
+                    float f_res = 0.0f;
+                    if (n->op == IR_FADD) f_res = f1 + f2;
+                    else if (n->op == IR_FSUB) f_res = f1 - f2;
+                    else if (n->op == IR_FMUL) f_res = f1 * f2;
+                    else if (n->op == IR_FDIV) { f_res = f1 / f2; }
+                    n->op = IR_FCONST;
+                    n->imm = float_to_long(f_res);
+                } else {
+                    double f1 = long_to_double(v1);
+                    double f2 = long_to_double(v2);
+                    double f_res = 0.0;
+                    if (n->op == IR_FADD) f_res = f1 + f2;
+                    else if (n->op == IR_FSUB) f_res = f1 - f2;
+                    else if (n->op == IR_FMUL) f_res = f1 * f2;
+                    else if (n->op == IR_FDIV) { f_res = f1 / f2; }
+                    n->op = IR_FCONST;
+                    n->imm = double_to_long(f_res);
+                }
                 n->tag = IR_TAG_NONE;
                 n->src1[0] = '\0';
                 n->src2[0] = '\0';
@@ -452,7 +490,6 @@ static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
                     sprintf(details, "Folded float op into constant");
                     record_transform("constant_folding", node_id, details);
                 }
-                fprintf(stderr, "\033[38;5;17m[FOLD]\033[38;5;51m Folded floating-point operation into IR_FCONST \033[38;5;199m%f\033[0m\n", f_res);
                 continue;
             } else {
                 switch (n->op) {
@@ -488,27 +525,53 @@ static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
                 case IR_FCMP_ULE:
                 case IR_FCMP_UGT:
                 case IR_FCMP_UGE: {
-                    double f1 = long_to_double(v1);
-                    double f2 = long_to_double(v2);
-                    int nan1 = (f1 != f1);
-                    int nan2 = (f2 != f2);
-                    int is_nan = nan1 || nan2;
-                    switch (n->op) {
-                    case IR_FCMP_OEQ: result = (!is_nan && f1 == f2) ? 1 : 0; break;
-                    case IR_FCMP_UNE: result = (is_nan || f1 != f2) ? 1 : 0; break;
-                    case IR_FCMP_OLT: result = (!is_nan && f1 < f2) ? 1 : 0; break;
-                    case IR_FCMP_OLE: result = (!is_nan && f1 <= f2) ? 1 : 0; break;
-                    case IR_FCMP_OGT: result = (!is_nan && f1 > f2) ? 1 : 0; break;
-                    case IR_FCMP_OGE: result = (!is_nan && f1 >= f2) ? 1 : 0; break;
-                    case IR_FCMP_ORD: result = (!is_nan) ? 1 : 0; break;
-                    case IR_FCMP_UNO: result = (is_nan) ? 1 : 0; break;
-                    case IR_FCMP_UEQ: result = (is_nan || f1 == f2) ? 1 : 0; break;
-                    case IR_FCMP_ONE: result = (!is_nan && f1 != f2) ? 1 : 0; break;
-                    case IR_FCMP_ULT: result = (is_nan || f1 < f2) ? 1 : 0; break;
-                    case IR_FCMP_ULE: result = (is_nan || f1 <= f2) ? 1 : 0; break;
-                    case IR_FCMP_UGT: result = (is_nan || f1 > f2) ? 1 : 0; break;
-                    case IR_FCMP_UGE: result = (is_nan || f1 >= f2) ? 1 : 0; break;
-                    default: result = 0; break;
+                    ir_type_t op_ty = find_reg_type(fn, n->src1);
+                    if (op_ty == IR_TY_F32) {
+                        float f1 = long_to_float(v1);
+                        float f2 = long_to_float(v2);
+                        int nan1 = (f1 != f1);
+                        int nan2 = (f2 != f2);
+                        int is_nan = nan1 || nan2;
+                        switch (n->op) {
+                        case IR_FCMP_OEQ: result = (!is_nan && f1 == f2) ? 1 : 0; break;
+                        case IR_FCMP_UNE: result = (is_nan || f1 != f2) ? 1 : 0; break;
+                        case IR_FCMP_OLT: result = (!is_nan && f1 < f2) ? 1 : 0; break;
+                        case IR_FCMP_OLE: result = (!is_nan && f1 <= f2) ? 1 : 0; break;
+                        case IR_FCMP_OGT: result = (!is_nan && f1 > f2) ? 1 : 0; break;
+                        case IR_FCMP_OGE: result = (!is_nan && f1 >= f2) ? 1 : 0; break;
+                        case IR_FCMP_ORD: result = (!is_nan) ? 1 : 0; break;
+                        case IR_FCMP_UNO: result = (is_nan) ? 1 : 0; break;
+                        case IR_FCMP_UEQ: result = (is_nan || f1 == f2) ? 1 : 0; break;
+                        case IR_FCMP_ONE: result = (!is_nan && f1 != f2) ? 1 : 0; break;
+                        case IR_FCMP_ULT: result = (is_nan || f1 < f2) ? 1 : 0; break;
+                        case IR_FCMP_ULE: result = (is_nan || f1 <= f2) ? 1 : 0; break;
+                        case IR_FCMP_UGT: result = (is_nan || f1 > f2) ? 1 : 0; break;
+                        case IR_FCMP_UGE: result = (is_nan || f1 >= f2) ? 1 : 0; break;
+                        default: result = 0; break;
+                        }
+                    } else {
+                        double f1 = long_to_double(v1);
+                        double f2 = long_to_double(v2);
+                        int nan1 = (f1 != f1);
+                        int nan2 = (f2 != f2);
+                        int is_nan = nan1 || nan2;
+                        switch (n->op) {
+                        case IR_FCMP_OEQ: result = (!is_nan && f1 == f2) ? 1 : 0; break;
+                        case IR_FCMP_UNE: result = (is_nan || f1 != f2) ? 1 : 0; break;
+                        case IR_FCMP_OLT: result = (!is_nan && f1 < f2) ? 1 : 0; break;
+                        case IR_FCMP_OLE: result = (!is_nan && f1 <= f2) ? 1 : 0; break;
+                        case IR_FCMP_OGT: result = (!is_nan && f1 > f2) ? 1 : 0; break;
+                        case IR_FCMP_OGE: result = (!is_nan && f1 >= f2) ? 1 : 0; break;
+                        case IR_FCMP_ORD: result = (!is_nan) ? 1 : 0; break;
+                        case IR_FCMP_UNO: result = (is_nan) ? 1 : 0; break;
+                        case IR_FCMP_UEQ: result = (is_nan || f1 == f2) ? 1 : 0; break;
+                        case IR_FCMP_ONE: result = (!is_nan && f1 != f2) ? 1 : 0; break;
+                        case IR_FCMP_ULT: result = (is_nan || f1 < f2) ? 1 : 0; break;
+                        case IR_FCMP_ULE: result = (is_nan || f1 <= f2) ? 1 : 0; break;
+                        case IR_FCMP_UGT: result = (is_nan || f1 > f2) ? 1 : 0; break;
+                        case IR_FCMP_UGE: result = (is_nan || f1 >= f2) ? 1 : 0; break;
+                        default: result = 0; break;
+                        }
                     }
                     break;
                 }

@@ -40,7 +40,10 @@ enum {
     RUST_TK_LAND,
     RUST_TK_LOR,
     RUST_TK_BANG,
-    RUST_TK_ARROW
+    RUST_TK_ARROW,
+    RUST_TK_F32,
+    RUST_TK_F64,
+    RUST_TK_FLIT
 };
 
 enum {
@@ -56,6 +59,7 @@ enum {
     RUST_EXPR_IDENT = 1,
     RUST_EXPR_NUM,
     RUST_EXPR_BOOL,
+    RUST_EXPR_FLIT,
     RUST_EXPR_BINARY,
     RUST_EXPR_UNARY,
     RUST_EXPR_CALL
@@ -64,7 +68,9 @@ enum {
 typedef enum RustTypeKind {
     RUST_TYPE_ERROR = 0,
     RUST_TYPE_I32,
-    RUST_TYPE_BOOL
+    RUST_TYPE_BOOL,
+    RUST_TYPE_F32,
+    RUST_TYPE_F64
 } RustTypeKind;
 
 typedef enum RustFlowKind {
@@ -77,6 +83,7 @@ typedef struct RustToken {
     int line;
     int col;
     long long num;
+    double f_val;
     char text[128];
 } RustToken;
 
@@ -96,6 +103,7 @@ typedef struct RustExpr {
     int line;
     int col;
     long long num;
+    double f_val;
     int bool_val;
     int op;
     struct RustExpr *lhs;
@@ -236,6 +244,8 @@ static int rust_kw(const char *s) {
     if (strcmp(s, "true") == 0) return RUST_TK_TRUE;
     if (strcmp(s, "false") == 0) return RUST_TK_FALSE;
     if (strcmp(s, "i32") == 0) return RUST_TK_I32;
+    if (strcmp(s, "f32") == 0) return RUST_TK_F32;
+    if (strcmp(s, "f64") == 0) return RUST_TK_F64;
     return RUST_TK_IDENT;
 }
 
@@ -261,12 +271,43 @@ static void rust_next(RustParser *p) {
         return;
     }
     if (rust_is_digit(c)) {
-        long long v = 0;
-        while (rust_is_digit(rust_peek(p))) {
-            v = v * 10 + (rust_read(p) - '0');
+        int i = 0;
+        int has_dot = 0;
+        while (rust_is_digit(rust_peek(p)) || (rust_peek(p) == '.' && !has_dot && rust_is_digit(p->pos + 1 < p->len ? p->src[p->pos + 1] : 0))) {
+            if (rust_peek(p) == '.') has_dot = 1;
+            if (i < 127) p->tk.text[i++] = (char)rust_read(p);
+            else rust_read(p);
         }
-        p->tk.kind = RUST_TK_NUM;
-        p->tk.num = v;
+        int saved_pos = p->pos;
+        int saved_col = p->col;
+        int saved_line = p->line;
+        char suffix[16] = {0};
+        int si = 0;
+        while (rust_peek(p) && (rust_is_alpha(rust_peek(p)) || rust_is_digit(rust_peek(p)))) {
+            if (si < 15) suffix[si++] = (char)rust_read(p);
+            else rust_read(p);
+        }
+        suffix[si] = 0;
+        int is_f32 = (strcmp(suffix, "f32") == 0);
+        int is_f64 = (strcmp(suffix, "f64") == 0);
+        if (is_f32 || is_f64) {
+            int sj = 0;
+            while (suffix[sj] && i < 127) p->tk.text[i++] = suffix[sj++];
+            p->tk.text[i] = 0;
+        } else {
+            p->pos = saved_pos;
+            p->col = saved_col;
+            p->line = saved_line;
+        }
+        p->tk.text[i] = 0;
+        if (has_dot || is_f32 || is_f64) {
+            p->tk.kind = RUST_TK_FLIT;
+            p->tk.f_val = strtod(p->tk.text, NULL);
+            p->tk.num = is_f32 ? RUST_TYPE_F32 : RUST_TYPE_F64;
+        } else {
+            p->tk.kind = RUST_TK_NUM;
+            p->tk.num = strtoll(p->tk.text, NULL, 10);
+        }
         return;
     }
     if (c == '-' && p->pos + 1 < p->len && p->src[p->pos + 1] == '>') {
@@ -378,6 +419,15 @@ static RustExpr *rust_parse_primary(RustParser *p) {
         rust_next(p);
         return e;
     }
+    if (p->tk.kind == RUST_TK_FLIT) {
+        e = rust_new_expr(RUST_EXPR_FLIT);
+        e->f_val = p->tk.f_val;
+        e->num = p->tk.num; /* Contains RUST_TYPE_F32 / RUST_TYPE_F64 */
+        e->line = p->tk.line;
+        e->col = p->tk.col;
+        rust_next(p);
+        return e;
+    }
     if (p->tk.kind == RUST_TK_TRUE || p->tk.kind == RUST_TK_FALSE) {
         e = rust_new_expr(RUST_EXPR_BOOL);
         e->bool_val = (p->tk.kind == RUST_TK_TRUE) ? 1 : 0;
@@ -408,7 +458,7 @@ static RustExpr *rust_parse_primary(RustParser *p) {
         rust_expect(p, RUST_TK_RPAREN, "expected ')' after expression", "close parenthesized expression");
         return e;
     }
-    rust_add_diag(p, "RUSTPARSE002", p->tk.line, p->tk.col, "expected expression", "use identifier, integer literal, bool literal, or parenthesized expression");
+    rust_add_diag(p, "RUSTPARSE002", p->tk.line, p->tk.col, "expected expression", "use identifier, number, bool literal, or parenthesized expression");
     rust_next(p);
     return rust_new_expr(RUST_EXPR_NUM);
 }
@@ -566,6 +616,18 @@ static int rust_parse_type_name(RustParser *p, char *buf, int buf_len) {
         rust_next(p);
         return 1;
     }
+    if (p->tk.kind == RUST_TK_F32) {
+        strncpy(buf, "f32", (size_t)buf_len - 1);
+        buf[buf_len - 1] = 0;
+        rust_next(p);
+        return 1;
+    }
+    if (p->tk.kind == RUST_TK_F64) {
+        strncpy(buf, "f64", (size_t)buf_len - 1);
+        buf[buf_len - 1] = 0;
+        rust_next(p);
+        return 1;
+    }
     if (p->tk.kind == RUST_TK_IDENT && strcmp(p->tk.text, "bool") == 0) {
         strncpy(buf, "bool", (size_t)buf_len - 1);
         buf[buf_len - 1] = 0;
@@ -700,7 +762,7 @@ static RustFunction *rust_parse_function(RustParser *p) {
         }
         rust_expect(p, RUST_TK_COLON, "expected ':' in parameter", "use syntax: name: i32");
         if (!rust_parse_type_name(p, fn->param_types[param_idx], 64)) {
-            rust_add_diag(p, "RUSTPARSE010", p->tk.line, p->tk.col, "expected parameter type", "v1 supports only i32 and bool parameters");
+            rust_add_diag(p, "RUSTPARSE010", p->tk.line, p->tk.col, "expected parameter type", "v1 supports only i32, bool, f32, and f64 parameters");
             strncpy(fn->param_types[param_idx], "i32", 63);
         }
         fn->param_symbol_ids[param_idx] = RUST_SYMBOL_INVALID;
@@ -711,7 +773,7 @@ static RustFunction *rust_parse_function(RustParser *p) {
     if (rust_accept(p, RUST_TK_ARROW)) {
         fn->has_explicit_ret_type = 1;
         if (!rust_parse_type_name(p, fn->ret_type, 64)) {
-            rust_add_diag(p, "RUSTPARSE006", p->tk.line, p->tk.col, "expected return type after '->'", "v1 supports only i32 and bool return types");
+            rust_add_diag(p, "RUSTPARSE006", p->tk.line, p->tk.col, "expected return type after '->'", "v1 supports only i32, bool, f32, and f64 return types");
             strncpy(fn->ret_type, "i32", 63);
         }
     } else {
@@ -757,6 +819,7 @@ static void rust_dump_expr(FILE *out, RustExpr *e, int indent) {
     if (e->kind == RUST_EXPR_IDENT) fprintf(out, "Expr Ident %s\n", e->text);
     else if (e->kind == RUST_EXPR_NUM) fprintf(out, "Expr Num %lld\n", e->num);
     else if (e->kind == RUST_EXPR_BOOL) fprintf(out, "Expr Bool %s\n", e->bool_val ? "true" : "false");
+    else if (e->kind == RUST_EXPR_FLIT) fprintf(out, "Expr Float %f\n", e->f_val);
     else if (e->kind == RUST_EXPR_CALL) {
         int ai;
         fprintf(out, "Expr Call %s argc=%d\n", e->call_callee, e->call_arg_count);
@@ -975,6 +1038,8 @@ static void rust_dump_expr_with_symbols(FILE *out, RustExpr *e, int indent) {
         rust_dump_expr_with_symbols(out, e->lhs, indent + 2);
     } else if (e->kind == RUST_EXPR_NUM) {
         fprintf(out, "Int %lld\n", e->num);
+    } else if (e->kind == RUST_EXPR_FLIT) {
+        fprintf(out, "Float %f\n", e->f_val);
     } else if (e->kind == RUST_EXPR_BOOL) {
         fprintf(out, "Bool %s\n", e->bool_val ? "true" : "false");
     } else {
@@ -1455,12 +1520,17 @@ static int rust_ast_symbol_is_mut_local(const RustAst *ast, RustSymbolId symbol_
 static const char *rust_type_name(RustTypeKind ty) {
     if (ty == RUST_TYPE_I32) return "i32";
     if (ty == RUST_TYPE_BOOL) return "bool";
+    if (ty == RUST_TYPE_F32) return "f32";
+    if (ty == RUST_TYPE_F64) return "f64";
     return "<error>";
 }
 
 static RustTypeKind rust_parse_type_kind_name(const char *name) {
-    if (!name || !name[0] || strcmp(name, "i32") == 0) return RUST_TYPE_I32;
+    if (!name || !name[0]) return RUST_TYPE_I32;
+    if (strcmp(name, "i32") == 0) return RUST_TYPE_I32;
     if (strcmp(name, "bool") == 0) return RUST_TYPE_BOOL;
+    if (strcmp(name, "f32") == 0) return RUST_TYPE_F32;
+    if (strcmp(name, "f64") == 0) return RUST_TYPE_F64;
     return RUST_TYPE_ERROR;
 }
 
@@ -1594,7 +1664,7 @@ int rust_typecheck(RustTypecheckContext *ctx) {
             } else {
                 RustTypeKind pty = rust_parse_type_kind_name(fn->param_types[pi]);
                 if (pty == RUST_TYPE_ERROR) {
-                    rust_typecheck_add_diag(ctx, "RUST-TYPE-E9999", fn->param_lines[pi], fn->param_cols[pi], "unsupported parameter type reached typechecker", "v1 supports only i32 and bool parameters");
+                    rust_typecheck_add_diag(ctx, "RUST-TYPE-E9999", fn->param_lines[pi], fn->param_cols[pi], "unsupported parameter type reached typechecker", "v1 supports only i32, bool, f32, and f64 parameters");
                     ctx->had_error = 1;
                 } else {
                     rust_type_assign_symbol(ctx, fn->param_symbol_ids[pi], pty, fn->param_lines[pi], fn->param_cols[pi]);
@@ -1602,11 +1672,11 @@ int rust_typecheck(RustTypecheckContext *ctx) {
             }
         }
         if (fn_ret == RUST_TYPE_ERROR) {
-            rust_typecheck_add_diag(ctx, "RUST-TYPE-E9999", fn->name_line, fn->name_col, "unsupported function return type reached typechecker", "v1 supports only i32 and bool");
+            rust_typecheck_add_diag(ctx, "RUST-TYPE-E9999", fn->name_line, fn->name_col, "unsupported function return type reached typechecker", "v1 supports only i32, bool, f32, and f64");
             fn_ret = RUST_TYPE_ERROR;
         }
         rust_typecheck_stmt_list(ctx, fn->body_head, fn_ret);
-        if (fn_ret == RUST_TYPE_I32) {
+        if (fn_ret == RUST_TYPE_I32 || fn_ret == RUST_TYPE_F32 || fn_ret == RUST_TYPE_F64) {
             RustFlowKind flow = rust_typecheck_stmt_list_flow(ctx, fn->body_head);
             if (flow != RUST_FLOW_ALWAYS_RETURNS) {
                 rust_type_report_missing_return(ctx, fn->name, fn->name_line, fn->name_col);
@@ -1621,6 +1691,7 @@ int rust_typecheck(RustTypecheckContext *ctx) {
 static RustTypeKind rust_typecheck_expr(RustTypecheckContext *ctx, RustExpr *e) {
     if (!ctx || !e) return RUST_TYPE_ERROR;
     if (e->kind == RUST_EXPR_NUM) return RUST_TYPE_I32;
+    if (e->kind == RUST_EXPR_FLIT) return (RustTypeKind)e->num;
     if (e->kind == RUST_EXPR_BOOL) return RUST_TYPE_BOOL;
     if (e->kind == RUST_EXPR_IDENT) {
         return rust_type_from_symbol(ctx, e->symbol_id, e->line, e->col);
@@ -1671,7 +1742,7 @@ static RustTypeKind rust_typecheck_expr(RustTypecheckContext *ctx, RustExpr *e) 
             RustTypeKind aty = rust_typecheck_expr(ctx, e->call_args[ai]);
             RustTypeKind pty = (ai < callee_fn->num_params) ? rust_parse_type_kind_name(callee_fn->param_types[ai]) : RUST_TYPE_ERROR;
             if (ai < callee_fn->num_params && pty == RUST_TYPE_ERROR) {
-                rust_typecheck_add_diag(ctx, "RUST-TYPE-E9999", e->line, e->col, "unsupported parameter type reached typechecker", "v1 supports only i32 and bool parameters");
+                rust_typecheck_add_diag(ctx, "RUST-TYPE-E9999", e->line, e->col, "unsupported parameter type reached typechecker", "v1 supports only i32, bool, f32, and f64 parameters");
             } else if (ai < callee_fn->num_params && aty != RUST_TYPE_ERROR && aty != pty) {
                 char msg[256];
                 snprintf(msg, sizeof(msg),
@@ -1696,16 +1767,38 @@ static RustTypeKind rust_typecheck_expr(RustTypecheckContext *ctx, RustExpr *e) 
             }
             return RUST_TYPE_BOOL;
         } else if (rust_is_cmp_op(e->op)) {
-            if (lt != RUST_TYPE_I32 || rt != RUST_TYPE_I32) {
-                char msg[256];
-                snprintf(msg, sizeof(msg),
-                         "comparison operands must be `i32`: left is `%s`, right is `%s`",
-                         rust_type_name(lt), rust_type_name(rt));
-                rust_typecheck_add_diag(ctx, "RUST-TYPE-E0008", e->line, e->col, msg, "compare integer expressions");
-                return RUST_TYPE_ERROR;
+            if (lt == RUST_TYPE_F32 || lt == RUST_TYPE_F64 || rt == RUST_TYPE_F32 || rt == RUST_TYPE_F64) {
+                if (lt != rt) {
+                    char msg[256];
+                    snprintf(msg, sizeof(msg),
+                             "comparison operands must be of matching type: left is `%s`, right is `%s`",
+                             rust_type_name(lt), rust_type_name(rt));
+                    rust_typecheck_add_diag(ctx, "RUST-TYPE-E0008", e->line, e->col, msg, "compare matching types");
+                    return RUST_TYPE_ERROR;
+                }
+            } else {
+                if (lt != RUST_TYPE_I32 || rt != RUST_TYPE_I32) {
+                    char msg[256];
+                    snprintf(msg, sizeof(msg),
+                             "comparison operands must be `i32`: left is `%s`, right is `%s`",
+                             rust_type_name(lt), rust_type_name(rt));
+                    rust_typecheck_add_diag(ctx, "RUST-TYPE-E0008", e->line, e->col, msg, "compare integer expressions");
+                    return RUST_TYPE_ERROR;
+                }
             }
             return RUST_TYPE_BOOL;
         } else {
+            if (lt == RUST_TYPE_F32 || lt == RUST_TYPE_F64 || rt == RUST_TYPE_F32 || rt == RUST_TYPE_F64) {
+                if (lt != rt) {
+                    char msg[256];
+                    snprintf(msg, sizeof(msg),
+                             "arithmetic operands must match: left is `%s`, right is `%s`",
+                             rust_type_name(lt), rust_type_name(rt));
+                    rust_typecheck_add_diag(ctx, "RUST-TYPE-E0001", e->line, e->col, msg, "ensure types match");
+                    return RUST_TYPE_ERROR;
+                }
+                return lt;
+            }
             if (lt != RUST_TYPE_I32) {
                 rust_type_report_expected(ctx, "RUST-TYPE-E0001", e->line, e->col, RUST_TYPE_I32, lt, "use i32 operands for arithmetic expressions");
                 return RUST_TYPE_ERROR;
@@ -1728,7 +1821,7 @@ static void rust_typecheck_stmt_list(RustTypecheckContext *ctx, RustStmt *s, Rus
             if (ctx->strict_let_annotations && !s->has_type_annotation) {
                 char msg[256];
                 snprintf(msg, sizeof(msg), "let binding `%s` requires explicit type annotation in strict mode", s->name[0] ? s->name : "<unknown>");
-                rust_typecheck_add_diag(ctx, "RUST-TYPE-E0014", s->line, s->col, msg, "add `: i32` or `: bool`, for example: `let x: i32 = 1;`");
+                rust_typecheck_add_diag(ctx, "RUST-TYPE-E0014", s->line, s->col, msg, "add `: i32` or `: f32`, for example: `let x: i32 = 1;`");
             }
             if (s->symbol_id == RUST_SYMBOL_INVALID) {
                 rust_typecheck_add_diag(ctx, "RUST-TYPE-E9999", s->name_line, s->name_col, "unresolved symbol reached typechecker", "resolver must succeed before typecheck");
@@ -1738,11 +1831,11 @@ static void rust_typecheck_stmt_list(RustTypecheckContext *ctx, RustStmt *s, Rus
             if (s->has_type_annotation) {
                 decl_ty = rust_parse_type_kind_name(s->type_name);
                 if (decl_ty == RUST_TYPE_ERROR) {
-                    rust_typecheck_add_diag(ctx, "RUST-TYPE-E9999", s->line, s->col, "unsupported let annotation type reached typechecker", "v1 supports only i32 and bool");
+                    rust_typecheck_add_diag(ctx, "RUST-TYPE-E9999", s->line, s->col, "unsupported let annotation type reached typechecker", "v1 supports only i32, bool, f32, and f64");
                 } else if (init_ty != RUST_TYPE_ERROR && init_ty != decl_ty) {
                     char msg[256];
                     snprintf(msg, sizeof(msg), "let initializer type mismatch: expected `%s`, found `%s`", rust_type_name(decl_ty), rust_type_name(init_ty));
-                    rust_typecheck_add_diag(ctx, "RUST-TYPE-E0013", s->line, s->col, msg, "make initializer match annotation, e.g. `let flag: bool = true;`");
+                    rust_typecheck_add_diag(ctx, "RUST-TYPE-E0013", s->line, s->col, msg, "make initializer match annotation, e.g. `let x: f32 = 1.0;`");
                 }
             } else {
                 decl_ty = init_ty;
@@ -2449,7 +2542,7 @@ static int rust_backend_emit_ir_function_to_x86(FILE *out, const RustAst *ast, c
 
 static int rust_backend_runtime_expr_supported(const RustAst *ast, const RustExpr *e, const RustSymbolId *call_stack, int call_stack_len) {
     if (!e) return 0;
-    if (e->kind == RUST_EXPR_NUM || e->kind == RUST_EXPR_BOOL || e->kind == RUST_EXPR_IDENT) return 1;
+    if (e->kind == RUST_EXPR_NUM || e->kind == RUST_EXPR_BOOL || e->kind == RUST_EXPR_IDENT || e->kind == RUST_EXPR_FLIT) return 1;
     if (e->kind == RUST_EXPR_CALL) {
         const RustFunction *callee;
         int ai;
@@ -3371,6 +3464,61 @@ static ir_op_t rust_ir_map_binop(int op) {
     }
 }
 
+static int *g_rust_symbol_types = NULL;
+
+static long rust_double_to_bits(double d, int is_f32) {
+    if (is_f32) {
+        union {
+            float f;
+            unsigned int u;
+        } uval;
+        uval.f = (float)d;
+        return (long)uval.u;
+    } else {
+        union {
+            double d;
+            unsigned long long u;
+        } uval;
+        uval.d = d;
+        return (long)uval.u;
+    }
+}
+
+static ir_type_t rust_map_ir_type(RustTypeKind tyk) {
+    if (tyk == RUST_TYPE_F32) return IR_TY_F32;
+    if (tyk == RUST_TYPE_F64) return IR_TY_F64;
+    return IR_TY_I32;
+}
+
+static RustTypeKind rust_infer_expr_type(const RustAst *ast, const RustExpr *e, const int *sym_types) {
+    if (!e) return RUST_TYPE_ERROR;
+    if (e->kind == RUST_EXPR_NUM) return RUST_TYPE_I32;
+    if (e->kind == RUST_EXPR_FLIT) return (RustTypeKind)e->num;
+    if (e->kind == RUST_EXPR_BOOL) return RUST_TYPE_BOOL;
+    if (e->kind == RUST_EXPR_IDENT) {
+        if (sym_types && e->symbol_id != RUST_SYMBOL_INVALID) {
+            return (RustTypeKind)sym_types[e->symbol_id];
+        }
+        return RUST_TYPE_ERROR;
+    }
+    if (e->kind == RUST_EXPR_UNARY) {
+        if (e->op == RUST_TK_BANG) return RUST_TYPE_BOOL;
+        return RUST_TYPE_ERROR;
+    }
+    if (e->kind == RUST_EXPR_BINARY) {
+        if (rust_is_cmp_op(e->op) || rust_is_logic_op(e->op)) return RUST_TYPE_BOOL;
+        return rust_infer_expr_type(ast, e->lhs, sym_types);
+    }
+    if (e->kind == RUST_EXPR_CALL) {
+        const RustFunction *fn = rust_backend_find_function_by_symbol_in_ast(ast, e->call_callee_symbol_id);
+        if (fn) {
+            return rust_parse_type_kind_name(fn->ret_type);
+        }
+        return RUST_TYPE_ERROR;
+    }
+    return RUST_TYPE_ERROR;
+}
+
 /* Forward declarations */
 static int rust_ir_emit_expr(const RustAst *ast, const RustExpr *e,
                               const RustBackendSlot *slots, int slot_count);
@@ -3389,6 +3537,14 @@ static int rust_ir_emit_expr(const RustAst *ast, const RustExpr *e,
         return 0;
     }
 
+    if (e->kind == RUST_EXPR_FLIT) {
+        char *dst = rust_ir_fresh();
+        ir_type_t ir_ty = (e->num == RUST_TYPE_F32) ? IR_TY_F32 : IR_TY_F64;
+        long bits = rust_double_to_bits(e->f_val, ir_ty == IR_TY_F32);
+        ZCC_EMIT_FCONST(ir_ty, dst, bits, e->line);
+        return 0;
+    }
+
     if (e->kind == RUST_EXPR_BOOL) {
         char *dst = rust_ir_fresh();
         ZCC_EMIT_CONST(IR_TY_I32, dst, e->bool_val ? 1 : 0, e->line);
@@ -3403,7 +3559,12 @@ static int rust_ir_emit_expr(const RustAst *ast, const RustExpr *e,
             return 1;
         sprintf(slot_name, "%%stack_%d", off * 2);
         dst = rust_ir_fresh();
-        ZCC_EMIT_LOAD(IR_TY_I32, dst, slot_name, e->line);
+        RustTypeKind tyk = RUST_TYPE_I32;
+        if (g_rust_symbol_types && e->symbol_id != RUST_SYMBOL_INVALID) {
+            tyk = (RustTypeKind)g_rust_symbol_types[e->symbol_id];
+        }
+        ir_type_t ir_ty = rust_map_ir_type(tyk);
+        ZCC_EMIT_LOAD(ir_ty, dst, slot_name, e->line);
         return 0;
     }
 
@@ -3505,9 +3666,31 @@ static int rust_ir_emit_expr(const RustAst *ast, const RustExpr *e,
             if (rust_ir_emit_expr(ast, e->rhs, slots, slot_count) != 0) return 1;
             op = rust_ir_map_binop(e->op);
             if (op == IR_NOP) return 1;
+
+            RustTypeKind operand_tyk = rust_infer_expr_type(ast, e->lhs, g_rust_symbol_types);
+            ir_type_t op_ir_ty = rust_map_ir_type(operand_tyk);
+
+            if (op_ir_ty == IR_TY_F32 || op_ir_ty == IR_TY_F64) {
+                if      (op == IR_ADD) op = IR_FADD;
+                else if (op == IR_SUB) op = IR_FSUB;
+                else if (op == IR_MUL) op = IR_FMUL;
+                else if (op == IR_DIV) op = IR_FDIV;
+                else if (op == IR_EQ)  op = IR_FCMP_OEQ;
+                else if (op == IR_NE)  op = IR_FCMP_UNE;
+                else if (op == IR_LT)  op = IR_FCMP_OLT;
+                else if (op == IR_LE)  op = IR_FCMP_OLE;
+                else if (op == IR_GT)  op = IR_FCMP_OGT;
+                else if (op == IR_GE)  op = IR_FCMP_OGE;
+            }
+
+            ir_type_t res_ir_ty = op_ir_ty;
+            if (rust_is_cmp_op(e->op)) {
+                res_ir_ty = IR_TY_I32;
+            }
+
             { char rhs_tmp[32]; rust_ir_save(rhs_tmp);
               dst = rust_ir_fresh();
-              ZCC_EMIT_BINARY(op, IR_TY_I32, dst, lhs_tmp, rhs_tmp, e->line);
+              ZCC_EMIT_BINARY(op, res_ir_ty, dst, lhs_tmp, rhs_tmp, e->line);
             }
             return 0;
         }
@@ -3529,11 +3712,13 @@ static int rust_ir_emit_expr(const RustAst *ast, const RustExpr *e,
         }
         /* emit arg instructions contiguously */
         for (ai = 0; ai < e->call_arg_count; ai++) {
-            ZCC_EMIT_ARG(IR_TY_I32, arg_tmps[ai], e->line);
+            RustTypeKind pty = rust_infer_expr_type(ast, e->call_args[ai], g_rust_symbol_types);
+            ZCC_EMIT_ARG(rust_map_ir_type(pty), arg_tmps[ai], e->line);
         }
         rust_backend_runtime_function_label(fn_label, (int)sizeof(fn_label), callee);
         dst = rust_ir_fresh();
-        ZCC_EMIT_CALL(IR_TY_I32, dst, fn_label, e->line);
+        RustTypeKind ret_tyk = rust_parse_type_kind_name(callee->ret_type);
+        ZCC_EMIT_CALL(rust_map_ir_type(ret_tyk), dst, fn_label, e->line);
         return 0;
     }
 
@@ -3554,7 +3739,12 @@ static int rust_ir_emit_stmt_list(const RustAst *ast, const RustStmt *st,
                 char val_tmp[32];
                 if (rust_ir_emit_expr(ast, st->expr, slots, slot_count) != 0) return 1;
                 rust_ir_save(val_tmp);
-                ZCC_EMIT_STORE(IR_TY_I32, slot_name, val_tmp, st->line);
+                RustTypeKind tyk = RUST_TYPE_I32;
+                if (g_rust_symbol_types && st->symbol_id != RUST_SYMBOL_INVALID) {
+                    tyk = (RustTypeKind)g_rust_symbol_types[st->symbol_id];
+                }
+                ir_type_t ir_ty = rust_map_ir_type(tyk);
+                ZCC_EMIT_STORE(ir_ty, slot_name, val_tmp, st->line);
             }
         } else if (st->kind == RUST_STMT_ASSIGN) {
             int off;
@@ -3566,12 +3756,19 @@ static int rust_ir_emit_stmt_list(const RustAst *ast, const RustStmt *st,
             sprintf(slot_name, "%%stack_%d", off * 2);
             if (rust_ir_emit_expr(ast, st->expr, slots, slot_count) != 0) return 1;
             rust_ir_save(val_tmp);
-            ZCC_EMIT_STORE(IR_TY_I32, slot_name, val_tmp, st->line);
+            RustTypeKind tyk = RUST_TYPE_I32;
+            if (g_rust_symbol_types && st->symbol_id != RUST_SYMBOL_INVALID) {
+                tyk = (RustTypeKind)g_rust_symbol_types[st->symbol_id];
+            }
+            ir_type_t ir_ty = rust_map_ir_type(tyk);
+            ZCC_EMIT_STORE(ir_ty, slot_name, val_tmp, st->line);
         } else if (st->kind == RUST_STMT_RETURN) {
             char val_tmp[32];
             if (rust_ir_emit_expr(ast, st->expr, slots, slot_count) != 0) return 1;
             rust_ir_save(val_tmp);
-            ZCC_EMIT_RET(IR_TY_I32, val_tmp, st->line);
+            RustTypeKind tyk = rust_infer_expr_type(ast, st->expr, g_rust_symbol_types);
+            ir_type_t ir_ty = rust_map_ir_type(tyk);
+            ZCC_EMIT_RET(ir_ty, val_tmp, st->line);
         } else if (st->kind == RUST_STMT_IF) {
             int id = rust_ir_label_counter++;
             char lbl_else[32], lbl_end[32];
@@ -3647,7 +3844,18 @@ static int rust_ir_emit_function(const RustAst *ast, const RustFunction *fn) {
     rust_ir_last[0] = 0;
 
     rust_backend_runtime_function_label(fn_label, (int)sizeof(fn_label), fn);
-    ZCC_IR_FUNC_BEGIN(fn_label, IR_TY_I32, fn->num_params, slot_count * 8);
+    RustTypeKind ret_tyk = rust_parse_type_kind_name(fn->ret_type);
+    ir_type_t ret_ir_ty = rust_map_ir_type(ret_tyk);
+    ZCC_IR_FUNC_BEGIN(fn_label, ret_ir_ty, fn->num_params, slot_count * 8);
+    if (g_ir_cur_func) {
+        for (pi = 0; pi < fn->num_params; pi++) {
+            RustTypeKind tyk = RUST_TYPE_I32;
+            if (g_rust_symbol_types && fn->param_symbol_ids[pi] != RUST_SYMBOL_INVALID) {
+                tyk = (RustTypeKind)g_rust_symbol_types[fn->param_symbol_ids[pi]];
+            }
+            g_ir_cur_func->param_types[pi] = rust_map_ir_type(tyk);
+        }
+    }
 
     /* Emit body */
     if (rust_ir_emit_stmt_list(ast, fn->body_head, slots, slot_count) != 0) return 1;
@@ -3655,8 +3863,13 @@ static int rust_ir_emit_function(const RustAst *ast, const RustFunction *fn) {
     /* Fallback return if function doesn't end with return */
     if (!rust_backend_stmt_list_ends_with_return(fn->body_head)) {
         char *z = rust_ir_fresh();
-        ZCC_EMIT_CONST(IR_TY_I32, z, 0, fn->name_line);
-        ZCC_EMIT_RET(IR_TY_I32, z, fn->name_line);
+        if (ret_ir_ty == IR_TY_F32 || ret_ir_ty == IR_TY_F64) {
+            long bits = rust_double_to_bits(0.0, ret_ir_ty == IR_TY_F32);
+            ZCC_EMIT_FCONST(ret_ir_ty, z, bits, fn->name_line);
+        } else {
+            ZCC_EMIT_CONST(ret_ir_ty, z, 0, fn->name_line);
+        }
+        ZCC_EMIT_RET(ret_ir_ty, z, fn->name_line);
     }
 
     ZCC_IR_FUNC_END();
@@ -3757,7 +3970,10 @@ int rust_backend_bridge_compile_file(const char *filename, const char *source, i
     }
     main_fn = rust_backend_find_main_function(ast);
     if ((main_fn || stop_at_asm || compile_only) && rust_backend_runtime_program_supported(ast)) {
-        if (rust_backend_emit_runtime_program(out, &p, ast) != 0) {
+        g_rust_symbol_types = tctx.symbol_types;
+        int err = rust_backend_emit_runtime_program(out, &p, ast);
+        g_rust_symbol_types = NULL;
+        if (err != 0) {
             fclose(out);
             rust_print_diags(filename, p.diags, p.num_diags);
             free(tctx.symbol_types);
@@ -3868,11 +4084,14 @@ int rust_backend_ir_compile_file(const char *filename, const char *source, int s
     if (!g_ir_module) g_ir_module = ir_module_create();
 
     /* Emit IR from Rust AST */
+    g_rust_symbol_types = tctx.symbol_types;
     if (rust_ir_emit_program(ast) != 0) {
+        g_rust_symbol_types = NULL;
         free(tctx.symbol_types);
         free(rctx.symbols);
         return 1;
     }
+    g_rust_symbol_types = NULL;
 
     /* Dump IR text to stderr for inspection */
     if (g_ir_module) {
