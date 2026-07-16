@@ -1,0 +1,169 @@
++ echo '=== 1. Rebuild ZCC ==='
+=== 1. Rebuild ZCC ===
++ make zcc
+=== Checking Workspace Lexicons ===
+# Tripwire: reject hand-edited zcc.c — parts are the source of truth.
+# Bypass with: ZCC_MUTATION_SANDBOX=1 make zcc  (Oneirogenesis daemon)
+# or:          touch .mutation_sandbox && make zcc
+cc -O0 -w -fno-asynchronous-unwind-tables -g0 -DZCC_REAL_TELEMETRY -Iinclude -I. -Dmain=zcc_main -o zcc zcc.c compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c ir_telemetry.c zcc_telemetry.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c -lm -Wl,-s
++ echo '=== 2. C Safe-Div Path A Repro ==='
+=== 2. C Safe-Div Path A Repro ===
++ ZCC_IR_BACKEND=1
++ ./zcc --safe-div tests/test_safe_div_ir.c -o /tmp/test_safe_div_c_repro.s
+zcc: warning: using synthesized header stub for stdio.h
+pp_process_include: stdio.h added 99 macros, total is 122
+zcc: warning: using synthesized header stub for stdlib.h
+pp_process_include: stdlib.h added 0 macros, total is 122
+[ICP] Interprocedural & local constant propagation completed. Solver iterations: 4
+[ICP] Rewrote parameter/variable 'num' to constant 42
+cc_func: run_div
+DEBUG FUNC BEGIN: run_div, ret type kind = 5, mapped = 3
+[ZCC-IR] DEBUG: params_env=x,y
+[ZCC-IR] DEBUG: get_or_create_var('x')
+[ZCC-IR] DEBUG: get_or_create_var('y')
+[ZCC-IR] DEBUG: get_or_create_var('x')
+[ZCC-IR] DEBUG: get_or_create_var('y')
+=== PRE-OPT IR ===
+Block 0 (preds: 0, succs: 0)
+  ins 1: op=22 dst=10 src0=0
+  ins 2: op=22 dst=11 src0=0
+  ins 3: op=20 dst=13 src0=10
+  ins 4: op=20 dst=14 src0=11
+  ins 5: op=6 dst=12 src0=13
+  ins 6: op=25 dst=0 src0=12
+Block 1 (preds: 0, succs: 0)
+  ins 7: op=25 dst=0 src0=0
+[EscapeAna] allocations promoted to stack: 0  (of 2 total)
+[DomTree] fn=run_div  BB0->idom=BB0
+[LoopStruct] fn=run_div  headers=0  max_depth=0
+[PGO-BBR]   blocks in emission order: 1
+[ALLOCA] dst=10 off=-8 size=8
+[ALLOCA] dst=11 off=-16 size=8
+[ZCC-IR] fn=run_div  emitted from IR (PGO layout) 2 blocks
+cc_func: run_mod
+DEBUG FUNC BEGIN: run_mod, ret type kind = 5, mapped = 3
+[ZCC-IR] DEBUG: params_env=x,y
+[ZCC-IR] DEBUG: get_or_create_var('x')
+[ZCC-IR] DEBUG: get_or_create_var('y')
+[ZCC-IR] DEBUG: get_or_create_var('x')
+[ZCC-IR] DEBUG: get_or_create_var('y')
+=== PRE-OPT IR ===
+Block 0 (preds: 0, succs: 0)
+  ins 1: op=22 dst=10 src0=0
+  ins 2: op=22 dst=11 src0=0
+  ins 3: op=20 dst=13 src0=10
+  ins 4: op=20 dst=14 src0=11
+  ins 5: op=7 dst=12 src0=13
+  ins 6: op=25 dst=0 src0=12
+Block 1 (preds: 0, succs: 0)
+  ins 7: op=25 dst=0 src0=0
+[EscapeAna] allocations promoted to stack: 0  (of 2 total)
+[DomTree] fn=run_mod  BB0->idom=BB0
+[LoopStruct] fn=run_mod  headers=0  max_depth=0
+[PGO-BBR]   blocks in emission order: 1
+[ALLOCA] dst=10 off=-8 size=8
+[ALLOCA] dst=11 off=-16 size=8
+[ZCC-IR] fn=run_mod  emitted from IR (PGO layout) 2 blocks
+cc_func: main
+DEBUG FUNC BEGIN: main, ret type kind = 5, mapped = 3
+[ZCC-IR] DEBUG: get_or_create_var('argc')
+[ZCC-IR] DEBUG: get_or_create_var('argv')
+[ZCC-IR] DEBUG: get_or_create_var('zero')
+[ZCC-IR] DEBUG: get_or_create_var('argc')
+[ZCC-IR] DEBUG: get_or_create_var('num')
+[ZCC-IR] DEBUG: get_or_create_var('zero')
+[DEBUG] RAW IR FOR MAIN BEFORE PASSES:
+ Block 0:
+   OP_CONST dst=17 imm=1
+   OP_STORE src[0]=15 src[1]=14
+   OP_CONST dst=21 imm=42
+   OP_STORE src[0]=21 src[1]=20
+   OP_CONST dst=25 imm=42
+   OP_CONST dst=27 imm=0
+ Block 1:
+=== PRE-OPT IR ===
+Block 0 (preds: 0, succs: 0)
+  ins 1: op=22 dst=10 src0=0
+  ins 2: op=22 dst=11 src0=0
+  ins 3: op=22 dst=14 src0=0
+  ins 4: op=20 dst=16 src0=10
+  ins 5: op=1 dst=17 src0=0
+  ins 6: op=4 dst=15 src0=16
+  ins 7: op=21 dst=0 src0=15
+  ins 8: op=22 dst=20 src0=0
+  ins 9: op=1 dst=21 src0=0
+  ins 10: op=21 dst=0 src0=21
+  ins 12: op=31 dst=23 src0=0
+  ins 14: op=1 dst=25 src0=0
+  ins 15: op=20 dst=26 src0=14
+  ins 13: op=24 dst=24 src0=0
+  ins 11: op=24 dst=22 src0=0
+  ins 16: op=1 dst=27 src0=0
+  ins 17: op=25 dst=0 src0=27
+Block 1 (preds: 0, succs: 0)
+  ins 18: op=25 dst=0 src0=0
+[EscapeAna] allocations promoted to stack: 2  (of 4 total)
+[Mem2Reg]   single-block allocas promoted: 2
+[DCE->SSA]  instructions removed (after mem2reg): 1  blocks removed: 3
+[DomTree] fn=main  BB0->idom=BB0
+[LoopStruct] fn=main  headers=0  max_depth=0
+[PGO-BBR]   blocks in emission order: 1
+[ALLOCA] dst=10 off=-8 size=8
+[ALLOCA] dst=11 off=-16 size=8
+[ZCC-IR] fn=main  emitted from IR (PGO layout) 2 blocks
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=3
+
+; func run_div -> i32
+; end run_div  nodes=0
+
+; func run_mod -> i32
+; end run_mod  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
++ gcc /tmp/test_safe_div_c_repro.s -o /tmp/test_safe_div_c_repro
++ /tmp/test_safe_div_c_repro
+Result: 0
++ echo 'Exit code: 0'
+Exit code: 0
++ echo '=== 3. Rust Safe-Div Path B Repro ==='
+=== 3. Rust Safe-Div Path B Repro ===
++ ZCC_IR_BACKEND=1
++ ./zcc --safe-div --rust-backend-v1 tests/rust/test_safe_div_rust.rs -o /tmp/test_safe_div_rust_repro.s
+[SSA] WARNING: No dominance info or mismatched function
+[SSA] Bitset liveness allocated: 1 blocks × 16 words on main
+[SSA] Bitset liveness allocated: 1 blocks × 16 words on main
+[SSA] Renamed main with 0 allocas
+[SSA] Full construction → destruction complete (0 Φ removed)
+DEBUG LOWER ARG: %rt2, type = 3, is_flt = 0, gp_idx = 0, fp_idx = 0
+DEBUG LOWER ARG: %rt3, type = 3, is_flt = 0, gp_idx = 1, fp_idx = 0
+[OK] Rust backend bridge compilation completed.
++ gcc -no-pie -fno-pie /tmp/test_safe_div_rust_repro.s -o /tmp/test_safe_div_rust_repro
++ /tmp/test_safe_div_rust_repro
++ echo 'Exit code: 0'
+Exit code: 0
++ echo '=== 4. Rust Strict Float ABI Repro ==='
+=== 4. Rust Strict Float ABI Repro ===
++ ZCC_IR_BACKEND=1
++ ./zcc --rust-backend-v1 tests/rust/test_float_abi_strict.rs -o /tmp/test_float_abi_strict_repro.s
+[SSA] WARNING: No dominance info or mismatched function
+[SSA] Bitset liveness allocated: 5 blocks × 16 words on main
+[SSA] Bitset liveness allocated: 5 blocks × 16 words on main
+[SSA] Inserted Φ for %rt12 at block 4 (frontier of def)
+[SSA] Renamed main with 0 allocas
+[SSA] Full construction → destruction complete (0 Φ removed)
+DEBUG LOWER ARG: %rt2, type = 10, is_flt = 1, gp_idx = 0, fp_idx = 0
+DEBUG LOWER ARG: %rt3, type = 10, is_flt = 1, gp_idx = 0, fp_idx = 1
+[OK] Rust backend bridge compilation completed.
++ gcc -no-pie -fno-pie /tmp/test_float_abi_strict_repro.s -o /tmp/test_float_abi_strict_repro
++ /tmp/test_float_abi_strict_repro
++ echo 'Exit code: 0'
+Exit code: 0

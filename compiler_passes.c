@@ -3791,6 +3791,10 @@ static IRType irtype_from_node(const ZCCNode *node) {
 static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
   if (!node)
     return 0;
+  if (node->is_float || node->src_is_float) {
+    fprintf(stderr, "ZCC Error: Floating-point type is not supported in C IR backend path (ZCC_IR_BACKEND=1) at line %d\n", node->line_no);
+    exit(1);
+  }
   /* Transparent passthrough: only recurse on operand. */
   if (node->kind == ZND_CAST) {
     RegID lhs_reg = node->lhs ? zcc_lower_expr(ctx, node->lhs) : 0;
@@ -4935,6 +4939,10 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
 static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
   if (!node)
     return;
+  if (node->is_float || node->src_is_float) {
+    fprintf(stderr, "ZCC Error: Floating-point type is not supported in C IR backend path (ZCC_IR_BACKEND=1) at line %d\n", node->line_no);
+    exit(1);
+  }
   Function *fn = ctx->fn;
   switch (node->kind) {
   case ZND_NOP:
@@ -7945,10 +7953,10 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
      * edx (32-bit) or rdx (64-bit) after the div instruction, so move it
      * into eax/rax before the generic ir_asm_store_rax_to. */
     int safe_div = (getenv("ZCC_SAFE_DIV") != NULL);
-    static int sdiv_lbl_counter = 0;
-    int sdiv_lbl = -1;
+    static int smod_lbl_counter = 0;
+    int smod_lbl = -1;
     if (safe_div) {
-      sdiv_lbl = sdiv_lbl_counter++;
+      smod_lbl = smod_lbl_counter++;
     }
     ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);
     if (ins->ir_type == IR_TY_I32) {
@@ -7956,32 +7964,32 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
       ir_asm_load_to_rcx_typed(ctx, ins->src[1], ins->ir_type);
       if (safe_div) {
         fprintf(f, "    testl %%ecx, %%ecx\n");
-        fprintf(f, "    jne .Lsdiv_ok_%d\n", sdiv_lbl);
+        fprintf(f, "    jne .Lsmod_ok_%d\n", smod_lbl);
         fprintf(f, "    xorl %%eax, %%eax\n");
         fprintf(f, "    xorl %%edx, %%edx\n");
-        fprintf(f, "    jmp .Lsdiv_end_%d\n", sdiv_lbl);
-        fprintf(f, ".Lsdiv_ok_%d:\n", sdiv_lbl);
+        fprintf(f, "    jmp .Lsmod_end_%d\n", smod_lbl);
+        fprintf(f, ".Lsmod_ok_%d:\n", smod_lbl);
       }
       fprintf(f, "    idivl %%ecx\n");
       fprintf(f, "    movl %%edx, %%eax\n");
       if (safe_div) {
-        fprintf(f, ".Lsdiv_end_%d:\n", sdiv_lbl);
+        fprintf(f, ".Lsmod_end_%d:\n", smod_lbl);
       }
     } else if (ins->ir_type == IR_TY_U32) {
       fprintf(f, "    xorl %%edx, %%edx\n");
       ir_asm_load_to_rcx_typed(ctx, ins->src[1], ins->ir_type);
       if (safe_div) {
         fprintf(f, "    testl %%ecx, %%ecx\n");
-        fprintf(f, "    jne .Lsdiv_ok_%d\n", sdiv_lbl);
+        fprintf(f, "    jne .Lsmod_ok_%d\n", smod_lbl);
         fprintf(f, "    xorl %%eax, %%eax\n");
         fprintf(f, "    xorl %%edx, %%edx\n");
-        fprintf(f, "    jmp .Lsdiv_end_%d\n", sdiv_lbl);
-        fprintf(f, ".Lsdiv_ok_%d:\n", sdiv_lbl);
+        fprintf(f, "    jmp .Lsmod_end_%d\n", smod_lbl);
+        fprintf(f, ".Lsmod_ok_%d:\n", smod_lbl);
       }
       fprintf(f, "    divl %%ecx\n");
       fprintf(f, "    movl %%edx, %%eax\n");
       if (safe_div) {
-        fprintf(f, ".Lsdiv_end_%d:\n", sdiv_lbl);
+        fprintf(f, ".Lsmod_end_%d:\n", smod_lbl);
       }
     } else if (ins->ir_type == IR_TY_U64) {
       fprintf(f, "    xorl %%edx, %%edx\n");
@@ -7990,16 +7998,16 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
       fprintf(f, ", %%rcx\n");
       if (safe_div) {
         fprintf(f, "    testq %%rcx, %%rcx\n");
-        fprintf(f, "    jne .Lsdiv_ok_%d\n", sdiv_lbl);
+        fprintf(f, "    jne .Lsmod_ok_%d\n", smod_lbl);
         fprintf(f, "    xorq %%rax, %%rax\n");
         fprintf(f, "    xorq %%rdx, %%rdx\n");
-        fprintf(f, "    jmp .Lsdiv_end_%d\n", sdiv_lbl);
-        fprintf(f, ".Lsdiv_ok_%d:\n", sdiv_lbl);
+        fprintf(f, "    jmp .Lsmod_end_%d\n", smod_lbl);
+        fprintf(f, ".Lsmod_ok_%d:\n", smod_lbl);
       }
       fprintf(f, "    divq %%rcx\n");
       fprintf(f, "    movq %%rdx, %%rax\n");
       if (safe_div) {
-        fprintf(f, ".Lsdiv_end_%d:\n", sdiv_lbl);
+        fprintf(f, ".Lsmod_end_%d:\n", smod_lbl);
       }
     } else {                               /* IR_TY_I64 — original path      */
       fprintf(f, "    cqo\n");
@@ -8008,16 +8016,16 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
       fprintf(f, ", %%rcx\n");
       if (safe_div) {
         fprintf(f, "    testq %%rcx, %%rcx\n");
-        fprintf(f, "    jne .Lsdiv_ok_%d\n", sdiv_lbl);
+        fprintf(f, "    jne .Lsmod_ok_%d\n", smod_lbl);
         fprintf(f, "    xorq %%rax, %%rax\n");
         fprintf(f, "    xorq %%rdx, %%rdx\n");
-        fprintf(f, "    jmp .Lsdiv_end_%d\n", sdiv_lbl);
-        fprintf(f, ".Lsdiv_ok_%d:\n", sdiv_lbl);
+        fprintf(f, "    jmp .Lsmod_end_%d\n", smod_lbl);
+        fprintf(f, ".Lsmod_ok_%d:\n", smod_lbl);
       }
       fprintf(f, "    idivq %%rcx\n");
       fprintf(f, "    movq %%rdx, %%rax\n");
       if (safe_div) {
-        fprintf(f, ".Lsdiv_end_%d:\n", sdiv_lbl);
+        fprintf(f, ".Lsmod_end_%d:\n", smod_lbl);
       }
     }
     ir_asm_store_rax_to(ctx, ins->dst);

@@ -216,5 +216,7 @@ hypotheses about forensic work:
 * **E-LEARN-002 (Blender Ops hasattr Check):** Calling `hasattr` on `bpy.ops` (or any sub-namespace like `bpy.ops.wm`) always returns `True` due to lazy attribute resolution. It is a non-discriminating probe; verify operator existence via direct polling (e.g. `hasattr(bpy.ops.wm, 'gltf_import')` is `True` even if the operator is missing).
 * **E-LEARN-003 (Blender CLI Exit Code):** Blender headlessly (`blender -b`) catches Python exceptions but still exits with code `0`. Always pass `--python-exit-code 1` on the command line to ensure assertion failures or exceptions return a non-zero exit code to the shell.
 * **E-LEARN-004 (Self-Swallowing Scopes):** Catching the same exception type raised to signal a test assertion failure makes the negative control self-swallowing. Scoping try-catch blocks to target only input validation and asserting exceptions outside the try block prevents this shadow pass.
+* **E-LEARN-005 (All-Runs Disclosure Rule):** The agent must fully disclose all intermediate execution runs and command outputs during verification and fault-injection, including any quoting artifacts, stale binary executions, or failed attempts. Hiding or selectively omitting intermediate runs to present a cleaner narrative violates verification integrity.
+
 
 

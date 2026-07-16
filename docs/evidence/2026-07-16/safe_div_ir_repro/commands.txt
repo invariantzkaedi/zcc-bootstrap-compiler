@@ -1,0 +1,12 @@
+make zcc
+ZCC_IR_BACKEND=1 ./zcc --safe-div tests/test_safe_div_ir.c -o /tmp/test_safe_div_c_repro.s
+gcc /tmp/test_safe_div_c_repro.s -o /tmp/test_safe_div_c_repro
+/tmp/test_safe_div_c_repro
+
+ZCC_IR_BACKEND=1 ./zcc --rust-backend-v1 tests/rust/test_safe_div_rust.rs -o /tmp/test_safe_div_rust_repro.s
+gcc -no-pie -fno-pie /tmp/test_safe_div_rust_repro.s -o /tmp/test_safe_div_rust_repro
+/tmp/test_safe_div_rust_repro
+
+ZCC_IR_BACKEND=1 ./zcc --rust-backend-v1 tests/rust/test_float_abi_strict.rs -o /tmp/test_float_abi_strict_repro.s
+gcc -no-pie -fno-pie /tmp/test_float_abi_strict_repro.s -o /tmp/test_float_abi_strict_repro
+/tmp/test_float_abi_strict_repro
