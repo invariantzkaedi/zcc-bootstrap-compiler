@@ -7864,27 +7864,77 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
        * Bug: cqo sign-extends rax→rdx:rax in 64-bit; for 32-bit int operands
        * that corrupts the dividend.  Fix: use cltd/idivl for I32, plain
        * xor+divl for U32, xor+divq for U64, cqo/idivq for I64 (default). */
+      int safe_div = (getenv("ZCC_SAFE_DIV") != NULL);
+      static int sdiv_lbl_counter = 0;
+      int sdiv_lbl = -1;
+      if (safe_div) {
+        sdiv_lbl = sdiv_lbl_counter++;
+      }
       ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);
       if (ins->ir_type == IR_TY_I32) {
         fprintf(f, "    cltd\n");              /* sign-extend eax → edx:eax    */
         ir_asm_load_to_rcx_typed(ctx, ins->src[1], ins->ir_type);
+        if (safe_div) {
+          fprintf(f, "    testl %%ecx, %%ecx\n");
+          fprintf(f, "    jne .Lsdiv_ok_%d\n", sdiv_lbl);
+          fprintf(f, "    xorl %%eax, %%eax\n");
+          fprintf(f, "    xorl %%edx, %%edx\n");
+          fprintf(f, "    jmp .Lsdiv_end_%d\n", sdiv_lbl);
+          fprintf(f, ".Lsdiv_ok_%d:\n", sdiv_lbl);
+        }
         fprintf(f, "    idivl %%ecx\n");
+        if (safe_div) {
+          fprintf(f, ".Lsdiv_end_%d:\n", sdiv_lbl);
+        }
       } else if (ins->ir_type == IR_TY_U32) {
         fprintf(f, "    xorl %%edx, %%edx\n");
         ir_asm_load_to_rcx_typed(ctx, ins->src[1], ins->ir_type);
+        if (safe_div) {
+          fprintf(f, "    testl %%ecx, %%ecx\n");
+          fprintf(f, "    jne .Lsdiv_ok_%d\n", sdiv_lbl);
+          fprintf(f, "    xorl %%eax, %%eax\n");
+          fprintf(f, "    xorl %%edx, %%edx\n");
+          fprintf(f, "    jmp .Lsdiv_end_%d\n", sdiv_lbl);
+          fprintf(f, ".Lsdiv_ok_%d:\n", sdiv_lbl);
+        }
         fprintf(f, "    divl %%ecx\n");
+        if (safe_div) {
+          fprintf(f, ".Lsdiv_end_%d:\n", sdiv_lbl);
+        }
       } else if (ins->ir_type == IR_TY_U64) {
         fprintf(f, "    xorl %%edx, %%edx\n");
         fprintf(f, "    movq ");
         ir_asm_emit_src_operand(ctx, ins->src[1]);
         fprintf(f, ", %%rcx\n");
+        if (safe_div) {
+          fprintf(f, "    testq %%rcx, %%rcx\n");
+          fprintf(f, "    jne .Lsdiv_ok_%d\n", sdiv_lbl);
+          fprintf(f, "    xorq %%rax, %%rax\n");
+          fprintf(f, "    xorq %%rdx, %%rdx\n");
+          fprintf(f, "    jmp .Lsdiv_end_%d\n", sdiv_lbl);
+          fprintf(f, ".Lsdiv_ok_%d:\n", sdiv_lbl);
+        }
         fprintf(f, "    divq %%rcx\n");
+        if (safe_div) {
+          fprintf(f, ".Lsdiv_end_%d:\n", sdiv_lbl);
+        }
       } else {                                /* IR_TY_I64 — original path     */
         fprintf(f, "    cqo\n");
         fprintf(f, "    movq ");
         ir_asm_emit_src_operand(ctx, ins->src[1]);
         fprintf(f, ", %%rcx\n");
+        if (safe_div) {
+          fprintf(f, "    testq %%rcx, %%rcx\n");
+          fprintf(f, "    jne .Lsdiv_ok_%d\n", sdiv_lbl);
+          fprintf(f, "    xorq %%rax, %%rax\n");
+          fprintf(f, "    xorq %%rdx, %%rdx\n");
+          fprintf(f, "    jmp .Lsdiv_end_%d\n", sdiv_lbl);
+          fprintf(f, ".Lsdiv_ok_%d:\n", sdiv_lbl);
+        }
         fprintf(f, "    idivq %%rcx\n");
+        if (safe_div) {
+          fprintf(f, ".Lsdiv_end_%d:\n", sdiv_lbl);
+        }
       }
       ir_asm_store_rax_to(ctx, ins->dst);
     }
@@ -7894,31 +7944,81 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
     /* CG-IR-015: same width/sign selection as OP_DIV; remainder is in
      * edx (32-bit) or rdx (64-bit) after the div instruction, so move it
      * into eax/rax before the generic ir_asm_store_rax_to. */
+    int safe_div = (getenv("ZCC_SAFE_DIV") != NULL);
+    static int sdiv_lbl_counter = 0;
+    int sdiv_lbl = -1;
+    if (safe_div) {
+      sdiv_lbl = sdiv_lbl_counter++;
+    }
     ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);
     if (ins->ir_type == IR_TY_I32) {
       fprintf(f, "    cltd\n");
       ir_asm_load_to_rcx_typed(ctx, ins->src[1], ins->ir_type);
+      if (safe_div) {
+        fprintf(f, "    testl %%ecx, %%ecx\n");
+        fprintf(f, "    jne .Lsdiv_ok_%d\n", sdiv_lbl);
+        fprintf(f, "    xorl %%eax, %%eax\n");
+        fprintf(f, "    xorl %%edx, %%edx\n");
+        fprintf(f, "    jmp .Lsdiv_end_%d\n", sdiv_lbl);
+        fprintf(f, ".Lsdiv_ok_%d:\n", sdiv_lbl);
+      }
       fprintf(f, "    idivl %%ecx\n");
       fprintf(f, "    movl %%edx, %%eax\n");
+      if (safe_div) {
+        fprintf(f, ".Lsdiv_end_%d:\n", sdiv_lbl);
+      }
     } else if (ins->ir_type == IR_TY_U32) {
       fprintf(f, "    xorl %%edx, %%edx\n");
       ir_asm_load_to_rcx_typed(ctx, ins->src[1], ins->ir_type);
+      if (safe_div) {
+        fprintf(f, "    testl %%ecx, %%ecx\n");
+        fprintf(f, "    jne .Lsdiv_ok_%d\n", sdiv_lbl);
+        fprintf(f, "    xorl %%eax, %%eax\n");
+        fprintf(f, "    xorl %%edx, %%edx\n");
+        fprintf(f, "    jmp .Lsdiv_end_%d\n", sdiv_lbl);
+        fprintf(f, ".Lsdiv_ok_%d:\n", sdiv_lbl);
+      }
       fprintf(f, "    divl %%ecx\n");
       fprintf(f, "    movl %%edx, %%eax\n");
+      if (safe_div) {
+        fprintf(f, ".Lsdiv_end_%d:\n", sdiv_lbl);
+      }
     } else if (ins->ir_type == IR_TY_U64) {
       fprintf(f, "    xorl %%edx, %%edx\n");
       fprintf(f, "    movq ");
       ir_asm_emit_src_operand(ctx, ins->src[1]);
       fprintf(f, ", %%rcx\n");
+      if (safe_div) {
+        fprintf(f, "    testq %%rcx, %%rcx\n");
+        fprintf(f, "    jne .Lsdiv_ok_%d\n", sdiv_lbl);
+        fprintf(f, "    xorq %%rax, %%rax\n");
+        fprintf(f, "    xorq %%rdx, %%rdx\n");
+        fprintf(f, "    jmp .Lsdiv_end_%d\n", sdiv_lbl);
+        fprintf(f, ".Lsdiv_ok_%d:\n", sdiv_lbl);
+      }
       fprintf(f, "    divq %%rcx\n");
       fprintf(f, "    movq %%rdx, %%rax\n");
+      if (safe_div) {
+        fprintf(f, ".Lsdiv_end_%d:\n", sdiv_lbl);
+      }
     } else {                               /* IR_TY_I64 — original path      */
       fprintf(f, "    cqo\n");
       fprintf(f, "    movq ");
       ir_asm_emit_src_operand(ctx, ins->src[1]);
       fprintf(f, ", %%rcx\n");
+      if (safe_div) {
+        fprintf(f, "    testq %%rcx, %%rcx\n");
+        fprintf(f, "    jne .Lsdiv_ok_%d\n", sdiv_lbl);
+        fprintf(f, "    xorq %%rax, %%rax\n");
+        fprintf(f, "    xorq %%rdx, %%rdx\n");
+        fprintf(f, "    jmp .Lsdiv_end_%d\n", sdiv_lbl);
+        fprintf(f, ".Lsdiv_ok_%d:\n", sdiv_lbl);
+      }
       fprintf(f, "    idivq %%rcx\n");
       fprintf(f, "    movq %%rdx, %%rax\n");
+      if (safe_div) {
+        fprintf(f, ".Lsdiv_end_%d:\n", sdiv_lbl);
+      }
     }
     ir_asm_store_rax_to(ctx, ins->dst);
     break;

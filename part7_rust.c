@@ -3000,8 +3000,8 @@ static int rust_backend_emit_runtime_program(FILE *out, RustParser *p, const Rus
         ir_pm_run_default(mod, 0);
 
         /* Lower them to x86 assembly */
-        extern void ir_module_lower_x86(const ir_module_t *mod, FILE *out);
-        ir_module_lower_x86(mod, out);
+        extern void ir_module_lower_x86(const ir_module_t *mod, FILE *out, int safe_div);
+        ir_module_lower_x86(mod, out, getenv("ZCC_SAFE_DIV") != NULL);
     }
     ir_module_free(mod);
 

@@ -376,7 +376,7 @@ static ir_type_t get_operand_type(ir_func_t *fn, ir_node_t *n, const char *src) 
     return IR_TY_VOID;
 }
 
-void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
+void ir_module_lower_x86(const ir_module_t *mod, FILE *out, int safe_div) {
     int i;
     const char *arg_regs[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
 
@@ -649,6 +649,34 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                     load_operand(out, n->src1, "%rax", ra);
                     /* divisor: must be in a register or memory for idivq/divq */
                     int is_32 = (n->type == IR_TY_I32 || n->type == IR_TY_U32);
+                    int sdiv_lbl = -1;
+                    if (safe_div) {
+                        static int sdiv_lbl_counter = 0;
+                        sdiv_lbl = sdiv_lbl_counter++;
+                        PhysReg pr2 = PREG_NONE;
+                        if (ra) {
+                            pr2 = ra_get(ra, n->src2);
+                        }
+                        if (pr2 != PREG_NONE) {
+                            if (is_32) fprintf(out, "    testl %%%s, %%%s\n", preg_name32(pr2), preg_name32(pr2));
+                            else       fprintf(out, "    testq %%%s, %%%s\n", preg_name(pr2), preg_name(pr2));
+                        } else {
+                            int off2 = get_or_create_var(n->src2);
+                            if (is_32) fprintf(out, "    cmpl $0, %d(%%rbp)\n", off2);
+                            else       fprintf(out, "    cmpq $0, %d(%%rbp)\n", off2);
+                        }
+                        fprintf(out, "    jne .Lsdiv_ok_%d\n", sdiv_lbl);
+                        if (is_32) {
+                            fprintf(out, "    xorl %%eax, %%eax\n");
+                            fprintf(out, "    xorl %%edx, %%edx\n");
+                        } else {
+                            fprintf(out, "    xorq %%rax, %%rax\n");
+                            fprintf(out, "    xorq %%rdx, %%rdx\n");
+                        }
+                        fprintf(out, "    jmp .Lsdiv_end_%d\n", sdiv_lbl);
+                        fprintf(out, ".Lsdiv_ok_%d:\n", sdiv_lbl);
+                    }
+
                     if (ir_type_unsigned(n->type)) {
                         if (is_32) fprintf(out, "    xorl %%edx, %%edx\n");
                         else       fprintf(out, "    xorq %%rdx, %%rdx\n");
@@ -687,6 +715,10 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out) {
                             if (is_32) fprintf(out, "    idivl %d(%%rbp)\n", off2);
                             else       fprintf(out, "    idivq %d(%%rbp)\n", off2);
                         }
+                    }
+
+                    if (safe_div) {
+                        fprintf(out, ".Lsdiv_end_%d:\n", sdiv_lbl);
                     }
                     if (n->op == IR_MOD) store_result(out, n->dst, "%rdx", ra);
                     else                 store_result(out, n->dst, "%rax", ra);

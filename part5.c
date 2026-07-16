@@ -1661,8 +1661,8 @@ int zcc_main(int argc, char **argv) {
       /* ir_pm_run_default(g_ir_module, 1); */
       
       /* Lower to x86-64 assembly! */
-      extern void ir_module_lower_x86(const ir_module_t *mod, FILE *out);
-      ir_module_lower_x86(g_ir_module, cc->out);
+      extern void ir_module_lower_x86(const ir_module_t *mod, FILE *out, int safe_div);
+      ir_module_lower_x86(g_ir_module, cc->out, cc->safe_div);
       extern void codegen_emit_globals_and_strings(Compiler *cc);
       codegen_emit_globals_and_strings(cc);
       fclose(cc->out);
@@ -2184,8 +2184,8 @@ int zcc_main(int argc, char **argv) {
       } else {
           cc->out = fopen(asm_file, "w");
       }
-      extern void ir_module_lower_x86(const ir_module_t *mod, FILE *out);
-      ir_module_lower_x86(g_ir_module, cc->out);
+      extern void ir_module_lower_x86(const ir_module_t *mod, FILE *out, int safe_div);
+      ir_module_lower_x86(g_ir_module, cc->out, cc->safe_div);
       extern void codegen_emit_globals_and_strings(Compiler *cc);
       codegen_emit_globals_and_strings(cc);
   } else {
