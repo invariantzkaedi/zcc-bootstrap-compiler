@@ -1,0 +1,12 @@
+make zcc
+ZCC_IR_BACKEND=1 ./zcc tests/test_safe_div_ir.c -o tests/test_safe_div_ir_unprotected.s
+gcc tests/test_safe_div_ir_unprotected.s -o tests/test_safe_div_ir_unprotected
+./tests/test_safe_div_ir_unprotected
+ZCC_IR_BACKEND=1 ./zcc --safe-div tests/test_safe_div_ir.c -o tests/test_safe_div_ir_protected.s
+gcc tests/test_safe_div_ir_protected.s -o tests/test_safe_div_ir_protected
+./tests/test_safe_div_ir_protected
+tests/abi/gate2_fwd.sh
+tests/abi/gate2_rev.sh
+make test
+make selfhost
+cmp zcc2.s zcc3.s

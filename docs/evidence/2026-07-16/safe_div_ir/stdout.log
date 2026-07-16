@@ -1,0 +1,70 @@
+=== ZCC Compilation ===
+cat part1.c part0_pp.c part2.c part3.c ir.h ir_emit_dispatch.h sym_type_ast_ir.c part4.c zcc_ast_serializer.c part5.c part7_rust.c part6_arm.c ir.c ir_to_x86.c regalloc.c ir_telemetry_stub.c forgezero_receipt_stub.c zcc_layout.c zcc_layout_dump.c zcc_static_assert.c > zcc.c
+cc -O0 -w -fno-asynchronous-unwind-tables -g0 -DZCC_REAL_TELEMETRY -Iinclude -I. -Dmain=zcc_main -o zcc zcc.c compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c ir_telemetry.c zcc_telemetry.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c -lm -Wl,-s
+
+=== Unprotected Variable Division-by-Zero Test Run ===
+$ ZCC_IR_BACKEND=1 ./zcc tests/test_safe_div_ir.c -o tests/test_safe_div_ir_unprotected.s && gcc tests/test_safe_div_ir_unprotected.s -o tests/test_safe_div_ir_unprotected && ./tests/test_safe_div_ir_unprotected
+[ICP] Interprocedural & local constant propagation completed. Solver iterations: 2
+[ICP] Rewrote parameter/variable 'x' to constant 42
+cc_func: main
+DEBUG FUNC BEGIN: main, ret type kind = 5, mapped = 3
+...
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+Floating point exception (core dumped)
+
+=== Protected Variable Division-by-Zero Test Run (with --safe-div) ===
+$ ZCC_IR_BACKEND=1 ./zcc --safe-div tests/test_safe_div_ir.c -o tests/test_safe_div_ir_protected.s && gcc tests/test_safe_div_ir_protected.s -o tests/test_safe_div_ir_protected && ./tests/test_safe_div_ir_protected
+[ICP] Interprocedural & local constant propagation completed. Solver iterations: 2
+[ICP] Rewrote parameter/variable 'x' to constant 42
+cc_func: main
+DEBUG FUNC BEGIN: main, ret type kind = 5, mapped = 3
+...
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+Result: 0
+
+=== Gate 2 Cross-Toolchain Inter-operability Run ===
+$ tests/abi/gate2_fwd.sh && tests/abi/gate2_rev.sh
+Starting Gate 2: Forward Inter-op
+Testing ret_int_int...
+PASS: ret_int_int forward
+Testing ret_sse_sse...
+PASS: ret_sse_sse forward
+Testing ret_sse_int...
+PASS: ret_sse_int forward
+Testing ret_int_sse...
+PASS: ret_int_sse forward
+Testing ret_tvalue...
+PASS: ret_tvalue forward
+Gate 2: ALL PASS
+Starting Gate 2: Reverse Inter-op
+Testing ret_int_int...
+PASS: ret_int_int reverse
+Testing ret_sse_sse...
+PASS: ret_sse_sse reverse
+Testing ret_sse_int...
+PASS: ret_sse_int reverse
+Testing ret_int_sse...
+PASS: ret_int_sse reverse
+Testing ret_tvalue...
+PASS: ret_tvalue reverse
+Gate 2: ALL PASS
+
+=== Gate 5 Test Suite Run ===
+$ make test
+══════════════════════════════════════════════════
+  PASS: 35  FAIL: 0  SKIP: 3
+══════════════════════════════════════════════════
+ALL TESTS PASSED
+
+=== Gate 1 Self-Host Bootstrap and Verification ===
+$ make selfhost
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (18364 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+$ diff zcc2.s zcc3.s && echo "SELF-HOST VERIFIED (assembly identical)" || (echo "SELF-HOST FAILED (assembly diverged)"; diff zcc2.s zcc3.s | head -20; exit 1)
+SELF-HOST VERIFIED (assembly identical)
