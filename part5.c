@@ -2243,14 +2243,33 @@ int zcc_main(int argc, char **argv) {
             n->next ? "," : "");
           n = n->next;
         }
-        fprintf(f, "      ]\n    }%s\n", fi == g_ir_module->func_count - 1 ? "" : ",");
+        fprintf(f, "      ]\n    }%s", fi == g_ir_module->func_count - 1 ? "" : ",");
       }
       fprintf(f, "  ]\n}\n");
       fclose(f);
-      int ret = system("python3 /mnt/g/suno/ZKAEDI_CORE/courtroom/ir_validator.py ir_snapshot.json");
-      if (ret != 0) {
-        fprintf(stderr, "[ZCC-HOOK-04] FATAL: IR Lowering Courtroom check failed.\\n");
-        exit(1);
+      const char *script_path = "/mnt/g/suno/ZKAEDI_CORE/courtroom/ir_validator.py";
+      FILE *test_f = fopen(script_path, "r");
+      if (test_f) {
+        fclose(test_f);
+      } else {
+        script_path = "./courtroom/ir_validator.py";
+        test_f = fopen(script_path, "r");
+        if (test_f) {
+          fclose(test_f);
+        } else {
+          script_path = NULL;
+        }
+      }
+      if (script_path) {
+        char cmd[512];
+        snprintf(cmd, sizeof(cmd), "python3 %s ir_snapshot.json", script_path);
+        int ret = system(cmd);
+        if (ret != 0) {
+          fprintf(stderr, "[ZCC-HOOK-04] FATAL: IR Lowering Courtroom check failed.\n");
+          exit(1);
+        }
+      } else {
+        fprintf(stderr, "[ZCC-HOOK-04] WARNING: IR Courtroom script not found. Skipping.\n");
       }
     }
   }

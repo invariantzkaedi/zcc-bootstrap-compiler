@@ -77,18 +77,16 @@ zcc_fast: verify-lexicon zcc.c $(PASSES)
 zcc2: zcc zcc.c
 	@echo "=== Stage 1: zcc compiles itself -> zcc2 ==="
 	./zcc zcc.c -o zcc2
-	strip --strip-all zcc2 || true
+	strip --strip-all zcc2
 
 zcc3: zcc2 zcc.c
 	@echo "=== Stage 2: zcc2 compiles itself -> zcc3 ==="
 	./zcc2 zcc.c -o zcc3
-	strip --strip-all zcc3 || true
+	strip --strip-all zcc3
 
-selfhost: verify-lexicon zcc3
-	@echo "=== Verify: zcc2.s == zcc3.s (codegen parity) ==="
-	./zcc  zcc.c -o zcc2.s
-	./zcc2 zcc.c -o zcc3.s
-	diff zcc2.s zcc3.s && echo "SELF-HOST VERIFIED (assembly identical)" || (echo "SELF-HOST FAILED (assembly diverged)"; diff zcc2.s zcc3.s | head -20; exit 1)
+selfhost: verify-lexicon zcc
+	bash gate.sh
+
 
 
 zjs: zcc zjs.c test_evm_sprites.c zcc_svg.c
@@ -1115,3 +1113,9 @@ VERIFY_SRCS = src/opt/zcc_verify_main.c src/opt/ir_parser.c src/opt/ir_verify.c
 
 zcc-verify: $(VERIFY_SRCS)
 	$(CC) $(CFLAGS) -Iinclude -I. -o zcc-verify $(VERIFY_SRCS) $(LDFLAGS)
+
+ghost: zcc_ghost.so
+
+zcc_ghost.so: zcc_mesh_warden_shim.c zcc_voxel_shrinkwrap.c zcc_mesh_warden_shim.h zcc_voxel_shrinkwrap.h
+	gcc -O2 -shared -fPIC -o zcc_ghost.so zcc_mesh_warden_shim.c zcc_voxel_shrinkwrap.c
+

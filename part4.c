@@ -4974,12 +4974,31 @@ static int allocate_registers(Node *func) {
           i == num_ra_locals - 1 ? "" : ",");
       }
       fprintf(f, "  ]\n}\n");
-      fclose(f);
-      int ret = system("python3 /mnt/g/suno/ZKAEDI_CORE/courtroom/register_validator.py ra_snapshot.json");
-      if (ret != 0) {
-        fprintf(stderr, "[ZCC-HOOK-02] FATAL: Register Manifold Stability check failed.\n");
-        exit(1);
+      const char *script_path = "/mnt/g/suno/ZKAEDI_CORE/courtroom/register_validator.py";
+      FILE *test_f = fopen(script_path, "r");
+      if (test_f) {
+        fclose(test_f);
+      } else {
+        script_path = "./courtroom/register_validator.py";
+        test_f = fopen(script_path, "r");
+        if (test_f) {
+          fclose(test_f);
+        } else {
+          script_path = NULL;
+        }
       }
+      if (script_path) {
+        char cmd[512];
+        snprintf(cmd, sizeof(cmd), "python3 %s ra_snapshot.json", script_path);
+        int ret = system(cmd);
+        if (ret != 0) {
+          fprintf(stderr, "[ZCC-HOOK-02] FATAL: Register Manifold Stability check failed.\n");
+          exit(1);
+        }
+      } else {
+        fprintf(stderr, "[ZCC-HOOK-02] WARNING: Register Courtroom script not found. Skipping.\n");
+      }
+
     }
   }
 

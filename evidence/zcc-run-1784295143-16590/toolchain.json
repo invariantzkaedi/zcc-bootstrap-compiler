@@ -1,0 +1,10 @@
+{
+  "as_path": "/usr/bin/as",
+  "as_sha256": "21aff249b692b5c31a44007491f922dcb49f41323e362c57d2ada3f52eddb7f0",
+  "ld_path": "/usr/bin/ld",
+  "ld_sha256": "e9ceb054c12207970f2726dfc07e9a66b411602748628baf27399f02a9bbb31b",
+  "objcopy_path": "/usr/bin/objcopy",
+  "objcopy_sha256": "9276e918e3c26d3aa7ef9dd2232cd8ac692f03d3c1f270bfa5144a2b5492b713",
+  "strip_path": "/usr/bin/strip",
+  "strip_sha256": "0d980587ada7ab12193f39271f060d5663aa2f289b0e80d2a0274ce7306e4e42"
+}

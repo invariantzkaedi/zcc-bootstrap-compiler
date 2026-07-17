@@ -12,7 +12,8 @@ ZCC is a robust, production-capable Systems-C compiler and EVM (Ethereum Virtual
 * **SwarmDecompile**: An automated decompilation engine that has fuzzed and verified 5,000+ smart contracts (achieving 91% PARTIAL / 9% SUCCESS decompilation parity).
 * **Native x86-64 JIT Backend**: High-performance execution engine for compiled target binaries.
 * **Symbolic Verification**: Formal validation capabilities (`--prove no-revert`) to mathematically assert instruction safety.
-* **Systems Bootstrap Capability**: Successfully compiles itself (self-hosting), Lua 5.4.6, SQLite 3.45.0, and DOOM 1.10.
+* **Systems Bootstrap Capability**: Successfully compiles itself (self-hosting), Lua 5.4.6, and DOOM 1.10. SQLite 3.45.0 compiles cleanly in development, but is tracked as an open container defect.
+
 
 ```bash
 make selfhost          # Execute triple-stage compiler bootstrap verification
@@ -29,19 +30,17 @@ zcc --prove contract.bin "no-revert"
 
 | Metric | Verification Result |
 | :--- | :--- |
-| **Self-Hosting** | Pass (Stage 2 $\leftrightarrow$ Stage 3 assembly byte-identical `zcc2.s == zcc3.s`) |
+| **Self-Hosting** | Pass (Stage 2 $\leftrightarrow$ Stage 3 assembly, object, and stripped binary byte-identical) |
 | **Regression Tests** | Pass (21/21 targeted assertions) |
 | **Fuzz Suite** | Pass (53/53 fuzzing test cases) |
-| **SQLite 3.45.0** | Pass (Full transactional SQL integrity verified) |
+| **SQLite 3.45.0** | Open Defect (Compiles in development host; segfaults at `sqlite3.c:38060` in generic containers) |
 | **Lua 5.4.6** | Pass (100% compliance on the core `testes/all.lua` VM test suite) |
 | **DOOM 1.10** | Pass (reproduction: `scripts/build_doom.sh`, md5=`7eb2e949`) |
 | **IR Backend Tests** | Pass (21/21 passes verified) |
 | **Peephole Elisions** | 18,142 redundant instructions optimized during self-host compilation |
 
 ### SQLite Integration & Compliance
-ZCC compiles SQLite 3.45.0 (approx. 85,000 lines of amalgamated source) out of the box. The resulting binary successfully performs complete SQL transactional workflows:
-* Verifies B-Tree allocations, the LALR(1) parser, standard memory allocators, and page caches.
-* Stabilized by fixing System V AMD64 `va_list` structure layouts, nested global structure initializers, negative array offset constants, and struct-by-value System V ABI rules.
+ZCC compiles SQLite 3.45.0 (approx. 85,000 lines of amalgamated source) out of the box in the development environment. The resulting binary successfully performs complete SQL transactional workflows (verifying B-Tree allocations, the LALR(1) parser, standard memory allocators, and page caches). However, under generic Ubuntu 24.04 containers, the preprocessor/AST path triggers an environment-dependent segfault at `sqlite3.c:38060` (tracked under issue `SQL-CRASH-38060`).
 
 ```text
 SQLite 3.45.0 compiled by ZCC

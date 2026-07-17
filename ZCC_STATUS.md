@@ -54,7 +54,7 @@ ZCC is compiled by concatenating discrete parts inside the `Makefile` before inv
 - DOOM compiled: 732 functions, 18.5% IR node reduction
 - Lua 5.4.6: 100% test suite pass (gate b299f43)
 - libcurl 8.7.1: 133/133 files compile, link, run (three ABI bugs fixed: ND_CAST strip, va_list 24B SysV ABI struct)
-- SQLite 3.45.0: full SQL round-trip
+- SQLite 3.45.0: Initial compilation succeeded in dev WSL environment; currently flagged as an open defect in generic containers (see below)
 - CG-IR-018: static pointer array .zero corruption — most significant find
 - DCE pass: eliminated 1,862 / 17,264 instructions (10.79%)
 - IR bridge: GCC-compiled boundary module with three-pointer ABI
@@ -63,8 +63,10 @@ ZCC is compiled by concatenating discrete parts inside the `Makefile` before inv
 
 ## Known Open Items
 
+- **SQL-CRASH-38060**: SQLite 3.45.0 compilation segfaults (Exit Code 139) at `sqlite3.c:38060` under Ubuntu 24.04 / GCC 13.3.0 environments. Requires preprocessor/AST type footprint bisecting.
 - 43 GLB fleet assets (~546MB) tracked in git history; pending move to HF/R2 plus filter-repo
 - DPO Model Alignment convergence (Initial baseline audited and failed training-health gate; requires retraining with increased step/LR budget)
+
 
 ## Suggested Next Steps
 
@@ -158,14 +160,15 @@ CG-IR-005, CG-IR-008, CG-IR-009, CG-IR-011, CG-IR-012, CG-IR-013
 
 ## ZCC SQLite Milestone — April 10, 2026
 
-- SQLite 3.45.0 compiled by ZCC
-- Full SQL round trip verified:
+- SQLite 3.45.0 compiled by ZCC (Parity environment-dependent; segfaults on Ubuntu 24.04 containers at crash site sqlite3.c:38060)
+- Full SQL round trip verified in development WSL host:
   - open rc=0
   - SELECT 1 = 1
   - CREATE TABLE rc=0
   - INSERT rc=0
   - SELECT x = 42
-- All rc=0, zero errors, zero segfaults
+- Zero errors, zero segfaults under development host; open defect tracked for generic containers
+
 
 Bugs closed to achieve this:
 

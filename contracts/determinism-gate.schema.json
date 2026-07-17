@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ZCCDeterminismGateProvenance",
+  "type": "object",
+  "properties": {
+    "schema_version": { "type": "string" },
+    "run_id": { "type": "string" },
+    "stage": { "type": "integer", "enum": [2, 3] },
+    "compiler_path": { "type": "string" },
+    "compiler_sha256_before": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "compiler_sha256_after": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "source_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "argv": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "LC_ALL": { "type": "string" },
+        "TZ": { "type": "string" },
+        "SOURCE_DATE_EPOCH": { "type": "string" }
+      },
+      "required": ["LC_ALL", "TZ", "SOURCE_DATE_EPOCH"]
+    },
+    "target": { "type": "string" },
+    "start_time_ns": { "type": "integer" },
+    "end_time_ns": { "type": "integer" },
+    "exit_code": { "type": "integer", "minimum": 0 },
+    "assembly_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "object_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "binary_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "stage",
+    "compiler_path",
+    "compiler_sha256_before",
+    "compiler_sha256_after",
+    "source_sha256",
+    "argv",
+    "environment",
+    "target",
+    "start_time_ns",
+    "end_time_ns",
+    "exit_code",
+    "assembly_sha256",
+    "object_sha256",
+    "binary_sha256"
+  ]
+}
