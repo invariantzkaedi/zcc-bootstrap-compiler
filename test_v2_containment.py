@@ -133,9 +133,8 @@ class TestV2Containment(unittest.TestCase):
                     must_exist=False,
                     authoritative_safe_bases=[str(self.safe_base)]
                 )
-        except OSError:
-            # Skip if OS does not support symlinks (Windows privilege restriction)
-            pass
+        except OSError as exc:
+            self.fail(f"Symlink control could not be established: {exc}")
 
     def test_c12_nonexistent_suffix_containing_traversal(self):
         target = self.safe_base / "nonexistent_dir" / ".." / ".." / "safe_evil" / "exfil.parquet"
@@ -167,8 +166,8 @@ class TestV2Containment(unittest.TestCase):
                     must_exist=False,
                     authoritative_safe_bases=[str(self.safe_base)]
                 )
-        except OSError:
-            pass
+        except OSError as exc:
+            self.fail(f"Symlink control could not be established: {exc}")
 
     def test_c14_nearest_existing_parent_escape(self):
         existing_dir = self.safe_base / "existing_dir"
