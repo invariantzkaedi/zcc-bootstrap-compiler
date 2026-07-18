@@ -237,6 +237,8 @@ def generate_dpo_attestation(
     except Exception:
         trl_version = "unknown"
 
+    from zkaedi_security_utils import PATH_VALIDATOR_VERSION
+
     attestation = {
         "attestation_type": "ZKAEDI_DPO_TRAINING_ATTESTATION",
         "attestation_id": attestation_id or str(uuid.uuid4()),
@@ -261,6 +263,9 @@ def generate_dpo_attestation(
             "identity": base_model,
             "allow_list_sha256": base_model_hash
         },
+        "authoritative_safe_base": str(safe_base_dir),
+        "path_validation_mode": "authoritative",
+        "path_validator_version": PATH_VALIDATOR_VERSION,
         "training_config": training_config or {},
         "model_payload_sha256": model_payload_sha256,
         "training_manifest": {
@@ -466,15 +471,35 @@ def main():
     global SAFE_BASE_DIR
     SAFE_BASE_DIR = Path(args.safe_base_dir).resolve()
 
+    # Capture the base's device and inode at startup
+    safe_base_stat = SAFE_BASE_DIR.stat()
+    safe_base_identity = (
+        safe_base_stat.st_dev,
+        safe_base_stat.st_ino,
+    )
+
+    def validate_runtime_path(path_val, *, must_exist: bool, description: str) -> Path:
+        curr_stat = SAFE_BASE_DIR.stat()
+        if (curr_stat.st_dev, curr_stat.st_ino) != safe_base_identity:
+            raise RuntimeError("Authoritative safe base identity changed during execution")
+        return validate_safe_path(
+            path_val,
+            must_exist=must_exist,
+            description=description,
+            authoritative_safe_bases=[SAFE_BASE_DIR],
+        )
+
     dataset_path_str = args.dataset.replace("\\", "/")
     output_path_str = args.output_dir.replace("\\", "/")
 
     # === SECURITY: Path validation (fail-closed) ===
     try:
-        dataset_path = validate_safe_path(dataset_path_str, description="dataset", must_exist=True, authoritative_safe_bases=[SAFE_BASE_DIR])
-        output_dir = validate_safe_path(output_path_str, description="output-dir", must_exist=False, authoritative_safe_bases=[SAFE_BASE_DIR])
+        dataset_path = validate_runtime_path(dataset_path_str, description="dataset", must_exist=True)
+        output_dir = validate_runtime_path(output_path_str, description="output-dir", must_exist=False)
         output_dir.mkdir(parents=True, exist_ok=True)
-    except (ValueError, FileNotFoundError) as e:
+        # Post-creation revalidation
+        output_dir = validate_runtime_path(output_dir, description="created output directory", must_exist=True)
+    except (ValueError, FileNotFoundError, RuntimeError) as e:
         logger.error(f"SECURITY BLOCK: {e}")
         sys.exit(1)
 
@@ -489,7 +514,7 @@ def main():
         
         p_base = Path(args.model_name)
         if p_base.exists():
-            p_base = validate_safe_path(str(p_base), must_exist=True, description="base model", authoritative_safe_bases=[SAFE_BASE_DIR])
+            p_base = validate_runtime_path(str(p_base), must_exist=True, description="base model")
             # Verify base model directory files strictly against allowlist
             is_valid, errors = verify_model_integrity(str(p_base), verify_signature=verify_sig, public_key_path=args.public_key)
             if not is_valid:
@@ -644,7 +669,7 @@ def main():
 
     # Post-save validations
     scan_for_known_cves()
-    validate_safe_path(str(checkpoint_dir), must_exist=True, description="saved checkpoint directory", authoritative_safe_bases=[SAFE_BASE_DIR])
+    validate_runtime_path(str(checkpoint_dir), must_exist=True, description="saved checkpoint directory")
     
     from zkaedi_model_registry import get_model_hashes
     model_payload_sha256, files_dict = get_model_hashes(checkpoint_dir)
@@ -665,6 +690,7 @@ def main():
     attestation_id = str(uuid.uuid4())
 
     # Optional: write integrity manifest
+    from zkaedi_security_utils import PATH_VALIDATOR_VERSION
     manifest_file = checkpoint_dir / "training_manifest.json"
     manifest_data = {
         "model_name": args.model_name,
@@ -683,6 +709,9 @@ def main():
             "enabled": det_enabled,
             "warn_only": det_warn_only
         },
+        "authoritative_safe_base": str(SAFE_BASE_DIR),
+        "path_validation_mode": "authoritative",
+        "path_validator_version": PATH_VALIDATOR_VERSION,
         "security_note": "Saved in safe tensors format. Hashed and ready for swarm ingestion."
     }
     write_atomic_json(manifest_file, manifest_data)

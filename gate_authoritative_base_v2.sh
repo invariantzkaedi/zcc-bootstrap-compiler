@@ -130,47 +130,69 @@ import ast
 import sys
 from pathlib import Path
 
+def check_file(content):
+    tree = ast.parse(content, filename="<string>")
+    safe_calls = []
+    runtime_calls = []
+    failures = []
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        fn = node.func
+        name = fn.id if isinstance(fn, ast.Name) else (
+            fn.attr if isinstance(fn, ast.Attribute) else None
+        )
+        if name == "validate_safe_path":
+            keywords = {kw.arg for kw in node.keywords if kw.arg is not None}
+            safe_calls.append((node.lineno, sorted(keywords)))
+            if "authoritative_safe_bases" not in keywords:
+                failures.append(f"line {node.lineno}: missing authoritative_safe_bases")
+            if "extra_safe_bases" in keywords:
+                failures.append(f"line {node.lineno}: legacy extra_safe_bases present")
+        elif name == "validate_runtime_path":
+            runtime_calls.append(node.lineno)
+
+    if len(safe_calls) != 5:
+        failures.append(f"expected exactly 5 validate_safe_path calls, found {len(safe_calls)}")
+    if len(runtime_calls) != 5:
+        failures.append(f"expected exactly 5 validate_runtime_path calls, found {len(runtime_calls)}")
+        
+    return failures, safe_calls, runtime_calls
+
 path = Path(sys.argv[1])
-tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+content = path.read_text(encoding="utf-8")
 
-calls = []
-failures = []
-for node in ast.walk(tree):
-    if not isinstance(node, ast.Call):
-        continue
-    fn = node.func
-    name = fn.id if isinstance(fn, ast.Name) else (
-        fn.attr if isinstance(fn, ast.Attribute) else None
-    )
-    if name != "validate_safe_path":
-        continue
-
-    keywords = {kw.arg for kw in node.keywords if kw.arg is not None}
-    calls.append((node.lineno, sorted(keywords)))
-
-    if "authoritative_safe_bases" not in keywords:
-        failures.append(
-            f"line {node.lineno}: missing authoritative_safe_bases"
-        )
-    if "extra_safe_bases" in keywords:
-        failures.append(
-            f"line {node.lineno}: legacy extra_safe_bases still present"
-        )
-
-print(f"validate_safe_path calls: {len(calls)}")
-for line, keywords in calls:
-    print(f"line {line}: {keywords}")
-
-if len(calls) != 8:
-    failures.append(f"expected exactly 8 call sites, found {len(calls)}")
+# 1. Run check on original script
+failures, safe_calls, runtime_calls = check_file(content)
+print(f"Original script: validate_safe_path calls: {len(safe_calls)}, validate_runtime_path calls: {len(runtime_calls)}")
+for line, keywords in safe_calls:
+    print(f"line {line} (validate_safe_path): {keywords}")
+for line in runtime_calls:
+    print(f"line {line} (validate_runtime_path)")
 
 if failures:
-    print("FAILURES:")
+    print("FAILURES ON ORIGINAL:")
     for failure in failures:
         print(f"- {failure}")
-    raise SystemExit(1)
+    sys.exit(1)
 
-print("PASS: all 8 call sites are authoritative and zero are legacy-additive")
+# 2. Self-mutation test: mutate authoritative_safe_bases with extra_safe_bases
+mutated = content.replace(
+    "authoritative_safe_bases=[SAFE_BASE_DIR]",
+    "extra_safe_bases=[SAFE_BASE_DIR]"
+)
+if mutated == content:
+    print("FAIL: self-mutation replace target not found")
+    sys.exit(1)
+
+mutated_failures, _, _ = check_file(mutated)
+if not mutated_failures:
+    print("FAIL: mutated script passed AST gate but should have failed")
+    sys.exit(1)
+
+print(f"PASS: G8P-positive current script passes, G8P-negative mutated script correctly fails with: {mutated_failures[0]}")
+sys.exit(0)
 PY
     g8_rc=$?
     record_gate "G8P" "v3 validator call-site enforcement" "$g8_rc" "$g8_log"

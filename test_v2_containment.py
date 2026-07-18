@@ -180,6 +180,23 @@ class TestV2Containment(unittest.TestCase):
                 authoritative_safe_bases=[str(self.safe_base)]
             )
 
+    def test_c15_filesystem_root_rejection(self):
+        root_path = Path("/").resolve()
+        with self.assertRaises(ValueError):
+            validate_safe_path(
+                str(self.safe_base / "file.txt"),
+                must_exist=False,
+                authoritative_safe_bases=[str(root_path)]
+            )
+
+    def test_c16_duplicate_bases_rejection(self):
+        with self.assertRaises(ValueError):
+            validate_safe_path(
+                str(self.safe_base / "file.txt"),
+                must_exist=False,
+                authoritative_safe_bases=[str(self.safe_base), str(self.safe_base)]
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
