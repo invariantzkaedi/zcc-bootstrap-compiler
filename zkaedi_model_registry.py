@@ -571,15 +571,28 @@ def save_registry(
 # =============================================================================
 
 def get_file_sha256(file_path: Path) -> str:
-    """Computes the SHA-256 hash of a single file."""
-    if hasattr(hashlib, "file_digest"):
-        with open(file_path, "rb") as f:
-            return hashlib.file_digest(f, "sha256").hexdigest()
-    h = hashlib.sha256()
-    with open(file_path, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
+    """Computes the SHA-256 hash of a single file using descriptor checks to prevent TOCTOU."""
+    import stat
+    import os
+    try:
+        fd = os.open(file_path, os.O_RDONLY)
+    except OSError as e:
+        raise ValueError(f"Failed to open file: {e}")
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise ValueError("Registration target must be a regular file")
+        if st.st_size <= 0:
+            raise ValueError("Cannot register a zero-byte file")
+        h = hashlib.sha256()
+        while True:
+            chunk = os.read(fd, 8192)
+            if not chunk:
+                break
             h.update(chunk)
-    return h.hexdigest()
+        return h.hexdigest()
+    finally:
+        os.close(fd)
 
 
 def get_model_hashes(model_path: Path) -> Tuple[str, Dict[str, str]]:
@@ -589,13 +602,18 @@ def get_model_hashes(model_path: Path) -> Tuple[str, Dict[str, str]]:
     Returns:
         Tuple of (combined_sha256, files_dict)
     """
+    if model_path.is_symlink():
+        raise ValueError("Symlinks cannot be registered as models")
+        
+    if not (model_path.is_file() or model_path.is_dir()):
+        raise ValueError("Registration target must be a regular file or directory")
+        
     if model_path.is_file():
         file_hash = get_file_sha256(model_path)
         return file_hash, {model_path.name: file_hash}
         
     files_to_hash = []
     for f in sorted(model_path.rglob("*")):
-        # Explicitly reject symlinks in release artifacts (SEC-14)
         if f.is_symlink():
             rel_path = f.relative_to(model_path).as_posix()
             raise ValueError(f"Symlink not permitted in release artifact: {rel_path}")
@@ -965,9 +983,12 @@ def verify_model_integrity(
             errors.append(f"Missing file: {rel_path}")
             continue
             
-        actual_hash = get_file_sha256(actual_file_path)
-        if actual_hash != expected_hash:
-            errors.append(f"Hash mismatch for {rel_path}. Expected: {expected_hash}, Actual: {actual_hash}")
+        try:
+            actual_hash = get_file_sha256(actual_file_path)
+            if actual_hash != expected_hash:
+                errors.append(f"Hash mismatch for {rel_path}. Expected: {expected_hash}, Actual: {actual_hash}")
+        except Exception as e:
+            errors.append(f"File validation failed for {rel_path}: {e}")
             
     # Check for untracked files
     for rel_path in current_files.keys():

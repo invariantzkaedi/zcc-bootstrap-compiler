@@ -1039,6 +1039,40 @@ class TestModelRegistry(unittest.TestCase):
             )
         self.assertIn("Cannot register a zero-byte file", str(ctx.exception))
 
+    def test_registration_ingestion_guards(self):
+        # 1. Missing file -> reject
+        missing_file = Path(self.test_dir) / "non_existent_file.pt"
+        with self.assertRaises(Exception):
+            reg.register_model(model_name="missing-model", model_path=str(missing_file))
+            
+        # 2. Broken symlink -> reject
+        symlink_file = Path(self.test_dir) / "broken_symlink.pt"
+        try:
+            symlink_file.symlink_to("non_existent_target.pt")
+            with self.assertRaises(ValueError) as ctx:
+                reg.register_model(model_name="symlink-model", model_path=str(symlink_file))
+            self.assertIn("Symlinks cannot be registered", str(ctx.exception))
+        except (OSError, NotImplementedError):
+            pass
+            
+        # 3. FIFO/device file -> reject
+        fifo_path = Path(self.test_dir) / "test_fifo.fifo"
+        try:
+            import os
+            os.mkfifo(fifo_path)
+            with self.assertRaises(ValueError) as ctx:
+                reg.register_model(model_name="fifo-model", model_path=str(fifo_path))
+            self.assertIn("Registration target must be a regular file or directory", str(ctx.exception))
+        except (AttributeError, NotImplementedError, OSError):
+            pass
+            
+        # 4. Valid one-byte file -> accept
+        one_byte_file = Path(self.test_dir) / "one_byte_model.pt"
+        with open(one_byte_file, "wb") as f:
+            f.write(b"x")
+        entry = reg.register_model(model_name="one-byte-model", model_path=str(one_byte_file))
+        self.assertEqual(entry["name"], "one-byte-model")
+
 
 if __name__ == "__main__":
     unittest.main()
