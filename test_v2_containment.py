@@ -122,5 +122,65 @@ class TestV2Containment(unittest.TestCase):
                 authoritative_safe_bases=[str(self.safe_base)]
             )
 
+    def test_c11_nonexistent_child_beneath_symlinked_parent(self):
+        parent_link = self.safe_base / "parent_link"
+        try:
+            os.symlink(self.evil_base, parent_link)
+            target = parent_link / "nonexistent.parquet"
+            with self.assertRaises(ValueError):
+                validate_safe_path(
+                    str(target),
+                    must_exist=False,
+                    authoritative_safe_bases=[str(self.safe_base)]
+                )
+        except OSError:
+            # Skip if OS does not support symlinks (Windows privilege restriction)
+            pass
+
+    def test_c12_nonexistent_suffix_containing_traversal(self):
+        target = self.safe_base / "nonexistent_dir" / ".." / ".." / "safe_evil" / "exfil.parquet"
+        with self.assertRaises(ValueError):
+            validate_safe_path(
+                str(target),
+                must_exist=False,
+                authoritative_safe_bases=[str(self.safe_base)]
+            )
+
+    def test_c13_symlink_swap_around_output_creation(self):
+        link = self.safe_base / "swap_link"
+        valid_target = self.safe_base / "valid.parquet"
+        valid_target.write_text("ok")
+        try:
+            os.symlink(valid_target, link)
+            res = validate_safe_path(
+                str(link),
+                must_exist=True,
+                authoritative_safe_bases=[str(self.safe_base)]
+            )
+            self.assertEqual(res, valid_target.resolve())
+            
+            os.remove(link)
+            os.symlink(self.evil_base / "evil.parquet", link)
+            with self.assertRaises(ValueError):
+                validate_safe_path(
+                    str(link),
+                    must_exist=False,
+                    authoritative_safe_bases=[str(self.safe_base)]
+                )
+        except OSError:
+            pass
+
+    def test_c14_nearest_existing_parent_escape(self):
+        existing_dir = self.safe_base / "existing_dir"
+        existing_dir.mkdir()
+        target = existing_dir / "nonexistent_sub" / ".." / ".." / ".." / "safe_evil" / "exfil.parquet"
+        with self.assertRaises(ValueError):
+            validate_safe_path(
+                str(target),
+                must_exist=False,
+                authoritative_safe_bases=[str(self.safe_base)]
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
