@@ -792,7 +792,10 @@ def register_model(
         
     total_size = 0
     for rel_path in files_dict:
-        file_p = validated_path / rel_path
+        if validated_path.is_file():
+            file_p = validated_path
+        else:
+            file_p = validated_path / rel_path
         size = file_p.stat().st_size
         if size == 0:
             raise ValueError(f"Cannot register a zero-byte file: {rel_path}")
@@ -954,7 +957,10 @@ def verify_model_integrity(
     
     # Check for missing or tampered files
     for rel_path, expected_hash in registered_files.items():
-        actual_file_path = validated_path / rel_path
+        if validated_path.is_file():
+            actual_file_path = validated_path
+        else:
+            actual_file_path = validated_path / rel_path
         if not actual_file_path.exists():
             errors.append(f"Missing file: {rel_path}")
             continue

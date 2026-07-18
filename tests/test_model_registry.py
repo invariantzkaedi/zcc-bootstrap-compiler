@@ -999,6 +999,46 @@ class TestModelRegistry(unittest.TestCase):
         self.assertEqual(combined_sha256, combined_sha256_2)
         self.assertEqual(files_dict, files_dict_2)
 
+    def test_single_file_registration(self):
+        # Create a single model file
+        model_file = Path(self.test_dir) / "single_model.pt"
+        with open(model_file, "w") as f:
+            f.write("single weights content")
+            
+        # Register single file model
+        entry = reg.register_model(
+            model_name="single-file-model",
+            model_path=str(model_file),
+            author="Anunnaki-Security",
+            description="Secure single file model"
+        )
+        
+        self.assertEqual(entry["name"], "single-file-model")
+        self.assertEqual(entry["author"], "Anunnaki-Security")
+        self.assertIn("single_model.pt", entry["files"])
+        
+        # Verify allow-list lookup
+        self.assertTrue(reg.is_model_allowed("single-file-model"))
+        
+        # Verify integrity checks
+        valid, errors = reg.verify_model_integrity(str(model_file))
+        self.assertTrue(valid)
+        self.assertEqual(len(errors), 0)
+
+    def test_single_file_registration_empty(self):
+        # Create an empty single model file
+        model_file = Path(self.test_dir) / "empty_single_model.pt"
+        with open(model_file, "w") as f:
+            f.write("")
+            
+        # Try registering empty single file model -> should raise ValueError
+        with self.assertRaises(ValueError) as ctx:
+            reg.register_model(
+                model_name="empty-single-file-model",
+                model_path=str(model_file)
+            )
+        self.assertIn("Cannot register a zero-byte file", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
