@@ -221,6 +221,7 @@ def generate_dpo_attestation(
     training_config: Optional[Dict[str, Any]] = None,
     attestation_id: Optional[str] = None,
     manifest_sha256: Optional[str] = None,
+    determinism: Optional[Dict[str, bool]] = None,
 ) -> None:
     """Generates a cryptographically signed DPO training attestation receipt."""
     import uuid
@@ -269,7 +270,8 @@ def generate_dpo_attestation(
         "checkpoint": {
             "path": get_relative_safe_path(checkpoint_dir, safe_base_dir),
             "files": files_dict
-        }
+        },
+        "determinism": determinism or {}
     }
     
     att_path = checkpoint_dir / "dpo_security_attestation.json"
@@ -443,6 +445,24 @@ def main():
     
     attestation_key = args.private_key if args.sign else None
 
+    # === SECURITY: Determinism Provenance Setup (F4) ===
+    import torch
+    det_enabled = False
+    det_warn_only = False
+    try:
+        torch.use_deterministic_algorithms(True, warn_only=True)
+        det_enabled = True
+        det_warn_only = True
+        logger.info("[ZKAEDI SEC] PyTorch deterministic algorithms enabled (enabled=true, warn_only=true)")
+    except RuntimeError as e:
+        logger.warning(f"[ZKAEDI SEC] PyTorch deterministic algorithms raised RuntimeError: {e}")
+        try:
+            torch.use_deterministic_algorithms(False)
+        except Exception:
+            pass
+        det_enabled = False
+        det_warn_only = False
+
     global SAFE_BASE_DIR
     SAFE_BASE_DIR = Path(args.safe_base_dir).resolve()
 
@@ -469,6 +489,7 @@ def main():
         
         p_base = Path(args.model_name)
         if p_base.exists():
+            p_base = validate_safe_path(str(p_base), must_exist=True, description="base model", authoritative_safe_bases=[SAFE_BASE_DIR])
             # Verify base model directory files strictly against allowlist
             is_valid, errors = verify_model_integrity(str(p_base), verify_signature=verify_sig, public_key_path=args.public_key)
             if not is_valid:
@@ -515,6 +536,47 @@ def main():
         eval_indices = manifest["eval"]
     except Exception as e:
         logger.error(f"Manifest load failed: {type(e).__name__}")
+        sys.exit(1)
+
+    # === SECURITY: Partition Integrity Verification (F3) ===
+    try:
+        if not isinstance(train_indices, list):
+            raise ValueError("train indices must be a list")
+        if not isinstance(eval_indices, list):
+            raise ValueError("eval indices must be a list")
+        if len(train_indices) == 0:
+            raise ValueError("empty train split")
+        if len(eval_indices) == 0:
+            raise ValueError("empty eval split")
+            
+        for idx in train_indices:
+            if isinstance(idx, bool):
+                raise ValueError("boolean index not allowed")
+            if type(idx) is not int:
+                raise ValueError("non-integer index")
+            if idx < 0:
+                raise ValueError("negative index")
+            if idx >= len(dataset):
+                raise ValueError("out-of-range index")
+                
+        for idx in eval_indices:
+            if isinstance(idx, bool):
+                raise ValueError("boolean index not allowed")
+            if type(idx) is not int:
+                raise ValueError("non-integer index")
+            if idx < 0:
+                raise ValueError("negative index")
+            if idx >= len(dataset):
+                raise ValueError("out-of-range index")
+                
+        if len(train_indices) != len(set(train_indices)):
+            raise ValueError("duplicate train index")
+        if len(eval_indices) != len(set(eval_indices)):
+            raise ValueError("duplicate eval index")
+        if set(train_indices) & set(eval_indices):
+            raise ValueError("train/eval overlap")
+    except ValueError as ve:
+        logger.error(f"[ZKAEDI SEC] Partition integrity failure: {ve}")
         sys.exit(1)
 
     train_dataset = dataset.select(train_indices).map(format_dpo)
@@ -617,6 +679,10 @@ def main():
         "model_payload_sha256": model_payload_sha256,
         "artifact_type": artifact_type,
         "attestation_id": attestation_id,
+        "determinism": {
+            "enabled": det_enabled,
+            "warn_only": det_warn_only
+        },
         "security_note": "Saved in safe tensors format. Hashed and ready for swarm ingestion."
     }
     write_atomic_json(manifest_file, manifest_data)
@@ -663,7 +729,11 @@ def main():
         num_eval_samples=len(eval_dataset),
         training_config=config_dict,
         attestation_id=attestation_id,
-        manifest_sha256=manifest_sha256
+        manifest_sha256=manifest_sha256,
+        determinism={
+            "enabled": det_enabled,
+            "warn_only": det_warn_only
+        }
     )
 
     # Compute complete final release-bundle digest of checkpoint directory

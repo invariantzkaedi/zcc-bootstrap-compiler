@@ -128,8 +128,8 @@ print(f"validate_safe_path calls: {len(calls)}")
 for line, keywords in calls:
     print(f"line {line}: {keywords}")
 
-if len(calls) != 7:
-    failures.append(f"expected exactly 7 call sites, found {len(calls)}")
+if len(calls) != 8:
+    failures.append(f"expected exactly 8 call sites, found {len(calls)}")
 
 if failures:
     print("FAILURES:")
@@ -137,7 +137,7 @@ if failures:
         print(f"- {failure}")
     raise SystemExit(1)
 
-print("PASS: all 7 call sites are authoritative and zero are legacy-additive")
+print("PASS: all 8 call sites are authoritative and zero are legacy-additive")
 PY
     g8_rc=$?
     record_gate "G8P" "v3 validator call-site enforcement" "$g8_rc" "$g8_log"
