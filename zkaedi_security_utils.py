@@ -93,6 +93,8 @@ def validate_safe_path(
     """Fail-closed path validation with symlink and traversal protection."""
     if extra_safe_bases is not None and authoritative_safe_bases is not None:
         raise ValueError("extra_safe_bases and authoritative_safe_bases are mutually exclusive")
+    if isinstance(user_path, Path):
+        user_path = str(user_path)
     if not user_path or not isinstance(user_path, str):
         raise ValueError(f"Invalid {description}: must be a non-empty string")
 

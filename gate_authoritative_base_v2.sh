@@ -6,7 +6,8 @@
 set -uo pipefail
 
 PYTHON_BIN="${PYTHON_BIN:-python3}"
-TEST_SOURCE="${TEST_SOURCE:-test_v2_containment.py}"
+TEST_SOURCE="${TEST_SOURCE:-test_authoritative_base.py}"
+REGRESSION_SOURCE="${REGRESSION_SOURCE:-test_v2_containment.py}"
 TRAIN_SCRIPT="${TRAIN_SCRIPT:-train_hf_dpo_adamw_hardened_v3.py}"
 LEDGER="${LEDGER:-gate_ledger.tsv}"
 LOG_DIR="${LOG_DIR:-/tmp/zkaedi_gates}"
@@ -50,14 +51,29 @@ source = Path(sys.argv[1]).read_text(encoding="utf-8")
 target = Path(sys.argv[2])
 module = sys.argv[3]
 
-source = source.replace(
-    "import zkaedi_safe_path_patch as sp",
-    f"import {module} as sp",
+old_module_import = "import zkaedi_safe_path_patch as sp"
+old_symbol_import = "from zkaedi_safe_path_patch import validate_safe_path"
+
+if source.count(old_module_import) != 1:
+    raise SystemExit("expected exactly one reference module import")
+
+if source.count(old_symbol_import) != 1:
+    raise SystemExit("expected exactly one reference symbol import")
+
+source = source.replace(old_module_import, f"import {module} as sp")
+source = source.replace(old_symbol_import, f"from {module} import validate_safe_path")
+
+required_markers = (
+    "T1a narrow-authoritative",
+    "T1b narrow-authoritative",
+    "T2 symlink escape",
+    "T5 both additive and authoritative",
+    "T13 legacy extra_safe_bases",
 )
-source = source.replace(
-    "from zkaedi_safe_path_patch import validate_safe_path",
-    f"from {module} import validate_safe_path",
-)
+
+missing = [m for m in required_markers if m not in source]
+if missing:
+    raise SystemExit(f"test source lacks required behavioral controls: {missing}")
 
 if "zkaedi_safe_path_patch" in source:
     raise SystemExit("reference-module import remained after rewrite")
@@ -83,6 +99,23 @@ PY
         g6_rc=$?
         record_gate "G6P" "production validator authoritative controls" "$g6_rc" "$g6_log"
     fi
+fi
+
+# G7P: run the production containment regression suite
+g7_log="$LOG_DIR/g7_production_regression.log"
+if [[ ! -f "$REGRESSION_SOURCE" ]]; then
+    printf 'Missing regression source: %s\n' "$REGRESSION_SOURCE" > "$g7_log"
+    record_gate "G7P" "production containment regression suite" 2 "$g7_log"
+else
+    (
+        set +e
+        PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m unittest "$REGRESSION_SOURCE"
+        rc=$?
+        printf '\nEXIT_CODE=%s\n' "$rc"
+        exit "$rc"
+    ) > "$g7_log" 2>&1
+    g7_rc=$?
+    record_gate "G7P" "production containment regression suite" "$g7_rc" "$g7_log"
 fi
 
 # G8P: every validate_safe_path call in v3 must use authoritative_safe_bases;
