@@ -132,44 +132,94 @@ from pathlib import Path
 
 def check_file(content):
     tree = ast.parse(content, filename="<string>")
-    safe_calls = []
-    runtime_calls = []
     failures = []
-
+    
+    # 1. Enforce direct call safety & check for extra_safe_bases keywords
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        fn = node.func
-        name = fn.id if isinstance(fn, ast.Name) else (
-            fn.attr if isinstance(fn, ast.Attribute) else None
-        )
-        if name == "validate_safe_path":
-            keywords = {kw.arg for kw in node.keywords if kw.arg is not None}
-            safe_calls.append((node.lineno, sorted(keywords)))
-            if "authoritative_safe_bases" not in keywords:
-                failures.append(f"line {node.lineno}: missing authoritative_safe_bases")
-            if "extra_safe_bases" in keywords:
-                failures.append(f"line {node.lineno}: legacy extra_safe_bases present")
-        elif name == "validate_runtime_path":
-            runtime_calls.append(node.lineno)
+        if isinstance(node, ast.Call):
+            fn = node.func
+            name = fn.id if isinstance(fn, ast.Name) else (
+                fn.attr if isinstance(fn, ast.Attribute) else None
+            )
+            if name == "validate_safe_path":
+                keywords = {kw.arg for kw in node.keywords if kw.arg is not None}
+                if "authoritative_safe_bases" not in keywords:
+                    failures.append(f"line {node.lineno}: direct validate_safe_path call missing authoritative_safe_bases")
+                if "extra_safe_bases" in keywords:
+                    failures.append(f"line {node.lineno}: legacy extra_safe_bases present")
+            
+            for kw in node.keywords:
+                if kw.arg == "extra_safe_bases":
+                    failures.append(f"line {node.lineno}: banned keyword argument 'extra_safe_bases' used")
 
-    if len(safe_calls) != 5:
-        failures.append(f"expected exactly 5 validate_safe_path calls, found {len(safe_calls)}")
-    if len(runtime_calls) != 5:
-        failures.append(f"expected exactly 5 validate_runtime_path calls, found {len(runtime_calls)}")
-        
-    return failures, safe_calls, runtime_calls
+    # 2. Track assignments for sensitive variables
+    sensitive_targets = {
+        "dataset_path", "output_dir", "manifest_path", 
+        "validated_receipt", "validated_public_key", "validated_sig_path",
+        "validated_checkpoint_dir"
+    }
+    
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            name = None
+            if isinstance(target, ast.Name):
+                name = target.id
+            if name in sensitive_targets:
+                val = node.value
+                is_valid_call = False
+                if isinstance(val, ast.Call):
+                    val_fn = val.func
+                    val_name = val_fn.id if isinstance(val_fn, ast.Name) else (
+                        val_fn.attr if isinstance(val_fn, ast.Attribute) else None
+                    )
+                    if val_name in ("validate_runtime_path", "validate_safe_path", "local_validate"):
+                        is_valid_call = True
+                if not is_valid_call:
+                    failures.append(f"line {node.lineno}: sensitive variable '{name}' assigned value from non-validator call")
+                    
+    # 3. Verify local_validate definition safety (def local_validate must only call validate_safe_path)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "local_validate":
+            calls = []
+            for child in ast.walk(node):
+                if isinstance(child, ast.Call):
+                    fn = child.func
+                    name = fn.id if isinstance(fn, ast.Name) else (
+                        fn.attr if isinstance(fn, ast.Attribute) else None
+                    )
+                    if name == "validate_safe_path":
+                        calls.append(child)
+            if len(calls) != 1:
+                failures.append(f"line {node.lineno}: local_validate definition must call validate_safe_path exactly once")
+            else:
+                call_node = calls[0]
+                keywords = {kw.arg for kw in call_node.keywords if kw.arg is not None}
+                if "authoritative_safe_bases" not in keywords:
+                    failures.append(f"line {node.lineno}: local_validate's inner validate_safe_path call missing authoritative_safe_bases")
+            returns = [c for c in ast.walk(node) if isinstance(c, ast.Return)]
+            for r in returns:
+                if r.value is not None:
+                    is_valid_return = False
+                    if isinstance(r.value, ast.Call):
+                        fn = r.value.func
+                        name = fn.id if isinstance(fn, ast.Name) else (
+                            fn.attr if isinstance(fn, ast.Attribute) else None
+                        )
+                        if name == "validate_safe_path":
+                            is_valid_return = True
+                    if not is_valid_return:
+                        failures.append(f"line {r.lineno}: local_validate has unsafe return path")
+                        
+    return failures
 
 path = Path(sys.argv[1])
 content = path.read_text(encoding="utf-8")
 
 # 1. Run check on original script
-failures, safe_calls, runtime_calls = check_file(content)
-print(f"Original script: validate_safe_path calls: {len(safe_calls)}, validate_runtime_path calls: {len(runtime_calls)}")
-for line, keywords in safe_calls:
-    print(f"line {line} (validate_safe_path): {keywords}")
-for line in runtime_calls:
-    print(f"line {line} (validate_runtime_path)")
+failures = check_file(content)
+print(f"Original script AST failures: {len(failures)}")
 
 if failures:
     print("FAILURES ON ORIGINAL:")
@@ -186,7 +236,7 @@ if mutated == content:
     print("FAIL: self-mutation replace target not found")
     sys.exit(1)
 
-mutated_failures, _, _ = check_file(mutated)
+mutated_failures = check_file(mutated)
 if not mutated_failures:
     print("FAIL: mutated script passed AST gate but should have failed")
     sys.exit(1)

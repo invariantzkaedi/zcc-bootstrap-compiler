@@ -14,13 +14,15 @@ SECURITY NOTES (MANDATORY READING BEFORE EXECUTION):
 - Error messages redact sensitive path components where possible for production logging.
 """
 
+import os
+os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+
 import argparse
 import json
 import logging
 import sys
 import getpass
 import tempfile
-import os
 
 try:
     import omnicatch
@@ -40,7 +42,6 @@ import numbers
 from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone
-
 import torch
 from datasets import load_dataset
 from transformers import TrainerCallback, __version__ as TRANSFORMERS_VERSION
@@ -54,6 +55,25 @@ from zkaedi_security_utils import (
 )
 
 SAFE_BASE_DIR = get_safe_bases()[0]
+safe_base_stat = SAFE_BASE_DIR.stat()
+safe_base_identity = (safe_base_stat.st_dev, safe_base_stat.st_ino)
+
+def update_safe_base(new_base: Path) -> None:
+    global SAFE_BASE_DIR, safe_base_identity
+    SAFE_BASE_DIR = Path(new_base).resolve()
+    stat_val = SAFE_BASE_DIR.stat()
+    safe_base_identity = (stat_val.st_dev, stat_val.st_ino)
+
+def validate_runtime_path(path_val, *, must_exist: bool, description: str) -> Path:
+    curr_stat = SAFE_BASE_DIR.stat()
+    if (curr_stat.st_dev, curr_stat.st_ino) != safe_base_identity:
+        raise RuntimeError("Authoritative safe base identity changed during execution")
+    return validate_safe_path(
+        path_val,
+        must_exist=must_exist,
+        description=description,
+        authoritative_safe_bases=[SAFE_BASE_DIR],
+    )
 
 # Configure secure logging (no secrets, redact paths in prod)
 logging.basicConfig(
@@ -193,6 +213,209 @@ class DPOSTripwireCallback(TrainerCallback):
                             raise ValueError(f"Training aborted due to preference margin saturation: {margin_val:.4f}")
 
 
+def compute_preference_metrics(eval_preds) -> dict[str, Any]:
+    """Computes DPO exact win rate, win count, margin mean, and one-sided paired t-test for margin significance."""
+    import numpy as np
+    preds = eval_preds.predictions
+    
+    if isinstance(preds, (tuple, list)):
+        if len(preds) < 2:
+            return {}
+        chosen_rewards = np.asarray(preds[0]).reshape(-1)
+        rejected_rewards = np.asarray(preds[1]).reshape(-1)
+    else:
+        array = np.asarray(preds)
+        if array.ndim != 2:
+            return {}
+        if array.shape[1] == 2:
+            chosen_rewards = array[:, 0]
+            rejected_rewards = array[:, 1]
+        elif array.shape[0] == 2:
+            chosen_rewards = array[0]
+            rejected_rewards = array[1]
+        else:
+            return {}
+            
+    if chosen_rewards.size != rejected_rewards.size or chosen_rewards.size == 0:
+        return {}
+        
+    mask = np.isfinite(chosen_rewards) & np.isfinite(rejected_rewards)
+    chosen_rewards = chosen_rewards[mask]
+    rejected_rewards = rejected_rewards[mask]
+    
+    if chosen_rewards.size == 0:
+        return {}
+        
+    win_count = int(np.sum(chosen_rewards > rejected_rewards))
+    sample_count = int(len(chosen_rewards))
+    win_rate = float(win_count / sample_count)
+    
+    diffs = chosen_rewards - rejected_rewards
+    mean_diff = float(np.mean(diffs))
+    std_diff = float(np.std(diffs, ddof=1)) if len(diffs) > 1 else 1e-5
+    if std_diff == 0:
+        std_diff = 1e-5
+    
+    import math
+    t_stat = mean_diff / (std_diff / np.sqrt(sample_count))
+    
+    try:
+        from scipy import stats
+        margin_p_val = float(stats.t.sf(t_stat, df=max(1, sample_count - 1)))
+    except Exception:
+        margin_p_val = float(0.5 * (1.0 - math.erf(t_stat / math.sqrt(2.0))))
+        
+    return {
+        "preference_win_count": win_count,
+        "preference_sample_count": sample_count,
+        "held_out_win_rate": win_rate,
+        "preference_margin_mean": mean_diff,
+        "preference_margin_p_value": margin_p_val,
+    }
+
+
+class DPOValidationCheckpointCallback(TrainerCallback):
+    """Monitors DPO evaluation metrics, computes statistical significance gates, and tracks the best checkpoint."""
+    def __init__(self, output_dir: Path, eval_dataset, sign: bool = False, private_key: Optional[str] = None, password: Optional[str] = None):
+        self.output_dir = output_dir
+        self.eval_dataset = eval_dataset
+        self.sign = sign
+        self.private_key = private_key
+        self.password = password
+        self.best_eval_loss = float("inf")
+        self.best_win_rate = 0.0
+        self.best_checkpoint_step = -1
+        self.pending_valid_result = None
+
+    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+        if metrics is None:
+            return
+
+        eval_loss = metrics.get("eval_loss")
+        win_count = metrics.get("eval_preference_win_count")
+        sample_count = metrics.get("eval_preference_sample_count")
+        
+        if win_count is None or sample_count is None:
+            logger.error("[ZKAEDI SEC] Exact preference counts unavailable; statistical gate cannot run.")
+            return
+            
+        win_count = int(win_count)
+        sample_count = int(sample_count)
+        
+        if sample_count <= 0:
+            return
+            
+        if win_count < 0 or win_count > sample_count:
+            raise ValueError("Invalid preference win/sample counts")
+            
+        win_rate = win_count / sample_count
+            
+        import math
+        
+        # 1. Win rate test (one-sided exact binomial test)
+        try:
+            from scipy import stats
+            if hasattr(stats, "binomtest"):
+                result = stats.binomtest(win_count, sample_count, p=0.5, alternative="greater")
+                win_p_val = float(result.pvalue)
+                win_test_method = "one_sided_exact_binomial"
+            else:
+                win_p_val = float(stats.binom_test(win_count, sample_count, p=0.5, alternative="greater"))
+                win_test_method = "one_sided_exact_binomial"
+        except ImportError:
+            mean = 0.5 * sample_count
+            std = math.sqrt(0.25 * sample_count)
+            if std > 0:
+                z = (win_count - 0.5 - mean) / std
+                win_p_val = float(0.5 * (1.0 - math.erf(z / math.sqrt(2.0))))
+            else:
+                win_p_val = 1.0
+            win_test_method = "one_sided_binomial_normal_approximation"
+
+        margin_mean = metrics.get("eval_preference_margin_mean", 0.0)
+        margin_p_val = metrics.get("eval_preference_margin_p_value", 1.0)
+        
+        logger.info(f"[ZKAEDI SEC] DPO Validation Step {state.global_step}: eval_loss={eval_loss}, win_rate={win_rate:.4f} ({win_count}/{sample_count}), win_p_val={win_p_val:.4e} ({win_test_method}), margin_mean={margin_mean:.4f}, margin_p_val={margin_p_val:.4e}")
+
+        # Separate metric logging from eligible-checkpoint selection (fail-closed check)
+        statistically_valid = (
+            win_rate > 0.5
+            and win_p_val < 0.05
+            and eval_loss is not None
+            and math.isfinite(float(eval_loss))
+        )
+        
+        if not statistically_valid:
+            return
+            
+        if float(eval_loss) >= self.best_eval_loss:
+            return
+
+        self.best_eval_loss = float(eval_loss)
+        self.best_win_rate = win_rate
+        self.best_checkpoint_step = state.global_step
+        
+        self.pending_valid_result = {
+            "step": state.global_step,
+            "eval_loss": float(eval_loss),
+            "win_rate": float(win_rate),
+            "win_rate_test": {
+                "method": win_test_method,
+                "null_probability": 0.5,
+                "alternative": "greater",
+                "win_count": int(win_count),
+                "sample_count": int(sample_count),
+                "p_value": float(win_p_val)
+            },
+            "margin_test": {
+                "method": "one_sided_paired_t_test",
+                "mean_margin": float(margin_mean),
+                "p_value": float(margin_p_val)
+            },
+            "statistically_valid": True
+        }
+
+    def on_save(self, args, state, control, **kwargs):
+        if not hasattr(self, "pending_valid_result") or self.pending_valid_result is None:
+            return
+        if self.pending_valid_result["step"] != state.global_step:
+            return
+            
+        checkpoint_dir = Path(args.output_dir) / f"checkpoint-{state.global_step}"
+        if not checkpoint_dir.is_dir():
+            logger.warning(f"[ZKAEDI SEC] Expected checkpoint directory {checkpoint_dir} does not exist yet. Postponing metadata write.")
+            return
+            
+        from zkaedi_model_registry import get_model_hashes
+        try:
+            model_payload_sha256, files_dict = get_model_hashes(checkpoint_dir)
+        except Exception as e:
+            logger.error(f"[ZKAEDI SEC] Failed to hash saved checkpoint: {e}")
+            return
+            
+        best_meta = {
+            **self.pending_valid_result,
+            "checkpoint": checkpoint_dir.name,
+            "model_payload_sha256": model_payload_sha256,
+            "files": files_dict
+        }
+        
+        best_json_path = self.output_dir / "best_statistically_valid_checkpoint.json"
+        write_atomic_json(best_json_path, best_meta)
+        logger.info(f"[ZKAEDI SEC] Updated best statistically valid checkpoint metadata at step {state.global_step} bound to {checkpoint_dir.name}")
+        
+        if self.sign and self.private_key:
+            from zkaedi_model_registry import sign_registry
+            try:
+                sig = sign_registry(best_meta, self.private_key, password=self.password)
+                write_atomic_binary(best_json_path.with_suffix(".json.sig"), sig)
+                logger.info(f"[ZKAEDI SEC] Signed best checkpoint metadata: {best_json_path.with_suffix('.json.sig')}")
+            except Exception as e:
+                logger.error(f"Failed to sign best checkpoint metadata: {e}")
+                
+        self.pending_valid_result = None
+
+
 def format_dpo(sample):
     """Safe formatting - no exec, pure string ops."""
     sys_prompt = sample.get("system") or ""
@@ -222,6 +445,8 @@ def generate_dpo_attestation(
     attestation_id: Optional[str] = None,
     manifest_sha256: Optional[str] = None,
     determinism: Optional[Dict[str, bool]] = None,
+    split_manifest_path: Optional[Path] = None,
+    split_manifest_sha256: Optional[str] = None,
 ) -> None:
     """Generates a cryptographically signed DPO training attestation receipt."""
     import uuid
@@ -258,6 +483,10 @@ def generate_dpo_attestation(
             "sha256": ds_hash,
             "train_samples": num_train_samples,
             "eval_samples": num_eval_samples
+        },
+        "split_manifest": {
+            "path": get_relative_safe_path(split_manifest_path, safe_base_dir) if split_manifest_path else "unknown",
+            "sha256": split_manifest_sha256 or "unknown"
         },
         "base_model": {
             "identity": base_model,
@@ -311,19 +540,25 @@ def verify_release_receipt(receipt_path: Path, public_key_path: Path, safe_base:
     from zkaedi_model_registry import verify_registry_signature, get_model_hashes
     from zkaedi_security_utils import validate_safe_path
     
-    if safe_base:
-        auth_bases = [Path(safe_base).resolve()]
-    else:
-        from zkaedi_security_utils import get_safe_bases
-        auth_bases = get_safe_bases()
+    if safe_base is None:
+        raise ValueError("verify_release_receipt requires an explicit authoritative safe base")
+    
+    auth_bases = [Path(safe_base).resolve()]
+    def local_validate(p_val, *, must_exist: bool, description: str) -> Path:
+        return validate_safe_path(
+            p_val,
+            must_exist=must_exist,
+            description=description,
+            authoritative_safe_bases=auth_bases,
+        )
     
     # 1. Path Containment check for paths (SEC-17)
     # Validate receipt file, public key, and signature file against safe base
-    validated_receipt = validate_safe_path(str(receipt_path), must_exist=True, authoritative_safe_bases=auth_bases, description="receipt path")
-    validated_public_key = validate_safe_path(str(public_key_path), must_exist=True, authoritative_safe_bases=auth_bases, description="public key path")
+    validated_receipt = local_validate(str(receipt_path), must_exist=True, description="receipt path")
+    validated_public_key = local_validate(str(public_key_path), must_exist=True, description="public key path")
     
     sig_path = Path(str(validated_receipt) + ".sig")
-    validated_sig_path = validate_safe_path(str(sig_path), must_exist=True, authoritative_safe_bases=auth_bases, description="receipt signature path")
+    validated_sig_path = local_validate(str(sig_path), must_exist=True, description="receipt signature path")
     
     # Resolve and check safe_base explicitly if provided
     if safe_base:
@@ -358,7 +593,7 @@ def verify_release_receipt(receipt_path: Path, public_key_path: Path, safe_base:
         raise ValueError("Receipt artifact path escapes the release directory") from exc
         
     # Validate artifact directory against safe base
-    validated_checkpoint_dir = validate_safe_path(str(checkpoint_dir), must_exist=True, authoritative_safe_bases=auth_bases, description="artifact directory")
+    validated_checkpoint_dir = local_validate(str(checkpoint_dir), must_exist=True, description="artifact directory")
     
     if safe_base:
         trusted_base = Path(safe_base).resolve()
@@ -408,6 +643,8 @@ def main():
                         help="Execution mode: 'dev' for rapid prototyping (unsigned), 'release' for strict cryptographic verification.")
     parser.add_argument("--dataset", type=str, default="/mnt/h/agents/train_maxed_validated.parquet",
                         help="Path to local parquet DPO dataset (must be under safe base)")
+    parser.add_argument("--split-manifest", type=str, default="splits/dpo_v1_manifest.json",
+                        help="Path to local split manifest JSON file (must be under safe base)")
     parser.add_argument("--model-name", type=str, default="gpt2",
                         help="Base model ID or LOCAL PATH to verified model directory")
     parser.add_argument("--model-revision", type=str, default="main",
@@ -417,6 +654,18 @@ def main():
     parser.add_argument("--safe-base-dir", type=str, default="/mnt/h",
                         help="Root directory allowed for all filesystem operations (ZKAEDI policy)")
     parser.add_argument("--public-key", help="Path to Ed25519 public key for registry verification")
+    
+    # DPO Training Configuration CLI arguments
+    parser.add_argument("--max-steps", type=int, default=25, help="Maximum DPO training steps")
+    parser.add_argument("--learning-rate", type=float, default=2e-5, help="DPO learning rate")
+    parser.add_argument("--batch-size", type=int, default=4, help="DPO batch size per device")
+    parser.add_argument("--seed", type=int, default=3407, help="Random seed for reproducibility")
+    parser.add_argument("--save-steps", type=int, default=5, help="Step interval for checkpoint saving")
+    parser.add_argument("--checkpoint-limit", type=int, default=3, help="Max checkpoints to preserve")
+    parser.add_argument("--use-cpu", action="store_true", help="Force CPU use during DPO training")
+    parser.add_argument("--load-best-model", action="store_true", help="Load the best model at the end of training")
+    parser.add_argument("--metric-for-best-model", type=str, default="eval_loss", help="Metric to compare models")
+    parser.add_argument("--greater-is-better", type=str, choices=["true", "false"], default="false", help="Whether larger metric values are better")
     
     # Registration & signing arguments
     parser.add_argument("--sign", action="store_true", help="Sign DPO attestation and registry entries")
@@ -448,10 +697,29 @@ def main():
     if args.sign and not args.private_key:
         parser.error("--private-key is required when --sign is enabled")
     
+    # === DPO strategy compatibility validation ===
+    if args.load_best_model and args.save_steps <= 0:
+        parser.error("--save-steps must be positive when --load-best-model is enabled")
+
+    pwd = None
+    if args.password:
+        logger.warning("[ZKAEDI SEC] WARNING: Passing password via plaintext CLI arguments is deprecated and insecure. Use --prompt-password or environment-based key managers.")
+        pwd = args.password
+    elif args.prompt_password:
+        pwd = getpass.getpass("Enter private key passphrase: ")
+    
     attestation_key = args.private_key if args.sign else None
 
     # === SECURITY: Determinism Provenance Setup (F4) ===
-    import torch
+    import random
+    import numpy as np
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+
     det_enabled = False
     det_warn_only = False
     try:
@@ -468,26 +736,7 @@ def main():
         det_enabled = False
         det_warn_only = False
 
-    global SAFE_BASE_DIR
-    SAFE_BASE_DIR = Path(args.safe_base_dir).resolve()
-
-    # Capture the base's device and inode at startup
-    safe_base_stat = SAFE_BASE_DIR.stat()
-    safe_base_identity = (
-        safe_base_stat.st_dev,
-        safe_base_stat.st_ino,
-    )
-
-    def validate_runtime_path(path_val, *, must_exist: bool, description: str) -> Path:
-        curr_stat = SAFE_BASE_DIR.stat()
-        if (curr_stat.st_dev, curr_stat.st_ino) != safe_base_identity:
-            raise RuntimeError("Authoritative safe base identity changed during execution")
-        return validate_safe_path(
-            path_val,
-            must_exist=must_exist,
-            description=description,
-            authoritative_safe_bases=[SAFE_BASE_DIR],
-        )
+    update_safe_base(args.safe_base_dir)
 
     dataset_path_str = args.dataset.replace("\\", "/")
     output_path_str = args.output_dir.replace("\\", "/")
@@ -549,9 +798,14 @@ def main():
         sys.exit(1)
 
     # Manifest load
-    manifest_path = Path("splits/dpo_v1_manifest.json")
-    if not manifest_path.is_absolute():
-        manifest_path = (Path.cwd() / manifest_path).resolve()
+    try:
+        manifest_path = validate_runtime_path(args.split_manifest, must_exist=True, description="dataset split manifest")
+    except (ValueError, FileNotFoundError, RuntimeError) as e:
+        logger.error(f"SECURITY BLOCK: {e}")
+        sys.exit(1)
+
+    from zkaedi_model_registry import get_file_sha256
+    split_manifest_sha256 = get_file_sha256(manifest_path)
 
     logger.info("[ZKAEDI SEC] Loading manifest...")
     try:
@@ -619,24 +873,30 @@ def main():
     logger.info("[ZKAEDI SEC] Constructing DPOConfig (AdamW + hardened defaults)...")
     training_args = DPOConfig(
         output_dir=str(output_dir),
-        per_device_train_batch_size=4,
+        per_device_train_batch_size=args.batch_size,
         gradient_accumulation_steps=1,
         warmup_steps=5,
-        max_steps=25,
-        learning_rate=2e-5,
+        max_steps=args.max_steps,
+        learning_rate=args.learning_rate,
         fp16=False,
         bf16=False,
         logging_steps=1,
         weight_decay=0.01,
         lr_scheduler_type="linear",
-        seed=3407,
+        seed=args.seed,
         gradient_checkpointing=False,
         remove_unused_columns=False,
         report_to="none",
         optim="adamw_torch",
-        use_cpu=True,
+        use_cpu=args.use_cpu,
         eval_strategy="steps",
-        eval_steps=5,
+        eval_steps=args.save_steps,
+        save_strategy="steps",
+        save_steps=args.save_steps,
+        save_total_limit=args.checkpoint_limit,
+        load_best_model_at_end=args.load_best_model,
+        metric_for_best_model=args.metric_for_best_model,
+        greater_is_better=(args.greater_is_better.lower() == "true"),
     )
 
     trainer = DPOTrainer(
@@ -646,11 +906,21 @@ def main():
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         optimizers=(None, None),
-        args=training_args
+        args=training_args,
+        compute_metrics=compute_preference_metrics
     )
 
     # Register Loss stability tripwire
     trainer.add_callback(DPOSTripwireCallback())
+    # Register DPO Validation statistical significance callback
+    val_callback = DPOValidationCheckpointCallback(
+        output_dir=output_dir,
+        eval_dataset=eval_dataset,
+        sign=args.sign,
+        private_key=attestation_key,
+        password=pwd
+    )
+    trainer.add_callback(val_callback)
 
     logger.info("[ZKAEDI SEC] Starting DPO Training (AdamW CPU, scope-compliant)...")
     try:
@@ -700,6 +970,10 @@ def main():
             "path": get_relative_safe_path(dataset_path, SAFE_BASE_DIR),
             "logical_name": dataset_path.stem
         },
+        "split_manifest": {
+            "path": get_relative_safe_path(manifest_path, SAFE_BASE_DIR),
+            "sha256": split_manifest_sha256
+        },
         "train_samples": len(train_dataset),
         "eval_samples": len(eval_dataset),
         "model_payload_sha256": model_payload_sha256,
@@ -720,14 +994,6 @@ def main():
     from zkaedi_model_registry import get_file_sha256
     manifest_sha256 = get_file_sha256(manifest_file)
 
-    # Password extraction
-    pwd = None
-    if args.password:
-        logger.warning("[ZKAEDI SEC] WARNING: Passing password via plaintext CLI arguments is deprecated and insecure. Use --prompt-password or environment-based key managers.")
-        pwd = args.password
-    elif args.prompt_password:
-        pwd = getpass.getpass("Enter private key passphrase: ")
-
     # Extract training hyperparameters
     config_dict = {
         "learning_rate": training_args.learning_rate,
@@ -739,7 +1005,8 @@ def main():
         "gradient_accumulation_steps": training_args.gradient_accumulation_steps,
         "optim": training_args.optim,
         "fp16": training_args.fp16,
-        "bf16": training_args.bf16
+        "bf16": training_args.bf16,
+        "split_manifest_sha256": split_manifest_sha256
     }
 
     # Generate and sign attestation
@@ -762,7 +1029,9 @@ def main():
         determinism={
             "enabled": det_enabled,
             "warn_only": det_warn_only
-        }
+        },
+        split_manifest_path=manifest_path,
+        split_manifest_sha256=split_manifest_sha256
     )
 
     # Compute complete final release-bundle digest of checkpoint directory
@@ -775,6 +1044,7 @@ def main():
         "bundle_sha256": final_bundle_hash,
         "files": final_bundle_files,
         "attestation_id": attestation_id,
+        "split_manifest_sha256": split_manifest_sha256,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
     receipt_path = output_dir / "release_receipt.json"
