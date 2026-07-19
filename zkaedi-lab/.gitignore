@@ -4,6 +4,7 @@ logs/*.log
 __pycache__/
 receipts/append-only/mutation_trajectory.json
 receipts/append-only/execution_cache.json
+receipts/append-only/pareto_archive.json
 candidates/sha256/*
 !candidates/sha256/ba13cba5e35479cde08d81b84671a4849062962d32284ab8f8715154f9275b8e.json
 !candidates/sha256/06d01555257bb6305bee1ffb77fa1453db0229416f646ca426d8d619af43470a.json
