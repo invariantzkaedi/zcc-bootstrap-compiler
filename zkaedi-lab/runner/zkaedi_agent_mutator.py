@@ -306,12 +306,9 @@ def main():
         # Config ID for caching
         config_id = compute_config_id(candidate)
         
-        # Materialize candidate
         cand_dir = os.path.join(LAB_DIR, "candidates", "sha256")
-        os.makedirs(cand_dir, exist_ok=True)
         cand_path = os.path.join(cand_dir, cid.split(":")[1] + ".json")
-        with open(cand_path, "w") as fh:
-            json.dump(candidate, fh, sort_keys=True, indent=2)
+        atomic_write_json(cand_path, candidate)
             
         # Sandbox execution lookup with persistent disk cache
         cache_entry = evaluated_cache.get(config_id)
