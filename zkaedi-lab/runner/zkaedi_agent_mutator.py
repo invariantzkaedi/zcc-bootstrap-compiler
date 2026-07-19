@@ -60,6 +60,12 @@ def atomic_write_json(path: str, payload) -> None:
             fh.flush()
             os.fsync(fh.fileno())
         os.replace(tmp_path, path)
+        if hasattr(os, "O_DIRECTORY"):
+            dir_fd = os.open(os.path.dirname(path), os.O_DIRECTORY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
     finally:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
