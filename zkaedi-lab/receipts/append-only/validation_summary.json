@@ -1,0 +1,17 @@
+{
+  "all_passed": true,
+  "cache_entries_count": 3,
+  "crash_recovery_passed": true,
+  "fuzz_validation_passed": true,
+  "median_runtime_ms": 1515.8082859998103,
+  "pareto_frontier_size": 1,
+  "pareto_invariants_passed": true,
+  "random_seed": 42,
+  "seeds_tested": 10,
+  "trajectory_margin_stats": {
+    "max": -1.01348876953125,
+    "mean": -1.01348876953125,
+    "min": -1.01348876953125,
+    "std": 0.0
+  }
+}
