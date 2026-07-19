@@ -44,6 +44,7 @@ class TrainingReceipt:
 
 @dataclass(frozen=True, slots=True)
 class LedgerEnvelope:
+    schema_version: int
     ledger_id: str
     sequence: int
     previous_hash: Optional[str]
@@ -137,6 +138,7 @@ def thaw(val: Any) -> Any:
 
 def serialize_envelope(envelope: LedgerEnvelope) -> bytes:
     envelope_dict = {
+        "schema_version": envelope.schema_version,
         "ledger_id": envelope.ledger_id,
         "sequence": envelope.sequence,
         "previous_hash": envelope.previous_hash,
@@ -214,6 +216,7 @@ def build_ledger_envelope(
     payload_hash = content_hash("zkaedi.ledger-payload", canonical_payload)
     
     header = {
+        "schema_version": 1,
         "ledger_id": ledger_id,
         "sequence": sequence,
         "previous_hash": previous_hash,
@@ -223,6 +226,7 @@ def build_ledger_envelope(
     entry_hash = content_hash("zkaedi.ledger-header", header)
     
     return LedgerEnvelope(
+        schema_version=1,
         ledger_id=ledger_id,
         sequence=sequence,
         previous_hash=previous_hash,
@@ -246,6 +250,13 @@ def verify_records_sequence(records: list[dict], expected_ledger_id: str) -> tup
         
         if not isinstance(rec, dict):
             failures.append(f"Record index {idx} is not a JSON object")
+            previous_entry_hash = None
+            continue
+
+        schema_version = rec.get("schema_version")
+        if schema_version != 1:
+            failures.append(f"Record index {idx} invalid schema_version: {schema_version} (expected: 1)")
+            record_valid = False
             previous_entry_hash = None
             continue
 
@@ -325,6 +336,7 @@ def verify_records_sequence(records: list[dict], expected_ledger_id: str) -> tup
             continue
             
         header = {
+            "schema_version": 1,
             "ledger_id": expected_ledger_id,
             "sequence": seq,
             "previous_hash": prev_hash,
@@ -591,6 +603,8 @@ def sign_ledger_anchor(
     private_key,  # ed25519.Ed25519PrivateKey
     anchored_at_unix: Optional[float] = None,
 ) -> LedgerAnchor:
+    if not isinstance(verification, LedgerVerification):
+        raise TypeError("verification must be a LedgerVerification")
     if not verification.valid or verification.head_hash is None or verification.records_verified <= 0:
         raise ValueError("cannot anchor an invalid or empty ledger")
         
@@ -647,6 +661,9 @@ def evaluate_anchor_policy(
     max_age: float = MAX_ANCHOR_AGE,
     now: Optional[float] = None,
 ) -> bool:
+    if not isinstance(anchor, LedgerAnchor):
+        return False
+
     if (
         isinstance(max_age, bool)
         or not isinstance(max_age, (int, float))
@@ -685,6 +702,8 @@ def verify_ledger_anchor(
 ) -> bool:
     # Fail-closed inputs validation guards
     if not isinstance(anchor, LedgerAnchor):
+        return False
+    if not isinstance(verification, LedgerVerification):
         return False
     if not isinstance(trusted_keys, Mapping):
         return False
@@ -734,7 +753,11 @@ def verify_ledger_anchor(
         return False
 
     # 3. Resolve key against trusted keys registry
-    signer_entry = trusted_keys.get(anchor.signer_key_id)
+    try:
+        signer_entry = trusted_keys.get(anchor.signer_key_id)
+    except Exception:
+        return False
+
     if signer_entry is None:
         return False
 
@@ -771,7 +794,7 @@ def verify_ledger_anchor(
     t = anchor.anchored_at_unix
     if t < valid_from:
         return False
-    if valid_until is not None and t > valid_until:
+    if valid_until is not None and t >= valid_until:
         return False
     if revoked_at is not None and t >= revoked_at:
         return False

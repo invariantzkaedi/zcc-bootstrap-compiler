@@ -10,6 +10,7 @@ from dataclasses import dataclass, asdict
 try:
     import fcntl
     HAS_FCNTL = True
+    HAS_MSVCRT = False
 except ImportError:
     HAS_FCNTL = False
     try:
