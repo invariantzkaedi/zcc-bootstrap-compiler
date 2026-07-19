@@ -119,6 +119,40 @@ def unlock_file(fh) -> None:
         fh.seek(0)
         msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
 
+def read_replay_prefix(content: bytes) -> tuple[list[dict[str, Any]], int]:
+    records: list[dict[str, Any]] = []
+    valid_end = 0
+    cursor = 0
+
+    for raw_line in content.splitlines(keepends=True):
+        cursor += len(raw_line)
+
+        if not raw_line.strip():
+            valid_end = cursor
+            continue
+
+        is_final = (cursor == len(content))
+        unterminated = not raw_line.endswith(b"\n")
+
+        try:
+            decoded = json.loads(raw_line.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            if is_final and unterminated:
+                return records, valid_end
+            raise ValueError(
+                f"replay contains durable corruption near record {len(records)}"
+            ) from exc
+
+        if not isinstance(decoded, dict):
+            raise ValueError(
+                f"replay record {len(records)} must be a JSON object"
+            )
+
+        records.append(decoded)
+        valid_end = cursor
+
+    return records, valid_end
+
 def append_jsonl_durable(path: str, record: dict[str, Any]) -> None:
     abspath = os.path.abspath(path)
     directory = os.path.dirname(abspath)
@@ -126,9 +160,20 @@ def append_jsonl_durable(path: str, record: dict[str, Any]) -> None:
         os.makedirs(directory, exist_ok=True)
         
     serialized = canonical_json_bytes(record) + b"\n"
-    with open(abspath, "ab") as fh:
+    with open(abspath, "a+b") as fh:
         lock_file_ex(fh)
         try:
+            fh.seek(0)
+            existing = fh.read()
+            _, valid_end = read_replay_prefix(existing)
+            
+            if valid_end < len(existing):
+                fh.seek(valid_end)
+                fh.truncate()
+                fh.flush()
+                os.fsync(fh.fileno())
+                
+            fh.seek(0, os.SEEK_END)
             fh.write(serialized)
             fh.flush()
             os.fsync(fh.fileno())
@@ -160,38 +205,6 @@ def record_online_outcome(path: str, outcome: OnlineOutcome) -> None:
     )
     append_jsonl_durable(path, payload)
 
-def parse_replay_jsonl(content: bytes) -> tuple[list[dict[str, Any]], bool]:
-    records: list[dict[str, Any]] = []
-    skipped_torn_tail = False
-    cursor = 0
-
-    for raw_line in content.splitlines(keepends=True):
-        cursor += len(raw_line)
-
-        if not raw_line.strip():
-            continue
-
-        is_final = (cursor == len(content))
-        unterminated = not raw_line.endswith(b"\n")
-
-        try:
-            text = raw_line.decode("utf-8")
-            record = json.loads(text)
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            if is_final and unterminated:
-                skipped_torn_tail = True
-                break
-            raise
-
-        if not isinstance(record, dict):
-            raise ValueError(
-                f"replay record {len(records)} must be a JSON object"
-            )
-
-        records.append(record)
-
-    return records, skipped_torn_tail
-
 def load_unique_records(path: str) -> ReplayLoadResult:
     abspath = os.path.abspath(path)
     if not os.path.exists(abspath):
@@ -213,7 +226,8 @@ def load_unique_records(path: str) -> ReplayLoadResult:
             unlock_file(fh)
 
     try:
-        records, skipped_torn = parse_replay_jsonl(content_bytes)
+        records, valid_end = read_replay_prefix(content_bytes)
+        skipped_torn = (valid_end < len(content_bytes))
     except Exception as exc:
         raise ValueError(f"Failed to parse replay JSONL: {exc}") from exc
 
@@ -227,6 +241,9 @@ def load_unique_records(path: str) -> ReplayLoadResult:
             synthetic_key = f"legacy:{index}"
             unique[synthetic_key] = record
             continue
+
+        if not isinstance(dedup_hash, str):
+            raise ValueError(f"record {index} dedup_hash must be a string")
 
         # Re-verify the dedup hash to protect against manipulation
         try:

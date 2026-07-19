@@ -56,6 +56,45 @@ def crash_writer(path: str) -> None:
         # Exit abruptly while holding lock (lock should be auto-released by OS)
         os._exit(17)
 
+def replay_worker(path, count, results_queue):
+    from lineage.online_types import record_online_outcome, OnlineOutcome
+    successes = 0
+    for i in range(count):
+        try:
+            outcome = OnlineOutcome(
+                config_id=f"config-{os.getpid()}-{i}",
+                candidate_id=f"cand-{os.getpid()}-{i}",
+                prompt=f"prompt-{os.getpid()}-{i}",
+                completion=f"completion-{os.getpid()}-{i}",
+                sandbox_passed=True,
+                safety_passed=True,
+                verification_score=1.0,
+                runtime_ms=50.0,
+                runner_exit=0,
+                verdict="pass",
+                failure_class=None,
+                harness_version="1.0",
+                evaluator_version="1.0",
+                policy_checkpoint="ckpt",
+                sandbox_version="1.0"
+            )
+            record_online_outcome(path, outcome)
+            successes += 1
+            time.sleep(0.005)
+        except Exception as exc:
+            results_queue.put((False, f"PID {os.getpid()} failed at index {i}: {exc}"))
+            return
+    results_queue.put((True, successes))
+
+def crash_replay_writer(path: str) -> None:
+    with open(path, "a+b") as fh:
+        lock_file_ex(fh)
+        fh.seek(0, os.SEEK_END)
+        fh.write(b'{"prompt":"crash","completion":"\xe2')
+        fh.flush()
+        os.fsync(fh.fileno())
+        os._exit(18)
+
 class TestLedgerSecurity(unittest.TestCase):
     def setUp(self):
         # Generate an Ed25519 key pair for tests
@@ -692,6 +731,230 @@ class TestLedgerSecurity(unittest.TestCase):
             self.assertEqual(len(res.records), 1)
             self.assertTrue(res.skipped_torn_tail)
             self.assertTrue(res.unterminated_tail)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_replay_append_repairs_torn_tail(self):
+        from lineage.online_types import load_unique_records, record_online_outcome, OnlineOutcome
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            first_outcome = OnlineOutcome(
+                config_id="config-1",
+                candidate_id="cand-1",
+                prompt="hello",
+                completion="world",
+                sandbox_passed=True,
+                safety_passed=True,
+                verification_score=1.0,
+                runtime_ms=120.0,
+                runner_exit=0,
+                verdict="pass",
+                failure_class=None,
+                harness_version="1.0",
+                evaluator_version="1.0",
+                policy_checkpoint="ckpt",
+                sandbox_version="1.0"
+            )
+            record_online_outcome(path, first_outcome)
+
+            # Manually write a torn tail
+            with open(path, "ab") as fh:
+                fh.write(b'{"prompt":"broken","completion":"\xe2')
+
+            second_outcome = OnlineOutcome(
+                config_id="config-2",
+                candidate_id="cand-2",
+                prompt="hello-2",
+                completion="world-2",
+                sandbox_passed=True,
+                safety_passed=True,
+                verification_score=1.0,
+                runtime_ms=120.0,
+                runner_exit=0,
+                verdict="pass",
+                failure_class=None,
+                harness_version="1.0",
+                evaluator_version="1.0",
+                policy_checkpoint="ckpt",
+                sandbox_version="1.0"
+            )
+            record_online_outcome(path, second_outcome)
+
+            result = load_unique_records(path)
+            self.assertEqual(len(result.records), 2)
+            self.assertFalse(result.skipped_torn_tail)
+            self.assertFalse(result.unterminated_tail)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_newline_terminated_malformed_replay_data_rejected(self):
+        from lineage.online_types import load_unique_records, record_online_outcome, OnlineOutcome
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            first_outcome = OnlineOutcome(
+                config_id="config-1",
+                candidate_id="cand-1",
+                prompt="hello",
+                completion="world",
+                sandbox_passed=True,
+                safety_passed=True,
+                verification_score=1.0,
+                runtime_ms=120.0,
+                runner_exit=0,
+                verdict="pass",
+                failure_class=None,
+                harness_version="1.0",
+                evaluator_version="1.0",
+                policy_checkpoint="ckpt",
+                sandbox_version="1.0"
+            )
+            record_online_outcome(path, first_outcome)
+
+            # Write newline-terminated malformed JSON data (not a torn tail since it has \n)
+            with open(path, "ab") as fh:
+                fh.write(b'{"prompt":"broken","completion":\n')
+
+            # Verification of loading must raise ValueError due to durable corruption
+            with self.assertRaises(ValueError):
+                load_unique_records(path)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_malformed_dedup_hash_fails_value_error(self):
+        from lineage.online_types import load_unique_records
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            # Write a record containing an invalid dedup_hash type (integer)
+            with open(path, "wb") as fh:
+                fh.write(b'{"prompt":"hello","completion":"world","harness_version":"1.0","evaluator_version":"1.0","policy_checkpoint":"ckpt","sandbox_version":"1.0","dedup_hash":123}\n')
+                
+            with self.assertRaises(ValueError) as ctx:
+                load_unique_records(path)
+            self.assertIn("dedup_hash must be a string", str(ctx.exception))
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_killed_replay_writer_releases_lock(self):
+        from lineage.online_types import load_unique_records, record_online_outcome, OnlineOutcome
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            # Append genesis outcome
+            outcome = OnlineOutcome(
+                config_id="config-1",
+                candidate_id="cand-1",
+                prompt="hello",
+                completion="world",
+                sandbox_passed=True,
+                safety_passed=True,
+                verification_score=1.0,
+                runtime_ms=120.0,
+                runner_exit=0,
+                verdict="pass",
+                failure_class=None,
+                harness_version="1.0",
+                evaluator_version="1.0",
+                policy_checkpoint="ckpt",
+                sandbox_version="1.0"
+            )
+            record_online_outcome(path, outcome)
+            
+            # Spawn a process that gets exclusive lock, appends partial, and exits abruptly
+            ctx = multiprocessing.get_context("spawn")
+            p = ctx.Process(target=crash_replay_writer, args=(path,))
+            p.start()
+            p.join(timeout=10)
+            self.assertEqual(p.exitcode, 18)
+            
+            # Append next outcome should succeed and repair the crash tail
+            outcome2 = OnlineOutcome(
+                config_id="config-2",
+                candidate_id="cand-2",
+                prompt="hello-2",
+                completion="world-2",
+                sandbox_passed=True,
+                safety_passed=True,
+                verification_score=1.0,
+                runtime_ms=120.0,
+                runner_exit=0,
+                verdict="pass",
+                failure_class=None,
+                harness_version="1.0",
+                evaluator_version="1.0",
+                policy_checkpoint="ckpt",
+                sandbox_version="1.0"
+            )
+            record_online_outcome(path, outcome2)
+            
+            res = load_unique_records(path)
+            self.assertEqual(len(res.records), 2)
+            self.assertFalse(res.skipped_torn_tail)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_concurrent_replay_writers(self):
+        from lineage.online_types import load_unique_records, record_online_outcome, OnlineOutcome
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            # Genesis outcome
+            outcome = OnlineOutcome(
+                config_id="config-1",
+                candidate_id="cand-1",
+                prompt="hello",
+                completion="world",
+                sandbox_passed=True,
+                safety_passed=True,
+                verification_score=1.0,
+                runtime_ms=120.0,
+                runner_exit=0,
+                verdict="pass",
+                failure_class=None,
+                harness_version="1.0",
+                evaluator_version="1.0",
+                policy_checkpoint="ckpt",
+                sandbox_version="1.0"
+            )
+            record_online_outcome(path, outcome)
+            
+            workers = 4
+            appends_per_worker = 15
+            ctx = multiprocessing.get_context("spawn")
+            queue = ctx.Queue()
+            processes = []
+            
+            for _ in range(workers):
+                p = ctx.Process(
+                    target=replay_worker,
+                    args=(path, appends_per_worker, queue)
+                )
+                processes.append(p)
+                p.start()
+                
+            for p in processes:
+                p.join(timeout=30)
+                self.assertFalse(p.is_alive())
+                self.assertEqual(p.exitcode, 0)
+                
+            results = [
+                queue.get(timeout=10)
+                for _ in range(workers)
+            ]
+            self.assertEqual(len(results), workers)
+            for ok, val in results:
+                self.assertTrue(ok, f"Worker failed: {val}")
+                self.assertEqual(val, appends_per_worker)
+                
+            res = load_unique_records(path)
+            self.assertEqual(len(res.records), 1 + workers * appends_per_worker)
         finally:
             if os.path.exists(path):
                 os.unlink(path)
