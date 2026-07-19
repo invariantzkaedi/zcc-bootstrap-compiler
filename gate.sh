@@ -89,7 +89,16 @@ write_provenance_jsonl() {
     local run_id="${13}"
     local argv_str="${14}"
     
-    echo "{\"schema_version\":\"1.0\",\"run_id\":\"$run_id\",\"stage\":$stage,\"compiler_path\":\"$compiler_path\",\"compiler_sha256_before\":\"$comp_sha_before\",\"compiler_sha256_after\":\"$comp_sha_after\",\"source_sha256\":\"$src_sha\",\"argv\":$argv_str,\"environment\":{\"LC_ALL\":\"C\",\"TZ\":\"UTC\",\"SOURCE_DATE_EPOCH\":\"1700000000\"},\"target\":\"x86-64-pc-linux-gnu\",\"start_time_ns\":$start_ns,\"end_time_ns\":$end_ns,\"exit_code\":$exit_code,\"assembly_sha256\":\"$asm_sha\",\"object_sha256\":\"$obj_sha\",\"binary_sha256\":\"$bin_sha\"}" >> "$out_path"
+    local prev_hash="null"
+    if [ -f "$out_path" ] && [ -s "$out_path" ]; then
+        local last_line
+        last_line=$(tail -n 1 "$out_path")
+        local calc_sha
+        calc_sha=$(echo -n "$last_line" | sha256sum | cut -d' ' -f1)
+        prev_hash="\"$calc_sha\""
+    fi
+    
+    echo "{\"schema_version\":\"1.0\",\"run_id\":\"$run_id\",\"stage\":$stage,\"previous_hash\":$prev_hash,\"compiler_path\":\"$compiler_path\",\"compiler_sha256_before\":\"$comp_sha_before\",\"compiler_sha256_after\":\"$comp_sha_after\",\"source_sha256\":\"$src_sha\",\"argv\":$argv_str,\"environment\":{\"LC_ALL\":\"C\",\"TZ\":\"UTC\",\"SOURCE_DATE_EPOCH\":\"1700000000\"},\"target\":\"x86-64-pc-linux-gnu\",\"start_time_ns\":$start_ns,\"end_time_ns\":$end_ns,\"exit_code\":$exit_code,\"assembly_sha256\":\"$asm_sha\",\"object_sha256\":\"$obj_sha\",\"binary_sha256\":\"$bin_sha\"}" >> "$out_path"
 }
 
 # Python schema validator
@@ -110,7 +119,7 @@ except ImportError:
         with open('$ledger_path') as f:
             for line in f:
                 data = json.loads(line.strip())
-                for key in ['schema_version', 'run_id', 'stage', 'compiler_path', 'compiler_sha256_before', 'compiler_sha256_after', 'source_sha256', 'argv', 'environment', 'target', 'start_time_ns', 'end_time_ns', 'exit_code', 'assembly_sha256', 'object_sha256', 'binary_sha256']:
+                for key in ['schema_version', 'run_id', 'stage', 'previous_hash', 'compiler_path', 'compiler_sha256_before', 'compiler_sha256_after', 'source_sha256', 'argv', 'environment', 'target', 'start_time_ns', 'end_time_ns', 'exit_code', 'assembly_sha256', 'object_sha256', 'binary_sha256']:
                     if key not in data:
                         sys.exit($EXIT_SCHEMA_FAIL)
         sys.exit(0)
@@ -139,6 +148,7 @@ validate_lineage() {
     python3 -c "
 import json
 import sys
+import hashlib
 
 ledger_path = '$ledger_path'
 expected_run_id = '$run_id'
@@ -146,17 +156,38 @@ stage2_bin_sha = None
 stage3_compiler_sha = None
 
 try:
+    records = []
     with open(ledger_path) as f:
         for line in f:
-            data = json.loads(line.strip())
-            if data.get('run_id') == expected_run_id:
-                if data.get('stage') == 2:
-                    stage2_bin_sha = data.get('binary_sha256')
-                elif data.get('stage') == 3:
-                    stage3_compiler_sha = data.get('compiler_sha256_before')
+            line_str = line.strip()
+            if not line_str:
+                continue
+            records.append((line_str, json.loads(line_str)))
 except Exception as e:
     print(f'Lineage read failure: {e}', file=sys.stderr)
     sys.exit($EXIT_LINEAGE_FAIL)
+
+# Verify cryptographic chaining
+for idx, (raw_line, data) in enumerate(records):
+    if idx == 0:
+        if data.get('previous_hash') is not None:
+            print('FAIL: First record must have null previous_hash.', file=sys.stderr)
+            sys.exit($EXIT_LINEAGE_FAIL)
+    else:
+        prev_raw = records[idx - 1][0]
+        expected_prev_hash = hashlib.sha256(prev_raw.encode('utf-8')).hexdigest()
+        actual_prev_hash = data.get('previous_hash')
+        if actual_prev_hash != expected_prev_hash:
+            print(f'FAIL: Cryptographic lineage break at index {idx}. expected {expected_prev_hash}, got {actual_prev_hash}', file=sys.stderr)
+            sys.exit($EXIT_LINEAGE_FAIL)
+
+# Check run ID and stages
+for _, data in records:
+    if data.get('run_id') == expected_run_id:
+        if data.get('stage') == 2:
+            stage2_bin_sha = data.get('binary_sha256')
+        elif data.get('stage') == 3:
+            stage3_compiler_sha = data.get('compiler_sha256_before')
 
 if not stage2_bin_sha or not stage3_compiler_sha:
     print('FAIL: Missing lineage ledger records matching current run_id.', file=sys.stderr)

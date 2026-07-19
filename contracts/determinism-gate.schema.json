@@ -6,6 +6,12 @@
     "schema_version": { "type": "string" },
     "run_id": { "type": "string" },
     "stage": { "type": "integer", "enum": [2, 3] },
+    "previous_hash": {
+      "anyOf": [
+        { "type": "null" },
+        { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      ]
+    },
     "compiler_path": { "type": "string" },
     "compiler_sha256_before": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "compiler_sha256_after": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
@@ -35,6 +41,7 @@
     "schema_version",
     "run_id",
     "stage",
+    "previous_hash",
     "compiler_path",
     "compiler_sha256_before",
     "compiler_sha256_after",
