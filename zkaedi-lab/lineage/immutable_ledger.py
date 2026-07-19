@@ -3,7 +3,7 @@ import hashlib
 import time
 from typing import Optional, Any
 from dataclasses import dataclass, asdict
-from online_types import append_jsonl_durable
+from online_types import append_jsonl_durable, canonical_json_bytes
 
 @dataclass(frozen=True)
 class TrainingReceipt:
@@ -20,7 +20,15 @@ class TrainingReceipt:
     heldout_delta: float
     promoted: bool
     rollback_target: Optional[str]
-    created_at: float
+
+@dataclass(frozen=True)
+class LedgerEnvelope:
+    sequence: int
+    previous_hash: Optional[str]
+    payload: dict[str, Any]
+    payload_hash: str
+    entry_hash: str
+    recorded_at_unix: float
 
 @dataclass(frozen=True)
 class ArtifactNode:
@@ -30,23 +38,35 @@ class ArtifactNode:
     created_at: float
     metadata_hash: str
 
-def compute_experiment_id(
-    replay_buffer_hash: str,
-    parent_checkpoint: str,
-    trainer_version: str,
-    sandbox_version: str,
-    validation_hash: str,
-) -> str:
-    basis = f"{replay_buffer_hash}|{parent_checkpoint}|{trainer_version}|{sandbox_version}|{validation_hash}"
-    return "sha256:" + hashlib.sha256(basis.encode()).hexdigest()
+def compute_experiment_id(manifest: dict[str, Any]) -> str:
+    # Deterministic content hash of experiment manifest parameters
+    manifest_bytes = canonical_json_bytes(manifest)
+    return "sha256:" + hashlib.sha256(manifest_bytes).hexdigest()
 
-def record_training_receipt(path: str, receipt: TrainingReceipt) -> str:
-    payload = asdict(receipt)
-    append_jsonl_durable(path, payload)
+def build_ledger_envelope(
+    sequence: int,
+    previous_hash: Optional[str],
+    payload: dict[str, Any]
+) -> LedgerEnvelope:
+    payload_hash = "sha256:" + hashlib.sha256(canonical_json_bytes(payload)).hexdigest()
     
-    # Return hash-address of the receipt
-    receipt_bytes = json.dumps(payload, sort_keys=True).encode()
-    return "sha256:" + hashlib.sha256(receipt_bytes).hexdigest()
+    # Compute chaining hash: previous_hash || sequence || payload_hash
+    prev_str = previous_hash if previous_hash else "genesis"
+    chain_basis = f"{prev_str}|{sequence}|{payload_hash}"
+    entry_hash = "sha256:" + hashlib.sha256(chain_basis.encode()).hexdigest()
+    
+    return LedgerEnvelope(
+        sequence=sequence,
+        previous_hash=previous_hash,
+        payload=payload,
+        payload_hash=payload_hash,
+        entry_hash=entry_hash,
+        recorded_at_unix=time.time()
+    )
+
+def record_ledger_envelope(path: str, envelope: LedgerEnvelope) -> None:
+    payload = asdict(envelope)
+    append_jsonl_durable(path, payload)
 
 def generate_promotion_certificate(
     checkpoint: str,
@@ -59,11 +79,9 @@ def generate_promotion_certificate(
         "checkpoint": checkpoint,
         "validation_hash": validation_hash,
         "replay_hash": replay_hash,
-        "policy_kl": policy_kl,
-        "timestamp_unix": time.time()
+        "policy_kl": policy_kl
     }
-    cert_bytes = json.dumps(cert, sort_keys=True).encode()
-    cert["signature"] = "sha256:" + hashlib.sha256(cert_bytes).hexdigest()
+    cert["content_hash"] = "sha256:" + hashlib.sha256(canonical_json_bytes(cert)).hexdigest()
     return cert
 
 def generate_rollback_certificate(
@@ -75,9 +93,7 @@ def generate_rollback_certificate(
         "rollback": True,
         "failed_checkpoint": failed_checkpoint,
         "restore_checkpoint": restore_checkpoint,
-        "reason": reason,
-        "timestamp_unix": time.time()
+        "reason": reason
     }
-    cert_bytes = json.dumps(cert, sort_keys=True).encode()
-    cert["signature"] = "sha256:" + hashlib.sha256(cert_bytes).hexdigest()
+    cert["content_hash"] = "sha256:" + hashlib.sha256(canonical_json_bytes(cert)).hexdigest()
     return cert

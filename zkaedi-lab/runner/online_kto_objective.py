@@ -31,10 +31,19 @@ def completion_logprob(model, tokenizer, prompt: str, completion: str) -> torch.
     input_ids = encoded.input_ids.to(device)
     offsets = encoded.offset_mapping[0]
 
+    # Validate that token length is sufficient for sequence shift prediction
+    if input_ids.shape[1] < 2:
+        raise ValueError("Input produced fewer than two tokens")
+
     boundary = len(prompt)
 
+    # Score only tokens that start wholly at or after the boundary (wholly inside completion)
+    # and exclude special/synthetic tokens that have end <= start (like padding or empty tokens)
     completion_mask = torch.tensor(
-        [end > boundary for start, end in offsets],
+        [
+            start >= boundary and end > start
+            for start, end in offsets.tolist()
+        ],
         device=device,
         dtype=torch.bool,
     )
@@ -42,11 +51,15 @@ def completion_logprob(model, tokenizer, prompt: str, completion: str) -> torch.
     if not completion_mask.any():
         raise ValueError("Completion produced no tokens")
 
-    logits = model(input_ids).logits[:, :-1, :]
+    outputs = model(input_ids=input_ids)
+    logits = outputs.logits[:, :-1, :]
     labels = input_ids[:, 1:]
 
     # Token i is predicted by logit i-1.
     prediction_mask = completion_mask[1:]
+
+    if not prediction_mask.any():
+        raise ValueError("Completion produced no predictable tokens")
 
     token_logps = F.log_softmax(logits, dim=-1).gather(
         -1,
@@ -76,45 +89,55 @@ def binary_reference_logratio_loss(
     if desirable.numel() != batch_size:
         raise ValueError("desirable labels must match batch length")
 
-    # Freeze reference model and set to evaluation mode
+    # Enforce that the batch contains both desirable and undesirable examples
+    positive_count = int(desirable.sum().item())
+    negative_count = batch_size - positive_count
+    if positive_count == 0 or negative_count == 0:
+        raise ValueError("Batch must contain both desirable and undesirable examples")
+
+    # Put reference to evaluation and requires_grad_ False (immutability)
     reference.eval()
     reference.requires_grad_(False)
     
-    # Put policy model in training mode
+    # Store policy training state and restore it afterwards
+    policy_was_training = policy.training
     policy.train()
     
-    policy_logps = []
-    reference_logps = []
+    try:
+        policy_logps = []
+        reference_logps = []
 
-    for prompt, completion in zip(prompts, completions):
-        policy_logps.append(
-            completion_logprob(policy, tokenizer, prompt, completion)
-        )
-        with torch.no_grad():
-            reference_logps.append(
-                completion_logprob(reference, tokenizer, prompt, completion)
+        for prompt, completion in zip(prompts, completions):
+            policy_logps.append(
+                completion_logprob(policy, tokenizer, prompt, completion)
             )
+            with torch.no_grad():
+                reference_logps.append(
+                    completion_logprob(reference, tokenizer, prompt, completion)
+                )
 
-    policy_logps = torch.cat(policy_logps)
-    reference_logps = torch.cat(reference_logps)
-    log_ratio = policy_logps - reference_logps
+        policy_logps = torch.cat(policy_logps)
+        reference_logps = torch.cat(reference_logps)
+        log_ratio = policy_logps - reference_logps
 
-    # A batch-centered reference point.
-    reference_point = log_ratio.detach().mean()
-    gain = beta * (log_ratio - reference_point)
+        # A batch-centered reference point.
+        reference_point = log_ratio.detach().mean()
+        gain = beta * (log_ratio - reference_point)
 
-    desirable = desirable.to(
-        device=gain.device,
-        dtype=torch.bool,
-    )
+        desirable = desirable.to(
+            device=gain.device,
+            dtype=torch.bool,
+        )
 
-    positive_loss = -F.logsigmoid(gain[desirable]).mean() if desirable.any() else gain.new_tensor(0.0)
-    negative_loss = -F.logsigmoid(-gain[~desirable]).mean() if (~desirable).any() else gain.new_tensor(0.0)
+        positive_loss = -F.logsigmoid(gain[desirable]).mean() if desirable.any() else gain.new_tensor(0.0)
+        negative_loss = -F.logsigmoid(-gain[~desirable]).mean() if (~desirable).any() else gain.new_tensor(0.0)
 
-    return (
-        desirable_weight * positive_loss
-        + undesirable_weight * negative_loss
-    )
+        return (
+            desirable_weight * positive_loss
+            + undesirable_weight * negative_loss
+        )
+    finally:
+        policy.train(policy_was_training)
 
 def effective_learning_rate(
     base_lr: float,

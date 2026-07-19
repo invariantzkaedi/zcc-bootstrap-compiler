@@ -20,6 +20,11 @@ def promotion_allowed(metrics: dict) -> tuple[bool, list[str]]:
         failures.append(f"missing promotion metrics: {missing}")
         return False, failures
 
+    # Check boolean types strictly
+    for name in ("all_safety_tests_passed", "pareto_invariants_passed"):
+        if not isinstance(metrics[name], bool):
+            failures.append(f"{name} must be a boolean")
+
     numeric_names = {
         "policy_kl",
         "max_policy_kl",
@@ -55,12 +60,16 @@ def promotion_allowed(metrics: dict) -> tuple[bool, list[str]]:
     if not -1.0 <= parsed["heldout_success_rate_delta"] <= 1.0:
         failures.append("heldout_success_rate_delta must be within [-1, 1]")
 
+    if failures:
+        return False, failures
+
     # Safety tests check
     if metrics["all_safety_tests_passed"] is not True:
         failures.append("safety regression")
 
-    # Policy KL check
-    if parsed["policy_kl"] > parsed["max_policy_kl"]:
+    # Policy KL check with tiny negative tolerance clipping
+    policy_kl_val = max(parsed["policy_kl"], 0.0)
+    if policy_kl_val > parsed["max_policy_kl"]:
         failures.append("policy drift exceeded limit")
 
     # Success rate delta check
@@ -84,11 +93,23 @@ def refresh_anchor_field(policy, reference, tokenizer, anchors, pairs):
     if not pairs:
         raise ValueError("evaluation pairs must not be empty")
 
+    for index, pair in enumerate(pairs):
+        if not isinstance(pair, dict):
+            raise TypeError(f"pair {index} must be a mapping")
+        for field in ("chosen", "rejected"):
+            value = pair.get(field)
+            if not isinstance(value, str) or not value:
+                raise ValueError(
+                    f"pair {index} field {field!r} must be a non-empty string"
+                )
+
     for anchor in anchors:
         if not isinstance(anchor.get("prompt"), str):
             raise TypeError("anchor prompt must be a string")
         if not isinstance(anchor.get("steps"), list):
             raise TypeError("anchor steps must be a list")
+        if not all(isinstance(step, str) for step in anchor["steps"]):
+            raise TypeError("all anchor steps must be strings")
 
     # Store prior state of policy model
     policy_was_training = policy.training
@@ -115,7 +136,7 @@ def refresh_anchor_field(policy, reference, tokenizer, anchors, pairs):
                 )
 
                 shifts.append(
-                    float((policy_margin - reference_margin_eval).item())
+                    float((policy_margin - reference_margin).item())
                 )
 
             refreshed.append({
@@ -125,5 +146,5 @@ def refresh_anchor_field(policy, reference, tokenizer, anchors, pairs):
         return refreshed
     finally:
         policy.train(policy_was_training)
-        # Reference is frozen/immutable, force evaluation mode
+        # Keep reference model frozen in evaluation mode
         reference.eval()
