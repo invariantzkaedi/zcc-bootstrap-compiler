@@ -73,6 +73,7 @@ class LedgerAnchor:
 @dataclass(frozen=True, slots=True)
 class LedgerVerification:
     valid: bool
+    initialized: bool
     records_verified: int
     head_hash: Optional[str]
     failures: tuple[str, ...]
@@ -254,6 +255,14 @@ def verify_records_sequence(records: list[dict], expected_ledger_id: str) -> tup
             continue
 
         schema_version = rec.get("schema_version")
+        if (
+            isinstance(schema_version, bool)
+            or not isinstance(schema_version, int)
+        ):
+            failures.append(f"Record index {idx} schema_version must be an integer")
+            record_valid = False
+            previous_entry_hash = None
+            continue
         if schema_version != 1:
             failures.append(f"Record index {idx} invalid schema_version: {schema_version} (expected: 1)")
             record_valid = False
@@ -427,11 +436,11 @@ def verify_ledger(path: str, expected_ledger_id: str) -> LedgerVerification:
     try:
         validate_ledger_id(expected_ledger_id)
     except ValueError as exc:
-        return LedgerVerification(valid=False, records_verified=0, head_hash=None, failures=(f"invalid expected_ledger_id: {exc}",))
+        return LedgerVerification(valid=False, initialized=False, records_verified=0, head_hash=None, failures=(f"invalid expected_ledger_id: {exc}",))
 
     abspath = os.path.abspath(path)
     if not os.path.exists(abspath):
-        return LedgerVerification(valid=True, records_verified=0, head_hash=None, failures=())
+        return LedgerVerification(valid=True, initialized=False, records_verified=0, head_hash=None, failures=())
 
     with open(abspath, "rb") as fh:
         lock_file_sh(fh)
@@ -443,7 +452,7 @@ def verify_ledger(path: str, expected_ledger_id: str) -> LedgerVerification:
     try:
         records, valid_end = read_complete_jsonl_prefix(content_bytes)
     except LedgerParseException as err:
-        return LedgerVerification(valid=False, records_verified=err.records_verified, head_hash=None, failures=(str(err),))
+        return LedgerVerification(valid=False, initialized=False, records_verified=err.records_verified, head_hash=None, failures=(str(err),))
 
     failures = []
     if valid_end < len(content_bytes):
@@ -454,9 +463,11 @@ def verify_ledger(path: str, expected_ledger_id: str) -> LedgerVerification:
     
     valid = (len(failures) == 0) and valid_seq
     head_hash = records[-1].get("entry_hash") if (valid and records) else None
+    initialized = len(records) > 0
     
     return LedgerVerification(
         valid=valid,
+        initialized=initialized,
         records_verified=len(records),
         head_hash=head_hash,
         failures=tuple(failures)

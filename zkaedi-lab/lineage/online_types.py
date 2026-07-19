@@ -4,6 +4,7 @@ import time
 import hashlib
 import secrets
 import copy
+import math
 from typing import Any
 from dataclasses import dataclass, asdict
 
@@ -41,6 +42,34 @@ class OnlineOutcome:
     evaluator_version: str
     policy_checkpoint: str
     sandbox_version: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.config_id, str) or not self.config_id:
+            raise ValueError("config_id must be a non-empty string")
+        if not isinstance(self.candidate_id, str) or not self.candidate_id:
+            raise ValueError("candidate_id must be a non-empty string")
+        if not isinstance(self.prompt, str) or not self.prompt:
+            raise ValueError("prompt must be a non-empty string")
+        if not isinstance(self.completion, str) or not self.completion:
+            raise ValueError("completion must be a non-empty string")
+        if not isinstance(self.verdict, str) or self.verdict not in {"pass", "fail", "error"}:
+            raise ValueError("verdict must be 'pass', 'fail', or 'error'")
+        
+        if isinstance(self.runner_exit, bool) or not isinstance(self.runner_exit, int):
+            raise TypeError("runner_exit must be an integer (non-boolean)")
+
+        if isinstance(self.runtime_ms, bool) or not isinstance(self.runtime_ms, (int, float)) or not math.isfinite(self.runtime_ms) or self.runtime_ms < 0:
+            raise ValueError("runtime_ms must be a finite non-negative number")
+
+        if isinstance(self.verification_score, bool) or not isinstance(self.verification_score, (int, float)) or not math.isfinite(self.verification_score):
+            raise ValueError("verification_score must be a finite number")
+
+        if self.failure_class is not None:
+            if not isinstance(self.failure_class, str) or not self.failure_class:
+                raise ValueError("failure_class must be a non-empty string or None")
+                
+        if self.verdict == "pass" and self.failure_class is not None:
+            raise ValueError("verdict 'pass' cannot have a failure_class")
 
 @dataclass(frozen=True)
 class ReplayLoadResult:
@@ -109,6 +138,20 @@ def compute_dedup_hash(
         "schema_version": schema_version,
     }
     return "sha256:" + hashlib.sha256(canonical_json_bytes(payload)).hexdigest()
+
+def compute_record_hash(record: dict[str, Any]) -> str:
+    unsigned = {
+        key: value
+        for key, value in record.items()
+        if key != "record_hash"
+    }
+    return "sha256:" + hashlib.sha256(
+        canonical_json_bytes({
+            "domain": "zkaedi.online-outcome",
+            "schema_version": 1,
+            "value": unsigned,
+        })
+    ).hexdigest()
 
 def lock_file_ex(fh) -> None:
     if HAS_FCNTL:
@@ -231,6 +274,7 @@ def record_online_outcome(path: str, outcome: OnlineOutcome) -> None:
         outcome.sandbox_version,
         schema_version=1
     )
+    payload["record_hash"] = compute_record_hash(payload)
     append_jsonl_durable(path, payload)
 
 def load_unique_records(path: str) -> ReplayLoadResult:
@@ -263,9 +307,15 @@ def load_unique_records(path: str) -> ReplayLoadResult:
     skipped_dup = 0
     
     for index, record in enumerate(records):
-        if "dedup_hash" not in record:
+        # Legacy/migration check
+        if "schema_version" not in record or record.get("schema_version") == 0:
+            if "dedup_hash" in record or "record_hash" in record:
+                raise ValueError(f"record {index} has a hash but has invalid/missing schema_version")
             unique[f"legacy:{index}"] = record
             continue
+
+        if "dedup_hash" not in record:
+            raise ValueError(f"record {index} is missing dedup_hash")
 
         dedup_hash = record["dedup_hash"]
         if not isinstance(dedup_hash, str):
@@ -277,16 +327,25 @@ def load_unique_records(path: str) -> ReplayLoadResult:
         if not is_sha256_identifier(dedup_hash):
             raise ValueError(f"record {index} dedup_hash is malformed")
 
-        if "schema_version" not in record:
-            raise ValueError(f"record {index} is missing schema_version")
-
         schema_version = record["schema_version"]
+        if isinstance(schema_version, bool) or not isinstance(schema_version, int):
+            raise ValueError(f"record {index} schema_version must be an integer")
+
         if schema_version != 1:
             raise ValueError(f"record {index} has unsupported schema_version: {schema_version}")
 
+        # Integrity check on full record
+        supplied_record_hash = record.get("record_hash")
+        if not is_sha256_identifier(supplied_record_hash):
+            raise ValueError(f"record {index} has malformed record_hash")
+        
+        expected_record_hash = compute_record_hash(record)
+        if not secrets.compare_digest(supplied_record_hash, expected_record_hash):
+            raise ValueError(f"record {index} failed integrity verification")
+
         # Re-verify the dedup hash to protect against manipulation
         try:
-            expected = compute_dedup_hash(
+            expected_dedup_hash = compute_dedup_hash(
                 record["prompt"],
                 record["completion"],
                 record["harness_version"],
@@ -295,7 +354,7 @@ def load_unique_records(path: str) -> ReplayLoadResult:
                 record["sandbox_version"],
                 schema_version=schema_version
             )
-            if not secrets.compare_digest(dedup_hash, expected):
+            if not secrets.compare_digest(dedup_hash, expected_dedup_hash):
                 raise ValueError(f"record {index} has an invalid dedup hash")
         except KeyError:
             raise ValueError(f"record {index} lacks required fields for dedup validation")

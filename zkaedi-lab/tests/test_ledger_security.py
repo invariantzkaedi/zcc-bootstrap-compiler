@@ -195,6 +195,7 @@ class TestLedgerSecurity(unittest.TestCase):
         
         verification = LedgerVerification(
             valid=True,
+            initialized=True,
             records_verified=1,
             head_hash="sha256:" + "a" * 64,
             failures=()
@@ -229,6 +230,7 @@ class TestLedgerSecurity(unittest.TestCase):
         
         verification = LedgerVerification(
             valid=True,
+            initialized=True,
             records_verified=1,
             head_hash="sha256:" + "a" * 64,
             failures=()
@@ -270,6 +272,7 @@ class TestLedgerSecurity(unittest.TestCase):
     def test_combined_anchor_acceptance_enforces_freshness(self):
         verification = LedgerVerification(
             valid=True,
+            initialized=True,
             records_verified=1,
             head_hash="sha256:" + "a" * 64,
             failures=()
@@ -320,6 +323,7 @@ class TestLedgerSecurity(unittest.TestCase):
         )
         verification = LedgerVerification(
             valid=True,
+            initialized=True,
             records_verified=1,
             head_hash="sha256:" + "a" * 64,
             failures=()
@@ -343,6 +347,7 @@ class TestLedgerSecurity(unittest.TestCase):
         # verify_ledger_anchor must reject raw public key bytes in trusted_keys
         verification = LedgerVerification(
             valid=True,
+            initialized=True,
             records_verified=1,
             head_hash="sha256:" + "a" * 64,
             failures=()
@@ -425,6 +430,7 @@ class TestLedgerSecurity(unittest.TestCase):
     def test_anchor_policy_uses_injected_clock(self):
         verification = LedgerVerification(
             valid=True,
+            initialized=True,
             records_verified=1,
             head_hash="sha256:" + "a" * 64,
             failures=()
@@ -444,6 +450,7 @@ class TestLedgerSecurity(unittest.TestCase):
     def test_malformed_now_clock_injected_fails(self):
         verification = LedgerVerification(
             valid=True,
+            initialized=True,
             records_verified=1,
             head_hash="sha256:" + "a" * 64,
             failures=()
@@ -464,6 +471,7 @@ class TestLedgerSecurity(unittest.TestCase):
     def test_expected_ledger_id_errors_fail_closed(self):
         verification = LedgerVerification(
             valid=True,
+            initialized=True,
             records_verified=1,
             head_hash="sha256:" + "a" * 64,
             failures=()
@@ -482,6 +490,7 @@ class TestLedgerSecurity(unittest.TestCase):
     def test_malformed_trusted_keys_fail_closed(self):
         verification = LedgerVerification(
             valid=True,
+            initialized=True,
             records_verified=1,
             head_hash="sha256:" + "a" * 64,
             failures=()
@@ -539,6 +548,7 @@ class TestLedgerSecurity(unittest.TestCase):
         )
         verification = LedgerVerification(
             valid=True,
+            initialized=True,
             records_verified=1,
             head_hash="sha256:" + "a" * 64,
             failures=()
@@ -580,6 +590,7 @@ class TestLedgerSecurity(unittest.TestCase):
     def test_anchor_policy_clock_skew_boundaries(self):
         verification = LedgerVerification(
             valid=True,
+            initialized=True,
             records_verified=1,
             head_hash="sha256:" + "a" * 64,
             failures=()
@@ -832,7 +843,7 @@ class TestLedgerSecurity(unittest.TestCase):
         try:
             # Write a record containing an invalid dedup_hash type (integer)
             with open(path, "wb") as fh:
-                fh.write(b'{"prompt":"hello","completion":"world","harness_version":"1.0","evaluator_version":"1.0","policy_checkpoint":"ckpt","sandbox_version":"1.0","dedup_hash":123}\n')
+                fh.write(b'{"prompt":"hello","completion":"world","harness_version":"1.0","evaluator_version":"1.0","policy_checkpoint":"ckpt","sandbox_version":"1.0","schema_version":1,"dedup_hash":123}\n')
                 
             with self.assertRaises(ValueError) as ctx:
                 load_unique_records(path)
@@ -1092,6 +1103,266 @@ class TestLedgerSecurity(unittest.TestCase):
         finally:
             if os.path.exists(path):
                 os.unlink(path)
+
+    def test_changing_safety_passed_invalidates_record_hash(self):
+        from lineage.online_types import load_unique_records, record_online_outcome, OnlineOutcome
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            outcome = OnlineOutcome(
+                config_id="config-1",
+                candidate_id="cand-1",
+                prompt="hello",
+                completion="world",
+                sandbox_passed=True,
+                safety_passed=True,
+                verification_score=1.0,
+                runtime_ms=120.0,
+                runner_exit=0,
+                verdict="pass",
+                failure_class=None,
+                harness_version="1.0",
+                evaluator_version="1.0",
+                policy_checkpoint="ckpt",
+                sandbox_version="1.0"
+            )
+            record_online_outcome(path, outcome)
+            
+            # Read first record, change safety_passed to False, write back
+            with open(path, "rb") as fh:
+                data = fh.read()
+            record = json.loads(data.decode("utf-8").strip())
+            record["safety_passed"] = False
+            
+            with open(path, "wb") as fh:
+                fh.write(json.dumps(record).encode("utf-8") + b"\n")
+                
+            # Verification of loading must raise ValueError due to broken integrity hash
+            with self.assertRaises(ValueError) as ctx:
+                load_unique_records(path)
+            self.assertIn("failed integrity verification", str(ctx.exception))
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_changing_desirable_invalidates_record_hash(self):
+        from lineage.online_types import load_unique_records, record_online_outcome, OnlineOutcome
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            outcome = OnlineOutcome(
+                config_id="config-1",
+                candidate_id="cand-1",
+                prompt="hello",
+                completion="world",
+                sandbox_passed=True,
+                safety_passed=True,
+                verification_score=1.0,
+                runtime_ms=120.0,
+                runner_exit=0,
+                verdict="pass",
+                failure_class=None,
+                harness_version="1.0",
+                evaluator_version="1.0",
+                policy_checkpoint="ckpt",
+                sandbox_version="1.0"
+            )
+            record_online_outcome(path, outcome)
+            
+            with open(path, "rb") as fh:
+                data = fh.read()
+            record = json.loads(data.decode("utf-8").strip())
+            record["desirable"] = not record["desirable"]
+            
+            with open(path, "wb") as fh:
+                fh.write(json.dumps(record).encode("utf-8") + b"\n")
+                
+            with self.assertRaises(ValueError) as ctx:
+                load_unique_records(path)
+            self.assertIn("failed integrity verification", str(ctx.exception))
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_changing_recorded_at_unix_invalidates_record_hash(self):
+        from lineage.online_types import load_unique_records, record_online_outcome, OnlineOutcome
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            outcome = OnlineOutcome(
+                config_id="config-1",
+                candidate_id="cand-1",
+                prompt="hello",
+                completion="world",
+                sandbox_passed=True,
+                safety_passed=True,
+                verification_score=1.0,
+                runtime_ms=120.0,
+                runner_exit=0,
+                verdict="pass",
+                failure_class=None,
+                harness_version="1.0",
+                evaluator_version="1.0",
+                policy_checkpoint="ckpt",
+                sandbox_version="1.0"
+            )
+            record_online_outcome(path, outcome)
+            
+            with open(path, "rb") as fh:
+                data = fh.read()
+            record = json.loads(data.decode("utf-8").strip())
+            record["recorded_at_unix"] = record["recorded_at_unix"] + 10.0
+            
+            with open(path, "wb") as fh:
+                fh.write(json.dumps(record).encode("utf-8") + b"\n")
+                
+            with self.assertRaises(ValueError) as ctx:
+                load_unique_records(path)
+            self.assertIn("failed integrity verification", str(ctx.exception))
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_dedup_hash_remains_stable_when_only_runtime_metadata_changes(self):
+        from lineage.online_types import compute_dedup_hash
+        # changing metadata fields like config_id does not change the prompt/completion dedup hash identity
+        dh1 = compute_dedup_hash("prompt", "completion", "1.0", "1.0", "ckpt", "1.0")
+        dh2 = compute_dedup_hash("prompt", "completion", "1.0", "1.0", "ckpt", "1.0")
+        self.assertEqual(dh1, dh2)
+
+    def test_boolean_replay_schema_version_rejected(self):
+        from lineage.online_types import load_unique_records
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            # boolean schema_version (e.g. true) must be rejected
+            with open(path, "wb") as fh:
+                fh.write(b'{"prompt":"h","completion":"c","harness_version":"1","evaluator_version":"1","policy_checkpoint":"x","sandbox_version":"1","schema_version":true,"dedup_hash":"sha256:0000000000000000000000000000000000000000000000000000000000000000"}\n')
+            with self.assertRaises(ValueError) as ctx:
+                load_unique_records(path)
+            self.assertIn("schema_version must be an integer", str(ctx.exception))
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_boolean_ledger_schema_version_rejected(self):
+        # boolean schema_version true must be rejected by records sequence verifier
+        records = [
+            {
+                "schema_version": True,
+                "ledger_id": self.ledger_id,
+                "sequence": 0,
+                "payload": {},
+                "payload_hash": "sha256:" + "0" * 64,
+                "entry_hash": "sha256:" + "1" * 64,
+                "previous_hash": None,
+                "recorded_at_unix": time.time(),
+            }
+        ]
+        valid, failures = verify_records_sequence(records, self.ledger_id)
+        self.assertFalse(valid)
+        self.assertTrue(any("schema_version must be an integer" in f for f in failures))
+
+    def test_modern_record_with_removed_dedup_hash_is_not_silently_treated_as_legacy(self):
+        from lineage.online_types import load_unique_records
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            # Modern records that lack dedup_hash key but have schema_version = 1 must be rejected
+            with open(path, "wb") as fh:
+                fh.write(b'{"prompt":"h","completion":"c","schema_version":1,"record_hash":"sha256:0000000000000000000000000000000000000000000000000000000000000000"}\n')
+            with self.assertRaises(ValueError) as ctx:
+                load_unique_records(path)
+            self.assertIn("missing dedup_hash", str(ctx.exception))
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_large_append_benchmark_confirms_acceptable_growth(self):
+        from lineage.online_types import record_online_outcome, OnlineOutcome, load_unique_records
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            # Append multiple items to ensure O(N) append loop executes correctly
+            for i in range(30):
+                outcome = OnlineOutcome(
+                    config_id=f"config-{i}",
+                    candidate_id=f"cand-{i}",
+                    prompt=f"prompt-{i}",
+                    completion=f"completion-{i}",
+                    sandbox_passed=True,
+                    safety_passed=True,
+                    verification_score=1.0,
+                    runtime_ms=10.0,
+                    runner_exit=0,
+                    verdict="pass",
+                    failure_class=None,
+                    harness_version="1.0",
+                    evaluator_version="1.0",
+                    policy_checkpoint="ckpt",
+                    sandbox_version="1.0"
+                )
+                record_online_outcome(path, outcome)
+            res = load_unique_records(path)
+            self.assertEqual(len(res.records), 30)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_empty_and_missing_ledgers_have_distinct_readiness_states(self):
+        # 1. Non-existent file
+        v_missing = verify_ledger("non_existent_file_path.jsonl", self.ledger_id)
+        self.assertTrue(v_missing.valid)
+        self.assertFalse(v_missing.initialized)
+        self.assertEqual(v_missing.records_verified, 0)
+        
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            # 2. Existent but empty file (0 bytes)
+            v_empty = verify_ledger(path, self.ledger_id)
+            self.assertTrue(v_empty.valid)
+            self.assertFalse(v_empty.initialized)
+            self.assertEqual(v_empty.records_verified, 0)
+            
+            # 3. Non-empty initialized file
+            append_ledger_payload(path, self.ledger_id, {"genesis": True})
+            v_filled = verify_ledger(path, self.ledger_id)
+            self.assertTrue(v_filled.valid)
+            self.assertTrue(v_filled.initialized)
+            self.assertEqual(v_filled.records_verified, 1)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_nan_score_and_negative_runtime_are_rejected_at_outcome_construction(self):
+        from lineage.online_types import OnlineOutcome
+        # nan verification_score must raise ValueError
+        with self.assertRaises(ValueError):
+            OnlineOutcome(
+                config_id="c", candidate_id="cand", prompt="p", completion="comp",
+                sandbox_passed=True, safety_passed=True, verification_score=float("nan"),
+                runtime_ms=10.0, runner_exit=0, verdict="pass", failure_class=None,
+                harness_version="1", evaluator_version="1", policy_checkpoint="ckpt", sandbox_version="1"
+            )
+            
+        # negative runtime_ms must raise ValueError
+        with self.assertRaises(ValueError):
+            OnlineOutcome(
+                config_id="c", candidate_id="cand", prompt="p", completion="comp",
+                sandbox_passed=True, safety_passed=True, verification_score=1.0,
+                runtime_ms=-50.0, runner_exit=0, verdict="pass", failure_class=None,
+                harness_version="1", evaluator_version="1", policy_checkpoint="ckpt", sandbox_version="1"
+            )
+
+        # bool runner_exit must raise TypeError
+        with self.assertRaises(TypeError):
+            OnlineOutcome(
+                config_id="c", candidate_id="cand", prompt="p", completion="comp",
+                sandbox_passed=True, safety_passed=True, verification_score=1.0,
+                runtime_ms=10.0, runner_exit=True, verdict="pass", failure_class=None,
+                harness_version="1", evaluator_version="1", policy_checkpoint="ckpt", sandbox_version="1"
+            )
 
 if __name__ == "__main__":
     unittest.main()
