@@ -4,15 +4,17 @@ import time
 import os
 import copy
 import secrets
-from typing import Optional, Any, Mapping
+from types import MappingProxyType
+from collections.abc import Mapping
 from dataclasses import dataclass, asdict
 from online_types import (
-    append_jsonl_durable,
     canonical_json_bytes,
     lock_file_ex,
     lock_file_sh,
     unlock_file
 )
+
+GENESIS_SEQUENCE = 0
 
 @dataclass(frozen=True, slots=True)
 class TrainingReceipt:
@@ -54,6 +56,58 @@ class LedgerVerification:
     head_hash: Optional[str]
     failures: tuple[str, ...]
 
+def deep_freeze(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return MappingProxyType({
+            str(key): deep_freeze(item)
+            for key, item in value.items()
+        })
+    if isinstance(value, list | tuple):
+        return tuple(deep_freeze(item) for item in value)
+    if isinstance(value, set | frozenset):
+        return frozenset(deep_freeze(item) for item in value)
+    return copy.deepcopy(value)
+
+def thaw(val: Any) -> Any:
+    if isinstance(val, MappingProxyType) or isinstance(val, dict):
+        return {k: thaw(v) for k, v in val.items()}
+    if isinstance(val, tuple | list):
+        return [thaw(v) for v in val]
+    if isinstance(val, frozenset | set):
+        return [thaw(v) for v in val]
+    return val
+
+def serialize_envelope(envelope: LedgerEnvelope) -> bytes:
+    envelope_dict = {
+        "sequence": envelope.sequence,
+        "previous_hash": envelope.previous_hash,
+        "payload": thaw(envelope.payload),
+        "payload_hash": envelope.payload_hash,
+        "entry_hash": envelope.entry_hash,
+        "recorded_at_unix": envelope.recorded_at_unix,
+    }
+    return canonical_json_bytes(envelope_dict)
+
+def is_sha256_identifier(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    prefix, separator, digest = value.partition(":")
+    return (
+        separator == ":"
+        and prefix == "sha256"
+        and len(digest) == 64
+        and all(char in "0123456789abcdef" for char in digest)
+    )
+
+def hashes_equal(left: Any, right: Any) -> bool:
+    return (
+        isinstance(left, str)
+        and isinstance(right, str)
+        and is_sha256_identifier(left)
+        and is_sha256_identifier(right)
+        and secrets.compare_digest(left, right)
+    )
+
 def content_hash(domain: str, value: Any) -> str:
     material = {
         "domain": domain,
@@ -71,8 +125,9 @@ def build_ledger_envelope(
     payload: dict[str, Any],
     recorded_at_unix: float
 ) -> LedgerEnvelope:
-    payload_copy = copy.deepcopy(payload)
-    payload_hash = content_hash("zkaedi.ledger-payload", payload_copy)
+    canonical_payload = copy.deepcopy(payload)
+    frozen_payload = deep_freeze(canonical_payload)
+    payload_hash = content_hash("zkaedi.ledger-payload", canonical_payload)
     
     header = {
         "sequence": sequence,
@@ -85,7 +140,7 @@ def build_ledger_envelope(
     return LedgerEnvelope(
         sequence=sequence,
         previous_hash=previous_hash,
-        payload=payload_copy,
+        payload=frozen_payload,
         payload_hash=payload_hash,
         entry_hash=entry_hash,
         recorded_at_unix=recorded_at_unix
@@ -96,21 +151,43 @@ def verify_records_sequence(records: list[dict]) -> tuple[bool, list[str]]:
     
     for idx, rec in enumerate(records):
         seq = rec.get("sequence")
-        if seq != idx:
-            failures.append(f"Record index {idx} has invalid sequence: {seq}")
+        
+        # Verify sequence type and increment
+        if not isinstance(seq, int) or isinstance(seq, bool):
+            failures.append(f"Record index {idx} sequence field is not an integer")
+            continue
             
-        # Verify payload hash
+        expected_seq = GENESIS_SEQUENCE + idx
+        if seq != expected_seq:
+            failures.append(f"Record index {idx} has invalid sequence: {seq} (expected: {expected_seq})")
+            
         payload = rec.get("payload")
         payload_hash = rec.get("payload_hash")
+        entry_hash = rec.get("entry_hash")
+        prev_hash = rec.get("previous_hash")
+        
+        # Safe validations of SHA-256 identifier hashes
+        if not is_sha256_identifier(payload_hash):
+            failures.append(f"Record index {idx} payload_hash is not a valid SHA-256 identifier")
+            continue
+        if not is_sha256_identifier(entry_hash):
+            failures.append(f"Record index {idx} entry_hash is not a valid SHA-256 identifier")
+            continue
+        if idx > 0 and not is_sha256_identifier(prev_hash):
+            failures.append(f"Record index {idx} previous_hash is not a valid SHA-256 identifier")
+            continue
+
+        # Verify payload hash
         expected_p_hash = content_hash("zkaedi.ledger-payload", payload)
-        if not secrets.compare_digest(payload_hash, expected_p_hash):
+        if not hashes_equal(payload_hash, expected_p_hash):
             failures.append(f"Record sequence {seq} payload hash mismatch")
             
         # Verify header/entry hash
         recorded_at = rec.get("recorded_at_unix")
-        prev_hash = rec.get("previous_hash")
-        entry_hash = rec.get("entry_hash")
-        
+        if not isinstance(recorded_at, float) and not isinstance(recorded_at, int):
+            failures.append(f"Record sequence {seq} recorded_at_unix has invalid type")
+            continue
+            
         header = {
             "sequence": seq,
             "previous_hash": prev_hash,
@@ -118,7 +195,7 @@ def verify_records_sequence(records: list[dict]) -> tuple[bool, list[str]]:
             "recorded_at_unix": recorded_at,
         }
         expected_entry_hash = content_hash("zkaedi.ledger-header", header)
-        if not secrets.compare_digest(entry_hash, expected_entry_hash):
+        if not hashes_equal(entry_hash, expected_entry_hash):
             failures.append(f"Record sequence {seq} entry hash mismatch")
             
         # Verify chain linking
@@ -128,10 +205,37 @@ def verify_records_sequence(records: list[dict]) -> tuple[bool, list[str]]:
         else:
             prev_rec = records[idx - 1]
             prev_entry_hash = prev_rec.get("entry_hash")
-            if not secrets.compare_digest(prev_hash, prev_entry_hash):
+            if not hashes_equal(prev_hash, prev_entry_hash):
                 failures.append(f"Record sequence {seq} points to invalid parent hash: {prev_hash}")
                 
     return len(failures) == 0, failures
+
+def read_complete_jsonl_prefix(data: bytes) -> tuple[list[dict], int]:
+    records: list[dict] = []
+    valid_end = 0
+    cursor = 0
+
+    for raw_line in data.splitlines(keepends=True):
+        cursor += len(raw_line)
+        stripped = raw_line.strip()
+
+        if not stripped:
+            valid_end = cursor
+            continue
+
+        try:
+            records.append(json.loads(stripped))
+            valid_end = cursor
+        except json.JSONDecodeError:
+            is_final = (cursor == len(data))
+            unterminated = not raw_line.endswith(b"\n")
+
+            if is_final and unterminated:
+                return records, valid_end
+
+            raise ValueError("ledger contains durable JSON corruption")
+
+    return records, valid_end
 
 def verify_ledger(path: str) -> LedgerVerification:
     abspath = os.path.abspath(path)
@@ -145,28 +249,20 @@ def verify_ledger(path: str) -> LedgerVerification:
         finally:
             unlock_file(fh)
 
-    lines = content_bytes.decode("utf-8").splitlines()
-    records = []
-    skipped_torn = False
+    try:
+        records, valid_end = read_complete_jsonl_prefix(content_bytes)
+    except ValueError as err:
+        return LedgerVerification(valid=False, records_verified=0, head_hash=None, failures=(str(err),))
+
+    failures = []
+    if valid_end < len(content_bytes):
+        failures.append("ledger contains an incomplete trailing write")
+
+    valid_seq, seq_failures = verify_records_sequence(records)
+    failures.extend(seq_failures)
     
-    for index, line in enumerate(lines):
-        line_str = line.strip()
-        if not line_str:
-            continue
-        try:
-            records.append(json.loads(line_str))
-        except json.JSONDecodeError:
-            # Tolerable only at final line if the last write was interrupted
-            if index == len(lines) - 1:
-                skipped_torn = True
-                continue
-            raise
-
-    if not records:
-        return LedgerVerification(valid=True, records_verified=0, head_hash=None, failures=())
-
-    valid, failures = verify_records_sequence(records)
-    head_hash = records[-1].get("entry_hash") if valid else None
+    valid = (len(failures) == 0) and valid_seq
+    head_hash = records[-1].get("entry_hash") if (valid and records) else None
     
     return LedgerVerification(
         valid=valid,
@@ -184,25 +280,18 @@ def append_ledger_payload(path: str, payload: dict[str, Any]) -> LedgerEnvelope:
     with open(abspath, "a+b") as fh:
         lock_file_ex(fh)
         try:
-            # Read and parse records under the exclusive write lock
             fh.seek(0)
             content_bytes = fh.read()
-            lines = content_bytes.decode("utf-8").splitlines()
-            records = []
             
-            for index, line in enumerate(lines):
-                line_str = line.strip()
-                if not line_str:
-                    continue
-                try:
-                    records.append(json.loads(line_str))
-                except json.JSONDecodeError:
-                    if index == len(lines) - 1:
-                        # Skip trailing torn tail under exclusive lock
-                        continue
-                    raise
+            # Read complete prefix and safely recover from a trailing torn write by truncating it
+            records, valid_end = read_complete_jsonl_prefix(content_bytes)
+            if valid_end < len(content_bytes):
+                fh.seek(valid_end)
+                fh.truncate()
+                fh.flush()
+                os.fsync(fh.fileno())
 
-            # Verify existing chain integrity before append
+            # Verify existing chain integrity before appending
             valid, failures = verify_records_sequence(records)
             if not valid:
                 raise ValueError(f"Ledger history is invalid. Failures: {failures}")
@@ -218,11 +307,19 @@ def append_ledger_payload(path: str, payload: dict[str, Any]) -> LedgerEnvelope:
             )
             
             # Write and sync the envelope canonical representation
-            serialized = canonical_json_bytes(asdict(envelope)) + b"\n"
+            serialized = serialize_envelope(envelope) + b"\n"
             fh.seek(0, os.SEEK_END)
             fh.write(serialized)
             fh.flush()
             os.fsync(fh.fileno())
+            
+            # POSIX directory sync
+            if hasattr(os, "O_DIRECTORY") and directory:
+                dir_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+                try:
+                    os.fsync(dir_fd)
+                finally:
+                    os.close(dir_fd)
             
             return envelope
         finally:

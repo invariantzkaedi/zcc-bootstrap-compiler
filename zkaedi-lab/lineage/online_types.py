@@ -93,21 +93,25 @@ def compute_dedup_hash(
     }
     return "sha256:" + hashlib.sha256(canonical_json_bytes(payload)).hexdigest()
 
-def lock_file_ex(fh):
+def lock_file_ex(fh) -> None:
     if HAS_FCNTL:
         fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
     elif HAS_MSVCRT:
+        # Reposition to lock byte 0 consistently across readers/writers on Windows
         fh.seek(0)
         msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
 
-def lock_file_sh(fh):
+def lock_file_sh(fh) -> None:
+    """Acquires a shared lock on POSIX, but emulates using exclusive locks on Windows.
+    Windows LK_LOCK is blocking and exclusive, ensuring safety across Windows runtimes.
+    """
     if HAS_FCNTL:
         fcntl.flock(fh.fileno(), fcntl.LOCK_SH)
     elif HAS_MSVCRT:
         fh.seek(0)
         msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
 
-def unlock_file(fh):
+def unlock_file(fh) -> None:
     if HAS_FCNTL:
         fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
     elif HAS_MSVCRT:
@@ -131,13 +135,16 @@ def append_jsonl_durable(path: str, record: dict[str, Any]) -> None:
             unlock_file(fh)
 
     if hasattr(os, "O_DIRECTORY"):
-        dir_fd = os.open(directory, os.O_DIRECTORY)
+        dir_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
         try:
             os.fsync(dir_fd)
         finally:
             os.close(dir_fd)
 
 def record_online_outcome(path: str, outcome: OnlineOutcome) -> None:
+    """Appends outcomes to the replay database.
+    Note: deduplication checks are performed as a read-time projection during load_unique_records.
+    """
     payload = asdict(outcome)
     payload["desirable"] = derive_desirability(outcome)
     payload["trainable"] = should_train_on(outcome)
@@ -211,7 +218,6 @@ def load_unique_records(path: str) -> ReplayLoadResult:
             if not secrets.compare_digest(dedup_hash, expected):
                 raise ValueError(f"record {index} has an invalid dedup hash")
         except KeyError:
-            # If missing key fields, treat as legacy/corrupted depending on design; here we fail closed if dedup_hash exists but key fields are absent
             raise ValueError(f"record {index} lacks required fields for dedup validation")
 
         if dedup_hash in unique:
