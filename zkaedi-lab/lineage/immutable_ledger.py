@@ -9,16 +9,17 @@ from types import MappingProxyType
 from collections.abc import Mapping
 from dataclasses import dataclass, asdict
 from typing import Optional, Any
+
+GENESIS_SEQUENCE = 0
+MAX_CLOCK_SKEW = 300.0
+MAX_ANCHOR_AGE = 86400.0 * 30.0  # 30 days
+
 from online_types import (
     canonical_json_bytes,
     lock_file_ex,
     lock_file_sh,
     unlock_file
 )
-
-GENESIS_SEQUENCE = 0
-MAX_CLOCK_SKEW = 300.0
-MAX_ANCHOR_AGE = 86400.0 * 30.0  # 30 days
 
 class LedgerParseException(ValueError):
     def __init__(self, message: str, records_verified: int):
@@ -153,6 +154,28 @@ def build_ledger_envelope(
     payload: dict[str, Any],
     recorded_at_unix: float
 ) -> LedgerEnvelope:
+    # 1. Parameter type and invariant checks
+    if isinstance(sequence, bool) or not isinstance(sequence, int):
+        raise TypeError("sequence must be an integer")
+    if sequence < GENESIS_SEQUENCE:
+        raise ValueError("sequence cannot be negative")
+
+    if sequence == GENESIS_SEQUENCE:
+        if previous_hash is not None:
+            raise ValueError("genesis previous_hash must be None")
+    elif not is_sha256_identifier(previous_hash):
+        raise ValueError("non-genesis previous_hash must be a SHA-256 identifier")
+
+    if (
+        isinstance(recorded_at_unix, bool)
+        or not isinstance(recorded_at_unix, (int, float))
+        or not math.isfinite(float(recorded_at_unix))
+    ):
+        raise ValueError("recorded_at_unix must be finite")
+
+    if not isinstance(payload, Mapping):
+        raise TypeError("Ledger payload must be a mapping")
+
     validate_json_mapping_keys(payload)
     canonical_payload = copy.deepcopy(payload)
     frozen_payload = deep_freeze(canonical_payload)
@@ -179,6 +202,10 @@ def verify_records_sequence(records: list[dict]) -> tuple[bool, list[str]]:
     failures = []
     
     for idx, rec in enumerate(records):
+        if not isinstance(rec, dict):
+            failures.append(f"Record index {idx} is not a JSON object")
+            continue
+
         seq = rec.get("sequence")
         
         # Verify sequence type and increment
@@ -191,6 +218,11 @@ def verify_records_sequence(records: list[dict]) -> tuple[bool, list[str]]:
             failures.append(f"Record index {idx} has invalid sequence: {seq} (expected: {expected_seq})")
             
         payload = rec.get("payload")
+        
+        if not isinstance(payload, dict):
+            failures.append(f"Record sequence {seq} payload must be a JSON object")
+            continue
+
         payload_hash = rec.get("payload_hash")
         entry_hash = rec.get("entry_hash")
         prev_hash = rec.get("previous_hash")
@@ -277,7 +309,13 @@ def read_complete_jsonl_prefix(data: bytes) -> tuple[list[dict], int]:
 
         try:
             line_str = raw_line.decode("utf-8")
-            records.append(json.loads(line_str))
+            decoded = json.loads(line_str)
+            if not isinstance(decoded, dict):
+                raise LedgerParseException(
+                    f"ledger record {len(records)} must be a JSON object",
+                    len(records)
+                )
+            records.append(decoded)
             valid_end = cursor
         except UnicodeDecodeError as exc:
             is_final = (cursor == len(data))
@@ -469,20 +507,36 @@ def sign_ledger_anchor(
     if not verification.valid or verification.head_hash is None or verification.records_verified <= 0:
         raise ValueError("cannot anchor an invalid or empty ledger")
         
+    if not isinstance(ledger_id, str) or not ledger_id:
+        raise ValueError("ledger_id must be non-empty")
+    if not isinstance(signer_key_id, str) or not signer_key_id:
+        raise ValueError("signer_key_id must be non-empty")
+
+    issued_at = (
+        time.time()
+        if anchored_at_unix is None
+        else anchored_at_unix
+    )
+    if (
+        isinstance(issued_at, bool)
+        or not isinstance(issued_at, (int, float))
+        or not math.isfinite(float(issued_at))
+    ):
+        raise ValueError("anchored_at_unix must be finite")
+
     unsigned = LedgerAnchor(
         ledger_id=ledger_id,
         sequence=verification.records_verified - 1,
         head_hash=verification.head_hash,
-        anchored_at_unix=(
-            time.time()
-            if anchored_at_unix is None
-            else anchored_at_unix
-        ),
+        anchored_at_unix=issued_at,
         signer_key_id=signer_key_id,
         signature=""
     )
     
     sig_bytes = private_key.sign(anchor_signing_bytes(unsigned))
+    if not isinstance(sig_bytes, bytes) or len(sig_bytes) != 64:
+        raise ValueError("private key returned an invalid Ed25519 signature")
+
     return LedgerAnchor(
         ledger_id=unsigned.ledger_id,
         sequence=unsigned.sequence,
@@ -563,3 +617,31 @@ def verify_ledger_anchor(
         return True
     except (ValueError, TypeError, InvalidSignature):
         return False
+
+def accept_ledger_anchor(
+    anchor: LedgerAnchor,
+    *,
+    expected_ledger_id: str,
+    verification: LedgerVerification,
+    trusted_keys: Mapping[str, bytes],
+    max_age: float = MAX_ANCHOR_AGE,
+) -> bool:
+    if (
+        isinstance(max_age, bool)
+        or not isinstance(max_age, (int, float))
+        or not math.isfinite(float(max_age))
+        or max_age < 0
+    ):
+        return False
+    return (
+        verify_ledger_anchor(
+            anchor,
+            expected_ledger_id=expected_ledger_id,
+            verification=verification,
+            trusted_keys=trusted_keys,
+        )
+        and evaluate_anchor_policy(
+            anchor,
+            max_age=max_age,
+        )
+    )
