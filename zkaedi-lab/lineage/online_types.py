@@ -21,6 +21,8 @@ except ImportError:
     except ImportError:
         HAS_MSVCRT = False
 
+ONLINE_OUTCOME_SCHEMA_VERSION = 1
+
 @dataclass(frozen=True)
 class OnlineOutcome:
     config_id: str
@@ -64,12 +66,35 @@ class OnlineOutcome:
         if isinstance(self.verification_score, bool) or not isinstance(self.verification_score, (int, float)) or not math.isfinite(self.verification_score):
             raise ValueError("verification_score must be a finite number")
 
+        for name in ("sandbox_passed", "safety_passed"):
+            value = getattr(self, name)
+            if not isinstance(value, bool):
+                raise TypeError(f"{name} must be a boolean")
+
+        for name in (
+            "harness_version",
+            "evaluator_version",
+            "policy_checkpoint",
+            "sandbox_version",
+        ):
+            value = getattr(self, name)
+            if not isinstance(value, str) or not value:
+                raise ValueError(f"{name} must be a non-empty string")
+
         if self.failure_class is not None:
             if not isinstance(self.failure_class, str) or not self.failure_class:
                 raise ValueError("failure_class must be a non-empty string or None")
                 
-        if self.verdict == "pass" and self.failure_class is not None:
-            raise ValueError("verdict 'pass' cannot have a failure_class")
+        if self.verdict == "pass":
+            if self.failure_class is not None:
+                raise ValueError("verdict 'pass' cannot have a failure_class")
+            if not self.sandbox_passed or not self.safety_passed:
+                raise ValueError("pass verdict requires sandbox and safety success")
+            if self.runner_exit != 0:
+                raise ValueError("pass verdict requires runner_exit == 0")
+
+        if self.verdict in {"fail", "error"} and self.failure_class is None:
+            raise ValueError("failed outcomes require a failure_class")
 
 @dataclass(frozen=True)
 class ReplayLoadResult:
@@ -126,7 +151,7 @@ def compute_dedup_hash(
     evaluator_version: str,
     policy_checkpoint: str,
     sandbox_version: str,
-    schema_version: int = 1,
+    schema_version: int = ONLINE_OUTCOME_SCHEMA_VERSION,
 ) -> str:
     payload = {
         "prompt": prompt,
@@ -140,18 +165,47 @@ def compute_dedup_hash(
     return "sha256:" + hashlib.sha256(canonical_json_bytes(payload)).hexdigest()
 
 def compute_record_hash(record: dict[str, Any]) -> str:
+    if not isinstance(record, dict):
+        raise TypeError("record must be a dictionary")
+    # Verify that all keys are strings
+    for k in record.keys():
+        if not isinstance(k, str):
+            raise TypeError("record keys must be strings")
     unsigned = {
         key: value
         for key, value in record.items()
         if key != "record_hash"
     }
+    # Validate canonical JSON serializability
+    try:
+        canonical_json_bytes(unsigned)
+    except Exception as exc:
+        raise ValueError(f"record cannot be serialized to canonical JSON: {exc}") from exc
+        
     return "sha256:" + hashlib.sha256(
         canonical_json_bytes({
             "domain": "zkaedi.online-outcome",
-            "schema_version": 1,
+            "schema_version": ONLINE_OUTCOME_SCHEMA_VERSION,
             "value": unsigned,
         })
     ).hexdigest()
+
+def compute_replay_root_hash(record_hashes: list[str]) -> str:
+    payload = {
+        "record_count": len(record_hashes),
+        "ordered_record_hashes": record_hashes,
+    }
+    canonical = json.dumps(
+        {
+            "domain": "zkaedi.replay-snapshot",
+            "value": payload,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(canonical).hexdigest()
 
 def lock_file_ex(fh) -> None:
     if HAS_FCNTL:
@@ -214,7 +268,7 @@ def read_replay_prefix(content: bytes) -> tuple[list[dict[str, Any]], int]:
 
 def append_jsonl_durable(path: str, record: dict[str, Any]) -> None:
     if not isinstance(record, dict):
-        raise TypeError("replay record must be a dictionary")
+        raise TypeError("record must be a dictionary")
         
     abspath = os.path.abspath(path)
     directory = os.path.dirname(abspath)
@@ -227,22 +281,43 @@ def append_jsonl_durable(path: str, record: dict[str, Any]) -> None:
     with open(abspath, "a+b") as fh:
         lock_file_ex(fh)
         try:
-            fh.seek(0)
-            existing = fh.read()
-            _, valid_end = read_replay_prefix(existing)
-            
-            if valid_end < len(existing):
-                fh.seek(valid_end)
-                fh.truncate()
-                fh.flush()
-                os.fsync(fh.fileno())
-                
-            # If the existing file did not end with a newline, append one first
             fh.seek(0, os.SEEK_END)
-            truncated_bytes = existing[:valid_end]
-            if truncated_bytes and not truncated_bytes.endswith(b"\n"):
-                fh.write(b"\n")
+            size = fh.tell()
+            
+            # Read up to the last 8192 bytes
+            read_size = min(size, 8192)
+            if read_size > 0:
+                fh.seek(-read_size, os.SEEK_END)
+                chunk = fh.read(read_size)
                 
+                # Find last line
+                lines = chunk.splitlines(keepends=True)
+                if lines:
+                    last_line = lines[-1]
+                    # Check if last_line is terminated
+                    if not last_line.endswith(b"\n") and last_line.strip():
+                        # It is unterminated. Let's see if it parses.
+                        try:
+                            json.loads(last_line.decode("utf-8"))
+                            # It is a valid record but just missing a newline. We don't truncate.
+                        except (UnicodeDecodeError, json.JSONDecodeError):
+                            # It is corrupted / torn. We must truncate it.
+                            trunc_offset = size - len(last_line)
+                            fh.seek(trunc_offset)
+                            fh.truncate()
+                            fh.flush()
+                            os.fsync(fh.fileno())
+            
+            # Check spacing: if the file size after truncation is > 0 and does not end with \n, append \n
+            fh.seek(0, os.SEEK_END)
+            final_size = fh.tell()
+            if final_size > 0:
+                fh.seek(-1, os.SEEK_END)
+                if fh.read(1) != b"\n":
+                    fh.seek(0, os.SEEK_END)
+                    fh.write(b"\n")
+                    
+            fh.seek(0, os.SEEK_END)
             fh.write(serialized)
             fh.flush()
             os.fsync(fh.fileno())
@@ -261,7 +336,7 @@ def record_online_outcome(path: str, outcome: OnlineOutcome) -> None:
     Note: deduplication checks are performed as a read-time projection during load_unique_records.
     """
     payload = asdict(outcome)
-    payload["schema_version"] = 1
+    payload["schema_version"] = ONLINE_OUTCOME_SCHEMA_VERSION
     payload["desirable"] = derive_desirability(outcome)
     payload["trainable"] = should_train_on(outcome)
     payload["recorded_at_unix"] = time.time()
@@ -272,12 +347,12 @@ def record_online_outcome(path: str, outcome: OnlineOutcome) -> None:
         outcome.evaluator_version,
         outcome.policy_checkpoint,
         outcome.sandbox_version,
-        schema_version=1
+        schema_version=ONLINE_OUTCOME_SCHEMA_VERSION
     )
     payload["record_hash"] = compute_record_hash(payload)
     append_jsonl_durable(path, payload)
 
-def load_unique_records(path: str) -> ReplayLoadResult:
+def load_unique_records(path: str, allow_legacy: bool = False) -> ReplayLoadResult:
     abspath = os.path.abspath(path)
     if not os.path.exists(abspath):
         return ReplayLoadResult(records=[], tail_record_skipped=False, skipped_duplicate_count=0, tail_missing_newline=False)
@@ -307,12 +382,29 @@ def load_unique_records(path: str) -> ReplayLoadResult:
     skipped_dup = 0
     
     for index, record in enumerate(records):
-        # Legacy/migration check
-        if "schema_version" not in record or record.get("schema_version") == 0:
-            if "dedup_hash" in record or "record_hash" in record:
-                raise ValueError(f"record {index} has a hash but has invalid/missing schema_version")
-            unique[f"legacy:{index}"] = record
-            continue
+        # Legacy migration boundary checks
+        if "schema_version" not in record:
+            if allow_legacy:
+                unique[f"legacy:{index}"] = record
+                continue
+            else:
+                raise ValueError(f"record {index} is unversioned; run the legacy migration tool")
+
+        schema_version = record["schema_version"]
+        if isinstance(schema_version, bool) or not isinstance(schema_version, int):
+            raise ValueError(f"record {index} schema_version must be an integer")
+
+        if schema_version == 0:
+            if allow_legacy:
+                if "dedup_hash" in record or "record_hash" in record:
+                    raise ValueError(f"record {index} has a hash but has legacy schema_version")
+                unique[f"legacy:{index}"] = record
+                continue
+            else:
+                raise ValueError(f"record {index} is legacy; run the legacy migration tool")
+
+        if schema_version != ONLINE_OUTCOME_SCHEMA_VERSION:
+            raise ValueError(f"record {index} has unsupported schema_version: {schema_version}")
 
         if "dedup_hash" not in record:
             raise ValueError(f"record {index} is missing dedup_hash")
@@ -326,13 +418,6 @@ def load_unique_records(path: str) -> ReplayLoadResult:
 
         if not is_sha256_identifier(dedup_hash):
             raise ValueError(f"record {index} dedup_hash is malformed")
-
-        schema_version = record["schema_version"]
-        if isinstance(schema_version, bool) or not isinstance(schema_version, int):
-            raise ValueError(f"record {index} schema_version must be an integer")
-
-        if schema_version != 1:
-            raise ValueError(f"record {index} has unsupported schema_version: {schema_version}")
 
         # Integrity check on full record
         supplied_record_hash = record.get("record_hash")
@@ -359,10 +444,14 @@ def load_unique_records(path: str) -> ReplayLoadResult:
         except KeyError:
             raise ValueError(f"record {index} lacks required fields for dedup validation")
 
-        if dedup_hash in unique:
+        # Conflict resolution check
+        existing = unique.get(dedup_hash)
+        if existing is None:
+            unique[dedup_hash] = record
+        elif secrets.compare_digest(existing["record_hash"], record["record_hash"]):
             skipped_dup += 1
         else:
-            unique[dedup_hash] = record
+            raise ValueError(f"record {index} conflicts with an existing dedup identity")
 
     return ReplayLoadResult(
         records=list(unique.values()),
@@ -370,3 +459,56 @@ def load_unique_records(path: str) -> ReplayLoadResult:
         skipped_duplicate_count=skipped_dup,
         tail_missing_newline=unterminated
     )
+
+def migrate_legacy_replay(
+    source_path: str,
+    destination_path: str,
+    migration_version: str = "legacy-v0-to-v1",
+) -> None:
+    source_abspath = os.path.abspath(source_path)
+    if not os.path.exists(source_abspath):
+        return
+
+    with open(source_abspath, "rb") as sf:
+        lock_file_sh(sf)
+        try:
+            content = sf.read()
+        finally:
+            unlock_file(sf)
+
+    records, _ = read_replay_prefix(content)
+    
+    for index, record in enumerate(records):
+        # Determine if it needs migration
+        if "schema_version" not in record or record.get("schema_version") == 0:
+            source_record_hash = "sha256:" + hashlib.sha256(canonical_json_bytes(record)).hexdigest()
+            
+            migrated = copy.deepcopy(record)
+            migrated["schema_version"] = ONLINE_OUTCOME_SCHEMA_VERSION
+            migrated["migration"] = {
+                "source_schema": 0,
+                "migration_version": migration_version,
+                "source_record_hash": source_record_hash,
+            }
+            
+            prompt = migrated.get("prompt", "")
+            completion = migrated.get("completion", "")
+            harness_version = migrated.get("harness_version", "legacy")
+            evaluator_version = migrated.get("evaluator_version", "legacy")
+            policy_checkpoint = migrated.get("policy_checkpoint", "legacy")
+            sandbox_version = migrated.get("sandbox_version", "legacy")
+            
+            migrated["prompt"] = prompt
+            migrated["completion"] = completion
+            migrated["harness_version"] = harness_version
+            migrated["evaluator_version"] = evaluator_version
+            migrated["policy_checkpoint"] = policy_checkpoint
+            migrated["sandbox_version"] = sandbox_version
+            
+            migrated["dedup_hash"] = compute_dedup_hash(
+                prompt, completion, harness_version, evaluator_version, policy_checkpoint, sandbox_version, schema_version=ONLINE_OUTCOME_SCHEMA_VERSION
+            )
+            migrated["record_hash"] = compute_record_hash(migrated)
+            append_jsonl_durable(destination_path, migrated)
+        else:
+            append_jsonl_durable(destination_path, record)

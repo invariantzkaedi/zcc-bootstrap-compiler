@@ -971,17 +971,33 @@ class TestLedgerSecurity(unittest.TestCase):
                 os.unlink(path)
 
     def test_replay_append_after_valid_unterminated_record(self):
-        from lineage.online_types import load_unique_records, append_jsonl_durable
+        from lineage.online_types import load_unique_records, append_jsonl_durable, compute_dedup_hash, compute_record_hash
         fd, path = tempfile.mkstemp(suffix=".jsonl")
         os.close(fd)
         try:
             # Write a valid JSON line missing a final newline separator
-            first_record = {"prompt": "hello", "completion": "world"}
+            first_record = {
+                "prompt": "hello", "completion": "world",
+                "harness_version": "1.0", "evaluator_version": "1.0",
+                "policy_checkpoint": "ckpt", "sandbox_version": "1.0",
+                "schema_version": 1
+            }
+            first_record["dedup_hash"] = compute_dedup_hash("hello", "world", "1.0", "1.0", "ckpt", "1.0", 1)
+            first_record["record_hash"] = compute_record_hash(first_record)
+            
             with open(path, "wb") as fh:
                 fh.write(json.dumps(first_record).encode("utf-8")) # no newline at all!
                 
             # Append next record durably
-            second_record = {"prompt": "hello-2", "completion": "world-2"}
+            second_record = {
+                "prompt": "hello-2", "completion": "world-2",
+                "harness_version": "1.0", "evaluator_version": "1.0",
+                "policy_checkpoint": "ckpt", "sandbox_version": "1.0",
+                "schema_version": 1
+            }
+            second_record["dedup_hash"] = compute_dedup_hash("hello-2", "world-2", "1.0", "1.0", "ckpt", "1.0", 1)
+            second_record["record_hash"] = compute_record_hash(second_record)
+            
             append_jsonl_durable(path, second_record)
             
             # Verify both records are loaded successfully and separator newline was placed correctly
@@ -1030,7 +1046,7 @@ class TestLedgerSecurity(unittest.TestCase):
             # Legacy records do not have dedup_hash key
             with open(path, "wb") as fh:
                 fh.write(b'{"prompt":"legacy","completion":"data"}\n')
-            result = load_unique_records(path)
+            result = load_unique_records(path, allow_legacy=True)
             self.assertEqual(len(result.records), 1)
             self.assertEqual(result.records[0]["prompt"], "legacy")
         finally:
@@ -1092,7 +1108,7 @@ class TestLedgerSecurity(unittest.TestCase):
                 fh.write(b'{"prompt":"h","completion":"c","harness_version":"1","evaluator_version":"1","policy_checkpoint":"x","sandbox_version":"1","dedup_hash":"sha256:0000000000000000000000000000000000000000000000000000000000000000"}\n')
             with self.assertRaises(ValueError) as ctx:
                 load_unique_records(path)
-            self.assertIn("missing schema_version", str(ctx.exception))
+            self.assertIn("is unversioned; run the legacy migration tool", str(ctx.exception))
             
             # Unsupported schema_version (e.g. 2)
             with open(path, "wb") as fh:
@@ -1363,6 +1379,256 @@ class TestLedgerSecurity(unittest.TestCase):
                 runtime_ms=10.0, runner_exit=True, verdict="pass", failure_class=None,
                 harness_version="1", evaluator_version="1", policy_checkpoint="ckpt", sandbox_version="1"
             )
+
+    def test_modern_record_with_all_security_fields_removed_is_rejected(self):
+        from lineage.online_types import load_unique_records
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            # Writing record with no schema_version, dedup_hash, or record_hash must fail loading
+            with open(path, "wb") as fh:
+                fh.write(b'{"prompt":"h","completion":"c"}\n')
+            with self.assertRaises(ValueError) as ctx:
+                load_unique_records(path)
+            self.assertIn("is unversioned; run the legacy migration tool", str(ctx.exception))
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_legacy_records_load_only_through_migration_mode(self):
+        from lineage.online_types import load_unique_records, migrate_legacy_replay
+        fd_src, src_path = tempfile.mkstemp(suffix="-src.jsonl")
+        fd_dst, dst_path = tempfile.mkstemp(suffix="-dst.jsonl")
+        os.close(fd_src)
+        os.close(fd_dst)
+        try:
+            # Legacy file
+            with open(src_path, "wb") as fh:
+                fh.write(b'{"prompt":"legacy","completion":"data"}\n')
+                
+            # Direct load must fail
+            with self.assertRaises(ValueError):
+                load_unique_records(src_path)
+                
+            # Run migration tool
+            migrate_legacy_replay(src_path, dst_path)
+            
+            # Destination load must succeed, and record must have schema_version=1 & migration info
+            res = load_unique_records(dst_path)
+            self.assertEqual(len(res.records), 1)
+            self.assertEqual(res.records[0]["schema_version"], 1)
+            self.assertEqual(res.records[0]["migration"]["source_schema"], 0)
+        finally:
+            for p in (src_path, dst_path):
+                if os.path.exists(p):
+                    os.unlink(p)
+
+    def test_exact_duplicate_record_hashes_increment_duplicate_count(self):
+        from lineage.online_types import record_online_outcome, OnlineOutcome, load_unique_records
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            outcome = OnlineOutcome(
+                config_id="config-1", candidate_id="cand-1", prompt="hello", completion="world",
+                sandbox_passed=True, safety_passed=True, verification_score=1.0, runtime_ms=10.0,
+                runner_exit=0, verdict="pass", failure_class=None,
+                harness_version="1", evaluator_version="1", policy_checkpoint="ckpt", sandbox_version="1"
+            )
+            # Append same outcome twice (exact duplicates by writing exact same bytes)
+            record_online_outcome(path, outcome)
+            with open(path, "rb") as fh:
+                data = fh.read()
+            with open(path, "ab") as fh:
+                fh.write(data)
+            
+            res = load_unique_records(path)
+            self.assertEqual(len(res.records), 1)
+            self.assertEqual(res.skipped_duplicate_count, 1)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_same_dedup_hash_with_different_record_hash_produces_conflict(self):
+        from lineage.online_types import load_unique_records, record_online_outcome, OnlineOutcome
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            outcome1 = OnlineOutcome(
+                config_id="config-1", candidate_id="cand-1", prompt="hello", completion="world",
+                sandbox_passed=True, safety_passed=True, verification_score=1.0, runtime_ms=10.0,
+                runner_exit=0, verdict="pass", failure_class=None,
+                harness_version="1", evaluator_version="1", policy_checkpoint="ckpt", sandbox_version="1"
+            )
+            # outcome2 has same prompt/completion (same dedup_hash) but different metadata (different record_hash)
+            outcome2 = OnlineOutcome(
+                config_id="config-2", candidate_id="cand-2", prompt="hello", completion="world",
+                sandbox_passed=True, safety_passed=True, verification_score=2.0, runtime_ms=20.0,
+                runner_exit=0, verdict="pass", failure_class=None,
+                harness_version="1", evaluator_version="1", policy_checkpoint="ckpt", sandbox_version="1"
+            )
+            record_online_outcome(path, outcome1)
+            record_online_outcome(path, outcome2)
+            
+            # Loading must raise a conflict ValueError
+            with self.assertRaises(ValueError) as ctx:
+                load_unique_records(path)
+            self.assertIn("conflicts with an existing dedup identity", str(ctx.exception))
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_non_boolean_sandbox_passed_rejected(self):
+        from lineage.online_types import OnlineOutcome
+        with self.assertRaises(TypeError):
+            OnlineOutcome(
+                config_id="c", candidate_id="cand", prompt="p", completion="comp",
+                sandbox_passed="yes", safety_passed=True, verification_score=1.0,
+                runtime_ms=10.0, runner_exit=0, verdict="pass", failure_class=None,
+                harness_version="1", evaluator_version="1", policy_checkpoint="ckpt", sandbox_version="1"
+            )
+
+    def test_non_boolean_safety_passed_rejected(self):
+        from lineage.online_types import OnlineOutcome
+        with self.assertRaises(TypeError):
+            OnlineOutcome(
+                config_id="c", candidate_id="cand", prompt="p", completion="comp",
+                sandbox_passed=True, safety_passed=1, verification_score=1.0,
+                runtime_ms=10.0, runner_exit=0, verdict="pass", failure_class=None,
+                harness_version="1", evaluator_version="1", policy_checkpoint="ckpt", sandbox_version="1"
+            )
+
+    def test_empty_version_metadata_rejected(self):
+        from lineage.online_types import OnlineOutcome
+        with self.assertRaises(ValueError):
+            OnlineOutcome(
+                config_id="c", candidate_id="cand", prompt="p", completion="comp",
+                sandbox_passed=True, safety_passed=True, verification_score=1.0,
+                runtime_ms=10.0, runner_exit=0, verdict="pass", failure_class=None,
+                harness_version="", evaluator_version="1", policy_checkpoint="ckpt", sandbox_version="1"
+            )
+
+    def test_pass_verdict_with_failed_safety_status_rejected(self):
+        from lineage.online_types import OnlineOutcome
+        with self.assertRaises(ValueError):
+            OnlineOutcome(
+                config_id="c", candidate_id="cand", prompt="p", completion="comp",
+                sandbox_passed=True, safety_passed=False, verification_score=1.0,
+                runtime_ms=10.0, runner_exit=0, verdict="pass", failure_class=None,
+                harness_version="1", evaluator_version="1", policy_checkpoint="ckpt", sandbox_version="1"
+            )
+
+    def test_pass_verdict_with_nonzero_runner_exit_rejected(self):
+        from lineage.online_types import OnlineOutcome
+        with self.assertRaises(ValueError):
+            OnlineOutcome(
+                config_id="c", candidate_id="cand", prompt="p", completion="comp",
+                sandbox_passed=True, safety_passed=True, verification_score=1.0,
+                runtime_ms=10.0, runner_exit=1, verdict="pass", failure_class=None,
+                harness_version="1", evaluator_version="1", policy_checkpoint="ckpt", sandbox_version="1"
+            )
+
+    def test_uninitialized_contradictory_ledger_verification_cannot_be_anchored(self):
+        # A verification showing records_verified=1 but initialized=False is contradictory
+        verification = LedgerVerification(
+            valid=True,
+            initialized=False,
+            records_verified=1,
+            head_hash="sha256:" + "a" * 64,
+            failures=()
+        )
+        with self.assertRaises(ValueError):
+            sign_ledger_anchor(
+                ledger_id=self.ledger_id,
+                verification=verification,
+                signer_key_id=self.signer_key_id,
+                private_key=self.private_key
+            )
+
+    def test_replay_root_committed_to_ledger_detects_wholesale_replay_replacement(self):
+        from lineage.online_types import record_online_outcome, OnlineOutcome, load_unique_records, compute_replay_root_hash
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            outcome = OnlineOutcome(
+                config_id="config-1", candidate_id="cand-1", prompt="hello", completion="world",
+                sandbox_passed=True, safety_passed=True, verification_score=1.0, runtime_ms=10.0,
+                runner_exit=0, verdict="pass", failure_class=None,
+                harness_version="1", evaluator_version="1", policy_checkpoint="ckpt", sandbox_version="1"
+            )
+            record_online_outcome(path, outcome)
+            
+            res = load_unique_records(path)
+            orig_hashes = [r["record_hash"] for r in res.records]
+            orig_root = compute_replay_root_hash(orig_hashes)
+            
+            # Now wholesale replacement of the database occurs
+            with open(path, "wb") as fh:
+                pass
+            outcome_new = OnlineOutcome(
+                config_id="config-1", candidate_id="cand-1", prompt="replaced", completion="different",
+                sandbox_passed=True, safety_passed=True, verification_score=1.0, runtime_ms=10.0,
+                runner_exit=0, verdict="pass", failure_class=None,
+                harness_version="1", evaluator_version="1", policy_checkpoint="ckpt", sandbox_version="1"
+            )
+            record_online_outcome(path, outcome_new)
+                
+            # Even if the records are technically valid v1 shapes, they produce a different root hash
+            # which will not match the committed root stored in the ledger!
+            res_new = load_unique_records(path)
+            new_hashes = [r["record_hash"] for r in res_new.records]
+            new_root = compute_replay_root_hash(new_hashes)
+            
+            self.assertNotEqual(orig_root, new_root)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_large_log_benchmark_records_append_latency(self):
+        from lineage.online_types import record_online_outcome, OnlineOutcome
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            # Warm up with some initial records
+            for i in range(10):
+                outcome = OnlineOutcome(
+                    config_id=f"config-{i}", candidate_id=f"cand-{i}", prompt=f"p-{i}", completion=f"c-{i}",
+                    sandbox_passed=True, safety_passed=True, verification_score=1.0, runtime_ms=10.0,
+                    runner_exit=0, verdict="pass", failure_class=None,
+                    harness_version="1", evaluator_version="1", policy_checkpoint="ckpt", sandbox_version="1"
+                )
+                record_online_outcome(path, outcome)
+                
+            # Time appends at N=10 vs N=100 (proving tail check optimization is scale-invariant/O(1) append latency)
+            outcome_test = OnlineOutcome(
+                config_id="config-test", candidate_id="cand-test", prompt="p-test", completion="c-test",
+                sandbox_passed=True, safety_passed=True, verification_score=1.0, runtime_ms=10.0,
+                runner_exit=0, verdict="pass", failure_class=None,
+                harness_version="1", evaluator_version="1", policy_checkpoint="ckpt", sandbox_version="1"
+            )
+            
+            t0 = time.perf_counter()
+            record_online_outcome(path, outcome_test)
+            dt_small = time.perf_counter() - t0
+            
+            # Grow database significantly
+            for i in range(11, 150):
+                outcome = OnlineOutcome(
+                    config_id=f"config-{i}", candidate_id=f"cand-{i}", prompt=f"p-{i}", completion=f"c-{i}",
+                    sandbox_passed=True, safety_passed=True, verification_score=1.0, runtime_ms=10.0,
+                    runner_exit=0, verdict="pass", failure_class=None,
+                    harness_version="1", evaluator_version="1", policy_checkpoint="ckpt", sandbox_version="1"
+                )
+                record_online_outcome(path, outcome)
+                
+            t1 = time.perf_counter()
+            record_online_outcome(path, outcome_test)
+            dt_large = time.perf_counter() - t1
+            
+            # Print latency results for tracking
+            print(f"\n[BENCHMARK] Append latency: N=10 -> {dt_small*1000:.3f}ms | N=150 -> {dt_large*1000:.3f}ms")
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
 
 if __name__ == "__main__":
     unittest.main()

@@ -13,6 +13,8 @@ from typing import Optional, Any
 GENESIS_SEQUENCE = 0
 MAX_CLOCK_SKEW = 300.0
 MAX_ANCHOR_AGE = 86400.0 * 30.0  # 30 days
+LEDGER_SCHEMA_VERSION = 1
+ANCHOR_SCHEMA_VERSION = 1
 
 from lineage.online_types import (
     canonical_json_bytes,
@@ -217,7 +219,7 @@ def build_ledger_envelope(
     payload_hash = content_hash("zkaedi.ledger-payload", canonical_payload)
     
     header = {
-        "schema_version": 1,
+        "schema_version": LEDGER_SCHEMA_VERSION,
         "ledger_id": ledger_id,
         "sequence": sequence,
         "previous_hash": previous_hash,
@@ -227,7 +229,7 @@ def build_ledger_envelope(
     entry_hash = content_hash("zkaedi.ledger-header", header)
     
     return LedgerEnvelope(
-        schema_version=1,
+        schema_version=LEDGER_SCHEMA_VERSION,
         ledger_id=ledger_id,
         sequence=sequence,
         previous_hash=previous_hash,
@@ -263,8 +265,8 @@ def verify_records_sequence(records: list[dict], expected_ledger_id: str) -> tup
             record_valid = False
             previous_entry_hash = None
             continue
-        if schema_version != 1:
-            failures.append(f"Record index {idx} invalid schema_version: {schema_version} (expected: 1)")
+        if schema_version != LEDGER_SCHEMA_VERSION:
+            failures.append(f"Record index {idx} invalid schema_version: {schema_version} (expected: {LEDGER_SCHEMA_VERSION})")
             record_valid = False
             previous_entry_hash = None
             continue
@@ -601,7 +603,7 @@ def verify_rollback_certificate(cert: dict[str, Any]) -> bool:
 def anchor_signing_bytes(anchor: LedgerAnchor) -> bytes:
     return canonical_json_bytes({
         "domain": "zkaedi.ledger-anchor",
-        "schema_version": 1,
+        "schema_version": ANCHOR_SCHEMA_VERSION,
         "ledger_id": anchor.ledger_id,
         "sequence": anchor.sequence,
         "head_hash": anchor.head_hash,
@@ -619,8 +621,8 @@ def sign_ledger_anchor(
 ) -> LedgerAnchor:
     if not isinstance(verification, LedgerVerification):
         raise TypeError("verification must be a LedgerVerification")
-    if not verification.valid or verification.head_hash is None or verification.records_verified <= 0:
-        raise ValueError("cannot anchor an invalid or empty ledger")
+    if not verification.valid or not verification.initialized or verification.head_hash is None or verification.records_verified <= 0:
+        raise ValueError("cannot anchor an invalid, uninitialized or empty ledger")
         
     validate_ledger_id(ledger_id)
     if not isinstance(signer_key_id, str) or not signer_key_id:
@@ -753,6 +755,8 @@ def verify_ledger_anchor(
 
     # 2. Check structural validation alignment
     if not verification.valid:
+        return False
+    if not verification.initialized:
         return False
     if verification.records_verified <= 0:
         return False
