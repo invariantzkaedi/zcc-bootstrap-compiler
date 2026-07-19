@@ -74,7 +74,7 @@ ZCC is compiled by concatenating discrete parts inside the `Makefile` before inv
 - [x] Re-enable LICM pass (Confirmed enabled in run_all_passes)
 - [x] Resolve src/ diverged duplicates (Checked: no duplicates remain)
 - [x] ASan run to confirm SARIF CWE-416/415 findings (Run completed, no UAF/Double-Free detected)
-- [ ] GLB extraction and history rewrite
+- [x] GLB extraction and history rewrite
 - [x] DPO Model Alignment Retrain (increase update budget, lr to 1e-5-5e-5, max_length=1024)
 
 ---

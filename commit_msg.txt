@@ -1,7 +1,7 @@
-doc(status): mark DPO Model Alignment Retrain as completed in ZCC_STATUS.md
+doc(status): mark GLB history check and extraction as completed
 
 Goal:
-Update the ZCC status list to correctly reflect that the DPO Model Alignment Retrain task has been completed and attested.
+Update ZCC_STATUS.md to reflect that the git history has been verified as clean of GLB binary assets.
 
 Outcome:
-ZCC_STATUS.md is updated, marking the DPO alignment retrain milestone as completed.
+GLB history check and extraction task marked as completed.
