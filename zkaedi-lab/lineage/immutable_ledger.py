@@ -14,7 +14,7 @@ GENESIS_SEQUENCE = 0
 MAX_CLOCK_SKEW = 300.0
 MAX_ANCHOR_AGE = 86400.0 * 30.0  # 30 days
 
-from online_types import (
+from lineage.online_types import (
     canonical_json_bytes,
     lock_file_ex,
     lock_file_sh,
@@ -44,6 +44,7 @@ class TrainingReceipt:
 
 @dataclass(frozen=True, slots=True)
 class LedgerEnvelope:
+    ledger_id: str
     sequence: int
     previous_hash: Optional[str]
     payload: Mapping[str, Any]
@@ -74,6 +75,14 @@ class LedgerVerification:
     records_verified: int
     head_hash: Optional[str]
     failures: tuple[str, ...]
+
+@dataclass(frozen=True, slots=True)
+class TrustedSigner:
+    public_key: bytes
+    valid_from: float
+    valid_until: Optional[float]
+    revoked_at: Optional[float]
+    allowed_ledgers: frozenset[str]
 
 def validate_json_mapping_keys(value: Any) -> None:
     if isinstance(value, set | frozenset):
@@ -108,6 +117,7 @@ def thaw(val: Any) -> Any:
 
 def serialize_envelope(envelope: LedgerEnvelope) -> bytes:
     envelope_dict = {
+        "ledger_id": envelope.ledger_id,
         "sequence": envelope.sequence,
         "previous_hash": envelope.previous_hash,
         "payload": thaw(envelope.payload),
@@ -149,12 +159,15 @@ def compute_experiment_id(manifest: dict[str, Any]) -> str:
     return content_hash("zkaedi.experiment-manifest", manifest)
 
 def build_ledger_envelope(
+    ledger_id: str,
     sequence: int,
     previous_hash: Optional[str],
     payload: dict[str, Any],
     recorded_at_unix: float
 ) -> LedgerEnvelope:
     # 1. Parameter type and invariant checks
+    if not isinstance(ledger_id, str) or not ledger_id:
+        raise ValueError("ledger_id must be a non-empty string")
     if isinstance(sequence, bool) or not isinstance(sequence, int):
         raise TypeError("sequence must be an integer")
     if sequence < GENESIS_SEQUENCE:
@@ -182,6 +195,7 @@ def build_ledger_envelope(
     payload_hash = content_hash("zkaedi.ledger-payload", canonical_payload)
     
     header = {
+        "ledger_id": ledger_id,
         "sequence": sequence,
         "previous_hash": previous_hash,
         "payload_hash": payload_hash,
@@ -190,6 +204,7 @@ def build_ledger_envelope(
     entry_hash = content_hash("zkaedi.ledger-header", header)
     
     return LedgerEnvelope(
+        ledger_id=ledger_id,
         sequence=sequence,
         previous_hash=previous_hash,
         payload=frozen_payload,
@@ -198,12 +213,14 @@ def build_ledger_envelope(
         recorded_at_unix=recorded_at_unix
     )
 
-def verify_records_sequence(records: list[dict]) -> tuple[bool, list[str]]:
+def verify_records_sequence(records: list[dict], expected_ledger_id: str) -> tuple[bool, list[str]]:
     failures = []
+    previous_entry_hash = None
     
     for idx, rec in enumerate(records):
         if not isinstance(rec, dict):
             failures.append(f"Record index {idx} is not a JSON object")
+            previous_entry_hash = None
             continue
 
         seq = rec.get("sequence")
@@ -211,6 +228,7 @@ def verify_records_sequence(records: list[dict]) -> tuple[bool, list[str]]:
         # Verify sequence type and increment
         if not isinstance(seq, int) or isinstance(seq, bool):
             failures.append(f"Record index {idx} sequence field is not an integer")
+            previous_entry_hash = None
             continue
             
         expected_seq = GENESIS_SEQUENCE + idx
@@ -221,21 +239,31 @@ def verify_records_sequence(records: list[dict]) -> tuple[bool, list[str]]:
         
         if not isinstance(payload, dict):
             failures.append(f"Record sequence {seq} payload must be a JSON object")
+            previous_entry_hash = None
             continue
 
         payload_hash = rec.get("payload_hash")
         entry_hash = rec.get("entry_hash")
         prev_hash = rec.get("previous_hash")
+        rec_ledger_id = rec.get("ledger_id")
         
+        if rec_ledger_id != expected_ledger_id:
+            failures.append(f"Record sequence {seq} ledger_id mismatch: {rec_ledger_id} (expected: {expected_ledger_id})")
+            previous_entry_hash = None
+            continue
+
         # Safe validations of SHA-256 identifier hashes
         if not is_sha256_identifier(payload_hash):
             failures.append(f"Record index {idx} payload_hash is not a valid SHA-256 identifier")
+            previous_entry_hash = None
             continue
         if not is_sha256_identifier(entry_hash):
             failures.append(f"Record index {idx} entry_hash is not a valid SHA-256 identifier")
+            previous_entry_hash = None
             continue
         if idx > 0 and not is_sha256_identifier(prev_hash):
             failures.append(f"Record index {idx} previous_hash is not a valid SHA-256 identifier")
+            previous_entry_hash = None
             continue
 
         # Safe verification of payload keys
@@ -243,6 +271,7 @@ def verify_records_sequence(records: list[dict]) -> tuple[bool, list[str]]:
             validate_json_mapping_keys(payload)
         except (TypeError, ValueError) as exc:
             failures.append(f"Record index {idx} payload keys validation failed: {exc}")
+            previous_entry_hash = None
             continue
 
         # Verify payload hash with crash-safe catch for non-canonical structures
@@ -250,6 +279,7 @@ def verify_records_sequence(records: list[dict]) -> tuple[bool, list[str]]:
             expected_p_hash = content_hash("zkaedi.ledger-payload", payload)
         except (TypeError, ValueError, OverflowError) as exc:
             failures.append(f"Record sequence {seq} payload is not canonical JSON: {exc}")
+            previous_entry_hash = None
             continue
 
         if not hashes_equal(payload_hash, expected_p_hash):
@@ -263,9 +293,11 @@ def verify_records_sequence(records: list[dict]) -> tuple[bool, list[str]]:
             or not math.isfinite(float(recorded_at))
         ):
             failures.append(f"Record sequence {seq} recorded_at_unix is invalid")
+            previous_entry_hash = None
             continue
             
         header = {
+            "ledger_id": expected_ledger_id,
             "sequence": seq,
             "previous_hash": prev_hash,
             "payload_hash": payload_hash,
@@ -277,6 +309,7 @@ def verify_records_sequence(records: list[dict]) -> tuple[bool, list[str]]:
             expected_entry_hash = content_hash("zkaedi.ledger-header", header)
         except (TypeError, ValueError, OverflowError) as exc:
             failures.append(f"Record sequence {seq} header is not canonical JSON: {exc}")
+            previous_entry_hash = None
             continue
 
         if not hashes_equal(entry_hash, expected_entry_hash):
@@ -287,10 +320,16 @@ def verify_records_sequence(records: list[dict]) -> tuple[bool, list[str]]:
             if prev_hash is not None:
                 failures.append("Genesis record previous_hash must be None")
         else:
-            prev_rec = records[idx - 1]
-            prev_entry_hash = prev_rec.get("entry_hash")
-            if not hashes_equal(prev_hash, prev_entry_hash):
-                failures.append(f"Record sequence {seq} points to invalid parent hash: {prev_hash}")
+            if previous_entry_hash is None:
+                failures.append(f"Record sequence {seq} follows an invalid parent")
+            elif not hashes_equal(prev_hash, previous_entry_hash):
+                failures.append(f"Record sequence {seq} points to an invalid parent")
+
+        previous_entry_hash = (
+            entry_hash
+            if is_sha256_identifier(entry_hash)
+            else None
+        )
                 
     return len(failures) == 0, failures
 
@@ -340,7 +379,7 @@ def read_complete_jsonl_prefix(data: bytes) -> tuple[list[dict], int]:
 
     return records, valid_end
 
-def verify_ledger(path: str) -> LedgerVerification:
+def verify_ledger(path: str, expected_ledger_id: str) -> LedgerVerification:
     abspath = os.path.abspath(path)
     if not os.path.exists(abspath):
         return LedgerVerification(valid=True, records_verified=0, head_hash=None, failures=())
@@ -361,7 +400,7 @@ def verify_ledger(path: str) -> LedgerVerification:
     if valid_end < len(content_bytes):
         failures.append("ledger contains an incomplete trailing write")
 
-    valid_seq, seq_failures = verify_records_sequence(records)
+    valid_seq, seq_failures = verify_records_sequence(records, expected_ledger_id)
     failures.extend(seq_failures)
     
     valid = (len(failures) == 0) and valid_seq
@@ -374,7 +413,7 @@ def verify_ledger(path: str) -> LedgerVerification:
         failures=tuple(failures)
     )
 
-def append_ledger_payload(path: str, payload: dict[str, Any]) -> LedgerEnvelope:
+def append_ledger_payload(path: str, ledger_id: str, payload: dict[str, Any]) -> LedgerEnvelope:
     abspath = os.path.abspath(path)
     directory = os.path.dirname(abspath)
     if directory:
@@ -395,7 +434,7 @@ def append_ledger_payload(path: str, payload: dict[str, Any]) -> LedgerEnvelope:
                 os.fsync(fh.fileno())
 
             # Verify existing chain integrity before appending
-            valid, failures = verify_records_sequence(records)
+            valid, failures = verify_records_sequence(records, ledger_id)
             if not valid:
                 raise ValueError(f"Ledger history is invalid. Failures: {failures}")
 
@@ -403,6 +442,7 @@ def append_ledger_payload(path: str, payload: dict[str, Any]) -> LedgerEnvelope:
             previous_hash = records[-1].get("entry_hash") if sequence > 0 else None
             
             envelope = build_ledger_envelope(
+                ledger_id=ledger_id,
                 sequence=sequence,
                 previous_hash=previous_hash,
                 payload=payload,
@@ -547,19 +587,34 @@ def sign_ledger_anchor(
     )
 
 def evaluate_anchor_policy(anchor: LedgerAnchor, *, max_age: float = MAX_ANCHOR_AGE) -> bool:
+    if (
+        isinstance(max_age, bool)
+        or not isinstance(max_age, (int, float))
+        or not math.isfinite(float(max_age))
+        or max_age < 0
+    ):
+        return False
+
+    timestamp = anchor.anchored_at_unix
+    if (
+        isinstance(timestamp, bool)
+        or not isinstance(timestamp, (int, float))
+        or not math.isfinite(float(timestamp))
+    ):
+        return False
+
     now = time.time()
-    if anchor.anchored_at_unix > now + MAX_CLOCK_SKEW:
-        return False
-    if now - anchor.anchored_at_unix > max_age:
-        return False
-    return True
+    return (
+        timestamp <= now + MAX_CLOCK_SKEW
+        and now - timestamp <= max_age
+    )
 
 def verify_ledger_anchor(
     anchor: LedgerAnchor,
     *,
     expected_ledger_id: str,
     verification: LedgerVerification,
-    trusted_keys: Mapping[str, bytes],
+    trusted_keys: Mapping[str, bytes | TrustedSigner],
 ) -> bool:
     # 1. Type validation on anchor properties
     if isinstance(anchor.sequence, bool) or not isinstance(anchor.sequence, int):
@@ -601,10 +656,37 @@ def verify_ledger_anchor(
         return False
 
     # 3. Resolve key against trusted keys registry
-    public_key = trusted_keys.get(anchor.signer_key_id)
-    if public_key is None:
+    signer_entry = trusted_keys.get(anchor.signer_key_id)
+    if signer_entry is None:
         return False
+
+    if isinstance(signer_entry, bytes):
+        public_key = signer_entry
+        valid_from = 0.0
+        valid_until = None
+        revoked_at = None
+        allowed_ledgers = None
+    elif isinstance(signer_entry, TrustedSigner):
+        public_key = signer_entry.public_key
+        valid_from = signer_entry.valid_from
+        valid_until = signer_entry.valid_until
+        revoked_at = signer_entry.revoked_at
+        allowed_ledgers = signer_entry.allowed_ledgers
+    else:
+        return False
+
     if not isinstance(public_key, bytes) or len(public_key) != 32:
+        return False
+
+    # Validate key lifecycle policy at anchor.anchored_at_unix time
+    t = anchor.anchored_at_unix
+    if t < valid_from:
+        return False
+    if valid_until is not None and t > valid_until:
+        return False
+    if revoked_at is not None and t >= revoked_at:
+        return False
+    if allowed_ledgers is not None and expected_ledger_id not in allowed_ledgers:
         return False
 
     # 4. Cryptographic signature check
@@ -623,7 +705,7 @@ def accept_ledger_anchor(
     *,
     expected_ledger_id: str,
     verification: LedgerVerification,
-    trusted_keys: Mapping[str, bytes],
+    trusted_keys: Mapping[str, bytes | TrustedSigner],
     max_age: float = MAX_ANCHOR_AGE,
 ) -> bool:
     if (
