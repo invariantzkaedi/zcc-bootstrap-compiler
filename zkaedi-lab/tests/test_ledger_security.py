@@ -6,6 +6,7 @@ import math
 import json
 import tempfile
 import multiprocessing
+import copy
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
 # Add zkaedi-lab directory to path
@@ -18,7 +19,7 @@ from lineage.immutable_ledger import (
     LedgerAnchor,
     LedgerVerification,
     TrustedSigner,
-    legacy_signer,
+    unrestricted_legacy_signer,
     build_ledger_envelope,
     serialize_envelope,
     verify_records_sequence,
@@ -359,9 +360,12 @@ class TestLedgerSecurity(unittest.TestCase):
                 os.unlink(path)
 
     def test_empty_expected_ledger_id_is_rejected(self):
-        # Empty ledger ID checks in validation guards
-        with self.assertRaises(ValueError):
-            verify_ledger("test_path.jsonl", "")
+        # Verifiers must fail closed with valid=False
+        v = verify_ledger("test_path.jsonl", "")
+        self.assertFalse(v.valid)
+        self.assertTrue(any("invalid expected_ledger_id" in f for f in v.failures))
+        
+        # Builders and mutators must raise
         with self.assertRaises(ValueError):
             append_ledger_payload("test_path.jsonl", "", {})
 
@@ -384,6 +388,143 @@ class TestLedgerSecurity(unittest.TestCase):
         # time=600 is too far ahead (age limit exceeded)
         self.assertFalse(evaluate_anchor_policy(anchor, now=600.0 + MAX_ANCHOR_AGE))
 
+    def test_malformed_now_clock_injected_fails(self):
+        verification = LedgerVerification(
+            valid=True,
+            records_verified=1,
+            head_hash="sha256:" + "a" * 64,
+            failures=()
+        )
+        anchor = sign_ledger_anchor(
+            ledger_id=self.ledger_id,
+            verification=verification,
+            signer_key_id=self.signer_key_id,
+            private_key=self.private_key,
+            anchored_at_unix=200.0
+        )
+        # Injected now timestamp must reject strings, booleans, NaN, and Infinity
+        self.assertFalse(evaluate_anchor_policy(anchor, now="today"))
+        self.assertFalse(evaluate_anchor_policy(anchor, now=True))
+        self.assertFalse(evaluate_anchor_policy(anchor, now=float("nan")))
+        self.assertFalse(evaluate_anchor_policy(anchor, now=float("inf")))
+
+    def test_expected_ledger_id_errors_fail_closed(self):
+        verification = LedgerVerification(
+            valid=True,
+            records_verified=1,
+            head_hash="sha256:" + "a" * 64,
+            failures=()
+        )
+        anchor = sign_ledger_anchor(
+            ledger_id=self.ledger_id,
+            verification=verification,
+            signer_key_id=self.signer_key_id,
+            private_key=self.private_key,
+            anchored_at_unix=time.time()
+        )
+        # verifiers must return False instead of raising ValueError for invalid ledger IDs
+        self.assertFalse(verify_ledger_anchor(anchor, expected_ledger_id="", verification=verification, trusted_keys=self.trusted_keys))
+        self.assertFalse(accept_ledger_anchor(anchor, expected_ledger_id="", verification=verification, trusted_keys=self.trusted_keys))
+
+    def test_malformed_trusted_keys_fail_closed(self):
+        verification = LedgerVerification(
+            valid=True,
+            records_verified=1,
+            head_hash="sha256:" + "a" * 64,
+            failures=()
+        )
+        anchor = sign_ledger_anchor(
+            ledger_id=self.ledger_id,
+            verification=verification,
+            signer_key_id=self.signer_key_id,
+            private_key=self.private_key,
+            anchored_at_unix=time.time()
+        )
+        # should return False on bad registry types instead of raising AttributeError
+        self.assertFalse(verify_ledger_anchor(anchor, expected_ledger_id=self.ledger_id, verification=verification, trusted_keys=None))
+        self.assertFalse(verify_ledger_anchor(anchor, expected_ledger_id=self.ledger_id, verification=verification, trusted_keys=[]))
+
+    def test_payload_mutation_after_append(self):
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            payload = {"state": "clean", "list": [1, 2, 3]}
+            # Append payload, then immediately mutate local reference
+            envelope = append_ledger_payload(path, self.ledger_id, payload)
+            payload["state"] = "mutated"
+            payload["list"].append(4)
+            
+            # Read back verification and check stored payload matches snapshot
+            verification = verify_ledger(path, self.ledger_id)
+            self.assertTrue(verification.valid)
+            with open(path, "rb") as fh:
+                records, _ = read_complete_jsonl_prefix(fh.read())
+            stored_payload = records[0]["payload"]
+            self.assertEqual(stored_payload["state"], "clean")
+            self.assertEqual(stored_payload["list"], [1, 2, 3])
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_abrupt_writer_termination_recovery(self):
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            # Genesis block append first
+            append_ledger_payload(path, self.ledger_id, {"genesis": True})
+            
+            # Manually append a partial, unterminated corrupted JSON line
+            with open(path, "ab") as fh:
+                fh.write(b'{"sequence": 1, "ledger_id": "test-ledger-abc", "payload": {"foo":')
+                
+            # Perform next append
+            append_ledger_payload(path, self.ledger_id, {"recovered": True})
+            
+            # Verify the ledger is completely recovered and valid
+            verification = verify_ledger(path, self.ledger_id)
+            self.assertTrue(verification.valid)
+            self.assertEqual(verification.records_verified, 2)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_unrestricted_legacy_signer_validates_key(self):
+        # invalid key lengths should raise ValueError on legacy adapter construction
+        with self.assertRaises(ValueError):
+            unrestricted_legacy_signer(b"short-key")
+        with self.assertRaises(ValueError):
+            unrestricted_legacy_signer(self.pub_bytes + b"extra")
+        # 32 bytes passes
+        self.assertIsInstance(unrestricted_legacy_signer(self.pub_bytes), TrustedSigner)
+
+    def test_historical_validity_vs_freshness(self):
+        # An anchor from Unix epoch 200.0 is historically cryptographically valid
+        signer = TrustedSigner(
+            public_key=self.pub_bytes,
+            valid_from=0.0,
+            valid_until=None,
+            revoked_at=None,
+            allowed_ledgers=frozenset([self.ledger_id])
+        )
+        verification = LedgerVerification(
+            valid=True,
+            records_verified=1,
+            head_hash="sha256:" + "a" * 64,
+            failures=()
+        )
+        anchor = sign_ledger_anchor(
+            ledger_id=self.ledger_id,
+            verification=verification,
+            signer_key_id=self.signer_key_id,
+            private_key=self.private_key,
+            anchored_at_unix=200.0
+        )
+        
+        # Historically valid Ed25519 signature
+        self.assertTrue(verify_ledger_anchor(anchor, expected_ledger_id=self.ledger_id, verification=verification, trusted_keys={self.signer_key_id: signer}))
+        # But accept_ledger_anchor at current real clock time rejects it as stale
+        self.assertFalse(accept_ledger_anchor(anchor, expected_ledger_id=self.ledger_id, verification=verification, trusted_keys={self.signer_key_id: signer}, now=time.time()))
+
     def test_multiple_processes_allocate_unique_sequences(self):
         fd, path = tempfile.mkstemp(suffix=".jsonl")
         os.close(fd)
@@ -393,23 +534,30 @@ class TestLedgerSecurity(unittest.TestCase):
             
             workers = 4
             appends_per_worker = 15
-            queue = multiprocessing.Queue()
+            
+            # Force spawn process context to ensure Windows compatibility checks
+            ctx = multiprocessing.get_context("spawn")
+            queue = ctx.Queue()
             processes = []
             for _ in range(workers):
-                p = multiprocessing.Process(
+                p = ctx.Process(
                     target=append_worker,
                     args=(path, self.ledger_id, appends_per_worker, queue)
                 )
                 processes.append(p)
                 p.start()
                 
+            # Collect and join processes with timeouts to prevent test deadlocks
             for p in processes:
-                p.join()
+                p.join(timeout=30)
+                self.assertFalse(p.is_alive())
+                self.assertEqual(p.exitcode, 0)
                 
-            results = []
-            while not queue.empty():
-                results.append(queue.get())
-                
+            results = [
+                queue.get(timeout=10)
+                for _ in range(workers)
+            ]
+            
             self.assertEqual(len(results), workers)
             for ok, val in results:
                 self.assertTrue(ok, f"Worker failed: {val}")

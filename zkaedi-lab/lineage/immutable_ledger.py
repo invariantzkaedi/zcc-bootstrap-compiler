@@ -84,7 +84,9 @@ class TrustedSigner:
     revoked_at: Optional[float]
     allowed_ledgers: Optional[frozenset[str]]
 
-def legacy_signer(public_key: bytes) -> TrustedSigner:
+def unrestricted_legacy_signer(public_key: bytes) -> TrustedSigner:
+    if not isinstance(public_key, bytes) or len(public_key) != 32:
+        raise ValueError("Ed25519 public key must contain exactly 32 bytes")
     return TrustedSigner(
         public_key=public_key,
         valid_from=0.0,
@@ -231,7 +233,11 @@ def build_ledger_envelope(
     )
 
 def verify_records_sequence(records: list[dict], expected_ledger_id: str) -> tuple[bool, list[str]]:
-    validate_ledger_id(expected_ledger_id)
+    try:
+        validate_ledger_id(expected_ledger_id)
+    except ValueError as exc:
+        return False, [f"invalid expected_ledger_id: {exc}"]
+
     failures = []
     previous_entry_hash = None
     
@@ -406,7 +412,11 @@ def read_complete_jsonl_prefix(data: bytes) -> tuple[list[dict], int]:
     return records, valid_end
 
 def verify_ledger(path: str, expected_ledger_id: str) -> LedgerVerification:
-    validate_ledger_id(expected_ledger_id)
+    try:
+        validate_ledger_id(expected_ledger_id)
+    except ValueError as exc:
+        return LedgerVerification(valid=False, records_verified=0, head_hash=None, failures=(f"invalid expected_ledger_id: {exc}",))
+
     abspath = os.path.abspath(path)
     if not os.path.exists(abspath):
         return LedgerVerification(valid=True, records_verified=0, head_hash=None, failures=())
@@ -445,9 +455,11 @@ def append_ledger_payload(path: str, ledger_id: str, payload: dict[str, Any]) ->
     validate_ledger_id(ledger_id)
     if not isinstance(payload, Mapping):
         raise TypeError("Ledger payload must be a mapping")
-    validate_json_mapping_keys(payload)
+        
+    payload_snapshot = copy.deepcopy(payload)
+    validate_json_mapping_keys(payload_snapshot)
     # Dry-run payload hash content sanity
-    content_hash("zkaedi.ledger-payload", payload)
+    content_hash("zkaedi.ledger-payload", payload_snapshot)
 
     abspath = os.path.abspath(path)
     directory = os.path.dirname(abspath)
@@ -480,7 +492,7 @@ def append_ledger_payload(path: str, ledger_id: str, payload: dict[str, Any]) ->
                 ledger_id=ledger_id,
                 sequence=sequence,
                 previous_hash=previous_hash,
-                payload=payload,
+                payload=payload_snapshot,
                 recorded_at_unix=time.time()
             )
             
@@ -652,6 +664,13 @@ def evaluate_anchor_policy(
         return False
 
     current = time.time() if now is None else now
+    if (
+        isinstance(current, bool)
+        or not isinstance(current, (int, float))
+        or not math.isfinite(float(current))
+    ):
+        return False
+
     return (
         timestamp <= current + MAX_CLOCK_SKEW
         and current - timestamp <= max_age
@@ -664,8 +683,18 @@ def verify_ledger_anchor(
     verification: LedgerVerification,
     trusted_keys: Mapping[str, TrustedSigner],
 ) -> bool:
+    # Fail-closed inputs validation guards
+    if not isinstance(anchor, LedgerAnchor):
+        return False
+    if not isinstance(trusted_keys, Mapping):
+        return False
+
+    try:
+        validate_ledger_id(expected_ledger_id)
+    except ValueError:
+        return False
+
     # 1. Type validation on anchor properties
-    validate_ledger_id(expected_ledger_id)
     if isinstance(anchor.sequence, bool) or not isinstance(anchor.sequence, int):
         return False
     if anchor.sequence < GENESIS_SEQUENCE:
@@ -769,7 +798,11 @@ def accept_ledger_anchor(
     max_age: float = MAX_ANCHOR_AGE,
     now: Optional[float] = None,
 ) -> bool:
-    validate_ledger_id(expected_ledger_id)
+    try:
+        validate_ledger_id(expected_ledger_id)
+    except ValueError:
+        return False
+
     if (
         isinstance(max_age, bool)
         or not isinstance(max_age, (int, float))
