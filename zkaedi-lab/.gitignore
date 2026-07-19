@@ -2,3 +2,4 @@ runs/
 logs/*.log
 *.pyc
 __pycache__/
+receipts/append-only/mutation_trajectory.json
