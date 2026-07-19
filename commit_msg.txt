@@ -1,17 +1,17 @@
-ci(selfhost): copy stage2.s and stage3.s to root directory for workflow compatibility
+ci(selfhost): copy stage2.bin and stage3.bin to root as zcc2/zcc3 for kernel verification compatibility
 
 Goal:
-Fix the ZCC Self-Host Verification and Gate CI workflows that failed due to missing zcc2.s/zcc3.s in the root directory.
+Fix the ZCC Self-Host Verification CI failure during the 'Link and verify zkernel boot (QEMU)' step which failed due to missing ../zcc2 and ../zcc3 binaries.
 
 Outcome:
-The bootstrap determinism gate (gate.sh) now copy-exposes stage2.s and stage3.s to the root directory upon successful validation, restoring compatibility with CI workflows.
+The bootstrap determinism gate (gate.sh) now copy-exposes stage2.bin and stage3.bin to the root directory as executable binaries zcc2 and zcc3 upon successful validation, restoring compatibility with kernel compilation and linker verification steps.
 
 Patch summary:
-- gate.sh: Copy $EVIDENCE_DIR/stage2.s and stage3.s to the root directory at the end of run_main_gate.
+- gate.sh: Copy $EVIDENCE_DIR/stage2.bin and stage3.bin to the root directory as zcc2 and zcc3 and set executable permissions.
 
 Gate 1: PASS via make selfhost
 === INITIALIZING ZCC BOOTSTRAP DETERMINISM GATE ===
-Run ID: zcc-run-1784441640-130269
+Run ID: zcc-run-1784443291-133736
 Lineage check: PASS
 === VERDICT: BOOTSTRAP DETERMINISM LOCK SECURED ===
-zcc2.s and zcc3.s exposed in root (299,393 lines generated).
+zcc2 and zcc3 exposed in root as executable binaries.

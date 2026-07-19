@@ -487,6 +487,10 @@ run_main_gate "$EVIDENCE_DIR" "./zcc" "zcc.c" "$LEDGER_FILE" "$RUN_ID" "$SCHEMA_
 # Expose stage2.s/stage3.s to root directory for backward compatibility with CI selfhost validation loops
 cp "$EVIDENCE_DIR/stage2.s" zcc2.s
 cp "$EVIDENCE_DIR/stage3.s" zcc3.s
+cp "$EVIDENCE_DIR/stage2.bin" zcc2
+cp "$EVIDENCE_DIR/stage3.bin" zcc3
+chmod +x zcc2 zcc3
+
 
 echo "=== VERDICT: BOOTSTRAP DETERMINISM LOCK SECURED ==="
 echo "Ledger written to $LEDGER_FILE"
