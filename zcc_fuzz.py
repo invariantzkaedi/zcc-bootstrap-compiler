@@ -373,7 +373,7 @@ class CGenerator:
         lines.append('    int _acc = 0;')
 
         # Mix in parameters
-        all_vars = local_names + [('a', 'int'), ('b', 'int'), ('c', 'int'), ('_acc', 'int')]
+        all_vars = local_names + [('b', 'int'), ('c', 'int'), ('_acc', 'int')]
 
         # Statements
         n_stmts = self.rng.randint(3, 10)
