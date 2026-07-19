@@ -135,7 +135,7 @@ def append_jsonl_durable(path: str, record: dict[str, Any]) -> None:
         finally:
             unlock_file(fh)
 
-    if hasattr(os, "O_DIRECTORY"):
+    if hasattr(os, "O_DIRECTORY") and directory:
         dir_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
         try:
             os.fsync(dir_fd)
@@ -160,6 +160,38 @@ def record_online_outcome(path: str, outcome: OnlineOutcome) -> None:
     )
     append_jsonl_durable(path, payload)
 
+def parse_replay_jsonl(content: bytes) -> tuple[list[dict[str, Any]], bool]:
+    records: list[dict[str, Any]] = []
+    skipped_torn_tail = False
+    cursor = 0
+
+    for raw_line in content.splitlines(keepends=True):
+        cursor += len(raw_line)
+
+        if not raw_line.strip():
+            continue
+
+        is_final = (cursor == len(content))
+        unterminated = not raw_line.endswith(b"\n")
+
+        try:
+            text = raw_line.decode("utf-8")
+            record = json.loads(text)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            if is_final and unterminated:
+                skipped_torn_tail = True
+                break
+            raise
+
+        if not isinstance(record, dict):
+            raise ValueError(
+                f"replay record {len(records)} must be a JSON object"
+            )
+
+        records.append(record)
+
+    return records, skipped_torn_tail
+
 def load_unique_records(path: str) -> ReplayLoadResult:
     abspath = os.path.abspath(path)
     if not os.path.exists(abspath):
@@ -180,25 +212,15 @@ def load_unique_records(path: str) -> ReplayLoadResult:
         finally:
             unlock_file(fh)
 
-    lines = content_bytes.decode("utf-8").splitlines()
+    try:
+        records, skipped_torn = parse_replay_jsonl(content_bytes)
+    except Exception as exc:
+        raise ValueError(f"Failed to parse replay JSONL: {exc}") from exc
+
     unique: dict[str, dict] = {}
-    skipped_torn = False
     skipped_dup = 0
     
-    for index, line in enumerate(lines):
-        line_str = line.strip()
-        if not line_str:
-            continue
-
-        try:
-            record = json.loads(line_str)
-        except json.JSONDecodeError:
-            is_final = (index == len(lines) - 1)
-            if is_final and unterminated:
-                skipped_torn = True
-                continue
-            raise
-
+    for index, record in enumerate(records):
         dedup_hash = record.get("dedup_hash")
         if not dedup_hash:
             # Preserve legacy record

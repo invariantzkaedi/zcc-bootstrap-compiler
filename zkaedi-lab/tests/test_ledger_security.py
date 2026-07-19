@@ -659,5 +659,42 @@ class TestLedgerSecurity(unittest.TestCase):
             self.assertTrue(HAS_FCNTL, "POSIX lock module (fcntl) must be available under POSIX/WSL")
             self.assertFalse(HAS_MSVCRT, "Windows lock module (msvcrt) must not be available under POSIX/WSL")
 
+    def test_replay_loader_torn_utf8_tail_recovery(self):
+        from lineage.online_types import load_unique_records, record_online_outcome, OnlineOutcome
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            # Append a valid outcome first
+            outcome = OnlineOutcome(
+                config_id="config-1",
+                candidate_id="cand-1",
+                prompt="hello",
+                completion="world",
+                sandbox_passed=True,
+                safety_passed=True,
+                verification_score=1.0,
+                runtime_ms=120.0,
+                runner_exit=0,
+                verdict="pass",
+                failure_class=None,
+                harness_version="1.0",
+                evaluator_version="1.0",
+                policy_checkpoint="ckpt",
+                sandbox_version="1.0"
+            )
+            record_online_outcome(path, outcome)
+            
+            # Manually append a partial, torn invalid UTF-8 byte sequence (interrupted multibyte character)
+            with open(path, "ab") as fh:
+                fh.write(b'{"prompt": "hello", "completion": "\xe2') # missing trailing bytes of 3-byte char
+                
+            res = load_unique_records(path)
+            self.assertEqual(len(res.records), 1)
+            self.assertTrue(res.skipped_torn_tail)
+            self.assertTrue(res.unterminated_tail)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
 if __name__ == "__main__":
     unittest.main()
