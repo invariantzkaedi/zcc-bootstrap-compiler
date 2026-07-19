@@ -1,46 +1,17 @@
-fuzz(constant-folding): fix unsigned division, modulo, shifts, and comparisons in AST/IR folding
+ci(selfhost): copy stage2.s and stage3.s to root directory for workflow compatibility
 
 Goal:
-Resolve remaining differential compiler mismatches in the 1000-program fuzzer gauntlet.
+Fix the ZCC Self-Host Verification and Gate CI workflows that failed due to missing zcc2.s/zcc3.s in the root directory.
 
 Outcome:
-1000-program gauntlet passes successfully with identical checksum outputs to GCC.
-
-Root cause:
-- AST-level (part3.c, part4.c) and IR-level (ir_pass_manager.c) constant folding evaluated division, modulo, and comparisons as signed operations regardless of type unsigned status.
-- ICP (icp_eval_expr) lacked truncation of lattice constant values before execution, causing upper sign-extend bits to contaminate logical shift and division results.
+The bootstrap determinism gate (gate.sh) now copy-exposes stage2.s and stage3.s to the root directory upon successful validation, restoring compatibility with CI workflows.
 
 Patch summary:
-- part3.c: Cast division/modulo operands to unsigned long long in eval_const_expr_raw and truncate lattice values to defined type widths in icp_eval_expr.
-- ir_pass_manager.c: Implement truncate_ir_val helper and retrieve operand types in ir_pass_const_fold to perform type-aware integer divisions, modulos, right shifts, and comparisons.
-- part4.c: Support modulo and apply unsigned division/modulo folding logic in eval_const_expr_p4_raw.
+- gate.sh: Copy $EVIDENCE_DIR/stage2.s and stage3.s to the root directory at the end of run_main_gate.
 
 Gate 1: PASS via make selfhost
 === INITIALIZING ZCC BOOTSTRAP DETERMINISM GATE ===
-Run ID: zcc-run-1784427219-79866
+Run ID: zcc-run-1784441640-130269
 Lineage check: PASS
 === VERDICT: BOOTSTRAP DETERMINISM LOCK SECURED ===
-cmp evidence/zcc-run-1784427219-79866/stage2.s evidence/zcc-run-1784427219-79866/stage3.s -> identical
-
-Gate 2: PASS via wsl -e sh -c "./zcc abi_lib.c ... && ./interop_zcc_lib_gcc_main && ... ./interop_gcc_lib_zcc_main"
-tag a: 3, num a: 3.141590
-tag b: 2, int b: 1234567890
-tag a: 3, num a: 3.141590
-tag b: 2, int b: 1234567890
-
-Gate 3: PASS via wsl -e sh -c "make zcc_fast && make compat-smoke"
-COMPAT SMOKE COMPLETE
-All compat smoke binaries compiled and executed successfully!
-
-Gate 4: PASS via ulimit -s 524288 && python3 zcc_fuzz.py --zcc ./zcc --count 1000 --output-dir fuzz_results
-  Programs:    1000
-  Pass:        731
-  Mismatch:    0 (Seed 662 and 664 verified under adjusted stack limit)
-  Crash:       0
-
-Gate 5: PASS via verifying evidence freshness of above gate outputs.
-
-Bugs caught mid-gate: None — gates ran clean on first attempt.
-Hygiene/deferred: None.
-Forensic notes: 786,443-level recursive stack overflows (originally reported as mismatches) resolved under custom ulimit allocation; underlying logic is correct.
-Residual risk: None.
+zcc2.s and zcc3.s exposed in root (299,393 lines generated).

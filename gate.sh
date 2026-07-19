@@ -484,5 +484,9 @@ record_toolchain "$EVIDENCE_DIR/toolchain.json"
 # Execute
 run_main_gate "$EVIDENCE_DIR" "./zcc" "zcc.c" "$LEDGER_FILE" "$RUN_ID" "$SCHEMA_FILE"
 
+# Expose stage2.s/stage3.s to root directory for backward compatibility with CI selfhost validation loops
+cp "$EVIDENCE_DIR/stage2.s" zcc2.s
+cp "$EVIDENCE_DIR/stage3.s" zcc3.s
+
 echo "=== VERDICT: BOOTSTRAP DETERMINISM LOCK SECURED ==="
 echo "Ledger written to $LEDGER_FILE"
