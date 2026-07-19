@@ -1,0 +1,1 @@
+{"tier": 0, "network": false, "filesystem": "tmpfs-only", "evaluator_argv": ["python3", "/home/claude/zkaedi-lab/evals/evaluate_config.py"], "limits": {"cpu_seconds": 10, "memory_bytes": 536870912, "wall_seconds": 2, "fsize_bytes": 10485760, "nofile": 64}}

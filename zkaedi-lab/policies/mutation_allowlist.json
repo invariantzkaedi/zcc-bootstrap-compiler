@@ -1,0 +1,18 @@
+{
+  "allowed_targets": [
+    "canonical_prompt",
+    "tool_policy.allowed_tools",
+    "tool_policy.retry_policy",
+    "scaffold.steps",
+    "scaffold.verification_checklist",
+    "eval_config.battery",
+    "eval_config.thresholds",
+    "eval_config.context_routing"
+  ],
+  "forbidden_targets": [
+    "harness_version", "parent_id", "candidate_id",
+    "runner/*", "receipts/*", "policies/*", "lineage/*", "schemas/*"
+  ],
+  "mutation_format": "declarative-patch-description-only",
+  "executable_code_in_mutations": false
+}

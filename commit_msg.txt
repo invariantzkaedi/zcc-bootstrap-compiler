@@ -1,7 +1,7 @@
-doc(battleplan): mark Milestone 4 (Csmith Hardening) as COMPLETED
+feat(lab): integrate zkaedi-lab configuration evolution sandbox
 
 Goal:
-Update the Ecosystem Battle Plan to reflect that the Csmith Hardening milestone has been completed.
+Add the Tier-0 zkaedi-lab configuration evolution sandbox and harden it to run cleanly in the current WSL sandbox environment.
 
 Outcome:
-ZCC_BATTLEPLAN_v1.0.4.md is updated, marking Milestone 4 as fully COMPLETED.
+The sandbox files are integrated. Sandbox policy unshare isolation updated to use unprivileged user namespaces ('unshare -rn') and hardcoded home paths dynamically remap to REPO root. Selftest passes 14/14.

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "zkaedi-lab run receipt v1",
+  "type": "object",
+  "required": ["run_id","candidate_id","parent_id","runner_version","started_at","finished_at","exit_code","stdout_sha256","stderr_sha256","artifacts","resource_usage","sandbox_policy","verdict"],
+  "properties": {
+    "run_id": {"type":"string","format":"uuid"},
+    "candidate_id": {"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},
+    "parent_id": {"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},
+    "runner_version": {"type":"string"},
+    "started_at": {"type":"string"},
+    "finished_at": {"type":"string"},
+    "exit_code": {"type":"integer"},
+    "stdout_sha256": {"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "stderr_sha256": {"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "artifacts": {"type":"object"},
+    "resource_usage": {"type":"object","required":["wall_seconds","cpu_seconds","max_rss_bytes"]},
+    "sandbox_policy": {"type":"object","required":["tier","network","network_enforcement","filesystem","limits_applied"]},
+    "verdict": {"enum":["pass","fail","timeout"]}
+  },
+  "additionalProperties": false
+}

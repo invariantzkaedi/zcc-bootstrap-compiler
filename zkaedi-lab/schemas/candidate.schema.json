@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "zkaedi-lab candidate v1",
+  "type": "object",
+  "required": ["canonical_prompt","tool_policy","scaffold","eval_config","parent_id","mutation_description","harness_version"],
+  "properties": {
+    "candidate_id": {"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},
+    "canonical_prompt": {"type":"string","minLength":1},
+    "tool_policy": {"type":["object","string"]},
+    "scaffold": {"type":["object","string","array"]},
+    "eval_config": {"type":["object","string"]},
+    "parent_id": {"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},
+    "mutation_description": {"type":"string"},
+    "harness_version": {"type":"string"}
+  }
+}
