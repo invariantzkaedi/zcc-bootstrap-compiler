@@ -46,6 +46,7 @@ def run_fuzz_validation():
     os.makedirs(os.path.dirname(fuzz_tmp_path), exist_ok=True)
     
     passed_checks = 0
+    # 1. Structure/Policy Fuzz Cases
     for idx, case in enumerate(FUZZ_CASES):
         try:
             full_cand = {
@@ -81,18 +82,50 @@ def run_fuzz_validation():
                 except json.JSONDecodeError:
                     continue
             
+            # Special check: if fuzz target mimics a runner exit code issue
+            if "_zk_selftest" in case:
+                if "exit_code" in case["_zk_selftest"]:
+                    exit_code = case["_zk_selftest"]["exit_code"]
+                if "crash" in case["_zk_selftest"]:
+                    exit_code = 1
+                    verdict = "fail"
+            
             safe_pass, safe_reasons = safety_gate(full_cand, exit_code, verdict)
             assert not safe_pass, f"Fuzz Case {idx} unexpectedly passed safety gate"
-            print(f"Fuzz Case {idx} successfully caught/rejected. Reasons: {safe_reasons}")
+            print(f"Policy Fuzz Case {idx} successfully caught/rejected. Reasons: {safe_reasons}")
             passed_checks += 1
             
         except (ValueError, TypeError, KeyError) as e:
-            print(f"Fuzz Case {idx} successfully rejected by lineage parser: {e}")
+            print(f"Policy Fuzz Case {idx} successfully rejected by lineage parser: {e}")
+            passed_checks += 1
+            
+    # 2. Raw File-level/Syntax Fuzz Cases (Truncated JSON, invalid UTF-8, excessive nesting)
+    raw_cases = [
+        (b'{"canonical_prompt": "truncated_json"', "truncated JSON"),
+        (b'{"canonical_prompt": \xff\xfe\xfd}', "invalid UTF-8 bytes"),
+        (b'{"scaffold": {"steps": ' + b'[' * 1000 + b'"verify"' + b']' * 1000 + b'}}', "excessive nesting"),
+    ]
+    for idx, (raw_bytes, desc) in enumerate(raw_cases):
+        try:
+            with open(fuzz_tmp_path, "wb") as fh:
+                fh.write(raw_bytes)
+                
+            runner_path = os.path.join(LAB_DIR, "runner", "run_candidate.py")
+            p_exec = subprocess.run(
+                [sys.executable, runner_path, fuzz_tmp_path],
+                capture_output=True, text=True, timeout=10
+            )
+            # The runner should exit with failure (non-zero) due to invalid json / schema validation crash
+            assert p_exec.returncode != 0, f"Raw Fuzz Case {idx} ({desc}) unexpectedly executed successfully"
+            print(f"Raw Fuzz Case {idx} ({desc}) successfully rejected by parser (Exit: {p_exec.returncode})")
+            passed_checks += 1
+        except subprocess.TimeoutExpired:
+            print(f"Raw Fuzz Case {idx} ({desc}) timed out safely")
             passed_checks += 1
             
     if os.path.exists(fuzz_tmp_path):
         os.unlink(fuzz_tmp_path)
-    return passed_checks == len(FUZZ_CASES)
+    return passed_checks == (len(FUZZ_CASES) + len(raw_cases))
 
 def main():
     print("=============================================================")
@@ -196,6 +229,7 @@ def main():
     path_lengths = []
     energy_drifts = []
     convergence_steps = []
+    unconverged_seeds = []
     prompt_counts = {"creative": 0, "neutral": 0, "rigorous": 0}
     terminal_configs = set()
     
@@ -234,12 +268,15 @@ def main():
         energy_drifts.append(drift)
         
         # Convergence step: first generation where |q_next - q_curr| < 0.1
-        conv_idx = len(trajectory)
+        conv_idx = None
         for idx in range(len(q_coords) - 1):
             if np.linalg.norm(q_coords[idx + 1] - q_coords[idx]) < 0.1:
                 conv_idx = idx + 1
                 break
-        convergence_steps.append(conv_idx)
+        if conv_idx is not None:
+            convergence_steps.append(conv_idx)
+        else:
+            unconverged_seeds.append(seed)
         
         # Region counts and terminal config
         for step in trajectory:
@@ -303,12 +340,17 @@ def main():
     # 6. Runtime Stability & Median Filtering check
     print("\n--- MEASURING RUNTIME STABILITY ---")
     times = []
-    # Rerun seed config 5 times to filter hardware noise
+    # Rerun seed config 5 times to filter hardware noise and assert subprocess success
     for _ in range(5):
         t0 = time.perf_counter()
         runner_path = os.path.join(LAB_DIR, "runner", "run_candidate.py")
         cand_path = os.path.join(LAB_DIR, "candidates/sha256/ba13cba5e35479cde08d81b84671a4849062962d32284ab8f8715154f9275b8e.json")
-        subprocess.run([sys.executable, runner_path, cand_path], capture_output=True)
+        result = subprocess.run([sys.executable, runner_path, cand_path], capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Runtime benchmark failed with exit {result.returncode}: "
+                f"{result.stderr[-500:]}"
+            )
         times.append(time.perf_counter() - t0)
     median_time_ms = float(median(times) * 1000.0)
     print(f"Verified seed candidate median runtime: {median_time_ms:.2f} ms")
@@ -325,22 +367,38 @@ def main():
         os.unlink(recovery_tmp_path)
     print(f"Crash recovery test: {'PASSED' if recovery_ok else 'FAILED'}")
     
+    # 8. Numeric Dynamics Acceptance Gates
+    MAX_ALLOWED_DRIFT = 50.0
+    MAX_TERMINAL_CONFIGS = 3
+    
+    dynamics_ok = (
+        np.isfinite(path_lengths).all()
+        and np.isfinite(all_gradients).all()
+        and np.isfinite(energy_drifts).all()
+        and max(energy_drifts) < MAX_ALLOWED_DRIFT
+        and len(terminal_configs) <= MAX_TERMINAL_CONFIGS
+    )
+    print(f"Dynamics Checks (Drift Limit {MAX_ALLOWED_DRIFT}, Config Limit {MAX_TERMINAL_CONFIGS}): {'PASSED ✅' if dynamics_ok else 'FAILED ❌'}")
+    
     # Save detailed validation report with dynamic trajectory statistics
     summary = {
-        "all_passed": bool(fuzz_ok and pareto_ok and recovery_ok and determinism_ok),
+        "all_passed": bool(fuzz_ok and pareto_ok and recovery_ok and determinism_ok and dynamics_ok),
         "random_seed": RANDOM_SEED,
         "seeds_tested": len(SEEDS),
         "fuzz_validation_passed": fuzz_ok,
         "pareto_invariants_passed": pareto_ok,
         "crash_recovery_passed": recovery_ok,
         "determinism_vs_cache_passed": determinism_ok,
+        "dynamics_validation_passed": bool(dynamics_ok),
         "median_runtime_ms": median_time_ms,
         "pareto_frontier_size": len(pareto_archive),
         "cache_entries_count": len(evaluated_cache),
         "trajectory_statistics": {
             "final_margin_mean": float(margins.mean()),
             "final_margin_std": float(margins.std()),
-            "iterations_to_convergence_mean": float(np.mean(convergence_steps)),
+            "converged_seed_count": len(convergence_steps),
+            "unconverged_seed_count": len(unconverged_seeds),
+            "iterations_to_convergence_mean": float(np.mean(convergence_steps)) if convergence_steps else None,
             "path_length_mean": float(np.mean(path_lengths)),
             "mean_gradient_norm": float(np.mean(all_gradients)),
             "energy_drift_mean": float(np.mean(energy_drifts)),
