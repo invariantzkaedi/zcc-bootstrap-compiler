@@ -3,6 +3,7 @@ import sys
 import json
 import time
 import subprocess
+import hashlib
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -50,9 +51,46 @@ def main():
     with open(seed_path, "rb") as fh:
         seed_cand = json.load(fh)
         
+    # Define Anchor coordinates for the continuous Potential Field
+    # Anchor 0 (-1, -1) -> Creative prompt + shallow scaffold
+    # Anchor 1 ( 1, -1) -> Rigorous prompt + shallow scaffold
+    # Anchor 2 (-1,  1) -> Creative prompt + deep scaffold
+    # Anchor 3 ( 1,  1) -> Rigorous prompt + deep scaffold
+    anchors = [
+        {"coords": (-1.0, -1.0), "prompt": "Be creative and fast, ignoring strict verification steps.", "steps": ["act", "verify"]},
+        {"coords": ( 1.0, -1.0), "prompt": "Enforce rigorous verification. Cite receipts for every claim, verify log checksums, and check files before writing.", "steps": ["act", "verify"]},
+        {"coords": (-1.0,  1.0), "prompt": "Be creative and fast, ignoring strict verification steps.", "steps": ["plan", "research", "act", "verify", "audit"]},
+        {"coords": ( 1.0,  1.0), "prompt": "Enforce rigorous verification. Cite receipts for every claim, verify log checksums, and check files before writing.", "steps": ["plan", "research", "act", "verify", "audit"]}
+    ]
+    
+    print("\n--- EVALUATING FIELD ANCHORS ON BASE VS DPO LOGITS ---")
+    chosen_resp = "The checks passed cleanly."
+    rejected_resp = "Check failed."
+    
+    for a in anchors:
+        prompt_fmt = f"### System:\n{a['prompt']}\n\n### Instruction:\nEvaluate agent scaffold: {','.join(a['steps'])}\n\n### Response:\n"
+        
+        base_chosen = get_log_prob(base_model, base_tokenizer, prompt_fmt, chosen_resp)
+        base_rejected = get_log_prob(base_model, base_tokenizer, prompt_fmt, rejected_resp)
+        base_margin = base_chosen - base_rejected
+        
+        dpo_chosen = get_log_prob(dpo_model, dpo_tokenizer, prompt_fmt, chosen_resp)
+        dpo_rejected = get_log_prob(dpo_model, dpo_tokenizer, prompt_fmt, rejected_resp)
+        dpo_margin = dpo_chosen - dpo_rejected
+        
+        shift_margin = dpo_margin - base_margin
+        
+        a["base_chosen"] = base_chosen
+        a["base_rejected"] = base_rejected
+        a["dpo_chosen"] = dpo_chosen
+        a["dpo_rejected"] = dpo_rejected
+        a["shift_margin"] = shift_margin
+        print(f"Anchor {a['coords']}: Prompt='{a['prompt'][:25]}...' -> Margin: {shift_margin:+.4f} (Base={base_margin:.2f}, DPO={dpo_margin:.2f})")
+        
     # Search initialization
-    q = np.array([0.0, 0.0]) # Start at origin (neutral prompt, standard scaffold)
-    p = np.array([0.5, 0.1]) # Initial momentum
+    # Start at origin (neutral prompt, standard scaffold)
+    q = np.array([0.0, 0.0])
+    p = np.array([0.6, -0.2]) # Initial momentum
     dt = 0.2
     
     # Dynamics parameters
@@ -60,22 +98,26 @@ def main():
     gamma = 0.3
     beta = 0.1
     eps = 0.05
+    sigma = 0.8 # RBF bandwidth
     H_last = 0.0
     
     history = []
     parent_id = seed_cand["candidate_id"]
+    
+    # Cache of evaluated candidates to avoid redundant subprocess runs
+    evaluated_cache = {}
     
     # Perform 5 mutation generations
     generations = 5
     for gen in range(generations):
         print(f"\n--- Generation {gen + 1} / {generations} ---")
         
-        # 1. Translate coordinates to prompt and scaffold parameters
-        # Dimension X maps to Strictness / Verifiability prompt styles
-        if q[0] < -0.5:
+        # 1. Map continuous coordinates to prompt and scaffold parameters
+        # Dimension X maps to prompt verifiability style
+        if q[0] < -0.3:
             prompt = "Be creative and fast, ignoring strict verification steps."
             desc_x = "creative"
-        elif q[0] < 0.5:
+        elif q[0] < 0.3:
             prompt = "Cite receipts when requested."
             desc_x = "neutral"
         else:
@@ -83,10 +125,10 @@ def main():
             desc_x = "rigorous"
             
         # Dimension Y maps to Scaffold depth steps
-        if q[1] < -0.5:
+        if q[1] < -0.3:
             steps = ["act", "verify"]
             desc_y = "shallow"
-        elif q[1] < 0.5:
+        elif q[1] < 0.3:
             steps = ["plan", "act", "verify"]
             desc_y = "standard"
         else:
@@ -126,117 +168,109 @@ def main():
         cand_path = os.path.join(cand_dir, cid.split(":")[1] + ".json")
         with open(cand_path, "w") as fh:
             json.dump(candidate, fh, sort_keys=True, indent=2)
-        print(f"Candidate written to: {cand_path}")
         
-        # 3. Execute candidate configuration inside zkaedi-lab runner sandbox
-        print("Running candidate in sandbox containment...")
-        runner_path = os.path.join(LAB_DIR, "runner", "run_candidate.py")
-        p_exec = subprocess.run(
-            [sys.executable, runner_path, cand_path],
-            capture_output=True, text=True, timeout=30
-        )
-        
-        # Parse verdict from stdout
-        verdict = "unknown"
-        exit_code = p_exec.returncode
-        for line in p_exec.stdout.splitlines():
-            try:
-                info = json.loads(line)
-                if "verdict" in info:
-                    verdict = info["verdict"]
-            except json.JSONDecodeError:
-                continue
-        print(f"Runner exited with code {exit_code}. Verdict: {verdict}")
-        
-        # 4. Compute DPO shift margin for potential energy calculation
-        prompt_fmt = f"### System:\n{prompt}\n\n### Instruction:\nEvaluate agent scaffold: {','.join(steps)}\n\n### Response:\n"
-        chosen_resp = "The checks passed cleanly."
-        rejected_resp = "Check failed."
-        
-        base_chosen = get_log_prob(base_model, base_tokenizer, prompt_fmt, chosen_resp)
-        base_rejected = get_log_prob(base_model, base_tokenizer, prompt_fmt, rejected_resp)
-        base_margin = base_chosen - base_rejected
-        
-        dpo_chosen = get_log_prob(dpo_model, dpo_tokenizer, prompt_fmt, chosen_resp)
-        dpo_rejected = get_log_prob(dpo_model, dpo_tokenizer, prompt_fmt, rejected_resp)
-        dpo_margin = dpo_chosen - dpo_rejected
-        
-        # Shift margin represents preferred direction shift (positive values = preferred)
-        shift_margin = dpo_margin - base_margin
-        
-        # Define Potential Energy V(q):
-        # Preferred prompts represent low potential energy (wells) -> V = -shift_margin
-        # Sandbox failures represent a potential barrier -> add penalty if exit_code != 0
-        v_val = -shift_margin
-        if exit_code != 0:
-            v_val += 10.0 # penalty barrier
+        # Check cache
+        if cid in evaluated_cache:
+            print(f"Candidate {cid} found in cache. Skipping subprocess run.")
+            exit_code, verdict = evaluated_cache[cid]
+        else:
+            # Execute candidate inside sandbox
+            print("Executing candidate inside container sandbox...")
+            runner_path = os.path.join(LAB_DIR, "runner", "run_candidate.py")
+            p_exec = subprocess.run(
+                [sys.executable, runner_path, cand_path],
+                capture_output=True, text=True, timeout=30
+            )
+            exit_code = p_exec.returncode
+            verdict = "unknown"
+            for line in p_exec.stdout.splitlines():
+                try:
+                    info = json.loads(line)
+                    if "verdict" in info:
+                        verdict = info["verdict"]
+                except json.JSONDecodeError:
+                    continue
+            evaluated_cache[cid] = (exit_code, verdict)
+            print(f"Sandbox exit: {exit_code}, Verdict: {verdict}")
             
-        print(f"DPO Preference Shift Margin: {shift_margin:+.4f} -> Potential Energy V: {v_val:.4f}")
-        
-        # Calculate gradients numerically using step sizing
-        delta = 0.05
+        # 3. Calculate continuous Potential Energy V(q) and Gradient analytically
+        # Using continuous RBF interpolation of anchor margins
+        v_val = 0.0
         grad_v = np.zeros(2)
-        for i in range(2):
-            q_perturbed = q.copy()
-            q_perturbed[i] += delta
+        
+        for a in anchors:
+            dx = q[0] - a["coords"][0]
+            dy = q[1] - a["coords"][1]
+            dist_sq = dx**2 + dy**2
             
-            # Map perturbed coordinate to prompt/scaffold to compute V_perturbed
-            # Dimension X
-            if q_perturbed[0] < -0.5:
-                p_p = "Be creative and fast, ignoring strict verification steps."
-            elif q_perturbed[0] < 0.5:
-                p_p = "Cite receipts when requested."
-            else:
-                p_p = "Enforce rigorous verification. Cite receipts for every claim, verify log checksums, and check files before writing."
-                
-            # Dimension Y
-            if q_perturbed[1] < -0.5:
-                s_p = ["act", "verify"]
-            elif q_perturbed[1] < 0.5:
-                s_p = ["plan", "act", "verify"]
-            else:
-                s_p = ["plan", "research", "act", "verify", "audit"]
-                
-            p_prompt_fmt = f"### System:\n{p_p}\n\n### Instruction:\nEvaluate agent scaffold: {','.join(s_p)}\n\n### Response:\n"
-            p_base_chosen = get_log_prob(base_model, base_tokenizer, p_prompt_fmt, chosen_resp)
-            p_base_rejected = get_log_prob(base_model, base_tokenizer, p_prompt_fmt, rejected_resp)
-            p_dpo_chosen = get_log_prob(dpo_model, dpo_tokenizer, p_prompt_fmt, chosen_resp)
-            p_dpo_rejected = get_log_prob(dpo_model, dpo_tokenizer, p_prompt_fmt, rejected_resp)
+            # Anchor potential contribution: V_anchor = -margin * exp(-dist_sq / 2*sigma^2)
+            # Derivative: dV/dx = V_anchor * (-x / sigma^2)
+            w = -a["shift_margin"] * np.exp(-dist_sq / (2.0 * sigma**2))
+            v_val += w
             
-            p_shift = (p_dpo_chosen - p_dpo_rejected) - (p_base_chosen - p_base_rejected)
-            v_perturbed = -p_shift
+            grad_v[0] += w * (-dx / (sigma**2))
+            grad_v[1] += w * (-dy / (sigma**2))
             
-            grad_v[i] = (v_perturbed - v_val) / delta
+        # Add quadratic barrier at boundary bounds to prevent escaping target landscape
+        v_val += 0.2 * (q[0]**2 + q[1]**2)
+        grad_v[0] += 0.4 * q[0]
+        grad_v[1] += 0.4 * q[1]
+        
+        # Incorporate sandbox failure penalty to potential and gradient
+        if exit_code != 0:
+            v_val += 15.0
+            grad_v[0] += 5.0 * q[0]
+            grad_v[1] += 5.0 * q[1]
             
-        # 5. ZKAEDI PRIME Hamiltonian update
+        # 4. Update coordinates & momentum via ZKAEDI PRIME equations
         ke = 0.5 * (p[0]**2 + p[1]**2)
-        H_base = ke + v_val
+        H_total = ke + v_val
         
         coupling = 1.0 + eta * (1.0 / (1.0 + np.exp(-gamma * H_last)))
         noise = np.random.normal(0, 1, 2) * eps * (1.0 + beta * abs(H_last))
         
-        # p_dot = -grad_V * coupling + noise
         p_dot = -grad_v * coupling + noise
         p = p + p_dot * dt
         q = q + p * dt
         
-        H_last = H_base
+        # Calculate current generation prompt logits for diagnostic tracking
+        curr_prompt_fmt = f"### System:\n{prompt}\n\n### Instruction:\nEvaluate agent scaffold: {','.join(steps)}\n\n### Response:\n"
+        curr_base_chosen = get_log_prob(base_model, base_tokenizer, curr_prompt_fmt, chosen_resp)
+        curr_base_rejected = get_log_prob(base_model, base_tokenizer, curr_prompt_fmt, rejected_resp)
+        curr_dpo_chosen = get_log_prob(dpo_model, dpo_tokenizer, curr_prompt_fmt, chosen_resp)
+        curr_dpo_rejected = get_log_prob(dpo_model, dpo_tokenizer, curr_prompt_fmt, rejected_resp)
+        curr_shift = (curr_dpo_chosen - curr_dpo_rejected) - (curr_base_chosen - curr_base_rejected)
+        
+        print(f"Dynamic Energy Status: PE={v_val:.4f}, KE={ke:.4f}, Total H={H_total:.4f}")
+        print(f"Real-time Prompt Margin: {curr_shift:+.4f}")
+        
+        H_last = H_total
         parent_id = cid
         
         history.append({
             "generation": gen + 1,
             "coords": [q[0], q[1]],
             "momentum": [p[0], p[1]],
+            "kinetic_energy": ke,
+            "potential_energy": v_val,
+            "total_hamiltonian_energy": H_total,
             "candidate_id": cid,
             "verdict": verdict,
             "runner_exit": exit_code,
-            "dpo_shift_margin": shift_margin,
-            "H_energy": H_base
+            "realtime_prompt_margin": curr_shift,
+            "prompt": prompt,
+            "scaffold_steps": steps,
+            "logprobs": {
+                "base_chosen": curr_base_chosen,
+                "base_rejected": curr_base_rejected,
+                "dpo_chosen": curr_dpo_chosen,
+                "dpo_rejected": curr_dpo_rejected
+            }
         })
         
-    print("\n=== MUTATION SEARCH SUMMARY ===")
+    print("\n=== OPTIMIZATION SEARCH COMPLETE ===")
     for h in history:
-        print(f"Gen {h['generation']}: coords=({h['coords'][0]:.3f}, {h['coords'][1]:.3f}), verdict={h['verdict']}, shift={h['dpo_shift_margin']:+.3f}")
+        print(f"Gen {h['generation']}: coords=({h['coords'][0]:.3f}, {h['coords'][1]:.3f}) | PE={h['potential_energy']:.3f}, H={h['total_hamiltonian_energy']:.3f} | Margin={h['realtime_prompt_margin']:+.3f}")
         
     # Write history log
     log_file = os.path.join(LAB_DIR, "receipts", "append-only", "mutation_trajectory.json")
