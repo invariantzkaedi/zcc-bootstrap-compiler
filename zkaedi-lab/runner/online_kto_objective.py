@@ -13,43 +13,47 @@ class OnlineTrainConfig:
     max_policy_kl: float = 0.02
 
 def completion_logprob(model, tokenizer, prompt: str, completion: str) -> torch.Tensor:
+    if not prompt:
+        raise ValueError("Prompt must not be empty")
+    if not completion:
+        raise ValueError("Completion must not be empty")
+        
     device = next(model.parameters()).device
-    
-    prompt_ids = tokenizer(
-        prompt,
+    full_text = prompt + completion
+
+    encoded = tokenizer(
+        full_text,
+        return_tensors="pt",
         add_special_tokens=False,
-    ).input_ids
-
-    completion_ids = tokenizer(
-        completion,
-        add_special_tokens=False,
-    ).input_ids
-
-    if not prompt_ids:
-        raise ValueError("Prompt produced no tokens")
-
-    full_ids = torch.tensor(
-        [prompt_ids + completion_ids],
-        device=device,
+        return_offsets_mapping=True,
     )
 
-    prompt_len = len(prompt_ids)
-    if full_ids.shape[1] <= prompt_len:
+    input_ids = encoded.input_ids.to(device)
+    offsets = encoded.offset_mapping[0]
+
+    boundary = len(prompt)
+
+    completion_mask = torch.tensor(
+        [end > boundary for start, end in offsets],
+        device=device,
+        dtype=torch.bool,
+    )
+
+    if not completion_mask.any():
         raise ValueError("Completion produced no tokens")
 
-    logits = model(full_ids).logits
-    prediction_logits = logits[:, prompt_len - 1 : -1, :]
-    completion_labels = full_ids[:, prompt_len:]
+    logits = model(input_ids).logits[:, :-1, :]
+    labels = input_ids[:, 1:]
 
-    token_logps = F.log_softmax(
-        prediction_logits,
-        dim=-1,
-    ).gather(
-        dim=-1,
-        index=completion_labels.unsqueeze(-1),
+    # Token i is predicted by logit i-1.
+    prediction_mask = completion_mask[1:]
+
+    token_logps = F.log_softmax(logits, dim=-1).gather(
+        -1,
+        labels.unsqueeze(-1),
     ).squeeze(-1)
 
-    return token_logps.mean(dim=-1)
+    return token_logps[:, prediction_mask].mean(dim=-1)
 
 def binary_reference_logratio_loss(
     policy,

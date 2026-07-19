@@ -42,6 +42,19 @@ def promotion_allowed(metrics: dict) -> tuple[bool, list[str]]:
     if failures:
         return False, failures
 
+    # Semantic bounds checks
+    if parsed["max_policy_kl"] <= 0.0:
+        failures.append("max_policy_kl must be positive")
+
+    if parsed["policy_kl"] < -1e-6:
+        failures.append("policy_kl is unexpectedly negative")
+
+    if not 0.0 <= parsed["malformed_rejection_rate"] <= 1.0:
+        failures.append("malformed_rejection_rate must be within [0, 1]")
+
+    if not -1.0 <= parsed["heldout_success_rate_delta"] <= 1.0:
+        failures.append("heldout_success_rate_delta must be within [-1, 1]")
+
     # Safety tests check
     if metrics["all_safety_tests_passed"] is not True:
         failures.append("safety regression")
@@ -66,9 +79,19 @@ def promotion_allowed(metrics: dict) -> tuple[bool, list[str]]:
 
 @torch.inference_mode()
 def refresh_anchor_field(policy, reference, tokenizer, anchors, pairs):
-    # Store prior state of model modes
+    if not anchors:
+        raise ValueError("anchors must not be empty")
+    if not pairs:
+        raise ValueError("evaluation pairs must not be empty")
+
+    for anchor in anchors:
+        if not isinstance(anchor.get("prompt"), str):
+            raise TypeError("anchor prompt must be a string")
+        if not isinstance(anchor.get("steps"), list):
+            raise TypeError("anchor steps must be a list")
+
+    # Store prior state of policy model
     policy_was_training = policy.training
-    reference_was_training = reference.training
     
     # Set models to evaluation mode to remove dropout or other source of noise
     policy.eval()
@@ -92,7 +115,7 @@ def refresh_anchor_field(policy, reference, tokenizer, anchors, pairs):
                 )
 
                 shifts.append(
-                    float((policy_margin - reference_margin).item())
+                    float((policy_margin - reference_margin_eval).item())
                 )
 
             refreshed.append({
@@ -102,4 +125,5 @@ def refresh_anchor_field(policy, reference, tokenizer, anchors, pairs):
         return refreshed
     finally:
         policy.train(policy_was_training)
-        reference.train(reference_was_training)
+        # Reference is frozen/immutable, force evaluation mode
+        reference.eval()

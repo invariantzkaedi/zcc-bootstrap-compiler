@@ -21,6 +21,18 @@ class OnlineOutcome:
     runner_exit: int
     verdict: str
     failure_class: str | None
+    
+    # Environment version metadata
+    harness_version: str
+    evaluator_version: str
+    policy_checkpoint: str
+    sandbox_version: str
+
+@dataclass(frozen=True)
+class ReplayLoadResult:
+    records: list[dict]
+    skipped_torn_tail: bool
+    skipped_duplicate_count: int
 
 def derive_desirability(outcome: OnlineOutcome) -> bool:
     return (
@@ -89,16 +101,16 @@ def record_online_outcome(path: str, outcome: OnlineOutcome) -> None:
     payload["dedup_hash"] = compute_dedup_hash(
         outcome.prompt,
         outcome.completion,
-        "harness-0.1.0",
-        "evaluator-0.1.0",
-        "checkpoint-25",
-        "sandbox-v1"
+        outcome.harness_version,
+        outcome.evaluator_version,
+        outcome.policy_checkpoint,
+        outcome.sandbox_version
     )
     append_jsonl_durable(path, payload)
 
-def load_unique_records(path: str) -> list[dict]:
+def load_unique_records(path: str) -> ReplayLoadResult:
     if not os.path.exists(path):
-        return []
+        return ReplayLoadResult(records=[], skipped_torn_tail=False, skipped_duplicate_count=0)
 
     with open(path, "r", encoding="utf-8") as fh:
         fcntl.flock(fh.fileno(), fcntl.LOCK_SH)
@@ -108,6 +120,9 @@ def load_unique_records(path: str) -> list[dict]:
             fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
 
     unique: dict[str, dict] = {}
+    skipped_torn = False
+    skipped_dup = 0
+    
     for index, line in enumerate(lines):
         line_str = line.strip()
         if not line_str:
@@ -117,12 +132,19 @@ def load_unique_records(path: str) -> list[dict]:
             record = json.loads(line_str)
         except json.JSONDecodeError:
             if index == len(lines) - 1:
-                # Quarantine/skip torn trailing record gracefully
+                skipped_torn = True
                 continue
             raise
 
         dedup_hash = record.get("dedup_hash")
         if dedup_hash:
-            unique.setdefault(dedup_hash, record)
+            if dedup_hash in unique:
+                skipped_dup += 1
+            else:
+                unique[dedup_hash] = record
 
-    return list(unique.values())
+    return ReplayLoadResult(
+        records=list(unique.values()),
+        skipped_torn_tail=skipped_torn,
+        skipped_duplicate_count=skipped_dup
+    )
