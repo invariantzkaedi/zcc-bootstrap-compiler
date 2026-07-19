@@ -729,8 +729,8 @@ class TestLedgerSecurity(unittest.TestCase):
                 
             res = load_unique_records(path)
             self.assertEqual(len(res.records), 1)
-            self.assertTrue(res.skipped_torn_tail)
-            self.assertTrue(res.unterminated_tail)
+            self.assertTrue(res.tail_record_skipped)
+            self.assertTrue(res.tail_missing_newline)
         finally:
             if os.path.exists(path):
                 os.unlink(path)
@@ -784,8 +784,8 @@ class TestLedgerSecurity(unittest.TestCase):
 
             result = load_unique_records(path)
             self.assertEqual(len(result.records), 2)
-            self.assertFalse(result.skipped_torn_tail)
-            self.assertFalse(result.unterminated_tail)
+            self.assertFalse(result.tail_record_skipped)
+            self.assertFalse(result.tail_missing_newline)
         finally:
             if os.path.exists(path):
                 os.unlink(path)
@@ -895,7 +895,7 @@ class TestLedgerSecurity(unittest.TestCase):
             
             res = load_unique_records(path)
             self.assertEqual(len(res.records), 2)
-            self.assertFalse(res.skipped_torn_tail)
+            self.assertFalse(res.tail_record_skipped)
         finally:
             if os.path.exists(path):
                 os.unlink(path)
@@ -955,6 +955,140 @@ class TestLedgerSecurity(unittest.TestCase):
                 
             res = load_unique_records(path)
             self.assertEqual(len(res.records), 1 + workers * appends_per_worker)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_replay_append_after_valid_unterminated_record(self):
+        from lineage.online_types import load_unique_records, append_jsonl_durable
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            # Write a valid JSON line missing a final newline separator
+            first_record = {"prompt": "hello", "completion": "world"}
+            with open(path, "wb") as fh:
+                fh.write(json.dumps(first_record).encode("utf-8")) # no newline at all!
+                
+            # Append next record durably
+            second_record = {"prompt": "hello-2", "completion": "world-2"}
+            append_jsonl_durable(path, second_record)
+            
+            # Verify both records are loaded successfully and separator newline was placed correctly
+            result = load_unique_records(path)
+            self.assertEqual(len(result.records), 2)
+            self.assertEqual(result.records[0]["prompt"], "hello")
+            self.assertEqual(result.records[1]["prompt"], "hello-2")
+            self.assertFalse(result.tail_missing_newline)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_ledger_append_after_valid_unterminated_record(self):
+        # Repeat similar check on the Ledger path to prove safety of valid unterminated envelope lines
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            envelope1 = build_ledger_envelope(
+                ledger_id=self.ledger_id,
+                sequence=0,
+                previous_hash=None,
+                payload={"first": True},
+                recorded_at_unix=time.time()
+            )
+            serialized = serialize_envelope(envelope1)
+            # Write exactly without trailing newline
+            with open(path, "wb") as fh:
+                fh.write(serialized)
+                
+            # Append next payload
+            append_ledger_payload(path, self.ledger_id, {"second": True})
+            
+            # Verify integrity
+            v = verify_ledger(path, self.ledger_id)
+            self.assertTrue(v.valid)
+            self.assertEqual(v.records_verified, 2)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_legacy_records_with_missing_dedup_hash_preserved(self):
+        from lineage.online_types import load_unique_records
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            # Legacy records do not have dedup_hash key
+            with open(path, "wb") as fh:
+                fh.write(b'{"prompt":"legacy","completion":"data"}\n')
+            result = load_unique_records(path)
+            self.assertEqual(len(result.records), 1)
+            self.assertEqual(result.records[0]["prompt"], "legacy")
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_empty_dedup_hash_rejected(self):
+        from lineage.online_types import load_unique_records
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            # Empty dedup_hash string is invalid
+            with open(path, "wb") as fh:
+                fh.write(b'{"prompt":"hello","completion":"world","dedup_hash":""}\n')
+            with self.assertRaises(ValueError):
+                load_unique_records(path)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_null_and_integer_dedup_hash_values_rejected(self):
+        from lineage.online_types import load_unique_records
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            with open(path, "wb") as fh:
+                fh.write(b'{"prompt":"hello","completion":"world","dedup_hash":null}\n')
+            with self.assertRaises(ValueError):
+                load_unique_records(path)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_malformed_sha256_identifier_rejected(self):
+        from lineage.online_types import load_unique_records
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            with open(path, "wb") as fh:
+                fh.write(b'{"prompt":"hello","completion":"world","dedup_hash":"sha256:not-hex"}\n')
+            with self.assertRaises(ValueError):
+                load_unique_records(path)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_non_dictionary_append_input_fails(self):
+        from lineage.online_types import append_jsonl_durable
+        with self.assertRaises(TypeError):
+            append_jsonl_durable("path.jsonl", ["list", "not", "dict"])
+
+    def test_replay_schema_version_required_and_unsupported_rejected(self):
+        from lineage.online_types import load_unique_records
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            # Missing schema_version key
+            with open(path, "wb") as fh:
+                fh.write(b'{"prompt":"h","completion":"c","harness_version":"1","evaluator_version":"1","policy_checkpoint":"x","sandbox_version":"1","dedup_hash":"sha256:0000000000000000000000000000000000000000000000000000000000000000"}\n')
+            with self.assertRaises(ValueError) as ctx:
+                load_unique_records(path)
+            self.assertIn("missing schema_version", str(ctx.exception))
+            
+            # Unsupported schema_version (e.g. 2)
+            with open(path, "wb") as fh:
+                fh.write(b'{"prompt":"h","completion":"c","harness_version":"1","evaluator_version":"1","policy_checkpoint":"x","sandbox_version":"1","schema_version":2,"dedup_hash":"sha256:0000000000000000000000000000000000000000000000000000000000000000"}\n')
+            with self.assertRaises(ValueError) as ctx:
+                load_unique_records(path)
+            self.assertIn("unsupported schema_version", str(ctx.exception))
         finally:
             if os.path.exists(path):
                 os.unlink(path)

@@ -3,6 +3,7 @@ import os
 import time
 import hashlib
 import secrets
+import copy
 from typing import Any
 from dataclasses import dataclass, asdict
 
@@ -44,9 +45,11 @@ class OnlineOutcome:
 @dataclass(frozen=True)
 class ReplayLoadResult:
     records: list[dict]
-    skipped_torn_tail: bool
+    # tail_record_skipped: True if one or more trailing corrupted tail records were skipped
+    tail_record_skipped: bool
     skipped_duplicate_count: int
-    unterminated_tail: bool
+    # tail_missing_newline: True if the file did not end with a trailing newline
+    tail_missing_newline: bool
 
 def derive_desirability(outcome: OnlineOutcome) -> bool:
     return (
@@ -76,6 +79,17 @@ def canonical_json_bytes(value: Any) -> bytes:
         allow_nan=False,
     ).encode("utf-8")
 
+def is_sha256_identifier(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    prefix, separator, digest = value.partition(":")
+    return (
+        separator == ":"
+        and prefix == "sha256"
+        and len(digest) == 64
+        and all(char in "0123456789abcdef" for char in digest)
+    )
+
 def compute_dedup_hash(
     prompt: str,
     completion: str,
@@ -83,6 +97,7 @@ def compute_dedup_hash(
     evaluator_version: str,
     policy_checkpoint: str,
     sandbox_version: str,
+    schema_version: int = 1,
 ) -> str:
     payload = {
         "prompt": prompt,
@@ -91,6 +106,7 @@ def compute_dedup_hash(
         "evaluator_version": evaluator_version,
         "policy_checkpoint": policy_checkpoint,
         "sandbox_version": sandbox_version,
+        "schema_version": schema_version,
     }
     return "sha256:" + hashlib.sha256(canonical_json_bytes(payload)).hexdigest()
 
@@ -154,12 +170,17 @@ def read_replay_prefix(content: bytes) -> tuple[list[dict[str, Any]], int]:
     return records, valid_end
 
 def append_jsonl_durable(path: str, record: dict[str, Any]) -> None:
+    if not isinstance(record, dict):
+        raise TypeError("replay record must be a dictionary")
+        
     abspath = os.path.abspath(path)
     directory = os.path.dirname(abspath)
     if directory:
         os.makedirs(directory, exist_ok=True)
         
-    serialized = canonical_json_bytes(record) + b"\n"
+    record_snapshot = copy.deepcopy(record)
+    serialized = canonical_json_bytes(record_snapshot) + b"\n"
+    
     with open(abspath, "a+b") as fh:
         lock_file_ex(fh)
         try:
@@ -173,7 +194,12 @@ def append_jsonl_durable(path: str, record: dict[str, Any]) -> None:
                 fh.flush()
                 os.fsync(fh.fileno())
                 
+            # If the existing file did not end with a newline, append one first
             fh.seek(0, os.SEEK_END)
+            truncated_bytes = existing[:valid_end]
+            if truncated_bytes and not truncated_bytes.endswith(b"\n"):
+                fh.write(b"\n")
+                
             fh.write(serialized)
             fh.flush()
             os.fsync(fh.fileno())
@@ -192,6 +218,7 @@ def record_online_outcome(path: str, outcome: OnlineOutcome) -> None:
     Note: deduplication checks are performed as a read-time projection during load_unique_records.
     """
     payload = asdict(outcome)
+    payload["schema_version"] = 1
     payload["desirable"] = derive_desirability(outcome)
     payload["trainable"] = should_train_on(outcome)
     payload["recorded_at_unix"] = time.time()
@@ -201,14 +228,15 @@ def record_online_outcome(path: str, outcome: OnlineOutcome) -> None:
         outcome.harness_version,
         outcome.evaluator_version,
         outcome.policy_checkpoint,
-        outcome.sandbox_version
+        outcome.sandbox_version,
+        schema_version=1
     )
     append_jsonl_durable(path, payload)
 
 def load_unique_records(path: str) -> ReplayLoadResult:
     abspath = os.path.abspath(path)
     if not os.path.exists(abspath):
-        return ReplayLoadResult(records=[], skipped_torn_tail=False, skipped_duplicate_count=0, unterminated_tail=False)
+        return ReplayLoadResult(records=[], tail_record_skipped=False, skipped_duplicate_count=0, tail_missing_newline=False)
 
     with open(abspath, "rb") as fh:
         lock_file_sh(fh)
@@ -228,22 +256,33 @@ def load_unique_records(path: str) -> ReplayLoadResult:
     try:
         records, valid_end = read_replay_prefix(content_bytes)
         skipped_torn = (valid_end < len(content_bytes))
-    except Exception as exc:
+    except ValueError as exc:
         raise ValueError(f"Failed to parse replay JSONL: {exc}") from exc
 
     unique: dict[str, dict] = {}
     skipped_dup = 0
     
     for index, record in enumerate(records):
-        dedup_hash = record.get("dedup_hash")
-        if not dedup_hash:
-            # Preserve legacy record
-            synthetic_key = f"legacy:{index}"
-            unique[synthetic_key] = record
+        if "dedup_hash" not in record:
+            unique[f"legacy:{index}"] = record
             continue
 
+        dedup_hash = record["dedup_hash"]
         if not isinstance(dedup_hash, str):
             raise ValueError(f"record {index} dedup_hash must be a string")
+
+        if not dedup_hash:
+            raise ValueError(f"record {index} dedup_hash must not be empty")
+
+        if not is_sha256_identifier(dedup_hash):
+            raise ValueError(f"record {index} dedup_hash is malformed")
+
+        if "schema_version" not in record:
+            raise ValueError(f"record {index} is missing schema_version")
+
+        schema_version = record["schema_version"]
+        if schema_version != 1:
+            raise ValueError(f"record {index} has unsupported schema_version: {schema_version}")
 
         # Re-verify the dedup hash to protect against manipulation
         try:
@@ -254,6 +293,7 @@ def load_unique_records(path: str) -> ReplayLoadResult:
                 record["evaluator_version"],
                 record["policy_checkpoint"],
                 record["sandbox_version"],
+                schema_version=schema_version
             )
             if not secrets.compare_digest(dedup_hash, expected):
                 raise ValueError(f"record {index} has an invalid dedup hash")
@@ -267,7 +307,7 @@ def load_unique_records(path: str) -> ReplayLoadResult:
 
     return ReplayLoadResult(
         records=list(unique.values()),
-        skipped_torn_tail=skipped_torn,
+        tail_record_skipped=skipped_torn,
         skipped_duplicate_count=skipped_dup,
-        unterminated_tail=unterminated
+        tail_missing_newline=unterminated
     )

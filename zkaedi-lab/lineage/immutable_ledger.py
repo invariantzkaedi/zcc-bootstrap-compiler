@@ -511,6 +511,9 @@ def append_ledger_payload(path: str, ledger_id: str, payload: dict[str, Any]) ->
             # Write and sync the envelope canonical representation
             serialized = serialize_envelope(envelope) + b"\n"
             fh.seek(0, os.SEEK_END)
+            truncated_bytes = content_bytes[:valid_end]
+            if truncated_bytes and not truncated_bytes.endswith(b"\n"):
+                fh.write(b"\n")
             fh.write(serialized)
             fh.flush()
             os.fsync(fh.fileno())
