@@ -73,6 +73,8 @@ class LedgerVerification:
     failures: tuple[str, ...]
 
 def validate_json_mapping_keys(value: Any) -> None:
+    if isinstance(value, set | frozenset):
+        raise TypeError("Sets are not supported in canonical ledger payloads")
     if isinstance(value, Mapping):
         for key, item in value.items():
             if not isinstance(key, str):
@@ -81,8 +83,6 @@ def validate_json_mapping_keys(value: Any) -> None:
     elif isinstance(value, list | tuple):
         for item in value:
             validate_json_mapping_keys(item)
-    elif isinstance(value, set | frozenset):
-        raise TypeError("Sets are not supported in canonical ledger payloads")
 
 def deep_freeze(value: Any) -> Any:
     if isinstance(value, set | frozenset):
@@ -274,16 +274,25 @@ def read_complete_jsonl_prefix(data: bytes) -> tuple[list[dict], int]:
             continue
 
         try:
-            records.append(json.loads(stripped))
+            line_str = raw_line.decode("utf-8")
+            records.append(json.loads(line_str))
             valid_end = cursor
-        except json.JSONDecodeError:
+        except UnicodeDecodeError as exc:
+            raise LedgerParseException(
+                f"ledger contains invalid UTF-8 at record {len(records)}: {exc}",
+                len(records)
+            ) from exc
+        except json.JSONDecodeError as exc:
             is_final = (cursor == len(data))
             unterminated = not raw_line.endswith(b"\n")
 
             if is_final and unterminated:
                 return records, valid_end
 
-            raise LedgerParseException("ledger contains durable JSON corruption", len(records))
+            raise LedgerParseException(
+                f"ledger contains durable JSON corruption: {exc}",
+                len(records)
+            ) from exc
 
     return records, valid_end
 
@@ -405,33 +414,83 @@ def generate_rollback_certificate(
     cert["content_hash"] = content_hash("zkaedi.rollback-certificate", cert)
     return cert
 
-def verify_certificate(cert: dict[str, Any], domain: str) -> bool:
+def _verify_certificate(cert: dict[str, Any], domain: str) -> bool:
+    if not isinstance(cert, dict):
+        return False
+        
     supplied = cert.get("content_hash")
+    if not is_sha256_identifier(supplied):
+        return False
+        
     unsigned = {
         key: value
         for key, value in cert.items()
         if key != "content_hash"
     }
-    expected = content_hash(domain, unsigned)
-    return (
-        is_sha256_identifier(supplied)
-        and secrets.compare_digest(supplied, expected)
-    )
+    
+    try:
+        expected = content_hash(domain, unsigned)
+    except (TypeError, ValueError, OverflowError):
+        return False
+        
+    return secrets.compare_digest(supplied, expected)
 
 def verify_promotion_certificate(cert: dict[str, Any]) -> bool:
-    return verify_certificate(cert, "zkaedi.promotion-certificate")
+    return _verify_certificate(cert, "zkaedi.promotion-certificate")
 
 def verify_rollback_certificate(cert: dict[str, Any]) -> bool:
-    return verify_certificate(cert, "zkaedi.rollback-certificate")
+    return _verify_certificate(cert, "zkaedi.rollback-certificate")
 
-def verify_ledger_anchor(anchor: LedgerAnchor, expected_ledger_id: str) -> bool:
-    if anchor.ledger_id != expected_ledger_id:
+def anchor_signing_bytes(anchor: LedgerAnchor) -> bytes:
+    return canonical_json_bytes({
+        "domain": "zkaedi.ledger-anchor",
+        "schema_version": 1,
+        "ledger_id": anchor.ledger_id,
+        "sequence": anchor.sequence,
+        "head_hash": anchor.head_hash,
+        "anchored_at_unix": anchor.anchored_at_unix,
+        "signer_key_id": anchor.signer_key_id,
+    })
+
+def verify_ledger_anchor(
+    anchor: LedgerAnchor,
+    *,
+    expected_ledger_id: str,
+    verification: LedgerVerification,
+    public_key: bytes,
+) -> bool:
+    # 1. Type validation on anchor properties
+    if isinstance(anchor.sequence, bool) or not isinstance(anchor.sequence, int):
         return False
-    if not is_sha256_identifier(anchor.head_hash):
+    if anchor.sequence < GENESIS_SEQUENCE:
         return False
-    if not isinstance(anchor.anchored_at_unix, (int, float)) or not math.isfinite(anchor.anchored_at_unix):
+    if (
+        isinstance(anchor.anchored_at_unix, bool)
+        or not isinstance(anchor.anchored_at_unix, (int, float))
+        or not math.isfinite(float(anchor.anchored_at_unix))
+    ):
         return False
-    # Validate anchor node signature structure integrity
+    if not isinstance(anchor.signer_key_id, str) or not anchor.signer_key_id:
+        return False
     if not isinstance(anchor.signature, str) or not anchor.signature:
         return False
-    return True
+
+    # 2. Check structural validation alignment
+    if anchor.ledger_id != expected_ledger_id:
+        return False
+    if anchor.sequence != verification.records_verified - 1:
+        return False
+    if not hashes_equal(anchor.head_hash, verification.head_hash):
+        return False
+
+    # 3. Cryptographic signature check
+    data_bytes = anchor_signing_bytes(anchor)
+    try:
+        signature_bytes = bytes.fromhex(anchor.signature)
+        from cryptography.hazmat.primitives.asymmetric import ed25519
+        from cryptography.exceptions import InvalidSignature
+        public_key_obj = ed25519.Ed25519PublicKey.from_public_bytes(public_key)
+        public_key_obj.verify(signature_bytes, data_bytes)
+        return True
+    except Exception:
+        return False
