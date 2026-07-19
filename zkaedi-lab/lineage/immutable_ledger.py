@@ -17,6 +17,8 @@ from online_types import (
 )
 
 GENESIS_SEQUENCE = 0
+MAX_CLOCK_SKEW = 300.0
+MAX_ANCHOR_AGE = 86400.0 * 30.0  # 30 days
 
 class LedgerParseException(ValueError):
     def __init__(self, message: str, records_verified: int):
@@ -278,6 +280,10 @@ def read_complete_jsonl_prefix(data: bytes) -> tuple[list[dict], int]:
             records.append(json.loads(line_str))
             valid_end = cursor
         except UnicodeDecodeError as exc:
+            is_final = (cursor == len(data))
+            unterminated = not raw_line.endswith(b"\n")
+            if is_final and unterminated:
+                return records, valid_end
             raise LedgerParseException(
                 f"ledger contains invalid UTF-8 at record {len(records)}: {exc}",
                 len(records)
@@ -452,12 +458,54 @@ def anchor_signing_bytes(anchor: LedgerAnchor) -> bytes:
         "signer_key_id": anchor.signer_key_id,
     })
 
+def sign_ledger_anchor(
+    *,
+    ledger_id: str,
+    verification: LedgerVerification,
+    signer_key_id: str,
+    private_key,  # ed25519.Ed25519PrivateKey
+    anchored_at_unix: Optional[float] = None,
+) -> LedgerAnchor:
+    if not verification.valid or verification.head_hash is None or verification.records_verified <= 0:
+        raise ValueError("cannot anchor an invalid or empty ledger")
+        
+    unsigned = LedgerAnchor(
+        ledger_id=ledger_id,
+        sequence=verification.records_verified - 1,
+        head_hash=verification.head_hash,
+        anchored_at_unix=(
+            time.time()
+            if anchored_at_unix is None
+            else anchored_at_unix
+        ),
+        signer_key_id=signer_key_id,
+        signature=""
+    )
+    
+    sig_bytes = private_key.sign(anchor_signing_bytes(unsigned))
+    return LedgerAnchor(
+        ledger_id=unsigned.ledger_id,
+        sequence=unsigned.sequence,
+        head_hash=unsigned.head_hash,
+        anchored_at_unix=unsigned.anchored_at_unix,
+        signer_key_id=unsigned.signer_key_id,
+        signature=sig_bytes.hex()
+    )
+
+def evaluate_anchor_policy(anchor: LedgerAnchor, *, max_age: float = MAX_ANCHOR_AGE) -> bool:
+    now = time.time()
+    if anchor.anchored_at_unix > now + MAX_CLOCK_SKEW:
+        return False
+    if now - anchor.anchored_at_unix > max_age:
+        return False
+    return True
+
 def verify_ledger_anchor(
     anchor: LedgerAnchor,
     *,
     expected_ledger_id: str,
     verification: LedgerVerification,
-    public_key: bytes,
+    trusted_keys: Mapping[str, bytes],
 ) -> bool:
     # 1. Type validation on anchor properties
     if isinstance(anchor.sequence, bool) or not isinstance(anchor.sequence, int):
@@ -475,7 +523,22 @@ def verify_ledger_anchor(
     if not isinstance(anchor.signature, str) or not anchor.signature:
         return False
 
+    # Verify key signature format explicitly
+    try:
+        signature_bytes = bytes.fromhex(anchor.signature)
+    except ValueError:
+        return False
+    if len(signature_bytes) != 64:
+        return False
+
     # 2. Check structural validation alignment
+    if not verification.valid:
+        return False
+    if verification.records_verified <= 0:
+        return False
+    if verification.head_hash is None:
+        return False
+
     if anchor.ledger_id != expected_ledger_id:
         return False
     if anchor.sequence != verification.records_verified - 1:
@@ -483,14 +546,20 @@ def verify_ledger_anchor(
     if not hashes_equal(anchor.head_hash, verification.head_hash):
         return False
 
-    # 3. Cryptographic signature check
+    # 3. Resolve key against trusted keys registry
+    public_key = trusted_keys.get(anchor.signer_key_id)
+    if public_key is None:
+        return False
+    if not isinstance(public_key, bytes) or len(public_key) != 32:
+        return False
+
+    # 4. Cryptographic signature check
     data_bytes = anchor_signing_bytes(anchor)
     try:
-        signature_bytes = bytes.fromhex(anchor.signature)
         from cryptography.hazmat.primitives.asymmetric import ed25519
         from cryptography.exceptions import InvalidSignature
         public_key_obj = ed25519.Ed25519PublicKey.from_public_bytes(public_key)
         public_key_obj.verify(signature_bytes, data_bytes)
         return True
-    except Exception:
+    except (ValueError, TypeError, InvalidSignature):
         return False
