@@ -1,53 +1,105 @@
+import math
 import torch
 from online_kto_objective import completion_logprob
+
+REQUIRED_PROMOTION_METRICS = {
+    "all_safety_tests_passed",
+    "policy_kl",
+    "max_policy_kl",
+    "heldout_success_rate_delta",
+    "malformed_rejection_rate",
+    "pareto_invariants_passed",
+}
 
 def promotion_allowed(metrics: dict) -> tuple[bool, list[str]]:
     failures = []
 
-    if not metrics.get("all_safety_tests_passed", False):
+    # Check for missing metrics
+    missing = sorted(REQUIRED_PROMOTION_METRICS - metrics.keys())
+    if missing:
+        failures.append(f"missing promotion metrics: {missing}")
+        return False, failures
+
+    numeric_names = {
+        "policy_kl",
+        "max_policy_kl",
+        "heldout_success_rate_delta",
+        "malformed_rejection_rate",
+    }
+
+    parsed: dict[str, float] = {}
+
+    for name in numeric_names:
+        try:
+            parsed[name] = float(metrics[name])
+        except (TypeError, ValueError):
+            failures.append(f"{name} is not a valid float")
+            continue
+
+        if not math.isfinite(parsed[name]):
+            failures.append(f"{name} is not finite")
+
+    if failures:
+        return False, failures
+
+    # Safety tests check
+    if metrics["all_safety_tests_passed"] is not True:
         failures.append("safety regression")
 
-    if metrics.get("policy_kl", 0.0) > metrics.get("max_policy_kl", 0.02):
+    # Policy KL check
+    if parsed["policy_kl"] > parsed["max_policy_kl"]:
         failures.append("policy drift exceeded limit")
 
-    if metrics.get("heldout_success_rate_delta", 0.0) < 0.0:
+    # Success rate delta check
+    if parsed["heldout_success_rate_delta"] < 0.0:
         failures.append("held-out success rate regressed")
 
-    if metrics.get("malformed_rejection_rate", 0.0) < 1.0:
+    # Malformed rejection check
+    if parsed["malformed_rejection_rate"] < 1.0:
         failures.append("malformed-input rejection regressed")
 
-    if metrics.get("pareto_invariants_passed") is not True:
+    # Pareto Invariant check
+    if metrics["pareto_invariants_passed"] is not True:
         failures.append("Pareto invariants failed")
 
     return len(failures) == 0, failures
 
+@torch.inference_mode()
 def refresh_anchor_field(policy, reference, tokenizer, anchors, pairs):
-    refreshed = []
+    # Store prior state of model modes
+    policy_was_training = policy.training
+    reference_was_training = reference.training
+    
+    # Set models to evaluation mode to remove dropout or other source of noise
+    policy.eval()
+    reference.eval()
+    
+    try:
+        refreshed = []
+        for anchor in anchors:
+            shifts = []
+            prompt = f"### System:\n{anchor['prompt']}\n\n### Instruction:\nEvaluate agent scaffold: {','.join(anchor['steps'])}\n\n### Response:\n"
 
-    for anchor in anchors:
-        shifts = []
-        # Reconstruct standard prompt from coordinate anchors
-        prompt = f"### System:\n{anchor['prompt']}\n\n### Instruction:\nEvaluate agent scaffold: {','.join(anchor['steps'])}\n\n### Response:\n"
+            for pair in pairs:
+                policy_margin = (
+                    completion_logprob(policy, tokenizer, prompt, pair["chosen"])
+                    - completion_logprob(policy, tokenizer, prompt, pair["rejected"])
+                )
 
-        for pair in pairs:
-            policy_margin = (
-                completion_logprob(policy, tokenizer, prompt, pair["chosen"])
-                - completion_logprob(policy, tokenizer, prompt, pair["rejected"])
-            )
-
-            with torch.no_grad():
                 reference_margin = (
                     completion_logprob(reference, tokenizer, prompt, pair["chosen"])
                     - completion_logprob(reference, tokenizer, prompt, pair["rejected"])
                 )
 
-            shifts.append(
-                float((policy_margin - reference_margin).item())
-            )
+                shifts.append(
+                    float((policy_margin - reference_margin).item())
+                )
 
-        refreshed.append({
-            **anchor,
-            "shift_margin": sum(shifts) / len(shifts),
-        })
-
-    return refreshed
+            refreshed.append({
+                **anchor,
+                "shift_margin": sum(shifts) / len(shifts),
+            })
+        return refreshed
+    finally:
+        policy.train(policy_was_training)
+        reference.train(reference_was_training)

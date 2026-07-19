@@ -1,6 +1,8 @@
 import json
 import os
 import time
+import hashlib
+import fcntl
 from typing import Any
 from dataclasses import dataclass, asdict
 
@@ -39,12 +41,38 @@ def should_train_on(outcome: OnlineOutcome) -> bool:
         return True
     return outcome.failure_class in TRAINABLE_FAILURES
 
+def compute_dedup_hash(
+    prompt: str,
+    completion: str,
+    harness_version: str,
+    evaluator_version: str,
+    policy_checkpoint: str,
+    sandbox_version: str,
+) -> str:
+    payload = json.dumps(
+        {
+            "prompt": prompt,
+            "completion": completion,
+            "harness_version": harness_version,
+            "evaluator_version": evaluator_version,
+            "policy_checkpoint": policy_checkpoint,
+            "sandbox_version": sandbox_version,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return "sha256:" + hashlib.sha256(payload.encode()).hexdigest()
+
 def append_jsonl_durable(path: str, record: dict[str, Any]) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "a", encoding="utf-8") as fh:
-        fh.write(json.dumps(record, sort_keys=True) + "\n")
-        fh.flush()
-        os.fsync(fh.fileno())
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        try:
+            fh.write(json.dumps(record, sort_keys=True) + "\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+        finally:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
 
     if hasattr(os, "O_DIRECTORY"):
         dir_fd = os.open(os.path.dirname(path), os.O_DIRECTORY)
@@ -58,13 +86,43 @@ def record_online_outcome(path: str, outcome: OnlineOutcome) -> None:
     payload["desirable"] = derive_desirability(outcome)
     payload["trainable"] = should_train_on(outcome)
     payload["recorded_at_unix"] = time.time()
-    
-    # Hash for deduplication
-    eval_hash_basis = f"{outcome.prompt}|{outcome.completion}|harness-0.1.0"
-    payload["dedup_hash"] = hashlib_md5(eval_hash_basis)
-    
+    payload["dedup_hash"] = compute_dedup_hash(
+        outcome.prompt,
+        outcome.completion,
+        "harness-0.1.0",
+        "evaluator-0.1.0",
+        "checkpoint-25",
+        "sandbox-v1"
+    )
     append_jsonl_durable(path, payload)
 
-def hashlib_md5(val: str) -> str:
-    import hashlib
-    return hashlib.md5(val.encode()).hexdigest()
+def load_unique_records(path: str) -> list[dict]:
+    if not os.path.exists(path):
+        return []
+
+    with open(path, "r", encoding="utf-8") as fh:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_SH)
+        try:
+            lines = fh.readlines()
+        finally:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+
+    unique: dict[str, dict] = {}
+    for index, line in enumerate(lines):
+        line_str = line.strip()
+        if not line_str:
+            continue
+
+        try:
+            record = json.loads(line_str)
+        except json.JSONDecodeError:
+            if index == len(lines) - 1:
+                # Quarantine/skip torn trailing record gracefully
+                continue
+            raise
+
+        dedup_hash = record.get("dedup_hash")
+        if dedup_hash:
+            unique.setdefault(dedup_hash, record)
+
+    return list(unique.values())

@@ -13,19 +13,27 @@ class OnlineTrainConfig:
     max_policy_kl: float = 0.02
 
 def completion_logprob(model, tokenizer, prompt: str, completion: str) -> torch.Tensor:
+    device = next(model.parameters()).device
+    
     prompt_ids = tokenizer(
         prompt,
-        return_tensors="pt",
         add_special_tokens=False,
-    ).input_ids.to(model.device)
+    ).input_ids
 
-    full_ids = tokenizer(
-        prompt + completion,
-        return_tensors="pt",
+    completion_ids = tokenizer(
+        completion,
         add_special_tokens=False,
-    ).input_ids.to(model.device)
+    ).input_ids
 
-    prompt_len = prompt_ids.shape[1]
+    if not prompt_ids:
+        raise ValueError("Prompt produced no tokens")
+
+    full_ids = torch.tensor(
+        [prompt_ids + completion_ids],
+        device=device,
+    )
+
+    prompt_len = len(prompt_ids)
     if full_ids.shape[1] <= prompt_len:
         raise ValueError("Completion produced no tokens")
 
@@ -43,7 +51,7 @@ def completion_logprob(model, tokenizer, prompt: str, completion: str) -> torch.
 
     return token_logps.mean(dim=-1)
 
-def kto_like_loss(
+def binary_reference_logratio_loss(
     policy,
     reference,
     tokenizer,
@@ -55,6 +63,22 @@ def kto_like_loss(
     desirable_weight: float = 1.0,
     undesirable_weight: float = 1.0,
 ) -> torch.Tensor:
+    """Experimental reference-relative binary preference loss."""
+    batch_size = len(prompts)
+    if batch_size == 0:
+        raise ValueError("Preference batch is empty")
+    if len(completions) != batch_size:
+        raise ValueError("prompts and completions must have equal length")
+    if desirable.numel() != batch_size:
+        raise ValueError("desirable labels must match batch length")
+
+    # Freeze reference model and set to evaluation mode
+    reference.eval()
+    reference.requires_grad_(False)
+    
+    # Put policy model in training mode
+    policy.train()
+    
     policy_logps = []
     reference_logps = []
 
