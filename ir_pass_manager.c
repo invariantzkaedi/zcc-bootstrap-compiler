@@ -308,6 +308,21 @@ static ir_type_t find_reg_type(ir_func_t *fn, const char *reg) {
     return IR_TY_VOID;
 }
 
+static long truncate_ir_val(long v, ir_type_t t) {
+    switch (t) {
+        case IR_TY_I8:   return (long)(char)v;
+        case IR_TY_U8:   return (long)(unsigned char)v;
+        case IR_TY_I16:  return (long)(short)v;
+        case IR_TY_U16:  return (long)(unsigned short)v;
+        case IR_TY_I32:  return (long)(int)v;
+        case IR_TY_U32:  return (long)(unsigned int)v;
+        case IR_TY_I64:  return (long)v;
+        case IR_TY_U64:  return (long)(unsigned long)v;
+        case IR_TY_PTR:  return (long)(unsigned long)v;
+        default:         return v;
+    }
+}
+
 static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
     ir_func_t *fn = (ir_func_t *)fn_ptr;
     ir_pass_result_t r;
@@ -399,6 +414,10 @@ static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
             } else {
                 if (cmap_get(n->src1, &v1) && cmap_get(n->src2, &v2)) {
                     can_fold = 1;
+                    ir_type_t op_ty = find_reg_type(fn, n->src1);
+                    ir_type_t op_ty2 = find_reg_type(fn, n->src2);
+                    v1 = truncate_ir_val(v1, op_ty);
+                    v2 = truncate_ir_val(v2, op_ty2);
                 }
             }
 
@@ -492,25 +511,36 @@ static ir_pass_result_t ir_pass_const_fold(void *fn_ptr) {
                 }
                 continue;
             } else {
+                ir_type_t op_ty = find_reg_type(fn, n->src1);
+                int is_uns = (op_ty == IR_TY_U8 || op_ty == IR_TY_U16 || op_ty == IR_TY_U32 || op_ty == IR_TY_U64 || op_ty == IR_TY_PTR);
                 switch (n->op) {
                 case IR_ADD: result = v1 + v2; break;
                 case IR_SUB: result = v1 - v2; break;
                 case IR_MUL: result = v1 * v2; break;
-                case IR_DIV: if (v2 == 0) continue; result = v1 / v2; break;
-                case IR_MOD: if (v2 == 0) continue; result = v1 % v2; break;
+                case IR_DIV:
+                    if (v2 == 0) continue;
+                    result = is_uns ? (long)((unsigned long)v1 / (unsigned long)v2) : (v1 / v2);
+                    break;
+                case IR_MOD:
+                    if (v2 == 0) continue;
+                    result = is_uns ? (long)((unsigned long)v1 % (unsigned long)v2) : (v1 % v2);
+                    break;
                 case IR_AND: result = v1 & v2; break;
                 case IR_OR:  result = v1 | v2; break;
                 case IR_XOR: result = v1 ^ v2; break;
                 case IR_SHL: result = (v2 >= 0 && v2 < 64)
                     ? (long)((unsigned long)v1 << (unsigned)v2) : 0; break;
-                case IR_SHR: result = (v2 >= 0 && v2 < 64)
-                    ? (long)((unsigned long)v1 >> (unsigned)v2) : 0; break;
+                case IR_SHR:
+                    result = (v2 >= 0 && v2 < 64)
+                        ? (is_uns ? (long)((unsigned long)v1 >> (unsigned)v2) : (long)(v1 >> (unsigned)v2))
+                        : 0;
+                    break;
                 case IR_EQ:  result = (v1 == v2) ? 1 : 0; break;
                 case IR_NE:  result = (v1 != v2) ? 1 : 0; break;
-                case IR_LT:  result = (v1 < v2)  ? 1 : 0; break;
-                case IR_LE:  result = (v1 <= v2) ? 1 : 0; break;
-                case IR_GT:  result = (v1 > v2)  ? 1 : 0; break;
-                case IR_GE:  result = (v1 >= v2) ? 1 : 0; break;
+                case IR_LT:  result = is_uns ? (long)((unsigned long)v1 < (unsigned long)v2) : ((v1 < v2) ? 1 : 0); break;
+                case IR_LE:  result = is_uns ? (long)((unsigned long)v1 <= (unsigned long)v2) : ((v1 <= v2) ? 1 : 0); break;
+                case IR_GT:  result = is_uns ? (long)((unsigned long)v1 > (unsigned long)v2) : ((v1 > v2) ? 1 : 0); break;
+                case IR_GE:  result = is_uns ? (long)((unsigned long)v1 >= (unsigned long)v2) : ((v1 >= v2) ? 1 : 0); break;
                 case IR_FCMP_OEQ:
                 case IR_FCMP_ONE:
                 case IR_FCMP_OLT:

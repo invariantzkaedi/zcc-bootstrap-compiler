@@ -5617,7 +5617,7 @@ static long long eval_const_expr_p4_raw(Node *elem, int *ok) {
     }
     if (elem->kind == ND_NUM) return elem->int_val;
     if (elem->kind == ND_ADD || elem->kind == ND_SUB ||
-        elem->kind == ND_MUL || elem->kind == ND_DIV) {
+        elem->kind == ND_MUL || elem->kind == ND_DIV || elem->kind == ND_MOD) {
         /* CG-GINIT-FLOAT-002: float/double arithmetic in static initializers
            must use actual FP ops, not integer ops on raw bits.
            Also fixes silent div/0 return 0 without *ok=0. */
@@ -5668,7 +5668,15 @@ static long long eval_const_expr_p4_raw(Node *elem, int *ok) {
             if (elem->kind == ND_ADD) return lv + rv;
             if (elem->kind == ND_SUB) return lv - rv;
             if (elem->kind == ND_MUL) return lv * rv;
-            if (rv) return lv / rv;
+            int is_unsigned = elem->type && node_type_unsigned(elem);
+            if (elem->kind == ND_DIV) {
+                if (rv) return is_unsigned ? (long long)((unsigned long long)lv / (unsigned long long)rv) : (lv / rv);
+                *ok = 0; return 0;
+            }
+            if (elem->kind == ND_MOD) {
+                if (rv) return is_unsigned ? (long long)((unsigned long long)lv % (unsigned long long)rv) : (lv % rv);
+                *ok = 0; return 0;
+            }
             *ok = 0; return 0;
         }
     }

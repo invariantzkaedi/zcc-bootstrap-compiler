@@ -1080,6 +1080,9 @@ static long long eval_const_expr_raw(Node *n) {
             }
             return 0;
         }
+        int is_unsigned = (n->lhs && n->lhs->type && is_unsigned_type(n->lhs->type));
+        if (is_unsigned)
+            return (long long)((unsigned long long)eval_const_expr(n->lhs) / (unsigned long long)r);
         return eval_const_expr(n->lhs) / r;
     }
     if (n->kind == ND_MOD) {
@@ -1093,6 +1096,9 @@ static long long eval_const_expr_raw(Node *n) {
             }
             return 0;
         }
+        int is_unsigned = (n->lhs && n->lhs->type && is_unsigned_type(n->lhs->type));
+        if (is_unsigned)
+            return (long long)((unsigned long long)eval_const_expr(n->lhs) % (unsigned long long)r);
         return eval_const_expr(n->lhs) % r;
     }
     if (n->kind == ND_SHL) return eval_const_expr(n->lhs) << eval_const_expr(n->rhs);
@@ -5202,7 +5208,13 @@ static LatticeVal icp_eval_expr(Node *n) {
         
         long long v1 = lhs_val.val;
         long long v2 = rhs_val.val;
+        if (n->lhs && n->lhs->type) v1 = force_truncate(v1, n->lhs->type);
+        if (n->rhs && n->rhs->type) v2 = force_truncate(v2, n->rhs->type);
         long long res = 0;
+        int is_uns = (n->lhs && n->lhs->type && is_unsigned_type(n->lhs->type));
+        if (!is_uns && n->type) {
+            is_uns = is_unsigned_type(n->type);
+        }
         switch (n->kind) {
             case ND_ADD: res = v1 + v2; break;
             case ND_SUB: res = v1 - v2; break;
@@ -5212,26 +5224,28 @@ static LatticeVal icp_eval_expr(Node *n) {
                     LatticeVal bot = {LATTICE_BOT, 0};
                     return bot;
                 }
-                res = v1 / v2;
+                res = is_uns ? (long long)((unsigned long long)v1 / (unsigned long long)v2) : (v1 / v2);
                 break;
             case ND_MOD:
                 if (v2 == 0) {
                     LatticeVal bot = {LATTICE_BOT, 0};
                     return bot;
                 }
-                res = v1 % v2;
+                res = is_uns ? (long long)((unsigned long long)v1 % (unsigned long long)v2) : (v1 % v2);
                 break;
             case ND_SHL: res = v1 << v2; break;
-            case ND_SHR: res = v1 >> v2; break;
+            case ND_SHR:
+                res = is_uns ? (long long)((unsigned long long)v1 >> v2) : (v1 >> v2);
+                break;
             case ND_BAND: res = v1 & v2; break;
             case ND_BOR: res = v1 | v2; break;
             case ND_BXOR: res = v1 ^ v2; break;
             case ND_EQ: res = v1 == v2; break;
             case ND_NE: res = v1 != v2; break;
-            case ND_LT: res = v1 < v2; break;
-            case ND_LE: res = v1 <= v2; break;
-            case ND_GT: res = v1 > v2; break;
-            case ND_GE: res = v1 >= v2; break;
+            case ND_LT: res = is_unsigned_cmp(n) ? (long long)((unsigned long long)v1 < (unsigned long long)v2) : (v1 < v2); break;
+            case ND_LE: res = is_unsigned_cmp(n) ? (long long)((unsigned long long)v1 <= (unsigned long long)v2) : (v1 <= v2); break;
+            case ND_GT: res = is_unsigned_cmp(n) ? (long long)((unsigned long long)v1 > (unsigned long long)v2) : (v1 > v2); break;
+            case ND_GE: res = is_unsigned_cmp(n) ? (long long)((unsigned long long)v1 >= (unsigned long long)v2) : (v1 >= v2); break;
             case ND_LAND: res = v1 && v2; break;
             case ND_LOR: res = v1 || v2; break;
         }
