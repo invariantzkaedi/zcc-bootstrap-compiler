@@ -119,9 +119,10 @@ def run_fuzz_validation():
             assert p_exec.returncode != 0, f"Raw Fuzz Case {idx} ({desc}) unexpectedly executed successfully"
             print(f"Raw Fuzz Case {idx} ({desc}) successfully rejected by parser (Exit: {p_exec.returncode})")
             passed_checks += 1
-        except subprocess.TimeoutExpired:
-            print(f"Raw Fuzz Case {idx} ({desc}) timed out safely")
-            passed_checks += 1
+        except subprocess.TimeoutExpired as exc:
+            raise AssertionError(
+                f"Raw fuzz case {idx} ({desc}) hung instead of rejecting promptly"
+            ) from exc
             
     if os.path.exists(fuzz_tmp_path):
         os.unlink(fuzz_tmp_path)
