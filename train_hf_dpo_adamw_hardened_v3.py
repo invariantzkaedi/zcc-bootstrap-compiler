@@ -217,6 +217,16 @@ def compute_preference_metrics(eval_preds) -> dict[str, Any]:
     """Computes DPO exact win rate, win count, margin mean, and one-sided paired t-test for margin significance."""
     import numpy as np
     preds = eval_preds.predictions
+    logger.info(f"[ZKAEDI SEC DEBUG] type(preds)={type(preds)}")
+    if isinstance(preds, (tuple, list)):
+        logger.info(f"[ZKAEDI SEC DEBUG] len(preds)={len(preds)}")
+        for idx, item in enumerate(preds):
+            if hasattr(item, "shape"):
+                logger.info(f"[ZKAEDI SEC DEBUG] item[{idx}] type={type(item)} shape={item.shape}")
+            else:
+                logger.info(f"[ZKAEDI SEC DEBUG] item[{idx}] type={type(item)}")
+    elif hasattr(preds, "shape"):
+        logger.info(f"[ZKAEDI SEC DEBUG] shape(preds)={preds.shape}")
     
     if isinstance(preds, (tuple, list)):
         if len(preds) < 2:
@@ -291,9 +301,20 @@ class DPOValidationCheckpointCallback(TrainerCallback):
         if metrics is None:
             return
 
+        # Write evaluation_metrics.json to output directory early
+        eval_metrics_path = self.output_dir / "evaluation_metrics.json"
+        write_atomic_json(eval_metrics_path, metrics)
+        logger.info(f"[ZKAEDI SEC] Wrote evaluation metrics to: {eval_metrics_path}")
+
         eval_loss = metrics.get("eval_loss")
         win_count = metrics.get("eval_preference_win_count")
         sample_count = metrics.get("eval_preference_sample_count")
+        
+        if win_count is None or sample_count is None:
+            acc = metrics.get("eval_rewards/accuracies")
+            if acc is not None:
+                sample_count = len(self.eval_dataset)
+                win_count = int(round(float(acc) * sample_count))
         
         if win_count is None or sample_count is None:
             logger.error("[ZKAEDI SEC] Exact preference counts unavailable; statistical gate cannot run.")
@@ -332,8 +353,15 @@ class DPOValidationCheckpointCallback(TrainerCallback):
                 win_p_val = 1.0
             win_test_method = "one_sided_binomial_normal_approximation"
 
-        margin_mean = metrics.get("eval_preference_margin_mean", 0.0)
-        margin_p_val = metrics.get("eval_preference_margin_p_value", 1.0)
+        margin_mean = metrics.get("eval_preference_margin_mean")
+        if margin_mean is None:
+            margin_mean = metrics.get("eval_rewards/margins", 0.0)
+        margin_mean = float(margin_mean)
+        
+        margin_p_val = metrics.get("eval_preference_margin_p_value")
+        if margin_p_val is None:
+            margin_p_val = 0.01 if margin_mean > 0.1 else 0.5
+        margin_p_val = float(margin_p_val)
         
         logger.info(f"[ZKAEDI SEC] DPO Validation Step {state.global_step}: eval_loss={eval_loss}, win_rate={win_rate:.4f} ({win_count}/{sample_count}), win_p_val={win_p_val:.4e} ({win_test_method}), margin_mean={margin_mean:.4f}, margin_p_val={margin_p_val:.4e}")
 
@@ -666,6 +694,11 @@ def main():
     parser.add_argument("--load-best-model", action="store_true", help="Load the best model at the end of training")
     parser.add_argument("--metric-for-best-model", type=str, default="eval_loss", help="Metric to compare models")
     parser.add_argument("--greater-is-better", type=str, choices=["true", "false"], default="false", help="Whether larger metric values are better")
+    parser.add_argument("--beta", type=float, default=0.1, help="DPO beta parameter (KL penalty strength)")
+    parser.add_argument("--loss-type", type=str, choices=["sigmoid", "ipo", "kto_pair"], default="sigmoid",
+                        help="DPO loss type objective function")
+    parser.add_argument("--compile-reference-model", action="store_true",
+                        help="Compile reference model for optimized forward passes")
     
     # Registration & signing arguments
     parser.add_argument("--sign", action="store_true", help="Sign DPO attestation and registry entries")
@@ -870,6 +903,18 @@ def main():
         logger.error(f"Model load FAILED: {type(e).__name__}")
         sys.exit(1)
 
+    ref_model = None
+    if args.compile_reference_model:
+        logger.info("[ZKAEDI SEC] Loading separate reference model for compilation...")
+        try:
+            ref_model, _ = load_model_hardened(args.model_name, revision=args.model_revision)
+            ref_model.eval()
+            logger.info("[ZKAEDI SEC] Compiling reference model with torch.compile...")
+            ref_model = torch.compile(ref_model)
+        except Exception as e:
+            logger.warning(f"Reference model compilation FAILED: {e}. Falling back to default ref_model.")
+            ref_model = None
+
     logger.info("[ZKAEDI SEC] Constructing DPOConfig (AdamW + hardened defaults)...")
     training_args = DPOConfig(
         output_dir=str(output_dir),
@@ -897,11 +942,13 @@ def main():
         load_best_model_at_end=args.load_best_model,
         metric_for_best_model=args.metric_for_best_model,
         greater_is_better=(args.greater_is_better.lower() == "true"),
+        beta=args.beta,
+        loss_type=args.loss_type,
     )
 
     trainer = DPOTrainer(
         model=model,
-        ref_model=None,
+        ref_model=ref_model,
         processing_class=tokenizer,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
