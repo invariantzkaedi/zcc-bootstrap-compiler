@@ -1,17 +1,26 @@
 {
   "all_passed": true,
-  "cache_entries_count": 3,
+  "cache_entries_count": 2,
   "crash_recovery_passed": true,
+  "determinism_vs_cache_passed": true,
   "fuzz_validation_passed": true,
-  "median_runtime_ms": 1515.8082859998103,
+  "median_runtime_ms": 1358.0401470026118,
   "pareto_frontier_size": 1,
   "pareto_invariants_passed": true,
   "random_seed": 42,
   "seeds_tested": 10,
-  "trajectory_margin_stats": {
-    "max": -1.01348876953125,
-    "mean": -1.01348876953125,
-    "min": -1.01348876953125,
-    "std": 0.0
+  "trajectory_statistics": {
+    "energy_drift_mean": 0.34419278496845823,
+    "final_margin_mean": -1.01348876953125,
+    "final_margin_std": 0.0,
+    "iterations_to_convergence_mean": 3.0,
+    "mean_gradient_norm": 2.2942632798257176,
+    "path_length_mean": 0.8194198573735063,
+    "prompt_region_counts": {
+      "creative": 0,
+      "neutral": 10,
+      "rigorous": 20
+    },
+    "unique_terminal_configs": 1
   }
 }

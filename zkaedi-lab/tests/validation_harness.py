@@ -47,10 +47,7 @@ def run_fuzz_validation():
     
     passed_checks = 0
     for idx, case in enumerate(FUZZ_CASES):
-        # We try to compute candidate ID; if it throws local exceptions, it is successfully caught.
-        # Otherwise, we write it and run the runner, expecting it to be rejected.
         try:
-            # Add placeholders for fields not under test to satisfy ID computation structure
             full_cand = {
                 "canonical_prompt": "Prompt",
                 "tool_policy": {"allowed_tools": ["read"], "network": False},
@@ -60,17 +57,14 @@ def run_fuzz_validation():
                 "mutation_description": "fuzz",
                 "harness_version": "sha256:dev-0.1.0"
             }
-            # Update with fuzz case properties
             full_cand.update(case)
             
             cid = compute_candidate_id(full_cand)
             full_cand["candidate_id"] = cid
             
-            # Write candidate file
             with open(fuzz_tmp_path, "w") as fh:
                 json.dump(full_cand, fh, indent=2)
                 
-            # Execute in sandbox runner
             runner_path = os.path.join(LAB_DIR, "runner", "run_candidate.py")
             p_exec = subprocess.run(
                 [sys.executable, runner_path, fuzz_tmp_path],
@@ -87,10 +81,7 @@ def run_fuzz_validation():
                 except json.JSONDecodeError:
                     continue
             
-            # Evaluate safety gate
             safe_pass, safe_reasons = safety_gate(full_cand, exit_code, verdict)
-            
-            # The candidate must fail either the sandbox run or the safety gate
             assert not safe_pass, f"Fuzz Case {idx} unexpectedly passed safety gate"
             print(f"Fuzz Case {idx} successfully caught/rejected. Reasons: {safe_reasons}")
             passed_checks += 1
@@ -139,25 +130,79 @@ def main():
             shifts.append(dpo_margin - base_margin)
         a["shift_margin"] = float(np.mean(shifts))
         
-    # Invalidate old archives to start fresh validation
     cache_path = os.path.join(LAB_DIR, "receipts", "append-only", "execution_cache.json")
     pareto_path = os.path.join(LAB_DIR, "receipts", "append-only", "pareto_archive.json")
+    
+    # 2. Cache-Disabled Validation / Determinism Test (Seed 42)
+    print("\n--- TESTING OPTIMIZER DETERMINISM VS. CACHE DETERMINISM ---")
+    if os.path.exists(cache_path):
+        os.unlink(cache_path)
     if os.path.exists(pareto_path):
         os.unlink(pareto_path)
         
-    evaluated_cache = {}
-    if os.path.exists(cache_path):
-        with open(cache_path, "r") as fh:
-            evaluated_cache = json.load(fh)
+    # Run 1: Cache Disabled (Empty Cache Dictionary)
+    print("Running trajectory with cache disabled (empty dictionary)...")
+    traj_no_cache = run_mutation_search(
+        seed=42,
+        base_model=base_model,
+        dpo_model=dpo_model,
+        base_tokenizer=base_tokenizer,
+        dpo_tokenizer=dpo_tokenizer,
+        seed_cand=seed_cand,
+        evaluated_cache={},
+        pareto_archive=[],
+        generations=3,
+        verbose=False
+    )
+    
+    # Run 2: Cache Enabled (Load populated cache from disk)
+    print("Loading cache from disk and running trajectory with cache enabled...")
+    with open(cache_path, "r") as fh:
+        loaded_cache = json.load(fh)
+        
+    traj_with_cache = run_mutation_search(
+        seed=42,
+        base_model=base_model,
+        dpo_model=dpo_model,
+        base_tokenizer=base_tokenizer,
+        dpo_tokenizer=dpo_tokenizer,
+        seed_cand=seed_cand,
+        evaluated_cache=loaded_cache,
+        pareto_archive=[],
+        generations=3,
+        verbose=False
+    )
+    
+    # Verify exact determinism
+    determinism_ok = (len(traj_no_cache) == len(traj_with_cache))
+    for i in range(len(traj_no_cache)):
+        id_match = (traj_no_cache[i]["candidate_id"] == traj_with_cache[i]["candidate_id"])
+        margin_match = abs(traj_no_cache[i]["realtime_prompt_margin"] - traj_with_cache[i]["realtime_prompt_margin"]) < 1e-6
+        if not (id_match and margin_match):
+            determinism_ok = False
             
-    # 2. Run Malformed Candidate Fuzz checks
+    print(f"Determinism Check: {'PASSED ✅' if determinism_ok else 'FAILED ❌'}")
+    
+    # 3. Run Malformed Candidate Fuzz checks
     fuzz_ok = run_fuzz_validation()
     
-    # 3. Run Multi-Seed Trajectory checks
+    # 4. Run Multi-Seed Trajectory checks and collect trajectory dynamics statistics
     print("\n--- RUNNING MULTI-SEED TRAJECTORY STABILITY TESTS ---")
     seed_results = []
     pareto_archive = []
     
+    # Track dynamical metrics across all trajectories
+    all_gradients = []
+    path_lengths = []
+    energy_drifts = []
+    convergence_steps = []
+    prompt_counts = {"creative": 0, "neutral": 0, "rigorous": 0}
+    terminal_configs = set()
+    
+    # Reload fresh cache populated from Run 1
+    with open(cache_path, "r") as fh:
+        evaluated_cache = json.load(fh)
+        
     for seed in SEEDS:
         print(f"Executing search trajectory for Seed {seed}...")
         trajectory = run_mutation_search(
@@ -169,9 +214,44 @@ def main():
             seed_cand=seed_cand,
             evaluated_cache=evaluated_cache,
             pareto_archive=pareto_archive,
-            generations=3, # 3 generations to optimize total running time
+            generations=3,
             verbose=False
         )
+        
+        # Calculate dynamics metrics for this seed
+        gradients = [step["gradient_z_norm"] for step in trajectory]
+        all_gradients.extend(gradients)
+        
+        # Path length (Euclidean distance in q-space)
+        q_coords = [np.array(step["q_evaluated"]) for step in trajectory]
+        dist = 0.0
+        for idx in range(len(q_coords) - 1):
+            dist += np.linalg.norm(q_coords[idx + 1] - q_coords[idx])
+        path_lengths.append(dist)
+        
+        # Energy drift |H_final - H_initial|
+        drift = abs(trajectory[-1]["total_energy_H"] - trajectory[0]["total_energy_H"])
+        energy_drifts.append(drift)
+        
+        # Convergence step: first generation where |q_next - q_curr| < 0.1
+        conv_idx = len(trajectory)
+        for idx in range(len(q_coords) - 1):
+            if np.linalg.norm(q_coords[idx + 1] - q_coords[idx]) < 0.1:
+                conv_idx = idx + 1
+                break
+        convergence_steps.append(conv_idx)
+        
+        # Region counts and terminal config
+        for step in trajectory:
+            desc = step["prompt"]
+            if "creative" in desc.lower():
+                prompt_counts["creative"] += 1
+            elif "rigorous" in desc.lower():
+                prompt_counts["rigorous"] += 1
+            else:
+                prompt_counts["neutral"] += 1
+                
+        terminal_configs.add(trajectory[-1]["config_id"])
         
         last = trajectory[-1]
         seed_results.append({
@@ -188,10 +268,8 @@ def main():
     print(f"\nMulti-Seed Trajectory Margin Statistics:")
     print(f"  Mean Margin: {margins.mean():+.4f}")
     print(f"  Std Margin:  {margins.std():.4f}")
-    print(f"  Min Margin:  {margins.min():+.4f}")
-    print(f"  Max Margin:  {margins.max():+.4f}")
     
-    # 4. Pareto Archive Invariant Validation
+    # 5. Pareto Archive Invariant Validation
     print("\n--- VALIDATING PARETO ARCHIVE INVARIANTS ---")
     pareto_ok = True
     seen_configs = set()
@@ -213,7 +291,6 @@ def main():
         for j, b in enumerate(pareto_archive):
             if i == j:
                 continue
-            # We map the structured items for dominates helper
             a_map = {"margin": a["margin"], "potential": a["potential"], "runtime_ms": a["runtime_ms"], "safety_passed": a["safety"] > 0.5}
             b_map = {"margin": b["margin"], "potential": b["potential"], "runtime_ms": b["runtime_ms"], "safety_passed": b["safety"] > 0.5}
             if dominates(a_map, b_map):
@@ -223,7 +300,7 @@ def main():
     if pareto_ok:
         print(f"Pareto Invariants verified successfully. Archive size: {len(pareto_archive)}")
         
-    # 5. Runtime Stability & Median Filtering check
+    # 6. Runtime Stability & Median Filtering check
     print("\n--- MEASURING RUNTIME STABILITY ---")
     times = []
     # Rerun seed config 5 times to filter hardware noise
@@ -236,7 +313,7 @@ def main():
     median_time_ms = float(median(times) * 1000.0)
     print(f"Verified seed candidate median runtime: {median_time_ms:.2f} ms")
     
-    # 6. Atomic Write Crash Recovery Check
+    # 7. Atomic Write Crash Recovery Check
     print("\n--- TESTING CRASH-RECOVERY ATOMICITY ---")
     recovery_tmp_path = os.path.join(LAB_DIR, "receipts", "append-only", "recovery_test.json")
     test_payload = {"seed": RANDOM_SEED, "status": "stable", "timestamp": time.time()}
@@ -248,23 +325,28 @@ def main():
         os.unlink(recovery_tmp_path)
     print(f"Crash recovery test: {'PASSED' if recovery_ok else 'FAILED'}")
     
-    # Save final validation report
+    # Save detailed validation report with dynamic trajectory statistics
     summary = {
+        "all_passed": bool(fuzz_ok and pareto_ok and recovery_ok and determinism_ok),
         "random_seed": RANDOM_SEED,
         "seeds_tested": len(SEEDS),
         "fuzz_validation_passed": fuzz_ok,
         "pareto_invariants_passed": pareto_ok,
         "crash_recovery_passed": recovery_ok,
+        "determinism_vs_cache_passed": determinism_ok,
         "median_runtime_ms": median_time_ms,
         "pareto_frontier_size": len(pareto_archive),
         "cache_entries_count": len(evaluated_cache),
-        "trajectory_margin_stats": {
-            "mean": float(margins.mean()),
-            "std": float(margins.std()),
-            "min": float(margins.min()),
-            "max": float(margins.max())
-        },
-        "all_passed": bool(fuzz_ok and pareto_ok and recovery_ok)
+        "trajectory_statistics": {
+            "final_margin_mean": float(margins.mean()),
+            "final_margin_std": float(margins.std()),
+            "iterations_to_convergence_mean": float(np.mean(convergence_steps)),
+            "path_length_mean": float(np.mean(path_lengths)),
+            "mean_gradient_norm": float(np.mean(all_gradients)),
+            "energy_drift_mean": float(np.mean(energy_drifts)),
+            "prompt_region_counts": prompt_counts,
+            "unique_terminal_configs": len(terminal_configs)
+        }
     }
     
     report_path = os.path.join(LAB_DIR, "receipts", "append-only", "validation_summary.json")
