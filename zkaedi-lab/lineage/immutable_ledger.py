@@ -4,9 +4,11 @@ import time
 import os
 import copy
 import secrets
+import math
 from types import MappingProxyType
 from collections.abc import Mapping
 from dataclasses import dataclass, asdict
+from typing import Optional, Any
 from online_types import (
     canonical_json_bytes,
     lock_file_ex,
@@ -15,6 +17,11 @@ from online_types import (
 )
 
 GENESIS_SEQUENCE = 0
+
+class LedgerParseException(ValueError):
+    def __init__(self, message: str, records_verified: int):
+        super().__init__(message)
+        self.records_verified = records_verified
 
 @dataclass(frozen=True, slots=True)
 class TrainingReceipt:
@@ -50,30 +57,49 @@ class ArtifactNode:
     metadata_hash: str
 
 @dataclass(frozen=True, slots=True)
+class LedgerAnchor:
+    ledger_id: str
+    sequence: int
+    head_hash: str
+    anchored_at_unix: float
+    signer_key_id: str
+    signature: str
+
+@dataclass(frozen=True, slots=True)
 class LedgerVerification:
     valid: bool
     records_verified: int
     head_hash: Optional[str]
     failures: tuple[str, ...]
 
+def validate_json_mapping_keys(value: Any) -> None:
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise TypeError("Ledger payload mapping keys must be strings")
+            validate_json_mapping_keys(item)
+    elif isinstance(value, list | tuple):
+        for item in value:
+            validate_json_mapping_keys(item)
+    elif isinstance(value, set | frozenset):
+        raise TypeError("Sets are not supported in canonical ledger payloads")
+
 def deep_freeze(value: Any) -> Any:
+    if isinstance(value, set | frozenset):
+        raise TypeError("Sets are not supported in canonical ledger payloads")
     if isinstance(value, Mapping):
         return MappingProxyType({
-            str(key): deep_freeze(item)
+            key: deep_freeze(item)
             for key, item in value.items()
         })
     if isinstance(value, list | tuple):
         return tuple(deep_freeze(item) for item in value)
-    if isinstance(value, set | frozenset):
-        return frozenset(deep_freeze(item) for item in value)
     return copy.deepcopy(value)
 
 def thaw(val: Any) -> Any:
     if isinstance(val, MappingProxyType) or isinstance(val, dict):
         return {k: thaw(v) for k, v in val.items()}
     if isinstance(val, tuple | list):
-        return [thaw(v) for v in val]
-    if isinstance(val, frozenset | set):
         return [thaw(v) for v in val]
     return val
 
@@ -125,6 +151,7 @@ def build_ledger_envelope(
     payload: dict[str, Any],
     recorded_at_unix: float
 ) -> LedgerEnvelope:
+    validate_json_mapping_keys(payload)
     canonical_payload = copy.deepcopy(payload)
     frozen_payload = deep_freeze(canonical_payload)
     payload_hash = content_hash("zkaedi.ledger-payload", canonical_payload)
@@ -177,15 +204,31 @@ def verify_records_sequence(records: list[dict]) -> tuple[bool, list[str]]:
             failures.append(f"Record index {idx} previous_hash is not a valid SHA-256 identifier")
             continue
 
-        # Verify payload hash
-        expected_p_hash = content_hash("zkaedi.ledger-payload", payload)
+        # Safe verification of payload keys
+        try:
+            validate_json_mapping_keys(payload)
+        except (TypeError, ValueError) as exc:
+            failures.append(f"Record index {idx} payload keys validation failed: {exc}")
+            continue
+
+        # Verify payload hash with crash-safe catch for non-canonical structures
+        try:
+            expected_p_hash = content_hash("zkaedi.ledger-payload", payload)
+        except (TypeError, ValueError, OverflowError) as exc:
+            failures.append(f"Record sequence {seq} payload is not canonical JSON: {exc}")
+            continue
+
         if not hashes_equal(payload_hash, expected_p_hash):
             failures.append(f"Record sequence {seq} payload hash mismatch")
             
         # Verify header/entry hash
         recorded_at = rec.get("recorded_at_unix")
-        if not isinstance(recorded_at, float) and not isinstance(recorded_at, int):
-            failures.append(f"Record sequence {seq} recorded_at_unix has invalid type")
+        if (
+            isinstance(recorded_at, bool)
+            or not isinstance(recorded_at, (int, float))
+            or not math.isfinite(float(recorded_at))
+        ):
+            failures.append(f"Record sequence {seq} recorded_at_unix is invalid")
             continue
             
         header = {
@@ -194,7 +237,14 @@ def verify_records_sequence(records: list[dict]) -> tuple[bool, list[str]]:
             "payload_hash": payload_hash,
             "recorded_at_unix": recorded_at,
         }
-        expected_entry_hash = content_hash("zkaedi.ledger-header", header)
+        
+        # Verify header hash with crash-safe catch
+        try:
+            expected_entry_hash = content_hash("zkaedi.ledger-header", header)
+        except (TypeError, ValueError, OverflowError) as exc:
+            failures.append(f"Record sequence {seq} header is not canonical JSON: {exc}")
+            continue
+
         if not hashes_equal(entry_hash, expected_entry_hash):
             failures.append(f"Record sequence {seq} entry hash mismatch")
             
@@ -233,7 +283,7 @@ def read_complete_jsonl_prefix(data: bytes) -> tuple[list[dict], int]:
             if is_final and unterminated:
                 return records, valid_end
 
-            raise ValueError("ledger contains durable JSON corruption")
+            raise LedgerParseException("ledger contains durable JSON corruption", len(records))
 
     return records, valid_end
 
@@ -251,8 +301,8 @@ def verify_ledger(path: str) -> LedgerVerification:
 
     try:
         records, valid_end = read_complete_jsonl_prefix(content_bytes)
-    except ValueError as err:
-        return LedgerVerification(valid=False, records_verified=0, head_hash=None, failures=(str(err),))
+    except LedgerParseException as err:
+        return LedgerVerification(valid=False, records_verified=err.records_verified, head_hash=None, failures=(str(err),))
 
     failures = []
     if valid_end < len(content_bytes):
@@ -363,7 +413,25 @@ def verify_certificate(cert: dict[str, Any], domain: str) -> bool:
         if key != "content_hash"
     }
     expected = content_hash(domain, unsigned)
-    return isinstance(supplied, str) and secrets.compare_digest(
-        supplied,
-        expected
+    return (
+        is_sha256_identifier(supplied)
+        and secrets.compare_digest(supplied, expected)
     )
+
+def verify_promotion_certificate(cert: dict[str, Any]) -> bool:
+    return verify_certificate(cert, "zkaedi.promotion-certificate")
+
+def verify_rollback_certificate(cert: dict[str, Any]) -> bool:
+    return verify_certificate(cert, "zkaedi.rollback-certificate")
+
+def verify_ledger_anchor(anchor: LedgerAnchor, expected_ledger_id: str) -> bool:
+    if anchor.ledger_id != expected_ledger_id:
+        return False
+    if not is_sha256_identifier(anchor.head_hash):
+        return False
+    if not isinstance(anchor.anchored_at_unix, (int, float)) or not math.isfinite(anchor.anchored_at_unix):
+        return False
+    # Validate anchor node signature structure integrity
+    if not isinstance(anchor.signature, str) or not anchor.signature:
+        return False
+    return True
