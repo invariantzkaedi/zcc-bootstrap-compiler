@@ -2,6 +2,7 @@ import json
 import os
 import time
 import hashlib
+import secrets
 from typing import Any
 from dataclasses import dataclass, asdict
 
@@ -96,14 +97,20 @@ def lock_file_ex(fh):
     if HAS_FCNTL:
         fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
     elif HAS_MSVCRT:
-        # lock first byte
+        fh.seek(0)
+        msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
+
+def lock_file_sh(fh):
+    if HAS_FCNTL:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_SH)
+    elif HAS_MSVCRT:
+        fh.seek(0)
         msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
 
 def unlock_file(fh):
     if HAS_FCNTL:
         fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
     elif HAS_MSVCRT:
-        # unlock first byte
         fh.seek(0)
         msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
 
@@ -113,10 +120,11 @@ def append_jsonl_durable(path: str, record: dict[str, Any]) -> None:
     if directory:
         os.makedirs(directory, exist_ok=True)
         
-    with open(abspath, "a", encoding="utf-8") as fh:
+    serialized = canonical_json_bytes(record) + b"\n"
+    with open(abspath, "ab") as fh:
         lock_file_ex(fh)
         try:
-            fh.write(json.dumps(record, sort_keys=True) + "\n")
+            fh.write(serialized)
             fh.flush()
             os.fsync(fh.fileno())
         finally:
@@ -149,30 +157,22 @@ def load_unique_records(path: str) -> ReplayLoadResult:
     if not os.path.exists(abspath):
         return ReplayLoadResult(records=[], skipped_torn_tail=False, skipped_duplicate_count=0, unterminated_tail=False)
 
-    # Check terminal newline status first in binary mode
-    unterminated = False
-    size = os.path.getsize(abspath)
-    if size > 0:
-        with open(abspath, "rb") as raw:
-            raw.seek(-1, os.SEEK_END)
-            unterminated = raw.read(1) != b"\n"
-
-    with open(abspath, "r", encoding="utf-8") as fh:
-        # Lock shared read
-        if HAS_FCNTL:
-            fcntl.flock(fh.fileno(), fcntl.LOCK_SH)
-        elif HAS_MSVCRT:
-            msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
-            
+    with open(abspath, "rb") as fh:
+        lock_file_sh(fh)
         try:
-            lines = fh.readlines()
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            unterminated = False
+            if size > 0:
+                fh.seek(-1, os.SEEK_END)
+                unterminated = fh.read(1) != b"\n"
+            
+            fh.seek(0)
+            content_bytes = fh.read()
         finally:
-            if HAS_FCNTL:
-                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
-            elif HAS_MSVCRT:
-                fh.seek(0)
-                msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+            unlock_file(fh)
 
+    lines = content_bytes.decode("utf-8").splitlines()
     unique: dict[str, dict] = {}
     skipped_torn = False
     skipped_dup = 0
@@ -185,7 +185,8 @@ def load_unique_records(path: str) -> ReplayLoadResult:
         try:
             record = json.loads(line_str)
         except json.JSONDecodeError:
-            if index == len(lines) - 1:
+            is_final = (index == len(lines) - 1)
+            if is_final and unterminated:
                 skipped_torn = True
                 continue
             raise
@@ -196,6 +197,22 @@ def load_unique_records(path: str) -> ReplayLoadResult:
             synthetic_key = f"legacy:{index}"
             unique[synthetic_key] = record
             continue
+
+        # Re-verify the dedup hash to protect against manipulation
+        try:
+            expected = compute_dedup_hash(
+                record["prompt"],
+                record["completion"],
+                record["harness_version"],
+                record["evaluator_version"],
+                record["policy_checkpoint"],
+                record["sandbox_version"],
+            )
+            if not secrets.compare_digest(dedup_hash, expected):
+                raise ValueError(f"record {index} has an invalid dedup hash")
+        except KeyError:
+            # If missing key fields, treat as legacy/corrupted depending on design; here we fail closed if dedup_hash exists but key fields are absent
+            raise ValueError(f"record {index} lacks required fields for dedup validation")
 
         if dedup_hash in unique:
             skipped_dup += 1
