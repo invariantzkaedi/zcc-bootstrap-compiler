@@ -4,6 +4,8 @@ import sys
 import time
 import math
 import json
+import tempfile
+import multiprocessing
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
 # Add zkaedi-lab directory to path
@@ -16,6 +18,7 @@ from lineage.immutable_ledger import (
     LedgerAnchor,
     LedgerVerification,
     TrustedSigner,
+    legacy_signer,
     build_ledger_envelope,
     serialize_envelope,
     verify_records_sequence,
@@ -26,8 +29,22 @@ from lineage.immutable_ledger import (
     evaluate_anchor_policy,
     verify_ledger_anchor,
     accept_ledger_anchor,
-    LedgerParseException
+    LedgerParseException,
+    MAX_ANCHOR_AGE
 )
+
+def append_worker(path, ledger_id, count, results_queue):
+    successes = 0
+    for i in range(count):
+        try:
+            append_ledger_payload(path, ledger_id, {"worker_pid": os.getpid(), "index": i})
+            successes += 1
+            # Add small random sleep to maximize lock contention
+            time.sleep(0.005)
+        except Exception as exc:
+            results_queue.put((False, f"PID {os.getpid()} failed at index {i}: {exc}"))
+            return
+    results_queue.put((True, successes))
 
 class TestLedgerSecurity(unittest.TestCase):
     def setUp(self):
@@ -38,7 +55,14 @@ class TestLedgerSecurity(unittest.TestCase):
         
         self.signer_key_id = "test-signer-01"
         self.ledger_id = "test-ledger-abc"
-        self.trusted_keys = {self.signer_key_id: self.pub_bytes}
+        self.signer = TrustedSigner(
+            public_key=self.pub_bytes,
+            valid_from=0.0,
+            valid_until=None,
+            revoked_at=None,
+            allowed_ledgers=frozenset([self.ledger_id])
+        )
+        self.trusted_keys = {self.signer_key_id: self.signer}
 
     def test_non_dict_record_in_sequence_does_not_crash(self):
         # Create a mock records sequence where one entry is not a dict
@@ -176,7 +200,7 @@ class TestLedgerSecurity(unittest.TestCase):
         self.assertTrue(ok)
 
     def test_chain_from_ledger_a_cannot_be_accepted_as_ledger_b(self):
-        # Ledger A entry cannot verify under Ledger Bexpected identifier
+        # Ledger A entry cannot verify under Ledger B expected identifier
         envelope = build_ledger_envelope(
             ledger_id="ledger-a",
             sequence=0,
@@ -232,6 +256,178 @@ class TestLedgerSecurity(unittest.TestCase):
         # Non-genesis previous_hash check
         with self.assertRaises(ValueError):
             build_ledger_envelope(self.ledger_id, 1, None, {}, time.time())
+
+    def test_malformed_trusted_signer_fails_closed(self):
+        # Create a TrustedSigner with malformed/invalid fields
+        bad_signer = TrustedSigner(
+            public_key=self.pub_bytes,
+            valid_from="yesterday",  # invalid type
+            valid_until=None,
+            revoked_at=None,
+            allowed_ledgers=frozenset([self.ledger_id])
+        )
+        verification = LedgerVerification(
+            valid=True,
+            records_verified=1,
+            head_hash="sha256:" + "a" * 64,
+            failures=()
+        )
+        anchor = sign_ledger_anchor(
+            ledger_id=self.ledger_id,
+            verification=verification,
+            signer_key_id=self.signer_key_id,
+            private_key=self.private_key,
+            anchored_at_unix=time.time()
+        )
+        ok = verify_ledger_anchor(
+            anchor,
+            expected_ledger_id=self.ledger_id,
+            verification=verification,
+            trusted_keys={self.signer_key_id: bad_signer}
+        )
+        self.assertFalse(ok)
+
+    def test_raw_key_rejected_in_strict_mode(self):
+        # verify_ledger_anchor must reject raw public key bytes in trusted_keys
+        verification = LedgerVerification(
+            valid=True,
+            records_verified=1,
+            head_hash="sha256:" + "a" * 64,
+            failures=()
+        )
+        anchor = sign_ledger_anchor(
+            ledger_id=self.ledger_id,
+            verification=verification,
+            signer_key_id=self.signer_key_id,
+            private_key=self.private_key,
+            anchored_at_unix=time.time()
+        )
+        ok = verify_ledger_anchor(
+            anchor,
+            expected_ledger_id=self.ledger_id,
+            verification=verification,
+            trusted_keys={self.signer_key_id: self.pub_bytes}  # raw bytes, not TrustedSigner
+        )
+        self.assertFalse(ok)
+
+    def test_hash_invalid_parent_invalidates_child(self):
+        # Entry hash doesn't match the record header -> record is invalid -> sets record_valid = False
+        # The next record should follow it and fail validation with "follows an invalid parent"
+        records = [
+            {
+                "ledger_id": self.ledger_id,
+                "sequence": 0,
+                "payload": {},
+                "payload_hash": "sha256:" + "0" * 64,
+                "entry_hash": "sha256:" + "f" * 64,  # wrong hash representation
+                "previous_hash": None,
+                "recorded_at_unix": time.time(),
+            },
+            {
+                "ledger_id": self.ledger_id,
+                "sequence": 1,
+                "payload": {},
+                "payload_hash": "sha256:" + "0" * 64,
+                "entry_hash": "sha256:" + "2" * 64,
+                "previous_hash": "sha256:" + "f" * 64,
+                "recorded_at_unix": time.time(),
+            }
+        ]
+        valid, failures = verify_records_sequence(records, self.ledger_id)
+        self.assertFalse(valid)
+        self.assertTrue(any("follows an invalid parent" in f for f in failures))
+
+    def test_invalid_payload_does_not_mutate_ledger(self):
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            # Genesis block append first
+            append_ledger_payload(path, self.ledger_id, {"genesis": True})
+            
+            with open(path, "rb") as fh:
+                original_content = fh.read()
+                
+            # Attempt to append invalid payload (must fail validation before file write)
+            with self.assertRaises(TypeError):
+                append_ledger_payload(path, self.ledger_id, ["invalid", "non-mapping"])
+                
+            with open(path, "rb") as fh:
+                current_content = fh.read()
+            self.assertEqual(original_content, current_content)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_empty_expected_ledger_id_is_rejected(self):
+        # Empty ledger ID checks in validation guards
+        with self.assertRaises(ValueError):
+            verify_ledger("test_path.jsonl", "")
+        with self.assertRaises(ValueError):
+            append_ledger_payload("test_path.jsonl", "", {})
+
+    def test_anchor_policy_uses_injected_clock(self):
+        verification = LedgerVerification(
+            valid=True,
+            records_verified=1,
+            head_hash="sha256:" + "a" * 64,
+            failures=()
+        )
+        anchor = sign_ledger_anchor(
+            ledger_id=self.ledger_id,
+            verification=verification,
+            signer_key_id=self.signer_key_id,
+            private_key=self.private_key,
+            anchored_at_unix=200.0
+        )
+        # Using exact current time time=200, within skew tolerance (0 skew)
+        self.assertTrue(evaluate_anchor_policy(anchor, now=200.0))
+        # time=600 is too far ahead (age limit exceeded)
+        self.assertFalse(evaluate_anchor_policy(anchor, now=600.0 + MAX_ANCHOR_AGE))
+
+    def test_multiple_processes_allocate_unique_sequences(self):
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        try:
+            # Genesis block append first
+            append_ledger_payload(path, self.ledger_id, {"genesis": True})
+            
+            workers = 4
+            appends_per_worker = 15
+            queue = multiprocessing.Queue()
+            processes = []
+            for _ in range(workers):
+                p = multiprocessing.Process(
+                    target=append_worker,
+                    args=(path, self.ledger_id, appends_per_worker, queue)
+                )
+                processes.append(p)
+                p.start()
+                
+            for p in processes:
+                p.join()
+                
+            results = []
+            while not queue.empty():
+                results.append(queue.get())
+                
+            self.assertEqual(len(results), workers)
+            for ok, val in results:
+                self.assertTrue(ok, f"Worker failed: {val}")
+                self.assertEqual(val, appends_per_worker)
+                
+            # Verify ledger sequence structure holds perfectly
+            verification = verify_ledger(path, self.ledger_id)
+            self.assertTrue(verification.valid)
+            self.assertEqual(verification.records_verified, 1 + workers * appends_per_worker)
+            
+            # Read file records and assert uniquely numbered sequence indexes
+            with open(path, "rb") as fh:
+                lines = fh.readlines()
+            sequences = [json.loads(line.decode("utf-8"))["sequence"] for line in lines if line.strip()]
+            self.assertEqual(sequences, list(range(len(lines))))
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
 
 if __name__ == "__main__":
     unittest.main()
