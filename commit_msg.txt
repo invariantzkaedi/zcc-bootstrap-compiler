@@ -1,18 +1,7 @@
-fuzz(differential): exclude recursion guard variable 'a' from write-assignments
+doc(battleplan): mark Milestone 4 (Csmith Hardening) as COMPLETED
 
 Goal:
-Harden zcc_fuzz.py recursive depth limits by protecting the sentinel variable 'a' from being overwritten in randomly generated statement scopes.
+Update the Ecosystem Battle Plan to reflect that the Csmith Hardening milestone has been completed.
 
 Outcome:
-The recursion counter 'a' remains read-only. Bounded depth is guaranteed, resolving runtime segfaults due to stack overflow and resulting in 1000/1000 clean passes.
-
-Gate 1: PASS via wsl -e make selfhost && cmp zcc2.s zcc3.s
-=== INITIALIZING ZCC BOOTSTRAP DETERMINISM GATE ===
-Run ID: zcc-run-1784447813-167077
-Lineage check: PASS
-=== VERDICT: BOOTSTRAP DETERMINISM LOCK SECURED ===
-
-Gate 3: PASS via wsl -e python3 zcc_fuzz.py --zcc ./zcc --count 1000 --output-dir fuzz_results
-Pass: 1000
-Mismatch: 0
-Crash: 0
+ZCC_BATTLEPLAN_v1.0.4.md is updated, marking Milestone 4 as fully COMPLETED.
