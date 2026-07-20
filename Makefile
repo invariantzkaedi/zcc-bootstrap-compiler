@@ -121,6 +121,16 @@ wasm-svg-bridge:
 	@sed -i 's/zcc_sprites.svg/wasm_svg_bridge.wasm/g' demo_sprites_wasm.html
 	@echo "777JACKPOT777 — WASM SVG bridge ready. Open demo_sprites_wasm.html"
 .PHONY: wasm-svg-bridge
+# === ZCC PROMPT GUARD V4 INTEGRATION ===
+.PHONY: prompt-guard-verify
+prompt-guard-verify: zcc
+	@echo "=== Verifying Prompt Guard v4 ==="
+	@cd zcc_prompt_guard_v4 && ./tests/verify_all.sh
+	@echo "=== Compiling Prompt Guard v4 via ZCC ==="
+	./zcc -c zcc_prompt_guard_v4/runtime/zcc_prompt_guard_v4.c -o zcc_prompt_guard_v4/runtime/guard_v4.s
+	gcc -no-pie zcc_prompt_guard_v4/runtime/guard_v4.s -o zcc_prompt_guard_v4/runtime/guard_v4
+	./zcc_prompt_guard_v4/runtime/guard_v4 --fingerprint
+	@echo "Prompt Guard v4 applied and verified successfully."
 
 
 
@@ -879,6 +889,26 @@ verify-ledger: tools/zcc_build_ledger tools/zcc_genome_history auditor
 	./tools/zcc_build_ledger verify --ledger scratch/build.ledger
 	@echo "=== ZXR Sovereign Build Ledger Gate: VERIFIED ==="
 
+verify-ledger-production: tools/zcc_build_ledger
+	@echo "=== Verifying Sovereign Production Build Ledger ==="
+	@if [ -f evidence/production_build.ledger ]; then \
+		./tools/zcc_build_ledger verify --ledger evidence/production_build.ledger; \
+	else \
+		echo "No production build ledger found. Initializing new ledger."; \
+		mkdir -p evidence; \
+		touch evidence/production_build.ledger; \
+	fi
+
+append-ledger-production: tools/zcc_build_ledger auditor
+	@mkdir -p scratch evidence
+	./tools/zcc_topology_auditor kernel/*.o --json > scratch/base_genome.json
+	./tools/zcc_build_ledger append \
+		--ledger evidence/production_build.ledger \
+		--genome scratch/base_genome.json \
+		--version "$$(git describe --tags --always 2>/dev/null || echo "v1.0.0")" \
+		--commit "$$(git rev-parse HEAD 2>/dev/null || echo "0000000000000000000000000000000000000000")" \
+		--stability 95
+
 tools/zcc_runtime_probe.o: tools/zcc_runtime_probe.c
 	gcc -O2 -Wall -c tools/zcc_runtime_probe.c -o tools/zcc_runtime_probe.o
 
@@ -905,7 +935,7 @@ verify-runtime-probe: tools/zcc_behavioral_diff tools/zcc_runtime_probe.o audito
 	./tools/zcc_behavioral_diff \
 		--static scratch/static_genome.json \
 		--runtime scratch/runtime_genome.json \
-		--out scratch/behavioral_drift_report.json || true
+		--out scratch/behavioral_drift_report.json
 	@echo "--- Drift report ---"
 	@cat scratch/behavioral_drift_report.json
 	@echo "=== ZXR Runtime Behavioral Probe Gate: VERIFIED ==="
@@ -947,17 +977,17 @@ verify-impact-attribution: tools/zcc_impact_attribution tools/zcc_function_ranke
 	./tools/zcc_function_ranker scratch/runtime_genome_b.json \
 		--top 5 --out scratch/ranked_b.json
 	@echo "--- Impact Attribution (static-only: v0.20 vs v0.23) ---"
-	./tools/zcc_impact_attribution \
+	bash scripts/ci/evaluate_impact.sh ./tools/zcc_impact_attribution \
 		--static-a scratch/static_genome_v020.json \
 		--static-b scratch/static_genome_v023.json \
 		--version-a v0.20 --version-b v0.23 \
 		--calibration-report scratch/calibration_report.json \
 		--thresholds scratch/calibrated_thresholds.json \
-		--out scratch/attribution_static.json || true
+		--out scratch/attribution_static.json
 	@echo "--- Attribution JSON (static) ---"
 	@cat scratch/attribution_static.json
 	@echo "--- Impact Attribution (full: A vs B with runtime genomes) ---"
-	./tools/zcc_impact_attribution \
+	bash scripts/ci/evaluate_impact.sh ./tools/zcc_impact_attribution \
 		--static-a scratch/static_genome_v020.json \
 		--static-b scratch/static_genome_v023.json \
 		--runtime-a scratch/runtime_genome_a.json \
@@ -965,7 +995,7 @@ verify-impact-attribution: tools/zcc_impact_attribution tools/zcc_function_ranke
 		--version-a v0.20-O2 --version-b v0.23-O3 \
 		--calibration-report scratch/calibration_report.json \
 		--thresholds scratch/calibrated_thresholds.json \
-		--out scratch/attribution_full.json || true
+		--out scratch/attribution_full.json
 	@echo "--- Attribution JSON (full) ---"
 	@cat scratch/attribution_full.json
 	@echo "=== ZXR Runtime Impact Attribution Gate: VERIFIED ==="
@@ -1079,8 +1109,8 @@ qec-max-summary:
 .PHONY: max-day1 max-quality max-perf max-audit max-report max-all max-all-with-day1
 
 OWNER_REPO ?= izkaedi-ui/ZCC
-BASE ?= build/base/zcc-opt
-CAND ?= build/cand/zcc-opt
+BASE ?= build/base/zcc
+CAND ?= build/cand/zcc
 SUITE ?= benchmarks/list.txt
 
 max-day1:
@@ -1119,3 +1149,59 @@ ghost: zcc_ghost.so
 zcc_ghost.so: zcc_mesh_warden_shim.c zcc_voxel_shrinkwrap.c zcc_mesh_warden_shim.h zcc_voxel_shrinkwrap.h
 	gcc -O2 -shared -fPIC -o zcc_ghost.so zcc_mesh_warden_shim.c zcc_voxel_shrinkwrap.c
 
+release-prepare:
+	@mkdir -p scratch evidence release_artifacts
+
+release-verify: verify-lexicon clean zcc selfhost test-float check-evm-lifter check-ir-vuln-tag check-copy-const-prop max-quality max-perf max-audit verify-ledger-production
+
+release-package: release-verify
+	@cp -f zcc zcc-opt zcc-verify release_artifacts/ 2>/dev/null || echo "Warning: Binaries missing"
+	@python3 sign_release_artifacts.py
+
+release-sign: release-package
+	@echo "[PLANNED] Signing bundle_hash with private key identity."
+
+release-approve: release-sign
+	@chmod +x scripts/ci/release_gate_validator.sh
+	bash scripts/ci/release_gate_validator.sh
+
+release-publish: release-approve
+	@if [ ! -f evidence/release_decision.json ]; then \
+		echo "ERROR: Approval record missing. Cannot publish release." >&2; \
+		exit 2; \
+	fi
+	@echo "Publishing artifacts to release distribution directory."
+
+release: release-prepare release-verify release-package release-sign release-approve release-publish
+
+# ZCC Quantum Stabilizer Optimizer — build + verification gates
+#
+# Gate sequence (all three must run; order matters):
+#   make gate-red    — harness against a missing binary: must exit nonzero
+#   make gate-fault  — harness against the FAULT_INJECT build: must detect the bug
+#   make gate-green  — harness + property mode against the real build: must pass
+#
+# Every gate logs to /tmp/qopt_gate*.log with the exit code echoed.
+
+zcc-qopt: src/opt/quantum_rules.c
+	$(CC) $(CFLAGS) -o $@ $<
+
+zcc-qopt-fault: src/opt/quantum_rules.c
+	$(CC) $(CFLAGS) -DFAULT_INJECT -o $@ $<
+
+gate-red:
+	-$(PY) tools/qopt_harness.py --binary ./zcc-qopt-MISSING > /tmp/qopt_gate_red.log 2>&1; \
+	echo "EXIT:$$?" | tee -a /tmp/qopt_gate_red.log
+
+gate-fault: zcc-qopt-fault
+	$(PY) tools/qopt_harness.py --binary ./zcc-qopt-fault --expect-fault > /tmp/qopt_gate_fault.log 2>&1; \
+	echo "EXIT:$$?" | tee -a /tmp/qopt_gate_fault.log
+
+gate-green: zcc-qopt
+	$(PY) tools/qopt_harness.py --binary ./zcc-qopt > /tmp/qopt_gate_green.log 2>&1; \
+	echo "EXIT:$$?" | tee -a /tmp/qopt_gate_green.log
+	$(PY) tools/qopt_harness.py --binary ./zcc-qopt --property --seed 1337 -n 50 \
+	  > /tmp/qopt_gate_property.log 2>&1; \
+	echo "EXIT:$$?" | tee -a /tmp/qopt_gate_property.log
+
+.PHONY: gate-red gate-fault gate-green
