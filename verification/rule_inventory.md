@@ -2,6 +2,8 @@
 
 This document catalogs all registered compiler optimizations and rewrites for the quantum stabilizer optimizer.
 
+> **Sub-Milestones Tracking**: See [QUANTUM_MILESTONES.md](file:///H:/__DOWNLOADS/zcc_github_upload/verification/QUANTUM_MILESTONES.md) for the roadmap to fully verified status.
+
 ---
 
 ## 📋 1. Rule Catalog
