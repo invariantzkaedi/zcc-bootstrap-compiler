@@ -574,8 +574,11 @@ def get_file_sha256(file_path: Path) -> str:
     """Computes the SHA-256 hash of a single file using descriptor checks to prevent TOCTOU."""
     import stat
     import os
+    flags = os.O_RDONLY
+    if hasattr(os, "O_BINARY"):
+        flags |= os.O_BINARY
     try:
-        fd = os.open(file_path, os.O_RDONLY)
+        fd = os.open(file_path, flags)
     except OSError as e:
         raise ValueError(f"Failed to open file: {e}")
     try:

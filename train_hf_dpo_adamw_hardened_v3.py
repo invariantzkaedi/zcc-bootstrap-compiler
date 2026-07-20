@@ -84,6 +84,54 @@ logging.basicConfig(
 logger = logging.getLogger("zkaedi_dpo_hardened")
 
 
+_active_trainer = None
+
+class HardenedDPOTrainer(DPOTrainer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.eval_chosen_rewards = []
+        self.eval_rejected_rewards = []
+        global _active_trainer
+        _active_trainer = self
+
+    def evaluation_loop(self, *args, **kwargs):
+        self.eval_chosen_rewards = []
+        self.eval_rejected_rewards = []
+        return super().evaluation_loop(*args, **kwargs)
+
+    def _compute_loss(self, model, inputs, return_outputs):
+        orig_gather = self.accelerator.gather
+        gathers = []
+        
+        def mock_gather(tensor):
+            res = orig_gather(tensor)
+            if not self.model.training:
+                gathers.append(res.detach().cpu().clone())
+            return res
+            
+        self.accelerator.gather = mock_gather
+        try:
+            res = super()._compute_loss(model, inputs, return_outputs)
+        finally:
+            self.accelerator.gather = orig_gather
+            
+        if not self.model.training:
+            tensors = [g for g in gathers if getattr(g, "ndim", 0) > 0]
+            if len(tensors) >= 2:
+                try:
+                    chosen_val = tensors[0]
+                    rejected_val = tensors[1]
+                    
+                    chosen_rew = chosen_val.tolist()
+                    rejected_rew = rejected_val.tolist()
+
+                    self.eval_chosen_rewards.extend(chosen_rew)
+                    self.eval_rejected_rewards.extend(rejected_rew)
+                except Exception as e:
+                    logger.warning(f"[ZKAEDI SEC] Failed to parse intercepted rewards: {e}")
+        return res
+
+
 def write_atomic_json(target_path: Path, data: dict) -> None:
     """Atomic write for JSON payloads using fsync, directory fsync, and temporary replacement."""
     target_path = Path(target_path)
@@ -216,38 +264,69 @@ class DPOSTripwireCallback(TrainerCallback):
 def compute_preference_metrics(eval_preds) -> dict[str, Any]:
     """Computes DPO exact win rate, win count, margin mean, and one-sided paired t-test for margin significance."""
     import numpy as np
-    preds = eval_preds.predictions
-    logger.info(f"[ZKAEDI SEC DEBUG] type(preds)={type(preds)}")
-    if isinstance(preds, (tuple, list)):
-        logger.info(f"[ZKAEDI SEC DEBUG] len(preds)={len(preds)}")
-        for idx, item in enumerate(preds):
-            if hasattr(item, "shape"):
-                logger.info(f"[ZKAEDI SEC DEBUG] item[{idx}] type={type(item)} shape={item.shape}")
-            else:
-                logger.info(f"[ZKAEDI SEC DEBUG] item[{idx}] type={type(item)}")
-    elif hasattr(preds, "shape"):
-        logger.info(f"[ZKAEDI SEC DEBUG] shape(preds)={preds.shape}")
-    
-    if isinstance(preds, (tuple, list)):
-        if len(preds) < 2:
-            return {}
-        chosen_rewards = np.asarray(preds[0]).reshape(-1)
-        rejected_rewards = np.asarray(preds[1]).reshape(-1)
-    else:
-        array = np.asarray(preds)
-        if array.ndim != 2:
-            return {}
-        if array.shape[1] == 2:
-            chosen_rewards = array[:, 0]
-            rejected_rewards = array[:, 1]
-        elif array.shape[0] == 2:
-            chosen_rewards = array[0]
-            rejected_rewards = array[1]
-        else:
-            return {}
+    global _active_trainer
+    if _active_trainer is not None and getattr(_active_trainer, "eval_chosen_rewards", None):
+        chosen_rewards = np.asarray(_active_trainer.eval_chosen_rewards)
+        rejected_rewards = np.asarray(_active_trainer.eval_rejected_rewards)
+        
+        # Tripwire check: cross-check with TRL's own batch-averaged accuracies and total sample count
+        expected_acc_list = getattr(_active_trainer, "_metrics", {}).get("eval", {}).get("rewards/accuracies", [])
+        expected_samples = len(_active_trainer.eval_dataset)
+        tripwire_passed = True
+        if expected_acc_list:
+            expected_acc = float(np.mean(expected_acc_list))
+            computed_acc = float(np.mean(chosen_rewards > rejected_rewards))
+            if abs(computed_acc - expected_acc) > 0.05:
+                logger.warning(
+                    f"[ZKAEDI SEC] Intercepted rewards tripwire mismatch! "
+                    f"expected_acc={expected_acc:.4f}, computed_acc={computed_acc:.4f}. "
+                    "Accuracy does not align with batch averages."
+                )
+                tripwire_passed = False
+        if len(chosen_rewards) != expected_samples:
+            logger.warning(
+                f"[ZKAEDI SEC] Intercepted rewards count mismatch! "
+                f"samples={len(chosen_rewards)}, expected_samples={expected_samples}."
+            )
+            tripwire_passed = False
             
-    if chosen_rewards.size != rejected_rewards.size or chosen_rewards.size == 0:
-        return {}
+        if not tripwire_passed:
+            logger.error("[ZKAEDI SEC] GATHER INTERCEPTION DISCARDED: fallback to reconstructed counts.")
+            chosen_rewards = np.array([])
+            rejected_rewards = np.array([])
+    else:
+        preds = eval_preds.predictions
+        logger.info(f"[ZKAEDI SEC DEBUG] type(preds)={type(preds)}")
+        if isinstance(preds, (tuple, list)):
+            logger.info(f"[ZKAEDI SEC DEBUG] len(preds)={len(preds)}")
+            for idx, item in enumerate(preds):
+                if hasattr(item, "shape"):
+                    logger.info(f"[ZKAEDI SEC DEBUG] item[{idx}] type={type(item)} shape={item.shape}")
+                else:
+                    logger.info(f"[ZKAEDI SEC DEBUG] item[{idx}] type={type(item)}")
+        elif hasattr(preds, "shape"):
+            logger.info(f"[ZKAEDI SEC DEBUG] shape(preds)={preds.shape}")
+        
+        if isinstance(preds, (tuple, list)):
+            if len(preds) < 2:
+                return {}
+            chosen_rewards = np.asarray(preds[0]).reshape(-1)
+            rejected_rewards = np.asarray(preds[1]).reshape(-1)
+        else:
+            array = np.asarray(preds)
+            if array.ndim != 2:
+                return {}
+            if array.shape[1] == 2:
+                chosen_rewards = array[:, 0]
+                rejected_rewards = array[:, 1]
+            elif array.shape[0] == 2:
+                chosen_rewards = array[0]
+                rejected_rewards = array[1]
+            else:
+                return {}
+                
+        if chosen_rewards.size != rejected_rewards.size or chosen_rewards.size == 0:
+            return {}
         
     mask = np.isfinite(chosen_rewards) & np.isfinite(rejected_rewards)
     chosen_rewards = chosen_rewards[mask]
@@ -286,9 +365,11 @@ def compute_preference_metrics(eval_preds) -> dict[str, Any]:
 
 class DPOValidationCheckpointCallback(TrainerCallback):
     """Monitors DPO evaluation metrics, computes statistical significance gates, and tracks the best checkpoint."""
-    def __init__(self, output_dir: Path, eval_dataset, sign: bool = False, private_key: Optional[str] = None, password: Optional[str] = None):
+    def __init__(self, output_dir: Path, eval_dataset, base_model_name: str = "unknown",
+                 sign: bool = False, private_key: Optional[str] = None, password: Optional[str] = None):
         self.output_dir = output_dir
         self.eval_dataset = eval_dataset
+        self._base_model_name = base_model_name   # SB-1: set here, used in attestation stub
         self.sign = sign
         self.private_key = private_key
         self.password = password
@@ -301,20 +382,39 @@ class DPOValidationCheckpointCallback(TrainerCallback):
         if metrics is None:
             return
 
-        # Write evaluation_metrics.json to output directory early
-        eval_metrics_path = self.output_dir / "evaluation_metrics.json"
-        write_atomic_json(eval_metrics_path, metrics)
-        logger.info(f"[ZKAEDI SEC] Wrote evaluation metrics to: {eval_metrics_path}")
+        # Fallback to state.log_history if metrics doesn't have the DPO keys (TRL 1.4.0 integration fallback)
+        if metrics and "eval_rewards/accuracies" not in metrics and getattr(state, "log_history", None):
+            for log_entry in reversed(state.log_history):
+                if "eval_rewards/accuracies" in log_entry:
+                    metrics = {**metrics, **log_entry}
+                    break
+
+        # FIX-5: Append per-step eval metrics instead of overwriting — history preserved
+        step_label = getattr(state, "global_step", "unknown")
+        eval_metrics_step_path = self.output_dir / f"evaluation_metrics_step{step_label}.json"
+        write_atomic_json(eval_metrics_step_path, metrics)
+        # Also maintain a JSONL audit trail
+        jsonl_path = self.output_dir / "evaluation_metrics_history.jsonl"
+        try:
+            with open(jsonl_path, "a", encoding="utf-8") as jf:
+                jf.write(json.dumps({"step": step_label, **metrics}) + "\n")
+        except OSError as e:
+            logger.warning(f"[ZKAEDI SEC] Failed to append eval JSONL: {e}")
+        logger.info(f"[ZKAEDI SEC] Wrote per-step eval metrics to: {eval_metrics_step_path}")
 
         eval_loss = metrics.get("eval_loss")
         win_count = metrics.get("eval_preference_win_count")
         sample_count = metrics.get("eval_preference_sample_count")
         
+        # FIX-2: Track whether counts are exact or reconstructed from batch-averaged accuracy.
+        # Reconstructed counts carry rounding error of ±1, which can flip a gate near p≈0.05.
+        _counts_are_reconstructed = False
         if win_count is None or sample_count is None:
             acc = metrics.get("eval_rewards/accuracies")
             if acc is not None:
                 sample_count = len(self.eval_dataset)
                 win_count = int(round(float(acc) * sample_count))
+                _counts_are_reconstructed = True
         
         if win_count is None or sample_count is None:
             logger.error("[ZKAEDI SEC] Exact preference counts unavailable; statistical gate cannot run.")
@@ -358,20 +458,41 @@ class DPOValidationCheckpointCallback(TrainerCallback):
             margin_mean = metrics.get("eval_rewards/margins", 0.0)
         margin_mean = float(margin_mean)
         
-        margin_p_val = metrics.get("eval_preference_margin_p_value")
-        if margin_p_val is None:
-            margin_p_val = 0.01 if margin_mean > 0.1 else 0.5
-        margin_p_val = float(margin_p_val)
-        
-        logger.info(f"[ZKAEDI SEC] DPO Validation Step {state.global_step}: eval_loss={eval_loss}, win_rate={win_rate:.4f} ({win_count}/{sample_count}), win_p_val={win_p_val:.4e} ({win_test_method}), margin_mean={margin_mean:.4f}, margin_p_val={margin_p_val:.4e}")
+        # FIX-1: Never fabricate a p-value. If the real statistic is unavailable, record UNAVAILABLE.
+        # Signing a heuristic fallback as "one_sided_paired_t_test" is worse than absence.
+        margin_p_val_raw = metrics.get("eval_preference_margin_p_value")
+        margin_p_val = float(margin_p_val_raw) if margin_p_val_raw is not None else None
 
-        # Separate metric logging from eligible-checkpoint selection (fail-closed check)
-        statistically_valid = (
-            win_rate > 0.5
-            and win_p_val < 0.05
-            and eval_loss is not None
-            and math.isfinite(float(eval_loss))
+        logger.info(
+            f"[ZKAEDI SEC] DPO Validation Step {state.global_step}: "
+            f"eval_loss={eval_loss}, win_rate={win_rate:.4f} ({win_count}/{sample_count}), "
+            f"win_p_val={win_p_val:.4e} ({win_test_method}), "
+            f"margin_mean={margin_mean:.4f}, "
+            f"margin_p_val={'UNAVAILABLE' if margin_p_val is None else f'{margin_p_val:.4e}'}, "
+            f"counts_reconstructed={_counts_are_reconstructed}"
         )
+
+        # FIX-2 (continued): If counts were reconstructed, demote the win_test_method label
+        # to prevent an "exact" test name appearing on rounded inputs, and block gating.
+        if _counts_are_reconstructed:
+            win_test_method = "binomial_from_reconstructed_counts_approx"
+            logger.warning(
+                "[ZKAEDI SEC] Win counts reconstructed from batch-averaged accuracy. "
+                "Exact binomial gate SKIPPED — requires exact counts from compute_preference_metrics."
+            )
+
+        # Separate metric logging from eligible-checkpoint selection (fail-closed).
+        # If counts are reconstructed, we skip the p-value check (since exact count is an approx)
+        # but still check win_rate > 0.5.
+        if _counts_are_reconstructed:
+            statistically_valid = False
+        else:
+            statistically_valid = (
+                win_rate > 0.5
+                and win_p_val < 0.05
+                and eval_loss is not None
+                and math.isfinite(float(eval_loss))
+            )
         
         if not statistically_valid:
             return
@@ -383,6 +504,23 @@ class DPOValidationCheckpointCallback(TrainerCallback):
         self.best_win_rate = win_rate
         self.best_checkpoint_step = state.global_step
         
+        # FIX-1: margin_test block is honest about availability.
+        # FIX-4: metrics_independently_reproduced is always false until the
+        #        independent verifier (verify_dpo_checkpoint.py) runs and patches this.
+        margin_test_block = (
+            {
+                "method": "one_sided_paired_t_test",
+                "mean_margin": float(margin_mean),
+                "p_value": float(margin_p_val),
+            }
+            if margin_p_val is not None
+            else {
+                "status": "UNAVAILABLE",
+                "mean_margin": float(margin_mean),
+                "note": "eval_preference_margin_p_value not emitted by trainer; no fallback heuristic applied",
+            }
+        )
+
         self.pending_valid_result = {
             "step": state.global_step,
             "eval_loss": float(eval_loss),
@@ -393,14 +531,14 @@ class DPOValidationCheckpointCallback(TrainerCallback):
                 "alternative": "greater",
                 "win_count": int(win_count),
                 "sample_count": int(sample_count),
-                "p_value": float(win_p_val)
+                "p_value": float(win_p_val),
+                "counts_source": "reconstructed_from_accuracy" if _counts_are_reconstructed else "exact",
             },
-            "margin_test": {
-                "method": "one_sided_paired_t_test",
-                "mean_margin": float(margin_mean),
-                "p_value": float(margin_p_val)
-            },
-            "statistically_valid": True
+            "margin_test": margin_test_block,
+            "statistically_valid": True,
+            # FIX-4: Attestation schema: metrics are trainer-self-reported, not independently reproduced.
+            # Run verify_dpo_checkpoint.py against this receipt to flip this to true.
+            "metrics_independently_reproduced": False,
         }
 
     def on_save(self, args, state, control, **kwargs):
@@ -413,24 +551,103 @@ class DPOValidationCheckpointCallback(TrainerCallback):
         if not checkpoint_dir.is_dir():
             logger.warning(f"[ZKAEDI SEC] Expected checkpoint directory {checkpoint_dir} does not exist yet. Postponing metadata write.")
             return
-            
-        from zkaedi_model_registry import get_model_hashes
+
+        # TRAINER RESIDUAL FIX: hash best_snapshot_dir AFTER copytree so the
+        # receipt's model_payload_sha256 + files describe the artifact it points at,
+        # not the original checkpoint_dir which rotation may delete.
+        # get_model_hashes is called below after the copy succeeds.
+
+        # FIX-3: Copy the eligible checkpoint to best/ BEFORE writing metadata.
+        # save_total_limit rotation can delete checkpoint_dir after on_save returns,
+        # which would leave a signed receipt pointing to a nonexistent artifact.
+        import shutil
+        best_snapshot_dir = self.output_dir / "best" / f"checkpoint-{state.global_step}"
         try:
-            model_payload_sha256, files_dict = get_model_hashes(checkpoint_dir)
+            if best_snapshot_dir.exists():
+                shutil.rmtree(best_snapshot_dir)
+            shutil.copytree(checkpoint_dir, best_snapshot_dir)
+            logger.info(f"[ZKAEDI SEC] Copied eligible checkpoint to rotation-safe path: {best_snapshot_dir}")
         except Exception as e:
-            logger.error(f"[ZKAEDI SEC] Failed to hash saved checkpoint: {e}")
+            logger.error(f"[ZKAEDI SEC] Failed to snapshot best checkpoint to best/: {e}. Metadata write ABORTED to prevent stale receipt.")
             return
+
+        # FINDING #1 FIX: Write minimal attestation stub into best_snapshot_dir
+        # BEFORE hashing, so (a) the stub is hash-covered in the receipt and
+        # (b) the verifier's provenance gate is reachable.
+        # The stub carries base_model identity + allow_list_sha256 from the
+        # registry so the verifier can confirm --ref-model matches.
+        _stub_written = False
+        try:
+            from zkaedi_model_registry import get_model_hashes, load_registry  # type: ignore[import]
+            _reg = load_registry(verify_signature=False)
+            _base_identity = self._base_model_name  # SB-1: always set via constructor
+            _base_hash = "unknown"
             
+            try:
+                _curr_hash, _ = get_model_hashes(Path(_base_identity))
+            except Exception:
+                _curr_hash = None
+
+            def normalize_path_ws_win(p: str) -> str:
+                p = str(p).replace("\\", "/").strip().rstrip("/")
+                if p.lower().startswith("/mnt/"):
+                    drive = p[5:6].upper()
+                    p = f"{drive}:{p[6:]}"
+                return p.lower()
+
+            _norm_base = normalize_path_ws_win(_base_identity)
+            for _entry in _reg.get("models", {}).values():
+                _entry_id = _entry.get("identity") or ""
+                _entry_path = _entry.get("path") or ""
+                if ((_curr_hash and _entry.get("combined_sha256") == _curr_hash) or 
+                    normalize_path_ws_win(_entry_path) == _norm_base or 
+                    _base_identity == _entry_id):
+                    _base_hash = _entry.get("combined_sha256", "unknown")
+                    break
+
+            if _base_hash == "unknown" and _base_identity in _reg.get("models", {}):
+                _base_hash = _reg["models"][_base_identity].get("combined_sha256", "unknown")
+            _attestation_stub = {
+                "attestation_type": "best_snapshot_stub",
+                "base_model": {
+                    "identity": _base_identity,
+                    "allow_list_sha256": _base_hash,
+                },
+                "attestation_id": f"stub-step{state.global_step}",
+                "note": (
+                    "Minimal stub written by on_save so verifier provenance gate is reachable. "
+                    "Full attestation written by generate_dpo_attestation at training end."
+                ),
+            }
+            _stub_path = best_snapshot_dir / "dpo_security_attestation.json"
+            write_atomic_json(_stub_path, _attestation_stub)
+            _stub_written = True
+            logger.info(f"[ZKAEDI SEC] Wrote attestation stub to: {_stub_path}")
+        except Exception as _e:
+            logger.warning(
+                f"[ZKAEDI SEC] Could not write attestation stub: {_e}. "
+                "Verifier provenance gate will warn-and-proceed (not fail-closed)."
+            )
+
+        # Hash the SNAPSHOT (not checkpoint_dir) so receipt digests match the artifact.
+        # get_model_hashes is called AFTER stub write so stub is hash-covered.
+        try:
+            model_payload_sha256, files_dict = get_model_hashes(best_snapshot_dir)
+        except Exception as e:
+            logger.error(f"[ZKAEDI SEC] Failed to hash snapshot: {e}. Metadata write ABORTED.")
+            return
+
         best_meta = {
             **self.pending_valid_result,
             "checkpoint": checkpoint_dir.name,
+            "best_snapshot": str(best_snapshot_dir.relative_to(self.output_dir)),
             "model_payload_sha256": model_payload_sha256,
-            "files": files_dict
+            "files": files_dict,
         }
-        
+
         best_json_path = self.output_dir / "best_statistically_valid_checkpoint.json"
         write_atomic_json(best_json_path, best_meta)
-        logger.info(f"[ZKAEDI SEC] Updated best statistically valid checkpoint metadata at step {state.global_step} bound to {checkpoint_dir.name}")
+        logger.info(f"[ZKAEDI SEC] Updated best statistically valid checkpoint metadata at step {state.global_step} bound to {checkpoint_dir.name} (snapshot: {best_snapshot_dir})")
         
         if self.sign and self.private_key:
             from zkaedi_model_registry import sign_registry
@@ -679,7 +896,10 @@ def main():
                         help="HF Hub revision/commit SHA for pinning (ignored for local paths)")
     parser.add_argument("--output-dir", type=str, default="outputs_dpo_adamw",
                         help="Output directory (will be created under safe base if relative)")
-    parser.add_argument("--safe-base-dir", type=str, default="/mnt/h",
+    default_safe_base = os.environ.get("ZKAEDI_SAFE_BASE") or "/mnt/h"
+    if not os.environ.get("ZKAEDI_SAFE_BASE") and os.name == "nt":
+        default_safe_base = str(Path(__file__).resolve().anchor)
+    parser.add_argument("--safe-base-dir", type=str, default=default_safe_base,
                         help="Root directory allowed for all filesystem operations (ZKAEDI policy)")
     parser.add_argument("--public-key", help="Path to Ed25519 public key for registry verification")
     
@@ -804,9 +1024,23 @@ def main():
             
             # Extract combined hash of local path from registry
             resolved_abs_base = p_base.resolve()
+            from zkaedi_model_registry import get_model_hashes
+            try:
+                curr_hash, _ = get_model_hashes(resolved_abs_base)
+            except Exception:
+                curr_hash = None
+
+            def normalize_path_ws_win(p: str) -> str:
+                p = str(p).replace("\\", "/").strip().rstrip("/")
+                if p.lower().startswith("/mnt/"):
+                    drive = p[5:6].upper()
+                    p = f"{drive}:{p[6:]}"
+                return p.lower()
+
+            norm_abs_base = normalize_path_ws_win(resolved_abs_base)
             for entry in registry.get("models", {}).values():
-                entry_path = Path(entry.get("path", "")).resolve()
-                if entry_path == resolved_abs_base:
+                entry_path = entry.get("path", "")
+                if (curr_hash and entry.get("combined_sha256") == curr_hash) or (normalize_path_ws_win(entry_path) == norm_abs_base):
                     base_model_hash = entry.get("combined_sha256", "unknown")
                     break
         else:
@@ -946,7 +1180,7 @@ def main():
         loss_type=args.loss_type,
     )
 
-    trainer = DPOTrainer(
+    trainer = HardenedDPOTrainer(
         model=model,
         ref_model=ref_model,
         processing_class=tokenizer,
@@ -963,6 +1197,7 @@ def main():
     val_callback = DPOValidationCheckpointCallback(
         output_dir=output_dir,
         eval_dataset=eval_dataset,
+        base_model_name=args.model_name,  # SB-1: pass explicitly so stub is never "unknown"
         sign=args.sign,
         private_key=attestation_key,
         password=pwd

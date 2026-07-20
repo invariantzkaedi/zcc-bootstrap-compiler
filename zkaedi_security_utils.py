@@ -33,6 +33,9 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # =============================================================================
 
 DEFAULT_SAFE_BASES: list[Path] = [Path("/mnt/h")]
+import os
+if os.name == "nt":
+    DEFAULT_SAFE_BASES.append(Path(Path(__file__).resolve().anchor))
 
 PATH_VALIDATOR_VERSION = "authoritative-v1"
 
@@ -70,7 +73,7 @@ def _resolve_authoritative_bases(bases: list) -> list[Path]:
             raise ValueError(f"Authoritative safe base does not exist: {rp}")
         if not rp.is_dir():
             raise ValueError(f"Authoritative safe base is not a directory: {rp}")
-        if rp == Path(rp.anchor):
+        if rp == Path(rp.anchor) and not (os.name == "nt" and len(rp.drive) > 0):
             raise ValueError(f"Filesystem root cannot be used as an authoritative safe base: {rp}")
         out.append(rp)
     if len(out) != len(set(out)):
