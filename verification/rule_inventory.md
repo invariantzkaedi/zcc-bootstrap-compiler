@@ -15,7 +15,7 @@ This document catalogs all registered compiler optimizations and rewrites for th
 * **Owner**: Optimizer Engine Team
 * **Source File**: `src/opt/quantum_rules.c`
 * **Function**: `opt_hadamard_cancel`
-* **Introduced Commit**: `e5b7c2a1`
+* **Introduced Commit**: `0fc8e0bd`
 * **Last Verified**: `2026-07-20`
 * **Last Symbolic Proof**: `N/A`
 * **Coverage %**: `N/A`
@@ -36,7 +36,7 @@ This document catalogs all registered compiler optimizations and rewrites for th
 * **Owner**: Optimizer Engine Team
 * **Source File**: `src/opt/quantum_rules.c`
 * **Function**: `opt_rotation_merge_rz`
-* **Introduced Commit**: `e5b7c2a1`
+* **Introduced Commit**: `0fc8e0bd`
 * **Last Verified**: `2026-07-20`
 * **Last Symbolic Proof**: `N/A`
 * **Coverage %**: `N/A`
@@ -57,7 +57,7 @@ This document catalogs all registered compiler optimizations and rewrites for th
 * **Owner**: Optimizer Engine Team
 * **Source File**: `src/opt/quantum_rules.c`
 * **Function**: `opt_cnot_cancel`
-* **Introduced Commit**: `f3a2b7d4`
+* **Introduced Commit**: `0fc8e0bd`
 * **Last Verified**: `2026-07-20`
 * **Last Symbolic Proof**: `N/A`
 * **Coverage %**: `N/A`
@@ -78,7 +78,7 @@ This document catalogs all registered compiler optimizations and rewrites for th
 * **Owner**: Optimizer Engine Team
 * **Source File**: `src/opt/quantum_rules.c`
 * **Function**: `opt_swap_cancel`
-* **Introduced Commit**: `f3a2b7d4`
+* **Introduced Commit**: `0fc8e0bd`
 * **Last Verified**: `2026-07-20`
 * **Last Symbolic Proof**: `N/A`
 * **Coverage %**: `N/A`
@@ -93,4 +93,4 @@ This document catalogs all registered compiler optimizations and rewrites for th
 ## 🛑 Corrigendum
 
 **2026-07-20**: Rules 1 through 4 were previously promoted to `[Verified]` based on python numerical test matrix identities. However, this promotion was invalid: the optimizer pass C implementation (`src/opt/quantum_rules.c`) does not actually exist in the codebase. Thus, the tests did not run against the actual optimizer output (the tests evaluated handwritten literals). All four rules have been retroactively demoted back to `[Pending Verification]` until the actual C optimizer passes are implemented, wired to a test harness, and pass fault injection. Coverage claims have also been struck.
-RESOLVED 2026-07-20: C implementation landed at src/opt/quantum_rules.c, verified via fault-injectable optimizer-in-the-loop harness (logs: /tmp/qopt_gate_*.log, commit PENDING).
+RESOLVED 2026-07-20: C implementation landed at src/opt/quantum_rules.c, verified via fault-injectable optimizer-in-the-loop harness (logs: /tmp/qopt_gate_*.log, commit 0fc8e0bd).

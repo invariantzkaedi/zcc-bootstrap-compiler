@@ -49,7 +49,7 @@ The verification plane separates **numerical evidence**, **logical interpretatio
 
 ## 🛑 Corrigendum
 **2026-07-20**: All four matrix identities previously marked `[Verified]` have been retroactively moved to `[Pending Verification]`. The optimizer implementation (`src/opt/quantum_rules.c`) does not yet exist. The numerical tests were structurally incapable of testing the optimizer since they ran on hand-written literals.
-RESOLVED 2026-07-20: C implementation landed at src/opt/quantum_rules.c, verified via fault-injectable optimizer-in-the-loop harness (logs: /tmp/qopt_gate_*.log, commit PENDING).
+RESOLVED 2026-07-20: C implementation landed at src/opt/quantum_rules.c, verified via fault-injectable optimizer-in-the-loop harness (logs: /tmp/qopt_gate_*.log, commit 0fc8e0bd).
 
 ---
 
