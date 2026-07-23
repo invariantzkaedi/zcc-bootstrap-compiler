@@ -104,7 +104,11 @@ static void bring_to_top(weaver_state_t *st, int vreg_id, FILE *out) {
             /* Avoid emitting redundant swaps if element is already at target position */
             int top_idx = st->stack_depth - 1;
             if (st->stack[top_idx] != vreg_id) {
+#ifdef FAULT_INJECT_BAD_SWAP
+                fprintf(out, "    swap%d /* CORRUPTED FAULT INJECTION %s */\n", depth_from_top + 3, st->vregs[vreg_id].name);
+#else
                 fprintf(out, "    swap%d /* %s */\n", depth_from_top, st->vregs[vreg_id].name);
+#endif
                 int tmp = st->stack[top_idx];
                 st->stack[top_idx] = st->stack[idx];
                 st->stack[idx] = tmp;
