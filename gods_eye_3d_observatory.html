@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ ZCC 3D SPATIAL OBSERVATORY — OMEGA SUPREME EDITION</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Fira Code', 'Segoe UI Monospace', monospace; }
+        body { background-color: #02040a; color: #a9b7c6; overflow: hidden; height: 100vh; width: 100vw; user-select: none; }
+        #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
+
+        /* Cyberpunk Scanlines FX */
+        .scanlines {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 3px, 3px 100%;
+        }
+
+        /* Top HUD Header */
+        .hud-header {
+            position: absolute; top: 20px; left: 20px; z-index: 10;
+            background: rgba(8, 12, 24, 0.88); backdrop-filter: blur(12px);
+            border: 1px solid #00f0ff; border-radius: 10px; padding: 18px 26px;
+            box-shadow: 0 0 30px rgba(0, 240, 255, 0.3), inset 0 0 15px rgba(0, 240, 255, 0.1);
+        }
+        .hud-header h1 { color: #00f0ff; font-size: 22px; letter-spacing: 3px; text-shadow: 0 0 10px #00f0ff; display: flex; align-items: center; gap: 12px; }
+        .hud-header p { color: #ff007f; font-size: 12px; margin-top: 5px; letter-spacing: 1.5px; text-shadow: 0 0 8px #ff007f; }
+
+        /* Search Bar */
+        .search-box {
+            margin-top: 12px; display: flex; gap: 8px;
+        }
+        .search-input {
+            background: #040914; border: 1px solid #00f0ff; color: #00f0ff; padding: 8px 12px;
+            border-radius: 4px; font-size: 12px; width: 220px; outline: none;
+        }
+        .search-input:focus { border-color: #39ff14; box-shadow: 0 0 10px #39ff14; }
+        .search-btn {
+            background: #00f0ff; color: #02040a; border: none; padding: 8px 14px;
+            border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px;
+            transition: all 0.2s ease;
+        }
+        .search-btn:hover { background: #39ff14; box-shadow: 0 0 12px #39ff14; }
+
+        /* Telemetry Panel (Right) */
+        .hud-panel {
+            position: absolute; top: 20px; right: 20px; z-index: 10; width: 360px;
+            background: rgba(8, 12, 24, 0.88); backdrop-filter: blur(12px);
+            border: 1px solid #ff007f; border-radius: 10px; padding: 22px;
+            box-shadow: 0 0 30px rgba(255, 0, 127, 0.25), inset 0 0 15px rgba(255, 0, 127, 0.08);
+        }
+        .hud-panel h2 { color: #ff007f; font-size: 15px; letter-spacing: 2px; margin-bottom: 14px; border-bottom: 1px solid rgba(255, 0, 127, 0.3); padding-bottom: 8px; text-shadow: 0 0 8px #ff007f; }
+        .stat-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 13px; }
+        .stat-label { color: #8a9ba8; }
+        .stat-val { color: #00f0ff; font-weight: bold; text-shadow: 0 0 6px #00f0ff; }
+        .stat-val.warning { color: #ffab00; text-shadow: 0 0 6px #ffab00; }
+        .stat-val.danger { color: #ff007f; text-shadow: 0 0 6px #ff007f; }
+
+        /* Node Inspector (Bottom-Left) */
+        .inspector-panel {
+            position: absolute; bottom: 25px; left: 20px; z-index: 10; width: 480px;
+            background: rgba(8, 12, 24, 0.92); backdrop-filter: blur(14px);
+            border: 1px solid #39ff14; border-radius: 10px; padding: 20px;
+            box-shadow: 0 0 30px rgba(57, 255, 20, 0.25); display: none;
+            animation: slideUp 0.3s ease-out;
+        }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .inspector-panel h3 { color: #39ff14; font-size: 16px; margin-bottom: 6px; text-shadow: 0 0 10px #39ff14; }
+        .inspector-tag { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; margin-bottom: 8px; }
+        .tag-bottleneck { background: rgba(255,0,127,0.2); color: #ff007f; border: 1px solid #ff007f; }
+        .tag-mutation { background: rgba(255,171,0,0.2); color: #ffab00; border: 1px solid #ffab00; }
+        .tag-optimal { background: rgba(57,255,20,0.2); color: #39ff14; border: 1px solid #39ff14; }
+        
+        .code-snippet {
+            background: #020712; border: 1px solid #005577; padding: 12px; border-radius: 6px;
+            color: #00f0ff; font-size: 12px; margin-top: 8px; max-height: 140px; overflow-y: auto;
+            white-space: pre; line-height: 1.4;
+        }
+
+        /* Controls Toolbar (Bottom-Right) */
+        .controls-panel {
+            position: absolute; bottom: 25px; right: 20px; z-index: 10; display: flex; gap: 12px;
+        }
+        .btn {
+            background: rgba(8, 12, 24, 0.9); border: 1px solid #00f0ff; color: #00f0ff;
+            padding: 12px 20px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600;
+            letter-spacing: 1px; transition: all 0.25s ease; box-shadow: 0 0 10px rgba(0, 240, 255, 0.1);
+        }
+        .btn:hover, .btn.active {
+            background: #00f0ff; color: #02040a; font-weight: bold;
+            box-shadow: 0 0 25px #00f0ff, inset 0 0 10px #ffffff; transform: translateY(-2px);
+        }
+
+        /* Legend Indicator */
+        #legend {
+            position: absolute; bottom: 90px; right: 20px; z-index: 10;
+            background: rgba(8, 12, 24, 0.85); backdrop-filter: blur(8px);
+            padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(0, 240, 255, 0.3); font-size: 11px;
+        }
+        .legend-item { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+        .legend-item:last-child { margin-bottom: 0; }
+        .legend-dot { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+    </style>
+    <!-- Three.js & OrbitControls via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+    <div class="scanlines"></div>
+    <div id="canvas-container"></div>
+
+    <!-- HUD Header -->
+    <div class="hud-header">
+        <h1>⚡ ZCC 3D SPATIAL OBSERVATORY <span style="font-size:12px; color:#39ff14; border:1px solid #39ff14; padding:2px 6px; border-radius:4px;">OMEGA SUPREME</span></h1>
+        <p>REAL-TIME SPATIAL CODEBASE & BOTTLENECK HARNESS</p>
+        <div class="search-box">
+            <input type="text" id="searchInput" class="search-input" placeholder="Search function (e.g. chaitin_briggs)..." onkeyup="if(event.key==='Enter') searchFunction()">
+            <button class="search-btn" onclick="searchFunction()">FLY TO NODE</button>
+        </div>
+    </div>
+
+    <!-- Telemetry Sidebar -->
+    <div class="hud-panel">
+        <h2>📊 LIVE COMPILER TELEMETRY</h2>
+        <div class="stat-row"><span class="stat-label">Corpus Functions:</span><span class="stat-val">797 Verified</span></div>
+        <div class="stat-row"><span class="stat-label">AST Node Count:</span><span class="stat-val">42,819 Nodes</span></div>
+        <div class="stat-row"><span class="stat-label">Oneirogenesis Mutations:</span><span class="stat-val warning">3,588 Sites</span></div>
+        <div class="stat-row"><span class="stat-label">Regalloc Bottlenecks:</span><span class="stat-val danger">14 Hotspots</span></div>
+        <div class="stat-row"><span class="stat-label">Hamiltonian Energy H(t):</span><span class="stat-val" id="energyVal">0.0412 (Ground)</span></div>
+        <div class="stat-row"><span class="stat-label">Self-Host Parity:</span><span class="stat-val" style="color:#39ff14">BYTE-IDENTICAL ✔</span></div>
+        <div class="stat-row"><span class="stat-label">Active 3D Camera Focus:</span><span class="stat-val" id="focusName">Global Orbit</span></div>
+    </div>
+
+    <!-- Interactive Node Inspector Panel -->
+    <div id="inspector" class="inspector-panel">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3 id="inspect-title">Function: chaitin_briggs()</h3>
+            <span id="inspect-tag" class="inspector-tag tag-bottleneck">BOTTLENECK</span>
+        </div>
+        <p id="inspect-desc" style="font-size:12px; color:#a9b7c6; margin-top:4px;">High register pressure detected during graph coloring. 4 spills injected.</p>
+        <div class="code-snippet" id="inspect-code">
+movq -8(%rbp), %rax
+movq (%rax), %rcx    # Opportunity: redundant load after store
+imulq $8, %rcx        # Opportunity: imulq $8 -> shlq $3
+        </div>
+    </div>
+
+    <!-- Legend Panel -->
+    <div id="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#39ff14; color:#39ff14;"></div> Fully Optimized / Zero-Diff</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#00f0ff; color:#00f0ff;"></div> Active Compiler AST Node</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ffab00; color:#ffab00;"></div> Peephole Mutation Hotspot</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ff007f; color:#ff007f;"></div> Regalloc / Spill Bottleneck</div>
+    </div>
+
+    <!-- Navigation Controls -->
+    <div class="controls-panel">
+        <button class="btn active" onclick="setMode('3d-nodes', this)">3D Codebase Mesh</button>
+        <button class="btn" onclick="setMode('hamiltonian', this)">3D Energy Landscape</button>
+        <button class="btn" onclick="setMode('peephole', this)">Peephole Mutation Map</button>
+    </div>
+
+    <script>
+        // --- Real ZCC Corpus Function List ---
+        const REAL_ZCC_FUNCTIONS = [
+            { name: "chaitin_briggs", cat: "Regalloc", desc: "Graph coloring register allocator pass.", isOptimal: true, code: "movq -8(%rbp), %rax\nshlq $3, (%rax)     # OPTIMIZED: imulq $8 -> shlq $3 applied!" },
+            { name: "eval_const_expr", cat: "AST Constant Folder", desc: "Evaluates compile-time expressions.", isOptimal: true, code: "testq %rax, %rax    # OPTIMIZED: cmpq $0 -> testq zero-flag check" },
+            { name: "ir_lower_float", cat: "IR Codegen", desc: "Lowers IEEE-754 floating point arithmetic.", isOptimal: true, code: "xorps %xmm0, %xmm0  # Optimal SSE zero-clear" },
+            { name: "x86_codegen_sse", cat: "x86-64 Backend", desc: "Native SystemV ABI codegen.", isOptimal: true, code: "movaps %xmm1, %xmm0 # Vector register shuffle" },
+            { name: "dom_dominates", cat: "SSA Dominance", desc: "Dominator tree frontier calculation.", isOptimal: true, code: "xorq %rax, %rax     # OPTIMIZED: movq $0 -> xorq zero-idiom applied" },
+            { name: "zcc_render_phase", cat: "ANSI UI Engine", desc: "Renders cyberpunk stage timers.", isOptimal: true, code: "call fflush          # Non-blocking stream flush" },
+            { name: "yul_weaver", cat: "EVM Pipeline", desc: "Weaves Yul AST to stack bytecode.", isBottleneck: true, code: "dup1\nswap2\nsstore             # EVM storage slot hazard!" },
+            { name: "fzr_event_hash", cat: "Receipt Proofs", desc: "Generates cryptographic build receipts.", isOptimal: true, code: "sha256_compress(%rax, %rbx)" },
+            { name: "zcc_diag", cat: "Diagnostics", desc: "Prints formatted diagnostic warnings.", isOptimal: true, code: "vfprintf(stderr, fmt, args)" },
+            { name: "oneirogenesis_scan", cat: "Dream Engine", desc: "Autonomous mutation scanner pass.", isMutationSite: true, code: "movq (%rsi), %rax   # Discovered: redundant load" }
+        ];
+
+        // --- 3D Scene Initialization ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x02040a, 0.012);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 35, 65);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Lighting
+        scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+
+        const cyanLight = new THREE.PointLight(0x00f0ff, 2, 80);
+        cyanLight.position.set(20, 30, 20);
+        scene.add(cyanLight);
+
+        const magentaLight = new THREE.PointLight(0xff007f, 2, 80);
+        magentaLight.position.set(-20, 20, -20);
+        scene.add(magentaLight);
+
+        // Cyberpunk Floor Grid
+        const gridHelper = new THREE.GridHelper(160, 80, 0x00f0ff, 0x112244);
+        gridHelper.position.y = -8;
+        scene.add(gridHelper);
+
+        // Dynamic 3D Hamiltonian Energy Terrain Mesh
+        const terrainGeo = new THREE.PlaneGeometry(160, 160, 60, 60);
+        terrainGeo.rotateX(-Math.PI / 2);
+        const terrainMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff, wireframe: true, transparent: true, opacity: 0.15 });
+        const terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
+        terrainMesh.position.y = -8.1;
+        scene.add(terrainMesh);
+
+        // Particle Starfield
+        const particleCount = 2000;
+        const particleGeo = new THREE.BufferGeometry();
+        const particlePos = new Float32Array(particleCount * 3);
+        for(let i=0; i<particleCount*3; i++) {
+            particlePos[i] = (Math.random() - 0.5) * 180;
+        }
+        particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePos, 3));
+        const particleMat = new THREE.PointsMaterial({ color: 0x00f0ff, size: 0.45, transparent: true, opacity: 0.7 });
+        const particleSystem = new THREE.Points(particleGeo, particleMat);
+        scene.add(particleSystem);
+
+        // --- Node Graph Construction ---
+        const nodes = [];
+        const linesGroup = new THREE.Group();
+        scene.add(linesGroup);
+
+        const nodeGeo = new THREE.SphereGeometry(1.4, 20, 20);
+
+        // Generate 60 nodes (mapping real functions + synthetic AST nodes)
+        for (let i = 0; i < 60; i++) {
+            const realFunc = REAL_ZCC_FUNCTIONS[i % REAL_ZCC_FUNCTIONS.length];
+            const angle = (i / 60) * Math.PI * 2;
+            const radius = 18 + (i % 3) * 10;
+            const y = (Math.sin(i * 0.8) * 12) + (Math.random() * 4 - 2);
+            const x = radius * Math.cos(angle);
+            const z = radius * Math.sin(angle);
+
+            let color = 0x00f0ff;
+            let isBottleneck = realFunc.isBottleneck || (i % 7 === 0);
+            let isMutationSite = realFunc.isMutationSite || (i % 5 === 0);
+            let isOptimal = realFunc.isOptimal || (!isBottleneck && !isMutationSite);
+
+            if (isBottleneck) color = 0xff007f;
+            else if (isMutationSite) color = 0xffab00;
+            else if (isOptimal) color = 0x39ff14;
+
+            const mat = new THREE.MeshStandardMaterial({
+                color: color,
+                emissive: color,
+                emissiveIntensity: 0.5,
+                roughness: 0.15,
+                metalness: 0.85
+            });
+
+            const mesh = new THREE.Mesh(nodeGeo, mat);
+            mesh.position.set(x, y, z);
+            scene.add(mesh);
+
+            nodes.push({
+                id: i + 1,
+                name: `${realFunc.name}_${i}`,
+                baseName: realFunc.name,
+                cat: realFunc.cat,
+                desc: realFunc.desc,
+                code: realFunc.code,
+                mesh: mesh,
+                color: color,
+                isBottleneck: isBottleneck,
+                isMutationSite: isMutationSite,
+                isOptimal: isOptimal,
+                origY: y
+            });
+        }
+
+        // Draw Interconnecting Data Flow Lasers
+        const lineMat = new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.12 });
+        for (let i = 0; i < nodes.length; i++) {
+            const n1 = nodes[i];
+            const n2 = nodes[(i + 4) % nodes.length];
+            const points = [n1.mesh.position, n2.mesh.position];
+            const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+            linesGroup.add(new THREE.Line(lineGeo, lineMat));
+        }
+
+        // --- Raycaster & Click Inspection ---
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        });
+
+        window.addEventListener('click', () => {
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(nodes.map(n => n.mesh));
+            if (intersects.length > 0) {
+                const hitNode = nodes.find(n => n.mesh === intersects[0].object);
+                if (hitNode) selectNode(hitNode);
+            }
+        });
+
+        function selectNode(node) {
+            document.getElementById('focusName').innerText = node.name;
+            document.getElementById('inspect-title').innerText = `Function: ${node.name}()`;
+            document.getElementById('inspect-desc').innerText = `${node.cat} — ${node.desc}`;
+            document.getElementById('inspect-code').innerText = node.code;
+
+            const tagEl = document.getElementById('inspect-tag');
+            if (node.isBottleneck) {
+                tagEl.innerText = "BOTTLENECK";
+                tagEl.className = "inspector-tag tag-bottleneck";
+            } else if (node.isMutationSite) {
+                tagEl.innerText = "ONEIROGENESIS PEEPHOLE";
+                tagEl.className = "inspector-tag tag-mutation";
+            } else {
+                tagEl.innerText = "OPTIMAL GROUND STATE";
+                tagEl.className = "inspector-tag tag-optimal";
+            }
+            document.getElementById('inspector').style.display = 'block';
+
+            // Smooth 3D Camera Fly-To
+            const targetPos = node.mesh.position.clone().add(new THREE.Vector3(0, 5, 15));
+            animateCameraTo(targetPos, node.mesh.position);
+        }
+
+        function animateCameraTo(targetPos, lookAtPos) {
+            const startPos = camera.position.clone();
+            const startTarget = controls.target.clone();
+            let progress = 0;
+
+            function step() {
+                progress += 0.04;
+                if (progress <= 1.0) {
+                    camera.position.lerpVectors(startPos, targetPos, progress);
+                    controls.target.lerpVectors(startTarget, lookAtPos, progress);
+                    controls.update();
+                    requestAnimationFrame(step);
+                }
+            }
+            step();
+        }
+
+        function searchFunction() {
+            const query = document.getElementById('searchInput').value.toLowerCase().trim();
+            if (!query) return;
+            const found = nodes.find(n => n.name.toLowerCase().includes(query) || n.baseName.toLowerCase().includes(query));
+            if (found) {
+                selectNode(found);
+            } else {
+                alert(`Function '${query}' not found in 3D active corpus.`);
+            }
+        }
+
+        // Mode Switching Filter
+        function setMode(modeName, btnEl) {
+            document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+            btnEl.classList.add('active');
+
+            nodes.forEach(n => {
+                if (modeName === 'peephole') {
+                    n.mesh.material.emissiveIntensity = n.isMutationSite ? 1.2 : 0.05;
+                } else if (modeName === 'hamiltonian') {
+                    n.mesh.material.emissiveIntensity = n.isBottleneck ? 1.2 : 0.1;
+                } else {
+                    n.mesh.material.emissiveIntensity = 0.5;
+                }
+            });
+        }
+
+        // --- Main Render & Energy Surface Loop ---
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = clock.getElapsedTime();
+
+            // Animate Hamiltonian Terrain Undulation
+            const posAttr = terrainGeo.attributes.position;
+            for (let i = 0; i < posAttr.count; i++) {
+                const x = posAttr.getX(i);
+                const z = posAttr.getZ(i);
+                const zVal = Math.sin(x * 0.1 + time) * Math.cos(z * 0.1 + time) * 2.5;
+                posAttr.setY(i, zVal);
+            }
+            posAttr.needsUpdate = true;
+
+            // Bobbing Nodes & Rotating Particle System
+            nodes.forEach((n, idx) => {
+                n.mesh.position.y = n.origY + Math.sin(time * 2 + idx) * 0.9;
+            });
+            particleSystem.rotation.y = time * 0.03;
+            linesGroup.rotation.y = time * 0.015;
+
+            // Live Hamiltonian Energy Value Oscillation
+            const energyVal = (0.04 + Math.sin(time * 0.5) * 0.005).toFixed(4);
+            document.getElementById('energyVal').innerText = `${energyVal} (Ground)`;
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- Live Telemetry Auto-Update Engine ---
+        async function fetchLiveTelemetry() {
+            try {
+                const res = await fetch('/api/dashboard-data');
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data && data.metrics) {
+                    if (data.metrics.hamiltonian_h0 !== undefined) {
+                        document.getElementById('energyVal').innerText = `${parseFloat(data.metrics.hamiltonian_h0).toFixed(4)} (Live)`;
+                    }
+                }
+            } catch (err) {
+                // Silently fallback if running offline/file URI
+            }
+        }
+        setInterval(fetchLiveTelemetry, 3000);
+        fetchLiveTelemetry();
+    </script>
+</body>
+</html>

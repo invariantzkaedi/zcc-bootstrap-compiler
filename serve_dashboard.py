@@ -23,6 +23,11 @@ STATIC_ROUTES = {
     "/viz/hamiltonian": "dashboard_hamiltonian_visualizer.html",
     "/viz/heist": "heist_dashboard.html",
     "/viz/audio": "audio_reactive_creature.html",
+    "/viz/matrix": "multi_showcase.html",
+    "/viz/oracle_masks": "oracle_masks.html",
+    "/viz/world_gen": "procedural_world_gen.html",
+    "/observatory": "gods_eye_3d_observatory.html",
+    "/viz/observatory": "gods_eye_3d_observatory.html",
 }
 
 API_ROUTES = {

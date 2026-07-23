@@ -272,3 +272,18 @@ bool ic_rule_mul_pow2_to_shl(ICtx *c) {
     return true;
 }
 
+/* Rule 17: icmp eq/ne x, 0 canonicalization for test instruction emission */
+bool ic_rule_icmp_zero_canonical(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_ICMP_EQ && it->op != OP_ICMP_NE) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->src1, &k) && k == 0 && !reg_is_const(c->fn, it->src2, &k)) {
+        int tmp = it->src1;
+        it->src1 = it->src2;
+        it->src2 = tmp;
+        return true;
+    }
+    return false;
+}
+
+
