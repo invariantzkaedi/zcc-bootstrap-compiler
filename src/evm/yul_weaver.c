@@ -101,12 +101,14 @@ static void bring_to_top(weaver_state_t *st, int vreg_id, FILE *out) {
     if (idx >= 0) {
         int depth_from_top = (st->stack_depth - 1) - idx;
         if (depth_from_top > 0) {
-            fprintf(out, "    swap%d /* %s */\n", depth_from_top, st->vregs[vreg_id].name);
-            /* Swap in our tracking array */
+            /* Avoid emitting redundant swaps if element is already at target position */
             int top_idx = st->stack_depth - 1;
-            int tmp = st->stack[top_idx];
-            st->stack[top_idx] = st->stack[idx];
-            st->stack[idx] = tmp;
+            if (st->stack[top_idx] != vreg_id) {
+                fprintf(out, "    swap%d /* %s */\n", depth_from_top, st->vregs[vreg_id].name);
+                int tmp = st->stack[top_idx];
+                st->stack[top_idx] = st->stack[idx];
+                st->stack[idx] = tmp;
+            }
         }
     } else if (st->vregs[vreg_id].spilled) {
         /* Restore from spill */

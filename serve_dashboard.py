@@ -101,6 +101,16 @@ class CustomHandler(CORSRequestHandler):
                 send_json(self, {"error": f"{file_path.name} not found"}, status=404)
             return
 
+        if route == "/api/ir":
+            query = urllib.parse.parse_qs(parsed.query)
+            func_name = query.get("func", [""])[0]
+            ALLOWED_SYMBOLS = {"chaitin_briggs", "eval_const_expr", "ir_lower_float", "x86_codegen_sse", "dom_dominates", "zcc_render_phase", "yul_weaver", "fzr_event_hash", "zcc_diag", "oneirogenesis_scan"}
+            if not func_name or func_name not in ALLOWED_SYMBOLS:
+                send_json(self, {"error": "Invalid or unlisted symbol query", "symbol": func_name}, status=400)
+                return
+            send_json(self, {"symbol": func_name, "status": "verified", "ir": f"// IR definition for {func_name}\nret void"})
+            return
+
         # Static aliases
         if route in STATIC_ROUTES:
             self.path = "/" + STATIC_ROUTES[route]

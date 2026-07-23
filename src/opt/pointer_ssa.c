@@ -9,18 +9,30 @@
 typedef struct {
     RegID base;
     int64_t offset;
+    int64_t access_size;
+    bool valid;
 } BaseOffsetKey;
 
+static bool intervals_overlap(int64_t off1, int64_t sz1, int64_t off2, int64_t sz2) {
+    int64_t end1 = off1 + sz1;
+    int64_t end2 = off2 + sz2;
+    return !(end1 <= off2 || end2 <= off1);
+}
+
 /*
- * Retrieve or allocate a tracking slot for the memory location (base, offset).
- * If the 1024 capacity limit is reached, it returns -1. In this case, points-to
- * propagation for values loaded from/stored to this location degrades conservatively
- * (resulting in no points-to targets for those loads, skipping rewrites but maintaining safety).
+ * Retrieve or allocate a tracking slot for the memory location (base, offset, access_size).
+ * If another tracked location on the same base overlaps in byte interval [offset, offset+access_size),
+ * points-to tracking for overlapping intervals degrades conservatively to AMBIGUOUS.
  */
-static int get_or_create_mem_location(RegID base, int64_t offset, BaseOffsetKey *locations, int *n_locations) {
+static int get_or_create_mem_location(RegID base, int64_t offset, int64_t access_size, BaseOffsetKey *locations, int *n_locations, RegID *mem_points_to_base) {
     for (int i = 0; i < *n_locations; i++) {
-        if (locations[i].base == base && locations[i].offset == offset) {
-            return i;
+        if (locations[i].base == base) {
+            if (locations[i].offset == offset && locations[i].access_size == access_size) {
+                return i;
+            }
+            if (intervals_overlap(locations[i].offset, locations[i].access_size, offset, access_size)) {
+                mem_points_to_base[i] = AMBIGUOUS;
+            }
         }
     }
     if (*n_locations >= 1024) {
@@ -29,6 +41,8 @@ static int get_or_create_mem_location(RegID base, int64_t offset, BaseOffsetKey 
     int id = (*n_locations)++;
     locations[id].base = base;
     locations[id].offset = offset;
+    locations[id].access_size = access_size;
+    locations[id].valid = true;
     return id;
 }
 
@@ -219,7 +233,7 @@ uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
                         RegID base = points_to_base[ptr_reg];
                         int64_t offset = points_to_offset[ptr_reg];
                         if (base != 0 && base != AMBIGUOUS) {
-                            int loc_id = get_or_create_mem_location(base, offset, mem_locations, &n_mem_locations);
+                            int loc_id = get_or_create_mem_location(base, offset, 8, mem_locations, &n_mem_locations, mem_points_to_base);
                             if (loc_id >= 0) {
                                 target_base = mem_points_to_base[loc_id];
                                 target_offset = mem_points_to_offset[loc_id];
@@ -236,7 +250,7 @@ uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
                             RegID stored_base = points_to_base[val_reg];
                             int64_t stored_offset = points_to_offset[val_reg];
                             if (stored_base != 0) {
-                                int loc_id = get_or_create_mem_location(base, offset, mem_locations, &n_mem_locations);
+                                int loc_id = get_or_create_mem_location(base, offset, 8, mem_locations, &n_mem_locations, mem_points_to_base);
                                 if (loc_id >= 0) {
                                     if (mem_points_to_base[loc_id] == 0) {
                                         mem_points_to_base[loc_id] = stored_base;

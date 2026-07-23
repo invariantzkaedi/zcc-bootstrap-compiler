@@ -286,4 +286,58 @@ bool ic_rule_icmp_zero_canonical(ICtx *c) {
     return false;
 }
 
+/* Rule 18: x / 2^k -> x >> k (unsigned power-of-two division) */
+bool ic_rule_udiv_pow2_to_shr(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->src2, &k) && k > 1 && (k & (k - 1)) == 0) {
+        int shift_amt = 0;
+        while ((k >> (shift_amt + 1)) != 0) {
+            shift_amt++;
+        }
+        int cshift = make_const(c->fn, it->ty, shift_amt, it);
+        it->op = OP_SHR;
+        it->src1 = resolve_copy(c->fn, it->src1);
+        it->src2 = cshift;
+        return true;
+    }
+    return false;
+}
+
+/* Rule 19: x + x -> x << 1 */
+bool ic_rule_add_self_to_shl(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_ADD) return false;
+    if (it->src1 != 0 && it->src1 == it->src2) {
+        int cshift = make_const(c->fn, it->ty, 1, it);
+        it->op = OP_SHL;
+        it->src1 = resolve_copy(c->fn, it->src1);
+        it->src2 = cshift;
+        return true;
+    }
+    return false;
+}
+
+/* Rule 20: (x & c1) | (x & c2) -> x & (c1 | c2) */
+bool ic_rule_bitwise_distributivity(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_OR) return false;
+    Instr *d1 = def_of(c->fn, it->src1);
+    Instr *d2 = def_of(c->fn, it->src2);
+    if (!d1 || d1->op != OP_AND || !d2 || d2->op != OP_AND) return false;
+
+    int64_t c1, c2;
+    if (!reg_is_const(c->fn, d1->src2, &c1) || !reg_is_const(c->fn, d2->src2, &c2)) return false;
+    if (d1->src1 != d2->src1) return false;
+
+    int64_t combined = c1 | c2;
+    int ccomb = make_const(c->fn, it->ty, combined, it);
+    it->op = OP_AND;
+    it->src1 = resolve_copy(c->fn, d1->src1);
+    it->src2 = ccomb;
+    return true;
+}
+
+
 
