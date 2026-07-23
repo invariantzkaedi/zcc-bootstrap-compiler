@@ -10,6 +10,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "../ir.h"
+#include "yul_fixed_point.h"
 
 #define MAX_EVM_VREGS 256
 #define MAX_EVM_STACK 16

@@ -157,8 +157,23 @@ int main(void) {
         return 2;
     }
 
-    /* --- PRECEDENCE CHECK 3: Clean Differential Identity (EXIT 0 - GREEN) --- */
-    printf("Gate 4-EVM PASS: Storage_opt == Storage_unopt identity verified (rewrites: %d).\n", rewrites_applied);
+    /* --- PRECEDENCE CHECK 3: Clean Differential Identity & Monotonic Gas (EXIT 0 - GREEN) --- */
+    /* Count total swap opcodes emitted in unoptimized vs optimized Yul files */
+    int swaps_unopt = 0, swaps_opt = 0;
+    FILE *f_u = fopen(unopt_path, "r");
+    FILE *f_o = fopen(opt_path, "r");
+    char lbuf[256];
+    if (f_u) { while (fgets(lbuf, sizeof(lbuf), f_u)) { if (strstr(lbuf, "swap")) swaps_unopt++; } fclose(f_u); }
+    if (f_o) { while (fgets(lbuf, sizeof(lbuf), f_o)) { if (strstr(lbuf, "swap")) swaps_opt++; } fclose(f_o); }
+
+    if (swaps_opt > swaps_unopt) {
+        fprintf(stderr, "Gate 4-EVM FAIL: Gas proxy regression (swaps_opt %d > swaps_unopt %d).\n", swaps_opt, swaps_unopt);
+        return 1;
+    }
+    assert(swaps_opt <= swaps_unopt && "Monotonic swap reduction invariant violated!");
+
+    printf("Gate 4-EVM PASS: Storage_opt == Storage_unopt identity & monotonic gas verified (swaps_unopt: %d, swaps_opt: %d, rewrites: %d).\n",
+           swaps_unopt, swaps_opt, rewrites_applied);
     printf("VERDICT: GATE 4-EVM PASS\n");
     return 0;
 }
