@@ -264,6 +264,10 @@ bool ic_rule_mul_pow2_to_shl(ICtx *c) {
     while ((k >> (shift_amt + 1)) != 0) {
         shift_amt++;
     }
+#if defined(FAULT_INJECT_INSTCOMBINE)
+    /* Fault injection mode: corrupt shift amount */
+    shift_amt += 1;
+#endif
 
     int cshift = make_const(c->fn, it->ty, shift_amt, it);
     it->op = OP_SHL;
