@@ -14,23 +14,37 @@ typedef struct {
 } BaseOffsetKey;
 
 static bool intervals_overlap(int64_t off1, int64_t sz1, int64_t off2, int64_t sz2) {
+#if defined(FAULT_INJECT_POINTER_SSA)
+    /* Fault injection mode: ignores interval bounds, returning false for overlapping memory accesses */
+    return false;
+#else
     int64_t end1 = off1 + sz1;
     int64_t end2 = off2 + sz2;
     return !(end1 <= off2 || end2 <= off1);
+#endif
 }
 
 /*
  * Retrieve or allocate a tracking slot for the memory location (base, offset, access_size).
  * If another tracked location on the same base overlaps in byte interval [offset, offset+access_size),
  * points-to tracking for overlapping intervals degrades conservatively to AMBIGUOUS.
+ *
+ * EXPLICIT FAIL-CLOSED INVALIDATION LIST:
+ * - Negative offset (off < 0) -> invalid = true -> AMBIGUOUS
+ * - Unknown object size (access_size <= 0: heap, args, externs) -> AMBIGUOUS
+ * - Int64 overflow on offset accumulation (offset + access_size < offset) -> AMBIGUOUS
  */
 static int get_or_create_mem_location(RegID base, int64_t offset, int64_t access_size, BaseOffsetKey *locations, int *n_locations, RegID *mem_points_to_base) {
+    bool is_invalid = (offset < 0 || access_size <= 0 ||
+                       ((uint64_t)offset + (uint64_t)access_size < (uint64_t)offset) ||
+                       ((uint64_t)offset + (uint64_t)access_size > 0x7FFFFFFFFFFFFFFFULL));
+
     for (int i = 0; i < *n_locations; i++) {
         if (locations[i].base == base) {
-            if (locations[i].offset == offset && locations[i].access_size == access_size) {
+            if (locations[i].offset == offset && locations[i].access_size == access_size && !is_invalid && locations[i].valid) {
                 return i;
             }
-            if (intervals_overlap(locations[i].offset, locations[i].access_size, offset, access_size)) {
+            if (is_invalid || !locations[i].valid || intervals_overlap(locations[i].offset, locations[i].access_size, offset, access_size)) {
                 mem_points_to_base[i] = AMBIGUOUS;
             }
         }
@@ -42,7 +56,10 @@ static int get_or_create_mem_location(RegID base, int64_t offset, int64_t access
     locations[id].base = base;
     locations[id].offset = offset;
     locations[id].access_size = access_size;
-    locations[id].valid = true;
+    locations[id].valid = !is_invalid;
+    if (is_invalid) {
+        mem_points_to_base[id] = AMBIGUOUS;
+    }
     return id;
 }
 
