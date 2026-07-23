@@ -244,3 +244,31 @@ bool ic_rule_icmp_self(ICtx *c) {
     if (it->src1 != it->src2) return false;
     return rewrite_to_const(c->fn, it, (it->op == OP_ICMP_EQ) ? 1 : 0);
 }
+
+/* Rule 16: x * 2^k -> x << k (positive power-of-two constant) */
+bool ic_rule_mul_pow2_to_shl(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_MUL) return false;
+    int64_t k;
+    int src_reg = 0;
+
+    if (reg_is_const(c->fn, it->src2, &k) && k > 1 && (k & (k - 1)) == 0) {
+        src_reg = it->src1;
+    } else if (reg_is_const(c->fn, it->src1, &k) && k > 1 && (k & (k - 1)) == 0) {
+        src_reg = it->src2;
+    } else {
+        return false;
+    }
+
+    int shift_amt = 0;
+    while ((k >> (shift_amt + 1)) != 0) {
+        shift_amt++;
+    }
+
+    int cshift = make_const(c->fn, it->ty, shift_amt, it);
+    it->op = OP_SHL;
+    it->src1 = resolve_copy(c->fn, src_reg);
+    it->src2 = cshift;
+    return true;
+}
+

@@ -2,6 +2,7 @@
 #include "zcc_ir_opt_helpers.h"
 #include "zcc_ir_opt_passes.h"
 #include <stdio.h>
+#include <string.h>
 #include "zcc_opt_metrics.h"
 #include "zcc_ir_verify.h"
 
