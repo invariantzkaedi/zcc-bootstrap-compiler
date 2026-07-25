@@ -82,7 +82,7 @@ jobs:
           python3 scripts/detect_anomalies.py || true
           python3 scripts/forecast_metrics.py || true
           python3 scripts/remediation_suggester.py || true
-          python3 scripts/check_policy_conformance.py || true
+          python3 scripts/check_policy_conformance.py
           python3 scripts/incident_intelligence.py || true
           python3 scripts/calibrate_risk_model.py || true
           python3 scripts/export_executive_scorecard.py || true
@@ -137,7 +137,7 @@ jobs:
           set -euxo pipefail
           mkdir -p artifacts/det
           for i in 1 2 3; do
-            QEC_SEED=1337 QEC_FUZZ_SEEDS=10 python3 tests/test_stabilizer_fuzz.py || true
+            QEC_SEED=1337 QEC_FUZZ_SEEDS=10 python3 tests/test_stabilizer_fuzz.py
             if [ -f artifacts/last_trace.json ]; then
               cp artifacts/last_trace.json artifacts/det/last_trace_${i}.json
             else
@@ -212,7 +212,7 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p artifacts
-          python3 -m pytest -q -m mutation tests/test_mutation_smoke.py || true
+          python3 -m pytest -q -m mutation tests/test_mutation_smoke.py
           if [ -f artifacts/mutation_report.json ]; then
             python3 -c "import json; d = json.load(open('artifacts/mutation_report.json')); kr = float(d.get('kill_rate', 0.0)); assert kr >= 0.90, f'kill_rate too low: {kr}'; print(f'kill_rate OK: {kr}')"
           else
