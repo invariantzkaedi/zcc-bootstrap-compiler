@@ -8,3 +8,4 @@ REWRITE	37d34e76	[history-rewrite]	-	git filter-repo	Linux 6.6.123.2-microsoft-s
 2026-07-10T09:11:05Z	37d34e76	bfafec62c1f82b1c888341b3ab8a969b	18142	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.6.123.2-microsoft-standard-WSL2+ x86_64	post-filter-repo history rewrite
 2026-07-10T09:41:03Z	548f8ace	bfafec62c1f82b1c888341b3ab8a969b	18142	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.6.123.2-microsoft-standard-WSL2+ x86_64	post-SQLite integration
 2026-07-10T11:06:56Z	bc32b5d3	b627bbea680d7157641b72a123b6667f	18142	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.6.123.2-microsoft-standard-WSL2+ x86_64	fix: make token_name global for individual part3.c compilation
+2026-07-25T08:20:01Z	3535898d	8a7abd473ceb1cd272734a59fc3de46e	18609	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	gates: prime_v2_regalloc_opt pass baseline

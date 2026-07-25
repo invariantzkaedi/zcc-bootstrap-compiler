@@ -37,7 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y gcc make python3
-      - run: make swarm-fuzz          # populates swarm_out/
+      - run: make zcc && make swarm-fuzz          # builds zcc and populates swarm_out/
       - run: make swarm-prove         # hardened gate: nonzero on any ERROR/VIOLATED
       - uses: actions/upload-artifact@v4
         if: always()
