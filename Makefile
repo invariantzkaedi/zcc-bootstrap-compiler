@@ -100,7 +100,13 @@ selfhost-eco: verify-lexicon zcc
 	python3 zcc_quest.py --cmd "bash gate.sh" --mode prime --low-power
 
 selfhost-raw: verify-lexicon zcc
-	bash gate.sh
+	ONE_SOURCE="$(ONE_SOURCE)" bash gate.sh
+
+boundary-gates:
+	python3 -m pytest -q tests/test_trace_schema_validation.py tests/test_invariants_battery.py tests/test_determinism_contract.py
+	python3 scripts/check_policy_conformance.py
+
+.PHONY: boundary-gates selfhost-raw
 
 
 

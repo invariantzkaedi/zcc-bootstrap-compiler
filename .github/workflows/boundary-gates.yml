@@ -29,5 +29,4 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y gcc make
 
       - name: Run Schema & Boundary Validations
-        run: |
-          python3 -m pytest -q tests/test_trace_schema_validation.py tests/test_invariants_battery.py tests/test_determinism_contract.py
+        run: make boundary-gates
