@@ -3524,8 +3524,7 @@ void codegen_expr(Compiler *cc, Node *node) {
         if (eb[0] == CLASS_MEMORY) {
             has_sret = 1;
             sret_size = (type_size(node->type) + 15) & ~15;
-            cc->local_offset -= sret_size;
-            sret_frame_offset = cc->local_offset;
+            sret_frame_offset = cc->abi_scratch_offset - sret_size;
         }
     }
 
@@ -5206,7 +5205,7 @@ void codegen_func(Compiler *cc, Node *func) {
       backend_ops->emit_prologue(cc, func);
   } else {
       stack_size = func->stack_size + 40; /* reserve 5x8 byte push slots */
-      stack_size += 16;                   /* ABI: 16-byte scratch for aggregate returns (CG-IR-019) */
+      stack_size += 64;                   /* ABI: 64-byte scratch for sret aggregate returns (CG-IR-019) */
       cc->abi_scratch_offset = -stack_size;
       if (func->func_type && func->func_type->is_variadic) {
           stack_size += 176;
