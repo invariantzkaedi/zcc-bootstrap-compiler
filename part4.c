@@ -3517,15 +3517,15 @@ void codegen_expr(Compiler *cc, Node *node) {
 
     int has_sret = 0;
     int sret_size = 0;
-    int sret_stack_depth = cc->stack_depth;
+    int sret_frame_offset = 0;
     if (node->type && (node->type->kind == TY_STRUCT || node->type->kind == TY_UNION)) {
         abi_class_t eb[2];
         classify_aggregate(node->type, eb);
         if (eb[0] == CLASS_MEMORY) {
             has_sret = 1;
             sret_size = (type_size(node->type) + 15) & ~15;
-            fprintf(cc->out, "    subq $%d, %%rsp\n", sret_size);
-            cc->stack_depth += sret_size / 8;
+            cc->local_offset -= sret_size;
+            sret_frame_offset = cc->local_offset;
         }
     }
 
@@ -3775,8 +3775,7 @@ void codegen_expr(Compiler *cc, Node *node) {
         cc->stack_depth = expected_depth;
     }
       if (has_sret) {
-          int sret_offset = (cc->stack_depth - sret_stack_depth) * 8 - sret_size;
-          fprintf(cc->out, "    leaq %d(%%rsp), %%rdi\n", sret_offset);
+          fprintf(cc->out, "    leaq %d(%%rbp), %%rdi\n", sret_frame_offset);
       }
 
       if (!backend_ops) {
