@@ -4,11 +4,13 @@ import os
 import subprocess
 from pathlib import Path
 
+import sys
+
 def sha256(p: Path):
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
 def test_trace_is_byte_stable(tmp_path):
-    cmd = "python3 tests/test_quantum_stabilizers.py"
+    cmd = f"{sys.executable} tests/test_quantum_stabilizers.py"
     hashes = []
     for _ in range(3):
         env = os.environ.copy()
