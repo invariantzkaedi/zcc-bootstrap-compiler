@@ -19,7 +19,7 @@ jobs:
           python-version: '3.10'
 
       - name: Install dependencies
-        run: pip install pytest jsonschema
+        run: pip install pytest jsonschema numpy
 
       - name: Install GCC and Build Essentials
         run: sudo apt-get update && sudo apt-get install -y gcc make
@@ -28,5 +28,5 @@ jobs:
         env:
           PYTHONPATH: .
         run: |
-          pytest -q tests/test_trace_schema_validation.py tests/test_invariants_battery.py tests/test_determinism_contract.py
+          python -m pytest -q tests/test_trace_schema_validation.py tests/test_invariants_battery.py tests/test_determinism_contract.py
           python scripts/check_policy_conformance.py
