@@ -28,5 +28,6 @@ jobs:
         env:
           PYTHONPATH: .
         run: |
+          python scripts/zcc_template_recognizer.py
           python -m pytest -q tests/test_trace_schema_validation.py tests/test_invariants_battery.py tests/test_determinism_contract.py
           python scripts/check_policy_conformance.py

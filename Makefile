@@ -53,7 +53,10 @@ verify-lexicon:
 	  exit 1; \
 	fi
 
-zcc: verify-lexicon zcc.c $(PASSES)
+verify-templates:
+	python3 scripts/zcc_template_recognizer.py
+
+zcc: verify-lexicon verify-templates zcc.c $(PASSES)
 	# Tripwire: reject hand-edited zcc.c — parts are the source of truth.
 	# Bypass with: ZCC_MUTATION_SANDBOX=1 make zcc  (Oneirogenesis daemon)
 	# or:          touch .mutation_sandbox && make zcc
