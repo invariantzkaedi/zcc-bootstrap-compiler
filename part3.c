@@ -5180,6 +5180,7 @@ static LatticeVal icp_eval_expr(Node *n) {
     }
     
     if (n->kind == ND_CAST) {
+        if (n->type && (n->type->kind == TY_FLOAT || n->type->kind == TY_DOUBLE)) return bot;
         LatticeVal val = icp_eval_expr(n->lhs);
         if (val.kind == LATTICE_CONST) {
             val.val = force_truncate(val.val, n->type);
@@ -5193,6 +5194,9 @@ static LatticeVal icp_eval_expr(Node *n) {
         n->kind == ND_BXOR || n->kind == ND_EQ || n->kind == ND_NE ||
         n->kind == ND_LT || n->kind == ND_LE || n->kind == ND_GT ||
         n->kind == ND_GE || n->kind == ND_LAND || n->kind == ND_LOR) {
+        if (n->type && (n->type->kind == TY_FLOAT || n->type->kind == TY_DOUBLE)) return bot;
+        if (n->lhs && n->lhs->type && (n->lhs->type->kind == TY_FLOAT || n->lhs->type->kind == TY_DOUBLE)) return bot;
+        if (n->rhs && n->rhs->type && (n->rhs->type->kind == TY_FLOAT || n->rhs->type->kind == TY_DOUBLE)) return bot;
         
         LatticeVal lhs_val = icp_eval_expr(n->lhs);
         LatticeVal rhs_val = icp_eval_expr(n->rhs);
@@ -5331,7 +5335,7 @@ static void propagate_local_assignments(Node *n, Node *current_func) {
              * Volatile writes must always reach memory — if ICP marks the symbol
              * LATTICE_CONST, a later read could be folded away, silently skipping
              * the required memory access. */
-            if (lhs->sym->type && lhs->sym->type->is_volatile) goto icp_assign_done;
+            if (lhs->sym->type && (lhs->sym->type->is_volatile || lhs->sym->type->kind == TY_FLOAT || lhs->sym->type->kind == TY_DOUBLE)) goto icp_assign_done;
             SymStats *stats = get_sym_stats(lhs->sym);
             if (stats && stats->assign_count <= 1 && stats->addr_taken == 0) {
                 LatticeVal rhs_val = icp_eval_expr(n->rhs);
