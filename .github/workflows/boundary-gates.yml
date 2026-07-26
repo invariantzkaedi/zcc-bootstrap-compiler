@@ -13,17 +13,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          node-version: '20'
-
-      - name: Install pnpm
-        run: npm install -g pnpm
+          python-version: '3.10'
 
       - name: Install dependencies
-        working-directory: spec
-        run: pnpm install --frozen-lockfile
+        run: pip install pytest jsonschema
 
       - name: Install GCC and Build Essentials
         run: sudo apt-get update && sudo apt-get install -y gcc make
