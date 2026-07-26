@@ -3778,10 +3778,15 @@ Node *parse_stmt_internal(Compiler *cc) {
                             var = node_new(cc, ND_VAR, line);
                             strncpy(var->name, vname, MAX_IDENT - 1);
                             var->sym = sym;
+                            Node *rhs_node = parse_assign(cc);
+                            if (vtype && vtype->kind == TY_VOID && rhs_node && rhs_node->type) {
+                                vtype = rhs_node->type;
+                                sym->type = vtype;
+                            }
                             var->type = vtype;
                             asgn = node_new(cc, ND_ASSIGN, line);
                             asgn->lhs = var;
-                            asgn->rhs = ensure_type(cc, parse_assign(cc), vtype);
+                            asgn->rhs = ensure_type(cc, rhs_node, vtype);
                             asgn->type = vtype;
                             if (cnt < cap) {
                                 block->stmts[cnt] = asgn;

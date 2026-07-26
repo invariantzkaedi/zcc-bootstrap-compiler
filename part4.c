@@ -523,7 +523,7 @@ void codegen_store(Compiler *cc, Type *type) {
     fprintf(cc->out, "    popq %%rdi\n");
     fprintf(cc->out, "    popq %%rsi\n");
     if (backend_ops) fprintf(cc->out, "    mov r0, r1\n");
-      else fprintf(cc->out, "    movq %%r11, %%rax\n");
+      else fprintf(cc->out, "    movq %%rdi, %%rax\n");
     return;
   }
   switch (type->size) {
@@ -1302,7 +1302,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       fprintf(cc->out, "    movq $0, %%rax\n");
       return;
     }
-    push_reg(cc, "rax");
+    fprintf(cc->out, "    movq %%rax, %d(%%rbp)\n", cc->abi_scratch_offset + 8);
     if (node->lhs->kind == ND_MEMBER && node->lhs->member_size > 0) {
       switch (node->lhs->member_size) {
       case 1:
@@ -1487,7 +1487,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     }
     if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
-    pop_reg(cc, "rax");
+    fprintf(cc->out, "    movq %d(%%rbp), %%rax\n", cc->abi_scratch_offset + 8);
     if (node->lhs->kind == ND_MEMBER && node->lhs->member_size > 0) {
       switch (node->lhs->member_size) {
       case 1:
@@ -3614,11 +3614,11 @@ void codegen_expr(Compiler *cc, Node *node) {
 
     int stack_depth_at_reservation = cc->stack_depth;
 
-    /* for indirect calls, evaluate callee first and save on stack */
+    /* for indirect calls, evaluate callee first and save in scratch slot */
     if (node->func_name[0] == 0 && node->lhs) {
       codegen_expr_checked(cc, node->lhs);
       ir_save_result(callee_ir);
-      push_reg(cc, "rax");
+      fprintf(cc->out, "    movq %%rax, %d(%%rbp)\n", cc->abi_scratch_offset + 16);
     }
 
     /* push args in reverse order */
@@ -3782,8 +3782,8 @@ void codegen_expr(Compiler *cc, Node *node) {
       }
     }
     if (node->func_name[0] == 0 && node->lhs) {
-      /* indirect call: pop callee into r10, call *r10 */
-      pop_reg(cc, "r10");
+      /* indirect call: restore callee into r10, call *r10 */
+      fprintf(cc->out, "    movq %d(%%rbp), %%r10\n", cc->abi_scratch_offset + 16);
       fprintf(cc->out, "    call *%%r10\n");
     } else if (strcmp(node->func_name, "__builtin_va_start") == 0) {
       Symbol *fsym = scope_find(cc, cc->current_func);
