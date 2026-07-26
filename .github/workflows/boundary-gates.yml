@@ -25,6 +25,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y gcc make
 
       - name: Run Schema & Boundary Validations
+        env:
+          PYTHONPATH: .
         run: |
           pytest -q tests/test_trace_schema_validation.py tests/test_invariants_battery.py tests/test_determinism_contract.py
           python scripts/check_policy_conformance.py
