@@ -3524,7 +3524,7 @@ void codegen_expr(Compiler *cc, Node *node) {
         if (eb[0] == CLASS_MEMORY) {
             has_sret = 1;
             sret_size = (type_size(node->type) + 15) & ~15;
-            sret_frame_offset = cc->abi_scratch_offset - sret_size;
+            sret_frame_offset = cc->abi_scratch_offset + 32;
         }
     }
 
@@ -3605,7 +3605,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       int current_stack_slot = 0;
       for (i = 0; i < nargs; i++) {
         if (arg_is_stack[i]) {
-          arg_stack_offset[i] = current_stack_slot * 8;
+          arg_stack_offset[i] = alignment_pad + current_stack_slot * 8;
           Type *at = (node->args[i] && !is_bad_ptr(node->args[i]) && node->args[i]->type) ? node->args[i]->type : 0;
           current_stack_slot += (at ? (type_size(at) + 7) / 8 : 1);
         }
@@ -3667,7 +3667,13 @@ void codegen_expr(Compiler *cc, Node *node) {
 
     /* pop args into correct registers: floats->xmm, ints->gpregs independently */
     {
-      int gp_idx = has_sret ? 1 : 0;
+      int callee_has_sret = 0;
+      if (node->type && (node->type->kind == TY_STRUCT || node->type->kind == TY_UNION)) {
+          abi_class_t eb[2];
+          classify_aggregate(node->type, eb);
+          if (eb[0] == CLASS_MEMORY) callee_has_sret = 1;
+      }
+      int gp_idx = callee_has_sret ? 1 : 0;
       int fp_idx = 0;
       /* Resolve callee's declared parameter types for float/double ABI */
       Symbol *callee_sym = node->func_name[0] ? scope_find(cc, node->func_name) : 0;
@@ -5059,7 +5065,7 @@ static Symbol *adjusted_syms[1024];
 static int num_adjusted = 0;
 
 static void adjust_sym(Compiler *cc, Symbol *sym, Node *func, int parser_param_limit, int shift, int *param_offsets) {
-  if (!sym || !sym->is_local) return;
+  return;
   for (int i = 0; i < num_adjusted; i++) {
     if (adjusted_syms[i] == sym) return;
   }
@@ -5205,7 +5211,7 @@ void codegen_func(Compiler *cc, Node *func) {
       backend_ops->emit_prologue(cc, func);
   } else {
       stack_size = func->stack_size + 40; /* reserve 5x8 byte push slots */
-      stack_size += 64;                   /* ABI: 64-byte scratch for sret aggregate returns (CG-IR-019) */
+      stack_size += 256;                  /* ABI: 256-byte scratch for sret aggregate returns and call scratch */
       cc->abi_scratch_offset = -stack_size;
       if (func->func_type && func->func_type->is_variadic) {
           stack_size += 176;
@@ -5247,11 +5253,10 @@ void codegen_func(Compiler *cc, Node *func) {
   scope_push(cc);
 
   /* Store params using System V ABI classification rules §3.2.3. */
-  int param_offset = 0;
   int f_idx = 0;
   int gp_idx = 0;
   int stack_arg_off = 16; /* args on stack start at 16(%rbp) */
-  cc->sret_offset = 0;
+  cc->sret_offset = -8;
 
   if (!backend_ops) {
   Type *ret_type = func->func_type ? func->func_type->ret : NULL;
@@ -5259,13 +5264,15 @@ void codegen_func(Compiler *cc, Node *func) {
       abi_class_t eb[2];
       classify_aggregate(ret_type, eb);
       if (eb[0] == CLASS_MEMORY) {
-          param_offset -= 8;
-          cc->sret_offset = param_offset;
-          fprintf(cc->out, "    movq %%rdi, %d(%%rbp)\n", param_offset);
+          fprintf(cc->out, "    movq %%rdi, %d(%%rbp)\n", cc->sret_offset);
           gp_idx = 1; /* %rdi is consumed by the hidden pointer */
       }
   }
+  }
 
+  int param_offset = -16;
+
+  if (!backend_ops) {
   for (i = 0; i < func->num_params; i++) {
     Type *ptype = func->func_params->types[i];
     int sz = type_size(ptype);
