@@ -3540,7 +3540,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       int current_stack_slot = 0;
       for (i = 0; i < nargs; i++) {
         if (arg_is_stack[i]) {
-          arg_stack_offset[i] = alignment_pad + current_stack_slot * 8;
+          arg_stack_offset[i] = current_stack_slot * 8;
           Type *at = (node->args[i] && !is_bad_ptr(node->args[i]) && node->args[i]->type) ? node->args[i]->type : 0;
           current_stack_slot += (at ? (type_size(at) + 7) / 8 : 1);
         }

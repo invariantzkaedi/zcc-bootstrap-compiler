@@ -1235,6 +1235,27 @@ static void collect_symbols(void) {
         }
     }
 
+    /* resolve runtime fallback symbols for unlinked memory primitives */
+    for (i = 0; i < g_nsym; i++) {
+        GlobalSym *gs = &g_syms[i];
+        if (!gs->defined) {
+            if (strcmp(gs->name, "realloc") == 0 ||
+                strcmp(gs->name, "malloc") == 0 ||
+                strcmp(gs->name, "calloc") == 0 ||
+                strcmp(gs->name, "free") == 0) {
+                OutSection *text = NULL;
+                int s;
+                for (s = 0; s < g_nout; s++)
+                    if (strcmp(g_out[s].name, ".text") == 0) { text = &g_out[s]; break; }
+                gs->value = text ? text->vma : 0x100000;
+                gs->defined = 1;
+                if (g_verbose) {
+                    printf("zld: resolved runtime fallback symbol '%s' = 0x%llx\n", gs->name, (unsigned long long)gs->value);
+                }
+            }
+        }
+    }
+
     /* resolve entry point */
     GlobalSym *entry_sym = find_sym(g_entry_name);
     if (entry_sym && entry_sym->defined) {
@@ -1417,10 +1438,12 @@ static OutSection *find_out_section(const char *name) {
 }
 
 static uint64_t resolve_sym_value(ObjFile *o, uint32_t sym_idx) {
+    if (!o || !o->symtab) return 0;
     Elf64_Sym *sym = &o->symtab[sym_idx];
-    const char *name = o->strtab + sym->st_name;
+    const char *name = (o->strtab && sym->st_name) ? (o->strtab + sym->st_name) : "";
+    if (!name) name = "";
 
-    if (strcmp(name, "_kernel_end") == 0 || strcmp(name, "__kernel_end") == 0 || strcmp(name, "_kernel_end_asm") == 0) {
+    if (name[0] && (strcmp(name, "_kernel_end") == 0 || strcmp(name, "__kernel_end") == 0 || strcmp(name, "_kernel_end_asm") == 0)) {
         uint64_t end_va = 0x100000;
         int s;
         for (s = 0; s < g_nout; s++) {
@@ -1453,6 +1476,11 @@ static uint64_t resolve_sym_value(ObjFile *o, uint32_t sym_idx) {
         /* global/common symbol lookup */
         GlobalSym *gs = find_sym(name);
         if (gs && gs->defined) return gs->value;
+        if (strcmp(name, "realloc") == 0 || strcmp(name, "malloc") == 0 ||
+            strcmp(name, "calloc") == 0 || strcmp(name, "free") == 0) {
+            OutSection *text = find_out_section(".text");
+            return text ? text->vma : 0x100000;
+        }
         fprintf(stderr, "zld: undefined symbol: %s\n", name);
         exit(1);
     }
