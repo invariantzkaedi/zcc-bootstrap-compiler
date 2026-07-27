@@ -1389,7 +1389,7 @@ static void recompute_struct_layout(Type *stype) {
         if (stype->pragma_pack > 0 && falign > stype->pragma_pack) {
             falign = stype->pragma_pack;
         }
-        if (stype->is_packed && ftype->explicit_align == 0) falign = 1;
+        if (stype->is_packed && ftype && ftype->explicit_align == 0) falign = 1;
         if (falign > max_align) max_align = falign;
         
         if (is_union) {
@@ -3862,12 +3862,12 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
     /* parse parameters */
     expect(cc, TK_LPAREN);
     scope_push(cc);
-    cc->local_offset = -16;
+    cc->local_offset = 0;
     if (ret_type && (ret_type->kind == TY_STRUCT || ret_type->kind == TY_UNION)) {
         abi_class_t eb[2];
         classify_aggregate(ret_type, eb);
         if (eb[0] == CLASS_MEMORY) {
-            cc->local_offset = -16;
+            cc->local_offset = -8;
         }
     }
 

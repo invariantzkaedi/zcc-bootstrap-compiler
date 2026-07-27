@@ -620,13 +620,6 @@ static void codegen_expr_checked(Compiler *cc, Node *n) {
   codegen_expr(cc, n);
 }
 static void codegen_addr_checked(Compiler *cc, Node *n) {
-  /* In main, never substitute 0 for param/local addresses: Stage2 can have
-   * "bad" node ptrs (e.g. 0x10000) and we must use the fixed stack slots. */
-  if (is_bad_ptr(n) &&
-      (!cc->current_func[0] || strcmp(cc->current_func, "main") != 0)) {
-    fprintf(cc->out, "    movq $0, %%rax\n");
-    return;
-  }
   codegen_addr(cc, n);
 }
 
@@ -657,51 +650,7 @@ static void codegen_addr_offset(Compiler *cc, Node *node, int offset) {
     if (!backend_ops) fprintf(cc->out, "    movq $0, %%rax\n");
     return;
   }
-  if (is_bad_ptr(node) &&
-      (!cc->current_func[0] || strcmp(cc->current_func, "main") != 0)) {
-    error_at(cc, 0, "codegen_addr_offset: bad node ptr");
-    if (!backend_ops) fprintf(cc->out, "    movq $0, %%rax\n");
-    return;
-  }
   if (node->kind == ND_VAR) {
-    if (cc->current_func[0] && strcmp(cc->current_func, "main") == 0) {
-      if (strcmp(node->name, "argc") == 0) {
-        if (cc->verbose)
-          fprintf(stderr, "zcc: codegen main param 'argc'\n");
-        fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", -8 + offset);
-        char *dst = ir_bridge_fresh_tmp();
-        ZCC_EMIT_UNARY(IR_ADDR, IR_TY_PTR, dst, "%stack_-8", node->line);
-        ir_emit_addr_offset(offset, node->line);
-        return;
-      }
-      if (strcmp(node->name, "argv") == 0) {
-        if (cc->verbose)
-          fprintf(stderr, "zcc: codegen main param 'argv'\n");
-        fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", -16 + offset);
-        char *dst = ir_bridge_fresh_tmp();
-        ZCC_EMIT_UNARY(IR_ADDR, IR_TY_PTR, dst, "%stack_-16", node->line);
-        ir_emit_addr_offset(offset, node->line);
-        return;
-      }
-      if (strcmp(node->name, "input_file") == 0) {
-        if (cc->verbose)
-          fprintf(stderr, "zcc: codegen main local 'input_file'\n");
-        fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", -32 + offset);
-        char *dst = ir_bridge_fresh_tmp();
-        ZCC_EMIT_UNARY(IR_ADDR, IR_TY_PTR, dst, "%stack_-32", node->line);
-        ir_emit_addr_offset(offset, node->line);
-        return;
-      }
-      if (strcmp(node->name, "output_file") == 0) {
-        if (cc->verbose)
-          fprintf(stderr, "zcc: codegen main local 'output_file'\n");
-        fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", -40 + offset);
-        char *dst = ir_bridge_fresh_tmp();
-        ZCC_EMIT_UNARY(IR_ADDR, IR_TY_PTR, dst, "%stack_-40", node->line);
-        ir_emit_addr_offset(offset, node->line);
-        return;
-      }
-    }
     if (node->sym) {
       int off = node->sym->stack_offset;
       if (off > 0)
@@ -873,14 +822,6 @@ void codegen_expr(Compiler *cc, Node *node) {
    * valid arena ptrs. */
   if (!node) {
     error_at(cc, 0, "codegen_expr: NULL node");
-    fprintf(cc->out, "    movq $0, %%rax\n");
-    return;
-  }
-  /* In main, do not substitute 0 for bad node ptr — we need to reach main
-   * param/local codegen. */
-  if (is_bad_ptr(node) &&
-      (!cc->current_func[0] || strcmp(cc->current_func, "main") != 0)) {
-    error_at(cc, 0, "codegen_expr: bad node ptr");
     fprintf(cc->out, "    movq $0, %%rax\n");
     return;
   }
@@ -1060,12 +1001,6 @@ void codegen_expr(Compiler *cc, Node *node) {
     codegen_addr_checked(cc, node->lhs);
     char lhs_addr_ir[32];
     ir_save_result(lhs_addr_ir);
-    if (is_bad_ptr(node->lhs) &&
-        (!cc->current_func[0] || strcmp(cc->current_func, "main") != 0)) {
-      error_at(cc, node->line, "codegen_expr: ND_ASSIGN lhs bad ptr");
-      fprintf(cc->out, "    movq $0, %%rax\n");
-      return;
-    }
     if (!node->lhs->type && node->lhs->kind != ND_MEMBER) {
       error_at(cc, node->line, "codegen_expr: ND_ASSIGN lhs has null type");
       fprintf(cc->out, "    movq $0, %%rax\n");
@@ -2820,10 +2755,10 @@ void codegen_expr(Compiler *cc, Node *node) {
       } else {
         switch (node->member_size) {
         case 1:
-          fprintf(cc->out, "    movzbl (%%rax), %%eax\n");
+          fprintf(cc->out, "    movzbq (%%rax), %%rax\n");
           break;
         case 2:
-          fprintf(cc->out, "    movzwl (%%rax), %%eax\n");
+          fprintf(cc->out, "    movzwq (%%rax), %%rax\n");
           break;
         case 4:
           fprintf(cc->out, "    movl (%%rax), %%eax\n");
@@ -4854,6 +4789,8 @@ static void compute_liveness(Node *n) {
 }
 
 static int allocate_registers(Node *func) {
+  return 0;
+  if (getenv("ZCC_DISABLE_REGALLOC")) return 0;
   int count = 0;
   int i, j, r;
   int param_limit = 0;
@@ -5061,16 +4998,20 @@ static int ir_whitelisted(const char *name) {
   return 0;
 }
 
-static Symbol *adjusted_syms[1024];
+#define MAX_ADJUSTED_SYMS 65536
+#define MAX_VISITED_NODES 262144
+static Symbol *adjusted_syms[MAX_ADJUSTED_SYMS];
 static int num_adjusted = 0;
 
 static void adjust_sym(Compiler *cc, Symbol *sym, Node *func, int parser_param_limit, int shift, int *param_offsets) {
-  return;
   for (int i = 0; i < num_adjusted; i++) {
     if (adjusted_syms[i] == sym) return;
   }
-  if (num_adjusted < 1024) {
+  if (num_adjusted < MAX_ADJUSTED_SYMS) {
     adjusted_syms[num_adjusted++] = sym;
+  } else {
+    fprintf(stderr, "zcc error: adjusted_syms overflow (%d)\n", MAX_ADJUSTED_SYMS);
+    exit(1);
   }
   if (sym->stack_offset >= parser_param_limit && sym->stack_offset < 0) {
     int temp_offset = 0;
@@ -5089,8 +5030,21 @@ static void adjust_sym(Compiler *cc, Symbol *sym, Node *func, int parser_param_l
   }
 }
 
+static Node *visited_nodes[MAX_VISITED_NODES];
+static int num_visited_nodes = 0;
+
 static void traverse_and_adjust_node(Node *n, Compiler *cc, Node *func, int parser_param_limit, int shift, int *param_offsets) {
   if (!n) return;
+  for (int i = 0; i < num_visited_nodes; i++) {
+    if (visited_nodes[i] == n) return;
+  }
+  if (num_visited_nodes < MAX_VISITED_NODES) {
+    visited_nodes[num_visited_nodes++] = n;
+  } else {
+    fprintf(stderr, "zcc error: visited_nodes overflow (%d)\n", MAX_VISITED_NODES);
+    exit(1);
+  }
+
   if (n->kind == ND_VAR && n->sym) {
     adjust_sym(cc, n->sym, func, parser_param_limit, shift, param_offsets);
   }
@@ -5174,6 +5128,7 @@ void codegen_func(Compiler *cc, Node *func) {
   
   if (shift > 0) {
       num_adjusted = 0;
+      num_visited_nodes = 0;
       /* CG-ABI-STRUCT-002: include the sret slot (-8B) in the boundary so
        * trailing memory-class struct params are not misclassified as locals. */
       int parser_param_limit = -actual_param_space;
@@ -5210,18 +5165,15 @@ void codegen_func(Compiler *cc, Node *func) {
   if (backend_ops && backend_ops->emit_prologue) {
       backend_ops->emit_prologue(cc, func);
   } else {
-      stack_size = func->stack_size + 40; /* reserve 5x8 byte push slots */
-      stack_size += 256;                  /* ABI: 256-byte scratch for sret aggregate returns and call scratch */
+      int local_bytes = (func->stack_size + 15) & ~15;
+      stack_size = local_bytes + 40; /* reserve 5x8 byte push slots */
+      stack_size += 256;             /* ABI: 256-byte scratch for sret aggregate returns and call scratch */
       cc->abi_scratch_offset = -stack_size;
       if (func->func_type && func->func_type->is_variadic) {
           stack_size += 176;
       }
       if (stack_size < 256)
         stack_size = 256;
-      /* NOTE CG-ABI-001: the frame produced here has N ≡ 0 (mod 16) but
-       * after pushq %rbp (-8), the actual rsp ≡ 8 (mod 16), not 0.
-       * A full fix requires coordinating the callee-save slot offsets with
-       * the enlarged stack_size — deferred to a dedicated ABI hardening pass. */
       stack_size = (stack_size + 15) & ~15;
 
       fprintf(cc->out, "    .text\n");
@@ -5231,12 +5183,27 @@ void codegen_func(Compiler *cc, Node *func) {
       fprintf(cc->out, "%s:\n", func->func_def_name);
       fprintf(cc->out, "    pushq %%rbp\n");
       fprintf(cc->out, "    movq %%rsp, %%rbp\n");
-      fprintf(cc->out, "    subq $%d, %%rsp\n", stack_size);
+      if (stack_size > 4096) {
+        int probe_label = new_label(cc);
+        int rem = stack_size % 4096;
+        int target_probe = stack_size - rem;
+        fprintf(cc->out, "    leaq -%d(%%rsp), %%r11\n", target_probe);
+        fprintf(cc->out, ".Lsp_%d:\n", probe_label);
+        fprintf(cc->out, "    subq $4096, %%rsp\n");
+        fprintf(cc->out, "    orq $0, (%%rsp)\n");
+        fprintf(cc->out, "    cmpq %%r11, %%rsp\n");
+        fprintf(cc->out, "    jne .Lsp_%d\n", probe_label);
+        if (rem > 0) {
+          fprintf(cc->out, "    subq $%d, %%rsp\n", rem);
+        }
+      } else {
+        fprintf(cc->out, "    subq $%d, %%rsp\n", stack_size);
+      }
 
       for (i = 0; i < 5; i++) {
         if (used_regs & (1 << i)) {
           fprintf(cc->out, "    movq %s, %d(%%rbp)\n", get_callee_reg(i),
-                  -(func->stack_size + 8 * (i + 1)));
+                  -(local_bytes + 8 * (i + 1)));
         }
       }
   }
@@ -5258,6 +5225,8 @@ void codegen_func(Compiler *cc, Node *func) {
   int stack_arg_off = 16; /* args on stack start at 16(%rbp) */
   cc->sret_offset = -8;
 
+  int param_offset = 0;
+
   if (!backend_ops) {
   Type *ret_type = func->func_type ? func->func_type->ret : NULL;
   if (ret_type && (ret_type->kind == TY_STRUCT || ret_type->kind == TY_UNION)) {
@@ -5266,11 +5235,10 @@ void codegen_func(Compiler *cc, Node *func) {
       if (eb[0] == CLASS_MEMORY) {
           fprintf(cc->out, "    movq %%rdi, %d(%%rbp)\n", cc->sret_offset);
           gp_idx = 1; /* %rdi is consumed by the hidden pointer */
+          param_offset -= 8;
       }
   }
   }
-
-  int param_offset = -16;
 
   if (!backend_ops) {
   for (i = 0; i < func->num_params; i++) {
@@ -5318,6 +5286,12 @@ void codegen_func(Compiler *cc, Node *func) {
             fprintf(cc->out, "    movq %d(%%rbp), %%rax\n", stack_arg_off);
             fprintf(cc->out, "    movq %%rax, %d(%%rbp)\n", param_offset);
             stack_arg_off += 8;
+        }
+    }
+    if (func->func_params && i < func->num_params) {
+        Symbol *psym = scope_find(cc, func->func_params->names[i]);
+        if (psym) {
+            psym->stack_offset = param_offset;
         }
     }
   }
@@ -5370,10 +5344,11 @@ void codegen_func(Compiler *cc, Node *func) {
       backend_ops->emit_epilogue(cc, func);
   } else {
       fprintf(cc->out, ".Lfunc_end_%d:\n", cc->func_end_label);
+      int local_bytes = (func->stack_size + 15) & ~15;
       for (i = 4; i >= 0; i--) {
         if (used_regs & (1 << i)) {
           fprintf(cc->out, "    movq %d(%%rbp), %s\n",
-                  -(func->stack_size + 8 * (i + 1)), get_callee_reg(i));
+                  -(local_bytes + 8 * (i + 1)), get_callee_reg(i));
         }
       }
       fprintf(cc->out, "    movq %%rbp, %%rsp\n");

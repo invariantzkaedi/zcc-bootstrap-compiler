@@ -96,6 +96,7 @@ extern PPConfig zcc_pp_config;
 
 static void init_compiler(Compiler *cc) {
   /* zero everything — cc was calloc'd */
+  { extern Compiler *g_cc; g_cc = cc; }
 
   /* init arena */
   cc->arena.data = (char *)malloc(ARENA_SIZE);
@@ -1358,7 +1359,7 @@ int zcc_main(int argc, char **argv) {
       i++;
       if (i < argc)
         output_file = argv[i];
-    } else if (strcmp(argv[i], "-c") == 0) {
+    } else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "-S") == 0) {
       compile_only = 1;
     } else if (strcmp(argv[i], "--pp-only") == 0) {
       pp_only = 1;
