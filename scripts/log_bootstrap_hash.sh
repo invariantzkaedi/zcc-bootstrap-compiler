@@ -17,7 +17,7 @@ UNAME=$(uname -srm)
 ELISIONS=$(grep -oE '[0-9]+ elided' "$BUILD_LOG" | head -1 | grep -oE '[0-9]+' || echo "?")
 rm -f "$BUILD_LOG"
 DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-KEY="${CC_ID}|${UNAME}"
+KEY="${CC_ID}"
 
 COMMENT="${1:-}"
 
@@ -25,8 +25,9 @@ if [ ! -f "$LEDGER" ]; then
   printf "date\tcommit\tmd5_zcc2s\telisions\ttoolchain\tuname\tcomment\n" > "$LEDGER"
 fi
 
-# Drift check against last row with same toolchain key
-PRIOR=$(awk -F'\t' -v k="$KEY" 'NR>1 && ($5"|"$6)==k {h=$3} END{print h}' "$LEDGER" || true)
+# Drift check against last row with same compiler toolchain
+PRIOR=$(awk -F'\t' -v k="$KEY" 'NR>1 && $5==k {h=$3} END{print h}' "$LEDGER" || true)
+
 printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$DATE" "$COMMIT" "$HASH" "$ELISIONS" "$CC_ID" "$UNAME" "$COMMENT" >> "$LEDGER"
 
 echo "BOOTSTRAP HASH: $HASH  commit=$COMMIT  elisions=$ELISIONS"
