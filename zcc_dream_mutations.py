@@ -34,6 +34,14 @@ import random
 import hashlib
 from dataclasses import dataclass, field
 from typing import Optional
+from enum import Enum
+
+class TargetArch(Enum):
+    X86_64 = "x86_64"
+    WASM32 = "wasm32"
+    ARM64 = "arm64"
+    RISCV64 = "riscv64"
+    WIN64_PE = "win64_pe"
 
 
 @dataclass
@@ -76,7 +84,8 @@ class MutationEngine:
     # ──────────────────────────────────────────────────────────────────
 
     def dream(self, asm_lines: list[str], max_point_mutations: int = 5,
-              include_sweeps: bool = True, blacklist: set = None) -> list[Mutation]:
+              include_sweeps: bool = True, blacklist: set = None,
+              target: TargetArch = TargetArch.X86_64) -> list[Mutation]:
         """
         Discover all applicable mutations.
         Returns sweep mutations (full-assembly passes) + point mutations
@@ -87,11 +96,20 @@ class MutationEngine:
 
         # --- SWEEP mutations (apply whole-assembly transformations) ---
         if include_sweeps:
-            results.extend(self._sweep_zero_mov_to_xor(asm_lines))
-            results.extend(self._sweep_strength_reduction(asm_lines))
-            results.extend(self._sweep_cmpq_zero_to_testq(asm_lines))
-            results.extend(self._sweep_branch_straighten(asm_lines))
-            results.extend(self._sweep_testb_bit_test(asm_lines))
+            if target == TargetArch.X86_64:
+                results.extend(self._sweep_zero_mov_to_xor(asm_lines))
+                results.extend(self._sweep_strength_reduction(asm_lines))
+                results.extend(self._sweep_cmpq_zero_to_testq(asm_lines))
+                results.extend(self._sweep_branch_straighten(asm_lines))
+                results.extend(self._sweep_testb_bit_test(asm_lines))
+            elif target == TargetArch.WASM32:
+                results.extend(self._sweep_wasm_nop_folding(asm_lines))
+            elif target == TargetArch.ARM64:
+                results.extend(self._sweep_arm64_add_zero_fold(asm_lines))
+            elif target == TargetArch.RISCV64:
+                results.extend(self._sweep_riscv_mv_fold(asm_lines))
+            elif target == TargetArch.WIN64_PE:
+                results.extend(self._sweep_win64_pe_section_compact(asm_lines))
 
         if blacklist:
             results = [m for m in results if m.fingerprint() not in blacklist]
@@ -251,6 +269,71 @@ class MutationEngine:
             is_sweep=True,
             sweep_count=count,
         )]
+
+    def _sweep_wasm_nop_folding(self, lines: list[str]) -> list[Mutation]:
+        count = sum(1 for l in lines if 'nop' in l.lower())
+        if count == 0:
+            return []
+        return [Mutation(
+            name="sweep_wasm_nop_folding",
+            category="SWEEP",
+            description=f"WASM Sweep: fold ALL {count} nop opcodes",
+            line_range=(0, 0),
+            original_asm="nop",
+            mutated_asm="(removed)",
+            energy_delta=-(count * 1.0),
+            is_sweep=True,
+            sweep_count=count,
+        )]
+
+    def _sweep_arm64_add_zero_fold(self, lines: list[str]) -> list[Mutation]:
+        count = sum(1 for l in lines if re.search(r'add\s+x\d+,\s*x\d+,\s*#0', l, re.IGNORECASE))
+        if count == 0:
+            return []
+        return [Mutation(
+            name="sweep_arm64_add_zero_fold",
+            category="SWEEP",
+            description=f"ARM64 Sweep: fold ALL {count} add #0 instructions to mov",
+            line_range=(0, 0),
+            original_asm="add xX, xY, #0",
+            mutated_asm="mov xX, xY",
+            energy_delta=-(count * 1.5),
+            is_sweep=True,
+            sweep_count=count,
+        )]
+
+    def _sweep_riscv_mv_fold(self, lines: list[str]) -> list[Mutation]:
+        count = sum(1 for l in lines if re.search(r'addi\s+[a-z0-9]+,\s*[a-z0-9]+,\s*0', l, re.IGNORECASE))
+        if count == 0:
+            return []
+        return [Mutation(
+            name="sweep_riscv_mv_fold",
+            category="SWEEP",
+            description=f"RISC-V Sweep: fold ALL {count} addi 0 instructions to mv",
+            line_range=(0, 0),
+            original_asm="addi rd, rs, 0",
+            mutated_asm="mv rd, rs",
+            energy_delta=-(count * 1.5),
+            is_sweep=True,
+            sweep_count=count,
+        )]
+
+    def _sweep_win64_pe_section_compact(self, lines: list[str]) -> list[Mutation]:
+        count = sum(1 for l in lines if '.data' in l or '.text' in l)
+        if count == 0:
+            return []
+        return [Mutation(
+            name="sweep_win64_pe_section_compact",
+            category="SWEEP",
+            description=f"Win64 PE Sweep: compact section header alignments across {count} directives",
+            line_range=(0, 0),
+            original_asm=".section unaligned",
+            mutated_asm=".section aligned_0x200",
+            energy_delta=-(count * 0.5),
+            is_sweep=True,
+            sweep_count=count,
+        )]
+
 
     def _apply_sweep(self, lines: list[str], mutation: Mutation) -> list[str]:
         """Execute a sweep mutation against the full assembly."""

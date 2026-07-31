@@ -164,6 +164,7 @@ def main():
     parser.add_argument("--input", default="zcc2.s", help="Target input assembly file (default: zcc2.s)")
     parser.add_argument("--output", default="zcc_optimized.s", help="Target output assembly file")
     parser.add_argument("--verify", action="store_true", default=True, help="Run self-host verification gate")
+    parser.add_argument("--target", default="x86_64", choices=["x86_64", "wasm32", "arm64", "riscv64", "win64_pe"], help="Target backend architecture")
     args = parser.parse_args()
 
     bp_path = args.blueprint
