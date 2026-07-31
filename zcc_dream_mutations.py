@@ -91,6 +91,7 @@ class MutationEngine:
             results.extend(self._sweep_strength_reduction(asm_lines))
             results.extend(self._sweep_cmpq_zero_to_testq(asm_lines))
             results.extend(self._sweep_branch_straighten(asm_lines))
+            results.extend(self._sweep_testb_bit_test(asm_lines))
 
         if blacklist:
             results = [m for m in results if m.fingerprint() not in blacklist]
@@ -302,6 +303,27 @@ class MutationEngine:
                         # jmp to next line — remove the jmp
                         continue
                 result.append(line)
+
+        elif name == "sweep_testb_bit_test":
+            reg_map = {"%rax": "%al", "%rbx": "%bl", "%rcx": "%cl", "%rdx": "%dl",
+                       "%rsi": "%sil", "%rdi": "%dil", "%rbp": "%bpl", "%rsp": "%spl",
+                       "%r8": "%r8b", "%r9": "%r9b", "%r10": "%r10b", "%r11": "%r11b",
+                       "%r12": "%r12b", "%r13": "%r13b", "%r14": "%r14b", "%r15": "%r15b"}
+            idx = 0
+            n = len(lines)
+            while idx < n:
+                if idx + 1 < n:
+                    m1 = re.match(r'(\s*)andq\s+\$1,\s*(%\w+)\s*$', lines[idx])
+                    m2 = re.match(r'\s*testq\s+(%\w+),\s*(%\w+)\s*$', lines[idx + 1])
+                    if m1 and m2 and m1.group(2) == m2.group(1) and m2.group(1) == m2.group(2):
+                        r = m1.group(2)
+                        if r in reg_map:
+                            indent = m1.group(1)
+                            result.append(f"{indent}testb $1, {reg_map[r]}\n")
+                            idx += 2
+                            continue
+                result.append(lines[idx])
+                idx += 1
 
         else:
             result = lines  # unknown sweep — pass through
@@ -604,6 +626,36 @@ class MutationEngine:
             original_asm="jmp .Lx / .Lx:",
             mutated_asm="(removed) / .Lx:",
             energy_delta=-(count * 3.0),
+            is_sweep=True,
+            sweep_count=count,
+        )]
+
+    def _sweep_testb_bit_test(self, lines: list[str]) -> list[Mutation]:
+        """
+        SWEEP: Replace andq $1, %rX followed by testq %rX, %rX with single testb $1, %rXb.
+        Saves 5 bytes per site.
+        """
+        count = 0
+        reg_map = {"%rax": "%al", "%rbx": "%bl", "%rcx": "%cl", "%rdx": "%dl",
+                   "%rsi": "%sil", "%rdi": "%dil", "%rbp": "%bpl", "%rsp": "%spl",
+                   "%r8": "%r8b", "%r9": "%r9b", "%r10": "%r10b", "%r11": "%r11b",
+                   "%r12": "%r12b", "%r13": "%r13b", "%r14": "%r14b", "%r15": "%r15b"}
+        for i in range(len(lines) - 1):
+            m1 = re.match(r'\s*andq\s+\$1,\s*(%\w+)', lines[i])
+            m2 = re.match(r'\s*testq\s+(%\w+),\s*(%\w+)', lines[i + 1])
+            if m1 and m2 and m1.group(1) == m2.group(1) and m2.group(1) == m2.group(2):
+                if m1.group(1) in reg_map:
+                    count += 1
+        if count == 0:
+            return []
+        return [Mutation(
+            name="sweep_testb_bit_test",
+            category="SWEEP",
+            description=f"Sweep: replace {count:,} andq $1 + testq pairs with testb $1",
+            line_range=(0, 0),
+            original_asm="andq $1, %rX / testq %rX, %rX",
+            mutated_asm="testb $1, %rXb",
+            energy_delta=-(count * 2.0),
             is_sweep=True,
             sweep_count=count,
         )]

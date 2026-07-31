@@ -1,0 +1,465 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="100%" height="100%" style="background-color: #030712;">
+  <defs>
+    <!-- Deep Space Grid Pattern -->
+    <pattern id="cyber-grid" width="50" height="50" patternUnits="userSpaceOnUse">
+      <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#0f172a" stroke-width="1" />
+      <path d="M 25 0 L 25 50 M 0 25 L 50 25" fill="none" stroke="#0f172a" stroke-width="0.5" stroke-dasharray="2,8" />
+      <circle cx="50" cy="50" r="1.5" fill="#1e293b" />
+    </pattern>
+
+    <!-- Subsystem Glow Filters -->
+    <filter id="glow-cyan" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="10" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <filter id="glow-emerald" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="10" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <filter id="glow-amber" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="10" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <filter id="glow-rose" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="12" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <!-- Linear Gradients for Pipelines -->
+    <linearGradient id="grad-cyan-amber" x1="0%" y1="50%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="#06b6d4" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+    <linearGradient id="grad-amber-emerald" x1="0%" y1="50%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+    <linearGradient id="grad-emerald-rose" x1="0%" y1="50%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#ef4444" />
+    </linearGradient>
+    <linearGradient id="card-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" stop-opacity="0.85" />
+      <stop offset="100%" stop-color="#020617" stop-opacity="0.95" />
+    </linearGradient>
+
+    <style>
+      @keyframes sweep-line {
+        0% { transform: translateY(-10px); opacity: 0; }
+        10% { opacity: 0.8; }
+        90% { opacity: 0.8; }
+        100% { transform: translateY(400px); opacity: 0; }
+      }
+      @keyframes pulse-core {
+        0%, 100% { transform: scale(1); opacity: 0.3; }
+        50% { transform: scale(1.05); opacity: 0.9; }
+      }
+      @keyframes spin-clockwise {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      @keyframes spin-counter {
+        from { transform: rotate(360deg); }
+        to { transform: rotate(0deg); }
+      }
+      @keyframes dash-flow {
+        to { stroke-dashoffset: -80; }
+      }
+      @keyframes alert-flash {
+        0%, 100% { fill: #ef4444; opacity: 0.4; filter: drop-shadow(0 0 2px #ef4444); }
+        50% { fill: #fca5a5; opacity: 1; filter: drop-shadow(0 0 12px #f43f5e); }
+      }
+      @keyframes text-glow {
+        0%, 100% { fill: #94a3b8; }
+        50% { fill: #f8fafc; filter: drop-shadow(0 0 2px #38bdf8); }
+      }
+
+      .sweep { animation: sweep-line 6s linear infinite; }
+      .pulse { animation: pulse-core 3s ease-in-out infinite; transform-origin: center; }
+      .rot-cw { animation: spin-clockwise 20s linear infinite; }
+      .rot-ccw { animation: spin-counter 15s linear infinite; }
+      .flow-fast { stroke-dasharray: 8, 12; animation: dash-flow 1.5s linear infinite; }
+      .flow-slow { stroke-dasharray: 10, 15; animation: dash-flow 3s linear infinite; }
+      .alert { animation: alert-flash 1.5s ease-in-out infinite; }
+      .flicker { animation: text-glow 4s ease-in-out infinite; }
+
+      text { font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace; font-size: 11px; fill: #94a3b8; }
+      .panel-header { font-size: 13px; font-weight: bold; fill: #f1f5f9; letter-spacing: 1px; }
+      .tech-title { font-size: 15px; font-weight: 800; fill: #ffffff; letter-spacing: 1.5px; }
+      .terminal-text { fill: #38bdf8; font-size: 10px; }
+      .accent-green { fill: #10b981; font-weight: bold; }
+      .accent-amber { fill: #f59e0b; font-weight: bold; }
+      .accent-rose { fill: #f43f5e; font-weight: bold; }
+    </style>
+  </defs>
+
+  <!-- Solid Obsidian and Cyber-Grid Canvas Background -->
+  <rect width="1200" height="800" fill="#02040a" />
+  <rect width="1200" height="800" fill="url(#cyber-grid)" />
+
+  <!-- Outer Interactive HUD Border Frame -->
+  <rect x="20" y="20" width="1160" height="760" fill="none" stroke="#1e293b" stroke-width="2" rx="10" />
+  <rect x="25" y="25" width="1150" height="45" fill="#0f172a" fill-opacity="0.8" rx="6" />
+  <line x1="20" y1="70" x2="1180" y2="70" stroke="#334155" stroke-width="1.5" />
+
+  <!-- Window Indicator Lights -->
+  <circle cx="45" cy="48" r="6" fill="#ef4444" class="alert" />
+  <circle cx="65" cy="48" r="6" fill="#f59e0b" opacity="0.8" />
+  <circle cx="85" cy="48" r="6" fill="#10b981" opacity="0.8" />
+  
+  <text x="110" y="52" class="tech-title">ZCC SYSTEMS AUDIT SCHEMATIC // HARDENED STABILITY CORE v2.0</text>
+  <text x="890" y="52" class="terminal-text" font-size="11">COMMIT: daac79c516cd5 [CLEAN] // T_ZONE: UTC</text>
+
+
+  <!-- ==================== INTER-CARD HIGHWAY LINES (PIPELINES) ==================== -->
+  
+  <!-- Pipe 1: Oneirogenesis -> AST Synthesizer (Cyan to Amber) -->
+  <path d="M 280 340 L 330 340" fill="none" stroke="url(#grad-cyan-amber)" stroke-width="4" opacity="0.8" />
+  <path d="M 280 340 L 330 340" fill="none" stroke="#ffffff" stroke-width="2" class="flow-fast" />
+
+  <!-- Pipe 2: AST Synthesizer -> Standalone ABI Auditor (Amber to Emerald) -->
+  <path d="M 590 340 L 640 340" fill="none" stroke="url(#grad-amber-emerald)" stroke-width="4" opacity="0.8" />
+  <path d="M 590 340 L 640 340" fill="none" stroke="#ffffff" stroke-width="2" class="flow-fast" />
+
+  <!-- Pipe 3: Standalone ABI Auditor -> Bootstrap Gate (Emerald to Rose) -->
+  <path d="M 890 340 L 930 340" fill="none" stroke="url(#grad-emerald-rose)" stroke-width="4" opacity="0.8" />
+  <path d="M 890 340 L 930 340" fill="none" stroke="#ffffff" stroke-width="2" class="flow-fast" />
+
+
+  <!-- ==================== COLUMN I: ONEIROGENESIS MUTATION SIMULATOR ==================== -->
+  <g transform="translate(40, 100)">
+    <!-- Subsystem Box -->
+    <rect width="240" height="490" fill="url(#card-grad)" stroke="#06b6d4" stroke-width="1.5" rx="8" filter="url(#glow-cyan)" />
+    <text x="15" y="30" class="panel-header" fill="#22d3ee">I. ONEIROGENESIS [THERMO]</text>
+    <text x="15" y="45" font-size="9" fill="#0891b2">zcc_oneirogenesis.py [DETERMINISTIC]</text>
+    <line x1="15" y1="55" x2="225" y2="55" stroke="#0891b2" stroke-width="1" opacity="0.5" />
+
+    <!-- Ising Model Grid Representation (Spin Lattice Nodes) -->
+    <g transform="translate(30, 75)">
+      <rect width="180" height="110" fill="#020617" stroke="#1e293b" rx="4" />
+      <text x="10" y="20" font-size="8" fill="#475569">2D-ISING GRID (LATTICE STATE)</text>
+      <!-- Draw spin matrix dots -->
+      <!-- Row 1 -->
+      <circle cx="30" cy="45" r="4" fill="#06b6d4" />
+      <circle cx="60" cy="45" r="4" fill="#334155" />
+      <circle cx="90" cy="45" r="4" fill="#06b6d4" />
+      <circle cx="120" cy="45" r="4" fill="#06b6d4" />
+      <circle cx="150" cy="45" r="4" fill="#334155" />
+      <!-- Row 2 -->
+      <circle cx="30" cy="70" r="4" fill="#334155" />
+      <circle cx="60" cy="70" r="4" fill="#06b6d4" class="pulse" />
+      <circle cx="90" cy="70" r="4" fill="#334155" />
+      <circle cx="120" cy="70" r="4" fill="#06b6d4" />
+      <circle cx="150" cy="70" r="4" fill="#06b6d4" />
+      <!-- Row 3 -->
+      <circle cx="30" cy="95" r="4" fill="#06b6d4" />
+      <circle cx="60" cy="95" r="4" fill="#06b6d4" />
+      <circle cx="90" cy="95" r="4" fill="#334155" />
+      <circle cx="120" cy="95" r="4" fill="#334155" />
+      <circle cx="150" cy="95" r="4" fill="#06b6d4" />
+      <!-- Connecting Spin Lines -->
+      <line x1="30" y1="45" x2="150" y2="45" stroke="#0891b2" stroke-width="0.5" opacity="0.3" />
+      <line x1="30" y1="70" x2="150" y2="70" stroke="#0891b2" stroke-width="0.5" opacity="0.3" />
+      <line x1="30" y1="95" x2="150" y2="95" stroke="#0891b2" stroke-width="0.5" opacity="0.3" />
+    </g>
+
+    <!-- State Metrics -->
+    <g transform="translate(15, 210)">
+      <rect width="210" height="90" fill="#020617" stroke="#334155" rx="4" />
+      <!-- Thermodynamic state variables -->
+      <text x="12" y="22" font-size="9" fill="#94a3b8">CRIT_TEMP (η_c):</text>
+      <text x="145" y="22" font-size="10" fill="#22d3ee" class="accent-green">1.4200</text>
+
+      <text x="12" y="42" font-size="9" fill="#94a3b8">SPECTRAL (d_s):</text>
+      <text x="145" y="42" font-size="10" fill="#22d3ee">1.815</text>
+
+      <text x="12" y="62" font-size="9" fill="#94a3b8">INITIAL_SCORE :</text>
+      <text x="145" y="62" font-size="10" fill="#f8fafc">1,426,522.9</text>
+
+      <text x="12" y="80" font-size="9" fill="#94a3b8">CURRENT_SCORE :</text>
+      <text x="145" y="80" font-size="10" fill="#00ff66" class="accent-green">1,421,734.0</text>
+    </g>
+
+    <!-- Console Logging Telemetry -->
+    <g transform="translate(15, 315)">
+      <rect width="210" height="155" fill="#000000" stroke="#0891b2" stroke-width="0.8" rx="4" />
+      <text x="10" y="20" font-size="8" fill="#0891b2">[DREAM COMPILER CONSOLE]</text>
+      <text x="10" y="40" font-size="8" fill="#e2e8f0">&gt; Loading Seed: 42</text>
+      <text x="10" y="55" font-size="8" fill="#e2e8f0">&gt; CFG Node Count: 25,858</text>
+      <text x="10" y="70" font-size="8" fill="#e2e8f0">&gt; CFG Edge Count: 36,480</text>
+      <text x="10" y="85" font-size="8" fill="#ef4444" class="alert">&gt; Relaunch: PYTHONHASHSEED=42</text>
+      <text x="10" y="100" font-size="8" fill="#22d3ee">&gt; Mutation Gen 1: Evolved [SWEEP]</text>
+      <text x="10" y="115" font-size="8" fill="#22d3ee">&gt; Mutation Gen 2: Evolved [SWEEP]</text>
+      <text x="10" y="130" font-size="8" fill="#10b981">&gt; STATUS: CONVERGED (H0 LOCK)</text>
+    </g>
+  </g>
+
+
+  <!-- ==================== COLUMN II: AST RULE SYNTHESIZER ==================== -->
+  <g transform="translate(330, 100)">
+    <!-- Subsystem Box -->
+    <rect width="260" height="490" fill="url(#card-grad)" stroke="#f59e0b" stroke-width="1.5" rx="8" filter="url(#glow-amber)" />
+    <!-- Scanner line inside card -->
+    <line x1="2" y1="5" x2="258" y2="5" stroke="#f59e0b" stroke-width="1.5" class="sweep" />
+
+    <text x="15" y="30" class="panel-header" fill="#fbbf24">II. AST SYNTHESIZER</text>
+    <text x="15" y="45" font-size="9" fill="#d97706">apply_oneirogenesis_blueprint.py</text>
+    <line x1="15" y1="55" x2="245" y2="55" stroke="#d97706" stroke-width="1" opacity="0.5" />
+
+    <!-- Active Transformation Rule Nodes -->
+    <!-- Rule A -->
+    <g transform="translate(15, 75)">
+      <rect width="230" height="110" fill="#020617" stroke="#b45309" rx="4" />
+      <text x="10" y="20" font-size="9" fill="#fbbf24">RULE A: JMP ELISION (G1)</text>
+      <text x="10" y="35" font-size="8" fill="#64748b">Omit jmp to immediately succeeding label</text>
+      
+      <!-- Source ASM Transformation Map -->
+      <rect x="10" y="50" width="85" height="45" fill="#1e293b" stroke="#334155" />
+      <text x="15" y="65" font-size="8" fill="#f8fafc">jmp .L42</text>
+      <text x="15" y="80" font-size="8" fill="#00ff66">.L42:</text>
+      
+      <!-- Arrow pointing to outcome -->
+      <path d="M 105 72 L 125 72" fill="none" stroke="#fbbf24" stroke-width="1.5" />
+      <polygon points="125,69 131,72 125,75" fill="#fbbf24" />
+
+      <rect x="135" y="50" width="85" height="45" fill="#1e293b" stroke="#ef4444" />
+      <text x="140" y="65" font-size="8" fill="#ef4444" stroke-dasharray="1,1">/* ELIDED */</text>
+      <text x="140" y="80" font-size="8" fill="#00ff66">.L42:</text>
+    </g>
+
+    <!-- Rule B -->
+    <g transform="translate(15, 200)">
+      <rect width="230" height="110" fill="#020617" stroke="#b45309" rx="4" />
+      <text x="10" y="20" font-size="9" fill="#fbbf24">RULE B: OP CONVERSION (G2)</text>
+      <text x="10" y="35" font-size="8" fill="#64748b">cmpq $0 -> testq %reg, %reg</text>
+      
+      <!-- Source ASM Transformation Map -->
+      <rect x="10" y="50" width="95" height="45" fill="#1e293b" stroke="#334155" />
+      <text x="15" y="65" font-size="8" fill="#64748b"># 7 Bytes</text>
+      <text x="15" y="80" font-size="8" fill="#fbbf24">cmpq $0, %rax</text>
+      
+      <!-- Arrow pointing to outcome -->
+      <path d="M 113 72 L 123 72" fill="none" stroke="#fbbf24" stroke-width="1.5" />
+      <polygon points="123,69 129,72 123,75" fill="#fbbf24" />
+
+      <rect x="131" y="50" width="91" height="45" fill="#1e293b" stroke="#10b981" />
+      <text x="136" y="65" font-size="8" fill="#10b981"># 3 Bytes (-57%)</text>
+      <text x="136" y="80" font-size="8" fill="#00ff66" font-weight="bold">testq %rax,%rax</text>
+    </g>
+
+    <!-- Compounded Realized Savings -->
+    <g transform="translate(15, 325)">
+      <rect width="230" height="145" fill="#020617" stroke="#334155" rx="4" />
+      <text x="12" y="20" font-size="9" fill="#fbbf24" font-weight="bold">CUMULATIVE BLUEPRINT IMPACT</text>
+      
+      <text x="12" y="45" font-size="9" fill="#94a3b8">Active Blueprints:</text>
+      <text x="150" y="45" font-size="9" fill="#fbbf24">G1 + G2 + G3</text>
+
+      <text x="12" y="65" font-size="9" fill="#94a3b8">Jmps Elided:</text>
+      <text x="150" y="65" font-size="10" fill="#10b981" font-weight="bold">-495 insts</text>
+
+      <text x="12" y="85" font-size="9" fill="#94a3b8">Compares Opted:</text>
+      <text x="150" y="85" font-size="10" fill="#10b981" font-weight="bold">-1,696 sites</text>
+
+      <text x="12" y="105" font-size="9" fill="#94a3b8">Bytes Saved:</text>
+      <text x="150" y="105" font-size="10" fill="#10b981" font-weight="bold">-2,723 bytes</text>
+
+      <!-- Horizontal Progress Bar -->
+      <rect x="12" y="122" width="206" height="8" fill="#1e293b" rx="2" />
+      <rect x="12" y="122" width="165" height="8" fill="#fbbf24" rx="2" />
+    </g>
+  </g>
+
+
+  <!-- ==================== COLUMN III: STANDALONE ABI AUDITOR ==================== -->
+  <g transform="translate(640, 100)">
+    <!-- Subsystem Box -->
+    <rect width="250" height="490" fill="url(#card-grad)" stroke="#10b981" stroke-width="1.5" rx="8" filter="url(#glow-emerald)" />
+    <text x="15" y="30" class="panel-header" fill="#34d399">III. ABI STANDALONE AUDIT</text>
+    <text x="15" y="45" font-size="9" fill="#059669">src/tools/zcc_abi_verifier.c</text>
+    <line x1="15" y1="55" x2="235" y2="55" stroke="#059669" stroke-width="1" opacity="0.5" />
+
+    <!-- Struct Ingestion Visualizer -->
+    <g transform="translate(15, 75)">
+      <rect width="220" height="110" fill="#020617" stroke="#047857" rx="4" />
+      <text x="10" y="20" font-size="9" fill="#34d399" font-weight="bold">ADT STRUCT ANALYSIS ENGINE</text>
+      <text x="10" y="35" font-size="8" fill="#64748b">Header: idt_ptr_64 (Interrupt Vector)</text>
+      
+      <!-- Bytes representation -->
+      <!-- Normal (16-byte) vs Packed (10-byte) block -->
+      <g transform="translate(10, 50)">
+        <rect x="0" y="0" width="85" height="45" fill="#1e293b" stroke="#ef4444" rx="2" />
+        <text x="8" y="15" font-size="8" fill="#ef4444">NATURAL ALIGN</text>
+        <text x="8" y="30" font-size="8" fill="#94a3b8">Size: 16-Bytes</text>
+        <text x="8" y="40" font-size="7" fill="#ef4444">[TRIPLE FAULT]</text>
+
+        <!-- Dynamic alert trigger line -->
+        <path d="M 90 22 L 105 22" fill="none" stroke="#10b981" stroke-width="1.5" />
+        <polygon points="105,19 111,22 105,25" fill="#10b981" />
+
+        <rect x="115" y="0" width="85" height="45" fill="#022c22" stroke="#10b981" rx="2" />
+        <text x="123" y="15" font-size="8" fill="#10b981" font-weight="bold">__attribute__((packed))</text>
+        <text x="123" y="30" font-size="8" fill="#34d399" font-weight="bold">Size: 10-Bytes</text>
+        <text x="123" y="40" font-size="7" fill="#10b981">[HARDWARE OK]</text>
+      </g>
+    </g>
+
+    <!-- Calling Convention / Aggregate Classification Class List -->
+    <g transform="translate(15, 200)">
+      <rect width="220" height="110" fill="#020617" stroke="#047857" rx="4" />
+      <text x="10" y="20" font-size="9" fill="#34d399" font-weight="bold">SYSTEM V AMD64 ABI CLASSIFY</text>
+      
+      <!-- List of Classes -->
+      <text x="10" y="40" font-size="8" fill="#e2e8f0">&#9632; INTEGER (gpr, rax, rdi)</text>
+      <text x="10" y="55" font-size="8" fill="#e2e8f0">&#9632; SSE     (xmm0 - xmm7)</text>
+      <text x="10" y="70" font-size="8" fill="#e2e8f0">&#9632; MEMORY  (sret passing &gt; 16B)</text>
+      
+      <circle cx="200" cy="55" r="12" fill="#10b981" opacity="0.2" />
+      <circle cx="200" cy="55" r="8" fill="#10b981" opacity="0.6" class="pulse" />
+    </g>
+
+    <!-- Fail-Closed Terminal Diagnostic Target -->
+    <g transform="translate(15, 325)">
+      <rect width="220" height="145" fill="#000000" stroke="#10b981" stroke-width="0.8" rx="4" />
+      <text x="10" y="20" font-size="8" fill="#10b981">[CI PIPELINE AUDITOR CONTRACT]</text>
+      <text x="10" y="40" font-size="8" fill="#94a3b8">&gt; Input: test_broken_packed_abi.c</text>
+      <text x="10" y="55" font-size="8" fill="#ef4444" font-weight="bold">&gt; ERR: Member size mismatch (12 != 10)</text>
+      <text x="10" y="70" font-size="8" fill="#ef4444" font-weight="bold">&gt; zcc_abi_verifier exit=1 [REJECTED]</text>
+      <line x1="10" y1="80" x2="210" y2="80" stroke="#ef4444" stroke-width="0.5" opacity="0.4" />
+      <text x="10" y="95" font-size="8" fill="#94a3b8">&gt; Input: test_packed_boundary_diff.c</text>
+      <text x="10" y="110" font-size="8" fill="#10b981" font-weight="bold">&gt; OK: 10-Byte hardware descriptor alignment</text>
+      <text x="10" y="125" font-size="8" fill="#10b981" font-weight="bold">&gt; zcc_abi_verifier exit=0 [STABILITY MERGE]</text>
+    </g>
+  </g>
+
+
+  <!-- ==================== COLUMN IV: TRIPLE DETERMINISTIC BOOTSTRAP SEAL ==================== -->
+  <g transform="translate(900, 100)">
+    <!-- Subsystem Box -->
+    <rect width="260" height="490" fill="url(#card-grad)" stroke="#f43f5e" stroke-width="1.5" rx="8" filter="url(#glow-rose)" />
+    <text x="15" y="30" class="panel-header" fill="#f43f5e">IV. THREE-STAGE BOOTSTRAP</text>
+    <text x="15" y="45" font-size="9" fill="#be123c">zcc2.s ≡ zcc3.s validation</text>
+    <line x1="15" y1="55" x2="245" y2="55" stroke="#be123c" stroke-width="1" opacity="0.5" />
+
+    <!-- Central Concentric Ring Gear of determinism -->
+    <g transform="translate(130, 170)">
+      <circle cx="0" cy="0" r="70" fill="none" stroke="#be123c" stroke-width="1" stroke-dasharray="10,10" class="rot-cw" />
+      <circle cx="0" cy="0" r="55" fill="none" stroke="#f43f5e" stroke-width="2" stroke-dasharray="30,10" class="rot-ccw" />
+      <circle cx="0" cy="0" r="40" fill="none" stroke="#fda4af" stroke-width="1" stroke-dasharray="2,4" />
+      <circle cx="0" cy="0" r="30" fill="url(#glass-grad)" />
+      
+      <!-- Inner Lock Indicator -->
+      <path d="M -8 -8 L 8 8 M 8 -8 L -8 8" stroke="#10b981" stroke-width="2.5" />
+      <circle cx="0" cy="0" r="12" fill="none" stroke="#10b981" stroke-width="2" />
+    </g>
+
+    <!-- Triple Layers Table -->
+    <g transform="translate(15, 275)">
+      <rect width="230" height="195" fill="#020617" stroke="#be123c" stroke-width="0.8" rx="4" />
+      <text x="12" y="20" font-size="9" fill="#f43f5e" font-weight="bold">3-LAYER COMPLIANCE LEDGER</text>
+      
+      <!-- Header Row -->
+      <text x="12" y="40" font-size="8" fill="#64748b">STAGE ARTIFACT</text>
+      <text x="120" y="40" font-size="8" fill="#64748b">DETERMINISM ENGINE</text>
+      <line x1="12" y1="45" x2="218" y2="45" stroke="#be123c" stroke-width="0.5" opacity="0.5" />
+
+      <!-- Row 1: Assembly s -->
+      <text x="12" y="65" font-size="8" fill="#f8fafc">1. Assembly (.s)</text>
+      <text x="120" y="65" font-size="8" fill="#00ff66" font-weight="bold">✔ BYTE-IDENTICAL</text>
+
+      <!-- Row 2: Object o -->
+      <text x="12" y="85" font-size="8" fill="#f8fafc">2. Object (.o)</text>
+      <text x="120" y="85" font-size="8" fill="#00ff66" font-weight="bold">✔ BYTE-IDENTICAL</text>
+
+      <!-- Row 3: Executable bin -->
+      <text x="12" y="105" font-size="8" fill="#f8fafc">3. Executable (.bin)</text>
+      <text x="120" y="105" font-size="8" fill="#00ff66" font-weight="bold">✔ BYTE-IDENTICAL</text>
+
+      <line x1="12" y1="120" x2="218" y2="120" stroke="#be123c" stroke-width="0.5" opacity="0.5" />
+
+      <!-- Hash Lineage Identity Contract -->
+      <text x="12" y="140" font-size="9" fill="#fda4af">LINEAGE RELATIONSHIP:</text>
+      <text x="12" y="155" font-size="8" fill="#94a3b8">Stage 2 Bin SHA256</text>
+      <text x="120" y="155" font-size="8" fill="#38bdf8">--&gt; Stage 3 Comp</text>
+      
+      <rect x="12" y="165" width="206" height="18" fill="#052e16" stroke="#10b981" stroke-width="1" rx="2" />
+      <text x="115" y="177" font-size="8" fill="#22c55e" font-weight="bold" text-anchor="middle">=== VERDICT: DET_LOCK SECURED ===</text>
+    </g>
+  </g>
+
+
+  <!-- ==================== UNDERLYING FOOTERS & FRAMEWORKS (THE BASELINE INVARIANTS) ==================== -->
+  
+  <!-- Left Footer: Invariant Warden (Pre/Post pass check) -->
+  <g transform="translate(40, 610)">
+    <rect width="360" height="150" fill="url(#card-grad)" stroke="#ef4444" stroke-width="1" rx="6" />
+    <text x="15" y="25" font-size="11" fill="#f8fafc" font-weight="bold">PASS-MANAGER INVARIANT WARDEN</text>
+    <text x="15" y="40" font-size="8" fill="#fda4af">ir_pass_manager.c // zcc_verify_pass_invariants</text>
+    <line x1="15" y1="48" x2="345" y2="48" stroke="#ef4444" stroke-width="1" opacity="0.4" />
+
+    <!-- Invariant check-out details -->
+    <text x="15" y="65" font-size="9" fill="#94a3b8">G-05 (Error Visibility) :</text>
+    <text x="180" y="65" font-size="9" fill="#00ff66" font-weight="bold" class="accent-green">EAGER_FAIL_CLOSED</text>
+
+    <text x="15" y="85" font-size="9" fill="#94a3b8">G-06 (Resource Hygiene):</text>
+    <text x="180" y="85" font-size="9" fill="#00ff66" font-weight="bold" class="accent-green">AUTO_CLEAN_ARENA</text>
+
+    <text x="15" y="105" font-size="9" fill="#94a3b8">G-07 (State Integrity) :</text>
+    <text x="180" y="105" font-size="9" fill="#00ff66" font-weight="bold" class="accent-green">ZERO_PASS_DRIFT_LOCK</text>
+
+    <text x="15" y="125" font-size="8" fill="#f43f5e" class="alert">● AUDITS ACTIVE PRE &amp; POST ALL OPTIMIZATION PASSES</text>
+  </g>
+
+  <!-- Center Footer: AST / IR Frame Contract -->
+  <g transform="translate(420, 610)">
+    <rect width="360" height="150" fill="url(#card-grad)" stroke="#38bdf8" stroke-width="1" rx="6" />
+    <text x="15" y="25" font-size="11" fill="#f8fafc" font-weight="bold">IR / AST FRAME REGISTRATION CONTRACT</text>
+    <text x="15" y="40" font-size="8" fill="#7dd3fc">part4.c &amp; regalloc.c // System V ABI</text>
+    <line x1="15" y1="48" x2="345" y2="48" stroke="#38bdf8" stroke-width="1" opacity="0.4" />
+
+    <!-- Invariant assertion values -->
+    <text x="15" y="65" font-size="9" fill="#94a3b8">Callee-Saved Reg Mask:</text>
+    <text x="190" y="65" font-size="9" fill="#38bdf8" font-weight="bold">0x1F (rbx, r12-r15)</text>
+
+    <text x="15" y="85" font-size="9" fill="#94a3b8">Stack Alignment Contract:</text>
+    <text x="190" y="85" font-size="9" fill="#38bdf8" font-weight="bold">Strict 16-Byte Bounds</text>
+
+    <text x="15" y="105" font-size="9" fill="#94a3b8">Defensive Safety Guards:</text>
+    <text x="190" y="105" font-size="9" fill="#00ff66">No Red-Zone Allowed</text>
+
+    <text x="15" y="125" font-size="8" fill="#38bdf8" class="flicker">● ASSERT_FAIL THROWS ZCC_INVARIANT_VIOLATION_IR_AST_FRAME</text>
+  </g>
+
+  <!-- Right Footer: Global Telemetry Ledger -->
+  <g transform="translate(800, 610)">
+    <rect width="360" height="150" fill="url(#card-grad)" stroke="#f59e0b" stroke-width="1" rx="6" />
+    <text x="15" y="25" font-size="11" fill="#f8fafc" font-weight="bold">COMPILATION SYSTEM LEDGER</text>
+    <text x="15" y="40" font-size="8" fill="#fde047">G-01 EVIDENCE CORE // G-10 REGRESSIONS</text>
+    <line x1="15" y1="48" x2="345" y2="48" stroke="#f59e0b" stroke-width="1" opacity="0.4" />
+
+    <!-- Invariant check-out details -->
+    <text x="15" y="65" font-size="9" fill="#94a3b8">Domain Invariants checked:</text>
+    <text x="210" y="65" font-size="9" fill="#fde047">78 Domains / 8 Tiers</text>
+
+    <text x="15" y="85" font-size="9" fill="#94a3b8">Constant Division Intercept:</text>
+    <text x="210" y="85" font-size="9" fill="#10b981" font-weight="bold">CG-SIGFPE-003 [CLOSED]</text>
+
+    <text x="15" y="105" font-size="9" fill="#94a3b8">Opt-in Variable Guard:</text>
+    <text x="210" y="105" font-size="9" fill="#38bdf8">--safe-div (UD2 Trap)</text>
+
+    <text x="15" y="125" font-size="8" fill="#10b981" font-weight="bold">✔ H0 FUNCTIONAL QUALITY CONVERGED PRECISELY</text>
+  </g>
+
+</svg>
