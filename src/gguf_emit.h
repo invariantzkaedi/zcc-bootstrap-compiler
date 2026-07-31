@@ -60,5 +60,7 @@ typedef struct {
 /* ================================================================= */
 
 int zcc_emit_gguf(void *cc_ptr, const char *out_path, int quantize_type);
+int zcc_emit_gguf_gemm_kernel(const char *out_path, int rows, int cols, int quant_type);
 
 #endif /* ZCC_GGUF_EMIT_H */
+

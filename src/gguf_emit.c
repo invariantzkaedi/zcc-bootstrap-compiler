@@ -776,3 +776,54 @@ int zcc_emit_gguf(void *cc_ptr, const char *out_path, int quantize_type) {
     printf("[ZCC-GGUF] Successfully serialized %lu tensors. Sovereign attestation hash: %s\n", (unsigned long)num_tensors, sig_hex);
     return 0;
 }
+
+int zcc_emit_gguf_gemm_kernel(const char *out_path, int rows, int cols, int quant_type) {
+    if (!out_path) return -1;
+    FILE *f = fopen(out_path, "wb");
+    if (!f) return -1;
+
+    gguf_header_t hdr;
+    hdr.magic = GGUF_MAGIC;
+    hdr.version = 3;
+    hdr.tensor_count = 1;
+    hdr.metadata_kv_count = 1;
+
+    fwrite(&hdr, sizeof(hdr), 1, f);
+
+    /* Write metadata key: "general.architecture" */
+    uint64_t klen = strlen("general.architecture");
+    fwrite(&klen, sizeof(klen), 1, f);
+    fwrite("general.architecture", 1, klen, f);
+    uint32_t val_type = GGUF_VALUE_TYPE_STRING;
+    fwrite(&val_type, sizeof(val_type), 1, f);
+    uint64_t vlen = strlen("zcc_gemm");
+    fwrite(&vlen, sizeof(vlen), 1, f);
+    fwrite("zcc_gemm", 1, vlen, f);
+
+    /* Tensor Info */
+    uint64_t tname_len = strlen("weight");
+    fwrite(&tname_len, sizeof(tname_len), 1, f);
+    fwrite("weight", 1, tname_len, f);
+
+    uint32_t dims = 2;
+    fwrite(&dims, sizeof(dims), 1, f);
+    uint64_t d0 = (rows > 0) ? rows : 64;
+    uint64_t d1 = (cols > 0) ? cols : 64;
+    fwrite(&d0, sizeof(d0), 1, f);
+    fwrite(&d1, sizeof(d1), 1, f);
+
+    uint32_t type = (uint32_t)quant_type;
+    fwrite(&type, sizeof(type), 1, f);
+    uint64_t offset = 0;
+    fwrite(&offset, sizeof(offset), 1, f);
+
+    /* Dummy quantized GEMM weights payload */
+    size_t payload_bytes = d0 * d1 * sizeof(float);
+    uint8_t *payload = (uint8_t *)calloc(1, payload_bytes);
+    fwrite(payload, 1, payload_bytes, f);
+    free(payload);
+
+    fclose(f);
+    return 0;
+}
+
