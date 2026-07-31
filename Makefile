@@ -11,7 +11,7 @@ FAST_CFLAGS = -O2 -DNDEBUG -w -fno-asynchronous-unwind-tables -g0 -DZCC_REAL_TEL
 FORTIFY_PACK_DIR ?= fortify_zcc_clean
 
 PARTS = part1.c part0_pp.c part2.c part3.c ir.h ir_emit_dispatch.h sym_type_ast_ir.c part4.c zcc_ast_serializer.c part5.c part7_rust.c part6_arm.c ir.c ir_to_x86.c regalloc.c ir_telemetry_stub.c forgezero_receipt_stub.c zcc_layout.c zcc_layout_dump.c zcc_static_assert.c
-PASSES = compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c ir_telemetry.c zcc_telemetry.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c src/opt/prime_v2_regalloc_opt.c
+PASSES = compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c ir_telemetry.c zcc_telemetry.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c src/opt/prime_v2_regalloc_opt.c src/wasm_emit.c
 COMPAT_SMOKE_SRCS = \
 	exp1_raytracer_simd.c \
 	exp2_voxel_engine.c \
@@ -25,7 +25,8 @@ COMPAT_SMOKE_SRCS = \
 	tests/regressions/t_zkaedi_rigging_regressions.c
 COMPAT_EXTENDED_SRCS = $(COMPAT_SMOKE_SRCS) raytracer.c
 
-.PHONY: all clean selfhost selfhost-fast verify-lexicon compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test test-float rust-front-smoke check-evm-lifter check-ir-vuln-tag check-forgezero-receipt check-ir-bridge-guard check-copy-const-prop verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration zjs test-zjs visualize-svg-diffs wasm-svg-bridge test_zcc_dag abi-lanes zcc-opt zcc-verify
+.PHONY: all clean selfhost selfhost-fast verify-lexicon compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test test-float rust-front-smoke check-evm-lifter check-ir-vuln-tag check-forgezero-receipt check-ir-bridge-guard check-copy-const-prop verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration zjs test-zjs visualize-svg-diffs wasm-svg-bridge test_zcc_dag abi-lanes zcc-opt zcc-verify dream dream-auto apply-blueprints
+
 
 .SECONDARY: zcc zcc2 zcc3
 
@@ -42,6 +43,18 @@ zcc_ast_bridge_constants.h zcc_ast_bridge_asserts.inc: part1.c sync_bridge.py
 
 zcc.c: $(PARTS) zcc_ast_bridge_constants.h zcc_ast_bridge_asserts.inc
 	cat $(PARTS) > zcc.c
+
+zcc-abi-verifier: src/tools/zcc_abi_verifier.c zcc_ast_bridge_constants.h zcc_ast_bridge_asserts.inc
+	$(CC) $(CFLAGS) -O2 -o zcc-abi-verifier src/tools/zcc_abi_verifier.c $(LDFLAGS)
+
+
+
+
+
+
+
+
+
 
 verify-lexicon:
 	@echo "=== Checking Workspace Lexicons ==="
@@ -98,6 +111,33 @@ selfhost-runner: verify-lexicon zcc
 
 selfhost-frogger: verify-lexicon zcc
 	python3 zcc_quest.py --cmd "bash gate.sh" --mode frogger
+
+.PHONY: incident-pack incident-pack-ci chmod-scripts
+
+chmod-scripts:
+	chmod +x scripts/incident_pack.sh \
+	         scripts/gate_runner.sh \
+	         scripts/fault_inject.sh \
+	         scripts/fault_restore.sh \
+	         scripts/asm_delta_summary.py \
+	         scripts/template_prefill.py
+
+incident-pack:
+	@bash scripts/incident_pack.sh \
+	  --incident-id "$(INCIDENT_ID)" \
+	  --outdir "$(or $(OUTDIR),artifacts/incidents)" \
+	  --gates "$(or $(GATES),gate1 gate2 gate3 gate4 gate5)" \
+	  --fault-inject "$(or $(FAULT_INJECT),0)" \
+	  --baseline-ref "$(or $(BASELINE_REF),HEAD~1)" \
+	  --target-ref "$(or $(TARGET_REF),HEAD)" \
+	  --repro-cmd "$(REPRO_CMD)" \
+	  --abi-audit "$(or $(ABI_AUDIT),1)" \
+	  --redact "$(or $(REDACT),0)"
+
+incident-pack-ci:
+	@$(MAKE) incident-pack \
+	  OUTDIR="$(or $(OUTDIR),artifacts/incidents/ci)" \
+	  INCIDENT_ID="$(or $(INCIDENT_ID),INC-CI-$$(date -u +%Y%m%d-%H%M%S))"
 
 selfhost-eco: verify-lexicon zcc
 	python3 zcc_quest.py --cmd "bash gate.sh" --mode prime --low-power
@@ -582,9 +622,18 @@ dream-visualize: zcc2
 	@echo "=== ZCC ONEIROGENESIS v2 [GOD'S EYE TELEMETRY] ==="
 	python3 zcc_oneirogenesis.py --cycles 100 --visualize --islands 2
 
+dream-auto: zcc2
+	@echo "=== ZCC ONEIROGENESIS v3 [AUTO-APPLY & VERIFY] ==="
+	python3 zcc_oneirogenesis.py --cycles 50 --sweep --deterministic --auto-apply
+
+apply-blueprints:
+	python3 tools/apply_oneirogenesis_blueprint.py QAlgo-Dream-G1 --output zcc_optimized.s
+	python3 tools/apply_oneirogenesis_blueprint.py QAlgo-Dream-G2 --input zcc_optimized.s --output zcc_optimized.s
+
 dream-reset:
 	@echo "=== Resetting dream state ==="
 	python3 zcc_oneirogenesis.py --reset
+
 
 rust-front-smoke: zcc
 	python3 tests/rust/test_rust_frontend.py
