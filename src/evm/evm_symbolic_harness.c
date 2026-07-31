@@ -95,3 +95,30 @@ void evm_run_symbolic_from_bytecode(const unsigned char* bytecode, size_t len, i
     
     evm_lifter_destroy(&ls);
 }
+
+int evm_symbolic_check_reentrancy_invariant(const unsigned char* bytecode, size_t len) {
+    if (!bytecode || len == 0) return 0; // Safe / empty
+
+    int call_seen = 0;
+    int reentrancy_detected = 0;
+
+    for (size_t i = 0; i < len; i++) {
+        unsigned char op = bytecode[i];
+        /* 0xF1 = CALL, 0xF2 = CALLCODE, 0xF4 = DELEGATECALL, 0xFA = STATICCALL */
+        if (op == 0xF1 || op == 0xF2 || op == 0xF4) {
+            call_seen = 1;
+        }
+        /* 0x55 = SSTORE */
+        if (op == 0x55 && call_seen) {
+            reentrancy_detected = 1;
+            printf("[EVM SYMBOLIC] Reentrancy Invariant Violation: SSTORE (0x55) after CALL at offset %zu\n", i);
+        }
+        /* PUSH opcodes skip immediate bytes */
+        if (op >= 0x60 && op <= 0x7F) {
+            i += (op - 0x5F);
+        }
+    }
+
+    return reentrancy_detected;
+}
+
