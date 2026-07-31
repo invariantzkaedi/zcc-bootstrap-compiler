@@ -49,4 +49,12 @@ void smt_prove_ir_peephole(
     size_t instr_id
 );
 
+void smt_prove_stack_alignment(
+    const char *func_name,
+    size_t stack_size,
+    int alignment,
+    size_t line_index
+);
+
 #endif /* ZCC_SMT_PROVER_H */
+
