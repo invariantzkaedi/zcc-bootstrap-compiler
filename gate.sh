@@ -17,7 +17,7 @@ EXIT_BYPASS_CONTROL_PASSED=51
 
 # 1. Environment Isolation Configuration
 CLEAN_ENV=(env -i)
-for var in PATH TMPDIR ZCC_IR_BACKEND; do
+for var in PATH TMPDIR ZCC_IR_BACKEND ONE_SOURCE ZCC_MUTATION_SANDBOX; do
     if [[ -v "$var" ]]; then
         CLEAN_ENV+=("$var=${!var}")
     fi
