@@ -8,7 +8,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt-get update
+          sudo apt-get update || true
           sudo apt-get install -y build-essential gcc make
 
       - name: Run ZCC Compiler Gates
@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install toolchain
-        run: sudo apt-get update && sudo apt-get install -y gcc make
+        run: (sudo apt-get update || true) && sudo apt-get install -y gcc make
       - name: Log + drift-check bootstrap hash
         run: bash scripts/log_bootstrap_hash.sh   # exits 1 on unexplained drift
       - name: Persist ledger
@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y gcc make python3
+      - run: (sudo apt-get update || true) && sudo apt-get install -y gcc make python3
       - run: make zcc && make swarm-fuzz          # builds zcc and populates swarm_out/
       - run: make swarm-prove || true   # quarantined from release gate failure
       - uses: actions/upload-artifact@v4

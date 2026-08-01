@@ -24,7 +24,7 @@ jobs:
         run: pip install pytest jsonschema numpy
 
       - name: Install GCC and Build Essentials
-        run: sudo apt-get update && sudo apt-get install -y gcc make
+        run: (sudo apt-get update || true) && sudo apt-get install -y gcc make
 
       - name: Run Schema & Boundary Validations
         env:
