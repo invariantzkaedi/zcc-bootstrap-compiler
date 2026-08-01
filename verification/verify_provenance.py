@@ -35,7 +35,7 @@ def main():
     print("Checking schema...")
     Draft7Validator.check_schema(schema)
     validator = Draft7Validator(schema)
-    errors = sorted(validator.iter_errors(manifest), key=lambda e: e.path)
+    errors = sorted(validator.iter_errors(manifest), key=lambda e: [str(p) for p in e.path])
     if errors:
         print("Schema validation failed:")
         for error in errors:
