@@ -74,7 +74,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m pip install --upgrade pip
-          pip install scipy==1.14.1
+          pip install --break-system-packages scipy==1.14.1
 
       - name: Build baseline and candidate
         run: |

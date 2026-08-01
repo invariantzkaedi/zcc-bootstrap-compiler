@@ -1,0 +1,35 @@
+name: Quantum Verification Assurance
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install --break-system-packages jsonschema cryptography
+
+    - name: Generate Provenance
+      run: |
+        python verification/generate_provenance.py
+
+    - name: Verify Provenance Schema and Hashes
+      run: |
+        python verification/verify_provenance.py
+
+    - name: Sign Provenance Manifest
+      run: |
+        python verification/sign_provenance.py
