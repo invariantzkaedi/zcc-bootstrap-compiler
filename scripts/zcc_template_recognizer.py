@@ -24,10 +24,10 @@ REQUIRED_TEMPLATES = [
 ]
 
 SIG_PATTERNS = {
-    "PLAYBOOK.md": [r"ZCC Systems Engineering", r"Stop-Work Triggers"],
-    "COMMIT_TEMPLATE.md": [r"Mandatory ZCC Commit Body", r"Gate Results"],
-    "GATE_CHECKLIST.md": [r"ZCC Gate Checklist", r"Gate 1: Selfhost Convergence"],
-    "FAULT_INJECTION_GUIDE.md": [r"ZCC Fault-Injection Guide", r"Sensitivity Verdict"],
+    "PLAYBOOK.md": [r"ZCC Systems Engineering", r"Stop-Work"],
+    "COMMIT_TEMPLATE.md": [r"Mandatory ZCC Commit Body", r"Phase 0 Evidence"],
+    "GATE_CHECKLIST.md": [r"ZCC Gate Checklist", r"Gate 0:"],
+    "FAULT_INJECTION_GUIDE.md": [r"ZCC Fault-Injection Guide", r"Target Defect Class"],
     "INCIDENT_REPORT.md": [r"ZCC CI / Self-Host Incident Report", r"Failure Signature"]
 }
 
