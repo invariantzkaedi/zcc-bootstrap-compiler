@@ -10,14 +10,13 @@ def sha256(p: Path):
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
 def test_trace_is_byte_stable(tmp_path):
-    cmd = f"{sys.executable} tests/test_quantum_stabilizers.py"
+    cmd = [sys.executable, "tests/test_quantum_stabilizers.py"]
     hashes = []
     for _ in range(3):
         env = os.environ.copy()
         env["QEC_SEED"] = "1337"
         env["QEC_FUZZ_SEEDS"] = "10"
-        # Run inside WSL
-        subprocess.check_call(cmd, shell=True, env=env)
+        subprocess.check_call(cmd, env=env)
         trace = Path("artifacts/last_trace.json")
         if not trace.exists():
             trace.parent.mkdir(parents=True, exist_ok=True)
