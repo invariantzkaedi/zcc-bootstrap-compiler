@@ -43,10 +43,10 @@ record_toolchain() {
     local objcopy_bin
     local strip_bin
     
-    as_bin=$(which as)
-    ld_bin=$(which ld)
-    objcopy_bin=$(which objcopy)
-    strip_bin=$(which strip)
+    as_bin=$(command -v as || echo "/usr/bin/as")
+    ld_bin=$(command -v ld || echo "/usr/bin/ld")
+    objcopy_bin=$(command -v objcopy || echo "/usr/bin/objcopy")
+    strip_bin=$(command -v strip || echo "/usr/bin/strip")
     
     local as_sha
     local ld_sha
@@ -214,6 +214,8 @@ compile_stage() {
     local out_s="$run_dir/${out_prefix}.s"
     local out_obj="$run_dir/${out_prefix}.o"
     local out_bin="$run_dir/${out_prefix}.bin"
+
+    printf "  \033[1;36m[Stage %d/3]\033[0m Compiling %s via %s... " "$stage_num" "$source_file" "$compiler_src_bin"
     
     # Verify pre-generation path emptiness (Freshness check)
     if [ -e "$out_s" ] || [ -e "$out_obj" ] || [ -e "$out_bin" ]; then
@@ -238,17 +240,18 @@ compile_stage() {
     start_ns=$(date +%s%N)
     
     local exit_code=0
+    echo ""
     # Compile Assembly
-    "${CLEAN_ENV[@]}" "$compiler_exec" "$source_file" -S -o "$out_s" > "$run_dir/stage${stage_num}_compile_s.log" 2>&1 || exit_code=$?
+    "${CLEAN_ENV[@]}" "$compiler_exec" "$source_file" -S -o "$out_s" 2>&1 | tee "$run_dir/stage${stage_num}_compile_s.log" || exit_code=${PIPESTATUS[0]}
     if [ "$exit_code" -ne 0 ]; then
-        echo "FAIL: Stage $stage_num compiler assembly generation failed with exit code $exit_code" >&2
+        echo "FAIL (Assembly Gen Failed with exit code $exit_code)" >&2
         exit "$exit_code"
     fi
     
     # Compile Linked Binary directly through driver
-    "${CLEAN_ENV[@]}" "$compiler_exec" "$source_file" -o "$out_bin" > "$run_dir/stage${stage_num}_compile_bin.log" 2>&1 || exit_code=$?
+    "${CLEAN_ENV[@]}" "$compiler_exec" "$source_file" -o "$out_bin" 2>&1 | tee "$run_dir/stage${stage_num}_compile_bin.log" || exit_code=${PIPESTATUS[0]}
     if [ "$exit_code" -ne 0 ]; then
-        echo "FAIL: Stage $stage_num compiler binary generation failed with exit code $exit_code" >&2
+        echo "FAIL (Binary Gen Failed with exit code $exit_code)" >&2
         exit "$exit_code"
     fi
     
@@ -260,14 +263,16 @@ compile_stage() {
     fi
     
     # Compile only to object file for comparative audit
-    "${CLEAN_ENV[@]}" "$compiler_exec" "$source_file" -c -o "$out_obj" > "$run_dir/stage${stage_num}_compile_obj.log" 2>&1 || exit_code=$?
+    "${CLEAN_ENV[@]}" "$compiler_exec" "$source_file" -c -o "$out_obj" 2>&1 | tee "$run_dir/stage${stage_num}_compile_obj.log" || exit_code=${PIPESTATUS[0]}
     if [ "$exit_code" -ne 0 ]; then
-        echo "FAIL: Object compilation failed with exit code $exit_code" >&2
+        echo "FAIL (Object Gen Failed with exit code $exit_code)" >&2
         exit "$exit_code"
     fi
     
     local end_ns
     end_ns=$(date +%s%N)
+    local stage_ms=$(( (end_ns - start_ns) / 1000000 ))
+    echo "└─ [Stage ${stage_num} Complete] (${stage_ms}ms)"
     
     # Verify compiler binary did not mutate during run
     comp_sha_after=$(sha256_file "$compiler_exec")
