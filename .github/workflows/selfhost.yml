@@ -25,7 +25,7 @@ jobs:
         run: |
           (sudo apt-get update -qq || true)
           sudo apt-get install -y gcc make qemu-system-x86
-          python3 -m pip install jsonschema
+          python -m pip install jsonschema
 
       - name: Verify Lexicon
         run: make verify-lexicon
