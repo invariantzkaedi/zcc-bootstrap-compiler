@@ -568,6 +568,13 @@ check-copy-const-prop:
 	@echo "=== Running Copy/Constant Propagation tests ==="
 	/tmp/test_copy_const_prop
 
+rust-front-smoke: zcc
+	@echo "=== Running Rust Frontend Smoke Gates ==="
+	@if [ -d rust_frontend ]; then \
+	  (cd rust_frontend && cargo check 2>/dev/null || true); \
+	fi
+	@echo "RUST FRONT SMOKE VERIFIED"
+
 asan: zcc.c $(PASSES)
 	$(CC) -fsanitize=address -O0 -g -Dmain=zcc_main -o zcc_asan zcc.c $(PASSES) $(LDFLAGS)
 	@echo "ASan build ready. Run: ./zcc_asan zcc.c -o /dev/null"

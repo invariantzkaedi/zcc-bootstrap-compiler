@@ -1,3 +1,3 @@
 .PHONY: test-positive
 test-positive:
-	./run_positive.sh
+	bash ./run_positive.sh

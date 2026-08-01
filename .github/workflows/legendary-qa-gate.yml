@@ -43,6 +43,7 @@ jobs:
       # It must output real metrics JSON to --output-json.
       - name: Verify runtime probe exists
         run: |
+          chmod +x tools/runtime_probe 2>/dev/null || true
           test -x tools/runtime_probe || (echo "Missing executable tools/runtime_probe" && exit 1)
 
       - name: Run REAL Legendary Experiment Suite

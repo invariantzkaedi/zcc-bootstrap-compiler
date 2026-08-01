@@ -1,7 +1,7 @@
 .PHONY: test test-normalized
 
 test:
-	./run.sh
+	bash ./run.sh
 
 test-normalized:
-	./run_normalized.sh
+	bash ./run_normalized.sh
