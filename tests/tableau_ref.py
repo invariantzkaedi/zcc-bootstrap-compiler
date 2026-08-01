@@ -53,28 +53,12 @@ class Tableau:
         self.matrix[:, a + self.n] ^= self.matrix[:, b]
         
     def is_valid_symplectic(self):
-        # Check symplectic inner products between all row pairs
-        # Inner product [r_i, r_j] = sum_k (x_ik * z_jk ^ z_ik * x_jk)
         n = self.n
-        for i in range(2 * n):
-            for j in range(2 * n):
-                x_i = self.matrix[i, :n]
-                z_i = self.matrix[i, n:]
-                x_j = self.matrix[j, :n]
-                z_j = self.matrix[j, n:]
-                
-                prod = np.sum(x_i * z_j ^ z_i * x_j) % 2
-                
-                # Destabilizer/destabilizer and stabilizer/stabilizer commute
-                # Destabilizer i and stabilizer j inner product must be delta_ij
-                if i < n and j < n:
-                    if prod != 0: return False
-                elif i >= n and j >= n:
-                    if prod != 0: return False
-                elif i < n and j >= n:
-                    expected = 1 if (j - n == i) else 0
-                    if prod != expected: return False
-        return True
+        omega = np.zeros((2 * n, 2 * n), dtype=np.uint8)
+        omega[:n, n:] = np.eye(n, dtype=np.uint8)
+        omega[n:, :n] = np.eye(n, dtype=np.uint8)
+        actual = (self.matrix @ omega @ self.matrix.T) % 2
+        return np.array_equal(actual, omega)
 
     def check_canonical_commutation(self):
         return self.is_valid_symplectic()
