@@ -25,8 +25,8 @@ if [ ! -f "$LEDGER" ]; then
   printf "date\tcommit\tmd5_zcc2s\telisions\ttoolchain\tuname\tcomment\n" > "$LEDGER"
 fi
 
-# Drift check against last row with same compiler toolchain
-PRIOR=$(awk -F'\t' -v k="$KEY" 'NR>1 && $5==k {h=$3} END{print h}' "$LEDGER" || true)
+# Drift check against last row with same compiler toolchain and uname environment
+PRIOR=$(awk -F'\t' -v cc="$CC_ID" -v u="$UNAME" 'NR>1 && $5==cc && $6==u {h=$3} END{print h}' "$LEDGER" || true)
 
 printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$DATE" "$COMMIT" "$HASH" "$ELISIONS" "$CC_ID" "$UNAME" "$COMMENT" >> "$LEDGER"
 
