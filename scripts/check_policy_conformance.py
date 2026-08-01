@@ -74,7 +74,7 @@ def run_conformance_checks():
         policy_kill_rate = policy.get("mutation_kill_rate_min", 0.90)
         # Find any LOW_KILL_RATE alert in dashboard alerts
         alerts = dash.get("alerts", [])
-        mut_alert = [a for a in alerts if a["code"] == "LOW_KILL_RATE"]
+        mut_alert = [a for a in alerts if isinstance(a, dict) and a.get("code") == "LOW_KILL_RATE"]
         if mut_alert:
             alert_threshold = mut_alert[0].get("threshold")
             aligned = (alert_threshold == policy_kill_rate)
