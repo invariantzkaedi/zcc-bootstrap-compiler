@@ -19,7 +19,9 @@ jobs:
           python-version: '3.10'
 
       - name: Install dependencies
-        run: pip install --break-system-packages pytest jsonschema numpy
+        env:
+          PIP_BREAK_SYSTEM_PACKAGES: "1"
+        run: pip install pytest jsonschema numpy
 
       - name: Install GCC and Build Essentials
         run: sudo apt-get update && sudo apt-get install -y gcc make

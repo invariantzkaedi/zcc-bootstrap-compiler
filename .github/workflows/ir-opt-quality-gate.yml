@@ -71,10 +71,12 @@ jobs:
           python-version: "3.11"
 
       - name: Install perf deps
+        env:
+          PIP_BREAK_SYSTEM_PACKAGES: "1"
         run: |
           set -euo pipefail
           python3 -m pip install --upgrade pip
-          pip install --break-system-packages scipy==1.14.1
+          pip install scipy==1.14.1
 
       - name: Build baseline and candidate
         run: |
