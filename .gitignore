@@ -655,10 +655,10 @@ docs/*
 !.github/copilot-instructions.md
 
 
-# Evidence archive is exempt from every pattern above (append-only per
-# EVIDENCE_RETENTION.md). Without this, bare patterns like a_zcc*/a_gcc*/*.elf
-# silently drop files anywhere under evidence/, including this directory --
-# this is exactly the bug that caused a false "unrecoverable" evidence loss
-# on 2026-07-12. Keep this negation last so it wins.
+# Evidence archive: track manifest & latest evidence, ignore heavy zcc-run history
 !evidence/
-!evidence/**
+evidence/zcc-run-*/
+!evidence/manifest.json
+!evidence/latest/
+!evidence/latest/**
+
