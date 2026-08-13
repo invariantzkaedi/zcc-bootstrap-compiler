@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ZCC Quantum Verification Provenance Manifest Schema",
+  "type": "object",
+  "properties": {
+    "experiment_id": { "type": "string" },
+    "verification_run_id": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "builder": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" }
+      },
+      "required": ["id"]
+    },
+    "git": {
+      "type": "object",
+      "properties": {
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "tree": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "dirty": { "type": "boolean" }
+      },
+      "required": ["commit", "tree", "dirty"]
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        },
+        "required": ["path", "sha256"]
+      }
+    }
+  },
+  "required": ["experiment_id", "verification_run_id", "timestamp", "builder", "git", "artifacts"],
+  "additionalProperties": true
+}

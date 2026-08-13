@@ -1,0 +1,42 @@
+{
+  "experiment_id": "EXP-2026-07-20-0001",
+  "verification_run_id": "VRF-2026-07-20-0001",
+  "method": "instance_level_numerical_equivalence_verification",
+  "status": "PASS_WITH_SCOPE_LIMITATION",
+  "environment": {
+    "git_commit": "9b7b45df",
+    "optimizer_version": "1.0.0-quantum-alpha",
+    "python_version": "3.13.0",
+    "numpy_version": "1.26.4",
+    "os": "Windows/WSL2 Ubuntu",
+    "cpu": "Intel/AMD x86_64",
+    "random_seed": 42
+  },
+  "evidence": {
+    "samples": 2,
+    "tolerance": 1e-10,
+    "min_difference": 2.220446049250313e-16,
+    "max_difference": 6.568167990716596e-16,
+    "mean_difference": 4.394307019983454e-16,
+    "std_difference": 2.1738609707331415e-16,
+    "interpretation": "Descriptive only. Sample size is insufficient for inferential conclusions about optimizer performance."
+  },
+  "supported_claims": [
+    "Numerical semantic equivalence for the tested circuit configurations"
+  ],
+  "unsupported_claims": [
+    "Universal correctness of every optimizer rule",
+    "Symbolic equivalence for arbitrary parameters",
+    "Formal SMT proof over all reachable states",
+    "Production-wide optimizer correctness"
+  ],
+  "pending_gates": [
+    "Rule inventory validation",
+    "Rule coverage tracking",
+    "Symbolic equivalence proving",
+    "Property-based random testing",
+    "CI regression verification",
+    "Independent verification signoff"
+  ],
+  "timestamp": "2026-07-20 07:15:45"
+}

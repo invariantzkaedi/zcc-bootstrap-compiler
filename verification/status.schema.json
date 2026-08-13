@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QuantumVerificationStatus",
+  "type": "object",
+  "properties": {
+    "experiment_id": { "type": "string" },
+    "verification_run_id": { "type": "string" },
+    "method": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["PASS", "FAIL", "PASS_WITH_SCOPE_LIMITATION", "UNVERIFIED"]
+    },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "git_commit": { "type": "string" },
+        "optimizer_version": { "type": "string" },
+        "python_version": { "type": "string" },
+        "numpy_version": { "type": "string" },
+        "os": { "type": "string" },
+        "cpu": { "type": "string" },
+        "random_seed": { "type": "integer" }
+      },
+      "required": ["git_commit", "python_version", "numpy_version", "random_seed"]
+    },
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "samples": { "type": "integer" },
+        "tolerance": { "type": "number" },
+        "min_difference": { "type": "number" },
+        "max_difference": { "type": "number" },
+        "mean_difference": { "type": "number" },
+        "std_difference": { "type": "number" },
+        "interpretation": { "type": "string" }
+      },
+      "required": ["samples", "tolerance", "min_difference", "max_difference", "interpretation"]
+    },
+    "supported_claims": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "unsupported_claims": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "pending_gates": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "timestamp": { "type": "string" }
+  },
+  "required": [
+    "experiment_id",
+    "verification_run_id",
+    "method",
+    "status",
+    "environment",
+    "evidence",
+    "supported_claims",
+    "unsupported_claims",
+    "pending_gates",
+    "timestamp"
+  ]
+}

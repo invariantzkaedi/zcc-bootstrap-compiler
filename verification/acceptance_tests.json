@@ -1,0 +1,51 @@
+{
+  "acceptance_tests": [
+    {
+      "id": "ACC-TEST-QOPT-001",
+      "name": "Dense Unitary Equivalence Test",
+      "method": "dense_unitary_matrix_comparison",
+      "tolerance": 1e-10,
+      "status": "VERIFIED",
+      "description": "Calculates the Frobenius norm of difference between full circuit unitaries."
+    },
+    {
+      "id": "ACC-TEST-QOPT-002",
+      "name": "Statevector Equivalence Test",
+      "method": "statevector_comparison",
+      "tolerance": 1e-10,
+      "status": "PENDING",
+      "description": "Applies raw and optimized unitaries to random initial states and asserts result vector identity."
+    },
+    {
+      "id": "ACC-TEST-QOPT-003",
+      "name": "Random Circuit Differential Testing",
+      "method": "property_based_fuzzing",
+      "max_qubits": 6,
+      "max_depth": 50,
+      "status": "PENDING",
+      "description": "Generates random sequences of gates, runs optimization, and asserts unitary equivalence."
+    },
+    {
+      "id": "ACC-TEST-QOPT-004",
+      "name": "Boundary Parameter Testing",
+      "method": "edge_case_parameter_validation",
+      "test_cases": ["angle = 0", "angle = pi", "angle = -pi", "angle = 2*pi"],
+      "status": "PENDING",
+      "description": "Asserts correct trigonometric merging and identity resolution for rotation boundary parameters."
+    },
+    {
+      "id": "ACC-TEST-QOPT-005",
+      "name": "Invalid Rewrite Rejection",
+      "method": "negative_precondition_testing",
+      "status": "PENDING",
+      "description": "Ensures the optimizer rejects rewrites when control/target qubits or parameter values do not match."
+    },
+    {
+      "id": "ACC-TEST-QOPT-006",
+      "name": "Multi-Rule Interaction Testing",
+      "method": "composite_pass_ordering",
+      "status": "PENDING",
+      "description": "Verifies that ordering of sequential passes (e.g. Hadamard cancellation then CNOT cancellation) preserves correctness."
+    }
+  ]
+}

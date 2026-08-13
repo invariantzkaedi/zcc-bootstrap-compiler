@@ -1,0 +1,31 @@
+{
+  "experiment_id": "EXP-2026-07-20-0001",
+  "verification_run_id": "VRF-20260720195441",
+  "timestamp": "2026-07-20T19:54:41.096143+00:00",
+  "builder": {
+    "id": "https://github.com/zkaedi/zcc/actions/workflows/quantum-verification.yml"
+  },
+  "git": {
+    "commit": "d324c9fdd41d5ea4d44d0bcce2dc82ded42a2985",
+    "tree": "37ff3645dff2db2292cb217f2f9c30c9609b00d2",
+    "dirty": true
+  },
+  "artifacts": [
+    {
+      "path": "verification/status.json",
+      "sha256": "e5985f28c97223d1507fd6e03991bbd160b32a95b30b6c79ae52d07b4357c74e"
+    },
+    {
+      "path": "verification/status.schema.json",
+      "sha256": "5b5c989208b3cb5a08804abb54969bb981904fcc1f3cc7bc166bf8d3a64a3195"
+    },
+    {
+      "path": "verification/rule_inventory.md",
+      "sha256": "f37bc5414c0529627d6b52dc3a0df985cd93f94111c4d8cf320b2f4d3bba879c"
+    },
+    {
+      "path": "verification/acceptance_tests.json",
+      "sha256": "9e3328b99051a06e4496b4c2d11c8e5c17d833a2c1d5f5b9fa19666154e18de3"
+    }
+  ]
+}
