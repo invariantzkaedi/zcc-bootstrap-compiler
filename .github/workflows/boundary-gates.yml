@@ -18,18 +18,16 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        env:
-          PIP_BREAK_SYSTEM_PACKAGES: "1"
-        run: python -m pip install pytest jsonschema numpy
-
-      - name: Install GCC and Build Essentials
-        run: (sudo apt-get update || true) && sudo apt-get install -y gcc make
+      - name: Install GCC, Make, Binutils & Python packages
+        run: |
+          sudo apt-get update || true
+          sudo apt-get install -y gcc make binutils python3 python3-pip
+          python3 -m pip install pytest jsonschema numpy --break-system-packages || python3 -m pip install pytest jsonschema numpy
 
       - name: Run Schema & Boundary Validations
         env:
           PYTHONPATH: .
         run: |
-          python scripts/zcc_template_recognizer.py
-          python -m pytest -q tests/test_trace_schema_validation.py tests/test_invariants_battery.py tests/test_determinism_contract.py
-          python scripts/check_policy_conformance.py
+          python3 scripts/zcc_template_recognizer.py
+          python3 -m pytest -q tests/test_trace_schema_validation.py tests/test_invariants_battery.py tests/test_determinism_contract.py
+          python3 scripts/check_policy_conformance.py
