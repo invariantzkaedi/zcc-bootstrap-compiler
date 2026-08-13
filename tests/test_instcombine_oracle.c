@@ -127,6 +127,33 @@ int main(void) {
                 return 1;
             }
         }
+
+        /* Rule 21: (x & c1) & c2 -> x & (c1 & c2) */
+        {
+            uint64_t c1 = 0x0FFFFFFFF0000000ULL;
+            uint64_t c2 = 0x00FFFFFFFF000000ULL;
+            uint64_t ref_val = (uval & c1) & c2;
+            uint64_t opt_val = uval & (c1 & c2);
+            rules_tested++;
+
+            if (ref_val != opt_val) {
+                fprintf(stderr, "InstCombine FAULT DETECTED: nested_and_consts mismatch on val=0x%llx\n", (unsigned long long)uval);
+                return 1;
+            }
+        }
+
+        /* Rule 22: (x + y) - y -> x */
+        {
+            uint64_t y = 0x123456789ABCDEF0ULL;
+            uint64_t ref_val = (uval + y) - y;
+            uint64_t opt_val = uval;
+            rules_tested++;
+
+            if (ref_val != opt_val) {
+                fprintf(stderr, "InstCombine FAULT DETECTED: add_sub_cancel mismatch on val=0x%llx\n", (unsigned long long)uval);
+                return 1;
+            }
+        }
     }
 #endif
 

@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ZKAEDIProvenanceNode",
+  "type": "object",
+  "properties": {
+    "node_id": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "node_type": {
+      "type": "string",
+      "enum": ["dataset", "split", "config", "checkpoint", "evaluation", "attestation", "receipt", "registry"]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "git_commit": {
+      "type": "string"
+    },
+    "payload_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "parents": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^sha256:[a-f0-9]{64}$"
+      }
+    },
+    "producer": {
+      "type": "object",
+      "properties": {
+        "script": { "type": "string" },
+        "script_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "validator_version": { "type": "string" }
+      },
+      "required": ["script", "script_sha256", "validator_version"]
+    }
+  },
+  "required": [
+    "node_id",
+    "node_type",
+    "created_at",
+    "git_commit",
+    "payload_sha256",
+    "parents",
+    "producer"
+  ]
+}

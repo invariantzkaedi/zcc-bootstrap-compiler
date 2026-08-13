@@ -1,0 +1,35 @@
+name: 'ZCC ABI & Struct Layout Verifier'
+description: 'Drop-in CI action to audit System V AMD64 ABI classification, packed struct alignment, and hardware descriptor rules.'
+author: 'ZCC Engineering'
+inputs:
+  target_file:
+    description: 'Path to C source file or header to audit'
+    required: true
+    default: 'tests/regressions/test_packed_boundary_diff.c'
+  fail_on_violation:
+    description: 'Fail CI job if struct layout or packing violations are detected'
+    required: false
+    default: 'true'
+  json_output:
+    description: 'Output audit report in JSON format'
+    required: false
+    default: 'false'
+runs:
+  using: 'composite'
+  steps:
+    - name: Build zcc-abi-verifier
+      shell: bash
+      run: |
+        make zcc-abi-verifier
+
+    - name: Run ABI & Layout Audit
+      shell: bash
+      run: |
+        FLAGS=""
+        if [ "${{ inputs.fail_on_violation }}" = "true" ]; then
+          FLAGS="$FLAGS --fail-on-violation"
+        fi
+        if [ "${{ inputs.json_output }}" = "true" ]; then
+          FLAGS="$FLAGS --json"
+        fi
+        ./zcc-abi-verifier ${{ inputs.target_file }} $FLAGS

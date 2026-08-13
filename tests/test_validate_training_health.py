@@ -10,7 +10,15 @@ import tempfile
 class TestValidatorHardening(unittest.TestCase):
     def setUp(self):
         self.test_dir = tempfile.mkdtemp(prefix="zcc_test_")
-
+        self.dataset_path = os.path.join(self.test_dir, "train_maxed_validated.parquet")
+        try:
+            import pyarrow as pa
+            import pyarrow.parquet as pq
+            table = pa.Table.from_pydict({"prompt": ["sample prompt"], "chosen": ["sample chosen text"], "rejected": ["sample rejected text"]})
+            pq.write_table(table, self.dataset_path)
+        except Exception:
+            with open(self.dataset_path, "wb") as f:
+                f.write(b"PAR1dummybytesPAR1")
 
         self.base_state = {
             "epoch": 1.0,
@@ -54,6 +62,8 @@ class TestValidatorHardening(unittest.TestCase):
         cmd = [sys.executable, script_path, state_path, "--out", out_path]
         if args:
             cmd.extend(args)
+        if "--dataset-path" not in cmd:
+            cmd.extend(["--dataset-path", self.dataset_path])
             
         env = os.environ.copy()
         env["ZKAEDI_SAFE_BASE"] = "/"

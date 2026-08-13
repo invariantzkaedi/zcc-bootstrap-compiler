@@ -37,6 +37,11 @@ GATES = [
 ]
 
 def generate_manifest(custom_gates=None, output_manifest="evidence/manifest.json", evidence_dir="evidence/latest"):
+    # Ensure self-host artifacts exist before running gates
+    if not Path("zcc2.s").exists() or not Path("zcc3.s").exists():
+        print("[PRE-FLIGHT] Assembly artifacts zcc2.s/zcc3.s missing. Executing make selfhost-raw...")
+        subprocess.run(["make", "selfhost-raw"], check=True)
+
     gates_to_run = custom_gates if custom_gates is not None else GATES
     commit_sha = get_git_sha()
     target_evidence_dir = Path(evidence_dir)

@@ -189,15 +189,38 @@ typedef struct {
 static void compute_entry_hash(const char *prev_hash,
                                 const char *build_id,
                                 const char *version,
+                                const char *commit_sha,
+                                const char *tree_hash,
+                                const char *parent_commit,
+                                const char *builder_identity,
+                                const char *compiler_version,
+                                const char *gcc_version,
+                                const char *ld_version,
+                                const char *cflags,
+                                const char *ldflags,
+                                const char *source_date_epoch,
+                                const char *zcc_sha,
+                                const char *zcc_opt_sha,
+                                const char *sbom_sha,
+                                const char *attestation_sha,
                                 int stability_score,
                                 char *out_hex) {
-    char buf[512];
-    snprintf(buf, sizeof(buf), "%s|%s|%s|%d", prev_hash, build_id, version, stability_score);
+    char buf[4096];
+    snprintf(buf, sizeof(buf), "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%d",
+             prev_hash, build_id, version, commit_sha, tree_hash, parent_commit,
+             builder_identity, compiler_version, gcc_version, ld_version,
+             cflags, ldflags, source_date_epoch, zcc_sha, zcc_opt_sha,
+             sbom_sha, attestation_sha, stability_score);
     sha256_hash_str(buf, out_hex);
 }
 
+static const char *get_env_fallback(const char *name, const char *fallback) {
+    const char *v = getenv(name);
+    return v ? v : fallback;
+}
+
 static int do_append(const char *ledger_path, const char *genome_path,
-                     const char *version, int stability_score) {
+                     const char *version, const char *commit_sha, int stability_score) {
     /* Extract build_id from genome JSON */
     char build_id[65] = "unknown";
     if (genome_path) {
@@ -243,28 +266,58 @@ static int do_append(const char *ledger_path, const char *genome_path,
     char timestamp[32];
     snprintf(timestamp, sizeof(timestamp), "%lld", (long long)time(NULL));
 
+    /* Expanded metadata from environment variables */
+    const char *tree_hash = get_env_fallback("ZCC_TREE_HASH", "0000000000000000000000000000000000000000");
+    const char *parent_commit = get_env_fallback("ZCC_PARENT_COMMIT", "0000000000000000000000000000000000000000");
+    const char *builder_identity = get_env_fallback("ZCC_BUILDER_IDENTITY", "unknown_builder");
+    const char *compiler_version = get_env_fallback("ZCC_COMPILER_VERSION", "unknown_version");
+    const char *gcc_version = get_env_fallback("ZCC_GCC_VERSION", "unknown_gcc");
+    const char *ld_version = get_env_fallback("ZCC_LD_VERSION", "unknown_ld");
+    const char *cflags = get_env_fallback("ZCC_CFLAGS", "none");
+    const char *ldflags = get_env_fallback("ZCC_LDFLAGS", "none");
+    const char *source_date_epoch = get_env_fallback("ZCC_SOURCE_DATE_EPOCH", "1700000000");
+    const char *zcc_sha = get_env_fallback("ZCC_ARTIFACT_ZCC_SHA256", "0000000000000000000000000000000000000000000000000000000000000000");
+    const char *zcc_opt_sha = get_env_fallback("ZCC_ARTIFACT_ZCC_OPT_SHA256", "0000000000000000000000000000000000000000000000000000000000000000");
+    const char *sbom_sha = get_env_fallback("ZCC_SBOM_SHA256", "0000000000000000000000000000000000000000000000000000000000000000");
+    const char *attestation_sha = get_env_fallback("ZCC_ATTESTATION_SHA256", "0000000000000000000000000000000000000000000000000000000000000000");
+
     /* Compute new entry hash */
     char new_hash[65];
-    compute_entry_hash(prev_hash, build_id, version, stability_score, new_hash);
+    compute_entry_hash(prev_hash, build_id, version, commit_sha, tree_hash, parent_commit,
+                       builder_identity, compiler_version, gcc_version, ld_version,
+                       cflags, ldflags, source_date_epoch, zcc_sha, zcc_opt_sha,
+                       sbom_sha, attestation_sha, stability_score, new_hash);
 
     /* Append to ledger */
     FILE *wf = fopen(ledger_path, "a");
     if (!wf) { fprintf(stderr, "error: cannot open ledger %s for append\n", ledger_path); return 1; }
 
     fprintf(wf, "{\"entry_hash\":\"%s\",\"prev_hash\":\"%s\","
-            "\"build_id\":\"%s\",\"version\":\"%s\","
+            "\"build_id\":\"%s\",\"version\":\"%s\",\"git_commit_sha\":\"%s\","
+            "\"tree_hash\":\"%s\",\"parent_commit\":\"%s\","
+            "\"builder_identity\":\"%s\",\"compiler_version\":\"%s\","
+            "\"gcc_version\":\"%s\",\"ld_version\":\"%s\","
+            "\"cflags\":\"%s\",\"ldflags\":\"%s\",\"source_date_epoch\":\"%s\","
+            "\"zcc_sha\":\"%s\",\"zcc_opt_sha\":\"%s\","
+            "\"sbom_sha\":\"%s\",\"attestation_sha\":\"%s\","
             "\"timestamp\":\"%s\",\"stability_score\":%d}\n",
-            new_hash, prev_hash, build_id, version, timestamp, stability_score);
+            new_hash, prev_hash, build_id, version, commit_sha,
+            tree_hash, parent_commit, builder_identity, compiler_version,
+            gcc_version, ld_version, cflags, ldflags, source_date_epoch,
+            zcc_sha, zcc_opt_sha, sbom_sha, attestation_sha,
+            timestamp, stability_score);
     fclose(wf);
 
     printf("Appended entry to ledger: %s\n", ledger_path);
     printf("  version:          %s\n", version);
     printf("  build_id:         %s\n", build_id);
+    printf("  git_commit_sha:   %s\n", commit_sha);
     printf("  stability_score:  %d\n", stability_score);
     printf("  entry_hash:       %s\n", new_hash);
     printf("  prev_hash:        %.16s...\n", prev_hash);
     return 0;
 }
+
 
 /* ── Verify mode ─────────────────────────────────────────────────────── */
 
@@ -290,14 +343,52 @@ static int do_verify(const char *ledger_path) {
 
         line_num++;
         char entry_hash[65]="", prev_hash[65]="", build_id[65]="";
-        char version[64]="", timestamp[32]="";
+        char version[64]="", timestamp[32]="", git_commit_sha[65]="";
         int  stability_score = 0;
 
-        find_json_string_scoped(line, "\"entry_hash\"",    entry_hash, 65);
-        find_json_string_scoped(line, "\"prev_hash\"",     prev_hash,  65);
-        find_json_string_scoped(line, "\"build_id\"",      build_id,   65);
-        find_json_string_scoped(line, "\"version\"",       version,    64);
-        find_json_string_scoped(line, "\"timestamp\"",     timestamp,  32);
+        find_json_string_scoped(line, "\"entry_hash\"",     entry_hash, 65);
+        find_json_string_scoped(line, "\"prev_hash\"",      prev_hash,  65);
+        find_json_string_scoped(line, "\"build_id\"",       build_id,   65);
+        find_json_string_scoped(line, "\"version\"",        version,    64);
+        find_json_string_scoped(line, "\"git_commit_sha\"",  git_commit_sha, 65);
+        find_json_string_scoped(line, "\"timestamp\"",      timestamp,  32);
+
+        if (!git_commit_sha[0]) {
+            strcpy(git_commit_sha, "0000000000000000000000000000000000000000");
+        }
+
+        char tree_hash[65]="", parent_commit[65]="", builder_identity[128]="";
+        char compiler_version[128]="", gcc_version[128]="", ld_version[128]="";
+        char cflags[256]="", ldflags[256]="", source_date_epoch[32]="";
+        char zcc_sha[65]="", zcc_opt_sha[65]="", sbom_sha[65]="", attestation_sha[65]="";
+
+        find_json_string_scoped(line, "\"tree_hash\"",          tree_hash,          65);
+        find_json_string_scoped(line, "\"parent_commit\"",      parent_commit,      65);
+        find_json_string_scoped(line, "\"builder_identity\"",   builder_identity,   128);
+        find_json_string_scoped(line, "\"compiler_version\"",   compiler_version,   128);
+        find_json_string_scoped(line, "\"gcc_version\"",        gcc_version,        128);
+        find_json_string_scoped(line, "\"ld_version\"",         ld_version,         128);
+        find_json_string_scoped(line, "\"cflags\"",             cflags,             256);
+        find_json_string_scoped(line, "\"ldflags\"",            ldflags,            256);
+        find_json_string_scoped(line, "\"source_date_epoch\"",   source_date_epoch,   32);
+        find_json_string_scoped(line, "\"zcc_sha\"",            zcc_sha,            65);
+        find_json_string_scoped(line, "\"zcc_opt_sha\"",        zcc_opt_sha,        65);
+        find_json_string_scoped(line, "\"sbom_sha\"",           sbom_sha,           65);
+        find_json_string_scoped(line, "\"attestation_sha\"",    attestation_sha,    65);
+
+        if (!tree_hash[0]) strcpy(tree_hash, "0000000000000000000000000000000000000000");
+        if (!parent_commit[0]) strcpy(parent_commit, "0000000000000000000000000000000000000000");
+        if (!builder_identity[0]) strcpy(builder_identity, "unknown_builder");
+        if (!compiler_version[0]) strcpy(compiler_version, "unknown_version");
+        if (!gcc_version[0]) strcpy(gcc_version, "unknown_gcc");
+        if (!ld_version[0]) strcpy(ld_version, "unknown_ld");
+        if (!cflags[0]) strcpy(cflags, "none");
+        if (!ldflags[0]) strcpy(ldflags, "none");
+        if (!source_date_epoch[0]) strcpy(source_date_epoch, "1700000000");
+        if (!zcc_sha[0]) strcpy(zcc_sha, "0000000000000000000000000000000000000000000000000000000000000000");
+        if (!zcc_opt_sha[0]) strcpy(zcc_opt_sha, "0000000000000000000000000000000000000000000000000000000000000000");
+        if (!sbom_sha[0]) strcpy(sbom_sha, "0000000000000000000000000000000000000000000000000000000000000000");
+        if (!attestation_sha[0]) strcpy(attestation_sha, "0000000000000000000000000000000000000000000000000000000000000000");
 
         /* Extract stability_score (integer) */
         {
@@ -319,7 +410,10 @@ static int do_verify(const char *ledger_path) {
 
         /* Recompute entry_hash */
         char computed[65];
-        compute_entry_hash(prev_hash, build_id, version, stability_score, computed);
+        compute_entry_hash(prev_hash, build_id, version, git_commit_sha, tree_hash, parent_commit,
+                           builder_identity, compiler_version, gcc_version, ld_version,
+                           cflags, ldflags, source_date_epoch, zcc_sha, zcc_opt_sha,
+                           sbom_sha, attestation_sha, stability_score, computed);
         if (strcmp(entry_hash, computed) != 0) {
             printf("  [HASH FAIL]   line %d (%s %s): entry hash mismatch\n",
                    line_num, version, build_id);
@@ -339,8 +433,7 @@ static int do_verify(const char *ledger_path) {
     printf("Ledger entries:  %d\n", line_num);
     printf("Errors detected: %d\n", errors);
     printf("Chain integrity: %s\n", errors == 0 ? "VERIFIED" : "BROKEN");
-    return errors == 0 ? 0 : 1;
-}
+    return errors == 0 ? 0 : 1;}
 
 /* ── Dump mode ───────────────────────────────────────────────────────── */
 
@@ -387,7 +480,7 @@ int main(int argc, char **argv) {
     if (argc < 2) {
         printf("Usage:\n");
         printf("  zcc_build_ledger append --ledger <file> --genome <genome.json> "
-               "--version <tag> [--stability N]\n");
+               "--version <tag> [--commit <sha>] [--stability N]\n");
         printf("  zcc_build_ledger verify --ledger <file>\n");
         printf("  zcc_build_ledger dump   --ledger <file>\n");
         return 2;
@@ -397,6 +490,7 @@ int main(int argc, char **argv) {
     const char *ledger_path = NULL;
     const char *genome_path = NULL;
     const char *version_tag = NULL;
+    const char *commit_sha  = "0000000000000000000000000000000000000000";
     int stability_score     = 80; /* default */
 
     for (int i = 2; i < argc; i++) {
@@ -406,6 +500,8 @@ int main(int argc, char **argv) {
             genome_path = argv[++i];
         else if (strcmp(argv[i], "--version") == 0 && i + 1 < argc)
             version_tag = argv[++i];
+        else if (strcmp(argv[i], "--commit") == 0 && i + 1 < argc)
+            commit_sha = argv[++i];
         else if (strcmp(argv[i], "--stability") == 0 && i + 1 < argc)
             stability_score = atoi(argv[++i]);
     }
@@ -420,7 +516,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "error: --version is required for append\n");
             return 2;
         }
-        return do_append(ledger_path, genome_path, version_tag, stability_score);
+        return do_append(ledger_path, genome_path, version_tag, commit_sha, stability_score);
     } else if (strcmp(op, "verify") == 0) {
         return do_verify(ledger_path);
     } else if (strcmp(op, "dump") == 0) {

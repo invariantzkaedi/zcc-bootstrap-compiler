@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+source "$(dirname "$0")/env.sh"
 
-: "${BASE:=build/base/zcc}"
-: "${CAND:=build/cand/zcc}"
-: "${SUITE:=benchmarks/list.txt}"
+: "${BASE:=$ZCC_BASE}"
+: "${CAND:=$ZCC_CAND}"
+: "${SUITE:=$BENCH_SUITE}"
 
 echo "[1/5] build baseline/candidate"
 make clean
@@ -11,15 +12,33 @@ make all OUT=build/base BASELINE=1
 make all OUT=build/cand
 
 echo "[2/5] run robust benchmarks"
-scripts/bench/run_robust_benchmarks.sh   --base "$BASE"   --cand "$CAND"   --suite "$SUITE"   --warmup 3   --runs 25   --trim 0.10   --out out/bench
+bash "$RUN_ROBUST_BENCH" \
+  --base "$BASE" \
+  --cand "$CAND" \
+  --suite "$SUITE" \
+  --warmup "$BENCH_WARMUP" \
+  --runs "$BENCH_RUNS" \
+  --trim "$BENCH_TRIM" \
+  --out out/bench
 
 echo "[3/5] evaluate thresholds"
-python3 scripts/bench/evaluate_robust_thresholds.py   --summary out/bench/summary.json   --max-compile-overhead-pct 8.0   --min-runtime-geomean-pct 3.0   --max-regressed-benches 2   --per-bench-regress-pct -2.0   --alpha 0.05
+python3 "$EVAL_THRESHOLDS" \
+  --summary "$BENCH_SUMMARY" \
+  --max-compile-overhead-pct "$THRESH_MAX_COMPILE_OVERHEAD_PCT" \
+  --min-runtime-geomean-pct "$THRESH_MIN_RUNTIME_GEOMEAN_PCT" \
+  --max-regressed-benches "$THRESH_MAX_REGRESSED_BENCHES" \
+  --per-bench-regress-pct "$THRESH_PER_BENCH_REGRESS_PCT" \
+  --alpha "$THRESH_ALPHA"
 
 echo "[4/5] watchdog"
-python3 scripts/bench/regression_watchdog.py   --summary out/bench/summary.json   --max-hard-regressions 2   --hard-threshold-pct -2.0
+python3 "$WATCHDOG" \
+  --summary "$BENCH_SUMMARY" \
+  --max-hard-regressions "$THRESH_MAX_HARD_REGRESSIONS" \
+  --hard-threshold-pct "$THRESH_HARD_PCT"
 
 echo "[5/5] render summary md"
-python3 scripts/bench/render_summary_md.py   --summary out/bench/summary.json   --out out/bench/summary.md
+python3 "$RENDER_MD" \
+  --summary "$BENCH_SUMMARY" \
+  --out "$BENCH_MD"
 
 echo "local perf gate PASS"

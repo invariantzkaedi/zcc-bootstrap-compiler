@@ -162,6 +162,8 @@ boundary-gates:
 .PHONY: verify verify-self-test verify-wsl verify-fast verify-reproducible evidence
 
 verify: verify-self-test
+	@echo "=== [0/3] Ensuring Self-Host Assembly Artifacts Exist ==="
+	@if [ ! -f zcc2.s ] || [ ! -f zcc3.s ]; then make selfhost-raw; fi
 	@echo "=== [1/3] Executing & Capturing Native Gate Manifest ==="
 	@python3 scripts/generate_evidence_manifest.py
 	@echo "=== [2/3] Validating Manifest against HEAD Commit SHA ==="
