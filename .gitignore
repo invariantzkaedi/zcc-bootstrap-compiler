@@ -105,6 +105,7 @@ fuzz_*/
 failures/
 harness/
 scripts/
+!scripts/*.py
 !spec/scripts/
 !spec/scripts/**
 audit/
