@@ -1272,8 +1272,6 @@ static long long eval_const_expr_raw(Node *n) {
     return 0; /* Fallback for unsupported complex compile-time bounds */
 }
 
-
-
 static Type *inject_base_type(Compiler *cc, Type *t, Type *base) {
     if (!t || t == cc->ty_int) return base;
     if (t->kind == TY_PTR) {
