@@ -1,0 +1,27 @@
+{
+  "version": "1.0.0",
+  "repository": "invariantzkaedi/ZCC",
+  "commit_sha": "29afa536a09b614791b6d5997e1a0ccd733eb7d7",
+  "environment": {
+    "os": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "python": "3.12.3"
+  },
+  "invariants": [
+    {
+      "id": "GATE-001",
+      "name": "bootstrap-fixed-point",
+      "command": "bash -c cmp zcc2.s zcc3.s && echo 'SELF-HOST VERIFIED (assembly identical)'",
+      "exit_code": 0,
+      "artifact_path": "evidence/latest/cmp_selfhost.log",
+      "sha256": "9ab781c5fe9b60aa511a86b5d19ed63a98cb8918f53a4ac2531bbb395bf1aa53"
+    },
+    {
+      "id": "GATE-002",
+      "name": "rust-frontend-smoke",
+      "command": "make rust-front-smoke",
+      "exit_code": 0,
+      "artifact_path": "evidence/latest/rust_smoke.log",
+      "sha256": "d7ee13712117de3d21f0b98a1035ea51b1da7820d9bc3cd798a3ad3cc9199ce9"
+    }
+  ]
+}

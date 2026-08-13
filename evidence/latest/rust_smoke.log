@@ -1,0 +1,33 @@
+make[1]: Entering directory '/mnt/h/__DOWNLOADS/zcc_github_upload'
+=== Checking Workspace Lexicons ===
+python3 scripts/zcc_template_recognizer.py
+[ZCC TEMPLATE RECOGNIZER] Scanning repository templates...
+
+[RECOGNIZED & VALIDATED] templates/PLAYBOOK.md (Matches ZCC Protocol Signature)
+[RECOGNIZED & VALIDATED] templates/COMMIT_TEMPLATE.md (Matches ZCC Protocol Signature)
+[RECOGNIZED & VALIDATED] templates/GATE_CHECKLIST.md (Matches ZCC Protocol Signature)
+[RECOGNIZED & VALIDATED] templates/FAULT_INJECTION_GUIDE.md (Matches ZCC Protocol Signature)
+[RECOGNIZED & VALIDATED] templates/INCIDENT_REPORT.md (Matches ZCC Protocol Signature)
+
+==================================================
+[SUMMARY] 5 / 5 Templates Recognized & Validated
+==================================================
+# Tripwire: reject hand-edited zcc.c — parts are the source of truth.
+# Bypass with: ZCC_MUTATION_SANDBOX=1 make zcc  (Oneirogenesis daemon)
+# or:          touch .mutation_sandbox && make zcc
+cc -O0 -w -fno-asynchronous-unwind-tables -g0 -DZCC_REAL_TELEMETRY -Iinclude -I. -Dmain=zcc_main -o zcc zcc.c compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c ir_telemetry.c zcc_telemetry.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c src/opt/prime_v2_regalloc_opt.c src/wasm_emit.c src/arm64_codegen.c src/riscv_codegen.c src/win64_pe_emit.c -lm -Wl,-s
+=== Running Rust Frontend Smoke Gates ===
+======================================================================
+ZCC RUST FRONTEND SMOKE & INTEGRATION TEST HARNESS
+======================================================================
+[TEST  1] Rust Basic Return Value                      : PASS (Exit Code: 42)
+[TEST  2] Rust Variable Assignment & Arithmetic        : PASS (Exit Code: 42)
+[TEST  3] Rust Unary Arithmetic Negation (-x)          : PASS (Exit Code: 10)
+[TEST  4] Rust Logical OR (||) Short-Circuit           : PASS (Exit Code: 99)
+[TEST  5] Rust Logical AND (&&) Short-Circuit          : PASS (Exit Code: 77)
+[TEST  6] Rust While Loop Counter                      : PASS (Exit Code: 45)
+======================================================================
+RUST FRONTEND RESULTS: 6 Passed, 0 Failed
+======================================================================
+RUST FRONT SMOKE VERIFIED
+make[1]: Leaving directory '/mnt/h/__DOWNLOADS/zcc_github_upload'
