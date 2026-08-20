@@ -86,6 +86,20 @@ void arm64_emit_sdiv(ARM64AsmBuffer *buf, ARM64Register dest, ARM64Register src1
 void arm64_emit_ldr_stack(ARM64AsmBuffer *buf, ARM64Register dest, int offset);
 void arm64_emit_str_stack(ARM64AsmBuffer *buf, ARM64Register src, int offset);
 
+typedef enum {
+    AAPCS64_PASS_IN_REGS = 0,
+    AAPCS64_PASS_BY_REF  = 1
+} AAPCS64PassMode;
+
+typedef struct {
+    AAPCS64PassMode mode;
+    int num_gp_regs; /* 1 or 2 if AAPCS64_PASS_IN_REGS */
+    size_t total_size;
+} AAPCS64StructArgLayout;
+
+AAPCS64StructArgLayout arm64_classify_struct_arg(size_t struct_size);
+void arm64_emit_struct_pass_regs(ARM64AsmBuffer *buf, ARM64Register start_reg, int num_regs, int stack_offset);
+
 int zcc_emit_arm64_assembly_to_file(const char *filename, const char *func_name, size_t stack_size);
 
 #endif /* ZCC_ARM64_CODEGEN_H */

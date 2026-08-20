@@ -1,4 +1,10 @@
-#pragma once
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include "ir.h"
 #include "ir_pass_manager.h"
 #include <string.h>

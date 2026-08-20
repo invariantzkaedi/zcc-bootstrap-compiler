@@ -66,6 +66,10 @@
 #define ZCC_ND_COMPOUND_ASSIGN 62
 #define ZCC_ND_INIT_LIST 63
 #define ZCC_ND_ASM 64
-#define ZCC_ND_NOP 65
+#define ZCC_ND_CREAL 65
+#define ZCC_ND_CIMAG 66
+#define ZCC_ND_CONJ 67
+#define ZCC_ND_COMPLEX_LIT 68
+#define ZCC_ND_NOP 69
 
 #endif /* ZCC_AST_BRIDGE_CONSTANTS_H */

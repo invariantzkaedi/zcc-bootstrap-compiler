@@ -575,9 +575,9 @@ static RustExpr *rust_parse_cmp(RustParser *p) {
 }
 
 static RustExpr *rust_parse_unary(RustParser *p) {
-    if (p->tk.kind == RUST_TK_BANG) {
+    if (p->tk.kind == RUST_TK_BANG || p->tk.kind == RUST_TK_MINUS) {
         RustExpr *u = rust_new_expr(RUST_EXPR_UNARY);
-        u->op = RUST_TK_BANG;
+        u->op = p->tk.kind;
         u->line = p->tk.line;
         u->col = p->tk.col;
         rust_next(p);
@@ -1697,6 +1697,14 @@ static RustTypeKind rust_typecheck_expr(RustTypecheckContext *ctx, RustExpr *e) 
         return rust_type_from_symbol(ctx, e->symbol_id, e->line, e->col);
     } else if (e->kind == RUST_EXPR_UNARY) {
         RustTypeKind ut = rust_typecheck_expr(ctx, e->lhs);
+        if (e->op == RUST_TK_MINUS) {
+            if (ut == RUST_TYPE_ERROR) return RUST_TYPE_ERROR;
+            if (ut != RUST_TYPE_I32 && ut != RUST_TYPE_F64) {
+                rust_typecheck_add_diag(ctx, "RUST-TYPE-E0010", e->line, e->col, "negation operand must be numeric (`i32` or `f64`)", "use a numeric expression with `-`");
+                return RUST_TYPE_ERROR;
+            }
+            return ut;
+        }
         if (e->op == RUST_TK_BANG) {
             if (ut == RUST_TYPE_ERROR) return RUST_TYPE_ERROR;
             if (ut != RUST_TYPE_BOOL) {
@@ -3112,6 +3120,18 @@ static int rust_backend_eval_const_i32_expr(RustParser *p, RustBackendEvalState 
             p, state, e->call_callee_symbol_id, arg_locals, e->call_arg_count, e->line, e->col, out_value
         );
     }
+    if (e->kind == RUST_EXPR_UNARY) {
+        if (e->op == RUST_TK_MINUS) {
+            if (rust_backend_eval_const_i32_expr(p, state, e->lhs, locals, local_count, &lhs) != 0) return 1;
+            *out_value = (int)-lhs;
+            return 0;
+        }
+        if (e->op == RUST_TK_BANG) {
+            if (rust_backend_eval_const_i32_expr(p, state, e->lhs, locals, local_count, &lhs) != 0) return 1;
+            *out_value = !lhs;
+            return 0;
+        }
+    }
     if (e->kind != RUST_EXPR_BINARY) {
         rust_backend_add_diag(p, e->line, e->col, "unsupported Rust backend feature `non-constant expression`", "this Rust construct is not supported by the current backend bridge");
         return 1;
@@ -3569,19 +3589,33 @@ static int rust_ir_emit_expr(const RustAst *ast, const RustExpr *e,
     }
 
     if (e->kind == RUST_EXPR_UNARY) {
-        /* !expr → (expr == 0) */
-        char lhs_tmp[32];
-        char zero_tmp[32];
-        char *dst;
-        if (e->op != RUST_TK_BANG) return 1;
-        if (rust_ir_emit_expr(ast, e->lhs, slots, slot_count) != 0) return 1;
-        rust_ir_save(lhs_tmp);
-        dst = rust_ir_fresh();
-        ZCC_EMIT_CONST(IR_TY_I32, dst, 0, e->line);
-        rust_ir_save(zero_tmp);
-        dst = rust_ir_fresh();
-        ZCC_EMIT_BINARY(IR_EQ, IR_TY_I32, dst, lhs_tmp, zero_tmp, e->line);
-        return 0;
+        if (e->op == RUST_TK_BANG) {
+            /* !expr → (expr == 0) */
+            char lhs_tmp[32];
+            char zero_tmp[32];
+            char *dst;
+            if (rust_ir_emit_expr(ast, e->lhs, slots, slot_count) != 0) return 1;
+            rust_ir_save(lhs_tmp);
+            dst = rust_ir_fresh();
+            ZCC_EMIT_CONST(IR_TY_I32, dst, 0, e->line);
+            rust_ir_save(zero_tmp);
+            dst = rust_ir_fresh();
+            ZCC_EMIT_BINARY(IR_EQ, IR_TY_I32, dst, lhs_tmp, zero_tmp, e->line);
+            return 0;
+        } else if (e->op == RUST_TK_MINUS) {
+            /* -expr → (0 - expr) */
+            char sub_zero[32], operand[32];
+            char *dst;
+            if (rust_ir_emit_expr(ast, e->lhs, slots, slot_count) != 0) return 1;
+            rust_ir_save(operand);
+            dst = rust_ir_fresh();
+            ZCC_EMIT_CONST(IR_TY_I32, dst, 0, e->line);
+            rust_ir_save(sub_zero);
+            dst = rust_ir_fresh();
+            ZCC_EMIT_BINARY(IR_SUB, IR_TY_I32, dst, sub_zero, operand, e->line);
+            return 0;
+        }
+        return 1;
     }
 
     if (e->kind == RUST_EXPR_BINARY) {
@@ -3596,11 +3630,27 @@ static int rust_ir_emit_expr(const RustAst *ast, const RustExpr *e,
             /* eval lhs */
             if (rust_ir_emit_expr(ast, e->lhs, slots, slot_count) != 0) return 1;
             rust_ir_save(lhs_tmp);
-            ZCC_EMIT_BR_IF(lhs_tmp, lbl_false, e->line);
+            { char *z = rust_ir_fresh();
+              char zero_tmp[32];
+              char *cmp;
+              ZCC_EMIT_CONST(IR_TY_I32, z, 0, e->line);
+              rust_ir_save(zero_tmp);
+              cmp = rust_ir_fresh();
+              ZCC_EMIT_BINARY(IR_EQ, IR_TY_I32, cmp, lhs_tmp, zero_tmp, e->line);
+              ZCC_EMIT_BR_IF(cmp, lbl_false, e->line);
+            }
             /* eval rhs */
             if (rust_ir_emit_expr(ast, e->rhs, slots, slot_count) != 0) return 1;
             rust_ir_save(lhs_tmp);
-            ZCC_EMIT_BR_IF(lhs_tmp, lbl_false, e->line);
+            { char *z = rust_ir_fresh();
+              char zero_tmp[32];
+              char *cmp;
+              ZCC_EMIT_CONST(IR_TY_I32, z, 0, e->line);
+              rust_ir_save(zero_tmp);
+              cmp = rust_ir_fresh();
+              ZCC_EMIT_BINARY(IR_EQ, IR_TY_I32, cmp, lhs_tmp, zero_tmp, e->line);
+              ZCC_EMIT_BR_IF(cmp, lbl_false, e->line);
+            }
             /* true path: result = 1 */
             dst = rust_ir_fresh();
             ZCC_EMIT_CONST(IR_TY_I32, dst, 1, e->line);
@@ -3623,27 +3673,11 @@ static int rust_ir_emit_expr(const RustAst *ast, const RustExpr *e,
             /* eval lhs */
             if (rust_ir_emit_expr(ast, e->lhs, slots, slot_count) != 0) return 1;
             rust_ir_save(lhs_tmp);
-            { char *z = rust_ir_fresh();
-              char zero_tmp[32];
-              char *cmp;
-              ZCC_EMIT_CONST(IR_TY_I32, z, 0, e->line);
-              rust_ir_save(zero_tmp);
-              cmp = rust_ir_fresh();
-              ZCC_EMIT_BINARY(IR_EQ, IR_TY_I32, cmp, lhs_tmp, zero_tmp, e->line);
-              ZCC_EMIT_BR_IF(cmp, lbl_true, e->line);
-            }
+            ZCC_EMIT_BR_IF(lhs_tmp, lbl_true, e->line);
             /* eval rhs */
             if (rust_ir_emit_expr(ast, e->rhs, slots, slot_count) != 0) return 1;
             rust_ir_save(lhs_tmp);
-            { char *z = rust_ir_fresh();
-              char zero_tmp[32];
-              char *cmp;
-              ZCC_EMIT_CONST(IR_TY_I32, z, 0, e->line);
-              rust_ir_save(zero_tmp);
-              cmp = rust_ir_fresh();
-              ZCC_EMIT_BINARY(IR_EQ, IR_TY_I32, cmp, lhs_tmp, zero_tmp, e->line);
-              ZCC_EMIT_BR_IF(cmp, lbl_true, e->line);
-            }
+            ZCC_EMIT_BR_IF(lhs_tmp, lbl_true, e->line);
             /* false path */
             dst = rust_ir_fresh();
             ZCC_EMIT_CONST(IR_TY_I32, dst, 0, e->line);

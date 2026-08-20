@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "../prelude.h"
+#include "prelude.h"
 
 #define ty ir_type
 #define src1 src[0]

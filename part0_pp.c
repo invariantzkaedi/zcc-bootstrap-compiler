@@ -108,6 +108,11 @@ static const char *zcc_stddef_text =
     "#define __volatile__\n"
     "#define __const__ const\n"
     "#define __const const\n"
+    "#define __THROW\n"
+    "#define __THROWNL\n"
+    "#define __NTH(fct) fct\n"
+    "#define __nonnull(args)\n"
+    "#define __wur\n"
     "#define _Noreturn\n"
     "#define __declspec(x)\n"
     "#define __cdecl\n"
@@ -158,6 +163,18 @@ static const char *zcc_stddef_text =
     "typedef long ptrdiff_t;\n"
     "typedef long intptr_t;\n"
     "typedef unsigned long uintptr_t;\n"
+    "#define UINT64_C(c) (c)\n"
+    "#define UINT32_C(c) (c)\n"
+    "#define INT64_C(c)  (c)\n"
+    "#define INT32_C(c)  (c)\n"
+    "#define UINT64_MAX 18446744073709551615UL\n"
+    "#define UINT32_MAX 4294967295U\n"
+    "#define INT64_MAX  9223372036854775807L\n"
+    "#define INT64_MIN  (-9223372036854775807L-1L)\n"
+    "#define INT32_MAX  2147483647\n"
+    "#define INT32_MIN  (-2147483647-1)\n"
+    "int puts(const char *s);\n"
+    "int printf(const char *format, ...);\n"
     "/* PP-STUB-024: signal.h / setjmp.h / stdint primitives for Lua internals "
     "*/\n"
     "typedef int sig_atomic_t;\n"
@@ -823,6 +840,9 @@ static int pp_resolve_path(PPState *state, const char *path, int is_system,
         fp = fopen(out_resolved, "rb");
         if (fp) {
           fclose(fp);
+          if (is_stddef_stub(path) && strncmp(out_resolved, "/usr/", 5) == 0) {
+            return 0; /* Prefer synthetic stub over glibc /usr/include headers */
+          }
           return 1;
         }
       }

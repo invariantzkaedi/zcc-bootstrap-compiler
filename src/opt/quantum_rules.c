@@ -25,44 +25,52 @@ void push_instruction(Instruction inst) {
     if (buffer_count > 0) {
         Instruction *last = &buffer[buffer_count - 1];
         
-        // RULE 1: Hadamard Cancellation
+        // RULE 1: Hadamard Cancellation (H H -> I)
         if (inst.type == INST_H && last->type == INST_H && inst.q0 == last->q0) {
 #ifdef FAULT_INJECT
-            // Fault: do not cancel, just push
+            // Fault: do not cancel, just push to simulate a broken optimizer
+            if (buffer_count >= MAX_INSTRUCTIONS) {
+                fprintf(stderr, "FATAL: Instruction buffer overflow during FAULT_INJECT\n");
+                exit(1);
+            }
             buffer[buffer_count++] = inst;
             return;
 #endif
-            buffer_count--; // Cancel both
+            buffer_count--; // Cancel both instructions
             return;
         }
         
-        // RULE 2: RZ Merge
+        // RULE 2: Phase Rotation Merge (RZ(a) RZ(b) -> RZ(a+b))
         if (inst.type == INST_RZ && last->type == INST_RZ && inst.q0 == last->q0) {
 #ifdef FAULT_INJECT
             last->angle -= inst.angle; // Fault: subtract instead of add
 #else
             last->angle += inst.angle;
 #endif
+            // Optional: If angle is exactly 0 (modulo 2PI), we could cancel it.
+            // For now, we leave it as RZ 0.0, which acts as Identity.
             return;
         }
         
-        // RULE 3: CNOT Cancellation
+        // RULE 3: CNOT Cancellation (CNOT CNOT -> I)
         if (inst.type == INST_CNOT && last->type == INST_CNOT && inst.q0 == last->q0 && inst.q1 == last->q1) {
-            buffer_count--; // Cancel
+            buffer_count--; // Cancel both instructions
             return;
         }
         
-        // RULE 4: SWAP Cancellation
+        // RULE 4: SWAP Cancellation (SWAP SWAP -> I)
         if (inst.type == INST_SWAP && last->type == INST_SWAP && inst.q0 == last->q0 && inst.q1 == last->q1) {
-            buffer_count--; // Cancel
+            buffer_count--; // Cancel both instructions
             return;
         }
     }
     
-    // Otherwise, push to buffer
-    if (buffer_count < MAX_INSTRUCTIONS) {
-        buffer[buffer_count++] = inst;
+    // Push new instruction to buffer if no peephole rules apply
+    if (buffer_count >= MAX_INSTRUCTIONS) {
+        fprintf(stderr, "FATAL: Quantum instruction buffer overflow (MAX_INSTRUCTIONS=%d)\n", MAX_INSTRUCTIONS);
+        exit(1);
     }
+    buffer[buffer_count++] = inst;
 }
 
 int main() {

@@ -14,10 +14,25 @@ __attribute__((weak)) void smt_prove_ir_peephole(const char *name, int op1, int 
     (void)name; (void)op1; (void)op2; (void)val1; (void)val2; (void)check1; (void)check2; (void)width; (void)reg;
 }
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <sys/time.h>
+#endif
+
 int64_t zcc_now_us(void) {
+#ifdef _WIN32
+    static LARGE_INTEGER freq = {0};
+    LARGE_INTEGER counter;
+    if (freq.QuadPart == 0)
+        QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&counter);
+    return (int64_t)((counter.QuadPart * 1000000) / freq.QuadPart);
+#else
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return (int64_t)tv.tv_sec * 1000000 + tv.tv_usec;
+#endif
 }
 
 Instr* def_of(Function *fn, int reg) {

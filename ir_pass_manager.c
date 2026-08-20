@@ -716,6 +716,17 @@ static ir_pass_result_t ir_pass_strength_reduce(void *fn_ptr) {
                 modified++;
                 continue;
             }
+            /* MUL by 2^N → SHL N */
+            if (cmap_get(n->src2, &val) && val > 1 && (val & (val - 1)) == 0) {
+                int shift = 0;
+                long temp = val;
+                while (temp > 1) { shift++; temp >>= 1; }
+                n->op = IR_SHL;
+                /* emit shift count as constant imm or src2 temp */
+                sprintf(n->src2, "$%d", shift);
+                modified++;
+                continue;
+            }
         }
 
         if (n->op == IR_ADD) {
@@ -738,6 +749,80 @@ static ir_pass_result_t ir_pass_strength_reduce(void *fn_ptr) {
 
         if (n->op == IR_SUB) {
             /* SUB src, 0 → COPY src */
+            if (cmap_get(n->src2, &val) && val == 0) {
+                n->op = IR_COPY;
+                n->src2[0] = '\0';
+                modified++;
+                continue;
+            }
+            /* SUB x, x → CONST 0 */
+            if (n->src1[0] && strcmp(n->src1, n->src2) == 0) {
+                n->op = IR_CONST;
+                n->imm = 0;
+                n->src1[0] = '\0';
+                n->src2[0] = '\0';
+                cmap_add(n->dst, 0);
+                modified++;
+                continue;
+            }
+        }
+
+        if (n->op == IR_XOR) {
+            /* XOR x, x → CONST 0 */
+            if (n->src1[0] && strcmp(n->src1, n->src2) == 0) {
+                n->op = IR_CONST;
+                n->imm = 0;
+                n->src1[0] = '\0';
+                n->src2[0] = '\0';
+                cmap_add(n->dst, 0);
+                modified++;
+                continue;
+            }
+        }
+
+        if (n->op == IR_AND) {
+            /* AND x, 0 → CONST 0 */
+            if ((cmap_get(n->src2, &val) && val == 0) || (cmap_get(n->src1, &val) && val == 0)) {
+                n->op = IR_CONST;
+                n->imm = 0;
+                n->src1[0] = '\0';
+                n->src2[0] = '\0';
+                cmap_add(n->dst, 0);
+                modified++;
+                continue;
+            }
+        }
+
+        if (n->op == IR_OR) {
+            /* OR x, 0 → COPY x */
+            if (cmap_get(n->src2, &val) && val == 0) {
+                n->op = IR_COPY;
+                n->src2[0] = '\0';
+                modified++;
+                continue;
+            }
+            if (cmap_get(n->src1, &val) && val == 0) {
+                n->op = IR_COPY;
+                strncpy(n->src1, n->src2, 31);
+                n->src1[31] = '\0';
+                n->src2[0] = '\0';
+                modified++;
+                continue;
+            }
+        }
+
+        if (n->op == IR_DIV) {
+            /* DIV x, 1 → COPY x */
+            if (cmap_get(n->src2, &val) && val == 1) {
+                n->op = IR_COPY;
+                n->src2[0] = '\0';
+                modified++;
+                continue;
+            }
+        }
+
+        if (n->op == IR_SHL || n->op == IR_SHR) {
+            /* SHL/SHR x, 0 → COPY x */
             if (cmap_get(n->src2, &val) && val == 0) {
                 n->op = IR_COPY;
                 n->src2[0] = '\0';
@@ -1408,6 +1493,27 @@ static void ir_pm_register(ir_pass_manager_t *pm, const char *name, ir_pass_fn f
     pm->count++;
 }
 
+/* INVARIANT G-05, G-06, G-07: Automatic Pass Manager Error & Invariant Warden */
+static void zcc_verify_pass_invariants(ir_module_t *mod, const char *pass_name, int is_post) {
+    if (!mod) return;
+    int f;
+    for (f = 0; f < mod->func_count; f++) {
+        ir_func_t *fn = mod->funcs[f];
+        if (!fn) continue;
+        ir_node_t *n = fn->head;
+        int count = 0;
+        while (n) {
+            count++;
+            if (count > 100000) {
+                fprintf(stderr, "[ZCC INVARIANT VIOLATION] G-07 State Integrity broken in pass '%s' (%s): linked list cycle detected\n",
+                        pass_name, is_post ? "post" : "pre");
+                exit(1);
+            }
+            n = n->next;
+        }
+    }
+}
+
 static void ir_pm_run(ir_pass_manager_t *pm, ir_module_t *mod) {
     int p;
     int f;
@@ -1424,6 +1530,8 @@ static void ir_pm_run(ir_pass_manager_t *pm, ir_module_t *mod) {
 
         if (!pm->passes[p].enabled) continue;
 
+        zcc_verify_pass_invariants(mod, pm->passes[p].name, 0);
+
         for (f = 0; f < mod->func_count; f++) {
             if (pm->verbose) ir_snapshot_state(mod->funcs[f], pm->passes[p].name);
             ir_pass_result_t r = pm->passes[p].fn(mod->funcs[f]);
@@ -1432,6 +1540,8 @@ static void ir_pm_run(ir_pass_manager_t *pm, ir_module_t *mod) {
             pass_deleted += r.nodes_deleted;
             pass_modified += r.nodes_modified;
         }
+
+        zcc_verify_pass_invariants(mod, pm->passes[p].name, 1);
 
         if (pm->verbose) {
             fprintf(stderr, "  [IR Pass] %-18s: %d funcs, %d nodes -> %d nodes (%d deleted, %d modified)\n",

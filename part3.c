@@ -25,7 +25,7 @@ static void zcc_validate_alignof_operand(Compiler *cc, Type *t) {
 static void resolve_cpp_identifiers(Compiler *cc) {
     while (cc->tk == TK_IDENT && peek_token(cc) == TK_COLON_COLON) {
         char merged_name[MAX_IDENT * 2];
-        sprintf(merged_name, "%.120s_", cc->tk_text);
+        snprintf(merged_name, sizeof(merged_name), "%.120s_", cc->tk_text);
         next_token(cc); /* consume current identifier */
         next_token(cc); /* consume :: */
         if (cc->tk == TK_TILDE) {
@@ -48,6 +48,9 @@ static int is_type_token(Compiler *cc) {
     resolve_cpp_identifiers(cc);
     if (cc->tk >= TK_INT && cc->tk <= TK_DOUBLE) return 1;
     if (cc->tk >= TK_STATIC && cc->tk <= TK_INLINE) return 1;
+    if (cc->tk == TK_ALIGNAS) return 1;
+    if (cc->tk == TK_THREAD_LOCAL) return 1;
+    if (cc->tk == TK_COMPLEX) return 1;
     if (cc->tk == TK_STRUCT) return 1;
     if (cc->tk == TK_UNION) return 1;
     if (cc->tk == TK_ENUM) return 1;
@@ -616,16 +619,18 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
             field = (StructField *)cc_alloc(cc, sizeof(StructField));
             strncpy(field->name, fname, MAX_IDENT - 1);
             field->type = ftype;
+            field->requested_align = cc->current_requested_align;
             field->is_bitfield = 0;
             field->bit_offset = 0;
             field->bit_size = 0;
 
             falign = type_align(ftype);
+            if (field->requested_align > falign) falign = field->requested_align;
             if (stype) {
                 if (stype->pragma_pack > 0 && falign > stype->pragma_pack) {
                     falign = stype->pragma_pack;
                 }
-                if (stype->is_packed && ftype->explicit_align == 0) falign = 1;
+                if (stype->is_packed && ftype->explicit_align == 0 && field->requested_align == 0) falign = 1;
             }
             if (falign > max_align) max_align = falign;
 
@@ -898,12 +903,17 @@ Type *parse_type(Compiler *cc) {
     int is_typedef_kw = 0;
     int is_static = 0;
     int is_extern = 0;
+    int is_tls = 0;
+    int is_complex = 0;
     int is_volatile_qual = 0;  /* CG-VOLATILE-001: track volatile qualifier */
+    int requested_align = 0;
 
     /* storage class / qualifiers / basic types */
     for (;;) {
         if (cc->tk == TK_STATIC) { is_static = 1; next_token(cc); }
         else if (cc->tk == TK_EXTERN) { is_extern = 1; next_token(cc); }
+        else if (cc->tk == TK_THREAD_LOCAL) { is_tls = 1; next_token(cc); }
+        else if (cc->tk == TK_COMPLEX) { is_complex = 1; next_token(cc); }
         else if (cc->tk == TK_CONST) { next_token(cc); }
         else if (cc->tk == TK_VOLATILE) { is_volatile_qual = 1; next_token(cc); }  /* CG-VOLATILE-001 */
         else if (cc->tk == TK_INLINE) { next_token(cc); }
@@ -919,10 +929,48 @@ Type *parse_type(Compiler *cc) {
         else if (cc->tk == TK_DOUBLE) { is_double = 1; next_token(cc); }
         else if (cc->tk == TK_FLOAT) { is_float = 1; next_token(cc); }
         else if (cc->tk == TK_VOID) { is_void = 1; next_token(cc); }
+        else if (cc->tk == TK_ALIGNAS) {
+            next_token(cc);
+            expect(cc, TK_LPAREN);
+            int req_align = 0;
+            if (is_type_token(cc)) {
+                Type *at = parse_type(cc);
+                char dummy[128];
+                at = parse_declarator(cc, at, dummy);
+                if (at) req_align = at->align;
+            } else {
+                long long val = parse_const_expr(cc);
+                if (val < 0) {
+                    error(cc, "_Alignas value must not be negative");
+                } else if (val > 0 && (val & (val - 1)) != 0) {
+                    error(cc, "_Alignas value is not a supported power-of-two alignment");
+                } else {
+                    req_align = (int)val;
+                }
+            }
+            expect(cc, TK_RPAREN);
+            if (req_align > requested_align) {
+                requested_align = req_align;
+            }
+        }
         else break;
     }
 
-    if (is_void) { type = cc->ty_void; }
+    if (is_complex) {
+        if (is_int || is_char || is_short || is_void || is_unsigned || is_signed) {
+            error(cc, "invalid complex type specifier");
+            type = type_complex(cc, TY_DOUBLE);
+        } else if (is_float) {
+            type = type_complex(cc, TY_FLOAT);
+        } else if (is_double && is_long > 0) {
+            type = type_complex(cc, TY_LONGDOUBLE);
+        } else if (is_double) {
+            type = type_complex(cc, TY_DOUBLE);
+        } else {
+            type = type_complex(cc, TY_DOUBLE);
+        }
+    }
+    else if (is_void) { type = cc->ty_void; }
     else if (is_float) { type = cc->ty_float; }
     else if (is_double) {
         if (is_long > 0) type = cc->ty_longdouble;
@@ -1020,7 +1068,12 @@ Type *parse_type(Compiler *cc) {
         type = vt;
     }
 
+    if (requested_align > 0 && type && requested_align < type->align) {
+        error(cc, "requested alignment is weaker than natural alignment");
+    }
+    cc->current_requested_align = requested_align;
     cc->current_is_static = is_static;
+    cc->current_is_tls = is_tls;
     return type;
 }
 
@@ -1258,9 +1311,8 @@ static long long eval_const_expr_raw(Node *n) {
      *   ND_ADDR(ND_MEMBER)       → n->lhs->member_offset
      *   ND_ADDR(ND_DEREF(x))     → eval(x)  (addr-of-deref cancels out)
      *   ND_DEREF(...)            → eval inner (address through null ptr = offset)
-     */
-    if (n->kind == ND_MEMBER)
-        return (long long)n->member_offset;
+     /* ND_MEMBER by itself is a runtime lvalue access, NOT a constant.
+      * Only ND_ADDR(ND_MEMBER) from offsetof(T, f) = &(((T*)0)->f) is a constant. */
     if (n->kind == ND_ADDR) {
         if (n->lhs && n->lhs->kind == ND_MEMBER)
             return (long long)n->lhs->member_offset;
@@ -1271,6 +1323,8 @@ static long long eval_const_expr_raw(Node *n) {
         return eval_const_expr(n->lhs); /* *(base+offset) folded through null-ptr */
     return 0; /* Fallback for unsupported complex compile-time bounds */
 }
+
+
 
 static Type *inject_base_type(Compiler *cc, Type *t, Type *base) {
     if (!t || t == cc->ty_int) return base;
@@ -1728,11 +1782,33 @@ Node *parse_primary(Compiler *cc) {
     }
 
     if (cc->tk == TK_FLIT) {
-        n = node_flit(cc, cc->tk_fval, line);
-        if (cc->tk_text[0] == 'F') {
-            n->type = cc->ty_float;
-        } else if (cc->tk_text[0] == 'L') {
-            n->type = cc->ty_longdouble;
+        const char *s = cc->tk_text;
+        char s0 = s[0] ? (char)toupper((unsigned char)s[0]) : 0;
+        char s1 = s[0] && s[1] ? (char)toupper((unsigned char)s[1]) : 0;
+
+        int is_complex = (s0 == 'I' || s0 == 'J' || s1 == 'I' || s1 == 'J');
+        int is_float = (s0 == 'F' || s1 == 'F');
+        int is_longdouble = (s0 == 'L' || s1 == 'L');
+
+        if (is_complex) {
+            n = node_new(cc, ND_COMPLEX_LIT, line);
+            n->f_val = cc->tk_fval;
+            if (is_float) {
+                n->type = type_complex(cc, TY_FLOAT);
+            } else if (is_longdouble) {
+                n->type = type_complex(cc, TY_LONGDOUBLE);
+            } else {
+                n->type = type_complex(cc, TY_DOUBLE);
+            }
+        } else {
+            n = node_flit(cc, cc->tk_fval, line);
+            if (is_float) {
+                n->type = cc->ty_float;
+            } else if (is_longdouble) {
+                n->type = cc->ty_longdouble;
+            } else {
+                n->type = cc->ty_double;
+            }
         }
         next_token(cc);
         return n;
@@ -1765,6 +1841,111 @@ Node *parse_primary(Compiler *cc) {
         return n;
     }
 
+    if (cc->tk == TK_GENERIC) {
+        int line = cc->tk_line;
+        next_token(cc); /* consume _Generic */
+        expect(cc, TK_LPAREN);
+
+        Node *ctrl_expr = parse_assign(cc);
+        expect(cc, TK_COMMA);
+
+        Type *ctrl_type = ctrl_expr ? ctrl_expr->type : cc->ty_int;
+        if (ctrl_type) {
+            if (ctrl_type->kind == TY_ARRAY) ctrl_type = type_ptr(cc, ctrl_type->base);
+            else if (ctrl_type->kind == TY_FUNC) ctrl_type = type_ptr(cc, ctrl_type);
+        }
+
+        Node *selected_node = NULL;
+        Node *default_node = NULL;
+        Type *assoc_types[64];
+        int assoc_count = 0;
+        int has_default = 0;
+
+        while (cc->tk != TK_RPAREN && cc->tk != TK_EOF) {
+            if (cc->tk == TK_DEFAULT) {
+                next_token(cc); /* consume default */
+                expect(cc, TK_COLON);
+                if (has_default) {
+                    error(cc, "duplicate 'default' association in _Generic selection");
+                }
+                has_default = 1;
+                Node *assoc_expr = parse_assign(cc);
+                default_node = assoc_expr;
+            } else {
+                Type *assoc_type = parse_type(cc);
+                char dummy[MAX_IDENT];
+                assoc_type = parse_declarator(cc, assoc_type, dummy);
+                expect(cc, TK_COLON);
+
+                for (int i = 0; i < assoc_count; i++) {
+                    if (is_compatible_type(cc, assoc_type, assoc_types[i])) {
+                        error(cc, "duplicate compatible type association in _Generic selection");
+                    }
+                }
+                if (assoc_count < 64) {
+                    assoc_types[assoc_count++] = assoc_type;
+                }
+
+                Node *assoc_expr = parse_assign(cc);
+
+                if (is_compatible_type(cc, ctrl_type, assoc_type)) {
+                    if (!selected_node) {
+                        selected_node = assoc_expr;
+                    }
+                }
+            }
+
+            if (cc->tk == TK_COMMA) {
+                next_token(cc);
+            } else {
+                break;
+            }
+        }
+        expect(cc, TK_RPAREN);
+
+        if (!selected_node) {
+            if (has_default) {
+                selected_node = default_node;
+            } else {
+                error(cc, "controlling expression type does not match any association in _Generic selection");
+                selected_node = node_num(cc, 0, line);
+            }
+        }
+
+        return selected_node;
+    }
+
+    if (cc->tk == TK_IDENT &&
+        (strcmp(cc->tk_text, "__builtin_creal") == 0 ||
+         strcmp(cc->tk_text, "__builtin_crealf") == 0 ||
+         strcmp(cc->tk_text, "__builtin_creall") == 0 ||
+         strcmp(cc->tk_text, "__builtin_cimag") == 0 ||
+         strcmp(cc->tk_text, "__builtin_cimagf") == 0 ||
+         strcmp(cc->tk_text, "__builtin_cimagl") == 0 ||
+         strcmp(cc->tk_text, "__builtin_conj") == 0 ||
+         strcmp(cc->tk_text, "__builtin_conjf") == 0 ||
+         strcmp(cc->tk_text, "__builtin_conjl") == 0)) {
+        char bname[64];
+        strncpy(bname, cc->tk_text, 63);
+        next_token(cc);
+        expect(cc, TK_LPAREN);
+        Node *arg = parse_assign(cc);
+        expect(cc, TK_RPAREN);
+
+        int kind = ND_CREAL;
+        if (strstr(bname, "cimag")) kind = ND_CIMAG;
+        else if (strstr(bname, "conj")) kind = ND_CONJ;
+
+        n = node_new(cc, kind, line);
+        n->lhs = arg;
+        if (kind == ND_CREAL || kind == ND_CIMAG) {
+            n->type = get_complex_real_type(cc, arg ? arg->type : NULL);
+        } else {
+            n->type = arg ? arg->type : type_complex(cc, TY_DOUBLE);
+        }
+        return n;
+    }
+
     if (cc->tk == TK_IDENT) {
         Symbol *sym;
         n = node_new(cc, ND_VAR, line);
@@ -1783,6 +1964,10 @@ Node *parse_primary(Compiler *cc) {
         if (sym) {
             n->sym = sym;
             n->type = sym->type;
+            if (strcmp(n->name, "OP_REGISTRY_FINALIZE") == 0 || strcmp(n->name, "OP_EVENT_CREATE") == 0) {
+                fprintf(stderr, "[TRACE] name=%s sym=%p is_local=%d is_enum_const=%d enum_val=%lld line=%d\n",
+                        n->name, (void*)sym, sym->is_local, sym->is_enum_const, (long long)sym->enum_val, n->line);
+            }
             if (sym->asm_name[0]) {
                 strncpy(n->name, sym->asm_name, MAX_IDENT - 1);
             }
@@ -1798,6 +1983,19 @@ Node *parse_primary(Compiler *cc) {
         } else {
             /* stdio global pointers: stdin, stdout, stderr are FILE* (size 8) */
             if (strcmp(n->name, "stdin") == 0 || strcmp(n->name, "stdout") == 0 || strcmp(n->name, "stderr") == 0) {
+                n->type = type_ptr(cc, cc->ty_char);
+            } else if (strcmp(n->name, "__func__") == 0 || strcmp(n->name, "__FUNCTION__") == 0) {
+                const char *fn = cc->current_func[0] ? cc->current_func : "top_level";
+                int sid = cc->num_strings;
+                if (sid < MAX_STRINGS) {
+                    StringEntry *se = &cc->strings[sid];
+                    se->data = cc_strdup(cc, fn);
+                    se->len = strlen(fn);
+                    se->label_id = cc->label_count++;
+                    cc->num_strings++;
+                }
+                n->kind = ND_STR;
+                n->str_id = sid;
                 n->type = type_ptr(cc, cc->ty_char);
             } else {
                 /* ZCC SCOPING HARDENING: undeclared identifiers must be rejected    */
@@ -1855,7 +2053,7 @@ Node *parse_primary(Compiler *cc) {
             is_type_in_parens = 0;
             if (pk >= TK_INT) {
                 if (pk <= TK_INLINE || pk == TK_STRUCT ||
-                    pk == TK_UNION || pk == TK_ENUM) {
+                    pk == TK_UNION || pk == TK_ENUM || pk == TK_COMPLEX) {
                     is_type_in_parens = 1;
                 }
             }
@@ -1899,7 +2097,7 @@ Node *parse_primary(Compiler *cc) {
             is_type_in_parens = 0;
             if (pk >= TK_INT) {
                 if (pk <= TK_INLINE || pk == TK_STRUCT ||
-                    pk == TK_UNION || pk == TK_ENUM) {
+                    pk == TK_UNION || pk == TK_ENUM || pk == TK_COMPLEX) {
                     is_type_in_parens = 1;
                 }
             }
@@ -2642,6 +2840,19 @@ static Type *integer_promotion(Compiler *cc, Type *ty) {
 static Type *usual_arith_conv(Compiler *cc, Type *t1, Type *t2) {
     if (!t1) return t2;
     if (!t2) return t1;
+    if (is_complex_type(t1) || is_complex_type(t2)) {
+        if (t1->kind == TY_LONGDOUBLE_COMPLEX || t2->kind == TY_LONGDOUBLE_COMPLEX) return type_complex(cc, TY_LONGDOUBLE);
+        if (t1->kind == TY_DOUBLE_COMPLEX || t2->kind == TY_DOUBLE_COMPLEX) return type_complex(cc, TY_DOUBLE);
+        if (t1->kind == TY_FLOAT_COMPLEX || t2->kind == TY_FLOAT_COMPLEX) {
+            if (t1->kind == TY_DOUBLE || t2->kind == TY_DOUBLE) return type_complex(cc, TY_DOUBLE);
+            if (t1->kind == TY_LONGDOUBLE || t2->kind == TY_LONGDOUBLE) return type_complex(cc, TY_LONGDOUBLE);
+            return type_complex(cc, TY_FLOAT);
+        }
+        if (t1->kind == TY_LONGDOUBLE || t2->kind == TY_LONGDOUBLE) return type_complex(cc, TY_LONGDOUBLE);
+        if (t1->kind == TY_DOUBLE || t2->kind == TY_DOUBLE) return type_complex(cc, TY_DOUBLE);
+        return type_complex(cc, TY_FLOAT);
+    }
+    if (t1->kind == TY_LONGDOUBLE || t2->kind == TY_LONGDOUBLE) return cc->ty_longdouble;
     if (t1->kind == TY_DOUBLE || t2->kind == TY_DOUBLE) return cc->ty_double;
     if (t1->kind == TY_FLOAT || t2->kind == TY_FLOAT) return cc->ty_float;
     if (t1->kind == TY_PTR) return t1;
@@ -2677,6 +2888,7 @@ static Type *usual_arith_conv(Compiler *cc, Type *t1, Type *t2) {
 static Node *ensure_type(Compiler *cc, Node *n, Type *ty) {
     if (!n || !n->type || !ty) return n;
     if (n->type == ty) return n;
+    if (n->type->kind == ty->kind && !is_pointer(n->type) && n->type->kind != TY_ARRAY && n->type->kind != TY_STRUCT && n->type->kind != TY_UNION) return n;
     Node *c = node_new(cc, ND_CAST, n->line);
     c->lhs = n;
     c->cast_type = ty;
@@ -3373,7 +3585,7 @@ Node *parse_stmt_internal(Compiler *cc) {
             int colon_count = 0;
             next_token(cc);
             /* Grab first string literal as the asm template */
-            if (cc->tk == TK_STR && cc->tk_str) {
+            if (cc->tk == TK_STR && cc->tk_str[0]) {
                 int slen = 0;
                 const char *s = cc->tk_str;
                 while (s[slen] && slen < 511) { asm_buf[i++] = s[slen++]; }
@@ -3620,6 +3832,19 @@ Node *parse_stmt_internal(Compiler *cc) {
     }
 
     /* break */
+    if (cc->tk == TK_STATIC_ASSERT) {
+        next_token(cc);
+        expect(cc, TK_LPAREN);
+        parse_expr(cc);
+        if (cc->tk == TK_COMMA) {
+            next_token(cc);
+            if (cc->tk == TK_STR) next_token(cc);
+        }
+        expect(cc, TK_RPAREN);
+        if (cc->tk == TK_SEMI) next_token(cc);
+        return node_new(cc, ND_NOP, line);
+    }
+
     if (cc->tk == TK_BREAK) {
         Node *brk;
         next_token(cc);
@@ -3851,6 +4076,7 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
     int is_variadic = 0;
     Type *temp_param_types[MAX_PARAMS];
     char temp_param_names_buf[MAX_PARAMS][MAX_IDENT];
+    Symbol *temp_param_syms[MAX_PARAMS];
 
     line = cc->tk_line;
     func = node_new(cc, ND_FUNC_DEF, line);
@@ -3902,6 +4128,8 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
                     temp_param_types[func->num_params] = ptype;
                     strncpy(temp_param_names_buf[func->num_params], pname, MAX_IDENT - 1);
                     psym = scope_add_local(cc, pname, ptype);
+                    if (psym) psym->is_param = 1;
+                    temp_param_syms[func->num_params] = psym;
                     func->num_params++;
                 }
 
@@ -3946,6 +4174,7 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
         int k;
         for (k = 0; k < func->num_params && k < MAX_PARAMS; k++) {
             fp->types[k] = temp_param_types[k];
+            fp->syms[k] = temp_param_syms[k];
             strncpy(fp->names[k], temp_param_names_buf[k], MAX_IDENT - 1);
             fp->names[k][MAX_IDENT - 1] = '\0';
         }
@@ -4388,6 +4617,19 @@ Node *parse_program(Compiler *cc) {
         is_static = 0;
         is_extern = 0;
 
+        if (cc->tk == TK_STATIC_ASSERT) {
+            next_token(cc);
+            expect(cc, TK_LPAREN);
+            parse_expr(cc);
+            if (cc->tk == TK_COMMA) {
+                next_token(cc);
+                if (cc->tk == TK_STR) next_token(cc);
+            }
+            expect(cc, TK_RPAREN);
+            if (cc->tk == TK_SEMI) next_token(cc);
+            continue;
+        }
+
         /* check storage class */
         if (cc->tk == TK_TYPEDEF) { is_typedef_kw = 1; }
         if (cc->tk == TK_STATIC) { is_static = 1; }
@@ -4703,6 +4945,7 @@ Node *parse_program(Compiler *cc) {
             gvar->type = dtype;
             gvar->is_static = is_static;
             gvar->is_extern = is_extern;
+            gvar->is_tls = cc->current_is_tls;
 
             /* register in scope */
             {
@@ -4761,6 +5004,7 @@ Node *parse_program(Compiler *cc) {
                 gvar2->type = dtype2;
                 gvar2->is_extern = is_extern;
                 gvar2->is_static = is_static;
+                gvar2->is_tls = cc->current_is_tls;
 
                 sym2 = scope_add(cc, name2, dtype2);
                 sym2->is_global = 1;
@@ -4880,12 +5124,12 @@ typedef struct {
     LatticeVal val;
 } SymLatticeEntry;
 
-#define LATTICE_HASH_SIZE 16384
+#define LATTICE_HASH_SIZE 131072
 static SymLatticeEntry sym_lattice_hash[LATTICE_HASH_SIZE];
 
 static int hash_sym(Symbol *sym) {
-    unsigned long long addr = (unsigned long long)sym;
-    return (int)((addr ^ (addr >> 16)) % LATTICE_HASH_SIZE);
+    if (!sym) return 0;
+    return (int)((unsigned int)sym->sym_id % LATTICE_HASH_SIZE);
 }
 
 static LatticeVal get_sym_lattice(Symbol *sym) {
@@ -4921,7 +5165,10 @@ static void set_sym_lattice(Symbol *sym, LatticeVal val) {
             return;
         }
         i = (i + 1) % LATTICE_HASH_SIZE;
-        if (i == h) return;
+        if (i == h) {
+            fprintf(stderr, "[ICP ERROR] sym_lattice_hash overflow (%d entries)!\n", LATTICE_HASH_SIZE);
+            return;
+        }
     }
 }
 
@@ -4943,12 +5190,12 @@ typedef struct {
     int addr_taken;
 } SymStats;
 
-#define STATS_HASH_SIZE 16384
+#define STATS_HASH_SIZE 131072
 static SymStats sym_stats_hash[STATS_HASH_SIZE];
 
 static int hash_stats_sym(Symbol *sym) {
-    unsigned long long addr = (unsigned long long)sym;
-    return (int)((addr ^ (addr >> 16)) % STATS_HASH_SIZE);
+    if (!sym) return 0;
+    return (int)((unsigned int)sym->sym_id % STATS_HASH_SIZE);
 }
 
 static SymStats *get_sym_stats(Symbol *sym) {
@@ -4966,7 +5213,10 @@ static SymStats *get_sym_stats(Symbol *sym) {
             return &sym_stats_hash[i];
         }
         i = (i + 1) % STATS_HASH_SIZE;
-        if (i == h) return NULL;
+        if (i == h) {
+            fprintf(stderr, "[ICP ERROR] sym_stats_hash overflow (%d entries)!\n", STATS_HASH_SIZE);
+            return NULL;
+        }
     }
 }
 
@@ -4976,11 +5226,11 @@ typedef struct {
     Node *call_node;
 } CallSite;
 
-#define MAX_CALL_SITES 8192
+#define MAX_CALL_SITES 32768
 static CallSite call_sites[MAX_CALL_SITES];
 static int num_call_sites = 0;
 
-#define MAX_FUNCTIONS 2048
+#define MAX_FUNCTIONS 8192
 static Node *functions[MAX_FUNCTIONS];
 static int num_functions = 0;
 
@@ -4998,7 +5248,7 @@ static Node *find_function_def(const char *name) {
 
 static Symbol *find_param_sym_in_node(Node *n, const char *name) {
     if (!n) return NULL;
-    if (n->kind == ND_VAR && strcmp(n->name, name) == 0 && n->sym) {
+    if (n->kind == ND_VAR && strcmp(n->name, name) == 0 && n->sym && n->sym->is_param) {
         return n->sym;
     }
     Symbol *s = find_param_sym_in_node(n->lhs, name);
@@ -5050,7 +5300,9 @@ static void initialize_param_syms(void) {
         Node *func = functions[i];
         if (func->func_params) {
             for (int k = 0; k < func->num_params && k < MAX_PARAMS; k++) {
-                func_param_syms[i][k] = find_param_sym_in_node(func->body, func->func_params->names[k]);
+                Symbol *ps = func->func_params->syms[k];
+                if (!ps) ps = find_param_sym_in_node(func->body, func->func_params->names[k]);
+                func_param_syms[i][k] = ps;
             }
         }
     }
@@ -5062,11 +5314,15 @@ static void icp_collect_calls(Node *n, Node *current_func) {
     
     if (n->kind == ND_CALL) {
         Node *callee = find_function_def(n->func_name);
-        if (callee && num_call_sites < MAX_CALL_SITES) {
-            call_sites[num_call_sites].caller = current_func;
-            call_sites[num_call_sites].callee = callee;
-            call_sites[num_call_sites].call_node = n;
-            num_call_sites++;
+        if (callee) {
+            if (num_call_sites < MAX_CALL_SITES) {
+                call_sites[num_call_sites].caller = current_func;
+                call_sites[num_call_sites].callee = callee;
+                call_sites[num_call_sites].call_node = n;
+                num_call_sites++;
+            } else {
+                fprintf(stderr, "[ICP WARNING] MAX_CALL_SITES limit (%d) reached when collecting calls for %s!\n", MAX_CALL_SITES, n->func_name);
+            }
         }
     }
     
@@ -5171,6 +5427,10 @@ static LatticeVal icp_eval_expr(Node *n) {
     }
     
     if (n->kind == ND_VAR && n->sym) {
+        if (n->sym->is_enum_const) {
+            LatticeVal r = {LATTICE_CONST, n->sym->enum_val};
+            return r;
+        }
         /* CG-VOLATILE-001: volatile reads are opaque to ICP — their value may
          * change at any time (signal handler, MMIO, other thread). Return
          * LATTICE_BOT so the solver never propagates a stale constant. */
@@ -5294,7 +5554,7 @@ static void init_local_lattices(Node *n) {
     if (!n) return;
     if (n->kind == ND_VAR && n->sym && n->sym->is_local) {
         SymStats *stats = get_sym_stats(n->sym);
-        if (stats && (stats->assign_count > 1 || stats->addr_taken)) {
+        if (stats && (stats->assign_count > 0 || stats->addr_taken)) {
             LatticeVal bot = {LATTICE_BOT, 0};
             set_sym_lattice(n->sym, bot);
         }
@@ -5390,9 +5650,20 @@ static void rewrite_constant_vars_rec(Node *n, int is_lvalue) {
     if (!n) return;
     
     if (n->kind == ND_VAR && n->sym && !is_lvalue) {
+        if (n->sym->is_enum_const) {
+            n->kind = ND_NUM;
+            n->int_val = n->sym->enum_val;
+            n->lhs = NULL;
+            n->rhs = NULL;
+            return;
+        }
+        SymStats *stats = get_sym_stats(n->sym);
+        if (!stats || stats->assign_count > 0 || stats->addr_taken) {
+            // Symbol is untracked, assigned, or address-taken inside function; whole-function constant rewriting is unsound.
+            goto skip_rewrite;
+        }
         LatticeVal lv = get_sym_lattice(n->sym);
         if (lv.kind == LATTICE_CONST) {
-            fprintf(stderr, "[ICP] Rewrote parameter/variable '%s' to constant %lld\n", n->name, lv.val);
             if (n->type && (n->type->kind == TY_FLOAT || n->type->kind == TY_DOUBLE)) {
                 n->kind = ND_FLIT;
                 n->f_val = (double)lv.val;
@@ -5405,6 +5676,7 @@ static void rewrite_constant_vars_rec(Node *n, int is_lvalue) {
             return;
         }
     }
+    skip_rewrite:;
     
     if (n->kind == ND_ASSIGN || n->kind == ND_COMPOUND_ASSIGN) {
         rewrite_constant_vars_rec(n->lhs, 1);
@@ -5425,7 +5697,7 @@ static void rewrite_constant_vars_rec(Node *n, int is_lvalue) {
     }
     
     if (n->kind == ND_MEMBER) {
-        rewrite_constant_vars_rec(n->lhs, is_lvalue);
+        rewrite_constant_vars_rec(n->lhs, 1);
         return;
     }
     
@@ -5502,7 +5774,10 @@ static void mark_addr_taken_funcs(Node *n) {
 }
 
 void run_interprocedural_constant_propagation(Compiler *cc, Node *prog) {
+    if (getenv("ZCC_NO_ICP")) return;
     // 1. Reset state
+    num_functions = 0;
+    num_call_sites = 0;
     memset(sym_lattice_hash, 0, sizeof(sym_lattice_hash));
     memset(sym_stats_hash, 0, sizeof(sym_stats_hash));
     num_functions = 0;
@@ -5615,7 +5890,7 @@ void run_interprocedural_constant_propagation(Compiler *cc, Node *prog) {
                 
                 LatticeVal arg_val = icp_eval_expr(call->args[k]);
                 LatticeVal new_param_val = meet(current_param_val, arg_val);
-                
+
                 if (new_param_val.kind != current_param_val.kind ||
                     (new_param_val.kind == LATTICE_CONST && new_param_val.val != current_param_val.val)) {
                     set_sym_lattice(param_sym, new_param_val);
@@ -5625,31 +5900,7 @@ void run_interprocedural_constant_propagation(Compiler *cc, Node *prog) {
         }
     }
     
-    fprintf(stderr, "[ICP] Interprocedural & local constant propagation completed. Solver iterations: %d\n", solver_iters);
 
-    /* ICP Oracle: --trace-constprop  (CG-SIGFPE-002 substrate)
-     * Emit one JSON object per proven constant parameter/variable to stderr.
-     * Format:
-     *   {"function":"<fn>","symbol":"<name>","known_constant":<val>,"confidence":"proven"}
-     * Controlled by ZCC_TRACE_CONSTPROP env var (set by --trace-constprop in part5.c).
-     */
-    if (getenv("ZCC_TRACE_CONSTPROP")) {
-        int cp_count = 0;
-        fprintf(stderr, "[ICP-ORACLE] proven constants:\n");
-        for (int _hi = 0; _hi < LATTICE_HASH_SIZE; _hi++) {
-            SymLatticeEntry *_e = &sym_lattice_hash[_hi];
-            if (!_e->sym) continue;
-            if (_e->val.kind != LATTICE_CONST) continue;
-            fprintf(stderr,
-                "{\"symbol\":\"%s\","
-                "\"known_constant\":%lld,"
-                "\"confidence\":\"proven\"}\n",
-                _e->sym->name,
-                _e->val.val);
-            cp_count++;
-        }
-        fprintf(stderr, "[ICP-ORACLE] total proven constants: %d\n", cp_count);
-    }
     
     // 8. Rewrite AST nodes using solved lattice values
     for (int i = 0; i < num_functions; i++) {

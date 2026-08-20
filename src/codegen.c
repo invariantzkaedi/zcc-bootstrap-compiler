@@ -1,3 +1,6 @@
+#define _GNU_SOURCE
+#define _POSIX_C_SOURCE 200809L
+
 #include "elf_emit.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,6 +26,19 @@ extern FILE *fmemopen(void *buf, size_t size, const char *mode);
 extern char *g_in_mem_asm_buf;
 extern size_t g_in_mem_asm_size;
 extern int g_use_in_mem_asm;
+
+static char g_temp_o_to_remove[256] = {0};
+static char g_temp_s_to_remove[256] = {0};
+
+static void cleanup_temp_files(void) {
+    if (g_temp_o_to_remove[0]) {
+        remove(g_temp_o_to_remove);
+    }
+    if (g_temp_s_to_remove[0]) {
+        remove(g_temp_s_to_remove);
+    }
+}
+
 
 AssemblerFile g_asm_files[512];
 size_t g_asm_file_count = 0;
@@ -3043,6 +3059,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
 extern int zld_link(const char **obj_files, int obj_count, const char *out_path, const char *script_path, const char *tensor_attest_bin_path, const char *tensor_note_json_path, const char *build_attest_bin_path);
 
 int main(int argc, char **argv) {
+    atexit(cleanup_temp_files);
     int i;
     int use_system_as = 0;
     int native_elf = 0;
@@ -3127,7 +3144,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if ((is_zcc_c && !native_elf) || is_out_s || has_trace_abi || has_emit_gguf || has_frontend_dump) {
+    if (is_zcc_c || is_out_s || compile_only || has_trace_abi || has_emit_gguf || has_frontend_dump) {
         return zcc_main(argc, argv);
     }
 
@@ -3144,6 +3161,7 @@ int main(int argc, char **argv) {
             p++;
         }
         sprintf(temp_s_filename, ".tmp_codegen_%s.s", base);
+        strncpy(g_temp_s_to_remove, temp_s_filename, sizeof(g_temp_s_to_remove) - 1);
 
         if (compile_only) {
             char derived_o_filename[256];
@@ -3161,9 +3179,10 @@ int main(int argc, char **argv) {
             }
 
             /* Construct modified argv for zcc_main to produce temporary assembly */
-            char **mod_argv = (char **)malloc(sizeof(char *) * (argc + 3));
+            char **mod_argv = (char **)malloc(sizeof(char *) * (argc + 4));
             int mod_argc = 0;
             mod_argv[mod_argc++] = argv[0];
+            int has_input_in_mod = 0;
             for (i = 1; i < argc; i++) {
                 if (strcmp(argv[i], "-c") == 0) {
                     continue;
@@ -3176,8 +3195,12 @@ int main(int argc, char **argv) {
                 } else if (strcmp(argv[i], "-emit-obj") == 0) {
                     continue;
                 } else {
+                    if (input_c_file && strcmp(argv[i], input_c_file) == 0) has_input_in_mod = 1;
                     mod_argv[mod_argc++] = argv[i];
                 }
+            }
+            if (!has_input_in_mod && input_c_file) {
+                mod_argv[mod_argc++] = (char *)input_c_file;
             }
             mod_argv[mod_argc++] = "-o";
             mod_argv[mod_argc++] = temp_s_filename;
@@ -3222,6 +3245,7 @@ int main(int argc, char **argv) {
 
             char temp_o_filename[256];
             sprintf(temp_o_filename, ".tmp_codegen_%s.o", base);
+            strncpy(g_temp_o_to_remove, temp_o_filename, sizeof(g_temp_o_to_remove) - 1);
 
             /* 1. Compile to temporary assembly (.s) */
             char **mod_argv = (char **)malloc(sizeof(char *) * (argc + 3));
@@ -3287,6 +3311,7 @@ int main(int argc, char **argv) {
 
             int link_ret = zld_link(link_objs, link_obj_count, out_filename, ld_script, NULL, NULL, NULL);
             remove(temp_o_filename);
+            g_temp_o_to_remove[0] = '\0';
 
             if (link_ret != 0) {
                 fprintf(stderr, "zcc: static linking failed with error code %d\n", link_ret);

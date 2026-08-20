@@ -63,4 +63,8 @@ typedef char zcc_static_assert_ND_GLOBAL_VAR[ (ND_GLOBAL_VAR == ZCC_ND_GLOBAL_VA
 typedef char zcc_static_assert_ND_COMPOUND_ASSIGN[ (ND_COMPOUND_ASSIGN == ZCC_ND_COMPOUND_ASSIGN) ? 1 : -1 ];
 typedef char zcc_static_assert_ND_INIT_LIST[ (ND_INIT_LIST == ZCC_ND_INIT_LIST) ? 1 : -1 ];
 typedef char zcc_static_assert_ND_ASM[ (ND_ASM == ZCC_ND_ASM) ? 1 : -1 ];
+typedef char zcc_static_assert_ND_CREAL[ (ND_CREAL == ZCC_ND_CREAL) ? 1 : -1 ];
+typedef char zcc_static_assert_ND_CIMAG[ (ND_CIMAG == ZCC_ND_CIMAG) ? 1 : -1 ];
+typedef char zcc_static_assert_ND_CONJ[ (ND_CONJ == ZCC_ND_CONJ) ? 1 : -1 ];
+typedef char zcc_static_assert_ND_COMPLEX_LIT[ (ND_COMPLEX_LIT == ZCC_ND_COMPLEX_LIT) ? 1 : -1 ];
 typedef char zcc_static_assert_ND_NOP[ (ND_NOP == ZCC_ND_NOP) ? 1 : -1 ];

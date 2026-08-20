@@ -243,6 +243,7 @@ ir_module_t *ir_module_create(void) {
 
 ir_func_t *ir_func_create(ir_module_t *mod, const char *name,
                            ir_type_t ret_type, int num_params) {
+    if (!mod) return NULL;
     if (mod->func_count >= IR_MAX_FUNCS) {
         fprintf(stderr, "ir: exceeded IR_MAX_FUNCS (%d)\n", IR_MAX_FUNCS);
         exit(1);

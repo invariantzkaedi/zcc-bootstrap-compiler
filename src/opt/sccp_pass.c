@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+bool opt_cfg_simplify_pass(Function *fn, OptMetricsSink *metrics);
+
 __attribute__((weak)) bool g_reg_is_param[MAX_INSTRS];
 
 typedef enum {

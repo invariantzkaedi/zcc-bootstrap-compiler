@@ -20,8 +20,10 @@
 /* Auto-generated values used by nd_to_znd(). Must match zcc.c enum. */
 #include "zcc_ast_bridge_constants.h"
 
-/* Opaque ZCC AST node; layout defined in zcc.c */
+/* Opaque ZCC AST structures */
 struct Node;
+struct Type;
+struct Compiler;
 
 /* Accessors: implemented in zcc.c when linked; weak stubs in compiler_passes.c when standalone */
 int           node_kind(struct Node *n);

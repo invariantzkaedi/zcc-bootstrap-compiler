@@ -30,10 +30,6 @@ void *cc_alloc(Compiler *cc, int size) {
                     cp[i] = 0;
                 }
             }
-            /* magic header: second qword = alloc_id for tracing */
-            if (size >= 16) {
-                *((unsigned long long *)((char *)p + 8)) = next_alloc_id++;
-            }
             {
                 extern void zcc_oracle_log_allocation(void *ptr, size_t size);
                 zcc_oracle_log_allocation(p, size);
@@ -72,7 +68,7 @@ void *cc_alloc(Compiler *cc, int size) {
     return 0;
 }
 
-char *cc_strdup(Compiler *cc, char *s) {
+char *cc_strdup(Compiler *cc, const char *s) {
     int len;
     char *p;
     int i;
@@ -90,11 +86,7 @@ char *cc_strdup(Compiler *cc, char *s) {
 /* ================================================================ */
 
 void error(Compiler *cc, char *msg) {
-    char *name;
-    name = cc->filename;
-    if (!name) name = "<input>";
-    printf( "%s:%d: error: %s\n", name, cc->tk_line, msg);
-    cc->errors++;
+    error_at(cc, cc->tk_line, msg);
 }
 
 void error_at(Compiler *cc, int line, char *msg) {
@@ -109,6 +101,7 @@ void error_at(Compiler *cc, int line, char *msg) {
 /* TYPE CONSTRUCTORS                                                 */
 /* ================================================================ */
 
+
 Type *type_new(Compiler *cc, int kind) {
     Type *t;
     t = (Type *)cc_alloc(cc, sizeof(Type));
@@ -122,7 +115,10 @@ Type *type_new(Compiler *cc, int kind) {
     else if (kind == TY_LONG || kind == TY_ULONG || kind == TY_LONGLONG || kind == TY_ULONGLONG) { t->size = 8; t->align = 8; }
     else if (kind == TY_FLOAT) { t->size = 4; t->align = 4; }
     else if (kind == TY_DOUBLE) { t->size = 8; t->align = 8; }
-    else if (kind == TY_LONGDOUBLE) { t->size = 16; t->align = 16; }
+    else if (kind == TY_LONGDOUBLE) { t->size = 16; t->align = 8; }
+    else if (kind == TY_FLOAT_COMPLEX) { t->size = 8; t->align = 4; }
+    else if (kind == TY_DOUBLE_COMPLEX) { t->size = 16; t->align = 8; }
+    else if (kind == TY_LONGDOUBLE_COMPLEX) { t->size = 16; t->align = 8; }
     else if (kind == TY_PTR) { t->size = 8; t->align = 8; }
     else if (kind == TY_ENUM) { t->size = 4; t->align = 4; }
     else { t->size = 0; t->align = 1; }
@@ -156,14 +152,14 @@ Type *type_func(Compiler *cc, Type *ret) {
     return t;
 }
 
+#define TYPE_GET_PROP(t, field) ((t) ? (t)->field : 8)
+
 int type_size(Type *t) {
-    if (!t) return 8;
-    return t->size;
+    return TYPE_GET_PROP(t, size);
 }
 
 int type_align(Type *t) {
-    if (!t) return 8;
-    return t->align;
+    return TYPE_GET_PROP(t, align);
 }
 
 int is_integer(Type *t) {
@@ -188,6 +184,46 @@ int is_float_type(Type *t) {
     if (t->kind == TY_DOUBLE) return 1;
     if (t->kind == TY_LONGDOUBLE) return 1;
     return 0;
+}
+
+int is_complex_type(Type *t) {
+    if (!t) return 0;
+    if (t->kind == TY_FLOAT_COMPLEX || t->kind == TY_DOUBLE_COMPLEX || t->kind == TY_LONGDOUBLE_COMPLEX) return 1;
+    return 0;
+}
+
+Type *type_complex(Compiler *cc, int real_kind) {
+    Type *t = 0;
+    if (real_kind == TY_FLOAT) {
+        t = type_new(cc, TY_FLOAT_COMPLEX);
+        t->size = 8;
+        t->align = 4;
+        t->base = cc->ty_float;
+    } else if (real_kind == TY_DOUBLE) {
+        t = type_new(cc, TY_DOUBLE_COMPLEX);
+        t->size = 16;
+        t->align = 8;
+        t->base = cc->ty_double;
+    } else if (real_kind == TY_LONGDOUBLE) {
+        t = type_new(cc, TY_LONGDOUBLE_COMPLEX);
+        t->size = 16;
+        t->align = 8;
+        t->base = cc->ty_longdouble;
+    } else {
+        t = type_new(cc, TY_DOUBLE_COMPLEX);
+        t->size = 16;
+        t->align = 8;
+        t->base = cc->ty_double;
+    }
+    return t;
+}
+
+Type *get_complex_real_type(Compiler *cc, Type *t) {
+    if (!t) return cc->ty_double;
+    if (t->kind == TY_FLOAT_COMPLEX) return cc->ty_float;
+    if (t->kind == TY_DOUBLE_COMPLEX) return cc->ty_double;
+    if (t->kind == TY_LONGDOUBLE_COMPLEX) return cc->ty_longdouble;
+    return cc->ty_double;
 }
 
 int is_unsigned_type(Type *t) {
@@ -298,9 +334,14 @@ Symbol *scope_add(Compiler *cc, char *name, Type *type) {
     }
     Symbol *sym;
     sym = (Symbol *)cc_alloc(cc, sizeof(Symbol));
+    sym->sym_id = ++cc->next_sym_id;
     strncpy(sym->name, name, MAX_IDENT - 1);
     sym->name[MAX_IDENT - 1] = '\0';
     sym->type = type;
+    sym->requested_align = cc->current_requested_align;
+    sym->is_tls = cc->current_is_tls;
+    if (cc->current_is_tls) sym->storage_class = SC_THREAD_LOCAL;
+    else if (cc->current_is_static) sym->storage_class = SC_STATIC;
     sym->stack_offset = 0;
     sym->next = cc->current_scope->symbols;
     cc->current_scope->symbols = sym;
@@ -314,13 +355,15 @@ Symbol *scope_add(Compiler *cc, char *name, Type *type) {
 /* Add local with auto-assigned stack offset */
 Symbol *scope_add_local(Compiler *cc, char *name, Type *type) {
     Symbol *sym;
-    int sz;
+    int sz, salign;
     sym = scope_add(cc, name, type);
     sym->is_local = 1;
     sz = type_size(type);
-    sz = (sz + 7) & ~7;
-    if (sz < 8) sz = 8;  /* minimum 8-byte slots */
+    salign = symbol_alignment(sym);
+    if (salign < 8) salign = 8;  /* minimum 8-byte slots */
+    sz = (sz + salign - 1) & ~(salign - 1);
     cc->local_offset = cc->local_offset - sz;
+    cc->local_offset = cc->local_offset & ~(salign - 1);
     sym->stack_offset = cc->local_offset;
     return sym;
 }
@@ -391,10 +434,19 @@ static Keyword keywords[] = {
     {"_Bool",      TK_INT},
     {"_Atomic",    TK_VOLATILE},
     {"_Noreturn",  TK_INLINE},
-    {"_Thread_local", TK_STATIC},
-    {"_Alignof",   TK_SIZEOF},
-    {"__alignof__", TK_SIZEOF},
-    {"__alignof",  TK_SIZEOF},
+    {"_Thread_local", TK_THREAD_LOCAL},
+    {"__thread",     TK_THREAD_LOCAL},
+    {"_Alignof",   TK_ALIGNOF},
+    {"__alignof__", TK_ALIGNOF},
+    {"__alignof",  TK_ALIGNOF},
+    {"alignof",    TK_ALIGNOF},
+    {"_Alignas",   TK_ALIGNAS},
+    {"alignas",    TK_ALIGNAS},
+    {"_Static_assert", TK_STATIC_ASSERT},
+    {"static_assert",  TK_STATIC_ASSERT},
+    {"_Generic",   TK_GENERIC},
+    {"_Complex",   TK_COMPLEX},
+    {"__complex__", TK_COMPLEX},
     {"class",            TK_STRUCT},
     {"public",           TK_PUBLIC},
     {"private",          TK_PRIVATE},
@@ -409,7 +461,30 @@ static Keyword keywords[] = {
     {0, 0}
 };
 
-static int kw_count = 71;
+static int kw_count = 79;
+
+int is_compatible_type(Compiler *cc, Type *t1, Type *t2) {
+    if (t1 == t2) return 1;
+    if (!t1 || !t2) return 0;
+
+    /* Perform array-to-pointer decay for comparison */
+    if (t1->kind == TY_ARRAY) t1 = type_ptr(cc, t1->base);
+    if (t2->kind == TY_ARRAY) t2 = type_ptr(cc, t2->base);
+
+    if (t1->kind != t2->kind) return 0;
+
+    if (t1->kind == TY_PTR) {
+        return is_compatible_type(cc, t1->base, t2->base);
+    }
+    if (t1->kind == TY_STRUCT || t1->kind == TY_UNION || t1->kind == TY_ENUM) {
+        if (t1->tag[0] && t2->tag[0]) return strcmp(t1->tag, t2->tag) == 0;
+        return t1 == t2;
+    }
+    if (t1->kind == TY_FUNC) {
+        return is_compatible_type(cc, t1->ret, t2->ret);
+    }
+    return (t1->kind == t2->kind);
+}
 
 static int lookup_keyword(char *name) {
     int i;
@@ -647,13 +722,25 @@ static void lex_number(Compiler *cc, int c) {
             cc->col = cc->col + len;
             /* CG-FLOAT-007: record f/F suffix in tk_text[0] for parse_primary */
             cc->tk_text[0] = 0;
+            cc->tk_text[1] = 0;
             if (cc->pos < cc->source_len) {
                 char sc = cc->source[cc->pos];
                 if (sc == 'f' || sc == 'F') {
                     cc->pos++; cc->col++;
                     cc->tk_text[0] = 'F';  /* tag as float literal */
+                    if (cc->pos < cc->source_len && (cc->source[cc->pos] == 'i' || cc->source[cc->pos] == 'I')) {
+                        cc->pos++; cc->col++;
+                        cc->tk_text[1] = 'I';  /* tag as imaginary literal */
+                    }
+                } else if (sc == 'i' || sc == 'I') {
+                    cc->pos++; cc->col++;
+                    cc->tk_text[1] = 'I';  /* tag as imaginary literal */
                 } else if (sc == 'l' || sc == 'L') {
                     cc->pos++; cc->col++;
+                    if (cc->pos < cc->source_len && (cc->source[cc->pos] == 'i' || cc->source[cc->pos] == 'I')) {
+                        cc->pos++; cc->col++;
+                        cc->tk_text[1] = 'I';  /* tag as imaginary literal */
+                    }
                 }
             }
             cc->tk = TK_FLIT;

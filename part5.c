@@ -94,9 +94,10 @@ typedef struct {
 #endif
 extern PPConfig zcc_pp_config;
 
-static void init_compiler(Compiler *cc) {
+void init_compiler(Compiler *cc) {
   /* zero everything — cc was calloc'd */
   { extern Compiler *g_cc; g_cc = cc; }
+
 
   /* init arena */
   cc->arena.data = (char *)malloc(ARENA_SIZE);

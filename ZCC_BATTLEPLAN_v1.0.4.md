@@ -128,5 +128,20 @@ A complete real-time diagnostics visualization subsystem:
 
 ---
 
+## 🔱 13. ZCC ERROR ARCHITECTURE & FAULT MANAGEMENT SPECIFICATION
+
+Full specification documented in [`docs/ZCC_ERROR_ARCHITECTURE.md`](file:///H:/__DOWNLOADS/zcc_github_upload/docs/ZCC_ERROR_ARCHITECTURE.md).
+
+```text
+  DETECTED ──► CLASSIFIED ──► INTEGRITY FAILURE ──► QUARANTINE (zcc-failure-<uuid>/) ──► RELEASE GATE BLOCKED
+```
+
+* **Common Structured Error Model**: Standardized `ZError` struct with domain codes `ZCC-<DOMAIN>-<NUMBER>`.
+* **Fail-Closed Release Gates**: Zero silent fallbacks. Integrity failures or ABI mismatches block releases.
+* **Diagnostic Bundle Schema**: Generates isolated `zcc-failure-<uuid>/` bundles with `error.json`, `command.txt`, `compiler-manifest.json`, and input/state hashes.
+
+---
+
 *🔱 ZKAEDI COMPILER FORGE — v1.0.4 Ecosystem Battle Plan*
 *An autonomous, deterministic, and kernel-capable future.*
+

@@ -17,7 +17,7 @@ ALLOWED_ROOT_NAMES = {
 }
 
 ALLOWED_EXTENSIONS = {
-    ".c", ".h", ".py", ".md", ".txt", ".json", ".yaml", ".yml",
+    ".c", ".h", ".inc", ".py", ".md", ".txt", ".json", ".yaml", ".yml",
     ".sh", ".bat", ".patch", ".gitignore", ".gitattributes", ".xml",
     ".html", ".js", ".tsv", ".css"
 }

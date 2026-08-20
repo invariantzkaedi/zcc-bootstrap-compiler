@@ -26,6 +26,8 @@ bool ic_rule_icmp_zero_canonical(ICtx *c);
 bool ic_rule_udiv_pow2_to_shr(ICtx *c);
 bool ic_rule_add_self_to_shl(ICtx *c);
 bool ic_rule_bitwise_distributivity(ICtx *c);
+bool ic_rule_nested_and_consts(ICtx *c);
+bool ic_rule_add_sub_cancel(ICtx *c);
 
 typedef bool (*IcRuleFn)(ICtx*);
 
@@ -49,7 +51,9 @@ static IcRuleFn kRules[] = {
     ic_rule_icmp_zero_canonical,
     ic_rule_udiv_pow2_to_shr,
     ic_rule_add_self_to_shl,
-    ic_rule_bitwise_distributivity
+    ic_rule_bitwise_distributivity,
+    ic_rule_nested_and_consts,
+    ic_rule_add_sub_cancel
 };
 
 bool ic_try_rules(Function *fn, Instr *it) {

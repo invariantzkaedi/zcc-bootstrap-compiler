@@ -1,3 +1,6 @@
+#define _GNU_SOURCE
+#define _POSIX_C_SOURCE 200809L
+
 #include "clone_remap.h"
 #include "zcc_ir_verify.h"
 #include <stdio.h>

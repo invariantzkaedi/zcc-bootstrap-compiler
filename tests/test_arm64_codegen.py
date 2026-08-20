@@ -14,24 +14,33 @@ def compile_c_arm64_harness():
     harness_c = os.path.join(REPO_ROOT, "tests", "temp_arm64_harness.c")
     bin_out = os.path.join(REPO_ROOT, "tests", "temp_arm64_harness")
     
-    code = """
+    code = r"""
 #include <stdio.h>
 #include "../src/arm64_codegen.h"
 
 int main() {
-    printf("REG_X0:%s\\n", arm64_get_reg_name64(ARM64_REG_X0));
-    printf("REG_W0:%s\\n", arm64_get_reg_name32(ARM64_REG_X0));
-    printf("REG_FP:%s\\n", arm64_get_reg_name64(ARM64_REG_FP));
-    printf("REG_LR:%s\\n", arm64_get_reg_name64(ARM64_REG_LR));
-    printf("REG_SP:%s\\n", arm64_get_reg_name64(ARM64_REG_SP));
+    printf("REG_X0:%s\n", arm64_get_reg_name64(ARM64_REG_X0));
+    printf("REG_W0:%s\n", arm64_get_reg_name32(ARM64_REG_X0));
+    printf("REG_FP:%s\n", arm64_get_reg_name64(ARM64_REG_FP));
+    printf("REG_LR:%s\n", arm64_get_reg_name64(ARM64_REG_LR));
+    printf("REG_SP:%s\n", arm64_get_reg_name64(ARM64_REG_SP));
     
     size_t align_8 = arm64_align_stack_frame(8);
     size_t align_24 = arm64_align_stack_frame(24);
-    printf("ALIGN_8:%zu\\n", align_8);
-    printf("ALIGN_24:%zu\\n", align_24);
+    printf("ALIGN_8:%zu\n", align_8);
+    printf("ALIGN_24:%zu\n", align_24);
+
+    /* AAPCS64 Nested Struct Pass-by-Value Classification Tests */
+    AAPCS64StructArgLayout s8 = arm64_classify_struct_arg(8);   /* 8-byte struct (1 GP reg: x0) */
+    AAPCS64StructArgLayout s16 = arm64_classify_struct_arg(16); /* 16-byte nested struct (2 GP regs: x0, x1) */
+    AAPCS64StructArgLayout s32 = arm64_classify_struct_arg(32); /* 32-byte nested struct (passed by ref pointer) */
+
+    printf("STRUCT_8_MODE:%d_REGS:%d\n", s8.mode, s8.num_gp_regs);
+    printf("STRUCT_16_MODE:%d_REGS:%d\n", s16.mode, s16.num_gp_regs);
+    printf("STRUCT_32_MODE:%d_REGS:%d\n", s32.mode, s32.num_gp_regs);
 
     int res = zcc_emit_arm64_assembly_to_file("/tmp/test_arm64_out.s", "my_arm_func", 16);
-    printf("ARM64_EMIT_RES:%d\\n", res);
+    printf("ARM64_EMIT_RES:%d\n", res);
     return 0;
 }
 """
@@ -74,6 +83,11 @@ class TestARM64Codegen(unittest.TestCase):
         self.assertIn("ALIGN_8:32", res.stdout)  # (8+16)=24 -> aligned to 32
         self.assertIn("ALIGN_24:48", res.stdout) # (24+16)=40 -> aligned to 48 (next multiple of 16)
         self.assertIn("ARM64_EMIT_RES:0", res.stdout)
+
+        # AAPCS64 Nested Struct Pass-by-Value Assertions
+        self.assertIn("STRUCT_8_MODE:0_REGS:1", res.stdout)   # In 1 GP reg (x0)
+        self.assertIn("STRUCT_16_MODE:0_REGS:2", res.stdout)  # In 2 GP regs (x0, x1)
+        self.assertIn("STRUCT_32_MODE:1_REGS:1", res.stdout)  # Passed by ref (1 pointer reg)
 
         # Inspect emitted ARM64 assembly file
         self.assertTrue(os.path.exists("/tmp/test_arm64_out.s"))

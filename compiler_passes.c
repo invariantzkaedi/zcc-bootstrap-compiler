@@ -18,6 +18,9 @@
  * -Wextra zcc.c compiler_passes.c -o zcc_full -lm
  */
 
+#define _GNU_SOURCE
+#define _POSIX_C_SOURCE 200809L
+
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -69,20 +72,17 @@ static const char *current_function_name = NULL;
  * all existing calloc'd Instrs remain correct without explicit initialisation.
  * Only I32/U32 need special treatment in ir_asm_lower_insn (div/mod/shr).   */
 typedef enum {
-    IR_TY_I64 = 0, /* signed 64-bit  — long, pointer; also "unknown" default  */
-    IR_TY_I32 = 1, /* signed 32-bit  — int                                    */
-    IR_TY_U32 = 2, /* unsigned 32-bit — unsigned int                          */
-    IR_TY_U64 = 3, /* unsigned 64-bit — unsigned long                         */
+  IR_TY_I64 = 0, /* signed 64-bit  — long, pointer; also "unknown" default  */
+  IR_TY_I32 = 1, /* signed 32-bit  — int                                    */
+  IR_TY_U32 = 2, /* unsigned 32-bit — unsigned int                          */
+  IR_TY_U64 = 3, /* unsigned 64-bit — unsigned long                         */
 } IRType;
 
 typedef uint32_t RegID;   /* virtual register identifier            */
 typedef uint32_t BlockID; /* basic block identifier                 */
 typedef uint32_t InstrID; /* instruction identifier within a block  */
 
-typedef enum {
-  ALIAS_UNKNOWN = 0,
-  ALIAS_LOCAL_STACK = 1
-} AliasClass;
+typedef enum { ALIAS_UNKNOWN = 0, ALIAS_LOCAL_STACK = 1 } AliasClass;
 
 typedef enum {
   OP_NOP = 0,
@@ -181,7 +181,7 @@ typedef struct Instr {
   uint32_t n_call_args;
 
   /* Metadata */
-  bool dead;        /* marked by DCE                       */
+  bool dead; /* marked by DCE                       */
   int is_float;
   int src_is_float;
   int src_size;
@@ -194,13 +194,14 @@ typedef struct Instr {
   int line_no;      /* source line for DWARF .loc (0 = none) */
   IRType ir_type;   /* CG-IR-015: value type for width-sensitive lowering     */
                     /* (0 = IR_TY_I64 default; set for OP_DIV/MOD/SHR/SHL)   */
-  int lscan_seq;    /* Liveness sequence ID injected by ir_asm_number_and_liveness */
+  int lscan_seq; /* Liveness sequence ID injected by ir_asm_number_and_liveness
+                  */
 
   /* Address-Mode Folding (AMF) metadata */
   struct {
-    bool folded;      /* true if address-mode fold was matched */
-    RegID base;       /* base register ID */
-    int64_t disp;     /* displacement offset */
+    bool folded;  /* true if address-mode fold was matched */
+    RegID base;   /* base register ID */
+    int64_t disp; /* displacement offset */
   } amf;
 
   AliasClass alias_class;
@@ -243,10 +244,10 @@ typedef struct Block {
   bool placed;        /* used during chain construction         */
   BlockID chain_next; /* next block in the PGO chain            */
 
-  bool reachable; /* set by CFG reachability pass           */
-  uint8_t loop_depth;      /* 0 = not in loop, >0 = nesting depth */
-  bool is_loop_header;  /* true if block has an incoming back-edge */
-  bool is_pre_header;   /* true if block is the pre-header of a loop */
+  bool reachable;      /* set by CFG reachability pass           */
+  uint8_t loop_depth;  /* 0 = not in loop, >0 = nesting depth */
+  bool is_loop_header; /* true if block has an incoming back-edge */
+  bool is_pre_header;  /* true if block is the pre-header of a loop */
   int pre_header_of;   /* block index of the loop header this pre-headers */
 } Block;
 
@@ -506,8 +507,10 @@ static void licm_compute_rpo(Function *fn) {
  * C.  Cooper et al. 2001 iterative dominator tree
  * ═════════════════════════════════════════════════════════════════ */
 static BlockID licm_intersect(BlockID b1, BlockID b2) {
-  if (b1 == NO_BLOCK) return b2;
-  if (b2 == NO_BLOCK) return b1;
+  if (b1 == NO_BLOCK)
+    return b2;
+  if (b2 == NO_BLOCK)
+    return b1;
   uint32_t f1 = licm_rpo_of[b1], f2 = licm_rpo_of[b2];
   while (f1 != f2) {
     while (f1 > f2) {
@@ -1146,6 +1149,54 @@ uint32_t licm_pass(Function *fn) {
             fprintf(stderr, "[LICM]      hoisted %%%u (%s) from '%s' -> '%s'\n",
                     (unsigned)ins->dst, opcode_name[ins->op], blk->name,
                     ph_blk->name);
+
+            if (ins->op == OP_LOAD) {
+              RegID load_base;
+              int64_t load_off;
+              bool load_var;
+              licm_analyze_ptr(fn, ins->src[0], &load_base, &load_off,
+                               &load_var);
+
+              bool verified_no_alias = true;
+              for (uint32_t i = 0; i < oracle.n_targets; i++) {
+                const StoreTarget *tgt = &oracle.targets[i];
+                if (tgt->base == load_base) {
+                  if (tgt->is_variable || load_var || tgt->offset == load_off) {
+                    verified_no_alias = false;
+                    break;
+                  }
+                } else {
+                  Instr *db1 = fn->def_of[tgt->base];
+                  Instr *db2 = fn->def_of[load_base];
+                  bool distinct_allocas =
+                      (db1 && db2 && db1->op == OP_ALLOCA &&
+                       db2->op == OP_ALLOCA && tgt->base != load_base);
+                  if (!distinct_allocas) {
+                    verified_no_alias = false;
+                    break;
+                  }
+                }
+              }
+
+              if (!verified_no_alias) {
+                fprintf(stderr,
+                        "[LICM-VERIFY-FAIL] fn=%s loop_hdr=%s orig_blk=%s "
+                        "preheader=%s ptr_id=%%%u (base=%%%u off=%lld) "
+                        "alias_verdict=MAY_ALIAS\n",
+                        fn->name, fn->blocks[lp->header]->name, blk->name,
+                        ph_blk->name, (unsigned)ins->dst, (unsigned)load_base,
+                        (long long)load_off);
+                exit(1);
+              }
+
+              fprintf(stderr,
+                      "[LICM-VERIFY-PASS] fn=%s loop_hdr=%s orig_blk=%s "
+                      "preheader=%s ptr_id=%%%u (base=%%%u off=%lld) "
+                      "alias_verdict=PROVEN_NO_ALIAS\n",
+                      fn->name, fn->blocks[lp->header]->name, blk->name,
+                      ph_blk->name, (unsigned)ins->dst, (unsigned)load_base,
+                      (long long)load_off);
+            }
           }
           ins = nxt;
         }
@@ -1189,19 +1240,22 @@ static uint32_t constant_fold_pass(Function *fn) {
 
       switch (ins->op) {
       case OP_ADD:
-        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST &&
+            d1->op == OP_CONST) {
           result = d0->imm + d1->imm;
           goto fold_binary;
         }
         break;
       case OP_SUB:
-        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST &&
+            d1->op == OP_CONST) {
           result = d0->imm - d1->imm;
           goto fold_binary;
         }
         break;
       case OP_MUL:
-        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST &&
+            d1->op == OP_CONST) {
           result = d0->imm * d1->imm;
           goto fold_binary;
         }
@@ -1212,7 +1266,8 @@ static uint32_t constant_fold_pass(Function *fn) {
           result = 0;
           goto fold_binary;
         }
-        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST &&
+            d1->op == OP_CONST) {
           if (d1->imm != 0) {
             result = d0->imm / d1->imm;
             goto fold_binary;
@@ -1225,7 +1280,8 @@ static uint32_t constant_fold_pass(Function *fn) {
           result = 0;
           goto fold_binary;
         }
-        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST &&
+            d1->op == OP_CONST) {
           if (d1->imm != 0) {
             result = d0->imm % d1->imm;
             goto fold_binary;
@@ -1267,37 +1323,43 @@ static uint32_t constant_fold_pass(Function *fn) {
         }
         break;
       case OP_LT:
-        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST &&
+            d1->op == OP_CONST) {
           result = d0->imm < d1->imm ? 1 : 0;
           goto fold_binary;
         }
         break;
       case OP_EQ:
-        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST &&
+            d1->op == OP_CONST) {
           result = (d0->imm == d1->imm) ? 1 : 0;
           goto fold_binary;
         }
         break;
       case OP_NE:
-        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST &&
+            d1->op == OP_CONST) {
           result = (d0->imm != d1->imm) ? 1 : 0;
           goto fold_binary;
         }
         break;
       case OP_GT:
-        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST &&
+            d1->op == OP_CONST) {
           result = (d0->imm > d1->imm) ? 1 : 0;
           goto fold_binary;
         }
         break;
       case OP_GE:
-        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST &&
+            d1->op == OP_CONST) {
           result = (d0->imm >= d1->imm) ? 1 : 0;
           goto fold_binary;
         }
         break;
       case OP_LE:
-        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST && d1->op == OP_CONST) {
+        if (!ins->is_float && d0 && d1 && d0->op == OP_CONST &&
+            d1->op == OP_CONST) {
           result = (d0->imm <= d1->imm) ? 1 : 0;
           goto fold_binary;
         }
@@ -1694,7 +1756,8 @@ uint32_t escape_analysis_pass(Function *fn, EscapeCtx *ctx) {
         }
       }
 
-      /* E4: any load/store with displacement or sbt_offset makes alloca escaping */
+      /* E4: any load/store with displacement or sbt_offset makes alloca
+       * escaping */
       if (ins->op == OP_LOAD && ins->n_src >= 1) {
         AllocaID aid = ea_alloc_of(ctx, ins->src[0]);
         if (aid != NO_ALLOC) {
@@ -1777,12 +1840,17 @@ static void unlink_instr(Block *blk, Instr *ins) {
   blk->n_instrs--;
 }
 
-static RegID trace_address_root_offset_recurse(Function *fn, RegID reg, int64_t *offset, bool *has_cast, int depth) {
-  if (depth > 10) return 0;
-  if (reg == 0 || reg >= MAX_INSTRS) return 0;
+static RegID trace_address_root_offset_recurse(Function *fn, RegID reg,
+                                               int64_t *offset, bool *has_cast,
+                                               int depth) {
+  if (depth > 10)
+    return 0;
+  if (reg == 0 || reg >= MAX_INSTRS)
+    return 0;
 
   Instr *def = fn->def_of[reg];
-  if (!def) return reg;
+  if (!def)
+    return reg;
 
   if (def->sbt_has_cast) {
     *has_cast = true;
@@ -1798,7 +1866,8 @@ static RegID trace_address_root_offset_recurse(Function *fn, RegID reg, int64_t 
 
   if (def->op == OP_COPY) {
     if (def->n_src > 0) {
-      return trace_address_root_offset_recurse(fn, def->src[0], offset, has_cast, depth + 1);
+      return trace_address_root_offset_recurse(fn, def->src[0], offset,
+                                               has_cast, depth + 1);
     }
   }
 
@@ -1811,29 +1880,34 @@ static RegID trace_address_root_offset_recurse(Function *fn, RegID reg, int64_t 
           *offset += idx_def->imm;
         }
       }
-      return trace_address_root_offset_recurse(fn, def->src[0], offset, has_cast, depth + 1);
+      return trace_address_root_offset_recurse(fn, def->src[0], offset,
+                                               has_cast, depth + 1);
     }
   }
 
   if (def->op == OP_ADD) {
-    /* If one of the operands is an OP_CONST, accumulate it and trace the other */
+    /* If one of the operands is an OP_CONST, accumulate it and trace the other
+     */
     if (def->n_src == 2) {
       Instr *d0 = fn->def_of[def->src[0]];
       Instr *d1 = fn->def_of[def->src[1]];
       if (d0 && d0->op == OP_CONST) {
         *offset += d0->imm;
-        return trace_address_root_offset_recurse(fn, def->src[1], offset, has_cast, depth + 1);
+        return trace_address_root_offset_recurse(fn, def->src[1], offset,
+                                                 has_cast, depth + 1);
       }
       if (d1 && d1->op == OP_CONST) {
         *offset += d1->imm;
-        return trace_address_root_offset_recurse(fn, def->src[0], offset, has_cast, depth + 1);
+        return trace_address_root_offset_recurse(fn, def->src[0], offset,
+                                                 has_cast, depth + 1);
       }
     }
     /* Fallback: trace both src[0] and src[1] to find an OP_ALLOCA */
     if (def->n_src > 0) {
       int64_t off0 = 0;
       bool cast0 = *has_cast;
-      RegID r0 = trace_address_root_offset_recurse(fn, def->src[0], &off0, &cast0, depth + 1);
+      RegID r0 = trace_address_root_offset_recurse(fn, def->src[0], &off0,
+                                                   &cast0, depth + 1);
       if (r0 > 0 && r0 < MAX_INSTRS) {
         Instr *d0 = fn->def_of[r0];
         if (d0 && d0->op == OP_ALLOCA) {
@@ -1846,7 +1920,8 @@ static RegID trace_address_root_offset_recurse(Function *fn, RegID reg, int64_t 
     if (def->n_src > 1) {
       int64_t off1 = 0;
       bool cast1 = *has_cast;
-      RegID r1 = trace_address_root_offset_recurse(fn, def->src[1], &off1, &cast1, depth + 1);
+      RegID r1 = trace_address_root_offset_recurse(fn, def->src[1], &off1,
+                                                   &cast1, depth + 1);
       if (r1 > 0 && r1 < MAX_INSTRS) {
         Instr *d1 = fn->def_of[r1];
         if (d1 && d1->op == OP_ALLOCA) {
@@ -1864,18 +1939,21 @@ static RegID trace_address_root_offset_recurse(Function *fn, RegID reg, int64_t 
       Instr *d1 = fn->def_of[def->src[1]];
       if (d1 && d1->op == OP_CONST) {
         *offset -= d1->imm;
-        return trace_address_root_offset_recurse(fn, def->src[0], offset, has_cast, depth + 1);
+        return trace_address_root_offset_recurse(fn, def->src[0], offset,
+                                                 has_cast, depth + 1);
       }
     }
     if (def->n_src > 0) {
-      return trace_address_root_offset_recurse(fn, def->src[0], offset, has_cast, depth + 1);
+      return trace_address_root_offset_recurse(fn, def->src[0], offset,
+                                               has_cast, depth + 1);
     }
   }
 
   return reg;
 }
 
-static RegID trace_address_root_offset(Function *fn, RegID reg, int64_t *offset, bool *has_cast) {
+static RegID trace_address_root_offset(Function *fn, RegID reg, int64_t *offset,
+                                       bool *has_cast) {
   *offset = 0;
   *has_cast = false;
   return trace_address_root_offset_recurse(fn, reg, offset, has_cast, 0);
@@ -1960,13 +2038,15 @@ static void build_dominator_tree_pass(Function *fn) {
   licm_compute_rpo(fn);
   licm_compute_doms(fn);
 
-  fprintf(stderr, "[DomTree] fn=%s", current_function_name ? current_function_name : "?");
+  fprintf(stderr, "[DomTree] fn=%s",
+          current_function_name ? current_function_name : "?");
   for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
     Block *blk = fn->blocks[bi];
     if (!blk || !blk->reachable)
       continue;
     BlockID idom = licm_idom[bi];
-    fprintf(stderr, "  BB%u->idom=BB%d", bi, (idom == NO_BLOCK) ? -1 : (int)idom);
+    fprintf(stderr, "  BB%u->idom=BB%d", bi,
+            (idom == NO_BLOCK) ? -1 : (int)idom);
   }
   fprintf(stderr, "\n");
 }
@@ -2000,7 +2080,8 @@ static void detect_loop_structure_pass(Function *fn, BlockID *idom) {
   /* Initialize all blocks */
   for (bi = 0; bi < fn->n_blocks; bi++) {
     Block *blk = fn->blocks[bi];
-    if (!blk) continue;
+    if (!blk)
+      continue;
     blk->loop_depth = 0;
     blk->is_loop_header = false;
     blk->is_pre_header = false;
@@ -2010,7 +2091,8 @@ static void detect_loop_structure_pass(Function *fn, BlockID *idom) {
   /* 1. Mark loop headers */
   for (H = 0; H < fn->n_blocks; H++) {
     Block *blk = fn->blocks[H];
-    if (!blk || !blk->reachable) continue;
+    if (!blk || !blk->reachable)
+      continue;
     for (pi = 0; pi < blk->n_preds; pi++) {
       BlockID pred_id = blk->preds[pi];
       if (dominates(idom, (int)H, (int)pred_id, (int)fn->n_blocks)) {
@@ -2067,7 +2149,8 @@ static void detect_loop_structure_pass(Function *fn, BlockID *idom) {
       while (q_head < q_tail) {
         int curr = body_queue[q_head++];
         Block *curr_blk = fn->blocks[curr];
-        if (!curr_blk) continue;
+        if (!curr_blk)
+          continue;
         for (pi = 0; pi < curr_blk->n_preds; pi++) {
           BlockID pred_id = curr_blk->preds[pi];
           if (!in_body[pred_id]) {
@@ -2078,7 +2161,8 @@ static void detect_loop_structure_pass(Function *fn, BlockID *idom) {
       }
 
       for (b_idx = 0; b_idx < fn->n_blocks; b_idx++) {
-        if (in_body[b_idx] && fn->blocks[b_idx] && fn->blocks[b_idx]->reachable) {
+        if (in_body[b_idx] && fn->blocks[b_idx] &&
+            fn->blocks[b_idx]->reachable) {
           fn->blocks[b_idx]->loop_depth++;
         }
       }
@@ -2098,14 +2182,15 @@ static void detect_loop_structure_pass(Function *fn, BlockID *idom) {
     }
   }
   fprintf(stderr, "[LoopStruct] fn=%s  headers=%u  max_depth=%u\n",
-          current_function_name ? current_function_name : "?",
-          headers_count, max_depth);
+          current_function_name ? current_function_name : "?", headers_count,
+          max_depth);
   {
     uint32_t pi;
     for (pi = 0; pi < fn->n_blocks; pi++) {
       Block *pb = fn->blocks[pi];
       if (pb && pb->reachable && pb->is_pre_header && pb->pre_header_of >= 0) {
-        fprintf(stderr, "[LoopStruct]   pre-header BB%u -> header BB%d\n", pi, pb->pre_header_of);
+        fprintf(stderr, "[LoopStruct]   pre-header BB%u -> header BB%d\n", pi,
+                pb->pre_header_of);
       }
     }
   }
@@ -2861,11 +2946,16 @@ static int is_main_func(const char *func_name) {
  * paths → uninitialized slot → null deref. Fix: always hoist OP_ALLOCA to the
  * entry block so it dominates all uses. */
 static RegID get_or_create_var(LowerCtx *ctx, const char *name, int size) {
+  if (getenv("ZCC_DEBUG_TRACE")) {
+    if (!name || (uintptr_t)name < 4096 || name[0] == '\0') {
+      fprintf(stderr, "[ZCC-IR] DEBUG: get_or_create_var EMPTY OR NULL\n");
+    } else {
+      fprintf(stderr, "[ZCC-IR] DEBUG: get_or_create_var('%s')\n", name);
+    }
+  }
   if (!name || (uintptr_t)name < 4096 || name[0] == '\0') {
-    fprintf(stderr, "[ZCC-IR] DEBUG: get_or_create_var EMPTY OR NULL\n");
     return 0;
   }
-  fprintf(stderr, "[ZCC-IR] DEBUG: get_or_create_var('%s')\n", name);
   for (uint32_t i = 0; i < ctx->n_vars; i++) {
     if (strcmp(ctx->var_names[i], name) == 0) {
       if (size > (int)ctx->slot_alloca_instr[i]->imm) {
@@ -2886,7 +2976,8 @@ static RegID get_or_create_var(LowerCtx *ctx, const char *name, int size) {
   RegID r = ctx->next_reg++;
   ctx->slot_alloca_reg[slot] = r;
 
-  Instr *alloca = make_instr_imm(ctx->next_instr_id++, OP_ALLOCA, r, size > 0 ? size : 8, 0);
+  Instr *alloca = make_instr_imm(ctx->next_instr_id++, OP_ALLOCA, r,
+                                 size > 0 ? size : 8, 0);
   ctx->slot_alloca_instr[slot] = alloca;
 
   /* Hoist OP_ALLOCA to the entry block so it dominates all uses. */
@@ -3184,7 +3275,7 @@ extern int node_is_float(struct Node *n);
 extern long long node_float_bits(struct Node *n);
 extern long long node_int_val(struct Node *n);
 extern int node_str_id(struct Node *n);
-extern void node_name(struct Node *n, char *buf, unsigned len);
+extern void node_name(struct Node *n, char *buf, int len);
 extern int node_is_global(struct Node *n);
 extern int node_is_array(struct Node *n);
 extern int node_is_func(struct Node *n);
@@ -3444,8 +3535,8 @@ static ZCCNode *zcc_node_from_expr(struct Node *n) {
     z->lhs = zcc_node_from_expr(node_lhs(n));
     z->rhs = zcc_node_from_expr(node_rhs(n));
     {
-      int ts = node_type_size(n);      /* 4 for int, 8 for long/ptr         */
-      int tu = node_type_unsigned(n);  /* 1 if unsigned                     */
+      int ts = node_type_size(n);     /* 4 for int, 8 for long/ptr         */
+      int tu = node_type_unsigned(n); /* 1 if unsigned                     */
       /* member_size is unused for arithmetic nodes; repurpose as type tag. */
       z->member_size = tu ? -(ts) : ts;
     }
@@ -3570,26 +3661,28 @@ static ZCCNode *zcc_node_from_stmt(struct Node *n) {
     return NULL;
   int nk = node_kind(n);
   if (nk == 110) { /* ND_RSP_SAVE */
-      ZCCNode *z = alloc_zcc_node();
-      z->kind = ZND_ASM;
-      z->line_no = node_line_no(n);
-      int off = node_member_offset(n);
-      char buf[64];
-      if (off > 0) off = -off;
-      sprintf(buf, "movq %%rsp, %d(%%rbp)", off);
-      z->asm_string = strdup(buf);
-      return z;
+    ZCCNode *z = alloc_zcc_node();
+    z->kind = ZND_ASM;
+    z->line_no = node_line_no(n);
+    int off = node_member_offset(n);
+    char buf[64];
+    if (off > 0)
+      off = -off;
+    sprintf(buf, "movq %%rsp, %d(%%rbp)", off);
+    z->asm_string = strdup(buf);
+    return z;
   }
   if (nk == 111) { /* ND_RSP_RESTORE */
-      ZCCNode *z = alloc_zcc_node();
-      z->kind = ZND_ASM;
-      z->line_no = node_line_no(n);
-      int off = node_member_offset(n);
-      char buf[64];
-      if (off > 0) off = -off;
-      sprintf(buf, "movq %d(%%rbp), %%rsp", off);
-      z->asm_string = strdup(buf);
-      return z;
+    ZCCNode *z = alloc_zcc_node();
+    z->kind = ZND_ASM;
+    z->line_no = node_line_no(n);
+    int off = node_member_offset(n);
+    char buf[64];
+    if (off > 0)
+      off = -off;
+    sprintf(buf, "movq %d(%%rbp), %%rsp", off);
+    z->asm_string = strdup(buf);
+    return z;
   }
   int zk = nd_to_znd(nk);
   if (zk < 0) {
@@ -3671,19 +3764,23 @@ static ZCCNode *zcc_node_from_stmt(struct Node *n) {
      * already has the complete ZND_CALL conversion logic. */
     {
       ZCCNode *call_node = zcc_node_from_expr(n);
-      if (call_node) { free(z); return call_node; }
+      if (call_node) {
+        free(z);
+        return call_node;
+      }
     }
     break;
   /* CG-IR-015: Expression-statements (i++, --p, etc.) in stmt position */
   case ZND_POST_INC:
   case ZND_PRE_INC:
   case ZND_POST_DEC:
-  case ZND_PRE_DEC:
-  {
+  case ZND_PRE_DEC: {
     ZCCNode *expr_node = zcc_node_from_expr(n);
-    if (expr_node) { free(z); return expr_node; }
-  }
-  break;
+    if (expr_node) {
+      free(z);
+      return expr_node;
+    }
+  } break;
   case ZND_NOP:
     break;
   case ZND_ASM:
@@ -3780,11 +3877,15 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node);
  *   member_size == -8  →  IR_TY_U64   (unsigned long)
  *   otherwise          →  IR_TY_I64   (signed long / default)           */
 static IRType irtype_from_node(const ZCCNode *node) {
-  if (!node) return IR_TY_I64;
+  if (!node)
+    return IR_TY_I64;
   int ms = node->member_size;
-  if (ms ==  4) return IR_TY_I32;
-  if (ms == -4) return IR_TY_U32;
-  if (ms == -8) return IR_TY_U64;
+  if (ms == 4)
+    return IR_TY_I32;
+  if (ms == -4)
+    return IR_TY_U32;
+  if (ms == -8)
+    return IR_TY_U64;
   return IR_TY_I64;
 }
 
@@ -3794,8 +3895,8 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
   /* Floating-point type check bypassed to enable IR backend float support */
   /*
   if (node->is_float || node->src_is_float) {
-    fprintf(stderr, "ZCC Error: Floating-point type is not supported in C IR backend path (ZCC_IR_BACKEND=1) at line %d\n", node->line_no);
-    exit(1);
+    fprintf(stderr, "ZCC Error: Floating-point type is not supported in C IR
+  backend path (ZCC_IR_BACKEND=1) at line %d\n", node->line_no); exit(1);
   }
   */
   /* Transparent passthrough: only recurse on operand. */
@@ -3907,36 +4008,39 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     load_ins->dst_size = node->dst_size;
     load_ins->exec_freq = 1.0;
     emit_instr(ctx, load_ins);
-    
-    if (node->is_bitfield) {
-        fprintf(stderr, "WIRING R-VALUE BITFIELD: offset=%d, size=%d\n", node->bit_offset, node->bit_size);
-        RegID bo_r = ctx->next_reg++;
-        emit_instr(ctx, make_instr_imm(ctx->next_instr_id++, OP_CONST, bo_r, node->bit_offset, node->line_no));
-        RegID shift_r = ctx->next_reg++;
-        Instr *sh_i = calloc(1, sizeof(Instr));
-        sh_i->id = ctx->next_instr_id++;
-        sh_i->op = OP_SHR;
-        sh_i->dst = shift_r;
-        sh_i->src[0] = r;
-        sh_i->src[1] = bo_r;
-        sh_i->n_src = 2;
-        sh_i->exec_freq = 1.0;
-        emit_instr(ctx, sh_i);
 
-        RegID mask_r = ctx->next_reg++;
-        long long mask_val = (1ULL << node->bit_size) - 1;
-        emit_instr(ctx, make_instr_imm(ctx->next_instr_id++, OP_CONST, mask_r, mask_val, node->line_no));
-        RegID band_r = ctx->next_reg++;
-        Instr *band_i = calloc(1, sizeof(Instr));
-        band_i->id = ctx->next_instr_id++;
-        band_i->op = OP_BAND;
-        band_i->dst = band_r;
-        band_i->src[0] = shift_r;
-        band_i->src[1] = mask_r;
-        band_i->n_src = 2;
-        band_i->exec_freq = 1.0;
-        emit_instr(ctx, band_i);
-        r = band_r;
+    if (node->is_bitfield) {
+      fprintf(stderr, "WIRING R-VALUE BITFIELD: offset=%d, size=%d\n",
+              node->bit_offset, node->bit_size);
+      RegID bo_r = ctx->next_reg++;
+      emit_instr(ctx, make_instr_imm(ctx->next_instr_id++, OP_CONST, bo_r,
+                                     node->bit_offset, node->line_no));
+      RegID shift_r = ctx->next_reg++;
+      Instr *sh_i = calloc(1, sizeof(Instr));
+      sh_i->id = ctx->next_instr_id++;
+      sh_i->op = OP_SHR;
+      sh_i->dst = shift_r;
+      sh_i->src[0] = r;
+      sh_i->src[1] = bo_r;
+      sh_i->n_src = 2;
+      sh_i->exec_freq = 1.0;
+      emit_instr(ctx, sh_i);
+
+      RegID mask_r = ctx->next_reg++;
+      long long mask_val = (1ULL << node->bit_size) - 1;
+      emit_instr(ctx, make_instr_imm(ctx->next_instr_id++, OP_CONST, mask_r,
+                                     mask_val, node->line_no));
+      RegID band_r = ctx->next_reg++;
+      Instr *band_i = calloc(1, sizeof(Instr));
+      band_i->id = ctx->next_instr_id++;
+      band_i->op = OP_BAND;
+      band_i->dst = band_r;
+      band_i->src[0] = shift_r;
+      band_i->src[1] = mask_r;
+      band_i->n_src = 2;
+      band_i->exec_freq = 1.0;
+      emit_instr(ctx, band_i);
+      r = band_r;
     }
     return r;
   }
@@ -4265,7 +4369,8 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
       emit_instr(ctx, load_ins);
       return val_r;
     } else {
-      RegID alloca_r = get_or_create_var(ctx, node->name, node->member_size > 0 ? node->member_size : 8);
+      RegID alloca_r = get_or_create_var(
+          ctx, node->name, node->member_size > 0 ? node->member_size : 8);
       if (ctx->want_address || node->is_array || node->is_func)
         return alloca_r;
       ins = calloc(1, sizeof(Instr));
@@ -4777,72 +4882,75 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     if (!addr_r)
       return 0;
     RegID val_r = zcc_lower_expr(ctx, node->rhs);
-    
+
     if (node->lhs && node->lhs->is_bitfield) {
-        RegID old_r = ctx->next_reg++;
-        Instr *ld_o = calloc(1, sizeof(Instr));
-        ld_o->id = ctx->next_instr_id++;
-        ld_o->op = OP_LOAD;
-        ld_o->dst = old_r;
-        ld_o->src[0] = addr_r;
-        ld_o->n_src = 1;
-        ld_o->imm = (node->lhs->member_size > 0) ? node->lhs->member_size : 8;
-        ld_o->exec_freq = 1.0;
-        emit_instr(ctx, ld_o);
-        
-        RegID mask_r = ctx->next_reg++;
-        long long mask_val = (1ULL << node->lhs->bit_size) - 1;
-        long long shift_mask = ~(mask_val << node->lhs->bit_offset);
-        emit_instr(ctx, make_instr_imm(ctx->next_instr_id++, OP_CONST, mask_r, shift_mask, node->line_no));
-        RegID band1_r = ctx->next_reg++;
-        Instr *b1_i = calloc(1, sizeof(Instr));
-        b1_i->id = ctx->next_instr_id++;
-        b1_i->op = OP_BAND;
-        b1_i->dst = band1_r;
-        b1_i->src[0] = old_r;
-        b1_i->src[1] = mask_r;
-        b1_i->n_src = 2;
-        b1_i->exec_freq = 1.0;
-        emit_instr(ctx, b1_i);
-        
-        RegID just_mask = ctx->next_reg++;
-        emit_instr(ctx, make_instr_imm(ctx->next_instr_id++, OP_CONST, just_mask, mask_val, node->line_no));
-        RegID band2_r = ctx->next_reg++;
-        Instr *b2_i = calloc(1, sizeof(Instr));
-        b2_i->id = ctx->next_instr_id++;
-        b2_i->op = OP_BAND;
-        b2_i->dst = band2_r;
-        b2_i->src[0] = val_r;
-        b2_i->src[1] = just_mask;
-        b2_i->n_src = 2;
-        b2_i->exec_freq = 1.0;
-        emit_instr(ctx, b2_i);
-        
-        RegID bo_r = ctx->next_reg++;
-        emit_instr(ctx, make_instr_imm(ctx->next_instr_id++, OP_CONST, bo_r, node->lhs->bit_offset, node->line_no));
-        RegID shl_r = ctx->next_reg++;
-        Instr *sh_i = calloc(1, sizeof(Instr));
-        sh_i->id = ctx->next_instr_id++;
-        sh_i->op = OP_SHL;
-        sh_i->dst = shl_r;
-        sh_i->src[0] = band2_r;
-        sh_i->src[1] = bo_r;
-        sh_i->n_src = 2;
-        sh_i->exec_freq = 1.0;
-        emit_instr(ctx, sh_i);
-        
-        RegID final_r = ctx->next_reg++;
-        Instr *bor_i = calloc(1, sizeof(Instr));
-        bor_i->id = ctx->next_instr_id++;
-        bor_i->op = OP_BOR;
-        bor_i->dst = final_r;
-        bor_i->src[0] = band1_r;
-        bor_i->src[1] = shl_r;
-        bor_i->n_src = 2;
-        bor_i->exec_freq = 1.0;
-        emit_instr(ctx, bor_i);
-        
-        val_r = final_r;
+      RegID old_r = ctx->next_reg++;
+      Instr *ld_o = calloc(1, sizeof(Instr));
+      ld_o->id = ctx->next_instr_id++;
+      ld_o->op = OP_LOAD;
+      ld_o->dst = old_r;
+      ld_o->src[0] = addr_r;
+      ld_o->n_src = 1;
+      ld_o->imm = (node->lhs->member_size > 0) ? node->lhs->member_size : 8;
+      ld_o->exec_freq = 1.0;
+      emit_instr(ctx, ld_o);
+
+      RegID mask_r = ctx->next_reg++;
+      long long mask_val = (1ULL << node->lhs->bit_size) - 1;
+      long long shift_mask = ~(mask_val << node->lhs->bit_offset);
+      emit_instr(ctx, make_instr_imm(ctx->next_instr_id++, OP_CONST, mask_r,
+                                     shift_mask, node->line_no));
+      RegID band1_r = ctx->next_reg++;
+      Instr *b1_i = calloc(1, sizeof(Instr));
+      b1_i->id = ctx->next_instr_id++;
+      b1_i->op = OP_BAND;
+      b1_i->dst = band1_r;
+      b1_i->src[0] = old_r;
+      b1_i->src[1] = mask_r;
+      b1_i->n_src = 2;
+      b1_i->exec_freq = 1.0;
+      emit_instr(ctx, b1_i);
+
+      RegID just_mask = ctx->next_reg++;
+      emit_instr(ctx, make_instr_imm(ctx->next_instr_id++, OP_CONST, just_mask,
+                                     mask_val, node->line_no));
+      RegID band2_r = ctx->next_reg++;
+      Instr *b2_i = calloc(1, sizeof(Instr));
+      b2_i->id = ctx->next_instr_id++;
+      b2_i->op = OP_BAND;
+      b2_i->dst = band2_r;
+      b2_i->src[0] = val_r;
+      b2_i->src[1] = just_mask;
+      b2_i->n_src = 2;
+      b2_i->exec_freq = 1.0;
+      emit_instr(ctx, b2_i);
+
+      RegID bo_r = ctx->next_reg++;
+      emit_instr(ctx, make_instr_imm(ctx->next_instr_id++, OP_CONST, bo_r,
+                                     node->lhs->bit_offset, node->line_no));
+      RegID shl_r = ctx->next_reg++;
+      Instr *sh_i = calloc(1, sizeof(Instr));
+      sh_i->id = ctx->next_instr_id++;
+      sh_i->op = OP_SHL;
+      sh_i->dst = shl_r;
+      sh_i->src[0] = band2_r;
+      sh_i->src[1] = bo_r;
+      sh_i->n_src = 2;
+      sh_i->exec_freq = 1.0;
+      emit_instr(ctx, sh_i);
+
+      RegID final_r = ctx->next_reg++;
+      Instr *bor_i = calloc(1, sizeof(Instr));
+      bor_i->id = ctx->next_instr_id++;
+      bor_i->op = OP_BOR;
+      bor_i->dst = final_r;
+      bor_i->src[0] = band1_r;
+      bor_i->src[1] = shl_r;
+      bor_i->n_src = 2;
+      bor_i->exec_freq = 1.0;
+      emit_instr(ctx, bor_i);
+
+      val_r = final_r;
     }
 
     Instr *st = calloc(1, sizeof(Instr));
@@ -4875,7 +4983,8 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     load_ins->dst = load_r;
     load_ins->src[0] = addr_r;
     load_ins->n_src = 1;
-    load_ins->imm = (node->lhs && node->lhs->member_size > 0) ? node->lhs->member_size : 8;
+    load_ins->imm =
+        (node->lhs && node->lhs->member_size > 0) ? node->lhs->member_size : 8;
     load_ins->is_float = node->is_float;
     load_ins->dst_size = node->dst_size;
     load_ins->exec_freq = 1.0;
@@ -4925,7 +5034,8 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     st->n_src = 2;
     st->is_float = node->is_float;
     st->exec_freq = 1.0;
-    st->imm = (node->lhs && node->lhs->member_size > 0) ? node->lhs->member_size : 8;
+    st->imm =
+        (node->lhs && node->lhs->member_size > 0) ? node->lhs->member_size : 8;
     emit_instr(ctx, st);
     return sum_r;
   }
@@ -4945,8 +5055,8 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
   /* Floating-point type check bypassed to enable IR backend float support */
   /*
   if (node->is_float || node->src_is_float) {
-    fprintf(stderr, "ZCC Error: Floating-point type is not supported in C IR backend path (ZCC_IR_BACKEND=1) at line %d\n", node->line_no);
-    exit(1);
+    fprintf(stderr, "ZCC Error: Floating-point type is not supported in C IR
+  backend path (ZCC_IR_BACKEND=1) at line %d\n", node->line_no); exit(1);
   }
   */
   Function *fn = ctx->fn;
@@ -4963,16 +5073,17 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
     return;
   }
   case ZND_VLA_ALLOC: {
-    if (!node->lhs) return;
+    if (!node->lhs)
+      return;
     RegID count_r = zcc_lower_expr(ctx, node->lhs);
-    
+
     Instr *imm = calloc(1, sizeof(Instr));
     imm->id = ctx->next_instr_id++;
     imm->op = OP_CONST;
     imm->dst = ctx->next_reg++;
     imm->imm = node->int_val;
     emit_instr(ctx, imm);
-    
+
     Instr *imul = calloc(1, sizeof(Instr));
     imul->id = ctx->next_instr_id++;
     imul->op = OP_MUL;
@@ -4981,7 +5092,7 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
     imul->src[1] = imm->dst;
     imul->n_src = 2;
     emit_instr(ctx, imul);
-    
+
     Instr *al = calloc(1, sizeof(Instr));
     al->id = ctx->next_instr_id++;
     al->op = OP_VLA_ALLOC;
@@ -5005,7 +5116,8 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
   }
   case ZND_ASSIGN: {
     (void)zcc_lower_expr(ctx, node);
-    assert(node->lhs && (node->lhs->is_bitfield == 0 || node->lhs->bit_size > 0));
+    assert(node->lhs &&
+           (node->lhs->is_bitfield == 0 || node->lhs->bit_size > 0));
     return;
   }
   case ZND_COMPOUND_ASSIGN: {
@@ -5437,7 +5549,8 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
     Block *final_blk = fn->blocks[ctx->cur_block];
     if (final_blk) {
       Instr *tail = final_blk->tail;
-      if (!(tail && (tail->op == OP_RET || tail->op == OP_BR || tail->op == OP_CONDBR))) {
+      if (!(tail && (tail->op == OP_RET || tail->op == OP_BR ||
+                     tail->op == OP_CONDBR))) {
         Instr *br_exit = calloc(1, sizeof(Instr));
         br_exit->id = ctx->next_instr_id++;
         br_exit->op = OP_BR;
@@ -5447,7 +5560,8 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
         emit_instr(ctx, br_exit);
         final_blk->succs[0] = exit_blk;
         final_blk->n_succs = 1;
-        fn->blocks[exit_blk]->preds[fn->blocks[exit_blk]->n_preds++] = ctx->cur_block;
+        fn->blocks[exit_blk]->preds[fn->blocks[exit_blk]->n_preds++] =
+            ctx->cur_block;
       }
     }
 
@@ -5474,7 +5588,8 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
 
     Block *cur = fn->blocks[ctx->cur_block];
     Instr *tail = cur ? cur->tail : NULL;
-    if (!(tail && (tail->op == OP_RET || tail->op == OP_BR || tail->op == OP_CONDBR))) {
+    if (!(tail &&
+          (tail->op == OP_RET || tail->op == OP_BR || tail->op == OP_CONDBR))) {
       Instr *br = calloc(1, sizeof(Instr));
       br->id = ctx->next_instr_id++;
       br->op = OP_BR;
@@ -5484,7 +5599,8 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
       emit_instr(ctx, br);
       cur->succs[0] = lbl_blk;
       cur->n_succs = 1;
-      fn->blocks[lbl_blk]->preds[fn->blocks[lbl_blk]->n_preds++] = ctx->cur_block;
+      fn->blocks[lbl_blk]->preds[fn->blocks[lbl_blk]->n_preds++] =
+          ctx->cur_block;
     }
 
     ctx->cur_block = lbl_blk;
@@ -5512,7 +5628,8 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
 
     Block *cur = fn->blocks[ctx->cur_block];
     Instr *tail = cur ? cur->tail : NULL;
-    if (!(tail && (tail->op == OP_RET || tail->op == OP_BR || tail->op == OP_CONDBR))) {
+    if (!(tail &&
+          (tail->op == OP_RET || tail->op == OP_BR || tail->op == OP_CONDBR))) {
       Instr *br = calloc(1, sizeof(Instr));
       br->id = ctx->next_instr_id++;
       br->op = OP_BR;
@@ -5522,9 +5639,10 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
       emit_instr(ctx, br);
       cur->succs[0] = lbl_blk;
       cur->n_succs = 1;
-      fn->blocks[lbl_blk]->preds[fn->blocks[lbl_blk]->n_preds++] = ctx->cur_block;
+      fn->blocks[lbl_blk]->preds[fn->blocks[lbl_blk]->n_preds++] =
+          ctx->cur_block;
     }
-    
+
     ctx->cur_block = new_block(ctx, "unreachable.after.goto");
     return;
   }
@@ -5585,8 +5703,10 @@ Function *zcc_ast_to_ir(ZCCNode *body_ast, const char *func_name) {
     (void)get_or_create_var(&ctx, "argv", 8);
   } else {
     const char *params_env = getenv("ZCC_IR_PARAM_NAMES");
-    fprintf(stderr, "[ZCC-IR] DEBUG: params_env=%s\n",
-            params_env ? params_env : "NULL");
+    if (getenv("ZCC_DEBUG_TRACE")) {
+      fprintf(stderr, "[ZCC-IR] DEBUG: params_env=%s\n",
+              params_env ? params_env : "NULL");
+    }
     if (params_env && params_env[0]) {
       char env_buf[512];
       strncpy(env_buf, params_env, sizeof(env_buf) - 1);
@@ -5613,9 +5733,11 @@ Function *zcc_ast_to_ir(ZCCNode *body_ast, const char *func_name) {
    * physical block PGO places next (causing infinite loops/segfaults). */
   for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
     Block *b = fn->blocks[bi];
-    if (!b) continue;
+    if (!b)
+      continue;
     if (b->n_succs == 0) {
-      if (!b->tail || (b->tail->op != OP_RET && b->tail->op != OP_BR && b->tail->op != OP_CONDBR)) {
+      if (!b->tail || (b->tail->op != OP_RET && b->tail->op != OP_BR &&
+                       b->tail->op != OP_CONDBR)) {
         ctx.cur_block = bi;
         Instr *ret = calloc(1, sizeof(Instr));
         ret->id = ctx.next_instr_id++;
@@ -5843,7 +5965,8 @@ static ASTNode *build_phase_b_ast(void) {
  * NOTE: Do not include ir_vuln_tag.h in this file — IR_TY_* names conflict
  * with this TU's IRType enum.  The schema lives entirely in ir_vuln_tag.c
  * and is linked separately.
- * ─────────────────────────────────────────────────────────────────────────── */
+ * ───────────────────────────────────────────────────────────────────────────
+ */
 
 /**
  * run_all_passes() — Execute the full three-pass optimization pipeline.
@@ -6217,7 +6340,8 @@ static void gvn_clear_table(void) {
   memset(gvn_scope_marks, 0, sizeof(gvn_scope_marks));
 }
 
-static uint32_t hash_gvn_key(Opcode op, RegID src1_vn, RegID src2_vn, int64_t imm, const char *global_name) {
+static uint32_t hash_gvn_key(Opcode op, RegID src1_vn, RegID src2_vn,
+                             int64_t imm, const char *global_name) {
   uint32_t hash = 5381;
   hash = ((hash << 5) + hash) + (uint32_t)op;
   hash = ((hash << 5) + hash) + src1_vn;
@@ -6225,59 +6349,76 @@ static uint32_t hash_gvn_key(Opcode op, RegID src1_vn, RegID src2_vn, int64_t im
   hash = ((hash << 5) + hash) + (uint32_t)(imm & 0xFFFFFFFF);
   hash = ((hash << 5) + hash) + (uint32_t)((imm >> 32) & 0xFFFFFFFF);
   if (global_name && global_name[0]) {
-    { int gi2; for (gi2 = 0; global_name[gi2]; gi2++) {
-      hash = ((hash << 5) + hash) + (uint32_t)global_name[gi2];
-    } }
+    {
+      int gi2;
+      for (gi2 = 0; global_name[gi2]; gi2++) {
+        hash = ((hash << 5) + hash) + (uint32_t)global_name[gi2];
+      }
+    }
   }
   return hash;
 }
 
-static GVNEntry *gvn_lookup_or_insert(Opcode op, RegID src1_vn, RegID src2_vn, int64_t imm, const char *global_name, RegID dst_reg, AliasClass alias_class, RegID root_addr, RegID sbt_base, int64_t sbt_offset, bool sbt_has_cast) {
+static GVNEntry *gvn_lookup_or_insert(Opcode op, RegID src1_vn, RegID src2_vn,
+                                      int64_t imm, const char *global_name,
+                                      RegID dst_reg, AliasClass alias_class,
+                                      RegID root_addr, RegID sbt_base,
+                                      int64_t sbt_offset, bool sbt_has_cast) {
   uint32_t hash = hash_gvn_key(op, src1_vn, src2_vn, imm, global_name);
   uint32_t idx = hash % GVN_TABLE_SIZE;
 
-  { int probe; for (probe = 0; probe < GVN_TABLE_SIZE; probe++) {
-    uint32_t slot = (idx + probe) % GVN_TABLE_SIZE;
+  {
+    int probe;
+    for (probe = 0; probe < GVN_TABLE_SIZE; probe++) {
+      uint32_t slot = (idx + probe) % GVN_TABLE_SIZE;
 
-    if (!gvn_table[slot].occupied) {
-      if (gvn_scope_top < GVN_SCOPE_MAX) {
-        { GVNScopeAction gvn_sa; gvn_sa.slot = slot; gvn_sa.old_occupied = false; gvn_sa.old_valid = false; gvn_scope_stack[gvn_scope_top++] = gvn_sa; }
+      if (!gvn_table[slot].occupied) {
+        if (gvn_scope_top < GVN_SCOPE_MAX) {
+          {
+            GVNScopeAction gvn_sa;
+            gvn_sa.slot = slot;
+            gvn_sa.old_occupied = false;
+            gvn_sa.old_valid = false;
+            gvn_scope_stack[gvn_scope_top++] = gvn_sa;
+          }
+        }
+        gvn_table[slot].occupied = true;
+        gvn_table[slot].valid = true;
+        gvn_table[slot].op = op;
+        gvn_table[slot].src1_vn = src1_vn;
+        gvn_table[slot].src2_vn = src2_vn;
+        gvn_table[slot].imm = imm;
+        if (global_name) {
+          strncpy(gvn_table[slot].global_name, global_name,
+                  sizeof(gvn_table[slot].global_name) - 1);
+          gvn_table[slot].global_name[sizeof(gvn_table[slot].global_name) - 1] =
+              '\0';
+        } else {
+          gvn_table[slot].global_name[0] = '\0';
+        }
+        gvn_table[slot].val_num = dst_reg;
+        gvn_table[slot].dst_reg = dst_reg;
+        gvn_table[slot].alias_class = alias_class;
+        gvn_table[slot].root_addr = root_addr;
+        gvn_table[slot].sbt_base = sbt_base;
+        gvn_table[slot].sbt_offset = sbt_offset;
+        gvn_table[slot].sbt_has_cast = sbt_has_cast;
+        gvn_table[slot].store_src = 0;
+        gvn_table[slot].from_store = false;
+        return &gvn_table[slot];
       }
-      gvn_table[slot].occupied = true;
-      gvn_table[slot].valid = true;
-      gvn_table[slot].op = op;
-      gvn_table[slot].src1_vn = src1_vn;
-      gvn_table[slot].src2_vn = src2_vn;
-      gvn_table[slot].imm = imm;
-      if (global_name) {
-        strncpy(gvn_table[slot].global_name, global_name, sizeof(gvn_table[slot].global_name) - 1);
-        gvn_table[slot].global_name[sizeof(gvn_table[slot].global_name) - 1] = '\0';
-      } else {
-        gvn_table[slot].global_name[0] = '\0';
-      }
-      gvn_table[slot].val_num = dst_reg;
-      gvn_table[slot].dst_reg = dst_reg;
-      gvn_table[slot].alias_class = alias_class;
-      gvn_table[slot].root_addr = root_addr;
-      gvn_table[slot].sbt_base = sbt_base;
-      gvn_table[slot].sbt_offset = sbt_offset;
-      gvn_table[slot].sbt_has_cast = sbt_has_cast;
-      gvn_table[slot].store_src = 0;
-      gvn_table[slot].from_store = false;
-      return &gvn_table[slot];
-    }
 
-    if (gvn_table[slot].occupied && gvn_table[slot].valid) {
-      if (gvn_table[slot].op == op &&
-          gvn_table[slot].src1_vn == src1_vn &&
-          gvn_table[slot].src2_vn == src2_vn &&
-          gvn_table[slot].imm == imm) {
-        if (!global_name || strcmp(gvn_table[slot].global_name, global_name) == 0) {
-          return &gvn_table[slot];
+      if (gvn_table[slot].occupied && gvn_table[slot].valid) {
+        if (gvn_table[slot].op == op && gvn_table[slot].src1_vn == src1_vn &&
+            gvn_table[slot].src2_vn == src2_vn && gvn_table[slot].imm == imm) {
+          if (!global_name ||
+              strcmp(gvn_table[slot].global_name, global_name) == 0) {
+            return &gvn_table[slot];
+          }
         }
       }
     }
-  } }
+  }
   return NULL;
 }
 
@@ -6297,29 +6438,29 @@ static void gvn_scope_pop(BlockID bid) {
 
 static bool is_gvn_pure(Opcode op) {
   switch (op) {
-    case OP_ADD:
-    case OP_SUB:
-    case OP_MUL:
-    case OP_DIV:
-    case OP_MOD:
-    case OP_BAND:
-    case OP_BOR:
-    case OP_BXOR:
-    case OP_BNOT:
-    case OP_SHL:
-    case OP_SHR:
-    case OP_LT:
-    case OP_EQ:
-    case OP_NE:
-    case OP_GT:
-    case OP_GE:
-    case OP_LE:
-    case OP_GEP:
-    case OP_GLOBAL:
-    case OP_CONST:
-      return true;
-    default:
-      return false;
+  case OP_ADD:
+  case OP_SUB:
+  case OP_MUL:
+  case OP_DIV:
+  case OP_MOD:
+  case OP_BAND:
+  case OP_BOR:
+  case OP_BXOR:
+  case OP_BNOT:
+  case OP_SHL:
+  case OP_SHR:
+  case OP_LT:
+  case OP_EQ:
+  case OP_NE:
+  case OP_GT:
+  case OP_GE:
+  case OP_LE:
+  case OP_GEP:
+  case OP_GLOBAL:
+  case OP_CONST:
+    return true;
+  default:
+    return false;
   }
 }
 
@@ -6349,7 +6490,8 @@ static void gvn_invalidate_loop_variant_loads(Function *fn, BlockID bid) {
   while (q_head < q_tail) {
     int curr = body_queue[q_head++];
     Block *curr_blk = fn->blocks[curr];
-    if (!curr_blk) continue;
+    if (!curr_blk)
+      continue;
     for (uint32_t pi = 0; pi < curr_blk->n_preds; pi++) {
       BlockID pred_id = curr_blk->preds[pi];
       if (!in_body[pred_id]) {
@@ -6383,18 +6525,21 @@ static void gvn_invalidate_loop_variant_loads(Function *fn, BlockID bid) {
             break;
           }
           LoopStore *ls = &stores[n_stores++];
-          ls->base = trace_address_root_offset(fn, ins->src[1], &ls->offset, &ls->has_cast);
+          ls->base = trace_address_root_offset(fn, ins->src[1], &ls->offset,
+                                               &ls->has_cast);
           if (ins->amf.folded) {
             ls->offset += ins->amf.disp;
           }
         }
       }
-      if (clobber_all) break;
+      if (clobber_all)
+        break;
     }
   }
 
   for (int gvni = 0; gvni < GVN_TABLE_SIZE; gvni++) {
-    if (gvn_table[gvni].occupied && gvn_table[gvni].valid && gvn_table[gvni].op == OP_LOAD) {
+    if (gvn_table[gvni].occupied && gvn_table[gvni].valid &&
+        gvn_table[gvni].op == OP_LOAD) {
       bool must_kill = false;
       if (clobber_all) {
         must_kill = true;
@@ -6415,7 +6560,9 @@ static void gvn_invalidate_loop_variant_loads(Function *fn, BlockID bid) {
           } else {
             Instr *db1 = fn->def_of[ls->base];
             Instr *db2 = fn->def_of[gvn_table[gvni].sbt_base];
-            bool distinct_allocas = (db1 && db2 && db1->op == OP_ALLOCA && db2->op == OP_ALLOCA && ls->base != gvn_table[gvni].sbt_base);
+            bool distinct_allocas =
+                (db1 && db2 && db1->op == OP_ALLOCA && db2->op == OP_ALLOCA &&
+                 ls->base != gvn_table[gvni].sbt_base);
             if (!distinct_allocas) {
               must_kill = true;
               break;
@@ -6425,8 +6572,11 @@ static void gvn_invalidate_loop_variant_loads(Function *fn, BlockID bid) {
       }
       if (must_kill) {
         if (getenv("ZCC_DEBUG_GVN")) {
-          fprintf(stderr, "[GVN-LOOP-KILL] block %u is loop header, killed load dst=%u base=%u offset=%ld due to loop stores\n",
-                  bid, gvn_table[gvni].dst_reg, gvn_table[gvni].sbt_base, gvn_table[gvni].sbt_offset);
+          fprintf(stderr,
+                  "[GVN-LOOP-KILL] block %u is loop header, killed load dst=%u "
+                  "base=%u offset=%ld due to loop stores\n",
+                  bid, gvn_table[gvni].dst_reg, gvn_table[gvni].sbt_base,
+                  gvn_table[gvni].sbt_offset);
         }
         gvn_table[gvni].valid = false;
       }
@@ -6449,20 +6599,31 @@ static void gvn_walk_domtree(Function *fn, BlockID bid, uint32_t *eliminated) {
     if (ins->dead || ins->op == OP_NOP)
       continue;
 
-    if (ins->op == OP_COPY && ins->n_src >= 1 && ins->dst && !ins->is_float && !ins->src_is_float) {
+    if (ins->op == OP_COPY && ins->n_src >= 1 && ins->dst && !ins->is_float &&
+        !ins->src_is_float) {
       vn_of[ins->dst] = vn_of[ins->src[0]];
       continue;
     }
 
     if (ins->op == OP_CALL) {
-      { int gvni; for (gvni = 0; gvni < GVN_TABLE_SIZE; gvni++) {
-        if (gvn_table[gvni].occupied && gvn_table[gvni].valid && gvn_table[gvni].op == OP_LOAD) {
-          if (gvn_scope_top < GVN_SCOPE_MAX) {
-            { GVNScopeAction gvn_sa2; gvn_sa2.slot = gvni; gvn_sa2.old_occupied = gvn_table[gvni].occupied; gvn_sa2.old_valid = gvn_table[gvni].valid; gvn_scope_stack[gvn_scope_top++] = gvn_sa2; }
+      {
+        int gvni;
+        for (gvni = 0; gvni < GVN_TABLE_SIZE; gvni++) {
+          if (gvn_table[gvni].occupied && gvn_table[gvni].valid &&
+              gvn_table[gvni].op == OP_LOAD) {
+            if (gvn_scope_top < GVN_SCOPE_MAX) {
+              {
+                GVNScopeAction gvn_sa2;
+                gvn_sa2.slot = gvni;
+                gvn_sa2.old_occupied = gvn_table[gvni].occupied;
+                gvn_sa2.old_valid = gvn_table[gvni].valid;
+                gvn_scope_stack[gvn_scope_top++] = gvn_sa2;
+              }
+            }
+            gvn_table[gvni].valid = false;
           }
-          gvn_table[gvni].valid = false;
         }
-      } }
+      }
       continue;
     }
 
@@ -6470,7 +6631,8 @@ static void gvn_walk_domtree(Function *fn, BlockID bid, uint32_t *eliminated) {
       RegID store_addr_reg = ins->src[1];
       int64_t store_offset = 0;
       bool store_has_cast = false;
-      RegID root_store = trace_address_root_offset(fn, store_addr_reg, &store_offset, &store_has_cast);
+      RegID root_store = trace_address_root_offset(
+          fn, store_addr_reg, &store_offset, &store_has_cast);
       int64_t store_disp;
       uint64_t store_mem_key;
       int64_t store_imm;
@@ -6481,95 +6643,121 @@ static void gvn_walk_domtree(Function *fn, BlockID bid, uint32_t *eliminated) {
       }
 
       if (getenv("ZCC_DEBUG_GVN")) {
-        fprintf(stderr, "[GVN-STORE] ins %u: store into base=%u (vn=%u), offset=%ld, has_cast=%d\n", 
-                ins->id, root_store, vn_of[root_store], store_offset, store_has_cast);
+        fprintf(stderr,
+                "[GVN-STORE] ins %u: store into base=%u (vn=%u), offset=%ld, "
+                "has_cast=%d\n",
+                ins->id, root_store, vn_of[root_store], store_offset,
+                store_has_cast);
       }
 
-      { int gvni2; for (gvni2 = 0; gvni2 < GVN_TABLE_SIZE; gvni2++) {
-        if (gvn_table[gvni2].occupied && gvn_table[gvni2].valid && gvn_table[gvni2].op == OP_LOAD) {
-          bool must_kill = false;
+      {
+        int gvni2;
+        for (gvni2 = 0; gvni2 < GVN_TABLE_SIZE; gvni2++) {
+          if (gvn_table[gvni2].occupied && gvn_table[gvni2].valid &&
+              gvn_table[gvni2].op == OP_LOAD) {
+            bool must_kill = false;
 
-          /* Rule 1: Cast fallback rule (Risk 2 mitigation) */
-          if (store_has_cast || gvn_table[gvni2].sbt_has_cast) {
-            must_kill = true;
-            if (getenv("ZCC_DEBUG_GVN")) {
-              fprintf(stderr, "  -> KILLED by Rule 1 (cast): load dst=%u base=%u offset=%ld has_cast=%d\n", gvn_table[gvni2].dst_reg, gvn_table[gvni2].sbt_base, gvn_table[gvni2].sbt_offset, gvn_table[gvni2].sbt_has_cast);
+            /* Rule 1: Cast fallback rule (Risk 2 mitigation) */
+            if (store_has_cast || gvn_table[gvni2].sbt_has_cast) {
+              must_kill = true;
+              if (getenv("ZCC_DEBUG_GVN")) {
+                fprintf(stderr,
+                        "  -> KILLED by Rule 1 (cast): load dst=%u base=%u "
+                        "offset=%ld has_cast=%d\n",
+                        gvn_table[gvni2].dst_reg, gvn_table[gvni2].sbt_base,
+                        gvn_table[gvni2].sbt_offset,
+                        gvn_table[gvni2].sbt_has_cast);
+              }
             }
-          }
-          /* Rule 2: If both have valid symbolic bases */
-          else if (root_store > 0 && gvn_table[gvni2].sbt_base > 0) {
-            RegID store_base_vn = vn_of[root_store];
-            RegID load_base_vn = vn_of[gvn_table[gvni2].sbt_base];
-            if (store_base_vn != load_base_vn) {
-              /* Different symbolic bases -> must not alias! No kill! */
-              must_kill = false;
-            } else {
-              /* Same symbolic base -> check offsets (struct field TBAA) */
-              if (store_offset == gvn_table[gvni2].sbt_offset) {
-                /* Same offset -> must kill! */
-                must_kill = true;
-                if (getenv("ZCC_DEBUG_GVN")) {
-                  fprintf(stderr, "  -> KILLED by Rule 2 (same base & offset): load dst=%u base=%u offset=%ld has_cast=%d\n", gvn_table[gvni2].dst_reg, gvn_table[gvni2].sbt_base, gvn_table[gvni2].sbt_offset, gvn_table[gvni2].sbt_has_cast);
+            /* Rule 2: If both have valid symbolic bases */
+            else if (root_store > 0 && gvn_table[gvni2].sbt_base > 0) {
+              RegID store_base_vn = vn_of[root_store];
+              RegID load_base_vn = vn_of[gvn_table[gvni2].sbt_base];
+              if (store_base_vn != load_base_vn) {
+                /* Different symbolic bases -> must not alias! No kill! */
+                must_kill = false;
+              } else {
+                /* Same symbolic base -> check offsets (struct field TBAA) */
+                if (store_offset == gvn_table[gvni2].sbt_offset) {
+                  /* Same offset -> must kill! */
+                  must_kill = true;
+                  if (getenv("ZCC_DEBUG_GVN")) {
+                    fprintf(stderr,
+                            "  -> KILLED by Rule 2 (same base & offset): load "
+                            "dst=%u base=%u offset=%ld has_cast=%d\n",
+                            gvn_table[gvni2].dst_reg, gvn_table[gvni2].sbt_base,
+                            gvn_table[gvni2].sbt_offset,
+                            gvn_table[gvni2].sbt_has_cast);
+                  }
+                } else {
+                  /* Different offsets -> must not alias! No kill! */
+                  must_kill = false;
+                }
+              }
+            }
+            /* Rule 3: Unknown bases -> conservative invalidation based on alias
+               class */
+            else {
+              if (ins->alias_class == ALIAS_LOCAL_STACK) {
+                if (gvn_table[gvni2].alias_class == ALIAS_LOCAL_STACK &&
+                    gvn_table[gvni2].root_addr == root_store) {
+                  must_kill = true;
+                  if (getenv("ZCC_DEBUG_GVN")) {
+                    fprintf(stderr,
+                            "  -> KILLED by Rule 3 (local stack): load dst=%u "
+                            "base=%u offset=%ld has_cast=%d\n",
+                            gvn_table[gvni2].dst_reg, gvn_table[gvni2].sbt_base,
+                            gvn_table[gvni2].sbt_offset,
+                            gvn_table[gvni2].sbt_has_cast);
+                  }
                 }
               } else {
-                /* Different offsets -> must not alias! No kill! */
-                must_kill = false;
-              }
-            }
-          }
-          /* Rule 3: Unknown bases -> conservative invalidation based on alias class */
-          else {
-            if (ins->alias_class == ALIAS_LOCAL_STACK) {
-              if (gvn_table[gvni2].alias_class == ALIAS_LOCAL_STACK && gvn_table[gvni2].root_addr == root_store) {
-                must_kill = true;
-                if (getenv("ZCC_DEBUG_GVN")) {
-                  fprintf(stderr, "  -> KILLED by Rule 3 (local stack): load dst=%u base=%u offset=%ld has_cast=%d\n", gvn_table[gvni2].dst_reg, gvn_table[gvni2].sbt_base, gvn_table[gvni2].sbt_offset, gvn_table[gvni2].sbt_has_cast);
-                }
-              }
-            } else {
-              if (gvn_table[gvni2].alias_class == ALIAS_UNKNOWN) {
-                must_kill = true;
-                if (getenv("ZCC_DEBUG_GVN")) {
-                  fprintf(stderr, "  -> KILLED by Rule 3 (unknown base): load dst=%u base=%u offset=%ld has_cast=%d\n", gvn_table[gvni2].dst_reg, gvn_table[gvni2].sbt_base, gvn_table[gvni2].sbt_offset, gvn_table[gvni2].sbt_has_cast);
+                if (gvn_table[gvni2].alias_class == ALIAS_UNKNOWN) {
+                  must_kill = true;
+                  if (getenv("ZCC_DEBUG_GVN")) {
+                    fprintf(stderr,
+                            "  -> KILLED by Rule 3 (unknown base): load dst=%u "
+                            "base=%u offset=%ld has_cast=%d\n",
+                            gvn_table[gvni2].dst_reg, gvn_table[gvni2].sbt_base,
+                            gvn_table[gvni2].sbt_offset,
+                            gvn_table[gvni2].sbt_has_cast);
+                  }
                 }
               }
             }
-          }
 
-          if (must_kill) {
-            if (gvn_scope_top < GVN_SCOPE_MAX) {
-              { GVNScopeAction gvn_sa3; gvn_sa3.slot = gvni2; gvn_sa3.old_occupied = gvn_table[gvni2].occupied; gvn_sa3.old_valid = gvn_table[gvni2].valid; gvn_scope_stack[gvn_scope_top++] = gvn_sa3; }
+            if (must_kill) {
+              if (gvn_scope_top < GVN_SCOPE_MAX) {
+                {
+                  GVNScopeAction gvn_sa3;
+                  gvn_sa3.slot = gvni2;
+                  gvn_sa3.old_occupied = gvn_table[gvni2].occupied;
+                  gvn_sa3.old_valid = gvn_table[gvni2].valid;
+                  gvn_scope_stack[gvn_scope_top++] = gvn_sa3;
+                }
+              }
+              gvn_table[gvni2].valid = false;
             }
-            gvn_table[gvni2].valid = false;
           }
         }
-      } }
+      }
 
       /* Store-to-Load Forwarding: Cache store values */
       if (root_store > 0 && !store_has_cast) {
         store_disp = ins->amf.folded ? ins->amf.disp : 0;
-        store_mem_key = ((uint64_t)(uint32_t)store_disp << 4) | (uint32_t)(ins->imm & 0xF);
+        store_mem_key =
+            ((uint64_t)(uint32_t)store_disp << 4) | (uint32_t)(ins->imm & 0xF);
         store_imm = (int64_t)store_mem_key;
 
-        e = gvn_lookup_or_insert(
-            OP_LOAD,
-            vn_of[store_addr_reg],
-            0,
-            store_imm,
-            NULL,
-            ins->src[0],
-            ins->alias_class,
-            root_store,
-            root_store,
-            store_offset,
-            false
-        );
+        e = gvn_lookup_or_insert(OP_LOAD, vn_of[store_addr_reg], 0, store_imm,
+                                 NULL, ins->src[0], ins->alias_class,
+                                 root_store, root_store, store_offset, false);
         if (e) {
-            e->dst_reg   = ins->src[0];
-            e->val_num   = ins->src[0];
-            e->store_src = ins->src[0];
-            e->from_store = true;
-            e->valid     = true;
+          e->dst_reg = ins->src[0];
+          e->val_num = ins->src[0];
+          e->store_src = ins->src[0];
+          e->from_store = true;
+          e->valid = true;
         }
       }
 
@@ -6585,7 +6773,8 @@ static void gvn_walk_domtree(Function *fn, BlockID bid, uint32_t *eliminated) {
       int64_t imm = ins->imm;
       if (ins->op == OP_LOAD || ins->op == OP_STORE) {
         int64_t disp = ins->amf.folded ? ins->amf.disp : 0;
-        uint64_t mem_key = ((uint64_t)(uint32_t)disp << 4) | (uint32_t)(ins->imm & 0xF);
+        uint64_t mem_key =
+            ((uint64_t)(uint32_t)disp << 4) | (uint32_t)(ins->imm & 0xF);
         imm = (int64_t)mem_key;
       }
       const char *global_name = (ins->op == OP_GLOBAL) ? ins->call_name : NULL;
@@ -6593,24 +6782,30 @@ static void gvn_walk_domtree(Function *fn, BlockID bid, uint32_t *eliminated) {
       AliasClass alias_class = ins->alias_class;
       int64_t load_offset = 0;
       bool load_has_cast = false;
-      RegID root_addr = trace_address_root_offset(fn, ins->src[0], &load_offset, &load_has_cast);
+      RegID root_addr = trace_address_root_offset(fn, ins->src[0], &load_offset,
+                                                  &load_has_cast);
       if (ins->op == OP_LOAD && ins->amf.folded) {
         load_offset += ins->amf.disp;
       }
 
       if (getenv("ZCC_DEBUG_GVN") && ins->op == OP_LOAD) {
-        fprintf(stderr, "[GVN-LOAD-LOOKUP] ins %u: load dst=%u, src0_vn=%u, imm=%ld, base=%u (vn=%u), offset=%ld, has_cast=%d\n", 
-                ins->id, ins->dst, src1_vn, imm, root_addr, vn_of[root_addr], load_offset, load_has_cast);
+        fprintf(stderr,
+                "[GVN-LOAD-LOOKUP] ins %u: load dst=%u, src0_vn=%u, imm=%ld, "
+                "base=%u (vn=%u), offset=%ld, has_cast=%d\n",
+                ins->id, ins->dst, src1_vn, imm, root_addr, vn_of[root_addr],
+                load_offset, load_has_cast);
       }
 
-      GVNEntry *entry = gvn_lookup_or_insert(ins->op, src1_vn, src2_vn, imm, global_name, ins->dst, alias_class, root_addr, root_addr, load_offset, load_has_cast);
+      GVNEntry *entry = gvn_lookup_or_insert(
+          ins->op, src1_vn, src2_vn, imm, global_name, ins->dst, alias_class,
+          root_addr, root_addr, load_offset, load_has_cast);
 
       if (entry && entry->dst_reg != ins->dst) {
         if (ins->op != OP_CONST) {
-          ins->op    = OP_COPY;
+          ins->op = OP_COPY;
           ins->src[0] = entry->dst_reg;
-          ins->n_src  = 1;
-          ins->imm    = 0;
+          ins->n_src = 1;
+          ins->imm = 0;
           if (ins->src[0] < MAX_INSTRS && fn->def_of[ins->src[0]]) {
             ins->src_is_float = fn->def_of[ins->src[0]]->is_float;
           }
@@ -6618,11 +6813,14 @@ static void gvn_walk_domtree(Function *fn, BlockID bid, uint32_t *eliminated) {
           (*eliminated)++;
           if (getenv("ZCC_DEBUG_GVN")) {
             if (entry->from_store)
-              fprintf(stderr, "  -> SLF: forwarded store reg %u to load dst %u\n",
+              fprintf(stderr,
+                      "  -> SLF: forwarded store reg %u to load dst %u\n",
                       entry->store_src, ins->dst);
             else
-              fprintf(stderr, "  -> ELIMINATED redundant load, replaced with COPY of %u\n",
-                      entry->dst_reg);
+              fprintf(
+                  stderr,
+                  "  -> ELIMINATED redundant load, replaced with COPY of %u\n",
+                  entry->dst_reg);
           }
         } else {
           vn_of[ins->dst] = vn_of[entry->dst_reg];
@@ -6657,7 +6855,8 @@ static uint32_t global_value_numbering_pass(Function *fn) {
   }
 
   if (eliminated > 0) {
-    fprintf(stderr, "[GVN]       redundant operations eliminated: %u\n", eliminated);
+    fprintf(stderr, "[GVN]       redundant operations eliminated: %u\n",
+            eliminated);
   }
   return eliminated;
 }
@@ -6765,16 +6964,17 @@ static uint32_t redundant_load_elim_pass(Function *fn) {
   return eliminated;
 }
 
-#include "zcc_ir_opt_passes.h"
 #include "ir_telemetry.h"
 #include "src/opt/pointer_ssa.h"
-#include <sys/time.h>
+#include "zcc_ir_opt_passes.h"
+#include <time.h>
 
 static int count_ir_nodes(Function *fn) {
   int count = 0;
   for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
     Block *b = fn->blocks[bi];
-    if (!b) continue;
+    if (!b)
+      continue;
     for (Instr *ins = b->head; ins; ins = ins->next) {
       count++;
     }
@@ -6782,10 +6982,25 @@ static int count_ir_nodes(Function *fn) {
   return count;
 }
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <sys/time.h>
+#endif
+
 static long long get_time_us(void) {
-  struct timeval tv;
-  gettimeofday(&tv, NULL);
-  return (long long)tv.tv_sec * 1000000 + tv.tv_usec;
+#ifdef _WIN32
+    static LARGE_INTEGER freq = {0};
+    LARGE_INTEGER counter;
+    if (freq.QuadPart == 0)
+        QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&counter);
+    return (long long)((counter.QuadPart * 1000000) / freq.QuadPart);
+#else
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (long long)tv.tv_sec * 1000000 + tv.tv_usec;
+#endif
 }
 
 #ifndef ZCC_BASELINE
@@ -6793,6 +7008,43 @@ bool opt_instcombine_pass(Function *fn, void *metrics);
 bool opt_sccp_pass(Function *fn, void *metrics);
 bool opt_cfg_simplify_pass(Function *fn, void *metrics);
 #endif
+
+static uint32_t audit_count_instrs(Function *fn) {
+  uint32_t total = 0;
+  for (uint32_t i = 0; i < fn->n_blocks; i++) {
+    Block *blk = fn->blocks[i];
+    if (blk && blk->reachable) {
+      for (Instr *ins = blk->head; ins; ins = ins->next) {
+        if (ins->op != OP_NOP)
+          total++;
+      }
+    }
+  }
+  return total;
+}
+
+static uint32_t audit_count_blocks(Function *fn) {
+  uint32_t count = 0;
+  for (uint32_t i = 0; i < fn->n_blocks; i++) {
+    if (fn->blocks[i] && fn->blocks[i]->reachable)
+      count++;
+  }
+  return count;
+}
+
+static uint32_t audit_count_allocas(Function *fn) {
+  uint32_t count = 0;
+  for (uint32_t i = 0; i < fn->n_blocks; i++) {
+    Block *blk = fn->blocks[i];
+    if (blk && blk->reachable) {
+      for (Instr *ins = blk->head; ins; ins = ins->next) {
+        if (ins->op == OP_ALLOCA)
+          count++;
+      }
+    }
+  }
+  return count;
+}
 
 void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
                     int num_params) {
@@ -6804,16 +7056,18 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
             "[run_all_passes] IR validation failed; continuing anyway.\n");
   }
 
-  fprintf(stderr, "=== PRE-OPT IR ===\n");
-  for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
-    Block *b = fn->blocks[bi];
-    if (!b)
-      continue;
-    fprintf(stderr, "Block %u (preds: %u, succs: %u)\n", bi, b->n_preds,
-            b->n_succs);
-    for (Instr *ins = b->head; ins; ins = ins->next) {
-      fprintf(stderr, "  ins %u: op=%d dst=%u src0=%u\n", (unsigned)ins->id,
-              ins->op, ins->dst, ins->n_src > 0 ? ins->src[0] : 0);
+  if (getenv("ZCC_DUMP_IR") && getenv("ZCC_DUMP_IR")[0] == '1') {
+    fprintf(stderr, "=== PRE-OPT IR ===\n");
+    for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
+      Block *b = fn->blocks[bi];
+      if (!b)
+        continue;
+      fprintf(stderr, "Block %u (preds: %u, succs: %u)\n", bi, b->n_preds,
+              b->n_succs);
+      for (Instr *ins = b->head; ins; ins = ins->next) {
+        fprintf(stderr, "  ins %u: op=%d dst=%u src0=%u\n", (unsigned)ins->id,
+                ins->op, ins->dst, ins->n_src > 0 ? ins->src[0] : 0);
+      }
     }
   }
 
@@ -6822,6 +7076,10 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   compute_reachability(fn);
   t_end = get_time_us();
   ir_telem_log_opt("compute_reachability", (int)(t_end - t_start), 0, 0, 0, 0);
+
+  uint32_t audit_initial_blocks = audit_count_blocks(fn);
+  uint32_t audit_initial_instrs = audit_count_instrs(fn);
+  uint32_t audit_initial_allocas = audit_count_allocas(fn);
 
   /* CG-IR: Mark parameter allocas as escaping so they are not promoted by
    * Mem2Reg */
@@ -6864,7 +7122,8 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   uint32_t folded = constant_fold_pass(fn);
   t_end = get_time_us();
   n_after = count_ir_nodes(fn);
-  ir_telem_log_opt("constant_fold", (int)(t_end - t_start), n_before, n_after, folded, 0);
+  ir_telem_log_opt("constant_fold", (int)(t_end - t_start), n_before, n_after,
+                   folded, 0);
 
   // NEW IR OPTIMIZATION PASSES
   n_before = count_ir_nodes(fn);
@@ -6872,21 +7131,24 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   uint32_t opt_sr = opt_strength_reduction_pass(fn);
   t_end = get_time_us();
   n_after = count_ir_nodes(fn);
-  ir_telem_log_opt("strength_reduction", (int)(t_end - t_start), n_before, n_after, opt_sr, 0);
+  ir_telem_log_opt("strength_reduction", (int)(t_end - t_start), n_before,
+                   n_after, opt_sr, 0);
 
   n_before = count_ir_nodes(fn);
   t_start = get_time_us();
   uint32_t opt_cp = opt_copy_prop_pass(fn);
   t_end = get_time_us();
   n_after = count_ir_nodes(fn);
-  ir_telem_log_opt("copy_propagation", (int)(t_end - t_start), n_before, n_after, opt_cp, 0);
+  ir_telem_log_opt("copy_propagation", (int)(t_end - t_start), n_before,
+                   n_after, opt_cp, 0);
 
   n_before = count_ir_nodes(fn);
   t_start = get_time_us();
   uint32_t opt_p = opt_peephole_pass(fn);
   t_end = get_time_us();
   n_after = count_ir_nodes(fn);
-  ir_telem_log_opt("peephole_opts", (int)(t_end - t_start), n_before, n_after, opt_p, 0);
+  ir_telem_log_opt("peephole_opts", (int)(t_end - t_start), n_before, n_after,
+                   opt_p, 0);
 
   uint32_t opt_cp2 = 0;
   if (opt_p > 0) {
@@ -6895,17 +7157,17 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
     opt_cp2 = opt_copy_prop_pass(fn);
     t_end = get_time_us();
     n_after = count_ir_nodes(fn);
-    ir_telem_log_opt("copy_propagation_2", (int)(t_end - t_start), n_before, n_after, opt_cp2, 0);
+    ir_telem_log_opt("copy_propagation_2", (int)(t_end - t_start), n_before,
+                     n_after, opt_cp2, 0);
   }
 
   if (folded > 0 || opt_sr > 0 || opt_cp > 0 || opt_p > 0 || opt_cp2 > 0) {
-    fprintf(
-        stderr,
-        "[IR-Opts] Folded: %u | S-Reduce: %u | Copy-Prop: %u | Peephole: %u | Copy-Prop2: %u\n",
-        folded, opt_sr, opt_cp, opt_p, opt_cp2);
+    fprintf(stderr,
+            "[IR-Opts] Folded: %u | S-Reduce: %u | Copy-Prop: %u | Peephole: "
+            "%u | Copy-Prop2: %u\n",
+            folded, opt_sr, opt_cp, opt_p, opt_cp2);
     licm_build_def_block(fn);
   }
-
 
   /* ── Pass 0b: Redundant Load Elimination ── */
   n_before = count_ir_nodes(fn);
@@ -6913,7 +7175,8 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   uint32_t rle_count = redundant_load_elim_pass(fn);
   t_end = get_time_us();
   n_after = count_ir_nodes(fn);
-  ir_telem_log_opt("redundant_load_elim", (int)(t_end - t_start), n_before, n_after, rle_count, 0);
+  ir_telem_log_opt("redundant_load_elim", (int)(t_end - t_start), n_before,
+                   n_after, rle_count, 0);
 
   if (rle_count > 0) {
     fprintf(stderr, "[RLE]       redundant loads eliminated: %u\n", rle_count);
@@ -6928,7 +7191,8 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   uint32_t amf_count = opt_address_mode_folding_pass(fn);
   t_end = get_time_us();
   n_after = count_ir_nodes(fn);
-  ir_telem_log_opt("address_mode_folding", (int)(t_end - t_start), n_before, n_after, amf_count, 0);
+  ir_telem_log_opt("address_mode_folding", (int)(t_end - t_start), n_before,
+                   n_after, amf_count, 0);
 
   if (amf_count > 0) {
     fprintf(stderr, "[AMF]       address modes folded: %u\n", amf_count);
@@ -6941,9 +7205,10 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   uint32_t dce_removed = ssa_dce_pass(fn);
   t_end = get_time_us();
   n_after = count_ir_nodes(fn);
-  ir_telem_log_opt("ssa_dce_1", (int)(t_end - t_start), n_before, n_after, dce_removed, 0);
+  ir_telem_log_opt("ssa_dce_1", (int)(t_end - t_start), n_before, n_after,
+                   dce_removed, 0);
 
-  uint32_t dce_total   = dce_removed;
+  uint32_t dce_total = dce_removed;
 #ifdef ZCC_DCE_VERBOSE
   fprintf(stderr, "[DCE->SSA]  instructions removed: %u  blocks removed: %u\n",
           dce_removed, fn->stats.dce_blocks_removed);
@@ -6958,7 +7223,8 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   uint32_t licm_hoisted = licm_pass(fn);
   t_end = get_time_us();
   n_after = count_ir_nodes(fn);
-  ir_telem_log_opt("licm_hoist", (int)(t_end - t_start), n_before, n_after, licm_hoisted, 0);
+  ir_telem_log_opt("licm_hoist", (int)(t_end - t_start), n_before, n_after,
+                   licm_hoisted, 0);
 
   if (licm_hoisted > 0)
     fprintf(stderr, "[LICM]      instructions hoisted: %u\n", licm_hoisted);
@@ -6970,9 +7236,10 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   dce_removed = ssa_dce_pass(fn);
   t_end = get_time_us();
   n_after = count_ir_nodes(fn);
-  ir_telem_log_opt("ssa_dce_2", (int)(t_end - t_start), n_before, n_after, dce_removed, 0);
+  ir_telem_log_opt("ssa_dce_2", (int)(t_end - t_start), n_before, n_after,
+                   dce_removed, 0);
 
-  dce_total  += dce_removed;
+  dce_total += dce_removed;
 #ifdef ZCC_DCE_VERBOSE
   fprintf(stderr, "[DCE->SSA]  instructions removed: %u  blocks removed: %u\n",
           dce_removed, fn->stats.dce_blocks_removed);
@@ -6986,7 +7253,8 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   /* Pointer SSA / Points-To Analysis & Rewrite Pass */
   uint32_t ptr_rewrites = opt_pointer_ssa_rewrite_pass(fn);
   if (ptr_rewrites > 0) {
-    fprintf(stderr, "[PointerSSA] rewrote %u indirect instructions\n", ptr_rewrites);
+    fprintf(stderr, "[PointerSSA] rewrote %u indirect instructions\n",
+            ptr_rewrites);
   }
 
   /* ── Pass 4: Escape Analysis (heap: large ctx; safe under deep ZCC stack) ──
@@ -6999,7 +7267,8 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   t_start = get_time_us();
   uint32_t promoted = escape_analysis_pass(fn, ea_ctx);
   t_end = get_time_us();
-  ir_telem_log_opt("escape_analysis", (int)(t_end - t_start), 0, 0, promoted, 0);
+  ir_telem_log_opt("escape_analysis", (int)(t_end - t_start), 0, 0, promoted,
+                   0);
 
   fprintf(stderr,
           "[EscapeAna] allocations promoted to stack: %u  (of %u total)\n",
@@ -7012,7 +7281,8 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   uint32_t mem2reg_count = scalar_promotion_pass(fn, ea_ctx);
   t_end = get_time_us();
   n_after = count_ir_nodes(fn);
-  ir_telem_log_opt("scalar_promotion", (int)(t_end - t_start), n_before, n_after, mem2reg_count, 0);
+  ir_telem_log_opt("scalar_promotion", (int)(t_end - t_start), n_before,
+                   n_after, mem2reg_count, 0);
 
   if (mem2reg_count > 0) {
     fprintf(stderr, "[Mem2Reg]   single-block allocas promoted: %u\n",
@@ -7023,42 +7293,49 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
     uint32_t post_cp = opt_copy_prop_pass(fn);
     uint32_t post_p = opt_peephole_pass(fn);
     if (post_folded > 0 || post_sr > 0 || post_cp > 0 || post_p > 0) {
-      fprintf(stderr, "[Post-Mem2Reg-Opts] Folded: %u | S-Reduce: %u | Copy-Prop: %u | Peephole: %u\n",
+      fprintf(stderr,
+              "[Post-Mem2Reg-Opts] Folded: %u | S-Reduce: %u | Copy-Prop: %u | "
+              "Peephole: %u\n",
               post_folded, post_sr, post_cp, post_p);
       licm_build_def_block(fn);
     }
 #ifndef ZCC_BASELINE
     if (fn->n_blocks > 2 && strcmp(fn->name, "main") != 0) {
-        uint64_t t_start_pass = get_time_us();
-        uint32_t iter = 0;
-        const uint32_t MAX_ITER = 1;
-        const uint64_t TIME_BUDGET_US = 5000;
-        bool changed = true;
-        const char *stop_reason = "fixpoint";
+      uint64_t t_start_pass = get_time_us();
+      uint32_t iter = 0;
+      const uint32_t MAX_ITER = 1;
+      const uint64_t TIME_BUDGET_US = 5000;
+      bool changed = true;
+      const char *stop_reason = "fixpoint";
 
-        while (changed) {
-            if (iter >= MAX_ITER) {
-                stop_reason = "max_iterations";
-                break;
-            }
-            uint64_t t_current = get_time_us();
-            if (t_current - t_start_pass >= TIME_BUDGET_US) {
-                stop_reason = "time_budget";
-                break;
-            }
-
-            changed = false;
-            iter++;
-
-            if (opt_sccp_pass(fn, NULL)) changed = true;
-            if (opt_instcombine_pass(fn, NULL)) changed = true;
-            if (opt_cfg_simplify_pass(fn, NULL)) changed = true;
-            if (changed) {
-                licm_build_def_block(fn);
-            }
+      while (changed) {
+        if (iter >= MAX_ITER) {
+          stop_reason = "max_iterations";
+          break;
         }
-        fprintf(stderr, "[PassLoop] fn=%s finished in %u iterations, stopped due to: %s\n",
-                fn->name, iter, stop_reason);
+        uint64_t t_current = get_time_us();
+        if (t_current - t_start_pass >= TIME_BUDGET_US) {
+          stop_reason = "time_budget";
+          break;
+        }
+
+        changed = false;
+        iter++;
+
+        if (opt_sccp_pass(fn, NULL))
+          changed = true;
+        if (opt_instcombine_pass(fn, NULL))
+          changed = true;
+        if (opt_cfg_simplify_pass(fn, NULL))
+          changed = true;
+        if (changed) {
+          licm_build_def_block(fn);
+        }
+      }
+      fprintf(
+          stderr,
+          "[PassLoop] fn=%s finished in %u iterations, stopped due to: %s\n",
+          fn->name, iter, stop_reason);
     }
 #endif
     uint32_t dce_after = ssa_dce_pass(fn);
@@ -7089,7 +7366,8 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   uint32_t gvn_ops = global_value_numbering_pass(fn);
   t_end = get_time_us();
   n_after = count_ir_nodes(fn);
-  ir_telem_log_opt("global_value_numbering", (int)(t_end - t_start), n_before, n_after, gvn_ops, 0);
+  ir_telem_log_opt("global_value_numbering", (int)(t_end - t_start), n_before,
+                   n_after, gvn_ops, 0);
 
   if (gvn_ops > 0) {
     opt_copy_prop_pass(fn);
@@ -7156,7 +7434,8 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
   // Log CFG Topology
   for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
     Block *b = fn->blocks[bi];
-    if (!b) continue;
+    if (!b)
+      continue;
 
     int preds[16];
     int n_preds = 0;
@@ -7175,10 +7454,41 @@ void run_all_passes(Function *fn, PassResult *result, const char *profile_path,
       inst_count++;
     }
 
-    ir_telem_log_cfg(b->id, n_preds, preds, n_succs, succs, inst_count, b->exec_freq);
+    ir_telem_log_cfg(b->id, n_preds, preds, n_succs, succs, inst_count,
+                     b->exec_freq);
   }
 
-  ir_telem_flush_observatory(current_function_name ? current_function_name : "unknown");
+  uint32_t final_blocks = audit_count_blocks(fn);
+  uint32_t final_instrs = audit_count_instrs(fn);
+  uint32_t final_allocas = audit_count_allocas(fn);
+
+  if (final_allocas > audit_initial_allocas) {
+    fprintf(stderr,
+            "[OPT-AUDIT FAIL] function=%s pass=Mem2Reg "
+            "reason=introduced_allocas (%u > %u)\n",
+            fn->name, final_allocas, audit_initial_allocas);
+    exit(1);
+  }
+
+  uint32_t allowed_max_blocks =
+      audit_initial_blocks + fn->stats.licm_preheaders_inserted;
+  if (final_blocks > allowed_max_blocks) {
+    fprintf(stderr,
+            "[OPT-AUDIT FAIL] function=%s pass=Final "
+            "reason=emitted_blocks_exceed_allowed_cfg_blocks (%u > %u, "
+            "preheaders=%u)\n",
+            fn->name, final_blocks, allowed_max_blocks,
+            fn->stats.licm_preheaders_inserted);
+    exit(1);
+  }
+
+  fprintf(stderr,
+          "[OPT-AUDIT-PASS] fn=%s blocks=%u->%u instrs=%u->%u allocas=%u->%u\n",
+          fn->name, audit_initial_blocks, final_blocks, audit_initial_instrs,
+          final_instrs, audit_initial_allocas, final_allocas);
+
+  ir_telem_flush_observatory(current_function_name ? current_function_name
+                                                   : "unknown");
 }
 
 /* ── Linear Scan Register Allocation ───────────────────────────────────────
@@ -7201,7 +7511,7 @@ typedef struct {
   RegID vreg;
   int start;
   int end;
-  int phys_reg; /* 0..N_PHYS_REGS-1 or -1 if spilled */
+  int phys_reg;   /* 0..N_PHYS_REGS-1 or -1 if spilled */
   int loop_depth; /* max loop_depth of blocks this interval spans */
 } LiveInterval;
 
@@ -7241,13 +7551,15 @@ static void ir_asm_number_and_liveness(Function *fn,
         continue;
       ins->lscan_seq = seq;
       /* Uses */
-#define RECORD_USE(reg) do { \
-  RegID r_id = (reg); \
-  if (r_id > 0 && r_id < MAX_INSTRS) { \
-    if (first_use[r_id] < 0) first_use[r_id] = seq; \
-    last_use[r_id] = seq; \
-  } \
-} while(0)
+#define RECORD_USE(reg)                                                        \
+  do {                                                                         \
+    RegID r_id = (reg);                                                        \
+    if (r_id > 0 && r_id < MAX_INSTRS) {                                       \
+      if (first_use[r_id] < 0)                                                 \
+        first_use[r_id] = seq;                                                 \
+      last_use[r_id] = seq;                                                    \
+    }                                                                          \
+  } while (0)
 
       if (ins->op == OP_CONDBR) {
         if (ins->n_src >= 1 && ins->src[0])
@@ -7316,38 +7628,49 @@ static void ir_asm_number_and_liveness(Function *fn,
    * extends to end of function (pessimizes regalloc but provably correct). */
   for (uint32_t bi = 0; bi < n_block_order; bi++) {
     BlockID hdr_bid = block_order[bi];
-    if (hdr_bid >= fn->n_blocks) continue;
+    if (hdr_bid >= fn->n_blocks)
+      continue;
     Block *hdr = fn->blocks[hdr_bid];
-    if (!hdr) continue;
+    if (!hdr)
+      continue;
     int is_loop_header = 0;
     for (uint32_t pi = 0; pi < hdr->n_preds; pi++) {
       BlockID pred_bid = hdr->preds[pi];
       for (uint32_t k = bi + 1; k < n_block_order; k++) {
-        if (block_order[k] == pred_bid) { is_loop_header = 1; break; }
+        if (block_order[k] == pred_bid) {
+          is_loop_header = 1;
+          break;
+        }
       }
-      if (is_loop_header) break;
+      if (is_loop_header)
+        break;
     }
-    if (!is_loop_header) continue;
+    if (!is_loop_header)
+      continue;
     int hdr_first_seq = hdr->head ? hdr->head->lscan_seq : -1;
-    if (hdr_first_seq < 0) continue;
+    if (hdr_first_seq < 0)
+      continue;
     for (int r = 0; r < MAX_INSTRS; r++) {
-      if (def_seq[r] < 0) continue;
+      if (def_seq[r] < 0)
+        continue;
       if (def_seq[r] < hdr_first_seq && last_use[r] >= hdr_first_seq) {
         last_use[r] = seq > 0 ? seq - 1 : 0;
       }
     }
   }
-  /* BUG-3 FIX: LICM hoisting + PGO can place a use BEFORE a def in linear emission
-   * order. The linear scanner assumes the interval starts at def_seq. If use < def,
-   * the interval [def, end] DOES NOT COVER the use, allowing the allocator to assign
-   * a register that is already active at the use point, causing lethal clobbering.
-   * Fix: Expand the interval backward to start at first_use, and forward to the
-   * end of the function (since it must span a loop back-edge). */
+  /* BUG-3 FIX: LICM hoisting + PGO can place a use BEFORE a def in linear
+   * emission order. The linear scanner assumes the interval starts at def_seq.
+   * If use < def, the interval [def, end] DOES NOT COVER the use, allowing the
+   * allocator to assign a register that is already active at the use point,
+   * causing lethal clobbering. Fix: Expand the interval backward to start at
+   * first_use, and forward to the end of the function (since it must span a
+   * loop back-edge). */
   for (int r = 0; r < MAX_INSTRS; r++) {
     if (def_seq[r] >= 0 && last_use[r] >= 0 && last_use[r] < def_seq[r]) {
       def_seq[r] = last_use[r];
       last_use[r] = seq > 0 ? seq - 1 : 0;
-    } else if (def_seq[r] >= 0 && first_use[r] >= 0 && first_use[r] < def_seq[r]) {
+    } else if (def_seq[r] >= 0 && first_use[r] >= 0 &&
+               first_use[r] < def_seq[r]) {
       def_seq[r] = first_use[r];
       last_use[r] = seq > 0 ? seq - 1 : 0;
     }
@@ -7370,7 +7693,8 @@ static void ir_asm_linear_scan(Function *fn, const uint32_t *block_order,
   for (bi2 = 0; bi2 < (int)fn->n_blocks; bi2++) {
     Block *blk2 = fn->blocks[bi2];
     Instr *ins2;
-    if (!blk2 || !blk2->reachable) continue;
+    if (!blk2 || !blk2->reachable)
+      continue;
     for (ins2 = blk2->head; ins2; ins2 = ins2->next) {
       if (ins2->dst > 0 && ins2->dst < MAX_INSTRS)
         vreg_loop_depth[ins2->dst] = blk2->loop_depth;
@@ -7442,8 +7766,10 @@ static void ir_asm_linear_scan(Function *fn, const uint32_t *block_order,
       int max_end = cur->end;
       int j;
       for (j = 0; j < active_end; j++) {
-        if (intervals[j].phys_reg < 0) continue;
-        if (intervals[j].end <= cur->end) continue;
+        if (intervals[j].phys_reg < 0)
+          continue;
+        if (intervals[j].end <= cur->end)
+          continue;
         if (spill_j >= 0) {
           if (intervals[j].loop_depth > intervals[spill_j].loop_depth)
             continue;
@@ -7462,11 +7788,11 @@ static void ir_asm_linear_scan(Function *fn, const uint32_t *block_order,
         }
         /* Evict the stolen register from the active interval */
         phys_reg_out[intervals[spill_j].vreg] = -1;
-        
+
         /* Assign stolen register to current */
         cur->phys_reg = stolen_reg;
         phys_reg_out[cur->vreg] = stolen_reg;
-        
+
         /* Replace evicted interval in the active set with current */
         intervals[spill_j] = *cur;
       } else {
@@ -7510,8 +7836,9 @@ typedef struct {
   int csave_base; /* CG-IR-016-CSAVE-V2: %rbp-relative base of callee-save area.
                    * = -(stack_size + ir_extra) + 32
                    * Slots: csave_base (rbx), csave_base-8 (r12), -16 (r13),
-                   *        csave_base-24 (r14), csave_base-32 (r15).          */
-  int ret_size;  /* CG-IR-015: return type bytes (4=int, 8=long/ptr, 0→treat as 8) */
+                   *        csave_base-24 (r14), csave_base-32 (r15). */
+  int ret_size; /* CG-IR-015: return type bytes (4=int, 8=long/ptr, 0→treat as
+                   8) */
   int label_counter;
 } IRAsmCtx;
 
@@ -7545,12 +7872,17 @@ static void ir_asm_load_to_rax_typed(IRAsmCtx *ctx, RegID r, IRType t) {
   int p = ir_asm_vreg_location(ctx, r, &slot);
   if (p >= 0) {
     fprintf(f, "    movq %%%s, %%rax\n", phys_reg_name[p]);
-    if (t == IR_TY_I32)      fprintf(f, "    movslq %%eax, %%rax\n");
-    else if (t == IR_TY_U32) fprintf(f, "    movl %%eax, %%eax\n");
+    if (t == IR_TY_I32)
+      fprintf(f, "    movslq %%eax, %%rax\n");
+    else if (t == IR_TY_U32)
+      fprintf(f, "    movl %%eax, %%eax\n");
   } else {
-    if (t == IR_TY_I32)      fprintf(f, "    movslq %d(%%rbp), %%rax\n", slot);
-    else if (t == IR_TY_U32) fprintf(f, "    movl %d(%%rbp), %%eax\n", slot);
-    else                     fprintf(f, "    movq %d(%%rbp), %%rax\n", slot);
+    if (t == IR_TY_I32)
+      fprintf(f, "    movslq %d(%%rbp), %%rax\n", slot);
+    else if (t == IR_TY_U32)
+      fprintf(f, "    movl %d(%%rbp), %%eax\n", slot);
+    else
+      fprintf(f, "    movq %d(%%rbp), %%rax\n", slot);
   }
 }
 
@@ -7590,7 +7922,8 @@ static void ir_asm_load_to_rcx_typed(IRAsmCtx *ctx, RegID r, IRType t) {
   }
 }
 
-static void ir_asm_load_to_xmm(IRAsmCtx *ctx, RegID r, int xmm_idx, int is_f32) {
+static void ir_asm_load_to_xmm(IRAsmCtx *ctx, RegID r, int xmm_idx,
+                               int is_f32) {
   FILE *f = ctx->out;
   int slot;
   int p = ir_asm_vreg_location(ctx, r, &slot);
@@ -7613,7 +7946,6 @@ static void ir_asm_store_xmm0_to(IRAsmCtx *ctx, RegID r, int is_f32) {
     fprintf(f, "    %s %%xmm0, %d(%%rbp)\n", mov_op, slot);
   }
 }
-
 
 /* Emit second operand for binary op: "addq <src>, %%rax" — <src> is reg or mem.
  */
@@ -7886,7 +8218,7 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
       }
       ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);
       if (ins->ir_type == IR_TY_I32) {
-        fprintf(f, "    cltd\n");              /* sign-extend eax → edx:eax    */
+        fprintf(f, "    cltd\n"); /* sign-extend eax → edx:eax    */
         ir_asm_load_to_rcx_typed(ctx, ins->src[1], ins->ir_type);
         if (safe_div) {
           fprintf(f, "    testl %%ecx, %%ecx\n");
@@ -7932,7 +8264,7 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
         if (safe_div) {
           fprintf(f, ".Lsdiv_end_%d:\n", sdiv_lbl);
         }
-      } else {                                /* IR_TY_I64 — original path     */
+      } else { /* IR_TY_I64 — original path     */
         fprintf(f, "    cqo\n");
         fprintf(f, "    movq ");
         ir_asm_emit_src_operand(ctx, ins->src[1]);
@@ -8015,7 +8347,7 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
       if (safe_div) {
         fprintf(f, ".Lsmod_end_%d:\n", smod_lbl);
       }
-    } else {                               /* IR_TY_I64 — original path      */
+    } else { /* IR_TY_I64 — original path      */
       fprintf(f, "    cqo\n");
       fprintf(f, "    movq ");
       ir_asm_emit_src_operand(ctx, ins->src[1]);
@@ -8063,14 +8395,18 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
     if (ins->src[1] < MAX_INSTRS && fn->def_of[ins->src[1]] &&
         fn->def_of[ins->src[1]]->op == OP_CONST) {
       int64_t k = fn->def_of[ins->src[1]]->imm & (shl_is32 ? 31 : 63);
-      if (shl_is32) fprintf(f, "    shll $%lld, %%eax\n", (long long)k);
-      else          fprintf(f, "    shlq $%lld, %%rax\n", (long long)k);
+      if (shl_is32)
+        fprintf(f, "    shll $%lld, %%eax\n", (long long)k);
+      else
+        fprintf(f, "    shlq $%lld, %%rax\n", (long long)k);
     } else {
       fprintf(f, "    movq ");
       ir_asm_emit_src_operand(ctx, ins->src[1]);
       fprintf(f, ", %%rcx\n");
-      if (shl_is32) fprintf(f, "    shll %%cl, %%eax\n");
-      else          fprintf(f, "    shlq %%cl, %%rax\n");
+      if (shl_is32)
+        fprintf(f, "    shll %%cl, %%eax\n");
+      else
+        fprintf(f, "    shlq %%cl, %%rax\n");
     }
     ir_asm_store_rax_to(ctx, ins->dst);
     break;
@@ -8082,23 +8418,34 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
      *  Fix: select {shr,sar}{l,q} based on ir_type width + signedness.
      *  Also fixes the undefined sz_suffix(ir_type_bytes(n->type)) reference. */
     ir_asm_load_to_rax_typed(ctx, ins->src[0], ins->ir_type);
-    int shr_is32  = (ins->ir_type == IR_TY_I32 || ins->ir_type == IR_TY_U32);
+    int shr_is32 = (ins->ir_type == IR_TY_I32 || ins->ir_type == IR_TY_U32);
     int shr_unsig = (ins->ir_type == IR_TY_U32 || ins->ir_type == IR_TY_U64);
     if (ins->src[1] < MAX_INSTRS && fn->def_of[ins->src[1]] &&
         fn->def_of[ins->src[1]]->op == OP_CONST) {
       int64_t k = fn->def_of[ins->src[1]]->imm & (shr_is32 ? 31 : 63);
-      if      (shr_is32 && shr_unsig)  fprintf(f, "    shrl $%lld, %%eax\n", (long long)k);
-      else if (shr_is32)               fprintf(f, "    sarl $%lld, %%eax\n", (long long)k);
-      else if (shr_unsig)              fprintf(f, "    shrq $%lld, %%rax\n", (long long)k);
-      else                             fprintf(f, "    shrq $%lld, %%rax\n", (long long)k); /* I64 default: keep shrq for compat */
+      if (shr_is32 && shr_unsig)
+        fprintf(f, "    shrl $%lld, %%eax\n", (long long)k);
+      else if (shr_is32)
+        fprintf(f, "    sarl $%lld, %%eax\n", (long long)k);
+      else if (shr_unsig)
+        fprintf(f, "    shrq $%lld, %%rax\n", (long long)k);
+      else
+        fprintf(f, "    shrq $%lld, %%rax\n",
+                (long long)k); /* I64 default: keep shrq for compat */
     } else {
       fprintf(f, "    movq ");
       ir_asm_emit_src_operand(ctx, ins->src[1]);
       fprintf(f, ", %%rcx\n");
-      if      (shr_is32 && shr_unsig)  fprintf(f, "    shrl %%cl, %%eax\n");
-      else if (shr_is32)               fprintf(f, "    sarl %%cl, %%eax\n");
-      else if (shr_unsig)              fprintf(f, "    shrq %%cl, %%rax\n");
-      else                             fprintf(f, "    shrq %%cl, %%rax\n"); /* I64 default: keep shrq for compat */
+      if (shr_is32 && shr_unsig)
+        fprintf(f, "    shrl %%cl, %%eax\n");
+      else if (shr_is32)
+        fprintf(f, "    sarl %%cl, %%eax\n");
+      else if (shr_unsig)
+        fprintf(f, "    shrq %%cl, %%rax\n");
+      else
+        fprintf(
+            f,
+            "    shrq %%cl, %%rax\n"); /* I64 default: keep shrq for compat */
     }
     ir_asm_store_rax_to(ctx, ins->dst);
     break;
@@ -8109,20 +8456,27 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
               (unsigned)cur_block, ins->dst, ins->src[0]);
     ir_asm_load_to_rax(ctx, ins->src[0]);
     int is_unsigned = (ins->ir_type == IR_TY_U32 || ins->ir_type == IR_TY_U64);
-    if (ins->amf.folded && ins->amf.disp >= -2147483648LL && ins->amf.disp <= 2147483647LL) {
+    if (ins->amf.folded && ins->amf.disp >= -2147483648LL &&
+        ins->amf.disp <= 2147483647LL) {
       int64_t disp = ins->amf.disp;
       switch ((int)ins->imm) {
       case 1:
-        if (is_unsigned) fprintf(f, "    movzbq %lld(%%rax), %%rax\n", (long long)disp);
-        else             fprintf(f, "    movsbq %lld(%%rax), %%rax\n", (long long)disp);
+        if (is_unsigned)
+          fprintf(f, "    movzbq %lld(%%rax), %%rax\n", (long long)disp);
+        else
+          fprintf(f, "    movsbq %lld(%%rax), %%rax\n", (long long)disp);
         break;
       case 2:
-        if (is_unsigned) fprintf(f, "    movzwq %lld(%%rax), %%rax\n", (long long)disp);
-        else             fprintf(f, "    movswq %lld(%%rax), %%rax\n", (long long)disp);
+        if (is_unsigned)
+          fprintf(f, "    movzwq %lld(%%rax), %%rax\n", (long long)disp);
+        else
+          fprintf(f, "    movswq %lld(%%rax), %%rax\n", (long long)disp);
         break;
       case 4:
-        if (is_unsigned || ins->is_float) fprintf(f, "    movl %lld(%%rax), %%eax\n", (long long)disp);
-        else                              fprintf(f, "    movslq %lld(%%rax), %%rax\n", (long long)disp);
+        if (is_unsigned || ins->is_float)
+          fprintf(f, "    movl %lld(%%rax), %%eax\n", (long long)disp);
+        else
+          fprintf(f, "    movslq %lld(%%rax), %%rax\n", (long long)disp);
         break;
       default:
         fprintf(f, "    movq %lld(%%rax), %%rax\n", (long long)disp);
@@ -8131,16 +8485,22 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
     } else {
       switch ((int)ins->imm) {
       case 1:
-        if (is_unsigned) fprintf(f, "    movzbq (%%rax), %%rax\n");
-        else             fprintf(f, "    movsbq (%%rax), %%rax\n");
+        if (is_unsigned)
+          fprintf(f, "    movzbq (%%rax), %%rax\n");
+        else
+          fprintf(f, "    movsbq (%%rax), %%rax\n");
         break;
       case 2:
-        if (is_unsigned) fprintf(f, "    movzwq (%%rax), %%rax\n");
-        else             fprintf(f, "    movswq (%%rax), %%rax\n");
+        if (is_unsigned)
+          fprintf(f, "    movzwq (%%rax), %%rax\n");
+        else
+          fprintf(f, "    movswq (%%rax), %%rax\n");
         break;
       case 4:
-        if (is_unsigned || ins->is_float) fprintf(f, "    movl (%%rax), %%eax\n"); /* zero-extends to rax */
-        else                              fprintf(f, "    movslq (%%rax), %%rax\n");
+        if (is_unsigned || ins->is_float)
+          fprintf(f, "    movl (%%rax), %%eax\n"); /* zero-extends to rax */
+        else
+          fprintf(f, "    movslq (%%rax), %%rax\n");
         break;
       default:
         fprintf(f, "    movq (%%rax), %%rax\n");
@@ -8154,7 +8514,8 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
     if (ins->n_src >= 2) {
       ir_asm_load_to_rax(ctx, ins->src[1]);
       ir_asm_load_to_rcx(ctx, ins->src[0]);
-      if (ins->amf.folded && ins->amf.disp >= -2147483648LL && ins->amf.disp <= 2147483647LL) {
+      if (ins->amf.folded && ins->amf.disp >= -2147483648LL &&
+          ins->amf.disp <= 2147483647LL) {
         int64_t disp = ins->amf.disp;
         switch ((int)ins->imm) {
         case 1:
@@ -8539,10 +8900,14 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
               }
               fprintf(f, ".L_itof_%d_%d:\n", ctx->func_label_id, l2);
             } else {
-              /* unsigned 8/16/32-bit to float/double: zero-extend first, then cvtsi2sdq/cvtsi2ssq */
-              if (ins->src_size == 4) fprintf(f, "    movl %%eax, %%eax\n");
-              else if (ins->src_size == 2) fprintf(f, "    movzwl %%ax, %%eax\n");
-              else if (ins->src_size == 1) fprintf(f, "    movzbl %%al, %%eax\n");
+              /* unsigned 8/16/32-bit to float/double: zero-extend first, then
+               * cvtsi2sdq/cvtsi2ssq */
+              if (ins->src_size == 4)
+                fprintf(f, "    movl %%eax, %%eax\n");
+              else if (ins->src_size == 2)
+                fprintf(f, "    movzwl %%ax, %%eax\n");
+              else if (ins->src_size == 1)
+                fprintf(f, "    movzbl %%al, %%eax\n");
               if (ins->dst_size == 4)
                 fprintf(f, "    cvtsi2ssq %%rax, %%xmm0\n");
               else
@@ -8637,7 +9002,8 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
       if (!(PHYS_CALLEE_SAVED_MASK & (1 << p))) {
         for (int r = 1; r < MAX_INSTRS; r++) {
           if (ctx->phys_reg[r] == p) {
-            if (ctx->def_seq[r] < current_seq && ctx->last_use[r] > current_seq) {
+            if (ctx->def_seq[r] < current_seq &&
+                ctx->last_use[r] > current_seq) {
               caller_saved_live[n_caller_saved++] = p;
               break;
             }
@@ -8694,7 +9060,8 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
       if (!arg_is_stack[i]) {
         if (ins->call_args_is_float[i]) {
           RegID arg_r = ins->call_args[i];
-          int is_f32 = (arg_r < MAX_INSTRS && ctx->fn->def_of[arg_r] && ctx->fn->def_of[arg_r]->dst_size == 4);
+          int is_f32 = (arg_r < MAX_INSTRS && ctx->fn->def_of[arg_r] &&
+                        ctx->fn->def_of[arg_r]->dst_size == 4);
           ir_asm_load_to_xmm(ctx, arg_r, fp_reg_idx, is_f32);
           fp_reg_idx++;
         } else {
@@ -8717,7 +9084,7 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
     int cleanup = stack_args * 8 + (need_pad ? 8 : 0);
     if (cleanup > 0)
       fprintf(f, "    addq $%d, %%rsp\n", cleanup);
-      
+
     /* Store return value */
     if (ins->dst) {
       if (ins->is_float) {
@@ -8745,11 +9112,14 @@ static void ir_asm_assign_alloca_offsets(IRAsmCtx *ctx) {
   uint32_t max_reg = fn->n_regs;
   for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
     Block *blk = fn->blocks[bi];
-    if (!blk) continue;
+    if (!blk)
+      continue;
     for (Instr *ins = blk->head; ins; ins = ins->next) {
-      if (ins->dst >= max_reg) max_reg = ins->dst + 1;
+      if (ins->dst >= max_reg)
+        max_reg = ins->dst + 1;
       for (uint32_t s = 0; s < ins->n_src && s < MAX_OPERANDS; s++)
-        if (ins->src[s] >= max_reg) max_reg = ins->src[s] + 1;
+        if (ins->src[s] >= max_reg)
+          max_reg = ins->src[s] + 1;
     }
   }
   int current_alloca_offset = ctx->slot_base - 8 * (int)(max_reg + 2);
@@ -8775,7 +9145,8 @@ static void ir_asm_assign_alloca_offsets(IRAsmCtx *ctx) {
       }
       if (ins->dst < MAX_INSTRS) {
         ctx->alloca_off[ins->dst] = off;
-        fprintf(stderr, "[ALLOCA] dst=%u off=%d size=%d\n", ins->dst, off, size);
+        fprintf(stderr, "[ALLOCA] dst=%u off=%d size=%d\n", ins->dst, off,
+                size);
       }
       n++;
     }
@@ -8849,16 +9220,17 @@ static uint32_t ir_asm_post_ra_peephole(Function *fn, int *phys_reg) {
   for (bi = 0; bi < fn->n_blocks; bi++) {
     Block *blk = fn->blocks[bi];
     Instr *ins;
-    if (!blk || !blk->reachable) continue;
+    if (!blk || !blk->reachable)
+      continue;
     for (ins = blk->head; ins; ins = ins->next) {
-      if (ins->dead) continue;
-      if (ins->op == OP_COPY && ins->n_src == 1 && !ins->is_float && !ins->src_is_float) {
+      if (ins->dead)
+        continue;
+      if (ins->op == OP_COPY && ins->n_src == 1 && !ins->is_float &&
+          !ins->src_is_float) {
         RegID dst = ins->dst;
         RegID src = ins->src[0];
-        if (dst > 0 && dst < MAX_INSTRS &&
-            src > 0 && src < MAX_INSTRS &&
-            phys_reg[dst] >= 0 &&
-            phys_reg[dst] == phys_reg[src]) {
+        if (dst > 0 && dst < MAX_INSTRS && src > 0 && src < MAX_INSTRS &&
+            phys_reg[dst] >= 0 && phys_reg[dst] == phys_reg[src]) {
           ins->dead = true;
           count++;
         }
@@ -8902,7 +9274,7 @@ static void ir_asm_emit_function_body(IRAsmCtx *ctx) {
   /* Linear scan register allocation: number instructions, compute intervals,
    * assign phys regs.  We must perform liveness analysis and linear scan
    * using a topologically clean block order (BFS from entry block) rather
-   * than the PGO/BBR emission order.  This ensures loop preheaders and 
+   * than the PGO/BBR emission order.  This ensures loop preheaders and
    * dominators are processed before their headers/uses, preventing lethal
    * loop register clobbering due to PGO-reordered block lifetimes. */
   uint32_t alloc_order[MAX_BLOCKS];
@@ -8917,7 +9289,8 @@ static void ir_asm_emit_function_body(IRAsmCtx *ctx) {
     while (head < tail) {
       BlockID bid = queue[head++];
       Block *blk = fn->blocks[bid];
-      if (!blk) continue;
+      if (!blk)
+        continue;
       for (uint32_t si = 0; si < blk->n_succs; si++) {
         BlockID s = blk->succs[si];
         if (s < fn->n_blocks && !visited[s]) {
@@ -8934,8 +9307,8 @@ static void ir_asm_emit_function_body(IRAsmCtx *ctx) {
   for (int i = 0; i < MAX_INSTRS; i++)
     ctx->phys_reg[i] = -1;
   int *first_use = (int *)calloc(MAX_INSTRS, sizeof(int));
-  ir_asm_number_and_liveness(fn, alloc_order, n_alloc_order,
-                             ctx->def_seq, ctx->last_use, first_use);
+  ir_asm_number_and_liveness(fn, alloc_order, n_alloc_order, ctx->def_seq,
+                             ctx->last_use, first_use);
   free(first_use);
   ir_asm_linear_scan(fn, alloc_order, n_alloc_order, ctx->def_seq,
                      ctx->last_use, ctx->phys_reg);
@@ -9202,7 +9575,7 @@ int zcc_run_passes_emit_body_pgo(ZCCNode *body_ast, const char *profile_path,
   for (uint32_t i = 0; i < ctx.n_block_order; i++)
     ctx.block_order[i] = result->order[i];
 
-    /* CG-IR-009: scan IR to compute exact frame depth before emission.
+  /* CG-IR-009: scan IR to compute exact frame depth before emission.
    * Must happen BEFORE ir_asm_emit_function_body since alloca offsets
    * and spill slots all live below slot_base.
    * CG-IR-016-CSAVE-V2: ir_extra extended by n_csave_slots=5 to give
@@ -9210,27 +9583,32 @@ int zcc_run_passes_emit_body_pgo(ZCCNode *body_ast, const char *profile_path,
    * bottom of the frame.  csave_base is the highest of those 5 slots.  */
   {
     ir_asm_assign_alloca_offsets(&ctx);
-    
+
     uint32_t max_reg = fn->n_regs;
     for (uint32_t bi = 0; bi < fn->n_blocks; bi++) {
       Block *b = fn->blocks[bi];
-      if (!b) continue;
+      if (!b)
+        continue;
       for (Instr *ins = b->head; ins; ins = ins->next) {
-        if (ins->dst >= max_reg) max_reg = ins->dst + 1;
+        if (ins->dst >= max_reg)
+          max_reg = ins->dst + 1;
         for (uint32_t s = 0; s < ins->n_src && s < MAX_OPERANDS; s++)
-          if (ins->src[s] >= max_reg) max_reg = ins->src[s] + 1;
+          if (ins->src[s] >= max_reg)
+            max_reg = ins->src[s] + 1;
       }
     }
-    
+
     int n_csave_slots = 5; /* rbx, r12, r13, r14, r15 — always reserve all 5 */
-    ctx.ir_extra = 8 * ((int)max_reg + 8 + n_csave_slots) + ctx.alloca_bytes_total;
+    ctx.ir_extra =
+        8 * ((int)max_reg + 8 + n_csave_slots) + ctx.alloca_bytes_total;
     ctx.ir_extra = (ctx.ir_extra + 15) & ~15;
     ir_extra = ctx.ir_extra;
     fprintf(out, "    subq $%d, %%rsp\n", ctx.ir_extra);
 
     /* CG-IR-016-CSAVE-V3: csave_base is the %rbp-relative offset of the
-     * highest callee-save slot (rbx). It sits at the extreme bottom of the 
-     * expanded ir_extra frame mathematically avoiding all dynamically allocated buffers. */
+     * highest callee-save slot (rbx). It sits at the extreme bottom of the
+     * expanded ir_extra frame mathematically avoiding all dynamically allocated
+     * buffers. */
     ctx.csave_base = -(stack_size + ctx.ir_extra) + 32;
   }
 
@@ -9704,7 +10082,7 @@ int main(void) {
 
   fprintf(stderr,
           "\n-- Running ZKAEDI PRIME pass pipeline (synthetic fixture) --\n");
-  run_all_passes(fn, &result, NULL);
+  run_all_passes(fn, &result, NULL, 0);
   print_pass_results(fn, &result);
   free_function(fn);
 
@@ -9716,7 +10094,7 @@ int main(void) {
     memset(&result_b, 0, sizeof(result_b));
     fprintf(stderr,
             "\n-- Phase B: AST->IR (while i<10 { i=i+1 } return i) --\n");
-    run_all_passes(fn_b, &result_b, NULL);
+    run_all_passes(fn_b, &result_b, NULL, 0);
     printf("\n=================================================\n");
     printf(" Phase B - AST->IR pass results\n");
     printf("=================================================\n");
@@ -9735,7 +10113,7 @@ int main(void) {
     memset(&result_z, 0, sizeof(result_z));
     fprintf(stderr, "\n-- Phase B ZCC: ZCC-shaped AST->IR (while i<10 { i=i+1 "
                     "} return i) --\n");
-    run_all_passes(fn_z, &result_z, NULL);
+    run_all_passes(fn_z, &result_z, NULL, 0);
     printf("\n=================================================\n");
     printf(" Phase B ZCC - ZCC->IR pass results\n");
     printf("=================================================\n");
@@ -9756,7 +10134,7 @@ int main(void) {
     ir_dump(fn_dce, "BEFORE DCE");
     PassResult result_dce;
     memset(&result_dce, 0, sizeof(result_dce));
-    run_all_passes(fn_dce, &result_dce, NULL);
+    run_all_passes(fn_dce, &result_dce, NULL, 0);
     ir_dump(fn_dce, "AFTER DCE");
     fprintf(stderr, "DCE removed: %u instructions, %u blocks\n",
             result_dce.dce_instrs_removed, fn_dce->stats.dce_blocks_removed);

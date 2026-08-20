@@ -38,5 +38,13 @@ Kernel migrated off the idt_p[10] workaround in 72a90cd4.
 ## Workaround
 kernel/kmain.c builds the IDT descriptor as a manual 10-byte stack array (unsigned char idt_p[10]) instead of relying on struct idt_ptr_64 with __attribute__((packed)). Zero runtime overhead; does not address the compiler defect.
 
-## Root cause (unfixed)
-ZCC's layout allocator ignores __attribute__((packed)) when a struct contains a >=8-byte primitive (e.g. unsigned long), forcing 8-byte alignment and inserting padding. Any packed struct crossing a hardware or ABI boundary (descriptor tables, MMIO maps, on-wire/on-disk formats) is affected. Fix requires teaching the layout allocator to honor packed on >=8-byte fields.
+## Root Cause (Resolved & Verified)
+RESOLVED — Fixed in `part3.c` by commit `91e511d9f98c213438cae7c966af4bdb6dce2fad` (`conformance(layout): align packed structs, aligned members, and pragma pack with GCC cases`).
+
+The layout allocator in `part3.c` now evaluates `if (stype->is_packed && ftype->explicit_align == 0) falign = 1;` for all primitive types including `>=8`-byte primitives (`unsigned long`, `uint64_t`), setting `falign = 1` and `stype->align = 1` when packed.
+
+Verified empirical behavior:
+- `sizeof(struct idt_ptr_64)` = **10 bytes** (zero unaligned padding)
+- `offsetof(base)` = **2 bytes**
+- Gate 1 (`cmp zcc2.s zcc3.s`): **PASS** (byte-identical self-host)
+- Gate 2 (`make compat-smoke`): **PASS** (`COMPAT SMOKE COMPLETE`)

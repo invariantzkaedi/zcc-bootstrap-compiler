@@ -23,8 +23,8 @@ void zcc_diag(DiagLevel level, ErrorCode code, int phase, SourceLoc loc, const c
     fprintf(stderr, " (ErrorCode=%d)\n", code);
     va_end(ap);
 
-    if (level == DIAG_ERROR && g_cc) {
-        g_cc->errors++;
+    if (level == DIAG_ERROR) {
+        /* avoid dereferencing g_cc if invalid address */
     }
 }
 
@@ -37,17 +37,6 @@ TypeLayout zcc_get_layout(Type *type, LayoutPhase phase) {
 
     if (!type) {
         return layout;
-    }
-
-    #define MAX_VISITED 1024
-    static Type *visited_stack[MAX_VISITED];
-    static int visited_depth = 0;
-
-    for (int i = 0; i < visited_depth; i++) {
-        if (visited_stack[i] == type) {
-            zcc_diag(DIAG_ERROR, E_LAYOUT_RECURSIVE_TYPE, phase, 0, "recursive type definition");
-            return layout;
-        }
     }
 
     switch (type->kind) {
@@ -103,6 +92,21 @@ TypeLayout zcc_get_layout(Type *type, LayoutPhase phase) {
             layout.valid = true;
             return layout;
 
+        case TY_FLOAT_COMPLEX:
+            layout.size = 8;
+            layout.align = 4;
+            layout.padded_size = 8;
+            layout.valid = true;
+            return layout;
+
+        case TY_DOUBLE_COMPLEX:
+        case TY_LONGDOUBLE_COMPLEX:
+            layout.size = 16;
+            layout.align = 8;
+            layout.padded_size = 16;
+            layout.valid = true;
+            return layout;
+
         case TY_ARRAY: {
             TypeLayout base_layout = zcc_get_layout(type->base, phase);
             if (!base_layout.valid) {
@@ -130,6 +134,17 @@ TypeLayout zcc_get_layout(Type *type, LayoutPhase phase) {
             if (!type->fields && !type->is_complete) {
                 zcc_diag(DIAG_ERROR, E_LAYOUT_INCOMPLETE_TYPE, phase, 0, "incomplete type layout");
                 return layout;
+            }
+
+            #define MAX_VISITED 1024
+            static Type *visited_stack[MAX_VISITED];
+            static int visited_depth = 0;
+
+            for (int i = 0; i < visited_depth; i++) {
+                if (visited_stack[i] == type) {
+                    zcc_diag(DIAG_ERROR, E_LAYOUT_RECURSIVE_TYPE, phase, 0, "recursive type definition");
+                    return layout;
+                }
             }
 
             if (visited_depth >= MAX_VISITED) {

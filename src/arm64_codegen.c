@@ -140,6 +140,27 @@ void arm64_emit_str_stack(ARM64AsmBuffer *buf, ARM64Register src, int offset) {
     arm64_asm_emit_line(buf, line);
 }
 
+AAPCS64StructArgLayout arm64_classify_struct_arg(size_t struct_size) {
+    AAPCS64StructArgLayout layout;
+    layout.total_size = struct_size;
+    if (struct_size <= 16) {
+        layout.mode = AAPCS64_PASS_IN_REGS;
+        layout.num_gp_regs = (struct_size <= 8) ? 1 : 2;
+    } else {
+        layout.mode = AAPCS64_PASS_BY_REF;
+        layout.num_gp_regs = 1; /* Passes 64-bit pointer in 1 GP register */
+    }
+    return layout;
+}
+
+void arm64_emit_struct_pass_regs(ARM64AsmBuffer *buf, ARM64Register start_reg, int num_regs, int stack_offset) {
+    if (!buf) return;
+    for (int i = 0; i < num_regs; i++) {
+        ARM64Register reg = (ARM64Register)(start_reg + i);
+        arm64_emit_ldr_stack(buf, reg, stack_offset + (i * 8));
+    }
+}
+
 int zcc_emit_arm64_assembly_to_file(const char *filename, const char *func_name, size_t stack_size) {
     if (!filename) return -1;
 

@@ -20,6 +20,7 @@
 #error "ir_bridge.h included twice in one translation unit — its static state would be duplicated."
 #else
 #define ZCC_IR_BRIDGE_H
+#include <stdio.h>
 
 /* ── IR Temporary Name Generator ─────────────────────────────────── */
 /*                                                                     */
@@ -137,8 +138,9 @@ static char *ir_var_name(Node *node) {
 static void ir_bridge_func_begin(Node *func) {
     ir_tmp_counter = 0;
     ir_last_result[0] = 0;
-    fprintf(stderr, "DEBUG FUNC BEGIN: %s, ret type kind = %d, mapped = %d\n", func->func_def_name, func->func_type ? (func->func_type->ret ? func->func_type->ret->kind : -1) : -2, ir_map_type(func->func_type ? func->func_type->ret : 0));
-    ZCC_IR_FUNC_BEGIN(func->func_def_name, ir_map_type(func->func_type->ret), func->num_params, func->stack_size);
+    if (func && func->func_type && func->func_type->ret) {
+        ZCC_IR_FUNC_BEGIN(func->func_def_name, ir_map_type(func->func_type->ret), func->num_params, func->stack_size);
+    }
 }
 
 static void ir_bridge_func_end(void) {

@@ -23,14 +23,18 @@ typedef struct {
     float epsilon;         /* Stochastic perturbation magnitude (default: 0.05) */
     float kappa[4][4];     /* 4x4 Inter-field coupling matrix */
     bool auto_tune;        /* Enable adaptive self-tuning via Lyapunov monitoring */
+    bool spectral_mode;    /* Enable ZCC_PRIME_SPECTRAL mode for spectral QR + cache-set allocator */
 } ZKAEDIPrimeV2Config;
 
 typedef struct {
-    float lyapunov_exponent; /* Attractor stability trace */
-    float synergy_score;     /* Phi = kappa * sqrt(Coherence * Diversity * Actionability) */
-    bool is_chaotic;         /* True if Lyapunov > 0.05 */
+    float lyapunov_exponent;       /* Attractor stability trace */
+    float lyapunov_lambda1;        /* Largest Lyapunov exponent from 4D QR spectrum */
+    float synergy_score;           /* Phi = kappa * sqrt(Coherence * Diversity * Actionability) */
+    bool is_chaotic;               /* True if Lyapunov > 0.05 */
+    bool is_fixed_point;           /* True if lambda1 < 0.0 and attractor collapsed */
     uint32_t instructions_optimized;
     uint32_t spills_avoided;
+    uint32_t cache_collisions_mitigated; /* L1 64-byte cache set collisions displaced */
 } ZKAEDIPrimeV2Metrics;
 
 /* Initialize default configuration for 4-field coupling */

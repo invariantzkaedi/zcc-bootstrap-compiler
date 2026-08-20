@@ -2,16 +2,24 @@
 /* CODE GENERATOR — x86-64 Linux (System V) or Windows x64 ABI      */
 /* ================================================================ */
 
+#ifndef ZCC_MONOLITHIC_BUILD
 #ifndef ZCC_AST_BRIDGE_H
-/* Exclusively for standalone IDE analysis */
+#define ZCC_AST_BRIDGE_H
 #include "part1.c"
 #endif
+#endif
+
+int is_complex_type(Type *t);
 
 #include "ir_emit_dispatch.h"
 #define ZCC_IR_BRIDGE_ALLOWED 1
 #include "ir_bridge.h"
 #undef ZCC_IR_BRIDGE_ALLOWED
 extern int g_ir_primary;
+
+#if ZCC_UPGRADE_DIV
+#include "zcc_upgrade_div.h"
+#endif
 
 /* Forward declaration — defined ~4200 lines below, used in ND_DIV const-fold guard */
 static long long eval_const_expr_p4(Node *elem, int *ok);
@@ -176,11 +184,11 @@ static void emit_cvttfd2si(Compiler *cc, Type *int_type, int is_f32) {
         fprintf(cc->out, "    movsd .LC_two63_%d(%%rip), %%xmm1\n", lbl_two63);
         fprintf(cc->out, "    ucomisd %%xmm1, %%xmm0\n");
         fprintf(cc->out, "    jae .L%d\n", l1);
-        fprintf(cc->out, "    cvttsd2si %%xmm0, %%rax\n");
+        fprintf(cc->out, "    cvttsd2siq %%xmm0, %%rax\n");
         fprintf(cc->out, "    jmp .L%d\n", l2);
         fprintf(cc->out, ".L%d:\n", l1);
         fprintf(cc->out, "    subsd %%xmm1, %%xmm0\n");
-        fprintf(cc->out, "    cvttsd2si %%xmm0, %%rax\n");
+        fprintf(cc->out, "    cvttsd2siq %%xmm0, %%rax\n");
         fprintf(cc->out, "    movabsq $0x8000000000000000, %%rdx\n");
         fprintf(cc->out, "    xorq %%rdx, %%rax\n");
         fprintf(cc->out, ".L%d:\n", l2);
@@ -190,11 +198,100 @@ static void emit_cvttfd2si(Compiler *cc, Type *int_type, int is_f32) {
     /* Default signed or 32-bit truncation */
     if (is_f32) {
         fprintf(cc->out, "    movd %%eax, %%xmm0\n");
-        fprintf(cc->out, "    cvttss2si %%xmm0, %%rax\n");
+        if (int_type && type_size(int_type) <= 4 && !is_unsigned_type(int_type))
+            fprintf(cc->out, "    cvttss2sil %%xmm0, %%eax\n");
+        else
+            fprintf(cc->out, "    cvttss2siq %%xmm0, %%rax\n");
     } else {
         fprintf(cc->out, "    movq %%rax, %%xmm0\n");
-        fprintf(cc->out, "    cvttsd2si %%xmm0, %%rax\n");
+        if (int_type && type_size(int_type) <= 4 && !is_unsigned_type(int_type))
+            fprintf(cc->out, "    cvttsd2sil %%xmm0, %%eax\n");
+        else
+            fprintf(cc->out, "    cvttsd2siq %%xmm0, %%rax\n");
     }
+}
+
+static void emit_fp_result_to_rax(Compiler *cc, Type *type) {
+    if (type && type->kind == TY_FLOAT)
+        fprintf(cc->out, "    movd %%xmm0, %%eax\n");
+    else
+        fprintf(cc->out, "    movq %%xmm0, %%rax\n");
+}
+
+static void emit_promote_to_complex(Compiler *cc, Type *operand_type, Type *complex_target_type, const char *reg_name) {
+    if (operand_type && complex_target_type && operand_type->kind == complex_target_type->kind) {
+        if (strcmp(reg_name, "rax") != 0) {
+            fprintf(cc->out, "    movq %%%s, %%rax\n", reg_name);
+        }
+        return;
+    }
+    int target_is_f32 = (complex_target_type && complex_target_type->kind == TY_FLOAT_COMPLEX);
+    int scratch_off = cc->abi_scratch_offset;
+
+    if (operand_type && is_complex_type(operand_type)) {
+        fprintf(cc->out, "    movq %%%s, %%r10\n", reg_name);
+        if (operand_type->kind == TY_FLOAT_COMPLEX) {
+            if (!target_is_f32) {
+                fprintf(cc->out, "    movss 0(%%r10), %%xmm0\n");
+                fprintf(cc->out, "    cvtss2sd %%xmm0, %%xmm0\n");
+                fprintf(cc->out, "    movsd %%xmm0, %d(%%rbp)\n", scratch_off);
+                fprintf(cc->out, "    movss 4(%%r10), %%xmm0\n");
+                fprintf(cc->out, "    cvtss2sd %%xmm0, %%xmm0\n");
+                fprintf(cc->out, "    movsd %%xmm0, %d(%%rbp)\n", scratch_off + 8);
+            } else {
+                fprintf(cc->out, "    movl 0(%%r10), %%eax\n    movl %%eax, %d(%%rbp)\n", scratch_off);
+                fprintf(cc->out, "    movl 4(%%r10), %%eax\n    movl %%eax, %d(%%rbp)\n", scratch_off + 4);
+            }
+        } else {
+            if (target_is_f32) {
+                fprintf(cc->out, "    movsd 0(%%r10), %%xmm0\n");
+                fprintf(cc->out, "    cvtsd2ss %%xmm0, %%xmm0\n");
+                fprintf(cc->out, "    movss %%xmm0, %d(%%rbp)\n", scratch_off);
+                fprintf(cc->out, "    movsd 8(%%r10), %%xmm0\n");
+                fprintf(cc->out, "    cvtsd2ss %%xmm0, %%xmm0\n");
+                fprintf(cc->out, "    movss %%xmm0, %d(%%rbp)\n", scratch_off + 4);
+            } else {
+                fprintf(cc->out, "    movq 0(%%r10), %%rax\n    movq %%rax, %d(%%rbp)\n", scratch_off);
+                fprintf(cc->out, "    movq 8(%%r10), %%rax\n    movq %%rax, %d(%%rbp)\n", scratch_off + 8);
+            }
+        }
+    } else {
+        fprintf(cc->out, "    movq %%%s, %%xmm0\n", reg_name);
+        if (operand_type && is_float_type(operand_type)) {
+            if (operand_type->kind == TY_FLOAT) {
+                if (!target_is_f32) {
+                    fprintf(cc->out, "    cvtss2sd %%xmm0, %%xmm0\n");
+                    fprintf(cc->out, "    movsd %%xmm0, %d(%%rbp)\n", scratch_off);
+                    fprintf(cc->out, "    movq $0, %d(%%rbp)\n", scratch_off + 8);
+                } else {
+                    fprintf(cc->out, "    movss %%xmm0, %d(%%rbp)\n", scratch_off);
+                    fprintf(cc->out, "    movl $0, %d(%%rbp)\n", scratch_off + 4);
+                }
+            } else {
+                if (target_is_f32) {
+                    fprintf(cc->out, "    cvtsd2ss %%xmm0, %%xmm0\n");
+                    fprintf(cc->out, "    movss %%xmm0, %d(%%rbp)\n", scratch_off);
+                    fprintf(cc->out, "    movl $0, %d(%%rbp)\n", scratch_off + 4);
+                } else {
+                    fprintf(cc->out, "    movsd %%xmm0, %d(%%rbp)\n", scratch_off);
+                    fprintf(cc->out, "    movq $0, %d(%%rbp)\n", scratch_off + 8);
+                }
+            }
+        } else {
+            if (strcmp(reg_name, "rsi") != 0) {
+                fprintf(cc->out, "    movq %%%s, %%rax\n", reg_name);
+            }
+            emit_cvtsi2fd(cc, operand_type, target_is_f32, "xmm0");
+            if (target_is_f32) {
+                fprintf(cc->out, "    movss %%xmm0, %d(%%rbp)\n", scratch_off);
+                fprintf(cc->out, "    movl $0, %d(%%rbp)\n", scratch_off + 4);
+            } else {
+                fprintf(cc->out, "    movsd %%xmm0, %d(%%rbp)\n", scratch_off);
+                fprintf(cc->out, "    movq $0, %d(%%rbp)\n", scratch_off + 8);
+            }
+        }
+    }
+    fprintf(cc->out, "    leaq %d(%%rbp), %%%s\n", scratch_off, reg_name);
 }
 
 
@@ -229,6 +326,7 @@ static void emit_zero_result(Compiler *cc, Type *type, int line) {
  * Oneirogenesis confirmed 371 surviving shlq substitutions — wire it into the codegen. */
 #define EMIT_PTR_SCALE_R11(cc, esz) do { \
     int _e = (esz); \
+    if (_e <= 0) break; \
     if ((_e & (_e - 1)) == 0) \
         fprintf((cc)->out, "    shlq $%d, %%r11\n", log2_of(_e)); \
     else \
@@ -237,6 +335,7 @@ static void emit_zero_result(Compiler *cc, Type *type, int line) {
 
 #define EMIT_PTR_SCALE_RAX(cc, esz) do { \
     int _e = (esz); \
+    if (_e <= 0) break; \
     if ((_e & (_e - 1)) == 0) \
         fprintf((cc)->out, "    shlq $%d, %%rax\n", log2_of(_e)); \
     else \
@@ -402,9 +501,15 @@ void codegen_load(Compiler *cc, Type *type) {
       if (!type || type->size == 4 || type->size == 8 || type->kind == TY_PTR) {
           fprintf(cc->out, "    ldr r0, [r0]\n");
       } else if (type->size == 1) {
-          fprintf(cc->out, "    ldrb r0, [r0]\n");
+          if (is_unsigned_type(type))
+              fprintf(cc->out, "    ldrb r0, [r0]\n");
+          else
+              fprintf(cc->out, "    ldrsb r0, [r0]\n");
       } else if (type->size == 2) {
-          fprintf(cc->out, "    ldrh r0, [r0]\n");
+          if (is_unsigned_type(type))
+              fprintf(cc->out, "    ldrh r0, [r0]\n");
+          else
+              fprintf(cc->out, "    ldrsh r0, [r0]\n");
       }
       return;
   }
@@ -511,7 +616,7 @@ void codegen_store(Compiler *cc, Type *type) {
     fprintf(cc->out, "    movq %%r11, %%rax\n");
     return;
   }
-  if (type->kind == TY_STRUCT || type->kind == TY_UNION || type->size > 8) {
+  if (type->kind == TY_STRUCT || type->kind == TY_UNION || is_complex_type(type) || type->size > 8) {
     fprintf(cc->out, "    pushq %%rsi\n");
     fprintf(cc->out, "    pushq %%rdi\n");
     fprintf(cc->out, "    pushq %%rcx\n");
@@ -523,7 +628,7 @@ void codegen_store(Compiler *cc, Type *type) {
     fprintf(cc->out, "    popq %%rdi\n");
     fprintf(cc->out, "    popq %%rsi\n");
     if (backend_ops) fprintf(cc->out, "    mov r0, r1\n");
-      else fprintf(cc->out, "    movq %%rdi, %%rax\n");
+      else fprintf(cc->out, "    movq %%r11, %%rax\n");
     return;
   }
   switch (type->size) {
@@ -680,10 +785,20 @@ static void codegen_addr_offset(Compiler *cc, Node *node, int offset) {
         fprintf(cc->out, "    ldr r0, =%s\n", node->name);
       }
     } else {
-      if (offset != 0) {
-        fprintf(cc->out, "    leaq %s+%d(%%rip), %%rax\n", node->name, offset);
+      if (node->is_tls || (node->sym && node->sym->is_tls)) {
+        if (offset != 0) {
+          fprintf(cc->out, "    movq %%fs:0, %%rax\n");
+          fprintf(cc->out, "    leaq %s@tpoff+%d(%%rax), %%rax\n", node->name, offset);
+        } else {
+          fprintf(cc->out, "    movq %%fs:0, %%rax\n");
+          fprintf(cc->out, "    leaq %s@tpoff(%%rax), %%rax\n", node->name);
+        }
       } else {
-        fprintf(cc->out, "    leaq %s(%%rip), %%rax\n", node->name);
+        if (offset != 0) {
+          fprintf(cc->out, "    leaq %s+%d(%%rip), %%rax\n", node->name, offset);
+        } else {
+          fprintf(cc->out, "    leaq %s(%%rip), %%rax\n", node->name);
+        }
       }
     }
     char gname[32];
@@ -745,21 +860,14 @@ static void emit_ir_inc_dec(Compiler *cc, Node *lhs, int is_inc, int is_post, in
     if (!g_emit_ir || !g_ir_cur_func) return;
     if (!lhs || !lhs->type) return;
     
-    FILE *orig_out = cc->out;
-    FILE *null_out = fopen("/dev/null", "w");
-    if (null_out) {
-        cc->out = null_out;
-    }
-    
-    codegen_addr_checked(cc, lhs);
-    
-    if (null_out) {
-        fclose(null_out);
-        cc->out = orig_out;
-    }
-    
     char lhs_addr[32];
-    ir_save_result(lhs_addr);
+    char *vname = ir_var_name(lhs);
+    if (vname && vname[0]) {
+        strncpy(lhs_addr, vname, 31);
+        lhs_addr[31] = 0;
+    } else {
+        ir_save_result(lhs_addr);
+    }
     
     char val_tmp[32];
     {
@@ -807,24 +915,16 @@ static void emit_ir_inc_dec(Compiler *cc, Node *lhs, int is_inc, int is_post, in
 }
 
 void codegen_expr(Compiler *cc, Node *node) {
-  if (!node)
+  if (!node) {
+    error_at(cc, 0, "codegen_expr: NULL node");
     return;
-  zcc_debug_loc(cc, node->line);
-
-  if (cc) {
   }
+  zcc_debug_loc(cc, node->line);
 
   int lbl1;
   int lbl2;
   char errbuf[80];
 
-  /* Do NOT use ptr_in_fault_range(node): stage2 miscompiles it and rejects
-   * valid arena ptrs. */
-  if (!node) {
-    error_at(cc, 0, "codegen_expr: NULL node");
-    fprintf(cc->out, "    movq $0, %%rax\n");
-    return;
-  }
   if (node->kind < ND_NUM || node->kind > ND_NOP) {
     sprintf(errbuf, "codegen_expr: invalid kind %d (0x%x) at %p", node->kind,
             node->kind, (void *)node);
@@ -921,9 +1021,8 @@ void codegen_expr(Compiler *cc, Node *node) {
             cc->strings[node->str_id].label_id);
     sprintf(lbl_buf, ".LS%d", cc->strings[node->str_id].label_id);
     char *dst = ir_bridge_fresh_tmp();
-    ZCC_EMIT_CONST(IR_TY_PTR, dst, 0, node->line); /* Fake for now */
     ZCC_EMIT_UNARY(IR_CONST_STR, IR_TY_PTR, dst, lbl_buf,
-                   node->line); /* REAL emit */
+                   node->line);
     return;
   }
 
@@ -952,7 +1051,9 @@ void codegen_expr(Compiler *cc, Node *node) {
         if (node->type->kind != TY_STRUCT) {
           if (node->type->kind != TY_UNION) {
             if (node->type->kind != TY_FUNC) {
-              codegen_load(cc, node->type);
+              if (!is_complex_type(node->type)) {
+                codegen_load(cc, node->type);
+              }
             }
           }
         }
@@ -972,9 +1073,32 @@ void codegen_expr(Compiler *cc, Node *node) {
 
   case ND_ASSIGN: {
     char rhs_ir[32];
+    int depth_before = cc->stack_depth;
     if (!node->lhs || !node->rhs) {
       error_at(cc, node->line, "codegen_expr: ND_ASSIGN missing lhs or rhs");
       fprintf(cc->out, "    movq $0, %%rax\n");
+      return;
+    }
+    if (node->lhs && node->lhs->type && is_complex_type(node->lhs->type)) {
+      codegen_expr_checked(cc, node->rhs);
+      push_reg(cc, "rax");
+      codegen_addr_checked(cc, node->lhs);
+      fprintf(cc->out, "    movq %%rax, %%rdi\n");
+      fprintf(cc->out, "    movq %%rax, %%r8\n");
+      pop_reg(cc, "rsi");
+      if (!node->rhs->type || !is_complex_type(node->rhs->type)) {
+        emit_promote_to_complex(cc, node->rhs->type, node->lhs->type, "rsi");
+      }
+      push_reg(cc, "rcx");
+      fprintf(cc->out, "    movq $%d, %%rcx\n", type_size(node->lhs->type));
+      fprintf(cc->out, "    rep movsb\n");
+      pop_reg(cc, "rcx");
+      fprintf(cc->out, "    movq %%r8, %%rax\n");
+      if (cc->stack_depth > depth_before) {
+        int bytes = (cc->stack_depth - depth_before) * 8;
+        fprintf(cc->out, "    addq $%d, %%rsp\n", bytes);
+        cc->stack_depth = depth_before;
+      }
       return;
     }
     codegen_expr_checked(cc, node->rhs);
@@ -1015,24 +1139,24 @@ void codegen_expr(Compiler *cc, Node *node) {
       case 4: fprintf(cc->out, "    movl (%%rax), %%r10d\n"); break;
       default: fprintf(cc->out, "    movq (%%rax), %%r10\n"); break;
       }
-      long long mask_val = (1ULL << node->lhs->bit_size) - 1;
-      long long shift_mask = ~(mask_val << node->lhs->bit_offset);
+      unsigned long long mask_val = (node->lhs->bit_size == 64) ? 0xFFFFFFFFFFFFFFFFULL : ((1ULL << node->lhs->bit_size) - 1ULL);
+      unsigned long long shift_mask = ~(mask_val << node->lhs->bit_offset);
       /* CG-BITFIELD-001: use movabsq for immediates that may not fit in
        * sign-extended imm32. E.g. shift_mask=0xFFFFFFFF00000000 (-4294967296)
        * cannot be encoded as movq $imm32 — GAS silently truncates to 0.
        * Similarly mask_val=0xFFFFFFFF sign-extends to -1 (all-ones) in andq
        * $imm32 form, turning the mask-and into a no-op. */
       if (shift_mask >= -2147483648LL && shift_mask <= 2147483647LL) {
-        fprintf(cc->out, "    movq $%lld, %%rcx\n", shift_mask);
+        fprintf(cc->out, "    movq $%lld, %%rcx\n", (long long)shift_mask);
       } else {
-        fprintf(cc->out, "    movabsq $%lld, %%rcx\n", shift_mask);
+        fprintf(cc->out, "    movabsq $%lld, %%rcx\n", (long long)shift_mask);
       }
       fprintf(cc->out, "    andq %%rcx, %%r10\n");
       if (mask_val >= -2147483648LL && mask_val <= 2147483647LL) {
-        fprintf(cc->out, "    andq $%lld, %%r11\n", mask_val);
+        fprintf(cc->out, "    andq $%lld, %%r11\n", (long long)mask_val);
       } else {
         /* mask_val doesn't fit in imm32; load into %rcx then and */
-        fprintf(cc->out, "    movabsq $%lld, %%rcx\n", mask_val);
+        fprintf(cc->out, "    movabsq $%lld, %%rcx\n", (long long)mask_val);
         fprintf(cc->out, "    andq %%rcx, %%r11\n");
       }
       fprintf(cc->out, "    shlq $%d, %%r11\n", node->lhs->bit_offset);
@@ -1054,7 +1178,7 @@ void codegen_expr(Compiler *cc, Node *node) {
      * not 8 */
     if (node->lhs->kind == ND_MEMBER && node->lhs->member_size > 0) {
       pop_reg(cc, "r11");
-      if ((node->lhs->type && (node->lhs->type->kind == TY_STRUCT || node->lhs->type->kind == TY_UNION)) || node->lhs->member_size > 8) {
+      if ((node->lhs->type && (node->lhs->type->kind == TY_STRUCT || node->lhs->type->kind == TY_UNION || is_complex_type(node->lhs->type))) || node->lhs->member_size > 8) {
         fprintf(cc->out, "    pushq %%rsi\n");
         fprintf(cc->out, "    pushq %%rdi\n");
         fprintf(cc->out, "    pushq %%rcx\n");
@@ -1487,6 +1611,29 @@ void codegen_expr(Compiler *cc, Node *node) {
       fprintf(cc->out, "    movq $0, %%rax\n");
       return;
     }
+    if (node->type && is_complex_type(node->type)) {
+      int scratch_off = cc->abi_scratch_offset;
+      codegen_expr_checked(cc, node->lhs);
+      emit_promote_to_complex(cc, node->lhs->type, node->type, "rax");
+      push_reg(cc, "rax");
+
+      codegen_expr_checked(cc, node->rhs);
+      emit_promote_to_complex(cc, node->rhs->type, node->type, "rax");
+      fprintf(cc->out, "    movq %%rax, %%rdx\n");
+      pop_reg(cc, "rsi");
+
+      fprintf(cc->out, "    leaq %d(%%rbp), %%rdi\n", scratch_off);
+
+      if (node->type->kind == TY_FLOAT_COMPLEX) {
+        fprintf(cc->out, "    movss 0(%%rsi), %%xmm0\n    addss 0(%%rdx), %%xmm0\n    movss %%xmm0, 0(%%rdi)\n");
+        fprintf(cc->out, "    movss 4(%%rsi), %%xmm0\n    addss 4(%%rdx), %%xmm0\n    movss %%xmm0, 4(%%rdi)\n");
+      } else {
+        fprintf(cc->out, "    movsd 0(%%rsi), %%xmm0\n    addsd 0(%%rdx), %%xmm0\n    movsd %%xmm0, 0(%%rdi)\n");
+        fprintf(cc->out, "    movsd 8(%%rsi), %%xmm0\n    addsd 8(%%rdx), %%xmm0\n    movsd %%xmm0, 8(%%rdi)\n");
+      }
+      fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", scratch_off);
+      return;
+    }
     if (node->type && is_float_type(node->type)) {
       int is_f32 = (node->type->kind == TY_FLOAT);
       codegen_expr_checked(cc, node->lhs);
@@ -1576,6 +1723,29 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (!node->lhs || !node->rhs) {
       error_at(cc, node->line, "codegen_expr: ND_SUB missing operand");
       fprintf(cc->out, "    movq $0, %%rax\n");
+      return;
+    }
+    if (node->type && is_complex_type(node->type)) {
+      int scratch_off = cc->abi_scratch_offset;
+      codegen_expr_checked(cc, node->lhs);
+      emit_promote_to_complex(cc, node->lhs->type, node->type, "rax");
+      push_reg(cc, "rax");
+
+      codegen_expr_checked(cc, node->rhs);
+      emit_promote_to_complex(cc, node->rhs->type, node->type, "rax");
+      fprintf(cc->out, "    movq %%rax, %%rdx\n");
+      pop_reg(cc, "rsi");
+
+      fprintf(cc->out, "    leaq %d(%%rbp), %%rdi\n", scratch_off);
+
+      if (node->type->kind == TY_FLOAT_COMPLEX) {
+        fprintf(cc->out, "    movss 0(%%rsi), %%xmm0\n    subss 0(%%rdx), %%xmm0\n    movss %%xmm0, 0(%%rdi)\n");
+        fprintf(cc->out, "    movss 4(%%rsi), %%xmm0\n    subss 4(%%rdx), %%xmm0\n    movss %%xmm0, 4(%%rdi)\n");
+      } else {
+        fprintf(cc->out, "    movsd 0(%%rsi), %%xmm0\n    subsd 0(%%rdx), %%xmm0\n    movsd %%xmm0, 0(%%rdi)\n");
+        fprintf(cc->out, "    movsd 8(%%rsi), %%xmm0\n    subsd 8(%%rdx), %%xmm0\n    movsd %%xmm0, 8(%%rdi)\n");
+      }
+      fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", scratch_off);
       return;
     }
     if (node->type && is_float_type(node->type)) {
@@ -1673,6 +1843,41 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (!node->lhs || !node->rhs) {
       error_at(cc, node->line, "codegen_expr: binary op missing operand");
       fprintf(cc->out, "    movq $0, %%rax\n");
+      return;
+    }
+    if (node->type && is_complex_type(node->type)) {
+      int scratch_off = cc->abi_scratch_offset;
+      codegen_expr_checked(cc, node->lhs);
+      emit_promote_to_complex(cc, node->lhs->type, node->type, "rax");
+      push_reg(cc, "rax");
+
+      codegen_expr_checked(cc, node->rhs);
+      emit_promote_to_complex(cc, node->rhs->type, node->type, "rax");
+      fprintf(cc->out, "    movq %%rax, %%rdx\n");
+      pop_reg(cc, "rsi");
+
+      fprintf(cc->out, "    leaq %d(%%rbp), %%rdi\n", scratch_off);
+
+      if (node->type->kind == TY_FLOAT_COMPLEX) {
+        /* real = a*c - b*d */
+        fprintf(cc->out, "    movss 0(%%rsi), %%xmm0\n    mulss 0(%%rdx), %%xmm0\n");
+        fprintf(cc->out, "    movss 4(%%rsi), %%xmm1\n    mulss 4(%%rdx), %%xmm1\n");
+        fprintf(cc->out, "    subss %%xmm1, %%xmm0\n    movss %%xmm0, 0(%%rdi)\n");
+        /* imag = a*d + b*c */
+        fprintf(cc->out, "    movss 0(%%rsi), %%xmm0\n    mulss 4(%%rdx), %%xmm0\n");
+        fprintf(cc->out, "    movss 4(%%rsi), %%xmm1\n    mulss 0(%%rdx), %%xmm1\n");
+        fprintf(cc->out, "    addss %%xmm1, %%xmm0\n    movss %%xmm0, 4(%%rdi)\n");
+      } else {
+        /* real = a*c - b*d */
+        fprintf(cc->out, "    movsd 0(%%rsi), %%xmm0\n    mulsd 0(%%rdx), %%xmm0\n");
+        fprintf(cc->out, "    movsd 8(%%rsi), %%xmm1\n    mulsd 8(%%rdx), %%xmm1\n");
+        fprintf(cc->out, "    subsd %%xmm1, %%xmm0\n    movsd %%xmm0, 0(%%rdi)\n");
+        /* imag = a*d + b*c */
+        fprintf(cc->out, "    movsd 0(%%rsi), %%xmm0\n    mulsd 8(%%rdx), %%xmm0\n");
+        fprintf(cc->out, "    movsd 8(%%rsi), %%xmm1\n    mulsd 0(%%rdx), %%xmm1\n");
+        fprintf(cc->out, "    addsd %%xmm1, %%xmm0\n    movsd %%xmm0, 8(%%rdi)\n");
+      }
+      fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", scratch_off);
       return;
     }
     if (node->type && is_float_type(node->type)) {
@@ -1783,7 +1988,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       fprintf(cc->out, "    movq $0, %%rax\n");
       return;
     }
-    if (node->type && !is_float_type(node->type)) {
+    if (node->type && !is_float_type(node->type) && !is_complex_type(node->type)) {
       int rhs_ok = 1;
       long long rhs_cv = eval_const_expr_p4(node->rhs, &rhs_ok);
       if (rhs_ok && rhs_cv == 0) {
@@ -1791,6 +1996,85 @@ void codegen_expr(Compiler *cc, Node *node) {
         emit_zero_result(cc, node->type, node->line);
         return;
       }
+    }
+    if (node->type && is_complex_type(node->type)) {
+      int depth_before = cc->stack_depth;
+      codegen_expr_checked(cc, node->lhs);
+      emit_promote_to_complex(cc, node->lhs->type, node->type, "rax");
+      push_reg(cc, "rax");
+      int lhs_pointer_depth = cc->stack_depth;
+
+      codegen_expr_checked(cc, node->rhs);
+      emit_promote_to_complex(cc, node->rhs->type, node->type, "rax");
+      fprintf(cc->out, "    movq %%rax, %%rdx\n");
+
+      fprintf(cc->out, "    subq $16, %%rsp\n");
+      cc->stack_depth += 2;
+      fprintf(cc->out, "    movq %%rsp, %%rdi\n");
+      int lhs_pointer_offset = (cc->stack_depth - lhs_pointer_depth) * 8;
+      fprintf(cc->out, "    movq %d(%%rsp), %%rsi\n", lhs_pointer_offset);
+
+      if (node->type->kind == TY_FLOAT_COMPLEX) {
+        /* den = c*c + d*d */
+        fprintf(cc->out, "    movss 0(%%rdx), %%xmm2\n");
+        fprintf(cc->out, "    mulss %%xmm2, %%xmm2\n");
+        fprintf(cc->out, "    movss 4(%%rdx), %%xmm3\n");
+        fprintf(cc->out, "    mulss %%xmm3, %%xmm3\n");
+        fprintf(cc->out, "    addss %%xmm3, %%xmm2\n");
+        /* real = (a*c + b*d) / den */
+        fprintf(cc->out, "    movss 0(%%rsi), %%xmm0\n");
+        fprintf(cc->out, "    mulss 0(%%rdx), %%xmm0\n");
+        fprintf(cc->out, "    movss 4(%%rsi), %%xmm1\n");
+        fprintf(cc->out, "    mulss 4(%%rdx), %%xmm1\n");
+        fprintf(cc->out, "    addss %%xmm1, %%xmm0\n");
+        fprintf(cc->out, "    divss %%xmm2, %%xmm0\n");
+        fprintf(cc->out, "    movss %%xmm0, 0(%%rdi)\n");
+        /* imag = (b*c - a*d) / den */
+        fprintf(cc->out, "    movss 4(%%rsi), %%xmm0\n");
+        fprintf(cc->out, "    mulss 0(%%rdx), %%xmm0\n");
+        fprintf(cc->out, "    movss 0(%%rsi), %%xmm1\n");
+        fprintf(cc->out, "    mulss 4(%%rdx), %%xmm1\n");
+        fprintf(cc->out, "    subss %%xmm1, %%xmm0\n");
+        fprintf(cc->out, "    divss %%xmm2, %%xmm0\n");
+        fprintf(cc->out, "    movss %%xmm0, 4(%%rdi)\n");
+      } else {
+        fprintf(cc->out, "    movsd 0(%%rdx), %%xmm2\n");
+        fprintf(cc->out, "    mulsd %%xmm2, %%xmm2\n");
+        fprintf(cc->out, "    movsd 8(%%rdx), %%xmm3\n");
+        fprintf(cc->out, "    mulsd %%xmm3, %%xmm3\n");
+        fprintf(cc->out, "    addsd %%xmm3, %%xmm2\n");
+        fprintf(cc->out, "    movsd 0(%%rsi), %%xmm0\n");
+        fprintf(cc->out, "    mulsd 0(%%rdx), %%xmm0\n");
+        fprintf(cc->out, "    movsd 8(%%rsi), %%xmm1\n");
+        fprintf(cc->out, "    mulsd 8(%%rdx), %%xmm1\n");
+        fprintf(cc->out, "    addsd %%xmm1, %%xmm0\n");
+        fprintf(cc->out, "    divsd %%xmm2, %%xmm0\n");
+        fprintf(cc->out, "    movsd %%xmm0, 0(%%rdi)\n");
+        fprintf(cc->out, "    movsd 8(%%rsi), %%xmm0\n");
+        fprintf(cc->out, "    mulsd 0(%%rdx), %%xmm0\n");
+        fprintf(cc->out, "    movsd 0(%%rsi), %%xmm1\n");
+        fprintf(cc->out, "    mulsd 8(%%rdx), %%xmm1\n");
+        fprintf(cc->out, "    subsd %%xmm1, %%xmm0\n");
+        fprintf(cc->out, "    divsd %%xmm2, %%xmm0\n");
+        fprintf(cc->out, "    movsd %%xmm0, 8(%%rdi)\n");
+      }
+
+      int total_bytes = (cc->stack_depth - (depth_before + 2)) * 8;
+      if (node->type->kind == TY_FLOAT_COMPLEX) {
+        fprintf(cc->out, "    movq 0(%%rdi), %%xmm0\n");
+        fprintf(cc->out, "    addq $%d, %%rsp\n", total_bytes);
+        cc->stack_depth = depth_before + 2;
+        fprintf(cc->out, "    movq %%xmm0, 0(%%rsp)\n");
+      } else {
+        fprintf(cc->out, "    movsd 0(%%rdi), %%xmm0\n");
+        fprintf(cc->out, "    movsd 8(%%rdi), %%xmm1\n");
+        fprintf(cc->out, "    addq $%d, %%rsp\n", total_bytes);
+        cc->stack_depth = depth_before + 2;
+        fprintf(cc->out, "    movsd %%xmm0, 0(%%rsp)\n");
+        fprintf(cc->out, "    movsd %%xmm1, 8(%%rsp)\n");
+      }
+      fprintf(cc->out, "    movq %%rsp, %%rax\n");
+      return;
     }
     if (node->type && is_float_type(node->type)) {
       int is_f32 = (node->type->kind == TY_FLOAT);
@@ -1851,6 +2135,22 @@ void codegen_expr(Compiler *cc, Node *node) {
       return;
     }
 
+    /* INVARIANT CG-SIGFPE-003: If denominator is constant-proven zero (ICP feedback), intercept before idiv codegen */
+    if (node->type && !is_float_type(node->type)) {
+      int rhs_ok = 1;
+      long long rhs_cv = eval_const_expr_p4(node->rhs, &rhs_ok);
+      if (rhs_ok && rhs_cv == 0) {
+        zcc_divzero_report(node->line, 0);
+        if (backend_ops) {
+          fprintf(cc->out, "    mov r0, #0\n");
+        } else {
+          fprintf(cc->out, "    movq $0, %%rax\n");
+        }
+        emit_ir_const_result(node->type, 0, node->line);
+        return;
+      }
+    }
+
     /* CG-SIGFPE-001: constant-fold both operands before emitting idiv.
        INT_MIN / -1 is signed integer overflow — emitting idiv causes SIGFPE
        on x86. GCC folds this at compile time; ZCC must too when both sides
@@ -1900,8 +2200,16 @@ void codegen_expr(Compiler *cc, Node *node) {
       int lbl = cc->label_count++;
       fprintf(cc->out, "    testq %%r11, %%r11\n");
       fprintf(cc->out, "    jne .Lsdiv%d\n", lbl);
+#if ZCC_UPGRADE_DIV
+      fprintf(cc->out, "    movq %%rax, %%rdi\n");
+      fprintf(cc->out, "    movq %%r11, %%rsi\n");
+      fprintf(cc->out, "    movq $0, %%rdx\n");
+      fprintf(cc->out, "    movq $0, %%rcx\n");
+      fprintf(cc->out, "    call zcc_upgrade_div_i64\n");
+#else
       fprintf(cc->out, "    xorl %%eax, %%eax\n");
       fprintf(cc->out, "    xorl %%edx, %%edx\n");
+#endif
       fprintf(cc->out, "    jmp .Lsdivend%d\n", lbl);
       fprintf(cc->out, ".Lsdiv%d:\n", lbl);
       if (node_type_unsigned(node)) {
@@ -2287,7 +2595,7 @@ void codegen_expr(Compiler *cc, Node *node) {
                     node->lhs->type->kind == TY_FLOAT) ||
                    (node->rhs && node->rhs->type &&
                     node->rhs->type->kind == TY_FLOAT);
-      /* If either operand is float, compare as float (ucomiss) */
+      int depth_before = cc->stack_depth;
       codegen_expr_checked(cc, node->lhs);
       ir_save_result(lhs_ir);
       if (!node->lhs->type || !is_float_type(node->lhs->type)) {
@@ -2300,6 +2608,7 @@ void codegen_expr(Compiler *cc, Node *node) {
         else        fprintf(cc->out, "    movq %%rax, %%xmm0\n");
       }
       fprintf(cc->out, "    subq $8, %%rsp\n");
+      cc->stack_depth++;
       if (is_f32) fprintf(cc->out, "    movss %%xmm0, (%%rsp)\n");
       else        fprintf(cc->out, "    movsd %%xmm0, (%%rsp)\n");
       codegen_expr_checked(cc, node->rhs);
@@ -2316,6 +2625,12 @@ void codegen_expr(Compiler *cc, Node *node) {
       if (is_f32) fprintf(cc->out, "    movss (%%rsp), %%xmm1\n");
       else        fprintf(cc->out, "    movsd (%%rsp), %%xmm1\n");
       fprintf(cc->out, "    addq $8, %%rsp\n");
+      cc->stack_depth--;
+      if (cc->stack_depth > depth_before) {
+        int bytes = (cc->stack_depth - depth_before) * 8;
+        fprintf(cc->out, "    addq $%d, %%rsp\n", bytes);
+        cc->stack_depth = depth_before;
+      }
       if (is_f32) fprintf(cc->out, "    ucomiss %%xmm0, %%xmm1\n");
       else        fprintf(cc->out, "    ucomisd %%xmm0, %%xmm1\n");
       switch (node->kind) {
@@ -2695,6 +3010,72 @@ void codegen_expr(Compiler *cc, Node *node) {
     return;
   }
 
+  case ND_CREAL:
+    codegen_expr_checked(cc, node->lhs);
+    if (node->lhs && node->lhs->type && is_complex_type(node->lhs->type)) {
+        if (node->lhs->type->kind == TY_FLOAT_COMPLEX) {
+            fprintf(cc->out, "    movl 0(%%rax), %%eax\n");
+        } else {
+            fprintf(cc->out, "    movq 0(%%rax), %%rax\n");
+        }
+    }
+    return;
+
+  case ND_CIMAG:
+    codegen_expr_checked(cc, node->lhs);
+    if (node->lhs && node->lhs->type && is_complex_type(node->lhs->type)) {
+        if (node->lhs->type->kind == TY_FLOAT_COMPLEX) {
+            fprintf(cc->out, "    movl 4(%%rax), %%eax\n");
+        } else {
+            fprintf(cc->out, "    movq 8(%%rax), %%rax\n");
+        }
+    } else {
+        fprintf(cc->out, "    movq $0, %%rax\n");
+    }
+    return;
+
+  case ND_CONJ: {
+    int scratch_off = cc->abi_scratch_offset;
+    codegen_expr_checked(cc, node->lhs);
+    fprintf(cc->out, "    movq %%rax, %%rsi\n");
+    if (!node->lhs->type || node->lhs->type->kind != node->type->kind) {
+      emit_promote_to_complex(cc, node->lhs->type, node->type, "rsi");
+    }
+    fprintf(cc->out, "    leaq %d(%%rbp), %%rdi\n", scratch_off);
+    if (node->type && node->type->kind == TY_FLOAT_COMPLEX) {
+        fprintf(cc->out, "    movl 0(%%rsi), %%eax\n    movl %%eax, 0(%%rdi)\n");
+        fprintf(cc->out, "    movl 4(%%rsi), %%eax\n");
+        fprintf(cc->out, "    xorl $0x80000000, %%eax\n");
+        fprintf(cc->out, "    movl %%eax, 4(%%rdi)\n");
+    } else {
+        fprintf(cc->out, "    movq 0(%%rsi), %%rax\n    movq %%rax, 0(%%rdi)\n");
+        fprintf(cc->out, "    movq 8(%%rsi), %%rax\n");
+        fprintf(cc->out, "    movabsq $-9223372036854775808, %%r11\n");
+        fprintf(cc->out, "    xorq %%r11, %%rax\n");
+        fprintf(cc->out, "    movq %%rax, 8(%%rdi)\n");
+    }
+    fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", scratch_off);
+    return;
+  }
+
+  case ND_COMPLEX_LIT: {
+    fprintf(cc->out, "    subq $16, %%rsp\n");
+    cc->stack_depth += 2;
+    fprintf(cc->out, "    movq %%rsp, %%rax\n");
+    if (node->type && node->type->kind == TY_FLOAT_COMPLEX) {
+        float fv = (float)node->f_val;
+        unsigned int fbits; memcpy(&fbits, &fv, 4);
+        fprintf(cc->out, "    movl $0, 0(%%rax)\n");
+        fprintf(cc->out, "    movl $0x%08x, 4(%%rax)\n", fbits);
+    } else {
+        double dv = node->f_val;
+        unsigned long long dbits; memcpy(&dbits, &dv, 8);
+        fprintf(cc->out, "    movq $0, 0(%%rax)\n");
+        fprintf(cc->out, "    movq $0x%016llx, 8(%%rax)\n", dbits);
+    }
+    return;
+  }
+
   case ND_ADDR_LABEL: {
     /* get address of local label: leaq .Luser_func_label(%rip), %rax */
     fprintf(cc->out, "    leaq .Luser_%s_%s(%%rip), %%rax\n", cc->current_func, node->label_name);
@@ -2770,16 +3151,22 @@ void codegen_expr(Compiler *cc, Node *node) {
           break;
         }
       }
-      if (node->is_bitfield) {
+      if (node->is_bitfield && node->bit_size > 0 && node->bit_size <= 64) {
         int uns = 1;
         if (node->type) {
           uns = is_unsigned_type(node->type);
         }
-        fprintf(cc->out, "    shlq $%d, %%rax\n", 64 - node->bit_offset - node->bit_size);
-        if (uns) {
-          fprintf(cc->out, "    shrq $%d, %%rax\n", 64 - node->bit_size);
-        } else {
-          fprintf(cc->out, "    sarq $%d, %%rax\n", 64 - node->bit_size);
+        int left_shift = 64 - node->bit_offset - node->bit_size;
+        int right_shift = 64 - node->bit_size;
+        if (left_shift > 0 && left_shift < 64) {
+            fprintf(cc->out, "    shlq $%d, %%rax\n", left_shift);
+        }
+        if (right_shift > 0 && right_shift < 64) {
+            if (uns) {
+              fprintf(cc->out, "    shrq $%d, %%rax\n", right_shift);
+            } else {
+              fprintf(cc->out, "    sarq $%d, %%rax\n", right_shift);
+            }
         }
       }
       {
@@ -2803,6 +3190,80 @@ void codegen_expr(Compiler *cc, Node *node) {
     }
     codegen_expr_checked(cc, node->lhs);
     ir_save_result(src_ir);
+    if (node->cast_type && is_complex_type(node->cast_type)) {
+      if (node->lhs && node->lhs->type && is_complex_type(node->lhs->type)) {
+        if (node->cast_type->kind == node->lhs->type->kind) {
+          return;
+        }
+        fprintf(cc->out, "    movq %%rax, %%rsi\n");
+        fprintf(cc->out, "    subq $16, %%rsp\n");
+        cc->stack_depth += 2;
+        fprintf(cc->out, "    movq %%rsp, %%rdi\n");
+        if (node->cast_type->kind == TY_DOUBLE_COMPLEX && node->lhs->type->kind == TY_FLOAT_COMPLEX) {
+            fprintf(cc->out, "    movss 0(%%rsi), %%xmm0\n");
+            fprintf(cc->out, "    cvtss2sd %%xmm0, %%xmm0\n");
+            fprintf(cc->out, "    movsd %%xmm0, 0(%%rdi)\n");
+            fprintf(cc->out, "    movss 4(%%rsi), %%xmm0\n");
+            fprintf(cc->out, "    cvtss2sd %%xmm0, %%xmm0\n");
+            fprintf(cc->out, "    movsd %%xmm0, 8(%%rdi)\n");
+        } else {
+            fprintf(cc->out, "    movsd 0(%%rsi), %%xmm0\n");
+            fprintf(cc->out, "    cvtsd2ss %%xmm0, %%xmm0\n");
+            fprintf(cc->out, "    movss %%xmm0, 0(%%rdi)\n");
+            fprintf(cc->out, "    movsd 8(%%rsi), %%xmm0\n");
+            fprintf(cc->out, "    cvtsd2ss %%xmm0, %%xmm0\n");
+            fprintf(cc->out, "    movss %%xmm0, 4(%%rdi)\n");
+        }
+        fprintf(cc->out, "    movq %%rdi, %%rax\n");
+        return;
+      } else {
+        /* Real -> Complex cast: (val) -> (val, +0.0i) */
+        fprintf(cc->out, "    movq %%rax, %%rsi\n");
+        fprintf(cc->out, "    subq $16, %%rsp\n");
+        cc->stack_depth += 2;
+        fprintf(cc->out, "    movq %%rsp, %%rdi\n");
+        if (node->cast_type->kind == TY_FLOAT_COMPLEX) {
+          if (node->lhs && node->lhs->type && node->lhs->type->kind == TY_DOUBLE) {
+            fprintf(cc->out, "    movq %%rsi, %%xmm0\n");
+            fprintf(cc->out, "    cvtsd2ss %%xmm0, %%xmm0\n");
+            fprintf(cc->out, "    movss %%xmm0, 0(%%rdi)\n");
+          } else if (node->lhs && node->lhs->type && node->lhs->type->kind == TY_FLOAT) {
+            fprintf(cc->out, "    movl %%esi, 0(%%rdi)\n");
+          } else {
+            fprintf(cc->out, "    cvtsi2ss %%rsi, %%xmm0\n");
+            fprintf(cc->out, "    movss %%xmm0, 0(%%rdi)\n");
+          }
+          fprintf(cc->out, "    movl $0, 4(%%rdi)\n");
+        } else {
+          if (node->lhs && node->lhs->type && node->lhs->type->kind == TY_FLOAT) {
+            fprintf(cc->out, "    movd %%esi, %%xmm0\n");
+            fprintf(cc->out, "    cvtss2sd %%xmm0, %%xmm0\n");
+            fprintf(cc->out, "    movsd %%xmm0, 0(%%rdi)\n");
+          } else if (node->lhs && node->lhs->type && node->lhs->type->kind == TY_DOUBLE) {
+            fprintf(cc->out, "    movq %%rsi, 0(%%rdi)\n");
+          } else {
+            fprintf(cc->out, "    cvtsi2sd %%rsi, %%xmm0\n");
+            fprintf(cc->out, "    movsd %%xmm0, 0(%%rdi)\n");
+          }
+          fprintf(cc->out, "    movq $0, 8(%%rdi)\n");
+        }
+        fprintf(cc->out, "    movq %%rdi, %%rax\n");
+        return;
+      }
+    }
+    if (node->lhs && node->lhs->type && is_complex_type(node->lhs->type) && !is_complex_type(node->cast_type)) {
+      /* Complex -> Real cast: discard imaginary, extract real component at offset 0 */
+      if (node->lhs->type->kind == TY_FLOAT_COMPLEX) {
+        fprintf(cc->out, "    movss 0(%%rax), %%xmm0\n");
+        if (node->cast_type->kind == TY_DOUBLE) fprintf(cc->out, "    cvtss2sd %%xmm0, %%xmm0\n    movq %%xmm0, %%rax\n");
+        else fprintf(cc->out, "    movd %%xmm0, %%eax\n");
+      } else {
+        fprintf(cc->out, "    movsd 0(%%rax), %%xmm0\n");
+        if (node->cast_type->kind == TY_FLOAT) fprintf(cc->out, "    cvtsd2ss %%xmm0, %%xmm0\n    movd %%xmm0, %%eax\n");
+        else fprintf(cc->out, "    movq %%xmm0, %%rax\n");
+      }
+      return;
+    }
     /* truncate/extend based on target type */
     if (node->cast_type) {
       int src_size = node->lhs && node->lhs->type ? type_size(node->lhs->type) : 4;
@@ -3562,7 +4023,15 @@ void codegen_expr(Compiler *cc, Node *node) {
         error_at(cc, node->line, "null argument in call");
         return;
       }
+      int depth_before_arg = cc->stack_depth;
       codegen_expr_checked(cc, node->args[i]);
+      if (cc->stack_depth > depth_before_arg && !arg_is_stack[i]) {
+          int extra = (cc->stack_depth - depth_before_arg) * 8;
+          fprintf(cc->out, "    movq %%rax, %%r11\n");
+          fprintf(cc->out, "    addq $%d, %%rsp\n", extra);
+          fprintf(cc->out, "    movq %%r11, %%rax\n");
+          cc->stack_depth = depth_before_arg;
+      }
       Type *atype = (node->args[i] && !is_bad_ptr(node->args[i]) && node->args[i]->type) ? node->args[i]->type : 0;
       int current_pushed_bytes = (cc->stack_depth - stack_depth_at_reservation) * 8;
       if (arg_is_stack[i]) {
@@ -3581,7 +4050,7 @@ void codegen_expr(Compiler *cc, Node *node) {
           continue;
       }
       /* REG arg: push placeholders for register loading pass */
-      if (atype && (atype->kind == TY_STRUCT || atype->kind == TY_UNION)) {
+      if (atype && (atype->kind == TY_STRUCT || atype->kind == TY_UNION || is_complex_type(atype))) {
           fprintf(cc->out, "    movq %%rax, %%r10\n");
           if (type_size(atype) > 8) {
               fprintf(cc->out, "    pushq 8(%%r10)\n");
@@ -3600,6 +4069,7 @@ void codegen_expr(Compiler *cc, Node *node) {
         ZCC_EMIT_ARG(ir_map_type((node->args[i] && !is_bad_ptr(node->args[i])) ? node->args[i]->type : 0), &args_ir_1d[i * 32], node->line);
     }
 
+    int fp_idx = 0;
     /* pop args into correct registers: floats->xmm, ints->gpregs independently */
     {
       int callee_has_sret = 0;
@@ -3609,7 +4079,6 @@ void codegen_expr(Compiler *cc, Node *node) {
           if (eb[0] == CLASS_MEMORY) callee_has_sret = 1;
       }
       int gp_idx = callee_has_sret ? 1 : 0;
-      int fp_idx = 0;
       /* Resolve callee's declared parameter types for float/double ABI */
       Symbol *callee_sym = node->func_name[0] ? scope_find(cc, node->func_name) : 0;
       Type *callee_ftype = (callee_sym && callee_sym->type && callee_sym->type->kind == TY_FUNC) ? callee_sym->type : 0;
@@ -3621,111 +4090,167 @@ void codegen_expr(Compiler *cc, Node *node) {
         else if (lt->kind == TY_PTR && lt->base && lt->base->kind == TY_FUNC)
           callee_ftype = lt->base;
       }
-       for (i = 0; i < nargs; i++) {
+      int target_gp[64];
+      int target_fp[64];
+      for (i = 0; i < nargs; i++) {
+        target_gp[i] = -1;
+        target_fp[i] = -1;
         if (arg_is_stack[i]) continue;
         Type *atype = (node->args[i] && !is_bad_ptr(node->args[i]) && node->args[i]->type) ? node->args[i]->type : 0;
-        if (atype && (atype->kind == TY_STRUCT || atype->kind == TY_UNION)) {
-            abi_class_t eb[2];
-            classify_aggregate(atype, eb);
-            /* Small aggregate: pop eightbytes into correct registers. */
-            /* Pop eightbyte 0 */
-            if (eb[0] == CLASS_SSE) {
-                fprintf(cc->out, "    popq %%rax\n");
-                cc->stack_depth--;
-                fprintf(cc->out, "    movq %%rax, %%xmm%d\n", fp_idx++);
-            } else {
-                pop_reg(cc, argregs[gp_idx++]);
-            }
-            /* Pop eightbyte 1 */
-            if (type_size(atype) > 8) {
-                if (eb[1] == CLASS_SSE) {
-                    fprintf(cc->out, "    popq %%rax\n");
-                    cc->stack_depth--;
-                    fprintf(cc->out, "    movq %%rax, %%xmm%d\n", fp_idx++);
-                } else {
-                    pop_reg(cc, argregs[gp_idx++]);
-                }
-            }
-            continue;
-        }
+        abi_class_t eb[2];
+        int is_agg = (atype && (atype->kind == TY_STRUCT || atype->kind == TY_UNION));
+        if (is_agg) classify_aggregate(atype, eb);
+
         if (atype && is_float_type(atype)) {
-          if (fp_idx < 8) {
-            fprintf(cc->out, "    popq %%rax\n");
-            cc->stack_depth--;
-            fprintf(cc->out, "    movq %%rax, %%xmm%d\n", fp_idx);
-            /* Check callee's declared param type... */
-            {
-              int arg_is_float = (atype && atype->kind == TY_FLOAT);
-              if (arg_is_float) {
-                int in_fixed_float_param = 0;
-                if (callee_ftype && callee_ftype->params && i < callee_ftype->num_params) {
-                  if (callee_ftype->params[i] && callee_ftype->params[i]->kind == TY_FLOAT) in_fixed_float_param = 1;
-                }
-                if (!in_fixed_float_param) {
-                  fprintf(cc->out, "    cvtss2sd %%xmm%d, %%xmm%d\n", fp_idx, fp_idx);
-                }
-              } else {
-                int need_cvt = 0;
-                if (callee_ftype && callee_ftype->params && i < callee_ftype->num_params) {
-                  if (callee_ftype->params[i] && callee_ftype->params[i]->kind == TY_FLOAT) need_cvt = 1;
-                }
-                if (need_cvt) fprintf(cc->out, "    cvtsd2ss %%xmm%d, %%xmm%d\n", fp_idx, fp_idx);
-              }
+            if (fp_idx < 8) target_fp[i] = fp_idx++;
+        } else if (atype && is_complex_type(atype)) {
+            if (fp_idx < 8) {
+                target_fp[i] = fp_idx++;
+                if (atype->kind == TY_DOUBLE_COMPLEX && fp_idx < 8) fp_idx++;
             }
-            fp_idx++;
-          }
         } else if (callee_ftype && callee_ftype->params && i < callee_ftype->num_params &&
                    callee_ftype->params[i] && is_float_type(callee_ftype->params[i])) {
-          /* CG-FLOAT-ABI-FIX: implicit int-to-float/double conversion at call site.
-           * The arg expression is integer but the callee declares this param as
-           * float/double. SysV ABI requires float/double args in xmm registers.
-           * Convert the integer value and route to xmm instead of GP. */
-          if (fp_idx < 8) {
-            fprintf(cc->out, "    popq %%rax\n");
-            cc->stack_depth--;
-            char xmm_name[16];
-            sprintf(xmm_name, "xmm%d", fp_idx);
-            emit_cvtsi2fd(cc, atype, callee_ftype->params[i]->kind == TY_FLOAT, xmm_name);
-            fp_idx++;
-          }
+            if (fp_idx < 8) target_fp[i] = fp_idx++;
+        } else if (is_agg) {
+            if (eb[0] == CLASS_SSE) {
+                if (fp_idx < 8) {
+                    target_fp[i] = fp_idx++;
+                    if (type_size(atype) > 8 && eb[1] == CLASS_SSE && fp_idx < 8) {
+                        fp_idx++;
+                    } else if (type_size(atype) > 8 && eb[1] == CLASS_INTEGER && gp_idx < 6) {
+                        target_gp[i] = gp_idx++;
+                    }
+                }
+            } else if (eb[0] == CLASS_INTEGER && type_size(atype) > 8 && eb[1] == CLASS_SSE) {
+                if (gp_idx < 6 && fp_idx < 8) {
+                    target_gp[i] = gp_idx++;
+                    target_fp[i] = fp_idx++;
+                }
+            } else {
+                int needed_gp = 1;
+                if (type_size(atype) > 8 && eb[1] != CLASS_SSE) {
+                    needed_gp = 2;
+                }
+                if (gp_idx + needed_gp <= 6) {
+                    target_gp[i] = gp_idx;
+                    gp_idx += needed_gp;
+                }
+            }
         } else {
-          if (backend_ops) {
-              if (gp_idx < 4) {
-                 fprintf(cc->out, "    pop {r%d}\n", gp_idx);
-                 cc->stack_depth--;
-                 gp_idx++;
-              }
-          } else {
-              if (gp_idx < 6) {
-                pop_reg(cc, argregs[gp_idx]);
-                gp_idx++;
-              }
+            if (gp_idx < 6) {
+                target_gp[i] = gp_idx++;
+            }
+        }
+      }
+
+      for (i = 0; i < nargs; i++) {
+        if (arg_is_stack[i]) continue;
+        Type *atype = (node->args[i] && !is_bad_ptr(node->args[i]) && node->args[i]->type) ? node->args[i]->type : 0;
+        abi_class_t eb[2];
+        int is_agg = (atype && (atype->kind == TY_STRUCT || atype->kind == TY_UNION));
+        if (is_agg) classify_aggregate(atype, eb);
+
+        if (target_fp[i] >= 0) {
+            int fpid = target_fp[i];
+            if (is_agg) {
+                if (eb[0] == CLASS_INTEGER && type_size(atype) > 8 && eb[1] == CLASS_SSE) {
+                    if (target_gp[i] >= 0) {
+                        pop_reg(cc, argregs[target_gp[i]]);
+                    }
+                    fprintf(cc->out, "    popq %%rax\n");
+                    cc->stack_depth--;
+                    fprintf(cc->out, "    movq %%rax, %%xmm%d\n", fpid);
+                } else if (eb[0] == CLASS_SSE) {
+                    fprintf(cc->out, "    popq %%rax\n");
+                    cc->stack_depth--;
+                    fprintf(cc->out, "    movq %%rax, %%xmm%d\n", fpid);
+                    if (type_size(atype) > 8 && eb[1] == CLASS_SSE) {
+                        fprintf(cc->out, "    popq %%rax\n");
+                        cc->stack_depth--;
+                        fprintf(cc->out, "    movq %%rax, %%xmm%d\n", fpid + 1);
+                    } else if (type_size(atype) > 8 && eb[1] == CLASS_INTEGER && target_gp[i] >= 0) {
+                        pop_reg(cc, argregs[target_gp[i]]);
+                    }
+                }
+            } else if (atype && is_complex_type(atype)) {
+                if (atype->kind == TY_DOUBLE_COMPLEX) {
+                    fprintf(cc->out, "    popq %%rax\n");
+                    cc->stack_depth--;
+                    fprintf(cc->out, "    movq %%rax, %%xmm%d\n", fpid);
+                    fprintf(cc->out, "    popq %%rax\n");
+                    cc->stack_depth--;
+                    fprintf(cc->out, "    movq %%rax, %%xmm%d\n", fpid + 1);
+                } else {
+                    fprintf(cc->out, "    popq %%rax\n");
+                    cc->stack_depth--;
+                    fprintf(cc->out, "    movq %%rax, %%xmm%d\n", fpid);
+                }
+            } else {
+                fprintf(cc->out, "    popq %%rax\n");
+                cc->stack_depth--;
+                fprintf(cc->out, "    movq %%rax, %%xmm%d\n", fpid);
+                int arg_is_float = (atype && atype->kind == TY_FLOAT);
+                if (arg_is_float) {
+                    int in_fixed_float_param = 0;
+                    if (callee_ftype && callee_ftype->params && i < callee_ftype->num_params) {
+                        if (callee_ftype->params[i] && callee_ftype->params[i]->kind == TY_FLOAT) in_fixed_float_param = 1;
+                    }
+                    if (!in_fixed_float_param) {
+                        fprintf(cc->out, "    cvtss2sd %%xmm%d, %%xmm%d\n", fpid, fpid);
+                    }
+                } else if (atype && atype->kind == TY_DOUBLE) {
+                    int need_cvt = 0;
+                    if (callee_ftype && callee_ftype->params && i < callee_ftype->num_params) {
+                        if (callee_ftype->params[i] && callee_ftype->params[i]->kind == TY_FLOAT) need_cvt = 1;
+                    }
+                    if (need_cvt) fprintf(cc->out, "    cvtsd2ss %%xmm%d, %%xmm%d\n", fpid, fpid);
+                } else if (callee_ftype && callee_ftype->params && i < callee_ftype->num_params &&
+                           callee_ftype->params[i] && is_float_type(callee_ftype->params[i])) {
+                    char xmm_name[16];
+                    sprintf(xmm_name, "xmm%d", fpid);
+                    emit_cvtsi2fd(cc, atype, callee_ftype->params[i]->kind == TY_FLOAT, xmm_name);
+                }
+            }
+        } else if (target_gp[i] >= 0) {
+            if (atype && (atype->kind == TY_STRUCT || atype->kind == TY_UNION) && type_size(atype) > 8) {
+                if (eb[0] == CLASS_INTEGER && eb[1] == CLASS_INTEGER) {
+                    pop_reg(cc, argregs[target_gp[i]]);
+                    if (target_gp[i] + 1 < 6) {
+                        pop_reg(cc, argregs[target_gp[i] + 1]);
+                    }
+                } else if (eb[0] == CLASS_INTEGER) {
+                    pop_reg(cc, argregs[target_gp[i]]);
+                }
+            } else {
+                pop_reg(cc, argregs[target_gp[i]]);
+            }
         }
       }
     }
 
-    /* ZCAEDI PRIME FIX: Restore stack pointer to remove leaked temporaries BEFORE call */
-    int expected_depth = stack_depth_at_reservation;
-    if (node->func_name[0] == 0 && node->lhs) {
-        expected_depth++; /* callee pointer was pushed */
-    }
-    if (cc->stack_depth > expected_depth) {
-        int leaked = cc->stack_depth - expected_depth;
-        fprintf(cc->out, "    addq $%d, %%rsp\n", leaked * 8);
-        cc->stack_depth = expected_depth;
-    }
+      int total_fp_args = fp_idx;
       if (has_sret) {
           fprintf(cc->out, "    leaq %d(%%rbp), %%rdi\n", sret_frame_offset);
       }
 
       if (!backend_ops) {
-          fprintf(cc->out, "    movl $%d, %%eax\n", fp_idx > 8 ? 8 : fp_idx);
+          fprintf(cc->out, "    movl $%d, %%eax\n", total_fp_args > 8 ? 8 : total_fp_args);
       }
-    }
     if (node->func_name[0] == 0 && node->lhs) {
       /* indirect call: restore callee into r10, call *r10 */
       fprintf(cc->out, "    movq %d(%%rbp), %%r10\n", cc->abi_scratch_offset + 16);
+      int call_lbl = cc->label_count++;
+      fprintf(cc->out, "    movq %%rsp, %%r11\n");
+      fprintf(cc->out, "    andq $15, %%r11\n");
+      fprintf(cc->out, "    testq %%r11, %%r11\n");
+      fprintf(cc->out, "    je .Lcall_ind_aligned_%d\n", call_lbl);
+      fprintf(cc->out, "    subq $8, %%rsp\n");
       fprintf(cc->out, "    call *%%r10\n");
+      fprintf(cc->out, "    addq $8, %%rsp\n");
+      fprintf(cc->out, "    jmp .Lcall_ind_end_%d\n", call_lbl);
+      fprintf(cc->out, ".Lcall_ind_aligned_%d:\n", call_lbl);
+      fprintf(cc->out, "    call *%%r10\n");
+      fprintf(cc->out, ".Lcall_ind_end_%d:\n", call_lbl);
     } else if (strcmp(node->func_name, "__builtin_va_start") == 0) {
       Symbol *fsym = scope_find(cc, cc->current_func);
       int gp_idx = 0;
@@ -3771,8 +4296,33 @@ void codegen_expr(Compiler *cc, Node *node) {
       if (backend_ops && backend_ops->emit_call) {
           backend_ops->emit_call(cc, node);
       } else {
-          fprintf(cc->out, "    call %s\n", node->func_name);
+          int call_lbl = cc->label_count++;
+          fprintf(cc->out, "    movq %%rsp, %%r11\n");
+          fprintf(cc->out, "    andq $15, %%r11\n");
+          fprintf(cc->out, "    testq %%r11, %%r11\n");
+          fprintf(cc->out, "    je .Lcall_aligned_%d\n", call_lbl);
+          if (node->func_name[0]) {
+              fprintf(cc->out, "    call %s\n", node->func_name);
+          } else {
+              fprintf(cc->out, "    call *%%rax\n");
+          }
+          fprintf(cc->out, "    addq $8, %%rsp\n");
+          fprintf(cc->out, "    jmp .Lcall_end_%d\n", call_lbl);
+          fprintf(cc->out, ".Lcall_aligned_%d:\n", call_lbl);
+          if (node->func_name[0]) {
+              fprintf(cc->out, "    call %s\n", node->func_name);
+          } else {
+              fprintf(cc->out, "    call *%%rax\n");
+          }
+          fprintf(cc->out, ".Lcall_end_%d:\n", call_lbl);
       }
+    }
+
+    /* cleanup arguments left on stack AND the alignment pad */
+    cleanup_bytes = (args_on_stack * 8) + alignment_pad;
+    if (cleanup_bytes > 0) {
+      fprintf(cc->out, "    addq $%d, %%rsp\n", cleanup_bytes);
+      cc->stack_depth -= (cleanup_bytes / 8);
     }
 
     /* CG-IR-019: System V aggregate return capture */
@@ -3780,8 +4330,7 @@ void codegen_expr(Compiler *cc, Node *node) {
         abi_class_t eb[2];
         classify_aggregate(node->type, eb);
         if (eb[0] != CLASS_MEMORY) {
-            /* Small aggregate: capture registers into scratch buffer immediately post-call.
-             * This must happen before any stack cleanup or other register clobbering. */
+            /* Small aggregate: capture registers into scratch buffer immediately post-call. */
             fprintf(cc->out, "    # SysV spill for %s\n", node->type->tag[0] ? node->type->tag : "<anon>");
             
             int cur_gp = 0, cur_fp = 0;
@@ -3805,6 +4354,15 @@ void codegen_expr(Compiler *cc, Node *node) {
             /* Set %rax to the address of the scratch buffer for downstream consumption. */
             fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", cc->abi_scratch_offset);
         }
+    } else if (node->type && is_complex_type(node->type)) {
+        if (node->type->kind == TY_FLOAT_COMPLEX) {
+            fprintf(cc->out, "    movss %%xmm0, %d(%%rbp)\n", cc->abi_scratch_offset);
+            fprintf(cc->out, "    movss %%xmm1, %d(%%rbp)\n", cc->abi_scratch_offset + 4);
+        } else {
+            fprintf(cc->out, "    movsd %%xmm0, %d(%%rbp)\n", cc->abi_scratch_offset);
+            fprintf(cc->out, "    movsd %%xmm1, %d(%%rbp)\n", cc->abi_scratch_offset + 8);
+        }
+        fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", cc->abi_scratch_offset);
     } else if (node->type && is_float_type(node->type)) {
         fprintf(cc->out, "    movq %%xmm0, %%rax\n");
     } else if (node->type && !node_type_unsigned(node)) {
@@ -3820,15 +4378,8 @@ void codegen_expr(Compiler *cc, Node *node) {
     {
       char *dst = ir_bridge_fresh_tmp();
       char *target = node->func_name[0] ? node->func_name : callee_ir;
-      fprintf(stderr, "DEBUG CALL SITE: %s, type kind = %d, mapped = %d\n", target, node->type ? node->type->kind : -1, ir_map_type(node->type));
+      if (getenv("ZCC_DEBUG_TRACE")) fprintf(stderr, "DEBUG CALL SITE: %s, type kind = %d, mapped = %d\n", target, node->type ? node->type->kind : -1, ir_map_type(node->type));
       ZCC_EMIT_CALL(ir_map_type(node->type), dst, target, node->line);
-    }
-
-    /* cleanup arguments left on stack AND the alignment pad */
-    cleanup_bytes = (args_on_stack * 8) + alignment_pad;
-    if (cleanup_bytes > 0) {
-      fprintf(cc->out, "    addq $%d, %%rsp\n", cleanup_bytes);
-      cc->stack_depth -= (cleanup_bytes / 8);
     }
     return;
   }
@@ -3977,13 +4528,12 @@ static int node_has_side_effects(Node *node) {
   if (is_bad_ptr(node)) return 0;
   if (node->magic != 0xC0FFEEBAD1234567ULL) return 0;
 
-  int skip_dce = 0;
-  char *env_dce = getenv("ZCC_OPT_DCE");
-  if (env_dce) {
-    if (strcmp(env_dce, "0") == 0) {
-      skip_dce = 1;
-    }
+  static int cached_skip_dce = -1;
+  if (cached_skip_dce == -1) {
+    char *env_dce = getenv("ZCC_OPT_DCE");
+    cached_skip_dce = (env_dce && strcmp(env_dce, "0") == 0) ? 1 : 0;
   }
+  int skip_dce = cached_skip_dce;
 
   switch (node->kind) {
     case ND_ASSIGN:
@@ -4178,7 +4728,16 @@ void codegen_stmt(Compiler *cc, Node *node) {
         ir_save_result(ret_tmp);
         ZCC_EMIT_RET(ir_map_type(node->lhs->type), ret_tmp, node->line);
       }
-      if (node->lhs->type && is_float_type(node->lhs->type)) {
+      if (node->lhs->type && is_complex_type(node->lhs->type)) {
+        fprintf(cc->out, "    movq %%rax, %%r10\n");
+        if (node->lhs->type->kind == TY_FLOAT_COMPLEX) {
+          fprintf(cc->out, "    movss 0(%%r10), %%xmm0\n");
+          fprintf(cc->out, "    movss 4(%%r10), %%xmm1\n");
+        } else {
+          fprintf(cc->out, "    movsd 0(%%r10), %%xmm0\n");
+          fprintf(cc->out, "    movsd 8(%%r10), %%xmm1\n");
+        }
+      } else if (node->lhs->type && is_float_type(node->lhs->type)) {
         fprintf(cc->out, "    movq %%rax, %%xmm0\n");
       }
     } else {
@@ -5013,6 +5572,14 @@ static void adjust_sym(Compiler *cc, Symbol *sym, Node *func, int parser_param_l
     fprintf(stderr, "zcc error: adjusted_syms overflow (%d)\n", MAX_ADJUSTED_SYMS);
     exit(1);
   }
+  if (func->func_params && func->func_params->names) {
+    for (int p_idx = 0; p_idx < func->num_params; p_idx++) {
+      if (sym->name[0] && func->func_params->names[p_idx] && strcmp(sym->name, func->func_params->names[p_idx]) == 0) {
+        sym->stack_offset = param_offsets[p_idx];
+        return;
+      }
+    }
+  }
   if (sym->stack_offset >= parser_param_limit && sym->stack_offset < 0) {
     int temp_offset = 0;
     for (int p_idx = 0; p_idx < func->num_params; p_idx++) {
@@ -5086,12 +5653,14 @@ void codegen_func(Compiler *cc, Node *func) {
   current_func_node = func;
 
   int parser_param_space = 0;
-  if (func->func_params) {
+  if (func->func_params && func->func_params->types) {
     for (int p_idx = 0; p_idx < func->num_params; p_idx++) {
       Type *ptype = func->func_params->types[p_idx];
-      int sz = type_size(ptype);
-      int slots = (sz + 7) / 8;
-      parser_param_space += (slots * 8);
+      if (ptype) {
+        int sz = type_size(ptype);
+        int slots = (sz + 7) / 8;
+        parser_param_space += (slots * 8);
+      }
     }
   } else {
     parser_param_space = func->num_params * 8;
@@ -5118,25 +5687,29 @@ void codegen_func(Compiler *cc, Node *func) {
           current_param_offset -= 8;
       }
   }
-  for (int p_idx = 0; p_idx < func->num_params && p_idx < 64; p_idx++) {
-      Type *ptype = func->func_params->types[p_idx];
-      int sz = type_size(ptype);
-      int slots = (sz + 7) / 8;
-      current_param_offset -= (slots * 8);
-      param_offsets[p_idx] = current_param_offset;
+  if (func->func_params && func->func_params->types) {
+      for (int p_idx = 0; p_idx < func->num_params && p_idx < 64; p_idx++) {
+          Type *ptype = func->func_params->types[p_idx];
+          if (ptype) {
+              int sz = type_size(ptype);
+              int slots = (sz + 7) / 8;
+              current_param_offset -= (slots * 8);
+              param_offsets[p_idx] = current_param_offset;
+          }
+      }
   }
   
+  num_adjusted = 0;
+  num_visited_nodes = 0;
+  /* CG-ABI-STRUCT-002: include the sret slot (-8B) in the boundary so
+   * trailing memory-class struct params are not misclassified as locals. */
+  int parser_param_limit = -actual_param_space;
+  traverse_and_adjust_node(func->body, cc, func, parser_param_limit, shift, param_offsets);
   if (shift > 0) {
-      num_adjusted = 0;
-      num_visited_nodes = 0;
-      /* CG-ABI-STRUCT-002: include the sret slot (-8B) in the boundary so
-       * trailing memory-class struct params are not misclassified as locals. */
-      int parser_param_limit = -actual_param_space;
-      traverse_and_adjust_node(func->body, cc, func, parser_param_limit, shift, param_offsets);
       func->stack_size += shift;
   }
 
-  fprintf(stderr, "cc_func: %s\n", func->func_def_name);
+  if (getenv("ZCC_DEBUG_TRACE")) fprintf(stderr, "ENTER cc_func: %s\n", func->func_def_name);
   cc->used_regs_mask = allocate_registers(func);
   cc->is_forced_mask = 0;
   if (backend_ops || ir_whitelisted(func->func_def_name)) {
@@ -5144,6 +5717,15 @@ void codegen_func(Compiler *cc, Node *func) {
       cc->used_regs_mask = 0x1F;
   }
   used_regs = cc->used_regs_mask;
+
+  /* INVARIANT ABI-SYSV-001 & RA-DETERMINISM-001: IR/AST Boundary Contract Verification */
+  if (g_ir_primary || backend_ops || ir_whitelisted(func->func_def_name)) {
+      if ((cc->used_regs_mask & 0x1F) != 0x1F) {
+          fprintf(stderr, "[ZCC INVARIANT VIOLATION] IR_AST_FRAME_MISMATCH: fn=%s used_regs=0x%02X != 0x1F\n",
+                  func->func_def_name, cc->used_regs_mask);
+          exit(1);
+      }
+  }
 
   if (getenv("ZCC_EMIT_TELEMETRY")) {
       fprintf(stderr, "[telem] fn=%s used_regs=0x%02X src=%s\n",
@@ -5240,9 +5822,10 @@ void codegen_func(Compiler *cc, Node *func) {
   }
   }
 
-  if (!backend_ops) {
+  if (!backend_ops && func->func_params && func->func_params->types) {
   for (i = 0; i < func->num_params; i++) {
     Type *ptype = func->func_params->types[i];
+    if (!ptype) continue;
     int sz = type_size(ptype);
     int slots = (sz + 7) / 8;
     param_offset -= (slots * 8); // Always 8-byte aligned slots in the local frame
@@ -5288,7 +5871,7 @@ void codegen_func(Compiler *cc, Node *func) {
             stack_arg_off += 8;
         }
     }
-    if (func->func_params && i < func->num_params) {
+    if (func->func_params && func->func_params->names && i < func->num_params && func->func_params->names[i]) {
         Symbol *psym = scope_find(cc, func->func_params->names[i]);
         if (psym) {
             psym->stack_offset = param_offset;
@@ -5320,11 +5903,15 @@ void codegen_func(Compiler *cc, Node *func) {
       if (ir_ast) {
         char params_env[512];
         memset(params_env, 0, sizeof(params_env));
-        for (int p_idx = 0; p_idx < func->num_params; p_idx++) {
-          if (p_idx > 0)
-            strcat(params_env, ",");
-          strncat(params_env, func->func_params->names[p_idx],
-                  511 - strlen(params_env));
+        if (func->func_params && func->func_params->names) {
+          for (int p_idx = 0; p_idx < func->num_params; p_idx++) {
+            if (func->func_params->names[p_idx]) {
+              if (p_idx > 0)
+                strcat(params_env, ",");
+              strncat(params_env, func->func_params->names[p_idx],
+                      511 - strlen(params_env));
+            }
+          }
         }
         setenv("ZCC_IR_PARAM_NAMES", params_env, 1);
 
@@ -5360,6 +5947,7 @@ void codegen_func(Compiler *cc, Node *func) {
 
   scope_pop(cc);
   current_func_node = NULL;
+  if (getenv("ZCC_DEBUG_TRACE")) fprintf(stderr, "EXIT cc_func: %s\n", func->func_def_name);
 }
 
 /* ================================================================ */
@@ -5596,6 +6184,7 @@ static long long eval_const_expr_p4_raw(Node *elem, int *ok) {
         return 0;
     }
     if (elem->kind == ND_NUM) return elem->int_val;
+    if (elem->kind == ND_VAR && elem->sym && elem->sym->is_enum_const && !elem->sym->is_local) return elem->sym->enum_val;
     if (elem->kind == ND_ADD || elem->kind == ND_SUB ||
         elem->kind == ND_MUL || elem->kind == ND_DIV || elem->kind == ND_MOD) {
         /* CG-GINIT-FLOAT-002: float/double arithmetic in static initializers
@@ -6021,10 +6610,17 @@ static void emit_global_var(Compiler *cc, Node *gvar) {
   if (size <= 0)
     size = 8;
     
+  int salign = (gvar->sym) ? symbol_alignment(gvar->sym) : (gvar->type ? type_align(gvar->type) : 8);
+  if (salign < 1) salign = 1;
+  int p2align = alignment_log2(salign);
+
   if (gvar->initializer) {
-    /* initialized data goes in .data */
-    fprintf(cc->out, "    .data\n");
-    fprintf(cc->out, "    .p2align 3\n");
+    if (gvar->is_tls || (gvar->sym && gvar->sym->is_tls)) {
+      fprintf(cc->out, "    .section .tdata,\"awT\",@progbits\n");
+    } else {
+      fprintf(cc->out, "    .data\n");
+    }
+    fprintf(cc->out, "    .p2align %d\n", p2align);
     if (!gvar->is_static) {
       fprintf(cc->out, "    .globl %s\n", gvar->name);
     }
@@ -6161,11 +6757,23 @@ static void emit_global_var(Compiler *cc, Node *gvar) {
         }
   } else {
     /* tentative definitions and uninitialized data */
-    if (gvar->is_static) {
+    if (gvar->is_tls || (gvar->sym && gvar->sym->is_tls)) {
+      fprintf(cc->out, "    .section .tbss,\"awT\",@nobits\n");
+      fprintf(cc->out, "    .p2align %d\n", p2align);
+      if (!gvar->is_static) {
+        fprintf(cc->out, "    .globl %s\n", gvar->name);
+      } else {
         fprintf(cc->out, "    .local %s\n", gvar->name);
-        fprintf(cc->out, "    .comm %s, %d, 8\n", gvar->name, size);
+      }
+      fprintf(cc->out, "%s:\n", gvar->name);
+      fprintf(cc->out, "    .zero %d\n", size);
     } else {
-        fprintf(cc->out, "    .comm %s, %d, 8\n", gvar->name, size);
+      if (gvar->is_static) {
+          fprintf(cc->out, "    .local %s\n", gvar->name);
+          fprintf(cc->out, "    .comm %s, %d, %d\n", gvar->name, size, salign >= 8 ? salign : 8);
+      } else {
+          fprintf(cc->out, "    .comm %s, %d, %d\n", gvar->name, size, salign >= 8 ? salign : 8);
+      }
     }
   }
 }
@@ -6596,7 +7204,10 @@ void codegen_program(Compiler *cc, Node *prog) {
 
   if (!backend_ops) fprintf(cc->out, "    .section .note.GNU-stack,\"\",@progbits\n");
   if (cc->filename) {
-    fprintf(cc->out, "    .file 1 \"%s\"\n", cc->filename);
+    const char *b_fn = strrchr(cc->filename, '/');
+    if (!b_fn) b_fn = strrchr(cc->filename, '\\');
+    b_fn = b_fn ? b_fn + 1 : cc->filename;
+    fprintf(cc->out, "    .file 1 \"%s\"\n", b_fn);
   }
 
   /* Emit functions */
@@ -6671,6 +7282,12 @@ void codegen_program(Compiler *cc, Node *prog) {
     fprintf(cc->out, "    .align 8\n");
     fprintf(cc->out, ".Lf64_one:\n");
     fprintf(cc->out, "    .quad 0x3FF0000000000000\n"); /* 1.0 double */
+    fprintf(cc->out, "    .align 16\n");
+    fprintf(cc->out, ".Lf32_signmask:\n");
+    fprintf(cc->out, "    .long 0x80000000\n    .long 0\n    .long 0\n    .long 0\n");
+    fprintf(cc->out, "    .align 16\n");
+    fprintf(cc->out, ".Lf64_signmask:\n");
+    fprintf(cc->out, "    .quad 0x8000000000000000\n    .quad 0\n");
   }
 }
 
@@ -6704,7 +7321,11 @@ void codegen_emit_globals_and_strings(Compiler *cc) {
     fprintf(cc->out, ".Lf32_one:\n");
     fprintf(cc->out, "    .long 0x3F800000\n");   /* 1.0f IEEE-754 */
     fprintf(cc->out, "    .align 8\n");
-    fprintf(cc->out, ".Lf64_one:\n");
-    fprintf(cc->out, "    .quad 0x3FF0000000000000\n"); /* 1.0 double */
+    fprintf(cc->out, "    .align 16\n");
+    fprintf(cc->out, ".Lf32_signmask:\n");
+    fprintf(cc->out, "    .long 0x80000000\n    .long 0\n    .long 0\n    .long 0\n");
+    fprintf(cc->out, "    .align 16\n");
+    fprintf(cc->out, ".Lf64_signmask:\n");
+    fprintf(cc->out, "    .quad 0x8000000000000000\n    .quad 0\n");
   }
 }

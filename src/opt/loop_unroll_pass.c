@@ -82,7 +82,7 @@ bool opt_loop_unroll_mvp_pass(Function *fn, OptMetricsSink *metrics) {
                 if (info.exit >= fn->n_blocks || !fn->blocks[info.exit]) continue;
 
                 printf("[Unroll MVP] Unrolling loop at header bb%d: trip_count=%lld, exit=bb%d\n", 
-                       bi, info.trip_count, info.exit);
+                       bi, (long long)info.trip_count, info.exit);
 
                 int64_t T = info.trip_count;
                 Block *header = fn->blocks[info.header];

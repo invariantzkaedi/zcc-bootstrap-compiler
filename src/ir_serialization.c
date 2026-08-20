@@ -5,6 +5,9 @@
  * Custom line-oriented text format replacing JSON.
  */
 
+#define _GNU_SOURCE
+#define _POSIX_C_SOURCE 200809L
+
 #include "ir_serialization.h"
 #include "../ir_dominance.h"
 #include "../ir.h"

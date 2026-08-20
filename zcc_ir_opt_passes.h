@@ -3,6 +3,7 @@
 #define ZCC_IR_OPT_PASSES_H
 
 #include "src/zcc_smt_prover.h"
+#include "src/opt/prime_v2_regalloc_opt.h"
 #include <stdlib.h>
 
 
@@ -285,6 +286,74 @@ static uint32_t opt_peephole_pass(Function *fn) {
                 ins->n_src = 1;
                 count++;
                 continue;
+            }
+
+            // Bitwise Complement Identities: x & ~x -> CONST 0
+            if (ins->op == OP_BAND && ins->n_src == 2) {
+                Instr *d0 = fn->def_of[ins->src[0]];
+                Instr *d1 = fn->def_of[ins->src[1]];
+                if ((d0 && d0->op == OP_BNOT && d0->n_src == 1 && d0->src[0] == ins->src[1]) ||
+                    (d1 && d1->op == OP_BNOT && d1->n_src == 1 && d1->src[0] == ins->src[0])) {
+                    if (g_emit_smt_proofs) {
+                        smt_prove_ir_peephole("ir_peep_band_not_self", ins->op, OP_CONST, 0, 0, 0, 1, 64, ins->dst);
+                    }
+                    ins->op = OP_CONST;
+                    ins->imm = 0;
+                    ins->n_src = 0;
+                    count++;
+                    continue;
+                }
+            }
+
+            // Bitwise Complement Identities: x | ~x -> CONST -1, x ^ ~x -> CONST -1
+            if ((ins->op == OP_BOR || ins->op == OP_BXOR) && ins->n_src == 2) {
+                Instr *d0 = fn->def_of[ins->src[0]];
+                Instr *d1 = fn->def_of[ins->src[1]];
+                if ((d0 && d0->op == OP_BNOT && d0->n_src == 1 && d0->src[0] == ins->src[1]) ||
+                    (d1 && d1->op == OP_BNOT && d1->n_src == 1 && d1->src[0] == ins->src[0])) {
+                    if (g_emit_smt_proofs) {
+                        smt_prove_ir_peephole("ir_peep_bor_not_self", ins->op, OP_CONST, -1, -1, 0, 1, 64, ins->dst);
+                    }
+                    ins->op = OP_CONST;
+                    ins->imm = -1;
+                    ins->n_src = 0;
+                    count++;
+                    continue;
+                }
+            }
+
+            // Double Negation: ~(~x) -> COPY x
+            if (ins->op == OP_BNOT && ins->n_src == 1) {
+                Instr *d0 = fn->def_of[ins->src[0]];
+                if (d0 && d0->op == OP_BNOT && d0->n_src == 1) {
+                    if (g_emit_smt_proofs) {
+                        smt_prove_ir_peephole("ir_peep_double_bnot", ins->op, OP_COPY, 0, 0, 0, 0, 64, ins->dst);
+                    }
+                    ins->op = OP_COPY;
+                    ins->src[0] = d0->src[0];
+                    ins->n_src = 1;
+                    count++;
+                    continue;
+                }
+            }
+
+            // Comparison Normalization: CONST op X -> X swapped_op CONST
+            if ((ins->op == OP_EQ || ins->op == OP_NE || ins->op == OP_LT || ins->op == OP_LE || ins->op == OP_GT || ins->op == OP_GE) && ins->n_src == 2) {
+                Instr *d0 = fn->def_of[ins->src[0]];
+                Instr *d1 = fn->def_of[ins->src[1]];
+                if (d0 && d0->op == OP_CONST && (!d1 || d1->op != OP_CONST)) {
+                    RegID tmp = ins->src[0];
+                    ins->src[0] = ins->src[1];
+                    ins->src[1] = tmp;
+                    switch (ins->op) {
+                        case OP_LT: ins->op = OP_GT; break;
+                        case OP_LE: ins->op = OP_GE; break;
+                        case OP_GT: ins->op = OP_LT; break;
+                        case OP_GE: ins->op = OP_LE; break;
+                        default: break; /* OP_EQ, OP_NE are symmetric */
+                    }
+                    count++;
+                }
             }
             
             // ADD x, 0 -> COPY x etc.

@@ -15,10 +15,18 @@
  *           static/extern/const qualifiers, #include <stdio.h> etc via host cpp.
  */
 
+#define _GNU_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#define ZCC_MONOLITHIC_BUILD 1
 #include <stdio.h>
 #include <string.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <ctype.h>
+
+char *strdup(const char *s);
+char *strndup(const char *s, size_t n);
+char *strtok_r(char *str, const char *delim, char **saveptr);
 
 /* ================================================================ */
 /* CONSTANTS — using enum for self-hosting (no preprocessor needed)  */
@@ -80,7 +88,7 @@ enum {
     TK_LBRACKET, TK_RBRACKET,
     TK_SEMI, TK_COMMA, TK_ELLIPSIS,
     TK_HASH,
-    TK_ALIGNOF, TK_STATIC_ASSERT
+    TK_ALIGNAS, TK_ALIGNOF, TK_STATIC_ASSERT, TK_GENERIC, TK_THREAD_LOCAL, TK_COMPLEX
 };
 
 /* ================================================================ */
@@ -110,6 +118,7 @@ enum {
     ND_COMPOUND_ASSIGN,
     ND_INIT_LIST,
     ND_ASM,
+    ND_CREAL, ND_CIMAG, ND_CONJ, ND_COMPLEX_LIT,
     ND_NOP
 };
 
@@ -122,7 +131,8 @@ enum {
     TY_INT, TY_UINT, TY_LONG, TY_ULONG,
     TY_LONGLONG, TY_ULONGLONG, TY_FLOAT, TY_DOUBLE,
     TY_PTR, TY_ARRAY, TY_FUNC, TY_STRUCT, TY_UNION, TY_ENUM,
-    TY_LONGDOUBLE
+    TY_LONGDOUBLE,
+    TY_FLOAT_COMPLEX, TY_DOUBLE_COMPLEX, TY_LONGDOUBLE_COMPLEX
 };
 
 typedef enum {
@@ -808,37 +818,43 @@ struct ArenaBlock {
 };
 
 struct StructField {
-    char name[MAX_IDENT];
+    /* 8-byte aligned fields */
     Type *type;
+    StructField *next;
+    /* 4-byte aligned fields */
     int offset;
+    int requested_align; /* _Alignas override for member */
     int is_bitfield;
     int bit_offset;
     int bit_size;
-    StructField *next;
+    int _pad;            /* explicit alignment padding to 8-byte boundary */
+    /* 8-byte aligned character array */
+    char name[MAX_IDENT];
 };
 
 struct Type {
+    /* 8-byte aligned fields (pointers & uint64) */
     unsigned long long magic;
     unsigned long long alloc_id;
+    Type *base;        /* for ptr/array */
+    Type *ret;         /* function return type */
+    Type **params;     /* function parameter types */
+    StructField *fields; /* struct/union fields */
+    /* 4-byte aligned fields (integers & flags) */
     int kind;
     int size;
     int align;
-    Type *base;        /* for ptr/array */
     int array_len;
-    /* function */
-    Type *ret;
-    Type **params;
     int num_params;
     int is_variadic;
-    /* struct/union */
-    char tag[MAX_IDENT];
-    StructField *fields;
     int is_complete;
     int is_packed;   /* __attribute__((packed)) — suppress field alignment */
     int explicit_align; /* __attribute__((aligned(N))) — override total align, 0 = none */
     int pragma_pack;    /* active pragma pack value when struct defined, 0 = none */
     int is_tbfp;     /* transparent bitfield packing (tbfp) marker */
     int is_volatile; /* volatile qualifier — force memory access, no register caching */
+    /* 8-byte aligned character array */
+    char tag[MAX_IDENT];
 };
 
 struct StringEntry {
@@ -847,22 +863,58 @@ struct StringEntry {
     int label_id;
 };
 
+typedef enum {
+    SC_NONE = 0,
+    SC_TYPEDEF,
+    SC_EXTERN,
+    SC_STATIC,
+    SC_AUTO,
+    SC_REGISTER,
+    SC_THREAD_LOCAL
+} StorageClass;
+
 struct Symbol {
-    char name[MAX_IDENT];
+    /* 8-byte aligned fields (no preceding padding) */
+    long long enum_val;
     Type *type;
+    char *assigned_reg;
+    Symbol *next;      /* linked list in scope */
+    /* 4-byte aligned fields (no preceding padding) */
+    int sym_id;        /* unique deterministic symbol ID */
     int is_local;
     int is_global;
     int is_typedef;
     int is_enum_const;
-    long long enum_val;
+    int is_param;
+    int is_tls;
+    StorageClass storage_class;
     int stack_offset;  /* for locals */
-    char asm_name[MAX_IDENT];
-    /* Regalloc */
-    char *assigned_reg;
+    int requested_align; /* _Alignas declaration override; 0 = natural */
     int live_start;
     int live_end;
-    Symbol *next;      /* linked list in scope */
+    /* 8-byte aligned character arrays */
+    char name[MAX_IDENT];
+    char asm_name[MAX_IDENT];
 };
+
+static int symbol_alignment(const Symbol *sym) {
+    if (!sym || !sym->type)
+        return 1;
+    return (sym->requested_align > sym->type->align)
+        ? sym->requested_align
+        : sym->type->align;
+}
+
+static int alignment_log2(int align) {
+    if (align <= 0 || (align & (align - 1)) != 0)
+        return 0;
+    int exponent = 0;
+    while (align > 1) {
+        align >>= 1;
+        exponent++;
+    }
+    return exponent;
+}
 
 struct Scope {
     Symbol *symbols;
@@ -872,99 +924,71 @@ struct Scope {
 struct FuncParams {
     char names[MAX_PARAMS][MAX_IDENT];
     Type *types[MAX_PARAMS];
+    Symbol *syms[MAX_PARAMS];
 };
 
 struct Node {
-    unsigned long long magic;
-    unsigned long long alloc_id;
-    int kind;
-    int line;
-    Type *type;
+    /* Fixed ABI Preamble (32 bytes) */
+    unsigned long long magic;     /* offset 0 */
+    unsigned long long alloc_id;  /* offset 8 */
+    int kind;                     /* offset 16 */
+    int line;                     /* offset 20 */
+    Type *type;                   /* offset 24 */
 
-    /* ND_NUM */
-    long long int_val;
-
-    /* ND_FLIT */
-    double f_val;
-
-    /* ND_STR */
-    int str_id;
-
-    /* ND_VAR */
-    char name[MAX_IDENT];
-    Symbol *sym;
-
-    /* ND_ASSIGN, binary ops */
-    Node *lhs;
+    /* 8-byte aligned fields (pointers, 64-bit ints, floats) */
+    long long int_val;      /* ND_NUM */
+    double f_val;           /* ND_FLIT */
+    Symbol *sym;            /* ND_VAR */
+    Node *lhs;              /* ND_ASSIGN, binary ops */
     Node *rhs;
-
-    /* ND_CALL */
-    char func_name[MAX_IDENT];
-    Node **args;
-    int num_args;
-
-    /* ND_IF / ND_WHILE / ND_FOR / ND_TERNARY */
-    Node *cond;
+    Node **args;            /* ND_CALL */
+    Node *cond;             /* ND_IF / ND_WHILE / ND_FOR / ND_TERNARY */
     Node *then_body;
     Node *else_body;
     Node *init;
     Node *inc;
-
-    /* ND_BLOCK */
-    Node **stmts;
-    int num_stmts;
-
-    /* ND_FUNC_DEF */
-    char func_def_name[MAX_IDENT];
-    Type *func_type;
+    Node **stmts;           /* ND_BLOCK */
+    Type *func_type;        /* ND_FUNC_DEF */
     struct FuncParams *func_params;
-    int num_params;
     Node *body;
-    int stack_size;
-
-    /* ND_MEMBER */
-    char member_name[MAX_IDENT];
-    int member_offset;
-    int member_size;
-
-    /* ND_SWITCH */
-    Node **cases;
-    int num_cases;
+    Node **cases;           /* ND_SWITCH */
     Node *default_case;
-
-    /* ND_CASE */
-    long long case_val;
+    long long case_val;     /* ND_CASE */
     Node *case_body;
+    Type *cast_type;        /* ND_CAST */
+    Node *initializer;      /* ND_GLOBAL_VAR */
+    char *asm_string;       /* ND_ASM */
+    Node *next;             /* linked list for top-level */
 
-    /* ND_GOTO / ND_LABEL */
-    char label_name[MAX_IDENT];
-
-    /* ND_COMPOUND_ASSIGN */
-    int compound_op;  /* ND_ADD, ND_SUB, etc */
-
-    /* ND_CAST */
-    Type *cast_type;
-
-    /* ND_GLOBAL_VAR */
-    int is_static;
+    /* 4-byte aligned fields (integers & flags) */
+    int str_id;             /* ND_STR */
+    int num_args;
+    int num_stmts;
+    int num_params;
+    int stack_size;
+    int member_offset;      /* ND_MEMBER */
+    int member_size;
+    int num_cases;
+    int compound_op;        /* ND_COMPOUND_ASSIGN */
+    int is_static;          /* ND_GLOBAL_VAR */
     int is_extern;
-    Node *initializer;
-
-    /* ND_BITFIELD (IR bridge) */
-    int is_bitfield;
+    int is_tls;
+    int is_bitfield;        /* ND_BITFIELD (IR bridge) */
     int bit_offset;
     int bit_size;
+    int asm_tier;           /* ND_ASM */
 
-    /* ND_ASM */
-    char *asm_string;
-    int   asm_tier;   /* CG-FRONTEND-ASM-001: 0=passthrough,1=volatile,2=clobbers,3=constraints */
-
-    /* linked list for top-level */
-    Node *next;
+    /* 8-byte aligned character arrays (256 bytes each) */
+    char name[MAX_IDENT];
+    char func_name[MAX_IDENT];
+    char func_def_name[MAX_IDENT];
+    char member_name[MAX_IDENT];
+    char label_name[MAX_IDENT];
 };
 
 char *zcc_preprocess(const char *source, int source_len, const char *filename, const char *include_paths, const char *define_flags, int *out_len);
 
+#include "zcc_ast_bridge_constants.h"
 #include "zcc_ast_bridge.h"
 
 /* Keep nd_to_znd mapping in sync with this file's enum. */
@@ -1072,19 +1096,19 @@ int node_is_char_or_void_ptr_cast(struct Node *n) {
     return 0;
 }
 int node_is_bitfield(struct Node *n) {
-    if (n) {
+    if (n && getenv("ZCC_DEBUG_TRACE")) {
         fprintf(stderr, "[DEBUG-ACCESSOR] node_is_bitfield called: kind=%d, is_bitfield=%d, member_name='%s'\n", n->kind, n->is_bitfield, n->kind == ND_MEMBER ? n->member_name : "");
     }
     return n ? n->is_bitfield : 0;
 }
 int node_bit_offset(struct Node *n) {
-    if (n && n->kind == ND_MEMBER && n->is_bitfield) {
+    if (n && n->kind == ND_MEMBER && n->is_bitfield && getenv("ZCC_DEBUG_TRACE")) {
         fprintf(stderr, "[DEBUG-ACCESSOR] node_bit_offset: kind=%d, member='%s', bit_offset=%d\n", n->kind, n->member_name, n->bit_offset);
     }
     return n ? n->bit_offset : 0;
 }
 int node_bit_size(struct Node *n) {
-    if (n && n->kind == ND_MEMBER && n->is_bitfield) {
+    if (n && n->kind == ND_MEMBER && n->is_bitfield && getenv("ZCC_DEBUG_TRACE")) {
         fprintf(stderr, "[DEBUG-ACCESSOR] node_bit_size: kind=%d, member='%s', bit_size=%d\n", n->kind, n->member_name, n->bit_size);
     }
     return n ? n->bit_size : 0;
@@ -1125,7 +1149,9 @@ int node_type_unsigned(struct Node *n) {
 }
 
 struct Compiler {
+    ArenaBlock arena;
     int verbose;
+    int next_sym_id;   /* symbol ID generator counter */
     /* source */
     char *source;
     int source_len;
@@ -1205,9 +1231,6 @@ struct Compiler {
     char current_func[MAX_IDENT];
     int func_end_label;
 
-    /* arena allocator */
-    ArenaBlock arena;
-
     /* error count */
     int errors;
 
@@ -1215,6 +1238,8 @@ struct Compiler {
     int local_offset;
 
     int current_is_static;
+    int current_is_tls;
+    int current_requested_align; /* _Alignas override for active declaration */
 
     /* pending __attribute__ flags — set by lexer, consumed by parse_struct_or_union */
     int pending_packed;     /* __attribute__((packed)) seen before struct keyword */
@@ -1356,7 +1381,7 @@ extern int ZCC_INT_WIDTH;
 /* ================================================================ */
 
 void *cc_alloc(Compiler *cc, int size);
-char *cc_strdup(Compiler *cc, char *s);
+char *cc_strdup(Compiler *cc, const char *s);
 /* LEXICAL ARMOR: Strict bounds checking and zero-copy token validation */
 void validate_token_bounds(Compiler *cc, int offset, int length);
 void ast_quarantine_lift_phase(Compiler *cc, Node *root);
@@ -1402,6 +1427,10 @@ Type *type_new(Compiler *cc, int kind);
 Type *type_ptr(Compiler *cc, Type *base);
 Type *type_func(Compiler *cc, Type *ret);
 Type *type_array(Compiler *cc, Type *base, int len);
+Type *type_complex(Compiler *cc, int real_kind);
+int is_complex_type(Type *t);
+Type *get_complex_real_type(Compiler *cc, Type *t);
+int is_compatible_type(Compiler *cc, Type *t1, Type *t2);
 int type_size(Type *t);
 int type_align(Type *t);
 int is_integer(Type *t);

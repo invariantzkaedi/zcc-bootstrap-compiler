@@ -343,5 +343,42 @@ bool ic_rule_bitwise_distributivity(ICtx *c) {
     return true;
 }
 
+/* Rule 21: (x & c1) & c2 -> x & (c1 & c2) */
+bool ic_rule_nested_and_consts(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_AND) return false;
+    int64_t c2;
+    if (!reg_is_const(c->fn, it->src2, &c2)) return false;
+
+    Instr *d = def_of(c->fn, it->src1);
+    if (!d || d->op != OP_AND) return false;
+
+    int64_t c1;
+    if (!reg_is_const(c->fn, d->src2, &c1)) return false;
+
+    int64_t combined = c1 & c2;
+    int ccomb = make_const(c->fn, it->ty, combined, it);
+    it->src1 = resolve_copy(c->fn, d->src1);
+    it->src2 = ccomb;
+    return true;
+}
+
+/* Rule 22: (x + y) - y -> x */
+bool ic_rule_add_sub_cancel(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_SUB) return false;
+    Instr *d = def_of(c->fn, it->src1);
+    if (!d || d->op != OP_ADD) return false;
+
+    if (d->src2 == it->src2) {
+        return rewrite_to_copy(c->fn, it, d->src1);
+    }
+    if (d->src1 == it->src2) {
+        return rewrite_to_copy(c->fn, it, d->src2);
+    }
+    return false;
+}
+
+
 
 

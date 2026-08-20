@@ -140,3 +140,61 @@ void zcc_serialize_ast_json(FILE *out, Compiler *cc, Node *prog) {
   for (n = prog; n; n = n->next) { if (!first) fputc(',', out); first = 0; zcc_ast_json_node(out, cc, n, 0); }
   fputs("]}\n", out);
 }
+
+typedef struct {
+  int total_nodes;
+  int func_defs;
+  int global_vars;
+  int max_depth;
+  int if_count;
+  int loop_count;
+  int assign_count;
+} ZccAstSummaryStats;
+
+static void zcc_ast_summary_walk(Node *n, ZccAstSummaryStats *st, int depth) {
+  int i;
+  if (!n) return;
+  st->total_nodes++;
+  if (depth > st->max_depth) st->max_depth = depth;
+  if (n->kind == ND_FUNC_DEF) st->func_defs++;
+  if (n->kind == ND_GLOBAL_VAR) st->global_vars++;
+  if (n->kind == ND_IF) st->if_count++;
+  if (n->kind == ND_WHILE || n->kind == ND_FOR || n->kind == ND_DO_WHILE) st->loop_count++;
+  if (n->kind == ND_ASSIGN || n->kind == ND_COMPOUND_ASSIGN) st->assign_count++;
+
+  zcc_ast_summary_walk(n->lhs, st, depth + 1);
+  zcc_ast_summary_walk(n->rhs, st, depth + 1);
+  zcc_ast_summary_walk(n->cond, st, depth + 1);
+  zcc_ast_summary_walk(n->then_body, st, depth + 1);
+  zcc_ast_summary_walk(n->else_body, st, depth + 1);
+  zcc_ast_summary_walk(n->init, st, depth + 1);
+  zcc_ast_summary_walk(n->inc, st, depth + 1);
+  zcc_ast_summary_walk(n->body, st, depth + 1);
+  zcc_ast_summary_walk(n->case_body, st, depth + 1);
+  zcc_ast_summary_walk(n->initializer, st, depth + 1);
+  zcc_ast_summary_walk(n->default_case, st, depth + 1);
+
+  if (n->args) for (i = 0; i < n->num_args; i++) zcc_ast_summary_walk(n->args[i], st, depth + 1);
+  if (n->stmts) for (i = 0; i < n->num_stmts; i++) zcc_ast_summary_walk(n->stmts[i], st, depth + 1);
+  if (n->cases) for (i = 0; i < n->num_cases; i++) zcc_ast_summary_walk(n->cases[i], st, depth + 1);
+  zcc_ast_summary_walk(n->next, st, depth);
+}
+
+void zcc_summarize_ast(FILE *out, Compiler *cc, Node *prog) {
+  ZccAstSummaryStats st;
+  memset(&st, 0, sizeof(st));
+  zcc_ast_summary_walk(prog, &st, 1);
+  fprintf(out, "{\n");
+  fprintf(out, "  \"schema\": \"zcc.ast.summary.v1\",\n");
+  fprintf(out, "  \"file\": "); zcc_json_str(out, cc && cc->filename ? cc->filename : ""); fprintf(out, ",\n");
+  fprintf(out, "  \"total_nodes\": %d,\n", st.total_nodes);
+  fprintf(out, "  \"functions\": %d,\n", st.func_defs);
+  fprintf(out, "  \"global_vars\": %d,\n", st.global_vars);
+  fprintf(out, "  \"if_statements\": %d,\n", st.if_count);
+  fprintf(out, "  \"loops\": %d,\n", st.loop_count);
+  fprintf(out, "  \"assignments\": %d,\n", st.assign_count);
+  fprintf(out, "  \"max_depth\": %d,\n", st.max_depth);
+  fprintf(out, "  \"estimated_ast_bytes\": %lu\n", (unsigned long)(st.total_nodes * sizeof(Node)));
+  fprintf(out, "}\n");
+}
+

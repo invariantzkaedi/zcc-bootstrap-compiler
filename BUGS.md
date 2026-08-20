@@ -40,32 +40,34 @@ During local scope initialization of multidimensional arrays (e.g. `int local_ma
 ### Resolution Strategy
 Fixed surgically in `part3.c` without altering `part4.c` ABI behavior by unrolling dimensions to scalar boundaries and mapping to explicitly emitted `ND_CAST` proxy pointers, ensuring pointer arithmetic correctly maps out exactly `1 x scalar` boundaries rather than dimensional decays.
 
-## CG-SIGFPE-002: Runtime SIGFPE from Variable-Denominator Division (PARTIALLY CLOSED)
+## CG-SIGFPE-002 / CG-SIGFPE-003: Runtime SIGFPE from Variable-Denominator Division (RESOLVED)
 
-**Status**: 🟡 PARTIALLY CLOSED — Constant-fold + ICP-proven paths diagnosed (`532bb4ae`)  
-**Severity**: LOW (remaining: opaque runtime variable denominators only)  
-**Discovered**: May 31, 2026 (session d2100a3e)
+**Status**: ✅ RESOLVED (Static paths closed in `532bb4ae`, runtime variable-denominator paths closed via `ZCC_SAFE_DIV=1` / commit `68914f27`)  
+**Severity**: LOW / HIGH (Csmith `--no-safe-math` zero-denominator division handling)  
+**Fix Date**: July 4, 2026 (commit `68914f27`)
 
-### Phase 2 Resolution (commit `532bb4ae`, June 19, 2026)
+### Resolution Architecture
 
-Three diagnostic layers now active:
+1. **Static / ICP Constant Paths (commit `532bb4ae`)**:
+   - `part4.c:5377`: Codegen binary-op fold
+   - `part3.c:1004`: Parse-time case/array bounds
+   - `part4.c:4776`: Global static initializer fold
+   - ICP Oracle Substrate (`--icp-closed-world`, `--trace-constprop` flags)
 
-| Layer | Guard Location | Trigger |
-|---|---|---|
-| Codegen binary-op fold | `part4.c:5377` (existing `warning_at`) | `1/0`, `x/0` after codegen fold |
-| Parse-time case/array | `part3.c:1004` (new CG-SIGFPE-002) | `case (1/0):`, `int a[1/0]` |
-| Static init global fold | `part4.c:4776` (new CG-SIGFPE-002) | `int g = 1/0;` in global scope |
-| ICP-proven zero | ICP rewrite → hits above layers | `div_probe(0)` with `--icp-closed-world` |
+2. **Dynamic / Runtime Denominator Paths (`CG-SIGFPE-003`, commit `68914f27`)**:
+   - Activated via `ZCC_SAFE_DIV=1` environment variable or `--safe-div` CLI flag.
+   - Emits runtime zero-guard check before `idiv`/`divl`/`divq`:
+     ```asm
+     testq %rcx, %rcx
+     je .Ldivzero_skip_NNN
+     idivq %rcx
+     ```
+   - Eliminates hardware SIGFPE crashes on opaque dynamic zero denominators in Csmith campaigns.
 
-**New CLI flags (commit `a62e8f97`)**: `--trace-constprop`, `--icp-closed-world`  
-**ICP Oracle proof**: `{"symbol":"x","known_constant":0,"confidence":"proven"}`
-
-### Remaining Open Scope (→ CG-SIGFPE-003)
-
-Runtime variable-denominator division where the denominator is not proven at
-compile time. Requires either:
-- Full interprocedural constant propagation feedback into codegen (not yet)
-- Or runtime zero-check emission (explicitly deferred — masks real bugs)
+### Verification
+- ✅ `ZCC_SAFE_DIV=1 ./zcc tests/regressions/test_safe_div.c` passes cleanly with exit code 0.
+- ✅ Without `ZCC_SAFE_DIV`: traps with `SIGFPE` (confirming guard is active only when requested to preserve raw UB diagnostics).
+- ✅ Bootstrap stable (`zcc2.s == zcc3.s`).
 
 ### The Pattern
 Csmith programs generated with `--no-safe-math` contain raw `/` operators on variables
@@ -191,3 +193,18 @@ For low-level operations (like `read_cr3` and `invlpg`), the pragmatic workaroun
 
 
 
+
+## seed9226: Differential Mismatch (CLOSED-UNREPRODUCIBLE - Jul 24, 2026)
+**Status**: Witness dead. Retained binaries produce identical deterministic output
+as of 2026-07-24. Generating source not retained; divergence cannot be reproduced
+or attributed. Likely resolved by CG-IR-011 era fixes. Lesson: witnesses MUST
+retain source + seed + regeneration command, not binaries alone.
+
+## swarm-prove: Gate Cannot Fail (QUARANTINED - Jul 24, 2026)
+**Status**: Removed from release-prep and v1.0 ship path. Makefile PASS branch
+greps for "violat" but src/evm/symbolic.c:90 emits only HOLD/UNKNOWN — the
+VIOLATED branch is unreachable dead code; gate cannot produce a red verdict.
+Underlying syntactic check (barriers==0 → HOLD) is sound but weak.
+**Re-entry criteria**: pass condition changed to PROVED==TOTAL, plus one
+known-barrier contract in corpus asserted to yield UNKNOWN (fault-injection
+proof the gate can fail).

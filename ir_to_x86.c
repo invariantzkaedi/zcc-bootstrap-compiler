@@ -666,6 +666,13 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out, int safe_div) {
                             else       fprintf(out, "    cmpq $0, %d(%%rbp)\n", off2);
                         }
                         fprintf(out, "    jne .Lsdiv_ok_%d\n", sdiv_lbl);
+#if ZCC_UPGRADE_DIV
+                        fprintf(out, "    movq %%rax, %%rdi\n");
+                        fprintf(out, "    movq %%r11, %%rsi\n");
+                        fprintf(out, "    movq $0, %%rdx\n");
+                        fprintf(out, "    movq $0, %%rcx\n");
+                        fprintf(out, "    call zcc_upgrade_div_i64\n");
+#else
                         if (is_32) {
                             fprintf(out, "    xorl %%eax, %%eax\n");
                             fprintf(out, "    xorl %%edx, %%edx\n");
@@ -673,6 +680,7 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out, int safe_div) {
                             fprintf(out, "    xorq %%rax, %%rax\n");
                             fprintf(out, "    xorq %%rdx, %%rdx\n");
                         }
+#endif
                         fprintf(out, "    jmp .Lsdiv_end_%d\n", sdiv_lbl);
                         fprintf(out, ".Lsdiv_ok_%d:\n", sdiv_lbl);
                     }
