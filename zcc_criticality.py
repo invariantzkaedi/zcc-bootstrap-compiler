@@ -19,9 +19,11 @@ Drop-in ready for zcc_oneirogenesis.py and dream_engine.py.
 """
 
 import math
+import random
 from collections import deque
 from dataclasses import dataclass
 from typing import Optional
+
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -148,7 +150,7 @@ def _power_iteration_eigenvalues(L: list, k: int = 6,
 # ═══════════════════════════════════════════════════════════════════════
 
 def topology_eta_search(adjacency: dict, tol: float = 1e-4,
-                        max_sweeps: int = 200, n_samples: int = 5) -> float:
+                        max_sweeps: int = 200, n_samples: int = 5, seed: int = 42) -> float:
     """
     Binary search for the critical coupling η_c on an arbitrary graph topology.
 
@@ -165,14 +167,10 @@ def topology_eta_search(adjacency: dict, tol: float = 1e-4,
         tol: Convergence tolerance for the binary search.
         max_sweeps: Metropolis sweeps per trial.
         n_samples: Number of independent runs to average χ.
+        seed: Random seed for deterministic simulation.
 
     Returns:
         η_c — the critical coupling constant for this graph topology.
-
-    For reference:
-        2D square lattice: η_c ≈ 0.4407
-        Fully connected N:  η_c ≈ 1/(N-1)
-        Bethe lattice (z):  η_c = atanh(1/(z-1))
     """
     nodes = sorted(adjacency.keys())
     n = len(nodes)
@@ -183,10 +181,10 @@ def topology_eta_search(adjacency: dict, tol: float = 1e-4,
     # Precompute neighbor index lists for speed
     nb_idx = []
     for node in nodes:
-        nbs = [idx[nb] for nb in adjacency.get(node, []) if nb in idx]
+        nbs = sorted([idx[nb] for nb in adjacency.get(node, []) if nb in idx])
         nb_idx.append(nbs)
 
-    import random as _rng
+    _rng = random.Random(seed)
 
     def _susceptibility(eta: float) -> float:
         """Estimate magnetic susceptibility χ at coupling η."""
@@ -213,6 +211,7 @@ def topology_eta_search(adjacency: dict, tol: float = 1e-4,
         m_mean = sum(chi_samples) / len(chi_samples)
         m_var = sum((x - m_mean) ** 2 for x in chi_samples) / max(len(chi_samples) - 1, 1)
         return m_var * n
+
 
     # Binary search: bracket η_c between lo and hi
     # Start with a wide bracket
@@ -551,7 +550,7 @@ def universality_class(eta_c: float, dim: float) -> ClassInfo:
 # UTILITY: BOLTZMANN ACCEPTANCE
 # ═══════════════════════════════════════════════════════════════════════
 
-def boltzmann_acceptance(delta_F: float, T: float) -> bool:
+def boltzmann_acceptance(delta_F: float, T: float, rng: Optional[random.Random] = None) -> bool:
     """
     Metropolis-Hastings acceptance criterion using free energy.
 
@@ -563,6 +562,7 @@ def boltzmann_acceptance(delta_F: float, T: float) -> bool:
     Args:
         delta_F: Change in free energy (mutant - parent). Negative = improvement.
         T: Temperature. Use effective T from mutation_rate * acceptance_ratio.
+        rng: Optional Random instance for deterministic acceptance decisions.
 
     Returns:
         True if the mutation should be accepted.
@@ -573,8 +573,9 @@ def boltzmann_acceptance(delta_F: float, T: float) -> bool:
     if T <= 0:
         return False  # T=0: greedy only
 
-    import random as _rng
+    _rng = rng if rng is not None else random
     exponent = delta_F / T
     if exponent > 500:
         return False  # Overflow guard
     return _rng.random() < math.exp(-exponent)
+

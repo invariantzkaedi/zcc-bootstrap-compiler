@@ -18,6 +18,36 @@
         #loading-overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: #00ffcc; font-size: 24px; justify-content: center; align-items: center; z-index: 1000; font-family: monospace; flex-direction: column; }
         #error-text { color: #ff003c; margin-top: 10px; font-size: 16px; }
         .hud-title { color: #ff007f; font-weight: bold; margin-bottom: 5px; border-bottom: 1px solid #ff007f; padding-bottom: 3px; }
+        .hud-btn {
+            background: rgba(0,255,204,0.05);
+            border: 1px solid #00ffcc;
+            color: #00ffcc;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-top: 10px;
+            pointer-events: auto;
+            display: inline-block;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+        .hud-btn:hover {
+            background: rgba(0,255,204,0.25);
+            box-shadow: 0 0 10px rgba(0,255,204,0.4);
+        }
+        .hud-btn-magenta {
+            border-color: #ff007f;
+            color: #ff007f;
+            background: rgba(255,0,127,0.05);
+        }
+        .hud-btn-magenta:hover {
+            background: rgba(255,0,127,0.25);
+            box-shadow: 0 0 10px rgba(255,0,127,0.4);
+        }
     </style>
 </head>
 <body>
@@ -174,6 +204,11 @@
             <option value="/assets/Meshy_AI_ZKAEDI_Teal_Pilot_Yet_0511000607_texture.glb">ZKAEDI_Teal_Pilot_Yet_0511000607</option>
             <option value="/assets/Meshy_AI_ZKAEDI_Yeti_Co_Pilot_0511000634_texture.glb">ZKAEDI_Yeti_Co_Pilot_0511000634</option>
         </select>
+        <div style="margin-top: 10px; pointer-events: auto;">
+            <a href="/" class="hud-btn">Control Center</a>
+            <a href="/viz/matrix" class="hud-btn hud-btn-magenta">Matrix Showcase</a>
+            <a href="/viz/oracle_masks" class="hud-btn">Oracle Masks</a>
+        </div>
     </div>
     
     <div id="loading-overlay">

@@ -86,25 +86,63 @@ int zcc_voxel_shrinkwrap(const float* high_verts, size_t vcount,
             int nx = x + dx[f], ny = y + dy[f], nz = z + dz[f];
             if (nx<0||nx>=voxel_res||ny<0||ny>=voxel_res||nz<0||nz>=voxel_res ||
                 !grid.occupied[vox_idx(nx,ny,nz,voxel_res)]) {
-                // emit quad as two tris
+                // Define 8 vertices of the voxel cell
                 float cx = grid.min[0] + (x + 0.5f) / grid.inv_size[0];
                 float cy = grid.min[1] + (y + 0.5f) / grid.inv_size[1];
                 float cz = grid.min[2] + (z + 0.5f) / grid.inv_size[2];
-                float hs = 0.5f / grid.inv_size[0]; // approx uniform for simplicity
-
-                // simple axis-aligned face emission (can be refined later)
-                // ... (vertex generation omitted for brevity in this drop — expand as needed)
-                // For production you expand the 4 corners per face here.
+                float hx = 0.5f / grid.inv_size[0];
+                float hy = 0.5f / grid.inv_size[1];
+                float hz = 0.5f / grid.inv_size[2];
+                float corners[8][3] = {
+                    {cx - hx, cy - hy, cz - hz}, // 0
+                    {cx + hx, cy - hy, cz - hz}, // 1
+                    {cx + hx, cy + hy, cz - hz}, // 2
+                    {cx - hx, cy + hy, cz - hz}, // 3
+                    {cx - hx, cy - hy, cz + hz}, // 4
+                    {cx + hx, cy - hy, cz + hz}, // 5
+                    {cx + hx, cy + hy, cz + hz}, // 6
+                    {cx - hx, cy + hy, cz + hz}  // 7
+                };
+                
+                int face_indices[4];
+                if (f == 0) { // +x
+                    face_indices[0] = 1; face_indices[1] = 5; face_indices[2] = 6; face_indices[3] = 2;
+                } else if (f == 1) { // +y
+                    face_indices[0] = 2; face_indices[1] = 6; face_indices[2] = 7; face_indices[3] = 3;
+                } else if (f == 2) { // +z
+                    face_indices[0] = 4; face_indices[1] = 5; face_indices[2] = 6; face_indices[3] = 7;
+                } else if (f == 3) { // -x
+                    face_indices[0] = 0; face_indices[1] = 4; face_indices[2] = 7; face_indices[3] = 3;
+                } else if (f == 4) { // -y
+                    face_indices[0] = 0; face_indices[1] = 1; face_indices[2] = 5; face_indices[3] = 4;
+                } else { // -z
+                    face_indices[0] = 1; face_indices[1] = 0; face_indices[2] = 3; face_indices[3] = 2;
+                }
+                
+                uint32_t start_v = (uint32_t)(vout / 3);
+                for (int c = 0; c < 4; c++) {
+                    gverts[vout]     = corners[face_indices[c]][0];
+                    gverts[vout + 1] = corners[face_indices[c]][1];
+                    gverts[vout + 2] = corners[face_indices[c]][2];
+                    vout += 3;
+                }
+                
+                gindices[iout]     = start_v;
+                gindices[iout + 1] = start_v + 1;
+                gindices[iout + 2] = start_v + 2;
+                
+                gindices[iout + 3] = start_v;
+                gindices[iout + 4] = start_v + 2;
+                gindices[iout + 5] = start_v + 3;
+                iout += 6;
             }
         }
     }
 
-    // For the initial ship we emit a clean voxel shell.
-    // The math is pure and the buffer is ready for Triton.
     out->verts = gverts;
     out->indices = gindices;
     out->vcount = vout / 3;
-    out->icount = iout / 3;
+    out->icount = iout;
 
     free(grid.occupied);
     return 1;

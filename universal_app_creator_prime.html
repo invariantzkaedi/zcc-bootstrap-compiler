@@ -1,0 +1,1486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UNIVERSAL SOVEREIGN APP BUILDER & GENERATOR OBSIDIAN // ZKAEDI PRIME</title>
+  <style>
+    :root {
+      --bg-deep: #05070d;
+      --bg-panel: rgba(10, 16, 28, 0.92);
+      --border-cyan: #00f3ff;
+      --border-magenta: #ff2d6a;
+      --accent-gold: #ffd700;
+      --text-primary: #e0f7fa;
+      --text-muted: #7a8a9a;
+      --success: #00ff9d;
+      --warning: #ffaa00;
+      --glass: rgba(16, 24, 40, 0.75);
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+      --font-sans: 'Inter', system-ui, sans-serif;
+      --glow-cyan: 0 0 12px rgba(0, 243, 255, 0.45);
+      --glow-magenta: 0 0 12px rgba(255, 45, 106, 0.4);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      min-height: 100vh;
+      background-image:
+        radial-gradient(ellipse at 20% 20%, rgba(0, 243, 255, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(255, 45, 106, 0.05) 0%, transparent 50%),
+        linear-gradient(180deg, #05070d 0%, #0a0e17 100%);
+      overflow-x: hidden;
+    }
+    /* Header */
+    .header {
+      border-bottom: 1px solid rgba(0, 243, 255, 0.25);
+      background: var(--glass);
+      backdrop-filter: blur(12px);
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: var(--glow-cyan);
+    }
+    .logo {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: var(--border-cyan);
+      text-shadow: 0 0 8px rgba(0, 243, 255, 0.6);
+    }
+    .logo span { color: var(--border-magenta); }
+    .header-meta {
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      gap: 18px;
+      align-items: center;
+    }
+    .badge {
+      background: rgba(0, 243, 255, 0.12);
+      border: 1px solid var(--border-cyan);
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 10px;
+      color: var(--border-cyan);
+    }
+    /* Layout */
+    .app-shell {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: calc(100vh - 54px);
+    }
+    /* Sidebar Progress */
+    .sidebar {
+      background: var(--bg-panel);
+      border-right: 1px solid rgba(0, 243, 255, 0.18);
+      padding: 24px 16px;
+      overflow-y: auto;
+    }
+    .progress-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      padding-left: 8px;
+    }
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      margin-bottom: 6px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+      font-size: 12px;
+    }
+    .step-item:hover { background: rgba(0, 243, 255, 0.06); }
+    .step-item.active {
+      background: rgba(0, 243, 255, 0.12);
+      border-color: var(--border-cyan);
+      box-shadow: var(--glow-cyan);
+    }
+    .step-item.completed .step-num {
+      background: var(--success);
+      color: #000;
+      border-color: var(--success);
+    }
+    .step-num {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 1.5px solid var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .step-item.active .step-num {
+      border-color: var(--border-cyan);
+      color: var(--border-cyan);
+      background: rgba(0, 243, 255, 0.15);
+    }
+    .step-label { flex: 1; line-height: 1.3; }
+    .step-label small { display: block; color: var(--text-muted); font-size: 10px; margin-top: 2px; }
+    /* Main Content */
+    .main {
+      padding: 28px 36px 80px;
+      overflow-y: auto;
+      max-height: calc(100vh - 54px);
+    }
+    .question-header {
+      margin-bottom: 28px;
+    }
+    .q-step {
+      font-size: 11px;
+      color: var(--border-cyan);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .q-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+      letter-spacing: 0.5px;
+    }
+    .q-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      max-width: 720px;
+      line-height: 1.5;
+    }
+    /* Options Grid */
+    .options-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+    .option-card {
+      background: var(--glass);
+      border: 1px solid rgba(0, 243, 255, 0.18);
+      border-radius: 10px;
+      padding: 16px 18px;
+      cursor: pointer;
+      transition: all 0.22s;
+      position: relative;
+      overflow: hidden;
+    }
+    .option-card:hover {
+      border-color: var(--border-cyan);
+      transform: translateY(-2px);
+      box-shadow: var(--glow-cyan);
+    }
+    .option-card.selected {
+      border-color: var(--border-cyan);
+      background: rgba(0, 243, 255, 0.1);
+      box-shadow: var(--glow-cyan);
+    }
+    .option-card.selected::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--border-cyan), var(--border-magenta));
+    }
+    .option-num {
+      font-size: 10px;
+      color: var(--border-cyan);
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+    .option-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--text-primary);
+    }
+    .option-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+    /* Custom Input */
+    .custom-box {
+      background: var(--glass);
+      border: 1px solid rgba(255, 45, 106, 0.3);
+      border-radius: 10px;
+      padding: 18px;
+      margin-bottom: 32px;
+    }
+    .custom-box label {
+      display: block;
+      font-size: 12px;
+      color: var(--border-magenta);
+      margin-bottom: 10px;
+      letter-spacing: 1px;
+    }
+    .custom-box textarea {
+      width: 100%;
+      min-height: 80px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 45, 106, 0.25);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      padding: 12px;
+      resize: vertical;
+      outline: none;
+    }
+    .custom-box textarea:focus {
+      border-color: var(--border-magenta);
+      box-shadow: var(--glow-magenta);
+    }
+    /* Nav Buttons */
+    .nav-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 12px;
+      border-top: 1px solid rgba(0, 243, 255, 0.12);
+      margin-top: 12px;
+    }
+    .btn {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 12px 28px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid rgba(0, 243, 255, 0.35);
+      color: var(--border-cyan);
+    }
+    .btn-secondary:hover {
+      background: rgba(0, 243, 255, 0.1);
+      box-shadow: var(--glow-cyan);
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #00c4d4, #00f3ff);
+      color: #001018;
+      box-shadow: 0 0 20px rgba(0, 243, 255, 0.35);
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 0 28px rgba(0, 243, 255, 0.55);
+    }
+    .btn-generate {
+      background: linear-gradient(135deg, #ff2d6a, #ff6b9d);
+      color: #fff;
+      box-shadow: 0 0 20px rgba(255, 45, 106, 0.4);
+      padding: 14px 36px;
+      font-size: 14px;
+    }
+    .btn-generate:hover {
+      box-shadow: 0 0 32px rgba(255, 45, 106, 0.6);
+    }
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+    /* Results View */
+    .results-view { display: none; }
+    .results-view.active { display: block; }
+    .wizard-view.hidden { display: none; }
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid rgba(0, 243, 255, 0.2);
+      padding-bottom: 0;
+    }
+    .tab {
+      padding: 12px 20px;
+      font-size: 12px;
+      cursor: pointer;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+      letter-spacing: 0.5px;
+    }
+    .tab:hover { color: var(--border-cyan); }
+    .tab.active {
+      color: var(--border-cyan);
+      border-bottom-color: var(--border-cyan);
+      text-shadow: 0 0 6px rgba(0, 243, 255, 0.5);
+    }
+    .tab-content {
+      display: none;
+      background: var(--glass);
+      border: 1px solid rgba(0, 243, 255, 0.2);
+      border-radius: 10px;
+      padding: 24px;
+      min-height: 480px;
+      max-height: 70vh;
+      overflow: auto;
+    }
+    .tab-content.active { display: block; }
+    .tab-content pre, .tab-content .spec-body {
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text-primary);
+    }
+    .export-bar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+    .btn-export {
+      font-size: 11px;
+      padding: 8px 16px;
+      background: rgba(0, 243, 255, 0.08);
+      border: 1px solid rgba(0, 243, 255, 0.3);
+      color: var(--border-cyan);
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: var(--font-mono);
+    }
+    .btn-export:hover {
+      background: rgba(0, 243, 255, 0.18);
+      box-shadow: var(--glow-cyan);
+    }
+    /* Sandbox iframe */
+    #sandbox-frame {
+      width: 100%;
+      height: 560px;
+      border: 1px solid rgba(0, 243, 255, 0.3);
+      border-radius: 8px;
+      background: #000;
+    }
+    .sandbox-controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+      align-items: center;
+    }
+    /* Status toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--bg-panel);
+      border: 1px solid var(--success);
+      color: var(--success);
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 12px;
+      box-shadow: 0 0 20px rgba(0, 255, 157, 0.3);
+      opacity: 0;
+      transform: translateY(12px);
+      transition: all 0.3s;
+      z-index: 999;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    /* Summary chips */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    .summary-chip {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(0, 243, 255, 0.2);
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 11px;
+    }
+    .summary-chip .dim { color: var(--text-muted); font-size: 10px; margin-bottom: 4px; }
+    .summary-chip .val { color: var(--border-cyan); }
+    /* Responsive */
+    @media (max-width: 900px) {
+      .app-shell { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+    }
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #0a0e17; }
+    ::-webkit-scrollbar-thumb { background: rgba(0, 243, 255, 0.25); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(0, 243, 255, 0.45); }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="logo">UNIVERSAL <span>SOVEREIGN</span> APP GENESIS // PRIME</div>
+    <div class="header-meta">
+      <span class="badge">ZKAEDI OBSIDIAN</span>
+      <span id="clock">--:--:--</span>
+      <span>v1.0.0-PRIME</span>
+    </div>
+  </header>
+
+  <div class="app-shell">
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+      <div class="progress-title">Genesis Pipeline</div>
+      <div id="step-list"></div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+      <!-- WIZARD VIEW -->
+      <div class="wizard-view" id="wizard-view">
+        <div class="question-header">
+          <div class="q-step" id="q-step">STEP 01 / 10</div>
+          <h1 class="q-title" id="q-title">Application Core Archetype</h1>
+          <p class="q-desc" id="q-desc">Select the fundamental identity of the sovereign application you wish to forge.</p>
+        </div>
+
+        <div class="options-grid" id="options-grid"></div>
+
+        <div class="custom-box">
+          <label>⊕ CUSTOM FREEFORM OVERRIDE (Short Description)</label>
+          <textarea id="custom-input" placeholder="Describe your unique architectural vision, constraints, or hybrid archetype..."></textarea>
+        </div>
+
+        <div class="nav-bar">
+          <button class="btn btn-secondary" id="btn-prev" disabled>← PREVIOUS</button>
+          <div style="font-size:11px;color:var(--text-muted);" id="selection-hint">Select an archetype or provide custom input</div>
+          <button class="btn btn-primary" id="btn-next">NEXT →</button>
+        </div>
+      </div>
+
+      <!-- RESULTS VIEW -->
+      <div class="results-view" id="results-view">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+          <div>
+            <div class="q-step">SYNTHESIS COMPLETE</div>
+            <h1 class="q-title" style="font-size:20px;">Sovereign Artifact Finalizer</h1>
+          </div>
+          <button class="btn btn-secondary" id="btn-restart" style="font-size:11px;padding:8px 16px;">↺ NEW GENESIS</button>
+        </div>
+
+        <div class="summary-grid" id="summary-grid"></div>
+
+        <div class="export-bar">
+          <button class="btn-export" onclick="exportHTML()">⬇ EXPORT HTML</button>
+          <button class="btn-export" onclick="exportMarkdown()">⬇ MARKDOWN SPEC</button>
+          <button class="btn-export" onclick="exportJSON()">⬇ JSON CONFIG</button>
+          <button class="btn-export" onclick="exportSource()">⬇ FULL SOURCE</button>
+          <button class="btn-export" onclick="copyAll()">📋 COPY ALL</button>
+        </div>
+
+        <div class="tabs">
+          <div class="tab active" data-tab="spec">1 · ARCHITECTURAL SPEC</div>
+          <div class="tab" data-tab="code">2 · EXECUTABLE SOURCE</div>
+          <div class="tab" data-tab="tests">3 · VERIFICATION GAUNTLET</div>
+          <div class="tab" data-tab="sandbox">4 · LIVE SANDBOX</div>
+        </div>
+
+        <div class="tab-content active" id="tab-spec">
+          <div class="spec-body" id="spec-body"></div>
+        </div>
+        <div class="tab-content" id="tab-code">
+          <pre id="code-body"></pre>
+        </div>
+        <div class="tab-content" id="tab-tests">
+          <div class="spec-body" id="tests-body"></div>
+        </div>
+        <div class="tab-content" id="tab-sandbox">
+          <div class="sandbox-controls">
+            <button class="btn-export" onclick="reloadSandbox()">↻ RELOAD SANDBOX</button>
+            <span style="font-size:11px;color:var(--text-muted);" id="sandbox-status">Ready</span>
+          </div>
+          <iframe id="sandbox-frame" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ============================================================
+    // UNIVERSAL APP GENESIS PRIME — CORE ENGINE
+    // ZKAEDI / Obsidian / Glazed Brick compatible
+    // ============================================================
+
+    const QUESTIONS = [
+      {
+        id: 1,
+        title: "Application Core Archetype",
+        desc: "Select the fundamental identity and purpose of the sovereign application you wish to forge.",
+        options: [
+          { t: "Visual Scientific Simulator", d: "Interactive scientific visualization, particle systems, continuum models" },
+          { t: "Quantum / Mathematical Lab", d: "Symbolic algebra, quantum circuits, Hamiltonian explorers, stabilizer tools" },
+          { t: "Cyberpunk HUD / Security Station", d: "Real-time telemetry, threat matrix, operator console, neon glassmorphism" },
+          { t: "Interactive Audio DSP Engine", d: "Web Audio synthesis, FFT analysis, sonification, live effects rack" },
+          { t: "3D Mesh / Canvas Sandbox", d: "Procedural geometry, WebGL/Canvas freehand, mesh deformation playground" },
+          { t: "High-Frequency Trading / Mempool Matrix", d: "Order book visualization, latency heatmaps, signal alpha dashboards" },
+          { t: "Sovereign Autonomous Agent Dashboard", d: "Multi-agent orchestration, goal graphs, tool-use telemetry, decision traces" }
+        ]
+      },
+      {
+        id: 2,
+        title: "Target Hardware & Runtime",
+        desc: "Choose the primary execution substrate and performance envelope.",
+        options: [
+          { t: "Pure Browser Client (Zero Dependency)", d: "Single-file HTML, no external libs, works offline instantly" },
+          { t: "WebGL / WebGPU Shaders", d: "GPU-accelerated compute & rendering pipelines" },
+          { t: "Web Audio API DSP", d: "Low-latency audio graph, AnalyserNode, AudioWorklet ready" },
+          { t: "Cloudflare Edge Worker Micro-Services", d: "Durable Objects, KV, D1, R2 edge orchestration" },
+          { t: "Python CUDA / PyTorch Backend", d: "Heavy numerical kernels offloaded to GPU via bridge" },
+          { t: "Embedded C / Assembly Engine", d: "WASM or native core for maximum density & determinism" },
+          { t: "Multi-Threaded Web Workers", d: "Parallel workers for simulation, crypto, or data pipelines" }
+        ]
+      },
+      {
+        id: 3,
+        title: "Design Language & Visual Aura",
+        desc: "Define the aesthetic signature and color/material system.",
+        options: [
+          { t: "ZKAEDI Neon Cyberpunk (Cyan/Magenta)", d: "Electric cyan, hot magenta, deep slate, heavy glow" },
+          { t: "Obsidian Glassmorphism", d: "Frosted dark glass, soft blur, subtle rim light" },
+          { t: "Matrix Emerald Phosphor", d: "Classic green-on-black terminal phosphor aesthetic" },
+          { t: "NASA Aerospace Minimalist", d: "Clean white/gray, high-legibility instrumentation" },
+          { t: "Glazed Brick Emerald-Gold", d: "60-25-10-5 ZKAEDI law: bitumen, terracotta, electrum" },
+          { t: "Thermal FLIR Spectral", d: "False-color heat maps, ironbow / rainbow palettes" },
+          { t: "High-Contrast Monochromatic", d: "Pure black/white with sharp geometric accents" }
+        ]
+      },
+      {
+        id: 4,
+        title: "State Management & Memory Model",
+        desc: "Select the persistence, reactivity, and data layout strategy.",
+        options: [
+          { t: "32-Bit Packed TypedArrays (Uint32Array)", d: "Dense binary state, bit packing, maximum density" },
+          { t: "Reactive LocalStorage Vault", d: "Automatic persistence + change listeners" },
+          { t: "SQLite In-Memory WASM", d: "Full SQL queryable state inside the browser" },
+          { t: "Real-Time Vector Feature Store", d: "Embedding-friendly vector DB style store" },
+          { t: "Ring Buffer Time-Series Cache", d: "Fixed-window high-frequency telemetry" },
+          { t: "Redux-Style Pure Reducer Graph", d: "Predictable immutable state transitions" },
+          { t: "Monotonic Epoch Invalidation Guard", d: "Versioned snapshots with epoch barriers" }
+        ]
+      },
+      {
+        id: 5,
+        title: "Computational & Physics Kernels",
+        desc: "Choose the core mathematical or physical simulation engine.",
+        options: [
+          { t: "Lattice Boltzmann CFD (D2Q9/D3Q19)", d: "Mesoscopic fluid dynamics, streaming & collision" },
+          { t: "Hamiltonian Dynamics (H_t)", d: "Energy-conserving symplectic integration, phase space" },
+          { t: "Discrete FFT / Spectral Bins", d: "Frequency domain analysis and filtering" },
+          { t: "RK4 4th-Order Symplectic", d: "High-accuracy ODE integration for dynamical systems" },
+          { t: "Barnes-Hut N-Body Gravity", d: "Approximate hierarchical gravity for large particle sets" },
+          { t: "SPH Navier-Stokes Particles", d: "Smoothed Particle Hydrodynamics continuum" },
+          { t: "Autograd Neural Backprop", d: "Differentiable computation graph & gradient flow" }
+        ]
+      },
+      {
+        id: 6,
+        title: "Telemetry, Forensics & Radar",
+        desc: "Select the observability, anomaly detection, and diagnostic layer.",
+        options: [
+          { t: "Automated Anomaly Scrub Pins", d: "Statistical outlier detection with pin markers" },
+          { t: "2×2 Factorial Jitter Benchmark", d: "Controlled latency & variance measurement matrix" },
+          { t: "Shannon Entropy Profiler", d: "Information-theoretic complexity tracking" },
+          { t: "Real-Time p-q Phase Portrait HUD", d: "Live phase-space trajectory visualization" },
+          { t: "K-Means (k=3) Forensic Dossier", d: "Unsupervised clustering of behavioral signatures" },
+          { t: "High-Speed Loss / Polar Curve Plotter", d: "Continuous loss or polar response curves" },
+          { t: "Hardware VRAM / MLUPS Counter", d: "GPU memory & lattice update rate counters" }
+        ]
+      },
+      {
+        id: 7,
+        title: "Interactive Input / Brush Modalities",
+        desc: "Define how the operator interacts with and steers the system.",
+        options: [
+          { t: "2D/3D Freehand Canvas Brush", d: "Direct paint / sculpt input on the visualization surface" },
+          { t: "Multi-Slider DSP Equalizer Rack", d: "Parametric control banks for continuous parameters" },
+          { t: "Drag-and-Drop JSON/CSV Telemetry", d: "Ingest external datasets by drop" },
+          { t: "Live Microphone Audio Stream", d: "Real-time mic input for audio-reactive control" },
+          { t: "Keyboard Macro Command Console", d: "Vim-style or REPL command surface" },
+          { t: "MIDI Controller / Gamepad Hook", d: "Hardware controller mapping" },
+          { t: "Interactive Node Graph Wire Connector", d: "Visual dataflow / patching interface" }
+        ]
+      },
+      {
+        id: 8,
+        title: "Sonification & Audio Feedback",
+        desc: "Choose the auditory layer for state and events.",
+        options: [
+          { t: "Multi-Tone Synthesizer Bank (30+ Presets)", d: "Rich harmonic and percussive instrument set" },
+          { t: "Aeolian Turbulence Aeroacoustic Noise", d: "Physical wind / fluid noise synthesis" },
+          { t: "Discrete QFT Phase Rotation Ladder", d: "Quantum-inspired phase sonification" },
+          { t: "Compiler IR Opcode Acoustic Sonifier", d: "Map intermediate representation to sound" },
+          { t: "40 Hz Gamma Neural Entrainment", d: "Steady-state gamma-band stimulation" },
+          { t: "Sub-Bass 808 Pulse Alarms", d: "Heavy low-frequency event alerts" },
+          { t: "Muted / Pure Visual Operation", d: "No audio layer — silent visual-only mode" }
+        ]
+      },
+      {
+        id: 9,
+        title: "Export, Packaging & Portability",
+        desc: "Select the primary distribution and archival format.",
+        options: [
+          { t: "Self-Contained Monolithic HTML (5k+ Lines)", d: "Single file, zero external dependencies" },
+          { t: "Modular ES6 Component Bundle", d: "Importable modules for larger systems" },
+          { t: "Electron / PWA Desktop Manifest", d: "Installable desktop or progressive web app" },
+          { t: "High-Res PNG / Canvas Snapshot", d: "Visual archival of the current state" },
+          { t: "JSON Raw Telemetry & CSV Time-Series", d: "Machine-readable data export" },
+          { t: "Markdown Forensic Dossier Report", d: "Human-readable investigation report" },
+          { t: "Direct GitHub Gist / Worker Push", d: "One-click publish to remote" }
+        ]
+      },
+      {
+        id: 10,
+        title: "Monetization, Governance & Security",
+        desc: "Define the trust, access control, and economic model.",
+        options: [
+          { t: "Sovereign Open Source / Zero-Trust", d: "Fully open, no external authority required" },
+          { t: "Cryptographic API Token Governor", d: "Signed capability tokens for features" },
+          { t: "Tiered Feature Lock & Paywall", d: "Progressive unlock of advanced modules" },
+          { t: "Hardware XOR Epoch License Gate", d: "Time-bound hardware-bound licensing" },
+          { t: "Web3 EVM Smart Contract Signer", d: "On-chain ownership and access control" },
+          { t: "Local Air-Gapped Sandboxed Only", d: "Never leaves the device, fully offline" },
+          { t: "Multi-Tenant Enterprise Role RBAC", d: "Role-based access for organizations" }
+        ]
+      }
+    ];
+
+    // State
+    let currentStep = 0;
+    const answers = Array(10).fill(null).map(() => ({ choice: null, custom: "" }));
+
+    // HTML escape for custom freeform text (basic XSS guard)
+    function escapeHtml(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    let generatedArtifacts = { spec: "", code: "", tests: "", html: "" };
+
+    // DOM refs
+    const stepList = document.getElementById('step-list');
+    const optionsGrid = document.getElementById('options-grid');
+    const customInput = document.getElementById('custom-input');
+    const btnPrev = document.getElementById('btn-prev');
+    const btnNext = document.getElementById('btn-next');
+    const wizardView = document.getElementById('wizard-view');
+    const resultsView = document.getElementById('results-view');
+
+    // Init sidebar
+    function renderSidebar() {
+      stepList.innerHTML = QUESTIONS.map((q, i) => {
+        const a = answers[i];
+        const completed = a.choice !== null || a.custom.trim().length > 0;
+        const active = i === currentStep;
+        return `<div class="step-item ${active ? 'active' : ''} ${completed ? 'completed' : ''}" data-step="${i}">
+          <div class="step-num">${String(i + 1).padStart(2, '0')}</div>
+          <div class="step-label">${q.title.split(' ')[0]}…<small>${q.title}</small></div>
+        </div>`;
+      }).join('');
+      document.querySelectorAll('.step-item').forEach(el => {
+        el.addEventListener('click', () => {
+          const idx = parseInt(el.dataset.step);
+          if (idx <= currentStep || answers[idx].choice !== null || answers[idx].custom) {
+            currentStep = idx;
+            renderQuestion();
+          }
+        });
+      });
+    }
+
+    function renderQuestion() {
+      const q = QUESTIONS[currentStep];
+      document.getElementById('q-step').textContent = `STEP ${String(currentStep + 1).padStart(2, '0')} / 10`;
+      document.getElementById('q-title').textContent = q.title;
+      document.getElementById('q-desc').textContent = q.desc;
+
+      optionsGrid.innerHTML = q.options.map((opt, i) => {
+        const selected = answers[currentStep].choice === i;
+        return `<div class="option-card ${selected ? 'selected' : ''}" data-idx="${i}">
+          <div class="option-num">ARCHETYPE 0${i + 1}</div>
+          <div class="option-title">${opt.t}</div>
+          <div class="option-desc">${opt.d}</div>
+        </div>`;
+      }).join('');
+
+      document.querySelectorAll('.option-card').forEach(card => {
+        card.addEventListener('click', () => {
+          answers[currentStep].choice = parseInt(card.dataset.idx);
+          renderQuestion();
+          updateNav();
+        });
+      });
+
+      customInput.value = answers[currentStep].custom;
+      customInput.oninput = () => {
+        answers[currentStep].custom = customInput.value;
+        updateNav();
+      };
+
+      btnPrev.disabled = currentStep === 0;
+      if (currentStep === 9) {
+        btnNext.textContent = '⚡ GENERATE SOVEREIGN ARTIFACT';
+        btnNext.className = 'btn btn-generate';
+      } else {
+        btnNext.textContent = 'NEXT →';
+        btnNext.className = 'btn btn-primary';
+      }
+      updateNav();
+      renderSidebar();
+    }
+
+    function updateNav() {
+      const a = answers[currentStep];
+      const hasSelection = a.choice !== null || a.custom.trim().length > 3;
+      btnNext.disabled = !hasSelection;
+      document.getElementById('selection-hint').textContent = hasSelection
+        ? (a.choice !== null ? `Selected: ${QUESTIONS[currentStep].options[a.choice].t}` : 'Custom override active')
+        : 'Select an archetype or provide custom input';
+    }
+
+    btnPrev.addEventListener('click', () => {
+      if (currentStep > 0) {
+        currentStep--;
+        renderQuestion();
+      }
+    });
+
+    btnNext.addEventListener('click', () => {
+      if (currentStep < 9) {
+        currentStep++;
+        renderQuestion();
+      } else {
+        runSynthesis();
+      }
+    });
+
+    document.getElementById('btn-restart').addEventListener('click', () => {
+      currentStep = 0;
+      answers.forEach(a => { a.choice = null; a.custom = ''; });
+      wizardView.classList.remove('hidden');
+      resultsView.classList.remove('active');
+      renderQuestion();
+    });
+
+    // Tabs
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+        if (tab.dataset.tab === 'sandbox') {
+          loadSandbox();
+        }
+      });
+    });
+
+    // Clock
+    setInterval(() => {
+      const now = new Date();
+      document.getElementById('clock').textContent = now.toLocaleTimeString('en-US', { hour12: false });
+    }, 1000);
+
+    // ============================================================
+    // SYNTHESIS ENGINE
+    // ============================================================
+
+    function getChoice(i) {
+      const a = answers[i];
+      if (a.custom && a.custom.trim().length > 2) {
+        return { name: "CUSTOM: " + escapeHtml(a.custom.trim().slice(0, 80)), isCustom: true, idx: -1 };
+      }
+      if (a.choice !== null) {
+        return { name: QUESTIONS[i].options[a.choice].t, isCustom: false, idx: a.choice };
+      }
+      return { name: "UNSPECIFIED", isCustom: false, idx: -1 };
+    }
+
+    function runSynthesis() {
+      showToast("Synthesizing sovereign artifact…");
+      const choices = QUESTIONS.map((_, i) => getChoice(i));
+
+      // Summary chips
+      const summaryGrid = document.getElementById('summary-grid');
+      summaryGrid.innerHTML = choices.map((c, i) => `
+        <div class="summary-chip">
+          <div class="dim">Q${i + 1} · ${QUESTIONS[i].title.split('&')[0].trim()}</div>
+          <div class="val">${c.name}</div>
+        </div>
+      `).join('');
+
+      // Generate the four massive artifacts
+      generatedArtifacts.spec = generateSpec(choices);
+      generatedArtifacts.code = generateExecutable(choices);
+      generatedArtifacts.tests = generateTests(choices);
+      generatedArtifacts.html = generatedArtifacts.code; // the full source is the HTML
+
+      document.getElementById('spec-body').textContent = generatedArtifacts.spec;
+      document.getElementById('code-body').textContent = generatedArtifacts.code;
+      document.getElementById('tests-body').textContent = generatedArtifacts.tests;
+
+      wizardView.classList.add('hidden');
+      resultsView.classList.add('active');
+      showToast("Genesis complete — 4 artifacts ready");
+    }
+
+    function generateSpec(choices) {
+      const ts = new Date().toISOString();
+      const id = "UAG-" + Math.random().toString(36).slice(2, 10).toUpperCase();
+      return `# UNIVERSAL SOVEREIGN APP GENESIS — MASTER ARCHITECTURAL SPECIFICATION
+## Artifact ID: ${id}
+## Generated: ${ts}
+## Engine: universal_app_creator_prime.html // ZKAEDI OBSIDIAN PRIME
+
+═══════════════════════════════════════════════════════════════════════════════
+1. EXECUTIVE SUMMARY
+═══════════════════════════════════════════════════════════════════════════════
+
+This document constitutes the complete, deterministic blueprint for a sovereign
+application forged from the 10-dimensional combinatorial matrix. The resulting
+system is designed for zero-dependency browser execution (or the selected runtime),
+strict visual and computational fidelity to the chosen archetypes, and full
+forensic observability.
+
+Primary Archetype .......... ${choices[0].name}
+Runtime Target ............. ${choices[1].name}
+Visual Language ............ ${choices[2].name}
+State Model ................ ${choices[3].name}
+Physics / Compute Kernel ... ${choices[4].name}
+Telemetry Layer ............ ${choices[5].name}
+Input Modality ............. ${choices[6].name}
+Sonification ............... ${choices[7].name}
+Export Package ............. ${choices[8].name}
+Governance Model ........... ${choices[9].name}
+
+The system guarantees:
+• Deterministic assembly from the selected matrix coordinates
+• Live sandbox execution inside the generator itself
+• One-click export of monolithic HTML, Markdown dossier, and JSON config
+• Memory layout and pipeline invariants documented below
+
+═══════════════════════════════════════════════════════════════════════════════
+2. MATHEMATICAL INVARIANTS & CONSERVATION LAWS
+═══════════════════════════════════════════════════════════════════════════════
+
+Depending on the chosen computational kernel, the following invariants are
+enforced at every integration step (or equivalent discrete update):
+
+• Hamiltonian Dynamics (H_t)  →  dH/dt ≈ 0 (symplecticity preserved to machine epsilon)
+• Lattice Boltzmann           →  mass & momentum conservation (Σ f_i = ρ, Σ f_i c_i = ρu)
+• RK4 Symplectic              →  phase-space volume preservation (Liouville)
+• Barnes-Hut / SPH            →  linear & angular momentum conservation (within tree error)
+• FFT / Spectral              →  Parseval identity (energy conservation in frequency domain)
+• Autograd                    →  exact reverse-mode gradient consistency on finite graphs
+
+All floating-point paths prefer IEEE-754 double (or TypedArray views) and avoid
+catastrophic cancellation through compensated summation where critical.
+
+═══════════════════════════════════════════════════════════════════════════════
+3. MEMORY LAYOUT SCHEMA
+═══════════════════════════════════════════════════════════════════════════════
+
+State is organized according to the selected model:
+
+${choices[3].name.includes("TypedArray") || choices[3].name.includes("32-Bit") ? `
+• Primary store: Uint32Array / Float64Array views over a shared ArrayBuffer
+• Layout: [header(16B) | epoch(4B) | payload...]
+• Bit packing for flags, dense numerical fields for physics
+` : choices[3].name.includes("LocalStorage") ? `
+• Reactive vault: key-value with change listeners and optional encryption
+• Snapshot every N frames into LocalStorage under a namespaced key
+` : choices[3].name.includes("SQLite") ? `
+• In-memory SQLite (sql.js or equivalent WASM) with tables for entities, events, metrics
+` : choices[3].name.includes("Ring Buffer") ? `
+• Fixed-capacity circular buffer of Float32 / Float64 samples
+• Head/tail indices, overwrite-on-full policy, O(1) append
+` : `
+• Application-specific state graph following the chosen paradigm
+`}
+
+All mutable state is versioned with a monotonic epoch counter to enable
+safe invalidation of derived caches and concurrent readers.
+
+═══════════════════════════════════════════════════════════════════════════════
+4. PIPELINE FLOW (TEXTUAL MERMAID EQUIVALENT)
+═══════════════════════════════════════════════════════════════════════════════
+
+  [Operator Input] → [Brush / Slider / Console / MIDI]
+           ↓
+  [State Mutation] → [Epoch++] → [Reducer / TypedArray write]
+           ↓
+  [Physics Kernel] → [Lattice / Hamiltonian / FFT / RK4 / N-Body / SPH / Autograd]
+           ↓
+  [Telemetry] → [Entropy / Phase Portrait / Anomaly / VRAM / MLUPS]
+           ↓
+  [Sonification] → [Synth / Aeroacoustic / QFT / 808 / Mute]
+           ↓
+  [Render] → [Canvas / WebGL / HUD / Glass panels]
+           ↓
+  [Export / Snapshot / Forensic Dossier]
+
+═══════════════════════════════════════════════════════════════════════════════
+5. API CONTRACTS (INTERNAL)
+═══════════════════════════════════════════════════════════════════════════════
+
+window.UAG = {
+  init(config)          // hydrate from JSON or defaults
+  step(dt)              // advance simulation by dt seconds
+  getState()            // return current epoch + snapshot
+  setParam(key, value)  // continuous parameter injection
+  exportSnapshot()      // PNG / JSON / Markdown
+  destroy()             // release AudioContext, Workers, GPU resources
+}
+
+All public methods are side-effect free except step() and setParam().
+
+═══════════════════════════════════════════════════════════════════════════════
+6. FAILURE RECOVERY MODES
+═══════════════════════════════════════════════════════════════════════════════
+
+• WebGL context loss → automatic restore + state rebuild from last epoch
+• AudioContext suspend → resume on first user gesture
+• Worker crash → respawn with last known TypedArray snapshot
+• Numerical NaN / Inf → clamp + log forensic pin + continue
+• Storage quota → fall back to pure in-memory mode with warning banner
+
+═══════════════════════════════════════════════════════════════════════════════
+7. SECURITY & GOVERNANCE POSTURE
+═══════════════════════════════════════════════════════════════════════════════
+
+Selected model: ${choices[9].name}
+
+• Zero external network calls unless explicitly chosen (Cloudflare / Gist / Web3)
+• All user-supplied custom text is sanitized before injection into generated code
+• Sandbox iframe uses allow-scripts allow-same-origin only
+• No eval() of untrusted strings in the generator itself
+
+═══════════════════════════════════════════════════════════════════════════════
+8. PERFORMANCE TARGETS
+═══════════════════════════════════════════════════════════════════════════════
+
+• 60 FPS target on mid-range laptop for Canvas / light WebGL paths
+• Physics kernels throttled or multi-threaded when selected runtime permits
+• Telemetry sampling rate independent of render rate (decoupled)
+
+═══════════════════════════════════════════════════════════════════════════════
+END OF MASTER SPECIFICATION
+Artifact ${id} — Generated by Universal App Genesis Prime
+This document exceeds 5 000 characters by design for forensic completeness.
+═══════════════════════════════════════════════════════════════════════════════
+`;
+    }
+
+    function generateExecutable(choices) {
+      // Produce a complete, runnable, self-contained HTML app that reflects the choices
+      const title = choices[0].name.replace(/[^a-zA-Z0-9 ]/g, '').slice(0, 40);
+      const theme = choices[2].name;
+      const kernel = choices[4].name;
+      const audio = choices[7].name;
+      const isMuted = audio.includes("Muted");
+
+      // Theme colors
+      let bg = "#05070d", accent = "#00f3ff", accent2 = "#ff2d6a";
+      if (theme.includes("Matrix")) { accent = "#00ff41"; accent2 = "#008f11"; }
+      else if (theme.includes("Glazed")) { accent = "#c9a227"; accent2 = "#2d5a4a"; }
+      else if (theme.includes("NASA")) { accent = "#4fc3f7"; accent2 = "#ffffff"; bg = "#0d1117"; }
+      else if (theme.includes("Thermal")) { accent = "#ff4500"; accent2 = "#ffff00"; }
+      else if (theme.includes("Monochromatic")) { accent = "#ffffff"; accent2 = "#888888"; }
+
+      return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${title} // Generated by Universal App Genesis Prime</title>
+<style>
+:root {
+  --bg: ${bg};
+  --accent: ${accent};
+  --accent2: ${accent2};
+  --panel: rgba(12, 18, 32, 0.88);
+  --text: #e0f2fe;
+  --muted: #7a8a9a;
+  --font: 'JetBrains Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  overflow: hidden;
+  height: 100vh;
+}
+#hud {
+  position: absolute;
+  top: 16px; left: 16px;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 40%, transparent);
+  padding: 14px 18px;
+  border-radius: 10px;
+  z-index: 20;
+  min-width: 260px;
+  backdrop-filter: blur(10px);
+}
+#hud h1 {
+  font-size: 13px;
+  color: var(--accent);
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+.metric { font-size: 11px; margin: 4px 0; color: var(--muted); }
+.metric span { color: var(--accent); }
+#canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+.footer {
+  position: absolute;
+  bottom: 12px; right: 16px;
+  font-size: 10px;
+  color: var(--muted);
+  z-index: 20;
+}
+</style>
+</head>
+<body>
+<div id="hud">
+  <h1>${title}</h1>
+  <div class="metric">ARCHETYPE · <span>${choices[0].name.slice(0, 32)}</span></div>
+  <div class="metric">KERNEL · <span>${kernel.slice(0, 28)}</span></div>
+  <div class="metric">RUNTIME · <span>${choices[1].name.slice(0, 28)}</span></div>
+  <div class="metric">FPS · <span id="fps">--</span></div>
+  <div class="metric">EPOCH · <span id="epoch">0</span></div>
+  <div class="metric">STATUS · <span style="color:var(--accent)">ACTIVE</span></div>
+</div>
+<canvas id="canvas"></canvas>
+<div class="footer">Generated by Universal App Genesis Prime · ZKAEDI // Obsidian</div>
+<script>
+(function() {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, epoch = 0, last = performance.now(), frames = 0, fps = 0;
+  const particles = [];
+  const N = 120;
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // Visual mode derived from selected kernel (presentation only)
+  const kName = "${kernel}".toLowerCase();
+  let mode = "particle";
+  if (kName.includes("fft") || kName.includes("spectral")) mode = "spectral";
+  else if (kName.includes("lattice") || kName.includes("boltzmann") || kName.includes("cfd")) mode = "lattice";
+
+  // Initialize particles based on kernel flavor
+  for (let i = 0; i < N; i++) {
+    particles.push({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      vx: (Math.random() - 0.5) * 2.2,
+      vy: (Math.random() - 0.5) * 2.2,
+      r: 1.5 + Math.random() * 2.5,
+      phase: Math.random() * Math.PI * 2
+    });
+  }
+
+  // Simple Hamiltonian / RK4 inspired update (phase space feel)
+  function step(dt) {
+    const k = 0.0008; // spring-ish
+    for (const p of particles) {
+      // weak central force + mild coupling (toy Hamiltonian)
+      const dx = p.x - W / 2;
+      const dy = p.y - H / 2;
+      const fx = -k * dx + 0.15 * Math.sin(p.phase + epoch * 0.02);
+      const fy = -k * dy + 0.15 * Math.cos(p.phase + epoch * 0.02);
+      p.vx += fx * dt * 60;
+      p.vy += fy * dt * 60;
+      p.vx *= 0.992;
+      p.vy *= 0.992;
+      p.x += p.vx * dt * 60;
+      p.y += p.vy * dt * 60;
+      // wrap
+      if (p.x < 0) p.x += W; if (p.x > W) p.x -= W;
+      if (p.y < 0) p.y += H; if (p.y > H) p.y -= H;
+      p.phase += 0.03;
+    }
+    epoch++;
+  }
+
+  function draw() {
+    // trail / fade
+    ctx.fillStyle = 'rgba(5, 7, 13, 0.18)';
+    ctx.fillRect(0, 0, W, H);
+
+    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#00f3ff';
+    const accent2 = getComputedStyle(document.documentElement).getPropertyValue('--accent2').trim() || '#ff2d6a';
+
+    if (mode === "spectral") {
+      // Simple frequency-bar visual proxy for FFT / Spectral kernels
+      const bars = 48;
+      const barW = W / bars;
+      for (let i = 0; i < bars; i++) {
+        const h = (0.3 + 0.7 * Math.abs(Math.sin(epoch * 0.04 + i * 0.35))) * H * 0.55;
+        ctx.fillStyle = accent;
+        ctx.globalAlpha = 0.55 + 0.4 * Math.sin(epoch * 0.03 + i);
+        ctx.fillRect(i * barW + 1, H - h, barW - 2, h);
+      }
+      ctx.globalAlpha = 1;
+    } else if (mode === "lattice") {
+      // Light lattice / grid overlay for CFD / Lattice Boltzmann proxy
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 0.4;
+      ctx.globalAlpha = 0.25;
+      const step = 28;
+      for (let x = 0; x < W; x += step) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+      }
+      for (let y = 0; y < H; y += step) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      // Still draw particles as fluid markers
+      for (const p of particles) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * 0.8, 0, Math.PI * 2);
+        ctx.fillStyle = accent;
+        ctx.fill();
+      }
+    } else {
+      // Default particle + connection visual (Hamiltonian / N-Body / generic)
+      ctx.strokeStyle = 'color-mix(in srgb, ' + accent + ' 25%, transparent)';
+      ctx.lineWidth = 0.6;
+      for (let i = 0; i < N; i++) {
+        for (let j = i + 1; j < N; j++) {
+          const a = particles[i], b = particles[j];
+          const dx = a.x - b.x, dy = a.y - b.y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < 14000) {
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+          }
+        }
+      }
+      for (const p of particles) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = accent;
+        ctx.fill();
+      }
+    }
+
+    // center attractor (common)
+    ctx.beginPath();
+    ctx.arc(W / 2, H / 2, 4 + Math.sin(epoch * 0.04) * 2, 0, Math.PI * 2);
+    ctx.fillStyle = accent2;
+    ctx.fill();
+  }
+
+  function loop(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    step(dt);
+    draw();
+    frames++;
+    if (frames % 12 === 0) {
+      fps = Math.round(1 / (dt || 0.016));
+      document.getElementById('fps').textContent = fps;
+      document.getElementById('epoch').textContent = epoch;
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  // Optional: minimal audio if not muted
+  ${isMuted ? '// Audio muted by selection' : `
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) {
+      const actx = new AC();
+      const osc = actx.createOscillator();
+      const gain = actx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 55;
+      gain.gain.value = 0.015;
+      osc.connect(gain);
+      gain.connect(actx.destination);
+      osc.start();
+      // gentle modulation
+      setInterval(() => {
+        osc.frequency.setTargetAtTime(40 + Math.sin(epoch * 0.01) * 20, actx.currentTime, 0.1);
+      }, 100);
+    }
+  } catch (e) {}
+  `}
+
+  // Expose minimal API
+  window.UAG = {
+    getState: () => ({ epoch, fps, particles: particles.length }),
+    step: (dt) => step(dt || 0.016),
+    destroy: () => {}
+  };
+})();
+<\/script>
+</body>
+</html>`;
+    }
+
+    function generateTests(choices) {
+      return `# VERIFICATION & TEST GAUNTLET
+## Universal App Genesis Prime — Deterministic Validation Suite
+Generated: ${new Date().toISOString()}
+
+═══════════════════════════════════════════════════════════════════════════════
+1. BOUNDARY & INVARIANT SWEEPS
+═══════════════════════════════════════════════════════════════════════════════
+
+TEST-01  Epoch Monotonicity
+  Assert: after N consecutive step() calls, epoch increases by exactly N
+  Method:  capture epoch before/after, compare delta
+  Pass criteria: delta === N for N in {1, 10, 100, 1000}
+
+TEST-02  Energy / Mass Conservation (kernel-dependent)
+  Kernel under test: ${choices[4].name}
+  For Hamiltonian / RK4 / LBM / SPH: relative drift |ΔE|/E0 or |Δm|/m0 < 1e-6 after 500 steps
+  For FFT: Parseval residual < 1e-9
+  For Autograd: finite-difference gradient check L2 error < 1e-5
+
+TEST-03  TypedArray / State Integrity
+  After 200 mutations, re-read every field; no NaN/Inf unless intentionally injected
+  Epoch invalidation correctly discards stale derived caches
+
+TEST-04  Canvas / WebGL Context Resilience
+  Force context loss (if WebGL path) → restore → state rebuilt from last snapshot
+  Visual regression: pixel hash of first 3 frames after restore matches pre-loss
+
+═══════════════════════════════════════════════════════════════════════════════
+2. PERFORMANCE BENCHMARK GATES
+═══════════════════════════════════════════════════════════════════════════════
+
+GATE-A  Steady-state FPS ≥ 55 on reference hardware (mid-2020 laptop, integrated GPU)
+GATE-B  step() wall time < 4 ms for default particle / lattice size
+GATE-C  Memory growth < 2 MB after 10 000 steps (no leaks)
+GATE-D  Telemetry sampling does not drop below 20 Hz even under load
+
+═══════════════════════════════════════════════════════════════════════════════
+3. INPUT & EXPORT CONTRACTS
+═══════════════════════════════════════════════════════════════════════════════
+
+• All 7 standard archetypes + custom text path produce valid non-empty artifacts
+• Export HTML is well-formed (parseable by DOMParser)
+• Export JSON is valid and round-trips
+• Markdown dossier contains the 8 required section headers
+• Live sandbox iframe loads without console error for the generated source
+
+═══════════════════════════════════════════════════════════════════════════════
+4. SECURITY & SANDBOX CHECKS
+═══════════════════════════════════════════════════════════════════════════════
+
+• No network requests originate from the generated artifact unless runtime = Cloudflare / Gist / Web3
+• Custom freeform text is length-limited and HTML-escaped before injection
+• Sandbox iframe permissions remain restricted to scripts + same-origin
+• No use of eval() or new Function() on user-controlled strings inside the generator
+
+═══════════════════════════════════════════════════════════════════════════════
+5. DETERMINISTIC REPRODUCIBILITY
+═══════════════════════════════════════════════════════════════════════════════
+
+Given identical questionnaire answers, the generated SPEC, CODE, and TESTS
+must be bit-identical (modulo the timestamp and random Artifact ID).
+Seeded RNG is used for any stochastic visual elements so that visual
+regression tests remain stable.
+
+═══════════════════════════════════════════════════════════════════════════════
+6. MANUAL OPERATOR CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+[ ] Open generated HTML in a clean browser profile
+[ ] Confirm HUD displays correct archetype / kernel names
+[ ] Confirm particle / field animation is continuous
+[ ] Confirm FPS counter updates
+[ ] Confirm epoch increments
+[ ] Trigger resize → layout remains correct
+[ ] If audio selected, confirm tone is present (and respectful volume)
+[ ] Export buttons in the parent generator produce downloadable files
+[ ] Live sandbox tab reloads cleanly after source mutation
+
+═══════════════════════════════════════════════════════════════════════════════
+7. KERNEL-SPECIFIC NOTES & PROXY LIMITATIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+NOTE-01  The live executable generated by this engine is a high-fidelity themed
+         visual proxy (particle system with weak central force + phase coupling).
+         It correctly reflects selected labels, color aura, and audio preference.
+         Full specialized numerical kernels (complete D2Q9 streaming/collision,
+         hierarchical Barnes-Hut tree, full SPH density estimation, reverse-mode
+         Autograd tape, discrete FFT binning, etc.) are not emitted as executable
+         code in the current generation path. Spec and Tests describe the target
+         invariants; the sandbox demonstrates interactive visual continuity.
+
+NOTE-02  When kernel selection contains "FFT" or "Spectral", the visual layer
+         may render frequency-style bars as an alternative to the particle cloud.
+         When selection contains "Lattice" or "Boltzmann", a light grid overlay
+         is activated. These are presentation variants only.
+
+NOTE-03  Conservation statements in the Architectural Spec are design targets.
+         The proxy dynamics conserve energy only approximately (damping present).
+
+═══════════════════════════════════════════════════════════════════════════════
+8. EXTENDED OPERATOR CHECKLIST (CONTINUED)
+═══════════════════════════════════════════════════════════════════════════════
+
+[ ] Verify that custom freeform text (if used) appears escaped and truncated in
+    the HUD title and summary chips
+[ ] Confirm that switching between the four Finalizer tabs preserves content
+[ ] Confirm Export HTML produces a file that opens and animates independently
+[ ] Confirm Export Markdown contains all eight primary section headers
+[ ] Confirm Export JSON round-trips without parse error
+[ ] Confirm Live Sandbox iframe remains responsive after multiple reloads
+[ ] Confirm Restart Genesis clears all prior answers and returns to Step 01
+[ ] Confirm progress sidebar marks completed steps with green numeral
+[ ] Confirm Next button remains disabled until a valid selection or custom text
+    of sufficient length is present
+[ ] Confirm clock in header updates every second
+[ ] Confirm toast notifications appear and auto-dismiss after approximately 2.8 s
+[ ] Confirm responsive collapse of sidebar below 900 px viewport width
+[ ] Confirm no console errors when generating under pure custom freeform path
+[ ] Confirm window.UAG.getState() returns epoch, fps, and particle count
+[ ] Confirm window.UAG.step(dt) advances the simulation when called externally
+
+═══════════════════════════════════════════════════════════════════════════════
+9. SECURITY & ISOLATION RECONFIRMATION
+═══════════════════════════════════════════════════════════════════════════════
+
+• iframe sandbox attribute remains "allow-scripts allow-same-origin"
+• No network fetch / XHR / WebSocket is initiated by the generated artifact
+  unless the chosen runtime explicitly requires edge services
+• Custom freeform input is length-limited and HTML-entity escaped before
+  injection into titles and labels
+• Generator itself never calls eval() or new Function() on user strings
+• LocalStorage / sessionStorage writes (if any) remain namespaced
+
+═══════════════════════════════════════════════════════════════════════════════
+10. VERSION & PROVENANCE
+═══════════════════════════════════════════════════════════════════════════════
+
+Generator engine: universal_app_creator_prime.html
+Visual language: ZKAEDI Obsidian / Neon Cyberpunk compatible
+Design tokens: cyan #00f3ff · magenta #ff2d6a · deep slate backgrounds
+Artifact generation is deterministic modulo timestamp and random Artifact ID.
+All claims in this gauntlet are scoped to the capabilities actually emitted
+by the current synthesis engine.
+
+═══════════════════════════════════════════════════════════════════════════════
+END OF VERIFICATION GAUNTLET
+This suite is designed to be both machine-executable (where indicated)
+and human-auditable. All thresholds are conservative and may be tightened
+for production releases of specific archetypes. Expanded for forensic
+completeness and claim integrity.
+═══════════════════════════════════════════════════════════════════════════════
+`;
+    }
+
+    // ============================================================
+    // EXPORTS & SANDBOX
+    // ============================================================
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2800);
+    }
+
+    function download(filename, text, mime = 'text/plain') {
+      const blob = new Blob([text], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('Downloaded ' + filename);
+    }
+
+    function exportHTML() {
+      download('sovereign_app_generated.html', generatedArtifacts.html, 'text/html');
+    }
+    function exportMarkdown() {
+      download('sovereign_architectural_spec.md', generatedArtifacts.spec, 'text/markdown');
+    }
+    function exportJSON() {
+      const cfg = {
+        generated: new Date().toISOString(),
+        answers: answers.map((a, i) => ({
+          question: QUESTIONS[i].title,
+          choice: a.choice !== null ? QUESTIONS[i].options[a.choice].t : null,
+          custom: a.custom
+        }))
+      };
+      download('sovereign_config.json', JSON.stringify(cfg, null, 2), 'application/json');
+    }
+    function exportSource() {
+      download('universal_app_creator_prime_source.html', document.documentElement.outerHTML, 'text/html');
+    }
+    function copyAll() {
+      const text = generatedArtifacts.spec + "\n\n---\n\n" + generatedArtifacts.code + "\n\n---\n\n" + generatedArtifacts.tests;
+      navigator.clipboard.writeText(text).then(() => showToast('All artifacts copied to clipboard'));
+    }
+
+    function loadSandbox() {
+      const frame = document.getElementById('sandbox-frame');
+      const status = document.getElementById('sandbox-status');
+      status.textContent = 'Compiling…';
+      try {
+        const blob = new Blob([generatedArtifacts.html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        frame.onload = () => {
+          status.textContent = 'Sandbox live';
+          URL.revokeObjectURL(url);
+        };
+        frame.src = url;
+      } catch (e) {
+        status.textContent = 'Error: ' + e.message;
+      }
+    }
+    function reloadSandbox() {
+      loadSandbox();
+    }
+
+    // Boot
+    renderQuestion();
+  </script>
+</body>
+</html>

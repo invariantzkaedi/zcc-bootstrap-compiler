@@ -28,6 +28,8 @@ STATIC_ROUTES = {
     "/viz/world_gen": "procedural_world_gen.html",
     "/observatory": "gods_eye_3d_observatory.html",
     "/viz/observatory": "gods_eye_3d_observatory.html",
+    "/waterfall": "spectrogram_waterfall_prime.html",
+    "/spectrogram": "spectrogram_waterfall_prime.html",
 }
 
 API_ROUTES = {

@@ -52,7 +52,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Any, List, Dict, Set, Tuple
 
 from zcc_dream_mutations import MutationEngine, Mutation
 from zcc_criticality import (
@@ -138,6 +138,11 @@ class DreamState:
     blacklisted_fingerprints: list = field(default_factory=list)
 
 
+def derive_seed(root_seed: int, namespace: str) -> int:
+    h = hashlib.sha256(f"{root_seed}:{namespace}".encode("utf-8")).hexdigest()
+    return int(h[:8], 16)
+
+
 @dataclass
 class CycleResult:
     """Result of one complete dream cycle (one island, one generation)."""
@@ -151,6 +156,11 @@ class CycleResult:
     delta: dict
     elapsed_s: float
     error: str = ""
+    parent_structural_score: float = 0.0
+    mutant_structural_score: float = 0.0
+    selection_score: float = 0.0
+    benchmark_observation: int = 0
+    deterministic_mode: bool = False
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -160,8 +170,8 @@ class CycleResult:
 class FitnessOracle:
     """
     v3: Multi-dimensional fitness oracle.
-    Measures 5 orthogonal quality metrics and computes a weighted composite score.
-    Runs 3 benchmark samples and takes the median to eliminate timing noise.
+    Measures orthogonal quality metrics and computes a weighted composite score.
+    In deterministic mode, runtime benchmark timing is excluded from selection_score.
     """
 
     N_SAMPLES = 3
@@ -172,14 +182,59 @@ class FitnessOracle:
     W_BRANCH   = 0.20
     W_STACK    = 0.10
 
+    _deterministic: bool = False
+    _eta_c: float = 0.4407
+    _T_eff: float = 1.0
+
+    @classmethod
+    def compute_structural_score(cls, metrics: dict) -> dict:
+        """
+        Pure scoring helper for ZCC structural quality score calculation.
+        Effective weights:
+          inst_count:      10.0 * 0.40 = 4.00
+          asm_size:        1.0  * 0.30 = 0.30
+          branch_count:    20.0 * 0.20 = 4.00
+          stack_depth_sum:  0.5 * 0.10 = 0.05
+        """
+        ic = metrics.get('inst_count', 0)
+        sz = metrics.get('asm_size', 0)
+        bc = metrics.get('branch_count', 0)
+        st = metrics.get('stack_depth_sum', 0)
+
+        w_ic = 10.0 * cls.W_INSTR   # 4.00
+        w_sz = 1.0  * cls.W_SIZE    # 0.30
+        w_bc = 20.0 * cls.W_BRANCH  # 4.00
+        w_st = 0.5  * cls.W_STACK   # 0.05
+
+        c_ic = ic * w_ic
+        c_sz = sz * w_sz
+        c_bc = bc * w_bc
+        c_st = st * w_st
+
+        score = c_ic + c_sz + c_bc + c_st
+
+        return {
+            'inst_count':       {'value': ic, 'weight': w_ic, 'contribution': round(c_ic, 4)},
+            'asm_size':         {'value': sz, 'weight': w_sz, 'contribution': round(c_sz, 4)},
+            'branch_count':     {'value': bc, 'weight': w_bc, 'contribution': round(c_bc, 4)},
+            'stack_depth_sum':  {'value': st, 'weight': w_st, 'contribution': round(c_st, 4)},
+            'structural_score': round(score, 4),
+        }
+
     @classmethod
     def measure(cls, zcc_binary: str, workload_c: str,
-                asm_output: str, tmpdir: str, timeout: int = 120) -> dict:
+                asm_output: str, tmpdir: str, timeout: int = 120,
+                deterministic: Optional[bool] = None) -> dict:
+        is_det = deterministic if deterministic is not None else cls._deterministic
         fitness = {
             'asm_size': 0, 'bin_size': 0, 'inst_count': 0,
             'branch_count': 0, 'branch_density': 0.0,
             'stack_depth_sum': 0,
-            'benchmark_time_ns': 0, 'score': 0.0,
+            'benchmark_time_ns': 0,
+            'structural_score': 0.0,
+            'selection_score': 0.0,
+            'score': 0.0,
+            'deterministic_mode': is_det,
         }
 
         if os.path.exists(zcc_binary):
@@ -256,23 +311,28 @@ class FitnessOracle:
             samples.sort()
             fitness['benchmark_time_ns'] = samples[len(samples) // 2]  # median
 
-        # Composite score: weighted sum (lower is better) — LEGACY
-        fitness['score'] = (
-            fitness['inst_count']     * 10.0 * cls.W_INSTR +
-            fitness['asm_size']       * 1.0  * cls.W_SIZE +
-            fitness['branch_count']   * 20.0 * cls.W_BRANCH +
-            fitness['stack_depth_sum'] * 0.5 * cls.W_STACK +
-            fitness['benchmark_time_ns'] / 1e6
-        )
+        score_breakdown = cls.compute_structural_score(fitness)
+        structural_score = score_breakdown['structural_score']
+        fitness['structural_score'] = structural_score
+        fitness['score_breakdown'] = score_breakdown
+
+        if is_det:
+            fitness['selection_score'] = structural_score
+        else:
+            fitness['selection_score'] = structural_score + (fitness['benchmark_time_ns'] / 1e6)
+
+        # Temporary alias for backwards compatibility
+        fitness['score'] = fitness['selection_score']
 
         # Free energy: F = E - TS (Wilson-Fisher universal fitness)
-        # eta and T are injected via class-level defaults or overridden
         eta = getattr(cls, '_eta_c', 0.4407)
         T_eff = getattr(cls, '_T_eff', 1.0)
         fitness['free_energy'] = prime_free_energy(fitness, eta, T_eff)
         fitness['eta_c'] = eta
 
         return fitness
+
+
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -494,9 +554,10 @@ class Island:
     """
 
     def __init__(self, island_id: int, seed: int, parent_asm: str,
-                 zcc_pp_c: str, blacklist: set):
+                 zcc_pp_c: str, blacklist: set, deterministic: bool = False):
         self.island_id = island_id
         self.rng = random.Random(seed)
+        self.deterministic = deterministic
         self.state = IslandState(island_id=island_id)
         self.blacklist = blacklist
         self.zcc_pp_c = zcc_pp_c
@@ -511,7 +572,7 @@ class Island:
         # Measure initial fitness
         with tempfile.TemporaryDirectory(prefix='island_init_') as td:
             self.parent_fitness = self._build_and_measure(island_asm, td)
-            self.state.parent_score = self.parent_fitness['score']
+            self.state.parent_score = self.parent_fitness.get('selection_score', self.parent_fitness.get('score', 0.0))
 
     def step(self, mutation_engine: MutationEngine,
              max_mutations: int, force_sweep: bool,
@@ -535,13 +596,21 @@ class Island:
         mutations = [m for m in mutations
                      if m.fingerprint() not in self.blacklist]
 
+        parent_fitness = self.parent_fitness
+        parent_struct = parent_fitness.get('structural_score', 0.0)
+
         if not mutations:
             return CycleResult(
                 island_id=self.island_id, generation=gen,
                 mutations_applied=[], survived=False,
-                self_host_passed=False, parent_fitness={}, mutant_fitness={},
+                self_host_passed=False, parent_fitness=parent_fitness, mutant_fitness={},
                 delta={}, elapsed_s=time.time() - t0,
-                error="No non-blacklisted mutation candidates"
+                error="No non-blacklisted mutation candidates",
+                parent_structural_score=parent_struct,
+                mutant_structural_score=parent_struct,
+                selection_score=parent_fitness.get('selection_score', 0.0),
+                benchmark_observation=parent_fitness.get('benchmark_time_ns', 0),
+                deterministic_mode=self.deterministic,
             )
 
         # Separate sweeps from point mutations; apply at most 1 sweep + N points
@@ -554,8 +623,6 @@ class Island:
         n_pt = self.rng.randint(1, max(1, min(len(points), max_mutations)))
         selected.extend(self.rng.sample(points, min(len(points), n_pt)))
 
-        parent_fitness = self.parent_fitness
-
         if dry_run:
             return CycleResult(
                 island_id=self.island_id, generation=gen,
@@ -563,7 +630,12 @@ class Island:
                 survived=False, self_host_passed=False,
                 parent_fitness=parent_fitness, mutant_fitness={},
                 delta={}, elapsed_s=time.time() - t0,
-                error="DRY RUN"
+                error="DRY RUN",
+                parent_structural_score=parent_struct,
+                mutant_structural_score=parent_struct,
+                selection_score=parent_fitness.get('selection_score', 0.0),
+                benchmark_observation=parent_fitness.get('benchmark_time_ns', 0),
+                deterministic_mode=self.deterministic,
             )
 
         # Apply mutations
@@ -589,7 +661,12 @@ class Island:
                     survived=False, self_host_passed=False,
                     parent_fitness=parent_fitness, mutant_fitness={},
                     delta={}, elapsed_s=time.time() - t0,
-                    error=f"build fail: {r.stderr.decode()[:120]}"
+                    error=f"build fail: {r.stderr.decode()[:120]}",
+                    parent_structural_score=parent_struct,
+                    mutant_structural_score=parent_struct,
+                    selection_score=parent_fitness.get('selection_score', 0.0),
+                    benchmark_observation=parent_fitness.get('benchmark_time_ns', 0),
+                    deterministic_mode=self.deterministic,
                 )
         except subprocess.TimeoutExpired:
             return CycleResult(
@@ -597,7 +674,12 @@ class Island:
                 mutations_applied=[asdict(m) for m in selected],
                 survived=False, self_host_passed=False,
                 parent_fitness=parent_fitness, mutant_fitness={},
-                delta={}, elapsed_s=time.time() - t0, error="build timeout"
+                delta={}, elapsed_s=time.time() - t0, error="build timeout",
+                parent_structural_score=parent_struct,
+                mutant_structural_score=parent_struct,
+                selection_score=parent_fitness.get('selection_score', 0.0),
+                benchmark_observation=parent_fitness.get('benchmark_time_ns', 0),
+                deterministic_mode=self.deterministic,
             )
 
         # Self-host gate
@@ -615,37 +697,49 @@ class Island:
                 survived=False, self_host_passed=False,
                 parent_fitness=parent_fitness, mutant_fitness={},
                 delta={}, elapsed_s=time.time() - t0,
-                error=f"gate: {gate_msg}"
+                error=f"gate: {gate_msg}",
+                parent_structural_score=parent_struct,
+                mutant_structural_score=parent_struct,
+                selection_score=parent_fitness.get('selection_score', 0.0),
+                benchmark_observation=parent_fitness.get('benchmark_time_ns', 0),
+                deterministic_mode=self.deterministic,
             )
 
         # Statistical fitness measurement
         mutant_fitness = self.oracle.measure(
-            mutant_bin, str(BENCHMARK_FILE), mutant_asm, tmpdir)
+            mutant_bin, str(BENCHMARK_FILE), mutant_asm, tmpdir,
+            deterministic=self.deterministic)
+
+        mutant_struct = mutant_fitness.get('structural_score', 0.0)
+        mutant_sel = mutant_fitness.get('selection_score', 0.0)
 
         delta = {
-            'asm_size':   mutant_fitness['asm_size']   - parent_fitness['asm_size'],
-            'inst_count': mutant_fitness['inst_count'] - parent_fitness.get('inst_count', 0),
-            'score':      mutant_fitness['score']      - parent_fitness['score'],
-            'free_energy': mutant_fitness.get('free_energy', 0) -
+            'asm_size':         mutant_fitness['asm_size']   - parent_fitness['asm_size'],
+            'inst_count':       mutant_fitness['inst_count'] - parent_fitness.get('inst_count', 0),
+            'structural_score': mutant_struct - parent_struct,
+            'selection_score':  mutant_sel - parent_fitness.get('selection_score', 0.0),
+            'score':            mutant_fitness['score']      - parent_fitness.get('score', 0.0),
+            'free_energy':      mutant_fitness.get('free_energy', 0) -
                            parent_fitness.get('free_energy', 0),
         }
 
         # Wilson-Fisher: Boltzmann acceptance on free energy delta
-        # Falls back to greedy (T=0) if free_energy not available
-        delta_F = delta.get('free_energy', delta['score'])
+        delta_F = delta.get('free_energy', delta['selection_score'])
         T_eff = getattr(FitnessOracle, '_T_eff', 1.0)
-        survived = boltzmann_acceptance(delta_F, T_eff)
+        survived = boltzmann_acceptance(delta_F, T_eff, rng=self.rng)
 
         if survived:
             self.state.generation = gen
-            self.state.parent_score = mutant_fitness['score']
+            self.state.parent_score = mutant_sel
             self.parent_fitness = mutant_fitness
             self.state.survived += 1
             shutil.copyfile(mutant_asm, self.state.parent_asm_path)
             self.state.lineage.append({
                 'generation': gen,
                 'mutations': [m.name for m in selected],
-                'delta_score': delta['score'],
+                'delta_score': delta['selection_score'],
+                'structural_score': mutant_struct,
+                'selection_score': mutant_sel,
             })
         else:
             self.state.rejected += 1
@@ -657,6 +751,11 @@ class Island:
             parent_fitness=parent_fitness,
             mutant_fitness=mutant_fitness,
             delta=delta, elapsed_s=time.time() - t0,
+            parent_structural_score=parent_struct,
+            mutant_structural_score=mutant_struct,
+            selection_score=mutant_sel,
+            benchmark_observation=mutant_fitness.get('benchmark_time_ns', 0),
+            deterministic_mode=self.deterministic,
         )
 
     def _build_and_measure(self, asm_path: str, tmpdir: str) -> dict:
@@ -671,15 +770,17 @@ class Island:
                  '-o', bin_path, asm_path] + p_args + ['-lm'],
                 capture_output=True, timeout=60)
             if r.returncode != 0:
-                return {'score': float('inf'), 'free_energy': float('inf'), 'asm_size': 0, 'inst_count': 0}
+                return {'score': float('inf'), 'selection_score': float('inf'), 'structural_score': float('inf'), 'free_energy': float('inf'), 'asm_size': 0, 'inst_count': 0}
         except Exception:
-            return {'score': float('inf'), 'free_energy': float('inf'), 'asm_size': 0, 'inst_count': 0}
+            return {'score': float('inf'), 'selection_score': float('inf'), 'structural_score': float('inf'), 'free_energy': float('inf'), 'asm_size': 0, 'inst_count': 0}
 
-        return FitnessOracle.measure(bin_path, str(BENCHMARK_FILE), asm_path, tmpdir)
+        return FitnessOracle.measure(bin_path, str(BENCHMARK_FILE), asm_path, tmpdir, deterministic=self.deterministic)
 
     def _build_and_score(self, asm_path: str, tmpdir: str) -> float:
-        """Build + score an assembly file. Returns composite score."""
-        return self._build_and_measure(asm_path, tmpdir)['score']
+        """Build + score an assembly file. Returns selection score."""
+        res = self._build_and_measure(asm_path, tmpdir)
+        return res.get('selection_score', res.get('score', float('inf')))
+
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -691,7 +792,7 @@ class DreamEngine:
     def __init__(self, seed: int = 42, max_mutations: int = 3,
                  n_islands: int = 1, force_sweep: bool = False,
                  aggressive: bool = False, visualize: bool = False,
-                 dry_run: bool = False):
+                 dry_run: bool = False, deterministic: bool = False):
         self.seed         = seed
         self.rng          = random.Random(seed)
         self.max_mutations = max_mutations if not aggressive else 8
@@ -700,6 +801,8 @@ class DreamEngine:
         self.aggressive   = aggressive
         self.visualize    = visualize
         self.dry_run      = dry_run
+        self.deterministic = deterministic
+        FitnessOracle._deterministic = deterministic
 
         DREAM_DIR.mkdir(parents=True, exist_ok=True)
         JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
@@ -856,10 +959,46 @@ int main(void) {
         BENCHMARK_FILE.write_text(src)
         print(f"  {_C}[INIT]{_W} Created benchmark workload")
 
+    def _safe_write_json(self, path: Path, data: Any):
+        data_str = json.dumps(data, indent=2)
+        for attempt in range(5):
+            tmp_path = None
+            try:
+                try:
+                    os.makedirs(str(path.parent), exist_ok=True)
+                except OSError:
+                    pass
+                tmp_path = path.parent / f".tmp_{path.name}_{os.getpid()}_{random.randint(1000, 9999)}"
+                with open(tmp_path, 'w', encoding='utf-8') as f:
+                    f.write(data_str)
+                    f.flush()
+                    try:
+                        os.fsync(f.fileno())
+                    except OSError:
+                        pass
+                os.replace(tmp_path, path)
+                return
+            except OSError:
+                time.sleep(0.1 * (attempt + 1))
+                if attempt == 4:
+                    try:
+                        with open(path, 'w', encoding='utf-8') as f:
+                            f.write(data_str)
+                    except Exception:
+                        pass
+            finally:
+                if tmp_path and tmp_path.exists():
+                    try:
+                        tmp_path.unlink()
+                    except Exception:
+                        pass
+
     def save_state(self):
-        self.state.blacklisted_fingerprints = list(self.blacklist)
-        with open(DREAM_DIR / "dream_state.json", 'w') as f:
-            json.dump(asdict(self.state), f, indent=2)
+        try:
+            self.state.blacklisted_fingerprints = list(self.blacklist)
+            self._safe_write_json(DREAM_DIR / "dream_state.json", asdict(self.state))
+        except Exception as e:
+            print(f"  {_Y}[WARN]{_W} Transient save_state warning: {e}")
 
     def _journal(self, gen: int, island_id: int, mutations: list,
                  delta: dict, fitness: dict, hash_id: str):
@@ -887,27 +1026,34 @@ int main(void) {
                 "asm_size_delta": delta.get('asm_size', 0),
                 "inst_count_delta": delta.get('inst_count', 0),
                 "score_delta": delta.get('score', 0),
+                "structural_score_delta": delta.get('structural_score', 0),
+                "selection_score_delta": delta.get('selection_score', 0),
                 "composite_score": fitness.get('score', 0),
+                "structural_score": fitness.get('structural_score', 0),
+                "selection_score": fitness.get('selection_score', 0),
             },
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "generation": gen,
         }
-        (JOURNAL_DIR / f"QAlgo-Dream-G{gen}.json").write_text(
-            json.dumps(entry, indent=2))
-        self.state.discovered_algorithms.append(entry['algorithm_info']['id'])
+        try:
+            self._safe_write_json(JOURNAL_DIR / f"QAlgo-Dream-G{gen}.json", entry)
+            self.state.discovered_algorithms.append(entry['algorithm_info']['id'])
+        except Exception as e:
+            print(f"  {_Y}[WARN]{_W} Transient journal warning: {e}")
 
     def _print_header(self, num_cycles: int):
         print()
         print(f"  {_B}╔══════════════════════════════════════════════════════════╗{_W}")
         print(f"  {_B}║   ZCC ONEIROGENESIS v3 — Enhanced Dream Engine          ║{_W}")
         print(f"  {_B}╠══════════════════════════════════════════════════════════╣{_W}")
-        print(f"  {_B}║{_W}  Seed:      {_C}{self.seed:<45}{_W}  {_B}║{_W}")
-        print(f"  {_B}║{_W}  Cycles:    {_C}{num_cycles:<45}{_W}  {_B}║{_W}")
-        print(f"  {_B}║{_W}  Islands:   {_C}{self.n_islands:<45}{_W}  {_B}║{_W}")
-        print(f"  {_B}║{_W}  Max Muts:  {_C}{self.max_mutations:<45}{_W}  {_B}║{_W}")
-        print(f"  {_B}║{_W}  Sweeps:    {_C}{'FORCED' if self.force_sweep else '30% random':<45}{_W}  {_B}║{_W}")
-        print(f"  {_B}║{_W}  Gen:       {_C}{self.state.generation:<45}{_W}  {_B}║{_W}")
-        print(f"  {_B}║{_W}  Blacklist: {_C}{len(self.blacklist)} fingerprints{'':<33}{_W}  {_B}║{_W}")
+        print(f"  {_B}║{_W}  Seed:          {_C}{self.seed:<41}{_W}  {_B}║{_W}")
+        print(f"  {_B}║{_W}  Deterministic: {_C}{str(self.deterministic):<41}{_W}  {_B}║{_W}")
+        print(f"  {_B}║{_W}  Cycles:        {_C}{num_cycles:<41}{_W}  {_B}║{_W}")
+        print(f"  {_B}║{_W}  Islands:       {_C}{self.n_islands:<41}{_W}  {_B}║{_W}")
+        print(f"  {_B}║{_W}  Max Muts:      {_C}{self.max_mutations:<41}{_W}  {_B}║{_W}")
+        print(f"  {_B}║{_W}  Sweeps:        {_C}{'FORCED' if self.force_sweep else '30% random':<41}{_W}  {_B}║{_W}")
+        print(f"  {_B}║{_W}  Gen:           {_C}{self.state.generation:<41}{_W}  {_B}║{_W}")
+        print(f"  {_B}║{_W}  Blacklist:     {_C}{len(self.blacklist)} fingerprints{'':<29}{_W}  {_B}║{_W}")
         print(f"  {_B}╚══════════════════════════════════════════════════════════╝{_W}")
         print()
 
@@ -919,7 +1065,7 @@ int main(void) {
         dt = f"{r.elapsed_s:.1f}s"
 
         if r.survived:
-            delta_s = r.delta.get('score', 0)
+            delta_s = r.delta.get('selection_score', r.delta.get('score', 0))
             asm_d   = r.delta.get('asm_size', 0)
             inst_d  = r.delta.get('inst_count', 0)
             cats    = {m.get('category','?') for m in r.mutations_applied}
@@ -934,7 +1080,7 @@ int main(void) {
                     sw = f"  ×{m.get('sweep_count',0)}" if m.get('is_sweep') else ""
                     print(f"    {_DIM}├─ {m.get('category','?'):>8s} │ {m.get('description','')}{sw}{_W}")
         elif r.self_host_passed:
-            delta_s = r.delta.get('score', 0)
+            delta_s = r.delta.get('selection_score', r.delta.get('score', 0))
             print(f"  {_DIM}○ {prefix} NEUTRAL  │ {n_mut} mut │ "
                   f"Δscore:{delta_s:+.1f} │ {dt}{_W}")
         elif r.dry_run if hasattr(r, 'dry_run') else "DRY RUN" in r.error:
@@ -970,20 +1116,23 @@ int main(void) {
                       f"{stats['edges']} edges, avg_degree={stats['avg_degree']}")
 
                 # Compute spectral dimension
-                d_s = cfg_spectral_dim(cfg)
+                spec_seed = derive_seed(self.seed, "spectral-dimension")
+                d_s = cfg_spectral_dim(cfg, seed=spec_seed)
                 print(f"  {_C}[WF]{_W} Spectral dimension: d_s={d_s:.3f}")
 
                 # Search for η_c (use subset for speed if graph is large)
+                eta_seed = derive_seed(self.seed, "topology-eta-search")
                 if stats['nodes'] > 500:
                     # Subsample: take first 500 nodes for tractability
                     sub_nodes = sorted(cfg.keys())[:500]
-                    sub_cfg = {n: [t for t in cfg[n] if t in sub_nodes]
+                    sub_cfg = {n: sorted([t for t in cfg[n] if t in sub_nodes])
                                for n in sub_nodes if n in cfg}
                     self.eta_c = topology_eta_search(sub_cfg, tol=1e-3,
-                                                     max_sweeps=80, n_samples=3)
+                                                     max_sweeps=80, n_samples=3, seed=eta_seed)
                 else:
-                    self.eta_c = topology_eta_search(cfg, tol=1e-3,
-                                                     max_sweeps=100, n_samples=3)
+                    sorted_cfg = {n: sorted(cfg[n]) for n in sorted(cfg.keys())}
+                    self.eta_c = topology_eta_search(sorted_cfg, tol=1e-3,
+                                                     max_sweeps=100, n_samples=3, seed=eta_seed)
 
                 # Classify universality class
                 self._uclass = universality_class(self.eta_c, d_s)
@@ -1006,9 +1155,9 @@ int main(void) {
             print(f"  {_C}[INIT]{_W} Spawning {self.n_islands} island(s)…")
             islands = []
             for i in range(self.n_islands):
-                island_seed = self.rng.randint(0, 2**32)
+                island_seed = derive_seed(self.seed, f"island-{i}")
                 with tempfile.TemporaryDirectory(prefix=f'island_init_{i}_') as it:
-                    isl = Island(i, island_seed, zcc2_asm, zcc_pp_c, self.blacklist)
+                    isl = Island(i, island_seed, zcc2_asm, zcc_pp_c, self.blacklist, deterministic=self.deterministic)
                 islands.append(isl)
                 print(f"    Island {i}: score={isl.state.parent_score:.0f} "
                       f"F={getattr(isl, '_last_fe', '?')}")
@@ -1039,8 +1188,8 @@ int main(void) {
 
                 # Round-robin across islands
                 island = islands[cycle % self.n_islands]
-                mutation_engine = MutationEngine(
-                    seed=self.rng.randint(0, 2**32))
+                engine_seed = derive_seed(self.seed, f"cycle-{cycle}")
+                mutation_engine = MutationEngine(seed=engine_seed)
 
                 with tempfile.TemporaryDirectory(prefix='dream_step_') as td:
                     result = island.step(
@@ -1070,7 +1219,7 @@ int main(void) {
                     self.spectral_detector.record(fv)
                     self._fitness_scores.append(
                         result.mutant_fitness.get('free_energy',
-                            result.mutant_fitness.get('score', 0)))
+                            result.mutant_fitness.get('selection_score', result.mutant_fitness.get('score', 0))))
 
                     if (not self.dry_run and cycle > 20 and
                             self.spectral_detector.arrested()):
@@ -1092,14 +1241,19 @@ int main(void) {
                     self.state.total_mutations_survived += len(result.mutations_applied)
                     self.state.fitness_history.append({
                         'generation': gen, 'island_id': island.island_id,
-                        'score': result.mutant_fitness.get('score', 0),
+                        'score': result.mutant_fitness.get('selection_score', result.mutant_fitness.get('score', 0)),
+                        'structural_score': result.mutant_fitness.get('structural_score', 0),
+                        'selection_score': result.mutant_fitness.get('selection_score', 0),
+                        'benchmark_time_ns': result.mutant_fitness.get('benchmark_time_ns', 0),
                         'timestamp': datetime.now(timezone.utc).isoformat(),
                     })
                     self.state.lineage.append({
                         'generation': gen, 'hash': h,
                         'island_id': island.island_id,
                         'mutations': [m.get('description','') for m in result.mutations_applied],
-                        'delta_score': result.delta.get('score', 0),
+                        'delta_score': result.delta.get('selection_score', result.delta.get('score', 0)),
+                        'structural_score': result.mutant_fitness.get('structural_score', 0),
+                        'selection_score': result.mutant_fitness.get('selection_score', 0),
                         'timestamp': datetime.now(timezone.utc).isoformat(),
                     })
                     self._journal(gen, island.island_id,
@@ -1167,6 +1321,7 @@ int main(void) {
         print(f"  {_B}                 DREAM SESSION COMPLETE{_W}")
         print(f"  {_B}═══════════════════════════════════════════════════════{_W}")
         print(f"  Cycles:          {num_cycles}")
+        print(f"  Deterministic:   {self.deterministic}")
         print(f"  Evolved:         {_G}{survived}{_W}")
         print(f"  Rejected:        {_R}{rejected}{_W}")
         print(f"  Fitness-reject:  {_Y}{fitness_rejected}{_W}")
@@ -1192,40 +1347,46 @@ int main(void) {
 
         # Evolution report
         report = DREAM_DIR / "EVOLUTION_REPORT.md"
-        with open(report, 'w') as f:
-            f.write("# ZCC Oneirogenesis v2 — Evolution Report\n\n")
-            f.write(f"**Generated**: {datetime.now(timezone.utc).isoformat()}\n\n")
-            f.write(f"## Summary\n\n")
-            f.write(f"| Metric | Value |\n|--------|-------|\n")
-            f.write(f"| Global Generation | {self.state.generation} |\n")
-            f.write(f"| Surviving cycles (= generation) | {self.state.generation} |\n")
-            f.write(f"| Mutations inside surviving cycles | {self.state.total_mutations_survived} |\n")
-            f.write(f"| Hard-rejected cycles (bucket 1-4) | {self.state.total_regressions} |\n")
-            f.write(f"| Fitness-rejected cycles (bucket 5) | {self.state.total_fitness_rejections} |\n")
-            f.write(f"| Mutations tried total | {self.state.total_mutations_tried} |\n")
-            f.write(f"| Algorithms Discovered | {len(self.state.discovered_algorithms)} |\n")
-            f.write(f"| Blacklisted Patterns | {len(self.blacklist)} |\n\n")
-            f.write(f"## Lineage\n\n")
-            f.write("| Gen | Island | Hash | Mutations | Δ Score | Timestamp |\n")
-            f.write("|-----|--------|------|-----------|---------|----------|\n")
-            for e in self.state.lineage:
-                muts = ', '.join(e.get('mutations', [])[:2])
-                if len(e.get('mutations', [])) > 2:
-                    muts += f" (+{len(e['mutations'])-2})"
-                f.write(f"| G{e['generation']:04d} | I{e.get('island_id',0)} | "
-                       f"`{e.get('hash','?')[:12]}` | {muts} | "
-                       f"{e.get('delta_score',0):+.1f} | "
-                       f"{e.get('timestamp','N/A')[:19]} |\n")
-            f.write(f"\n## Discovered Algorithms\n\n")
-            for a in self.state.discovered_algorithms:
-                f.write(f"- `{a}` → [`{a}.json`](journal/{a}.json)\n")
-            f.write(f"\n## Fitness History\n\n```\n")
-            for fh in self.state.fitness_history[-30:]:
-                f.write(f"G{fh['generation']:04d} I{fh.get('island_id',0)}: "
-                       f"score={fh['score']:.0f}\n")
-            f.write("```\n")
-
-        print(f"  {_C}[REPORT]{_W} {report}")
+        DREAM_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            with open(report, 'w', encoding='utf-8') as f:
+                f.write("# ZCC Oneirogenesis v3 — Evolution Report\n\n")
+                f.write(f"**Generated**: {datetime.now(timezone.utc).isoformat()}\n")
+                f.write(f"**Deterministic Mode**: `{self.deterministic}`\n\n")
+                f.write(f"## Summary\n\n")
+                f.write(f"| Metric | Value |\n|--------|-------|\n")
+                f.write(f"| Global Generation | {self.state.generation} |\n")
+                f.write(f"| Surviving cycles (= generation) | {self.state.generation} |\n")
+                f.write(f"| Mutations inside surviving cycles | {self.state.total_mutations_survived} |\n")
+                f.write(f"| Hard-rejected cycles (bucket 1-4) | {self.state.total_regressions} |\n")
+                f.write(f"| Fitness-rejected cycles (bucket 5) | {self.state.total_fitness_rejections} |\n")
+                f.write(f"| Mutations tried total | {self.state.total_mutations_tried} |\n")
+                f.write(f"| Algorithms Discovered | {len(self.state.discovered_algorithms)} |\n")
+                f.write(f"| Blacklisted Patterns | {len(self.blacklist)} |\n\n")
+                f.write(f"## Lineage\n\n")
+                f.write("| Gen | Island | Hash | Mutations | Δ Score | Struct Score | Sel Score | Timestamp |\n")
+                f.write("|-----|--------|------|-----------|---------|--------------|-----------|-----------|\n")
+                for e in self.state.lineage:
+                    muts = ', '.join(e.get('mutations', [])[:2])
+                    if len(e.get('mutations', [])) > 2:
+                        muts += f" (+{len(e['mutations'])-2})"
+                    f.write(f"| G{e.get('generation', 0):04d} | I{e.get('island_id', 0)} | "
+                           f"`{e.get('hash', '?')[:12]}` | {muts} | "
+                           f"{e.get('delta_score', 0):+.1f} | "
+                           f"{e.get('structural_score', 0):.1f} | "
+                           f"{e.get('selection_score', 0):.1f} | "
+                           f"{e.get('timestamp', 'N/A')[:19]} |\n")
+                f.write(f"\n## Discovered Algorithms\n\n")
+                for a in self.state.discovered_algorithms:
+                    f.write(f"- `{a}` → [`{a}.json`](journal/{a}.json)\n")
+                f.write(f"\n## Fitness History\n\n```\n")
+                for fh in self.state.fitness_history[-30:]:
+                    f.write(f"G{fh['generation']:04d} I{fh.get('island_id',0)}: "
+                           f"score={fh['score']:.0f}\n")
+                f.write("```\n")
+            print(f"  {_C}[REPORT]{_W} {report}")
+        except Exception as e:
+            print(f"  {_Y}[REPORT WARNING]{_W} Failed to write evolution report: {e}")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1243,24 +1404,43 @@ def main():
   make dream-dry             # Preview mutations only
   make dream-reset           # Clear state
 
-  python3 zcc_oneirogenesis.py --islands 3 --sweep --cycles 100
+  python3 zcc_oneirogenesis.py --islands 3 --sweep --cycles 100 --deterministic
         """
     )
-    p.add_argument('--cycles',    type=int, default=50)
-    p.add_argument('--seed',      type=int, default=42)
-    p.add_argument('--mutations', type=int, default=3,
+    p.add_argument('--cycles',        type=int, default=50)
+    p.add_argument('--seed',          type=int, default=42)
+    p.add_argument('--mutations',     type=int, default=3,
                    help='Max point mutations per cycle (default: 3)')
-    p.add_argument('--islands',   type=int, default=1,
+    p.add_argument('--islands',       type=int, default=1,
                    help='Number of parallel evolving lineages (default: 1)')
-    p.add_argument('--sweep',     action='store_true',
+    p.add_argument('--sweep',         action='store_true',
                    help='Force sweep mutations (replace ALL instances at once)')
-    p.add_argument('--aggressive', action='store_true')
-    p.add_argument('--visualize', action='store_true',
+    p.add_argument('--aggressive',    action='store_true')
+    p.add_argument('--visualize',     action='store_true',
                    help='Emit Hamiltonian energy packets (UDP:8084) for God\'s Eye')
-    p.add_argument('--dry-run',   action='store_true')
-    p.add_argument('--reset',     action='store_true',
+    p.add_argument('--dry-run',       action='store_true')
+    p.add_argument('--reset',         action='store_true',
                    help='Clear dream state and restart from Genesis')
+    p.add_argument('--deterministic', action='store_true',
+                   help='Enable deterministic execution (structural selection score, controlled env, seed-derived streams)')
+    p.add_argument('--auto-apply', action='store_true',
+                   help='Automatically apply & verify all discovered blueprints to zcc_optimized.s upon completion')
     args = p.parse_args()
+
+    if args.deterministic and os.environ.get("PYTHONHASHSEED") != "0" and os.environ.get("_ZCC_REEXEC_GUARD") != "1":
+        env = os.environ.copy()
+        env.update({
+            "PYTHONHASHSEED": "0",
+            "LC_ALL": "C",
+            "LANG": "C",
+            "TZ": "UTC",
+            "SOURCE_DATE_EPOCH": "1700000000",
+            "OMP_NUM_THREADS": "1",
+            "OPENBLAS_NUM_THREADS": "1",
+            "MKL_NUM_THREADS": "1",
+            "_ZCC_REEXEC_GUARD": "1"
+        })
+        os.execve(sys.executable, [sys.executable] + sys.argv, env)
 
     if args.reset:
         sf = DREAM_DIR / "dream_state.json"
@@ -1270,7 +1450,7 @@ def main():
             f.unlink()
         print(f"  {_Y}[RESET]{_W} Dream state cleared.")
 
-    DreamEngine(
+    engine = DreamEngine(
         seed=args.seed,
         max_mutations=args.mutations,
         n_islands=args.islands,
@@ -1278,8 +1458,47 @@ def main():
         aggressive=args.aggressive,
         visualize=args.visualize,
         dry_run=args.dry_run,
-    ).run(num_cycles=args.cycles)
+        deterministic=args.deterministic,
+    )
+    engine.run(num_cycles=args.cycles)
+
+    if getattr(args, 'auto_apply', False):
+        print(f"\n  {_G}[AUTO-APPLY]{_W} Applying & verifying discovered algorithm blueprints...")
+        try:
+            from tools.apply_oneirogenesis_blueprint import apply_blueprint
+            blueprints = sorted(list((DREAM_DIR / "journal").glob("QAlgo-Dream-G*.json")))
+            if not blueprints:
+                print(f"  {_Y}[AUTO-APPLY]{_W} No blueprints found in journal.")
+            else:
+                curr_inp = str(REPO_ROOT / "zcc2.s")
+                out_path = str(REPO_ROOT / "zcc_optimized.s")
+                for bp in blueprints:
+                    res = apply_blueprint(str(bp), curr_inp, out_path)
+                    print(f"    - Applied {bp.name}: {res['modifications']} transformations")
+                    curr_inp = out_path
+
+                with tempfile.TemporaryDirectory(prefix="auto_apply_gate_") as td:
+                    mutant_bin = os.path.join(td, "mutant_zcc")
+                    p_args = [str(REPO_ROOT / p) for p in PASSES]
+                    cmd = ["gcc", "-no-pie", "-O0", "-w", "-fno-asynchronous-unwind-tables",
+                           "-Wa,--noexecstack", "-fno-unwind-tables",
+                           "-Iinclude", "-I.", "-o", mutant_bin, out_path] + p_args + ["-lm"]
+                    subprocess.run(cmd, check=True)
+                    zcc_pp_c = str(REPO_ROOT / "zcc_pp.c")
+                    passed, msg = SelfHostGate.verify(mutant_bin, zcc_pp_c, PASSES, td)
+                    if passed:
+                        m_orig = FitnessOracle.measure(mutant_bin, "benchmark_workload.c", str(REPO_ROOT / "zcc2.s"), td, deterministic=True)
+                        m_opt = FitnessOracle.measure(mutant_bin, "benchmark_workload.c", out_path, td, deterministic=True)
+                        print(f"  {_G}[AUTO-APPLY SUCCESS]{_W} Self-host Gate PASS!")
+                        print(f"    - Final Structural Score: {m_opt['structural_score']:.1f} (Δ = {m_opt['structural_score'] - m_orig['structural_score']:+.1f})")
+                        print(f"    - Total Bytes Saved:     {m_orig['asm_size'] - m_opt['asm_size']:,} bytes")
+                        print(f"    - Total Insts Removed:   {m_orig['inst_count'] - m_opt['inst_count']:,} insts")
+                    else:
+                        print(f"  {_R}[AUTO-APPLY FAIL]{_W} Self-host gate failed: {msg}")
+        except Exception as e:
+            print(f"  {_R}[AUTO-APPLY ERROR]{_W} {e}")
 
 
 if __name__ == '__main__':
     main()
+

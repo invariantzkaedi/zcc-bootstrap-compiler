@@ -129,10 +129,14 @@ def extract_cfg(asm_lines: list) -> dict:
     for node in to_remove:
         del adjacency[node]
 
-    return adjacency
+    # Canonicalize node and edge ordering
+    sorted_adj = {}
+    for k in sorted(adjacency.keys()):
+        sorted_adj[k] = sorted(list(set(adjacency[k])))
+    return sorted_adj
 
 
-def cfg_spectral_dim(adjacency: dict) -> float:
+def cfg_spectral_dim(adjacency: dict, seed: int = 42) -> float:
     """
     Compute effective spectral dimension via sparse Laplacian eigensolver.
     Uses scipy.sparse — O(N) memory, sub-second for N=22k.
@@ -152,7 +156,7 @@ def cfg_spectral_dim(adjacency: dict) -> float:
         degrees = [0] * n
         for node in nodes:
             i = idx[node]
-            for nb in adjacency.get(node, []):
+            for nb in sorted(adjacency.get(node, [])):
                 if nb in idx:
                     j = idx[nb]
                     rows.append(i); cols.append(j); data.append(-1.0)
@@ -161,17 +165,21 @@ def cfg_spectral_dim(adjacency: dict) -> float:
             rows.append(i); cols.append(i); data.append(float(d))
         L = sp.csr_matrix((data, (rows, cols)), shape=(n, n))
         k_small = min(6, n - 2)
-        vals_small, _ = spla.eigsh(L, k=k_small, which="SM", tol=1e-4, maxiter=1000)
+        rng = np.random.default_rng(seed)
+        v0_small = rng.standard_normal(n)
+        vals_small, _ = spla.eigsh(L, k=k_small, which="SM", tol=1e-4, maxiter=1000, v0=v0_small)
         vals_small = sorted(abs(v) for v in vals_small)
         lambda_1 = next((v for v in vals_small if v > 1e-8), None)
         if lambda_1 is None:
             return 2.0
-        vals_large, _ = spla.eigsh(L, k=1, which="LM", tol=1e-4, maxiter=1000)
+        v0_large = rng.standard_normal(n)
+        vals_large, _ = spla.eigsh(L, k=1, which="LM", tol=1e-4, maxiter=1000, v0=v0_large)
         lambda_max = abs(vals_large[0])
         if lambda_max / lambda_1 <= 1.0:
             return 2.0
         import math
         return 2.0 * math.log(n) / math.log(lambda_max / lambda_1)
+
     except Exception:
         import math
         degrees = [len(adjacency.get(nd, [])) for nd in nodes]

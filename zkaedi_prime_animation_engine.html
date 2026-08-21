@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ZKAEDI PRIME — ANIMATION ENGINE</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+  :root {
+    --cyan: #00ffff;
+    --magenta: #ff00ff;
+    --yellow: #ffff00;
+    --dark: #02060c;
+    --mid: #08111e;
+    --glow-cyan: 0 0 10px var(--cyan), 0 0 20px rgba(0,255,255,0.2);
+    --glow-mag: 0 0 10px var(--magenta), 0 0 20px rgba(255,0,255,0.2);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--dark);
+    color: var(--cyan);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+    transition: background 0.3s ease;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,255,0.01) 2px, rgba(0,255,255,0.01) 4px);
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  header {
+    text-align: center;
+    padding: 16px 0 6px;
+    border-bottom: 1px solid rgba(0,255,255,0.1);
+    background: rgba(2,6,12,0.6);
+    backdrop-filter: blur(10px);
+  }
+
+  h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(16px, 3.5vw, 24px);
+    font-weight: 900;
+    color: var(--cyan);
+    text-shadow: var(--glow-cyan);
+    letter-spacing: 5px;
+  }
+
+  .subtitle {
+    font-size: 10px;
+    color: var(--cyan);
+    opacity: 0.6;
+    letter-spacing: 2px;
+    margin-top: 3px;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 16px;
+    padding: 16px;
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+
+  #viewport-container {
+    position: relative;
+    background: var(--mid);
+    border: 1px solid rgba(0,255,255,0.15);
+    box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+    display: flex;
+    flex-direction: column;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 600px;
+    background: radial-gradient(circle at center, var(--mid) 0%, var(--dark) 100%);
+    cursor: crosshair;
+  }
+
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: 100%;
+  }
+
+  .card {
+    background: rgba(5,13,24,0.85);
+    border: 1px solid rgba(0,255,255,0.1);
+    padding: 12px 14px;
+    font-size: 11px;
+    line-height: 1.6;
+    backdrop-filter: blur(6px);
+  }
+
+  .card-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: var(--magenta);
+    text-shadow: var(--glow-mag);
+    margin-bottom: 8px;
+    border-bottom: 1px solid rgba(255,0,255,0.15);
+    padding-bottom: 4px;
+  }
+
+  .metric {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+
+  .metric-label { color: var(--cyan); opacity: 0.7; }
+  .metric-value { color: var(--yellow); font-weight: bold; }
+
+  .bar-container { margin-top: 6px; }
+  .bar-label { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 2px; }
+  
+  input[type="range"] {
+    width: 100%;
+    background: #08111e;
+    accent-color: var(--cyan);
+    margin-bottom: 4px;
+  }
+
+  .controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  button {
+    background: transparent;
+    border: 1px solid var(--cyan);
+    color: var(--cyan);
+    font-family: 'Orbitron', sans-serif;
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    padding: 8px 12px;
+    cursor: pointer;
+    text-shadow: var(--glow-cyan);
+    box-shadow: 0 0 6px rgba(0,255,255,0.1);
+    transition: all 0.2s;
+    flex: 1;
+  }
+
+  button:hover {
+    background: rgba(0,255,255,0.1);
+    box-shadow: 0 0 10px rgba(0,255,255,0.3);
+  }
+
+  button.mag {
+    border-color: var(--magenta);
+    color: var(--magenta);
+    text-shadow: var(--glow-mag);
+  }
+
+  button.mag:hover { background: rgba(255,0,255,0.1); box-shadow: 0 0 10px rgba(255,0,255,0.3); }
+
+  .timeline-bar {
+    background: #02060c;
+    border-top: 1px solid rgba(0,255,255,0.15);
+    padding: 8px 14px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .timeline-track {
+    position: relative;
+    height: 14px;
+    background: #08111e;
+    border: 1px solid rgba(0,255,255,0.1);
+    cursor: pointer;
+  }
+
+  .timeline-progress {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    background: rgba(0, 255, 255, 0.15);
+    border-right: 2px solid var(--cyan);
+    pointer-events: none;
+  }
+
+  .keyframe-node {
+    position: absolute;
+    top: -2px;
+    width: 14px;
+    height: 14px;
+    background: var(--magenta);
+    border: 1px solid #fff;
+    transform: rotate(45deg);
+    cursor: pointer;
+    z-index: 10;
+  }
+
+  .log {
+    background: #010408;
+    border: 1px solid rgba(0,255,255,0.05);
+    padding: 10px;
+    font-size: 10px;
+    height: 100px;
+    overflow-y: auto;
+    color: var(--cyan);
+    opacity: 0.8;
+    margin-top: 6px;
+  }
+
+  .log-line { padding: 1px 0; }
+  .log-line.prime { color: var(--cyan); text-shadow: var(--glow-cyan); }
+  .log-line.warn { color: var(--magenta); text-shadow: var(--glow-mag); }
+  .log-line.info { color: var(--yellow); }
+
+  .preset-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  select {
+    background: var(--mid);
+    color: var(--cyan);
+    border: 1px solid rgba(0,255,255,0.2);
+    font-family: inherit;
+    width: 100%;
+    font-size: 11px;
+    padding: 6px;
+    outline: none;
+    cursor: pointer;
+    margin-bottom: 6px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ZKAEDI PRIME — ANIMATION ENGINE</h1>
+  <div class="subtitle">MULTI-THREADED SWARM MOTION DYNAMICS | INTEGRATED IK RIGGING</div>
+</header>
+
+<div class="layout">
+  <div id="viewport-container">
+    <canvas id="viewport"></canvas>
+    
+    <!-- Timeline Playback -->
+    <div class="timeline-bar">
+      <button style="flex:none; width:60px;" id="playBtn" onclick="togglePlay()">PLAY</button>
+      <div class="timeline-track" id="timeTrack" onclick="scrubTimeline(event)">
+        <div class="timeline-progress" id="timeProgress" style="width: 0%"></div>
+      </div>
+      <button style="flex:none; width:120px;" onclick="addKeyframe()">+ KEYFRAME</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <!-- Presets -->
+    <div class="card">
+      <div class="card-title">SIMULATION PRESETS</div>
+      <div class="preset-grid">
+        <button onclick="loadPreset('maze')">HAMILTONIAN MAZE</button>
+        <button onclick="loadPreset('fhn')">FHN CHAOS GRID</button>
+        <button onclick="loadPreset('orbit')">QUANTUM ORBIT</button>
+        <button onclick="loadPreset('cascade')">BIFURCATION CASCADE</button>
+      </div>
+    </div>
+
+    <!-- Active Solver -->
+    <div class="card">
+      <div class="card-title">ZKAEDI PRIME SOLVER</div>
+      <select id="regime-select">
+        <option value="v3">v3 (Backtracking + Scars)</option>
+        <option value="v2">v2 (Scars + Noise)</option>
+        <option value="v1">v1 (Baseline - Inverted Field)</option>
+      </select>
+      
+      <div class="bar-title" style="margin-top:4px; font-size:10px; opacity:0.7;">CREATIVE STYLE THEME</div>
+      <select id="theme-select" onchange="changeTheme()">
+        <option value="glazed">GLAZED BRICK (Cyan / Magenta)</option>
+        <option value="anime">ANIME VIBRANT (Sakura Pink / Sky Blue)</option>
+        <option value="cosmic">COSMIC FLUID (Starlight Green / Purple)</option>
+        <option value="vapor">VAPORWAVE (Sunset Violet / Peach)</option>
+      </select>
+    </div>
+
+    <!-- Control Sliders -->
+    <div class="card">
+      <div class="card-title">FIELD PARAMETERS</div>
+      
+      <div class="bar-container">
+        <div class="bar-label"><span>η (eta - field coupling)</span><span id="val-eta" style="color:var(--yellow)">0.00</span></div>
+        <input type="range" id="param-eta" min="0.0" max="1.5" step="0.05" value="0.00">
+      </div>
+
+      <div class="bar-container">
+        <div class="bar-label"><span>ε (eps - noise amplitude)</span><span id="val-eps" style="color:var(--yellow)">0.05</span></div>
+        <input type="range" id="param-eps" min="0.0" max="0.2" step="0.01" value="0.05">
+      </div>
+
+      <div class="bar-container">
+        <div class="bar-label"><span>Kick (scar footprint strength)</span><span id="val-kick" style="color:var(--yellow)">2.0</span></div>
+        <input type="range" id="param-kick" min="0.0" max="5.0" step="0.1" value="2.0">
+      </div>
+
+      <div class="bar-container">
+        <div class="bar-label"><span>Solver Speed</span><span id="val-speed" style="color:var(--yellow)">8</span></div>
+        <input type="range" id="param-speed" min="1" max="10" step="1" value="8">
+      </div>
+
+      <div class="bar-container">
+        <div class="bar-label"><span>Camera View mode</span></div>
+        <select id="camera-select">
+          <option value="fixed">Fixed Flat Grid</option>
+          <option value="parallax">Parallax Tilt Tracking</option>
+          <option value="orbit">3D Orbit Rotate Mode</option>
+        </select>
+      </div>
+
+      <div class="bar-container" style="display: flex; gap: 12px; margin-top: 6px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--cyan);opacity:0.8;cursor:pointer;">
+          <input type="checkbox" id="param-mute" checked> Mute Synth
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--cyan);opacity:0.8;cursor:pointer;">
+          <input type="checkbox" id="param-vector" checked> Vector Field
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--cyan);opacity:0.8;cursor:pointer;">
+          <input type="checkbox" id="param-rig" checked> Draw IK Rig
+        </label>
+      </div>
+    </div>
+
+    <!-- Engine Telemetry -->
+    <div class="card">
+      <div class="card-title">ENGINE TELEMETRY</div>
+      <div class="metric"><span class="metric-label">Frame Caching</span><span class="metric-value" id="tel-caching" style="color: #00ff88;">0 / 1000</span></div>
+      <div class="metric"><span class="metric-label">Mass Invariants</span><span id="tel-mass" class="metric-value">0.000</span></div>
+      <div class="metric"><span class="metric-label">State Energy (H)</span><span id="tel-energy" class="metric-value">0.000</span></div>
+      <div class="metric"><span class="metric-label">Time Step (t)</span><span id="tel-t" class="metric-value">0</span></div>
+    </div>
+
+    <!-- Logs & Recording pipeline -->
+    <div class="card" style="padding:0;">
+      <div class="log" id="log">
+        <div class="log-line prime">// ZKAEDI PRIME Animation Engine initialized</div>
+        <div class="log-line info">// Multi-Threaded Web Worker active</div>
+        <div class="log-line">// Click on the canvas to seed custom attractors</div>
+      </div>
+    </div>
+
+    <!-- Lucky Reward Bounty Panel -->
+    <div class="card" id="bounty-card" style="border-color: var(--yellow); box-shadow: 0 0 10px rgba(255, 235, 59, 0.15);">
+      <div class="card-title" style="color: var(--yellow); text-shadow: 0 0 8px rgba(255, 235, 59, 0.4); border-bottom-color: rgba(255, 235, 59, 0.25);">LUCKY REWARD BOUNTY</div>
+      <div class="metric"><span class="metric-label" style="color: var(--yellow);">Active Tier</span><span class="metric-value" style="color: #ffffff; text-shadow: 0 0 5px #fff;">💎 Gold Researcher</span></div>
+      <div class="metric"><span class="metric-label">Reputation Score</span><span class="metric-value" style="color: #00ff88;">4,950 XP</span></div>
+      <button class="mag" style="width: 100%; margin-top: 8px; border-color: var(--yellow); color: var(--yellow); text-shadow: 0 0 5px var(--yellow);" onclick="triggerLuckyBonus()">★ REDEEM LUCKY BONUS</button>
+    </div>
+
+    <div class="controls">
+      <button onclick="downloadSequence()">EXPORT JSON</button>
+      <button class="mag" onclick="resetEngine()">↺ RESET ALL</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Inline Web Worker Code
+const workerCodeString = `
+  let solverGridSize = 25;
+  let cx = 12;
+  let cy = 12;
+  let t = 0;
+  let H_field = [];
+  let H_static = [];
+  let scars = [];
+  let grid = [];
+  let stack = [];
+  let on_path = new Set();
+  let sealed = new Set();
+  
+  let eta = 0.0;
+  let eps = 0.05;
+  let kick = 2.0;
+  let speed = 8;
+  let regime = 'v3';
+  const gamma = 0.3;
+  const beta = 0.1;
+  const seal = 100.0;
+  
+  let running = false;
+  let buffer = null;
+
+  function initGrid(preset) {
+    cx = Math.floor(solverGridSize / 2);
+    cy = Math.floor(solverGridSize / 2);
+    t = 0;
+    
+    grid = Array.from({length: solverGridSize}, () => new Array(solverGridSize).fill(1));
+    H_field = Array.from({length: solverGridSize}, () => new Array(solverGridSize).fill(0));
+    scars = Array.from({length: solverGridSize}, () => new Array(solverGridSize).fill(0));
+    stack = [[cx, cy]];
+    on_path = new Set([\`\${cx},\${cy}\`]);
+    sealed = new Set();
+    
+    for (let r = 0; r < solverGridSize; r++) {
+      for (let c = 0; c < solverGridSize; c++) {
+        const nr = r / solverGridSize;
+        const nc = c / solverGridSize;
+        if (preset === 'maze') {
+          const edge = (r === 0 || r === solverGridSize - 1 || c === 0 || c === solverGridSize - 1);
+          if (edge || (r % 3 === 0 && c % 4 !== 0 && c > 2 && c < solverGridSize - 3)) {
+            grid[r][c] = 0;
+          }
+          H_field[r][c] = Math.sin(nr * Math.PI * 3) * Math.cos(nc * Math.PI * 3) * 3.5;
+        } else if (preset === 'fhn') {
+          H_field[r][c] = Math.cos(nr * Math.PI * 5) * Math.sin(nc * Math.PI * 5) * 4.0;
+        } else if (preset === 'orbit') {
+          const dist = Math.sqrt(Math.pow(nr - 0.5, 2) + Math.pow(nc - 0.5, 2));
+          H_field[r][c] = dist * 8.0 - 4.5;
+        } else {
+          H_field[r][c] = Math.tan(nr * nc * Math.PI * 1.5);
+        }
+        H_field[r][c] = Math.max(-5, Math.min(5, H_field[r][c]));
+      }
+    }
+    H_static = H_field.map(r => [...r]);
+  }
+
+  function stepSolver() {
+    if (cx === 1 && cy === solverGridSize - 2) {
+      self.postMessage({ type: 'GOAL_REACHED', steps: t });
+      running = false;
+      return;
+    }
+    
+    if (cx >= 0 && cx < solverGridSize && cy >= 0 && cy < solverGridSize) {
+      if (regime === 'v2' || regime === 'v3') {
+        scars[cx][cy] += kick;
+      }
+    }
+    
+    let H_base = H_field.map(r => [...r]);
+    for (let r = 0; r < solverGridSize; r++) {
+      for (let c = 0; c < solverGridSize; c++) {
+        if (grid[r] && grid[r][c] === 0) continue;
+        if (regime === 'v2' || regime === 'v3') {
+          if (H_base[r] && H_static[r] && scars[r]) {
+            H_base[r][c] = H_static[r][c] + scars[r][c];
+          }
+        }
+      }
+    }
+    
+    let newH = H_field.map(r => [...r]);
+    for (let r = 0; r < solverGridSize; r++) {
+      for (let c = 0; c < solverGridSize; c++) {
+        if (grid[r] && grid[r][c] === 0) continue;
+        if (H_field[r]) {
+          const h = H_field[r][c];
+          const sigmoid = 1 / (1 + Math.exp(-gamma * h));
+          const noise = (Math.random() - 0.5) * 2 * (1 + beta * Math.abs(h));
+          if (newH[r] && H_base[r]) {
+            newH[r][c] = H_base[r][c] + eta * h * sigmoid + eps * noise;
+            newH[r][c] = Math.max(-5, Math.min(5, newH[r][c]));
+          }
+        }
+      }
+    }
+    H_field = newH;
+    
+    const dirs = [[0,1],[1,0],[0,-1],[-1,0]];
+    let moves = [];
+    for (const [dr, dc] of dirs) {
+      const nr = cx + dr, nc = cy + dc;
+      if (nr >= 0 && nr < solverGridSize && nc >= 0 && nc < solverGridSize && grid[nr] && grid[nr][nc] === 1) {
+        const key = \`\${nr},\${nc}\`;
+        if (regime === 'v3') {
+          if (!on_path.has(key) && !sealed.has(key)) {
+            if (H_field[nr]) {
+              moves.push([H_field[nr][nc], nr, nc]);
+            }
+          }
+        } else {
+          if (H_field[nr]) {
+            moves.push([H_field[nr][nc], nr, nc]);
+          }
+        }
+      }
+    }
+    
+    if (moves.length === 0) {
+      if (regime === 'v3') {
+        if (cx >= 0 && cx < solverGridSize && cy >= 0 && cy < solverGridSize && scars[cx]) {
+          sealed.add(\`\${cx},\${cy}\`);
+          scars[cx][cy] += seal;
+          on_path.delete(\`\${cx},\${cy}\`);
+        }
+        stack.pop();
+        if (stack.length === 0) {
+          self.postMessage({ type: 'TRAPPED' });
+          running = false;
+          return;
+        }
+        const prev = stack[stack.length - 1];
+        if (prev && prev.length === 2) {
+          cx = prev[0];
+          cy = prev[1];
+          self.postMessage({ type: 'BACKTRACK', x: cx, y: cy });
+          t++;
+        } else {
+          self.postMessage({ type: 'TRAPPED' });
+          running = false;
+          return;
+        }
+      } else {
+        self.postMessage({ type: 'TRAPPED' });
+        running = false;
+      }
+    } else {
+      moves.sort((a, b) => a[0] - b[0]);
+      if (moves[0] && moves[0].length === 3) {
+        const [, nr, nc] = moves[0];
+        cx = nr; cy = nc;
+        
+        if (regime === 'v3') {
+          stack.push([cx, cy]);
+          on_path.add(\`\${cx},\${cy}\`);
+        }
+        if (H_field[cx]) {
+          self.postMessage({ type: 'STEP', x: cx, y: cy, hVal: H_field[cx][cy] });
+        }
+        t++;
+      } else {
+        self.postMessage({ type: 'TRAPPED' });
+        running = false;
+      }
+    }
+  }
+
+  function sendState() {
+    const totalSize = 3 + solverGridSize * solverGridSize * 3;
+    if (!buffer || buffer.length !== totalSize) {
+      buffer = new Float32Array(totalSize);
+    }
+    buffer[0] = cx;
+    buffer[1] = cy;
+    buffer[2] = t;
+    
+    let idx = 3;
+    const N2 = solverGridSize * solverGridSize;
+    for (let r = 0; r < solverGridSize; r++) {
+      for (let c = 0; c < solverGridSize; c++) {
+        buffer[idx] = H_field[r][c];
+        buffer[idx + N2] = scars[r][c];
+        buffer[idx + 2 * N2] = grid[r][c];
+        idx++;
+      }
+    }
+    
+    self.postMessage({ type: 'STATE', buffer: buffer }, [buffer.buffer]);
+    buffer = null;
+  }
+
+  function loop() {
+    if (!running) return;
+    
+    const steps = speed === 10 ? 3 : speed >= 8 ? 2 : 1;
+    const delay = speed <= 4 ? (11 - speed) * 30 : 16;
+    
+    for (let i = 0; i < steps; i++) {
+      if (running) {
+        stepSolver();
+      }
+    }
+    
+    sendState();
+    setTimeout(loop, delay);
+  }
+
+  self.onmessage = function(e) {
+    const msg = e.data;
+    switch(msg.type) {
+      case 'INIT':
+        solverGridSize = msg.gridSize;
+        initGrid(msg.preset);
+        sendState();
+        break;
+      case 'START':
+        running = true;
+        loop();
+        break;
+      case 'PAUSE':
+        running = false;
+        break;
+      case 'INJECT_ATTRACTOR':
+        if (msg.row >= 0 && msg.row < solverGridSize && msg.col >= 0 && msg.col < solverGridSize) {
+          H_field[msg.row][msg.col] = -5.0;
+        }
+        sendState();
+        break;
+      case 'UPDATE_PARAMS':
+        eta = msg.eta;
+        eps = msg.eps;
+        kick = msg.kick;
+        speed = msg.speed;
+        regime = msg.regime;
+        break;
+      case 'RETURN_BUFFER':
+        buffer = msg.buffer;
+        break;
+      case 'RESET':
+        running = false;
+        initGrid(msg.preset);
+        sendState();
+        break;
+    }
+  };
+`;
+
+const canvas = document.getElementById('viewport');
+const ctx = canvas.getContext('2d');
+
+let W = canvas.width = canvas.offsetWidth;
+let H = canvas.height = 600;
+
+// Theme Palettes
+const themes = {
+  glazed: { bg: '#02060c', acc1: '#00ffff', acc2: '#ff00ff', acc3: '#ffff00', mid: '#08111e' },
+  anime: { bg: '#0c0612', acc1: '#ff7ebb', acc2: '#5ad3ff', acc3: '#ffc83b', mid: '#190e25' },
+  cosmic: { bg: '#020f12', acc1: '#00ff88', acc2: '#9d4edd', acc3: '#f77f00', mid: '#051f24' },
+  vapor: { bg: '#18002a', acc1: '#ff007f', acc2: '#00f3ff', acc3: '#fbd07c', mid: '#25083c' }
+};
+
+let activeTheme = 'glazed';
+
+function changeTheme() {
+  activeTheme = document.getElementById('theme-select').value;
+  const t = themes[activeTheme];
+  document.documentElement.style.setProperty('--cyan', t.acc1);
+  document.documentElement.style.setProperty('--magenta', t.acc2);
+  document.documentElement.style.setProperty('--yellow', t.acc3);
+  document.documentElement.style.setProperty('--dark', t.bg);
+  document.documentElement.style.setProperty('--mid', t.mid);
+  addLog(`// Aesthetic palette synced to: ${activeTheme.toUpperCase()}`, "info");
+}
+
+window.addEventListener('resize', () => {
+  W = canvas.width = canvas.offsetWidth;
+  H = canvas.height = 600;
+});
+
+// Main Thread Engine variables
+let playing = false;
+let t = 0;
+let keyframes = [];
+let currentTimelineTime = 0.0;
+let solverGridSize = 25;
+let cellWidth = W / solverGridSize;
+let cellHeight = H / solverGridSize;
+
+let grid = Array.from({length: solverGridSize}, () => new Array(solverGridSize).fill(1));
+let H_field = Array.from({length: solverGridSize}, () => new Array(solverGridSize).fill(0));
+let scars = Array.from({length: solverGridSize}, () => new Array(solverGridSize).fill(0));
+
+let cx = Math.floor(solverGridSize / 2);
+let cy = Math.floor(solverGridSize / 2);
+let walkerPath = [[cx, cy]];
+let activePreset = 'maze';
+let bonusParticles = [];
+let lastLuckyBonusTime = 0;
+
+// Ring Buffer History Frame Cache
+let historyBuffer = [];
+let maxHistoryFrames = 1000;
+
+// Inverse Kinematics Rig variables
+let shoulderX = W / 2;
+let shoulderY = H - 20;
+let elbowX = 0;
+let elbowY = 0;
+const L1 = 160; 
+const L2 = 160;
+
+// Camera state variables
+let cameraAngle = 0;
+let mouseX = W / 2;
+let mouseY = H / 2;
+
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  mouseX = e.clientX - rect.left;
+  mouseY = e.clientY - rect.top;
+});
+
+// Audio setup
+let audioCtx = null;
+let ambientOsc = null;
+let ambientGain = null;
+
+function initAudio() {
+  if (audioCtx) return;
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AudioContextClass();
+    
+    ambientOsc = audioCtx.createOscillator();
+    ambientOsc.type = 'sawtooth';
+    ambientOsc.frequency.setValueAtTime(55, audioCtx.currentTime);
+    
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(90, audioCtx.currentTime);
+    filter.Q.setValueAtTime(8, audioCtx.currentTime);
+    
+    ambientGain = audioCtx.createGain();
+    ambientGain.gain.setValueAtTime(0.015, audioCtx.currentTime);
+    
+    ambientOsc.connect(filter);
+    filter.connect(ambientGain);
+    ambientGain.connect(audioCtx.destination);
+    
+    ambientOsc.start();
+    
+    const lfo = audioCtx.createOscillator();
+    lfo.frequency.setValueAtTime(0.15, audioCtx.currentTime);
+    const lfoGain = audioCtx.createGain();
+    lfoGain.gain.setValueAtTime(20, audioCtx.currentTime);
+    lfo.connect(lfoGain);
+    lfoGain.connect(filter.frequency);
+    lfo.start();
+    
+    addLog("// Audio Synthesizer: running", "info");
+  } catch (e) {
+    console.error("Web Audio initialization skipped", e);
+  }
+}
+
+function playStepSound(hValue) {
+  const mute = document.getElementById('param-mute').checked;
+  if (!audioCtx || mute) return;
+  const freq = 180 + (hValue + 5) * 45;
+  
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(freq * 0.5, audioCtx.currentTime + 0.1);
+  
+  gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+  
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.15);
+}
+
+function playBacktrackSound() {
+  const mute = document.getElementById('param-mute').checked;
+  if (!audioCtx || mute) return;
+  
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(120, audioCtx.currentTime);
+  osc.frequency.linearRampToValueAtTime(45, audioCtx.currentTime + 0.2);
+  
+  gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.22);
+  
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.25);
+}
+
+function playGoalSound() {
+  const mute = document.getElementById('param-mute').checked;
+  if (!audioCtx || mute) return;
+  
+  const now = audioCtx.currentTime;
+  const notes = [220, 261.63, 329.63, 392, 523.25, 659.25, 783.99, 1046.5];
+  notes.forEach((freq, idx) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+    
+    gain.gain.setValueAtTime(0.08, now + idx * 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.35);
+    
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    
+    osc.start(now + idx * 0.08);
+    osc.stop(now + idx * 0.08 + 0.4);
+  });
+}
+
+function updateAmbientDrone(hValue) {
+  if (!audioCtx || !ambientOsc) return;
+  const targetFreq = 55 + (hValue + 5) * 2;
+  ambientOsc.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.25);
+}
+
+// Inline Worker Setup
+let solverWorker = null;
+
+function initWorker() {
+  if (solverWorker) solverWorker.terminate();
+  
+  const blob = new Blob([workerCodeString], { type: 'application/javascript' });
+  solverWorker = new Worker(URL.createObjectURL(blob));
+  
+  solverWorker.onerror = function(err) {
+    addLog(`// Web Worker Crashed: ${err.message}`, "warn");
+    addLog(`// Re-initializing execution thread...`, "info");
+    initWorker();
+  };
+  
+  solverWorker.onmessage = function(e) {
+    const msg = e.data;
+    switch(msg.type) {
+      case 'STATE':
+        const buf = msg.buffer;
+        cx = buf[0];
+        cy = buf[1];
+        t = buf[2];
+        
+        // Unpack grid arrays
+        let idx = 3;
+        const N2 = solverGridSize * solverGridSize;
+        for (let r = 0; r < solverGridSize; r++) {
+          for (let c = 0; c < solverGridSize; c++) {
+            H_field[r][c] = buf[idx];
+            scars[r][c] = buf[idx + N2];
+            grid[r][c] = buf[idx + 2 * N2];
+            idx++;
+          }
+        }
+        
+        // Cache this state copy to local timeline history ring buffer
+        if (playing) {
+          if (historyBuffer.length >= maxHistoryFrames) {
+            historyBuffer.shift();
+          }
+          historyBuffer.push(new Float32Array(buf));
+          document.getElementById('tel-caching').textContent = `${historyBuffer.length} / ${maxHistoryFrames}`;
+          
+          currentTimelineTime = Math.min(1.0, historyBuffer.length / maxHistoryFrames);
+          document.getElementById('timeProgress').style.width = `${currentTimelineTime * 100}%`;
+        }
+        
+        // Push coordinate path trace
+        if (walkerPath.length === 0 || walkerPath[walkerPath.length - 1][0] !== cx || walkerPath[walkerPath.length - 1][1] !== cy) {
+          walkerPath.push([cx, cy]);
+        }
+        
+        // Return ownership to solver worker
+        solverWorker.postMessage({ type: 'RETURN_BUFFER', buffer: buf }, [buf.buffer]);
+        draw();
+        break;
+        
+      case 'STEP':
+        if (walkerPath.length === 0 || walkerPath[walkerPath.length - 1][0] !== msg.x || walkerPath[walkerPath.length - 1][1] !== msg.y) {
+          walkerPath.push([msg.x, msg.y]);
+        }
+        playStepSound(msg.hVal);
+        updateAmbientDrone(msg.hVal);
+        break;
+        
+      case 'BACKTRACK':
+        if (walkerPath.length === 0 || walkerPath[walkerPath.length - 1][0] !== msg.x || walkerPath[walkerPath.length - 1][1] !== msg.y) {
+          walkerPath.push([msg.x, msg.y]);
+        }
+        playBacktrackSound();
+        break;
+        
+      case 'GOAL_REACHED':
+        addLog(`// GOAL REACHED in ${msg.steps} steps`, 'prime');
+        playGoalSound();
+        playing = false;
+        document.getElementById('playBtn').textContent = 'PLAY';
+        draw();
+        break;
+        
+      case 'TRAPPED':
+        addLog('// SOLVER TRAPPED — system arrested', 'warn');
+        playing = false;
+        document.getElementById('playBtn').textContent = 'PLAY';
+        draw();
+        break;
+    }
+  };
+
+  solverWorker.postMessage({ type: 'INIT', gridSize: solverGridSize, preset: activePreset });
+  syncParams();
+}
+
+function syncParams() {
+  if (!solverWorker) return;
+  const eta = parseFloat(document.getElementById('param-eta').value);
+  const eps = parseFloat(document.getElementById('param-eps').value);
+  const kick = parseFloat(document.getElementById('param-kick').value);
+  const speed = parseInt(document.getElementById('param-speed').value);
+  const regime = document.getElementById('regime-select').value;
+  
+  solverWorker.postMessage({
+    type: 'UPDATE_PARAMS',
+    eta: eta,
+    eps: eps,
+    kick: kick,
+    speed: speed,
+    regime: regime
+  });
+  
+  document.getElementById('val-eta').textContent = eta.toFixed(2);
+  document.getElementById('val-eps').textContent = eps.toFixed(2);
+  document.getElementById('val-kick').textContent = kick.toFixed(1);
+  document.getElementById('val-speed').textContent = speed;
+}
+
+// 2D Analytical Inverse Kinematics Rig Solver
+function solveIK(targetX, targetY) {
+  shoulderX = W / 2;
+  shoulderY = H - 10;
+  
+  const dx = targetX - shoulderX;
+  const dy = targetY - shoulderY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  
+  // Constrain target distance to reachable length
+  const maxReach = L1 + L2 - 4;
+  let tx = targetX;
+  let ty = targetY;
+  if (dist > maxReach) {
+    const angle = Math.atan2(dy, dx);
+    tx = shoulderX + maxReach * Math.cos(angle);
+    ty = shoulderY + maxReach * Math.sin(angle);
+  }
+  
+  const constrainedDist = Math.sqrt((tx - shoulderX)**2 + (ty - shoulderY)**2);
+  
+  // Cosine rule calculations
+  const cosElbow = (constrainedDist * constrainedDist - L1 * L1 - L2 * L2) / (2 * L1 * L2);
+  const elbowAngle = Math.acos(Math.max(-1.0, Math.min(1.0, cosElbow)));
+  
+  const baseToTargetAngle = Math.atan2(ty - shoulderY, tx - shoulderX);
+  const denom = 2 * L1 * constrainedDist;
+  const cosShoulder = denom === 0 ? 0 : (L1 * L1 + constrainedDist * constrainedDist - L2 * L2) / denom;
+  const shoulderAngleOffset = Math.acos(Math.max(-1.0, Math.min(1.0, cosShoulder)));
+  
+  const shoulderAngle = baseToTargetAngle - shoulderAngleOffset;
+  
+  elbowX = shoulderX + L1 * Math.cos(shoulderAngle);
+  elbowY = shoulderY + L1 * Math.sin(shoulderAngle);
+  if (isNaN(elbowX) || isNaN(elbowY)) {
+    elbowX = shoulderX;
+    elbowY = shoulderY - L1;
+  }
+}
+
+// Main Canvas Render Loop with Camera transformations
+function draw() {
+  cellWidth = W / solverGridSize;
+  cellHeight = H / solverGridSize;
+  
+  ctx.fillStyle = themes[activeTheme].bg;
+  ctx.fillRect(0, 0, W, H);
+  
+  ctx.save();
+  
+  const cameraMode = document.getElementById('camera-select').value;
+  if (cameraMode === 'parallax') {
+    // Parallax tracking moves with mouse coordinate offset
+    const tiltX = (mouseX - W/2) * 0.08;
+    const tiltY = (mouseY - H/2) * 0.08;
+    ctx.translate(tiltX, tiltY);
+  } else if (cameraMode === 'orbit') {
+    // Orbit rotate camera center
+    cameraAngle = Math.sin(Date.now() * 0.0006) * 0.08;
+    ctx.translate(W/2, H/2);
+    ctx.rotate(cameraAngle);
+    ctx.scale(0.96, 0.96);
+    ctx.translate(-W/2, -H/2);
+  }
+  
+  const activeT = themes[activeTheme];
+
+  // Draw Heatmap matrix
+  for (let r = 0; r < solverGridSize; r++) {
+    for (let c = 0; c < solverGridSize; c++) {
+      const h = H_field[r][c];
+      const norm = (h + 5) / 10;
+      
+      let fillCol;
+      if (norm < 0.5) {
+        const val = norm * 2;
+        fillCol = `rgba(0, ${Math.floor(val * 180)}, ${Math.floor(val * 255)}, 0.35)`;
+      } else {
+        const val = (norm - 0.5) * 2;
+        fillCol = `rgba(${Math.floor(val * 255)}, 0, ${Math.floor(val * 180)}, 0.35)`;
+      }
+      
+      ctx.fillStyle = fillCol;
+      ctx.fillRect(c * cellWidth, r * cellHeight, cellWidth, cellHeight);
+      
+      ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+      ctx.strokeRect(c * cellWidth, r * cellHeight, cellWidth, cellHeight);
+    }
+  }
+
+  // Draw Vector arrows
+  if (document.getElementById('param-vector').checked) {
+    ctx.strokeStyle = `${activeT.acc1}1a`;
+    ctx.fillStyle = `${activeT.acc1}33`;
+    ctx.lineWidth = 1;
+    for (let r = 0; r < solverGridSize; r++) {
+      for (let c = 0; c < solverGridSize; c++) {
+        if (grid[r][c] === 0) continue;
+        let bestN = null;
+        let bestH = H_field[r][c];
+        const dirs = [[0,1],[1,0],[0,-1],[-1,0]];
+        for (const [dr, dc] of dirs) {
+          const nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < solverGridSize && nc >= 0 && nc < solverGridSize && grid[nr][nc] === 1) {
+            if (H_field[nr][nc] < bestH) {
+              bestH = H_field[nr][nc];
+              bestN = [nr, nc];
+            }
+          }
+        }
+        if (bestN) {
+          const x1 = c * cellWidth + cellWidth/2;
+          const y1 = r * cellHeight + cellHeight/2;
+          const x2 = bestN[1] * cellWidth + cellWidth/2;
+          const y2 = bestN[0] * cellHeight + cellHeight/2;
+          
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.stroke();
+          
+          const dx = x2 - x1;
+          const dy = y2 - y1;
+          const angle = Math.atan2(dy, dx);
+          ctx.beginPath();
+          ctx.moveTo(x2, y2);
+          ctx.lineTo(x2 - 3 * Math.cos(angle - Math.PI/6), y2 - 3 * Math.sin(angle - Math.PI/6));
+          ctx.lineTo(x2 - 3 * Math.cos(angle + Math.PI/6), y2 - 3 * Math.sin(angle + Math.PI/6));
+          ctx.fill();
+        }
+      }
+    }
+  }
+
+  // Draw coordinate path history traces
+  if (walkerPath.length > 1) {
+    ctx.strokeStyle = activeT.acc1;
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = activeT.acc1;
+    ctx.beginPath();
+    ctx.moveTo(walkerPath[0][1] * cellWidth + cellWidth/2, walkerPath[0][0] * cellHeight + cellHeight/2);
+    for (let i = 1; i < walkerPath.length; i++) {
+      ctx.lineTo(walkerPath[i][1] * cellWidth + cellWidth/2, walkerPath[i][0] * cellHeight + cellHeight/2);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  // Draw current solver position (volumetric glow)
+  const targetScrX = cy * cellWidth + cellWidth/2;
+  const targetScrY = cx * cellHeight + cellHeight/2;
+  
+  const g = ctx.createRadialGradient(targetScrX, targetScrY, 2, targetScrX, targetScrY, 32);
+  g.addColorStop(0, '#ffffff');
+  g.addColorStop(0.3, activeT.acc2);
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(targetScrX, targetScrY, 32, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Mechanical Rig Inverse Kinematics arm
+  if (document.getElementById('param-rig').checked) {
+    solveIK(targetScrX, targetScrY);
+    
+    ctx.strokeStyle = activeT.acc2;
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = activeT.acc2;
+    
+    // Draw joints and bones
+    ctx.beginPath();
+    ctx.moveTo(shoulderX, shoulderY);
+    ctx.lineTo(elbowX, elbowY);
+    ctx.lineTo(targetScrX, targetScrY);
+    ctx.stroke();
+    
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(shoulderX, shoulderY, 6, 0, Math.PI*2);
+    ctx.arc(elbowX, elbowY, 5, 0, Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  // Update and draw bonus particles inside camera space
+  if (bonusParticles.length > 0) {
+    for (let i = bonusParticles.length - 1; i >= 0; i--) {
+      const p = bonusParticles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vx *= 0.96;
+      p.vy *= 0.96;
+      p.alpha -= p.decay;
+      
+      if (p.alpha <= 0) {
+        bonusParticles.splice(i, 1);
+        continue;
+      }
+      
+      ctx.save();
+      ctx.globalAlpha = p.alpha;
+      ctx.fillStyle = p.color;
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  ctx.restore();
+
+  // Telemetry
+  document.getElementById('tel-t').textContent = t;
+  document.getElementById('tel-energy').textContent = H_field[cx][cy].toFixed(3);
+  document.getElementById('tel-mass').textContent = (walkerPath.length * 0.05).toFixed(3);
+}
+
+function tick() {
+  draw();
+  requestAnimationFrame(tick);
+}
+
+function togglePlay() {
+  initAudio();
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+  playing = !playing;
+  document.getElementById('playBtn').textContent = playing ? 'PAUSE' : 'PLAY';
+  if (playing) {
+    solverWorker.postMessage({ type: 'START' });
+  } else {
+    solverWorker.postMessage({ type: 'PAUSE' });
+  }
+  addLog(`// Simulation state: ${playing ? "RUNNING" : "PAUSED"}`, "prime");
+}
+
+// Timeline scrubbing functionality
+function scrubTimeline(e) {
+  if (historyBuffer.length === 0) return;
+  playing = false;
+  document.getElementById('playBtn').textContent = 'PLAY';
+  solverWorker.postMessage({ type: 'PAUSE' });
+  
+  const rect = document.getElementById('timeTrack').getBoundingClientRect();
+  const clickX = e.clientX - rect.left;
+  const pct = Math.max(0.0, Math.min(1.0, clickX / rect.width));
+  
+  const frameIdx = Math.floor(pct * (historyBuffer.length - 1));
+  const cachedBuf = historyBuffer[frameIdx];
+  if (!cachedBuf) return;
+  
+  // Restore state
+  cx = cachedBuf[0];
+  cy = cachedBuf[1];
+  t = cachedBuf[2];
+  
+  let idx = 3;
+  const N2 = solverGridSize * solverGridSize;
+  for (let r = 0; r < solverGridSize; r++) {
+    for (let c = 0; c < solverGridSize; c++) {
+      H_field[r][c] = cachedBuf[idx];
+      scars[r][c] = cachedBuf[idx + N2];
+      grid[r][c] = cachedBuf[idx + 2 * N2];
+      idx++;
+    }
+  }
+  
+  // Truncate walker path mapping back to frame history index
+  walkerPath = walkerPath.slice(0, frameIdx + 1);
+  currentTimelineTime = pct;
+  document.getElementById('timeProgress').style.width = `${pct * 100}%`;
+  
+  draw();
+  addLog(`// Scrub to frame ${frameIdx} (${(pct * 100).toFixed(1)}%)`, "info");
+}
+
+function addKeyframe() {
+  const pct = currentTimelineTime;
+  keyframes.push(pct);
+  const marker = document.createElement('div');
+  marker.className = 'keyframe-node';
+  marker.style.left = `calc(${pct * 100}% - 7px)`;
+  document.getElementById('timeTrack').appendChild(marker);
+  addLog(`// Timeline Keyframe stored at index: ${(pct * 100).toFixed(1)}%`, "prime");
+  playGoalSound();
+}
+
+function loadPreset(presetName) {
+  initAudio();
+  activePreset = presetName;
+  playing = false;
+  document.getElementById('playBtn').textContent = 'PLAY';
+  
+  cx = Math.floor(solverGridSize / 2);
+  cy = Math.floor(solverGridSize / 2);
+  walkerPath = [[cx, cy]];
+  historyBuffer = [];
+  document.getElementById('tel-caching').textContent = `0 / ${maxHistoryFrames}`;
+  
+  solverWorker.postMessage({ type: 'RESET', preset: presetName });
+  syncParams();
+  addLog(`// Solver Preset loaded: ${presetName.toUpperCase()}`, "info");
+}
+
+function resetEngine() {
+  playing = false;
+  document.getElementById('playBtn').textContent = 'PLAY';
+  
+  cx = Math.floor(solverGridSize / 2);
+  cy = Math.floor(solverGridSize / 2);
+  walkerPath = [[cx, cy]];
+  historyBuffer = [];
+  document.getElementById('tel-caching').textContent = `0 / ${maxHistoryFrames}`;
+  
+  document.querySelectorAll('.keyframe-node').forEach(k => k.remove());
+  keyframes = [];
+  currentTimelineTime = 0;
+  document.getElementById('timeProgress').style.width = "0%";
+  
+  solverWorker.postMessage({ type: 'RESET', preset: activePreset });
+  syncParams();
+  addLog("// System cleared. Scars and grid paths neutralized.", "warn");
+}
+
+function triggerLuckyBonus() {
+  const now = Date.now();
+  if (now - lastLuckyBonusTime < 2500) {
+    addLog("// [LUCKY BONUS] Cool-down active. Please wait.", "warn");
+    return;
+  }
+  lastLuckyBonusTime = now;
+
+  initAudio();
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+  playGoalSound();
+  
+  const card = document.getElementById('bounty-card');
+  if (card) {
+    card.style.boxShadow = '0 0 25px rgba(255, 235, 59, 0.6)';
+    card.style.borderColor = '#ffffff';
+    setTimeout(() => {
+      card.style.boxShadow = '0 0 10px rgba(255, 235, 59, 0.15)';
+      card.style.borderColor = 'rgba(0, 255, 255, 0.1)';
+    }, 1000);
+  }
+
+  addLog("// [LUCKY BONUS] Redeeming 4,500 XP research credits...", "info");
+  addLog("// Tier Promoted: Gold Researcher! Milestone secured.", "prime");
+  
+  const startX = cy * cellWidth + cellWidth / 2;
+  const startY = cx * cellHeight + cellHeight / 2;
+  
+  const colors = [themes[activeTheme].acc1, themes[activeTheme].acc2, '#ffff00', '#ffffff'];
+  for (let i = 0; i < 120; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const velocity = 2 + Math.random() * 9;
+    bonusParticles.push({
+      x: startX,
+      y: startY,
+      vx: Math.cos(angle) * velocity,
+      vy: Math.sin(angle) * velocity,
+      size: 2 + Math.random() * 4,
+      alpha: 1.0,
+      decay: 0.01 + Math.random() * 0.015,
+      color: colors[Math.floor(Math.random() * colors.length)]
+    });
+  }
+}
+
+// Download sequence trace JSON pipeline (PRIME Rendering pipeline)
+function downloadSequence() {
+  if (walkerPath.length === 0) return;
+  const exportData = {
+    metadata: {
+      engine: "ZKAEDI PRIME Animation Engine v4.0",
+      preset: activePreset,
+      theme: activeTheme,
+      timestamp: new Date().toISOString()
+    },
+    keyframes: keyframes,
+    trajectory: walkerPath.map((pt, idx) => ({
+      frame: idx,
+      coord: pt,
+      t: idx
+    }))
+  };
+  
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `zpae_motion_sequence_${activePreset}.json`;
+  a.click();
+  addLog("// Motion sequence exported successfully to client.", "info");
+}
+
+function addLog(msg, cls = '') {
+  const log = document.getElementById('log');
+  const div = document.createElement('div');
+  div.className = `log-line ${cls}`;
+  div.textContent = msg;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+  while (log.children.length > 30) log.removeChild(log.firstChild);
+}
+
+// Canvas click coordinate attractor seeding
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const clickX = e.clientX - rect.left;
+  const clickY = e.clientY - rect.top;
+  
+  const col = Math.floor(clickX / cellWidth);
+  const row = Math.floor(clickY / cellHeight);
+  
+  if (row >= 0 && row < solverGridSize && col >= 0 && col < solverGridSize) {
+    solverWorker.postMessage({ type: 'INJECT_ATTRACTOR', row: row, col: col });
+    addLog(`// Seed gravitational well at grid block (${col}, ${row})`, "prime");
+    playStepSound(-5.0);
+  }
+});
+
+// Parameter triggers
+['param-eta', 'param-eps', 'param-kick', 'param-speed', 'regime-select'].forEach(id => {
+  document.getElementById(id).addEventListener('input', syncParams);
+  document.getElementById(id).addEventListener('change', syncParams);
+});
+
+document.getElementById('regime-select').addEventListener('change', (e) => {
+  const r = e.target.value;
+  if (r === 'v3') {
+    document.getElementById('param-eta').value = '0.00';
+    document.getElementById('val-eta').textContent = '0.00';
+  } else {
+    document.getElementById('param-eta').value = '0.40';
+    document.getElementById('val-eta').textContent = '0.40';
+  }
+  syncParams();
+});
+
+document.body.addEventListener('click', () => {
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+});
+
+// Setup & run
+initWorker();
+changeTheme();
+tick();
+</script>
+</body>
+</html>

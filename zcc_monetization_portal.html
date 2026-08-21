@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZCC Sovereign Monetization & Compiler Cloud Portal</title>
+    <style>
+        :root {
+            --bg-primary: #07090e;
+            --bg-secondary: #0d121d;
+            --bg-card: #131b2a;
+            --accent-cyan: #00f0ff;
+            --accent-purple: #9d4edd;
+            --accent-gold: #ffd166;
+            --text-main: #f0f6fc;
+            --text-muted: #8b949e;
+            --border-glow: rgba(0, 240, 255, 0.25);
+            --font-stack: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-main);
+            font-family: var(--font-stack);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        /* Hero Section */
+        .hero {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .hero h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 16px;
+        }
+
+        .hero p {
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        /* Grid */
+        .tiers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 24px;
+            margin-bottom: 60px;
+        }
+
+        .tier-card {
+            background: var(--bg-card);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 32px 24px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tier-card:hover {
+            transform: translateY(-6px);
+            border-color: var(--accent-cyan);
+            box-shadow: 0 12px 30px rgba(0, 240, 255, 0.15);
+        }
+
+        .tier-card.featured {
+            border: 2px solid var(--accent-gold);
+            box-shadow: 0 0 25px rgba(255, 209, 102, 0.2);
+        }
+
+        .tier-badge {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(255, 209, 102, 0.15);
+            color: var(--accent-gold);
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 20px;
+            text-transform: uppercase;
+        }
+
+        .tier-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .tier-price {
+            font-size: 2.2rem;
+            font-weight: 800;
+            margin-bottom: 20px;
+            color: var(--text-main);
+        }
+
+        .tier-price span {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .features-list {
+            list-style: none;
+            margin-bottom: 32px;
+            flex-grow: 1;
+        }
+
+        .features-list li {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .features-list li::before {
+            content: "✓";
+            color: var(--accent-cyan);
+            font-weight: 800;
+        }
+
+        .btn {
+            display: inline-block;
+            text-align: center;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            border: none;
+            width: 100%;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-cyan), #00a8ff);
+            color: #000;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+        }
+
+        .btn-gold {
+            background: linear-gradient(135deg, var(--accent-gold), #f39c12);
+            color: #000;
+        }
+
+        /* Metered Cloud API & Terminal Sandbox */
+        .interactive-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-top: 40px;
+        }
+
+        @media (max-width: 850px) {
+            .interactive-section {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel-box {
+            background: #090e17;
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .panel-box h3 {
+            font-size: 1.25rem;
+            margin-bottom: 16px;
+            color: var(--accent-cyan);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .form-control {
+            width: 100%;
+            background: #05070a;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-family: inherit;
+        }
+
+        .slider-container {
+            margin-bottom: 20px;
+        }
+
+        .slider-container input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent-cyan);
+        }
+
+        .calc-stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 0.95rem;
+        }
+
+        .calc-stat span:last-child {
+            font-weight: 700;
+            color: var(--accent-gold);
+        }
+
+        .terminal-box {
+            background: #05070a;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: #a9b7c6;
+            min-height: 220px;
+            overflow-x: auto;
+        }
+
+        .terminal-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 8px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .dot.red { background: #ff5f56; }
+        .dot.yellow { background: #ffbd2e; }
+        .dot.green { background: #27c93f; }
+
+        .terminal-title {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            margin-left: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="hero">
+            <h1>ZCC Sovereign Monetization & Cloud Engine</h1>
+            <p>Cryptographically verified compiler license tokens, usage-metered micro-tier passes, and hardware-fingerprinted zero-knowledge proof receipts.</p>
+        </div>
+
+        <div class="tiers-grid">
+            <!-- Community Tier -->
+            <div class="tier-card">
+                <div>
+                    <h3 class="tier-title">Community</h3>
+                    <div class="tier-price">$0 <span>/ forever</span></div>
+                    <ul class="features-list">
+                        <li>SystemV x86-64 ELF Emitter</li>
+                        <li>Standard AST & Basic Passes</li>
+                        <li>Full C99 Syntax Coverage</li>
+                        <li>Standard Stdio / Runtime Linking</li>
+                    </ul>
+                </div>
+                <button class="btn btn-primary" onclick="generateToken('COMMUNITY', 0)">Deploy Free</button>
+            </div>
+
+            <!-- Professional Tier -->
+            <div class="tier-card">
+                <div>
+                    <h3 class="tier-title">Professional</h3>
+                    <div class="tier-price">$49 <span>/ seat / mo</span></div>
+                    <ul class="features-list">
+                        <li>Deterministic PGO Engine (-fprofile-use)</li>
+                        <li>Autonomous SIMD Auto-Vectorizer (AVX2)</li>
+                        <li>Hardware FMA / CORDIC-01 Solver</li>
+                        <li>High-Throughput Inlining & SCCP</li>
+                    </ul>
+                </div>
+                <button class="btn btn-primary" onclick="generateToken('PROFESSIONAL', 49)">Select Pro</button>
+            </div>
+
+            <!-- Enterprise Tier -->
+            <div class="tier-card featured">
+                <div class="tier-badge">Most Popular</div>
+                <div>
+                    <h3 class="tier-title">Enterprise</h3>
+                    <div class="tier-price">$299 <span>/ team / mo</span></div>
+                    <ul class="features-list">
+                        <li>WASM32-WASI Edge Target Emitter</li>
+                        <li>RISC-V 64 (RV64GC) psABI Backend</li>
+                        <li>Windows PE32+ Direct Binary Emitter</li>
+                        <li>Container Hardening Invariant Shields</li>
+                    </ul>
+                </div>
+                <button class="btn btn-gold" onclick="generateToken('ENTERPRISE', 299)">Activate Enterprise</button>
+            </div>
+
+            <!-- Sovereign Tier -->
+            <div class="tier-card">
+                <div>
+                    <h3 class="tier-title">Sovereign</h3>
+                    <div class="tier-price">Custom <span>/ Dedicated</span></div>
+                    <ul class="features-list">
+                        <li>Hamiltonian Neural Energy Pass NAS</li>
+                        <li>Zero-Knowledge BN254 R1CS Prover</li>
+                        <li>106-bit dd_real Quad-Precision Vector Engine</li>
+                        <li>Unlimited Cloud Metered Credits & Receipts</li>
+                    </ul>
+                </div>
+                <button class="btn btn-primary" onclick="generateToken('SOVEREIGN', 999)">Contact Architect</button>
+            </div>
+        </div>
+
+        <div class="interactive-section">
+            <!-- Interactive Token & Proof Generator -->
+            <div class="panel-box">
+                <h3>⚡ Live Cryptographic Token Generator</h3>
+                <div class="form-group">
+                    <label>Selected Tier</label>
+                    <input type="text" id="tokenTier" class="form-control" value="ENTERPRISE" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Client Identity SHA-256</label>
+                    <input type="text" id="clientHash" class="form-control" value="0x7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Generated Bearer Token</label>
+                    <input type="text" id="bearerToken" class="form-control" value="ZCC$PAY$0002_ENT_TOKEN_f83b1657ff" readonly>
+                </div>
+                <button class="btn btn-primary" onclick="simulateCompilation()">Simulate Cloud Metered Compilation</button>
+            </div>
+
+            <!-- Real-time Cost & Speedup ROI Calculator -->
+            <div class="panel-box">
+                <h3>📊 Performance & Compute ROI Calculator</h3>
+                <div class="slider-container">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span style="font-size: 0.85rem; color: var(--text-muted);">Monthly Compilations</span>
+                        <span id="compCountVal" style="font-weight: 700; color: var(--accent-cyan);">25,000</span>
+                    </div>
+                    <input type="range" id="compSlider" min="1000" max="100000" step="1000" value="25000" oninput="updateRoi()">
+                </div>
+                <div class="calc-stat">
+                    <span>Cloud Metering Cost:</span>
+                    <span id="meteredCost">$45.00</span>
+                </div>
+                <div class="calc-stat">
+                    <span>Compute Hours Saved (SIMD/PGO):</span>
+                    <span id="hoursSaved">142.5 hrs</span>
+                </div>
+                <div class="calc-stat">
+                    <span>Estimated Infrastructure Savings:</span>
+                    <span id="infraSavings">$1,280.00 / mo</span>
+                </div>
+                <div class="calc-stat" style="border: none; margin-top: 8px;">
+                    <span>Net ROI Multiplier:</span>
+                    <span id="roiMult" style="font-size: 1.2rem; color: #27c93f;">28.4x</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="terminal-box" style="margin-top: 24px;">
+            <div class="terminal-header">
+                <span class="dot red"></span>
+                <span class="dot yellow"></span>
+                <span class="dot green"></span>
+                <span class="terminal-title">zcc-cloud-metering ~ interactive live log</span>
+            </div>
+            <div id="terminalLog">
+                <p><span style="color: var(--accent-cyan);">$</span> curl -X POST https://api.zcc.forge/v1/compile/meter \</p>
+                <p>&nbsp;&nbsp;&nbsp;&nbsp;-H "Authorization: Bearer ZCC$PAY$0002_ENT_TOKEN_f83b1657ff" \</p>
+                <p>&nbsp;&nbsp;&nbsp;&nbsp;-d '{"target": "riscv64-linux", "passes": ["pgo", "simd", "win64_pe"]}'</p>
+                <br>
+                <p style="color: #27c93f;">[HTTP 200 OK] Proof-of-Compilation Receipt Generated:</p>
+                <p style="color: var(--text-muted);">{ "receipt_id": "RCPT-984210", "credits_consumed": 30, "status": "VERIFIED", "proof_hash": "0x7a8f6d2b4c8e19b1" }</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function generateToken(tier, price) {
+            document.getElementById('tokenTier').value = tier;
+            const randHex = Math.random().toString(16).substring(2, 12);
+            document.getElementById('bearerToken').value = `ZCC$PAY$000${price > 0 ? (price > 100 ? (price > 500 ? 3 : 2) : 1) : 0}_${tier.substring(0, 3)}_${randHex}`;
+            
+            const term = document.getElementById('terminalLog');
+            term.innerHTML += `<br><p style="color: var(--accent-gold);">[TOKEN-MINT] Activated ${tier} Token: ${document.getElementById('bearerToken').value}</p>`;
+            term.scrollTop = term.scrollHeight;
+        }
+
+        function simulateCompilation() {
+            const token = document.getElementById('bearerToken').value;
+            const tier = document.getElementById('tokenTier').value;
+            const randReceipt = Math.floor(100000 + Math.random() * 900000);
+            const proofHash = '0x' + Array.from({length: 16}, () => Math.floor(Math.random()*16).toString(16)).join('');
+            
+            const term = document.getElementById('terminalLog');
+            term.innerHTML += `<br><p><span style="color: var(--accent-cyan);">$</span> zcc-cloud --token ${token} --target wasm32-wasi main.c</p>`;
+            term.innerHTML += `<p style="color: #27c93f;">[METER-OK] Verification Pass: 0 Violations (Tier: ${tier})</p>`;
+            term.innerHTML += `<p style="color: var(--text-muted);">{ "receipt_id": "RCPT-${randReceipt}", "status": "PROVEN", "proof_hash": "${proofHash}" }</p>`;
+            term.scrollTop = term.scrollHeight;
+        }
+
+        function updateRoi() {
+            const count = parseInt(document.getElementById('compSlider').value);
+            document.getElementById('compCountVal').innerText = count.toLocaleString();
+            
+            const cost = (count * 0.0018).toFixed(2);
+            const hours = (count * 0.0057).toFixed(1);
+            const savings = (count * 0.0512).toFixed(2);
+            const roi = (savings / (cost > 0 ? cost : 1)).toFixed(1);
+
+            document.getElementById('meteredCost').innerText = `$${cost}`;
+            document.getElementById('hoursSaved').innerText = `${hours} hrs`;
+            document.getElementById('infraSavings').innerText = `$${parseFloat(savings).toLocaleString()} / mo`;
+            document.getElementById('roiMult').innerText = `${roi}x`;
+        }
+    </script>
+</body>
+</html>

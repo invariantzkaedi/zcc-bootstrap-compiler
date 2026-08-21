@@ -1,0 +1,1448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZKAEDI PRIME // Procedural Oracle World Generator</title>
+    <style>
+        :root {
+            --cyan: #00ffcc;
+            --magenta: #ff007f;
+            --purple: #9b5de5;
+            --bg-void: #030308;
+            --bg-panel: rgba(8, 10, 20, 0.85);
+            --line: rgba(255, 0, 127, 0.2);
+            --text: #e8f8ff;
+            --muted: #8091a8;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: var(--bg-void);
+            color: var(--text);
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* Scanlines & Glow Overlay */
+        body::before {
+            content: " ";
+            display: block;
+            position: fixed;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+                        linear-gradient(90deg, rgba(0, 255, 204, 0.03), rgba(255, 0, 127, 0.02), rgba(155, 93, 229, 0.03));
+            z-index: 999;
+            background-size: 100% 4px, 6px 100%;
+            pointer-events: none;
+            opacity: 0.9;
+        }
+
+        .hud-panel {
+            position: absolute;
+            background: var(--bg-panel);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            box-shadow: 0 0 35px rgba(255, 0, 127, 0.08);
+            backdrop-filter: blur(12px);
+            z-index: 10;
+            padding: 18px;
+        }
+
+        #header-hud {
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .hud-title {
+            font-size: 20px;
+            font-weight: bold;
+            letter-spacing: 0.25em;
+            color: var(--magenta);
+            text-shadow: 0 0 10px rgba(255, 0, 127, 0.5);
+        }
+
+        .hud-subtitle {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 3px;
+        }
+
+        #controls-hud {
+            bottom: 20px;
+            left: 20px;
+            width: 330px;
+        }
+
+        #meta-hud {
+            bottom: 20px;
+            right: 20px;
+            width: 360px;
+            max-height: 40vh;
+            overflow-y: auto;
+        }
+
+        #inspect-hud {
+            top: 110px;
+            right: 20px;
+            width: 360px;
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .hud-section-title {
+            font-size: 12px;
+            font-weight: bold;
+            color: var(--cyan);
+            border-bottom: 1px solid rgba(0, 255, 204, 0.2);
+            padding-bottom: 4px;
+            margin-bottom: 8px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .control-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 11px;
+        }
+
+        .btn {
+            background: rgba(255, 0, 127, 0.05);
+            border: 1px solid var(--magenta);
+            color: var(--magenta);
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            background: rgba(255, 0, 127, 0.2);
+            box-shadow: 0 0 10px rgba(255, 0, 127, 0.3);
+        }
+
+        .btn-cyan {
+            border-color: var(--cyan);
+            color: var(--cyan);
+            background: rgba(0, 255, 204, 0.05);
+        }
+
+        .btn-cyan:hover {
+            background: rgba(0, 255, 204, 0.2);
+            box-shadow: 0 0 10px rgba(0, 255, 204, 0.3);
+        }
+
+        .btn-magenta {
+            background: rgba(255, 0, 127, 0.1);
+            color: var(--magenta);
+        }
+
+        .btn-active {
+            background: var(--cyan) !important;
+            color: #000 !important;
+            box-shadow: 0 0 12px var(--cyan);
+        }
+
+        .status-pill {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            background: rgba(0, 255, 204, 0.1);
+            color: var(--cyan);
+            border: 1px solid rgba(0, 255, 204, 0.3);
+        }
+
+        #loading-screen {
+            position: absolute;
+            inset: 0;
+            background: var(--bg-void);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.5s ease;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(255, 0, 127, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--magenta);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        #loading-text {
+            margin-top: 20px;
+            font-size: 14px;
+            letter-spacing: 0.2em;
+            color: var(--magenta);
+            text-shadow: 0 0 10px rgba(255, 0, 127, 0.3);
+        }
+
+        #loading-bar-container {
+            width: 300px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 2px;
+            margin-top: 15px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 0, 127, 0.1);
+        }
+
+        #loading-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--magenta), var(--cyan));
+            transition: width 0.3s ease;
+        }
+
+        .meta-item {
+            font-size: 10px;
+            margin-bottom: 6px;
+            border-left: 2px solid var(--cyan);
+            padding-left: 6px;
+            color: var(--text);
+            cursor: pointer;
+        }
+
+        .meta-item:hover {
+            border-left-color: var(--magenta);
+            background: rgba(255, 0, 127, 0.05);
+        }
+
+        .meta-item span {
+            color: var(--magenta);
+        }
+
+        /* Walk Help HUD Overlay */
+        #walk-help {
+            position: absolute;
+            top: 110px;
+            left: 20px;
+            width: 250px;
+            background: rgba(5, 5, 10, 0.85);
+            border: 1px dashed var(--cyan);
+            border-radius: 8px;
+            font-size: 10px;
+            padding: 10px 14px;
+            line-height: 1.5;
+            display: none;
+            pointer-events: none;
+        }
+    </style>
+    <!-- WebGL dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+</head>
+<body>
+    <div id="loading-screen">
+        <div class="spinner"></div>
+        <div id="loading-text">INGESTING ORACLE MASK MATRICES...</div>
+        <div id="loading-bar-container">
+            <div id="loading-bar"></div>
+        </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <!-- HEADER HUD -->
+    <div id="header-hud" class="hud-panel">
+        <div>
+            <div class="hud-title">ORACLE BATTLE FIELD</div>
+            <div class="hud-subtitle">FACTION SIMULATOR & PLAYER RANKS</div>
+        </div>
+        <div>
+            <span class="status-pill" id="tel-round-info">ROUND ACTIVE // CYAN VS MAGENTA</span>
+        </div>
+    </div>
+
+    <!-- CONTROLS HUD -->
+    <div id="controls-hud" class="hud-panel">
+        <div class="hud-section-title">Generation Rules</div>
+        <div class="control-row">
+            <span>Seed Value:</span>
+            <input type="number" id="gen-seed" value="777" style="width: 80px; background: rgba(0,0,0,0.5); border: 1px solid var(--line); color: var(--text); font-family: inherit; font-size: 11px; padding: 2px 4px;">
+            <button class="btn btn-cyan" id="btn-rand-seed" style="padding: 2px 6px;">Rand</button>
+        </div>
+        <div class="control-row">
+            <span>Mask Density:</span>
+            <input type="range" id="val-density" min="10" max="80" value="40" style="width: 120px;">
+        </div>
+        <div class="control-row">
+            <span>Terrain Height:</span>
+            <input type="range" id="val-height" min="5" max="80" value="25" style="width: 120px;">
+        </div>
+        <div class="control-row">
+            <span>Noise Scale:</span>
+            <input type="range" id="val-rough" min="10" max="100" value="45" style="width: 120px;">
+        </div>
+        <div class="control-row">
+            <span>Fog Level:</span>
+            <input type="range" id="val-fog" min="0" max="100" value="40" style="width: 120px;">
+        </div>
+        <div class="control-row">
+            <span>Hamiltonian (&eta;):</span>
+            <input type="range" id="val-eta" min="0" max="100" value="35" style="width: 120px;">
+        </div>
+        <div class="hud-section-title" style="margin-top: 12px;">Camera Rules</div>
+        <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+            <button class="btn btn-cyan btn-active" id="cam-orbit" style="flex: 1; font-size:10px;">Orbit</button>
+            <button class="btn btn-cyan" id="cam-cinematic" style="flex: 1; font-size:10px;">Cinematic</button>
+            <button class="btn btn-cyan" id="cam-walk" style="flex: 1; font-size:10px;">Walk</button>
+        </div>
+        <div style="display: flex; gap: 8px;">
+            <button class="btn btn-magenta" id="btn-regenerate" style="flex: 1;">Regenerate World</button>
+        </div>
+        <div style="margin-top: 10px; display: flex; gap: 8px;">
+            <button class="btn" style="flex: 1;" onclick="window.location.href='/viz/oracle_masks'">Mask Grid</button>
+            <button class="btn btn-cyan" style="flex: 1;" onclick="window.location.href='/'">Control Center</button>
+        </div>
+    </div>
+
+    <!-- WALK HELP HUD OVERLAY -->
+    <div id="walk-help">
+        <div style="color: var(--cyan); font-weight:bold; margin-bottom:4px; text-transform:uppercase;">Walk Mode Active</div>
+        - Move: <b>WASD</b> or <b>Arrow Keys</b><br>
+        - Rotate View: <b>Click & Drag mouse</b><br>
+        - Height is procedurally snapped to ground
+    </div>
+
+    <!-- INSPECTOR HUD -->
+    <div id="inspect-hud" class="hud-panel">
+        <div class="hud-section-title">Mask Inspector</div>
+        <div class="control-row"><span>Faction:</span> <span id="ins-faction" style="font-weight:bold;">NONE</span></div>
+        <div class="control-row"><span>ID / Name:</span> <span id="ins-id" style="color: var(--text);">None</span></div>
+        <div class="control-row"><span>Level / XP:</span> <span id="ins-level" style="color: var(--cyan);">Lvl 1 (0/100)</span></div>
+        <div class="control-row"><span>Rank Title:</span> <span id="ins-rank" style="color: var(--magenta);">Recruit (0 RP)</span></div>
+        <div class="control-row"><span>Weapon:</span> <span id="ins-weapon" style="color: var(--orange);">None</span></div>
+        <div class="control-row"><span>Health (HP):</span> <span id="ins-hp" style="color: var(--green);">100 / 100</span></div>
+        <div class="control-row"><span>Stats:</span> <span id="ins-stats" style="color: var(--muted); font-size:9px;">DMG: 10 | RNG: 25 | SPD: 1s</span></div>
+        <div style="margin-top: 10px; display: flex; gap: 8px;">
+            <button class="btn btn-cyan" style="flex: 1;" id="btn-focus">Focus Target</button>
+            <button class="btn" style="flex: 1;" id="btn-close-inspect">Clear</button>
+        </div>
+    </div>
+
+    <!-- METADATA HUD -->
+    <div id="meta-hud" class="hud-panel">
+        <div class="hud-section-title">Matrix Telemetry</div>
+        <div id="telemetry-info" style="font-size: 11px;">
+            <div class="control-row"><span>Cyan Kills:</span> <span id="tel-cyan-kills" style="color: var(--cyan); font-weight:bold;">0</span></div>
+            <div class="control-row"><span>Magenta Kills:</span> <span id="tel-magenta-kills" style="color: var(--magenta); font-weight:bold;">0</span></div>
+            <div class="control-row"><span>Active Spawns:</span> <span id="tel-placed">0</span></div>
+            <div class="control-row"><span>Active Seed:</span> <span id="tel-seed" style="color: var(--magenta);">777</span></div>
+            <div class="control-row"><span>Render FPS:</span> <span id="tel-fps">60</span></div>
+            <div class="hud-section-title" style="margin-top: 12px; font-size: 10px;">Battle & Log Telemetry</div>
+            <div id="tel-list" style="max-height: 150px; overflow-y: auto;">
+                <!-- Battle events listed here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const assetFiles = [
+            "Meshy_AI_One_equation_two_reg_0718022144_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0718022122_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0718021728_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0718021716_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0718021704_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0718021655_texture.glb",
+            "Meshy_AI_ZkaediOracleMask_Cer_0718021640_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0718021602_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0718021455_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0718021442_texture.glb",
+            "Meshy_AI_ZkaediOracleMask_Cer_0718021230_texture.glb",
+            "Meshy_AI_ZkaediOracleMask_Cer_0718021218_texture.glb",
+            "Meshy_AI_ZkaediOracleMask_Cer_0718004157_texture.glb",
+            "Meshy_AI_One_equation_two_reg_0717142918_generate.glb",
+            "Meshy_AI_One_equation_two_reg_0717142902_generate.glb",
+            "Meshy_AI_an_amazing_scene_neu_0717142835_generate.glb",
+            "Meshy_AI_an_amazing_scene_neu_0717142807_generate.glb",
+            "Meshy_AI_an_amazing_scene_neu_0717142735_generate.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121724_texture (1).glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713193537_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121637_texture (1).glb",
+            "Meshy_AI_ZkaediOracleMask_Cer_0713121627_texture (1).glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121838_texture.glb",
+            "Meshy_AI_ZkaediOracleMask_Cer_0713121812_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121748_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121739_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121734_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121724_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121716_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121706_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121652_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121645_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121637_texture.glb",
+            "Meshy_AI_ZkaediOracleMask_Cer_0713121627_texture.glb",
+            "Meshy_AI_ZkaediOracleMask_Cer_0713121615_texture.glb",
+            "Meshy_AI_ZkaediOracleMask_Cer_0713121608_texture.glb",
+            "Meshy_AI_ZkaediOracleMask_Cer_0713121602_texture.glb",
+            "Meshy_AI_ZkaediOracleMask_Cer_0713121554_texture.glb",
+            "Meshy_AI_ZkaediOracleMask_Cer_0713121544_texture.glb",
+            "Meshy_AI_ZkaediOracleMask_Cer_0713121536_texture.glb",
+            "Meshy_AI_ZkaediOracleMask_Cer_0713121525_texture.glb",
+            "Meshy_AI_ZkaediOracleMask_Cer_0713121457_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121437_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121432_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121423_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121409_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121402_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121348_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121336_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121239_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121215_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121210_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121103_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121035_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713121009_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713120953_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713120927_texture.glb",
+            "Meshy_AI_Oracle_Mask_Ceremoni_0713120820_texture.glb"
+        ];
+
+        const targetCount = assetFiles.length;
+
+        // Persistent Ranks logic
+        let persistentRanks = {};
+        try {
+            const saved = localStorage.getItem('zkaedi_mask_ranks');
+            if (saved) persistentRanks = JSON.parse(saved);
+        } catch (e) {}
+
+        function getRankTitle(rp) {
+            if (rp >= 25) return "Supreme Arch-Oracle";
+            if (rp >= 15) return "Elite Commander";
+            if (rp >= 8)  return "Vanguard Sentinel";
+            if (rp >= 3)  return "Order Knight";
+            return "Recruit";
+        }
+
+        function saveRanks() {
+            try {
+                localStorage.setItem('zkaedi_mask_ranks', JSON.stringify(persistentRanks));
+            } catch (e) {}
+        }
+
+        // Mulberry32 PRNG
+        function mulberry32(a) {
+            return function() {
+              let t = a += 0x6D2B79F5;
+              t = Math.imul(t ^ (t >>> 15), t | 1);
+              t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+              return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            }
+        }
+
+        let lcg = mulberry32(777);
+        function setSeed(s) {
+            lcg = mulberry32(s);
+            for (let i = 0; i < noiseGrid.length; i++) {
+                noiseGrid[i] = lcg();
+            }
+        }
+
+        // Noise Grid
+        const noiseGridSize = 256;
+        const noiseGrid = new Float32Array(noiseGridSize * noiseGridSize);
+
+        function noise2D(x, y) {
+            const X = Math.floor(x) & 255;
+            const Y = Math.floor(y) & 255;
+            const xf = x - Math.floor(x);
+            const yf = y - Math.floor(y);
+            const u = xf * xf * (3.0 - 2.0 * xf);
+            const v = yf * yf * (3.0 - 2.0 * yf);
+            const n00 = noiseGrid[Y * 256 + X];
+            const n10 = noiseGrid[Y * 256 + ((X + 1) & 255)];
+            const n01 = noiseGrid[((Y + 1) & 255) * 256 + X];
+            const n11 = noiseGrid[((Y + 1) & 255) * 256 + ((X + 1) & 255)];
+            return n00 + (n10 - n00) * u + ((n01 + (n11 - n01) * u) - (n00 + (n10 - n00) * u)) * v;
+        }
+
+        function fbm(x, y, octaves = 4) {
+            let value = 0.0;
+            let amplitude = 0.5;
+            let frequency = 1.0;
+            for (let i = 0; i < octaves; i++) {
+                value += amplitude * noise2D(x * frequency, y * frequency);
+                frequency *= 2.0;
+                amplitude *= 0.5;
+            }
+            return value;
+        }
+
+        // ThreeJS setup
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x030308);
+        scene.fog = new THREE.FogExp2(0x030308, 0.006);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 50, 100);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 - 0.02;
+
+        // Custom Shader Material matching the Hamiltonian style
+        const customMaterial = new THREE.ShaderMaterial({
+            uniforms: {
+                time: { value: 0 },
+                eta: { value: 0.35 },
+                beta: { value: 0.1 },
+                colorA: { value: new THREE.Color(1.0, 0.0, 0.5) }, // Magenta
+                colorB: { value: new THREE.Color(0.0, 1.0, 0.8) }  // Cyan
+            },
+            vertexShader: `
+                uniform float time;
+                uniform float eta;
+                uniform float beta;
+                varying vec3 vNormal;
+                varying vec3 vPosition;
+                void main() {
+                    vNormal = normalize(normalMatrix * normal);
+                    vec3 pos = position;
+                    float wave = sin(pos.y * 1.5 + time) * cos(pos.x * 1.5 + time) * eta * (1.0 - beta);
+                    pos += normal * wave * 0.15;
+                    vPosition = pos;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform float time;
+                uniform vec3 colorA;
+                uniform vec3 colorB;
+                varying vec3 vNormal;
+                varying vec3 vPosition;
+                void main() {
+                    float pulse = sin(time * 3.0) * 0.5 + 0.5;
+                    vec3 baseColor = colorA * (vNormal.z * 0.5 + 0.5);
+                    vec3 glowColor = colorB * pulse;
+                    float rim = 1.0 - max(0.0, dot(vNormal, vec3(0.0, 0.0, 1.0)));
+                    rim = pow(rim, 3.0);
+                    vec3 finalColor = mix(baseColor, glowColor, rim * 0.85);
+                    gl_FragColor = vec4(finalColor, 1.0);
+                }
+            `,
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+
+        // Lights
+        const dirLight = new THREE.DirectionalLight(0xff007f, 1.2);
+        dirLight.position.set(30, 80, 30);
+        scene.add(dirLight);
+
+        const pointLight = new THREE.PointLight(0x00ffcc, 1.5, 100);
+        pointLight.position.set(0, 20, 0);
+        scene.add(pointLight);
+
+        const ambLight = new THREE.AmbientLight(0x05020a);
+        scene.add(ambLight);
+
+        // Terrain Geometry
+        const worldSize = 400;
+        const terrainSegments = 120;
+        const terrainGeo = new THREE.PlaneGeometry(worldSize, worldSize, terrainSegments, terrainSegments);
+        terrainGeo.rotateX(-Math.PI / 2);
+
+        // Terrain material - neon grid lines shader
+        const terrainMat = new THREE.ShaderMaterial({
+            uniforms: {
+                color: { value: new THREE.Color(0x9b5de5) },
+                gridColor: { value: new THREE.Color(0x00ffcc) }
+            },
+            vertexShader: `
+                varying vec3 vPos;
+                void main() {
+                    vPos = position;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform vec3 color;
+                uniform vec3 gridColor;
+                varying vec3 vPos;
+                void main() {
+                    float coordX = vPos.x / 10.0;
+                    float coordZ = vPos.z / 10.0;
+                    float gridX = abs(fract(coordX - 0.5) - 0.5) / fwidth(coordX);
+                    float gridZ = abs(fract(coordZ - 0.5) - 0.5) / fwidth(coordZ);
+                    float line = min(gridX, gridZ);
+                    float isLine = 1.0 - min(line, 1.0);
+                    vec3 finalColor = mix(color * 0.12, gridColor, isLine * 0.35);
+                    gl_FragColor = vec4(finalColor, 0.9);
+                }
+            `,
+            transparent: true,
+            depthWrite: true
+        });
+
+        const terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
+        scene.add(terrainMesh);
+
+        // Load & Cache Models
+        const loader = new THREE.GLTFLoader();
+        const cachedGeometries = [];
+        let loadedCount = 0;
+
+        function loadAllAssets() {
+            assetFiles.forEach((file, index) => {
+                loader.load(`/assets/${file}`, function(gltf) {
+                    let targetMesh = null;
+                    gltf.scene.traverse((child) => {
+                        if (child.isMesh && !targetMesh) {
+                            targetMesh = child;
+                        }
+                    });
+
+                    if (targetMesh) {
+                        const geo = targetMesh.geometry.clone();
+                        geo.computeBoundingBox();
+                        const size = new THREE.Vector3();
+                        geo.boundingBox.getSize(size);
+                        const maxDim = Math.max(size.x, size.y, size.z);
+                        const scaleFactor = 4.0 / maxDim;
+                        geo.scale(scaleFactor, scaleFactor, scaleFactor);
+
+                        cachedGeometries.push({
+                            file: file,
+                            geometry: geo,
+                            vertexCount: geo.attributes.position.count
+                        });
+                    }
+
+                    loadedCount++;
+                    const pct = Math.floor((loadedCount / targetCount) * 100);
+                    document.getElementById('loading-bar').style.width = `${pct}%`;
+                    document.getElementById('tel-loaded').innerText = `${loadedCount} / ${targetCount}`;
+
+                    if (loadedCount >= targetCount) {
+                        setSeed(parseInt(document.getElementById('gen-seed').value) || 777);
+                        buildWorld();
+                        setTimeout(() => {
+                            document.getElementById('loading-screen').style.opacity = 0;
+                            setTimeout(() => {
+                                document.getElementById('loading-screen').style.display = 'none';
+                            }, 500);
+                        }, 500);
+                    }
+                }, undefined, function(err) {
+                    console.error("Error loading glb file: " + file, err);
+                    loadedCount++;
+                });
+            });
+        }
+
+        // Instantiated Objects Reference
+        let masks = [];
+        let items = [];
+        let projectiles = [];
+        let visualExplosions = [];
+        let cyanKills = 0;
+        let magentaKills = 0;
+
+        function getTerrainHeight(x, z, roughness, scale) {
+            return fbm(x * scale, z * scale, 4) * roughness;
+        }
+
+        function clearWorld() {
+            masks.forEach(m => scene.remove(m.group));
+            items.forEach(i => scene.remove(i.mesh));
+            projectiles.forEach(p => scene.remove(p.mesh));
+            visualExplosions.forEach(e => scene.remove(e.group));
+            masks = [];
+            items = [];
+            projectiles = [];
+            visualExplosions = [];
+            selectedModel = null;
+            document.getElementById('inspect-hud').style.display = 'none';
+        }
+
+        let terrainRoughness = 35;
+        let terrainScale = 0.007;
+
+        function updateTerrainGeometry(roughness, scale) {
+            const posAttr = terrainGeo.attributes.position;
+            for (let i = 0; i < posAttr.count; i++) {
+                const x = posAttr.getX(i);
+                const z = posAttr.getZ(i);
+                const h = getTerrainHeight(x, z, roughness, scale);
+                posAttr.setY(i, h);
+            }
+            terrainGeo.computeVertexNormals();
+            posAttr.needsUpdate = true;
+        }
+
+        function logEvent(msg, color = 'var(--cyan)') {
+            const logDiv = document.getElementById('tel-list');
+            const item = document.createElement('div');
+            item.className = 'meta-item';
+            item.style.borderLeftColor = color;
+            item.innerHTML = msg;
+            logDiv.insertBefore(item, logDiv.firstChild);
+            if (logDiv.children.length > 25) {
+                logDiv.removeChild(logDiv.lastChild);
+            }
+        }
+
+        function buildWorld() {
+            clearWorld();
+            cyanKills = 0;
+            magentaKills = 0;
+            document.getElementById('tel-cyan-kills').innerText = 0;
+            document.getElementById('tel-magenta-kills').innerText = 0;
+            document.getElementById('tel-round-info').innerText = "ROUND ACTIVE // CYAN VS MAGENTA";
+
+            const seedVal = parseInt(document.getElementById('gen-seed').value) || 777;
+            setSeed(seedVal);
+            document.getElementById('tel-seed').innerText = seedVal;
+
+            terrainRoughness = parseFloat(document.getElementById('val-height').value);
+            terrainScale = (parseFloat(document.getElementById('val-rough').value) / 10.0) * 0.0015;
+
+            updateTerrainGeometry(terrainRoughness, terrainScale);
+
+            const density = parseInt(document.getElementById('val-density').value);
+
+            if (cachedGeometries.length === 0) return;
+
+            for (let i = 0; i < density; i++) {
+                const x = (lcg() - 0.5) * (worldSize - 60);
+                const z = (lcg() - 0.5) * (worldSize - 60);
+                const y = getTerrainHeight(x, z, terrainRoughness, terrainScale);
+
+                const geoIdx = Math.floor(lcg() * cachedGeometries.length);
+                const cachedGeo = cachedGeometries[geoIdx];
+
+                // Faction styling Accents
+                const faction = (i % 2 === 0) ? 'CYAN' : 'MAGENTA';
+                const instMat = customMaterial.clone();
+                if (faction === 'CYAN') {
+                    instMat.uniforms.colorA.value = new THREE.Color(0.0, 0.8, 1.0);
+                    instMat.uniforms.colorB.value = new THREE.Color(0.0, 1.0, 0.5);
+                } else {
+                    instMat.uniforms.colorA.value = new THREE.Color(1.0, 0.0, 0.5);
+                    instMat.uniforms.colorB.value = new THREE.Color(0.5, 0.0, 1.0);
+                }
+
+                const mesh = new THREE.Mesh(cachedGeo.geometry, instMat);
+                
+                // Add faction colored ring underneath
+                const ringGeo = new THREE.RingGeometry(2.0, 2.3, 16);
+                ringGeo.rotateX(-Math.PI / 2);
+                const ringMat = new THREE.MeshBasicMaterial({
+                    color: faction === 'CYAN' ? 0x00ffcc : 0xff007f,
+                    side: THREE.DoubleSide
+                });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.position.y = -1.9;
+
+                const group = new THREE.Group();
+                group.add(mesh);
+                group.add(ring);
+                group.position.set(x, y + 2.5, z);
+                scene.add(group);
+
+                const rankPoints = persistentRanks[cachedGeo.file] || 0;
+
+                masks.push({
+                    id: `${cachedGeo.file.substring(9, 28)}-${Math.floor(lcg()*100)}`,
+                    filename: cachedGeo.file,
+                    faction: faction,
+                    level: 1,
+                    xp: 0,
+                    health: 100,
+                    maxHealth: 100,
+                    baseDamage: 12,
+                    baseRange: 24,
+                    baseSpeed: 1.0, // attack cooldown (sec)
+                    cooldown: 0,
+                    weapon: 'Fists',
+                    targetItem: null,
+                    targetEnemy: null,
+                    group: group,
+                    mesh: mesh,
+                    x: x,
+                    z: z,
+                    angle: lcg() * Math.PI * 2,
+                    state: 'WANDER'
+                });
+            }
+
+            document.getElementById('tel-placed').innerText = masks.length;
+            logEvent("Simulation initialized with factions divided. FHN field active.", "var(--cyan)");
+
+            // Spawn initial weapons
+            for (let k = 0; k < 12; k++) {
+                spawnRandomItem();
+            }
+        }
+
+        // Procedural Item Drops
+        function spawnRandomItem() {
+            if (items.length > 20) return;
+            const x = (Math.random() - 0.5) * (worldSize - 60);
+            const z = (Math.random() - 0.5) * (worldSize - 60);
+            const types = ['SABRE', 'BLASTER', 'SHIELD'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            
+            let geo, colorVal;
+            if (type === 'SABRE') {
+                geo = new THREE.CylinderGeometry(0.1, 0.8, 4.0, 6);
+                colorVal = 0x00ff66; // Green glowing sabre
+            } else if (type === 'BLASTER') {
+                geo = new THREE.ConeGeometry(0.8, 2.5, 6);
+                colorVal = 0xffaa00; // Orange core
+            } else {
+                geo = new THREE.TorusGeometry(1.0, 0.25, 6, 12);
+                colorVal = 0x9b5de5; // Purple shield matrix
+            }
+
+            const mat = new THREE.MeshBasicMaterial({ color: colorVal, wireframe: true });
+            const mesh = new THREE.Mesh(geo, mat);
+            const y = getTerrainHeight(x, z, terrainRoughness, terrainScale) + 2.5;
+            mesh.position.set(x, y, z);
+            scene.add(mesh);
+
+            items.push({
+                mesh: mesh,
+                x: x,
+                z: z,
+                type: type,
+                color: colorVal
+            });
+        }
+
+        // Particle Exploded Splats
+        function triggerExplosion(x, y, z, color) {
+            const count = 35;
+            const group = new THREE.Group();
+            const positions = new Float32Array(count * 3);
+            const velocities = [];
+
+            for (let i = 0; i < count; i++) {
+                positions[i*3] = 0;
+                positions[i*3+1] = 0;
+                positions[i*3+2] = 0;
+                velocities.push(new THREE.Vector3(
+                    (Math.random() - 0.5) * 12,
+                    Math.random() * 10 + 2,
+                    (Math.random() - 0.5) * 12
+                ));
+            }
+
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const mat = new THREE.PointsMaterial({
+                color: color,
+                size: 2.0,
+                transparent: true,
+                opacity: 1.0,
+                blending: THREE.AdditiveBlending
+            });
+
+            const points = new THREE.Points(geo, mat);
+            group.add(points);
+            group.position.set(x, y, z);
+            scene.add(group);
+
+            visualExplosions.push({
+                group: group,
+                velocities: velocities,
+                age: 0,
+                maxAge: 0.6 // seconds
+            });
+        }
+
+        // Click detection to select a mask
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let selectedModel = null;
+
+        window.addEventListener('click', (e) => {
+            // Ignore if clicked on UI
+            if (e.target.closest('.hud-panel') || e.target.closest('input') || e.target.closest('button')) return;
+
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(scene.children, true);
+
+            let found = null;
+            for (let hit of intersects) {
+                // Find parent group that holds our mask
+                let cur = hit.object;
+                while (cur && cur.parent !== scene) {
+                    cur = cur.parent;
+                }
+                if (cur) {
+                    const mask = masks.find(m => m.group === cur);
+                    if (mask) {
+                        found = mask;
+                        break;
+                    }
+                }
+            }
+
+            if (found) {
+                selectMask(found);
+            }
+        });
+
+        function selectMask(mask) {
+            selectedModel = mask;
+            document.getElementById('inspect-hud').style.display = 'block';
+            updateInspectorHUD();
+        }
+
+        function updateInspectorHUD() {
+            if (!selectedModel) return;
+            const m = selectedModel;
+            const rankPoints = persistentRanks[m.filename] || 0;
+            const title = getRankTitle(rankPoints);
+
+            document.getElementById('ins-faction').innerText = m.faction;
+            document.getElementById('ins-faction').style.color = m.faction === 'CYAN' ? 'var(--cyan)' : 'var(--magenta)';
+            document.getElementById('ins-id').innerText = m.id;
+            document.getElementById('ins-level').innerText = `Lvl ${m.level} (${m.xp}/100 XP)`;
+            document.getElementById('ins-rank').innerText = `${title} (${rankPoints} RP)`;
+            document.getElementById('ins-weapon').innerText = m.weapon;
+            document.getElementById('ins-hp').innerText = `${Math.round(m.health)} / ${m.maxHealth}`;
+
+            // Compute active stats
+            let activeDmg = m.baseDamage;
+            let activeRng = m.baseRange;
+            let activeSpd = m.baseSpeed;
+            if (m.weapon === 'Plasma Sabre') { activeDmg += 20; activeRng = 14; activeSpd = 0.5; }
+            if (m.weapon === 'Blaster Core') { activeDmg += 8; activeRng = 40; activeSpd = 0.8; }
+
+            document.getElementById('ins-stats').innerText = `DMG: ${activeDmg} | RNG: ${activeRng} | SPD: ${activeSpd}s`;
+        }
+
+        document.getElementById('btn-close-inspect').addEventListener('click', () => {
+            selectedModel = null;
+            document.getElementById('inspect-hud').style.display = 'none';
+        });
+
+        document.getElementById('btn-focus').addEventListener('click', () => {
+            if (selectedModel) {
+                controls.target.copy(selectedModel.group.position);
+                camera.position.copy(selectedModel.group.position).add(new THREE.Vector3(0, 25, 45));
+            }
+        });
+
+        // Keyboard & Mouse WALKING Controls
+        const keys = { w: false, a: false, s: false, d: false };
+        let camYaw = 0;
+        let camPitch = -0.2;
+        let isMouseDown = false;
+        let prevMousePos = { x: 0, y: 0 };
+        const walkSpeed = 65.0; // units/sec
+
+        window.addEventListener('keydown', (e) => {
+            const k = e.key.toLowerCase();
+            if (k === 'w' || k === 'arrowup') keys.w = true;
+            if (k === 's' || k === 'arrowdown') keys.s = true;
+            if (k === 'a' || k === 'arrowleft') keys.a = true;
+            if (k === 'd' || k === 'arrowright') keys.d = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            const k = e.key.toLowerCase();
+            if (k === 'w' || k === 'arrowup') keys.w = false;
+            if (k === 's' || k === 'arrowdown') keys.s = false;
+            if (k === 'a' || k === 'arrowleft') keys.a = false;
+            if (k === 'd' || k === 'arrowright') keys.d = false;
+        });
+
+        container.addEventListener('mousedown', (e) => {
+            if (activeCameraMode === 'WALK') {
+                isMouseDown = true;
+                prevMousePos = { x: e.clientX, y: e.clientY };
+            }
+        });
+
+        container.addEventListener('mousemove', (e) => {
+            if (activeCameraMode === 'WALK' && isMouseDown) {
+                const dx = e.clientX - prevMousePos.x;
+                const dy = e.clientY - prevMousePos.y;
+                camYaw -= dx * 0.004;
+                camPitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, camPitch - dy * 0.004));
+                prevMousePos = { x: e.clientX, y: e.clientY };
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            isMouseDown = false;
+        });
+
+        // Camera control toggles
+        let activeCameraMode = 'ORBIT'; // ORBIT, CINEMATIC, WALK
+
+        document.getElementById('cam-orbit').addEventListener('click', () => {
+            activeCameraMode = 'ORBIT';
+            document.getElementById('cam-orbit').classList.add('btn-active');
+            document.getElementById('cam-cinematic').classList.remove('btn-active');
+            document.getElementById('cam-walk').classList.remove('btn-active');
+            document.getElementById('walk-help').style.display = 'none';
+            controls.enabled = true;
+        });
+
+        document.getElementById('cam-cinematic').addEventListener('click', () => {
+            activeCameraMode = 'CINEMATIC';
+            document.getElementById('cam-cinematic').classList.add('btn-active');
+            document.getElementById('cam-orbit').classList.remove('btn-active');
+            document.getElementById('cam-walk').classList.remove('btn-active');
+            document.getElementById('walk-help').style.display = 'none';
+            controls.enabled = false;
+        });
+
+        document.getElementById('cam-walk').addEventListener('click', () => {
+            activeCameraMode = 'WALK';
+            document.getElementById('cam-walk').classList.add('btn-active');
+            document.getElementById('cam-orbit').classList.remove('btn-active');
+            document.getElementById('cam-cinematic').classList.remove('btn-active');
+            document.getElementById('walk-help').style.display = 'block';
+            controls.enabled = false;
+            
+            // Set walk variables facing center
+            camYaw = Math.atan2(camera.position.x, camera.position.z) + Math.PI;
+            camPitch = -0.15;
+        });
+
+        document.getElementById('btn-regenerate').addEventListener('click', () => {
+            buildWorld();
+        });
+
+        document.getElementById('btn-rand-seed').addEventListener('click', () => {
+            const r = Math.floor(Math.random() * 10000);
+            document.getElementById('gen-seed').value = r;
+            buildWorld();
+        });
+
+        document.getElementById('val-fog').addEventListener('input', (e) => {
+            scene.fog.density = (parseFloat(e.target.value) / 100.0) * 0.015;
+        });
+
+        document.getElementById('val-eta').addEventListener('input', (e) => {
+            customMaterial.uniforms.eta.value = (parseFloat(e.target.value) / 100.0) * 0.8;
+        });
+
+        // Resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Floating ambient sparks
+        const particleCount = 120;
+        const particleGeo = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+        for (let i = 0; i < particleCount * 3; i += 3) {
+            positions[i] = (Math.random() - 0.5) * worldSize;
+            positions[i+1] = Math.random() * 60 + 5;
+            positions[i+2] = (Math.random() - 0.5) * worldSize;
+        }
+        particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const particleMat = new THREE.PointsMaterial({
+            color: 0x00ffcc,
+            size: 1.2,
+            transparent: true,
+            opacity: 0.55,
+            blending: THREE.AdditiveBlending
+        });
+        const particles = new THREE.Points(particleGeo, particleMat);
+        scene.add(particles);
+
+        let roundOver = false;
+
+        function checkRoundEnd() {
+            if (roundOver) return;
+            if (cyanKills >= 10 || magentaKills >= 10) {
+                roundOver = true;
+                const winner = cyanKills >= 10 ? 'CYAN' : 'MAGENTA';
+                document.getElementById('tel-round-info').innerText = `ROUND OVER // ${winner} FACTION WINS!`;
+                logEvent(`ROUND COMPLETE. ${winner} faction reached 10 kills. Ranks distributed!`, winner === 'CYAN' ? 'var(--cyan)' : 'var(--magenta)');
+
+                // Award RP to winning faction masks
+                masks.forEach(m => {
+                    if (m.faction === winner) {
+                        const file = m.filename;
+                        persistentRanks[file] = (persistentRanks[file] || 0) + 1;
+                    }
+                });
+                saveRanks();
+
+                // Auto reset after 8 seconds
+                setTimeout(() => {
+                    roundOver = false;
+                    buildWorld();
+                }, 8000);
+            }
+        }
+
+        // Clock tracking for combat cycles
+        const clock = new THREE.Clock();
+        let lastSpawn = 0;
+        let lastFpsUpdate = 0;
+        let frameCount = 0;
+        let cinematicTime = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const dt = Math.min(0.05, clock.getDelta()); // cap delta to avoid frame jumps
+            const now = performance.now();
+
+            customMaterial.uniforms.time.value = now * 0.001;
+
+            // Animate items rotation
+            items.forEach(i => {
+                i.mesh.rotation.y += dt * 1.5;
+                i.mesh.position.y = getTerrainHeight(i.mesh.position.x, i.mesh.position.z, terrainRoughness, terrainScale) + 2.5 + Math.sin(now * 0.003 + i.x) * 0.5;
+            });
+
+            // Spawner ticks
+            if (now - lastSpawn > 5000) {
+                spawnRandomItem();
+                lastSpawn = now;
+            }
+
+            // Animate environment sparks
+            const pPositions = particles.geometry.attributes.position.array;
+            for (let i = 1; i < pPositions.length; i += 3) {
+                pPositions[i] -= dt * 6.0;
+                if (pPositions[i] < 0) pPositions[i] = 60 + Math.random() * 10;
+            }
+            particles.geometry.attributes.position.needsUpdate = true;
+
+            // Explosions animations
+            for (let j = visualExplosions.length - 1; j >= 0; j--) {
+                const expl = visualExplosions[j];
+                expl.age += dt;
+                
+                const pos = expl.group.children[0].geometry.attributes.position.array;
+                for (let k = 0; k < expl.velocities.length; k++) {
+                    const vel = expl.velocities[k];
+                    pos[k*3]   += vel.x * dt;
+                    pos[k*3+1] += vel.y * dt;
+                    pos[k*3+2] += vel.z * dt;
+                    
+                    vel.y -= 9.8 * dt; // gravity
+                }
+                expl.group.children[0].geometry.attributes.position.needsUpdate = true;
+                
+                // Fade out opacity
+                expl.group.children[0].material.opacity = 1.0 - (expl.age / expl.maxAge);
+
+                if (expl.age >= expl.maxAge) {
+                    scene.remove(expl.group);
+                    visualExplosions.splice(j, 1);
+                }
+            }
+
+            // Laser projectiles animations
+            for (let pIdx = projectiles.length - 1; pIdx >= 0; pIdx--) {
+                const proj = projectiles[pIdx];
+                proj.age += dt;
+                
+                // Move towards target
+                const dir = new THREE.Vector3().subVectors(proj.targetPos, proj.mesh.position);
+                const dist = dir.length();
+                if (dist < 3.0 || proj.age > 0.8) {
+                    // Explode sparks on hit
+                    triggerExplosion(proj.targetPos.x, proj.targetPos.y, proj.targetPos.z, proj.color);
+                    scene.remove(proj.mesh);
+                    projectiles.splice(pIdx, 1);
+                } else {
+                    dir.normalize();
+                    proj.mesh.position.addScaledVector(dir, 140 * dt);
+                }
+            }
+
+            // Masks Combat Loop simulation
+            masks.forEach(m => {
+                if (m.health <= 0) return;
+
+                if (m.cooldown > 0) m.cooldown -= dt;
+
+                // Simple state transitions
+                if (m.state === 'WANDER') {
+                    // Scan for items
+                    let closestItem = null;
+                    let minDist = 90;
+                    items.forEach(i => {
+                        const d = Math.hypot(m.group.position.x - i.x, m.group.position.z - i.z);
+                        if (d < minDist) {
+                            minDist = d;
+                            closestItem = i;
+                        }
+                    });
+
+                    if (closestItem) {
+                        m.targetItem = closestItem;
+                        m.state = 'SEEK_ITEM';
+                    } else {
+                        // Wander random walking
+                        m.angle += (Math.random() - 0.5) * 0.7;
+                        const mx = Math.sin(m.angle) * 12 * dt;
+                        const mz = Math.cos(m.angle) * 12 * dt;
+                        m.group.position.x = Math.max(-worldSize/2 + 20, Math.min(worldSize/2 - 20, m.group.position.x + mx));
+                        m.group.position.z = Math.max(-worldSize/2 + 20, Math.min(worldSize/2 - 20, m.group.position.z + mz));
+                        m.group.position.y = getTerrainHeight(m.group.position.x, m.group.position.z, terrainRoughness, terrainScale) + 2.5;
+                        m.group.rotation.y = m.angle;
+                    }
+                } 
+                else if (m.state === 'SEEK_ITEM') {
+                    const itemIdx = items.indexOf(m.targetItem);
+                    if (itemIdx === -1) {
+                        m.state = 'WANDER';
+                        m.targetItem = null;
+                    } else {
+                        const target = m.targetItem;
+                        const dx = target.x - m.group.position.x;
+                        const dz = target.z - m.group.position.z;
+                        const d = Math.hypot(dx, dz);
+                        if (d < 4.0) {
+                            // Pick up item
+                            if (target.type === 'SABRE') m.weapon = 'Plasma Sabre';
+                            if (target.type === 'BLASTER') m.weapon = 'Blaster Core';
+                            if (target.type === 'SHIELD') {
+                                m.health = Math.min(m.maxHealth, m.health + 45);
+                            }
+                            
+                            logEvent(`Mask [${m.id}] picked up <span>${target.type}</span>`, m.faction === 'CYAN' ? 'var(--cyan)' : 'var(--magenta)');
+                            if (selectedModel === m) updateInspectorHUD();
+
+                            scene.remove(target.mesh);
+                            items.splice(itemIdx, 1);
+                            
+                            m.state = 'WANDER';
+                            m.targetItem = null;
+                        } else {
+                            m.angle = Math.atan2(dx, dz);
+                            m.group.position.x += Math.sin(m.angle) * 20 * dt;
+                            m.group.position.z += Math.cos(m.angle) * 20 * dt;
+                            m.group.position.y = getTerrainHeight(m.group.position.x, m.group.position.z, terrainRoughness, terrainScale) + 2.5;
+                            m.group.rotation.y = m.angle;
+                        }
+                    }
+                }
+
+                // Scan for enemies
+                let closestEnemy = null;
+                let minEnemyDist = 70;
+                
+                // Weapon stats calculation
+                let range = m.baseRange;
+                let damage = m.baseDamage;
+                let cooldownSpeed = m.baseSpeed;
+                if (m.weapon === 'Plasma Sabre') { range = 14; damage += 20; cooldownSpeed = 0.5; }
+                if (m.weapon === 'Blaster Core') { range = 42; damage += 8; cooldownSpeed = 0.8; }
+
+                masks.forEach(other => {
+                    if (other === m || other.health <= 0 || other.faction === m.faction) return;
+                    const d = Math.hypot(other.group.position.x - m.group.position.x, other.group.position.z - m.group.position.z);
+                    if (d < minEnemyDist) {
+                        minEnemyDist = d;
+                        closestEnemy = other;
+                    }
+                });
+
+                if (closestEnemy) {
+                    if (minEnemyDist <= range) {
+                        // Engage Battle!
+                        m.state = 'BATTLE';
+                        m.group.rotation.y = Math.atan2(closestEnemy.group.position.x - m.group.position.x, closestEnemy.group.position.z - m.group.position.z);
+                        
+                        if (m.cooldown <= 0) {
+                            // Shoot laser line projectile
+                            const laserGeo = new THREE.CylinderGeometry(0.15, 0.15, 6, 4);
+                            laserGeo.rotateX(Math.PI / 2);
+                            const laserMat = new THREE.MeshBasicMaterial({ color: m.faction === 'CYAN' ? 0x00ffcc : 0xff007f });
+                            const laserMesh = new THREE.Mesh(laserGeo, laserMat);
+                            laserMesh.position.copy(m.group.position);
+                            scene.add(laserMesh);
+
+                            projectiles.push({
+                                mesh: laserMesh,
+                                targetPos: closestEnemy.group.position.clone(),
+                                color: m.faction === 'CYAN' ? 0x00ffcc : 0xff007f,
+                                age: 0
+                            });
+
+                            closestEnemy.health -= damage;
+                            m.cooldown = cooldownSpeed;
+
+                            if (closestEnemy.health <= 0) {
+                                // Defeated!
+                                logEvent(`[${m.id}] 💀 DEFEATED [${closestEnemy.id}]`, m.faction === 'CYAN' ? 'var(--cyan)' : 'var(--magenta)');
+                                triggerExplosion(closestEnemy.group.position.x, closestEnemy.group.position.y, closestEnemy.group.position.z, closestEnemy.faction === 'CYAN' ? 0x00ffcc : 0xff007f);
+                                scene.remove(closestEnemy.group);
+
+                                if (m.faction === 'CYAN') {
+                                    cyanKills++;
+                                    document.getElementById('tel-cyan-kills').innerText = cyanKills;
+                                } else {
+                                    magentaKills++;
+                                    document.getElementById('tel-magenta-kills').innerText = magentaKills;
+                                }
+
+                                checkRoundEnd();
+
+                                // Award XP
+                                m.xp += 50;
+                                if (m.xp >= 100) {
+                                    m.level++;
+                                    m.xp = 0;
+                                    m.maxHealth += 20;
+                                    m.health = m.maxHealth;
+                                    m.baseDamage += 3;
+                                    logEvent(`[${m.id}] 🌟 LEVELED UP TO LVL ${m.level}!`, 'var(--cyan)');
+                                }
+
+                                if (selectedModel === m || selectedModel === closestEnemy) {
+                                    updateInspectorHUD();
+                                }
+
+                                // Respawn enemy
+                                const enemyRef = closestEnemy;
+                                setTimeout(() => {
+                                    if (roundOver) return;
+                                    const rx = (Math.random() - 0.5) * (worldSize - 60);
+                                    const rz = (Math.random() - 0.5) * (worldSize - 60);
+                                    const ry = getTerrainHeight(rx, rz, terrainRoughness, terrainScale);
+                                    enemyRef.health = enemyRef.maxHealth;
+                                    enemyRef.level = 1;
+                                    enemyRef.xp = 0;
+                                    enemyRef.weapon = 'Fists';
+                                    enemyRef.group.position.set(rx, ry + 2.5, rz);
+                                    scene.add(enemyRef.group);
+                                }, 5000);
+                            }
+
+                            if (selectedModel === m || selectedModel === closestEnemy) {
+                                updateInspectorHUD();
+                            }
+                        }
+                    } else {
+                        // Chase Enemy
+                        const dx = closestEnemy.group.position.x - m.group.position.x;
+                        const dz = closestEnemy.group.position.z - m.group.position.z;
+                        m.angle = Math.atan2(dx, dz);
+                        m.group.position.x += Math.sin(m.angle) * 18 * dt;
+                        m.group.position.z += Math.cos(m.angle) * 18 * dt;
+                        m.group.position.y = getTerrainHeight(m.group.position.x, m.group.position.z, terrainRoughness, terrainScale) + 2.5;
+                        m.group.rotation.y = m.angle;
+                        m.state = 'WANDER';
+                    }
+                }
+            });
+
+            // Camera handling
+            if (activeCameraMode === 'ORBIT') {
+                controls.update();
+            } 
+            else if (activeCameraMode === 'CINEMATIC') {
+                cinematicTime += dt * 0.08;
+                const pathRadius = 130;
+                const cx = Math.sin(cinematicTime) * pathRadius;
+                const cz = Math.cos(cinematicTime * 0.75) * pathRadius;
+                const cy = getTerrainHeight(cx, cz, terrainRoughness, terrainScale) + 25;
+                camera.position.set(cx, cy, cz);
+
+                const targetTime = cinematicTime + 0.15;
+                const tx = Math.sin(targetTime) * pathRadius;
+                const tz = Math.cos(targetTime * 0.75) * pathRadius;
+                const ty = getTerrainHeight(tx, tz, terrainRoughness, terrainScale) + 6;
+                camera.lookAt(tx, ty, tz);
+            } 
+            else if (activeCameraMode === 'WALK') {
+                const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), camYaw);
+                const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), camYaw);
+                
+                const moveDirection = new THREE.Vector3(0, 0, 0);
+                if (keys.w) moveDirection.add(forward);
+                if (keys.s) moveDirection.sub(forward);
+                if (keys.d) moveDirection.add(right);
+                if (keys.a) moveDirection.sub(right);
+                
+                if (moveDirection.lengthSq() > 0) {
+                    moveDirection.normalize().multiplyScalar(walkSpeed * dt);
+                    camera.position.add(moveDirection);
+                }
+                
+                const groundY = getTerrainHeight(camera.position.x, camera.position.z, terrainRoughness, terrainScale);
+                camera.position.y = THREE.MathUtils.lerp(camera.position.y, groundY + 12, 0.12);
+                
+                const target = new THREE.Vector3(0, 0, -1)
+                    .applyAxisAngle(new THREE.Vector3(1, 0, 0), camPitch)
+                    .applyAxisAngle(new THREE.Vector3(0, 1, 0), camYaw)
+                    .add(camera.position);
+                camera.lookAt(target);
+            }
+
+            renderer.render(scene, camera);
+
+            // FPS telemetry update
+            frameCount++;
+            if (now - lastFpsUpdate >= 1000) {
+                document.getElementById('tel-fps').innerText = frameCount;
+                frameCount = 0;
+                lastFpsUpdate = now;
+            }
+        }
+
+        // Initial launch calls
+        initNoiseGrid();
+        loadAllAssets();
+        animate();
+    </script>
+</body>
+</html>
