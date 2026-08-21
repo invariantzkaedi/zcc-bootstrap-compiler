@@ -2334,22 +2334,22 @@ void codegen_expr(Compiler *cc, Node *node) {
       fprintf(cc->out, "    movq %%rdx, %%rax\n");
       fprintf(cc->out, ".Lsmodend%d:\n", lbl);
     } else {
-    if (node_type_unsigned(node)) {
+    if (backend_ops) {
+      backend_ops->emit_binary_op(cc, ND_MOD);
+    } else if (node_type_unsigned(node)) {
       if (node->type && type_size(node->type) <= 4) {
-        if (!backend_ops) fprintf(cc->out, "    xorl %%edx, %%edx\n    divl %%r11d\n");
+        fprintf(cc->out, "    xorl %%edx, %%edx\n    divl %%r11d\n");
       } else {
-        if (!backend_ops) fprintf(cc->out, "    xorq %%rdx, %%rdx\n    divq %%r11\n");
+        fprintf(cc->out, "    xorq %%rdx, %%rdx\n    divq %%r11\n");
       }
-      if (backend_ops) fprintf(cc->out, "    mov r0, r2\n");
-      else fprintf(cc->out, "    movq %%rdx, %%rax\n");
+      fprintf(cc->out, "    movq %%rdx, %%rax\n");
     } else {
       if (node->type && type_size(node->type) <= 4) {
-        if (!backend_ops) fprintf(cc->out, "    cltd\n    idivl %%r11d\n");
+        fprintf(cc->out, "    cltd\n    idivl %%r11d\n");
       } else {
-        if (!backend_ops) fprintf(cc->out, "    cqo\n    idivq %%r11\n");
+        fprintf(cc->out, "    cqo\n    idivq %%r11\n");
       }
-      if (backend_ops) fprintf(cc->out, "    mov r0, r2\n");
-      else fprintf(cc->out, "    movq %%rdx, %%rax\n");
+      fprintf(cc->out, "    movq %%rdx, %%rax\n");
     }
     } /* end safe_div else */
     ir_emit_binary_op(ND_MOD, node->type, lhs_ir, rhs_ir, node->line);
@@ -5712,7 +5712,7 @@ void codegen_func(Compiler *cc, Node *func) {
   if (getenv("ZCC_DEBUG_TRACE")) fprintf(stderr, "ENTER cc_func: %s\n", func->func_def_name);
   cc->used_regs_mask = allocate_registers(func);
   cc->is_forced_mask = 0;
-  if (backend_ops || ir_whitelisted(func->func_def_name)) {
+  if (g_ir_primary || backend_ops || ir_whitelisted(func->func_def_name)) {
       if ((cc->used_regs_mask & 0x1F) != 0x1F) cc->is_forced_mask = 1;
       cc->used_regs_mask = 0x1F;
   }
@@ -5915,8 +5915,10 @@ void codegen_func(Compiler *cc, Node *func) {
         }
         setenv("ZCC_IR_PARAM_NAMES", params_env, 1);
 
+        const char *pgo_prof = getenv("ZCC_USE_PROFILE");
         ir_ok = zcc_run_passes_emit_body_pgo(
-            ir_ast, NULL, func->func_def_name, cc->out, stack_size,
+            ir_ast, (pgo_prof && pgo_prof[0]) ? pgo_prof : NULL,
+            func->func_def_name, cc->out, stack_size,
             func->num_params, cc->func_end_label, cc->func_end_label);
 
         unsetenv("ZCC_IR_PARAM_NAMES");

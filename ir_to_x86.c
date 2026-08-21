@@ -1019,6 +1019,25 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out, int safe_div) {
                     store_result_xmm(out, n->dst, "%xmm0", n->type, ra);
                     break;
                 }
+                case IR_FMA:
+                case IR_FNMA: {
+                    int is_f32 = (n->type == IR_TY_F32);
+                    const char *op_suffix = is_f32 ? "ss" : "sd";
+                    load_operand_xmm(out, n->src1, "%xmm0", n->type, ra);
+                    load_operand_xmm(out, n->src2, "%xmm1", n->type, ra);
+                    if (n->label[0] != '\0') {
+                        load_operand_xmm(out, n->label, "%xmm2", n->type, ra);
+                    } else {
+                        fprintf(out, "    xorps %%xmm2, %%xmm2\n");
+                    }
+                    if (n->op == IR_FMA) {
+                        fprintf(out, "    vfmadd213%s %%xmm2, %%xmm1, %%xmm0\n", op_suffix);
+                    } else {
+                        fprintf(out, "    vfnmadd213%s %%xmm2, %%xmm1, %%xmm0\n", op_suffix);
+                    }
+                    store_result_xmm(out, n->dst, "%xmm0", n->type, ra);
+                    break;
+                }
                 case IR_ITOF: {
                     load_operand(out, n->src1, "%rax", ra);
                     ir_type_t src_ty = IR_TY_I64;

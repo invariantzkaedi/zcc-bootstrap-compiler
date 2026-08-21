@@ -74,6 +74,10 @@ static void thumb_emit_binary_op(Compiler *cc, int op) {
         case ND_DIV:
             fprintf(cc->out, "    bl __aeabi_idiv\n"); /* software divide */
             break;
+        case ND_MOD:
+            fprintf(cc->out, "    bl __aeabi_idivmod\n"); /* software divmod: r0=quot, r1=rem */
+            fprintf(cc->out, "    movs r0, r1\n");        /* return remainder in r0 */
+            break;
         case ND_BAND:
             fprintf(cc->out, "    ands r0, r0, r1\n");
             break;

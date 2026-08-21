@@ -46,34 +46,37 @@ struct ArenaBlock {
 };
 
 struct StructField {
-    char name[MAX_IDENT];
     Type *type;
+    StructField *next;
     int offset;
+    int requested_align;
     int is_bitfield;
     int bit_offset;
     int bit_size;
-    StructField *next;
+    int _pad;
+    char name[MAX_IDENT];
 };
 
 struct Type {
     unsigned long long magic;
     unsigned long long alloc_id;
+    Type *base;
+    Type *ret;
+    Type **params;
+    StructField *fields;
     int kind;
     int size;
     int align;
-    Type *base;
     int array_len;
-    Type *ret;
-    Type **params;
     int num_params;
     int is_variadic;
-    char tag[MAX_IDENT];
-    StructField *fields;
     int is_complete;
     int is_packed;
     int explicit_align;
+    int pragma_pack;
     int is_tbfp;
     int is_volatile;
+    char tag[MAX_IDENT];
 };
 
 struct StringEntry {
@@ -83,19 +86,24 @@ struct StringEntry {
 };
 
 struct Symbol {
-    char name[MAX_IDENT];
+    long long enum_val;
     Type *type;
+    char *assigned_reg;
+    Symbol *next;
+    int sym_id;
     int is_local;
     int is_global;
     int is_typedef;
     int is_enum_const;
-    long long enum_val;
+    int is_param;
+    int is_tls;
+    int storage_class;
     int stack_offset;
-    char asm_name[MAX_IDENT];
-    char *assigned_reg;
+    int requested_align;
     int live_start;
     int live_end;
-    Symbol *next;
+    char name[MAX_IDENT];
+    char asm_name[MAX_IDENT];
 };
 
 struct Scope {
@@ -106,6 +114,7 @@ struct Scope {
 struct FuncParams {
     char names[MAX_PARAMS][MAX_IDENT];
     Type *types[MAX_PARAMS];
+    Symbol *syms[MAX_PARAMS];
 };
 
 struct Node {
@@ -116,51 +125,54 @@ struct Node {
     Type *type;
     long long int_val;
     double f_val;
-    int str_id;
-    char name[MAX_IDENT];
     Symbol *sym;
     Node *lhs;
     Node *rhs;
-    char func_name[MAX_IDENT];
     Node **args;
-    int num_args;
     Node *cond;
     Node *then_body;
     Node *else_body;
     Node *init;
     Node *inc;
     Node **stmts;
-    int num_stmts;
-    char func_def_name[MAX_IDENT];
     Type *func_type;
     struct FuncParams *func_params;
-    int num_params;
     Node *body;
-    int stack_size;
-    char member_name[MAX_IDENT];
-    int member_offset;
-    int member_size;
     Node **cases;
-    int num_cases;
     Node *default_case;
     long long case_val;
     Node *case_body;
-    char label_name[MAX_IDENT];
-    int compound_op;
     Type *cast_type;
+    Node *initializer;
+    char *asm_string;
+    Node *next;
+    int str_id;
+    int num_args;
+    int num_stmts;
+    int num_params;
+    int stack_size;
+    int member_offset;
+    int member_size;
+    int num_cases;
+    int compound_op;
     int is_static;
     int is_extern;
-    Node *initializer;
+    int is_tls;
     int is_bitfield;
     int bit_offset;
     int bit_size;
-    char *asm_string;
     int asm_tier;
-    Node *next;
+    char name[MAX_IDENT];
+    char func_name[MAX_IDENT];
+    char func_def_name[MAX_IDENT];
+    char member_name[MAX_IDENT];
+    char label_name[MAX_IDENT];
 };
 
 struct Compiler {
+    ArenaBlock arena;
     int verbose;
+    int next_sym_id;
     char *source;
     int source_len;
     int pos;
@@ -214,13 +226,17 @@ struct Compiler {
     int switch_end_label;
     char current_func[MAX_IDENT];
     int func_end_label;
-    ArenaBlock arena;
     int errors;
     int local_offset;
     int current_is_static;
+    int current_is_tls;
+    int current_requested_align;
     int pending_packed;
     int pending_aligned_n;
     int pending_tbfp;
+    int pragma_pack_stack[64];
+    int pragma_pack_stack_ptr;
+    int current_pragma_pack;
     int debug_abi_classes;
     int abi_scratch_offset;
     int sret_offset;
@@ -232,6 +248,7 @@ struct Compiler {
     int asm_report_passthrough;
     int asm_report_warn;
     int asm_report_unsupported;
+    int safe_div;
 };
 
 /* ========================================================================= */

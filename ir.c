@@ -69,6 +69,8 @@ static const char *OP_NAMES[] = {
     "fsub",
     "fmul",
     "fdiv",
+    "fma",
+    "fnma",
     "itof",
     "ftoi",
     "fneg",

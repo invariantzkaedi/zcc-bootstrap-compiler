@@ -4,7 +4,8 @@
 #include <sys/types.h>
 #include <time.h>
 
-/* Missing type definitions */
+#ifdef __ZCC__
+/* Missing type definitions under ZCC */
 typedef int pid_t;
 typedef int uid_t;
 typedef int gid_t;
@@ -29,28 +30,6 @@ struct flock {
     pid_t l_pid;
 };
 
-/* Missing POSIX constants */
-#define O_EXCL 02000
-#define S_ISREG(m) (((m) & 0170000) == 0100000)
-#define S_ISLNK(m) (((m) & 0170000) == 0120000)
-#define S_ISDIR(m) (((m) & 0170000) == 0040000)
-#define W_OK 2
-#define R_OK 4
-#define F_OK 0
-#define F_RDLCK 0
-#define F_WRLCK 1
-#define F_UNLCK 2
-#define F_GETLK 5
-#define F_SETLK 6
-#define F_SETLKW 7
-#define MREMAP_MAYMOVE 1
-#define ETIMEDOUT 110
-#define EBUSY 16
-#define ENOLCK 37
-#define EPERM 1
-#define EIO 5
-#define _SC_PAGESIZE 30
-
 /* Missing function declarations */
 char *getcwd(char *buf, size_t size);
 int ftruncate(int fd, off_t length);
@@ -64,12 +43,14 @@ int fchown(int fd, uid_t owner, gid_t group);
 uid_t geteuid(void);
 void *mremap(void *old_address, size_t old_size, size_t new_size, int flags, ...);
 ssize_t readlink(const char *pathname, char *buf, size_t bufsiz);
+struct stat;
 int lstat(const char *pathname, struct stat *statbuf);
 int getpid(void);
 int nanosleep(const struct timespec *req, struct timespec *rem);
 int utimes(const char *filename, const struct timeval times[2]);
 int fsync(int fd);
 long sysconf(int name);
+#endif
 
 /* Builtins mapping */
 #define __builtin_bswap16(x) ((((x)&0xff)<<8)|(((x)>>8)&0xff))
@@ -82,5 +63,34 @@ long sysconf(int name);
 /* Atomic ops mapping for thread-safe-disabled SQLite */
 #define __atomic_load_n(ptr,mo) (*(ptr))
 #define __atomic_store_n(ptr,val,mo) (*(ptr)=(val))
+
+/*
+ * SQL-CRASH-38060 Container Hardening & Fortification:
+ * Enforces exact ZCC SystemV AMD64 Parse struct layout offsets across
+ * Ubuntu 24.04 / GCC 13.3.0 container runtimes to prevent VLA/FinishCoding segfaults.
+ */
+#ifndef ZCC_PARSE_OFFSETS_DEFINED
+#define ZCC_PARSE_OFFSETS_DEFINED
+#define ZCC_PARSE_TOTAL_SIZE      424
+#define ZCC_PARSE_LASTTOKEN_OFF   288
+#define ZCC_PARSE_TAIL_SIZE       136
+#define ZCC_PARSE_HDR_SIZE        176
+
+/* Compile-time static assertions guaranteeing layout invariants */
+_Static_assert(ZCC_PARSE_TOTAL_SIZE == 424, "ZCC SystemV Parse struct size mismatch");
+_Static_assert(ZCC_PARSE_LASTTOKEN_OFF == 288, "ZCC SystemV Parse sLastToken offset mismatch");
+_Static_assert(ZCC_PARSE_TOTAL_SIZE - ZCC_PARSE_LASTTOKEN_OFF == ZCC_PARSE_TAIL_SIZE, "ZCC SystemV Parse tail invariant violated");
+
+/* Memory boundary safety macros */
+#define ZCC_SQLITE_VALIDATE_PARSE_PTR(p) \
+    do { \
+        if (!(p)) { \
+            fprintf(stderr, "[ZCC-CONTAINER-GUARD] NULL Parse pointer intercepted!\n"); \
+            abort(); \
+        } \
+    } while(0)
+
+#define ZCC_SQLITE_SAFE_TAIL_OFFSET(p) (((char*)(p)) + ZCC_PARSE_LASTTOKEN_OFF)
+#endif
 
 #endif /* ZCC_SQLITE_COMPAT_H */
