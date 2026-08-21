@@ -1,3 +1,1 @@
 # Known failures — tolerated
-smoke_compiler_passes
-smoke_part4

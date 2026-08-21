@@ -63,8 +63,7 @@ def run_fuzz_validation():
             cid = compute_candidate_id(full_cand)
             full_cand["candidate_id"] = cid
             
-            with open(fuzz_tmp_path, "w") as fh:
-                json.dump(full_cand, fh, indent=2)
+            atomic_write_json(fuzz_tmp_path, full_cand)
                 
             runner_path = os.path.join(LAB_DIR, "runner", "run_candidate.py")
             p_exec = subprocess.run(

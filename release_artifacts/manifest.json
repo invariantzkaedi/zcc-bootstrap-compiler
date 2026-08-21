@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "bundle_hash": "sha256:1f28d15620e5a0821fdf2d8bde35c7c8ae37dd944aec065c8e459d188652ddb8",
+  "bundle_hash": "sha256:75b72a9b319496e11b5e521fb63ef58ff61e880fde7c3b70769da431e24f87a5",
   "excluded_from_bundle_hash": [
     "release_artifacts/manifest.json"
   ],
@@ -56,6 +56,18 @@
     {
       "path": "release_artifacts/alert_1783718141_ZKAEDI_UNKNOWNCODE_JACKPOT.json",
       "sha256": "sha256:93bba7e9d59ab829cd1df5684213dae7659eed699d3e4dc67241301a14fb438e"
+    },
+    {
+      "path": "release_artifacts/zcc",
+      "sha256": "sha256:fbece907dee17fe03d06de7ddd508258d0bfa53196acc5e96315019305f1194b"
+    },
+    {
+      "path": "release_artifacts/zcc-opt",
+      "sha256": "sha256:a64561740b9950deaf17dc8195813e3b10c19b7eadfcbe3ee78e33e8678c0360"
+    },
+    {
+      "path": "release_artifacts/zcc-verify",
+      "sha256": "sha256:01516d467c30659d77e36a1c621d48cc3da243ce199cf9bee12b5178f8db7230"
     }
   ]
 }

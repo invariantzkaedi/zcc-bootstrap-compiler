@@ -53,12 +53,37 @@ def base_candidate(**extra) -> dict:
     return c
 
 
+def atomic_write_json(path: str, payload) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp_path = f"{path}.tmp.{os.getpid()}"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, sort_keys=True)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp_path, path)
+        if hasattr(os, "O_DIRECTORY"):
+            try:
+                dir_fd = os.open(os.path.dirname(path), os.O_DIRECTORY)
+                try:
+                    os.fsync(dir_fd)
+                finally:
+                    os.close(dir_fd)
+            except Exception:
+                pass
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+
 def write_candidate(c: dict) -> str:
     cid = compute_candidate_id(c)
     c["candidate_id"] = cid
     path = os.path.join(REPO, "candidates", "sha256", cid.split(":")[1] + ".json")
-    with open(path, "w") as fh:
-        json.dump(c, fh, sort_keys=True)
+    atomic_write_json(path, c)
     return path
 
 
@@ -201,7 +226,7 @@ def main() -> int:
     fast = json.load(open(os.path.join(REPO, "policies", "tier0.json")))
     fast["limits"]["wall_seconds"] = 2
     fast_path = os.path.join(REPO, "logs", "tier0-fastwall.json")
-    json.dump(fast, open(fast_path, "w"))
+    atomic_write_json(fast_path, fast)
     cand = write_candidate(base_candidate(mutation_description="t8-hang",
                                           _zk_selftest={"hang": True}))
     p = sh(RUNNER + [cand, "--policy", fast_path])

@@ -32,10 +32,38 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # CONFIGURATION
 # =============================================================================
 
-DEFAULT_SAFE_BASES: list[Path] = [Path("/mnt/h")]
 import os
-if os.name == "nt":
-    DEFAULT_SAFE_BASES.append(Path(Path(__file__).resolve().anchor))
+
+def _detect_safe_bases() -> list[Path]:
+    """Build DEFAULT_SAFE_BASES from platform detection."""
+    bases: list[Path] = []
+    if os.name == "nt":
+        # Windows: use the drive root where this file lives
+        bases.append(Path(Path(__file__).resolve().anchor))
+    else:
+        # Linux / WSL: check if running under WSL
+        _is_wsl = False
+        try:
+            with open("/proc/version", "r") as f:
+                _proc_ver = f.read().lower()
+                _is_wsl = "microsoft" in _proc_ver or "wsl" in _proc_ver
+        except OSError:
+            pass
+
+        if _is_wsl:
+            # Auto-discover /mnt/X mount points that exist as directories
+            mnt = Path("/mnt")
+            if mnt.is_dir():
+                for child in sorted(mnt.iterdir()):
+                    if child.is_dir() and len(child.name) == 1 and child.name.isalpha():
+                        bases.append(child)
+        # Fallback: always include /mnt/h if it exists and wasn't already added
+        fallback = Path("/mnt/h")
+        if fallback.is_dir() and fallback not in bases:
+            bases.append(fallback)
+    return bases if bases else [Path("/mnt/h")]  # ultimate fallback
+
+DEFAULT_SAFE_BASES: list[Path] = _detect_safe_bases()
 
 PATH_VALIDATOR_VERSION = "authoritative-v1"
 
