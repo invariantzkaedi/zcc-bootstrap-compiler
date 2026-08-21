@@ -1363,7 +1363,7 @@ int zcc_main(int argc, char **argv) {
       i++;
       if (i < argc)
         output_file = argv[i];
-    } else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "-S") == 0) {
+    } else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "-S") == 0 || strcmp(argv[i], "-emit-obj") == 0) {
       compile_only = 1;
     } else if (strcmp(argv[i], "--pp-only") == 0) {
       pp_only = 1;
