@@ -38,6 +38,8 @@ IR_TIMEOUT=${IR_TIMEOUT:-10}
 TESTDIR="/tmp/zcc_tests_zkaedi"
 rm -rf "$TESTDIR"
 mkdir -p "$TESTDIR"
+rm -rf /tmp/zcc_proofs
+mkdir -p /tmp/zcc_proofs
 
 # ── Ensure zcc_pp.c and zcc_host exist ───────────────────────────
 
@@ -77,7 +79,7 @@ test_file() {
     fi
 
     # Compile through IR
-    if ! ZCC_IR_BACKEND=1 ./zcc2 "$src" -o "$TESTDIR/${name}_ir.s" 2>"$TESTDIR/${name}_ir.log"; then
+    if ! ZCC_IR_BACKEND=1 ./zcc2 "$src" --emit-smt-proofs /tmp/zcc_proofs -o "$TESTDIR/${name}_ir.s" 2>"$TESTDIR/${name}_ir.log"; then
         fail "$name: IR compilation failed"
         return
     fi
@@ -609,6 +611,19 @@ if [ "$QUICK" = "0" ]; then
         fi
     else
         skip "verify_ir_backend.sh not found"
+    fi
+
+    step "Category 12: Formal SMT Optimization Verification (Z3)"
+    if [ -f verify_smt.py ]; then
+        if python3 verify_smt.py > "$TESTDIR/smt_verify.log" 2>&1; then
+            SMT_VERIFIED=$(grep -c '\[VERIFIED\]' "$TESTDIR/smt_verify.log" 2>/dev/null || echo "0")
+            pass "Formal equivalence VERIFIED ($SMT_VERIFIED optimization proofs)"
+        else
+            fail "Formal equivalence FAILED (sat counterexample or solver error)"
+            cat "$TESTDIR/smt_verify.log"
+        fi
+    else
+        skip "verify_smt.py not found"
     fi
 else
     skip "Selfhost (--quick mode)"
