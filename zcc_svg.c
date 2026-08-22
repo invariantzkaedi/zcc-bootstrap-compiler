@@ -669,18 +669,17 @@ static void render_layout_to_nodes(LayoutNode* l, ZccSvgNode* parent_svg) {
 
     ZccSvgNode* txt2 = svg_text();
     char ty_str2[32];
-    sprintf(ty_str2, "%.1f", l->x);
-    sprintf(ty_str2, "%.1f", l->y + 12.0f);
+    snprintf(ty_str2, sizeof(ty_str2), "%.1f", l->y + 12.0f);
     svg_set_x(txt2, tx_str);
     svg_set_y(txt2, ty_str2);
 
-    char details[64] = "";
+    char details[128] = "";
     if (l->znode->name[0] != '\0') {
-        sprintf(details, "sym: %s", l->znode->name);
+        snprintf(details, sizeof(details), "sym: %s", l->znode->name);
     } else if (l->znode->int_val != 0 || l->znode->kind == ZND_NUM) {
-        sprintf(details, "val: %lld", l->znode->int_val);
+        snprintf(details, sizeof(details), "val: %lld", l->znode->int_val);
     } else if (l->znode->kind == ZND_VAR) {
-        sprintf(details, "var: %s", l->znode->name);
+        snprintf(details, sizeof(details), "var: %s", l->znode->name);
     }
 
     if (details[0] != '\0') {

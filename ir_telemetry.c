@@ -1,12 +1,11 @@
 /*
  * ir_telemetry.c — ZCC IR Pass Telemetry Emitter
  * ================================================
- * Emits per-pass optimization metrics to Gods Eye via UDP 41337.
+ * Emits per-pass optimization metrics to Gods Eye via loopback UDP 41337.
  * Fire-and-forget: if nobody is listening, sendto() fails silently.
  *
  * Wire format: {"_body":"<canonical JSON>","_sig":"ir_telemetry"}
- * The _body contains escaped JSON. The relay accepts
- * _sig == "ir_telemetry" as a Phase 1 HMAC bypass.
+ * The _body contains escaped JSON. Local loopback IPC only.
  *
  * Compiled by GCC only (linked separately, NOT in zcc.c).
  * Uses POSIX sockets (Linux/WSL only).
@@ -77,9 +76,7 @@ void ir_telem_init(void) {
         return;
     }
 
-    host = getenv("GODS_EYE_HOST");
-    if (!host) host = "127.0.0.1";
-
+    host = "127.0.0.1";
     port = 41337;
     env = getenv("GODS_EYE_PORT");
     if (env) port = atoi(env);

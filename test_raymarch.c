@@ -64,8 +64,10 @@ int main() {
     obj_load_torus(&mesh);
 
     // Allocate a large heap space for morph targets (values list for SMIL animation)
-    char* values_list = (char*)malloc(2 * 1024 * 1024);
+    size_t values_cap = 2 * 1024 * 1024;
+    char* values_list = (char*)malloc(values_cap);
     values_list[0] = '\0';
+    size_t values_len = 0;
     
     int num_frames = 30;
     ChaosPhasor ph;
@@ -73,7 +75,8 @@ int main() {
 
     printf("Starting CPU 3D Hybrid SDF & OBJ Mesh Ray Marcher...\n");
     
-    char* first_frame_path = (char*)malloc(256 * 1024);
+    size_t first_frame_cap = 256 * 1024;
+    char* first_frame_path = (char*)malloc(first_frame_cap);
     first_frame_path[0] = '\0';
 
     for (int f = 0; f < num_frames; f++) {
@@ -138,13 +141,18 @@ int main() {
             }
         }
         
-        if (f == 0) {
-            strcpy(first_frame_path, path->d);
+        size_t d_len = strlen(path->d);
+        if (f == 0 && d_len < first_frame_cap) {
+            memcpy(first_frame_path, path->d, d_len + 1);
         }
         
-        strcat(values_list, path->d);
-        if (f < num_frames - 1) {
-            strcat(values_list, ";");
+        if (values_len + d_len + 2 < values_cap) {
+            memcpy(values_list + values_len, path->d, d_len);
+            values_len += d_len;
+            if (f < num_frames - 1) {
+                values_list[values_len++] = ';';
+            }
+            values_list[values_len] = '\0';
         }
         
         svg_path_free(path);
@@ -161,11 +169,11 @@ int main() {
         // Scale stroke width and opacity for ghosting trail decay
         char sw_str[32], op_str[32];
         if (g == 0) {
-            sprintf(sw_str, "2.2");
-            sprintf(op_str, "0.9");
+            snprintf(sw_str, sizeof(sw_str), "2.2");
+            snprintf(op_str, sizeof(op_str), "0.9");
         } else {
-            sprintf(sw_str, "%.2f", 2.2f / (float)(g + 1));
-            sprintf(op_str, "%.3f", 0.70f / (float)(g + 1));
+            snprintf(sw_str, sizeof(sw_str), "%.2f", 2.2f / (float)(g + 1));
+            snprintf(op_str, sizeof(op_str), "%.3f", 0.70f / (float)(g + 1));
         }
         svg_set_stroke_width(morph_shape, sw_str);
         svg_set_opacity(morph_shape, op_str);
@@ -174,7 +182,7 @@ int main() {
         // Inject morph animator and apply delayed start phase offset
         ZccSvgNode* anim = svg_animate_path_morph(morph_shape, values_list, 4.0f, "indefinite");
         char begin_str[32];
-        sprintf(begin_str, "-%.3fs", (float)g * 0.20f);
+        snprintf(begin_str, sizeof(begin_str), "-%.3fs", (float)g * 0.20f);
         svg_set_attr(anim, "begin", begin_str);
 
         svg_add_child(svg, morph_shape);

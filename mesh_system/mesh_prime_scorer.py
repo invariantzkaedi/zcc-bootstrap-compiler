@@ -1,7 +1,7 @@
 import math
 import random
 import time
-import pickle
+import json
 
 try:
     import prime_vector_pb2
@@ -52,7 +52,7 @@ class PrimeVector:
             "timestamp": self.timestamp, "history": self.history,
             "metrics": self.metrics, "context": self.context
         }
-        return b"ZPK:" + pickle.dumps(data)
+        return b"ZJS:" + json.dumps(data).encode("utf-8")
 
     @classmethod
     def deserialize(cls, data: bytes):
@@ -67,8 +67,12 @@ class PrimeVector:
                 timestamp=pb_vec.timestamp, history=list(pb_vec.history),
                 metrics=dict(pb_vec.metrics), context=pb_vec.context
             )
-        elif data.startswith(b"ZPK:"):
-            d = pickle.loads(data[4:])
+        elif data.startswith(b"ZJS:") or data.startswith(b"ZPK:"):
+            payload = data[4:]
+            try:
+                d = json.loads(payload.decode("utf-8"))
+            except Exception:
+                d = {}
             return cls(
                 h=d.get("h", 0.0), h0=d.get("h0", 0.0), eta=d.get("eta", 0.0),
                 gamma=d.get("gamma", 0.0), epsilon=d.get("epsilon", 0.0),
@@ -89,7 +93,10 @@ class PrimeVector:
                     )
                 except Exception:
                     pass
-            d = pickle.loads(data)
+            try:
+                d = json.loads(data.decode("utf-8"))
+            except Exception:
+                d = {}
             if isinstance(d, dict):
                 return cls(
                     h=d.get("h", 0.0), h0=d.get("h0", 0.0), eta=d.get("eta", 0.0),
@@ -150,7 +157,7 @@ class PrimeConsensus:
             "jackpot": self.jackpot,
             "alerts": self.alerts
         }
-        return b"ZPK_C:" + pickle.dumps(data)
+        return b"ZJS_C:" + json.dumps(data).encode("utf-8")
 
     def serialize_c_struct(self) -> bytes:
         import struct
@@ -237,8 +244,12 @@ class PrimeConsensus:
                 state=state, consensus_score=pb_con.consensus_score,
                 drift=pb_con.drift, jackpot=pb_con.jackpot, alerts=list(pb_con.alerts)
             )
-        elif data.startswith(b"ZPK_C:"):
-            d = pickle.loads(data[6:])
+        elif data.startswith(b"ZJS_C:") or data.startswith(b"ZPK_C:"):
+            payload = data[6:]
+            try:
+                d = json.loads(payload.decode("utf-8"))
+            except Exception:
+                d = {}
             state_data = d.get("state")
             state = None
             if state_data:
@@ -275,7 +286,10 @@ class PrimeConsensus:
                     )
                 except Exception:
                     pass
-            d = pickle.loads(data)
+            try:
+                d = json.loads(data.decode("utf-8"))
+            except Exception:
+                d = {}
             if isinstance(d, dict):
                 state_data = d.get("state")
                 state = None
