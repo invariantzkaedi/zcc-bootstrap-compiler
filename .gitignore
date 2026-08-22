@@ -12,6 +12,7 @@ zcc2
 zcc2_*
 zcc3_*
 zcc_[!s]*[!.cph]
+!zcc_compiler_explorer.html
 zcc_s[!y]*[!.cph]
 zcc_sy[!s]*[!.cph]
 gcc_*
