@@ -1358,6 +1358,7 @@ int zcc_main(int argc, char **argv) {
   int qasm_canonical_mode = 0;
   int qasm_validate_mode = 0;
   int qasm_sim_mode = 0;
+  int qasm_opt_mode = 0;
   uint64_t qasm_sim_seed = 0;
 
   /* parse arguments */
@@ -1370,6 +1371,8 @@ int zcc_main(int argc, char **argv) {
       qasm_validate_mode = 1;
     } else if (strcmp(argv[i], "--target=qasm-sim") == 0 || strcmp(argv[i], "--qasm-sim") == 0) {
       qasm_sim_mode = 1;
+    } else if (strcmp(argv[i], "--target=qasm-opt") == 0 || strcmp(argv[i], "--qasm-opt") == 0 || strcmp(argv[i], "-Oq") == 0) {
+      qasm_opt_mode = 1;
     } else if (strncmp(argv[i], "--seed=", 7) == 0) {
       qasm_sim_seed = strtoull(argv[i] + 7, NULL, 0);
     } else if (strcmp(argv[i], "--target=arm") == 0 || strcmp(argv[i], "--target=thumb") == 0 || strcmp(argv[i], "--target=thumbv6m") == 0) {
@@ -1850,7 +1853,7 @@ int zcc_main(int argc, char **argv) {
       source_len = new_len;
   }
 
-  if (qasm_canonical_mode || qasm_validate_mode || qasm_sim_mode || (input_file && strlen(input_file) >= 5 && strcmp(input_file + strlen(input_file) - 5, ".qasm") == 0)) {
+  if (qasm_canonical_mode || qasm_validate_mode || qasm_sim_mode || qasm_opt_mode || (input_file && strlen(input_file) >= 5 && strcmp(input_file + strlen(input_file) - 5, ".qasm") == 0)) {
     char err_buf[512] = {0};
     ZCCQasmCircuit *circ = zcc_qasm_parse_string(source, input_file, err_buf, sizeof(err_buf));
     if (!circ) {
@@ -1863,6 +1866,40 @@ int zcc_main(int argc, char **argv) {
       zcc_qasm_circuit_free(circ);
       free(source);
       return 1;
+    }
+    if (qasm_opt_mode) {
+      ZCCQasmCircuit *opt_circ = NULL;
+      ZCCQasmOptStats stats;
+      memset(&stats, 0, sizeof(stats));
+      if (zcc_qasm_optimize(circ, &opt_circ, NULL, &stats, err_buf, sizeof(err_buf)) != 0) {
+        fprintf(stderr, "%s\n", err_buf[0] ? err_buf : "error: quantum circuit optimization failed");
+        zcc_qasm_circuit_free(circ);
+        free(source);
+        return 1;
+      }
+      if (zcc_verbose_flag) {
+        fprintf(stderr, "QASM optimizer:\n  gates:       %zu -> %zu\n  removed:     %zu\n  fused:       %zu\n  slid:        %zu\n  rewrites:    %zu\n  iterations:  %zu\n  equivalence: %s\n",
+                stats.gates_before, stats.gates_after, stats.gates_removed, stats.gates_fused, stats.gates_slid, stats.rewrite_count, stats.iterations, stats.equivalence_verified ? "PASS" : "N/A");
+      }
+      if (explicit_output_file) {
+        if (zcc_qasm_emit_file(opt_circ, output_file) != 0) {
+          fprintf(stderr, "error: failed to write optimized QASM to '%s'\n", output_file);
+          zcc_qasm_circuit_free(opt_circ);
+          zcc_qasm_circuit_free(circ);
+          free(source);
+          return 1;
+        }
+      } else {
+        char *canonical_str = zcc_qasm_emit_canonical(opt_circ);
+        if (canonical_str) {
+          fputs(canonical_str, stdout);
+          free(canonical_str);
+        }
+      }
+      zcc_qasm_circuit_free(opt_circ);
+      zcc_qasm_circuit_free(circ);
+      free(source);
+      return 0;
     }
     if (qasm_sim_mode) {
       ZCCQasmSimulator *sim = zcc_qasm_sim_create((size_t)circ->total_qubits, (size_t)circ->total_clbits, qasm_sim_seed);
@@ -2475,7 +2512,7 @@ link_phase:
     if (compile_only) {
       written = snprintf(cmd, sizeof(cmd), "gcc %s -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -c -o %s %s 2>&1", prefix_map, output_file, asm_file);
     } else if (strcmp(input_file, "zcc.c") == 0 || (strlen(input_file) >= 6 && strcmp(input_file + strlen(input_file) - 6, "/zcc.c") == 0)) {
-      written = snprintf(cmd, sizeof(cmd), "gcc %s -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -Iinclude -I. -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c src/wasm_emit.c src/quantum/zcc_qasm_parser.c src/quantum/zcc_qasm_sim.c -lm 2>&1", prefix_map, output_file, asm_file);
+      written = snprintf(cmd, sizeof(cmd), "gcc %s -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -Iinclude -I. -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c src/wasm_emit.c src/quantum/zcc_qasm_parser.c src/quantum/zcc_qasm_sim.c src/quantum/zcc_qasm_opt.c -lm 2>&1", prefix_map, output_file, asm_file);
     } else {
       written = snprintf(cmd, sizeof(cmd), "gcc %s -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -Iinclude -I. -o %s %s %s -lm -lpthread -ldl 2>&1", prefix_map, output_file, asm_file, extra_link_args);
     }

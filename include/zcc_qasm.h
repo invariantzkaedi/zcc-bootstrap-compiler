@@ -235,8 +235,49 @@ int zcc_qasm_sim_apply_circuit(ZCCQasmSimulator *sim, const ZCCQasmCircuit *circ
 int zcc_qasm_sim_run_file(const char *filename, uint64_t seed, ZCCQasmSimulator **out_sim, char *err_buf, size_t err_buf_size);
 char *zcc_qasm_sim_dump_state(const ZCCQasmSimulator *sim, double threshold);
 
+/* ================================================================ */
+/* QUANTUM CIRCUIT OPTIMIZER & ALGEBRAIC REWRITE API                */
+/* ================================================================ */
+
+typedef struct {
+    unsigned max_iterations;
+    double angle_epsilon;
+    double equivalence_tolerance;
+    int enable_local_rewrites;
+    int enable_commutation;
+    int enable_equivalence_check;
+} ZCCQasmOptConfig;
+
+typedef struct {
+    size_t gates_before;
+    size_t gates_after;
+    size_t gates_removed;
+    size_t gates_fused;
+    size_t gates_slid;
+    size_t rewrite_count;
+    size_t iterations;
+    int changed;
+    int equivalence_verified;
+} ZCCQasmOptStats;
+
+void zcc_qasm_opt_config_default(ZCCQasmOptConfig *cfg);
+ZCCQasmExpr *zcc_qasm_expr_clone(const ZCCQasmExpr *expr);
+int zcc_qasm_circuit_clone(const ZCCQasmCircuit *src, ZCCQasmCircuit **dst, char *err_buf, size_t err_buf_size);
+size_t zcc_qasm_circuit_gate_count(const ZCCQasmCircuit *circ);
+uint64_t zcc_qasm_circuit_fingerprint(const ZCCQasmCircuit *circ);
+
+int zcc_qasm_verify_equivalent(const ZCCQasmCircuit *c1, const ZCCQasmCircuit *c2, double tolerance, char *err_buf, size_t err_buf_size);
+
+int zcc_qasm_optimize(const ZCCQasmCircuit *input,
+                      ZCCQasmCircuit **output,
+                      const ZCCQasmOptConfig *config,
+                      ZCCQasmOptStats *stats,
+                      char *err_buf,
+                      size_t err_buf_size);
+
 #ifdef __cplusplus
 }
 #endif
 
 #endif /* ZCC_QASM_H */
+

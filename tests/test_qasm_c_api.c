@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <assert.h>
+#include <string.h>
 
 static int g_failed = 0;
 
@@ -16,7 +17,7 @@ static int g_failed = 0;
 } while (0)
 
 int main(void) {
-    printf("=== Running ZCC QASM Simulator C API Tests ===\n");
+    printf("=== Running ZCC QASM Simulator & Optimizer C API Tests ===\n");
 
     /* 1. Ground state & norm test */
     ZCCQasmSimulator *sim = zcc_qasm_sim_create(2, 2, 42);
@@ -88,7 +89,42 @@ int main(void) {
     zcc_qasm_circuit_free(ghz_circ);
     zcc_qasm_sim_free(ghz_sim);
 
-    /* 4. Safety limits verification */
+    /* 4. Optimizer C API & Equivalence Oracle */
+    const char *opt_test_qasm =
+        "OPENQASM 2.0;\n"
+        "include \"qelib1.inc\";\n"
+        "qreg q[2];\n"
+        "h q[0];\n"
+        "h q[0];\n"
+        "rx(pi/4) q[1];\n"
+        "rx(pi/4) q[1];\n"
+        "x q[0];\n"
+        "x q[0];\n";
+    ZCCQasmCircuit *unopt_circ = zcc_qasm_parse_string(opt_test_qasm, "opt_test.qasm", err_buf, sizeof(err_buf));
+    TEST_ASSERT(unopt_circ != NULL, "parse unoptimized QASM");
+    TEST_ASSERT(zcc_qasm_circuit_gate_count(unopt_circ) == 6, "unoptimized gate count == 6");
+
+    uint64_t fp1 = zcc_qasm_circuit_fingerprint(unopt_circ);
+    uint64_t fp2 = zcc_qasm_circuit_fingerprint(unopt_circ);
+    TEST_ASSERT(fp1 == fp2 && fp1 != 0, "deterministic circuit fingerprint");
+
+    ZCCQasmCircuit *opt_circ = NULL;
+    ZCCQasmOptStats stats;
+    memset(&stats, 0, sizeof(stats));
+    int opt_rc = zcc_qasm_optimize(unopt_circ, &opt_circ, NULL, &stats, err_buf, sizeof(err_buf));
+    TEST_ASSERT(opt_rc == 0 && opt_circ != NULL, "optimize circuit C API");
+    TEST_ASSERT(zcc_qasm_circuit_gate_count(opt_circ) == 1, "optimized gate count == 1 (fused rx(pi/2))");
+    TEST_ASSERT(stats.gates_removed == 5, "stats.gates_removed == 5 (2x H, 2x X, 1x RX absorption)");
+    TEST_ASSERT(stats.gates_fused == 1, "stats.gates_fused == 1 (RX fusion)");
+    TEST_ASSERT(stats.equivalence_verified == 1, "stats.equivalence_verified == 1");
+
+    int equiv = zcc_qasm_verify_equivalent(unopt_circ, opt_circ, 1e-10, err_buf, sizeof(err_buf));
+    TEST_ASSERT(equiv == 1, "direct zcc_qasm_verify_equivalent oracle confirms equivalence");
+
+    zcc_qasm_circuit_free(unopt_circ);
+    zcc_qasm_circuit_free(opt_circ);
+
+    /* 5. Safety limits verification */
     ZCCQasmSimulator *oversized_sim = zcc_qasm_sim_create(32, 0, 1);
     TEST_ASSERT(oversized_sim == NULL, "reject oversized simulation (> 28 qubits)");
 

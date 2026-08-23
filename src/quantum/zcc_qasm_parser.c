@@ -56,6 +56,7 @@ ZCCQasmExpr *zcc_qasm_expr_unary(ZCCQasmExprKind kind, ZCCQasmExpr *child) {
 }
 
 double zcc_qasm_expr_eval_const(const ZCCQasmExpr *expr, int *ok) {
+    if (ok) *ok = 1;
     if (!expr) {
         if (ok) *ok = 0;
         return 0.0;
