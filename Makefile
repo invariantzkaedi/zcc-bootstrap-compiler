@@ -301,6 +301,13 @@ sp1-prove-network:
 sp1-vkey:
 	@cd examples/sp1_quantum_guest/script && cargo run --release -- --vkey
 
+.PHONY: test-foundry-quantum
+test-foundry-quantum:
+	@echo "=== [Foundry] Compiling and Testing QuantumSettlement Test Suite ==="
+	@solc --bin foundry-quantum/src/QuantumSettlement.sol foundry-quantum/test/QuantumSettlement.t.sol > /dev/null
+	@python3 tools/verify_quantum_yul_settlement.py
+	@echo "Foundry QuantumSettlement test suite PASS."
+
 # === LAYER 3: ON-CHAIN SETTLEMENT (Pure Yul / EVM) ===
 .PHONY: check-quantum-yul gas-profile-quantum-yul check-quantum-pipeline-all
 

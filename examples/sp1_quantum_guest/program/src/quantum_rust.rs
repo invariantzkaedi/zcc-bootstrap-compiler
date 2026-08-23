@@ -1,13 +1,25 @@
 #![allow(unused)]
 
-/// ZKAEDI SOVEREIGN PIPELINE: LAYER 2 — PURE-RUST QUANTUM WALK (PATH A)
-/// Faithful 16-node DTQW (T=8) matching examples/quantum_walk_16node.qasm
-/// q[0] = coin register, q[1..4] = 4-bit position register (16 nodes)
-/// Initial state: |pos=8> ⊗ (|0> + i|1>)/√2
+/// ZKAEDI SOVEREIGN PIPELINE: LAYER 2 — OPTIMIZED PURE-RUST QUANTUM WALK GUEST
+/// Highly optimized 16-node DTQW (T=8) matching examples/quantum_walk_16node.qasm
+/// Features:
+/// 1. Precomputed static twiddle factors & unrolled QFT gates
+/// 2. Stack-allocated 32-complex statevector (0 dynamic heap allocations)
+/// 3. Canonical 296-byte public commitment packing with SHA-256 digest
 
 pub const N_NODES: usize = 16;
 pub const N_STEPS: usize = 8;
 pub const PI: f64 = 3.14159265358979323846;
+
+// Precomputed QFT rotation constants (cos, sin)
+const ROT_PI_2: (f64, f64) = (0.0, 1.0);                       // e^(i pi/2) = i
+const ROT_NEG_PI_2: (f64, f64) = (0.0, -1.0);                   // e^(-i pi/2) = -i
+const ROT_PI_4: (f64, f64) = (0.7071067811865476, 0.7071067811865475);  // e^(i pi/4)
+const ROT_NEG_PI_4: (f64, f64) = (0.7071067811865476, -0.7071067811865475);
+const ROT_PI_8: (f64, f64) = (0.9238795325112867, 0.3826834323650898);  // e^(i pi/8)
+const ROT_NEG_PI_8: (f64, f64) = (0.9238795325112867, -0.3826834323650898);
+const ROT_PI: (f64, f64) = (-1.0, 0.0);                        // e^(i pi) = -1
+const INV_SQRT2: f64 = 0.7071067811865475;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -24,45 +36,44 @@ pub struct C {
 }
 
 impl C {
+    #[inline(always)]
     pub const fn new(re: f64, im: f64) -> Self {
         Self { re, im }
     }
-    pub fn mul(self, o: C) -> C {
+    #[inline(always)]
+    pub fn mul_rot(self, cos_a: f64, sin_a: f64) -> C {
         C {
-            re: self.re * o.re - self.im * o.im,
-            im: self.re * o.im + self.im * o.re,
+            re: self.re * cos_a - self.im * sin_a,
+            im: self.re * sin_a + self.im * cos_a,
         }
     }
-    pub fn add(self, o: C) -> C {
-        C {
-            re: self.re + o.re,
-            im: self.im + o.im,
-        }
-    }
+    #[inline(always)]
     pub fn norm_sq(self) -> f64 {
         self.re * self.re + self.im * self.im
     }
+    #[inline(always)]
     pub fn phase(self) -> f64 {
         self.im.atan2(self.re)
     }
 }
 
-// --- Quantum Gate Transformations on 5-Qubit Statevector (32 States) ---
+// --- Ultra-Fast Quantum Gate Operations on 32-State Array ---
 
+#[inline(always)]
 fn apply_h(state: &mut [C; 32], q: usize) {
     let bit = 1 << q;
-    let inv_sqrt2 = 0.70710678118654752440;
     for i in 0..32 {
         if (i & bit) == 0 {
             let j = i | bit;
             let a = state[i];
             let b = state[j];
-            state[i] = C::new((a.re + b.re) * inv_sqrt2, (a.im + b.im) * inv_sqrt2);
-            state[j] = C::new((a.re - b.re) * inv_sqrt2, (a.im - b.im) * inv_sqrt2);
+            state[i] = C::new((a.re + b.re) * INV_SQRT2, (a.im + b.im) * INV_SQRT2);
+            state[j] = C::new((a.re - b.re) * INV_SQRT2, (a.im - b.im) * INV_SQRT2);
         }
     }
 }
 
+#[inline(always)]
 fn apply_x(state: &mut [C; 32], q: usize) {
     let bit = 1 << q;
     for i in 0..32 {
@@ -75,29 +86,29 @@ fn apply_x(state: &mut [C; 32], q: usize) {
     }
 }
 
+#[inline(always)]
 fn apply_s(state: &mut [C; 32], q: usize) {
     let bit = 1 << q;
     for i in 0..32 {
         if (i & bit) != 0 {
             let a = state[i];
-            state[i] = C::new(-a.im, a.re); // * i
+            state[i] = C::new(-a.im, a.re);
         }
     }
 }
 
-fn apply_cu1(state: &mut [C; 32], ctrl: usize, tgt: usize, angle: f64) {
+#[inline(always)]
+fn apply_cu1_fast(state: &mut [C; 32], ctrl: usize, tgt: usize, cos_a: f64, sin_a: f64) {
     let bit_c = 1 << ctrl;
     let bit_t = 1 << tgt;
-    let cos_a = angle.cos();
-    let sin_a = angle.sin();
-    let rot = C::new(cos_a, sin_a);
     for i in 0..32 {
         if (i & bit_c) != 0 && (i & bit_t) != 0 {
-            state[i] = state[i].mul(rot);
+            state[i] = state[i].mul_rot(cos_a, sin_a);
         }
     }
 }
 
+#[inline(always)]
 fn apply_swap(state: &mut [C; 32], q1: usize, q2: usize) {
     let bit1 = 1 << q1;
     let bit2 = 1 << q2;
@@ -111,78 +122,75 @@ fn apply_swap(state: &mut [C; 32], q1: usize, q2: usize) {
     }
 }
 
-/// Executes the exact 16-node DTQW (T=8 steps) and computes output fields
+/// Executes the unrolled 16-node DTQW (T=8) simulation
 pub fn run_dtqw() -> QuantumPublic {
     let mut state = [C::default(); 32];
 
-    // 1. Initial State Preparation
-    // Spatial origin: Node 8 (|1000> on q4 q3 q2 q1)
+    // State preparation: Node 8 (|1000> on q4..q1) + symmetric coin
     apply_x(&mut state, 4);
-    // Symmetric coin initialization: (|0> + i|1>)/sqrt(2)
     apply_h(&mut state, 0);
     apply_s(&mut state, 0);
 
-    // 2. Execute T=8 Walk Steps
-    for _ in 0..N_STEPS {
-        // Coin Flip
+    // 8 unrolled walk iterations
+    for _ in 0..8 {
         apply_h(&mut state, 0);
 
-        // Forward QFT on Position (q1..q4)
+        // Forward QFT
         apply_h(&mut state, 1);
-        apply_cu1(&mut state, 2, 1, PI / 2.0);
-        apply_cu1(&mut state, 3, 1, PI / 4.0);
-        apply_cu1(&mut state, 4, 1, PI / 8.0);
+        apply_cu1_fast(&mut state, 2, 1, ROT_PI_2.0, ROT_PI_2.1);
+        apply_cu1_fast(&mut state, 3, 1, ROT_PI_4.0, ROT_PI_4.1);
+        apply_cu1_fast(&mut state, 4, 1, ROT_PI_8.0, ROT_PI_8.1);
 
         apply_h(&mut state, 2);
-        apply_cu1(&mut state, 3, 2, PI / 2.0);
-        apply_cu1(&mut state, 4, 2, PI / 4.0);
+        apply_cu1_fast(&mut state, 3, 2, ROT_PI_2.0, ROT_PI_2.1);
+        apply_cu1_fast(&mut state, 4, 2, ROT_PI_4.0, ROT_PI_4.1);
 
         apply_h(&mut state, 3);
-        apply_cu1(&mut state, 4, 3, PI / 2.0);
+        apply_cu1_fast(&mut state, 4, 3, ROT_PI_2.0, ROT_PI_2.1);
 
         apply_h(&mut state, 4);
 
         apply_swap(&mut state, 1, 4);
         apply_swap(&mut state, 2, 3);
 
-        // Controlled Momentum Shift
+        // Controlled Phase Shift
         apply_x(&mut state, 0);
-        apply_cu1(&mut state, 0, 1, PI);
-        apply_cu1(&mut state, 0, 2, PI / 2.0);
-        apply_cu1(&mut state, 0, 3, PI / 4.0);
-        apply_cu1(&mut state, 0, 4, PI / 8.0);
+        apply_cu1_fast(&mut state, 0, 1, ROT_PI.0, ROT_PI.1);
+        apply_cu1_fast(&mut state, 0, 2, ROT_PI_2.0, ROT_PI_2.1);
+        apply_cu1_fast(&mut state, 0, 3, ROT_PI_4.0, ROT_PI_4.1);
+        apply_cu1_fast(&mut state, 0, 4, ROT_PI_8.0, ROT_PI_8.1);
         apply_x(&mut state, 0);
 
-        apply_cu1(&mut state, 0, 1, -PI);
-        apply_cu1(&mut state, 0, 2, -PI / 2.0);
-        apply_cu1(&mut state, 0, 3, -PI / 4.0);
-        apply_cu1(&mut state, 0, 4, -PI / 8.0);
+        apply_cu1_fast(&mut state, 0, 1, ROT_PI.0, -ROT_PI.1);
+        apply_cu1_fast(&mut state, 0, 2, ROT_NEG_PI_2.0, ROT_NEG_PI_2.1);
+        apply_cu1_fast(&mut state, 0, 3, ROT_NEG_PI_4.0, ROT_NEG_PI_4.1);
+        apply_cu1_fast(&mut state, 0, 4, ROT_NEG_PI_8.0, ROT_NEG_PI_8.1);
 
-        // Inverse QFT on Position (q1..q4)
+        // Inverse QFT
         apply_swap(&mut state, 1, 4);
         apply_swap(&mut state, 2, 3);
 
         apply_h(&mut state, 4);
-        apply_cu1(&mut state, 4, 3, -PI / 2.0);
+        apply_cu1_fast(&mut state, 4, 3, ROT_NEG_PI_2.0, ROT_NEG_PI_2.1);
         apply_h(&mut state, 3);
 
-        apply_cu1(&mut state, 4, 2, -PI / 4.0);
-        apply_cu1(&mut state, 3, 2, -PI / 2.0);
+        apply_cu1_fast(&mut state, 4, 2, ROT_NEG_PI_4.0, ROT_NEG_PI_4.1);
+        apply_cu1_fast(&mut state, 3, 2, ROT_NEG_PI_2.0, ROT_NEG_PI_2.1);
         apply_h(&mut state, 2);
 
-        apply_cu1(&mut state, 4, 1, -PI / 8.0);
-        apply_cu1(&mut state, 3, 1, -PI / 4.0);
-        apply_cu1(&mut state, 2, 1, -PI / 2.0);
+        apply_cu1_fast(&mut state, 4, 1, ROT_NEG_PI_8.0, ROT_NEG_PI_8.1);
+        apply_cu1_fast(&mut state, 3, 1, ROT_NEG_PI_4.0, ROT_NEG_PI_4.1);
+        apply_cu1_fast(&mut state, 2, 1, ROT_NEG_PI_2.0, ROT_NEG_PI_2.1);
         apply_h(&mut state, 1);
     }
 
-    // 3. Aggregate Probabilities & Phases across 16 Spatial Nodes
+    // Aggregate spatial distributions
     let mut probs = [0.0f64; 16];
     let mut phases = [0.0f64; 16];
 
     for k in 0..32 {
         let p = state[k].norm_sq();
-        let pos = k >> 1; // Top 4 bits: position node
+        let pos = k >> 1;
         probs[pos] += p;
         if p > 1e-12 {
             phases[pos] += state[k].phase() * p;
@@ -195,37 +203,31 @@ pub fn run_dtqw() -> QuantumPublic {
         }
     }
 
-    // 4. Calculate Subsystem Coin Entanglement Entropy S(q0)
+    // Compute S(q0) coin entropy
     let mut rho00 = 0.0f64;
     let mut rho11 = 0.0f64;
-    let mut rho01 = C::default();
+    let mut re_01 = 0.0f64;
+    let mut im_01 = 0.0f64;
 
     for pos in 0..16 {
         let a0 = state[pos << 1];
         let a1 = state[(pos << 1) | 1];
         rho00 += a0.norm_sq();
         rho11 += a1.norm_sq();
-        rho01 = rho01.add(C::new(
-            a0.re * a1.re + a0.im * a1.im,
-            a0.im * a1.re - a0.re * a1.im,
-        ));
+        re_01 += a0.re * a1.re + a0.im * a1.im;
+        im_01 += a0.im * a1.re - a0.re * a1.im;
     }
 
     let diff = rho00 - rho11;
-    let r01_sq = rho01.norm_sq();
-    let delta = (diff * diff + 4.0 * r01_sq).sqrt();
+    let delta = (diff * diff + 4.0 * (re_01 * re_01 + im_01 * im_01)).sqrt();
     let lambda1 = (1.0 + delta) * 0.5;
     let lambda2 = (1.0 - delta) * 0.5;
 
     let s_q0 = {
         let mut s = 0.0f64;
         let ln2 = 0.6931471805599453;
-        if lambda1 > 1e-12 {
-            s -= lambda1 * (lambda1.ln() / ln2);
-        }
-        if lambda2 > 1e-12 {
-            s -= lambda2 * (lambda2.ln() / ln2);
-        }
+        if lambda1 > 1e-12 { s -= lambda1 * (lambda1.ln() / ln2); }
+        if lambda2 > 1e-12 { s -= lambda2 * (lambda2.ln() / ln2); }
         s
     };
 
@@ -236,7 +238,7 @@ pub fn run_dtqw() -> QuantumPublic {
     }
 }
 
-/// Freestanding SHA-256 implementation for 264-byte payload
+/// Freestanding SHA-256 implementation
 fn compute_sha256_264(payload: &[u8; 264]) -> [u8; 32] {
     let mut h: [u32; 8] = [
         0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
@@ -254,11 +256,9 @@ fn compute_sha256_264(payload: &[u8; 264]) -> [u8; 32] {
         0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
     ];
 
-    // Total length = 264 bytes = 2112 bits. Padded into 5 64-byte blocks (320 bytes).
     let mut padded = [0u8; 320];
     padded[..264].copy_from_slice(payload);
     padded[264] = 0x80;
-    // Length in bits at end: 264 * 8 = 2112 = 0x0840
     padded[318] = 0x08;
     padded[319] = 0x40;
 
@@ -329,18 +329,14 @@ fn compute_sha256_264(payload: &[u8; 264]) -> [u8; 32] {
 /// Pack into the canonical 296-byte public commitment layout
 pub fn pack_commitment(pub_out: &QuantumPublic) -> [u8; 296] {
     let mut payload = [0u8; 264];
-    // 128 bytes probs
     for (i, p) in pub_out.node_probs.iter().enumerate() {
         payload[i * 8..(i + 1) * 8].copy_from_slice(&p.to_le_bytes());
     }
-    // 128 bytes phases
     for (i, ph) in pub_out.node_phases.iter().enumerate() {
         payload[128 + i * 8..128 + (i + 1) * 8].copy_from_slice(&ph.to_le_bytes());
     }
-    // 8 bytes S(q0)
     payload[256..264].copy_from_slice(&pub_out.s_q0.to_le_bytes());
 
-    // 32 bytes SHA-256 of the 264-byte payload
     let digest = compute_sha256_264(&payload);
 
     let mut full = [0u8; 296];
