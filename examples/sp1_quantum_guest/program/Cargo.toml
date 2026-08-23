@@ -4,5 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# SP1 zkVM Guest SDK
 # sp1-zkvm = "4.1.0"
+
+[features]
+default = ["rust-path"]
+rust-path = []
+c-path = []

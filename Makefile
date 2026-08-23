@@ -287,6 +287,20 @@ check-quantum-zk-sp1: $(QUANTUM_RISCV_ELF)
 	@echo "=== [Layer 2] Running SP1 / RISC-V ZK Prover & Verification Gauntlet ==="
 	python3 tools/verify_quantum_zk_sp1.py
 
+.PHONY: sp1-prove-diff sp1-prove-local sp1-prove-network sp1-vkey
+sp1-prove-diff:
+	@echo "=== Dual-path differential test (Rust vs C) ==="
+	@cd examples/sp1_quantum_guest/script && cargo run --release -- --diff
+
+sp1-prove-local:
+	@cd examples/sp1_quantum_guest/script && cargo run --release -- --prove --local
+
+sp1-prove-network:
+	@cd examples/sp1_quantum_guest/script && cargo run --release -- --prove --network
+
+sp1-vkey:
+	@cd examples/sp1_quantum_guest/script && cargo run --release -- --vkey
+
 # === LAYER 3: ON-CHAIN SETTLEMENT (Pure Yul / EVM) ===
 .PHONY: check-quantum-yul gas-profile-quantum-yul check-quantum-pipeline-all
 
