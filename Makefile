@@ -231,19 +231,21 @@ wasm-svg-bridge:
 .PHONY: wasm-svg-bridge
 
 # === ZCC OPENQASM 2.0 VERIFICATION SUITE ===
-.PHONY: check-qasm check-qasm-opt check-qasm-c
+.PHONY: check-qasm check-qasm-opt check-qasm-c check-qasm-gauntlet
 check-qasm: zcc
-	@echo "=== [1/5] Running OpenQASM 2.0 Parser Test Suite ==="
+	@echo "=== [1/6] Running OpenQASM 2.0 Parser Test Suite ==="
 	@python3 tests/test_qasm_parser.py
-	@echo "=== [2/5] Running OpenQASM 2.0 Statevector Simulator Test Suite ==="
+	@echo "=== [2/6] Running OpenQASM 2.0 Statevector Simulator Test Suite ==="
 	@python3 tests/test_qasm_sim.py
-	@echo "=== [3/5] Running OpenQASM 2.0 Circuit Optimizer Test Suite ==="
+	@echo "=== [3/6] Running OpenQASM 2.0 Circuit Optimizer Test Suite ==="
 	@python3 tests/test_qasm_opt.py
-	@echo "=== [4/5] Running OpenQASM 2.0 Standalone C Code Generator Test Suite ==="
+	@echo "=== [4/6] Running OpenQASM 2.0 Standalone C Code Generator Test Suite ==="
 	@python3 tests/test_qasm_sim_c.py
-	@echo "=== [5/5] Running C API Native Quantum Tests ==="
+	@echo "=== [5/6] Running C API Native Quantum Tests ==="
 	@gcc -O2 -Iinclude -I. -o /tmp/test_qasm_c_api tests/test_qasm_c_api.c src/quantum/zcc_qasm_parser.c src/quantum/zcc_qasm_sim.c src/quantum/zcc_qasm_opt.c src/quantum/zcc_qasm_c_emit.c -lm
 	@/tmp/test_qasm_c_api
+	@echo "=== [6/6] Running Multi-Dimensional Multi-Diagonal Quantum Torture Gauntlet ==="
+	@python3 tests/test_quantum_multidimensional_gauntlet.py
 	@echo "=== OpenQASM 2.0 Verification Suite Complete: ALL PASS ==="
 
 check-qasm-opt: zcc
@@ -251,6 +253,9 @@ check-qasm-opt: zcc
 
 check-qasm-c: zcc
 	python3 tests/test_qasm_sim_c.py
+
+check-qasm-gauntlet: zcc
+	python3 tests/test_quantum_multidimensional_gauntlet.py
 
 # === ZCC PROMPT GUARD V4 INTEGRATION ===
 .PHONY: prompt-guard-verify
