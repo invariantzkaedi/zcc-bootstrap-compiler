@@ -124,7 +124,36 @@ int main(void) {
     zcc_qasm_circuit_free(unopt_circ);
     zcc_qasm_circuit_free(opt_circ);
 
-    /* 5. Safety limits verification */
+    /* 5. C Code Generator API (Phase 0D) */
+    const char *c_emit_test_qasm =
+        "OPENQASM 2.0;\n"
+        "include \"qelib1.inc\";\n"
+        "qreg q[2];\n"
+        "creg c[2];\n"
+        "h q[0];\n"
+        "cx q[0], q[1];\n"
+        "measure q[0] -> c[0];\n"
+        "measure q[1] -> c[1];\n";
+    ZCCQasmCircuit *c_emit_circ = zcc_qasm_parse_string(c_emit_test_qasm, "c_emit.qasm", err_buf, sizeof(err_buf));
+    TEST_ASSERT(c_emit_circ != NULL, "parse circuit for C emission");
+
+    ZCCQasmCEmitConfig c_cfg;
+    zcc_qasm_c_emit_config_default(&c_cfg);
+    char *emitted_c = zcc_qasm_emit_c_code(c_emit_circ, &c_cfg, err_buf, sizeof(err_buf));
+    TEST_ASSERT(emitted_c != NULL, "generate standalone C code string");
+    TEST_ASSERT(strstr(emitted_c, "void run_quantum_circuit(ZCCQasmState *state)") != NULL, "emitted C contains circuit function");
+    TEST_ASSERT(strstr(emitted_c, "int main(int argc, char **argv)") != NULL, "emitted C contains standalone main");
+    TEST_ASSERT(strstr(emitted_c, "zcc_gate_h(state, 0);") != NULL, "emitted C contains Hadamard gate call");
+    TEST_ASSERT(strstr(emitted_c, "zcc_gate_cx(state, 0, 1);") != NULL, "emitted C contains CNOT gate call");
+    TEST_ASSERT(strstr(emitted_c, "zcc_op_measure(state, 0, 0);") != NULL, "emitted C contains measure q0 call");
+    TEST_ASSERT(strstr(emitted_c, "zcc_op_measure(state, 1, 1);") != NULL, "emitted C contains measure q1 call");
+    free(emitted_c);
+
+    int file_rc = zcc_qasm_emit_c_file(c_emit_circ, "/tmp/test_emitted_bell.c", &c_cfg, err_buf, sizeof(err_buf));
+    TEST_ASSERT(file_rc == 0, "zcc_qasm_emit_c_file successfully wrote /tmp/test_emitted_bell.c");
+    zcc_qasm_circuit_free(c_emit_circ);
+
+    /* 6. Safety limits verification */
     ZCCQasmSimulator *oversized_sim = zcc_qasm_sim_create(32, 0, 1);
     TEST_ASSERT(oversized_sim == NULL, "reject oversized simulation (> 28 qubits)");
 

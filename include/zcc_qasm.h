@@ -275,6 +275,30 @@ int zcc_qasm_optimize(const ZCCQasmCircuit *input,
                       char *err_buf,
                       size_t err_buf_size);
 
+/* ================================================================ */
+/* PHASE 0D: STANDALONE C SIMULATION CODE GENERATOR                */
+/* ================================================================ */
+
+typedef struct {
+    int standalone_main;    /* Emit full standalone main() CLI (default: 1) */
+    int include_comments;   /* Emit circuit line and gate comments (default: 1) */
+    int enable_openmp;      /* Emit OpenMP parallelization directives (default: 0) */
+    double print_threshold; /* Threshold for amplitude reporting (default: 1e-6) */
+} ZCCQasmCEmitConfig;
+
+void zcc_qasm_c_emit_config_default(ZCCQasmCEmitConfig *cfg);
+
+char *zcc_qasm_emit_c_code(const ZCCQasmCircuit *circ,
+                           const ZCCQasmCEmitConfig *config,
+                           char *err_buf,
+                           size_t err_buf_size);
+
+int zcc_qasm_emit_c_file(const ZCCQasmCircuit *circ,
+                         const char *filepath,
+                         const ZCCQasmCEmitConfig *config,
+                         char *err_buf,
+                         size_t err_buf_size);
+
 #ifdef __cplusplus
 }
 #endif

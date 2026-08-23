@@ -33,5 +33,5 @@ REWRITE	37d34e76	[history-rewrite]	-	git filter-repo	Linux 6.6.123.2-microsoft-s
 2026-08-23T09:53:32Z	ae321beb	d0a5a501a42ea4ea8d2367d80f9b2c7a	29511	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	azure	Phase 0C Azure baseline lock
 2026-08-23T09:53:32Z	ae321beb	d0a5a501a42ea4ea8d2367d80f9b2c7a	29511	gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0	azure	Phase 0C Azure baseline lock
 2026-08-23T09:53:32Z	ae321beb	d0a5a501a42ea4ea8d2367d80f9b2c7a	29511	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.8.0-1018-azure x86_64	Phase 0C Azure baseline lock
-2026-08-23T09:53:32Z	ae321beb	d0a5a501a42ea4ea8d2367d80f9b2c7a	29511	gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0	Linux 6.8.0-1018-azure x86_64	Phase 0C Azure baseline lock
 2026-08-23T10:02:54Z	ae321beb	fd2493af40cbc0527981e5c495535863	29511	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	
+2026-08-23T10:33:00Z	b9f0d11	328a7ee7e78cbda1de24a7ff8a765479	29550	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	Phase 0D WSL2 baseline lock
