@@ -75,6 +75,7 @@ class FuzzWarfare:
 
         self.enable_reduce = args.enable_reduce
         self.reduce_timeout = args.reduce_timeout
+        self.cooldown = getattr(args, "cooldown", 0.5)
 
         # Check critical pre-requisites
         if not self.csmith_bin:
@@ -329,12 +330,16 @@ class FuzzWarfare:
                 # Run C-Reduce
                 self.run_reduction(seed, c_file, failure)
                 
+            if hasattr(self, 'cooldown') and self.cooldown > 0:
+                time.sleep(self.cooldown)
+                
         print(f"\n🔱 Fuzzing campaign finished. Total iterations: {self.iterations}. Failures found: {failures_found}.")
 
 def main():
     p = argparse.ArgumentParser(description="🔱 ZCC Csmith Differential Fuzzing Warfare Harness")
     p.add_argument("--iterations", type=int, default=100, help="Number of fuzzing seeds to test")
     p.add_argument("--timeout", type=float, default=5.0, help="Execution timeout for compiled programs")
+    p.add_argument("--cooldown", type=float, default=0.5, help="Thermal cooldown pause between iterations in seconds (default: 0.5s)")
     p.add_argument("--csmith-args", type=str, default=DEFAULT_CSMITH_ARGS, help="Arguments passed to Csmith")
     p.add_argument("--tmp-dir", type=str, default="tmp_fuzz", help="Temp working directory")
     p.add_argument("--out-dir", type=str, default="fuzz_warfare", help="Output directory for failures & reduced test cases")
