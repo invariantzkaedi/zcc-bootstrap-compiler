@@ -1276,6 +1276,9 @@ typedef struct TargetBackend {
     void (*emit_float_binop)(Compiler *cc, int op);
 } TargetBackend;
 
+extern TargetBackend *backend_ops;
+extern TargetBackend backend_thumbv6m;
+
 typedef enum {
     FRONTEND_LANG_C = 0,
     FRONTEND_LANG_RUST = 1,

@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
   "repository": "invariantzkaedi/ZCC",
-  "commit_sha": "3d294a0404cca55e1ea1ee4189f8420c9a13fff0",
+  "commit_sha": "7f8f2c27a1afe148e04db8a626f1baeb1fffd82e",
   "environment": {
     "os": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
     "python": "3.12.3"
@@ -21,7 +21,7 @@
       "command": "make rust-front-smoke",
       "exit_code": 0,
       "artifact_path": "evidence/latest/rust_smoke.log",
-      "sha256": "8d2eb816c9a43df4aba095ecba408ccc637576139b22d4a2132a2712eded5443"
+      "sha256": "47ada156ef95ea21e0997c1b511e45f552a26231bbf21eea14a074d06068edc8"
     }
   ]
 }
