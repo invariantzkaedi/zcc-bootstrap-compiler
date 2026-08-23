@@ -203,6 +203,38 @@ int zcc_qasm_validate(const ZCCQasmCircuit *circ, char *err_buf, size_t err_buf_
 char *zcc_qasm_emit_canonical(const ZCCQasmCircuit *circ);
 int zcc_qasm_emit_file(const ZCCQasmCircuit *circ, const char *output_file);
 
+/* ================================================================ */
+/* HIGH-PRECISION STATEVECTOR SIMULATOR API                         */
+/* ================================================================ */
+
+#define ZCC_QASM_MAX_SIM_QUBITS 28
+
+typedef struct {
+    double real;
+    double imag;
+} ZCCComplex;
+
+typedef struct {
+    size_t num_qubits;
+    size_t num_amplitudes;
+    ZCCComplex *amplitudes;
+    uint64_t rng_state;
+    unsigned int *classical_bits;
+    size_t num_classical_bits;
+    char last_error[256];
+} ZCCQasmSimulator;
+
+ZCCQasmSimulator *zcc_qasm_sim_create(size_t num_qubits, size_t num_clbits, uint64_t seed);
+void zcc_qasm_sim_free(ZCCQasmSimulator *sim);
+void zcc_qasm_sim_reset_state(ZCCQasmSimulator *sim);
+
+double zcc_qasm_sim_norm(const ZCCQasmSimulator *sim);
+double zcc_qasm_sim_entropy_1q(const ZCCQasmSimulator *sim, size_t target_qubit);
+
+int zcc_qasm_sim_apply_circuit(ZCCQasmSimulator *sim, const ZCCQasmCircuit *circ);
+int zcc_qasm_sim_run_file(const char *filename, uint64_t seed, ZCCQasmSimulator **out_sim, char *err_buf, size_t err_buf_size);
+char *zcc_qasm_sim_dump_state(const ZCCQasmSimulator *sim, double threshold);
+
 #ifdef __cplusplus
 }
 #endif
