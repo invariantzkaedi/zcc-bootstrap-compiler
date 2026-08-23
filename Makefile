@@ -265,6 +265,28 @@ check-quantum-dsp: zcc
 	@python3 tests/test_quantum_dsp_pipeline.py
 	@python3 tools/quantum_dsp_audio_stem.py
 
+# === LAYER 2: ZERO-KNOWLEDGE PROVER (SP1 / riscv32im) ===
+.PHONY: check-quantum-zk-riscv check-quantum-zk-sp1 quantum-zk-guest
+
+QUANTUM_SIM_C = examples/quantum_walk_16node_sim.c
+QUANTUM_RISCV_ELF = examples/quantum_walk_16node_sim_riscv.elf
+
+check-quantum-zk-riscv: $(QUANTUM_RISCV_ELF)
+	@echo "=== [Layer 2] riscv32im ELF Produced ==="
+	@riscv64-unknown-elf-readelf -h $(QUANTUM_RISCV_ELF)
+	@ls -lh $(QUANTUM_RISCV_ELF)
+	@sha256sum $(QUANTUM_RISCV_ELF)
+
+$(QUANTUM_RISCV_ELF): $(QUANTUM_SIM_C) src/quantum/riscv32_stub.c
+	@echo "=== Cross-compiling quantum walk to riscv32im (freestanding) ==="
+	riscv64-unknown-elf-gcc --specs=picolibc.specs -O2 -march=rv32im -mabi=ilp32 \
+		src/quantum/riscv32_stub.c $< -o $@ -lm
+	@echo "ELF ready: $@"
+
+check-quantum-zk-sp1: $(QUANTUM_RISCV_ELF)
+	@echo "=== [Layer 2] Running SP1 / RISC-V ZK Prover & Verification Gauntlet ==="
+	python3 tools/verify_quantum_zk_sp1.py
+
 # === ZCC PROMPT GUARD V4 INTEGRATION ===
 .PHONY: prompt-guard-verify
 prompt-guard-verify: zcc
