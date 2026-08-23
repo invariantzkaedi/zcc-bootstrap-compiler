@@ -257,6 +257,14 @@ check-qasm-c: zcc
 check-qasm-gauntlet: zcc
 	python3 tests/test_quantum_multidimensional_gauntlet.py
 
+.PHONY: check-quantum-dsp
+check-quantum-dsp: zcc
+	@echo "=== Building and Running Quantum DSP Audio Stem Pipeline (Layer 1) ==="
+	@./zcc --target=qasm-sim-c examples/quantum_walk_16node.qasm -o examples/quantum_walk_16node_sim.c
+	@gcc -O3 -w examples/quantum_walk_16node_sim.c -o examples/quantum_walk_16node_sim -lm
+	@python3 tests/test_quantum_dsp_pipeline.py
+	@python3 tools/quantum_dsp_audio_stem.py
+
 # === ZCC PROMPT GUARD V4 INTEGRATION ===
 .PHONY: prompt-guard-verify
 prompt-guard-verify: zcc
