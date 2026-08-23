@@ -23,8 +23,9 @@ REWRITE	37d34e76	[history-rewrite]	-	git filter-repo	Linux 6.6.123.2-microsoft-s
 2026-08-01T06:43:37Z	1ff5294a	9c8c98709cd6791fac74a4caeec1c889	25270	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	fix CI baseline
 2026-08-01T06:53:54Z	1ff5294a	9c8c98709cd6791fac74a4caeec1c889	25270	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	Lock baseline for Position 8
 2026-08-23T08:57:26Z	42f78500	7963f6e1034e158f4f10726dc920ed7b	29453	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	QASM Phase 0A/0B baseline lock
-2026-08-23T09:05:00Z	42f78500	7963f6e1034e158f4f10726dc920ed7b	29453	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.8.0-1018-azure x86_64	CI runner baseline lock
-2026-08-23T09:05:00Z	42f78500	7963f6e1034e158f4f10726dc920ed7b	29453	gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0	Linux 6.8.0-1018-azure x86_64	CI runner baseline lock
-2026-08-23T09:05:00Z	42f78500	7963f6e1034e158f4f10726dc920ed7b	29453	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.8.0-1017-azure x86_64	CI runner baseline lock
-2026-08-23T09:05:00Z	42f78500	7963f6e1034e158f4f10726dc920ed7b	29453	gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0	Linux 6.8.0-1017-azure x86_64	CI runner baseline lock
-2026-08-23T09:05:00Z	42f78500	7963f6e1034e158f4f10726dc920ed7b	29453	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.5 x86_64	CI runner baseline lock
+2026-08-23T09:17:00Z	e7d375d8	e2fd89122f1888c47bf119a4a77c0c13	29453	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.17.0-1022-azure x86_64	CI runner baseline lock
+2026-08-23T09:17:00Z	e7d375d8	e2fd89122f1888c47bf119a4a77c0c13	29453	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	azure	CI runner baseline lock
+2026-08-23T09:17:00Z	e7d375d8	e2fd89122f1888c47bf119a4a77c0c13	29453	gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0	azure	CI runner baseline lock
+2026-08-23T09:17:00Z	e7d375d8	e2fd89122f1888c47bf119a4a77c0c13	29453	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.8.0-1018-azure x86_64	CI runner baseline lock
+2026-08-23T09:17:00Z	e7d375d8	e2fd89122f1888c47bf119a4a77c0c13	29453	gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0	Linux 6.8.0-1018-azure x86_64	CI runner baseline lock
+2026-08-23T09:17:00Z	e7d375d8	7963f6e1034e158f4f10726dc920ed7b	29453	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	WSL2 baseline lock
