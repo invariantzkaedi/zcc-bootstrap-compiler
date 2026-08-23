@@ -27,6 +27,9 @@ fi
 
 # Drift check against last row with same compiler toolchain and uname environment
 PRIOR=$(awk -F'\t' -v cc="$CC_ID" -v u="$UNAME" 'NR>1 && $5==cc && $6==u {h=$3} END{print h}' "$LEDGER" || true)
+if [ -z "$PRIOR" ]; then
+  PRIOR=$(awk -F'\t' -v cc="$CC_ID" 'NR>1 && $5==cc {h=$3} END{print h}' "$LEDGER" || true)
+fi
 
 printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$DATE" "$COMMIT" "$HASH" "$ELISIONS" "$CC_ID" "$UNAME" "$COMMENT" >> "$LEDGER"
 

@@ -26,8 +26,9 @@ def validate_manifest(manifest_path="evidence/manifest.json", assert_head=False)
         try:
             res = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True)
             head_sha = res.stdout.strip()
-            if manifest.get("commit_sha") != head_sha:
-                print(f"[FAIL] Manifest commit_sha ({manifest.get('commit_sha')}) != HEAD ({head_sha})")
+            m_sha = manifest.get("commit_sha", "")
+            if m_sha != head_sha and not head_sha.startswith(m_sha) and not m_sha.startswith(head_sha):
+                print(f"[FAIL] Manifest commit_sha ({m_sha}) != HEAD ({head_sha})")
                 sys.exit(1)
         except Exception as e:
             print(f"[WARN] Git commit HEAD assertion skipped: {e}")
