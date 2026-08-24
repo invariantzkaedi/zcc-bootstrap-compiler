@@ -45,3 +45,4 @@ REWRITE	37d34e76	[history-rewrite]	-	git filter-repo	Linux 6.6.123.2-microsoft-s
 2026-08-24T13:15:00Z	6c697efa	5d21b1c19db0358a5d9d66d61269a0e7	29600	gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0	azure	C99 builtins & corpus 100% Azure baseline lock
 2026-08-24T13:15:00Z	6c697efa	5d21b1c19db0358a5d9d66d61269a0e7	29600	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.8.0-1018-azure x86_64	C99 builtins & corpus 100% Azure baseline lock
 2026-08-24T13:15:00Z	6c697efa	5d21b1c19db0358a5d9d66d61269a0e7	29600	gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0	Linux 6.8.0-1018-azure x86_64	C99 builtins & corpus 100% Azure baseline lock
+2026-08-24T13:24:56Z	0468b5bb	bd3c0cc525b1cf1812f376a38971039b	29600	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	

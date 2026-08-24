@@ -299,6 +299,37 @@ int zcc_qasm_emit_c_file(const ZCCQasmCircuit *circ,
                          char *err_buf,
                          size_t err_buf_size);
 
+/* ================================================================ */
+/* CLIFFORD + T FAULT-TOLERANT GATE SYNTHESIS & TRANSPILER          */
+/* ================================================================ */
+
+typedef struct {
+    double max_approximation_error; /* Max L_inf error for SK approximation (default: 1e-3) */
+    unsigned max_recursion_depth;   /* Max Solovay-Kitaev recursion depth (default: 4) */
+    int expand_toffoli;             /* Expand CCX to canonical 7-T lattice (default: 1) */
+    int expand_controlled_rotations;/* Expand CRx, CRy, CRz, CU to Clifford+T (default: 1) */
+    int verify_equivalence;         /* Verify statevector equivalence vs oracle (default: 1) */
+} ZCCQasmCliffordTConfig;
+
+typedef struct {
+    size_t gates_before;
+    size_t gates_after;
+    size_t t_count;
+    size_t t_depth;
+    size_t clifford_count;
+    size_t rotations_decomposed;
+    int equivalence_verified;
+} ZCCQasmCliffordTStats;
+
+void zcc_qasm_clifford_t_config_default(ZCCQasmCliffordTConfig *cfg);
+
+int zcc_qasm_transpile_clifford_t(const ZCCQasmCircuit *input,
+                                  ZCCQasmCircuit **output,
+                                  const ZCCQasmCliffordTConfig *config,
+                                  ZCCQasmCliffordTStats *stats,
+                                  char *err_buf,
+                                  size_t err_buf_size);
+
 #ifdef __cplusplus
 }
 #endif
