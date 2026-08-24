@@ -43,8 +43,9 @@ jobs:
           sudo chmod +x /usr/local/bin/solc
           solc --version
 
-      - name: Execute Full End-to-End Quantum Pipeline Gate
+      - name: Initialize Artifacts Directory & Execute Quantum Pipeline Gate
         run: |
+          mkdir -p artifacts
           make check-quantum-pipeline-all
 
       - name: Run SP1 Dual-Path Differential Prover & VKey Extraction

@@ -18,7 +18,17 @@ fn main() {
     let is_network = args.iter().any(|a| a == "--network");
     let is_vkey = args.iter().any(|a| a == "--vkey");
 
-    let out_dir = PathBuf::from("../../artifacts");
+    let out_dir = std::env::var("ARTIFACTS_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            if std::path::Path::new("artifacts").is_dir() {
+                PathBuf::from("artifacts")
+            } else if std::path::Path::new("../../../artifacts").is_dir() || std::path::Path::new("../../../Makefile").is_file() {
+                PathBuf::from("../../../artifacts")
+            } else {
+                PathBuf::from("../../artifacts")
+            }
+        });
 
     println!("========================================================================");
     println!("     ZKAEDI SOVEREIGN PIPELINE: SP1 QUANTUM PROOF HARNESS (LAYER 2)     ");
