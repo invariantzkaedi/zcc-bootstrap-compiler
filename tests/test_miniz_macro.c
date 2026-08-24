@@ -1,5 +1,6 @@
 #define MINIZ_NO_ARCHIVE_APIS
-#include "miniz.c"
+#define MINIZ_UNALIGNED_USE_MEMCPY 1
+#define MINIZ_USE_UNALIGNED_LOADS_AND_STORES 0
 
 #ifdef MINIZ_UNALIGNED_USE_MEMCPY
 static int unaligned_memcpy_works = 1;

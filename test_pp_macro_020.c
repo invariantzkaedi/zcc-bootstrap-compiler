@@ -1,3 +1,6 @@
+struct GC { int tt; struct { int c; } cl; };
+struct Obj { struct { struct GC *gc; } value_; int tt_; };
+
 #define clCvalue(o) check_exp(ttisCclosure(o), gco2ccl(val_(o).gc))
 #define ttisCclosure(o) zzzzzzzzz((o), 1)
 #define check_exp(c, e) (lua_assert(c), (e))
@@ -6,7 +9,8 @@
 #define zzzzzzzzz(o, t) ((o)->tt_ == (t))
 #define gco2ccl(o) check_exp((o)->tt == 1, &((o)->cl.c))
 
-int test(void *obj) {
+int test(struct Obj *obj) {
     clCvalue(obj);
     return 0;
 }
+int main() { return 0; }

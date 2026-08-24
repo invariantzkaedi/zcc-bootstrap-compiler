@@ -1,5 +1,12 @@
 #include <stdio.h>
-#include "sqlite3.h"
+struct sqlite3_value {
+    union {
+        double r;
+        long long i;
+    } u;
+    int flags;
+};
+typedef struct sqlite3_value sqlite3_value;
 
 int main() {
     sqlite3_value v;

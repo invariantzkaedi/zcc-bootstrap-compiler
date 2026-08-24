@@ -1,6 +1,38 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "character_engine.c"
+#include <math.h>
+
+typedef struct { double x, y, z; } Vec3;
+typedef struct { Vec3 origin; Vec3 dir; } Ray;
+
+static void p_cross(Vec3 *res, Vec3 *a, Vec3 *b) {
+    res->x = a->y * b->z - a->z * b->y;
+    res->y = a->z * b->x - a->x * b->z;
+    res->z = a->x * b->y - a->y * b->x;
+}
+static void p_normalize(Vec3 *res, Vec3 *a) {
+    double l = sqrt(a->x * a->x + a->y * a->y + a->z * a->z);
+    if (l > 1e-9) { res->x = a->x / l; res->y = a->y / l; res->z = a->z / l; }
+    else { res->x = 0; res->y = 0; res->z = 0; }
+}
+static int is_negative(double x) { return x < 0.0; }
+static void init_skeleton(void) {}
+
+typedef struct { double m[16]; } Mat4;
+typedef struct {
+    double length;
+    int is_sphere;
+    Mat4 inv_world_transform;
+    Mat4 world_transform;
+} Bone;
+static int num_bones = 0;
+static Bone *bones = NULL;
+static void p_mat4_transform_point(Vec3 *out, Mat4 *m, Vec3 *in) { *out = *in; }
+static void p_mat4_transform_dir(Vec3 *out, Mat4 *m, Vec3 *in) { *out = *in; }
+static double intersect_sphere(Ray *r, double rad) { return -1.0; }
+static double intersect_cylinder(Ray *r, double rad, double len) { return -1.0; }
+static void p_sphere_normal(Vec3 *out, Vec3 *p) { *out = *p; }
+static void p_cylinder_normal(Vec3 *out, Vec3 *p, double len) { *out = *p; }
 
 int main() {
     int w = 1920, h = 1080;

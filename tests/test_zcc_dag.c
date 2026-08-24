@@ -12,7 +12,12 @@
     } \
 } while(0)
 
-#define ASSERT_FALSE(x) ASSERT_TRUE(!(x))
+#define ASSERT_FALSE(x) do { \
+    if (x) { \
+        fprintf(stderr, "ASSERTION FAILED: %s at %s:%d\n", #x, __FILE__, __LINE__); \
+        exit(1); \
+    } \
+} while(0)
 
 static void test_linear_dag(void) {
     BuildDAG dag;

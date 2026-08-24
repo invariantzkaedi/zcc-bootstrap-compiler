@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 # Test 1: ZCC Corpus Regression (fixed: check ASM file has content, success msg on stderr)
-ZCC=/mnt/h/__DOWNLOADS/selforglinux
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+ZCC_BIN="${ZCC_BIN:-$REPO_DIR/zcc}"
 PASS=0; FAIL=0; TOTAL=0
 FAIL_LIST=""
 
-for f in "$ZCC"/test_*.c; do
+for f in "$REPO_DIR"/tests/test_*.c "$REPO_DIR"/test_*.c; do
+  [ -f "$f" ] || continue
   TOTAL=$((TOTAL+1))
   name=$(basename "$f")
   out_s="/tmp/_zcc_corp_${name%.c}.s"
   
-  # zcc2 writes progress to stdout/stderr, ASM to -o file
-  if timeout 8 "$ZCC/zcc2" "$f" -o "$out_s" 2>&1 | grep -q "ZCC Engine Compilation Terminated Successfully"; then
+  # zcc writes progress to stdout/stderr, ASM to -o file
+  if timeout 8 "$ZCC_BIN" -I"$REPO_DIR"/src -I"$REPO_DIR"/include -I"$REPO_DIR" "$f" -o "$out_s" 2>&1 | grep -q "ZCC Engine Compilation Terminated Successfully"; then
     # Double-check: output ASM has actual content
     if [ -s "$out_s" ] && grep -q ".section" "$out_s" 2>/dev/null; then
       PASS=$((PASS+1))

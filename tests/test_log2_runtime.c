@@ -11,4 +11,6 @@ static int log2_of(long long val) {
     return n;
 }
 int main() {
-    printf(" log2_of 8 = %d\n\,
+    printf(" log2_of 8 = %d\n", log2_of(8));
+    return 0;
+}

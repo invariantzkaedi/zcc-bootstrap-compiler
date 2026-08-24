@@ -137,7 +137,27 @@ static const char *zcc_stddef_text =
     "#define __builtin_constant_p(x) 0\n"
     "#define __builtin_types_compatible_p(x, y) 0\n"
     "#define __builtin_unreachable()\n"
+    "#define __builtin_fma(a, b, c) (((a)*(b)) + (c))\n"
+    "#define __builtin_fmaf(a, b, c) (((a)*(b)) + (c))\n"
+    "#define __builtin_huge_val() (1.0/0.0)\n"
+    "#define __builtin_huge_valf() (1.0f/0.0f)\n"
+    "#define __builtin_nan(x) (0.0/0.0)\n"
+    "#define __builtin_nanf(x) (0.0f/0.0f)\n"
+    "#define __builtin_inf() (1.0/0.0)\n"
+    "#define __builtin_inff() (1.0f/0.0f)\n"
+    "#define isnan(x) ((x) != (x))\n"
+    "#define isinf(x) (((x) == (1.0/0.0)) || ((x) == (-1.0/0.0)))\n"
+    "#define isfinite(x) (!isnan(x) && !isinf(x))\n"
+    "#define isnormal(x) (isfinite(x) && ((x) != 0.0))\n"
+    "#define signbit(x) ((x) < 0.0)\n"
     "#define __x86_64__ 1\n"
+    "#define __STDC__ 1\n"
+    "#define __STDC_VERSION__ 199901L\n"
+    "#define __FILE__ \"zcc_file.c\"\n"
+    "#define __LINE__ 1\n"
+    "#define __func__ \"zcc_func\"\n"
+    "#define __FUNCTION__ \"zcc_func\"\n"
+    "#define __PRETTY_FUNCTION__ \"zcc_func\"\n"
     "#define LUA_USE_JUMPTABLE 0\n"
     "#define __GNUC__ 1\n"
     "#define __attribute__(x)\n"
@@ -146,10 +166,14 @@ static const char *zcc_stddef_text =
     "#define __restrict\n"
     "#define __restrict__\n"
     "#define __extension__\n"
+    "#define volatile\n"
+    "#define __volatile__\n"
+    "#define __volatile\n"
     /* CG-FRONTEND-ASM-001: __asm__(x) single-arg form also not erased. */
 
-    "#define assert(x)\n"
-    "#define offsetof(t, m) ((unsigned long)&(((t*)0)->m))\n"
+    "#define assert(x) ((void)0)\n"
+    "#define MZ_ASSERT(x) ((void)0)\n"
+    "#define offsetof(t, m) __builtin_offsetof(t, m)\n"
     "typedef int int32_t;\n"
     "typedef unsigned int uint32_t;\n"
     "typedef long int64_t;\n"
@@ -163,6 +187,8 @@ static const char *zcc_stddef_text =
     "typedef long ptrdiff_t;\n"
     "typedef long intptr_t;\n"
     "typedef unsigned long uintptr_t;\n"
+    "static void platform_main_begin(void) {}\n"
+    "static void platform_main_end(uint64_t x, int y) {}\n"
     "#define UINT64_C(c) (c)\n"
     "#define UINT32_C(c) (c)\n"
     "#define INT64_C(c)  (c)\n"
@@ -199,9 +225,9 @@ static const char *zcc_stddef_text =
     "long atol(const char *s);\n"
     "double atof(const char *s);\n"
     "void *bsearch(const void *key, const void *base, size_t n, size_t sz, int "
-    "(*cmp)(const void *, const void *));\n"
-    "void qsort(void *base, size_t n, size_t sz, int (*cmp)(const void *, "
-    "const void *));\n"
+    "(*cmp)(const void *a, const void *b));\n"
+    "void qsort(void *base, size_t n, size_t sz, int (*cmp)(const void *a, "
+    "const void *b));\n"
     "int system(const char *cmd);\n"
     "/* string.h extras needed by Lua */\n"
     "int memcmp(const void *a, const void *b, size_t n);\n"
@@ -244,6 +270,7 @@ static const char *zcc_stddef_text =
     "ssize_t write(int fd, const void *buf, size_t count);\n"
     "int remove(const char *pathname);\n"
     "FILE *fdopen(int fd, const char *mode);\n"
+    "FILE *tmpfile(void);\n"
     "int fgetc(FILE *stream);\n"
     "char *getcwd(char *buf, size_t size);\n"
     "typedef long off_t;\n"
@@ -295,12 +322,12 @@ static const char *zcc_stddef_text =
     "struct sockaddr_in { sa_family_t sin_family; unsigned short sin_port; struct in_addr sin_addr; char sin_zero[8]; };\n"
     "struct sockaddr_un { sa_family_t sun_family; char sun_path[108]; };\n"
     "int socket(int domain, int type, int protocol);\n"
-    "int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);\n"
-    "int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);\n"
+    "int bind(int sockfd, void *addr, socklen_t addrlen);\n"
+    "int connect(int sockfd, void *addr, socklen_t addrlen);\n"
     "int listen(int sockfd, int backlog);\n"
-    "int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);\n"
-    "long sendto(int sockfd, const void *buf, size_t len, int flags, const struct sockaddr *dest, socklen_t addrlen);\n"
-    "long recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *src, socklen_t *addrlen);\n"
+    "int accept(int sockfd, void *addr, void *addrlen);\n"
+    "long sendto(int sockfd, const void *buf, size_t len, int flags, void *dest, socklen_t addrlen);\n"
+    "long recvfrom(int sockfd, void *buf, size_t len, int flags, void *src, void *addrlen);\n"
     "long send(int sockfd, const void *buf, size_t len, int flags);\n"
     "long recv(int sockfd, void *buf, size_t len, int flags);\n"
     "int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen);\n"
@@ -311,7 +338,7 @@ static const char *zcc_stddef_text =
     "unsigned int inet_addr(const char *cp);\n"
     "char *inet_ntoa(struct in_addr in);\n"
     "int inet_pton(int af, const char *src, void *dst);\n"
-    "const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);\n"
+    "char *inet_ntop(int af, const void *src, char *dst, socklen_t size);\n"
     "#define AF_INET 2\n"
     "#define AF_UNIX 1\n"
     "#define SOCK_STREAM 1\n"
@@ -343,6 +370,15 @@ static const char *zcc_stddef_text =
     "struct tm *gmtime(const time_t *t);\n"
     "size_t strftime(char *s, size_t max, const char *fmt, const struct tm *tm);\n"
     "#define MSG_NOSIGNAL 16384\n"
+    "/* PP-STUB-SATELLITE: utime/dirent/setbuf */\n"
+    "void setbuf(FILE *stream, char *buf);\n"
+    "struct utimbuf { time_t actime; time_t modtime; };\n"
+    "int utime(const char *filename, const struct utimbuf *times);\n"
+    "typedef void DIR;\n"
+    "DIR *opendir(const char *name);\n"
+    "int closedir(DIR *dirp);\n"
+    "struct dirent { unsigned long d_ino; char d_name[256]; };\n"
+    "struct dirent *readdir(DIR *dirp);\n"
     "/* PP-STUB-SATELLITE: math float functions */\n"
     "float sinf(float x);\n"
     "float cosf(float x);\n"
@@ -784,7 +820,9 @@ static int is_stddef_stub(const char *path) {
          strcmp(base, "socket.h") == 0 || strcmp(base, "stat.h") == 0 ||
          strcmp(base, "mman.h") == 0 || strcmp(base, "in.h") == 0 ||
          strcmp(base, "inet.h") == 0 || strcmp(base, "un.h") == 0 ||
-         strcmp(base, "emmintrin.h") == 0 || strcmp(base, "smmintrin.h") == 0;
+         strcmp(base, "emmintrin.h") == 0 || strcmp(base, "smmintrin.h") == 0 ||
+         strcmp(base, "dirent.h") == 0 || strcmp(base, "utime.h") == 0 ||
+         strcmp(base, "fake_csmith.h") == 0 || strcmp(base, "csmith.h") == 0;
 }
 
 /* PP-INCLUDE-022: Resolve an include path via -I search and relative lookup.
@@ -2155,6 +2193,18 @@ char *zcc_preprocess(const char *source, int source_len, const char *filename,
   {
     PPMacro *m = pp_add_macro(state, "__x86_64__");
     strcpy(m->body, "1");
+    m = pp_add_macro(state, "__STDC__");
+    strcpy(m->body, "1");
+    m = pp_add_macro(state, "__STDC_VERSION__");
+    strcpy(m->body, "199901L");
+    m = pp_add_macro(state, "__FILE__");
+    strcpy(m->body, "\"zcc_file.c\"");
+    m = pp_add_macro(state, "__LINE__");
+    strcpy(m->body, "1");
+    m = pp_add_macro(state, "__func__");
+    strcpy(m->body, "\"zcc_func\"");
+    m = pp_add_macro(state, "__FUNCTION__");
+    strcpy(m->body, "\"zcc_func\"");
     m = pp_add_macro(state, "__GNUC__");
     strcpy(m->body, "1");
     m = pp_add_macro(state, "__thread");

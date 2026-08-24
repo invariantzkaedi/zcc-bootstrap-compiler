@@ -17,4 +17,7 @@ static int lookup_keyword(char *name) {
     return 0;
 }
 int main() {
-    kws_word[0] = " int\;
+    kws_word[0] = "int";
+    kws_token[0] = 1;
+    return lookup_keyword("int") == 1 ? 0 : 1;
+}

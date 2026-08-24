@@ -1,0 +1,31 @@
+{
+  "version": "sp1-v4.1.0",
+  "guest_target": "riscv32im",
+  "elf_path": "./examples/quantum_walk_16node_sim_riscv.elf",
+  "elf_sha256": "58b79726537c93ae31d66cee695a0d5390599384ae5be35a92e87d838ada7b7f",
+  "execution_cycles": 14208,
+  "public_commitment": {
+    "size_bytes": 296,
+    "digest_sha256": "cecba8fed5984c0a6e3cecb3d0bb70aa42539b2cd2e652b0a584a636071b1af9",
+    "s_q0_entropy_bits": 0.877437,
+    "wavefront_nodes": [
+      {
+        "node": 10,
+        "prob": 0.2265625,
+        "phase_rad": 0.2366
+      },
+      {
+        "node": 11,
+        "prob": 0.2265625,
+        "phase_rad": 0.8866
+      }
+    ],
+    "layer1_reference_wav_hash": "02e541292efc3c324d55e4bb6e85aeaefd31ad80179280405fad0cf9ce25443f"
+  },
+  "proof": {
+    "prover": "SP1-Core",
+    "curve": "BabyBear",
+    "stark_receipt_hash": "32f75773eb3f6b9a4902fc48070d763bea1993b178b840bb6949ebdcff37fe92",
+    "status": "VERIFIED_VALID"
+  }
+}

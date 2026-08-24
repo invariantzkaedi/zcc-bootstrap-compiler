@@ -58,8 +58,15 @@ static int g_fail = 0;
     }                                                                   \
 } while(0)
 
-#define CHECK_STR(label, a, b) \
-    CHECK(label, strcmp((a),(b)) == 0)
+#define CHECK_STR(label, a, b) do { \
+    if (strcmp((a), (b)) == 0) { \
+        printf("PASS  [%s]\n", label); \
+        g_pass++; \
+    } else { \
+        printf("FAIL  [%s]  (%s:%d)\n", label, __FILE__, __LINE__); \
+        g_fail++; \
+    } \
+} while(0)
 
 /* ── T01: ir_op_name ──────────────────────────────────────────────────── */
 static void test_op_names(void) {

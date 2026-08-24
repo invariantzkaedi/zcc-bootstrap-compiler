@@ -2,20 +2,21 @@
 #include <stdlib.h>
 typedef struct sqlite3 sqlite3;
 typedef struct sqlite3_stmt sqlite3_stmt;
-int sqlite3_open(const char *filename, sqlite3 **ppDb);
-int sqlite3_exec(sqlite3*, const char *sql, int (*callback)(void*,int,char**,char**), void *, char **errmsg);
-int sqlite3_close(sqlite3*);
+int sqlite3_open(const char *filename, void *ppDb);
+int sqlite3_exec(void *db, const char *sql, void *callback, void *arg, void *errmsg);
+int sqlite3_close(void *db);
 
 int callback(void *NotUsed, int argc, char **argv, char **azColName) {
-    for (int i = 0; i < argc; i++) {
+    int i;
+    for (i = 0; i < argc; i++) {
         printf("%s = %s | ", azColName[i], argv[i] ? argv[i] : "NULL");
     }
     printf("\n");
     return 0;
 }
 
-__asm__(".global __atomic_store_n\n__atomic_store_n:\nmovq %rsi, (%rdi)\nret\n");
-__asm__(".global __atomic_load_n\n__atomic_load_n:\nmovq (%rdi), %rax\nret\n");
+void __atomic_store_n(void *p, unsigned long val, int model) { *(unsigned long*)p = val; }
+unsigned long __atomic_load_n(void *p, int model) { return *(unsigned long*)p; }
 
 void execute(sqlite3 *db, const char *sql) {
     char *zErrMsg = 0;

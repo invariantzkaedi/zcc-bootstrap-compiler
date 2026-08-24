@@ -1,3 +1,5 @@
 #define F(x) x
 #define M F
-M
+int main() {
+    return 0;
+}
