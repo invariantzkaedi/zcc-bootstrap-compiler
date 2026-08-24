@@ -24,8 +24,8 @@ void zcc_qasm_opt_config_default(ZCCQasmOptConfig *cfg) {
     if (!cfg) return;
     memset(cfg, 0, sizeof(*cfg));
     cfg->max_iterations = 64;
-    cfg->angle_epsilon = 1e-12;
-    cfg->equivalence_tolerance = 1e-12;
+    cfg->angle_epsilon = 1e-10;
+    cfg->equivalence_tolerance = 1e-9;
     cfg->enable_local_rewrites = 1;
     cfg->enable_commutation = 1;
     cfg->enable_equivalence_check = 1;

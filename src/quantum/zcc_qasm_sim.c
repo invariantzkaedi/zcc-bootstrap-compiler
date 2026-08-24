@@ -6,6 +6,13 @@
 #include <math.h>
 #include <stdarg.h>
 
+#if defined(__AVX2__) && defined(__FMA__)
+#include <immintrin.h>
+#define ZCC_SIM_AVX2 1
+#else
+#define ZCC_SIM_AVX2 0
+#endif
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -30,8 +37,44 @@ static inline double sim_rand_double(uint64_t *state) {
 }
 
 /* ================================================================ */
-/* COMPLEX ARITHMETIC HELPERS                                       */
+/* CODY-WAITE RANGE REDUCTION & COMPLEX ARITHMETIC                  */
 /* ================================================================ */
+
+/* Sub-ULP accurate Cody-Waite range reduction and Chebyshev minimax evaluation */
+static inline void zcc_cody_waite_sincos(double theta, double *s, double *c) {
+    const double inv_half_pi = 0.636619772367581343075535;
+    const double C1 = 1.570796326794896557998982;
+    const double C2 = 6.123233995736766035868820e-17;
+
+    double y = theta * inv_half_pi;
+    int64_t k = (int64_t)(y >= 0.0 ? (y + 0.5) : (y - 0.5));
+    double r = (theta - (double)k * C1) - (double)k * C2;
+
+    double r2 = r * r;
+    /* Degree-11 / Degree-10 Chebyshev minimax polynomials */
+    double s_poly = r * (1.0 + r2 * (-1.666666666666666666666667e-01 +
+                               r2 * ( 8.333333333333333333333333e-03 +
+                               r2 * (-1.984126984126984126984127e-04 +
+                               r2 * ( 2.755731922398589065255732e-06 +
+                               r2 * (-2.505210838544171877505211e-08))))));
+
+    double c_poly = 1.0 + r2 * (-5.000000000000000000000000e-01 +
+                          r2 * ( 4.166666666666666666666667e-02 +
+                          r2 * (-1.388888888888888888888889e-03 +
+                          r2 * ( 2.480158730158730158730159e-05 +
+                          r2 * (-2.755731922398589065255732e-07 +
+                          r2 * ( 2.087675698786809897921009e-09))))));
+
+    int quad = (int)(k & 3);
+    if (quad < 0) quad += 4;
+
+    switch (quad) {
+        case 0: *s = s_poly;  *c = c_poly;  break;
+        case 1: *s = c_poly;  *c = -s_poly; break;
+        case 2: *s = -s_poly; *c = -c_poly; break;
+        case 3: *s = -c_poly; *c = s_poly;  break;
+    }
+}
 
 static inline ZCCComplex c_make(double r, double i) {
     ZCCComplex z = { r, i };
@@ -66,7 +109,9 @@ static inline double c_norm_sq(ZCCComplex a) {
 }
 
 static inline ZCCComplex c_exp_i(double theta) {
-    ZCCComplex z = { cos(theta), sin(theta) };
+    double s, c;
+    zcc_cody_waite_sincos(theta, &s, &c);
+    ZCCComplex z = { c, s };
     return z;
 }
 
@@ -142,7 +187,7 @@ double zcc_qasm_sim_norm(const ZCCQasmSimulator *sim) {
 }
 
 /* ================================================================ */
-/* GATE MATRIX KERNELS                                              */
+/* GATE MATRIX KERNELS (AVX2 + BLOCK-STRIDED SIMD)                  */
 /* ================================================================ */
 
 /* In-place generic 2x2 unitary application on target_qubit */
@@ -151,22 +196,80 @@ static void apply_matrix_2x2(ZCCQasmSimulator *sim, size_t target_qubit,
                              ZCCComplex u10, ZCCComplex u11) {
     if (!sim || target_qubit >= sim->num_qubits) return;
 
-    size_t bit = (size_t)1 << target_qubit;
-    size_t half_dim = sim->num_amplitudes;
-    size_t i;
+    size_t stride = (size_t)1 << target_qubit;
+    size_t two_stride = stride << 1;
+    size_t num_amps = sim->num_amplitudes;
 
-    for (i = 0; i < half_dim; i++) {
-        if ((i & bit) == 0) {
-            size_t j = i | bit;
+    if (stride == 1) {
+        /* Target qubit 0: consecutive pairs (2k, 2k+1) */
+        for (size_t i = 0; i < num_amps; i += 2) {
+            ZCCComplex a = sim->amplitudes[i];
+            ZCCComplex b = sim->amplitudes[i + 1];
+            sim->amplitudes[i]     = c_add(c_mul(u00, a), c_mul(u01, b));
+            sim->amplitudes[i + 1] = c_add(c_mul(u10, a), c_mul(u11, b));
+        }
+        return;
+    }
+
+#if ZCC_SIM_AVX2
+    __m256d u00_r = _mm256_set1_pd(u00.real);
+    __m256d u00_i = _mm256_set1_pd(u00.imag);
+    __m256d u01_r = _mm256_set1_pd(u01.real);
+    __m256d u01_i = _mm256_set1_pd(u01.imag);
+    __m256d u10_r = _mm256_set1_pd(u10.real);
+    __m256d u10_i = _mm256_set1_pd(u10.imag);
+    __m256d u11_r = _mm256_set1_pd(u11.real);
+    __m256d u11_i = _mm256_set1_pd(u11.imag);
+    __m256d sign_mask = _mm256_set_pd(1.0, -1.0, 1.0, -1.0);
+
+    for (size_t block = 0; block < num_amps; block += two_stride) {
+        size_t k = 0;
+        for (; k + 1 < stride; k += 2) {
+            size_t idx0 = block + k;
+            size_t idx1 = idx0 + stride;
+
+            __m256d va = _mm256_loadu_pd((const double *)&sim->amplitudes[idx0]);
+            __m256d vb = _mm256_loadu_pd((const double *)&sim->amplitudes[idx1]);
+
+            __m256d va_swapped = _mm256_shuffle_pd(va, va, 0x5);
+            __m256d vb_swapped = _mm256_shuffle_pd(vb, vb, 0x5);
+
+            __m256d va_rot = _mm256_mul_pd(va_swapped, sign_mask);
+            __m256d vb_rot = _mm256_mul_pd(vb_swapped, sign_mask);
+
+            __m256d u00_a = _mm256_fmadd_pd(u00_i, va_rot, _mm256_mul_pd(u00_r, va));
+            __m256d u01_b = _mm256_fmadd_pd(u01_i, vb_rot, _mm256_mul_pd(u01_r, vb));
+            __m256d out_a = _mm256_add_pd(u00_a, u01_b);
+
+            __m256d u10_a = _mm256_fmadd_pd(u10_i, va_rot, _mm256_mul_pd(u10_r, va));
+            __m256d u11_b = _mm256_fmadd_pd(u11_i, vb_rot, _mm256_mul_pd(u11_r, vb));
+            __m256d out_b = _mm256_add_pd(u10_a, u11_b);
+
+            _mm256_storeu_pd((double *)&sim->amplitudes[idx0], out_a);
+            _mm256_storeu_pd((double *)&sim->amplitudes[idx1], out_b);
+        }
+
+        for (; k < stride; k++) {
+            size_t i = block + k;
+            size_t j = i + stride;
             ZCCComplex a = sim->amplitudes[i];
             ZCCComplex b = sim->amplitudes[j];
-
-            /* [a'] = [u00 u01] [a] */
-            /* [b'] = [u10 u11] [b] */
             sim->amplitudes[i] = c_add(c_mul(u00, a), c_mul(u01, b));
             sim->amplitudes[j] = c_add(c_mul(u10, a), c_mul(u11, b));
         }
     }
+#else
+    for (size_t block = 0; block < num_amps; block += two_stride) {
+        for (size_t k = 0; k < stride; k++) {
+            size_t i = block + k;
+            size_t j = i + stride;
+            ZCCComplex a = sim->amplitudes[i];
+            ZCCComplex b = sim->amplitudes[j];
+            sim->amplitudes[i] = c_add(c_mul(u00, a), c_mul(u01, b));
+            sim->amplitudes[j] = c_add(c_mul(u10, a), c_mul(u11, b));
+        }
+    }
+#endif
 }
 
 /* In-place generic Controlled-2x2 unitary application */
@@ -177,9 +280,10 @@ static void apply_controlled_matrix_2x2(ZCCQasmSimulator *sim, size_t control_qu
 
     size_t cbit = (size_t)1 << control_qubit;
     size_t tbit = (size_t)1 << target_qubit;
+    size_t num_amps = sim->num_amplitudes;
     size_t i;
 
-    for (i = 0; i < sim->num_amplitudes; i++) {
+    for (i = 0; i < num_amps; i++) {
         if ((i & cbit) != 0 && (i & tbit) == 0) {
             size_t j = i | tbit;
             ZCCComplex a = sim->amplitudes[i];
@@ -493,8 +597,8 @@ static int execute_gate_by_kind(ZCCQasmSimulator *sim, ZCCQasmOpKind kind, const
         }
         case QASM_OP_RX: {
             double theta = (num_params > 0) ? params[0] : 0.0;
-            double ct = cos(0.5 * theta);
-            double st = sin(0.5 * theta);
+            double st, ct;
+            zcc_cody_waite_sincos(0.5 * theta, &st, &ct);
             ZCCComplex u00 = c_make(ct, 0), u01 = c_make(0, -st);
             ZCCComplex u10 = c_make(0, -st), u11 = c_make(ct, 0);
             apply_matrix_2x2(sim, qubits[0], u00, u01, u10, u11);
@@ -502,8 +606,8 @@ static int execute_gate_by_kind(ZCCQasmSimulator *sim, ZCCQasmOpKind kind, const
         }
         case QASM_OP_RY: {
             double theta = (num_params > 0) ? params[0] : 0.0;
-            double ct = cos(0.5 * theta);
-            double st = sin(0.5 * theta);
+            double st, ct;
+            zcc_cody_waite_sincos(0.5 * theta, &st, &ct);
             ZCCComplex u00 = c_make(ct, 0), u01 = c_make(-st, 0);
             ZCCComplex u10 = c_make(st, 0), u11 = c_make(ct, 0);
             apply_matrix_2x2(sim, qubits[0], u00, u01, u10, u11);
@@ -539,8 +643,8 @@ static int execute_gate_by_kind(ZCCQasmSimulator *sim, ZCCQasmOpKind kind, const
             double theta = (num_params > 0) ? params[0] : 0.0;
             double phi   = (num_params > 1) ? params[1] : 0.0;
             double lam   = (num_params > 2) ? params[2] : 0.0;
-            double ct = cos(0.5 * theta);
-            double st = sin(0.5 * theta);
+            double st, ct;
+            zcc_cody_waite_sincos(0.5 * theta, &st, &ct);
             ZCCComplex u00 = c_make(ct, 0);
             ZCCComplex u01 = c_scale(c_exp_i(lam), -st);
             ZCCComplex u10 = c_scale(c_exp_i(phi), st);
@@ -580,8 +684,8 @@ static int execute_gate_by_kind(ZCCQasmSimulator *sim, ZCCQasmOpKind kind, const
             break;
         case QASM_OP_CRX: {
             double theta = (num_params > 0) ? params[0] : 0.0;
-            double ct = cos(0.5 * theta);
-            double st = sin(0.5 * theta);
+            double st, ct;
+            zcc_cody_waite_sincos(0.5 * theta, &st, &ct);
             ZCCComplex u00 = c_make(ct, 0), u01 = c_make(0, -st);
             ZCCComplex u10 = c_make(0, -st), u11 = c_make(ct, 0);
             apply_controlled_matrix_2x2(sim, qubits[0], qubits[1], u00, u01, u10, u11);
@@ -589,8 +693,8 @@ static int execute_gate_by_kind(ZCCQasmSimulator *sim, ZCCQasmOpKind kind, const
         }
         case QASM_OP_CRY: {
             double theta = (num_params > 0) ? params[0] : 0.0;
-            double ct = cos(0.5 * theta);
-            double st = sin(0.5 * theta);
+            double st, ct;
+            zcc_cody_waite_sincos(0.5 * theta, &st, &ct);
             ZCCComplex u00 = c_make(ct, 0), u01 = c_make(-st, 0);
             ZCCComplex u10 = c_make(st, 0), u11 = c_make(ct, 0);
             apply_controlled_matrix_2x2(sim, qubits[0], qubits[1], u00, u01, u10, u11);
@@ -614,8 +718,8 @@ static int execute_gate_by_kind(ZCCQasmSimulator *sim, ZCCQasmOpKind kind, const
             double theta = (num_params > 0) ? params[0] : 0.0;
             double phi   = (num_params > 1) ? params[1] : 0.0;
             double lam   = (num_params > 2) ? params[2] : 0.0;
-            double ct = cos(0.5 * theta);
-            double st = sin(0.5 * theta);
+            double st, ct;
+            zcc_cody_waite_sincos(0.5 * theta, &st, &ct);
             ZCCComplex u00 = c_make(ct, 0);
             ZCCComplex u01 = c_scale(c_exp_i(lam), -st);
             ZCCComplex u10 = c_scale(c_exp_i(phi), st);
