@@ -34,6 +34,9 @@ if [ -z "$PRIOR" ]; then
   PRIOR=$(awk -F'\t' -v cc="$CC_ID" 'NR>1 && $5==cc {h=$3} END{print h}' "$LEDGER" || true)
 fi
 
+PRIOR=$(echo "$PRIOR" | tr -d '\r\n[:space:]')
+HASH=$(echo "$HASH" | tr -d '\r\n[:space:]')
+
 printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$DATE" "$COMMIT" "$HASH" "$ELISIONS" "$CC_ID" "$UNAME" "$COMMENT" >> "$LEDGER"
 
 echo "BOOTSTRAP HASH: $HASH  commit=$COMMIT  elisions=$ELISIONS"
