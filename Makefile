@@ -25,7 +25,7 @@ COMPAT_SMOKE_SRCS = \
 	tests/regressions/t_zkaedi_rigging_regressions.c
 COMPAT_EXTENDED_SRCS = $(COMPAT_SMOKE_SRCS) raytracer.c
 
-.PHONY: all clean selfhost selfhost-fast verify-lexicon compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test test-float rust-front-smoke check-evm-lifter check-ir-vuln-tag check-forgezero-receipt check-ir-bridge-guard check-copy-const-prop verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration zjs test-zjs visualize-svg-diffs wasm-svg-bridge test_zcc_dag abi-lanes zcc-opt zcc-verify dream dream-auto apply-blueprints test-upgrade-div
+.PHONY: all clean selfhost selfhost-fast verify-lexicon compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test test-float rust-front-smoke check-evm-lifter check-ir-vuln-tag check-forgezero-receipt check-ir-bridge-guard check-copy-const-prop verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration zjs test-zjs visualize-svg-diffs wasm-svg-bridge test_zcc_dag abi-lanes zcc-opt zcc-verify dream dream-auto apply-blueprints test-upgrade-div avxzkd test-avxzkd libavxzkd.a
 
 
 .SECONDARY: zcc zcc2 zcc3
@@ -52,6 +52,33 @@ test-upgrade-div:
 	/tmp/test_zcc_upgrade_div
 	$(CC) $(CFLAGS) hello_singularity.c src/zcc_upgrade_div.c -o /tmp/hello_singularity_demo $(LDFLAGS)
 	/tmp/hello_singularity_demo
+
+# =========================================================================
+# AVXzkd Supreme SIMD Engine Target
+# =========================================================================
+AVXZKD_CFLAGS = -O3 -mavx2 -mfma -fopenmp -Wall -Wextra -Iinclude -I.
+
+libavxzkd.a: src/avxzkd_supreme.c include/avxzkd_supreme.h
+	$(CC) $(AVXZKD_CFLAGS) -c src/avxzkd_supreme.c -o /tmp/avxzkd_supreme.o
+	ar rcs libavxzkd.a /tmp/avxzkd_supreme.o
+
+libavxzkd.so: src/avxzkd_supreme.c include/avxzkd_supreme.h
+	$(CC) -shared -fPIC $(AVXZKD_CFLAGS) src/avxzkd_supreme.c -o libavxzkd.so -lm
+
+avxzkd: tests/test_avxzkd_supreme.c src/avxzkd_supreme.c include/avxzkd_supreme.h
+	$(CC) $(AVXZKD_CFLAGS) tests/test_avxzkd_supreme.c src/avxzkd_supreme.c -o avxzkd -lm
+
+test-avxzkd: avxzkd
+	./avxzkd
+
+test-pyavxzkd: libavxzkd.so
+	python3 -m unittest tests/test_pyavxzkd.py
+
+quantum-trinity-gauntlet: libavxzkd.so test-avxzkd test-pyavxzkd
+	python3 -m unittest tests/test_quantum_dsp_pipeline.py
+	python3 tools/verify_quantum_zk_sp1.py
+	python3 -m unittest tests/test_quantum_settlement_evm.py
+	python3 tools/quantum_citadel_bridge.py --once
 
 
 

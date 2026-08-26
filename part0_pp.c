@@ -1536,12 +1536,6 @@ static void pp_parse_directive(PPState *state) {
 static void pp_expand_ident(PPState *state, const char *ident) {
   PPMacro *m;
   int i, p_count;
-  char *args[PP_MAX_PARAMS];
-  int arg_caps[PP_MAX_PARAMS];
-  for (i = 0; i < PP_MAX_PARAMS; i++) {
-    arg_caps[i] = 256;
-    args[i] = (char *)malloc(arg_caps[i]);
-  }
   char c;
 
   if (strcmp(ident, "defined") == 0) {
@@ -1707,8 +1701,13 @@ static void pp_expand_ident(PPState *state, const char *ident) {
   pp_next(state); /* consume '(' */
 
   /* parse arguments */
-  for (i = 0; i < PP_MAX_PARAMS; i++)
+  char *args[PP_MAX_PARAMS];
+  int arg_caps[PP_MAX_PARAMS];
+  for (i = 0; i < PP_MAX_PARAMS; i++) {
+    arg_caps[i] = 256;
+    args[i] = (char *)malloc(arg_caps[i]);
     args[i][0] = 0;
+  }
 
   p_count = 0;
   int paren_level = 0;
