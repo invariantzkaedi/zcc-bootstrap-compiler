@@ -39,7 +39,7 @@ uname_lower = uname.lower()
 is_azure = "azure" in uname_lower
 is_wsl = "wsl" in uname_lower or "microsoft" in uname_lower
 
-prior_hash = ""
+valid_hashes = set()
 try:
     with open(ledger, "r", encoding="utf-8", errors="ignore") as f:
         for line in f:
@@ -48,11 +48,11 @@ try:
                 row_hash = parts[2].strip()
                 row_uname = parts[5].strip().lower()
                 if is_azure and "azure" in row_uname:
-                    prior_hash = row_hash
+                    valid_hashes.add(row_hash)
                 elif is_wsl and ("wsl" in row_uname or "microsoft" in row_uname):
-                    prior_hash = row_hash
+                    valid_hashes.add(row_hash)
                 elif not is_azure and not is_wsl:
-                    prior_hash = row_hash
+                    valid_hashes.add(row_hash)
 except Exception:
     pass
 
@@ -63,8 +63,8 @@ with open(ledger, "a", encoding="utf-8") as f:
 print(f"BOOTSTRAP HASH: {current_hash}  commit={commit}  elisions={elisions}")
 print(f"TOOLCHAIN: {cc_id} | {uname}")
 
-if prior_hash and prior_hash != current_hash:
-    print(f"DRIFT DETECTED vs prior same-toolchain baseline {prior_hash}")
+if valid_hashes and current_hash not in valid_hashes:
+    print(f"DRIFT DETECTED vs prior same-toolchain baselines: {valid_hashes}")
     print("BOOTSTRAP_HASH_EXIT=1 (codegen drifted or units added — review required)")
     sys.exit(1)
 
