@@ -51,6 +51,7 @@ extern void zcc_oracle_log_sentinel(size_t idt_size, size_t gdt_size,
 #include "forgezero_receipt.h"
 #include "src/zcc_oracle_substrate.h"
 #include "zcc_lucky_alert_injector.h"
+#include "include/zcc_super_peepholes_100.h"
 
 /* Manifold engine globals (defined in ir_pass_manager.c) */
 extern int  g_manifold_enabled;
@@ -741,6 +742,29 @@ static void peephole_optimize(char *filename) {
         }
         i += 3;
         continue;
+      }
+    }
+
+    /* 4. A100-Evolved Super-Peepholes (Zero comparison, zero idiom, imul reduction) */
+    {
+      char reg[64];
+      if (strncmp(l1, "    cmpl $0, ", 13) == 0 && sscanf(l1, "    cmpl $0, %63s", reg) == 1 && reg[0] == '%') {
+        sprintf(line_ptrs[i], "    testl %s, %s\n", reg, reg); eliminated++; i++; continue;
+      }
+      if (strncmp(l1, "    cmpq $0, ", 13) == 0 && sscanf(l1, "    cmpq $0, %63s", reg) == 1 && reg[0] == '%') {
+        sprintf(line_ptrs[i], "    testq %s, %s\n", reg, reg); eliminated++; i++; continue;
+      }
+      if (strncmp(l1, "    movq $0, ", 13) == 0 && sscanf(l1, "    movq $0, %63s", reg) == 1 && reg[0] == '%') {
+        sprintf(line_ptrs[i], "    xorq %s, %s\n", reg, reg); eliminated++; i++; continue;
+      }
+      if (strncmp(l1, "    imulq $2, ", 14) == 0 && sscanf(l1, "    imulq $2, %63s", reg) == 1 && reg[0] == '%') {
+        sprintf(line_ptrs[i], "    addq %s, %s\n", reg, reg); eliminated++; i++; continue;
+      }
+      if (strncmp(l1, "    imulq $4, ", 14) == 0 && sscanf(l1, "    imulq $4, %63s", reg) == 1 && reg[0] == '%') {
+        sprintf(line_ptrs[i], "    shlq $2, %s\n", reg); eliminated++; i++; continue;
+      }
+      if (strncmp(l1, "    imulq $8, ", 14) == 0 && sscanf(l1, "    imulq $8, %63s", reg) == 1 && reg[0] == '%') {
+        sprintf(line_ptrs[i], "    shlq $3, %s\n", reg); eliminated++; i++; continue;
       }
     }
     i++;
