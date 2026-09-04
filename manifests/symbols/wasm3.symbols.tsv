@@ -1,0 +1,110 @@
+name	kind	defined_by	required_by	signature	zcc_status	test	severity
+M3Environment	core_type	m3_core.h	wasm3.h	struct M3Environment	PROVEN	test_wasm3_types	P0
+M3Runtime	core_type	m3_core.h	wasm3.h	struct M3Runtime	PROVEN	test_wasm3_types	P0
+M3Module	core_type	m3_core.h	wasm3.h	struct M3Module	PROVEN	test_wasm3_types	P0
+M3Function	core_type	m3_core.h	wasm3.h	struct M3Function	PROVEN	test_wasm3_types	P0
+M3Global	core_type	m3_core.h	wasm3.h	struct M3Global	PROVEN	test_wasm3_types	P0
+IM3Environment	pointer_typedef	wasm3.h	wasm3.h	struct M3Environment*	PROVEN	test_wasm3_types	P0
+IM3Runtime	pointer_typedef	wasm3.h	wasm3.h	struct M3Runtime*	PROVEN	test_wasm3_types	P0
+IM3Module	pointer_typedef	wasm3.h	wasm3.h	struct M3Module*	PROVEN	test_wasm3_types	P0
+IM3Function	pointer_typedef	wasm3.h	wasm3.h	struct M3Function*	PROVEN	test_wasm3_types	P0
+IM3Global	pointer_typedef	wasm3.h	wasm3.h	struct M3Global*	PROVEN	test_wasm3_types	P0
+M3Result	result_type	wasm3.h	wasm3.h	const char*	PROVEN	test_wasm3_types	P0
+M3ErrorInfo	result_type	wasm3.h	wasm3.h	struct M3ErrorInfo	PROVEN	test_wasm3_types	P0
+M3BacktraceFrame	result_type	wasm3.h	wasm3.h	struct M3BacktraceFrame	PROVEN	test_wasm3_types	P1
+M3BacktraceInfo	result_type	wasm3.h	wasm3.h	struct M3BacktraceInfo	PROVEN	test_wasm3_types	P1
+M3ValueType	value_type	wasm3.h	wasm3.h	uint8_t	PROVEN	test_wasm3_types	P0
+M3ImportContext	value_type	wasm3.h	wasm3.h	struct M3ImportContext	PROVEN	test_wasm3_types	P1
+M3RawCall	funcptr_type	wasm3.h	wasm3.h	m3ret_t (*)(IM3Runtime, uint64_t*, void*)	PROVEN	test_wasm3_abi	P0
+M3SectionHandler	funcptr_type	wasm3.h	wasm3.h	M3Result (*)(IM3Module, const char*, const uint8_t*, size_t)	PROVEN	test_wasm3_abi	P1
+u8	integer_alias	m3_core.h	m3_core.h	uint8_t	PROVEN	test_wasm3_types	P0
+i8	integer_alias	m3_core.h	m3_core.h	int8_t	PROVEN	test_wasm3_types	P0
+u16	integer_alias	m3_core.h	m3_core.h	uint16_t	PROVEN	test_wasm3_types	P0
+i16	integer_alias	m3_core.h	m3_core.h	int16_t	PROVEN	test_wasm3_types	P0
+u32	integer_alias	m3_core.h	m3_core.h	uint32_t	PROVEN	test_wasm3_types	P0
+i32	integer_alias	m3_core.h	m3_core.h	int32_t	PROVEN	test_wasm3_types	P0
+u64	integer_alias	m3_core.h	m3_core.h	uint64_t	PROVEN	test_wasm3_types	P0
+i64	integer_alias	m3_core.h	m3_core.h	int64_t	PROVEN	test_wasm3_types	P0
+f32	fp_alias	m3_core.h	m3_core.h	float	PROVEN	test_wasm3_types	P0
+f64	fp_alias	m3_core.h	m3_core.h	double	PROVEN	test_wasm3_types	P0
+m3ret_t	interpreter_alias	m3_core.h	m3_core.h	const void*	PROVEN	test_wasm3_types	P0
+code_t	interpreter_alias	m3_core.h	m3_core.h	const void*	PROVEN	test_wasm3_types	P0
+pc_t	interpreter_alias	m3_core.h	m3_core.h	const void**	PROVEN	test_wasm3_types	P0
+m3opcode_t	interpreter_alias	m3_core.h	m3_core.h	uint8_t	PROVEN	test_wasm3_types	P0
+m3reg_t	interpreter_alias	m3_core.h	m3_core.h	uint64_t	PROVEN	test_wasm3_types	P0
+M3MemoryHeader	runtime_internal	m3_env.h	m3_env.c	struct M3MemoryHeader	SUPPORTED	test_wasm3_layout	P0
+M3CodePageHeader	runtime_internal	m3_code.h	m3_code.c	struct M3CodePageHeader	SUPPORTED	test_wasm3_layout	P0
+M3CodeMappingPage	runtime_internal	m3_code.h	m3_code.c	struct M3CodeMappingPage	SUPPORTED	test_wasm3_layout	P0
+m3_NewEnvironment	public_api	m3_env.c	wasm3.h	IM3Environment m3_NewEnvironment(void)	SUPPORTED	test_wasm3_api	P0
+m3_FreeEnvironment	public_api	m3_env.c	wasm3.h	void m3_FreeEnvironment(IM3Environment)	SUPPORTED	test_wasm3_api	P0
+m3_SetCustomSectionHandler	public_api	m3_env.c	wasm3.h	void m3_SetCustomSectionHandler(IM3Environment, M3SectionHandler)	SUPPORTED	test_wasm3_api	P1
+m3_NewRuntime	public_api	m3_env.c	wasm3.h	IM3Runtime m3_NewRuntime(IM3Environment, u32, void*)	SUPPORTED	test_wasm3_api	P0
+m3_FreeRuntime	public_api	m3_env.c	wasm3.h	void m3_FreeRuntime(IM3Runtime)	SUPPORTED	test_wasm3_api	P0
+m3_GetMemory	public_api	m3_env.c	wasm3.h	uint8_t* m3_GetMemory(IM3Runtime, u32*, u32)	SUPPORTED	test_wasm3_api	P0
+m3_GetMemorySize	public_api	m3_env.c	wasm3.h	u32 m3_GetMemorySize(IM3Runtime)	SUPPORTED	test_wasm3_api	P0
+m3_GetUserData	public_api	m3_env.c	wasm3.h	void* m3_GetUserData(IM3Runtime)	SUPPORTED	test_wasm3_api	P1
+m3_ParseModule	public_api	m3_parse.c	wasm3.h	M3Result m3_ParseModule(IM3Environment, IM3Module*, const uint8_t*, size_t)	SUPPORTED	test_wasm3_api	P0
+m3_FreeModule	public_api	m3_module.c	wasm3.h	void m3_FreeModule(IM3Module)	SUPPORTED	test_wasm3_api	P0
+m3_LoadModule	public_api	m3_env.c	wasm3.h	M3Result m3_LoadModule(IM3Runtime, IM3Module)	SUPPORTED	test_wasm3_api	P0
+m3_CompileModule	public_api	m3_compile.c	wasm3.h	M3Result m3_CompileModule(IM3Module)	SUPPORTED	test_wasm3_api	P0
+m3_RunStart	public_api	m3_module.c	wasm3.h	M3Result m3_RunStart(IM3Module)	SUPPORTED	test_wasm3_api	P0
+m3_Yield	public_api	m3_exec.c	wasm3.h	M3Result m3_Yield(void)	SUPPORTED	test_wasm3_api	P1
+m3_FindFunction	public_api	m3_function.c	wasm3.h	M3Result m3_FindFunction(IM3Function*, IM3Runtime, const char*)	SUPPORTED	test_wasm3_api	P0
+m3_GetTableFunction	public_api	m3_function.c	wasm3.h	M3Result m3_GetTableFunction(IM3Function*, IM3Module, u32)	SUPPORTED	test_wasm3_api	P1
+m3_GetArgCount	public_api	m3_function.c	wasm3.h	u32 m3_GetArgCount(IM3Function)	SUPPORTED	test_wasm3_api	P0
+m3_GetRetCount	public_api	m3_function.c	wasm3.h	u32 m3_GetRetCount(IM3Function)	SUPPORTED	test_wasm3_api	P0
+m3_GetArgType	public_api	m3_function.c	wasm3.h	M3ValueType m3_GetArgType(IM3Function, u32)	SUPPORTED	test_wasm3_api	P0
+m3_GetRetType	public_api	m3_function.c	wasm3.h	M3ValueType m3_GetRetType(IM3Function, u32)	SUPPORTED	test_wasm3_api	P0
+m3_CallV	public_api	m3_exec.c	wasm3.h	M3Result m3_CallV(IM3Function, ...)	SUPPORTED	test_wasm3_varargs	P0
+m3_CallVL	public_api	m3_exec.c	wasm3.h	M3Result m3_CallVL(IM3Function, va_list)	SUPPORTED	test_wasm3_varargs	P0
+m3_Call	public_api	m3_exec.c	wasm3.h	M3Result m3_Call(IM3Function, u32, const void*[])	SUPPORTED	test_wasm3_api	P0
+m3_CallArgv	public_api	m3_exec.c	wasm3.h	M3Result m3_CallArgv(IM3Function, u32, const char*[])	SUPPORTED	test_wasm3_api	P0
+m3_GetResultsV	public_api	m3_exec.c	wasm3.h	M3Result m3_GetResultsV(IM3Function, ...)	SUPPORTED	test_wasm3_varargs	P0
+m3_GetResultsVL	public_api	m3_exec.c	wasm3.h	M3Result m3_GetResultsVL(IM3Function, va_list)	SUPPORTED	test_wasm3_varargs	P0
+m3_GetGlobalType	public_api	m3_module.c	wasm3.h	M3ValueType m3_GetGlobalType(IM3Global)	SUPPORTED	test_wasm3_api	P1
+m3Error	internal_fn	m3_info.c	m3_info.h	M3Result m3Error(M3Result, IM3Module, IM3Function, const char*, ...)	SUPPORTED	test_wasm3_internal	P0
+_m3Error	internal_fn	m3_info.c	m3_info.h	M3Result _m3Error(M3Result, IM3Runtime, IM3Module, IM3Function, const char*, ...)	SUPPORTED	test_wasm3_internal	P0
+ErrorRuntime	internal_fn	m3_info.c	m3_info.h	M3Result ErrorRuntime(M3Result, IM3Runtime, const char*, ...)	SUPPORTED	test_wasm3_internal	P0
+ErrorModule	internal_fn	m3_info.c	m3_info.h	M3Result ErrorModule(M3Result, IM3Module, const char*, ...)	SUPPORTED	test_wasm3_internal	P0
+ErrorCompile	internal_fn	m3_info.c	m3_info.h	M3Result ErrorCompile(M3Result, IM3Module, const char*, ...)	SUPPORTED	test_wasm3_internal	P0
+m3_Malloc_Impl	internal_fn	m3_core.c	m3_core.h	void* m3_Malloc_Impl(size_t)	SUPPORTED	test_wasm3_internal	P0
+m3_Abort	internal_fn	m3_core.c	m3_core.h	void m3_Abort(const char*)	SUPPORTED	test_wasm3_internal	P0
+PushBacktraceFrame	internal_fn	m3_info.c	m3_info.h	void PushBacktraceFrame(IM3Runtime, pc_t)	SUPPORTED	test_wasm3_internal	P1
+ClearBacktrace	internal_fn	m3_info.c	m3_info.h	void ClearBacktrace(IM3Runtime)	SUPPORTED	test_wasm3_internal	P1
+m3StackCheckInit	internal_fn	m3_env.c	m3_env.h	void m3StackCheckInit(void)	SUPPORTED	test_wasm3_internal	P1
+m3StackCheck	internal_fn	m3_env.c	m3_env.h	bool m3StackCheck(void)	SUPPORTED	test_wasm3_internal	P1
+m3_GetTimestamp	internal_fn	m3_core.c	m3_core.h	i64 m3_GetTimestamp(void)	SUPPORTED	test_wasm3_internal	P1
+d_m3ImplementFloat	macro_constant	m3_config.h	m3_config.h	#define d_m3ImplementFloat 1	PROVEN	test_wasm3_constants	P0
+d_m3HasFloat	macro_constant	m3_config.h	m3_config.h	#define d_m3HasFloat 1	PROVEN	test_wasm3_constants	P0
+d_m3NoFloatDynamic	macro_constant	m3_config.h	m3_config.h	#define d_m3NoFloatDynamic 0	PROVEN	test_wasm3_constants	P0
+d_m3DefaultMemPageSize	macro_constant	m3_config.h	m3_config.h	#define d_m3DefaultMemPageSize 65536	PROVEN	test_wasm3_constants	P0
+d_m3Reg0SlotAlias	macro_constant	m3_config.h	m3_config.h	#define d_m3Reg0SlotAlias 0	PROVEN	test_wasm3_constants	P0
+d_m3Fp0SlotAlias	macro_constant	m3_config.h	m3_config.h	#define d_m3Fp0SlotAlias 1	PROVEN	test_wasm3_constants	P0
+malloc	libc_dep	stdlib.h	m3_core.c	void* malloc(size_t)	PROVEN	test_libc_alloc	P0
+calloc	libc_dep	stdlib.h	m3_core.c	void* calloc(size_t, size_t)	PROVEN	test_libc_alloc	P0
+realloc	libc_dep	stdlib.h	m3_core.c	void* realloc(void*, size_t)	PROVEN	test_libc_alloc	P0
+free	libc_dep	stdlib.h	m3_core.c	void free(void*)	PROVEN	test_libc_alloc	P0
+memcpy	libc_dep	string.h	m3_core.c	void* memcpy(void*, const void*, size_t)	PROVEN	test_libc_mem	P0
+memmove	libc_dep	string.h	m3_core.c	void* memmove(void*, const void*, size_t)	PROVEN	test_libc_mem	P0
+memset	libc_dep	string.h	m3_core.c	void* memset(void*, int, size_t)	PROVEN	test_libc_mem	P0
+memcmp	libc_dep	string.h	m3_core.c	int memcmp(const void*, const void*, size_t)	PROVEN	test_libc_mem	P0
+strlen	libc_dep	string.h	m3_core.c	size_t strlen(const char*)	PROVEN	test_libc_str	P0
+strcmp	libc_dep	string.h	m3_core.c	int strcmp(const char*, const char*)	PROVEN	test_libc_str	P0
+strncmp	libc_dep	string.h	m3_core.c	int strncmp(const char*, const char*, size_t)	PROVEN	test_libc_str	P0
+strcpy	libc_dep	string.h	m3_core.c	char* strcpy(char*, const char*)	PROVEN	test_libc_str	P0
+strncpy	libc_dep	string.h	m3_core.c	char* strncpy(char*, const char*, size_t)	PROVEN	test_libc_str	P0
+strchr	libc_dep	string.h	m3_core.c	char* strchr(const char*, int)	PROVEN	test_libc_str	P0
+strrchr	libc_dep	string.h	m3_core.c	char* strrchr(const char*, int)	PROVEN	test_libc_str	P0
+strstr	libc_dep	string.h	m3_core.c	char* strstr(const char*, const char*)	PROVEN	test_libc_str	P0
+printf	libc_dep	stdio.h	wasm3.c	int printf(const char*, ...)	PROVEN	test_libc_io	P0
+fprintf	libc_dep	stdio.h	wasm3.c	int fprintf(FILE*, const char*, ...)	PROVEN	test_libc_io	P0
+sprintf	libc_dep	stdio.h	m3_info.c	int sprintf(char*, const char*, ...)	PROVEN	test_libc_io	P0
+snprintf	libc_dep	stdio.h	m3_info.c	int snprintf(char*, size_t, const char*, ...)	PROVEN	test_libc_io	P0
+vsnprintf	libc_dep	stdio.h	m3_info.c	int vsnprintf(char*, size_t, const char*, va_list)	PROVEN	test_libc_io	P0
+abort	libc_dep	stdlib.h	m3_core.c	void abort(void)	PROVEN	test_libc_misc	P0
+va_start	compiler_builtin	stdarg.h	m3_info.c	__builtin_va_start	PROVEN	test_varargs	P0
+va_arg	compiler_builtin	stdarg.h	m3_info.c	__builtin_va_arg	PROVEN	test_varargs	P0
+va_end	compiler_builtin	stdarg.h	m3_info.c	__builtin_va_end	PROVEN	test_varargs	P0
+indirect_dispatch	compiler_construct	m3_exec.c	m3_exec.h	m3ret_t (*op)(m3stack_t, m3reg_t*)	SUPPORTED	gate_s4_abi	P0
+64bit_shift_rot	compiler_construct	m3_compile.c	m3_exec.c	(a << n) | (a >> (64 - n))	SUPPORTED	test_math64	P0
+tail_call_dispatch	compiler_construct	m3_exec.c	m3_exec.h	return next_op(stack, regs)	SUPPORTED	gate_s4_abi	P0

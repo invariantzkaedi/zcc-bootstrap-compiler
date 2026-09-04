@@ -243,8 +243,10 @@ static long long parse_const_expr_unary(Compiler *cc) {
     if (cc->tk == TK_TILDE) { next_token(cc); return ~parse_const_expr_unary(cc); }
     if (cc->tk == TK_BANG) { next_token(cc); return !parse_const_expr_unary(cc); }
     if (cc->tk == TK_SIZEOF) {
+        int has_paren = 0;
         next_token(cc);
         if (cc->tk == TK_LPAREN) {
+            has_paren = 1;
             next_token(cc);
             if (is_type_token(cc)) {
                 Type *st = parse_type(cc);
@@ -253,37 +255,67 @@ static long long parse_const_expr_unary(Compiler *cc) {
                 expect(cc, TK_RPAREN);
                 return type_size(st);
             }
-            /* sizeof(expr) — handle identifier with optional [] subscript */
-            if (cc->tk == TK_IDENT) {
-                Symbol *sym = scope_find(cc, cc->tk_text);
-                if (sym && sym->type) {
-                    Type *t = sym->type;
-                    next_token(cc); /* consume identifier */
-                    /* Peel array subscripts: sizeof(arr[0]) → sizeof(element) */
-                    while (cc->tk == TK_LBRACKET) {
+        }
+        /* sizeof(expr) or sizeof expr — handle identifier with member access (->, .) and [] subscripts */
+        if (cc->tk == TK_IDENT) {
+            Symbol *sym = scope_find(cc, cc->tk_text);
+            if (sym && sym->type) {
+                Type *t = sym->type;
+                next_token(cc); /* consume identifier */
+                for (;;) {
+                    if (cc->tk == TK_LBRACKET) {
                         next_token(cc); /* consume [ */
                         parse_const_expr(cc); /* consume index expression */
                         expect(cc, TK_RBRACKET); /* consume ] */
-                        if (t->kind == TY_ARRAY && t->base) {
+                        if (t && t->kind == TY_ARRAY && t->base) {
                             t = t->base;
-                        } else if (t->kind == TY_PTR && t->base) {
+                        } else if (t && t->kind == TY_PTR && t->base) {
+                            t = t->base;
+                        } else {
+                            error(cc, "subscripted value is neither array nor pointer");
+                        }
+                    } else if (cc->tk == TK_ARROW) {
+                        next_token(cc); /* consume -> */
+                        if (t && t->kind == TY_PTR && t->base) {
                             t = t->base;
                         }
+                        if (cc->tk == TK_IDENT && t) {
+                            int offset = 0;
+                            StructField *f = find_struct_member(t, cc->tk_text, &offset);
+                            if (f) t = f->type;
+                            next_token(cc);
+                        }
+                    } else if (cc->tk == TK_DOT) {
+                        next_token(cc); /* consume . */
+                        if (cc->tk == TK_IDENT && t) {
+                            int offset = 0;
+                            StructField *f = find_struct_member(t, cc->tk_text, &offset);
+                            if (f) t = f->type;
+                            next_token(cc);
+                        }
+                    } else {
+                        break;
                     }
-                    expect(cc, TK_RPAREN);
-                    return type_size(t);
                 }
+                if (has_paren) expect(cc, TK_RPAREN);
+                return type_size(t);
             }
-            long long v = parse_const_expr(cc);
-            expect(cc, TK_RPAREN);
-            return v;
-        } else {
-            return 8;
         }
+        if (cc->tk == TK_STR) {
+            int sz = cc->tk_str_len + 1;
+            next_token(cc);
+            if (has_paren) expect(cc, TK_RPAREN);
+            return sz;
+        }
+        long long v = parse_const_expr(cc);
+        if (has_paren) expect(cc, TK_RPAREN);
+        return v;
     }
     if (cc->tk == TK_ALIGNOF) {
+        int has_paren = 0;
         next_token(cc);
         if (cc->tk == TK_LPAREN) {
+            has_paren = 1;
             next_token(cc);
             if (is_type_token(cc)) {
                 Type *st = parse_type(cc);
@@ -293,12 +325,19 @@ static long long parse_const_expr_unary(Compiler *cc) {
                 zcc_validate_alignof_operand(cc, st);
                 return type_align(st);
             }
-            parse_const_expr(cc);
-            expect(cc, TK_RPAREN);
-            return 8;
-        } else {
-            return 8;
         }
+        if (cc->tk == TK_IDENT) {
+            Symbol *sym = scope_find(cc, cc->tk_text);
+            if (sym && sym->type) {
+                next_token(cc);
+                if (has_paren) expect(cc, TK_RPAREN);
+                zcc_validate_alignof_operand(cc, sym->type);
+                return type_align(sym->type);
+            }
+        }
+        parse_const_expr(cc);
+        if (has_paren) expect(cc, TK_RPAREN);
+        return 8;
     }
     return parse_const_expr_primary(cc);
 }
@@ -1747,14 +1786,15 @@ Node *parse_primary(Compiler *cc) {
     if (cc->tk == TK_NUM) {
         n = node_num(cc, cc->tk_val, line);
         int is_hex_or_oct = (cc->tk_text[2] == 'H');
+        unsigned long long uval = (unsigned long long)cc->tk_val;
         if (cc->tk_text[1] == 'L') {
-             if (cc->tk_text[0] == 'U') {
+             if (cc->tk_text[0] == 'U' || uval > 9223372036854775807ULL) {
                  n->type = cc->ty_ulong;
              } else {
                  n->type = cc->ty_long;
              }
         } else if (cc->tk_text[0] == 'U') {
-             if (cc->tk_val <= 4294967295ULL) {
+             if (uval <= 4294967295ULL) {
                  n->type = cc->ty_uint;
              } else {
                  n->type = cc->ty_ulong;
@@ -1762,18 +1802,22 @@ Node *parse_primary(Compiler *cc) {
         } else {
              /* unsuffixed literal */
              if (is_hex_or_oct) {
-                 if (cc->tk_val <= 2147483647LL) {
+                 if (uval <= 2147483647ULL) {
                      n->type = cc->ty_int;
-                 } else if (cc->tk_val <= 4294967295ULL) {
+                 } else if (uval <= 4294967295ULL) {
                      n->type = cc->ty_uint;
+                 } else if (uval <= 9223372036854775807ULL) {
+                     n->type = cc->ty_long;
                  } else {
                      n->type = cc->ty_ulong;
                  }
              } else {
-                 if (cc->tk_val <= 2147483647LL) {
+                 if (uval <= 2147483647ULL) {
                      n->type = cc->ty_int;
-                 } else {
+                 } else if (uval <= 9223372036854775807ULL) {
                      n->type = cc->ty_long;
+                 } else {
+                     n->type = cc->ty_ulong;
                  }
              }
         }
@@ -2073,14 +2117,10 @@ Node *parse_primary(Compiler *cc) {
                 return n;
             }
             /* sizeof(expr) */
-            {
-                Node *expr;
-                next_token(cc); /* skip ( */
-                expr = parse_unary(cc);
-                expect(cc, TK_RPAREN);
-                n = node_num(cc, type_size(expr->type), line);
-                return n;
-            }
+            Node *expr;
+            expr = parse_unary(cc);
+            n = node_num(cc, type_size(expr->type), line);
+            return n;
         } else {
             Node *expr;
             expr = parse_unary(cc);
@@ -2118,15 +2158,11 @@ Node *parse_primary(Compiler *cc) {
                 return n;
             }
             /* _Alignof(expr) */
-            {
-                Node *expr;
-                next_token(cc); /* skip ( */
-                expr = parse_unary(cc);
-                expect(cc, TK_RPAREN);
-                if (expr) zcc_validate_alignof_operand(cc, expr->type);
-                n = node_num(cc, type_align(expr->type), line);
-                return n;
-            }
+            Node *expr;
+            expr = parse_unary(cc);
+            if (expr) zcc_validate_alignof_operand(cc, expr->type);
+            n = node_num(cc, type_align(expr->type), line);
+            return n;
         } else {
             Node *expr;
             expr = parse_unary(cc);
@@ -2548,14 +2584,7 @@ Node *parse_unary(Compiler *cc) {
             t = parse_declarator(cc, t, dummy);
             expect(cc, TK_RPAREN);
         } else {
-            Node *expr_n;
-            if (cc->tk == TK_LPAREN) {
-                next_token(cc);
-                expr_n = parse_expr(cc);
-                expect(cc, TK_RPAREN);
-            } else {
-                expr_n = parse_unary(cc);
-            }
+            Node *expr_n = parse_unary(cc);
             if (expr_n && expr_n->kind == ND_STR) {
                 sz = cc->strings[expr_n->str_id].len + 1;
             } else if (expr_n && expr_n->type) {
@@ -2590,14 +2619,7 @@ Node *parse_unary(Compiler *cc) {
             t = parse_declarator(cc, t, dummy);
             expect(cc, TK_RPAREN);
         } else {
-            Node *expr_n;
-            if (cc->tk == TK_LPAREN) {
-                next_token(cc);
-                expr_n = parse_expr(cc);
-                expect(cc, TK_RPAREN);
-            } else {
-                expr_n = parse_unary(cc);
-            }
+            Node *expr_n = parse_unary(cc);
             if (expr_n && expr_n->type) {
                 t = expr_n->type;
             }
@@ -4002,18 +4024,71 @@ Node *parse_stmt_internal(Compiler *cc) {
                             strncpy(var->name, vname, MAX_IDENT - 1);
                             var->sym = sym;
                             Node *rhs_node = parse_assign(cc);
-                            if (vtype && vtype->kind == TY_VOID && rhs_node && rhs_node->type) {
-                                vtype = rhs_node->type;
-                                sym->type = vtype;
-                            }
-                            var->type = vtype;
-                            asgn = node_new(cc, ND_ASSIGN, line);
-                            asgn->lhs = var;
-                            asgn->rhs = ensure_type(cc, rhs_node, vtype);
-                            asgn->type = vtype;
-                            if (cnt < cap) {
-                                block->stmts[cnt] = asgn;
-                                cnt++;
+                            if (vtype && vtype->kind == TY_ARRAY && rhs_node && rhs_node->kind == ND_STR) {
+                                char *s = cc->strings[rhs_node->str_id].data;
+                                int slen = cc->strings[rhs_node->str_id].len;
+                                if (vtype->array_len == 0) {
+                                    vtype = type_array(cc, vtype->base ? vtype->base : cc->ty_char, slen + 1);
+                                    sym->type = vtype;
+                                    int sz = type_size(vtype);
+                                    if (sz < 8) sz = 8;
+                                    sz = (sz + 7) & ~7;
+                                    cc->local_offset = cc->local_offset + 8 - sz;
+                                    sym->stack_offset = cc->local_offset;
+                                }
+                                int copy_len = slen + 1;
+                                if (vtype->array_len > 0 && copy_len > vtype->array_len)
+                                    copy_len = vtype->array_len;
+                                for (int k = 0; k < copy_len; k++) {
+                                    Node *var_node = node_new(cc, ND_VAR, line);
+                                    strncpy(var_node->name, vname, MAX_IDENT - 1);
+                                    var_node->sym = sym;
+                                    var_node->type = vtype;
+
+                                    Node *cast_base = node_new(cc, ND_CAST, line);
+                                    cast_base->lhs = var_node;
+                                    cast_base->cast_type = type_ptr(cc, cc->ty_char);
+                                    cast_base->type = type_ptr(cc, cc->ty_char);
+
+                                    Node *add = node_new(cc, ND_ADD, line);
+                                    add->lhs = cast_base;
+                                    add->rhs = node_num(cc, k, line);
+                                    add->type = type_ptr(cc, cc->ty_char);
+
+                                    Node *deref = node_new(cc, ND_DEREF, line);
+                                    deref->lhs = add;
+                                    deref->type = cc->ty_char;
+
+                                    Node *elem_asgn = node_new(cc, ND_ASSIGN, line);
+                                    elem_asgn->lhs = deref;
+                                    elem_asgn->rhs = node_num(cc, (unsigned char)s[k], line);
+                                    elem_asgn->type = cc->ty_char;
+
+                                    if (cnt >= cap) {
+                                        Node **new_stmts = (Node **)cc_alloc(cc, sizeof(Node *) * cap * 2);
+                                        for (int j = 0; j < cnt; j++) new_stmts[j] = block->stmts[j];
+                                        block->stmts = new_stmts;
+                                        cap = cap * 2;
+                                    }
+                                    block->stmts[cnt++] = elem_asgn;
+                                }
+                            } else {
+                                if (vtype && vtype->kind == TY_VOID && rhs_node && rhs_node->type) {
+                                    vtype = rhs_node->type;
+                                    sym->type = vtype;
+                                }
+                                var->type = vtype;
+                                asgn = node_new(cc, ND_ASSIGN, line);
+                                asgn->lhs = var;
+                                asgn->rhs = ensure_type(cc, rhs_node, vtype);
+                                asgn->type = vtype;
+                                if (cnt >= cap) {
+                                    Node **new_stmts = (Node **)cc_alloc(cc, sizeof(Node *) * cap * 2);
+                                    for (int j = 0; j < cnt; j++) new_stmts[j] = block->stmts[j];
+                                    block->stmts = new_stmts;
+                                    cap = cap * 2;
+                                }
+                                block->stmts[cnt++] = asgn;
                             }
                         }
                     }
@@ -5388,6 +5463,10 @@ static void scan_sym_stats(Node *n) {
             if (stats) stats->addr_taken = 1;
         }
     }
+    if (n->kind == ND_VAR && n->sym && n->sym->type && n->sym->type->kind == TY_ARRAY) {
+        SymStats *stats = get_sym_stats(n->sym);
+        if (stats) stats->addr_taken = 1;
+    }
     
     scan_sym_stats(n->lhs);
     scan_sym_stats(n->rhs);
@@ -5435,11 +5514,13 @@ static LatticeVal icp_eval_expr(Node *n) {
          * change at any time (signal handler, MMIO, other thread). Return
          * LATTICE_BOT so the solver never propagates a stale constant. */
         if (n->sym->type && n->sym->type->is_volatile) return bot;
-        /* If it is a global variable, it is not tracked by the ICP lattice.
-         * Return LATTICE_BOT to prevent it from decaying to LATTICE_TOP (which would
-         * cause it to be silently elided in meet() operations). */
+        /* If it is a global variable or non-constant local, it is not an established
+         * constant in the ICP lattice. Return LATTICE_BOT to prevent unassigned/dynamic
+         * variables from decaying to LATTICE_TOP (which causes them to be silently elided in meet()). */
         if (!n->sym->is_local) return bot;
-        return get_sym_lattice(n->sym);
+        LatticeVal lv = get_sym_lattice(n->sym);
+        if (lv.kind != LATTICE_CONST) return bot;
+        return lv;
     }
     
     if (n->kind == ND_CAST) {
@@ -5889,6 +5970,10 @@ void run_interprocedural_constant_propagation(Compiler *cc, Node *prog) {
                 if (current_param_val.kind == LATTICE_BOT) continue;
                 
                 LatticeVal arg_val = icp_eval_expr(call->args[k]);
+                if (arg_val.kind != LATTICE_CONST) {
+                    arg_val.kind = LATTICE_BOT;
+                    arg_val.val = 0;
+                }
                 LatticeVal new_param_val = meet(current_param_val, arg_val);
 
                 if (new_param_val.kind != current_param_val.kind ||

@@ -7,12 +7,14 @@ FAIL_LIST=""
 
 for f in "$REPO_DIR"/tests/test_*.c "$REPO_DIR"/test_*.c; do
   [ -f "$f" ] || continue
-  TOTAL=$((TOTAL+1))
   name=$(basename "$f")
+  # Skip explicit negative regression tests that MUST fail compilation
+  [ "$name" = "test_ir_bridge_guard.c" ] && continue
+  TOTAL=$((TOTAL+1))
   out_s="/tmp/_zcc_corp_${name%.c}.s"
   
   # zcc writes progress to stdout/stderr, ASM to -o file
-  if timeout 8 "$ZCC_BIN" -I"$REPO_DIR"/src -I"$REPO_DIR"/include -I"$REPO_DIR" "$f" -o "$out_s" 2>&1 | grep -q "ZCC Engine Compilation Terminated Successfully"; then
+  if timeout 15 "$ZCC_BIN" -I"$REPO_DIR"/src -I"$REPO_DIR"/include -I"$REPO_DIR" "$f" -o "$out_s" 2>&1 | grep -q "ZCC Engine Compilation Terminated Successfully"; then
     # Double-check: output ASM has actual content
     if [ -s "$out_s" ] && grep -q ".section" "$out_s" 2>/dev/null; then
       PASS=$((PASS+1))

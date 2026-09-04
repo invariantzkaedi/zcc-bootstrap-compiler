@@ -1,0 +1,7 @@
+# ZCC BearSSL Cryptographic Conquest Gate Commands
+make zcc
+python3 scripts/build_bearssl.py
+cmp zcc2.s zcc3.s
+make selfhost
+python3 tools/symbol_oracle.py --target bearssl --manifest manifests/symbols/bearssl.symbols.tsv --bin /tmp/bearssl_objs/testcrypto
+bash tests/test_corpus.sh

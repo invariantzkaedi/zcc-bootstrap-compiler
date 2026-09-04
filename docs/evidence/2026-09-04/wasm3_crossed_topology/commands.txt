@@ -1,0 +1,43 @@
+# Wasm3 Crossed-Topology Verification Commands
+# Date: 2026-09-04
+# Target: Wasm3 v0.9.1-beta.1 + ZCC WASM MVP Emitter
+
+# 1. Compile and Link Native Wasm3 via ZCC
+bash scripts/build_wasm3.sh
+
+# 2. Compile Cross-Topology WASM Bytecode Generator with ZCC
+./zcc -Isrc src/wasm_emit.c -o /tmp/wasm_emit_zcc.s
+as -o /tmp/wasm_emit_zcc.o /tmp/wasm_emit_zcc.s
+./zcc -Isrc tests/test_cross_topology_math.c -o /tmp/test_cross_topology_math.s
+as -o /tmp/test_cross_topology_math.o /tmp/test_cross_topology_math.s
+gcc -o /tmp/gen_wasm /tmp/test_cross_topology_math.o /tmp/wasm_emit_zcc.o
+/tmp/gen_wasm
+
+# 3. Execute ZCC-emitted WASM Module on ZCC-built Wasm3 Binary
+/tmp/wasm3_zcc_native --func add /tmp/cross_topology_math.wasm 17 25
+/tmp/wasm3_zcc_native --func mult /tmp/cross_topology_math.wasm 6 7
+/tmp/wasm3_zcc_native --func square /tmp/cross_topology_math.wasm 9
+/tmp/wasm3_zcc_native --func pythagoras /tmp/cross_topology_math.wasm 3 4
+/tmp/wasm3_zcc_native --func pythagoras /tmp/cross_topology_math.wasm 5 12
+
+# 4. Run Symbol Oracle Audit (Gates S0-S6)
+python3 tools/symbol_oracle.py --target wasm3 --manifest manifests/symbols/wasm3.symbols.tsv --source /tmp/wasm3/source/m3_core.c --obj /tmp/wasm3_objs/m3_core.o --bin /tmp/wasm3_zcc_native
+
+# 5. Gate 1 Self-Host Identity
+make selfhost
+cmp zcc2.s zcc3.s
+
+# 6. Gate 2 ABI Interoperability (both directions)
+./zcc abi_lib.c -o /tmp/abi_lib_zcc.s
+as -o /tmp/abi_lib_zcc.o /tmp/abi_lib_zcc.s
+gcc abi_main.c /tmp/abi_lib_zcc.o -o /tmp/interop_zcc_lib_gcc_main
+/tmp/interop_zcc_lib_gcc_main
+
+gcc -c abi_lib.c -o /tmp/abi_lib_gcc.o
+./zcc abi_main.c -o /tmp/abi_main_zcc.s
+as -o /tmp/abi_main_zcc.o /tmp/abi_main_zcc.s
+gcc /tmp/abi_main_zcc.o /tmp/abi_lib_gcc.o -o /tmp/interop_gcc_lib_zcc_main
+/tmp/interop_gcc_lib_zcc_main
+
+# 7. Gate 3 Corpus Regression
+bash tests/test_corpus.sh

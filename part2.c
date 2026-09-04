@@ -359,8 +359,11 @@ Symbol *scope_add_local(Compiler *cc, char *name, Type *type) {
     sym = scope_add(cc, name, type);
     sym->is_local = 1;
     sz = type_size(type);
+    if (sz < 8) sz = 8;
     salign = symbol_alignment(sym);
     if (salign < 8) salign = 8;  /* minimum 8-byte slots */
+    if (sz >= 32 && salign < 32) salign = 32;
+    if (sz >= 64 && salign < 64) salign = 64;
     sz = (sz + salign - 1) & ~(salign - 1);
     cc->local_offset = cc->local_offset - sz;
     cc->local_offset = cc->local_offset & ~(salign - 1);
@@ -681,7 +684,7 @@ static int read_escape(Compiler *cc) {
 }
 
 static void lex_number(Compiler *cc, int c) {
-        long long val;
+        unsigned long long val;
         int start;
         int is_float = 0;
         int i_look = 0;
