@@ -67,3 +67,9 @@ REWRITE	37d34e76	[history-rewrite]	-	git filter-repo	Linux 6.6.123.2-microsoft-s
 2026-08-26T05:18:15Z	0eef4899	21e048230d90d7dd70296d4ef3d24dd9	29647	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	
 2026-08-26T05:25:43Z	d7afcde5	21e048230d90d7dd70296d4ef3d24dd9	29647	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	
 2026-08-26T05:45:14Z	25f7148b	21e048230d90d7dd70296d4ef3d24dd9	29647	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64
+2026-09-04T23:55:00Z	4fe71073	ed396f1278a9addb1403fcf1ac738ad8	29647	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	Stage 3 QuickJS conquest baseline lock
+2026-09-04T23:55:00Z	4fe71073	d8468e240c544ab3d25bfc3c7feaf0d1	29647	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.17.0-1022-azure x86_64	Stage 3 QuickJS conquest Azure baseline lock
+2026-09-04T23:55:00Z	4fe71073	d8468e240c544ab3d25bfc3c7feaf0d1	29647	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	azure	Stage 3 QuickJS conquest Azure baseline lock
+2026-09-04T23:55:00Z	4fe71073	d8468e240c544ab3d25bfc3c7feaf0d1	29647	gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0	azure	Stage 3 QuickJS conquest Azure baseline lock
+2026-09-04T23:55:00Z	4fe71073	d8468e240c544ab3d25bfc3c7feaf0d1	29647	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.8.0-1018-azure x86_64	Stage 3 QuickJS conquest Azure baseline lock
+2026-09-04T23:55:00Z	4fe71073	d8468e240c544ab3d25bfc3c7feaf0d1	29647	gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0	Linux 6.8.0-1018-azure x86_64	Stage 3 QuickJS conquest Azure baseline lock
