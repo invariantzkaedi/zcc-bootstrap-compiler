@@ -208,13 +208,20 @@ static long long parse_const_expr_unary(Compiler *cc) {
         char dummy[128];
         st = parse_declarator(cc, st, dummy);
         expect(cc, TK_COMMA);
-        char member[128];
-        strncpy(member, cc->tk_text, 127);
-        member[127] = 0;
-        expect(cc, TK_IDENT);
-        expect(cc, TK_RPAREN);
         int offset = 0;
-        find_struct_member(st, member, &offset);
+        while (cc->tk == TK_IDENT) {
+            char member[128];
+            strncpy(member, cc->tk_text, 127);
+            member[127] = 0;
+            next_token(cc);
+            int sub_off = 0;
+            StructField *f = find_struct_member(st, member, &sub_off);
+            offset += sub_off;
+            if (f) st = f->type;
+            if (cc->tk == TK_DOT) next_token(cc);
+            else break;
+        }
+        expect(cc, TK_RPAREN);
         return offset;
     }
     if (cc->tk == TK_LPAREN) {
@@ -684,7 +691,7 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
                 if (is_bf) {
                     int fsize = type_size(ftype);
                     int packing_active = (stype && (stype->is_packed || (stype->pragma_pack > 0 && stype->pragma_pack < 8)));
-                    if (bf_active && fsize == bf_unit_size && bf_size > 0 && bf_current_bit + bf_size <= fsize * 8) {
+                    if (bf_active && (packing_active ? (bf_current_bit + bf_size <= 64) : (fsize == bf_unit_size && bf_current_bit + bf_size <= fsize * 8)) && bf_size > 0) {
                         field->offset = bf_unit_offset;
                         field->is_bitfield = 1;
                         field->bit_offset = bf_current_bit;
@@ -780,7 +787,7 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
                     if (is_bf2) {
                         int fsize2 = type_size(ftype2);
                         int packing_active2 = (stype && (stype->is_packed || (stype->pragma_pack > 0 && stype->pragma_pack < 8)));
-                        if (bf_active && fsize2 == bf_unit_size && bf_size2 > 0 && bf_current_bit + bf_size2 <= fsize2 * 8) {
+                        if (bf_active && (packing_active2 ? (bf_current_bit + bf_size2 <= 64) : (fsize2 == bf_unit_size && bf_current_bit + bf_size2 <= fsize2 * 8)) && bf_size2 > 0) {
                             field2->offset = bf_unit_offset;
                             field2->is_bitfield = 1;
                             field2->bit_offset = bf_current_bit;
@@ -1491,7 +1498,7 @@ static void recompute_struct_layout(Type *stype) {
                 int bf_size = field->bit_size;
                 int fsize = type_size(ftype);
                 int packing_active = (stype->is_packed || (stype->pragma_pack > 0 && stype->pragma_pack < 8));
-                if (bf_active && fsize == bf_unit_size && bf_size > 0 && bf_current_bit + bf_size <= fsize * 8) {
+                if (bf_active && (packing_active ? (bf_current_bit + bf_size <= 64) : (fsize == bf_unit_size && bf_current_bit + bf_size <= fsize * 8)) && bf_size > 0) {
                     field->offset = bf_unit_offset;
                     field->bit_offset = bf_current_bit;
                     bf_current_bit += bf_size;
@@ -1637,6 +1644,7 @@ Type *parse_declarator(Compiler *cc, Type *base, char *name_out) {
                 while (cc->tk == TK_LBRACKET) {
                     int len = 0;
                     next_token(cc);
+                    while (cc->tk == TK_STATIC || cc->tk == TK_CONST || cc->tk == TK_VOLATILE) next_token(cc);
                     if (cc->tk != TK_RBRACKET) len = (int)parse_const_expr(cc);
                     expect(cc, TK_RBRACKET);
                     if (arr_num < 16) arr_lens[arr_num++] = len;
@@ -1703,6 +1711,7 @@ Type *parse_declarator(Compiler *cc, Type *base, char *name_out) {
         while (cc->tk == TK_LBRACKET) {
             int len = 0;
             next_token(cc);
+            while (cc->tk == TK_STATIC || cc->tk == TK_CONST || cc->tk == TK_VOLATILE) next_token(cc);
             if (cc->tk != TK_RBRACKET) len = (int)parse_const_expr(cc);
             expect(cc, TK_RBRACKET);
             if (arr_num < 16) arr_lens[arr_num++] = len;
@@ -1872,7 +1881,7 @@ Node *parse_primary(Compiler *cc) {
         sid = cc->num_strings;
         if (sid < MAX_STRINGS) {
             se = &cc->strings[sid];
-            se->data = cc_strdup(cc, cc->tk_str);
+            se->data = cc_memdup(cc, cc->tk_str, cc->tk_str_len);
             se->len = cc->tk_str_len;
             se->label_id = cc->label_count;
             cc->label_count++;
@@ -2549,13 +2558,20 @@ Node *parse_unary(Compiler *cc) {
         char dummy[128];
         st = parse_declarator(cc, st, dummy);
         expect(cc, TK_COMMA);
-        char member[128];
-        strncpy(member, cc->tk_text, 127);
-        member[127] = 0;
-        expect(cc, TK_IDENT);
-        expect(cc, TK_RPAREN);
         int offset = 0;
-        find_struct_member(st, member, &offset);
+        while (cc->tk == TK_IDENT) {
+            char member[128];
+            strncpy(member, cc->tk_text, 127);
+            member[127] = 0;
+            next_token(cc);
+            int sub_off = 0;
+            StructField *f = find_struct_member(st, member, &sub_off);
+            offset += sub_off;
+            if (f) st = f->type;
+            if (cc->tk == TK_DOT) next_token(cc);
+            else break;
+        }
+        expect(cc, TK_RPAREN);
         n = node_new(cc, ND_NUM, line);
         n->type = cc->ty_int; // size_t is unsigned long, but ty_int is fine for offset
         n->int_val = offset;
@@ -2674,9 +2690,32 @@ Node *parse_unary(Compiler *cc) {
                 Node *expr = 0;
                 next_token(cc); /* skip { */
 
-                if (cast_type->kind == TY_STRUCT) {
+                if (cast_type->kind == TY_STRUCT || cast_type->kind == TY_UNION) {
                     StructField *sf = cast_type->fields;
                     while (cc->tk != TK_RBRACE && cc->tk != TK_EOF && sf) {
+                        StructField *root_sf = sf;
+                        int member_off = sf->offset;
+                        if (cc->tk == TK_DOT) {
+                            Type *curr_t = cast_type;
+                            member_off = 0;
+                            while (cc->tk == TK_DOT) {
+                                next_token(cc); /* consume '.' */
+                                if (cc->tk == TK_IDENT) {
+                                    int sub_off = 0;
+                                    StructField *matched = find_struct_member(curr_t, cc->tk_text, &sub_off);
+                                    if (matched) {
+                                        sf = matched;
+                                        member_off += sub_off;
+                                        curr_t = matched->type;
+                                    }
+                                    next_token(cc); /* consume ident */
+                                }
+                            }
+                            if (cc->tk == TK_ASSIGN) {
+                                next_token(cc); /* consume '=' */
+                            }
+                            root_sf = sf;
+                        }
                         Node *var_n = node_new(cc, ND_VAR, line);
                         strncpy(var_n->name, tmp_name, MAX_IDENT - 1);
                         var_n->sym = sym;
@@ -2685,7 +2724,7 @@ Node *parse_unary(Compiler *cc) {
                         Node *mem_n = node_new(cc, ND_MEMBER, line);
                         mem_n->lhs = var_n;
                         strncpy(mem_n->member_name, sf->name, MAX_IDENT - 1);
-                        mem_n->member_offset = sf->offset;
+                        mem_n->member_offset = member_off;
                         mem_n->type = sf->type;
                         mem_n->member_size = type_size(sf->type);
                         mem_n->is_bitfield = sf->is_bitfield;
@@ -2708,7 +2747,12 @@ Node *parse_unary(Compiler *cc) {
                             expr = asgn_n;
                         }
 
-                        sf = sf->next;
+                        if (cast_type->kind == TY_UNION) {
+                            if (cc->tk == TK_COMMA) next_token(cc);
+                            break;
+                        }
+
+                        sf = root_sf->next;
                         if (cc->tk == TK_COMMA) next_token(cc);
                     }
                 } else if (cast_type->kind == TY_ARRAY) {
@@ -3289,15 +3333,20 @@ static Node *parse_initializer_list(Compiler *cc, int *out_count) {
     
     while (cc->tk != TK_EOF) {
         Node *item = NULL;
+        char desig_name[MAX_IDENT] = {0};
+        int has_desig = 0;
         if (cc->tk == TK_LBRACE) {
             item = parse_initializer_list(cc, NULL);
         } else if (cc->tk == TK_DOT) {
             /* C99 designated initializer: .field = value
-             * Consume the designator and parse the value.
-             * Note: fields are assumed to be in declaration order. */
-            next_token(cc); /* consume '.' */
-            if (cc->tk == TK_IDENT) {
-                next_token(cc); /* consume field name */
+             * Consume the designator and parse the value. */
+            while (cc->tk == TK_DOT) {
+                next_token(cc); /* consume '.' */
+                if (cc->tk == TK_IDENT) {
+                    strncpy(desig_name, cc->tk_text, MAX_IDENT - 1);
+                    has_desig = 1;
+                    next_token(cc); /* consume field name */
+                }
             }
             if (cc->tk == TK_ASSIGN) {
                 next_token(cc); /* consume '=' */
@@ -3331,6 +3380,9 @@ static Node *parse_initializer_list(Compiler *cc, int *out_count) {
             for (int i = 0; i < list->num_args; i++) {
                 list->args[i] = old_args[i];
             }
+        }
+        if (item && has_desig) {
+            strncpy(item->member_name, desig_name, MAX_IDENT - 1);
         }
         list->args[list->num_args++] = item;
         
@@ -4091,7 +4143,13 @@ Node *parse_stmt_internal(Compiler *cc) {
                                 block->stmts[cnt++] = asgn;
                             }
                         }
-                    }
+                        } else {
+                            if (vtype && vtype->kind == TY_ARRAY && vtype->array_len == 0) {
+                                int vla_sz = 1024;
+                                cc->local_offset = cc->local_offset + 8 - vla_sz;
+                                sym->stack_offset = cc->local_offset;
+                            }
+                        }
                     }
                 }
 
@@ -4345,7 +4403,7 @@ static Node* parse_value_from_wire(Compiler *cc, const uint8_t *ptr) {
             int sid = cc->num_strings;
             if (sid < MAX_STRINGS) {
                 StringEntry *se = &cc->strings[sid];
-                se->data = cc_strdup(cc, (char*)payload);
+                se->data = cc_memdup(cc, (char*)payload, w->u.value.len);
                 se->len = w->u.value.len;
                 se->label_id = cc->label_count++;
                 cc->num_strings++;

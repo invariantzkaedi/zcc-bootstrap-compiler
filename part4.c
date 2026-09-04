@@ -26,6 +26,7 @@ static long long eval_const_expr_p4(Node *elem, int *ok);
 long long force_truncate(long long v, Type *type);
 int is_unsigned_cmp(Node *n);
 extern void zcc_divzero_report(int line, int is_mod);
+StructField *find_struct_member(Type *type, const char *name, int *out_offset);
 
 #ifdef __clang__
 #pragma clang diagnostic ignored "-Wdangling-else"
@@ -834,6 +835,22 @@ static void codegen_addr_offset(Compiler *cc, Node *node, int offset) {
     codegen_addr_offset(cc, node->lhs, offset + node->member_offset);
     return;
   }
+  if (node->kind == ND_CAST) {
+    codegen_addr_offset(cc, node->lhs, offset);
+    return;
+  }
+  if (node->kind == ND_CALL || node->kind == ND_COMMA_EXPR) {
+    codegen_expr_checked(cc, node);
+    if (offset != 0) {
+      if (backend_ops) {
+        fprintf(cc->out, "    ldr r3, =%d\n    adds r0, r0, r3\n", offset);
+      } else {
+        fprintf(cc->out, "    addq $%d, %%rax\n", offset);
+      }
+      ir_emit_addr_offset(offset, node->line);
+    }
+    return;
+  }
   error_at(cc, node->line, "not an lvalue");
   if (!backend_ops) fprintf(cc->out, "    movq $0, %%rax\n");
 }
@@ -850,6 +867,65 @@ static int ptr_elem_size(Type *type) {
       return type_size(type->base);
   }
   return 1;
+}
+
+static void emit_bitfield_extract_p4(Compiler *cc, Node *node) {
+  if (node->is_bitfield && node->bit_size > 0 && node->bit_size <= 64) {
+    int uns = 1;
+    if (node->type) {
+      uns = is_unsigned_type(node->type);
+      if (node->type->kind == TY_ENUM) uns = 1;
+    }
+    int left_shift = 64 - node->bit_offset - node->bit_size;
+    int right_shift = 64 - node->bit_size;
+    if (left_shift > 0 && left_shift < 64) fprintf(cc->out, "    shlq $%d, %%rax\n", left_shift);
+    if (right_shift > 0 && right_shift < 64) {
+      if (uns) fprintf(cc->out, "    shrq $%d, %%rax\n", right_shift);
+      else fprintf(cc->out, "    sarq $%d, %%rax\n", right_shift);
+    }
+  }
+}
+
+static void emit_bitfield_store_p4(Compiler *cc, Node *lhs) {
+  fprintf(cc->out, "    movq %%r11, %%r9\n");
+  int bf_q = (lhs->member_size > 4 || (lhs->bit_offset + lhs->bit_size > lhs->member_size * 8));
+  if (bf_q) {
+    fprintf(cc->out, "    movq (%%rax), %%r10\n");
+  } else {
+    switch (lhs->member_size) {
+    case 1: fprintf(cc->out, "    movzbl (%%rax), %%r10d\n"); break;
+    case 2: fprintf(cc->out, "    movzwl (%%rax), %%r10d\n"); break;
+    case 4: fprintf(cc->out, "    movl (%%rax), %%r10d\n"); break;
+    default: fprintf(cc->out, "    movq (%%rax), %%r10\n"); break;
+    }
+  }
+  unsigned long long mask_val = (lhs->bit_size == 64) ? 0xFFFFFFFFFFFFFFFFULL : ((1ULL << lhs->bit_size) - 1ULL);
+  unsigned long long shift_mask = ~(mask_val << lhs->bit_offset);
+  if (shift_mask >= -2147483648LL && shift_mask <= 2147483647LL) {
+    fprintf(cc->out, "    movq $%lld, %%rcx\n", (long long)shift_mask);
+  } else {
+    fprintf(cc->out, "    movabsq $%lld, %%rcx\n", (long long)shift_mask);
+  }
+  fprintf(cc->out, "    andq %%rcx, %%r10\n");
+  if (mask_val >= -2147483648LL && mask_val <= 2147483647LL) {
+    fprintf(cc->out, "    andq $%lld, %%r11\n", (long long)mask_val);
+  } else {
+    fprintf(cc->out, "    movabsq $%lld, %%rcx\n", (long long)mask_val);
+    fprintf(cc->out, "    andq %%rcx, %%r11\n");
+  }
+  fprintf(cc->out, "    shlq $%d, %%r11\n", lhs->bit_offset);
+  fprintf(cc->out, "    orq %%r11, %%r10\n");
+  if (bf_q) {
+    fprintf(cc->out, "    movq %%r10, (%%rax)\n");
+  } else {
+    switch (lhs->member_size) {
+    case 1: fprintf(cc->out, "    movb %%r10b, (%%rax)\n"); break;
+    case 2: fprintf(cc->out, "    movw %%r10w, (%%rax)\n"); break;
+    case 4: fprintf(cc->out, "    movl %%r10d, (%%rax)\n"); break;
+    default: fprintf(cc->out, "    movq %%r10, (%%rax)\n"); break;
+    }
+  }
+  fprintf(cc->out, "    movq %%r9, %%rax\n");
 }
 
 /* ---------------------------------------------------------------- */
@@ -1132,42 +1208,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     }
     if (node->lhs->is_bitfield) {
       pop_reg(cc, "r11");
-      fprintf(cc->out, "    movq %%r11, %%r9\n");
-      switch (node->lhs->member_size) {
-      case 1: fprintf(cc->out, "    movzbl (%%rax), %%r10d\n"); break;
-      case 2: fprintf(cc->out, "    movzwl (%%rax), %%r10d\n"); break;
-      case 4: fprintf(cc->out, "    movl (%%rax), %%r10d\n"); break;
-      default: fprintf(cc->out, "    movq (%%rax), %%r10\n"); break;
-      }
-      unsigned long long mask_val = (node->lhs->bit_size == 64) ? 0xFFFFFFFFFFFFFFFFULL : ((1ULL << node->lhs->bit_size) - 1ULL);
-      unsigned long long shift_mask = ~(mask_val << node->lhs->bit_offset);
-      /* CG-BITFIELD-001: use movabsq for immediates that may not fit in
-       * sign-extended imm32. E.g. shift_mask=0xFFFFFFFF00000000 (-4294967296)
-       * cannot be encoded as movq $imm32 — GAS silently truncates to 0.
-       * Similarly mask_val=0xFFFFFFFF sign-extends to -1 (all-ones) in andq
-       * $imm32 form, turning the mask-and into a no-op. */
-      if (shift_mask >= -2147483648LL && shift_mask <= 2147483647LL) {
-        fprintf(cc->out, "    movq $%lld, %%rcx\n", (long long)shift_mask);
-      } else {
-        fprintf(cc->out, "    movabsq $%lld, %%rcx\n", (long long)shift_mask);
-      }
-      fprintf(cc->out, "    andq %%rcx, %%r10\n");
-      if (mask_val >= -2147483648LL && mask_val <= 2147483647LL) {
-        fprintf(cc->out, "    andq $%lld, %%r11\n", (long long)mask_val);
-      } else {
-        /* mask_val doesn't fit in imm32; load into %rcx then and */
-        fprintf(cc->out, "    movabsq $%lld, %%rcx\n", (long long)mask_val);
-        fprintf(cc->out, "    andq %%rcx, %%r11\n");
-      }
-      fprintf(cc->out, "    shlq $%d, %%r11\n", node->lhs->bit_offset);
-      fprintf(cc->out, "    orq %%r11, %%r10\n");
-      switch (node->lhs->member_size) {
-      case 1: fprintf(cc->out, "    movb %%r10b, (%%rax)\n"); break;
-      case 2: fprintf(cc->out, "    movw %%r10w, (%%rax)\n"); break;
-      case 4: fprintf(cc->out, "    movl %%r10d, (%%rax)\n"); break;
-      default: fprintf(cc->out, "    movq %%r10, (%%rax)\n"); break;
-      }
-      fprintf(cc->out, "    movq %%r9, %%rax\n");
+      emit_bitfield_store_p4(cc, node->lhs);
       {
         ZCC_EMIT_STORE(ir_map_type(node->lhs->type), lhs_addr_ir, rhs_ir,
                        node->line);
@@ -1398,6 +1439,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     } else {
       codegen_load(cc, node->lhs->type);
     }
+    if (node->lhs->is_bitfield) emit_bitfield_extract_p4(cc, node->lhs);
     push_reg(cc, "rax");
     codegen_expr_checked(cc, node->rhs);
     if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
@@ -1585,6 +1627,10 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rax");
+    if (node->lhs->is_bitfield) {
+      emit_bitfield_store_p4(cc, node->lhs);
+      return;
+    }
     if (node->lhs->kind == ND_MEMBER && node->lhs->member_size > 0) {
       switch (node->lhs->member_size) {
       case 1:
@@ -3187,7 +3233,9 @@ void codegen_expr(Compiler *cc, Node *node) {
     {
       char member_addr[32];
       ir_save_result(member_addr);
-      if (node->type) {
+      if (node->is_bitfield && (node->bit_offset + node->bit_size > (node->type ? node->type->size * 8 : 32) || (node->type && node->type->size > 4))) {
+        fprintf(cc->out, "    movq (%%rax), %%rax\n");
+      } else if (node->type) {
         codegen_load(cc, node->type);
       } else {
         switch (node->member_size) {
@@ -3207,24 +3255,7 @@ void codegen_expr(Compiler *cc, Node *node) {
           break;
         }
       }
-      if (node->is_bitfield && node->bit_size > 0 && node->bit_size <= 64) {
-        int uns = 1;
-        if (node->type) {
-          uns = is_unsigned_type(node->type);
-        }
-        int left_shift = 64 - node->bit_offset - node->bit_size;
-        int right_shift = 64 - node->bit_size;
-        if (left_shift > 0 && left_shift < 64) {
-            fprintf(cc->out, "    shlq $%d, %%rax\n", left_shift);
-        }
-        if (right_shift > 0 && right_shift < 64) {
-            if (uns) {
-              fprintf(cc->out, "    shrq $%d, %%rax\n", right_shift);
-            } else {
-              fprintf(cc->out, "    sarq $%d, %%rax\n", right_shift);
-            }
-        }
-      }
+      emit_bitfield_extract_p4(cc, node);
       {
         char *dst = ir_bridge_fresh_tmp();
         Type *t = node->type;
@@ -5603,7 +5634,7 @@ static int ir_whitelisted(const char *name) {
       "test_struct_tbaa", "test_cast_fallback", "gvn_test", "forward_test", "slf_sink", "slf_call_barrier", "loop_sum",
       /* Split Lexer Core (fortified and hardened) */
       "read_char", "read_escape", "node_name", "lex_char", "lex_operator",
-      "next_token",
+      /* "next_token", */
       NULL
   };
   int i;
@@ -6589,12 +6620,21 @@ static void emit_global_init_list(Compiler *cc, Type *type, Node *init_list, int
     } else if (type->kind == TY_STRUCT || type->kind == TY_UNION) {
         StructField *f = type->fields;
         for (int i = 0; i < init_list->num_args && f != NULL; i++, f = f->next) {
-            int field_abs_offset = base_offset + f->offset;
+            Node *elem = init_list->args[i];
+            int field_off = f->offset;
+            if (elem && elem->member_name[0]) {
+                int dummy_off = 0;
+                StructField *sf = find_struct_member(type, elem->member_name, &dummy_off);
+                if (sf) {
+                    f = sf;
+                    field_off = dummy_off;
+                }
+            }
+            int field_abs_offset = base_offset + field_off;
             if (field_abs_offset > *emitted) {
                 fprintf(cc->out, "    .zero %d\n", field_abs_offset - *emitted);
                 *emitted = field_abs_offset;
             }
-            Node *elem = init_list->args[i];
             if (elem->kind == ND_INIT_LIST) {
                 emit_global_init_list(cc, f->type, elem, field_abs_offset, emitted);
             } else if (f->type->kind == TY_STRUCT || f->type->kind == TY_UNION || f->type->kind == TY_ARRAY) {
