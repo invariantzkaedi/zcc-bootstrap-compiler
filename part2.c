@@ -81,6 +81,17 @@ char *cc_strdup(Compiler *cc, const char *s) {
     return p;
 }
 
+char *cc_memdup(Compiler *cc, const void *data, int len) {
+    char *p = (char *)cc_alloc(cc, len + 1);
+    int i;
+    const char *s = (const char *)data;
+    for (i = 0; i < len; i++) {
+        p[i] = s[i];
+    }
+    p[len] = 0;
+    return p;
+}
+
 /* ================================================================ */
 /* ERROR REPORTING                                                   */
 /* ================================================================ */
@@ -1223,7 +1234,7 @@ void next_token(Compiler *cc) {
         cc->tk = cc->peek_tk;
         cc->tk_val = cc->peek_val;
         strncpy(cc->tk_text, cc->peek_text, MAX_IDENT - 1);
-        strncpy(cc->tk_str, cc->peek_str, MAX_STR - 1);
+        memcpy(cc->tk_str, cc->peek_str, MAX_STR);
         cc->tk_str_len = cc->peek_str_len;
         cc->tk_line = cc->peek_line;
         cc->tk_col = cc->peek_col;
@@ -1398,7 +1409,7 @@ int peek_token(Compiler *cc) {
     s_tk = cc->tk;
     s_val = cc->tk_val;
     strncpy(s_text, cc->tk_text, MAX_IDENT - 1);
-    strncpy(s_str, cc->tk_str, MAX_STR - 1);
+    memcpy(s_str, cc->tk_str, MAX_STR);
     s_slen = cc->tk_str_len;
     s_line = cc->tk_line;
     s_col = cc->tk_col;
@@ -1410,7 +1421,7 @@ int peek_token(Compiler *cc) {
     cc->peek_tk = cc->tk;
     cc->peek_val = cc->tk_val;
     strncpy(cc->peek_text, cc->tk_text, MAX_IDENT - 1);
-    strncpy(cc->peek_str, cc->tk_str, MAX_STR - 1);
+    memcpy(cc->peek_str, cc->tk_str, MAX_STR);
     cc->peek_str_len = cc->tk_str_len;
     cc->peek_line = cc->tk_line;
     cc->peek_col = cc->tk_col;
@@ -1420,7 +1431,7 @@ int peek_token(Compiler *cc) {
     cc->tk = s_tk;
     cc->tk_val = s_val;
     strncpy(cc->tk_text, s_text, MAX_IDENT - 1);
-    strncpy(cc->tk_str, s_str, MAX_STR - 1);
+    memcpy(cc->tk_str, s_str, MAX_STR);
     cc->tk_str_len = s_slen;
     cc->tk_line = s_line;
     cc->tk_col = s_col;
