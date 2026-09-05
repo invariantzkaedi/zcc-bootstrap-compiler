@@ -126,6 +126,20 @@ class CircuitIndividual:
             _GATE_MATRIX_CACHE[cache_key] = mat
             return mat
 
+        elif gene.gate_name == "SWAP":
+            c, t = gene.control_qubit, gene.target_qubit
+            mat = np.zeros((dim, dim), dtype=complex)
+            for i in range(dim):
+                bit_c = (i >> c) & 1
+                bit_t = (i >> t) & 1
+                if bit_c != bit_t:
+                    flipped = i ^ (1 << c) ^ (1 << t)
+                    mat[flipped, i] = 1.0
+                else:
+                    mat[i, i] = 1.0
+            _GATE_MATRIX_CACHE[cache_key] = mat
+            return mat
+
         # Single qubit gate
         if gene.gate_name in GATE_MATRICES_1Q:
             base_1q = GATE_MATRICES_1Q[gene.gate_name]
@@ -239,17 +253,18 @@ class OneirogenesisQuantumOptimizer:
         self._init_islands()
 
     def _random_gene(self) -> QuantumGene:
-        gate_choices = ["H", "X", "Y", "Z", "S", "S_DAG", "T", "T_DAG", "RZ", "RX", "CX", "CZ"]
+        gate_choices = ["H", "X", "Y", "Z", "S", "S_DAG", "T", "T_DAG", "RZ", "RX", "CX", "CZ", "SWAP"]
         g_name = random.choice(gate_choices)
         target = random.randint(0, self.n_qubits - 1)
 
-        if g_name in ("CX", "CZ"):
+        if g_name in ("CX", "CZ", "SWAP"):
             c = random.randint(0, self.n_qubits - 1)
             while c == target:
                 c = random.randint(0, self.n_qubits - 1)
             return QuantumGene(gate_name=g_name, target_qubit=target, control_qubit=c)
         elif g_name in ("RZ", "RX"):
-            theta = random.choice([np.pi/4, np.pi/2, 3*np.pi/4, np.pi, -np.pi/4, -np.pi/2])
+            k = random.choice([-7, -6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6, 7])
+            theta = k * np.pi / 8.0
             return QuantumGene(gate_name=g_name, target_qubit=target, theta=theta)
         else:
             return QuantumGene(gate_name=g_name, target_qubit=target)
@@ -280,14 +295,18 @@ class OneirogenesisQuantumOptimizer:
                 cut2 = random.randint(0, len(p2.genes))
                 child_genes = p1.genes[:cut1] + p2.genes[cut2:]
 
-                # Mutations: Add, Delete, Swap, Replace
+                # Mutations: Add, Delete, Swap, Replace, Angle-Refine
                 if random.random() < 0.35 and len(child_genes) < 32:
                     child_genes.insert(random.randint(0, len(child_genes)), self._random_gene())
                 if random.random() < 0.25 and len(child_genes) > 1:
                     child_genes.pop(random.randint(0, len(child_genes) - 1))
-                if random.random() < 0.20 and len(child_genes) > 0:
+                if random.random() < 0.25 and len(child_genes) > 0:
                     idx = random.randint(0, len(child_genes) - 1)
-                    child_genes[idx] = self._random_gene()
+                    if child_genes[idx].gate_name in ("RZ", "RX"):
+                        delta = random.choice([-np.pi/8, np.pi/8, -np.pi/16, np.pi/16])
+                        child_genes[idx].theta += delta
+                    else:
+                        child_genes[idx] = self._random_gene()
 
                 child = CircuitIndividual(genes=child_genes, n_qubits=self.n_qubits)
                 child.compute_metrics(self.target_unitary)
@@ -447,6 +466,8 @@ def generate_qasm_string(genes: List[QuantumGene], n_qubits: int, target_name: s
     for g in genes:
         if g.gate_name in ("CX", "CZ"):
             lines.append(f"{g.gate_name.lower()} q[{g.control_qubit}], q[{g.target_qubit}];")
+        elif g.gate_name == "SWAP":
+            lines.append(f"swap q[{g.control_qubit}], q[{g.target_qubit}];")
         elif g.gate_name == "RZ":
             lines.append(f"rz({g.theta:.6f}) q[{g.target_qubit}];")
         elif g.gate_name == "RX":
