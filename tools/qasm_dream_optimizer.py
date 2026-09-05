@@ -33,6 +33,14 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
+try:
+    import torch
+    HAS_TORCH = True
+    CUDA_AVAILABLE = torch.cuda.is_available()
+except ImportError:
+    HAS_TORCH = False
+    CUDA_AVAILABLE = False
+
 BABYBEAR_PRIME = 2013265921  # 2^31 - 2^27 + 1 (15 * 2^27 + 1)
 QUANT_SCALE = 1000000000     # 1e9 quantization scale
 
@@ -164,13 +172,7 @@ class CircuitIndividual:
         _GATE_MATRIX_CACHE[cache_key] = full_mat
         return full_mat
 
-    def compute_metrics(self, target_unitary: np.ndarray):
-        U_synth = self.evaluate_unitary()
-        dim = 1 << self.n_qubits
-        # Gauge-invariant Hilbert-Schmidt fidelity: |Tr(U_target† * U_synth)| / dim
-        trace_val = np.trace(target_unitary.conj().T @ U_synth)
-        self.fidelity = float(abs(trace_val) / dim)
-
+    def update_pareto_fitness(self):
         # Count T-gates and T-depth
         self.t_count = sum(1 for g in self.genes if g.is_t_gate)
         self.total_gates = len(self.genes)
@@ -180,7 +182,7 @@ class CircuitIndividual:
         for g in self.genes:
             if g.is_t_gate:
                 qubit_t_layers[g.target_qubit] += 1
-            elif g.gate_name in ("CX", "CZ"):
+            elif g.gate_name in ("CX", "CZ", "SWAP"):
                 c, t = g.control_qubit, g.target_qubit
                 max_l = max(qubit_t_layers[c], qubit_t_layers[t])
                 qubit_t_layers[c] = qubit_t_layers[t] = max_l
@@ -188,6 +190,14 @@ class CircuitIndividual:
 
         # Pareto Fitness Function: Rewards Fidelity, penalizes T-count & depth
         self.fitness = (self.fidelity * 100.0) - (self.t_count * 1.5) - (self.t_depth * 2.0) - (self.total_gates * 0.2)
+
+    def compute_metrics(self, target_unitary: np.ndarray):
+        U_synth = self.evaluate_unitary()
+        dim = 1 << self.n_qubits
+        # Gauge-invariant Hilbert-Schmidt fidelity: |Tr(U_target† * U_synth)| / dim
+        trace_val = np.trace(target_unitary.conj().T @ U_synth)
+        self.fidelity = float(abs(trace_val) / dim)
+        self.update_pareto_fitness()
 
 # =====================================================================
 # 3. BabyBear Finite Field STARK Merkle Prover
@@ -236,21 +246,104 @@ class BabyBearSTARKProver:
 # =====================================================================
 
 class OneirogenesisQuantumOptimizer:
-    """8-Island Parallel Evolutionary Optimizer for Quantum Unitary Synthesis."""
-    def __init__(self, target_unitary: np.ndarray, n_qubits: int = 2, n_islands: int = 8, pop_per_island: Optional[int] = None):
+    """8-Island Parallel Evolutionary Optimizer for Quantum Unitary Synthesis with PyTorch CUDA Acceleration."""
+    def __init__(self, target_unitary: np.ndarray, n_qubits: int = 2, n_islands: int = 8, pop_per_island: Optional[int] = None, device_str: str = "auto", is_state_prep: bool = False):
         self.target_unitary = target_unitary
         self.n_qubits = n_qubits
         self.n_islands = n_islands
+        self.is_state_prep = is_state_prep
+
+        # Configure GPU / CPU device
+        if (device_str == "cuda" or (device_str == "auto" and CUDA_AVAILABLE)) and HAS_TORCH:
+            self.device = torch.device("cuda")
+            self.use_cuda = True
+            self.device_name = f"NVIDIA CUDA ({torch.cuda.get_device_name(0)})"
+        else:
+            self.device = torch.device("cpu") if HAS_TORCH else None
+            self.use_cuda = False
+            self.device_name = "Host CPU (NumPy / Multi-Core)"
+
+        if self.use_cuda:
+            self.target_tensor = torch.tensor(target_unitary, dtype=torch.complex64, device=self.device)
+            dim = 1 << n_qubits
+            if is_state_prep:
+                # State vector target = target_unitary @ |0>
+                state_0 = torch.zeros(dim, 1, dtype=torch.complex64, device=self.device)
+                state_0[0, 0] = 1.0
+                self.target_state = torch.matmul(self.target_tensor, state_0)
+            self.torch_gate_cache: Dict[Tuple, torch.Tensor] = {}
+        else:
+            self.target_tensor = None
+
         if pop_per_island is not None:
             self.pop_per_island = pop_per_island
         elif n_qubits <= 3:
             self.pop_per_island = 40
         elif n_qubits <= 5:
-            self.pop_per_island = 20
+            self.pop_per_island = 25
         else:
-            self.pop_per_island = 8
+            self.pop_per_island = 16
         self.islands: List[List[CircuitIndividual]] = []
         self._init_islands()
+
+    def _get_torch_matrix(self, gene: QuantumGene) -> torch.Tensor:
+        cache_key = (self.n_qubits, gene.gate_name, gene.target_qubit, gene.control_qubit, round(gene.theta, 5))
+        if cache_key in self.torch_gate_cache:
+            return self.torch_gate_cache[cache_key]
+        np_mat = CircuitIndividual(genes=[gene], n_qubits=self.n_qubits)._get_full_matrix(gene)
+        t_mat = torch.tensor(np_mat, dtype=torch.complex64, device=self.device)
+        self.torch_gate_cache[cache_key] = t_mat
+        return t_mat
+
+    def evaluate_population_batch(self, population: List[CircuitIndividual]):
+        if not population:
+            return
+        if self.use_cuda:
+            P = len(population)
+            dim = 1 << self.n_qubits
+            max_len = max((len(ind.genes) for ind in population), default=0)
+            I_mat = torch.eye(dim, dtype=torch.complex64, device=self.device)
+
+            if self.is_state_prep:
+                # O(D) State-Vector Simulation mode for 8-qubit state synthesis
+                psi_0 = torch.zeros(dim, 1, dtype=torch.complex64, device=self.device)
+                psi_0[0, 0] = 1.0
+                batch_psi = psi_0.unsqueeze(0).repeat(P, 1, 1)
+
+                for step in range(max_len):
+                    step_tensors = [
+                        self._get_torch_matrix(ind.genes[step]) if step < len(ind.genes) else I_mat
+                        for ind in population
+                    ]
+                    step_stack = torch.stack(step_tensors, dim=0)
+                    batch_psi = torch.bmm(step_stack, batch_psi)
+
+                target_bra = self.target_state.conj().T.unsqueeze(0).expand(P, 1, dim)
+                overlaps = torch.bmm(target_bra, batch_psi).squeeze(-1).squeeze(-1)
+                fids = (torch.abs(overlaps) ** 2).cpu().numpy()
+            else:
+                # O(D^3) Full Unitary mode with GPU Tensor batched matrix multiplication
+                batch_U = I_mat.unsqueeze(0).repeat(P, 1, 1)
+
+                for step in range(max_len):
+                    step_tensors = [
+                        self._get_torch_matrix(ind.genes[step]) if step < len(ind.genes) else I_mat
+                        for ind in population
+                    ]
+                    step_stack = torch.stack(step_tensors, dim=0)
+                    batch_U = torch.bmm(step_stack, batch_U)
+
+                target_adj = self.target_tensor.conj().T.unsqueeze(0).expand(P, dim, dim)
+                prod = torch.bmm(target_adj, batch_U)
+                traces = torch.einsum('bii->b', prod)
+                fids = (torch.abs(traces) / dim).cpu().numpy()
+
+            for idx, ind in enumerate(population):
+                ind.fidelity = float(fids[idx])
+                ind.update_pareto_fitness()
+        else:
+            for ind in population:
+                ind.compute_metrics(self.target_unitary)
 
     def _random_gene(self) -> QuantumGene:
         gate_choices = ["H", "X", "Y", "Z", "S", "S_DAG", "T", "T_DAG", "RZ", "RX", "CX", "CZ", "SWAP"]
@@ -270,32 +363,35 @@ class OneirogenesisQuantumOptimizer:
             return QuantumGene(gate_name=g_name, target_qubit=target)
 
     def _init_islands(self):
+        all_inds = []
         for _ in range(self.n_islands):
             pop = []
             for _ in range(self.pop_per_island):
                 length = random.randint(2, 10)
                 genes = [self._random_gene() for _ in range(length)]
                 ind = CircuitIndividual(genes=genes, n_qubits=self.n_qubits)
-                ind.compute_metrics(self.target_unitary)
                 pop.append(ind)
+                all_inds.append(ind)
             self.islands.append(pop)
+        self.evaluate_population_batch(all_inds)
 
     def evolve_step(self) -> CircuitIndividual:
-        for island_idx, pop in enumerate(self.islands):
-            # Sort by fitness descending
-            pop.sort(key=lambda x: x.fitness, reverse=True)
-            new_pop = pop[:5] # Elitism
+        new_children_all = []
+        island_children_map = []
 
-            while len(new_pop) < self.pop_per_island:
+        for island_idx, pop in enumerate(self.islands):
+            pop.sort(key=lambda x: x.fitness, reverse=True)
+            new_pop = list(pop[:5]) # Elitism
+            children = []
+
+            while len(new_pop) + len(children) < self.pop_per_island:
                 p1 = random.choice(pop[:15])
                 p2 = random.choice(pop[:15])
 
-                # Crossover
                 cut1 = random.randint(0, len(p1.genes))
                 cut2 = random.randint(0, len(p2.genes))
                 child_genes = p1.genes[:cut1] + p2.genes[cut2:]
 
-                # Mutations: Add, Delete, Swap, Replace, Angle-Refine
                 if random.random() < 0.35 and len(child_genes) < 32:
                     child_genes.insert(random.randint(0, len(child_genes)), self._random_gene())
                 if random.random() < 0.25 and len(child_genes) > 1:
@@ -309,18 +405,24 @@ class OneirogenesisQuantumOptimizer:
                         child_genes[idx] = self._random_gene()
 
                 child = CircuitIndividual(genes=child_genes, n_qubits=self.n_qubits)
-                child.compute_metrics(self.target_unitary)
-                new_pop.append(child)
+                children.append(child)
+                new_children_all.append(child)
 
+            island_children_map.append((new_pop, children))
+
+        # Batched evaluation of ALL children across ALL islands in a single GPU pass!
+        self.evaluate_population_batch(new_children_all)
+
+        for island_idx, (new_pop, children) in enumerate(island_children_map):
+            new_pop.extend(children)
             self.islands[island_idx] = new_pop
 
-        # Inter-island Migration Ring Topology
+        # Ring Migration
         if random.random() < 0.15:
             for i in range(self.n_islands):
                 next_i = (i + 1) % self.n_islands
                 self.islands[next_i][-1] = self.islands[i][0]
 
-        # Return global best
         best = min((pop[0] for pop in self.islands), key=lambda x: (1.0 - x.fidelity, x.t_count))
         return best
 
@@ -526,17 +628,25 @@ def export_all_artifacts(best: CircuitIndividual, n_qubits: int, target_name: st
         json.dump(manifest_data, f, indent=2)
     print(f"  ✔ [EXPORT] Sealed Manifest: {manifest_path}")
 
-def run_single_benchmark(target_name: str, islands: int, cycles: int, export: bool = True) -> CircuitIndividual:
+def run_single_benchmark(target_name: str, islands: int, cycles: int, device: str = "auto", pop_size: Optional[int] = None, export: bool = True) -> CircuitIndividual:
     target_mat, n_qubits = build_benchmark_unitary(target_name)
     dim = 1 << n_qubits
-    print(f"\n────────────────────────────────────────────────────────────────────────")
-    print(f"  ⚡ BENCHMARK: {target_name.upper()} ({n_qubits} Qubits, Dim: {dim}x{dim})")
-    print(f"────────────────────────────────────────────────────────────────────────")
-    print(f"  • Island Topology: {islands} Parallel Ring Lineages")
-    print(f"  • Optimization   : T-Depth & Clifford+T Minimal Word Synthesis")
-    print(f"  • STARK Prover   : BabyBear Field (p={BABYBEAR_PRIME}) Merkle Commitments\n")
+    is_state_prep = (target_name.lower() in ("ghz3", "ghz8", "syndrome8"))
+    mode_str = "State-Vector O(D)" if is_state_prep else "Unitary O(D^3)"
 
-    optimizer = OneirogenesisQuantumOptimizer(target_mat, n_qubits=n_qubits, n_islands=islands)
+    optimizer = OneirogenesisQuantumOptimizer(
+        target_mat, n_qubits=n_qubits, n_islands=islands,
+        pop_per_island=pop_size, device_str=device, is_state_prep=is_state_prep
+    )
+
+    print(f"\n────────────────────────────────────────────────────────────────────────")
+    print(f"  ⚡ BENCHMARK: {target_name.upper()} ({n_qubits} Qubits, Dim: {dim}x{dim}) [{mode_str}]")
+    print(f"────────────────────────────────────────────────────────────────────────")
+    print(f"  • Compute Device : {optimizer.device_name}")
+    print(f"  • Island Topology: {islands} Parallel Ring Lineages (Pop/Island: {optimizer.pop_per_island})")
+    print(f"  • Optimization   : T-Depth & Clifford+T Minimal Word Synthesis")
+    print(f"  • STARK Prover   : BabyBear Field (p={BABYBEAR_PRIME}) Merkle Commitments\n", flush=True)
+
     best = optimizer.run_gauntlet(cycles=cycles)
 
     print(f"\n  🏆 [{target_name.upper()}] SYNTHESIS COMPLETE:")
@@ -544,7 +654,7 @@ def run_single_benchmark(target_name: str, islands: int, cycles: int, export: bo
     print(f"     T-Gate Count        : {best.t_count}")
     print(f"     T-Depth (Parallel)  : {best.t_depth}")
     print(f"     Total Gates         : {best.total_gates}")
-    print(f"     STARK Merkle Root   : {best.merkle_root}")
+    print(f"     STARK Merkle Root   : {best.merkle_root}", flush=True)
 
     if export:
         export_all_artifacts(best, n_qubits, target_name)
@@ -554,23 +664,25 @@ def main():
     parser = argparse.ArgumentParser(description="ZKAEDI Oneirogenesis Quantum Superoptimizer")
     parser.add_argument("--target", type=str, default="qft2", choices=list(BENCHMARK_TARGETS.keys()) + ["toffoli_2q_approx"])
     parser.add_argument("--islands", type=int, default=8)
+    parser.add_argument("--pop-size", type=int, default=None, help="Population size per island")
     parser.add_argument("--cycles", type=int, default=500)
+    parser.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "cpu"], help="Compute device for tensor batching")
     parser.add_argument("--gauntlet", action="store_true", help="Run multi-target quantum gauntlet (QFT2, Toffoli, QFT3, GHZ8, Syndrome8)")
     parser.add_argument("--export-manifest", action="store_true", default=True)
     args = parser.parse_args()
 
     print("╔════════════════════════════════════════════════════════════════════════╗")
     print("║  🔱 ZKAEDI PRIME // ONEIROGENESIS QUANTUM SUPEROPTIMIZER (T-DEPTH)    ║")
-    print("╚════════════════════════════════════════════════════════════════════════╝")
+    print("╚════════════════════════════════════════════════════════════════════════╝", flush=True)
 
     if args.gauntlet:
         suite = ["qft2", "toffoli", "qft3", "ghz8", "syndrome8"]
-        print(f"\n[*] Launching Multi-Arch Quantum Circuit Synthesis Gauntlet across {len(suite)} targets...")
+        print(f"\n[*] Launching Multi-Arch Quantum Circuit Synthesis Gauntlet across {len(suite)} targets...", flush=True)
         results = {}
         for target in suite:
             # Scale cycles for multi-target gauntlet responsiveness
             target_cycles = min(args.cycles, 300) if target in ("ghz8", "syndrome8") else args.cycles
-            res = run_single_benchmark(target, args.islands, target_cycles, export=True)
+            res = run_single_benchmark(target, args.islands, target_cycles, device=args.device, pop_size=args.pop_size, export=True)
             results[target] = res
 
         print("\n========================================================================")
@@ -579,9 +691,9 @@ def main():
         for target, best in results.items():
             print(f"  • {target.upper():<12} | Fidelity: {best.fidelity:.6f} | T-Count: {best.t_count:2d} | T-Depth: {best.t_depth:2d} | Gates: {best.total_gates:2d}")
         print("========================================================================")
-        print("  ✔ All circuits, BabyBear STARK proofs, and manifests sealed!")
+        print("  ✔ All circuits, BabyBear STARK proofs, and manifests sealed!", flush=True)
     else:
-        run_single_benchmark(args.target, args.islands, args.cycles, export=args.export_manifest)
+        run_single_benchmark(args.target, args.islands, args.cycles, device=args.device, pop_size=args.pop_size, export=args.export_manifest)
 
 if __name__ == "__main__":
     main()
