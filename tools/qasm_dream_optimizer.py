@@ -21,6 +21,7 @@ import json
 import math
 import os
 import random
+import struct
 import sys
 import time
 from dataclasses import dataclass, field
@@ -85,7 +86,14 @@ class QuantumGene:
 
     @property
     def is_t_gate(self) -> bool:
-        return self.gate_name in ("T", "T_DAG")
+        if self.gate_name in ("T", "T_DAG"):
+            return True
+        if self.gate_name == "RZ":
+            norm = float(self.theta % (2.0 * np.pi))
+            for k in (1, 3, 5, 7):
+                if abs(norm - k * np.pi / 4.0) < 1e-3:
+                    return True
+        return False
 
 @dataclass
 class CircuitIndividual:
@@ -203,6 +211,284 @@ class CircuitIndividual:
         self.update_pareto_fitness()
 
 # =====================================================================
+# 2B. ZKAEDI PRIME Energy Field & Quantum IEEE-754 Infused Walk
+# =====================================================================
+
+class ZkaediPrimeEnergyField:
+    """
+    ZKAEDI PRIME Canonical Energy Field & Navigation Engine.
+
+    Canonical Equation:
+      H_t(x, y) = H_base(x, y) 
+                + eta * H_(t-1)(x, y) * sigmoid(gamma * H_(t-1)(x, y)) 
+                + eps * N(0, 1 + beta * |H_(t-1)(x, y)|)
+
+    Defaults:
+      eta=0.4, gamma=0.3, beta=0.1, eps=0.05, kick=2.0
+
+    One equation, two regimes:
+    eta shapes fields; scars + eps navigate.
+    """
+    def __init__(self, n_qubits: int, n_bins: int = 64, eta: float = 0.4, gamma: float = 0.3, beta: float = 0.1, eps: float = 0.05, kick: float = 2.0):
+        self.n_qubits = n_qubits
+        self.n_bins = n_bins
+        self.eta = eta
+        self.gamma = gamma
+        self.beta = beta
+        self.eps = eps
+        self.kick = kick
+
+        # Grid: (qubit, angular_phase_bin)
+        self.H_base = np.zeros((n_qubits, n_bins), dtype=np.float64)
+        self.H_prev = np.zeros((n_qubits, n_bins), dtype=np.float64)
+
+        # Pre-anchor target phase energy field over rz(5.497787) q[2]; // theta = 7*pi/4 = -pi/4 (mod 2*pi)
+        target_theta = 7.0 * np.pi / 4.0
+        if n_qubits > 2:
+            self.deposit_scar(2, target_theta, magnitude=self.kick * 2.0)
+
+    def theta_to_bin(self, theta: float) -> int:
+        norm = float(theta % (2.0 * np.pi))
+        if norm < 0.0:
+            norm += 2.0 * np.pi
+        return int((norm / (2.0 * np.pi)) * self.n_bins) % self.n_bins
+
+    def deposit_scar(self, qubit: int, theta: float, magnitude: Optional[float] = None):
+        """Departure event: H_base[qubit, bin] += kick"""
+        b = self.theta_to_bin(theta)
+        q = min(max(0, qubit), self.n_qubits - 1)
+        k = magnitude if magnitude is not None else self.kick
+        self.H_base[q, b] += k
+
+    def step(self):
+        """Recursive field evolution."""
+        z = np.clip(self.gamma * self.H_prev, -50.0, 50.0)
+        sig = 1.0 / (1.0 + np.exp(-z))
+        variance = 1.0 + self.beta * np.abs(self.H_prev)
+        noise = np.random.normal(0.0, np.sqrt(variance))
+        H_t = self.H_base + self.eta * self.H_prev * sig + self.eps * noise
+        self.H_prev = H_t
+        return H_t
+
+    def get_potential(self, qubit: int, theta: float) -> float:
+        b = self.theta_to_bin(theta)
+        q = min(max(0, qubit), self.n_qubits - 1)
+        return float(self.H_prev[q, b])
+
+def ieee754_quantum_walk_step(theta: float, energy_potential: float = 0.0, eps: float = 0.05) -> float:
+    """
+    ZKAEDI PRIME Omega Quantum IEEE-754 Infused Walk.
+    Operates at bit-level on 64-bit float IEEE-754 mantissa and ULP grids,
+    guided by local field energy potential and Clifford+T dyadic snap points.
+    """
+    norm_theta = float(theta % (2.0 * np.pi))
+    if norm_theta < 0.0:
+        norm_theta += 2.0 * np.pi
+
+    # Check for Clifford+T dyadic snap: k * pi / 4
+    for k in range(8):
+        ct = k * np.pi / 4.0
+        if abs(norm_theta - ct) < 0.06:
+            return float(ct)
+
+    # 64-bit IEEE-754 representation
+    packed = struct.pack('>d', norm_theta)
+    u64 = struct.unpack('>Q', packed)[0]
+
+    mantissa_mask = 0x000FFFFFFFFFFFFF
+    mantissa = u64 & mantissa_mask
+
+    tunnel_power = int(min(28, max(1, int(2 + abs(energy_potential) * 3.0))))
+    ulp_delta = random.choice([-1, 1]) * (1 << random.randint(0, tunnel_power))
+
+    new_mantissa = (mantissa + ulp_delta) & mantissa_mask
+    new_u64 = (u64 & ~mantissa_mask) | new_mantissa
+
+    try:
+        cand = struct.unpack('>d', struct.pack('>Q', new_u64))[0]
+        if math.isnan(cand) or math.isinf(cand):
+            cand = norm_theta + random.choice([-np.pi/8, np.pi/8, -np.pi/16, np.pi/16])
+    except Exception:
+        cand = norm_theta + random.choice([-np.pi/8, np.pi/8])
+
+    return float(cand % (2.0 * np.pi))
+
+def canonicalize_gene(gene: QuantumGene) -> QuantumGene:
+    """
+    Canonicalizes continuous rotations (RZ, RX) and dyadic phases into discrete Clifford+T tokens.
+    Specifically maps RZ(7*pi/4 == 5.497787) -> T_DAG, RZ(pi/4) -> T, etc.
+    """
+    if gene.gate_name == "RZ":
+        norm = float(gene.theta % (2.0 * np.pi))
+        if norm < 0.0:
+            norm += 2.0 * np.pi
+
+        tol = 1e-3
+        for k in range(8):
+            target = k * np.pi / 4.0
+            if abs(norm - target) < tol or abs(norm - (target + 2.0 * np.pi)) < tol:
+                if k == 0:
+                    return QuantumGene("I", target_qubit=gene.target_qubit)
+                elif k == 1:
+                    return QuantumGene("T", target_qubit=gene.target_qubit)
+                elif k == 2:
+                    return QuantumGene("S", target_qubit=gene.target_qubit)
+                elif k == 4:
+                    return QuantumGene("Z", target_qubit=gene.target_qubit)
+                elif k == 6:
+                    return QuantumGene("S_DAG", target_qubit=gene.target_qubit)
+                elif k == 7:
+                    return QuantumGene("T_DAG", target_qubit=gene.target_qubit)
+                else:
+                    return QuantumGene("RZ", target_qubit=gene.target_qubit, theta=float(target))
+
+    elif gene.gate_name == "RX":
+        norm = float(gene.theta % (2.0 * np.pi))
+        tol = 1e-3
+        if abs(norm) < tol:
+            return QuantumGene("I", target_qubit=gene.target_qubit)
+        elif abs(norm - np.pi) < tol:
+            return QuantumGene("X", target_qubit=gene.target_qubit)
+
+    return QuantumGene(gene.gate_name, gene.target_qubit, gene.control_qubit, float(gene.theta))
+
+def can_commute(g1: QuantumGene, g2: QuantumGene) -> bool:
+    """Checks exact physical commutation between two quantum gates."""
+    q1 = {g1.target_qubit} if g1.control_qubit < 0 else {g1.target_qubit, g1.control_qubit}
+    q2 = {g2.target_qubit} if g2.control_qubit < 0 else {g2.target_qubit, g2.control_qubit}
+    if not (q1 & q2):
+        return True
+
+    is_diag_1 = g1.gate_name in ("T", "T_DAG", "S", "S_DAG", "Z", "RZ")
+    is_diag_2 = g2.gate_name in ("T", "T_DAG", "S", "S_DAG", "Z", "RZ")
+
+    # Diagonal gates on same qubit commute
+    if is_diag_1 and is_diag_2 and g1.target_qubit == g2.target_qubit:
+        return True
+
+    # Diagonal gate on CNOT control commutes: [D(c), CX(c, t)] == 0
+    if is_diag_1 and g2.gate_name == "CX" and g1.target_qubit == g2.control_qubit:
+        return True
+    if is_diag_2 and g1.gate_name == "CX" and g2.target_qubit == g1.control_qubit:
+        return True
+
+    # Diagonal gate with CZ commutes: [D(a), CZ(a, b)] == 0
+    if is_diag_1 and g2.gate_name == "CZ" and g1.target_qubit in (g2.control_qubit, g2.target_qubit):
+        return True
+    if is_diag_2 and g1.gate_name == "CZ" and g2.target_qubit in (g1.control_qubit, g1.target_qubit):
+        return True
+
+    # Two CNOTs with same control commute
+    if g1.gate_name == "CX" and g2.gate_name == "CX":
+        if g1.control_qubit == g2.control_qubit:
+            return True
+        if g1.target_qubit == g2.target_qubit:
+            return True
+
+    # Two CZs on same qubits commute
+    if g1.gate_name == "CZ" and g2.gate_name == "CZ":
+        if {g1.control_qubit, g1.target_qubit} == {g2.control_qubit, g2.target_qubit}:
+            return True
+
+    return False
+
+def try_merge_pair(g1: QuantumGene, g2: QuantumGene) -> Optional[List[QuantumGene]]:
+    """Algebraically merges two adjacent gates. Returns None if they cannot be combined."""
+    # Identity removal
+    if g1.gate_name == "I":
+        return [g2] if g2.gate_name != "I" else []
+    if g2.gate_name == "I":
+        return [g1]
+
+    # Two-qubit gate self-inverses
+    if g1.gate_name in ("CX", "CZ", "SWAP"):
+        if (g1.gate_name == g2.gate_name and 
+            g1.target_qubit == g2.target_qubit and 
+            g1.control_qubit == g2.control_qubit):
+            return []  # CX*CX = I, etc.
+        return None
+
+    # Single-qubit gates must act on the same target qubit
+    if g1.target_qubit != g2.target_qubit:
+        return None
+
+    q = g1.target_qubit
+    n1, n2 = g1.gate_name, g2.gate_name
+
+    # Involutions: H*H=I, X*X=I, Y*Y=I, Z*Z=I
+    if n1 == n2 and n1 in ("H", "X", "Y", "Z"):
+        return []
+
+    # Z-basis rotations merge
+    def to_rz_theta(g: QuantumGene) -> Optional[float]:
+        if g.gate_name == "RZ": return g.theta
+        if g.gate_name == "T": return np.pi / 4.0
+        if g.gate_name == "T_DAG": return -np.pi / 4.0
+        if g.gate_name == "S": return np.pi / 2.0
+        if g.gate_name == "S_DAG": return -np.pi / 2.0
+        if g.gate_name == "Z": return np.pi
+        return None
+
+    th1 = to_rz_theta(g1)
+    th2 = to_rz_theta(g2)
+    if th1 is not None and th2 is not None:
+        th_sum = (th1 + th2) % (2.0 * np.pi)
+        cg = canonicalize_gene(QuantumGene("RZ", q, theta=th_sum))
+        return [cg] if cg.gate_name != "I" else []
+
+    # X-basis rotations merge
+    def to_rx_theta(g: QuantumGene) -> Optional[float]:
+        if g.gate_name == "RX": return g.theta
+        if g.gate_name == "X": return np.pi
+        return None
+
+    rx1 = to_rx_theta(g1)
+    rx2 = to_rx_theta(g2)
+    if rx1 is not None and rx2 is not None:
+        rx_sum = (rx1 + rx2) % (2.0 * np.pi)
+        if abs(rx_sum) < 1e-3 or abs(rx_sum - 2.0 * np.pi) < 1e-3:
+            return []
+        elif abs(rx_sum - np.pi) < 1e-3:
+            return [QuantumGene("X", q)]
+        else:
+            return [QuantumGene("RX", q, theta=rx_sum)]
+
+    return None
+
+def reduce_and_pack_circuit(genes: List[QuantumGene], n_qubits: int, max_passes: int = 8) -> List[QuantumGene]:
+    """
+    Universal Commutation-Aware Peephole Reducer.
+    Performs forward/backward commutation bubble sorting and algebraic gate cancellation:
+      - T * T -> S (T-count -2)
+      - T * T_DAG -> I (T-count -2)
+      - S * S -> Z
+      - H * H -> I, CX * CX -> I
+      - RZ(theta1) * RZ(theta2) -> RZ(theta1 + theta2)
+      - Commuting diagonal Z gates past CNOT controls: [T(c), CX(c, t)] == 0
+    """
+    curr = [canonicalize_gene(g) for g in genes if g.gate_name != "I"]
+    for _ in range(max_passes):
+        changed = False
+        i = 0
+        while i < len(curr):
+            j = i + 1
+            while j < len(curr):
+                merged = try_merge_pair(curr[i], curr[j])
+                if merged is not None:
+                    curr = curr[:i] + merged + curr[i+1:j] + curr[j+1:]
+                    changed = True
+                    break
+                if not can_commute(curr[i], curr[j]):
+                    break
+                j += 1
+            if changed:
+                break
+            i += 1
+        if not changed:
+            break
+    return [g for g in curr if g.gate_name != "I"]
+
+# =====================================================================
 # 3. BabyBear Finite Field STARK Merkle Prover
 # =====================================================================
 
@@ -287,6 +573,10 @@ class OneirogenesisQuantumOptimizer:
             self.pop_per_island = 25
         else:
             self.pop_per_island = 16
+
+        # Initialize ZKAEDI PRIME Canonical Energy Field over continuous rotation phase manifold
+        self.energy_field = ZkaediPrimeEnergyField(n_qubits=self.n_qubits, kick=2.0)
+
         self.islands: List[List[CircuitIndividual]] = []
         self._init_islands()
 
@@ -391,6 +681,7 @@ class OneirogenesisQuantumOptimizer:
                             QuantumGene('T', 0),
                             QuantumGene('T_DAG', 1),
                             QuantumGene('CX', 1, 0),
+                            
                         ]
                     elif self.target_name == "qft2":
                         # Clifford+T QFT2 (8 gates, 3 T, 2 T-depth, F=1.0)
@@ -444,6 +735,10 @@ class OneirogenesisQuantumOptimizer:
                 if genes is None:
                     length = random.randint(2, 12)
                     genes = [self._random_gene() for _ in range(length)]
+                # Ensure seed/initial individuals are canonicalized & reduced
+                genes = reduce_and_pack_circuit(genes, self.n_qubits)
+                if not genes:
+                    genes = [self._random_gene()]
                 ind = CircuitIndividual(genes=genes, n_qubits=self.n_qubits)
                 pop.append(ind)
                 all_inds.append(ind)
@@ -453,6 +748,9 @@ class OneirogenesisQuantumOptimizer:
     def evolve_step(self) -> CircuitIndividual:
         new_children_all = []
         island_children_map = []
+
+        # Advance ZKAEDI PRIME Energy Field state
+        self.energy_field.step()
 
         for island_idx, pop in enumerate(self.islands):
             pop.sort(key=lambda x: x.fitness, reverse=True)
@@ -465,19 +763,33 @@ class OneirogenesisQuantumOptimizer:
 
                 cut1 = random.randint(0, len(p1.genes))
                 cut2 = random.randint(0, len(p2.genes))
-                child_genes = p1.genes[:cut1] + p2.genes[cut2:]
+                # Deep copy genes to prevent corrupting parent objects in-place
+                child_genes = [
+                    QuantumGene(g.gate_name, g.target_qubit, g.control_qubit, float(g.theta))
+                    for g in (p1.genes[:cut1] + p2.genes[cut2:])
+                ]
 
                 if random.random() < 0.35 and len(child_genes) < 32:
                     child_genes.insert(random.randint(0, len(child_genes)), self._random_gene())
                 if random.random() < 0.25 and len(child_genes) > 1:
                     child_genes.pop(random.randint(0, len(child_genes) - 1))
-                if random.random() < 0.25 and len(child_genes) > 0:
+                if random.random() < 0.30 and len(child_genes) > 0:
                     idx = random.randint(0, len(child_genes) - 1)
                     if child_genes[idx].gate_name in ("RZ", "RX"):
-                        delta = random.choice([-np.pi/8, np.pi/8, -np.pi/16, np.pi/16])
-                        child_genes[idx].theta += delta
+                        q = child_genes[idx].target_qubit
+                        curr_theta = child_genes[idx].theta
+                        pot = self.energy_field.get_potential(q, curr_theta)
+                        # ZKAEDI PRIME Omega Quantum IEEE-754 Infused Walk
+                        new_theta = ieee754_quantum_walk_step(curr_theta, energy_potential=pot)
+                        self.energy_field.deposit_scar(q, curr_theta, magnitude=self.energy_field.kick)
+                        child_genes[idx].theta = new_theta
                     else:
                         child_genes[idx] = self._random_gene()
+
+                # Universal Commutation-Aware Peephole Reduction & Dyadic Canonicalization
+                child_genes = reduce_and_pack_circuit(child_genes, self.n_qubits)
+                if not child_genes:
+                    child_genes = [self._random_gene()]
 
                 child = CircuitIndividual(genes=child_genes, n_qubits=self.n_qubits)
                 children.append(child)
@@ -521,6 +833,10 @@ class OneirogenesisQuantumOptimizer:
             if best_overall.fidelity >= 0.999999 and best_overall.t_count <= 4:
                 print(f"  👑 [FIXED-POINT CONVERGENCE] Reached target fidelity > 0.999999 at cycle {cycle}!", flush=True)
                 break
+
+        # Canonicalize, reduce and evaluate best overall circuit
+        best_overall.genes = reduce_and_pack_circuit(best_overall.genes, self.n_qubits)
+        best_overall.compute_metrics(self.target_unitary)
 
         # Compute BabyBear STARK Merkle Root
         best_overall.merkle_root = BabyBearSTARKProver.compute_merkle_commitment(
@@ -720,7 +1036,10 @@ def run_single_benchmark(target_name: str, islands: int, cycles: int, device: st
     print(f"────────────────────────────────────────────────────────────────────────")
     print(f"  • Compute Device : {optimizer.device_name}")
     print(f"  • Island Topology: {islands} Parallel Ring Lineages (Pop/Island: {optimizer.pop_per_island})")
-    print(f"  • Optimization   : T-Depth & Clifford+T Minimal Word Synthesis")
+    print(f"  • Energy Field   : ZKAEDI PRIME Canonical Field Active (η=0.4, γ=0.3, β=0.1, ε=0.05, kick=2.0)")
+    print(f"  • Pre-Anchor Scar: rz(5.497787) q[2]; theta = 7*pi/4 = -pi/4 (mod 2*pi)")
+    print(f"  • Quantum Walk   : IEEE-754 Mantissa / ULP Tunneling Infused Walk & Dyadic Phase Snap")
+    print(f"  • Reducer        : Commutation-Aware Algebraic Peephole Reducer ([T, CX_c] = 0)")
     print(f"  • STARK Prover   : BabyBear Field (p={BABYBEAR_PRIME}) Merkle Commitments\n", flush=True)
 
     best = optimizer.run_gauntlet(cycles=cycles)
