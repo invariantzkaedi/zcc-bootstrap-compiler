@@ -982,9 +982,12 @@ def export_all_artifacts(best: CircuitIndividual, n_qubits: int, target_name: st
     # 1. Export OpenQASM Circuit
     qasm_content = generate_qasm_string(best.genes, n_qubits, target_name, best.fidelity, best.t_count, best.t_depth)
     qasm_path = artifacts_dir / "dream_circuit_optimized.qasm"
+    target_qasm_path = artifacts_dir / f"dream_circuit_{target_name.lower()}.qasm"
     with open(qasm_path, "w", encoding="utf-8") as f:
         f.write(qasm_content)
-    print(f"  ✔ [EXPORT] Synthesized QASM: {qasm_path}")
+    with open(target_qasm_path, "w", encoding="utf-8") as f:
+        f.write(qasm_content)
+    print(f"  ✔ [EXPORT] Synthesized QASM: {target_qasm_path}")
 
     # 2. Export BabyBear STARK Proof
     proof_data = {
@@ -1002,12 +1005,16 @@ def export_all_artifacts(best: CircuitIndividual, n_qubits: int, target_name: st
         "timestamp": time.time()
     }
     proof_path = artifacts_dir / "babybear_stark_proof.json"
+    target_proof_path = artifacts_dir / f"babybear_stark_proof_{target_name.lower()}.json"
     with open(proof_path, "w", encoding="utf-8") as f:
         json.dump(proof_data, f, indent=2)
-    print(f"  ✔ [EXPORT] Cryptographic STARK Proof: {proof_path}")
+    with open(target_proof_path, "w", encoding="utf-8") as f:
+        json.dump(proof_data, f, indent=2)
+    print(f"  ✔ [EXPORT] Cryptographic STARK Proof: {target_proof_path}")
 
     # 3. Export Manifest
     manifest_path = reports_dir / "QASM_DREAM_OPTIMIZER_MANIFEST.json"
+    target_manifest_path = reports_dir / f"QASM_MANIFEST_{target_name.upper()}.json"
     manifest_data = {
         **proof_data,
         "gates": [
@@ -1017,7 +1024,9 @@ def export_all_artifacts(best: CircuitIndividual, n_qubits: int, target_name: st
     }
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest_data, f, indent=2)
-    print(f"  ✔ [EXPORT] Sealed Manifest: {manifest_path}")
+    with open(target_manifest_path, "w", encoding="utf-8") as f:
+        json.dump(manifest_data, f, indent=2)
+    print(f"  ✔ [EXPORT] Sealed Manifest: {target_manifest_path}")
 
 def run_single_benchmark(target_name: str, islands: int, cycles: int, device: str = "auto", pop_size: Optional[int] = None, export: bool = True) -> CircuitIndividual:
     target_mat, n_qubits = build_benchmark_unitary(target_name)
