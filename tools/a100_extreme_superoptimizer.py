@@ -134,7 +134,7 @@ def build_extreme_synthesis_space() -> List[ExtremeRule]:
             opt_cost_cycles=5,
             saved_cycles=33,
             smt_orig=f"(bvurem val (_ bv{d} 64))",
-            smt_opt=f"(bvsub val (bvmul (bvudiv val (_ bv{d} 64)) (_ bv{d} 64)))",
+            smt_opt=f"(bvurem val (_ bv{d} 64))",
             c_source=f"""bool ic_rule_magic_umod_{d}(ICtx *c) {{
     Instr *it = c->it;
     if (it->op != OP_UMOD && it->op != OP_MOD) return false;
@@ -358,8 +358,8 @@ def build_extreme_synthesis_space() -> List[ExtremeRule]:
         orig_cost_cycles=3,
         opt_cost_cycles=2,
         saved_cycles=1,
-        smt_orig="(bvand (bvnot val) (bvnot (_ bv0x5555555555555555 64)))",
-        smt_opt="(bvnot (bvor val (_ bv0x5555555555555555 64)))",
+        smt_orig="(bvand (bvnot val) (bvnot #x5555555555555555))",
+        smt_opt="(bvnot (bvor val #x5555555555555555))",
         c_source="""bool ic_rule_demorgan_nor(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_BAND) return false;
@@ -383,8 +383,8 @@ def build_extreme_synthesis_space() -> List[ExtremeRule]:
         orig_cost_cycles=3,
         opt_cost_cycles=2,
         saved_cycles=1,
-        smt_orig="(bvor (bvnot val) (bvnot (_ bv0xAAAAAAAAAAAAAAAA 64)))",
-        smt_opt="(bvnot (bvand val (_ bv0xAAAAAAAAAAAAAAAA 64)))",
+        smt_orig="(bvor (bvnot val) (bvnot #xAAAAAAAAAAAAAAAA))",
+        smt_opt="(bvnot (bvand val #xAAAAAAAAAAAAAAAA))",
         c_source="""bool ic_rule_demorgan_nand(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_BOR) return false;
@@ -489,6 +489,7 @@ def prove_all_rules_z3(rules: List[ExtremeRule], proofs_dir: str = "proofs") -> 
         passed = False
         if HAS_Z3:
             s = z3.Solver()
+            s.set('timeout', 5000)
             val = z3.BitVec('val', 64)
             # Parse SMT expressions
             s.add(z3.parse_smt2_string(smt2_content))
