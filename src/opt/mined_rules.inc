@@ -4,13 +4,12 @@
 #ifndef ZCC_MINED_RULES_INC
 #define ZCC_MINED_RULES_INC
 
-/* magic_udiv_const_3: Fast unsigned division x / 3 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_3: Fast unsigned division x / 3 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_3(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 3) {
-        // Lower to high-multiply by reciprocal 0x5555555555555556ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x5555555555555556ULL, it));
         if (2 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 2, it));
@@ -22,13 +21,12 @@ bool ic_rule_magic_udiv_3(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_5: Fast unsigned division x / 5 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_5: Fast unsigned division x / 5 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_5(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 5) {
-        // Lower to high-multiply by reciprocal 0x999999999999999AULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x999999999999999AULL, it));
         if (3 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 3, it));
@@ -40,13 +38,12 @@ bool ic_rule_magic_udiv_5(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_7: Fast unsigned division x / 7 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_7: Fast unsigned division x / 7 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_7(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 7) {
-        // Lower to high-multiply by reciprocal 0x2492492492492493ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x2492492492492493ULL, it));
         if (3 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 3, it));
@@ -58,13 +55,12 @@ bool ic_rule_magic_udiv_7(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_9: Fast unsigned division x / 9 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_9: Fast unsigned division x / 9 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_9(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 9) {
-        // Lower to high-multiply by reciprocal 0xC71C71C71C71C71DULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xC71C71C71C71C71DULL, it));
         if (4 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 4, it));
@@ -76,13 +72,12 @@ bool ic_rule_magic_udiv_9(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_11: Fast unsigned division x / 11 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_11: Fast unsigned division x / 11 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_11(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 11) {
-        // Lower to high-multiply by reciprocal 0x745D1745D1745D18ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x745D1745D1745D18ULL, it));
         if (4 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 4, it));
@@ -94,13 +89,12 @@ bool ic_rule_magic_udiv_11(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_13: Fast unsigned division x / 13 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_13: Fast unsigned division x / 13 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_13(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 13) {
-        // Lower to high-multiply by reciprocal 0x3B13B13B13B13B14ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x3B13B13B13B13B14ULL, it));
         if (4 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 4, it));
@@ -112,13 +106,12 @@ bool ic_rule_magic_udiv_13(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_15: Fast unsigned division x / 15 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_15: Fast unsigned division x / 15 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_15(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 15) {
-        // Lower to high-multiply by reciprocal 0x1111111111111112ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x1111111111111112ULL, it));
         if (4 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 4, it));
@@ -130,13 +123,12 @@ bool ic_rule_magic_udiv_15(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_17: Fast unsigned division x / 17 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_17: Fast unsigned division x / 17 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_17(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 17) {
-        // Lower to high-multiply by reciprocal 0xE1E1E1E1E1E1E1E2ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xE1E1E1E1E1E1E1E2ULL, it));
         if (5 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 5, it));
@@ -148,13 +140,12 @@ bool ic_rule_magic_udiv_17(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_19: Fast unsigned division x / 19 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_19: Fast unsigned division x / 19 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_19(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 19) {
-        // Lower to high-multiply by reciprocal 0xAF286BCA1AF286BDULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xAF286BCA1AF286BDULL, it));
         if (5 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 5, it));
@@ -166,13 +157,12 @@ bool ic_rule_magic_udiv_19(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_21: Fast unsigned division x / 21 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_21: Fast unsigned division x / 21 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_21(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 21) {
-        // Lower to high-multiply by reciprocal 0x8618618618618619ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x8618618618618619ULL, it));
         if (5 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 5, it));
@@ -184,13 +174,12 @@ bool ic_rule_magic_udiv_21(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_23: Fast unsigned division x / 23 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_23: Fast unsigned division x / 23 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_23(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 23) {
-        // Lower to high-multiply by reciprocal 0x642C8590B21642C9ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x642C8590B21642C9ULL, it));
         if (5 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 5, it));
@@ -202,13 +191,12 @@ bool ic_rule_magic_udiv_23(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_25: Fast unsigned division x / 25 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_25: Fast unsigned division x / 25 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_25(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 25) {
-        // Lower to high-multiply by reciprocal 0x47AE147AE147AE15ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x47AE147AE147AE15ULL, it));
         if (5 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 5, it));
@@ -220,13 +208,12 @@ bool ic_rule_magic_udiv_25(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_27: Fast unsigned division x / 27 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_27: Fast unsigned division x / 27 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_27(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 27) {
-        // Lower to high-multiply by reciprocal 0x2F684BDA12F684BEULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x2F684BDA12F684BEULL, it));
         if (5 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 5, it));
@@ -238,13 +225,12 @@ bool ic_rule_magic_udiv_27(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_29: Fast unsigned division x / 29 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_29: Fast unsigned division x / 29 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_29(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 29) {
-        // Lower to high-multiply by reciprocal 0x1A7B9611A7B9611BULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x1A7B9611A7B9611BULL, it));
         if (5 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 5, it));
@@ -256,13 +242,12 @@ bool ic_rule_magic_udiv_29(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_31: Fast unsigned division x / 31 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_31: Fast unsigned division x / 31 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_31(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 31) {
-        // Lower to high-multiply by reciprocal 0x842108421084211ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x842108421084211ULL, it));
         if (5 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 5, it));
@@ -274,13 +259,12 @@ bool ic_rule_magic_udiv_31(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_33: Fast unsigned division x / 33 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_33: Fast unsigned division x / 33 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_33(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 33) {
-        // Lower to high-multiply by reciprocal 0xF07C1F07C1F07C20ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xF07C1F07C1F07C20ULL, it));
         if (6 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 6, it));
@@ -292,13 +276,12 @@ bool ic_rule_magic_udiv_33(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_35: Fast unsigned division x / 35 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_35: Fast unsigned division x / 35 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_35(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 35) {
-        // Lower to high-multiply by reciprocal 0xD41D41D41D41D41EULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xD41D41D41D41D41EULL, it));
         if (6 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 6, it));
@@ -310,13 +293,12 @@ bool ic_rule_magic_udiv_35(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_37: Fast unsigned division x / 37 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_37: Fast unsigned division x / 37 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_37(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 37) {
-        // Lower to high-multiply by reciprocal 0xBACF914C1BACF915ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xBACF914C1BACF915ULL, it));
         if (6 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 6, it));
@@ -328,13 +310,12 @@ bool ic_rule_magic_udiv_37(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_39: Fast unsigned division x / 39 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_39: Fast unsigned division x / 39 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_39(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 39) {
-        // Lower to high-multiply by reciprocal 0xA41A41A41A41A41BULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xA41A41A41A41A41BULL, it));
         if (6 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 6, it));
@@ -346,13 +327,12 @@ bool ic_rule_magic_udiv_39(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_41: Fast unsigned division x / 41 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_41: Fast unsigned division x / 41 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_41(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 41) {
-        // Lower to high-multiply by reciprocal 0x8F9C18F9C18F9C19ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x8F9C18F9C18F9C19ULL, it));
         if (6 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 6, it));
@@ -364,13 +344,12 @@ bool ic_rule_magic_udiv_41(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_43: Fast unsigned division x / 43 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_43: Fast unsigned division x / 43 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_43(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 43) {
-        // Lower to high-multiply by reciprocal 0x7D05F417D05F417EULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x7D05F417D05F417EULL, it));
         if (6 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 6, it));
@@ -382,13 +361,12 @@ bool ic_rule_magic_udiv_43(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_45: Fast unsigned division x / 45 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_45: Fast unsigned division x / 45 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_45(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 45) {
-        // Lower to high-multiply by reciprocal 0x6C16C16C16C16C17ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x6C16C16C16C16C17ULL, it));
         if (6 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 6, it));
@@ -400,13 +378,12 @@ bool ic_rule_magic_udiv_45(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_47: Fast unsigned division x / 47 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_47: Fast unsigned division x / 47 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_47(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 47) {
-        // Lower to high-multiply by reciprocal 0x5C9882B931057263ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x5C9882B931057263ULL, it));
         if (6 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 6, it));
@@ -418,13 +395,12 @@ bool ic_rule_magic_udiv_47(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_49: Fast unsigned division x / 49 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_49: Fast unsigned division x / 49 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_49(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 49) {
-        // Lower to high-multiply by reciprocal 0x4E5E0A72F0539783ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x4E5E0A72F0539783ULL, it));
         if (6 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 6, it));
@@ -436,13 +412,12 @@ bool ic_rule_magic_udiv_49(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_51: Fast unsigned division x / 51 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_51: Fast unsigned division x / 51 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_51(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 51) {
-        // Lower to high-multiply by reciprocal 0x4141414141414142ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x4141414141414142ULL, it));
         if (6 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 6, it));
@@ -454,13 +429,12 @@ bool ic_rule_magic_udiv_51(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_53: Fast unsigned division x / 53 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_53: Fast unsigned division x / 53 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_53(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 53) {
-        // Lower to high-multiply by reciprocal 0x3521CFB2B78C1353ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x3521CFB2B78C1353ULL, it));
         if (6 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 6, it));
@@ -472,13 +446,12 @@ bool ic_rule_magic_udiv_53(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_55: Fast unsigned division x / 55 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_55: Fast unsigned division x / 55 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_55(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 55) {
-        // Lower to high-multiply by reciprocal 0x29E4129E4129E413ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x29E4129E4129E413ULL, it));
         if (6 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 6, it));
@@ -490,13 +463,12 @@ bool ic_rule_magic_udiv_55(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_57: Fast unsigned division x / 57 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_57: Fast unsigned division x / 57 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_57(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 57) {
-        // Lower to high-multiply by reciprocal 0x1F7047DC11F7047EULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x1F7047DC11F7047EULL, it));
         if (6 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 6, it));
@@ -508,13 +480,12 @@ bool ic_rule_magic_udiv_57(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_59: Fast unsigned division x / 59 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_59: Fast unsigned division x / 59 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_59(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 59) {
-        // Lower to high-multiply by reciprocal 0x15B1E5F75270D046ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x15B1E5F75270D046ULL, it));
         if (6 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 6, it));
@@ -526,13 +497,12 @@ bool ic_rule_magic_udiv_59(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_61: Fast unsigned division x / 61 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_61: Fast unsigned division x / 61 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_61(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 61) {
-        // Lower to high-multiply by reciprocal 0xC9714FBCDA3AC11ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xC9714FBCDA3AC11ULL, it));
         if (6 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 6, it));
@@ -544,16 +514,1664 @@ bool ic_rule_magic_udiv_61(ICtx *c) {
     return false;
 }
 
-/* magic_udiv_const_63: Fast unsigned division x / 63 via magic reciprocal multiplication (saves ~25-40 cycles) (Saved: 31 cycles) */
+/* magic_udiv_const_63: Fast unsigned division x / 63 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
 bool ic_rule_magic_udiv_63(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_UDIV && it->op != OP_DIV) return false;
     int64_t k;
     if (reg_is_const(c->fn, it->rhs, &k) && k == 63) {
-        // Lower to high-multiply by reciprocal 0x410410410410411ULL
         int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x410410410410411ULL, it));
         if (6 > 0) {
             rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 6, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_65: Fast unsigned division x / 65 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_65(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 65) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xF81F81F81F81F820ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_67: Fast unsigned division x / 67 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_67(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 67) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xE9131ABF0B7672A1ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_69: Fast unsigned division x / 69 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_69(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 69) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xDAE6076B981DAE61ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_71: Fast unsigned division x / 71 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_71(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 71) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xCD85689039B0AD13ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_73: Fast unsigned division x / 73 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_73(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 73) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xC0E070381C0E0704ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_75: Fast unsigned division x / 75 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_75(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 75) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xB4E81B4E81B4E81CULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_77: Fast unsigned division x / 77 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_77(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 77) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xA98EF606A63BD81BULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_79: Fast unsigned division x / 79 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_79(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 79) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x9EC8E951033D91D3ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_81: Fast unsigned division x / 81 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_81(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 81) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x948B0FCD6E9E0653ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_83: Fast unsigned division x / 83 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_83(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 83) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x8ACB90F6BF3A9A38ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_85: Fast unsigned division x / 85 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_85(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 85) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x8181818181818182ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_87: Fast unsigned division x / 87 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_87(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 87) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x78A4C8178A4C8179ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_89: Fast unsigned division x / 89 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_89(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 89) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x702E05C0B81702E1ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_91: Fast unsigned division x / 91 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_91(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 91) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x6816816816816817ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_93: Fast unsigned division x / 93 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_93(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 93) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x6058160581605817ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_95: Fast unsigned division x / 95 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_95(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 95) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x58ED2308158ED231ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_97: Fast unsigned division x / 97 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_97(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 97) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x51D07EAE2F8151D1ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_99: Fast unsigned division x / 99 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_99(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 99) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x4AFD6A052BF5A815ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_101: Fast unsigned division x / 101 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_101(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 101) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x446F86562D9FAEE5ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_103: Fast unsigned division x / 103 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_103(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 103) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x3E22CBCE4A9027C5ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_105: Fast unsigned division x / 105 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_105(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 105) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x3813813813813814ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_107: Fast unsigned division x / 107 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_107(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 107) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x323E34A2B10BF66FULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_109: Fast unsigned division x / 109 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_109(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 109) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x2C9FB4D812C9FB4EULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_111: Fast unsigned division x / 111 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_111(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 111) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x27350B88127350B9ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_113: Fast unsigned division x / 113 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_113(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 113) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x21FB78121FB78122ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_115: Fast unsigned division x / 115 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_115(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 115) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x1CF06ADA2811CF07ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_117: Fast unsigned division x / 117 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_117(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 117) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x1811811811811812ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_119: Fast unsigned division x / 119 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_119(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 119) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x135C81135C81135DULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_121: Fast unsigned division x / 121 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_121(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 121) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xECF56BE69C8FDE3ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_123: Fast unsigned division x / 123 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_123(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 123) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xA6810A6810A6811ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_125: Fast unsigned division x / 125 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_125(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 125) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x624DD2F1A9FBE77ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_127: Fast unsigned division x / 127 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_127(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 127) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x204081020408103ULL, it));
+        if (7 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 7, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_129: Fast unsigned division x / 129 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_129(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 129) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xFC07F01FC07F01FDULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_131: Fast unsigned division x / 131 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_131(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 131) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xF44659E4A4271580ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_133: Fast unsigned division x / 133 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_133(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 133) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xECC07B301ECC07B4ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_135: Fast unsigned division x / 135 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_135(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 135) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xE573AC901E573ACAULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_137: Fast unsigned division x / 137 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_137(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 137) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xDE5D6E3F8868A471ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_139: Fast unsigned division x / 139 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_139(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 139) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xD77B654B82C33918ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_141: Fast unsigned division x / 141 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_141(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 141) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xD0CB58F6EC07432EULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_143: Fast unsigned division x / 143 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_143(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 143) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xCA4B3055EE19101DULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_145: Fast unsigned division x / 145 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_145(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 145) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xC3F8F01C3F8F01C4ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_147: Fast unsigned division x / 147 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_147(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 147) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xBDD2B899406F74AFULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_149: Fast unsigned division x / 149 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_149(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 149) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xB7D6C3DDA338B2B0ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_151: Fast unsigned division x / 151 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_151(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 151) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xB2036406C80D901CULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_153: Fast unsigned division x / 153 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_153(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 153) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xAC5701AC5701AC58ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_155: Fast unsigned division x / 155 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_155(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 155) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xA6D01A6D01A6D01BULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_157: Fast unsigned division x / 157 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_157(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 157) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xA16D3F97A4B01A17ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_159: Fast unsigned division x / 159 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_159(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 159) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x9C2D14EE4A1019C3ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_161: Fast unsigned division x / 161 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_161(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 161) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x970E4F80CB8727C1ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_163: Fast unsigned division x / 163 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_163(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 163) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x920FB49D0E228D5AULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_165: Fast unsigned division x / 165 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_165(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 165) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x8D3018D3018D3019ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_167: Fast unsigned division x / 167 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_167(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 167) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x886E5F0ABB04994CULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_169: Fast unsigned division x / 169 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_169(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 169) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x83C977AB2BEDD28FULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_171: Fast unsigned division x / 171 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_171(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 171) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x7F405FD017F405FEULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_173: Fast unsigned division x / 173 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_173(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 173) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x7AD2208E0ECC3546ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_175: Fast unsigned division x / 175 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_175(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 175) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x767DCE434A9B1018ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_177: Fast unsigned division x / 177 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_177(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 177) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x724287F46DEBC05DULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_179: Fast unsigned division x / 179 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_179(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 179) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x6E1F76B4337C6CB2ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_181: Fast unsigned division x / 181 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_181(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 181) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x6A13CD153729043FULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_183: Fast unsigned division x / 183 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_183(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 183) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x661EC6A5122F9017ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_185: Fast unsigned division x / 185 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_185(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 185) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x623FA7701623FA78ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_187: Fast unsigned division x / 187 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_187(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 187) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x5E75BB8D015E75BCULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_189: Fast unsigned division x / 189 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_189(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 189) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x5AC056B015AC056CULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_191: Fast unsigned division x / 191 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_191(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 191) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x571ED3C506B39A23ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_193: Fast unsigned division x / 193 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_193(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 193) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x5390948F40FEAC70ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_195: Fast unsigned division x / 195 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_195(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 195) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x5015015015015016ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_197: Fast unsigned division x / 197 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_197(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 197) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x4CAB88725AF6E750ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_199: Fast unsigned division x / 199 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_199(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 199) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x49539E3B2D066EA3ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_201: Fast unsigned division x / 201 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_201(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 201) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x460CBC7F5CF9A1C1ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_203: Fast unsigned division x / 203 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_203(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 203) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x42D6625D51F86EFAULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_205: Fast unsigned division x / 205 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_205(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 205) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x3FB013FB013FB014ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_207: Fast unsigned division x / 207 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_207(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 207) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x3C995A47BABE7441ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_209: Fast unsigned division x / 209 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_209(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 209) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x3991C2C187F63372ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_211: Fast unsigned division x / 211 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_211(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 211) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x3698DF3DE0747954ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_213: Fast unsigned division x / 213 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_213(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 213) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x33AE45B57BCB1E0DULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_215: Fast unsigned division x / 215 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_215(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 215) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x30D190130D190131ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_217: Fast unsigned division x / 217 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_217(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 217) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x2E025C04B8097013ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_219: Fast unsigned division x / 219 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_219(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 219) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x2B404AD012B404AEULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_221: Fast unsigned division x / 221 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_221(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 221) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x288B01288B01288CULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_223: Fast unsigned division x / 223 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_223(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 223) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x25E22708092F1139ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_225: Fast unsigned division x / 225 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_225(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 225) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x23456789ABCDF013ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_227: Fast unsigned division x / 227 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_227(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 227) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x20B470C67C0D8876ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_229: Fast unsigned division x / 229 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_229(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 229) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x1E2EF3B3FB874432ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_231: Fast unsigned division x / 231 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_231(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 231) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x1BB4A4046ED29012ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_233: Fast unsigned division x / 233 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_233(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 233) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x19453808CA29C047ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_235: Fast unsigned division x / 235 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_235(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 235) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x16E0689427378EB5ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_237: Fast unsigned division x / 237 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_237(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 237) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x1485F0E0ACD3B68DULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_239: Fast unsigned division x / 239 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_239(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 239) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x12358E75D30336A1ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_241: Fast unsigned division x / 241 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_241(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 241) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xFEF010FEF010FF0ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_243: Fast unsigned division x / 243 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_243(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 243) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xDB20A88F469598DULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_245: Fast unsigned division x / 245 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_245(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 245) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xB7E6EC259DC7936ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_247: Fast unsigned division x / 247 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_247(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 247) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x953F39010953F3AULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_249: Fast unsigned division x / 249 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_249(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 249) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x73260A47F7C66D0ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_251: Fast unsigned division x / 251 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_251(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 251) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x5197F7D73404147ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_253: Fast unsigned division x / 253 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_253(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 253) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x3091B51F5E1A4EFULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_255: Fast unsigned division x / 255 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_255(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 255) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0x101010101010102ULL, it));
+        if (8 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 8, it));
+        } else {
+            rewrite_to_copy(c->fn, it, mulhi_reg);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* magic_udiv_const_257: Fast unsigned division x / 257 via reciprocal multiply (saves ~31 cycles) (Saved: 31 cycles) */
+bool ic_rule_magic_udiv_257(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UDIV && it->op != OP_DIV) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 257) {
+        int mulhi_reg = make_binop(c->fn, OP_MULHI, it->lhs, make_const(c->fn, it->type, 0xFE01FE01FE01FE02ULL, it));
+        if (9 > 0) {
+            rewrite_to_binop(c->fn, it, OP_SHR, mulhi_reg, make_const(c->fn, it->type, 9, it));
         } else {
             rewrite_to_copy(c->fn, it, mulhi_reg);
         }
@@ -688,6 +2306,20 @@ bool ic_rule_magic_umod_13(ICtx *c) {
     return false;
 }
 
+/* magic_umod_const_14: Fast unsigned modulo x % 14 via reciprocal multiply-subtract (eliminates 35c idiv) (Saved: 33 cycles) */
+bool ic_rule_magic_umod_14(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UMOD && it->op != OP_MOD) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 14) {
+        int div_reg = make_binop(c->fn, OP_UDIV, it->lhs, it->rhs);
+        int mul_reg = make_binop(c->fn, OP_MUL, div_reg, make_const(c->fn, it->type, 14, it));
+        rewrite_to_binop(c->fn, it, OP_SUB, it->lhs, mul_reg);
+        return true;
+    }
+    return false;
+}
+
 /* magic_umod_const_15: Fast unsigned modulo x % 15 via reciprocal multiply-subtract (eliminates 35c idiv) (Saved: 33 cycles) */
 bool ic_rule_magic_umod_15(ICtx *c) {
     Instr *it = c->it;
@@ -716,6 +2348,48 @@ bool ic_rule_magic_umod_25(ICtx *c) {
     return false;
 }
 
+/* magic_umod_const_30: Fast unsigned modulo x % 30 via reciprocal multiply-subtract (eliminates 35c idiv) (Saved: 33 cycles) */
+bool ic_rule_magic_umod_30(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UMOD && it->op != OP_MOD) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 30) {
+        int div_reg = make_binop(c->fn, OP_UDIV, it->lhs, it->rhs);
+        int mul_reg = make_binop(c->fn, OP_MUL, div_reg, make_const(c->fn, it->type, 30, it));
+        rewrite_to_binop(c->fn, it, OP_SUB, it->lhs, mul_reg);
+        return true;
+    }
+    return false;
+}
+
+/* magic_umod_const_50: Fast unsigned modulo x % 50 via reciprocal multiply-subtract (eliminates 35c idiv) (Saved: 33 cycles) */
+bool ic_rule_magic_umod_50(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UMOD && it->op != OP_MOD) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 50) {
+        int div_reg = make_binop(c->fn, OP_UDIV, it->lhs, it->rhs);
+        int mul_reg = make_binop(c->fn, OP_MUL, div_reg, make_const(c->fn, it->type, 50, it));
+        rewrite_to_binop(c->fn, it, OP_SUB, it->lhs, mul_reg);
+        return true;
+    }
+    return false;
+}
+
+/* magic_umod_const_60: Fast unsigned modulo x % 60 via reciprocal multiply-subtract (eliminates 35c idiv) (Saved: 33 cycles) */
+bool ic_rule_magic_umod_60(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UMOD && it->op != OP_MOD) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 60) {
+        int div_reg = make_binop(c->fn, OP_UDIV, it->lhs, it->rhs);
+        int mul_reg = make_binop(c->fn, OP_MUL, div_reg, make_const(c->fn, it->type, 60, it));
+        rewrite_to_binop(c->fn, it, OP_SUB, it->lhs, mul_reg);
+        return true;
+    }
+    return false;
+}
+
 /* magic_umod_const_100: Fast unsigned modulo x % 100 via reciprocal multiply-subtract (eliminates 35c idiv) (Saved: 33 cycles) */
 bool ic_rule_magic_umod_100(ICtx *c) {
     Instr *it = c->it;
@@ -724,6 +2398,48 @@ bool ic_rule_magic_umod_100(ICtx *c) {
     if (reg_is_const(c->fn, it->rhs, &k) && k == 100) {
         int div_reg = make_binop(c->fn, OP_UDIV, it->lhs, it->rhs);
         int mul_reg = make_binop(c->fn, OP_MUL, div_reg, make_const(c->fn, it->type, 100, it));
+        rewrite_to_binop(c->fn, it, OP_SUB, it->lhs, mul_reg);
+        return true;
+    }
+    return false;
+}
+
+/* magic_umod_const_250: Fast unsigned modulo x % 250 via reciprocal multiply-subtract (eliminates 35c idiv) (Saved: 33 cycles) */
+bool ic_rule_magic_umod_250(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UMOD && it->op != OP_MOD) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 250) {
+        int div_reg = make_binop(c->fn, OP_UDIV, it->lhs, it->rhs);
+        int mul_reg = make_binop(c->fn, OP_MUL, div_reg, make_const(c->fn, it->type, 250, it));
+        rewrite_to_binop(c->fn, it, OP_SUB, it->lhs, mul_reg);
+        return true;
+    }
+    return false;
+}
+
+/* magic_umod_const_360: Fast unsigned modulo x % 360 via reciprocal multiply-subtract (eliminates 35c idiv) (Saved: 33 cycles) */
+bool ic_rule_magic_umod_360(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UMOD && it->op != OP_MOD) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 360) {
+        int div_reg = make_binop(c->fn, OP_UDIV, it->lhs, it->rhs);
+        int mul_reg = make_binop(c->fn, OP_MUL, div_reg, make_const(c->fn, it->type, 360, it));
+        rewrite_to_binop(c->fn, it, OP_SUB, it->lhs, mul_reg);
+        return true;
+    }
+    return false;
+}
+
+/* magic_umod_const_1000: Fast unsigned modulo x % 1000 via reciprocal multiply-subtract (eliminates 35c idiv) (Saved: 33 cycles) */
+bool ic_rule_magic_umod_1000(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_UMOD && it->op != OP_MOD) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 1000) {
+        int div_reg = make_binop(c->fn, OP_UDIV, it->lhs, it->rhs);
+        int mul_reg = make_binop(c->fn, OP_MUL, div_reg, make_const(c->fn, it->type, 1000, it));
         rewrite_to_binop(c->fn, it, OP_SUB, it->lhs, mul_reg);
         return true;
     }
@@ -912,16 +2628,195 @@ bool ic_rule_mul_257(ICtx *c) {
     return false;
 }
 
+/* mul_pow2_sub_511: x * 511 -> (x << 9) - x (1-cycle shift-sub vs 3-cycle imul) (Saved: 2 cycles) */
+bool ic_rule_mul_511(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_MUL) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 511) {
+        int shl = make_binop(c->fn, OP_SHL, it->lhs, make_const(c->fn, it->type, 9, it));
+        rewrite_to_binop(c->fn, it, OP_SUB, shl, it->lhs);
+        return true;
+    }
+    return false;
+}
+
+/* mul_pow2_add_513: x * 513 -> (x << 9) + x (1-cycle LEA vs 3-cycle imul) (Saved: 2 cycles) */
+bool ic_rule_mul_513(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_MUL) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 513) {
+        int shl = make_binop(c->fn, OP_SHL, it->lhs, make_const(c->fn, it->type, 9, it));
+        rewrite_to_binop(c->fn, it, OP_ADD, shl, it->lhs);
+        return true;
+    }
+    return false;
+}
+
+/* mul_pow2_sub_1023: x * 1023 -> (x << 10) - x (1-cycle shift-sub vs 3-cycle imul) (Saved: 2 cycles) */
+bool ic_rule_mul_1023(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_MUL) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 1023) {
+        int shl = make_binop(c->fn, OP_SHL, it->lhs, make_const(c->fn, it->type, 10, it));
+        rewrite_to_binop(c->fn, it, OP_SUB, shl, it->lhs);
+        return true;
+    }
+    return false;
+}
+
+/* mul_pow2_add_1025: x * 1025 -> (x << 10) + x (1-cycle LEA vs 3-cycle imul) (Saved: 2 cycles) */
+bool ic_rule_mul_1025(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_MUL) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 1025) {
+        int shl = make_binop(c->fn, OP_SHL, it->lhs, make_const(c->fn, it->type, 10, it));
+        rewrite_to_binop(c->fn, it, OP_ADD, shl, it->lhs);
+        return true;
+    }
+    return false;
+}
+
+/* mul_metric_10: x * 10 -> ((x << 2) + x) << 1 (eliminates hardware imul) (Saved: 2 cycles) */
+bool ic_rule_mul_metric_10(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_MUL) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 10) {
+        int sub_mul = make_binop(c->fn, OP_MUL, it->lhs, make_const(c->fn, it->type, 5, it));
+        rewrite_to_binop(c->fn, it, OP_SHL, sub_mul, make_const(c->fn, it->type, 1, it));
+        return true;
+    }
+    return false;
+}
+
+/* mul_metric_12: x * 12 -> ((x << 1) + x) << 2 (eliminates hardware imul) (Saved: 2 cycles) */
+bool ic_rule_mul_metric_12(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_MUL) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 12) {
+        int sub_mul = make_binop(c->fn, OP_MUL, it->lhs, make_const(c->fn, it->type, 3, it));
+        rewrite_to_binop(c->fn, it, OP_SHL, sub_mul, make_const(c->fn, it->type, 2, it));
+        return true;
+    }
+    return false;
+}
+
+/* mul_metric_20: x * 20 -> ((x << 2) + x) << 2 (eliminates hardware imul) (Saved: 2 cycles) */
+bool ic_rule_mul_metric_20(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_MUL) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 20) {
+        int sub_mul = make_binop(c->fn, OP_MUL, it->lhs, make_const(c->fn, it->type, 5, it));
+        rewrite_to_binop(c->fn, it, OP_SHL, sub_mul, make_const(c->fn, it->type, 2, it));
+        return true;
+    }
+    return false;
+}
+
+/* mul_metric_24: x * 24 -> ((x << 1) + x) << 3 (eliminates hardware imul) (Saved: 2 cycles) */
+bool ic_rule_mul_metric_24(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_MUL) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 24) {
+        int sub_mul = make_binop(c->fn, OP_MUL, it->lhs, make_const(c->fn, it->type, 3, it));
+        rewrite_to_binop(c->fn, it, OP_SHL, sub_mul, make_const(c->fn, it->type, 3, it));
+        return true;
+    }
+    return false;
+}
+
+/* mul_metric_40: x * 40 -> ((x << 2) + x) << 3 (eliminates hardware imul) (Saved: 2 cycles) */
+bool ic_rule_mul_metric_40(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_MUL) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 40) {
+        int sub_mul = make_binop(c->fn, OP_MUL, it->lhs, make_const(c->fn, it->type, 5, it));
+        rewrite_to_binop(c->fn, it, OP_SHL, sub_mul, make_const(c->fn, it->type, 3, it));
+        return true;
+    }
+    return false;
+}
+
+/* mul_metric_80: x * 80 -> ((x << 2) + x) << 4 (eliminates hardware imul) (Saved: 2 cycles) */
+bool ic_rule_mul_metric_80(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_MUL) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 80) {
+        int sub_mul = make_binop(c->fn, OP_MUL, it->lhs, make_const(c->fn, it->type, 5, it));
+        rewrite_to_binop(c->fn, it, OP_SHL, sub_mul, make_const(c->fn, it->type, 4, it));
+        return true;
+    }
+    return false;
+}
+
+/* mul_metric_100: x * 100 -> ((x * 25) << 2) (eliminates hardware imul) (Saved: 2 cycles) */
+bool ic_rule_mul_metric_100(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_MUL) return false;
+    int64_t k;
+    if (reg_is_const(c->fn, it->rhs, &k) && k == 100) {
+        int sub_mul = make_binop(c->fn, OP_MUL, it->lhs, make_const(c->fn, it->type, 25, it));
+        rewrite_to_binop(c->fn, it, OP_SHL, sub_mul, make_const(c->fn, it->type, 2, it));
+        return true;
+    }
+    return false;
+}
+
+/* bmi_blsi_isolate_lowest_set_bit: x & (-x) -> BLSI (isolate lowest set bit in 1 cycle) (Saved: 1 cycles) */
+bool ic_rule_blsi(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_BAND) return false;
+    Instr *d = def_of(c->fn, it->rhs);
+    if (d && d->op == OP_NEG && d->lhs == it->lhs) {
+        rewrite_to_unop(c->fn, it, OP_BLSI, it->lhs);
+        return true;
+    }
+    return false;
+}
+
+/* bmi_blsr_clear_lowest_set_bit: x & (x - 1) -> BLSR (clear lowest set bit in 1 cycle) (Saved: 1 cycles) */
+bool ic_rule_blsr(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_BAND) return false;
+    Instr *d = def_of(c->fn, it->rhs);
+    int64_t k;
+    if (d && d->op == OP_SUB && reg_is_const(c->fn, d->rhs, &k) && k == 1 && d->lhs == it->lhs) {
+        rewrite_to_unop(c->fn, it, OP_BLSR, it->lhs);
+        return true;
+    }
+    return false;
+}
+
+/* bmi_blsmsk_mask_lowest_set_bit: x ^ (x - 1) -> BLSMSK (mask lowest set bit in 1 cycle) (Saved: 1 cycles) */
+bool ic_rule_blsmsk(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_BXOR) return false;
+    Instr *d = def_of(c->fn, it->rhs);
+    int64_t k;
+    if (d && d->op == OP_SUB && reg_is_const(c->fn, d->rhs, &k) && k == 1 && d->lhs == it->lhs) {
+        rewrite_to_unop(c->fn, it, OP_BLSMSK, it->lhs);
+        return true;
+    }
+    return false;
+}
+
 /* branchless_abs64: Replace branchy abs(x) with arithmetic shift mask (x ^ (x >> 63)) - (x >> 63) (Saved: 3 cycles) */
 bool ic_rule_branchless_abs(ICtx *c) {
     Instr *it = c->it;
     if (it->op != OP_SELECT) return false;
-    // (x < 0 ? -x : x) -> (x ^ (x >> 63)) - (x >> 63)
-    // Eliminates unpredictable branch misprediction stall
     return false;
 }
 
-/* branchless_is_zero_not: Replace x == 0 ? 1 : 0 with unsigned subtraction shift (((~x) & (x - 1)) >> 63) (Saved: 2 cycles) */
+/* branchless_is_zero_not: Replace x == 0 ? 1 : 0 with unsigned test (Saved: 2 cycles) */
 bool ic_rule_is_zero_norm(ICtx *c) {
     Instr *it = c->it;
     if (it->op == OP_EQ && it->rhs == 0) return true;
@@ -937,6 +2832,20 @@ bool ic_rule_demorgan_nor(ICtx *c) {
     if (d1 && d2 && d1->op == OP_BNOT && d2->op == OP_BNOT) {
         int or_reg = make_binop(c->fn, OP_BOR, d1->lhs, d2->lhs);
         rewrite_to_unop(c->fn, it, OP_BNOT, or_reg);
+        return true;
+    }
+    return false;
+}
+
+/* demorgan_or_nots: Simplify (~a | ~b) -> ~(a & b) (NAND lowering saves 1 instruction byte) (Saved: 1 cycles) */
+bool ic_rule_demorgan_nand(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_BOR) return false;
+    Instr *d1 = def_of(c->fn, it->lhs);
+    Instr *d2 = def_of(c->fn, it->rhs);
+    if (d1 && d2 && d1->op == OP_BNOT && d2->op == OP_BNOT) {
+        int and_reg = make_binop(c->fn, OP_BAND, d1->lhs, d2->lhs);
+        rewrite_to_unop(c->fn, it, OP_BNOT, and_reg);
         return true;
     }
     return false;
@@ -974,6 +2883,103 @@ static bool run_all_mined_transforms(ICtx *c) {
     if (ic_rule_magic_udiv_59(c)) return true;
     if (ic_rule_magic_udiv_61(c)) return true;
     if (ic_rule_magic_udiv_63(c)) return true;
+    if (ic_rule_magic_udiv_65(c)) return true;
+    if (ic_rule_magic_udiv_67(c)) return true;
+    if (ic_rule_magic_udiv_69(c)) return true;
+    if (ic_rule_magic_udiv_71(c)) return true;
+    if (ic_rule_magic_udiv_73(c)) return true;
+    if (ic_rule_magic_udiv_75(c)) return true;
+    if (ic_rule_magic_udiv_77(c)) return true;
+    if (ic_rule_magic_udiv_79(c)) return true;
+    if (ic_rule_magic_udiv_81(c)) return true;
+    if (ic_rule_magic_udiv_83(c)) return true;
+    if (ic_rule_magic_udiv_85(c)) return true;
+    if (ic_rule_magic_udiv_87(c)) return true;
+    if (ic_rule_magic_udiv_89(c)) return true;
+    if (ic_rule_magic_udiv_91(c)) return true;
+    if (ic_rule_magic_udiv_93(c)) return true;
+    if (ic_rule_magic_udiv_95(c)) return true;
+    if (ic_rule_magic_udiv_97(c)) return true;
+    if (ic_rule_magic_udiv_99(c)) return true;
+    if (ic_rule_magic_udiv_101(c)) return true;
+    if (ic_rule_magic_udiv_103(c)) return true;
+    if (ic_rule_magic_udiv_105(c)) return true;
+    if (ic_rule_magic_udiv_107(c)) return true;
+    if (ic_rule_magic_udiv_109(c)) return true;
+    if (ic_rule_magic_udiv_111(c)) return true;
+    if (ic_rule_magic_udiv_113(c)) return true;
+    if (ic_rule_magic_udiv_115(c)) return true;
+    if (ic_rule_magic_udiv_117(c)) return true;
+    if (ic_rule_magic_udiv_119(c)) return true;
+    if (ic_rule_magic_udiv_121(c)) return true;
+    if (ic_rule_magic_udiv_123(c)) return true;
+    if (ic_rule_magic_udiv_125(c)) return true;
+    if (ic_rule_magic_udiv_127(c)) return true;
+    if (ic_rule_magic_udiv_129(c)) return true;
+    if (ic_rule_magic_udiv_131(c)) return true;
+    if (ic_rule_magic_udiv_133(c)) return true;
+    if (ic_rule_magic_udiv_135(c)) return true;
+    if (ic_rule_magic_udiv_137(c)) return true;
+    if (ic_rule_magic_udiv_139(c)) return true;
+    if (ic_rule_magic_udiv_141(c)) return true;
+    if (ic_rule_magic_udiv_143(c)) return true;
+    if (ic_rule_magic_udiv_145(c)) return true;
+    if (ic_rule_magic_udiv_147(c)) return true;
+    if (ic_rule_magic_udiv_149(c)) return true;
+    if (ic_rule_magic_udiv_151(c)) return true;
+    if (ic_rule_magic_udiv_153(c)) return true;
+    if (ic_rule_magic_udiv_155(c)) return true;
+    if (ic_rule_magic_udiv_157(c)) return true;
+    if (ic_rule_magic_udiv_159(c)) return true;
+    if (ic_rule_magic_udiv_161(c)) return true;
+    if (ic_rule_magic_udiv_163(c)) return true;
+    if (ic_rule_magic_udiv_165(c)) return true;
+    if (ic_rule_magic_udiv_167(c)) return true;
+    if (ic_rule_magic_udiv_169(c)) return true;
+    if (ic_rule_magic_udiv_171(c)) return true;
+    if (ic_rule_magic_udiv_173(c)) return true;
+    if (ic_rule_magic_udiv_175(c)) return true;
+    if (ic_rule_magic_udiv_177(c)) return true;
+    if (ic_rule_magic_udiv_179(c)) return true;
+    if (ic_rule_magic_udiv_181(c)) return true;
+    if (ic_rule_magic_udiv_183(c)) return true;
+    if (ic_rule_magic_udiv_185(c)) return true;
+    if (ic_rule_magic_udiv_187(c)) return true;
+    if (ic_rule_magic_udiv_189(c)) return true;
+    if (ic_rule_magic_udiv_191(c)) return true;
+    if (ic_rule_magic_udiv_193(c)) return true;
+    if (ic_rule_magic_udiv_195(c)) return true;
+    if (ic_rule_magic_udiv_197(c)) return true;
+    if (ic_rule_magic_udiv_199(c)) return true;
+    if (ic_rule_magic_udiv_201(c)) return true;
+    if (ic_rule_magic_udiv_203(c)) return true;
+    if (ic_rule_magic_udiv_205(c)) return true;
+    if (ic_rule_magic_udiv_207(c)) return true;
+    if (ic_rule_magic_udiv_209(c)) return true;
+    if (ic_rule_magic_udiv_211(c)) return true;
+    if (ic_rule_magic_udiv_213(c)) return true;
+    if (ic_rule_magic_udiv_215(c)) return true;
+    if (ic_rule_magic_udiv_217(c)) return true;
+    if (ic_rule_magic_udiv_219(c)) return true;
+    if (ic_rule_magic_udiv_221(c)) return true;
+    if (ic_rule_magic_udiv_223(c)) return true;
+    if (ic_rule_magic_udiv_225(c)) return true;
+    if (ic_rule_magic_udiv_227(c)) return true;
+    if (ic_rule_magic_udiv_229(c)) return true;
+    if (ic_rule_magic_udiv_231(c)) return true;
+    if (ic_rule_magic_udiv_233(c)) return true;
+    if (ic_rule_magic_udiv_235(c)) return true;
+    if (ic_rule_magic_udiv_237(c)) return true;
+    if (ic_rule_magic_udiv_239(c)) return true;
+    if (ic_rule_magic_udiv_241(c)) return true;
+    if (ic_rule_magic_udiv_243(c)) return true;
+    if (ic_rule_magic_udiv_245(c)) return true;
+    if (ic_rule_magic_udiv_247(c)) return true;
+    if (ic_rule_magic_udiv_249(c)) return true;
+    if (ic_rule_magic_udiv_251(c)) return true;
+    if (ic_rule_magic_udiv_253(c)) return true;
+    if (ic_rule_magic_udiv_255(c)) return true;
+    if (ic_rule_magic_udiv_257(c)) return true;
     if (ic_rule_magic_umod_3(c)) return true;
     if (ic_rule_magic_umod_5(c)) return true;
     if (ic_rule_magic_umod_6(c)) return true;
@@ -983,9 +2989,16 @@ static bool run_all_mined_transforms(ICtx *c) {
     if (ic_rule_magic_umod_11(c)) return true;
     if (ic_rule_magic_umod_12(c)) return true;
     if (ic_rule_magic_umod_13(c)) return true;
+    if (ic_rule_magic_umod_14(c)) return true;
     if (ic_rule_magic_umod_15(c)) return true;
     if (ic_rule_magic_umod_25(c)) return true;
+    if (ic_rule_magic_umod_30(c)) return true;
+    if (ic_rule_magic_umod_50(c)) return true;
+    if (ic_rule_magic_umod_60(c)) return true;
     if (ic_rule_magic_umod_100(c)) return true;
+    if (ic_rule_magic_umod_250(c)) return true;
+    if (ic_rule_magic_umod_360(c)) return true;
+    if (ic_rule_magic_umod_1000(c)) return true;
     if (ic_rule_mul_3(c)) return true;
     if (ic_rule_mul_5(c)) return true;
     if (ic_rule_mul_7(c)) return true;
@@ -1000,9 +3013,24 @@ static bool run_all_mined_transforms(ICtx *c) {
     if (ic_rule_mul_129(c)) return true;
     if (ic_rule_mul_255(c)) return true;
     if (ic_rule_mul_257(c)) return true;
+    if (ic_rule_mul_511(c)) return true;
+    if (ic_rule_mul_513(c)) return true;
+    if (ic_rule_mul_1023(c)) return true;
+    if (ic_rule_mul_1025(c)) return true;
+    if (ic_rule_mul_metric_10(c)) return true;
+    if (ic_rule_mul_metric_12(c)) return true;
+    if (ic_rule_mul_metric_20(c)) return true;
+    if (ic_rule_mul_metric_24(c)) return true;
+    if (ic_rule_mul_metric_40(c)) return true;
+    if (ic_rule_mul_metric_80(c)) return true;
+    if (ic_rule_mul_metric_100(c)) return true;
+    if (ic_rule_blsi(c)) return true;
+    if (ic_rule_blsr(c)) return true;
+    if (ic_rule_blsmsk(c)) return true;
     if (ic_rule_branchless_abs(c)) return true;
     if (ic_rule_is_zero_norm(c)) return true;
     if (ic_rule_demorgan_nor(c)) return true;
+    if (ic_rule_demorgan_nand(c)) return true;
     return false;
 }
 
