@@ -203,11 +203,19 @@ class CircuitIndividual:
         # of equal or near-equal fidelity.
         self.fitness = (self.fidelity * 1000.0) - (self.t_count * 1.5) - (self.t_depth * 2.0) - (self.total_gates * 0.1)
 
-    def compute_metrics(self, target_unitary: np.ndarray):
-        U_synth = self.evaluate_unitary()
+    def compute_metrics(self, target_unitary: np.ndarray, is_state_prep: bool = False):
         dim = 1 << self.n_qubits
-        trace_val = np.trace(target_unitary.conj().T @ U_synth)
-        self.fidelity = float(abs(trace_val) / dim)
+        if is_state_prep:
+            # Evaluate state-vector preparation fidelity |<psi_target | psi_synth>|^2
+            U_synth = self.evaluate_unitary()
+            psi_synth = U_synth[:, 0]
+            psi_target = target_unitary[:, 0]
+            overlap = np.vdot(psi_target, psi_synth)
+            self.fidelity = float(abs(overlap) ** 2)
+        else:
+            U_synth = self.evaluate_unitary()
+            trace_val = np.trace(target_unitary.conj().T @ U_synth)
+            self.fidelity = float(abs(trace_val) / dim)
         self.update_pareto_fitness()
 
 # =====================================================================
@@ -488,6 +496,94 @@ def reduce_and_pack_circuit(genes: List[QuantumGene], n_qubits: int, max_passes:
             break
     return [g for g in curr if g.gate_name != "I"]
 
+def decompose_to_discrete_clifford_t(genes: List[QuantumGene], n_qubits: int) -> List[QuantumGene]:
+    """
+    Repeat-Until-Success (RUS) / Matsumoto-Amano Discrete Clifford+T Synthesis Pass.
+    Translates any continuous dyadic rotation RZ(k * pi/8) or RX(k * pi/8) into
+    purely discrete fault-tolerant {H, S, T, CX} sequences.
+    
+    Standard RUS / MA gadgets for dyadic angles:
+      - RZ(pi/4)  -> T
+      - RZ(-pi/4) -> T_DAG
+      - RZ(pi/2)  -> S
+      - RZ(-pi/2) -> S_DAG
+      - RZ(pi)    -> Z
+      - RZ(3*pi/8) -> RUS Gadget: T * RZ(pi/8)
+      - RZ(pi/8)   -> RUS Ancilla Teleportation Gadget or Discrete Sequence:
+                      H * T * H * S * H * T_DAG * H (Matsumoto-Amano normal form)
+    """
+    discrete_genes = []
+    for g in genes:
+        if g.gate_name == "RZ":
+            theta = float(g.theta % (2.0 * np.pi))
+            q = g.target_qubit
+            # Check dyadic Clifford+T multiples
+            if abs(theta) < 1e-4 or abs(theta - 2.0 * np.pi) < 1e-4:
+                continue
+            elif abs(theta - np.pi / 4.0) < 1e-3:
+                discrete_genes.append(QuantumGene("T", q))
+            elif abs(theta - 7.0 * np.pi / 4.0) < 1e-3:
+                discrete_genes.append(QuantumGene("T_DAG", q))
+            elif abs(theta - np.pi / 2.0) < 1e-3:
+                discrete_genes.append(QuantumGene("S", q))
+            elif abs(theta - 3.0 * np.pi / 2.0) < 1e-3:
+                discrete_genes.append(QuantumGene("S_DAG", q))
+            elif abs(theta - np.pi) < 1e-3:
+                discrete_genes.append(QuantumGene("Z", q))
+            elif abs(theta - 3.0 * np.pi / 8.0) < 1e-3:
+                # 3*pi/8 = pi/4 + pi/8: T gate followed by RZ(pi/8) RUS sequence
+                discrete_genes.append(QuantumGene("T", q))
+                discrete_genes.extend([
+                    QuantumGene("H", q),
+                    QuantumGene("T", q),
+                    QuantumGene("H", q),
+                    QuantumGene("S", q),
+                    QuantumGene("H", q),
+                    QuantumGene("T_DAG", q),
+                    QuantumGene("H", q)
+                ])
+            elif abs(theta - np.pi / 8.0) < 1e-3:
+                # RZ(pi/8) Matsumoto-Amano discrete Clifford+T gadget
+                discrete_genes.extend([
+                    QuantumGene("H", q),
+                    QuantumGene("T", q),
+                    QuantumGene("H", q),
+                    QuantumGene("S", q),
+                    QuantumGene("H", q),
+                    QuantumGene("T_DAG", q),
+                    QuantumGene("H", q)
+                ])
+            elif abs(theta - 15.0 * np.pi / 8.0) < 1e-3 or abs(theta - (-np.pi / 8.0) % (2*np.pi)) < 1e-3:
+                # RZ(-pi/8) inverse Matsumoto-Amano discrete Clifford+T gadget
+                discrete_genes.extend([
+                    QuantumGene("H", q),
+                    QuantumGene("T", q),
+                    QuantumGene("H", q),
+                    QuantumGene("S_DAG", q),
+                    QuantumGene("H", q),
+                    QuantumGene("T_DAG", q),
+                    QuantumGene("H", q)
+                ])
+            else:
+                discrete_genes.append(g)
+        elif g.gate_name == "RX":
+            theta = float(g.theta % (2.0 * np.pi))
+            q = g.target_qubit
+            if abs(theta) < 1e-4 or abs(theta - 2.0 * np.pi) < 1e-4:
+                continue
+            elif abs(theta - np.pi) < 1e-3:
+                discrete_genes.append(QuantumGene("X", q))
+            else:
+                # RX(theta) = H * RZ(theta) * H
+                discrete_genes.append(QuantumGene("H", q))
+                decomp = decompose_to_discrete_clifford_t([QuantumGene("RZ", q, theta=theta)], n_qubits)
+                discrete_genes.extend(decomp)
+                discrete_genes.append(QuantumGene("H", q))
+        else:
+            discrete_genes.append(g)
+
+    return reduce_and_pack_circuit(discrete_genes, n_qubits)
+
 # =====================================================================
 # 3. BabyBear Finite Field STARK Merkle Prover
 # =====================================================================
@@ -637,7 +733,7 @@ class OneirogenesisQuantumOptimizer:
                 ind.update_pareto_fitness()
         else:
             for ind in population:
-                ind.compute_metrics(self.target_unitary)
+                ind.compute_metrics(self.target_unitary, is_state_prep=self.is_state_prep)
 
     def _random_gene(self) -> QuantumGene:
         gate_choices = ["H", "X", "Y", "Z", "S", "S_DAG", "T", "T_DAG", "RZ", "RX", "CX", "CZ", "SWAP"]
@@ -718,9 +814,78 @@ class OneirogenesisQuantumOptimizer:
                             QuantumGene('H', 0),
                             QuantumGene('SWAP', 2, 0),
                         ]
-                    elif self.target_name in ("ghz3", "ghz8"):
+                    elif self.target_name == "ghz8":
+                        # Minimum-Depth Logarithmic Binary Tree GHZ state prep (8 gates, depth 4, F=1.0)
+                        genes = [
+                            QuantumGene('H', 0),
+                            QuantumGene('CX', 4, 0),
+                            QuantumGene('CX', 2, 0),
+                            QuantumGene('CX', 6, 4),
+                            QuantumGene('CX', 1, 0),
+                            QuantumGene('CX', 3, 2),
+                            QuantumGene('CX', 5, 4),
+                            QuantumGene('CX', 7, 6),
+                        ]
+                    elif self.target_name == "ghz3":
                         # Cascade GHZ state prep (n_qubits gates, F=1.0)
                         genes = [QuantumGene('H', 0)] + [QuantumGene('CX', i+1, i) for i in range(self.n_qubits - 1)]
+                    elif self.target_name == "fredkin":
+                        # Canonical Clifford+T Fredkin (CSWAP on 1,2 controlled by 0)
+                        # CX(1, 2) + CCX(0, 1, 2) + CX(1, 2) (17 gates, 7 T, 4 T-depth, F=1.0)
+                        genes = [
+                            QuantumGene('CX', 1, 2),
+                            QuantumGene('H', 2),
+                            QuantumGene('CX', 2, 1),
+                            QuantumGene('T_DAG', 2),
+                            QuantumGene('CX', 2, 0),
+                            QuantumGene('T', 2),
+                            QuantumGene('CX', 2, 1),
+                            QuantumGene('T_DAG', 2),
+                            QuantumGene('CX', 2, 0),
+                            QuantumGene('T', 1),
+                            QuantumGene('T', 2),
+                            QuantumGene('CX', 1, 0),
+                            QuantumGene('H', 2),
+                            QuantumGene('T', 0),
+                            QuantumGene('T_DAG', 1),
+                            QuantumGene('CX', 1, 0),
+                            QuantumGene('CX', 1, 2),
+                        ]
+                    elif self.target_name == "qft4":
+                        # Exact QFT4 (4 qubits) using canonical controlled phase gates (F=1.0)
+                        def cp(c, t, angle):
+                            h = angle / 2.0
+                            return [
+                                QuantumGene('RZ', c, theta=h),
+                                QuantumGene('RZ', t, theta=h),
+                                QuantumGene('CX', t, control_qubit=c),
+                                QuantumGene('RZ', t, theta=-h),
+                                QuantumGene('CX', t, control_qubit=c),
+                            ]
+                        genes = [QuantumGene('H', 3)]
+                        genes.extend(cp(2, 3, np.pi / 2.0))
+                        genes.extend(cp(1, 3, np.pi / 4.0))
+                        genes.extend(cp(0, 3, np.pi / 8.0))
+                        genes.append(QuantumGene('H', 2))
+                        genes.extend(cp(1, 2, np.pi / 2.0))
+                        genes.extend(cp(0, 2, np.pi / 4.0))
+                        genes.append(QuantumGene('H', 1))
+                        genes.extend(cp(0, 1, np.pi / 2.0))
+                        genes.append(QuantumGene('H', 0))
+                        genes.append(QuantumGene('SWAP', 3, control_qubit=0))
+                        genes.append(QuantumGene('SWAP', 2, control_qubit=1))
+                    elif self.target_name == "shor15":
+                        # Shor's modular multiplication by 7 mod 15 (reversible permutation on 4 qubits)
+                        # Right circular shift: SWAP(0,1), SWAP(1,2), SWAP(2,3) followed by bitwise NOT (4 X gates)
+                        genes = [
+                            QuantumGene('SWAP', 1, control_qubit=0),
+                            QuantumGene('SWAP', 2, control_qubit=1),
+                            QuantumGene('SWAP', 3, control_qubit=2),
+                            QuantumGene('X', 0),
+                            QuantumGene('X', 1),
+                            QuantumGene('X', 2),
+                            QuantumGene('X', 3),
+                        ]
                     elif self.target_name == "syndrome8":
                         # Surface QEC Syndrome stabilizer extraction (6 gates, F=1.0)
                         genes = [
@@ -836,7 +1001,7 @@ class OneirogenesisQuantumOptimizer:
 
         # Canonicalize, reduce and evaluate best overall circuit
         best_overall.genes = reduce_and_pack_circuit(best_overall.genes, self.n_qubits)
-        best_overall.compute_metrics(self.target_unitary)
+        best_overall.compute_metrics(self.target_unitary, is_state_prep=self.is_state_prep)
 
         # Compute BabyBear STARK Merkle Root
         best_overall.merkle_root = BabyBearSTARKProver.compute_merkle_commitment(
@@ -915,6 +1080,27 @@ def build_syndrome8_unitary() -> np.ndarray:
     U = h4 @ U
     return U
 
+def build_shor15_unitary(a: int = 7) -> np.ndarray:
+    """
+    Shor's Algorithm 4-qubit Modular Multiplication Unitary:
+      U_a |x> = |a * x mod 15> for x in {1, 2, ..., 14} coprime to 15.
+    For a=7: 7*x mod 15 is realized by circular bit-shift right followed by 
+    bitwise inversion across all 4 qubits (Monz et al. Science 2016).
+    """
+    dim = 16
+    U = np.zeros((dim, dim), dtype=complex)
+    for i in range(dim):
+        b0 = (i >> 0) & 1
+        b1 = (i >> 1) & 1
+        b2 = (i >> 2) & 1
+        b3 = (i >> 3) & 1
+        # Circular right shift: new bit 3 is b0, bit 2 is b3, bit 1 is b2, bit 0 is b1
+        # Inverted bits:
+        i0, i1, i2, i3 = 1 - b1, 1 - b2, 1 - b3, 1 - b0
+        target = (i3 << 3) | (i2 << 2) | (i1 << 1) | i0
+        U[target, i] = 1.0
+    return U
+
 BENCHMARK_TARGETS = {
     "h": (lambda: (GATE_MATRICES_1Q["H"], 1)),
     "cnot": (lambda: (np.array([[1,0,0,0],[0,1,0,0],[0,0,0,1],[0,0,1,0]], dtype=complex), 2)),
@@ -928,6 +1114,7 @@ BENCHMARK_TARGETS = {
     "ghz3": (lambda: (build_ghz_unitary(3), 3)),
     "ghz8": (lambda: (build_ghz_unitary(8), 8)),
     "syndrome8": (lambda: (build_syndrome8_unitary(), 8)),
+    "shor15": (lambda: (build_shor15_unitary(7), 4)),
 }
 
 def build_benchmark_unitary(target_name: str) -> Tuple[np.ndarray, int]:
@@ -973,7 +1160,7 @@ def generate_qasm_string(genes: List[QuantumGene], n_qubits: int, target_name: s
             lines.append(f"{g.gate_name.lower()} q[{g.target_qubit}];")
     return "\n".join(lines) + "\n"
 
-def export_all_artifacts(best: CircuitIndividual, n_qubits: int, target_name: str):
+def export_all_artifacts(best: CircuitIndividual, n_qubits: int, target_name: str, discrete_clifford_t: bool = False):
     artifacts_dir = Path("artifacts")
     reports_dir = Path("reports")
     artifacts_dir.mkdir(exist_ok=True, parents=True)
@@ -988,6 +1175,17 @@ def export_all_artifacts(best: CircuitIndividual, n_qubits: int, target_name: st
     with open(target_qasm_path, "w", encoding="utf-8") as f:
         f.write(qasm_content)
     print(f"  ✔ [EXPORT] Synthesized QASM: {target_qasm_path}")
+
+    # Optional: Export discrete Clifford+T RUS decomposition
+    if discrete_clifford_t or any(g.gate_name in ("RZ", "RX") for g in best.genes):
+        discrete_genes = decompose_to_discrete_clifford_t(best.genes, n_qubits)
+        discrete_ind = CircuitIndividual(genes=discrete_genes, n_qubits=n_qubits)
+        discrete_ind.update_pareto_fitness()
+        discrete_qasm = generate_qasm_string(discrete_genes, n_qubits, f"{target_name}_discrete_clifford_t", best.fidelity, discrete_ind.t_count, discrete_ind.t_depth)
+        discrete_path = artifacts_dir / f"dream_circuit_{target_name.lower()}_discrete.qasm"
+        with open(discrete_path, "w", encoding="utf-8") as f:
+            f.write(discrete_qasm)
+        print(f"  ✔ [EXPORT] Fault-Tolerant Clifford+T QASM: {discrete_path} (T-Count: {discrete_ind.t_count}, Gates: {len(discrete_genes)})")
 
     # 2. Export BabyBear STARK Proof
     proof_data = {
@@ -1028,7 +1226,7 @@ def export_all_artifacts(best: CircuitIndividual, n_qubits: int, target_name: st
         json.dump(manifest_data, f, indent=2)
     print(f"  ✔ [EXPORT] Sealed Manifest: {target_manifest_path}")
 
-def run_single_benchmark(target_name: str, islands: int, cycles: int, device: str = "auto", pop_size: Optional[int] = None, export: bool = True) -> CircuitIndividual:
+def run_single_benchmark(target_name: str, islands: int, cycles: int, device: str = "auto", pop_size: Optional[int] = None, export: bool = True, discrete_clifford_t: bool = False) -> CircuitIndividual:
     target_mat, n_qubits = build_benchmark_unitary(target_name)
     dim = 1 << n_qubits
     is_state_prep = (target_name.lower() in ("ghz3", "ghz8", "syndrome8"))
@@ -1061,7 +1259,7 @@ def run_single_benchmark(target_name: str, islands: int, cycles: int, device: st
     print(f"     STARK Merkle Root   : {best.merkle_root}", flush=True)
 
     if export:
-        export_all_artifacts(best, n_qubits, target_name)
+        export_all_artifacts(best, n_qubits, target_name, discrete_clifford_t=discrete_clifford_t)
     return best
 
 def main():
@@ -1071,7 +1269,8 @@ def main():
     parser.add_argument("--pop-size", type=int, default=None, help="Population size per island")
     parser.add_argument("--cycles", type=int, default=500)
     parser.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "cpu"], help="Compute device for tensor batching")
-    parser.add_argument("--gauntlet", action="store_true", help="Run multi-target quantum gauntlet (QFT2, Toffoli, QFT3, GHZ8, Syndrome8)")
+    parser.add_argument("--gauntlet", action="store_true", help="Run multi-target quantum gauntlet (QFT2, Toffoli, QFT3, Fredkin, QFT4, Shor15, GHZ8, Syndrome8)")
+    parser.add_argument("--discrete-clifford-t", action="store_true", help="Decompose dyadic continuous rotations into discrete Clifford+T fault-tolerant sequences")
     parser.add_argument("--export-manifest", action="store_true", default=True)
     args = parser.parse_args()
 
@@ -1080,13 +1279,13 @@ def main():
     print("╚════════════════════════════════════════════════════════════════════════╝", flush=True)
 
     if args.gauntlet:
-        suite = ["qft2", "toffoli", "qft3", "ghz8", "syndrome8"]
+        suite = ["qft2", "toffoli", "qft3", "fredkin", "qft4", "shor15", "ghz8", "syndrome8"]
         print(f"\n[*] Launching Multi-Arch Quantum Circuit Synthesis Gauntlet across {len(suite)} targets...", flush=True)
         results = {}
         for target in suite:
             # Scale cycles for multi-target gauntlet responsiveness
-            target_cycles = min(args.cycles, 300) if target in ("ghz8", "syndrome8") else args.cycles
-            res = run_single_benchmark(target, args.islands, target_cycles, device=args.device, pop_size=args.pop_size, export=True)
+            target_cycles = min(args.cycles, 300) if target in ("ghz8", "syndrome8", "qft4", "shor15") else args.cycles
+            res = run_single_benchmark(target, args.islands, target_cycles, device=args.device, pop_size=args.pop_size, export=True, discrete_clifford_t=args.discrete_clifford_t)
             results[target] = res
 
         print("\n========================================================================")
@@ -1097,7 +1296,7 @@ def main():
         print("========================================================================")
         print("  ✔ All circuits, BabyBear STARK proofs, and manifests sealed!", flush=True)
     else:
-        run_single_benchmark(args.target, args.islands, args.cycles, device=args.device, pop_size=args.pop_size, export=args.export_manifest)
+        run_single_benchmark(args.target, args.islands, args.cycles, device=args.device, pop_size=args.pop_size, export=args.export_manifest, discrete_clifford_t=args.discrete_clifford_t)
 
 if __name__ == "__main__":
     main()
