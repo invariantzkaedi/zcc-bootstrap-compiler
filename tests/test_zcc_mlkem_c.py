@@ -16,7 +16,7 @@ import os
 import time
 import unittest
 
-LIB_PATH = os.path.abspath("./libzcc_mlkem.so")
+LIB_PATH = os.environ.get("LIB_PATH", os.path.abspath("./libzcc_mlkem.so"))
 
 
 class TestZCCMlkemC(unittest.TestCase):

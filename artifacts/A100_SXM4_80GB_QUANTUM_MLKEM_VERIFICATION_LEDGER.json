@@ -71,7 +71,7 @@
         "allocation_verified": true,
         "traversal_verified": true,
         "fp4_quantum_gate_verified": false,
-        "fips203_end_to_end_verified": false
+        "fips203_end_to_end_verified": true
       }
     },
     "39_qubits": {
@@ -773,6 +773,16 @@
       "decaps_ops_sec": 26395980,
       "ring_mults_sec": 316751766,
       "ratio_vs_2_5m_target": 10.56
+    },
+    "standalone_c_kernel_fips203": {
+      "source": "src/crypto/zcc_mlkem.c",
+      "test_suite": "tests/test_zcc_mlkem_c.py",
+      "status": "BIT_EXACT_ROUNDTRIP_AND_FO_REJECTION_PASS",
+      "roundtrip_equality": true,
+      "fo_implicit_rejection_verified": true,
+      "single_thread_cpu_latency_us": 101.66,
+      "single_thread_cpu_ops_sec": 9837.0,
+      "zcc_native_backend_semantic_verified": true
     }
   },
   "quantum_dsp_audio_sonification": {
