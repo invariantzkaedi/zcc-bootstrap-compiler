@@ -1092,10 +1092,14 @@ def run_39qubit_continuous_unitary_gauntlet(hw: dict, gate_name: str = "H(q0)"):
         ref_h1_sample = bytes(fwd_lut[b] for b in sample_h0)
         expected_h1 = hashlib.sha256(ref_h1_sample).hexdigest()[:16]
 
+        slice_size = 32 * 1024 * 1024  # 32 MiB streaming slice (bounds temporary index memory to 256 MiB)
         torch.cuda.synchronize()
         t_p1_start = time.perf_counter()
         for chunk in working_chunks:
-            chunk.copy_(t_fwd_lut[chunk.long()])
+            for start in range(0, chunk.size(0), slice_size):
+                end = min(start + slice_size, chunk.size(0))
+                sub = chunk[start:end]
+                sub.copy_(t_fwd_lut[sub.long()])
         torch.cuda.synchronize()
         t_p1 = time.perf_counter() - t_p1_start
         total_p1_sec += t_p1
@@ -1110,7 +1114,10 @@ def run_39qubit_continuous_unitary_gauntlet(hw: dict, gate_name: str = "H(q0)"):
         torch.cuda.synchronize()
         t_p2_start = time.perf_counter()
         for chunk in working_chunks:
-            chunk.copy_(t_inv_lut[chunk.long()])
+            for start in range(0, chunk.size(0), slice_size):
+                end = min(start + slice_size, chunk.size(0))
+                sub = chunk[start:end]
+                sub.copy_(t_inv_lut[sub.long()])
         torch.cuda.synchronize()
         t_p2 = time.perf_counter() - t_p2_start
         total_p2_sec += t_p2
