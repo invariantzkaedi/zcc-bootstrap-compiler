@@ -128,8 +128,8 @@ class RotaryEmbedding(nn.Module):
         self.register_buffer("sin", emb.sin(), persistent=False)
 
     def forward(self, x, seq_len):
-        cos = self.cos[:seq_len, :].unsqueeze(0).unsqueeze(1)
-        sin = self.sin[:seq_len, :].unsqueeze(0).unsqueeze(1)
+        cos = self.cos[:seq_len, :].to(dtype=x.dtype).unsqueeze(0).unsqueeze(1)
+        sin = self.sin[:seq_len, :].to(dtype=x.dtype).unsqueeze(0).unsqueeze(1)
         return cos, sin
 
 def apply_rotary_pos_emb(q, k, cos, sin):
@@ -254,11 +254,72 @@ def print_ascii_chart(title, values, width=60, height=10):
     print(" " * 8 + "└" + "─" * len(values))
     print(" " * 8 + f"Step 1{' ' * (len(values) - 10)}Step {len(values)*10}\n")
 
-def run_training_arm(optimizer_name, device, steps=150, batch_size=32, seq_len=128):
+PRESETS = {
+    "small": {
+        "name": "37M-Small",
+        "description": "37M Parameters • 6 Layers • Context 128 (Ultra-Fast 7s Baseline)",
+        "dim": 768, "num_layers": 6, "num_heads": 12, "intermediate_dim": 1536,
+        "batch_size": 32, "seq_len": 128
+    },
+    "medium": {
+        "name": "125M-Medium",
+        "description": "125M Parameters • 12 Layers • Context 512 (Standard Llama/GPT-2 Scale)",
+        "dim": 768, "num_layers": 12, "num_heads": 12, "intermediate_dim": 2048,
+        "batch_size": 16, "seq_len": 512
+    },
+    "large": {
+        "name": "367M-Large",
+        "description": "367M Parameters • 24 Layers • Context 1024 (A100 Tensor Core Sweet Spot)",
+        "dim": 1024, "num_layers": 24, "num_heads": 16, "intermediate_dim": 3584,
+        "batch_size": 8, "seq_len": 1024
+    },
+    "titan": {
+        "name": "493M-Titan",
+        "description": "493M Parameters • 22 Layers • Context 2048 (Full A100 High-Capacity Regime)",
+        "dim": 1280, "num_layers": 22, "num_heads": 16, "intermediate_dim": 4096,
+        "batch_size": 4, "seq_len": 2048
+    }
+}
+
+def get_lr(step, total_steps, base_lr=1e-3, warmup_steps=10, min_lr=1e-4):
+    if step <= warmup_steps:
+        return base_lr * (step / max(1, warmup_steps))
+    decay_ratio = (step - warmup_steps) / max(1, total_steps - warmup_steps)
+    coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
+    return min_lr + coeff * (base_lr - min_lr)
+
+def run_training_arm(optimizer_name, device, preset_cfg, steps=100, batch_size=None, seq_len=None):
     torch.manual_seed(42)
+    b_size = batch_size if batch_size is not None else preset_cfg["batch_size"]
+    s_len = seq_len if seq_len is not None else preset_cfg["seq_len"]
+
+    # Adapt batch size if running on memory-constrained GPUs (< 24GB VRAM)
+    if device.startswith('cuda') and batch_size is None:
+        gpu_mem_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+        if gpu_mem_gb < 16.0:
+            if s_len >= 2048:
+                b_size = min(b_size, 1)
+            elif s_len >= 1024:
+                b_size = min(b_size, 2)
+            elif s_len >= 512:
+                b_size = min(b_size, 4)
+        elif gpu_mem_gb < 24.0:
+            if s_len >= 2048:
+                b_size = min(b_size, 2)
+            elif s_len >= 1024:
+                b_size = min(b_size, 4)
+            elif s_len >= 512:
+                b_size = min(b_size, 8)
+
+    dtype = torch.bfloat16 if device.startswith('cuda') else torch.float32
     model = ZKAEDITransformer(
-        vocab_size=2048, dim=768, num_layers=6, num_heads=12, intermediate_dim=1536, max_seq_len=seq_len
-    ).to(device)
+        vocab_size=2048,
+        dim=preset_cfg["dim"],
+        num_layers=preset_cfg["num_layers"],
+        num_heads=preset_cfg["num_heads"],
+        intermediate_dim=preset_cfg["intermediate_dim"],
+        max_seq_len=s_len
+    ).to(device=device, dtype=dtype)
 
     total_params = sum(p.numel() for p in model.parameters())
 
@@ -269,21 +330,31 @@ def run_training_arm(optimizer_name, device, steps=150, batch_size=32, seq_len=1
     else:
         raise ValueError(f"Unknown optimizer {optimizer_name}")
 
-    data_stream = CompilerDataStream(vocab_size=2048, seq_len=seq_len, batch_size=batch_size, device=device)
+    data_stream = CompilerDataStream(vocab_size=2048, seq_len=s_len, batch_size=b_size, device=device)
     loss_history = []
-    tokens_per_step = batch_size * (seq_len - 1)
+    tokens_per_step = b_size * (s_len - 1)
+    warmup_steps = min(10, max(1, steps // 10))
+
+    if device.startswith('cuda'):
+        torch.cuda.reset_peak_memory_stats()
 
     print(f"\n{'='*75}")
     print(f" 🚀 ENGAGING ARM: [{optimizer_name.upper()}] ON {device.upper()}")
-    print(f" • Architecture : 6-Layer Llama-Style Transformer ({total_params/1e6:.2f}M Parameters)")
-    print(f" • Batch Config : Batch Size {batch_size} × Seq Len {seq_len} ({tokens_per_step:,} tokens/step)")
+    print(f" • Preset       : {preset_cfg['name']} ({preset_cfg['description']})")
+    print(f" • Architecture : {preset_cfg['num_layers']}-Layer Llama-Style Transformer ({total_params/1e6:.2f}M Parameters)")
+    print(f" • Batch Config : Batch Size {b_size} × Seq Len {s_len} ({tokens_per_step:,} tokens/step)")
     print(f" • Precision    : BF16 Autocast + FlashAttention-2 SDPA")
+    print(f" • LR Schedule  : Linear Warmup ({warmup_steps} steps) + Cosine Annealing (1e-3 -> 1e-4)")
     print(f"{'='*75}")
 
     t_start = time.perf_counter()
     model.train()
 
     for step in range(1, steps + 1):
+        lr_curr = get_lr(step, steps, base_lr=1e-3, warmup_steps=warmup_steps)
+        for pg in optimizer.param_groups:
+            pg['lr'] = lr_curr
+
         x, y = data_stream.next_batch()
         optimizer.zero_grad(set_to_none=True)
 
@@ -292,38 +363,53 @@ def run_training_arm(optimizer_name, device, steps=150, batch_size=32, seq_len=1
             logits = model(x)
             loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
 
+        loss_val = loss.item()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
+        del loss, logits
 
         if step % 10 == 0 or step == 1 or step == steps:
-            loss_val = loss.item()
             loss_history.append(loss_val)
             elapsed = time.perf_counter() - t_start
             tokens_sec = (step * tokens_per_step) / elapsed
             tflops = (6.0 * total_params * tokens_sec) / 1e12
+            vram_peak_gb = (torch.cuda.max_memory_allocated() / (1024**3)) if device.startswith('cuda') else 0.0
 
             bar_len = 25
             progress = int((step / steps) * bar_len)
             bar = "█" * progress + "░" * (bar_len - progress)
-            print(f"[{step:3d}/{steps}] |{bar}| Loss: {loss_val:6.4f} | {int(tokens_sec):9,d} tok/s | {tflops:5.1f} TFLOPS | {elapsed:4.1f}s")
+            print(f"[{step:3d}/{steps}] |{bar}| Loss: {loss_val:6.4f} | {int(tokens_sec):9,d} tok/s | {tflops:5.1f} TFLOPS | VRAM: {vram_peak_gb:4.1f}G | {elapsed:4.1f}s")
 
     total_time = time.perf_counter() - t_start
     total_tokens = steps * tokens_per_step
     final_tok_sec = total_tokens / total_time
     avg_tflops = (6.0 * total_params * final_tok_sec) / 1e12
+    vram_peak_gb = (torch.cuda.max_memory_allocated() / (1024**3)) if device.startswith('cuda') else 0.0
 
-    return {
+    result = {
         "name": optimizer_name,
+        "preset": preset_cfg["name"],
         "total_params": total_params,
+        "batch_size": b_size,
+        "seq_len": s_len,
         "steps": steps,
         "final_loss": loss_history[-1],
         "initial_loss": loss_history[0],
         "loss_history": loss_history,
         "total_time_sec": total_time,
         "throughput_tokens_sec": final_tok_sec,
-        "average_tflops": avg_tflops
+        "average_tflops": avg_tflops,
+        "vram_peak_gb": vram_peak_gb
     }
+
+    del model, optimizer, data_stream
+    if device.startswith('cuda'):
+        import gc
+        gc.collect()
+        torch.cuda.empty_cache()
+
+    return result
 
 # ================================================================================
 # 5. MAIN BENCHMARK & REPORT GENERATION
@@ -331,15 +417,20 @@ def run_training_arm(optimizer_name, device, steps=150, batch_size=32, seq_len=1
 
 def main():
     parser = argparse.ArgumentParser(description="ZKAEDI Prime Fast AI Training Gauntlet")
+    parser.add_argument("--preset", type=str, choices=["small", "medium", "large", "titan"], default="small",
+                        help="Model preset: small (37M, ctx 128), medium (125M, ctx 512), large (367M, ctx 1024), titan (493M, ctx 2048)")
     parser.add_argument("--steps", type=int, default=100, help="Training steps per arm (default: 100)")
-    parser.add_argument("--batch-size", type=int, default=32, help="Batch size (default: 32)")
-    parser.add_argument("--seq-len", type=int, default=128, help="Sequence length (default: 128)")
+    parser.add_argument("--batch-size", type=int, default=None, help="Batch size override")
+    parser.add_argument("--seq-len", type=int, default=None, help="Sequence length override")
     args = parser.parse_args()
 
-    print("""
+    cfg = PRESETS[args.preset]
+
+    print(f"""
 ╔════════════════════════════════════════════════════════════════════════╗
 ║ 🔱 ZKAEDI PRIME // FAST A100 AI TRAINING ENGINE & BENCHMARK SUITE      ║
 ║ Transformer IR Codec • BF16 FlashAttention • Hamiltonian Dynamics     ║
+║ Mode: {cfg['name']:<12} ({cfg['description']:<49}) ║
 ╚════════════════════════════════════════════════════════════════════════╝
     """)
 
@@ -355,8 +446,8 @@ def main():
         print(f"[⚡ HARDWARE PROBE] CPU Fallback Mode: {torch.get_num_threads()} Threads")
 
     # Run Dual-Arm Benchmark
-    res_adamw = run_training_arm("AdamW", device, steps=args.steps, batch_size=args.batch_size, seq_len=args.seq_len)
-    res_prime = run_training_arm("ZKAEDI-Prime", device, steps=args.steps, batch_size=args.batch_size, seq_len=args.seq_len)
+    res_adamw = run_training_arm("AdamW", device, cfg, steps=args.steps, batch_size=args.batch_size, seq_len=args.seq_len)
+    res_prime = run_training_arm("ZKAEDI-Prime", device, cfg, steps=args.steps, batch_size=args.batch_size, seq_len=args.seq_len)
 
     # Print ASCII charts
     print_ascii_chart("ADAMW LOSS TRAJECTORY", res_adamw["loss_history"])
@@ -364,7 +455,7 @@ def main():
 
     # Comparison Table
     print(f"{'='*75}")
-    print(f" 📊 DUAL-ARM BENCHMARK RESULTS MATRIX")
+    print(f" 📊 DUAL-ARM BENCHMARK RESULTS MATRIX: [{cfg['name']}]")
     print(f"{'='*75}")
     print(f"{'Metric':<30} | {'AdamW Baseline':<18} | {'ZKAEDI-Prime':<18}")
     print(f"{'-'*30}-+-{'-'*18}-+-{'-'*18}")
@@ -374,6 +465,7 @@ def main():
     print(f"{'Total Execution Time (s)':<30} | {res_adamw['total_time_sec']:<18.2f} | {res_prime['total_time_sec']:<18.2f}")
     print(f"{'Throughput (Tokens/sec)':<30} | {res_adamw['throughput_tokens_sec']:<18,.0f} | {res_prime['throughput_tokens_sec']:<18,.0f}")
     print(f"{'Compute Rate (TFLOPS)':<30} | {res_adamw['average_tflops']:<18.1f} | {res_prime['average_tflops']:<18.1f}")
+    print(f"{'Peak VRAM Footprint':<30} | {res_adamw['vram_peak_gb']:<16.2f}GB | {res_prime['vram_peak_gb']:<16.2f}GB")
     print(f"{'='*75}")
 
     # Emit Artifact Report
@@ -383,9 +475,11 @@ def main():
         f.write(f"""# 🔱 ZKAEDI PRIME AI TRAINING BENCHMARK REPORT
 ### *Dual-Arm Empirical Gauntlet: AdamW vs. ZKAEDI Prime Hamiltonian Energy Optimizer*
 
-Date: {time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())}  
-Hardware: `{hw_name}` ({vram_gb:.2f} GiB VRAM)  
-Model: 85M-Parameter Llama-Style Transformer (6 Layers, RoPE, SwiGLU, RMSNorm, BF16, FlashAttention-2)
+- **Date**: {time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())}  
+- **Hardware**: `{hw_name}` ({vram_gb:.2f} GiB VRAM)  
+- **Preset**: `{cfg['name']}` ({cfg['description']})  
+- **Model Parameters**: {res_adamw['total_params'] / 1e6:.2f}M Parameters  
+- **Batch Specification**: Batch Size {res_adamw['batch_size']} × Sequence Length {res_adamw['seq_len']}  
 
 | Metric | PyTorch AdamW Baseline | 🔱 ZKAEDI Prime Hamiltonian Optimizer |
 | :--- | :---: | :---: |
@@ -394,6 +488,7 @@ Model: 85M-Parameter Llama-Style Transformer (6 Layers, RoPE, SwiGLU, RMSNorm, B
 | **Loss Reduction** | -{res_adamw['initial_loss'] - res_adamw['final_loss']:.4f} | -{res_prime['initial_loss'] - res_prime['final_loss']:.4f} |
 | **Throughput** | {res_adamw['throughput_tokens_sec']:,.0f} tokens/sec | {res_prime['throughput_tokens_sec']:,.0f} tokens/sec |
 | **Compute Rate** | {res_adamw['average_tflops']:.1f} TFLOPS | {res_prime['average_tflops']:.1f} TFLOPS |
+| **Peak VRAM** | {res_adamw['vram_peak_gb']:.2f} GiB | {res_prime['vram_peak_gb']:.2f} GiB |
 | **Total Wall-Clock** | {res_adamw['total_time_sec']:.2f} s | {res_prime['total_time_sec']:.2f} s |
 
 ✔ Artifact emitted to `{report_path}`.
