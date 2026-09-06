@@ -1,0 +1,52 @@
+{
+  "proof_uuid": "32e2713d-ecfe-4403-84db-69fdfd116627",
+  "protocol": "ZKAEDI_PRIME_BABYBEAR_STARK_v1",
+  "finite_field": {
+    "name": "BabyBear",
+    "prime": 2013265921,
+    "formula": "2^31 - 2^27 + 1",
+    "scale": 1000000000
+  },
+  "merkle_root": "0x8ab7413c0f779995f7b52707251392ab288dd8d2d85a7bd7ef728fe2525eaa3b",
+  "trace_row_count": 13,
+  "queries_verified": true,
+  "query_evaluations": [
+    {
+      "query_row": 7,
+      "circuit": "Octant_Slab_2_Staging",
+      "leaf_hash": "7bc050e14f6a5d4d9422da134c33e429c88a4c01cd5a5498effc68658081b2e9",
+      "auth_path_len": 4,
+      "verified": true
+    },
+    {
+      "query_row": 5,
+      "circuit": "Octant_Slab_0_Staging",
+      "leaf_hash": "8ad5ed29b3169d890e00705b00aa32e669bf1c28df2bfca58e65593ff6c1192b",
+      "auth_path_len": 4,
+      "verified": true
+    },
+    {
+      "query_row": 3,
+      "circuit": "Surface17_Commutativity",
+      "leaf_hash": "3a49549e82f550ac143d39170bc4b2d03922a81a7869ea9d8f0aa81d4e9397f5",
+      "auth_path_len": 4,
+      "verified": true
+    },
+    {
+      "query_row": 8,
+      "circuit": "Octant_Slab_3_Staging",
+      "leaf_hash": "a6ee3440d83076f21ceee43b84a8d525f92df76079935bdcdfd730eb3ca746b1",
+      "auth_path_len": 4,
+      "verified": true
+    }
+  ],
+  "attested_invariants": {
+    "grover_40q_step1_amplification": "9.00x EXACT MATCH",
+    "grover_40q_logical_state_space": "512-GiB logical state space represented by eight distinct sequentially staged octants",
+    "surface17_stabilizer_commutativity": "ALL [X_i, Z_j] = 0",
+    "surface17_fault_tolerant_cnot_fidelity": "99.9824% (> 99.9% FT Threshold)",
+    "hypercube_42q_frontier": "4,398,046,511,104 Amplitudes (42Q)"
+  },
+  "generation_latency_ms": 0.187,
+  "timestamp_ns": 1788688897903075300
+}
