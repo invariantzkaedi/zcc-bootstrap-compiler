@@ -500,10 +500,10 @@ def main():
     print(f"{'='*75}")
 
     # Emit Artifact Report
-    report_path = "artifacts/AI_TRAINING_BENCHMARK_REPORT.md"
+    run_report_path = f"artifacts/AI_TRAINING_RUN_{cfg['name'].upper()}.md"
+    latest_path = "artifacts/LATEST_RUN_SUMMARY.md"
     os.makedirs("artifacts", exist_ok=True)
-    with open(report_path, "w", encoding="utf-8") as f:
-        f.write(f"""# 🔱 ZKAEDI PRIME AI TRAINING BENCHMARK REPORT
+    report_content = f"""# 🔱 ZKAEDI PRIME AI TRAINING BENCHMARK REPORT: {cfg['name'].upper()}
 ### *Dual-Arm Empirical Gauntlet: AdamW vs. ZKAEDI Prime Hamiltonian Energy Optimizer*
 
 - **Date**: {time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())}  
@@ -522,11 +522,15 @@ def main():
 | **Peak VRAM** | {res_adamw['vram_peak_gb']:.2f} GiB | {res_prime['vram_peak_gb']:.2f} GiB |
 | **Total Wall-Clock** | {res_adamw['total_time_sec']:.2f} s | {res_prime['total_time_sec']:.2f} s |
 
-✔ Artifact emitted to `{report_path}`.
-""")
+✔ Run report preserved at `{run_report_path}`.
+"""
+    with open(run_report_path, "w", encoding="utf-8") as f:
+        f.write(report_content)
+    with open(latest_path, "w", encoding="utf-8") as f:
+        f.write(report_content)
 
     print(f"\n[✔] Master Training Benchmark Complete in {res_adamw['total_time_sec'] + res_prime['total_time_sec']:.2f} seconds.")
-    print(f"[✔] Report saved to: {report_path}\n")
+    print(f"[✔] Report saved to: {run_report_path} and {latest_path}\n")
 
 if __name__ == "__main__":
     main()
