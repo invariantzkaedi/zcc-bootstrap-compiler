@@ -1,31 +1,31 @@
 # Global fallback
-* @izkaedi-ui
+* @invariantzkaedi
 
 # CI/workflow governance
-.github/workflows/* @izkaedi-ui
+.github/workflows/* @invariantzkaedi
 
 # Verification schemas and artifacts tooling
-schemas/* @izkaedi-ui
-scripts/validate_artifacts.py @izkaedi-ui
-scripts/check_determinism_hashes.py @izkaedi-ui
-scripts/render_job_summary.py @izkaedi-ui
-scripts/artifact_utils.py @izkaedi-ui
-scripts/make_repro_script.py @izkaedi-ui
-scripts/golden_semantic_diff.py @izkaedi-ui
+schemas/* @invariantzkaedi
+scripts/validate_artifacts.py @invariantzkaedi
+scripts/check_determinism_hashes.py @invariantzkaedi
+scripts/render_job_summary.py @invariantzkaedi
+scripts/artifact_utils.py @invariantzkaedi
+scripts/make_repro_script.py @invariantzkaedi
+scripts/golden_semantic_diff.py @invariantzkaedi
 
 # QEC verification tests and harness
-tests/test_trace_schema_validation.py @izkaedi-ui
-tests/test_determinism_contract.py @izkaedi-ui
-tests/test_invariants_battery.py @izkaedi-ui
-tests/test_flake_sentinel.py @izkaedi-ui
-tests/test_mutation_smoke.py @izkaedi-ui
-tests/_failure_emit_helper.py @izkaedi-ui
+tests/test_trace_schema_validation.py @invariantzkaedi
+tests/test_determinism_contract.py @invariantzkaedi
+tests/test_invariants_battery.py @invariantzkaedi
+tests/test_flake_sentinel.py @invariantzkaedi
+tests/test_mutation_smoke.py @invariantzkaedi
+tests/_failure_emit_helper.py @invariantzkaedi
 
 # Golden fixtures must be explicitly reviewed
-tests/golden/** @izkaedi-ui
+tests/golden/** @invariantzkaedi
 
 # Policy docs
-docs/merge_policy.md @izkaedi-ui
-docs/qec_forensics_playbook.md @izkaedi-ui
-docs/qec_golden_update_policy.md @izkaedi-ui
-docs/qec_mutation_strategy.md @izkaedi-ui
+docs/merge_policy.md @invariantzkaedi
+docs/qec_forensics_playbook.md @invariantzkaedi
+docs/qec_golden_update_policy.md @invariantzkaedi
+docs/qec_mutation_strategy.md @invariantzkaedi

@@ -11,7 +11,7 @@ FAST_CFLAGS = -O2 -DNDEBUG -w -fno-asynchronous-unwind-tables -g0 -DZCC_REAL_TEL
 FORTIFY_PACK_DIR ?= fortify_zcc_clean
 
 PARTS = part1.c part0_pp.c part2.c part3.c ir.h ir_emit_dispatch.h sym_type_ast_ir.c part4.c zcc_ast_serializer.c part5.c part7_rust.c part6_arm.c part6_wasm.c ir.c ir_to_x86.c regalloc.c ir_telemetry_stub.c forgezero_receipt_stub.c zcc_layout.c zcc_layout_dump.c zcc_static_assert.c
-PASSES = compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c ir_telemetry.c zcc_telemetry.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c src/opt/prime_v2_regalloc_opt.c src/wasm_emit.c src/arm64_codegen.c src/riscv_codegen.c src/win64_pe_emit.c src/quantum/zcc_qasm_parser.c src/quantum/zcc_qasm_sim.c src/quantum/zcc_qasm_opt.c src/quantum/zcc_qasm_c_emit.c src/quantum/zcc_qasm_clifford_t.c
+PASSES = compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c ir_telemetry.c zcc_telemetry.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c src/opt/prime_v2_regalloc_opt.c src/opt/q_licm_pass.c src/opt/cap_tripwire.c src/evm/evm2native_pass.c src/evm/evm2native_fuzzer.c src/zk/zk_air_trace.c src/zk/zk_witness_bridge.c src/codegen/avxzkd_jit_x86.c src/engine/zcc_hyper_engine.c src/ai/bare_gguf_jit.c src/optics/optiqpu_emitter.c src/dynamic/oneiro_kernel.c src/crypto/fhe_encrypted_ssa.c src/crypto/lattice_guard.c src/concurrency/chrono_spec.c src/neuromorphic/zcc_neuromorphic.c src/vector/zcc_hyper_vector_db.c src/quantum/zcc_topological_qpu.c src/physics/zcc_celestial_nbody.c src/zk/zcc_pq_light_client.c src/security/zcc_enclave_seal.c src/wasm_emit.c src/arm64_codegen.c src/riscv_codegen.c src/win64_pe_emit.c src/quantum/zcc_qasm_parser.c src/quantum/zcc_qasm_sim.c src/quantum/zcc_qasm_opt.c src/quantum/zcc_qasm_c_emit.c src/quantum/zcc_qasm_clifford_t.c src/zcc_binary_vector_engine.c
 COMPAT_SMOKE_SRCS = \
 	exp1_raytracer_simd.c \
 	exp2_voxel_engine.c \
@@ -25,7 +25,7 @@ COMPAT_SMOKE_SRCS = \
 	tests/regressions/t_zkaedi_rigging_regressions.c
 COMPAT_EXTENDED_SRCS = $(COMPAT_SMOKE_SRCS) raytracer.c
 
-.PHONY: all clean selfhost selfhost-fast verify-lexicon compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test test-float rust-front-smoke check-evm-lifter check-ir-vuln-tag check-forgezero-receipt check-ir-bridge-guard check-copy-const-prop verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration zjs test-zjs visualize-svg-diffs wasm-svg-bridge test_zcc_dag abi-lanes zcc-opt zcc-verify dream dream-auto apply-blueprints test-upgrade-div avxzkd test-avxzkd libavxzkd.a
+.PHONY: all clean selfhost selfhost-fast verify-lexicon compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test test-float rust-front-smoke check-rust-c-ffi check-evm-lifter check-ir-vuln-tag check-forgezero-receipt check-ir-bridge-guard check-copy-const-prop verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration zjs test-zjs visualize-svg-diffs wasm-svg-bridge test_zcc_dag abi-lanes zcc-opt zcc-verify dream dream-auto apply-blueprints test-upgrade-div avxzkd test-avxzkd libavxzkd.a
 
 
 .SECONDARY: zcc zcc2 zcc3
@@ -80,15 +80,221 @@ quantum-trinity-gauntlet: libavxzkd.so test-avxzkd test-pyavxzkd
 	python3 -m unittest tests/test_quantum_settlement_evm.py
 	python3 tools/quantum_citadel_bridge.py --once
 
+# =========================================================================
+# Freestanding OS Kernel Targets (zkernel)
+# =========================================================================
+.PHONY: kernel kernel-stage2 kernel-stage3 kernel-verify test-quantum-dex-avx2 test-py-quantum-dex
+
+kernel: zcc
+	$(MAKE) -C kernel all
+
+kernel-stage2: zcc2
+	$(MAKE) -C kernel stage2
+
+kernel-stage3: zcc3
+	$(MAKE) -C kernel stage3
+
+kernel-verify: zcc2 zcc3
+	$(MAKE) -C kernel verify
+
+# =========================================================================
+# AVX2 16-Node Quantum Walk & DEX Profit Predictor Target
+# =========================================================================
+libquantum_dex_avx2.so: src/quantum/quantum_dex_walk_avx2.c include/quantum_dex_walk_avx2.h
+	$(CC) -O3 -mavx2 -mfma -shared -fPIC -Iinclude src/quantum/quantum_dex_walk_avx2.c -o libquantum_dex_avx2.so -lm
+
+test-quantum-dex-avx2: src/quantum/quantum_dex_walk_avx2.c tests/test_quantum_dex_walk_avx2.c include/quantum_dex_walk_avx2.h
+	$(CC) -O3 -mavx2 -mfma -Iinclude src/quantum/quantum_dex_walk_avx2.c tests/test_quantum_dex_walk_avx2.c -o /tmp/test_quantum_dex_avx2 -lm
+	/tmp/test_quantum_dex_avx2
+
+test-py-quantum-dex: libquantum_dex_avx2.so
+	python3 tests/test_quantum_dex_cov.py
+
+# =========================================================================
+# Fused Quantum-Compiler Subsystem Targets
+# =========================================================================
+.PHONY: test-quantum-unified test-py-quantum-unified
+
+libzcc_quantum_unified.so: src/quantum/zcc_quantum_unified.c include/zcc_quantum_unified.h
+	$(CC) -O3 -mavx2 -mfma -shared -fPIC -Iinclude src/quantum/zcc_quantum_unified.c -o libzcc_quantum_unified.so -lm
+
+test-quantum-unified: src/quantum/zcc_quantum_unified.c tests/test_zcc_quantum_unified.c include/zcc_quantum_unified.h
+	$(CC) -O3 -mavx2 -mfma -Iinclude src/quantum/zcc_quantum_unified.c tests/test_zcc_quantum_unified.c -o /tmp/test_zcc_quantum_unified -lm
+	/tmp/test_zcc_quantum_unified
+
+test-py-quantum-unified: libzcc_quantum_unified.so
+	python3 tests/test_zcc_quantum_unified_cov.py
+
+# =========================================================================
+# libcurl 8.7.1 Sovereign Verification Target
+# =========================================================================
+.PHONY: curl-verify
+
+curl-verify: zcc
+	bash scripts/build_curl.sh
+
+# =========================================================================
+# CQAS Quantum-Superposition Self-Synthesizing JIT Target
+# =========================================================================
+.PHONY: test-cqas-superposition
+
+test-cqas-superposition: src/quantum/zcc_cqas_superposition.c tests/test_zcc_cqas_superposition.c include/zcc_cqas_superposition.h
+	$(CC) -O3 -mavx2 -mfma -Iinclude src/quantum/zcc_cqas_superposition.c tests/test_zcc_cqas_superposition.c -o /tmp/test_zcc_cqas_superposition -lm
+	/tmp/test_zcc_cqas_superposition
+
+# =========================================================================
+# Multi-Threaded Cache-Tiled AVX2 Parallel Dispatch Target
+# =========================================================================
+.PHONY: test-parallel-dispatch
+
+test-parallel-dispatch: src/quantum/quantum_dex_walk_avx2.c src/quantum/zcc_parallel_dispatcher.c tests/test_zcc_parallel_dispatcher.c include/zcc_parallel_dispatcher.h
+	$(CC) -O3 -mavx2 -mfma -pthread -Iinclude src/quantum/quantum_dex_walk_avx2.c src/quantum/zcc_parallel_dispatcher.c tests/test_zcc_parallel_dispatcher.c -o /tmp/test_zcc_parallel_dispatcher -lm
+	/tmp/test_zcc_parallel_dispatcher
+
+# =========================================================================
+# ZCC Triton GPU C-Native Bridge Target
+# =========================================================================
+.PHONY: test-triton-bridge
+
+test-triton-bridge: src/quantum/zcc_triton_bridge.c tests/test_triton_bridge.c include/zcc_triton_bridge.h
+	$(CC) -O3 -mavx2 -mfma -Iinclude src/quantum/zcc_triton_bridge.c tests/test_triton_bridge.c -o /tmp/test_triton_bridge -lm
+	/tmp/test_triton_bridge
+
+# =========================================================================
+# ZCC Topological QPU Non-Abelian Majorana Braid Target
+# =========================================================================
+.PHONY: test-topological-qpu
+
+test-topological-qpu: src/quantum/zcc_topological_qpu.c tests/test_zcc_topological_qpu_gauntlet.c src/quantum/zcc_topological_qpu.h
+	$(CC) -O3 -Iinclude -I. src/quantum/zcc_topological_qpu.c tests/test_zcc_topological_qpu_gauntlet.c -o /tmp/test_topological_qpu -lm
+	/tmp/test_topological_qpu
+
+# =========================================================================
+# ZKAEDI Temporal Drift Substrate Target
+# =========================================================================
+.PHONY: test-temporal-drift
+
+test-temporal-drift:
+	python3 tools/zkaedi_temporal_drift_unified.py
+
+# =========================================================================
+# ZCC Multi-Architecture Quantum Hybrid Dispatcher Target
+# =========================================================================
+.PHONY: test-multi-arch-qasm
+
+test-multi-arch-qasm: src/quantum/zcc_multi_arch_qasm_dispatcher.c src/quantum/zcc_topological_qpu.c tests/test_zcc_multi_arch_qasm_dispatcher.c include/zcc_multi_arch_qasm_dispatcher.h
+	$(CC) -O3 -Iinclude -I. src/quantum/zcc_multi_arch_qasm_dispatcher.c src/quantum/zcc_topological_qpu.c tests/test_zcc_multi_arch_qasm_dispatcher.c -o /tmp/test_multi_arch_qasm -lm
+	/tmp/test_multi_arch_qasm
+
+# =========================================================================
+# ZCC OpenQASM 3.0 Dynamic Feed-Forward & Surface-17 QEC Target
+# =========================================================================
+.PHONY: test-qasm3-surface-qec
+
+test-qasm3-surface-qec: src/quantum/zcc_qasm3_surface_qec.c src/quantum/zcc_multi_arch_qasm_dispatcher.c src/quantum/zcc_topological_qpu.c tests/test_zcc_qasm3_surface_qec_gauntlet.c include/zcc_qasm3_surface_qec.h
+	$(CC) -O3 -Iinclude -I. src/quantum/zcc_qasm3_surface_qec.c src/quantum/zcc_multi_arch_qasm_dispatcher.c src/quantum/zcc_topological_qpu.c tests/test_zcc_qasm3_surface_qec_gauntlet.c -o /tmp/test_qasm3_surface_qec -lm
+	/tmp/test_qasm3_surface_qec
+
+# =========================================================================
+# ZCC Microarchitectural Profiler & RAPL Energy Harvester Target
+# =========================================================================
+.PHONY: test-perf-energy
+
+test-perf-energy: src/quantum/zcc_perf_energy.c tests/test_zcc_perf_energy.c include/zcc_perf_energy.h
+	$(CC) -O3 -Iinclude src/quantum/zcc_perf_energy.c tests/test_zcc_perf_energy.c -o /tmp/test_perf_energy -lm
+	/tmp/test_perf_energy
+
+# =========================================================================
+# ZCC Sovereign Hardening Shield Target (H1-H5)
+# =========================================================================
+.PHONY: test-sovereign-hardening
+
+test-sovereign-hardening: src/quantum/zcc_sovereign_hardening.c tests/test_zcc_sovereign_hardening.c include/zcc_sovereign_hardening.h
+	$(CC) -O3 -Iinclude src/quantum/zcc_sovereign_hardening.c tests/test_zcc_sovereign_hardening.c -o /tmp/test_sovereign_hardening -lm
+	/tmp/test_sovereign_hardening
+
+# =========================================================================
+# ZCC Sovereign 8-Tier Hardware Benchmark Gauntlet
+# =========================================================================
+.PHONY: benchmark-all competition-arena
+
+benchmark-all: tools/benchmark_all_sovereign_tiers.c src/quantum/quantum_dex_walk_avx2.c src/quantum/zcc_multi_arch_qasm_dispatcher.c src/quantum/zcc_qasm3_surface_qec.c src/quantum/zcc_topological_qpu.c src/quantum/zcc_perf_energy.c src/quantum/zcc_triton_bridge.c src/quantum/zcc_parallel_dispatcher.c src/vector/zcc_hyper_vector_db.c src/zcc_binary_vector_engine.c src/quantum/zcc_ai_tensor_ir.c src/quantum/zcc_mixed_precision_quant.c src/quantum/zcc_flash_attention_avx2.c src/quantum/zcc_speculative_dma_ring.c
+	$(CC) -O3 -mavx2 -mfma -mf16c -pthread -I. -Iinclude src/quantum/quantum_dex_walk_avx2.c src/quantum/zcc_multi_arch_qasm_dispatcher.c src/quantum/zcc_qasm3_surface_qec.c src/quantum/zcc_topological_qpu.c src/quantum/zcc_perf_energy.c src/quantum/zcc_triton_bridge.c src/quantum/zcc_parallel_dispatcher.c src/vector/zcc_hyper_vector_db.c src/zcc_binary_vector_engine.c src/quantum/zcc_ai_tensor_ir.c src/quantum/zcc_mixed_precision_quant.c src/quantum/zcc_flash_attention_avx2.c src/quantum/zcc_speculative_dma_ring.c tools/benchmark_all_sovereign_tiers.c -o /tmp/benchmark_all_sovereign_tiers -lm
+	/tmp/benchmark_all_sovereign_tiers
+
+competition-arena: tools/competition_head_to_head.c src/vector/zcc_hyper_vector_db.c src/zcc_binary_vector_engine.c src/quantum/zcc_qasm3_surface_qec.c src/quantum/zcc_multi_arch_qasm_dispatcher.c src/quantum/zcc_topological_qpu.c src/quantum/zcc_sovereign_hardening.c
+	$(CC) -O3 -mavx2 -mfma -I. -Iinclude src/vector/zcc_hyper_vector_db.c src/zcc_binary_vector_engine.c src/quantum/zcc_qasm3_surface_qec.c src/quantum/zcc_multi_arch_qasm_dispatcher.c src/quantum/zcc_topological_qpu.c src/quantum/zcc_sovereign_hardening.c tools/competition_head_to_head.c -o /tmp/competition_head_to_head -lm
+	/tmp/competition_head_to_head
 
 
+# =========================================================================
+# ZCC HyperVectorDB & Binary Vector Engine Targets (V1-V5, B1-B4)
+# =========================================================================
+.PHONY: test-hyper-vector-db test-binary-vector-engine
 
+test-hyper-vector-db: src/vector/zcc_hyper_vector_db.c tests/test_zcc_hyper_vector_db.c src/vector/zcc_hyper_vector_db.h
+	$(CC) -O3 -I. src/vector/zcc_hyper_vector_db.c tests/test_zcc_hyper_vector_db.c -o /tmp/test_hyper_vector_db -lm
+	/tmp/test_hyper_vector_db
 
+test-binary-vector-engine: src/zcc_binary_vector_engine.c tests/test_zcc_binary_vector_engine.c include/zcc_binary_vector_engine.h
+	$(CC) -O3 -I. -Iinclude src/zcc_binary_vector_engine.c tests/test_zcc_binary_vector_engine.c -o /tmp/test_binary_vector_engine -lm
+	/tmp/test_binary_vector_engine
 
+# =========================================================================
+# ZCC AI Tensor SSA & Polyhedral Engine Target (T1-T5)
+# =========================================================================
+.PHONY: test-ai-tensor-ir
 
+test-ai-tensor-ir: src/quantum/zcc_ai_tensor_ir.c tests/test_zcc_ai_tensor_ir.c include/zcc_ai_tensor_ir.h
+	$(CC) -O3 -mavx2 -mfma -mf16c -Iinclude -I. src/quantum/zcc_ai_tensor_ir.c tests/test_zcc_ai_tensor_ir.c -o /tmp/test_ai_tensor_ir -lm
+	/tmp/test_ai_tensor_ir
 
+# =========================================================================
+# ZCC Mixed-Precision Quantization Optimizer Target (Q1-Q5)
+# =========================================================================
+.PHONY: test-mixed-precision-quant
 
+test-mixed-precision-quant: src/quantum/zcc_ai_tensor_ir.c src/quantum/zcc_mixed_precision_quant.c tests/test_zcc_mixed_precision_quant.c include/zcc_mixed_precision_quant.h include/zcc_ai_tensor_ir.h
+	$(CC) -O3 -mavx2 -mfma -mf16c -Iinclude -I. src/quantum/zcc_ai_tensor_ir.c src/quantum/zcc_mixed_precision_quant.c tests/test_zcc_mixed_precision_quant.c -o /tmp/test_mixed_precision_quant -lm
+	/tmp/test_mixed_precision_quant
 
+# =========================================================================
+# ZCC Speculative NPU/GPU Asynchronous DMA Ring Scheduler (R1-R5)
+# =========================================================================
+.PHONY: test-speculative-dma-ring
+
+test-speculative-dma-ring: src/quantum/zcc_speculative_dma_ring.c tests/test_zcc_speculative_dma_ring.c include/zcc_speculative_dma_ring.h
+	$(CC) -O3 -mavx2 -mfma -Iinclude -I. src/quantum/zcc_speculative_dma_ring.c tests/test_zcc_speculative_dma_ring.c -o /tmp/test_speculative_dma_ring -lm
+	/tmp/test_speculative_dma_ring
+
+# =========================================================================
+# ZCC FlashAttention Tiled AVX2 Multi-Head Attention Target (A1-A5)
+# =========================================================================
+.PHONY: test-flash-attention-avx2
+
+test-flash-attention-avx2: src/quantum/zcc_flash_attention_avx2.c tests/test_zcc_flash_attention_avx2.c include/zcc_flash_attention_avx2.h
+	$(CC) -O3 -mavx2 -mfma -Iinclude -I. src/quantum/zcc_flash_attention_avx2.c tests/test_zcc_flash_attention_avx2.c -o /tmp/test_flash_attention_avx2 -lm
+	/tmp/test_flash_attention_avx2
+
+# =========================================================================
+# ZKAEDI Prime Omega Native ZCC Standalone Target
+# =========================================================================
+.PHONY: test-prime-omega
+
+test-prime-omega: zcc tests/test_zkaedi_prime_omega_zcc.c
+	./zcc tests/test_zkaedi_prime_omega_zcc.c -o /tmp/test_prime_omega_zcc.s
+	gcc -no-pie /tmp/test_prime_omega_zcc.s -lm -o /tmp/test_prime_omega_zcc
+	/tmp/test_prime_omega_zcc
+
+# =========================================================================
+# Fused Grand-Slam Sovereign Gauntlet Target
+# =========================================================================
+.PHONY: fuse-all-gauntlet
+
+fuse-all-gauntlet: zcc zcc-opt test-prime-omega test-quantum-unified test-py-quantum-unified test-quantum-dex-avx2 test-py-quantum-dex curl-verify test-cqas-superposition test-parallel-dispatch test-triton-bridge test-topological-qpu test-multi-arch-qasm test-qasm3-surface-qec test-perf-energy test-sovereign-hardening test-hyper-vector-db test-binary-vector-engine test-ai-tensor-ir test-mixed-precision-quant test-speculative-dma-ring test-flash-attention-avx2 test-temporal-drift
+	@echo "========================================================================"
+	@echo "  💎 ALL SOVEREIGN PIPELINES FUSED & 100% VERIFIED ACROSS ALL GATES!  "
+	@echo "========================================================================"
 verify-lexicon:
 	@echo "=== Checking Workspace Lexicons ==="
 	@if [ ! -f docs/lexicon/actionable-lexicon.md ] || \
@@ -746,7 +952,7 @@ check-copy-const-prop:
 	@echo "=== Running Copy/Constant Propagation tests ==="
 	/tmp/test_copy_const_prop
 
-rust-front-smoke: zcc
+rust-front-smoke: zcc check-rust-c-ffi
 	@echo "=== Running Rust Frontend Smoke Gates ==="
 	@if [ -d rust_frontend ]; then \
 	  (cd rust_frontend && cargo check 2>/dev/null || true); \
@@ -755,6 +961,11 @@ rust-front-smoke: zcc
 	  python3 tests/rust/test_rust_frontend.py 2>/dev/null || true; \
 	fi
 	@echo "RUST FRONT SMOKE VERIFIED"
+
+check-rust-c-ffi: zcc
+	@echo "=== [RUST-FFI-LAYOUT-001] Running 7-Gate Multi-Oracle Zero-Copy FFI Gauntlet ==="
+	bash tests/run_rust_c_zero_copy_layout.sh
+	@echo "RUST-FFI-LAYOUT-001 VERIFIED"
 
 asan: zcc.c $(PASSES)
 	$(CC) -fsanitize=address -O0 -g -Dmain=zcc_main -o zcc_asan zcc.c $(PASSES) $(LDFLAGS)
@@ -1365,7 +1576,7 @@ qec-max-summary:
 
 .PHONY: max-day1 max-quality max-perf max-audit max-report max-all max-all-with-day1
 
-OWNER_REPO ?= izkaedi-ui/ZCC
+OWNER_REPO ?= invariantzkaedi/zcc-bootstrap-compiler
 BASE ?= build/base/zcc
 CAND ?= build/cand/zcc
 SUITE ?= benchmarks/list.txt
@@ -1391,7 +1602,7 @@ max-all: max-quality max-perf max-audit max-report
 max-all-with-day1: max-day1 max-all
 	@echo "MAX ALL + DAY1 COMPLETE ✅"
 
-OPT_SRCS = src/opt/zcc_opt_main.c src/opt/ir_parser.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c
+OPT_SRCS = src/opt/zcc_opt_main.c src/opt/ir_parser.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/q_licm_pass.c src/opt/cap_tripwire.c
 
 zcc-opt: $(OPT_SRCS)
 	$(CC) $(CFLAGS) -Iinclude -I. -o zcc-opt $(OPT_SRCS) $(LDFLAGS)

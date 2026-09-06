@@ -33,9 +33,9 @@ def test_sync_incidents_dry_run(monkeypatch):
     mock_issue = {
         "number": 101,
         "title": "[QEC Incident] a1b2c3d4e5f67890abcdef1234567890abcdef12 math mismatch",
-        "html_url": "https://github.com/izkaedi-ui/ZCC/issues/101",
+        "html_url": "https://github.com/invariantzkaedi/zcc-bootstrap-compiler/issues/101",
         "state": "open",
-        "assignee": {"login": "izkaedi-ui"},
+        "assignee": {"login": "invariantzkaedi"},
         "created_at": "2026-07-06T00:00:00Z",
         "closed_at": None,
         "updated_at": "2026-07-06T01:00:00Z",
@@ -58,9 +58,9 @@ def test_sync_incidents_live(monkeypatch):
     mock_issue = {
         "number": 101,
         "title": "[QEC Incident] a1b2c3d4e5f67890abcdef1234567890abcdef12 math mismatch",
-        "html_url": "https://github.com/izkaedi-ui/ZCC/issues/101",
+        "html_url": "https://github.com/invariantzkaedi/zcc-bootstrap-compiler/issues/101",
         "state": "open",
-        "assignee": {"login": "izkaedi-ui"},
+        "assignee": {"login": "invariantzkaedi"},
         "created_at": "2026-07-06T00:00:00Z",
         "closed_at": None,
         "updated_at": "2026-07-06T01:00:00Z",

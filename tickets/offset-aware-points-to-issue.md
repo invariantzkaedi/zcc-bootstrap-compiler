@@ -62,7 +62,7 @@ if (ins->op == OP_LOAD && ins->n_src >= 1) {
 }
 ```
 
-Full file at the conservative fix: https://github.com/izkaedi-ui/ZCC/blob/c8cf9fd234be43fd048ec56337f60d5c091f96dd/src/opt/pointer_ssa.c
+Full file at the conservative fix: https://github.com/invariantzkaedi/zcc-bootstrap-compiler/blob/c8cf9fd234be43fd048ec56337f60d5c091f96dd/src/opt/pointer_ssa.c
 
 ## Proposal
 

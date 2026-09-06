@@ -1,0 +1,20 @@
+App(
+    appid="zkaedi_bench",
+    name="Zkaedi DWT Bench",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="zkaedi_bench_app",
+    sources=[
+        "zkaedi_dwt_bench.c",
+        "zkaedi_svr008_core.c",
+        "zkaedi_prime_kernel.c",
+    ],
+    cdefines=["APP_ZKAEDI_BENCH"],
+    requires=["gui"],
+    stack_size=2 * 1024,
+    order=20,
+    fap_category="Misc",
+    fap_version="1.0",
+    fap_description="Zkaedi DWT / TIM2 Dual-Oracle Kernel Benchmark",
+    fap_author="ZKAEDI",
+    fap_weburl="https://github.com/invariantzkaedi/zcc-bootstrap-compiler",
+)

@@ -52,6 +52,8 @@ downstream protocol (debug, feature, hardening, etc.).
 
 ## Hard Prohibitions
 
+* DO NOT reference or push to `izkaedi-ui` or `izkaedi-ui/ZCC`. The authoritative repository is `https://github.com/invariantzkaedi/zcc-bootstrap-compiler` under user `invariantzkaedi`. All git remotes, Colab links, workflows, documentation, and push targets MUST use `invariantzkaedi/zcc-bootstrap-compiler`.
+
 * DO NOT rewrite `part0_pp.c`, `part3.c`, `part4.c`, or any PARTS
   file "wholesale." Surgical edits only; diff should be under 50
   lines unless the user explicitly authorizes more. The preprocessor

@@ -12,7 +12,7 @@ jobs:
       - name: Sync PR status field
         env:
           GH_TOKEN: ${{ secrets.PROJECTV2_TOKEN || secrets.GITHUB_TOKEN }}
-          OWNER: izkaedi-ui
+          OWNER: invariantzkaedi
           PROJECT_NUMBER: "1"
           PR_NODE_ID: ${{ github.event.pull_request.node_id }}
           PR_MERGED: ${{ github.event.pull_request.merged }}

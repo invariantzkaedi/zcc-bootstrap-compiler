@@ -33,12 +33,12 @@ def test_compute_risk_ci_workflow():
 
 def test_get_reviewers():
     codeowners = [
-        ("schemas/*", ["@izkaedi-ui"]),
+        ("schemas/*", ["@invariantzkaedi"]),
         ("tests/*", ["@tester-owner"]),
     ]
     
     revs = get_reviewers(["schemas/qec_failure_schema.json"], codeowners)
-    assert "@izkaedi-ui" in revs
+    assert "@invariantzkaedi" in revs
     assert len(revs) == 1
     
     revs = get_reviewers(["tests/test_fuzz.py", "docs/README.md"], codeowners)

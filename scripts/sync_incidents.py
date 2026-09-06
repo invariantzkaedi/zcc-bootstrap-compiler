@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 DB_PATH = Path("artifacts/qec_warehouse.db")
-GITHUB_API_URL = "https://api.github.com/repos/izkaedi-ui/ZCC/issues"
+GITHUB_API_URL = "https://api.github.com/repos/invariantzkaedi/zcc-bootstrap-compiler/issues"
 
 def parse_args():
     args = sys.argv[1:]
@@ -75,9 +75,9 @@ def sync_incidents(dry_run=False):
             {
                 "number": 101,
                 "title": "[QEC Incident] a1b2c3d4e5f67890abcdef1234567890abcdef12 math mismatch",
-                "html_url": "https://github.com/izkaedi-ui/ZCC/issues/101",
+                "html_url": "https://github.com/invariantzkaedi/zcc-bootstrap-compiler/issues/101",
                 "state": "open",
-                "assignee": {"login": "izkaedi-ui"},
+                "assignee": {"login": "invariantzkaedi"},
                 "created_at": "2026-07-06T00:00:00Z",
                 "closed_at": None,
                 "updated_at": "2026-07-06T01:00:00Z",

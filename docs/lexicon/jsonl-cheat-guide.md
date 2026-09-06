@@ -50,7 +50,7 @@
 {"ts": "2026-07-05T14:03:07Z", "level": "info", "msg": "request completed", "method": "GET", "path": "/health", "status": 200, "dur_ms": 12, "corr_id": "r-9f3"}
 {"ts": "2026-07-05T14:03:09Z", "level": "error", "msg": "retry exhausted", "svc": "sync-worker", "err": "ETIMEDOUT", "attempt": 3, "max": 3, "corr_id": "r-9f4"}
 {"ts": "2026-07-05T14:03:10Z", "metric": "queue_depth", "value": 1287, "unit": "msgs", "svc": "ingest"}
-{"ts": "2026-07-05T14:03:11Z", "actor": "izkaedi-ui", "action": "secret.rotate", "target": "CF_API_TOKEN", "result": "success"}
+{"ts": "2026-07-05T14:03:11Z", "actor": "invariantzkaedi", "action": "secret.rotate", "target": "CF_API_TOKEN", "result": "success"}
 {"ts": "2026-07-05T14:03:12Z", "level": "warn", "msg": "circuit breaker opened", "svc": "payments", "from": "half-open", "to": "open", "window_s": 30}
 ```
 
