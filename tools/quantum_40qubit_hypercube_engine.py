@@ -77,6 +77,9 @@ if hasattr(sys.stdout, 'reconfigure'):
     except Exception:
         pass
 
+# Enable expandable segments to eliminate CUDA allocator fragmentation
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 try:
     import torch
     HAS_TORCH = True
@@ -285,12 +288,10 @@ def init_octant_pattern(chunk: torch.Tensor, a_0: int, a_1: int):
 #   EXECUTION ENGINE KERNELS (BITWISE & CONTINUOUS)
 # ========================================================================
 
-def apply_intra_byte_swap_x0(chunk: torch.Tensor):
-    """Pauli-X(q0): In-place bitwise nibble swap: (c >> 4) | (c << 4)."""
-def apply_gpu_xk_inplace(chunk: torch.Tensor, k: int):
+def apply_gpu_xk_inplace(chunk: torch.Tensor, k: int, slice_bytes: int = 33554432):
     """
     In-place vectorized bitwise permutation on torch.int64 tensor.
-    Executes in-place with zero tensor allocations per chunk.
+    Processes in 32-MiB slices to eliminate temporary tensor allocation OOM on 16-GiB chunks.
     """
     w = chunk.view(torch.int64)
     masks_shifts = {
@@ -301,26 +302,36 @@ def apply_gpu_xk_inplace(chunk: torch.Tensor, k: int):
     }
     mask_u64, shift = masks_shifts[k]
     signed_mask = struct.unpack("<q", struct.pack("<Q", mask_u64))[0]
-    low = w & signed_mask
-    low.bitwise_left_shift_(shift)
-    w.bitwise_right_shift_(shift)
-    w.bitwise_and_(signed_mask)
-    w.bitwise_or_(low)
 
-def apply_cswap_fredkin(chunk: torch.Tensor):
+    sub_elems = slice_bytes // 8
+    n_elems = w.numel()
+    for start in range(0, n_elems, sub_elems):
+        sub = w[start : min(start + sub_elems, n_elems)]
+        low = sub & signed_mask
+        low.bitwise_left_shift_(shift)
+        sub.bitwise_right_shift_(shift)
+        sub.bitwise_and_(signed_mask)
+        sub.bitwise_or_(low)
+
+def apply_cswap_fredkin(chunk: torch.Tensor, slice_bytes: int = 33554432):
     """
     In-place vectorized bitwise SWAP(q0, q1) on torch.int64 tensor.
     Swaps amplitude a1 and a2 in each 16-bit word (4 nibbles: a3, a2, a1, a0).
+    Processes in 32-MiB slices to eliminate temporary tensor allocation OOM on 16-GiB chunks.
     """
     w = chunk.view(torch.int64)
     mask_untouched = struct.unpack("<q", struct.pack("<Q", 0xF00FF00FF00FF00F))[0]
     mask_a1 = struct.unpack("<q", struct.pack("<Q", 0x00F000F000F000F0))[0]
     mask_a2 = struct.unpack("<q", struct.pack("<Q", 0x0F000F000F000F00))[0]
 
-    untouched = w & mask_untouched
-    new_a2 = (w & mask_a1) << 4
-    new_a1 = (w & mask_a2) >> 4
-    w.copy_(untouched | new_a2 | new_a1)
+    sub_elems = slice_bytes // 8
+    n_elems = w.numel()
+    for start in range(0, n_elems, sub_elems):
+        sub = w[start : min(start + sub_elems, n_elems)]
+        untouched = sub & mask_untouched
+        new_a2 = (sub & mask_a1) << 4
+        new_a1 = (sub & mask_a2) >> 4
+        sub.copy_(untouched | new_a2 | new_a1)
 
 def apply_continuous_unitary_lut(chunk: torch.Tensor, lut_tensor: torch.Tensor, slice_size: int = 33554432):
     """
@@ -438,11 +449,18 @@ def run_40qubit_hypercube_gauntlet(scaled: bool = False):
 
         lut_p1 = None
         lut_p2 = None
+        lut_cpu1 = None
+        lut_cpu2 = None
         if is_continuous and unitary_matrix is not None:
             raw_lut1 = build_unitary_byte_lut(unitary_matrix)
             raw_lut2 = build_unitary_byte_lut(adjoint_matrix)
             lut_p1 = torch.tensor(raw_lut1, dtype=torch.uint8, device=device)
             lut_p2 = torch.tensor(raw_lut2, dtype=torch.uint8, device=device)
+            lut_cpu1 = torch.tensor(raw_lut1, dtype=torch.uint8, device="cpu")
+            lut_cpu2 = torch.tensor(raw_lut2, dtype=torch.uint8, device="cpu")
+
+        # 2-MiB CPU reference tensor (zero VRAM overhead)
+        ref_tensor = torch.empty(2097152, dtype=torch.uint8, device="cpu")
 
         for cfg in OCTANT_CONFIGS:
             oct_id = cfg["id"]
@@ -493,8 +511,7 @@ def run_40qubit_hypercube_gauntlet(scaled: bool = False):
             p1_ms = (t1 - t0) * 1000.0
             h1 = compute_chunk_hash(chunks[0])
 
-            # Compute CPU reference H1
-            ref_tensor = torch.empty_like(chunks[0])
+            # Compute CPU reference H1 on 2 MiB representative buffer
             if is_continuous:
                 ref_tensor.fill_(init_byte)
             else:
@@ -506,7 +523,7 @@ def run_40qubit_hypercube_gauntlet(scaled: bool = False):
                 if control_predicate(oct_id):
                     kernel_fn(ref_tensor)
             elif is_continuous:
-                apply_continuous_unitary_lut(ref_tensor, lut_p1)
+                apply_continuous_unitary_lut(ref_tensor, lut_cpu1)
             else:
                 kernel_fn(ref_tensor)
             ref_h1 = compute_chunk_hash(ref_tensor)

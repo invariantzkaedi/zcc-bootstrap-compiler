@@ -28,6 +28,9 @@ if hasattr(sys.stdout, 'reconfigure'):
     except Exception:
         pass
 
+# Enable expandable segments to eliminate CUDA allocator fragmentation
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 try:
     import torch
 except ImportError:

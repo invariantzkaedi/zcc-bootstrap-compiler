@@ -26,20 +26,20 @@
 
 | Gate Name | Pass 1 Latency | Total Round-Trip | Master Checkpoint UUID | Dual Parity Parity |
 | :--- | :---: | :---: | :--- | :---: |
-| **Pauli-X(q0)** | 315.497 ms | 619.269 ms | `1bc5ec7a-f094-4e4c-98d2-d380a9b361de` | 🟢 **8/8 PASS** |
-| **Pauli-X(q1)** | 287.480 ms | 574.909 ms | `bccf8e54-6547-46b1-aa3d-41d15fac5dfe` | 🟢 **8/8 PASS** |
-| **Pauli-X(q2)** | 296.854 ms | 597.507 ms | `6be35303-4064-468d-a3e0-17b6e8273d99` | 🟢 **8/8 PASS** |
-| **Pauli-X(q3)** | 302.470 ms | 602.426 ms | `26e2ef03-dc7a-4046-b58b-ac45fb9dcb0c` | 🟢 **8/8 PASS** |
-| **Pauli-X(q37)** | 26.848 ms | 55.381 ms | `4c329f29-dc8e-4a32-8ad0-0166a38d03dc` | 🟢 **8/8 PASS** |
-| **Pauli-X(q38)** | 29.227 ms | 58.187 ms | `626a6ab6-8422-4b5c-84bf-2854f85a99ed` | 🟢 **8/8 PASS** |
-| **Pauli-X(q39)** | 29.376 ms | 57.115 ms | `ba034bc8-adb6-4e4b-9789-6475aee397c4` | 🟢 **8/8 PASS** |
-| **CX(q37->q0)** | 147.696 ms | 291.730 ms | `e880a06f-ab50-40e2-9915-09d7e47ba7ac` | 🟢 **8/8 PASS** |
-| **CCX(q38,q37->q0)** | 74.832 ms | 147.835 ms | `ea1d2048-ea7c-402b-ad41-a480a2b13655` | 🟢 **8/8 PASS** |
-| **CCCX(q39,q38,q37->q0)** | 37.274 ms | 77.090 ms | `e9833e1c-97f6-4bad-8ef2-201ec66e1ea4` | 🟢 **8/8 PASS** |
-| **CSWAP(q37->q0,q1)** | 259.166 ms | 494.928 ms | `a9e0a688-e454-4366-bbe3-9ddf31837198` | 🟢 **8/8 PASS** |
-| **CCSWAP(q39,q38->q0,q1)** | 119.442 ms | 238.667 ms | `5e1d4a76-0835-43d6-aa93-bfa490586c74` | 🟢 **8/8 PASS** |
-| **Hadamard H(q0)** | 615.894 ms | 1152.757 ms | `fdd37edf-c53e-4f0e-9d00-a56c1dd64010` | 🟢 **8/8 PASS** |
-| **Phase S(q0)** | 574.687 ms | 1154.044 ms | `8f0b9f92-f0f6-4cb6-9102-39af6ba397b0` | 🟢 **8/8 PASS** |
-| **Phase T(q0)** | 603.912 ms | 1212.733 ms | `9bbed168-ef27-4f51-82b8-e1ff9bc4144b` | 🟢 **8/8 PASS** |
+| **Pauli-X(q0)** | 337.024 ms | 661.784 ms | `b69a0fc6-5d42-4433-b00d-641d6f6891ad` | 🟢 **8/8 PASS** |
+| **Pauli-X(q1)** | 287.114 ms | 574.301 ms | `f256b38a-4b18-4785-ab98-f2c1c6d3a51f` | 🟢 **8/8 PASS** |
+| **Pauli-X(q2)** | 284.162 ms | 571.115 ms | `750b0673-3d11-4253-9da3-7ffc480c8f8b` | 🟢 **8/8 PASS** |
+| **Pauli-X(q3)** | 287.483 ms | 575.410 ms | `f91d1a62-bf9e-49d0-b3b0-270109e6b1d8` | 🟢 **8/8 PASS** |
+| **Pauli-X(q37)** | 27.426 ms | 53.577 ms | `64f4fb42-29f9-409b-8f71-ab8c9f5fd859` | 🟢 **8/8 PASS** |
+| **Pauli-X(q38)** | 26.741 ms | 53.454 ms | `1aa4547b-25c9-46a2-86f5-2560f3458764` | 🟢 **8/8 PASS** |
+| **Pauli-X(q39)** | 27.611 ms | 55.983 ms | `804f91f6-7fac-46b8-90f2-18575c4b6e60` | 🟢 **8/8 PASS** |
+| **CX(q37->q0)** | 142.067 ms | 285.152 ms | `01763603-68f2-4a0b-ab3c-3a213fb2d437` | 🟢 **8/8 PASS** |
+| **CCX(q38,q37->q0)** | 70.362 ms | 141.502 ms | `b7cdbcae-506b-437c-a424-37a79d72eb94` | 🟢 **8/8 PASS** |
+| **CCCX(q39,q38,q37->q0)** | 36.084 ms | 72.509 ms | `e5facc3e-086d-49ae-8605-4fdb62f45828` | 🟢 **8/8 PASS** |
+| **CSWAP(q37->q0,q1)** | 260.511 ms | 519.763 ms | `347bef52-b6cb-47ba-bafa-df66d0d8dd28` | 🟢 **8/8 PASS** |
+| **CCSWAP(q39,q38->q0,q1)** | 128.474 ms | 258.687 ms | `dd135eaa-86cb-4a0c-9c8c-c396fa6bdbe2` | 🟢 **8/8 PASS** |
+| **Hadamard H(q0)** | 615.367 ms | 1209.227 ms | `fac5f098-2529-4478-8998-93dfdd1ecd0b` | 🟢 **8/8 PASS** |
+| **Phase S(q0)** | 655.276 ms | 1309.207 ms | `923e99de-3c9e-499d-997b-1b969a0ddad2` | 🟢 **8/8 PASS** |
+| **Phase T(q0)** | 608.916 ms | 1211.910 ms | `3cfb6649-2fcf-4f43-aaaf-a358de8e903f` | 🟢 **8/8 PASS** |
 
 ---
