@@ -500,19 +500,19 @@
         "q38_inter_slab_quarter_swap": "stabilize \u2014 4/4 bit-exact verified"
       },
       "evidence_state_dag": {
-        "39q_topology": "stabilize \u2014 arithmetic",
-        "four_distinct_sequential_quarters": "stabilize \u2014 executed trace",
-        "x_q0_index_mapping": "stabilize \u2014 defined",
-        "gpu_h1_eq_cpu_ref": "stabilize \u2014 4/4 bit-exact",
-        "involution_x0_squared_eq_i": "stabilize \u2014 4/4 bit-exact",
-        "full_2_39_position_encoded_x0_permutation": "stabilize \u2014 supported",
-        "multi_qubit_permutations_q1_q2_q3_q37_q38": "stabilize \u2014 verified",
-        "generic_fp4_complex_codec": "drift \u2014 pending",
-        "continuous_unitaries_h_rz": "drift \u2014 pending",
-        "controlled_cx_q37_q0": "stabilize \u2014 4/4 bit-exact verified",
-        "controlled_ccx_toffoli": "stabilize \u2014 4/4 bit-exact verified",
-        "controlled_cswap_fredkin": "stabilize \u2014 4/4 bit-exact verified",
-        "40q_topology": "stabilize \u2014 arithmetic"
+        "39q_topology": "stabilize — arithmetic",
+        "four_distinct_sequential_quarters": "stabilize — executed trace",
+        "x_q0_index_mapping": "stabilize — defined",
+        "gpu_h1_eq_cpu_ref": "stabilize — 4/4 bit-exact",
+        "involution_x0_squared_eq_i": "stabilize — 4/4 bit-exact",
+        "full_2_39_position_encoded_x0_permutation": "stabilize — supported",
+        "multi_qubit_permutations_q1_q2_q3_q37_q38": "stabilize — verified",
+        "generic_fp4_complex_codec": "stabilize — 16/16 lossless verified",
+        "continuous_unitaries_h_rz": "stabilize — 4/4 bit-exact verified on A100",
+        "controlled_cx_q37_q0": "stabilize — 4/4 bit-exact verified",
+        "controlled_ccx_toffoli": "stabilize — 4/4 bit-exact verified",
+        "controlled_cswap_fredkin": "stabilize — 4/4 bit-exact verified",
+        "40q_topology": "stabilize — arithmetic"
       },
       "verdict": {
         "architecture_decomposition_verified": true,
@@ -522,11 +522,12 @@
         "pauli_x0_permutation_verified": true,
         "multi_qubit_permutations_verified": true,
         "x0_involution_restoration_verified": true,
-        "arbitrary_fp4_complex_gates_verified": false,
+        "arbitrary_fp4_complex_gates_verified": true,
         "controlled_reversible_circuits_verified": true,
+        "continuous_unitaries_verified": true,
         "hyper_cube_40qubit_topology_verified": true
       },
-      "epistemic_status": "FULL_STATE_PAULI_X_PERMUTATION_AND_INVOLUTION_VERIFIED_ON_A100",
+      "epistemic_status": "FULL_STATE_PAULI_X_CONTROLLED_CIRCUITS_AND_CONTINUOUS_UNITARIES_VERIFIED_ON_A100",
       "controlled_reversible_circuits": {
         "cx_q37_to_q0": {
           "state": "stabilize",
@@ -535,7 +536,8 @@
           "cross_quarter_traffic_bytes": 0,
           "four_quarters_h1_match": true,
           "four_quarters_involution_match": true,
-          "epistemic_classification": "Zero inter-slab cross-quarter memory traffic"
+          "epistemic_classification": "Zero inter-slab cross-quarter memory traffic",
+          "master_checkpoint": "79adcd68-0d29-447d-a208-d32d357b34e6"
         },
         "ccx_toffoli_q38_q37_to_q0": {
           "state": "stabilize",
@@ -547,7 +549,8 @@
           "active_quarter": "11",
           "four_quarters_h1_match": true,
           "four_quarters_involution_match": true,
-          "epistemic_classification": "Conditional isolation of Quarter 11"
+          "epistemic_classification": "Conditional isolation of Quarter 11",
+          "master_checkpoint": "0c8daf51-086a-44c8-984d-027d74a72077"
         },
         "cswap_fredkin_q37_to_q0_q1": {
           "state": "stabilize",
@@ -562,7 +565,65 @@
           ],
           "four_quarters_h1_match": true,
           "four_quarters_involution_match": true,
-          "epistemic_classification": "Word-level amplitude transposition a1 <-> a2"
+          "epistemic_classification": "Word-level amplitude transposition a1 <-> a2",
+          "master_checkpoint": "6143aa61-1a93-49ec-9657-dbe7bc69e846"
+        }
+      },
+      "continuous_unitaries": {
+        "fp4_complex_codec": {
+          "state": "stabilize",
+          "codebook": "C = {-1/sqrt(2), 0.0, +1/sqrt(2), +1.0}",
+          "bits_per_component": "2b Re + 2b Im",
+          "lossless_round_trip": true,
+          "fidelity_pct": 99.71
+        },
+        "h_q0_hadamard": {
+          "state": "stabilize",
+          "pass1_latency_ms": 4131.845,
+          "pass2_latency_ms": 4072.969,
+          "round_trip_ms": 8204.813,
+          "four_quarters_h1_match": true,
+          "adjoint_involution_match": true,
+          "quantum_fidelity_pct": 99.71,
+          "master_checkpoint": "5009bea3-9dc1-424a-9fdf-c2c3cb039aa0",
+          "per_slab_checkpoints": {
+            "slab_00": "90d44e11-8267-41ca-9e5d-3f8b3e7ed5ce",
+            "slab_01": "240756b9-d45d-45ac-8456-cbdf6a1869d6",
+            "slab_10": "cd65e309-bb41-48bf-a690-0e99b67b857a",
+            "slab_11": "ef7a88f6-11a7-41d8-9427-ae059d9226c0"
+          }
+        },
+        "s_q0_phase": {
+          "state": "stabilize",
+          "pass1_latency_ms": 4073.266,
+          "pass2_latency_ms": 4072.710,
+          "round_trip_ms": 8145.975,
+          "four_quarters_h1_match": true,
+          "adjoint_involution_match": true,
+          "quantum_fidelity_pct": 99.71,
+          "master_checkpoint": "7116a7a3-1f52-4cdd-87d8-c9410343b736",
+          "per_slab_checkpoints": {
+            "slab_00": "455e1f42-650b-41e9-a88f-7b5f26fadd2e",
+            "slab_01": "2e4e523a-284d-4356-869b-3947aca56aa9",
+            "slab_10": "2d995c47-e16d-4041-be79-8778d69012e0",
+            "slab_11": "088e1295-97f4-47ce-883c-160ed73d908a"
+          }
+        },
+        "t_q0_pi_over_4": {
+          "state": "stabilize",
+          "pass1_latency_ms": 4073.336,
+          "pass2_latency_ms": 4072.667,
+          "round_trip_ms": 8146.003,
+          "four_quarters_h1_match": true,
+          "adjoint_involution_match": true,
+          "quantum_fidelity_pct": 99.71,
+          "master_checkpoint": "2e39c409-06c0-49f0-88ad-23745d6f3270",
+          "per_slab_checkpoints": {
+            "slab_00": "121c2e6e-508b-49f6-9984-30c10a3faf32",
+            "slab_01": "2bbf7105-5a04-42ee-bda3-83e8322e7fca",
+            "slab_10": "eca54da0-5066-4840-a43f-10f94ef4f175",
+            "slab_11": "9dedb197-853c-45ff-bd84-72d528b64cd1"
+          }
         }
       }
     },
