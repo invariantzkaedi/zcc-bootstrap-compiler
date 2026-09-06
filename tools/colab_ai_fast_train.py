@@ -38,12 +38,15 @@ if hasattr(sys.stdout, 'reconfigure'):
 
 class ZKAEDIPrimeOptimizer(Optimizer):
     """
-    ZKAEDI Prime Sovereign Optimizer:
-    H_t = H_0 + eta * H_{t-1} * sigmoid(gamma * H_{t-1}) + eps * N(0, 1 + beta * |H_{t-1}|)
-    theta_{t+1} = theta_t - lambda * H_t
+    🔱 Hardened ZKAEDI Prime Recursive Hamiltonian Energy Optimizer:
+    • Bounded Directional Field Coupling: align = tanh(gamma * norm_dot)
+    • Fluctuation-Dissipation Noise Annealing: eps_t = eps_0 * (lr_t / lr_base)
+    • Canonical Recursive Field Shaping: H_t = (1 - b1) * (1 + 0.5*eta*align) * grad + b1 * H_{t-1}
+    • Second-Moment Decoupled Descent: theta_{t+1} = theta_t - lr * (m_hat / (sqrt(v_hat) + eps))
     """
     def __init__(self, params, lr=1e-3, eta=0.4, gamma=0.3, beta=0.1, eps=1e-4, beta1=0.9, beta2=0.999, weight_decay=0.01):
-        defaults = dict(lr=lr, eta=eta, gamma=gamma, beta=beta, eps=eps, beta1=beta1, beta2=beta2, weight_decay=weight_decay)
+        defaults = dict(lr=lr, eta=eta, gamma=gamma, beta=beta, eps=eps, beta1=beta1, beta2=beta2,
+                        weight_decay=weight_decay, initial_lr=lr)
         super().__init__(params, defaults)
 
     @torch.no_grad()
@@ -62,6 +65,8 @@ class ZKAEDIPrimeOptimizer(Optimizer):
             b1 = group['beta1']
             b2 = group['beta2']
             wd = group['weight_decay']
+            init_lr = group.get('initial_lr', 1e-3)
+            temp_ratio = max(0.0, min(1.0, lr / max(1e-7, init_lr)))
 
             for p in group['params']:
                 if p.grad is None:
@@ -82,21 +87,25 @@ class ZKAEDIPrimeOptimizer(Optimizer):
                 m = state['m']
                 v = state['v']
 
-                # ZKAEDI Prime Canonical Recursive Hamiltonian Shaping:
-                # Field alignment & recursion term:
-                align = torch.sigmoid(gamma * (grad * m) / (grad.abs().mean() * m.abs().mean() + 1e-8))
-                m.mul_(b1).add_(grad * ((1.0 - b1) * (1.0 + eta * (align - 0.5))))
+                # 1. Bounded Field Alignment (Soft Tanh Coupling)
+                denom = (grad.abs().mean() * m.abs().mean()).clamp(min=1e-7)
+                norm_dot = torch.clamp((grad * m) / denom, min=-4.0, max=4.0)
+                align = torch.tanh(gamma * norm_dot)
 
-                # Stochastic exploratory kick: eps * N(0, 1 + beta * |H_{t-1}|)
-                if eps > 0:
+                # 2. Canonical Recursive Hamiltonian Field Momentum
+                field_accel = (1.0 - b1) * (1.0 + eta * 0.5 * align)
+                m.mul_(b1).add_(grad * field_accel)
+
+                # 3. Fluctuation-Dissipation Noise Annealing (Exploration early, crystallization late)
+                if eps > 0 and temp_ratio > 0.05:
                     g_scale = grad.std().clamp(min=1e-6)
-                    noise = torch.randn_like(p) * (1.0 + beta * torch.abs(m)) * (g_scale * eps)
+                    noise = torch.randn_like(p) * (1.0 + beta * torch.abs(m)) * (g_scale * eps * temp_ratio)
                     m.add_(noise)
 
-                # Second moment estimation
+                # 4. Second Moment Estimation
                 v.mul_(b2).addcmul_(grad, grad, value=1.0 - b2)
 
-                # Bias correction & parameter update
+                # 5. Bias-Corrected Parameter Update
                 m_hat = m / (1.0 - b1**t)
                 v_hat = v / (1.0 - b2**t)
                 p.addcdiv_(m_hat, torch.sqrt(v_hat).add_(1e-8), value=-lr)
@@ -224,11 +233,32 @@ class CompilerDataStream:
         self.batch_size = batch_size
         self.device = device
 
+class CompilerDataStream:
+    """
+    Generates structured, realistic synthetic token sequences simulating
+    ZCC compiler IR pipelines, x86-64 basic blocks, register allocation,
+    and control flow graphs.
+    """
+    def __init__(self, vocab_size=2048, seq_len=128, batch_size=32, device='cuda'):
+        self.vocab_size = vocab_size
+        self.seq_len = seq_len
+        self.batch_size = batch_size
+        self.device = device
+        # Common repetitive compiler opcodes & assembly motifs
+        self.motifs = torch.tensor([
+            [10, 24, 5, 88, 120, 15, 2, 45, 60, 75, 12, 19, 4, 33, 50, 99],       # Arithmetic + branch
+            [12, 55, 99, 102, 33, 4, 18, 90, 14, 28, 92, 110, 3, 50, 8, 16],      # Stack frame setup/teardown
+            [70, 80, 14, 28, 92, 110, 3, 50, 21, 42, 63, 84, 105, 7, 14, 2],      # Memory load/store pipeline
+            [1, 9, 100, 200, 15, 30, 40, 2, 64, 128, 192, 255, 5, 10, 15, 20]     # Function call + prologue
+        ], device=device)
+
     def next_batch(self):
-        # Generate structured repetitive grammar simulating IR tokens
-        base = torch.randint(0, self.vocab_size, (self.batch_size, 1), device=self.device)
-        deltas = torch.randint(0, 16, (self.batch_size, self.seq_len), device=self.device)
-        seq = (base + deltas * 37) % self.vocab_size
+        motif_len = self.motifs.size(1)
+        num_blocks = (self.seq_len // motif_len) + 1
+        idx = torch.randint(0, len(self.motifs), (self.batch_size, num_blocks), device=self.device)
+        blocks = self.motifs[idx].reshape(self.batch_size, -1)[:, :self.seq_len]
+        var_offsets = torch.randint(0, 64, (self.batch_size, 1), device=self.device) * 16
+        seq = (blocks + var_offsets) % self.vocab_size
         inputs = seq[:, :-1].contiguous()
         targets = seq[:, 1:].contiguous()
         return inputs, targets
@@ -259,25 +289,25 @@ PRESETS = {
         "name": "37M-Small",
         "description": "37M Parameters • 6 Layers • Context 128 (Ultra-Fast 7s Baseline)",
         "dim": 768, "num_layers": 6, "num_heads": 12, "intermediate_dim": 1536,
-        "batch_size": 32, "seq_len": 128
+        "batch_size": 32, "seq_len": 128, "base_lr": 1e-3
     },
     "medium": {
         "name": "125M-Medium",
         "description": "125M Parameters • 12 Layers • Context 512 (Standard Llama/GPT-2 Scale)",
         "dim": 768, "num_layers": 12, "num_heads": 12, "intermediate_dim": 2048,
-        "batch_size": 16, "seq_len": 512
+        "batch_size": 16, "seq_len": 512, "base_lr": 8e-4
     },
     "large": {
         "name": "367M-Large",
         "description": "367M Parameters • 24 Layers • Context 1024 (A100 Tensor Core Sweet Spot)",
         "dim": 1024, "num_layers": 24, "num_heads": 16, "intermediate_dim": 3584,
-        "batch_size": 8, "seq_len": 1024
+        "batch_size": 8, "seq_len": 1024, "base_lr": 6e-4
     },
     "titan": {
         "name": "493M-Titan",
         "description": "493M Parameters • 22 Layers • Context 2048 (Full A100 High-Capacity Regime)",
-        "dim": 1280, "num_layers": 22, "num_heads": 16, "intermediate_dim": 4096,
-        "batch_size": 4, "seq_len": 2048
+        "dim": 1280, "num_layers": 22, "num_heads": 20, "intermediate_dim": 4096,
+        "batch_size": 4, "seq_len": 2048, "base_lr": 4e-4
     }
 }
 
@@ -292,6 +322,7 @@ def run_training_arm(optimizer_name, device, preset_cfg, steps=100, batch_size=N
     torch.manual_seed(42)
     b_size = batch_size if batch_size is not None else preset_cfg["batch_size"]
     s_len = seq_len if seq_len is not None else preset_cfg["seq_len"]
+    base_lr = preset_cfg.get("base_lr", 1e-3)
 
     # Adapt batch size if running on memory-constrained GPUs (< 24GB VRAM)
     if device.startswith('cuda') and batch_size is None:
@@ -324,9 +355,9 @@ def run_training_arm(optimizer_name, device, preset_cfg, steps=100, batch_size=N
     total_params = sum(p.numel() for p in model.parameters())
 
     if optimizer_name == "AdamW":
-        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, betas=(0.9, 0.999), weight_decay=0.01)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=base_lr, betas=(0.9, 0.999), weight_decay=0.01)
     elif optimizer_name == "ZKAEDI-Prime":
-        optimizer = ZKAEDIPrimeOptimizer(model.parameters(), lr=1e-3, eta=0.4, gamma=0.3, beta=0.1, eps=1e-4)
+        optimizer = ZKAEDIPrimeOptimizer(model.parameters(), lr=base_lr, eta=0.4, gamma=0.3, beta=0.1, eps=1e-4)
     else:
         raise ValueError(f"Unknown optimizer {optimizer_name}")
 
@@ -344,14 +375,14 @@ def run_training_arm(optimizer_name, device, preset_cfg, steps=100, batch_size=N
     print(f" • Architecture : {preset_cfg['num_layers']}-Layer Llama-Style Transformer ({total_params/1e6:.2f}M Parameters)")
     print(f" • Batch Config : Batch Size {b_size} × Seq Len {s_len} ({tokens_per_step:,} tokens/step)")
     print(f" • Precision    : BF16 Autocast + FlashAttention-2 SDPA")
-    print(f" • LR Schedule  : Linear Warmup ({warmup_steps} steps) + Cosine Annealing (1e-3 -> 1e-4)")
+    print(f" • LR Schedule  : Linear Warmup ({warmup_steps} steps) + Cosine Annealing ({base_lr:.1e} -> {base_lr*0.1:.1e})")
     print(f"{'='*75}")
 
     t_start = time.perf_counter()
     model.train()
 
     for step in range(1, steps + 1):
-        lr_curr = get_lr(step, steps, base_lr=1e-3, warmup_steps=warmup_steps)
+        lr_curr = get_lr(step, steps, base_lr=base_lr, warmup_steps=warmup_steps, min_lr=base_lr * 0.1)
         for pg in optimizer.param_groups:
             pg['lr'] = lr_curr
 
