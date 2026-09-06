@@ -6,10 +6,12 @@ tools/colab_surface_qec_runner.py
   38 Physical Qubits • 2x Distance-3 Rotated Patches • Logical CNOT
 ========================================================================
 Single-cell executable runner for Google Colab with NVIDIA A100/H100 GPU.
+Packages and triggers browser download of all artifacts automatically.
 """
 
 import os
 import sys
+import shutil
 import argparse
 
 # Force unbuffered streaming output in Colab
@@ -39,6 +41,28 @@ from quantum_surface_qec_lattice_surgery import (
     print_banner, run_surface_qec_gauntlet
 )
 
+def trigger_colab_download(zip_name: str = "zkaedi_surface_qec_artifacts"):
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    artifact_dir = os.path.join(repo_root, "artifacts")
+    if not os.path.exists(artifact_dir):
+        artifact_dir = "artifacts"
+
+    zip_base = os.path.join(os.getcwd(), zip_name)
+    zip_path = f"{zip_base}.zip"
+    print(f"\n  📦 Packaging artifacts into '{zip_path}'...")
+    shutil.make_archive(zip_base, "zip", artifact_dir)
+    if os.path.exists(zip_path):
+        print(f"  ✔ Archive created ({os.path.getsize(zip_path):,} bytes).")
+
+    try:
+        from google.colab import files
+        print(f"  ⬇ Triggering direct browser download of '{os.path.basename(zip_path)}'...")
+        files.download(zip_path)
+        print(f"  ✔ Browser download triggered successfully!")
+    except Exception as e:
+        print(f"  [i] Colab direct download: {e}")
+        print(f"  [i] Archive saved on disk at: {zip_path}")
+
 def main():
     parser = argparse.ArgumentParser(description="ZKAEDI PRIME // Surface-17 Two-Patch Lattice Surgery Colab Runner")
     parser.add_argument("--scaled", action="store_true", help="Force CPU scaled execution")
@@ -60,6 +84,7 @@ def main():
     print("=" * 72 + "\n")
 
     run_surface_qec_gauntlet(scaled=args.scaled)
+    trigger_colab_download("zkaedi_surface_qec_artifacts")
 
 if __name__ == "__main__":
     main()

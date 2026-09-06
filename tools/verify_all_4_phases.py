@@ -71,6 +71,32 @@ def run_master_gauntlet(scaled: bool = True):
     print("  • STARK Merkle Root: " + res_p4["merkle_root"])
     print("█" * 76 + "\n")
 
+    # Trigger automatic packaging & download
+    trigger_colab_download("zkaedi_all_quantum_artifacts")
+
+def trigger_colab_download(zip_name: str = "zkaedi_all_quantum_artifacts"):
+    import shutil
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    artifact_dir = os.path.join(repo_root, "artifacts")
+    if not os.path.exists(artifact_dir):
+        artifact_dir = "artifacts"
+
+    zip_base = os.path.join(os.getcwd(), zip_name)
+    zip_path = f"{zip_base}.zip"
+    print(f"\n  📦 Packaging all artifacts into '{zip_path}'...")
+    shutil.make_archive(zip_base, "zip", artifact_dir)
+    if os.path.exists(zip_path):
+        print(f"  ✔ Archive created ({os.path.getsize(zip_path):,} bytes).")
+
+    try:
+        from google.colab import files
+        print(f"  ⬇ Triggering direct browser download of '{os.path.basename(zip_path)}'...")
+        files.download(zip_path)
+        print("  ✔ Browser download triggered successfully!")
+    except Exception as e:
+        print(f"  [i] Colab direct download: {e}")
+        print(f"  [i] Archive saved on disk at: {zip_path}")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Master 4-Phase Gauntlet Runner")
     parser.add_argument("--physical", action="store_true", help="Run in full physical hardware mode (A100 required)")
