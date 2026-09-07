@@ -40,7 +40,7 @@ PRIMARY_ZIP = os.path.join(REPO_ROOT, "artifacts", "zkaedi_prime_40qubit_hypercu
 WINDOWS_ABSTRACT_DIR = r"E:\__GROUPED_IMAGES\ABSTRACT"
 MIRROR_ZIP = os.path.join(WINDOWS_ABSTRACT_DIR, "zkaedi_prime_40qubit_hypercube_artifacts.zip") if os.path.exists(WINDOWS_ABSTRACT_DIR) else None
 
-# Rel-paths of all essential 40Q & Chemistry artifacts
+# Rel-paths of all essential 40Q, Chemistry & Nitrogenase Fertilizer artifacts
 RELATIVE_ARTIFACTS = [
     os.path.join("artifacts", "40QUBIT_EXPLORATION_REPORT.md"),
     os.path.join("artifacts", "quantum_40qubit_metrics.json"),
@@ -50,10 +50,16 @@ RELATIVE_ARTIFACTS = [
     os.path.join("artifacts", "quantum_chemistry_observatory.html"),
     os.path.join("artifacts", "quantum_sonification_40qubit.wav"),
     os.path.join("artifacts", "quantum_chemistry_vqe_sonification.wav"),
+    os.path.join("artifacts", "NITROGENASE_FERTILIZER_REPORT.md"),
+    os.path.join("artifacts", "nitrogenase_fertilizer_metrics.json"),
+    os.path.join("artifacts", "nitrogenase_fertilizer_observatory.html"),
+    os.path.join("artifacts", "nitrogenase_fertilizer_sonification.wav"),
+    os.path.join("artifacts", "zk_nitrogenase_fertilizer_receipt.json"),
     os.path.join("notebooks", "zkaedi_prime_40qubit_hypercube.ipynb"),
     os.path.join("notebooks", "zkaedi_prime_quantum_chemistry_vqe.ipynb"),
     os.path.join("tools", "quantum_40qubit_hypercube_engine.py"),
-    os.path.join("tools", "quantum_chemistry_hyperslab_engine.py")
+    os.path.join("tools", "quantum_chemistry_hyperslab_engine.py"),
+    os.path.join("tools", "nitrogenase_femo_catalyst_engine.py")
 ]
 
 def main():

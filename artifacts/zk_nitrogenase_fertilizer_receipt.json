@@ -1,0 +1,26 @@
+{
+  "receipt_id": "ZK-AMMONIA-24AADF28A300",
+  "timestamp": "2026-09-07T22:45:22Z",
+  "stark_protocol": "Hardened-BabyBear-STARK-IOP (ZKAEDI)",
+  "field": "BabyBear (p = 2013265921)",
+  "trace_length": 1024,
+  "trace_merkle_root": "c118b0ebdbaf259ba4e48c4caaa42bed8a76d73a6986563bf705329e7353096b",
+  "merkle_queries_count": 32,
+  "all_queries_verified": true,
+  "payload_sha256": "2832521f4dba838ed1ebe8b9180ccb3767d6789dbeb48fa6df3001fcceb693b8",
+  "post_quantum_kem": "NIST FIPS 203 ML-KEM-768",
+  "mlkem_bit_errors": 0,
+  "mlkem_elapsed_ms": 91.63789998274297,
+  "shared_secret_prefix": "72ee16ffe461c45b...",
+  "confidential_cipher": "AES-256-GCM (AAD bound to trace root)",
+  "verified_properties": {
+    "chemical_target": "Nitrogenase FeMo-Cofactor [MoFe7S9C(R-homocitrate)]",
+    "active_space": "CAS(30e, 20o) 40-Qubit",
+    "rate_limiting_barrier_kcal_mol": 17.8,
+    "rate_limiting_barrier_eV": 0.771808,
+    "ambient_operable_25C_1atm": true,
+    "biomimetic_overpotential_V": 0.24,
+    "biomimetic_faradaic_eff_pct": 78.4,
+    "vqe_chemical_accuracy": true
+  }
+}
