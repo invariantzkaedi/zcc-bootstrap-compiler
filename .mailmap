@@ -1,0 +1,16 @@
+# Canonical Mailmap for ZCC Bootstrap Compiler
+# Unifies all historical commit identities under invariantzkaedi <invariantzkaedi@gmail.com>
+
+invariantzkaedi <invariantzkaedi@gmail.com> <izkaedi@gmail.com>
+invariantzkaedi <invariantzkaedi@gmail.com> <ideakzkaedi@outlook.com>
+invariantzkaedi <invariantzkaedi@gmail.com> <198982749+Copilot@users.noreply.github.com>
+invariantzkaedi <invariantzkaedi@gmail.com> <noreply@anthropic.com>
+
+# Explicit name + email combinations
+invariantzkaedi <invariantzkaedi@gmail.com> zkaedii <izkaedi@gmail.com>
+invariantzkaedi <invariantzkaedi@gmail.com> zkaedii <ideakzkaedi@outlook.com>
+invariantzkaedi <invariantzkaedi@gmail.com> zkaedi <ideakzkaedi@outlook.com>
+invariantzkaedi <invariantzkaedi@gmail.com> izkaedi-ui <izkaedi@gmail.com>
+invariantzkaedi <invariantzkaedi@gmail.com> copilot-swe-agent[bot] <198982749+Copilot@users.noreply.github.com>
+invariantzkaedi <invariantzkaedi@gmail.com> Copilot <198982749+Copilot@users.noreply.github.com>
+invariantzkaedi <invariantzkaedi@gmail.com> Claude <noreply@anthropic.com>

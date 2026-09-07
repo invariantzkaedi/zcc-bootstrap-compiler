@@ -1,0 +1,44 @@
+{
+  "timestamp": 1788773635.280512,
+  "device": "NVIDIA GeForce RTX 5070 Laptop GPU",
+  "sm_count": 36,
+  "vram_gb": 7.95953369140625,
+  "milestone": "HYPERBONUS-SINGULARITY-v1.0",
+  "stages": {
+    "hyper_pqc": {
+      "handshakes_per_sec": 59718.0,
+      "latency_us": 16.75,
+      "bit_errors": 0
+    },
+    "hyper_zk": {
+      "trace_len": 262144,
+      "lde_len": 1048576,
+      "merkle_root": "0x2767c6621d5da4983969692a97f26d1e2d5c6889c82a123e830bd88c419cf27d",
+      "t_trace_ms": 168.66209998261184,
+      "t_lde_ms": 21.189099992625415,
+      "t_const_ms": 1.2116999714635313,
+      "t_merkle_ms": 6.063600012566894,
+      "total_time_ms": 197.13149999734014,
+      "throughput_mops": 989.7314665355013
+    },
+    "hyper_quantum": {
+      "amplitudes": 262144,
+      "steps_per_sec": 2815.5,
+      "gflops": 141.71,
+      "norm": 0.99999774,
+      "grover_amplification": 172.9
+    },
+    "hyper_neural": {
+      "tokens_per_sec": 22.6,
+      "latency_ms": 1328.51,
+      "model_ckpt": "artifacts/zcc_blackwell_copilot_85m_finetuned.pt"
+    },
+    "hyper_recall": {
+      "hyperrecall_us": 50.4,
+      "total_engrams": 46,
+      "lore_merkle_root": "2165757070d05c802fe2b8713a1450b826e07a0d9b54927cfb63ce23bc849222"
+    }
+  },
+  "total_execution_wall_time_sec": 5.62,
+  "receipt_sha256": "3e290375d342eacbb578271c260101156193c86c174c58b3be4e7557da04f9dc"
+}

@@ -1,0 +1,10 @@
+{
+  "format": "ZKAEDI-STARK-RECEIPT-v1.0",
+  "proof_system": "BabyBear STARK (p = 2^31 - 2^27 + 1)",
+  "timestamp": "2026-09-07 09:40:17 UTC",
+  "transactions_certified": 262144,
+  "merkle_root": "0x2767c6621d5da4983969692a97f26d1e2d5c6889c82a123e830bd88c419cf27d",
+  "ntt_throughput_mops": 531.685055160899,
+  "prover_wall_time_ms": 328.3246000064537,
+  "verification_guarantee": "Zero credit creation, non-negative balances across all accounts"
+}
