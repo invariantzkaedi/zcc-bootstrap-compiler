@@ -51,18 +51,31 @@ void zcc_oracle_init(const char *source_file) {
     s_peak_alloc_bytes = 0;
     s_start_time = (long)clock();
 
-    /* Open the ledger in overwrite mode for each unique compilation run */
-    s_ledger_fp = fopen("zcc_resource_events.jsonl", "w");
-    if (s_ledger_fp) {
-        fprintf(s_ledger_fp, "{\"type\":\"metadata\",\"source_file\":\"%s\",\"timestamp\":%ld}\n", 
-                s_source_file, (long)time(NULL));
-        fflush(s_ledger_fp);
+    /* Open resource-event ledger only when telemetry is explicitly enabled. */
+    const char *telemetry_env = getenv("ZCC_EMIT_TELEMETRY");
+    int telemetry_enabled =
+        telemetry_env &&
+        telemetry_env[0] != '\0' &&
+        telemetry_env[0] != '0';
+
+    s_ledger_fp = NULL;
+
+    if (telemetry_enabled) {
+        s_ledger_fp = fopen("zcc_resource_events.jsonl", "w");
+        if (s_ledger_fp) {
+            fprintf(
+                s_ledger_fp,
+                "{\"type\":\"metadata\",\"source_file\":\"%s\",\"timestamp\":%ld}\n",
+                s_source_file,
+                (long)time(NULL)
+            );
+            fflush(s_ledger_fp);
+        }
     }
 
 #ifndef _WIN32
-    /* Setup UDP Socket matching Gods Eye telemetry */
-    const char *env = getenv("ZCC_EMIT_TELEMETRY");
-    if (env && env[0] != '0' && env[0] != '\0') {
+    /* Setup UDP socket only when telemetry is explicitly enabled. */
+    if (telemetry_enabled) {
         s_sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
         if (s_sock_fd >= 0) {
             memset(&s_addr, 0, sizeof(s_addr));

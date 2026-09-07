@@ -275,7 +275,11 @@ static int s_ra_spills = 0;
 static int s_ra_peak_pressure = 0;
 
 static int is_telem_active(void) {
-    return s_enabled || s_stdout_enabled || (getenv("ZCC_EMIT_TELEMETRY") && getenv("ZCC_EMIT_TELEMETRY")[0] != '0');
+    const char *env = getenv("ZCC_EMIT_TELEMETRY");
+
+    return s_enabled ||
+           s_stdout_enabled ||
+           (env && env[0] != '\0' && env[0] != '0');
 }
 
 void ir_telem_log_opt(const char *pass_name, int duration_us, int nodes_before, int nodes_after, int deleted, int modified) {
