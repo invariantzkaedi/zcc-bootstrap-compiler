@@ -70,9 +70,14 @@ void ir_telem_init(void) {
     const char *host;
     int port;
 
+    if (s_sock_fd >= 0) {
+        close(s_sock_fd);
+        s_sock_fd = -1;
+    }
+    s_enabled = 0;
+
     env = getenv("ZCC_EMIT_TELEMETRY");
-    if (!env || env[0] == '0' || env[0] == '\0') {
-        s_enabled = 0;
+    if (!env || strcmp(env, "1") != 0) {
         return;
     }
 
@@ -279,7 +284,7 @@ static int is_telem_active(void) {
 
     return s_enabled ||
            s_stdout_enabled ||
-           (env && env[0] != '\0' && env[0] != '0');
+           (env && strcmp(env, "1") == 0);
 }
 
 void ir_telem_log_opt(const char *pass_name, int duration_us, int nodes_before, int nodes_after, int deleted, int modified) {

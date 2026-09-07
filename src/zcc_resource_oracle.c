@@ -43,7 +43,41 @@ static void send_telemetry_event(const char *body_escaped) {
 #endif
 }
 
+static void json_escape(const char *in, char *out, size_t out_size) {
+    if (!out || out_size == 0) return;
+    if (!in) { snprintf(out, out_size, "unknown"); return; }
+    size_t j = 0;
+    for (size_t i = 0; in[i] && j + 2 < out_size; i++) {
+        unsigned char c = (unsigned char)in[i];
+        if (c == '"' || c == '\\') {
+            out[j++] = '\\'; out[j++] = (char)c;
+        } else if (c == '\n') {
+            out[j++] = '\\'; out[j++] = 'n';
+        } else if (c == '\r') {
+            out[j++] = '\\'; out[j++] = 'r';
+        } else if (c == '\t') {
+            out[j++] = '\\'; out[j++] = 't';
+        } else if (c >= 32) {
+            out[j++] = (char)c;
+        }
+    }
+    out[j] = '\0';
+}
+
 void zcc_oracle_init(const char *source_file) {
+#ifndef _WIN32
+    if (s_sock_fd >= 0) {
+        close(s_sock_fd);
+        s_sock_fd = -1;
+    }
+    s_udp_enabled = 0;
+#endif
+
+    if (s_ledger_fp) {
+        fclose(s_ledger_fp);
+        s_ledger_fp = NULL;
+    }
+
     s_source_file = source_file ? source_file : "unknown";
     s_malloc_count = 0;
     s_free_count = 0;
@@ -51,22 +85,21 @@ void zcc_oracle_init(const char *source_file) {
     s_peak_alloc_bytes = 0;
     s_start_time = (long)clock();
 
-    /* Open resource-event ledger only when telemetry is explicitly enabled. */
+    /* Open resource-event ledger only when telemetry is explicitly enabled ("1"). */
     const char *telemetry_env = getenv("ZCC_EMIT_TELEMETRY");
-    int telemetry_enabled =
-        telemetry_env &&
-        telemetry_env[0] != '\0' &&
-        telemetry_env[0] != '0';
+    int telemetry_enabled = telemetry_env && strcmp(telemetry_env, "1") == 0;
 
     s_ledger_fp = NULL;
 
     if (telemetry_enabled) {
         s_ledger_fp = fopen("zcc_resource_events.jsonl", "w");
         if (s_ledger_fp) {
+            char escaped_source[512];
+            json_escape(s_source_file, escaped_source, sizeof(escaped_source));
             fprintf(
                 s_ledger_fp,
                 "{\"type\":\"metadata\",\"source_file\":\"%s\",\"timestamp\":%ld}\n",
-                s_source_file,
+                escaped_source,
                 (long)time(NULL)
             );
             fflush(s_ledger_fp);
@@ -93,8 +126,10 @@ void zcc_oracle_shutdown(void) {
     double duration_ms = (double)(end_time - s_start_time) * 1000.0 / CLOCKS_PER_SEC;
 
     if (s_ledger_fp) {
+        char escaped_source[512];
+        json_escape(s_source_file, escaped_source, sizeof(escaped_source));
         fprintf(s_ledger_fp, "{\"type\":\"summary\",\"source_file\":\"%s\",\"malloc_count\":%zu,\"free_count\":%zu,\"leak_count\":%zu,\"peak_bytes\":%zu,\"duration_ms\":%.2f}\n",
-                s_source_file, s_malloc_count, s_free_count, 
+                escaped_source, s_malloc_count, s_free_count, 
                 (s_malloc_count >= s_free_count) ? (s_malloc_count - s_free_count) : 0, 
                 s_peak_alloc_bytes, duration_ms);
         fclose(s_ledger_fp);
