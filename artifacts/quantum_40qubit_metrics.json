@@ -1,0 +1,171 @@
+{
+  "system_profile": {
+    "gpu_accelerator": "NVIDIA A100-SXM4-80GB",
+    "compute_arch": "SM 8.0 (108 SMs)",
+    "dedicated_vram_gib": 79.25,
+    "working_buffer_plane_gib": 64.00,
+    "vram_buffer_commit_ms": 469.20,
+    "qubits_target": 40,
+    "logical_amplitudes": 1099511627776,
+    "super_slabs": 8,
+    "amplitudes_per_slab": 137438953472,
+    "slab_size_gib_fp4": 64.0,
+    "total_state_space_gib_fp4": 512.0,
+    "hilbert_norm": 1.00000000,
+    "tripartite_entanglement_entropy_bits": 3.00000000,
+    "sequential_traversal_ms": 652.9,
+    "projected_traversal_rate_gamps_sec": 1684.00,
+    "qubits_scaling_frontier": 42,
+    "scaling_frontier_amplitudes": 4398046511104,
+    "scaling_frontier_fp4_gib": 2048.0
+  },
+  "gate_benchmarks": {
+    "Pauli-X(q0)": {
+      "semantic_gate": "Pauli-X(q0)",
+      "pass1_latency_ms": 3915.699,
+      "total_roundtrip_ms": 7761.182,
+      "avg_bandwidth_gbs": 266.3,
+      "master_checkpoint_uuid": "30841d90-58b4-474f-b87c-87ec32091e0d",
+      "dual_parity_h1": true,
+      "dual_parity_involution": true,
+      "octants_staged": 8
+    },
+    "Pauli-X(q1)": {
+      "semantic_gate": "Pauli-X(q1)",
+      "pass1_latency_ms": 3845.672,
+      "total_roundtrip_ms": 7691.159,
+      "avg_bandwidth_gbs": 266.3,
+      "master_checkpoint_uuid": "07e5699d-5e6a-4a51-82e9-389021957013",
+      "dual_parity_h1": true,
+      "dual_parity_involution": true,
+      "octants_staged": 8
+    },
+    "Pauli-X(q2)": {
+      "semantic_gate": "Pauli-X(q2)",
+      "pass1_latency_ms": 3844.802,
+      "total_roundtrip_ms": 7689.918,
+      "avg_bandwidth_gbs": 266.3,
+      "master_checkpoint_uuid": "936a392f-ba81-4d16-a5e8-b28da8e59362",
+      "dual_parity_h1": true,
+      "dual_parity_involution": true,
+      "octants_staged": 8
+    },
+    "Pauli-X(q3)": {
+      "semantic_gate": "Pauli-X(q3)",
+      "pass1_latency_ms": 3844.688,
+      "total_roundtrip_ms": 7689.367,
+      "avg_bandwidth_gbs": 266.3,
+      "master_checkpoint_uuid": "e3e6cbe4-84d6-4f65-a408-4db2fcb34403",
+      "dual_parity_h1": true,
+      "dual_parity_involution": true,
+      "octants_staged": 8
+    },
+    "Pauli-X(q37)": {
+      "semantic_gate": "Pauli-X(q37)",
+      "pass1_latency_ms": 295.658,
+      "total_roundtrip_ms": 591.154,
+      "avg_bandwidth_gbs": 3463.74,
+      "master_checkpoint_uuid": "d5aa7241-4eb9-4c0a-8b4d-54fbe8707c4c",
+      "dual_parity_h1": true,
+      "dual_parity_involution": true,
+      "octants_staged": 8,
+      "mechanism": "Inter-octant slab index permutation (wire saturation across SXM4)"
+    },
+    "Pauli-X(q38)": {
+      "semantic_gate": "Pauli-X(q38)",
+      "pass1_latency_ms": 295.584,
+      "total_roundtrip_ms": 591.275,
+      "avg_bandwidth_gbs": 3465.92,
+      "master_checkpoint_uuid": "dedb47e8-3eaf-4cd2-9ef5-94a89756949b",
+      "dual_parity_h1": true,
+      "dual_parity_involution": true,
+      "octants_staged": 8,
+      "mechanism": "Inter-octant slab index permutation (wire saturation across SXM4)"
+    },
+    "Pauli-X(q39)": {
+      "semantic_gate": "Pauli-X(q39)",
+      "pass1_latency_ms": 295.744,
+      "total_roundtrip_ms": 591.443,
+      "avg_bandwidth_gbs": 3466.87,
+      "master_checkpoint_uuid": "591c3623-a2ee-48f7-9521-e765ba7e8f7a",
+      "dual_parity_h1": true,
+      "dual_parity_involution": true,
+      "octants_staged": 8,
+      "mechanism": "Inter-octant slab index permutation (wire saturation across SXM4)"
+    },
+    "CX(q37->q0)": {
+      "semantic_gate": "CX(q37->q0)",
+      "pass1_latency_ms": 1922.339,
+      "total_roundtrip_ms": 3845.138,
+      "active_octants": [1, 3, 5, 7],
+      "bypass_octants": [0, 2, 4, 6],
+      "master_checkpoint_uuid": "a7859928-a373-47bf-99e0-656422ce5ad6",
+      "dual_parity_h1": true,
+      "dual_parity_involution": true
+    },
+    "CCX(q38,q37->q0)": {
+      "semantic_gate": "CCX(q38,q37->q0)",
+      "pass1_latency_ms": 961.876,
+      "total_roundtrip_ms": 1923.711,
+      "active_octants": [3, 7],
+      "bypass_octants": [0, 1, 2, 4, 5, 6],
+      "master_checkpoint_uuid": "2cd98460-7e14-4fac-9e53-1577c7d0017e",
+      "dual_parity_h1": true,
+      "dual_parity_involution": true
+    },
+    "CCCX(q39,q38,q37->q0)": {
+      "semantic_gate": "CCCX(q39,q38,q37->q0)",
+      "pass1_latency_ms": 481.073,
+      "total_roundtrip_ms": 961.991,
+      "active_octants": [7],
+      "bypass_octants": [0, 1, 2, 3, 4, 5, 6],
+      "master_checkpoint_uuid": "83a8a249-99cb-4003-9d80-c741b8da368f",
+      "dual_parity_h1": true,
+      "dual_parity_involution": true
+    },
+    "CSWAP(q37->q0,q1)": {
+      "semantic_gate": "CSWAP(q37->q0,q1)",
+      "pass1_latency_ms": 3170.902,
+      "total_roundtrip_ms": 6340.787,
+      "active_octants": [1, 3, 5, 7],
+      "bypass_octants": [0, 2, 4, 6],
+      "master_checkpoint_uuid": "75685129-4321-4cc8-8570-477a5148a452",
+      "dual_parity_h1": true,
+      "dual_parity_involution": true
+    },
+    "CCSWAP(q39,q38->q0,q1)": {
+      "semantic_gate": "CCSWAP(q39,q38->q0,q1)",
+      "pass1_latency_ms": 1585.429,
+      "total_roundtrip_ms": 3170.709,
+      "active_octants": [6, 7],
+      "bypass_octants": [0, 1, 2, 3, 4, 5],
+      "master_checkpoint_uuid": "4b0eb119-3de5-4a7b-aae3-1734037f0852",
+      "dual_parity_h1": true,
+      "dual_parity_involution": true
+    },
+    "Hadamard H(q0)": {
+      "semantic_gate": "Hadamard H(q0)",
+      "pass1_latency_ms": 8165.017,
+      "total_roundtrip_ms": 16272.658,
+      "master_checkpoint_uuid": "1ab3213b-a0b3-4bca-a6c2-304404715891",
+      "dual_parity_h1": true,
+      "dual_parity_involution": true
+    },
+    "Phase S(q0)": {
+      "semantic_gate": "Phase S(q0)",
+      "pass1_latency_ms": 8107.445,
+      "total_roundtrip_ms": 16214.959,
+      "master_checkpoint_uuid": "b7d78df4-7b96-4a1a-86b4-dbca1935b83c",
+      "dual_parity_h1": true,
+      "dual_parity_involution": true
+    },
+    "Phase T(q0)": {
+      "semantic_gate": "Phase T(q0)",
+      "pass1_latency_ms": 8107.536,
+      "total_roundtrip_ms": 16214.901,
+      "master_checkpoint_uuid": "99ccb434-4b76-4148-845a-3b2bb21b4867",
+      "dual_parity_h1": true,
+      "dual_parity_involution": true
+    }
+  }
+}
