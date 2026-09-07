@@ -1,0 +1,125 @@
+{
+  "h2_eq": {
+    "e_hf": -1.7928460063353118,
+    "e_fci": -1.872072035094789,
+    "e_vqe": -1.8720720224260652,
+    "err_mha": 1.2668723847752972e-05,
+    "chem_accuracy": true
+  },
+  "h2_str": {
+    "e_hf": -1.737935920800378,
+    "e_fci": -1.750982927882773,
+    "e_vqe": -1.7509829157026,
+    "err_mha": 1.2180173092346536e-05,
+    "chem_accuracy": true
+  },
+  "h4": {
+    "e_hf": -3.560380702495036,
+    "e_fci": -5.050210637131735,
+    "e_vqe": -5.04494318419242,
+    "err_mha": 5.26745293931441,
+    "chem_accuracy": false
+  },
+  "n2_dissociation_curve": [
+    {
+      "R_angstrom": 1.0977,
+      "e_hf": 12.734807083524458,
+      "e_fci": 11.509228414802818,
+      "e_vqe": 11.509234753494132,
+      "err_mha": 0.006338691314056177,
+      "chem_accuracy": true,
+      "elapsed_ms": 50433.79187583923
+    },
+    {
+      "R_angstrom": 1.5,
+      "e_hf": 6.5583101920274345,
+      "e_fci": 5.896366962876439,
+      "e_vqe": 5.896369488819355,
+      "err_mha": 0.002525942916165036,
+      "chem_accuracy": true,
+      "elapsed_ms": 48637.83764839172
+    },
+    {
+      "R_angstrom": 2.0,
+      "e_hf": 2.47844667439306,
+      "e_fci": 2.179316487367357,
+      "e_vqe": 2.1793170925356655,
+      "err_mha": 0.0006051683083541093,
+      "chem_accuracy": true,
+      "elapsed_ms": 48245.025396347046
+    },
+    {
+      "R_angstrom": 2.5,
+      "e_hf": 0.15180904299636466,
+      "e_fci": 0.018884411125291357,
+      "e_vqe": 0.01888547986293237,
+      "err_mha": 0.0010687376410141447,
+      "chem_accuracy": true,
+      "elapsed_ms": 47158.695220947266
+    }
+  ],
+  "industrial_targets": [
+    {
+      "qubits": 12,
+      "total_dim": 4096,
+      "slater_determinants": 400,
+      "sparsity_ratio": 0.09765625,
+      "mem_c128_gb": 6.103515625e-05,
+      "mem_c64_gb": 3.0517578125e-05,
+      "mem_fp4_gb": 1.9073486328125e-06,
+      "mem_fp1_gb": 4.76837158203125e-07,
+      "super_slabs_64gb": 1,
+      "target_name": "N2 Dinitrogen Triple Bond Dissociation",
+      "formula": "N2",
+      "active_space": "CAS(6e, 6o) -> 12 Spin-Orbitals",
+      "commercial_utility": "Haber-Bosch catalyst modeling ($100B global fertilizer market)"
+    },
+    {
+      "qubits": 32,
+      "total_dim": 4294967296,
+      "slater_determinants": 165636900,
+      "sparsity_ratio": 0.03856534603983164,
+      "mem_c128_gb": 64.0,
+      "mem_c64_gb": 32.0,
+      "mem_fp4_gb": 2.0,
+      "mem_fp1_gb": 0.5,
+      "super_slabs_64gb": 1,
+      "target_name": "Lithium-Sulfur Battery Dissolution Complex",
+      "formula": "[Li2S4] radical dimer",
+      "active_space": "CAS(16e, 16o) -> 32 Spin-Orbitals",
+      "commercial_utility": "Next-gen EV battery life extension (500 Wh/kg capacity)"
+    },
+    {
+      "qubits": 36,
+      "total_dim": 68719476736,
+      "slater_determinants": 344622096,
+      "sparsity_ratio": 0.005014911526814103,
+      "mem_c128_gb": 1024.0,
+      "mem_c64_gb": 512.0,
+      "mem_fp4_gb": 32.0,
+      "mem_fp1_gb": 8.0,
+      "super_slabs_64gb": 1,
+      "target_name": "Chromium Dimer (Cr2) Sextuple Bond",
+      "formula": "Cr2",
+      "active_space": "CAS(12e, 18o) -> 36 Spin-Orbitals",
+      "commercial_utility": "Ultra-hard semiconductor alloy and wear-resistant coatings"
+    },
+    {
+      "qubits": 40,
+      "total_dim": 1099511627776,
+      "slater_determinants": 240374016,
+      "sparsity_ratio": 0.00021861889399588108,
+      "mem_c128_gb": 16384.0,
+      "mem_c64_gb": 8192.0,
+      "mem_fp4_gb": 512.0,
+      "mem_fp1_gb": 128.0,
+      "super_slabs_64gb": 8,
+      "target_name": "FeMo-Cofactor (Nitrogenase Active Site)",
+      "formula": "[MoFe7S9C(R-homocitrate)]",
+      "active_space": "CAS(30e, 20o) -> 40 Spin-Orbitals",
+      "commercial_utility": "Room-temperature biological nitrogen fixation catalyst synthesis"
+    }
+  ],
+  "sonification_file": "artifacts/quantum_chemistry_vqe_sonification.wav",
+  "elapsed_seconds": 195.31686115264893
+}
