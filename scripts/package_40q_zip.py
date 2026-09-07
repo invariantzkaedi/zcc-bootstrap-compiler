@@ -20,9 +20,18 @@ if hasattr(sys.stdout, 'reconfigure'):
     except Exception:
         pass
 
-# Resolve repository root dynamically relative to this script
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
+# Resolve repository root dynamically (works in CLI scripts or interactive Colab/Jupyter cells)
+if "__file__" in globals():
+    SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+    REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
+else:
+    # Running directly inside an interactive Google Colab / Jupyter notebook cell
+    REPO_ROOT = os.getcwd()
+    if not os.path.exists(os.path.join(REPO_ROOT, "artifacts")):
+        parent = os.path.abspath(os.path.join(REPO_ROOT, ".."))
+        if os.path.exists(os.path.join(parent, "artifacts")):
+            REPO_ROOT = parent
+    SCRIPT_DIR = os.path.join(REPO_ROOT, "scripts")
 
 # Primary output path inside the repo artifacts directory
 PRIMARY_ZIP = os.path.join(REPO_ROOT, "artifacts", "zkaedi_prime_40qubit_hypercube_artifacts.zip")
