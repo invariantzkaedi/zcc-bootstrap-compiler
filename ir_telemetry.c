@@ -323,20 +323,46 @@ void ir_telem_log_regalloc(const char *func_name, int live_ranges, int coloring_
     s_ra_peak_pressure = peak_pressure;
 }
 
+static void telem_json_escape(const char *in, char *out, size_t out_size) {
+    if (!out || out_size == 0) return;
+    if (!in) { snprintf(out, out_size, "unknown"); return; }
+    size_t j = 0;
+    for (size_t i = 0; in[i] && j + 2 < out_size; i++) {
+        unsigned char c = (unsigned char)in[i];
+        if (c == '"' || c == '\\') {
+            out[j++] = '\\'; out[j++] = (char)c;
+        } else if (c == '\n') {
+            out[j++] = '\\'; out[j++] = 'n';
+        } else if (c == '\r') {
+            out[j++] = '\\'; out[j++] = 'r';
+        } else if (c == '\t') {
+            out[j++] = '\\'; out[j++] = 't';
+        } else if (c >= 32) {
+            out[j++] = (char)c;
+        }
+    }
+    out[j] = '\0';
+}
+
 void ir_telem_flush_observatory(const char *func_name) {
     if (!is_telem_active()) return;
     FILE *f = fopen("zcc_observatory_data.json", "w");
     if (!f) return;
 
+    char esc_fn[128];
+    telem_json_escape(func_name, esc_fn, sizeof(esc_fn));
+
     fprintf(f, "{\n");
-    fprintf(f, "  \"function_name\": \"%s\",\n", func_name);
+    fprintf(f, "  \"function_name\": \"%s\",\n", esc_fn);
     
     // Write passes
     fprintf(f, "  \"passes\": [\n");
     for (int i = 0; i < s_num_opts; i++) {
         TelemPassOpt *opt = &s_opts[i];
+        char esc_pname[128];
+        telem_json_escape(opt->pass_name, esc_pname, sizeof(esc_pname));
         fprintf(f, "    {\n");
-        fprintf(f, "      \"pass_name\": \"%s\",\n", opt->pass_name);
+        fprintf(f, "      \"pass_name\": \"%s\",\n", esc_pname);
         fprintf(f, "      \"duration_us\": %d,\n", opt->duration_us);
         fprintf(f, "      \"nodes_before\": %d,\n", opt->nodes_before);
         fprintf(f, "      \"nodes_after\": %d,\n", opt->nodes_after);
@@ -371,8 +397,10 @@ void ir_telem_flush_observatory(const char *func_name) {
     fprintf(f, "  },\n");
 
     // Write RegAlloc
+    char esc_rafn[128];
+    telem_json_escape(s_ra_func_name, esc_rafn, sizeof(esc_rafn));
     fprintf(f, "  \"register_allocation\": {\n");
-    fprintf(f, "    \"func_name\": \"%s\",\n", s_ra_func_name);
+    fprintf(f, "    \"func_name\": \"%s\",\n", esc_rafn);
     fprintf(f, "    \"live_ranges\": %d,\n", s_ra_live_ranges);
     fprintf(f, "    \"coloring_loops\": %d,\n", s_ra_coloring_loops);
     fprintf(f, "    \"spills\": %d,\n", s_ra_spills);

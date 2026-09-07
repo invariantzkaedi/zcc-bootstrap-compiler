@@ -24,6 +24,8 @@ static long s_start_time = 0;
 
 static int s_udp_enabled = 0;
 static int s_sock_fd = -1;
+static int s_verbose_checked = 0;
+static int s_verbose = 0;
 #ifndef _WIN32
 static struct sockaddr_in s_addr;
 #endif
@@ -84,6 +86,8 @@ void zcc_oracle_init(const char *source_file) {
     s_total_alloc_bytes = 0;
     s_peak_alloc_bytes = 0;
     s_start_time = (long)clock();
+    s_verbose_checked = 0;
+    s_verbose = 0;
 
     /* Open resource-event ledger only when telemetry is explicitly enabled ("1"). */
     const char *telemetry_env = getenv("ZCC_EMIT_TELEMETRY");
@@ -153,9 +157,12 @@ void zcc_oracle_log_prediction(const char *filename, int loops, int indirections
         risk = "medium";
     }
 
+    char esc_file[256];
+    json_escape(filename ? filename : "unknown", esc_file, sizeof(esc_file));
+
     if (s_ledger_fp) {
         fprintf(s_ledger_fp, "{\"type\":\"preprocess_prediction\",\"file\":\"%s\",\"risk\":\"%s\",\"loops\":%d,\"indirections\":%d,\"structs\":%d}\n",
-                filename ? filename : "unknown", risk, loops, indirections, structs);
+                esc_file, risk, loops, indirections, structs);
         fflush(s_ledger_fp);
     }
 
@@ -163,7 +170,7 @@ void zcc_oracle_log_prediction(const char *filename, int loops, int indirections
     char body[512];
     snprintf(body, sizeof(body), 
         "{\\\"op\\\":1,\\\"file\\\":\\\"%s\\\",\\\"risk\\\":\\\"%s\\\",\\\"loops\\\":%d,\\\"indirections\\\":%d,\\\"structs\\\":%d}",
-        filename ? filename : "unknown", risk, loops, indirections, structs);
+        esc_file, risk, loops, indirections, structs);
     send_telemetry_event(body);
 }
 
@@ -175,8 +182,6 @@ void zcc_oracle_log_allocation(void *ptr, size_t size) {
         s_peak_alloc_bytes = s_total_alloc_bytes;
     }
 
-    static int s_verbose_checked = 0;
-    static int s_verbose = 0;
     if (!s_verbose_checked) {
         const char *env = getenv("ZCC_ORACLE_VERBOSE");
         s_verbose = (env && env[0] != '0' && env[0] != '\0');
@@ -203,8 +208,6 @@ void zcc_oracle_log_free(void *ptr) {
     if (!ptr) return;
     s_free_count++;
     
-    static int s_verbose_checked = 0;
-    static int s_verbose = 0;
     if (!s_verbose_checked) {
         const char *env = getenv("ZCC_ORACLE_VERBOSE");
         s_verbose = (env && env[0] != '0' && env[0] != '\0');
@@ -229,9 +232,14 @@ void zcc_oracle_log_free(void *ptr) {
 void zcc_oracle_log_pass(const char *pass_name, const char *function_name, 
                          double duration_ms, size_t heap_bytes, 
                          int spills, int virtual_regs, int physical_regs) {
+    char esc_pass[128];
+    char esc_func[128];
+    json_escape(pass_name ? pass_name : "unknown", esc_pass, sizeof(esc_pass));
+    json_escape(function_name ? function_name : "_global", esc_func, sizeof(esc_func));
+
     if (s_ledger_fp) {
         fprintf(s_ledger_fp, "{\"type\":\"pass\",\"pass_name\":\"%s\",\"function\":\"%s\",\"duration_ms\":%.2f,\"heap_bytes\":%zu,\"spills\":%d,\"virtual_regs\":%d,\"physical_regs\":%d}\n",
-                pass_name, function_name ? function_name : "_global", 
+                esc_pass, esc_func, 
                 duration_ms, heap_bytes, spills, virtual_regs, physical_regs);
         fflush(s_ledger_fp);
     }
@@ -240,7 +248,7 @@ void zcc_oracle_log_pass(const char *pass_name, const char *function_name,
     char body[1024];
     snprintf(body, sizeof(body), 
         "{\\\"op\\\":10,\\\"pass\\\":\\\"%s\\\",\\\"fn\\\":\\\"%s\\\",\\\"duration\\\":%.2f,\\\"heap\\\":%zu,\\\"spills\\\":%d,\\\"vregs\\\":%d}",
-        pass_name, function_name ? function_name : "_global", duration_ms, heap_bytes, spills, virtual_regs);
+        esc_pass, esc_func, duration_ms, heap_bytes, spills, virtual_regs);
     send_telemetry_event(body);
 }
 
@@ -252,9 +260,12 @@ void zcc_oracle_log_elf(const char *obj_name, size_t text_bytes,
     size_t total_size = text_bytes + (rela_entries * 24) + (symtab_entries * 24) + strtab_bytes + shstrtab_bytes + padding_bytes;
     double padding_ratio = total_size > 0 ? (double)padding_bytes / total_size : 0.0;
 
+    char esc_obj[256];
+    json_escape(obj_name ? obj_name : "unknown", esc_obj, sizeof(esc_obj));
+
     if (s_ledger_fp) {
         fprintf(s_ledger_fp, "{\"type\":\"elf_geometry\",\"object\":\"%s\",\"text_bytes\":%zu,\"rela_entries\":%d,\"symtab_entries\":%d,\"strtab_bytes\":%zu,\"shstrtab_bytes\":%zu,\"padding_bytes\":%zu,\"relocation_density\":%.4f,\"padding_ratio\":%.4f}\n",
-                obj_name, text_bytes, rela_entries, symtab_entries, 
+                esc_obj, text_bytes, rela_entries, symtab_entries, 
                 strtab_bytes, shstrtab_bytes, padding_bytes, 
                 relocation_density, padding_ratio);
         fflush(s_ledger_fp);
@@ -264,7 +275,7 @@ void zcc_oracle_log_elf(const char *obj_name, size_t text_bytes,
     char body[1024];
     snprintf(body, sizeof(body), 
         "{\\\"op\\\":18,\\\"object\\\":\\\"%s\\\",\\\"text\\\":%zu,\\\"relas\\\":%d,\\\"syms\\\":%d,\\\"padding\\\":%zu,\\\"ratio\\\":%.4f}",
-        obj_name, text_bytes, rela_entries, symtab_entries, padding_bytes, padding_ratio);
+        esc_obj, text_bytes, rela_entries, symtab_entries, padding_bytes, padding_ratio);
     send_telemetry_event(body);
 }
 

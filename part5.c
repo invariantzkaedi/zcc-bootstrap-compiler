@@ -1856,7 +1856,8 @@ int zcc_main(int argc, char **argv) {
       ir_telemetry_enable_stdout();
   }
   ir_telem_init();
-  if (getenv("ZCC_EMIT_TELEMETRY")) {
+  const char *telem_env = getenv("ZCC_EMIT_TELEMETRY");
+  if (telem_env && strcmp(telem_env, "1") == 0) {
       telemetry_init("127.0.0.1", 9003);
       atexit(telemetry_close);
   }
