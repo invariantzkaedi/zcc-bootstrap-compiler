@@ -1,224 +1,149 @@
-"""
-nexus.checkpoint_engine - Universal Telemetry & Symbolic Drift Engine
-=====================================================================
-Computes multi-dimensional symbolic drift tensors across state embeddings,
-probability distributions, entropy, and fitness. Classifies stability regimes
-and writes immutable, cryptographically attested checkpoints to the DAG.
-"""
-
 from __future__ import annotations
 
-import json
 import math
-import hashlib
 import time
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from collections.abc import Mapping, Sequence
+from typing import Any
 from uuid import UUID, uuid4
 
-from .models import DriftClass, NexusFrame, CheckpointPayload
+from .ledger import NexusDAGLedger, lineage_hash, sha256_hex
+from .models import CheckpointState, DriftClass, DriftThresholds, DriftWeights, NexusFrame
 
 
-def _canonical_hash(obj: Any) -> str:
-    """Computes deterministic SHA-256 hash of any JSON-serializable structure or bytes."""
-    if isinstance(obj, bytes):
-        return hashlib.sha256(obj).hexdigest()
-    if isinstance(obj, str):
-        return hashlib.sha256(obj.encode("utf-8")).hexdigest()
-    dumped = json.dumps(obj, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(dumped.encode("utf-8")).hexdigest()
+def _finite_vector(name: str, values: Sequence[float]) -> tuple[float, ...]:
+    result = tuple(float(v) for v in values)
+    if any(not math.isfinite(v) for v in result):
+        raise ValueError(f"{name} must contain only finite values")
+    return result
 
 
-def _l2_displacement(z1: Sequence[float], z2: Sequence[float]) -> float:
-    """Computes Euclidean distance ||z_t - z_{t-1}||_2."""
-    if not z1 or not z2:
-        return 0.0
-    dim = min(len(z1), len(z2))
-    s = sum((z1[i] - z2[i]) ** 2 for i in range(dim))
-    return math.sqrt(s)
+def l2_displacement(current: Sequence[float], previous: Sequence[float]) -> tuple[tuple[float, ...], float]:
+    a = _finite_vector("current latent vector", current)
+    b = _finite_vector("previous latent vector", previous)
+    if len(a) != len(b):
+        raise ValueError("current and previous latent vectors must have identical lengths")
+    delta = tuple(x - y for x, y in zip(a, b))
+    return delta, math.sqrt(sum(v * v for v in delta))
 
 
-def _normalize_probs(probs: Sequence[float], eps: float = 1e-9) -> List[float]:
-    """Ensures a probability vector is non-negative and sums to 1."""
-    if not probs:
-        return [1.0]
-    p = [max(float(x), eps) for x in probs]
-    total = sum(p)
-    return [x / total for x in p]
+def _normalized_distribution(name: str, values: Sequence[float], epsilon: float) -> tuple[float, ...]:
+    raw = _finite_vector(name, values)
+    if not raw:
+        raise ValueError(f"{name} must not be empty")
+    if any(v < 0.0 for v in raw):
+        raise ValueError(f"{name} cannot contain negative probabilities")
+    total = sum(raw)
+    if total <= 0.0:
+        raise ValueError(f"{name} must have positive total mass")
+    probs = tuple(v / total for v in raw)
+    # Epsilon smoothing makes KL finite when the previous distribution has a zero bin.
+    smooth = tuple(max(p, epsilon) for p in probs)
+    renorm = sum(smooth)
+    return tuple(p / renorm for p in smooth)
 
 
-def _kl_divergence(p: Sequence[float], q: Sequence[float], eps: float = 1e-9) -> float:
-    """
-    Computes D_KL(P || Q) = sum_i P_i * ln(P_i / Q_i).
-    Applies Laplace smoothing to prevent numerical divergence.
-    """
-    p_norm = _normalize_probs(p, eps)
-    q_norm = _normalize_probs(q, eps)
-    dim = min(len(p_norm), len(q_norm))
-    kl = 0.0
-    for i in range(dim):
-        pi = p_norm[i]
-        qi = q_norm[i]
-        kl += pi * math.log(pi / qi)
-    return max(0.0, float(kl))
+def kl_divergence(current: Sequence[float], previous: Sequence[float], epsilon: float = 1e-12) -> float:
+    if epsilon <= 0.0:
+        raise ValueError("epsilon must be positive")
+    p = _normalized_distribution("current distribution", current, epsilon)
+    q = _normalized_distribution("previous distribution", previous, epsilon)
+    if len(p) != len(q):
+        raise ValueError("current and previous distributions must have identical lengths")
+    return sum(pi * math.log(pi / qi) for pi, qi in zip(p, q))
 
 
-def _shannon_entropy(probs: Sequence[float], eps: float = 1e-9) -> float:
-    """Computes Shannon entropy H(P) = -sum_i P_i * ln(P_i)."""
-    p_norm = _normalize_probs(probs, eps)
-    ent = -sum(pi * math.log(pi) for pi in p_norm)
-    return max(0.0, float(ent))
+def shannon_entropy(distribution: Sequence[float], epsilon: float = 1e-12) -> float:
+    p = _normalized_distribution("distribution", distribution, epsilon)
+    return -sum(x * math.log(x) for x in p)
 
 
-class NexusDAGLedger:
-    """
-    In-memory DAG representation backed by an append-only JSONL journal.
-    Guarantees monotonic parent->child relationships and immutable state recovery.
-    """
-
-    def __init__(self, ledger_dir: Optional[Union[str, Path]] = None):
-        self.ledger_dir = Path(ledger_dir) if ledger_dir else None
-        if self.ledger_dir:
-            self.ledger_dir.mkdir(parents=True, exist_ok=True)
-            self.journal_file = self.ledger_dir / "nexus_frames.jsonl"
-            self.checkpoints_file = self.ledger_dir / "nexus_checkpoints.jsonl"
-        else:
-            self.journal_file = None
-            self.checkpoints_file = None
-
-        self.frames: Dict[UUID, NexusFrame] = {}
-        self.checkpoints: Dict[UUID, CheckpointPayload] = {}
-        self.children_map: Dict[UUID, List[UUID]] = {}
-        self.active_leaves: List[UUID] = []
-
-    def append_frame(self, frame: NexusFrame, payload: Optional[CheckpointPayload] = None) -> None:
-        """Stores frame and optional snapshot payload, linking into the DAG."""
-        self.frames[frame.node_uuid] = frame
-
-        if frame.parent_uuid:
-            self.children_map.setdefault(frame.parent_uuid, []).append(frame.node_uuid)
-            if frame.parent_uuid in self.active_leaves:
-                self.active_leaves.remove(frame.parent_uuid)
-        self.active_leaves.append(frame.node_uuid)
-
-        if payload:
-            self.checkpoints[payload.checkpoint_uuid] = payload
-
-        # Persistent append-only logging if configured
-        if self.journal_file:
-            with open(self.journal_file, "a", encoding="utf-8") as f:
-                f.write(json.dumps(frame.to_dict()) + "\n")
-        if self.checkpoints_file and payload:
-            with open(self.checkpoints_file, "a", encoding="utf-8") as f:
-                f.write(payload.serialize() + "\n")
-
-    def get_lineage(self, node_uuid: UUID) -> List[NexusFrame]:
-        """Traces lineage backwards from node_uuid to root."""
-        lineage = []
-        curr = node_uuid
-        while curr and curr in self.frames:
-            f = self.frames[curr]
-            lineage.append(f)
-            curr = f.parent_uuid
-        lineage.reverse()
-        return lineage
+def classify_drift(score: float, thresholds: DriftThresholds) -> DriftClass:
+    thresholds.validate()
+    if not math.isfinite(score) or score < 0.0:
+        raise ValueError("drift score must be finite and non-negative")
+    if score < thresholds.tau_s:
+        return DriftClass.STABILIZE
+    if score < thresholds.tau_d:
+        return DriftClass.TRANSITION
+    if score < thresholds.tau_c:
+        return DriftClass.DRIFT
+    return DriftClass.CRITICAL
 
 
 def symbolic_drift_checkpoint_engine(
+    *,
+    ledger: NexusDAGLedger,
     subsystem: str,
     operation: str,
     current_state: Any,
-    current_config: Dict[str, Any],
-    current_embedding: Sequence[float],
+    config: Mapping[str, Any],
+    current_latent: Sequence[float],
+    previous_latent: Sequence[float],
     current_distribution: Sequence[float],
+    previous_distribution: Sequence[float],
     current_fitness: float,
-    parent_frame: Optional[NexusFrame] = None,
-    parent_payload: Optional[CheckpointPayload] = None,
-    ledger: Optional[NexusDAGLedger] = None,
-    alpha: float = 0.35,
-    beta: float = 0.30,
-    gamma: float = 0.20,
-    delta: float = 0.15,
-    tau_s: float = 0.05,
-    tau_d: float = 0.20,
-    tau_c: float = 0.50,
+    previous_fitness: float,
+    current_entropy: float | None = None,
+    previous_entropy: float | None = None,
+    weights: DriftWeights = DriftWeights(),
+    thresholds: DriftThresholds = DriftThresholds(),
+    confidence: float = 1.0,
     latency_ns: int = 0,
     memory_delta_bytes: int = 0,
-    metadata: Optional[Dict[str, Any]] = None,
-) -> Tuple[NexusFrame, CheckpointPayload]:
+    parent_uuid: UUID | None = None,
+    parent_lineage_hash: str | None = None,
+    node_uuid: UUID | None = None,
+    checkpoint_uuid: UUID | None = None,
+    timestamp_ns: int | None = None,
+) -> NexusFrame:
     """
-    Universal telemetry and checkpoint primitive for the Nexus Sovereign Runtime.
+    Measure symbolic drift, persist a checkpoint, and append an immutable frame.
 
-    Evaluates:
-      D_t(v) = alpha * ||z_t - z_{t-1}||_2
-             + beta  * D_KL(P_t || P_{t-1})
-             + gamma * |Delta H_t|
-             + delta * |Delta F_t|
-
-    Classifies:
-      stabilize:  D_t < tau_s
-      transition: tau_s <= D_t < tau_d
-      drift:      tau_d <= D_t < tau_c
-      critical:   D_t >= tau_c
-
-    Returns:
-      (immutable_nexus_frame, checkpoint_payload)
+    D_t = alpha*||z_t-z_{t-1}||_2 + beta*KL(P_t||P_{t-1})
+          + gamma*|H_t-H_{t-1}| + delta*|F_t-F_{t-1}|.
     """
-    timestamp_ns = time.time_ns()
-    node_uuid = uuid4()
-    checkpoint_uuid = uuid4()
+    if not subsystem.strip() or not operation.strip():
+        raise ValueError("subsystem and operation must be non-empty")
+    thresholds.validate()
+    if any(not math.isfinite(v) or v < 0.0 for v in (weights.alpha, weights.beta, weights.gamma, weights.delta)):
+        raise ValueError("drift weights must be finite and non-negative")
+    if not 0.0 <= confidence <= 1.0 or not math.isfinite(confidence):
+        raise ValueError("confidence must be finite and within [0, 1]")
+    if latency_ns < 0:
+        raise ValueError("latency_ns cannot be negative")
+    if not math.isfinite(float(current_fitness)) or not math.isfinite(float(previous_fitness)):
+        raise ValueError("fitness values must be finite")
 
-    # Calculate individual drift terms
-    if parent_frame is not None and parent_payload is not None:
-        prev_embedding = parent_payload.metadata.get("embedding", [])
-        prev_dist = parent_payload.metadata.get("distribution", [])
-        prev_fitness = parent_payload.metadata.get("fitness", current_fitness)
-        prev_entropy = parent_frame.entropy
+    node_uuid = node_uuid or uuid4()
+    checkpoint_uuid = checkpoint_uuid or uuid4()
+    timestamp_ns = timestamp_ns if timestamp_ns is not None else time.time_ns()
 
-        disp = _l2_displacement(current_embedding, prev_embedding)
-        kl = _kl_divergence(current_distribution, prev_dist)
-        curr_ent = _shannon_entropy(current_distribution)
-        delta_h = abs(curr_ent - prev_entropy)
-        delta_f = abs(current_fitness - prev_fitness)
-        parent_uuid = parent_frame.node_uuid
-        parent_lineage = parent_frame.lineage_hash
-    else:
-        disp = 0.0
-        kl = 0.0
-        curr_ent = _shannon_entropy(current_distribution)
-        delta_h = 0.0
-        delta_f = 0.0
-        parent_uuid = None
-        parent_lineage = "GENESIS_ROOT"
+    if parent_uuid is not None:
+        parent = ledger.find_frame_by_node(parent_uuid)
+        if parent_lineage_hash is not None and parent_lineage_hash != parent.lineage_hash:
+            raise ValueError("supplied parent_lineage_hash does not match ledger parent")
+        parent_lineage_hash = parent.lineage_hash
+    elif parent_lineage_hash is not None:
+        raise ValueError("parent_lineage_hash cannot be supplied without parent_uuid")
 
-    # Drift vector components: (disp, kl, delta_h, delta_f)
-    drift_vector = (disp, kl, delta_h, delta_f)
+    drift_vector, l2 = l2_displacement(current_latent, previous_latent)
+    kl = kl_divergence(current_distribution, previous_distribution)
+    h_current = shannon_entropy(current_distribution) if current_entropy is None else float(current_entropy)
+    h_previous = shannon_entropy(previous_distribution) if previous_entropy is None else float(previous_entropy)
+    if not math.isfinite(h_current) or not math.isfinite(h_previous):
+        raise ValueError("entropy values must be finite")
+    fitness_delta = float(current_fitness) - float(previous_fitness)
 
-    # Composite drift score
-    drift_score = (alpha * disp) + (beta * kl) + (gamma * delta_h) + (delta * delta_f)
-
-    # Four-state runtime classification
-    if drift_score < tau_s:
-        drift_class = DriftClass.STABILIZE.value
-        confidence = 1.0 - (drift_score / max(tau_s, 1e-6)) * 0.1  # High confidence
-    elif drift_score < tau_d:
-        drift_class = DriftClass.TRANSITION.value
-        confidence = 0.85
-    elif drift_score < tau_c:
-        drift_class = DriftClass.DRIFT.value
-        confidence = 0.60
-    else:
-        drift_class = DriftClass.CRITICAL.value
-        confidence = 0.20
-
-    # Cryptographic hashes
-    state_hash = _canonical_hash(current_state)
-    config_hash = _canonical_hash(current_config)
-    lineage_str = f"{parent_lineage}:{node_uuid}:{state_hash}"
-    lineage_hash = hashlib.sha256(lineage_str.encode("utf-8")).hexdigest()
-
-    # Fitness delta from parent
-    fitness_delta = (current_fitness - parent_payload.metadata.get("fitness", current_fitness)) if parent_payload else 0.0
+    score = (
+        weights.alpha * l2
+        + weights.beta * kl
+        + weights.gamma * abs(h_current - h_previous)
+        + weights.delta * abs(fitness_delta)
+    )
+    drift_class = classify_drift(score, thresholds)
+    state_hash = sha256_hex(current_state)
+    config_hash = sha256_hex(config)
+    lin_hash = lineage_hash(parent_lineage_hash, node_uuid)
 
     frame = NexusFrame(
         node_uuid=node_uuid,
@@ -227,40 +152,37 @@ def symbolic_drift_checkpoint_engine(
         timestamp_ns=timestamp_ns,
         subsystem=subsystem,
         operation=operation,
-        entropy=curr_ent,
+        entropy=h_current,
         drift_vector=drift_vector,
-        drift_score=drift_score,
-        drift_class=drift_class,
+        drift_score=score,
+        drift_class=drift_class.value,
         confidence=confidence,
-        latency_ns=latency_ns,
-        memory_delta_bytes=memory_delta_bytes,
+        latency_ns=int(latency_ns),
+        memory_delta_bytes=int(memory_delta_bytes),
         fitness_delta=fitness_delta,
         state_hash=state_hash,
         config_hash=config_hash,
-        lineage_hash=lineage_hash,
+        lineage_hash=lin_hash,
     )
-
-    payload_metadata = {
-        "embedding": list(current_embedding),
-        "distribution": list(current_distribution),
-        "fitness": current_fitness,
-        "drift_score": drift_score,
-        "drift_class": drift_class,
-    }
-    if metadata:
-        payload_metadata.update(metadata)
-
-    payload = CheckpointPayload(
+    checkpoint = CheckpointState(
         checkpoint_uuid=checkpoint_uuid,
+        node_uuid=node_uuid,
+        parent_uuid=parent_uuid,
         timestamp_ns=timestamp_ns,
         subsystem=subsystem,
-        state_data=current_state,
-        config_data=current_config,
-        metadata=payload_metadata,
-        parent_checkpoint_uuid=parent_frame.checkpoint_uuid if parent_frame else None,
+        operation=operation,
+        state=current_state,
+        config=dict(config),
+        entropy=h_current,
+        fitness=float(current_fitness),
+        state_hash=state_hash,
+        config_hash=config_hash,
+        lineage_hash=lin_hash,
     )
 
-    if ledger is not None:
-        ledger.append_frame(frame, payload)
-
-    return frame, payload
+    # Persist state before advertising it in the append-only ledger. A crash can
+    # leave an unreferenced checkpoint file, but never a ledger entry that points
+    # to a checkpoint which was not durably written first.
+    ledger.save_checkpoint(checkpoint)
+    ledger.append_frame(frame)
+    return frame

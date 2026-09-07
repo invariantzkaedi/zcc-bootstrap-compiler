@@ -1,131 +1,104 @@
-"""
-nexus.replay_engine - Counterfactual DAG Branch Replay & Causal Inference
-==========================================================================
-Enables retrospective branch execution from any historical checkpoint in the DAG,
-applying counterfactual mutations to measure true causal lift vs observed reality:
-
-    Delta_causal = F(counterfactual) - F(observed)
-"""
-
 from __future__ import annotations
 
-import copy
+import math
 import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
-from uuid import UUID, uuid4
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any
+from uuid import UUID
 
-from .models import DriftClass, NexusFrame, CheckpointPayload, ReplayResult
-from .checkpoint_engine import NexusDAGLedger, symbolic_drift_checkpoint_engine
+from .checkpoint_engine import symbolic_drift_checkpoint_engine
+from .ledger import NexusDAGLedger
+from .models import DriftThresholds, DriftWeights, ReplayResult
+
+
+ReplayFn = Callable[[Any, Mapping[str, Any]], tuple[Any, float, Sequence[float], Sequence[float], int, int]]
+InvariantFn = Callable[[Any], str | None]
 
 
 def counterfactual_dag_replay_engine(
-    origin_checkpoint_uuid: UUID,
-    counterfactual_config_overrides: Dict[str, Any],
-    counterfactual_evaluator: Callable[[Any, Dict[str, Any]], Tuple[Any, float, List[float], List[float], List[str], Dict[str, Any]]],
+    *,
     ledger: NexusDAGLedger,
-    operation_label: str = "counterfactual_branch_replay",
+    checkpoint_uuid: UUID,
+    alternate_config: Mapping[str, Any],
+    replay_fn: ReplayFn,
+    invariant_checks: Sequence[InvariantFn] = (),
+    weights: DriftWeights = DriftWeights(),
+    thresholds: DriftThresholds = DriftThresholds(),
+    confidence: float = 1.0,
 ) -> ReplayResult:
     """
-    Forks execution from a historical checkpoint, evaluates counterfactual parameters,
-    computes exact causal deltas Delta_causal = F(counterfactual) - F(observed),
-    audits invariants, and integrates the branch frame into the DAG.
+    Fork a historical checkpoint into an isolated deterministic branch.
 
-    Args:
-        origin_checkpoint_uuid: Target checkpoint to fork from.
-        counterfactual_config_overrides: Key-value parameter mutations (e.g. optimizer, passes, precision).
-        counterfactual_evaluator: Callable (state, config) -> (new_state, fitness, embedding, dist, invariant_violations, metrics).
-        ledger: The active NexusDAGLedger containing historical nodes.
-        operation_label: Subsystem audit tag.
+    replay_fn(state, alternate_config) returns:
+        (new_state, fitness, latent_vector, distribution, latency_ns, memory_bytes)
 
-    Returns:
-        ReplayResult with causal delta, invariant report, and new NexusFrame.
+    For the observed ancestor, a latent vector/distribution may be stored in its
+    state as ``latent`` and ``distribution``. If absent, deterministic scalar
+    projections are used so the branch is still representable in the drift DAG.
     """
-    if origin_checkpoint_uuid not in ledger.checkpoints:
-        raise KeyError(f"Checkpoint UUID {origin_checkpoint_uuid} not found in active ledger.")
+    ancestor = ledger.load_checkpoint(checkpoint_uuid)
+    ancestor_frame = ledger.find_frame_by_checkpoint(checkpoint_uuid)
 
-    origin_payload = ledger.checkpoints[origin_checkpoint_uuid]
-    
-    # Locate origin frame
-    origin_frame = None
-    for f in ledger.frames.values():
-        if f.checkpoint_uuid == origin_checkpoint_uuid:
-            origin_frame = f
-            break
-    if origin_frame is None:
-        raise ValueError(f"Origin frame matching checkpoint {origin_checkpoint_uuid} missing in ledger.")
+    output = replay_fn(ancestor.state, alternate_config)
+    if not isinstance(output, tuple) or len(output) != 6:
+        raise TypeError(
+            "replay_fn must return "
+            "(new_state, fitness, latent_vector, distribution, latency_ns, memory_bytes)"
+        )
+    new_state, new_fitness, new_latent, new_distribution, latency_ns, memory_bytes = output
+    if not math.isfinite(float(new_fitness)):
+        raise ValueError("counterfactual fitness must be finite")
 
-    observed_fitness = origin_payload.metadata.get("fitness", origin_frame.fitness_delta)
+    violations: list[str] = []
+    for check in invariant_checks:
+        try:
+            violation = check(new_state)
+        except Exception as exc:
+            violations.append(f"{getattr(check, '__name__', 'invariant')}: raised {type(exc).__name__}: {exc}")
+            continue
+        if violation:
+            violations.append(str(violation))
 
-    # Clone state and fuse config overrides
-    forked_state = copy.deepcopy(origin_payload.state_data)
-    forked_config = copy.deepcopy(origin_payload.config_data)
-    forked_config.update(counterfactual_config_overrides)
-
-    start_ns = time.time_ns()
-    # Execute counterfactual branch in sandbox
-    (
-        cf_state,
-        cf_fitness,
-        cf_embedding,
-        cf_distribution,
-        violations,
-        metrics,
-    ) = counterfactual_evaluator(forked_state, forked_config)
-    elapsed_ns = time.time_ns() - start_ns
-
-    # Compute Causal Delta: F(counterfactual) - F(observed)
-    causal_delta = cf_fitness - observed_fitness
-    resource_delta = metrics.get("memory_delta_bytes", 0)
-    latency_delta = elapsed_ns - origin_frame.latency_ns
-
-    # Derive verdict
-    if violations:
-        verdict = "INVARIANT_BREACH"
-        confidence = 0.0
-    elif causal_delta > 1e-5:
-        verdict = "SUPERIOR"
-        confidence = min(1.0, 0.8 + abs(causal_delta) * 0.1)
-    elif causal_delta < -1e-5:
-        verdict = "INFERIOR"
-        confidence = min(1.0, 0.8 + abs(causal_delta) * 0.1)
+    old_latent: Sequence[float]
+    old_distribution: Sequence[float]
+    if isinstance(ancestor.state, Mapping) and "latent" in ancestor.state:
+        old_latent = ancestor.state["latent"]
     else:
-        verdict = "PARITY"
-        confidence = 0.95
+        old_latent = tuple(0.0 for _ in new_latent)
+    if isinstance(ancestor.state, Mapping) and "distribution" in ancestor.state:
+        old_distribution = ancestor.state["distribution"]
+    else:
+        n = max(1, len(tuple(new_distribution)))
+        old_distribution = tuple(1.0 / n for _ in range(n))
 
-    # Emit new frame parented to origin frame
-    replay_frame, replay_payload = symbolic_drift_checkpoint_engine(
-        subsystem=origin_frame.subsystem,
-        operation=operation_label,
-        current_state=cf_state,
-        current_config=forked_config,
-        current_embedding=cf_embedding,
-        current_distribution=cf_distribution,
-        current_fitness=cf_fitness,
-        parent_frame=origin_frame,
-        parent_payload=origin_payload,
+    branch_frame = symbolic_drift_checkpoint_engine(
         ledger=ledger,
-        latency_ns=elapsed_ns,
-        memory_delta_bytes=resource_delta,
-        metadata={
-            "counterfactual": True,
-            "origin_checkpoint_uuid": str(origin_checkpoint_uuid),
-            "causal_delta": causal_delta,
-            "verdict": verdict,
-            "invariant_violations": violations,
-            "config_overrides": counterfactual_config_overrides,
-        },
+        subsystem=ancestor.subsystem,
+        operation=f"counterfactual:{ancestor.operation}",
+        current_state=new_state,
+        config=dict(alternate_config),
+        current_latent=new_latent,
+        previous_latent=old_latent,
+        current_distribution=new_distribution,
+        previous_distribution=old_distribution,
+        current_fitness=float(new_fitness),
+        previous_fitness=ancestor.fitness,
+        weights=weights,
+        thresholds=thresholds,
+        confidence=confidence,
+        latency_ns=int(latency_ns),
+        memory_delta_bytes=int(memory_bytes) - int(ancestor_frame.memory_delta_bytes),
+        parent_uuid=ancestor.node_uuid,
     )
 
     return ReplayResult(
-        fork_node_uuid=replay_frame.node_uuid,
-        origin_checkpoint_uuid=origin_checkpoint_uuid,
-        causal_delta=causal_delta,
-        counterfactual_fitness=cf_fitness,
-        observed_fitness=observed_fitness,
-        invariant_violations=violations,
-        resource_delta_bytes=resource_delta,
-        latency_delta_ns=latency_delta,
-        confidence=confidence,
-        replay_frame=replay_frame,
-        verdict=verdict,
+        ancestor_checkpoint_uuid=checkpoint_uuid,
+        branch_checkpoint_uuid=branch_frame.checkpoint_uuid,
+        observed_fitness=ancestor.fitness,
+        counterfactual_fitness=float(new_fitness),
+        causal_delta=float(new_fitness) - ancestor.fitness,
+        latency_delta_ns=int(latency_ns) - ancestor_frame.latency_ns,
+        memory_delta_bytes=int(memory_bytes) - ancestor_frame.memory_delta_bytes,
+        invariant_violations=tuple(violations),
+        frame=branch_frame,
     )
