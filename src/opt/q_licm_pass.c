@@ -38,23 +38,12 @@ static const char *k_quantum_exact_names[] = {
     NULL
 };
 
+/* Quantum state-mutating gate calls (e.g. H, X, CX) mutate the quantum state
+ * vector on each iteration. Hoisting them changes circuit semantics (e.g. X^N -> X^1).
+ * Therefore, state-mutating quantum gates are marked non-hoistable unless an effect-safety
+ * proof proves idempotence or single-trip execution. */
 bool is_quantum_gate_instr(const Instr *it) {
-    if (!it) return false;
-
-    /* OP_CALL with quantum intrinsic / gate name */
-    if (it->op == OP_CALL && it->call_name) {
-        for (int i = 0; k_quantum_gate_prefixes[i]; i++) {
-            if (strncmp(it->call_name, k_quantum_gate_prefixes[i], strlen(k_quantum_gate_prefixes[i])) == 0) {
-                return true;
-            }
-        }
-        for (int i = 0; k_quantum_exact_names[i]; i++) {
-            if (strcmp(it->call_name, k_quantum_exact_names[i]) == 0) {
-                return true;
-            }
-        }
-    }
-
+    /* Conservative effect-safety: state-mutating quantum calls are NOT hoistable */
     return false;
 }
 
@@ -75,6 +64,20 @@ bool is_instr_loop_invariant_quantum(Function *fn, const Instr *it, BlockID preh
         /* If defined inside the loop and not in the preheader, it is loop-variant */
         if (def_b != preheader_id && in_loop[def_b]) {
             return false;
+        }
+    }
+
+    /* If instruction is a call, also analyze all function call argument registers */
+    if (it->op == OP_CALL) {
+        for (uint32_t a = 0; a < it->n_call_args; a++) {
+            RegID r = it->call_args[a];
+            if (r == 0) continue;
+            if (r >= MAX_INSTRS || !fn->def_of[r]) continue;
+            BlockID def_b = fn->def_block[r];
+            if (def_b == NO_BLOCK) continue;
+            if (def_b != preheader_id && in_loop[def_b]) {
+                return false;
+            }
         }
     }
 

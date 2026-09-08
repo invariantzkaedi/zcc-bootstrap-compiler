@@ -100,10 +100,27 @@ bool opt_cap_tripwire_pass(Function *fn, OptMetricsSink *metrics) {
             if (is_access_provably_safe(&cap, access_sz)) {
                 /* Provably safe in-bounds access: elide bounds checking */
                 stats.bounds_checks_elided++;
-            } else {
-                /* Ambiguous dynamic offset: mark tripwire tracking */
+            } else if (cap.capacity > 0 && (cap.min_offset < 0 || cap.max_offset + access_sz > cap.capacity || cap.status == CAP_REVOKED_USE_AFTER_FREE)) {
+                /* Provably out-of-bounds or use-after-free: inject tripwire trap */
+                Instr *trap = calloc(1, sizeof(Instr));
+                trap->op = OP_CALL;
+                strncpy(trap->call_name, "abort", sizeof(trap->call_name) - 1);
+
+                /* Insert trap before the violating instruction */
+                trap->prev = it->prev;
+                trap->next = it;
+                if (it->prev) it->prev->next = trap;
+                else bb->head = trap;
+                it->prev = trap;
+                bb->n_instrs++;
+
                 stats.tripwires_injected++;
+                if (cap.status == CAP_REVOKED_USE_AFTER_FREE) {
+                    stats.uaf_traps_injected++;
+                }
                 changed = true;
+            } else {
+                /* Ambiguous dynamic offset: capability tracking logged in static audit without injecting false mutation */
             }
         }
     }

@@ -1,29 +1,27 @@
-// apps/zcc-cloud/functions/api/analyze.js
-// Cloudflare Pages Function: POST /api/analyze
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key",
-  "Content-Type": "application/json;charset=utf-8"
-};
+import {
+  CORS_HEADERS,
+  authenticateRequest,
+  readGuardedJsonBody,
+  MAX_BODY_BYTES
+} from "./_auth.js";
 
 export async function onRequestOptions() {
   return new Response(null, { headers: CORS_HEADERS });
 }
 
-export async function onRequestPost({ request }) {
+export async function onRequestPost({ request, env }) {
   const startTime = Date.now();
 
   try {
-    const contentType = request.headers.get("content-type") || "";
-    let body = {};
-    if (contentType.includes("application/json")) {
-      body = await request.json();
-    } else {
-      const text = await request.text();
-      body = { source: text };
+    // 1. Authenticate Request
+    const auth = await authenticateRequest(request, env, { allowAnonymous: true });
+    if (!auth.authenticated && !auth.isSandboxAnonymous) {
+      return auth.response;
     }
+
+    // 2. Guard Against Resource Exhaustion
+    const { errorResponse, body } = await readGuardedJsonBody(request, MAX_BODY_BYTES);
+    if (errorResponse) return errorResponse;
 
     const source = (body.source || "").trim();
     if (!source) {
@@ -33,7 +31,7 @@ export async function onRequestPost({ request }) {
         code: "INVALID_SOURCE"
       }), {
         status: 400,
-        headers: CORS_HEADERS
+        headers: { ...CORS_HEADERS, ...auth.rateLimitHeaders }
       });
     }
 

@@ -447,7 +447,8 @@ bool ic_rule_nested_add_consts(ICtx *c) {
     int64_t c1;
     if (!reg_is_const(c->fn, d->src2, &c1)) return false;
 
-    int64_t combined = c1 + c2;
+    /* Prevent signed integer overflow UB: perform two's complement addition via unsigned */
+    int64_t combined = (int64_t)((uint64_t)c1 + (uint64_t)c2);
     int ccomb = make_const(c->fn, it->ty, combined, it);
     it->src1 = resolve_copy(c->fn, d->src1);
     it->src2 = ccomb;

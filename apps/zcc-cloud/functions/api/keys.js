@@ -1,52 +1,36 @@
 // apps/zcc-cloud/functions/api/keys.js
 // Cloudflare Pages Function: POST & GET /api/keys
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key",
-  "Content-Type": "application/json;charset=utf-8"
-};
+import { CORS_HEADERS, generateSignedApiKey, verifyApiKey, readGuardedJsonBody } from "./_auth.js";
 
 export async function onRequestOptions() {
   return new Response(null, { headers: CORS_HEADERS });
 }
 
-export async function onRequestPost({ request }) {
+export async function onRequestPost({ request, env }) {
   try {
-    let email = "developer@zkaedi.ai";
-    let tier = "developer_sandbox";
+    const { errorResponse, body } = await readGuardedJsonBody(request, 8192);
+    if (errorResponse) return errorResponse;
 
-    try {
-      const body = await request.json();
-      if (body.email) email = body.email;
-      if (body.tier) tier = body.tier;
-    } catch {
-      // default sandbox values
-    }
+    const email = (body.email || "developer@zkaedi.ai").toString().trim();
+    const tier = (body.tier || "developer_sandbox").toString().trim();
 
-    // Generate random 32-hex character cryptographic key
-    const array = new Uint8Array(16);
-    crypto.getRandomValues(array);
-    const hex = Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
-    const apiKey = `zk_live_${hex}`;
-
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+    // Generate cryptographically signed HMAC key
+    const keyData = await generateSignedApiKey({ email, tier }, env);
 
     return new Response(JSON.stringify({
       success: true,
-      api_key: apiKey,
-      tier,
-      developer_email: email,
+      api_key: keyData.apiKey,
+      tier: keyData.payload.tier,
+      developer_email: keyData.payload.email,
       status: "ACTIVE",
-      created_at: now.toISOString(),
-      expires_at: expiresAt.toISOString(),
+      created_at: new Date(keyData.payload.created).toISOString(),
+      expires_at: keyData.expiresAt,
       rate_limits: {
         requests_per_minute: 60,
         requests_per_day: 5000,
         burst_allowance: 120,
-        max_source_size_kb: 256
+        max_source_size_kb: 64
       },
       allowed_features: [
         "native_x86_64_compilation",
@@ -59,12 +43,9 @@ export async function onRequestPost({ request }) {
         "ast_json_export"
       ],
       quickstart: {
-        curl: `curl -X POST https://zkaedi.ai/api/compile \\
-  -H "Authorization: Bearer ${apiKey}" \\
-  -H "Content-Type: application/json" \\
-  -d '{"source": "int main() { return 42; }"}'`
+        curl: `curl -X POST https://zkaedi.ai/api/compile \\\n  -H "Authorization: Bearer ${keyData.apiKey}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"source": "int main() { return 42; }"}'`
       }
-    }), {
+    }, null, 2), {
       status: 201,
       headers: CORS_HEADERS
     });
@@ -72,7 +53,7 @@ export async function onRequestPost({ request }) {
   } catch (err) {
     return new Response(JSON.stringify({
       success: false,
-      error: err.message,
+      error: "Key generation failed: " + err.message,
       code: "KEY_GENERATION_FAILED"
     }), {
       status: 500,
@@ -81,7 +62,7 @@ export async function onRequestPost({ request }) {
   }
 }
 
-export async function onRequestGet({ request }) {
+export async function onRequestGet({ request, env }) {
   const authHeader = request.headers.get("authorization") || request.headers.get("x-api-key") || "";
   const key = authHeader.replace(/^Bearer\s+/i, '').trim();
 
@@ -89,33 +70,42 @@ export async function onRequestGet({ request }) {
     return new Response(JSON.stringify({
       success: false,
       error: "Missing API key in Authorization header or X-API-Key.",
-      hint: "Generate an instant sandbox key with POST /api/keys."
+      hint: "Generate an authentic cryptographically signed key with POST /api/keys."
     }), {
       status: 401,
       headers: CORS_HEADERS
     });
   }
 
-  // Verify prefix
-  const isValid = key.startsWith("zk_live_") || key.startsWith("zk_test_");
+  // Cryptographic verification: prefix-only or forged keys are strictly rejected
+  const verResult = await verifyApiKey(key, env);
+
+  if (!verResult.valid) {
+    return new Response(JSON.stringify({
+      success: false,
+      status: "INVALID",
+      error: verResult.error,
+      code: verResult.code || "FORBIDDEN"
+    }), {
+      status: 403,
+      headers: CORS_HEADERS
+    });
+  }
 
   return new Response(JSON.stringify({
-    success: isValid,
-    status: isValid ? "ACTIVE" : "INVALID",
+    success: true,
+    status: "ACTIVE",
     api_key_masked: key.slice(0, 11) + "..." + key.slice(-4),
-    tier: "developer_sandbox",
-    quota: {
-      daily_limit: 5000,
-      used_today: 14,
-      remaining: 4986,
-      reset_at: "2026-09-09T00:00:00.000Z"
-    },
+    tier: verResult.user.tier,
+    developer_email: verResult.user.email,
+    created_at: verResult.user.createdAt,
+    quota: verResult.user.quota,
     rate_limit: {
       limit_per_minute: 60,
       remaining_in_window: 59
     }
-  }), {
-    status: isValid ? 200 : 403,
+  }, null, 2), {
+    status: 200,
     headers: CORS_HEADERS
   });
 }
