@@ -397,6 +397,9 @@ async function runTests() {
   assert(validProofData.zk_proof_audit.final_exponentiation === "VERIFIED_FQ12_IDENTITY", "Audit confirms final exponentiation verified against Fq12 identity");
   assert(validProofData.zk_proof_audit.public_inputs_cardinality_verified === true, "Audit confirms public inputs cardinality verified");
   assert(validProofData.zk_proof_audit.r1cs_witness_evaluated === true, "Audit confirms caller witness evaluated against R1CS constraints");
+  assert(validProofData.zk_proof_audit.verification_key_source === "CANONICAL_PINNED_CIRCUIT", "Audit confirms canonical pinned circuit VK source");
+  assert(validProofData.zk_proof_audit.verification_key_pinned === true, "Audit confirms verification key is pinned");
+  assert(validProofData.zk_proof_audit.verification_key_hash === verifyHandler.PINNED_CIRCUIT_VK_HASH, "Audit records authentic pinned VK hash");
   assert(validProofData.r1cs_violations === 0, "Receipt reports 0 R1CS violations");
   assert(validProofData.r1cs_constraints > 0, "Receipt reports authentic positive R1CS constraint count");
   assert(validProofData.r1cs_witness_variables > 0, "Receipt reports authentic positive R1CS witness count");
@@ -411,6 +414,52 @@ async function runTests() {
   assert(r1csUnitTest.violations === 0, "verifyProgramR1CS confirms 0 constraint violations");
   assert(r1csUnitTest.constraintCount >= 10, "verifyProgramR1CS produces real constraint count (not fabricated)");
   assert(r1csUnitTest.witnessCount >= 10, "verifyProgramR1CS produces real witness count (not fabricated)");
+
+  // 3i: Caller-Controlled Verification Key Prohibition (Trust Boundary Guard)
+  // Submitting caller-supplied vkey MUST be rejected with 400 UNTRUSTED_VERIFICATION_KEY
+  const callerVkeyRes = await verifyHandler.onRequestPost({
+    request: mockRequest("POST", "https://zkaedi.ai/api/verify", {
+      "Authorization": `Bearer ${validKey}`,
+      "Content-Type": "application/json"
+    }, {
+      source: sampleSource,
+      ast_commitment: expectedCommitment,
+      proof: genuineProof,
+      witness: authenticWitness,
+      vkey: { protocol: "groth16", curve: "bn128" } // Attacker attempts to choose VK
+    }),
+    env: TEST_ENV
+  });
+  assert(callerVkeyRes.status === 400, "POST /api/verify rejects caller-supplied vkey with 400 Bad Request");
+  const callerVkeyData = await callerVkeyRes.json();
+  assert(callerVkeyData.code === "UNTRUSTED_VERIFICATION_KEY", "Rejection code is UNTRUSTED_VERIFICATION_KEY");
+
+  const callerVerificationKeyRes = await verifyHandler.onRequestPost({
+    request: mockRequest("POST", "https://zkaedi.ai/api/verify", {
+      "Authorization": `Bearer ${validKey}`,
+      "Content-Type": "application/json"
+    }, {
+      source: sampleSource,
+      ast_commitment: expectedCommitment,
+      proof: genuineProof,
+      witness: authenticWitness,
+      verification_key: { protocol: "groth16", curve: "bn128" }
+    }),
+    env: TEST_ENV
+  });
+  assert(callerVerificationKeyRes.status === 400, "POST /api/verify rejects caller-supplied verification_key with 400 Bad Request");
+  const callerVerificationKeyData = await callerVerificationKeyRes.json();
+  assert(callerVerificationKeyData.code === "UNTRUSTED_VERIFICATION_KEY", "Rejection code is UNTRUSTED_VERIFICATION_KEY");
+
+  // 3j: Pinned VK Hash Authentication Unit Check
+  const tamperedVk = { ...verifyHandler.DEFAULT_VERIFICATION_KEY, nPublic: 2 };
+  const vkProvenanceFail = await verifyHandler.loadAndValidateVerificationKey(tamperedVk, verifyHandler.PINNED_CIRCUIT_VK_HASH);
+  assert(vkProvenanceFail.valid === false, "loadAndValidateVerificationKey rejects key with mismatched hash");
+  assert(vkProvenanceFail.code === "UNTRUSTED_VERIFICATION_KEY_HASH", "Rejection code is UNTRUSTED_VERIFICATION_KEY_HASH");
+
+  const vkProvenanceOk = await verifyHandler.loadAndValidateVerificationKey(verifyHandler.DEFAULT_VERIFICATION_KEY, verifyHandler.PINNED_CIRCUIT_VK_HASH);
+  assert(vkProvenanceOk.valid === true, "loadAndValidateVerificationKey accepts authentic canonical VK matching pinned hash");
+  assert(vkProvenanceOk.hash === verifyHandler.PINNED_CIRCUIT_VK_HASH, "VK hash matches PINNED_CIRCUIT_VK_HASH");
 
   // ── BLOCKER 4: C COMPILER LOCALS, CALLS & CONTROL FLOW ──────────
   console.log("\nBlocker 4: Compiler Semantic Codegen for Locals, Calls, and Control Flow");
