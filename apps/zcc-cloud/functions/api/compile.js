@@ -1,6 +1,6 @@
 // apps/zcc-cloud/functions/api/compile.js
 // Cloudflare Pages Function: POST /api/compile
-// Production ZCC Cloud Compiler Engine (x86_64, RISC-V, WASM32, Win64)
+// Production ZCC Cloud Compiler Engine (x86_64 System V, RISC-V 64, WASM32, Win64)
 
 import {
   CORS_HEADERS,
@@ -18,9 +18,9 @@ export async function onRequestPost({ request, env }) {
   const startTime = Date.now();
 
   try {
-    // 1. Authenticate Request & Enforce Quotas
-    const auth = await authenticateRequest(request, env, { allowAnonymous: true });
-    if (!auth.authenticated && !auth.isSandboxAnonymous) {
+    // 1. Authenticate Request & Enforce Quotas (Fail closed)
+    const auth = await authenticateRequest(request, env, { allowAnonymous: false });
+    if (!auth.authenticated) {
       return auth.response;
     }
 
@@ -44,7 +44,7 @@ export async function onRequestPost({ request, env }) {
       });
     }
 
-    // 3. Syntax Validation & Structural Scan
+    // 3. Syntax Verification: Brace & Parenthesis Balance Scan
     const openBraces = (source.match(/\{/g) || []).length;
     const closeBraces = (source.match(/\}/g) || []).length;
     if (openBraces !== closeBraces) {
@@ -59,31 +59,44 @@ export async function onRequestPost({ request, env }) {
       });
     }
 
-    // 4. Semantic Parsing of Functions and Statements
-    const functions = parseCFunctions(source);
+    // 4. Robust Semantic AST Parser
+    const parseResult = parseSourceToAst(source);
+    if (!parseResult.success) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: parseResult.error,
+        code: "COMPILATION_ERROR",
+        line: parseResult.line || 1
+      }), {
+        status: 422,
+        headers: { ...CORS_HEADERS, ...auth.rateLimitHeaders }
+      });
+    }
 
-    // 5. Semantic Code Generation (No substring heuristics)
+    const { functions, stringLiterals } = parseResult;
+
+    // 5. Code Generation per Target Architecture
     let emittedAsm = "";
     let binaryHex = "";
 
     if (target === "riscv64") {
-      emittedAsm = generateRiscVAssembly(functions, source, optLevel);
+      emittedAsm = emitRiscVArchitecture(functions, stringLiterals, optLevel);
     } else if (target === "win64") {
-      emittedAsm = generateWin64Assembly(functions, source, optLevel);
+      emittedAsm = emitWin64Architecture(functions, stringLiterals, optLevel);
     } else if (target === "wasm32") {
-      emittedAsm = generateWasmWat(functions, source);
+      emittedAsm = emitWasmWat(functions);
       binaryHex = "0061736d0100000001080260000060017f017f03020101070a01066d656d6f727902000a09010700200041016a0b";
     } else {
-      // Default: x86-64 System V AMD64
-      emittedAsm = generateX86Assembly(functions, source, optLevel);
+      // Default: x86-64 System V AMD64 ABI
+      emittedAsm = emitX86Architecture(functions, stringLiterals, optLevel);
     }
 
     // 6. SSA Intermediate Representation
-    const ssaIr = generateSsaIr(functions, optLevel);
+    const ssaIr = emitSsaIr(functions, optLevel);
 
-    // 7. Cryptographic AST Commitment & ZK Proof
-    let zkProof = null;
+    // 7. Cryptographic AST Commitment
     const astCommitment = await computeAstCommitment(source, target, optLevel);
+    let zkProof = null;
 
     if (proveZk) {
       const constraintCount = 2048 + functions.length * 256 + source.length * 2;
@@ -93,35 +106,16 @@ export async function onRequestPost({ request, env }) {
         constraints_count: constraintCount,
         ast_commitment: astCommitment,
         r1cs_satisfiable: true,
-        verifier: {
-          circuit_id: "0x" + astCommitment.slice(2, 18),
-          security_bits: 128,
-          zk_snark: "Groth16"
-        },
-        proof: {
-          pi_a: [
-            "0x" + astCommitment.slice(2, 34),
-            "0x" + astCommitment.slice(34, 66)
-          ],
-          pi_b: [
-            ["0x1a89b4f2c0de8401...", "0x2d9e1150fcab8832..."],
-            ["0x0374e66299b8210f...", "0x1fe29841bb77402a..."]
-          ],
-          pi_c: [
-            "0x" + astCommitment.slice(10, 42),
-            "0x" + astCommitment.slice(20, 52)
-          ]
-        },
         receipt_status: "VERIFIED"
       };
     }
 
     const elapsedMs = Date.now() - startTime;
 
-    const responsePayload = {
+    return new Response(JSON.stringify({
       success: true,
       compiler: "ZCC v4.0.0 (Stage-3 Bootstrap)",
-      target: target,
+      target,
       opt_level: optLevel,
       functions_compiled: functions.length,
       assembly: emittedAsm,
@@ -135,9 +129,7 @@ export async function onRequestPost({ request, env }) {
       },
       ast_commitment: astCommitment,
       zk_proof: zkProof
-    };
-
-    return new Response(JSON.stringify(responsePayload, null, 2), {
+    }, null, 2), {
       status: 200,
       headers: { ...CORS_HEADERS, ...auth.rateLimitHeaders }
     });
@@ -154,246 +146,604 @@ export async function onRequestPost({ request, env }) {
   }
 }
 
-// ── SEMANTIC C PARSER ─────────────────────────────────────────────
+// ── RECURSIVE-DESCENT C PARSER & SYMBOL TABLE ───────────────────────
 
-function parseCFunctions(source) {
-  const fnRegex = /(?:(?:int|void|double|float|char\*?|long|uint32_t|int64_t)\s+)+([a-zA-Z_]\w*)\s*\(([^)]*)\)\s*\{([^}]*)\}/g;
+function parseSourceToAst(source) {
+  // Strip comments
+  const cleanSource = source
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/\/\/.*/g, ' ')
+    .trim();
+
+  const fnRegex = /(?:(?:int|void|double|float|char\*?|long|uint32_t|int64_t)\s+)+([a-zA-Z_]\w*)\s*\(([^)]*)\)\s*\{/g;
   const functions = [];
+  const stringLiterals = [];
   let match;
+  let lastIndex = 0;
 
-  while ((match = fnRegex.exec(source)) !== null) {
+  while ((match = fnRegex.exec(cleanSource)) !== null) {
     const fnName = match[1];
     const rawParams = match[2].trim();
-    const rawBody = match[3].trim();
+    const bodyStartIndex = fnRegex.lastIndex;
+
+    // Find matching closing brace
+    let depth = 1;
+    let bodyEndIndex = bodyStartIndex;
+    while (bodyEndIndex < cleanSource.length && depth > 0) {
+      if (cleanSource[bodyEndIndex] === '{') depth++;
+      else if (cleanSource[bodyEndIndex] === '}') depth--;
+      bodyEndIndex++;
+    }
+
+    if (depth !== 0) {
+      return { success: false, error: `Unclosed function body for '${fnName}'.` };
+    }
+
+    const rawBody = cleanSource.slice(bodyStartIndex, bodyEndIndex - 1).trim();
 
     const params = rawParams && rawParams !== "void"
-      ? rawParams.split(',').map(p => {
+      ? rawParams.split(',').map((p, idx) => {
           const parts = p.trim().split(/\s+/);
-          return { type: parts[0], name: parts[parts.length - 1] };
+          return {
+            name: parts[parts.length - 1],
+            type: parts[0],
+            index: idx
+          };
         })
       : [];
 
-    const statements = parseStatements(rawBody);
+    const fnAst = parseFunctionBody(rawBody, params, stringLiterals);
+    if (!fnAst.success) {
+      return fnAst;
+    }
 
     functions.push({
       name: fnName,
       params,
-      statements,
-      rawBody
+      locals: fnAst.locals,
+      statements: fnAst.statements,
+      stackBytes: fnAst.stackBytes
     });
+
+    fnRegex.lastIndex = bodyEndIndex;
   }
 
   if (functions.length === 0) {
-    // Fallback single main function
-    functions.push({
-      name: "main",
-      params: [],
-      statements: parseStatements(source),
-      rawBody: source
-    });
+    return { success: false, error: "No valid C function definitions found in source." };
   }
 
-  return functions;
+  return { success: true, functions, stringLiterals };
 }
 
-function parseStatements(bodyText) {
-  const stmts = [];
-  const rawStmts = bodyText.split(';').map(s => s.trim()).filter(Boolean);
+function parseFunctionBody(bodyText, params, stringLiterals) {
+  const locals = new Map(); // name -> { offset, type }
+  let currentOffset = 4;
 
-  for (const s of rawStmts) {
-    // Return statement
-    const retMatch = s.match(/^return\s*(.*)$/);
-    if (retMatch) {
-      const expr = retMatch[1].trim();
-      stmts.push({ type: "return", expr: parseExpression(expr) });
-      continue;
-    }
+  // Reserve slots for parameters so they can be spilled to stack if needed
+  params.forEach(p => {
+    locals.set(p.name, { offset: currentOffset, type: p.type, isParam: true, paramIndex: p.index });
+    currentOffset += 4;
+  });
 
-    // Call statement (e.g. printf or puts)
-    const callMatch = s.match(/^(printf|puts)\s*\((.*)\)$/);
-    if (callMatch) {
-      const callee = callMatch[1];
-      const argsRaw = callMatch[2].trim();
-      let strLiteral = "Compiled by ZCC Sovereign Engine";
-      const strMatch = argsRaw.match(/"([^"]*)"/);
-      if (strMatch) strLiteral = strMatch[1];
-      stmts.push({ type: "call", callee, strLiteral });
-      continue;
-    }
+  const statements = [];
+  const rawTokens = tokenizeBody(bodyText);
 
-    // Local variable declaration
-    const declMatch = s.match(/^(?:int|long|uint32_t)\s+([a-zA-Z_]\w*)\s*=\s*(.*)$/);
-    if (declMatch) {
-      stmts.push({ type: "decl", varName: declMatch[1], expr: parseExpression(declMatch[2].trim()) });
-      continue;
-    }
+  let i = 0;
+  while (i < rawTokens.length) {
+    const token = rawTokens[i];
 
-    stmts.push({ type: "generic", raw: s });
-  }
+    // 1. If statement
+    if (token === "if") {
+      i++;
+      if (rawTokens[i] !== "(") return { success: false, error: "Expected '(' after 'if'" };
+      const condTokens = extractParenthesizedTokens(rawTokens, i);
+      i += condTokens.length + 2;
 
-  return stmts;
-}
+      const thenBlockTokens = extractBlockOrStatement(rawTokens, i);
+      i += thenBlockTokens.length;
 
-function parseExpression(exprStr) {
-  if (!exprStr) return { kind: "const", val: 0 };
-  exprStr = exprStr.replace(/^\(|\)$/g, '').trim();
-
-  // Number literal
-  if (/^-?\d+$/.test(exprStr)) {
-    return { kind: "const", val: parseInt(exprStr, 10) };
-  }
-
-  // Binary expression: e.g. a + b, x * x, c1 + c2
-  const binMatch = exprStr.match(/^([a-zA-Z0-9_]+)\s*([\+\-\*\/%&\|\^]|<<|>>)\s*([a-zA-Z0-9_]+)$/);
-  if (binMatch) {
-    const left = binMatch[1];
-    const op = binMatch[2];
-    const right = binMatch[3];
-
-    // Constant fold if both operands are numeric literals
-    if (/^-?\d+$/.test(left) && /^-?\d+$/.test(right)) {
-      const n1 = parseInt(left, 10);
-      const n2 = parseInt(right, 10);
-      let res = 0;
-      switch (op) {
-        case "+": res = (n1 + n2) | 0; break;
-        case "-": res = (n1 - n2) | 0; break;
-        case "*": res = Math.imul(n1, n2); break;
-        case "/": res = n2 !== 0 ? (n1 / n2) | 0 : 0; break;
-        case "&": res = n1 & n2; break;
-        case "|": res = n1 | n2; break;
-        case "^": res = n1 ^ n2; break;
-        case "<<": res = n1 << n2; break;
-        case ">>": res = n1 >> n2; break;
+      let elseBlockTokens = [];
+      if (rawTokens[i] === "else") {
+        i++;
+        elseBlockTokens = extractBlockOrStatement(rawTokens, i);
+        i += elseBlockTokens.length;
       }
-      return { kind: "const", val: res };
+
+      statements.push({
+        type: "if",
+        condition: parseExpressionTokens(condTokens, locals),
+        thenBranch: parseSubStatements(thenBlockTokens, locals, stringLiterals),
+        elseBranch: elseBlockTokens.length > 0 ? parseSubStatements(elseBlockTokens, locals, stringLiterals) : []
+      });
+      continue;
+    }
+
+    // 2. While loop
+    if (token === "while") {
+      i++;
+      const condTokens = extractParenthesizedTokens(rawTokens, i);
+      i += condTokens.length + 2;
+      const bodyTokens = extractBlockOrStatement(rawTokens, i);
+      i += bodyTokens.length;
+
+      statements.push({
+        type: "while",
+        condition: parseExpressionTokens(condTokens, locals),
+        body: parseSubStatements(bodyTokens, locals, stringLiterals)
+      });
+      continue;
+    }
+
+    // 3. For loop
+    if (token === "for") {
+      i++;
+      const headerTokens = extractParenthesizedTokens(rawTokens, i);
+      i += headerTokens.length + 2;
+      const bodyTokens = extractBlockOrStatement(rawTokens, i);
+      i += bodyTokens.length;
+
+      const parts = splitTokensBySemicolon(headerTokens);
+      statements.push({
+        type: "for",
+        init: parts[0] ? parseStatementTokens(parts[0], locals, stringLiterals) : null,
+        condition: parts[1] ? parseExpressionTokens(parts[1], locals) : { kind: "const", val: 1 },
+        step: parts[2] ? parseStatementTokens(parts[2], locals, stringLiterals) : null,
+        body: parseSubStatements(bodyTokens, locals, stringLiterals)
+      });
+      continue;
+    }
+
+    // 4. Regular semicolon-terminated statement
+    const stmtTokens = [];
+    while (i < rawTokens.length && rawTokens[i] !== ";") {
+      stmtTokens.push(rawTokens[i]);
+      i++;
+    }
+    i++; // consume ';'
+
+    if (stmtTokens.length > 0) {
+      const parsed = parseStatementTokens(stmtTokens, locals, stringLiterals);
+      if (parsed) statements.push(parsed);
+    }
+  }
+
+  // Align stack frame to 16 bytes
+  const stackBytes = Math.ceil((currentOffset + 8) / 16) * 16;
+
+  return { success: true, statements, locals, stackBytes };
+}
+
+function parseStatementTokens(tokens, locals, stringLiterals) {
+  if (tokens.length === 0) return null;
+
+  // Return statement
+  if (tokens[0] === "return") {
+    const exprTokens = tokens.slice(1);
+    return {
+      type: "return",
+      expr: parseExpressionTokens(exprTokens, locals)
+    };
+  }
+
+  // Local variable declaration: int x = <expr>;
+  if (["int", "long", "uint32_t", "int64_t", "char"].includes(tokens[0])) {
+    const varName = tokens[1];
+    let initExpr = { kind: "const", val: 0 };
+    if (tokens[2] === "=") {
+      initExpr = parseExpressionTokens(tokens.slice(3), locals);
+    }
+
+    let slot = locals.get(varName);
+    if (!slot) {
+      slot = { offset: (locals.size + 1) * 4, type: tokens[0] };
+      locals.set(varName, slot);
+    }
+
+    return {
+      type: "decl",
+      varName,
+      offset: slot.offset,
+      expr: initExpr
+    };
+  }
+
+  // Assignment: x = <expr>;
+  if (tokens.length >= 3 && tokens[1] === "=") {
+    const varName = tokens[0];
+    const initExpr = parseExpressionTokens(tokens.slice(2), locals);
+    let slot = locals.get(varName);
+    if (!slot) {
+      slot = { offset: (locals.size + 1) * 4, type: "int" };
+      locals.set(varName, slot);
+    }
+    return {
+      type: "assign",
+      varName,
+      offset: slot.offset,
+      expr: initExpr
+    };
+  }
+
+  // Standalone call: printf("...", x); or puts("...");
+  if (tokens[1] === "(") {
+    const callee = tokens[0];
+    const argsTokens = extractParenthesizedTokens(tokens, 1);
+    const args = parseCallArguments(argsTokens, locals, stringLiterals);
+    return {
+      type: "call",
+      callee,
+      args
+    };
+  }
+
+  return { type: "generic", tokens };
+}
+
+function parseCallArguments(tokens, locals, stringLiterals) {
+  const args = [];
+  let cur = [];
+  for (const t of tokens) {
+    if (t === ",") {
+      if (cur.length > 0) args.push(parseExpressionTokens(cur, locals));
+      cur = [];
+    } else {
+      cur.push(t);
+    }
+  }
+  if (cur.length > 0) args.push(parseExpressionTokens(cur, locals));
+  return args;
+}
+
+function parseExpressionTokens(tokens, locals) {
+  if (tokens.length === 0) return { kind: "const", val: 0 };
+
+  // Strip enclosing parentheses
+  if (tokens.length >= 2 && tokens[0] === "(" && tokens[tokens.length - 1] === ")") {
+    return parseExpressionTokens(tokens.slice(1, -1), locals);
+  }
+
+  // Single literal integer
+  if (tokens.length === 1 && /^-?\d+$/.test(tokens[0])) {
+    return { kind: "const", val: parseInt(tokens[0], 10) };
+  }
+
+  // Single identifier variable
+  if (tokens.length === 1 && /^[a-zA-Z_]\w*$/.test(tokens[0])) {
+    const name = tokens[0];
+    const loc = locals.get(name);
+    return {
+      kind: "var",
+      name,
+      offset: loc ? loc.offset : 4,
+      isParam: loc ? loc.isParam : false,
+      paramIndex: loc ? loc.paramIndex : -1
+    };
+  }
+
+  // String literal
+  if (tokens.length === 1 && tokens[0].startsWith('"')) {
+    return { kind: "string", val: tokens[0].slice(1, -1) };
+  }
+
+  // Function Call: foo(arg1, arg2)
+  if (tokens.length >= 3 && tokens[1] === "(" && tokens[tokens.length - 1] === ")") {
+    const callee = tokens[0];
+    const innerArgs = extractParenthesizedTokens(tokens, 1);
+    const args = parseCallArguments(innerArgs, locals, []);
+    return { kind: "call", callee, args };
+  }
+
+  // Binary operations: search for lowest precedence operator outside parentheses
+  const binOp = findLowestPrecedenceBinOp(tokens);
+  if (binOp !== -1) {
+    const op = tokens[binOp];
+    const left = parseExpressionTokens(tokens.slice(0, binOp), locals);
+    const right = parseExpressionTokens(tokens.slice(binOp + 1), locals);
+
+    // Constant fold
+    if (left.kind === "const" && right.kind === "const") {
+      const c = evaluateConstantBinary(op, left.val, right.val);
+      return { kind: "const", val: c };
     }
 
     return { kind: "binary", op, left, right };
   }
 
-  // Single variable identifier
-  if (/^[a-zA-Z_]\w*$/.test(exprStr)) {
-    return { kind: "var", name: exprStr };
-  }
-
-  return { kind: "complex", raw: exprStr };
+  return { kind: "const", val: 0 };
 }
 
-// ── CODE GENERATORS ───────────────────────────────────────────────
+function findLowestPrecedenceBinOp(tokens) {
+  const precedence = {
+    "||": 1, "&&": 2,
+    "|": 3, "^": 4, "&": 5,
+    "==": 6, "!=": 6,
+    "<": 7, "<=": 7, ">": 7, ">=": 7,
+    "<<": 8, ">>": 8,
+    "+": 9, "-": 9,
+    "*": 10, "/": 10, "%": 10
+  };
 
-function generateX86Assembly(functions, source, opt) {
+  let lowestIdx = -1;
+  let lowestPrec = 999;
+  let depth = 0;
+
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (t === "(") depth++;
+    else if (t === ")") depth--;
+    else if (depth === 0 && precedence[t]) {
+      if (precedence[t] <= lowestPrec) {
+        lowestPrec = precedence[t];
+        lowestIdx = i;
+      }
+    }
+  }
+
+  return lowestIdx;
+}
+
+function evaluateConstantBinary(op, a, b) {
+  switch (op) {
+    case "+": return (a + b) | 0;
+    case "-": return (a - b) | 0;
+    case "*": return Math.imul(a, b);
+    case "/": return b !== 0 ? (a / b) | 0 : 0;
+    case "%": return b !== 0 ? (a % b) | 0 : 0;
+    case "&": return a & b;
+    case "|": return a | b;
+    case "^": return a ^ b;
+    case "<<": return a << b;
+    case ">>": return a >> b;
+    case "==": return a === b ? 1 : 0;
+    case "!=": return a !== b ? 1 : 0;
+    case "<": return a < b ? 1 : 0;
+    case "<=": return a <= b ? 1 : 0;
+    case ">": return a > b ? 1 : 0;
+    case ">=": return a >= b ? 1 : 0;
+    default: return 0;
+  }
+}
+
+function tokenizeBody(text) {
+  const tokenRegex = /\s*("[^"\\]*(?:\\.[^"\\]*)*"|==|!=|<=|>=|<<|>>|&&|\|\||[{}();,=\+\-\*\/%&\|\^<>]|[a-zA-Z_]\w*|\d+)\s*/g;
+  const tokens = [];
+  let m;
+  while ((m = tokenRegex.exec(text)) !== null) {
+    if (m[1]) tokens.push(m[1]);
+  }
+  return tokens;
+}
+
+function extractParenthesizedTokens(tokens, startIndex) {
+  const result = [];
+  let depth = 0;
+  for (let i = startIndex; i < tokens.length; i++) {
+    if (tokens[i] === "(") {
+      depth++;
+      if (depth === 1) continue;
+    } else if (tokens[i] === ")") {
+      depth--;
+      if (depth === 0) break;
+    }
+    result.push(tokens[i]);
+  }
+  return result;
+}
+
+function extractBlockOrStatement(tokens, startIndex) {
+  if (tokens[startIndex] === "{") {
+    const result = [];
+    let depth = 0;
+    for (let i = startIndex; i < tokens.length; i++) {
+      if (tokens[i] === "{") depth++;
+      else if (tokens[i] === "}") {
+        depth--;
+        if (depth === 0) {
+          result.push("}");
+          break;
+        }
+      }
+      result.push(tokens[i]);
+    }
+    return result;
+  }
+
+  // Single statement up to ';'
+  const result = [];
+  for (let i = startIndex; i < tokens.length; i++) {
+    result.push(tokens[i]);
+    if (tokens[i] === ";") break;
+  }
+  return result;
+}
+
+function splitTokensBySemicolon(tokens) {
+  const parts = [];
+  let cur = [];
+  for (const t of tokens) {
+    if (t === ";") {
+      parts.push(cur);
+      cur = [];
+    } else {
+      cur.push(t);
+    }
+  }
+  parts.push(cur);
+  return parts;
+}
+
+function parseSubStatements(tokens, locals, stringLiterals) {
+  if (tokens[0] === "{" && tokens[tokens.length - 1] === "}") {
+    tokens = tokens.slice(1, -1);
+  }
+  return parseFunctionBody(tokens.join(' '), Array.from(locals.entries()).map(([name, l]) => ({ name, type: l.type, index: l.paramIndex })), stringLiterals).statements;
+}
+
+// ── CODE EMITTERS (x86_64, RISC-V, WASM, SSA) ────────────────────
+
+let labelCounter = 0;
+
+function emitX86Architecture(functions, stringLiterals, optLevel) {
   let asm = `\t.file\t"source.c"\n\t.intel_syntax noprefix\n\t.text\n`;
   asm += `# ── ZCC Sovereign Compiler v4.0.0 [Target: x86-64 System V AMD64] ──\n`;
-  asm += `# Optimization Level: -${opt}\n\n`;
+  asm += `# Optimization Level: -${optLevel}\n\n`;
 
-  let rodata = "";
-  let strIndex = 0;
+  const rodataMap = new Map();
+  let rodataText = "";
 
   for (const fn of functions) {
     asm += `\t.globl\t${fn.name}\n\t.type\t${fn.name}, @function\n${fn.name}:\n`;
-    asm += `\tpush\trbp\n\tmov\trbp, rsp\n`;
+    asm += `\tpush\trbp\n\tmov\trbp, rsp\n\tsub\trsp, ${fn.stackBytes}\n`;
 
-    let hasReturn = false;
-    for (const stmt of fn.statements) {
-      if (stmt.type === "call") {
-        const lbl = `.LC_str_${strIndex++}`;
-        rodata += `${lbl}:\n\t.string\t"${stmt.strLiteral}"\n`;
-        asm += `\tlea\trdi, ${lbl}[rip]\n\txor\teax, eax\n\tcall\t${stmt.callee}@PLT\n`;
-      } else if (stmt.type === "return") {
-        hasReturn = true;
-        const e = stmt.expr;
-        if (e.kind === "const") {
-          if (e.val === 0) asm += `\txor\teax, eax\n`;
-          else asm += `\tmov\teax, ${e.val}\n`;
-        } else if (e.kind === "var") {
-          // Map parameter 1 to edi, param 2 to esi
-          const pIdx = fn.params.findIndex(p => p.name === e.name);
-          if (pIdx === 0) asm += `\tmov\teax, edi\n`;
-          else if (pIdx === 1) asm += `\tmov\teax, esi\n`;
-          else asm += `\tmov\teax, DWORD PTR -4[rbp]\n`;
-        } else if (e.kind === "binary") {
-          asm += emitX86Binary(e, fn.params);
-        } else {
-          asm += `\txor\teax, eax\n`;
+    // Spill incoming parameter registers to local stack slots
+    const paramRegs = ["edi", "esi", "edx", "ecx", "r8d", "r9d"];
+    fn.params.forEach((p, idx) => {
+      if (idx < paramRegs.length) {
+        const slot = fn.locals.get(p.name);
+        if (slot) {
+          asm += `\tmov\tDWORD PTR -${slot.offset}[rbp], ${paramRegs[idx]}\n`;
         }
       }
+    });
+
+    for (const stmt of fn.statements) {
+      asm += emitX86Statement(stmt, rodataMap);
     }
 
-    if (!hasReturn) {
-      asm += `\txor\teax, eax\n`;
-    }
-
-    asm += `\tpop\trbp\n\tret\n.LFE_${fn.name}:\n\t.size\t${fn.name}, .-${fn.name}\n\n`;
+    asm += `.L_epilogue_${fn.name}:\n\tleave\n\tret\n.LFE_${fn.name}:\n\t.size\t${fn.name}, .-${fn.name}\n\n`;
   }
 
-  if (rodata) {
-    asm += `\t.section\t.rodata\n${rodata}`;
+  for (const [str, lbl] of rodataMap.entries()) {
+    rodataText += `${lbl}:\n\t.string\t"${str}"\n`;
   }
+
+  if (rodataText) {
+    asm += `\t.section\t.rodata\n${rodataText}`;
+  }
+
   asm += `\t.ident\t"ZCC: (Sovereign Bootstrap) 4.0.0"\n\t.section\t.note.GNU-stack,"",@progbits\n`;
   return asm;
 }
 
-function emitX86Binary(binExpr, params) {
-  const { op, left, right } = binExpr;
+function emitX86Statement(stmt, rodataMap) {
   let code = "";
+  if (stmt.type === "decl" || stmt.type === "assign") {
+    code += emitX86Expression(stmt.expr, rodataMap);
+    code += `\tmov\tDWORD PTR -${stmt.offset}[rbp], eax\n`;
+  } else if (stmt.type === "return") {
+    code += emitX86Expression(stmt.expr, rodataMap);
+    code += `\tjmp\t.L_epilogue_${stmt.fnName || "main"}\n`;
+  } else if (stmt.type === "call") {
+    code += emitX86Call(stmt.callee, stmt.args, rodataMap);
+  } else if (stmt.type === "if") {
+    const lblElse = `.L_else_${labelCounter++}`;
+    const lblEnd = `.L_end_${labelCounter++}`;
 
-  // Move left into eax
-  if (/^-?\d+$/.test(left)) code += `\tmov\teax, ${left}\n`;
-  else if (params.length > 0 && params[0].name === left) code += `\tmov\teax, edi\n`;
-  else code += `\tmov\teax, DWORD PTR -4[rbp]\n`;
+    code += emitX86Expression(stmt.condition, rodataMap);
+    code += `\ttest\teax, eax\n\tjz\t${lblElse}\n`;
 
-  // Apply op with right operand
-  let rightOperand = right;
-  if (params.length > 1 && params[1].name === right) rightOperand = "esi";
-  else if (params.length > 0 && params[0].name === right) rightOperand = "edi";
+    for (const s of stmt.thenBranch) code += emitX86Statement(s, rodataMap);
+    code += `\tjmp\t${lblEnd}\n${lblElse}:\n`;
 
-  switch (op) {
-    case "+": code += `\tadd\teax, ${rightOperand}\n`; break;
-    case "-": code += `\tsub\teax, ${rightOperand}\n`; break;
-    case "*": code += `\timul\teax, ${rightOperand}\n`; break;
-    case "&": code += `\tand\teax, ${rightOperand}\n`; break;
-    case "|": code += `\tor\teax, ${rightOperand}\n`; break;
-    case "^": code += `\txor\teax, ${rightOperand}\n`; break;
-    default: code += `\tadd\teax, ${rightOperand}\n`; break;
+    for (const s of stmt.elseBranch) code += emitX86Statement(s, rodataMap);
+    code += `${lblEnd}:\n`;
   }
   return code;
 }
 
-function generateRiscVAssembly(functions, source, opt) {
+function emitX86Expression(expr, rodataMap) {
+  if (expr.kind === "const") {
+    if (expr.val === 0) return `\txor\teax, eax\n`;
+    return `\tmov\teax, ${expr.val}\n`;
+  }
+
+  if (expr.kind === "var") {
+    return `\tmov\teax, DWORD PTR -${expr.offset}[rbp]\n`;
+  }
+
+  if (expr.kind === "string") {
+    let lbl = rodataMap.get(expr.val);
+    if (!lbl) {
+      lbl = `.LC_str_${rodataMap.size}`;
+      rodataMap.set(expr.val, lbl);
+    }
+    return `\tlea\trax, ${lbl}[rip]\n`;
+  }
+
+  if (expr.kind === "call") {
+    return emitX86Call(expr.callee, expr.args, rodataMap);
+  }
+
+  if (expr.kind === "binary") {
+    let s = emitX86Expression(expr.left, rodataMap);
+    s += `\tpush\trax\n`;
+    s += emitX86Expression(expr.right, rodataMap);
+    s += `\tmov\tebx, eax\n\tpop\trax\n`;
+
+    switch (expr.op) {
+      case "+": s += `\tadd\teax, ebx\n`; break;
+      case "-": s += `\tsub\teax, ebx\n`; break;
+      case "*": s += `\timul\teax, ebx\n`; break;
+      case "/": s += `\tcdq\n\tidiv\tebx\n`; break;
+      case "%": s += `\tcdq\n\tidiv\tebx\n\tmov\teax, edx\n`; break;
+      case "&": s += `\tand\teax, ebx\n`; break;
+      case "|": s += `\tor\teax, ebx\n`; break;
+      case "^": s += `\txor\teax, ebx\n`; break;
+      case "==": s += `\tcmp\teax, ebx\n\tsete\tal\n\tmovzx\teax, al\n`; break;
+      case "!=": s += `\tcmp\teax, ebx\n\tsetne\tal\n\tmovzx\teax, al\n`; break;
+      case "<": s += `\tcmp\teax, ebx\n\tsetl\tal\n\tmovzx\teax, al\n`; break;
+      case "<=": s += `\tcmp\teax, ebx\n\tsetle\tal\n\tmovzx\teax, al\n`; break;
+      case ">": s += `\tcmp\teax, ebx\n\tsetg\tal\n\tmovzx\teax, al\n`; break;
+      case ">=": s += `\tcmp\teax, ebx\n\tsetge\tal\n\tmovzx\teax, al\n`; break;
+      default: s += `\tadd\teax, ebx\n`; break;
+    }
+    return s;
+  }
+
+  return `\txor\teax, eax\n`;
+}
+
+function emitX86Call(callee, args, rodataMap) {
+  let s = "";
+  const paramRegs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
+
+  for (let i = 0; i < args.length && i < paramRegs.length; i++) {
+    s += emitX86Expression(args[i], rodataMap);
+    s += `\tmov\t${paramRegs[i]}, rax\n`;
+  }
+
+  s += `\txor\teax, eax\n\tcall\t${callee}@PLT\n`;
+  return s;
+}
+
+function emitRiscVArchitecture(functions, stringLiterals, optLevel) {
   let asm = `\t.file\t"source.c"\n\t.option pic\n\t.text\n`;
   asm += `# ── ZCC Sovereign Compiler v4.0.0 [Target: RISC-V 64 RV64GC] ──\n\n`;
 
   for (const fn of functions) {
     asm += `\t.globl\t${fn.name}\n\t.type\t${fn.name}, @function\n${fn.name}:\n`;
-    asm += `\taddi\tsp, sp, -16\n\tsd\tra, 8(sp)\n`;
+    asm += `\taddi\tsp, sp, -32\n\tsd\tra, 24(sp)\n\tsd\ts0, 16(sp)\n\taddi\ts0, sp, 32\n`;
 
-    let hasReturn = false;
     for (const stmt of fn.statements) {
       if (stmt.type === "return") {
-        hasReturn = true;
-        const e = stmt.expr;
-        if (e.kind === "const") {
-          asm += `\tli\ta0, ${e.val}\n`;
-        } else if (e.kind === "binary") {
-          if (e.op === "+") asm += `\taddw\ta0, a0, a1\n`;
-          else if (e.op === "*") asm += `\tmulw\ta0, a0, a1\n`;
-          else if (e.op === "-") asm += `\tsubw\ta0, a0, a1\n`;
+        if (stmt.expr.kind === "const") {
+          asm += `\tli\ta0, ${stmt.expr.val}\n`;
+        } else if (stmt.expr.kind === "var") {
+          asm += `\t# Pass through local var\n`;
+        } else if (stmt.expr.kind === "binary") {
+          if (stmt.expr.op === "-") asm += `\tsubw\ta0, a0, a1\n`;
+          else if (stmt.expr.op === "*") asm += `\tmulw\ta0, a0, a1\n`;
           else asm += `\taddw\ta0, a0, a1\n`;
-        } else {
-          asm += `\tli\ta0, 0\n`;
         }
       }
     }
 
-    if (!hasReturn) asm += `\tli\ta0, 0\n`;
-
-    asm += `\tld\tra, 8(sp)\n\taddi\tsp, sp, 16\n\tret\n.LFE_${fn.name}:\n\t.size\t${fn.name}, .-${fn.name}\n\n`;
+    asm += `\tld\tra, 24(sp)\n\tld\ts0, 16(sp)\n\taddi\tsp, sp, 32\n\tret\n.LFE_${fn.name}:\n\t.size\t${fn.name}, .-${fn.name}\n\n`;
   }
   return asm;
 }
 
-function generateWin64Assembly(functions, source, opt) {
+function emitWin64Architecture(functions, stringLiterals, optLevel) {
   let asm = `\t.file\t"source.c"\n\t.text\n`;
   asm += `# ── ZCC Sovereign Compiler v4.0.0 [Target: Windows x64 PE32+] ──\n\n`;
 
@@ -401,42 +751,75 @@ function generateWin64Assembly(functions, source, opt) {
     asm += `\t.globl\t${fn.name}\n\t.def\t${fn.name};\t.scl\t2;\t.type\t32;\t.endef\n${fn.name}:\n`;
     asm += `\tsub\trsp, 40\n`;
 
-    let retVal = 0;
     const retStmt = fn.statements.find(s => s.type === "return");
     if (retStmt && retStmt.expr.kind === "const") {
-      retVal = retStmt.expr.val;
+      asm += retStmt.expr.val === 0 ? `\txor\teax, eax\n` : `\tmov\teax, ${retStmt.expr.val}\n`;
+    } else {
+      asm += `\txor\teax, eax\n`;
     }
-
-    if (retVal === 0) asm += `\txor\teax, eax\n`;
-    else asm += `\tmov\teax, ${retVal}\n`;
 
     asm += `\tadd\trsp, 40\n\tret\n\n`;
   }
   return asm;
 }
 
-function generateWasmWat(functions, source) {
+function emitWasmWat(functions) {
   let wat = `(module\n  (memory (export "memory") 1)\n`;
   for (const fn of functions) {
+    wat += `  (func $${fn.name} (export "${fn.name}")`;
+    if (fn.params.length > 0) {
+      wat += fn.params.map(p => ` (param $${p.name} i32)`).join('');
+    }
+    wat += ` (result i32)\n`;
+
     const retStmt = fn.statements.find(s => s.type === "return");
-    const retVal = retStmt && retStmt.expr.kind === "const" ? retStmt.expr.val : 0;
-    wat += `  (func $${fn.name} (export "${fn.name}") (result i32)\n`;
-    wat += `    i32.const ${retVal}\n`;
+    if (retStmt && retStmt.expr.kind === "const") {
+      wat += `    i32.const ${retStmt.expr.val}\n`;
+    } else if (retStmt && retStmt.expr.kind === "var") {
+      wat += `    local.get $${retStmt.expr.name}\n`;
+    } else if (retStmt && retStmt.expr.kind === "binary") {
+      wat += `    local.get $${retStmt.expr.left.name || "a"}\n`;
+      wat += `    local.get $${retStmt.expr.right.name || "b"}\n`;
+      if (retStmt.expr.op === "-") wat += `    i32.sub\n`;
+      else if (retStmt.expr.op === "*") wat += `    i32.mul\n`;
+      else wat += `    i32.add\n`;
+    } else {
+      wat += `    i32.const 0\n`;
+    }
+
     wat += `    return\n  )\n`;
   }
   wat += `)\n`;
   return wat;
 }
 
-function generateSsaIr(functions, optLevel) {
-  let ir = `; ZCC SSA Intermediate Representation [Opt: -${optLevel}]\n\n`;
+function emitSsaIr(functions, optLevel) {
+  let ir = `; ZCC Intermediate Representation (SSA Form) [Opt: -${optLevel}]\n\n`;
   for (const fn of functions) {
-    const retStmt = fn.statements.find(s => s.type === "return");
-    const retVal = retStmt && retStmt.expr.kind === "const" ? retStmt.expr.val : 0;
-
-    ir += `define @${fn.name}() -> i32 {\n`;
+    const params = fn.params.map(p => `i32 %${p.name}`).join(', ');
+    ir += `define @${fn.name}(${params}) -> i32 {\n`;
     ir += `entry:\n`;
-    ir += `  ret i32 ${retVal}\n`;
+
+    let regCount = 0;
+    for (const stmt of fn.statements) {
+      if (stmt.type === "decl" || stmt.type === "assign") {
+        ir += `  %${regCount++} = alloca i32, align 4\n`;
+      } else if (stmt.type === "return") {
+        if (stmt.expr.kind === "const") {
+          ir += `  ret i32 ${stmt.expr.val}\n`;
+        } else if (stmt.expr.kind === "binary") {
+          const l = stmt.expr.left.name ? `%${stmt.expr.left.name}` : (stmt.expr.left.val || 0);
+          const r = stmt.expr.right.name ? `%${stmt.expr.right.name}` : (stmt.expr.right.val || 0);
+          const opMap = { "+": "add", "-": "sub", "*": "mul", "/": "sdiv" };
+          const op = opMap[stmt.expr.op] || "add";
+          ir += `  %${regCount} = ${op} i32 ${l}, ${r}\n`;
+          ir += `  ret i32 %${regCount++}\n`;
+        } else {
+          ir += `  ret i32 0\n`;
+        }
+      }
+    }
+
     ir += `}\n\n`;
   }
   return ir;

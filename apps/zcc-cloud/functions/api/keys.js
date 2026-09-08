@@ -81,16 +81,19 @@ export async function onRequestGet({ request, env }) {
   const verResult = await verifyApiKey(key, env);
 
   if (!verResult.valid) {
+    const status = verResult.code === "SERVER_AUTH_UNCONFIGURED" ? 500 : 403;
     return new Response(JSON.stringify({
       success: false,
       status: "INVALID",
       error: verResult.error,
       code: verResult.code || "FORBIDDEN"
     }), {
-      status: 403,
+      status,
       headers: CORS_HEADERS
     });
   }
+
+  const limitCheck = enforceRateLimitAndQuota(verResult.user.id, verResult.user.tier);
 
   return new Response(JSON.stringify({
     success: true,
@@ -99,13 +102,13 @@ export async function onRequestGet({ request, env }) {
     tier: verResult.user.tier,
     developer_email: verResult.user.email,
     created_at: verResult.user.createdAt,
-    quota: verResult.user.quota,
+    quota: limitCheck.quota,
     rate_limit: {
-      limit_per_minute: 60,
-      remaining_in_window: 59
+      limit_per_minute: verResult.user.tier === "enterprise" ? 300 : 60,
+      remaining_in_window: parseInt(limitCheck.headers["X-RateLimit-Remaining"], 10)
     }
   }, null, 2), {
     status: 200,
-    headers: CORS_HEADERS
+    headers: { ...CORS_HEADERS, ...limitCheck.headers }
   });
 }

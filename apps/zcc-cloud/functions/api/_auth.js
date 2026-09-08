@@ -8,8 +8,26 @@ export const CORS_HEADERS = {
   "Content-Type": "application/json;charset=utf-8"
 };
 
-const DEFAULT_SECRET = "zkaedi_zcc_sovereign_edge_key_v4_secret_auth_2026";
 export const MAX_BODY_BYTES = 65536; // 64 KB strict ceiling
+
+// In-memory sliding window rate limiter state
+const rateLimitCache = new Map();
+const WINDOW_MS = 60 * 1000; // 1 minute
+const DAY_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_LIMIT_PER_MINUTE = 60;
+const DEFAULT_LIMIT_PER_DAY = 5000;
+
+/**
+ * Obtain server HMAC secret.
+ * Production MUST FAIL CLOSED if API_KEY_SECRET is missing or insufficiently random.
+ */
+function getSecret(env = {}) {
+  const secret = env.API_KEY_SECRET;
+  if (!secret || typeof secret !== "string" || secret.trim().length < 16) {
+    return null;
+  }
+  return secret.trim();
+}
 
 /**
  * Get the HMAC CryptoKey
@@ -28,8 +46,8 @@ async function getHmacKey(secretStr) {
 /**
  * Constant-time hex string comparison
  */
-function timingSafeEqualHex(a, b) {
-  if (a.length !== b.length) return false;
+export function timingSafeEqualHex(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) {
     diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
@@ -38,10 +56,93 @@ function timingSafeEqualHex(a, b) {
 }
 
 /**
- * Create a cryptographically signed API key
+ * Enforce real rate limits and quotas per identity
+ */
+export function enforceRateLimitAndQuota(identifier, tier = "developer_sandbox") {
+  const now = Date.now();
+  let entry = rateLimitCache.get(identifier);
+  if (!entry) {
+    entry = { count: 0, windowStart: now, dailyUsed: 0, dayStart: now };
+    rateLimitCache.set(identifier, entry);
+  }
+
+  // Reset 1-minute window
+  if (now - entry.windowStart >= WINDOW_MS) {
+    entry.count = 0;
+    entry.windowStart = now;
+  }
+
+  // Reset daily window
+  if (now - entry.dayStart >= DAY_MS) {
+    entry.dailyUsed = 0;
+    entry.dayStart = now;
+  }
+
+  const limitPerMin = tier === "enterprise" ? 300 : DEFAULT_LIMIT_PER_MINUTE;
+  const limitPerDay = tier === "enterprise" ? 50000 : DEFAULT_LIMIT_PER_DAY;
+
+  if (entry.count >= limitPerMin) {
+    const retryAfterSec = Math.max(1, Math.ceil((entry.windowStart + WINDOW_MS - now) / 1000));
+    return {
+      allowed: false,
+      code: "RATE_LIMIT_EXCEEDED",
+      error: `Rate limit of ${limitPerMin} requests per minute exceeded.`,
+      retryAfter: retryAfterSec,
+      headers: {
+        "X-RateLimit-Limit": String(limitPerMin),
+        "X-RateLimit-Remaining": "0",
+        "X-RateLimit-Reset": String(retryAfterSec),
+        "Retry-After": String(retryAfterSec)
+      }
+    };
+  }
+
+  if (entry.dailyUsed >= limitPerDay) {
+    return {
+      allowed: false,
+      code: "QUOTA_EXHAUSTED",
+      error: `Daily quota of ${limitPerDay} requests exhausted.`,
+      retryAfter: 3600,
+      headers: {
+        "X-RateLimit-Limit": String(limitPerMin),
+        "X-RateLimit-Remaining": "0",
+        "X-RateLimit-Reset": "3600",
+        "Retry-After": "3600"
+      }
+    };
+  }
+
+  entry.count++;
+  entry.dailyUsed++;
+
+  const remainingMin = Math.max(0, limitPerMin - entry.count);
+  const resetSec = Math.max(1, Math.ceil((entry.windowStart + WINDOW_MS - now) / 1000));
+
+  return {
+    allowed: true,
+    quota: {
+      daily_limit: limitPerDay,
+      used_today: entry.dailyUsed,
+      remaining: Math.max(0, limitPerDay - entry.dailyUsed)
+    },
+    headers: {
+      "X-RateLimit-Limit": String(limitPerMin),
+      "X-RateLimit-Remaining": String(remainingMin),
+      "X-RateLimit-Reset": String(resetSec)
+    }
+  };
+}
+
+/**
+ * Create a cryptographically signed API key.
+ * Fails closed if API_KEY_SECRET is not configured.
  */
 export async function generateSignedApiKey({ email = "developer@zkaedi.ai", tier = "developer_sandbox" }, env = {}) {
-  const secret = env.API_KEY_SECRET || DEFAULT_SECRET;
+  const secret = getSecret(env);
+  if (!secret) {
+    throw new Error("Server authentication is unconfigured: API_KEY_SECRET environment variable is missing or less than 16 characters. Server fails closed.");
+  }
+
   const hmacKey = await getHmacKey(secret);
 
   const payload = {
@@ -80,9 +181,19 @@ export async function generateSignedApiKey({ email = "developer@zkaedi.ai", tier
 }
 
 /**
- * Cryptographically verify an incoming API key
+ * Cryptographically verify an incoming API key.
+ * Fails closed if API_KEY_SECRET is not configured.
  */
 export async function verifyApiKey(key, env = {}) {
+  const secret = getSecret(env);
+  if (!secret) {
+    return {
+      valid: false,
+      code: "SERVER_AUTH_UNCONFIGURED",
+      error: "Server authentication is unconfigured: API_KEY_SECRET is missing. Server fails closed."
+    };
+  }
+
   if (!key || typeof key !== "string") {
     return { valid: false, code: "MISSING_KEY", error: "API key is required." };
   }
@@ -100,9 +211,7 @@ export async function verifyApiKey(key, env = {}) {
     return { valid: false, code: "INVALID_SIGNATURE_LENGTH", error: "API key contains an invalid signature." };
   }
 
-  const secret = env.API_KEY_SECRET || DEFAULT_SECRET;
   const hmacKey = await getHmacKey(secret);
-
   const expectedSigBuf = await crypto.subtle.sign("HMAC", hmacKey, new TextEncoder().encode(payloadHex));
   const expectedSigHex = Array.from(new Uint8Array(expectedSigBuf), b => b.toString(16).padStart(2, '0')).join('');
 
@@ -143,52 +252,63 @@ export async function verifyApiKey(key, env = {}) {
       id: payload.id,
       email: payload.email,
       tier: payload.tier || "developer_sandbox",
-      createdAt: new Date(payload.created).toISOString(),
-      quota: {
-        daily_limit: 5000,
-        used_today: 1,
-        remaining: 4999
-      }
+      createdAt: new Date(payload.created).toISOString()
     }
   };
 }
 
 /**
- * Authenticate incoming HTTP request
+ * Authenticate incoming HTTP request.
+ * Enforces real rate limiting and daily quotas. Rejects unauthenticated requests on compute endpoints.
  */
 export async function authenticateRequest(request, env = {}, { allowAnonymous = false } = {}) {
   const authHeader = request.headers.get("authorization") || request.headers.get("x-api-key") || "";
   const key = authHeader.replace(/^Bearer\s+/i, '').trim();
 
   if (!key) {
-    if (allowAnonymous) {
+    if (!allowAnonymous) {
       return {
         authenticated: false,
-        isSandboxAnonymous: true,
-        user: { tier: "anonymous_sandbox", quota: { daily_limit: 50, remaining: 49 } },
-        rateLimitHeaders: {
-          "X-RateLimit-Limit": "10",
-          "X-RateLimit-Remaining": "9",
-          "X-RateLimit-Reset": "60"
-        }
+        response: new Response(JSON.stringify({
+          success: false,
+          error: "Authentication required. Provide Authorization: Bearer <key> or X-API-Key header.",
+          code: "UNAUTHORIZED",
+          hint: "Obtain an authenticated key via POST /api/keys."
+        }), {
+          status: 401,
+          headers: CORS_HEADERS
+        })
       };
     }
+
+    // Strictly bounded anonymous rate limit (e.g. for docs/status endpoints)
+    const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "anonymous";
+    const anonCheck = enforceRateLimitAndQuota(`anon:${clientIp}`, "anonymous_limited");
+    if (!anonCheck.allowed) {
+      return {
+        authenticated: false,
+        response: new Response(JSON.stringify({
+          success: false,
+          error: anonCheck.error,
+          code: anonCheck.code
+        }), {
+          status: 429,
+          headers: { ...CORS_HEADERS, ...anonCheck.headers }
+        })
+      };
+    }
+
     return {
       authenticated: false,
-      response: new Response(JSON.stringify({
-        success: false,
-        error: "Missing API credentials. Provide Authorization: Bearer <key> or X-API-Key header.",
-        code: "UNAUTHORIZED",
-        hint: "Obtain a cryptographic key via POST /api/keys."
-      }), {
-        status: 401,
-        headers: CORS_HEADERS
-      })
+      isSandboxAnonymous: true,
+      user: { tier: "anonymous_limited", quota: anonCheck.quota },
+      rateLimitHeaders: anonCheck.headers
     };
   }
 
   const verResult = await verifyApiKey(key, env);
   if (!verResult.valid) {
+    const status = verResult.code === "SERVER_AUTH_UNCONFIGURED" ? 500 : 403;
     return {
       authenticated: false,
       response: new Response(JSON.stringify({
@@ -196,20 +316,34 @@ export async function authenticateRequest(request, env = {}, { allowAnonymous = 
         error: verResult.error,
         code: verResult.code || "FORBIDDEN"
       }), {
-        status: 403,
+        status,
         headers: CORS_HEADERS
       })
     };
   }
 
+  // Enforce rate limits and quotas on authenticated key
+  const limitCheck = enforceRateLimitAndQuota(verResult.user.id, verResult.user.tier);
+  if (!limitCheck.allowed) {
+    return {
+      authenticated: false,
+      response: new Response(JSON.stringify({
+        success: false,
+        error: limitCheck.error,
+        code: limitCheck.code
+      }), {
+        status: 429,
+        headers: { ...CORS_HEADERS, ...limitCheck.headers }
+      })
+    };
+  }
+
+  verResult.user.quota = limitCheck.quota;
+
   return {
     authenticated: true,
     user: verResult.user,
-    rateLimitHeaders: {
-      "X-RateLimit-Limit": "60",
-      "X-RateLimit-Remaining": "59",
-      "X-RateLimit-Reset": "60"
-    }
+    rateLimitHeaders: limitCheck.headers
   };
 }
 
