@@ -398,6 +398,7 @@ async function runTests() {
   assert(validProofData.zk_proof_audit.public_inputs_cardinality_verified === true, "Audit confirms public inputs cardinality verified");
   assert(validProofData.zk_proof_audit.r1cs_witness_evaluated === true, "Audit confirms caller witness evaluated against R1CS constraints");
   assert(validProofData.zk_proof_audit.verification_key_source === "CANONICAL_PINNED_CIRCUIT", "Audit confirms canonical pinned circuit VK source");
+  assert(validProofData.zk_proof_audit.pinned_circuit_vk_hash === verifyHandler.PINNED_CIRCUIT_VK_HASH, "Audit records committed pinned circuit VK hash");
   assert(validProofData.zk_proof_audit.verification_key_pinned === true, "Audit confirms verification key is pinned");
   assert(validProofData.zk_proof_audit.verification_key_hash === verifyHandler.PINNED_CIRCUIT_VK_HASH, "Audit records authentic pinned VK hash");
   assert(validProofData.r1cs_violations === 0, "Receipt reports 0 R1CS violations");
@@ -451,15 +452,87 @@ async function runTests() {
   const callerVerificationKeyData = await callerVerificationKeyRes.json();
   assert(callerVerificationKeyData.code === "UNTRUSTED_VERIFICATION_KEY", "Rejection code is UNTRUSTED_VERIFICATION_KEY");
 
-  // 3j: Pinned VK Hash Authentication Unit Check
+  // 3j: Unconditional Pinned VK Hash Authentication Unit Check
   const tamperedVk = { ...verifyHandler.DEFAULT_VERIFICATION_KEY, nPublic: 2 };
-  const vkProvenanceFail = await verifyHandler.loadAndValidateVerificationKey(tamperedVk, verifyHandler.PINNED_CIRCUIT_VK_HASH);
-  assert(vkProvenanceFail.valid === false, "loadAndValidateVerificationKey rejects key with mismatched hash");
+  const vkProvenanceFail = await verifyHandler.loadAndValidateVerificationKey(tamperedVk);
+  assert(vkProvenanceFail.valid === false, "loadAndValidateVerificationKey unconditionally rejects key with mismatched hash");
   assert(vkProvenanceFail.code === "UNTRUSTED_VERIFICATION_KEY_HASH", "Rejection code is UNTRUSTED_VERIFICATION_KEY_HASH");
+  assert(vkProvenanceFail.pinned === false, "loadAndValidateVerificationKey reports pinned: false for mismatched key");
 
-  const vkProvenanceOk = await verifyHandler.loadAndValidateVerificationKey(verifyHandler.DEFAULT_VERIFICATION_KEY, verifyHandler.PINNED_CIRCUIT_VK_HASH);
+  // Attempting to supply a custom hash parameter cannot bypass PINNED_CIRCUIT_VK_HASH
+  const tamperedVkHash = await verifyHandler.computeVkHash(tamperedVk);
+  const vkOverrideAttempt = await verifyHandler.loadAndValidateVerificationKey(tamperedVk, tamperedVkHash);
+  assert(vkOverrideAttempt.valid === false, "loadAndValidateVerificationKey unconditionally rejects tampered key even if custom hash is supplied");
+  assert(vkOverrideAttempt.code === "UNTRUSTED_VERIFICATION_KEY_HASH", "Override attempt rejected with UNTRUSTED_VERIFICATION_KEY_HASH");
+
+  const vkProvenanceOk = await verifyHandler.loadAndValidateVerificationKey(verifyHandler.DEFAULT_VERIFICATION_KEY);
   assert(vkProvenanceOk.valid === true, "loadAndValidateVerificationKey accepts authentic canonical VK matching pinned hash");
   assert(vkProvenanceOk.hash === verifyHandler.PINNED_CIRCUIT_VK_HASH, "VK hash matches PINNED_CIRCUIT_VK_HASH");
+  assert(vkProvenanceOk.pinned === true, "VK reports pinned: true for authentic canonical VK");
+
+  // 3k: Deployment Environment Pin Override Prohibition (TRUSTED_VK_HASH override rejection)
+  // An environment attempting to configure env.TRUSTED_VK_HASH to a custom hash MUST be rejected with 422
+  const tamperedEnvRes = await verifyHandler.onRequestPost({
+    request: mockRequest("POST", "https://zkaedi.ai/api/verify", {
+      "Authorization": `Bearer ${validKey}`,
+      "Content-Type": "application/json"
+    }, {
+      source: sampleSource,
+      ast_commitment: expectedCommitment,
+      proof: genuineProof,
+      witness: authenticWitness
+    }),
+    env: {
+      ...TEST_ENV,
+      TRUSTED_VK_HASH: "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+    }
+  });
+  assert(tamperedEnvRes.status === 422, "POST /api/verify rejects env.TRUSTED_VK_HASH override attempt with 422 Unprocessable Entity");
+  const tamperedEnvData = await tamperedEnvRes.json();
+  assert(tamperedEnvData.code === "UNTRUSTED_ENVIRONMENT_CONFIGURATION", "Rejection code is UNTRUSTED_ENVIRONMENT_CONFIGURATION");
+  assert(tamperedEnvData.status === "UNTRUSTED_ENVIRONMENT_CONFIGURATION", "Status reports UNTRUSTED_ENVIRONMENT_CONFIGURATION");
+  assert(tamperedEnvData.verification_key_pinned === false, "Rejection explicitly confirms verification_key_pinned: false");
+
+  // 3l: Deployment Environment Custom Key Under Custom Hash Rejection
+  // An environment attempting to configure both env.VERIFICATION_KEY and env.TRUSTED_VK_HASH to altered values
+  const tamperedEnvVkRes = await verifyHandler.onRequestPost({
+    request: mockRequest("POST", "https://zkaedi.ai/api/verify", {
+      "Authorization": `Bearer ${validKey}`,
+      "Content-Type": "application/json"
+    }, {
+      source: sampleSource,
+      ast_commitment: expectedCommitment,
+      proof: genuineProof,
+      witness: authenticWitness
+    }),
+    env: {
+      ...TEST_ENV,
+      VERIFICATION_KEY: JSON.stringify(tamperedVk),
+      TRUSTED_VK_HASH: tamperedVkHash
+    }
+  });
+  assert(tamperedEnvVkRes.status === 422, "POST /api/verify rejects altered env.VERIFICATION_KEY even when accompanied by matching custom hash");
+
+  // 3m: Deployment Environment Altered Key Under Default Environment Rejection
+  const tamperedEnvVkOnlyRes = await verifyHandler.onRequestPost({
+    request: mockRequest("POST", "https://zkaedi.ai/api/verify", {
+      "Authorization": `Bearer ${validKey}`,
+      "Content-Type": "application/json"
+    }, {
+      source: sampleSource,
+      ast_commitment: expectedCommitment,
+      proof: genuineProof,
+      witness: authenticWitness
+    }),
+    env: {
+      ...TEST_ENV,
+      VERIFICATION_KEY: JSON.stringify(tamperedVk)
+    }
+  });
+  assert(tamperedEnvVkOnlyRes.status === 422, "POST /api/verify rejects altered env.VERIFICATION_KEY under default environment with 422");
+  const tamperedEnvVkOnlyData = await tamperedEnvVkOnlyRes.json();
+  assert(tamperedEnvVkOnlyData.code === "UNTRUSTED_VERIFICATION_KEY_HASH", "Rejection code is UNTRUSTED_VERIFICATION_KEY_HASH");
+  assert(tamperedEnvVkOnlyData.verification_key_pinned === false, "Rejection response explicitly confirms verification_key_pinned: false");
 
   // ── BLOCKER 4: C COMPILER LOCALS, CALLS & CONTROL FLOW ──────────
   console.log("\nBlocker 4: Compiler Semantic Codegen for Locals, Calls, and Control Flow");

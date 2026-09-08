@@ -190,17 +190,37 @@ export async function onRequestPost({ request, env }) {
     }
 
     // 6. Load & Authenticate Trusted Server-Side Verification Key (VK)
-    // Sourced exclusively from trusted environment binding or canonical circuit, pinned to immutable hash
+    // Sourced exclusively from trusted environment binding or canonical circuit,
+    // and pinned unconditionally to the committed PINNED_CIRCUIT_VK_HASH.
+    if (env && env.TRUSTED_VK_HASH) {
+      const cleanEnvHash = env.TRUSTED_VK_HASH.toLowerCase().replace(/^0x/, '');
+      if (!timingSafeEqualHex(cleanEnvHash, PINNED_CIRCUIT_VK_HASH.toLowerCase())) {
+        return new Response(JSON.stringify({
+          verified: false,
+          status: "UNTRUSTED_ENVIRONMENT_CONFIGURATION",
+          error: "Environment configuration TRUSTED_VK_HASH does not match committed PINNED_CIRCUIT_VK_HASH. Custom verification key hash overrides are prohibited.",
+          code: "UNTRUSTED_ENVIRONMENT_CONFIGURATION",
+          committed_pinned_hash: PINNED_CIRCUIT_VK_HASH,
+          rejected_env_hash: env.TRUSTED_VK_HASH,
+          verification_key_pinned: false,
+          verification_time_ms: Date.now() - startTime
+        }, null, 2), {
+          status: 422,
+          headers: { ...CORS_HEADERS, ...auth.rateLimitHeaders }
+        });
+      }
+    }
+
     const serverVk = (env && env.VERIFICATION_KEY) ? env.VERIFICATION_KEY : DEFAULT_VERIFICATION_KEY;
-    const trustedVkHash = (env && env.TRUSTED_VK_HASH) ? env.TRUSTED_VK_HASH : PINNED_CIRCUIT_VK_HASH;
-    const vkResult = await loadAndValidateVerificationKey(serverVk, trustedVkHash);
+    const vkResult = await loadAndValidateVerificationKey(serverVk);
     if (!vkResult.valid) {
       return new Response(JSON.stringify({
         verified: false,
         status: vkResult.code || "INVALID_VERIFICATION_KEY",
         error: vkResult.error,
         code: vkResult.code || "INVALID_VERIFICATION_KEY",
-        vk_hash: vkResult.hash
+        vk_hash: vkResult.hash,
+        verification_key_pinned: false
       }, null, 2), {
         status: 422,
         headers: { ...CORS_HEADERS, ...auth.rateLimitHeaders }
@@ -272,10 +292,11 @@ export async function onRequestPost({ request, env }) {
       provided_commitment: astCommitment,
       zk_proof_audit: {
         proof_system: "Groth16-BN254",
+        pinned_circuit_vk_hash: PINNED_CIRCUIT_VK_HASH,
         verification_key_loaded: true,
-        verification_key_source: (env && env.VERIFICATION_KEY) ? "TRUSTED_ENV_BINDING" : "CANONICAL_PINNED_CIRCUIT",
+        verification_key_source: (env && env.VERIFICATION_KEY) ? "VERIFIED_ENV_BINDING" : "CANONICAL_PINNED_CIRCUIT",
         verification_key_hash: vkHash,
-        verification_key_pinned: true,
+        verification_key_pinned: vkResult.pinned === true && timingSafeEqualHex(vkHash.toLowerCase(), PINNED_CIRCUIT_VK_HASH.toLowerCase()),
         g1_membership_pi_a: "VALIDATED (y^2 == x^3 + 3 mod q)",
         g2_membership_pi_b: "VALIDATED (y^2 == x^3 + b2 over F_q^2)",
         g1_membership_pi_c: "VALIDATED (y^2 == x^3 + 3 mod q)",
@@ -546,15 +567,16 @@ function normalizeG2Point(pt) {
 
 /**
  * Loads and validates verification key from trusted server environment.
- * Rejects untrusted keys failing the pinned immutable hash check.
+ * The committed pin (PINNED_CIRCUIT_VK_HASH) is enforced unconditionally;
+ * neither callers nor environment overrides can bypass the immutable pin.
  */
-export async function loadAndValidateVerificationKey(serverVk, expectedHash = PINNED_CIRCUIT_VK_HASH) {
+export async function loadAndValidateVerificationKey(serverVk) {
   let vkey = serverVk;
   if (typeof vkey === "string") {
     try {
       vkey = JSON.parse(vkey);
     } catch {
-      return { valid: false, code: "MALFORMED_VK_JSON", error: "Environment verification key is invalid JSON." };
+      return { valid: false, code: "MALFORMED_VK_JSON", error: "Environment verification key is invalid JSON.", pinned: false };
     }
   }
 
@@ -562,64 +584,68 @@ export async function loadAndValidateVerificationKey(serverVk, expectedHash = PI
     vkey = DEFAULT_VERIFICATION_KEY;
   }
 
-  // 1. Authenticate Provenance against Immutable Pinned Circuit Hash
+  // 1. Authenticate Provenance against Immutable Committed Pinned Circuit Hash
+  // Committed pin is enforced unconditionally; environment or caller overrides are prohibited.
   const hash = await computeVkHash(vkey);
-  if (expectedHash && !timingSafeEqualHex(hash, expectedHash.toLowerCase())) {
+  const isPinned = timingSafeEqualHex(hash.toLowerCase(), PINNED_CIRCUIT_VK_HASH.toLowerCase());
+  if (!isPinned) {
     return {
       valid: false,
       code: "UNTRUSTED_VERIFICATION_KEY_HASH",
-      error: `Verification key hash (${hash}) does not match trusted pinned circuit hash (${expectedHash}). Untrusted key rejected.`,
-      hash
+      error: `Verification key hash (${hash}) does not match committed immutable pinned circuit hash (${PINNED_CIRCUIT_VK_HASH}). Untrusted key rejected.`,
+      hash,
+      pinned: false
     };
   }
 
   // 2. Structural Curve Validation
   // Validate alpha_1 on G1
   if (!vkey.vk_alpha_1 || !isValidBn254G1Point(vkey.vk_alpha_1[0], vkey.vk_alpha_1[1])) {
-    return { valid: false, code: "INVALID_VK_ALPHA", error: "VK vk_alpha_1 does not lie on BN254 G1 curve.", hash };
+    return { valid: false, code: "INVALID_VK_ALPHA", error: "VK vk_alpha_1 does not lie on BN254 G1 curve.", hash, pinned: false };
   }
 
   // Validate beta_2 on G2
   if (!vkey.vk_beta_2 || !isValidBn254G2Point(vkey.vk_beta_2)) {
-    return { valid: false, code: "INVALID_VK_BETA", error: "VK vk_beta_2 does not lie on BN254 G2 curve.", hash };
+    return { valid: false, code: "INVALID_VK_BETA", error: "VK vk_beta_2 does not lie on BN254 G2 curve.", hash, pinned: false };
   }
 
   // Validate gamma_2 on G2
   if (!vkey.vk_gamma_2 || !isValidBn254G2Point(vkey.vk_gamma_2)) {
-    return { valid: false, code: "INVALID_VK_GAMMA", error: "VK vk_gamma_2 does not lie on BN254 G2 curve.", hash };
+    return { valid: false, code: "INVALID_VK_GAMMA", error: "VK vk_gamma_2 does not lie on BN254 G2 curve.", hash, pinned: false };
   }
 
   // Validate delta_2 on G2
   if (!vkey.vk_delta_2 || !isValidBn254G2Point(vkey.vk_delta_2)) {
-    return { valid: false, code: "INVALID_VK_DELTA", error: "VK vk_delta_2 does not lie on BN254 G2 curve.", hash };
+    return { valid: false, code: "INVALID_VK_DELTA", error: "VK vk_delta_2 does not lie on BN254 G2 curve.", hash, pinned: false };
   }
 
   // Validate nPublic if defined
   if (vkey.nPublic !== undefined) {
     if (typeof vkey.nPublic !== "number" || !Number.isInteger(vkey.nPublic) || vkey.nPublic < 0) {
-      return { valid: false, code: "INVALID_VK_NPUBLIC", error: "VK nPublic must be a non-negative integer.", hash };
+      return { valid: false, code: "INVALID_VK_NPUBLIC", error: "VK nPublic must be a non-negative integer.", hash, pinned: false };
     }
   }
 
   // Validate IC on G1
   if (!Array.isArray(vkey.IC) || vkey.IC.length < 1) {
-    return { valid: false, code: "INVALID_VK_IC", error: "VK IC vector must contain at least IC_0.", hash };
+    return { valid: false, code: "INVALID_VK_IC", error: "VK IC vector must contain at least IC_0.", hash, pinned: false };
   }
   if (typeof vkey.nPublic === "number" && vkey.IC.length !== vkey.nPublic + 1) {
     return {
       valid: false,
       code: "INVALID_VK_IC_CARDINALITY",
       error: `VK IC length (${vkey.IC.length}) must equal nPublic + 1 (${vkey.nPublic + 1}).`,
-      hash
+      hash,
+      pinned: false
     };
   }
   for (let i = 0; i < vkey.IC.length; i++) {
     if (!isValidBn254G1Point(vkey.IC[i][0], vkey.IC[i][1])) {
-      return { valid: false, code: "INVALID_VK_IC_POINT", error: `VK IC[${i}] does not lie on BN254 G1 curve.`, hash };
+      return { valid: false, code: "INVALID_VK_IC_POINT", error: `VK IC[${i}] does not lie on BN254 G1 curve.`, hash, pinned: false };
     }
   }
 
-  return { valid: true, vkey, hash };
+  return { valid: true, vkey, hash, pinned: true };
 }
 
 // ── BN254 OPTIMAL ATE PAIRING & FINAL EXPONENTIATION ──────────────
