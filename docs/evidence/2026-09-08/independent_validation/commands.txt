@@ -1,13 +1,13 @@
-[2026-09-08T08:32:25.947094+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ git rev-parse HEAD
-[2026-09-08T08:32:26.071316+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ git branch --show-current
-[2026-09-08T08:32:40.860729+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ git status --porcelain
-[2026-09-08T08:32:40.862976+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ gcc --version
-[2026-09-08T08:32:40.933282+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ clang --version
-[2026-09-08T08:32:40.942450+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ node --version
-[2026-09-08T08:32:40.943921+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ make --version
-[2026-09-08T08:32:40.945763+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ as --version
-[2026-09-08T08:32:54.539252+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ make zcc
-[2026-09-08T08:34:24.054039+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ make selfhost
-[2026-09-08T08:34:24.793516+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ cmp zcc2.s zcc3.s
-[2026-09-08T08:34:26.521111+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ node /mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon/apps/zcc-cloud/test_edge_endpoints.mjs
-[2026-09-08T08:34:44.969248+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ /usr/bin/python3 /mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon/tools/differential_compiler_gauntlet.py --count=50 --workers=4 --json=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon/docs/evidence/2026-09-08/independent_validation/differential_results.json
+[2026-09-08T10:28:47.757817+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ git rev-parse HEAD
+[2026-09-08T10:28:47.903231+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ git branch --show-current
+[2026-09-08T10:29:03.564900+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ git status --porcelain
+[2026-09-08T10:29:03.569291+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ gcc --version
+[2026-09-08T10:29:03.750537+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ clang --version
+[2026-09-08T10:29:03.816342+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ node --version
+[2026-09-08T10:29:03.818784+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ make --version
+[2026-09-08T10:29:03.823737+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ as --version
+[2026-09-08T10:29:18.151538+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ make zcc
+[2026-09-08T10:30:50.842388+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ make selfhost
+[2026-09-08T10:30:51.602272+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ cmp zcc2.s zcc3.s
+[2026-09-08T10:30:53.665846+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ node /mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon/apps/zcc-cloud/test_edge_endpoints.mjs
+[2026-09-08T10:33:27.747820+00:00] (cwd=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon, exit=0) $ /usr/bin/python3 /mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon/tools/differential_compiler_gauntlet.py --count=1000 --workers=8 --json=/mnt/c/Users/zkaed/copilot-worktrees/zcc-bootstrap-compiler/invariantzkaedi-sturdy-spoon/docs/evidence/2026-09-08/independent_validation/differential_results.json

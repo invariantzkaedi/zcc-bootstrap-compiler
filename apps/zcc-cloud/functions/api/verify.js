@@ -527,6 +527,49 @@ function checkG2Equation(X, Y) {
   return y2[0] === rhs[0] && y2[1] === rhs[1];
 }
 
+export function g2Double(pt) {
+  if (!pt) return null;
+  const [X, Y] = pt;
+  if (Y[0] === 0n && Y[1] === 0n) return null;
+  const num = fq2.mul([3n, 0n], fq2.sqr(X));
+  const den = fq2.mul([2n, 0n], Y);
+  const lambda = fq2.mul(num, fq2.inv(den));
+  const x3 = fq2.sub(fq2.sqr(lambda), fq2.mul([2n, 0n], X));
+  const y3 = fq2.sub(fq2.mul(lambda, fq2.sub(X, x3)), Y);
+  return [x3, y3];
+}
+
+export function g2Add(p1, p2) {
+  if (!p1) return p2;
+  if (!p2) return p1;
+  const [x1, y1] = p1;
+  const [x2, y2] = p2;
+  if (x1[0] === x2[0] && x1[1] === x2[1]) {
+    if (y1[0] === y2[0] && y1[1] === y2[1]) return g2Double(p1);
+    return null;
+  }
+  const lambda = fq2.mul(fq2.sub(y2, y1), fq2.inv(fq2.sub(x2, x1)));
+  const x3 = fq2.sub(fq2.sub(fq2.sqr(lambda), x1), x2);
+  const y3 = fq2.sub(fq2.mul(lambda, fq2.sub(x1, x3)), y1);
+  return [x3, y3];
+}
+
+/**
+ * Validates that point P lies strictly in the order-r subgroup G2: [r] P == O.
+ * Rejects small subgroup elements on the twist curve E'(Fq2).
+ */
+export function checkG2Subgroup(pt) {
+  let res = null;
+  let cur = pt;
+  let k = BN254_R;
+  while (k > 0n) {
+    if (k & 1n) res = g2Add(res, cur);
+    cur = g2Double(cur);
+    k >>= 1n;
+  }
+  return res === null;
+}
+
 export function isValidBn254G2Point(pt) {
   if (!Array.isArray(pt) || pt.length < 2) return false;
   const [coordX, coordY] = pt;
@@ -540,16 +583,24 @@ export function isValidBn254G2Point(pt) {
 
     if ([x0, x1, y0, y1].some(v => v < 0n || v >= BN254_Q)) return false;
 
+    let normPt = null;
     // Direct representation: (x0 + x1*u), (y0 + y1*u)
-    if (checkG2Equation([x0, x1], [y0, y1])) return true;
-    // SnarkJS / EVM reversed representation: (x1 + x0*u), (y1 + y0*u)
-    if (checkG2Equation([x1, x0], [y1, y0])) return true;
+    if (checkG2Equation([x0, x1], [y0, y1])) {
+      normPt = [[x0, x1], [y0, y1]];
+    } else if (checkG2Equation([x1, x0], [y1, y0])) {
+      // SnarkJS / EVM reversed representation: (x1 + x0*u), (y1 + y0*u)
+      normPt = [[x1, x0], [y1, y0]];
+    } else {
+      return false;
+    }
 
-    return false;
+    // Cryptographic Subgroup Check: [r] P == O in E'(Fq2)
+    return checkG2Subgroup(normPt);
   } catch {
     return false;
   }
 }
+
 
 function normalizeG2Point(pt) {
   const x0 = parseBigIntHex(pt[0][0]);

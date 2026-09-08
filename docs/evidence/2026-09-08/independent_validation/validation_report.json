@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "timestamp_utc": "2026-09-08T08:32:25.812270+00:00",
+    "timestamp_utc": "2026-09-08T10:28:47.554919+00:00",
     "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
     "system": "Linux",
     "architecture": "x86_64",
@@ -32,7 +32,7 @@
         "version": "GNU assembler (GNU Binutils for Ubuntu) 2.42"
       }
     },
-    "git_commit_sha": "e55809509f1847f22a945d1162924045b2129279",
+    "git_commit_sha": "fd011a72b003f11f698fc67e05ec4df292b6b44a",
     "git_branch": "invariantzkaedi-sturdy-spoon",
     "git_dirty": true
   },
@@ -53,7 +53,7 @@
     },
     "differential_gauntlet": {
       "status": "PASS",
-      "detail": "50/50 programs matched reference oracles (100.0%).",
+      "detail": "1000/1000 programs matched reference oracles (100.0%).",
       "results": {
         "status": "PASS",
         "verdict": "PASS",
@@ -61,10 +61,10 @@
           "gcc": "AVAILABLE",
           "clang": "AVAILABLE"
         },
-        "total": 50,
-        "passed": 50,
+        "total": 1000,
+        "passed": 1000,
         "pass_rate": 100.0,
-        "elapsed_seconds": 16.904443979263306,
+        "elapsed_seconds": 152.48961329460144,
         "failures": {},
         "divergences": []
       }
@@ -77,12 +77,12 @@
       "sha256": "c2163b2ec30953fc0730a49173c9ff974e8e76ceb110c24e13632766d0fef373"
     },
     "tools/differential_compiler_gauntlet.py": {
-      "size_bytes": 17978,
-      "sha256": "cbfb04b9b60c71835137574a3ec752cde3b6ecb0a1f7907b9619574ece0218b5"
+      "size_bytes": 25546,
+      "sha256": "c8e7188257b92c0d8955534f9025fa8c7d21b46e5d98652faa9961a6be9c82dc"
     },
     "tools/reproducible_validation_runner.py": {
-      "size_bytes": 19367,
-      "sha256": "589b336f46c0feb811d94e660a847f32f0984855955c27ab63878656cbdd41b7"
+      "size_bytes": 19417,
+      "sha256": "c260761b5b0c2b9f420f843c5175706965215386f4405508de4a20048737829f"
     },
     "scripts/reproducible_validate.sh": {
       "size_bytes": 611,
@@ -91,6 +91,10 @@
     "scripts/reproducible_validate.ps1": {
       "size_bytes": 905,
       "sha256": "127e441c840de4108ca13610b58cbd8de6ea06a378ee48ffc56b456cb63bfb8a"
+    },
+    "apps/zcc-cloud/functions/api/verify.js": {
+      "size_bytes": 46528,
+      "sha256": "9a09fe7b5891871a499faf5df1788b0cc6c6f0fcef55bf52c73f9bc7760a70e7"
     },
     ".gitignore": {
       "size_bytes": 11118,

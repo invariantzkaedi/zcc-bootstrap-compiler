@@ -332,7 +332,7 @@ def main():
         f"--workers={args.workers}",
         f"--json={json_out_file}"
     ]
-    rc, out, err = run_logged_cmd(gauntlet_cmd, repo_root, logger, timeout=240.0)
+    rc, out, err = run_logged_cmd(gauntlet_cmd, repo_root, logger, timeout=900.0)
     print(out)
     if err:
         print(err, file=sys.stderr)
@@ -376,6 +376,7 @@ def main():
         "tools/reproducible_validation_runner.py",
         "scripts/reproducible_validate.sh",
         "scripts/reproducible_validate.ps1",
+        "apps/zcc-cloud/functions/api/verify.js",
         ".gitignore",
     ]
     source_artifacts: Dict[str, Dict[str, Any]] = {}
