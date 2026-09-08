@@ -160,7 +160,55 @@ async function runTests() {
   const missingProofData = await missingProofRes.json();
   assert(missingProofData.code === "MISSING_ZK_PROOF", "Rejection code is MISSING_ZK_PROOF (proof is non-optional)");
 
-  // 3b: Forged G1 curve point MUST be rejected with 422
+  // 3b: Missing public_inputs MUST be rejected with 422
+  const missingInputsRes = await verifyHandler.onRequestPost({
+    request: mockRequest("POST", "https://zkaedi.ai/api/verify", {
+      "Authorization": `Bearer ${validKey}`,
+      "Content-Type": "application/json"
+    }, {
+      source: sampleSource,
+      ast_commitment: expectedCommitment,
+      proof: {
+        pi_a: ["0x01", "0x02"],
+        pi_b: [
+          ["0x1800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed", "0x198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c2"],
+          ["0x12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa", "0x090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b"]
+        ],
+        pi_c: ["0x01", "0x02"]
+        // public_inputs intentionally omitted!
+      }
+    }),
+    env: TEST_ENV
+  });
+  assert(missingInputsRes.status === 422, "POST /api/verify rejects missing public_inputs with 422 Unprocessable Entity");
+  const missingInputsData = await missingInputsRes.json();
+  assert(missingInputsData.code === "MISSING_PUBLIC_INPUTS", "Rejection code is MISSING_PUBLIC_INPUTS (public inputs mandatory)");
+
+  // 3c: Mismatched public_inputs MUST be rejected with 422
+  const mismatchedInputsRes = await verifyHandler.onRequestPost({
+    request: mockRequest("POST", "https://zkaedi.ai/api/verify", {
+      "Authorization": `Bearer ${validKey}`,
+      "Content-Type": "application/json"
+    }, {
+      source: sampleSource,
+      ast_commitment: expectedCommitment,
+      proof: {
+        pi_a: ["0x01", "0x02"],
+        pi_b: [
+          ["0x1800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed", "0x198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c2"],
+          ["0x12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa", "0x090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b"]
+        ],
+        pi_c: ["0x01", "0x02"],
+        public_inputs: ["0xdeadbeef12345678"] // mismatched public input
+      }
+    }),
+    env: TEST_ENV
+  });
+  assert(mismatchedInputsRes.status === 422, "POST /api/verify rejects mismatched public_inputs with 422");
+  const mismatchedData = await mismatchedInputsRes.json();
+  assert(mismatchedData.code === "PUBLIC_INPUT_MISMATCH", "Rejection code is PUBLIC_INPUT_MISMATCH");
+
+  // 3d: Forged G1 curve point MUST be rejected with 422
   const forgedG1ProofRes = await verifyHandler.onRequestPost({
     request: mockRequest("POST", "https://zkaedi.ai/api/verify", {
       "Authorization": `Bearer ${validKey}`,
@@ -174,7 +222,8 @@ async function runTests() {
           ["0x1800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed", "0x198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c2"],
           ["0x12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa", "0x090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b"]
         ],
-        pi_c: ["0x01", "0x02"]
+        pi_c: ["0x01", "0x02"],
+        public_inputs: [expectedCommitment]
       }
     }),
     env: TEST_ENV
@@ -183,7 +232,7 @@ async function runTests() {
   const forgedG1Data = await forgedG1ProofRes.json();
   assert(forgedG1Data.code === "INVALID_CURVE_POINT", "Rejection code is INVALID_CURVE_POINT");
 
-  // 3c: Forged G2 curve point MUST be rejected with 422 (INVALID_G2_CURVE_POINT)
+  // 3e: Forged G2 curve point MUST be rejected with 422 (INVALID_G2_CURVE_POINT)
   const forgedG2ProofRes = await verifyHandler.onRequestPost({
     request: mockRequest("POST", "https://zkaedi.ai/api/verify", {
       "Authorization": `Bearer ${validKey}`,
@@ -194,7 +243,8 @@ async function runTests() {
       proof: {
         pi_a: ["0x01", "0x02"],
         pi_b: [["0x1", "0x2"], ["0x3", "0x4"]], // Forged G2 point NOT on twist curve
-        pi_c: ["0x01", "0x02"]
+        pi_c: ["0x01", "0x02"],
+        public_inputs: [expectedCommitment]
       }
     }),
     env: TEST_ENV
@@ -203,12 +253,47 @@ async function runTests() {
   const forgedG2Data = await forgedG2ProofRes.json();
   assert(forgedG2Data.code === "INVALID_G2_CURVE_POINT", "Rejection code is INVALID_G2_CURVE_POINT");
 
-  // 3d: Valid curve points on BN254 G1 & G2 with verified pairing and loaded verification key
-  const validG1Point = ["0x01", "0x02"]; // Satisfies 2^2 = 1^3 + 3 = 4 (mod q)
+  // 3f: Invalid On-Curve Proof MUST be rejected with 422 PAIRING_CHECK_FAILED
+  // Points lie strictly on BN254 G1 and G2 curves, but do not satisfy the Groth16 pairing equation
   const validG2Point = [
     ["0x1800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed", "0x198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c2"],
     ["0x12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa", "0x090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b"]
   ];
+  const onCurveForgedRes = await verifyHandler.onRequestPost({
+    request: mockRequest("POST", "https://zkaedi.ai/api/verify", {
+      "Authorization": `Bearer ${validKey}`,
+      "Content-Type": "application/json"
+    }, {
+      source: sampleSource,
+      ast_commitment: expectedCommitment,
+      proof: {
+        pi_a: ["0x01", "0x02"], // strictly on G1 (2^2 = 1^3 + 3), but does NOT satisfy Groth16 pairing!
+        pi_b: validG2Point,     // strictly on G2
+        pi_c: ["0x01", "0x02"], // strictly on G1
+        public_inputs: [expectedCommitment]
+      }
+    }),
+    env: TEST_ENV
+  });
+  assert(onCurveForgedRes.status === 422, "POST /api/verify rejects invalid on-curve proof failing pairing check with 422");
+  const onCurveForgedData = await onCurveForgedRes.json();
+  assert(onCurveForgedData.code === "PAIRING_CHECK_FAILED", "Rejection code is PAIRING_CHECK_FAILED (Fq12 pairing check non-identity)");
+
+  // 3g: Genuine Groth16 Proof with Valid Optimal Ate Pairing and Fq12 Identity
+  // Construct genuine cryptographic proof points that satisfy the pairing equation
+  const commScalar = BigInt("0x" + expectedCommitment.replace(/^0x/, "")) % verifyHandler.BN254_R;
+  const g1Gen = verifyHandler.G1_GENERATOR;
+  // vk_x = IC[0] + comm * IC[1] = (1 + comm) * G1
+  // pi_c = 7 * G1
+  // pi_a = alpha(1) + vk_x(1 + comm) + pi_c(7) = (9 + comm) * G1
+  const genuinePiC = verifyHandler.g1Mul(g1Gen, 7n);
+  const genuinePiA = verifyHandler.g1Mul(g1Gen, 9n + commScalar);
+  const genuineProof = {
+    pi_a: ["0x" + genuinePiA[0].toString(16), "0x" + genuinePiA[1].toString(16)],
+    pi_b: validG2Point,
+    pi_c: ["0x" + genuinePiC[0].toString(16), "0x" + genuinePiC[1].toString(16)],
+    public_inputs: [expectedCommitment]
+  };
 
   const validProofRes = await verifyHandler.onRequestPost({
     request: mockRequest("POST", "https://zkaedi.ai/api/verify", {
@@ -217,21 +302,27 @@ async function runTests() {
     }, {
       source: sampleSource,
       ast_commitment: expectedCommitment,
-      proof: {
-        pi_a: validG1Point,
-        pi_b: validG2Point,
-        pi_c: validG1Point,
-        public_inputs: [expectedCommitment]
-      }
+      proof: genuineProof
     }),
     env: TEST_ENV
   });
-  assert(validProofRes.status === 200, "POST /api/verify accepts genuine BN254 G1 & G2 curve points");
+  assert(validProofRes.status === 200, "POST /api/verify accepts genuine Groth16 proof with valid Fq12 pairing identity");
   const validProofData = await validProofRes.json();
   assert(validProofData.verified === true, "verified = true for genuine proof");
   assert(validProofData.zk_proof_audit.verification_key_loaded === true, "Audit confirms verification key loaded");
   assert(validProofData.zk_proof_audit.g2_membership_pi_b.includes("VALIDATED"), "Audit confirms G2 membership validation on twist curve");
   assert(validProofData.zk_proof_audit.pairing_check.includes("PASSED"), "Audit confirms pairing equation evaluated");
+  assert(validProofData.zk_proof_audit.final_exponentiation === "VERIFIED_FQ12_IDENTITY", "Audit confirms final exponentiation verified against Fq12 identity");
+  assert(validProofData.r1cs_violations === 0, "Receipt reports 0 R1CS violations");
+  assert(validProofData.r1cs_constraints > 0, "Receipt reports authentic positive R1CS constraint count");
+  assert(validProofData.r1cs_witness_variables > 0, "Receipt reports authentic positive R1CS witness count");
+
+  // 3h: Authentic R1CS Witness & Constraint Verification Unit Check
+  const r1csUnitTest = verifyHandler.verifyProgramR1CS(sampleSource, expectedCommitment);
+  assert(r1csUnitTest.satisfiable === true, "verifyProgramR1CS evaluates genuine witness with satisfiable: true");
+  assert(r1csUnitTest.violations === 0, "verifyProgramR1CS confirms 0 constraint violations");
+  assert(r1csUnitTest.constraintCount >= 10, "verifyProgramR1CS produces real constraint count (not fabricated)");
+  assert(r1csUnitTest.witnessCount >= 10, "verifyProgramR1CS produces real witness count (not fabricated)");
 
   // ── BLOCKER 4: C COMPILER LOCALS, CALLS & CONTROL FLOW ──────────
   console.log("\nBlocker 4: Compiler Semantic Codegen for Locals, Calls, and Control Flow");

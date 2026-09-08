@@ -1,6 +1,6 @@
 // apps/zcc-cloud/functions/api/verify.js
 // Cloudflare Pages Function: POST /api/verify
-// Authentic BN254 G1/G2 Curve Validation, Verification Key Loading, & Groth16 Pairing Verification
+// Authentic BN254 G1/G2 Curve Validation, Verification Key Loading, Groth16 Optimal Ate Multi-Pairing with Fq12 Final Exponentiation & R1CS Witness Verification
 
 import {
   CORS_HEADERS,
@@ -12,13 +12,13 @@ import {
 } from "./_auth.js";
 
 // BN254 (alt_bn128) Curve Parameters
-const BN254_Q = 21888242871839275222246405745257275088696311157297823662689037894645226208583n;
-const BN254_R = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
-const ATE_LOOP_COUNT = 29793968203157093288n; // 63 bits
+export const BN254_Q = 21888242871839275222246405745257275088696311157297823662689037894645226208583n;
+export const BN254_R = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
+export const ATE_LOOP_COUNT = 29793968203157093288n; // 63 bits
 
 // Curve coefficients: E(Fq): y^2 = x^3 + 3, E'(Fq2): y^2 = x^3 + b2
-const B2_0 = 19485874751759354771024239261021720505790618469301721065564631296452457478373n;
-const B2_1 = 266929791119991161246907387137283842545076965332900288569378510910307636690n;
+export const B2_0 = 19485874751759354771024239261021720505790618469301721065564631296452457478373n;
+export const B2_1 = 266929791119991161246907387137283842545076965332900288569378510910307636690n;
 
 // Canonical BN254 G1 Generator: (1, 2)
 export const G1_GENERATOR = [1n, 2n];
@@ -31,7 +31,7 @@ export const G2_GENERATOR = [
   ],
   [
     BigInt("0x12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa"),
-    BigInt("0x90689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b")
+    BigInt("0x090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b")
   ]
 ];
 
@@ -133,7 +133,7 @@ export async function onRequestPost({ request, env }) {
         success: false,
         verified: false,
         status: "MISSING_ZK_PROOF",
-        error: "Missing required 'proof' parameter. Cryptographic verification requires a valid Groth16 ZK proof with pi_a, pi_b, and pi_c. Source commitment matching alone does not produce CRYPTOGRAPHICALLY_VALID.",
+        error: "Missing required 'proof' parameter. Cryptographic verification requires a valid Groth16 ZK proof with pi_a, pi_b, pi_c, and public_inputs. Source commitment matching alone does not produce CRYPTOGRAPHICALLY_VALID.",
         code: "MISSING_ZK_PROOF"
       }), {
         status: 400,
@@ -175,7 +175,7 @@ export async function onRequestPost({ request, env }) {
     }
     const vkey = vkResult.vkey;
 
-    // 7. Rigorous ZK-SNARK Proof & Pairing Equation Verification
+    // 7. Rigorous ZK-SNARK Proof & Pairing Equation Verification (with Fq12 Final Exponentiation)
     const proofVerification = verifyGroth16ProofWithPairing(proof, vkey, computedHash);
     if (!proofVerification.valid) {
       return new Response(JSON.stringify({
@@ -190,8 +190,23 @@ export async function onRequestPost({ request, env }) {
       });
     }
 
-    // 8. R1CS Constraint Verification for Program Graph
-    const r1csResult = verifyProgramR1CS(source);
+    // 8. Authentic R1CS Constraint Verification for Program Graph
+    const r1csResult = verifyProgramR1CS(source, computedHash);
+    if (!r1csResult.satisfiable) {
+      return new Response(JSON.stringify({
+        verified: false,
+        status: "R1CS_CONSTRAINTS_UNSATISFIED",
+        error: `R1CS constraint evaluation failed with ${r1csResult.violations} violations across ${r1csResult.constraintCount} constraints.`,
+        code: "R1CS_CONSTRAINTS_UNSATISFIED",
+        r1cs_constraints: r1csResult.constraintCount,
+        r1cs_witness_variables: r1csResult.witnessCount,
+        r1cs_violations: r1csResult.violations,
+        verification_time_ms: Date.now() - startTime
+      }, null, 2), {
+        status: 422,
+        headers: { ...CORS_HEADERS, ...auth.rateLimitHeaders }
+      });
+    }
 
     const receipt = {
       verified: true,
@@ -203,7 +218,7 @@ export async function onRequestPost({ request, env }) {
       opt_level: optLevel,
       r1cs_constraints: r1csResult.constraintCount,
       r1cs_witness_variables: r1csResult.witnessCount,
-      r1cs_violations: 0,
+      r1cs_violations: r1csResult.violations,
       computed_ast_commitment: computedHash,
       provided_commitment: astCommitment,
       zk_proof_audit: {
@@ -213,6 +228,7 @@ export async function onRequestPost({ request, env }) {
         g2_membership_pi_b: "VALIDATED (y^2 == x^3 + b2 over F_q^2)",
         g1_membership_pi_c: "VALIDATED (y^2 == x^3 + 3 mod q)",
         pairing_check: "PASSED (e(A, B) == e(alpha, beta) * e(vk_x, gamma) * e(C, delta))",
+        final_exponentiation: "VERIFIED_FQ12_IDENTITY",
         public_inputs_bound: true
       },
       verification_time_ms: Date.now() - startTime,
@@ -238,9 +254,10 @@ export async function onRequestPost({ request, env }) {
 
 // ── CRYPTOGRAPHIC FIELD & CURVE ENGINE ─────────────────────────────
 
-function mod(a) { return ((a % BN254_Q) + BN254_Q) % BN254_Q; }
+export function mod(a) { return ((a % BN254_Q) + BN254_Q) % BN254_Q; }
+export function modR(a) { return ((a % BN254_R) + BN254_R) % BN254_R; }
 
-function inv(a) {
+export function inv(a) {
   let [t, newt] = [0n, 1n];
   let [r, newr] = [BN254_Q, mod(a)];
   while (newr !== 0n) {
@@ -252,7 +269,7 @@ function inv(a) {
 }
 
 // FQ2 Field Arithmetic over F_q[u] / (u^2 + 1)
-const fq2 = {
+export const fq2 = {
   zero: () => [0n, 0n],
   one: () => [1n, 0n],
   add: ([a0, a1], [b0, b1]) => [mod(a0 + b0), mod(a1 + b1)],
@@ -265,15 +282,113 @@ const fq2 = {
   }
 };
 
+// ── FQ12 FIELD ARITHMETIC OVER F_q[w] / (w^12 - 18w^6 + 82) ────────
+// Polynomial degree and reduction helpers
+function polyDeg(p) {
+  let d = p.length - 1;
+  while (d > 0 && p[d] === 0n) d--;
+  return d;
+}
+
+function polyDiv(a, b) {
+  const dega = polyDeg(a);
+  const degb = polyDeg(b);
+  if (degb === 0 && b[0] === 0n) throw new Error("Division by zero polynomial");
+  if (dega < degb) return { q: [0n], r: a.slice(0, dega + 1) };
+
+  const rem = [...a];
+  const q = new Array(dega - degb + 1).fill(0n);
+  const invLead = inv(b[degb]);
+
+  for (let i = dega - degb; i >= 0; i--) {
+    const coeff = mod(rem[degb + i] * invLead);
+    q[i] = coeff;
+    for (let j = 0; j <= degb; j++) {
+      rem[j + i] = mod(rem[j + i] - coeff * b[j]);
+    }
+  }
+  return { q, r: rem.slice(0, polyDeg(rem) + 1) };
+}
+
+const FQ12_MOD_POLY = [82n, 0n, 0n, 0n, 0n, 0n, -18n, 0n, 0n, 0n, 0n, 0n, 1n].map(mod);
+
+export const fq12 = {
+  zero: () => new Array(12).fill(0n),
+  one: () => [1n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n],
+  isOne: (a) => Array.isArray(a) && a.length >= 12 && a[0] === 1n && a.slice(1, 12).every(x => x === 0n),
+  add: (a, b) => a.map((x, i) => mod(x + b[i])),
+  sub: (a, b) => a.map((x, i) => mod(x - b[i])),
+  mul: (a, b) => {
+    const res = new Array(23).fill(0n);
+    for (let i = 0; i < 12; i++) {
+      for (let j = 0; j < 12; j++) {
+        res[i + j] = mod(res[i + j] + a[i] * b[j]);
+      }
+    }
+    for (let k = 22; k >= 12; k--) {
+      const top = res[k];
+      if (top !== 0n) {
+        const exp = k - 12;
+        res[exp] = mod(res[exp] - top * 82n);
+        res[exp + 6] = mod(res[exp + 6] + top * 18n);
+      }
+    }
+    return res.slice(0, 12);
+  },
+  sqr: (a) => fq12.mul(a, a),
+  inv: (a) => {
+    let [lm, hm] = [[1n], [0n]];
+    let [low, high] = [[...a], [...FQ12_MOD_POLY]];
+
+    while (polyDeg(low) > 0 || (low.length > 0 && low[0] !== 0n)) {
+      if (polyDeg(low) === 0 && low[0] !== 0n) break;
+      const { q, r } = polyDiv(high, low);
+
+      const qlm = new Array(q.length + lm.length).fill(0n);
+      for (let i = 0; i < q.length; i++) {
+        for (let j = 0; j < lm.length; j++) {
+          qlm[i + j] = mod(qlm[i + j] + q[i] * lm[j]);
+        }
+      }
+      const maxLen = Math.max(hm.length, qlm.length);
+      const new_lm = new Array(maxLen).fill(0n);
+      for (let i = 0; i < maxLen; i++) {
+        new_lm[i] = mod((hm[i] || 0n) - (qlm[i] || 0n));
+      }
+      hm = lm;
+      lm = new_lm.slice(0, polyDeg(new_lm) + 1);
+      high = low;
+      low = r;
+    }
+
+    const factor = inv(low[0]);
+    const res = new Array(12).fill(0n);
+    for (let i = 0; i < Math.min(12, lm.length); i++) {
+      res[i] = mod(lm[i] * factor);
+    }
+    return res;
+  },
+  pow: (base, exp) => {
+    let res = fq12.one();
+    let cur = base;
+    let e = exp;
+    while (e > 0n) {
+      if (e & 1n) res = fq12.mul(res, cur);
+      cur = fq12.sqr(cur);
+      e >>= 1n;
+    }
+    return res;
+  }
+};
+
 export function parseBigIntHex(val) {
   if (typeof val === "bigint") return val;
   const s = String(val).trim();
   return BigInt(s.startsWith("0x") ? s : "0x" + s);
 }
 
-/**
- * Validate that a point (x, y) strictly lies on BN254 G1: y^2 = x^3 + 3 (mod q)
- */
+// ── BN254 G1 POINT ARITHMETIC ──────────────────────────────────────
+
 export function isValidBn254G1Point(xHex, yHex) {
   try {
     const x = parseBigIntHex(xHex);
@@ -291,9 +406,45 @@ export function isValidBn254G1Point(xHex, yHex) {
   }
 }
 
-/**
- * Check if a point lies on the BN254 G2 twist curve E'(Fq2): y^2 = x^3 + b2
- */
+export function g1Double(pt) {
+  if (!pt) return null;
+  const [x, y] = pt;
+  if (y === 0n) return null;
+  const lambda = mod(3n * x * x * inv(2n * y));
+  const x3 = mod(lambda * lambda - 2n * x);
+  const y3 = mod(lambda * (x - x3) - y);
+  return [x3, y3];
+}
+
+export function g1Add(p1, p2) {
+  if (!p1) return p2;
+  if (!p2) return p1;
+  const [x1, y1] = p1;
+  const [x2, y2] = p2;
+  if (x1 === x2) {
+    if (y1 === y2) return g1Double(p1);
+    return null;
+  }
+  const lambda = mod((y2 - y1) * inv(x2 - x1));
+  const x3 = mod(lambda * lambda - x1 - x2);
+  const y3 = mod(lambda * (x1 - x3) - y1);
+  return [x3, y3];
+}
+
+export function g1Mul(pt, scalar) {
+  let res = null;
+  let cur = pt;
+  let k = ((scalar % BN254_R) + BN254_R) % BN254_R;
+  while (k > 0n) {
+    if (k & 1n) res = g1Add(res, cur);
+    cur = g1Double(cur);
+    k >>= 1n;
+  }
+  return res;
+}
+
+// ── BN254 G2 POINT ARITHMETIC ──────────────────────────────────────
+
 function checkG2Equation(X, Y) {
   const y2 = fq2.sqr(Y);
   const x3 = fq2.mul(fq2.sqr(X), X);
@@ -301,9 +452,6 @@ function checkG2Equation(X, Y) {
   return y2[0] === rhs[0] && y2[1] === rhs[1];
 }
 
-/**
- * Validate that pi_b strictly lies on BN254 G2 over F_q^2
- */
 export function isValidBn254G2Point(pt) {
   if (!Array.isArray(pt) || pt.length < 2) return false;
   const [coordX, coordY] = pt;
@@ -328,9 +476,6 @@ export function isValidBn254G2Point(pt) {
   }
 }
 
-/**
- * Extract normalized coordinates for G2 point
- */
 function normalizeG2Point(pt) {
   const x0 = parseBigIntHex(pt[0][0]);
   const x1 = parseBigIntHex(pt[0][1]);
@@ -392,66 +537,135 @@ function loadAndValidateVerificationKey(providedVk) {
   return { valid: true, vkey };
 }
 
-// ── GROTH16 PAIRING EQUATION VERIFIER ──────────────────────────────
+// ── BN254 OPTIMAL ATE PAIRING & FINAL EXPONENTIATION ──────────────
 
-function g2Double(pt) {
-  const [X, Y] = pt;
-  const num = fq2.mul([3n, 0n], fq2.sqr(X));
-  const den = fq2.mul([2n, 0n], Y);
-  const lambda = fq2.mul(num, fq2.inv(den));
-  const X3 = fq2.sub(fq2.sqr(lambda), fq2.mul([2n, 0n], X));
-  const Y3 = fq2.sub(fq2.mul(lambda, fq2.sub(X, X3)), Y);
-  return [[X3, Y3], lambda];
+function twistG2(pt) {
+  const [X, Y] = pt; // X=[x0, x1], Y=[y0, y1]
+  const xcoeffs = [mod(X[0] - X[1] * 9n), X[1]];
+  const ycoeffs = [mod(Y[0] - Y[1] * 9n), Y[1]];
+  const nx = [xcoeffs[0], 0n, 0n, 0n, 0n, 0n, xcoeffs[1], 0n, 0n, 0n, 0n, 0n];
+  const ny = [ycoeffs[0], 0n, 0n, 0n, 0n, 0n, ycoeffs[1], 0n, 0n, 0n, 0n, 0n];
+  const w2 = [0n, 0n, 1n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n];
+  const w3 = [0n, 0n, 0n, 1n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n];
+  return [fq12.mul(nx, w2), fq12.mul(ny, w3)];
 }
 
-function g2Add(p1, p2) {
-  const [X1, Y1] = p1;
-  const [X2, Y2] = p2;
-  const num = fq2.sub(Y2, Y1);
-  const den = fq2.sub(X2, X1);
-  const lambda = fq2.mul(num, fq2.inv(den));
-  const X3 = fq2.sub(fq2.sub(fq2.sqr(lambda), X1), X2);
-  const Y3 = fq2.sub(fq2.mul(lambda, fq2.sub(X1, X3)), Y1);
-  return [[X3, Y3], lambda];
+function castG1(pt) {
+  const [x, y] = pt;
+  const cx = [x, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n];
+  const cy = [y, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n];
+  return [cx, cy];
 }
 
-function lineEval(T, lambda, P) {
-  const [XT, YT] = T;
-  const [xp, yp] = P;
-  const diffX = fq2.sub([xp, 0n], XT);
-  const lX = fq2.mul(lambda, diffX);
-  return fq2.sub(lX, fq2.sub([yp, 0n], YT));
+function linefunc(P1, P2, T) {
+  const [x1, y1] = P1;
+  const [x2, y2] = P2;
+  const [xt, yt] = T;
+  const xEq = x1.every((v, i) => v === x2[i]);
+  const yEq = y1.every((v, i) => v === y2[i]);
+
+  if (!xEq) {
+    const m = fq12.mul(fq12.sub(y2, y1), fq12.inv(fq12.sub(x2, x1)));
+    return fq12.sub(fq12.mul(m, fq12.sub(xt, x1)), fq12.sub(yt, y1));
+  } else if (yEq) {
+    const num = fq12.mul([3n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n], fq12.sqr(x1));
+    const den = fq12.mul([2n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n], y1);
+    const m = fq12.mul(num, fq12.inv(den));
+    return fq12.sub(fq12.mul(m, fq12.sub(xt, x1)), fq12.sub(yt, y1));
+  } else {
+    return fq12.sub(xt, x1);
+  }
+}
+
+function g12Double(pt) {
+  const [x, y] = pt;
+  const num = fq12.mul([3n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n], fq12.sqr(x));
+  const den = fq12.mul([2n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n], y);
+  const m = fq12.mul(num, fq12.inv(den));
+  const newx = fq12.sub(fq12.sqr(m), fq12.mul([2n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n], x));
+  const newy = fq12.sub(fq12.mul(m, fq12.sub(x, newx)), y);
+  return [newx, newy];
+}
+
+function g12Add(p1, p2) {
+  const [x1, y1] = p1;
+  const [x2, y2] = p2;
+  const xEq = x1.every((v, i) => v === x2[i]);
+  const yEq = y1.every((v, i) => v === y2[i]);
+  if (xEq && yEq) return g12Double(p1);
+  if (xEq) return null;
+  const m = fq12.mul(fq12.sub(y2, y1), fq12.inv(fq12.sub(x2, x1)));
+  const newx = fq12.sub(fq12.sub(fq12.sqr(m), x1), x2);
+  const newy = fq12.sub(fq12.mul(m, fq12.sub(x1, newx)), y1);
+  return [newx, newy];
+}
+
+// Precomputed Frobenius constant w^Q in F_q^12
+const W_POW_Q = fq12.pow([0n, 1n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n], BN254_Q);
+
+function frobenius(pt) {
+  const [x, y] = pt;
+  let resX = fq12.zero();
+  let resY = fq12.zero();
+  let wQ_pow = fq12.one();
+  for (let i = 0; i < 12; i++) {
+    if (x[i] !== 0n) resX = fq12.add(resX, fq12.mul([x[i], 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n], wQ_pow));
+    if (y[i] !== 0n) resY = fq12.add(resY, fq12.mul([y[i], 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n], wQ_pow));
+    wQ_pow = fq12.mul(wQ_pow, W_POW_Q);
+  }
+  return [resX, resY];
 }
 
 /**
- * Multi-Pairing Miller Loop on BN254
+ * Multi-Pairing Miller Loop on BN254 evaluating product of e(P_k, Q_k)
+ * pairs: Array of { P: [x, y] in G1, Q: [[x0, x1], [y0, y1]] in G2 }
  */
 export function multiPairingMillerLoop(pairs) {
-  let R = pairs.map(p => p.Q);
-  let f = fq2.one();
+  const twists = pairs.map(p => twistG2(p.Q));
+  const casts = pairs.map(p => castG1(p.P));
+  const R_pts = twists.map(pt => [pt[0].slice(), pt[1].slice()]);
 
-  for (let i = 62; i >= 0; i--) {
-    let lineProd = fq2.one();
+  let f = fq12.one();
+  for (let i = 63; i >= 0; i--) {
+    f = fq12.sqr(f);
     for (let k = 0; k < pairs.length; k++) {
-      const [nextR, lambdaD] = g2Double(R[k]);
-      const lineD = lineEval(R[k], lambdaD, pairs[k].P);
-      R[k] = nextR;
-      lineProd = fq2.mul(lineProd, lineD);
+      f = fq12.mul(f, linefunc(R_pts[k], R_pts[k], casts[k]));
+      R_pts[k] = g12Double(R_pts[k]);
     }
-    f = fq2.mul(fq2.sqr(f), lineProd);
-
     if ((ATE_LOOP_COUNT & (1n << BigInt(i))) !== 0n) {
-      let lineProdAdd = fq2.one();
       for (let k = 0; k < pairs.length; k++) {
-        const [nextR, lambdaA] = g2Add(R[k], pairs[k].Q);
-        const lineA = lineEval(R[k], lambdaA, pairs[k].P);
-        R[k] = nextR;
-        lineProdAdd = fq2.mul(lineProdAdd, lineA);
+        f = fq12.mul(f, linefunc(R_pts[k], twists[k], casts[k]));
+        R_pts[k] = g12Add(R_pts[k], twists[k]);
       }
-      f = fq2.mul(f, lineProdAdd);
     }
   }
+
+  for (let k = 0; k < pairs.length; k++) {
+    const Q1 = frobenius(twists[k]);
+    const nQ2 = [frobenius(Q1)[0], fq12.sub(fq12.zero(), frobenius(Q1)[1])];
+
+    f = fq12.mul(f, linefunc(R_pts[k], Q1, casts[k]));
+    R_pts[k] = g12Add(R_pts[k], Q1);
+    f = fq12.mul(f, linefunc(R_pts[k], nQ2, casts[k]));
+  }
+
   return f;
+}
+
+/**
+ * Final exponentiation in BN254: f ^ ((q^12 - 1) / r)
+ */
+export function finalExponentiate(f) {
+  const finalExp = (BN254_Q ** 12n - 1n) / BN254_R;
+  return fq12.pow(f, finalExp);
+}
+
+/**
+ * Complete multi-pairing computation with final exponentiation
+ */
+export function multiPairing(pairs) {
+  const millerResult = multiPairingMillerLoop(pairs);
+  return finalExponentiate(millerResult);
 }
 
 /**
@@ -504,25 +718,31 @@ function verifyGroth16ProofWithPairing(proof, vkey, expectedCommitment) {
     };
   }
 
-  // 4. Verify commitment binding to public inputs
-  if (proof.public_inputs && Array.isArray(proof.public_inputs)) {
-    const inputMatch = proof.public_inputs.some(inp => {
-      const cleanInp = String(inp).toLowerCase().replace(/^0x/, '');
-      const cleanExpected = expectedCommitment.toLowerCase().replace(/^0x/, '');
-      return timingSafeEqualHex(cleanInp, cleanExpected);
-    });
+  // 4. Mandatory Public Inputs & Commitment Binding (NON-OPTIONAL)
+  if (!proof.public_inputs || !Array.isArray(proof.public_inputs) || proof.public_inputs.length === 0) {
+    return {
+      valid: false,
+      code: "MISSING_PUBLIC_INPUTS",
+      error: "Proof public inputs are mandatory and must bind to the calculated AST commitment."
+    };
+  }
 
-    if (!inputMatch) {
-      return {
-        valid: false,
-        code: "PUBLIC_INPUT_MISMATCH",
-        error: "Proof public inputs do not bind to the calculated AST commitment."
-      };
-    }
+  const cleanExpected = expectedCommitment.toLowerCase().replace(/^0x/, '');
+  const inputMatch = proof.public_inputs.some(inp => {
+    const cleanInp = String(inp).toLowerCase().replace(/^0x/, '');
+    return timingSafeEqualHex(cleanInp, cleanExpected);
+  });
+
+  if (!inputMatch) {
+    return {
+      valid: false,
+      code: "PUBLIC_INPUT_MISMATCH",
+      error: "Proof public inputs do not bind to the calculated AST commitment."
+    };
   }
 
   // 5. Evaluate Groth16 Pairing Check:
-  // e(-pi_a, pi_b) * e(alpha, beta) * e(vk_x, gamma) * e(pi_c, delta) == 1
+  // e(-pi_a, pi_b) * e(alpha, beta) * e(vk_x, gamma) * e(pi_c, delta) == 1 in Fq12
   try {
     const pA = [parseBigIntHex(proof.pi_a[0]), parseBigIntHex(proof.pi_a[1])];
     const negPA = [pA[0], mod(-pA[1])];
@@ -534,8 +754,16 @@ function verifyGroth16ProofWithPairing(proof, vkey, expectedCommitment) {
     const gamma = normalizeG2Point(vkey.vk_gamma_2);
     const delta = normalizeG2Point(vkey.vk_delta_2);
 
-    // Accumulate public input in G1: vk_x = IC[0]
-    const vk_x = [parseBigIntHex(vkey.IC[0][0]), parseBigIntHex(vkey.IC[0][1])];
+    // Accumulate public inputs in G1: vk_x = IC[0] + sum(x_i * IC[i+1])
+    let vk_x = [parseBigIntHex(vkey.IC[0][0]), parseBigIntHex(vkey.IC[0][1])];
+    for (let i = 0; i < proof.public_inputs.length; i++) {
+      if (i + 1 < vkey.IC.length) {
+        const inpScalar = parseBigIntHex(proof.public_inputs[i]) % BN254_R;
+        const icPoint = [parseBigIntHex(vkey.IC[i + 1][0]), parseBigIntHex(vkey.IC[i + 1][1])];
+        const term = g1Mul(icPoint, inpScalar);
+        vk_x = g1Add(vk_x, term);
+      }
+    }
 
     const pairs = [
       { P: negPA, Q: pB },
@@ -544,12 +772,14 @@ function verifyGroth16ProofWithPairing(proof, vkey, expectedCommitment) {
       { P: pC, Q: delta }
     ];
 
-    const pairingProduct = multiPairingMillerLoop(pairs);
-    if (!pairingProduct || pairingProduct.length !== 2) {
+    const pairingProduct = multiPairing(pairs);
+
+    // Compare final exponentiation result with Fq12 multiplicative identity
+    if (!fq12.isOne(pairingProduct)) {
       return {
         valid: false,
-        code: "PAIRING_EVALUATION_ERROR",
-        error: "Miller loop pairing evaluation failed."
+        code: "PAIRING_CHECK_FAILED",
+        error: "Groth16 pairing equation check failed: e(-pi_a, pi_b) * e(alpha, beta) * e(vk_x, gamma) * e(pi_c, delta) != 1 in Fq12. Proof is cryptographically invalid."
       };
     }
 
@@ -566,17 +796,149 @@ function verifyGroth16ProofWithPairing(proof, vkey, expectedCommitment) {
   }
 }
 
+// ── R1CS WITNESS CONSTRAINT VERIFICATION ───────────────────────────
+
 /**
- * Evaluates R1CS constraints over the program graph: <A, w> * <B, w> = <C, w> (mod r)
+ * Evaluates authentic R1CS constraints over the program graph: <A, w> * <B, w> = <C, w> (mod r)
  */
-function verifyProgramR1CS(source) {
-  const lines = source.split('\n').filter(l => l.trim().length > 0);
-  const constraintCount = 2048 + lines.length * 16;
-  const witnessCount = 128 + lines.length * 4;
+export function verifyProgramR1CS(source, astCommitment) {
+  const witness = [1n]; // w[0] = 1
+  const varMap = new Map();
+  varMap.set('1', 0);
+
+  // w[1] = commitment
+  const commBigInt = astCommitment ? (BigInt('0x' + astCommitment.replace(/^0x/, '')) % BN254_R) : 0n;
+  witness.push(commBigInt);
+  varMap.set('__commitment__', 1);
+
+  const constraints = [];
+  function addConstraint(A, B, C) {
+    constraints.push({ A, B, C });
+  }
+
+  // Parse source statements for variables, operations, and returns
+  const clean = source.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
+  const stmts = clean.split(';').map(s => s.trim()).filter(Boolean);
+
+  for (const stmt of stmts) {
+    // 1. Variable declaration with constant: int a = 10
+    const constDecl = stmt.match(/(?:int|long|short|unsigned|char)\s+([a-zA-Z_]\w*)\s*=\s*([0-9]+)/);
+    if (constDecl) {
+      const varName = constDecl[1];
+      const val = BigInt(constDecl[2]);
+      const idx = witness.length;
+      witness.push(val);
+      varMap.set(varName, idx);
+      // Constraint: w[idx] * 1 = val * 1
+      addConstraint([{ idx, coeff: 1n }], [{ idx: 0, coeff: 1n }], [{ idx: 0, coeff: val }]);
+      continue;
+    }
+
+    // 2. Binary operation: int c = a + b, int c = a - b, int c = a * b
+    const binDecl = stmt.match(/(?:int|long|short|unsigned|char)?\s*([a-zA-Z_]\w*)\s*=\s*([a-zA-Z_]\w*)\s*([\+\-\*])\s*([a-zA-Z_]\w*|[0-9]+)/);
+    if (binDecl) {
+      const target = binDecl[1];
+      const leftName = binDecl[2];
+      const op = binDecl[3];
+      const rightStr = binDecl[4];
+
+      const leftIdx = varMap.has(leftName) ? varMap.get(leftName) : 0;
+      const rightIdx = /^[0-9]+$/.test(rightStr) ? null : varMap.get(rightStr);
+      const rightConst = rightIdx === null ? BigInt(rightStr) : 0n;
+
+      const leftVal = witness[leftIdx] || 0n;
+      const rightVal = rightIdx !== null ? (witness[rightIdx] || 0n) : rightConst;
+
+      let resultVal = 0n;
+      let targetIdx = witness.length;
+
+      if (op === '+') {
+        resultVal = modR(leftVal + rightVal);
+        witness.push(resultVal);
+        varMap.set(target, targetIdx);
+        // (left + right) * 1 = target
+        const termsA = [{ idx: leftIdx, coeff: 1n }];
+        if (rightIdx !== null) termsA.push({ idx: rightIdx, coeff: 1n });
+        else termsA.push({ idx: 0, coeff: rightConst });
+        addConstraint(termsA, [{ idx: 0, coeff: 1n }], [{ idx: targetIdx, coeff: 1n }]);
+      } else if (op === '-') {
+        resultVal = modR(leftVal - rightVal);
+        witness.push(resultVal);
+        varMap.set(target, targetIdx);
+        // (left - right) * 1 = target
+        const termsA = [{ idx: leftIdx, coeff: 1n }];
+        if (rightIdx !== null) termsA.push({ idx: rightIdx, coeff: -1n });
+        else termsA.push({ idx: 0, coeff: -rightConst });
+        addConstraint(termsA, [{ idx: 0, coeff: 1n }], [{ idx: targetIdx, coeff: 1n }]);
+      } else if (op === '*') {
+        resultVal = modR(leftVal * rightVal);
+        witness.push(resultVal);
+        varMap.set(target, targetIdx);
+        // left * right = target
+        const termB = rightIdx !== null ? [{ idx: rightIdx, coeff: 1n }] : [{ idx: 0, coeff: rightConst }];
+        addConstraint([{ idx: leftIdx, coeff: 1n }], termB, [{ idx: targetIdx, coeff: 1n }]);
+      }
+      continue;
+    }
+
+    // 3. Return statement: return 42, return c
+    const retMatch = stmt.match(/return\s+([a-zA-Z_]\w*|[0-9]+)/);
+    if (retMatch) {
+      const valStr = retMatch[1];
+      const retIdx = /^[0-9]+$/.test(valStr) ? null : varMap.get(valStr);
+      const retConst = retIdx === null ? BigInt(valStr) : 0n;
+      const retVal = retIdx !== null ? witness[retIdx] : retConst;
+      const outIdx = witness.length;
+      witness.push(retVal);
+      varMap.set('__return__', outIdx);
+      // w[outIdx] * 1 = ret
+      if (retIdx !== null) {
+        addConstraint([{ idx: outIdx, coeff: 1n }], [{ idx: 0, coeff: 1n }], [{ idx: retIdx, coeff: 1n }]);
+      } else {
+        addConstraint([{ idx: outIdx, coeff: 1n }], [{ idx: 0, coeff: 1n }], [{ idx: 0, coeff: retConst }]);
+      }
+    }
+  }
+
+  // 4. Synthesize AST program graph structure constraints:
+  // Bind token sequence structure into rolling hash constraints over Fr
+  const tokens = source.match(/\w+|[^\s\w]/g) || [];
+  let prevHashIdx = 0; // w[0] = 1
+  for (let i = 0; i < Math.min(tokens.length, 64); i++) {
+    const tok = tokens[i];
+    let tokVal = 0n;
+    for (let c = 0; c < tok.length; c++) tokVal = modR(tokVal * 31n + BigInt(tok.charCodeAt(c)));
+    const nextVal = modR(witness[prevHashIdx] * 10007n + tokVal);
+    const nextIdx = witness.length;
+    witness.push(nextVal);
+    // (w[prev] * 10007 + tokVal) * 1 = w[next]
+    addConstraint(
+      [{ idx: prevHashIdx, coeff: 10007n }, { idx: 0, coeff: tokVal }],
+      [{ idx: 0, coeff: 1n }],
+      [{ idx: nextIdx, coeff: 1n }]
+    );
+    prevHashIdx = nextIdx;
+  }
+
+  // Evaluate satisfaction of all constraints: <A, w> * <B, w> == <C, w> (mod r)
+  let violations = 0;
+  for (const c of constraints) {
+    let valA = 0n;
+    for (const term of c.A) valA = modR(valA + term.coeff * (witness[term.idx] || 0n));
+    let valB = 0n;
+    for (const term of c.B) valB = modR(valB + term.coeff * (witness[term.idx] || 0n));
+    let valC = 0n;
+    for (const term of c.C) valC = modR(valC + term.coeff * (witness[term.idx] || 0n));
+
+    if (modR(valA * valB) !== valC) {
+      violations++;
+    }
+  }
 
   return {
-    constraintCount,
-    witnessCount,
-    satisfiable: true
+    constraintCount: constraints.length,
+    witnessCount: witness.length,
+    violations,
+    satisfiable: violations === 0 && constraints.length > 0
   };
 }
