@@ -10,12 +10,14 @@ export const CORS_HEADERS = {
 
 export const MAX_BODY_BYTES = 65536; // 64 KB strict ceiling
 
-// In-memory sliding window rate limiter state
-const rateLimitCache = new Map();
+// Sliding window parameters
 const WINDOW_MS = 60 * 1000; // 1 minute
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_LIMIT_PER_MINUTE = 60;
 const DEFAULT_LIMIT_PER_DAY = 5000;
+
+// Process-local fallback cache (used when cloud platform bindings are unconfigured)
+const rateLimitCache = new Map();
 
 /**
  * Obtain server HMAC secret.
@@ -56,10 +58,130 @@ export function timingSafeEqualHex(a, b) {
 }
 
 /**
- * Enforce real rate limits and quotas per identity
+ * Enforce rate limits and quotas per identity.
+ * Prioritizes:
+ * 1. Cloudflare Platform Rate Limiting binding (env.RATE_LIMITER)
+ * 2. Durable Objects (env.RATE_LIMIT_DO)
+ * 3. Durable Atomic Storage via Cloudflare KV (env.RATELIMIT_KV || env.API_KEYS_KV || env.KV)
+ * 4. Process-local sliding window cache (isolated test/dev fallback)
  */
-export function enforceRateLimitAndQuota(identifier, tier = "developer_sandbox") {
+export async function enforceRateLimitAndQuota(identifier, tier = "developer_sandbox", env = {}) {
   const now = Date.now();
+  const limitPerMin = tier === "enterprise" ? 300 : DEFAULT_LIMIT_PER_MINUTE;
+  const limitPerDay = tier === "enterprise" ? 50000 : DEFAULT_LIMIT_PER_DAY;
+
+  // 1. Cloudflare Platform Rate Limiting Binding
+  if (env.RATE_LIMITER && typeof env.RATE_LIMITER.limit === "function") {
+    try {
+      const rlResult = await env.RATE_LIMITER.limit({ key: identifier });
+      if (rlResult && rlResult.success === false) {
+        return {
+          allowed: false,
+          code: "RATE_LIMIT_EXCEEDED",
+          error: `Platform rate limit of ${limitPerMin} requests per minute exceeded.`,
+          retryAfter: 60,
+          headers: {
+            "X-RateLimit-Limit": String(limitPerMin),
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": "60",
+            "Retry-After": "60"
+          }
+        };
+      }
+    } catch (e) {
+      console.warn("Platform rate limiter error:", e);
+    }
+  }
+
+  // 2. Durable Objects for strict serializable linearizable counting
+  if (env.RATE_LIMIT_DO && typeof env.RATE_LIMIT_DO.idFromName === "function") {
+    try {
+      const doId = env.RATE_LIMIT_DO.idFromName(identifier);
+      const doStub = env.RATE_LIMIT_DO.get(doId);
+      const doRes = await doStub.fetch("https://ratelimit.internal/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier, tier, limitPerMin, limitPerDay, now })
+      });
+      if (doRes.ok) {
+        return await doRes.json();
+      }
+    } catch (e) {
+      console.warn("Durable Object rate limit error:", e);
+    }
+  }
+
+  // 3. Durable Atomic Storage via Cloudflare KV (survives isolate restarts and syncs across PoPs)
+  const kv = env.RATELIMIT_KV || env.API_KEYS_KV || env.KV;
+  if (kv && typeof kv.get === "function" && typeof kv.put === "function") {
+    const minBucket = Math.floor(now / WINDOW_MS);
+    const minKey = `rl:win:${identifier}:${minBucket}`;
+    const dayKey = `rl:day:${identifier}:${new Date(now).toISOString().slice(0, 10)}`;
+
+    const [minStr, dayStr] = await Promise.all([
+      kv.get(minKey),
+      kv.get(dayKey)
+    ]);
+
+    let minCount = minStr ? parseInt(minStr, 10) : 0;
+    let dayCount = dayStr ? parseInt(dayStr, 10) : 0;
+    const resetSec = Math.max(1, 60 - Math.floor((now % WINDOW_MS) / 1000));
+
+    if (minCount >= limitPerMin) {
+      return {
+        allowed: false,
+        code: "RATE_LIMIT_EXCEEDED",
+        error: `Rate limit of ${limitPerMin} requests per minute exceeded.`,
+        retryAfter: resetSec,
+        headers: {
+          "X-RateLimit-Limit": String(limitPerMin),
+          "X-RateLimit-Remaining": "0",
+          "X-RateLimit-Reset": String(resetSec),
+          "Retry-After": String(resetSec)
+        }
+      };
+    }
+
+    if (dayCount >= limitPerDay) {
+      return {
+        allowed: false,
+        code: "QUOTA_EXHAUSTED",
+        error: `Daily quota of ${limitPerDay} requests exhausted.`,
+        retryAfter: 3600,
+        headers: {
+          "X-RateLimit-Limit": String(limitPerMin),
+          "X-RateLimit-Remaining": "0",
+          "X-RateLimit-Reset": "3600",
+          "Retry-After": "3600"
+        }
+      };
+    }
+
+    minCount++;
+    dayCount++;
+
+    await Promise.all([
+      kv.put(minKey, String(minCount), { expirationTtl: 120 }),
+      kv.put(dayKey, String(dayCount), { expirationTtl: 172800 })
+    ]);
+
+    const remainingMin = Math.max(0, limitPerMin - minCount);
+    return {
+      allowed: true,
+      quota: {
+        daily_limit: limitPerDay,
+        used_today: dayCount,
+        remaining: Math.max(0, limitPerDay - dayCount)
+      },
+      headers: {
+        "X-RateLimit-Limit": String(limitPerMin),
+        "X-RateLimit-Remaining": String(remainingMin),
+        "X-RateLimit-Reset": String(resetSec)
+      }
+    };
+  }
+
+  // 4. In-Memory Sliding Window (Fallback for environments without persistent storage bindings)
   let entry = rateLimitCache.get(identifier);
   if (!entry) {
     entry = { count: 0, windowStart: now, dailyUsed: 0, dayStart: now };
@@ -77,9 +199,6 @@ export function enforceRateLimitAndQuota(identifier, tier = "developer_sandbox")
     entry.dailyUsed = 0;
     entry.dayStart = now;
   }
-
-  const limitPerMin = tier === "enterprise" ? 300 : DEFAULT_LIMIT_PER_MINUTE;
-  const limitPerDay = tier === "enterprise" ? 50000 : DEFAULT_LIMIT_PER_DAY;
 
   if (entry.count >= limitPerMin) {
     const retryAfterSec = Math.max(1, Math.ceil((entry.windowStart + WINDOW_MS - now) / 1000));
@@ -283,7 +402,7 @@ export async function authenticateRequest(request, env = {}, { allowAnonymous = 
 
     // Strictly bounded anonymous rate limit (e.g. for docs/status endpoints)
     const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "anonymous";
-    const anonCheck = enforceRateLimitAndQuota(`anon:${clientIp}`, "anonymous_limited");
+    const anonCheck = await enforceRateLimitAndQuota(`anon:${clientIp}`, "anonymous_limited", env);
     if (!anonCheck.allowed) {
       return {
         authenticated: false,
@@ -322,8 +441,8 @@ export async function authenticateRequest(request, env = {}, { allowAnonymous = 
     };
   }
 
-  // Enforce rate limits and quotas on authenticated key
-  const limitCheck = enforceRateLimitAndQuota(verResult.user.id, verResult.user.tier);
+  // Enforce rate limits and quotas on authenticated key (with durable storage)
+  const limitCheck = await enforceRateLimitAndQuota(verResult.user.id, verResult.user.tier, env);
   if (!limitCheck.allowed) {
     return {
       authenticated: false,

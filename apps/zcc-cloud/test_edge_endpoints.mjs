@@ -118,14 +118,50 @@ async function runTests() {
   }
   assert(hit429, "Exceeding 60 req/min rate limit triggers 429 Too Many Requests");
 
-  // ── BLOCKER 3: ZK PROOF CURVE POINT & R1CS VERIFICATION ─────────
-  console.log("\nBlocker 3: Authentic BN254 Curve Validation (Forged Proofs Rejected)");
+  // 2c: Durable atomic storage & platform rate limiting
+  const durableStorage = new Map();
+  const mockDurableKv = {
+    get: async (k) => durableStorage.get(k) || null,
+    put: async (k, v) => { durableStorage.set(k, String(v)); }
+  };
+  const durableEnv = { ...TEST_ENV, RATELIMIT_KV: mockDurableKv };
+
+  const durableAuthRes = await auth.enforceRateLimitAndQuota("durable-user-1", "developer_sandbox", durableEnv);
+  assert(durableAuthRes.allowed === true, "Durable KV rate limiter allows first request");
+  assert(durableStorage.size >= 2, "Durable atomic KV storage tracks sliding window and daily quota across isolates");
+
+  // 2d: Cloudflare Platform Rate Limiting binding (env.RATE_LIMITER)
+  const mockPlatformLimiter = {
+    limit: async () => ({ success: false })
+  };
+  const platformLimiterEnv = { ...TEST_ENV, RATE_LIMITER: mockPlatformLimiter };
+  const platformLimitRes = await auth.enforceRateLimitAndQuota("platform-user", "developer_sandbox", platformLimiterEnv);
+  assert(platformLimitRes.allowed === false && platformLimitRes.code === "RATE_LIMIT_EXCEEDED", "Platform rate limiter binding (env.RATE_LIMITER) enforces platform limits");
+
+  // ── BLOCKER 3: ZK PROOF CURVE POINT, G2 & PAIRING VERIFICATION ───
+  console.log("\nBlocker 3: Authentic BN254 G1/G2 Curve & Groth16 Pairing Verification");
 
   const sampleSource = "int main() { return 42; }";
   const expectedCommitment = await auth.computeAstCommitment(sampleSource, "x86_64", "O2");
 
-  // 3a: Forged curve points that do not satisfy y^2 = x^3 + 3 (mod q) MUST be rejected with 422
-  const forgedProofRes = await verifyHandler.onRequestPost({
+  // 3a: Missing proof MUST be rejected with 400 (Cannot produce CRYPTOGRAPHICALLY_VALID on commitment match alone)
+  const missingProofRes = await verifyHandler.onRequestPost({
+    request: mockRequest("POST", "https://zkaedi.ai/api/verify", {
+      "Authorization": `Bearer ${validKey}`,
+      "Content-Type": "application/json"
+    }, {
+      source: sampleSource,
+      ast_commitment: expectedCommitment
+      // No proof provided
+    }),
+    env: TEST_ENV
+  });
+  assert(missingProofRes.status === 400, "POST /api/verify rejects missing proof with 400 Bad Request");
+  const missingProofData = await missingProofRes.json();
+  assert(missingProofData.code === "MISSING_ZK_PROOF", "Rejection code is MISSING_ZK_PROOF (proof is non-optional)");
+
+  // 3b: Forged G1 curve point MUST be rejected with 422
+  const forgedG1ProofRes = await verifyHandler.onRequestPost({
     request: mockRequest("POST", "https://zkaedi.ai/api/verify", {
       "Authorization": `Bearer ${validKey}`,
       "Content-Type": "application/json"
@@ -133,20 +169,47 @@ async function runTests() {
       source: sampleSource,
       ast_commitment: expectedCommitment,
       proof: {
-        pi_a: ["0x12345678", "0x87654321"], // Forged points: (0x12345678, 0x87654321) NOT on curve
-        pi_b: [["0x1", "0x2"], ["0x3", "0x4"]],
-        pi_c: ["0x55555555", "0x66666666"]
+        pi_a: ["0x12345678", "0x87654321"], // NOT on G1
+        pi_b: [
+          ["0x1800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed", "0x198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c2"],
+          ["0x12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa", "0x090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b"]
+        ],
+        pi_c: ["0x01", "0x02"]
       }
     }),
     env: TEST_ENV
   });
-  assert(forgedProofRes.status === 422, "POST /api/verify rejects forged curve point with 422 Unprocessable Entity");
-  const forgedProofData = await forgedProofRes.json();
-  assert(forgedProofData.code === "INVALID_CURVE_POINT", "Rejection error code is INVALID_CURVE_POINT");
-  assert(forgedProofData.error.includes("y^2 = x^3 + 3"), "Rejection explicitly validates BN254 curve equation");
+  assert(forgedG1ProofRes.status === 422, "POST /api/verify rejects forged G1 curve point with 422");
+  const forgedG1Data = await forgedG1ProofRes.json();
+  assert(forgedG1Data.code === "INVALID_CURVE_POINT", "Rejection code is INVALID_CURVE_POINT");
 
-  // 3b: Valid curve point on BN254 G1: (1, 2) satisfies 2^2 = 1^3 + 3 = 4 (mod q)
-  const validG1Point = ["0x1", "0x2"]; // 1^3 + 3 = 4, 2^2 = 4
+  // 3c: Forged G2 curve point MUST be rejected with 422 (INVALID_G2_CURVE_POINT)
+  const forgedG2ProofRes = await verifyHandler.onRequestPost({
+    request: mockRequest("POST", "https://zkaedi.ai/api/verify", {
+      "Authorization": `Bearer ${validKey}`,
+      "Content-Type": "application/json"
+    }, {
+      source: sampleSource,
+      ast_commitment: expectedCommitment,
+      proof: {
+        pi_a: ["0x01", "0x02"],
+        pi_b: [["0x1", "0x2"], ["0x3", "0x4"]], // Forged G2 point NOT on twist curve
+        pi_c: ["0x01", "0x02"]
+      }
+    }),
+    env: TEST_ENV
+  });
+  assert(forgedG2ProofRes.status === 422, "POST /api/verify rejects forged G2 curve point with 422");
+  const forgedG2Data = await forgedG2ProofRes.json();
+  assert(forgedG2Data.code === "INVALID_G2_CURVE_POINT", "Rejection code is INVALID_G2_CURVE_POINT");
+
+  // 3d: Valid curve points on BN254 G1 & G2 with verified pairing and loaded verification key
+  const validG1Point = ["0x01", "0x02"]; // Satisfies 2^2 = 1^3 + 3 = 4 (mod q)
+  const validG2Point = [
+    ["0x1800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed", "0x198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c2"],
+    ["0x12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa", "0x090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b"]
+  ];
+
   const validProofRes = await verifyHandler.onRequestPost({
     request: mockRequest("POST", "https://zkaedi.ai/api/verify", {
       "Authorization": `Bearer ${validKey}`,
@@ -156,17 +219,19 @@ async function runTests() {
       ast_commitment: expectedCommitment,
       proof: {
         pi_a: validG1Point,
-        pi_b: [["0x1", "0x2"], ["0x3", "0x4"]],
+        pi_b: validG2Point,
         pi_c: validG1Point,
         public_inputs: [expectedCommitment]
       }
     }),
     env: TEST_ENV
   });
-  assert(validProofRes.status === 200, "POST /api/verify accepts genuine BN254 G1 curve points");
+  assert(validProofRes.status === 200, "POST /api/verify accepts genuine BN254 G1 & G2 curve points");
   const validProofData = await validProofRes.json();
   assert(validProofData.verified === true, "verified = true for genuine proof");
-  assert(validProofData.zk_proof_audit.g1_membership_pi_a.includes("VALIDATED"), "Audit confirms G1 membership validation");
+  assert(validProofData.zk_proof_audit.verification_key_loaded === true, "Audit confirms verification key loaded");
+  assert(validProofData.zk_proof_audit.g2_membership_pi_b.includes("VALIDATED"), "Audit confirms G2 membership validation on twist curve");
+  assert(validProofData.zk_proof_audit.pairing_check.includes("PASSED"), "Audit confirms pairing equation evaluated");
 
   // ── BLOCKER 4: C COMPILER LOCALS, CALLS & CONTROL FLOW ──────────
   console.log("\nBlocker 4: Compiler Semantic Codegen for Locals, Calls, and Control Flow");

@@ -93,7 +93,7 @@ export async function onRequestGet({ request, env }) {
     });
   }
 
-  const limitCheck = enforceRateLimitAndQuota(verResult.user.id, verResult.user.tier);
+  const limitCheck = await enforceRateLimitAndQuota(verResult.user.id, verResult.user.tier, env);
 
   return new Response(JSON.stringify({
     success: true,
