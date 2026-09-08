@@ -16,12 +16,16 @@ bool opt_cfg_simplify_pass(Function *fn, OptMetricsSink *metrics);
 void licm_build_def_block(Function *fn);
 bool opt_loop_unroll_mvp_pass(Function *fn, OptMetricsSink *metrics);
 bool opt_inline_mvp_pass(Module *m, Function *fn, OptMetricsSink *metrics);
+bool opt_q_licm_pass(Function *fn, OptMetricsSink *metrics);
+bool opt_cap_tripwire_pass(Function *fn, OptMetricsSink *metrics);
 
 enum PassKind {
     PASS_INSTCOMBINE,
     PASS_SCCP,
     PASS_CFG_SIMPLIFY,
-    PASS_LOOP
+    PASS_LOOP,
+    PASS_Q_LICM,
+    PASS_CAP_TRIPWIRE
 };
 
 int main(int argc, char **argv) {
@@ -45,8 +49,13 @@ int main(int argc, char **argv) {
                 passes[n_passes++] = PASS_CFG_SIMPLIFY;
             } else if (strcmp(pname, "loop") == 0) {
                 passes[n_passes++] = PASS_LOOP;
+            } else if (strcmp(pname, "q_licm") == 0) {
+                passes[n_passes++] = PASS_Q_LICM;
+            } else if (strcmp(pname, "cap_tripwire") == 0) {
+                passes[n_passes++] = PASS_CAP_TRIPWIRE;
             }
-        } else if (strcmp(argv[i], "--enable-unroll-mvp") == 0) {
+        }
+ else if (strcmp(argv[i], "--enable-unroll-mvp") == 0) {
             enable_unroll_mvp = true;
         } else if (strcmp(argv[i], "--enable-inline-mvp") == 0) {
             enable_inline_mvp = true;
@@ -109,6 +118,12 @@ int main(int argc, char **argv) {
                     break;
                 case PASS_CFG_SIMPLIFY:
                     opt_cfg_simplify_pass(fn, &metrics_sink);
+                    break;
+                case PASS_Q_LICM:
+                    opt_q_licm_pass(fn, &metrics_sink);
+                    break;
+                case PASS_CAP_TRIPWIRE:
+                    opt_cap_tripwire_pass(fn, &metrics_sink);
                     break;
                 case PASS_LOOP: {
                     bool changed = true;

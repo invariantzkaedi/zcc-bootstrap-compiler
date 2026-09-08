@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZKAEDI PRIME // Sovereign Visual Observatory & Quantum Solver</title>
+    <meta name="description" content="Interactive 2M particle singularity WebGL simulator and autonomous two-regime Hamiltonian maze & terrain navigator.">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Header Navigation & Telemetry HUD -->
+    <header>
+        <div class="brand">
+            <div class="brand-icon">⚡</div>
+            <div>
+                <h1 class="brand-title">ZKAEDI PRIME // OBSERVATORY</h1>
+                <div class="brand-subtitle">RECURSIVELY COUPLED HAMILTONIAN ENGINE v3.0</div>
+            </div>
+        </div>
+
+        <!-- View Switcher -->
+        <div class="view-switcher" role="tablist">
+            <button id="btnViewParticles" class="mode-btn active" role="tab" aria-selected="true">
+                <span>🌌</span> 2M Singularity
+            </button>
+            <button id="btnViewNavigator" class="mode-btn" role="tab" aria-selected="false">
+                <span>🧭</span> Terrain Navigator
+            </button>
+            <button id="btnViewSplit" class="mode-btn" role="tab" aria-selected="false">
+                <span>⚡</span> Dual Split View
+            </button>
+        </div>
+
+        <!-- Live Telemetry HUD -->
+        <div class="telemetry-hud">
+            <div class="hud-chip">
+                <span class="chip-label">FPS:</span>
+                <span id="hudFps" class="chip-value">60 FPS</span>
+            </div>
+            <div class="hud-chip">
+                <span class="chip-label">REGIME:</span>
+                <span id="hudRegime" class="chip-value">SUB-CRITICAL (η=0.4)</span>
+            </div>
+            <div class="hud-chip">
+                <span class="chip-label">PARTICLES:</span>
+                <span id="hudParticles" class="chip-value">2,000,000</span>
+            </div>
+            <a href="../index.html" class="hud-chip" style="text-decoration:none; color:var(--neon-cyan); border-color:rgba(0,243,255,0.4);" title="Return to Sovereign Portal">
+                <span>⚡</span> Portal ↗
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main id="mainWorkspace">
+
+        <!-- VIEW 1: 2M Particle Singularity Simulator -->
+        <section id="viewParticles" class="view-panel active">
+            <div class="canvas-container">
+                <canvas id="particleCanvas"></canvas>
+
+                <!-- Floating Bottom Status Pill -->
+                <div class="floating-status-pill">
+                    <div class="status-indicator"></div>
+                    <div>GPU GPGPU SHADER RUNNING // 2,097,152 COMPUTE NODES ACTIVE</div>
+                    <div style="color: var(--text-muted);">| DRAG TO TUMBLE • SCROLL TO ZOOM</div>
+                </div>
+
+                <!-- Floating Glassmorphic Control Deck -->
+                <div class="floating-deck">
+                    <div class="deck-header">
+                        <div class="deck-title"><span>🌌</span> SINGULARITY CONTROLS</div>
+                        <button id="btnSnapshot" class="btn-action" style="width: auto; padding: 4px 8px;" title="Capture High-Res PNG">📸 Snapshot</button>
+                    </div>
+
+                    <!-- Presets Dropdown -->
+                    <div class="control-group">
+                        <div class="control-label-row">
+                            <span class="control-label">Manifold Preset</span>
+                        </div>
+                        <select id="selPreset">
+                            <option value="canonical" selected>Canonical Attractor (1.2B Video Run)</option>
+                            <option value="explosion">Supercritical Explosion (Phase III)</option>
+                            <option value="limitcycle">Dipole Limit Cycle (Phase II)</option>
+                            <option value="vortex">Double Vortex Torus</option>
+                            <option value="singularity">Cosmic Singularity Eye</option>
+                        </select>
+                    </div>
+
+                    <!-- Particle Density -->
+                    <div class="control-group">
+                        <div class="control-label-row">
+                            <span class="control-label">Active Particles</span>
+                            <span id="valParticles" class="control-value">2,000,000</span>
+                        </div>
+                        <input type="range" id="sliderParticles" min="100000" max="2000000" step="100000" value="2000000">
+                    </div>
+
+                    <!-- Eta (Field Shaping) -->
+                    <div class="control-group">
+                        <div class="control-label-row">
+                            <span class="control-label">Coupling Term (η)</span>
+                            <span id="valEta" class="control-value">0.40</span>
+                        </div>
+                        <input type="range" id="sliderEta" min="0.0" max="1.50" step="0.01" value="0.40">
+                        <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px; display: flex; justify-content: space-between;">
+                            <span>0.0 (Pure Base)</span>
+                            <span style="color: var(--neon-magenta);">η_c ≈ 1.005 (Bifurcation)</span>
+                            <span>1.5 (Supercritical)</span>
+                        </div>
+                    </div>
+
+                    <!-- Gamma (Sigmoid Sharpness) -->
+                    <div class="control-group">
+                        <div class="control-label-row">
+                            <span class="control-label">Sigmoid Sharpness (γ)</span>
+                            <span id="valGamma" class="control-value">0.30</span>
+                        </div>
+                        <input type="range" id="sliderGamma" min="0.05" max="1.00" step="0.01" value="0.30">
+                    </div>
+
+                    <!-- Phosphor Decay -->
+                    <div class="control-group">
+                        <div class="control-label-row">
+                            <span class="control-label">Phosphor Trail Persistence</span>
+                            <span id="valDecay" class="control-value">0.78</span>
+                        </div>
+                        <input type="range" id="sliderDecay" min="0.50" max="0.98" step="0.01" value="0.78">
+                    </div>
+
+                    <!-- Color Theme -->
+                    <div class="control-group">
+                        <div class="control-label-row">
+                            <span class="control-label">Luminescent Palette</span>
+                        </div>
+                        <select id="selTheme">
+                            <option value="rhodium" selected>Cyber Rhodium (Cyan & Magenta)</option>
+                            <option value="gold">Solar Gold & Obsidian</option>
+                            <option value="spectral">Hyper-Spectral Rainbow</option>
+                            <option value="emerald">Emerald Deep Nebula</option>
+                        </select>
+                    </div>
+
+                    <!-- Attractor Coeffs (Foldable) -->
+                    <div class="control-group" style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;">
+                        <div class="control-label-row" style="margin-bottom: 8px;">
+                            <span class="control-label" style="font-weight: 700;">Attractor Parameters (a, b, c, d)</span>
+                            <label style="font-size: 11px; cursor: pointer; color: var(--neon-cyan);">
+                                <input type="checkbox" id="chkAutoMorph" checked> Auto-Morph
+                            </label>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-family: var(--font-mono); font-size: 11px;">
+                            <div>a: <span id="valA">-1.40</span></div>
+                            <div>b: <span id="valB">1.60</span></div>
+                            <div>c: <span id="valC">1.00</span></div>
+                            <div>d: <span id="valD">0.70</span></div>
+                        </div>
+                    </div>
+
+                    <div class="btn-row">
+                        <button id="btnResetCamera" class="btn-action">🔄 Reset Camera</button>
+                        <button id="btnInjectToMaze" class="btn-action primary">➡️ Send to Navigator</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- VIEW 2: Autonomous Maze & Terrain Navigator -->
+        <section id="viewNavigator" class="view-panel">
+            <div class="maze-canvas-wrapper">
+                <canvas id="mazeCanvas" width="800" height="800"></canvas>
+
+                <!-- Floating Bottom Status Pill -->
+                <div class="floating-status-pill">
+                    <div class="status-indicator" id="navIndicator"></div>
+                    <div>STATUS: <span id="navStatus" style="font-weight: 700;">READY</span></div>
+                    <div>| STEPS: <span id="navSteps" class="control-value">0</span></div>
+                    <div>| BFS OPT: <span id="navOptimal" class="control-value">48</span></div>
+                    <div>| RATIO: <span id="navRatio" class="control-value">---</span></div>
+                </div>
+
+                <!-- Floating Glassmorphic Control Deck -->
+                <div class="floating-deck">
+                    <div class="deck-header">
+                        <div class="deck-title"><span>🧭</span> NAVIGATOR CONTROLS</div>
+                        <button id="btnResetNav" class="btn-action" style="width: auto; padding: 4px 8px;">↺ Reset</button>
+                    </div>
+
+                    <!-- Algorithm Selection -->
+                    <div class="control-group">
+                        <div class="control-label-row">
+                            <span class="control-label">Algorithm Architecture</span>
+                        </div>
+                        <select id="selAlgorithm">
+                            <option value="v3" selected>v3: Backtrack + Pruning (1.12x Optimal)</option>
+                            <option value="v2">v2: Scar + Noise (kick=2.0, eps=0.05)</option>
+                            <option value="v1">v1: Recursion-Only (Traps in 2-cell loops)</option>
+                        </select>
+                    </div>
+
+                    <!-- Playback Controls -->
+                    <div class="btn-row" style="margin-bottom: 16px;">
+                        <button id="btnPlayNav" class="btn-action primary">▶️ Start Solver</button>
+                        <button id="btnStepNav" class="btn-action">⏯️ Single Step</button>
+                    </div>
+
+                    <!-- Speed Slider -->
+                    <div class="control-group">
+                        <div class="control-label-row">
+                            <span class="control-label">Simulation Speed</span>
+                            <span id="valSpeed" class="control-value">20x Fast</span>
+                        </div>
+                        <input type="range" id="sliderSpeed" min="1" max="100" step="1" value="20">
+                    </div>
+
+                    <!-- Visual Layer Toggles -->
+                    <div class="control-group" style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;">
+                        <span class="control-label" style="font-weight: 700; margin-bottom: 8px; display: block;">Visual Layers</span>
+                        <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
+                            <label style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="chkShowField" checked> Potential Energy Field (H_t)
+                            </label>
+                            <label style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="chkShowScars" checked> Thermal Departure Scars (ΔH += kick)
+                            </label>
+                            <label style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="chkShowPath" checked> Geodesic Path & Backtrack Stack
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Maze Terrain Generator -->
+                    <div class="control-group">
+                        <div class="control-label-row">
+                            <span class="control-label">Grid Resolution</span>
+                            <span id="valGridSize" class="control-value">25 × 25</span>
+                        </div>
+                        <select id="selGridSize">
+                            <option value="15">15 × 15 (Micro Swift)</option>
+                            <option value="25" selected>25 × 25 (Canonical Gauntlet)</option>
+                            <option value="35">35 × 35 (Deep Maze)</option>
+                            <option value="50">50 × 50 (Extreme Labyrinth)</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-label-row">
+                            <span class="control-label">Wall Density</span>
+                            <span id="valDensity" class="control-value">0.32</span>
+                        </div>
+                        <input type="range" id="sliderDensity" min="0.15" max="0.48" step="0.01" value="0.32">
+                    </div>
+
+                    <div class="btn-row">
+                        <button id="btnNewMaze" class="btn-action">🎲 Random Maze</button>
+                        <button id="btnAttractorMaze" class="btn-action primary">🌀 Attractor Landscape</button>
+                    </div>
+
+                    <!-- Gauntlet Benchmark Runner -->
+                    <button id="btnRunGauntlet" class="btn-action primary" style="margin-top: 14px; width: 100%;">
+                        🏆 Run Full Gauntlet A/B Compare
+                    </button>
+
+                    <div id="benchmarkCard" class="benchmark-card" style="display: none;">
+                        <div style="font-weight: 700; margin-bottom: 8px; color: var(--neon-cyan);">A/B BENCHMARK RESULT:</div>
+                        <div class="benchmark-row">
+                            <span>v3 Backtrack:</span>
+                            <span id="resV3Steps">--- steps (1.12x)</span>
+                        </div>
+                        <div class="benchmark-bar-track"><div id="barV3" class="benchmark-bar-fill bar-v3" style="width: 0%;"></div></div>
+
+                        <div class="benchmark-row" style="margin-top: 6px;">
+                            <span>v2 Scar-only:</span>
+                            <span id="resV2Steps">--- steps (1.65x)</span>
+                        </div>
+                        <div class="benchmark-bar-track"><div id="barV2" class="benchmark-bar-fill bar-v2" style="width: 0%;"></div></div>
+
+                        <div class="benchmark-row" style="margin-top: 6px;">
+                            <span>v1 Recursion:</span>
+                            <span id="resV1Steps">TRAPPED (0.0% solvability)</span>
+                        </div>
+                        <div class="benchmark-bar-track"><div id="barV1" class="benchmark-bar-fill bar-v1" style="width: 100%;"></div></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script src="particles.js"></script>
+    <script src="navigator.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

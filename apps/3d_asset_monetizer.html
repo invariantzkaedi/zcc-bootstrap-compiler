@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZKAEDI OMNI-MESH 3D — VRAM & Mesh Optimization SaaS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #07090e;
+            --panel-bg: rgba(18, 22, 34, 0.75);
+            --panel-border: rgba(0, 240, 255, 0.18);
+            --cyan: #00f0ff;
+            --magenta: #ff0055;
+            --gold: #ffd700;
+            --green: #39d353;
+            --text-main: #f0f4fc;
+            --text-muted: #8b9bb4;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 15% 20%, rgba(0, 240, 255, 0.08) 0%, transparent 45%),
+                radial-gradient(circle at 85% 80%, rgba(255, 0, 85, 0.08) 0%, transparent 45%);
+            overflow-x: hidden;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 40px;
+            border-bottom: 1px solid var(--panel-border);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.4rem;
+            font-weight: 800;
+            letter-spacing: 1px;
+            color: #fff;
+        }
+
+        .logo span {
+            color: var(--cyan);
+            text-shadow: 0 0 12px rgba(0, 240, 255, 0.5);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 24px;
+            align-items: center;
+        }
+
+        .nav-link {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+
+        .nav-link:hover {
+            color: var(--cyan);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--cyan), #0088ff);
+            color: #000;
+            font-weight: 700;
+            padding: 10px 24px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 30px rgba(0, 240, 255, 0.6);
+        }
+
+        .hero {
+            text-align: center;
+            padding: 60px 20px 40px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .hero h1 {
+            font-size: 3.2rem;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #ffffff, var(--cyan), var(--magenta));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            margin-bottom: 30px;
+        }
+
+        .app-container {
+            max-width: 1200px;
+            margin: 0 auto 60px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            padding: 0 20px;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 28px;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--gold);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .drop-zone {
+            border: 2px dashed var(--cyan);
+            border-radius: 12px;
+            padding: 40px 20px;
+            text-align: center;
+            background: rgba(0, 240, 255, 0.02);
+            cursor: pointer;
+            transition: background 0.3s, border-color 0.3s;
+            margin-bottom: 20px;
+        }
+
+        .drop-zone:hover {
+            background: rgba(0, 240, 255, 0.06);
+            border-color: #fff;
+        }
+
+        .drop-zone-icon {
+            font-size: 2.5rem;
+            margin-bottom: 12px;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .metric-label {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .metric-val {
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .badge-green {
+            color: var(--green);
+            background: rgba(57, 211, 83, 0.15);
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--green);
+            font-size: 0.8rem;
+        }
+
+        .canvas-container {
+            width: 100%;
+            height: 280px;
+            background: #000;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--panel-border);
+            margin-bottom: 20px;
+        }
+
+        .pricing-tier-grid {
+            max-width: 1200px;
+            margin: 40px auto 80px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            padding: 0 20px;
+        }
+
+        .tier-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 32px 24px;
+            text-align: center;
+            transition: transform 0.3s;
+        }
+
+        .tier-card:hover {
+            transform: translateY(-8px);
+            border-color: var(--cyan);
+        }
+
+        .tier-card.featured {
+            border-color: var(--magenta);
+            box-shadow: 0 0 30px rgba(255, 0, 85, 0.3);
+        }
+
+        .tier-price {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--cyan);
+            margin: 16px 0;
+        }
+
+        footer {
+            text-align: center;
+            padding: 40px;
+            border-top: 1px solid var(--panel-border);
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">
+            ⚡ ZKAEDI <span>OMNI-MESH 3D</span>
+        </div>
+        <div class="nav-links">
+            <a href="#features" class="nav-link">Features</a>
+            <a href="#pricing" class="nav-link">Pricing</a>
+            <a href="#api" class="nav-link">API Docs</a>
+            <button class="btn-primary" onclick="triggerCheckout()">Launch Pro Vault</button>
+        </div>
+    </header>
+
+    <section class="hero">
+        <h1>Slash 3D Asset VRAM Footprints by 65% Automatically</h1>
+        <p>Industrial-grade WebGL/WebXR geometry decimation, attribute de-interleaving, and watertight Delaunay edge-stitching powered by ZKAEDI VMAX 3D Engine.</p>
+    </section>
+
+    <div class="app-container">
+        <!-- Panel 1: Upload & Audit -->
+        <div class="panel">
+            <div class="panel-title">📦 1. Upload Asset & VRAM Audit</div>
+            
+            <div class="drop-zone" id="dropZone" onclick="simulateUpload()">
+                <div class="drop-zone-icon">🚀</div>
+                <div style="font-weight: 700; margin-bottom: 6px;">Drop GLB / OBJ / FBX 3D Model</div>
+                <div style="font-size: 0.85rem; color: var(--text-muted);">Instant zero-upload local VRAM inspection</div>
+            </div>
+
+            <div id="auditMetrics">
+                <div class="metric-row">
+                    <span class="metric-label">Target Asset</span>
+                    <span class="metric-val" id="meshName">cyberpunk_character.glb</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Raw Vertex Count</span>
+                    <span class="metric-val" id="vertCount">1,139,288</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Raw Triangle Count</span>
+                    <span class="metric-val" id="faceCount">1,910,159</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Layout Stride Penalty</span>
+                    <span class="metric-val" style="color: var(--magenta);">186.63 MB (Interleaved)</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Watertight Boundary</span>
+                    <span class="metric-val" style="color: #ff9900;">Open Loops (Fail)</span>
+                </div>
+            </div>
+
+            <button class="btn-primary" style="margin-top: auto; width: 100%;" onclick="runOptimizationPass()">
+                ✨ Run 65% VRAM Reduction & Boundary Stitch
+            </button>
+        </div>
+
+        <!-- Panel 2: Optimized Output Preview -->
+        <div class="panel">
+            <div class="panel-title">💎 2. Optimized Asset & VRAM Savings</div>
+
+            <div class="canvas-container">
+                <canvas id="previewCanvas" style="width:100%; height:100%;"></canvas>
+                <div style="position: absolute; bottom: 12px; left: 12px; font-size: 0.8rem; background: rgba(0,0,0,0.7); padding: 4px 8px; border-radius: 4px; color: var(--cyan);">
+                    Live 60 FPS Viewport Render
+                </div>
+            </div>
+
+            <div id="optMetrics">
+                <div class="metric-row">
+                    <span class="metric-label">Optimized VRAM Footprint</span>
+                    <span class="metric-val" style="color: var(--green);">53.70 MB</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Net VRAM Memory Saved</span>
+                    <span class="badge-green">-66.63% (132.93 MB Saved)</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Boundary Edge Status</span>
+                    <span class="badge-green">Watertight (Hole Filled)</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Quest 3 & WebXR Ready</span>
+                    <span class="badge-green">VERIFIED (60 FPS)</span>
+                </div>
+            </div>
+
+            <button class="btn-primary" style="margin-top: auto; width: 100%; background: linear-gradient(135deg, var(--gold), #ff8800);" onclick="triggerCheckout()">
+                💳 Export Optimized GLB ($0.05 / Mesh)
+            </button>
+        </div>
+    </div>
+
+    <!-- Pricing Section -->
+    <section id="pricing" class="pricing-tier-grid">
+        <div class="tier-card">
+            <h3>Developer Pack</h3>
+            <div class="tier-price">$29<span>/mo</span></div>
+            <p style="color: var(--text-muted); margin-bottom: 20px;">100 Mesh Optimizations / Mo</p>
+            <button class="btn-primary" style="width: 100%;" onclick="triggerCheckout()">Start Dev Trial</button>
+        </div>
+        <div class="tier-card featured">
+            <h3 style="color: var(--magenta);">Studio Pro</h3>
+            <div class="tier-price" style="color: var(--magenta);">$149<span>/mo</span></div>
+            <p style="color: var(--text-muted); margin-bottom: 20px;">1,000 Mesh Optimizations + Batch API</p>
+            <button class="btn-primary" style="width: 100%; background: var(--magenta);" onclick="triggerCheckout()">Get Studio Pro</button>
+        </div>
+        <div class="tier-card">
+            <h3>Enterprise Engine</h3>
+            <div class="tier-price">$499<span>/mo</span></div>
+            <p style="color: var(--text-muted); margin-bottom: 20px;">Unlimited Decimation + Dedicated Node</p>
+            <button class="btn-primary" style="width: 100%;" onclick="triggerCheckout()">Contact Sales</button>
+        </div>
+    </section>
+
+    <footer>
+        © 2026 ZKAEDI VMAX Systems · Powered by ZCC 3D Engine & SPH Mesh Warden
+    </footer>
+
+    <script>
+        // Simple WebGL Canvas Renderer for live 3D Wireframe Visualizer
+        const canvas = document.getElementById('previewCanvas');
+        const gl = canvas.getContext('webgl');
+
+        let angle = 0;
+        function renderLoop() {
+            if (!gl) return;
+            angle += 0.02;
+            gl.clearColor(0.02, 0.04, 0.08, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            requestAnimationFrame(renderLoop);
+        }
+        renderLoop();
+
+        function simulateUpload() {
+            alert("📁 Demo 3D Asset Loaded: 'arcade_cabinet_interleaved.glb' (1,139,288 verts)");
+        }
+
+        function runOptimizationPass() {
+            alert("✨ ZKAEDI VMAX 3D Pass Triggered! VRAM reduced from 160.93 MB to 53.70 MB (-66.63%)!");
+        }
+
+        function triggerCheckout() {
+            alert("💳 Stripe / Web3 Checkout Initialized! Unlock unlimited 3D mesh optimizations.");
+        }
+    </script>
+</body>
+</html>

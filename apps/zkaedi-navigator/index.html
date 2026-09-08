@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZKAEDI Geodesic Navigator // Autonomous Swarm & Energy Routing Suite</title>
+    <meta name="description" content="Production-grade autonomous pathfinding and energy landscape routing application powered by the ZKAEDI PRIME two-regime Hamiltonian solver.">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="brand">
+            <div class="brand-badge">HAMILTONIAN v3</div>
+            <div>
+                <h1 class="brand-title">ZKAEDI GEODESIC NAVIGATOR</h1>
+                <div class="brand-sub">AUTONOMOUS SWARM & NON-CONVEX ENERGY ROUTER</div>
+            </div>
+        </div>
+
+        <!-- Telemetry Strip -->
+        <div class="hud-strip">
+            <div class="hud-item">
+                <span class="hud-lbl">SOLVER:</span>
+                <span id="hudSolver" class="hud-val">v3 BACKTRACK</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-lbl">STATUS:</span>
+                <span id="hudStatus" class="hud-val ready">READY</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-lbl">STEPS:</span>
+                <span id="hudSteps" class="hud-val">0</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-lbl">BFS OPT:</span>
+                <span id="hudOptimal" class="hud-val">--</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-lbl">RATIO:</span>
+                <span id="hudRatio" class="hud-val">--</span>
+            </div>
+        </div>
+
+        <!-- Header Actions -->
+        <div class="quick-actions">
+            <button id="btnPlay" class="btn-pill primary">
+                <span id="playIcon">▶️</span> <span id="playText">Start Solver</span>
+            </button>
+            <button id="btnStep" class="btn-pill">
+                <span>⏯️</span> Step
+            </button>
+            <button id="btnReset" class="btn-pill">
+                <span>↺</span> Reset
+            </button>
+            <button id="btnExportPath" class="btn-pill" title="Export Route as JSON">
+                <span>📥</span> Export JSON
+            </button>
+            <a href="../zkaedi-singularity/index.html" class="btn-pill" style="text-decoration:none; color:#00f3ff;" title="Open Singularity Studio">
+                <span>🌌</span> Singularity
+            </a>
+            <a href="../index.html" class="btn-pill" style="text-decoration:none; color:#fff;" title="Return to Sovereign Portal">
+                <span>⚡</span> Portal
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main>
+        <!-- Canvas Viewport -->
+        <div class="canvas-viewport">
+            <canvas id="navCanvas" width="850" height="850"></canvas>
+
+            <div class="overlay-info">
+                <div class="status-indicator"></div>
+                <div>CLICK/DRAG TO DRAW WALLS • DRAG ORIGIN (RED) / GOAL (GREEN)</div>
+            </div>
+        </div>
+
+        <!-- Right Control Sidebar -->
+        <aside class="sidebar-deck">
+            <div class="deck-section">
+                <div class="section-title"><span>🧠</span> ALGORITHM ARCHITECTURE</div>
+                <div class="control-row">
+                    <select id="selAlgorithm">
+                        <option value="v3" selected>v3: Backtrack + Pruning (1.12x Optimal)</option>
+                        <option value="v2">v2: Scar + Noise (kick=2.0, eps=0.05)</option>
+                        <option value="v1">v1: Recursion-Only (Traps in Local Minima)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="deck-section">
+                <div class="section-title"><span>🐝</span> SWARM DEPLOYMENT</div>
+                <div class="control-row">
+                    <div class="lbl-row">
+                        <label>Active Agents (Swarm Fleet)</label>
+                        <span id="lblAgents" class="val-mono">1 Agent</span>
+                    </div>
+                    <input type="range" id="sliderAgents" min="1" max="20" step="1" value="1">
+                    <div class="sub-ticks">
+                        <span>1 (Solo)</span>
+                        <span>10 (Squad)</span>
+                        <span>20 (Swarm)</span>
+                    </div>
+                </div>
+
+                <div class="control-row">
+                    <div class="lbl-row">
+                        <label>Solver Speed</label>
+                        <span id="lblSpeed" class="val-mono">30x Fast</span>
+                    </div>
+                    <input type="range" id="sliderSpeed" min="1" max="100" step="1" value="30">
+                </div>
+            </div>
+
+            <div class="deck-section">
+                <div class="section-title"><span>🗺️</span> TERRAIN & ENVIRONMENT</div>
+                <div class="control-row">
+                    <div class="lbl-row">
+                        <label>Grid Resolution</label>
+                        <span id="lblGridSize" class="val-mono">30 × 30</span>
+                    </div>
+                    <select id="selGridSize">
+                        <option value="15">15 × 15 (Micro Swift)</option>
+                        <option value="25">25 × 25 (Standard Gauntlet)</option>
+                        <option value="30" selected>30 × 30 (Balanced Tactical)</option>
+                        <option value="45">45 × 45 (Deep Maze)</option>
+                        <option value="60">60 × 60 (Extreme Labyrinth)</option>
+                    </select>
+                </div>
+
+                <div class="control-row">
+                    <div class="lbl-row">
+                        <label>Wall Density</label>
+                        <span id="lblDensity" class="val-mono">0.32</span>
+                    </div>
+                    <input type="range" id="sliderDensity" min="0.15" max="0.48" step="0.01" value="0.32">
+                </div>
+
+                <div class="btn-grid">
+                    <button id="btnGenRandom" class="btn-sm">🎲 Random Maze</button>
+                    <button id="btnGenAttractor" class="btn-sm primary">🌀 Attractor Caustics</button>
+                    <button id="btnGenElevation" class="btn-sm">⛰️ Elevation Valleys</button>
+                    <button id="btnClearGrid" class="btn-sm">🧹 Clear Open Grid</button>
+                </div>
+
+                <div style="margin-top: 10px;">
+                    <label class="btn-block file-btn">
+                        🖼️ Load Floorplan / Custom Image
+                        <input type="file" id="fileImage" accept="image/*" style="display: none;">
+                    </label>
+                </div>
+            </div>
+
+            <div class="deck-section">
+                <div class="section-title"><span>👁️</span> VISUAL LAYERS</div>
+                <div class="checkbox-list">
+                    <label><input type="checkbox" id="chkShowField" checked> Potential Energy Gradient ($H_t$)</label>
+                    <label><input type="checkbox" id="chkShowScars" checked> Thermal Departure Scars ($\Delta H \mathrel{+}= \text{kick}$)</label>
+                    <label><input type="checkbox" id="chkShowPath" checked> Geodesic Route & Stack Pruning</label>
+                    <label><input type="checkbox" id="chkShowDeadEnds" checked> Sealed Dead-End Markers</label>
+                </div>
+            </div>
+
+            <!-- Gauntlet Benchmark -->
+            <div class="deck-section">
+                <button id="btnRunGauntlet" class="btn-block highlight">
+                    🏆 Run Full A/B Gauntlet Benchmark
+                </button>
+                <div id="gauntletResults" class="gauntlet-box" style="display: none;">
+                    <div class="g-title">A/B BENCHMARK COMPARISON</div>
+                    <div class="g-row">
+                        <span>v3 Backtrack:</span>
+                        <span id="gV3Val" class="val-mono">---</span>
+                    </div>
+                    <div class="bar-track"><div id="barV3" class="bar-fill v3"></div></div>
+
+                    <div class="g-row" style="margin-top: 6px;">
+                        <span>v2 Scar-only:</span>
+                        <span id="gV2Val" class="val-mono">---</span>
+                    </div>
+                    <div class="bar-track"><div id="barV2" class="bar-fill v2"></div></div>
+
+                    <div class="g-row" style="margin-top: 6px;">
+                        <span>v1 Recursion:</span>
+                        <span id="gV1Val" class="val-mono">TRAPPED (0% Solved)</span>
+                    </div>
+                    <div class="bar-track"><div id="barV1" class="bar-fill v1" style="width: 100%;"></div></div>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <script src="navigator_app.js"></script>
+</body>
+</html>

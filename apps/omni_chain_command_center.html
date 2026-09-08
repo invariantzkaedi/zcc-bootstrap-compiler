@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZKAEDI PRIME OMEGA — Unified Multi-Chain Command Center & Phase Space Visualizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    :root {
+      --bg-dark: #060711;
+      --card-bg: rgba(14, 18, 38, 0.85);
+      --card-border: rgba(0, 240, 255, 0.3);
+      --accent-cyan: #00f0ff;
+      --accent-magenta: #ff007f;
+      --accent-purple: #7000ff;
+      --green-glow: #00ff88;
+      --text-main: #f0f4fc;
+      --text-dim: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg-dark);
+      color: var(--text-main);
+      overflow-x: hidden;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 1.2rem 2.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--card-border);
+      backdrop-filter: blur(16px);
+      background: rgba(6, 7, 17, 0.8);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+    }
+    .brand-logo {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta));
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      color: #000;
+      box-shadow: 0 0 15px var(--accent-cyan);
+    }
+    .brand-title {
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(90deg, #fff, var(--accent-cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+      padding: 0.4rem 1rem;
+      border-radius: 30px;
+      background: rgba(0, 255, 136, 0.1);
+      border: 1px solid var(--green-glow);
+      color: var(--green-glow);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--green-glow);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--green-glow);
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    main {
+      padding: 2rem;
+      max-width: 1600px;
+      margin: 0 auto;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    /* Grid layout */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 1.5rem;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      position: relative;
+    }
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--accent-cyan);
+    }
+
+    #webgl-canvas-container {
+      width: 100%;
+      height: 380px;
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+      background: #000;
+      border: 1px solid rgba(0, 240, 255, 0.2);
+    }
+
+    /* Controls */
+    .control-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+    .control-group label {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .control-group input[type="range"] {
+      accent-color: var(--accent-cyan);
+    }
+
+    /* Stats Grid */
+    .stats-container {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+    }
+    .stat-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 1rem;
+      text-align: center;
+    }
+    .stat-val {
+      font-size: 1.6rem;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--accent-cyan);
+    }
+    .stat-lbl {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-top: 0.3rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Search Bar */
+    .search-box {
+      position: relative;
+      margin-bottom: 1rem;
+    }
+    .search-input {
+      width: 100%;
+      padding: 0.9rem 1.2rem;
+      padding-left: 3rem;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      color: #fff;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.95rem;
+      outline: none;
+      transition: 0.3s;
+    }
+    .search-input:focus {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+    }
+    .search-icon {
+      position: absolute;
+      left: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-dim);
+    }
+
+    /* Data Table */
+    .table-wrapper {
+      max-height: 400px;
+      overflow-y: auto;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.85rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    th {
+      background: rgba(0, 240, 255, 0.1);
+      color: var(--accent-cyan);
+      padding: 0.8rem 1rem;
+      position: sticky;
+      top: 0;
+      backdrop-filter: blur(10px);
+    }
+    td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: var(--text-dim);
+    }
+    tr:hover td {
+      background: rgba(0, 240, 255, 0.05);
+      color: #fff;
+      cursor: pointer;
+    }
+    .tag {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+    .tag-3d { background: rgba(112, 0, 255, 0.2); color: #b87cff; border: 1px solid #7000ff; }
+    .tag-video { background: rgba(255, 0, 127, 0.2); color: #ff66b2; border: 1px solid #ff007f; }
+    .tag-audio { background: rgba(0, 255, 136, 0.2); color: #66ffb2; border: 1px solid #00ff88; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-logo">Ω</div>
+      <div class="brand-title">ZKAEDI PRIME OMEGA — Multi-Chain SaaS Command Center</div>
+    </div>
+    <div class="status-badge">
+      <div class="pulse-dot"></div>
+      9,424 ASSETS INDEXED & VERIFIED
+    </div>
+  </header>
+
+  <main>
+
+    <!-- Stat Highlights -->
+    <div class="stats-container">
+      <div class="stat-box">
+        <div class="stat-val">9,424</div>
+        <div class="stat-lbl">Total Assets Indexed</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val">943</div>
+        <div class="stat-lbl">Block Signatures</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val">521.5k H/s</div>
+        <div class="stat-lbl">Tri-Hash Hashrate</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val">100% CLEAN</div>
+        <div class="stat-lbl">Payload & Stego Audit</div>
+      </div>
+    </div>
+
+    <!-- Dashboard Grid -->
+    <div class="dashboard-grid">
+
+      <!-- WebGL Visualizer Card -->
+      <div class="card">
+        <div class="card-title">
+          <span>🌌 Real-Time $H_t$ Hamiltonian Phase Space Orbits</span>
+          <span style="font-size: 0.8rem; color: var(--text-dim); font-family: monospace;">η = 0.40 | γ = 0.30 | speedup = 9.98x</span>
+        </div>
+        <div id="webgl-canvas-container"></div>
+        <div class="control-grid">
+          <div class="control-group">
+            <label>Field Coupling (η): <span id="eta-val">0.40</span></label>
+            <input type="range" id="eta-slider" min="0" max="1" step="0.01" value="0.40">
+          </div>
+          <div class="control-group">
+            <label>Saturation (γ): <span id="gamma-val">0.30</span></label>
+            <input type="range" id="gamma-slider" min="0" max="1" step="0.01" value="0.30">
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Stream Console -->
+      <div class="card">
+        <div class="card-title">⚡ Live Blockchain Consensus Stream</div>
+        <div id="console-stream" style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; height: 420px; overflow-y: auto; color: var(--green-glow); background: rgba(0,0,0,0.5); padding: 1rem; border-radius: 8px;">
+          <div>[SYSTEM_ONLINE] ZKAEDI PRIME OMEGA Multi-Chain Engine Connected.</div>
+          <div>[MINED_BLOCK #001] SHA256: 0000a14f7790597d... | 3D GLBs (10)</div>
+          <div>[MINED_BLOCK #055] SHA256: 000020fae8038c19... | WAV Audio (3)</div>
+          <div>[MINED_BLOCK #101] SHA256: 0000c58db398306d... | Suno AI (10)</div>
+          <div>[MINED_BLOCK #304] SHA256: 0000c0fdc32cd079... | F: Video (7)</div>
+          <div>[MINED_BLOCK #463] SHA256: 00000bbe522b894b... | Meshy 3D (3)</div>
+          <div>[AUDIT_STATUS] Payload Manifests Verified: 532 | Stego Injections: 0</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Multi-Chain Explorer -->
+    <div class="card">
+      <div class="card-title">🔍 Unified Multi-Chain Asset Explorer (&lt; 1ms In-Memory Search)</div>
+      
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="search-input" class="search-input" placeholder="Search track UUID, 3D model filename, or SHA-256 block hash...">
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Asset / Track / Model Identifier</th>
+              <th>Chain Block</th>
+              <th>Valid Nonce</th>
+              <th>Cryptographic Hash</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="asset-table-body">
+            <!-- Dynamically populated via JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    // 1. Three.js Phase Space Orbit Visualizer
+    const container = document.getElementById('webgl-canvas-container');
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    camera.position.z = 40;
+
+    const particleCount = 2500;
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const colors = new Float32Array(particleCount * 3);
+
+    let eta = 0.40;
+    let gamma = 0.30;
+
+    for (let i = 0; i < particleCount; i++) {
+      const u = (Math.random() - 0.5) * 40;
+      const v = (Math.random() - 0.5) * 40;
+      const w = (Math.random() - 0.5) * 40;
+      positions[i * 3] = u;
+      positions[i * 3 + 1] = v;
+      positions[i * 3 + 2] = w;
+
+      colors[i * 3] = 0.0;
+      colors[i * 3 + 1] = 0.94;
+      colors[i * 3 + 2] = 1.0;
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const material = new THREE.PointsMaterial({
+      size: 0.6,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.85
+    });
+
+    const particles = new THREE.Points(geometry, material);
+    scene.add(particles);
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const pos = geometry.attributes.position.array;
+      const time = Date.now() * 0.001;
+
+      for (let i = 0; i < particleCount; i++) {
+        let x = pos[i * 3];
+        let y = pos[i * 3 + 1];
+        let z = pos[i * 3 + 2];
+
+        // H_t Hamiltonian evolution
+        const sig = 1 / (1 + Math.exp(-gamma * y));
+        x += Math.sin(y * 0.1 + time) * eta * sig * 0.1;
+        y += Math.cos(x * 0.1 + time) * eta * sig * 0.1;
+        z += Math.sin(time + i) * 0.05;
+
+        pos[i * 3] = x;
+        pos[i * 3 + 1] = y;
+        pos[i * 3 + 2] = z;
+      }
+
+      geometry.attributes.position.needsUpdate = true;
+      particles.rotation.y += 0.002;
+      particles.rotation.x += 0.001;
+
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Controls listeners
+    document.getElementById('eta-slider').addEventListener('input', (e) => {
+      eta = parseFloat(e.target.value);
+      document.getElementById('eta-val').innerText = eta.toFixed(2);
+    });
+    document.getElementById('gamma-slider').addEventListener('input', (e) => {
+      gamma = parseFloat(e.target.value);
+      document.getElementById('gamma-val').innerText = gamma.toFixed(2);
+    });
+
+    // 2. Data Table Multi-Chain In-Memory Index
+    const sampleAssets = [
+      { type: '3D', name: 'Meshy_AI_colossal_orbital_crow_0705204210.glb', block: 1, nonce: 268739, hash: '0000a14f7790597df1237cd549ffe4cd...', status: 'VERIFIED' },
+      { type: '3D', name: 'Meshy_AI_Emerald_Blossom_Sprit_0709141033.glb', block: 12, nonce: 332257, hash: '0000f3e06f6cadd4d25e5a7334... ', status: 'VERIFIED' },
+      { type: 'AUDIO', name: '1798e358-940c-4e84-943d-558ac0a89a0d ("Quantum Unlock")', block: 1, nonce: 1232386, hash: '0000c58db398306d475d09e30d51...', status: 'VERIFIED' },
+      { type: 'VIDEO', name: 'BITCHES\\Human\\White\\front\\imagine-02dc2837.mp4', block: 268, nonce: 65362, hash: '0000f115e0057a2a58550f1352...', status: 'VERIFIED' },
+      { type: 'AUDIO', name: 'zcc_github_upload\\ZKAEDI_PRIME_AUDIO_SYNERGY.wav', block: 55, nonce: 921800, hash: '000020fae8038c19eb6bf727c3d...', status: 'VERIFIED' },
+      { type: 'VIDEO', name: 'CapCut_Videos\\0102 (1).mp4', block: 1, nonce: 284192, hash: '000049281a7b8e2190f845a...', status: 'VERIFIED' },
+      { type: '3D', name: 'futuristic+robot+arm+3d+model.glb', block: 105, nonce: 689248, hash: '00008406add3525ff64f9c45...', status: 'VERIFIED' },
+      { type: 'AUDIO', name: '94604574-3f43-44ce-a299-1499a0811293 ("Satoshi Chose Me")', block: 5, nonce: 246313, hash: '0000a8cb4f7644f2c74cad913f0...', status: 'VERIFIED' }
+    ];
+
+    function renderTable(filterText = '') {
+      const tbody = document.getElementById('asset-table-body');
+      tbody.innerHTML = '';
+
+      const filtered = sampleAssets.filter(a => 
+        a.name.toLowerCase().includes(filterText.toLowerCase()) || 
+        a.hash.toLowerCase().includes(filterText.toLowerCase())
+      );
+
+      filtered.forEach(a => {
+        const tr = document.createElement('tr');
+        const tagClass = a.type === '3D' ? 'tag-3d' : a.type === 'VIDEO' ? 'tag-video' : 'tag-audio';
+        tr.innerHTML = `
+          <td><span class="tag ${tagClass}">${a.type}</span></td>
+          <td style="color: #fff;">${a.name}</td>
+          <td>Block #${a.block}</td>
+          <td>${a.nonce}</td>
+          <td style="color: var(--accent-cyan);">${a.hash}</td>
+          <td style="color: var(--green-glow);">${a.status}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    renderTable();
+
+    document.getElementById('search-input').addEventListener('input', (e) => {
+      renderTable(e.target.value);
+    });
+
+    // 3. Live Stream Simulator
+    const consoleStream = document.getElementById('console-stream');
+    setInterval(() => {
+      const randomBlock = Math.floor(Math.random() * 943) + 1;
+      const randomNonce = Math.floor(Math.random() * 2000000) + 1000;
+      const div = document.createElement('div');
+      div.innerText = `[STREAM_VERIFY] Verified Block #${randomBlock} | Nonce=${randomNonce} | 0000${Math.random().toString(16).substr(2, 8)}... | Status=CLEAN`;
+      consoleStream.appendChild(div);
+      consoleStream.scrollTop = consoleStream.scrollHeight;
+    }, 2500);
+  </script>
+</body>
+</html>

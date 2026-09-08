@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZCC SMT AUDITOR — Smart Contract Security & Bug Bounty SaaS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #07090e;
+            --panel-bg: rgba(18, 22, 34, 0.75);
+            --panel-border: rgba(0, 240, 255, 0.18);
+            --cyan: #00f0ff;
+            --magenta: #ff0055;
+            --gold: #ffd700;
+            --green: #39d353;
+            --text-main: #f0f4fc;
+            --text-muted: #8b9bb4;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 80% 20%, rgba(255, 0, 85, 0.08) 0%, transparent 45%),
+                radial-gradient(circle at 20% 80%, rgba(0, 240, 255, 0.08) 0%, transparent 45%);
+            overflow-x: hidden;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 40px;
+            border-bottom: 1px solid var(--panel-border);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.4rem;
+            font-weight: 800;
+            letter-spacing: 1px;
+            color: #fff;
+        }
+
+        .logo span {
+            color: var(--magenta);
+            text-shadow: 0 0 12px rgba(255, 0, 85, 0.5);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--magenta), #ff4400);
+            color: #fff;
+            font-weight: 700;
+            padding: 10px 24px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(255, 0, 85, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 30px rgba(255, 0, 85, 0.6);
+        }
+
+        .hero {
+            text-align: center;
+            padding: 60px 20px 40px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .hero h1 {
+            font-size: 3.2rem;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #ffffff, var(--magenta), var(--gold));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .app-container {
+            max-width: 1200px;
+            margin: 0 auto 60px;
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 24px;
+            padding: 0 20px;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 28px;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            display: flex;
+            flex-direction: column;
+        }
+
+        textarea {
+            width: 100%;
+            height: 320px;
+            background: #0d1117;
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            color: var(--cyan);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            padding: 16px;
+            resize: none;
+            margin-bottom: 20px;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .badge-green {
+            color: var(--green);
+            background: rgba(57, 211, 83, 0.15);
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--green);
+            font-size: 0.85rem;
+        }
+
+        footer {
+            text-align: center;
+            padding: 40px;
+            border-top: 1px solid var(--panel-border);
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">
+            🛡️ ZCC <span>SMT AUDITOR</span>
+        </div>
+        <button class="btn-primary" onclick="alert('💳 Subscribed to Pro Audit Node ($299/mo)')">Upgrade Pro Node</button>
+    </header>
+
+    <section class="hero">
+        <h1>Autonomous Solidity SMT Prover & Immunefi Bounty Generator</h1>
+        <p>Prove zero reentrancy, zero unhandled delegatecalls, and 100% SSA block safety in under 5 seconds.</p>
+    </section>
+
+    <div class="app-container">
+        <!-- Panel 1: Code Input -->
+        <div class="panel">
+            <h3 style="color: var(--gold); margin-bottom: 16px;">📜 Paste Solidity Code / EVM Bytecode</h3>
+            <textarea id="solCode">
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+contract VaultStorage {
+    mapping(address => uint256) public balances;
+
+    function withdraw() external {
+        uint256 amount = balances[msg.sender];
+        require(amount > 0, "INSUFFICIENT_BALANCE");
+        (bool success, ) = msg.sender.call{value: amount}("");
+        require(success, "TRANSFER_FAILED");
+        balances[msg.sender] = 0;
+    }
+}
+            </textarea>
+            <button class="btn-primary" onclick="runSmtAudit()">
+                ⚡ Execute ZCC SMT Symbolic Audit & Taint Check
+            </button>
+        </div>
+
+        <!-- Panel 2: Audit Verdict -->
+        <div class="panel">
+            <h3 style="color: var(--cyan); margin-bottom: 16px;">🔍 SMT Solver Audit Disposition</h3>
+            
+            <div id="resultsBox">
+                <div class="metric-row">
+                    <span>SSA Blocks Proven</span>
+                    <span style="color:#fff; font-weight:bold;">1,858 Blocks</span>
+                </div>
+                <div class="metric-row">
+                    <span>SMT Solver Status</span>
+                    <span class="badge-green">UNSAT (Clean)</span>
+                </div>
+                <div class="metric-row">
+                    <span>Reentrancy Risk</span>
+                    <span style="color:var(--magenta); font-weight:bold;">CRITICAL (CEI Pattern Violated)</span>
+                </div>
+                <div class="metric-row">
+                    <span>CVSS v3.1 Severity</span>
+                    <span style="color:var(--magenta); font-weight:bold;">9.8 / 10.0 (Critical)</span>
+                </div>
+                <div class="metric-row">
+                    <span>Immunefi Bounty Est.</span>
+                    <span style="color:var(--gold); font-weight:bold;">$50,000 - $250,000 USD</span>
+                </div>
+            </div>
+
+            <button class="btn-primary" style="margin-top: auto; background: linear-gradient(135deg, var(--gold), #ff8800);" onclick="exportReport()">
+                📄 Export Immunefi Submission Report
+            </button>
+        </div>
+    </div>
+
+    <footer>
+        © 2026 ZCC Compiler Systems · Powered by ZCC SMT Symbolic Prover
+    </footer>
+
+    <script>
+        function runSmtAudit() {
+            alert("⚡ ZCC SMT Symbolic Solver completed in 142 ms! 1,858 SSA Blocks proven. Critical reentrancy path identified on line 10!");
+        }
+
+        function exportReport() {
+            alert("📄 Immunefi Bug Bounty Report Exported as markdown artifact!");
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ SCIP Studio — Unified Software Intelligence Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #07090e;
+            --bg-card: rgba(18, 22, 36, 0.75);
+            --border-glow: rgba(0, 240, 255, 0.2);
+            --cyan: #00f0ff;
+            --magenta: #ff0055;
+            --gold: #ffd700;
+            --green: #39d353;
+            --purple: #bf5af2;
+            --text-main: #f0f4fc;
+            --text-muted: #8b9bb4;
+            --font-outfit: 'Outfit', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: var(--font-outfit);
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(0, 240, 255, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(191, 90, 242, 0.04) 0%, transparent 40%);
+            padding: 24px 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        header {
+            max-width: 1500px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            margin-bottom: 30px;
+        }
+
+        .logo-section h1 {
+            font-size: 1.8rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff, var(--cyan), var(--purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .logo-section p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-top: 4px;
+        }
+
+        .status-badge {
+            background: rgba(57, 211, 83, 0.1);
+            border: 1px solid var(--green);
+            color: var(--green);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--green);
+            border-radius: 50%;
+            animation: pulse 1.8s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.9); opacity: 0.6; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(0.9); opacity: 0.6; }
+        }
+
+        /* Hero Section */
+        .hero {
+            max-width: 1500px;
+            width: 100%;
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 30px 20px;
+            background: rgba(255, 255, 255, 0.01);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 20px;
+            backdrop-filter: blur(8px);
+        }
+
+        .hero h2 {
+            font-size: 2.8rem;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 12px;
+            letter-spacing: -1px;
+            line-height: 1.1;
+        }
+
+        .hero p {
+            max-width: 900px;
+            margin: 0 auto 24px;
+            font-size: 1.15rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .hero-ctas {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+        }
+
+        .btn-cta {
+            padding: 12px 28px;
+            border-radius: 30px;
+            font-weight: 700;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .btn-cta.primary {
+            background: var(--cyan);
+            color: #000;
+            border: none;
+            box-shadow: 0 4px 15px rgba(0, 240, 255, 0.2);
+        }
+
+        .btn-cta.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 240, 255, 0.35);
+        }
+
+        .btn-cta.secondary {
+            background: rgba(255, 255, 255, 0.04);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-cta.secondary:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Workspace Grid */
+        .workspace {
+            max-width: 1500px;
+            width: 100%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glow);
+            border-radius: 16px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            height: 480px;
+        }
+
+        .panel-header {
+            padding: 16px 20px;
+            background: rgba(255,255,255,0.02);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-title {
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: var(--cyan);
+        }
+
+        .selector-tabs {
+            display: flex;
+            background: rgba(0,0,0,0.25);
+            border-radius: 8px;
+            padding: 3px;
+        }
+
+        .selector-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+
+        .selector-btn.active {
+            background: var(--cyan);
+            color: #000;
+        }
+
+        .panel-body {
+            padding: 20px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        textarea {
+            width: 100%;
+            flex-grow: 1;
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            color: #fff;
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            padding: 16px;
+            resize: none;
+            outline: none;
+            line-height: 1.5;
+            transition: border-color 0.2s;
+        }
+
+        textarea:focus {
+            border-color: var(--cyan);
+        }
+
+        .btn-action {
+            margin-top: 16px;
+            background: linear-gradient(135deg, var(--cyan), #007bff);
+            color: #000;
+            font-weight: 700;
+            padding: 14px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            width: 100%;
+            font-size: 0.95rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 240, 255, 0.35);
+        }
+
+        .ir-list {
+            list-style: none;
+            overflow-y: auto;
+            max-height: 100%;
+            padding-right: 8px;
+            font-family: var(--font-mono);
+            font-size: 0.88rem;
+        }
+
+        .ir-item {
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            border: 1px solid transparent;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255,255,255,0.01);
+        }
+
+        .ir-op { color: var(--purple); font-weight: 600; }
+        .ir-dst { color: var(--cyan); }
+        .ir-src { color: var(--text-main); }
+        .ir-tag {
+            font-size: 0.72rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(255, 0, 85, 0.15);
+            color: var(--magenta);
+            border: 1px solid var(--magenta);
+            font-family: var(--font-outfit);
+            font-weight: 600;
+        }
+
+        /* Capability Cards Grid */
+        .capabilities-header {
+            max-width: 1500px;
+            width: 100%;
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: #fff;
+            text-align: left;
+        }
+
+        .cards-grid {
+            max-width: 1500px;
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .cap-card {
+            background: var(--bg-card);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cap-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--cyan);
+            box-shadow: 0 4px 15px rgba(0, 240, 255, 0.1);
+        }
+
+        .cap-card.active {
+            border-color: var(--cyan);
+            background: rgba(0, 240, 255, 0.04);
+        }
+
+        .cap-title {
+            font-weight: 700;
+            font-size: 1.05rem;
+            color: #fff;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .cap-desc {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        /* Detail Container */
+        .detail-container {
+            max-width: 1500px;
+            width: 100%;
+            background: var(--bg-card);
+            border: 1px solid var(--border-glow);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 40px;
+            min-height: 250px;
+        }
+
+        .detail-view {
+            display: none;
+        }
+
+        .detail-view.active {
+            display: block;
+        }
+
+        /* Security styling */
+        .vuln-card {
+            background: rgba(255, 0, 85, 0.03);
+            border: 1px solid rgba(255, 0, 85, 0.15);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .vuln-info h4 {
+            color: var(--magenta);
+            margin-bottom: 4px;
+        }
+
+        .severity-badge {
+            background: rgba(255, 0, 85, 0.1);
+            color: var(--magenta);
+            border: 1px solid var(--magenta);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-family: var(--font-mono);
+            font-weight: 700;
+            margin-left: 8px;
+        }
+
+        .btn-healer {
+            background: rgba(57, 211, 83, 0.1);
+            border: 1px solid var(--green);
+            color: var(--green);
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+
+        .btn-healer:hover {
+            background: var(--green);
+            color: #000;
+        }
+
+        /* Optimization Grid */
+        .opt-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+
+        .opt-card {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .opt-val {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: var(--cyan);
+            margin-top: 6px;
+            font-family: var(--font-mono);
+        }
+
+        /* CFG container */
+        .cfg-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0,0,0,0.25);
+            border-radius: 8px;
+            padding: 20px;
+            overflow: auto;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+
+        /* AI Assistant Section */
+        .ai-assistant {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .ai-input-row {
+            display: flex;
+            gap: 12px;
+        }
+
+        .ai-input {
+            flex-grow: 1;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px;
+            color: #fff;
+            padding: 12px 16px;
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            outline: none;
+        }
+
+        .ai-input:focus {
+            border-color: var(--cyan);
+        }
+
+        .btn-query {
+            background: var(--purple);
+            color: #fff;
+            border: none;
+            padding: 12px 24px;
+            font-weight: 700;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .ai-response {
+            background: #000;
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 8px;
+            padding: 16px;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--green);
+            white-space: pre-wrap;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-section">
+            <h1>⚡ ZCC Sovereign Code Intelligence Platform</h1>
+            <p>A Unified Software Intelligence Platform Built on the ZCC Intermediate Representation</p>
+        </div>
+        <div class="status-badge">
+            <div class="status-dot"></div>
+            <span>ANALYSIS ENGINE ACTIVE</span>
+        </div>
+    </header>
+
+    <!-- Product Hero -->
+    <div class="hero">
+        <h2>Understand Any Software Through One Intermediate Representation</h2>
+        <p>SCIP transforms source code, binaries, and smart contracts into a unified intermediate representation, enabling modular security analysis, optimization, visualization, and automated code intelligence.</p>
+        <div class="hero-ctas">
+            <button class="btn-cta primary" onclick="runAnalysis()">Analyze Code</button>
+            <a href="https://github.com" target="_blank" class="btn-cta secondary">Explore the Architecture</a>
+        </div>
+    </div>
+
+    <!-- Workspace Grid -->
+    <div class="workspace">
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">📝 SCIP Studio Ingest</span>
+                <div class="selector-tabs">
+                    <button class="selector-btn active" id="btn-evm" onclick="switchInput('evm')">EVM Bytecode</button>
+                    <button class="selector-btn" id="btn-c" onclick="switchInput('c')">C Source</button>
+                </div>
+            </div>
+            <div class="panel-body">
+                <textarea id="code-input" spellcheck="false"></textarea>
+                <button class="btn-action" onclick="runAnalysis()">
+                    <span>🚀 Lift & Analyze to ZCC IR</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">🌳 Unified 3-Address ZCC IR Node Viewer</span>
+                <span id="ir-count" style="font-family: var(--font-mono); font-size: 0.82rem; color: var(--text-muted);">0 instructions</span>
+            </div>
+            <div class="panel-body" style="background: rgba(0,0,0,0.15);">
+                <ul class="ir-list" id="ir-list">
+                    <li style="color: var(--text-muted); text-align: center; margin-top: 100px;">
+                        Load target code to lift intermediate nodes.
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Capabilities Cards Grid -->
+    <div class="capabilities-header">💡 Dynamic Analysis Modules</div>
+    <div class="cards-grid">
+        <div class="cap-card active" id="card-security" onclick="switchModule('security')">
+            <div class="cap-title">🛡️ Security Analysis</div>
+            <div class="cap-desc">Scan vulnerability tags, taint propagation trails, and verify privilege boundaries.</div>
+        </div>
+        <div class="cap-card" id="card-opt" onclick="switchModule('opt')">
+            <div class="cap-title">🚀 Optimization & SSA</div>
+            <div class="cap-desc">Track Sparse Conditional Constant Propagation (SCCP), dead code ratios, and SSA forms.</div>
+        </div>
+        <div class="cap-card" id="card-cfg" onclick="switchModule('cfg')">
+            <div class="cap-title">🌳 Control Flow (CFG)</div>
+            <div class="cap-desc">Explore visual basic blocks, dominator frontiers, and edge relationships.</div>
+        </div>
+        <div class="cap-card" id="card-ai" onclick="switchModule('ai')">
+            <div class="cap-title">🤖 AI IR Assistant</div>
+            <div class="cap-desc">Query software logic deterministically using natural language over the lifted IR.</div>
+        </div>
+    </div>
+
+    <!-- Active Detail Module View -->
+    <div class="detail-container">
+        <!-- View: Security -->
+        <div class="detail-view active" id="view-security">
+            <div id="security-summary" style="margin-bottom: 12px; font-weight: 600;"></div>
+            <div id="vuln-list">
+                <p style="color: var(--text-muted);">Audit summary will appear here.</p>
+            </div>
+        </div>
+
+        <!-- View: Opt -->
+        <div class="detail-view" id="view-opt">
+            <div class="opt-grid">
+                <div class="opt-card">
+                    <div>Nodes Before</div>
+                    <div class="opt-val" id="opt-before">-</div>
+                </div>
+                <div class="opt-card">
+                    <div>Nodes After</div>
+                    <div class="opt-val" id="opt-after">-</div>
+                </div>
+                <div class="opt-card">
+                    <div>DCE Removed</div>
+                    <div class="opt-val" id="opt-deleted" style="color: var(--magenta);">-</div>
+                </div>
+                <div class="opt-card">
+                    <div>Optimization Ratio</div>
+                    <div class="opt-val" id="opt-ratio" style="color: var(--green);">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- View: CFG -->
+        <div class="detail-view" id="view-cfg">
+            <div class="cfg-container">
+                <svg id="cfg-svg" width="600" height="240" style="background: transparent;">
+                    <text x="300" y="120" fill="var(--text-muted)" text-anchor="middle">No graph rendered.</text>
+                </svg>
+            </div>
+        </div>
+
+        <!-- View: AI Assistant -->
+        <div class="detail-view" id="view-ai">
+            <div class="ai-assistant">
+                <div class="ai-input-row">
+                    <input type="text" class="ai-input" id="ai-query" value="Why is this SSTORE vulnerable?">
+                    <button class="btn-query" onclick="runAIQuery()">Query IR Assistant</button>
+                </div>
+                <div class="ai-response" id="ai-response">Awaiting query...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const samples = {
+            evm: "602060005560006000fd", // PUSH1 0x20, PUSH1 0x00, SSTORE, PUSH1 0, PUSH1 0, REVERT
+            c: `// C program to demonstrate privilege boundaries\nint main() {\n    int user_input = read_untrusted();\n    write_persistent_storage(user_input);\n    return 0;\n}`
+        };
+
+        let currentType = 'evm';
+
+        function switchInput(type) {
+            currentType = type;
+            document.getElementById('btn-evm').classList.toggle('active', type === 'evm');
+            document.getElementById('btn-c').classList.toggle('active', type === 'c');
+            document.getElementById('code-input').value = samples[type];
+        }
+
+        // Prefill
+        switchInput('evm');
+
+        function switchModule(modId) {
+            document.querySelectorAll('.cap-card').forEach(card => {
+                card.classList.toggle('active', card.id === `card-\${modId}`);
+            });
+            document.querySelectorAll('.detail-view').forEach(view => {
+                view.classList.remove('active');
+            });
+            document.getElementById(`view-\${modId}`).classList.add('active');
+        }
+
+        // Simulated compilation database
+        const mockAnalysis = {
+            evm: {
+                ir: [
+                    { dst: "t0", op: "CONST", src: "0x20", tag: null },
+                    { dst: "t1", op: "CONST", src: "0x00", tag: null },
+                    { dst: null, op: "SSTORE", src: "t1, t0", tag: "IR_TAG_SSTORE" },
+                    { dst: "t2", op: "CONST", src: "0x00", tag: null },
+                    { dst: "t3", op: "CONST", src: "0x00", tag: null },
+                    { dst: null, op: "RET", src: "t2, t3", tag: "IR_TAG_EVM_BARRIER" }
+                ],
+                vulns: [
+                    {
+                        title: "State Write Event (SSTORE)",
+                        desc: "State variable mutation detected outside verified lock boundaries.",
+                        severity: "MEDIUM (CVSS 5.3)",
+                        tag: "IR_VULN_STATE_WRITE"
+                    },
+                    {
+                        title: "Execution Barrier (REVERT)",
+                        desc: "Standard EVM execution reversion node tagged as execution barrier.",
+                        severity: "LOW (CVSS 2.1)",
+                        tag: "IR_VULN_EXEC_BARRIER"
+                    }
+                ],
+                opt: { before: 12, after: 6, deleted: 6, ratio: "50%" },
+                cfg: `
+                    <g stroke="var(--cyan)" stroke-width="2" fill="none">
+                        <rect x="50" y="30" width="160" height="60" rx="6" fill="rgba(255,255,255,0.02)" />
+                        <rect x="50" y="140" width="160" height="60" rx="6" fill="rgba(255,255,255,0.02)" />
+                        <line x1="130" y1="90" x2="130" y2="140" marker-end="url(#arrow)" />
+                        <text x="130" y="65" fill="#fff" text-anchor="middle" font-family="monospace">Block 0 (Entry)</text>
+                        <text x="130" y="175" fill="#fff" text-anchor="middle" font-family="monospace">Block 1 (Revert)</text>
+                        <defs>
+                            <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--cyan)" />
+                            </marker>
+                        </defs>
+                    </g>
+                `
+            },
+            c: {
+                ir: [
+                    { dst: "t0", op: "CALL", src: "read_untrusted()", tag: "IR_TAG_UNTRUSTED_EXTERNAL_CALL" },
+                    { dst: "t1", op: "COPY", src: "t0", tag: null },
+                    { dst: null, op: "CALL", src: "write_persistent_storage(t1)", tag: "IR_TAG_SSTORE" },
+                    { dst: null, op: "RET", src: "0", tag: null }
+                ],
+                vulns: [
+                    {
+                        title: "Untrusted Taint Source",
+                        desc: "Input from external FFI boundary is read without validation.",
+                        severity: "HIGH (CVSS 7.5)",
+                        tag: "IR_VULN_UNTRUSTED_CALL"
+                    },
+                    {
+                        title: "Tainted Storage Write",
+                        desc: "Externally tainted data propagates directly to persistent state variables.",
+                        severity: "CRITICAL (CVSS 8.8)",
+                        tag: "IR_VULN_STATE_WRITE"
+                    }
+                ],
+                opt: { before: 8, after: 4, deleted: 4, ratio: "50%" },
+                cfg: `
+                    <g stroke="var(--purple)" stroke-width="2" fill="none">
+                        <rect x="200" y="50" width="200" height="80" rx="8" fill="rgba(255,255,255,0.02)" />
+                        <text x="300" y="95" fill="#fff" text-anchor="middle" font-family="monospace">Main block (C Entry)</text>
+                    </g>
+                `
+            }
+        };
+
+        function runAnalysis() {
+            const data = mockAnalysis[currentType];
+            
+            // Render IR
+            const irList = document.getElementById('ir-list');
+            irList.innerHTML = '';
+            data.ir.forEach((item, index) => {
+                const li = document.createElement('li');
+                li.className = 'ir-item';
+                li.innerHTML = `
+                    <div>
+                        <span style="color: var(--text-muted); margin-right: 8px;">[\${index}]</span>
+                        \${item.dst ? \`<span class="ir-dst">\${item.dst}</span> = \` : ''}
+                        <span class="ir-op">\${item.op}</span> 
+                        <span class="ir-src">\${item.src}</span>
+                    </div>
+                    \${item.tag ? \`<span class="ir-tag">\${item.tag}</span>\` : ''}
+                `;
+                irList.appendChild(li);
+            });
+            document.getElementById('ir-count').textContent = `\${data.ir.length} nodes`;
+
+            // Render Security
+            const vulnList = document.getElementById('vuln-list');
+            vulnList.innerHTML = '';
+            document.getElementById('security-summary').textContent = `🛡️ Vulnerability Audit Completed: \${data.vulns.length} vulnerabilities found.`;
+            data.vulns.forEach(v => {
+                const div = document.createElement('div');
+                div.className = 'vuln-card';
+                div.innerHTML = `
+                    <div class="vuln-info">
+                        <h4>\${v.title} <span class="severity-badge">\${v.severity}</span></h4>
+                        <p>\${v.desc}</p>
+                        <span style="font-family: monospace; font-size: 0.8rem; background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; color: var(--cyan);">\${v.tag}</span>
+                    </div>
+                    <button class="btn-healer" onclick="alert('Mitigating \${v.tag} via Auto-Healer rewrite passes...')">Auto-Heal</button>
+                `;
+                vulnList.appendChild(div);
+            });
+
+            // Render Opt
+            document.getElementById('opt-before').textContent = data.opt.before;
+            document.getElementById('opt-after').textContent = data.opt.after;
+            document.getElementById('opt-deleted').textContent = data.opt.deleted;
+            document.getElementById('opt-ratio').textContent = data.opt.ratio;
+
+            // Render CFG
+            document.getElementById('cfg-svg').innerHTML = data.cfg;
+
+            // Update AI Response Preview
+            runAIQuery();
+        }
+
+        function runAIQuery() {
+            const query = document.getElementById('ai-query').value.trim();
+            const responseBox = document.getElementById('ai-response');
+            
+            if (currentType === 'evm') {
+                if (query.toLowerCase().includes('sstore') || query.toLowerCase().includes('vulnerable')) {
+                    responseBox.textContent = `[DET-AI-ASSISTANT] Query resolved successfully on evm_contract:\n\n- Node 2 is a state mutation node [SSTORE] writing 't0' (value: 32) to 't1' (storage slot: 0).\n- Taint warden reports that Slot 0 is un-guarded by transient mutex locks.\n- Conclusion: Unprotected persistent storage modification hazard present on Node 2.`;
+                } else {
+                    responseBox.textContent = `[DET-AI-ASSISTANT] Query: "\${query}"\n- Lifted IR consists of 6 statements. No custom data flow matches found for this query.`;
+                }
+            } else {
+                responseBox.textContent = `[DET-AI-ASSISTANT] Query resolved successfully on main:\n\n- Node 0 reads untrusted external data [CALL] into 't0'.\n- Node 1 copies 't0' to 't1'.\n- Node 2 writes 't1' to persistent storage. This creates a dataflow path from untrusted FFI boundary to storage sink without static sanitization passes.\n- Recommendation: Apply input sanitization filter before Node 2.`;
+            }
+        }
+
+        // Initialize on load
+        runAnalysis();
+    </script>
+</body>
+</html>

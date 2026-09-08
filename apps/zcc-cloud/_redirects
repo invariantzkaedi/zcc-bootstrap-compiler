@@ -1,0 +1,6 @@
+/* SPA fallback — serve index.html for any unmatched route */
+/* Cloudflare Pages _redirects file */
+/* https://developers.cloudflare.com/pages/configuration/redirects/ */
+
+/compile    /    302
+/playground /    302

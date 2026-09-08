@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZKAEDI Singularity Studio // 2M Particle VFX & Audio-Reactive Synth</title>
+    <meta name="description" content="Production-grade 2,097,152 particle WebGL2 GPGPU visual synthesizer with real-time audio reactivity, 3D choreography, and native ZCC C code export.">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Top Header -->
+    <header>
+        <div class="brand">
+            <div class="brand-badge">2M GPU</div>
+            <div>
+                <h1 class="brand-title">ZKAEDI SINGULARITY // VISUAL SYNTH</h1>
+                <div class="brand-sub">QUANTUM ATTRACTOR & AUDIO-REACTIVE VFX SUITE</div>
+            </div>
+        </div>
+
+        <!-- Telemetry & Performance HUD -->
+        <div class="hud-strip">
+            <div class="hud-item">
+                <span class="hud-lbl">FPS</span>
+                <span id="hudFps" class="hud-val">60</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-lbl">NODES</span>
+                <span id="hudNodes" class="hud-val">2,097,152</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-lbl">AUDIO PEAK</span>
+                <canvas id="audioMiniViz" width="80" height="22"></canvas>
+            </div>
+            <div class="hud-item">
+                <span class="hud-lbl">REGIME</span>
+                <span id="hudRegime" class="hud-val">SUB-CRITICAL</span>
+            </div>
+        </div>
+
+        <!-- Action Quick-Bar -->
+        <div class="quick-actions">
+            <button id="btnAudioToggle" class="btn-pill" title="Toggle Microphone / Audio Input">
+                <span>🎤</span> Audio Reactive
+            </button>
+            <button id="btnRecordVideo" class="btn-pill record" title="Record 60 FPS Video">
+                <span class="rec-dot"></span> <span id="recBtnText">Record Video</span>
+            </button>
+            <button id="btnExportC" class="btn-pill c-code" title="Export Native ZCC C Source Code">
+                <span>⚡</span> Export C Source
+            </button>
+            <button id="btnSnapshot" class="btn-pill" title="Save 4K Still Snapshot">
+                <span>📸</span> Snapshot
+            </button>
+            <a href="../zkaedi-navigator/index.html" class="btn-pill" style="text-decoration:none; color:#ff0055;" title="Open Geodesic Navigator">
+                <span>🧭</span> Navigator
+            </a>
+            <a href="../index.html" class="btn-pill" style="text-decoration:none; color:#fff;" title="Return to Sovereign Portal">
+                <span>⚡</span> Portal
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Viewport -->
+    <main>
+        <div class="viewport-wrapper">
+            <canvas id="singularityCanvas"></canvas>
+
+            <!-- Bottom Left Info Overlay -->
+            <div class="overlay-info">
+                <div class="status-indicator"></div>
+                <div id="statusText">GPGPU STREAM ACTIVE // DRAG TO ORBIT • SCROLL TO ZOOM</div>
+            </div>
+
+            <!-- Floating Right Studio Deck -->
+            <aside class="studio-deck">
+                <div class="deck-tabs">
+                    <button class="deck-tab active" data-tab="tabPhysics">Physics & Chaos</button>
+                    <button class="deck-tab" data-tab="tabAudio">Audio Synth</button>
+                    <button class="deck-tab" data-tab="tabOptics">Optics & Color</button>
+                </div>
+
+                <!-- TAB 1: Physics & Chaos -->
+                <div id="tabPhysics" class="deck-content active">
+                    <div class="control-row">
+                        <label>Manifold Preset</label>
+                        <select id="selPreset">
+                            <option value="canonical" selected>Canonical Attractor (1.2B Video Run)</option>
+                            <option value="supercritical">Supercritical Explosion (Phase III)</option>
+                            <option value="limitcycle">Dipole Limit Cycle (Phase II)</option>
+                            <option value="vortex">Double Vortex Torus</option>
+                            <option value="hopf">Hopf Fibers Singularity</option>
+                            <option value="rossler">Rossler Hyper-Spiral</option>
+                            <option value="de_jong">Peter de Jong Fractal Caustics</option>
+                        </select>
+                    </div>
+
+                    <div class="control-row">
+                        <div class="lbl-row">
+                            <label>Active Particle Density</label>
+                            <span id="lblParticles" class="val-mono">2,000,000</span>
+                        </div>
+                        <input type="range" id="sliderParticles" min="100000" max="2097152" step="100000" value="2000000">
+                    </div>
+
+                    <div class="control-row">
+                        <div class="lbl-row">
+                            <label>ZKAEDI Coupling (η)</label>
+                            <span id="lblEta" class="val-mono">0.40</span>
+                        </div>
+                        <input type="range" id="sliderEta" min="0.0" max="1.50" step="0.01" value="0.40">
+                        <div class="sub-range-ticks">
+                            <span>0.0 (Base)</span>
+                            <span class="crit">η_c ≈ 1.005</span>
+                            <span>1.50</span>
+                        </div>
+                    </div>
+
+                    <div class="control-row">
+                        <div class="lbl-row">
+                            <label>Sigmoid Sharpness (γ)</label>
+                            <span id="lblGamma" class="val-mono">0.30</span>
+                        </div>
+                        <input type="range" id="sliderGamma" min="0.05" max="1.00" step="0.01" value="0.30">
+                    </div>
+
+                    <div class="control-box">
+                        <div class="lbl-row" style="margin-bottom: 8px;">
+                            <label style="font-weight: 700;">Attractor Parameters (a, b, c, d)</label>
+                            <label class="chk-label"><input type="checkbox" id="chkAutoMorph" checked> Auto-Morph</label>
+                        </div>
+                        <div class="grid-2col">
+                            <div>a: <span id="valA" class="val-mono">-1.40</span></div>
+                            <div>b: <span id="valB" class="val-mono">1.60</span></div>
+                            <div>c: <span id="valC" class="val-mono">1.00</span></div>
+                            <div>d: <span id="valD" class="val-mono">0.70</span></div>
+                        </div>
+                    </div>
+
+                    <div class="control-row">
+                        <div class="lbl-row">
+                            <label>Camera Distance</label>
+                            <span id="lblDist" class="val-mono">4.2</span>
+                        </div>
+                        <input type="range" id="sliderDist" min="1.0" max="10.0" step="0.1" value="4.2">
+                    </div>
+
+                    <button id="btnResetCamera" class="btn-block">🔄 Reset Camera Orbit</button>
+                </div>
+
+                <!-- TAB 2: Audio Synth -->
+                <div id="tabAudio" class="deck-content">
+                    <p class="tab-desc">Modulate particle attractor coordinates using live audio FFT frequency bands.</p>
+                    
+                    <div class="control-row">
+                        <label>Audio Source</label>
+                        <div class="btn-group">
+                            <button id="btnMicInput" class="btn-sm active">🎙️ Microphone</button>
+                            <label class="btn-sm file-label">
+                                📁 Load Audio
+                                <input type="file" id="fileAudio" accept="audio/*" style="display: none;">
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="control-row">
+                        <div class="lbl-row">
+                            <label>Bass Reactivity (Low Freq $\rightarrow$ Chaos Amplitude)</label>
+                            <span id="lblBass" class="val-mono">1.5x</span>
+                        </div>
+                        <input type="range" id="sliderBass" min="0.0" max="3.0" step="0.1" value="1.5">
+                    </div>
+
+                    <div class="control-row">
+                        <div class="lbl-row">
+                            <label>Treble Reactivity (High Freq $\rightarrow$ Coupling η)</label>
+                            <span id="lblTreble" class="val-mono">1.0x</span>
+                        </div>
+                        <input type="range" id="sliderTreble" min="0.0" max="3.0" step="0.1" value="1.0">
+                    </div>
+
+                    <div class="audio-spectrum-box">
+                        <label style="font-size: 11px; margin-bottom: 6px; display: block;">Live FFT Frequency Spectrum</label>
+                        <canvas id="audioFullViz" width="280" height="70"></canvas>
+                    </div>
+                </div>
+
+                <!-- TAB 3: Optics & Color -->
+                <div id="tabOptics" class="deck-content">
+                    <div class="control-row">
+                        <label>Color Theme</label>
+                        <select id="selTheme">
+                            <option value="rhodium" selected>Cyber Rhodium (Cyan & Magenta)</option>
+                            <option value="gold">Solar Gold & Deep Obsidian</option>
+                            <option value="spectral">Hyper-Spectral Rainbow</option>
+                            <option value="emerald">Emerald Deep Nebula</option>
+                            <option value="infrared">Infrared Quantum Thermal</option>
+                        </select>
+                    </div>
+
+                    <div class="control-row">
+                        <div class="lbl-row">
+                            <label>Phosphor Trail Persistence</label>
+                            <span id="lblDecay" class="val-mono">0.78</span>
+                        </div>
+                        <input type="range" id="sliderDecay" min="0.40" max="0.98" step="0.01" value="0.78">
+                        <div class="sub-range-ticks">
+                            <span>Crisp Dots (0.4)</span>
+                            <span>Silky Ribbons (0.98)</span>
+                        </div>
+                    </div>
+
+                    <div class="control-row">
+                        <div class="lbl-row">
+                            <label>Depth Shading (Z-Parallax)</label>
+                            <span id="lblDepth" class="val-mono">1.2x</span>
+                        </div>
+                        <input type="range" id="sliderDepth" min="0.0" max="3.0" step="0.1" value="1.2">
+                    </div>
+
+                    <div class="control-row">
+                        <div class="lbl-row">
+                            <label>Particle Point Size</label>
+                            <span id="lblPointSize" class="val-mono">1.0 px</span>
+                        </div>
+                        <input type="range" id="sliderPointSize" min="1.0" max="4.0" step="0.5" value="1.0">
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </main>
+
+    <!-- Modal for C Code Export -->
+    <div id="modalExportC" class="modal-backdrop">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3>⚡ Native ZCC C Code Generator</h3>
+                <button id="btnCloseModal" class="btn-close">×</button>
+            </div>
+            <p class="modal-desc">
+                This exact C source code compiles natively with your <code>zcc</code> compiler and pipes directly into FFmpeg to generate broadcast-quality 4K/60FPS video.
+            </p>
+            <textarea id="txtCCode" readonly></textarea>
+            <div class="modal-actions">
+                <button id="btnCopyC" class="btn-pill primary">📋 Copy to Clipboard</button>
+                <button id="btnDownloadC" class="btn-pill">💾 Download .c File</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="singularity.js"></script>
+</body>
+</html>

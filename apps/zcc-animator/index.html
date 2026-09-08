@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZKAEDI ANIMATOR PRO // Elite Vector Motion & Physics Studio</title>
+  <meta name="description" content="Studio-grade vector keyframe motion studio with Bezier curve editor, live onion skinning, physics particles, and 60 FPS video export.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       TOP STUDIO APP HEADER
+       ═══════════════════════════════════════════════════════════ -->
+  <header class="app-header">
+    <div class="brand-section">
+      <div class="brand-badge">ZCC ANIM</div>
+      <div>
+        <div class="brand-title">
+          ZKAEDI ANIMATOR PRO
+          <span class="version-tag">STUDIO v2.0</span>
+        </div>
+        <div class="brand-sub">Vector Motion · Easing Curves · Physics Engine</div>
+      </div>
+    </div>
+
+    <!-- Center View Switcher (Dope Sheet vs Curve Editor) -->
+    <div class="header-center-tabs">
+      <button class="view-tab-btn active" data-view="timeline">🎬 Dope Sheet</button>
+      <button class="view-tab-btn" data-view="curves">📈 Graph Curves</button>
+    </div>
+
+    <!-- Studio Actions & Exports -->
+    <div class="header-actions">
+      <!-- Preset Gallery Dropdown -->
+      <select class="prop-input" id="selPreset" style="padding:5px 8px; width:150px; font-size:0.78rem;" title="Load Demo Presets">
+        <option value="" disabled selected>Preset Gallery ▾</option>
+        <option value="hud">Cyberpunk HUD</option>
+        <option value="attractor">Strange Attractor</option>
+      </select>
+
+      <button class="btn-header" id="btnOnionSkin" title="Toggle Onion Skinning (Ghosting)">
+        🧅 Onion Skin
+      </button>
+
+      <button class="btn-header" id="btnExportVideo" title="Record and download 60 FPS WebM/MP4 video">
+        🎥 Export Video
+      </button>
+
+      <button class="btn-header primary" id="btnExportC" title="Export C source code using zcc_anim.h and zcc_svg.h">
+        ⚡ Export ZCC C Code
+      </button>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       MAIN WORKSPACE
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="workspace-container">
+
+    <!-- Left Tool Palette -->
+    <aside class="tool-palette" aria-label="Tool selection">
+      <button class="tool-btn active" data-tool="select" title="Select & Transform (V)">
+        ↖
+        <span class="hotkey">V</span>
+      </button>
+      <div class="tool-separator"></div>
+      <button class="tool-btn" data-tool="rect" title="Rectangle (R)">
+        ■
+        <span class="hotkey">R</span>
+      </button>
+      <button class="tool-btn" data-tool="circle" title="Circle / Ellipse (C)">
+        ●
+        <span class="hotkey">C</span>
+      </button>
+      <button class="tool-btn" data-tool="star" title="Star / Polygon (S)">
+        ★
+        <span class="hotkey">S</span>
+      </button>
+      <button class="tool-btn" data-tool="attractor" title="Clifford Quantum Vortex (A)">
+        🌀
+        <span class="hotkey">A</span>
+      </button>
+      <button class="tool-btn" data-tool="text" title="Kinetic Text (T)">
+        T
+        <span class="hotkey">T</span>
+      </button>
+    </aside>
+
+    <!-- Center Viewport (Infinite Pan & Zoom Canvas) -->
+    <main class="canvas-viewport" id="viewport">
+      <div class="viewport-hud">
+        <span>Artboard: <span class="badge">800 × 500</span></span>
+        <span>•</span>
+        <span>Output: <span class="badge">60 FPS</span></span>
+        <span>•</span>
+        <span><kbd>Space</kbd> Play/Pause</span>
+        <span>•</span>
+        <span><kbd>K</kbd> Keyframe</span>
+        <span>•</span>
+        <span><kbd>Ctrl+Z</kbd> Undo</span>
+      </div>
+
+      <div class="canvas-artboard-wrapper">
+        <canvas id="renderCanvas" width="800" height="500"></canvas>
+      </div>
+    </main>
+
+    <!-- Right Properties & Layers Panel -->
+    <aside class="properties-panel" aria-label="Properties and layers">
+      <div class="panel-tabs">
+        <button class="panel-tab active">Properties</button>
+      </div>
+
+      <div class="panel-content">
+        <!-- Properties Card -->
+        <div class="prop-card">
+          <div class="prop-card-title">
+            <span>Transform & Style</span>
+            <span style="color:var(--accent-cyan); font-family:var(--font-mono); font-size:0.65rem;">KEYFRAMED</span>
+          </div>
+          <div id="inspectorProperties">
+            <!-- Dynamically populated by app.js -->
+          </div>
+        </div>
+
+        <!-- Layers Stack Card -->
+        <div class="prop-card" style="margin-top:auto;">
+          <div class="prop-card-title">
+            <span>Layers Hierarchy</span>
+            <span style="font-size:0.65rem; color:var(--text-dim);">TOP-FIRST</span>
+          </div>
+          <div class="layer-list" id="layersContainer">
+            <!-- Dynamically populated by app.js -->
+          </div>
+        </div>
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       BOTTOM TIMELINE & CURVE DECK
+       ═══════════════════════════════════════════════════════════ -->
+  <footer class="timeline-panel" aria-label="Animation Timeline">
+    <div class="timeline-toolbar">
+      <div class="transport-controls">
+        <button class="btn-transport" id="btnRewind" title="Rewind to start (0f)">⏮</button>
+        <button class="btn-transport" id="btnStepBack" title="Step Back 1 frame (←)">◀</button>
+        <button class="btn-transport play" id="btnPlay" title="Play / Pause (Space)">▶</button>
+        <button class="btn-transport" id="btnStepForward" title="Step Forward 1 frame (→)">▶</button>
+        <div class="timecode-display" id="timecodeDisplay">000f / 0.00s</div>
+      </div>
+
+      <div class="timeline-meta">
+        <span>Timeline: <strong>120 Frames</strong> (2.0s @ 60fps)</span>
+        <span>•</span>
+        <span>Kernel: <strong>zcc_anim.h Easing Math</strong></span>
+      </div>
+    </div>
+
+    <!-- View 1: Dope Sheet Timeline -->
+    <div class="timeline-tracks-wrapper" id="timelineView">
+      <div class="timeline-labels-column">
+        <div class="track-label-header">
+          <span>Track Names</span>
+          <span>💎</span>
+        </div>
+        <div id="trackLabels">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <div class="timeline-scrubber-column" id="scrubberScrollArea">
+        <div class="timeline-ruler" id="timelineRuler"></div>
+        <div class="timeline-grid" id="timelineTracks"></div>
+        <div class="playhead-needle" id="playheadNeedle">
+          <div class="playhead-head"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- View 2: Graph Curves Bezier Deck -->
+    <div class="curve-editor-deck" id="curveEditorView">
+      <canvas id="curveCanvas"></canvas>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

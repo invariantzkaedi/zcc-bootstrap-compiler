@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZKAEDI VMAX — DPO Resource Allocator & Cluster Scheduler</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #060814;
+      --card-bg: rgba(15, 20, 42, 0.85);
+      --card-border: rgba(0, 240, 255, 0.3);
+      --accent-cyan: #00f0ff;
+      --accent-magenta: #ff007f;
+      --accent-purple: #7000ff;
+      --green-glow: #00ff88;
+      --yellow-alert: #ffcc00;
+      --text-main: #f0f4fc;
+      --text-dim: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg-dark);
+      color: var(--text-main);
+      background-image: radial-gradient(circle at 15% 15%, rgba(112, 0, 255, 0.15) 0%, transparent 45%),
+                        radial-gradient(circle at 85% 85%, rgba(0, 240, 255, 0.15) 0%, transparent 45%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 1.2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--card-border);
+      backdrop-filter: blur(16px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(6, 8, 20, 0.85);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .brand-logo {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, var(--accent-magenta), var(--accent-cyan));
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      font-size: 1.3rem;
+      color: #000;
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+    }
+
+    .brand-title {
+      font-size: 1.5rem;
+      font-weight: 800;
+      background: linear-gradient(90deg, #fff, var(--accent-cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+    }
+
+    .nav-item {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-weight: 600;
+      transition: 0.3s;
+    }
+    .nav-item:hover, .nav-item.active { color: var(--accent-cyan); }
+
+    .btn-action {
+      background: linear-gradient(135deg, var(--accent-purple), var(--accent-magenta));
+      color: #fff;
+      border: none;
+      padding: 0.75rem 1.8rem;
+      border-radius: 30px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      cursor: pointer;
+      box-shadow: 0 0 25px rgba(255, 0, 127, 0.4);
+      transition: 0.3s;
+    }
+    .btn-action:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 35px rgba(0, 240, 255, 0.6);
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2.5rem 2rem;
+      width: 100%;
+    }
+
+    .hero {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    .hero-badge {
+      display: inline-block;
+      padding: 0.4rem 1.2rem;
+      background: rgba(0, 240, 255, 0.1);
+      border: 1px solid var(--accent-cyan);
+      border-radius: 30px;
+      color: var(--accent-cyan);
+      font-weight: 700;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .hero-title {
+      font-size: 3rem;
+      font-weight: 800;
+      margin-bottom: 1rem;
+    }
+
+    .gradient-text {
+      background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-subtitle {
+      color: var(--text-dim);
+      font-size: 1.1rem;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    /* Grid Layouts */
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      backdrop-filter: blur(12px);
+    }
+
+    .stat-label {
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-value {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: var(--accent-cyan);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 2rem;
+      backdrop-filter: blur(12px);
+    }
+
+    .panel-title {
+      font-size: 1.4rem;
+      font-weight: 800;
+      margin-bottom: 1.5rem;
+      color: var(--accent-cyan);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Preference Pair Comparison Cards */
+    .pair-box {
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 1.2rem;
+      margin-bottom: 1rem;
+      background: rgba(4, 6, 14, 0.6);
+      transition: 0.3s;
+    }
+
+    .pair-box.chosen {
+      border-color: var(--green-glow);
+      background: rgba(0, 255, 136, 0.05);
+    }
+
+    .pair-box.rejected {
+      border-color: var(--accent-magenta);
+      background: rgba(255, 0, 127, 0.05);
+    }
+
+    .pair-header {
+      display: flex;
+      justify-content: space-between;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      font-size: 0.95rem;
+    }
+
+    .tag-chosen { color: var(--green-glow); }
+    .tag-rejected { color: var(--accent-magenta); }
+
+    .slider-group {
+      margin-bottom: 1.2rem;
+    }
+
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      font-weight: 600;
+      margin-bottom: 0.4rem;
+      font-size: 0.9rem;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent-cyan);
+    }
+
+    canvas {
+      width: 100%;
+      height: 220px;
+      background: #04050a;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .console-log {
+      background: #04050a;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      color: var(--green-glow);
+      height: 200px;
+      overflow-y: auto;
+    }
+
+    footer {
+      border-top: 1px solid var(--card-border);
+      padding: 2rem;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.9rem;
+      margin-top: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-logo">DPO</div>
+      <div class="brand-title">ZKAEDI VMAX RESOURCE ALLOCATOR</div>
+    </div>
+    <nav class="nav-links">
+      <a href="#cluster" class="nav-item active">Cluster Status</a>
+      <a href="#optimization" class="nav-item">DPO Policy Engine</a>
+      <a href="#benchmark" class="nav-item">Loss Curve</a>
+    </nav>
+    <button class="btn-action" onclick="runDPOTrainingStep()">Run DPO Optimization Step ⚡</button>
+  </header>
+
+  <div class="container">
+    <div class="hero">
+      <div class="hero-badge">🎯 Direct Preference Optimization Engine</div>
+      <h1 class="hero-title">DPO Cluster <span class="gradient-text">Resource Allocator</span></h1>
+      <p class="hero-subtitle">Directly optimizes GPU/CPU cluster allocations without reward models. Learns implicit preference parameters ($\beta$) across competing workloads.</p>
+    </div>
+
+    <!-- Cluster Overview Cards -->
+    <div class="grid-4" id="cluster">
+      <div class="stat-card">
+        <div class="stat-label">DPO Win-Rate Accuracy</div>
+        <div class="stat-value" id="stat-winrate">100.0%</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Current DPO Loss</div>
+        <div class="stat-value" style="color: var(--green-glow)" id="stat-loss">0.3218</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Implicit Reward Margin</div>
+        <div class="stat-value" style="color: var(--accent-magenta)" id="stat-margin">+0.9690</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active GPU Cluster Load</div>
+        <div class="stat-value" style="color: var(--yellow-alert)" id="stat-gpu">84.2%</div>
+      </div>
+    </div>
+
+    <!-- DPO Preference Pair & Hyperparameters -->
+    <div class="grid-2" id="optimization">
+      <div class="panel">
+        <div class="panel-title">
+          <span>🎯 DPO Preference Pairs ($A_w$ vs $A_l$)</span>
+          <button style="background:transparent; border:1px solid var(--accent-cyan); color:var(--accent-cyan); padding:0.3rem 0.8rem; border-radius:6px; cursor:pointer;" onclick="generateNewPairs()">Sample Next Pair</button>
+        </div>
+
+        <div class="pair-box chosen" id="box-chosen">
+          <div class="pair-header">
+            <span>Option A: Chosen Allocation ($A_w$)</span>
+            <span class="tag-chosen">PREFERRED (y_w)</span>
+          </div>
+          <div style="font-size:0.9rem; color:var(--text-dim);" id="text-chosen">
+            GPU H100: 8 Nodes (64GB VRAM) | CPU Cores: 128 | Task: DPO Fine-Tuning + SMT Prover<br>
+            Estimated Completion: 4.2 min | Implicit Reward: +1.482
+          </div>
+        </div>
+
+        <div class="pair-box rejected" id="box-rejected">
+          <div class="pair-header">
+            <span>Option B: Rejected Allocation ($A_l$)</span>
+            <span class="tag-rejected">REJECTED (y_l)</span>
+          </div>
+          <div style="font-size:0.9rem; color:var(--text-dim);" id="text-rejected">
+            GPU H100: 2 Nodes (16GB VRAM) | CPU Cores: 16 | Task: Over-provisioned Idle Sweep<br>
+            Estimated Completion: 18.9 min | Implicit Reward: -0.764
+          </div>
+        </div>
+      </div>
+
+      <!-- Hyperparameters & Controls -->
+      <div class="panel">
+        <div class="panel-title">⚙️ DPO Hyperparameter Tuning</div>
+        
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>Implicit Temperature ($\beta$)</span>
+            <span id="lbl-beta">0.20</span>
+          </div>
+          <input type="range" id="slide-beta" min="0.05" max="0.50" step="0.05" value="0.20" oninput="updateHyperparams()">
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>Learning Rate ($\eta$)</span>
+            <span id="lbl-lr">0.001</span>
+          </div>
+          <input type="range" id="slide-lr" min="0.0001" max="0.005" step="0.0001" value="0.001" oninput="updateHyperparams()">
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>Batch Size (Preference Pairs)</span>
+            <span id="lbl-batch">64</span>
+          </div>
+          <input type="range" id="slide-batch" min="16" max="256" step="16" value="64" oninput="updateHyperparams()">
+        </div>
+
+        <button class="btn-action" style="width:100%; margin-top:1rem;" onclick="dispatchClusterAllocation()">🚀 Dispatch Optimized Cluster Parameters</button>
+      </div>
+    </div>
+
+    <!-- Live Convergence Loss Chart & Log -->
+    <div class="grid-2" id="benchmark">
+      <div class="panel">
+        <div class="panel-title">📈 Live DPO Loss Trajectory</div>
+        <canvas id="lossCanvas"></canvas>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">📜 Optimization Event Console</div>
+        <div class="console-log" id="console">
+          <div>[SYSTEM READY] ZKAEDI VMAX DPO Allocator Online.</div>
+          <div>[INFO] Initialized reference policy pi_ref across GPU/CPU nodes.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    &copy; 2026 ZKAEDI VMAX Systems Inc. DPO Cluster Resource Allocator Engine.
+  </footer>
+
+  <script>
+    let stepCount = 0;
+    let lossData = [0.693, 0.682, 0.654, 0.612, 0.542, 0.450, 0.380, 0.321];
+    
+    function logConsole(msg) {
+      const c = document.getElementById('console');
+      c.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+      c.scrollTop = c.scrollHeight;
+    }
+
+    function updateHyperparams() {
+      const b = parseFloat(document.getElementById('slide-beta').value).toFixed(2);
+      const lr = parseFloat(document.getElementById('slide-lr').value).toFixed(4);
+      const batch = document.getElementById('slide-batch').value;
+
+      document.getElementById('lbl-beta').innerText = b;
+      document.getElementById('lbl-lr').innerText = lr;
+      document.getElementById('lbl-batch').innerText = batch;
+
+      logConsole(`Hyperparameters updated: Beta=${b}, LR=${lr}, Batch=${batch}`);
+    }
+
+    function drawLossChart() {
+      const canvas = document.getElementById('lossCanvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = canvas.clientWidth;
+      canvas.height = canvas.clientHeight;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = '#00f0ff';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+
+      const padding = 30;
+      const w = canvas.width - padding * 2;
+      const h = canvas.height - padding * 2;
+
+      lossData.forEach((val, idx) => {
+        const x = padding + (idx / (lossData.length - 1)) * w;
+        const y = padding + (1.0 - (val / 0.8)) * h;
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+
+      ctx.stroke();
+    }
+
+    function runDPOTrainingStep() {
+      stepCount += 10;
+      const beta = parseFloat(document.getElementById('slide-beta').value);
+      const newLoss = Math.max(0.1, lossData[lossData.length - 1] - (0.02 * beta));
+      lossData.push(newLoss);
+      if (lossData.length > 20) lossData.shift();
+
+      const margin = (0.5 + (stepCount * 0.01) * beta).toFixed(4);
+      document.getElementById('stat-loss').innerText = newLoss.toFixed(4);
+      document.getElementById('stat-margin').innerText = `+${margin}`;
+
+      logConsole(`DPO Step ${stepCount}: Loss=${newLoss.toFixed(4)}, Margin=+${margin}`);
+      drawLossChart();
+    }
+
+    function generateNewPairs() {
+      const tasks = ["Quantum SMT Verification", "3D Mesh Decimation", "Blockchain Mining Pass", "DPO Policy Gradient"];
+      const t = tasks[Math.floor(Math.random() * tasks.length)];
+      
+      document.getElementById('text-chosen').innerHTML = `GPU H100: ${Math.floor(Math.random()*6+4)} Nodes | CPU: 128 Cores | Task: ${t}<br>Estimated Completion: ${(Math.random()*3+2).toFixed(1)} min | Implicit Reward: +${(Math.random()*1+1).toFixed(3)}`;
+      logConsole(`New preference pair generated for task: ${t}`);
+    }
+
+    function dispatchClusterAllocation() {
+      logConsole(`🚀 CLUSTER DISPATCHED: Optimal DPO Policy parameters applied across all GPU/CPU nodes!`);
+      alert("Cluster Allocation Dispatched Successfully!");
+    }
+
+    window.onload = function() {
+      drawLossChart();
+    };
+  </script>
+</body>
+</html>

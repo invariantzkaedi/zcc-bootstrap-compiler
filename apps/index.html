@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZKAEDI Sovereign Application Suite // ZCC Ecosystem</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;500;600;700&family=Outfit:wght@600;800;900&display=swap">
+    <style>
+        :root {
+            --bg: #05070d;
+            --surface: rgba(13, 17, 28, 0.8);
+            --border: rgba(255, 255, 255, 0.08);
+            --neon-cyan: #00f3ff;
+            --neon-green: #00ff88;
+            --neon-magenta: #ff0055;
+            --neon-gold: #ffb700;
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .badge {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--neon-cyan), var(--neon-magenta));
+            color: #000;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 900;
+            font-size: 11px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 32px;
+            font-weight: 800;
+            background: linear-gradient(90deg, #fff, var(--neon-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+        p.subtitle {
+            font-family: 'Fira Code', monospace;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 20px;
+            max-width: 1100px;
+            width: 100%;
+        }
+        .card {
+            background: var(--surface);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            text-decoration: none;
+            color: inherit;
+            position: relative;
+            overflow: hidden;
+        }
+        .card:hover {
+            transform: translateY(-4px);
+            border-color: var(--neon-cyan);
+            box-shadow: 0 10px 30px rgba(0, 243, 255, 0.15);
+        }
+        .card-icon {
+            font-size: 32px;
+            margin-bottom: 14px;
+        }
+        .card h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 20px;
+            margin-bottom: 8px;
+            color: #fff;
+        }
+        .card p {
+            color: var(--text-muted);
+            font-size: 13px;
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+        .card-tags {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        .tag {
+            background: rgba(255, 255, 255, 0.05);
+            font-family: 'Fira Code', monospace;
+            font-size: 10px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            color: var(--neon-cyan);
+            border: 1px solid rgba(0, 243, 255, 0.2);
+        }
+        .btn-launch {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: rgba(0, 243, 255, 0.1);
+            border: 1px solid var(--neon-cyan);
+            color: var(--neon-cyan);
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            font-size: 13px;
+            padding: 10px;
+            border-radius: 8px;
+            width: 100%;
+            transition: all 0.2s;
+        }
+        .card:hover .btn-launch {
+            background: var(--neon-cyan);
+            color: #000;
+            box-shadow: 0 0 16px var(--neon-cyan);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="badge">SOVEREIGN ECOSYSTEM</div>
+        <h1>ZKAEDI SUITE // APPLICATION PORTAL</h1>
+        <p class="subtitle">Bare-Metal ZCC Compilation • GPGPU Visual Synthesis • Two-Regime Hamiltonian Solvers</p>
+    </header>
+
+    <div class="grid">
+        <!-- App 1: Singularity Studio -->
+        <a href="zkaedi-singularity/index.html" class="card">
+            <div>
+                <div class="card-icon">🌌</div>
+                <h2>ZKAEDI Singularity Studio</h2>
+                <p>2,097,152 particle WebGL2 GPGPU visual synthesizer. Real-time audio reactivity, 3D choreographic camera, in-browser 60 FPS video recording, and native ZCC C source export.</p>
+                <div class="card-tags">
+                    <span class="tag">2M Particles</span>
+                    <span class="tag">GPGPU FBO</span>
+                    <span class="tag">Web Audio FFT</span>
+                    <span class="tag">C Source Gen</span>
+                </div>
+            </div>
+            <div class="btn-launch">Launch Singularity Studio ➔</div>
+        </a>
+
+        <!-- App 2: Geodesic Navigator -->
+        <a href="zkaedi-navigator/index.html" class="card">
+            <div>
+                <div class="card-icon">🧭</div>
+                <h2>ZKAEDI Geodesic Navigator</h2>
+                <p>Autonomous multi-agent swarm pathfinding and non-convex energy routing engine. Features departure scars ($\Delta H \mathrel{+}= \text{kick}$), v3 dead-end pruning stack (1.12x optimal), and custom floorplan imports.</p>
+                <div class="card-tags">
+                    <span class="tag">Swarm Fleet</span>
+                    <span class="tag">v3 Backtracking</span>
+                    <span class="tag">Thermal Scars</span>
+                    <span class="tag">GeoJSON/JSON</span>
+                </div>
+            </div>
+            <div class="btn-launch">Launch Geodesic Navigator ➔</div>
+        </a>
+
+        <!-- App 3: Dual Split Studio -->
+        <a href="zkaedi-studio/index.html" class="card">
+            <div>
+                <div class="card-icon">⚡</div>
+                <h2>ZKAEDI Sovereign Observatory</h2>
+                <p>Integrated dual-split command deck linking the 2M particle singularity live with the autonomous Hamiltonian maze solver. Includes instant attractor energy landscape injection.</p>
+                <div class="card-tags">
+                    <span class="tag">Dual View</span>
+                    <span class="tag">Bifurcation Monitor</span>
+                    <span class="tag">Gauntlet A/B</span>
+                </div>
+            </div>
+            <div class="btn-launch">Launch Sovereign Observatory ➔</div>
+        </a>
+
+        <!-- App 3b: Quantum Hyper-Slab Observatory -->
+        <a href="zkaedi-quantum/index.html" class="card" style="border-color: rgba(56, 189, 248, 0.3);">
+            <div>
+                <div class="card-icon">🔱</div>
+                <h2 style="color: #38bdf8;">ZKAEDI Quantum Observatory</h2>
+                <p>39-Qubit (549.76B Amplitudes) &amp; 40-Qubit (1.10T Amplitudes) hyper-slab state space explorer. Verified bit-exact unitary involution U†U = I, interactive SHA-64 hash chains, and 44.1 kHz audio sonification.</p>
+                <div class="card-tags">
+                    <span class="tag" style="color:#38bdf8; border-color:rgba(56,189,248,0.3);">39Q &amp; 40Q Space</span>
+                    <span class="tag">FP4 Complex Codec</span>
+                    <span class="tag">U†U = I Parity</span>
+                    <span class="tag">44.1kHz Audio</span>
+                </div>
+            </div>
+            <div class="btn-launch" style="border-color: #38bdf8; color: #38bdf8; background: rgba(56, 189, 248, 0.1);">Launch Quantum Observatory ➔</div>
+        </a>
+
+        <!-- App 4: ZCC Animator -->
+        <a href="zcc-animator/index.html" class="card">
+            <div>
+                <div class="card-icon">🎬</div>
+                <h2>ZCC Animator Studio</h2>
+                <p>Interactive motion graphics workstation with Dope Sheet Timeline, Bezier Curve Editor, Canvas 60 FPS recording, and direct SVG / native C compilation export.</p>
+                <div class="card-tags">
+                    <span class="tag">Dope Sheet</span>
+                    <span class="tag">Bézier Curves</span>
+                    <span class="tag">SVG Export</span>
+                </div>
+            </div>
+            <div class="btn-launch">Launch Animator Studio ➔</div>
+        </a>
+
+        <!-- App 5: ZCC Cloud Compiler -->
+        <a href="zcc-cloud/index.html" class="card">
+            <div>
+                <div class="card-icon">☁️</div>
+                <h2>ZCC Cloud Compiler</h2>
+                <p>Web IDE and binary inspection workbench with live Colab Pro+ backend connectivity, telemetry phase monitoring, and deterministic AST verification.</p>
+                <div class="card-tags">
+                    <span class="tag">Web IDE</span>
+                    <span class="tag">Colab Backend</span>
+                    <span class="tag">Binary View</span>
+                </div>
+            </div>
+            <div class="btn-launch">Launch Cloud Compiler ➔</div>
+        </a>
+
+        <!-- App 6: Native ZCC CLI Suite -->
+        <div class="card" style="border-color: rgba(255, 183, 0, 0.4);">
+            <div>
+                <div class="card-icon">⚡</div>
+                <h2 style="color: var(--neon-gold);">Native ZCC CLI Suite</h2>
+                <p>Bare-metal C binaries compiled natively by the self-hosting ZCC compiler. Features high-throughput 60 FPS video frame generation piped into FFmpeg and ANSI terminal maze solving with JSON path export.</p>
+                <div class="card-tags">
+                    <span class="tag" style="color: var(--neon-gold); border-color: rgba(255, 183, 0, 0.3);">bin/render_zkaedi_singularity</span>
+                    <span class="tag" style="color: var(--neon-gold); border-color: rgba(255, 183, 0, 0.3);">bin/navigate_zkaedi_terrain</span>
+                    <span class="tag">60 FPS FFmpeg</span>
+                    <span class="tag">Zero Glibc Drift</span>
+                </div>
+                <pre style="background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 6px; font-family: 'Fira Code', monospace; font-size: 11px; color: #a5f3fc; overflow-x: auto; margin-bottom: 12px;">./bin/render_zkaedi_singularity -p 100000 -f 600 -o out.mp4
+./bin/navigate_zkaedi_terrain --size 25 --ansi --json path.json</pre>
+            </div>
+            <div class="btn-launch" style="border-color: var(--neon-gold); color: var(--neon-gold); background: rgba(255, 183, 0, 0.1);">Compiled & Ready in ./bin/ ➔</div>
+        </div>
+    </div>
+
+</body>
+</html>

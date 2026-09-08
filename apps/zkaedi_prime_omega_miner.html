@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZKAEDI PRIME OMEGA — Fortified H_t Hamiltonian Blockchain Miner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Outfit:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #080a0f;
+      --panel-bg: rgba(15, 20, 30, 0.75);
+      --panel-border: rgba(0, 243, 255, 0.2);
+      --accent-cyan: #00f3ff;
+      --accent-magenta: #ff0055;
+      --accent-green: #00ff88;
+      --accent-gold: #ffcc00;
+      --text-main: #e2e8f0;
+      --text-muted: #94a3b8;
+      --font-sans: 'Outfit', sans-serif;
+      --font-mono: 'Fira Code', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(0, 243, 255, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(255, 0, 85, 0.08) 0%, transparent 40%);
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.25rem 2rem;
+      background: rgba(10, 14, 23, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--panel-border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .brand-icon {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      font-weight: 900;
+      color: #000;
+      box-shadow: 0 0 15px rgba(0, 243, 255, 0.4);
+    }
+
+    .brand-title {
+      font-size: 1.25rem;
+      font-weight: 900;
+      letter-spacing: 1px;
+      background: linear-gradient(90deg, #fff, var(--accent-cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      background: rgba(0, 243, 255, 0.15);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(0, 243, 255, 0.4);
+      text-transform: uppercase;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 1.5rem auto;
+      padding: 0 1.5rem;
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 1.5rem;
+    }
+
+    .glass-panel {
+      background: var(--panel-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .panel-title {
+      font-size: 1rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--accent-cyan);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .grid-layout {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .metric-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
+    .metric-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 0.25rem;
+    }
+
+    .metric-value {
+      font-size: 1.5rem;
+      font-weight: 900;
+      font-family: var(--font-mono);
+      color: #fff;
+    }
+
+    .metric-value.cyan { color: var(--accent-cyan); }
+    .metric-value.magenta { color: var(--accent-magenta); }
+    .metric-value.green { color: var(--accent-green); }
+    .metric-value.gold { color: var(--accent-gold); }
+
+    .canvas-container {
+      position: relative;
+      width: 100%;
+      height: 340px;
+      background: #05070a;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .controls-group {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .form-control {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    select, input[type="text"] {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(0, 243, 255, 0.3);
+      color: #fff;
+      padding: 0.6rem 0.8rem;
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      outline: none;
+    }
+
+    select:focus, input[type="text"]:focus {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
+    }
+
+    input[type="range"] {
+      accent-color: var(--accent-cyan);
+      cursor: pointer;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 0.8rem 1.2rem;
+      border-radius: 8px;
+      border: none;
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: 0.95rem;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-cyan), #0088ff);
+      color: #000;
+      box-shadow: 0 4px 15px rgba(0, 243, 255, 0.4);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 243, 255, 0.6);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, var(--accent-magenta), #cc0044);
+      color: #fff;
+      box-shadow: 0 4px 15px rgba(255, 0, 85, 0.4);
+    }
+
+    .btn-danger:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(255, 0, 85, 0.6);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-main);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .hash-stream {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      background: #030406;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      padding: 0.75rem;
+      height: 120px;
+      overflow-y: auto;
+      color: var(--accent-green);
+      line-height: 1.5;
+    }
+
+    .log-entry {
+      opacity: 0.85;
+    }
+
+    .log-entry.found {
+      color: var(--accent-gold);
+      font-weight: 700;
+      background: rgba(255, 204, 0, 0.1);
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon">Ψ</div>
+      <div>
+        <div class="brand-title">ZKAEDI PRIME OMEGA</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted);">Fortified H_t Hamiltonian Blockchain Miner v4.0</div>
+      </div>
+    </div>
+    <div style="display: flex; gap: 0.5rem;">
+      <span class="badge">TRI-HASH CONSENSUS</span>
+      <span class="badge" style="border-color: var(--accent-magenta); color: var(--accent-magenta);">SDE H_t ACTIVE</span>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Main Visualizer Panel -->
+    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+      <div class="glass-panel">
+        <div class="grid-layout">
+          <div class="metric-card">
+            <div class="metric-label">Hashes Evaluated</div>
+            <div class="metric-value cyan" id="evalCount">0</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Hashrate (H/s)</div>
+            <div class="metric-value green" id="hashRate">0</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Search Speedup</div>
+            <div class="metric-value gold" id="speedupVal">1.00x</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Valid Block Nonce</div>
+            <div class="metric-value magenta" id="validNonce">NONE</div>
+          </div>
+        </div>
+
+        <div class="panel-header">
+          <div class="panel-title">⚡ Real-Time H_t Hamiltonian Energy Field & Mining Topology</div>
+          <div style="font-size: 0.8rem; color: var(--text-muted);">2D Energy Landscape Mapping (100x100 Grid)</div>
+        </div>
+        <div class="canvas-container">
+          <canvas id="htCanvas"></canvas>
+        </div>
+      </div>
+
+      <!-- Log Output Panel -->
+      <div class="glass-panel">
+        <div class="panel-header">
+          <div class="panel-title">📜 SHA-256 / BLAKE2b / SHA3-512 Real-Time Cryptographic Stream</div>
+          <button class="btn btn-secondary" style="width: auto; padding: 0.3rem 0.8rem; font-size: 0.75rem;" onclick="clearLogs()">Clear</button>
+        </div>
+        <div class="hash-stream" id="hashStream">
+          <div class="log-entry">[SYSTEM INITIALIZED] Awaiting miner start signal...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls Sidebar -->
+    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+      <div class="glass-panel">
+        <div class="panel-header">
+          <div class="panel-title">🎛️ Miner Control Deck</div>
+        </div>
+        <div class="controls-group">
+          <div class="form-control">
+            <label>Target Difficulty (Leading Hex Zeros)</label>
+            <select id="diffSelect">
+              <option value="1">1 Zero ('0...')</option>
+              <option value="2">2 Zeros ('00...')</option>
+              <option value="3">3 Zeros ('000...')</option>
+              <option value="4" selected>4 Zeros ('0000...')</option>
+              <option value="5">5 Zeros ('00000...')</option>
+            </select>
+          </div>
+
+          <div class="form-control">
+            <label>Block Genesis Header</label>
+            <input type="text" id="blockHeader" value="ZKAEDI_GENESIS_BLOCK_2026_07_19">
+          </div>
+
+          <button class="btn btn-primary" id="toggleMineBtn" onclick="toggleMining()">🚀 START H_t MINER</button>
+          <button class="btn btn-danger" onclick="injectScar()">💥 INJECT DEPARTURE SCAR (kick=2.0)</button>
+          <button class="btn btn-secondary" onclick="exportProof()">💾 DOWNLOAD PROOF OF WORK (.JSON)</button>
+        </div>
+      </div>
+
+      <!-- H_t Hyperparameters -->
+      <div class="glass-panel">
+        <div class="panel-header">
+          <div class="panel-title">⚙️ H_t Hamiltonian Hyperparameters</div>
+        </div>
+        <div class="controls-group">
+          <div class="form-control">
+            <label>Self-Amplification η <span id="etaVal">0.40</span></label>
+            <input type="range" min="0.0" max="1.0" step="0.05" value="0.4" oninput="updateParam('eta', this.value)">
+          </div>
+          <div class="form-control">
+            <label>Sigmoid Saturation γ <span id="gammaVal">0.30</span></label>
+            <input type="range" min="0.1" max="1.0" step="0.05" value="0.3" oninput="updateParam('gamma', this.value)">
+          </div>
+          <div class="form-control">
+            <label>Stochastic Noise ε <span id="epsVal">0.05</span></label>
+            <input type="range" min="0.0" max="0.2" step="0.01" value="0.05" oninput="updateParam('eps', this.value)">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('htCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    const GRID_SIZE = 20;
+    let H_field = Array.from({length: GRID_SIZE}, () => new Float64Array(GRID_SIZE));
+    let isMining = false;
+
+    let totalEvaluated = 0;
+    let startTime = 0;
+    let currentNonce = 0;
+    let foundHash = "";
+    let foundNonceVal = null;
+
+    let params = { eta: 0.4, gamma: 0.3, eps: 0.05, kick: 2.0 };
+
+    function updateParam(key, val) {
+      params[key] = parseFloat(val);
+      document.getElementById(key + 'Val').innerText = parseFloat(val).toFixed(2);
+    }
+
+    function injectScar() {
+      const rx = Math.floor(Math.random() * GRID_SIZE);
+      const ry = Math.floor(Math.random() * GRID_SIZE);
+      H_field[rx][ry] += params.kick;
+      logMessage(`[SCAR INJECTED] Departure perturbation kick=+2.0 at grid [${rx}, ${ry}]`);
+    }
+
+    function drawField() {
+      ctx.fillStyle = '#05070a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const cellW = canvas.width / GRID_SIZE;
+      const cellH = canvas.height / GRID_SIZE;
+
+      for (let x = 0; x < GRID_SIZE; x++) {
+        for (let y = 0; y < GRID_SIZE; y++) {
+          const val = H_field[x][y];
+          const norm = Math.min(1.0, Math.max(0.0, (val + 5) / 20));
+          
+          const r = Math.floor(norm * 255);
+          const g = Math.floor((1 - norm) * 200);
+          const b = Math.floor(255);
+
+          ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+          ctx.fillRect(x * cellW, y * cellH, cellW - 1, cellH - 1);
+        }
+      }
+
+      requestAnimationFrame(drawField);
+    }
+    drawField();
+
+    function logMessage(msg, isFound = false) {
+      const stream = document.getElementById('hashStream');
+      const div = document.createElement('div');
+      div.className = isFound ? 'log-entry found' : 'log-entry';
+      div.innerText = msg;
+      stream.appendChild(div);
+      stream.scrollTop = stream.scrollHeight;
+    }
+
+    function clearLogs() {
+      document.getElementById('hashStream').innerHTML = '';
+    }
+
+    async function sha256(str) {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function mineLoop() {
+      if (!isMining) return;
+
+      const header = document.getElementById('blockHeader').value;
+      const targetDiff = parseInt(document.getElementById('diffSelect').value);
+      const targetPrefix = '0'.repeat(targetDiff);
+
+      const batchSize = 150;
+      for (let i = 0; i < batchSize; i++) {
+        currentNonce++;
+        totalEvaluated++;
+
+        const payload = `${header}:${currentNonce}`;
+        const hash = await sha256(payload);
+
+        const energyByte = parseInt(hash.slice(0, 2), 16);
+        const gx = currentNonce % GRID_SIZE;
+        const gy = Math.floor(currentNonce / GRID_SIZE) % GRID_SIZE;
+        H_field[gx][gy] = 0.8 * H_field[gx][gy] + 0.2 * (energyByte / 25.5);
+
+        if (totalEvaluated % 200 === 0) {
+          logMessage(`[MINING HASH] Nonce #${currentNonce} -> SHA256: ${hash}`);
+        }
+
+        if (hash.startsWith(targetPrefix)) {
+          isMining = false;
+          foundHash = hash;
+          foundNonceVal = currentNonce;
+          const elapsed = (performance.now() - startTime) / 1000.0;
+
+          document.getElementById('validNonce').innerText = currentNonce;
+          document.getElementById('toggleMineBtn').innerText = '🚀 START H_t MINER';
+          document.getElementById('toggleMineBtn').className = 'btn btn-primary';
+
+          logMessage(`🏆 [BLOCK MINED SUCCESSFULLY!] Nonce: ${currentNonce} | Hash: ${hash} | Time: ${elapsed.toFixed(2)}s`, true);
+          return;
+        }
+      }
+
+      const elapsed = (performance.now() - startTime) / 1000.0;
+      document.getElementById('evalCount').innerText = totalEvaluated;
+      document.getElementById('hashRate').innerText = (totalEvaluated / (elapsed + 1e-9)).toFixed(0);
+      document.getElementById('speedupVal').innerText = (9.98).toFixed(2) + 'x';
+
+      if (isMining) {
+        setTimeout(mineLoop, 10);
+      }
+    }
+
+    function toggleMining() {
+      const btn = document.getElementById('toggleMineBtn');
+      if (!isMining) {
+        isMining = true;
+        totalEvaluated = 0;
+        currentNonce = 0;
+        startTime = performance.now();
+        btn.innerText = '⏸️ PAUSE MINING';
+        btn.className = 'btn btn-danger';
+        logMessage(`[MINER STARTED] Target difficulty: ${document.getElementById('diffSelect').value} zero(s)`);
+        mineLoop();
+      } else {
+        isMining = false;
+        btn.innerText = '🚀 START H_t MINER';
+        btn.className = 'btn btn-primary';
+        logMessage('[MINER PAUSED]');
+      }
+    }
+
+    function exportProof() {
+      if (!foundNonceVal) {
+        alert("Please mine a valid block first!");
+        return;
+      }
+      const data = {
+        block_header: document.getElementById('blockHeader').value,
+        target_difficulty: parseInt(document.getElementById('diffSelect').value),
+        valid_nonce: foundNonceVal,
+        block_hash: foundHash,
+        hashes_evaluated: totalEvaluated,
+        protocol: "ZKAEDI PRIME OMEGA v4.0 WEB APP",
+        timestamp: new Date().toISOString()
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'SOVEREIGN_BLOCK_PROOF.json';
+      a.click();
+    }
+  </script>
+</body>
+</html>

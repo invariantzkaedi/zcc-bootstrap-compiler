@@ -1,3 +1,6 @@
+#ifndef ZCC_PRELUDE_H
+#define ZCC_PRELUDE_H
+
 #include <stdint.h>
 #include <stdbool.h>
 #define MAX_OPERANDS 4
@@ -226,3 +229,5 @@ typedef struct Function {
   char name[NAME_LEN];
   char ret_type[16];
 } Function;
+
+#endif /* ZCC_PRELUDE_H */

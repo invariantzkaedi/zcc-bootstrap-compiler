@@ -379,6 +379,101 @@ bool ic_rule_add_sub_cancel(ICtx *c) {
     return false;
 }
 
+/* Rule 23: (x - y) + y -> x */
+bool ic_rule_sub_add_cancel(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_ADD) return false;
+    Instr *d1 = def_of(c->fn, it->src1);
+    if (d1 && d1->op == OP_SUB) {
+        if (d1->src2 == it->src2) {
+            return rewrite_to_copy(c->fn, it, d1->src1);
+        }
+    }
+    Instr *d2 = def_of(c->fn, it->src2);
+    if (d2 && d2->op == OP_SUB) {
+        if (d2->src2 == it->src1) {
+            return rewrite_to_copy(c->fn, it, d2->src1);
+        }
+    }
+    return false;
+}
+
+/* Rule 24: (x ^ y) ^ y -> x */
+bool ic_rule_xor_cancel(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_XOR) return false;
+    Instr *d = def_of(c->fn, it->src1);
+    if (!d || d->op != OP_XOR) return false;
+
+    if (d->src2 == it->src2) {
+        return rewrite_to_copy(c->fn, it, d->src1);
+    }
+    if (d->src1 == it->src2) {
+        return rewrite_to_copy(c->fn, it, d->src2);
+    }
+    return false;
+}
+
+/* Rule 25: (x | c1) | c2 -> x | (c1 | c2) */
+bool ic_rule_nested_or_consts(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_OR) return false;
+    int64_t c2;
+    if (!reg_is_const(c->fn, it->src2, &c2)) return false;
+
+    Instr *d = def_of(c->fn, it->src1);
+    if (!d || d->op != OP_OR) return false;
+
+    int64_t c1;
+    if (!reg_is_const(c->fn, d->src2, &c1)) return false;
+
+    int64_t combined = c1 | c2;
+    int ccomb = make_const(c->fn, it->ty, combined, it);
+    it->src1 = resolve_copy(c->fn, d->src1);
+    it->src2 = ccomb;
+    return true;
+}
+
+/* Rule 27: (x + c1) + c2 -> x + (c1 + c2) */
+bool ic_rule_nested_add_consts(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_ADD) return false;
+    int64_t c2;
+    if (!reg_is_const(c->fn, it->src2, &c2)) return false;
+
+    Instr *d = def_of(c->fn, it->src1);
+    if (!d || d->op != OP_ADD) return false;
+
+    int64_t c1;
+    if (!reg_is_const(c->fn, d->src2, &c1)) return false;
+
+    int64_t combined = c1 + c2;
+    int ccomb = make_const(c->fn, it->ty, combined, it);
+    it->src1 = resolve_copy(c->fn, d->src1);
+    it->src2 = ccomb;
+    return true;
+}
+
+/* Rule 28: (x ^ c1) ^ c2 -> x ^ (c1 ^ c2) */
+bool ic_rule_nested_xor_consts(ICtx *c) {
+    Instr *it = c->it;
+    if (it->op != OP_XOR) return false;
+    int64_t c2;
+    if (!reg_is_const(c->fn, it->src2, &c2)) return false;
+
+    Instr *d = def_of(c->fn, it->src1);
+    if (!d || d->op != OP_XOR) return false;
+
+    int64_t c1;
+    if (!reg_is_const(c->fn, d->src2, &c1)) return false;
+
+    int64_t combined = c1 ^ c2;
+    int ccomb = make_const(c->fn, it->ty, combined, it);
+    it->src1 = resolve_copy(c->fn, d->src1);
+    it->src2 = ccomb;
+    return true;
+}
+
 
 
 

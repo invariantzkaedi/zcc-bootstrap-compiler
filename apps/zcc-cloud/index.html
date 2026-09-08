@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZKAEDI — The AI-Native C Compiler That Compiled Itself</title>
+  <meta name="description" content="ZKAEDI is a self-hosting C compiler powered by ZCC — running natively in your browser via WebAssembly. Compile C to x86-64, RISC-V, Win64 PE, and WASM32 with zero server overhead. ZK-provable AST correctness. 439/439 corpus verified.">
+  <meta name="keywords" content="C compiler, WebAssembly, self-hosting compiler, RISC-V, ZK proofs, online C compiler, ZCC, ZKAEDI">
+  <link rel="canonical" href="https://zkaedi.ai/">
+  <meta property="og:title" content="ZKAEDI — Compile C Anywhere">
+  <meta property="og:description" content="The only C compiler that bootstraps itself, compiled Doom & SQLite, and runs in your browser. ZK-provable. AI-native.">
+  <meta property="og:url" content="https://zkaedi.ai/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="ZKAEDI">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ZKAEDI — The AI-Native C Compiler">
+  <meta name="twitter:description" content="Self-hosting C compiler. Compiled Doom, SQLite, QuickJS, Lua. Runs in your browser via WASM.">
+  <meta name="twitter:site" content="@zkaedi">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     NAV
+═══════════════════════════════════════════════════════════ -->
+<nav id="nav" role="navigation" aria-label="Main navigation">
+  <div class="nav-inner">
+    <a href="https://zkaedi.ai" class="nav-logo" aria-label="ZKAEDI home">
+      <div class="logo-icon" aria-hidden="true" style="font-size:0.65rem; letter-spacing:-0.03em;">ZK</div>
+      <span>ZKAEDI</span>
+    </a>
+    <ul class="nav-links" role="list">
+      <li><a href="#playground">Playground</a></li>
+      <li><a href="#applications">Apps Suite</a></li>
+      <li><a href="../zkaedi-singularity/index.html" style="color:#00f3ff; font-weight:700;">🌌 Singularity 2M</a></li>
+      <li><a href="../zkaedi-navigator/index.html" style="color:#ff0055; font-weight:700;">🧭 Navigator</a></li>
+      <li><a href="../zkaedi-studio/index.html" style="color:#ffb700; font-weight:700;">⚡ Observatory</a></li>
+      <li><a href="../zkaedi-quantum/index.html" style="color:#38bdf8; font-weight:700;">🔱 Quantum 39Q</a></li>
+      <li><a href="../zcc-animator/index.html" style="color:var(--c-accent); font-weight:700;">🎬 Animator</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#api" style="color:var(--c-accent); font-weight:700;">API</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+      <li><a href="https://github.com/invariantzkaedi/zcc-bootstrap-compiler" target="_blank" rel="noopener">GitHub ↗</a></li>
+    </ul>
+    <div class="nav-cta">
+      <a href="#waitlist" class="btn btn-ghost" style="padding:10px 20px; font-size:0.88rem;">Join Waitlist</a>
+      <a href="#playground" class="btn btn-primary" style="padding:10px 20px; font-size:0.88rem;">Try Free →</a>
+    </div>
+    <!-- structured data for SEO -->
+    <script type="application/ld+json">
+    {"@context":"https://schema.org","@type":"SoftwareApplication","name":"ZKAEDI","url":"https://zkaedi.ai","description":"Self-hosting C compiler that runs in your browser via WebAssembly.","applicationCategory":"DeveloperApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
+    </script>
+  </div>
+</nav>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     HERO
+═══════════════════════════════════════════════════════════ -->
+<section id="hero" aria-labelledby="hero-heading">
+  <div id="hero-grid" aria-hidden="true"></div>
+
+  <div class="badge" aria-label="Status: Bootstrap verified">
+    <span class="dot" aria-hidden="true"></span>
+    zkaedi.ai — Bootstrap VERIFIED · zcc2.s ≡ zcc3.s byte-identical
+  </div>
+
+  <h1 class="hero-title" id="hero-heading">
+    <span class="line-accent">ZKAEDI.</span><br>
+    <span>The C compiler</span><br>
+    <span>that compiled itself.</span>
+  </h1>
+
+  <p class="hero-sub">
+    ZKAEDI is an AI-native, self-hosting C compiler with 3-stage bootstrap
+    verification, native WASM emission, and ZK-provable AST correctness.
+    It has compiled <strong>Doom, SQLite, Lua</strong>, and <strong>QuickJS</strong> from source —
+    and it runs entirely in your browser at <strong style="color:var(--c-accent)">zkaedi.ai</strong>.
+  </p>
+
+  <div class="hero-cta">
+    <a href="#playground" class="btn btn-primary" id="hero-cta-primary">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><polygon points="4,2 14,8 4,14" fill="currentColor"/></svg>
+      Compile Now — Free
+    </a>
+    <a href="https://github.com/invariantzkaedi/zcc-bootstrap-compiler" target="_blank" rel="noopener" class="btn btn-ghost" id="hero-cta-github">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+      View Source
+    </a>
+  </div>
+
+  <div class="hero-stats" role="list" aria-label="ZCC stats">
+    <div class="hero-stat" role="listitem">
+      <div class="num" aria-label="439 out of 439">439/439</div>
+      <div class="label">Corpus Tests</div>
+    </div>
+    <div class="hero-stat" role="listitem">
+      <div class="num" aria-label="3 stage">3-Stage</div>
+      <div class="label">Self-Host Verified</div>
+    </div>
+    <div class="hero-stat" role="listitem">
+      <div class="num" aria-label="4 targets">4 Targets</div>
+      <div class="label">x86 · RISC-V · Win64 · WASM</div>
+    </div>
+    <div class="hero-stat" role="listitem">
+      <div class="num" aria-label="zero">$0</div>
+      <div class="label">Infra to Start</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     PROOF BANNER
+═══════════════════════════════════════════════════════════ -->
+<section id="proof-banner" aria-label="Proof of capability">
+  <div class="container">
+    <div class="proof-grid">
+      <div class="proof-item">
+        <div class="proof-icon" aria-hidden="true">🎮</div>
+        <div>
+          <strong>Compiled Doom</strong>
+          <span>linuxdoom-1.10 from source</span>
+        </div>
+      </div>
+      <div class="proof-item">
+        <div class="proof-icon" aria-hidden="true">🗃️</div>
+        <div>
+          <strong>Compiled SQLite 3.53.1</strong>
+          <span>Full production amalgamation</span>
+        </div>
+      </div>
+      <div class="proof-item">
+        <div class="proof-icon" aria-hidden="true">⚡</div>
+        <div>
+          <strong>Compiled QuickJS</strong>
+          <span>Full ES2020 JavaScript engine</span>
+        </div>
+      </div>
+      <div class="proof-item">
+        <div class="proof-icon" aria-hidden="true">🌕</div>
+        <div>
+          <strong>Compiled Lua 5.4.6</strong>
+          <span>Full interpreter + stdlib</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     MILESTONE TICKER
+═══════════════════════════════════════════════════════════ -->
+<div id="milestones-bar" aria-hidden="true">
+  <div class="ticker-track">
+    <span class="ticker-item"><span class="tick-check">✓</span> PGO Engine</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> AVX-512 SIMD Auto-Vectorizer</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> WASM32-WASI Target</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> ZK R1CS Compiler Proofs</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> RISC-V 64 Backend</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> Win64 PE Emitter</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> SQLite 3.53.1 Stabilized</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> SMT Z3 Superoptimizer</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> BN254 On-Chain ZK Verifier</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> 5M QPS Lock-Free Memory Vault</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> 3D WebGL AST Observatory</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> In-Browser zcc.wasm Engine</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> Neural EVM Lifter</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> ZK-MPC Threshold Auth</span>
+    <!-- duplicate for seamless loop -->
+    <span class="ticker-item"><span class="tick-check">✓</span> PGO Engine</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> AVX-512 SIMD Auto-Vectorizer</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> WASM32-WASI Target</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> ZK R1CS Compiler Proofs</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> RISC-V 64 Backend</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> Win64 PE Emitter</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> SQLite 3.53.1 Stabilized</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> SMT Z3 Superoptimizer</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> BN254 On-Chain ZK Verifier</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> 5M QPS Lock-Free Memory Vault</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> 3D WebGL AST Observatory</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> In-Browser zcc.wasm Engine</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> Neural EVM Lifter</span>
+    <span class="ticker-item"><span class="tick-check">✓</span> ZK-MPC Threshold Auth</span>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     PLAYGROUND
+═══════════════════════════════════════════════════════════ -->
+<section id="playground" aria-labelledby="playground-heading">
+  <div class="container">
+    <div class="reveal">
+      <span class="section-label" aria-hidden="true">Live Compiler</span>
+      <h2 class="section-title" id="playground-heading">
+        Compile C.<br>In your browser.<br>Right now.
+      </h2>
+      <p class="section-sub">
+        ZCC stage-3 bootstrap runs as WebAssembly. No server, no login, no latency.
+        Hit <kbd style="font-family:var(--font-mono); background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12); border-radius:5px; padding:2px 7px; font-size:0.82em;">Ctrl+Enter</kbd> to compile.
+      </p>
+    </div>
+
+    <!-- Demo Selector & Colab Cloud Connect -->
+    <div style="display:flex; gap:10px; margin:28px 0 0; flex-wrap:wrap; align-items:center;" role="group" aria-label="Select demo program">
+      <button class="btn btn-ghost active" data-demo="hello" id="demo-hello" aria-pressed="true"
+              style="padding:9px 18px; font-size:0.83rem;">
+        👋 Hello World
+      </button>
+      <button class="btn btn-ghost" data-demo="fib" id="demo-fib" aria-pressed="false"
+              style="padding:9px 18px; font-size:0.83rem;">
+        🔢 Fibonacci
+      </button>
+      <button class="btn btn-ghost" data-demo="matrix" id="demo-matrix" aria-pressed="false"
+              style="padding:9px 18px; font-size:0.83rem;">
+        🧮 Matrix Multiply
+      </button>
+      <button class="btn btn-ghost" data-demo="singularity" id="demo-singularity" aria-pressed="false"
+              style="padding:9px 18px; font-size:0.83rem; border:1px solid rgba(0,243,255,0.4); color:#00f3ff;">
+        🌌 Singularity 2M
+      </button>
+      <button class="btn btn-ghost" data-demo="navigator" id="demo-navigator" aria-pressed="false"
+              style="padding:9px 18px; font-size:0.83rem; border:1px solid rgba(255,0,85,0.4); color:#ff0055;">
+        🧭 Geodesic Router
+      </button>
+      <button class="btn btn-ghost" id="btn-colab-connect"
+              style="padding:9px 18px; font-size:0.83rem; border:1px solid #38bdf8; color:#38bdf8;"
+              title="Connect to a live Google Colab or Cloudflare Tunnel instance running ZCC">
+        ☁️ Connect Colab Backend
+      </button>
+      <span id="wasm-badge" style="font-size:0.78rem; padding:5px 12px; border-radius:999px; background:rgba(0,255,136,0.08); border:1px solid rgba(0,255,136,0.25); color:var(--c-accent); font-weight:600; display:inline-flex; align-items:center; gap:6px; font-family:var(--font-mono);">
+        <span style="width:7px; height:7px; border-radius:50%; background:var(--c-accent); display:inline-block; box-shadow:0 0 8px var(--c-accent);"></span>
+        zcc.wasm: Active
+      </span>
+      <div style="display:flex; gap:8px; margin-left:auto; align-items:center;">
+        <a href="../zkaedi-singularity/index.html" class="btn btn-ghost" style="padding:6px 12px; font-size:0.75rem; border:1px solid rgba(0,243,255,0.3); color:#00f3ff;" target="_blank">
+          🌌 VFX Studio ↗
+        </a>
+        <a href="../zkaedi-navigator/index.html" class="btn btn-ghost" style="padding:6px 12px; font-size:0.75rem; border:1px solid rgba(255,0,85,0.3); color:#ff0055;" target="_blank">
+          🧭 Navigator ↗
+        </a>
+        <a href="../index.html" class="btn btn-ghost" style="padding:6px 12px; font-size:0.75rem; border:1px solid rgba(255,255,255,0.2); color:#fff;">
+          ⚡ Portal ↗
+        </a>
+      </div>
+    </div>
+
+    <div class="playground-wrapper reveal" style="margin-top:16px;">
+      <!-- Editor Pane -->
+      <div class="editor-pane">
+        <div class="pane-header">
+          <div class="pane-dots" aria-hidden="true">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <span>source.c</span>
+          <span style="font-size:0.75rem; opacity:0.5;">ZCC 4.0.0</span>
+        </div>
+        <textarea
+          id="code-editor"
+          spellcheck="false"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          aria-label="C source code editor"
+          aria-multiline="true"
+          role="textbox"
+        >#include &lt;stdio.h&gt;
+
+int main() {
+    printf("Hello from ZCC Cloud!\n");
+    return 0;
+}</textarea>
+        <div class="pane-footer">
+          <span class="compile-status running" id="compile-status" aria-live="polite">
+            Loading ZCC stage-3…
+          </span>
+          <button class="btn btn-primary" id="compile-btn"
+                  style="padding:9px 20px; font-size:0.85rem; gap:6px;"
+                  aria-label="Compile source code">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><polygon points="4,2 14,8 4,14" fill="currentColor"/></svg>
+            Compile
+          </button>
+        </div>
+      </div>
+
+      <!-- Output Pane -->
+      <div class="output-pane">
+        <div class="output-tabs" role="tablist" aria-label="Output type">
+          <button class="output-tab active" data-tab="asm" role="tab" aria-selected="true"
+                  id="tab-asm" aria-controls="asm-output">x86-64 Assembly</button>
+          <button class="output-tab" data-tab="ir" role="tab" aria-selected="false"
+                  id="tab-ir" aria-controls="asm-output">ZCC IR (SSA)</button>
+          <button class="output-tab" data-tab="output" role="tab" aria-selected="false"
+                  id="tab-output" aria-controls="asm-output">Binary Output</button>
+          <div style="flex:1;"></div>
+          <div class="pane-dots" style="padding:0 16px;" aria-hidden="true">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+        </div>
+        <pre id="asm-output"
+             role="region"
+             aria-label="Compiler output"
+             aria-live="polite"
+             style="margin:0;"></pre>
+        <div class="pane-footer">
+          <span style="font-family:var(--font-mono); font-size:0.75rem; color:var(--c-muted);">
+            Intel syntax · System V ABI · zcc.wasm verified
+          </span>
+          <button id="btn-download-asm" class="btn btn-ghost"
+             style="padding:7px 14px; font-size:0.78rem;" title="Download the emitted assembly as a .s file">
+            ↓ Download .s
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     FEATURES
+═══════════════════════════════════════════════════════════ -->
+<section id="features" aria-labelledby="features-heading">
+  <div class="container">
+    <div class="reveal" style="text-align:center;">
+      <span class="section-label" aria-hidden="true">Capabilities</span>
+      <h2 class="section-title" id="features-heading">
+        Not your average<br>online compiler.
+      </h2>
+      <p class="section-sub" style="margin:0 auto; text-align:center;">
+        ZCC has features that GCC and Clang charge enterprise contracts for —
+        and some they simply don't have at all.
+      </p>
+    </div>
+
+    <div class="features-grid">
+
+      <article class="card feature-card reveal">
+        <div class="feature-icon fi-green" aria-hidden="true">🔄</div>
+        <h3 class="feature-title">3-Stage Self-Hosting Bootstrap</h3>
+        <p class="feature-desc">
+          GCC compiles ZCC. ZCC compiles ZCC again. The two outputs are bit-for-bit
+          identical — <code>cmp zcc2.s zcc3.s</code>. This is the gold standard for
+          compiler correctness that most compilers never achieve.
+        </p>
+      </article>
+
+      <article class="card feature-card reveal">
+        <div class="feature-icon fi-blue" aria-hidden="true">🌐</div>
+        <h3 class="feature-title">In-Browser WASM Engine</h3>
+        <p class="feature-desc">
+          ZCC is compiled to WebAssembly (Milestone 19). The entire compiler
+          runs in your browser via a Web Worker — no backend, no API calls,
+          no latency. Compile anywhere, even offline.
+        </p>
+      </article>
+
+      <article class="card feature-card reveal">
+        <div class="feature-icon fi-purple" aria-hidden="true">🔮</div>
+        <h3 class="feature-title">Zero-Knowledge Compiler Proofs</h3>
+        <p class="feature-desc">
+          Every compilation can produce a BN254 ZK proof of AST correctness via
+          R1CS circuits. Verify the proof on-chain via the Solidity verifier —
+          cryptographic evidence that your binary was correctly compiled.
+        </p>
+      </article>
+
+      <article class="card feature-card reveal">
+        <div class="feature-icon fi-orange" aria-hidden="true">🏛️</div>
+        <h3 class="feature-title">3D Holographic AST Observatory</h3>
+        <p class="feature-desc">
+          Pro users get a live WebGL visualization of the compiler's internal
+          AST, IR graph, and basic block structure — rendered in 3D with
+          AVX-512 particle physics. No other online compiler has this.
+        </p>
+      </article>
+
+      <article class="card feature-card reveal">
+        <div class="feature-icon fi-teal" aria-hidden="true">🎯</div>
+        <h3 class="feature-title">4 Native Code Targets</h3>
+        <p class="feature-desc">
+          Emit to <strong>x86-64</strong> (System V + Intel syntax),
+          <strong>RISC-V 64</strong> (RV64GC), <strong>Win64 PE</strong>
+          (direct PE/COFF emission), and <strong>WASM32-WASI</strong>
+          standalone — all from the same C source file.
+        </p>
+      </article>
+
+      <article class="card feature-card reveal">
+        <div class="feature-icon fi-red" aria-hidden="true">⚡</div>
+        <h3 class="feature-title">AVX-512 SIMD Auto-Vectorizer</h3>
+        <p class="feature-desc">
+          ZCC's autonomous SIMD pass detects vectorizable loops and emits
+          AVX-512/AVX2/NEON intrinsics. Paired with the Z3 SMT superoptimizer
+          for formally proven peephole rules — 8/8 rules verified UNSAT.
+        </p>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     SOVEREIGN APPLICATION SUITE
+═══════════════════════════════════════════════════════════ -->
+<section id="applications" aria-labelledby="apps-heading" style="padding: 90px 0; background: linear-gradient(180deg, transparent, rgba(0, 243, 255, 0.03) 50%, transparent);">
+  <div class="container">
+    <div class="reveal" style="text-align:center;">
+      <span class="section-label" aria-hidden="true" style="color:var(--c-accent2);">Sovereign Ecosystem</span>
+      <h2 class="section-title" id="apps-heading">
+        Visual Synthesizers &amp;<br>Autonomous Energy Navigators.
+      </h2>
+      <p class="section-sub" style="margin:0 auto 40px; text-align:center;">
+        Engineered with pure GPGPU WebGL2 compute, the ZKAEDI PRIME two-regime Hamiltonian routing engine,
+        and native ZCC bare-metal compilation with zero runtime drift.
+      </p>
+    </div>
+
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 24px;">
+
+      <!-- Card 1: Singularity 2M -->
+      <article class="card reveal" style="padding: 30px; display:flex; flex-direction:column; justify-content:space-between; border-color: rgba(0, 243, 255, 0.25);">
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
+            <div style="font-size:2.4rem;">🌌</div>
+            <span style="background:rgba(0, 243, 255, 0.12); color:#00f3ff; border:1px solid rgba(0, 243, 255, 0.3); font-family:var(--font-mono); font-size:0.75rem; font-weight:700; padding:4px 10px; border-radius:999px;">
+              2,097,152 PARTICLES
+            </span>
+          </div>
+          <h3 style="font-size:1.35rem; font-weight:800; color:#fff; margin-bottom:10px;">ZKAEDI Singularity Studio</h3>
+          <p style="color:var(--c-muted); font-size:0.88rem; line-height:1.6; margin-bottom:20px;">
+            Full WebGL2 GPGPU particle physics and chaos attractor visualizer. Features real-time Web Audio API FFT reactivity, 3D choreographic orbit camera, in-browser 60 FPS video recording, and native ZCC C source export.
+          </p>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:24px;">
+            <span style="font-family:var(--font-mono); font-size:0.72rem; padding:3px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:#a5f3fc; border:1px solid rgba(0,243,255,0.2);">GPGPU Double FBO</span>
+            <span style="font-family:var(--font-mono); font-size:0.72rem; padding:3px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:#a5f3fc; border:1px solid rgba(0,243,255,0.2);">Audio Reactivity</span>
+            <span style="font-family:var(--font-mono); font-size:0.72rem; padding:3px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:#a5f3fc; border:1px solid rgba(0,243,255,0.2);">60 FPS Recorder</span>
+          </div>
+        </div>
+        <a href="../zkaedi-singularity/index.html" class="btn btn-ghost" style="width:100%; justify-content:center; border-color:rgba(0, 243, 255, 0.4); color:#00f3ff; font-weight:700;" target="_blank">
+          Launch Singularity Studio ↗
+        </a>
+      </article>
+
+      <!-- Card 2: Geodesic Navigator -->
+      <article class="card reveal" style="padding: 30px; display:flex; flex-direction:column; justify-content:space-between; border-color: rgba(255, 0, 85, 0.25);">
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
+            <div style="font-size:2.4rem;">🧭</div>
+            <span style="background:rgba(255, 0, 85, 0.12); color:#ff0055; border:1px solid rgba(255, 0, 85, 0.3); font-family:var(--font-mono); font-size:0.75rem; font-weight:700; padding:4px 10px; border-radius:999px;">
+              SWARM ROUTER
+            </span>
+          </div>
+          <h3 style="font-size:1.35rem; font-weight:800; color:#fff; margin-bottom:10px;">ZKAEDI Geodesic Navigator</h3>
+          <p style="color:var(--c-muted); font-size:0.88rem; line-height:1.6; margin-bottom:20px;">
+            Autonomous swarm pathfinding through non-convex energy landscapes. Implements thermal departure scars (&Delta;H += kick), stochastic noise (&epsilon;), and v3 dead-end stack pruning achieving 1.12&times; theoretical BFS optimality.
+          </p>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:24px;">
+            <span style="font-family:var(--font-mono); font-size:0.72rem; padding:3px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:#fda4af; border:1px solid rgba(255,0,85,0.2);">1-20 Agent Fleet</span>
+            <span style="font-family:var(--font-mono); font-size:0.72rem; padding:3px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:#fda4af; border:1px solid rgba(255,0,85,0.2);">Thermal Scars</span>
+            <span style="font-family:var(--font-mono); font-size:0.72rem; padding:3px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:#fda4af; border:1px solid rgba(255,0,85,0.2);">GeoJSON / JSON</span>
+          </div>
+        </div>
+        <a href="../zkaedi-navigator/index.html" class="btn btn-ghost" style="width:100%; justify-content:center; border-color:rgba(255, 0, 85, 0.4); color:#ff0055; font-weight:700;" target="_blank">
+          Launch Geodesic Navigator ↗
+        </a>
+      </article>
+
+      <!-- Card 3: Sovereign Observatory -->
+      <article class="card reveal" style="padding: 30px; display:flex; flex-direction:column; justify-content:space-between; border-color: rgba(255, 183, 0, 0.25);">
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
+            <div style="font-size:2.4rem;">⚡</div>
+            <span style="background:rgba(255, 183, 0, 0.12); color:#ffb700; border:1px solid rgba(255, 183, 0, 0.3); font-family:var(--font-mono); font-size:0.75rem; font-weight:700; padding:4px 10px; border-radius:999px;">
+              DUAL OBSERVATORY
+            </span>
+          </div>
+          <h3 style="font-size:1.35rem; font-weight:800; color:#fff; margin-bottom:10px;">ZKAEDI Sovereign Observatory</h3>
+          <p style="color:var(--c-muted); font-size:0.88rem; line-height:1.6; margin-bottom:20px;">
+            Dual-split synchronized command deck coupling the 2M particle singularity simulator live with the Hamiltonian maze solver. Features real-time Lyapunov bifurcation monitoring and canonical A/B gauntlets.
+          </p>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:24px;">
+            <span style="font-family:var(--font-mono); font-size:0.72rem; padding:3px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:#fde68a; border:1px solid rgba(255,183,0,0.2);">Dual Deck Sync</span>
+            <span style="font-family:var(--font-mono); font-size:0.72rem; padding:3px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:#fde68a; border:1px solid rgba(255,183,0,0.2);">Bifurcation Monitor</span>
+            <span style="font-family:var(--font-mono); font-size:0.72rem; padding:3px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:#fde68a; border:1px solid rgba(255,183,0,0.2);">Gauntlet A/B</span>
+          </div>
+        </div>
+        <a href="../zkaedi-studio/index.html" class="btn btn-ghost" style="width:100%; justify-content:center; border-color:rgba(255, 183, 0, 0.4); color:#ffb700; font-weight:700;" target="_blank">
+          Launch Observatory ↗
+        </a>
+      </article>
+
+      <!-- Card 4: Quantum Hyper-Slab Observatory -->
+      <article class="card reveal" style="padding: 30px; display:flex; flex-direction:column; justify-content:space-between; border-color: rgba(56, 189, 248, 0.25);">
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
+            <div style="font-size:2.4rem;">🔱</div>
+            <span style="background:rgba(56, 189, 248, 0.12); color:#38bdf8; border:1px solid rgba(56, 189, 248, 0.3); font-family:var(--font-mono); font-size:0.75rem; font-weight:700; padding:4px 10px; border-radius:999px;">
+              39Q &amp; 40Q SPACE
+            </span>
+          </div>
+          <h3 style="font-size:1.35rem; font-weight:800; color:#fff; margin-bottom:10px;">ZKAEDI Quantum Observatory</h3>
+          <p style="color:var(--c-muted); font-size:0.88rem; line-height:1.6; margin-bottom:20px;">
+            549.76 Billion (39Q) &amp; 1.10 Trillion (40Q) amplitude Hilbert space explorer. Features verified bit-exact unitary involution U†U = I, multi-qubit Pauli-X permutations, interactive cryptographic SHA-64 hash chains, and 44.1 kHz audio sonification.
+          </p>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:24px;">
+            <span style="font-family:var(--font-mono); font-size:0.72rem; padding:3px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:#bae6fd; border:1px solid rgba(56,189,248,0.2);">550B Amplitudes</span>
+            <span style="font-family:var(--font-mono); font-size:0.72rem; padding:3px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:#bae6fd; border:1px solid rgba(56,189,248,0.2);">U†U = I Involution</span>
+            <span style="font-family:var(--font-mono); font-size:0.72rem; padding:3px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:#bae6fd; border:1px solid rgba(56,189,248,0.2);">44.1kHz Sonification</span>
+          </div>
+        </div>
+        <a href="../zkaedi-quantum/index.html" class="btn btn-ghost" style="width:100%; justify-content:center; border-color:rgba(56, 189, 248, 0.4); color:#38bdf8; font-weight:700;" target="_blank">
+          Launch Quantum Observatory ↗
+        </a>
+      </article>
+
+    </div>
+
+    <!-- Master Portal & CLI Banner -->
+    <div class="card reveal" style="margin-top:24px; padding:24px 30px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:20px; border-color:rgba(0,255,136,0.2); background:linear-gradient(90deg, rgba(0,255,136,0.04), rgba(0,194,255,0.04));">
+      <div>
+        <div style="font-size:1.1rem; font-weight:700; color:#fff; display:flex; align-items:center; gap:10px;">
+          <span>🏛️ Master Sovereign Portal &amp; Native ZCC CLI Suite</span>
+          <span style="font-size:0.75rem; padding:2px 8px; border-radius:999px; background:rgba(0,255,136,0.15); color:var(--c-accent); font-family:var(--font-mono);">
+            Zero Glibc Drift
+          </span>
+        </div>
+        <div style="font-size:0.83rem; color:var(--c-muted); margin-top:6px; max-width:750px;">
+          Execute standalone bare-metal binaries compiled natively with <code>./zcc</code>: <code>bin/render_zkaedi_singularity</code> (60 FPS FFmpeg video renderer) and <code>bin/navigate_zkaedi_terrain</code> (autonomous ANSI terminal router).
+        </div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <a href="../index.html" class="btn btn-primary" style="padding:9px 20px; font-size:0.84rem;">
+          Open Sovereign Portal ➔
+        </a>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     DEVELOPER REST API
+═══════════════════════════════════════════════════════════ -->
+<section id="api" aria-labelledby="api-heading">
+  <div class="container">
+    <div class="reveal" style="text-align:center;">
+      <span class="section-label" aria-hidden="true">REST API & Platform</span>
+      <h2 class="section-title" id="api-heading">
+        Embed C Compilation Anywhere.<br>Sub-Millisecond REST API.
+      </h2>
+      <p class="section-sub" style="margin:0 auto; text-align:center;">
+        Integrate sovereign multi-target C compilation, SSA IR generation, and ZK-SNARK R1CS proof receipts
+        into your CI/CD pipelines, automated testing rigs, smart contracts, or IDE extensions in a single HTTP request.
+      </p>
+    </div>
+
+    <!-- API Key Quick Access Banner -->
+    <div class="api-key-banner reveal" id="api-key-container">
+      <div class="api-key-info">
+        <div style="width:36px; height:36px; border-radius:8px; background:rgba(0,255,136,0.15); border:1px solid rgba(0,255,136,0.3); display:flex; align-items:center; justify-content:center; font-size:1.1rem; color:var(--c-accent);" aria-hidden="true">🔑</div>
+        <div>
+          <div style="font-weight:700; font-size:0.9rem; color:var(--c-text); display:flex; align-items:center; gap:8px;">
+            Free Developer Sandbox Key
+            <span style="font-size:0.7rem; padding:2px 6px; border-radius:4px; background:rgba(56,189,248,0.2); color:#38bdf8; font-family:var(--font-mono);">5,000 req/day</span>
+          </div>
+          <div style="font-size:0.78rem; color:var(--c-muted); margin-top:2px;">
+            Issue an instant cryptographic token to authenticate edge compilation requests from your backend, CI, or IDE.
+          </div>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <div class="api-key-box" id="api-key-display">
+          <span style="color:var(--c-muted);">Key:</span>
+          <span id="api-key-val" style="letter-spacing:0.5px;">zk_live_demo_sandbox_token</span>
+          <button class="btn btn-ghost" id="btn-copy-key" style="padding:2px 6px; font-size:0.7rem;" title="Copy Key">Copy</button>
+        </div>
+        <button class="btn btn-primary" id="btn-generate-key" style="padding:7px 14px; font-size:0.78rem; gap:6px;">
+          ⚡ Generate New Key
+        </button>
+      </div>
+    </div>
+
+    <!-- Endpoint Selector Tabs -->
+    <div class="api-endpoints-nav reveal" role="tablist" aria-label="API Endpoints" style="margin-top:16px; justify-content:center;">
+      <button class="api-endpoint-btn active" data-endpoint="compile" id="ep-compile">
+        <span class="api-method post">POST</span> /api/compile
+      </button>
+      <button class="api-endpoint-btn" data-endpoint="optimize" id="ep-optimize">
+        <span class="api-method post">POST</span> /api/optimize
+      </button>
+      <button class="api-endpoint-btn" data-endpoint="analyze" id="ep-analyze">
+        <span class="api-method post">POST</span> /api/analyze
+      </button>
+      <button class="api-endpoint-btn" data-endpoint="ast" id="ep-ast">
+        <span class="api-method post">POST</span> /api/ast
+      </button>
+      <button class="api-endpoint-btn" data-endpoint="verify" id="ep-verify">
+        <span class="api-method post">POST</span> /api/verify
+      </button>
+      <button class="api-endpoint-btn" data-endpoint="diff" id="ep-diff">
+        <span class="api-method post">POST</span> /api/diff
+      </button>
+      <button class="api-endpoint-btn" data-endpoint="keys" id="ep-keys">
+        <span class="api-method post">POST</span> /api/keys
+      </button>
+      <button class="api-endpoint-btn" data-endpoint="targets" id="ep-targets">
+        <span class="api-method get">GET</span> /api/targets
+      </button>
+      <button class="api-endpoint-btn" data-endpoint="status" id="ep-status">
+        <span class="api-method get">GET</span> /api/status
+      </button>
+      <button class="api-endpoint-btn" data-endpoint="openapi" id="ep-openapi">
+        <span class="api-method get">GET</span> /api/openapi.json
+      </button>
+      <button class="api-endpoint-btn" data-endpoint="quantum" id="ep-quantum">
+        <span class="api-method get">GET</span> /api/quantum
+      </button>
+    </div>
+
+    <div class="api-container reveal">
+      <!-- Request Column -->
+      <div class="api-code-card">
+        <div class="api-code-header">
+          <div class="api-lang-tabs" role="tablist" aria-label="Programming Language">
+            <button class="api-lang-btn active" data-lang="curl">cURL</button>
+            <button class="api-lang-btn" data-lang="js">Node.js</button>
+            <button class="api-lang-btn" data-lang="python">Python</button>
+            <button class="api-lang-btn" data-lang="rust">Rust</button>
+          </div>
+          <button class="btn btn-ghost" id="btn-copy-code" style="padding:4px 10px; font-size:0.75rem;">Copy</button>
+        </div>
+        <pre class="api-code-body" id="api-request-code">curl -X POST https://zkaedi.ai/api/compile \
+  -H "Authorization: Bearer zk_live_demo_sandbox_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": "int fib(int n) { if (n <= 1) return n; return fib(n-1) + fib(n-2); }",
+    "target": "x86_64",
+    "opt_level": "O2",
+    "prove_zk": true
+  }'</pre>
+        <div style="padding:14px 18px; background:rgba(0,0,0,0.25); border-top:1px solid var(--c-border); display:flex; gap:10px; align-items:center;">
+          <button class="btn btn-primary" id="btn-api-send" style="padding:8px 18px; font-size:0.82rem; gap:6px;">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><polygon points="4,2 14,8 4,14"/></svg>
+            Send Live Request
+          </button>
+          <span style="font-size:0.75rem; color:var(--c-muted); font-family:var(--font-mono);" id="api-call-hint">
+            Direct Cloudflare Pages Edge Execution
+          </span>
+        </div>
+      </div>
+
+      <!-- Response Column -->
+      <div class="api-response-card">
+        <div class="api-response-header">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="api-status-badge" id="api-status-code">HTTP 200 OK</span>
+            <span style="font-family:var(--font-mono); font-size:0.75rem; color:var(--c-muted);" id="api-response-time">1.2ms</span>
+          </div>
+          <span style="font-family:var(--font-mono); font-size:0.72rem; color:var(--c-muted);">application/json</span>
+        </div>
+        <pre class="api-response-body" id="api-response-json">{
+  "compiler": "ZCC v4.0.0 (Stage-3 Bootstrap)",
+  "target": "x86_64",
+  "success": true,
+  "stats": {
+    "latency_ms": 1.2,
+    "lines_emitted": 42
+  },
+  "zk_proof": {
+    "circuit": "ZCC_AST_Invariant_BN254",
+    "r1cs_satisfiable": true,
+    "verifier_contract": "0x78921FaCb98E7B21c10D0b48Ae564B98E18a24F1"
+  }
+}</pre>
+      </div>
+    </div>
+
+    <!-- API Links Row -->
+    <div class="api-links-row reveal">
+      <a href="/api/openapi.json" target="_blank" rel="noopener">
+        <span>📄</span> OpenAPI 3.1.0 JSON Spec
+      </a>
+      <span style="color:var(--c-border);">•</span>
+      <a href="/api/status" target="_blank" rel="noopener">
+        <span>⚡</span> Live Cluster Status
+      </a>
+      <span style="color:var(--c-border);">•</span>
+      <a href="/api/targets" target="_blank" rel="noopener">
+        <span>🔱</span> Target Architecture Specs
+      </a>
+      <span style="color:var(--c-border);">•</span>
+      <a href="#playground">
+        <span>⚡</span> Try in WASM Playground
+      </a>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     PRICING
+═══════════════════════════════════════════════════════════ -->
+<section id="pricing" aria-labelledby="pricing-heading">
+  <div class="container">
+    <div class="reveal">
+      <span class="section-label" aria-hidden="true">Pricing</span>
+      <h2 class="section-title" id="pricing-heading">Simple, honest pricing.</h2>
+      <p class="section-sub" style="margin:0 auto; text-align:center;">
+        Start free. Upgrade when you need more power, more targets, or the full AST Observatory.
+      </p>
+    </div>
+
+    <div class="pricing-grid reveal">
+
+      <!-- FREE -->
+      <div class="card pricing-card">
+        <div class="plan-name">Free</div>
+        <div class="plan-price">
+          <span class="amount">$0</span>
+          <span class="period">/ forever</span>
+        </div>
+        <p class="plan-tagline">Everything you need to get started with ZCC in the browser.</p>
+        <div class="plan-divider"></div>
+        <ul class="plan-features">
+          <li><span class="check">✓</span> In-browser x86-64 compilation</li>
+          <li><span class="check">✓</span> 3 built-in demo programs</li>
+          <li><span class="check">✓</span> ZCC IR (SSA) output viewer</li>
+          <li><span class="check">✓</span> Syntax-highlighted assembly</li>
+          <li><span class="check">✓</span> 100 compiles / day</li>
+          <li class="dim"><span class="cross">✗</span> Upload your own .c files</li>
+          <li class="dim"><span class="cross">✗</span> .s / .wasm download</li>
+          <li class="dim"><span class="cross">✗</span> 3D AST Observatory</li>
+          <li class="dim"><span class="cross">✗</span> ZK compiler proofs</li>
+        </ul>
+        <a href="#playground" class="btn btn-ghost" style="width:100%; justify-content:center;" id="btn-free">Start Free</a>
+      </div>
+
+      <!-- PRO (featured) -->
+      <div class="card pricing-card featured">
+        <div class="plan-badge">Most Popular</div>
+        <div class="plan-name">Pro</div>
+        <div class="plan-price">
+          <span class="amount">$14</span>
+          <span class="period">/ mo</span>
+        </div>
+        <p class="plan-tagline">Full compiler power for individual developers and researchers.</p>
+        <div class="plan-divider"></div>
+        <ul class="plan-features">
+          <li><span class="check">✓</span> Everything in Free</li>
+          <li><span class="check">✓</span> Upload any C file (≤ 10 MB)</li>
+          <li><span class="check">✓</span> All 4 compile targets</li>
+          <li><span class="check">✓</span> .s / .wasm / PE binary download</li>
+          <li><span class="check">✓</span> 3D holographic AST Observatory</li>
+          <li><span class="check">✓</span> ZK R1CS compiler proof download</li>
+          <li><span class="check">✓</span> Unlimited compiles</li>
+          <li><span class="check">✓</span> Shareable permalink per compile</li>
+          <li><span class="check">✓</span> Priority email support</li>
+        </ul>
+        <a href="#waitlist" class="btn btn-primary" style="width:100%; justify-content:center;" id="btn-pro">Get Pro →</a>
+      </div>
+
+      <!-- TEAM -->
+      <div class="card pricing-card">
+        <div class="plan-name">Team</div>
+        <div class="plan-price">
+          <span class="amount">$49</span>
+          <span class="period">/ mo</span>
+        </div>
+        <p class="plan-tagline">For teams and organizations with CI/CD integration needs.</p>
+        <div class="plan-divider"></div>
+        <ul class="plan-features">
+          <li><span class="check">✓</span> Everything in Pro</li>
+          <li><span class="check">✓</span> Up to 10 seats</li>
+          <li><span class="check">✓</span> REST API access</li>
+          <li><span class="check">✓</span> CI/CD GitHub Action</li>
+          <li><span class="check">✓</span> On-chain ZK proof publication</li>
+          <li><span class="check">✓</span> Private compile history</li>
+          <li><span class="check">✓</span> Custom RISC-V target flags</li>
+          <li><span class="check">✓</span> Slack / Discord notifications</li>
+          <li><span class="check">✓</span> Dedicated support SLA</li>
+        </ul>
+        <a href="#waitlist" class="btn btn-outline" style="width:100%; justify-content:center;" id="btn-team">Contact Us →</a>
+      </div>
+
+    </div>
+
+    <p class="reveal" style="text-align:center; margin-top:32px; font-size:0.88rem; color:var(--c-muted);">
+      All plans include access to the open-source ZCC compiler. Hosted at
+      <a href="https://zkaedi.ai" style="color:var(--c-accent); font-weight:600;">zkaedi.ai</a> ·
+      <a href="https://github.com/invariantzkaedi/zcc-bootstrap-compiler" target="_blank" rel="noopener"
+         style="color:var(--c-accent); font-weight:600;">View source on GitHub →</a>
+    </p>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     WAITLIST
+═══════════════════════════════════════════════════════════ -->
+<section id="waitlist" aria-labelledby="waitlist-heading">
+  <div class="container">
+    <div class="waitlist-box reveal">
+      <div style="font-size:3rem; margin-bottom:16px;" aria-hidden="true">🔱</div>
+      <h2 class="waitlist-title" id="waitlist-heading">
+        Get early access.
+      </h2>
+      <p class="waitlist-sub">
+        ZKAEDI Pro is launching at <strong style="color:var(--c-accent);">zkaedi.ai</strong>.
+        Join the waitlist for a <strong style="color:var(--c-accent);">50% founding member discount</strong>
+        and be first to try the 3D AST Observatory and ZK proof downloads.
+      </p>
+      <form class="waitlist-form" id="waitlist-form" novalidate aria-label="Waitlist signup form">
+        <input
+          type="email"
+          id="waitlist-email"
+          name="email"
+          placeholder="you@company.com"
+          autocomplete="email"
+          required
+          aria-label="Email address"
+          aria-required="true"
+        />
+        <button type="submit" class="btn btn-primary" id="waitlist-submit">
+          Join Waitlist →
+        </button>
+      </form>
+      <p class="waitlist-count" id="waitlist-msg" aria-live="polite">
+        <strong>419 developers</strong> already on the list. No spam, ever.
+      </p>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     FOOTER
+═══════════════════════════════════════════════════════════ -->
+<footer id="footer" role="contentinfo">
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-copy">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; font-weight:700;">
+          <div style="width:24px; height:24px; background:linear-gradient(135deg,var(--c-accent),var(--c-accent2)); border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:0.6rem; font-weight:900; color:#000; font-family:var(--font-mono);">ZK</div>
+          <a href="https://zkaedi.ai" style="color:inherit;">ZKAEDI</a>
+        </div>
+        <p>© 2026 ZKAEDI / invariantzkaedi. Powered by ZCC. Open-source GPL-2.0.</p>
+        <p style="margin-top:4px; font-size:0.8rem;">
+          <a href="https://zkaedi.ai" style="color:var(--c-accent); font-weight:600;">zkaedi.ai</a>
+          · Bootstrap: <code style="font-family:var(--font-mono); color:var(--c-accent);">cmp zcc2.s zcc3.s → identical</code>
+        </p>
+      </div>
+      <nav aria-label="Footer navigation">
+        <ul class="footer-links">
+          <li><a href="https://github.com/invariantzkaedi/zcc-bootstrap-compiler" target="_blank" rel="noopener">GitHub ↗</a></li>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="#waitlist">Waitlist</a></li>
+          <li><a href="#playground">Playground</a></li>
+          <li><a href="https://zkaedi.ai" style="color:var(--c-accent); font-weight:700;">zkaedi.ai</a></li>
+        </ul>
+      </nav>
+    </div>
+  </div>
+</footer>
+
+
+<script src="app.js"></script>
+</body>
+</html>
