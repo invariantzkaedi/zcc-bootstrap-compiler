@@ -190,14 +190,29 @@ export async function onRequestPost({ request, env }) {
       });
     }
 
-    // 8. Authentic R1CS Constraint Verification for Program Graph
-    const r1csResult = verifyProgramR1CS(source, computedHash);
+    // 8. Authentic R1CS Constraint Verification for Program Graph using Caller-Supplied Witness
+    const callerWitness = body.witness || (proof && proof.witness);
+    if (!callerWitness || !Array.isArray(callerWitness) || callerWitness.length === 0) {
+      return new Response(JSON.stringify({
+        success: false,
+        verified: false,
+        status: "MISSING_WITNESS",
+        error: "Missing required 'witness' vector in verification payload. Cryptographic verification requires a caller-supplied witness vector bound to the public inputs and R1CS constraints.",
+        code: "MISSING_WITNESS",
+        verification_time_ms: Date.now() - startTime
+      }), {
+        status: 400,
+        headers: { ...CORS_HEADERS, ...auth.rateLimitHeaders }
+      });
+    }
+
+    const r1csResult = verifyProgramR1CS(source, computedHash, callerWitness, proof.public_inputs);
     if (!r1csResult.satisfiable) {
       return new Response(JSON.stringify({
         verified: false,
-        status: "R1CS_CONSTRAINTS_UNSATISFIED",
-        error: `R1CS constraint evaluation failed with ${r1csResult.violations} violations across ${r1csResult.constraintCount} constraints.`,
-        code: "R1CS_CONSTRAINTS_UNSATISFIED",
+        status: r1csResult.code || "R1CS_CONSTRAINTS_UNSATISFIED",
+        error: r1csResult.error || `R1CS constraint evaluation failed with ${r1csResult.violations} violations across ${r1csResult.constraintCount} constraints.`,
+        code: r1csResult.code || "R1CS_CONSTRAINTS_UNSATISFIED",
         r1cs_constraints: r1csResult.constraintCount,
         r1cs_witness_variables: r1csResult.witnessCount,
         r1cs_violations: r1csResult.violations,
@@ -229,7 +244,9 @@ export async function onRequestPost({ request, env }) {
         g1_membership_pi_c: "VALIDATED (y^2 == x^3 + 3 mod q)",
         pairing_check: "PASSED (e(A, B) == e(alpha, beta) * e(vk_x, gamma) * e(C, delta))",
         final_exponentiation: "VERIFIED_FQ12_IDENTITY",
-        public_inputs_bound: true
+        public_inputs_bound: true,
+        public_inputs_cardinality_verified: true,
+        r1cs_witness_evaluated: true
       },
       verification_time_ms: Date.now() - startTime,
       timestamp: new Date().toISOString()
@@ -524,9 +541,23 @@ function loadAndValidateVerificationKey(providedVk) {
     return { valid: false, code: "INVALID_VK_DELTA", error: "VK vk_delta_2 does not lie on BN254 G2 curve." };
   }
 
+  // Validate nPublic if defined
+  if (vkey.nPublic !== undefined) {
+    if (typeof vkey.nPublic !== "number" || !Number.isInteger(vkey.nPublic) || vkey.nPublic < 0) {
+      return { valid: false, code: "INVALID_VK_NPUBLIC", error: "VK nPublic must be a non-negative integer." };
+    }
+  }
+
   // Validate IC on G1
   if (!Array.isArray(vkey.IC) || vkey.IC.length < 1) {
     return { valid: false, code: "INVALID_VK_IC", error: "VK IC vector must contain at least IC_0." };
+  }
+  if (typeof vkey.nPublic === "number" && vkey.IC.length !== vkey.nPublic + 1) {
+    return {
+      valid: false,
+      code: "INVALID_VK_IC_CARDINALITY",
+      error: `VK IC length (${vkey.IC.length}) must equal nPublic + 1 (${vkey.nPublic + 1}).`
+    };
   }
   for (let i = 0; i < vkey.IC.length; i++) {
     if (!isValidBn254G1Point(vkey.IC[i][0], vkey.IC[i][1])) {
@@ -727,6 +758,27 @@ function verifyGroth16ProofWithPairing(proof, vkey, expectedCommitment) {
     };
   }
 
+  // Check public input cardinality against vkey.nPublic / vkey.IC
+  const expectedPublicCount = (typeof vkey.nPublic === "number" && vkey.nPublic >= 0)
+    ? vkey.nPublic
+    : (Array.isArray(vkey.IC) ? vkey.IC.length - 1 : 1);
+
+  if (proof.public_inputs.length !== expectedPublicCount) {
+    return {
+      valid: false,
+      code: "PUBLIC_INPUT_CARDINALITY_MISMATCH",
+      error: `Public input cardinality mismatch: expected exactly ${expectedPublicCount} public input(s) per verification key (vkey.nPublic=${expectedPublicCount}), but received ${proof.public_inputs.length}. Extra or missing public inputs are strictly rejected to prevent partial binding.`
+    };
+  }
+
+  if (!Array.isArray(vkey.IC) || vkey.IC.length !== expectedPublicCount + 1) {
+    return {
+      valid: false,
+      code: "INVALID_VERIFICATION_KEY_IC",
+      error: `Verification key IC length (${vkey.IC ? vkey.IC.length : 0}) does not match expected nPublic + 1 (${expectedPublicCount + 1}).`
+    };
+  }
+
   const cleanExpected = expectedCommitment.toLowerCase().replace(/^0x/, '');
   const inputMatch = proof.public_inputs.some(inp => {
     const cleanInp = String(inp).toLowerCase().replace(/^0x/, '');
@@ -754,15 +806,13 @@ function verifyGroth16ProofWithPairing(proof, vkey, expectedCommitment) {
     const gamma = normalizeG2Point(vkey.vk_gamma_2);
     const delta = normalizeG2Point(vkey.vk_delta_2);
 
-    // Accumulate public inputs in G1: vk_x = IC[0] + sum(x_i * IC[i+1])
+    // Accumulate public inputs in G1: vk_x = IC[0] + sum_{i=0}^{nPublic-1} (x_i * IC[i+1])
     let vk_x = [parseBigIntHex(vkey.IC[0][0]), parseBigIntHex(vkey.IC[0][1])];
     for (let i = 0; i < proof.public_inputs.length; i++) {
-      if (i + 1 < vkey.IC.length) {
-        const inpScalar = parseBigIntHex(proof.public_inputs[i]) % BN254_R;
-        const icPoint = [parseBigIntHex(vkey.IC[i + 1][0]), parseBigIntHex(vkey.IC[i + 1][1])];
-        const term = g1Mul(icPoint, inpScalar);
-        vk_x = g1Add(vk_x, term);
-      }
+      const inpScalar = parseBigIntHex(proof.public_inputs[i]) % BN254_R;
+      const icPoint = [parseBigIntHex(vkey.IC[i + 1][0]), parseBigIntHex(vkey.IC[i + 1][1])];
+      const term = g1Mul(icPoint, inpScalar);
+      vk_x = g1Add(vk_x, term);
     }
 
     const pairs = [
@@ -799,17 +849,14 @@ function verifyGroth16ProofWithPairing(proof, vkey, expectedCommitment) {
 // ── R1CS WITNESS CONSTRAINT VERIFICATION ───────────────────────────
 
 /**
- * Evaluates authentic R1CS constraints over the program graph: <A, w> * <B, w> = <C, w> (mod r)
+ * Synthesizes authentic R1CS constraints for the given program source and commitment.
+ * Returns { constraints, variableCount, varMap, publicCount }
  */
-export function verifyProgramR1CS(source, astCommitment) {
-  const witness = [1n]; // w[0] = 1
+export function synthesizeProgramR1CS(source, astCommitment) {
   const varMap = new Map();
   varMap.set('1', 0);
-
-  // w[1] = commitment
-  const commBigInt = astCommitment ? (BigInt('0x' + astCommitment.replace(/^0x/, '')) % BN254_R) : 0n;
-  witness.push(commBigInt);
   varMap.set('__commitment__', 1);
+  let nextVarIdx = 2; // w[0]=1, w[1]=astCommitment
 
   const constraints = [];
   function addConstraint(A, B, C) {
@@ -826,8 +873,7 @@ export function verifyProgramR1CS(source, astCommitment) {
     if (constDecl) {
       const varName = constDecl[1];
       const val = BigInt(constDecl[2]);
-      const idx = witness.length;
-      witness.push(val);
+      const idx = nextVarIdx++;
       varMap.set(varName, idx);
       // Constraint: w[idx] * 1 = val * 1
       addConstraint([{ idx, coeff: 1n }], [{ idx: 0, coeff: 1n }], [{ idx: 0, coeff: val }]);
@@ -846,34 +892,22 @@ export function verifyProgramR1CS(source, astCommitment) {
       const rightIdx = /^[0-9]+$/.test(rightStr) ? null : varMap.get(rightStr);
       const rightConst = rightIdx === null ? BigInt(rightStr) : 0n;
 
-      const leftVal = witness[leftIdx] || 0n;
-      const rightVal = rightIdx !== null ? (witness[rightIdx] || 0n) : rightConst;
-
-      let resultVal = 0n;
-      let targetIdx = witness.length;
+      const targetIdx = nextVarIdx++;
+      varMap.set(target, targetIdx);
 
       if (op === '+') {
-        resultVal = modR(leftVal + rightVal);
-        witness.push(resultVal);
-        varMap.set(target, targetIdx);
         // (left + right) * 1 = target
         const termsA = [{ idx: leftIdx, coeff: 1n }];
         if (rightIdx !== null) termsA.push({ idx: rightIdx, coeff: 1n });
         else termsA.push({ idx: 0, coeff: rightConst });
         addConstraint(termsA, [{ idx: 0, coeff: 1n }], [{ idx: targetIdx, coeff: 1n }]);
       } else if (op === '-') {
-        resultVal = modR(leftVal - rightVal);
-        witness.push(resultVal);
-        varMap.set(target, targetIdx);
         // (left - right) * 1 = target
         const termsA = [{ idx: leftIdx, coeff: 1n }];
         if (rightIdx !== null) termsA.push({ idx: rightIdx, coeff: -1n });
         else termsA.push({ idx: 0, coeff: -rightConst });
         addConstraint(termsA, [{ idx: 0, coeff: 1n }], [{ idx: targetIdx, coeff: 1n }]);
       } else if (op === '*') {
-        resultVal = modR(leftVal * rightVal);
-        witness.push(resultVal);
-        varMap.set(target, targetIdx);
         // left * right = target
         const termB = rightIdx !== null ? [{ idx: rightIdx, coeff: 1n }] : [{ idx: 0, coeff: rightConst }];
         addConstraint([{ idx: leftIdx, coeff: 1n }], termB, [{ idx: targetIdx, coeff: 1n }]);
@@ -887,9 +921,7 @@ export function verifyProgramR1CS(source, astCommitment) {
       const valStr = retMatch[1];
       const retIdx = /^[0-9]+$/.test(valStr) ? null : varMap.get(valStr);
       const retConst = retIdx === null ? BigInt(valStr) : 0n;
-      const retVal = retIdx !== null ? witness[retIdx] : retConst;
-      const outIdx = witness.length;
-      witness.push(retVal);
+      const outIdx = nextVarIdx++;
       varMap.set('__return__', outIdx);
       // w[outIdx] * 1 = ret
       if (retIdx !== null) {
@@ -908,9 +940,7 @@ export function verifyProgramR1CS(source, astCommitment) {
     const tok = tokens[i];
     let tokVal = 0n;
     for (let c = 0; c < tok.length; c++) tokVal = modR(tokVal * 31n + BigInt(tok.charCodeAt(c)));
-    const nextVal = modR(witness[prevHashIdx] * 10007n + tokVal);
-    const nextIdx = witness.length;
-    witness.push(nextVal);
+    const nextIdx = nextVarIdx++;
     // (w[prev] * 10007 + tokVal) * 1 = w[next]
     addConstraint(
       [{ idx: prevHashIdx, coeff: 10007n }, { idx: 0, coeff: tokVal }],
@@ -920,15 +950,189 @@ export function verifyProgramR1CS(source, astCommitment) {
     prevHashIdx = nextIdx;
   }
 
-  // Evaluate satisfaction of all constraints: <A, w> * <B, w> == <C, w> (mod r)
+  return {
+    constraints,
+    variableCount: nextVarIdx,
+    varMap,
+    publicCount: 1
+  };
+}
+
+/**
+ * Prover helper: generates the authentic satisfying witness vector for the given source and commitment.
+ * Used by provers and test harnesses to produce the witness passed in body.witness.
+ */
+export function generateProgramWitness(source, astCommitment) {
+  const { constraints, variableCount, varMap } = synthesizeProgramR1CS(source, astCommitment);
+  const witness = new Array(variableCount).fill(0n);
+  witness[0] = 1n; // w[0] = 1
+  const commBigInt = astCommitment ? (BigInt('0x' + astCommitment.replace(/^0x/, '')) % BN254_R) : 0n;
+  witness[1] = commBigInt; // w[1] = commitment
+
+  const clean = source.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
+  const stmts = clean.split(';').map(s => s.trim()).filter(Boolean);
+
+  for (const stmt of stmts) {
+    const constDecl = stmt.match(/(?:int|long|short|unsigned|char)\s+([a-zA-Z_]\w*)\s*=\s*([0-9]+)/);
+    if (constDecl) {
+      const varName = constDecl[1];
+      const val = BigInt(constDecl[2]);
+      const idx = varMap.get(varName);
+      witness[idx] = val;
+      continue;
+    }
+
+    const binDecl = stmt.match(/(?:int|long|short|unsigned|char)?\s*([a-zA-Z_]\w*)\s*=\s*([a-zA-Z_]\w*)\s*([\+\-\*])\s*([a-zA-Z_]\w*|[0-9]+)/);
+    if (binDecl) {
+      const target = binDecl[1];
+      const leftName = binDecl[2];
+      const op = binDecl[3];
+      const rightStr = binDecl[4];
+
+      const leftIdx = varMap.has(leftName) ? varMap.get(leftName) : 0;
+      const rightIdx = /^[0-9]+$/.test(rightStr) ? null : varMap.get(rightStr);
+      const rightConst = rightIdx === null ? BigInt(rightStr) : 0n;
+
+      const leftVal = witness[leftIdx] || 0n;
+      const rightVal = rightIdx !== null ? (witness[rightIdx] || 0n) : rightConst;
+
+      let resultVal = 0n;
+      if (op === '+') resultVal = modR(leftVal + rightVal);
+      else if (op === '-') resultVal = modR(leftVal - rightVal);
+      else if (op === '*') resultVal = modR(leftVal * rightVal);
+
+      const targetIdx = varMap.get(target);
+      witness[targetIdx] = resultVal;
+      continue;
+    }
+
+    const retMatch = stmt.match(/return\s+([a-zA-Z_]\w*|[0-9]+)/);
+    if (retMatch) {
+      const valStr = retMatch[1];
+      const retIdx = /^[0-9]+$/.test(valStr) ? null : varMap.get(valStr);
+      const retConst = retIdx === null ? BigInt(valStr) : 0n;
+      const retVal = retIdx !== null ? witness[retIdx] : retConst;
+      const outIdx = varMap.get('__return__');
+      witness[outIdx] = retVal;
+    }
+  }
+
+  for (const c of constraints) {
+    if (c.A.length === 2 && c.A[0].coeff === 10007n && c.B.length === 1 && c.B[0].idx === 0) {
+      const pIdx = c.A[0].idx;
+      const tokVal = c.A[1].coeff;
+      const nIdx = c.C[0].idx;
+      witness[nIdx] = modR(witness[pIdx] * 10007n + tokVal);
+    }
+  }
+
+  return witness.map(x => "0x" + x.toString(16));
+}
+
+/**
+ * Evaluates authentic caller-supplied witness against R1CS constraints for the program graph.
+ * Does NOT synthesize witness values; caller must supply the witness vector.
+ * Validates:
+ * 1. Caller witness is non-null array with sufficient length.
+ * 2. w[0] === 1n (constant 1).
+ * 3. Public inputs portion matches proof.public_inputs (astCommitment binding).
+ * 4. All constraints <A_k, w> * <B_k, w> == <C_k, w> (mod r) hold.
+ */
+export function verifyProgramR1CS(source, astCommitment, callerWitness, publicInputs) {
+  if (!callerWitness || !Array.isArray(callerWitness) || callerWitness.length === 0) {
+    return {
+      satisfiable: false,
+      code: "MISSING_WITNESS",
+      error: "A caller-supplied witness vector is required to verify R1CS constraint satisfaction.",
+      constraintCount: 0,
+      witnessCount: 0,
+      violations: 1
+    };
+  }
+
+  const { constraints, variableCount } = synthesizeProgramR1CS(source, astCommitment);
+
+  if (callerWitness.length < variableCount) {
+    return {
+      satisfiable: false,
+      code: "INSUFFICIENT_WITNESS_LENGTH",
+      error: `Caller witness vector length (${callerWitness.length}) is shorter than required R1CS variable count (${variableCount}).`,
+      constraintCount: constraints.length,
+      witnessCount: callerWitness.length,
+      violations: 1
+    };
+  }
+
+  // Parse witness elements into BigInt mod BN254_R
+  const w = [];
+  try {
+    for (let i = 0; i < callerWitness.length; i++) {
+      w.push(parseBigIntHex(callerWitness[i]) % BN254_R);
+    }
+  } catch (err) {
+    return {
+      satisfiable: false,
+      code: "MALFORMED_WITNESS",
+      error: "Failed to parse witness element into scalar: " + err.message,
+      constraintCount: constraints.length,
+      witnessCount: callerWitness.length,
+      violations: 1
+    };
+  }
+
+  // 1. Validate constant 1: w[0] === 1n
+  if (w[0] !== 1n) {
+    return {
+      satisfiable: false,
+      code: "INVALID_WITNESS_CONSTANT_ONE",
+      error: `R1CS witness invariant violated: w[0] must equal 1, but received ${w[0]}.`,
+      constraintCount: constraints.length,
+      witnessCount: w.length,
+      violations: 1
+    };
+  }
+
+  // 2. Validate binding between public inputs and witness
+  // In our circuit, w[1] is the public input corresponding to astCommitment / public_inputs[0]
+  const expectedCommScalar = astCommitment ? (BigInt('0x' + astCommitment.replace(/^0x/, '')) % BN254_R) : null;
+  if (expectedCommScalar !== null && w.length > 1 && w[1] !== expectedCommScalar) {
+    return {
+      satisfiable: false,
+      code: "WITNESS_PUBLIC_INPUT_MISMATCH",
+      error: `Witness variable w[1] does not match AST commitment public input (${astCommitment}). Witness is not bound to the proof.`,
+      constraintCount: constraints.length,
+      witnessCount: w.length,
+      violations: 1
+    };
+  }
+
+  if (publicInputs && Array.isArray(publicInputs)) {
+    for (let i = 0; i < publicInputs.length; i++) {
+      const expScalar = parseBigIntHex(publicInputs[i]) % BN254_R;
+      const wIdx = 1 + i;
+      if (wIdx < w.length && w[wIdx] !== expScalar) {
+        return {
+          satisfiable: false,
+          code: "WITNESS_PUBLIC_INPUT_MISMATCH",
+          error: `Witness variable w[${wIdx}] does not match public input ${i} (${publicInputs[i]}). Witness is not bound to proof.`,
+          constraintCount: constraints.length,
+          witnessCount: w.length,
+          violations: 1
+        };
+      }
+    }
+  }
+
+  // 3. Evaluate constraint satisfaction over caller-supplied witness:
+  // For every constraint k: <A_k, w> * <B_k, w> == <C_k, w> (mod r)
   let violations = 0;
   for (const c of constraints) {
     let valA = 0n;
-    for (const term of c.A) valA = modR(valA + term.coeff * (witness[term.idx] || 0n));
+    for (const term of c.A) valA = modR(valA + term.coeff * (w[term.idx] || 0n));
     let valB = 0n;
-    for (const term of c.B) valB = modR(valB + term.coeff * (witness[term.idx] || 0n));
+    for (const term of c.B) valB = modR(valB + term.coeff * (w[term.idx] || 0n));
     let valC = 0n;
-    for (const term of c.C) valC = modR(valC + term.coeff * (witness[term.idx] || 0n));
+    for (const term of c.C) valC = modR(valC + term.coeff * (w[term.idx] || 0n));
 
     if (modR(valA * valB) !== valC) {
       violations++;
@@ -937,7 +1141,7 @@ export function verifyProgramR1CS(source, astCommitment) {
 
   return {
     constraintCount: constraints.length,
-    witnessCount: witness.length,
+    witnessCount: w.length,
     violations,
     satisfiable: violations === 0 && constraints.length > 0
   };

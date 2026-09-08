@@ -208,6 +208,30 @@ async function runTests() {
   const mismatchedData = await mismatchedInputsRes.json();
   assert(mismatchedData.code === "PUBLIC_INPUT_MISMATCH", "Rejection code is PUBLIC_INPUT_MISMATCH");
 
+  // 3c-2: Public input cardinality mismatch MUST be rejected with 422 (PUBLIC_INPUT_CARDINALITY_MISMATCH)
+  const cardinalityMismatchRes = await verifyHandler.onRequestPost({
+    request: mockRequest("POST", "https://zkaedi.ai/api/verify", {
+      "Authorization": `Bearer ${validKey}`,
+      "Content-Type": "application/json"
+    }, {
+      source: sampleSource,
+      ast_commitment: expectedCommitment,
+      proof: {
+        pi_a: ["0x01", "0x02"],
+        pi_b: [
+          ["0x1800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed", "0x198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c2"],
+          ["0x12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa", "0x090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b"]
+        ],
+        pi_c: ["0x01", "0x02"],
+        public_inputs: [expectedCommitment, "0xextra_public_input_1234"] // 2 inputs when vkey.nPublic = 1
+      }
+    }),
+    env: TEST_ENV
+  });
+  assert(cardinalityMismatchRes.status === 422, "POST /api/verify rejects public_inputs cardinality mismatch with 422");
+  const cardinalityData = await cardinalityMismatchRes.json();
+  assert(cardinalityData.code === "PUBLIC_INPUT_CARDINALITY_MISMATCH", "Rejection code is PUBLIC_INPUT_CARDINALITY_MISMATCH");
+
   // 3d: Forged G1 curve point MUST be rejected with 422
   const forgedG1ProofRes = await verifyHandler.onRequestPost({
     request: mockRequest("POST", "https://zkaedi.ai/api/verify", {
@@ -279,7 +303,7 @@ async function runTests() {
   const onCurveForgedData = await onCurveForgedRes.json();
   assert(onCurveForgedData.code === "PAIRING_CHECK_FAILED", "Rejection code is PAIRING_CHECK_FAILED (Fq12 pairing check non-identity)");
 
-  // 3g: Genuine Groth16 Proof with Valid Optimal Ate Pairing and Fq12 Identity
+  // 3g: Genuine Groth16 Proof with Valid Optimal Ate Pairing, Fq12 Identity, and Authentic Caller Witness
   // Construct genuine cryptographic proof points that satisfy the pairing equation
   const commScalar = BigInt("0x" + expectedCommitment.replace(/^0x/, "")) % verifyHandler.BN254_R;
   const g1Gen = verifyHandler.G1_GENERATOR;
@@ -295,6 +319,63 @@ async function runTests() {
     public_inputs: [expectedCommitment]
   };
 
+  // 3g-1: Missing caller witness MUST be rejected with 400 (MISSING_WITNESS)
+  const missingWitnessRes = await verifyHandler.onRequestPost({
+    request: mockRequest("POST", "https://zkaedi.ai/api/verify", {
+      "Authorization": `Bearer ${validKey}`,
+      "Content-Type": "application/json"
+    }, {
+      source: sampleSource,
+      ast_commitment: expectedCommitment,
+      proof: genuineProof // No witness supplied
+    }),
+    env: TEST_ENV
+  });
+  assert(missingWitnessRes.status === 400, "POST /api/verify rejects missing caller witness with 400");
+  const missingWitnessData = await missingWitnessRes.json();
+  assert(missingWitnessData.code === "MISSING_WITNESS", "Rejection code is MISSING_WITNESS");
+
+  // 3g-2: Witness with public input mismatch MUST be rejected with 422 (WITNESS_PUBLIC_INPUT_MISMATCH)
+  const authenticWitness = verifyHandler.generateProgramWitness(sampleSource, expectedCommitment);
+  const tamperedPublicWitness = [...authenticWitness];
+  tamperedPublicWitness[1] = "0xdeadbeef12345678";
+  const tamperedPublicRes = await verifyHandler.onRequestPost({
+    request: mockRequest("POST", "https://zkaedi.ai/api/verify", {
+      "Authorization": `Bearer ${validKey}`,
+      "Content-Type": "application/json"
+    }, {
+      source: sampleSource,
+      ast_commitment: expectedCommitment,
+      proof: genuineProof,
+      witness: tamperedPublicWitness
+    }),
+    env: TEST_ENV
+  });
+  assert(tamperedPublicRes.status === 422, "POST /api/verify rejects witness with public input mismatch with 422");
+  const tamperedPublicData = await tamperedPublicRes.json();
+  assert(tamperedPublicData.code === "WITNESS_PUBLIC_INPUT_MISMATCH", "Rejection code is WITNESS_PUBLIC_INPUT_MISMATCH");
+
+  // 3g-3: Witness with unsatisfied R1CS constraint (corrupted variable) MUST be rejected with 422 (R1CS_CONSTRAINTS_UNSATISFIED)
+  const tamperedConstraintWitness = [...authenticWitness];
+  tamperedConstraintWitness[2] = "0x99999999";
+  const tamperedConstraintRes = await verifyHandler.onRequestPost({
+    request: mockRequest("POST", "https://zkaedi.ai/api/verify", {
+      "Authorization": `Bearer ${validKey}`,
+      "Content-Type": "application/json"
+    }, {
+      source: sampleSource,
+      ast_commitment: expectedCommitment,
+      proof: genuineProof,
+      witness: tamperedConstraintWitness
+    }),
+    env: TEST_ENV
+  });
+  assert(tamperedConstraintRes.status === 422, "POST /api/verify rejects witness failing R1CS constraints with 422");
+  const tamperedConstraintData = await tamperedConstraintRes.json();
+  assert(tamperedConstraintData.code === "R1CS_CONSTRAINTS_UNSATISFIED", "Rejection code is R1CS_CONSTRAINTS_UNSATISFIED");
+  assert(tamperedConstraintData.r1cs_violations > 0, "Receipt reports positive constraint violations for tampered witness");
+
+  // 3g-4: Valid caller witness accepting genuine proof
   const validProofRes = await verifyHandler.onRequestPost({
     request: mockRequest("POST", "https://zkaedi.ai/api/verify", {
       "Authorization": `Bearer ${validKey}`,
@@ -302,23 +383,30 @@ async function runTests() {
     }, {
       source: sampleSource,
       ast_commitment: expectedCommitment,
-      proof: genuineProof
+      proof: genuineProof,
+      witness: authenticWitness
     }),
     env: TEST_ENV
   });
-  assert(validProofRes.status === 200, "POST /api/verify accepts genuine Groth16 proof with valid Fq12 pairing identity");
+  assert(validProofRes.status === 200, "POST /api/verify accepts genuine Groth16 proof with valid Fq12 pairing identity and authentic witness");
   const validProofData = await validProofRes.json();
   assert(validProofData.verified === true, "verified = true for genuine proof");
   assert(validProofData.zk_proof_audit.verification_key_loaded === true, "Audit confirms verification key loaded");
   assert(validProofData.zk_proof_audit.g2_membership_pi_b.includes("VALIDATED"), "Audit confirms G2 membership validation on twist curve");
   assert(validProofData.zk_proof_audit.pairing_check.includes("PASSED"), "Audit confirms pairing equation evaluated");
   assert(validProofData.zk_proof_audit.final_exponentiation === "VERIFIED_FQ12_IDENTITY", "Audit confirms final exponentiation verified against Fq12 identity");
+  assert(validProofData.zk_proof_audit.public_inputs_cardinality_verified === true, "Audit confirms public inputs cardinality verified");
+  assert(validProofData.zk_proof_audit.r1cs_witness_evaluated === true, "Audit confirms caller witness evaluated against R1CS constraints");
   assert(validProofData.r1cs_violations === 0, "Receipt reports 0 R1CS violations");
   assert(validProofData.r1cs_constraints > 0, "Receipt reports authentic positive R1CS constraint count");
   assert(validProofData.r1cs_witness_variables > 0, "Receipt reports authentic positive R1CS witness count");
 
   // 3h: Authentic R1CS Witness & Constraint Verification Unit Check
-  const r1csUnitTest = verifyHandler.verifyProgramR1CS(sampleSource, expectedCommitment);
+  const r1csMissingWitness = verifyHandler.verifyProgramR1CS(sampleSource, expectedCommitment, null);
+  assert(r1csMissingWitness.satisfiable === false, "verifyProgramR1CS rejects null witness with satisfiable: false");
+  assert(r1csMissingWitness.code === "MISSING_WITNESS", "Rejection code is MISSING_WITNESS");
+
+  const r1csUnitTest = verifyHandler.verifyProgramR1CS(sampleSource, expectedCommitment, authenticWitness, [expectedCommitment]);
   assert(r1csUnitTest.satisfiable === true, "verifyProgramR1CS evaluates genuine witness with satisfiable: true");
   assert(r1csUnitTest.violations === 0, "verifyProgramR1CS confirms 0 constraint violations");
   assert(r1csUnitTest.constraintCount >= 10, "verifyProgramR1CS produces real constraint count (not fabricated)");
