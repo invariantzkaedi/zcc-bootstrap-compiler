@@ -653,6 +653,10 @@ docs/*
 !docs/lexicon/
 !.github/
 !.github/copilot-instructions.md
+# Independent validation suite deliverables & evidence tracking
+!docs/SPEC_C_SUBSET_v1.md
+!docs/evidence/
+!docs/evidence/**
 
 
 # Evidence archive: track manifest & latest evidence, ignore heavy zcc-run history

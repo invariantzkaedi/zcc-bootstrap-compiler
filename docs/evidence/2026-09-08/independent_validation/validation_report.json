@@ -1,0 +1,100 @@
+{
+  "metadata": {
+    "timestamp_utc": "2026-09-08T08:32:25.812270+00:00",
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "system": "Linux",
+    "architecture": "x86_64",
+    "python_version": "3.12.3",
+    "tools": {
+      "gcc": {
+        "available": true,
+        "path": "/usr/bin/gcc",
+        "version": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0"
+      },
+      "clang": {
+        "available": true,
+        "path": "/usr/bin/clang",
+        "version": "Ubuntu clang version 18.1.3 (1ubuntu1)"
+      },
+      "node": {
+        "available": true,
+        "path": "/usr/bin/node",
+        "version": "v20.20.2"
+      },
+      "make": {
+        "available": true,
+        "path": "/usr/bin/make",
+        "version": "GNU Make 4.3"
+      },
+      "as": {
+        "available": true,
+        "path": "/usr/bin/as",
+        "version": "GNU assembler (GNU Binutils for Ubuntu) 2.42"
+      }
+    },
+    "git_commit_sha": "e55809509f1847f22a945d1162924045b2129279",
+    "git_branch": "invariantzkaedi-sturdy-spoon",
+    "git_dirty": true
+  },
+  "gates": {
+    "clean_build": {
+      "status": "PASS",
+      "detail": "make zcc exited 0 and produced executable binary."
+    },
+    "gate1_selfhost": {
+      "status": "PASS",
+      "detail": "cmp zcc2.s zcc3.s exit 0 (byte-identical assembly)"
+    },
+    "gate4_edge_api": {
+      "status": "PASS",
+      "detail": "Dynamically verified 97/97 assertions passing without failure.",
+      "passed_assertions": 97,
+      "total_assertions": 97
+    },
+    "differential_gauntlet": {
+      "status": "PASS",
+      "detail": "50/50 programs matched reference oracles (100.0%).",
+      "results": {
+        "status": "PASS",
+        "verdict": "PASS",
+        "oracles": {
+          "gcc": "AVAILABLE",
+          "clang": "AVAILABLE"
+        },
+        "total": 50,
+        "passed": 50,
+        "pass_rate": 100.0,
+        "elapsed_seconds": 16.904443979263306,
+        "failures": {},
+        "divergences": []
+      }
+    }
+  },
+  "verdict": "PASS",
+  "source_deliverables": {
+    "docs/SPEC_C_SUBSET_v1.md": {
+      "size_bytes": 5525,
+      "sha256": "c2163b2ec30953fc0730a49173c9ff974e8e76ceb110c24e13632766d0fef373"
+    },
+    "tools/differential_compiler_gauntlet.py": {
+      "size_bytes": 17978,
+      "sha256": "cbfb04b9b60c71835137574a3ec752cde3b6ecb0a1f7907b9619574ece0218b5"
+    },
+    "tools/reproducible_validation_runner.py": {
+      "size_bytes": 19367,
+      "sha256": "589b336f46c0feb811d94e660a847f32f0984855955c27ab63878656cbdd41b7"
+    },
+    "scripts/reproducible_validate.sh": {
+      "size_bytes": 611,
+      "sha256": "eae0106ed9cd045bc949567b6f7ad261f25e37f09bd88f319d371aa0f24c63cb"
+    },
+    "scripts/reproducible_validate.ps1": {
+      "size_bytes": 905,
+      "sha256": "127e441c840de4108ca13610b58cbd8de6ea06a378ee48ffc56b456cb63bfb8a"
+    },
+    ".gitignore": {
+      "size_bytes": 11118,
+      "sha256": "a2b36b580813e311bd18ec9eb68aa851764da293b6036da063ff611790e4da20"
+    }
+  }
+}

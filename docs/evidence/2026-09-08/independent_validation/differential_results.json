@@ -1,0 +1,14 @@
+{
+  "status": "PASS",
+  "verdict": "PASS",
+  "oracles": {
+    "gcc": "AVAILABLE",
+    "clang": "AVAILABLE"
+  },
+  "total": 50,
+  "passed": 50,
+  "pass_rate": 100.0,
+  "elapsed_seconds": 16.904443979263306,
+  "failures": {},
+  "divergences": []
+}
