@@ -1,0 +1,24 @@
+=== DIRECTION 1: ZCC-LIB + GCC-MAIN ===
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (12 elided)
+[Phase 6] GCC Assembly/Linker Binding... OK
+[OK] ZCC Engine Compilation Terminated Successfully.
+tag a: 3, num a: 3.141590
+tag b: 2, int b: 1234567890
+Direction 1 Exit: True
+=== DIRECTION 2: GCC-LIB + ZCC-MAIN ===
+zcc: warning: using synthesized header stub for stdio.h
+pp_process_include: stdio.h added 175 macros, total is 212
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (18 elided)
+[Phase 6] GCC Assembly/Linker Binding... OK
+[OK] ZCC Engine Compilation Terminated Successfully.
+tag a: 3, num a: 3.141590
+tag b: 2, int b: 1234567890
+Direction 2 Exit: True

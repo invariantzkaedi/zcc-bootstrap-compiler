@@ -11,7 +11,7 @@ FAST_CFLAGS = -O2 -DNDEBUG -w -fno-asynchronous-unwind-tables -g0 -DZCC_REAL_TEL
 FORTIFY_PACK_DIR ?= fortify_zcc_clean
 
 PARTS = part1.c part0_pp.c part2.c part3.c ir.h ir_emit_dispatch.h sym_type_ast_ir.c part4.c zcc_ast_serializer.c part5.c part7_rust.c part6_arm.c part6_wasm.c ir.c ir_to_x86.c regalloc.c ir_telemetry_stub.c forgezero_receipt_stub.c zcc_layout.c zcc_layout_dump.c zcc_static_assert.c
-PASSES = compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c ir_telemetry.c zcc_telemetry.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c src/opt/prime_v2_regalloc_opt.c src/opt/q_licm_pass.c src/opt/cap_tripwire.c src/evm/evm2native_pass.c src/evm/evm2native_fuzzer.c src/zk/zk_air_trace.c src/zk/zk_witness_bridge.c src/codegen/avxzkd_jit_x86.c src/engine/zcc_hyper_engine.c src/ai/bare_gguf_jit.c src/optics/optiqpu_emitter.c src/dynamic/oneiro_kernel.c src/crypto/fhe_encrypted_ssa.c src/crypto/lattice_guard.c src/concurrency/chrono_spec.c src/neuromorphic/zcc_neuromorphic.c src/vector/zcc_hyper_vector_db.c src/quantum/zcc_topological_qpu.c src/physics/zcc_celestial_nbody.c src/zk/zcc_pq_light_client.c src/security/zcc_enclave_seal.c src/wasm_emit.c src/arm64_codegen.c src/riscv_codegen.c src/win64_pe_emit.c src/quantum/zcc_qasm_parser.c src/quantum/zcc_qasm_sim.c src/quantum/zcc_qasm_opt.c src/quantum/zcc_qasm_c_emit.c src/quantum/zcc_qasm_clifford_t.c src/zcc_binary_vector_engine.c
+PASSES = compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c ir_telemetry.c zcc_telemetry.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c src/opt/prime_v2_regalloc_opt.c src/opt/q_licm_pass.c src/opt/cap_tripwire.c src/evm/evm2native_pass.c src/evm/evm2native_fuzzer.c src/zk/zk_air_trace.c src/zk/zk_witness_bridge.c src/zk/zk_stark_emit.c src/codegen/avxzkd_jit_x86.c src/engine/zcc_hyper_engine.c src/ai/bare_gguf_jit.c src/optics/optiqpu_emitter.c src/dynamic/oneiro_kernel.c src/crypto/fhe_encrypted_ssa.c src/crypto/lattice_guard.c src/concurrency/chrono_spec.c src/neuromorphic/zcc_neuromorphic.c src/vector/zcc_hyper_vector_db.c src/quantum/zcc_topological_qpu.c src/physics/zcc_celestial_nbody.c src/zk/zcc_pq_light_client.c src/security/zcc_enclave_seal.c src/wasm_emit.c src/arm64_codegen.c src/riscv_codegen.c src/win64_pe_emit.c src/quantum/zcc_qasm_parser.c src/quantum/zcc_qasm_sim.c src/quantum/zcc_qasm_opt.c src/quantum/zcc_qasm_c_emit.c src/quantum/zcc_qasm_clifford_t.c src/zcc_binary_vector_engine.c
 COMPAT_SMOKE_SRCS = \
 	exp1_raytracer_simd.c \
 	exp2_voxel_engine.c \
@@ -25,7 +25,7 @@ COMPAT_SMOKE_SRCS = \
 	tests/regressions/t_zkaedi_rigging_regressions.c
 COMPAT_EXTENDED_SRCS = $(COMPAT_SMOKE_SRCS) raytracer.c
 
-.PHONY: all clean selfhost selfhost-fast verify-lexicon compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test test-float rust-front-smoke check-rust-c-ffi check-evm-lifter check-ir-vuln-tag check-forgezero-receipt check-ir-bridge-guard check-copy-const-prop verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration zjs test-zjs visualize-svg-diffs wasm-svg-bridge test_zcc_dag abi-lanes zcc-opt zcc-verify dream dream-auto apply-blueprints test-upgrade-div avxzkd test-avxzkd libavxzkd.a
+.PHONY: all clean selfhost selfhost-fast verify-lexicon compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test test-float rust-front-smoke check-rust-c-ffi check-evm-lifter check-ir-vuln-tag check-forgezero-receipt check-ir-bridge-guard check-copy-const-prop verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration zjs test-zjs visualize-svg-diffs wasm-svg-bridge test_zcc_dag abi-lanes zcc-opt zcc-verify dream dream-auto apply-blueprints test-upgrade-div avxzkd test-avxzkd libavxzkd.a fullcov check-fullcov
 
 
 .SECONDARY: zcc zcc2 zcc3
@@ -967,6 +967,11 @@ check-rust-c-ffi: zcc
 	bash tests/run_rust_c_zero_copy_layout.sh
 	@echo "RUST-FFI-LAYOUT-001 VERIFIED"
 
+fullcov:
+	python3 tests/differential/test_fullcov_master.py
+
+check-fullcov: fullcov
+
 asan: zcc.c $(PASSES)
 	$(CC) -fsanitize=address -O0 -g -Dmain=zcc_main -o zcc_asan zcc.c $(PASSES) $(LDFLAGS)
 	@echo "ASan build ready. Run: ./zcc_asan zcc.c -o /dev/null"
@@ -1084,24 +1089,36 @@ swarm-jit: zcc
 swarm-prove: zcc
 	@echo "🔱 Running symbolic proofs on swarm..."
 	@CORPUS=swarm_out; PROP=no-revert; LOG=swarm_prove_results.tsv; \
-	PROVED=0; VIOLATED=0; ERROR=0; TOTAL=0; : > $$LOG; \
+	PROVED=0; UNKNOWN=0; VIOLATED=0; ERROR=0; TOTAL=0; : > $$LOG; \
 	for f in $$CORPUS/*.bin; do \
 		[ -e "$$f" ] || { echo "FATAL: corpus empty: $$CORPUS/*.bin"; exit 3; }; \
 		TOTAL=$$((TOTAL+1)); \
 		OUT=$$(./zcc --prove "$$f" "$$PROP" 2>&1); RC=$$?; \
 		if [ $$RC -eq 0 ] && echo "$$OUT" | grep -q "HOLD"; then \
 			PROVED=$$((PROVED+1)); printf "%s\tHOLD\t%d\n" "$$f" $$RC >> $$LOG; \
+		elif echo "$$OUT" | grep -qi "UNKNOWN"; then \
+			UNKNOWN=$$((UNKNOWN+1)); printf "%s\tUNKNOWN\t%d\n" "$$f" $$RC >> $$LOG; \
 		elif echo "$$OUT" | grep -qi "violat"; then \
 			VIOLATED=$$((VIOLATED+1)); printf "%s\tVIOLATED\t%d\n" "$$f" $$RC >> $$LOG; \
 		else \
 			ERROR=$$((ERROR+1)); printf "%s\tERROR\t%d\n" "$$f" $$RC >> $$LOG; \
 		fi; \
 	done; \
-	echo "SWARM-PROVE SUMMARY: TOTAL=$$TOTAL PROVED=$$PROVED VIOLATED=$$VIOLATED ERROR=$$ERROR"; \
-	if [ $$TOTAL -gt 0 ] && [ $$ERROR -eq 0 ] && [ $$((PROVED+VIOLATED)) -eq $$TOTAL ]; then \
+	echo "SWARM-PROVE SUMMARY: TOTAL=$$TOTAL PROVED=$$PROVED UNKNOWN=$$UNKNOWN VIOLATED=$$VIOLATED ERROR=$$ERROR"; \
+	if [ $$TOTAL -gt 0 ] && [ $$ERROR -eq 0 ] && [ $$UNKNOWN -eq 0 ] && [ $$VIOLATED -eq 0 ] && [ $$PROVED -eq $$TOTAL ]; then \
 		echo "SWARM-PROVE EXIT=0 (results: $$LOG)"; exit 0; \
 	else \
 		echo "SWARM-PROVE EXIT=1 (results: $$LOG)"; exit 1; \
+	fi
+
+swarm-prove-fault-injection: zcc
+	@echo "🔱 Running fault injection on known-barrier contract..."
+	@python3 scripts/create_fault_barrier.py >/dev/null
+	@OUT=$$(./zcc --prove tests/evm/fault_injection_barrier.bin no-revert 2>&1); \
+	if echo "$$OUT" | grep -Eq "UNKNOWN|VIOLATED"; then \
+		echo "✓ Fault injection PASS: known-barrier contract rejected as non-HOLD"; \
+	else \
+		echo "❌ Fault injection FAIL: known-barrier contract unexpectedly held ($$OUT)"; exit 1; \
 	fi
 
 swarm-memory: zcc
@@ -1191,7 +1208,8 @@ release-v1.0:
 	@make selfhost
 	@make swarm-fuzz
 	@make swarm-jit
-	@echo "swarm-prove QUARANTINED: VIOLATED branch unreachable (src/evm/symbolic.c emits only HOLD/UNKNOWN) — see BUGS.md"
+	@make swarm-prove-fault-injection
+	@make swarm-prove
 	@git tag -a v1.0.0 -m "Boundary Shatter Release"
 	@gh release create v1.0.0 zcc \
 		--title "ZCC v1.0.0 — God Tier EVM Toolchain" \

@@ -154,6 +154,115 @@ int main(void) {
                 return 1;
             }
         }
+
+        /* Rule 23: (x - y) + y -> x */
+        {
+            uint64_t y = 0x987654321FEDCBA0ULL;
+            uint64_t ref_val = (uval - y) + y;
+            uint64_t opt_val = uval;
+            rules_tested++;
+
+            if (ref_val != opt_val) {
+                fprintf(stderr, "InstCombine FAULT DETECTED: sub_add_cancel mismatch on val=0x%llx\n", (unsigned long long)uval);
+                return 1;
+            }
+        }
+
+        /* Rule 24: (x ^ y) ^ y -> x */
+        {
+            uint64_t y = 0xAAAAAAAAAAAAAAAAULL;
+            uint64_t ref_val = (uval ^ y) ^ y;
+            uint64_t opt_val = uval;
+            rules_tested++;
+
+            if (ref_val != opt_val) {
+                fprintf(stderr, "InstCombine FAULT DETECTED: xor_cancel mismatch on val=0x%llx\n", (unsigned long long)uval);
+                return 1;
+            }
+        }
+
+        /* Rule 25: (x | c1) | c2 -> x | (c1 | c2) */
+        {
+            uint64_t c1 = 0x00FF00FF00FF00FFULL;
+            uint64_t c2 = 0xFF00FF00FF00FF00ULL;
+            uint64_t ref_val = (uval | c1) | c2;
+            uint64_t opt_val = uval | (c1 | c2);
+            rules_tested++;
+
+            if (ref_val != opt_val) {
+                fprintf(stderr, "InstCombine FAULT DETECTED: nested_or_consts mismatch on val=0x%llx\n", (unsigned long long)uval);
+                return 1;
+            }
+        }
+
+        /* Rule 26: (x & c1) & c2 -> x & (c1 & c2) */
+        {
+            uint64_t c1 = 0x0F0F0F0F0F0F0F0FULL;
+            uint64_t c2 = 0x3333333333333333ULL;
+            uint64_t ref_val = (uval & c1) & c2;
+            uint64_t opt_val = uval & (c1 & c2);
+            rules_tested++;
+
+            if (ref_val != opt_val) {
+                fprintf(stderr, "InstCombine FAULT DETECTED: nested_and_consts mismatch on val=0x%llx\n", (unsigned long long)uval);
+                return 1;
+            }
+        }
+
+        /* Rule 27: (x + c1) + c2 -> x + (c1 + c2) */
+        {
+            uint64_t c1 = 12345ULL;
+            uint64_t c2 = 67890ULL;
+            uint64_t ref_val = (uval + c1) + c2;
+            uint64_t opt_val = uval + (c1 + c2);
+            rules_tested++;
+
+            if (ref_val != opt_val) {
+                fprintf(stderr, "InstCombine FAULT DETECTED: nested_add_consts mismatch on val=0x%llx\n", (unsigned long long)uval);
+                return 1;
+            }
+        }
+
+        /* Rule 28: (x ^ c1) ^ c2 -> x ^ (c1 ^ c2) */
+        {
+            uint64_t c1 = 0x5555555555555555ULL;
+            uint64_t c2 = 0xAAAAAAAAAAAAAAAAULL;
+            uint64_t ref_val = (uval ^ c1) ^ c2;
+            uint64_t opt_val = uval ^ (c1 ^ c2);
+            rules_tested++;
+
+            if (ref_val != opt_val) {
+                fprintf(stderr, "InstCombine FAULT DETECTED: nested_xor_consts mismatch on val=0x%llx\n", (unsigned long long)uval);
+                return 1;
+            }
+        }
+
+        /* Rule 29: (x << c1) << c2 -> x << (c1 + c2) */
+        {
+            uint64_t c1 = 3ULL;
+            uint64_t c2 = 5ULL;
+            uint64_t ref_val = (uval << c1) << c2;
+            uint64_t opt_val = uval << (c1 + c2);
+            rules_tested++;
+
+            if (ref_val != opt_val) {
+                fprintf(stderr, "InstCombine FAULT DETECTED: nested_shl_consts mismatch on val=0x%llx\n", (unsigned long long)uval);
+                return 1;
+            }
+        }
+
+        /* Rule 30: (x & y) | x -> x (Absorption law) */
+        {
+            uint64_t y = 0x123456789ABCDEF0ULL;
+            uint64_t ref_val = (uval & y) | uval;
+            uint64_t opt_val = uval;
+            rules_tested++;
+
+            if (ref_val != opt_val) {
+                fprintf(stderr, "InstCombine FAULT DETECTED: absorption_and_or mismatch on val=0x%llx\n", (unsigned long long)uval);
+                return 1;
+            }
+        }
     }
 #endif
 
@@ -168,3 +277,4 @@ int main(void) {
     printf("VERDICT: INSTCOMBINE TRUTH ORACLE PASS\n");
     return 0;
 }
+

@@ -175,19 +175,20 @@ int evm_yul_weaver_opt(ir_func_t *fn, FILE *out, int opt_level) {
     for (n = fn->head; n; n = n->next, line++) {
         fprintf(out, "    /* line %d: op %d */\n", line, n->op);
         if (n->op == IR_ADD || n->op == IR_SUB || n->op == IR_MUL || n->op == IR_DIV ||
+            n->op == IR_MOD || n->op == IR_AND || n->op == IR_OR || n->op == IR_XOR ||
+            n->op == IR_SHL || n->op == IR_SHR ||
             n->op == IR_FADD || n->op == IR_FSUB || n->op == IR_FMUL || n->op == IR_FDIV) {
             int src1_id = find_vreg(&st, n->src1);
             int src2_id = find_vreg(&st, n->src2);
             int dst_id = find_vreg(&st, n->dst);
             
-            bool is_commutative = (n->op == IR_ADD || n->op == IR_MUL || n->op == IR_FADD || n->op == IR_FMUL);
+            bool is_commutative = (n->op == IR_ADD || n->op == IR_MUL || n->op == IR_AND || 
+                                   n->op == IR_OR || n->op == IR_XOR || n->op == IR_FADD || n->op == IR_FMUL);
 
             if (opt_level == 1 && is_commutative && st.stack_depth >= 2) {
                 int top0 = st.stack[st.stack_depth - 1];
                 int top1 = st.stack[st.stack_depth - 2];
                 if ((top0 == src1_id && top1 == src2_id) || (top0 == src2_id && top1 == src1_id)) {
-                    /* Commutative swap reduction: top two stack slots already hold operands in either order!
-                     * Unoptimized weaver would emit swap1 to force exact order. Opt level 1 omits swap1! */
                     rewrites_applied++;
                 } else {
                     if (src2_id >= 0) bring_to_top_opt(&st, src2_id, out, opt_level, &rewrites_applied);
@@ -202,6 +203,12 @@ int evm_yul_weaver_opt(ir_func_t *fn, FILE *out, int opt_level) {
             else if (n->op == IR_SUB) fprintf(out, "    sub\n");
             else if (n->op == IR_MUL) fprintf(out, "    mul\n");
             else if (n->op == IR_DIV) fprintf(out, "    div\n");
+            else if (n->op == IR_MOD) fprintf(out, "    mod\n");
+            else if (n->op == IR_AND) fprintf(out, "    and\n");
+            else if (n->op == IR_OR) fprintf(out, "    or\n");
+            else if (n->op == IR_XOR) fprintf(out, "    xor\n");
+            else if (n->op == IR_SHL) fprintf(out, "    shl\n");
+            else if (n->op == IR_SHR) fprintf(out, "    shr\n");
             else {
                 fprintf(out, "    %s\n", yul_lower_float_op(n->op));
             }

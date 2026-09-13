@@ -1,0 +1,127 @@
+=== TARGET 1: INSTCOMBINE ORACLE BUNDLE ===
+gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+1053415b6c6e0a78a31ab829c73a02eb32a7884483410d35138fbe52627b17e1  tests/test_instcombine_oracle.c
+7998a8082740d13386645429e3145a2aa417b98a09b9f52f23ab994cee77d750  tests/run_gate_instcombine.sh
+SCRIPT_EXIT:0
+=== baseline ===
+InstCombine VACUOUS: Zero rules evaluated (rules_tested == 0).
+=== INSTCOMBINE ORACLE: INITIALIZING HOST GCC REFERENCE TRUTH ORACLE ===
+VERDICT: ORACLE-SUSPECT (EXIT 2 AS EXPECTED)
+EXIT:2
+=== fault ===
+InstCombine FAULT DETECTED: mul_pow2 mismatch on val=0x1, k=2 (ref: 0x2, opt: 0x4)
+=== INSTCOMBINE ORACLE: INITIALIZING HOST GCC REFERENCE TRUTH ORACLE ===
+VERDICT: INSTCOMBINE FAULT DETECTED (EXIT RED AS EXPECTED)
+EXIT:1
+=== green ===
+=== INSTCOMBINE ORACLE: INITIALIZING HOST GCC REFERENCE TRUTH ORACLE ===
+InstCombine PASS: Exact Host GCC reference identity verified across 672 boundary vector test pairs.
+VERDICT: INSTCOMBINE TRUTH ORACLE PASS
+EXIT:0
+=== TARGET 2: YUL EMISSION HARNESS ===
+[ZCC-SNAPSHOT] Pass symbolic_cfg: Func=main IR=c9a4cbf0c9c39dbf CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+  [IR Pass] symbolic_cfg      : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass const_fold: Func=main IR=c9a4cbf0c9c39dbf CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+  [IR Pass] const_fold        : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass strength_reduce: Func=main IR=c9a4cbf0c9c39dbf CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+  [IR Pass] strength_reduce   : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass dominance: Func=main IR=c9a4cbf0c9c39dbf CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+  [IR Pass] dominance         : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 1 modified)
+[ZCC-SNAPSHOT] Pass ssa: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+[SSA] Bitset liveness allocated: 1 blocks × 16 words on main
+[SSA] Bitset liveness allocated: 1 blocks × 16 words on main
+[SSA] Renamed main with 0 allocas
+[SSA] Full construction → destruction complete (0 Φ removed)
+  [IR Pass] ssa               : 1 funcs, 0 nodes -> 0 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass taint_propagate: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+  [IR Pass] taint_propagate   : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass auto_healer: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+  [IR Pass] auto_healer       : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass dce: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+  [IR Pass] dce               : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass gvn: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+  [IR Pass] gvn               : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass copy_const_prop: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+  [IR Pass] copy_const_prop   : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass coalesce_vload: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+  [IR Pass] coalesce_vload    : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass lower_float: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+  [IR Pass] lower_float       : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass warden: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+  [IR Pass] warden            : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass dce2: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+  [IR Pass] dce2              : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass transient_lock_audit: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+  [IR Pass] transient_lock_audit: 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+  [IR Pass] Pipeline complete: 2 nodes -> 2 nodes (total: 0 deleted, 1 modified)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[OK] Yul EVM contract emitted to /tmp/simple_ret.yul
+object "StateHealer" {
+  code {
+        function wad_add(x, y) -> z {
+            z := add(x, y)
+            if lt(z, x) { revert(0, 0) } // overflow
+        }
+        function wad_sub(x, y) -> z {
+            if lt(x, y) { revert(0, 0) } // underflow
+            z := sub(x, y)
+        }
+        function wad_mul(x, y) -> z {
+            if iszero(y) { z := 0 leave }
+            let wad := 1000000000000000000
+            z := mul(x, y)
+            if iszero(eq(div(z, y), x)) { revert(0, 0) } // overflow
+            z := div(z, wad)
+        }
+        function wad_div(x, y) -> z {
+            if iszero(y) { revert(0, 0) } // divide by zero
+            let wad := 1000000000000000000
+            let x_wad := mul(x, wad)
+            if iszero(eq(div(x_wad, wad), x)) { revert(0, 0) } // overflow
+            z := div(x_wad, y)
+        }
+    /* line 0: op 26 */
+=== TARGET 3: STARK PROOF EMISSION HARNESS ===
+[ZCC-SNAPSHOT] Pass symbolic_cfg: Func=main IR=c9a4cbf0c9c39dbf CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+  [IR Pass] symbolic_cfg      : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass const_fold: Func=main IR=c9a4cbf0c9c39dbf CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+  [IR Pass] const_fold        : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass strength_reduce: Func=main IR=c9a4cbf0c9c39dbf CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+  [IR Pass] strength_reduce   : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass dominance: Func=main IR=c9a4cbf0c9c39dbf CFG=0000000000000000 DOM=0000000000000000 LIVE=0000000000000000
+  [IR Pass] dominance         : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 1 modified)
+[ZCC-SNAPSHOT] Pass ssa: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+[SSA] Bitset liveness allocated: 1 blocks × 16 words on main
+[SSA] Bitset liveness allocated: 1 blocks × 16 words on main
+[SSA] Renamed main with 0 allocas
+[SSA] Full construction → destruction complete (0 Φ removed)
+  [IR Pass] ssa               : 1 funcs, 0 nodes -> 0 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass taint_propagate: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+  [IR Pass] taint_propagate   : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass auto_healer: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+  [IR Pass] auto_healer       : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass dce: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+  [IR Pass] dce               : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass gvn: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+  [IR Pass] gvn               : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass copy_const_prop: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+  [IR Pass] copy_const_prop   : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass coalesce_vload: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+  [IR Pass] coalesce_vload    : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass lower_float: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+  [IR Pass] lower_float       : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass warden: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+  [IR Pass] warden            : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass dce2: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+  [IR Pass] dce2              : 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+[ZCC-SNAPSHOT] Pass transient_lock_audit: Func=main IR=c9a4cbf0c9c39dbf CFG=08a97b0004e7feab DOM=fffffefffffffe4d LIVE=0000000000000000
+  [IR Pass] transient_lock_audit: 1 funcs, 2 nodes -> 2 nodes (0 deleted, 0 modified)
+  [IR Pass] Pipeline complete: 2 nodes -> 2 nodes (total: 0 deleted, 1 modified)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[ZCC-STARK] Proof Synthesis Complete: 356 bytes calldata emitted to '/tmp/simple_ret.proof.hex'
+    -> Merkle Root: 0x85ad3ffe71217e056286a14abd1d2e9949bf1298f9e2176afcb6023a9e0bd1dd
+    -> Trajectory:  l0=4, l1=16, l2=64
+[OK] STARK proof calldata emitted to /tmp/simple_ret.proof.hex
+6e288921000000000000000000000000000000000000000000000000000000000000004000000000

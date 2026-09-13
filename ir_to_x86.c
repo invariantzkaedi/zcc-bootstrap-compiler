@@ -35,7 +35,7 @@ static int max_vars = 0;
 static int num_vars = 0;
 static int next_offset_from_rbp = -8;
 
-static int get_or_create_var(const char *name) {
+static int get_or_create_var_sz(const char *name, int sz) {
     int i;
     if (!name || name[0] == '\0' || name[0] == '-') return 0;
     
@@ -58,14 +58,50 @@ static int get_or_create_var(const char *name) {
         vars = new_vars;
     }
     
+    if (sz < 8) sz = 8;
+    if (sz >= 64) {
+        while ((-next_offset_from_rbp) % 64 != 0) {
+            next_offset_from_rbp -= 8;
+        }
+        next_offset_from_rbp -= (sz - 8);
+    } else if (sz >= 32) {
+        while ((-next_offset_from_rbp) % 32 != 0) {
+            next_offset_from_rbp -= 8;
+        }
+        next_offset_from_rbp -= (sz - 8);
+    }
     int off;
     strncpy(vars[num_vars].name, name, IR_NAME_MAX - 1);
     vars[num_vars].name[IR_NAME_MAX - 1] = '\0';
     vars[num_vars].offset = next_offset_from_rbp;
-    off = next_offset_from_rbp;
+    off = vars[num_vars].offset;
     next_offset_from_rbp -= 8;
     num_vars++;
     return off;
+}
+
+static int get_or_create_var(const char *name) {
+    return get_or_create_var_sz(name, 8);
+}
+
+static void load_operand_ymm(FILE *out, const char *src, const char *dst_ymm) {
+    int off = get_or_create_var_sz(src, 32);
+    fprintf(out, "    vmovupd %d(%%rbp), %%%s\n", off, dst_ymm);
+}
+
+static void store_result_ymm(FILE *out, const char *dst, const char *src_ymm) {
+    int off = get_or_create_var_sz(dst, 32);
+    fprintf(out, "    vmovupd %%%s, %d(%%rbp)\n", src_ymm, off);
+}
+
+static void load_operand_zmm(FILE *out, const char *src, const char *dst_zmm) {
+    int off = get_or_create_var_sz(src, 64);
+    fprintf(out, "    vmovupd %d(%%rbp), %%%s\n", off, dst_zmm);
+}
+
+static void store_result_zmm(FILE *out, const char *dst, const char *src_zmm) {
+    int off = get_or_create_var_sz(dst, 64);
+    fprintf(out, "    vmovupd %%%s, %d(%%rbp)\n", src_zmm, off);
 }
 
 /* ── Register-aware operand helpers ──────────────────────────────────── */
@@ -193,8 +229,8 @@ static void emit_src2(FILE *out, const char *mnemonic, const char *src2,
 static void load_address(FILE *out, const char *src, const char *reg) {
     if (strncmp(src, "%stack_", 7) == 0) {
         int off = get_or_create_var(src);
-        fprintf(out, "    leaq %d(%%rbp), %s\n", off, reg);
-    } else if (strncmp(src, "%t", 2) == 0) {
+        fprintf(out, "    movq %d(%%rbp), %s\n", off, reg);
+    } else if (strncmp(src, "%t", 2) == 0 || (src[0] == 't' && src[1] >= '0' && src[1] <= '9')) {
         /* A temp holding an address: load its value (the pointer) */
         int off = get_or_create_var(src);
         fprintf(out, "    movq %d(%%rbp), %s\n", off, reg);
@@ -208,7 +244,7 @@ static void load_address(FILE *out, const char *src, const char *reg) {
 /* Address-load that is register-aware for %t temporaries holding pointers */
 static void load_address_ra(FILE *out, const char *src, const char *reg,
                              const RegAllocator *ra) {
-    if (strncmp(src, "%t", 2) == 0 && ra) {
+    if ((strncmp(src, "%t", 2) == 0 || (src[0] == 't' && src[1] >= '0' && src[1] <= '9')) && ra) {
         PhysReg pr = ra_get(ra, src);
         if (pr != PREG_NONE) {
             const char *pname = preg_name(pr);
@@ -440,9 +476,11 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out, int safe_div) {
                 n = n->next;
                 continue;
             }
-            if (n->dst[0]  != '\0' && n->dst[0]  != '-') get_or_create_var(n->dst);
-            if (n->src1[0] != '\0' && n->src1[0] != '-') get_or_create_var(n->src1);
-            if (n->src2[0] != '\0' && n->src2[0] != '-') get_or_create_var(n->src2);
+            int sz = (n->type == IR_TY_V8F64 || n->op == IR_VLOAD8 || n->op == IR_VSTORE8) ? 64 :
+                     ((n->type == IR_TY_V4F64 || n->op == IR_VLOAD4 || n->op == IR_VSTORE4) ? 32 : 8);
+            if (n->dst[0]  != '\0' && n->dst[0]  != '-') get_or_create_var_sz(n->dst, sz);
+            if (n->src1[0] != '\0' && n->src1[0] != '-') get_or_create_var_sz(n->src1, sz);
+            if (n->src2[0] != '\0' && n->src2[0] != '-') get_or_create_var_sz(n->src2, sz);
             if (n->op == IR_ALLOCA) {
                 next_offset_from_rbp -= n->imm;
             }
@@ -778,6 +816,98 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out, int safe_div) {
                     load_operand(out, n->src1, "%rax", ra);
                     fprintf(out, "    shrq $32, %%rax\n");
                     store_result(out, n->dst, "%rax", ra);
+                    break;
+                }
+                case IR_VLOAD4: {
+                    load_address_ra(out, n->src1, "%rax", ra);
+                    fprintf(out, "    vmovupd (%%rax), %%ymm0\n");
+                    store_result_ymm(out, n->dst, "ymm0");
+                    break;
+                }
+                case IR_VSTORE4: {
+                    load_operand_ymm(out, n->src1, "ymm0");
+                    load_address_ra(out, n->dst, "%rax", ra);
+                    fprintf(out, "    vmovupd %%ymm0, (%%rax)\n");
+                    break;
+                }
+                case IR_VLOAD8: {
+                    load_address_ra(out, n->src1, "%rax", ra);
+                    fprintf(out, "    vmovupd (%%rax), %%zmm0\n");
+                    store_result_zmm(out, n->dst, "zmm0");
+                    break;
+                }
+                case IR_VSTORE8: {
+                    load_operand_zmm(out, n->src1, "zmm0");
+                    load_address_ra(out, n->dst, "%rax", ra);
+                    fprintf(out, "    vmovupd %%zmm0, (%%rax)\n");
+                    break;
+                }
+                case IR_VFADD: {
+                    if (n->type == IR_TY_V8F64) {
+                        load_operand_zmm(out, n->src1, "zmm0");
+                        load_operand_zmm(out, n->src2, "zmm1");
+                        fprintf(out, "    vaddpd %%zmm1, %%zmm0, %%zmm0\n");
+                        store_result_zmm(out, n->dst, "zmm0");
+                    } else {
+                        load_operand_ymm(out, n->src1, "ymm0");
+                        load_operand_ymm(out, n->src2, "ymm1");
+                        fprintf(out, "    vaddpd %%ymm1, %%ymm0, %%ymm0\n");
+                        store_result_ymm(out, n->dst, "ymm0");
+                    }
+                    break;
+                }
+                case IR_VFSUB: {
+                    if (n->type == IR_TY_V8F64) {
+                        load_operand_zmm(out, n->src1, "zmm0");
+                        load_operand_zmm(out, n->src2, "zmm1");
+#ifdef ZCC_MUT_VFSUB_TO_ADD
+                        fprintf(out, "    vaddpd %%zmm1, %%zmm0, %%zmm0\n");
+#else
+                        fprintf(out, "    vsubpd %%zmm1, %%zmm0, %%zmm0\n");
+#endif
+                        store_result_zmm(out, n->dst, "zmm0");
+                    } else {
+                        load_operand_ymm(out, n->src1, "ymm0");
+                        load_operand_ymm(out, n->src2, "ymm1");
+#ifdef ZCC_MUT_VFSUB_TO_ADD
+                        /* MUT-G3-S1-01: Invert vector subtraction to addition */
+                        fprintf(out, "    vaddpd %%ymm1, %%ymm0, %%ymm0\n");
+#else
+                        fprintf(out, "    vsubpd %%ymm1, %%ymm0, %%ymm0\n");
+#endif
+                        store_result_ymm(out, n->dst, "ymm0");
+                    }
+                    break;
+                }
+                case IR_VFMUL: {
+                    if (n->type == IR_TY_V8F64) {
+                        load_operand_zmm(out, n->src1, "zmm0");
+                        load_operand_zmm(out, n->src2, "zmm1");
+                        fprintf(out, "    vmulpd %%zmm1, %%zmm0, %%zmm0\n");
+                        store_result_zmm(out, n->dst, "zmm0");
+                    } else {
+                        load_operand_ymm(out, n->src1, "ymm0");
+                        load_operand_ymm(out, n->src2, "ymm1");
+                        fprintf(out, "    vmulpd %%ymm1, %%ymm0, %%ymm0\n");
+                        store_result_ymm(out, n->dst, "ymm0");
+                    }
+                    break;
+                }
+                case IR_VFMA: {
+                    /* dst = (src1 * src2) + label (addend) */
+                    if (n->type == IR_TY_V8F64) {
+                        load_operand_zmm(out, n->src1, "zmm0");
+                        load_operand_zmm(out, n->src2, "zmm1");
+                        load_operand_zmm(out, n->label, "zmm2");
+                        fprintf(out, "    vfmadd213pd %%zmm1, %%zmm2, %%zmm0\n");
+                        store_result_zmm(out, n->dst, "zmm0");
+                    } else {
+                        load_operand_ymm(out, n->src1, "ymm0");
+                        load_operand_ymm(out, n->src2, "ymm1");
+                        load_operand_ymm(out, n->label, "ymm2");
+                        fprintf(out, "    vfmadd213pd %%ymm1, %%ymm2, %%ymm0\n");
+                        store_result_ymm(out, n->dst, "ymm0");
+                    }
                     break;
                 }
                 case IR_ADDR: {

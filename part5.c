@@ -1268,6 +1268,7 @@ static void security_bounds_scan(Compiler *cc, char *filename) {
 /* Bug fix: Compiler is heap-allocated (52KB+ struct, not stack)     */
 /* ================================================================ */
 
+
 /* Forward declaration for IR pass manager (linked separately) */
 void ir_pm_run_default(void *mod_ptr, int verbose);
 
@@ -1379,6 +1380,8 @@ int zcc_main(int argc, char **argv) {
   char *g_diff_ir_path_a = NULL;
   char *g_diff_ir_path_b = NULL;
   int g_emit_wasm = 0;
+  int g_emit_yul = 0;
+  int g_emit_stark_proof = 0;
   int qasm_canonical_mode = 0;
   int qasm_validate_mode = 0;
   int qasm_sim_mode = 0;
@@ -1389,7 +1392,11 @@ int zcc_main(int argc, char **argv) {
 
   /* parse arguments */
   for (i = 1; i < argc; i++) {
-    if (strcmp(argv[i], "--target=wasm32-wasi") == 0 || strcmp(argv[i], "--target=wasm32") == 0) {
+    if (strcmp(argv[i], "--emit-yul") == 0 || strcmp(argv[i], "-emit-yul") == 0 || strcmp(argv[i], "--target=yul") == 0) {
+      g_emit_yul = 1;
+    } else if (strcmp(argv[i], "--emit-stark-proof") == 0 || strcmp(argv[i], "-emit-stark-proof") == 0 || strcmp(argv[i], "--target=stark-proof") == 0) {
+      g_emit_stark_proof = 1;
+    } else if (strcmp(argv[i], "--target=wasm32-wasi") == 0 || strcmp(argv[i], "--target=wasm32") == 0) {
       g_emit_wasm = 1;
     } else if (strcmp(argv[i], "--target=qasm-canonical") == 0 || strcmp(argv[i], "--qasm-canonical") == 0) {
       qasm_canonical_mode = 1;
@@ -1720,6 +1727,20 @@ int zcc_main(int argc, char **argv) {
       compile_only = 1;
   }
 
+  if (g_emit_yul) {
+      if (!output_file) {
+          output_file = "a.yul";
+      }
+      compile_only = 1;
+  }
+
+  if (g_emit_stark_proof) {
+      if (!output_file) {
+          output_file = "a.proof.hex";
+      }
+      compile_only = 1;
+  }
+
   if (g_diff_ir_path_a && g_diff_ir_path_b) {
       extern int ir_diff_json(const char *path_a, const char *path_b);
       return ir_diff_json(g_diff_ir_path_a, g_diff_ir_path_b);
@@ -1824,7 +1845,8 @@ int zcc_main(int argc, char **argv) {
     printf("  --memory-trace      enable full symbolic memory dump\n");
     printf("  --abi             force full ABI reconstruction\n");
     printf("  --release <ticket> run Courtroom Release Gate-Zero\n");
-    printf("  --error-divzero-proven fail compilation on proven div/mod by zero\n");
+    printf("  --emit-yul        compile C source and emit EVM Yul contract\n");
+    printf("  --emit-stark-proof synthesize ZK-STARK compilation proof calldata\n");
     printf("  -c                compile only (C path)\n");
     printf("  --telemetry       enable compiler phase telemetry stdout dump\n");
     printf("  -q, --quiet       suppress diagnostics output\n");
@@ -2394,6 +2416,87 @@ int zcc_main(int argc, char **argv) {
     }
   }
 
+  if (g_emit_yul) {
+    /* Initialize IR module and build IR */
+    extern void ZCC_IR_INIT(void);
+    extern ir_module_t *ir_module_create(void);
+    extern void ir_pm_run_default(void *mod_ptr, int verbose);
+    extern void evm_yul_weaver(ir_func_t *fn, FILE *out);
+
+    ZCC_IR_INIT();
+    g_emit_ir = 1;
+    g_ir_primary = 1;
+    if (!g_ir_module) g_ir_module = ir_module_create();
+
+    codegen_program(cc, prog);
+    fclose(cc->out);
+
+    if (g_ir_module) {
+      ir_pm_run_default(g_ir_module, 1);
+      FILE *yul_out = fopen(output_file, "w");
+      if (!yul_out) {
+        fprintf(stderr, "zcc: failed to open '%s' for Yul output\n", output_file);
+        free(source);
+        free(cc);
+        ir_telem_shutdown();
+        return 1;
+      }
+      for (int fi = 0; fi < g_ir_module->func_count; fi++) {
+        evm_yul_weaver(g_ir_module->funcs[fi], yul_out);
+      }
+      fclose(yul_out);
+      if (!enable_telemetry_stdout) printf("[OK] Yul EVM contract emitted to %s\n", output_file);
+      free(source);
+      free(cc);
+      ir_telem_shutdown();
+      return 0;
+    } else {
+      fprintf(stderr, "zcc: no IR generated for Yul backend\n");
+      free(source);
+      free(cc);
+      ir_telem_shutdown();
+      return 1;
+    }
+  }
+
+  if (g_emit_stark_proof) {
+    extern void ZCC_IR_INIT(void);
+    extern ir_module_t *ir_module_create(void);
+    extern void ir_pm_run_default(void *mod_ptr, int verbose);
+    extern int zcc_stark_synthesize_proof(ir_module_t *mod, const char *output_path);
+
+    ZCC_IR_INIT();
+    g_emit_ir = 1;
+    g_ir_primary = 1;
+    if (!g_ir_module) g_ir_module = ir_module_create();
+
+    codegen_program(cc, prog);
+    fclose(cc->out);
+
+    if (g_ir_module) {
+      ir_pm_run_default(g_ir_module, 1);
+      int proof_res = zcc_stark_synthesize_proof(g_ir_module, output_file);
+      if (proof_res != 0) {
+        fprintf(stderr, "zcc: failed to synthesize STARK proof\n");
+        free(source);
+        free(cc);
+        ir_telem_shutdown();
+        return 1;
+      }
+      if (!enable_telemetry_stdout) printf("[OK] STARK proof calldata emitted to %s\n", output_file);
+      free(source);
+      free(cc);
+      ir_telem_shutdown();
+      return 0;
+    } else {
+      fprintf(stderr, "zcc: no IR generated for STARK proof backend\n");
+      free(source);
+      free(cc);
+      ir_telem_shutdown();
+      return 1;
+    }
+  }
+
   if (oracle_abi_mode) {
     run_oracle_abi(cc, prog);
     fclose(cc->out);
@@ -2602,7 +2705,7 @@ link_phase:
     if (compile_only) {
       written = snprintf(cmd, sizeof(cmd), "gcc %s -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -c -o %s %s 2>&1", prefix_map, output_file, asm_file);
     } else if (strcmp(input_file, "zcc.c") == 0 || (strlen(input_file) >= 6 && strcmp(input_file + strlen(input_file) - 6, "/zcc.c") == 0)) {
-      written = snprintf(cmd, sizeof(cmd), "gcc %s -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -Iinclude -I. -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c src/wasm_emit.c src/quantum/zcc_qasm_parser.c src/quantum/zcc_qasm_sim.c src/quantum/zcc_qasm_opt.c src/quantum/zcc_qasm_c_emit.c src/quantum/zcc_qasm_clifford_t.c -lm 2>&1", prefix_map, output_file, asm_file);
+      written = snprintf(cmd, sizeof(cmd), "gcc %s -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -Iinclude -I. -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c src/wasm_emit.c src/zk/zk_stark_emit.c src/quantum/zcc_qasm_parser.c src/quantum/zcc_qasm_sim.c src/quantum/zcc_qasm_opt.c src/quantum/zcc_qasm_c_emit.c src/quantum/zcc_qasm_clifford_t.c -lm 2>&1", prefix_map, output_file, asm_file);
     } else {
       written = snprintf(cmd, sizeof(cmd), "gcc %s -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -Iinclude -I. -o %s %s %s -lm -lpthread -ldl 2>&1", prefix_map, output_file, asm_file, extra_link_args);
     }

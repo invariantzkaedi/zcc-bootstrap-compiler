@@ -1,0 +1,8 @@
+make zcc
+cmp zcc2.s zcc3.s && md5sum zcc2.s zcc3.s
+./zcc -c abi_lib.c -o /tmp/zcc_abi_lib.o && gcc -c abi_main.c -o /tmp/gcc_abi_main.o && gcc /tmp/zcc_abi_lib.o /tmp/gcc_abi_main.o -o /tmp/interop_zcc_lib_gcc_main && /tmp/interop_zcc_lib_gcc_main
+gcc -c abi_lib.c -o /tmp/gcc_abi_lib.o && ./zcc -c abi_main.c -o /tmp/zcc_abi_main.o && gcc /tmp/gcc_abi_lib.o /tmp/zcc_abi_main.o -o /tmp/interop_gcc_lib_zcc_main && /tmp/interop_gcc_lib_zcc_main
+make rust-front-smoke
+bash tests/verify_instcombine_bundle.sh
+./zcc /tmp/simple_ret.c --emit-yul -o /tmp/simple_ret.yul
+./zcc /tmp/simple_ret.c --emit-stark-proof -o /tmp/simple_ret.proof.hex

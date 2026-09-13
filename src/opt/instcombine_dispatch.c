@@ -28,6 +28,13 @@ bool ic_rule_add_self_to_shl(ICtx *c);
 bool ic_rule_bitwise_distributivity(ICtx *c);
 bool ic_rule_nested_and_consts(ICtx *c);
 bool ic_rule_add_sub_cancel(ICtx *c);
+bool ic_rule_sub_add_cancel(ICtx *c);
+bool ic_rule_xor_cancel(ICtx *c);
+bool ic_rule_nested_or_consts(ICtx *c);
+bool ic_rule_nested_add_consts(ICtx *c);
+bool ic_rule_nested_xor_consts(ICtx *c);
+bool ic_rule_nested_shl_consts(ICtx *c);
+bool ic_rule_absorption_and_or(ICtx *c);
 
 typedef bool (*IcRuleFn)(ICtx*);
 
@@ -53,7 +60,14 @@ static IcRuleFn kRules[] = {
     ic_rule_add_self_to_shl,
     ic_rule_bitwise_distributivity,
     ic_rule_nested_and_consts,
-    ic_rule_add_sub_cancel
+    ic_rule_add_sub_cancel,
+    ic_rule_sub_add_cancel,
+    ic_rule_xor_cancel,
+    ic_rule_nested_or_consts,
+    ic_rule_nested_add_consts,
+    ic_rule_nested_xor_consts,
+    ic_rule_nested_shl_consts,
+    ic_rule_absorption_and_or
 };
 
 bool ic_try_rules(Function *fn, Instr *it) {
@@ -63,3 +77,4 @@ bool ic_try_rules(Function *fn, Instr *it) {
     }
     return false;
 }
+

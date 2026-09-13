@@ -145,19 +145,44 @@ static const char *zcc_stddef_text =
     "#define __builtin_nanf(x) (0.0f/0.0f)\n"
     "#define __builtin_inf() (1.0/0.0)\n"
     "#define __builtin_inff() (1.0f/0.0f)\n"
+    "#define NAN (0.0f/0.0f)\n"
+    "#define INFINITY (1.0f/0.0f)\n"
+    "#define M_PI 3.14159265358979323846\n"
     "#define isnan(x) ((x) != (x))\n"
     "#define isinf(x) (((x) == (1.0/0.0)) || ((x) == (-1.0/0.0)))\n"
     "#define isfinite(x) (!isnan(x) && !isinf(x))\n"
     "#define isnormal(x) (isfinite(x) && ((x) != 0.0))\n"
     "#define signbit(x) ((x) < 0.0)\n"
+    "#define DBL_MAX 1.7976931348623157e+308\n"
+    "#define DBL_MIN 2.2250738585072014e-308\n"
+    "#define FLT_MAX 3.402823466e+38F\n"
+    "#define FLT_MIN 1.175494351e-38F\n"
+    "#define ERANGE 34\n"
+    "#define __builtin_frame_address(x) ((void*)0)\n"
     "#define __x86_64__ 1\n"
+    "#define __SIZEOF_POINTER__ 8\n"
+    "#define __ORDER_LITTLE_ENDIAN__ 1234\n"
+    "#define __ORDER_BIG_ENDIAN__ 4321\n"
+    "#define __BYTE_ORDER__ 1234\n"
+    "#define __LITTLE_ENDIAN__ 1\n"
     "#define __STDC__ 1\n"
     "#define __STDC_VERSION__ 199901L\n"
     "#define __FILE__ \"zcc_file.c\"\n"
     "#define __LINE__ 1\n"
+    "#define __TIME__ \"00:00:00\"\n"
+    "#define __DATE__ \"Sep 04 2026\"\n"
+    "#define __VERSION__ \"zcc\"\n"
     "#define __func__ \"zcc_func\"\n"
     "#define __FUNCTION__ \"zcc_func\"\n"
     "#define __PRETTY_FUNCTION__ \"zcc_func\"\n"
+    "#define PRIi32 \"d\"\n"
+    "#define PRIi64 \"ld\"\n"
+    "#define PRId32 \"d\"\n"
+    "#define PRId64 \"ld\"\n"
+    "#define PRIu32 \"u\"\n"
+    "#define PRIu64 \"lu\"\n"
+    "#define PRIx32 \"x\"\n"
+    "#define PRIx64 \"lx\"\n"
     "#define LUA_USE_JUMPTABLE 0\n"
     "#define __GNUC__ 1\n"
     "#define __attribute__(x)\n"
@@ -189,14 +214,19 @@ static const char *zcc_stddef_text =
     "typedef unsigned long uintptr_t;\n"
     "static void platform_main_begin(void) {}\n"
     "static void platform_main_end(uint64_t x, int y) {}\n"
-    "#define UINT64_C(c) (c)\n"
-    "#define UINT32_C(c) (c)\n"
-    "#define INT64_C(c)  (c)\n"
-    "#define INT32_C(c)  (c)\n"
+    "#define UINT64_C(c) ((unsigned long long)(c))\n"
+    "#define UINT32_C(c) ((unsigned int)(c))\n"
+    "#define INT64_C(c)  ((long long)(c))\n"
+    "#define INT32_C(c)  ((int)(c))\n"
     "#define UINT64_MAX 18446744073709551615UL\n"
     "#define UINT32_MAX 4294967295U\n"
     "#define INT64_MAX  9223372036854775807L\n"
     "#define INT64_MIN  (-9223372036854775807L-1L)\n"
+    "#define INTPTR_MAX 9223372036854775807L\n"
+    "#define INTPTR_MIN (-9223372036854775807L-1L)\n"
+    "#define UINTPTR_MAX 18446744073709551615UL\n"
+    "#define PTRDIFF_MAX 9223372036854775807L\n"
+    "#define PTRDIFF_MIN (-9223372036854775807L-1L)\n"
     "#define INT32_MAX  2147483647\n"
     "#define INT32_MIN  (-2147483647-1)\n"
     "int puts(const char *s);\n"
@@ -228,6 +258,7 @@ static const char *zcc_stddef_text =
     "(*cmp)(const void *a, const void *b));\n"
     "void qsort(void *base, size_t n, size_t sz, int (*cmp)(const void *a, "
     "const void *b));\n"
+    "void *aligned_alloc(size_t alignment, size_t size);\n"
     "int system(const char *cmd);\n"
     "/* string.h extras needed by Lua */\n"
     "int memcmp(const void *a, const void *b, size_t n);\n"
@@ -246,8 +277,16 @@ static const char *zcc_stddef_text =
     "char *strtok(char *s, const char *delim);\n"
     "char *strerror(int errnum);\n"
     "char *strdup(const char *s);\n"
+    "size_t strnlen(const char *s, size_t maxlen);\n"
+    "int putc(int c, FILE *stream);\n"
     "int vfprintf(FILE *stream, const char *format, va_list ap);\n"
     "int __builtin_popcount(unsigned int x);\n"
+    "int __builtin_popcountl(unsigned long x);\n"
+    "int __builtin_popcountll(unsigned long long x);\n"
+    "int __builtin_clz(unsigned int x);\n"
+    "int __builtin_ctz(unsigned int x);\n"
+    "int __builtin_clzll(unsigned long long x);\n"
+    "int __builtin_ctzll(unsigned long long x);\n"
     "typedef int bool;\n"
     "int getchar(void);\n"
     "int putchar(int c);\n"
@@ -286,7 +325,9 @@ static const char *zcc_stddef_text =
     "#define MAP_FAILED ((void *)-1)\n"
     "#define PATH_MAX 4096\n"
     "int snprintf(char *str, size_t size, const char *format, ...);\n"
-    "extern int errno;\n"
+    "int vsnprintf(char *str, size_t size, const char *format, va_list ap);\n"
+    "int *__errno_location(void);\n"
+    "#define errno (*__errno_location())\n"
     "#define EINTR 4\n"
     "int sem_init(sem_t *sem, int pshared, unsigned int value);\n"
     "int sem_wait(sem_t *sem);\n"
@@ -362,11 +403,17 @@ static const char *zcc_stddef_text =
     "/* PP-STUB-SATELLITE: time/clock */\n"
     "typedef long clock_t;\n"
     "typedef long time_t;\n"
+    "typedef int clockid_t;\n"
+    "#define CLOCK_REALTIME 0\n"
+    "#define CLOCK_MONOTONIC 1\n"
     "#define CLOCKS_PER_SEC 1000000L\n"
+    "struct timespec { time_t tv_sec; long tv_nsec; };\n"
     "clock_t clock(void);\n"
     "time_t time(time_t *t);\n"
-    "struct tm { int tm_sec; int tm_min; int tm_hour; int tm_mday; int tm_mon; int tm_year; int tm_wday; int tm_yday; int tm_isdst; };\n"
+    "int clock_gettime(clockid_t clk_id, struct timespec *tp);\n"
+    "struct tm { int tm_sec; int tm_min; int tm_hour; int tm_mday; int tm_mon; int tm_year; int tm_wday; int tm_yday; int tm_isdst; long tm_gmtoff; const char *tm_zone; };\n"
     "struct tm *localtime(const time_t *t);\n"
+    "struct tm *localtime_r(const time_t *t, struct tm *res);\n"
     "struct tm *gmtime(const time_t *t);\n"
     "size_t strftime(char *s, size_t max, const char *fmt, const struct tm *tm);\n"
     "#define MSG_NOSIGNAL 16384\n"
@@ -415,6 +462,102 @@ static const char *zcc_stddef_text =
     "double atan2(double y, double x);\n"
     "double fmax(double x, double y);\n"
     "double fmin(double x, double y);\n"
+    "double fma(double x, double y, double z);\n"
+    "float copysignf(float x, float y);\n"
+    "double copysign(double x, double y);\n"
+    "float ceilf(float x);\n"
+    "double ceil(double x);\n"
+    "float floorf(float x);\n"
+    "double floor(double x);\n"
+    "float truncf(float x);\n"
+    "double trunc(double x);\n"
+    "float rintf(float x);\n"
+    "double rint(double x);\n"
+    "long lrint(double x);\n"
+    "double hypot(double x, double y);\n"
+    "double acosh(double x);\n"
+    "double asinh(double x);\n"
+    "double atanh(double x);\n"
+    "double expm1(double x);\n"
+    "double log1p(double x);\n"
+    "double cbrt(double x);\n"
+    "double modf(double x, double *iptr);\n"
+    "double ldexp(double x, int exp);\n"
+    "double frexp(double x, int *exp);\n"
+    "double fmod(double x, double y);\n"
+    "double acos(double x);\n"
+    "double asin(double x);\n"
+    "double atan(double x);\n"
+    "double cosh(double x);\n"
+    "double sinh(double x);\n"
+    "double tanh(double x);\n"
+    "void *alloca(size_t size);\n"
+    "#define FE_TONEAREST 0\n"
+    "#define FE_DOWNWARD 1\n"
+    "#define FE_UPWARD 2\n"
+    "#define FE_TOWARDZERO 3\n"
+    "int fesetround(int round);\n"
+    "int fegetround(void);\n"
+    "#endif\n";
+
+static const char *zcc_simd_text =
+    "#ifndef _ZCC_SIMD_H_\n"
+    "#define _ZCC_SIMD_H_\n"
+    "typedef double __m128d __attribute__((__vector_size__(16)));\n"
+    "typedef float  __m128  __attribute__((__vector_size__(16)));\n"
+    "typedef long long __m128i __attribute__((__vector_size__(16)));\n"
+    "typedef double __m256d __attribute__((__vector_size__(32)));\n"
+    "typedef float  __m256  __attribute__((__vector_size__(32)));\n"
+    "typedef long long __m256i __attribute__((__vector_size__(32)));\n"
+    "typedef double __m512d __attribute__((__vector_size__(64)));\n"
+    "typedef float  __m512  __attribute__((__vector_size__(64)));\n"
+    "typedef long long __m512i __attribute__((__vector_size__(64)));\n"
+    "#define _CMP_GE_OQ 0x1d\n"
+    "#define _CMP_GT_OQ 0x1e\n"
+    "#define _CMP_LT_OQ 0x11\n"
+    "__m256d _mm256_loadu_pd(const double *p);\n"
+    "void _mm256_storeu_pd(double *p, __m256d a);\n"
+    "__m256d _mm256_set1_pd(double a);\n"
+    "__m256d _mm256_setzero_pd(void);\n"
+    "__m256d _mm256_add_pd(__m256d a, __m256d b);\n"
+    "__m256d _mm256_sub_pd(__m256d a, __m256d b);\n"
+    "__m256d _mm256_mul_pd(__m256d a, __m256d b);\n"
+    "__m256d _mm256_div_pd(__m256d a, __m256d b);\n"
+    "__m256d _mm256_sqrt_pd(__m256d a);\n"
+    "__m256d _mm256_fmsub_pd(__m256d a, __m256d b, __m256d c);\n"
+    "__m256d _mm256_and_pd(__m256d a, __m256d b);\n"
+    "__m256d _mm256_cmp_pd(__m256d a, __m256d b, int imm);\n"
+    "__m256d _mm256_blendv_pd(__m256d a, __m256d b, __m256d mask);\n"
+    "unsigned long long __rdtsc(void);\n"
+    "#endif\n";
+
+static const char *zcc_curl_text =
+    "#ifndef _ZCC_CURL_H_\n"
+    "#define _ZCC_CURL_H_\n"
+    "typedef void CURLU;\n"
+    "typedef int CURLUcode;\n"
+    "typedef int CURLcode;\n"
+    "#define CURLUE_OK 0\n"
+    "#define CURLE_OK 0\n"
+    "#define CURLE_UNSUPPORTED_PROTOCOL 1\n"
+    "#define CURLE_URL_MALFORMAT 3\n"
+    "#define CURLUPART_URL 0\n"
+    "#define CURLUPART_SCHEME 1\n"
+    "#define CURLUPART_HOST 3\n"
+    "#define CURLUPART_PORT 4\n"
+    "#define CURLUPART_PATH 5\n"
+    "#define CURLUPART_QUERY 6\n"
+    "#define CURLUPART_FRAGMENT 7\n"
+    "#define CURLU_NON_SUPPORT_SCHEME (1<<2)\n"
+    "const char *curl_version(void);\n"
+    "CURLU *curl_url(void);\n"
+    "CURLUcode curl_url_set(CURLU *u, int part, const char *content, unsigned int flags);\n"
+    "CURLUcode curl_url_get(CURLU *u, int part, char **content, unsigned int flags);\n"
+    "void curl_url_cleanup(CURLU *u);\n"
+    "void curl_free(void *p);\n"
+    "char *curl_easy_escape(void *handle, const char *string, int length);\n"
+    "char *curl_easy_unescape(void *handle, const char *string, int length, int *outlength);\n"
+    "const char *curl_easy_strerror(CURLcode errornum);\n"
     "#endif\n";
 
 static void pp_emit(PPState *state, char c) {
@@ -554,8 +697,11 @@ static void pp_push_input(PPState *state, const char *new_src, char *alloc_buf,
 }
 
 static void pp_skip_whitespace(PPState *state) {
-  while (pp_peek(state) == ' ' || pp_peek(state) == '\t')
+  pp_drain_frames(state);
+  while (pp_peek(state) == ' ' || pp_peek(state) == '\t') {
     pp_next(state);
+    pp_drain_frames(state);
+  }
 }
 
 static int is_ident_start(char c) {
@@ -820,9 +966,27 @@ static int is_stddef_stub(const char *path) {
          strcmp(base, "socket.h") == 0 || strcmp(base, "stat.h") == 0 ||
          strcmp(base, "mman.h") == 0 || strcmp(base, "in.h") == 0 ||
          strcmp(base, "inet.h") == 0 || strcmp(base, "un.h") == 0 ||
-         strcmp(base, "emmintrin.h") == 0 || strcmp(base, "smmintrin.h") == 0 ||
          strcmp(base, "dirent.h") == 0 || strcmp(base, "utime.h") == 0 ||
-         strcmp(base, "fake_csmith.h") == 0 || strcmp(base, "csmith.h") == 0;
+         strcmp(base, "fake_csmith.h") == 0 || strcmp(base, "csmith.h") == 0 ||
+         strcmp(base, "float.h") == 0 ||
+         strcmp(base, "fenv.h") == 0;
+}
+
+static int is_simd_stub(const char *path) {
+  const char *base = path;
+  const char *slash = strrchr(path, '/');
+  if (slash)
+    base = slash + 1;
+  return strcmp(base, "emmintrin.h") == 0 || strcmp(base, "smmintrin.h") == 0 ||
+         strcmp(base, "immintrin.h") == 0 || strcmp(base, "x86intrin.h") == 0;
+}
+
+static int is_curl_stub(const char *path) {
+  const char *base = path;
+  const char *slash = strrchr(path, '/');
+  if (slash)
+    base = slash + 1;
+  return strcmp(base, "curl.h") == 0;
 }
 
 /* PP-INCLUDE-022: Resolve an include path via -I search and relative lookup.
@@ -913,7 +1077,25 @@ static void pp_process_include(PPState *state, const char *path,
 
   /* Step 2: If disk failed, check stub whitelist */
   if (!file_src) {
-    if (is_stddef_stub(path)) {
+    if (is_simd_stub(path)) {
+      if (!zcc_pp_config.stub_silent) {
+        fprintf(stderr, "zcc: warning: using synthesized header stub for %s\n",
+                path);
+      }
+      file_src = (char *)zcc_simd_text;
+      file_len = strlen(file_src);
+      strncpy(resolved_path, path, 1023);
+      resolved_path[1023] = '\0';
+    } else if (is_curl_stub(path)) {
+      if (!zcc_pp_config.stub_silent) {
+        fprintf(stderr, "zcc: warning: using synthesized header stub for %s\n",
+                path);
+      }
+      file_src = (char *)zcc_curl_text;
+      file_len = strlen(file_src);
+      strncpy(resolved_path, path, 1023);
+      resolved_path[1023] = '\0';
+    } else if (is_stddef_stub(path)) {
       if (!zcc_pp_config.stub_silent) {
         fprintf(stderr, "zcc: warning: using synthesized header stub for %s\n",
                 path);
@@ -1026,6 +1208,10 @@ static void pp_parse_params(PPState *state, PPMacro *m) {
         }
         pp_parse_ident(state, dummy, 64);
       }
+    } else if (pp_peek(state) == '.') {
+      while (pp_peek(state) == '.') pp_next(state);
+      strcpy(m->params[m->num_params++], "__VA_ARGS__");
+      m->is_function_like = 2;
     } else {
       pp_next(state); /* comma or whitespace */
     }
@@ -1500,9 +1686,9 @@ static void pp_parse_directive(PPState *state) {
             }
             char emit_buf[128];
             if (val > 0) {
-              sprintf(emit_buf, " __zcc_pragma_pack_push_%d__ ", val);
+              snprintf(emit_buf, sizeof(emit_buf), " __zcc_pragma_pack_push_%d__ ", val);
             } else {
-              sprintf(emit_buf, " __zcc_pragma_pack_push__ ");
+              snprintf(emit_buf, sizeof(emit_buf), " __zcc_pragma_pack_push__ ");
             }
             pp_emit_str(state, emit_buf, (int)strlen(emit_buf));
           } else if (strncmp(p, "pop", 3) == 0) {
@@ -1514,7 +1700,7 @@ static void pp_parse_directive(PPState *state) {
               p++;
             }
             char emit_buf[128];
-            sprintf(emit_buf, " __zcc_pragma_pack_%d__ ", val);
+            snprintf(emit_buf, sizeof(emit_buf), " __zcc_pragma_pack_%d__ ", val);
             pp_emit_str(state, emit_buf, (int)strlen(emit_buf));
           } else if (*p == ')') {
             pp_emit_str(state, " __zcc_pragma_pack_reset__ ", 27);
@@ -1549,6 +1735,7 @@ static void pp_expand_ident(PPState *state, const char *ident) {
    * __zcc_attr_packed__ for 'packed', consume everything else silently. */
   if (strcmp(ident, "__attribute__") == 0 ||
       strcmp(ident, "__attribute") == 0) {
+    int need = 2; /* we pre-consume two '(' below — need two matching ')' */
     /* consume whitespace then (( */
     while (pp_peek(state) == ' ' || pp_peek(state) == '\t' ||
            pp_peek(state) == '\n')
@@ -1588,12 +1775,13 @@ static void pp_expand_ident(PPState *state, const char *ident) {
         if (strcmp(an, "packed") == 0) {
           pp_emit_str(state, " __zcc_attr_packed__ ", 21);
         } else if (strcmp(an, "aligned") == 0) {
-          /* read (N) */
+          /* read (N) and count ( in need */
           while (pp_peek(state) == ' ' || pp_peek(state) == '\t' ||
                  pp_peek(state) == '\n')
             pp_next(state);
           if (pp_peek(state) == '(') {
             pp_next(state); /* consume ( */
+            need++;         /* we consumed an inner '(', so we need an extra ')' */
             while (pp_peek(state) == ' ' || pp_peek(state) == '\t' ||
                    pp_peek(state) == '\n')
               pp_next(state);
@@ -1601,11 +1789,6 @@ static void pp_expand_ident(PPState *state, const char *ident) {
             while (pp_peek(state) >= '0' && pp_peek(state) <= '9') {
               n = n * 10 + (pp_next(state) - '0');
             }
-            while (pp_peek(state) == ' ' || pp_peek(state) == '\t' ||
-                   pp_peek(state) == '\n')
-              pp_next(state);
-            if (pp_peek(state) == ')')
-              pp_next(state); /* consume ) */
             if (n > 0) {
               if (n < 1 || n > 8192) {
                 fprintf(stderr,
@@ -1635,9 +1818,8 @@ static void pp_expand_ident(PPState *state, const char *ident) {
      * After reading the attribute name, we've consumed:  (  (  attrname
      * Still in stream:      [args...]  )  )
      * Strategy: balance-count from current position, stop when we've
-     * seen 2 more ')' than '(' (the two closes we opened above). */
+     * seen matching closes. */
     {
-      int need = 2; /* we pre-consumed two '(' — need two matching ')' */
       pp_drain_frames(
           state); /* PP-001: drain before stream-continuation loop */
       while (pp_peek(state) != 0 && need > 0) {
@@ -1678,8 +1860,20 @@ static void pp_expand_ident(PPState *state, const char *ident) {
   }
 
   /* Function-like macro expansion */
+  int saved_depth = state->input_depth;
   int saved_pos = state->pos;
   int saved_line = state->line;
+
+  pp_skip_whitespace(state);
+  if (pp_peek(state) != '(') {
+    /* Not an invocation */
+    if (state->input_depth == saved_depth) {
+      state->pos = saved_pos;
+      state->line = saved_line;
+    }
+    pp_emit_str(state, ident, strlen(ident));
+    return;
+  }
 
   PPMacro *parent_blocked[32];
   int parent_num_blocked = state->num_blocked;
@@ -1689,15 +1883,8 @@ static void pp_expand_ident(PPState *state, const char *ident) {
       parent_blocked[bi] = state->blocked_macros[bi];
     }
   }
-
-  pp_skip_whitespace(state);
-  if (pp_peek(state) != '(') {
-    /* Not an invocation */
-    state->pos = saved_pos;
-    state->line = saved_line;
-    pp_emit_str(state, ident, strlen(ident));
-    return;
-  }
+  int old_barrier = state->pop_barrier;
+  state->pop_barrier = state->input_depth;
   pp_next(state); /* consume '(' */
 
   /* parse arguments */
@@ -1813,10 +2000,14 @@ static void pp_expand_ident(PPState *state, const char *ident) {
         }
         paren_level--;
       } else if (c == ',' && paren_level == 0) {
-        p_count++;
-        arg_idx = 0;
-        pp_next(state);
-        continue;
+        if (m->is_function_like == 2 && p_count >= m->num_params - 1) {
+          /* comma is part of variadic arg */
+        } else {
+          p_count++;
+          arg_idx = 0;
+          pp_next(state);
+          continue;
+        }
       }
     }
 
@@ -1838,6 +2029,7 @@ static void pp_expand_ident(PPState *state, const char *ident) {
     }
     pp_next(state);
   }
+  state->pop_barrier = old_barrier;
 
   /* strip leading/trailing spaces from arguments */
   for (i = 0; i < p_count; i++) {
@@ -1931,6 +2123,12 @@ static void pp_expand_ident(PPState *state, const char *ident) {
              (subst[subst_idx - 1] == ' ' || subst[subst_idx - 1] == '\t')) {
         subst_idx--;
       }
+      int next_k = i + 1;
+      while (next_k < len && (m->body[next_k] == ' ' || m->body[next_k] == '\t')) next_k++;
+      if (strncmp(m->body + next_k, "__VA_ARGS__", 11) == 0 &&
+          (m->num_params > p_count || (p_count > 0 && strlen(expanded_args[m->num_params - 1]) == 0))) {
+        if (subst_idx > 0 && subst[subst_idx - 1] == ',') subst_idx--;
+      }
       /* strip leading spaces in upcoming tokens */
       while (i + 1 < len && (m->body[i + 1] == ' ' || m->body[i + 1] == '\t')) {
         i++;
@@ -1979,6 +2177,7 @@ static void pp_expand_ident(PPState *state, const char *ident) {
       }
     }
     if (is_ident_start(m->body[i])) {
+      int p_start = i;
       char param_name[128];
       int p_idx = 0;
       while (i < len && is_ident_char(m->body[i]) && p_idx < 127) {
@@ -1997,13 +2196,24 @@ static void pp_expand_ident(PPState *state, const char *ident) {
       }
 
       if (found >= 0 && found < p_count) {
-        int exp_len = strlen(expanded_args[found]);
+        int is_pasted = 0;
+        int bk = p_start - 1;
+        while (bk >= 0 && (m->body[bk] == ' ' || m->body[bk] == '\t')) bk--;
+        if (bk >= 1 && m->body[bk] == '#' && m->body[bk - 1] == '#') is_pasted = 1;
+        int fw = i + 1;
+        while (fw < len && (m->body[fw] == ' ' || m->body[fw] == '\t')) fw++;
+        if (fw + 1 < len && m->body[fw] == '#' && m->body[fw + 1] == '#') is_pasted = 1;
+
+        const char *arg_to_use = is_pasted ? args[found] : expanded_args[found];
+        int exp_len = strlen(arg_to_use);
         if (subst_idx + exp_len + 128 > subst_cap) {
           subst_cap = (subst_idx + exp_len + 1024) * 2;
           subst = (char *)realloc(subst, subst_cap);
         }
-        strcpy(subst + subst_idx, expanded_args[found]);
+        strcpy(subst + subst_idx, arg_to_use);
         subst_idx += exp_len;
+      } else if (found >= 0) {
+        /* omitted variadic argument: expands to empty string */
       } else {
         int param_len = strlen(param_name);
         if (subst_idx + param_len + 128 > subst_cap) {
@@ -2192,6 +2402,16 @@ char *zcc_preprocess(const char *source, int source_len, const char *filename,
   {
     PPMacro *m = pp_add_macro(state, "__x86_64__");
     strcpy(m->body, "1");
+    m = pp_add_macro(state, "__SIZEOF_POINTER__");
+    strcpy(m->body, "8");
+    m = pp_add_macro(state, "__ORDER_LITTLE_ENDIAN__");
+    strcpy(m->body, "1234");
+    m = pp_add_macro(state, "__ORDER_BIG_ENDIAN__");
+    strcpy(m->body, "4321");
+    m = pp_add_macro(state, "__BYTE_ORDER__");
+    strcpy(m->body, "1234");
+    m = pp_add_macro(state, "__LITTLE_ENDIAN__");
+    strcpy(m->body, "1");
     m = pp_add_macro(state, "__STDC__");
     strcpy(m->body, "1");
     m = pp_add_macro(state, "__STDC_VERSION__");
@@ -2254,6 +2474,12 @@ char *zcc_preprocess(const char *source, int source_len, const char *filename,
     m = pp_add_macro(state, "ULONG_MAX");
     strcpy(m->body, "18446744073709551615UL");
     m = pp_add_macro(state, "SIZE_MAX");
+    strcpy(m->body, "18446744073709551615UL");
+    m = pp_add_macro(state, "INT64_MAX");
+    strcpy(m->body, "9223372036854775807L");
+    m = pp_add_macro(state, "INTPTR_MAX");
+    strcpy(m->body, "9223372036854775807L");
+    m = pp_add_macro(state, "UINTPTR_MAX");
     strcpy(m->body, "18446744073709551615UL");
   }
 
