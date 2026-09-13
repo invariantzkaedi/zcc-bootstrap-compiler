@@ -8003,8 +8003,13 @@ static void ir_asm_register_allocate(Function *fn, const uint32_t *block_order,
 
   bool colored = ir_asm_chordal_color(fn, def_seq, last_use, phys_reg_out);
   if (!colored) {
-    /* Fallback to eviction linear-scan */
-    ir_asm_linear_scan(fn, block_order, n_block_order, def_seq, last_use, phys_reg_out);
+    /* CG-IR-013: Fallback to eviction linear-scan with stack spill support.
+     * Gated behind ZCC_IR_SPILL env var (enabled when ZCC_IR_SPILL!=0). */
+    const char *spill_env = getenv("ZCC_IR_SPILL");
+    int spill_enabled = (spill_env && strcmp(spill_env, "0") == 0) ? 0 : 1;
+    if (spill_enabled) {
+      ir_asm_linear_scan(fn, block_order, n_block_order, def_seq, last_use, phys_reg_out);
+    }
   }
 }
 

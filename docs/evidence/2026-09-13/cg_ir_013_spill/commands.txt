@@ -1,0 +1,30 @@
+# CG-IR-013 Linear-Scan Register Spilling & IR Whitelist Expansion Verification Commands
+
+# 1. Build ZCC with updated whitelist and spill gate
+make zcc
+
+# 2. Forced Spill Unit Test Compilation and Execution
+ZCC_DEBUG_LSCAN=1 ./zcc tests/test_ir_spill_forced.c -o /tmp/spill_test.s
+gcc /tmp/spill_test.s -o /tmp/spill_test && /tmp/spill_test
+
+# 3. Gate 1: 3-Stage Bootstrap Self-Host Identity Verification
+make selfhost
+cmp zcc2.s zcc3.s
+
+# 4. Gate 2: Bidirectional Inter-operability
+# Direction 1: zcc-lib + gcc-main
+./zcc /tmp/interop_zcc_lib.c -o /tmp/interop_zcc_lib.s
+gcc -c /tmp/interop_zcc_lib.s -o /tmp/interop_zcc_lib.o
+gcc -c /tmp/interop_gcc_main.c -o /tmp/interop_gcc_main.o
+gcc /tmp/interop_zcc_lib.o /tmp/interop_gcc_main.o -o /tmp/interop_d1
+/tmp/interop_d1
+
+# Direction 2: gcc-lib + zcc-main
+gcc -c /tmp/interop_gcc_lib.c -o /tmp/interop_gcc_lib.o
+./zcc /tmp/interop_zcc_main.c -o /tmp/interop_zcc_main.s
+gcc -c /tmp/interop_zcc_main.s -o /tmp/interop_zcc_main.o
+gcc /tmp/interop_gcc_lib.o /tmp/interop_zcc_main.o -o /tmp/interop_d2
+/tmp/interop_d2
+
+# 5. Full C Regression Corpus
+bash tests/test_corpus.sh

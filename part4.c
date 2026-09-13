@@ -5634,7 +5634,7 @@ static int ir_whitelisted(const char *name) {
       "test_struct_tbaa", "test_cast_fallback", "gvn_test", "forward_test", "slf_sink", "slf_call_barrier", "loop_sum",
       /* Split Lexer Core (fortified and hardened) */
       "read_char", "read_escape", "node_name", "lex_char", "lex_operator",
-      /* "next_token", */
+      "next_token", "forced_spill_calc",
       NULL
   };
   int i;
@@ -5643,6 +5643,14 @@ static int ir_whitelisted(const char *name) {
   }
   return 0;
 }
+
+static int is_ir_eligible(Node *func) {
+  if (!func || !func->func_def_name) return 0;
+  Type *ret_type = func->func_type ? func->func_type->ret : NULL;
+  if (ret_type && (ret_type->kind == TY_STRUCT || ret_type->kind == TY_UNION)) return 0;
+  return ir_whitelisted(func->func_def_name);
+}
+
 
 #define MAX_ADJUSTED_SYMS 65536
 #define MAX_VISITED_NODES 262144
@@ -5799,14 +5807,14 @@ void codegen_func(Compiler *cc, Node *func) {
   if (getenv("ZCC_DEBUG_TRACE")) fprintf(stderr, "ENTER cc_func: %s\n", func->func_def_name);
   cc->used_regs_mask = allocate_registers(func);
   cc->is_forced_mask = 0;
-  if (g_ir_primary || backend_ops || ir_whitelisted(func->func_def_name)) {
+  if (g_ir_primary || backend_ops || is_ir_eligible(func)) {
       if ((cc->used_regs_mask & 0x1F) != 0x1F) cc->is_forced_mask = 1;
       cc->used_regs_mask = 0x1F;
   }
   used_regs = cc->used_regs_mask;
 
   /* INVARIANT ABI-SYSV-001 & RA-DETERMINISM-001: IR/AST Boundary Contract Verification */
-  if (g_ir_primary || backend_ops || ir_whitelisted(func->func_def_name)) {
+  if (g_ir_primary || backend_ops || is_ir_eligible(func)) {
       if ((cc->used_regs_mask & 0x1F) != 0x1F) {
           fprintf(stderr, "[ZCC INVARIANT VIOLATION] IR_AST_FRAME_MISMATCH: fn=%s used_regs=0x%02X != 0x1F\n",
                   func->func_def_name, cc->used_regs_mask);
@@ -5984,7 +5992,7 @@ void codegen_func(Compiler *cc, Node *func) {
   } /* end !backend_ops block */
 
   int ir_ok = 0;
-  if (getenv("ZCC_IR_BACKEND") || getenv("ZCC_IR_LOWER") || ir_whitelisted(func->func_def_name)) {
+  if (getenv("ZCC_IR_BACKEND") || getenv("ZCC_IR_LOWER") || is_ir_eligible(func)) {
     if (zcc_run_passes_emit_body_pgo && zcc_node_from) {
       void *ir_ast = zcc_node_from((void *)func->body);
       if (ir_ast) {

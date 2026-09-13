@@ -1,0 +1,100 @@
+=== 1. Forced Spill Unit Test (Pressure > 7, Linear Scan Spill Active) ===
+[LSCAN] vreg=10 start=0 end=12
+[LSCAN] vreg=11 start=1 end=17
+[LSCAN] vreg=12 start=2 end=22
+[LSCAN] vreg=13 start=3 end=27
+[LSCAN] vreg=14 start=4 end=32
+[LSCAN] vreg=15 start=5 end=37
+[LSCAN] vreg=16 start=6 end=42
+[LSCAN] vreg=17 start=7 end=47
+[LSCAN] vreg=18 start=8 end=52
+[LSCAN] vreg=19 start=9 end=57
+[LSCAN] vreg=20 start=10 end=62
+[LSCAN] vreg=21 start=11 end=67
+[LSCAN] vreg=27 gets phys_reg=0
+[LSCAN] vreg=28 gets phys_reg=1
+[LSCAN] vreg=26 gets phys_reg=2
+[LSCAN] vreg=29 gets phys_reg=0
+[LSCAN] vreg=25 gets phys_reg=1
+[LSCAN] vreg=35 gets phys_reg=0
+[LSCAN] vreg=36 gets phys_reg=2
+[LSCAN] vreg=34 gets phys_reg=3
+[LSCAN] vreg=37 gets phys_reg=0
+[LSCAN] vreg=33 gets phys_reg=2
+[LSCAN] vreg=43 gets phys_reg=0
+[LSCAN] vreg=44 gets phys_reg=3
+[LSCAN] vreg=42 gets phys_reg=4
+[LSCAN] vreg=45 gets phys_reg=0
+[LSCAN] vreg=41 gets phys_reg=3
+[LSCAN] vreg=51 gets phys_reg=0
+[LSCAN] vreg=52 gets phys_reg=4
+[LSCAN] vreg=50 gets phys_reg=5
+[LSCAN] vreg=53 gets phys_reg=0
+[LSCAN] vreg=49 gets phys_reg=4
+[LSCAN] vreg=59 gets phys_reg=0
+[LSCAN] vreg=60 gets phys_reg=5
+[LSCAN] vreg=58 gets phys_reg=6
+[LSCAN] vreg=61 gets phys_reg=0
+[LSCAN] vreg=57 gets phys_reg=5
+[LSCAN] vreg=67 gets phys_reg=0
+[LSCAN] vreg=68 gets phys_reg=6
+[LSCAN] vreg=66 spills vreg=57 from phys_reg=5
+[LSCAN] vreg=69 gets phys_reg=0
+[LSCAN] vreg=65 gets phys_reg=6
+[LSCAN] vreg=75 gets phys_reg=0
+[LSCAN] vreg=76 gets phys_reg=5
+[LSCAN] vreg=74 spills vreg=65 from phys_reg=6
+[LSCAN] vreg=77 gets phys_reg=0
+[LSCAN] vreg=73 gets phys_reg=5
+[LSCAN] vreg=83 gets phys_reg=0
+[LSCAN] vreg=84 gets phys_reg=6
+[LSCAN] vreg=82 spills vreg=73 from phys_reg=5
+[LSCAN] vreg=85 gets phys_reg=0
+[LSCAN] vreg=81 gets phys_reg=6
+[LSCAN] vreg=91 gets phys_reg=0
+[LSCAN] vreg=92 gets phys_reg=5
+[LSCAN] vreg=90 spills vreg=81 from phys_reg=6
+[LSCAN] vreg=93 gets phys_reg=0
+[LSCAN] vreg=89 gets phys_reg=5
+[LSCAN] vreg=99 gets phys_reg=0
+[LSCAN] vreg=100 gets phys_reg=6
+[LSCAN] vreg=98 spills vreg=89 from phys_reg=5
+[LSCAN] vreg=101 gets phys_reg=0
+[LSCAN] vreg=97 gets phys_reg=6
+[LSCAN] vreg=107 gets phys_reg=0
+[LSCAN] vreg=108 gets phys_reg=5
+[LSCAN] vreg=106 spills vreg=97 from phys_reg=6
+[LSCAN] vreg=109 gets phys_reg=0
+[LSCAN] vreg=105 gets phys_reg=5
+[LSCAN] vreg=115 gets phys_reg=0
+[LSCAN] vreg=116 gets phys_reg=6
+[LSCAN] vreg=114 spills vreg=105 from phys_reg=5
+[LSCAN] vreg=117 gets phys_reg=0
+[LSCAN] vreg=113 gets phys_reg=6
+[ZCC-IR] fn=forced_spill_calc  emitted from IR (PGO layout) 2 blocks
+forced_spill_calc result: 2110 (expected 2110)
+
+=== 2. Gate 1: make selfhost & cmp zcc2.s zcc3.s ===
+◈ STREAMING COMPILER OBSERVATORY ◈
+  ✓ Gate 1 PASS: Assembly byte-identical (cmp stage2.s stage3.s).
+[Semantic Oracle] Cross-verifying against GCC & Golden Oracle... [PASS: Byte-Identical]
+ABI Oracle] Bidirectional Interop (MV1.2, MV1.3a & MV1.3b)... [PASS: Triple-Corpus]
+Lineage check: PASS
+★ ✦ · : · ⟐ ZKAEDI PRIME FIXED POINT CONVERGED (exit 0 · scars: 0 · ⟐ BYTE-IDENTICAL SEAL ⟐) ⟐ · : · ✦ ★
+
+$ cmp zcc2.s zcc3.s
+CMP_RESULT=IDENTICAL_EXIT_0
+$ md5sum zcc2.s zcc3.s
+53cd1862760748f654f6caa815d7fdb7  zcc2.s
+53cd1862760748f654f6caa815d7fdb7  zcc3.s
+
+=== 3. Gate 2: Bidirectional Inter-operability ===
+Direction 1 (zcc-lib + gcc-main): res=2110
+Direction 2 (gcc-lib + zcc-main): res=2110
+
+=== 4. Test Corpus Regression Suite ===
+CORPUS_TOTAL=460
+CORPUS_PASS=460
+CORPUS_FAIL=0
+CORPUS_PCT=100.0%
+STATUS=CLEAN
