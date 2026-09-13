@@ -1,0 +1,27 @@
+# Exact Verification Commands — Sovereign Full-Spectrum Hardening, Enchantment & Verification
+# Date: 2026-09-13
+
+# 1. Phase 0 Baseline Truth
+set -o pipefail
+make selfhost 2>&1 | tee /tmp/zcc-selfhost-baseline.log
+cmp zcc2.s zcc3.s
+
+# 2. Solidity Verifier Hardening & Compilation
+cd /mnt/d/zkaedi-prime-omega-release/contracts
+solc --via-ir --optimize --bin --abi ZkaediLeviathanPoUWVerifier.sol -o build --overwrite
+
+# 3. Deploy Bytecode Packaging & Enclave Constructor Injection
+python3 -c "import json; b = open('/mnt/d/zkaedi-prime-omega-release/contracts/build/ZkaediLeviathanPoUWVerifier.bin').read().strip(); d = '0x' + b + '00000000000000000000000090f8bf6a479f320ead074411a4b0e7944ea8c9c1'; json.dump({'deployData': d}, open('/mnt/d/zkaedi-prime-omega-release/contracts/deploy_bytecode.json', 'w'), indent=2)"
+
+# 4. Rule EF-7 (UI & HTML Upgrade Verification Protocol)
+node C:/Users/zkaed/.gemini/antigravity-ide/brain/3f42bf19-f37c-4a22-945a-5deebe890dfa/scratch/test_deploy_html_ef7.js
+
+# 5. Master Curated Manifest & DPO Cryptographic Sealing
+python d:/zkaedi-prime-omega-release/data/curated/seal_curated_manifest.py
+
+# 6. TinyCC Amalgamation Tests
+./zcc tests/test_tcc_expr.c -o /tmp/test_tcc_expr.s && gcc -no-pie /tmp/test_tcc_expr.s -o /tmp/test_tcc_expr && /tmp/test_tcc_expr
+./zcc tests/test_tcc_tok.c -o /tmp/test_tcc_tok.s && gcc -no-pie /tmp/test_tcc_tok.s -o /tmp/test_tcc_tok && /tmp/test_tcc_tok
+
+# 7. Full C Regression Corpus
+bash tests/test_corpus.sh
