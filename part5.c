@@ -1781,8 +1781,13 @@ int zcc_main(int argc, char **argv) {
       extern void codegen_emit_globals_and_strings(Compiler *cc);
       codegen_emit_globals_and_strings(cc);
       fclose(cc->out);
-      
-       /* cc will be freed and telemetry shut down cleanly at the end of link_phase */
+      /* cc will be freed and telemetry shut down cleanly at the end of link_phase */
+      int opt_peephole_replay = 1;
+      if (getenv("ZCC_OPT") && strcmp(getenv("ZCC_OPT"), "0") == 0) opt_peephole_replay = 0;
+      if (getenv("ZCC_OPT_PEEPHOLE") && strcmp(getenv("ZCC_OPT_PEEPHOLE"), "0") == 0) opt_peephole_replay = 0;
+      if (opt_peephole_replay) {
+          peephole_optimize(asm_file);
+      }
       
       /* Now go to linking phase cleanly! */
       stop_at_asm = 0;

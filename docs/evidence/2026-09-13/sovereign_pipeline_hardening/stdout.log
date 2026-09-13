@@ -1,0 +1,60 @@
+=== 1. Pointer SSA Interval Disjointness Harness ===
+=== STAGE 3 POINTER SSA: INITIALIZING SOUND INTERVAL DISJOINTNESS HARNESS ===
+Pointer SSA PASS: Sound disjoint interval points-to analysis & invalidation list verified (6 tests).
+VERDICT: POINTER SSA TRUTH ORACLE PASS
+EXIT:0
+
+=== 2. IR Backend Parity & Replay Peephole Optimization ===
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase IR] IR Pass Manager...
+[Phase 5] Native C Peephole Optimization... OK (18 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 5] Native C Peephole Optimization... OK (18 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[PASS] IR backend parity verified
+[PASS] IR backend parity verified (DCE target)
+
+=== 3. TinyCC Struct & Miniz Amalgamation Verification ===
+$ ./zcc tests/test_tcc_struct.c -o /tmp/tcc.s && gcc /tmp/tcc.s -o /tmp/tcc && /tmp/tcc
+aligned: 1
+
+$ ./zcc tests/test_miniz_amalgamation.c -o /tmp/miniz.s && gcc /tmp/miniz.s -o /tmp/miniz && /tmp/miniz
+PASS (compressed 65536 bytes down to 577 bytes, checksum 2342668747544700031)
+
+=== 4. Full C Regression Corpus ===
+CORPUS_TOTAL=462
+CORPUS_PASS=462
+CORPUS_FAIL=0
+CORPUS_PCT=100.0%
+STATUS=CLEAN
+
+=== 5. ZK R1CS & STARK Compiler Proof Verification ===
+[+] R1CS Circuit Synthesized: 9 constraints over 10 witness variables.
+  • Nominal Satisfiability Evaluation: 🟢 SATISFIED (0 Violations)
+  • Adversarial Corrupted Witness Rejection: 9 / 9 trapped by R1CS gates.
+[ZK PROOF VERIFIED] R1CS Semantic Equivalence sealed in 6.78 ms
+[ZCC-STARK] Proof Synthesis Complete: 356 bytes calldata emitted to '/tmp/test_main.proof'
+    -> Merkle Root: 0x85ad3ffe71217e056286a14abd1d2e9949bf1298f9e2176afcb6023a9e0bd1dd
+    -> Trajectory:  l0=4, l1=16, l2=64
+[OK] STARK proof calldata emitted to /tmp/test_main.proof
+
+=== 6. Gate 1: 3-Stage Bootstrap Self-Host Identity ===
+◈ STREAMING COMPILER OBSERVATORY ◈
+  ✓ Gate 1 PASS: Assembly byte-identical (cmp stage2.s stage3.s).
+[Semantic Oracle] Cross-verifying against GCC & Golden Oracle... [PASS: Byte-Identical]
+ABI Oracle] Bidirectional Interop (MV1.2, MV1.3a & MV1.3b)... [PASS: Triple-Corpus]
+ZKAEDI PRIME FIXED POINT CONVERGED (exit 0 · scars: 0 · ⟐ BYTE-IDENTICAL SEAL ⟐)
+
+$ cmp zcc2.s zcc3.s
+CMP_RESULT=IDENTICAL_EXIT_0
+
+$ md5sum zcc2.s zcc3.s
+7afc1dc0bed0e049a895cf06386fcc00  zcc2.s
+7afc1dc0bed0e049a895cf06386fcc00  zcc3.s
+
+=== 7. Gate 2: Cross-Toolchain Bidirectional Interoperability ===
+Direction 1 (zcc-lib + gcc-main): res=2110
+Direction 2 (gcc-lib + zcc-main): res=2110

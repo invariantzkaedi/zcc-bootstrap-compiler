@@ -1,0 +1,29 @@
+# Full Sovereign Pipeline Hardening Commands
+
+# 1. Compiler Rebuild
+make zcc
+
+# 2. Pointer SSA Interval Soundness Gauntlet
+bash tests/run_gate_pointer_ssa.sh
+
+# 3. IR Backend Replay Parity & Peephole Parity
+bash verify_ir_backend.sh
+
+# 4. TinyCC Struct & Miniz Amalgamation Verification
+./zcc tests/test_tcc_struct.c -o /tmp/tcc.s && gcc /tmp/tcc.s -o /tmp/tcc && /tmp/tcc
+./zcc tests/test_miniz_amalgamation.c -o /tmp/miniz.s && gcc /tmp/miniz.s -o /tmp/miniz && /tmp/miniz
+
+# 5. Full C Regression Corpus (462 / 462 PASS)
+bash tests/test_corpus.sh
+
+# 6. ZK R1CS & STARK Proof Verification
+python3 tools/verify_zk_compiler_proof.py
+./zcc tests/test_main.c --emit-stark-proof -o /tmp/test_main.proof
+
+# 7. Gate 1: 3-Stage Bootstrap Self-Host Identity
+make selfhost
+cmp zcc2.s zcc3.s
+
+# 8. Gate 2: Cross-Toolchain Bidirectional Interoperability
+# Direction 1: zcc-lib + gcc-main
+# Direction 2: gcc-lib + zcc-main
