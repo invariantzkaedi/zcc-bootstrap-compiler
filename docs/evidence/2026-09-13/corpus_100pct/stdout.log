@@ -1,0 +1,18 @@
+=== bash tests/test_corpus.sh ===
+CORPUS_TOTAL=459
+CORPUS_PASS=459
+CORPUS_FAIL=0
+CORPUS_PCT=100.0%
+STATUS=CLEAN
+
+=== make selfhost ===
+═══ [GATE 1] SELF-HOST IDENTITY VERIFICATION ═══
+  ✓ Gate 1 PASS: Assembly byte-identical (cmp stage2.s stage3.s).
+[Semantic Oracle] Cross-verifying against GCC & Golden Oracle... [PASS: Byte-Identical]
+[ABI Oracle] Bidirectional Interop (MV1.2, MV1.3a & MV1.3b)... [PASS: Triple-Corpus]
+ZKAEDI PRIME FIXED POINT CONVERGED (exit 0 · scars: 0 · ⟐ BYTE-IDENTICAL SEAL ⟐)
+zcc_quest: child exit=0 warnings=0 errors=0 elapsed=352.8s
+
+=== cmp zcc2.s zcc3.s ===
+CMP SUCCESS: zcc2.s and zcc3.s are byte-identical
+Exit code: 0

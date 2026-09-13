@@ -1,0 +1,7 @@
+make zcc
+./zcc -Iinclude -Isrc -I. tests/test_quickjs_native.c -o /tmp/test_qjs.s
+./zcc -Iinclude -Isrc -I. tests/test_sovereign_trinity_stress.c -o /tmp/test_trinity.s
+./zcc -Iinclude -Isrc -I. test_avx2_supercharge.c -o /tmp/test_avx2.s
+bash tests/test_corpus.sh
+make selfhost
+cmp zcc2.s zcc3.s
