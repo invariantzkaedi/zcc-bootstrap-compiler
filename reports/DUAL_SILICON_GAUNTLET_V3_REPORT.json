@@ -1,0 +1,97 @@
+{
+  "timestamp": "2026-09-15 01:25:50",
+  "hardware": {
+    "npu": {
+      "status": "ONLINE",
+      "name": "NPU Krackan",
+      "tops": 51.3,
+      "shared_mem_gb": 47.12,
+      "active_ep": [
+        "DmlExecutionProvider",
+        "CPUExecutionProvider"
+      ]
+    },
+    "gpu": {
+      "status": "ONLINE",
+      "name": "NVIDIA GeForce RTX 5070 Laptop GPU",
+      "vram_mb": 2976.4,
+      "model": "Qwen2.5-Coder-1.5B-Instruct"
+    }
+  },
+  "total_workloads": 5,
+  "total_passed": 5,
+  "average_speedup": 1.06,
+  "total_time_sec": 90.242,
+  "results": [
+    {
+      "id": "STRESS-01-POINTER-ARRAY",
+      "title": "Pointer Iteration & Array Sum",
+      "domain": "STRESS_POINTERS_HEAP",
+      "single_gpu_time_s": 9.205,
+      "dual_silicon_time_s": 7.391,
+      "speedup_factor": 1.25,
+      "npu_latency_ms": 7.97,
+      "draft_tokens": 4,
+      "expected": "Pointer sum: 150",
+      "actual_output": "Pointer sum: 150",
+      "exec_time_ms": 111.7,
+      "verdict": "PASS"
+    },
+    {
+      "id": "STRESS-02-BUBBLESORT",
+      "title": "In-Place Array Bubble Sort",
+      "domain": "STRESS_POINTERS_HEAP",
+      "single_gpu_time_s": 11.791,
+      "dual_silicon_time_s": 11.448,
+      "speedup_factor": 1.03,
+      "npu_latency_ms": 2.77,
+      "draft_tokens": 4,
+      "expected": "Sorted: 11 12 22 25 64 90",
+      "actual_output": "Sorted: 11 12 22 25 64 90",
+      "exec_time_ms": 92.29,
+      "verdict": "PASS"
+    },
+    {
+      "id": "STRESS-03-STRUCT-GEOM",
+      "title": "Compound Struct Geometry & Offsets",
+      "domain": "STRESS_STRUCTS_ABI",
+      "single_gpu_time_s": 5.924,
+      "dual_silicon_time_s": 5.848,
+      "speedup_factor": 1.01,
+      "npu_latency_ms": 2.14,
+      "draft_tokens": 4,
+      "expected": "Point area: 120",
+      "actual_output": "Point area: 120",
+      "exec_time_ms": 106.7,
+      "verdict": "PASS"
+    },
+    {
+      "id": "CRYPTO-01-SHA256-PRIM",
+      "title": "SHA-256 Compression Primitives (ROTR, Ch, Maj)",
+      "domain": "CRYPTO_BIT_OPS",
+      "single_gpu_time_s": 8.978,
+      "dual_silicon_time_s": 8.859,
+      "speedup_factor": 1.01,
+      "npu_latency_ms": 2.4,
+      "draft_tokens": 4,
+      "expected": "SHA256 primitives verified",
+      "actual_output": "SHA256 primitives verified",
+      "exec_time_ms": 94.39,
+      "verdict": "PASS"
+    },
+    {
+      "id": "CRYPTO-02-MOD-EXPON",
+      "title": "64-bit Modular Binary Exponentiation",
+      "domain": "CRYPTO_BIT_OPS",
+      "single_gpu_time_s": 7.553,
+      "dual_silicon_time_s": 7.446,
+      "speedup_factor": 1.01,
+      "npu_latency_ms": 2.56,
+      "draft_tokens": 4,
+      "expected": "ModExp result:",
+      "actual_output": "ModExp result: 24",
+      "exec_time_ms": 90.69,
+      "verdict": "PASS"
+    }
+  ]
+}

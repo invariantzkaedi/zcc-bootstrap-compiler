@@ -1,0 +1,59 @@
+feat(posix,stark): implement BabyBear C STARK proof engine and expand native POSIX systems bridge
+
+Goal:
+Implement a zero-knowledge BabyBear STARK execution trace attester for C compilations, and expand native POSIX system programming under ZCC with virtual memory (mmap/munmap), IPC pipes, and multiprocessing (fork/waitpid).
+
+Outcome:
+BabyBear STARK attestation engine verified across 5/5 cryptographic unit tests with negative control tamper rejection; complete POSIX headers landed under zcc_sys_includes/; dual-suite POSIX gauntlet verified 100% clean under native ZCC compilation; and Gate 1 self-host byte identity sealed.
+
+Root cause:
+- Lack of verifiable compilation: Compiler pipelines could not cryptographically prove that machine code accurately represents source AST without full re-execution.
+- Missing POSIX systems interface: ZCC lacked unistd.h, fcntl.h, sys/stat.h, sys/mman.h, and sys/wait.h, preventing standalone POSIX systems programming without GCC header dependencies.
+
+Patch summary:
+- tools/zk_compiler_stark_attester.py: BabyBear field arithmetic (p = 2^31 - 2^27 + 1), execution trace synthesizer, and SHA-256 binary Merkle IOP verifier.
+- tests/test_zk_compiler_stark.py: 5 unit tests validating field algebra, Merkle paths, and tamper rejection.
+- zcc_sys_includes/unistd.h: POSIX standard symbols, process IDs, file descriptors, fork, pipe, execve, _exit.
+- zcc_sys_includes/fcntl.h: File creation and access mode flags.
+- zcc_sys_includes/sys/stat.h: File permissions and type test macros.
+- zcc_sys_includes/sys/types.h: Core scalar types (mode_t, dev_t, ino_t, time_t).
+- zcc_sys_includes/sys/mman.h: Virtual memory allocation (mmap, munmap, mprotect).
+- zcc_sys_includes/sys/wait.h: Process waiting status macros (wait, waitpid, WIFEXITED, WEXITSTATUS).
+- tests/test_posix_bridge_native.c: Native POSIX file I/O and PID test.
+- tests/test_posix_advanced_native.c: Native POSIX mmap, pipe, and fork/waitpid test.
+- tools/run_posix_gauntlet.py: Automated dual-suite POSIX test runner.
+- docs/evidence/2026-09-15/stark_posix_milestone/: Complete evidence bundle.
+
+Gate 1: PASS via cmp zcc2.s zcc3.s
+SELF-HOST VERIFIED: BYTE IDENTICAL
+7afc1dc0bed0e049a895cf06386fcc00  zcc2.s
+7afc1dc0bed0e049a895cf06386fcc00  zcc3.s
+
+Gate 2: PASS via python -m unittest tests/test_zk_compiler_stark.py
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.002s
+
+OK
+
+Gate 3: PASS via python tools/run_posix_gauntlet.py
+[Suite 1: File I/O & Process Interrogation]
+- getpid() -> 10229 (PASS)
+- write() -> 37 bytes (PASS)
+- read() -> payload match 'ZCC_POSIX_SYSTEM_BRIDGE_VERIFIED_7701' (PASS)
+- unlink() -> clean (PASS)
+[Suite 2: Virtual Memory mmap, IPC pipe, fork & waitpid]
+- mmap() -> 4096 bytes allocated & verified (PASS)
+- munmap() -> unmapped cleanly (PASS)
+- pipe() -> IPC roundtrip 'IPC_PIPE_PAYLOAD_8820' (PASS)
+- fork() & waitpid() -> Child 10242 exited with code 42 (PASS)
+VERDICT: PASS (Suite 1: PASS, Suite 2: PASS)
+
+Gate 4: NOT-APPLICABLE (Target defect harness: Lua/SQLite/curl not modified)
+
+Gate 5: PASS (Fresh execution verified across all gates)
+
+Bugs caught mid-gate: None — all tests clean on first run.
+Hygiene/deferred: None.
+Forensic notes: Zero edits to foundational compiler units (part0_pp.c, part3.c, part4.c).
+Residual risk: None.
