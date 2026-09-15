@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "infinimemory"
+version = "1.0.0"
+description = "Sovereign High-Assurance Memory Architecture & Cognitive Substrate"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+    { name = "ZKAEDI Sovereign Systems", email = "zkaedi@prime.internal" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Security :: Cryptography",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+]
+
+[project.scripts]
+infinimemory = "infinimemory.cli:main"
+zkaedi-prime = "zkaedi_prime.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["infinimemory*", "zkaedi_prime*"]

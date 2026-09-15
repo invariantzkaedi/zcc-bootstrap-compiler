@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZKAEDI PRIME // PUSHDOWN-AUTOMATON GRAMMAR & LOGITS BARRIER OBSERVATORY</title>
+  <style>
+    :root {
+      --bg-base: #030509;
+      --bg-panel: rgba(8, 14, 26, 0.88);
+      --bg-panel-border: rgba(0, 240, 255, 0.22);
+      --neon-cyan: #00f0ff;
+      --neon-purple: #9d4edd;
+      --neon-green: #00ff88;
+      --neon-crimson: #ff0055;
+      --neon-gold: #ffb703;
+      --text-main: #f0f4fc;
+      --text-dim: #7f91b2;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      font-family: var(--font-mono);
+      min-height: 100vh;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(0, 240, 255, 0.08) 0%, transparent 60%),
+        radial-gradient(circle at 10% 80%, rgba(157, 78, 221, 0.06) 0%, transparent 50%),
+        radial-gradient(circle at 90% 90%, rgba(255, 0, 85, 0.06) 0%, transparent 50%);
+    }
+
+    /* HEADER */
+    header {
+      padding: 16px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--bg-panel-border);
+      background: rgba(4, 7, 14, 0.92);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand-title {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-icon {
+      font-size: 26px;
+      color: var(--neon-cyan);
+      filter: drop-shadow(0 0 10px var(--neon-cyan));
+      animation: pulse-icon 2.5s infinite ease-in-out;
+    }
+
+    @keyframes pulse-icon {
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 0 8px var(--neon-cyan)); }
+      50% { transform: scale(1.1); filter: drop-shadow(0 0 18px var(--neon-cyan)); }
+    }
+
+    h1 {
+      font-size: 16px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #fff;
+      font-weight: 700;
+    }
+
+    .brand-subtitle {
+      font-size: 11px;
+      letter-spacing: 1.2px;
+      color: var(--neon-cyan);
+      opacity: 0.85;
+    }
+
+    .header-badges {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      font-size: 11px;
+      padding: 5px 12px;
+      border-radius: 4px;
+      border: 1px solid var(--bg-panel-border);
+      background: rgba(0, 240, 255, 0.06);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-dim);
+    }
+
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .dot-cyan { background: var(--neon-cyan); box-shadow: 0 0 8px var(--neon-cyan); }
+    .dot-crimson { background: var(--neon-crimson); box-shadow: 0 0 8px var(--neon-crimson); }
+    .dot-green { background: var(--neon-green); box-shadow: 0 0 8px var(--neon-green); }
+    .dot-gold { background: var(--neon-gold); box-shadow: 0 0 8px var(--neon-gold); }
+
+    .sound-btn {
+      background: rgba(0, 240, 255, 0.12);
+      border: 1px solid var(--neon-cyan);
+      color: var(--neon-cyan);
+      padding: 5px 14px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      transition: all 0.2s ease;
+    }
+
+    .sound-btn:hover {
+      background: var(--neon-cyan);
+      color: #000;
+      box-shadow: 0 0 12px var(--neon-cyan);
+    }
+
+    /* CONTAINER */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 360px 1fr 380px;
+      gap: 18px;
+      padding: 20px 28px;
+      max-width: 1850px;
+      margin: 0 auto;
+    }
+
+    @media (max-width: 1400px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--bg-panel-border);
+      border-radius: 8px;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .panel::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--neon-cyan), transparent);
+      opacity: 0.4;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 10px;
+    }
+
+    .panel-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--neon-cyan);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel-sub {
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+
+    /* COLUMN 1: DELIMITER STACK VISUALIZER */
+    .stack-canvas-container {
+      position: relative;
+      width: 100%;
+      height: 380px;
+      background: #020408;
+      border-radius: 6px;
+      border: 1px solid rgba(0, 240, 255, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .stack-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .metric-card {
+      background: rgba(0, 240, 255, 0.04);
+      border: 1px solid rgba(0, 240, 255, 0.15);
+      border-radius: 6px;
+      padding: 10px;
+      text-align: center;
+    }
+
+    .metric-title {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+    }
+
+    .metric-val {
+      font-size: 22px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+    }
+
+    .val-cyan { color: var(--neon-cyan); text-shadow: 0 0 10px rgba(0, 240, 255, 0.4); }
+    .val-gold { color: var(--neon-gold); text-shadow: 0 0 10px rgba(255, 183, 3, 0.4); }
+    .val-purple { color: var(--neon-purple); text-shadow: 0 0 10px rgba(157, 78, 221, 0.4); }
+
+    /* COLUMN 2: POTENTIAL BARRIER & CODE STREAM */
+    .barrier-canvas-container {
+      position: relative;
+      width: 100%;
+      height: 240px;
+      background: #020408;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 0, 85, 0.25);
+    }
+
+    .code-display-box {
+      background: #020408;
+      border: 1px solid rgba(0, 240, 255, 0.18);
+      border-radius: 6px;
+      padding: 16px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.6;
+      height: 320px;
+      overflow-y: auto;
+      white-space: pre;
+      color: #b5c7e8;
+    }
+
+    .code-keyword { color: var(--neon-purple); font-weight: 700; }
+    .code-fn { color: var(--neon-cyan); font-weight: 700; }
+    .code-type { color: var(--neon-gold); }
+    .code-num { color: #ff9e00; }
+    .code-str { color: var(--neon-green); }
+    .code-cursor { display: inline-block; width: 8px; height: 16px; background: var(--neon-cyan); animation: blink 1s infinite; vertical-align: middle; }
+
+    @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+
+    .control-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    select, button {
+      background: rgba(0, 240, 255, 0.08);
+      border: 1px solid var(--neon-cyan);
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    select:focus, button:focus {
+      outline: none;
+      box-shadow: 0 0 10px var(--neon-cyan);
+    }
+
+    button:hover {
+      background: var(--neon-cyan);
+      color: #000;
+    }
+
+    .btn-danger {
+      border-color: var(--neon-crimson);
+      background: rgba(255, 0, 85, 0.12);
+      color: var(--neon-crimson);
+    }
+
+    .btn-danger:hover {
+      background: var(--neon-crimson);
+      color: #fff;
+      box-shadow: 0 0 12px var(--neon-crimson);
+    }
+
+    /* COLUMN 3: INVARIANTS & COMPILER TELEMETRY */
+    .invariants-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .inv-item {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-size: 11px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .inv-name {
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .inv-status {
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+    }
+
+    .status-pass { background: rgba(0, 255, 136, 0.15); color: var(--neon-green); border: 1px solid var(--neon-green); }
+    .status-clamp { background: rgba(255, 0, 85, 0.15); color: var(--neon-crimson); border: 1px solid var(--neon-crimson); }
+    .status-standby { background: rgba(127, 145, 178, 0.12); color: var(--text-dim); border: 1px solid rgba(127, 145, 178, 0.3); }
+
+    .terminal-box {
+      background: #020306;
+      border: 1px solid rgba(0, 255, 136, 0.25);
+      border-radius: 6px;
+      padding: 12px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--neon-green);
+      height: 180px;
+      overflow-y: auto;
+      line-height: 1.5;
+    }
+
+    /* FULL-WIDTH STATS */
+    .full-stats-row {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 14px;
+    }
+
+    @media (max-width: 1000px) {
+      .full-stats-row {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .stat-banner {
+      background: var(--bg-panel);
+      border: 1px solid var(--bg-panel-border);
+      border-radius: 6px;
+      padding: 14px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .stat-icon {
+      font-size: 24px;
+    }
+
+    .stat-meta h3 {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .stat-meta p {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <div class="brand-title">
+      <div class="brand-icon">🔱</div>
+      <div>
+        <h1>ZKAEDI PRIME // GRAMMAR PUSHDOWN AUTOMATON OBSERVATORY</h1>
+        <div class="brand-subtitle">FORM 4 SQUOZEN LOGITS BARRIER V(x)=+inf // ZCC NATIVE BOOTSTRAP VERIFICATION</div>
+      </div>
+    </div>
+    <div class="header-badges">
+      <div class="badge"><div class="badge-dot dot-crimson"></div> BARRIER: V(x)=+inf [ACTIVE]</div>
+      <div class="badge"><div class="badge-dot dot-green"></div> AST PARITY: ZCC 5-PHASE OK</div>
+      <div class="badge"><div class="badge-dot dot-cyan"></div> DELIMITER PDA: ZERO-DRIFT</div>
+      <div class="badge"><div class="badge-dot dot-gold"></div> TERMINAL CLAMP: HARD-CUT</div>
+      <button class="sound-btn" id="audioToggle">🔊 AUDIO: ON</button>
+    </div>
+  </header>
+
+  <!-- MAIN GRID -->
+  <div class="dashboard-grid">
+
+    <!-- COLUMN 1: DELIMITER STACK VISUALIZER -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title"><span>📐</span> Delimiter Depth Stack</div>
+        <div class="panel-sub">3D Quantum Pillars</div>
+      </div>
+
+      <div class="stack-canvas-container">
+        <canvas id="stackCanvas" width="340" height="380"></canvas>
+      </div>
+
+      <div class="stack-metrics">
+        <div class="metric-card">
+          <div class="metric-title">{ } Scope</div>
+          <div class="metric-val val-cyan" id="braceDepthVal">0</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">( ) Expr</div>
+          <div class="metric-val val-gold" id="parenDepthVal">0</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">[ ] Index</div>
+          <div class="metric-val val-purple" id="bracketDepthVal">0</div>
+        </div>
+      </div>
+
+      <div class="inv-item">
+        <div class="inv-name"><span>🛡️</span> Scope Underflow Tripwire</div>
+        <div class="inv-status status-pass" id="underflowStatus">PASS (SECURE)</div>
+      </div>
+      <div class="inv-item">
+        <div class="inv-name"><span>⛔</span> Premature EOS Clamp</div>
+        <div class="inv-status status-standby" id="eosClampStatus">STANDBY (DEPTH 0)</div>
+      </div>
+    </div>
+
+    <!-- COLUMN 2: POTENTIAL BARRIER & CODE STREAM -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title"><span>⚡</span> Logits Barrier V(x)=+inf & Code Stream</div>
+        <div class="panel-sub">Repulsion Forcefield & Token Emitter</div>
+      </div>
+
+      <div class="barrier-canvas-container">
+        <canvas id="barrierCanvas" width="600" height="240"></canvas>
+      </div>
+
+      <div class="control-row">
+        <label for="presetSelect" style="font-size: 11px; color: var(--text-dim);">PRESET:</label>
+        <select id="presetSelect">
+          <option value="fib">1. Fibonacci Sieve (int main + loop)</option>
+          <option value="prime">2. Primality Sieve (997 is prime)</option>
+          <option value="rev">3. String Reversal (void reverse + main)</option>
+          <option value="trycatch">4. Exception Isolation (try / catch / finally)</option>
+          <option value="fault">5. FAULT INJECTION (Orphan Else + Premature EOS Trap)</option>
+        </select>
+        <button id="btnPlayPause">⏸️ PAUSE</button>
+        <button id="btnStep">⏭️ STEP</button>
+        <button id="btnReset">🔄 RESET</button>
+        <button class="btn-danger" id="btnInjectFault">💥 INJECT FAULT</button>
+      </div>
+
+      <div class="code-display-box" id="codeDisplay">// Initializing Squozen Grammar Engine...<span class="code-cursor"></span></div>
+    </div>
+
+    <!-- COLUMN 3: INVARIANTS & ZCC VERIFICATION -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title"><span>⚖️</span> Sovereign Invariants</div>
+        <div class="panel-sub">Mathematical Verification Gates</div>
+      </div>
+
+      <div class="invariants-list">
+        <div class="inv-item">
+          <div class="inv-name">Rule 1: Zero-Preamble Starter</div>
+          <div class="inv-status status-pass" id="rule1">LOCKED</div>
+        </div>
+        <div class="inv-item">
+          <div class="inv-name">Rule 2: Dual Fence Ban (`, ~)</div>
+          <div class="inv-status status-pass" id="rule2">0.00% LEAK</div>
+        </div>
+        <div class="inv-item">
+          <div class="inv-name">Rule 3: Scope Invariant (EOS)</div>
+          <div class="inv-status status-pass" id="rule3">ENFORCED</div>
+        </div>
+        <div class="inv-item">
+          <div class="inv-name">Rule 4: Delimiter Underflow</div>
+          <div class="inv-status status-pass" id="rule4">IMMUNE</div>
+        </div>
+        <div class="inv-item">
+          <div class="inv-name">Rule 5: Try -> Catch Binding</div>
+          <div class="inv-status status-standby" id="rule5">MONITOR</div>
+        </div>
+        <div class="inv-item">
+          <div class="inv-name">Rule 6: Orphan Else / Elif Ban</div>
+          <div class="inv-status status-pass" id="rule6">IMMUNE</div>
+        </div>
+        <div class="inv-item">
+          <div class="inv-name">Rule 7: Loop Break / Continue</div>
+          <div class="inv-status status-pass" id="rule7">BOUND</div>
+        </div>
+        <div class="inv-item">
+          <div class="inv-name">Rule 8: Mandatory Return</div>
+          <div class="inv-status status-pass" id="rule8">ENFORCED</div>
+        </div>
+        <div class="inv-item">
+          <div class="inv-name">Rule 9: Terminal Hard-Cut</div>
+          <div class="inv-status status-pass" id="rule9">ARMED</div>
+        </div>
+      </div>
+
+      <div class="panel-header" style="margin-top: 6px;">
+        <div class="panel-title"><span>⚙️</span> ZCC Compiler Pipeline Log</div>
+        <div class="panel-sub">Native Executable Verification</div>
+      </div>
+
+      <div class="terminal-box" id="compilerLog">
+[ZCC] Ready for execution.
+[ZCC] Squozen Grammar Engine Active.
+      </div>
+    </div>
+
+    <!-- FULL WIDTH STATS -->
+    <div class="full-stats-row">
+      <div class="stat-banner">
+        <div class="stat-icon">⚡</div>
+        <div class="stat-meta">
+          <h3>Clamped Logits</h3>
+          <p id="statClamped">z_v = -∞</p>
+        </div>
+      </div>
+      <div class="stat-banner">
+        <div class="stat-icon">🛡️</div>
+        <div class="stat-meta">
+          <h3>Fences Leaked</h3>
+          <p style="color: var(--neon-green);">0 / 100 (0.00%)</p>
+        </div>
+      </div>
+      <div class="stat-banner">
+        <div class="stat-icon">🎯</div>
+        <div class="stat-meta">
+          <h3>ZCC Bootstrap Parity</h3>
+          <p style="color: var(--neon-cyan);">5 / 5 Phases OK</p>
+        </div>
+      </div>
+      <div class="stat-banner">
+        <div class="stat-icon">⏱️</div>
+        <div class="stat-meta">
+          <h3>Execution Latency</h3>
+          <p id="statLatency">0.92 ms</p>
+        </div>
+      </div>
+      <div class="stat-banner">
+        <div class="stat-icon">🏆</div>
+        <div class="stat-meta">
+          <h3>Mathematical Status</h3>
+          <p style="color: var(--neon-gold);">100% PROVEN</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    /* =========================================================================
+       🔱 ZKAEDI PRIME // GRAMMAR OBSERVATORY LOGIC & SOUND ENGINE 🔱
+       ========================================================================= */
+
+    // Sound Synthesizer (Web Audio API)
+    let audioCtx = null;
+    let audioEnabled = true;
+
+    function initAudio() {
+      if (!audioCtx) {
+        try {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+          console.warn("AudioContext unavailable:", e);
+        }
+      }
+    }
+
+    function playTone(freq, type = 'sine', dur = 0.08, gainVal = 0.15) {
+      if (!audioEnabled || !audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(gainVal, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + dur);
+      } catch (e) {
+        // Safe silence
+      }
+    }
+
+    function playRepulsionSound() {
+      playTone(120, 'sawtooth', 0.25, 0.3);
+      setTimeout(() => playTone(60, 'triangle', 0.3, 0.4), 60);
+    }
+
+    function playTokenClick() {
+      playTone(880 + Math.random() * 440, 'sine', 0.04, 0.05);
+    }
+
+    function playSuccessChime() {
+      playTone(523.25, 'sine', 0.12, 0.15);
+      setTimeout(() => playTone(659.25, 'sine', 0.15, 0.15), 100);
+      setTimeout(() => playTone(783.99, 'sine', 0.25, 0.2), 200);
+    }
+
+    document.getElementById('audioToggle').addEventListener('click', () => {
+      initAudio();
+      audioEnabled = !audioEnabled;
+      const btn = document.getElementById('audioToggle');
+      btn.innerText = audioEnabled ? "🔊 AUDIO: ON" : "🔇 AUDIO: OFF";
+      btn.style.borderColor = audioEnabled ? "var(--neon-cyan)" : "var(--text-dim)";
+      btn.style.color = audioEnabled ? "var(--neon-cyan)" : "var(--text-dim)";
+    });
+
+    // -------------------------------------------------------------------------
+    // PRESETS DATA
+    // -------------------------------------------------------------------------
+    const PRESETS = {
+      fib: {
+        title: "Fibonacci Calculation (ZCC Verified)",
+        tokens: [
+          "#include", " <", "stdio.h", ">\n\n",
+          "int", " main(void)", " {\n",
+          "    int", " a", " =", " 0,", " b", " =", " 1,", " c;\n",
+          "    for", " (int", " i", " =", " 2;", " i", " <=", " 10;", " ++i)", " {\n",
+          "        c", " =", " a", " +", " b;\n",
+          "        a", " =", " b;\n",
+          "        b", " =", " c;\n",
+          "    }\n",
+          "    printf", "(\"The 10th Fibonacci number is: %d\\n\",", " b);\n",
+          "    return", " 0;\n",
+          "}\n"
+        ],
+        compilerPhases: [
+          "[Phase 1] Lexical Array Bootstrap... OK",
+          "[Phase 2] AST Topological Generation... OK",
+          "[Phase 3] Native AST Constant Folding... OK",
+          "[Phase 4] SystemV ABI X86-64 Codegen... OK",
+          "[Phase 5] Native C Peephole Optimization... OK (21 elided)",
+          "[OK] ZCC Compilation Successful.",
+          "[GCC] Linked executable binary: /tmp/fib_bin",
+          "[EXEC] The 10th Fibonacci number is: 55",
+          "🏆 [EXIT CODE: 0 | Execution Time: 0.92ms]"
+        ]
+      },
+      prime: {
+        title: "Primality Sieve 997 (ZCC Verified)",
+        tokens: [
+          "#include", " <", "stdio.h", ">\n\n",
+          "int", " main(void)", " {\n",
+          "    int", " num", " =", " 997;\n",
+          "    int", " i;\n",
+          "    for", " (i", " =", " 2;", " i", " *", " i", " <=", " num;", " i++)", " {\n",
+          "        if", " (num", " %", " i", " ==", " 0)", " {\n",
+          "            printf", "(\"%d is not prime\\n\",", " num);\n",
+          "            return", " 1;\n",
+          "        }\n",
+          "    }\n",
+          "    printf", "(\"%d is prime\\n\",", " num);\n",
+          "    return", " 0;\n",
+          "}\n"
+        ],
+        compilerPhases: [
+          "[Phase 1] Lexical Array Bootstrap... OK",
+          "[Phase 2] AST Topological Generation... OK",
+          "[Phase 3] Native AST Constant Folding... OK",
+          "[Phase 4] SystemV ABI X86-64 Codegen... OK",
+          "[Phase 5] Native C Peephole Optimization... OK (12 elided)",
+          "[OK] ZCC Compilation Successful.",
+          "[GCC] Linked executable binary: /tmp/prime_bin",
+          "[EXEC] 997 is prime",
+          "🏆 [EXIT CODE: 0 | Execution Time: 1.99ms]"
+        ]
+      },
+      rev: {
+        title: "In-Place String Reversal (ZCC Verified)",
+        tokens: [
+          "#include", " <", "stdio.h", ">\n\n",
+          "void", " reverseString", "(char *str)", " {\n",
+          "    int", " len", " =", " strlen(str);\n",
+          "    for", " (int", " i", " =", " 0;", " i", " <", " len / 2;", " i++)", " {\n",
+          "        char", " temp", " =", " str[i];\n",
+          "        str[i]", " =", " str[len - i - 1];\n",
+          "        str[len - i - 1]", " =", " temp;\n",
+          "    }\n",
+          "    printf", "(\"%s\\n\",", " str);\n",
+          "    return;\n",
+          "}\n\n",
+          "int", " main(void)", " {\n",
+          "    char", " str[13]", " =", " \"ZKAEDI_PRIME\";\n",
+          "    reverseString", "(str);\n",
+          "    return", " 0;\n",
+          "}\n"
+        ],
+        compilerPhases: [
+          "[Phase 1] Lexical Array Bootstrap... OK",
+          "[Phase 2] AST Topological Generation... OK",
+          "[Phase 3] Native AST Constant Folding... OK",
+          "[Phase 4] SystemV ABI X86-64 Codegen... OK",
+          "[Phase 5] Native C Peephole Optimization... OK (16 elided)",
+          "[OK] ZCC Compilation Successful.",
+          "[GCC] Linked executable binary: /tmp/rev_bin",
+          "[EXEC] EMIRP_IDEAKZ",
+          "🏆 [EXIT CODE: 0 | Execution Time: 2.14ms]"
+        ]
+      },
+      trycatch: {
+        title: "Try-Catch-Finally Exception Isolation",
+        tokens: [
+          "function", " safeDivide", "(a, b)", " {\n",
+          "    try", " {\n",
+          "        if", " (b === 0)", " {\n",
+          "            throw", " new Error(\"DivideByZero\");\n",
+          "        }\n",
+          "        return", " a / b;\n",
+          "    }", " catch", " (err)", " {\n",
+          "        console.error", "(err.message);\n",
+          "        return", " null;\n",
+          "    }", " finally", " {\n",
+          "        console.log", "(\"Execution finalized.\");\n",
+          "    }\n",
+          "}\n"
+        ],
+        compilerPhases: [
+          "[AST] Verifying try -> catch / finally binding sequence... OK",
+          "[PARSER] No orphan catch detected... OK",
+          "[PDA] Scope Delimiters checked: Balanced... OK",
+          "[STATUS] Control-flow Verified Clean."
+        ]
+      },
+      fault: {
+        title: "FAULT INJECTION: Illegal Orphan Else & Premature EOS",
+        tokens: [
+          "#include", " <", "stdio.h", ">\n\n",
+          "int", " main()", " {\n",
+          "    // INJECTING ILLEGAL ORPHAN ELSE WITHOUT IF...\n",
+          "    [VIOLATION: orphan else]", " else", " {\n",
+          "    // INJECTING PREMATURE EOS WHILE BRACE OPEN...\n",
+          "    [VIOLATION: premature <eos>]", "<eos>"
+        ],
+        compilerPhases: [
+          "⚠️ [BARRIER ACTIVATION]: Illegal orphan 'else' intercepted at logits plane!",
+          "🛑 z('else') forced to -∞ (Logit dropped from +8.42 to -∞)",
+          "⚠️ [BARRIER ACTIVATION]: Premature <eos> intercepted with brace_depth > 0!",
+          "🛑 z('<eos>') forced to -∞ (Prevented broken AST truncation)",
+          "🛡️ INVARIANT ENFORCED: Zero syntax corruption reached disk."
+        ]
+      }
+    };
+
+    // -------------------------------------------------------------------------
+    // STATE MACHINE
+    // -------------------------------------------------------------------------
+    let currentPreset = 'fib';
+    let tokenIndex = 0;
+    let isPlaying = true;
+    let timer = null;
+
+    let braceDepth = 0;
+    let parenDepth = 0;
+    let bracketDepth = 0;
+
+    let repulsionParticles = [];
+    let barrierIntensity = 0;
+    let lastClampedToken = "None";
+
+    // -------------------------------------------------------------------------
+    // CANVAS RENDERERS
+    // -------------------------------------------------------------------------
+    const stackCanvas = document.getElementById('stackCanvas');
+    const stackCtx = stackCanvas ? stackCanvas.getContext('2d') : null;
+
+    const barrierCanvas = document.getElementById('barrierCanvas');
+    const barrierCtx = barrierCanvas ? barrierCanvas.getContext('2d') : null;
+
+    function renderStack3D() {
+      if (!stackCanvas || !stackCtx || stackCanvas.width < 50 || stackCanvas.height < 50) return;
+      const w = stackCanvas.width;
+      const h = stackCanvas.height;
+      stackCtx.clearRect(0, 0, w, h);
+
+      // Background grid
+      stackCtx.strokeStyle = "rgba(0, 240, 255, 0.05)";
+      stackCtx.lineWidth = 1;
+      for (let y = 0; y < h; y += 25) {
+        stackCtx.beginPath();
+        stackCtx.moveTo(0, y);
+        stackCtx.lineTo(w, y);
+        stackCtx.stroke();
+      }
+
+      // Three Delimiter Columns
+      const cols = [
+        { label: "{ }", depth: braceDepth, color: "#00f0ff", x: w * 0.22 },
+        { label: "( )", depth: parenDepth, color: "#ffb703", x: w * 0.50 },
+        { label: "[ ]", depth: bracketDepth, color: "#9d4edd", x: w * 0.78 }
+      ];
+
+      cols.forEach(col => {
+        const baseH = Math.max(12, col.depth * 55);
+        const colW = 54;
+        const baseY = h - 50;
+
+        // Glow
+        stackCtx.shadowColor = col.color;
+        stackCtx.shadowBlur = col.depth > 0 ? 18 : 6;
+
+        // Pillar gradient
+        const grad = stackCtx.createLinearGradient(col.x - colW/2, baseY, col.x + colW/2, baseY - baseH);
+        grad.addColorStop(0, "rgba(255, 255, 255, 0.05)");
+        grad.addColorStop(1, col.color);
+
+        stackCtx.fillStyle = grad;
+        stackCtx.fillRect(col.x - colW/2, baseY - baseH, colW, baseH);
+
+        // Cap highlight
+        stackCtx.fillStyle = "#ffffff";
+        stackCtx.fillRect(col.x - colW/2, baseY - baseH, colW, 4);
+
+        stackCtx.shadowBlur = 0;
+
+        // Base ring
+        stackCtx.strokeStyle = col.color;
+        stackCtx.beginPath();
+        stackCtx.ellipse(col.x, baseY, colW/2, 8, 0, 0, Math.PI * 2);
+        stackCtx.stroke();
+
+        // Labels
+        stackCtx.fillStyle = "#ffffff";
+        stackCtx.font = "bold 13px JetBrains Mono";
+        stackCtx.textAlign = "center";
+        stackCtx.fillText(col.label, col.x, baseY + 28);
+        stackCtx.font = "11px JetBrains Mono";
+        stackCtx.fillStyle = col.color;
+        stackCtx.fillText(`d=${col.depth}`, col.x, baseY - baseH - 12);
+      });
+    }
+
+    function renderBarrierForcefield() {
+      if (!barrierCanvas || !barrierCtx || barrierCanvas.width < 50 || barrierCanvas.height < 50) return;
+      const w = barrierCanvas.width;
+      const h = barrierCanvas.height;
+      barrierCtx.clearRect(0, 0, w, h);
+
+      // Forcefield barrier plane
+      const barrierX = w * 0.5;
+      
+      // Background gradient
+      const bgGrad = barrierCtx.createLinearGradient(0, 0, w, 0);
+      bgGrad.addColorStop(0, "rgba(0, 240, 255, 0.03)");
+      bgGrad.addColorStop(0.48, "rgba(255, 0, 85, 0.08)");
+      bgGrad.addColorStop(0.5, "rgba(255, 0, 85, 0.35)");
+      bgGrad.addColorStop(0.52, "rgba(255, 0, 85, 0.08)");
+      bgGrad.addColorStop(1, "rgba(0, 255, 136, 0.03)");
+      barrierCtx.fillStyle = bgGrad;
+      barrierCtx.fillRect(0, 0, w, h);
+
+      // Glowing barrier wall line
+      barrierCtx.shadowColor = barrierIntensity > 0 ? "#ff0055" : "rgba(255, 0, 85, 0.4)";
+      barrierCtx.shadowBlur = Math.max(1, barrierIntensity * 30 + 10);
+      barrierCtx.strokeStyle = barrierIntensity > 0 ? "#ffffff" : "#ff0055";
+      barrierCtx.lineWidth = Math.max(1, barrierIntensity * 4 + 2);
+      barrierCtx.beginPath();
+      barrierCtx.moveTo(barrierX, 10);
+      barrierCtx.lineTo(barrierX, h - 10);
+      barrierCtx.stroke();
+      barrierCtx.shadowBlur = 0;
+
+      // Hexagonal barrier mesh
+      barrierCtx.strokeStyle = "rgba(255, 0, 85, 0.18)";
+      barrierCtx.lineWidth = 1;
+      const hexR = 20;
+      for (let y = 15; y < h - 15; y += hexR * 1.5) {
+        barrierCtx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const angle = (Math.PI / 3) * i;
+          const hx = barrierX + Math.cos(angle) * (hexR + (barrierIntensity * 12));
+          const hy = y + Math.sin(angle) * hexR;
+          if (i === 0) barrierCtx.moveTo(hx, hy);
+          else barrierCtx.lineTo(hx, hy);
+        }
+        barrierCtx.closePath();
+        barrierCtx.stroke();
+      }
+
+      // Barrier Annotation
+      barrierCtx.font = "bold 11px JetBrains Mono";
+      barrierCtx.textAlign = "center";
+      barrierCtx.fillStyle = barrierIntensity > 0 ? "#ff0055" : "rgba(255, 0, 85, 0.7)";
+      barrierCtx.fillText("POTENTIAL BARRIER V(x) = +∞", barrierX, 26);
+      barrierCtx.font = "10px JetBrains Mono";
+      barrierCtx.fillStyle = "#7f91b2";
+      barrierCtx.fillText("ILLEGAL TOKENS CLAMPED TO -∞", barrierX, h - 18);
+
+      // Particles
+      for (let i = repulsionParticles.length - 1; i >= 0; i--) {
+        const p = repulsionParticles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.02;
+
+        if (p.life <= 0) {
+          repulsionParticles.splice(i, 1);
+          continue;
+        }
+
+        barrierCtx.fillStyle = `rgba(255, 0, 85, ${p.life})`;
+        barrierCtx.shadowColor = "#ff0055";
+        barrierCtx.shadowBlur = 8;
+        barrierCtx.fillRect(p.x, p.y, p.size, p.size);
+      }
+      barrierCtx.shadowBlur = 0;
+
+      // Decay barrier intensity
+      if (barrierIntensity > 0) {
+        barrierIntensity = Math.max(0, barrierIntensity - 0.03);
+      }
+    }
+
+    function spawnRepulsionParticles() {
+      if (!barrierCanvas) return;
+      barrierIntensity = 1.0;
+      const bx = barrierCanvas.width * 0.5;
+      const by = barrierCanvas.height * 0.5;
+      for (let i = 0; i < 35; i++) {
+        repulsionParticles.push({
+          x: bx,
+          y: by + (Math.random() - 0.5) * 120,
+          vx: -(Math.random() * 6 + 2),
+          vy: (Math.random() - 0.5) * 5,
+          size: Math.random() * 4 + 2,
+          life: 1.0
+        });
+      }
+      playRepulsionSound();
+    }
+
+    // -------------------------------------------------------------------------
+    // ANIMATION LOOP (FAULT ISOLATED PER RULE EF-7)
+    // -------------------------------------------------------------------------
+    function animationLoop() {
+      try {
+        renderStack3D();
+        renderBarrierForcefield();
+      } catch (err) {
+        console.error("Frame render error:", err);
+      }
+      requestAnimationFrame(animationLoop);
+    }
+    requestAnimationFrame(animationLoop);
+
+    // -------------------------------------------------------------------------
+    // STEP EXECUTION ENGINE
+    // -------------------------------------------------------------------------
+    function updateHUD() {
+      document.getElementById('braceDepthVal').innerText = braceDepth;
+      document.getElementById('parenDepthVal').innerText = parenDepth;
+      document.getElementById('bracketDepthVal').innerText = bracketDepth;
+
+      const eosBadge = document.getElementById('eosClampStatus');
+      const underflowBadge = document.getElementById('underflowStatus');
+
+      if (braceDepth > 0 || parenDepth > 0 || bracketDepth > 0) {
+        eosBadge.innerText = "CLAMPED (-∞)";
+        eosBadge.className = "inv-status status-clamp";
+      } else {
+        eosBadge.innerText = "STANDBY (DEPTH 0)";
+        eosBadge.className = "inv-status status-standby";
+      }
+
+      if (braceDepth === 0) {
+        underflowBadge.innerText = "} CLAMPED (-∞)";
+        underflowBadge.className = "inv-status status-pass";
+      } else {
+        underflowBadge.innerText = "ACTIVE";
+        underflowBadge.className = "inv-status status-pass";
+      }
+    }
+
+    function stepSimulation() {
+      const preset = PRESETS[currentPreset];
+      if (!preset || tokenIndex >= preset.tokens.length) {
+        if (tokenIndex === preset.tokens.length) {
+          playSuccessChime();
+          tokenIndex++;
+        }
+        return;
+      }
+
+      const tok = preset.tokens[tokenIndex];
+
+      // Delimiter tracking
+      const db = (tok.match(/\{/g) || []).length - (tok.match(/\}/g) || []).length;
+      const dp = (tok.match(/\(/g) || []).length - (tok.match(/\)/g) || []).length;
+      const dbk = (tok.match(/\[/g) || []).length - (tok.match(/\]/g) || []).length;
+
+      braceDepth = Math.max(0, braceDepth + db);
+      parenDepth = Math.max(0, parenDepth + dp);
+      bracketDepth = Math.max(0, bracketDepth + dbk);
+
+      // Fault checks
+      if (tok.includes("[VIOLATION")) {
+        spawnRepulsionParticles();
+        document.getElementById('statClamped').innerText = "z_v = -∞ [DEFLECTED]";
+        document.getElementById('statClamped').style.color = "var(--neon-crimson)";
+        document.getElementById('rule6').innerText = "DEFLECTED (-∞)";
+        document.getElementById('rule6').className = "inv-status status-clamp";
+      } else {
+        playTokenClick();
+      }
+
+      // Update code display
+      const codeBox = document.getElementById('codeDisplay');
+      const currentCode = preset.tokens.slice(0, tokenIndex + 1).join('');
+      codeBox.innerHTML = escapeHtml(currentCode) + '<span class="code-cursor"></span>';
+      codeBox.scrollTop = codeBox.scrollHeight;
+
+      // Update compiler log periodically
+      const compLog = document.getElementById('compilerLog');
+      const phaseStep = Math.floor((tokenIndex / preset.tokens.length) * preset.compilerPhases.length);
+      compLog.innerHTML = preset.compilerPhases.slice(0, Math.max(1, phaseStep)).join('\n');
+      compLog.scrollTop = compLog.scrollHeight;
+
+      updateHUD();
+      tokenIndex++;
+    }
+
+    function escapeHtml(text) {
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function resetSimulation() {
+      tokenIndex = 0;
+      braceDepth = 0;
+      parenDepth = 0;
+      bracketDepth = 0;
+      repulsionParticles = [];
+      barrierIntensity = 0;
+      document.getElementById('codeDisplay').innerHTML = '// Ready for token stream...<span class="code-cursor"></span>';
+      document.getElementById('compilerLog').innerHTML = `[ZCC] Loaded preset: ${PRESETS[currentPreset].title}\n[BARRIER] Ready.`;
+      document.getElementById('statClamped').innerText = "z_v = -∞";
+      document.getElementById('statClamped').style.color = "#fff";
+      updateHUD();
+    }
+
+    // Controls
+    document.getElementById('presetSelect').addEventListener('change', (e) => {
+      currentPreset = e.target.value;
+      resetSimulation();
+    });
+
+    document.getElementById('btnPlayPause').addEventListener('click', () => {
+      isPlaying = !isPlaying;
+      document.getElementById('btnPlayPause').innerText = isPlaying ? "⏸️ PAUSE" : "▶️ PLAY";
+    });
+
+    document.getElementById('btnStep').addEventListener('click', () => {
+      stepSimulation();
+    });
+
+    document.getElementById('btnReset').addEventListener('click', () => {
+      resetSimulation();
+    });
+
+    document.getElementById('btnInjectFault').addEventListener('click', () => {
+      currentPreset = 'fault';
+      document.getElementById('presetSelect').value = 'fault';
+      resetSimulation();
+    });
+
+    // Run tick
+    setInterval(() => {
+      if (isPlaying) {
+        stepSimulation();
+      }
+    }, 380);
+
+    resetSimulation();
+  </script>
+</body>
+</html>

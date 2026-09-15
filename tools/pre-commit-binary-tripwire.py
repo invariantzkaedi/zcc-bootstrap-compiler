@@ -13,13 +13,14 @@ ALLOWED_ROOT_NAMES = {
     "CODEOWNERS",
     "Dockerfile",
     "LICENSE",
-    "char"  # tracked empty file — origin: see git log -- char
+    "char",  # tracked empty file — origin: see git log -- char
+    "pyproject.toml"
 }
 
 ALLOWED_EXTENSIONS = {
     ".c", ".h", ".inc", ".py", ".md", ".txt", ".json", ".yaml", ".yml",
     ".sh", ".bat", ".patch", ".gitignore", ".gitattributes", ".xml",
-    ".html", ".js", ".tsv", ".css"
+    ".html", ".js", ".tsv", ".css", ".toml"
 }
 
 def is_binary(filepath):

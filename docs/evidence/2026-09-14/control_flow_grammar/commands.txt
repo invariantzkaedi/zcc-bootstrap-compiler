@@ -1,0 +1,34 @@
+# Universal Control-Flow & Pushdown-Automaton Grammar Engine Evidence Commands
+# Date: 2026-09-14
+# Host: WSL Ubuntu / Linux x86-64 / Windows Host
+
+# 1. Package Installation & CLI Registration
+cd /mnt/h/__DOWNLOADS/zcc_github_upload
+/home/zkaedi/.local/share/wsl-recon/venv/bin/pip install -e .
+
+# 2. Sovereign 5-Gate Unit Test Suite Execution
+/home/zkaedi/.local/share/wsl-recon/venv/bin/python -m unittest -v tests/test_zkaedi_prime_sovereign.py
+
+# 3. Live Logits-Constrained Inference via Sovereign CLI (Try/Catch/Finally Exception Isolation)
+zkaedi-prime infer \
+  --mode CODE_GRAMMAR \
+  --require-return \
+  --prompt "Write a JavaScript function safeDivide(a, b) with try-catch-finally that checks if b === 0, throws an Error, handles it, and returns the quotient or null." \
+  --max-tokens 180
+
+# 4. Neural-Compiler Triple Gauntlet (Pure C Generation -> ZCC Native Codegen -> Execution)
+# 4a. Factorial Calculation (6! = 720)
+zkaedi-prime compile --prompt "Write a C program that calculates 6 factorial and prints the result."
+
+# 4b. Primality Sieve (997 is prime)
+zkaedi-prime compile --prompt "Write a C program that checks if 997 is prime and prints '997 is prime' if so."
+
+# 4c. In-Place String Reversal ('ZKAEDI_PRIME' -> 'EMIRP_IDEAKZ')
+zkaedi-prime compile --prompt "Write a C program that reverses the string 'ZKAEDI_PRIME' in place and prints it."
+
+# 5. UI & HTML Upgrade Verification Protocol (Rule EF-7 Headless Automated AST & Render Gate)
+node tests/test_observatory_rule_ef7.js
+
+# 6. Baseline Self-Host Identity Verification
+make selfhost
+cmp zcc2.s zcc3.s

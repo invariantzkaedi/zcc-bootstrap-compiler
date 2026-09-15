@@ -1,0 +1,142 @@
+================================================================================
+  🔱 SOVEREIGN 5-GATE UNIT TEST SUITE (tests/test_zkaedi_prime_sovereign.py)
+================================================================================
+test_gate1_canonical_field_lyapunov (tests.test_zkaedi_prime_sovereign.TestZkaediPrimeSovereign.test_gate1_canonical_field_lyapunov)
+Verify Form 1 & Form 3: Subcritical Lyapunov contraction and scarring. ... ok
+test_gate2_two_regime_pathfinder (tests.test_zkaedi_prime_sovereign.TestZkaediPrimeSovereign.test_gate2_two_regime_pathfinder)
+Verify Form 5: Fast pathfinder escape from local minimum. ... ok
+test_gate3_flash_kernel_sram (tests.test_zkaedi_prime_sovereign.TestZkaediPrimeSovereign.test_gate3_flash_kernel_sram)
+Verify Form 6: In-SRAM tile rollout stability. ... ok
+test_gate4_squozen_engine_unit_clamp (tests.test_zkaedi_prime_sovereign.TestZkaediPrimeSovereign.test_gate4_squozen_engine_unit_clamp)
+Verify Form 4: Pure unit test on LogitsProcessor without loading model. ... ok
+test_gate5_control_flow_grammar (tests.test_zkaedi_prime_sovereign.TestZkaediPrimeSovereign.test_gate5_control_flow_grammar)
+Verify Universal Control-Flow Engine: try/catch, if/else, def/return, and delimiters. ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.014s
+
+OK
+
+================================================================================
+  RULE EF-7 HEADLESS OBSERVATORY VALIDATION (tests/test_observatory_rule_ef7.js)
+================================================================================
+RULE EF-7.1 Syntax AST Gate: PASS (0 syntax errors)
+RULE EF-7.4 Symbol Integrity Gate: PASS (17 DOM IDs audited & verified)
+RULE EF-7.2 & EF-7.3 Zero-Dimension Resilience & Animation Loop: PASS (5 frames rendered)
+Simulating stepSimulation() across all 5 presets:
+ - Preset [fib]: 15 steps executed clean.
+ - Preset [prime]: 15 steps executed clean.
+ - Preset [rev]: 15 steps executed clean.
+ - Preset [trycatch]: 15 steps executed clean.
+ - Preset [fault]: 15 steps executed clean.
+RULE EF-7.5 Same-Turn Headless DOM & Render Execution: PASS (0 errors)
+
+================================================================================
+  NEURAL-COMPILER TRIPLE GAUNTLET: LIVE OUTPUT
+================================================================================
+--- GAUNTLET 1: Factorial Calculation (6!) ---
+Command: zkaedi-prime compile --prompt "Write a C program that calculates 6 factorial and prints the result."
+Generated Code:
+#include <stdio.h>
+
+int main(void) {
+    int n = 6;
+    int fact = 1;
+    for (int i = 1; i <= n; i++) {
+        fact *= i;
+    }
+    printf("%d\n", fact);
+    return 0;
+}
+ZCC Compiler Output:
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK
+[OK] ZCC Compilation Successful.
+Binary Execution:
+720
+🏆 [EXIT CODE: 0 | Execution Time: 1.89ms]
+
+--- GAUNTLET 2: Primality Sieve (997 is prime) ---
+Command: zkaedi-prime compile --prompt "Write a C program that checks if 997 is prime and prints '997 is prime' if so."
+Generated Code:
+#include <stdio.h>
+
+int main(void) {
+    int num = 997;
+    int i;
+    for (i = 2; i * i <= num; i++) {
+        if (num % i == 0) {
+            printf("%d is not prime\n", num);
+            return 1;
+        }
+    }
+    printf("%d is prime\n", num);
+    return 0;
+}
+ZCC Compiler Output:
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK
+[OK] ZCC Compilation Successful.
+Binary Execution:
+997 is prime
+🏆 [EXIT CODE: 0 | Execution Time: 1.99ms]
+
+--- GAUNTLET 3: In-Place String Reversal ('ZKAEDI_PRIME' -> 'EMIRP_IDEAKZ') ---
+Command: zkaedi-prime compile --prompt "Write a C program that reverses the string 'ZKAEDI_PRIME' in place and prints it."
+Generated Code:
+#include <stdio.h>
+#include <string.h>
+
+void reverseString(char *str) {
+    int len = strlen(str);
+    for (int i = 0; i < len / 2; i++) {
+        char temp = str[i];
+        str[i] = str[len - i - 1];
+        str[len - i - 1] = temp;
+    }
+    printf("%s\n", str);
+    return;
+}
+
+int main(void) {
+    char str[13] = "ZKAEDI_PRIME";
+    reverseString(str);
+    return 0;
+}
+ZCC Compiler Output:
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK
+[OK] ZCC Compilation Successful.
+Binary Execution:
+EMIRP_IDEAKZ
+🏆 [EXIT CODE: 0 | Execution Time: 2.14ms]
+
+================================================================================
+  UNIVERSAL CONTROL-FLOW INFERENCE (Try-Catch-Finally)
+================================================================================
+Command: zkaedi-prime infer --mode CODE_GRAMMAR --require-return --prompt "Write a JavaScript function safeDivide(a, b)..."
+Output:
+function safeDivide(a, b) {
+    try {
+        if (b === 0) {
+            throw new Error("DivideByZero");
+        }
+        return a / b;
+    } catch (err) {
+        console.error(err.message);
+        return null;
+    } finally {
+        console.log("Execution finalized.");
+    }
+}
+[DELIMITER PDA] Depth Braces: 0, Parens: 0, Brackets: 0 [BALANCED]
+[BARRIER V(x)=+inf] Clamped Tokens: 0 backticks, 0 tildes, 0 orphan catch, 0 premature EOS.
