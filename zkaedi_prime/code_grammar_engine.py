@@ -53,7 +53,8 @@ class SovereignControlFlowLogitsProcessor(LogitsProcessor):
         allow_markdown_fences: bool = False,
         pure_code: bool = False,
         terminal_scope_clamp: bool = False,
-        single_function: bool = False
+        single_function: bool = False,
+        anti_repetition: bool = True
     ):
         self.prompt_len = prompt_len
         self.tokenizer = tokenizer
@@ -63,6 +64,7 @@ class SovereignControlFlowLogitsProcessor(LogitsProcessor):
         self.pure_code = pure_code
         self.terminal_scope_clamp = terminal_scope_clamp
         self.single_function = single_function
+        self.anti_repetition = anti_repetition
         self.eos_token_id = tokenizer.eos_token_id
 
         vocab = tokenizer.get_vocab()
@@ -80,7 +82,10 @@ class SovereignControlFlowLogitsProcessor(LogitsProcessor):
 
         # 1. Functions & Definitions
         self.tok_def = get_tokens_for_words(["def", "function", "fn", "func"])
-        self.tok_main = get_tokens_for_words(["main"])
+        self.tok_main = set()
+        for tok_str, tok_id in vocab.items():
+            if "main" in tok_str.lower():
+                self.tok_main.add(tok_id)
         self.tok_return = get_tokens_for_words(["return", "yield"])
 
         # 2. Conditionals & Branching
@@ -103,6 +108,9 @@ class SovereignControlFlowLogitsProcessor(LogitsProcessor):
         self.tok_switch = get_tokens_for_words(["switch", "match"])
         self.tok_case = get_tokens_for_words(["case"])
         self.tok_default = get_tokens_for_words(["default"])
+
+        # 5B. Structs & Types
+        self.tok_struct = get_tokens_for_words(["struct", "union"])
 
         # 6. Delimiters - Character-level delimiter count tables (impervious to BPE token merges like '++)' or ');\n')
         vocab_size = max(vocab.values()) + 1
@@ -141,7 +149,8 @@ class SovereignControlFlowLogitsProcessor(LogitsProcessor):
         # Whitespace / formatting tokens (newlines, spaces, indentation)
         self.whitespace_tokens: Set[int] = set()
         for tok_str, tok_id in vocab.items():
-            if tok_str.strip() == "" or tok_str in ["\n", "\r\n", "\t", " ", "  ", "   ", "    "]:
+            dec = tokenizer.decode([tok_id]) if hasattr(tokenizer, "decode") else tok_str
+            if dec.strip() == "" or tok_str.strip() == "" or all(c in " \t\r\nĠ " for c in tok_str):
                 self.whitespace_tokens.add(tok_id)
 
         # Fence tokens (Markdown backticks ` and tildes ~)
@@ -176,6 +185,47 @@ class SovereignControlFlowLogitsProcessor(LogitsProcessor):
             if s.startswith("//") or s.startswith("/*") or s.startswith("#"):
                 self.code_starters.add(tok_id)
 
+        # 8. C++ OOP & modern C++ ban in pure C mode
+        self.tok_cpp_only = get_tokens_for_words([
+            "this", "class", "public", "private", "protected",
+            "template", "namespace", "std", "cout", "cin", "virtual",
+            "override", "auto", "nullptr"
+        ])
+
+        # 9. Special tokens & FIM ban (prevents <|fim_suffix|>, <|fim_middle|>, etc.)
+        self.special_tokens_to_ban: Set[int] = set()
+        for tok_str, tok_id in vocab.items():
+            if tok_id != self.eos_token_id:
+                if tok_id >= 151643 or "<|" in tok_str or "3rd" in tok_str:
+                    self.special_tokens_to_ban.add(tok_id)
+
+        # 10. Escaped operators ban (prevents \% and other markdown/latex artifacts in C)
+        self.escaped_operator_tokens: Set[int] = set()
+        for tok_str, tok_id in vocab.items():
+            if tok_str.strip() == "\\":
+                self.escaped_operator_tokens.add(tok_id)
+            for op in ["%", "+", "-", "*", "/", "=", "&", "|", "^", "~", "(", ")", "[", "]", "{", "}", ";", ",", ":", "<", ">", "!"]:
+                if f"\\{op}" in tok_str:
+                    self.escaped_operator_tokens.add(tok_id)
+
+        # 11. C Struct field rules
+        self.tok_void = get_tokens_for_words(["void"])
+        self.tok_colon: Set[int] = set()
+        for tok_str, tok_id in vocab.items():
+            if ":" in tok_str:
+                self.tok_colon.add(tok_id)
+        self.tok_semi: Set[int] = set()
+        for tok_str, tok_id in vocab.items():
+            if ";" in tok_str:
+                self.tok_semi.add(tok_id)
+
+        # 12. Digit tokens (prevents split numbers like 10000 0007 in C)
+        self.digit_tokens: Set[int] = set()
+        for tok_str, tok_id in vocab.items():
+            s = tok_str.lstrip()
+            if s and s[0] in "0123456789":
+                self.digit_tokens.add(tok_id)
+
     def inspect_state(self, input_ids: torch.LongTensor) -> Dict[str, Any]:
         """
         Extracts the pushdown automaton state from the token stream for introspection.
@@ -197,11 +247,17 @@ class SovereignControlFlowLogitsProcessor(LogitsProcessor):
         seen_main = False
         in_main = False
         main_closed = False
+        seen_struct = False
+        in_struct = False
+        struct_closed_needs_semi = False
+        struct_member_semis = 0
         ever_opened_scope = False
 
         for tid in gen_tokens:
             if tid in self.tok_main:
                 seen_main = True
+            elif tid in self.tok_struct:
+                seen_struct = True
 
             db = self.delta_brace[tid] if tid < len(self.delta_brace) else 0
             dp = self.delta_paren[tid] if tid < len(self.delta_paren) else 0
@@ -211,14 +267,27 @@ class SovereignControlFlowLogitsProcessor(LogitsProcessor):
             paren_depth = max(0, paren_depth + dp)
             bracket_depth = max(0, bracket_depth + dbk)
 
+            if in_struct and tid in self.tok_semi:
+                struct_member_semis += 1
+
+            if struct_closed_needs_semi and tid in self.tok_semi:
+                struct_closed_needs_semi = False
+
             if db > 0:
                 ever_opened_scope = True
                 if seen_main and brace_depth >= 1:
                     in_main = True
+                elif seen_struct and not seen_main:
+                    in_struct = True
+                    seen_struct = False
+                    struct_member_semis = 0
             elif db < 0:
                 if in_main and brace_depth == 0:
                     in_main = False
                     main_closed = True
+                if in_struct and brace_depth == 0:
+                    in_struct = False
+                    struct_closed_needs_semi = True
                 if in_try_block and brace_depth == 0:
                     in_try_block = False
                     try_closed_needs_catch = True
@@ -243,6 +312,20 @@ class SovereignControlFlowLogitsProcessor(LogitsProcessor):
             elif tid in self.tok_return:
                 has_return_emitted = True
 
+        last_non_ws_was_semi = False
+        last_tok_was_space_after_number = False
+        saw_ws = False
+        for tid in reversed(gen_tokens):
+            if tid in self.whitespace_tokens:
+                saw_ws = True
+            else:
+                if tid in self.tok_semi:
+                    last_non_ws_was_semi = True
+                tok_str = self.tokenizer.decode([tid]) if hasattr(self.tokenizer, "decode") else ""
+                if saw_ws and any(tok_str.endswith(d) for d in "0123456789"):
+                    last_tok_was_space_after_number = True
+                break
+
         return {
             "brace_depth": brace_depth,
             "paren_depth": paren_depth,
@@ -255,12 +338,49 @@ class SovereignControlFlowLogitsProcessor(LogitsProcessor):
             "try_closed_needs_catch": try_closed_needs_catch,
             "has_return_emitted": has_return_emitted,
             "ever_opened_scope": ever_opened_scope,
-            "main_closed": main_closed
+            "main_closed": main_closed,
+            "in_struct": in_struct,
+            "in_main": in_main,
+            "struct_closed_needs_semi": struct_closed_needs_semi,
+            "struct_member_semis": struct_member_semis,
+            "last_non_ws_was_semi": last_non_ws_was_semi,
+            "last_tok_was_space_after_number": last_tok_was_space_after_number
         }
 
     def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
         cur_len = input_ids.shape[1]
         step = cur_len - self.prompt_len
+
+        # ---------------------------------------------------------------------
+        # RULE 0A: ANTI-REPETITION 3-GRAM CLAMP (PREVENTS INFINITE STRUCT/CODE LOOPS)
+        # ---------------------------------------------------------------------
+        if self.anti_repetition and step > 4:
+            gen_tokens = input_ids[0][self.prompt_len:]
+            recent = gen_tokens[-3:].tolist()
+            for i in range(len(gen_tokens) - 3):
+                if gen_tokens[i:i+3].tolist() == recent:
+                    blocked_token = gen_tokens[i+3].item()
+                    scores[:, blocked_token] = -float("inf")
+
+        # ---------------------------------------------------------------------
+        # RULE 0B: C++ LEAK BAN FOR PURE C (FORBIDS 'this', 'class', ETC.)
+        # ---------------------------------------------------------------------
+        if self.pure_code:
+            for tid in self.tok_cpp_only:
+                scores[:, tid] = -float("inf")
+
+        # ---------------------------------------------------------------------
+        # RULE 0C: SPECIAL TOKENS & FIM CLAMP (BANS <|fim_suffix|>, <|fim_middle|>, ETC.)
+        # ---------------------------------------------------------------------
+        for tid in self.special_tokens_to_ban:
+            scores[:, tid] = -float("inf")
+
+        # ---------------------------------------------------------------------
+        # RULE 0D: ESCAPED OPERATORS BAN (NO \% OR \+ IN C EXPRESSIONS)
+        # ---------------------------------------------------------------------
+        if self.pure_code:
+            for tid in self.escaped_operator_tokens:
+                scores[:, tid] = -float("inf")
 
         # ---------------------------------------------------------------------
         # RULE 1: STEP-0 NO CONVERSATIONAL FLUFF & PURE CODE GUARANTEE
@@ -322,6 +442,40 @@ class SovereignControlFlowLogitsProcessor(LogitsProcessor):
                 scores[:, tid] = -float("inf")
 
         # ---------------------------------------------------------------------
+        # RULE 4B: NO NESTED FUNCTIONS (main CANNOT BE EMITTED INSIDE OPEN SCOPE)
+        # ---------------------------------------------------------------------
+        # In C, main() can only exist at file scope (brace_depth == 0).
+        # Any open struct or block MUST close before main() can begin!
+        if brace_depth > 0:
+            for tid in self.tok_main:
+                scores[:, tid] = -float("inf")
+
+        # ---------------------------------------------------------------------
+        # RULE 4C: STRUCT MEMBER INTEGRITY & FORCED CLOSURE
+        # ---------------------------------------------------------------------
+        # In C, structs only have data members (no functions, no code blocks, no void)
+        if state["in_struct"]:
+            for tid in self.paren_open | self.paren_close | self.brace_open:
+                scores[:, tid] = -float("inf")
+            for tid in self.tok_void:
+                scores[:, tid] = -float("inf")
+            for tid in self.tok_colon:
+                scores[:, tid] = -float("inf")
+            # If at least 2 member declarations have closed with semicolon,
+            # and the last token was semicolon, force closing brace '}'
+            if state.get("struct_member_semis", 0) >= 2 and state.get("last_non_ws_was_semi", False):
+                allowed = self.brace_close | self.whitespace_tokens
+                mask = torch.full_like(scores, -float("inf"))
+                for tid in allowed:
+                    mask[:, tid] = scores[:, tid]
+                return mask
+
+        # After struct closing brace '}', force semicolon ';' or typedef name
+        if state.get("struct_closed_needs_semi", False):
+            for tid in self.brace_open | self.tok_main:
+                scores[:, tid] = -float("inf")
+
+        # ---------------------------------------------------------------------
         # RULE 5: EXCEPTION HANDLER INVARIANCE (TRY -> CATCH/FINALLY MANDATORY)
         # ---------------------------------------------------------------------
         # If 'try { ... }' just closed, the next non-whitespace statement
@@ -375,7 +529,7 @@ class SovereignControlFlowLogitsProcessor(LogitsProcessor):
         # ---------------------------------------------------------------------
         # If a typed function is required to return a value, and we are at
         # the final closing brace without a return, clamp '}' to -inf to force return!
-        if self.require_return and not has_return_emitted and brace_depth == 1:
+        if self.require_return and not state.get("in_struct", False) and not has_return_emitted and brace_depth == 1:
             for tid in self.brace_close:
                 scores[:, tid] = -float("inf")
 
@@ -396,6 +550,13 @@ class SovereignControlFlowLogitsProcessor(LogitsProcessor):
         # clamp conversational prose tokens so the model cannot begin commentary!
         if self.pure_code and ever_opened_scope and brace_depth == 0:
             for tid in self.chatter_tokens:
+                scores[:, tid] = -float("inf")
+
+        # ---------------------------------------------------------------------
+        # RULE 13: NO SPACE-SPLIT NUMBER LITERALS (e.g. 10000 0007 IS ILLEGAL IN C)
+        # ---------------------------------------------------------------------
+        if state.get("last_tok_was_space_after_number", False):
+            for tid in self.digit_tokens:
                 scores[:, tid] = -float("inf")
 
         return scores

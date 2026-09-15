@@ -1,0 +1,23 @@
+# ==============================================================================
+# ZKAEDI PRIME // RESIDENT VRAM DAEMON & GAUNTLET V2 VERIFICATION COMMANDS
+# Date: 2026-09-14
+# Hardware: NVIDIA GeForce RTX 5070 Laptop GPU (CUDA) | AMD Ryzen AI 7 350
+# ==============================================================================
+
+# 1. Daemon Lifecycle & IPC Socket Audit
+zkaedi-prime daemon status
+ss -tlpn | grep 8765
+ls -la /tmp/zkaedi_prime.sock
+
+# 2. Gate 1 Bootstrap Self-Host Identity Seal
+cmp zcc2.s zcc3.s
+
+# 3. Unit Test Suite Execution (Windows & WSL)
+python -m unittest tests/test_zkaedi_prime_sovereign.py
+python -m unittest tests/test_zkaedi_prime_daemon.py
+
+# 4. Neural-Compiler 5-Workload Gauntlet V2 Execution
+python tools/prime/run_sovereign_gauntlet_v2.py
+
+# 5. Live Single-Prompt Verification
+zkaedi-prime compile --prompt "Write a C program that prints Hello World."

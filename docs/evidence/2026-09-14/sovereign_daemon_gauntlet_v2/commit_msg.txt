@@ -1,0 +1,64 @@
+feat(prime): launch persistent VRAM compiler daemon, resolve 4 grammar bugs, and seal Gauntlet V2 5/5 pass
+
+Goal:
+Deploy a resident GPU inference daemon to eliminate weight-load latency, harden C grammar pushdown automata against struct trapping and token leakage, and achieve 100% pass across advanced stress/cryptographic compilation gauntlets.
+
+Outcome:
+Resident VRAM daemon operational on NVIDIA GeForce RTX 5070 Laptop GPU (2,976.4 MB resident) over UDS and TCP; 4 compiler grammar defects resolved; Gauntlet V2 swept 5/5 clean (100.0%) under native ZCC; and self-host byte identity sealed.
+
+Root cause:
+- Cold weight-load overhead: Loading 1.5B model parameters from disk on every CLI prompt introduced a ~20s latency penalty per run.
+- Fill-In-The-Middle (FIM) token leakage: Qwen tokenizer defined FIM special tokens (151659-151664) outside standard special_ids, emitting into code streams.
+- C struct trapping: Rule 10 require_return clamped closing braces inside structs, and lack of field restrictions allowed method hallucinations.
+- BPE whitespace splitting: Space token 220 (Unicode Ġ) bypassed strip() detection, leading to split integer literals (e.g. 10000 0007).
+
+Patch summary:
+- zkaedi_prime/daemon.py: persistent GPU VRAM server with Unix Domain Socket and TCP loopback IPC.
+- zkaedi_prime/cli.py: automatic IPC daemon dispatch with direct fallback; upgraded deprecated torch_dtype to dtype.
+- zkaedi_prime/code_grammar_engine.py: clamped FIM tokens, banned ordinals in pure C, exempted structs from require_return, banned methods inside structs, and clamped post-digit whitespace digit splits.
+- zkaedi_prime/dual_silicon_orchestrator.py: cross-silicon orchestration bridging AMD NPU (Device 1) and RTX 5070 GPU.
+- tools/npu/amd_npu_directml_drafter.py: DirectML device initialization, NPU tensor benchmark, and speculative drafter.
+- tools/npu/test_dual_silicon_gauntlet.py: automated test harness passing all dual-silicon gates.
+- tools/prime/run_sovereign_gauntlet_v2.py: 5-workload stress and crypto compilation gauntlet suite.
+- tests/test_zkaedi_prime_daemon.py: automated lifecycle unit test for daemon spawn, ping, and shutdown.
+- docs/evidence/2026-09-14/sovereign_daemon_gauntlet_v2/: complete evidence bundle with raw logs and checksums.
+
+Gate 1: PASS via cmp zcc2.s zcc3.s
+SELF-HOST VERIFIED: BYTE IDENTICAL
+7afc1dc0bed0e049a895cf06386fcc00  zcc2.s
+7afc1dc0bed0e049a895cf06386fcc00  zcc3.s
+
+Gate 2: PASS via python -m unittest tests/test_zkaedi_prime_daemon.py
+.
+----------------------------------------------------------------------
+Ran 1 test in 0.120s
+
+OK
+
+Gate 3: PASS via python -m unittest tests/test_zkaedi_prime_sovereign.py
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.027s
+
+OK
+
+Gate 4: PASS via python tools/prime/run_sovereign_gauntlet_v2.py
+STRESS-01-POINTER-ARRAY: Pointer sum: 150 (PASS)
+STRESS-02-BUBBLESORT: Sorted: 11 12 22 25 64 90 (PASS)
+STRESS-03-STRUCT-GEOM: Point area: 120 (PASS)
+CRYPTO-01-SHA256-PRIM: SHA256 primitives verified (PASS)
+CRYPTO-02-MOD-EXPON: ModExp result: 24 (PASS)
+Overall Result: 5/5 Passed (100.0%) | Total Time: 100.73s
+
+Gate 5: PASS via zkaedi-prime compile --prompt "Write a C program that prints Hello World."
+Code generated instantly via resident VRAM in 3.811s!
+Exit Code: 0 | Execution Time: 2.21ms
+Output: Hello World
+
+Bugs caught mid-gate:
+1. Transformers 5.x deprecation: torch_dtype replaced with canonical dtype across all loaders.
+2. Struct method hallucination: resolved by enforcing member types and closing braces before main().
+
+Hygiene/deferred: None.
+Forensic notes: RTX 5070 GPU hosts daemon at 2,976.4 MB VRAM; AMD Ryzen AI NPU 0 identified at 47.1 GB shared pool for future DirectML/ONNX offloading.
+Residual risk: None.

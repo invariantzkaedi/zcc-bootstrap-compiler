@@ -51,7 +51,7 @@ def run_inference(args):
     tokenizer = AutoTokenizer.from_pretrained(str(model_path), trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(
         str(model_path),
-        torch_dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,
+        dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,
         device_map="auto",
         trust_remote_code=True
     )
@@ -108,51 +108,78 @@ def run_compile(args):
     import subprocess
     import tempfile
 
-    model_path = resolve_model_path(args.model or DEFAULT_MODEL_PATH)
-    print(f"\n[NEURAL-COMPILER LOOP] Initializing Model: {model_path}...")
+    c_source = None
+    gen_time = 0.0
 
-    tokenizer = AutoTokenizer.from_pretrained(str(model_path), trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        str(model_path),
-        torch_dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,
-        device_map="auto",
-        trust_remote_code=True
-    )
-    model.eval()
+    # 1. Check if Resident VRAM Daemon is active for zero-load instant compilation
+    if not getattr(args, "no_daemon", False):
+        try:
+            from .daemon import send_daemon_request, is_daemon_running
+            if is_daemon_running():
+                print("\n[NEURAL-COMPILER LOOP] Resident VRAM Daemon detected! Querying via IPC socket...")
+                req = {
+                    "action": "generate",
+                    "prompt": args.prompt,
+                    "mode": "CODE_GRAMMAR",
+                    "max_tokens": args.max_tokens,
+                    "pure_code": True,
+                    "terminal_scope_clamp": True
+                }
+                daemon_res = send_daemon_request(req, timeout=120.0)
+                if daemon_res and daemon_res.get("status") == "ok":
+                    c_source = daemon_res.get("c_source", "")
+                    gen_time = daemon_res.get("gen_time", 0.0)
+                    print(f"⚡ [DAEMON IPC SUCCESS] Code generated instantly via resident VRAM in {gen_time:.3f}s!")
+        except Exception as e:
+            print(f"[DAEMON FALLBACK] Daemon query failed ({e}), falling back to direct load...")
 
-    messages = [
-        {
-            "role": "system",
-            "content": "You are an expert low-level C systems compiler engineer. Write clean, complete, standalone C programs starting with #include and containing main(). Zero markdown, zero commentary, pure C source code."
-        },
-        {"role": "user", "content": args.prompt}
-    ]
-    prompt_str = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    inputs = tokenizer(prompt_str, return_tensors="pt").to(model.device)
-    plen = inputs["input_ids"].shape[1]
+    # 2. Direct model load fallback
+    if c_source is None:
+        model_path = resolve_model_path(args.model or DEFAULT_MODEL_PATH)
+        print(f"\n[NEURAL-COMPILER LOOP] Initializing Model: {model_path}...")
 
-    from .code_grammar_engine import SovereignControlFlowLogitsProcessor
-    processor = SovereignControlFlowLogitsProcessor(
-        prompt_len=plen,
-        tokenizer=tokenizer,
-        require_return=True,
-        allow_markdown_fences=False,
-        pure_code=True,
-        terminal_scope_clamp=True
-    )
-
-    print(f"[GENERATING] Enforcing Pure C Grammar + Terminal Scope Clamping...")
-    t0 = time.time()
-    with torch.no_grad():
-        out = model.generate(
-            **inputs,
-            max_new_tokens=args.max_tokens,
-            do_sample=False,
-            logits_processor=LogitsProcessorList([processor]),
-            pad_token_id=tokenizer.eos_token_id
+        tokenizer = AutoTokenizer.from_pretrained(str(model_path), trust_remote_code=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            str(model_path),
+            dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,
+            device_map="auto",
+            trust_remote_code=True
         )
-    gen_time = time.time() - t0
-    c_source = tokenizer.decode(out[0][plen:], skip_special_tokens=True).strip()
+        model.eval()
+
+        messages = [
+            {
+                "role": "system",
+                "content": "You are an expert low-level C systems compiler engineer. Write clean, complete, standalone C programs starting with #include and containing main(). Zero markdown, zero commentary, pure C source code."
+            },
+            {"role": "user", "content": args.prompt}
+        ]
+        prompt_str = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        inputs = tokenizer(prompt_str, return_tensors="pt").to(model.device)
+        plen = inputs["input_ids"].shape[1]
+
+        from .code_grammar_engine import SovereignControlFlowLogitsProcessor
+        processor = SovereignControlFlowLogitsProcessor(
+            prompt_len=plen,
+            tokenizer=tokenizer,
+            require_return=True,
+            allow_markdown_fences=False,
+            pure_code=True,
+            terminal_scope_clamp=True
+        )
+
+        print(f"[GENERATING] Enforcing Pure C Grammar + Terminal Scope Clamping...")
+        t0 = time.time()
+        with torch.no_grad():
+            out = model.generate(
+                **inputs,
+                max_new_tokens=args.max_tokens,
+                do_sample=False,
+                logits_processor=LogitsProcessorList([processor]),
+                pad_token_id=tokenizer.eos_token_id
+            )
+        gen_time = time.time() - t0
+        c_source = tokenizer.decode(out[0][plen:], skip_special_tokens=True).strip()
 
     print("\n" + "=" * 80)
     print(" 🔱 GENERATED C SOURCE CODE (SQUOZEN VERIFIED) 🔱")
@@ -245,6 +272,13 @@ def main():
     comp_p.add_argument("--max-tokens", type=int, default=256)
     comp_p.add_argument("--no-run", action="store_true", help="Compile only, do not run binary")
     comp_p.add_argument("--model", type=str, default=DEFAULT_MODEL_PATH)
+    comp_p.add_argument("--no-daemon", action="store_true", help="Force local direct model load, bypassing resident daemon")
+
+    # Daemon sub-command (Frontier 1)
+    daemon_p = subparsers.add_parser("daemon", help="Manage resident VRAM inference daemon")
+    daemon_p.add_argument("action", choices=["start", "stop", "status", "restart"], help="Daemon lifecycle action")
+    daemon_p.add_argument("--model", type=str, default=DEFAULT_MODEL_PATH)
+    daemon_p.add_argument("--port", type=int, default=8765)
 
     # Walk sub-command
     subparsers.add_parser("walk-6forms", help="Execute Ultra Quantum Walk on 6 Forms")
@@ -258,6 +292,9 @@ def main():
         run_inference(args)
     elif args.command == "compile":
         run_compile(args)
+    elif args.command == "daemon":
+        from .daemon import run_daemon_cli
+        run_daemon_cli(args.action, model_path=args.model, port=args.port)
     elif args.command == "walk-6forms":
         from tools.prime.ultra_quantum_walk_forms import execute_ultra_quantum_walk
         execute_ultra_quantum_walk()
