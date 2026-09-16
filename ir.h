@@ -124,9 +124,19 @@ typedef enum {
     IR_FPTRUNC,     /* dst = (float)src1  (double to float truncation)     */
     IR_ASM,         /* dst = asm_string                                    */
 
-    /* Vector Operations */
-    IR_VLOAD,       /* dst = *(vec*)src1   (Coalesced Vector Load)         */
-    IR_VEXTRACT,    /* dst = src1[imm]     (Vector Element Extract)        */
+    /* Legacy pseudo-vector Operations */
+    IR_VLOAD,       /* dst = *(vec*)src1   (Coalesced Vector Load - GPR)   */
+    IR_VEXTRACT,    /* dst = src1[imm]     (Vector Element Extract - GPR)  */
+
+    /* 256-bit AVX/FMA3 and 512-bit AVX-512 Vector Operations */
+    IR_VLOAD4,      /* dst = *(v4f64*)src1 (256-bit 4x double vector load) */
+    IR_VSTORE4,     /* *(v4f64*)dst = src1 (256-bit 4x double vector store)*/
+    IR_VLOAD8,      /* dst = *(v8f64*)src1 (512-bit 8x double vector load) */
+    IR_VSTORE8,     /* *(v8f64*)dst = src1 (512-bit 8x double vector store)*/
+    IR_VFADD,       /* dst = src1 +v src2  (Vector float add)              */
+    IR_VFSUB,       /* dst = src1 -v src2  (Vector float sub)              */
+    IR_VFMUL,       /* dst = src1 *v src2  (Vector float mul)              */
+    IR_VFMA,        /* dst = (src1 * src2) + label (FMA3 vector FMA)       */
 
     IR_OP_COUNT     /* sentinel — keep last                                */
 } ir_op_t;
@@ -148,8 +158,10 @@ typedef enum {
     IR_TY_U32,      /* unsigned 32-bit                                     */
     IR_TY_U64,      /* unsigned 64-bit                                     */
     IR_TY_PTR,      /* generic pointer — 8 bytes LP64                      */
-    IR_TY_F32,      /* float   — reserved, not emitted in P1               */
-    IR_TY_F64,      /* double  — reserved, not emitted in P1               */
+    IR_TY_F32,      /* float   — 4 bytes single precision                  */
+    IR_TY_F64,      /* double  — 8 bytes double precision                  */
+    IR_TY_V4F64,    /* v4f64   — 32 bytes (4x 64-bit IEEE-754 floats)      */
+    IR_TY_V8F64,    /* v8f64   — 64 bytes (8x 64-bit IEEE-754 floats)      */
     IR_TY_COUNT     /* sentinel                                             */
 } ir_type_t;
 

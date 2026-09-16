@@ -92,25 +92,37 @@ static const char *OP_NAMES[] = {
     "fptrunc",
     "asm",
     "vload",
-    "vextract"
+    "vextract",
+    "vload4",
+    "vstore4",
+    "vload8",
+    "vstore8",
+    "vfadd",
+    "vfsub",
+    "vfmul",
+    "vfma"
 };
 
 /* ── Type table ──────────────────────────────────────────────────────── */
 
-static const char *TY_NAMES[12] = {
+static const char *TY_NAMES[14] = {
     "void",
     "i8", "i16", "i32", "i64",
     "u8", "u16", "u32", "u64",
     "ptr",
-    "f32", "f64"
+    "f32", "f64",
+    "v4f64",
+    "v8f64"
 };
 
-static const int TY_BYTES[12] = {
+static const int TY_BYTES[14] = {
     0,              /* void  */
     1, 2, 4, 8,    /* i8..i64 */
     1, 2, 4, 8,    /* u8..u64 */
     8,              /* ptr — LP64 */
-    4, 8            /* f32, f64 */
+    4, 8,           /* f32, f64 */
+    32,             /* v4f64 — 256-bit AVX vector (4x double) */
+    64              /* v8f64 — 512-bit AVX-512 vector (8x double) */
 };
 
 /* ── Query helpers ────────────────────────────────────────────────────── */
@@ -121,12 +133,12 @@ const char *ir_op_name(ir_op_t op) {
 }
 
 const char *ir_type_name(ir_type_t ty) {
-    if (ty < 0 || ty >= 12) return "???";
+    if (ty < 0 || ty >= 14) return "???";
     return TY_NAMES[ty];
 }
 
 int ir_type_bytes(ir_type_t ty) {
-    if (ty < 0 || ty >= 12) return -1;
+    if (ty < 0 || ty >= 14) return -1;
     return TY_BYTES[ty];
 }
 
