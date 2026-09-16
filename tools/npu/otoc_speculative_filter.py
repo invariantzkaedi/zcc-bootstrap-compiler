@@ -128,7 +128,9 @@ class OtocSpeculativeFilter:
         accepted_branches = []
         pruned_branches = []
 
-        for branch in candidate_branches:
+        for i, branch in enumerate(candidate_branches):
+            if isinstance(branch, str):
+                branch = {"id": i, "token": branch, "prefix": context_prefix}
             token = branch.get("token", "")
             prefix = branch.get("prefix", context_prefix)
 
