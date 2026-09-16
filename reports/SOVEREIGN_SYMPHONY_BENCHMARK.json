@@ -1,0 +1,48 @@
+{
+  "prompt": "Write a C program that computes pointer sum of 5 integers and asserts 150",
+  "stages": {
+    "STAGE_1_NPU_COPILOT": {
+      "latency_ms": 5.136,
+      "matches": 3,
+      "top_match": "include\\zcc_post_quantum_mayhem.h",
+      "verdict": "PASS"
+    },
+    "STAGE_2_NPU_QUANTUM_DRAFT": {
+      "latency_ms": 2.301,
+      "tree_size": 16,
+      "otoc_accepted": 16,
+      "otoc_pruned": 0,
+      "otoc_boost": 1.0,
+      "verdict": "PASS"
+    },
+    "STAGE_3_RTX5070_VERIFIER": {
+      "latency_ms": 28.054,
+      "accepted_length": 4,
+      "speedup": 1.15,
+      "verdict": "PASS"
+    },
+    "STAGE_4_ZCC_JIT": {
+      "latency_ms": 0.29,
+      "exit_code": 0,
+      "stdout": "SOVEREIGN_SYMPHONY_PASS: sum=150",
+      "method": "in_memory_virtualalloc",
+      "verdict": "PASS"
+    },
+    "STAGE_5_WEBGL_OBSERVATORY": {
+      "latency_ms": 0.003,
+      "lattice_fps": 444.5,
+      "norm": 1.000057,
+      "verdict": "PASS"
+    }
+  },
+  "timings": {
+    "stage1_npu_copilot_ms": 5.136,
+    "stage2_npu_tree_draft_ms": 2.301,
+    "stage3_gpu_verification_ms": 28.054,
+    "stage4_zcc_jit_ms": 0.29,
+    "stage5_observatory_ms": 0.003,
+    "total_symphony_ms": 36.165,
+    "core_cognitive_turn_ms": 35.781
+  },
+  "overall_verdict": "PASS"
+}

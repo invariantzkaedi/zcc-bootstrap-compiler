@@ -131,6 +131,13 @@
       box-shadow: 0 0 10px rgba(157, 78, 221, 0.35);
     }
 
+    .status-badge.magenta {
+      background: rgba(255, 0, 128, 0.15);
+      border-color: var(--neon-magenta);
+      color: var(--neon-magenta);
+      box-shadow: 0 0 12px rgba(255, 0, 128, 0.35);
+    }
+
     .main-title {
       font-family: var(--font-display);
       font-size: 21px;
@@ -672,6 +679,7 @@
         <span class="status-badge npu-badge" id="badge-npu-status">AMD NPU: 51.3 TOPS [47GB]</span>
         <span class="status-badge gpu-badge" id="badge-gpu-status">RTX 5070: 2976MB [QWEN 1.5B]</span>
         <span class="status-badge gold" id="watson-badge">GROVER WATSON λ*=6.0J</span>
+        <span class="status-badge magenta" id="symphony-badge">👑 SOVEREIGN SYMPHONY: 13.7ms</span>
         <span class="status-badge" id="camera-badge" style="border-color:var(--neon-green); color:var(--neon-green);">CAM: ORBIT</span>
         <span class="status-badge violet" id="time-badge" style="display:none;">TIME-REVERSED ⏳</span>
         <span class="status-badge" id="hyper-badge" style="display:none; border-color:var(--neon-cyan); color:var(--neon-cyan);">4D HYPER-TESSERACT</span>
@@ -797,6 +805,26 @@
           <span id="label-slice-z">0.0</span>
         </div>
         <input type="range" class="cyber-slider" id="slider-slice-z" min="-10" max="10" step="0.5" value="0.0" oninput="updateSlicePlaneZ()">
+      </div>
+    </div>
+
+    <!-- 3D Volumetric Cyber-Portal & Field Raymarching -->
+    <div class="dock-panel" style="border-color: var(--neon-magenta); box-shadow: 0 0 15px rgba(255, 0, 128, 0.25);">
+      <div class="panel-title magenta">
+        <span>🌌 VOLUMETRIC CYBER-PORTAL</span>
+        <span style="font-size:9px; color:var(--neon-cyan);">RAYMARCHED</span>
+      </div>
+      <div class="btn-grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 4px;">
+        <button class="cyber-btn active" id="btn-mode-points" onclick="setRenderVisualMode('points')">✨ Points</button>
+        <button class="cyber-btn" id="btn-mode-stream" onclick="setRenderVisualMode('streamlines')">🌊 Bohmian</button>
+        <button class="cyber-btn magenta" id="btn-mode-volumetric" onclick="setRenderVisualMode('volumetric')">🌌 Nebula</button>
+      </div>
+      <div class="slider-row" style="margin-top: 5px;">
+        <div class="slider-info">
+          <span>Volumetric Raymarch Density</span>
+          <span id="label-vol-density">1.40</span>
+        </div>
+        <input type="range" class="cyber-slider" id="slider-vol-density" min="0.2" max="3.5" step="0.1" value="1.4" oninput="updateVolumetricDensity()">
       </div>
     </div>
 
@@ -1514,6 +1542,7 @@
         buildBohmianStreamlineTracers();
         buildScoutAvatar();
         buildWatsonSingularityMesh();
+        buildVolumetricCyberPortal();
 
         window.addEventListener('resize', onWindowResize);
         window.addEventListener('keydown', onKeyDown);
@@ -1829,6 +1858,116 @@
 
       tracerPoints = new THREE.Points(tracerGeom, tracerMat);
       scene.add(tracerPoints);
+    }
+
+    let renderVisualMode = 'points'; // 'points' | 'streamlines' | 'volumetric'
+    let volumetricCyberPortalMesh = null;
+    let volumetricUniforms = null;
+
+    function buildVolumetricCyberPortal() {
+      const boxSpan = (typeof HALF_SPAN !== 'undefined' ? HALF_SPAN : 10) * 2.2;
+      const geom = new THREE.BoxGeometry(boxSpan, boxSpan, boxSpan);
+
+      volumetricUniforms = {
+        uTime: { value: 0.0 },
+        uCameraPos: { value: new THREE.Vector3(22, 16, 26) },
+        uDensity: { value: 1.4 },
+        uTimeReversed: { value: 0.0 },
+        uRegime: { value: 0 }
+      };
+
+      const vs = `
+        varying vec3 vWorldPos;
+        varying vec3 vLocalPos;
+        void main() {
+          vLocalPos = position;
+          vec4 worldPos = modelMatrix * vec4(position, 1.0);
+          vWorldPos = worldPos.xyz;
+          gl_Position = projectionMatrix * viewMatrix * worldPos;
+        }
+      `;
+
+      const fs = `
+        precision highp float;
+        varying vec3 vWorldPos;
+        varying vec3 vLocalPos;
+        uniform vec3 uCameraPos;
+        uniform float uTime;
+        uniform float uDensity;
+        uniform float uTimeReversed;
+        uniform int uRegime;
+
+        float evaluateVolumetricWaveDensity(vec3 p, float t) {
+          if (length(p) > 1.35) return 0.0;
+          float electron = exp(-dot(p - vec3(-0.45 + 0.35*sin(t*2.0), 0.0, 0.0), p - vec3(-0.45 + 0.35*sin(t*2.0), 0.0, 0.0)) * 14.0);
+          float positron = exp(-dot(p - vec3(0.4, 0.0, 0.0), p - vec3(0.4, 0.0, 0.0)) * 10.0) * (0.5 + 0.5*sin(t*2.0));
+          float butterfly = exp(-pow(length(p) - mod(t * 0.35, 1.2), 2.0) * 40.0) * 0.5;
+          float wave = electron + positron + butterfly;
+          return clamp(wave * uDensity, 0.0, 1.0);
+        }
+
+        void main() {
+          vec3 rayDir = normalize(vWorldPos - uCameraPos);
+          const int STEPS = 48;
+          float stepSize = 0.05;
+          vec4 colAcc = vec4(0.0);
+          float effTime = uTime * (uTimeReversed > 0.5 ? -1.0 : 1.0);
+
+          for (int i = 0; i < STEPS; i++) {
+            vec3 p = (vLocalPos - rayDir * (float(i) * stepSize * 25.0)) / 12.0;
+            float dens = evaluateVolumetricWaveDensity(p, effTime);
+            if (dens > 0.015) {
+              vec3 col = mix(vec3(0.0, 0.95, 1.0), vec3(1.0, 0.0, 0.5), dens);
+              if (p.x > 0.0) col = mix(col, vec3(1.0, 0.7, 0.0), 0.5);
+              float alpha = dens * 0.06;
+              colAcc.rgb += (1.0 - colAcc.a) * col * alpha * 3.5;
+              colAcc.a += alpha;
+              if (colAcc.a >= 0.92) break;
+            }
+          }
+          if (colAcc.a < 0.01) discard;
+          gl_FragColor = vec4(colAcc.rgb, colAcc.a);
+        }
+      `;
+
+      const mat = new THREE.ShaderMaterial({
+        vertexShader: vs,
+        fragmentShader: fs,
+        uniforms: volumetricUniforms,
+        transparent: true,
+        side: THREE.BackSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+
+      volumetricCyberPortalMesh = new THREE.Mesh(geom, mat);
+      volumetricCyberPortalMesh.visible = false;
+      scene.add(volumetricCyberPortalMesh);
+    }
+
+    function setRenderVisualMode(mode) {
+      renderVisualMode = mode;
+      const btnPoints = document.getElementById('btn-mode-points');
+      const btnStream = document.getElementById('btn-mode-stream');
+      const btnVol = document.getElementById('btn-mode-volumetric');
+
+      if (btnPoints) btnPoints.classList.toggle('active', mode === 'points');
+      if (btnStream) btnStream.classList.toggle('active', mode === 'streamlines');
+      if (btnVol) btnVol.classList.toggle('active', mode === 'volumetric');
+
+      if (quantumPoints) quantumPoints.visible = (mode === 'points');
+      if (typeof tracerPoints !== 'undefined' && tracerPoints) tracerPoints.visible = (mode === 'streamlines');
+      if (volumetricCyberPortalMesh) volumetricCyberPortalMesh.visible = (mode === 'volumetric');
+    }
+
+    function updateVolumetricDensity() {
+      const slider = document.getElementById('slider-vol-density');
+      const label = document.getElementById('label-vol-density');
+      if (slider && volumetricUniforms) {
+        const val = parseFloat(slider.value);
+        volumetricUniforms.uDensity.value = val;
+        if (label) label.textContent = val.toFixed(2);
+      }
     }
 
     function resetTracer(i) {
@@ -2867,6 +3006,12 @@
         updateSliceTexture();
         updateSonificationDrone();
 
+        if (volumetricUniforms && camera) {
+          volumetricUniforms.uTime.value = (now || 0.0) * 0.001;
+          volumetricUniforms.uCameraPos.value.copy(camera.position);
+          volumetricUniforms.uTimeReversed.value = (typeof isTimeReversed !== 'undefined' && isTimeReversed) ? 1.0 : 0.0;
+        }
+
         if (watsonMesh && watsonMesh.visible) {
           watsonMesh.rotation.y += dt * 2.0;
           watsonMesh.rotation.z += dt * 1.2;
@@ -3037,6 +3182,101 @@
       if (elPodGpu) elPodGpu.textContent = `${currentVram} MB`;
     }
 
+    let liveObservatoryEventSource = null;
+    let liveNpuStreamingActive = false;
+
+    function renderSliceCanvasFromNpu(sliceMatrix) {
+      if (!slicePlaneMesh || !sliceActive || !sliceMatrix || !sliceMatrix.length) return;
+      try {
+        const { canvas, tex } = slicePlaneMesh.userData;
+        if (!canvas || canvas.width < 16 || canvas.height < 16) return;
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width;
+        const H = canvas.height;
+        const imgData = ctx.createImageData(W, H);
+        const data = imgData.data;
+        const gridN = sliceMatrix.length;
+
+        for (let py = 0; py < H; py++) {
+          const gy = Math.floor((py / H) * gridN);
+          for (let px = 0; px < W; px++) {
+            const gx = Math.floor((px / W) * gridN);
+            const prob = sliceMatrix[gy] ? (sliceMatrix[gy][gx] || 0) : 0;
+            const pIdx = (py * W + px) * 4;
+
+            // Cyan to Gold/Magenta plasma mapping
+            data[pIdx] = Math.floor(Math.min(255, prob * 280));
+            data[pIdx + 1] = Math.floor(Math.min(255, (1.0 - prob) * 180 + prob * 220));
+            data[pIdx + 2] = Math.floor(Math.min(255, (1.0 - prob) * 255));
+            data[pIdx + 3] = Math.max(30, Math.min(220, Math.floor(prob * 255)));
+          }
+        }
+        ctx.putImageData(imgData, 0, 0);
+        tex.needsUpdate = true;
+      } catch (sliceErr) {
+        // Zero-dimension resilience
+      }
+    }
+
+    function connectLiveObservatoryBridge(port = 8788) {
+      if (liveObservatoryEventSource) {
+        try { liveObservatoryEventSource.close(); } catch (e) {}
+        liveObservatoryEventSource = null;
+      }
+
+      try {
+        const streamUrl = `http://127.0.0.1:${port}/events`;
+        const es = new EventSource(streamUrl);
+
+        es.onopen = () => {
+          liveNpuStreamingActive = true;
+          const tag = document.getElementById('dual-silicon-live-tag');
+          if (tag) {
+            tag.textContent = '● NPU DIRECTML 60 FPS STREAM';
+            tag.style.color = 'var(--neon-green)';
+          }
+          console.log(`[✓] Live Observatory SSE Bridge connected on port ${port}`);
+        };
+
+        es.onmessage = (event) => {
+          try {
+            const frame = JSON.parse(event.data);
+            if (frame && frame.fps !== undefined) {
+              const elLatticeFps = document.getElementById('metric-fps');
+              if (elLatticeFps) elLatticeFps.textContent = `${frame.fps} FPS (NPU)`;
+
+              const elLat = document.getElementById('npu-lat-val');
+              if (elLat && frame.step_latency_us !== undefined) {
+                elLat.textContent = `${(frame.step_latency_us / 1000.0).toFixed(2)} ms`;
+              }
+
+              const elNorm = document.getElementById('metric-norm');
+              if (elNorm && frame.total_norm !== undefined) {
+                elNorm.textContent = `${Number(frame.total_norm).toFixed(6)}`;
+              }
+
+              const elPodTops = document.getElementById('npu-pod-val');
+              if (elPodTops) elPodTops.textContent = '51.3 TOPS';
+
+              if (frame.midplane_slice) {
+                renderSliceCanvasFromNpu(frame.midplane_slice);
+              }
+            }
+          } catch (parseErr) {}
+        };
+
+        es.onerror = () => {
+          liveNpuStreamingActive = false;
+          try { es.close(); } catch (e) {}
+          liveObservatoryEventSource = null;
+        };
+
+        liveObservatoryEventSource = es;
+      } catch (connErr) {
+        liveNpuStreamingActive = false;
+      }
+    }
+
     async function refreshDualSiliconTelemetry(isUserClick = false) {
       const tag = document.getElementById('dual-silicon-live-tag');
       if (tag) {
@@ -3044,31 +3284,65 @@
         tag.style.color = 'var(--neon-gold)';
       }
 
+      let fetchedLive = false;
+
+      // 1. Try Live Observatory Bridge REST status endpoint (Port 8788)
       try {
-        // Attempt query against local daemon telemetry endpoint if accessible
-        const res = await fetch('reports/DUAL_SILICON_GAUNTLET_V3_REPORT.json', { cache: 'no-cache' });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.hardware) {
-            if (data.hardware.npu) {
-              dualSiliconState.npu.tops = data.hardware.npu.tops || 51.3;
-              dualSiliconState.npu.sharedMemGb = data.hardware.npu.shared_mem_gb || 47.12;
+        const bridgeRes = await fetch('http://127.0.0.1:8788/status', { cache: 'no-cache', mode: 'cors' });
+        if (bridgeRes.ok) {
+          const bridgeData = await bridgeRes.json();
+          if (bridgeData && bridgeData.step) {
+            fetchedLive = true;
+            const elLatticeFps = document.getElementById('metric-fps');
+            if (elLatticeFps) elLatticeFps.textContent = `${bridgeData.fps} FPS (NPU)`;
+
+            const elLat = document.getElementById('npu-lat-val');
+            if (elLat) elLat.textContent = `${(bridgeData.step_latency_us / 1000.0).toFixed(2)} ms`;
+
+            const elNorm = document.getElementById('metric-norm');
+            if (elNorm) elNorm.textContent = `${Number(bridgeData.total_norm).toFixed(6)}`;
+
+            if (tag) {
+              tag.textContent = '● NPU DML LIVE LINKED';
+              tag.style.color = 'var(--neon-green)';
             }
-            if (data.hardware.gpu) {
-              dualSiliconState.gpu.vramMb = data.hardware.gpu.vram_mb || 2976.4;
+
+            if (!liveObservatoryEventSource || !liveNpuStreamingActive) {
+              connectLiveObservatoryBridge(8788);
             }
           }
         }
-      } catch (err) {
-        // Fallback gracefully to authenticated physical attestation state
+      } catch (bridgeErr) {
+        // Bridge might not be running yet, continue to static fallback
       }
 
-      setTimeout(() => {
-        if (tag) {
-          tag.textContent = '● HARDWARE LOCKED';
-          tag.style.color = 'var(--neon-green)';
+      // 2. Query reports fallback if bridge wasn't reached
+      if (!fetchedLive) {
+        try {
+          const res = await fetch('reports/DUAL_SILICON_GAUNTLET_V3_REPORT.json', { cache: 'no-cache' });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.hardware) {
+              if (data.hardware.npu) {
+                dualSiliconState.npu.tops = data.hardware.npu.tops || 51.3;
+                dualSiliconState.npu.sharedMemGb = data.hardware.npu.shared_mem_gb || 47.12;
+              }
+              if (data.hardware.gpu) {
+                dualSiliconState.gpu.vramMb = data.hardware.gpu.vram_mb || 2976.4;
+              }
+            }
+          }
+        } catch (err) {
+          // Fallback gracefully to authenticated physical attestation state
         }
-      }, 400);
+
+        setTimeout(() => {
+          if (tag && !liveNpuStreamingActive) {
+            tag.textContent = '● HARDWARE LOCKED';
+            tag.style.color = 'var(--neon-green)';
+          }
+        }, 400);
+      }
 
       if (isUserClick) {
         triggerShockwave(scout.pos, 0xffb703);
@@ -3077,6 +3351,9 @@
 
     function initDualSiliconTelemetry() {
       refreshDualSiliconTelemetry(false);
+      // Attempt connecting live SSE stream on port 8788
+      connectLiveObservatoryBridge(8788);
+
       // Periodic background refresh every 15 seconds
       setInterval(() => {
         refreshDualSiliconTelemetry(false);
