@@ -59,12 +59,29 @@ def run_posix_gauntlet() -> bool:
         print("[STDERR]:", p2.stderr)
     ok2 = (p2.returncode == 0) and ("ALL ADVANCED POSIX EXPANSION TESTS PASSED CLEANLY" in p2.stdout)
 
-    passed = ok1 and ok2
+    # Suite 3: Berkeley Sockets Full-Duplex IPC (socketpair, send, recv)
+    print("\n--- [SUITE 3: BERKELEY SOCKETS FULL-DUPLEX IPC (SOCKETPAIR)] ---")
+    cmd3 = [
+        "wsl", "-e", "bash", "-c",
+        "cd /mnt/h/__DOWNLOADS/zcc_github_upload && "
+        "./zcc -I zcc_sys_includes tests/test_posix_socket_native.c -o /tmp/posix_sock.s && "
+        "gcc -o /tmp/posix_sock /tmp/posix_sock.s && "
+        "/tmp/posix_sock"
+    ]
+    t2 = time.time()
+    p3 = subprocess.run(cmd3, capture_output=True, text=True)
+    dur3 = time.time() - t2
+    print(p3.stdout)
+    if p3.stderr:
+        print("[STDERR]:", p3.stderr)
+    ok3 = (p3.returncode == 0) and ("ALL POSIX SOCKETPAIR TESTS PASSED CLEANLY" in p3.stdout)
+
+    passed = ok1 and ok2 and ok3
     verdict = "PASS" if passed else "FAIL"
 
     print("-" * 80)
-    print(f"VERDICT      : {verdict} (Suite 1: {'PASS' if ok1 else 'FAIL'}, Suite 2: {'PASS' if ok2 else 'FAIL'})")
-    print(f"Total Time   : {(dur1 + dur2):.3f}s")
+    print(f"VERDICT      : {verdict} (Suite 1: {'PASS' if ok1 else 'FAIL'}, Suite 2: {'PASS' if ok2 else 'FAIL'}, Suite 3: {'PASS' if ok3 else 'FAIL'})")
+    print(f"Total Time   : {(dur1 + dur2 + dur3):.3f}s")
     print("=" * 80 + "\n")
 
     return passed
