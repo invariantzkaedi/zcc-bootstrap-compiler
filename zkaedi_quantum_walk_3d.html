@@ -866,6 +866,32 @@
       </div>
     </div>
 
+    <!-- Speculative Tree Decoding & Zero-Spawn JIT HUD -->
+    <div class="dock-panel" style="border-color: var(--neon-cyan); box-shadow: 0 0 15px rgba(0, 245, 212, 0.25);">
+      <div class="panel-title">
+        <span>🌳 SPECULATIVE TREE & JIT HUD</span>
+        <span style="font-size:9px; color:var(--neon-green);" id="spec-tree-status">● VERIFIED</span>
+      </div>
+      <div class="vector-readout" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom:6px;">
+        <div class="vector-box">
+          <div class="axis">Speedup</div>
+          <div class="val" id="spec-speedup-val" style="color:var(--neon-green)">642.4x</div>
+        </div>
+        <div class="vector-box">
+          <div class="axis">Throughput</div>
+          <div class="val" id="spec-thru-val" style="color:var(--neon-cyan)">14.2k t/s</div>
+        </div>
+        <div class="vector-box">
+          <div class="axis">JIT Latency</div>
+          <div class="val" id="spec-jit-val" style="color:var(--neon-gold)">0.076 ms</div>
+        </div>
+      </div>
+      <div style="font-size:9px; color:var(--text-dim); display:flex; justify-content:space-between;">
+        <span>HOM Dip: <strong style="color:var(--neon-cyan)" id="spec-hom-val">1.000000</strong></span>
+        <span>OTOC Pruned: <strong style="color:var(--neon-magenta)" id="spec-otoc-val">-12.5% VRAM</strong></span>
+      </div>
+    </div>
+
     <!-- Phase Wheel Legend -->
     <div class="dock-panel">
       <div class="panel-title">
@@ -3260,6 +3286,20 @@
 
               if (frame.midplane_slice) {
                 renderSliceCanvasFromNpu(frame.midplane_slice);
+              }
+
+              if (frame.speculative_tree) {
+                const st = frame.speculative_tree;
+                const elSpeedup = document.getElementById('spec-speedup-val');
+                if (elSpeedup && st.speedup !== undefined) elSpeedup.textContent = `${Number(st.speedup).toFixed(1)}x`;
+                const elThru = document.getElementById('spec-thru-val');
+                if (elThru && st.throughput !== undefined) elThru.textContent = `${Number(st.throughput).toFixed(1)}k t/s`;
+                const elJit = document.getElementById('spec-jit-val');
+                if (elJit && st.jit_ms !== undefined) elJit.textContent = `${Number(st.jit_ms).toFixed(3)} ms`;
+                const elHom = document.getElementById('spec-hom-val');
+                if (elHom && st.hom_dip !== undefined) elHom.textContent = `${Number(st.hom_dip).toFixed(6)}`;
+                const elOtoc = document.getElementById('spec-otoc-val');
+                if (elOtoc && st.otoc_saved_pct !== undefined) elOtoc.textContent = `-${Number(st.otoc_saved_pct).toFixed(1)}% VRAM`;
               }
             }
           } catch (parseErr) {}
