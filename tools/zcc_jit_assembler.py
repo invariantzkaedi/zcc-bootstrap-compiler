@@ -298,9 +298,52 @@ class ZccJitAssembler:
 
 def assemble_and_execute(asm_code: str) -> Dict[str, Any]:
     """
-    Assembles SystemV x86-64 assembly in memory and executes via ZccJitEngine.
+    Assembles SystemV x86-64 assembly in memory and executes via ZccJitEngine
+    or native C libzcc_jit_assembler.so when available.
     Measures and returns assembly latency, JIT latency, and exit code.
     """
+    # 1. Check if native C shared library is available
+    so_path = REPO_ROOT / "tools" / "libzcc_jit_assembler.so"
+    if so_path.exists() and sys.platform.startswith("linux"):
+        try:
+            import ctypes
+            c_lib = ctypes.CDLL(str(so_path))
+            c_lib.zcc_assemble_and_exec.argtypes = [
+                ctypes.c_char_p,
+                ctypes.POINTER(ctypes.c_int),
+                ctypes.POINTER(ctypes.c_double),
+                ctypes.POINTER(ctypes.c_double),
+                ctypes.POINTER(ctypes.c_size_t)
+            ]
+            c_lib.zcc_assemble_and_exec.restype = ctypes.c_int
+
+            exit_code = ctypes.c_int(0)
+            asm_ms = ctypes.c_double(0.0)
+            exec_ms = ctypes.c_double(0.0)
+            byte_len = ctypes.c_size_t(0)
+
+            ret = c_lib.zcc_assemble_and_exec(
+                asm_code.encode("utf-8"),
+                ctypes.byref(exit_code),
+                ctypes.byref(asm_ms),
+                ctypes.byref(exec_ms),
+                ctypes.byref(byte_len)
+            )
+            if ret == 0:
+                total_ms = round(asm_ms.value + exec_ms.value, 4)
+                return {
+                    "exit_code": exit_code.value,
+                    "latency_ms": round(exec_ms.value, 4),
+                    "asm_time_ms": round(asm_ms.value, 4),
+                    "total_jit_pipeline_ms": total_ms,
+                    "byte_len": byte_len.value,
+                    "engine": "Native C in-process assembler",
+                    "speedup_factor": round(875.19 / max(0.0001, total_ms), 1)
+                }
+        except Exception:
+            pass
+
+    # 2. Pure Python / ctypes fallback (Windows & portable)
     from tools.zcc_jit_exec import ZccJitEngine
 
     assembler = ZccJitAssembler()
@@ -313,6 +356,8 @@ def assemble_and_execute(asm_code: str) -> Dict[str, Any]:
     exec_res["asm_time_ms"] = round(asm_time_ms, 4)
     exec_res["byte_len"] = len(code_bytes)
     exec_res["total_jit_pipeline_ms"] = round(asm_time_ms + exec_res["latency_ms"], 4)
+    exec_res["engine"] = "Python in-process assembler + JIT"
+    exec_res["speedup_factor"] = round(875.19 / max(0.0001, exec_res["total_jit_pipeline_ms"]), 1)
     return exec_res
 
 
