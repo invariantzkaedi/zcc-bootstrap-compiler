@@ -80,6 +80,7 @@ def generate_manifest(custom_gates=None, output_manifest="evidence/manifest.json
         
         if actual_exit_code != 0:
             print(f"[{gate_id}] FAIL: Command '{' '.join(cmd)}' failed with exit code {actual_exit_code}")
+            print(f"[{gate_id}] Output:\n{raw_output.strip()}")
             has_failure = True
         else:
             print(f"[{gate_id}] PASS: Executed clean with exit code 0 ({len(persisted_bytes)} bytes)")

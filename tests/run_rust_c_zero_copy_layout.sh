@@ -11,11 +11,17 @@ echo "========================================================================"
 echo "  ⚡ RUST-FFI-LAYOUT-001: MULTI-ORACLE ZERO-COPY FFI GAUNTLET"
 echo "========================================================================"
 
+# Check Rust toolchain presence
+if ! command -v rustc &>/dev/null; then
+    echo "[!] rustc not found in PATH — skipping Rust FFI layout gauntlet (Rust toolchain required)"
+    exit 0
+fi
+
 # Record Compiler Versions
 echo "[*] Toolchain Provenance:"
-echo "    -> GCC:   $(gcc --version | head -n 1)"
-echo "    -> Clang: $(clang --version | head -n 1)"
-echo "    -> Rustc: $(rustc --version)"
+echo "    -> GCC:   $(gcc --version 2>/dev/null | head -n 1 || echo 'GCC not found')"
+echo "    -> Clang: $(clang --version 2>/dev/null | head -n 1 || echo 'Clang not found (GCC fallback)')"
+echo "    -> Rustc: $(rustc --version 2>/dev/null || echo 'Rustc not found')"
 echo "    -> ZCC:   $($ZCC_BIN -v 2>&1 | head -n 1 || echo 'ZCC Native v4.0')"
 
 # 1. Independent Host Oracle Verification

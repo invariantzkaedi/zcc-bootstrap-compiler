@@ -21,13 +21,14 @@ jobs:
       - name: Install Build Prerequisites
         run: |
           sudo apt-get update || true
-          sudo apt-get install -y gcc make binutils python3
+          sudo apt-get install -y gcc make binutils python3 clang rustc
 
       - name: Execute Native Verification Pipeline
         run: |
           make verify
 
       - name: Archive Machine Evidence Artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: verification-evidence-${{ github.sha }}
