@@ -8,7 +8,7 @@
 #define ty ir_type
 #define src1 src[0]
 #define src2 src[1]
-#define src_is_float is_float
+
 
 #define OP_ICMP_EQ OP_EQ
 #define OP_ICMP_NE OP_NE
