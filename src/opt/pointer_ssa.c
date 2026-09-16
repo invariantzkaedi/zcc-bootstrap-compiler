@@ -2,6 +2,7 @@
 #include "zcc_ir.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdbool.h>
 
 #define AMBIGUOUS 65537
@@ -34,33 +35,56 @@ static bool intervals_overlap(int64_t off1, int64_t sz1, int64_t off2, int64_t s
  * - Unknown object size (access_size <= 0: heap, args, externs) -> AMBIGUOUS
  * - Int64 overflow on offset accumulation (offset + access_size < offset) -> AMBIGUOUS
  */
-static int get_or_create_mem_location(RegID base, int64_t offset, int64_t access_size, BaseOffsetKey *locations, int *n_locations, RegID *mem_points_to_base) {
+static int get_or_create_mem_location_dyn(RegID base, int64_t offset, int64_t access_size,
+                                          BaseOffsetKey **locations, int *n_locations, int *cap_locations,
+                                          RegID **mem_points_to_base, int64_t **mem_points_to_offset) {
     bool is_invalid = (offset < 0 || access_size <= 0 ||
                        ((uint64_t)offset + (uint64_t)access_size < (uint64_t)offset) ||
                        ((uint64_t)offset + (uint64_t)access_size > 0x7FFFFFFFFFFFFFFFULL));
 
     for (int i = 0; i < *n_locations; i++) {
-        if (locations[i].base == base) {
-            if (locations[i].offset == offset && locations[i].access_size == access_size && !is_invalid && locations[i].valid) {
+        if ((*locations)[i].base == base) {
+            if ((*locations)[i].offset == offset && (*locations)[i].access_size == access_size && !is_invalid && (*locations)[i].valid) {
                 return i;
             }
-            if (is_invalid || !locations[i].valid || intervals_overlap(locations[i].offset, locations[i].access_size, offset, access_size)) {
-                mem_points_to_base[i] = AMBIGUOUS;
+            if (is_invalid || !(*locations)[i].valid || intervals_overlap((*locations)[i].offset, (*locations)[i].access_size, offset, access_size)) {
+                (*mem_points_to_base)[i] = AMBIGUOUS;
             }
         }
     }
-    if (*n_locations >= 1024) {
-        return -1;
+    if (*n_locations >= *cap_locations) {
+        if (!mem_points_to_offset || !(*mem_points_to_offset)) {
+            return -1;
+        }
+        int new_cap = (*cap_locations) * 2;
+        BaseOffsetKey *new_locs = realloc(*locations, new_cap * sizeof(BaseOffsetKey));
+        RegID *new_base = realloc(*mem_points_to_base, new_cap * sizeof(RegID));
+        int64_t *new_off = realloc(*mem_points_to_offset, new_cap * sizeof(int64_t));
+        if (!new_locs || !new_base || !new_off) {
+            return -1;
+        }
+        memset(new_locs + *cap_locations, 0, (*cap_locations) * sizeof(BaseOffsetKey));
+        memset(new_base + *cap_locations, 0, (*cap_locations) * sizeof(RegID));
+        memset(new_off + *cap_locations, 0, (*cap_locations) * sizeof(int64_t));
+        *locations = new_locs;
+        *mem_points_to_base = new_base;
+        *mem_points_to_offset = new_off;
+        *cap_locations = new_cap;
     }
     int id = (*n_locations)++;
-    locations[id].base = base;
-    locations[id].offset = offset;
-    locations[id].access_size = access_size;
-    locations[id].valid = !is_invalid;
+    (*locations)[id].base = base;
+    (*locations)[id].offset = offset;
+    (*locations)[id].access_size = access_size;
+    (*locations)[id].valid = !is_invalid;
     if (is_invalid) {
-        mem_points_to_base[id] = AMBIGUOUS;
+        (*mem_points_to_base)[id] = AMBIGUOUS;
     }
     return id;
+}
+
+static int get_or_create_mem_location(RegID base, int64_t offset, int64_t access_size, BaseOffsetKey *locations, int *n_locations, RegID *mem_points_to_base) {
+    int cap = 1024;
+    return get_or_create_mem_location_dyn(base, offset, access_size, &locations, n_locations, &cap, &mem_points_to_base, NULL);
 }
 
 uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
@@ -70,10 +94,11 @@ uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
     RegID *points_to_base = calloc(MAX_INSTRS, sizeof(RegID));
     int64_t *points_to_offset = calloc(MAX_INSTRS, sizeof(int64_t));
 
-    BaseOffsetKey *mem_locations = calloc(1024, sizeof(BaseOffsetKey));
+    int cap_mem_locations = 1024;
+    BaseOffsetKey *mem_locations = calloc(cap_mem_locations, sizeof(BaseOffsetKey));
     int n_mem_locations = 0;
-    RegID *mem_points_to_base = calloc(1024, sizeof(RegID));
-    int64_t *mem_points_to_offset = calloc(1024, sizeof(int64_t));
+    RegID *mem_points_to_base = calloc(cap_mem_locations, sizeof(RegID));
+    int64_t *mem_points_to_offset = calloc(cap_mem_locations, sizeof(int64_t));
 
     if (!points_to_base || !points_to_offset || !mem_locations || !mem_points_to_base || !mem_points_to_offset) {
         free(points_to_base);
@@ -134,7 +159,7 @@ uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
                                                 Instr *alloca_ins = fn->def_of[base];
                                                 if (alloca_ins && alloca_ins->op == OP_ALLOCA) {
                                                     int64_t alloca_size = alloca_ins->imm;
-                                                    if (next_offset < 0 || next_offset >= alloca_size) {
+                                                    if (next_offset < 0 || (alloca_size > 0 && next_offset >= alloca_size)) {
                                                         bounds_ok = false;
                                                     }
                                                 }
@@ -250,7 +275,7 @@ uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
                         RegID base = points_to_base[ptr_reg];
                         int64_t offset = points_to_offset[ptr_reg];
                         if (base != 0 && base != AMBIGUOUS) {
-                            int loc_id = get_or_create_mem_location(base, offset, 8, mem_locations, &n_mem_locations, mem_points_to_base);
+                            int loc_id = get_or_create_mem_location_dyn(base, offset, 8, &mem_locations, &n_mem_locations, &cap_mem_locations, &mem_points_to_base, &mem_points_to_offset);
                             if (loc_id >= 0) {
                                 target_base = mem_points_to_base[loc_id];
                                 target_offset = mem_points_to_offset[loc_id];
@@ -267,7 +292,7 @@ uint32_t opt_pointer_ssa_rewrite_pass(Function *fn) {
                             RegID stored_base = points_to_base[val_reg];
                             int64_t stored_offset = points_to_offset[val_reg];
                             if (stored_base != 0) {
-                                int loc_id = get_or_create_mem_location(base, offset, 8, mem_locations, &n_mem_locations, mem_points_to_base);
+                                int loc_id = get_or_create_mem_location_dyn(base, offset, 8, &mem_locations, &n_mem_locations, &cap_mem_locations, &mem_points_to_base, &mem_points_to_offset);
                                 if (loc_id >= 0) {
                                     if (mem_points_to_base[loc_id] == 0) {
                                         mem_points_to_base[loc_id] = stored_base;

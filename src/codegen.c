@@ -3073,6 +3073,8 @@ int main(int argc, char **argv) {
     int has_emit_gguf = 0;
     int has_frontend_dump = 0;
     int has_wasm_target = 0;
+    int has_yul_target = 0;
+    int has_stark_proof_target = 0;
 
     /* Parse arguments */
     for (i = 1; i < argc; i++) {
@@ -3082,6 +3084,10 @@ int main(int argc, char **argv) {
             native_elf = 1;
         } else if (strcmp(argv[i], "--target=wasm32-wasi") == 0 || strcmp(argv[i], "--target=wasm32") == 0) {
             has_wasm_target = 1;
+        } else if (strcmp(argv[i], "--emit-yul") == 0 || strcmp(argv[i], "-emit-yul") == 0 || strcmp(argv[i], "--target=yul") == 0) {
+            has_yul_target = 1;
+        } else if (strcmp(argv[i], "--emit-stark-proof") == 0 || strcmp(argv[i], "-emit-stark-proof") == 0 || strcmp(argv[i], "--target=stark-proof") == 0) {
+            has_stark_proof_target = 1;
         } else if (strcmp(argv[i], "--trace-abi") == 0) {
             has_trace_abi = 1;
         } else if (strcmp(argv[i], "--emit-gguf") == 0) {
@@ -3147,7 +3153,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (is_zcc_c || is_out_s || compile_only || has_trace_abi || has_emit_gguf || has_frontend_dump || has_wasm_target) {
+    if (is_zcc_c || is_out_s || compile_only || has_trace_abi || has_emit_gguf || has_frontend_dump || has_wasm_target || has_yul_target || has_stark_proof_target) {
         return zcc_main(argc, argv);
     }
 

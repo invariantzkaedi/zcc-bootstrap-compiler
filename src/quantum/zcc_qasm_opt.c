@@ -448,7 +448,7 @@ static int qasm_opt_local_pass(QasmOpArray *arr, const ZCCQasmOptConfig *cfg, ZC
             continue;
         }
 
-        /* 3. Inverse-pair cancellation (S Sdg -> I, T Tdg -> I, etc.) */
+        /* 3. Inverse pair cancellation (S Sdg -> I, T Tdg -> I) */
         if (qasm_try_cancel_inverse_pair(a, b)) {
             op_array_remove_two(arr, i);
             stats->gates_removed += 2;
@@ -456,6 +456,73 @@ static int qasm_opt_local_pass(QasmOpArray *arr, const ZCCQasmOptConfig *cfg, ZC
             changed = 1;
             if (i > 0) i--;
             continue;
+        }
+
+        /* 4. Algebraic 2-Gate Peephole (S S -> Z, T T -> S, Sdg Sdg -> Z, Tdg Tdg -> Sdg) */
+        if (qasm_same_operands(a, b)) {
+            if (a->kind == QASM_OP_S && b->kind == QASM_OP_S) {
+                a->kind = QASM_OP_Z;
+                strncpy(a->gate_name, "z", sizeof(a->gate_name) - 1);
+                op_array_remove_at(arr, i + 1);
+                stats->gates_removed++;
+                stats->rewrite_count++;
+                changed = 1;
+                continue;
+            }
+            if (a->kind == QASM_OP_T && b->kind == QASM_OP_T) {
+                a->kind = QASM_OP_S;
+                strncpy(a->gate_name, "s", sizeof(a->gate_name) - 1);
+                op_array_remove_at(arr, i + 1);
+                stats->gates_removed++;
+                stats->rewrite_count++;
+                changed = 1;
+                continue;
+            }
+            if (a->kind == QASM_OP_SDG && b->kind == QASM_OP_SDG) {
+                a->kind = QASM_OP_Z;
+                strncpy(a->gate_name, "z", sizeof(a->gate_name) - 1);
+                op_array_remove_at(arr, i + 1);
+                stats->gates_removed++;
+                stats->rewrite_count++;
+                changed = 1;
+                continue;
+            }
+            if (a->kind == QASM_OP_TDG && b->kind == QASM_OP_TDG) {
+                a->kind = QASM_OP_SDG;
+                strncpy(a->gate_name, "sdg", sizeof(a->gate_name) - 1);
+                op_array_remove_at(arr, i + 1);
+                stats->gates_removed++;
+                stats->rewrite_count++;
+                changed = 1;
+                continue;
+            }
+        }
+
+        /* 5. Algebraic 3-Gate Peephole (H Z H -> X, H X H -> Z) */
+        if (i + 2 < arr->count) {
+            ZCCQasmOp *c = arr->ops[i + 2];
+            if (!qasm_op_is_rewrite_barrier(c) && qasm_same_operands(a, b) && qasm_same_operands(b, c)) {
+                if (a->kind == QASM_OP_H && b->kind == QASM_OP_Z && c->kind == QASM_OP_H) {
+                    a->kind = QASM_OP_X;
+                    strncpy(a->gate_name, "x", sizeof(a->gate_name) - 1);
+                    op_array_remove_at(arr, i + 2);
+                    op_array_remove_at(arr, i + 1);
+                    stats->gates_removed += 2;
+                    stats->rewrite_count++;
+                    changed = 1;
+                    continue;
+                }
+                if (a->kind == QASM_OP_H && b->kind == QASM_OP_X && c->kind == QASM_OP_H) {
+                    a->kind = QASM_OP_Z;
+                    strncpy(a->gate_name, "z", sizeof(a->gate_name) - 1);
+                    op_array_remove_at(arr, i + 2);
+                    op_array_remove_at(arr, i + 1);
+                    stats->gates_removed += 2;
+                    stats->rewrite_count++;
+                    changed = 1;
+                    continue;
+                }
+            }
         }
 
         /* 4. Rotation angle fusion (Rx(a) Rx(b) -> Rx(a+b)) */

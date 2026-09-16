@@ -37,13 +37,21 @@ def generate_ir_ghosts(ir_path, ghost_bin, depth=50.0):
             
             f.write(struct.pack('<fff', x, y, z))
             
-    os.chmod(ghost_bin, 0o444)
+    try:
+        os.chmod(ghost_bin, 0o666)
+    except OSError:
+        pass
     return len(nodes)
 
 def unknowncode_seed_native(svg_hash: str, depth: float = 50.0, ghost_bin: str = ''):
     seed = int(svg_hash, 16) % (2**32)
     random.seed(seed)
     
+    try:
+        os.chmod(ghost_bin, 0o666)
+    except OSError:
+        pass
+
     with open(ghost_bin, 'wb') as f:
         for _ in range(32):
             x = random.uniform(-0.15, 0.15)
@@ -51,7 +59,10 @@ def unknowncode_seed_native(svg_hash: str, depth: float = 50.0, ghost_bin: str =
             z = random.uniform(-0.15, 0.15) * (depth * 0.05)
             f.write(struct.pack('<fff', x, y, z))
             
-    os.chmod(ghost_bin, 0o444)
+    try:
+        os.chmod(ghost_bin, 0o666)
+    except OSError:
+        pass
     return 32
 
 if __name__ == "__main__":
@@ -69,8 +80,14 @@ if __name__ == "__main__":
         print("\n[ZKAEDI KINETIC BRIDGE] BOOTSTRAP_RED DETECTED.")
         print("[ZKAEDI KINETIC BRIDGE] Shattering sentient geometry. Compiler loop fractured.")
         if os.path.exists(ghost_bin):
-            os.chmod(ghost_bin, 0o666)
-            os.remove(ghost_bin)
+            try:
+                os.chmod(ghost_bin, 0o666)
+            except OSError:
+                pass
+            try:
+                os.remove(ghost_bin)
+            except OSError:
+                pass
         sys.exit(1)
         
     seed_hash = hashlib.sha256(zcc_hash.encode()).hexdigest()[:16]
@@ -78,7 +95,10 @@ if __name__ == "__main__":
     print(f"\n[ZKAEDI KINETIC BRIDGE] Received ZCC Telemetry (SHA256): {zcc_hash[:16]}...")
     
     if os.path.exists(ghost_bin):
-        os.chmod(ghost_bin, 0o666)
+        try:
+            os.chmod(ghost_bin, 0o666)
+        except OSError:
+            pass
         
     # Attempt to ingest the real IR snapshot from the compiler
     if os.path.exists(ir_path):

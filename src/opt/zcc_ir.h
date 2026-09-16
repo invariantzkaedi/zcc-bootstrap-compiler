@@ -1,5 +1,5 @@
-#ifndef ZCC_IR_H
-#define ZCC_IR_H
+#ifndef ZCC_OPT_ZCC_IR_H
+#define ZCC_OPT_ZCC_IR_H
 
 #include <stdint.h>
 #include <stdbool.h>
