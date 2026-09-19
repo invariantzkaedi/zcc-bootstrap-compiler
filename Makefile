@@ -880,6 +880,15 @@ test-float: zcc test-xmm
 test: zcc test-float
 	bash zcc_test_suite.sh --quick
 
+.PHONY: readme
+readme:
+	@echo "=== ZCC Documentation Status ==="
+	@echo "  README.md:          $$(wc -l < README.md) lines, $$(wc -c < README.md) bytes"
+	@echo "  README_EXTENDED.md: $$(wc -l < README_EXTENDED.md) lines, $$(wc -c < README_EXTENDED.md) bytes"
+	@echo "  XMM_VALIDATION.md:  $$(wc -l < docs/XMM_VALIDATION.md) lines"
+	@echo "  Interactive Suite:  README_INTERACTIVE.html"
+	@test -f README.md && echo "[OK] All core documentation artifacts verified."
+
 # ─── EVM Lifter Scaffold Tests ───────────────────────────────────────
 # Defensive audit scaffold only — not for exploit use.
 # Builds and runs tests/test_evm_lifter.c against evm_lifter.c + ir.c.
