@@ -1,0 +1,15 @@
+# Phase 0 baseline
+make selfhost
+
+# Gate 1: Self-host identity
+cmp zcc2.s zcc3.s
+
+# Gate 2: Compatibility smoke
+make compat-smoke
+
+# Gate 4: XMM Floating-point validation harness
+bash tests/fractal_xmm_validate.sh ./zcc
+make test-xmm
+
+# Gate 5: Float test battery
+make test-float

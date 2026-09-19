@@ -1,0 +1,69 @@
+=== GATE 1: SELF-HOST IDENTITY ===
+cmp zcc2.s zcc3.s
+GATE 1 PASS: BYTE-IDENTICAL
+b17c5ebda8c063fdebb7e0de0e8edb5c  zcc2.s
+b17c5ebda8c063fdebb7e0de0e8edb5c  zcc3.s
+
+=== GATE 2: COMPATIBILITY SMOKE ===
+make compat-smoke
+COMPAT SMOKE COMPLETE
+
+=== GATE 4: XMM VALIDATION HARNESS ===
+bash tests/fractal_xmm_validate.sh ./zcc
+────────────────────────────────────────────────────────────
+🔱 PHASE 1: ZCC compile → fractal.s
+────────────────────────────────────────────────────────────
+✓ fractal.s emitted (1492 lines)
+────────────────────────────────────────────────────────────
+🔱 PHASE 2: XMM register + FP opcode scan
+────────────────────────────────────────────────────────────
+  XMM regs:    %xmm0 %xmm1 %xmm2 %xmm3 
+  distinct:    4 (higher = more register pressure handled)
+  FP opcodes: 
+    ✓ movsd         144
+    ✓ addsd           8
+    ✓ subsd           4
+    ✓ mulsd          15
+    ✓ divsd           1
+    ✓ ucomisd         3
+    · comisd          0
+    ✓ cvtsi2sd        2
+    · cvttsd2si       0
+    · xorpd           0
+✓ All required FP opcodes present
+  FP spills:   66  (stack-relative movsd)
+  varargs al:  36  (mov $N, %al/%eax/%rax before varargs)
+────────────────────────────────────────────────────────────
+🔱 PHASE 3: assemble + link + execute ZCC output
+────────────────────────────────────────────────────────────
+✓ fractal_zcc ran, 2178 bytes output (md5: 9fe81c3d00c986b2882e8973bb3c15a2)
+────────────────────────────────────────────────────────────
+🔱 PHASE 4: reference compile with gcc
+────────────────────────────────────────────────────────────
+✓ fractal_ref ran (md5: 9fe81c3d00c986b2882e8973bb3c15a2)
+────────────────────────────────────────────────────────────
+🔱 PHASE 5: output diff & golden checksum check
+────────────────────────────────────────────────────────────
+✓ ✓ ✓  IDENTICAL OUTPUT TO GCC REFERENCE
+✓ ✓ ✓  GOLDEN MD5 VERIFIED (9fe81c3d00c986b2882e8973bb3c15a2)
+────────────────────────────────────────────────────────────
+🔱 SUMMARY
+────────────────────────────────────────────────────────────
+  ZCC binary     : ./zcc
+  .s lines       : 1492
+  XMM regs used  : 4  (%xmm0 %xmm1 %xmm2 %xmm3 )
+  FP spills      : 66
+  Varargs al sets: 36
+  Output match   : YES (bit-identical to GCC reference)
+  Golden MD5     : 9fe81c3d00c986b2882e8973bb3c15a2 (MATCH)
+
+🔱 ZCC XMM STRESS TEST: PASS
+
+=== GATE 5: FULL FLOAT TEST BATTERY ===
+make test-float
+=== Running XMM Floating-Point Validation Harness (fractal.c) ===
+bash tests/fractal_xmm_validate.sh ./zcc
+🔱 ZCC XMM STRESS TEST: PASS
+=== Running Float Probes Correctness Gates ===
+...
+=== Float Probes: ALL PASS ===

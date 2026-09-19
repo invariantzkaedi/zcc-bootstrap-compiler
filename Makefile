@@ -856,7 +856,12 @@ fortify-recursive-ci:
 supercharge-ad: selfhost-fast compat-smoke
 	@echo "SUPERCHARGE A+D COMPLETE"
 
-test-float: zcc
+.PHONY: test-xmm
+test-xmm: zcc
+	@echo "=== Running XMM Floating-Point Validation Harness (fractal.c) ==="
+	bash tests/fractal_xmm_validate.sh ./zcc
+
+test-float: zcc test-xmm
 	@echo "=== Running Float Probes Correctness Gates ==="
 	./zcc probe_float_cmp.c -o /tmp/probe_float_cmp.s && gcc -fno-pie -no-pie -o /tmp/probe_float_cmp /tmp/probe_float_cmp.s -lm && /tmp/probe_float_cmp
 	./zcc probe_float_cmp_v2.c -o /tmp/probe_float_cmp_v2.s && gcc -fno-pie -no-pie -o /tmp/probe_float_cmp_v2 /tmp/probe_float_cmp_v2.s -lm && /tmp/probe_float_cmp_v2
