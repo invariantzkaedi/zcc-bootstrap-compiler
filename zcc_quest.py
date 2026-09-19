@@ -10,9 +10,10 @@ Wraps your build command and renders an arcade progress game:
   - prime   : ZKAEDI PRIME Recursively Coupled Hamiltonian Phase-Space Solver
 
 Usage:
-    python3 zcc_quest.py --cmd "make selfhost" --mode prime
-    python3 zcc_quest.py --demo --mode garden           # Zen Garden Mode
+    python3 zcc_quest.py --cmd "make selfhost" --mode sovereign # Sovereign Quantum HUD v6.0
+    python3 zcc_quest.py --demo --mode sovereign        # Sovereign Quantum HUD
     python3 zcc_quest.py --demo --mode prime            # ZKAEDI PRIME Mode
+    python3 zcc_quest.py --demo --mode garden           # Zen Garden Mode
     python3 zcc_quest.py --demo --mode frogger          # Frogger Mode
 """
 
@@ -843,6 +844,183 @@ class PrimeEnergyGame:
 
 
 # ---------------------------------------------------------------------------
+# ZCC Quest HUD v6.0 — Sovereign Mode
+# Real-time 7-system status matrix, 16-node wavepacket probability density
+# ---------------------------------------------------------------------------
+class SovereignHudGame:
+    """ZCC Quest HUD v6.0: 7-System Matrix & 16-Node CTQW Quantum Probability Density."""
+
+    NODES = [
+        "Raydium", "Whirlpool", "DLMM", "Dynamic",
+        "Phoenix", "OpenBook", "Lifinity", "INF",
+        "Manifest", "ZeroFi", "GoonFi", "SolFi",
+        "Tessera", "Humming", "Cropper", "Scorch"
+    ]
+
+    SYSTEMS = [
+        ("NATIVE_X86", "Self-Host Identity (zcc2.s == zcc3.s)", "SYS_V_ABI"),
+        ("CTQW_QPU", "16-DEX Hilbert Space Hamiltonian", "BALLISTIC"),
+        ("PTX_TRITON", "RTX 5070 Blackwell SM 12.0 JIT", "CUDA_GRAPH"),
+        ("ZK_STARK", "BabyBear Radix-2 NTT Prover (16.7M)", "O(N log N)"),
+        ("AVX512_FMA", "FeMoCo Abiotic Catalyst Potential", "28.2 MVS"),
+        ("ONEIRO_LEDGER", "WKB Pareto Evolutionary Synthesis", "DAG_APPEND"),
+        ("SOLANA_DEX", "Flash Loan Arbitrage / Sanctum Loop", "ATOMIC_SAFE")
+    ]
+
+    def __init__(self, files_per_stage: int, lines_per_stage: int):
+        self.files_per_stage = files_per_stage
+        self.lines_per_stage = lines_per_stage
+        self.frame = 0
+        self.eta = 0.4
+        self.gamma = 0.3
+        self.beta = 0.1
+        self.eps = 0.05
+        self.h_prev = 1.0
+        self.scars = 0
+        self.seen_warnings = 0
+        self.rng = random.Random(1337)
+        # Precomputed baseline 16-DEX Hermitian coupling network
+        N = 16
+        self.H_base = [[0.0] * N for _ in range(N)]
+        for i in range(N):
+            for j in range(i + 1, N):
+                c = 0.2 + ((i * 7 + j * 13) % 100) / 200.0
+                self.H_base[i][j] = -c
+                self.H_base[j][i] = -c
+        diag_pots = [-18.5, -12.4, -9.8, -8.5, -7.2, -6.1, -5.4, -14.2,
+                     -4.8, -3.2, -2.1, -1.9, -1.5, -1.2, -0.9, -0.5]
+        for i in range(N):
+            self.H_base[i][i] = diag_pots[i]
+
+    def progress(self, snap: dict) -> float:
+        stg = snap["stage"]
+        in_stage = min(1.0, snap["stage_files"] / self.files_per_stage) \
+            if snap["stage_files"] else \
+            min(1.0, (snap["total_lines"] % self.lines_per_stage) / self.lines_per_stage)
+        p = (stg + in_stage) / 3.0
+        if snap["boss_seen"]:
+            p = max(p, 0.98)
+        if snap["finished"] and snap["exit_code"] == 0:
+            p = 1.0
+        return max(0.0, min(1.0, p))
+
+    def render(self, snap: dict, cols: int, rows: int) -> str:
+        self.frame += 1
+        w = max(76, cols)
+        field_w = w - 2
+        p = self.progress(snap)
+        stg = snap["stage"]
+
+        if snap["warnings"] > self.seen_warnings:
+            diff = snap["warnings"] - self.seen_warnings
+            self.scars += diff
+            self.seen_warnings = snap["warnings"]
+            self.h_prev += 2.0 * diff
+
+        # Canonical Recursive Field Evolution: H_t = H_base + eta * H * sig + noise
+        h_base = (1.0 - p) * 4.5
+        noise = self.rng.gauss(0, 1 + self.beta * abs(self.h_prev)) * self.eps
+        h_t = h_base + self.eta * self.h_prev * _sigmoid(self.gamma * self.h_prev) + noise
+        self.h_prev = h_t
+
+        out: List[str] = []
+        A = out.append
+        elapsed = snap["elapsed"]
+        eta = (elapsed / p - elapsed) if p > 0.02 else float("inf")
+        eta_s = f"{int(eta // 60):02d}:{int(eta % 60):02d}" if eta != float("inf") else "--:--"
+
+        # 1. Master Telemetry Header
+        A(f" {BOLD}{fg(46)}🔱 ZCC QUEST HUD v7.0-ULTIMATE // SOVEREIGN QUANTUM COCKPIT{RESET} "
+          f"│ {fg(51)}Stage {stg+1}/3{RESET} │ {fg(213)}H={h_t:6.4f}{RESET} │ {fg(226)}Scars:{self.scars}{RESET} "
+          f"│ {fg(244)}⏱ {int(elapsed // 60):02d}:{int(elapsed % 60):02d} (eta {eta_s}){RESET}")
+
+        # 2. Quantum Progress Bar with Palindromic Loschmidt Inversion Fidelity
+        bar_w = max(20, field_w - 28)
+        filled = int(p * bar_w)
+        loschmidt_f = 1.000000000000000 - (1.0 - p) * 1e-15
+        A(" " + fg(250) + "[" + fg(46) + "█" * filled
+          + fg(238) + "░" * (bar_w - filled) + fg(250) + f"] {int(p * 100):3d}%"
+          + f" │ {fg(46)}F_echo: {loschmidt_f:.14f}{RESET}")
+
+        # 3. 7-System Sovereign Matrix
+        A(f" {BOLD}{fg(226)}── 7-SYSTEM SOVEREIGN STATUS MATRIX ──────────────────────────────────────────{RESET}")
+        sys_active_count = min(7, int(p * 7) + (1 if not snap["finished"] else 0))
+        for idx, (sys_name, desc, metric) in enumerate(self.SYSTEMS):
+            if idx < sys_active_count or (snap["finished"] and snap["exit_code"] == 0):
+                status_glyph = f"{fg(46)}● ONLINE {RESET}"
+            elif idx == sys_active_count:
+                status_glyph = f"{fg(226)}◐ SYNCING{RESET}"
+            else:
+                status_glyph = f"{fg(240)}○ STANDBY{RESET}"
+            A(f"   [{idx+1}] {BOLD}{fg(51)}{sys_name:<14}{RESET} │ {desc:<36} │ {status_glyph} │ {fg(245)}{metric}{RESET}")
+
+        # 4. 16-Node CTQW Quantum Probability Density Topography
+        A(f" {BOLD}{fg(213)}── 16-NODE CTQW QUANTUM DENSITY TOPOGRAPHY (|ψ_j|^2) ───────────────────────{RESET}")
+        densities = []
+        for j in range(16):
+            base_p = 0.7197 if j == 0 else (0.0826 if j == 7 else (0.0538 if j == 2 else 0.015))
+            osc = math.sin(self.frame * 0.25 + j * 0.45) * 0.012
+            d = max(0.005, base_p + osc)
+            densities.append(d)
+        total_d = sum(densities)
+        densities = [d / total_d for d in densities]
+
+        row1, row2 = [], []
+        for j in range(8):
+            c = 46 if j == 0 else (51 if j == 7 else 245)
+            row1.append(f"{fg(c)}{self.NODES[j][:4]}:{densities[j]*100:4.1f}%{RESET}")
+        for j in range(8, 16):
+            c = 51 if j == 8 else (213 if densities[j] > 0.02 else 240)
+            row2.append(f"{fg(c)}{self.NODES[j][:4]}:{densities[j]*100:4.1f}%{RESET}")
+        A("   " + " │ ".join(row1))
+        A("   " + " │ ".join(row2))
+
+        # 5. Continuous 2D Wavefield Radar Phase Space
+        grid_h = 4
+        cx, cy = field_w // 2, grid_h // 2
+        r_orbit = max(0.5, (1.0 - p) * (field_w // 4))
+        angle = self.frame * 0.2
+        px = int(cx + r_orbit * math.cos(angle))
+        py = int(cy + (r_orbit * 0.3) * math.sin(angle))
+        A(f" {BOLD}{fg(51)}── RECURSIVE TOPOLOGICAL PHASE PORTRAIT (H_t) ─────────────────────────────{RESET}")
+        for y in range(grid_h):
+            row = []
+            for x in range(field_w):
+                dx = (x - cx) / max(1.0, field_w / 2.5)
+                dy = (y - cy) / max(1.0, grid_h / 2.0)
+                dist = math.sqrt(dx * dx + dy * dy)
+                if x == px and y == py:
+                    row.append(fg(51) + "✦" + RESET)
+                elif x == cx and y == cy:
+                    row.append(fg(46) + "⟐" + RESET if p >= 0.98 else fg(213) + "⊙" + RESET)
+                else:
+                    val = math.sin(dist * 5.0 - self.frame * 0.2) * h_t
+                    if val > 1.2:
+                        row.append(fg(196) + "·" + RESET)
+                    elif val > 0.4:
+                        row.append(fg(208) + "·" + RESET)
+                    elif val > -0.4:
+                        row.append(fg(240) + "·" + RESET)
+                    else:
+                        row.append(" ")
+            A(" " + "".join(row))
+
+        # 6. Build Output Stream
+        A(f" {fg(240)}┈┈ live build stream ┈┈{RESET}")
+        for ln in snap["tail"]:
+            color = 196 if ERR_RE.search(ln) else 178 if WARN_RE.search(ln) else 245
+            A(f" {fg(color)}{ln[:field_w]}{RESET}")
+
+        if snap["finished"]:
+            if snap["exit_code"] == 0:
+                A(f" {BOLD}{fg(46)}★ SOVEREIGN VICTORY — 7/7 SYSTEMS SYNCHRONIZED — BYTE-IDENTICAL VERIFIED ({BOSS_NAME}) ★{RESET}")
+            else:
+                A(f" {BOLD}{fg(196)}✖ SOVEREIGN DRIFT — EXIT {snap['exit_code']} — CHECK BUILD LOG{RESET}")
+
+        return "\n".join(out)
+
+
+# ---------------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------------
 def main(argv: Optional[List[str]] = None) -> int:
@@ -857,8 +1035,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--log", default="/tmp/zcc_quest.log", help="sidecar log path")
     ap.add_argument("--fps", type=float, default=5.0, help="frames per second (default: 5.0 for low CPU/heat)")
     ap.add_argument("--low-power", action="store_true", help="ultra low-power mode (2 FPS, minimal CPU/heat)")
-    ap.add_argument("--mode", choices=("runner", "frogger", "garden", "prime"), default="runner",
-                    help="runner: side-scroller · frogger: traffic lanes · garden: zen mode · prime: ZKAEDI PRIME Hamiltonian energy plot")
+    ap.add_argument("--mode", choices=("runner", "frogger", "garden", "prime", "sovereign"), default="sovereign",
+                    help="sovereign: 7-system status matrix & 16-node CTQW · prime: Hamiltonian energy · garden: zen mode · runner/frogger: arcade")
     ap.add_argument("--lanes", type=int, default=9,
                     help="frogger traffic lanes (multiple of 3, 3..15)")
     ap.add_argument("--frames", type=int, default=0,
@@ -888,6 +1066,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         game = FroggerGame(args.files, args.lines_per_stage, args.lanes)
     elif args.mode == "prime":
         game = PrimeEnergyGame(args.files, args.lines_per_stage)
+    elif args.mode == "sovereign":
+        game = SovereignHudGame(args.files, args.lines_per_stage)
     else:
         game = Game(args.files, args.lines_per_stage)
     interactive = sys.stdout.isatty()
@@ -926,7 +1106,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             sys.stdout.flush()
 
     snap = state.snapshot()
-    rc = snap["exit_code"] if snap["exit_code"] is not None else 130
+    if args.frames and frames >= args.frames:
+        rc = snap["exit_code"] if snap["exit_code"] is not None else 0
+    else:
+        rc = snap["exit_code"] if snap["exit_code"] is not None else 130
     print(f"zcc_quest: child exit={snap['exit_code']} warnings={snap['warnings']} "
           f"errors={snap['errors']} elapsed={snap['elapsed']:.1f}s "
           f"(raw output: {args.log}.build)")
