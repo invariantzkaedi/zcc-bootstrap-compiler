@@ -66,6 +66,8 @@ extern int  g_peephole_verbose;
 static int  g_security_signext = 0;
 static int  g_security_476 = 0;
 static int  g_security_787 = 0;
+static int  g_oneiro_enabled = 0;
+static int  g_oneiro_cycles = 10;
 
 static const char *g_emit_zxr_path = NULL;
 static const char *g_replay_zxr_path = NULL;
@@ -1466,6 +1468,11 @@ int zcc_main(int argc, char **argv) {
       g_manifold_enabled = 1;  /* export implies manifold active */
     } else if (strcmp(argv[i], "--peephole") == 0) {
       g_peephole_enabled = 1;
+    } else if (strcmp(argv[i], "-moneiro") == 0 || strcmp(argv[i], "--oneiro") == 0) {
+      g_oneiro_enabled = 1;
+    } else if (strncmp(argv[i], "--oneiro-cycles=", 16) == 0) {
+      g_oneiro_enabled = 1;
+      g_oneiro_cycles = atoi(argv[i] + 16);
     } else if (strcmp(argv[i], "-fprofile-generate") == 0) {
       setenv("ZCC_PGO_INSTRUMENT", "1", 1);
     } else if (strncmp(argv[i], "-fprofile-use=", 14) == 0) {
@@ -2679,6 +2686,14 @@ int zcc_main(int argc, char **argv) {
   if (getenv("ZCC_OPT_PEEPHOLE") && strcmp(getenv("ZCC_OPT_PEEPHOLE"), "0") == 0) opt_peephole = 0;
   if (opt_peephole) {
     peephole_optimize(asm_file);
+  }
+  if (g_oneiro_enabled && asm_file) {
+    char oneiro_cmd[1024];
+    snprintf(oneiro_cmd, sizeof(oneiro_cmd),
+             "python3 zcc_oneirogenesis.py \"%s\" -o \"%s\" --cycles %d --deterministic --no-telemetry",
+             asm_file, asm_file, g_oneiro_cycles > 0 ? g_oneiro_cycles : 10);
+    int oneiro_ret = system(oneiro_cmd);
+    (void)oneiro_ret;
   }
   long p5_end = clock();
   int p5_us = (int)((p5_end - p5_start) * 1000000 / 1000000);

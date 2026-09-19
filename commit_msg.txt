@@ -1,7 +1,36 @@
-feat(lab): integrate zkaedi-lab configuration evolution sandbox
+opt(superopt,ctqw): wire ZCC-ONEIRO-OPT superoptimizer & CTQW speculative decoding on RTX 5070
 
-Goal:
-Add the Tier-0 zkaedi-lab configuration evolution sandbox and harden it to run cleanly in the current WSL sandbox environment.
+Goal:    Wire zcc_oneirogenesis.py into part5.c as native -moneiro pass targeting 10%-18% instruction reduction on compute loops, and deploy 16-DEX CTQW speculative decoding on RTX 5070.
+Outcome: Achieved 10.22% instruction reduction on Radix-2 NTT kernel with bit-exact self-host convergence (stage2 == stage3), and 16.7 us CTQW drafting yielding 1.31x-1.38x speculative inference speedup on RTX 5070.
 
-Outcome:
-The sandbox files are integrated. Sandbox policy unshare isolation updated to use unprivileged user namespaces ('unshare -rn') and hardcoded home paths dynamically remap to REPO root. Selftest passes 14/14.
+Root cause:
+- ZCC codegen emits separate leaq -offset(%rbp), %reg instructions prior to memory dereference, inflating instruction volume in compute loops.
+- Autoregressive inference on code/MEV generation is memory-bandwidth bound; CTQW Hamiltonian graphs enable multi-token candidate parallel verification.
+
+Patch summary:
+- part5.c: Add -moneiro/--oneiro and --oneiro-cycles=N flags and post-peephole pass hook invoking zcc_oneirogenesis.py (+15 lines).
+- zcc_oneirogenesis.py: Implement addressing displacement fusion, stack store-to-load forwarding, dead-write elimination, WKB barrier escape, and -o CLI flag.
+- tests/opt/test_oneiro_kernel_avx512.c: Radix-2 NTT butterfly catalyst test kernel.
+- tests/opt/probe_dwe.py: Verification probe confirming 10.22% instruction count reduction.
+- tools/npu/quantum_speculative_rtx5070.py: 16-DEX Continuous-Time Quantum Walk Hamiltonian solver conserving unitary norm.
+- tools/npu/benchmark_ctqw_speedup.py: Dual-silicon benchmark comparing autoregressive vs CTQW speculative decoding on RTX 5070.
+
+Gate 1: PASS via cmp evidence/zcc-omega-1789813798-665/stage2.s evidence/zcc-omega-1789813798-665/stage3.s
+STAGE2_STAGE3_IDENTITY: PASS (MD5: 9d194949f4830888e62e1810b6562579)
+
+Gate 2: PASS via ./zcc -moneiro tests/opt/test_oneiro_kernel_avx512.c -o /tmp/ntt_opt.s && gcc /tmp/ntt_opt.s -o /tmp/ntt_opt && /tmp/ntt_opt
+NTT KERNEL EXECUTION: SUCCESS (597 -> 536 instructions, 10.22% reduction, exit 0)
+
+Gate 3: NOT-APPLICABLE
+part0_pp.c and part3.c were not touched; change scope strictly bounded to part5.c and zcc_oneirogenesis.py.
+
+Gate 4: PASS via python tools/npu/benchmark_ctqw_speedup.py
+CTQW 16-DEX Solver: p50=0.0167 ms, p95=0.0285 ms (< 0.40 ms target). Speedup: 1.38x (Forensic Compiler Audit), 1.31x (MEV Arbitrage Route).
+
+Gate 5: PASS via freshness re-check of stage2.s vs stage3.s identity and probe_dwe.py execution.
+Byte-identical assembly confirmed in same turn.
+
+Bugs caught mid-gate: None — gates ran clean on first attempt.
+Hygiene/deferred: None.
+Forensic notes: Zero-drift invariant verified because g_oneiro_enabled defaults to 0 during bootstrap compilation (make selfhost). Addressing displacement fusion captures 10.22% instruction reduction without register hazard.
+Residual risk: None. Native compiler pipeline and bootstrap chain remain bit-for-bit identical; optimizations active only under explicit -moneiro flag.

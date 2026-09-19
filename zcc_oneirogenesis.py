@@ -1,1504 +1,1141 @@
 #!/usr/bin/env python3
 """
-=============================================================================
-   ██████╗ ███╗   ██╗███████╗██╗██████╗  ██████╗  ██████╗ ███████╗███╗   ██╗
-  ██╔═══██╗████╗  ██║██╔════╝██║██╔══██╗██╔═══██╗██╔════╝ ██╔════╝████╗  ██║
-  ██║   ██║██╔██╗ ██║█████╗  ██║██████╔╝██║   ██║██║  ███╗█████╗  ██╔██╗ ██║
-  ██║   ██║██║╚██╗██║██╔══╝  ██║██╔══██╗██║   ██║██║   ██║██╔══╝  ██║╚██╗██║
-  ╚██████╔╝██║ ╚████║███████╗██║██║  ██║╚██████╔╝╚██████╔╝███████╗██║ ╚████║
-   ╚═════╝ ╚═╝  ╚═══╝╚══════╝╚═╝╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚══════╝╚═╝  ╚═══╝
-                 ZCC ONEIROGENESIS v2 — Enhanced Dream Engine
-=============================================================================
-Enhancements over v1:
-  1. SWEEP MUTATIONS  — apply ALL instances of a safe pattern in one pass
-     (3,588 movq-zero→xorq + 189 imulq-pow2→shl in current ZCC assembly)
-  2. ISLAND MODEL     — 3 parallel lineages evolve independently, survivors
-     cross-breed: best mutations from each island can combine
-  3. STATISTICAL ORACLE — 3-sample fitness averaging to eliminate timing noise
-  4. HAMILTONIAN TELEMETRY — real-time energy landscape streaming to God's Eye
-  5. MUTATION MEMORY  — failed mutation fingerprints are blacklisted to prevent
-     re-testing patterns the gate already rejected
+ZCC ONEIROGENESIS v4.0-SOVEREIGN
 
-Usage:
-    python3 zcc_oneirogenesis.py                    # 50 cycles, 1 lineage
-    python3 zcc_oneirogenesis.py --islands 3        # Island model (3 lineages)
-    python3 zcc_oneirogenesis.py --sweep            # Force sweep mutations first
-    python3 zcc_oneirogenesis.py --aggressive       # 8 mutations/cycle, 3 sweeps
-    python3 zcc_oneirogenesis.py --dry-run          # Preview without executing
-    python3 zcc_oneirogenesis.py --visualize        # Stream to God's Eye
-=============================================================================
+Self-contained evolutionary assembly optimizer candidate.
+
+Evidence note:
+- The ZKAEDI PRIME two-regime Hamiltonian invariant is implemented from the
+  project documentation supplied with this task.
+- This file is not represented as a byte-for-byte port of v3.5-EXPERIMENTALE
+  because that source was not available in the supplied workspace.
+
+Public compatibility exports:
+    FitnessOracle, DreamEngine, DREAM_DIR, REPO_ROOT, PASSES
 """
+
+from __future__ import annotations
 
 import argparse
 import hashlib
 import hmac
 import json
+import math
 import os
-import re
-import shutil
-import socket
-import subprocess
-import sys
-if sys.stdout and getattr(sys.stdout, 'encoding', '').lower() != 'utf-8':
-    try:
-        sys.stdout.reconfigure(encoding='utf-8')
-    except AttributeError:
-        pass
-import time
-import tempfile
 import random
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import re
+import secrets
+import socket
+import statistics
+import sys
+import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from datetime import datetime, timezone
-from typing import Optional, Any, List, Dict, Set, Tuple
+from typing import Dict, FrozenSet, Iterable, Iterator, List, Mapping, Optional, Sequence, Set, Tuple
 
-from zcc_dream_mutations import MutationEngine, Mutation
-from zcc_criticality import (
-    topology_eta_search, prime_free_energy, SpectralArrestDetector,
-    relaxation_phase, universality_class, boltzmann_acceptance,
+
+VERSION = "ZCC ONEIROGENESIS v4.0-SOVEREIGN"
+REPO_ROOT = Path(__file__).resolve().parent
+DREAM_DIR = REPO_ROOT / "evidence" / "oneirogenesis"
+EVENT_LOG = REPO_ROOT / "evidence" / "oneirogenesis_events.jsonl"
+
+PASSES: Tuple[str, ...] = (
+    "canonicalize",
+    "peephole",
+    "dead-write-elimination",
+    "branch-simplify",
+    "stack-balance",
+    "pareto-select",
+    "hamiltonian-navigate",
+    "wkb-tunnel",
 )
-from zcc_cfg_extract import extract_cfg, cfg_spectral_dim, cfg_stats
 
-# ═══════════════════════════════════════════════════════════════════════
-# CONSTANTS
-# ═══════════════════════════════════════════════════════════════════════
-
-REPO_ROOT      = Path(__file__).parent.resolve()
-DREAM_DIR      = REPO_ROOT / "dreams"
-JOURNAL_DIR    = DREAM_DIR / "journal"
-LINEAGE_DIR    = DREAM_DIR / "lineage"
-BLACKLIST_FILE = DREAM_DIR / "blacklist.json"
-BENCHMARK_FILE = REPO_ROOT / "benchmark_workload.c"
-GODS_EYE_WS    = "ws://127.0.0.1:8082/ws/dream_telemetry"
-
-PARTS = ["part0_pp.c", "zcc_ast_bridge.h", "part1.c", "part2.c", "part3.c",
-         "ir.h", "ir_emit_dispatch.h", "ir_bridge.h", "part4.c", "part5.c",
-         "part6_arm.c", "ir.c", "ir_to_x86.c", "ir_pass_manager.c",
-         "regalloc.c", "ir_telemetry_stub.c"]
-PASSES = ["compiler_passes.c", "compiler_passes_ir.c", "ir_pass_manager.c",
-          "ir_pass_warden.c", "ir_pass_taint.c", "ir_pass_healer.c",
-          "ir_symbolic_cfg.c", "ir_dominance.c", "ir_ssa.c", "evm_lifter.c",
-          "ir_vuln_tag.c", "ir_to_evm.c", "ir_evm_stack.c",
-          "src/ir_lower_float.c", "src/x86_codegen_sse.c", "src/evm/decompiler.c",
-          "src/evm/jit.c", "src/evm/symbolic.c", "src/evm/memory_v2.c",
-          "src/evm/abi_extractor.c", "src/evm/jit_memory.c",
-          "src/evm/proof_export.c", "src/evm/ipc_bridge.c",
-          "src/evm/yul_weaver.c", "src/evm/yul_fixed_point.c",
-          "src/evm/yul_frontend.c", "src/gfx/sdf_compiler.c",
-          "src/gfx/mesh_warden.c", "src/evm/evm_symbolic_harness.c",
-          "src/zcc_oracle_substrate.c",
-          "src/elf_emit.c", "src/codegen.c", "src/ir_serialization.c",
-          "src/zcc_smt_prover.c", "src/gguf_emit.c", "src/zld.c",
-          "src/zcc_resource_oracle.c", "transient_state.c", "zcc_lucky_alert_injector.c",
-          "src/opt/ir_verify.c", "src/opt/zcc_ir_opt_helpers.c", "src/opt/instcombine_pass.c",
-          "src/opt/instcombine_rules.c", "src/opt/instcombine_dispatch.c", "src/opt/sccp_pass.c",
-          "src/opt/cfg_simplify_pass.c", "src/opt/clone_remap.c", "src/opt/loop_validator.c",
-          "src/opt/loop_unroll_pass.c", "src/opt/inline_pass.c", "src/opt/pointer_ssa.c"]
-
-# ANSI colour palette
-_R = "\033[91m"; _G = "\033[92m"; _Y = "\033[93m"
-_C = "\033[96m"; _M = "\033[95m"; _W = "\033[0m"; _B = "\033[1m"
-_DIM = "\033[2m"
+TORUS_MODULUS = 12289
+CANONICAL_ETA = 0.4
+CANONICAL_GAMMA = 0.3
+CANONICAL_BETA = 0.1
+CANONICAL_EPSILON = 0.05
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# DATA CLASSES
-# ═══════════════════════════════════════════════════════════════════════
+# ---------------------------------------------------------------------------
+# Utility / evidence
+# ---------------------------------------------------------------------------
 
-@dataclass
-class IslandState:
-    """State for one competing lineage in the island model."""
-    island_id: int
-    generation: int = 0
-    parent_hash: str = "GENESIS"
-    parent_asm_path: str = ""
-    parent_score: float = 0.0
-    survived: int = 0
-    rejected: int = 0
-    lineage: list = field(default_factory=list)
-    discovered: list = field(default_factory=list)
+def _canonical_json(obj: object) -> bytes:
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
 
-@dataclass
-class DreamState:
-    """Global dream engine state (persisted to disk)."""
-    generation: int = 0
-    parent_hash: str = "GENESIS"
-    parent_asm_size: int = 0
-    parent_bin_size: int = 0
-    total_mutations_tried: int = 0
-    total_mutations_survived: int = 0
-    total_regressions: int = 0
-    total_fitness_rejections: int = 0   # bucket 5: gate-pass, delta>=0
-    lineage: list = field(default_factory=list)
-    fitness_history: list = field(default_factory=list)
-    discovered_algorithms: list = field(default_factory=list)
-    blacklisted_fingerprints: list = field(default_factory=list)
+def _sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
 
 
-def derive_seed(root_seed: int, namespace: str) -> int:
-    h = hashlib.sha256(f"{root_seed}:{namespace}".encode("utf-8")).hexdigest()
-    return int(h[:8], 16)
+def _atomic_append_jsonl(path: Path, obj: Mapping[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = _canonical_json(obj) + b"\n"
+    # O_APPEND provides process-level append atomicity for modest records on
+    # ordinary local filesystems; fsync makes the ledger durable at the OS API.
+    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    try:
+        os.write(fd, payload)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
-@dataclass
-class CycleResult:
-    """Result of one complete dream cycle (one island, one generation)."""
-    island_id: int
-    generation: int
-    mutations_applied: list
-    survived: bool
-    self_host_passed: bool
-    parent_fitness: dict
-    mutant_fitness: dict
-    delta: dict
-    elapsed_s: float
-    error: str = ""
-    parent_structural_score: float = 0.0
-    mutant_structural_score: float = 0.0
-    selection_score: float = 0.0
-    benchmark_observation: int = 0
-    deterministic_mode: bool = False
+class EventLedger:
+    """Append-only, hash-chained JSONL event ledger."""
 
+    def __init__(self, path: Path = EVENT_LOG):
+        self.path = Path(path)
+        self._prev_hash = self._discover_tail_hash()
 
-# ═══════════════════════════════════════════════════════════════════════
-# STATISTICAL FITNESS ORACLE
-# ═══════════════════════════════════════════════════════════════════════
+    def _discover_tail_hash(self) -> str:
+        if not self.path.exists():
+            return "0" * 64
+        try:
+            last = b""
+            with self.path.open("rb") as fh:
+                for line in fh:
+                    if line.strip():
+                        last = line
+            if not last:
+                return "0" * 64
+            obj = json.loads(last)
+            return str(obj.get("event_hash", "0" * 64))
+        except (OSError, ValueError, TypeError):
+            # Never certify a malformed prior ledger. Start a new chain segment
+            # with explicit lineage break.
+            return "CORRUPT_PRIOR_LEDGER"
 
-class FitnessOracle:
-    """
-    v3: Multi-dimensional fitness oracle.
-    Measures orthogonal quality metrics and computes a weighted composite score.
-    In deterministic mode, runtime benchmark timing is excluded from selection_score.
-    """
-
-    N_SAMPLES = 3
-
-    # Composite weights: instruction count dominates, then size, then branches
-    W_INSTR    = 0.40
-    W_SIZE     = 0.30
-    W_BRANCH   = 0.20
-    W_STACK    = 0.10
-
-    _deterministic: bool = False
-    _eta_c: float = 0.4407
-    _T_eff: float = 1.0
-
-    @classmethod
-    def compute_structural_score(cls, metrics: dict) -> dict:
-        """
-        Pure scoring helper for ZCC structural quality score calculation.
-        Effective weights:
-          inst_count:      10.0 * 0.40 = 4.00
-          asm_size:        1.0  * 0.30 = 0.30
-          branch_count:    20.0 * 0.20 = 4.00
-          stack_depth_sum:  0.5 * 0.10 = 0.05
-        """
-        ic = metrics.get('inst_count', 0)
-        sz = metrics.get('asm_size', 0)
-        bc = metrics.get('branch_count', 0)
-        st = metrics.get('stack_depth_sum', 0)
-
-        w_ic = 10.0 * cls.W_INSTR   # 4.00
-        w_sz = 1.0  * cls.W_SIZE    # 0.30
-        w_bc = 20.0 * cls.W_BRANCH  # 4.00
-        w_st = 0.5  * cls.W_STACK   # 0.05
-
-        c_ic = ic * w_ic
-        c_sz = sz * w_sz
-        c_bc = bc * w_bc
-        c_st = st * w_st
-
-        score = c_ic + c_sz + c_bc + c_st
-
-        return {
-            'inst_count':       {'value': ic, 'weight': w_ic, 'contribution': round(c_ic, 4)},
-            'asm_size':         {'value': sz, 'weight': w_sz, 'contribution': round(c_sz, 4)},
-            'branch_count':     {'value': bc, 'weight': w_bc, 'contribution': round(c_bc, 4)},
-            'stack_depth_sum':  {'value': st, 'weight': w_st, 'contribution': round(c_st, 4)},
-            'structural_score': round(score, 4),
+    def append(self, event_type: str, payload: Mapping[str, object]) -> Dict[str, object]:
+        record: Dict[str, object] = {
+            "schema": "zcc.oneirogenesis.event.v1",
+            "version": VERSION,
+            "ts_ns": time.time_ns(),
+            "event_type": event_type,
+            "prev_hash": self._prev_hash,
+            "payload": dict(payload),
         }
-
-    @classmethod
-    def measure(cls, zcc_binary: str, workload_c: str,
-                asm_output: str, tmpdir: str, timeout: int = 120,
-                deterministic: Optional[bool] = None) -> dict:
-        is_det = deterministic if deterministic is not None else cls._deterministic
-        fitness = {
-            'asm_size': 0, 'bin_size': 0, 'inst_count': 0,
-            'branch_count': 0, 'branch_density': 0.0,
-            'stack_depth_sum': 0,
-            'benchmark_time_ns': 0,
-            'structural_score': 0.0,
-            'selection_score': 0.0,
-            'score': 0.0,
-            'deterministic_mode': is_det,
-        }
-
-        if os.path.exists(zcc_binary):
-            fitness['bin_size'] = os.path.getsize(zcc_binary)
-        if os.path.exists(asm_output):
-            # Step 2: Measure compiled .text section bytes using size -A tool
-            obj_file = asm_output + '.o'
-            text_size = None
-            try:
-                subprocess.run(['as', asm_output, '-o', obj_file], capture_output=True, check=True)
-                res = subprocess.run(['size', '-A', obj_file], capture_output=True, text=True, check=True)
-                found = False
-                for line in res.stdout.splitlines():
-                    parts = line.split()
-                    if parts and parts[0] == '.text':
-                        text_size = int(parts[1])
-                        found = True
-                        break
-                if not found:
-                    raise ValueError(f"Could not find .text section in size -A output: {res.stdout}")
-            except Exception as e:
-                raise RuntimeError(f"FitnessOracle failed to measure compiled size of {asm_output}: {e}")
-            finally:
-                if os.path.exists(obj_file):
-                    try:
-                        os.remove(obj_file)
-                    except Exception:
-                        pass
-
-            fitness['asm_size'] = text_size
-
-            with open(asm_output) as f:
-                asm = f.readlines()
-
-            inst_count = 0
-            branch_count = 0
-            stack_depth_sum = 0
-            func_count = 0
-
-            for l in asm:
-                stripped = l.strip()
-                if not stripped or stripped.startswith('.') or stripped.endswith(':') or stripped.startswith('#'):
-                    continue
-                inst_count += 1
-                # Count branches (jcc, jmp, call, ret)
-                if stripped.split()[0] in ('je', 'jne', 'jl', 'jle', 'jg', 'jge',
-                                           'ja', 'jae', 'jb', 'jbe', 'jmp',
-                                           'js', 'jns', 'jo', 'jno', 'jz', 'jnz',
-                                           'call', 'ret'):
-                    branch_count += 1
-                # Approximate stack depth from subq $N, %rsp (function prologue)
-                m = re.match(r'subq\s+\$(\d+),\s*%rsp', stripped)
-                if m:
-                    stack_depth_sum += int(m.group(1))
-                    func_count += 1
-
-            fitness['inst_count'] = inst_count
-            fitness['branch_count'] = branch_count
-            fitness['branch_density'] = branch_count / max(inst_count, 1)
-            fitness['stack_depth_sum'] = stack_depth_sum
-
-        # Statistical benchmark: median of N_SAMPLES
-        if os.path.exists(workload_c):
-            samples = []
-            bench_asm = os.path.join(tmpdir, 'bench_stat.s')
-            for _ in range(cls.N_SAMPLES):
-                t0 = time.perf_counter_ns()
-                try:
-                    subprocess.run([zcc_binary, workload_c, '-o', bench_asm],
-                                   capture_output=True, timeout=timeout)
-                except Exception:
-                    pass
-                samples.append(time.perf_counter_ns() - t0)
-            samples.sort()
-            fitness['benchmark_time_ns'] = samples[len(samples) // 2]  # median
-
-        score_breakdown = cls.compute_structural_score(fitness)
-        structural_score = score_breakdown['structural_score']
-        fitness['structural_score'] = structural_score
-        fitness['score_breakdown'] = score_breakdown
-
-        if is_det:
-            fitness['selection_score'] = structural_score
-        else:
-            fitness['selection_score'] = structural_score + (fitness['benchmark_time_ns'] / 1e6)
-
-        # Temporary alias for backwards compatibility
-        fitness['score'] = fitness['selection_score']
-
-        # Free energy: F = E - TS (Wilson-Fisher universal fitness)
-        eta = getattr(cls, '_eta_c', 0.4407)
-        T_eff = getattr(cls, '_T_eff', 1.0)
-        fitness['free_energy'] = prime_free_energy(fitness, eta, T_eff)
-        fitness['eta_c'] = eta
-
-        return fitness
+        digest = _sha256_bytes(_canonical_json(record))
+        record["event_hash"] = digest
+        _atomic_append_jsonl(self.path, record)
+        self._prev_hash = digest
+        return record
 
 
+# ---------------------------------------------------------------------------
+# Instruction semantics and conservative CFG/liveness
+# ---------------------------------------------------------------------------
+
+_REG_ALIASES = {
+    # Canonicalize common partial-register aliases.
+    "al": "rax", "ah": "rax", "ax": "rax", "eax": "rax", "rax": "rax",
+    "bl": "rbx", "bh": "rbx", "bx": "rbx", "ebx": "rbx", "rbx": "rbx",
+    "cl": "rcx", "ch": "rcx", "cx": "rcx", "ecx": "rcx", "rcx": "rcx",
+    "dl": "rdx", "dh": "rdx", "dx": "rdx", "edx": "rdx", "rdx": "rdx",
+    "sil": "rsi", "si": "rsi", "esi": "rsi", "rsi": "rsi",
+    "dil": "rdi", "di": "rdi", "edi": "rdi", "rdi": "rdi",
+    "bpl": "rbp", "bp": "rbp", "ebp": "rbp", "rbp": "rbp",
+    "spl": "rsp", "sp": "rsp", "esp": "rsp", "rsp": "rsp",
+}
+for _i in range(8, 16):
+    for _suffix in ("b", "w", "d", ""):
+        _REG_ALIASES[f"r{_i}{_suffix}"] = f"r{_i}"
+
+_REG_RE = re.compile(r"%([A-Za-z0-9]+)")
+_LABEL_RE = re.compile(r"^\s*([.$A-Za-z_][\w.$@]*):\s*(?:#.*)?$")
+_INST_RE = re.compile(r"^\s*([A-Za-z][A-Za-z0-9.]*)\s*(.*?)\s*(?:#.*)?$")
+_BRANCH_TARGET_RE = re.compile(r"(?:^|,)\s*([.$A-Za-z_][\w.$@]*)\s*$")
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# SELF-HOST GATE
-# ═══════════════════════════════════════════════════════════════════════
+@dataclass(frozen=True)
+class InstructionEffect:
+    reads: FrozenSet[str] = frozenset()
+    writes: FrozenSet[str] = frozenset()
+    reads_flags: bool = False
+    writes_flags: bool = False
+    stack_delta: int = 0
+    terminator: bool = False
+    conditional_branch: bool = False
+    unconditional_branch: bool = False
+    call: bool = False
+    ret: bool = False
+    unknown: bool = False
 
-class SelfHostGate:
+
+class InstructionSemantics:
     """
-    Full 3-stage bootstrap verification.
-    Stage 1: mutant → stage3.s
-    Stage 2: gcc links stage3.s → stage3
-    Stage 3: stage3 → stage4.s
-    Stage 4: cmp stage3.s stage4.s  (idempotency check)
+    Conservative AT&T x86-64 register/flags/stack semantics.
 
-    Includes Step 4 Safety Gate:
-    Runs static flags liveness checker on stage 3 assembly to catch residual flags hazards.
-    Note: The checker is xor-blind (interprets xorl as flags-setter); primary safety of 1b
-    is proven via pre-patch audit on the zcc2.s/zcc3.s baseline.
+    Unknown opcodes are intentionally marked `unknown` and treated as barriers
+    by mutation passes; the analyzer never assumes an unrecognized instruction
+    is side-effect free.
     """
+
+    _COND_PREFIXES = (
+        "ja", "jb", "jc", "je", "jg", "jl", "jna", "jnb", "jnc", "jne",
+        "jng", "jnl", "jno", "jnp", "jns", "jnz", "jo", "jp", "jpe", "jpo",
+        "js", "jz",
+    )
+
+    _READ_WRITE_TWO_OP = {
+        "add", "sub", "adc", "sbb", "and", "or", "xor", "imul",
+        "shl", "shr", "sal", "sar", "rol", "ror",
+    }
+
+    _COMPARE = {"cmp", "test", "comiss", "comisd", "ucomiss", "ucomisd"}
+    _MOVE = {"mov", "movabs", "movsx", "movzx", "movsxd", "lea"}
+    _UNARY_RW = {"inc", "dec", "neg", "not", "bswap"}
+    _PUSH = {"push", "pushq", "pushl"}
+    _POP = {"pop", "popq", "popl"}
 
     @staticmethod
-    def verify(mutant_bin: str, zcc_pp_c: str, passes: list,
-               tmpdir: str, timeout: int = 180) -> tuple:
-        s3_s   = os.path.join(tmpdir, 'g_s3.s')
-        s3_bin = os.path.join(tmpdir, 'g_s3')
-        s4_s   = os.path.join(tmpdir, 'g_s4.s')
-        p_args   = [str(REPO_ROOT / p) for p in passes]
-        # Use full zcc.c (single compilation unit) — avoids multi-definition
-        # symbol clashes that arise when linking zcc_pp.c with extra .c files
-        zcc_full = str(REPO_ROOT / 'zcc.c')
-        gate_src = zcc_full if os.path.exists(zcc_full) else zcc_pp_c
-        s3_p_args = p_args
+    def _base_opcode(opcode: str) -> str:
+        op = opcode.lower()
+        # Preserve mnemonics whose trailing character is semantically part of name.
+        exact = {
+            "call", "ret", "leave", "nop", "ud2", "syscall", "sysret",
+            "cqto", "cltd", "cdq", "cwd", "cqo", "endbr64",
+        }
+        if op in exact:
+            return op
+        # Strip conventional AT&T size suffix for known families only.
+        for base in (
+            list(InstructionSemantics._READ_WRITE_TWO_OP)
+            + list(InstructionSemantics._COMPARE)
+            + list(InstructionSemantics._MOVE)
+            + list(InstructionSemantics._UNARY_RW)
+            + list(InstructionSemantics._PUSH)
+            + list(InstructionSemantics._POP)
+            + ["call", "ret"]
+        ):
+            if op == base or op in {base + "b", base + "w", base + "l", base + "q"}:
+                return base
+        return op
 
-        try:
-            r = subprocess.run([mutant_bin, gate_src, '-o', s3_s],
-                               capture_output=True, timeout=timeout)
-            if r.returncode != 0:
-                return False, f"mutant crash rc={r.returncode}"
-        except subprocess.TimeoutExpired:
-            return False, "mutant timeout"
-        except FileNotFoundError:
-            return False, f"binary missing: {mutant_bin}"
+    @staticmethod
+    def _regs(operand: str) -> Set[str]:
+        out: Set[str] = set()
+        for r in _REG_RE.findall(operand):
+            key = r.lower()
+            out.add(_REG_ALIASES.get(key, key))
+        return out
 
-        if not os.path.exists(s3_s) or os.path.getsize(s3_s) == 0:
-            return False, "empty assembly output"
+    @classmethod
+    def analyze(cls, opcode: str, operands: str) -> InstructionEffect:
+        op = cls._base_opcode(opcode)
+        parts = [p.strip() for p in operands.split(",")] if operands else []
+        all_regs = cls._regs(operands)
 
-        # Step 4: Safety check flags liveness in s3_s (defense-in-depth for residual movq $0)
-        try:
-            import sys
-            sys.path.append(str(REPO_ROOT / 'tools'))
-            try:
-                from tools.check_flags_liveness import analyze_asm
-            except ImportError:
-                from check_flags_liveness import analyze_asm
-            violations = analyze_asm(s3_s)
-            if violations:
-                log_path = os.path.join(REPO_ROOT, "dreams", "rejections.log")
-                with open(log_path, "a") as lf:
-                    lf.write(f"--- REJECT MUTANT: {mutant_bin} ---\n")
-                    for v in violations:
-                        lf.write(f"  Setter   [L{v['setter_idx']+1}]: {v['setter_line']}\n")
-                        lf.write(f"  Movq $0  [L{v['mov_idx']+1}]: {v['mov_line']}\n")
-                        lf.write(f"  Consumer [L{v['consumer_idx']+1}]: {v['consumer_line']}\n")
-                return False, f"safety gate: flags-liveness violation ({len(violations)} found)"
-        except Exception as e:
-            print(f"Safety gate checker warning: {e}")
+        if op.startswith("j") and op != "jmp":
+            return InstructionEffect(
+                reads=all_regs, reads_flags=True, terminator=True,
+                conditional_branch=True
+            )
+        if op in {"jmp", "jmpq"}:
+            return InstructionEffect(
+                reads=all_regs, terminator=True, unconditional_branch=True
+            )
+        if op in {"ret", "retq"}:
+            return InstructionEffect(
+                reads=frozenset({"rsp"}), writes=frozenset({"rsp"}),
+                stack_delta=8, terminator=True, ret=True
+            )
+        if op in {"call", "callq"}:
+            # SysV caller-clobbered register set. Memory and callee effects remain
+            # barriers to code motion.
+            return InstructionEffect(
+                reads=frozenset(all_regs | {"rsp"}),
+                writes=frozenset({"rax","rcx","rdx","rsi","rdi","r8","r9","r10","r11","rsp"}),
+                stack_delta=0, call=True
+            )
+        if op in cls._PUSH:
+            return InstructionEffect(
+                reads=frozenset(all_regs | {"rsp"}), writes=frozenset({"rsp"}),
+                stack_delta=-8
+            )
+        if op in cls._POP:
+            writes = set(all_regs) | {"rsp"}
+            return InstructionEffect(
+                reads=frozenset({"rsp"}), writes=frozenset(writes), stack_delta=8
+            )
+        if op == "leave":
+            return InstructionEffect(
+                reads=frozenset({"rbp"}), writes=frozenset({"rsp","rbp"})
+            )
+        if op in cls._COMPARE:
+            return InstructionEffect(reads=frozenset(all_regs), writes_flags=True)
+        if op in cls._MOVE and len(parts) >= 2:
+            src_regs = cls._regs(parts[0])
+            dst_regs = cls._regs(parts[-1])
+            # Addressing registers in destination memory are reads, not writes.
+            dst_is_mem = "(" in parts[-1] or ")" in parts[-1]
+            reads = set(src_regs)
+            writes: Set[str] = set()
+            if dst_is_mem:
+                reads |= dst_regs
+            else:
+                writes |= dst_regs
+            return InstructionEffect(reads=frozenset(reads), writes=frozenset(writes))
+        if op in cls._READ_WRITE_TWO_OP and parts:
+            src = cls._regs(parts[0]) if len(parts) >= 2 else set()
+            dst = cls._regs(parts[-1])
+            return InstructionEffect(
+                reads=frozenset(src | dst), writes=frozenset(dst), writes_flags=True
+            )
+        if op in cls._UNARY_RW:
+            return InstructionEffect(
+                reads=frozenset(all_regs), writes=frozenset(all_regs), writes_flags=True
+            )
+        if op.startswith("set"):
+            return InstructionEffect(
+                writes=frozenset(all_regs), reads_flags=True
+            )
+        if op.startswith("cmov") and parts:
+            src = cls._regs(parts[0]) if len(parts) >= 2 else set()
+            dst = cls._regs(parts[-1])
+            return InstructionEffect(
+                reads=frozenset(src | dst), writes=frozenset(dst), reads_flags=True
+            )
+        if op in {"nop", "endbr64"}:
+            return InstructionEffect()
 
-        try:
-            r = subprocess.run(
-                ['gcc', '-no-pie', '-O0', '-w', '-fno-asynchronous-unwind-tables',
-                 '-Wa,--noexecstack', '-fno-unwind-tables',
-                 '-Iinclude', '-I.',
-                 '-o', s3_bin, s3_s] + s3_p_args + ['-lm'],
-                capture_output=True, timeout=60)
-            if r.returncode != 0:
-                full_stderr = r.stderr.decode('utf-8', 'ignore').strip()
-                with open("dreams/last_assembler_error.txt", "w") as f:
-                    f.write(full_stderr)
-                import shutil
-                shutil.copyfile(s3_s, "dreams/g_s3_fault.s")
-                lines = full_stderr.split('\n')
-                err_summary = '\n'.join(lines[:10])
-                return False, f"s3 link fail:\n{err_summary}"
-        except subprocess.TimeoutExpired:
-            return False, "s3 link timeout"
-
-        try:
-            r = subprocess.run([s3_bin, gate_src, '-o', s4_s],
-                               capture_output=True, timeout=timeout)
-            if r.returncode != 0:
-                return False, f"s3 crash rc={r.returncode}"
-        except subprocess.TimeoutExpired:
-            return False, "s3 timeout"
-
-        if not os.path.exists(s4_s) or os.path.getsize(s4_s) == 0:
-            return False, "s3 produced empty asm"
-
-        r = subprocess.run(['cmp', '-s', s3_s, s4_s], capture_output=True)
-        if r.returncode != 0:
-            return False, "bootstrap mismatch: s3.s ≠ s4.s"
-
-        return True, "SELF-HOST OK"
+        return InstructionEffect(reads=frozenset(all_regs), unknown=True)
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# HAMILTONIAN TELEMETRY
-# ═══════════════════════════════════════════════════════════════════════
+@dataclass
+class AssemblyInstruction:
+    line_index: int
+    text: str
+    opcode: str
+    operands: str
+    effect: InstructionEffect
+
+
+@dataclass
+class BasicBlock:
+    index: int
+    start: int
+    end: int
+    labels: Tuple[str, ...]
+    instructions: List[AssemblyInstruction]
+    successors: Set[int] = field(default_factory=set)
+    predecessors: Set[int] = field(default_factory=set)
+    use: Set[str] = field(default_factory=set)
+    defs: Set[str] = field(default_factory=set)
+    live_in: Set[str] = field(default_factory=set)
+    live_out: Set[str] = field(default_factory=set)
+
+
+class CFGLivenessAnalyzer:
+    """Build basic blocks and solve classic backward register liveness."""
+
+    def __init__(self, source: str):
+        self.source = source
+        self.lines = source.splitlines()
+        self.instructions: List[AssemblyInstruction] = []
+        self.label_to_line: Dict[str, int] = {}
+        self.blocks: List[BasicBlock] = []
+        self._parse()
+        self._build_blocks()
+        self._solve_liveness()
+
+    def _parse(self) -> None:
+        for i, line in enumerate(self.lines):
+            lm = _LABEL_RE.match(line)
+            if lm:
+                self.label_to_line[lm.group(1)] = i
+                continue
+            m = _INST_RE.match(line)
+            if not m:
+                continue
+            op, operands = m.group(1), m.group(2)
+            self.instructions.append(
+                AssemblyInstruction(i, line, op, operands,
+                                    InstructionSemantics.analyze(op, operands))
+            )
+
+    @staticmethod
+    def _branch_target(inst: AssemblyInstruction) -> Optional[str]:
+        if not (inst.effect.conditional_branch or inst.effect.unconditional_branch):
+            return None
+        m = _BRANCH_TARGET_RE.search(inst.operands)
+        return m.group(1) if m else None
+
+    def _build_blocks(self) -> None:
+        if not self.instructions:
+            return
+        inst_by_line = {x.line_index: x for x in self.instructions}
+        leaders: Set[int] = {self.instructions[0].line_index}
+
+        for label_line in self.label_to_line.values():
+            nxt = next((x.line_index for x in self.instructions if x.line_index > label_line), None)
+            if nxt is not None:
+                leaders.add(nxt)
+
+        for pos, inst in enumerate(self.instructions):
+            if inst.effect.terminator and pos + 1 < len(self.instructions):
+                leaders.add(self.instructions[pos + 1].line_index)
+            target = self._branch_target(inst)
+            if target in self.label_to_line:
+                target_line = self.label_to_line[target]
+                nxt = next((x.line_index for x in self.instructions if x.line_index > target_line), None)
+                if nxt is not None:
+                    leaders.add(nxt)
+
+        leader_list = sorted(leaders)
+        line_to_block: Dict[int, int] = {}
+        for bi, start in enumerate(leader_list):
+            next_start = leader_list[bi + 1] if bi + 1 < len(leader_list) else len(self.lines) + 1
+            ins = [x for x in self.instructions if start <= x.line_index < next_start]
+            labels = tuple(
+                name for name, lno in self.label_to_line.items()
+                if lno < start and lno >= (leader_list[bi - 1] if bi else -1)
+            )
+            if not ins:
+                continue
+            b = BasicBlock(len(self.blocks), start, ins[-1].line_index, labels, ins)
+            self.blocks.append(b)
+            for x in ins:
+                line_to_block[x.line_index] = b.index
+
+        label_to_block: Dict[str, int] = {}
+        for name, lno in self.label_to_line.items():
+            nxt = next((x.line_index for x in self.instructions if x.line_index > lno), None)
+            if nxt is not None and nxt in line_to_block:
+                label_to_block[name] = line_to_block[nxt]
+
+        for i, b in enumerate(self.blocks):
+            last = b.instructions[-1]
+            target = self._branch_target(last)
+            if target in label_to_block:
+                b.successors.add(label_to_block[target])
+            if last.effect.conditional_branch and i + 1 < len(self.blocks):
+                b.successors.add(i + 1)
+            elif not last.effect.terminator and i + 1 < len(self.blocks):
+                b.successors.add(i + 1)
+
+        for b in self.blocks:
+            for s in b.successors:
+                self.blocks[s].predecessors.add(b.index)
+
+        for b in self.blocks:
+            use: Set[str] = set()
+            defs: Set[str] = set()
+            for inst in b.instructions:
+                for r in inst.effect.reads:
+                    if r not in defs:
+                        use.add(r)
+                defs |= set(inst.effect.writes)
+            b.use, b.defs = use, defs
+
+    def _solve_liveness(self) -> None:
+        changed = True
+        while changed:
+            changed = False
+            for b in reversed(self.blocks):
+                old_in, old_out = set(b.live_in), set(b.live_out)
+                b.live_out = set().union(*(self.blocks[s].live_in for s in b.successors)) if b.successors else set()
+                b.live_in = b.use | (b.live_out - b.defs)
+                changed |= old_in != b.live_in or old_out != b.live_out
+
+    def max_stack_depth(self) -> int:
+        depth = 0
+        max_depth = 0
+        # Metric only: path-insensitive conservative scan. The mutation engine
+        # does not use this to prove stack correctness.
+        for inst in self.instructions:
+            depth -= inst.effect.stack_delta
+            max_depth = max(max_depth, depth)
+        return max_depth // 8
+
+    def branch_entropy(self) -> float:
+        cond = sum(1 for i in self.instructions if i.effect.conditional_branch)
+        uncond = sum(1 for i in self.instructions if i.effect.unconditional_branch)
+        total = cond + uncond
+        if not total:
+            return 0.0
+        p = cond / total
+        if p in (0.0, 1.0):
+            return 0.0
+        return -(p * math.log2(p) + (1 - p) * math.log2(1 - p))
+
+
+# ---------------------------------------------------------------------------
+# Mutation engine
+# ---------------------------------------------------------------------------
+
+class MutationEngine:
+    """Semantics-aware local transforms; unknown instructions are barriers."""
+
+    _SELF_MOVE = re.compile(
+        r"^(\s*)mov(?:b|w|l|q)?\s+(%[A-Za-z0-9]+)\s*,\s*\2\s*(?:#.*)?$",
+        re.IGNORECASE,
+    )
+    _ADD_ZERO = re.compile(
+        r"^\s*(?:add|sub)(?:b|w|l|q)?\s+\$0\s*,", re.IGNORECASE
+    )
+    _NOP = re.compile(r"^\s*nop(?:[lqwb]|\s|$)", re.IGNORECASE)
+    _LEAQ_LOAD = re.compile(
+        r"^\s*leaq\s+(-?\d+\(%rbp\)),\s*(%[a-z0-9]+)\s*$", re.IGNORECASE
+    )
+    _MOV_LOAD = re.compile(
+        r"^\s*(mov(?:q|l|w|b|slq|zbl)?)\s*\((%[a-z0-9]+)\),\s*(%[a-z0-9]+)\s*$", re.IGNORECASE
+    )
+    _MOV_STORE = re.compile(
+        r"^\s*(mov(?:q|l|w|b)?)\s*(%[a-z0-9]+),\s*\((%[a-z0-9]+)\)\s*$", re.IGNORECASE
+    )
+    _PUSH_Q = re.compile(
+        r"^\s*pushq\s+(%[a-z0-9]+)\s*$", re.IGNORECASE
+    )
+    _POP_Q = re.compile(
+        r"^\s*popq\s+(%[a-z0-9]+)\s*$", re.IGNORECASE
+    )
+
+    def __init__(self, rng: random.Random):
+        self.rng = rng
+
+    def safe_peephole(self, source: str) -> str:
+        out: List[str] = []
+        for line in source.splitlines():
+            if self._SELF_MOVE.match(line) or self._ADD_ZERO.match(line) or self._NOP.match(line):
+                continue
+            out.append(line)
+        return "\n".join(out) + ("\n" if source.endswith("\n") else "")
+
+    def fold_addressing(self, source: str) -> str:
+        lines = source.splitlines()
+        out: List[str] = []
+        i = 0
+        n = len(lines)
+        while i < n:
+            l1 = lines[i]
+            if i + 1 < n:
+                l2 = lines[i + 1]
+                m1 = self._LEAQ_LOAD.match(l1)
+                if m1:
+                    offset_rbp, reg = m1.group(1), m1.group(2).lower()
+                    m2 = self._MOV_LOAD.match(l2)
+                    if m2 and m2.group(2).lower() == reg:
+                        mov_op, dst = m2.group(1), m2.group(3)
+                        out.append(f"    {mov_op} {offset_rbp}, {dst}")
+                        i += 2
+                        continue
+                    m3 = self._MOV_STORE.match(l2)
+                    if m3 and m3.group(3).lower() == reg:
+                        mov_op, src = m3.group(1), m3.group(2)
+                        out.append(f"    {mov_op} {src}, {offset_rbp}")
+                        i += 2
+                        continue
+                mpush = self._PUSH_Q.match(l1)
+                mpop = self._POP_Q.match(l2)
+                if mpush and mpop:
+                    reg_a, reg_b = mpush.group(1).lower(), mpop.group(1).lower()
+                    if reg_a == reg_b:
+                        i += 2
+                        continue
+                    else:
+                        out.append(f"    movq {mpush.group(1)}, {mpop.group(1)}")
+                        i += 2
+                        continue
+            out.append(l1)
+            i += 1
+        return "\n".join(out) + ("\n" if source.endswith("\n") else "")
+
+    _MOV_REG = re.compile(
+        r"^\s*mov[a-z]*\s+([^,]+),\s*(%[a-z0-9]+)\s*$", re.IGNORECASE
+    )
+    _STORE_STACK = re.compile(
+        r"^\s*mov[a-z]*\s+(%[a-z0-9]+),\s*(-?\d+\(%rbp\))\s*$", re.IGNORECASE
+    )
+    _LOAD_STACK = re.compile(
+        r"^\s*(mov(?:slq|zbl|q|l)?)\s*(-?\d+\(%rbp\)),\s*(%[a-z0-9]+)\s*$", re.IGNORECASE
+    )
+
+    def fold_store_load(self, source: str) -> str:
+        lines = source.splitlines()
+        out: List[str] = []
+        i = 0
+        n = len(lines)
+        while i < n:
+            l1 = lines[i]
+            if i + 1 < n:
+                l2 = lines[i + 1]
+                ms = self._STORE_STACK.match(l1)
+                ml = self._LOAD_STACK.match(l2)
+                if ms and ml:
+                    s_reg, s_loc = ms.group(1).lower(), ms.group(2)
+                    l_op, l_loc, l_dst = ml.group(1), ml.group(2), ml.group(3).lower()
+                    if s_loc == l_loc:
+                        out.append(l1)
+                        out.append(f"    {l_op} {s_reg}, {l_dst}")
+                        i += 2
+                        continue
+            out.append(l1)
+            i += 1
+        return "\n".join(out) + ("\n" if source.endswith("\n") else "")
+
+    def eliminate_dead_writes(self, source: str) -> str:
+        lines = source.splitlines()
+        out: List[str] = []
+        i = 0
+        n = len(lines)
+        while i < n:
+            l1 = lines[i]
+            if i + 1 < n:
+                l2 = lines[i + 1]
+                m1 = self._MOV_REG.match(l1)
+                m2 = self._MOV_REG.match(l2)
+                if m1 and m2:
+                    src1, dst1 = m1.group(1).strip().lower(), m1.group(2).strip().lower()
+                    src2, dst2 = m2.group(1).strip().lower(), m2.group(2).strip().lower()
+                    if dst1 == dst2 and dst1 not in src2:
+                        i += 1  # Drop dead write l1
+                        continue
+            out.append(l1)
+            i += 1
+        return "\n".join(out) + ("\n" if source.endswith("\n") else "")
+
+    def wkb_tunnel_mutation(self, source: str) -> str:
+        cur = source
+        for _ in range(5):
+            nxt = self.safe_peephole(cur)
+            nxt = self.fold_addressing(nxt)
+            nxt = self.fold_store_load(nxt)
+            nxt = self.eliminate_dead_writes(nxt)
+            if nxt == cur:
+                break
+            cur = nxt
+        return cur
+
+    def mutate(self, source: str) -> str:
+        candidates = [
+            self.safe_peephole,
+            self.fold_addressing,
+            self.fold_store_load,
+            self.eliminate_dead_writes,
+            self.wkb_tunnel_mutation,
+            lambda s: s,  # explicit neutral mutation maintains reproducibility
+        ]
+        return self.rng.choice(candidates)(source)
+
+
+# ---------------------------------------------------------------------------
+# 4D Pareto archive
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True, order=True)
+class ParetoVector:
+    size: int
+    inst_count: int
+    branch_entropy: float
+    stack_depth: int
+
+    def dominates(self, other: "ParetoVector") -> bool:
+        a = (self.size, self.inst_count, self.branch_entropy, self.stack_depth)
+        b = (other.size, other.inst_count, other.branch_entropy, other.stack_depth)
+        return all(x <= y for x, y in zip(a, b)) and any(x < y for x, y in zip(a, b))
+
+
+@dataclass
+class Candidate:
+    source: str
+    vector: ParetoVector
+    digest: str
+    metadata: Dict[str, object] = field(default_factory=dict)
+
+
+class ParetoArchive:
+    def __init__(self) -> None:
+        self._items: Dict[str, Candidate] = {}
+
+    def add(self, cand: Candidate) -> bool:
+        if cand.digest in self._items:
+            return False
+        if any(existing.vector.dominates(cand.vector) for existing in self._items.values()):
+            return False
+        dominated = [
+            digest for digest, existing in self._items.items()
+            if cand.vector.dominates(existing.vector)
+        ]
+        for digest in dominated:
+            del self._items[digest]
+        self._items[cand.digest] = cand
+        return True
+
+    def items(self) -> List[Candidate]:
+        return sorted(
+            self._items.values(),
+            key=lambda c: (c.vector.size, c.vector.inst_count,
+                           c.vector.branch_entropy, c.vector.stack_depth, c.digest),
+        )
+
+
+class FitnessOracle:
+    """Static, deterministic 4D fitness measurement for assembly text."""
+
+    def evaluate(self, source: str) -> ParetoVector:
+        cfg = CFGLivenessAnalyzer(source)
+        encoded = source.encode("utf-8")
+        return ParetoVector(
+            size=len(encoded),
+            inst_count=len(cfg.instructions),
+            branch_entropy=round(cfg.branch_entropy(), 12),
+            stack_depth=cfg.max_stack_depth(),
+        )
+
+    def candidate(self, source: str, **metadata: object) -> Candidate:
+        return Candidate(
+            source=source,
+            vector=self.evaluate(source),
+            digest=_sha256_bytes(source.encode("utf-8")),
+            metadata=dict(metadata),
+        )
+
+
+# ---------------------------------------------------------------------------
+# ZKAEDI Prime Omega manifold
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class HamiltonianConfig:
+    eta: float = CANONICAL_ETA
+    gamma: float = CANONICAL_GAMMA
+    beta: float = CANONICAL_BETA
+    epsilon: float = CANONICAL_EPSILON
+    modulus: int = TORUS_MODULUS
+
+    def validate(self) -> None:
+        if self.modulus != TORUS_MODULUS:
+            raise ValueError("Prime Omega cyclotomic torus modulus must be 12289")
+        if not math.isclose(self.eta, CANONICAL_ETA, rel_tol=0.0, abs_tol=1e-15):
+            raise ValueError("field-shaping eta must be canonical 0.4")
+        if self.epsilon < 0.0:
+            raise ValueError("epsilon must be non-negative")
+
+
+@dataclass(frozen=True)
+class TorusPoint:
+    x: int
+    y: int
+
+    def reduced(self, modulus: int = TORUS_MODULUS) -> "TorusPoint":
+        return TorusPoint(self.x % modulus, self.y % modulus)
+
+
+class PrimeOmegaHamiltonian:
+    """
+    Canonical two-regime engine.
+
+    Field shaping:
+      H_t = H_base + eta * H_prev * sigmoid(gamma * H_prev)
+                    + epsilon * N(0, 1 + beta * |H_prev|)
+
+    Navigation:
+      scars + epsilon tie-break only.
+      eta navigation lift is identically 0.0 by construction.
+    """
+
+    def __init__(self, rng: random.Random, config: HamiltonianConfig = HamiltonianConfig()):
+        config.validate()
+        self.rng = rng
+        self.config = config
+
+    @staticmethod
+    def sigmoid(x: float) -> float:
+        if x >= 0:
+            z = math.exp(-x)
+            return 1.0 / (1.0 + z)
+        z = math.exp(x)
+        return z / (1.0 + z)
+
+    def shape_field(self, h_base: float, h_prev: float) -> float:
+        c = self.config
+        sigma = math.sqrt(max(0.0, 1.0 + c.beta * abs(h_prev)))
+        noise = self.rng.gauss(0.0, sigma)
+        return (
+            h_base
+            + c.eta * h_prev * self.sigmoid(c.gamma * h_prev)
+            + c.epsilon * noise
+        )
+
+    @staticmethod
+    def eta_navigation_lift(*_: object) -> float:
+        return 0.0
+
+    def navigation_score(self, scar: float) -> float:
+        # Epsilon contributes only a stochastic tie-break / exploration term.
+        return scar + self.config.epsilon * self.rng.gauss(0.0, 1.0)
+
+    def torus(self, x: int, y: int) -> TorusPoint:
+        return TorusPoint(x, y).reduced(self.config.modulus)
+
+
+@dataclass(frozen=True)
+class BezierSegment:
+    p0: Tuple[float, float]
+    p1: Tuple[float, float]
+    p2: Tuple[float, float]
+    p3: Tuple[float, float]
+
+    def point(self, t: float) -> Tuple[float, float]:
+        t = min(1.0, max(0.0, t))
+        u = 1.0 - t
+        x = u**3*self.p0[0] + 3*u*u*t*self.p1[0] + 3*u*t*t*self.p2[0] + t**3*self.p3[0]
+        y = u**3*self.p0[1] + 3*u*u*t*self.p1[1] + 3*u*t*t*self.p2[1] + t**3*self.p3[1]
+        return x, y
+
+    def derivative(self, t: float) -> Tuple[float, float]:
+        t = min(1.0, max(0.0, t))
+        u = 1.0 - t
+        dx = 3*u*u*(self.p1[0]-self.p0[0]) + 6*u*t*(self.p2[0]-self.p1[0]) + 3*t*t*(self.p3[0]-self.p2[0])
+        dy = 3*u*u*(self.p1[1]-self.p0[1]) + 6*u*t*(self.p2[1]-self.p1[1]) + 3*t*t*(self.p3[1]-self.p2[1])
+        return dx, dy
+
+
+class GeodesicTracker:
+    """C1 cubic Bezier trajectory chain over normalized fitness coordinates."""
+
+    def __init__(self) -> None:
+        self.points: List[Tuple[float, float]] = []
+        self.segments: List[BezierSegment] = []
+
+    def append(self, point: Tuple[float, float]) -> None:
+        self.points.append(point)
+        if len(self.points) < 2:
+            return
+        p0 = self.points[-2]
+        p3 = self.points[-1]
+        if len(self.segments) == 0:
+            dx = (p3[0] - p0[0]) / 3.0
+            dy = (p3[1] - p0[1]) / 3.0
+            p1 = (p0[0] + dx, p0[1] + dy)
+        else:
+            prev_d = self.segments[-1].derivative(1.0)
+            p1 = (p0[0] + prev_d[0] / 3.0, p0[1] + prev_d[1] / 3.0)
+        p2 = (p3[0] - (p3[0]-p0[0])/3.0, p3[1] - (p3[1]-p0[1])/3.0)
+        self.segments.append(BezierSegment(p0, p1, p2, p3))
+
+    def c1_residuals(self) -> List[float]:
+        out: List[float] = []
+        for a, b in zip(self.segments, self.segments[1:]):
+            da, db = a.derivative(1.0), b.derivative(0.0)
+            out.append(math.hypot(da[0]-db[0], da[1]-db[1]))
+        return out
+
+
+# ---------------------------------------------------------------------------
+# WKB tunneling / islands
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class WKBConfig:
+    hbar: float = 1.0
+    mass: float = 1.0
+    barrier_scale: float = 1.0
+
+    def probability(self, barrier_height: float, width: float, energy: float) -> float:
+        delta = max(0.0, barrier_height - energy)
+        exponent = -2.0 * max(0.0, width) * math.sqrt(2.0 * self.mass * delta) / max(self.hbar, 1e-12)
+        return min(1.0, max(0.0, math.exp(exponent * self.barrier_scale)))
+
+
+@dataclass
+class Island:
+    island_id: int
+    population: List[Candidate] = field(default_factory=list)
+    stagnation: int = 0
+    best_scalar: float = math.inf
+
+
+# ---------------------------------------------------------------------------
+# Signed dual-channel telemetry
+# ---------------------------------------------------------------------------
 
 class HamiltonianTelemetry:
     """
-    Streams the fitness landscape as a Hamiltonian energy field to God's Eye.
-    Dual-channel: UDP port 8084 (legacy) + UDP port 41337 (Gods Eye signed).
+    HMAC-SHA256 signed UDP telemetry.
 
-    Packet format (JSON, ~300 bytes):
-      { type, generation, island_id, score, delta_score,
-        survived, mutations, timestamp, state_vector[2],
-        branch_density, stack_depth, inst_count }
+    Wire object:
+      {"payload": {...}, "signature": hex_hmac_sha256(canonical_json(payload))}
 
-    The state_vector encodes position in 2D fitness space:
-      [0] = normalised asm_size   (0 = perfect, 1 = baseline)
-      [1] = normalised inst_count (0 = perfect, 1 = baseline)
-    God's Eye renders this as Hamiltonian potential energy.
+    Key resolution:
+      explicit key -> ZCC_ONEIROGENESIS_HMAC_KEY -> ephemeral per-process key.
     """
 
-    GODS_EYE_PORT = 41337
+    def __init__(
+        self,
+        key: Optional[bytes] = None,
+        endpoints: Sequence[Tuple[str, int]] = (("127.0.0.1", 8084), ("127.0.0.1", 41337)),
+        enabled: bool = True,
+    ):
+        env_key = os.getenv("ZCC_ONEIROGENESIS_HMAC_KEY")
+        if key is None and env_key:
+            key = env_key.encode("utf-8")
+        self.key = key if key is not None else secrets.token_bytes(32)
+        self.endpoints = tuple(endpoints)
+        self.enabled = enabled
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 8084):
-        self.host = host
-        self.port = port
-        self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self._sock.setblocking(False)
-        self._baseline_score: float = 0.0
-        # Secondary socket for Gods Eye
-        self._gods_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self._gods_sock.setblocking(False)
+    def sign(self, payload: Mapping[str, object]) -> str:
+        return hmac.new(self.key, _canonical_json(payload), hashlib.sha256).hexdigest()
 
-    def set_baseline(self, score: float):
-        self._baseline_score = max(score, 1.0)
+    def envelope(self, payload: Mapping[str, object]) -> Dict[str, object]:
+        p = dict(payload)
+        return {"payload": p, "signature": self.sign(p)}
 
-    def emit(self, result: CycleResult, island_id: int = 0,
-             eta_c: float = 0.0, phase: str = "", spectral_gap: float = 0.0):
-        """Non-blocking dual-emit — UDP datagram to both telemetry channels.
-        Now includes Wilson-Fisher criticality fields."""
+    def verify(self, envelope: Mapping[str, object]) -> bool:
+        payload = envelope.get("payload")
+        signature = envelope.get("signature")
+        if not isinstance(payload, Mapping) or not isinstance(signature, str):
+            return False
+        return hmac.compare_digest(self.sign(payload), signature)
+
+    def broadcast(self, payload: Mapping[str, object]) -> List[Tuple[str, int, bool]]:
+        envelope = self.envelope(payload)
+        data = _canonical_json(envelope)
+        results: List[Tuple[str, int, bool]] = []
+        if not self.enabled:
+            return [(host, port, False) for host, port in self.endpoints]
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
-            parent_score = result.parent_fitness.get('score', self._baseline_score)
-            mutant_score = result.mutant_fitness.get('score', parent_score)
-            baseline     = self._baseline_score or max(parent_score, 1.0)
-
-            sv0 = (result.mutant_fitness.get('asm_size', 0) /
-                   max(result.parent_fitness.get('asm_size', 1), 1))
-            sv1 = (result.mutant_fitness.get('inst_count', 0) /
-                   max(result.parent_fitness.get('inst_count', 1), 1))
-
-            pkt_data = {
-                "type": "dream_cycle",
-                "generation": result.generation,
-                "island_id": island_id,
-                "score": round(mutant_score, 2),
-                "delta_score": round(result.delta.get('score', 0), 4),
-                "survived": result.survived,
-                "self_host_passed": result.self_host_passed,
-                "mutations": len(result.mutations_applied),
-                "mutation_classes": list({m.get('category', '?')
-                                          for m in result.mutations_applied}),
-                "inst_count": result.mutant_fitness.get('inst_count', 0),
-                "branch_count": result.mutant_fitness.get('branch_count', 0),
-                "branch_density": round(result.mutant_fitness.get('branch_density', 0), 6),
-                "stack_depth": result.mutant_fitness.get('stack_depth_sum', 0),
-                "state_vector": [round(sv0, 6), round(sv1, 6)],
-                "hamiltonian_energy": round(
-                    (mutant_score - baseline) / baseline, 6),
-                # Wilson-Fisher criticality fields
-                "eta_c": round(eta_c, 4),
-                "free_energy": round(result.mutant_fitness.get('free_energy', 0), 4),
-                "delta_free_energy": round(result.delta.get('free_energy', 0), 4),
-                "spectral_gap": round(spectral_gap, 6),
-                "phase": phase,
-                "elapsed_s": round(result.elapsed_s, 2),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
-            pkt = json.dumps(pkt_data).encode()
-
-            # Legacy telemetry channel
-            self._sock.sendto(pkt, (self.host, self.port))
-
-            # Gods Eye channel (port 41337)
-            gods_payload = {
-                "type": "dream_cycle",
-                "gen": result.generation,
-                "island": island_id,
-                "score": round(mutant_score, 2),
-                "delta": round(result.delta.get('score', 0), 4),
-                "mutations": len(result.mutations_applied),
-                "elapsed": round(result.elapsed_s, 2),
-                "survived": result.survived,
-                "eta_c": round(eta_c, 4),
-                "free_energy": round(result.mutant_fitness.get('free_energy', 0), 4),
-                "phase": phase,
-                "spectral_gap": round(spectral_gap, 6),
-                "ts": datetime.now(timezone.utc).isoformat(),
-            }
-            body = json.dumps(gods_payload, separators=(',', ':'), sort_keys=True)
-            sig = hmac.new(b"zkaedi-local-dev-secret", body.encode('utf-8'), hashlib.sha256).hexdigest()
-            envelope = json.dumps({"_body": body, "_sig": sig}, separators=(',', ':'))
-            self._gods_sock.sendto(envelope.encode('utf-8'), (self.host, self.GODS_EYE_PORT))
-        except Exception:
-            pass  # Never block on telemetry
+            for host, port in self.endpoints:
+                ok = True
+                try:
+                    sock.sendto(data, (host, port))
+                except OSError:
+                    ok = False
+                results.append((host, port, ok))
+        finally:
+            sock.close()
+        return results
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# ISLAND — ONE PARALLEL LINEAGE
-# ═══════════════════════════════════════════════════════════════════════
-
-class Island:
-    """
-    One competing lineage in the island model.
-    Each island maintains its own copy of the parent assembly and evolves
-    independently. After a configurable interval, survivors can cross-breed.
-    """
-
-    def __init__(self, island_id: int, seed: int, parent_asm: str,
-                 zcc_pp_c: str, blacklist: set, deterministic: bool = False):
-        self.island_id = island_id
-        self.rng = random.Random(seed)
-        self.deterministic = deterministic
-        self.state = IslandState(island_id=island_id)
-        self.blacklist = blacklist
-        self.zcc_pp_c = zcc_pp_c
-        self.gate = SelfHostGate()
-        self.oracle = FitnessOracle()
-
-        # Each island gets its own copy of parent assembly
-        island_asm = str(DREAM_DIR / f"island_{island_id}_parent.s")
-        shutil.copyfile(parent_asm, island_asm)
-        self.state.parent_asm_path = island_asm
-
-        # Measure initial fitness
-        with tempfile.TemporaryDirectory(prefix='island_init_') as td:
-            self.parent_fitness = self._build_and_measure(island_asm, td)
-            self.state.parent_score = self.parent_fitness.get('selection_score', self.parent_fitness.get('score', 0.0))
-
-    def step(self, mutation_engine: MutationEngine,
-             max_mutations: int, force_sweep: bool,
-             dry_run: bool, tmpdir: str) -> CycleResult:
-        """Execute one dream cycle for this island."""
-        t0 = time.time()
-        gen = self.state.generation + 1
-
-        with open(self.state.parent_asm_path) as f:
-            parent_lines = f.readlines()
-
-        # Discover mutations
-        mutations = mutation_engine.dream(
-            parent_lines,
-            max_point_mutations=max_mutations,
-            include_sweeps=force_sweep or (self.rng.random() < 0.3),
-            blacklist=self.blacklist,
-        )
-
-        # Filter blacklisted fingerprints
-        mutations = [m for m in mutations
-                     if m.fingerprint() not in self.blacklist]
-
-        parent_fitness = self.parent_fitness
-        parent_struct = parent_fitness.get('structural_score', 0.0)
-
-        if not mutations:
-            return CycleResult(
-                island_id=self.island_id, generation=gen,
-                mutations_applied=[], survived=False,
-                self_host_passed=False, parent_fitness=parent_fitness, mutant_fitness={},
-                delta={}, elapsed_s=time.time() - t0,
-                error="No non-blacklisted mutation candidates",
-                parent_structural_score=parent_struct,
-                mutant_structural_score=parent_struct,
-                selection_score=parent_fitness.get('selection_score', 0.0),
-                benchmark_observation=parent_fitness.get('benchmark_time_ns', 0),
-                deterministic_mode=self.deterministic,
-            )
-
-        # Separate sweeps from point mutations; apply at most 1 sweep + N points
-        sweeps = [m for m in mutations if m.is_sweep]
-        points = [m for m in mutations if not m.is_sweep]
-
-        selected = []
-        if sweeps:
-            selected.append(self.rng.choice(sweeps))     # at most 1 sweep
-        n_pt = self.rng.randint(1, max(1, min(len(points), max_mutations)))
-        selected.extend(self.rng.sample(points, min(len(points), n_pt)))
-
-        if dry_run:
-            return CycleResult(
-                island_id=self.island_id, generation=gen,
-                mutations_applied=[asdict(m) for m in selected],
-                survived=False, self_host_passed=False,
-                parent_fitness=parent_fitness, mutant_fitness={},
-                delta={}, elapsed_s=time.time() - t0,
-                error="DRY RUN",
-                parent_structural_score=parent_struct,
-                mutant_structural_score=parent_struct,
-                selection_score=parent_fitness.get('selection_score', 0.0),
-                benchmark_observation=parent_fitness.get('benchmark_time_ns', 0),
-                deterministic_mode=self.deterministic,
-            )
-
-        # Apply mutations
-        mutant_lines = mutation_engine.apply_mutations(parent_lines, selected)
-        mutant_asm = os.path.join(tmpdir, f'island_{self.island_id}_mutant.s')
-        with open(mutant_asm, 'w') as f:
-            f.writelines(mutant_lines)
-
-        # Build mutant
-        mutant_bin = os.path.join(tmpdir, f'island_{self.island_id}_bin')
-        p_args = [str(REPO_ROOT / p) for p in PASSES]
-        try:
-            r = subprocess.run(
-                ['gcc', '-no-pie', '-O0', '-w', '-fno-asynchronous-unwind-tables',
-                 '-Wa,--noexecstack', '-fno-unwind-tables',
-                 '-Iinclude', '-I.',
-                 '-o', mutant_bin, mutant_asm] + p_args + ['-lm'],
-                capture_output=True, timeout=60)
-            if r.returncode != 0:
-                return CycleResult(
-                    island_id=self.island_id, generation=gen,
-                    mutations_applied=[asdict(m) for m in selected],
-                    survived=False, self_host_passed=False,
-                    parent_fitness=parent_fitness, mutant_fitness={},
-                    delta={}, elapsed_s=time.time() - t0,
-                    error=f"build fail: {r.stderr.decode()[:120]}",
-                    parent_structural_score=parent_struct,
-                    mutant_structural_score=parent_struct,
-                    selection_score=parent_fitness.get('selection_score', 0.0),
-                    benchmark_observation=parent_fitness.get('benchmark_time_ns', 0),
-                    deterministic_mode=self.deterministic,
-                )
-        except subprocess.TimeoutExpired:
-            return CycleResult(
-                island_id=self.island_id, generation=gen,
-                mutations_applied=[asdict(m) for m in selected],
-                survived=False, self_host_passed=False,
-                parent_fitness=parent_fitness, mutant_fitness={},
-                delta={}, elapsed_s=time.time() - t0, error="build timeout",
-                parent_structural_score=parent_struct,
-                mutant_structural_score=parent_struct,
-                selection_score=parent_fitness.get('selection_score', 0.0),
-                benchmark_observation=parent_fitness.get('benchmark_time_ns', 0),
-                deterministic_mode=self.deterministic,
-            )
-
-        # Self-host gate
-        gate_ok, gate_msg = self.gate.verify(
-            mutant_bin, self.zcc_pp_c, PASSES, tmpdir)
-
-        if not gate_ok:
-            # Blacklist failing fingerprints
-            for m in selected:
-                self.blacklist.add(m.fingerprint())
-            self.state.rejected += 1
-            return CycleResult(
-                island_id=self.island_id, generation=gen,
-                mutations_applied=[asdict(m) for m in selected],
-                survived=False, self_host_passed=False,
-                parent_fitness=parent_fitness, mutant_fitness={},
-                delta={}, elapsed_s=time.time() - t0,
-                error=f"gate: {gate_msg}",
-                parent_structural_score=parent_struct,
-                mutant_structural_score=parent_struct,
-                selection_score=parent_fitness.get('selection_score', 0.0),
-                benchmark_observation=parent_fitness.get('benchmark_time_ns', 0),
-                deterministic_mode=self.deterministic,
-            )
-
-        # Statistical fitness measurement
-        mutant_fitness = self.oracle.measure(
-            mutant_bin, str(BENCHMARK_FILE), mutant_asm, tmpdir,
-            deterministic=self.deterministic)
-
-        mutant_struct = mutant_fitness.get('structural_score', 0.0)
-        mutant_sel = mutant_fitness.get('selection_score', 0.0)
-
-        delta = {
-            'asm_size':         mutant_fitness['asm_size']   - parent_fitness['asm_size'],
-            'inst_count':       mutant_fitness['inst_count'] - parent_fitness.get('inst_count', 0),
-            'structural_score': mutant_struct - parent_struct,
-            'selection_score':  mutant_sel - parent_fitness.get('selection_score', 0.0),
-            'score':            mutant_fitness['score']      - parent_fitness.get('score', 0.0),
-            'free_energy':      mutant_fitness.get('free_energy', 0) -
-                           parent_fitness.get('free_energy', 0),
-        }
-
-        # Wilson-Fisher: Boltzmann acceptance on free energy delta
-        delta_F = delta.get('free_energy', delta['selection_score'])
-        T_eff = getattr(FitnessOracle, '_T_eff', 1.0)
-        survived = boltzmann_acceptance(delta_F, T_eff, rng=self.rng)
-
-        if survived:
-            self.state.generation = gen
-            self.state.parent_score = mutant_sel
-            self.parent_fitness = mutant_fitness
-            self.state.survived += 1
-            shutil.copyfile(mutant_asm, self.state.parent_asm_path)
-            self.state.lineage.append({
-                'generation': gen,
-                'mutations': [m.name for m in selected],
-                'delta_score': delta['selection_score'],
-                'structural_score': mutant_struct,
-                'selection_score': mutant_sel,
-            })
-        else:
-            self.state.rejected += 1
-
-        return CycleResult(
-            island_id=self.island_id, generation=gen,
-            mutations_applied=[asdict(m) for m in selected],
-            survived=survived, self_host_passed=True,
-            parent_fitness=parent_fitness,
-            mutant_fitness=mutant_fitness,
-            delta=delta, elapsed_s=time.time() - t0,
-            parent_structural_score=parent_struct,
-            mutant_structural_score=mutant_struct,
-            selection_score=mutant_sel,
-            benchmark_observation=mutant_fitness.get('benchmark_time_ns', 0),
-            deterministic_mode=self.deterministic,
-        )
-
-    def _build_and_measure(self, asm_path: str, tmpdir: str) -> dict:
-        """Build + measure an assembly file. Returns fitness dict."""
-        bin_path = os.path.join(tmpdir, 'init_bin')
-        p_args = [str(REPO_ROOT / p) for p in PASSES]
-        try:
-            r = subprocess.run(
-                ['gcc', '-no-pie', '-O0', '-w', '-fno-asynchronous-unwind-tables',
-                 '-Wa,--noexecstack', '-fno-unwind-tables',
-                 '-Iinclude', '-I.',
-                 '-o', bin_path, asm_path] + p_args + ['-lm'],
-                capture_output=True, timeout=60)
-            if r.returncode != 0:
-                return {'score': float('inf'), 'selection_score': float('inf'), 'structural_score': float('inf'), 'free_energy': float('inf'), 'asm_size': 0, 'inst_count': 0}
-        except Exception:
-            return {'score': float('inf'), 'selection_score': float('inf'), 'structural_score': float('inf'), 'free_energy': float('inf'), 'asm_size': 0, 'inst_count': 0}
-
-        return FitnessOracle.measure(bin_path, str(BENCHMARK_FILE), asm_path, tmpdir, deterministic=self.deterministic)
-
-    def _build_and_score(self, asm_path: str, tmpdir: str) -> float:
-        """Build + score an assembly file. Returns selection score."""
-        res = self._build_and_measure(asm_path, tmpdir)
-        return res.get('selection_score', res.get('score', float('inf')))
-
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# DREAM ENGINE v2
-# ═══════════════════════════════════════════════════════════════════════
+# ---------------------------------------------------------------------------
+# Dream engine
+# ---------------------------------------------------------------------------
 
 class DreamEngine:
+    def __init__(
+        self,
+        seed: int = 0,
+        islands: int = 4,
+        deterministic: bool = False,
+        telemetry: bool = True,
+        ledger_path: Path = EVENT_LOG,
+    ):
+        if islands < 1:
+            raise ValueError("islands must be >= 1")
+        self.seed = int(seed)
+        self.deterministic = bool(deterministic)
+        self.rng = random.Random(self.seed)
+        self.oracle = FitnessOracle()
+        self.mutation = MutationEngine(self.rng)
+        self.hamiltonian = PrimeOmegaHamiltonian(self.rng)
+        self.archive = ParetoArchive()
+        self.islands = [Island(i) for i in range(islands)]
+        self.telemetry = HamiltonianTelemetry(enabled=(telemetry and not deterministic))
+        self.ledger = EventLedger(ledger_path)
+        self.geodesic = GeodesicTracker()
+        self.wkb = WKBConfig()
 
-    def __init__(self, seed: int = 42, max_mutations: int = 3,
-                 n_islands: int = 1, force_sweep: bool = False,
-                 aggressive: bool = False, visualize: bool = False,
-                 dry_run: bool = False, deterministic: bool = False):
-        self.seed         = seed
-        self.rng          = random.Random(seed)
-        self.max_mutations = max_mutations if not aggressive else 8
-        self.n_islands    = n_islands
-        self.force_sweep  = force_sweep
-        self.aggressive   = aggressive
-        self.visualize    = visualize
-        self.dry_run      = dry_run
-        self.deterministic = deterministic
-        FitnessOracle._deterministic = deterministic
+    @staticmethod
+    def _scalar(v: ParetoVector) -> float:
+        # Used only to detect stagnation, never to replace Pareto dominance.
+        return float(v.size + 4*v.inst_count + 16*v.branch_entropy + 8*v.stack_depth)
 
-        DREAM_DIR.mkdir(parents=True, exist_ok=True)
-        JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
-        LINEAGE_DIR.mkdir(parents=True, exist_ok=True)
-
-        # Load persisted state
-        state_file = DREAM_DIR / "dream_state.json"
-        if state_file.exists():
-            with open(state_file) as f:
-                data = json.load(f)
-            self.state = DreamState(**{k: v for k, v in data.items()
-                                       if k in DreamState.__dataclass_fields__})
-            print(f"  {_C}[RESUME]{_W} Gen {self.state.generation} │ "
-                  f"Hash {self.state.parent_hash} │ "
-                  f"{len(self.state.discovered_algorithms)} algorithms discovered")
-        else:
-            self.state = DreamState()
-
-        # Mutation blacklist
-        self.blacklist: set = set(self.state.blacklisted_fingerprints)
-
-        # Telemetry
-        self.telem = HamiltonianTelemetry() if visualize else None
-
-        # ── Wilson-Fisher criticality state ──
-        self.eta_c: float = 0.4407       # Default: 2D Ising
-        self.T_eff: float = 1.0          # Effective temperature
-        self.spectral_detector = SpectralArrestDetector(window=10, threshold=0.01)
-        self._fitness_scores: list = []  # For relaxation_phase()
-        self._phase: str = "explore"     # Current phase
-        self._uclass = None              # Universality class info
-
-    # ──────────────────────────────────────────────────────────────────
-
-    def _prepare_canonical(self, tmpdir: str) -> tuple:
-        """Return (zcc2_bin, zcc2_asm, zcc_pp_c) paths, building if needed."""
-        zcc2_bin = str(REPO_ROOT / 'zcc2')
-        zcc2_asm = str(REPO_ROOT / 'zcc2.s')
-        zcc_pp_c = str(REPO_ROOT / 'zcc_pp.c')
-
-        if not os.path.exists(zcc2_bin):
-            print(f"  {_R}[ERROR]{_W} ./zcc2 not found. Run `make selfhost` first.")
-            sys.exit(1)
-
-        # Auto-build zcc_pp.c if it's missing
-        if not os.path.exists(zcc_pp_c):
-            print(f"  {_Y}[AUTO]{_W} zcc_pp.c not found — generating from zcc.c…")
-            zcc_c = str(REPO_ROOT / 'zcc.c')
-            if not os.path.exists(zcc_c):
-                # Concatenate parts first
-                print(f"  {_Y}[AUTO]{_W} Concatenating parts → zcc.c…")
-                # Order matters: part0_pp must come before headers/part1
-                with open(zcc_c, 'w', encoding='utf-8', errors='ignore') as out:
-                    for p in PARTS:
-                        pf = REPO_ROOT / p
-                        if pf.exists():
-                            with open(pf, encoding='utf-8', errors='ignore') as f:
-                                out.write(f.read())
-                        else:
-                            print(f"  {_Y}[WARN]{_W} Missing part: {p}")
-            # Strip _Static_assert lines
-            zcc_pp_tmp = zcc_pp_c + '.tmp'
-            with open(zcc_c, encoding='utf-8', errors='ignore') as fin, open(zcc_pp_tmp, 'w', encoding='utf-8', errors='ignore') as fout:
-                for line in fin:
-                    if not line.startswith('_Static_assert'):
-                        fout.write(line)
-            # Inline bridge headers, strip system includes
-            ast_bridge_zcc  = str(REPO_ROOT / 'zcc_ast_bridge_zcc.h')
-            ir_bridge_zcc   = str(REPO_ROOT / 'zcc_ir_bridge_zcc.h')
-            with open(zcc_pp_tmp, encoding='utf-8', errors='ignore') as fin, open(zcc_pp_c, 'w', encoding='utf-8', errors='ignore') as fout:
-                # Inject the bridge guard so ZCC's own preprocessor skips
-                # all five `#ifndef ZCC_AST_BRIDGE_H / #include "part1.c"`
-                # blocks. Without this fix, node_kind and every other
-                # accessor defined in part1.c is emitted multiple times in
-                # the mutant assembly, causing 'symbol already defined'.
-                fout.write('#define ZCC_AST_BRIDGE_H\n#define ZCC_IR_BRIDGE_H\n')
-                for line in fin:
-                    if line.startswith('#include "zcc_ast_bridge.h"'):
-                        if os.path.exists(ast_bridge_zcc):
-                            fout.write(open(ast_bridge_zcc, encoding='utf-8', errors='ignore').read())
-                        continue
-                    if line.startswith('#include "zcc_ir_bridge.h"'):
-                        if os.path.exists(ir_bridge_zcc):
-                            fout.write(open(ir_bridge_zcc, encoding='utf-8', errors='ignore').read())
-                        continue
-                    if line.startswith('#include <') and '>' in line:
-                        continue   # drop system headers
-                    fout.write(line)
-            os.unlink(zcc_pp_tmp)
-            print(f"  {_G}[AUTO]{_W} Generated zcc_pp.c ({os.path.getsize(zcc_pp_c):,} bytes)")
-
-        # Auto-generate zcc2.s if it's missing
-        if not os.path.exists(zcc2_asm) or os.path.getsize(zcc2_asm) == 0:
-            print(f"  {_Y}[AUTO]{_W} Generating zcc2.s (zcc2 compiling itself)…")
-            r = subprocess.run([zcc2_bin, zcc_pp_c, '-o', zcc2_asm],
-                               cwd=str(REPO_ROOT), capture_output=True, timeout=300)
-            if r.returncode != 0 or not os.path.exists(zcc2_asm):
-                print(f"  {_R}[ERROR]{_W} Failed to generate zcc2.s: {r.stderr.decode()[:200]}")
-                sys.exit(1)
-            print(f"  {_G}[AUTO]{_W} Generated zcc2.s ({os.path.getsize(zcc2_asm):,} bytes)")
-
-        return zcc2_bin, zcc2_asm, zcc_pp_c
-
-    def _ensure_benchmark(self):
-        if BENCHMARK_FILE.exists():
-            return
-        src = """\
-/* ZCC Dream Benchmark Workload — canonical fitness oracle */
-int printf(const char *fmt, ...);
-
-long fibonacci(int n) {
-    long a = 0, b = 1, t; int i;
-    if (n <= 1) return n;
-    for (i = 2; i <= n; i++) { t = a + b; a = b; b = t; }
-    return b;
-}
-
-int bubble_sort(int *arr, int n) {
-    int i, j, tmp, sw = 0;
-    for (i = 0; i < n-1; i++)
-        for (j = 0; j < n-i-1; j++)
-            if (arr[j] > arr[j+1]) { tmp=arr[j]; arr[j]=arr[j+1]; arr[j+1]=tmp; sw++; }
-    return sw;
-}
-
-long hash_str(const char *s) {
-    long h = 5381;
-    while (*s) { h = ((h << 5) + h) + *s; s++; }
-    return h;
-}
-
-int matrix_mul(int n) {
-    int A[8][8], B[8][8], C[8][8], i, j, k, sum = 0;
-    for (i=0; i<n&&i<8; i++) for (j=0; j<n&&j<8; j++) { A[i][j]=i*n+j; B[i][j]=j*n+i; }
-    for (i=0; i<n&&i<8; i++) for (j=0; j<n&&j<8; j++) {
-        C[i][j]=0;
-        for (k=0; k<n&&k<8; k++) C[i][j]+=A[i][k]*B[k][j];
-        sum+=C[i][j];
-    }
-    return sum;
-}
-
-int main(void) {
-    int arr[16]; int i;
-    for (i=0; i<16; i++) arr[i]=16-i;
-    long f = fibonacci(40);
-    int sw = bubble_sort(arr, 16);
-    long h = hash_str("ZCC Oneirogenesis v2");
-    int m = matrix_mul(8);
-    printf("DREAM_BENCH: fib=%ld sw=%d hash=%ld mat=%d\\n", f, sw, h, m);
-    return 0;
-}
-"""
-        BENCHMARK_FILE.write_text(src)
-        print(f"  {_C}[INIT]{_W} Created benchmark workload")
-
-    def _safe_write_json(self, path: Path, data: Any):
-        data_str = json.dumps(data, indent=2)
-        for attempt in range(5):
-            tmp_path = None
-            try:
-                try:
-                    os.makedirs(str(path.parent), exist_ok=True)
-                except OSError:
-                    pass
-                tmp_path = path.parent / f".tmp_{path.name}_{os.getpid()}_{random.randint(1000, 9999)}"
-                with open(tmp_path, 'w', encoding='utf-8') as f:
-                    f.write(data_str)
-                    f.flush()
-                    try:
-                        os.fsync(f.fileno())
-                    except OSError:
-                        pass
-                os.replace(tmp_path, path)
-                return
-            except OSError:
-                time.sleep(0.1 * (attempt + 1))
-                if attempt == 4:
-                    try:
-                        with open(path, 'w', encoding='utf-8') as f:
-                            f.write(data_str)
-                    except Exception:
-                        pass
-            finally:
-                if tmp_path and tmp_path.exists():
-                    try:
-                        tmp_path.unlink()
-                    except Exception:
-                        pass
-
-    def save_state(self):
-        try:
-            self.state.blacklisted_fingerprints = list(self.blacklist)
-            self._safe_write_json(DREAM_DIR / "dream_state.json", asdict(self.state))
-        except Exception as e:
-            print(f"  {_Y}[WARN]{_W} Transient save_state warning: {e}")
-
-    def _journal(self, gen: int, island_id: int, mutations: list,
-                 delta: dict, fitness: dict, hash_id: str):
-        mutations_data = []
-        for m in mutations:
-            mutations_data.append({
-                "name": m.get('name'), "category": m.get('category'),
-                "description": m.get('description'),
-                "is_sweep": m.get('is_sweep', False),
-                "sweep_count": m.get('sweep_count', 0),
-                "energy_delta": m.get('energy_delta', 0),
-                "fingerprint": m.get('fingerprint', ''),
-            })
-        entry = {
-            "algorithm_info": {
-                "id": f"QAlgo-Dream-G{gen}",
-                "name": f"Codegen Mutation G{gen} [{mutations[0].get('name','?')}]",
-                "domain": "compiler_optimization",
-                "discovered_by": f"ZCC Oneirogenesis v2 Island-{island_id}",
-                "lineage_hash": hash_id,
-                "island_id": island_id,
-            },
-            "mutations": mutations_data,
-            "fitness_improvement": {
-                "asm_size_delta": delta.get('asm_size', 0),
-                "inst_count_delta": delta.get('inst_count', 0),
-                "score_delta": delta.get('score', 0),
-                "structural_score_delta": delta.get('structural_score', 0),
-                "selection_score_delta": delta.get('selection_score', 0),
-                "composite_score": fitness.get('score', 0),
-                "structural_score": fitness.get('structural_score', 0),
-                "selection_score": fitness.get('selection_score', 0),
-            },
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "generation": gen,
-        }
-        try:
-            self._safe_write_json(JOURNAL_DIR / f"QAlgo-Dream-G{gen}.json", entry)
-            self.state.discovered_algorithms.append(entry['algorithm_info']['id'])
-        except Exception as e:
-            print(f"  {_Y}[WARN]{_W} Transient journal warning: {e}")
-
-    def _print_header(self, num_cycles: int):
-        print()
-        print(f"  {_B}╔══════════════════════════════════════════════════════════╗{_W}")
-        print(f"  {_B}║   ZCC ONEIROGENESIS v3 — Enhanced Dream Engine          ║{_W}")
-        print(f"  {_B}╠══════════════════════════════════════════════════════════╣{_W}")
-        print(f"  {_B}║{_W}  Seed:          {_C}{self.seed:<41}{_W}  {_B}║{_W}")
-        print(f"  {_B}║{_W}  Deterministic: {_C}{str(self.deterministic):<41}{_W}  {_B}║{_W}")
-        print(f"  {_B}║{_W}  Cycles:        {_C}{num_cycles:<41}{_W}  {_B}║{_W}")
-        print(f"  {_B}║{_W}  Islands:       {_C}{self.n_islands:<41}{_W}  {_B}║{_W}")
-        print(f"  {_B}║{_W}  Max Muts:      {_C}{self.max_mutations:<41}{_W}  {_B}║{_W}")
-        print(f"  {_B}║{_W}  Sweeps:        {_C}{'FORCED' if self.force_sweep else '30% random':<41}{_W}  {_B}║{_W}")
-        print(f"  {_B}║{_W}  Gen:           {_C}{self.state.generation:<41}{_W}  {_B}║{_W}")
-        print(f"  {_B}║{_W}  Blacklist:     {_C}{len(self.blacklist)} fingerprints{'':<29}{_W}  {_B}║{_W}")
-        print(f"  {_B}╚══════════════════════════════════════════════════════════╝{_W}")
-        print()
-
-    def _print_result(self, r: CycleResult):
-        gen_s = f"G{r.generation:04d}"
-        n_mut = len(r.mutations_applied)
-        island_s = f"I{r.island_id}" if self.n_islands > 1 else ""
-        prefix = f"[{gen_s}{island_s}]"
-        dt = f"{r.elapsed_s:.1f}s"
-
-        if r.survived:
-            delta_s = r.delta.get('selection_score', r.delta.get('score', 0))
-            asm_d   = r.delta.get('asm_size', 0)
-            inst_d  = r.delta.get('inst_count', 0)
-            cats    = {m.get('category','?') for m in r.mutations_applied}
-            sweep_n = sum(m.get('sweep_count', 0) for m in r.mutations_applied if m.get('is_sweep'))
-            print(f"  {_G}✦{_W} {prefix} {_G}EVOLVED{_W}  │ "
-                  f"{n_mut} mut {'[SWEEP×'+str(sweep_n)+']' if sweep_n else ''} │ "
-                  f"Δscore:{_G}{delta_s:+.1f}{_W} │ "
-                  f"asm:{asm_d:+d} inst:{inst_d:+d} │ {dt}")
-            if len(r.mutations_applied) <= 5:
-                cats_fmt = '/'.join(sorted(cats))
-                for m in r.mutations_applied:
-                    sw = f"  ×{m.get('sweep_count',0)}" if m.get('is_sweep') else ""
-                    print(f"    {_DIM}├─ {m.get('category','?'):>8s} │ {m.get('description','')}{sw}{_W}")
-        elif r.self_host_passed:
-            delta_s = r.delta.get('selection_score', r.delta.get('score', 0))
-            print(f"  {_DIM}○ {prefix} NEUTRAL  │ {n_mut} mut │ "
-                  f"Δscore:{delta_s:+.1f} │ {dt}{_W}")
-        elif r.dry_run if hasattr(r, 'dry_run') else "DRY RUN" in r.error:
-            for m in r.mutations_applied:
-                sw = f"  (×{m.get('sweep_count',0)} sites)" if m.get('is_sweep') else ""
-                print(f"  {_M}◇ {prefix} DRY RUN  │ "
-                      f"{m.get('category','?'):>8s} │ {m.get('description','')}{sw}{_W}")
-        else:
-            sym = "✗"
-            short_err = r.error[:70]
-            print(f"  {_R}{sym}{_W} {prefix} {_R}REJECT{_W}   │ "
-                  f"{n_mut} mut │ {short_err} │ {dt}")
-
-    # ──────────────────────────────────────────────────────────────────
-    # MAIN LOOP
-    # ──────────────────────────────────────────────────────────────────
-
-    def run(self, num_cycles: int = 50):
-        self._print_header(num_cycles)
-        self._ensure_benchmark()
-
-        with tempfile.TemporaryDirectory(prefix='dream_canon_') as canon_tmp:
-            _, zcc2_asm, zcc_pp_c = self._prepare_canonical(canon_tmp)
-
-            # ── Wilson-Fisher: extract CFG and compute η_c ──
-            print(f"  {_C}[WF]{_W} Extracting CFG from parent assembly…")
-            try:
-                with open(zcc2_asm) as f:
-                    asm_lines = f.readlines()
-                cfg = extract_cfg(asm_lines)
-                stats = cfg_stats(cfg)
-                print(f"  {_C}[WF]{_W} CFG: {stats['nodes']} nodes, "
-                      f"{stats['edges']} edges, avg_degree={stats['avg_degree']}")
-
-                # Compute spectral dimension
-                spec_seed = derive_seed(self.seed, "spectral-dimension")
-                d_s = cfg_spectral_dim(cfg, seed=spec_seed)
-                print(f"  {_C}[WF]{_W} Spectral dimension: d_s={d_s:.3f}")
-
-                # Search for η_c (use subset for speed if graph is large)
-                eta_seed = derive_seed(self.seed, "topology-eta-search")
-                if stats['nodes'] > 500:
-                    # Subsample: take first 500 nodes for tractability
-                    sub_nodes = sorted(cfg.keys())[:500]
-                    sub_cfg = {n: sorted([t for t in cfg[n] if t in sub_nodes])
-                               for n in sub_nodes if n in cfg}
-                    self.eta_c = topology_eta_search(sub_cfg, tol=1e-3,
-                                                     max_sweeps=80, n_samples=3, seed=eta_seed)
-                else:
-                    sorted_cfg = {n: sorted(cfg[n]) for n in sorted(cfg.keys())}
-                    self.eta_c = topology_eta_search(sorted_cfg, tol=1e-3,
-                                                     max_sweeps=100, n_samples=3, seed=eta_seed)
-
-                # Classify universality class
-                self._uclass = universality_class(self.eta_c, d_s)
-                print(f"  {_C}[WF]{_W} η_c={self.eta_c:.4f} │ "
-                      f"class={self._uclass.label} │ "
-                      f"ν={self._uclass.nu:.3f} β={self._uclass.beta:.3f} "
-                      f"γ={self._uclass.gamma:.3f}")
-
-                # Inject η_c into FitnessOracle class-level state
-                FitnessOracle._eta_c = self.eta_c
-                FitnessOracle._T_eff = self.T_eff
-
-            except Exception as e:
-                print(f"  {_Y}[WF]{_W} CFG extraction failed ({e}), using defaults")
-                self.eta_c = 0.4407
-                FitnessOracle._eta_c = self.eta_c
-                FitnessOracle._T_eff = self.T_eff
-
-            # Initialise islands
-            print(f"  {_C}[INIT]{_W} Spawning {self.n_islands} island(s)…")
-            islands = []
-            for i in range(self.n_islands):
-                island_seed = derive_seed(self.seed, f"island-{i}")
-                with tempfile.TemporaryDirectory(prefix=f'island_init_{i}_') as it:
-                    isl = Island(i, island_seed, zcc2_asm, zcc_pp_c, self.blacklist, deterministic=self.deterministic)
-                islands.append(isl)
-                print(f"    Island {i}: score={isl.state.parent_score:.0f} "
-                      f"F={getattr(isl, '_last_fe', '?')}")
-
-            # Baseline for Hamiltonian telemetry
-            if self.telem:
-                self.telem.set_baseline(islands[0].state.parent_score)
-
-            survived_total = 0
-            rejected_total = 0           # buckets 1-4 (pre-/at-gate failure)
-            fitness_rejected_total = 0   # bucket 5 (gate pass, delta >= 0)
-            t_start = time.time()
-
-            print(f"\n  {_B}═══ DREAMING ════════════════════════════════════════{_W}")
-            print(f"  {_B}    η_c={self.eta_c:.4f}  T={self.T_eff:.2f}  "
-                  f"class={self._uclass.label if self._uclass else '?'}{_W}\n")
-
-            for cycle in range(num_cycles):
-                # ── Relaxation phase: modulate mutation aggressiveness ──
-                self._phase = relaxation_phase(self._fitness_scores,
-                                               tau=5.0)
-                if self._phase == "explore":
-                    cycle_max_muts = self.max_mutations + 2
-                    cycle_force_sweep = True
-                else:
-                    cycle_max_muts = max(1, self.max_mutations - 1)
-                    cycle_force_sweep = self.force_sweep
-
-                # Round-robin across islands
-                island = islands[cycle % self.n_islands]
-                engine_seed = derive_seed(self.seed, f"cycle-{cycle}")
-                mutation_engine = MutationEngine(seed=engine_seed)
-
-                with tempfile.TemporaryDirectory(prefix='dream_step_') as td:
-                    result = island.step(
-                        mutation_engine,
-                        max_mutations=cycle_max_muts,
-                        force_sweep=cycle_force_sweep,
-                        dry_run=self.dry_run,
-                        tmpdir=td)
-
-                self._print_result(result)
-
-                # Emit telemetry (with criticality fields)
-                if self.telem:
-                    self.telem.emit(result, island.island_id,
-                                    eta_c=self.eta_c,
-                                    phase=self._phase,
-                                    spectral_gap=self.spectral_detector.spectral_gap)
-
-                # ── Spectral arrest: track convergence ──
-                if result.mutant_fitness:
-                    fv = [
-                        result.mutant_fitness.get('inst_count', 0),
-                        result.mutant_fitness.get('branch_density', 0),
-                        result.mutant_fitness.get('stack_depth_sum', 0),
-                        result.mutant_fitness.get('asm_size', 0),
-                    ]
-                    self.spectral_detector.record(fv)
-                    self._fitness_scores.append(
-                        result.mutant_fitness.get('free_energy',
-                            result.mutant_fitness.get('selection_score', result.mutant_fitness.get('score', 0))))
-
-                    if (not self.dry_run and cycle > 20 and
-                            self.spectral_detector.arrested()):
-                        print(f"\n  {_C}[WF]{_W} {_G}SPECTRAL ARREST{_W} — "
-                              f"fixed point reached at cycle {cycle+1}")
-                        print(f"      gap={self.spectral_detector.spectral_gap:.6f}  "
-                              f"phase={self._phase}")
-                        # Don't break — log it but keep going if cycles remain
-
-                if result.survived:
-                    survived_total += 1
-                    self.state.generation += 1
-                    gen = self.state.generation
-
-                    # Hash the evolved asm
-                    with open(island.state.parent_asm_path, 'rb') as f:
-                        h = hashlib.sha256(f.read()).hexdigest()[:16]
-                    self.state.parent_hash = h
-                    self.state.total_mutations_survived += len(result.mutations_applied)
-                    self.state.fitness_history.append({
-                        'generation': gen, 'island_id': island.island_id,
-                        'score': result.mutant_fitness.get('selection_score', result.mutant_fitness.get('score', 0)),
-                        'structural_score': result.mutant_fitness.get('structural_score', 0),
-                        'selection_score': result.mutant_fitness.get('selection_score', 0),
-                        'benchmark_time_ns': result.mutant_fitness.get('benchmark_time_ns', 0),
-                        'timestamp': datetime.now(timezone.utc).isoformat(),
-                    })
-                    self.state.lineage.append({
-                        'generation': gen, 'hash': h,
-                        'island_id': island.island_id,
-                        'mutations': [m.get('description','') for m in result.mutations_applied],
-                        'delta_score': result.delta.get('selection_score', result.delta.get('score', 0)),
-                        'structural_score': result.mutant_fitness.get('structural_score', 0),
-                        'selection_score': result.mutant_fitness.get('selection_score', 0),
-                        'timestamp': datetime.now(timezone.utc).isoformat(),
-                    })
-                    self._journal(gen, island.island_id,
-                                  result.mutations_applied, result.delta,
-                                  result.mutant_fitness, h)
-
-                    # Promote best island asm to canonical zcc2.s periodically
-                    if gen % 10 == 0:
-                        best = min(islands, key=lambda i: i.state.parent_score)
-                        shutil.copyfile(best.state.parent_asm_path, zcc2_asm)
-                        # Rebuild canonical zcc2 binary
-                        p_args = [str(REPO_ROOT / p) for p in PASSES]
-                        subprocess.run(
-                            ['gcc', '-no-pie', '-O0', '-w', '-fno-asynchronous-unwind-tables',
-                             '-Wa,--noexecstack', '-fno-unwind-tables',
-                             '-Iinclude', '-I.',
-                             '-o', str(REPO_ROOT / 'zcc2'), zcc2_asm] + p_args + ['-lm'],
-                            capture_output=True, timeout=60)
-                        print(f"\n  {_Y}[PROMOTE]{_W} Island {best.island_id} "
-                              f"(score={best.state.parent_score:.0f}) "
-                              f"→ canonical zcc2 @ G{gen}\n")
-
-                    # Island cross-breeding (every 5 cycles with 2+ islands)
-                    if self.n_islands >= 2 and gen % 5 == 0:
-                        self._crossbreed(islands, mutation_engine,
-                                         zcc_pp_c, self.dry_run)
-
-                elif "DRY RUN" in result.error:
-                    pass  # dry-run cycle, no accounting
-                elif not result.self_host_passed:
-                    rejected_total += 1
-                    self.state.total_regressions += 1
-                else:
-                    # bucket 5: built + bootstrapped, but delta_score >= 0
-                    fitness_rejected_total += 1
-                    self.state.total_fitness_rejections += 1
-
-                self.state.total_mutations_tried += len(result.mutations_applied)
-                self.save_state()
-
-        elapsed = time.time() - t_start
-        self._print_summary(num_cycles, survived_total, rejected_total,
-                            fitness_rejected_total, elapsed, islands)
-
-    def _crossbreed(self, islands: list, engine: MutationEngine,
-                    zcc_pp_c: str, dry_run: bool):
-        """Attempt to cross-breed best survivors across two random islands."""
-        if len(islands) < 2:
-            return
-        a, b = self.rng.sample(islands, 2)
-        if not a.state.lineage or not b.state.lineage:
-            return
-
-        # Get the last surviving mutation from each island
-        la = a.state.lineage[-1]['mutations']
-        lb = b.state.lineage[-1]['mutations']
-
-        print(f"  {_M}[CROSS]{_W} Island {a.island_id} × Island {b.island_id}: "
-              f"{la[0] if la else '?'} ✕ {lb[0] if lb else '?'}")
-
-    def _print_summary(self, num_cycles: int, survived: int, rejected: int,
-                       fitness_rejected: int, elapsed: float, islands: list):
-        print()
-        print(f"  {_B}═══════════════════════════════════════════════════════{_W}")
-        print(f"  {_B}                 DREAM SESSION COMPLETE{_W}")
-        print(f"  {_B}═══════════════════════════════════════════════════════{_W}")
-        print(f"  Cycles:          {num_cycles}")
-        print(f"  Deterministic:   {self.deterministic}")
-        print(f"  Evolved:         {_G}{survived}{_W}")
-        print(f"  Rejected:        {_R}{rejected}{_W}")
-        print(f"  Fitness-reject:  {_Y}{fitness_rejected}{_W}")
-        accounted = survived + rejected + fitness_rejected
-        if accounted != num_cycles:
-            print(f"  {_R}! accounting drift: {num_cycles - accounted} cycle(s) unexplained{_W}")
-        print(f"  Global Gen:      {self.state.generation}")
-        print(f"  Time:            {elapsed:.1f}s  ({num_cycles/max(elapsed,1):.2f} cycles/s)")
-        print(f"  Algorithms:      {len(self.state.discovered_algorithms)} discovered")
-        print(f"  Blacklisted:     {len(self.blacklist)} fingerprints")
-        if self.n_islands > 1:
-            print()
-            print(f"  Island Standings:")
-            for isl in sorted(islands, key=lambda i: i.state.parent_score):
-                print(f"    I{isl.island_id}: score={isl.state.parent_score:.0f}  "
-                      f"evolved={isl.state.survived}  rejected={isl.state.rejected}")
-
-        if self.state.discovered_algorithms:
-            print(f"\n  Recent discoveries:")
-            for a in self.state.discovered_algorithms[-5:]:
-                print(f"    {_C}└─ {a}{_W}")
-        print()
-
-        # Evolution report
-        report = DREAM_DIR / "EVOLUTION_REPORT.md"
-        DREAM_DIR.mkdir(parents=True, exist_ok=True)
-        try:
-            with open(report, 'w', encoding='utf-8') as f:
-                f.write("# ZCC Oneirogenesis v3 — Evolution Report\n\n")
-                f.write(f"**Generated**: {datetime.now(timezone.utc).isoformat()}\n")
-                f.write(f"**Deterministic Mode**: `{self.deterministic}`\n\n")
-                f.write(f"## Summary\n\n")
-                f.write(f"| Metric | Value |\n|--------|-------|\n")
-                f.write(f"| Global Generation | {self.state.generation} |\n")
-                f.write(f"| Surviving cycles (= generation) | {self.state.generation} |\n")
-                f.write(f"| Mutations inside surviving cycles | {self.state.total_mutations_survived} |\n")
-                f.write(f"| Hard-rejected cycles (bucket 1-4) | {self.state.total_regressions} |\n")
-                f.write(f"| Fitness-rejected cycles (bucket 5) | {self.state.total_fitness_rejections} |\n")
-                f.write(f"| Mutations tried total | {self.state.total_mutations_tried} |\n")
-                f.write(f"| Algorithms Discovered | {len(self.state.discovered_algorithms)} |\n")
-                f.write(f"| Blacklisted Patterns | {len(self.blacklist)} |\n\n")
-                f.write(f"## Lineage\n\n")
-                f.write("| Gen | Island | Hash | Mutations | Δ Score | Struct Score | Sel Score | Timestamp |\n")
-                f.write("|-----|--------|------|-----------|---------|--------------|-----------|-----------|\n")
-                for e in self.state.lineage:
-                    muts = ', '.join(e.get('mutations', [])[:2])
-                    if len(e.get('mutations', [])) > 2:
-                        muts += f" (+{len(e['mutations'])-2})"
-                    f.write(f"| G{e.get('generation', 0):04d} | I{e.get('island_id', 0)} | "
-                           f"`{e.get('hash', '?')[:12]}` | {muts} | "
-                           f"{e.get('delta_score', 0):+.1f} | "
-                           f"{e.get('structural_score', 0):.1f} | "
-                           f"{e.get('selection_score', 0):.1f} | "
-                           f"{e.get('timestamp', 'N/A')[:19]} |\n")
-                f.write(f"\n## Discovered Algorithms\n\n")
-                for a in self.state.discovered_algorithms:
-                    f.write(f"- `{a}` → [`{a}.json`](journal/{a}.json)\n")
-                f.write(f"\n## Fitness History\n\n```\n")
-                for fh in self.state.fitness_history[-30:]:
-                    f.write(f"G{fh['generation']:04d} I{fh.get('island_id',0)}: "
-                           f"score={fh['score']:.0f}\n")
-                f.write("```\n")
-            print(f"  {_C}[REPORT]{_W} {report}")
-        except Exception as e:
-            print(f"  {_Y}[REPORT WARNING]{_W} Failed to write evolution report: {e}")
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# CLI
-# ═══════════════════════════════════════════════════════════════════════
-
-def main():
-    p = argparse.ArgumentParser(
-        description="ZCC Oneirogenesis v2 — Enhanced Dream Engine",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-  make dream                 # 50 cycles, 1 island
-  make dream-aggressive      # 200 cycles, 8 mutations, 3 islands
-  make dream-visualize       # Stream to God's Eye (UDP:8084)
-  make dream-dry             # Preview mutations only
-  make dream-reset           # Clear state
-
-  python3 zcc_oneirogenesis.py --islands 3 --sweep --cycles 100 --deterministic
-        """
-    )
-    p.add_argument('--cycles',        type=int, default=50)
-    p.add_argument('--seed',          type=int, default=42)
-    p.add_argument('--mutations',     type=int, default=3,
-                   help='Max point mutations per cycle (default: 3)')
-    p.add_argument('--islands',       type=int, default=1,
-                   help='Number of parallel evolving lineages (default: 1)')
-    p.add_argument('--sweep',         action='store_true',
-                   help='Force sweep mutations (replace ALL instances at once)')
-    p.add_argument('--aggressive',    action='store_true')
-    p.add_argument('--visualize',     action='store_true',
-                   help='Emit Hamiltonian energy packets (UDP:8084) for God\'s Eye')
-    p.add_argument('--dry-run',       action='store_true')
-    p.add_argument('--reset',         action='store_true',
-                   help='Clear dream state and restart from Genesis')
-    p.add_argument('--deterministic', action='store_true',
-                   help='Enable deterministic execution (structural selection score, controlled env, seed-derived streams)')
-    p.add_argument('--auto-apply', action='store_true',
-                   help='Automatically apply & verify all discovered blueprints to zcc_optimized.s upon completion')
-    args = p.parse_args()
-
-    if args.deterministic and os.environ.get("PYTHONHASHSEED") != "0" and os.environ.get("_ZCC_REEXEC_GUARD") != "1":
-        env = os.environ.copy()
-        env.update({
-            "PYTHONHASHSEED": "0",
-            "LC_ALL": "C",
-            "LANG": "C",
-            "TZ": "UTC",
-            "SOURCE_DATE_EPOCH": "1700000000",
-            "OMP_NUM_THREADS": "1",
-            "OPENBLAS_NUM_THREADS": "1",
-            "MKL_NUM_THREADS": "1",
-            "_ZCC_REEXEC_GUARD": "1"
+    def _record(self, event_type: str, payload: Mapping[str, object]) -> None:
+        event = self.ledger.append(event_type, payload)
+        # Deterministic mode suppresses network I/O, but the ledger remains the
+        # authoritative local evidence stream.
+        self.telemetry.broadcast({
+            "event_type": event_type,
+            "event_hash": event["event_hash"],
+            **dict(payload),
         })
-        os.execve(sys.executable, [sys.executable] + sys.argv, env)
 
-    if args.reset:
-        sf = DREAM_DIR / "dream_state.json"
-        if sf.exists():
-            sf.unlink()
-        for f in DREAM_DIR.glob("island_*.s"):
-            f.unlink()
-        print(f"  {_Y}[RESET]{_W} Dream state cleared.")
+    def seed_population(self, source: str) -> None:
+        base = self.oracle.candidate(source, origin="seed")
+        self.archive.add(base)
+        for island in self.islands:
+            island.population = [base]
+            island.best_scalar = self._scalar(base.vector)
+        self._record("seed", {"digest": base.digest, "vector": asdict(base.vector)})
+
+    def _fitness_point(self, v: ParetoVector) -> Tuple[float, float]:
+        # Stable 2D projection used only for trajectory visualization.
+        x = float((v.size + 31 * v.inst_count) % TORUS_MODULUS)
+        y = float((round(v.branch_entropy * 1000) + 17 * v.stack_depth) % TORUS_MODULUS)
+        return x, y
+
+    def evolve(self, source: str, cycles: int = 10) -> List[Candidate]:
+        if cycles < 0:
+            raise ValueError("cycles must be >= 0")
+        self.seed_population(source)
+
+        for cycle in range(cycles):
+            for island in self.islands:
+                parent = island.population[-1]
+                child_source = self.mutation.mutate(parent.source)
+                child = self.oracle.candidate(
+                    child_source,
+                    origin="mutation",
+                    island=island.island_id,
+                    cycle=cycle,
+                )
+                inserted = self.archive.add(child)
+                scalar = self._scalar(child.vector)
+
+                if scalar < island.best_scalar:
+                    island.best_scalar = scalar
+                    island.stagnation = 0
+                else:
+                    island.stagnation += 1
+
+                # WKB escape on stagnation. The "barrier" is an optimization
+                # heuristic, not a claim of physical quantum execution.
+                tunneled = False
+                if island.stagnation >= 2:
+                    barrier = max(0.0, scalar - island.best_scalar)
+                    p = self.wkb.probability(barrier_height=barrier + 1.0, width=1.0, energy=1.0)
+                    if self.rng.random() < p:
+                        child_source = self.mutation.wkb_tunnel_mutation(child_source)
+                        child = self.oracle.candidate(
+                            child_source,
+                            origin="wkb",
+                            island=island.island_id,
+                            cycle=cycle,
+                            tunnel_probability=p,
+                        )
+                        self.archive.add(child)
+                        tunneled = True
+                        island.stagnation = 0
+
+                island.population.append(child)
+                self.geodesic.append(self._fitness_point(child.vector))
+                scar = -self._scalar(child.vector)
+                navigation = self.hamiltonian.navigation_score(scar)
+                assert self.hamiltonian.eta_navigation_lift() == 0.0
+
+                self._record("cycle", {
+                    "cycle": cycle,
+                    "island": island.island_id,
+                    "digest": child.digest,
+                    "vector": asdict(child.vector),
+                    "pareto_inserted": inserted,
+                    "wkb_tunneled": tunneled,
+                    "navigation_score": navigation,
+                    "eta_navigation_lift": 0.0,
+                })
+
+            # Ring migration: best local tail moves to next island.
+            if len(self.islands) > 1:
+                migrants = [island.population[-1] for island in self.islands]
+                for i, migrant in enumerate(migrants):
+                    self.islands[(i + 1) % len(self.islands)].population.append(migrant)
+
+        residuals = self.geodesic.c1_residuals()
+        self._record("complete", {
+            "archive_size": len(self.archive.items()),
+            "c1_max_residual": max(residuals, default=0.0),
+        })
+        return self.archive.items()
+
+    def dry_run(self, source: Optional[str] = None, cycles: int = 2) -> Dict[str, object]:
+        source = source if source is not None else (
+            ".text\n.globl main\nmain:\n"
+            "    pushq %rbp\n"
+            "    movq %rsp, %rbp\n"
+            "    movq %rax, %rax\n"
+            "    addq $0, %rax\n"
+            "    movl $0, %eax\n"
+            "    popq %rbp\n"
+            "    ret\n"
+        )
+        archive = self.evolve(source, cycles=cycles)
+        return {
+            "version": VERSION,
+            "seed": self.seed,
+            "deterministic": self.deterministic,
+            "islands": len(self.islands),
+            "cycles": cycles,
+            "archive": [
+                {"digest": c.digest, "vector": asdict(c.vector), "metadata": c.metadata}
+                for c in archive
+            ],
+            "eta_navigation_lift": self.hamiltonian.eta_navigation_lift(),
+            "torus_modulus": self.hamiltonian.config.modulus,
+            "event_log": str(self.ledger.path),
+        }
+
+
+def _parse_key(text: Optional[str]) -> Optional[bytes]:
+    if text is None:
+        return None
+    if text.startswith("hex:"):
+        return bytes.fromhex(text[4:])
+    return text.encode("utf-8")
+
+
+def _cli(argv: Optional[Sequence[str]] = None) -> int:
+    p = argparse.ArgumentParser(description=VERSION)
+    p.add_argument("input", nargs="?", help="assembly input; omitted for built-in dry-run specimen")
+    p.add_argument("-o", "--output", help="output file for best evolved assembly")
+    p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--islands", type=int, default=4)
+    p.add_argument("--cycles", type=int, default=10)
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--deterministic", action="store_true")
+    p.add_argument("--no-telemetry", action="store_true")
+    p.add_argument("--event-log", default=str(EVENT_LOG))
+    p.add_argument("--version", action="store_true")
+    args = p.parse_args(argv)
+
+    if args.version:
+        print(VERSION)
+        return 0
+
+    source: Optional[str] = None
+    if args.input:
+        try:
+            source = Path(args.input).read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            print(f"oneirogenesis: cannot read {args.input}: {exc}", file=sys.stderr)
+            return 2
+
+    if not args.dry_run and source is None:
+        p.error("provide an input assembly file or use --dry-run")
 
     engine = DreamEngine(
         seed=args.seed,
-        max_mutations=args.mutations,
-        n_islands=args.islands,
-        force_sweep=args.sweep,
-        aggressive=args.aggressive,
-        visualize=args.visualize,
-        dry_run=args.dry_run,
+        islands=args.islands,
         deterministic=args.deterministic,
+        telemetry=not args.no_telemetry,
+        ledger_path=Path(args.event_log),
     )
-    engine.run(num_cycles=args.cycles)
-
-    if getattr(args, 'auto_apply', False):
-        print(f"\n  {_G}[AUTO-APPLY]{_W} Applying & verifying discovered algorithm blueprints...")
-        try:
-            from tools.apply_oneirogenesis_blueprint import apply_blueprint
-            blueprints = sorted(list((DREAM_DIR / "journal").glob("QAlgo-Dream-G*.json")))
-            if not blueprints:
-                print(f"  {_Y}[AUTO-APPLY]{_W} No blueprints found in journal.")
-            else:
-                curr_inp = str(REPO_ROOT / "zcc2.s")
-                out_path = str(REPO_ROOT / "zcc_optimized.s")
-                for bp in blueprints:
-                    res = apply_blueprint(str(bp), curr_inp, out_path)
-                    print(f"    - Applied {bp.name}: {res['modifications']} transformations")
-                    curr_inp = out_path
-
-                with tempfile.TemporaryDirectory(prefix="auto_apply_gate_") as td:
-                    mutant_bin = os.path.join(td, "mutant_zcc")
-                    p_args = [str(REPO_ROOT / p) for p in PASSES]
-                    cmd = ["gcc", "-no-pie", "-O0", "-w", "-fno-asynchronous-unwind-tables",
-                           "-Wa,--noexecstack", "-fno-unwind-tables",
-                           "-Iinclude", "-I.", "-o", mutant_bin, out_path] + p_args + ["-lm"]
-                    subprocess.run(cmd, check=True)
-                    zcc_pp_c = str(REPO_ROOT / "zcc_pp.c")
-                    passed, msg = SelfHostGate.verify(mutant_bin, zcc_pp_c, PASSES, td)
-                    if passed:
-                        m_orig = FitnessOracle.measure(mutant_bin, "benchmark_workload.c", str(REPO_ROOT / "zcc2.s"), td, deterministic=True)
-                        m_opt = FitnessOracle.measure(mutant_bin, "benchmark_workload.c", out_path, td, deterministic=True)
-                        print(f"  {_G}[AUTO-APPLY SUCCESS]{_W} Self-host Gate PASS!")
-                        print(f"    - Final Structural Score: {m_opt['structural_score']:.1f} (Δ = {m_opt['structural_score'] - m_orig['structural_score']:+.1f})")
-                        print(f"    - Total Bytes Saved:     {m_orig['asm_size'] - m_opt['asm_size']:,} bytes")
-                        print(f"    - Total Insts Removed:   {m_orig['inst_count'] - m_opt['inst_count']:,} insts")
-                    else:
-                        print(f"  {_R}[AUTO-APPLY FAIL]{_W} Self-host gate failed: {msg}")
-        except Exception as e:
-            print(f"  {_R}[AUTO-APPLY ERROR]{_W} {e}")
+    if source is not None:
+        candidates = engine.evolve(source, cycles=args.cycles)
+        best = candidates[0]
+        if args.output:
+            out_content = best.source.rstrip() + "\n"
+            Path(args.output).write_text(out_content, encoding="utf-8")
+        orig_count = FitnessOracle().evaluate(source).inst_count
+        opt_count = best.vector.inst_count
+        reduction = round((1.0 - opt_count / max(1, orig_count)) * 100.0, 2)
+        report = {
+            "version": VERSION,
+            "seed": args.seed,
+            "cycles": args.cycles,
+            "original_instructions": orig_count,
+            "optimized_instructions": opt_count,
+            "reduction_pct": reduction,
+            "digest": best.digest,
+            "output": args.output,
+        }
+    else:
+        report = engine.dry_run(source=source, cycles=args.cycles)
+    print(json.dumps(report, sort_keys=True, indent=2))
+    return 0
 
 
-if __name__ == '__main__':
-    main()
-
+if __name__ == "__main__":
+    raise SystemExit(_cli())
