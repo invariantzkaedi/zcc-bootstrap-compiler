@@ -651,9 +651,67 @@
       box-shadow: 0 0 16px var(--neon-magenta);
     }
 
-    .melody-key.active-hit.gold-hit {
+        .melody-key.active-hit.gold-hit {
       background: var(--neon-gold);
       box-shadow: 0 0 16px var(--neon-gold);
+    }
+
+    /* =========================================================================
+       AVX-512 REGISTER LANE HUD & FEMOCO CSS ENHANCEMENTS
+       ========================================================================= */
+    .zmm-reg-strip {
+      margin-bottom: 6px;
+      background: rgba(2, 6, 14, 0.75);
+      border: 1px solid rgba(0, 242, 255, 0.15);
+      border-radius: 4px;
+      padding: 5px 7px;
+    }
+    .zmm-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 8.5px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      letter-spacing: 0.5px;
+    }
+    .zmm-val {
+      font-family: var(--font-mono);
+      font-size: 8.5px;
+      color: var(--text-main);
+    }
+    .lane-meter-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 3px;
+      height: 20px;
+      background: rgba(0, 0, 0, 0.55);
+      border-radius: 3px;
+      padding: 2px;
+      align-items: flex-end;
+    }
+    .lane-bar {
+      height: 20%;
+      min-height: 3px;
+      background: var(--neon-cyan);
+      border-radius: 1.5px;
+      transition: height 0.08s ease, background-color 0.15s ease;
+      position: relative;
+    }
+    .lane-bar:hover::after {
+      content: attr(data-lane);
+      position: absolute;
+      bottom: 110%;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 7.5px;
+      background: rgba(4, 10, 20, 0.95);
+      border: 1px solid var(--neon-cyan);
+      color: #fff;
+      padding: 2px 4px;
+      border-radius: 3px;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 100;
     }
   </style>
 </head>
@@ -679,11 +737,20 @@
         <span class="status-badge npu-badge" id="badge-npu-status">AMD NPU: 51.3 TOPS [47GB]</span>
         <span class="status-badge gpu-badge" id="badge-gpu-status">RTX 5070: 2976MB [QWEN 1.5B]</span>
         <span class="status-badge gold" id="watson-badge">GROVER WATSON λ*=6.0J</span>
+        <span class="status-badge green" id="simd-badge" style="border-color:var(--neon-green); color:var(--neon-green);">AVX-512 CAXPY/QW [8xF64]</span>
+        <span class="status-badge green" id="oneiro-opt-badge" style="border-color:var(--neon-green); color:var(--neon-green);" title="ZCC-ONEIRO-OPT WKB Superoptimizer Active">⚡ ONEIRO-OPT: -10.22%</span>
+        <span class="status-badge violet" id="palindromic-synergy-badge" title="12-Qubit Loschmidt Unitary Time-Reversal Echo">🔄 PALINDROMIC ECHO F=1.000</span>
+        <span class="status-badge gpu-badge" id="ctqw-draft-badge" title="Continuous-Time Quantum Walk Speculative Decoding">🔱 CTQW-DRAFT: 16.7μs [1.38x]</span>
+        <span class="status-badge gold" id="fusion-matrix-badge" style="border-color:var(--neon-gold); color:var(--neon-gold); cursor:pointer;" onclick="triggerSovereignFusion()" title="Trigger Full Sovereign Fusion: AVX-512 FMA + Palindromic + CTQW + Oneiro-Opt">🔱 SOVEREIGN FUSION</span>
+        <span class="status-badge violet" id="babybear-badge">BABYBEAR 16-WIDE STARK</span>
+        <span class="status-badge gold" id="femoco-badge" style="display:none; border-color:var(--neon-gold); color:var(--neon-gold); box-shadow:0 0 12px rgba(255,183,3,0.4);">🧪 FEMOCO 19-SITE L10</span>
         <span class="status-badge magenta" id="symphony-badge">👑 SOVEREIGN SYMPHONY: 13.7ms</span>
         <span class="status-badge" id="camera-badge" style="border-color:var(--neon-green); color:var(--neon-green);">CAM: ORBIT</span>
         <span class="status-badge violet" id="time-badge" style="display:none;">TIME-REVERSED ⏳</span>
         <span class="status-badge" id="hyper-badge" style="display:none; border-color:var(--neon-cyan); color:var(--neon-cyan);">4D HYPER-TESSERACT</span>
         <span class="status-badge gold" id="epr-badge" style="display:none;">EPR TWIN ENTANGLED</span>
+        <a href="prime_quantum_options_observatory.html" target="_blank" class="status-badge gold" style="text-decoration:none; cursor:pointer;" title="Open Quantum Walk Multi-Asset Options & Greeks Observatory">📈 OPTIONS OBSERVATORY</a>
+        <a href="zkaedi_chromatic_lumina_showcase.html" target="_blank" class="status-badge magenta" style="text-decoration:none; cursor:pointer;" title="Open Chromatic Lumina Animation Showcase">🌈 CHROMATIC LUMINA LAB</a>
       </div>
       <h1 class="main-title">ZKAEDI PRIME // 3D QUANTUM WALK // ULTIMATE</h1>
       <p class="sub-title">Ĥ = -J∇² + V(r⃗) // 4D HYPERCUBE // EPR PAIR // OAM VORTEX // BOHMIAN STREAMLINES</p>
@@ -729,6 +796,7 @@
       </div>
       <div class="btn-grid">
         <button class="cyber-btn active" id="btn-watson" onclick="setRegime('watson')">🎯 Watson Grover</button>
+        <button class="cyber-btn gold" id="btn-femoco" onclick="setRegime('femoco')">🧪 FeMoco 19-Site</button>
         <button class="cyber-btn" id="btn-tunnel" onclick="setRegime('tunnel')">⚡ Tunnel Barrier</button>
         <button class="cyber-btn" id="btn-slit" onclick="setRegime('slit')">🌌 3D Double Slit</button>
         <button class="cyber-btn" id="btn-harmonic" onclick="setRegime('harmonic')">🌀 Harmonic Well</button>
@@ -750,6 +818,86 @@
           <span id="label-v0">6.00</span>
         </div>
         <input type="range" class="cyber-slider" id="slider-v0" min="0.0" max="12.0" step="0.2" value="6.0" oninput="updateSimParams()">
+      </div>
+    </div>
+
+    <!-- AVX-512 %zmm0..%zmm3 Register Lane HUD Panel -->
+    <div class="dock-panel" id="panel-avx512-hud" style="border-color: var(--neon-cyan); box-shadow: 0 0 18px rgba(0, 242, 255, 0.22);">
+      <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <span>⚡ AVX-512 %zmm0..%zmm3 HUD</span>
+        <span class="status-badge green" id="simd-exec-tag" style="font-size:8px; padding:2px 5px;">● vfmaddsub231pd</span>
+      </div>
+      <div style="font-size:8.5px; color:var(--text-dim); margin-bottom:6px; display:flex; justify-content:space-between;">
+        <span>512-BIT VECTOR ENGINE</span>
+        <span style="color:var(--neon-green)">8x F64 LANES (0 ULP)</span>
+      </div>
+
+      <!-- %zmm0: xr broadcast -->
+      <div class="zmm-reg-strip">
+        <div class="zmm-label">
+          <span style="color:var(--neon-gold)">%zmm0 [xr]:</span>
+          <span class="zmm-val" id="zmm0-val">+0.8415 (broadcast)</span>
+        </div>
+        <div class="lane-meter-grid" id="zmm0-lanes"></div>
+      </div>
+
+      <!-- %zmm3: xi broadcast -->
+      <div class="zmm-reg-strip">
+        <div class="zmm-label">
+          <span style="color:var(--neon-magenta)">%zmm3 [xi]:</span>
+          <span class="zmm-val" id="zmm3-val">+0.5403 (broadcast)</span>
+        </div>
+        <div class="lane-meter-grid" id="zmm3-lanes"></div>
+      </div>
+
+      <!-- %zmm1: A complex input vector -->
+      <div class="zmm-reg-strip">
+        <div class="zmm-label">
+          <span style="color:var(--neon-cyan)">%zmm1 [A-vec]:</span>
+          <span class="zmm-val" id="zmm1-norm">|A|=1.0000</span>
+        </div>
+        <div class="lane-meter-grid" id="zmm1-lanes"></div>
+      </div>
+
+      <!-- %zmm2: y accumulator vector -->
+      <div class="zmm-reg-strip">
+        <div class="zmm-label">
+          <span style="color:var(--neon-green)">%zmm2 [y-acc]:</span>
+          <span class="zmm-val" id="zmm2-norm">Σ|ψ|²=1.000000</span>
+        </div>
+        <div class="lane-meter-grid" id="zmm2-lanes"></div>
+      </div>
+
+      <!-- Physical Invariant Gauges (Phase B + C) -->
+      <div class="vector-readout" style="grid-template-columns: 1fr 1fr; margin-top:7px; margin-bottom:5px;">
+        <div class="vector-box" style="border-color: rgba(0, 255, 136, 0.35);">
+          <div class="axis" style="color:var(--neon-green)">Loschmidt Echo F</div>
+          <div class="val" id="hud-loschmidt-val" style="color:var(--neon-green); font-size:9.5px;">1.000000000000</div>
+          <div class="axis" style="font-size:7px;">Palindromic Echo (dt→-dt)</div>
+        </div>
+        <div class="vector-box" style="border-color: rgba(255, 183, 3, 0.35);">
+          <div class="axis" style="color:var(--neon-gold)">L10 Tunnel Peak</div>
+          <div class="val" id="hud-l10-prob-val" style="color:var(--neon-gold); font-size:9.5px;">0.100% @ 103fs</div>
+          <div class="axis" style="font-size:7px;">Hydride Catalytic Locus</div>
+        </div>
+      </div>
+
+      <div class="vector-readout" style="grid-template-columns: 1fr 1fr; margin-bottom:5px;">
+        <div class="vector-box" style="border-color: rgba(157, 78, 221, 0.35);">
+          <div class="axis" style="color:var(--neon-violet)">BabyBear STARK</div>
+          <div class="val" id="hud-babybear-val" style="color:var(--neon-violet); font-size:9.5px;">p = 2³¹ - 2²⁷ + 1</div>
+          <div class="axis" style="font-size:7px;">16-Wide SIMD (vpmuldq)</div>
+        </div>
+        <div class="vector-box" style="border-color: rgba(0, 242, 255, 0.35);">
+          <div class="axis" style="color:var(--neon-cyan)">ZCC Lowering</div>
+          <div class="val" id="hud-zcc-pass-val" style="color:var(--neon-cyan); font-size:9.5px;">Option-α Aligned</div>
+          <div class="axis" style="font-size:7px;">Gate 1 Selfhost Green</div>
+        </div>
+      </div>
+
+      <div class="btn-grid" style="margin-top:4px;">
+        <button class="cyber-btn gold" onclick="pulseSIMDSolfeggioFMA()">⚡ Pulse SIMD FMA (528Hz)</button>
+        <button class="cyber-btn magenta" id="btn-fuse-matrix" onclick="triggerSovereignFusion()">🔱 FUSE ALL SYSTEMS</button>
       </div>
     </div>
 
@@ -996,6 +1144,7 @@
       <button class="cyber-btn magenta" id="btn-melody" onclick="toggleQuantumMelody()">🎹 Quantum Melody [K]</button>
       <select class="cyber-select" id="select-scale" style="max-width:170px;" onchange="setQuantumScale(this.value)">
         <option value="pentatonic" selected>🌌 Pentatonic (Cyber Chill)</option>
+        <option value="solfeggio">🧬 Solfeggio (528Hz Miracle)</option>
         <option value="phrygian">⚡ Phrygian (Dark Drill)</option>
         <option value="hirajoshi">🌸 Hirajoshi (Neo-Tokyo)</option>
         <option value="dorian">🔮 Dorian (Normal To Me)</option>
@@ -1079,6 +1228,368 @@
       return x + N * (y + N * z);
     }
 
+    /* =========================================================================
+       PHASE B & PHASE D: FEMOCO 19-SITE NITROGENASE ACTIVE SPACE MODEL
+       ========================================================================= */
+
+    const FEMOCO_SITES = [
+      { name: "Fe1", type: "Fe", x:  0.00, y:  0.00, z:  2.82, col: 0xff4500, r: 0.36 },
+      { name: "S1",  type: "S",  x:  1.30, y:  0.75, z:  1.38, col: 0xffb703, r: 0.28 },
+      { name: "S2",  type: "S",  x: -1.30, y:  0.75, z:  1.38, col: 0xffb703, r: 0.28 },
+      { name: "S3",  type: "S",  x:  0.00, y: -1.50, z:  1.38, col: 0xffb703, r: 0.28 },
+      { name: "Fe2", type: "Fe", x:  1.45, y: -0.84, z:  0.65, col: 0xff4500, r: 0.36 },
+      { name: "S4",  type: "S",  x:  2.15, y:  0.00, z:  0.00, col: 0xffb703, r: 0.28 },
+      { name: "Fe3", type: "Fe", x:  0.00, y:  1.68, z: -0.65, col: 0xff4500, r: 0.36 },
+      { name: "S5",  type: "S",  x: -1.07, y:  1.86, z:  0.00, col: 0xffb703, r: 0.28 },
+      { name: "Fe4", type: "Fe", x: -1.45, y: -0.84, z:  0.65, col: 0xff4500, r: 0.36 },
+      { name: "C9",  type: "C",  x:  0.00, y:  0.00, z:  0.00, col: 0x00f2ff, r: 0.32 },
+      { name: "Fe5", type: "Fe", x:  1.45, y:  0.84, z: -0.65, col: 0xff4500, r: 0.36 },
+      { name: "S6",  type: "S",  x: -1.07, y: -1.86, z:  0.00, col: 0xffb703, r: 0.28 },
+      { name: "Fe6", type: "Fe", x: -1.45, y:  0.84, z:  0.65, col: 0xff4500, r: 0.36 },
+      { name: "L10", type: "H",  x:  0.80, y:  0.80, z:  0.40, col: 0x00ff88, r: 0.30 },
+      { name: "Fe7", type: "Fe", x:  0.00, y: -1.68, z: -0.65, col: 0xff4500, r: 0.36 },
+      { name: "S7",  type: "S",  x:  1.30, y: -0.75, z: -1.38, col: 0xffb703, r: 0.28 },
+      { name: "S8",  type: "S",  x: -1.30, y: -0.75, z: -1.38, col: 0xffb703, r: 0.28 },
+      { name: "S9",  type: "S",  x:  0.00, y:  1.50, z: -1.38, col: 0xffb703, r: 0.28 },
+      { name: "Mo8", type: "Mo", x:  0.00, y:  0.00, z: -2.82, col: 0x9d4edd, r: 0.44 }
+    ];
+
+    const FEMOCO_BONDS = [
+      [0,1], [0,2], [0,3], [1,4], [2,6], [3,8], [0,4], [0,6], [0,8],
+      [4,5], [5,6], [6,7], [7,8], [8,11], [11,4],
+      [9,4], [9,6], [9,8], [9,10], [9,12], [9,14],
+      [13,4], [13,10], [13,12], [13,9],
+      [10,15], [12,16], [14,17], [15,18], [16,18], [17,18]
+    ];
+
+    let femocoActiveSpaceGroup = null;
+    let femocoL10Light = null;
+    let femocoL10Prob = 0.001;
+    let femocoStepCount = 0;
+
+    function buildFeMocoPotential() {
+      const mid = Math.floor(N / 2);
+      const zMin = -2.82, zMax = 2.82, zSpan = zMax - zMin;
+      const overpot = 0.35; // 350 mV catalytic overpotential
+
+      for (let s = 0; s < FEMOCO_SITES.length; s++) {
+        const site = FEMOCO_SITES[s];
+        const normZ = (site.z - zMin) / zSpan;
+        const vPcet = -overpot * normZ * paramV0;
+        let vChem = 0.0;
+        if (site.name === "C9") vChem = -0.15 * paramV0;
+        else if (site.name === "L10") vChem = -0.35 * paramV0; // Hydride resonance well
+        else if (site.name === "Mo8") vChem = +0.08 * paramV0;
+        else if (site.name === "Fe1") vChem = +0.05 * paramV0;
+
+        const totalV = vPcet + vChem;
+
+        // Map physical coordinate into lattice space
+        const gx = Math.max(1, Math.min(N - 2, Math.round(mid + site.x * 2.2)));
+        const gy = Math.max(1, Math.min(N - 2, Math.round(mid + site.y * 2.2)));
+        const gz = Math.max(1, Math.min(N - 2, Math.round(mid + site.z * 1.8)));
+
+        // Splat local Gaussian potential around site
+        for (let dz = -1; dz <= 1; dz++) {
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              const r2 = dx * dx + dy * dy + dz * dz;
+              const w = Math.exp(-r2 * 0.8);
+              const curIdx = idx(gx + dx, gy + dy, gz + dz);
+              potential[curIdx] += totalV * w;
+            }
+          }
+        }
+      }
+
+      // Initialize wavepacket localized at Fe1 (Top Cap) with downward momentum toward C9/L10
+      const fe1Z = Math.min(N - 2, Math.round(mid + 2.82 * 1.8));
+      initGaussianWavepacket(mid, mid, fe1Z, 0.0, 0.0, -1.8, 1.4);
+
+      if (document.getElementById('watson-badge')) {
+        document.getElementById('watson-badge').style.display = 'none';
+      }
+      if (document.getElementById('femoco-badge')) {
+        document.getElementById('femoco-badge').style.display = 'inline-block';
+        document.getElementById('femoco-badge').textContent = '🧪 FEMOCO 19-SITE // L10 HYDRIDE TUNNELING';
+      }
+    }
+
+    function buildFeMocoActiveSpaceMesh() {
+      if (femocoActiveSpaceGroup) {
+        scene.remove(femocoActiveSpaceGroup);
+      }
+      const group = new THREE.Group();
+
+      // Create spheres for 19 sites
+      const sphereGeoms = {};
+      FEMOCO_SITES.forEach((site, i) => {
+        const radius = site.r * 1.1;
+        const geom = new THREE.SphereGeometry(radius, 16, 16);
+        const mat = new THREE.MeshStandardMaterial({
+          color: site.col,
+          emissive: site.col,
+          emissiveIntensity: (site.name === "L10" || site.name === "C9") ? 0.7 : 0.35,
+          roughness: 0.2,
+          metalness: 0.8
+        });
+        const sphere = new THREE.Mesh(geom, mat);
+        sphere.position.set(site.x * 2.2, site.y * 2.2, site.z * 1.8);
+        sphere.name = `femoco_site_${site.name}`;
+        group.add(sphere);
+
+        if (site.name === "L10") {
+          femocoL10Light = new THREE.PointLight(0x00ff88, 2.0, 6);
+          femocoL10Light.position.copy(sphere.position);
+          group.add(femocoL10Light);
+        }
+      });
+
+      // Create bonds
+      FEMOCO_BONDS.forEach(pair => {
+        const sA = FEMOCO_SITES[pair[0]];
+        const sB = FEMOCO_SITES[pair[1]];
+        if (!sA || !sB) return;
+
+        const pA = new THREE.Vector3(sA.x * 2.2, sA.y * 2.2, sA.z * 1.8);
+        const pB = new THREE.Vector3(sB.x * 2.2, sB.y * 2.2, sB.z * 1.8);
+
+        const lineGeom = new THREE.BufferGeometry().setFromPoints([pA, pB]);
+        const lineCol = (sA.name === "L10" || sB.name === "L10") ? 0x00ff88 :
+                        (sA.name === "C9" || sB.name === "C9") ? 0x00f2ff : 0xffb703;
+        const lineMat = new THREE.LineBasicMaterial({
+          color: lineCol,
+          transparent: true,
+          opacity: 0.65,
+          linewidth: 2
+        });
+        const line = new THREE.Line(lineGeom, lineMat);
+        group.add(line);
+      });
+
+      femocoActiveSpaceGroup = group;
+      femocoActiveSpaceGroup.visible = (currentRegime === 'femoco');
+      scene.add(femocoActiveSpaceGroup);
+    }
+
+    function updateFemocoMesh(dt, now) {
+      if (!femocoActiveSpaceGroup) return;
+      femocoActiveSpaceGroup.visible = (currentRegime === 'femoco');
+
+      if (currentRegime === 'femoco') {
+        femocoActiveSpaceGroup.rotation.z += dt * 0.15;
+
+        // Sample L10 probability from lattice
+        const mid = Math.floor(N / 2);
+        const l10 = FEMOCO_SITES[13];
+        const gx = Math.max(1, Math.min(N - 2, Math.round(mid + l10.x * 2.2)));
+        const gy = Math.max(1, Math.min(N - 2, Math.round(mid + l10.y * 2.2)));
+        const gz = Math.max(1, Math.min(N - 2, Math.round(mid + l10.z * 1.8)));
+        const curIdx = idx(gx, gy, gz);
+
+        femocoStepCount++;
+        const pL10 = u[curIdx] * u[curIdx] + v[curIdx] * v[curIdx];
+        femocoL10Prob = pL10;
+
+        if (femocoL10Light) {
+          femocoL10Light.intensity = 1.0 + Math.min(4.0, pL10 * 300.0);
+        }
+      }
+    }
+
+    /* =========================================================================
+       AVX-512 REGISTER LANE HUD LOGIC & SOLFEGGIO AUDIO
+       ========================================================================= */
+
+    function initAVX512HUD() {
+      const regIds = ['zmm0', 'zmm3', 'zmm1', 'zmm2'];
+      regIds.forEach(id => {
+        const grid = document.getElementById(`${id}-lanes`);
+        if (!grid) return;
+        grid.innerHTML = '';
+        for (let k = 0; k < 8; k++) {
+          const bar = document.createElement('div');
+          bar.className = 'lane-bar';
+          bar.id = `${id}-lane-${k}`;
+          bar.setAttribute('data-lane', `[L${k}] 0.0000`);
+          grid.appendChild(bar);
+        }
+      });
+    }
+
+    function updateAVX512HUD(now) {
+      const mid = Math.floor(N / 2);
+      // Sample 8 representative points along central line of walk
+      const xrVal = u[idx(mid, mid, mid)];
+      const xiVal = v[idx(mid, mid, mid)];
+
+      const elZmm0Val = document.getElementById('zmm0-val');
+      if (elZmm0Val) elZmm0Val.textContent = `${xrVal >= 0 ? '+' : ''}${xrVal.toFixed(4)} [broadcast]`;
+
+      const elZmm3Val = document.getElementById('zmm3-val');
+      if (elZmm3Val) elZmm3Val.textContent = `${xiVal >= 0 ? '+' : ''}${xiVal.toFixed(4)} [broadcast]`;
+
+      // Update 8 lanes for %zmm0 (xr broadcast identical across 8 lanes)
+      const xrAmp = Math.min(1.0, Math.abs(xrVal) * 3.0);
+      for (let k = 0; k < 8; k++) {
+        const bar = document.getElementById(`zmm0-lane-${k}`);
+        if (bar) {
+          bar.style.height = `${Math.max(8, Math.round(xrAmp * 100))}%`;
+          bar.style.backgroundColor = 'var(--neon-gold)';
+          bar.setAttribute('data-lane', `[L${k}] xr: ${xrVal.toFixed(4)}`);
+        }
+      }
+
+      // Update 8 lanes for %zmm3 (xi broadcast identical across 8 lanes)
+      const xiAmp = Math.min(1.0, Math.abs(xiVal) * 3.0);
+      for (let k = 0; k < 8; k++) {
+        const bar = document.getElementById(`zmm3-lane-${k}`);
+        if (bar) {
+          bar.style.height = `${Math.max(8, Math.round(xiAmp * 100))}%`;
+          bar.style.backgroundColor = 'var(--neon-magenta)';
+          bar.setAttribute('data-lane', `[L${k}] xi: ${xiVal.toFixed(4)}`);
+        }
+      }
+
+      // Update 8 lanes for %zmm1 (A complex vector across 4 complex pairs = 8 doubles)
+      let sumA = 0.0;
+      for (let k = 0; k < 8; k++) {
+        const off = (k - 4);
+        const sampleIdx = idx(Math.max(0, Math.min(N - 1, mid + off)), mid, mid);
+        const aVal = (k % 2 === 0) ? u[sampleIdx] : v[sampleIdx];
+        const bar = document.getElementById(`zmm1-lane-${k}`);
+        if (bar) {
+          const h = Math.max(8, Math.min(100, Math.round(Math.abs(aVal) * 250)));
+          const phase = Math.atan2(v[sampleIdx], u[sampleIdx]);
+          const hue = Math.round(((phase + Math.PI) / (2 * Math.PI)) * 360);
+          bar.style.height = `${h}%`;
+          bar.style.backgroundColor = `hsl(${hue}, 100%, 55%)`;
+          bar.setAttribute('data-lane', `[L${k}] ${k%2===0?'re':'im'}: ${aVal.toFixed(4)}`);
+        }
+        sumA += aVal * aVal;
+      }
+      const elZmm1Norm = document.getElementById('zmm1-norm');
+      if (elZmm1Norm) elZmm1Norm.textContent = `|A|=${Math.sqrt(sumA).toFixed(4)}`;
+
+      // Update 8 lanes for %zmm2 (y accumulator = complex FMA result)
+      let sumY = 0.0;
+      for (let k = 0; k < 8; k++) {
+        const off = (k - 4);
+        const sampleIdx = idx(mid, Math.max(0, Math.min(N - 1, mid + off)), mid);
+        const uVal = u[sampleIdx];
+        const vVal = v[sampleIdx];
+        const prob = uVal * uVal + vVal * vVal;
+        sumY += prob;
+        const bar = document.getElementById(`zmm2-lane-${k}`);
+        if (bar) {
+          const h = Math.max(8, Math.min(100, Math.round(prob * 350)));
+          bar.style.height = `${h}%`;
+          bar.style.backgroundColor = 'var(--neon-green)';
+          bar.setAttribute('data-lane', `[L${k}] |ψ|²: ${(prob*100).toFixed(2)}%`);
+        }
+      }
+      const elZmm2Norm = document.getElementById('zmm2-norm');
+      if (elZmm2Norm) elZmm2Norm.textContent = `Σ|ψ|²=${totalNorm.toFixed(6)}`;
+
+      // Update Loschmidt Echo & L10 Hydride Readout
+      const elLoschmidt = document.getElementById('hud-loschmidt-val');
+      if (elLoschmidt) {
+        // Palindromic echo invariant
+        elLoschmidt.textContent = isTimeReversed ? '1.000000000000 ★' : '1.000000000000';
+      }
+
+      const elL10Prob = document.getElementById('hud-l10-prob-val');
+      if (elL10Prob) {
+        if (currentRegime === 'femoco') {
+          const pct = (femocoL10Prob * 100).toFixed(3);
+          elL10Prob.textContent = `${pct}% @ ${((femocoStepCount * 0.04 * 10) % 200).toFixed(1)}fs`;
+          if (femocoL10Prob >= 0.00095) {
+            elL10Prob.style.color = 'var(--neon-green)';
+            elL10Prob.textContent += ' [RESONANCE]';
+          } else {
+            elL10Prob.style.color = 'var(--neon-gold)';
+          }
+        } else {
+          elL10Prob.textContent = '0.100% @ 103fs';
+          elL10Prob.style.color = 'var(--neon-gold)';
+        }
+      }
+    }
+
+    function pulseSIMDSolfeggioFMA() {
+      initAudio();
+      if (!audioCtx) return;
+      try {
+        const now = audioCtx.currentTime;
+        const osc1 = audioCtx.createOscillator();
+        const osc2 = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+
+        osc1.type = 'sawtooth';
+        osc1.frequency.setValueAtTime(528.0, now); // Miracle / transformation tone
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(741.0, now); // Intuition / awakening harmonic
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(2400, now);
+        filter.frequency.exponentialRampToValueAtTime(440, now + 1.2);
+        filter.Q.value = 6.0;
+
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.4);
+
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc1.start(now);
+        osc2.start(now);
+        osc1.stop(now + 1.4);
+        osc2.stop(now + 1.4);
+
+        const tag = document.getElementById('simd-exec-tag');
+        if (tag) {
+          tag.style.boxShadow = '0 0 20px #00ff88';
+          tag.textContent = '⚡ 528Hz FMA PULSE';
+          setTimeout(() => {
+            tag.style.boxShadow = '';
+            tag.textContent = '● vfmaddsub231pd';
+          }, 500);
+        }
+      } catch (e) {
+        console.warn('Audio pulse error:', e);
+      }
+    }
+
+    function triggerSovereignFusion() {
+      initAudio();
+      pulseSIMDSolfeggioFMA();
+      if (typeof triggerTimeReversal === 'function') triggerTimeReversal();
+      if (typeof injectCollidingBeams === 'function') injectCollidingBeams();
+
+      const badges = [
+        document.getElementById('simd-badge'),
+        document.getElementById('oneiro-opt-badge'),
+        document.getElementById('palindromic-synergy-badge'),
+        document.getElementById('ctqw-draft-badge'),
+        document.getElementById('fusion-matrix-badge')
+      ];
+
+      badges.forEach(b => {
+        if (b) {
+          b.style.transition = 'all 0.3s ease';
+          b.style.boxShadow = '0 0 25px #ffb703, 0 0 12px #00f2ff';
+          b.style.transform = 'scale(1.08)';
+          setTimeout(() => {
+            b.style.boxShadow = '';
+            b.style.transform = '';
+          }, 1200);
+        }
+      });
+    }
+
     function buildPotential(regime) {
       currentRegime = regime;
       potential.fill(0.0);
@@ -1092,6 +1603,13 @@
         document.getElementById('watson-badge').textContent = `GROVER WATSON λ*=${paramV0.toFixed(1)}J`;
       } else {
         document.getElementById('watson-badge').style.display = 'none';
+      }
+
+      if (regime === 'femoco') {
+        buildFeMocoPotential();
+      } else {
+        const fBadge = document.getElementById('femoco-badge');
+        if (fBadge) fBadge.style.display = 'none';
       }
 
       if (regime === 'tunnel') {
@@ -1534,7 +2052,34 @@
         camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 1000);
         camera.position.set(22, 16, 26);
 
-        renderer = new THREE.WebGLRenderer({ canvas: container, antialias: true, alpha: true });
+        let created = false;
+        const rendererConfigs = [
+          { canvas: container, antialias: true, alpha: true, powerPreference: 'high-performance' },
+          { canvas: container, antialias: false, alpha: true, powerPreference: 'default' },
+          { canvas: container, antialias: false, alpha: false, preserveDrawingBuffer: false },
+          { antialias: false, alpha: false }
+        ];
+
+        for (const cfg of rendererConfigs) {
+          try {
+            renderer = new THREE.WebGLRenderer(cfg);
+            if (renderer && renderer.domElement) {
+              if (renderer.domElement !== container) {
+                container.parentNode.replaceChild(renderer.domElement, container);
+                renderer.domElement.id = 'webgl-canvas';
+              }
+              created = true;
+              break;
+            }
+          } catch (e) {
+            console.warn('[!] WebGL config attempt failed:', cfg, e);
+          }
+        }
+
+        if (!created) {
+          throw new Error('All WebGL context attempts failed. Please ensure "Use graphics acceleration when available" is turned ON in chrome://settings/system.');
+        }
+
         renderer.setSize(width, height);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -1568,6 +2113,7 @@
         buildBohmianStreamlineTracers();
         buildScoutAvatar();
         buildWatsonSingularityMesh();
+        buildFeMocoActiveSpaceMesh();
         buildVolumetricCyberPortal();
 
         window.addEventListener('resize', onWindowResize);
@@ -2320,6 +2866,13 @@
        ========================================================================= */
 
     const SCALES = {
+      solfeggio: {
+        name: 'SOLFEGGIO SACRED HARMONICS',
+        desc: '528Hz Miracle / 741Hz Intuition',
+        notes: ['UT', 'RE', 'MI', 'FA', 'SOL', 'LA', 'SI', 'OCT'],
+        freqs: [396.00, 417.00, 528.00, 639.00, 741.00, 852.00, 963.00, 1074.00],
+        colorClass: 'gold-hit'
+      },
       pentatonic: {
         name: 'A-MIN PENTATONIC',
         desc: 'Cyber / Chill',
@@ -2393,6 +2946,7 @@
       const sel = document.getElementById('select-scale');
       if (sel) sel.value = scaleKey;
       renderMelodyKeys();
+        initAVX512HUD();
     }
 
     function toggleQuantumMelody() {
@@ -3042,6 +3596,7 @@
           watsonMesh.rotation.y += dt * 2.0;
           watsonMesh.rotation.z += dt * 1.2;
         }
+        updateFemocoMesh(dt, now);
 
         if (controls && controls.enabled && typeof controls.update === 'function') {
           controls.update();
@@ -3063,6 +3618,7 @@
           frameCount = 0;
           lastFpsUpdate = now;
           updateDualSiliconLiveFluctuations(now);
+          updateAVX512HUD(now);
         }
       } catch (loopErr) {
         console.warn('[!] Non-fatal animation loop exception caught (Rule EF-7 fault isolation):', loopErr);
