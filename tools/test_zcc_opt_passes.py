@@ -42,7 +42,8 @@ TEST_CORPUS = [
     {"name": "t_rigging_regressions", "src": "tests/regressions/t_zkaedi_rigging_regressions.c", "flags": "-lm"},
     {"name": "diff_read_escape", "src": "tests/diff_read_escape.c", "flags": ""},
     {"name": "diff_parse_initializer_list", "src": "tests/diff_parse_initializer_list.c", "flags": ""},
-    {"name": "diff_HUlib_drawTextLine", "src": "tests/diff_HUlib_drawTextLine.c", "flags": ""}
+    {"name": "diff_HUlib_drawTextLine", "src": "tests/diff_HUlib_drawTextLine.c", "flags": ""},
+    {"name": "diff_R_DrawColumn", "src": "tests/diff_R_DrawColumn.c", "flags": ""}
 ]
 
 def run_cmd(cmd, check=True):
@@ -167,7 +168,7 @@ def test_opt_passes():
     print("=" * 78)
 
     if failed_tests == 0:
-        print("★ ALL 10 TEST SUITES BIT-EXACT & VERIFIED (EXIT 0) ★")
+        print(f"★ ALL {len(TEST_CORPUS)} TEST SUITES BIT-EXACT & VERIFIED (EXIT 0) ★")
     else:
         print(f"[!] Gauntlet failed with {failed_tests} divergences.")
         sys.exit(1)
