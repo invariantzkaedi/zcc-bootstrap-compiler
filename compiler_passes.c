@@ -119,6 +119,7 @@ typedef enum {
   OP_GLOBAL,           /* load address of global symbol: lea name(%rip), %reg */
   OP_ASM,              /* inline assembly string */
   OP_VLA_ALLOC,
+  OP_GET_RDX,
 } Opcode;
 
 static const char *opcode_name[] __attribute__((unused)) = {"nop",
@@ -153,7 +154,9 @@ static const char *opcode_name[] __attribute__((unused)) = {"nop",
                                                             "undef",
                                                             "pgo_counter_addr",
                                                             "global",
-                                                            "asm"};
+                                                            "asm",
+                                                            "vla_alloc",
+                                                            "get_rdx"};
 
 typedef struct {
   RegID reg;     /* source register                    */
@@ -890,6 +893,7 @@ static bool licm_is_invariant(Function *fn, const Instr *ins,
   case OP_ALLOCA:
   case OP_UNDEF:
   case OP_PGO_COUNTER_ADDR: /* PGO probe: must stay in block */
+  case OP_GET_RDX:
     return false;
   default:
     break;
@@ -2906,6 +2910,7 @@ typedef struct {
   char label_names[128][NAME_LEN];
   BlockID label_blocks[128];
   uint32_t n_labels;
+  RegID last_ret_rdx;
 } LowerCtx;
 
 static RegID lower_expr(LowerCtx *ctx, ASTNode *ast);
@@ -4923,7 +4928,20 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     }
     ins->exec_freq = 1.0;
     ins->line_no = node->line_no;
-    break;
+    emit_instr(ctx, ins);
+    if (node->dst_size > 8 && node->dst_size <= 16) {
+      RegID r_rdx = ctx->next_reg++;
+      Instr *get_rdx = calloc(1, sizeof(Instr));
+      get_rdx->id = ctx->next_instr_id++;
+      get_rdx->op = OP_GET_RDX;
+      get_rdx->dst = r_rdx;
+      get_rdx->exec_freq = 1.0;
+      emit_instr(ctx, get_rdx);
+      ctx->last_ret_rdx = r_rdx;
+    } else {
+      ctx->last_ret_rdx = 0;
+    }
+    return r;
   }
   case ZND_ASSIGN: {
     if (!node->lhs)
@@ -5018,6 +5036,32 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     st->is_float = (node->lhs && node->lhs->is_float) || node->is_float;
     st->imm = bf_q ? 8 : ((node->lhs && node->lhs->member_size > 0) ? node->lhs->member_size : 8);
     emit_instr(ctx, st);
+    if (node->lhs && node->lhs->dst_size > 8 && node->lhs->dst_size <= 16 && ctx->last_ret_rdx) {
+      RegID off8_r = ctx->next_reg++;
+      emit_instr(ctx, make_instr_imm(ctx->next_instr_id++, OP_CONST, off8_r, 8, node->line_no));
+      RegID addr_hi = ctx->next_reg++;
+      Instr *add_ins = calloc(1, sizeof(Instr));
+      add_ins->id = ctx->next_instr_id++;
+      add_ins->op = OP_ADD;
+      add_ins->dst = addr_hi;
+      add_ins->src[0] = addr_r;
+      add_ins->src[1] = off8_r;
+      add_ins->n_src = 2;
+      add_ins->exec_freq = 1.0;
+      emit_instr(ctx, add_ins);
+
+      Instr *st1 = calloc(1, sizeof(Instr));
+      st1->id = ctx->next_instr_id++;
+      st1->op = OP_STORE;
+      st1->dst = 0;
+      st1->src[0] = ctx->last_ret_rdx;
+      st1->src[1] = addr_hi;
+      st1->n_src = 2;
+      st1->exec_freq = 1.0;
+      st1->imm = node->lhs->dst_size - 8;
+      emit_instr(ctx, st1);
+      ctx->last_ret_rdx = 0;
+    }
     return val_r;
   }
   case ZND_COMPOUND_ASSIGN: {
@@ -5701,6 +5745,64 @@ static void zcc_lower_stmt(LowerCtx *ctx, ZCCNode *node) {
     return;
   }
   case ZND_RETURN: {
+    if (node->lhs && node->lhs->dst_size > 8 && node->lhs->dst_size <= 16) {
+      int old_want = ctx->want_address;
+      ctx->want_address = 1;
+      RegID addr_r = zcc_lower_expr(ctx, node->lhs);
+      ctx->want_address = old_want;
+      if (addr_r) {
+        /* Load Eightbyte 0 (low 8 bytes) from addr_r + 0 */
+        RegID r_lo = ctx->next_reg++;
+        Instr *ld_lo = calloc(1, sizeof(Instr));
+        ld_lo->id = ctx->next_instr_id++;
+        ld_lo->op = OP_LOAD;
+        ld_lo->dst = r_lo;
+        ld_lo->src[0] = addr_r;
+        ld_lo->n_src = 1;
+        ld_lo->imm = 8;
+        ld_lo->exec_freq = 1.0;
+        emit_instr(ctx, ld_lo);
+
+        /* Load Eightbyte 1 (high 8 bytes) from addr_r + 8 */
+        RegID off8_r = ctx->next_reg++;
+        emit_instr(ctx, make_instr_imm(ctx->next_instr_id++, OP_CONST, off8_r, 8, node->line_no));
+        RegID addr_hi = ctx->next_reg++;
+        Instr *add_ins = calloc(1, sizeof(Instr));
+        add_ins->id = ctx->next_instr_id++;
+        add_ins->op = OP_ADD;
+        add_ins->dst = addr_hi;
+        add_ins->src[0] = addr_r;
+        add_ins->src[1] = off8_r;
+        add_ins->n_src = 2;
+        add_ins->exec_freq = 1.0;
+        emit_instr(ctx, add_ins);
+
+        RegID r_hi = ctx->next_reg++;
+        Instr *ld_hi = calloc(1, sizeof(Instr));
+        ld_hi->id = ctx->next_instr_id++;
+        ld_hi->op = OP_LOAD;
+        ld_hi->dst = r_hi;
+        ld_hi->src[0] = addr_hi;
+        ld_hi->n_src = 1;
+        ld_hi->imm = node->lhs->dst_size - 8;
+        ld_hi->exec_freq = 1.0;
+        emit_instr(ctx, ld_hi);
+
+        Instr *ret = calloc(1, sizeof(Instr));
+        ret->id = ctx->next_instr_id++;
+        ret->op = OP_RET;
+        ret->dst = 0;
+        ret->is_float = 0;
+        ret->dst_size = node->lhs->dst_size;
+        ret->src[0] = r_lo;
+        ret->src[1] = r_hi;
+        ret->n_src = 2;
+        ret->exec_freq = 1.0;
+        emit_instr(ctx, ret);
+        fn->blocks[ctx->cur_block]->n_succs = 0;
+        return;
+      }
+    }
     RegID val_r = zcc_lower_expr(ctx, node->lhs);
     Instr *ret = calloc(1, sizeof(Instr));
     ret->id = ctx->next_instr_id++;
@@ -8104,6 +8206,26 @@ static void ir_asm_store_rax_to(IRAsmCtx *ctx, RegID r) {
     fprintf(f, "    movq %%rax, %d(%%rbp)\n", slot);
 }
 
+static void ir_asm_load_to_rdx(IRAsmCtx *ctx, RegID r) {
+  FILE *f = ctx->out;
+  int slot;
+  int p = ir_asm_vreg_location(ctx, r, &slot);
+  if (p >= 0)
+    fprintf(f, "    movq %%%s, %%rdx\n", phys_reg_name[p]);
+  else
+    fprintf(f, "    movq %d(%%rbp), %%rdx\n", slot);
+}
+
+static void ir_asm_store_rdx_to(IRAsmCtx *ctx, RegID r) {
+  FILE *f = ctx->out;
+  int slot;
+  int p = ir_asm_vreg_location(ctx, r, &slot);
+  if (p >= 0)
+    fprintf(f, "    movq %%rdx, %%%s\n", phys_reg_name[p]);
+  else
+    fprintf(f, "    movq %%rdx, %d(%%rbp)\n", slot);
+}
+
 static void ir_asm_load_to_rcx(IRAsmCtx *ctx, RegID r) {
   FILE *f = ctx->out;
   int slot;
@@ -8290,6 +8412,12 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
     fprintf(f, "    subq %%rax, %%rsp\n");
     fprintf(f, "    movq %%rsp, %%rax\n");
     ir_asm_store_rax_to(ctx, ins->dst);
+    break;
+  }
+  case OP_GET_RDX: {
+    if (ins->dst) {
+      ir_asm_store_rdx_to(ctx, ins->dst);
+    }
     break;
   }
   case OP_PGO_COUNTER_ADDR: {
@@ -8793,6 +8921,9 @@ static void ir_asm_lower_insn(IRAsmCtx *ctx, const Instr *ins,
       } else {
         ir_asm_load_to_rax(ctx, ins->src[0]);
       }
+    }
+    if (ins->n_src >= 2) {
+      ir_asm_load_to_rdx(ctx, ins->src[1]);
     }
     /* CG-IR-015: zero-truncate 32-bit return values.
      * 64-bit arithmetic (neg/sub on sign-extended values) can leave garbage

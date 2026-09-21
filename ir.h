@@ -137,6 +137,7 @@ typedef enum {
     IR_VFSUB,       /* dst = src1 -v src2  (Vector float sub)              */
     IR_VFMUL,       /* dst = src1 *v src2  (Vector float mul)              */
     IR_VFMA,        /* dst = (src1 * src2) + label (FMA3 vector FMA)       */
+    IR_RET2,        /* return [src1], [src2] (SysV %rax, %rdx dual return) */
 
     IR_OP_COUNT     /* sentinel — keep last                                */
 } ir_op_t;

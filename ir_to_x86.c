@@ -69,6 +69,8 @@ static int get_or_create_var_sz(const char *name, int sz) {
             next_offset_from_rbp -= 8;
         }
         next_offset_from_rbp -= (sz - 8);
+    } else if (sz >= 16) {
+        next_offset_from_rbp -= (sz - 8);
     }
     int off;
     strncpy(vars[num_vars].name, name, IR_NAME_MAX - 1);
@@ -109,7 +111,8 @@ static void store_result_zmm(FILE *out, const char *dst, const char *src_zmm) {
 static int is_constant_num(const char *src) {
     if (!src || src[0] == '\0') return 0;
     int i = 0;
-    if (src[0] == '-' || src[0] == '+') i++;
+    if (src[0] == '$') i++;
+    if (src[i] == '-' || src[i] == '+') i++;
     if (src[i] == '\0') return 0;
     for (; src[i]; i++) {
         if (src[i] < '0' || src[i] > '9') return 0;
@@ -127,7 +130,8 @@ static int is_constant_num(const char *src) {
 static void load_operand(FILE *out, const char *src, const char *dst_reg,
                          const RegAllocator *ra) {
     if (is_constant_num(src)) {
-        fprintf(out, "    movq $%s, %s\n", src, dst_reg);
+        const char *p = (src[0] == '$') ? src + 1 : src;
+        fprintf(out, "    movq $%s, %s\n", p, dst_reg);
         return;
     }
     if (ra) {
@@ -210,7 +214,8 @@ static void store_result_xmm(FILE *out, const char *dst, const char *src_reg, ir
 static void emit_src2(FILE *out, const char *mnemonic, const char *src2,
                       const RegAllocator *ra) {
     if (is_constant_num(src2)) {
-        fprintf(out, "    %s $%s, %%rax\n", mnemonic, src2);
+        const char *p = (src2[0] == '$') ? src2 + 1 : src2;
+        fprintf(out, "    %s $%s, %%rax\n", mnemonic, p);
         return;
     }
     if (ra) {
@@ -229,7 +234,7 @@ static void emit_src2(FILE *out, const char *mnemonic, const char *src2,
 static void load_address(FILE *out, const char *src, const char *reg) {
     if (strncmp(src, "%stack_", 7) == 0) {
         int off = get_or_create_var(src);
-        fprintf(out, "    movq %d(%%rbp), %s\n", off, reg);
+        fprintf(out, "    leaq %d(%%rbp), %s\n", off, reg);
     } else if (strncmp(src, "%t", 2) == 0 || (src[0] == 't' && src[1] >= '0' && src[1] <= '9')) {
         /* A temp holding an address: load its value (the pointer) */
         int off = get_or_create_var(src);
@@ -255,6 +260,9 @@ static void load_address_ra(FILE *out, const char *src, const char *reg,
     }
     load_address(out, src, reg);
 }
+
+#include "avx512_qw_peephole.c"
+#include "avx512_caxpy_peephole.c"
 
 /* Callee-save register tables — match get_callee_reg() order in part4.c
  * r12=0, r13=1, r14=2, r15=3, rbx=4 */
@@ -552,6 +560,22 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out, int safe_div) {
         while (n) {
             /* CG-IR-OPT-001: skip dead nodes */
             if (n->flags & IRF_DEAD) { n = n->next; continue; }
+            if (zcc_avx512_qw_gate()) {
+                int consumed = zcc_try_emit_avx512_qw_axpy8(out, fn, n, ra);
+                if (consumed > 0) {
+                    while (consumed-- > 0 && n)
+                        n = n->next;
+                    continue;
+                }
+            }
+            if (zcc_avx512_caxpy_gate()) {
+                int consumed = zcc_try_emit_avx512_caxpy4(out, fn, n, ra);
+                if (consumed > 0) {
+                    while (consumed-- > 0 && n)
+                        n = n->next;
+                    continue;
+                }
+            }
             fprintf(out, "    # %s\n", ir_op_name(n->op));
             switch (n->op) {
                 case IR_CONST: {
@@ -911,22 +935,37 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out, int safe_div) {
                     break;
                 }
                 case IR_ADDR: {
-                    load_address_ra(out, n->src1, "%rax", ra);
+                    if (strncmp(n->src1, "%stack_", 7) == 0) {
+                        int off = get_or_create_var(n->src1);
+                        fprintf(out, "    leaq %d(%%rbp), %%rax\n", off);
+                    } else {
+                        load_address_ra(out, n->src1, "%rax", ra);
+                    }
                     store_result(out, n->dst, "%rax", ra);
                     break;
                 }
                 case IR_STORE: {
-                    /* src1 = value, dst = address */
-                    load_operand(out, n->src1, "%rcx", ra);
-                    load_address_ra(out, n->dst, "%rax", ra);
-                    if (n->type == IR_TY_I32 || n->type == IR_TY_U32 || n->type == IR_TY_F32)
-                        fprintf(out, "    movl %%ecx, (%%rax)\n");
-                    else if (n->type == IR_TY_I16 || n->type == IR_TY_U16)
-                        fprintf(out, "    movw %%cx, (%%rax)\n");
-                    else if (n->type == IR_TY_I8 || n->type == IR_TY_U8)
-                        fprintf(out, "    movb %%cl, (%%rax)\n");
-                    else
-                        fprintf(out, "    movq %%rcx, (%%rax)\n");
+                    if (n->imm > 8 && n->imm <= 16) {
+                        load_address_ra(out, n->dst, "%rax", ra);
+                        int off_src = get_or_create_var(n->src1);
+                        fprintf(out, "    leaq %d(%%rbp), %%rcx\n", off_src);
+                        fprintf(out, "    movq 0(%%rcx), %%r10\n");
+                        fprintf(out, "    movq %%r10, 0(%%rax)\n");
+                        fprintf(out, "    movq 8(%%rcx), %%r10\n");
+                        fprintf(out, "    movq %%r10, 8(%%rax)\n");
+                    } else {
+                        /* src1 = value, dst = address */
+                        load_operand(out, n->src1, "%rcx", ra);
+                        load_address_ra(out, n->dst, "%rax", ra);
+                        if (n->type == IR_TY_I32 || n->type == IR_TY_U32 || n->type == IR_TY_F32)
+                            fprintf(out, "    movl %%ecx, (%%rax)\n");
+                        else if (n->type == IR_TY_I16 || n->type == IR_TY_U16)
+                            fprintf(out, "    movw %%cx, (%%rax)\n");
+                        else if (n->type == IR_TY_I8 || n->type == IR_TY_U8)
+                            fprintf(out, "    movb %%cl, (%%rax)\n");
+                        else
+                            fprintf(out, "    movq %%rcx, (%%rax)\n");
+                    }
                     break;
                 }
                 case IR_ALLOCA: {
@@ -1043,7 +1082,6 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out, int safe_div) {
                     }
 
                     int is_flt = (n->type == IR_TY_F32 || n->type == IR_TY_F64);
-                    fprintf(stderr, "DEBUG LOWER ARG: %s, type = %d, is_flt = %d, gp_idx = %d, fp_idx = %d\n", n->src1, n->type, is_flt, gp_arg_idx, fp_arg_idx);
                     if (is_flt) {
                         if (fp_arg_idx < 8) {
                             char xmm_reg[16];
@@ -1085,7 +1123,11 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out, int safe_div) {
                         fprintf(out, "    addq $%d, %%rsp\n", cleanup_size);
                     }
                     if (n->dst[0] != '\0' && n->dst[0] != '-') {
-                        if (n->type == IR_TY_F32 || n->type == IR_TY_F64) {
+                        if (n->imm > 8 && n->imm <= 16) {
+                            int off = get_or_create_var_sz(n->dst, 16);
+                            fprintf(out, "    movq %%rax, %d(%%rbp)\n", off);
+                            fprintf(out, "    movq %%rdx, %d(%%rbp)\n", off + 8);
+                        } else if (n->type == IR_TY_F32 || n->type == IR_TY_F64) {
                             store_result_xmm(out, n->dst, "%xmm0", n->type, ra);
                         } else {
                             store_result(out, n->dst, "%rax", ra);
@@ -1112,6 +1154,19 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out, int safe_div) {
                             else if (n->type == IR_TY_I16) fprintf(out, "    movswl %%ax, %%eax\n    movswq %%ax, %%rax\n");
                             else if (n->type == IR_TY_U16) fprintf(out, "    movzwl %%ax, %%eax\n");
                         }
+                    }
+                    fprintf(out, "    jmp %s\n", fn->end_label);
+                    has_ret = 1;
+                    break;
+                }
+                case IR_RET2: {
+                    if (n->src2[0] != '\0') {
+                        load_operand(out, n->src1, "%rax", ra);
+                        load_operand(out, n->src2, "%rdx", ra);
+                    } else if (n->src1[0] != '\0') {
+                        load_address_ra(out, n->src1, "%r10", ra);
+                        fprintf(out, "    movq 0(%%r10), %%rax\n");
+                        fprintf(out, "    movq 8(%%r10), %%rdx\n");
                     }
                     fprintf(out, "    jmp %s\n", fn->end_label);
                     has_ret = 1;

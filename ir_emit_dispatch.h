@@ -117,6 +117,12 @@ static void ZCC_EMIT_RET(ir_type_t ty, const char *val, int line) {
     }
 }
 
+static void ZCC_EMIT_RET2(ir_type_t ty, const char *val1, const char *val2, int line) {
+    if (g_emit_ir && g_ir_cur_func) {
+        ir_emit(g_ir_cur_func, IR_RET2, ty, 0, val1 ? val1 : "", val2 ? val2 : "", 0, 0, line);
+    }
+}
+
 static void ZCC_EMIT_CALL(ir_type_t ty, const char *dst, const char *fname, int line) {
     if (g_emit_ir && g_ir_cur_func) {
         ir_emit(g_ir_cur_func, IR_CALL, ty, dst, 0, 0, fname, 0, line);

@@ -1,0 +1,9 @@
+python tools/ext4_sync.py
+wsl -e bash -c "cd /home/zkaedi/zcc_ext4_test && make zcc"
+wsl -e bash -c "cd /home/zkaedi/zcc_ext4_test && ./zcc tests/probe_ret2.c -o /tmp/probe_ret2_def.s && gcc /tmp/probe_ret2_def.s -o /tmp/probe_ret2_def && /tmp/probe_ret2_def"
+wsl -e bash -c "cd /home/zkaedi/zcc_ext4_test && ZCC_IR_LOWER=1 ./zcc tests/probe_ret2.c -o /tmp/probe_ret2_lower.s && gcc /tmp/probe_ret2_lower.s -o /tmp/probe_ret2_lower && /tmp/probe_ret2_lower"
+wsl -e bash -c "cd /home/zkaedi/zcc_ext4_test && ./zcc --ir tests/probe_ret2.c -o /tmp/probe_ret2_ir.s && gcc /tmp/probe_ret2_ir.s -o /tmp/probe_ret2_ir && /tmp/probe_ret2_ir"
+wsl -e bash -c "cd /home/zkaedi/zcc_ext4_test && bash gate.sh"
+wsl -e bash -c "cd /home/zkaedi/zcc_ext4_test && cmp zcc2.s zcc3.s && echo 'CMP SUCCESS: byte-identical'"
+wsl -e bash -c "cd /home/zkaedi/zcc_ext4_test && python3 tools/test_zcc_opt_passes.py"
+wsl -e bash -c "cd /home/zkaedi/zcc_ext4_test && gcc -o /tmp/test_quickjs_runner tests/test_quickjs_native.c tests/zcc_quickjs_runtime.s /tmp/quickjs_objs/quickjs.o /tmp/quickjs_objs/cutils.o /tmp/quickjs_objs/libunicode.o /tmp/quickjs_objs/dtoa.o /tmp/quickjs_objs/libregexp.o -I/tmp/quickjs -lm -lpthread -ldl && /tmp/test_quickjs_runner"

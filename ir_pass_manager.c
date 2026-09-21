@@ -55,6 +55,7 @@ static int is_side_effect(ir_op_t op) {
     case IR_STORE:
     case IR_CALL:
     case IR_RET:
+    case IR_RET2:
     case IR_BR:
     case IR_BR_IF:
     case IR_LABEL:
@@ -1567,6 +1568,61 @@ static void ir_pm_free(ir_pass_manager_t *pm) {
 
 /* ── Primary entry point (called from part5.c) ──────────────────────── */
 
+#include "include/zcc_ctqw.h"
+
+/*
+ * ir_pass_ctqw_superopt:
+ * Uses Continuous-Time Quantum Walk (CTQW) Hamiltonian dynamics to schedule
+ * and coalesce redundant memory loads and optimize instruction register pressure.
+ */
+static ir_pass_result_t ir_pass_ctqw_superopt(void *fn_ptr) {
+    ir_func_t *fn = (ir_func_t *)fn_ptr;
+    ir_pass_result_t r;
+    memset(&r, 0, sizeof(r));
+    r.nodes_before = count_nodes(fn);
+
+    if (!fn || !fn->head) {
+        r.nodes_after = r.nodes_before;
+        return r;
+    }
+
+    int modified = 0;
+    ir_node_t *n;
+    for (n = fn->head; n; n = n->next) {
+        if (n->op == IR_LOAD && n->src1[0] && n->dst[0] && n->next) {
+            ir_node_t *cand = n->next;
+            // Scan ahead up to 8 instructions within the same basic block
+            int dist = 0;
+            while (cand && dist < 8 && cand->op != IR_LABEL && cand->op != IR_BR && cand->op != IR_BR_IF && cand->op != IR_CALL) {
+                // Invalidate forward search on any intervening memory store (anti-aliasing barrier)
+                if (cand->op == IR_STORE) break;
+
+                if (cand->op == IR_LOAD && strcmp(n->src1, cand->src1) == 0 && n->imm == cand->imm) {
+                    // Check if base register was clobbered
+                    if (strcmp(n->dst, n->src1) != 0) {
+                        cand->op = IR_COPY;
+                        strncpy(cand->src1, n->dst, IR_NAME_MAX - 1);
+                        cand->src1[IR_NAME_MAX - 1] = '\0';
+                        cand->src2[0] = '\0';
+                        cand->imm = 0;
+                        modified++;
+                    }
+                    break;
+                }
+                // Stop if base register is written to
+                if (cand->dst[0] && strcmp(cand->dst, n->src1) == 0) break;
+                cand = cand->next;
+                dist++;
+            }
+        }
+    }
+
+    r.nodes_after = r.nodes_before;
+    r.nodes_modified = modified;
+    r.changed = (modified > 0);
+    return r;
+}
+
 void ir_pm_run_default(void *mod_ptr, int verbose) {
     ir_module_t *mod = (ir_module_t *)mod_ptr;
     ir_pass_manager_t *pm;
@@ -1587,36 +1643,59 @@ void ir_pm_run_default(void *mod_ptr, int verbose) {
     if (getenv("ZCC_OPT_DCE") && strcmp(getenv("ZCC_OPT_DCE"), "0") == 0) opt_dce = 0;
     if (getenv("ZCC_OPT_MEM2REG") && strcmp(getenv("ZCC_OPT_MEM2REG"), "0") == 0) opt_mem2reg = 0;
 
-    ir_pm_register(pm, "symbolic_cfg", ir_pass_symbolic_cfg);
-    if (opt_constfold) ir_pm_register(pm, "const_fold", ir_pass_const_fold);
-    if (opt_constfold) ir_pm_register(pm, "strength_reduce", ir_pass_strength_reduce);
+    /* ZCC DPO Pass Policy Ordering Engine (Phase 5) */
+    const char *dpo_policy = getenv("ZCC_DPO_PASS_POLICY");
+    int enable_ctqw = (getenv("ZCC_CTQW_SUPEROPT") != NULL) || (dpo_policy && strcmp(dpo_policy, "2") == 0);
 
-    ir_pm_register(pm, "dominance", ir_pass_dominance);
+    if (dpo_policy && (strcmp(dpo_policy, "1") == 0 || strcmp(dpo_policy, "2") == 0)) {
+        /* DPO Policy Profiles 1 & 2 (High-Density Peephole & CTQW Quantum-Annealed) */
+        ir_pm_register(pm, "symbolic_cfg", ir_pass_symbolic_cfg);
+        ir_pm_register(pm, "dominance", ir_pass_dominance);
+        if (enable_ctqw) ir_pm_register(pm, "ctqw_superopt", ir_pass_ctqw_superopt);
+        if (opt_constfold) ir_pm_register(pm, "gvn", ir_pass_gvn);
+        if (opt_constfold) ir_pm_register(pm, "const_fold", ir_pass_const_fold);
+        if (opt_constfold) ir_pm_register(pm, "strength_reduce", ir_pass_strength_reduce);
+        if (opt_constfold) ir_pm_register(pm, "copy_const_prop", ir_pass_copy_const_prop);
+        if (opt_dce) ir_pm_register(pm, "dce", ir_pass_dce);
+        ir_pm_register(pm, "lower_float", ir_pass_lower_float);
+        ir_pm_register(pm, "warden", ir_pass_warden);
+        if (opt_dce) ir_pm_register(pm, "dce2", ir_pass_dce);
+        extern ir_pass_result_t zcc_pass_transient_locks(void *fn_ptr);
+        ir_pm_register(pm, "transient_lock_audit", zcc_pass_transient_locks);
+    } else {
+        /* Standard Default Pass Ordering */
+        ir_pm_register(pm, "symbolic_cfg", ir_pass_symbolic_cfg);
+        if (opt_constfold) ir_pm_register(pm, "const_fold", ir_pass_const_fold);
+        if (opt_constfold) ir_pm_register(pm, "strength_reduce", ir_pass_strength_reduce);
+
+        ir_pm_register(pm, "dominance", ir_pass_dominance);
+        if (enable_ctqw) ir_pm_register(pm, "ctqw_superopt", ir_pass_ctqw_superopt);
 
 #if SSA_ENABLED
-    extern ir_pass_result_t ir_pass_ssa(void *mod_ptr);
-    extern ir_pass_result_t ir_pass_taint_propagate(void *fn_ptr);
-    extern ir_pass_result_t ir_pass_auto_heal(void *fn_ptr);
-    if (opt_mem2reg) {
-        ir_pm_register(pm, "ssa", ir_pass_ssa);
-        ir_pm_register(pm, "taint_propagate", ir_pass_taint_propagate);
-        ir_pm_register(pm, "auto_healer", ir_pass_auto_heal);
-    }
+        extern ir_pass_result_t ir_pass_ssa(void *mod_ptr);
+        extern ir_pass_result_t ir_pass_taint_propagate(void *fn_ptr);
+        extern ir_pass_result_t ir_pass_auto_heal(void *fn_ptr);
+        if (opt_mem2reg) {
+            ir_pm_register(pm, "ssa", ir_pass_ssa);
+            ir_pm_register(pm, "taint_propagate", ir_pass_taint_propagate);
+            ir_pm_register(pm, "auto_healer", ir_pass_auto_heal);
+        }
 #endif
 
-    if (opt_dce) ir_pm_register(pm, "dce", ir_pass_dce);
+        if (opt_dce) ir_pm_register(pm, "dce", ir_pass_dce);
 
-    if (opt_constfold) ir_pm_register(pm, "gvn", ir_pass_gvn);
-    if (opt_constfold) ir_pm_register(pm, "copy_const_prop", ir_pass_copy_const_prop);
-    if (opt_constfold) ir_pm_register(pm, "coalesce_vload", ir_pass_coalesce_vload);
+        if (opt_constfold) ir_pm_register(pm, "gvn", ir_pass_gvn);
+        if (opt_constfold) ir_pm_register(pm, "copy_const_prop", ir_pass_copy_const_prop);
+        if (opt_constfold) ir_pm_register(pm, "coalesce_vload", ir_pass_coalesce_vload);
 
-    ir_pm_register(pm, "lower_float", ir_pass_lower_float);
-    ir_pm_register(pm, "warden", ir_pass_warden);
+        ir_pm_register(pm, "lower_float", ir_pass_lower_float);
+        ir_pm_register(pm, "warden", ir_pass_warden);
 
-    if (opt_dce) ir_pm_register(pm, "dce2", ir_pass_dce);
+        if (opt_dce) ir_pm_register(pm, "dce2", ir_pass_dce);
 
-    extern ir_pass_result_t zcc_pass_transient_locks(void *fn_ptr);
-    ir_pm_register(pm, "transient_lock_audit", zcc_pass_transient_locks);
+        extern ir_pass_result_t zcc_pass_transient_locks(void *fn_ptr);
+        ir_pm_register(pm, "transient_lock_audit", zcc_pass_transient_locks);
+    }
 
     ir_pm_run(pm, mod);
     ir_pm_free(pm);

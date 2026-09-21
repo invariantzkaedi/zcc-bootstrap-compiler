@@ -100,7 +100,8 @@ static const char *OP_NAMES[] = {
     "vfadd",
     "vfsub",
     "vfmul",
-    "vfma"
+    "vfma",
+    "ret2"
 };
 
 /* ── Type table ──────────────────────────────────────────────────────── */
@@ -148,7 +149,7 @@ int ir_type_unsigned(ir_type_t ty) {
 }
 
 int ir_op_is_terminator(ir_op_t op) {
-    return op == IR_RET || op == IR_BR || op == IR_BR_IF;
+    return op == IR_RET || op == IR_RET2 || op == IR_BR || op == IR_BR_IF;
 }
 
 /* ── Node allocation ──────────────────────────────────────────────────── */

@@ -1264,8 +1264,10 @@ void codegen_expr(Compiler *cc, Node *node) {
       codegen_store(cc, node->lhs->type);
     }
     {
-      ZCC_EMIT_STORE(ir_map_type(node->lhs->type), lhs_addr_ir, rhs_ir,
-                     node->line);
+      long st_sz = (node->lhs->type && (node->lhs->type->kind == TY_STRUCT || node->lhs->type->kind == TY_UNION)) ? type_size(node->lhs->type) : 0;
+      if (g_emit_ir && g_ir_cur_func) {
+        ir_emit(g_ir_cur_func, IR_STORE, ir_map_type(node->lhs->type), lhs_addr_ir, rhs_ir, 0, 0, st_sz, node->line);
+      }
     }
     return;
   }
@@ -2002,41 +2004,45 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (!backend_ops) {
       if (node->rhs->kind == ND_NUM && is_power_of_2_val(node->rhs->int_val)) {
         int shift;
+        char shift_str[16];
         codegen_expr_checked(cc, node->lhs);
         ir_save_result(lhs_ir);
         shift = log2_of(node->rhs->int_val);
         fprintf(cc->out, "    shlq $%d, %%rax\n", shift);
-        ir_emit_binary_op(ND_SHL, node->type, lhs_ir, "unused_rhs", node->line);
+        sprintf(shift_str, "%d", shift);
+        ir_emit_binary_op(ND_SHL, node->type, lhs_ir, shift_str, node->line);
         return;
       }
       if (node->lhs->kind == ND_NUM && is_power_of_2_val(node->lhs->int_val)) {
         int shift;
+        char shift_str[16];
         codegen_expr_checked(cc, node->rhs);
         ir_save_result(rhs_ir);
         shift = log2_of(node->lhs->int_val);
         fprintf(cc->out, "    shlq $%d, %%rax\n", shift);
-        ir_emit_binary_op(ND_SHL, node->type, "unused_lhs", rhs_ir, node->line);
+        sprintf(shift_str, "%d", shift);
+        ir_emit_binary_op(ND_SHL, node->type, rhs_ir, shift_str, node->line);
         return;
       }
       if (node->rhs->kind == ND_NUM && node->rhs->int_val == 3) {
         codegen_expr_checked(cc, node->lhs);
         ir_save_result(lhs_ir);
         fprintf(cc->out, "    leaq (%%rax,%%rax,2), %%rax\n");
-        ir_emit_binary_op(ND_MUL, node->type, lhs_ir, "unused_rhs", node->line);
+        ir_emit_binary_op(ND_MUL, node->type, lhs_ir, "3", node->line);
         return;
       }
       if (node->rhs->kind == ND_NUM && node->rhs->int_val == 5) {
         codegen_expr_checked(cc, node->lhs);
         ir_save_result(lhs_ir);
         fprintf(cc->out, "    leaq (%%rax,%%rax,4), %%rax\n");
-        ir_emit_binary_op(ND_MUL, node->type, lhs_ir, "unused_rhs", node->line);
+        ir_emit_binary_op(ND_MUL, node->type, lhs_ir, "5", node->line);
         return;
       }
       if (node->rhs->kind == ND_NUM && node->rhs->int_val == 9) {
         codegen_expr_checked(cc, node->lhs);
         ir_save_result(lhs_ir);
         fprintf(cc->out, "    leaq (%%rax,%%rax,8), %%rax\n");
-        ir_emit_binary_op(ND_MUL, node->type, lhs_ir, "unused_rhs", node->line);
+        ir_emit_binary_op(ND_MUL, node->type, lhs_ir, "9", node->line);
         return;
       }
     }
@@ -4388,6 +4394,7 @@ void codegen_expr(Compiler *cc, Node *node) {
           fprintf(cc->out, "    andq $15, %%r11\n");
           fprintf(cc->out, "    testq %%r11, %%r11\n");
           fprintf(cc->out, "    je .Lcall_aligned_%d\n", call_lbl);
+          fprintf(cc->out, "    subq $8, %%rsp\n");
           if (node->func_name[0]) {
               fprintf(cc->out, "    call %s\n", node->func_name);
           } else {
@@ -4466,7 +4473,10 @@ void codegen_expr(Compiler *cc, Node *node) {
       char *dst = ir_bridge_fresh_tmp();
       char *target = node->func_name[0] ? node->func_name : callee_ir;
       if (getenv("ZCC_DEBUG_TRACE")) fprintf(stderr, "DEBUG CALL SITE: %s, type kind = %d, mapped = %d\n", target, node->type ? node->type->kind : -1, ir_map_type(node->type));
-      ZCC_EMIT_CALL(ir_map_type(node->type), dst, target, node->line);
+      if (g_emit_ir && g_ir_cur_func) {
+        long ret_sz = (node->type && (node->type->kind == TY_STRUCT || node->type->kind == TY_UNION)) ? type_size(node->type) : 0;
+        ir_emit(g_ir_cur_func, IR_CALL, ir_map_type(node->type), dst, 0, 0, target, ret_sz, node->line);
+      }
     }
     return;
   }
@@ -4763,6 +4773,8 @@ void codegen_stmt(Compiler *cc, Node *node) {
   case ND_RETURN:
     if (node->lhs) {
       codegen_expr_checked(cc, node->lhs);
+      char ret_tmp[32];
+      ir_save_result(ret_tmp);
       /* CG-IR-019: System V aggregate return support */
       Type *ty = node->lhs->type;
       if (ty && (ty->kind == TY_STRUCT || ty->kind == TY_UNION)) {
@@ -4795,6 +4807,7 @@ void codegen_stmt(Compiler *cc, Node *node) {
           /* Jump directly to epilogue */
           if (backend_ops) fprintf(cc->out, "    b .Lfunc_end_%d\n", cc->func_end_label);
           else fprintf(cc->out, "    jmp .Lfunc_end_%d\n", cc->func_end_label);
+          ZCC_EMIT_RET2(IR_TY_I64, ret_tmp, "", node->line);
           return;
         } else {
           /* Large aggregate return (sret). The hidden pointer is at cc->sret_offset(%rbp). */
@@ -5647,7 +5660,9 @@ static int ir_whitelisted(const char *name) {
 static int is_ir_eligible(Node *func) {
   if (!func || !func->func_def_name) return 0;
   Type *ret_type = func->func_type ? func->func_type->ret : NULL;
-  if (ret_type && (ret_type->kind == TY_STRUCT || ret_type->kind == TY_UNION)) return 0;
+  if (ret_type && (ret_type->kind == TY_STRUCT || ret_type->kind == TY_UNION)) {
+    if (type_size(ret_type) > 16) return 0;
+  }
   return ir_whitelisted(func->func_def_name);
 }
 

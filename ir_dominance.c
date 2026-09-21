@@ -41,7 +41,7 @@ int dom_dominates(const dom_cfg_t *cfg, int dominator, int block) {
  * Determine if an opcode terminates a basic block (is a block terminator).
  */
 static int is_terminator(ir_op_t op) {
-    return op == IR_BR || op == IR_BR_IF || op == IR_RET;
+    return op == IR_BR || op == IR_BR_IF || op == IR_RET || op == IR_RET2;
 }
 
 /*
@@ -193,7 +193,7 @@ int dom_build_cfg(dom_cfg_t *cfg, ir_func_t *fn) {
                 add_succ(cfg, i, i + 1);
                 add_pred(cfg, i + 1, i);
             }
-        } else if (last->op == IR_RET) {
+        } else if (last->op == IR_RET || last->op == IR_RET2) {
             /* No successors */
         } else {
             /* Fallthrough: last instruction is not a terminator */
