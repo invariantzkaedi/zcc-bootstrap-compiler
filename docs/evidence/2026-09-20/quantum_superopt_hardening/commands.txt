@@ -1,0 +1,23 @@
+# Execution Commands for ZCC Quantum Superopt Hardening & Verification
+# Date: 2026-09-20
+# Environment: WSL Ubuntu / x86-64 System V AMD64
+
+# 1. Gate 1: Deterministic Self-Host Bootstrap Identity
+make selfhost
+cmp zcc2.s zcc3.s
+
+# 2. Gate 2: System V AMD64 ABI Classification & Interoperability
+./zcc tests/test_abi.c -S -o /tmp/test_abi_zcc.s
+gcc -no-pie /tmp/test_abi_zcc.s -o /tmp/test_abi_zcc -lm
+/tmp/test_abi_zcc
+
+# 3. Gate 3: 12-Suite Production Optimizer Gauntlet
+python3 tools/test_zcc_opt_passes.py
+
+# 4. Gate 4: Hardened SIMD Alignment Gauntlet across 8 Memory Offsets
+./zcc tests/test_simd_alignment_gauntlet.c -S -o /tmp/test_simd.s
+gcc -no-pie /tmp/test_simd.s -o /tmp/test_simd
+/tmp/test_simd
+
+# 5. Master Attestation Sweep across 8 Benchmark Subsystems
+python H:/run_corpus_superopt_sweep.py
