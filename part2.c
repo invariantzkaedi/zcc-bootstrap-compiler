@@ -338,7 +338,7 @@ Symbol *scope_add(Compiler *cc, char *name, Type *type) {
                 return existing;
             }
             char err_msg[256];
-            sprintf(err_msg, "redefinition of symbol '%s' in same scope", name);
+            snprintf(err_msg, sizeof(err_msg), "redefinition of symbol '%s' in same scope", name);
             error(cc, err_msg);
             exit(1);
         }
@@ -446,7 +446,7 @@ static Keyword keywords[] = {
     {"__int128",   TK_LONG},
     {"__int128_t", TK_LONG},
     {"_Bool",      TK_INT},
-    {"_Atomic",    TK_VOLATILE},
+    {"_Atomic",    TK_ATOMIC},
     {"_Noreturn",  TK_INLINE},
     {"_Thread_local", TK_THREAD_LOCAL},
     {"__thread",     TK_THREAD_LOCAL},
@@ -1372,6 +1372,13 @@ const char *token_name(int t) {
     };
 
     if (t >= 0 && t < 100) return names[t];
+    if (t == TK_ALIGNAS) return "_Alignas";
+    if (t == TK_ALIGNOF) return "_Alignof";
+    if (t == TK_STATIC_ASSERT) return "_Static_assert";
+    if (t == TK_GENERIC) return "_Generic";
+    if (t == TK_THREAD_LOCAL) return "_Thread_local";
+    if (t == TK_COMPLEX) return "_Complex";
+    if (t == TK_ATOMIC) return "_Atomic";
     return "?";
 }
 
@@ -1384,11 +1391,11 @@ typedef char _assert_token_order[1 - 2 * (TK_EOF != 0)];
 void expect(Compiler *cc, int tk) {
     char buf[256];
     if (tk < 0 || tk > 128) {
-        sprintf(buf, "DEMON: insane expected token %d (line %d) — possible stack corruption", tk, cc->tk_line);
+        snprintf(buf, sizeof(buf), "DEMON: insane expected token %d (line %d) — possible stack corruption", tk, cc->tk_line);
         error(cc, buf);
     }
     if (cc->tk != tk) {
-        sprintf(buf, "expected %s (%d), got %s (%d)", token_name(tk), tk, token_name(cc->tk), cc->tk);
+        snprintf(buf, sizeof(buf), "expected %s (%d), got %s (%d)", token_name(tk), tk, token_name(cc->tk), cc->tk);
         error(cc, buf);
     }
     next_token(cc);

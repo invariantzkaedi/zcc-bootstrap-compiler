@@ -1,0 +1,18 @@
+# LIMIT-002 Verification Commands
+# 1. Build Compiler
+cat part1.c part0_pp.c part2.c part3.c ir.h ir_emit_dispatch.h sym_type_ast_ir.c part4.c zcc_ast_serializer.c part5.c part7_rust.c part6_arm.c part6_wasm.c ir.c ir_to_x86.c regalloc.c ir_telemetry_stub.c forgezero_receipt_stub.c zcc_layout.c zcc_layout_dump.c zcc_static_assert.c > zcc.c
+make zcc
+
+# 2. LIMIT-002 Proof-Carrying Gauntlet & Mutation Sensitivity
+python3 tools/run_limit002_gauntlet.py
+
+# 3. Gate 1 - Byte-identical Selfhost Identity
+make selfhost
+cmp zcc2.s zcc3.s
+md5sum zcc2.s zcc3.s
+
+# 4. Gate 2 - Production Optimization Passes (19/19 suites)
+python3 tools/test_zcc_opt_passes.py
+
+# 5. Gate 4 - Target Harness (QuickJS Engine)
+/tmp/test_quickjs_runner

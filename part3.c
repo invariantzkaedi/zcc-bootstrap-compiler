@@ -57,6 +57,7 @@ static int is_type_token(Compiler *cc) {
     if (cc->tk == TK_TYPEDEF) return 1;
     if (cc->tk == TK_TYPEOF) return 1;
     if (cc->tk == TK_AUTO_TYPE) return 1;
+    if (cc->tk == TK_ATOMIC) return 1;
     if (cc->tk == TK_IDENT) {
         Symbol *sym;
         sym = scope_find(cc, cc->tk_text);
@@ -97,6 +98,7 @@ Type *parse_type(Compiler *cc);
 Type *parse_declarator(Compiler *cc, Type *base, char *name_out);
 static void parse_or_skip_gcc_attributes(Compiler *cc, Type *dtype);
 static Type *inject_attribute_parser(Compiler *cc, Type *dtype);
+#include "zcc_c11_c23.h"
 static long long parse_const_expr_ternary(Compiler *cc);
 static Node *ensure_type(Compiler *cc, Node *n, Type *ty);
 static long long parse_const_expr_lor(Compiler *cc);
@@ -955,6 +957,7 @@ Type *parse_type(Compiler *cc) {
     int requested_align = 0;
 
     /* storage class / qualifiers / basic types */
+    skip_c23_attributes(cc);
     for (;;) {
         if (cc->tk == TK_STATIC) { is_static = 1; next_token(cc); }
         else if (cc->tk == TK_EXTERN) { is_extern = 1; next_token(cc); }
@@ -962,6 +965,11 @@ Type *parse_type(Compiler *cc) {
         else if (cc->tk == TK_COMPLEX) { is_complex = 1; next_token(cc); }
         else if (cc->tk == TK_CONST) { next_token(cc); }
         else if (cc->tk == TK_VOLATILE) { is_volatile_qual = 1; next_token(cc); }  /* CG-VOLATILE-001 */
+        else if (cc->tk == TK_ATOMIC) {
+            next_token(cc);
+            if (cc->tk == TK_LPAREN) return parse_atomic_type_name(cc);
+            is_volatile_qual = 1;
+        }
         else if (cc->tk == TK_INLINE) { next_token(cc); }
         else if (cc->tk == TK_AUTO) { next_token(cc); }
         else if (cc->tk == TK_REGISTER) { next_token(cc); }
@@ -1561,6 +1569,7 @@ static void recompute_struct_layout(Type *stype) {
 
 static Type *inject_attribute_parser(Compiler *cc, Type *dtype) {
     if (!dtype) return NULL;
+    skip_c23_attributes(cc);
     int was_packed = dtype->is_packed;
     int was_explicit = dtype->explicit_align;
 
@@ -2106,7 +2115,7 @@ Node *parse_primary(Compiler *cc) {
             is_type_in_parens = 0;
             if (pk >= TK_INT) {
                 if (pk <= TK_INLINE || pk == TK_STRUCT ||
-                    pk == TK_UNION || pk == TK_ENUM || pk == TK_COMPLEX) {
+                    pk == TK_UNION || pk == TK_ENUM || pk == TK_COMPLEX || pk == TK_ATOMIC) {
                     is_type_in_parens = 1;
                 }
             }
@@ -2146,7 +2155,7 @@ Node *parse_primary(Compiler *cc) {
             is_type_in_parens = 0;
             if (pk >= TK_INT) {
                 if (pk <= TK_INLINE || pk == TK_STRUCT ||
-                    pk == TK_UNION || pk == TK_ENUM || pk == TK_COMPLEX) {
+                    pk == TK_UNION || pk == TK_ENUM || pk == TK_COMPLEX || pk == TK_ATOMIC) {
                     is_type_in_parens = 1;
                 }
             }
@@ -2585,7 +2594,7 @@ Node *parse_unary(Compiler *cc) {
         next_token(cc);
         if (cc->tk == TK_LPAREN) {
             int pk = peek_token(cc);
-            if ((pk >= TK_INT && pk <= TK_DOUBLE) || (pk >= TK_STATIC && pk <= TK_INLINE) || pk == TK_STRUCT || pk == TK_UNION || pk == TK_ENUM || pk == TK_TYPEDEF) {
+            if ((pk >= TK_INT && pk <= TK_DOUBLE) || (pk >= TK_STATIC && pk <= TK_INLINE) || pk == TK_STRUCT || pk == TK_UNION || pk == TK_ENUM || pk == TK_TYPEDEF || pk == TK_ATOMIC) {
                 is_type = 1;
             } else if (pk == TK_IDENT) {
                 Symbol *sym = scope_find(cc, cc->peek_text);
@@ -2620,7 +2629,7 @@ Node *parse_unary(Compiler *cc) {
         next_token(cc);
         if (cc->tk == TK_LPAREN) {
             int pk = peek_token(cc);
-            if ((pk >= TK_INT && pk <= TK_DOUBLE) || (pk >= TK_STATIC && pk <= TK_INLINE) || pk == TK_STRUCT || pk == TK_UNION || pk == TK_ENUM || pk == TK_TYPEDEF) {
+            if ((pk >= TK_INT && pk <= TK_DOUBLE) || (pk >= TK_STATIC && pk <= TK_INLINE) || pk == TK_STRUCT || pk == TK_UNION || pk == TK_ENUM || pk == TK_TYPEDEF || pk == TK_ATOMIC) {
                 is_type = 1;
             } else if (pk == TK_IDENT) {
                 Symbol *sym = scope_find(cc, cc->peek_text);
@@ -3594,6 +3603,14 @@ static void emit_local_initializer(Compiler *cc, Node *block, int *cnt, int *cap
 Node *parse_stmt_internal(Compiler *cc) {
     int line;
     line = cc->tk_line;
+
+    if (cc->tk == TK_LBRACKET && peek_token(cc) == TK_LBRACKET) {
+        skip_c23_attributes(cc);
+        if (cc->tk == TK_SEMI) {
+            next_token(cc);
+            return node_new(cc, ND_NOP, line);
+        }
+    }
 
     if (cc->tk == TK_STATIC_ASSERT) {
         extern void zcc_handle_static_assert(Node *condition, const char *message, int loc);
@@ -4613,6 +4630,8 @@ Node *parse_program(Compiler *cc) {
         int is_static;
         int is_extern;
         int line;
+
+        skip_c23_attributes(cc);
 
         if (top_count >= 50000) {
             error(cc, "too many top-level declarations (possible parser loop)");

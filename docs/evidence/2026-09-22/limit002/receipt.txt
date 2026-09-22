@@ -1,0 +1,27 @@
+================================================================
+LIMIT-002 RECEIPT
+================================================================
+SOURCE_SHA256:       0077ccf3947242d3a460a43126c057504f5bee3d797d9aaf3ed1328e7a4c1dc6
+HARNESS_SHA256:      f799af4d8c6f7edd1ee7f3934c8cf3e2b4b9ceb5813ce9d9afd52fe7785cadb0
+HOST_CC:             /usr/bin/gcc
+ZCC_STAGE1_SHA256:   e2bce3285a5452893aa0826ad950fc3ea76e0e8bdcde6ea1ba461cbfe155dfc1
+ZCC_STAGE2_ASM:      b636c008d4a869aeff8572be66a9290d746dc85af35bcf32d975cdcfa363f45f
+ZCC_STAGE3_ASM:      b636c008d4a869aeff8572be66a9290d746dc85af35bcf32d975cdcfa363f45f
+STAGE2_STAGE3_CMP:   PASS
+
+ATOMIC_SYNTAX:       PASS
+ATOMIC_TYPE_SYSTEM:  PASS
+ATOMIC_SEMANTICS:    NOT_CLAIMED
+C23_ATTRIBUTES:      PASS (SUPPORTED POSITIONS)
+GENERIC_REGRESSION:  PASS
+THREAD_CREATE_JOIN:  PASS
+THREAD_MUTEX:        PASS
+THREAD_CONDVAR:      PASS
+THREAD_TSS:          PASS
+THREAD_ONCE:         PASS
+
+NEGATIVE_CONTROLS:   PASS
+DIFFERENTIAL_ORACLE: PASS
+MUTATION_SENSITIVITY: PASS (4/4 DETECTED)
+OVERALL:             PASS
+================================================================

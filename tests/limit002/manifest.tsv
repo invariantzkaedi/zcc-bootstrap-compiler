@@ -1,0 +1,14 @@
+TEST	CLAIM	ORACLE
+atomic_parse_positive	_Atomic(T) accepted	compile exit=0
+atomic_parse_negative	malformed forms rejected	compile exit!=0
+atomic_type_contexts	type-name contexts accepted	runtime + GCC differential
+atomic_semantics	atomic syntax lowering (ATOMIC_SEMANTICS: NOT_CLAIMED)	runtime oracle
+attributes_positive	supported [[...]] accepted	runtime + GCC differential
+attributes_malformed	malformed attrs rejected	negative control (exit!=0)
+attributes_placement	placement matrix accepted	runtime oracle
+generic_regression	_Generic remains operational	runtime equality
+threads_create_join	create/join observable API	runtime oracle
+threads_mutex	mutex observable API	pthread differential
+threads_condvar	condvar observable API	runtime oracle
+threads_tss	tss observable API	runtime oracle
+threads_once	call_once observable API	runtime oracle
