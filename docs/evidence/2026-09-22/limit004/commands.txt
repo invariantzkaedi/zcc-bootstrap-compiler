@@ -1,0 +1,20 @@
+# LIMIT-004 Verification Commands
+# Date: 2026-09-22
+
+# Gate 1: Self-Host Bootstrap Identity
+make selfhost
+cmp zcc2.s zcc3.s
+
+# Gate 2: Optimization Passes Suite
+python3 tools/test_zcc_opt_passes.py
+
+# Gate 3: Structural Budget Verification
+git diff --stat part0_pp.c part3.c part4.c
+git diff --stat part5.c src/codegen.c
+
+# Gate 4: Target Harness (Minimal Probe + QuickJS ES2020)
+gcc -O2 tests/probe_limit004.c -o /tmp/run_probe_limit004 && /tmp/run_probe_limit004
+/tmp/test_quickjs_runner
+
+# Gate 5: Evidence Freshness & Ledger Synchronization
+bash scripts/log_bootstrap_hash.sh

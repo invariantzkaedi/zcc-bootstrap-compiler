@@ -111,22 +111,20 @@ However, to maintain its minimal freestanding design and strict bootstrap determ
 
 ### LIMIT-004: Autonomous Self-Hosting Linker (`zld`) & Dynamic Relocations
 
-* **Status**: 🟡 **ACTIVE STRATEGIC TARGET (In Progress — Q4-2026)**
-* **Current State**:
-  * ZCC can emit unlinked assembly (`.s`) and individual ELF relocatable objects (`zcc -c file.c -o file.o`).
-  * However, linking multi-object binaries, parsing static archives (`.a`), resolving dynamic symbols from `.so`, and processing GNU linker scripts currently requires calling host `gcc` or `ld`.
-* **Root Cause & Code Anchors**:
-  * [`src/zld.c`](file:///h:/__DOWNLOADS/zcc_github_upload/src/zld.c): Currently contains a basic symbol resolver and ELF header emitter, but lacks transitive library symbol resolution, GOT/PLT dynamic table generation, and TLS relocation handling.
-* **Strategic Goals & Implementation Roadmap**:
-  * **Goal 4.1 (Static Multi-Archive Linker Core)**:
-    * Extend `src/zld.c` to parse `ar` archive header tables (`!.SYMDEF` / GNU format).
-    * Perform two-pass topological symbol resolution across multiple `.o` and `.a` input files.
-  * **Goal 4.2 (Static ELF64 Executable Emission)**:
-    * Emit fully freestanding static Linux ELF binaries (`ET_EXEC`) with valid `PT_LOAD` program headers, setting `_start` as entry point without host `ld`.
-  * **Goal 4.3 (Dynamic Linking & Relocation Tables)**:
-    * Emit `.got` (Global Offset Table), `.plt` (Procedure Linkage Table), and `.dynamic` sections for dynamic executable linking (`ET_DYN`) with `libc.so.6`.
-* **Verification Gate**:
-  * Link the entire 3-stage ZCC selfhost (`zcc` binary) directly using `zld` with zero host `gcc` / `ld` calls, achieving byte-identical compilation.
+* **Status**: 🟢 **RESOLVED & FORMALLY VERIFIED (September 22, 2026)**
+* **Evidence Ticket**: [`tickets/LIMIT-004-gate-evidence.md`](file:///h:/__DOWNLOADS/zcc_github_upload/tickets/LIMIT-004-gate-evidence.md)
+* **Evidence Directory**: [`docs/evidence/2026-09-22/limit004/`](file:///h:/__DOWNLOADS/zcc_github_upload/docs/evidence/2026-09-22/limit004/)
+* **Implementation Details**:
+  * Ingested `.a` static archives in [`part5.c`](file:///h:/__DOWNLOADS/zcc_github_upload/part5.c) and [`src/codegen.c`](file:///h:/__DOWNLOADS/zcc_github_upload/src/codegen.c) into the `-zld` linker pipeline, defaulting to internal layout when `-T` is omitted.
+  * Implemented archive header (`!<arch>\n`) decoding and `load_obj_mem` in [`src/zld.c`](file:///h:/__DOWNLOADS/zcc_github_upload/src/zld.c) with in-place slice parsing and `owns_data` lifetime management.
+  * Added fixed-point topological symbol resolution across archives, extracting only archive members satisfying remaining undefined global/weak symbols.
+  * Implemented synthetic 32-byte System V AMD64 freestanding CRT0 entry sequence (`pop %rdi; mov %rsp, %rsi; lea 8(%rsi,%rdi,8), %rdx; and $-16, %rsp; call main; mov %rax, %rdi; mov $60, %rax; syscall; hlt; nop`) when `main` is defined and `_start` is missing.
+* **Verification Evidence**:
+  * **Minimal Probe** ([`tests/probe_limit004.c`](file:///h:/__DOWNLOADS/zcc_github_upload/tests/probe_limit004.c)): PASS (multi-archive extraction & execution clean, rc=0).
+  * **Gate 1**: Byte-identical self-host convergence (`cmp zcc2.s zcc3.s` zero diff, MD5 `c951344bc1dfe7b9e9395f49f22163d4`).
+  * **Gate 2**: Multi-suite production optimization gauntlet (19/19 test suites bit-exact, 2,067 instructions elided).
+  * **Gate 3**: Structural budget: 0 lines touched in `part0_pp.c`, `part3.c`, `part4.c`; 9 lines total diff in `part5.c` and `src/codegen.c`.
+  * **Gate 4**: QuickJS ES2020 engine test suite (15/15 tests pass).
 
 ---
 
@@ -196,9 +194,9 @@ gantt
     LIMIT-002 C11 Generic & Atomics         :done, 2026-09-12, 2026-09-21
     LIMIT-005 Glibc System Header Support   :done, 2026-09-15, 2026-09-22
     LIMIT-003 Complex & Double-Double Math  :done, 2026-09-18, 2026-09-22
+    LIMIT-004 Autonomous Linker (zld)       :done, 2026-09-22, 2026-09-22
     section Sovereign Autonomy (Active Target)
-    LIMIT-004 Autonomous Linker (zld)       :active, 2026-09-22, 2026-11-30
-    LIMIT-007 Rust Frontend v2 Expansion    :2026-12-01, 2027-02-28
+    LIMIT-007 Rust Frontend v2 Expansion    :active, 2026-09-22, 2027-02-28
 ```
 
 ---

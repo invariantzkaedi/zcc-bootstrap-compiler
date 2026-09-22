@@ -96,3 +96,7 @@ REWRITE	37d34e76	[history-rewrite]	-	git filter-repo	Linux 6.6.123.2-microsoft-s
 2026-09-22T12:36:21Z	19724a2c	4d414daa3c2c23bcf09fdee45c40b727	47893	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	LIMIT-003 extended precision and C99 complex arithmetic baseline lock
 2026-09-22T12:36:21Z	19724a2c	4d414daa3c2c23bcf09fdee45c40b727	47893	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.8.0-1018-azure x86_64	LIMIT-003 extended precision and C99 complex arithmetic Azure baseline lock
 2026-09-22T12:36:21Z	19724a2c	4d414daa3c2c23bcf09fdee45c40b727	47893	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	azure	LIMIT-003 extended precision and C99 complex arithmetic Azure baseline lock
+2026-09-22T12:50:26Z	471a4e3b	4d414daa3c2c23bcf09fdee45c40b727	?	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	
+2026-09-22T17:48:00Z	8b0526b2	c951344bc1dfe7b9e9395f49f22163d4	47893	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	LIMIT-004 multi-archive ingestion and freestanding CRT0 entry baseline lock
+2026-09-22T17:48:00Z	8b0526b2	c951344bc1dfe7b9e9395f49f22163d4	47893	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.8.0-1018-azure x86_64	LIMIT-004 multi-archive ingestion and freestanding CRT0 entry Azure baseline lock
+2026-09-22T17:48:00Z	8b0526b2	c951344bc1dfe7b9e9395f49f22163d4	47893	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	azure	LIMIT-004 multi-archive ingestion and freestanding CRT0 entry Azure baseline lock

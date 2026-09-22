@@ -3106,11 +3106,13 @@ int main(int argc, char **argv) {
                 ld_script = argv[i + 1];
                 i++;
             }
+        } else if (strcmp(argv[i], "-zld") == 0) {
+            /* Explicit static linker invocation flag */
         } else if (argv[i][0] != '-') {
             int len = strlen(argv[i]);
             if (len > 2 && strcmp(argv[i] + len - 2, ".c") == 0) {
                 input_c_file = argv[i];
-            } else if (len > 2 && strcmp(argv[i] + len - 2, ".o") == 0) {
+            } else if (len > 2 && (strcmp(argv[i] + len - 2, ".o") == 0 || strcmp(argv[i] + len - 2, ".a") == 0)) {
                 if (obj_count < 2048) {
                     obj_files[obj_count++] = argv[i];
                 }

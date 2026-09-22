@@ -153,6 +153,7 @@ typedef struct {
     char     *path;
     uint8_t  *data;
     size_t    size;
+    int       owns_data;
     Elf64_Ehdr *ehdr;
     Elf64_Shdr *shdrs;
     char     *shstrtab;
@@ -196,6 +197,17 @@ typedef struct {
 static ObjFile   *g_objs = NULL;
 static int       g_objs_cap = 0;
 static int       g_nobj = 0;
+
+typedef struct {
+    char *path;
+    uint8_t *data;
+    size_t size;
+} ArchiveFile;
+
+static ArchiveFile *g_archives = NULL;
+static int       g_archives_cap = 0;
+static int       g_narchives = 0;
+static int       g_need_crt0 = 0;
 
 static GlobalSym *g_syms = NULL;
 static int       g_syms_cap = 0;
@@ -264,7 +276,7 @@ static void cleanup_linker_state(void) {
 
     if (g_objs) {
         for (i = 0; i < g_nobj; i++) {
-            if (g_objs[i].data) {
+            if (g_objs[i].data && g_objs[i].owns_data) {
                 free(g_objs[i].data);
             }
             if (g_objs[i].section_vma) {
@@ -276,6 +288,17 @@ static void cleanup_linker_state(void) {
     }
     g_nobj = 0;
     g_objs_cap = 0;
+
+    if (g_archives) {
+        for (i = 0; i < g_narchives; i++) {
+            if (g_archives[i].data) free(g_archives[i].data);
+        }
+        free(g_archives);
+        g_archives = NULL;
+    }
+    g_narchives = 0;
+    g_archives_cap = 0;
+    g_need_crt0 = 0;
 
     if (g_syms) {
         free(g_syms);
@@ -662,11 +685,24 @@ static void parse_ld_script(const char *path) {
     free(src);
 }
 
-/* ── Load and parse one .o file ────────────────────────────────────────── */
-static void load_obj(const char *path, int idx) {
+/* ── Load and parse .o / .a files ────────────────────────────────────────── */
+static int add_obj_slot(void) {
+    if (g_nobj >= g_objs_cap) {
+        int old_cap = g_objs_cap;
+        g_objs_cap = g_objs_cap ? g_objs_cap * 2 : 16;
+        g_objs = xrealloc(g_objs, g_objs_cap * sizeof(ObjFile));
+        memset(g_objs + old_cap, 0, (g_objs_cap - old_cap) * sizeof(ObjFile));
+    }
+    return g_nobj++;
+}
+
+static void load_obj_mem(const char *path, uint8_t *data, size_t size, int idx, int owns_data) {
     ObjFile *o = &g_objs[idx];
+    memset(o, 0, sizeof(*o));
     o->path = (char *)path;
-    o->data = read_file(path, &o->size);
+    o->data = data;
+    o->size = size;
+    o->owns_data = owns_data;
 
     if (o->size < sizeof(Elf64_Ehdr)) die("input too small for ELF header");
     o->ehdr = (Elf64_Ehdr *)o->data;
@@ -694,6 +730,140 @@ static void load_obj(const char *path, int idx) {
             break;
         }
     }
+}
+
+static void load_obj(const char *path, int idx) {
+    size_t sz = 0;
+    uint8_t *data = read_file(path, &sz);
+    load_obj_mem(path, data, sz, idx, 1);
+}
+
+static void add_archive(const char *path) {
+    if (g_narchives >= g_archives_cap) {
+        int old_cap = g_archives_cap;
+        g_archives_cap = g_archives_cap ? g_archives_cap * 2 : 8;
+        g_archives = xrealloc(g_archives, g_archives_cap * sizeof(ArchiveFile));
+        memset(g_archives + old_cap, 0, (g_archives_cap - old_cap) * sizeof(ArchiveFile));
+    }
+    ArchiveFile *ar = &g_archives[g_narchives++];
+    ar->path = (char *)path;
+    ar->data = read_file(path, &ar->size);
+    if (ar->size < 8 || memcmp(ar->data, "!<arch>\n", 8) != 0) {
+        fprintf(stderr, "zld: %s is not a valid archive file\n", path);
+        exit(1);
+    }
+}
+
+static int has_symbol_defined(const char *name) {
+    int i;
+    for (i = 0; i < g_nobj; i++) {
+        ObjFile *o = &g_objs[i];
+        if (!o->symtab) continue;
+        uint32_t s;
+        for (s = 0; s < o->symcnt; s++) {
+            Elf64_Sym *sym = &o->symtab[s];
+            int bind = ELF64_ST_BIND(sym->st_info);
+            if (bind != STB_GLOBAL && bind != STB_WEAK) continue;
+            if (sym->st_shndx != SHN_UNDEF) {
+                const char *sname = o->strtab + sym->st_name;
+                if (strcmp(sname, name) == 0) return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+static int is_sym_needed(const char *name) {
+    if (has_symbol_defined(name)) return 0;
+    int i;
+    for (i = 0; i < g_nobj; i++) {
+        ObjFile *o = &g_objs[i];
+        if (!o->symtab) continue;
+        uint32_t s;
+        for (s = 0; s < o->symcnt; s++) {
+            Elf64_Sym *sym = &o->symtab[s];
+            int bind = ELF64_ST_BIND(sym->st_info);
+            if (bind != STB_GLOBAL && bind != STB_WEAK) continue;
+            if (sym->st_shndx == SHN_UNDEF) {
+                const char *sname = o->strtab + sym->st_name;
+                if (strcmp(sname, name) == 0) return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+static int obj_defines_needed_sym(const uint8_t *data, size_t size) {
+    if (size < sizeof(Elf64_Ehdr)) return 0;
+    const Elf64_Ehdr *eh = (const Elf64_Ehdr *)data;
+    if (eh->e_ident[0] != ELFMAG0 || eh->e_ident[1] != ELFMAG1 ||
+        eh->e_ident[2] != ELFMAG2 || eh->e_ident[3] != ELFMAG3) return 0;
+    if (eh->e_ident[4] != ELFCLASS64 || eh->e_type != ET_REL || eh->e_machine != EM_X86_64) return 0;
+    if (eh->e_shoff + eh->e_shnum * sizeof(Elf64_Shdr) > size) return 0;
+
+    const Elf64_Shdr *shdrs = (const Elf64_Shdr *)(data + eh->e_shoff);
+    uint32_t i;
+    for (i = 0; i < eh->e_shnum; i++) {
+        if (shdrs[i].sh_type == SHT_SYMTAB) {
+            if (shdrs[i].sh_offset + shdrs[i].sh_size > size) continue;
+            uint32_t link = shdrs[i].sh_link;
+            if (link >= eh->e_shnum) continue;
+            if (shdrs[link].sh_offset + shdrs[link].sh_size > size) continue;
+            const char *strtab = (const char *)(data + shdrs[link].sh_offset);
+            const Elf64_Sym *syms = (const Elf64_Sym *)(data + shdrs[i].sh_offset);
+            uint32_t symcnt = (uint32_t)(shdrs[i].sh_size / sizeof(Elf64_Sym));
+            uint32_t s;
+            for (s = 0; s < symcnt; s++) {
+                int bind = ELF64_ST_BIND(syms[s].st_info);
+                if ((bind == STB_GLOBAL || bind == STB_WEAK) &&
+                    syms[s].st_shndx != SHN_UNDEF &&
+                    syms[s].st_shndx != SHN_COMMON) {
+                    const char *name = strtab + syms[s].st_name;
+                    if (name[0] && is_sym_needed(name)) {
+                        return 1;
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+static int scan_and_load_archive_members(ArchiveFile *ar) {
+    int loaded = 0;
+    size_t off = 8;
+    while (off + 60 <= ar->size) {
+        char size_buf[11];
+        memcpy(size_buf, ar->data + off + 48, 10);
+        size_buf[10] = 0;
+        size_t msz = (size_t)strtoul(size_buf, NULL, 10);
+        off += 60;
+        if (off + msz > ar->size) break;
+
+        uint8_t *mdata = ar->data + off;
+        int already = 0;
+        int j;
+        for (j = 0; j < g_nobj; j++) {
+            if (g_objs[j].data == mdata) {
+                already = 1;
+                break;
+            }
+        }
+
+        if (!already && obj_defines_needed_sym(mdata, msz)) {
+            int slot = add_obj_slot();
+            load_obj_mem(ar->path, mdata, msz, slot, 0);
+            if (g_verbose) {
+                printf("[zld] Extracted member from archive '%s' at offset %zu (%zu bytes)\n",
+                       ar->path, off, msz);
+            }
+            loaded++;
+        }
+
+        off += msz;
+        if (off & 1) off++;
+    }
+    return loaded;
 }
 
 /* ── Find or create output section ─────────────────────────────────────── */
@@ -851,6 +1021,9 @@ static void layout(void) {
                 base = common_cursor;
             }
             cursor = base;
+            if (g_need_crt0 && strcmp(oname, ".text") == 0) {
+                cursor += 32;
+            }
 
             /* 1. Lay out sections matching rules in order of linker script */
             for (r_idx = 0; r_idx < g_nrules; r_idx++) {
@@ -1257,6 +1430,20 @@ static void collect_symbols(void) {
     }
 
     /* resolve entry point */
+    if (g_need_crt0) {
+        OutSection *text_sec = NULL;
+        int s;
+        for (s = 0; s < g_nout; s++) {
+            if (strcmp(g_out[s].name, ".text") == 0) { text_sec = &g_out[s]; break; }
+        }
+        uint64_t text_vma = text_sec ? text_sec->vma : 0x100000;
+        GlobalSym *gs = find_sym("_start");
+        if (!gs) gs = add_sym("_start");
+        gs->value = text_vma;
+        gs->defined = 1;
+        g_entry = text_vma;
+    }
+
     GlobalSym *entry_sym = find_sym(g_entry_name);
     if (entry_sym && entry_sym->defined) {
         g_entry = entry_sym->value;
@@ -1278,6 +1465,22 @@ static void copy_sections(void) {
     for (i = 0; i < g_nout; i++) {
         OutSection *out = &g_out[i];
         out->buf_used = 0;
+
+        if (g_need_crt0 && strcmp(out->name, ".text") == 0) {
+            static const uint8_t crt0_stub[32] = {
+                0x5f,                               /* pop %rdi */
+                0x48, 0x89, 0xe6,                   /* mov %rsp, %rsi */
+                0x48, 0x8d, 0x54, 0xfe, 0x08,       /* lea 8(%rsi,%rdi,8), %rdx */
+                0x48, 0x83, 0xe4, 0xf0,             /* and $-16, %rsp */
+                0xe8, 0x00, 0x00, 0x00, 0x00,       /* call main */
+                0x48, 0x89, 0xc7,                   /* mov %rax, %rdi */
+                0x48, 0xc7, 0xc0, 0x3c, 0x00, 0x00, 0x00, /* mov $60, %rax */
+                0x0f, 0x05,                         /* syscall */
+                0xf4,                               /* hlt */
+                0x90                                /* nop */
+            };
+            outsec_append(out, crt0_stub, 32, 1);
+        }
 
         for (c = 0; c < out->contrib_cnt; c++) {
             int obj_idx = out->contrib[c].obj;
@@ -1591,6 +1794,21 @@ static void apply_relocations(void) {
                             rtype, (unsigned long long)P);
                     break;
                 }
+            }
+        }
+    }
+
+    if (g_need_crt0) {
+        OutSection *text_sec = find_out_section(".text");
+        GlobalSym *main_sym = find_sym("main");
+        if (text_sec && main_sym && main_sym->defined) {
+            uint64_t main_vma = main_sym->value;
+            uint64_t call_next_ip = text_sec->vma + 18;
+            int32_t rel32 = (int32_t)(main_vma - call_next_ip);
+            memcpy(text_sec->buf + 14, &rel32, sizeof(int32_t));
+            if (g_verbose) {
+                printf("[zld] Patched CRT0 stub: main_vma=0x%llx, call_next_ip=0x%llx, rel32=%d\n",
+                       (unsigned long long)main_vma, (unsigned long long)call_next_ip, (int)rel32);
             }
         }
     }
@@ -2017,11 +2235,63 @@ int zld_link(const char **obj_files, int obj_count, const char *out_path, const 
         r->addr = 0; r->has_addr = 0;
     }
 
-    g_nobj = obj_count;
-    g_objs_cap = g_nobj;
-    g_objs = xcalloc(g_objs_cap, sizeof(ObjFile));
-    for (i = 0; i < g_nobj; i++) {
-        load_obj(obj_files[i], i);
+    /* Ingest input files: separate .o from .a (or check magic) */
+    for (i = 0; i < obj_count; i++) {
+        const char *fpath = obj_files[i];
+        size_t flen = strlen(fpath);
+        int is_archive = 0;
+        if (flen > 2 && strcmp(fpath + flen - 2, ".a") == 0) {
+            is_archive = 1;
+        } else {
+            FILE *tf = fopen(fpath, "rb");
+            if (tf) {
+                char hdr[8];
+                if (fread(hdr, 1, 8, tf) == 8 && memcmp(hdr, "!<arch>\n", 8) == 0) {
+                    is_archive = 1;
+                }
+                fclose(tf);
+            }
+        }
+
+        if (is_archive) {
+            add_archive(fpath);
+        } else {
+            int slot = add_obj_slot();
+            load_obj(fpath, slot);
+        }
+    }
+
+    /* Multi-pass topological resolution against archives */
+    {
+        int pass = 0;
+        int progress = 1;
+        while (progress) {
+            progress = 0;
+            pass++;
+            for (i = 0; i < g_narchives; i++) {
+                int n = scan_and_load_archive_members(&g_archives[i]);
+                if (n > 0) {
+                    progress = 1;
+                    if (g_verbose) {
+                        printf("[zld] Pass %d: loaded %d member(s) from archive '%s'\n",
+                               pass, n, g_archives[i].path);
+                    }
+                }
+            }
+        }
+    }
+
+    if (g_nobj == 0) {
+        die("no input objects to link");
+    }
+
+    /* Freestanding CRT0 detection */
+    if (!has_symbol_defined("_start") && has_symbol_defined("main")) {
+        g_need_crt0 = 1;
+        strncpy(g_entry_name, "_start", sizeof(g_entry_name) - 1);
+        if (g_verbose) {
+            printf("[zld] Freestanding CRT0 entry synthesized for main()\n");
+        }
     }
 
     layout();
