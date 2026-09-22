@@ -2,7 +2,7 @@
 
 **Document ID**: `ZCC-LIMITATIONS-AND-GOALS-v1.0`  
 **Authoritative Scope**: ZCC Compiler Internals, Bootstrap Chain Integrity, Multi-Target Codegen  
-**Date**: September 21, 2026  
+**Date**: September 22, 2026  
 **Status**: ACTIVE ARCHITECTURAL SPECIFICATION & MILESTONE ROADMAP  
 
 ---
@@ -28,8 +28,8 @@ However, to maintain its minimal freestanding design and strict bootstrap determ
 ├───────────┼───────────────────────────────────┼──────────────┼──────────────┤
 │ LIMIT-001 │ Extended GCC Inline Assembly      │ RESOLVED     │ VERIFIED ✅  │
 │ LIMIT-002 │ C11 / C23 Language Conformance    │ RESOLVED     │ VERIFIED ✅  │
-│ LIMIT-003 │ Extended Precision & Complex Math │ MEDIUM       │ Goal Q1-2027 │
-│ LIMIT-004 │ Autonomous Linker & Dynamic Reloc │ HIGH         │ Goal Q2-2027 │
+│ LIMIT-003 │ Extended Precision & Complex Math │ RESOLVED     │ VERIFIED ✅  │
+│ LIMIT-004 │ Autonomous Linker & Dynamic Reloc │ HIGH         │ ACTIVE TARGET│
 │ LIMIT-005 │ Raw Glibc Header Ingestion        │ RESOLVED     │ VERIFIED ✅  │
 │ LIMIT-006 │ SSA-IR Dual-Register Struct Return│ RESOLVED     │ VERIFIED ✅  │
 │ LIMIT-007 │ Rust Frontend Semantic Depth      │ MEDIUM       │ Goal Q2-2027 │
@@ -111,6 +111,7 @@ However, to maintain its minimal freestanding design and strict bootstrap determ
 
 ### LIMIT-004: Autonomous Self-Hosting Linker (`zld`) & Dynamic Relocations
 
+* **Status**: 🟡 **ACTIVE STRATEGIC TARGET (In Progress — Q4-2026)**
 * **Current State**:
   * ZCC can emit unlinked assembly (`.s`) and individual ELF relocatable objects (`zcc -c file.c -o file.o`).
   * However, linking multi-object binaries, parsing static archives (`.a`), resolving dynamic symbols from `.so`, and processing GNU linker scripts currently requires calling host `gcc` or `ld`.
@@ -189,16 +190,15 @@ However, to maintain its minimal freestanding design and strict bootstrap determ
 gantt
     title ZCC Strategic Enhancement Horizon (2026 - 2027)
     dateFormat  YYYY-MM-DD
-    section High-Impact Fixes
-    LIMIT-006 Dual-Register IR Return       :active, 2026-10-01, 2026-11-15
-    LIMIT-001 Extended GCC Inline Asm       :2026-11-16, 2026-12-31
-    LIMIT-005 Glibc System Header Support   :2026-12-01, 2027-01-31
-    section Language Modernization
-    LIMIT-002 C11 Generic & Atomics         :2027-02-01, 2027-03-31
-    LIMIT-003 Complex & Double-Double Math  :2027-03-01, 2027-04-30
-    section Sovereign Autonomy
-    LIMIT-004 Autonomous Linker (zld)       :2027-04-01, 2027-06-30
-    LIMIT-007 Rust Frontend v2 Expansion    :2027-05-01, 2027-07-31
+    section Completed Architectural Milestones
+    LIMIT-006 Dual-Register IR Return       :done, 2026-09-01, 2026-09-21
+    LIMIT-001 Extended GCC Inline Asm       :done, 2026-09-10, 2026-09-21
+    LIMIT-002 C11 Generic & Atomics         :done, 2026-09-12, 2026-09-21
+    LIMIT-005 Glibc System Header Support   :done, 2026-09-15, 2026-09-22
+    LIMIT-003 Complex & Double-Double Math  :done, 2026-09-18, 2026-09-22
+    section Sovereign Autonomy (Active Target)
+    LIMIT-004 Autonomous Linker (zld)       :active, 2026-09-22, 2026-11-30
+    LIMIT-007 Rust Frontend v2 Expansion    :2026-12-01, 2027-02-28
 ```
 
 ---

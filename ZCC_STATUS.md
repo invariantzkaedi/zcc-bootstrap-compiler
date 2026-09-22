@@ -35,7 +35,7 @@ Generation 3 — supersedes generation 2 below
 | GVN Pointer SSA & Peephole | 7afc1dc0bed0e049a895cf06386fcc00 | locked Sep 13 on WSL2 (commit c6404005) |
 | Extended Asm (LIMIT-001)   | 4202b5e2ca1046c73f547946b766e84b | locked Sep 21 on WSL2 & Azure (commit 3276dea3) |
 | Raw Glibc (LIMIT-005)      | ca9f0f87c0c6638ba715d7389720fe76 | locked Sep 22 on WSL2 & Azure (commit ba34111c) |
-| Complex & Ext Prec (LIMIT-003) | 4d414daa3c2c23bcf09fdee45c40b727 | locked Sep 22 on WSL2 & Azure |
+| Complex & Ext Prec (LIMIT-003) | 4d414daa3c2c23bcf09fdee45c40b727 | locked Sep 22 on WSL2 & Azure (commit 19724a2c) |
 
 If a future bootstrap produces a different hash, either codegen drifted (regression) or new compilation units were added (intentional). Use this table as the first line of forensic defense.
 
@@ -260,6 +260,19 @@ Bugs closed to achieve this:
 - Standards-compliant opaque `struct _IO_FILE` for `FILE` in `part5.c`.
 - Verified raw header ingestion of `/usr/include/stdio.h` and `/usr/include/stdlib.h` (`tests/test_glibc_dual_headers.c`).
 - Byte-identical self-host convergence (MD5 `ca9f0f87c0c6638ba715d7389720fe76`, 47,991 elided).
+- 19/19 optimization pass gauntlet suites verified bit-exact.
+- 15/15 QuickJS ES2020 engine tests pass.
+
+---
+
+## ZCC Extended Precision & Complex Arithmetic Milestone (LIMIT-003) — September 22, 2026
+- Lexer floating suffix parsing in `part3.c` rectified to evaluate `s1` independently of `s[0]`, restoring `1.0i`, `4.0i`, and complex literal tokens.
+- Zero-allocation `.rodata` static quad/long emission for `ND_COMPLEX_LIT` in `part4.c`, permanently eliminating expression-tree stack pointer desynchronization (`subq $16, %rsp`).
+- Dedicated complex scratch ring allocator (`get_complex_scratch_offset`) with rotating slot footprints preventing subexpression overwrites.
+- Out-of-place register accumulation in `ND_MUL` computing `%xmm0` (real) and `%xmm2` (imaginary) before storing to destination memory.
+- Unified `ND_CAST` via `emit_promote_to_complex` and verified 106-bit double-double arithmetic library (`include/zcc_dd_real.h`).
+- 20/20 C99 complex gauntlet regression tests pass (`tests/test_limit003_complex.c`) with zero numerical drift against GCC.
+- Byte-identical self-host convergence (MD5 `4d414daa3c2c23bcf09fdee45c40b727`, 47,893 elisions).
 - 19/19 optimization pass gauntlet suites verified bit-exact.
 - 15/15 QuickJS ES2020 engine tests pass.
 
