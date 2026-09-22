@@ -1,13 +1,19 @@
 # ZCC Status Report
 
-Generated: 2026-04-28
-Generation 2 — supersedes generation 1 below
+Generated: 2026-09-22
+Generation 3 — supersedes generation 2 below
 
-## Build Health (verified Apr 28, 2026)
+## Build Health (verified Sep 22, 2026)
 
 | Component | Status |
 | --------- | ------ |
-| AST Selfhost (zcc2.s == zcc3.s) | VERIFIED |
+| AST Selfhost (zcc2.s == zcc3.s) | **VERIFIED (`ca9f0f87c0c6638ba715d7389720fe76`, byte-identical)** |
+| Extended GCC Inline Assembly (LIMIT-001) | **VERIFIED (13/13 probe tests pass, register alloc & DCE preserved)** |
+| C11/C23 Conformance & Threads (LIMIT-002) | **VERIFIED (13/13 manifest tests pass, freestanding threads, attributes, atomics)** |
+| Raw Glibc Header Ingestion (LIMIT-005) | **VERIFIED (stdio.h + stdlib.h raw ingestion pass, extension tolerator)** |
+| Dual-Register IR Return (LIMIT-006) | **VERIFIED (%rax/%rdx 16-byte System V struct return, 19/19 opt passes)** |
+| QuickJS ES2020 Engine Suite | **VERIFIED (15/15 PASS across 6 suites)** |
+| Production Opt Gauntlet (`tools/test_zcc_opt_passes.py`) | **19/19 Bit-Exact PASS (2,067 instructions elided, 0 divergences)** |
 | IR Backend | Operational (CG-IR-001 through CG-IR-022 all closed) |
 | IR Telemetry | Operational |
 | CRLF Hardening | Locked (tag: crlf-pp-hardened-20260424) |
@@ -24,6 +30,10 @@ Generation 2 — supersedes generation 1 below
 | -------------------------- | -------------------------------- | ----------------------------- |
 | C-only (pre-rust merge)    | bbe72c8e677d4270bca32db48897e956 | locked Apr 28 on main b69147d |
 | C + Rust v1 (current main) | bfafec62c1f82b1c888341b3ab8a969b | locked Jul 10 on GCC 13.3.0 / WSL2 + sandbox (post-Lua fix) |
+| QuickJS Conquest (Stage 3) | ed396f1278a9addb1403fcf1ac738ad8 | locked Sep 04 on WSL2 (commit 4fe71073) |
+| GVN Pointer SSA & Peephole | 7afc1dc0bed0e049a895cf06386fcc00 | locked Sep 13 on WSL2 (commit c6404005) |
+| Extended Asm (LIMIT-001)   | 4202b5e2ca1046c73f547946b766e84b | locked Sep 21 on WSL2 & Azure (commit 3276dea3) |
+| Raw Glibc (LIMIT-005)      | ca9f0f87c0c6638ba715d7389720fe76 | locked Sep 22 on WSL2 & Azure (commit ba34111c) |
 
 If a future bootstrap produces a different hash, either codegen drifted (regression) or new compilation units were added (intentional). Use this table as the first line of forensic defense.
 
