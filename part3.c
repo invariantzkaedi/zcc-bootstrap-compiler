@@ -4360,6 +4360,23 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
     }
 
     /* forward declaration: );  — do not parse body, do not add to codegen list */
+    while (cc->tk == TK_ASM || (cc->tk == TK_IDENT && (
+           strcmp(cc->tk_text, "__asm__") == 0 ||
+           strcmp(cc->tk_text, "asm") == 0 ||
+           strcmp(cc->tk_text, "__asm") == 0 ||
+           strcmp(cc->tk_text, "__attribute__") == 0 ||
+           strcmp(cc->tk_text, "__attribute") == 0))) {
+        next_token(cc);
+        if (cc->tk == TK_LPAREN) {
+            int pdepth = 1;
+            next_token(cc);
+            while (pdepth > 0 && cc->tk != TK_EOF) {
+                if (cc->tk == TK_LPAREN) pdepth++;
+                else if (cc->tk == TK_RPAREN) pdepth--;
+                next_token(cc);
+            }
+        }
+    }
     if (cc->tk == TK_SEMI) {
         next_token(cc);
         func->body = 0;

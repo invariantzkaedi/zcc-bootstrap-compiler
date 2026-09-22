@@ -142,8 +142,12 @@ void init_compiler(Compiler *cc) {
   /* register common typedefs and builtins */
   {
     Symbol *sym;
-    /* typedef void *FILE — so FILE* works */
-    sym = scope_add(cc, "FILE", type_ptr(cc, cc->ty_void));
+    /* typedef struct _IO_FILE FILE — standards-compliant opaque struct */
+    Type *st_file = type_new(cc, TY_STRUCT);
+    strncpy(st_file->tag, "_IO_FILE", MAX_IDENT - 1);
+    st_file->is_complete = 0;
+    register_struct(cc, st_file);
+    sym = scope_add(cc, "FILE", st_file);
     sym->is_typedef = 1;
 
     /* typedef long size_t */
@@ -179,10 +183,12 @@ void init_compiler(Compiler *cc) {
     sym->is_enum_const = 1;
     sym->enum_val = 0;
 
-    /* stdout, stderr */
-    sym = scope_add(cc, "stdout", type_ptr(cc, cc->ty_void));
+    /* stdin, stdout, stderr */
+    sym = scope_add(cc, "stdin", type_ptr(cc, st_file));
     sym->is_global = 1;
-    sym = scope_add(cc, "stderr", type_ptr(cc, cc->ty_void));
+    sym = scope_add(cc, "stdout", type_ptr(cc, st_file));
+    sym->is_global = 1;
+    sym = scope_add(cc, "stderr", type_ptr(cc, st_file));
     sym->is_global = 1;
 
     /* common libc functions */
@@ -1646,6 +1652,8 @@ int zcc_main(int argc, char **argv) {
       audit_export_mode = 2;
     } else if (strcmp(argv[i], "-Zstub-silent") == 0) {
       zcc_pp_config.stub_silent = 1;
+    } else if (strcmp(argv[i], "--raw-glibc") == 0) {
+      zcc_pp_config.raw_glibc = 1;
     } else if (strncmp(argv[i], "-Zstub=", 7) == 0) {
       const char *stub = argv[i] + 7;
       if (strchr(stub, '/') || strchr(stub, '\\') || strstr(stub, "..")) {
@@ -1701,6 +1709,12 @@ int zcc_main(int argc, char **argv) {
         strncat(extra_link_args, argv[i], 4095 - (int)strlen(extra_link_args));
       }
     }
+  }
+
+  if (zcc_pp_config.raw_glibc || getenv("ZCC_RAW_GLIBC")) {
+    zcc_pp_config.raw_glibc = 1;
+    if (include_paths[0]) strncat(include_paths, ":", 4095 - (int)strlen(include_paths));
+    strncat(include_paths, "/usr/include:/usr/include/x86_64-linux-gnu", 4095 - (int)strlen(include_paths));
   }
 
   if (getenv("ZCC_EMIT_IR_PRE")) {

@@ -129,6 +129,10 @@ static const char *zcc_stddef_text =
     "/* PP-STUB-024B: route va_* to ZCC builtins so va_arg(ap,type) is parsed "
     "correctly */\n"
     "#define va_list __builtin_va_list\n"
+    "typedef __builtin_va_list __gnuc_va_list;\n"
+    "#define _VA_LIST_DEFINED 1\n"
+    "#define __GNUC_VA_LIST 1\n"
+    "typedef int wchar_t;\n"
     "#define va_start(ap, last) __builtin_va_start(ap, last)\n"
     "#define va_end(ap)         __builtin_va_end(ap)\n"
     "#define va_copy(dst, src)  ((dst)[0] = (src)[0])\n"
@@ -214,6 +218,21 @@ static const char *zcc_stddef_text =
     "typedef long ptrdiff_t;\n"
     "typedef long intptr_t;\n"
     "typedef unsigned long uintptr_t;\n"
+    "typedef long __off_t;\n"
+    "typedef long __off64_t;\n"
+    "typedef long __ssize_t;\n"
+    "typedef unsigned int __uint32_t;\n"
+    "typedef int __int32_t;\n"
+    "typedef unsigned long __uint64_t;\n"
+    "typedef long __int64_t;\n"
+    "typedef unsigned short __uint16_t;\n"
+    "typedef short __int16_t;\n"
+    "typedef unsigned char __uint8_t;\n"
+    "typedef signed char __int8_t;\n"
+    "typedef int __pid_t;\n"
+    "typedef unsigned int __mode_t;\n"
+    "typedef unsigned int __socklen_t;\n"
+    "typedef long __time_t;\n"
     "static void platform_main_begin(void) {}\n"
     "static void platform_main_end(uint64_t x, int y) {}\n"
     "#define UINT64_C(c) ((unsigned long long)(c))\n"
@@ -760,6 +779,8 @@ static PPMacro *pp_add_macro(PPState *state, const char *name) {
   return m_macro;
 }
 
+#include "zcc_glibc_compat.h"
+
 static void pp_read_line(PPState *state, char *buf, int max) {
   int i = 0;
   int in_comment = 0;
@@ -914,6 +935,7 @@ typedef struct {
   const char *stubs[ZCC_MAX_CLI_STUBS];
   int stub_count;
   int stub_silent;
+  int raw_glibc;
 } PPConfig;
 #endif
 
@@ -956,6 +978,7 @@ static int is_empty_fallback_safe(const char *path) {
 /* PP-INCLUDE-022: Only these exact basenames get the synthesized stub.
  * Everything else must resolve from disk or hard-fail. */
 static int is_stddef_stub(const char *path) {
+  if (strncmp(path, "bits/", 5) == 0) return 0;
   const char *base = path;
   const char *slash = strrchr(path, '/');
   if (slash)
@@ -1010,6 +1033,17 @@ static int pp_resolve_path(PPState *state, const char *path, int is_system,
   int si;
   FILE *fp;
 
+  if (path[0] == '/') {
+    fp = fopen(path, "rb");
+    if (fp) {
+      fclose(fp);
+      if (!zcc_pp_config.raw_glibc && strncmp(path, "/usr/", 5) == 0 && is_stddef_stub(path)) return 0;
+      strncpy(out_resolved, path, 1023);
+      out_resolved[1023] = '\0';
+      return 1;
+    }
+  }
+
   /* For quoted includes, try relative to current file's directory first */
   if (!is_system && state->filename) {
     sl = strrchr(state->filename, '/');
@@ -1051,7 +1085,7 @@ static int pp_resolve_path(PPState *state, const char *path, int is_system,
         fp = fopen(out_resolved, "rb");
         if (fp) {
           fclose(fp);
-          if (is_stddef_stub(path) && strncmp(out_resolved, "/usr/", 5) == 0) {
+          if (!zcc_pp_config.raw_glibc && is_stddef_stub(path) && strncmp(out_resolved, "/usr/", 5) == 0) {
             return 0; /* Prefer synthetic stub over glibc /usr/include headers */
           }
           return 1;
@@ -2435,6 +2469,9 @@ char *zcc_preprocess(const char *source, int source_len, const char *filename,
     strcpy(m->body, "\"zcc_func\"");
     m = pp_add_macro(state, "__GNUC__");
     strcpy(m->body, "1");
+    if (zcc_pp_config.raw_glibc || getenv("ZCC_RAW_GLIBC")) {
+      zcc_glibc_init_macros(state);
+    }
     m = pp_add_macro(state, "__thread");
     strcpy(m->body, "");
     m = pp_add_macro(state, "__SIZE_TYPE__");

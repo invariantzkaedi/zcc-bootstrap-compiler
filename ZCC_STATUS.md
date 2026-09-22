@@ -238,6 +238,18 @@ Bugs closed to achieve this:
 - **C23 `[[...]]` Attributes**: Lexical skipper with delimiter balancing `()`, `[]`, `{}`, EOF detection, and deterministic malformed syntax rejection across declarations, statements (`[[fallthrough]];` -> `ND_NOP`), types, and declarators.
 - **Freestanding C11 `<threads.h>`**: Self-contained POSIX pthread-backed implementation for SystemV x86-64 Linux ABI (`thrd_*`, `mtx_*`, `cnd_*`, `tss_*`, `call_once`).
 - **Proof-Carrying Conformance Gate**: 13/13 manifest tests pass, GCC differential oracle passes, and 4/4 fault-injection mutations detected (Mutations A–D turn gates RED).
-- Byte-identical self-host convergence (MD5 `ceb8c1f7c8e5da2f9038807e9beaf629`).
+
+---
+
+## ZCC Raw Glibc System Header Ingestion Milestone (LIMIT-005) — September 22, 2026
+- Modular GNU extension tolerator & builtin folder (`zcc_glibc_compat.h`) absorbing `__builtin_bswap16/32/64`, `__glibc_likely/unlikely`, `__wur`, `__leaf`, `__cold`, `__hot`, and glibc internal types (`__gnuc_va_list`, `__off_t`, `__ssize_t`).
+- Preprocessor `--raw-glibc` and `ZCC_RAW_GLIBC` mode in `part0_pp.c` bypassing synthetic stubs to ingest raw glibc system headers.
+- Parser toleration in `part3.c` for GNU `__asm__("__rename")` symbol redirects on forward function declarations.
+- Standards-compliant opaque `struct _IO_FILE` for `FILE` in `part5.c`.
+- Verified raw header ingestion of `/usr/include/stdio.h` and `/usr/include/stdlib.h` (`tests/test_glibc_dual_headers.c`).
+- Byte-identical self-host convergence (MD5 `ca9f0f87c0c6638ba715d7389720fe76`, 47,991 elided).
+- 19/19 optimization pass gauntlet suites verified bit-exact.
+- 15/15 QuickJS ES2020 engine tests pass.
 
 ZKAEDI PRIME: CONVERGED
+

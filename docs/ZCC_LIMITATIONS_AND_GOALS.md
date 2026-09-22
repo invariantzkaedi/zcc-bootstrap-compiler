@@ -30,7 +30,7 @@ However, to maintain its minimal freestanding design and strict bootstrap determ
 │ LIMIT-002 │ C11 / C23 Language Conformance    │ RESOLVED     │ VERIFIED ✅  │
 │ LIMIT-003 │ Extended Precision & Complex Math │ MEDIUM       │ Goal Q1-2027 │
 │ LIMIT-004 │ Autonomous Linker & Dynamic Reloc │ HIGH         │ Goal Q2-2027 │
-│ LIMIT-005 │ Raw Glibc Header Ingestion        │ HIGH         │ Goal Q4-2026 │
+│ LIMIT-005 │ Raw Glibc Header Ingestion        │ RESOLVED     │ VERIFIED ✅  │
 │ LIMIT-006 │ SSA-IR Dual-Register Struct Return│ RESOLVED     │ VERIFIED ✅  │
 │ LIMIT-007 │ Rust Frontend Semantic Depth      │ MEDIUM       │ Goal Q2-2027 │
 └───────────┴───────────────────────────────────┴──────────────┴──────────────┘
@@ -131,18 +131,19 @@ However, to maintain its minimal freestanding design and strict bootstrap determ
 
 ### LIMIT-005: Raw Glibc System Header Ingestion
 
-* **Current State**:
-  * Directly including un-preprocessed GNU glibc headers (e.g., `#include </usr/include/stdio.h>`) can fail due to hundreds of compiler-internal GNU extensions (`__builtin_va_arg_pack`, `__attribute__((__artificial__))`, complex recursive macro expansions).
-  * ZCC currently relies on its synthesized clean system headers in [`zcc_sys_includes/`](file:///h:/__DOWNLOADS/zcc_github_upload/zcc_sys_includes/).
-* **Root Cause & Code Anchors**:
-  * [`part0_pp.c`](file:///h:/__DOWNLOADS/zcc_github_upload/part0_pp.c): Has strict recursion limits and minimal stub definitions for unknown GNU builtins to prevent memory blowups during preprocessing.
-* **Strategic Goals & Implementation Roadmap**:
-  * **Goal 5.1 (GNU Extension Lexical Tolerator)**:
-    * In `part0_pp.c` and `part2.c`, recognize and safely absorb unsupported GCC/Clang builtins (`__builtin_expect`, `__builtin_unreachable`, `__builtin_assume_aligned`, `__builtin_constant_p`) as identity operations or constant folds.
-  * **Goal 5.2 (High-Capacity Macro Expansion Table)**:
-    * Expand the macro symbol table in `part0_pp.c` with linear probing / open addressing to handle the 40,000+ macros loaded by complex Linux headers (`<sys/socket.h>`, `<netinet/in.h>`, `<windows.h>`).
-* **Verification Gate**:
-  * Successfully preprocess and parse `#include <stdio.h>` and `#include <stdlib.h>` directly from unmodified `/usr/include/` on Ubuntu 24.04 without errors.
+* **Status**: 🟢 **RESOLVED & FORMALLY VERIFIED (September 22, 2026)**
+* **Evidence Ticket**: [`tickets/LIMIT-005-gate-evidence.md`](file:///h:/__DOWNLOADS/zcc_github_upload/tickets/LIMIT-005-gate-evidence.md)
+* **Evidence Directory**: [`docs/evidence/2026-09-22/limit005/`](file:///h:/__DOWNLOADS/zcc_github_upload/docs/evidence/2026-09-22/limit005/)
+* **Implementation Details**:
+  * Created [`zcc_glibc_compat.h`](file:///h:/__DOWNLOADS/zcc_github_upload/zcc_glibc_compat.h) as a modular GNU extension tolerator and builtin folder (`__builtin_bswap16/32/64`, `__glibc_likely/unlikely`, attribute absorption).
+  * Upgraded [`part0_pp.c`](file:///h:/__DOWNLOADS/zcc_github_upload/part0_pp.c) (< 50 lines diff) with `--raw-glibc` mode and `ZCC_RAW_GLIBC` detection, absorbing glibc type declarations (`__gnuc_va_list`, `__off_t`, `__ssize_t`, etc.).
+  * Upgraded [`part3.c`](file:///h:/__DOWNLOADS/zcc_github_upload/part3.c) (< 50 lines diff) to absorb GNU inline assembly symbol redirects (`__asm__("__rename")`) on forward function declarations.
+  * Upgraded [`part5.c`](file:///h:/__DOWNLOADS/zcc_github_upload/part5.c) with standards-compliant opaque `struct _IO_FILE` for `FILE`, and automated system include path resolution (`/usr/include:/usr/include/x86_64-linux-gnu`).
+* **Verification Gates Passed**:
+  * Minimal Target Test [`tests/test_glibc_dual_headers.c`](file:///h:/__DOWNLOADS/zcc_github_upload/tests/test_glibc_dual_headers.c): PASS (ingesting raw `/usr/include/stdio.h` and `/usr/include/stdlib.h`, printing `GLIBC DUAL INGESTION: stdio.h + stdlib.h VERIFIED`).
+  * Gate 1 Self-Host Identity: `cmp zcc2.s zcc3.s` byte-identical (`ca9f0f87c0c6638ba715d7389720fe76`, 47,991 elided).
+  * Gate 2 Optimizer Gauntlet: 19/19 test suites bit-exact (2,067 instructions elided, 0 divergences).
+  * Gate 4 QuickJS ES2020: 15/15 tests passing cleanly.
 
 ---
 

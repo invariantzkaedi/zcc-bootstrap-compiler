@@ -1,0 +1,71 @@
+=== [PROBE TEST EXECUTION] ===
+$ ./zcc --raw-glibc tests/test_glibc_dual_headers.c -o /tmp/glibc_test.s && gcc /tmp/glibc_test.s -o /tmp/glibc_test && /tmp/glibc_test
+pp_process_include: /usr/include/stdio.h added 453 macros, total is 510
+pp_process_include: /usr/include/stdlib.h added 150 macros, total is 660
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (71 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+GLIBC DUAL INGESTION: stdio.h + stdlib.h VERIFIED
+
+=== [GATE 1: SELF-HOST CMP & MD5] ===
+$ cmp zcc2.s zcc3.s && echo "CMP SUCCESS: byte-identical"
+CMP SUCCESS: byte-identical
+$ md5sum zcc2.s zcc3.s
+ca9f0f87c0c6638ba715d7389720fe76  zcc2.s
+ca9f0f87c0c6638ba715d7389720fe76  zcc3.s
+
+=== [GATE 2: OPTIMIZER GAUNTLET] ===
+$ python3 tools/test_zcc_opt_passes.py
+==============================================================================
+  ZCC MULTI-SUITE PRODUCTION OPTIMIZATION PASS GAUNTLET
+  Testing: GVN Store-to-Load, Constant Fold, DCE & Symbolic CFG
+==============================================================================
+GAUNTLET SUMMARY:
+  * Suites Evaluated:          19
+  * Bit-Exact Passes:          19/19
+  * Semantic Divergences:      0
+  * Total Assembly (Baseline): 89,522 lines
+  * Total Assembly (Optimized):87,455 lines
+  * Net Instructions Elided:   2,067 lines (2.31% net reduction)
+==============================================================================
+★ ALL 19 TEST SUITES BIT-EXACT & VERIFIED (EXIT 0) ★
+
+=== [GATE 3: LINE BUDGET AUDIT] ===
+$ git diff --numstat part0_pp.c part3.c part4.c part5.c
+38	1	part0_pp.c
+17	0	part3.c
+0	0	part4.c
+19	5	part5.c
+
+=== [GATE 4: QUICKJS ES2020 ENGINE] ===
+$ /tmp/test_quickjs_runner
+===============================================================
+  ZCC NATIVE QUICKJS ES2020 TEST HARNESS
+===============================================================
+--- Test Suite 1: Arithmetic & IEEE-754 Floats ---
+  [PASS] 1 + 2 * 3 == 7
+  [PASS] Math.hypot(3, 4) == 5
+  [PASS] Math.sin(0) == 0
+  [PASS] Math.PI > 3.14 && Math.PI < 3.15 == true
+  [PASS] Number.MAX_SAFE_INTEGER.toString() == 9007199254740991
+--- Test Suite 2: Objects, Arrays & JSON ---
+  [PASS] JSON.stringify({ a: 42, b: 'hello' }) == {"a":42,"b":"hello"}
+  [PASS] [1, 2, 3, 4, 5].map(x => x * x).reduce((a, b) => a + b, 0) == 55
+  [PASS] ['apple', 'banana', 'cherry'].join('-') == apple-banana-cherry
+--- Test Suite 3: Closures, Loops & Functions ---
+  [PASS] (() => { let s = 0; for (let i = 1; i <= 10; i++) s += i; return s; })() == 55
+  [PASS] function fib(n) { return n <= 1 ? n : fib(n-1) + fib(n-2); }; fib(10) == 55
+--- Test Suite 4: RegExp & Strings ---
+  [PASS] 'quickjs-2024'.replace(/([a-z]+)-([0-9]+)/, '$2-$1') == 2024-quickjs
+  [PASS] /^[a-z0-9_]+$/i.test('zcc_2026') == true
+--- Test Suite 5: ES6 Classes & Prototypes ---
+  [PASS] class Point { constructor(x, y) { this.x = x; this.y = y; } norm2() { return this.x*this.x + this.y*this.y; } }; new Point(3, 4).norm2() == 25
+--- Test Suite 6: Date & BigInt ---
+  [PASS] new Date(0).toISOString() == 1970-01-01T00:00:00.000Z
+  [PASS] (2n ** 64n).toString() == 18446744073709551616
+===============================================================
+  ALL QUICKJS TESTS PASSED CLEANLY! (Failures: 0)
+===============================================================

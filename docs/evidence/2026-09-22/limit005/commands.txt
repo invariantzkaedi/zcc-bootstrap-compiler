@@ -1,0 +1,7 @@
+# LIMIT-005 Verification Commands
+1. ./zcc --raw-glibc tests/test_glibc_dual_headers.c -o /tmp/glibc_test.s && gcc /tmp/glibc_test.s -o /tmp/glibc_test && /tmp/glibc_test
+2. cmp zcc2.s zcc3.s
+3. md5sum zcc2.s zcc3.s
+4. python3 tools/test_zcc_opt_passes.py
+5. /tmp/test_quickjs_runner
+6. git diff --numstat part0_pp.c part3.c part4.c part5.c
