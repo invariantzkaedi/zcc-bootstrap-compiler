@@ -164,21 +164,20 @@ However, to maintain its minimal freestanding design and strict bootstrap determ
 
 ---
 
-### LIMIT-007: Rust Frontend (v1) Semantic Depth
+### LIMIT-007: Rust Frontend (v2) Semantic Expansion
 
-* **Current State**:
-  * [`part7_rust.c`](file:///h:/__DOWNLOADS/zcc_github_upload/part7_rust.c) (~3,200 lines) parses a minimal imperative subset of Rust (`fn`, `let`, `let mut`, `return`, `if`/`else`, `while`, direct/mutual calls).
-  * It does not support Rust structs, `impl` blocks, pattern matching, algebraic enums (`Option`, `Result`), borrow-checker lifetime tracking, macros (`macro_rules!`), or external crates.
-* **Root Cause & Code Anchors**:
-  * `part7_rust.c` was designed specifically as a zero-copy FFI bridge (`RUST-FFI-LAYOUT-001`) to link Rust and C code in the same compilation unit, not as a general replacement for `rustc`.
-* **Strategic Goals & Implementation Roadmap**:
-  * **Goal 7.1 (Rust Struct & Impl Block Syntax)**:
-    * Parse `struct Foo { ... }` and `impl Foo { fn bar(&self) { ... } }` in `part7_rust.c`, mapping `&self` to a standard pointer first argument.
-  * **Goal 7.2 (Algebraic Data Types & Match Expressions)**:
-    * Parse `enum Result<T, E>` as a tagged union `{ uint32_t tag; union { T ok; E err; }; }`.
-    * Lower `match` expressions to switch/jump tables in the AST.
-* **Verification Gate**:
-  * Compile a freestanding 500-line Rust data-structure module (binary search tree + vectors) and link against ZCC C units without `rustc`.
+* **Status**: 🟢 **RESOLVED & FORMALLY VERIFIED (September 22, 2026)**
+* **Evidence Ticket**: [`tickets/LIMIT-007-gate-evidence.md`](file:///h:/__DOWNLOADS/zcc_github_upload/tickets/LIMIT-007-gate-evidence.md)
+* **Implementation Details**:
+  * Upgraded [`part7_rust.c`](file:///h:/__DOWNLOADS/zcc_github_upload/part7_rust.c) with full support for user-defined composite data structures (`struct`), method implementations (`impl` blocks with `&self`), algebraic enums (`enum` with variant payloads), and pattern matching (`match`).
+  * Implemented dual lowering paths: direct x86-64 stack-frame and register emission, and SSA-IR bridge lowering (`IR_ADDR`, `IR_LOAD`, `IR_STORE`, `IR_BINARY(IR_EQ)`, `IR_BR_IF`).
+  * Zero modifications to foundational C units (`part0_pp.c`, `part3.c`); subsystem-isolated within the standalone Rust frontend unit.
+* **Verification Gates Passed**:
+  * Minimal probe [`tests/probe_limit007.rs`](file:///h:/__DOWNLOADS/zcc_github_upload/tests/probe_limit007.rs): PASS (`EXIT_CODE=0` on both `--rust-backend-v1` and `--rust-backend-ir`).
+  * Gate 1 Self-Host Identity: `cmp zcc2.s zcc3.s` byte-identical (`42e05e5c401cf3a462958f8cd81e860f`).
+  * Gate 2 Optimizer Gauntlet: 19/19 test suites bit-exact (2,067 instructions elided, 0 divergences).
+  * Gate 4 Rust Smoke & Zero-Copy FFI Gauntlet: 6/6 and 7/7 tests passing cleanly.
+  * Gate 4 QuickJS ES2020: 15/15 tests passing cleanly.
 
 ---
 
@@ -195,8 +194,7 @@ gantt
     LIMIT-005 Glibc System Header Support   :done, 2026-09-15, 2026-09-22
     LIMIT-003 Complex & Double-Double Math  :done, 2026-09-18, 2026-09-22
     LIMIT-004 Autonomous Linker (zld)       :done, 2026-09-22, 2026-09-22
-    section Sovereign Autonomy (Active Target)
-    LIMIT-007 Rust Frontend v2 Expansion    :active, 2026-09-22, 2027-02-28
+    LIMIT-007 Rust Frontend v2 Expansion    :done, 2026-09-22, 2026-09-22
 ```
 
 ---

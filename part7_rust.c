@@ -43,7 +43,17 @@ enum {
     RUST_TK_ARROW,
     RUST_TK_F32,
     RUST_TK_F64,
-    RUST_TK_FLIT
+    RUST_TK_FLIT,
+    RUST_TK_STRUCT,
+    RUST_TK_IMPL,
+    RUST_TK_ENUM,
+    RUST_TK_MATCH,
+    RUST_TK_PUB,
+    RUST_TK_SELF,
+    RUST_TK_FAT_ARROW,
+    RUST_TK_COLONCOLON,
+    RUST_TK_DOT,
+    RUST_TK_AMP
 };
 
 enum {
@@ -52,7 +62,8 @@ enum {
     RUST_STMT_EXPR,
     RUST_STMT_IF,
     RUST_STMT_WHILE,
-    RUST_STMT_ASSIGN
+    RUST_STMT_ASSIGN,
+    RUST_STMT_MATCH
 };
 
 enum {
@@ -62,7 +73,12 @@ enum {
     RUST_EXPR_FLIT,
     RUST_EXPR_BINARY,
     RUST_EXPR_UNARY,
-    RUST_EXPR_CALL
+    RUST_EXPR_CALL,
+    RUST_EXPR_FIELD,
+    RUST_EXPR_METHOD_CALL,
+    RUST_EXPR_STRUCT_LIT,
+    RUST_EXPR_ENUM_CONSTRUCT,
+    RUST_EXPR_MATCH
 };
 
 typedef enum RustTypeKind {
@@ -70,7 +86,10 @@ typedef enum RustTypeKind {
     RUST_TYPE_I32,
     RUST_TYPE_BOOL,
     RUST_TYPE_F32,
-    RUST_TYPE_F64
+    RUST_TYPE_F64,
+    RUST_TYPE_PTR,
+    RUST_TYPE_STRUCT,
+    RUST_TYPE_ENUM
 } RustTypeKind;
 
 typedef enum RustFlowKind {
@@ -96,6 +115,50 @@ struct RustDiag {
     char hint[256];
 };
 
+struct RustStmt;
+
+typedef struct RustField {
+    char name[64];
+    char type_name[64];
+    int offset;
+    int size;
+} RustField;
+
+typedef struct RustStruct {
+    char name[64];
+    RustField fields[32];
+    int field_count;
+    int size;
+    int align;
+    struct RustStruct *next;
+} RustStruct;
+
+typedef struct RustVariant {
+    char name[64];
+    int tag;
+    char payload_type[64];
+    int payload_size;
+} RustVariant;
+
+typedef struct RustEnum {
+    char name[64];
+    RustVariant variants[32];
+    int variant_count;
+    int size;
+    int align;
+    struct RustEnum *next;
+} RustEnum;
+
+typedef struct RustMatchArm {
+    char enum_name[64];
+    char variant_name[64];
+    char binding_name[64];
+    RustSymbolId binding_symbol_id;
+    struct RustStmt *body_head;
+    struct RustExpr *body_expr;
+    struct RustMatchArm *next;
+} RustMatchArm;
+
 typedef struct RustExpr {
     int kind;
     char text[128];
@@ -112,6 +175,21 @@ typedef struct RustExpr {
     RustSymbolId call_callee_symbol_id;
     struct RustExpr **call_args;
     int call_arg_count;
+    /* Field access & method call */
+    char field_name[64];
+    /* Struct literal */
+    char struct_name[64];
+    char struct_field_names[16][64];
+    struct RustExpr *struct_field_exprs[16];
+    int struct_field_count;
+    /* Enum constructor */
+    char enum_name[64];
+    char variant_name[64];
+    struct RustExpr *enum_payload;
+    /* Match */
+    struct RustExpr *match_target;
+    struct RustMatchArm *match_arms;
+    int match_arm_count;
 } RustExpr;
 
 typedef struct RustStmt {
@@ -131,6 +209,9 @@ typedef struct RustStmt {
     struct RustStmt *else_head;
     struct RustStmt *body_head;
     struct RustStmt *next;
+    /* Match */
+    RustExpr *match_target;
+    RustMatchArm *match_arms;
 } RustStmt;
 
 typedef struct RustFunction {
@@ -154,6 +235,10 @@ typedef struct RustFunction {
 struct RustAst {
     RustFunction *functions;
     int function_count;
+    RustStruct *structs;
+    int struct_count;
+    RustEnum *enums;
+    int enum_count;
 };
 
 typedef struct RustParser {
@@ -246,6 +331,12 @@ static int rust_kw(const char *s) {
     if (strcmp(s, "i32") == 0) return RUST_TK_I32;
     if (strcmp(s, "f32") == 0) return RUST_TK_F32;
     if (strcmp(s, "f64") == 0) return RUST_TK_F64;
+    if (strcmp(s, "struct") == 0) return RUST_TK_STRUCT;
+    if (strcmp(s, "impl") == 0) return RUST_TK_IMPL;
+    if (strcmp(s, "enum") == 0) return RUST_TK_ENUM;
+    if (strcmp(s, "match") == 0) return RUST_TK_MATCH;
+    if (strcmp(s, "pub") == 0) return RUST_TK_PUB;
+    if (strcmp(s, "self") == 0) return RUST_TK_SELF;
     return RUST_TK_IDENT;
 }
 
@@ -310,6 +401,16 @@ static void rust_next(RustParser *p) {
         }
         return;
     }
+    if (c == '=' && p->pos + 1 < p->len && p->src[p->pos + 1] == '>') {
+        rust_read(p); rust_read(p);
+        p->tk.kind = RUST_TK_FAT_ARROW;
+        return;
+    }
+    if (c == ':' && p->pos + 1 < p->len && p->src[p->pos + 1] == ':') {
+        rust_read(p); rust_read(p);
+        p->tk.kind = RUST_TK_COLONCOLON;
+        return;
+    }
     if (c == '-' && p->pos + 1 < p->len && p->src[p->pos + 1] == '>') {
         rust_read(p); rust_read(p);
         p->tk.kind = RUST_TK_ARROW;
@@ -361,6 +462,8 @@ static void rust_next(RustParser *p) {
     else if (c == '-') p->tk.kind = RUST_TK_MINUS;
     else if (c == '*') p->tk.kind = RUST_TK_STAR;
     else if (c == '/') p->tk.kind = RUST_TK_SLASH;
+    else if (c == '.') p->tk.kind = RUST_TK_DOT;
+    else if (c == '&') p->tk.kind = RUST_TK_AMP;
     else {
         rust_add_diag(p, "RUSTLEX001", p->tk.line, p->tk.col, "unsupported character in Rust source", "remove or replace unsupported syntax");
         p->tk.kind = RUST_TK_EOF;
@@ -408,6 +511,42 @@ static RustExpr *rust_parse_add(RustParser *p);
 static RustExpr *rust_parse_lor(RustParser *p);
 static RustExpr *rust_parse_land(RustParser *p);
 static RustExpr *rust_parse_unary(RustParser *p);
+static RustExpr *rust_parse_postfix(RustParser *p);
+static RustStmt *rust_parse_stmt(RustParser *p);
+static RustStmt *rust_parse_block(RustParser *p);
+
+static RustStruct *rust_find_struct(const RustAst *ast, const char *name) {
+    const RustStruct *s;
+    if (!ast || !name) return 0;
+    s = ast->structs;
+    while (s) {
+        if (strcmp(s->name, name) == 0) return (RustStruct *)s;
+        s = s->next;
+    }
+    return 0;
+}
+
+static RustEnum *rust_find_enum(const RustAst *ast, const char *name) {
+    const RustEnum *e;
+    if (!ast || !name) return 0;
+    e = ast->enums;
+    while (e) {
+        if (strcmp(e->name, name) == 0) return (RustEnum *)e;
+        e = e->next;
+    }
+    return 0;
+}
+
+static int rust_type_size(const RustAst *ast, const char *type_name) {
+    if (!type_name || !type_name[0]) return 4;
+    if (strcmp(type_name, "i32") == 0 || strcmp(type_name, "f32") == 0 || strcmp(type_name, "bool") == 0) return 4;
+    if (strcmp(type_name, "f64") == 0 || type_name[0] == '&' || type_name[0] == '*') return 8;
+    RustStruct *st = rust_find_struct(ast, type_name);
+    if (st) return st->size > 0 ? st->size : 8;
+    RustEnum *en = rust_find_enum(ast, type_name);
+    if (en) return 16;
+    return 8;
+}
 
 static RustExpr *rust_parse_primary(RustParser *p) {
     RustExpr *e;
@@ -436,21 +575,62 @@ static RustExpr *rust_parse_primary(RustParser *p) {
         rust_next(p);
         return e;
     }
-    if (p->tk.kind == RUST_TK_IDENT) {
+    if (p->tk.kind == RUST_TK_IDENT || p->tk.kind == RUST_TK_SELF) {
         char ident_name[128];
         int ident_line = p->tk.line;
         int ident_col = p->tk.col;
         strncpy(ident_name, p->tk.text, 127);
         ident_name[127] = 0;
+        rust_next(p);
+        /* Enum::Variant(payload) */
+        if (p->tk.kind == RUST_TK_COLONCOLON) {
+            rust_next(p);
+            char variant_name[64];
+            strncpy(variant_name, p->tk.text, 63);
+            variant_name[63] = 0;
+            rust_next(p);
+            e = rust_new_expr(RUST_EXPR_ENUM_CONSTRUCT);
+            strncpy(e->enum_name, ident_name, 63);
+            strncpy(e->variant_name, variant_name, 63);
+            e->line = ident_line;
+            e->col = ident_col;
+            if (p->tk.kind == RUST_TK_LPAREN) {
+                rust_next(p);
+                e->enum_payload = rust_parse_expr(p);
+                rust_expect(p, RUST_TK_RPAREN, "expected ')' after variant payload", "close variant with ')'");
+            }
+            return e;
+        }
+        /* Struct { ... } */
+        if (p->tk.kind == RUST_TK_LBRACE && rust_find_struct(&p->ast, ident_name)) {
+            rust_next(p);
+            e = rust_new_expr(RUST_EXPR_STRUCT_LIT);
+            strncpy(e->struct_name, ident_name, 63);
+            e->line = ident_line;
+            e->col = ident_col;
+            while (p->tk.kind != RUST_TK_RBRACE && p->tk.kind != RUST_TK_EOF) {
+                if (p->tk.kind == RUST_TK_IDENT) {
+                    int sfi = e->struct_field_count++;
+                    strncpy(e->struct_field_names[sfi], p->tk.text, 63);
+                    rust_next(p);
+                    rust_expect(p, RUST_TK_COLON, "expected ':' after field name", "specify field value");
+                    e->struct_field_exprs[sfi] = rust_parse_expr(p);
+                    rust_accept(p, RUST_TK_COMMA);
+                } else {
+                    rust_next(p);
+                }
+            }
+            rust_expect(p, RUST_TK_RBRACE, "expected '}' after struct literal", "close struct literal with '}'");
+            return e;
+        }
+        if (p->tk.kind == RUST_TK_LPAREN) {
+            return rust_parse_call_from_ident(p, ident_name, ident_line, ident_col);
+        }
         e = rust_new_expr(RUST_EXPR_IDENT);
         strncpy(e->text, ident_name, 127);
         e->text[127] = 0;
         e->line = ident_line;
         e->col = ident_col;
-        rust_next(p);
-        if (p->tk.kind == RUST_TK_LPAREN) {
-            return rust_parse_call_from_ident(p, ident_name, ident_line, ident_col);
-        }
         return e;
     }
     if (rust_accept(p, RUST_TK_LPAREN)) {
@@ -493,6 +673,65 @@ static RustExpr *rust_parse_call_from_ident(RustParser *p, const char *callee_na
     return call;
 }
 
+static RustExpr *rust_parse_postfix(RustParser *p) {
+    RustExpr *e = rust_parse_primary(p);
+    while (p->tk.kind == RUST_TK_DOT) {
+        rust_next(p);
+        char mem_name[128] = {0};
+        strncpy(mem_name, p->tk.text, 127);
+        mem_name[127] = 0;
+        int mline = p->tk.line;
+        int mcol = p->tk.col;
+        rust_next(p);
+        if (p->tk.kind == RUST_TK_LPAREN) {
+            RustExpr *mc = rust_new_expr(RUST_EXPR_METHOD_CALL);
+            mc->lhs = e;
+            strncpy(mc->field_name, mem_name, 63);
+            mc->line = mline;
+            mc->col = mcol;
+            RustExpr **args = 0;
+            int arg_cap = 0;
+            rust_expect(p, RUST_TK_LPAREN, "expected '(' after method name", "call method with ()");
+            while (p->tk.kind != RUST_TK_RPAREN && p->tk.kind != RUST_TK_EOF) {
+                RustExpr *arg = rust_parse_expr(p);
+                if (mc->call_arg_count == arg_cap) {
+                    int next_cap = arg_cap ? arg_cap * 2 : 4;
+                    RustExpr **new_args = (RustExpr **)realloc(args, (size_t)next_cap * sizeof(RustExpr *));
+                    if (!new_args) break;
+                    args = new_args;
+                    arg_cap = next_cap;
+                }
+                args[mc->call_arg_count++] = arg;
+                if (!rust_accept(p, RUST_TK_COMMA)) break;
+            }
+            rust_expect(p, RUST_TK_RPAREN, "expected ')' after method arguments", "close arguments with ')'");
+            mc->call_args = args;
+            e = mc;
+        } else {
+            RustExpr *fa = rust_new_expr(RUST_EXPR_FIELD);
+            fa->lhs = e;
+            strncpy(fa->field_name, mem_name, 63);
+            fa->line = mline;
+            fa->col = mcol;
+            e = fa;
+        }
+    }
+    return e;
+}
+
+static RustExpr *rust_parse_unary(RustParser *p) {
+    if (p->tk.kind == RUST_TK_BANG || p->tk.kind == RUST_TK_MINUS) {
+        RustExpr *u = rust_new_expr(RUST_EXPR_UNARY);
+        u->op = p->tk.kind;
+        u->line = p->tk.line;
+        u->col = p->tk.col;
+        rust_next(p);
+        u->lhs = rust_parse_unary(p);
+        return u;
+    }
+    return rust_parse_postfix(p);
+}
+
 static RustExpr *rust_parse_mul(RustParser *p) {
     RustExpr *lhs = rust_parse_unary(p);
     while (p->tk.kind == RUST_TK_STAR || p->tk.kind == RUST_TK_SLASH) {
@@ -503,40 +742,6 @@ static RustExpr *rust_parse_mul(RustParser *p) {
         rust_next(p);
         bin->lhs = lhs;
         bin->rhs = rust_parse_unary(p);
-        lhs = bin;
-    }
-    return lhs;
-}
-
-static RustExpr *rust_parse_expr(RustParser *p) {
-    return rust_parse_lor(p);
-}
-
-static RustExpr *rust_parse_lor(RustParser *p) {
-    RustExpr *lhs = rust_parse_land(p);
-    while (p->tk.kind == RUST_TK_LOR) {
-        RustExpr *bin = rust_new_expr(RUST_EXPR_BINARY);
-        bin->op = p->tk.kind;
-        bin->line = p->tk.line;
-        bin->col = p->tk.col;
-        rust_next(p);
-        bin->lhs = lhs;
-        bin->rhs = rust_parse_land(p);
-        lhs = bin;
-    }
-    return lhs;
-}
-
-static RustExpr *rust_parse_land(RustParser *p) {
-    RustExpr *lhs = rust_parse_cmp(p);
-    while (p->tk.kind == RUST_TK_LAND) {
-        RustExpr *bin = rust_new_expr(RUST_EXPR_BINARY);
-        bin->op = p->tk.kind;
-        bin->line = p->tk.line;
-        bin->col = p->tk.col;
-        rust_next(p);
-        bin->lhs = lhs;
-        bin->rhs = rust_parse_cmp(p);
         lhs = bin;
     }
     return lhs;
@@ -574,17 +779,38 @@ static RustExpr *rust_parse_cmp(RustParser *p) {
     return lhs;
 }
 
-static RustExpr *rust_parse_unary(RustParser *p) {
-    if (p->tk.kind == RUST_TK_BANG || p->tk.kind == RUST_TK_MINUS) {
-        RustExpr *u = rust_new_expr(RUST_EXPR_UNARY);
-        u->op = p->tk.kind;
-        u->line = p->tk.line;
-        u->col = p->tk.col;
+static RustExpr *rust_parse_land(RustParser *p) {
+    RustExpr *lhs = rust_parse_cmp(p);
+    while (p->tk.kind == RUST_TK_LAND) {
+        RustExpr *bin = rust_new_expr(RUST_EXPR_BINARY);
+        bin->op = p->tk.kind;
+        bin->line = p->tk.line;
+        bin->col = p->tk.col;
         rust_next(p);
-        u->lhs = rust_parse_unary(p);
-        return u;
+        bin->lhs = lhs;
+        bin->rhs = rust_parse_cmp(p);
+        lhs = bin;
     }
-    return rust_parse_primary(p);
+    return lhs;
+}
+
+static RustExpr *rust_parse_lor(RustParser *p) {
+    RustExpr *lhs = rust_parse_land(p);
+    while (p->tk.kind == RUST_TK_LOR) {
+        RustExpr *bin = rust_new_expr(RUST_EXPR_BINARY);
+        bin->op = p->tk.kind;
+        bin->line = p->tk.line;
+        bin->col = p->tk.col;
+        rust_next(p);
+        bin->lhs = lhs;
+        bin->rhs = rust_parse_land(p);
+        lhs = bin;
+    }
+    return lhs;
+}
+
+static RustExpr *rust_parse_expr(RustParser *p) {
+    return rust_parse_lor(p);
 }
 
 static void rust_append_stmt(RustStmt **head, RustStmt *s) {
@@ -598,8 +824,6 @@ static void rust_append_stmt(RustStmt **head, RustStmt *s) {
     cur->next = s;
 }
 
-static RustStmt *rust_parse_stmt(RustParser *p);
-
 static int rust_next_token_kind_lookahead(const RustParser *p) {
     RustParser probe;
     if (!p) return RUST_TK_EOF;
@@ -610,6 +834,12 @@ static int rust_next_token_kind_lookahead(const RustParser *p) {
 
 static int rust_parse_type_name(RustParser *p, char *buf, int buf_len) {
     if (!p || !buf || buf_len <= 0) return 0;
+    if (p->tk.kind == RUST_TK_AMP) {
+        rust_next(p);
+        buf[0] = '&';
+        int ok = rust_parse_type_name(p, buf + 1, buf_len - 1);
+        return ok;
+    }
     if (p->tk.kind == RUST_TK_I32) {
         strncpy(buf, "i32", (size_t)buf_len - 1);
         buf[buf_len - 1] = 0;
@@ -628,8 +858,8 @@ static int rust_parse_type_name(RustParser *p, char *buf, int buf_len) {
         rust_next(p);
         return 1;
     }
-    if (p->tk.kind == RUST_TK_IDENT && strcmp(p->tk.text, "bool") == 0) {
-        strncpy(buf, "bool", (size_t)buf_len - 1);
+    if (p->tk.kind == RUST_TK_IDENT) {
+        strncpy(buf, p->tk.text, (size_t)buf_len - 1);
         buf[buf_len - 1] = 0;
         rust_next(p);
         return 1;
@@ -648,10 +878,63 @@ static RustStmt *rust_parse_block(RustParser *p) {
     return head;
 }
 
+static RustStmt *rust_parse_match_stmt(RustParser *p) {
+    int line = p->tk.line;
+    int col = p->tk.col;
+    rust_expect(p, RUST_TK_MATCH, "expected 'match'", "use syntax: match expr { ... }");
+    RustStmt *s = rust_new_stmt(RUST_STMT_MATCH, line);
+    s->col = col;
+    s->match_target = rust_parse_expr(p);
+    rust_expect(p, RUST_TK_LBRACE, "expected '{' after match target", "begin match body with '{'");
+    RustMatchArm *arm_tail = 0;
+    while (p->tk.kind != RUST_TK_RBRACE && p->tk.kind != RUST_TK_EOF) {
+        RustMatchArm *arm = (RustMatchArm *)calloc(1, sizeof(RustMatchArm));
+        if (!arm) exit(1);
+        char first_id[64] = {0};
+        strncpy(first_id, p->tk.text, 63);
+        rust_next(p);
+        if (p->tk.kind == RUST_TK_COLONCOLON) {
+            rust_next(p);
+            strncpy(arm->enum_name, first_id, 63);
+            strncpy(arm->variant_name, p->tk.text, 63);
+            rust_next(p);
+        } else {
+            strncpy(arm->variant_name, first_id, 63);
+        }
+        if (p->tk.kind == RUST_TK_LPAREN) {
+            rust_next(p);
+            strncpy(arm->binding_name, p->tk.text, 63);
+            rust_next(p);
+            rust_expect(p, RUST_TK_RPAREN, "expected ')' after pattern binding", "close pattern with ')'");
+        }
+        rust_expect(p, RUST_TK_FAT_ARROW, "expected '=>' in match arm", "syntax: Pattern => { ... }");
+        if (p->tk.kind == RUST_TK_LBRACE) {
+            arm->body_head = rust_parse_block(p);
+        } else {
+            arm->body_expr = rust_parse_expr(p);
+        }
+        rust_accept(p, RUST_TK_COMMA);
+        if (!s->match_arms) s->match_arms = arm;
+        else arm_tail->next = arm;
+        arm_tail = arm;
+    }
+    rust_expect(p, RUST_TK_RBRACE, "expected '}' after match arms", "close match with '}'");
+    return s;
+}
+
 static RustStmt *rust_parse_stmt(RustParser *p) {
     RustStmt *s;
     int line = p->tk.line;
     int col = p->tk.col;
+    while (rust_accept(p, RUST_TK_SEMI)) {
+        /* empty statement */
+        if (p->tk.kind == RUST_TK_RBRACE || p->tk.kind == RUST_TK_EOF) return 0;
+    }
+    if (p->tk.kind == RUST_TK_MATCH) {
+        s = rust_parse_match_stmt(p);
+        rust_accept(p, RUST_TK_SEMI);
+        return s;
+    }
     if (rust_accept(p, RUST_TK_LET)) {
         s = rust_new_stmt(RUST_STMT_LET, line);
         s->col = col;
@@ -671,7 +954,7 @@ static RustStmt *rust_parse_stmt(RustParser *p) {
         if (rust_accept(p, RUST_TK_COLON)) {
             s->has_type_annotation = 1;
             if (!rust_parse_type_name(p, s->type_name, 64)) {
-                rust_add_diag(p, "RUSTPARSE004", p->tk.line, p->tk.col, "expected type in let binding", "v1 supports only 'i32' and 'bool'");
+                rust_add_diag(p, "RUSTPARSE004", p->tk.line, p->tk.col, "expected type in let binding", "specify variable type");
             }
         } else {
             s->has_type_annotation = 0;
@@ -750,6 +1033,20 @@ static RustFunction *rust_parse_function(RustParser *p) {
             break;
         }
         param_idx = fn->num_params;
+        if (p->tk.kind == RUST_TK_AMP) {
+            rust_next(p);
+            if (p->tk.kind == RUST_TK_SELF || (p->tk.kind == RUST_TK_IDENT && strcmp(p->tk.text, "self") == 0)) {
+                strncpy(fn->param_names[param_idx], "self", 127);
+                fn->param_lines[param_idx] = p->tk.line;
+                fn->param_cols[param_idx] = p->tk.col;
+                rust_next(p);
+                strncpy(fn->param_types[param_idx], "&self", 63);
+                fn->param_symbol_ids[param_idx] = RUST_SYMBOL_INVALID;
+                fn->num_params++;
+                if (!rust_accept(p, RUST_TK_COMMA)) break;
+                continue;
+            }
+        }
         if (p->tk.kind == RUST_TK_IDENT) {
             strncpy(fn->param_names[param_idx], p->tk.text, 127);
             fn->param_names[param_idx][127] = 0;
@@ -757,12 +1054,12 @@ static RustFunction *rust_parse_function(RustParser *p) {
             fn->param_cols[param_idx] = p->tk.col;
             rust_next(p);
         } else {
-            rust_add_diag(p, "RUSTPARSE009", p->tk.line, p->tk.col, "expected parameter name", "use syntax: name: i32");
+            rust_add_diag(p, "RUSTPARSE009", p->tk.line, p->tk.col, "expected parameter name", "use syntax: name: type");
             break;
         }
-        rust_expect(p, RUST_TK_COLON, "expected ':' in parameter", "use syntax: name: i32");
+        rust_expect(p, RUST_TK_COLON, "expected ':' in parameter", "use syntax: name: type");
         if (!rust_parse_type_name(p, fn->param_types[param_idx], 64)) {
-            rust_add_diag(p, "RUSTPARSE010", p->tk.line, p->tk.col, "expected parameter type", "v1 supports only i32, bool, f32, and f64 parameters");
+            rust_add_diag(p, "RUSTPARSE010", p->tk.line, p->tk.col, "expected parameter type", "specify valid parameter type");
             strncpy(fn->param_types[param_idx], "i32", 63);
         }
         fn->param_symbol_ids[param_idx] = RUST_SYMBOL_INVALID;
@@ -773,7 +1070,7 @@ static RustFunction *rust_parse_function(RustParser *p) {
     if (rust_accept(p, RUST_TK_ARROW)) {
         fn->has_explicit_ret_type = 1;
         if (!rust_parse_type_name(p, fn->ret_type, 64)) {
-            rust_add_diag(p, "RUSTPARSE006", p->tk.line, p->tk.col, "expected return type after '->'", "v1 supports only i32, bool, f32, and f64 return types");
+            rust_add_diag(p, "RUSTPARSE006", p->tk.line, p->tk.col, "expected return type after '->'", "specify valid return type");
             strncpy(fn->ret_type, "i32", 63);
         }
     } else {
@@ -789,22 +1086,155 @@ static RustFunction *rust_parse_function(RustParser *p) {
     return fn;
 }
 
+static void rust_parse_struct(RustParser *p) {
+    rust_expect(p, RUST_TK_STRUCT, "expected 'struct'", "use syntax: struct Name { ... }");
+    RustStruct *st = (RustStruct *)calloc(1, sizeof(RustStruct));
+    if (!st) exit(1);
+    strncpy(st->name, p->tk.text, 63);
+    st->name[63] = 0;
+    rust_next(p);
+    rust_expect(p, RUST_TK_LBRACE, "expected '{' after struct name", "begin struct body with '{'");
+    int cur_offset = 0;
+    while (p->tk.kind != RUST_TK_RBRACE && p->tk.kind != RUST_TK_EOF) {
+        if (p->tk.kind == RUST_TK_PUB) rust_next(p);
+        if (p->tk.kind == RUST_TK_IDENT) {
+            int fi = st->field_count++;
+            strncpy(st->fields[fi].name, p->tk.text, 63);
+            rust_next(p);
+            rust_expect(p, RUST_TK_COLON, "expected ':' after field name", "specify field type with ':'");
+            rust_parse_type_name(p, st->fields[fi].type_name, 64);
+            int fsize = (strcmp(st->fields[fi].type_name, "f64") == 0 || st->fields[fi].type_name[0] == '&') ? 8 : 4;
+            st->fields[fi].size = fsize;
+            st->fields[fi].offset = cur_offset;
+            cur_offset += fsize;
+            rust_accept(p, RUST_TK_COMMA);
+        } else {
+            rust_next(p);
+        }
+    }
+    rust_expect(p, RUST_TK_RBRACE, "expected '}' after struct fields", "close struct body with '}'");
+    st->size = cur_offset;
+    if (st->size % 4 != 0) st->size += 4 - (st->size % 4);
+    st->align = 4;
+    RustStruct *tail = p->ast.structs;
+    if (!tail) {
+        p->ast.structs = st;
+    } else {
+        while (tail->next) tail = tail->next;
+        tail->next = st;
+    }
+    p->ast.struct_count++;
+}
+
+static void rust_parse_enum(RustParser *p) {
+    rust_expect(p, RUST_TK_ENUM, "expected 'enum'", "use syntax: enum Name { ... }");
+    RustEnum *en = (RustEnum *)calloc(1, sizeof(RustEnum));
+    if (!en) exit(1);
+    strncpy(en->name, p->tk.text, 63);
+    en->name[63] = 0;
+    rust_next(p);
+    rust_expect(p, RUST_TK_LBRACE, "expected '{' after enum name", "begin enum body with '{'");
+    while (p->tk.kind != RUST_TK_RBRACE && p->tk.kind != RUST_TK_EOF) {
+        if (p->tk.kind == RUST_TK_PUB) rust_next(p);
+        if (p->tk.kind == RUST_TK_IDENT) {
+            int vi = en->variant_count++;
+            strncpy(en->variants[vi].name, p->tk.text, 63);
+            en->variants[vi].tag = vi;
+            rust_next(p);
+            if (p->tk.kind == RUST_TK_LPAREN) {
+                rust_next(p);
+                rust_parse_type_name(p, en->variants[vi].payload_type, 64);
+                en->variants[vi].payload_size = 4;
+                rust_expect(p, RUST_TK_RPAREN, "expected ')' after variant payload", "close variant payload with ')'");
+            } else {
+                en->variants[vi].payload_type[0] = 0;
+                en->variants[vi].payload_size = 0;
+            }
+            rust_accept(p, RUST_TK_COMMA);
+        } else {
+            rust_next(p);
+        }
+    }
+    rust_expect(p, RUST_TK_RBRACE, "expected '}' after enum variants", "close enum body with '}'");
+    en->size = 16; /* 4B tag + 4B pad + 8B payload */
+    en->align = 8;
+    RustEnum *tail = p->ast.enums;
+    if (!tail) {
+        p->ast.enums = en;
+    } else {
+        while (tail->next) tail = tail->next;
+        tail->next = en;
+    }
+    p->ast.enum_count++;
+}
+
+static void rust_parse_impl(RustParser *p) {
+    rust_expect(p, RUST_TK_IMPL, "expected 'impl'", "use syntax: impl TypeName { ... }");
+    char type_name[64];
+    strncpy(type_name, p->tk.text, 63);
+    type_name[63] = 0;
+    rust_next(p);
+    rust_expect(p, RUST_TK_LBRACE, "expected '{' after impl type name", "begin impl block with '{'");
+    while (p->tk.kind != RUST_TK_RBRACE && p->tk.kind != RUST_TK_EOF) {
+        if (p->tk.kind == RUST_TK_PUB) rust_next(p);
+        if (p->tk.kind == RUST_TK_FN) {
+            RustFunction *fn = rust_parse_function(p);
+            if (fn) {
+                char mangled[128];
+                snprintf(mangled, sizeof(mangled), "%s_%s", type_name, fn->name);
+                strncpy(fn->name, mangled, 127);
+                if (fn->num_params > 0 && strcmp(fn->param_names[0], "self") == 0) {
+                    snprintf(fn->param_types[0], 64, "&%s", type_name);
+                }
+                RustFunction *tail = p->ast.functions;
+                if (!tail) {
+                    p->ast.functions = fn;
+                } else {
+                    while (tail->next) tail = tail->next;
+                    tail->next = fn;
+                }
+                p->ast.function_count++;
+            }
+        } else {
+            rust_next(p);
+        }
+    }
+    rust_expect(p, RUST_TK_RBRACE, "expected '}' to close impl block", "close impl block with '}'");
+}
+
 static RustAst *rust_parse_program_internal(RustParser *p) {
-    RustFunction *tail = 0;
+    RustFunction *tail = p->ast.functions;
+    while (tail && tail->next) tail = tail->next;
     rust_next(p);
     while (p->tk.kind != RUST_TK_EOF) {
-        RustFunction *fn;
-        if (p->tk.kind != RUST_TK_FN) {
-            rust_add_diag(p, "RUSTPARSE007", p->tk.line, p->tk.col, "expected top-level function", "v1 frontend accepts only top-level fn items");
+        if (p->tk.kind == RUST_TK_PUB) {
             rust_next(p);
+        }
+        if (p->tk.kind == RUST_TK_STRUCT) {
+            rust_parse_struct(p);
             continue;
         }
-        fn = rust_parse_function(p);
-        if (!fn) break;
-        if (!p->ast.functions) p->ast.functions = fn;
-        else tail->next = fn;
-        tail = fn;
-        p->ast.function_count++;
+        if (p->tk.kind == RUST_TK_ENUM) {
+            rust_parse_enum(p);
+            continue;
+        }
+        if (p->tk.kind == RUST_TK_IMPL) {
+            rust_parse_impl(p);
+            tail = p->ast.functions;
+            while (tail && tail->next) tail = tail->next;
+            continue;
+        }
+        if (p->tk.kind == RUST_TK_FN) {
+            RustFunction *fn = rust_parse_function(p);
+            if (!fn) break;
+            if (!p->ast.functions) p->ast.functions = fn;
+            else tail->next = fn;
+            tail = fn;
+            p->ast.function_count++;
+            continue;
+        }
+        rust_add_diag(p, "RUSTPARSE007", p->tk.line, p->tk.col, "expected top-level item", "v2 frontend accepts fn, struct, enum, and impl");
+        rust_next(p);
     }
     return &p->ast;
 }
@@ -830,6 +1260,31 @@ static void rust_dump_expr(FILE *out, RustExpr *e, int indent) {
     else if (e->kind == RUST_EXPR_UNARY) {
         fprintf(out, "Expr Unary op=%d\n", e->op);
         rust_dump_expr(out, e->lhs, indent + 2);
+    }
+    else if (e->kind == RUST_EXPR_FIELD) {
+        fprintf(out, "Expr Field .%s\n", e->field_name);
+        rust_dump_expr(out, e->lhs, indent + 2);
+    }
+    else if (e->kind == RUST_EXPR_METHOD_CALL) {
+        int ai;
+        fprintf(out, "Expr MethodCall .%s argc=%d\n", e->field_name, e->call_arg_count);
+        rust_dump_expr(out, e->lhs, indent + 2);
+        for (ai = 0; ai < e->call_arg_count; ai++) {
+            rust_dump_expr(out, e->call_args[ai], indent + 2);
+        }
+    }
+    else if (e->kind == RUST_EXPR_STRUCT_LIT) {
+        int fi;
+        fprintf(out, "Expr StructLit %s fields=%d\n", e->struct_name, e->struct_field_count);
+        for (fi = 0; fi < e->struct_field_count; fi++) {
+            for (i = 0; i < indent + 2; i++) fprintf(out, " ");
+            fprintf(out, "Field %s:\n", e->struct_field_names[fi]);
+            rust_dump_expr(out, e->struct_field_exprs[fi], indent + 4);
+        }
+    }
+    else if (e->kind == RUST_EXPR_ENUM_CONSTRUCT) {
+        fprintf(out, "Expr EnumConstruct %s::%s\n", e->enum_name, e->variant_name);
+        if (e->enum_payload) rust_dump_expr(out, e->enum_payload, indent + 2);
     }
     else {
         fprintf(out, "Expr Binary op=%d\n", e->op);
@@ -872,6 +1327,17 @@ static void rust_dump_stmt(FILE *out, RustStmt *s, int indent) {
             for (i = 0; i < indent + 2; i++) fprintf(out, " ");
             fprintf(out, "Body\n");
             rust_dump_stmt(out, s->body_head, indent + 4);
+        } else if (s->kind == RUST_STMT_MATCH) {
+            fprintf(out, "Stmt Match\n");
+            rust_dump_expr(out, s->match_target, indent + 2);
+            RustMatchArm *arm = s->match_arms;
+            while (arm) {
+                for (i = 0; i < indent + 2; i++) fprintf(out, " ");
+                fprintf(out, "Arm %s::%s(%s) =>\n", arm->enum_name, arm->variant_name, arm->binding_name);
+                if (arm->body_head) rust_dump_stmt(out, arm->body_head, indent + 4);
+                if (arm->body_expr) rust_dump_expr(out, arm->body_expr, indent + 4);
+                arm = arm->next;
+            }
         } else {
             fprintf(out, "Stmt Expr\n");
             rust_dump_expr(out, s->expr, indent + 2);
@@ -1036,6 +1502,25 @@ static void rust_dump_expr_with_symbols(FILE *out, RustExpr *e, int indent) {
     } else if (e->kind == RUST_EXPR_UNARY) {
         fprintf(out, "Unary op=%d\n", e->op);
         rust_dump_expr_with_symbols(out, e->lhs, indent + 2);
+    } else if (e->kind == RUST_EXPR_FIELD) {
+        fprintf(out, "Field .%s\n", e->field_name);
+        rust_dump_expr_with_symbols(out, e->lhs, indent + 2);
+    } else if (e->kind == RUST_EXPR_METHOD_CALL) {
+        int ai;
+        fprintf(out, "MethodCall .%s argc=%d\n", e->field_name, e->call_arg_count);
+        rust_dump_expr_with_symbols(out, e->lhs, indent + 2);
+        for (ai = 0; ai < e->call_arg_count; ai++) {
+            rust_dump_expr_with_symbols(out, e->call_args[ai], indent + 2);
+        }
+    } else if (e->kind == RUST_EXPR_STRUCT_LIT) {
+        int fi;
+        fprintf(out, "StructLit %s fields=%d\n", e->struct_name, e->struct_field_count);
+        for (fi = 0; fi < e->struct_field_count; fi++) {
+            rust_dump_expr_with_symbols(out, e->struct_field_exprs[fi], indent + 2);
+        }
+    } else if (e->kind == RUST_EXPR_ENUM_CONSTRUCT) {
+        fprintf(out, "EnumConstruct %s::%s\n", e->enum_name, e->variant_name);
+        if (e->enum_payload) rust_dump_expr_with_symbols(out, e->enum_payload, indent + 2);
     } else if (e->kind == RUST_EXPR_NUM) {
         fprintf(out, "Int %lld\n", e->num);
     } else if (e->kind == RUST_EXPR_FLIT) {
@@ -1091,6 +1576,19 @@ static void rust_dump_stmt_with_symbols(FILE *out, RustStmt *s, int indent) {
             for (i = 0; i < indent + 2; i++) fprintf(out, " ");
             fprintf(out, "Body\n");
             rust_dump_stmt_with_symbols(out, s->body_head, indent + 4);
+        } else if (s->kind == RUST_STMT_MATCH) {
+            fprintf(out, "Match\n");
+            rust_dump_expr_with_symbols(out, s->match_target, indent + 2);
+            RustMatchArm *arm = s->match_arms;
+            while (arm) {
+                for (i = 0; i < indent + 2; i++) fprintf(out, " ");
+                fprintf(out, "Arm %s::%s binding=\"%s\" symbol=", arm->enum_name, arm->variant_name, arm->binding_name);
+                rust_dump_symbol_id(out, arm->binding_symbol_id);
+                fprintf(out, "\n");
+                if (arm->body_head) rust_dump_stmt_with_symbols(out, arm->body_head, indent + 4);
+                if (arm->body_expr) rust_dump_expr_with_symbols(out, arm->body_expr, indent + 4);
+                arm = arm->next;
+            }
         } else {
             fprintf(out, "ExprStmt\n");
             rust_dump_expr_with_symbols(out, s->expr, indent + 2);
@@ -1484,6 +1982,31 @@ static void rust_resolve_expr(RustResolver *r, RustExpr *e) {
         rust_resolve_expr(r, e->rhs);
         return;
     }
+    if (e->kind == RUST_EXPR_FIELD) {
+        rust_resolve_expr(r, e->lhs);
+        return;
+    }
+    if (e->kind == RUST_EXPR_METHOD_CALL) {
+        int ai;
+        rust_resolve_expr(r, e->lhs);
+        for (ai = 0; ai < e->call_arg_count; ai++) {
+            rust_resolve_expr(r, e->call_args[ai]);
+        }
+        return;
+    }
+    if (e->kind == RUST_EXPR_STRUCT_LIT) {
+        int fi;
+        for (fi = 0; fi < e->struct_field_count; fi++) {
+            rust_resolve_expr(r, e->struct_field_exprs[fi]);
+        }
+        return;
+    }
+    if (e->kind == RUST_EXPR_ENUM_CONSTRUCT) {
+        if (e->enum_payload) {
+            rust_resolve_expr(r, e->enum_payload);
+        }
+        return;
+    }
 }
 
 static void rust_resolve_stmt_list_in_new_scope(RustResolver *r, RustStmt *s);
@@ -1500,6 +2023,12 @@ static int rust_stmt_list_symbol_is_mut_local(const RustStmt *s, RustSymbolId sy
             if (rust_stmt_list_symbol_is_mut_local(s->else_head, symbol_id)) return 1;
         } else if (s->kind == RUST_STMT_WHILE) {
             if (rust_stmt_list_symbol_is_mut_local(s->body_head, symbol_id)) return 1;
+        } else if (s->kind == RUST_STMT_MATCH) {
+            RustMatchArm *arm = s->match_arms;
+            while (arm) {
+                if (rust_stmt_list_symbol_is_mut_local(arm->body_head, symbol_id)) return 1;
+                arm = arm->next;
+            }
         }
         s = s->next;
     }
@@ -1522,16 +2051,26 @@ static const char *rust_type_name(RustTypeKind ty) {
     if (ty == RUST_TYPE_BOOL) return "bool";
     if (ty == RUST_TYPE_F32) return "f32";
     if (ty == RUST_TYPE_F64) return "f64";
+    if (ty == RUST_TYPE_PTR) return "&";
+    if (ty == RUST_TYPE_STRUCT) return "struct";
+    if (ty == RUST_TYPE_ENUM) return "enum";
     return "<error>";
 }
 
-static RustTypeKind rust_parse_type_kind_name(const char *name) {
+static RustTypeKind rust_parse_type_kind_name_ast(const RustAst *ast, const char *name) {
     if (!name || !name[0]) return RUST_TYPE_I32;
     if (strcmp(name, "i32") == 0) return RUST_TYPE_I32;
     if (strcmp(name, "bool") == 0) return RUST_TYPE_BOOL;
     if (strcmp(name, "f32") == 0) return RUST_TYPE_F32;
     if (strcmp(name, "f64") == 0) return RUST_TYPE_F64;
-    return RUST_TYPE_ERROR;
+    if (name[0] == '&') return RUST_TYPE_PTR;
+    if (ast && rust_find_enum(ast, name)) return RUST_TYPE_ENUM;
+    if (ast && rust_find_struct(ast, name)) return RUST_TYPE_STRUCT;
+    return RUST_TYPE_STRUCT;
+}
+
+static RustTypeKind rust_parse_type_kind_name(const char *name) {
+    return rust_parse_type_kind_name_ast(NULL, name);
 }
 
 static int rust_is_cmp_op(int op) {
@@ -1543,6 +2082,8 @@ static int rust_is_cmp_op(int op) {
 static int rust_is_logic_op(int op) {
     return op == RUST_TK_LAND || op == RUST_TK_LOR;
 }
+
+static void rust_resolve_stmt_list_no_new_scope(RustResolver *r, RustStmt *s);
 
 static void rust_resolve_stmt(RustResolver *r, RustStmt *s) {
     if (!s) return;
@@ -1576,6 +2117,29 @@ static void rust_resolve_stmt(RustResolver *r, RustStmt *s) {
     if (s->kind == RUST_STMT_WHILE) {
         rust_resolve_expr(r, s->cond);
         rust_resolve_stmt_list_in_new_scope(r, s->body_head);
+        return;
+    }
+    if (s->kind == RUST_STMT_MATCH) {
+        RustMatchArm *arm;
+        rust_resolve_expr(r, s->match_target);
+        arm = s->match_arms;
+        while (arm) {
+            if (!rust_resolver_push_scope(r)) {
+                rust_resolver_add_diag(r->ctx, "RUST-E9999", s->line, s->col, "out of memory while entering match arm scope", "try simplifying match arms");
+            } else {
+                if (arm->binding_name[0]) {
+                    arm->binding_symbol_id = rust_declare(r, RUST_SYMBOL_LOCAL, arm->binding_name, s->line, s->col);
+                }
+                if (arm->body_head) {
+                    rust_resolve_stmt_list_no_new_scope(r, arm->body_head);
+                }
+                if (arm->body_expr) {
+                    rust_resolve_expr(r, arm->body_expr);
+                }
+                rust_resolver_pop_scope(r);
+            }
+            arm = arm->next;
+        }
         return;
     }
 }
@@ -1647,7 +2211,7 @@ int rust_typecheck(RustTypecheckContext *ctx) {
     fn = ctx->ast->functions;
     while (fn) {
         int pi;
-        RustTypeKind fn_ret = rust_parse_type_kind_name(fn->ret_type);
+        RustTypeKind fn_ret = rust_parse_type_kind_name_ast(ctx->ast, fn->ret_type);
         if (ctx->strict_function_signatures && !fn->has_explicit_ret_type) {
             char msg[256];
             snprintf(msg, sizeof(msg), "function `%s` requires explicit return type in strict signature mode", fn->name[0] ? fn->name : "<anon>");
@@ -1662,7 +2226,7 @@ int rust_typecheck(RustTypecheckContext *ctx) {
                 rust_typecheck_add_diag(ctx, "RUST-TYPE-E9999", fn->param_lines[pi], fn->param_cols[pi], "unresolved symbol reached typechecker", "resolver must succeed before typecheck");
                 ctx->had_error = 1;
             } else {
-                RustTypeKind pty = rust_parse_type_kind_name(fn->param_types[pi]);
+                RustTypeKind pty = rust_parse_type_kind_name_ast(ctx->ast, fn->param_types[pi]);
                 if (pty == RUST_TYPE_ERROR) {
                     rust_typecheck_add_diag(ctx, "RUST-TYPE-E9999", fn->param_lines[pi], fn->param_cols[pi], "unsupported parameter type reached typechecker", "v1 supports only i32, bool, f32, and f64 parameters");
                     ctx->had_error = 1;
@@ -1693,6 +2257,31 @@ static RustTypeKind rust_typecheck_expr(RustTypecheckContext *ctx, RustExpr *e) 
     if (e->kind == RUST_EXPR_NUM) return RUST_TYPE_I32;
     if (e->kind == RUST_EXPR_FLIT) return (RustTypeKind)e->num;
     if (e->kind == RUST_EXPR_BOOL) return RUST_TYPE_BOOL;
+    if (e->kind == RUST_EXPR_FIELD) {
+        rust_typecheck_expr(ctx, e->lhs);
+        return RUST_TYPE_I32;
+    }
+    if (e->kind == RUST_EXPR_METHOD_CALL) {
+        rust_typecheck_expr(ctx, e->lhs);
+        int ai;
+        for (ai = 0; ai < e->call_arg_count; ai++) {
+            rust_typecheck_expr(ctx, e->call_args[ai]);
+        }
+        return RUST_TYPE_I32;
+    }
+    if (e->kind == RUST_EXPR_STRUCT_LIT) {
+        int fi;
+        for (fi = 0; fi < e->struct_field_count; fi++) {
+            rust_typecheck_expr(ctx, e->struct_field_exprs[fi]);
+        }
+        return RUST_TYPE_STRUCT;
+    }
+    if (e->kind == RUST_EXPR_ENUM_CONSTRUCT) {
+        if (e->enum_payload) {
+            rust_typecheck_expr(ctx, e->enum_payload);
+        }
+        return RUST_TYPE_ENUM;
+    }
     if (e->kind == RUST_EXPR_IDENT) {
         return rust_type_from_symbol(ctx, e->symbol_id, e->line, e->col);
     } else if (e->kind == RUST_EXPR_UNARY) {
@@ -1748,7 +2337,7 @@ static RustTypeKind rust_typecheck_expr(RustTypecheckContext *ctx, RustExpr *e) 
         }
         for (ai = 0; ai < e->call_arg_count; ai++) {
             RustTypeKind aty = rust_typecheck_expr(ctx, e->call_args[ai]);
-            RustTypeKind pty = (ai < callee_fn->num_params) ? rust_parse_type_kind_name(callee_fn->param_types[ai]) : RUST_TYPE_ERROR;
+            RustTypeKind pty = (ai < callee_fn->num_params) ? rust_parse_type_kind_name_ast(ctx->ast, callee_fn->param_types[ai]) : RUST_TYPE_ERROR;
             if (ai < callee_fn->num_params && pty == RUST_TYPE_ERROR) {
                 rust_typecheck_add_diag(ctx, "RUST-TYPE-E9999", e->line, e->col, "unsupported parameter type reached typechecker", "v1 supports only i32, bool, f32, and f64 parameters");
             } else if (ai < callee_fn->num_params && aty != RUST_TYPE_ERROR && aty != pty) {
@@ -1759,7 +2348,7 @@ static RustTypeKind rust_typecheck_expr(RustTypecheckContext *ctx, RustExpr *e) 
                 rust_typecheck_add_diag(ctx, "RUST-TYPE-E0007", e->line, e->col, msg, "pass an argument with the declared parameter type");
             }
         }
-        return rust_parse_type_kind_name(callee_fn->ret_type);
+        return rust_parse_type_kind_name_ast(ctx->ast, callee_fn->ret_type);
     } else if (e->kind == RUST_EXPR_BINARY) {
         RustTypeKind lt = rust_typecheck_expr(ctx, e->lhs);
         RustTypeKind rt = rust_typecheck_expr(ctx, e->rhs);
@@ -1837,7 +2426,7 @@ static void rust_typecheck_stmt_list(RustTypecheckContext *ctx, RustStmt *s, Rus
             }
             init_ty = rust_typecheck_expr(ctx, s->expr);
             if (s->has_type_annotation) {
-                decl_ty = rust_parse_type_kind_name(s->type_name);
+                decl_ty = rust_parse_type_kind_name_ast(ctx->ast, s->type_name);
                 if (decl_ty == RUST_TYPE_ERROR) {
                     rust_typecheck_add_diag(ctx, "RUST-TYPE-E9999", s->line, s->col, "unsupported let annotation type reached typechecker", "v1 supports only i32, bool, f32, and f64");
                 } else if (init_ty != RUST_TYPE_ERROR && init_ty != decl_ty) {
@@ -1892,6 +2481,32 @@ static void rust_typecheck_stmt_list(RustTypecheckContext *ctx, RustStmt *s, Rus
                 rust_type_report_expected(ctx, "RUST-TYPE-E0002", s->line, s->col, RUST_TYPE_BOOL, ct, "use a bool expression for condition");
             }
             rust_typecheck_stmt_list(ctx, s->body_head, fn_ret);
+        } else if (s->kind == RUST_STMT_MATCH) {
+            rust_typecheck_expr(ctx, s->match_target);
+            RustMatchArm *arm = s->match_arms;
+            while (arm) {
+                if (arm->binding_symbol_id != RUST_SYMBOL_INVALID) {
+                    RustTypeKind pty = RUST_TYPE_I32;
+                    const RustEnum *ren = rust_find_enum(ctx->ast, arm->enum_name);
+                    if (ren) {
+                        int vi;
+                        for (vi = 0; vi < ren->variant_count; vi++) {
+                            if (strcmp(ren->variants[vi].name, arm->variant_name) == 0) {
+                                pty = rust_parse_type_kind_name_ast(ctx->ast, ren->variants[vi].payload_type);
+                                break;
+                            }
+                        }
+                    }
+                    rust_type_assign_symbol(ctx, arm->binding_symbol_id, pty, s->line, s->col);
+                }
+                if (arm->body_head) {
+                    rust_typecheck_stmt_list(ctx, arm->body_head, fn_ret);
+                }
+                if (arm->body_expr) {
+                    rust_typecheck_expr(ctx, arm->body_expr);
+                }
+                arm = arm->next;
+            }
         }
         s = s->next;
     }
@@ -1911,6 +2526,17 @@ static RustFlowKind rust_typecheck_stmt_flow(RustTypecheckContext *ctx, RustStmt
     }
     if (s->kind == RUST_STMT_WHILE) {
         return RUST_FLOW_MAY_CONTINUE;
+    }
+    if (s->kind == RUST_STMT_MATCH) {
+        RustMatchArm *arm = s->match_arms;
+        if (!arm) return RUST_FLOW_MAY_CONTINUE;
+        while (arm) {
+            if (rust_typecheck_stmt_list_flow(ctx, arm->body_head) != RUST_FLOW_ALWAYS_RETURNS) {
+                return RUST_FLOW_MAY_CONTINUE;
+            }
+            arm = arm->next;
+        }
+        return RUST_FLOW_ALWAYS_RETURNS;
     }
     return RUST_FLOW_MAY_CONTINUE;
 }
@@ -2001,6 +2627,32 @@ static void rust_lower_dump_expr(RustLowerContext *ctx, RustExpr *e) {
         fputc(')', stdout);
         return;
     }
+    if (e->kind == RUST_EXPR_FIELD) {
+        fputs("(field ", stdout);
+        rust_lower_dump_expr(ctx, e->lhs);
+        printf(" %s)", e->field_name);
+        return;
+    }
+    if (e->kind == RUST_EXPR_METHOD_CALL) {
+        int ai;
+        fputs("(method-call ", stdout);
+        rust_lower_dump_expr(ctx, e->lhs);
+        printf(" %s", e->field_name);
+        for (ai = 0; ai < e->call_arg_count; ai++) {
+            fputc(' ', stdout);
+            rust_lower_dump_expr(ctx, e->call_args[ai]);
+        }
+        fputc(')', stdout);
+        return;
+    }
+    if (e->kind == RUST_EXPR_STRUCT_LIT) {
+        printf("(struct %s)", e->struct_name);
+        return;
+    }
+    if (e->kind == RUST_EXPR_ENUM_CONSTRUCT) {
+        printf("(enum %s::%s)", e->enum_name, e->variant_name);
+        return;
+    }
     rust_lower_add_diag(ctx, e->line, e->col, "unsupported expression reached Rust lowering", "this expression is not supported by the current lowering pass");
     fputs("(error)", stdout);
 }
@@ -2064,6 +2716,11 @@ static void rust_lower_dump_stmt_list(RustLowerContext *ctx, RustStmt *st, int i
             rust_lower_dump_stmt_list(ctx, st->body_head, indent + 2);
             rust_lower_indent(indent);
             fputs("end\n", stdout);
+        } else if (st->kind == RUST_STMT_MATCH) {
+            rust_lower_indent(indent);
+            fputs("match ", stdout);
+            rust_lower_dump_expr(ctx, st->match_target);
+            fputc('\n', stdout);
         } else if (ctx->dump_ir) {
             rust_lower_add_diag(ctx, st->line, st->col, "unsupported statement reached lowering", "typecheck should gate unsupported forms");
         }
@@ -2502,11 +3159,89 @@ typedef struct RustBackendLocal {
     int has_value;
 } RustBackendLocal;
 
+enum {
+    RUST_SLOT_I32 = 1,
+    RUST_SLOT_BOOL = 2,
+    RUST_SLOT_PTR = 3,
+    RUST_SLOT_STRUCT = 4,
+    RUST_SLOT_ENUM = 5
+};
+
 typedef struct RustBackendSlot {
     RustSymbolId symbol_id;
     int offset;
-    int kind; /* 1=i32, 2=bool */
+    int kind; /* RUST_SLOT_* */
+    int size;
 } RustBackendSlot;
+
+static int rust_find_field_offset(const RustAst *ast, const char *struct_name, const char *field_name) {
+    const RustStruct *st;
+    if (struct_name && struct_name[0]) {
+        st = rust_find_struct(ast, struct_name);
+        if (st) {
+            int i;
+            for (i = 0; i < st->field_count; i++) {
+                if (strcmp(st->fields[i].name, field_name) == 0) return st->fields[i].offset;
+            }
+        }
+    }
+    if (ast) {
+        st = ast->structs;
+        while (st) {
+            int i;
+            for (i = 0; i < st->field_count; i++) {
+                if (strcmp(st->fields[i].name, field_name) == 0) return st->fields[i].offset;
+            }
+            st = st->next;
+        }
+    }
+    return 0;
+}
+
+static int rust_find_variant_tag(const RustAst *ast, const char *enum_name, const char *variant_name) {
+    const RustEnum *en;
+    if (enum_name && enum_name[0]) {
+        en = rust_find_enum(ast, enum_name);
+        if (en) {
+            int i;
+            for (i = 0; i < en->variant_count; i++) {
+                if (strcmp(en->variants[i].name, variant_name) == 0) return en->variants[i].tag;
+            }
+        }
+    }
+    if (ast) {
+        en = ast->enums;
+        while (en) {
+            int i;
+            for (i = 0; i < en->variant_count; i++) {
+                if (strcmp(en->variants[i].name, variant_name) == 0) return en->variants[i].tag;
+            }
+            en = en->next;
+        }
+    }
+    return 0;
+}
+
+static const char *rust_find_method_function_label(const RustAst *ast, const char *type_name, const char *method_name, char *buf, int buf_len) {
+    if (type_name && type_name[0]) {
+        snprintf(buf, (size_t)buf_len, "%s_%s", type_name, method_name);
+        return buf;
+    }
+    if (ast) {
+        const RustFunction *fn = ast->functions;
+        size_t mlen = strlen(method_name);
+        while (fn) {
+            size_t flen = strlen(fn->name);
+            if (flen > mlen + 1 && fn->name[flen - mlen - 1] == '_' && strcmp(fn->name + flen - mlen, method_name) == 0) {
+                snprintf(buf, (size_t)buf_len, "%s", fn->name);
+                return buf;
+            }
+            fn = fn->next;
+        }
+    }
+    snprintf(buf, (size_t)buf_len, "%s", method_name);
+    return buf;
+}
 
 typedef struct RustBackendEvalState {
     RustAst *ast;
@@ -2551,6 +3286,30 @@ static int rust_backend_emit_ir_function_to_x86(FILE *out, const RustAst *ast, c
 static int rust_backend_runtime_expr_supported(const RustAst *ast, const RustExpr *e, const RustSymbolId *call_stack, int call_stack_len) {
     if (!e) return 0;
     if (e->kind == RUST_EXPR_NUM || e->kind == RUST_EXPR_BOOL || e->kind == RUST_EXPR_IDENT || e->kind == RUST_EXPR_FLIT) return 1;
+    if (e->kind == RUST_EXPR_FIELD) {
+        return rust_backend_runtime_expr_supported(ast, e->lhs, call_stack, call_stack_len);
+    }
+    if (e->kind == RUST_EXPR_METHOD_CALL) {
+        int ai;
+        if (!rust_backend_runtime_expr_supported(ast, e->lhs, call_stack, call_stack_len)) return 0;
+        for (ai = 0; ai < e->call_arg_count; ai++) {
+            if (!rust_backend_runtime_expr_supported(ast, e->call_args[ai], call_stack, call_stack_len)) return 0;
+        }
+        return 1;
+    }
+    if (e->kind == RUST_EXPR_STRUCT_LIT) {
+        int fi;
+        for (fi = 0; fi < e->struct_field_count; fi++) {
+            if (!rust_backend_runtime_expr_supported(ast, e->struct_field_exprs[fi], call_stack, call_stack_len)) return 0;
+        }
+        return 1;
+    }
+    if (e->kind == RUST_EXPR_ENUM_CONSTRUCT) {
+        if (e->enum_payload) {
+            return rust_backend_runtime_expr_supported(ast, e->enum_payload, call_stack, call_stack_len);
+        }
+        return 1;
+    }
     if (e->kind == RUST_EXPR_CALL) {
         const RustFunction *callee;
         int ai;
@@ -2581,7 +3340,7 @@ static int rust_backend_runtime_expr_supported(const RustAst *ast, const RustExp
         return 0;
     }
     if (e->kind == RUST_EXPR_UNARY) {
-        if (e->op != RUST_TK_BANG) return 0;
+        if (e->op != RUST_TK_BANG && e->op != RUST_TK_MINUS) return 0;
         return rust_backend_runtime_expr_supported(ast, e->lhs, call_stack, call_stack_len);
     }
     return 0;
@@ -2616,6 +3375,15 @@ static int rust_backend_runtime_stmt_supported(const RustAst *ast, const RustStm
         } else if (st->kind == RUST_STMT_WHILE) {
             if (!st->cond || !rust_backend_runtime_expr_supported(ast, st->cond, call_stack, call_stack_len)) return 0;
             if (!rust_backend_runtime_stmt_supported(ast, st->body_head, call_stack, call_stack_len)) return 0;
+        } else if (st->kind == RUST_STMT_MATCH) {
+            RustMatchArm *arm;
+            if (!st->match_target || !rust_backend_runtime_expr_supported(ast, st->match_target, call_stack, call_stack_len)) return 0;
+            arm = st->match_arms;
+            while (arm) {
+                if (arm->body_head && !rust_backend_runtime_stmt_supported(ast, arm->body_head, call_stack, call_stack_len)) return 0;
+                if (arm->body_expr && !rust_backend_runtime_expr_supported(ast, arm->body_expr, call_stack, call_stack_len)) return 0;
+                arm = arm->next;
+            }
         } else {
             return 0;
         }
@@ -2661,13 +3429,14 @@ static int rust_backend_find_slot(const RustBackendSlot *slots, int slot_count, 
 }
 
 /* Walk the same stmt shapes as rust_backend_runtime_stmt_supported / rust_backend_emit_runtime_stmt_list
- * so every runtime-supported `let` gets a stack slot (including under if/else/while bodies). */
+ * so every runtime-supported `let` gets a stack slot (including under if/else/while/match bodies). */
 static int rust_backend_collect_runtime_slots_from_stmt_list(
     RustParser *p,
     RustBackendSlot *slots,
     int *slot_count,
-    int *next_off,
-    const RustStmt *st
+    int *alloc_bytes,
+    const RustStmt *st,
+    const RustAst *ast
 ) {
     while (st) {
         if (st->kind == RUST_STMT_LET) {
@@ -2675,16 +3444,61 @@ static int rust_backend_collect_runtime_slots_from_stmt_list(
                 rust_backend_add_diag(p, st->line, st->col, "backend runtime slot table overflow", "reduce parameter/local bindings for backend-v1 runtime codegen");
                 return 1;
             }
+            int size = 4;
+            int align = 4;
+            int kind = RUST_SLOT_I32;
+            if (st->type_name[0]) {
+                if (st->type_name[0] == '&') {
+                    size = 8; align = 8; kind = RUST_SLOT_PTR;
+                } else if (rust_find_enum(ast, st->type_name)) {
+                    size = 16; align = 8; kind = RUST_SLOT_ENUM;
+                } else if (rust_find_struct(ast, st->type_name)) {
+                    size = 8; align = 8; kind = RUST_SLOT_STRUCT;
+                } else if (strcmp(st->type_name, "bool") == 0) {
+                    size = 4; align = 4; kind = RUST_SLOT_BOOL;
+                }
+            } else if (st->expr) {
+                if (st->expr->kind == RUST_EXPR_STRUCT_LIT) {
+                    size = 8; align = 8; kind = RUST_SLOT_STRUCT;
+                } else if (st->expr->kind == RUST_EXPR_ENUM_CONSTRUCT) {
+                    size = 16; align = 8; kind = RUST_SLOT_ENUM;
+                } else if (st->expr->kind == RUST_EXPR_BOOL) {
+                    kind = RUST_SLOT_BOOL;
+                }
+            }
+            while (*alloc_bytes % align != 0) (*alloc_bytes) += 4;
+            (*alloc_bytes) += size;
             slots[*slot_count].symbol_id = st->symbol_id;
-            slots[*slot_count].offset = *next_off;
-            slots[*slot_count].kind = rust_backend_runtime_expr_kind(st->expr);
+            slots[*slot_count].offset = -(*alloc_bytes);
+            slots[*slot_count].kind = kind;
+            slots[*slot_count].size = size;
             (*slot_count)++;
-            *next_off -= 4;
+        } else if (st->kind == RUST_STMT_MATCH) {
+            RustMatchArm *arm = st->match_arms;
+            while (arm) {
+                if (arm->binding_symbol_id != RUST_SYMBOL_INVALID) {
+                    if (*slot_count >= 256) {
+                        rust_backend_add_diag(p, st->line, st->col, "backend runtime slot table overflow", "reduce parameter/local bindings for backend-v1 runtime codegen");
+                        return 1;
+                    }
+                    while (*alloc_bytes % 8 != 0) (*alloc_bytes) += 4;
+                    (*alloc_bytes) += 8;
+                    slots[*slot_count].symbol_id = arm->binding_symbol_id;
+                    slots[*slot_count].offset = -(*alloc_bytes);
+                    slots[*slot_count].kind = RUST_SLOT_I32;
+                    slots[*slot_count].size = 8;
+                    (*slot_count)++;
+                }
+                if (arm->body_head) {
+                    if (rust_backend_collect_runtime_slots_from_stmt_list(p, slots, slot_count, alloc_bytes, arm->body_head, ast) != 0) return 1;
+                }
+                arm = arm->next;
+            }
         } else if (st->kind == RUST_STMT_IF) {
-            if (rust_backend_collect_runtime_slots_from_stmt_list(p, slots, slot_count, next_off, st->then_head) != 0) return 1;
-            if (rust_backend_collect_runtime_slots_from_stmt_list(p, slots, slot_count, next_off, st->else_head) != 0) return 1;
+            if (rust_backend_collect_runtime_slots_from_stmt_list(p, slots, slot_count, alloc_bytes, st->then_head, ast) != 0) return 1;
+            if (rust_backend_collect_runtime_slots_from_stmt_list(p, slots, slot_count, alloc_bytes, st->else_head, ast) != 0) return 1;
         } else if (st->kind == RUST_STMT_WHILE) {
-            if (rust_backend_collect_runtime_slots_from_stmt_list(p, slots, slot_count, next_off, st->body_head) != 0) return 1;
+            if (rust_backend_collect_runtime_slots_from_stmt_list(p, slots, slot_count, alloc_bytes, st->body_head, ast) != 0) return 1;
         }
         st = st->next;
     }
@@ -2708,8 +3522,35 @@ static int rust_backend_emit_runtime_expr(FILE *out, RustParser *p, const RustAs
             rust_backend_add_diag(p, e->line, e->col, "unsupported Rust backend feature `runtime identifier binding`", "this Rust construct is not supported by the current backend runtime bridge");
             return 1;
         }
-        (void)sk;
-        fprintf(out, "    movl %d(%%rbp), %%eax\n", off);
+        if (sk == RUST_SLOT_PTR) {
+            fprintf(out, "    movq %d(%%rbp), %%rax\n", off);
+        } else {
+            fprintf(out, "    movl %d(%%rbp), %%eax\n", off);
+        }
+        return 0;
+    }
+    if (e->kind == RUST_EXPR_FIELD) {
+        if (!rust_backend_find_slot(slots, slot_count, e->lhs->symbol_id, &off, &sk)) {
+            rust_backend_add_diag(p, e->line, e->col, "unsupported Rust backend feature `runtime field access`", "symbol not found");
+            return 1;
+        }
+        int foff = rust_find_field_offset(ast, "", e->field_name);
+        if (sk == RUST_SLOT_PTR) {
+            fprintf(out, "    movq %d(%%rbp), %%rcx\n", off);
+            fprintf(out, "    movl %d(%%rcx), %%eax\n", foff);
+        } else {
+            fprintf(out, "    movl %d(%%rbp), %%eax\n", off + foff);
+        }
+        return 0;
+    }
+    if (e->kind == RUST_EXPR_METHOD_CALL) {
+        char label[128];
+        if (e->lhs && e->lhs->kind == RUST_EXPR_IDENT) {
+            rust_backend_find_slot(slots, slot_count, e->lhs->symbol_id, &off, &sk);
+            fprintf(out, "    leaq %d(%%rbp), %%rdi\n", off);
+        }
+        rust_find_method_function_label(ast, "", e->field_name, label, (int)sizeof(label));
+        fprintf(out, "    call %s\n", label);
         return 0;
     }
     if (e->kind == RUST_EXPR_CALL) {
@@ -2737,16 +3578,21 @@ static int rust_backend_emit_runtime_expr(FILE *out, RustParser *p, const RustAs
             rust_backend_add_diag(p, e->line, e->col, "unsupported Rust backend feature `runtime call arguments`", "call argument count does not match callee parameter count");
             return 1;
         }
+        if (callee->num_params == 1 && rust_find_enum(ast, callee->param_types[0])) {
+            int aoff;
+            int ask;
+            if (e->call_args[0]->kind == RUST_EXPR_IDENT && rust_backend_find_slot(slots, slot_count, e->call_args[0]->symbol_id, &aoff, &ask)) {
+                fprintf(out, "    movq %d(%%rbp), %%rdi\n", aoff);
+                fprintf(out, "    movq %d(%%rbp), %%rsi\n", aoff + 8);
+                rust_backend_runtime_function_label(label, (int)sizeof(label), callee);
+                fprintf(out, "    call %s\n", label);
+                return 0;
+            }
+        }
         n = e->call_arg_count;
         n_reg = n < 6 ? n : 6;
         n_stack = n > 6 ? n - 6 : 0;
-        /* Register args (first six) are evaluated right-to-left (push on stack), then
-         * popped into %edi..%r9d. A left-to-right mov would clobber nested call args. */
         align_pad = (n_stack & 1) ? 8 : 0;
-        /* SysV: the first stack param must live at 0(%rsp) at the *call* site so that after
-         * `call` (ret at 0) it is at 8(%rsp) for the callee. Do not `push` stack params then
-         * add reg-arg pushes (that would bury the 7th under temps). Reg args first, then
-         * subq a contiguous outgoing-arg area, movl each i32 to 0, 8, ... 8(n_stack-1)(%rsp). */
         room = 8 * n_stack + align_pad;
         for (ai = n_reg - 1; ai >= 0; ai--) {
             if (rust_backend_emit_runtime_expr(out, p, ast, e->call_args[ai], slots, slot_count, label_id) != 0) return 1;
@@ -2773,6 +3619,11 @@ static int rust_backend_emit_runtime_expr(FILE *out, RustParser *p, const RustAs
         return 0;
     }
     if (e->kind == RUST_EXPR_UNARY) {
+        if (e->op == RUST_TK_MINUS) {
+            if (rust_backend_emit_runtime_expr(out, p, ast, e->lhs, slots, slot_count, label_id) != 0) return 1;
+            fprintf(out, "    negl %%eax\n");
+            return 0;
+        }
         if (e->op != RUST_TK_BANG) {
             rust_backend_add_diag(p, e->line, e->col, "unsupported Rust backend feature `runtime unary operator`", "this Rust construct is not supported by the current backend runtime bridge");
             return 1;
@@ -2848,12 +3699,33 @@ static int rust_backend_emit_runtime_stmt_list(FILE *out, RustParser *p, const R
     while (st) {
         if (st->kind == RUST_STMT_LET) {
             int off;
-            if (!rust_backend_find_slot(slots, slot_count, st->symbol_id, &off, 0)) {
+            int sk;
+            if (!rust_backend_find_slot(slots, slot_count, st->symbol_id, &off, &sk)) {
                 rust_backend_add_diag(p, st->line, st->col, "unsupported Rust backend feature `runtime let slot binding`", "this Rust construct is not supported by the current backend runtime bridge");
                 return 1;
             }
-            if (rust_backend_emit_runtime_expr(out, p, ast, st->expr, slots, slot_count, label_id) != 0) return 1;
-            fprintf(out, "    movl %%eax, %d(%%rbp)\n", off);
+            if (st->expr && st->expr->kind == RUST_EXPR_STRUCT_LIT) {
+                int fi;
+                for (fi = 0; fi < st->expr->struct_field_count; fi++) {
+                    int foff = rust_find_field_offset(ast, st->expr->struct_name, st->expr->struct_field_names[fi]);
+                    if (rust_backend_emit_runtime_expr(out, p, ast, st->expr->struct_field_exprs[fi], slots, slot_count, label_id) != 0) return 1;
+                    fprintf(out, "    movl %%eax, %d(%%rbp)\n", off + foff);
+                }
+            } else if (st->expr && st->expr->kind == RUST_EXPR_ENUM_CONSTRUCT) {
+                int vtag = rust_find_variant_tag(ast, st->expr->enum_name, st->expr->variant_name);
+                fprintf(out, "    movq $%d, %d(%%rbp)\n", vtag, off);
+                if (st->expr->enum_payload) {
+                    if (rust_backend_emit_runtime_expr(out, p, ast, st->expr->enum_payload, slots, slot_count, label_id) != 0) return 1;
+                    fprintf(out, "    movq %%rax, %d(%%rbp)\n", off + 8);
+                }
+            } else {
+                if (rust_backend_emit_runtime_expr(out, p, ast, st->expr, slots, slot_count, label_id) != 0) return 1;
+                if (sk == RUST_SLOT_PTR) {
+                    fprintf(out, "    movq %%rax, %d(%%rbp)\n", off);
+                } else {
+                    fprintf(out, "    movl %%eax, %d(%%rbp)\n", off);
+                }
+            }
         } else if (st->kind == RUST_STMT_ASSIGN) {
             int off;
             if (st->symbol_id == RUST_SYMBOL_INVALID || !rust_ast_symbol_is_mut_local(ast, st->symbol_id)) {
@@ -2889,6 +3761,38 @@ static int rust_backend_emit_runtime_stmt_list(FILE *out, RustParser *p, const R
             if (rust_backend_emit_runtime_stmt_list(out, p, ast, st->body_head, slots, slot_count, label_id) != 0) return 1;
             fprintf(out, "    jmp .Lrust_while_start_%d\n", id);
             fprintf(out, ".Lrust_while_end_%d:\n", id);
+        } else if (st->kind == RUST_STMT_MATCH) {
+            int end_id = (*label_id)++;
+            int target_off = 0;
+            int target_sk = 0;
+            if (st->match_target && st->match_target->kind == RUST_EXPR_IDENT) {
+                rust_backend_find_slot(slots, slot_count, st->match_target->symbol_id, &target_off, &target_sk);
+            }
+            RustMatchArm *arm = st->match_arms;
+            while (arm) {
+                int arm_next_id = (*label_id)++;
+                int vtag = rust_find_variant_tag(ast, arm->enum_name, arm->variant_name);
+                fprintf(out, "    movl %d(%%rbp), %%eax\n", target_off);
+                fprintf(out, "    cmpl $%d, %%eax\n", vtag);
+                fprintf(out, "    jne .Lrust_match_arm_next_%d\n", arm_next_id);
+                if (arm->binding_symbol_id != RUST_SYMBOL_INVALID) {
+                    int bind_off = 0;
+                    if (rust_backend_find_slot(slots, slot_count, arm->binding_symbol_id, &bind_off, 0)) {
+                        fprintf(out, "    movl %d(%%rbp), %%eax\n", target_off + 8);
+                        fprintf(out, "    movl %%eax, %d(%%rbp)\n", bind_off);
+                    }
+                }
+                if (arm->body_head) {
+                    if (rust_backend_emit_runtime_stmt_list(out, p, ast, arm->body_head, slots, slot_count, label_id) != 0) return 1;
+                }
+                if (arm->body_expr) {
+                    if (rust_backend_emit_runtime_expr(out, p, ast, arm->body_expr, slots, slot_count, label_id) != 0) return 1;
+                }
+                fprintf(out, "    jmp .Lrust_match_end_%d\n", end_id);
+                fprintf(out, ".Lrust_match_arm_next_%d:\n", arm_next_id);
+                arm = arm->next;
+            }
+            fprintf(out, ".Lrust_match_end_%d:\n", end_id);
         } else {
             rust_backend_add_diag(p, st->line, st->col, "unsupported Rust backend feature `runtime statement`", "this Rust construct is not supported by the current backend runtime bridge");
             return 1;
@@ -2909,25 +3813,41 @@ static int rust_backend_stmt_list_ends_with_return(const RustStmt *st) {
 static int rust_backend_emit_runtime_function(FILE *out, RustParser *p, const RustAst *ast, const RustFunction *fn, int *label_id) {
     RustBackendSlot slots[256];
     int slot_count = 0;
-    int next_off = -4;
+    int alloc_bytes = 0;
     int pi;
     int stack_bytes;
     char fn_label[64];
-    static const char *arg_regs[6] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
+    static const char *reg_names_64[6] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
+    static const char *reg_names_32[6] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
+    int reg_idx = 0;
     if (!out || !p || !fn) return 1;
     for (pi = 0; pi < fn->num_params; pi++) {
         if (slot_count >= 256) {
             rust_backend_add_diag(p, fn->name_line, fn->name_col, "backend runtime slot table overflow", "reduce parameter/local bindings for backend-v1 runtime codegen");
             return 1;
         }
+        int size = 4;
+        int align = 4;
+        int kind = RUST_SLOT_I32;
+        if (fn->param_types[pi][0] == '&') {
+            size = 8; align = 8; kind = RUST_SLOT_PTR;
+        } else if (rust_find_enum(ast, fn->param_types[pi])) {
+            size = 16; align = 8; kind = RUST_SLOT_ENUM;
+        } else if (rust_find_struct(ast, fn->param_types[pi])) {
+            size = 8; align = 8; kind = RUST_SLOT_STRUCT;
+        } else if (strcmp(fn->param_types[pi], "bool") == 0) {
+            size = 4; align = 4; kind = RUST_SLOT_BOOL;
+        }
+        while (alloc_bytes % align != 0) alloc_bytes += 4;
+        alloc_bytes += size;
         slots[slot_count].symbol_id = fn->param_symbol_ids[pi];
-        slots[slot_count].offset = next_off;
-        slots[slot_count].kind = 1;
+        slots[slot_count].offset = -alloc_bytes;
+        slots[slot_count].kind = kind;
+        slots[slot_count].size = size;
         slot_count++;
-        next_off -= 4;
     }
-    if (rust_backend_collect_runtime_slots_from_stmt_list(p, slots, &slot_count, &next_off, fn->body_head) != 0) return 1;
-    stack_bytes = slot_count * 4;
+    if (rust_backend_collect_runtime_slots_from_stmt_list(p, slots, &slot_count, &alloc_bytes, fn->body_head, ast) != 0) return 1;
+    stack_bytes = alloc_bytes;
     if (stack_bytes > 0) {
         int rem = stack_bytes % 16;
         if (rem != 0) stack_bytes += 16 - rem;
@@ -2940,12 +3860,26 @@ static int rust_backend_emit_runtime_function(FILE *out, RustParser *p, const Ru
         fprintf(out, "    subq $%d, %%rsp\n", stack_bytes);
     }
     for (pi = 0; pi < fn->num_params; pi++) {
-        if (pi < 6) {
-            fprintf(out, "    movl %s, %d(%%rbp)\n", arg_regs[pi], slots[pi].offset);
+        if (slots[pi].kind == RUST_SLOT_PTR) {
+            if (reg_idx < 6) {
+                fprintf(out, "    movq %s, %d(%%rbp)\n", reg_names_64[reg_idx++], slots[pi].offset);
+            }
+        } else if (slots[pi].kind == RUST_SLOT_ENUM) {
+            if (reg_idx < 6) {
+                fprintf(out, "    movq %s, %d(%%rbp)\n", reg_names_64[reg_idx++], slots[pi].offset);
+            }
+            if (reg_idx < 6) {
+                fprintf(out, "    movq %s, %d(%%rbp)\n", reg_names_64[reg_idx++], slots[pi].offset + 8);
+            }
         } else {
-            int incoming_off = 16 + 8 * (pi - 6);
-            fprintf(out, "    movl %d(%%rbp), %%eax\n", incoming_off);
-            fprintf(out, "    movl %%eax, %d(%%rbp)\n", slots[pi].offset);
+            if (reg_idx < 6) {
+                fprintf(out, "    movl %s, %d(%%rbp)\n", reg_names_32[reg_idx++], slots[pi].offset);
+            } else {
+                int incoming_off = 16 + 8 * (reg_idx - 6);
+                fprintf(out, "    movl %d(%%rbp), %%eax\n", incoming_off);
+                fprintf(out, "    movl %%eax, %d(%%rbp)\n", slots[pi].offset);
+                reg_idx++;
+            }
         }
     }
     if (rust_backend_emit_runtime_stmt_list(out, p, ast, fn->body_head, slots, slot_count, label_id) != 0) return 1;
@@ -3756,6 +4690,109 @@ static int rust_ir_emit_expr(const RustAst *ast, const RustExpr *e,
         return 0;
     }
 
+    if (e->kind == RUST_EXPR_FIELD) {
+        if (e->lhs && e->lhs->kind == RUST_EXPR_IDENT) {
+            int off = 0;
+            if (rust_backend_find_slot(slots, slot_count, e->lhs->symbol_id, &off, 0)) {
+                int si = 0;
+                for (si = 0; si < slot_count; si++) {
+                    if (slots[si].symbol_id == e->lhs->symbol_id) break;
+                }
+                if (si < slot_count) {
+                    const RustStruct *st = ast ? ast->structs : NULL;
+                    int f_off = 0;
+                    while (st) {
+                        f_off = rust_find_field_offset(ast, st->name, e->field_name);
+                        if (f_off >= 0) break;
+                        st = st->next;
+                    }
+                    if (f_off < 0) f_off = 0;
+                    if (slots[si].kind == RUST_SLOT_PTR) {
+                        char slot_name[32];
+                        char *ptr_tmp;
+                        char *dst;
+                        sprintf(slot_name, "%%stack_%d", off * 2);
+                        ptr_tmp = rust_ir_fresh();
+                        ZCC_EMIT_LOAD(IR_TY_PTR, ptr_tmp, slot_name, e->line);
+                        dst = rust_ir_fresh();
+                        if (f_off > 0) {
+                            char off_tmp[32];
+                            char *off_const = rust_ir_fresh();
+                            char *addr_tmp;
+                            ZCC_EMIT_CONST(IR_TY_I64, off_const, f_off, e->line);
+                            rust_ir_save(off_tmp);
+                            addr_tmp = rust_ir_fresh();
+                            ZCC_EMIT_BINARY(IR_ADD, IR_TY_PTR, addr_tmp, ptr_tmp, off_tmp, e->line);
+                            ZCC_EMIT_LOAD(IR_TY_I32, dst, addr_tmp, e->line);
+                        } else {
+                            ZCC_EMIT_LOAD(IR_TY_I32, dst, ptr_tmp, e->line);
+                        }
+                        return 0;
+                    } else {
+                        char slot_name[32];
+                        char *dst;
+                        sprintf(slot_name, "%%stack_%d", (off - f_off) * 2);
+                        dst = rust_ir_fresh();
+                        ZCC_EMIT_LOAD(IR_TY_I32, dst, slot_name, e->line);
+                        return 0;
+                    }
+                }
+            }
+        }
+        return 1;
+    }
+
+    if (e->kind == RUST_EXPR_METHOD_CALL) {
+        char fn_label[64];
+        char *dst;
+        int ai;
+        char arg_tmps[256][32];
+        const RustStruct *st = ast ? ast->structs : NULL;
+        fn_label[0] = 0;
+        while (st) {
+            if (rust_find_method_function_label(ast, st->name, e->field_name, fn_label, sizeof(fn_label))) {
+                break;
+            }
+            st = st->next;
+        }
+        if (!fn_label[0]) {
+            snprintf(fn_label, sizeof(fn_label), "%s", e->field_name);
+        }
+        if (e->lhs && e->lhs->kind == RUST_EXPR_IDENT) {
+            int off = 0;
+            if (!rust_backend_find_slot(slots, slot_count, e->lhs->symbol_id, &off, 0))
+                return 1;
+            char slot_name[32];
+            char *addr_tmp;
+            sprintf(slot_name, "%%stack_%d", off * 2);
+            addr_tmp = rust_ir_fresh();
+            if (g_emit_ir && g_ir_cur_func) {
+                ir_emit(g_ir_cur_func, IR_ADDR, IR_TY_PTR, addr_tmp, slot_name, 0, 0, 0, e->line);
+            }
+            rust_ir_save(arg_tmps[0]);
+        } else {
+            return 1;
+        }
+        for (ai = 0; ai < e->call_arg_count; ai++) {
+            if (rust_ir_emit_expr(ast, e->call_args[ai], slots, slot_count) != 0) return 1;
+            rust_ir_save(arg_tmps[ai + 1]);
+        }
+        ZCC_EMIT_ARG(IR_TY_PTR, arg_tmps[0], e->line);
+        for (ai = 0; ai < e->call_arg_count; ai++) {
+            RustTypeKind pty = rust_infer_expr_type(ast, e->call_args[ai], g_rust_symbol_types);
+            ZCC_EMIT_ARG(rust_map_ir_type(pty), arg_tmps[ai + 1], e->line);
+        }
+        dst = rust_ir_fresh();
+        ZCC_EMIT_CALL(IR_TY_I32, dst, fn_label, e->line);
+        return 0;
+    }
+
+    if (e->kind == RUST_EXPR_STRUCT_LIT || e->kind == RUST_EXPR_ENUM_CONSTRUCT) {
+        char *dst = rust_ir_fresh();
+        ZCC_EMIT_CONST(IR_TY_I32, dst, 0, e->line);
+        return 0;
+    }
+
     return 1; /* unsupported expression */
 }
 
@@ -3770,15 +4807,45 @@ static int rust_ir_emit_stmt_list(const RustAst *ast, const RustStmt *st,
                 return 1;
             sprintf(slot_name, "%%stack_%d", off * 2);
             if (st->expr) {
-                char val_tmp[32];
-                if (rust_ir_emit_expr(ast, st->expr, slots, slot_count) != 0) return 1;
-                rust_ir_save(val_tmp);
-                RustTypeKind tyk = RUST_TYPE_I32;
-                if (g_rust_symbol_types && st->symbol_id != RUST_SYMBOL_INVALID) {
-                    tyk = (RustTypeKind)g_rust_symbol_types[st->symbol_id];
+                if (st->expr->kind == RUST_EXPR_STRUCT_LIT) {
+                    int fi;
+                    for (fi = 0; fi < st->expr->struct_field_count; fi++) {
+                        int f_off = rust_find_field_offset(ast, st->expr->struct_name, st->expr->struct_field_names[fi]);
+                        if (f_off < 0) f_off = fi * 4;
+                        char fslot[32];
+                        char fval[32];
+                        sprintf(fslot, "%%stack_%d", (off - f_off) * 2);
+                        if (rust_ir_emit_expr(ast, st->expr->struct_field_exprs[fi], slots, slot_count) != 0) return 1;
+                        rust_ir_save(fval);
+                        ZCC_EMIT_STORE(IR_TY_I32, fslot, fval, st->line);
+                    }
+                } else if (st->expr->kind == RUST_EXPR_ENUM_CONSTRUCT) {
+                    int tag = rust_find_variant_tag(ast, st->expr->enum_name, st->expr->variant_name);
+                    if (tag < 0) tag = 0;
+                    char tag_slot[32];
+                    char *tag_imm = rust_ir_fresh();
+                    sprintf(tag_slot, "%%stack_%d", off * 2);
+                    ZCC_EMIT_CONST(IR_TY_I32, tag_imm, tag, st->line);
+                    ZCC_EMIT_STORE(IR_TY_I32, tag_slot, tag_imm, st->line);
+                    if (st->expr->enum_payload) {
+                        char pay_slot[32];
+                        char pay_val[32];
+                        sprintf(pay_slot, "%%stack_%d", (off - 8) * 2);
+                        if (rust_ir_emit_expr(ast, st->expr->enum_payload, slots, slot_count) != 0) return 1;
+                        rust_ir_save(pay_val);
+                        ZCC_EMIT_STORE(IR_TY_I32, pay_slot, pay_val, st->line);
+                    }
+                } else {
+                    char val_tmp[32];
+                    if (rust_ir_emit_expr(ast, st->expr, slots, slot_count) != 0) return 1;
+                    rust_ir_save(val_tmp);
+                    RustTypeKind tyk = RUST_TYPE_I32;
+                    if (g_rust_symbol_types && st->symbol_id != RUST_SYMBOL_INVALID) {
+                        tyk = (RustTypeKind)g_rust_symbol_types[st->symbol_id];
+                    }
+                    ir_type_t ir_ty = rust_map_ir_type(tyk);
+                    ZCC_EMIT_STORE(ir_ty, slot_name, val_tmp, st->line);
                 }
-                ir_type_t ir_ty = rust_map_ir_type(tyk);
-                ZCC_EMIT_STORE(ir_ty, slot_name, val_tmp, st->line);
             }
         } else if (st->kind == RUST_STMT_ASSIGN) {
             int off;
@@ -3839,6 +4906,67 @@ static int rust_ir_emit_stmt_list(const RustAst *ast, const RustStmt *st,
             if (rust_ir_emit_stmt_list(ast, st->body_head, slots, slot_count) != 0) return 1;
             ZCC_EMIT_BR(lbl_start, st->line);
             ZCC_EMIT_LABEL(lbl_end, st->line);
+        } else if (st->kind == RUST_STMT_MATCH) {
+            int match_id = rust_ir_label_counter++;
+            char lbl_match_end[32];
+            sprintf(lbl_match_end, ".Lri_matchend_%d", match_id);
+            int target_off = 0;
+            if (st->match_target && st->match_target->kind == RUST_EXPR_IDENT) {
+                rust_backend_find_slot(slots, slot_count, st->match_target->symbol_id, &target_off, 0);
+            }
+            RustMatchArm *arm = st->match_arms;
+            int arm_idx = 0;
+            while (arm) {
+                int arm_id = rust_ir_label_counter++;
+                char lbl_next_arm[32];
+                sprintf(lbl_next_arm, ".Lri_armnext_%d", arm_id);
+                int tag = rust_find_variant_tag(ast, arm->enum_name, arm->variant_name);
+                if (tag < 0) tag = arm_idx;
+                char tag_slot[32];
+                char *tag_val;
+                char *tag_imm;
+                char tag_imm_tmp[32];
+                char *cmp_res;
+                char *not_res;
+                char zero_imm_tmp[32];
+                char *z;
+                sprintf(tag_slot, "%%stack_%d", target_off * 2);
+                tag_val = rust_ir_fresh();
+                ZCC_EMIT_LOAD(IR_TY_I32, tag_val, tag_slot, st->line);
+                tag_imm = rust_ir_fresh();
+                ZCC_EMIT_CONST(IR_TY_I32, tag_imm, tag, st->line);
+                rust_ir_save(tag_imm_tmp);
+                cmp_res = rust_ir_fresh();
+                ZCC_EMIT_BINARY(IR_EQ, IR_TY_I32, cmp_res, tag_val, tag_imm_tmp, st->line);
+                z = rust_ir_fresh();
+                ZCC_EMIT_CONST(IR_TY_I32, z, 0, st->line);
+                rust_ir_save(zero_imm_tmp);
+                not_res = rust_ir_fresh();
+                ZCC_EMIT_BINARY(IR_EQ, IR_TY_I32, not_res, cmp_res, zero_imm_tmp, st->line);
+                ZCC_EMIT_BR_IF(not_res, lbl_next_arm, st->line);
+
+                if (arm->binding_symbol_id != RUST_SYMBOL_INVALID) {
+                    int bind_off = 0;
+                    if (rust_backend_find_slot(slots, slot_count, arm->binding_symbol_id, &bind_off, 0)) {
+                        char payload_slot[32];
+                        char bind_slot[32];
+                        char *pay_val;
+                        sprintf(payload_slot, "%%stack_%d", (target_off - 8) * 2);
+                        sprintf(bind_slot, "%%stack_%d", bind_off * 2);
+                        pay_val = rust_ir_fresh();
+                        ZCC_EMIT_LOAD(IR_TY_I32, pay_val, payload_slot, st->line);
+                        ZCC_EMIT_STORE(IR_TY_I32, bind_slot, pay_val, st->line);
+                    }
+                }
+                if (arm->body_head) {
+                    if (rust_ir_emit_stmt_list(ast, arm->body_head, slots, slot_count) != 0) return 1;
+                }
+                ZCC_EMIT_BR(lbl_match_end, st->line);
+                ZCC_EMIT_LABEL(lbl_next_arm, st->line);
+                arm = arm->next;
+                arm_idx++;
+            }
+            ZCC_EMIT_LABEL(lbl_match_end, st->line);
         } else if (st->kind == RUST_STMT_EXPR) {
             if (rust_ir_emit_expr(ast, st->expr, slots, slot_count) != 0) return 1;
         } else {
@@ -3870,8 +4998,9 @@ static int rust_ir_emit_function(const RustAst *ast, const RustFunction *fn) {
     }
     /* Collect local variable slots */
     { RustParser tmp_p;
+      int alloc_bytes = -next_off;
       memset(&tmp_p, 0, sizeof(tmp_p));
-      if (rust_backend_collect_runtime_slots_from_stmt_list(&tmp_p, slots, &slot_count, &next_off, fn->body_head) != 0) return 1;
+      if (rust_backend_collect_runtime_slots_from_stmt_list(&tmp_p, slots, &slot_count, &alloc_bytes, fn->body_head, ast) != 0) return 1;
     }
 
     rust_ir_tmp_counter = 0;
