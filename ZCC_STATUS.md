@@ -110,6 +110,7 @@ ZCC is compiled by concatenating discrete parts inside the `Makefile` before inv
 - [x] ASan run to confirm SARIF CWE-416/415 findings (Run completed, no UAF/Double-Free detected)
 - [x] GLB extraction and history rewrite
 - [x] DPO Model Alignment Retrain (increase update budget, lr to 1e-5-5e-5, max_length=1024)
+- [x] Formalize architectural limitations & strategic goals (see [`docs/ZCC_LIMITATIONS_AND_GOALS.md`](file:///h:/__DOWNLOADS/zcc_github_upload/docs/ZCC_LIMITATIONS_AND_GOALS.md))
 
 ---
 
@@ -219,5 +220,24 @@ Bugs closed to achieve this:
 - Makefile -no-pie
 - sizeof(char_array) = 8 bug
 - Octal escape sequences unimplemented
+
+---
+
+## ZCC Extended Inline Assembly Milestone (LIMIT-001) — September 21, 2026
+- Extended GCC inline assembly syntax with input/output/clobber constraints, register allocation, `%[name]` substitution, `%k` modifiers, immediate literals, and callee-saved preservation.
+- 13/13 probe test suite passes.
+- Byte-identical self-host convergence (MD5 `4202b5e2ca1046c73f547946b766e84b`).
+- 19/19 optimization pass gauntlet suites verified bit-exact.
+- 15/15 QuickJS ES2020 engine tests pass.
+
+---
+
+## ZCC Modern C11 / C23 Language Conformance Milestone (LIMIT-002) — September 21, 2026
+- **C11 `_Atomic(type-name)` & `_Atomic T`**: Syntax & Type-System Compatibility (`ATOMIC_SEMANTICS: NOT_CLAIMED`). C11 §6.7.2.4 constraints enforced: requires abstract declarators, rejects identifiers, array types, and function types.
+- **`LIMIT002-TYPESTART-INV`**: Every grammar path capable of consuming a C type-name agrees on `TK_ATOMIC`.
+- **C23 `[[...]]` Attributes**: Lexical skipper with delimiter balancing `()`, `[]`, `{}`, EOF detection, and deterministic malformed syntax rejection across declarations, statements (`[[fallthrough]];` -> `ND_NOP`), types, and declarators.
+- **Freestanding C11 `<threads.h>`**: Self-contained POSIX pthread-backed implementation for SystemV x86-64 Linux ABI (`thrd_*`, `mtx_*`, `cnd_*`, `tss_*`, `call_once`).
+- **Proof-Carrying Conformance Gate**: 13/13 manifest tests pass, GCC differential oracle passes, and 4/4 fault-injection mutations detected (Mutations A–D turn gates RED).
+- Byte-identical self-host convergence (MD5 `ceb8c1f7c8e5da2f9038807e9beaf629`).
 
 ZKAEDI PRIME: CONVERGED

@@ -27,7 +27,7 @@ However, to maintain its minimal freestanding design and strict bootstrap determ
 │ ID        │ Subsystem / Area                  │ Severity     │ Target Phase │
 ├───────────┼───────────────────────────────────┼──────────────┼──────────────┤
 │ LIMIT-001 │ Extended GCC Inline Assembly      │ RESOLVED     │ VERIFIED ✅  │
-│ LIMIT-002 │ C11 / C23 Language Conformance    │ MEDIUM       │ Goal Q1-2027 │
+│ LIMIT-002 │ C11 / C23 Language Conformance    │ RESOLVED     │ VERIFIED ✅  │
 │ LIMIT-003 │ Extended Precision & Complex Math │ MEDIUM       │ Goal Q1-2027 │
 │ LIMIT-004 │ Autonomous Linker & Dynamic Reloc │ HIGH         │ Goal Q2-2027 │
 │ LIMIT-005 │ Raw Glibc Header Ingestion        │ HIGH         │ Goal Q4-2026 │
