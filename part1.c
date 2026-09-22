@@ -927,6 +927,15 @@ struct FuncParams {
     Symbol *syms[MAX_PARAMS];
 };
 
+typedef struct AsmOperand {
+    char constraint[32];   /* "=r", "+r", "r", "m", "=a", "0", etc. */
+    char symbol_name[64];  /* optional [name] */
+    Node *expr;            /* lvalue (output) or rvalue (input) */
+    int is_output;         /* 1 = output, 0 = input */
+    int is_rw;             /* 1 = '+' read-write */
+    int reg_id;            /* allocated physical register ID */
+} AsmOperand;
+
 struct Node {
     /* Fixed ABI Preamble (32 bytes) */
     unsigned long long magic;     /* offset 0 */
@@ -958,6 +967,8 @@ struct Node {
     Type *cast_type;        /* ND_CAST */
     Node *initializer;      /* ND_GLOBAL_VAR */
     char *asm_string;       /* ND_ASM */
+    AsmOperand *asm_operands;
+    char **asm_clobbers;
     Node *next;             /* linked list for top-level */
 
     /* 4-byte aligned fields (integers & flags) */
@@ -977,6 +988,8 @@ struct Node {
     int bit_offset;
     int bit_size;
     int asm_tier;           /* ND_ASM */
+    int num_asm_operands;
+    int num_asm_clobbers;
 
     /* 8-byte aligned character arrays (256 bytes each) */
     char name[MAX_IDENT];

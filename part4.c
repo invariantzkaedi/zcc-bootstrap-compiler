@@ -4608,6 +4608,12 @@ static int variable_is_read(Node *node, Symbol *sym) {
       }
       return 0;
 
+    case ND_ASM:
+      for (i = 0; node->asm_operands && i < node->num_asm_operands; i++) {
+        if (variable_is_read(node->asm_operands[i].expr, sym)) return 1;
+      }
+      return 0;
+
     default:
       /* Fallback for general binary/unary/member operators */
       if (variable_is_read(node->lhs, sym)) return 1;
@@ -4728,6 +4734,9 @@ static void codegen_stmt_dce(Compiler *cc, Node *node, int *terminated) {
     *terminated = 0;
   }
 }
+
+#define ZCC_INLINE_ASM_CODEGEN
+#include "zcc_inline_asm.h"
 
 void codegen_stmt(Compiler *cc, Node *node) {
   if (!node)
@@ -5316,6 +5325,7 @@ void codegen_stmt(Compiler *cc, Node *node) {
     return;
 
   case ND_ASM:
+    if (node->num_asm_operands > 0 || node->num_asm_clobbers > 0) { codegen_extended_asm(cc, node); return; }
     fprintf(cc->out, "    %s\n", node->asm_string);
     ZCC_EMIT_ASM(node->asm_string, node->line);
     /* Note: IR backend handles this via ZCC_ND_ASM -> OP_ASM translation if enabled */

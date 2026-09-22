@@ -1,0 +1,20 @@
+# LIMIT-001 Evidence Execution Trace
+# Host: Linux 6.18.33.2-microsoft-standard-WSL2 x86_64
+# Toolchain: gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+
+# 1. Rule EF-3 Probe Compilation & Execution
+cd /home/zkaedi/zcc_ext4_test
+./zcc tests/probe_inline_asm.c -o /tmp/probe_asm.s
+gcc /tmp/probe_asm.s -o /tmp/probe_asm
+/tmp/probe_asm
+
+# 2. Gate 1 Self-Host Identity Verification
+make selfhost
+cmp zcc2.s zcc3.s
+md5sum zcc2.s zcc3.s
+
+# 3. Gate 2 Multi-Suite Production Optimization Pass Gauntlet
+python3 tools/test_zcc_opt_passes.py
+
+# 4. Gate 4 QuickJS Target Harness
+/tmp/test_quickjs_runner

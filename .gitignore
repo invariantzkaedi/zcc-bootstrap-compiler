@@ -656,6 +656,7 @@ docs/*
 # Independent validation suite deliverables & evidence tracking
 !docs/SPEC_C_SUBSET_v1.md
 !docs/XMM_VALIDATION.md
+!docs/ZCC_LIMITATIONS_AND_GOALS.md
 !docs/evidence/
 !docs/evidence/**
 
@@ -668,3 +669,4 @@ evidence/zcc-run-*/
 !evidence/latest/**
 
 **/target/
+.ext4_sync_manifest.*

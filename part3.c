@@ -3588,6 +3588,9 @@ static void emit_local_initializer(Compiler *cc, Node *block, int *cnt, int *cap
     }
 }
 
+#define ZCC_INLINE_ASM_PARSE
+#include "zcc_inline_asm.h"
+
 Node *parse_stmt_internal(Compiler *cc) {
     int line;
     line = cc->tk_line;
@@ -3638,7 +3641,7 @@ Node *parse_stmt_internal(Compiler *cc) {
         strcmp(cc->tk_text, "__asm__") == 0 ||
         strcmp(cc->tk_text, "asm") == 0 ||
         strcmp(cc->tk_text, "__asm") == 0))) {
-        char asm_buf[512];
+        char asm_buf[4096];
         int asm_tier = 0;
         int i = 0;
         Node *asmn;
@@ -3646,43 +3649,34 @@ Node *parse_stmt_internal(Compiler *cc) {
         /* skip optional volatile qualifier */
         if (cc->tk == TK_IDENT && (strcmp(cc->tk_text, "__volatile__") == 0 ||
             strcmp(cc->tk_text, "volatile") == 0)) {
-            asm_tier = (asm_tier < 1) ? 1 : asm_tier;
+            asm_tier = 1;
             next_token(cc);
         }
         if (cc->tk == TK_VOLATILE) {
-            asm_tier = (asm_tier < 1) ? 1 : asm_tier;
+            asm_tier = 1;
             next_token(cc);
         }
+        asmn = node_new(cc, ND_ASM, line);
         /* Extract string from ("...") */
         if (cc->tk == TK_LPAREN) {
-            int depth = 1;
-            int colon_count = 0;
             next_token(cc);
-            /* Grab first string literal as the asm template */
-            if (cc->tk == TK_STR && cc->tk_str[0]) {
+            /* Grab string literal(s) as the asm template */
+            while (cc->tk == TK_STR) {
                 int slen = 0;
                 const char *s = cc->tk_str;
-                while (s[slen] && slen < 511) { asm_buf[i++] = s[slen++]; }
+                while (s[slen] && i < 4090) { asm_buf[i++] = s[slen++]; }
                 asm_buf[i] = 0;
                 next_token(cc);
             }
-            /* Scan for colons (constraint/clobber indicators) and close paren */
-            while (depth > 0 && cc->tk != TK_EOF) {
-                if (cc->tk == TK_LPAREN) depth++;
-                else if (cc->tk == TK_RPAREN) { depth--; if (depth == 0) break; }
-                else if (cc->tk == TK_COLON) { colon_count++; }
-                next_token(cc);
+            if (cc->tk == TK_COLON) {
+                parse_extended_asm_operands(cc, asmn);
+                asm_tier = 3;
+            } else {
+                while (cc->tk != TK_RPAREN && cc->tk != TK_EOF) next_token(cc);
+                if (cc->tk == TK_RPAREN) next_token(cc);
             }
-            if (cc->tk == TK_RPAREN) next_token(cc);
-            /* Upgrade tier based on colon count:
-             *  1 colon = output constraints (Tier 3)
-             *  2 colons = input constraints (Tier 3)
-             *  3 colons = clobbers (Tier 2) */
-            if (colon_count >= 1) asm_tier = (asm_tier < 3) ? 3 : asm_tier;
-            else if (colon_count == 0 && i > 0) asm_tier = (asm_tier < 1) ? 1 : asm_tier;
         }
         if (cc->tk == TK_SEMI) next_token(cc);
-        asmn = node_new(cc, ND_ASM, line);
         asmn->asm_string = cc_strdup(cc, asm_buf);
         asmn->asm_tier   = asm_tier;
         return asmn;
