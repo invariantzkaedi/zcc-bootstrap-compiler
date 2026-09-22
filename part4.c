@@ -219,6 +219,10 @@ static void emit_fp_result_to_rax(Compiler *cc, Type *type) {
         fprintf(cc->out, "    movq %%xmm0, %%rax\n");
 }
 
+static int get_complex_scratch_offset(Compiler *cc) {
+    return cc->abi_scratch_offset + 64 + (cc->stack_depth & 7) * 16;
+}
+
 static void emit_promote_to_complex(Compiler *cc, Type *operand_type, Type *complex_target_type, const char *reg_name) {
     if (operand_type && complex_target_type && operand_type->kind == complex_target_type->kind) {
         if (strcmp(reg_name, "rax") != 0) {
@@ -227,7 +231,7 @@ static void emit_promote_to_complex(Compiler *cc, Type *operand_type, Type *comp
         return;
     }
     int target_is_f32 = (complex_target_type && complex_target_type->kind == TY_FLOAT_COMPLEX);
-    int scratch_off = cc->abi_scratch_offset;
+    int scratch_off = get_complex_scratch_offset(cc);
 
     if (operand_type && is_complex_type(operand_type)) {
         fprintf(cc->out, "    movq %%%s, %%r10\n", reg_name);
@@ -1698,7 +1702,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       return;
     }
     if (node->type && is_complex_type(node->type)) {
-      int scratch_off = cc->abi_scratch_offset;
+      int scratch_off = get_complex_scratch_offset(cc);
       codegen_expr_checked(cc, node->lhs);
       emit_promote_to_complex(cc, node->lhs->type, node->type, "rax");
       push_reg(cc, "rax");
@@ -1812,7 +1816,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       return;
     }
     if (node->type && is_complex_type(node->type)) {
-      int scratch_off = cc->abi_scratch_offset;
+      int scratch_off = get_complex_scratch_offset(cc);
       codegen_expr_checked(cc, node->lhs);
       emit_promote_to_complex(cc, node->lhs->type, node->type, "rax");
       push_reg(cc, "rax");
@@ -1932,7 +1936,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       return;
     }
     if (node->type && is_complex_type(node->type)) {
-      int scratch_off = cc->abi_scratch_offset;
+      int scratch_off = get_complex_scratch_offset(cc);
       codegen_expr_checked(cc, node->lhs);
       emit_promote_to_complex(cc, node->lhs->type, node->type, "rax");
       push_reg(cc, "rax");
@@ -1948,20 +1952,22 @@ void codegen_expr(Compiler *cc, Node *node) {
         /* real = a*c - b*d */
         fprintf(cc->out, "    movss 0(%%rsi), %%xmm0\n    mulss 0(%%rdx), %%xmm0\n");
         fprintf(cc->out, "    movss 4(%%rsi), %%xmm1\n    mulss 4(%%rdx), %%xmm1\n");
-        fprintf(cc->out, "    subss %%xmm1, %%xmm0\n    movss %%xmm0, 0(%%rdi)\n");
+        fprintf(cc->out, "    subss %%xmm1, %%xmm0\n");
         /* imag = a*d + b*c */
-        fprintf(cc->out, "    movss 0(%%rsi), %%xmm0\n    mulss 4(%%rdx), %%xmm0\n");
-        fprintf(cc->out, "    movss 4(%%rsi), %%xmm1\n    mulss 0(%%rdx), %%xmm1\n");
-        fprintf(cc->out, "    addss %%xmm1, %%xmm0\n    movss %%xmm0, 4(%%rdi)\n");
+        fprintf(cc->out, "    movss 0(%%rsi), %%xmm2\n    mulss 4(%%rdx), %%xmm2\n");
+        fprintf(cc->out, "    movss 4(%%rsi), %%xmm3\n    mulss 0(%%rdx), %%xmm3\n");
+        fprintf(cc->out, "    addss %%xmm3, %%xmm2\n");
+        fprintf(cc->out, "    movss %%xmm0, 0(%%rdi)\n    movss %%xmm2, 4(%%rdi)\n");
       } else {
         /* real = a*c - b*d */
         fprintf(cc->out, "    movsd 0(%%rsi), %%xmm0\n    mulsd 0(%%rdx), %%xmm0\n");
         fprintf(cc->out, "    movsd 8(%%rsi), %%xmm1\n    mulsd 8(%%rdx), %%xmm1\n");
-        fprintf(cc->out, "    subsd %%xmm1, %%xmm0\n    movsd %%xmm0, 0(%%rdi)\n");
+        fprintf(cc->out, "    subsd %%xmm1, %%xmm0\n");
         /* imag = a*d + b*c */
-        fprintf(cc->out, "    movsd 0(%%rsi), %%xmm0\n    mulsd 8(%%rdx), %%xmm0\n");
-        fprintf(cc->out, "    movsd 8(%%rsi), %%xmm1\n    mulsd 0(%%rdx), %%xmm1\n");
-        fprintf(cc->out, "    addsd %%xmm1, %%xmm0\n    movsd %%xmm0, 8(%%rdi)\n");
+        fprintf(cc->out, "    movsd 0(%%rsi), %%xmm2\n    mulsd 8(%%rdx), %%xmm2\n");
+        fprintf(cc->out, "    movsd 8(%%rsi), %%xmm3\n    mulsd 0(%%rdx), %%xmm3\n");
+        fprintf(cc->out, "    addsd %%xmm3, %%xmm2\n");
+        fprintf(cc->out, "    movsd %%xmm0, 0(%%rdi)\n    movsd %%xmm2, 8(%%rdi)\n");
       }
       fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", scratch_off);
       return;
@@ -3143,7 +3149,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     return;
 
   case ND_CONJ: {
-    int scratch_off = cc->abi_scratch_offset;
+    int scratch_off = get_complex_scratch_offset(cc);
     codegen_expr_checked(cc, node->lhs);
     fprintf(cc->out, "    movq %%rax, %%rsi\n");
     if (!node->lhs->type || node->lhs->type->kind != node->type->kind) {
@@ -3167,20 +3173,18 @@ void codegen_expr(Compiler *cc, Node *node) {
   }
 
   case ND_COMPLEX_LIT: {
-    fprintf(cc->out, "    subq $16, %%rsp\n");
-    cc->stack_depth += 2;
-    fprintf(cc->out, "    movq %%rsp, %%rax\n");
+    int lbl = cc->str_label_count++;
+    fprintf(cc->out, "    .section .rodata\n");
     if (node->type && node->type->kind == TY_FLOAT_COMPLEX) {
         float fv = (float)node->f_val;
         unsigned int fbits; memcpy(&fbits, &fv, 4);
-        fprintf(cc->out, "    movl $0, 0(%%rax)\n");
-        fprintf(cc->out, "    movl $0x%08x, 4(%%rax)\n", fbits);
+        fprintf(cc->out, "    .p2align 2\n.LS_cplx_%d:\n    .long 0\n    .long %u\n", lbl, fbits);
     } else {
         double dv = node->f_val;
         unsigned long long dbits; memcpy(&dbits, &dv, 8);
-        fprintf(cc->out, "    movq $0, 0(%%rax)\n");
-        fprintf(cc->out, "    movq $0x%016llx, 8(%%rax)\n", dbits);
+        fprintf(cc->out, "    .p2align 3\n.LS_cplx_%d:\n    .quad 0\n    .quad %llu\n", lbl, dbits);
     }
+    fprintf(cc->out, "    .text\n    leaq .LS_cplx_%d(%%rip), %%rax\n", lbl);
     return;
   }
 
@@ -3284,65 +3288,8 @@ void codegen_expr(Compiler *cc, Node *node) {
     codegen_expr_checked(cc, node->lhs);
     ir_save_result(src_ir);
     if (node->cast_type && is_complex_type(node->cast_type)) {
-      if (node->lhs && node->lhs->type && is_complex_type(node->lhs->type)) {
-        if (node->cast_type->kind == node->lhs->type->kind) {
-          return;
-        }
-        fprintf(cc->out, "    movq %%rax, %%rsi\n");
-        fprintf(cc->out, "    subq $16, %%rsp\n");
-        cc->stack_depth += 2;
-        fprintf(cc->out, "    movq %%rsp, %%rdi\n");
-        if (node->cast_type->kind == TY_DOUBLE_COMPLEX && node->lhs->type->kind == TY_FLOAT_COMPLEX) {
-            fprintf(cc->out, "    movss 0(%%rsi), %%xmm0\n");
-            fprintf(cc->out, "    cvtss2sd %%xmm0, %%xmm0\n");
-            fprintf(cc->out, "    movsd %%xmm0, 0(%%rdi)\n");
-            fprintf(cc->out, "    movss 4(%%rsi), %%xmm0\n");
-            fprintf(cc->out, "    cvtss2sd %%xmm0, %%xmm0\n");
-            fprintf(cc->out, "    movsd %%xmm0, 8(%%rdi)\n");
-        } else {
-            fprintf(cc->out, "    movsd 0(%%rsi), %%xmm0\n");
-            fprintf(cc->out, "    cvtsd2ss %%xmm0, %%xmm0\n");
-            fprintf(cc->out, "    movss %%xmm0, 0(%%rdi)\n");
-            fprintf(cc->out, "    movsd 8(%%rsi), %%xmm0\n");
-            fprintf(cc->out, "    cvtsd2ss %%xmm0, %%xmm0\n");
-            fprintf(cc->out, "    movss %%xmm0, 4(%%rdi)\n");
-        }
-        fprintf(cc->out, "    movq %%rdi, %%rax\n");
-        return;
-      } else {
-        /* Real -> Complex cast: (val) -> (val, +0.0i) */
-        fprintf(cc->out, "    movq %%rax, %%rsi\n");
-        fprintf(cc->out, "    subq $16, %%rsp\n");
-        cc->stack_depth += 2;
-        fprintf(cc->out, "    movq %%rsp, %%rdi\n");
-        if (node->cast_type->kind == TY_FLOAT_COMPLEX) {
-          if (node->lhs && node->lhs->type && node->lhs->type->kind == TY_DOUBLE) {
-            fprintf(cc->out, "    movq %%rsi, %%xmm0\n");
-            fprintf(cc->out, "    cvtsd2ss %%xmm0, %%xmm0\n");
-            fprintf(cc->out, "    movss %%xmm0, 0(%%rdi)\n");
-          } else if (node->lhs && node->lhs->type && node->lhs->type->kind == TY_FLOAT) {
-            fprintf(cc->out, "    movl %%esi, 0(%%rdi)\n");
-          } else {
-            fprintf(cc->out, "    cvtsi2ss %%rsi, %%xmm0\n");
-            fprintf(cc->out, "    movss %%xmm0, 0(%%rdi)\n");
-          }
-          fprintf(cc->out, "    movl $0, 4(%%rdi)\n");
-        } else {
-          if (node->lhs && node->lhs->type && node->lhs->type->kind == TY_FLOAT) {
-            fprintf(cc->out, "    movd %%esi, %%xmm0\n");
-            fprintf(cc->out, "    cvtss2sd %%xmm0, %%xmm0\n");
-            fprintf(cc->out, "    movsd %%xmm0, 0(%%rdi)\n");
-          } else if (node->lhs && node->lhs->type && node->lhs->type->kind == TY_DOUBLE) {
-            fprintf(cc->out, "    movq %%rsi, 0(%%rdi)\n");
-          } else {
-            fprintf(cc->out, "    cvtsi2sd %%rsi, %%xmm0\n");
-            fprintf(cc->out, "    movsd %%xmm0, 0(%%rdi)\n");
-          }
-          fprintf(cc->out, "    movq $0, 8(%%rdi)\n");
-        }
-        fprintf(cc->out, "    movq %%rdi, %%rax\n");
-        return;
-      }
+      emit_promote_to_complex(cc, node->lhs ? node->lhs->type : NULL, node->cast_type, "rax");
+      return;
     }
     if (node->lhs && node->lhs->type && is_complex_type(node->lhs->type) && !is_complex_type(node->cast_type)) {
       /* Complex -> Real cast: discard imaginary, extract real component at offset 0 */

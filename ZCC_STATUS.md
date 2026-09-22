@@ -7,9 +7,10 @@ Generation 3 — supersedes generation 2 below
 
 | Component | Status |
 | --------- | ------ |
-| AST Selfhost (zcc2.s == zcc3.s) | **VERIFIED (`ca9f0f87c0c6638ba715d7389720fe76`, byte-identical)** |
+| AST Selfhost (zcc2.s == zcc3.s) | **VERIFIED (`4d414daa3c2c23bcf09fdee45c40b727`, byte-identical)** |
 | Extended GCC Inline Assembly (LIMIT-001) | **VERIFIED (13/13 probe tests pass, register alloc & DCE preserved)** |
 | C11/C23 Conformance & Threads (LIMIT-002) | **VERIFIED (13/13 manifest tests pass, freestanding threads, attributes, atomics)** |
+| Extended Precision & Complex Arithmetic (LIMIT-003) | **VERIFIED (20/20 complex gauntlet tests pass, 0 drift vs GCC, 106-bit dd_real)** |
 | Raw Glibc Header Ingestion (LIMIT-005) | **VERIFIED (stdio.h + stdlib.h raw ingestion pass, extension tolerator)** |
 | Dual-Register IR Return (LIMIT-006) | **VERIFIED (%rax/%rdx 16-byte System V struct return, 19/19 opt passes)** |
 | QuickJS ES2020 Engine Suite | **VERIFIED (15/15 PASS across 6 suites)** |
@@ -34,6 +35,7 @@ Generation 3 — supersedes generation 2 below
 | GVN Pointer SSA & Peephole | 7afc1dc0bed0e049a895cf06386fcc00 | locked Sep 13 on WSL2 (commit c6404005) |
 | Extended Asm (LIMIT-001)   | 4202b5e2ca1046c73f547946b766e84b | locked Sep 21 on WSL2 & Azure (commit 3276dea3) |
 | Raw Glibc (LIMIT-005)      | ca9f0f87c0c6638ba715d7389720fe76 | locked Sep 22 on WSL2 & Azure (commit ba34111c) |
+| Complex & Ext Prec (LIMIT-003) | 4d414daa3c2c23bcf09fdee45c40b727 | locked Sep 22 on WSL2 & Azure |
 
 If a future bootstrap produces a different hash, either codegen drifted (regression) or new compilation units were added (intentional). Use this table as the first line of forensic defense.
 

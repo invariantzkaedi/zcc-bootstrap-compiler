@@ -1846,7 +1846,7 @@ Node *parse_primary(Compiler *cc) {
     if (cc->tk == TK_FLIT) {
         const char *s = cc->tk_text;
         char s0 = s[0] ? (char)toupper((unsigned char)s[0]) : 0;
-        char s1 = s[0] && s[1] ? (char)toupper((unsigned char)s[1]) : 0;
+        char s1 = s[1] ? (char)toupper((unsigned char)s[1]) : 0;
 
         int is_complex = (s0 == 'I' || s0 == 'J' || s1 == 'I' || s1 == 'J');
         int is_float = (s0 == 'F' || s1 == 'F');

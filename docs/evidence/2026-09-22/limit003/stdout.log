@@ -1,0 +1,91 @@
+=== GATE 1: SELFHOST IDENTITY ===
+4d414daa3c2c23bcf09fdee45c40b727  zcc2.s
+4d414daa3c2c23bcf09fdee45c40b727  zcc3.s
+CMP STATUS: byte-identical (cmp exit 0)
+
+=== GATE 2: OPT GAUNTLET ===
+==============================================================================
+  ZCC MULTI-SUITE PRODUCTION OPTIMIZATION PASS GAUNTLET
+  Testing: GVN Store-to-Load, Constant Fold, DCE & Symbolic CFG
+==============================================================================
+Target Test Suite          Baseline   Optimized  Reduction    Verdict
+------------------------------------------------------------------------------
+test_abi                   402        389        -13 (3.2%)   [PASS]
+test_asm_real              39         39         -0 (0.0%)    [PASS]
+test_vla                   271        264        -7 (2.6%)    [PASS]
+exp1_raytracer             5594       5421       -173 (3.1%)  [PASS]
+exp2_voxel                 5368       5223       -145 (2.7%)  [PASS]
+exp3_audio                 6239       6098       -141 (2.3%)  [PASS]
+exp4_vr_stereo             5479       5351       -128 (2.3%)  [PASS]
+exp5_physics               40006      39135      -871 (2.2%)  [PASS]
+t_rigging_regressions      2087       2027       -60 (2.9%)   [PASS]
+diff_read_escape           2354       2289       -65 (2.8%)   [PASS]
+diff_parse_initializer_list 9025       8870       -155 (1.7%)  [PASS]
+diff_HUlib_drawTextLine    2632       2565       -67 (2.5%)   [PASS]
+diff_R_DrawColumn          2917       2845       -72 (2.5%)   [PASS]
+diff_my_sha256_final       1632       1598       -34 (2.1%)   [PASS]
+diff_PIT_CheckThing        796        772        -24 (3.0%)   [PASS]
+diff_cf_socket_open        803        786        -17 (2.1%)   [PASS]
+diff_addsfx                1558       1512       -46 (3.0%)   [PASS]
+diff_P_SpawnMapThing       1140       1113       -27 (2.4%)   [PASS]
+diff_cr_eob_read           1180       1158       -22 (1.9%)   [PASS]
+------------------------------------------------------------------------------
+GAUNTLET SUMMARY:
+  * Suites Evaluated:          19
+  * Bit-Exact Passes:          19/19
+  * Semantic Divergences:      0
+  * Total Assembly (Baseline): 89,522 lines
+  * Total Assembly (Optimized):87,455 lines
+  * Net Instructions Elided:   2,067 lines (2.31% net reduction)
+==============================================================================
+★ ALL 19 TEST SUITES BIT-EXACT & VERIFIED (EXIT 0) ★
+
+=== GATE 3: LINE BUDGET AUDIT ===
+part3.c |   2 +-
+part4.c | 105 ++++++++++++++++------------------------------------------------
+2 files changed, 27 insertions(+), 80 deletions(-)
+
+=== GATE 4: TARGET HARNESS & COMPLEX GAUNTLET ===
+===============================================================
+  ZCC NATIVE QUICKJS ES2020 TEST HARNESS
+===============================================================
+  ALL QUICKJS TESTS PASSED CLEANLY! (Failures: 0)
+
+===============================================================
+  ZCC C99 COMPLEX ARITHMETIC GAUNTLET (LIMIT-003)
+===============================================================
+PASS: double_add_real (diff: 0.000000e+00)
+PASS: double_add_imag (diff: 0.000000e+00)
+PASS: double_sub_real (diff: 0.000000e+00)
+PASS: double_sub_imag (diff: 0.000000e+00)
+PASS: double_mul_real (diff: 0.000000e+00)
+PASS: double_mul_imag (diff: 0.000000e+00)
+PASS: double_div_real (diff: 0.000000e+00)
+PASS: double_div_imag (diff: 0.000000e+00)
+PASS: double_conj_real (diff: 0.000000e+00)
+PASS: double_conj_imag (diff: 0.000000e+00)
+PASS: literal_i_add_real (diff: 0.000000e+00)
+PASS: literal_i_add_imag (diff: 0.000000e+00)
+PASS: literal_i_mul_real (diff: 0.000000e+00)
+PASS: literal_i_mul_imag (diff: 0.000000e+00)
+PASS: float_add_real (diff: 0.000000e+00)
+PASS: float_add_imag (diff: 0.000000e+00)
+PASS: float_sub_real (diff: 0.000000e+00)
+PASS: float_sub_imag (diff: 0.000000e+00)
+PASS: float_mul_real (diff: 0.000000e+00)
+PASS: float_mul_imag (diff: 0.000000e+00)
+PASS: float_div_real (diff: 0.000000e+00)
+PASS: float_div_imag (diff: 0.000000e+00)
+PASS: float_conj_real (diff: 0.000000e+00)
+PASS: float_conj_imag (diff: 0.000000e+00)
+PASS: mixed_real_add_real (diff: 0.000000e+00)
+PASS: mixed_real_add_imag (diff: 0.000000e+00)
+PASS: mixed_real_mul_real (diff: 0.000000e+00)
+PASS: mixed_real_mul_imag (diff: 0.000000e+00)
+PASS: cast_float_to_double_real (diff: 0.000000e+00)
+PASS: cast_float_to_double_imag (diff: 0.000000e+00)
+===============================================================
+★ ALL 20 COMPLEX TESTS PASSED WITH ZERO DRIFT (EXIT 0) ★
+
+=== DIFFERENTIAL ORACLE: ZCC vs GCC ===
+diff -u /tmp/gcc_out.txt /tmp/zcc_out.txt (Exit 0, zero difference)

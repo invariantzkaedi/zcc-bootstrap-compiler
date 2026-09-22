@@ -1,0 +1,23 @@
+# LIMIT-003 Verification Commands
+# Date: 2026-09-22
+
+# 1. Selfhost bootstrap verification (Gate 1)
+make selfhost
+cmp zcc2.s zcc3.s
+md5sum zcc2.s zcc3.s
+
+# 2. Multi-suite optimization gauntlet (Gate 2)
+python3 tools/test_zcc_opt_passes.py
+
+# 3. Core compiler line budget audit (Gate 3)
+git diff --stat part0_pp.c part3.c part4.c
+
+# 4. Target Harness & Differential Testing (Gate 4)
+/tmp/test_quickjs_runner
+./zcc tests/test_limit003_complex.c -o /tmp/test_limit003_complex.s && gcc -o /tmp/test_limit003_complex /tmp/test_limit003_complex.s -lm && /tmp/test_limit003_complex
+gcc -Iinclude tests/probe_limit003.c -o /tmp/probe_gcc -lm && /tmp/probe_gcc > /tmp/gcc_out.txt
+./zcc tests/probe_limit003.c -o /tmp/probe_zcc.s && gcc -o /tmp/probe_zcc /tmp/probe_zcc.s -lm && /tmp/probe_zcc > /tmp/zcc_out.txt
+diff -u /tmp/gcc_out.txt /tmp/zcc_out.txt
+
+# 5. Measure peephole elisions
+./zcc zcc.c -o /tmp/zcc_test_elision.s 2>&1 | grep 'elided'

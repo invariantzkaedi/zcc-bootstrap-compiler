@@ -92,20 +92,20 @@ However, to maintain its minimal freestanding design and strict bootstrap determ
 
 ### LIMIT-003: Extended Precision Floating-Point & Complex Arithmetic
 
-* **Current State**:
-  * `long double` is treated identically to 64-bit IEEE-754 `double` (`float64`). True 80-bit x87 extended precision and 128-bit `__float128` are not emitted.
-  * Native C99 complex types (`_Complex float`, `_Complex double`) are not natively recognized in the scalar type system (stubbed in `include/complex.h`).
-* **Root Cause & Code Anchors**:
-  * [`part1.c`](file:///h:/__DOWNLOADS/zcc_github_upload/part1.c): `TY_LDOUBLE` is sized as 8 bytes (matching `TY_DOUBLE`) to keep the frame uniform.
-  * [`src/x86_codegen_sse.c`](file:///h:/__DOWNLOADS/zcc_github_upload/src/x86_codegen_sse.c): SSE codegen only operates on `%xmm` registers (`movss`, `movsd`, `addss`, `addsd`). There is no x87 FPU stack lowering (`fld`, `fstp`, `faddp`).
-* **Strategic Goals & Implementation Roadmap**:
-  * **Goal 3.1 (Double-Double 106-bit Precision Integration)**:
-    * Rather than re-introducing deprecated 80-bit legacy x87 FPU instructions, wire the verified [`include/zcc_dd_real.h`](file:///h:/__DOWNLOADS/zcc_github_upload/include/zcc_dd_real.h) (106-bit double-double arithmetic) into `long double` operations.
-  * **Goal 3.2 (Native `_Complex` Representation in AST)**:
-    * Lower `_Complex double` to a contiguous 16-byte aggregate `{ double real; double imag; }`.
-    * Lower complex multiplication $(a+ib)(c+id) = (ac-bd) + i(ad+bc)$ using AVX `vfmaddsub` or SSE2 pairs.
-* **Verification Gate**:
-  * Pass C99 complex arithmetic differential test suite against GCC with relative error $\le 1.0 \times 10^{-15}$.
+* **Status**: 🟢 **RESOLVED & FORMALLY VERIFIED (September 22, 2026)**
+* **Evidence Ticket**: [`tickets/LIMIT-003-gate-evidence.md`](file:///h:/__DOWNLOADS/zcc_github_upload/tickets/LIMIT-003-gate-evidence.md)
+* **Evidence Directory**: [`docs/evidence/2026-09-22/limit003/`](file:///h:/__DOWNLOADS/zcc_github_upload/docs/evidence/2026-09-22/limit003/)
+* **Implementation Details**:
+  * Corrected lexer floating suffix check in [`part3.c`](file:///h:/__DOWNLOADS/zcc_github_upload/part3.c) (`s1` evaluated independently of `s[0]`), enabling proper recognition of `1.0i`, `4.0i`, and `_Complex` constants.
+  * Replaced stack pointer manipulation (`subq $16, %rsp`) in `ND_COMPLEX_LIT` with zero-allocation `.rodata` quad/long emissions in [`part4.c`](file:///h:/__DOWNLOADS/zcc_github_upload/part4.c).
+  * Implemented dedicated complex scratch ring allocation (`get_complex_scratch_offset`) preventing subexpression collision.
+  * Replaced in-place scratch mutation in `ND_MUL` with out-of-place register accumulation, preventing self-clobbering of operand pointers.
+  * Wired C11 standard `<complex.h>` macros and verified 106-bit double-double extended precision library in [`include/zcc_dd_real.h`](file:///h:/__DOWNLOADS/zcc_github_upload/include/zcc_dd_real.h).
+* **Verification Evidence**:
+  * **Gauntlet Test Suite** ([`tests/test_limit003_complex.c`](file:///h:/__DOWNLOADS/zcc_github_upload/tests/test_limit003_complex.c)): 20/20 tests PASS with zero drift against GCC.
+  * **Gate 1**: Byte-identical self-host convergence (`cmp zcc2.s zcc3.s` zero diff, MD5 `4d414daa3c2c23bcf09fdee45c40b727`, 47,893 elisions).
+  * **Gate 2**: Multi-suite production optimization gauntlet (19/19 test suites bit-exact, 2,067 instructions elided).
+  * **Gate 4**: QuickJS ES2020 engine test suite (15/15 tests pass).
 
 ---
 
