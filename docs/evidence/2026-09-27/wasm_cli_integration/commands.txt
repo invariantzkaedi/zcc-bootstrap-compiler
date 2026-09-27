@@ -1,0 +1,35 @@
+# Step 1: Probe before patch (Rule EF-3)
+./zcc -target wasm tests/probe_wasm.c -o /tmp/probe.wasm
+node tests/run_wasm.js /tmp/probe.wasm
+# (Failed with: [CompileError: expected magic word 00 61 73 6d, found 7f 45 4c 46])
+
+# Step 2: Apply minimal patch to part5.c and src/codegen.c
+# Recompile ZCC
+make zcc
+
+# Step 3: Probe after patch (Rule EF-3 verification)
+./zcc -target wasm tests/probe_wasm.c -o /tmp/probe.wasm
+node tests/run_wasm.js /tmp/probe.wasm
+# Output:
+# [WASM RUNNER] Module loaded successfully.
+# [WASM RUNNER] add(40, 2) = 42
+# [WASM RUNNER] main() = 42
+
+# Step 4: Verify all CLI flag aliases
+./zcc -wasm tests/probe_wasm.c -o /tmp/probe_dash.wasm && node tests/run_wasm.js /tmp/probe_dash.wasm
+./zcc --target wasm tests/probe_wasm.c -o /tmp/probe_target.wasm && node tests/run_wasm.js /tmp/probe_target.wasm
+./zcc --target=wasm tests/probe_wasm.c -o /tmp/probe_eq.wasm && node tests/run_wasm.js /tmp/probe_eq.wasm
+
+# Step 5: Gate 1 — Self-host byte-identical verification
+make selfhost
+cmp zcc2.s zcc3.s
+
+# Step 6: Gate 2 — Optimization passes gauntlet
+python3 tools/test_zcc_opt_passes.py
+
+# Step 7: Gate 4 — Target harness and test suites
+python3 tests/test_wasm_emitter.py
+python3 tests/test_wasm_float.py
+python3 tests/test_wasm_memory.py
+python3 tests/test_wasm_wasi.py
+python3 tests/test_wasm_advanced.py

@@ -1404,8 +1404,25 @@ int zcc_main(int argc, char **argv) {
       g_emit_yul = 1;
     } else if (strcmp(argv[i], "--emit-stark-proof") == 0 || strcmp(argv[i], "-emit-stark-proof") == 0 || strcmp(argv[i], "--target=stark-proof") == 0) {
       g_emit_stark_proof = 1;
-    } else if (strcmp(argv[i], "--target=wasm32-wasi") == 0 || strcmp(argv[i], "--target=wasm32") == 0) {
+    } else if (strcmp(argv[i], "--target=wasm32-wasi") == 0 || strcmp(argv[i], "--target=wasm32") == 0 ||
+               strcmp(argv[i], "--target=wasm") == 0 || strcmp(argv[i], "-target=wasm") == 0 ||
+               strcmp(argv[i], "-target=wasm32") == 0 || strcmp(argv[i], "-target=wasm32-wasi") == 0 ||
+               strcmp(argv[i], "--wasm") == 0 || strcmp(argv[i], "-wasm") == 0 ||
+               strcmp(argv[i], "--emit-wasm") == 0 || strcmp(argv[i], "-emit-wasm") == 0) {
       g_emit_wasm = 1;
+    } else if (strcmp(argv[i], "-target") == 0 || strcmp(argv[i], "--target") == 0) {
+      i++;
+      if (i < argc) {
+        if (strncmp(argv[i], "wasm", 4) == 0) {
+          g_emit_wasm = 1;
+        } else if (strcmp(argv[i], "arm") == 0 || strcmp(argv[i], "thumb") == 0 || strcmp(argv[i], "thumbv6m") == 0) {
+          backend_ops = &backend_thumbv6m;
+        } else if (strcmp(argv[i], "yul") == 0) {
+          g_emit_yul = 1;
+        } else if (strcmp(argv[i], "stark-proof") == 0) {
+          g_emit_stark_proof = 1;
+        }
+      }
     } else if (strcmp(argv[i], "--target=qasm-canonical") == 0 || strcmp(argv[i], "--qasm-canonical") == 0) {
       qasm_canonical_mode = 1;
     } else if (strcmp(argv[i], "--target=qasm-validate") == 0 || strcmp(argv[i], "--qasm-validate") == 0) {
@@ -2426,6 +2443,7 @@ int zcc_main(int argc, char **argv) {
     extern int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file);
     int wasm_ret = wasm_lower_program(cc, prog, output_file);
     fclose(cc->out);
+    if (!g_use_in_mem_asm && asm_file[0]) remove(asm_file);
     if (wasm_ret == 0) {
       if (!enable_telemetry_stdout) printf("[OK] WebAssembly module emitted to %s\n", output_file);
       free(source);

@@ -7,20 +7,22 @@ Generation 3 — supersedes generation 2 below
 
 | Component | Status |
 | --------- | ------ |
-| AST Selfhost (zcc2.s == zcc3.s) | **VERIFIED (`c951344bc1dfe7b9e9395f49f22163d4`, byte-identical)** |
+| AST Selfhost (zcc2.s == zcc3.s) | **VERIFIED (`42e05e5c401cf3a462958f8cd81e860f`, byte-identical)** |
 | Extended GCC Inline Assembly (LIMIT-001) | **VERIFIED (13/13 probe tests pass, register alloc & DCE preserved)** |
 | C11/C23 Conformance & Threads (LIMIT-002) | **VERIFIED (13/13 manifest tests pass, freestanding threads, attributes, atomics)** |
 | Extended Precision & Complex Arithmetic (LIMIT-003) | **VERIFIED (20/20 complex gauntlet tests pass, 0 drift vs GCC, 106-bit dd_real)** |
 | Autonomous Linker zld (LIMIT-004) | **VERIFIED (multi-archive .a ingestion, freestanding CRT0 entry, ET_EXEC)** |
 | Raw Glibc Header Ingestion (LIMIT-005) | **VERIFIED (stdio.h + stdlib.h raw ingestion pass, extension tolerator)** |
 | Dual-Register IR Return (LIMIT-006) | **VERIFIED (%rax/%rdx 16-byte System V struct return, 19/19 opt passes)** |
+| Rust Frontend v2 Expansion (LIMIT-007) | **VERIFIED (`struct`, `impl`, `enum`, `match`, method dispatch, 0 test drift)** |
+| WebAssembly CLI Target (LIMIT-008) | **VERIFIED (-target wasm / -wasm, 57/57 wasm tests pass, 0 drift)** |
 | QuickJS ES2020 Engine Suite | **VERIFIED (15/15 PASS across 6 suites)** |
 | Production Opt Gauntlet (`tools/test_zcc_opt_passes.py`) | **19/19 Bit-Exact PASS (2,067 instructions elided, 0 divergences)** |
 | IR Backend | Operational (CG-IR-001 through CG-IR-022 all closed) |
 | IR Telemetry | Operational |
 | CRLF Hardening | Locked (tag: crlf-pp-hardened-20260424) |
 | Tripwire (zcc.c == cat of PARTS) | Active |
-| Rust Frontend (v1) | Merged (PR #7) |
+| Rust Frontend (v1 & v2) | Merged & Operational |
 | make rust-front-smoke | All checks passed (including RUST-FFI-LAYOUT-001 gauntlet) |
 | C Regression Corpus (tests/test_corpus.sh) | **439/439 PASS (100.0% CLEAN)** — 100% test pass including Flipper Zero bare-metal DPO policy |
 | Rust-C Zero-Copy FFI Gate (make check-rust-c-ffi) | **VERIFIED (7/7 Gates Clean)** — Complete multi-oracle layout consensus & pointer identity |
@@ -37,7 +39,8 @@ Generation 3 — supersedes generation 2 below
 | Extended Asm (LIMIT-001)   | 4202b5e2ca1046c73f547946b766e84b | locked Sep 21 on WSL2 & Azure (commit 3276dea3) |
 | Raw Glibc (LIMIT-005)      | ca9f0f87c0c6638ba715d7389720fe76 | locked Sep 22 on WSL2 & Azure (commit ba34111c) |
 | Complex & Ext Prec (LIMIT-003) | 4d414daa3c2c23bcf09fdee45c40b727 | locked Sep 22 on WSL2 & Azure (commit 19724a2c) |
-| Autonomous Linker (LIMIT-004) | c951344bc1dfe7b9e9395f49f22163d4 | locked Sep 22 on WSL2 & Azure |
+| Autonomous Linker (LIMIT-004) | c951344bc1dfe7b9e9395f49f22163d4 | locked Sep 22 on WSL2 & Azure (commit 70f3d143) |
+| Rust Frontend v2 (LIMIT-007) | 42e05e5c401cf3a462958f8cd81e860f | locked Sep 22 on WSL2 & Azure (commit 68097a82) |
 
 If a future bootstrap produces a different hash, either codegen drifted (regression) or new compilation units were added (intentional). Use this table as the first line of forensic defense.
 

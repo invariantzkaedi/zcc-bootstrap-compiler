@@ -2405,15 +2405,18 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                            strcmp(mnemonic, "subss") == 0 || strcmp(mnemonic, "subsd") == 0 ||
                            strcmp(mnemonic, "mulss") == 0 || strcmp(mnemonic, "mulsd") == 0 ||
                            strcmp(mnemonic, "divss") == 0 || strcmp(mnemonic, "divsd") == 0 ||
+                           strcmp(mnemonic, "sqrtss") == 0 || strcmp(mnemonic, "sqrtsd") == 0 ||
                            strcmp(mnemonic, "cvtsd2ss") == 0 || strcmp(mnemonic, "cvtss2sd") == 0) {
                     const char *pref = (strcmp(mnemonic, "addss") == 0 || strcmp(mnemonic, "subss") == 0 ||
                                         strcmp(mnemonic, "mulss") == 0 || strcmp(mnemonic, "divss") == 0 ||
+                                        strcmp(mnemonic, "sqrtss") == 0 ||
                                         strcmp(mnemonic, "cvtss2sd") == 0) ? "\xF3" : "\xF2";
                     unsigned char opcode = 0x58;
                     if (strcmp(mnemonic, "addss") == 0 || strcmp(mnemonic, "addsd") == 0) opcode = 0x58;
                     else if (strcmp(mnemonic, "subss") == 0 || strcmp(mnemonic, "subsd") == 0) opcode = 0x5C;
                     else if (strcmp(mnemonic, "mulss") == 0 || strcmp(mnemonic, "mulsd") == 0) opcode = 0x59;
                     else if (strcmp(mnemonic, "divss") == 0 || strcmp(mnemonic, "divsd") == 0) opcode = 0x5E;
+                    else if (strcmp(mnemonic, "sqrtss") == 0 || strcmp(mnemonic, "sqrtsd") == 0) opcode = 0x51;
                     else if (strcmp(mnemonic, "cvtsd2ss") == 0 || strcmp(mnemonic, "cvtss2sd") == 0) opcode = 0x5A;
                     
                     int is_mem1 = 0;
@@ -2542,8 +2545,8 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                     } else {
                         encode_sse_binop(&text_seg, pref, n_pref, opcode, reg1, reg2);
                     }
-                } else if (strcmp(mnemonic, "cvttss2si") == 0 || strcmp(mnemonic, "cvttss2siq") == 0 ||
-                           strcmp(mnemonic, "cvttsd2si") == 0 || strcmp(mnemonic, "cvttsd2siq") == 0) {
+                } else if (strcmp(mnemonic, "cvttss2si") == 0 || strcmp(mnemonic, "cvttss2siq") == 0 || strcmp(mnemonic, "cvttss2sil") == 0 ||
+                           strcmp(mnemonic, "cvttsd2si") == 0 || strcmp(mnemonic, "cvttsd2siq") == 0 || strcmp(mnemonic, "cvttsd2sil") == 0) {
                     const char *pref = (strncmp(mnemonic, "cvttss", 6) == 0) ? "\xF3" : "\xF2";
                     int use_rex_w = (strstr(mnemonic, "siq") != NULL) || is_reg_64(op2);
                     int is_mem1 = 0;
@@ -3082,8 +3085,17 @@ int main(int argc, char **argv) {
             use_system_as = 1;
         } else if (strcmp(argv[i], "--native-elf") == 0) {
             native_elf = 1;
-        } else if (strcmp(argv[i], "--target=wasm32-wasi") == 0 || strcmp(argv[i], "--target=wasm32") == 0) {
+        } else if (strcmp(argv[i], "--target=wasm32-wasi") == 0 || strcmp(argv[i], "--target=wasm32") == 0 ||
+                   strcmp(argv[i], "--target=wasm") == 0 || strcmp(argv[i], "-target=wasm") == 0 ||
+                   strcmp(argv[i], "-target=wasm32") == 0 || strcmp(argv[i], "-target=wasm32-wasi") == 0 ||
+                   strcmp(argv[i], "--wasm") == 0 || strcmp(argv[i], "-wasm") == 0 ||
+                   strcmp(argv[i], "--emit-wasm") == 0 || strcmp(argv[i], "-emit-wasm") == 0) {
             has_wasm_target = 1;
+        } else if ((strcmp(argv[i], "-target") == 0 || strcmp(argv[i], "--target") == 0) && i + 1 < argc) {
+            if (strncmp(argv[i + 1], "wasm", 4) == 0) {
+                has_wasm_target = 1;
+                i++;
+            }
         } else if (strcmp(argv[i], "--emit-yul") == 0 || strcmp(argv[i], "-emit-yul") == 0 || strcmp(argv[i], "--target=yul") == 0) {
             has_yul_target = 1;
         } else if (strcmp(argv[i], "--emit-stark-proof") == 0 || strcmp(argv[i], "-emit-stark-proof") == 0 || strcmp(argv[i], "--target=stark-proof") == 0) {

@@ -29,10 +29,11 @@ However, to maintain its minimal freestanding design and strict bootstrap determ
 │ LIMIT-001 │ Extended GCC Inline Assembly      │ RESOLVED     │ VERIFIED ✅  │
 │ LIMIT-002 │ C11 / C23 Language Conformance    │ RESOLVED     │ VERIFIED ✅  │
 │ LIMIT-003 │ Extended Precision & Complex Math │ RESOLVED     │ VERIFIED ✅  │
-│ LIMIT-004 │ Autonomous Linker & Dynamic Reloc │ HIGH         │ ACTIVE TARGET│
+│ LIMIT-004 │ Autonomous Linker & Dynamic Reloc │ RESOLVED     │ VERIFIED ✅  │
 │ LIMIT-005 │ Raw Glibc Header Ingestion        │ RESOLVED     │ VERIFIED ✅  │
 │ LIMIT-006 │ SSA-IR Dual-Register Struct Return│ RESOLVED     │ VERIFIED ✅  │
-│ LIMIT-007 │ Rust Frontend Semantic Depth      │ MEDIUM       │ Goal Q2-2027 │
+│ LIMIT-007 │ Rust Frontend Semantic Depth      │ RESOLVED     │ VERIFIED ✅  │
+│ LIMIT-008 │ WebAssembly Target CLI Pipeline   │ RESOLVED     │ VERIFIED ✅  │
 └───────────┴───────────────────────────────────┴──────────────┴──────────────┘
 ```
 
@@ -195,6 +196,7 @@ gantt
     LIMIT-003 Complex & Double-Double Math  :done, 2026-09-18, 2026-09-22
     LIMIT-004 Autonomous Linker (zld)       :done, 2026-09-22, 2026-09-22
     LIMIT-007 Rust Frontend v2 Expansion    :done, 2026-09-22, 2026-09-22
+    LIMIT-008 WebAssembly Target CLI        :done, 2026-09-27, 2026-09-27
 ```
 
 ---
