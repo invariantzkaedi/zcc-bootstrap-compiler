@@ -1,0 +1,44 @@
+{
+  "device": "NVIDIA GeForce RTX 5070 Laptop GPU",
+  "sm": "12.0",
+  "cuda_version": "12.8",
+  "pytorch_version": "2.11.0+cu128",
+  "c_native_bridge": {
+    "status": "PASS",
+    "returncode": 0
+  },
+  "pillar1": {
+    "latency_ms": 1.4333,
+    "throughput_Groutes_s": 0.6976906439684644,
+    "linf": 0.0,
+    "max_profit": 20.74144172668457,
+    "status": "PASS"
+  },
+  "pillar2": {
+    "cells": 1048576,
+    "steps": 10,
+    "step_latency_ms": 0.29657,
+    "throughput_GCells_s": 3.5356779175236874,
+    "mass_delta": 0.0078125,
+    "status": "PASS"
+  },
+  "pillar3": {
+    "seq_len": 512,
+    "heads": 16,
+    "head_dim": 64,
+    "latency_ms": 4.88274,
+    "sdpa_tflops": 1.7592447257072874,
+    "mm_tflops": 11.236898372664957,
+    "linf": 0.00024366378784179688,
+    "status": "PASS"
+  },
+  "pillar4": {
+    "degree": 65536,
+    "latency_ms": 4006.4271,
+    "throughput_G_butterfly_ops_s": 0.0002617234692726594,
+    "merkle_root": "15910db714dec84daf9281a7081f00761a7b97c01261ea300bb6d0394af8652a",
+    "max_err": 0,
+    "status": "PASS"
+  },
+  "sha256": "30682f2973df5bca562a026bc40994e9a18300638e8b551fd3136e7a85fbad89"
+}
