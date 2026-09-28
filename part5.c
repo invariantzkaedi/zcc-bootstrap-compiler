@@ -1422,6 +1422,11 @@ int zcc_main(int argc, char **argv) {
                    strcmp(argv[i], "aarch64-linux-gnu") == 0) {
           backend_ops = &backend_aarch64;
           ZCC_POINTER_WIDTH = 8;
+        } else if (strcmp(argv[i], "riscv64") == 0 || strcmp(argv[i], "riscv") == 0 ||
+                   strcmp(argv[i], "rv64gc") == 0 || strcmp(argv[i], "riscv64-linux") == 0 ||
+                   strcmp(argv[i], "riscv64-linux-gnu") == 0) {
+          backend_ops = &backend_riscv;
+          ZCC_POINTER_WIDTH = 8;
         } else if (strcmp(argv[i], "yul") == 0) {
           g_emit_yul = 1;
         } else if (strcmp(argv[i], "stark-proof") == 0) {
@@ -1449,6 +1454,13 @@ int zcc_main(int argc, char **argv) {
                strcmp(argv[i], "-arm64") == 0 || strcmp(argv[i], "-aarch64") == 0 ||
                strcmp(argv[i], "--arm64") == 0 || strcmp(argv[i], "--aarch64") == 0) {
       backend_ops = &backend_aarch64;
+      ZCC_POINTER_WIDTH = 8;
+    } else if (strcmp(argv[i], "--target=riscv64") == 0 || strcmp(argv[i], "--target=riscv") == 0 ||
+               strcmp(argv[i], "-target=riscv64") == 0 || strcmp(argv[i], "-target=riscv") == 0 ||
+               strcmp(argv[i], "-riscv64") == 0 || strcmp(argv[i], "-riscv") == 0 ||
+               strcmp(argv[i], "--riscv64") == 0 || strcmp(argv[i], "--riscv") == 0 ||
+               strcmp(argv[i], "--target=rv64gc") == 0 || strcmp(argv[i], "-target=rv64gc") == 0) {
+      backend_ops = &backend_riscv;
       ZCC_POINTER_WIDTH = 8;
     } else if (strcmp(argv[i], "-o") == 0) {
       i++;

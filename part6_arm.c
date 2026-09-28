@@ -307,6 +307,18 @@ static void aarch64_emit_cmp_zero(Compiler *cc) {
     fprintf(cc->out, "    cmp x0, #0\n");
 }
 
+static void aarch64_emit_div(Compiler *cc, int is_unsigned) {
+    fprintf(cc->out, is_unsigned ? "    udiv x0, x0, x1\n" : "    sdiv x0, x0, x1\n");
+}
+
+static void aarch64_emit_mod(Compiler *cc, int is_unsigned) {
+    fprintf(cc->out, is_unsigned ? "    udiv x2, x0, x1\n    msub x0, x2, x1, x0\n" : "    sdiv x2, x0, x1\n    msub x0, x2, x1, x0\n");
+}
+
+static void aarch64_emit_shr(Compiler *cc, int is_unsigned) {
+    fprintf(cc->out, is_unsigned ? "    lsr x0, x0, x1\n" : "    asr x0, x0, x1\n");
+}
+
 TargetBackend backend_aarch64 = {
     8, /* ptr_size = 8 */
     aarch64_emit_prologue,
@@ -323,6 +335,10 @@ TargetBackend backend_aarch64 = {
     aarch64_emit_addr,
     aarch64_emit_num,
     aarch64_emit_prep_rhs,
-    aarch64_emit_cmp_zero
+    aarch64_emit_cmp_zero,
+    aarch64_emit_div,
+    aarch64_emit_mod,
+    aarch64_emit_shr,
+    "b" /* jump_mnemonic */
 };
 

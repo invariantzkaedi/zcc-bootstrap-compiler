@@ -10,7 +10,7 @@ endif
 FAST_CFLAGS = -O2 -DNDEBUG -w -fno-asynchronous-unwind-tables -g0 -DZCC_REAL_TELEMETRY -Iinclude -I.
 FORTIFY_PACK_DIR ?= fortify_zcc_clean
 
-PARTS = part1.c part0_pp.c part2.c part3.c ir.h ir_emit_dispatch.h sym_type_ast_ir.c part4.c zcc_ast_serializer.c part5.c part7_rust.c part6_arm.c part6_wasm.c ir.c ir_to_x86.c regalloc.c ir_telemetry_stub.c forgezero_receipt_stub.c zcc_layout.c zcc_layout_dump.c zcc_static_assert.c
+PARTS = part1.c part0_pp.c part2.c part3.c ir.h ir_emit_dispatch.h sym_type_ast_ir.c part4.c zcc_ast_serializer.c part5.c part7_rust.c part6_arm.c part6_riscv.c part6_wasm.c ir.c ir_to_x86.c regalloc.c ir_telemetry_stub.c forgezero_receipt_stub.c zcc_layout.c zcc_layout_dump.c zcc_static_assert.c
 PASSES = compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c ir_telemetry.c zcc_telemetry.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c src/opt/prime_v2_regalloc_opt.c src/opt/q_licm_pass.c src/opt/cap_tripwire.c src/evm/evm2native_pass.c src/evm/evm2native_fuzzer.c src/zk/zk_air_trace.c src/zk/zk_witness_bridge.c src/zk/zk_stark_emit.c src/codegen/avxzkd_jit_x86.c src/engine/zcc_hyper_engine.c src/ai/bare_gguf_jit.c src/optics/optiqpu_emitter.c src/dynamic/oneiro_kernel.c src/crypto/fhe_encrypted_ssa.c src/crypto/lattice_guard.c src/concurrency/chrono_spec.c src/neuromorphic/zcc_neuromorphic.c src/vector/zcc_hyper_vector_db.c src/quantum/zcc_topological_qpu.c src/physics/zcc_celestial_nbody.c src/zk/zcc_pq_light_client.c src/security/zcc_enclave_seal.c src/wasm_emit.c src/arm64_codegen.c src/riscv_codegen.c src/win64_pe_emit.c src/quantum/zcc_qasm_parser.c src/quantum/zcc_qasm_sim.c src/quantum/zcc_qasm_opt.c src/quantum/zcc_qasm_c_emit.c src/quantum/zcc_qasm_clifford_t.c src/zcc_binary_vector_engine.c
 COMPAT_SMOKE_SRCS = \
 	exp1_raytracer_simd.c \
@@ -52,6 +52,33 @@ test-upgrade-div:
 	/tmp/test_zcc_upgrade_div
 	$(CC) $(CFLAGS) hello_singularity.c src/zcc_upgrade_div.c -o /tmp/hello_singularity_demo $(LDFLAGS)
 	/tmp/hello_singularity_demo
+
+quantum-pricer: zcc
+	./zcc -moneiro tools/zcc_quantum_options_pricer.c -o /tmp/quantum_pricer.s
+	$(CC) /tmp/quantum_pricer.s -o /tmp/quantum_pricer -lm
+	/tmp/quantum_pricer
+
+palindromic-synergy: zcc
+	./zcc -moneiro tools/test_palindromic_zcc.c -o /tmp/palindromic.s
+	$(CC) /tmp/palindromic.s -o /tmp/palindromic -lm
+	/tmp/palindromic
+
+fuse: zcc palindromic-synergy quantum-pricer
+	@echo "=== [1/4] Testing AVX-512 Complex FMA Fused Kernel (CAXPY4) ==="
+	ZCC_AVX512_CAXPY=1 ./zcc --ir tests/test_zcc_avx512_caxpy_simd.c -S -o /tmp/test_zcc_avx512_caxpy_simd.s
+	$(CC) -O0 -no-pie /tmp/test_zcc_avx512_caxpy_simd.s -lm -o /tmp/test_zcc_avx512_caxpy_simd
+	/tmp/test_zcc_avx512_caxpy_simd
+	@echo "=== [2/4] Testing AVX-512 Real FMA Fused Kernel (QW8) ==="
+	ZCC_AVX512_QW=1 ./zcc --ir tests/test_zcc_avx512_qw_simd.c -S -o /tmp/test_zcc_avx512_qw_simd.s
+	$(CC) -O0 -no-pie /tmp/test_zcc_avx512_qw_simd.s -lm -o /tmp/test_zcc_avx512_qw_simd
+	/tmp/test_zcc_avx512_qw_simd
+	@echo "=== [3/4] Testing ZKAEDI PRIME Ensemble Fusion Engine ==="
+	python3 -m pytest -q tools/prime/test_zkaedi_prime_ensemble.py
+	@echo "=== [4/4] Executing Omni-Chain Fused Arbitrage Matrix ==="
+	python3 prime_omnichain_fused_matrix.py --cycles 3
+	@echo "========================================================================"
+	@echo "★ ZKAEDI PRIME SOVEREIGN FUSION MATRIX: ALL GATES SEALED & VERIFIED ★"
+	@echo "========================================================================"
 
 # =========================================================================
 # AVXzkd Supreme SIMD Engine Target
@@ -172,10 +199,41 @@ test-topological-qpu: src/quantum/zcc_topological_qpu.c tests/test_zcc_topologic
 # =========================================================================
 # ZKAEDI Temporal Drift Substrate Target
 # =========================================================================
-.PHONY: test-temporal-drift
+.PHONY: test-temporal-drift pico-hil-verify wots-zk-verify
 
 test-temporal-drift:
 	python3 tools/zkaedi_temporal_drift_unified.py
+
+# =========================================================================
+# Milestone 22: Dual-RP2040 Bare-Metal HIL Continuous Verification Target
+# =========================================================================
+pico-hil-verify:
+	python3 tools/pico_hil_gate.py || python tools/pico_hil_gate.py
+
+# =========================================================================
+# Milestone 25: Post-Quantum WOTS+ & BabyBear Micro-ZK Starks Target
+# =========================================================================
+wots-zk-verify:
+	$(CC) -O3 -Iinclude -I. tests/test_wots_babybear_standalone.c src/crypto/wots_plus.c src/zk/zk_babybear_micro.c -o /tmp/test_wots_babybear -lm
+	/tmp/test_wots_babybear
+
+# =========================================================================
+# Milestone 23: Native Blackwell PTX / SM 12.0 Direct Tensor Backend Target
+# =========================================================================
+.PHONY: blackwell-tensor-verify
+
+blackwell-tensor-verify:
+	python3 tests/test_nvptx_tensor_core.py || python tests/test_nvptx_tensor_core.py
+
+# =========================================================================
+# Milestone 24: Unified Sovereign Observatory Live JIT WebSocket Bridge
+# =========================================================================
+.PHONY: observatory-ws-verify
+
+observatory-ws-verify:
+	python3 tests/test_ast_ws_bridge.py || python tests/test_ast_ws_bridge.py
+
+
 
 # =========================================================================
 # ZCC Multi-Architecture Quantum Hybrid Dispatcher Target

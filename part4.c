@@ -366,16 +366,16 @@ static void emit_label_fmt(Compiler *cc, int n, int fmt) {
   if (backend_ops) {
       switch (fmt) {
       case FMT_JE:
-        fprintf(cc->out, "    beq .L%d\n", n);
+        fprintf(cc->out, "    %s .L%d\n", (backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j') ? "beqz a0," : "beq", n);
         break;
       case FMT_JMP:
-        fprintf(cc->out, "    b .L%d\n", n);
+        fprintf(cc->out, "    %s .L%d\n", (backend_ops->jump_mnemonic) ? backend_ops->jump_mnemonic : "b", n);
         break;
       case FMT_DEF:
         fprintf(cc->out, ".L%d:\n", n);
         break;
       case FMT_JNE:
-        fprintf(cc->out, "    bne .L%d\n", n);
+        fprintf(cc->out, "    %s .L%d\n", (backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j') ? "bnez a0," : "bne", n);
         break;
       default:
         fprintf(cc->out, ".L%d:\n", n);
@@ -1770,7 +1770,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     push_reg(cc, "rax");
     codegen_expr_checked(cc, node->rhs);
     ir_save_result(rhs_ir);
-    if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
+    if (backend_ops) { if (backend_ops->emit_prep_rhs) backend_ops->emit_prep_rhs(cc); else fprintf(cc->out, "    mov r1, r0\n"); }
     else if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rax");
@@ -1885,7 +1885,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     push_reg(cc, "rax");
     codegen_expr_checked(cc, node->rhs);
     ir_save_result(rhs_ir);
-    if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x1, x0\n" : "    mov r1, r0\n");
+    if (backend_ops) { if (backend_ops->emit_prep_rhs) backend_ops->emit_prep_rhs(cc); else fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x1, x0\n" : "    mov r1, r0\n"); }
     else if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x1, x0\n" : "    mov r1, r0\n");
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rax");
@@ -2293,8 +2293,8 @@ void codegen_expr(Compiler *cc, Node *node) {
     push_reg(cc, "rax");
     codegen_expr_checked(cc, node->rhs);
     ir_save_result(rhs_ir);
-    if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x1, x0\n" : "    mov r1, r0\n");
-      else fprintf(cc->out, "    movq %%rax, %%r11\n");
+    if (backend_ops) { if (backend_ops->emit_prep_rhs) backend_ops->emit_prep_rhs(cc); else fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x1, x0\n" : "    mov r1, r0\n"); }
+    else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rax");
     /* CG-SIGFPE-003: --safe-div: emit runtime zero-guard around idiv/divl/divq.
      * Denominator is in %%r11. UB (C std 6.5.5p5) -- fold result to 0. */
@@ -2328,7 +2328,8 @@ void codegen_expr(Compiler *cc, Node *node) {
       fprintf(cc->out, ".Lsdivend%d:\n", lbl);
     } else {
     if (backend_ops) {
-      if (backend_ops->ptr_size == 8) fprintf(cc->out, (node_type_unsigned(node)) ? "    udiv x0, x0, x1\n" : "    sdiv x0, x0, x1\n");
+      if (backend_ops->emit_div) backend_ops->emit_div(cc, node_type_unsigned(node));
+      else if (backend_ops->ptr_size == 8) fprintf(cc->out, (node_type_unsigned(node)) ? "    udiv x0, x0, x1\n" : "    sdiv x0, x0, x1\n");
       else if (node_type_unsigned(node))
         fprintf(cc->out, "    bl __aeabi_uidiv\n");
       else
@@ -2415,8 +2416,8 @@ void codegen_expr(Compiler *cc, Node *node) {
     push_reg(cc, "rax");
     codegen_expr_checked(cc, node->rhs);
     ir_save_result(rhs_ir);
-    if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x1, x0\n" : "    mov r1, r0\n");
-      else fprintf(cc->out, "    movq %%rax, %%r11\n");
+    if (backend_ops) { if (backend_ops->emit_prep_rhs) backend_ops->emit_prep_rhs(cc); else fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x1, x0\n" : "    mov r1, r0\n"); }
+    else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rax");
     /* CG-SIGFPE-003: --safe-div: zero-guard for ND_MOD. Result is %%rdx. */
     if (cc->safe_div && !backend_ops) {
@@ -2443,7 +2444,8 @@ void codegen_expr(Compiler *cc, Node *node) {
       fprintf(cc->out, ".Lsmodend%d:\n", lbl);
     } else {
     if (backend_ops) {
-      if (backend_ops->ptr_size == 8) fprintf(cc->out, (node_type_unsigned(node)) ? "    udiv x2, x0, x1\n    msub x0, x2, x1, x0\n" : "    sdiv x2, x0, x1\n    msub x0, x2, x1, x0\n");
+      if (backend_ops->emit_mod) backend_ops->emit_mod(cc, node_type_unsigned(node));
+      else if (backend_ops->ptr_size == 8) fprintf(cc->out, (node_type_unsigned(node)) ? "    udiv x2, x0, x1\n    msub x0, x2, x1, x0\n" : "    sdiv x2, x0, x1\n    msub x0, x2, x1, x0\n");
       else if (node_type_unsigned(node)) {
         fprintf(cc->out, "    bl __aeabi_uidivmod\n");
         fprintf(cc->out, "    movs r0, r1\n");
@@ -2549,7 +2551,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     push_reg(cc, "rax");
     codegen_expr_checked(cc, node->rhs);
     ir_save_result(rhs_ir);
-    if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x1, x0\n" : "    mov r1, r0\n");
+    if (backend_ops) { if (backend_ops->emit_prep_rhs) backend_ops->emit_prep_rhs(cc); else fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x1, x0\n" : "    mov r1, r0\n"); }
     else fprintf(cc->out, "    movq %%rax, %%rcx\n");
     pop_reg(cc, "rax");
     if (backend_ops) backend_ops->emit_binary_op(cc, ND_SHL);
@@ -2571,11 +2573,12 @@ void codegen_expr(Compiler *cc, Node *node) {
     push_reg(cc, "rax");
     codegen_expr_checked(cc, node->rhs);
     ir_save_result(rhs_ir);
-    if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x1, x0\n" : "    mov r1, r0\n");
+    if (backend_ops) { if (backend_ops->emit_prep_rhs) backend_ops->emit_prep_rhs(cc); else fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x1, x0\n" : "    mov r1, r0\n"); }
     else fprintf(cc->out, "    movq %%rax, %%rcx\n");
     pop_reg(cc, "rax");
     if (backend_ops) {
-        if (backend_ops->ptr_size == 8) fprintf(cc->out, (node->lhs->type && is_unsigned_type(node->lhs->type)) ? "    lsr x0, x0, x1\n" : "    asr x0, x0, x1\n");
+        if (backend_ops->emit_shr) backend_ops->emit_shr(cc, node->lhs->type && is_unsigned_type(node->lhs->type));
+        else if (backend_ops->ptr_size == 8) fprintf(cc->out, (node->lhs->type && is_unsigned_type(node->lhs->type)) ? "    lsr x0, x0, x1\n" : "    asr x0, x0, x1\n");
         else if (node->lhs->type && is_unsigned_type(node->lhs->type)) {
             fprintf(cc->out, "    lsrs r0, r0, r1\n");
         } else {
@@ -4770,7 +4773,7 @@ void codegen_stmt(Compiler *cc, Node *node) {
           }
           
           /* Jump directly to epilogue */
-          if (backend_ops) fprintf(cc->out, "    b .Lfunc_end_%d\n", cc->func_end_label);
+          if (backend_ops) fprintf(cc->out, "    %s .Lfunc_end_%d\n", (backend_ops->jump_mnemonic) ? backend_ops->jump_mnemonic : "b", cc->func_end_label);
           else fprintf(cc->out, "    jmp .Lfunc_end_%d\n", cc->func_end_label);
           ZCC_EMIT_RET2(IR_TY_I64, ret_tmp, "", node->line);
           return;
@@ -4782,7 +4785,7 @@ void codegen_stmt(Compiler *cc, Node *node) {
           fprintf(cc->out, "    movq $%d, %%rcx\n", type_size(ty));
           fprintf(cc->out, "    rep movsb\n");
           fprintf(cc->out, "    movq %%r11, %%rax\n"); /* Return the hidden pointer in %rax */
-          if (backend_ops) fprintf(cc->out, "    b .Lfunc_end_%d\n", cc->func_end_label);
+          if (backend_ops) fprintf(cc->out, "    %s .Lfunc_end_%d\n", (backend_ops->jump_mnemonic) ? backend_ops->jump_mnemonic : "b", cc->func_end_label);
           else fprintf(cc->out, "    jmp .Lfunc_end_%d\n", cc->func_end_label);
           return;
         }
@@ -4808,7 +4811,7 @@ void codegen_stmt(Compiler *cc, Node *node) {
     } else {
       ZCC_EMIT_RET(0, "", node->line);
     }
-    if (backend_ops) fprintf(cc->out, "    b .Lfunc_end_%d\n", cc->func_end_label);
+    if (backend_ops) fprintf(cc->out, "    %s .Lfunc_end_%d\n", (backend_ops->jump_mnemonic) ? backend_ops->jump_mnemonic : "b", cc->func_end_label);
     else fprintf(cc->out, "    jmp .Lfunc_end_%d\n", cc->func_end_label);
     return;
 
@@ -4847,7 +4850,7 @@ void codegen_stmt(Compiler *cc, Node *node) {
           int end_lbl = new_label(cc);
           char ir_lbl[32];
           sprintf(ir_lbl, ".L%d", end_lbl);
-          if (backend_ops) fprintf(cc->out, "    b .L%d\n", end_lbl);
+          if (backend_ops) fprintf(cc->out, "    %s .L%d\n", (backend_ops->jump_mnemonic) ? backend_ops->jump_mnemonic : "b", end_lbl);
           else fprintf(cc->out, "    jmp .L%d\n", end_lbl);
           ZCC_EMIT_BR(ir_lbl, node->line);
           codegen_stmt_dce(cc, node->else_body, &terminated);
@@ -4860,7 +4863,7 @@ void codegen_stmt(Compiler *cc, Node *node) {
           int else_lbl = new_label(cc);
           char ir_lbl[32];
           sprintf(ir_lbl, ".L%d", else_lbl);
-          if (backend_ops) fprintf(cc->out, "    b .L%d\n", else_lbl);
+          if (backend_ops) fprintf(cc->out, "    %s .L%d\n", (backend_ops->jump_mnemonic) ? backend_ops->jump_mnemonic : "b", else_lbl);
           else fprintf(cc->out, "    jmp .L%d\n", else_lbl);
           ZCC_EMIT_BR(ir_lbl, node->line);
           codegen_stmt_dce(cc, node->then_body, &terminated);
@@ -4942,7 +4945,7 @@ void codegen_stmt(Compiler *cc, Node *node) {
         int end_lbl = new_label(cc);
         char ir_lbl[32];
         sprintf(ir_lbl, ".L%d", end_lbl);
-        if (backend_ops) fprintf(cc->out, "    b .L%d\n", end_lbl);
+        if (backend_ops) fprintf(cc->out, "    %s .L%d\n", (backend_ops->jump_mnemonic) ? backend_ops->jump_mnemonic : "b", end_lbl);
         else fprintf(cc->out, "    jmp .L%d\n", end_lbl);
         ZCC_EMIT_BR(ir_lbl, node->line);
         codegen_stmt_dce(cc, node->body, &terminated);
@@ -5008,7 +5011,7 @@ void codegen_stmt(Compiler *cc, Node *node) {
         int end_lbl = new_label(cc);
         char ir_lbl[32];
         sprintf(ir_lbl, ".L%d", end_lbl);
-        if (backend_ops) fprintf(cc->out, "    b .L%d\n", end_lbl);
+        if (backend_ops) fprintf(cc->out, "    %s .L%d\n", (backend_ops->jump_mnemonic) ? backend_ops->jump_mnemonic : "b", end_lbl);
         else fprintf(cc->out, "    jmp .L%d\n", end_lbl);
         ZCC_EMIT_BR(ir_lbl, node->line);
         codegen_stmt_dce(cc, node->body, &terminated);

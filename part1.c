@@ -1295,11 +1295,16 @@ typedef struct TargetBackend {
     void (*emit_num)(Compiler *cc, long long val);
     void (*emit_prep_rhs)(Compiler *cc);
     void (*emit_cmp_zero)(Compiler *cc);
+    void (*emit_div)(Compiler *cc, int is_unsigned);
+    void (*emit_mod)(Compiler *cc, int is_unsigned);
+    void (*emit_shr)(Compiler *cc, int is_unsigned);
+    const char *jump_mnemonic;
 } TargetBackend;
 
 extern TargetBackend *backend_ops;
 extern TargetBackend backend_thumbv6m;
 extern TargetBackend backend_aarch64;
+extern TargetBackend backend_riscv;
 
 typedef enum {
     FRONTEND_LANG_C = 0,
