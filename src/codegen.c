@@ -2941,6 +2941,49 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
         }
     }
 
+    /* For Win64 PE: Synthesize import stubs for unresolved external symbols */
+    const char *win_import_funcs[64];
+    size_t win_import_count = 0;
+    size_t win_stub_offsets[64];
+
+    if (is_win64_pe) {
+        size_t k;
+        for (k = 0; k < label_count; k++) {
+            if (labels[k].segment == 0 && labels[k].is_global) {
+                if (win_import_count < 64) {
+                    /* Pad text segment to 16 bytes */
+                    size_t pad = (16 - (text_seg.size % 16)) % 16;
+                    if (pad > 0) {
+                        unsigned char pad_bytes[16] = {0};
+                        seg_append(&text_seg, pad_bytes, pad);
+                    }
+                    win_stub_offsets[win_import_count] = text_seg.size;
+                    win_import_funcs[win_import_count] = labels[k].name;
+
+                    /* Mark label as defined in .text at stub offset */
+                    labels[k].segment = 1;
+                    labels[k].offset = text_seg.size;
+                    labels[k].size = 32;
+
+                    /* Template for 32-byte Win64 import stub */
+                    unsigned char stub_tmpl[32] = {
+                        0x48, 0x83, 0xEC, 0x28,             /* sub $0x28, %rsp */
+                        0x4C, 0x89, 0x44, 0x24, 0x20,       /* mov %r8, 0x20(%rsp) (arg 5) */
+                        0x49, 0x89, 0xC9,                   /* mov %rcx, %r9       (arg 4) */
+                        0x49, 0x89, 0xD0,                   /* mov %rdx, %r8       (arg 3) */
+                        0x48, 0x89, 0xF2,                   /* mov %rsi, %rdx      (arg 2) */
+                        0x48, 0x89, 0xF9,                   /* mov %rdi, %rcx      (arg 1) */
+                        0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, /* call *disp32(%rip) at offset 21 */
+                        0x48, 0x83, 0xC4, 0x28,             /* add $0x28, %rsp */
+                        0xC3                                /* ret */
+                    };
+                    seg_append(&text_seg, stub_tmpl, 32);
+                    win_import_count++;
+                }
+            }
+        }
+    }
+
     /* Pass 2: Local relocation resolution */
     size_t i;
     for (i = 0; i < reloc_count; i++) {
@@ -3045,6 +3088,21 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
             }
         }
 
+        /* If imports present, calculate IAT RVAs and patch stub call displacements */
+        if (win_import_count > 0) {
+            uint32_t iat_rvas[64];
+            zcc_win64_pe_calc_iat_rvas(text_seg.size, win_import_funcs, win_import_count, iat_rvas);
+            size_t k;
+            for (k = 0; k < win_import_count; k++) {
+                uint32_t stub_rva = 0x1000 + (uint32_t)win_stub_offsets[k];
+                int32_t disp = (int32_t)(iat_rvas[k] - (stub_rva + 27));
+                text_seg.data[win_stub_offsets[k] + 23] = disp & 0xFF;
+                text_seg.data[win_stub_offsets[k] + 24] = (disp >> 8) & 0xFF;
+                text_seg.data[win_stub_offsets[k] + 25] = (disp >> 16) & 0xFF;
+                text_seg.data[win_stub_offsets[k] + 26] = (disp >> 24) & 0xFF;
+            }
+        }
+
         /* Determine entry point offset: find 'main' or '_main' */
         uint32_t entry_offset = 0;
         for (i = 0; i < label_count; i++) {
@@ -3054,7 +3112,8 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
             }
         }
 
-        int ret = zcc_emit_win64_pe_file_ex(out_o_filename, text_seg.data, text_seg.size, entry_offset);
+        int ret = zcc_emit_win64_pe_file_with_imports(out_o_filename, text_seg.data, text_seg.size, entry_offset,
+                                                      win_import_count > 0 ? win_import_funcs : NULL, win_import_count);
         free(elf_syms);
         free(text_seg.data);
         free(data_seg.data);

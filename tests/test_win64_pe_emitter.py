@@ -179,6 +179,126 @@ class TestWin64PEEmitter(unittest.TestCase):
             run_res = subprocess.run([exe_file])
             self.assertEqual(run_res.returncode, 77, f"Expected exit code 77, got {run_res.returncode}")
 
+    def test_07_win64_pe_import_directory_headers(self):
+        """Verify emitted PE binary has valid DataDirectory[1] (Import) and DataDirectory[12] (IAT)."""
+        src_file = os.path.join(self.tmp_dir.name, "probe_import_hdr.c")
+        exe_file = os.path.join(self.tmp_dir.name, "probe_import_hdr.exe")
+        with open(src_file, "w", encoding="utf-8") as f:
+            f.write(
+                "extern void ExitProcess(unsigned int uExitCode);\n"
+                "extern void *GetStdHandle(int nStdHandle);\n"
+                "int main(void) { void *h = GetStdHandle(-11); ExitProcess(42); return 0; }\n"
+            )
+
+        if sys.platform == "win32":
+            wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            cmd = ["wsl", "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
+        else:
+            cmd = [self.zcc_bin, src_file, "-target", "win64", "-o", exe_file]
+
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(res.returncode, 0, f"Compilation failed: {res.stderr}\n{res.stdout}")
+        self.assertTrue(os.path.exists(exe_file))
+
+        with open(exe_file, "rb") as f:
+            data = f.read()
+
+        e_lfanew = struct.unpack_from("<I", data, 0x3C)[0]
+        opt_offset = e_lfanew + 4 + 20
+
+        # DataDirectory[1] = Import Directory
+        import_rva, import_sz = struct.unpack_from("<II", data, opt_offset + 112 + 1 * 8)
+        self.assertGreater(import_rva, 0x1000, "Import Directory RVA should be valid")
+        self.assertEqual(import_sz, 40, "Import Directory size should be 40 bytes (1 DLL descriptor + 1 null)")
+
+        # DataDirectory[12] = IAT
+        iat_rva, iat_sz = struct.unpack_from("<II", data, opt_offset + 112 + 12 * 8)
+        self.assertGreater(iat_rva, 0x1000, "IAT RVA should be valid")
+        self.assertGreater(iat_sz, 0, "IAT size should be non-zero")
+
+        # Verify DLL name string "KERNEL32.dll" is embedded
+        self.assertIn(b"KERNEL32.dll", data)
+        self.assertIn(b"ExitProcess", data)
+        self.assertIn(b"GetStdHandle", data)
+
+    def test_08_windows_host_dynamic_dll_binding_execution(self):
+        """Verify dynamic execution of GetStdHandle, WriteFile, and ExitProcess on Windows host."""
+        if sys.platform != "win32":
+            self.skipTest("Host execution test requires Windows environment")
+
+        src_file = os.path.join(self.tmp_dir.name, "probe_dll_run.c")
+        exe_file = os.path.join(self.tmp_dir.name, "probe_dll_run.exe")
+        with open(src_file, "w", encoding="utf-8") as f:
+            f.write(
+                "extern void ExitProcess(unsigned int uExitCode);\n"
+                "extern void *GetStdHandle(int nStdHandle);\n"
+                "extern int WriteFile(void *hFile, const void *lpBuffer, unsigned int nNumberOfBytesToWrite, unsigned int *lpNumberOfBytesWritten, void *lpOverlapped);\n"
+                "int main(void) {\n"
+                "    void *hOut = GetStdHandle(-11);\n"
+                "    unsigned int written = 0;\n"
+                "    const char *msg = \"TEST_KERNEL32_WRITEFILE_OK\\r\\n\";\n"
+                "    WriteFile(hOut, msg, 29, &written, 0);\n"
+                "    ExitProcess(42);\n"
+                "    return 0;\n"
+                "}\n"
+            )
+
+        wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+        wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+        wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+        cmd = ["wsl", "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
+
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(res.returncode, 0, f"Compilation failed: {res.stderr}\n{res.stdout}")
+        self.assertTrue(os.path.exists(exe_file))
+
+        run_res = subprocess.run([exe_file], capture_output=True, text=True)
+        self.assertEqual(run_res.returncode, 42, f"Expected exit code 42, got {run_res.returncode}")
+        self.assertIn("TEST_KERNEL32_WRITEFILE_OK", run_res.stdout)
+
+    def test_09_multi_api_heap_and_sleep_execution(self):
+        """Verify dynamic execution of VirtualAlloc, VirtualFree, Sleep, and normal main return 79."""
+        if sys.platform != "win32":
+            self.skipTest("Host execution test requires Windows environment")
+
+        src_file = os.path.join(self.tmp_dir.name, "probe_multi_api.c")
+        exe_file = os.path.join(self.tmp_dir.name, "probe_multi_api.exe")
+        with open(src_file, "w", encoding="utf-8") as f:
+            f.write(
+                "extern void *GetStdHandle(int nStdHandle);\n"
+                "extern int WriteFile(void *hFile, const void *lpBuffer, unsigned int nNumberOfBytesToWrite, unsigned int *lpNumberOfBytesWritten, void *lpOverlapped);\n"
+                "extern void *VirtualAlloc(void *lpAddress, unsigned long long dwSize, unsigned int flAllocationType, unsigned int flProtect);\n"
+                "extern int VirtualFree(void *lpAddress, unsigned long long dwSize, unsigned int dwFreeType);\n"
+                "extern void Sleep(unsigned int dwMilliseconds);\n"
+                "int main(void) {\n"
+                "    char *buf = (char *)VirtualAlloc(0, 4096, 0x3000, 0x04);\n"
+                "    if (!buf) return 1;\n"
+                "    buf[0] = 'O'; buf[1] = 'K'; buf[2] = '\\r'; buf[3] = '\\n';\n"
+                "    void *hOut = GetStdHandle(-11);\n"
+                "    unsigned int written = 0;\n"
+                "    WriteFile(hOut, buf, 4, &written, 0);\n"
+                "    Sleep(5);\n"
+                "    VirtualFree(buf, 0, 0x8000);\n"
+                "    return 79;\n"
+                "}\n"
+            )
+
+        wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+        wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+        wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+        cmd = ["wsl", "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -o '{wsl_exe}'"]
+
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(res.returncode, 0, f"Compilation failed: {res.stderr}\n{res.stdout}")
+        self.assertTrue(os.path.exists(exe_file))
+
+        run_res = subprocess.run([exe_file], capture_output=True, text=True)
+        self.assertEqual(run_res.returncode, 79, f"Expected returncode 79, got {run_res.returncode}")
+        self.assertIn("OK", run_res.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
+

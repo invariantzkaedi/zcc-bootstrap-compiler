@@ -102,11 +102,24 @@ typedef struct {
     uint32_t Characteristics;       /* Section flags (Code / Read / Execute) */
 } IMAGE_SECTION_HEADER;
 
+/* Import Directory Descriptor (20 bytes) */
+typedef struct {
+    uint32_t OriginalFirstThunk;    /* RVA of Import Lookup Table (ILT) */
+    uint32_t TimeDateStamp;         /* 0 */
+    uint32_t ForwarderChain;        /* 0 */
+    uint32_t Name;                  /* RVA of DLL name string */
+    uint32_t FirstThunk;            /* RVA of Import Address Table (IAT) */
+} IMAGE_IMPORT_DESCRIPTOR;
+
 #pragma pack(pop)
 
 /* Function Declarations */
 uint32_t win64_pe_align_to(uint32_t val, uint32_t align);
 int zcc_emit_win64_pe_file(const char *filename, const uint8_t *code_bytes, size_t code_len);
 int zcc_emit_win64_pe_file_ex(const char *filename, const uint8_t *code_bytes, size_t code_len, uint32_t entry_offset);
+void zcc_win64_pe_calc_iat_rvas(size_t code_len, const char **imported_funcs, size_t num_imported_funcs, uint32_t *out_iat_rvas);
+int zcc_emit_win64_pe_file_with_imports(const char *filename, const uint8_t *code_bytes, size_t code_len,
+                                       uint32_t entry_offset, const char **imported_funcs, size_t num_imported_funcs);
 
 #endif /* ZCC_WIN64_PE_EMIT_H */
+

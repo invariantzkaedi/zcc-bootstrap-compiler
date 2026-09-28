@@ -1,0 +1,31 @@
+# Commands executed during Track 2 Win64 PE Import Directory & Dynamic DLL Binding verification
+
+# 1. Baseline Self-Host verification (Phase 0)
+wsl -e bash -c "cd /mnt/h/__DOWNLOADS/zcc_github_upload && set -o pipefail; make selfhost 2>&1 | tee /tmp/zcc-selfhost-baseline-t2.log"
+wsl -e bash -c "cd /mnt/h/__DOWNLOADS/zcc_github_upload && cmp zcc2.s zcc3.s && md5sum zcc2.s zcc3.s"
+
+# 2. Minimal Probe test (Phase 3 probe before patch)
+python tests/probe_pe_imports.py
+
+# 3. Build compiler with Track 2 updates
+wsl -e bash -c "cd /mnt/h/__DOWNLOADS/zcc_github_upload && make zcc"
+
+# 4. Live Windows host execution probes
+wsl -e bash -c "cd /mnt/h/__DOWNLOADS/zcc_github_upload && ./zcc test_win64_import_prog.c -target win64 -o test_win64_imports.exe"
+.\test_win64_imports.exe; echo "ExitCode: $LASTEXITCODE"
+
+wsl -e bash -c "cd /mnt/h/__DOWNLOADS/zcc_github_upload && ./zcc test_win64_multi_api.c -target win64 -o test_win64_multi_api.exe"
+.\test_win64_multi_api.exe; echo "ExitCode: $LASTEXITCODE"
+
+wsl -e bash -c "cd /mnt/h/__DOWNLOADS/zcc_github_upload && ./zcc test_win64_import_prog.c -o test_auto_import.exe"
+.\test_auto_import.exe; echo "ExitCode: $LASTEXITCODE"
+
+# 5. Gate 4: Complete unit test suite (9 tests)
+python -m unittest -v tests/test_win64_pe_emitter.py
+
+# 6. Gate 2: Multi-suite optimization passes gauntlet (19 suites)
+wsl -e bash -c "cd /mnt/h/__DOWNLOADS/zcc_github_upload && python3 tools/test_zcc_opt_passes.py"
+
+# 7. Gate 1: Self-host identity verification
+wsl -e bash -c "cd /mnt/h/__DOWNLOADS/zcc_github_upload && set -o pipefail; make selfhost 2>&1 | tee /tmp/zcc-selfhost-gate1-t2.log"
+wsl -e bash -c "cd /mnt/h/__DOWNLOADS/zcc_github_upload && cmp zcc2.s zcc3.s"
