@@ -162,13 +162,147 @@ int zcc_emit_win64_pe_file(const char *filename, const uint8_t *code_bytes, size
     return zcc_emit_win64_pe_file_ex(filename, code_bytes, code_len, 0);
 }
 
+const char *zcc_win64_pe_resolve_dll_for_symbol(const char *sym) {
+    if (!sym) return "KERNEL32.dll";
+    /* USER32 GUI functions */
+    if (strncmp(sym, "MessageBox", 10) == 0 ||
+        strncmp(sym, "GetMessage", 10) == 0 ||
+        strncmp(sym, "PeekMessage", 11) == 0 ||
+        strncmp(sym, "TranslateMessage", 16) == 0 ||
+        strncmp(sym, "DispatchMessage", 15) == 0 ||
+        strncmp(sym, "PostQuitMessage", 15) == 0 ||
+        strncmp(sym, "PostMessage", 11) == 0 ||
+        strncmp(sym, "SendMessage", 11) == 0 ||
+        strncmp(sym, "CreateWindow", 12) == 0 ||
+        strncmp(sym, "DefWindowProc", 13) == 0 ||
+        strncmp(sym, "DestroyWindow", 13) == 0 ||
+        strncmp(sym, "ShowWindow", 10) == 0 ||
+        strncmp(sym, "UpdateWindow", 12) == 0 ||
+        strncmp(sym, "GetDesktopWindow", 16) == 0 ||
+        strncmp(sym, "GetSystemMetrics", 16) == 0 ||
+        strncmp(sym, "MessageBeep", 11) == 0) {
+        return "USER32.dll";
+    }
+    /* GDI32 functions */
+    if (strncmp(sym, "CreateSolidBrush", 16) == 0 ||
+        strncmp(sym, "SelectObject", 12) == 0 ||
+        strncmp(sym, "DeleteObject", 12) == 0 ||
+        strncmp(sym, "TextOut", 7) == 0) {
+        return "GDI32.dll";
+    }
+    /* MSVCRT C runtime standard library functions */
+    if (strcmp(sym, "printf") == 0 ||
+        strcmp(sym, "fprintf") == 0 ||
+        strcmp(sym, "sprintf") == 0 ||
+        strcmp(sym, "snprintf") == 0 ||
+        strcmp(sym, "vprintf") == 0 ||
+        strcmp(sym, "vfprintf") == 0 ||
+        strcmp(sym, "vsprintf") == 0 ||
+        strcmp(sym, "vsnprintf") == 0 ||
+        strcmp(sym, "puts") == 0 ||
+        strcmp(sym, "putchar") == 0 ||
+        strcmp(sym, "getchar") == 0 ||
+        strcmp(sym, "malloc") == 0 ||
+        strcmp(sym, "calloc") == 0 ||
+        strcmp(sym, "realloc") == 0 ||
+        strcmp(sym, "free") == 0 ||
+        strcmp(sym, "exit") == 0 ||
+        strcmp(sym, "abort") == 0 ||
+        strcmp(sym, "system") == 0 ||
+        strcmp(sym, "getenv") == 0 ||
+        strcmp(sym, "fopen") == 0 ||
+        strcmp(sym, "fclose") == 0 ||
+        strcmp(sym, "fread") == 0 ||
+        strcmp(sym, "fwrite") == 0 ||
+        strcmp(sym, "fseek") == 0 ||
+        strcmp(sym, "ftell") == 0 ||
+        strcmp(sym, "fflush") == 0 ||
+        strcmp(sym, "strlen") == 0 ||
+        strcmp(sym, "strcmp") == 0 ||
+        strcmp(sym, "strncmp") == 0 ||
+        strcmp(sym, "strcpy") == 0 ||
+        strcmp(sym, "strncpy") == 0 ||
+        strcmp(sym, "strcat") == 0 ||
+        strcmp(sym, "strncat") == 0 ||
+        strcmp(sym, "strchr") == 0 ||
+        strcmp(sym, "strrchr") == 0 ||
+        strcmp(sym, "strstr") == 0 ||
+        strcmp(sym, "memcpy") == 0 ||
+        strcmp(sym, "memmove") == 0 ||
+        strcmp(sym, "memset") == 0 ||
+        strcmp(sym, "memcmp") == 0 ||
+        strcmp(sym, "sin") == 0 ||
+        strcmp(sym, "cos") == 0 ||
+        strcmp(sym, "tan") == 0 ||
+        strcmp(sym, "asin") == 0 ||
+        strcmp(sym, "acos") == 0 ||
+        strcmp(sym, "atan") == 0 ||
+        strcmp(sym, "atan2") == 0 ||
+        strcmp(sym, "sqrt") == 0 ||
+        strcmp(sym, "pow") == 0 ||
+        strcmp(sym, "exp") == 0 ||
+        strcmp(sym, "log") == 0 ||
+        strcmp(sym, "log10") == 0 ||
+        strcmp(sym, "floor") == 0 ||
+        strcmp(sym, "ceil") == 0 ||
+        strcmp(sym, "fabs") == 0) {
+        return "msvcrt.dll";
+    }
+    /* Default to KERNEL32.dll for base system services */
+    return "KERNEL32.dll";
+}
+
+typedef struct {
+    char dll_name[64];
+    size_t func_indices[64];
+    size_t num_funcs;
+    uint32_t iat_offset;
+    uint32_t ilt_offset;
+    uint32_t desc_offset;
+    uint32_t name_offset;
+} Win64PeDllGroup;
+
+static size_t win64_pe_build_groups(const char **imported_funcs, size_t num_funcs, Win64PeDllGroup *groups, size_t max_groups) {
+    size_t num_groups = 0;
+    size_t i;
+    for (i = 0; i < num_funcs; i++) {
+        const char *dll = zcc_win64_pe_resolve_dll_for_symbol(imported_funcs[i]);
+        int g_idx = -1;
+        size_t g;
+        for (g = 0; g < num_groups; g++) {
+            if (strcmp(groups[g].dll_name, dll) == 0) {
+                g_idx = (int)g;
+                break;
+            }
+        }
+        if (g_idx == -1 && num_groups < max_groups) {
+            g_idx = (int)num_groups++;
+            memset(&groups[g_idx], 0, sizeof(Win64PeDllGroup));
+            strncpy(groups[g_idx].dll_name, dll, 63);
+        }
+        if (g_idx >= 0 && groups[g_idx].num_funcs < 64) {
+            groups[g_idx].func_indices[groups[g_idx].num_funcs++] = i;
+        }
+    }
+    return num_groups;
+}
+
 void zcc_win64_pe_calc_iat_rvas(size_t code_len, const char **imported_funcs, size_t num_imported_funcs, uint32_t *out_iat_rvas) {
     if (!out_iat_rvas || !imported_funcs || num_imported_funcs == 0) return;
     uint32_t raw_code_len = (code_len > 0) ? (uint32_t)code_len : 16;
     uint32_t idata_rva = 0x1000 + win64_pe_align_to(raw_code_len, 0x1000);
-    size_t i;
-    for (i = 0; i < num_imported_funcs; i++) {
-        out_iat_rvas[i] = idata_rva + (uint32_t)(i * 8);
+
+    Win64PeDllGroup groups[16];
+    size_t num_groups = win64_pe_build_groups(imported_funcs, num_imported_funcs, groups, 16);
+
+    uint32_t cur_iat = 0;
+    size_t g, j;
+    for (g = 0; g < num_groups; g++) {
+        for (j = 0; j < groups[g].num_funcs; j++) {
+            size_t orig_idx = groups[g].func_indices[j];
+            out_iat_rvas[orig_idx] = idata_rva + cur_iat + (uint32_t)(j * 8);
+        }
+        cur_iat += (uint32_t)((groups[g].num_funcs + 1) * 8);
     }
 }
 
@@ -178,6 +312,12 @@ int zcc_emit_win64_pe_file_with_imports(const char *filename, const uint8_t *cod
         return zcc_emit_win64_pe_file_ex(filename, code_bytes, code_len, entry_offset);
     }
     if (!filename) return -1;
+
+    Win64PeDllGroup groups[16];
+    size_t num_groups = win64_pe_build_groups(imported_funcs, num_imported_funcs, groups, 16);
+    if (num_groups == 0) {
+        return zcc_emit_win64_pe_file_ex(filename, code_bytes, code_len, entry_offset);
+    }
 
     FILE *f = fopen(filename, "wb");
     if (!f) return -1;
@@ -219,31 +359,59 @@ int zcc_emit_win64_pe_file_with_imports(const char *filename, const uint8_t *cod
     file_hdr.Characteristics = 0x0022; /* EXECUTABLE_IMAGE | LARGE_ADDRESS_AWARE */
 
     /* 5. Build .idata section contents */
-    size_t N = num_imported_funcs;
     uint32_t raw_code_len = (code_bytes && code_len > 0) ? (uint32_t)code_len : 16;
     uint32_t aligned_code_size = win64_pe_align_to(raw_code_len, 0x0200);
     uint32_t idata_rva = 0x1000 + win64_pe_align_to(raw_code_len, 0x1000);
 
-    uint32_t ilt_offset = (uint32_t)((N + 1) * 8);
-    uint32_t desc_offset = ilt_offset + (uint32_t)((N + 1) * 8);
-    uint32_t dll_name_offset = desc_offset + 40; /* 20 bytes KERNEL32 desc + 20 bytes null desc */
-    const char *dll_name = "KERNEL32.dll";
-    uint32_t dll_name_len = 16; /* Padded to 16 bytes */
-    uint32_t hint_name_start = dll_name_offset + dll_name_len;
+    /* 5a. Calculate IAT offsets */
+    uint32_t cur_iat = 0;
+    size_t g, j;
+    for (g = 0; g < num_groups; g++) {
+        groups[g].iat_offset = cur_iat;
+        cur_iat += (uint32_t)((groups[g].num_funcs + 1) * 8);
+    }
+    uint32_t total_iat_size = cur_iat;
 
-    uint32_t *hint_name_offsets = (uint32_t *)malloc(sizeof(uint32_t) * N);
+    /* 5b. Calculate ILT offsets */
+    uint32_t cur_ilt = total_iat_size;
+    for (g = 0; g < num_groups; g++) {
+        groups[g].ilt_offset = cur_ilt;
+        cur_ilt += (uint32_t)((groups[g].num_funcs + 1) * 8);
+    }
+    uint32_t total_ilt_size = cur_ilt - total_iat_size;
+
+    /* 5c. Calculate IMAGE_IMPORT_DESCRIPTOR offsets (num_groups descriptors + 1 null descriptor) */
+    uint32_t desc_offset = cur_ilt;
+    uint32_t desc_size = (uint32_t)((num_groups + 1) * sizeof(IMAGE_IMPORT_DESCRIPTOR));
+    for (g = 0; g < num_groups; g++) {
+        groups[g].desc_offset = desc_offset + (uint32_t)(g * sizeof(IMAGE_IMPORT_DESCRIPTOR));
+    }
+
+    /* 5d. Calculate DLL Name offsets */
+    uint32_t cur_name_offset = desc_offset + desc_size;
+    for (g = 0; g < num_groups; g++) {
+        if (cur_name_offset % 2 != 0) cur_name_offset++;
+        groups[g].name_offset = cur_name_offset;
+        cur_name_offset += (uint32_t)strlen(groups[g].dll_name) + 1;
+    }
+
+    /* 5e. Calculate Hint/Name offsets */
+    uint32_t cur_hn_offset = cur_name_offset;
+    uint32_t *hint_name_offsets = (uint32_t *)malloc(sizeof(uint32_t) * (num_imported_funcs + 1));
     if (!hint_name_offsets) {
         fclose(f);
         return -1;
     }
-    uint32_t cur = hint_name_start;
-    size_t i;
-    for (i = 0; i < N; i++) {
-        if (cur % 2 != 0) cur++;
-        hint_name_offsets[i] = cur;
-        cur += 2 + (uint32_t)strlen(imported_funcs[i]) + 1;
+    for (g = 0; g < num_groups; g++) {
+        for (j = 0; j < groups[g].num_funcs; j++) {
+            size_t orig_idx = groups[g].func_indices[j];
+            if (cur_hn_offset % 2 != 0) cur_hn_offset++;
+            hint_name_offsets[orig_idx] = cur_hn_offset;
+            cur_hn_offset += 2 + (uint32_t)strlen(imported_funcs[orig_idx]) + 1;
+        }
     }
-    uint32_t total_idata_size = cur;
+
+    uint32_t total_idata_size = cur_hn_offset;
     uint8_t *idata_bytes = (uint8_t *)calloc(1, total_idata_size);
     if (!idata_bytes) {
         free(hint_name_offsets);
@@ -251,31 +419,44 @@ int zcc_emit_win64_pe_file_with_imports(const char *filename, const uint8_t *cod
         return -1;
     }
 
-    /* Write DLL name */
-    memcpy(idata_bytes + dll_name_offset, dll_name, strlen(dll_name) + 1);
-
-    /* Write Hint/Name entries */
-    for (i = 0; i < N; i++) {
-        uint32_t off = hint_name_offsets[i];
-        strcpy((char *)(idata_bytes + off + 2), imported_funcs[i]);
+    /* 5f. Populate DLL names */
+    for (g = 0; g < num_groups; g++) {
+        memcpy(idata_bytes + groups[g].name_offset, groups[g].dll_name, strlen(groups[g].dll_name) + 1);
     }
 
-    /* Write IAT and ILT */
-    for (i = 0; i < N; i++) {
-        uint64_t target_rva = (uint64_t)(idata_rva + hint_name_offsets[i]);
-        memcpy(idata_bytes + (i * 8), &target_rva, sizeof(uint64_t));
-        memcpy(idata_bytes + ilt_offset + (i * 8), &target_rva, sizeof(uint64_t));
+    /* 5g. Populate Hint/Name entries */
+    for (g = 0; g < num_groups; g++) {
+        for (j = 0; j < groups[g].num_funcs; j++) {
+            size_t orig_idx = groups[g].func_indices[j];
+            uint32_t off = hint_name_offsets[orig_idx];
+            /* Hint is uint16_t 0 */
+            strcpy((char *)(idata_bytes + off + 2), imported_funcs[orig_idx]);
+        }
     }
 
-    /* Write IMAGE_IMPORT_DESCRIPTOR for KERNEL32.dll */
-    IMAGE_IMPORT_DESCRIPTOR desc;
-    memset(&desc, 0, sizeof(desc));
-    desc.OriginalFirstThunk = idata_rva + ilt_offset;
-    desc.TimeDateStamp = 0;
-    desc.ForwarderChain = 0;
-    desc.Name = idata_rva + dll_name_offset;
-    desc.FirstThunk = idata_rva;
-    memcpy(idata_bytes + desc_offset, &desc, sizeof(desc));
+    /* 5h. Populate IAT and ILT */
+    for (g = 0; g < num_groups; g++) {
+        for (j = 0; j < groups[g].num_funcs; j++) {
+            size_t orig_idx = groups[g].func_indices[j];
+            uint64_t target_rva = (uint64_t)(idata_rva + hint_name_offsets[orig_idx]);
+            memcpy(idata_bytes + groups[g].iat_offset + j * 8, &target_rva, sizeof(uint64_t));
+            memcpy(idata_bytes + groups[g].ilt_offset + j * 8, &target_rva, sizeof(uint64_t));
+        }
+        /* Terminators at end of each slice are already 0 from calloc */
+    }
+
+    /* 5i. Populate IMAGE_IMPORT_DESCRIPTOR array */
+    for (g = 0; g < num_groups; g++) {
+        IMAGE_IMPORT_DESCRIPTOR desc;
+        memset(&desc, 0, sizeof(desc));
+        desc.OriginalFirstThunk = idata_rva + groups[g].ilt_offset;
+        desc.TimeDateStamp = 0;
+        desc.ForwarderChain = 0;
+        desc.Name = idata_rva + groups[g].name_offset;
+        desc.FirstThunk = idata_rva + groups[g].iat_offset;
+        memcpy(idata_bytes + groups[g].desc_offset, &desc, sizeof(desc));
+    }
+    /* Terminating descriptor at desc_offset + num_groups * 20 is already 0 from calloc */
 
     uint32_t aligned_idata_size = win64_pe_align_to(total_idata_size, 0x0200);
     uint32_t data_rva = idata_rva + win64_pe_align_to(total_idata_size, 0x1000);
@@ -315,11 +496,11 @@ int zcc_emit_win64_pe_file_with_imports(const char *filename, const uint8_t *cod
 
     /* Import Directory: DataDirectory[1] */
     opt_hdr.DataDirectory[1].VirtualAddress = idata_rva + desc_offset;
-    opt_hdr.DataDirectory[1].Size = 40;
+    opt_hdr.DataDirectory[1].Size = desc_size;
 
     /* IAT: DataDirectory[12] */
     opt_hdr.DataDirectory[12].VirtualAddress = idata_rva;
-    opt_hdr.DataDirectory[12].Size = (uint32_t)((N + 1) * 8);
+    opt_hdr.DataDirectory[12].Size = total_iat_size;
 
     /* 8. Section Headers */
     IMAGE_SECTION_HEADER sec_text;
@@ -406,3 +587,4 @@ int zcc_emit_win64_pe_file_with_imports(const char *filename, const uint8_t *cod
     fclose(f);
     return 0;
 }
+

@@ -298,7 +298,127 @@ class TestWin64PEEmitter(unittest.TestCase):
         self.assertEqual(run_res.returncode, 79, f"Expected returncode 79, got {run_res.returncode}")
         self.assertIn("OK", run_res.stdout)
 
+    def test_10_multi_dll_msvcrt_printf_malloc(self):
+        """Verify multi-DLL PE import directory with msvcrt.dll and KERNEL32.dll dynamic binding."""
+        src_file = os.path.join(self.tmp_dir.name, "probe_msvcrt_kernel32.c")
+        exe_file = os.path.join(self.tmp_dir.name, "probe_msvcrt_kernel32.exe")
+        with open(src_file, "w", encoding="utf-8") as f:
+            f.write(
+                "extern void *malloc(unsigned long long sz);\n"
+                "extern void free(void *ptr);\n"
+                "extern int printf(const char *fmt, ...);\n"
+                "extern void ExitProcess(unsigned int code);\n"
+                "int main(void) {\n"
+                "    char *buf = (char *)malloc(64);\n"
+                "    if (!buf) ExitProcess(1);\n"
+                "    buf[0] = 'H'; buf[1] = 'I'; buf[2] = '_'; buf[3] = 'M'; buf[4] = 'S'; buf[5] = 'V'; buf[6] = 'C'; buf[7] = 'R'; buf[8] = 'T'; buf[9] = '\\n'; buf[10] = '\\0';\n"
+                "    printf(\"%s\", buf);\n"
+                "    free(buf);\n"
+                "    ExitProcess(88);\n"
+                "    return 0;\n"
+                "}\n"
+            )
+
+        if sys.platform == "win32":
+            wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            cmd = ["wsl", "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
+        else:
+            cmd = [self.zcc_bin, src_file, "-target", "win64", "-o", exe_file]
+
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(res.returncode, 0, f"Compilation failed: {res.stderr}\n{res.stdout}")
+        self.assertTrue(os.path.exists(exe_file))
+
+        with open(exe_file, "rb") as f:
+            data = f.read()
+
+        e_lfanew = struct.unpack_from("<I", data, 0x3C)[0]
+        opt_offset = e_lfanew + 4 + 20
+
+        # DataDirectory[1] = Import Directory: 2 DLLs -> (2 + 1) * 20 = 60 bytes
+        import_rva, import_sz = struct.unpack_from("<II", data, opt_offset + 112 + 1 * 8)
+        self.assertGreater(import_rva, 0x1000, "Import Directory RVA should be valid")
+        self.assertEqual(import_sz, 60, "Import Directory size should be 60 bytes (2 DLL descriptors + 1 null)")
+
+        # Verify DLL name strings are embedded
+        self.assertIn(b"msvcrt.dll", data)
+        self.assertIn(b"KERNEL32.dll", data)
+        self.assertIn(b"printf", data)
+        self.assertIn(b"malloc", data)
+        self.assertIn(b"free", data)
+        self.assertIn(b"ExitProcess", data)
+
+        if sys.platform == "win32":
+            run_res = subprocess.run([exe_file], capture_output=True, text=True)
+            self.assertEqual(run_res.returncode, 88, f"Expected returncode 88, got {run_res.returncode}")
+            self.assertIn("HI_MSVCRT", run_res.stdout)
+
+    def test_11_multi_dll_three_libraries_user32(self):
+        """Verify simultaneous multi-DLL binding across 3 libraries (KERNEL32, msvcrt, USER32)."""
+        src_file = os.path.join(self.tmp_dir.name, "probe_tri_dll.c")
+        exe_file = os.path.join(self.tmp_dir.name, "probe_tri_dll.exe")
+        with open(src_file, "w", encoding="utf-8") as f:
+            f.write(
+                "extern void *malloc(unsigned long long sz);\n"
+                "extern void free(void *ptr);\n"
+                "extern int printf(const char *fmt, ...);\n"
+                "extern void *GetDesktopWindow(void);\n"
+                "extern int GetSystemMetrics(int nIndex);\n"
+                "extern void Sleep(unsigned int dwMilliseconds);\n"
+                "extern void ExitProcess(unsigned int code);\n"
+                "int main(void) {\n"
+                "    void *hwnd = GetDesktopWindow();\n"
+                "    int screen_w = GetSystemMetrics(0);\n"
+                "    char *buf = (char *)malloc(128);\n"
+                "    if (!buf) ExitProcess(1);\n"
+                "    printf(\"DESKTOP_HWND: %p, SCREEN_W: %d\\n\", hwnd, screen_w);\n"
+                "    free(buf);\n"
+                "    Sleep(10);\n"
+                "    ExitProcess(77);\n"
+                "    return 0;\n"
+                "}\n"
+            )
+
+        if sys.platform == "win32":
+            wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            cmd = ["wsl", "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
+        else:
+            cmd = [self.zcc_bin, src_file, "-target", "win64", "-o", exe_file]
+
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(res.returncode, 0, f"Compilation failed: {res.stderr}\n{res.stdout}")
+        self.assertTrue(os.path.exists(exe_file))
+
+        with open(exe_file, "rb") as f:
+            data = f.read()
+
+        e_lfanew = struct.unpack_from("<I", data, 0x3C)[0]
+        opt_offset = e_lfanew + 4 + 20
+
+        # DataDirectory[1] = Import Directory: 3 DLLs -> (3 + 1) * 20 = 80 bytes
+        import_rva, import_sz = struct.unpack_from("<II", data, opt_offset + 112 + 1 * 8)
+        self.assertGreater(import_rva, 0x1000, "Import Directory RVA should be valid")
+        self.assertEqual(import_sz, 80, "Import Directory size should be 80 bytes (3 DLL descriptors + 1 null)")
+
+        # Verify DLL names
+        self.assertIn(b"msvcrt.dll", data)
+        self.assertIn(b"USER32.dll", data)
+        self.assertIn(b"KERNEL32.dll", data)
+        self.assertIn(b"GetDesktopWindow", data)
+        self.assertIn(b"GetSystemMetrics", data)
+
+        if sys.platform == "win32":
+            run_res = subprocess.run([exe_file], capture_output=True, text=True)
+            self.assertEqual(run_res.returncode, 77, f"Expected returncode 77, got {run_res.returncode}")
+            self.assertIn("DESKTOP_HWND:", run_res.stdout)
+            self.assertIn("SCREEN_W:", run_res.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

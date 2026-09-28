@@ -1,0 +1,17 @@
+# Track 3: Win64 PE Multi-DLL Dynamic Binding Verification Commands
+# Date: 2026-09-28
+
+# 1. Compile ZCC compiler with multi-DLL PE import support
+wsl -e bash -c "cd /mnt/h/__DOWNLOADS/zcc_github_upload && make zcc"
+
+# 2. Gate 4: Target Unit Test Suite & Live Host Execution (11/11 tests)
+python -m unittest -v tests/test_win64_pe_emitter.py
+
+# 3. Gate 2: Multi-Suite Production Optimization Pass Gauntlet (19/19 tests)
+wsl -e bash -c "cd /mnt/h/__DOWNLOADS/zcc_github_upload && python3 tools/test_zcc_opt_passes.py"
+
+# 4. Gate 3: Foundational Core Diff Budget Audit
+wsl -e bash -c "cd /mnt/h/__DOWNLOADS/zcc_github_upload && git diff bcd03ee1b -- part0_pp.c part1.c part2.c part3.c part4.c part5.c"
+
+# 5. Gate 1: 3-Stage Self-Host Identity Verification
+wsl -e bash -c "cd /mnt/h/__DOWNLOADS/zcc_github_upload && make selfhost && cmp zcc2.s zcc3.s && md5sum zcc2.s zcc3.s"

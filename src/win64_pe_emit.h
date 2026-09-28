@@ -115,6 +115,7 @@ typedef struct {
 
 /* Function Declarations */
 uint32_t win64_pe_align_to(uint32_t val, uint32_t align);
+const char *zcc_win64_pe_resolve_dll_for_symbol(const char *sym);
 int zcc_emit_win64_pe_file(const char *filename, const uint8_t *code_bytes, size_t code_len);
 int zcc_emit_win64_pe_file_ex(const char *filename, const uint8_t *code_bytes, size_t code_len, uint32_t entry_offset);
 void zcc_win64_pe_calc_iat_rvas(size_t code_len, const char **imported_funcs, size_t num_imported_funcs, uint32_t *out_iat_rvas);
@@ -122,4 +123,5 @@ int zcc_emit_win64_pe_file_with_imports(const char *filename, const uint8_t *cod
                                        uint32_t entry_offset, const char **imported_funcs, size_t num_imported_funcs);
 
 #endif /* ZCC_WIN64_PE_EMIT_H */
+
 
