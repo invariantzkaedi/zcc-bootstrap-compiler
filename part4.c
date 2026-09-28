@@ -74,8 +74,8 @@ void zcc_debug_loc(Compiler *cc, int line) {
 }
 
 static void push_reg(Compiler *cc, char *reg) {
-
   if (backend_ops) {
+      if (backend_ops->emit_push) { backend_ops->emit_push(cc, reg); cc->stack_depth++; return; }
       if (strcmp(reg, "rax") == 0) reg = "r0";
       else if (strcmp(reg, "r11") == 0) reg = "r1";
       else if (strcmp(reg, "rdx") == 0) reg = "r2";
@@ -89,6 +89,7 @@ static void push_reg(Compiler *cc, char *reg) {
 
 static void pop_reg(Compiler *cc, char *reg) {
   if (backend_ops) {
+      if (backend_ops->emit_pop) { backend_ops->emit_pop(cc, reg); cc->stack_depth--; return; }
       if (strcmp(reg, "rax") == 0) reg = "r0";
       else if (strcmp(reg, "r11") == 0) reg = "r1";
       else if (strcmp(reg, "rdx") == 0) reg = "r2";
@@ -503,6 +504,7 @@ void classify_aggregate(Type *agg, abi_class_t eb[2]) {
 
 void codegen_load(Compiler *cc, Type *type) {
   if (backend_ops) {
+      if (backend_ops->emit_load) { backend_ops->emit_load(cc, type); return; }
       if (!type || type->size == 4 || type->size == 8 || type->kind == TY_PTR) {
           fprintf(cc->out, "    ldr r0, [r0]\n");
       } else if (type->size == 1) {
@@ -584,6 +586,7 @@ void codegen_load(Compiler *cc, Type *type) {
 void codegen_store(Compiler *cc, Type *type) {
   pop_reg(cc, "r11");
   if (backend_ops) {
+      if (backend_ops->emit_store) { backend_ops->emit_store(cc, type); return; }
       if (!type || type->size == 4 || type->size == 8 || type->kind == TY_PTR) {
           fprintf(cc->out, "    str r1, [r0]\n");
       } else if (type->size == 1) {
@@ -594,6 +597,7 @@ void codegen_store(Compiler *cc, Type *type) {
       fprintf(cc->out, "    mov r0, r1\n");
       return;
   }
+
   if (!type) {
     if (backend_ops) fprintf(cc->out, "    str r1, [r0]\n");
       else fprintf(cc->out, "    movq %%r11, (%%rax)\n");
@@ -768,7 +772,8 @@ static void codegen_addr_offset(Compiler *cc, Node *node, int offset) {
       if (off != 0 && !node->sym->is_global) {
         int folded_off = off + offset;
         if (backend_ops) {
-          fprintf(cc->out, "    ldr r3, =%d\n    adds r0, r7, r3\n", folded_off);
+          if (backend_ops->emit_addr) backend_ops->emit_addr(cc, folded_off);
+          else fprintf(cc->out, "    ldr r3, =%d\n    adds r0, r7, r3\n", folded_off);
         } else {
           fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", folded_off);
         }
@@ -1017,7 +1022,8 @@ void codegen_expr(Compiler *cc, Node *node) {
 
   case ND_NUM:
     if (backend_ops) {
-        fprintf(cc->out, "    ldr r0, =%lld\n", node->int_val);
+        if (backend_ops->emit_num) backend_ops->emit_num(cc, node->int_val);
+        else fprintf(cc->out, "    ldr r0, =%lld\n", node->int_val);
         {
           char *dst = ir_bridge_fresh_tmp();
           ZCC_EMIT_CONST(ir_map_type(node->type), dst, node->int_val, node->line);
@@ -1879,8 +1885,8 @@ void codegen_expr(Compiler *cc, Node *node) {
     push_reg(cc, "rax");
     codegen_expr_checked(cc, node->rhs);
     ir_save_result(rhs_ir);
-    if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
-    else if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
+    if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x1, x0\n" : "    mov r1, r0\n");
+    else if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x1, x0\n" : "    mov r1, r0\n");
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rax");
     if (node->lhs->type && is_pointer(node->lhs->type)) {
@@ -2287,7 +2293,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     push_reg(cc, "rax");
     codegen_expr_checked(cc, node->rhs);
     ir_save_result(rhs_ir);
-    if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
+    if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x1, x0\n" : "    mov r1, r0\n");
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rax");
     /* CG-SIGFPE-003: --safe-div: emit runtime zero-guard around idiv/divl/divq.
@@ -2322,7 +2328,8 @@ void codegen_expr(Compiler *cc, Node *node) {
       fprintf(cc->out, ".Lsdivend%d:\n", lbl);
     } else {
     if (backend_ops) {
-      if (node_type_unsigned(node))
+      if (backend_ops->ptr_size == 8) fprintf(cc->out, (node_type_unsigned(node)) ? "    udiv x0, x0, x1\n" : "    sdiv x0, x0, x1\n");
+      else if (node_type_unsigned(node))
         fprintf(cc->out, "    bl __aeabi_uidiv\n");
       else
         fprintf(cc->out, "    bl __aeabi_idiv\n");
@@ -2408,7 +2415,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     push_reg(cc, "rax");
     codegen_expr_checked(cc, node->rhs);
     ir_save_result(rhs_ir);
-    if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
+    if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x1, x0\n" : "    mov r1, r0\n");
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rax");
     /* CG-SIGFPE-003: --safe-div: zero-guard for ND_MOD. Result is %%rdx. */
@@ -2436,7 +2443,8 @@ void codegen_expr(Compiler *cc, Node *node) {
       fprintf(cc->out, ".Lsmodend%d:\n", lbl);
     } else {
     if (backend_ops) {
-      if (node_type_unsigned(node)) {
+      if (backend_ops->ptr_size == 8) fprintf(cc->out, (node_type_unsigned(node)) ? "    udiv x2, x0, x1\n    msub x0, x2, x1, x0\n" : "    sdiv x2, x0, x1\n    msub x0, x2, x1, x0\n");
+      else if (node_type_unsigned(node)) {
         fprintf(cc->out, "    bl __aeabi_uidivmod\n");
         fprintf(cc->out, "    movs r0, r1\n");
       } else {
@@ -2541,7 +2549,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     push_reg(cc, "rax");
     codegen_expr_checked(cc, node->rhs);
     ir_save_result(rhs_ir);
-    if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
+    if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x1, x0\n" : "    mov r1, r0\n");
     else fprintf(cc->out, "    movq %%rax, %%rcx\n");
     pop_reg(cc, "rax");
     if (backend_ops) backend_ops->emit_binary_op(cc, ND_SHL);
@@ -2563,11 +2571,12 @@ void codegen_expr(Compiler *cc, Node *node) {
     push_reg(cc, "rax");
     codegen_expr_checked(cc, node->rhs);
     ir_save_result(rhs_ir);
-    if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
+    if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x1, x0\n" : "    mov r1, r0\n");
     else fprintf(cc->out, "    movq %%rax, %%rcx\n");
     pop_reg(cc, "rax");
     if (backend_ops) {
-        if (node->lhs->type && is_unsigned_type(node->lhs->type)) {
+        if (backend_ops->ptr_size == 8) fprintf(cc->out, (node->lhs->type && is_unsigned_type(node->lhs->type)) ? "    lsr x0, x0, x1\n" : "    asr x0, x0, x1\n");
+        else if (node->lhs->type && is_unsigned_type(node->lhs->type)) {
             fprintf(cc->out, "    lsrs r0, r0, r1\n");
         } else {
             fprintf(cc->out, "    asrs r0, r0, r1\n");
@@ -2947,7 +2956,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       fprintf(cc->out, "    movzbl %%al, %%eax\n");
     } else {
       if (backend_ops) {
-        fprintf(cc->out, "    cmp r0, #0\n");
+        fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    cmp x0, #0\n" : "    cmp r0, #0\n");
       } else {
         if (node->rhs && node->rhs->type && type_size(node->rhs->type) <= 4) {
           fprintf(cc->out, "    cmpl $0, %%eax\n");
@@ -3431,7 +3440,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     lbl2 = new_label(cc);
     codegen_expr_checked(cc, node->cond);
     ir_save_result(ternary_cond_ir);
-    if (backend_ops) fprintf(cc->out, "    cmp r0, #0\n");
+    if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    cmp x0, #0\n" : "    cmp r0, #0\n");
     else {
       /* CG-FLOAT-012: float/double ternary condition needs SSE zero-compare */
       int tern_is_float = node->cond && node->cond->type &&
@@ -4870,7 +4879,7 @@ void codegen_stmt(Compiler *cc, Node *node) {
     lbl1 = new_label(cc);
     codegen_expr_checked(cc, node->cond);
     ir_save_result(cond_ir);
-    if (backend_ops) fprintf(cc->out, "    cmp r0, #0\n");
+    if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    cmp x0, #0\n" : "    cmp r0, #0\n");
     else {
       /* CG-FLOAT-012: use SSE zero-compare for float/double conditions */
       int cond_is_float = node->cond && node->cond->type &&
@@ -7291,7 +7300,7 @@ void codegen_program(Compiler *cc, Node *prog) {
     const char *b_fn = strrchr(cc->filename, '/');
     if (!b_fn) b_fn = strrchr(cc->filename, '\\');
     b_fn = b_fn ? b_fn + 1 : cc->filename;
-    fprintf(cc->out, "    .file 1 \"%s\"\n", b_fn);
+    if (!backend_ops) fprintf(cc->out, "    .file 1 \"%s\"\n", b_fn);
   }
 
   /* Emit functions */

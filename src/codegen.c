@@ -3078,6 +3078,7 @@ int main(int argc, char **argv) {
     int has_wasm_target = 0;
     int has_yul_target = 0;
     int has_stark_proof_target = 0;
+    int has_arm_target = 0;
 
     /* Parse arguments */
     for (i = 1; i < argc; i++) {
@@ -3095,7 +3096,16 @@ int main(int argc, char **argv) {
             if (strncmp(argv[i + 1], "wasm", 4) == 0) {
                 has_wasm_target = 1;
                 i++;
+            } else if (strncmp(argv[i + 1], "arm", 3) == 0 || strncmp(argv[i + 1], "aarch64", 7) == 0 || strncmp(argv[i + 1], "thumb", 5) == 0) {
+                has_arm_target = 1;
+                i++;
             }
+        } else if (strcmp(argv[i], "--target=arm64") == 0 || strcmp(argv[i], "--target=aarch64") == 0 ||
+                   strcmp(argv[i], "-target=arm64") == 0 || strcmp(argv[i], "-target=aarch64") == 0 ||
+                   strcmp(argv[i], "-arm64") == 0 || strcmp(argv[i], "-aarch64") == 0 ||
+                   strcmp(argv[i], "--arm64") == 0 || strcmp(argv[i], "--aarch64") == 0 ||
+                   strcmp(argv[i], "--target=arm") == 0 || strcmp(argv[i], "--target=thumb") == 0) {
+            has_arm_target = 1;
         } else if (strcmp(argv[i], "--emit-yul") == 0 || strcmp(argv[i], "-emit-yul") == 0 || strcmp(argv[i], "--target=yul") == 0) {
             has_yul_target = 1;
         } else if (strcmp(argv[i], "--emit-stark-proof") == 0 || strcmp(argv[i], "-emit-stark-proof") == 0 || strcmp(argv[i], "--target=stark-proof") == 0) {
@@ -3167,7 +3177,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (is_zcc_c || is_out_s || compile_only || has_trace_abi || has_emit_gguf || has_frontend_dump || has_wasm_target || has_yul_target || has_stark_proof_target) {
+    if (is_zcc_c || is_out_s || compile_only || has_trace_abi || has_emit_gguf || has_frontend_dump || has_wasm_target || has_arm_target || has_yul_target || has_stark_proof_target) {
         return zcc_main(argc, argv);
     }
 

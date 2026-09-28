@@ -101,5 +101,44 @@ class TestARM64Codegen(unittest.TestCase):
         self.assertIn("ldp x29, x30, [sp], #32", asm_content)
         self.assertIn("ret", asm_content)
 
+    def test_03_zcc_cli_aarch64_full_pipeline(self):
+        """Compiles C code using ./zcc -target aarch64 and verifies assembly via clang oracle."""
+        zcc_bin = os.path.join(REPO_ROOT, "zcc")
+        src_file = os.path.join(REPO_ROOT, "tests", "regress_arm_arith.c")
+        asm_out = "/tmp/test_aarch64_pipeline.s"
+        obj_out = "/tmp/test_aarch64_pipeline.o"
+
+        # 1. Run ZCC with AArch64 target
+        zcc_cmd = [zcc_bin, "-target", "aarch64", src_file, "-o", asm_out]
+        res = subprocess.run(zcc_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(res.returncode, 0, f"ZCC compilation failed: {res.stderr}")
+
+        # 2. Inspect emitted assembly tokens
+        with open(asm_out, "r") as f:
+            asm_content = f.read()
+        self.assertIn(".arch armv8-a", asm_content)
+        self.assertIn("stp x29, x30", asm_content)
+        self.assertIn("ldp x29, x30", asm_content)
+        self.assertIn("sdiv x2, x0, x1", asm_content)
+        self.assertIn("msub x0, x2, x1, x0", asm_content)
+        self.assertIn("udiv x2, x0, x1", asm_content)
+        self.assertIn("sdiv x0, x0, x1", asm_content)
+        self.assertIn("udiv x0, x0, x1", asm_content)
+        self.assertIn("asr x0, x0, x1", asm_content)
+        self.assertIn("lsr x0, x0, x1", asm_content)
+        self.assertIn("ret", asm_content)
+
+        # 3. Assemble with independent oracle (clang --target=aarch64-linux-gnu)
+        clang_cmd = ["clang", "--target=aarch64-linux-gnu", "-c", asm_out, "-o", obj_out]
+        clang_res = subprocess.run(clang_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(clang_res.returncode, 0, f"Clang oracle assembly failed: {clang_res.stderr}")
+
+        # 4. Verify ELF64 AArch64 object header
+        readelf_cmd = ["llvm-readelf", "-h", obj_out]
+        readelf_res = subprocess.run(readelf_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(readelf_res.returncode, 0)
+        self.assertIn("ELF64", readelf_res.stdout)
+        self.assertIn("AArch64", readelf_res.stdout)
+
 if __name__ == "__main__":
     unittest.main()

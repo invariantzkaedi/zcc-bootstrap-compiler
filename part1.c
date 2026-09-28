@@ -1287,10 +1287,19 @@ typedef struct TargetBackend {
     void (*emit_load_stack)(Compiler *cc, int offset, const char *reg);
     void (*emit_store_stack)(Compiler *cc, int offset, const char *reg);
     void (*emit_float_binop)(Compiler *cc, int op);
+    void (*emit_push)(Compiler *cc, const char *reg);
+    void (*emit_pop)(Compiler *cc, const char *reg);
+    void (*emit_load)(Compiler *cc, Type *type);
+    void (*emit_store)(Compiler *cc, Type *type);
+    void (*emit_addr)(Compiler *cc, int folded_off);
+    void (*emit_num)(Compiler *cc, long long val);
+    void (*emit_prep_rhs)(Compiler *cc);
+    void (*emit_cmp_zero)(Compiler *cc);
 } TargetBackend;
 
 extern TargetBackend *backend_ops;
 extern TargetBackend backend_thumbv6m;
+extern TargetBackend backend_aarch64;
 
 typedef enum {
     FRONTEND_LANG_C = 0,

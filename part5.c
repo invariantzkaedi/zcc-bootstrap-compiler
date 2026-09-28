@@ -1417,6 +1417,11 @@ int zcc_main(int argc, char **argv) {
           g_emit_wasm = 1;
         } else if (strcmp(argv[i], "arm") == 0 || strcmp(argv[i], "thumb") == 0 || strcmp(argv[i], "thumbv6m") == 0) {
           backend_ops = &backend_thumbv6m;
+        } else if (strcmp(argv[i], "arm64") == 0 || strcmp(argv[i], "aarch64") == 0 ||
+                   strcmp(argv[i], "arm64-linux") == 0 || strcmp(argv[i], "aarch64-linux") == 0 ||
+                   strcmp(argv[i], "aarch64-linux-gnu") == 0) {
+          backend_ops = &backend_aarch64;
+          ZCC_POINTER_WIDTH = 8;
         } else if (strcmp(argv[i], "yul") == 0) {
           g_emit_yul = 1;
         } else if (strcmp(argv[i], "stark-proof") == 0) {
@@ -1439,6 +1444,12 @@ int zcc_main(int argc, char **argv) {
       qasm_sim_seed = strtoull(argv[i] + 7, NULL, 0);
     } else if (strcmp(argv[i], "--target=arm") == 0 || strcmp(argv[i], "--target=thumb") == 0 || strcmp(argv[i], "--target=thumbv6m") == 0) {
       backend_ops = &backend_thumbv6m;
+    } else if (strcmp(argv[i], "--target=arm64") == 0 || strcmp(argv[i], "--target=aarch64") == 0 ||
+               strcmp(argv[i], "-target=arm64") == 0 || strcmp(argv[i], "-target=aarch64") == 0 ||
+               strcmp(argv[i], "-arm64") == 0 || strcmp(argv[i], "-aarch64") == 0 ||
+               strcmp(argv[i], "--arm64") == 0 || strcmp(argv[i], "--aarch64") == 0) {
+      backend_ops = &backend_aarch64;
+      ZCC_POINTER_WIDTH = 8;
     } else if (strcmp(argv[i], "-o") == 0) {
       i++;
       if (i < argc)
