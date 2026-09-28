@@ -1581,7 +1581,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
             *colon = '\0';
             char *lbl_name = trim(p);
             /* Add or update label */
-            size_t idx = 9999;
+            size_t idx = (size_t)-1;
             size_t i;
             for (i = 0; i < label_count; i++) {
                 if (strcmp(labels[i].name, lbl_name) == 0) {
@@ -1589,7 +1589,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                     break;
                 }
             }
-            if (idx == 9999) {
+            if (idx == (size_t)-1) {
                 if (label_count >= 131072) {
                     fprintf(stderr, "error: assembler label table limit exceeded (max 131072)\n");
                     exit(1);
@@ -3081,6 +3081,11 @@ int main(int argc, char **argv) {
     int has_arm_target = 0;
     int has_riscv_target = 0;
 
+    int has_stop_at_asm = 0;
+    int has_lib_flag = 0;
+    int has_explicit_zld = 0;
+    int c_file_count = 0;
+
     /* Parse arguments */
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--use-system-as") == 0) {
@@ -3128,6 +3133,8 @@ int main(int argc, char **argv) {
             has_frontend_dump = 1;
         } else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "-emit-obj") == 0) {
             compile_only = 1;
+        } else if (strcmp(argv[i], "-S") == 0 || strcmp(argv[i], "-E") == 0) {
+            has_stop_at_asm = 1;
         } else if (strcmp(argv[i], "-o") == 0) {
             if (i + 1 < argc) {
                 out_filename = argv[i + 1];
@@ -3139,11 +3146,14 @@ int main(int argc, char **argv) {
                 i++;
             }
         } else if (strcmp(argv[i], "-zld") == 0) {
-            /* Explicit static linker invocation flag */
+            has_explicit_zld = 1;
+        } else if (strncmp(argv[i], "-l", 2) == 0 || strcmp(argv[i], "-shared") == 0 || strcmp(argv[i], "-pie") == 0) {
+            has_lib_flag = 1;
         } else if (argv[i][0] != '-') {
             int len = strlen(argv[i]);
             if (len > 2 && strcmp(argv[i] + len - 2, ".c") == 0) {
                 input_c_file = argv[i];
+                c_file_count++;
             } else if (len > 2 && (strcmp(argv[i] + len - 2, ".o") == 0 || strcmp(argv[i] + len - 2, ".a") == 0)) {
                 if (obj_count < 2048) {
                     obj_files[obj_count++] = argv[i];
@@ -3178,7 +3188,42 @@ int main(int argc, char **argv) {
         }
     }
 
+    const char *base = input_c_file;
+    if (input_c_file) {
+        const char *p = input_c_file;
+        while (*p) {
+            if (*p == '/' || *p == '\\') {
+                base = p + 1;
+            }
+            p++;
+        }
+    }
+
     /* Output-assembly pass-through: if compiling directly to .s, use legacy path */
+    char derived_s_filename[256];
+    if (has_stop_at_asm && !out_filename && base) {
+        strncpy(derived_s_filename, base, sizeof(derived_s_filename) - 1);
+        derived_s_filename[sizeof(derived_s_filename) - 1] = '\0';
+        int len = strlen(derived_s_filename);
+        if (len > 2 && strcmp(derived_s_filename + len - 2, ".c") == 0) {
+            derived_s_filename[len - 2] = '\0';
+            strcat(derived_s_filename, ".s");
+        } else {
+            strcat(derived_s_filename, ".s");
+        }
+        char **mod_argv = (char **)malloc(sizeof(char *) * (argc + 3));
+        int mod_argc = 0;
+        for (i = 0; i < argc; i++) {
+            mod_argv[mod_argc++] = argv[i];
+        }
+        mod_argv[mod_argc++] = "-o";
+        mod_argv[mod_argc++] = derived_s_filename;
+        mod_argv[mod_argc] = NULL;
+        int ret = zcc_main(mod_argc, mod_argv);
+        free(mod_argv);
+        return ret;
+    }
+
     int is_out_s = 0;
     if (out_filename) {
         int len = strlen(out_filename);
@@ -3187,7 +3232,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (is_zcc_c || is_out_s || compile_only || has_trace_abi || has_emit_gguf || has_frontend_dump || has_wasm_target || has_arm_target || has_riscv_target || has_yul_target || has_stark_proof_target) {
+    if (is_zcc_c || is_out_s || has_stop_at_asm || (has_lib_flag && !has_explicit_zld) || c_file_count > 1 || (!input_c_file && obj_count == 0) || has_trace_abi || has_emit_gguf || has_frontend_dump || has_wasm_target || has_arm_target || has_riscv_target || has_yul_target || has_stark_proof_target) {
         return zcc_main(argc, argv);
     }
 
@@ -3195,21 +3240,13 @@ int main(int argc, char **argv) {
     if (input_c_file) {
         /* Generate safe temporary assembly filename in current directory */
         char temp_s_filename[256];
-        const char *base = input_c_file;
-        const char *p = input_c_file;
-        while (*p) {
-            if (*p == '/' || *p == '\\') {
-                base = p + 1;
-            }
-            p++;
-        }
         sprintf(temp_s_filename, ".tmp_codegen_%s.s", base);
         strncpy(g_temp_s_to_remove, temp_s_filename, sizeof(g_temp_s_to_remove) - 1);
 
         if (compile_only) {
             char derived_o_filename[256];
             if (!out_filename) {
-                strncpy(derived_o_filename, input_c_file, sizeof(derived_o_filename) - 1);
+                strncpy(derived_o_filename, base, sizeof(derived_o_filename) - 1);
                 derived_o_filename[sizeof(derived_o_filename) - 1] = '\0';
                 int len = strlen(derived_o_filename);
                 if (len > 2 && strcmp(derived_o_filename + len - 2, ".c") == 0) {
