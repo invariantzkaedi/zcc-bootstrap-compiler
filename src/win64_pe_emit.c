@@ -13,7 +13,7 @@ uint32_t win64_pe_align_to(uint32_t val, uint32_t align) {
     return val + (align - rem);
 }
 
-int zcc_emit_win64_pe_file(const char *filename, const uint8_t *code_bytes, size_t code_len) {
+int zcc_emit_win64_pe_file_ex(const char *filename, const uint8_t *code_bytes, size_t code_len, uint32_t entry_offset) {
     if (!filename) return -1;
 
     FILE *f = fopen(filename, "wb");
@@ -67,7 +67,7 @@ int zcc_emit_win64_pe_file(const char *filename, const uint8_t *code_bytes, size
 
     opt_hdr.SizeOfCode = aligned_code_size;
     opt_hdr.SizeOfInitializedData = 0x0200;
-    opt_hdr.AddressOfEntryPoint = 0x1000; /* RVA of .text */
+    opt_hdr.AddressOfEntryPoint = 0x1000 + entry_offset; /* RVA of entry point */
     opt_hdr.BaseOfCode = 0x1000;
     opt_hdr.ImageBase = 0x140000000ULL;
     opt_hdr.SectionAlignment = 0x1000; /* 4KB memory page alignment */
@@ -100,7 +100,7 @@ int zcc_emit_win64_pe_file(const char *filename, const uint8_t *code_bytes, size
     sec_text.VirtualAddress = 0x1000;
     sec_text.SizeOfRawData = aligned_code_size;
     sec_text.PointerToRawData = aligned_headers_size;
-    sec_text.Characteristics = 0x60000020; /* CODE | EXECUTE | READ */
+    sec_text.Characteristics = 0xE0000020; /* CODE | EXECUTE | READ | WRITE */
 
     IMAGE_SECTION_HEADER sec_data;
     memset(&sec_data, 0, sizeof(sec_data));
@@ -156,4 +156,8 @@ int zcc_emit_win64_pe_file(const char *filename, const uint8_t *code_bytes, size
 
     fclose(f);
     return 0;
+}
+
+int zcc_emit_win64_pe_file(const char *filename, const uint8_t *code_bytes, size_t code_len) {
+    return zcc_emit_win64_pe_file_ex(filename, code_bytes, code_len, 0);
 }

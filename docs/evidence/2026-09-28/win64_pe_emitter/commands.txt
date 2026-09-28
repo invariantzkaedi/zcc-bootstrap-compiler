@@ -1,0 +1,29 @@
+# Track 1 Win64 PE32+ Direct Cross-Compiler Verification Commands
+# Date: 2026-09-28
+
+# Phase 0: Baseline verification & forensic check
+git log --all --oneline --format='%h %ad %s' --date=short | head -30
+find . -maxdepth 2 \( -name 'FORENSIC*.md' -o -path './tickets/*.md' \) -print
+git log -p --follow part5.c | head -300
+make selfhost
+
+# Build:
+make zcc
+
+# Gate 1: Self-Host Identity (3-stage fixed point)
+make selfhost
+cmp zcc2.s zcc3.s
+
+# Gate 2: Optimization Passes Gauntlet (19 suites)
+python3 tools/test_zcc_opt_passes.py
+
+# Gate 3: Foundational Line Budget Audit
+git diff --stat part0_pp.c part3.c part4.c
+git diff --stat part5.c
+
+# Gate 4: Target Unit Tests & Windows Host Execution
+python3 -m unittest -v tests/test_win64_pe_emitter.py
+python -m unittest -v tests/test_win64_pe_emitter.py
+
+# Gate 5: Evidence & Ledger Attestation
+bash scripts/log_bootstrap_hash.sh "Track 1 Win64 PE32+ direct emitter baseline lock"

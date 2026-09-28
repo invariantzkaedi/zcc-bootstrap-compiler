@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "elf_emit.h"
+#include "win64_pe_emit.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1531,7 +1532,7 @@ void zcc_direct_assemble_line(const char *line) {
 }
 
 /* Two-Pass Assembler Core */
-static int assemble(const char *in_s_filename, const char *out_o_filename, const char *in_mem_buf, size_t mem_buf_len) {
+static int assemble(const char *in_s_filename, const char *out_o_filename, const char *in_mem_buf, size_t mem_buf_len, int is_win64_pe) {
     FILE *in = NULL;
     if (!g_direct_asm_lines) {
         if (in_mem_buf) {
@@ -3020,6 +3021,46 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
         }
     }
 
+    if (is_win64_pe) {
+        /* Resolve PC-relative relocations pointing to merged data segment */
+        if (data_seg.size > 0) {
+            size_t data_start = orig_text_size + ((16 - (orig_text_size % 16)) % 16);
+            for (i = 0; i < reloc_count; i++) {
+                if (relocs[i].type == R_X86_64_PC32) {
+                    size_t j;
+                    for (j = 0; j < label_count; j++) {
+                        if (strcmp(labels[j].name, relocs[i].target_name) == 0 && labels[j].segment == 2) {
+                            long long target_val = data_start + labels[j].offset;
+                            long long pc = relocs[i].offset + 4;
+                            long long disp = target_val - pc;
+                            text_seg.data[relocs[i].offset] = disp & 0xFF;
+                            text_seg.data[relocs[i].offset + 1] = (disp >> 8) & 0xFF;
+                            text_seg.data[relocs[i].offset + 2] = (disp >> 16) & 0xFF;
+                            text_seg.data[relocs[i].offset + 3] = (disp >> 24) & 0xFF;
+                            relocs[i].type = R_X86_64_NONE;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        /* Determine entry point offset: find 'main' or '_main' */
+        uint32_t entry_offset = 0;
+        for (i = 0; i < label_count; i++) {
+            if (strcmp(labels[i].name, "main") == 0 || strcmp(labels[i].name, "_main") == 0) {
+                entry_offset = (uint32_t)labels[i].offset;
+                break;
+            }
+        }
+
+        int ret = zcc_emit_win64_pe_file_ex(out_o_filename, text_seg.data, text_seg.size, entry_offset);
+        free(elf_syms);
+        free(text_seg.data);
+        free(data_seg.data);
+        return ret;
+    }
+
     /* Filter out NONE relocations */
     size_t final_reloc_count = 0;
     for (i = 0; i < reloc_count; i++) {
@@ -3080,6 +3121,7 @@ int main(int argc, char **argv) {
     int has_stark_proof_target = 0;
     int has_arm_target = 0;
     int has_riscv_target = 0;
+    int has_win64_target = 0;
 
     int has_stop_at_asm = 0;
     int has_lib_flag = 0;
@@ -3108,7 +3150,15 @@ int main(int argc, char **argv) {
             } else if (strncmp(argv[i + 1], "riscv", 5) == 0 || strncmp(argv[i + 1], "rv64", 4) == 0) {
                 has_riscv_target = 1;
                 i++;
+            } else if (strncmp(argv[i + 1], "win64", 5) == 0 || strncmp(argv[i + 1], "pe64", 4) == 0 || strncmp(argv[i + 1], "windows", 7) == 0) {
+                has_win64_target = 1;
+                i++;
             }
+        } else if (strcmp(argv[i], "--target=win64") == 0 || strcmp(argv[i], "-target=win64") == 0 ||
+                   strcmp(argv[i], "--target=pe64") == 0 || strcmp(argv[i], "-target=pe64") == 0 ||
+                   strcmp(argv[i], "-win64") == 0 || strcmp(argv[i], "--win64") == 0 ||
+                   strcmp(argv[i], "-pe64") == 0 || strcmp(argv[i], "--pe64") == 0) {
+            has_win64_target = 1;
         } else if (strcmp(argv[i], "--target=arm64") == 0 || strcmp(argv[i], "--target=aarch64") == 0 ||
                    strcmp(argv[i], "-target=arm64") == 0 || strcmp(argv[i], "-target=aarch64") == 0 ||
                    strcmp(argv[i], "-arm64") == 0 || strcmp(argv[i], "-aarch64") == 0 ||
@@ -3139,6 +3189,10 @@ int main(int argc, char **argv) {
             if (i + 1 < argc) {
                 out_filename = argv[i + 1];
                 i++;
+                int olen = strlen(out_filename);
+                if (olen > 4 && strcmp(out_filename + olen - 4, ".exe") == 0) {
+                    has_win64_target = 1;
+                }
             }
         } else if (strcmp(argv[i], "-T") == 0) {
             if (i + 1 < argc) {
@@ -3232,6 +3286,28 @@ int main(int argc, char **argv) {
         }
     }
 
+    if (has_win64_target && (has_stop_at_asm || is_out_s)) {
+        char **mod_argv = (char **)malloc(sizeof(char *) * (argc + 1));
+        int mod_argc = 0;
+        for (i = 0; i < argc; i++) {
+            if ((strcmp(argv[i], "-target") == 0 || strcmp(argv[i], "--target") == 0) && i + 1 < argc &&
+                (strncmp(argv[i + 1], "win64", 5) == 0 || strncmp(argv[i + 1], "pe64", 4) == 0 || strncmp(argv[i + 1], "windows", 7) == 0)) {
+                i++;
+                continue;
+            } else if (strcmp(argv[i], "--target=win64") == 0 || strcmp(argv[i], "-target=win64") == 0 ||
+                       strcmp(argv[i], "--target=pe64") == 0 || strcmp(argv[i], "-target=pe64") == 0 ||
+                       strcmp(argv[i], "-win64") == 0 || strcmp(argv[i], "--win64") == 0 ||
+                       strcmp(argv[i], "-pe64") == 0 || strcmp(argv[i], "--pe64") == 0) {
+                continue;
+            }
+            mod_argv[mod_argc++] = argv[i];
+        }
+        mod_argv[mod_argc] = NULL;
+        int ret = zcc_main(mod_argc, mod_argv);
+        free(mod_argv);
+        return ret;
+    }
+
     if (is_zcc_c || is_out_s || has_stop_at_asm || (has_lib_flag && !has_explicit_zld) || c_file_count > 1 || (!input_c_file && obj_count == 0) || has_trace_abi || has_emit_gguf || has_frontend_dump || has_wasm_target || has_arm_target || has_riscv_target || has_yul_target || has_stark_proof_target) {
         return zcc_main(argc, argv);
     }
@@ -3251,9 +3327,9 @@ int main(int argc, char **argv) {
                 int len = strlen(derived_o_filename);
                 if (len > 2 && strcmp(derived_o_filename + len - 2, ".c") == 0) {
                     derived_o_filename[len - 2] = '\0';
-                    strcat(derived_o_filename, ".o");
+                    strcat(derived_o_filename, has_win64_target ? ".obj" : ".o");
                 } else {
-                    strcat(derived_o_filename, ".o");
+                    strcat(derived_o_filename, has_win64_target ? ".obj" : ".o");
                 }
                 out_filename = derived_o_filename;
             }
@@ -3273,6 +3349,15 @@ int main(int argc, char **argv) {
                     if (i + 1 < argc) i++;
                     continue;
                 } else if (strcmp(argv[i], "-emit-obj") == 0) {
+                    continue;
+                } else if ((strcmp(argv[i], "-target") == 0 || strcmp(argv[i], "--target") == 0) && i + 1 < argc &&
+                           (strncmp(argv[i + 1], "win64", 5) == 0 || strncmp(argv[i + 1], "pe64", 4) == 0 || strncmp(argv[i + 1], "windows", 7) == 0)) {
+                    i++;
+                    continue;
+                } else if (strcmp(argv[i], "--target=win64") == 0 || strcmp(argv[i], "-target=win64") == 0 ||
+                           strcmp(argv[i], "--target=pe64") == 0 || strcmp(argv[i], "-target=pe64") == 0 ||
+                           strcmp(argv[i], "-win64") == 0 || strcmp(argv[i], "--win64") == 0 ||
+                           strcmp(argv[i], "-pe64") == 0 || strcmp(argv[i], "--pe64") == 0) {
                     continue;
                 } else {
                     if (input_c_file && strcmp(argv[i], input_c_file) == 0) has_input_in_mod = 1;
@@ -3303,7 +3388,7 @@ int main(int argc, char **argv) {
                 return compile_ret;
             }
 
-            int assemble_ret = assemble(NULL, out_filename, g_in_mem_asm_buf, g_in_mem_asm_size);
+            int assemble_ret = assemble(NULL, out_filename, g_in_mem_asm_buf, g_in_mem_asm_size, has_win64_target);
             if (g_in_mem_asm_buf) {
                 free(g_in_mem_asm_buf);
                 g_in_mem_asm_buf = NULL;
@@ -3320,7 +3405,7 @@ int main(int argc, char **argv) {
         } else {
             /* Compile and Link */
             if (!out_filename) {
-                out_filename = "a.out";
+                out_filename = has_win64_target ? "a.exe" : "a.out";
             }
 
             char temp_o_filename[256];
@@ -3339,6 +3424,15 @@ int main(int argc, char **argv) {
                     if (i + 1 < argc) i++;
                     continue;
                 } else if (strcmp(argv[i], "-emit-obj") == 0) {
+                    continue;
+                } else if ((strcmp(argv[i], "-target") == 0 || strcmp(argv[i], "--target") == 0) && i + 1 < argc &&
+                           (strncmp(argv[i + 1], "win64", 5) == 0 || strncmp(argv[i + 1], "pe64", 4) == 0 || strncmp(argv[i + 1], "windows", 7) == 0)) {
+                    i++;
+                    continue;
+                } else if (strcmp(argv[i], "--target=win64") == 0 || strcmp(argv[i], "-target=win64") == 0 ||
+                           strcmp(argv[i], "--target=pe64") == 0 || strcmp(argv[i], "-target=pe64") == 0 ||
+                           strcmp(argv[i], "-win64") == 0 || strcmp(argv[i], "--win64") == 0 ||
+                           strcmp(argv[i], "-pe64") == 0 || strcmp(argv[i], "--pe64") == 0) {
                     continue;
                 } else {
                     mod_argv[mod_argc++] = argv[i];
@@ -3365,8 +3459,23 @@ int main(int argc, char **argv) {
                 return compile_ret;
             }
 
+            if (has_win64_target) {
+                int pe_ret = assemble(NULL, out_filename, g_in_mem_asm_buf, g_in_mem_asm_size, 1);
+                if (g_in_mem_asm_buf) {
+                    free(g_in_mem_asm_buf);
+                    g_in_mem_asm_buf = NULL;
+                    g_in_mem_asm_size = 0;
+                }
+                g_use_in_mem_asm = 0;
+                if (pe_ret != 0) {
+                    fprintf(stderr, "zcc: win64 PE emission failed with error code %d\n", pe_ret);
+                    return pe_ret;
+                }
+                return 0;
+            }
+
             /* 2. Assemble directly to temporary object (.o) in memory */
-            int assemble_ret = assemble(NULL, temp_o_filename, g_in_mem_asm_buf, g_in_mem_asm_size);
+            int assemble_ret = assemble(NULL, temp_o_filename, g_in_mem_asm_buf, g_in_mem_asm_size, 0);
             if (g_in_mem_asm_buf) {
                 free(g_in_mem_asm_buf);
                 g_in_mem_asm_buf = NULL;

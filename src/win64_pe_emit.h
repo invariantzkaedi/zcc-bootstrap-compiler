@@ -107,5 +107,6 @@ typedef struct {
 /* Function Declarations */
 uint32_t win64_pe_align_to(uint32_t val, uint32_t align);
 int zcc_emit_win64_pe_file(const char *filename, const uint8_t *code_bytes, size_t code_len);
+int zcc_emit_win64_pe_file_ex(const char *filename, const uint8_t *code_bytes, size_t code_len, uint32_t entry_offset);
 
 #endif /* ZCC_WIN64_PE_EMIT_H */
