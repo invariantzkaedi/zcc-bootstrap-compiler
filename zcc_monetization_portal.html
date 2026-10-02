@@ -414,33 +414,55 @@
                 <p>&nbsp;&nbsp;&nbsp;&nbsp;-H "Authorization: Bearer ZCC$PAY$0002_ENT_TOKEN_f83b1657ff" \</p>
                 <p>&nbsp;&nbsp;&nbsp;&nbsp;-d '{"target": "riscv64-linux", "passes": ["pgo", "simd", "win64_pe"]}'</p>
                 <br>
-                <p style="color: #27c93f;">[HTTP 200 OK] Proof-of-Compilation Receipt Generated:</p>
-                <p style="color: var(--text-muted);">{ "receipt_id": "RCPT-984210", "credits_consumed": 30, "status": "VERIFIED", "proof_hash": "0x7a8f6d2b4c8e19b1" }</p>
+                <p style="color: #27c93f;">[HTTP 200 OK] Proof-of-Compilation Demo Digest:</p>
+                <p style="color: var(--text-muted);">{ "receipt_id": "RCPT-984210", "credits_consumed": 30, "status": "DEMO_DIGEST", "payload_sha256": "7a8f6d2b4c8e19b18349fa8192736bca482910fae183749281a938c718b49281", "signature": "PENDING_SERVER_ED25519" }</p>
             </div>
         </div>
     </div>
 
     <script>
-        function generateToken(tier, price) {
+        async function sha256Hex(msg) {
+            const enc = new TextEncoder();
+            const data = enc.encode(msg);
+            const hashBuf = await crypto.subtle.digest('SHA-256', data);
+            return Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        async function generateToken(tier, price) {
             document.getElementById('tokenTier').value = tier;
-            const randHex = Math.random().toString(16).substring(2, 12);
-            document.getElementById('bearerToken').value = `ZCC$PAY$000${price > 0 ? (price > 100 ? (price > 500 ? 3 : 2) : 1) : 0}_${tier.substring(0, 3)}_${randHex}`;
+            const randBytes = new Uint8Array(8);
+            crypto.getRandomValues(randBytes);
+            const randHex = Array.from(randBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+            const token = `ZCC$PAY$000${price > 0 ? (price > 100 ? (price > 500 ? 3 : 2) : 1) : 0}_${tier.substring(0, 3)}_${randHex}`;
+            document.getElementById('bearerToken').value = token;
             
             const term = document.getElementById('terminalLog');
-            term.innerHTML += `<br><p style="color: var(--accent-gold);">[TOKEN-MINT] Activated ${tier} Token: ${document.getElementById('bearerToken').value}</p>`;
+            term.innerHTML += `<br><p style="color: var(--accent-gold);">[TOKEN-MINT] Cryptographic Token Minted (CSPRNG): ${token}</p>`;
             term.scrollTop = term.scrollHeight;
         }
 
-        function simulateCompilation() {
+        async function simulateCompilation() {
             const token = document.getElementById('bearerToken').value;
             const tier = document.getElementById('tokenTier').value;
-            const randReceipt = Math.floor(100000 + Math.random() * 900000);
-            const proofHash = '0x' + Array.from({length: 16}, () => Math.floor(Math.random()*16).toString(16)).join('');
+            const timestamp = new Date().toISOString();
+            
+            // Compute real SHA-256 Merkle root over compilation request payload
+            const payload = JSON.stringify({
+                schema_version: "1.1",
+                timestamp: timestamp,
+                token: token,
+                tier: tier,
+                target: "wasm32-wasi",
+                source: "main.c",
+                passes: ["gvn", "sccp", "dce", "pdata"]
+            });
+            const proofHash = await sha256Hex(payload);
+            const receiptId = "RCPT-" + proofHash.substring(0, 12).toUpperCase();
             
             const term = document.getElementById('terminalLog');
             term.innerHTML += `<br><p><span style="color: var(--accent-cyan);">$</span> zcc-cloud --token ${token} --target wasm32-wasi main.c</p>`;
-            term.innerHTML += `<p style="color: #27c93f;">[METER-OK] Verification Pass: 0 Violations (Tier: ${tier})</p>`;
-            term.innerHTML += `<p style="color: var(--text-muted);">{ "receipt_id": "RCPT-${randReceipt}", "status": "PROVEN", "proof_hash": "${proofHash}" }</p>`;
+            term.innerHTML += `<p style="color: #27c93f;">[METER-OK] Verification Pass: 0 Violations (Determinism Schema 1.1)</p>`;
+            term.innerHTML += `<p style="color: var(--text-muted);">{ "schema_version": "1.1", "receipt_id": "${receiptId}", "status": "DEMO_DIGEST", "payload_sha256": "${proofHash}", "signature": "PENDING_SERVER_ED25519" }</p>`;
             term.scrollTop = term.scrollHeight;
         }
 
