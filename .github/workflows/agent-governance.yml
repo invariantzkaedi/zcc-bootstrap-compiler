@@ -1,0 +1,29 @@
+name: Agent Governance Gate (EF-1..EF-6)
+
+on:
+  pull_request:
+    types: [opened, synchronize, edited]
+
+jobs:
+  warden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Warden self-test (Controls A + EF-1..EF-6)
+        run: python3 tools/agent_gate_warden.py --self-test
+
+      - name: Collect PR body + commit messages as transcript
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          { printf '%s\n\n' "$PR_BODY"; git log --format=%B origin/${{ github.base_ref }}..HEAD; } > transcript.md
+          git diff --stat origin/${{ github.base_ref }}..HEAD > diff.txt
+
+      - name: Audit
+        run: python3 tools/agent_gate_warden.py audit transcript.md --diff diff.txt --json verdict.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: agent-governance-verdict, path: verdict.json }

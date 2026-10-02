@@ -282,6 +282,18 @@ ZCC integrates a complete 256-bit Ethereum Virtual Machine (EVM) lifter and nati
 | **Autocure & Silicon Heatmap HUD**| — | **PASS** | 3/3 AST memory tripwires injected, live telemetry (Ryzen AI 8C, XDNA 2 42.8 TOPS, RTX 5070 27.4 TFLOPS) |
 | **CG-IR-011 Aggressive Memory** | test_cg_ir_011_aggressive.c | **PASS** | Evaluated 2,007,292 without segfault across 5 large global array tables |
 
+## 🔱 Agent Governance Gate
+
+[![Agent Governance](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/workflows/agent-governance.yml/badge.svg)](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/workflows/agent-governance.yml)
+
+Every PR is mechanically audited against **EF-1 … EF-6** by `tools/agent_gate_warden.py`.
+See [`docs/AGENT_GOVERNANCE_PROTOCOL.md`](docs/AGENT_GOVERNANCE_PROTOCOL.md).
+
+```bash
+python3 tools/agent_gate_warden.py --self-test
+python3 tools/agent_gate_warden.py audit transcript.md --diff <(git diff --stat main..HEAD) --json verdict.json
+```
+
 ---
 
 ## 🔱 Epistemic Fortification & Agent Protocol

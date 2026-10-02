@@ -68,6 +68,32 @@ struct
 vm
 ztest
 ztest_lit
+/avxzkd
+/benchmark_all_sovereign_tiers
+/enum_val
+/ex[0-9]*
+/fuzz_synapse_copilot_radar
+/gauntlet_gcc
+/gauntlet_zcc
+/guard_v4
+/hil_tmp_test
+/int_val
+/kind
+/lhs
+/rhs
+/omni_*_bin
+/qdex_gauntlet
+/quantum_rules_bin
+/quantum_rules_cov
+/run_qdex_avx2
+/run_qwalk*
+/sym-
+/test_bitfields
+/test_gcc
+/test_math
+/test_*_zcc
+/test_rec
+/test_zcc
 
 # Python
 *.pyc
@@ -84,16 +110,22 @@ venv*/
 .env.example
 .antigravityignore
 
-# Large data
+# Large data & binary assets
 *.zip
 *.pdf
 *.png
 *.sarif
+*.db
+*.sqlite
+*.sqlite3
+*.npz
+compile_commands.json
 data/
 assets/
 docs/
 vault/
-contracts/
+contracts/*
+!contracts/*.json
 mainnet_contracts/
 UltimateFullStackApp/
 VectCutAPI/
@@ -664,9 +696,96 @@ docs/*
 # Evidence archive: track manifest & latest evidence, ignore heavy zcc-run history
 !evidence/
 evidence/zcc-run-*/
+evidence/zcc-omega-*/
 !evidence/manifest.json
 !evidence/latest/
 !evidence/latest/**
 
 **/target/
 .ext4_sync_manifest.*
+
+# -----------------------------------------------------------------------------
+# Evaluation outputs, experiment ledgers, and temporary receipts
+# -----------------------------------------------------------------------------
+eval_out/
+receipts/
+zkaedi_output/
+zkaedi_output_src/
+zkaedi_model_registry/
+trade_ledger_*.json
+yul_*.json
+/*_RESULTS.json
+/*_REPORT.json
+/*.jsonl
+/*_results.tsv
+/*_ledger.tsv
+/observatory_live_state.json
+/prime_qw_signals.json
+/r1cs_proof.json
+/audit_result.json
+.coverage
+*.tmp
+/Makefile copy
+*.264
+*.tar.gz
+
+# Local compiled binaries & wasm artifacts
+/zcc-abi-verifier
+/zcc-opt
+/zcc-qopt
+/zcc-qopt-fault
+/zcc-verify
+/zcc.wasm
+/verify_smt
+/verify_svr008_c99
+
+# Compiled binaries and object/shared libraries in tools/
+tools/zcc_*[!cphs]
+tools/zcc-*
+tools/cuda_quantum_walk_rtx5070
+tools/cuda_stratum_miner
+tools/femoco_qw_bin
+tools/runtime_probe
+tools/verify_svr008_c99
+tools/*.o
+tools/*.so
+tools/*.bin
+tools/c_kernels/*[!ch]
+
+# Standalone scratch HTML visualizers
+zkaedi_*_observatory.html
+zkaedi_quantum_*.html
+zkaedi_chromatic_*.html
+zkaedi_insane_*.html
+*.phase_c_bak
+ultra_instinct_*
+verification_bundle/
+
+# Temporary test execution directories, checkpoints, and scratch runs
+tmp_*/
+out/
+runs/
+checkpoints/
+dream_runs/
+repro_failures/
+divergences/
+divergences_extreme/
+backups/
+
+# Ephemeral test keys, bytecode, and compiled wasm
+*.wasm
+*.pqc
+*.sec
+temp_*
+
+# Ephemeral SVG blueprints & rendered visual diagrams
+/*_blueprint.svg
+/*_output.svg
+/omni_node_v4.svg
+/omni_singularity_*.svg
+/secure_checkpoint_map.svg
+
+# Agent Governance Protocol & Schemas
+!contracts/agent-governance-verdict.schema.json
+!docs/AGENT_GOVERNANCE_PROTOCOL.md
+

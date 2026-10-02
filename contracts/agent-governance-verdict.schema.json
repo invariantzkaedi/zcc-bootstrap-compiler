@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zkaedi.ai/schemas/agent-governance-verdict.json",
+  "title": "ZKAEDI Agent Governance Verdict",
+  "type": "object",
+  "required": ["schema_version", "input_sha256", "overall", "rules"],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0.0" },
+    "input_sha256":   { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "overall":        { "$ref": "#/$defs/verdict" },
+    "rules": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "required": ["id", "verdict", "evidence"],
+        "properties": {
+          "id":       { "type": "string", "enum": ["EF-1","EF-2","EF-3","EF-4","EF-5","EF-6"] },
+          "verdict":  { "$ref": "#/$defs/verdict" },
+          "evidence": { "type": "array", "items": { "type": "string" } },
+          "line":     { "type": ["integer", "null"] }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "verdict": { "type": "string", "enum": ["PASS", "FAIL", "INCONCLUSIVE", "NOT-APPLICABLE"] }
+  }
+}
