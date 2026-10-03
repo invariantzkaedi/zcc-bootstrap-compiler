@@ -1,0 +1,8 @@
+# Commands for Option 3: Win64 PE TLS - Thread Local Storage
+wsl -d Ubuntu -e bash -c "cd /home/zkaedii/zcc_github_upload && make zcc"
+wsl -d Ubuntu -e bash -c "cd /home/zkaedii/zcc_github_upload && make selfhost"
+wsl -d Ubuntu -e bash -c "cd /home/zkaedii/zcc_github_upload && cmp zcc2.s zcc3.s"
+wsl -d Ubuntu -e bash -c "cd /home/zkaedii/zcc_github_upload && python3 tools/test_zcc_opt_passes.py"
+git diff --stat part0_pp.c part3.c part4.c
+python tests/test_win64_pe_emitter.py
+git diff --stat HEAD -- src/win64_pe_emit.h src/win64_pe_emit.c src/codegen.c src/elf_emit.h tests/test_win64_pe_emitter.py

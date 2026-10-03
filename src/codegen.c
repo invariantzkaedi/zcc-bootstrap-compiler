@@ -153,6 +153,8 @@ static int parse_reg(const char *s) {
     return -1;
 }
 
+static char *trim(char *s);
+
 static int parse_mem_operand(const char *s, int *reg, long long *disp) {
     const char *paren = strchr(s, '(');
     if (paren) {
@@ -182,7 +184,21 @@ static int parse_mem_operand(const char *s, int *reg, long long *disp) {
             if (disp_len >= 63) disp_len = 63;
             strncpy(disp_str, s, disp_len);
             disp_str[disp_len] = '\0';
-            *disp = strtoll(disp_str, NULL, 0);
+            char *tpoff = strstr(disp_str, "@tpoff");
+            if (tpoff) {
+                *tpoff = '\0';
+                char *sym = trim(disp_str);
+                *disp = 0;
+                size_t k;
+                for (k = 0; k < label_count; k++) {
+                    if (strcmp(labels[k].name, sym) == 0) {
+                        *disp = labels[k].offset;
+                        break;
+                    }
+                }
+            } else {
+                *disp = strtoll(disp_str, NULL, 0);
+            }
         }
         return 1;
     }
@@ -305,6 +321,30 @@ static void encode_leaq(Segment *seg, int src_reg, int dst_reg, long long disp) 
         d[3] = (disp >> 24) & 0xFF;
         seg_append(seg, d, 4);
     }
+}
+
+static void encode_leaq_disp32(Segment *seg, int src_reg, int dst_reg, long long disp) {
+    unsigned char rex = 0x48;
+    unsigned char opcode = 0x8d;
+    unsigned char modrm;
+    
+    if (src_reg & 8) rex |= 0x01;
+    if (dst_reg & 8) rex |= 0x04;
+    
+    modrm = (0x02 << 6) | ((dst_reg & 7) << 3) | (src_reg & 7);
+    seg_append(seg, &rex, 1);
+    seg_append(seg, &opcode, 1);
+    seg_append(seg, &modrm, 1);
+    if ((src_reg & 7) == 4) {
+        unsigned char sib = 0x24;
+        seg_append(seg, &sib, 1);
+    }
+    unsigned char d[4];
+    d[0] = disp & 0xFF;
+    d[1] = (disp >> 8) & 0xFF;
+    d[2] = (disp >> 16) & 0xFF;
+    d[3] = (disp >> 24) & 0xFF;
+    seg_append(seg, d, 4);
 }
 
 static void encode_movq_imm(Segment *seg, long long imm, int dst_reg) {
@@ -1560,8 +1600,11 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
     }
     Segment text_seg = { NULL, 0, 0 };
     Segment data_seg = { NULL, 0, 0 };
+    Segment tls_seg = { NULL, 0, 0 };
+    size_t tls_zero_fill = 0;
+#define CUR_DATA_SEG ((current_segment == 4) ? &tls_seg : &data_seg)
     char line[65536];
-    int current_segment = 1; /* 1 = .text, 2 = .data */
+    int current_segment = 1; /* 1 = .text, 2 = .data, 4 = .tls */
 
     label_count = 0;
     reloc_count = 0;
@@ -1590,9 +1633,12 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
         p = trim(line);
         if (*p == '\0') continue;
 
-        /* Is it a label? */
+        /* Is it a label? (Must not have whitespace before colon) */
         char *colon = strchr(p, ':');
-        if (colon && !strchr(p, '"')) {
+        char *lbl_space = strchr(p, ' ');
+        char *lbl_tab = strchr(p, '\t');
+        char *first_ws = (lbl_space && lbl_tab) ? (lbl_space < lbl_tab ? lbl_space : lbl_tab) : (lbl_space ? lbl_space : lbl_tab);
+        if (colon && (!first_ws || colon < first_ws) && !strchr(p, '"')) {
             *colon = '\0';
             char *lbl_name = trim(p);
             /* Add or update label */
@@ -1613,7 +1659,9 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                 strcpy(labels[idx].name, lbl_name);
                 labels[idx].is_global = 0;
             }
-            labels[idx].offset = (current_segment == 1) ? text_seg.size : data_seg.size;
+            if (current_segment == 1) labels[idx].offset = text_seg.size;
+            else if (current_segment == 4) labels[idx].offset = tls_seg.size;
+            else labels[idx].offset = data_seg.size;
             labels[idx].segment = current_segment;
             continue;
         }
@@ -1627,7 +1675,11 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
             if (strcmp(dir, ".text") == 0) {
                 current_segment = 1;
             } else if (strcmp(dir, ".data") == 0 || strcmp(dir, ".section") == 0 || strcmp(dir, ".rodata") == 0 || strcmp(dir, ".bss") == 0) {
-                current_segment = 2;
+                if (strstr(p, ".tdata") || strstr(p, ".tbss")) {
+                    current_segment = 4;
+                } else {
+                    current_segment = 2;
+                }
             } else if (strcmp(dir, ".globl") == 0 || strcmp(dir, ".global") == 0) {
                 char name[128];
                 sscanf(p + strlen(dir), "%127s", name);
@@ -1678,6 +1730,9 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                     labels[idx].segment = 3; /* Common */
                     labels[idx].offset = align;
                     labels[idx].size = size;
+                    if (current_segment == 4) {
+                        tls_zero_fill += (size_t)size;
+                    }
                 }
             } else if (strcmp(dir, ".long") == 0) {
                 long long val = strtoll(p + 5, NULL, 0);
@@ -1686,7 +1741,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                 b[1] = (val >> 8) & 0xFF;
                 b[2] = (val >> 16) & 0xFF;
                 b[3] = (val >> 24) & 0xFF;
-                seg_append(&data_seg, b, 4);
+                seg_append(CUR_DATA_SEG, b, 4);
             } else if (strcmp(dir, ".quad") == 0) {
                 /* Check if it's a label or constant */
                 char target[128];
@@ -1695,13 +1750,13 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                 if (isalpha((unsigned char)*arg) || *arg == '.' || *arg == '_') {
                     sscanf(arg, "%127s", target);
                     Reloc r;
-                    r.offset = data_seg.size;
+                    r.offset = CUR_DATA_SEG->size;
                     strcpy(r.target_name, target);
                     r.type = R_X86_64_64;
                     r.addend = 0;
                     add_reloc(r);
                     unsigned char zero[8] = {0,0,0,0,0,0,0,0};
-                    seg_append(&data_seg, zero, 8);
+                    seg_append(CUR_DATA_SEG, zero, 8);
                 } else {
                     val = strtoll(arg, NULL, 0);
                     unsigned char b[8];
@@ -1709,34 +1764,37 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                     for (i = 0; i < 8; i++) {
                         b[i] = (val >> (i * 8)) & 0xFF;
                     }
-                    seg_append(&data_seg, b, 8);
+                    seg_append(CUR_DATA_SEG, b, 8);
                 }
             } else if (strcmp(dir, ".byte") == 0) {
                 int val = (int)strtoll(p + 5, NULL, 0);
                 unsigned char b = (unsigned char)val;
-                seg_append(&data_seg, &b, 1);
+                seg_append(CUR_DATA_SEG, &b, 1);
             } else if (strcmp(dir, ".short") == 0) {
                 int val = (int)strtoll(p + 6, NULL, 0);
                 unsigned char b[2];
                 b[0] = val & 0xFF;
                 b[1] = (val >> 8) & 0xFF;
-                seg_append(&data_seg, b, 2);
+                seg_append(CUR_DATA_SEG, b, 2);
             } else if (strcmp(dir, ".zero") == 0) {
                 long long size = 0;
                 sscanf(p + 5, "%lld", &size);
                 if (size > 0) {
                     unsigned char *zeros = (unsigned char *)calloc(1, size);
-                    seg_append(&data_seg, zeros, size);
+                    seg_append(CUR_DATA_SEG, zeros, size);
                     free(zeros);
                 }
-            } else if (strcmp(dir, ".align") == 0) {
+            } else if (strcmp(dir, ".align") == 0 || strcmp(dir, ".p2align") == 0) {
                 long long align = 0;
-                sscanf(p + 6, "%lld", &align);
+                sscanf(p + strlen(dir), "%lld", &align);
+                if (strcmp(dir, ".p2align") == 0 && align > 0) {
+                    align = 1LL << align;
+                }
                 if (align > 0) {
-                    size_t pad_size = (align - (data_seg.size % align)) % align;
+                    size_t pad_size = (align - (CUR_DATA_SEG->size % align)) % align;
                     if (pad_size > 0) {
                         unsigned char *zeros = (unsigned char *)calloc(1, pad_size);
-                        seg_append(&data_seg, zeros, pad_size);
+                        seg_append(CUR_DATA_SEG, zeros, pad_size);
                         free(zeros);
                     }
                 }
@@ -2148,16 +2206,56 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                 int reg2 = parse_reg(op2);
                 
                 if (op1[0] == '%' && reg1 == -1) {
-                    fprintf(stderr, "assembler error: invalid register '%s' in %s\n", op1, mnemonic);
-                    exit(1);
+                    if (strncmp(op1, "%fs:", 4) != 0 && strncmp(op1, "%gs:", 4) != 0) {
+                        fprintf(stderr, "assembler error: invalid register '%s' in %s\n", op1, mnemonic);
+                        exit(1);
+                    }
                 }
                 if (op2[0] == '%' && reg2 == -1) {
-                    fprintf(stderr, "assembler error: invalid register '%s' in %s\n", op2, mnemonic);
-                    exit(1);
+                    if (strncmp(op2, "%fs:", 4) != 0 && strncmp(op2, "%gs:", 4) != 0) {
+                        fprintf(stderr, "assembler error: invalid register '%s' in %s\n", op2, mnemonic);
+                        exit(1);
+                    }
                 }
                 
                 if (strcmp(mnemonic, "movq") == 0) {
-                    if ((reg1 >= 16 && reg1 <= 31) || (reg2 >= 16 && reg2 <= 31)) {
+                    if (strncmp(op1, "%fs:", 4) == 0) {
+                        if (is_win64_pe) {
+                            /* Win64 PE TLS model:
+                             * %gs:0x58 points to ThreadLocalStoragePointer array in TEB.
+                             * movq %gs:0x58, %rax -> 65 48 8b 04 25 58 00 00 00
+                             * movq (%rax), %rax   -> 48 8b 00
+                             */
+                            const unsigned char gs_tls_load[] = {
+                                0x65, 0x48, 0x8B, 0x04, 0x25, 0x58, 0x00, 0x00, 0x00,
+                                0x48, 0x8B, 0x00
+                            };
+                            seg_append(&text_seg, gs_tls_load, sizeof(gs_tls_load));
+                            if (reg2 != 0) {
+                                encode_movq(&text_seg, 0, reg2, 0, 0, 0);
+                            }
+                        } else {
+                            /* SystemV ELF TLS: movq %fs:0, reg2 */
+                            unsigned char fs_mov[] = {
+                                0x64, 0x48, 0x8B, 0x04, 0x25, 0x00, 0x00, 0x00, 0x00
+                            };
+                            if (reg2 & 8) fs_mov[1] |= 0x04;
+                            fs_mov[3] = (unsigned char)(0x04 | ((reg2 & 7) << 3));
+                            seg_append(&text_seg, fs_mov, sizeof(fs_mov));
+                        }
+                    } else if (strncmp(op1, "%gs:", 4) == 0) {
+                        long long disp = strtoll(op1 + 4, NULL, 0);
+                        unsigned char gs_mov[] = {
+                            0x65, 0x48, 0x8B, 0x04, 0x25,
+                            (unsigned char)(disp & 0xFF),
+                            (unsigned char)((disp >> 8) & 0xFF),
+                            (unsigned char)((disp >> 16) & 0xFF),
+                            (unsigned char)((disp >> 24) & 0xFF)
+                        };
+                        if (reg2 & 8) gs_mov[1] |= 0x04;
+                        gs_mov[3] = (unsigned char)(0x04 | ((reg2 & 7) << 3));
+                        seg_append(&text_seg, gs_mov, sizeof(gs_mov));
+                    } else if ((reg1 >= 16 && reg1 <= 31) || (reg2 >= 16 && reg2 <= 31)) {
                         int is_mem1 = 0, is_mem2 = 0;
                         long long disp1 = 0, disp2 = 0;
                         if (parse_mem_operand(op1, &reg1, &disp1)) is_mem1 = 1;
@@ -2326,6 +2424,45 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                         *rip = '\0';
                         strcpy(lbl, trim(op1));
                         encode_rip_relative(&text_seg, lbl, reg2, 2);
+                    } else if (strstr(op1, "@tpoff")) {
+                        char sym[128];
+                        char *tpoff = strstr(op1, "@tpoff");
+                        size_t sym_len = (size_t)(tpoff - op1);
+                        if (sym_len >= sizeof(sym)) sym_len = sizeof(sym) - 1;
+                        strncpy(sym, op1, sym_len);
+                        sym[sym_len] = '\0';
+
+                        long long extra = 0;
+                        char *paren = strchr(tpoff, '(');
+                        char *plus = strchr(tpoff, '+');
+                        char *minus = strchr(tpoff, '-');
+                        if (plus && (!paren || plus < paren)) {
+                            extra = strtoll(plus, NULL, 0);
+                        } else if (minus && (!paren || minus < paren)) {
+                            extra = strtoll(minus, NULL, 0);
+                        }
+
+                        int base_reg = 0;
+                        if (paren) {
+                            char reg_name[32];
+                            char *rparen = strchr(paren, ')');
+                            if (rparen) {
+                                size_t rlen = (size_t)(rparen - (paren + 1));
+                                if (rlen >= sizeof(reg_name)) rlen = sizeof(reg_name) - 1;
+                                strncpy(reg_name, paren + 1, rlen);
+                                reg_name[rlen] = '\0';
+                                base_reg = parse_reg(reg_name);
+                                if (base_reg < 0) base_reg = 0;
+                            }
+                        }
+
+                        encode_leaq_disp32(&text_seg, base_reg, reg2, 0);
+                        Reloc r;
+                        r.offset = text_seg.size - 4;
+                        strcpy(r.target_name, trim(sym));
+                        r.type = R_X86_64_TPOFF32;
+                        r.addend = extra;
+                        add_reloc(r);
                     } else {
                         int is_mem1 = 0;
                         long long disp1 = 0;
@@ -2942,6 +3079,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                     fprintf(stderr, "error: assembler label table limit exceeded (max 131072)\n");
                     free(text_seg.data);
                     free(data_seg.data);
+                    if (tls_seg.data) free(tls_seg.data);
                     return -1;
                 }
                 idx = label_count++;
@@ -3001,6 +3139,21 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
     /* Pass 2: Local relocation resolution */
     size_t i;
     for (i = 0; i < reloc_count; i++) {
+        if (relocs[i].type == R_X86_64_TPOFF32) {
+            size_t j;
+            for (j = 0; j < label_count; j++) {
+                if (strcmp(labels[j].name, relocs[i].target_name) == 0) {
+                    long long val = (long long)labels[j].offset + relocs[i].addend;
+                    text_seg.data[relocs[i].offset] = val & 0xFF;
+                    text_seg.data[relocs[i].offset + 1] = (val >> 8) & 0xFF;
+                    text_seg.data[relocs[i].offset + 2] = (val >> 16) & 0xFF;
+                    text_seg.data[relocs[i].offset + 3] = (val >> 24) & 0xFF;
+                    relocs[i].type = R_X86_64_NONE;
+                    break;
+                }
+            }
+            continue;
+        }
         size_t j;
         int found = 0;
         for (j = 0; j < label_count; j++) {
@@ -3044,6 +3197,9 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
         } else if (labels[i].segment == 3) {
             elf_syms[i].type = STT_OBJECT;
             elf_syms[i].shndx = SHN_COMMON;
+        } else if (labels[i].segment == 4) {
+            elf_syms[i].type = STT_TLS;
+            elf_syms[i].shndx = 1;
         } else {
             elf_syms[i].type = STT_NOTYPE;
             elf_syms[i].shndx = SHN_UNDEF;
@@ -3291,11 +3447,21 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
             if (!dname) dname = strrchr(out_o_filename, '\\');
             dname = dname ? (dname + 1) : out_o_filename;
 
-            ret = zcc_emit_win64_pe_dll(out_o_filename, dname, text_seg.data, text_seg.size, entry_offset,
+            win64_pe_tls_info_t tls_info;
+            memset(&tls_info, 0, sizeof(tls_info));
+            int has_tls = (tls_seg.size > 0 || tls_zero_fill > 0);
+            if (has_tls) {
+                tls_info.raw_data = tls_seg.data;
+                tls_info.raw_data_size = tls_seg.size;
+                tls_info.zero_fill_size = (uint32_t)tls_zero_fill;
+            }
+
+            ret = zcc_emit_win64_pe_dll_ex(out_o_filename, dname, text_seg.data, text_seg.size, entry_offset,
                                         win_import_count > 0 ? win_import_funcs : NULL, win_import_count,
                                         win_exports, win_export_count,
                                         win_reloc_count > 0 ? win_reloc_rvas : NULL, win_reloc_count,
-                                        win_extent_count > 0 ? win_extents : NULL, win_extent_count);
+                                        win_extent_count > 0 ? win_extents : NULL, win_extent_count,
+                                        has_tls ? &tls_info : NULL);
 
             /* Automatically emit .def and MSVC .lib import library */
             if (ret == 0 && win_export_count > 0) {
@@ -3315,17 +3481,27 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
             if (win_exports) free(win_exports);
         } else {
             uint16_t target_subsystem = g_win64_gui_subsystem ? 2 : 3;
-            ret = zcc_emit_win64_pe_file_v5(out_o_filename, text_seg.data, text_seg.size, entry_offset,
+            win64_pe_tls_info_t tls_info;
+            memset(&tls_info, 0, sizeof(tls_info));
+            int has_tls = (tls_seg.size > 0 || tls_zero_fill > 0);
+            if (has_tls) {
+                tls_info.raw_data = tls_seg.data;
+                tls_info.raw_data_size = tls_seg.size;
+                tls_info.zero_fill_size = (uint32_t)tls_zero_fill;
+            }
+            ret = zcc_emit_win64_pe_file_v6(out_o_filename, text_seg.data, text_seg.size, entry_offset,
                                                 win_import_count > 0 ? win_import_funcs : NULL, win_import_count,
                                                 win_reloc_count > 0 ? win_reloc_rvas : NULL, win_reloc_count,
                                                 win_extent_count > 0 ? win_extents : NULL, win_extent_count,
-                                                target_subsystem, NULL, 0);
+                                                target_subsystem, NULL, 0,
+                                                has_tls ? &tls_info : NULL);
         }
         if (win_extents) free(win_extents);
         if (func_offsets) free(func_offsets);
         free(elf_syms);
         free(text_seg.data);
         free(data_seg.data);
+        if (tls_seg.data) free(tls_seg.data);
         return ret;
     }
 

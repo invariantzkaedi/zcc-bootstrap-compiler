@@ -155,6 +155,24 @@ typedef struct {
   win64_pe_seh_scope_t scopes[4];
 } win64_pe_func_extent_t;
 
+/* TLS Directory Descriptor for x64 (40 bytes) */
+typedef struct {
+  uint64_t StartAddressOfRawData; /* VA of start of TLS template */
+  uint64_t EndAddressOfRawData;   /* VA of end of TLS template */
+  uint64_t AddressOfIndex;        /* VA of TLS index variable (uint32_t) */
+  uint64_t AddressOfCallBacks;    /* VA of null-terminated array of callback function pointers */
+  uint32_t SizeOfZeroFill;        /* Size in bytes of zero-fill template */
+  uint32_t Characteristics;       /* Reserved (0) */
+} IMAGE_TLS_DIRECTORY64;
+
+typedef struct {
+  const uint8_t *raw_data;        /* Template initialized data */
+  size_t         raw_data_size;   /* Size of template data */
+  uint32_t       zero_fill_size;  /* Uninitialized zero-fill size (.tbss) */
+  const uint32_t *callback_rvas;  /* Optional callback function RVAs */
+  size_t         num_callbacks;   /* Number of callbacks */
+} win64_pe_tls_info_t;
+
 #pragma pack(pop)
 
 /* Function Declarations */
@@ -188,6 +206,14 @@ int zcc_emit_win64_pe_file_v5(const char *filename, const uint8_t *code_bytes,
                               const win64_pe_func_extent_t *extents, size_t num_extents,
                               uint16_t subsystem,
                               const uint8_t *rsrc_bytes, size_t rsrc_len);
+int zcc_emit_win64_pe_file_v6(const char *filename, const uint8_t *code_bytes,
+                              size_t code_len, uint32_t entry_offset,
+                              const char **imported_funcs, size_t num_imported_funcs,
+                              const uint32_t *reloc_rvas, size_t num_reloc_rvas,
+                              const win64_pe_func_extent_t *extents, size_t num_extents,
+                              uint16_t subsystem,
+                              const uint8_t *rsrc_bytes, size_t rsrc_len,
+                              const win64_pe_tls_info_t *tls_info);
 uint8_t *win64_pe_build_default_manifest_rsrc(const char *app_name, uint32_t rsrc_rva, uint32_t *out_size);
 
 typedef struct {
@@ -203,6 +229,19 @@ int zcc_emit_win64_pe_dll(const char *filename, const char *dll_name,
                           const uint32_t *reloc_rvas, size_t num_reloc_rvas,
                           const win64_pe_func_extent_t *extents, size_t num_extents);
 
+int zcc_emit_win64_pe_dll_ex(const char *filename, const char *dll_name,
+                             const uint8_t *code_bytes, size_t code_len,
+                             uint32_t entry_offset,
+                             const char **imported_funcs, size_t num_imported_funcs,
+                             const win64_pe_export_t *exports, size_t num_exports,
+                             const uint32_t *reloc_rvas, size_t num_reloc_rvas,
+                             const win64_pe_func_extent_t *extents, size_t num_extents,
+                             const win64_pe_tls_info_t *tls_info);
+
+uint8_t *win64_pe_build_tls(uint64_t image_base, uint32_t tls_rva,
+                            const win64_pe_tls_info_t *tls_info,
+                            uint32_t *out_tls_size, uint32_t *out_dir_rva,
+                            uint32_t *out_reloc_rvas, size_t *out_num_relocs);
 
 int zcc_emit_win64_def_file(const char *filename, const char *dll_name,
                             const win64_pe_export_t *exports, size_t num_exports);

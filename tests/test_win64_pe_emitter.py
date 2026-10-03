@@ -1170,8 +1170,126 @@ class TestWin64PEEmitter(unittest.TestCase):
         self.assertEqual(sig2, 0xFFFF, "Sig2 must be 0xFFFF (IMAGE_FILE_MACHINE_UNKNOWN)")
         self.assertEqual(machine, 0x8664, "Machine must be 0x8664 (AMD64)")
 
+    def test_29_win64_pe_tls_directory_and_thread_local(self):
+        """Verify Win64 PE .tls section, IMAGE_TLS_DIRECTORY64 (40 bytes), DataDirectory[9], and runtime execution."""
+        scratch_dir = os.path.join(REPO_ROOT, "scratch")
+        os.makedirs(scratch_dir, exist_ok=True)
+        src = os.path.join(scratch_dir, "probe_tls_test.c")
+        exe = os.path.join(scratch_dir, "probe_tls_test.exe")
+
+        with open(src, "w", encoding="utf-8") as f:
+            f.write(
+                "_Thread_local int my_tls = 42;\n"
+                "_Thread_local int other_tls = 100;\n"
+                "int main(void) {\n"
+                "    if (my_tls != 42) return 1;\n"
+                "    if (other_tls != 100) return 2;\n"
+                "    my_tls = 84;\n"
+                "    if (my_tls != 84) return 3;\n"
+                "    other_tls = 200;\n"
+                "    if (other_tls != 200) return 4;\n"
+                "    return 0;\n"
+                "}\n"
+            )
+
+        if sys.platform == "win32":
+            wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
+        else:
+            cmd = [self.zcc_bin, src, "-target", "win64", "-o", exe]
+
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(res.returncode, 0, f"Compilation failed: {res.stderr}\n{res.stdout}")
+        self.assertTrue(os.path.exists(exe))
+
+        with open(exe, "rb") as f:
+            data = f.read()
+
+        e_lfanew = struct.unpack_from("<I", data, 0x3C)[0]
+        num_sections = struct.unpack_from("<H", data, e_lfanew + 6)[0]
+        opt_hdr_magic = struct.unpack_from("<H", data, e_lfanew + 24)[0]
+        self.assertEqual(opt_hdr_magic, 0x020B, "Must be PE32+ (64-bit)")
+
+        # Verify DataDirectory[9] (IMAGE_DIRECTORY_ENTRY_TLS)
+        tls_dir_offset = e_lfanew + 24 + 112 + (9 * 8)
+        tls_rva, tls_size = struct.unpack_from("<II", data, tls_dir_offset)
+        self.assertGreater(tls_rva, 0, "TLS DataDirectory RVA must be non-zero")
+        self.assertEqual(tls_size, 40, f"TLS DataDirectory Size must be 40 (IMAGE_TLS_DIRECTORY64), got {tls_size}")
+
+        # Verify Section Headers contain .tls
+        sec_tbl_offset = e_lfanew + 24 + 240
+        sec_names = []
+        tls_sec_raw_offset = 0
+        tls_sec_rva = 0
+        for i in range(num_sections):
+            sec_hdr = data[sec_tbl_offset + i * 40 : sec_tbl_offset + (i + 1) * 40]
+            name = sec_hdr[:8].rstrip(b"\x00 ").decode("ascii", errors="ignore")
+            sec_names.append(name)
+            if name == ".tls":
+                tls_sec_rva = struct.unpack_from("<I", sec_hdr, 12)[0]
+                tls_sec_raw_offset = struct.unpack_from("<I", sec_hdr, 20)[0]
+
+        self.assertIn(".tls", sec_names, "Missing .tls section header")
+        self.assertGreater(tls_sec_raw_offset, 0)
+
+        # Inspect IMAGE_TLS_DIRECTORY64 contents
+        dir_file_offset = tls_sec_raw_offset + (tls_rva - tls_sec_rva)
+        raw_start, raw_end, idx_addr, cb_addr, zero_fill, chars = struct.unpack_from("<QQQQII", data, dir_file_offset)
+        self.assertGreater(raw_start, 0x140000000)
+        self.assertGreater(raw_end, raw_start)
+        self.assertEqual(raw_end - raw_start, 8, "my_tls + other_tls is 8 bytes")
+        self.assertGreater(idx_addr, raw_start)
+        self.assertGreater(cb_addr, raw_start)
+        self.assertEqual(zero_fill, 0)
+
+        # Native execution on Win64
+        if sys.platform == "win32":
+            run_res = subprocess.run(["cmd.exe", "/c", exe])
+            self.assertEqual(run_res.returncode, 0, f"Expected returncode 0 from TLS probe, got {run_res.returncode}")
+
+    def test_30_win64_pe_tls_multi_variable_and_offsets(self):
+        """Verify multiple initialized and uninitialized TLS variables with alignment and offset calculation."""
+        scratch_dir = os.path.join(REPO_ROOT, "scratch")
+        os.makedirs(scratch_dir, exist_ok=True)
+        src = os.path.join(scratch_dir, "probe_tls_multi.c")
+        exe = os.path.join(scratch_dir, "probe_tls_multi.exe")
+
+        with open(src, "w", encoding="utf-8") as f:
+            f.write(
+                "_Thread_local long long tls_a = 0x1122334455667788LL;\n"
+                "_Thread_local int tls_b = 77;\n"
+                "_Thread_local short tls_c = 1234;\n"
+                "int main(void) {\n"
+                "    if (tls_a != 0x1122334455667788LL) return 1;\n"
+                "    if (tls_b != 77) return 2;\n"
+                "    if (tls_c != 1234) return 3;\n"
+                "    tls_b = 99;\n"
+                "    if (tls_b != 99) return 4;\n"
+                "    return 0;\n"
+                "}\n"
+            )
+
+        if sys.platform == "win32":
+            wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
+        else:
+            cmd = [self.zcc_bin, src, "-target", "win64", "-o", exe]
+
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(res.returncode, 0, f"Compilation failed: {res.stderr}\n{res.stdout}")
+        self.assertTrue(os.path.exists(exe))
+
+        if sys.platform == "win32":
+            run_res = subprocess.run(["cmd.exe", "/c", exe])
+            self.assertEqual(run_res.returncode, 0, f"Expected returncode 0 from multi-TLS probe, got {run_res.returncode}")
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 

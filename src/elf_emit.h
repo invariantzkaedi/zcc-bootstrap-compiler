@@ -104,6 +104,7 @@ typedef struct {
 #define STT_OBJECT      1
 #define STT_FUNC        2
 #define STT_SECTION     3
+#define STT_TLS         6
 
 #define SHN_UNDEF       0
 #define SHN_COMMON      0xfff2
@@ -116,6 +117,7 @@ typedef struct {
 #define R_X86_64_PLT32   4
 #define R_X86_64_32      10
 #define R_X86_64_32S     11
+#define R_X86_64_TPOFF32 23
 
 
 /* DWARF-4 Constants */
