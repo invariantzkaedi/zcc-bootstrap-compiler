@@ -1,0 +1,14 @@
+# Gate 1: Selfhost identity
+make selfhost && cmp zcc2.s zcc3.s
+
+# Gate 2: Optimization pass gauntlet
+python3 tools/test_zcc_opt_passes.py
+
+# Gate 3: Foundational diff boundary (< 50 lines in part0_pp.c, part3.c, part4.c)
+git diff --stat part0_pp.c part3.c part4.c
+
+# Gate 4: Target test suite
+python3 tests/test_win64_pe_emitter.py
+
+# Gate 5: Scope audit
+git diff --stat

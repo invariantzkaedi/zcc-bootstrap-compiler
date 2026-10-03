@@ -729,6 +729,43 @@ static void peephole_optimize(char *filename) {
       continue;
     }
 
+    /* 3b. Push/Imm/Mov/Pop Quad: push %rax; mov $imm, %rax; mov %rax, %r11; pop %rax -> mov $imm, %r11 */
+    if (strcmp(l1, "    pushq %rax\n") == 0 && i + 3 < nlines) {
+      char *l2 = line_ptrs[i + 1];
+      char *l3 = line_ptrs[i + 2];
+      char *l4 = line_ptrs[i + 3];
+      if (strcmp(l3, "    movq %rax, %r11\n") == 0 && strcmp(l4, "    popq %rax\n") == 0) {
+        if (strncmp(l2, "    movq $", 10) == 0) {
+          char imm[64];
+          if (sscanf(l2, "    movq %63[^,]", imm) == 1) {
+            sprintf(line_ptrs[i], "    movq %s, %%r11\n", imm);
+            line_ptrs[i + 1][0] = 0;
+            line_ptrs[i + 2][0] = 0;
+            line_ptrs[i + 3][0] = 0;
+            eliminated += 3;
+            i += 4;
+            continue;
+          }
+        } else if (strcmp(l2, "    xorl %eax, %eax\n") == 0) {
+          sprintf(line_ptrs[i], "    xorq %%r11, %%r11\n");
+          line_ptrs[i + 1][0] = 0;
+          line_ptrs[i + 2][0] = 0;
+          line_ptrs[i + 3][0] = 0;
+          eliminated += 3;
+          i += 4;
+          continue;
+        }
+      }
+    }
+
+    /* 3c. Redundant Ping-Pong Move Elision: mov %rax, %r11; mov %r11, %rax */
+    if (strcmp(l1, "    movq %rax, %r11\n") == 0 && i + 1 < nlines &&
+        strcmp(line_ptrs[i + 1], "    movq %r11, %rax\n") == 0) {
+      line_ptrs[i + 1][0] = 0;
+      eliminated += 1;
+      i += 2;
+      continue;
+    }
     /* 3. Push/Lea/Pop Triad */
     if (strcmp(l1, "    pushq %rax\n") == 0 && i + 2 < nlines) {
       char *l2 = line_ptrs[i + 1];
