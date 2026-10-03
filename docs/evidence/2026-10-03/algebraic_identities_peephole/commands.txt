@@ -1,0 +1,7 @@
+# Frontier 4: Algebraic Identity & Constant Elimination in Codegen
+gcc tests/probe_algebraic_identities.c -o /tmp/probe_ident_bin
+python3 tools/test_zcc_opt_passes.py
+make selfhost
+cmp zcc2.s zcc3.s
+python3 tests/test_win64_pe_emitter.py
+git diff --stat

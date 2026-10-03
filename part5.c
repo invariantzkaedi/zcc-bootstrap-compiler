@@ -720,11 +720,14 @@ static void peephole_optimize(char *filename) {
       }
     }
 
-    /* 2. Arithmetic Nullification */
-    if (strcmp(l1, "    addq $0, %rax\n") == 0 ||
-        strcmp(l1, "    subq $0, %rax\n") == 0 ||
-        strcmp(l1, "    addq $0, %rsp\n") == 0 ||
-        strcmp(l1, "    subq $0, %rsp\n") == 0) {
+    /* 2. Generalized Arithmetic Nullification: addq/subq $0 to any register */
+    if ((strncmp(l1, "    addq $0, ", 13) == 0 ||
+         strncmp(l1, "    subq $0, ", 13) == 0 ||
+         strncmp(l1, "    addl $0, ", 13) == 0 ||
+         strncmp(l1, "    subl $0, ", 13) == 0) &&
+        (strstr(l1, "%rax") || strstr(l1, "%rsp") || strstr(l1, "%r11") ||
+         strstr(l1, "%rcx") || strstr(l1, "%rdx") || strstr(l1, "%rsi") || strstr(l1, "%rdi") ||
+         strstr(l1, "%eax") || strstr(l1, "%r11d"))) {
       if (g_emit_smt_proofs) {
           smt_prove_arith_nullification(l1, strstr(l1, "%rsp") ? "rsp" : "rax", i);
       }
@@ -737,6 +740,83 @@ static void peephole_optimize(char *filename) {
       }
       i += 1;
       continue;
+    }
+
+    /* 2b. Redundant Self-Move Elision: movq %reg, %reg */
+    if (strncmp(l1, "    movq ", 9) == 0) {
+      char r1[32], r2[32];
+      if (sscanf(l1, "    movq %31[^,], %31s", r1, r2) == 2 && strcmp(r1, r2) == 0) {
+        line_ptrs[i][0] = 0;
+        eliminated += 1;
+        i += 1;
+        continue;
+      }
+    }
+
+    /* 2c. Identity Multiplication by 1: push %rax; mov $1, %rax; cltq; pop %r11; imulq %r11, %rax -> movq %rax, %r11 */
+    if (strcmp(l1, "    pushq %rax\n") == 0 && i + 4 < nlines) {
+      char *l2 = line_ptrs[i + 1];
+      char *l3 = line_ptrs[i + 2];
+      char *l4 = line_ptrs[i + 3];
+      char *l5 = line_ptrs[i + 4];
+      if (strcmp(l2, "    movq $1, %rax\n") == 0 &&
+          strcmp(l3, "    cltq\n") == 0 &&
+          strcmp(l4, "    popq %r11\n") == 0 &&
+          strcmp(l5, "    imulq %r11, %rax\n") == 0) {
+        sprintf(line_ptrs[i], "    movq %%rax, %%r11\n");
+        line_ptrs[i + 1][0] = 0;
+        line_ptrs[i + 2][0] = 0;
+        line_ptrs[i + 3][0] = 0;
+        line_ptrs[i + 4][0] = 0;
+        eliminated += 4;
+        i += 5;
+        continue;
+      }
+    }
+
+    /* 2d. Zero Multiplication by 0: push %rax; xorl %eax, %eax; cltq; pop %r11; imulq %r11, %rax -> movq %rax, %r11; xorl %eax, %eax */
+    if (strcmp(l1, "    pushq %rax\n") == 0 && i + 4 < nlines) {
+      char *l2 = line_ptrs[i + 1];
+      char *l3 = line_ptrs[i + 2];
+      char *l4 = line_ptrs[i + 3];
+      char *l5 = line_ptrs[i + 4];
+      if (strcmp(l2, "    xorl %eax, %eax\n") == 0 &&
+          strcmp(l3, "    cltq\n") == 0 &&
+          strcmp(l4, "    popq %r11\n") == 0 &&
+          strcmp(l5, "    imulq %r11, %rax\n") == 0) {
+        sprintf(line_ptrs[i], "    movq %%rax, %%r11\n");
+        sprintf(line_ptrs[i + 1], "    xorl %%eax, %%eax\n");
+        line_ptrs[i + 2][0] = 0;
+        line_ptrs[i + 3][0] = 0;
+        line_ptrs[i + 4][0] = 0;
+        eliminated += 3;
+        i += 5;
+        continue;
+      }
+    }
+
+    /* 2e. Zero Add/Sub Algebraic Fold: push %rax; xorl %eax, %eax; cltq; movq %rax, %r11; pop %rax; addq/subq %r11, %rax */
+    if (strcmp(l1, "    pushq %rax\n") == 0 && i + 5 < nlines) {
+      char *l2 = line_ptrs[i + 1];
+      char *l3 = line_ptrs[i + 2];
+      char *l4 = line_ptrs[i + 3];
+      char *l5 = line_ptrs[i + 4];
+      char *l6 = line_ptrs[i + 5];
+      if (strcmp(l2, "    xorl %eax, %eax\n") == 0 &&
+          strcmp(l3, "    cltq\n") == 0 &&
+          strcmp(l4, "    movq %rax, %r11\n") == 0 &&
+          strcmp(l5, "    popq %rax\n") == 0 &&
+          (strcmp(l6, "    addq %r11, %rax\n") == 0 || strcmp(l6, "    subq %r11, %rax\n") == 0)) {
+        sprintf(line_ptrs[i], "    xorq %%r11, %%r11\n");
+        line_ptrs[i + 1][0] = 0;
+        line_ptrs[i + 2][0] = 0;
+        line_ptrs[i + 3][0] = 0;
+        line_ptrs[i + 4][0] = 0;
+        line_ptrs[i + 5][0] = 0;
+        eliminated += 5;
+        i += 6;
+        continue;
+      }
     }
 
     /* 3b. Push/Imm/Mov/Pop Quad: push %rax; mov $imm, %rax; mov %rax, %r11; pop %rax -> mov $imm, %r11 */
