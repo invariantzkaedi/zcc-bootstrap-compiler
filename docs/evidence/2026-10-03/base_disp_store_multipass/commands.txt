@@ -1,0 +1,8 @@
+make zcc
+./zcc scratch/probe_lea.c -S -o scratch/probe_lea.s
+./zcc scratch/probe_combined.c -o scratch/probe_combined && ./scratch/probe_combined
+make selfhost && cmp zcc2.s zcc3.s
+python3 tools/test_zcc_opt_passes.py
+git diff --stat part0_pp.c part3.c part4.c
+python3 tests/test_win64_pe_emitter.py
+git diff --stat

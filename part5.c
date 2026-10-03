@@ -659,7 +659,17 @@ static void peephole_optimize(char *filename) {
   }
   fclose(fp);
 
-  for (i = 0; i < nlines;) {
+  int pass;
+  for (pass = 0; pass < 2; pass++) {
+    int active = 0;
+    for (i = 0; i < nlines; i++) {
+      if (line_ptrs[i][0] != 0) {
+        line_ptrs[active++] = line_ptrs[i];
+      }
+    }
+    nlines = active;
+
+    for (i = 0; i < nlines;) {
     char *l1 = line_ptrs[i];
 
     /* 1. Redundant Push/Pop */
@@ -804,6 +814,35 @@ static void peephole_optimize(char *filename) {
       i += 2;
       continue;
     }
+
+    /* 3f. Base-Displacement Local Store Folding:
+       leaq disp(%rbp), %rax; mov... %r11..., (%rax); movq %r11, %rax
+       -> mov... %r11..., disp(%rbp); movq %r11, %rax */
+    if (strncmp(l1, "    leaq ", 9) == 0 && strstr(l1, "(%rbp), %rax\n") && i + 2 < nlines) {
+      char disp[64];
+      if (sscanf(l1, "    leaq %63[^(](%%rbp), %%rax", disp) == 1 &&
+          strcmp(line_ptrs[i + 2], "    movq %r11, %rax\n") == 0) {
+        char *l2 = line_ptrs[i + 1];
+        const char *op = NULL;
+        const char *src = NULL;
+        if (strcmp(l2, "    movl %r11d, (%rax)\n") == 0) {
+          op = "movl"; src = "%r11d";
+        } else if (strcmp(l2, "    movq %r11, (%rax)\n") == 0) {
+          op = "movq"; src = "%r11";
+        } else if (strcmp(l2, "    movb %r11b, (%rax)\n") == 0) {
+          op = "movb"; src = "%r11b";
+        } else if (strcmp(l2, "    movw %r11w, (%rax)\n") == 0) {
+          op = "movw"; src = "%r11w";
+        }
+        if (op) {
+          sprintf(line_ptrs[i], "    %s %s, %s(%%rbp)\n", op, src, disp);
+          line_ptrs[i + 1][0] = 0;
+          eliminated += 1;
+          i += 2;
+          continue;
+        }
+      }
+    }
     /* 3. Push/Lea/Pop Triad */
     if (strcmp(l1, "    pushq %rax\n") == 0 && i + 2 < nlines) {
       char *l2 = line_ptrs[i + 1];
@@ -851,6 +890,7 @@ static void peephole_optimize(char *filename) {
       }
     }
     i++;
+    }
   }
 
   if (g_use_in_mem_asm) {
