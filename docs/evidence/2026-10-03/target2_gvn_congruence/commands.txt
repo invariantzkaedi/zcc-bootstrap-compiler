@@ -1,0 +1,6 @@
+cc -O0 -w -Iinclude -I. tests/test_dominance.c tests/test_copy_const_prop_stubs.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c ir.c src/ir_lower_float.c src/evm/memory_v2.c src/evm/abi_extractor.c ir_telemetry.c zcc_telemetry.c src/zcc_oracle_substrate.c transient_state.c -lm -o /tmp/test_dominance && /tmp/test_dominance
+make check-copy-const-prop
+make selfhost
+cmp zcc2.s zcc3.s
+bash tests/abi/gate2_fwd.sh
+bash tests/abi/gate2_rev.sh

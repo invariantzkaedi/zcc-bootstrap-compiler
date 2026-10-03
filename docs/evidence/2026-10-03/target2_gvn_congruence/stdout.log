@@ -1,0 +1,93 @@
+=== test_dominance (T1-T6) ===
+╔══════════════════════════════════════════════════════════════╗
+║  ▸ ZKAEDI DOMINANCE + GVN TEST SUITE                          ║
+╚══════════════════════════════════════════════════════════════╝
+
+  [TEST] T1: Basic Block construction (3 blocks)
+    ✓ PASS: cfg build returns 0
+    ✓ PASS: 3 basic blocks
+    ✓ PASS: entry has 2 successors (taken + fallthrough)
+    ✓ PASS: block 1 label is .L_end
+    ✓ PASS: block 2 label is .L1
+  [TEST] T2: Diamond CFG — dominator tree
+    ✓ PASS: 4 basic blocks
+    ✓ PASS: entry idom = -1
+    ✓ PASS: left idom = entry
+    ✓ PASS: right idom = entry
+    ✓ PASS: merge idom = entry
+    ✓ PASS: entry dominates 3 children
+  [TEST] T3: Cross-block GVN — entry expression folded in dominated branch
+[SSA] Bitset liveness allocated: 3 blocks × 16 words on test_xblock
+[SSA] Bitset liveness allocated: 3 blocks × 16 words on test_xblock
+[SSA] Inserted Φ for sum2 at block 2 (frontier of def)
+[SSA] Renamed test_xblock with 0 allocas
+[SSA] Full construction → destruction complete (0 Φ removed)
+    ✓ PASS: redundant ADD in dominated block rewritten to COPY
+    ✓ PASS: COPY source is 'sum' (the canonical ADD)
+  [TEST] T4: GVN isolation — sibling branches don't leak
+[SSA] Bitset liveness allocated: 4 blocks × 16 words on test_isolation
+[SSA] Bitset liveness allocated: 4 blocks × 16 words on test_isolation
+[SSA] Inserted Φ for sum_l at block 1 (frontier of def)
+[SSA] Inserted Φ for sum_r at block 2 (frontier of def)
+[SSA] Inserted Φ for total at block 3 (frontier of def)
+[SSA] Renamed test_isolation with 0 allocas
+[SSA] Full construction → destruction complete (0 Φ removed)
+    ✓ PASS: left ADD remains ADD (not folded)
+    ✓ PASS: right ADD remains ADD (sibling isolation preserved)
+  [TEST] T5: Commutative cross-block GVN — reversed operands fold to canonical def
+[SSA] Bitset liveness allocated: 3 blocks × 16 words on test_comm
+[SSA] Bitset liveness allocated: 3 blocks × 16 words on test_comm
+[SSA] Inserted Φ for sum_rev at block 2 (frontier of def)
+[SSA] Renamed test_comm with 0 allocas
+[SSA] Full construction → destruction complete (0 Φ removed)
+    ✓ PASS: commutative ADD with swapped operands folded to COPY
+    ✓ PASS: COPY source is canonical 'sum'
+  [TEST] T6: Transitive congruence closure — operand alias chain folds to canonical def
+[SSA] Bitset liveness allocated: 3 blocks × 16 words on test_cong
+[SSA] Bitset liveness allocated: 3 blocks × 16 words on test_cong
+[SSA] Inserted Φ for alias0 at block 2 (frontier of def)
+[SSA] Inserted Φ for sum_trans at block 2 (frontier of def)
+[SSA] Renamed test_cong with 0 allocas
+[SSA] Full construction → destruction complete (0 Φ removed)
+    ✓ PASS: transitive ADD with copy alias folded to COPY
+    ✓ PASS: COPY source is canonical 'sum'
+
+  Results: 0 FAILED
+  ✓ ALL TESTS GREEN
+
+=== make check-copy-const-prop ===
+=== Copy/Constant Propagation Pass Tests ===
+  T01: Constant propagated through single IR_COPY
+  T02: Constant propagation through COPY-of-COPY chain
+  T03: Copy propagation — use of alias rewritten to source
+  T04: Dead IR_COPY removed by DCE after CCP
+  T05: Block boundary resets alias map
+  T06: IR_PHI nodes are not modified by CCP
+  T07: Two-hop copy chain resolves to ultimate source
+  T08: Pipeline reports modifications on a function with propagatable copies
+  T09: Pipeline is a no-op on a function with no copies
+  T10: Full pipeline (ir_pm_run_default) eliminates all dead copies
+
+=== Results: 19 passed, 0 failed ===
+ALL PASS
+
+=== Gate 1: cmp zcc2.s zcc3.s ===
+cmp zcc2.s zcc3.s: exit 0
+99fc51b35d7e80da9b70bb8b8c30e31120ccd8311660b0a88847edea18cca378  zcc2.s
+99fc51b35d7e80da9b70bb8b8c30e31120ccd8311660b0a88847edea18cca378  zcc3.s
+
+=== Gate 2: ABI Inter-op ===
+Starting Gate 2: Forward Inter-op
+PASS: ret_int_int forward
+PASS: ret_sse_sse forward
+PASS: ret_sse_int forward
+PASS: ret_int_sse forward
+PASS: ret_tvalue forward
+Gate 2: ALL PASS
+Starting Gate 2: Reverse Inter-op
+PASS: ret_int_int reverse
+PASS: ret_sse_sse reverse
+PASS: ret_sse_int reverse
+PASS: ret_int_sse reverse
+PASS: ret_tvalue reverse
+Gate 2: ALL PASS

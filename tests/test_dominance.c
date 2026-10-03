@@ -160,7 +160,6 @@ static void test_crossblock_gvn(void) {
     ir_emit(fn, IR_LABEL, IR_TY_VOID, NULL, NULL, NULL, ".L_fall", 0L, 8);
     ir_emit(fn, IR_RET,   IR_TY_I64, NULL, "sum", NULL, NULL, 0L, 9);
 
-    /* B2: .L_branch — duplicate ADD (non-foldable) */
     ir_emit(fn, IR_LABEL, IR_TY_VOID, NULL, NULL, NULL, ".L_branch", 0L, 10);
     add2_node = ir_emit(fn, IR_ADD, IR_TY_I64, "sum2", "slot0", "slot1", NULL, 0L, 11);
     ir_emit(fn, IR_RET,   IR_TY_I64, NULL, "sum2", NULL, NULL, 0L, 12);
@@ -170,7 +169,9 @@ static void test_crossblock_gvn(void) {
         ir_module_t *run_mod = ir_module_create();
         run_mod->funcs[0] = fn;
         run_mod->func_count = 1;
+        setenv("ZCC_OPT_DCE", "0", 1);
         ir_pm_run_default(run_mod, 0);
+        unsetenv("ZCC_OPT_DCE");
         run_mod->funcs[0] = NULL;
         run_mod->func_count = 0;
         ir_module_free(run_mod);
@@ -253,8 +254,121 @@ static void test_sibling_isolation(void) {
     ir_module_free(mod);
 }
 
+/*
+ * T5: Commutative cross-block GVN.
+ *
+ * Tests that ADD(slot1, slot0) in a dominated block matches ADD(slot0, slot1)
+ * from the entry block due to commutative canonicalization.
+ */
+static void test_commutative_gvn(void) {
+    ir_module_t *mod;
+    ir_func_t   *fn;
+    ir_node_t   *add_comm_node;
+
+    TEST("T5: Commutative cross-block GVN \xe2\x80\x94 reversed operands fold to canonical def");
+
+    mod = ir_module_create();
+    fn  = ir_func_create(mod, "test_comm", IR_TY_I64, 0);
+
+    /* B0: entry — ADD slot0, slot1 */
+    ir_emit(fn, IR_CONST, IR_TY_I64, "addr0", NULL, NULL, NULL, 0L, 1);
+    ir_emit(fn, IR_CONST, IR_TY_I64, "addr1", NULL, NULL, NULL, 8L, 2);
+    ir_emit(fn, IR_LOAD,  IR_TY_I64, "slot0", "addr0", NULL, NULL, 0L, 3);
+    ir_emit(fn, IR_LOAD,  IR_TY_I64, "slot1", "addr1", NULL, NULL, 0L, 4);
+    ir_emit(fn, IR_ADD,   IR_TY_I64, "sum",   "slot0", "slot1", NULL, 0L, 5);
+    ir_emit(fn, IR_CONST, IR_TY_I64, "cond", NULL, NULL, NULL, 1L, 6);
+    ir_emit(fn, IR_BR_IF, IR_TY_VOID, NULL, "cond", NULL, ".L_branch", 0L, 7);
+
+    /* B1: fallthrough */
+    ir_emit(fn, IR_LABEL, IR_TY_VOID, NULL, NULL, NULL, ".L_fall", 0L, 8);
+    ir_emit(fn, IR_RET,   IR_TY_I64, NULL, "sum", NULL, NULL, 0L, 9);
+
+    /* B2: .L_branch — ADD slot1, slot0 (reversed commutative operands!) */
+    ir_emit(fn, IR_LABEL, IR_TY_VOID, NULL, NULL, NULL, ".L_branch", 0L, 10);
+    add_comm_node = ir_emit(fn, IR_ADD, IR_TY_I64, "sum_rev", "slot1", "slot0", NULL, 0L, 11);
+    ir_emit(fn, IR_RET,   IR_TY_I64, NULL, "sum_rev", NULL, NULL, 0L, 12);
+
+    {
+        ir_module_t *run_mod = ir_module_create();
+        run_mod->funcs[0] = fn;
+        run_mod->func_count = 1;
+        setenv("ZCC_OPT_DCE", "0", 1);
+        ir_pm_run_default(run_mod, 0);
+        unsetenv("ZCC_OPT_DCE");
+        run_mod->funcs[0] = NULL;
+        run_mod->func_count = 0;
+        ir_module_free(run_mod);
+    }
+
+    CHECK(add_comm_node->op == IR_COPY,
+          "commutative ADD with swapped operands folded to COPY");
+    if (add_comm_node->op == IR_COPY) {
+        CHECK(strcmp(add_comm_node->src1, "sum") == 0,
+              "COPY source is canonical 'sum'");
+    }
+
+    ir_module_free(mod);
+}
+
+/*
+ * T6: Transitive congruence closure across copy chains.
+ *
+ * Tests that if alias0 = COPY slot0, then ADD(alias0, slot1) is recognized
+ * as congruent to ADD(slot0, slot1) and folded.
+ */
+static void test_congruence_closure(void) {
+    ir_module_t *mod;
+    ir_func_t   *fn;
+    ir_node_t   *add_trans_node;
+
+    TEST("T6: Transitive congruence closure \xe2\x80\x94 operand alias chain folds to canonical def");
+
+    mod = ir_module_create();
+    fn  = ir_func_create(mod, "test_cong", IR_TY_I64, 0);
+
+    /* B0: entry — ADD slot0, slot1 */
+    ir_emit(fn, IR_CONST, IR_TY_I64, "addr0", NULL, NULL, NULL, 0L, 1);
+    ir_emit(fn, IR_CONST, IR_TY_I64, "addr1", NULL, NULL, NULL, 8L, 2);
+    ir_emit(fn, IR_LOAD,  IR_TY_I64, "slot0", "addr0", NULL, NULL, 0L, 3);
+    ir_emit(fn, IR_LOAD,  IR_TY_I64, "slot1", "addr1", NULL, NULL, 0L, 4);
+    ir_emit(fn, IR_ADD,   IR_TY_I64, "sum",   "slot0", "slot1", NULL, 0L, 5);
+    ir_emit(fn, IR_CONST, IR_TY_I64, "cond", NULL, NULL, NULL, 1L, 6);
+    ir_emit(fn, IR_BR_IF, IR_TY_VOID, NULL, "cond", NULL, ".L_branch", 0L, 7);
+
+    /* B1: fallthrough */
+    ir_emit(fn, IR_LABEL, IR_TY_VOID, NULL, NULL, NULL, ".L_fall", 0L, 8);
+    ir_emit(fn, IR_RET,   IR_TY_I64, NULL, "sum", NULL, NULL, 0L, 9);
+
+    /* B2: .L_branch — alias0 = COPY slot0, then ADD alias0, slot1 */
+    ir_emit(fn, IR_LABEL, IR_TY_VOID, NULL, NULL, NULL, ".L_branch", 0L, 10);
+    ir_emit(fn, IR_COPY,  IR_TY_I64, "alias0", "slot0", NULL, NULL, 0L, 11);
+    add_trans_node = ir_emit(fn, IR_ADD, IR_TY_I64, "sum_trans", "alias0", "slot1", NULL, 0L, 12);
+    ir_emit(fn, IR_RET,   IR_TY_I64, NULL, "sum_trans", NULL, NULL, 0L, 13);
+
+    {
+        ir_module_t *run_mod = ir_module_create();
+        run_mod->funcs[0] = fn;
+        run_mod->func_count = 1;
+        setenv("ZCC_OPT_DCE", "0", 1);
+        ir_pm_run_default(run_mod, 0);
+        unsetenv("ZCC_OPT_DCE");
+        run_mod->funcs[0] = NULL;
+        run_mod->func_count = 0;
+        ir_module_free(run_mod);
+    }
+
+    CHECK(add_trans_node->op == IR_COPY,
+          "transitive ADD with copy alias folded to COPY");
+    if (add_trans_node->op == IR_COPY) {
+        CHECK(strcmp(add_trans_node->src1, "sum") == 0,
+              "COPY source is canonical 'sum'");
+    }
+
+    ir_module_free(mod);
+}
+
 int main(void) {
-    fprintf(stderr, "\n\xe2\x95\x94\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x97\n");
+    fprintf(stderr, "\n\xe2\x95\x94\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x9d\n");
     fprintf(stderr, "\xe2\x95\x91  \xe2\x96\xb8 ZKAEDI DOMINANCE + GVN TEST SUITE                          \xe2\x95\x91\n");
     fprintf(stderr, "\xe2\x95\x9a\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x90\xe2\x95\x9d\n\n");
 
@@ -262,6 +376,8 @@ int main(void) {
     test_diamond_dominance();
     test_crossblock_gvn();
     test_sibling_isolation();
+    test_commutative_gvn();
+    test_congruence_closure();
 
     fprintf(stderr, "\n  Results: %d FAILED\n", failures);
     if (failures == 0) {

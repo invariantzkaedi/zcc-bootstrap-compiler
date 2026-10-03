@@ -876,10 +876,94 @@ typedef struct {
 
 static gvn_entry_t s_gvn_table[GVN_TABLE_SIZE];
 
+#define GVN_CONG_MAX 512
+typedef struct {
+    char from[IR_NAME_MAX];
+    char to[IR_NAME_MAX];
+} gvn_cong_t;
+
+static gvn_cong_t s_gvn_cong[GVN_CONG_MAX];
+static int s_gvn_cong_count = 0;
+static int s_gvn_cong_marks[DOM_MAX_BLOCKS];
+
 static void gvn_clear(void) {
     int i;
     for (i = 0; i < GVN_TABLE_SIZE; i++) {
         s_gvn_table[i].occupied = 0;
+    }
+    s_gvn_cong_count = 0;
+}
+
+static const char *gvn_resolve_leader(const char *name) {
+    if (!name || !name[0]) return name;
+    int hops = 0;
+    const char *cur = name;
+    while (hops < 16) {
+        int found = 0;
+        int i;
+        for (i = 0; i < s_gvn_cong_count; i++) {
+            if (strcmp(s_gvn_cong[i].from, cur) == 0) {
+                cur = s_gvn_cong[i].to;
+                found = 1;
+                break;
+            }
+        }
+        if (!found) break;
+        hops++;
+    }
+    return cur;
+}
+
+static void gvn_add_congruence(const char *from, const char *to) {
+    if (!from || !to || !from[0] || !to[0] || strcmp(from, to) == 0) return;
+    const char *lead_to = gvn_resolve_leader(to);
+    int i;
+    for (i = 0; i < s_gvn_cong_count; i++) {
+        if (strcmp(s_gvn_cong[i].from, from) == 0) {
+            strncpy(s_gvn_cong[i].to, lead_to, IR_NAME_MAX - 1);
+            s_gvn_cong[i].to[IR_NAME_MAX - 1] = '\0';
+            return;
+        }
+    }
+    if (s_gvn_cong_count < GVN_CONG_MAX) {
+        strncpy(s_gvn_cong[s_gvn_cong_count].from, from, IR_NAME_MAX - 1);
+        s_gvn_cong[s_gvn_cong_count].from[IR_NAME_MAX - 1] = '\0';
+        strncpy(s_gvn_cong[s_gvn_cong_count].to, lead_to, IR_NAME_MAX - 1);
+        s_gvn_cong[s_gvn_cong_count].to[IR_NAME_MAX - 1] = '\0';
+        s_gvn_cong_count++;
+    }
+}
+
+static int gvn_is_commutative(ir_op_t op) {
+    switch (op) {
+    case IR_ADD:
+    case IR_MUL:
+    case IR_AND:
+    case IR_OR:
+    case IR_XOR:
+    case IR_EQ:
+    case IR_NE:
+    case IR_FADD:
+    case IR_FMUL:
+    case IR_FCMP_OEQ:
+    case IR_FCMP_ONE:
+    case IR_FCMP_UEQ:
+    case IR_FCMP_UNE:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static void gvn_get_canonical_operands(ir_node_t *n, const char **out_s1, const char **out_s2) {
+    const char *s1 = gvn_resolve_leader(n->src1);
+    const char *s2 = gvn_resolve_leader(n->src2);
+    if (gvn_is_commutative(n->op) && strcmp(s1, s2) > 0) {
+        *out_s1 = s2;
+        *out_s2 = s1;
+    } else {
+        *out_s1 = s1;
+        *out_s2 = s2;
     }
 }
 
@@ -889,6 +973,10 @@ static unsigned long long gvn_hash_node(ir_node_t *n) {
     unsigned char op_byte;
     unsigned char ty_byte;
     int i;
+    const char *s1;
+    const char *s2;
+
+    gvn_get_canonical_operands(n, &s1, &s2);
 
     /* Hash opcode */
     op_byte = (unsigned char)n->op;
@@ -900,16 +988,16 @@ static unsigned long long gvn_hash_node(ir_node_t *n) {
     h ^= ty_byte;
     h *= FNV_PRIME;
 
-    /* Hash src1 */
-    for (p = n->src1; *p; p++) {
+    /* Hash s1 */
+    for (p = s1; *p; p++) {
         h ^= (unsigned char)*p;
         h *= FNV_PRIME;
     }
     h ^= 0xFF; /* separator */
     h *= FNV_PRIME;
 
-    /* Hash src2 */
-    for (p = n->src2; *p; p++) {
+    /* Hash s2 */
+    for (p = s2; *p; p++) {
         h ^= (unsigned char)*p;
         h *= FNV_PRIME;
     }
@@ -959,8 +1047,10 @@ static int gvn_keys_match(gvn_entry_t *e, ir_node_t *n) {
     if (e->key_op   != n->op)   return 0;
     if (e->key_type != n->type) return 0;
     if (e->key_imm  != n->imm)  return 0;
-    if (strcmp(e->key_src1, n->src1) != 0) return 0;
-    if (strcmp(e->key_src2, n->src2) != 0) return 0;
+    const char *s1, *s2;
+    gvn_get_canonical_operands(n, &s1, &s2);
+    if (strcmp(e->key_src1, s1) != 0) return 0;
+    if (strcmp(e->key_src2, s2) != 0) return 0;
     return 1;
 }
 
@@ -977,14 +1067,16 @@ static const char *gvn_lookup_or_insert(unsigned long long hash, ir_node_t *n) {
 
         if (!s_gvn_table[slot].occupied) {
             /* Empty slot — insert with full structural key */
+            const char *s1, *s2;
+            gvn_get_canonical_operands(n, &s1, &s2);
             s_gvn_table[slot].hash = hash;
             strncpy(s_gvn_table[slot].dst, n->dst, IR_NAME_MAX - 1);
             s_gvn_table[slot].dst[IR_NAME_MAX - 1] = '\0';
             s_gvn_table[slot].key_op   = n->op;
             s_gvn_table[slot].key_type = n->type;
-            strncpy(s_gvn_table[slot].key_src1, n->src1, IR_NAME_MAX - 1);
+            strncpy(s_gvn_table[slot].key_src1, s1, IR_NAME_MAX - 1);
             s_gvn_table[slot].key_src1[IR_NAME_MAX - 1] = '\0';
-            strncpy(s_gvn_table[slot].key_src2, n->src2, IR_NAME_MAX - 1);
+            strncpy(s_gvn_table[slot].key_src2, s2, IR_NAME_MAX - 1);
             s_gvn_table[slot].key_src2[IR_NAME_MAX - 1] = '\0';
             s_gvn_table[slot].key_imm  = n->imm;
             s_gvn_table[slot].occupied = 1;
@@ -1028,14 +1120,16 @@ static const char *gvn_lookup_or_insert_scoped(unsigned long long hash, ir_node_
 
         if (!s_gvn_table[slot].occupied) {
             /* Empty slot — insert with full structural key */
+            const char *s1, *s2;
+            gvn_get_canonical_operands(n, &s1, &s2);
             s_gvn_table[slot].hash = hash;
             strncpy(s_gvn_table[slot].dst, n->dst, IR_NAME_MAX - 1);
             s_gvn_table[slot].dst[IR_NAME_MAX - 1] = '\0';
             s_gvn_table[slot].key_op   = n->op;
             s_gvn_table[slot].key_type = n->type;
-            strncpy(s_gvn_table[slot].key_src1, n->src1, IR_NAME_MAX - 1);
+            strncpy(s_gvn_table[slot].key_src1, s1, IR_NAME_MAX - 1);
             s_gvn_table[slot].key_src1[IR_NAME_MAX - 1] = '\0';
-            strncpy(s_gvn_table[slot].key_src2, n->src2, IR_NAME_MAX - 1);
+            strncpy(s_gvn_table[slot].key_src2, s2, IR_NAME_MAX - 1);
             s_gvn_table[slot].key_src2[IR_NAME_MAX - 1] = '\0';
             s_gvn_table[slot].key_imm  = n->imm;
             s_gvn_table[slot].occupied = 1;
@@ -1064,6 +1158,7 @@ static const char *gvn_lookup_or_insert_scoped(unsigned long long hash, ir_node_
  */
 static void gvn_scope_push(int block_id) {
     s_gvn_scope_marks[block_id] = s_gvn_scope_top;
+    s_gvn_cong_marks[block_id] = s_gvn_cong_count;
 }
 
 /*
@@ -1077,6 +1172,7 @@ static void gvn_scope_pop(int block_id) {
         int slot = s_gvn_scope_stack[s_gvn_scope_top];
         s_gvn_table[slot].occupied = 0;
     }
+    s_gvn_cong_count = s_gvn_cong_marks[block_id];
 }
 
 /*
@@ -1089,6 +1185,11 @@ static void gvn_process_block(const dom_cfg_t *cfg, int bid) {
     for (n = b->first; n; n = n->next) {
         unsigned long long h;
         const char *canon;
+
+        if (n->op == IR_COPY && n->dst[0] && n->src1[0]) {
+            gvn_add_congruence(n->dst, n->src1);
+            goto next;
+        }
 
         /* Skip non-pure or non-defining instructions */
         if (!gvn_is_pure(n->op)) goto next;
@@ -1105,6 +1206,7 @@ static void gvn_process_block(const dom_cfg_t *cfg, int bid) {
             n->src2[0] = '\0';
             n->imm = 0;
             s_gvn_modified++;
+            gvn_add_congruence(n->dst, canon);
         }
 
     next:
