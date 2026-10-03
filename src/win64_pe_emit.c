@@ -306,21 +306,176 @@ void zcc_win64_pe_calc_iat_rvas(size_t code_len, const char **imported_funcs, si
     }
 }
 
-int zcc_emit_win64_pe_file_with_imports(const char *filename, const uint8_t *code_bytes, size_t code_len,
-                                       uint32_t entry_offset, const char **imported_funcs, size_t num_imported_funcs) {
-    if (!imported_funcs || num_imported_funcs == 0) {
-        return zcc_emit_win64_pe_file_ex(filename, code_bytes, code_len, entry_offset);
+static uint8_t *win64_pe_build_relocs(const uint32_t *reloc_rvas, size_t num_relocs, uint32_t *out_total_size) {
+    if (!reloc_rvas || num_relocs == 0) {
+        if (out_total_size) *out_total_size = 0;
+        return NULL;
     }
+
+    /* 1. Copy and sort RVAs */
+    uint32_t *sorted = (uint32_t *)malloc(sizeof(uint32_t) * num_relocs);
+    if (!sorted) {
+        if (out_total_size) *out_total_size = 0;
+        return NULL;
+    }
+    memcpy(sorted, reloc_rvas, sizeof(uint32_t) * num_relocs);
+
+    size_t i, j;
+    for (i = 0; i < num_relocs; i++) {
+        for (j = i + 1; j < num_relocs; j++) {
+            if (sorted[j] < sorted[i]) {
+                uint32_t tmp = sorted[i];
+                sorted[i] = sorted[j];
+                sorted[j] = tmp;
+            }
+        }
+    }
+
+    /* 2. Calculate required size by grouping by 4KB page (rva & ~0xFFF) */
+    uint32_t total_size = 0;
+    i = 0;
+    while (i < num_relocs) {
+        uint32_t page_rva = sorted[i] & ~0xFFF;
+        size_t count = 0;
+        while (i < num_relocs && (sorted[i] & ~0xFFF) == page_rva) {
+            count++;
+            i++;
+        }
+        uint32_t block_size = 8 + (uint32_t)(count * 2);
+        if (count % 2 != 0) block_size += 2; /* 4-byte align */
+        total_size += block_size;
+    }
+
+    /* 3. Allocate and populate */
+    uint8_t *buf = (uint8_t *)calloc(1, total_size);
+    if (!buf) {
+        free(sorted);
+        if (out_total_size) *out_total_size = 0;
+        return NULL;
+    }
+
+    uint32_t cur_offset = 0;
+    i = 0;
+    while (i < num_relocs) {
+        uint32_t page_rva = sorted[i] & ~0xFFF;
+        size_t start_idx = i;
+        size_t count = 0;
+        while (i < num_relocs && (sorted[i] & ~0xFFF) == page_rva) {
+            count++;
+            i++;
+        }
+        uint32_t block_size = 8 + (uint32_t)(count * 2);
+        if (count % 2 != 0) block_size += 2;
+
+        IMAGE_BASE_RELOCATION base_reloc;
+        base_reloc.VirtualAddress = page_rva;
+        base_reloc.SizeOfBlock = block_size;
+        memcpy(buf + cur_offset, &base_reloc, sizeof(base_reloc));
+
+        size_t k;
+        for (k = 0; k < count; k++) {
+            uint32_t rva = sorted[start_idx + k];
+            uint16_t entry = (uint16_t)((0xA << 12) | (rva & 0xFFF)); /* IMAGE_REL_BASED_DIR64 */
+            memcpy(buf + cur_offset + 8 + (k * 2), &entry, sizeof(uint16_t));
+        }
+        if (count % 2 != 0) {
+            uint16_t pad = 0; /* IMAGE_REL_BASED_ABSOLUTE */
+            memcpy(buf + cur_offset + 8 + (count * 2), &pad, sizeof(uint16_t));
+        }
+        cur_offset += block_size;
+    }
+
+    free(sorted);
+    if (out_total_size) *out_total_size = total_size;
+    return buf;
+}
+
+static uint8_t *win64_pe_build_pdata(uint32_t text_rva, uint32_t raw_code_len, uint32_t entry_offset,
+                                     const win64_pe_func_extent_t *extents, size_t num_extents,
+                                     uint32_t pdata_rva, uint32_t *out_pdata_size, uint32_t *out_entries_size) {
+    size_t count = (extents && num_extents > 0) ? num_extents : 1;
+    win64_pe_func_extent_t *sorted = (win64_pe_func_extent_t *)malloc(sizeof(win64_pe_func_extent_t) * count);
+    if (!sorted) return NULL;
+
+    if (extents && num_extents > 0) {
+        memcpy(sorted, extents, sizeof(win64_pe_func_extent_t) * num_extents);
+        /* Bubble sort by begin_offset ascending (PE x64 ABI requirement) */
+        size_t i, j;
+        for (i = 0; i < count; i++) {
+            for (j = i + 1; j < count; j++) {
+                if (sorted[j].begin_offset < sorted[i].begin_offset) {
+                    win64_pe_func_extent_t tmp = sorted[i];
+                    sorted[i] = sorted[j];
+                    sorted[j] = tmp;
+                }
+            }
+        }
+    } else {
+        sorted[0].begin_offset = entry_offset;
+        sorted[0].end_offset = (raw_code_len > entry_offset) ? raw_code_len : (entry_offset + 16);
+    }
+
+    uint32_t entries_size = (uint32_t)(count * sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY));
+    uint32_t unwind_info_size = (uint32_t)(count * 8);
+    uint32_t total_size = entries_size + unwind_info_size;
+    uint8_t *buf = (uint8_t *)calloc(1, total_size);
+    if (!buf) {
+        free(sorted);
+        return NULL;
+    }
+
+    size_t i;
+    for (i = 0; i < count; i++) {
+        IMAGE_RUNTIME_FUNCTION_ENTRY entry;
+        entry.BeginAddress = text_rva + sorted[i].begin_offset;
+        entry.EndAddress = text_rva + sorted[i].end_offset;
+        entry.UnwindInfoAddress = pdata_rva + entries_size + (uint32_t)(i * 8);
+        memcpy(buf + i * sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY), &entry, sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY));
+
+        /* Synthesize UNWIND_INFO at offset (entries_size + i * 8) */
+        uint8_t *uinfo = buf + entries_size + (i * 8);
+        uinfo[0] = 0x01; /* Version = 1, Flags = 0 (UNW_FLAG_NHANDLER) */
+        uinfo[1] = 0x04; /* SizeOfProlog = 4 bytes (push %rbp [1] + mov %rsp, %rbp [3]) */
+        uinfo[2] = 0x02; /* CountOfCodes = 2 */
+        uinfo[3] = 0x05; /* FrameRegister = 5 (%rbp), FrameOffset = 0 */
+        /* Code 0: UWOP_SET_FPREG (Op 3, Info 0) at prolog offset 4: (0 << 12) | (3 << 8) | 4 = 0x0304 */
+        uint16_t code0 = 0x0304;
+        memcpy(uinfo + 4, &code0, sizeof(uint16_t));
+        /* Code 1: UWOP_PUSH_NONVOL (Op 0, Info 5 for RBP) at prolog offset 1: (5 << 12) | (0 << 8) | 1 = 0x5001 */
+        uint16_t code1 = 0x5001;
+        memcpy(uinfo + 6, &code1, sizeof(uint16_t));
+    }
+
+    free(sorted);
+    if (out_pdata_size) *out_pdata_size = total_size;
+    if (out_entries_size) *out_entries_size = entries_size;
+    return buf;
+}
+
+int zcc_emit_win64_pe_file_v4(const char *filename, const uint8_t *code_bytes, size_t code_len,
+                              uint32_t entry_offset, const char **imported_funcs, size_t num_imported_funcs,
+                              const uint32_t *reloc_rvas, size_t num_reloc_rvas,
+                              const win64_pe_func_extent_t *extents, size_t num_extents) {
     if (!filename) return -1;
 
     Win64PeDllGroup groups[16];
-    size_t num_groups = win64_pe_build_groups(imported_funcs, num_imported_funcs, groups, 16);
-    if (num_groups == 0) {
-        return zcc_emit_win64_pe_file_ex(filename, code_bytes, code_len, entry_offset);
+    size_t num_groups = 0;
+    if (imported_funcs && num_imported_funcs > 0) {
+        num_groups = win64_pe_build_groups(imported_funcs, num_imported_funcs, groups, 16);
     }
 
+    uint32_t total_reloc_size = 0;
+    uint8_t *reloc_bytes = win64_pe_build_relocs(reloc_rvas, num_reloc_rvas, &total_reloc_size);
+    int has_reloc = (reloc_bytes != NULL && total_reloc_size > 0);
+    uint32_t aligned_reloc_size = has_reloc ? win64_pe_align_to(total_reloc_size, 0x0200) : 0;
+
+    int has_idata = (num_groups > 0);
+
     FILE *f = fopen(filename, "wb");
-    if (!f) return -1;
+    if (!f) {
+        if (reloc_bytes) free(reloc_bytes);
+        return -1;
+    }
 
     /* 1. Construct DOS Header (64 bytes) */
     IMAGE_DOS_HEADER dos_hdr;
@@ -350,131 +505,145 @@ int zcc_emit_win64_pe_file_with_imports(const char *filename, const uint8_t *cod
     uint32_t pe_sig = 0x00004550; /* 'PE\0\0' */
 
     /* 4. COFF File Header (20 bytes) */
+    int has_pdata = 1; /* Track 4: Always emit .pdata exception directory */
+    uint16_t num_sections = 2; /* .text and .data */
+    if (has_idata) num_sections++;
+    if (has_pdata) num_sections++;
+    if (has_reloc) num_sections++;
+
     IMAGE_FILE_HEADER file_hdr;
     memset(&file_hdr, 0, sizeof(file_hdr));
     file_hdr.Machine = 0x8664; /* AMD64 / x86-64 */
-    file_hdr.NumberOfSections = 3; /* .text, .idata, .data */
+    file_hdr.NumberOfSections = num_sections;
     file_hdr.TimeDateStamp = 0x66900000;
     file_hdr.SizeOfOptionalHeader = sizeof(IMAGE_OPTIONAL_HEADER64);
     file_hdr.Characteristics = 0x0022; /* EXECUTABLE_IMAGE | LARGE_ADDRESS_AWARE */
 
-    /* 5. Build .idata section contents */
+    /* 5. Build .idata section contents if present */
     uint32_t raw_code_len = (code_bytes && code_len > 0) ? (uint32_t)code_len : 16;
     uint32_t aligned_code_size = win64_pe_align_to(raw_code_len, 0x0200);
     uint32_t idata_rva = 0x1000 + win64_pe_align_to(raw_code_len, 0x1000);
 
-    /* 5a. Calculate IAT offsets */
-    uint32_t cur_iat = 0;
-    size_t g, j;
-    for (g = 0; g < num_groups; g++) {
-        groups[g].iat_offset = cur_iat;
-        cur_iat += (uint32_t)((groups[g].num_funcs + 1) * 8);
-    }
-    uint32_t total_iat_size = cur_iat;
+    uint32_t total_iat_size = 0;
+    uint32_t desc_offset = 0;
+    uint32_t desc_size = 0;
+    uint32_t total_idata_size = 0;
+    uint8_t *idata_bytes = NULL;
+    uint32_t *hint_name_offsets = NULL;
 
-    /* 5b. Calculate ILT offsets */
-    uint32_t cur_ilt = total_iat_size;
-    for (g = 0; g < num_groups; g++) {
-        groups[g].ilt_offset = cur_ilt;
-        cur_ilt += (uint32_t)((groups[g].num_funcs + 1) * 8);
-    }
-    uint32_t total_ilt_size = cur_ilt - total_iat_size;
+    if (has_idata) {
+        uint32_t cur_iat = 0;
+        size_t g, j;
+        for (g = 0; g < num_groups; g++) {
+            groups[g].iat_offset = cur_iat;
+            cur_iat += (uint32_t)((groups[g].num_funcs + 1) * 8);
+        }
+        total_iat_size = cur_iat;
 
-    /* 5c. Calculate IMAGE_IMPORT_DESCRIPTOR offsets (num_groups descriptors + 1 null descriptor) */
-    uint32_t desc_offset = cur_ilt;
-    uint32_t desc_size = (uint32_t)((num_groups + 1) * sizeof(IMAGE_IMPORT_DESCRIPTOR));
-    for (g = 0; g < num_groups; g++) {
-        groups[g].desc_offset = desc_offset + (uint32_t)(g * sizeof(IMAGE_IMPORT_DESCRIPTOR));
-    }
+        uint32_t cur_ilt = total_iat_size;
+        for (g = 0; g < num_groups; g++) {
+            groups[g].ilt_offset = cur_ilt;
+            cur_ilt += (uint32_t)((groups[g].num_funcs + 1) * 8);
+        }
 
-    /* 5d. Calculate DLL Name offsets */
-    uint32_t cur_name_offset = desc_offset + desc_size;
-    for (g = 0; g < num_groups; g++) {
-        if (cur_name_offset % 2 != 0) cur_name_offset++;
-        groups[g].name_offset = cur_name_offset;
-        cur_name_offset += (uint32_t)strlen(groups[g].dll_name) + 1;
-    }
+        desc_offset = cur_ilt;
+        desc_size = (uint32_t)((num_groups + 1) * sizeof(IMAGE_IMPORT_DESCRIPTOR));
+        for (g = 0; g < num_groups; g++) {
+            groups[g].desc_offset = desc_offset + (uint32_t)(g * sizeof(IMAGE_IMPORT_DESCRIPTOR));
+        }
 
-    /* 5e. Calculate Hint/Name offsets */
-    uint32_t cur_hn_offset = cur_name_offset;
-    uint32_t *hint_name_offsets = (uint32_t *)malloc(sizeof(uint32_t) * (num_imported_funcs + 1));
-    if (!hint_name_offsets) {
-        fclose(f);
-        return -1;
-    }
-    for (g = 0; g < num_groups; g++) {
-        for (j = 0; j < groups[g].num_funcs; j++) {
-            size_t orig_idx = groups[g].func_indices[j];
-            if (cur_hn_offset % 2 != 0) cur_hn_offset++;
-            hint_name_offsets[orig_idx] = cur_hn_offset;
-            cur_hn_offset += 2 + (uint32_t)strlen(imported_funcs[orig_idx]) + 1;
+        uint32_t cur_name_offset = desc_offset + desc_size;
+        for (g = 0; g < num_groups; g++) {
+            if (cur_name_offset % 2 != 0) cur_name_offset++;
+            groups[g].name_offset = cur_name_offset;
+            cur_name_offset += (uint32_t)strlen(groups[g].dll_name) + 1;
+        }
+
+        uint32_t cur_hn_offset = cur_name_offset;
+        hint_name_offsets = (uint32_t *)malloc(sizeof(uint32_t) * (num_imported_funcs + 1));
+        if (!hint_name_offsets) {
+            fclose(f);
+            if (reloc_bytes) free(reloc_bytes);
+            return -1;
+        }
+        for (g = 0; g < num_groups; g++) {
+            for (j = 0; j < groups[g].num_funcs; j++) {
+                size_t orig_idx = groups[g].func_indices[j];
+                if (cur_hn_offset % 2 != 0) cur_hn_offset++;
+                hint_name_offsets[orig_idx] = cur_hn_offset;
+                cur_hn_offset += 2 + (uint32_t)strlen(imported_funcs[orig_idx]) + 1;
+            }
+        }
+
+        total_idata_size = cur_hn_offset;
+        idata_bytes = (uint8_t *)calloc(1, total_idata_size);
+        if (!idata_bytes) {
+            free(hint_name_offsets);
+            fclose(f);
+            if (reloc_bytes) free(reloc_bytes);
+            return -1;
+        }
+
+        for (g = 0; g < num_groups; g++) {
+            memcpy(idata_bytes + groups[g].name_offset, groups[g].dll_name, strlen(groups[g].dll_name) + 1);
+        }
+
+        for (g = 0; g < num_groups; g++) {
+            for (j = 0; j < groups[g].num_funcs; j++) {
+                size_t orig_idx = groups[g].func_indices[j];
+                uint32_t off = hint_name_offsets[orig_idx];
+                strcpy((char *)(idata_bytes + off + 2), imported_funcs[orig_idx]);
+            }
+        }
+
+        for (g = 0; g < num_groups; g++) {
+            for (j = 0; j < groups[g].num_funcs; j++) {
+                size_t orig_idx = groups[g].func_indices[j];
+                uint64_t target_rva = (uint64_t)(idata_rva + hint_name_offsets[orig_idx]);
+                memcpy(idata_bytes + groups[g].iat_offset + j * 8, &target_rva, sizeof(uint64_t));
+                memcpy(idata_bytes + groups[g].ilt_offset + j * 8, &target_rva, sizeof(uint64_t));
+            }
+        }
+
+        for (g = 0; g < num_groups; g++) {
+            IMAGE_IMPORT_DESCRIPTOR desc;
+            memset(&desc, 0, sizeof(desc));
+            desc.OriginalFirstThunk = idata_rva + groups[g].ilt_offset;
+            desc.TimeDateStamp = 0;
+            desc.ForwarderChain = 0;
+            desc.Name = idata_rva + groups[g].name_offset;
+            desc.FirstThunk = idata_rva + groups[g].iat_offset;
+            memcpy(idata_bytes + groups[g].desc_offset, &desc, sizeof(desc));
         }
     }
 
-    uint32_t total_idata_size = cur_hn_offset;
-    uint8_t *idata_bytes = (uint8_t *)calloc(1, total_idata_size);
-    if (!idata_bytes) {
-        free(hint_name_offsets);
-        fclose(f);
-        return -1;
-    }
+    uint32_t aligned_idata_size = has_idata ? win64_pe_align_to(total_idata_size, 0x0200) : 0;
+    uint32_t pdata_rva = has_idata ? (idata_rva + win64_pe_align_to(total_idata_size, 0x1000)) : idata_rva;
 
-    /* 5f. Populate DLL names */
-    for (g = 0; g < num_groups; g++) {
-        memcpy(idata_bytes + groups[g].name_offset, groups[g].dll_name, strlen(groups[g].dll_name) + 1);
-    }
+    /* 6. Build .pdata section contents (Track 4) */
+    uint32_t total_pdata_size = 0;
+    uint32_t pdata_entries_size = 0;
+    uint8_t *pdata_bytes = win64_pe_build_pdata(0x1000, raw_code_len, entry_offset,
+                                               extents, num_extents,
+                                               pdata_rva, &total_pdata_size, &pdata_entries_size);
+    uint32_t aligned_pdata_size = win64_pe_align_to(total_pdata_size, 0x0200);
+    uint32_t data_rva = pdata_rva + win64_pe_align_to(total_pdata_size, 0x1000);
+    uint32_t reloc_rva = data_rva + 0x1000;
 
-    /* 5g. Populate Hint/Name entries */
-    for (g = 0; g < num_groups; g++) {
-        for (j = 0; j < groups[g].num_funcs; j++) {
-            size_t orig_idx = groups[g].func_indices[j];
-            uint32_t off = hint_name_offsets[orig_idx];
-            /* Hint is uint16_t 0 */
-            strcpy((char *)(idata_bytes + off + 2), imported_funcs[orig_idx]);
-        }
-    }
-
-    /* 5h. Populate IAT and ILT */
-    for (g = 0; g < num_groups; g++) {
-        for (j = 0; j < groups[g].num_funcs; j++) {
-            size_t orig_idx = groups[g].func_indices[j];
-            uint64_t target_rva = (uint64_t)(idata_rva + hint_name_offsets[orig_idx]);
-            memcpy(idata_bytes + groups[g].iat_offset + j * 8, &target_rva, sizeof(uint64_t));
-            memcpy(idata_bytes + groups[g].ilt_offset + j * 8, &target_rva, sizeof(uint64_t));
-        }
-        /* Terminators at end of each slice are already 0 from calloc */
-    }
-
-    /* 5i. Populate IMAGE_IMPORT_DESCRIPTOR array */
-    for (g = 0; g < num_groups; g++) {
-        IMAGE_IMPORT_DESCRIPTOR desc;
-        memset(&desc, 0, sizeof(desc));
-        desc.OriginalFirstThunk = idata_rva + groups[g].ilt_offset;
-        desc.TimeDateStamp = 0;
-        desc.ForwarderChain = 0;
-        desc.Name = idata_rva + groups[g].name_offset;
-        desc.FirstThunk = idata_rva + groups[g].iat_offset;
-        memcpy(idata_bytes + groups[g].desc_offset, &desc, sizeof(desc));
-    }
-    /* Terminating descriptor at desc_offset + num_groups * 20 is already 0 from calloc */
-
-    uint32_t aligned_idata_size = win64_pe_align_to(total_idata_size, 0x0200);
-    uint32_t data_rva = idata_rva + win64_pe_align_to(total_idata_size, 0x1000);
-
-    /* 6. Headers sizing */
+    /* 7. Headers sizing */
     uint32_t headers_size = sizeof(IMAGE_DOS_HEADER) + sizeof(dos_stub) + sizeof(pe_sig) +
                             sizeof(IMAGE_FILE_HEADER) + sizeof(IMAGE_OPTIONAL_HEADER64) +
-                            (3 * sizeof(IMAGE_SECTION_HEADER));
+                            (num_sections * sizeof(IMAGE_SECTION_HEADER));
     uint32_t aligned_headers_size = win64_pe_align_to(headers_size, 0x0200);
 
-    /* 7. PE32+ Optional Header */
+    /* 8. PE32+ Optional Header */
     IMAGE_OPTIONAL_HEADER64 opt_hdr;
     memset(&opt_hdr, 0, sizeof(opt_hdr));
     opt_hdr.Magic = 0x020B; /* PE32+ */
     opt_hdr.MajorLinkerVersion = 14;
     opt_hdr.MinorLinkerVersion = 0;
     opt_hdr.SizeOfCode = aligned_code_size;
-    opt_hdr.SizeOfInitializedData = aligned_idata_size + 0x0200;
+    opt_hdr.SizeOfInitializedData = aligned_idata_size + aligned_pdata_size + 0x0200 + aligned_reloc_size;
     opt_hdr.AddressOfEntryPoint = 0x1000 + entry_offset;
     opt_hdr.BaseOfCode = 0x1000;
     opt_hdr.ImageBase = 0x140000000ULL;
@@ -484,25 +653,34 @@ int zcc_emit_win64_pe_file_with_imports(const char *filename, const uint8_t *cod
     opt_hdr.MinorOperatingSystemVersion = 0;
     opt_hdr.MajorSubsystemVersion = 6;
     opt_hdr.MinorSubsystemVersion = 0;
-    opt_hdr.SizeOfImage = data_rva + 0x1000;
+    opt_hdr.SizeOfImage = has_reloc ? (reloc_rva + win64_pe_align_to(total_reloc_size, 0x1000)) : (data_rva + 0x1000);
     opt_hdr.SizeOfHeaders = aligned_headers_size;
     opt_hdr.Subsystem = 3; /* Console */
-    opt_hdr.DllCharacteristics = 0x8160;
+    opt_hdr.DllCharacteristics = 0x8160; /* HIGH_ENTROPY_VA | DYNAMIC_BASE | NX_COMPAT | TERMINAL_SERVER_AWARE */
     opt_hdr.SizeOfStackReserve = 0x100000;
     opt_hdr.SizeOfStackCommit = 0x1000;
     opt_hdr.SizeOfHeapReserve = 0x100000;
     opt_hdr.SizeOfHeapCommit = 0x1000;
     opt_hdr.NumberOfRvaAndSizes = 16;
 
-    /* Import Directory: DataDirectory[1] */
-    opt_hdr.DataDirectory[1].VirtualAddress = idata_rva + desc_offset;
-    opt_hdr.DataDirectory[1].Size = desc_size;
+    if (has_idata) {
+        opt_hdr.DataDirectory[1].VirtualAddress = idata_rva + desc_offset;
+        opt_hdr.DataDirectory[1].Size = desc_size;
+        opt_hdr.DataDirectory[12].VirtualAddress = idata_rva;
+        opt_hdr.DataDirectory[12].Size = total_iat_size;
+    }
 
-    /* IAT: DataDirectory[12] */
-    opt_hdr.DataDirectory[12].VirtualAddress = idata_rva;
-    opt_hdr.DataDirectory[12].Size = total_iat_size;
+    if (has_pdata && pdata_bytes) {
+        opt_hdr.DataDirectory[3].VirtualAddress = pdata_rva;
+        opt_hdr.DataDirectory[3].Size = pdata_entries_size;
+    }
 
-    /* 8. Section Headers */
+    if (has_reloc) {
+        opt_hdr.DataDirectory[5].VirtualAddress = reloc_rva;
+        opt_hdr.DataDirectory[5].Size = total_reloc_size;
+    }
+
+    /* 9. Section Headers */
     IMAGE_SECTION_HEADER sec_text;
     memset(&sec_text, 0, sizeof(sec_text));
     memcpy(sec_text.Name, ".text\0\0\0", 8);
@@ -510,16 +688,29 @@ int zcc_emit_win64_pe_file_with_imports(const char *filename, const uint8_t *cod
     sec_text.VirtualAddress = 0x1000;
     sec_text.SizeOfRawData = aligned_code_size;
     sec_text.PointerToRawData = aligned_headers_size;
-    sec_text.Characteristics = 0xE0000020; /* CODE | EXECUTE | READ | WRITE */
+    sec_text.Characteristics = has_reloc ? 0x60000020 : 0xE0000020; /* CODE | EXEC | READ */
 
     IMAGE_SECTION_HEADER sec_idata;
     memset(&sec_idata, 0, sizeof(sec_idata));
-    memcpy(sec_idata.Name, ".idata\0\0", 8);
-    sec_idata.VirtualSize = total_idata_size;
-    sec_idata.VirtualAddress = idata_rva;
-    sec_idata.SizeOfRawData = aligned_idata_size;
-    sec_idata.PointerToRawData = aligned_headers_size + aligned_code_size;
-    sec_idata.Characteristics = 0xC0000040; /* INITIALIZED_DATA | READ | WRITE */
+    if (has_idata) {
+        memcpy(sec_idata.Name, ".idata\0\0", 8);
+        sec_idata.VirtualSize = total_idata_size;
+        sec_idata.VirtualAddress = idata_rva;
+        sec_idata.SizeOfRawData = aligned_idata_size;
+        sec_idata.PointerToRawData = aligned_headers_size + aligned_code_size;
+        sec_idata.Characteristics = 0xC0000040; /* INITIALIZED_DATA | READ | WRITE */
+    }
+
+    IMAGE_SECTION_HEADER sec_pdata;
+    memset(&sec_pdata, 0, sizeof(sec_pdata));
+    if (has_pdata) {
+        memcpy(sec_pdata.Name, ".pdata\0\0", 8);
+        sec_pdata.VirtualSize = total_pdata_size;
+        sec_pdata.VirtualAddress = pdata_rva;
+        sec_pdata.SizeOfRawData = aligned_pdata_size;
+        sec_pdata.PointerToRawData = aligned_headers_size + aligned_code_size + aligned_idata_size;
+        sec_pdata.Characteristics = 0x40000040; /* INITIALIZED_DATA | READ */
+    }
 
     IMAGE_SECTION_HEADER sec_data;
     memset(&sec_data, 0, sizeof(sec_data));
@@ -527,8 +718,19 @@ int zcc_emit_win64_pe_file_with_imports(const char *filename, const uint8_t *cod
     sec_data.VirtualSize = 16;
     sec_data.VirtualAddress = data_rva;
     sec_data.SizeOfRawData = 0x0200;
-    sec_data.PointerToRawData = aligned_headers_size + aligned_code_size + aligned_idata_size;
+    sec_data.PointerToRawData = aligned_headers_size + aligned_code_size + aligned_idata_size + aligned_pdata_size;
     sec_data.Characteristics = 0xC0000040; /* INITIALIZED_DATA | READ | WRITE */
+
+    IMAGE_SECTION_HEADER sec_reloc;
+    memset(&sec_reloc, 0, sizeof(sec_reloc));
+    if (has_reloc) {
+        memcpy(sec_reloc.Name, ".reloc\0\0", 8);
+        sec_reloc.VirtualSize = total_reloc_size;
+        sec_reloc.VirtualAddress = reloc_rva;
+        sec_reloc.SizeOfRawData = aligned_reloc_size;
+        sec_reloc.PointerToRawData = aligned_headers_size + aligned_code_size + aligned_idata_size + aligned_pdata_size + 0x0200;
+        sec_reloc.Characteristics = 0x42000040; /* INITIALIZED_DATA | DISCARDABLE | READ */
+    }
 
     /* Write Headers */
     fwrite(&dos_hdr, sizeof(dos_hdr), 1, f);
@@ -537,12 +739,14 @@ int zcc_emit_win64_pe_file_with_imports(const char *filename, const uint8_t *cod
     fwrite(&file_hdr, sizeof(file_hdr), 1, f);
     fwrite(&opt_hdr, sizeof(opt_hdr), 1, f);
     fwrite(&sec_text, sizeof(sec_text), 1, f);
-    fwrite(&sec_idata, sizeof(sec_idata), 1, f);
+    if (has_idata) fwrite(&sec_idata, sizeof(sec_idata), 1, f);
+    if (has_pdata) fwrite(&sec_pdata, sizeof(sec_pdata), 1, f);
     fwrite(&sec_data, sizeof(sec_data), 1, f);
+    if (has_reloc) fwrite(&sec_reloc, sizeof(sec_reloc), 1, f);
 
     /* Pad headers */
     size_t written_headers = sizeof(dos_hdr) + sizeof(dos_stub) + sizeof(pe_sig) +
-                             sizeof(file_hdr) + sizeof(opt_hdr) + (3 * sizeof(IMAGE_SECTION_HEADER));
+                             sizeof(file_hdr) + sizeof(opt_hdr) + (num_sections * sizeof(IMAGE_SECTION_HEADER));
     if (aligned_headers_size > written_headers) {
         size_t pad_len = aligned_headers_size - written_headers;
         uint8_t *pad = (uint8_t *)calloc(1, pad_len);
@@ -569,12 +773,25 @@ int zcc_emit_win64_pe_file_with_imports(const char *filename, const uint8_t *cod
     }
 
     /* Write .idata */
-    fwrite(idata_bytes, 1, total_idata_size, f);
-    if (aligned_idata_size > total_idata_size) {
-        size_t pad_idata = aligned_idata_size - total_idata_size;
-        uint8_t *pad = (uint8_t *)calloc(1, pad_idata);
-        fwrite(pad, 1, pad_idata, f);
-        free(pad);
+    if (has_idata && idata_bytes) {
+        fwrite(idata_bytes, 1, total_idata_size, f);
+        if (aligned_idata_size > total_idata_size) {
+            size_t pad_idata = aligned_idata_size - total_idata_size;
+            uint8_t *pad = (uint8_t *)calloc(1, pad_idata);
+            fwrite(pad, 1, pad_idata, f);
+            free(pad);
+        }
+    }
+
+    /* Write .pdata */
+    if (has_pdata && pdata_bytes) {
+        fwrite(pdata_bytes, 1, total_pdata_size, f);
+        if (aligned_pdata_size > total_pdata_size) {
+            size_t pad_pdata = aligned_pdata_size - total_pdata_size;
+            uint8_t *pad = (uint8_t *)calloc(1, pad_pdata);
+            fwrite(pad, 1, pad_pdata, f);
+            free(pad);
+        }
     }
 
     /* Write dummy .data section (512 bytes aligned) */
@@ -582,9 +799,37 @@ int zcc_emit_win64_pe_file_with_imports(const char *filename, const uint8_t *cod
     fwrite(data_pad, 1, 0x0200, f);
     free(data_pad);
 
-    free(hint_name_offsets);
-    free(idata_bytes);
+    /* Write .reloc section */
+    if (has_reloc && reloc_bytes) {
+        fwrite(reloc_bytes, 1, total_reloc_size, f);
+        if (aligned_reloc_size > total_reloc_size) {
+            size_t pad_reloc = aligned_reloc_size - total_reloc_size;
+            uint8_t *pad = (uint8_t *)calloc(1, pad_reloc);
+            fwrite(pad, 1, pad_reloc, f);
+            free(pad);
+        }
+    }
+
+    if (hint_name_offsets) free(hint_name_offsets);
+    if (idata_bytes) free(idata_bytes);
+    if (pdata_bytes) free(pdata_bytes);
+    if (reloc_bytes) free(reloc_bytes);
     fclose(f);
     return 0;
+}
+
+int zcc_emit_win64_pe_file_full(const char *filename, const uint8_t *code_bytes, size_t code_len,
+                                uint32_t entry_offset, const char **imported_funcs, size_t num_imported_funcs,
+                                const uint32_t *reloc_rvas, size_t num_reloc_rvas) {
+    return zcc_emit_win64_pe_file_v4(filename, code_bytes, code_len, entry_offset,
+                                     imported_funcs, num_imported_funcs,
+                                     reloc_rvas, num_reloc_rvas, NULL, 0);
+}
+
+int zcc_emit_win64_pe_file_with_imports(const char *filename, const uint8_t *code_bytes, size_t code_len,
+                                        uint32_t entry_offset, const char **imported_funcs, size_t num_imported_funcs) {
+    return zcc_emit_win64_pe_file_v4(filename, code_bytes, code_len, entry_offset,
+                                     imported_funcs, num_imported_funcs,
+                                     NULL, 0, NULL, 0);
 }
 

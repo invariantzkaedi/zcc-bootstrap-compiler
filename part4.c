@@ -16,6 +16,7 @@ int is_complex_type(Type *t);
 #include "ir_bridge.h"
 #undef ZCC_IR_BRIDGE_ALLOWED
 extern int g_ir_primary;
+int g_win64_abi_mode = 0;
 
 #if ZCC_UPGRADE_DIV
 #include "zcc_upgrade_div.h"
@@ -3893,14 +3894,14 @@ void codegen_expr(Compiler *cc, Node *node) {
 
     callee_ir[0] = '\0';
 
-    /* System V AMD64 (Linux): 6 register args: RDI, RSI, RDX, RCX, R8, R9; 7th+
-     * on stack */
-    argregs[0] = "rdi";
-    argregs[1] = "rsi";
-    argregs[2] = "rdx";
-    argregs[3] = "rcx";
-    argregs[4] = "r8";
-    argregs[5] = "r9";
+    int max_gp_args = g_win64_abi_mode ? 4 : 6;
+    if (g_win64_abi_mode) {
+      argregs[0] = "rcx"; argregs[1] = "rdx"; argregs[2] = "r8"; argregs[3] = "r9";
+      argregs[4] = "r10"; argregs[5] = "r11";
+    } else {
+      argregs[0] = "rdi"; argregs[1] = "rsi"; argregs[2] = "rdx";
+      argregs[3] = "rcx"; argregs[4] = "r8"; argregs[5] = "r9";
+    }
 
     if (!node->func_name[0] && !node->lhs) {
       error_at(cc, node->line, "codegen_expr: ND_CALL no func_name and no callee");
@@ -4018,7 +4019,7 @@ void codegen_expr(Compiler *cc, Node *node) {
             if (is_fp) {
                 if (temp_fp < 8) temp_fp++; else is_stack = 1;
             } else {
-                if (temp_gp < 6) temp_gp++; else is_stack = 1;
+                if (temp_gp < max_gp_args) temp_gp++; else is_stack = 1;
             }
         }
         arg_is_stack[i] = is_stack;
@@ -4030,13 +4031,13 @@ void codegen_expr(Compiler *cc, Node *node) {
      * aligned. */
     /* Currently, depth is cc->stack_depth. After pushes/pops, depth will be
      * cc->stack_depth + args_on_stack. */
+    int shadow_space = g_win64_abi_mode ? 32 : 0;
     alignment_pad = 0;
     {
-      if ((cc->stack_depth + args_on_stack) % 2 != 0) {
+      if ((cc->stack_depth + args_on_stack + (shadow_space / 8)) % 2 != 0) {
         alignment_pad = 8;
       }
     }
-
 
     if (alignment_pad > 0) {
       fprintf(cc->out, "    subq $%d, %%rsp\n", alignment_pad);
@@ -4046,6 +4047,11 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (args_on_stack > 0) {
       fprintf(cc->out, "    subq $%d, %%rsp\n", args_on_stack * 8);
       cc->stack_depth += args_on_stack;
+    }
+
+    if (shadow_space > 0) {
+      fprintf(cc->out, "    subq $%d, %%rsp\n", shadow_space);
+      cc->stack_depth += (shadow_space / 8);
     }
 
     int arg_stack_offset[64];
@@ -4189,7 +4195,7 @@ void codegen_expr(Compiler *cc, Node *node) {
                 }
             }
         } else {
-            if (gp_idx < 6) {
+            if (gp_idx < max_gp_args) {
                 target_gp[i] = gp_idx++;
             }
         }
@@ -4372,7 +4378,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     }
 
     /* cleanup arguments left on stack AND the alignment pad */
-    cleanup_bytes = (args_on_stack * 8) + alignment_pad;
+    cleanup_bytes = (args_on_stack * 8) + alignment_pad + shadow_space;
     if (cleanup_bytes > 0) {
       fprintf(cc->out, "    addq $%d, %%rsp\n", cleanup_bytes);
       cc->stack_depth -= (cleanup_bytes / 8);
@@ -5811,12 +5817,14 @@ void codegen_func(Compiler *cc, Node *func) {
               func->func_def_name, used_regs, cc->is_forced_mask ? "forced" : "computed");
   }
 
-  argregs[0] = "rdi";
-  argregs[1] = "rsi";
-  argregs[2] = "rdx";
-  argregs[3] = "rcx";
-  argregs[4] = "r8";
-  argregs[5] = "r9";
+  int max_gp_args = g_win64_abi_mode ? 4 : 6;
+  if (g_win64_abi_mode) {
+    argregs[0] = "rcx"; argregs[1] = "rdx"; argregs[2] = "r8"; argregs[3] = "r9";
+    argregs[4] = "r10"; argregs[5] = "r11";
+  } else {
+    argregs[0] = "rdi"; argregs[1] = "rsi"; argregs[2] = "rdx";
+    argregs[3] = "rcx"; argregs[4] = "r8"; argregs[5] = "r9";
+  }
 
   cc->func_end_label = new_label(cc);
   strncpy(cc->current_func, func->func_def_name, MAX_IDENT - 1);
@@ -5941,7 +5949,7 @@ void codegen_func(Compiler *cc, Node *func) {
         if (is_fp && f_idx < 8) {
             if (ptype->kind == TY_FLOAT) fprintf(cc->out, "    movss %%xmm%d, %d(%%rbp)\n", f_idx++, param_offset);
             else fprintf(cc->out, "    movsd %%xmm%d, %d(%%rbp)\n", f_idx++, param_offset);
-        } else if (!is_fp && gp_idx < 6) {
+        } else if (!is_fp && gp_idx < max_gp_args) {
             fprintf(cc->out, "    movq %%%s, %d(%%rbp)\n", argregs[gp_idx++], param_offset);
         } else {
             /* Pass on stack */

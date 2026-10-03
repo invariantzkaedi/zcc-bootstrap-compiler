@@ -1462,6 +1462,11 @@ int zcc_main(int argc, char **argv) {
                strcmp(argv[i], "--target=rv64gc") == 0 || strcmp(argv[i], "-target=rv64gc") == 0) {
       backend_ops = &backend_riscv;
       ZCC_POINTER_WIDTH = 8;
+    } else if (strcmp(argv[i], "-mabi=ms") == 0 || strcmp(argv[i], "-mabi=win64") == 0 ||
+               strcmp(argv[i], "--mabi=ms") == 0 || strcmp(argv[i], "--mabi=win64") == 0) {
+      g_win64_abi_mode = 1;
+    } else if (strcmp(argv[i], "-mabi=sysv") == 0 || strcmp(argv[i], "--mabi=sysv") == 0) {
+      g_win64_abi_mode = 0;
     } else if (strcmp(argv[i], "-o") == 0) {
       i++;
       if (i < argc)

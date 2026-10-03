@@ -7,6 +7,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 
 #ifndef __GNUC_MINOR__
 int __builtin_popcount(unsigned int x) {
@@ -3260,6 +3265,7 @@ int main(int argc, char **argv) {
     int has_arm_target = 0;
     int has_riscv_target = 0;
     int has_win64_target = 0;
+    int has_win64_abi = 0;
 
     int has_stop_at_asm = 0;
     int has_lib_flag = 0;
@@ -3301,6 +3307,9 @@ int main(int argc, char **argv) {
                    strcmp(argv[i], "-win64") == 0 || strcmp(argv[i], "--win64") == 0 ||
                    strcmp(argv[i], "-pe64") == 0 || strcmp(argv[i], "--pe64") == 0) {
             has_win64_target = 1;
+        } else if (strcmp(argv[i], "-mabi=ms") == 0 || strcmp(argv[i], "-mabi=win64") == 0 ||
+                   strcmp(argv[i], "--mabi=ms") == 0 || strcmp(argv[i], "--mabi=win64") == 0) {
+            has_win64_abi = 1;
         } else if (strcmp(argv[i], "--target=arm64") == 0 || strcmp(argv[i], "--target=aarch64") == 0 ||
                    strcmp(argv[i], "-target=arm64") == 0 || strcmp(argv[i], "-target=aarch64") == 0 ||
                    strcmp(argv[i], "-arm64") == 0 || strcmp(argv[i], "-aarch64") == 0 ||
@@ -3619,6 +3628,9 @@ int main(int argc, char **argv) {
             }
             if (!has_input_in_mod && input_c_file) {
                 mod_argv[mod_argc++] = (char *)input_c_file;
+            }
+            if (has_win64_abi) {
+                mod_argv[mod_argc++] = "-mabi=ms";
             }
             mod_argv[mod_argc++] = "-o";
             mod_argv[mod_argc++] = temp_s_filename;

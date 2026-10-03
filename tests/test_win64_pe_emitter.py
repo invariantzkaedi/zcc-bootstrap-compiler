@@ -15,6 +15,7 @@ import unittest
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOS_MAGIC_MZ = b"MZ"
 PE_SIG_MAGIC = b"PE\x00\x00"
+WSL_DISTRO = "Ubuntu"
 
 
 def win64_pe_align_to_py(val: int, align: int) -> int:
@@ -87,7 +88,7 @@ class TestWin64PEEmitter(unittest.TestCase):
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
-            cmd = ["wsl", "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
         else:
             cmd = [self.zcc_bin, src_file, "-target", "win64", "-o", exe_file]
 
@@ -144,7 +145,7 @@ class TestWin64PEEmitter(unittest.TestCase):
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
-            cmd = ["wsl", "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' --target=win64 -o '{wsl_exe}'"]
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' --target=win64 -o '{wsl_exe}'"]
         else:
             cmd = [self.zcc_bin, src_file, "--target=win64", "-o", exe_file]
 
@@ -167,7 +168,7 @@ class TestWin64PEEmitter(unittest.TestCase):
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
-            cmd = ["wsl", "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -o '{wsl_exe}'"]
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -o '{wsl_exe}'"]
         else:
             cmd = [self.zcc_bin, src_file, "-o", exe_file]
 
@@ -194,7 +195,7 @@ class TestWin64PEEmitter(unittest.TestCase):
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
-            cmd = ["wsl", "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
         else:
             cmd = [self.zcc_bin, src_file, "-target", "win64", "-o", exe_file]
 
@@ -248,7 +249,7 @@ class TestWin64PEEmitter(unittest.TestCase):
         wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
         wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
         wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
-        cmd = ["wsl", "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
+        cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
 
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         self.assertEqual(res.returncode, 0, f"Compilation failed: {res.stderr}\n{res.stdout}")
@@ -288,7 +289,7 @@ class TestWin64PEEmitter(unittest.TestCase):
         wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
         wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
         wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
-        cmd = ["wsl", "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -o '{wsl_exe}'"]
+        cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -o '{wsl_exe}'"]
 
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         self.assertEqual(res.returncode, 0, f"Compilation failed: {res.stderr}\n{res.stdout}")
@@ -323,7 +324,7 @@ class TestWin64PEEmitter(unittest.TestCase):
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
-            cmd = ["wsl", "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
         else:
             cmd = [self.zcc_bin, src_file, "-target", "win64", "-o", exe_file]
 
@@ -385,7 +386,7 @@ class TestWin64PEEmitter(unittest.TestCase):
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
-            cmd = ["wsl", "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
         else:
             cmd = [self.zcc_bin, src_file, "-target", "win64", "-o", exe_file]
 
@@ -432,7 +433,7 @@ class TestWin64PEEmitter(unittest.TestCase):
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
-            cmd = ["wsl", "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
         else:
             cmd = [self.zcc_bin, src_file, "-target", "win64", "-o", exe_file]
 
@@ -524,7 +525,7 @@ class TestWin64PEEmitter(unittest.TestCase):
             wsl_s1 = src1.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_s2 = src2.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
-            cmd = ["wsl", "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_s1}' '{wsl_s2}' -target win64 -o '{wsl_exe}'"]
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_s1}' '{wsl_s2}' -target win64 -o '{wsl_exe}'"]
         else:
             cmd = [self.zcc_bin, src1, src2, "-target", "win64", "-o", exe_file]
 
@@ -555,8 +556,8 @@ class TestWin64PEEmitter(unittest.TestCase):
             wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_s = asm_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
-            cmd_s = ["wsl", "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc -S '{wsl_src}' -o '{wsl_s}'"]
-            cmd_exe = ["wsl", "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_s}' -target win64 -o '{wsl_exe}'"]
+            cmd_s = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc -S '{wsl_src}' -o '{wsl_s}'"]
+            cmd_exe = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_s}' -target win64 -o '{wsl_exe}'"]
         else:
             cmd_s = [self.zcc_bin, "-S", src_file, "-o", asm_file]
             cmd_exe = [self.zcc_bin, asm_file, "-target", "win64", "-o", exe_file]
@@ -601,7 +602,7 @@ class TestWin64PEEmitter(unittest.TestCase):
             wsl_s1 = src1.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_s2 = src2.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
-            cmd = ["wsl", "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_s1}' '{wsl_s2}' -target win64 -o '{wsl_exe}'"]
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_s1}' '{wsl_s2}' -target win64 -o '{wsl_exe}'"]
         else:
             cmd = [self.zcc_bin, src1, src2, "-target", "win64", "-o", exe_file]
 
@@ -642,7 +643,7 @@ class TestWin64PEEmitter(unittest.TestCase):
             wsl_c = src_c.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_s = src_s.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
-            cmd = ["wsl", "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_c}' '{wsl_s}' -target win64 -o '{wsl_exe}'"]
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_c}' '{wsl_s}' -target win64 -o '{wsl_exe}'"]
         else:
             cmd = [self.zcc_bin, src_c, src_s, "-target", "win64", "-o", exe_file]
 
@@ -685,7 +686,7 @@ class TestWin64PEEmitter(unittest.TestCase):
             wsl_s1 = s1.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_s2 = s2.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
-            cmd = ["wsl", "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_s1}' '{wsl_s2}' -target win64 -o '{wsl_exe}'"]
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_s1}' '{wsl_s2}' -target win64 -o '{wsl_exe}'"]
         else:
             cmd = [self.zcc_bin, s1, s2, "-target", "win64", "-o", exe_file]
 
@@ -714,7 +715,7 @@ class TestWin64PEEmitter(unittest.TestCase):
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
-            cmd = ["wsl", "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
         else:
             cmd = [self.zcc_bin, src, "-target", "win64", "-o", exe_file]
 
@@ -736,6 +737,60 @@ class TestWin64PEEmitter(unittest.TestCase):
         if sys.platform == "win32":
             run_res = subprocess.run([exe_file])
             self.assertEqual(run_res.returncode, 1, f"Expected returncode 1 (func_299() - 299 = 1), got {run_res.returncode}")
+
+    def test_20_win64_ms_abi_calling_convention(self):
+        """Verify Win64 MS ABI calling convention: rcx, rdx, r8, r9 + 32-byte shadow space."""
+        src = os.path.join(self.tmp_dir.name, "probe_ms_abi.c")
+        asm_file = os.path.join(self.tmp_dir.name, "probe_ms_abi.s")
+        exe_file = os.path.join(self.tmp_dir.name, "probe_ms_abi.exe")
+
+        with open(src, "w", encoding="utf-8") as f:
+            f.write(
+                "int compute4(int a, int b, int c, int d) {\n"
+                "    return a + b + c + d;\n"
+                "}\n"
+                "int main(void) {\n"
+                "    int res = compute4(10, 12, 8, 12);\n"
+                "    return res;\n"
+                "}\n"
+            )
+
+        if sys.platform == "win32":
+            wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            wsl_asm = asm_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            cmd_asm = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -mabi=ms -S -o '{wsl_asm}'"]
+            cmd_exe = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -mabi=ms -o '{wsl_exe}'"]
+        else:
+            cmd_asm = [self.zcc_bin, src, "-mabi=ms", "-S", "-o", asm_file]
+            cmd_exe = [self.zcc_bin, src, "-target", "win64", "-mabi=ms", "-o", exe_file]
+
+        # 1. Verify assembly emission with -mabi=ms
+        res_asm = subprocess.run(cmd_asm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(res_asm.returncode, 0, f"Assembly generation failed: {res_asm.stderr}\n{res_asm.stdout}")
+        self.assertTrue(os.path.exists(asm_file))
+
+        with open(asm_file, "r", encoding="utf-8") as f:
+            asm_content = f.read()
+
+        # Win64 ABI mandates RCX, RDX, R8, R9 for first 4 integer/pointer parameters
+        self.assertIn("%rcx", asm_content, "Expected %rcx in MS ABI parameter store")
+        self.assertIn("%rdx", asm_content, "Expected %rdx in MS ABI parameter store")
+        self.assertIn("%r8", asm_content, "Expected %r8 in MS ABI parameter store")
+        self.assertIn("%r9", asm_content, "Expected %r9 in MS ABI parameter store")
+        # Win64 ABI mandates 32-byte shadow space allocation prior to call
+        self.assertIn("subq $32, %rsp", asm_content, "Expected 32-byte shadow space allocation")
+
+        # 2. Verify standalone PE executable creation with -mabi=ms
+        res_exe = subprocess.run(cmd_exe, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(res_exe.returncode, 0, f"PE executable compilation failed: {res_exe.stderr}\n{res_exe.stdout}")
+        self.assertTrue(os.path.exists(exe_file))
+
+        # 3. Verify execution on Windows host
+        if sys.platform == "win32":
+            run_res = subprocess.run([exe_file])
+            self.assertEqual(run_res.returncode, 42, f"Expected returncode 42 (10+12+8+12), got {run_res.returncode}")
 
 if __name__ == "__main__":
     unittest.main()
