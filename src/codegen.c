@@ -3296,6 +3296,22 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                                         win_exports, win_export_count,
                                         win_reloc_count > 0 ? win_reloc_rvas : NULL, win_reloc_count,
                                         win_extent_count > 0 ? win_extents : NULL, win_extent_count);
+
+            /* Automatically emit .def and MSVC .lib import library */
+            if (ret == 0 && win_export_count > 0) {
+                char def_path[1024];
+                char lib_path[1024];
+                strncpy(def_path, out_o_filename, sizeof(def_path) - 1);
+                def_path[sizeof(def_path) - 1] = '\0';
+                strncpy(lib_path, out_o_filename, sizeof(lib_path) - 1);
+                lib_path[sizeof(lib_path) - 1] = '\0';
+                char *dot_def = strrchr(def_path, '.');
+                char *dot_lib = strrchr(lib_path, '.');
+                if (dot_def) strcpy(dot_def, ".def"); else strncat(def_path, ".def", sizeof(def_path) - strlen(def_path) - 1);
+                if (dot_lib) strcpy(dot_lib, ".lib"); else strncat(lib_path, ".lib", sizeof(lib_path) - strlen(lib_path) - 1);
+                zcc_emit_win64_def_file(def_path, dname, win_exports, win_export_count);
+                zcc_emit_win64_implib(lib_path, dname, win_exports, win_export_count);
+            }
             if (win_exports) free(win_exports);
         } else {
             uint16_t target_subsystem = g_win64_gui_subsystem ? 2 : 3;

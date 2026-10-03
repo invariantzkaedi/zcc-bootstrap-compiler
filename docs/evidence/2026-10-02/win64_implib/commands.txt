@@ -1,0 +1,8 @@
+make -j16 zcc
+make selfhost
+cmp zcc2.s zcc3.s
+python3 tools/test_zcc_opt_passes.py
+python3 tests/test_win64_pe_emitter.py
+python tests/test_win64_pe_emitter.py
+git diff --stat part0_pp.c part3.c part4.c
+git diff --stat src/ tests/test_win64_pe_emitter.py

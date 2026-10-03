@@ -1093,6 +1093,84 @@ class TestWin64PEEmitter(unittest.TestCase):
         self.assertEqual(run_res.returncode, 42, f"Expected returncode 42 from SEH probe, got {run_res.returncode}")
 
 
+    def test_27_win64_pe_module_definition_file_emission(self):
+        """Verify automatic emission of Module-Definition (.def) file during -shared compilation."""
+        src = os.path.join(self.tmp_dir.name, "probe_def_test.c")
+        dll = os.path.join(self.tmp_dir.name, "probe_def_test.dll")
+        deffile = os.path.join(self.tmp_dir.name, "probe_def_test.def")
+
+        with open(src, "w", encoding="utf-8") as f:
+            f.write(
+                "int export_alpha(int x) { return x + 1; }\n"
+                "int export_beta(int y) { return y * 2; }\n"
+            )
+
+        if sys.platform == "win32":
+            wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            wsl_dll = dll.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -shared -o '{wsl_dll}'"]
+        else:
+            cmd = [self.zcc_bin, src, "-target", "win64", "-shared", "-o", dll]
+
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(res.returncode, 0, f"Compilation failed: {res.stderr}\n{res.stdout}")
+        self.assertTrue(os.path.exists(dll))
+        self.assertTrue(os.path.exists(deffile), ".def file was not automatically emitted alongside .dll")
+
+        with open(deffile, "r", encoding="utf-8") as f:
+            def_content = f.read()
+
+        self.assertIn("LIBRARY \"probe_def_test.dll\"", def_content)
+        self.assertIn("EXPORTS", def_content)
+        self.assertIn("export_alpha", def_content)
+        self.assertIn("export_beta", def_content)
+
+    def test_28_win64_pe_coff_import_library_emission(self):
+        """Verify automatic emission of MSVC-compatible COFF Import Library (.lib) archive during -shared compilation."""
+        dll = os.path.join(self.tmp_dir.name, "probe_def_test.dll")
+        libfile = os.path.join(self.tmp_dir.name, "probe_def_test.lib")
+
+        self.assertTrue(os.path.exists(libfile), ".lib import library was not emitted alongside .dll")
+
+        with open(libfile, "rb") as f:
+            data = f.read()
+
+        # Archive Signature (8 bytes)
+        self.assertTrue(data.startswith(b"!<arch>\n"), "Invalid COFF archive signature")
+
+        # First Linker Member header (60 bytes)
+        first_hdr = data[8:68]
+        self.assertTrue(first_hdr.startswith(b"/               "), "Expected first linker member /")
+        member_sz_str = first_hdr[48:58].decode("ascii").strip()
+        member_sz = int(member_sz_str)
+        self.assertGreater(member_sz, 0)
+
+        # Unpack big-endian symbol count
+        first_data = data[68 : 68 + member_sz]
+        num_symbols = struct.unpack_from(">I", first_data, 0)[0]
+        self.assertEqual(num_symbols, 4, f"Expected 4 symbols (2 direct + 2 __imp_), got {num_symbols}")
+
+        # Verify symbols present in string table
+        self.assertIn(b"export_alpha\x00", first_data)
+        self.assertIn(b"__imp_export_alpha\x00", first_data)
+        self.assertIn(b"export_beta\x00", first_data)
+        self.assertIn(b"__imp_export_beta\x00", first_data)
+
+        # Verify Short Import Object member headers
+        self.assertIn(b"export_alpha.obj/", data)
+        self.assertIn(b"export_beta.obj/", data)
+
+        # Verify Short Import Object Header fields (Sig1=0, Sig2=0xFFFF, Machine=0x8664)
+        alpha_idx = data.find(b"export_alpha.obj/")
+        self.assertGreater(alpha_idx, 0)
+        obj_data = data[alpha_idx + 60 :]
+        sig1, sig2, ver, machine = struct.unpack_from("<HHHH", obj_data, 0)
+        self.assertEqual(sig1, 0x0000, "Sig1 must be 0x0000")
+        self.assertEqual(sig2, 0xFFFF, "Sig2 must be 0xFFFF (IMAGE_FILE_MACHINE_UNKNOWN)")
+        self.assertEqual(machine, 0x8664, "Machine must be 0x8664 (AMD64)")
+
+
 if __name__ == "__main__":
     unittest.main()
 
