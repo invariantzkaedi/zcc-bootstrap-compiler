@@ -994,6 +994,104 @@ class TestWin64PEEmitter(unittest.TestCase):
             finally:
                 _ctypes.FreeLibrary(lib._handle)
 
+    def test_25_win64_pe_seh_unwind_ehandler_and_scope_table(self):
+        """Verify Win64 PE Structured Exception Handling .pdata emission with UNW_FLAG_EHANDLER and ScopeTable."""
+        src = os.path.join(self.tmp_dir.name, "probe_seh_test.c")
+        exe = os.path.join(self.tmp_dir.name, "probe_seh_test.exe")
+
+        with open(src, "w", encoding="utf-8") as f:
+            f.write(
+                "int protected_func_handler(void *rec, void *frame, void *ctx, void *disp) {\n"
+                "    return 1;\n"
+                "}\n"
+                "int protected_func(void) {\n"
+                "    int x = 10;\n"
+                "    __asm__(\"seh_try_begin:\");\n"
+                "    x += 32;\n"
+                "    __asm__(\"seh_try_end:\");\n"
+                "    if (x == 0) {\n"
+                "        __asm__(\"seh_target:\");\n"
+                "        x = 999;\n"
+                "    }\n"
+                "    return x;\n"
+                "}\n"
+                "int main(void) {\n"
+                "    return protected_func();\n"
+                "}\n"
+            )
+
+        if sys.platform == "win32":
+            wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
+        else:
+            cmd = [self.zcc_bin, src, "-target", "win64", "-o", exe]
+
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(res.returncode, 0, f"SEH compilation failed: {res.stderr}\n{res.stdout}")
+        self.assertTrue(os.path.exists(exe))
+
+        with open(exe, "rb") as f:
+            data = f.read()
+
+        e_lfanew = struct.unpack_from("<I", data, 0x3C)[0]
+        opt_offset = e_lfanew + 24
+        pdata_rva, pdata_sz = struct.unpack_from("<II", data, opt_offset + 112 + 3*8)
+        self.assertGreater(pdata_rva, 0x1000)
+        self.assertGreaterEqual(pdata_sz, 24)
+
+        # Locate .pdata section
+        coff_offset = e_lfanew + 4
+        num_sections, _, _, _, opt_size, _ = struct.unpack_from("<HIIIHH", data, coff_offset + 2)
+        sec_headers_offset = opt_offset + opt_size
+        pdata_raw = None
+        for i in range(num_sections):
+            sec_off = sec_headers_offset + i * 40
+            sec_name = data[sec_off : sec_off + 8].rstrip(b"\x00")
+            if sec_name == b".pdata":
+                pdata_raw = struct.unpack_from("<I", data, sec_off + 20)[0]
+                break
+        self.assertIsNotNone(pdata_raw)
+
+        # Find entry with UNW_FLAG_EHANDLER
+        num_entries = pdata_sz // 12
+        found_ehandler = False
+        for i in range(num_entries):
+            b_rva, e_rva, u_rva = struct.unpack_from("<III", data, pdata_raw + i*12)
+            u_off = pdata_raw + (u_rva - pdata_rva)
+            vf, psz, cc, fr = struct.unpack_from("<BBBB", data, u_off)
+            version = vf & 7
+            flags = vf >> 3
+            self.assertEqual(version, 1)
+
+            if flags & 1:  # UNW_FLAG_EHANDLER
+                found_ehandler = True
+                handler_rva = struct.unpack_from("<I", data, u_off + 8)[0]
+                self.assertGreaterEqual(handler_rva, 0x1000, "ExceptionHandler RVA must be valid in .text")
+
+                # Verify ScopeTable
+                scope_cnt = struct.unpack_from("<I", data, u_off + 12)[0]
+                self.assertEqual(scope_cnt, 1, "Expected 1 SEH ScopeRecord")
+
+                sb, se, sh, st = struct.unpack_from("<IIII", data, u_off + 16)
+                self.assertGreater(se, sb, "Scope EndAddress must be > BeginAddress")
+                self.assertEqual(sh, 1, "HandlerAddress must be 1 (EXCEPTION_EXECUTE_HANDLER)")
+                self.assertGreater(st, b_rva, "JumpTarget must be within function extent")
+
+        self.assertTrue(found_ehandler, "Expected at least one function with UNW_FLAG_EHANDLER")
+
+    def test_26_win64_pe_seh_runtime_execution(self):
+        """Verify Windows host execution of binary with SEH unwind tables and scope records."""
+        if sys.platform != "win32":
+            self.skipTest("Host execution test requires Windows environment")
+
+        exe = os.path.join(self.tmp_dir.name, "probe_seh_test.exe")
+        self.assertTrue(os.path.exists(exe))
+
+        run_res = subprocess.run([exe])
+        self.assertEqual(run_res.returncode, 42, f"Expected returncode 42 from SEH probe, got {run_res.returncode}")
+
 
 if __name__ == "__main__":
     unittest.main()

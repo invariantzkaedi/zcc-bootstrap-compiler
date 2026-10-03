@@ -1,0 +1,18 @@
+=== Gate 1: make selfhost ===
+CMP: IDENTICAL
+73f470d97d577d224897c0466cfe9458836a3f981b18df594bcf15c4e1bc8739  zcc2.s
+73f470d97d577d224897c0466cfe9458836a3f981b18df594bcf15c4e1bc8739  zcc3.s
+
+=== Gate 2: tools/test_zcc_opt_passes.py ===
+Suites Evaluated: 13
+Bit-Exact Passes: 13/13
+Semantic Divergences: 0
+Net Instructions Elided: 1,897 lines (2.30% net reduction)
+ALL 13 TEST SUITES BIT-EXACT & VERIFIED (EXIT 0)
+
+=== Gate 3: Foundational diff ===
+part0_pp.c, part3.c, part4.c: 0 lines modified (diff < 50 threshold satisfied)
+
+=== Gate 4: tests/test_win64_pe_emitter.py ===
+Ran 26 tests in 4.739s
+OK

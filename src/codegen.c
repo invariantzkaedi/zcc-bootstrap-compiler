@@ -3172,7 +3172,8 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
         size_t func_count = 0;
         if (win_extents && func_offsets) {
             for (i = 0; i < label_count; i++) {
-                if (labels[i].segment == 1 && labels[i].name[0] != '.' && labels[i].name[0] != '\0') {
+                if (labels[i].segment == 1 && labels[i].name[0] != '.' && labels[i].name[0] != '\0' &&
+                    strncmp(labels[i].name, "seh_", 4) != 0 && strncmp(labels[i].name, "__seh_", 6) != 0) {
                     if (func_count < max_extents) {
                         func_offsets[func_count++] = (uint32_t)labels[i].offset;
                     }
@@ -3196,12 +3197,73 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                     func_offsets[ucount++] = func_offsets[fi];
                 }
             }
+            memset(win_extents, 0, sizeof(win64_pe_func_extent_t) * max_extents);
             for (fi = 0; fi < ucount; fi++) {
                 uint32_t b = func_offsets[fi];
                 uint32_t e = (fi + 1 < ucount) ? func_offsets[fi + 1] : (uint32_t)orig_text_size;
                 if (e > b && win_extent_count < max_extents) {
                     win_extents[win_extent_count].begin_offset = b;
                     win_extents[win_extent_count].end_offset = e;
+                    win_extents[win_extent_count].flags = WIN64_UNW_FLAG_NHANDLER;
+                    win_extents[win_extent_count].handler_rva = 0;
+                    win_extents[win_extent_count].num_scopes = 0;
+
+                    /* Check if this function has SEH try/except labels or a companion handler */
+                    const char *fn_name = "";
+                    size_t li;
+                    for (li = 0; li < label_count; li++) {
+                        if (labels[li].segment == 1 && (uint32_t)labels[li].offset == b &&
+                            labels[li].name[0] != '.' && labels[li].name[0] != '\0') {
+                            fn_name = labels[li].name;
+                            break;
+                        }
+                    }
+
+                    /* Search for companion handler: <fn_name>_handler or _seh_handler or __seh_handler */
+                    char companion_name[128];
+                    snprintf(companion_name, sizeof(companion_name), "%s_handler", fn_name);
+                    uint32_t handler_rva = 0;
+                    for (li = 0; li < label_count; li++) {
+                        if (labels[li].segment == 1 &&
+                            (strcmp(labels[li].name, companion_name) == 0 ||
+                             strcmp(labels[li].name, "__seh_handler") == 0 ||
+                             strcmp(labels[li].name, "_seh_handler") == 0)) {
+                            handler_rva = 0x1000 + (uint32_t)labels[li].offset;
+                            break;
+                        }
+                    }
+
+                    /* Search for SEH try/except labels within [b, e) */
+                    uint32_t try_b = 0, try_e = 0, target = 0;
+                    int has_try_b = 0, has_try_e = 0, has_target = 0;
+                    for (li = 0; li < label_count; li++) {
+                        if (labels[li].segment == 1 && (uint32_t)labels[li].offset >= b && (uint32_t)labels[li].offset < e) {
+                            const char *lname = labels[li].name;
+                            if (strstr(lname, "try_end") || strstr(lname, "seh_end")) {
+                                try_e = (uint32_t)labels[li].offset;
+                                has_try_e = 1;
+                            } else if (strstr(lname, "try_begin") || strstr(lname, "seh_begin") || strstr(lname, "seh_try")) {
+                                try_b = (uint32_t)labels[li].offset;
+                                has_try_b = 1;
+                            } else if (strstr(lname, "target") || strstr(lname, "except") || strstr(lname, "seh_catch")) {
+                                target = (uint32_t)labels[li].offset;
+                                has_target = 1;
+                            }
+                        }
+                    }
+
+                    if (handler_rva != 0 || (has_try_b && has_try_e && has_target)) {
+                        win_extents[win_extent_count].flags = WIN64_UNW_FLAG_EHANDLER;
+                        win_extents[win_extent_count].handler_rva = handler_rva;
+                        if (has_try_b && has_try_e && has_target) {
+                            win_extents[win_extent_count].num_scopes = 1;
+                            win_extents[win_extent_count].scopes[0].try_begin_offset = try_b;
+                            win_extents[win_extent_count].scopes[0].try_end_offset = try_e;
+                            win_extents[win_extent_count].scopes[0].handler_offset = 1; /* EXCEPTION_EXECUTE_HANDLER */
+                            win_extents[win_extent_count].scopes[0].target_offset = target;
+                        }
+                    }
+
                     win_extent_count++;
                 }
             }

@@ -411,42 +411,86 @@ static uint8_t *win64_pe_build_pdata(uint32_t text_rva, uint32_t raw_code_len, u
             }
         }
     } else {
+        memset(sorted, 0, sizeof(win64_pe_func_extent_t));
         sorted[0].begin_offset = entry_offset;
         sorted[0].end_offset = (raw_code_len > entry_offset) ? raw_code_len : (entry_offset + 16);
     }
 
     uint32_t entries_size = (uint32_t)(count * sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY));
-    uint32_t unwind_info_size = (uint32_t)(count * 8);
-    uint32_t total_size = entries_size + unwind_info_size;
-    uint8_t *buf = (uint8_t *)calloc(1, total_size);
-    if (!buf) {
+    uint32_t *uinfo_offsets = (uint32_t *)malloc(sizeof(uint32_t) * count);
+    if (!uinfo_offsets) {
         free(sorted);
         return NULL;
     }
 
+    uint32_t cur_uinfo = entries_size;
     size_t i;
+    for (i = 0; i < count; i++) {
+        cur_uinfo = win64_pe_align_to(cur_uinfo, 4);
+        uinfo_offsets[i] = cur_uinfo;
+        uint32_t sz = 8; /* 4 bytes header + 4 bytes codes */
+        uint8_t flags = sorted[i].flags & 0x1F;
+        if (flags & (WIN64_UNW_FLAG_EHANDLER | WIN64_UNW_FLAG_UHANDLER)) {
+            sz += 4; /* ExceptionHandler RVA */
+            if (sorted[i].num_scopes > 0) {
+                sz += 4 + (uint32_t)(sorted[i].num_scopes * 16);
+            }
+        }
+        cur_uinfo += win64_pe_align_to(sz, 4);
+    }
+
+    uint32_t total_size = cur_uinfo;
+    uint8_t *buf = (uint8_t *)calloc(1, total_size);
+    if (!buf) {
+        free(sorted);
+        free(uinfo_offsets);
+        return NULL;
+    }
+
     for (i = 0; i < count; i++) {
         IMAGE_RUNTIME_FUNCTION_ENTRY entry;
         entry.BeginAddress = text_rva + sorted[i].begin_offset;
         entry.EndAddress = text_rva + sorted[i].end_offset;
-        entry.UnwindInfoAddress = pdata_rva + entries_size + (uint32_t)(i * 8);
+        entry.UnwindInfoAddress = pdata_rva + uinfo_offsets[i];
         memcpy(buf + i * sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY), &entry, sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY));
 
-        /* Synthesize UNWIND_INFO at offset (entries_size + i * 8) */
-        uint8_t *uinfo = buf + entries_size + (i * 8);
-        uinfo[0] = 0x01; /* Version = 1, Flags = 0 (UNW_FLAG_NHANDLER) */
+        /* Synthesize UNWIND_INFO at offset uinfo_offsets[i] */
+        uint8_t *uinfo = buf + uinfo_offsets[i];
+        uint8_t flags = sorted[i].flags & 0x1F;
+        uinfo[0] = 0x01 | (flags << 3); /* Version = 1, Flags */
         uinfo[1] = 0x04; /* SizeOfProlog = 4 bytes (push %rbp [1] + mov %rsp, %rbp [3]) */
         uinfo[2] = 0x02; /* CountOfCodes = 2 */
         uinfo[3] = 0x05; /* FrameRegister = 5 (%rbp), FrameOffset = 0 */
-        /* Code 0: UWOP_SET_FPREG (Op 3, Info 0) at prolog offset 4: (0 << 12) | (3 << 8) | 4 = 0x0304 */
-        uint16_t code0 = 0x0304;
+
+        uint16_t code0 = 0x0304; /* UWOP_SET_FPREG */
         memcpy(uinfo + 4, &code0, sizeof(uint16_t));
-        /* Code 1: UWOP_PUSH_NONVOL (Op 0, Info 5 for RBP) at prolog offset 1: (5 << 12) | (0 << 8) | 1 = 0x5001 */
-        uint16_t code1 = 0x5001;
+        uint16_t code1 = 0x5001; /* UWOP_PUSH_NONVOL (%rbp) */
         memcpy(uinfo + 6, &code1, sizeof(uint16_t));
+
+        if (flags & (WIN64_UNW_FLAG_EHANDLER | WIN64_UNW_FLAG_UHANDLER)) {
+            uint32_t h_rva = sorted[i].handler_rva;
+            memcpy(uinfo + 8, &h_rva, sizeof(uint32_t));
+            if (sorted[i].num_scopes > 0) {
+                uint32_t scope_cnt = (uint32_t)sorted[i].num_scopes;
+                memcpy(uinfo + 12, &scope_cnt, sizeof(uint32_t));
+                size_t s;
+                for (s = 0; s < sorted[i].num_scopes; s++) {
+                    uint8_t *sc_ptr = uinfo + 16 + (s * 16);
+                    uint32_t b_addr = text_rva + sorted[i].scopes[s].try_begin_offset;
+                    uint32_t e_addr = text_rva + sorted[i].scopes[s].try_end_offset;
+                    uint32_t h_addr = (sorted[i].scopes[s].handler_offset == 1) ? 1 : (text_rva + sorted[i].scopes[s].handler_offset);
+                    uint32_t j_addr = text_rva + sorted[i].scopes[s].target_offset;
+                    memcpy(sc_ptr + 0, &b_addr, 4);
+                    memcpy(sc_ptr + 4, &e_addr, 4);
+                    memcpy(sc_ptr + 8, &h_addr, 4);
+                    memcpy(sc_ptr + 12, &j_addr, 4);
+                }
+            }
+        }
     }
 
     free(sorted);
+    free(uinfo_offsets);
     if (out_pdata_size) *out_pdata_size = total_size;
     if (out_entries_size) *out_entries_size = entries_size;
     return buf;

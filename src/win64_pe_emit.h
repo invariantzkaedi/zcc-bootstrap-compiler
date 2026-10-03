@@ -133,10 +133,26 @@ typedef struct {
   uint8_t FrameRegisterAndOffset; /* Frame reg (bits 0-3), Offset (bits 4-7) */
 } IMAGE_UNWIND_INFO;
 
+#define WIN64_UNW_FLAG_NHANDLER  0x00
+#define WIN64_UNW_FLAG_EHANDLER  0x01
+#define WIN64_UNW_FLAG_UHANDLER  0x02
+#define WIN64_UNW_FLAG_CHAININFO 0x04
+
+typedef struct {
+  uint32_t try_begin_offset;
+  uint32_t try_end_offset;
+  uint32_t handler_offset;    /* 1 for EXCEPTION_EXECUTE_HANDLER, or offset of filter func */
+  uint32_t target_offset;     /* Offset of catch / except block */
+} win64_pe_seh_scope_t;
+
 /* Function extent definition for caller-provided function bounds */
 typedef struct {
   uint32_t begin_offset;       /* Offset from start of .text */
   uint32_t end_offset;         /* Offset from start of .text */
+  uint8_t  flags;              /* WIN64_UNW_FLAG_* */
+  uint32_t handler_rva;        /* RVA of exception personality handler */
+  size_t   num_scopes;
+  win64_pe_seh_scope_t scopes[4];
 } win64_pe_func_extent_t;
 
 #pragma pack(pop)
