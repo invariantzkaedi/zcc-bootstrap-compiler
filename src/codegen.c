@@ -35,6 +35,10 @@ extern int g_use_in_mem_asm;
 int g_win64_gui_subsystem = 0;
 int g_win64_is_shared = 0;
 const char *g_win64_cert_file = NULL;
+const char *g_win64_delay_dlls[16] = {0};
+const char *g_win64_delay_funcs[16][32] = {{0}};
+size_t g_win64_delay_func_counts[16] = {0};
+size_t g_win64_delay_dll_count = 0;
 
 static char g_temp_o_to_remove[256] = {0};
 static char g_temp_s_to_remove[256] = {0};
@@ -3449,6 +3453,21 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
             }
         }
 
+        /* Build delay import info if specified */
+        win64_pe_delay_dll_t delay_dll_items[16];
+        win64_pe_delay_info_t delay_info;
+        memset(&delay_info, 0, sizeof(delay_info));
+        if (g_win64_delay_dll_count > 0) {
+            size_t d;
+            for (d = 0; d < g_win64_delay_dll_count; d++) {
+                delay_dll_items[d].dll_name = g_win64_delay_dlls[d];
+                delay_dll_items[d].func_names = (const char **)g_win64_delay_funcs[d];
+                delay_dll_items[d].num_funcs = g_win64_delay_func_counts[d];
+            }
+            delay_info.dlls = delay_dll_items;
+            delay_info.num_dlls = g_win64_delay_dll_count;
+        }
+
         int ret = 0;
         if (g_win64_is_shared) {
             /* Gather exported functions from labels */
@@ -3480,13 +3499,14 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                 tls_info.zero_fill_size = (uint32_t)tls_zero_fill;
             }
 
-            ret = zcc_emit_win64_pe_dll_v7(out_o_filename, dname, text_seg.data, text_seg.size, entry_offset,
+            ret = zcc_emit_win64_pe_dll_v8(out_o_filename, dname, text_seg.data, text_seg.size, entry_offset,
                                         win_import_count > 0 ? win_import_funcs : NULL, win_import_count,
                                         win_exports, win_export_count,
                                         win_reloc_count > 0 ? win_reloc_rvas : NULL, win_reloc_count,
                                         win_extent_count > 0 ? win_extents : NULL, win_extent_count,
                                         has_tls ? &tls_info : NULL,
-                                        cert_info.cert_data ? &cert_info : NULL);
+                                        cert_info.cert_data ? &cert_info : NULL,
+                                        g_win64_delay_dll_count > 0 ? &delay_info : NULL);
 
             /* Automatically emit .def and MSVC .lib import library */
             if (ret == 0 && win_export_count > 0) {
@@ -3514,13 +3534,14 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                 tls_info.raw_data_size = tls_seg.size;
                 tls_info.zero_fill_size = (uint32_t)tls_zero_fill;
             }
-            ret = zcc_emit_win64_pe_file_v7(out_o_filename, text_seg.data, text_seg.size, entry_offset,
+            ret = zcc_emit_win64_pe_file_v8(out_o_filename, text_seg.data, text_seg.size, entry_offset,
                                                 win_import_count > 0 ? win_import_funcs : NULL, win_import_count,
                                                 win_reloc_count > 0 ? win_reloc_rvas : NULL, win_reloc_count,
                                                 win_extent_count > 0 ? win_extents : NULL, win_extent_count,
                                                 target_subsystem, NULL, 0,
                                                 has_tls ? &tls_info : NULL,
-                                                cert_info.cert_data ? &cert_info : NULL);
+                                                cert_info.cert_data ? &cert_info : NULL,
+                                                g_win64_delay_dll_count > 0 ? &delay_info : NULL);
         }
         if (win_extents) free(win_extents);
         if (func_offsets) free(func_offsets);
@@ -3651,6 +3672,38 @@ int main(int argc, char **argv) {
             g_win64_cert_file = argv[i] + 11;
         } else if (strcmp(argv[i], "--cert-sig") == 0 && i + 1 < argc) {
             g_win64_cert_file = argv[++i];
+        } else if (strncmp(argv[i], "--delay-load=", 13) == 0 || strncmp(argv[i], "-delayload:", 11) == 0) {
+            const char *val = strchr(argv[i], '=');
+            if (!val) val = strchr(argv[i], ':');
+            if (val && val[1] && g_win64_delay_dll_count < 16) {
+                val++;
+                char *colon = strchr(val, ':');
+                if (colon) {
+                    size_t dlen = colon - val;
+                    char *dname = (char *)malloc(dlen + 1);
+                    strncpy(dname, val, dlen);
+                    dname[dlen] = '\0';
+                    size_t cur_d = g_win64_delay_dll_count++;
+                    g_win64_delay_dlls[cur_d] = dname;
+                    char *fstart = colon + 1;
+                    while (*fstart) {
+                        char *comma = strchr(fstart, ',');
+                        size_t flen = comma ? (size_t)(comma - fstart) : strlen(fstart);
+                        if (flen > 0 && g_win64_delay_func_counts[cur_d] < 32) {
+                            char *fname = (char *)malloc(flen + 1);
+                            strncpy(fname, fstart, flen);
+                            fname[flen] = '\0';
+                            g_win64_delay_funcs[cur_d][g_win64_delay_func_counts[cur_d]++] = fname;
+                        }
+                        if (!comma) break;
+                        fstart = comma + 1;
+                    }
+                } else {
+                    size_t cur_d = g_win64_delay_dll_count++;
+                    g_win64_delay_dlls[cur_d] = val;
+                    g_win64_delay_funcs[cur_d][g_win64_delay_func_counts[cur_d]++] = "DllStubFunction";
+                }
+            }
         } else if (strcmp(argv[i], "--target=arm64") == 0 || strcmp(argv[i], "--target=aarch64") == 0 ||
                    strcmp(argv[i], "-target=arm64") == 0 || strcmp(argv[i], "-target=aarch64") == 0 ||
                    strcmp(argv[i], "-arm64") == 0 || strcmp(argv[i], "-aarch64") == 0 ||

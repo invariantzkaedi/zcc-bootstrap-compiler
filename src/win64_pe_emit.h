@@ -279,6 +279,67 @@ int zcc_emit_win64_pe_dll_v7(const char *filename, const char *dll_name,
                              const win64_pe_tls_info_t *tls_info,
                              const win64_pe_cert_info_t *cert_info);
 
+/* Delay-Load Import Directory (IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT) */
+#define IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT 13
+
+#pragma pack(push, 4)
+typedef struct {
+    union {
+        uint32_t AllAttributes;
+        struct {
+            uint32_t RvaBased : 1;
+            uint32_t Reserved : 31;
+        } DllAttributes;
+    } Attributes;
+    uint32_t DllNameRVA;
+    uint32_t ModuleHandleRVA;
+    uint32_t ImportAddressTableRVA;
+    uint32_t ImportNameTableRVA;
+    uint32_t BoundImportAddressTableRVA;
+    uint32_t UnloadInformationTableRVA;
+    uint32_t TimeDateStamp;
+} IMAGE_DELAYLOAD_DESCRIPTOR;
+#pragma pack(pop)
+
+typedef struct {
+    const char *dll_name;
+    const char **func_names;
+    size_t      num_funcs;
+} win64_pe_delay_dll_t;
+
+typedef struct {
+    const win64_pe_delay_dll_t *dlls;
+    size_t                     num_dlls;
+} win64_pe_delay_info_t;
+
+uint8_t *win64_pe_build_didat(uint32_t didat_rva,
+                              const win64_pe_delay_info_t *delay_info,
+                              uint32_t *out_total_size,
+                              uint32_t *out_desc_rva,
+                              uint32_t *out_desc_size);
+
+int zcc_emit_win64_pe_file_v8(const char *filename, const uint8_t *code_bytes,
+                              size_t code_len, uint32_t entry_offset,
+                              const char **imported_funcs, size_t num_imported_funcs,
+                              const uint32_t *reloc_rvas, size_t num_reloc_rvas,
+                              const win64_pe_func_extent_t *extents, size_t num_extents,
+                              uint16_t subsystem,
+                              const uint8_t *rsrc_bytes, size_t rsrc_len,
+                              const win64_pe_tls_info_t *tls_info,
+                              const win64_pe_cert_info_t *cert_info,
+                              const win64_pe_delay_info_t *delay_info);
+
+int zcc_emit_win64_pe_dll_v8(const char *filename, const char *dll_name,
+                             const uint8_t *code_bytes, size_t code_len,
+                             uint32_t entry_offset,
+                             const char **imported_funcs, size_t num_imported_funcs,
+                             const win64_pe_export_t *exports, size_t num_exports,
+                             const uint32_t *reloc_rvas, size_t num_reloc_rvas,
+                             const win64_pe_func_extent_t *extents, size_t num_extents,
+                             const win64_pe_tls_info_t *tls_info,
+                             const win64_pe_cert_info_t *cert_info,
+                             const win64_pe_delay_info_t *delay_info);
+
 uint8_t *win64_pe_build_security_dir(const win64_pe_cert_info_t *cert_info,
                                      uint32_t *out_total_size);
 

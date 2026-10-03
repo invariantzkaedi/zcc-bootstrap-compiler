@@ -1341,6 +1341,73 @@ class TestWin64PEEmitter(unittest.TestCase):
             run_res = subprocess.run(["cmd.exe", "/c", exe])
             self.assertEqual(run_res.returncode, 77)
 
+    def test_32_win64_pe_delay_import_directory(self):
+        """Verify Win64 PE IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT (DataDirectory[13]) and .didat section emission."""
+        scratch_dir = os.path.join(REPO_ROOT, "scratch")
+        os.makedirs(scratch_dir, exist_ok=True)
+        src = os.path.join(scratch_dir, "probe_delay_unit.c")
+        exe = os.path.join(scratch_dir, "probe_delay_unit.exe")
+
+        with open(src, "w", encoding="utf-8") as f:
+            f.write("int main(void) { return 88; }\n")
+
+        if sys.platform == "win32":
+            wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c",
+                   f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 --delay-load=advapi32.dll:CryptAcquireContextA,CryptGenRandom -o '{wsl_exe}'"]
+        else:
+            cmd = [self.zcc_bin, src, "-target", "win64", "--delay-load=advapi32.dll:CryptAcquireContextA,CryptGenRandom", "-o", exe]
+
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(res.returncode, 0, f"Compilation failed: {res.stderr}\n{res.stdout}")
+        self.assertTrue(os.path.exists(exe))
+
+        with open(exe, "rb") as f:
+            data = f.read()
+
+        e_lfanew = struct.unpack_from("<I", data, 0x3C)[0]
+        num_sections = struct.unpack_from("<H", data, e_lfanew + 4 + 2)[0]
+        opt_hdr_off = e_lfanew + 4 + 20
+
+        delay_dir_off = opt_hdr_off + 112 + 13 * 8
+        delay_rva, delay_sz = struct.unpack_from("<II", data, delay_dir_off)
+        self.assertGreater(delay_rva, 0, "Delay import RVA must be non-zero")
+        self.assertEqual(delay_sz, 64, f"Expected delay directory size 64, got {delay_sz}")
+
+        sec_headers_off = opt_hdr_off + struct.unpack_from("<H", data, e_lfanew + 4 + 16)[0]
+        didat_file_offset = None
+        section_names = []
+        for s in range(num_sections):
+            sh_off = sec_headers_off + s * 40
+            sname = data[sh_off : sh_off + 8].rstrip(b"\x00").decode("ascii", errors="ignore")
+            section_names.append(sname)
+            s_vsz, s_va, s_raw_sz, s_raw_ptr = struct.unpack_from("<IIII", data, sh_off + 8)
+            if s_va <= delay_rva < s_va + s_vsz:
+                didat_file_offset = s_raw_ptr + (delay_rva - s_va)
+                break
+
+        self.assertIn(".didat", section_names)
+        self.assertIsNotNone(didat_file_offset)
+
+        attrs, dll_name_rva, mod_h_rva, iat_rva, int_rva, bound_rva, unload_rva, timestamp = struct.unpack_from(
+            "<IIIIIIII", data, didat_file_offset
+        )
+        self.assertEqual(attrs, 1)  # RvaBased
+        self.assertGreater(dll_name_rva, delay_rva)
+        self.assertGreater(mod_h_rva, delay_rva)
+        self.assertGreater(iat_rva, delay_rva)
+        self.assertGreater(int_rva, delay_rva)
+
+        dll_name_file_off = didat_file_offset + (dll_name_rva - delay_rva)
+        dll_name = data[dll_name_file_off:].split(b"\x00")[0].decode("ascii")
+        self.assertEqual(dll_name, "advapi32.dll")
+
+        if sys.platform == "win32":
+            run_res = subprocess.run(["cmd.exe", "/c", exe])
+            self.assertEqual(run_res.returncode, 88)
+
 
 if __name__ == "__main__":
     unittest.main()
