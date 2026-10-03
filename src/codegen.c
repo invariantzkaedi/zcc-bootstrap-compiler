@@ -2201,7 +2201,16 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
         /* 2-operand instructions */
         else if (args_start) {
             char op1[128], op2[128];
-            char *comma = strchr(args_start, ',');
+            char *comma = NULL;
+            int paren_depth = 0;
+            for (char *p = args_start; *p; p++) {
+                if (*p == '(') paren_depth++;
+                else if (*p == ')') paren_depth--;
+                else if (*p == ',' && paren_depth == 0) {
+                    comma = p;
+                    break;
+                }
+            }
             if (comma) {
                 *comma = '\0';
                 strcpy(op1, trim(args_start));
@@ -2423,7 +2432,16 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                         encode_movl(&text_seg, reg1, reg2, is_mem1, is_mem2, is_mem1 ? disp1 : disp2);
                     }
                 } else if (strcmp(mnemonic, "leaq") == 0) {
-                    if (strstr(op1, "(%rip)")) {
+                    if (strcmp(op1, "(%rax,%rax,2)") == 0 && reg2 == 0) {
+                        const unsigned char bytes[] = { 0x48, 0x8D, 0x04, 0x40 };
+                        seg_append(&text_seg, bytes, sizeof(bytes));
+                    } else if (strcmp(op1, "(%rax,%rax,4)") == 0 && reg2 == 0) {
+                        const unsigned char bytes[] = { 0x48, 0x8D, 0x04, 0x80 };
+                        seg_append(&text_seg, bytes, sizeof(bytes));
+                    } else if (strcmp(op1, "(%rax,%rax,8)") == 0 && reg2 == 0) {
+                        const unsigned char bytes[] = { 0x48, 0x8D, 0x04, 0xC0 };
+                        seg_append(&text_seg, bytes, sizeof(bytes));
+                    } else if (strstr(op1, "(%rip)")) {
                         char lbl[128];
                         char *rip = strstr(op1, "(%rip)");
                         *rip = '\0';

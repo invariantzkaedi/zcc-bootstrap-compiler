@@ -766,6 +766,44 @@ static void peephole_optimize(char *filename) {
       i += 2;
       continue;
     }
+
+    /* 3d. Base-Displacement Local Load Folding:
+       leaq disp(%rbp), %rax; movslq/movq/movl/movzbl/movzwl (%rax), dest -> mov... disp(%rbp), dest */
+    if (strncmp(l1, "    leaq ", 9) == 0 && strstr(l1, "(%rbp), %rax\n") && i + 1 < nlines) {
+      char disp[64];
+      if (sscanf(l1, "    leaq %63[^(](%%rbp), %%rax", disp) == 1) {
+        char *l2 = line_ptrs[i + 1];
+        const char *op = NULL;
+        const char *dest = "%rax";
+        if (strcmp(l2, "    movslq (%rax), %rax\n") == 0) {
+          op = "movslq"; dest = "%rax";
+        } else if (strcmp(l2, "    movq (%rax), %rax\n") == 0) {
+          op = "movq"; dest = "%rax";
+        } else if (strcmp(l2, "    movl (%rax), %eax\n") == 0) {
+          op = "movl"; dest = "%eax";
+        } else if (strcmp(l2, "    movzbl (%rax), %eax\n") == 0) {
+          op = "movzbl"; dest = "%eax";
+        } else if (strcmp(l2, "    movzwl (%rax), %eax\n") == 0) {
+          op = "movzwl"; dest = "%eax";
+        }
+        if (op) {
+          sprintf(line_ptrs[i], "    %s %s(%%rbp), %s\n", op, disp, dest);
+          line_ptrs[i + 1][0] = 0;
+          eliminated += 1;
+          i += 2;
+          continue;
+        }
+      }
+    }
+
+    /* 3e. Redundant Double CLTQs: cltq; cltq -> cltq */
+    if (strcmp(l1, "    cltq\n") == 0 && i + 1 < nlines &&
+        strcmp(line_ptrs[i + 1], "    cltq\n") == 0) {
+      line_ptrs[i + 1][0] = 0;
+      eliminated += 1;
+      i += 2;
+      continue;
+    }
     /* 3. Push/Lea/Pop Triad */
     if (strcmp(l1, "    pushq %rax\n") == 0 && i + 2 < nlines) {
       char *l2 = line_ptrs[i + 1];
