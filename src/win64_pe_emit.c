@@ -6,6 +6,10 @@
 
 #include "win64_pe_emit.h"
 
+int g_win64_reproducible = 0;
+int g_win64_guard_cf = 0;
+
+
 uint32_t win64_pe_align_to(uint32_t val, uint32_t align) {
     if (align == 0) return val;
     uint32_t rem = val % align;
@@ -51,7 +55,7 @@ int zcc_emit_win64_pe_file_ex(const char *filename, const uint8_t *code_bytes, s
     memset(&file_hdr, 0, sizeof(file_hdr));
     file_hdr.Machine = 0x8664; /* AMD64 / x86-64 */
     file_hdr.NumberOfSections = 2; /* .text and .data */
-    file_hdr.TimeDateStamp = 0x66900000;
+    file_hdr.TimeDateStamp = g_win64_reproducible ? 0 : 0x66900000;
     file_hdr.SizeOfOptionalHeader = sizeof(IMAGE_OPTIONAL_HEADER64);
     file_hdr.Characteristics = 0x0022; /* EXECUTABLE_IMAGE | LARGE_ADDRESS_AWARE */
 
@@ -85,7 +89,7 @@ int zcc_emit_win64_pe_file_ex(const char *filename, const uint8_t *code_bytes, s
     opt_hdr.SizeOfHeaders = aligned_headers_size;
     opt_hdr.SizeOfImage = 0x1000 + win64_pe_align_to(raw_code_len, 0x1000) + 0x1000;
     opt_hdr.Subsystem = 3; /* IMAGE_SUBSYSTEM_WINDOWS_CUI (Console) */
-    opt_hdr.DllCharacteristics = 0x8160;
+    opt_hdr.DllCharacteristics = 0x8160 | (g_win64_guard_cf ? 0x4000 : 0);
     opt_hdr.SizeOfStackReserve = 0x100000;
     opt_hdr.SizeOfStackCommit = 0x1000;
     opt_hdr.SizeOfHeapReserve = 0x100000;
@@ -1034,7 +1038,7 @@ int zcc_emit_win64_pe_file_v8(const char *filename, const uint8_t *code_bytes,
     memset(&file_hdr, 0, sizeof(file_hdr));
     file_hdr.Machine = 0x8664;
     file_hdr.NumberOfSections = num_sections;
-    file_hdr.TimeDateStamp = 0x66900000;
+    file_hdr.TimeDateStamp = g_win64_reproducible ? 0 : 0x66900000;
     file_hdr.SizeOfOptionalHeader = sizeof(IMAGE_OPTIONAL_HEADER64);
     file_hdr.Characteristics = 0x0022;
 
@@ -1062,7 +1066,7 @@ int zcc_emit_win64_pe_file_v8(const char *filename, const uint8_t *code_bytes,
     opt_hdr.SizeOfImage = has_reloc ? (reloc_rva + win64_pe_align_to(total_reloc_size, 0x1000)) : (has_rsrc ? (rsrc_rva + win64_pe_align_to(total_rsrc_size, 0x1000)) : (has_tls ? (tls_rva + win64_pe_align_to(total_tls_size, 0x1000)) : (data_rva + 0x1000)));
     opt_hdr.SizeOfHeaders = aligned_headers_size;
     opt_hdr.Subsystem = (subsystem == 2) ? 2 : 3;
-    opt_hdr.DllCharacteristics = 0x8160;
+    opt_hdr.DllCharacteristics = 0x8160 | (g_win64_guard_cf ? 0x4000 : 0);
     opt_hdr.SizeOfStackReserve = 0x100000;
     opt_hdr.SizeOfStackCommit = 0x1000;
     opt_hdr.SizeOfHeapReserve = 0x100000;
@@ -1733,7 +1737,7 @@ int zcc_emit_win64_pe_dll_v8(const char *filename, const char *dll_name,
     memset(&file_hdr, 0, sizeof(file_hdr));
     file_hdr.Machine = 0x8664;
     file_hdr.NumberOfSections = num_sections;
-    file_hdr.TimeDateStamp = 0x66900000;
+    file_hdr.TimeDateStamp = g_win64_reproducible ? 0 : 0x66900000;
     file_hdr.SizeOfOptionalHeader = sizeof(IMAGE_OPTIONAL_HEADER64);
     file_hdr.Characteristics = 0x2022; /* EXECUTABLE_IMAGE | LARGE_ADDRESS_AWARE | DLL */
 
@@ -1761,7 +1765,7 @@ int zcc_emit_win64_pe_dll_v8(const char *filename, const char *dll_name,
     opt_hdr.SizeOfImage = has_reloc ? (reloc_rva + win64_pe_align_to(total_reloc_size, 0x1000)) : (has_tls ? (tls_rva + win64_pe_align_to(total_tls_size, 0x1000)) : (data_rva + 0x1000));
     opt_hdr.SizeOfHeaders = aligned_headers_size;
     opt_hdr.Subsystem = 3;
-    opt_hdr.DllCharacteristics = 0x8160;
+    opt_hdr.DllCharacteristics = 0x8160 | (g_win64_guard_cf ? 0x4000 : 0);
     opt_hdr.SizeOfStackReserve = 0x100000;
     opt_hdr.SizeOfStackCommit = 0x1000;
     opt_hdr.SizeOfHeapReserve = 0x100000;

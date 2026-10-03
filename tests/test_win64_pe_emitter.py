@@ -1408,6 +1408,43 @@ class TestWin64PEEmitter(unittest.TestCase):
             run_res = subprocess.run(["cmd.exe", "/c", exe])
             self.assertEqual(run_res.returncode, 88)
 
+    def test_33_win64_pe_reproducible_and_guard_cf(self):
+        scratch_dir = os.path.join(REPO_ROOT, "scratch")
+        os.makedirs(scratch_dir, exist_ok=True)
+        src = os.path.join(scratch_dir, "test_repro.c")
+        exe = os.path.join(scratch_dir, "test_repro.exe")
+
+        with open(src, "w", encoding="utf-8") as f:
+            f.write("int main(void) { return 42; }\n")
+
+        if sys.platform == "win32":
+            wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c",
+                   f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 --reproducible --guard-cf -o '{wsl_exe}'"]
+        else:
+            cmd = [self.zcc_bin, src, "-target", "win64", "--reproducible", "--guard-cf", "-o", exe]
+
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(res.returncode, 0, f"Compilation failed: {res.stderr}\n{res.stdout}")
+        self.assertTrue(os.path.exists(exe), "Output EXE does not exist")
+
+        with open(exe, "rb") as f:
+            data = f.read()
+
+        e_lfanew = struct.unpack_from("<I", data, 0x3C)[0]
+        timestamp = struct.unpack_from("<I", data, e_lfanew + 4 + 4)[0]
+        self.assertEqual(timestamp, 0, f"Expected TimeDateStamp 0 for reproducible build, got {timestamp}")
+
+        opt_hdr_off = e_lfanew + 4 + 20
+        dll_chars = struct.unpack_from("<H", data, opt_hdr_off + 70)[0]
+        self.assertTrue(bool(dll_chars & 0x4000), f"Expected GUARD_CF (0x4000) in DllCharacteristics (0x{dll_chars:04x})")
+
+        if sys.platform == "win32":
+            run_res = subprocess.run(["cmd.exe", "/c", exe])
+            self.assertEqual(run_res.returncode, 42)
+
 
 if __name__ == "__main__":
     unittest.main()

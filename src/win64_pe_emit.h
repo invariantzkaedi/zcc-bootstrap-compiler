@@ -354,4 +354,7 @@ int zcc_emit_win64_def_file(const char *filename, const char *dll_name,
 int zcc_emit_win64_implib(const char *filename, const char *dll_name,
                           const win64_pe_export_t *exports, size_t num_exports);
 
+extern int g_win64_reproducible;
+extern int g_win64_guard_cf;
+
 #endif /* ZCC_WIN64_PE_EMIT_H */

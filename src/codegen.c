@@ -3594,6 +3594,93 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
 
 extern int zld_link(const char **obj_files, int obj_count, const char *out_path, const char *script_path, const char *tensor_attest_bin_path, const char *tensor_note_json_path, const char *build_attest_bin_path);
 
+
+static void zcc_hardware_profile_buffer(const char *buf, size_t sz, const char *source_desc, int is_json) {
+    if (!buf || sz == 0) return;
+    int total_insns = 0, alu_cycles = 0, mul_cycles = 0, div_cycles = 0, mem_cycles = 0, branch_cycles = 0, stack_spills = 0;
+    const char *p = buf, *end = buf + sz;
+    while (p < end) {
+        const char *eol = (const char *)memchr(p, '\n', end - p);
+        if (!eol) eol = end;
+        size_t line_len = eol - p;
+        if (line_len > 0) {
+            char line[512];
+            size_t copy_len = line_len < sizeof(line) - 1 ? line_len : sizeof(line) - 1;
+            memcpy(line, p, copy_len);
+            line[copy_len] = '\0';
+            char *s = line;
+            while (*s == ' ' || *s == '\t') s++;
+            if (*s != '\0' && *s != '.' && *s != '#' && *s != '/' && *s != ';') {
+                char *colon = strchr(s, ':');
+                if (colon && *(colon + 1) == '\0') {
+                    // label
+                } else {
+                    total_insns++;
+                    char op[32] = {0};
+                    sscanf(s, "%31s", op);
+                    for (int k = 0; op[k]; k++) {
+                        if (op[k] >= 'A' && op[k] <= 'Z') op[k] += 32;
+                    }
+                    if (strcmp(op, "idiv") == 0 || strcmp(op, "idivq") == 0 ||
+                        strcmp(op, "idivl") == 0 || strcmp(op, "div") == 0 ||
+                        strcmp(op, "divq") == 0 || strcmp(op, "divl") == 0) {
+                        div_cycles += 35;
+                    } else if (strcmp(op, "imul") == 0 || strcmp(op, "imulq") == 0 ||
+                               strcmp(op, "imull") == 0 || strcmp(op, "mul") == 0 ||
+                               strcmp(op, "mulq") == 0) {
+                        mul_cycles += 3;
+                    } else if (op[0] == 'j') {
+                        branch_cycles += 3;
+                    } else if (strstr(s, "(%rbp)") || strstr(s, "(%rsp)")) {
+                        mem_cycles += 4;
+                        stack_spills++;
+                    } else {
+                        alu_cycles += 1;
+                    }
+                }
+            }
+        }
+        p = eol + 1;
+    }
+    int total_est_cycles = alu_cycles + mul_cycles + div_cycles + mem_cycles + branch_cycles;
+    if (is_json) {
+        printf("{\"target\":\"%s\",\"insns\":%d,\"cycles\":%d,\"alu\":%d,\"mul\":%d,\"div\":%d,\"mem\":%d,\"branch\":%d,\"spills\":%d}\n",
+               source_desc ? source_desc : "target", total_insns, total_est_cycles, alu_cycles, mul_cycles / 3, div_cycles / 35, mem_cycles / 4, branch_cycles / 3, stack_spills);
+    } else {
+        fprintf(stderr, "\n==============================================================================\n");
+        fprintf(stderr, " [ZCC HARDWARE SILICON PROFILE REPORT] %s\n", source_desc ? source_desc : "");
+        fprintf(stderr, "==============================================================================\n");
+        fprintf(stderr, "  * Emitted Executable Instructions: %d\n", total_insns);
+        fprintf(stderr, "  * Estimated Hardware Cycles:     ~%d cycles\n", total_est_cycles);
+        fprintf(stderr, "  * Micro-Architectural Breakdown:\n");
+        fprintf(stderr, "    - ALU Operations:   %3d insns  (%d cycles)\n", alu_cycles, alu_cycles);
+        fprintf(stderr, "    - Multiplications:  %3d insns  (%d cycles)\n", mul_cycles / 3, mul_cycles);
+        fprintf(stderr, "    - Division Latency: %3d insns  (%d cycles)\n", div_cycles / 35, div_cycles);
+        fprintf(stderr, "    - Memory Accesses:  %3d insns  (%d cycles, %d stack spills)\n", mem_cycles / 4, mem_cycles, stack_spills);
+        fprintf(stderr, "    - Branch Hazards:   %3d jumps  (%d cycles)\n", branch_cycles / 3, branch_cycles);
+        fprintf(stderr, "==============================================================================\n\n");
+    }
+}
+
+static void zcc_hardware_profile_file(const char *filename, int is_json) {
+    if (!filename) return;
+    FILE *f = fopen(filename, "rb");
+    if (!f) return;
+    fseek(f, 0, SEEK_END);
+    long sz = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (sz > 0 && sz < 32 * 1024 * 1024) {
+        char *buf = (char *)malloc(sz + 1);
+        if (buf) {
+            size_t r = fread(buf, 1, sz, f);
+            buf[r] = '\0';
+            zcc_hardware_profile_buffer(buf, r, filename, is_json);
+            free(buf);
+        }
+    }
+    fclose(f);
+}
+
 int main(int argc, char **argv) {
     atexit(cleanup_temp_files);
     int i;
@@ -3615,6 +3702,8 @@ int main(int argc, char **argv) {
     int has_riscv_target = 0;
     int has_win64_target = 0;
     int has_win64_abi = 0;
+    int has_profile_target = 0;
+    int has_profile_json = 0;
 
     int has_stop_at_asm = 0;
     int has_lib_flag = 0;
@@ -3720,6 +3809,16 @@ int main(int argc, char **argv) {
             has_yul_target = 1;
         } else if (strcmp(argv[i], "--emit-stark-proof") == 0 || strcmp(argv[i], "-emit-stark-proof") == 0 || strcmp(argv[i], "--target=stark-proof") == 0) {
             has_stark_proof_target = 1;
+        } else if (strcmp(argv[i], "--profile") == 0 || strcmp(argv[i], "-profile") == 0 ||
+                   strcmp(argv[i], "--asm-diagnostics") == 0) {
+            has_profile_target = 1;
+        } else if (strcmp(argv[i], "--profile-json") == 0) {
+            has_profile_target = 1;
+            has_profile_json = 1;
+        } else if (strcmp(argv[i], "--reproducible") == 0 || strcmp(argv[i], "-reproducible") == 0) {
+            g_win64_reproducible = 1;
+        } else if (strcmp(argv[i], "--guard-cf") == 0 || strcmp(argv[i], "-guard-cf") == 0) {
+            g_win64_guard_cf = 1;
         } else if (strcmp(argv[i], "--trace-abi") == 0) {
             has_trace_abi = 1;
         } else if (strcmp(argv[i], "--emit-gguf") == 0) {
@@ -3965,7 +4064,22 @@ int main(int argc, char **argv) {
             remove(temp_multi_c_filename);
             g_temp_multi_c_to_remove[0] = '\0';
         }
-        return zcc_main(argc, argv);
+        int ret = zcc_main(argc, argv);
+        if (ret == 0 && has_profile_target) {
+            const char *target_s = out_filename;
+            if (!target_s && input_c_file) {
+                static char s_buf[256];
+                strncpy(s_buf, base, sizeof(s_buf) - 3);
+                int blen = strlen(s_buf);
+                if (blen > 2 && strcmp(s_buf + blen - 2, ".c") == 0) s_buf[blen - 2] = '\0';
+                strcat(s_buf, ".s");
+                target_s = s_buf;
+            }
+            if (target_s) {
+                zcc_hardware_profile_file(target_s, has_profile_json);
+            }
+        }
+        return ret;
     }
 
     /* Driver integration: assemble/link freestanding statically by default */

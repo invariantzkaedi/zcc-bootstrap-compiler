@@ -1,0 +1,8 @@
+make zcc
+./zcc scratch/prof_test.c -S -o scratch/prof_test.s --profile
+./zcc scratch/prof_test.c -S -o scratch/prof_test.s --profile-json
+make selfhost && cmp zcc2.s zcc3.s
+python3 tools/test_zcc_opt_passes.py
+git diff --stat part0_pp.c part3.c part4.c
+python3 tests/test_win64_pe_emitter.py
+git diff --stat
