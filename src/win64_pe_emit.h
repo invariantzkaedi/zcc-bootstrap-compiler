@@ -165,5 +165,13 @@ int zcc_emit_win64_pe_file_v4(const char *filename, const uint8_t *code_bytes,
                               const char **imported_funcs, size_t num_imported_funcs,
                               const uint32_t *reloc_rvas, size_t num_reloc_rvas,
                               const win64_pe_func_extent_t *extents, size_t num_extents);
+int zcc_emit_win64_pe_file_v5(const char *filename, const uint8_t *code_bytes,
+                              size_t code_len, uint32_t entry_offset,
+                              const char **imported_funcs, size_t num_imported_funcs,
+                              const uint32_t *reloc_rvas, size_t num_reloc_rvas,
+                              const win64_pe_func_extent_t *extents, size_t num_extents,
+                              uint16_t subsystem,
+                              const uint8_t *rsrc_bytes, size_t rsrc_len);
+uint8_t *win64_pe_build_default_manifest_rsrc(const char *app_name, uint32_t rsrc_rva, uint32_t *out_size);
 
 #endif /* ZCC_WIN64_PE_EMIT_H */

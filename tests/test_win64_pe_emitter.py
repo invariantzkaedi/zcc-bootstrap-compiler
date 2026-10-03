@@ -792,6 +792,82 @@ class TestWin64PEEmitter(unittest.TestCase):
             run_res = subprocess.run([exe_file])
             self.assertEqual(run_res.returncode, 42, f"Expected returncode 42 (10+12+8+12), got {run_res.returncode}")
 
+    def test_21_win64_gui_subsystem_and_winmain(self):
+        """Verify Win64 PE GUI Subsystem (-mwindows) sets Subsystem=2 and resolves WinMain entry point."""
+        src = os.path.join(self.tmp_dir.name, "probe_gui_subsystem.c")
+        exe = os.path.join(self.tmp_dir.name, "probe_gui_subsystem.exe")
+
+        with open(src, "w", encoding="utf-8") as f:
+            f.write(
+                "int WinMain(void *hInstance, void *hPrevInstance, char *lpCmdLine, int nCmdShow) {\n"
+                "    return 88;\n"
+                "}\n"
+            )
+
+        if sys.platform == "win32":
+            wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -mwindows -o '{wsl_exe}'"]
+        else:
+            cmd = [self.zcc_bin, src, "-target", "win64", "-mwindows", "-o", exe]
+
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(res.returncode, 0, f"GUI compilation failed: {res.stderr}\n{res.stdout}")
+        self.assertTrue(os.path.exists(exe))
+
+        with open(exe, "rb") as f:
+            data = f.read()
+
+        e_lfanew = struct.unpack_from("<I", data, 0x3C)[0]
+        opt_offset = e_lfanew + 4 + 20
+        subsystem = struct.unpack_from("<H", data, opt_offset + 68)[0]
+        self.assertEqual(subsystem, 2, f"Expected IMAGE_SUBSYSTEM_WINDOWS_GUI (2), got {subsystem}")
+
+        if sys.platform == "win32":
+            run_res = subprocess.run([exe])
+            self.assertEqual(run_res.returncode, 88, f"Expected returncode 88 from WinMain, got {run_res.returncode}")
+
+    def test_22_win64_pe_resource_directory_and_manifest(self):
+        """Verify Win64 PE .rsrc section and DataDirectory[2] Resource Table with Common-Controls manifest."""
+        src = os.path.join(self.tmp_dir.name, "probe_rsrc_test.c")
+        exe = os.path.join(self.tmp_dir.name, "probe_rsrc_test.exe")
+
+        with open(src, "w", encoding="utf-8") as f:
+            f.write(
+                "int WinMain(void *hInst, void *hPrev, char *cmd, int show) {\n"
+                "    return 0;\n"
+                "}\n"
+            )
+
+        if sys.platform == "win32":
+            wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -mwindows -o '{wsl_exe}'"]
+        else:
+            cmd = [self.zcc_bin, src, "-target", "win64", "-mwindows", "-o", exe]
+
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(res.returncode, 0, f"Compilation failed: {res.stderr}\n{res.stdout}")
+
+        with open(exe, "rb") as f:
+            data = f.read()
+
+        e_lfanew = struct.unpack_from("<I", data, 0x3C)[0]
+        opt_offset = e_lfanew + 4 + 20
+
+        # DataDirectory[2] is Resource Directory
+        rsrc_rva, rsrc_size = struct.unpack_from("<II", data, opt_offset + 112 + 2 * 8)
+        self.assertGreater(rsrc_rva, 0x1000, "Expected valid .rsrc RVA")
+        self.assertGreater(rsrc_size, 0, "Expected non-zero .rsrc size")
+
+        # Verify .rsrc section header exists
+        self.assertIn(b".rsrc\x00\x00\x00", data)
+        # Verify XML manifest with Common-Controls 6.0 exists
+        self.assertIn(b"Microsoft.Windows.Common-Controls", data)
+        self.assertIn(b"urn:schemas-microsoft-com:asm.v1", data)
+
 if __name__ == "__main__":
     unittest.main()
 

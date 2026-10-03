@@ -32,6 +32,7 @@ extern FILE *fmemopen(void *buf, size_t size, const char *mode);
 extern char *g_in_mem_asm_buf;
 extern size_t g_in_mem_asm_size;
 extern int g_use_in_mem_asm;
+int g_win64_gui_subsystem = 0;
 
 static char g_temp_o_to_remove[256] = {0};
 static char g_temp_s_to_remove[256] = {0};
@@ -3140,12 +3141,25 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
             }
         }
 
-        /* Determine entry point offset: find 'main' or '_main' */
+        /* Determine entry point offset: find WinMain, wWinMain, main, or _main */
         uint32_t entry_offset = 0;
-        for (i = 0; i < label_count; i++) {
-            if (strcmp(labels[i].name, "main") == 0 || strcmp(labels[i].name, "_main") == 0) {
-                entry_offset = (uint32_t)labels[i].offset;
-                break;
+        int found_entry = 0;
+        if (g_win64_gui_subsystem) {
+            for (i = 0; i < label_count; i++) {
+                if (strcmp(labels[i].name, "WinMain") == 0 || strcmp(labels[i].name, "_WinMain") == 0 ||
+                    strcmp(labels[i].name, "wWinMain") == 0 || strcmp(labels[i].name, "_wWinMain") == 0) {
+                    entry_offset = (uint32_t)labels[i].offset;
+                    found_entry = 1;
+                    break;
+                }
+            }
+        }
+        if (!found_entry) {
+            for (i = 0; i < label_count; i++) {
+                if (strcmp(labels[i].name, "main") == 0 || strcmp(labels[i].name, "_main") == 0) {
+                    entry_offset = (uint32_t)labels[i].offset;
+                    break;
+                }
             }
         }
 
@@ -3192,10 +3206,12 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
             }
         }
 
-        int ret = zcc_emit_win64_pe_file_v4(out_o_filename, text_seg.data, text_seg.size, entry_offset,
+        uint16_t target_subsystem = g_win64_gui_subsystem ? 2 : 3;
+        int ret = zcc_emit_win64_pe_file_v5(out_o_filename, text_seg.data, text_seg.size, entry_offset,
                                             win_import_count > 0 ? win_import_funcs : NULL, win_import_count,
                                             win_reloc_count > 0 ? win_reloc_rvas : NULL, win_reloc_count,
-                                            win_extent_count > 0 ? win_extents : NULL, win_extent_count);
+                                            win_extent_count > 0 ? win_extents : NULL, win_extent_count,
+                                            target_subsystem, NULL, 0);
         if (win_extents) free(win_extents);
         if (func_offsets) free(func_offsets);
         free(elf_syms);
@@ -3310,6 +3326,9 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "-mabi=ms") == 0 || strcmp(argv[i], "-mabi=win64") == 0 ||
                    strcmp(argv[i], "--mabi=ms") == 0 || strcmp(argv[i], "--mabi=win64") == 0) {
             has_win64_abi = 1;
+        } else if (strcmp(argv[i], "-mwindows") == 0 || strcmp(argv[i], "--subsystem=windows") == 0 ||
+                   strcmp(argv[i], "-subsystem=windows") == 0) {
+            g_win64_gui_subsystem = 1;
         } else if (strcmp(argv[i], "--target=arm64") == 0 || strcmp(argv[i], "--target=aarch64") == 0 ||
                    strcmp(argv[i], "-target=arm64") == 0 || strcmp(argv[i], "-target=aarch64") == 0 ||
                    strcmp(argv[i], "-arm64") == 0 || strcmp(argv[i], "-aarch64") == 0 ||
@@ -3631,6 +3650,9 @@ int main(int argc, char **argv) {
             }
             if (has_win64_abi) {
                 mod_argv[mod_argc++] = "-mabi=ms";
+            }
+            if (g_win64_gui_subsystem) {
+                mod_argv[mod_argc++] = "-mwindows";
             }
             mod_argv[mod_argc++] = "-o";
             mod_argv[mod_argc++] = temp_s_filename;

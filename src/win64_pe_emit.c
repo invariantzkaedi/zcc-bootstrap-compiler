@@ -452,10 +452,93 @@ static uint8_t *win64_pe_build_pdata(uint32_t text_rva, uint32_t raw_code_len, u
     return buf;
 }
 
-int zcc_emit_win64_pe_file_v4(const char *filename, const uint8_t *code_bytes, size_t code_len,
-                              uint32_t entry_offset, const char **imported_funcs, size_t num_imported_funcs,
+/* Standard Windows Resource Directory Structures for .rsrc emission */
+typedef struct {
+    uint32_t Characteristics;
+    uint32_t TimeDateStamp;
+    uint16_t MajorVersion;
+    uint16_t MinorVersion;
+    uint16_t NumberOfNamedEntries;
+    uint16_t NumberOfIdEntries;
+} IMAGE_RESOURCE_DIRECTORY;
+
+typedef struct {
+    uint32_t NameOrId;
+    uint32_t OffsetToDataOrDirectory;
+} IMAGE_RESOURCE_DIRECTORY_ENTRY;
+
+typedef struct {
+    uint32_t OffsetToData;
+    uint32_t Size;
+    uint32_t CodePage;
+    uint32_t Reserved;
+} IMAGE_RESOURCE_DATA_ENTRY;
+
+uint8_t *win64_pe_build_default_manifest_rsrc(const char *app_name, uint32_t rsrc_rva, uint32_t *out_size) {
+    const char *manifest_xml_template =
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n"
+        "<assembly xmlns=\"urn:schemas-microsoft-com:asm.v1\" manifestVersion=\"1.0\">\r\n"
+        "  <assemblyIdentity version=\"1.0.0.0\" processorArchitecture=\"amd64\" name=\"%s\" type=\"win32\"/>\r\n"
+        "  <description>%s Application</description>\r\n"
+        "  <dependency>\r\n"
+        "    <dependentAssembly>\r\n"
+        "      <assemblyIdentity type=\"win32\" name=\"Microsoft.Windows.Common-Controls\" version=\"6.0.0.0\" processorArchitecture=\"*\" publicKeyToken=\"6595b64144ccf1df\" language=\"*\"/>\r\n"
+        "    </dependentAssembly>\r\n"
+        "  </dependency>\r\n"
+        "</assembly>\r\n";
+
+    char xml_buf[1024];
+    const char *name = app_name ? app_name : "ZCC.Win64.App";
+    snprintf(xml_buf, sizeof(xml_buf), manifest_xml_template, name, name);
+    uint32_t xml_len = (uint32_t)strlen(xml_buf);
+
+    uint32_t data_entry_offset = 0x48;
+    uint32_t raw_xml_offset = 0x58;
+    uint32_t total_len = raw_xml_offset + xml_len;
+    uint32_t aligned_len = win64_pe_align_to(total_len, 4);
+
+    uint8_t *buf = (uint8_t *)calloc(1, aligned_len);
+    if (!buf) {
+        if (out_size) *out_size = 0;
+        return NULL;
+    }
+
+    IMAGE_RESOURCE_DIRECTORY *root = (IMAGE_RESOURCE_DIRECTORY *)(buf + 0x00);
+    root->NumberOfIdEntries = 1;
+    IMAGE_RESOURCE_DIRECTORY_ENTRY *root_entry = (IMAGE_RESOURCE_DIRECTORY_ENTRY *)(buf + 0x10);
+    root_entry->NameOrId = 24; /* RT_MANIFEST */
+    root_entry->OffsetToDataOrDirectory = 0x80000018;
+
+    IMAGE_RESOURCE_DIRECTORY *type_dir = (IMAGE_RESOURCE_DIRECTORY *)(buf + 0x18);
+    type_dir->NumberOfIdEntries = 1;
+    IMAGE_RESOURCE_DIRECTORY_ENTRY *type_entry = (IMAGE_RESOURCE_DIRECTORY_ENTRY *)(buf + 0x28);
+    type_entry->NameOrId = 1;
+    type_entry->OffsetToDataOrDirectory = 0x80000030;
+
+    IMAGE_RESOURCE_DIRECTORY *lang_dir = (IMAGE_RESOURCE_DIRECTORY *)(buf + 0x30);
+    lang_dir->NumberOfIdEntries = 1;
+    IMAGE_RESOURCE_DIRECTORY_ENTRY *lang_entry = (IMAGE_RESOURCE_DIRECTORY_ENTRY *)(buf + 0x40);
+    lang_entry->NameOrId = 0x0409; /* en-US */
+    lang_entry->OffsetToDataOrDirectory = data_entry_offset;
+
+    IMAGE_RESOURCE_DATA_ENTRY *data_entry = (IMAGE_RESOURCE_DATA_ENTRY *)(buf + data_entry_offset);
+    data_entry->OffsetToData = rsrc_rva + raw_xml_offset;
+    data_entry->Size = xml_len;
+    data_entry->CodePage = 0;
+
+    memcpy(buf + raw_xml_offset, xml_buf, xml_len);
+
+    if (out_size) *out_size = aligned_len;
+    return buf;
+}
+
+int zcc_emit_win64_pe_file_v5(const char *filename, const uint8_t *code_bytes,
+                              size_t code_len, uint32_t entry_offset,
+                              const char **imported_funcs, size_t num_imported_funcs,
                               const uint32_t *reloc_rvas, size_t num_reloc_rvas,
-                              const win64_pe_func_extent_t *extents, size_t num_extents) {
+                              const win64_pe_func_extent_t *extents, size_t num_extents,
+                              uint16_t subsystem,
+                              const uint8_t *rsrc_bytes, size_t rsrc_len) {
     if (!filename) return -1;
 
     Win64PeDllGroup groups[16];
@@ -506,6 +589,18 @@ int zcc_emit_win64_pe_file_v4(const char *filename, const uint8_t *code_bytes, s
 
     /* 4. COFF File Header (20 bytes) */
     int has_pdata = 1; /* Track 4: Always emit .pdata exception directory */
+    uint32_t raw_code_len = (code_bytes && code_len > 0) ? (uint32_t)code_len : 16;
+    uint32_t idata_rva = 0x1000 + win64_pe_align_to(raw_code_len, 0x1000);
+
+    /* Check if default manifest should be synthesized */
+    uint8_t *allocated_rsrc = NULL;
+    uint32_t total_rsrc_size = (uint32_t)rsrc_len;
+    const uint8_t *final_rsrc_bytes = rsrc_bytes;
+    if (subsystem == 2 && (!rsrc_bytes || rsrc_len == 0)) {
+        /* Default GUI manifest will be computed once data_rva is established */
+    }
+
+    int has_rsrc = (final_rsrc_bytes != NULL && total_rsrc_size > 0);
     uint16_t num_sections = 2; /* .text and .data */
     if (has_idata) num_sections++;
     if (has_pdata) num_sections++;
@@ -520,9 +615,7 @@ int zcc_emit_win64_pe_file_v4(const char *filename, const uint8_t *code_bytes, s
     file_hdr.Characteristics = 0x0022; /* EXECUTABLE_IMAGE | LARGE_ADDRESS_AWARE */
 
     /* 5. Build .idata section contents if present */
-    uint32_t raw_code_len = (code_bytes && code_len > 0) ? (uint32_t)code_len : 16;
     uint32_t aligned_code_size = win64_pe_align_to(raw_code_len, 0x0200);
-    uint32_t idata_rva = 0x1000 + win64_pe_align_to(raw_code_len, 0x1000);
 
     uint32_t total_iat_size = 0;
     uint32_t desc_offset = 0;
@@ -628,7 +721,20 @@ int zcc_emit_win64_pe_file_v4(const char *filename, const uint8_t *code_bytes, s
                                                pdata_rva, &total_pdata_size, &pdata_entries_size);
     uint32_t aligned_pdata_size = win64_pe_align_to(total_pdata_size, 0x0200);
     uint32_t data_rva = pdata_rva + win64_pe_align_to(total_pdata_size, 0x1000);
-    uint32_t reloc_rva = data_rva + 0x1000;
+    uint32_t rsrc_rva = data_rva + 0x1000;
+
+    if (subsystem == 2 && (!rsrc_bytes || rsrc_len == 0)) {
+        allocated_rsrc = win64_pe_build_default_manifest_rsrc("ZCC.Win64.App", rsrc_rva, &total_rsrc_size);
+        if (allocated_rsrc && total_rsrc_size > 0) {
+            final_rsrc_bytes = allocated_rsrc;
+            has_rsrc = 1;
+        }
+    }
+    if (has_rsrc) num_sections++;
+    file_hdr.NumberOfSections = num_sections;
+
+    uint32_t aligned_rsrc_size = has_rsrc ? win64_pe_align_to(total_rsrc_size, 0x0200) : 0;
+    uint32_t reloc_rva = has_rsrc ? (rsrc_rva + win64_pe_align_to(total_rsrc_size, 0x1000)) : (data_rva + 0x1000);
 
     /* 7. Headers sizing */
     uint32_t headers_size = sizeof(IMAGE_DOS_HEADER) + sizeof(dos_stub) + sizeof(pe_sig) +
@@ -643,7 +749,7 @@ int zcc_emit_win64_pe_file_v4(const char *filename, const uint8_t *code_bytes, s
     opt_hdr.MajorLinkerVersion = 14;
     opt_hdr.MinorLinkerVersion = 0;
     opt_hdr.SizeOfCode = aligned_code_size;
-    opt_hdr.SizeOfInitializedData = aligned_idata_size + aligned_pdata_size + 0x0200 + aligned_reloc_size;
+    opt_hdr.SizeOfInitializedData = aligned_idata_size + aligned_pdata_size + 0x0200 + aligned_rsrc_size + aligned_reloc_size;
     opt_hdr.AddressOfEntryPoint = 0x1000 + entry_offset;
     opt_hdr.BaseOfCode = 0x1000;
     opt_hdr.ImageBase = 0x140000000ULL;
@@ -653,9 +759,9 @@ int zcc_emit_win64_pe_file_v4(const char *filename, const uint8_t *code_bytes, s
     opt_hdr.MinorOperatingSystemVersion = 0;
     opt_hdr.MajorSubsystemVersion = 6;
     opt_hdr.MinorSubsystemVersion = 0;
-    opt_hdr.SizeOfImage = has_reloc ? (reloc_rva + win64_pe_align_to(total_reloc_size, 0x1000)) : (data_rva + 0x1000);
+    opt_hdr.SizeOfImage = has_reloc ? (reloc_rva + win64_pe_align_to(total_reloc_size, 0x1000)) : (has_rsrc ? (rsrc_rva + win64_pe_align_to(total_rsrc_size, 0x1000)) : (data_rva + 0x1000));
     opt_hdr.SizeOfHeaders = aligned_headers_size;
-    opt_hdr.Subsystem = 3; /* Console */
+    opt_hdr.Subsystem = (subsystem == 2) ? 2 : 3;
     opt_hdr.DllCharacteristics = 0x8160; /* HIGH_ENTROPY_VA | DYNAMIC_BASE | NX_COMPAT | TERMINAL_SERVER_AWARE */
     opt_hdr.SizeOfStackReserve = 0x100000;
     opt_hdr.SizeOfStackCommit = 0x1000;
@@ -673,6 +779,11 @@ int zcc_emit_win64_pe_file_v4(const char *filename, const uint8_t *code_bytes, s
     if (has_pdata && pdata_bytes) {
         opt_hdr.DataDirectory[3].VirtualAddress = pdata_rva;
         opt_hdr.DataDirectory[3].Size = pdata_entries_size;
+    }
+
+    if (has_rsrc) {
+        opt_hdr.DataDirectory[2].VirtualAddress = rsrc_rva;
+        opt_hdr.DataDirectory[2].Size = total_rsrc_size;
     }
 
     if (has_reloc) {
@@ -721,6 +832,17 @@ int zcc_emit_win64_pe_file_v4(const char *filename, const uint8_t *code_bytes, s
     sec_data.PointerToRawData = aligned_headers_size + aligned_code_size + aligned_idata_size + aligned_pdata_size;
     sec_data.Characteristics = 0xC0000040; /* INITIALIZED_DATA | READ | WRITE */
 
+    IMAGE_SECTION_HEADER sec_rsrc;
+    memset(&sec_rsrc, 0, sizeof(sec_rsrc));
+    if (has_rsrc) {
+        memcpy(sec_rsrc.Name, ".rsrc\0\0\0", 8);
+        sec_rsrc.VirtualSize = total_rsrc_size;
+        sec_rsrc.VirtualAddress = rsrc_rva;
+        sec_rsrc.SizeOfRawData = aligned_rsrc_size;
+        sec_rsrc.PointerToRawData = aligned_headers_size + aligned_code_size + aligned_idata_size + aligned_pdata_size + 0x0200;
+        sec_rsrc.Characteristics = 0x40000040; /* INITIALIZED_DATA | READ */
+    }
+
     IMAGE_SECTION_HEADER sec_reloc;
     memset(&sec_reloc, 0, sizeof(sec_reloc));
     if (has_reloc) {
@@ -728,7 +850,7 @@ int zcc_emit_win64_pe_file_v4(const char *filename, const uint8_t *code_bytes, s
         sec_reloc.VirtualSize = total_reloc_size;
         sec_reloc.VirtualAddress = reloc_rva;
         sec_reloc.SizeOfRawData = aligned_reloc_size;
-        sec_reloc.PointerToRawData = aligned_headers_size + aligned_code_size + aligned_idata_size + aligned_pdata_size + 0x0200;
+        sec_reloc.PointerToRawData = aligned_headers_size + aligned_code_size + aligned_idata_size + aligned_pdata_size + 0x0200 + aligned_rsrc_size;
         sec_reloc.Characteristics = 0x42000040; /* INITIALIZED_DATA | DISCARDABLE | READ */
     }
 
@@ -742,6 +864,7 @@ int zcc_emit_win64_pe_file_v4(const char *filename, const uint8_t *code_bytes, s
     if (has_idata) fwrite(&sec_idata, sizeof(sec_idata), 1, f);
     if (has_pdata) fwrite(&sec_pdata, sizeof(sec_pdata), 1, f);
     fwrite(&sec_data, sizeof(sec_data), 1, f);
+    if (has_rsrc) fwrite(&sec_rsrc, sizeof(sec_rsrc), 1, f);
     if (has_reloc) fwrite(&sec_reloc, sizeof(sec_reloc), 1, f);
 
     /* Pad headers */
@@ -799,6 +922,17 @@ int zcc_emit_win64_pe_file_v4(const char *filename, const uint8_t *code_bytes, s
     fwrite(data_pad, 1, 0x0200, f);
     free(data_pad);
 
+    /* Write .rsrc section */
+    if (has_rsrc && final_rsrc_bytes) {
+        fwrite(final_rsrc_bytes, 1, total_rsrc_size, f);
+        if (aligned_rsrc_size > total_rsrc_size) {
+            size_t pad_rsrc = aligned_rsrc_size - total_rsrc_size;
+            uint8_t *pad = (uint8_t *)calloc(1, pad_rsrc);
+            fwrite(pad, 1, pad_rsrc, f);
+            free(pad);
+        }
+    }
+
     /* Write .reloc section */
     if (has_reloc && reloc_bytes) {
         fwrite(reloc_bytes, 1, total_reloc_size, f);
@@ -814,8 +948,20 @@ int zcc_emit_win64_pe_file_v4(const char *filename, const uint8_t *code_bytes, s
     if (idata_bytes) free(idata_bytes);
     if (pdata_bytes) free(pdata_bytes);
     if (reloc_bytes) free(reloc_bytes);
+    if (allocated_rsrc) free(allocated_rsrc);
     fclose(f);
     return 0;
+}
+
+int zcc_emit_win64_pe_file_v4(const char *filename, const uint8_t *code_bytes, size_t code_len,
+                              uint32_t entry_offset, const char **imported_funcs, size_t num_imported_funcs,
+                              const uint32_t *reloc_rvas, size_t num_reloc_rvas,
+                              const win64_pe_func_extent_t *extents, size_t num_extents) {
+    return zcc_emit_win64_pe_file_v5(filename, code_bytes, code_len, entry_offset,
+                                     imported_funcs, num_imported_funcs,
+                                     reloc_rvas, num_reloc_rvas,
+                                     extents, num_extents,
+                                     3, NULL, 0);
 }
 
 int zcc_emit_win64_pe_file_full(const char *filename, const uint8_t *code_bytes, size_t code_len,
