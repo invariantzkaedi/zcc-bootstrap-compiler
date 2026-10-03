@@ -1,0 +1,6 @@
+cd /home/zkaedi/zcc_ext4_test && make selfhost
+cmp zcc2.s zcc3.s && sha256sum zcc2.s zcc3.s
+cd /home/zkaedi/zcc_ext4_test && python3 tools/test_zcc_opt_passes.py
+git diff -- part0_pp.c part3.c part4.c
+python tests/test_win64_pe_emitter.py
+git diff --stat src/codegen.c tests/test_win64_pe_emitter.py

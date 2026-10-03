@@ -30,13 +30,20 @@ extern int g_use_in_mem_asm;
 
 static char g_temp_o_to_remove[256] = {0};
 static char g_temp_s_to_remove[256] = {0};
+static char g_temp_multi_c_to_remove[256] = {0};
 
 static void cleanup_temp_files(void) {
     if (g_temp_o_to_remove[0]) {
         remove(g_temp_o_to_remove);
+        g_temp_o_to_remove[0] = '\0';
     }
     if (g_temp_s_to_remove[0]) {
         remove(g_temp_s_to_remove);
+        g_temp_s_to_remove[0] = '\0';
+    }
+    if (g_temp_multi_c_to_remove[0]) {
+        remove(g_temp_multi_c_to_remove);
+        g_temp_multi_c_to_remove[0] = '\0';
     }
 }
 
@@ -3065,24 +3072,49 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
     }
 
     if (is_win64_pe) {
-        /* Resolve PC-relative relocations pointing to merged data segment */
-        if (data_seg.size > 0) {
-            size_t data_start = orig_text_size + ((16 - (orig_text_size % 16)) % 16);
-            for (i = 0; i < reloc_count; i++) {
-                if (relocs[i].type == R_X86_64_PC32) {
-                    size_t j;
-                    for (j = 0; j < label_count; j++) {
-                        if (strcmp(labels[j].name, relocs[i].target_name) == 0 && labels[j].segment == 2) {
-                            long long target_val = data_start + labels[j].offset;
-                            long long pc = relocs[i].offset + 4;
-                            long long disp = target_val - pc;
-                            text_seg.data[relocs[i].offset] = disp & 0xFF;
-                            text_seg.data[relocs[i].offset + 1] = (disp >> 8) & 0xFF;
-                            text_seg.data[relocs[i].offset + 2] = (disp >> 16) & 0xFF;
-                            text_seg.data[relocs[i].offset + 3] = (disp >> 24) & 0xFF;
-                            relocs[i].type = R_X86_64_NONE;
-                            break;
+        uint32_t win_reloc_rvas[256];
+        size_t win_reloc_count = 0;
+        uint64_t image_base = 0x140000000ULL;
+        uint32_t text_rva = 0x1000;
+        size_t data_start = orig_text_size + ((16 - (orig_text_size % 16)) % 16);
+
+        /* Resolve relocations pointing to merged data segment or text segment */
+        for (i = 0; i < reloc_count; i++) {
+            if (relocs[i].type == R_X86_64_64) {
+                size_t j;
+                for (j = 0; j < label_count; j++) {
+                    if (strcmp(labels[j].name, relocs[i].target_name) == 0) {
+                        uint64_t target_offset = 0;
+                        if (labels[j].segment == 1) {
+                            target_offset = (uint64_t)labels[j].offset;
+                        } else if (labels[j].segment == 2) {
+                            target_offset = (uint64_t)(data_start + labels[j].offset);
                         }
+                        target_offset += (uint64_t)relocs[i].addend;
+                        uint64_t abs_va = image_base + text_rva + target_offset;
+                        if (relocs[i].offset + 8 <= text_seg.size) {
+                            memcpy(&text_seg.data[relocs[i].offset], &abs_va, sizeof(uint64_t));
+                        }
+                        if (win_reloc_count < 256) {
+                            win_reloc_rvas[win_reloc_count++] = text_rva + (uint32_t)relocs[i].offset;
+                        }
+                        relocs[i].type = R_X86_64_NONE;
+                        break;
+                    }
+                }
+            } else if (relocs[i].type == R_X86_64_PC32 && data_seg.size > 0) {
+                size_t j;
+                for (j = 0; j < label_count; j++) {
+                    if (strcmp(labels[j].name, relocs[i].target_name) == 0 && labels[j].segment == 2) {
+                        long long target_val = data_start + labels[j].offset;
+                        long long pc = relocs[i].offset + 4;
+                        long long disp = target_val - pc;
+                        text_seg.data[relocs[i].offset] = disp & 0xFF;
+                        text_seg.data[relocs[i].offset + 1] = (disp >> 8) & 0xFF;
+                        text_seg.data[relocs[i].offset + 2] = (disp >> 16) & 0xFF;
+                        text_seg.data[relocs[i].offset + 3] = (disp >> 24) & 0xFF;
+                        relocs[i].type = R_X86_64_NONE;
+                        break;
                     }
                 }
             }
@@ -3112,8 +3144,55 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
             }
         }
 
-        int ret = zcc_emit_win64_pe_file_with_imports(out_o_filename, text_seg.data, text_seg.size, entry_offset,
-                                                      win_import_count > 0 ? win_import_funcs : NULL, win_import_count);
+        /* Extract function extents for Win64 PE .pdata exception directory (dynamically allocated) */
+        size_t max_extents = (label_count > 256) ? (label_count + 1) : 256;
+        win64_pe_func_extent_t *win_extents = (win64_pe_func_extent_t *)malloc(sizeof(win64_pe_func_extent_t) * max_extents);
+        uint32_t *func_offsets = (uint32_t *)malloc(sizeof(uint32_t) * max_extents);
+        size_t win_extent_count = 0;
+        size_t func_count = 0;
+        if (win_extents && func_offsets) {
+            for (i = 0; i < label_count; i++) {
+                if (labels[i].segment == 1 && labels[i].name[0] != '.' && labels[i].name[0] != '\0') {
+                    if (func_count < max_extents) {
+                        func_offsets[func_count++] = (uint32_t)labels[i].offset;
+                    }
+                }
+            }
+            /* Sort function start offsets ascending */
+            size_t fi, fj;
+            for (fi = 0; fi < func_count; fi++) {
+                for (fj = fi + 1; fj < func_count; fj++) {
+                    if (func_offsets[fj] < func_offsets[fi]) {
+                        uint32_t tmp = func_offsets[fi];
+                        func_offsets[fi] = func_offsets[fj];
+                        func_offsets[fj] = tmp;
+                    }
+                }
+            }
+            /* Deduplicate offsets */
+            size_t ucount = 0;
+            for (fi = 0; fi < func_count; fi++) {
+                if (ucount == 0 || func_offsets[fi] != func_offsets[ucount - 1]) {
+                    func_offsets[ucount++] = func_offsets[fi];
+                }
+            }
+            for (fi = 0; fi < ucount; fi++) {
+                uint32_t b = func_offsets[fi];
+                uint32_t e = (fi + 1 < ucount) ? func_offsets[fi + 1] : (uint32_t)orig_text_size;
+                if (e > b && win_extent_count < max_extents) {
+                    win_extents[win_extent_count].begin_offset = b;
+                    win_extents[win_extent_count].end_offset = e;
+                    win_extent_count++;
+                }
+            }
+        }
+
+        int ret = zcc_emit_win64_pe_file_v4(out_o_filename, text_seg.data, text_seg.size, entry_offset,
+                                            win_import_count > 0 ? win_import_funcs : NULL, win_import_count,
+                                            win_reloc_count > 0 ? win_reloc_rvas : NULL, win_reloc_count,
+                                            win_extent_count > 0 ? win_extents : NULL, win_extent_count);
+        if (win_extents) free(win_extents);
+        if (func_offsets) free(func_offsets);
         free(elf_syms);
         free(text_seg.data);
         free(data_seg.data);
@@ -3186,6 +3265,10 @@ int main(int argc, char **argv) {
     int has_lib_flag = 0;
     int has_explicit_zld = 0;
     int c_file_count = 0;
+    const char *input_c_files[64];
+    const char *input_s_files[64];
+    const char *input_s_file = NULL;
+    int s_file_count = 0;
 
     /* Parse arguments */
     for (i = 1; i < argc; i++) {
@@ -3265,12 +3348,22 @@ int main(int argc, char **argv) {
         } else if (argv[i][0] != '-') {
             int len = strlen(argv[i]);
             if (len > 2 && strcmp(argv[i] + len - 2, ".c") == 0) {
+                if (c_file_count < 64) {
+                    input_c_files[c_file_count] = argv[i];
+                }
                 input_c_file = argv[i];
                 c_file_count++;
-            } else if (len > 2 && (strcmp(argv[i] + len - 2, ".o") == 0 || strcmp(argv[i] + len - 2, ".a") == 0)) {
+            } else if ((len > 2 && (strcmp(argv[i] + len - 2, ".o") == 0 || strcmp(argv[i] + len - 2, ".a") == 0)) ||
+                       (len > 4 && strcmp(argv[i] + len - 4, ".obj") == 0)) {
                 if (obj_count < 2048) {
                     obj_files[obj_count++] = argv[i];
                 }
+            } else if (len > 2 && strcmp(argv[i] + len - 2, ".s") == 0) {
+                if (s_file_count < 64) {
+                    input_s_files[s_file_count] = argv[i];
+                }
+                input_s_file = argv[i];
+                s_file_count++;
             }
         }
     }
@@ -3367,7 +3460,108 @@ int main(int argc, char **argv) {
         return ret;
     }
 
-    if (is_zcc_c || is_out_s || has_stop_at_asm || (has_lib_flag && !has_explicit_zld) || c_file_count > 1 || (!input_c_file && obj_count == 0) || has_trace_abi || has_emit_gguf || has_frontend_dump || has_wasm_target || has_arm_target || has_riscv_target || has_yul_target || has_stark_proof_target) {
+    /* Win64 PE Direct Assembly Target: assemble .s directly to .exe (single or multiple .s) */
+    if (has_win64_target && s_file_count > 0 && c_file_count == 0 && !compile_only && !is_out_s && !has_stop_at_asm) {
+        if (!out_filename) {
+            out_filename = "a.exe";
+        }
+        if (s_file_count == 1) {
+            int ret = assemble(input_s_files[0], out_filename, NULL, 0, 1);
+            if (ret != 0) {
+                fprintf(stderr, "zcc: win64 direct assembly failed with error code %d\n", ret);
+                return ret;
+            }
+            return 0;
+        } else {
+            /* Multi-assembly concatenation */
+            size_t total_asm_sz = 0;
+            char *multi_asm_buf = NULL;
+            for (i = 0; i < s_file_count; i++) {
+                FILE *sf = fopen(input_s_files[i], "rb");
+                if (sf) {
+                    fseek(sf, 0, SEEK_END);
+                    long sz = ftell(sf);
+                    fseek(sf, 0, SEEK_SET);
+                    if (sz > 0) {
+                        char *nb = (char *)realloc(multi_asm_buf, total_asm_sz + sz + 2);
+                        if (nb) {
+                            multi_asm_buf = nb;
+                            size_t r = fread(multi_asm_buf + total_asm_sz, 1, sz, sf);
+                            total_asm_sz += r;
+                            multi_asm_buf[total_asm_sz++] = '\n';
+                            multi_asm_buf[total_asm_sz] = '\0';
+                        }
+                    }
+                    fclose(sf);
+                }
+            }
+            int ret = assemble(NULL, out_filename, multi_asm_buf, total_asm_sz, 1);
+            if (multi_asm_buf) free(multi_asm_buf);
+            if (ret != 0) {
+                fprintf(stderr, "zcc: win64 multi-assembly failed with error code %d\n", ret);
+                return ret;
+            }
+            return 0;
+        }
+    }
+
+    /* Win64 PE Multi-Source Synthesis: compile multiple .c files directly to .exe with PID-isolation & path normalization */
+    char temp_multi_c_filename[256];
+    temp_multi_c_filename[0] = '\0';
+    if (has_win64_target && c_file_count > 1 && !compile_only && !is_out_s && !has_stop_at_asm) {
+        #ifdef _WIN32
+        snprintf(temp_multi_c_filename, sizeof(temp_multi_c_filename), ".tmp_codegen_multi_win64_%s.c", base ? base : "unit");
+        #else
+        snprintf(temp_multi_c_filename, sizeof(temp_multi_c_filename), ".tmp_codegen_multi_win64_%d_%s.c", (int)getpid(), base ? base : "unit");
+        #endif
+        strncpy(g_temp_multi_c_to_remove, temp_multi_c_filename, sizeof(g_temp_multi_c_to_remove) - 1);
+        FILE *mf = fopen(temp_multi_c_filename, "w");
+        if (!mf) {
+            fprintf(stderr, "zcc: failed to create temporary multi-source synthesis file\n");
+            return -1;
+        }
+        for (i = 0; i < c_file_count; i++) {
+            /* Normalize backslashes to forward slashes for clean preprocessor line directives */
+            char clean_path[512];
+            size_t pi = 0;
+            const char *p_in = input_c_files[i];
+            while (*p_in && pi < sizeof(clean_path) - 1) {
+                clean_path[pi++] = (*p_in == '\\') ? '/' : *p_in;
+                p_in++;
+            }
+            clean_path[pi] = '\0';
+            fprintf(mf, "#line 1 \"%s\"\n", clean_path);
+
+            FILE *src_f = fopen(input_c_files[i], "r");
+            if (src_f) {
+                char buf[4096];
+                size_t n;
+                while ((n = fread(buf, 1, sizeof(buf), src_f)) > 0) {
+                    fwrite(buf, 1, n, mf);
+                }
+                fclose(src_f);
+                fprintf(mf, "\n");
+            } else {
+                fprintf(stderr, "zcc: error opening input source file %s\n", input_c_files[i]);
+                fclose(mf);
+                remove(temp_multi_c_filename);
+                g_temp_multi_c_to_remove[0] = '\0';
+                return -1;
+            }
+        }
+        fclose(mf);
+        input_c_file = temp_multi_c_filename;
+        base = "multi_win64";
+    }
+
+    if (is_zcc_c || is_out_s || has_stop_at_asm || (has_lib_flag && !has_explicit_zld) || 
+        (c_file_count > 1 && !has_win64_target) || 
+        (!input_c_file && obj_count == 0) || has_trace_abi || has_emit_gguf || has_frontend_dump || 
+        has_wasm_target || has_arm_target || has_riscv_target || has_yul_target || has_stark_proof_target) {
+        if (temp_multi_c_filename[0] != '\0') {
+            remove(temp_multi_c_filename);
+            g_temp_multi_c_to_remove[0] = '\0';
+        }
         return zcc_main(argc, argv);
     }
 
@@ -3494,8 +3688,17 @@ int main(int argc, char **argv) {
                            strcmp(argv[i], "-pe64") == 0 || strcmp(argv[i], "--pe64") == 0) {
                     continue;
                 } else {
+                    if (temp_multi_c_filename[0] != '\0' && argv[i][0] != '-') {
+                        int len = strlen(argv[i]);
+                        if (len > 2 && strcmp(argv[i] + len - 2, ".c") == 0) {
+                            continue;
+                        }
+                    }
                     mod_argv[mod_argc++] = argv[i];
                 }
+            }
+            if (temp_multi_c_filename[0] != '\0') {
+                mod_argv[mod_argc++] = temp_multi_c_filename;
             }
             mod_argv[mod_argc++] = "-o";
             mod_argv[mod_argc++] = temp_s_filename;
@@ -3510,6 +3713,9 @@ int main(int argc, char **argv) {
             free(mod_argv);
 
             if (compile_ret != 0) {
+                if (temp_multi_c_filename[0] != '\0') {
+                    remove(temp_multi_c_filename);
+                }
                 fprintf(stderr, "zcc: AST-codegen phase failed\n");
                 if (g_in_mem_asm_buf) free(g_in_mem_asm_buf);
                 g_in_mem_asm_buf = NULL;
@@ -3519,7 +3725,33 @@ int main(int argc, char **argv) {
             }
 
             if (has_win64_target) {
+                /* Append any auxiliary .s assembly files (mixed C + assembly support) */
+                if (s_file_count > 0) {
+                    for (i = 0; i < s_file_count; i++) {
+                        FILE *sf = fopen(input_s_files[i], "rb");
+                        if (sf) {
+                            fseek(sf, 0, SEEK_END);
+                            long s_sz = ftell(sf);
+                            fseek(sf, 0, SEEK_SET);
+                            if (s_sz > 0) {
+                                char *nb = (char *)realloc(g_in_mem_asm_buf, g_in_mem_asm_size + s_sz + 2);
+                                if (nb) {
+                                    g_in_mem_asm_buf = nb;
+                                    size_t r = fread(g_in_mem_asm_buf + g_in_mem_asm_size, 1, s_sz, sf);
+                                    g_in_mem_asm_size += r;
+                                    g_in_mem_asm_buf[g_in_mem_asm_size++] = '\n';
+                                    g_in_mem_asm_buf[g_in_mem_asm_size] = '\0';
+                                }
+                            }
+                            fclose(sf);
+                        }
+                    }
+                }
                 int pe_ret = assemble(NULL, out_filename, g_in_mem_asm_buf, g_in_mem_asm_size, 1);
+                if (temp_multi_c_filename[0] != '\0') {
+                    remove(temp_multi_c_filename);
+                    g_temp_multi_c_to_remove[0] = '\0';
+                }
                 if (g_in_mem_asm_buf) {
                     free(g_in_mem_asm_buf);
                     g_in_mem_asm_buf = NULL;
