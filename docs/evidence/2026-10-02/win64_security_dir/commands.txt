@@ -1,0 +1,8 @@
+1. make zcc
+2. python scratch/test_cert_probe.py
+3. python tests/test_win64_pe_emitter.py
+4. make selfhost
+5. cmp zcc2.s zcc3.s
+6. python3 tools/test_zcc_opt_passes.py
+7. git diff --stat part0_pp.c part3.c part4.c
+8. git diff --stat

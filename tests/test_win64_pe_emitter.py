@@ -1287,6 +1287,60 @@ class TestWin64PEEmitter(unittest.TestCase):
             run_res = subprocess.run(["cmd.exe", "/c", exe])
             self.assertEqual(run_res.returncode, 0, f"Expected returncode 0 from multi-TLS probe, got {run_res.returncode}")
 
+    def test_31_win64_pe_security_directory_and_certificate_table(self):
+        """Verify Win64 PE IMAGE_DIRECTORY_ENTRY_SECURITY and WIN_CERTIFICATE attribute certificate table."""
+        scratch_dir = os.path.join(REPO_ROOT, "scratch")
+        os.makedirs(scratch_dir, exist_ok=True)
+        src = os.path.join(scratch_dir, "probe_cert_unit.c")
+        exe = os.path.join(scratch_dir, "probe_cert_unit.exe")
+        cert_file = os.path.join(scratch_dir, "probe_unit_sig.der")
+
+        with open(src, "w", encoding="utf-8") as f:
+            f.write("int main(void) { return 77; }\n")
+
+        cert_payload = b"PKCS7_SIGNED_DATA_MOCK_PAYLOAD_" + bytes([i % 256 for i in range(80)])
+        with open(cert_file, "wb") as f:
+            f.write(cert_payload)
+
+        if sys.platform == "win32":
+            wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_cert = cert_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 --embed-certificate='{wsl_cert}' -o '{wsl_exe}'"]
+        else:
+            cmd = [self.zcc_bin, src, "-target", "win64", f"--embed-certificate={cert_file}", "-o", exe]
+
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(res.returncode, 0, f"Compilation failed: {res.stderr}\n{res.stdout}")
+        self.assertTrue(os.path.exists(exe))
+
+        with open(exe, "rb") as f:
+            data = f.read()
+
+        e_lfanew = struct.unpack_from("<I", data, 0x3C)[0]
+        opt_hdr_off = e_lfanew + 4 + 20
+        sec_dir_off = opt_hdr_off + 112 + 4 * 8
+        cert_offset, cert_size = struct.unpack_from("<II", data, sec_dir_off)
+
+        expected_unpadded = 8 + len(cert_payload)
+        expected_padded = (expected_unpadded + 7) & ~7
+        self.assertEqual(cert_size, expected_padded)
+        self.assertEqual(cert_offset % 8, 0, "Certificate table file offset must be 8-byte aligned")
+        self.assertEqual(cert_offset + cert_size, len(data), "Certificate table must be at end of PE file")
+
+        dwLength, wRevision, wCertificateType = struct.unpack_from("<IHH", data, cert_offset)
+        self.assertEqual(dwLength, expected_unpadded)
+        self.assertEqual(wRevision, 0x0200)
+        self.assertEqual(wCertificateType, 0x0002)
+
+        actual_payload = data[cert_offset + 8 : cert_offset + dwLength]
+        self.assertEqual(actual_payload, cert_payload)
+
+        if sys.platform == "win32":
+            run_res = subprocess.run(["cmd.exe", "/c", exe])
+            self.assertEqual(run_res.returncode, 77)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -34,6 +34,7 @@ extern size_t g_in_mem_asm_size;
 extern int g_use_in_mem_asm;
 int g_win64_gui_subsystem = 0;
 int g_win64_is_shared = 0;
+const char *g_win64_cert_file = NULL;
 
 static char g_temp_o_to_remove[256] = {0};
 static char g_temp_s_to_remove[256] = {0};
@@ -3425,6 +3426,29 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
             }
         }
 
+        /* Read certificate data if specified */
+        win64_pe_cert_info_t cert_info;
+        memset(&cert_info, 0, sizeof(cert_info));
+        uint8_t *cert_data_buf = NULL;
+        if (g_win64_cert_file) {
+            FILE *cf = fopen(g_win64_cert_file, "rb");
+            if (cf) {
+                fseek(cf, 0, SEEK_END);
+                long csz = ftell(cf);
+                fseek(cf, 0, SEEK_SET);
+                if (csz > 0) {
+                    cert_data_buf = (uint8_t *)malloc(csz);
+                    if (cert_data_buf && fread(cert_data_buf, 1, csz, cf) == (size_t)csz) {
+                        cert_info.cert_data = cert_data_buf;
+                        cert_info.cert_len = (size_t)csz;
+                        cert_info.revision = WIN_CERT_REVISION_2_0;
+                        cert_info.cert_type = WIN_CERT_TYPE_PKCS_SIGNED_DATA;
+                    }
+                }
+                fclose(cf);
+            }
+        }
+
         int ret = 0;
         if (g_win64_is_shared) {
             /* Gather exported functions from labels */
@@ -3456,12 +3480,13 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                 tls_info.zero_fill_size = (uint32_t)tls_zero_fill;
             }
 
-            ret = zcc_emit_win64_pe_dll_ex(out_o_filename, dname, text_seg.data, text_seg.size, entry_offset,
+            ret = zcc_emit_win64_pe_dll_v7(out_o_filename, dname, text_seg.data, text_seg.size, entry_offset,
                                         win_import_count > 0 ? win_import_funcs : NULL, win_import_count,
                                         win_exports, win_export_count,
                                         win_reloc_count > 0 ? win_reloc_rvas : NULL, win_reloc_count,
                                         win_extent_count > 0 ? win_extents : NULL, win_extent_count,
-                                        has_tls ? &tls_info : NULL);
+                                        has_tls ? &tls_info : NULL,
+                                        cert_info.cert_data ? &cert_info : NULL);
 
             /* Automatically emit .def and MSVC .lib import library */
             if (ret == 0 && win_export_count > 0) {
@@ -3489,12 +3514,13 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
                 tls_info.raw_data_size = tls_seg.size;
                 tls_info.zero_fill_size = (uint32_t)tls_zero_fill;
             }
-            ret = zcc_emit_win64_pe_file_v6(out_o_filename, text_seg.data, text_seg.size, entry_offset,
+            ret = zcc_emit_win64_pe_file_v7(out_o_filename, text_seg.data, text_seg.size, entry_offset,
                                                 win_import_count > 0 ? win_import_funcs : NULL, win_import_count,
                                                 win_reloc_count > 0 ? win_reloc_rvas : NULL, win_reloc_count,
                                                 win_extent_count > 0 ? win_extents : NULL, win_extent_count,
                                                 target_subsystem, NULL, 0,
-                                                has_tls ? &tls_info : NULL);
+                                                has_tls ? &tls_info : NULL,
+                                                cert_info.cert_data ? &cert_info : NULL);
         }
         if (win_extents) free(win_extents);
         if (func_offsets) free(func_offsets);
@@ -3502,6 +3528,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
         free(text_seg.data);
         free(data_seg.data);
         if (tls_seg.data) free(tls_seg.data);
+        if (cert_data_buf) free(cert_data_buf);
         return ret;
     }
 
@@ -3616,6 +3643,14 @@ int main(int argc, char **argv) {
             g_win64_gui_subsystem = 1;
         } else if (strcmp(argv[i], "-shared") == 0 || strcmp(argv[i], "--shared") == 0) {
             g_win64_is_shared = 1;
+        } else if (strncmp(argv[i], "--embed-certificate=", 20) == 0) {
+            g_win64_cert_file = argv[i] + 20;
+        } else if (strcmp(argv[i], "--embed-certificate") == 0 && i + 1 < argc) {
+            g_win64_cert_file = argv[++i];
+        } else if (strncmp(argv[i], "--cert-sig=", 11) == 0) {
+            g_win64_cert_file = argv[i] + 11;
+        } else if (strcmp(argv[i], "--cert-sig") == 0 && i + 1 < argc) {
+            g_win64_cert_file = argv[++i];
         } else if (strcmp(argv[i], "--target=arm64") == 0 || strcmp(argv[i], "--target=aarch64") == 0 ||
                    strcmp(argv[i], "-target=arm64") == 0 || strcmp(argv[i], "-target=aarch64") == 0 ||
                    strcmp(argv[i], "-arm64") == 0 || strcmp(argv[i], "-aarch64") == 0 ||

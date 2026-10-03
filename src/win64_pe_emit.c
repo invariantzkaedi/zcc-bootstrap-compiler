@@ -643,14 +643,44 @@ uint8_t *win64_pe_build_tls(uint64_t image_base, uint32_t tls_rva,
     return buf;
 }
 
-int zcc_emit_win64_pe_file_v6(const char *filename, const uint8_t *code_bytes,
+/* Standard Win64 PE Attribute Certificate Table (IMAGE_DIRECTORY_ENTRY_SECURITY) Builder */
+uint8_t *win64_pe_build_security_dir(const win64_pe_cert_info_t *cert_info,
+                                     uint32_t *out_total_size) {
+    if (!cert_info || !cert_info->cert_data || cert_info->cert_len == 0) {
+        if (out_total_size) *out_total_size = 0;
+        return NULL;
+    }
+
+    uint32_t unpadded_len = (uint32_t)(sizeof(WIN_CERTIFICATE) + cert_info->cert_len);
+    uint32_t padded_len = (unpadded_len + 7) & ~7;
+
+    uint8_t *buf = (uint8_t *)calloc(1, padded_len);
+    if (!buf) {
+        if (out_total_size) *out_total_size = 0;
+        return NULL;
+    }
+
+    WIN_CERTIFICATE hdr;
+    hdr.dwLength = unpadded_len;
+    hdr.wRevision = cert_info->revision ? cert_info->revision : WIN_CERT_REVISION_2_0;
+    hdr.wCertificateType = cert_info->cert_type ? cert_info->cert_type : WIN_CERT_TYPE_PKCS_SIGNED_DATA;
+
+    memcpy(buf, &hdr, sizeof(WIN_CERTIFICATE));
+    memcpy(buf + sizeof(WIN_CERTIFICATE), cert_info->cert_data, cert_info->cert_len);
+
+    if (out_total_size) *out_total_size = padded_len;
+    return buf;
+}
+
+int zcc_emit_win64_pe_file_v7(const char *filename, const uint8_t *code_bytes,
                               size_t code_len, uint32_t entry_offset,
                               const char **imported_funcs, size_t num_imported_funcs,
                               const uint32_t *reloc_rvas, size_t num_reloc_rvas,
                               const win64_pe_func_extent_t *extents, size_t num_extents,
                               uint16_t subsystem,
                               const uint8_t *rsrc_bytes, size_t rsrc_len,
-                              const win64_pe_tls_info_t *tls_info) {
+                              const win64_pe_tls_info_t *tls_info,
+                              const win64_pe_cert_info_t *cert_info) {
     if (!filename) return -1;
 
     Win64PeDllGroup groups[16];
@@ -924,6 +954,23 @@ int zcc_emit_win64_pe_file_v6(const char *filename, const uint8_t *code_bytes,
         opt_hdr.DataDirectory[5].Size = total_reloc_size;
     }
 
+    uint32_t end_of_sections = aligned_headers_size + aligned_code_size + aligned_idata_size + aligned_pdata_size + 0x0200 + aligned_tls_size + aligned_rsrc_size + aligned_reloc_size;
+    int has_cert = (cert_info != NULL && cert_info->cert_data != NULL && cert_info->cert_len > 0);
+    uint8_t *cert_bytes = NULL;
+    uint32_t total_cert_size = 0;
+    uint32_t cert_file_offset = 0;
+
+    if (has_cert) {
+        cert_bytes = win64_pe_build_security_dir(cert_info, &total_cert_size);
+        if (cert_bytes && total_cert_size > 0) {
+            cert_file_offset = (end_of_sections + 7) & ~7;
+            opt_hdr.DataDirectory[IMAGE_DIRECTORY_ENTRY_SECURITY].VirtualAddress = cert_file_offset;
+            opt_hdr.DataDirectory[IMAGE_DIRECTORY_ENTRY_SECURITY].Size = total_cert_size;
+        } else {
+            has_cert = 0;
+        }
+    }
+
     /* Section Headers */
     IMAGE_SECTION_HEADER sec_text;
     memset(&sec_text, 0, sizeof(sec_text));
@@ -1099,6 +1146,20 @@ int zcc_emit_win64_pe_file_v6(const char *filename, const uint8_t *code_bytes,
         }
     }
 
+    /* Write Attribute Certificate Table (IMAGE_DIRECTORY_ENTRY_SECURITY) */
+    if (has_cert && cert_bytes) {
+        if (cert_file_offset > end_of_sections) {
+            size_t pad_cert = cert_file_offset - end_of_sections;
+            uint8_t *pad = (uint8_t *)calloc(1, pad_cert);
+            if (pad) {
+                fwrite(pad, 1, pad_cert, f);
+                free(pad);
+            }
+        }
+        fwrite(cert_bytes, 1, total_cert_size, f);
+    }
+
+    if (cert_bytes) free(cert_bytes);
     if (all_relocs) free(all_relocs);
     if (tls_bytes) free(tls_bytes);
     if (hint_name_offsets) free(hint_name_offsets);
@@ -1108,6 +1169,22 @@ int zcc_emit_win64_pe_file_v6(const char *filename, const uint8_t *code_bytes,
     if (allocated_rsrc) free(allocated_rsrc);
     fclose(f);
     return 0;
+}
+
+int zcc_emit_win64_pe_file_v6(const char *filename, const uint8_t *code_bytes,
+                              size_t code_len, uint32_t entry_offset,
+                              const char **imported_funcs, size_t num_imported_funcs,
+                              const uint32_t *reloc_rvas, size_t num_reloc_rvas,
+                              const win64_pe_func_extent_t *extents, size_t num_extents,
+                              uint16_t subsystem,
+                              const uint8_t *rsrc_bytes, size_t rsrc_len,
+                              const win64_pe_tls_info_t *tls_info) {
+    return zcc_emit_win64_pe_file_v7(filename, code_bytes, code_len, entry_offset,
+                                     imported_funcs, num_imported_funcs,
+                                     reloc_rvas, num_reloc_rvas,
+                                     extents, num_extents,
+                                     subsystem, rsrc_bytes, rsrc_len,
+                                     tls_info, NULL);
 }
 
 int zcc_emit_win64_pe_file_v5(const char *filename, const uint8_t *code_bytes,
@@ -1232,14 +1309,15 @@ static uint8_t *win64_pe_build_edata(const char *dll_name,
     return buf;
 }
 
-int zcc_emit_win64_pe_dll_ex(const char *filename, const char *dll_name,
+int zcc_emit_win64_pe_dll_v7(const char *filename, const char *dll_name,
                              const uint8_t *code_bytes, size_t code_len,
                              uint32_t entry_offset,
                              const char **imported_funcs, size_t num_imported_funcs,
                              const win64_pe_export_t *exports, size_t num_exports,
                              const uint32_t *reloc_rvas, size_t num_reloc_rvas,
                              const win64_pe_func_extent_t *extents, size_t num_extents,
-                             const win64_pe_tls_info_t *tls_info) {
+                             const win64_pe_tls_info_t *tls_info,
+                             const win64_pe_cert_info_t *cert_info) {
     if (!filename) return -1;
 
     Win64PeDllGroup groups[16];
@@ -1510,6 +1588,23 @@ int zcc_emit_win64_pe_dll_ex(const char *filename, const char *dll_name,
         opt_hdr.DataDirectory[5].Size = total_reloc_size;
     }
 
+    uint32_t end_of_sections = aligned_headers_size + aligned_code_size + aligned_edata_size + aligned_idata_size + aligned_pdata_size + 0x0200 + aligned_tls_size + aligned_reloc_size;
+    int has_cert = (cert_info != NULL && cert_info->cert_data != NULL && cert_info->cert_len > 0);
+    uint8_t *cert_bytes = NULL;
+    uint32_t total_cert_size = 0;
+    uint32_t cert_file_offset = 0;
+
+    if (has_cert) {
+        cert_bytes = win64_pe_build_security_dir(cert_info, &total_cert_size);
+        if (cert_bytes && total_cert_size > 0) {
+            cert_file_offset = (end_of_sections + 7) & ~7;
+            opt_hdr.DataDirectory[IMAGE_DIRECTORY_ENTRY_SECURITY].VirtualAddress = cert_file_offset;
+            opt_hdr.DataDirectory[IMAGE_DIRECTORY_ENTRY_SECURITY].Size = total_cert_size;
+        } else {
+            has_cert = 0;
+        }
+    }
+
     /* Section Headers */
     IMAGE_SECTION_HEADER sec_text;
     memset(&sec_text, 0, sizeof(sec_text));
@@ -1677,6 +1772,20 @@ int zcc_emit_win64_pe_dll_ex(const char *filename, const char *dll_name,
         }
     }
 
+    /* Write Attribute Certificate Table (IMAGE_DIRECTORY_ENTRY_SECURITY) */
+    if (has_cert && cert_bytes) {
+        if (cert_file_offset > end_of_sections) {
+            size_t pad_cert = cert_file_offset - end_of_sections;
+            uint8_t *pad = (uint8_t *)calloc(1, pad_cert);
+            if (pad) {
+                fwrite(pad, 1, pad_cert, f);
+                free(pad);
+            }
+        }
+        fwrite(cert_bytes, 1, total_cert_size, f);
+    }
+
+    if (cert_bytes) free(cert_bytes);
     if (all_relocs) free(all_relocs);
     if (tls_bytes) free(tls_bytes);
     if (hint_name_offsets) free(hint_name_offsets);
@@ -1686,6 +1795,20 @@ int zcc_emit_win64_pe_dll_ex(const char *filename, const char *dll_name,
     if (edata_bytes) free(edata_bytes);
     fclose(f);
     return 0;
+}
+
+int zcc_emit_win64_pe_dll_ex(const char *filename, const char *dll_name,
+                             const uint8_t *code_bytes, size_t code_len,
+                             uint32_t entry_offset,
+                             const char **imported_funcs, size_t num_imported_funcs,
+                             const win64_pe_export_t *exports, size_t num_exports,
+                             const uint32_t *reloc_rvas, size_t num_reloc_rvas,
+                             const win64_pe_func_extent_t *extents, size_t num_extents,
+                             const win64_pe_tls_info_t *tls_info) {
+    return zcc_emit_win64_pe_dll_v7(filename, dll_name, code_bytes, code_len,
+                                    entry_offset, imported_funcs, num_imported_funcs,
+                                    exports, num_exports, reloc_rvas, num_reloc_rvas,
+                                    extents, num_extents, tls_info, NULL);
 }
 
 int zcc_emit_win64_pe_dll(const char *filename, const char *dll_name,

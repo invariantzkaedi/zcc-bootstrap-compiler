@@ -173,6 +173,28 @@ typedef struct {
   size_t         num_callbacks;   /* Number of callbacks */
 } win64_pe_tls_info_t;
 
+/* Attribute Certificate Table (WIN_CERTIFICATE) for IMAGE_DIRECTORY_ENTRY_SECURITY */
+#define IMAGE_DIRECTORY_ENTRY_SECURITY 4
+#define WIN_CERT_REVISION_1_0          0x0100
+#define WIN_CERT_REVISION_2_0          0x0200
+#define WIN_CERT_TYPE_X509             0x0001
+#define WIN_CERT_TYPE_PKCS_SIGNED_DATA 0x0002
+#define WIN_CERT_TYPE_RESERVED_1       0x0003
+#define WIN_CERT_TYPE_TS_STACK_SIGNED  0x0004
+
+typedef struct {
+  uint32_t dwLength;         /* Total length of entry including header and padding, 8-byte aligned */
+  uint16_t wRevision;        /* WIN_CERT_REVISION_2_0 (0x0200) */
+  uint16_t wCertificateType; /* WIN_CERT_TYPE_PKCS_SIGNED_DATA (0x0002) */
+} WIN_CERTIFICATE;
+
+typedef struct {
+  const uint8_t *cert_data;  /* Certificate / Authenticode payload */
+  size_t         cert_len;   /* Length of payload in bytes */
+  uint16_t       revision;   /* 0x0200 default */
+  uint16_t       cert_type;  /* 0x0002 default */
+} win64_pe_cert_info_t;
+
 #pragma pack(pop)
 
 /* Function Declarations */
@@ -214,6 +236,15 @@ int zcc_emit_win64_pe_file_v6(const char *filename, const uint8_t *code_bytes,
                               uint16_t subsystem,
                               const uint8_t *rsrc_bytes, size_t rsrc_len,
                               const win64_pe_tls_info_t *tls_info);
+int zcc_emit_win64_pe_file_v7(const char *filename, const uint8_t *code_bytes,
+                              size_t code_len, uint32_t entry_offset,
+                              const char **imported_funcs, size_t num_imported_funcs,
+                              const uint32_t *reloc_rvas, size_t num_reloc_rvas,
+                              const win64_pe_func_extent_t *extents, size_t num_extents,
+                              uint16_t subsystem,
+                              const uint8_t *rsrc_bytes, size_t rsrc_len,
+                              const win64_pe_tls_info_t *tls_info,
+                              const win64_pe_cert_info_t *cert_info);
 uint8_t *win64_pe_build_default_manifest_rsrc(const char *app_name, uint32_t rsrc_rva, uint32_t *out_size);
 
 typedef struct {
@@ -237,6 +268,19 @@ int zcc_emit_win64_pe_dll_ex(const char *filename, const char *dll_name,
                              const uint32_t *reloc_rvas, size_t num_reloc_rvas,
                              const win64_pe_func_extent_t *extents, size_t num_extents,
                              const win64_pe_tls_info_t *tls_info);
+
+int zcc_emit_win64_pe_dll_v7(const char *filename, const char *dll_name,
+                             const uint8_t *code_bytes, size_t code_len,
+                             uint32_t entry_offset,
+                             const char **imported_funcs, size_t num_imported_funcs,
+                             const win64_pe_export_t *exports, size_t num_exports,
+                             const uint32_t *reloc_rvas, size_t num_reloc_rvas,
+                             const win64_pe_func_extent_t *extents, size_t num_extents,
+                             const win64_pe_tls_info_t *tls_info,
+                             const win64_pe_cert_info_t *cert_info);
+
+uint8_t *win64_pe_build_security_dir(const win64_pe_cert_info_t *cert_info,
+                                     uint32_t *out_total_size);
 
 uint8_t *win64_pe_build_tls(uint64_t image_base, uint32_t tls_rva,
                             const win64_pe_tls_info_t *tls_info,
