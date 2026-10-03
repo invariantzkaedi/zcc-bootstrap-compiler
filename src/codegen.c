@@ -33,6 +33,7 @@ extern char *g_in_mem_asm_buf;
 extern size_t g_in_mem_asm_size;
 extern int g_use_in_mem_asm;
 int g_win64_gui_subsystem = 0;
+int g_win64_is_shared = 0;
 
 static char g_temp_o_to_remove[256] = {0};
 static char g_temp_s_to_remove[256] = {0};
@@ -3206,12 +3207,42 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
             }
         }
 
-        uint16_t target_subsystem = g_win64_gui_subsystem ? 2 : 3;
-        int ret = zcc_emit_win64_pe_file_v5(out_o_filename, text_seg.data, text_seg.size, entry_offset,
-                                            win_import_count > 0 ? win_import_funcs : NULL, win_import_count,
-                                            win_reloc_count > 0 ? win_reloc_rvas : NULL, win_reloc_count,
-                                            win_extent_count > 0 ? win_extents : NULL, win_extent_count,
-                                            target_subsystem, NULL, 0);
+        int ret = 0;
+        if (g_win64_is_shared) {
+            /* Gather exported functions from labels */
+            size_t max_exp = label_count + 1;
+            win64_pe_export_t *win_exports = (win64_pe_export_t *)malloc(sizeof(win64_pe_export_t) * max_exp);
+            size_t win_export_count = 0;
+            if (win_exports) {
+                for (i = 0; i < label_count; i++) {
+                    if (labels[i].segment == 1 && labels[i].name[0] != '.' && labels[i].name[0] != '\0' &&
+                        strcmp(labels[i].name, "DllMain") != 0 && strcmp(labels[i].name, "_DllMain") != 0 &&
+                        strcmp(labels[i].name, "main") != 0 && strcmp(labels[i].name, "_main") != 0) {
+                        win_exports[win_export_count].name = labels[i].name;
+                        win_exports[win_export_count].func_rva = 0x1000 + (uint32_t)labels[i].offset;
+                        win_export_count++;
+                    }
+                }
+            }
+            /* Default DLL name from out_o_filename */
+            const char *dname = strrchr(out_o_filename, '/');
+            if (!dname) dname = strrchr(out_o_filename, '\\');
+            dname = dname ? (dname + 1) : out_o_filename;
+
+            ret = zcc_emit_win64_pe_dll(out_o_filename, dname, text_seg.data, text_seg.size, entry_offset,
+                                        win_import_count > 0 ? win_import_funcs : NULL, win_import_count,
+                                        win_exports, win_export_count,
+                                        win_reloc_count > 0 ? win_reloc_rvas : NULL, win_reloc_count,
+                                        win_extent_count > 0 ? win_extents : NULL, win_extent_count);
+            if (win_exports) free(win_exports);
+        } else {
+            uint16_t target_subsystem = g_win64_gui_subsystem ? 2 : 3;
+            ret = zcc_emit_win64_pe_file_v5(out_o_filename, text_seg.data, text_seg.size, entry_offset,
+                                                win_import_count > 0 ? win_import_funcs : NULL, win_import_count,
+                                                win_reloc_count > 0 ? win_reloc_rvas : NULL, win_reloc_count,
+                                                win_extent_count > 0 ? win_extents : NULL, win_extent_count,
+                                                target_subsystem, NULL, 0);
+        }
         if (win_extents) free(win_extents);
         if (func_offsets) free(func_offsets);
         free(elf_syms);
@@ -3329,6 +3360,8 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "-mwindows") == 0 || strcmp(argv[i], "--subsystem=windows") == 0 ||
                    strcmp(argv[i], "-subsystem=windows") == 0) {
             g_win64_gui_subsystem = 1;
+        } else if (strcmp(argv[i], "-shared") == 0 || strcmp(argv[i], "--shared") == 0) {
+            g_win64_is_shared = 1;
         } else if (strcmp(argv[i], "--target=arm64") == 0 || strcmp(argv[i], "--target=aarch64") == 0 ||
                    strcmp(argv[i], "-target=arm64") == 0 || strcmp(argv[i], "-target=aarch64") == 0 ||
                    strcmp(argv[i], "-arm64") == 0 || strcmp(argv[i], "-aarch64") == 0 ||
@@ -3653,6 +3686,9 @@ int main(int argc, char **argv) {
             }
             if (g_win64_gui_subsystem) {
                 mod_argv[mod_argc++] = "-mwindows";
+            }
+            if (g_win64_is_shared) {
+                mod_argv[mod_argc++] = "-shared";
             }
             mod_argv[mod_argc++] = "-o";
             mod_argv[mod_argc++] = temp_s_filename;

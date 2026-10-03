@@ -1467,6 +1467,8 @@ int zcc_main(int argc, char **argv) {
       g_win64_abi_mode = 1;
     } else if (strcmp(argv[i], "-mwindows") == 0 || strcmp(argv[i], "--subsystem=windows") == 0) {
       /* Handled by driver for PE Subsystem 2 GUI */
+    } else if (strcmp(argv[i], "-shared") == 0 || strcmp(argv[i], "--shared") == 0) {
+      /* Handled by driver for PE DLL emission */
     } else if (strcmp(argv[i], "-mabi=sysv") == 0 || strcmp(argv[i], "--mabi=sysv") == 0) {
       g_win64_abi_mode = 0;
     } else if (strcmp(argv[i], "-o") == 0) {

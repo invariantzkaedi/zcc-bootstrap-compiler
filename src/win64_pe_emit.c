@@ -979,3 +979,455 @@ int zcc_emit_win64_pe_file_with_imports(const char *filename, const uint8_t *cod
                                      NULL, 0, NULL, 0);
 }
 
+
+
+/* Standard PE Export Directory (40 bytes) */
+typedef struct {
+    uint32_t Characteristics;
+    uint32_t TimeDateStamp;
+    uint16_t MajorVersion;
+    uint16_t MinorVersion;
+    uint32_t Name;
+    uint32_t Base;
+    uint32_t NumberOfFunctions;
+    uint32_t NumberOfNames;
+    uint32_t AddressOfFunctions;
+    uint32_t AddressOfNames;
+    uint32_t AddressOfNameOrdinals;
+} IMAGE_EXPORT_DIRECTORY;
+
+static uint8_t *win64_pe_build_edata(const char *dll_name,
+                                     const win64_pe_export_t *exports, size_t num_exports,
+                                     uint32_t edata_rva, uint32_t *out_total_size) {
+    if (!exports || num_exports == 0) {
+        if (out_total_size) *out_total_size = 0;
+        return NULL;
+    }
+    const char *dname = (dll_name && dll_name[0]) ? dll_name : "library.dll";
+    uint32_t dname_len = (uint32_t)strlen(dname) + 1;
+
+    uint32_t eat_offset = sizeof(IMAGE_EXPORT_DIRECTORY);
+    uint32_t ent_offset = eat_offset + (uint32_t)(num_exports * 4);
+    uint32_t eot_offset = ent_offset + (uint32_t)(num_exports * 4);
+    uint32_t strings_offset = eot_offset + (uint32_t)(num_exports * 2);
+
+    uint32_t str_cursor = strings_offset;
+    uint32_t dname_rva_offset = str_cursor;
+    str_cursor += dname_len;
+
+    uint32_t *name_rva_offsets = (uint32_t *)malloc(sizeof(uint32_t) * num_exports);
+    size_t i;
+    for (i = 0; i < num_exports; i++) {
+        name_rva_offsets[i] = str_cursor;
+        str_cursor += (uint32_t)(strlen(exports[i].name) + 1);
+    }
+
+    uint32_t total_size = win64_pe_align_to(str_cursor, 4);
+    uint8_t *buf = (uint8_t *)calloc(1, total_size);
+    if (!buf) {
+        free(name_rva_offsets);
+        if (out_total_size) *out_total_size = 0;
+        return NULL;
+    }
+
+    IMAGE_EXPORT_DIRECTORY *exp = (IMAGE_EXPORT_DIRECTORY *)buf;
+    exp->TimeDateStamp = 0x66900000;
+    exp->Name = edata_rva + dname_rva_offset;
+    exp->Base = 1;
+    exp->NumberOfFunctions = (uint32_t)num_exports;
+    exp->NumberOfNames = (uint32_t)num_exports;
+    exp->AddressOfFunctions = edata_rva + eat_offset;
+    exp->AddressOfNames = edata_rva + ent_offset;
+    exp->AddressOfNameOrdinals = edata_rva + eot_offset;
+
+    uint32_t *eat = (uint32_t *)(buf + eat_offset);
+    uint32_t *ent = (uint32_t *)(buf + ent_offset);
+    uint16_t *eot = (uint16_t *)(buf + eot_offset);
+
+    for (i = 0; i < num_exports; i++) {
+        eat[i] = exports[i].func_rva;
+        ent[i] = edata_rva + name_rva_offsets[i];
+        eot[i] = (uint16_t)i;
+    }
+
+    memcpy(buf + dname_rva_offset, dname, dname_len);
+    for (i = 0; i < num_exports; i++) {
+        const char *s = exports[i].name;
+        memcpy(buf + name_rva_offsets[i], s, strlen(s) + 1);
+    }
+
+    free(name_rva_offsets);
+    if (out_total_size) *out_total_size = total_size;
+    return buf;
+}
+
+int zcc_emit_win64_pe_dll(const char *filename, const char *dll_name,
+                          const uint8_t *code_bytes, size_t code_len,
+                          uint32_t entry_offset,
+                          const char **imported_funcs, size_t num_imported_funcs,
+                          const win64_pe_export_t *exports, size_t num_exports,
+                          const uint32_t *reloc_rvas, size_t num_reloc_rvas,
+                          const win64_pe_func_extent_t *extents, size_t num_extents) {
+    if (!filename) return -1;
+
+    Win64PeDllGroup groups[16];
+    size_t num_groups = 0;
+    if (imported_funcs && num_imported_funcs > 0) {
+        num_groups = win64_pe_build_groups(imported_funcs, num_imported_funcs, groups, 16);
+    }
+
+    uint32_t total_reloc_size = 0;
+    uint8_t *reloc_bytes = win64_pe_build_relocs(reloc_rvas, num_reloc_rvas, &total_reloc_size);
+    int has_reloc = (reloc_bytes != NULL && total_reloc_size > 0);
+    uint32_t aligned_reloc_size = has_reloc ? win64_pe_align_to(total_reloc_size, 0x0200) : 0;
+
+    int has_idata = (num_groups > 0);
+    int has_pdata = 1;
+
+    uint32_t raw_code_len = (code_bytes && code_len > 0) ? (uint32_t)code_len : 16;
+    uint32_t aligned_code_size = win64_pe_align_to(raw_code_len, 0x0200);
+
+    /* Sizing sections */
+    uint32_t edata_rva = 0x1000 + win64_pe_align_to(raw_code_len, 0x1000);
+    uint32_t total_edata_size = 0;
+    uint8_t *edata_bytes = win64_pe_build_edata(dll_name, exports, num_exports, edata_rva, &total_edata_size);
+    int has_edata = (edata_bytes != NULL && total_edata_size > 0);
+    uint32_t aligned_edata_size = has_edata ? win64_pe_align_to(total_edata_size, 0x0200) : 0;
+
+    uint32_t idata_rva = has_edata ? (edata_rva + win64_pe_align_to(total_edata_size, 0x1000)) : edata_rva;
+
+    FILE *f = fopen(filename, "wb");
+    if (!f) {
+        if (reloc_bytes) free(reloc_bytes);
+        if (edata_bytes) free(edata_bytes);
+        return -1;
+    }
+
+    /* DOS Header */
+    IMAGE_DOS_HEADER dos_hdr;
+    memset(&dos_hdr, 0, sizeof(dos_hdr));
+    dos_hdr.e_magic = 0x5A4D;
+    dos_hdr.e_cblp = 0x0090;
+    dos_hdr.e_cp = 0x0003;
+    dos_hdr.e_cparhdr = 0x0004;
+    dos_hdr.e_maxalloc = 0xFFFF;
+    dos_hdr.e_sp = 0x00B8;
+    dos_hdr.e_lfarlc = 0x0040;
+    dos_hdr.e_lfanew = 0x0080;
+
+    uint8_t dos_stub[64] = {
+        0x0E, 0x1F, 0xBA, 0x0E, 0x00, 0xB4, 0x09, 0xCD,
+        0x21, 0xB8, 0x01, 0x4C, 0xCD, 0x21, 'T',  'h',
+        'i',  's',  ' ',  'p',  'r',  'o',  'g',  'r',
+        'a',  'm',  ' ',  'c',  'a',  'n',  'n',  'o',
+        't',  ' ',  'b',  'e',  ' ',  'r',  'u',  'n',
+        ' ',  'i',  'n',  ' ',  'D',  'O',  'S',  ' ',
+        'm',  'o',  'd',  'e',  '.',  '\r', '\r', '\n',
+        '$',  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+
+    uint32_t pe_sig = 0x00004550;
+
+    uint16_t num_sections = 2; /* .text and .data */
+    if (has_edata) num_sections++;
+    if (has_idata) num_sections++;
+    if (has_pdata) num_sections++;
+    if (has_reloc) num_sections++;
+
+    IMAGE_FILE_HEADER file_hdr;
+    memset(&file_hdr, 0, sizeof(file_hdr));
+    file_hdr.Machine = 0x8664;
+    file_hdr.NumberOfSections = num_sections;
+    file_hdr.TimeDateStamp = 0x66900000;
+    file_hdr.SizeOfOptionalHeader = sizeof(IMAGE_OPTIONAL_HEADER64);
+    file_hdr.Characteristics = 0x2022; /* IMAGE_FILE_DLL | EXECUTABLE_IMAGE | LARGE_ADDRESS_AWARE */
+
+    /* Import Table Construction */
+    uint32_t total_iat_size = 0;
+    uint32_t desc_offset = 0;
+    uint32_t desc_size = 0;
+    uint32_t total_idata_size = 0;
+    uint8_t *idata_bytes = NULL;
+    uint32_t *hint_name_offsets = NULL;
+
+    if (has_idata) {
+        uint32_t cur_iat = 0;
+        size_t g, j;
+        for (g = 0; g < num_groups; g++) {
+            groups[g].iat_offset = cur_iat;
+            cur_iat += (uint32_t)((groups[g].num_funcs + 1) * 8);
+        }
+        total_iat_size = cur_iat;
+        uint32_t cur_ilt = cur_iat;
+        for (g = 0; g < num_groups; g++) {
+            groups[g].ilt_offset = cur_ilt;
+            cur_ilt += (uint32_t)((groups[g].num_funcs + 1) * 8);
+        }
+        desc_offset = cur_ilt;
+        desc_size = (uint32_t)((num_groups + 1) * sizeof(IMAGE_IMPORT_DESCRIPTOR));
+        uint32_t str_offset = desc_offset + desc_size;
+        for (g = 0; g < num_groups; g++) {
+            groups[g].name_offset = str_offset;
+            str_offset += (uint32_t)(strlen(groups[g].dll_name) + 1);
+        }
+        hint_name_offsets = (uint32_t *)malloc(sizeof(uint32_t) * num_imported_funcs);
+        for (g = 0; g < num_groups; g++) {
+            for (j = 0; j < groups[g].num_funcs; j++) {
+                size_t orig_idx = groups[g].func_indices[j];
+                str_offset = (str_offset + 1) & ~1;
+                hint_name_offsets[orig_idx] = str_offset;
+                str_offset += (uint32_t)(2 + strlen(imported_funcs[orig_idx]) + 1);
+            }
+        }
+        total_idata_size = str_offset;
+        idata_bytes = (uint8_t *)calloc(1, total_idata_size);
+        if (!idata_bytes) {
+            free(hint_name_offsets);
+            if (reloc_bytes) free(reloc_bytes);
+            if (edata_bytes) free(edata_bytes);
+            fclose(f);
+            return -1;
+        }
+
+        for (g = 0; g < num_groups; g++) {
+            memcpy(idata_bytes + groups[g].name_offset, groups[g].dll_name, strlen(groups[g].dll_name) + 1);
+        }
+        for (g = 0; g < num_groups; g++) {
+            for (j = 0; j < groups[g].num_funcs; j++) {
+                size_t orig_idx = groups[g].func_indices[j];
+                uint32_t off = hint_name_offsets[orig_idx];
+                strcpy((char *)(idata_bytes + off + 2), imported_funcs[orig_idx]);
+            }
+        }
+        for (g = 0; g < num_groups; g++) {
+            for (j = 0; j < groups[g].num_funcs; j++) {
+                size_t orig_idx = groups[g].func_indices[j];
+                uint64_t target_rva = (uint64_t)(idata_rva + hint_name_offsets[orig_idx]);
+                memcpy(idata_bytes + groups[g].iat_offset + j * 8, &target_rva, sizeof(uint64_t));
+                memcpy(idata_bytes + groups[g].ilt_offset + j * 8, &target_rva, sizeof(uint64_t));
+            }
+        }
+        for (g = 0; g < num_groups; g++) {
+            IMAGE_IMPORT_DESCRIPTOR desc;
+            memset(&desc, 0, sizeof(desc));
+            desc.OriginalFirstThunk = idata_rva + groups[g].ilt_offset;
+            desc.Name = idata_rva + groups[g].name_offset;
+            desc.FirstThunk = idata_rva + groups[g].iat_offset;
+            memcpy(idata_bytes + groups[g].desc_offset, &desc, sizeof(desc));
+        }
+    }
+
+    uint32_t aligned_idata_size = has_idata ? win64_pe_align_to(total_idata_size, 0x0200) : 0;
+    uint32_t pdata_rva = has_idata ? (idata_rva + win64_pe_align_to(total_idata_size, 0x1000)) : idata_rva;
+
+    uint32_t total_pdata_size = 0;
+    uint32_t pdata_entries_size = 0;
+    uint8_t *pdata_bytes = win64_pe_build_pdata(0x1000, raw_code_len, entry_offset,
+                                               extents, num_extents,
+                                               pdata_rva, &total_pdata_size, &pdata_entries_size);
+    uint32_t aligned_pdata_size = win64_pe_align_to(total_pdata_size, 0x0200);
+    uint32_t data_rva = pdata_rva + win64_pe_align_to(total_pdata_size, 0x1000);
+    uint32_t reloc_rva = data_rva + 0x1000;
+
+    uint32_t headers_size = sizeof(IMAGE_DOS_HEADER) + sizeof(dos_stub) + sizeof(pe_sig) +
+                            sizeof(IMAGE_FILE_HEADER) + sizeof(IMAGE_OPTIONAL_HEADER64) +
+                            (num_sections * sizeof(IMAGE_SECTION_HEADER));
+    uint32_t aligned_headers_size = win64_pe_align_to(headers_size, 0x0200);
+
+    IMAGE_OPTIONAL_HEADER64 opt_hdr;
+    memset(&opt_hdr, 0, sizeof(opt_hdr));
+    opt_hdr.Magic = 0x020B; /* PE32+ */
+    opt_hdr.MajorLinkerVersion = 14;
+    opt_hdr.MinorLinkerVersion = 0;
+    opt_hdr.SizeOfCode = aligned_code_size;
+    opt_hdr.SizeOfInitializedData = aligned_edata_size + aligned_idata_size + aligned_pdata_size + 0x0200 + aligned_reloc_size;
+    opt_hdr.AddressOfEntryPoint = (entry_offset > 0) ? (0x1000 + entry_offset) : 0;
+    opt_hdr.BaseOfCode = 0x1000;
+    opt_hdr.ImageBase = 0x180000000ULL; /* Default DLL base */
+    opt_hdr.SectionAlignment = 0x1000;
+    opt_hdr.FileAlignment = 0x0200;
+    opt_hdr.MajorOperatingSystemVersion = 6;
+    opt_hdr.MinorOperatingSystemVersion = 0;
+    opt_hdr.MajorSubsystemVersion = 6;
+    opt_hdr.MinorSubsystemVersion = 0;
+    opt_hdr.SizeOfImage = has_reloc ? (reloc_rva + win64_pe_align_to(total_reloc_size, 0x1000)) : (data_rva + 0x1000);
+    opt_hdr.SizeOfHeaders = aligned_headers_size;
+    opt_hdr.Subsystem = 3; /* Console or default */
+    opt_hdr.DllCharacteristics = 0x8160; /* HIGH_ENTROPY_VA | DYNAMIC_BASE | NX_COMPAT */
+    opt_hdr.SizeOfStackReserve = 0x100000;
+    opt_hdr.SizeOfStackCommit = 0x1000;
+    opt_hdr.SizeOfHeapReserve = 0x100000;
+    opt_hdr.SizeOfHeapCommit = 0x1000;
+    opt_hdr.NumberOfRvaAndSizes = 16;
+
+    if (has_edata) {
+        opt_hdr.DataDirectory[0].VirtualAddress = edata_rva;
+        opt_hdr.DataDirectory[0].Size = total_edata_size;
+    }
+    if (has_idata) {
+        opt_hdr.DataDirectory[1].VirtualAddress = idata_rva + desc_offset;
+        opt_hdr.DataDirectory[1].Size = desc_size;
+        opt_hdr.DataDirectory[12].VirtualAddress = idata_rva;
+        opt_hdr.DataDirectory[12].Size = total_iat_size;
+    }
+    if (has_pdata && pdata_bytes) {
+        opt_hdr.DataDirectory[3].VirtualAddress = pdata_rva;
+        opt_hdr.DataDirectory[3].Size = pdata_entries_size;
+    }
+    if (has_reloc) {
+        opt_hdr.DataDirectory[5].VirtualAddress = reloc_rva;
+        opt_hdr.DataDirectory[5].Size = total_reloc_size;
+    }
+
+    /* Section Headers */
+    IMAGE_SECTION_HEADER sec_text;
+    memset(&sec_text, 0, sizeof(sec_text));
+    memcpy(sec_text.Name, ".text\0\0\0", 8);
+    sec_text.VirtualSize = raw_code_len;
+    sec_text.VirtualAddress = 0x1000;
+    sec_text.SizeOfRawData = aligned_code_size;
+    sec_text.PointerToRawData = aligned_headers_size;
+    sec_text.Characteristics = 0x60000020; /* CODE | EXEC | READ */
+
+    IMAGE_SECTION_HEADER sec_edata;
+    memset(&sec_edata, 0, sizeof(sec_edata));
+    if (has_edata) {
+        memcpy(sec_edata.Name, ".edata\0\0", 8);
+        sec_edata.VirtualSize = total_edata_size;
+        sec_edata.VirtualAddress = edata_rva;
+        sec_edata.SizeOfRawData = aligned_edata_size;
+        sec_edata.PointerToRawData = aligned_headers_size + aligned_code_size;
+        sec_edata.Characteristics = 0x40000040; /* INITIALIZED_DATA | READ */
+    }
+
+    IMAGE_SECTION_HEADER sec_idata;
+    memset(&sec_idata, 0, sizeof(sec_idata));
+    if (has_idata) {
+        memcpy(sec_idata.Name, ".idata\0\0", 8);
+        sec_idata.VirtualSize = total_idata_size;
+        sec_idata.VirtualAddress = idata_rva;
+        sec_idata.SizeOfRawData = aligned_idata_size;
+        sec_idata.PointerToRawData = aligned_headers_size + aligned_code_size + aligned_edata_size;
+        sec_idata.Characteristics = 0xC0000040;
+    }
+
+    IMAGE_SECTION_HEADER sec_pdata;
+    memset(&sec_pdata, 0, sizeof(sec_pdata));
+    if (has_pdata) {
+        memcpy(sec_pdata.Name, ".pdata\0\0", 8);
+        sec_pdata.VirtualSize = total_pdata_size;
+        sec_pdata.VirtualAddress = pdata_rva;
+        sec_pdata.SizeOfRawData = aligned_pdata_size;
+        sec_pdata.PointerToRawData = aligned_headers_size + aligned_code_size + aligned_edata_size + aligned_idata_size;
+        sec_pdata.Characteristics = 0x40000040;
+    }
+
+    IMAGE_SECTION_HEADER sec_data;
+    memset(&sec_data, 0, sizeof(sec_data));
+    memcpy(sec_data.Name, ".data\0\0\0", 8);
+    sec_data.VirtualSize = 16;
+    sec_data.VirtualAddress = data_rva;
+    sec_data.SizeOfRawData = 0x0200;
+    sec_data.PointerToRawData = aligned_headers_size + aligned_code_size + aligned_edata_size + aligned_idata_size + aligned_pdata_size;
+    sec_data.Characteristics = 0xC0000040;
+
+    IMAGE_SECTION_HEADER sec_reloc;
+    memset(&sec_reloc, 0, sizeof(sec_reloc));
+    if (has_reloc) {
+        memcpy(sec_reloc.Name, ".reloc\0\0", 8);
+        sec_reloc.VirtualSize = total_reloc_size;
+        sec_reloc.VirtualAddress = reloc_rva;
+        sec_reloc.SizeOfRawData = aligned_reloc_size;
+        sec_reloc.PointerToRawData = aligned_headers_size + aligned_code_size + aligned_edata_size + aligned_idata_size + aligned_pdata_size + 0x0200;
+        sec_reloc.Characteristics = 0x42000040;
+    }
+
+    /* Write Headers */
+    fwrite(&dos_hdr, sizeof(dos_hdr), 1, f);
+    fwrite(dos_stub, sizeof(dos_stub), 1, f);
+    fwrite(&pe_sig, sizeof(pe_sig), 1, f);
+    fwrite(&file_hdr, sizeof(file_hdr), 1, f);
+    fwrite(&opt_hdr, sizeof(opt_hdr), 1, f);
+    fwrite(&sec_text, sizeof(sec_text), 1, f);
+    if (has_edata) fwrite(&sec_edata, sizeof(sec_edata), 1, f);
+    if (has_idata) fwrite(&sec_idata, sizeof(sec_idata), 1, f);
+    if (has_pdata) fwrite(&sec_pdata, sizeof(sec_pdata), 1, f);
+    fwrite(&sec_data, sizeof(sec_data), 1, f);
+    if (has_reloc) fwrite(&sec_reloc, sizeof(sec_reloc), 1, f);
+
+    size_t written_headers = sizeof(dos_hdr) + sizeof(dos_stub) + sizeof(pe_sig) +
+                             sizeof(file_hdr) + sizeof(opt_hdr) + (num_sections * sizeof(IMAGE_SECTION_HEADER));
+    if (aligned_headers_size > written_headers) {
+        size_t pad_len = aligned_headers_size - written_headers;
+        uint8_t *pad = (uint8_t *)calloc(1, pad_len);
+        fwrite(pad, 1, pad_len, f);
+        free(pad);
+    }
+
+    /* Write .text */
+    if (code_bytes && code_len > 0) {
+        fwrite(code_bytes, 1, code_len, f);
+        if (aligned_code_size > code_len) {
+            size_t pad_code = aligned_code_size - code_len;
+            uint8_t *pad = (uint8_t *)calloc(1, pad_code);
+            fwrite(pad, 1, pad_code, f);
+            free(pad);
+        }
+    }
+
+    /* Write .edata */
+    if (has_edata && edata_bytes) {
+        fwrite(edata_bytes, 1, total_edata_size, f);
+        if (aligned_edata_size > total_edata_size) {
+            size_t pad_edata = aligned_edata_size - total_edata_size;
+            uint8_t *pad = (uint8_t *)calloc(1, pad_edata);
+            fwrite(pad, 1, pad_edata, f);
+            free(pad);
+        }
+    }
+
+    /* Write .idata */
+    if (has_idata && idata_bytes) {
+        fwrite(idata_bytes, 1, total_idata_size, f);
+        if (aligned_idata_size > total_idata_size) {
+            size_t pad_idata = aligned_idata_size - total_idata_size;
+            uint8_t *pad = (uint8_t *)calloc(1, pad_idata);
+            fwrite(pad, 1, pad_idata, f);
+            free(pad);
+        }
+    }
+
+    /* Write .pdata */
+    if (has_pdata && pdata_bytes) {
+        fwrite(pdata_bytes, 1, total_pdata_size, f);
+        if (aligned_pdata_size > total_pdata_size) {
+            size_t pad_pdata = aligned_pdata_size - total_pdata_size;
+            uint8_t *pad = (uint8_t *)calloc(1, pad_pdata);
+            fwrite(pad, 1, pad_pdata, f);
+            free(pad);
+        }
+    }
+
+    /* Write .data */
+    uint8_t data_pad[0x0200] = {0};
+    fwrite(data_pad, 1, 0x0200, f);
+
+    /* Write .reloc */
+    if (has_reloc && reloc_bytes) {
+        fwrite(reloc_bytes, 1, total_reloc_size, f);
+        if (aligned_reloc_size > total_reloc_size) {
+            size_t pad_reloc = aligned_reloc_size - total_reloc_size;
+            uint8_t *pad = (uint8_t *)calloc(1, pad_reloc);
+            fwrite(pad, 1, pad_reloc, f);
+            free(pad);
+        }
+    }
+
+    if (hint_name_offsets) free(hint_name_offsets);
+    if (idata_bytes) free(idata_bytes);
+    if (pdata_bytes) free(pdata_bytes);
+    if (reloc_bytes) free(reloc_bytes);
+    if (edata_bytes) free(edata_bytes);
+    fclose(f);
+    return 0;
+}

@@ -31,7 +31,10 @@ class TestWin64PEEmitter(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.tmp_dir.cleanup()
+        try:
+            cls.tmp_dir.cleanup()
+        except Exception:
+            pass
 
     def test_01_build_harness(self):
         """Verify Win64 PE emitter source exists and has clean prototypes."""
@@ -867,6 +870,130 @@ class TestWin64PEEmitter(unittest.TestCase):
         # Verify XML manifest with Common-Controls 6.0 exists
         self.assertIn(b"Microsoft.Windows.Common-Controls", data)
         self.assertIn(b"urn:schemas-microsoft-com:asm.v1", data)
+
+    def test_23_win64_pe_native_dll_export_directory(self):
+        """Verify Win64 PE native dynamic library emission with -shared and .edata Export Address Table."""
+        src = os.path.join(self.tmp_dir.name, "probe_dll_test.c")
+        dll = os.path.join(self.tmp_dir.name, "probe_dll_test.dll")
+
+        with open(src, "w", encoding="utf-8") as f:
+            f.write(
+                "int compute_sum(int a, int b) {\n"
+                "    return a + b;\n"
+                "}\n"
+                "int compute_prod(int a, int b) {\n"
+                "    return a * b;\n"
+                "}\n"
+            )
+
+        if sys.platform == "win32":
+            wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            wsl_dll = dll.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -shared -o '{wsl_dll}'"]
+        else:
+            cmd = [self.zcc_bin, src, "-target", "win64", "-shared", "-o", dll]
+
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(res.returncode, 0, f"DLL compilation failed: {res.stderr}\n{res.stdout}")
+        self.assertTrue(os.path.exists(dll), "Output .dll was not generated")
+
+        with open(dll, "rb") as f:
+            data = f.read()
+
+        # Check DOS & PE signature
+        self.assertTrue(data.startswith(DOS_MAGIC_MZ))
+        e_lfanew = struct.unpack_from("<I", data, 0x3C)[0]
+        self.assertEqual(data[e_lfanew : e_lfanew + 4], PE_SIG_MAGIC)
+
+        # File header Characteristics
+        file_hdr = data[e_lfanew + 4 : e_lfanew + 24]
+        num_sections, _, _, _, opt_size, characteristics = struct.unpack_from("<HIIIHH", file_hdr, 2)
+        # IMAGE_FILE_DLL = 0x2000
+        self.assertTrue(bool(characteristics & 0x2000), f"Expected IMAGE_FILE_DLL (0x2000) flag in {hex(characteristics)}")
+
+        # Optional header DataDirectory[0] = Export Table
+        opt_offset = e_lfanew + 24
+        export_rva, export_size = struct.unpack_from("<II", data, opt_offset + 112)
+        self.assertGreater(export_rva, 0, "Export Directory RVA must be non-zero")
+        self.assertGreater(export_size, 0, "Export Directory size must be non-zero")
+
+        # Locate .edata section
+        sec_offset = opt_offset + opt_size
+        edata_raw = None
+        edata_vaddr = None
+        for i in range(num_sections):
+            sec = data[sec_offset + i*40 : sec_offset + (i+1)*40]
+            name = sec[:8].rstrip(b"\x00").decode("latin1")
+            vsize, vaddr, rsize, roff = struct.unpack_from("<IIII", sec, 8)
+            if name == ".edata":
+                edata_raw = roff
+                edata_vaddr = vaddr
+                break
+
+        self.assertIsNotNone(edata_raw, ".edata section header not found")
+        # Parse IMAGE_EXPORT_DIRECTORY
+        exp_dir = data[edata_raw : edata_raw + 40]
+        _, _, _, _, name_rva, base, num_funcs, num_names, eat_rva, ent_rva, eot_rva = struct.unpack_from("<IIHHIIIIIII", exp_dir)
+        self.assertEqual(base, 1)
+        self.assertEqual(num_funcs, 2)
+        self.assertEqual(num_names, 2)
+
+        # Verify exported names in ENT
+        ent_offset = edata_raw + (ent_rva - edata_vaddr)
+        exported_names = []
+        for j in range(num_names):
+            nrva = struct.unpack_from("<I", data, ent_offset + j*4)[0]
+            name_str = data[edata_raw + (nrva - edata_vaddr):].split(b"\x00")[0].decode("latin1")
+            exported_names.append(name_str)
+
+        self.assertIn("compute_sum", exported_names)
+        self.assertIn("compute_prod", exported_names)
+
+    def test_24_win64_pe_dll_runtime_loadlibrary(self):
+        """Verify Win64 PE DLL runtime execution via ctypes LoadLibrary on Windows host."""
+        src = os.path.join(self.tmp_dir.name, "probe_dll_runtime.c")
+        dll = os.path.join(self.tmp_dir.name, "probe_dll_runtime.dll")
+
+        with open(src, "w", encoding="utf-8") as f:
+            f.write(
+                "int add_ten(int x) {\n"
+                "    return x + 10;\n"
+                "}\n"
+                "int square(int x) {\n"
+                "    return x * x;\n"
+                "}\n"
+            )
+
+        if sys.platform == "win32":
+            wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            wsl_dll = dll.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -mabi=ms -shared -o '{wsl_dll}'"]
+        else:
+            cmd = [self.zcc_bin, src, "-target", "win64", "-mabi=ms", "-shared", "-o", dll]
+
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(res.returncode, 0, f"Compilation failed: {res.stderr}\n{res.stdout}")
+        self.assertTrue(os.path.exists(dll))
+
+        if sys.platform == "win32":
+            import ctypes
+            import _ctypes
+            lib = ctypes.CDLL(dll)
+            try:
+                add_fn = lib.add_ten
+                add_fn.argtypes = [ctypes.c_int]
+                add_fn.restype = ctypes.c_int
+                self.assertEqual(add_fn(32), 42)
+
+                sq_fn = lib.square
+                sq_fn.argtypes = [ctypes.c_int]
+                sq_fn.restype = ctypes.c_int
+                self.assertEqual(sq_fn(9), 81)
+            finally:
+                _ctypes.FreeLibrary(lib._handle)
+
 
 if __name__ == "__main__":
     unittest.main()

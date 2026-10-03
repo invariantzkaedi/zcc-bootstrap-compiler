@@ -1,0 +1,9 @@
+1. make zcc
+2. ./zcc -target win64 -shared test_dll_probe.c -o test_dll_probe.dll
+3. make selfhost
+4. cmp zcc2.s zcc3.s
+5. sha256sum zcc2.s zcc3.s
+6. python3 tools/test_zcc_opt_passes.py
+7. python tests/test_win64_pe_emitter.py
+8. git diff --stat part0_pp.c part3.c part4.c
+9. git diff --stat
