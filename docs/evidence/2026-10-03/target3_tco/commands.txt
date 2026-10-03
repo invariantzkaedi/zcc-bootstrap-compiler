@@ -1,0 +1,14 @@
+# Gate 1 — Self-host Identity Verification
+set -o pipefail
+make selfhost 2>&1 | tee /tmp/zcc-selfhost-tco.log
+cmp evidence/zcc-omega-1791067731-944/stage2.s evidence/zcc-omega-1791067731-944/stage3.s
+sha256sum evidence/zcc-omega-1791067731-944/stage2.s evidence/zcc-omega-1791067731-944/stage3.s
+
+# Gate 2 — Cross-Toolchain Interoperability
+bash tests/abi/gate2_fwd.sh
+bash tests/abi/gate2_rev.sh
+
+# Gate 4 — Target Harness Verification (TCO Comprehensive Suite)
+./zcc -S -o /tmp/test_tco.s tests/test_tco.c
+gcc -no-pie /tmp/test_tco.s -o /tmp/test_tco
+/tmp/test_tco

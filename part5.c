@@ -969,6 +969,41 @@ static void peephole_optimize(char *filename) {
         sprintf(line_ptrs[i], "    shlq $3, %s\n", reg); eliminated++; i++; continue;
       }
     }
+
+    /* 5. Tail Call Optimization (TCO): self-recursive & sibling call frame elimination */
+    if (strncmp(l1, "    movq %rsp, %r11\n", 20) == 0 && i + 11 < nlines && !getenv("ZCC_NO_TCO")) {
+      if (strcmp(line_ptrs[i+1], "    andq $15, %r11\n") == 0 && strcmp(line_ptrs[i+2], "    testq %r11, %r11\n") == 0 &&
+          strncmp(line_ptrs[i+3], "    je .Lcall_aligned_", 22) == 0 && strcmp(line_ptrs[i+4], "    subq $8, %rsp\n") == 0 &&
+          strncmp(line_ptrs[i+5], "    call ", 9) == 0 && strcmp(line_ptrs[i+6], "    addq $8, %rsp\n") == 0 &&
+          strncmp(line_ptrs[i+7], "    jmp .Lcall_end_", 19) == 0 && strncmp(line_ptrs[i+8], ".Lcall_aligned_", 15) == 0 &&
+          strncmp(line_ptrs[i+9], "    call ", 9) == 0 && strncmp(line_ptrs[i+10], ".Lcall_end_", 11) == 0 &&
+          strncmp(line_ptrs[i+11], "    jmp .Lfunc_end_", 19) == 0) {
+        char tgt1[64], tgt2[64], end_lbl[64], target_lbl[70];
+        if (sscanf(line_ptrs[i+5], "    call %63s", tgt1) == 1 && sscanf(line_ptrs[i+9], "    call %63s", tgt2) == 1 &&
+            strcmp(tgt1, tgt2) == 0 && sscanf(line_ptrs[i+11], "    jmp %63s", end_lbl) == 1) {
+          int has_local_stack = 0, k;
+          for (k = i - 1; k >= 0 && k >= i - 32; k--) {
+            if (line_ptrs[k][0] == '.' && line_ptrs[k][1] == 'L') break;
+            if (strstr(line_ptrs[k], "leaq ") && strstr(line_ptrs[k], "(%rbp)")) { has_local_stack = 1; break; }
+          }
+          if (has_local_stack) { i++; continue; }
+          sprintf(target_lbl, "%s:\n", end_lbl);
+          int e_idx = -1;
+          for (k = i + 12; k < nlines; k++) if (strcmp(line_ptrs[k], target_lbl) == 0) { e_idx = k; break; }
+          if (e_idx < 0) for (k = i - 1; k >= 0; k--) if (strcmp(line_ptrs[k], target_lbl) == 0) { e_idx = k; break; }
+          if (e_idx >= 0) {
+            int cur = i;
+            for (k = e_idx + 1; k < nlines && k < e_idx + 16; k++) {
+              if (strcmp(line_ptrs[k], "    ret\n") == 0) break;
+              if (cur <= i + 11) sprintf(line_ptrs[cur++], "%s", line_ptrs[k]);
+            }
+            if (cur <= i + 11) sprintf(line_ptrs[cur++], "    jmp %s\n", tgt1);
+            while (cur <= i + 11) line_ptrs[cur++][0] = 0;
+            eliminated += 8; i += 12; continue;
+          }
+        }
+      }
+    }
     i++;
     }
   }
