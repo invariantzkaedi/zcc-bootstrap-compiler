@@ -1,0 +1,9 @@
+# Commands executed for ZCC Native C-to-WGSL WebGPU Backend Verification
+1. gcc -O2 -Wall -Wextra -Werror -I. -Iinclude -o bin/zcc_wgsl tools/zcc_wgsl_cli.c ir.c src/backend/ir_to_wgsl.c
+2. gcc -O2 -Wall -Wextra -Werror -I. -Iinclude -o /tmp/test_zcc_wgsl_hardening tests/test_zcc_wgsl_hardening.c ir.c src/backend/ir_to_wgsl.c && /tmp/test_zcc_wgsl_hardening
+3. python tools/test_zcc_wgsl_gauntlet.py
+4. cmp zcc2.s zcc3.s
+5. In-Browser WebGPU Hardening Execution via Chromium on NVIDIA GeForce RTX 5070 Laptop GPU (file:///H:/agents/wgsl_test_runner.html)
+6. In-Browser WebGPU Integration Verification in Sovereign Observatory (file:///H:/agents/enhanced-ui.html#tab-quantum)
+7. git diff --stat && git status --short
+8. cmp zcc2.s zcc3.s (Gate 5 freshness)
