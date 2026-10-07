@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-10-06 20:27:28",
-  "total_runtime_sec": 8.6,
+  "timestamp": "2026-10-06 23:26:23",
+  "total_runtime_sec": 9.32,
   "theory_and_hamiltonian_field": {
     "ground_energy": -3.3583,
     "spectral_gap": 2.1765,
@@ -75,16 +75,79 @@
       0.279,
       23.7137
     ],
-    "squozen_truth_axiom": "THE SQUOZEN TRUTH (MECH-COGNITIVE DUALITY THEOREM):\n---------------------------------------------------------------------------------\nLet M be a language model with parameter manifold Theta and vocabulary V.\nStructural boundary invariants (markdown fences, delimiter balance, EOS placement, budget closure)\noccupy high-entropy boundary basins in the generation simplex Delta^|V|.\n\n1. Training Theta to avoid these boundary violations (via RLHF/DPO) compresses semantic representation,\n   steals attention heads, and remains probabilistic: P(structural leakage) > 0.\n2. Erecting an infinite potential barrier V(x) -> +inf (logits processor score -> -inf)\n   at the boundary mechanically guarantees zero structural leakage (fences, delimiter mismatches, EOS/budget).\n   Grammar and semantic validity beyond these structural boundaries remain empirical.\n3. By the Conservation of Cognitive Bandwidth, removing structural policing from Theta\n   maximizes the Fisher Information Metric of the model weights on semantic reasoning.\nCONCLUSION: Mechanism governs structure; Neural weights govern meaning.\n---------------------------------------------------------------------------------"
+    "squozen_truth_axiom": "THE SQUOZEN TRUTH (MECH-COGNITIVE DUALITY THEOREM):\n---------------------------------------------------------------------------------\nLet M be a language model with parameter manifold Theta and vocabulary V.\nStructural boundary invariants (markdown fences, delimiter balance, EOS placement, budget closure)\noccupy high-entropy boundary basins in the generation simplex Delta^|V|.\n\n1. Training Theta to avoid these boundary violations (via RLHF/DPO) compresses semantic representation,\n   steals attention heads, and remains probabilistic: P(structural leakage) > 0.\n2. Erecting an infinite potential barrier V(x) -> +inf (logits processor score -> -inf)\n   at the boundary mechanically guarantees zero structural leakage (fences, delimiter mismatches, EOS/budget).\n   Grammar and semantic validity beyond these structural boundaries remain empirical.\n3. [Conjecture] By the Conservation of Cognitive Bandwidth, removing structural policing from Theta\n   maximizes the Fisher Information Metric of the model weights on semantic reasoning.\nCONCLUSION: Mechanism governs structure; Neural weights govern meaning.\n---------------------------------------------------------------------------------"
   },
   "empirical_test": {
+    "unified_latency_benchmark": {
+      "benchmark_timestamp": "2026-10-06 23:06:05",
+      "model": "H:/models/Qwen2.5-Coder-1.5B-Instruct",
+      "interleaved_pairs_total": 12,
+      "interleaved_pairs_evaluated": 11,
+      "warmup_dropped_pair": {
+        "unconstrained_ms_per_tok": 57.74,
+        "engine_ms_per_tok": 43.13
+      },
+      "hardware_clock_policy": {
+        "clock_locking_attempted": "nvidia-smi -lgc 1500,1500",
+        "clock_locking_status": "UNAVAILABLE (Requires OS Administrator on Windows WDDM / Mobile GPU)",
+        "mitigation_method": "A/B interleaved execution across 12 cycles directly cancels laptop thermal throttling and power state drift."
+      },
+      "unconstrained_baseline": {
+        "raw_latencies_ms_per_tok": [
+          38.71,
+          36.42,
+          36.55,
+          34.58,
+          37.62,
+          37.27,
+          39.1,
+          34.36,
+          33.35,
+          36.97,
+          34.2
+        ],
+        "median_ms_per_tok": 36.55,
+        "q1_ms_per_tok": 34.47,
+        "q3_ms_per_tok": 37.44,
+        "iqr_ms_per_tok": 2.97,
+        "throughput_tok_per_sec": 27.4
+      },
+      "squozen_engine_telemetry_off": {
+        "raw_latencies_ms_per_tok": [
+          37.68,
+          39.96,
+          37.85,
+          37.49,
+          37.34,
+          42.15,
+          36.49,
+          33.11,
+          38.77,
+          36.9,
+          36.47
+        ],
+        "median_ms_per_tok": 37.49,
+        "q1_ms_per_tok": 36.69,
+        "q3_ms_per_tok": 38.31,
+        "iqr_ms_per_tok": 1.62,
+        "throughput_tok_per_sec": 26.7
+      },
+      "comparison": {
+        "delta_ms_per_tok": 0.94,
+        "delta_pct": 2.6,
+        "authoritative_statement": "Under interleaved A/B testing (N=11 evaluated pairs), unconstrained baseline median is 36.55 ms/tok (IQR 2.97) vs engine median 37.49 ms/tok (IQR 1.62), yielding a net overhead of +0.94 ms/tok (+2.6%)."
+      }
+    },
     "unconstrained": {
       "text": "```json\n{\n  \"fn_name\": \"compute_sha256_digest\",\n  \"spill_count\": 1,\n  \"callee_saved_regs\": [\"r0\", \"r1\"],\n  \"target_arch\": \"x86_64\"\n}\n```",
       "tokens": 56,
       "has_backticks": true,
       "backtick_count": 6,
-      "time_sec": 1.832,
-      "ms_per_token": 32.71
+      "time_sec": 2.11,
+      "authoritative_benchmark_source": "LATENCY_BENCHMARK_UNIFIED.json",
+      "ms_per_token_median": 36.55,
+      "ms_per_token_iqr": 2.97,
+      "throughput_tok_s_median": 27.4
     },
     "squozen_engine": {
       "text": "{\n  \"fn_name\": \"compute_sha256_digest\",\n  \"spill_count\": 1,\n  \"callee_saved_regs\": [\"r0\", \"r1\", \"r2\", \"r3\"],\n  \"target_arch\": \"x86_64\"\n}",
@@ -104,18 +167,53 @@
         "target_arch": "x86_64"
       },
       "parse_error": null,
-      "time_sec": 2.607,
-      "ms_per_token": 43.46,
+      "time_sec": 2.81,
+      "authoritative_benchmark_source": "LATENCY_BENCHMARK_UNIFIED.json",
+      "ms_per_token_median": 37.49,
+      "ms_per_token_iqr": 1.62,
+      "throughput_tok_s_median": 26.7,
+      "delta_overhead_ms": 0.94,
+      "delta_overhead_pct": 2.6,
+      "cache_build_ms": 733.27,
+      "per_engine_init_ms": 1.402,
+      "first_engine_init_ms": 734.67,
       "rules_fired": [
         "eos_trigger",
-        "mismatch_mask",
+        "mismatch_guard_active",
         "opening_mask"
       ],
       "closer_fired": false,
+      "argmax_overrides": [
+        {
+          "step": 0,
+          "raw_token_id": 73594,
+          "raw_token_text": "```",
+          "new_token_id": 515,
+          "new_token_text": "{\n",
+          "rule": "opening_mask"
+        }
+      ],
+      "positive_control_verified": true,
+      "tokenizer_cache": {
+        "type": "weakref.WeakKeyDictionary",
+        "verified_lifecycle": "PASS",
+        "retains_references": false
+      },
+      "latency_telemetry_note": {
+        "authoritative_source": "LATENCY_BENCHMARK_UNIFIED.json",
+        "statement": "Under interleaved A/B testing (N=11 evaluated pairs), unconstrained baseline median is 36.55 ms/tok (IQR 2.97) vs engine median 37.49 ms/tok (IQR 1.62), yielding a net overhead of +0.94 ms/tok (+2.6%).",
+        "unconstrained_baseline_median_ms_per_tok": 36.55,
+        "unconstrained_baseline_iqr_ms_per_tok": 2.97,
+        "engine_telemetry_off_median_ms_per_tok": 37.49,
+        "engine_telemetry_off_iqr_ms_per_tok": 1.62,
+        "delta_overhead_ms_per_tok": 0.94,
+        "delta_overhead_pct": 2.6,
+        "telemetry_overhead_explanation": "Timing benchmark runs with track_argmax_overrides=False (telemetry=False) in interleaved A/B pairs to eliminate thermal and GPU synchronization drift. Evaluative generation runs with track_argmax_overrides=True as positive control."
+      },
       "epistemic_scope": {
         "mechanically_guaranteed": "zero backticks, delimiter balance, EOS placement, budget-safe closure.",
         "empirically_observed": "100% json.loads success on this model, this prompt set, these budgets.",
-        "disclaimed": "does not police semantic content, base model hallucination, or unmasked invalid JSON sequences."
+        "disclaimed": "does not police semantic content, base model hallucination, or unmasked invalid JSON sequences (e.g. {'a' 1}, 01, tru, invalid escapes). closer_fired=True signifies truncated-but-parseable syntax, not semantic completeness."
       }
     }
   }

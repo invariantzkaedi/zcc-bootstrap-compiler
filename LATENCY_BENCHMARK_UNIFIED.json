@@ -1,0 +1,60 @@
+{
+  "benchmark_timestamp": "2026-10-06 23:06:05",
+  "model": "H:/models/Qwen2.5-Coder-1.5B-Instruct",
+  "interleaved_pairs_total": 12,
+  "interleaved_pairs_evaluated": 11,
+  "warmup_dropped_pair": {
+    "unconstrained_ms_per_tok": 57.74,
+    "engine_ms_per_tok": 43.13
+  },
+  "hardware_clock_policy": {
+    "clock_locking_attempted": "nvidia-smi -lgc 1500,1500",
+    "clock_locking_status": "UNAVAILABLE (Requires OS Administrator on Windows WDDM / Mobile GPU)",
+    "mitigation_method": "A/B interleaved execution across 12 cycles directly cancels laptop thermal throttling and power state drift."
+  },
+  "unconstrained_baseline": {
+    "raw_latencies_ms_per_tok": [
+      38.71,
+      36.42,
+      36.55,
+      34.58,
+      37.62,
+      37.27,
+      39.1,
+      34.36,
+      33.35,
+      36.97,
+      34.2
+    ],
+    "median_ms_per_tok": 36.55,
+    "q1_ms_per_tok": 34.47,
+    "q3_ms_per_tok": 37.44,
+    "iqr_ms_per_tok": 2.97,
+    "throughput_tok_per_sec": 27.4
+  },
+  "squozen_engine_telemetry_off": {
+    "raw_latencies_ms_per_tok": [
+      37.68,
+      39.96,
+      37.85,
+      37.49,
+      37.34,
+      42.15,
+      36.49,
+      33.11,
+      38.77,
+      36.9,
+      36.47
+    ],
+    "median_ms_per_tok": 37.49,
+    "q1_ms_per_tok": 36.69,
+    "q3_ms_per_tok": 38.31,
+    "iqr_ms_per_tok": 1.62,
+    "throughput_tok_per_sec": 26.7
+  },
+  "comparison": {
+    "delta_ms_per_tok": 0.94,
+    "delta_pct": 2.6,
+    "authoritative_statement": "Under interleaved A/B testing (N=11 evaluated pairs), unconstrained baseline median is 36.55 ms/tok (IQR 2.97) vs engine median 37.49 ms/tok (IQR 1.62), yielding a net overhead of +0.94 ms/tok (+2.6%)."
+  }
+}

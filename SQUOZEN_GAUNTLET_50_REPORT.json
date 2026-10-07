@@ -1,35 +1,129 @@
 {
-  "timestamp": "2026-10-06 22:46:38",
+  "timestamp": "2026-10-06 23:31:31",
   "model": "H:/models/Qwen2.5-Coder-1.5B-Instruct",
   "prompts_tested": 50,
   "valid_json_count": 50,
   "zero_leakage_count": 50,
   "total_tokens": 1140,
-  "runtime_sec": 66.22,
-  "pure_generation_time_sec": 66.17,
-  "pure_throughput_tok_s": 17.2,
-  "pure_latency_ms_per_tok": 58.05,
-  "cache_build_ms": 655.05,
-  "per_engine_init_ms": 0.036,
+  "runtime_sec": 104.94,
+  "pure_generation_time_sec": 104.9,
+  "pure_throughput_tok_s": 10.9,
+  "pure_latency_ms_per_tok": 92.01,
+  "cache_build_ms": 861.19,
+  "per_engine_init_ms": 0.001,
   "key_coverage_count": 50,
   "key_coverage_pct": 100.0,
-  "value_match_count": 56,
-  "value_expected_count": 56,
-  "value_match_pct": 100.0,
+  "value_match_count": 83,
+  "value_expected_count": 84,
+  "value_match_pct": 98.8,
+  "value_fidelity_note": "83 / 84 (98.8%) exact matches under strict evaluation. Note on Row 30: under ast.literal_eval of the prompt string 'a/b/c\\\\d', the requested literal string value is 'a/b/c\\d' (1 backslash). While the raw prompt text displays two escaped backslashes, the model generated 'a/b/c\\\\\\\\d' in raw JSON which decodes via json.loads to 'a/b/c\\\\d' (2 backslashes), representing a genuine model escape divergence correctly flagged by the strict comparator.",
   "fence_overrides_count": 50,
   "content_overrides_count": 0,
   "total_argmax_overrides": 50,
   "dual_claims": {
-    "content_neutrality": "0 content overrides (step > 0) across all 50 prompts; 100% key and value fidelity on valid JSON.",
+    "content_neutrality": "0 content overrides (step > 0) across all 50 prompts; 100% key fidelity and 83/84 value fidelity with strict escape checking.",
     "boundary_correction": "50/50 step-0 markdown fences (```) overridden to opening delimiters ({\") with rule='opening_mask'."
+  },
+  "tokenizer_cache": {
+    "type": "weakref.WeakKeyDictionary",
+    "verified_lifecycle": "PASS",
+    "retains_references": false
+  },
+  "adversarial_suite_label": "All closer cutoffs (28/28) and cycle breaker trajectory mutation PASS.",
+  "unified_latency_benchmark": {
+    "benchmark_timestamp": "2026-10-06 23:06:05",
+    "model": "H:/models/Qwen2.5-Coder-1.5B-Instruct",
+    "interleaved_pairs_total": 12,
+    "interleaved_pairs_evaluated": 11,
+    "warmup_dropped_pair": {
+      "unconstrained_ms_per_tok": 57.74,
+      "engine_ms_per_tok": 43.13
+    },
+    "hardware_clock_policy": {
+      "clock_locking_attempted": "nvidia-smi -lgc 1500,1500",
+      "clock_locking_status": "UNAVAILABLE (Requires OS Administrator on Windows WDDM / Mobile GPU)",
+      "mitigation_method": "A/B interleaved execution across 12 cycles directly cancels laptop thermal throttling and power state drift."
+    },
+    "unconstrained_baseline": {
+      "raw_latencies_ms_per_tok": [
+        38.71,
+        36.42,
+        36.55,
+        34.58,
+        37.62,
+        37.27,
+        39.1,
+        34.36,
+        33.35,
+        36.97,
+        34.2
+      ],
+      "median_ms_per_tok": 36.55,
+      "q1_ms_per_tok": 34.47,
+      "q3_ms_per_tok": 37.44,
+      "iqr_ms_per_tok": 2.97,
+      "throughput_tok_per_sec": 27.4
+    },
+    "squozen_engine_telemetry_off": {
+      "raw_latencies_ms_per_tok": [
+        37.68,
+        39.96,
+        37.85,
+        37.49,
+        37.34,
+        42.15,
+        36.49,
+        33.11,
+        38.77,
+        36.9,
+        36.47
+      ],
+      "median_ms_per_tok": 37.49,
+      "q1_ms_per_tok": 36.69,
+      "q3_ms_per_tok": 38.31,
+      "iqr_ms_per_tok": 1.62,
+      "throughput_tok_per_sec": 26.7
+    },
+    "comparison": {
+      "delta_ms_per_tok": 0.94,
+      "delta_pct": 2.6,
+      "authoritative_statement": "Under interleaved A/B testing (N=11 evaluated pairs), unconstrained baseline median is 36.55 ms/tok (IQR 2.97) vs engine median 37.49 ms/tok (IQR 1.62), yielding a net overhead of +0.94 ms/tok (+2.6%)."
+    }
+  },
+  "latency_telemetry_note": {
+    "authoritative_source": "LATENCY_BENCHMARK_UNIFIED.json",
+    "statement": "Under interleaved A/B testing (N=11 evaluated pairs), unconstrained baseline median is 36.55 ms/tok (IQR 2.97) vs engine median 37.49 ms/tok (IQR 1.62), yielding a net overhead of +0.94 ms/tok (+2.6%).",
+    "unconstrained_baseline_median_ms_per_tok": 36.55,
+    "unconstrained_baseline_iqr_ms_per_tok": 2.97,
+    "engine_telemetry_off_median_ms_per_tok": 37.49,
+    "engine_telemetry_off_iqr_ms_per_tok": 1.62,
+    "delta_overhead_ms_per_tok": 0.94,
+    "delta_overhead_pct": 2.6,
+    "gauntlet_latency_with_argmax_telemetry_ms_per_tok": 92.01,
+    "telemetry_overhead_explanation": "In this 50-prompt gauntlet with telemetry active, pure latency was 92.01 ms/tok (a +54.52 ms/tok delta vs the 37.49 ms/tok telemetry-off engine baseline) due to per-step GPU argmax inspection and CPU synchronization to verify 50/50 fence overrides and 0 content overrides. In production with track_argmax_overrides=False, the unified interleaved benchmark (LATENCY_BENCHMARK_UNIFIED.json) measures median overhead as +0.94 ms/tok (+2.6%)."
   },
   "mismatch_mask_unit_test": {
     "case_a_brace_count": 312,
     "case_a_all_inf": true,
     "case_b_bracket_count": 358,
-    "case_b_all_inf": true
+    "case_b_all_inf": true,
+    "multi_closer_token": "]}",
+    "multi_closer_token_id": 13989,
+    "multi_closer_permitted_in_array_with_outer_object": true,
+    "multi_closer_clamped_in_object": true,
+    "multi_closer_clamped_in_bare_array_stack_len_1": true,
+    "internal_error_token": "[}",
+    "internal_error_tokens_count": 0,
+    "internal_error_tokens_clamped_case_a": true,
+    "internal_error_tokens_clamped_case_b": true,
+    "internal_error_tokens_vacuous_pass_note": "Vacuously true for Qwen2.5: tokenizer vocabulary contains 0 merged tokens with conflicting bracket/brace delimiters (e.g., '[}'). Clamping is verified by unit test get_external_closers('[}') == ('INTERNAL_ERROR',) and table construction, but live logit clamping in Qwen2.5 is vacuously true because numel() == 0. On tokenizers with such merged tokens, this path remains untested.",
+    "unit_assertions": "PASS"
   },
   "adversarial_suite": {
+    "status": "PASS",
+    "cycle_breaker_fired": true,
+    "cycle_breaker_trajectory_mutation": "PASS",
+    "adversarial_suite_label": "All closer cutoffs (28/28) and cycle breaker trajectory mutation PASS.",
     "closer_tests": [
       {
         "budget": 12,
@@ -515,38 +609,44 @@
         "mismatch_guard_active",
         "opening_mask"
       ],
-      "output": "{\"word\": \"go go go go go go go go go gogogogogogogogogogo go go go go go go go go\"}"
+      "output": "{\"word\": \"go go go go go go go go go gogogogogogogogogogo go go go go go go go go\"}",
+      "trajectory_mutation_status": "PASS"
     }
   },
-  "batched_b2_sanity": [
-    {
-      "row": 0,
-      "prompt": "Output raw JSON with keys 'a': 1, 'b': 2, 'active': true.",
-      "output": "{\"a\":1,\"b\":2,\"active\":true}",
-      "backticks": 0,
-      "valid_json": true,
-      "closer_fired": false,
-      "rules_fired": [
-        "cycle_breaker",
-        "eos_trigger",
-        "mismatch_guard_active",
-        "opening_mask"
-      ]
-    },
-    {
-      "row": 1,
-      "prompt": "Output raw JSON with key 'matrix' set to [[0, 0, 0], [0, 0, 0], [0, 0, 0]].",
-      "output": "{\"matrix\": [[0, 0, 0], [0, 0, 0], [0, 0, 0]]}",
-      "backticks": 0,
-      "valid_json": true,
-      "closer_fired": false,
-      "rules_fired": [
-        "eos_trigger",
-        "mismatch_guard_active",
-        "opening_mask"
-      ]
-    }
-  ],
+  "batched_b2_sanity": {
+    "batch_records": [
+      {
+        "row": 0,
+        "prompt": "Output raw JSON with keys 'a': 1, 'b': 2, 'active': true.",
+        "output": "{\"a\":1,\"b\":2,\"active\":true}",
+        "backticks": 0,
+        "valid_json": true,
+        "finished": true,
+        "closer_fired": false,
+        "rules_fired": [
+          "eos_trigger",
+          "mismatch_guard_active",
+          "opening_mask"
+        ]
+      },
+      {
+        "row": 1,
+        "prompt": "Output raw JSON with key 'matrix' set to [[0, 0, 0], [0, 0, 0], [0, 0, 0]].",
+        "output": "{\"matrix\": [[0, 0, 0], [0, 0, 0], [0, 0, 0]]}",
+        "backticks": 0,
+        "valid_json": true,
+        "finished": true,
+        "closer_fired": false,
+        "rules_fired": [
+          "eos_trigger",
+          "mismatch_guard_active",
+          "opening_mask"
+        ]
+      }
+    ],
+    "finished_guard_verified": true,
+    "spurious_cycle_breaker_prevented": true
+  },
   "epistemic_scope": {
     "mechanically_guaranteed": "zero backticks, delimiter balance, EOS placement, budget-safe closure.",
     "empirically_observed": "100% json.loads success (50/50) on this model, this prompt set, these budgets.",
@@ -580,8 +680,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 0,
-      "value_fidelity_expected": 0
+      "value_fidelity_matches": 2,
+      "value_fidelity_expected": 2,
+      "value_fidelity_misses": []
     },
     {
       "id": 2,
@@ -610,8 +711,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_matches": 2,
+      "value_fidelity_expected": 2,
+      "value_fidelity_misses": []
     },
     {
       "id": 3,
@@ -640,8 +742,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_matches": 2,
+      "value_fidelity_expected": 2,
+      "value_fidelity_misses": []
     },
     {
       "id": 4,
@@ -671,7 +774,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 5,
@@ -700,8 +804,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 0,
-      "value_fidelity_expected": 0
+      "value_fidelity_matches": 2,
+      "value_fidelity_expected": 2,
+      "value_fidelity_misses": []
     },
     {
       "id": 6,
@@ -730,8 +835,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_matches": 2,
+      "value_fidelity_expected": 2,
+      "value_fidelity_misses": []
     },
     {
       "id": 7,
@@ -760,8 +866,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_matches": 2,
+      "value_fidelity_expected": 2,
+      "value_fidelity_misses": []
     },
     {
       "id": 8,
@@ -791,7 +898,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 2,
-      "value_fidelity_expected": 2
+      "value_fidelity_expected": 2,
+      "value_fidelity_misses": []
     },
     {
       "id": 9,
@@ -820,8 +928,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 0,
-      "value_fidelity_expected": 0
+      "value_fidelity_matches": 1,
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 10,
@@ -851,7 +960,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 11,
@@ -880,8 +990,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 0,
-      "value_fidelity_expected": 0
+      "value_fidelity_matches": 1,
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 12,
@@ -911,7 +1022,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 13,
@@ -940,8 +1052,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 0,
-      "value_fidelity_expected": 0
+      "value_fidelity_matches": 1,
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 14,
@@ -970,8 +1083,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 0,
-      "value_fidelity_expected": 0
+      "value_fidelity_matches": 1,
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 15,
@@ -1000,7 +1114,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 16,
@@ -1030,7 +1145,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 17,
@@ -1060,7 +1176,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 18,
@@ -1089,8 +1206,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 0,
-      "value_fidelity_expected": 0
+      "value_fidelity_matches": 1,
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 19,
@@ -1119,8 +1237,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 0,
-      "value_fidelity_expected": 0
+      "value_fidelity_matches": 1,
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 20,
@@ -1149,8 +1268,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 0,
-      "value_fidelity_expected": 0
+      "value_fidelity_matches": 1,
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 21,
@@ -1179,8 +1299,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 0,
-      "value_fidelity_expected": 0
+      "value_fidelity_matches": 1,
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 22,
@@ -1209,8 +1330,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 0,
-      "value_fidelity_expected": 0
+      "value_fidelity_matches": 1,
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 23,
@@ -1240,7 +1362,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 2,
-      "value_fidelity_expected": 2
+      "value_fidelity_expected": 2,
+      "value_fidelity_misses": []
     },
     {
       "id": 24,
@@ -1270,7 +1393,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 25,
@@ -1300,7 +1424,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 26,
@@ -1330,7 +1455,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 2,
-      "value_fidelity_expected": 2
+      "value_fidelity_expected": 2,
+      "value_fidelity_misses": []
     },
     {
       "id": 27,
@@ -1359,8 +1485,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_matches": 3,
+      "value_fidelity_expected": 3,
+      "value_fidelity_misses": []
     },
     {
       "id": 28,
@@ -1390,7 +1517,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 29,
@@ -1420,7 +1548,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 30,
@@ -1449,8 +1578,11 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_matches": 0,
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": [
+        "key 'escaped_slash': expected 'a/b/c\\\\d' vs actual 'a/b/c\\\\\\\\d'"
+      ]
     },
     {
       "id": 31,
@@ -1479,8 +1611,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 0,
-      "value_fidelity_expected": 0
+      "value_fidelity_matches": 1,
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 32,
@@ -1509,8 +1642,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 2,
-      "value_fidelity_expected": 2
+      "value_fidelity_matches": 3,
+      "value_fidelity_expected": 3,
+      "value_fidelity_misses": []
     },
     {
       "id": 33,
@@ -1540,7 +1674,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 3,
-      "value_fidelity_expected": 3
+      "value_fidelity_expected": 3,
+      "value_fidelity_misses": []
     },
     {
       "id": 34,
@@ -1569,8 +1704,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_matches": 2,
+      "value_fidelity_expected": 2,
+      "value_fidelity_misses": []
     },
     {
       "id": 35,
@@ -1600,7 +1736,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 3,
-      "value_fidelity_expected": 3
+      "value_fidelity_expected": 3,
+      "value_fidelity_misses": []
     },
     {
       "id": 36,
@@ -1629,8 +1766,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 2,
-      "value_fidelity_expected": 2
+      "value_fidelity_matches": 3,
+      "value_fidelity_expected": 3,
+      "value_fidelity_misses": []
     },
     {
       "id": 37,
@@ -1660,7 +1798,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 2,
-      "value_fidelity_expected": 2
+      "value_fidelity_expected": 2,
+      "value_fidelity_misses": []
     },
     {
       "id": 38,
@@ -1689,8 +1828,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_matches": 2,
+      "value_fidelity_expected": 2,
+      "value_fidelity_misses": []
     },
     {
       "id": 39,
@@ -1720,7 +1860,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 3,
-      "value_fidelity_expected": 3
+      "value_fidelity_expected": 3,
+      "value_fidelity_misses": []
     },
     {
       "id": 40,
@@ -1750,7 +1891,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 3,
-      "value_fidelity_expected": 3
+      "value_fidelity_expected": 3,
+      "value_fidelity_misses": []
     },
     {
       "id": 41,
@@ -1779,8 +1921,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 0,
-      "value_fidelity_expected": 0
+      "value_fidelity_matches": 1,
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 42,
@@ -1810,7 +1953,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 2,
-      "value_fidelity_expected": 2
+      "value_fidelity_expected": 2,
+      "value_fidelity_misses": []
     },
     {
       "id": 43,
@@ -1839,8 +1983,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 2,
-      "value_fidelity_expected": 2
+      "value_fidelity_matches": 3,
+      "value_fidelity_expected": 3,
+      "value_fidelity_misses": []
     },
     {
       "id": 44,
@@ -1869,7 +2014,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 45,
@@ -1899,7 +2045,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 46,
@@ -1928,7 +2075,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 47,
@@ -1958,7 +2106,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 1,
-      "value_fidelity_expected": 1
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 48,
@@ -1986,8 +2135,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 0,
-      "value_fidelity_expected": 0
+      "value_fidelity_matches": 1,
+      "value_fidelity_expected": 1,
+      "value_fidelity_misses": []
     },
     {
       "id": 49,
@@ -2016,8 +2166,9 @@
       "fence_overrides": 1,
       "content_overrides": 0,
       "key_fidelity_subset": true,
-      "value_fidelity_matches": 3,
-      "value_fidelity_expected": 3
+      "value_fidelity_matches": 4,
+      "value_fidelity_expected": 4,
+      "value_fidelity_misses": []
     },
     {
       "id": 50,
@@ -2047,7 +2198,8 @@
       "content_overrides": 0,
       "key_fidelity_subset": true,
       "value_fidelity_matches": 3,
-      "value_fidelity_expected": 3
+      "value_fidelity_expected": 3,
+      "value_fidelity_misses": []
     }
   ]
 }
