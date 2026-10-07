@@ -256,11 +256,39 @@ def parse_zcc_diagnostics(stderr_text: str, stdout_text: str, file_path: Optiona
 
     total_lines = len(file_path.read_text(encoding="utf-8").splitlines()) if (file_path and file_path.exists()) else 999999
 
-    # Matches patterns like: /path/file.c:2: error: expected SEMI (96), got EOF (0)
+    # Pre-compute preprocessor header offset if any line exceeds total_lines
     err_pattern = re.compile(r"([^:\n]+):(\d+):\s*error:\s*([^\n]+)")
-    for match in err_pattern.finditer(combined):
+    raw_matches = list(err_pattern.finditer(combined))
+    raw_lines = [int(m.group(2)) for m in raw_matches]
+    first_bad_raw = next((rl for rl in raw_lines if rl > total_lines), None)
+
+    header_offset = 0
+    if first_bad_raw is not None and file_path and file_path.exists():
+        try:
+            wsl_src = to_wsl_path(file_path)
+            cmd = f"gcc -fsyntax-only {wsl_src}"
+            proc = subprocess.run(
+                ["wsl", "-d", "Ubuntu", "bash", "-c", cmd],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            m = re.search(r':(\d+):\d+:\s*error:', proc.stderr)
+            if m:
+                oracle_line = int(m.group(1))
+                header_offset = first_bad_raw - oracle_line
+        except Exception:
+            pass
+
+    for match in raw_matches:
         raw_line = int(match.group(2))
-        resolved_line = resolve_diagnostic_line(file_path, raw_line, total_lines)
+        if 1 <= raw_line <= total_lines:
+            resolved_line = raw_line
+        elif header_offset > 0:
+            resolved_line = min(total_lines, max(1, raw_line - header_offset))
+        else:
+            resolved_line = min(total_lines, max(1, raw_line))
+
         errors.append({
             "file": match.group(1).strip(),
             "line": resolved_line,
@@ -616,11 +644,12 @@ class ZccSquozenRepairLoop:
         target_c_file: Path,
         expected_oracle_code: Optional[int] = None,
         max_attempts: int = 3,
-        num_candidates: int = 4
+        num_candidates: int = 4,
+        max_cascade_steps: int = 6
     ) -> Dict[str, Any]:
         """
         End-to-End autonomous repair loop with Blackwell Quad-Warp speculative beam
-        tournament, multi-attempt feedback, dual-oracle differential verification,
+        tournament, multi-defect cascade healing, dual-oracle differential verification,
         and transactional rollback.
         """
         print(f"\n================================================================================")
@@ -634,8 +663,8 @@ class ZccSquozenRepairLoop:
         success = False
         final_repaired_code = ""
         attempt_logs = []
-        diag = {}
         output_bin = target_c_file.with_suffix(".bin")
+        initial_errors = []
 
         try:
             # 1. Probe Baseline State
@@ -648,147 +677,206 @@ class ZccSquozenRepairLoop:
                 return {"status": "ALREADY_CLEAN"}
 
             diag = parse_zcc_diagnostics(stderr, stdout, file_path=target_c_file)
+            initial_errors = diag.get("errors", [])
             print(f"  ✖ Captured {diag['error_count']} diagnostic error(s):")
-            for err in diag["errors"]:
+            for err in initial_errors[:5]:
                 print(f"    - Line {err['line']}: {err['message']}")
+            if len(initial_errors) > 5:
+                print(f"    ... and {len(initial_errors) - 5} more diagnostic errors.")
 
             current_source = orig_source
-            current_diag = diag
-            last_error = None
 
-            # Multi-Attempt Adaptive Feedback Loop
-            for attempt in range(1, max_attempts + 1):
-                # Check for surgical macro localization (>50 lines)
-                surgical_mode = len(current_source.splitlines()) > 50 and bool(current_diag.get("errors"))
-                if surgical_mode:
-                    err_line = current_diag["errors"][0]["line"]
-                    start_l, end_l, focus_block = extract_enclosing_function_or_block(current_source, err_line)
-                    print(f"  [SURGICAL SCOPE] Macro file ({len(current_source.splitlines())} lines) detected.")
-                    print(f"  [SURGICAL SCOPE] Localized error to lines {start_l}..{end_l} ({end_l - start_l + 1} lines in {focus_block.splitlines()[0][:35]}...)")
-                    source_to_synthesize = focus_block
-                    synth_candidates = num_candidates
-                else:
-                    source_to_synthesize = current_source
-                    synth_candidates = num_candidates
-
-                print(f"\n[STAGE 2] Synthesis Round {attempt}/{max_attempts} (Speculative Beam: {synth_candidates} Hypotheses)...")
-                try:
-                    candidates = self.synthesize_repairs(
-                        source_to_synthesize,
-                        current_diag,
-                        attempt=attempt,
-                        num_candidates=synth_candidates,
-                        previous_error=last_error
-                    )
-                except Exception as e:
-                    print(f"  ✖ Synthesis Error: {e}")
-                    attempt_logs.append({"attempt": attempt, "error": str(e)})
-                    continue
-
-                if not candidates:
-                    print(f"  ✖ No valid JSON candidates parsed from batch generation. Retrying...")
-                    last_error = "Model generated malformed JSON output."
-                    continue
-
-                print(f"  ✔ {len(candidates)} candidate repair(s) synthesized in parallel ({candidates[0]['gen_time_sec']}s).")
-                tournament_winner = None
-                best_failure_msg = None
-
-                for cand in candidates:
-                    c_idx = cand["candidate_idx"]
-                    parsed = cand["parsed_json"]
-                    raw_code = parsed.get("repaired_source", "")
-                    repaired_code = sanitize_c_source(raw_code)
-                    root_cause = parsed.get("root_cause", "N/A")
-
-                    if surgical_mode:
-                        if "#include" not in focus_block:
-                            repaired_code = "\n".join(
-                                l for l in repaired_code.splitlines()
-                                if not l.strip().startswith("#include")
-                            ).strip()
-                        lines = current_source.splitlines()
-                        full_code = "\n".join(lines[:start_l - 1] + repaired_code.splitlines() + lines[end_l:])
-                    else:
-                        full_code = repaired_code
-
-                    # Pre-write sanity check
-                    valid_c, val_err = validate_c_syntax_integrity(full_code)
-                    if not valid_c:
-                        best_failure_msg = f"Candidate {c_idx} C syntax check failed: {val_err}"
-                        continue
-
-                    # Apply Patch Atomically for Candidate Evaluation
-                    target_c_file.write_text(full_code, encoding="utf-8")
-
-                    # Verify Re-Compilation under ZCC
-                    rc2, stdout2, stderr2 = run_zcc_compile(target_c_file, output_bin=output_bin)
-                    if rc2 != 0:
-                        raw_combined = f"{stdout2}\n{stderr2}".strip()
-                        cleaned_err = "\n".join(
-                            line for line in raw_combined.splitlines()
-                            if "using synthesized header" not in line and "pp_process_include" not in line
-                        ).strip()
-                        best_failure_msg = f"Candidate {c_idx} failed ZCC compile (exit {rc2}): {cleaned_err or raw_combined}"
-                        continue
-
-                    # Shield 3: AST Topological Invariant Checker
+            # =========================================================================
+            # MULTI-DEFECT CASCADE HEALING LOOP
+            # Iteratively heals defect clusters until global convergence (errors == 0).
+            # =========================================================================
+            for cascade_step in range(1, max_cascade_steps + 1):
+                # 1. Check current compilation status
+                rc_curr, stdout_curr, stderr_curr = run_zcc_compile(target_c_file, output_bin=output_bin)
+                if rc_curr == 0:
+                    # Clean compilation achieved across entire file!
                     ast_ok, ast_data, ast_err = verify_zcc_ast(target_c_file)
-                    if not ast_ok:
-                        best_failure_msg = f"Candidate {c_idx} AST violation: {ast_err}"
-                        continue
-
-                    node_count = len(ast_data.get("nodes", []))
-
-                    # Shield 4 & 5: Independent Dual-Oracle Differential Execution Check
                     diff_ok, diff_msg, diff_telem = verify_differential_execution(
                         source_path=target_c_file,
                         output_bin=output_bin,
                         expected_exit_code=expected_oracle_code
                     )
+                    if ast_ok and diff_ok:
+                        print(f"\n[CASCADE STEP {cascade_step}] 🏆 GLOBAL CONVERGENCE ACHIEVED!")
+                        print(f"  ✔ All defect clusters resolved! ZCC exit 0.")
+                        print(f"  ✔ AST Invariant Verified: schema={ast_data.get('schema')}, {len(ast_data.get('nodes', []))} nodes.")
+                        print(f"  ✔ Dual-Oracle Parity: {diff_msg}")
+                        success = True
+                        final_repaired_code = current_source
+                        break
 
-                    if not diff_ok:
-                        best_failure_msg = f"Candidate {c_idx} Differential Oracle Violation: {diff_msg}"
+                current_diag = parse_zcc_diagnostics(stderr_curr, stdout_curr, file_path=target_c_file)
+                curr_errors = current_diag.get("errors", [])
+                if not curr_errors:
+                    print(f"  ✖ Compilation failed without parsed diagnostics.")
+                    break
+
+                err_line = curr_errors[0]["line"]
+                start_l, end_l, focus_block = extract_enclosing_function_or_block(current_source, err_line)
+                total_file_lines = len(current_source.splitlines())
+                surgical_mode = (start_l > 1 or end_l < total_file_lines)
+
+                if surgical_mode:
+                    print(f"\n[CASCADE STEP {cascade_step}/{max_cascade_steps}] Localized defect to lines {start_l}..{end_l} in {focus_block.splitlines()[0][:35]}... ({len(curr_errors)} total error(s) remaining)")
+                    source_to_synthesize = focus_block
+                else:
+                    start_l, end_l = 1, total_file_lines
+                    source_to_synthesize = current_source
+                    print(f"\n[CASCADE STEP {cascade_step}/{max_cascade_steps}] Localized defect at line {err_line} ({len(curr_errors)} total error(s) remaining)")
+
+                # Inner speculative tournament loop
+                step_winner = None
+                last_error = None
+
+                for attempt in range(1, max_attempts + 1):
+                    feedback_note = f" (Attempt {attempt})" if attempt > 1 else ""
+                    print(f"  [SYNTHESIS ROUND {attempt}/{max_attempts}{feedback_note}] Generating {num_candidates} Hypotheses...")
+                    try:
+                        candidates = self.synthesize_repairs(
+                            source_to_synthesize,
+                            current_diag,
+                            attempt=attempt,
+                            num_candidates=num_candidates,
+                            previous_error=last_error
+                        )
+                    except Exception as e:
+                        print(f"  ✖ Synthesis Error: {e}")
+                        last_error = str(e)
                         continue
 
-                    # TOURNAMENT WINNER FOUND!
-                    print(f"  🏆 Candidate {c_idx} WON Tournament! {diff_msg} (Exit Code: {diff_telem.get('zcc_exit_code')})")
-                    print(f"  ✔ Root Cause Diagnosed: {root_cause}")
-                    print(f"  ✔ AST Invariant Verified: schema={ast_data.get('schema')}, {node_count} nodes.")
-                    tournament_winner = cand
-                    tournament_winner["repaired_code"] = full_code
-                    tournament_winner["diff_telem"] = diff_telem
-                    tournament_winner["ast_nodes"] = node_count
-                    tournament_winner["root_cause"] = root_cause
-                    break
+                    if not candidates:
+                        last_error = "Model generated malformed JSON."
+                        continue
 
-                if tournament_winner:
-                    success = True
-                    final_repaired_code = tournament_winner["repaired_code"]
+                    best_failure_msg = None
+
+                    for cand in candidates:
+                        c_idx = cand["candidate_idx"]
+                        parsed = cand["parsed_json"]
+                        raw_code = parsed.get("repaired_source", "")
+                        repaired_code = sanitize_c_source(raw_code)
+                        root_cause = parsed.get("root_cause", "N/A")
+
+                        if surgical_mode:
+                            if "#include" not in focus_block:
+                                repaired_code = "\n".join(
+                                    l for l in repaired_code.splitlines()
+                                    if not l.strip().startswith("#include")
+                                ).strip()
+                            lines = current_source.splitlines()
+                            full_code = "\n".join(lines[:start_l - 1] + repaired_code.splitlines() + lines[end_l:])
+                        else:
+                            full_code = repaired_code
+
+                        # Pre-write sanity check
+                        valid_c, val_err = validate_c_syntax_integrity(full_code)
+                        if not valid_c:
+                            best_failure_msg = f"Candidate {c_idx} C syntax check failed: {val_err}"
+                            continue
+
+                        # Apply patch atomically to test
+                        target_c_file.write_text(full_code, encoding="utf-8")
+                        rc2, stdout2, stderr2 = run_zcc_compile(target_c_file, output_bin=output_bin)
+
+                        if rc2 == 0:
+                            # Full compile clean!
+                            ast_ok, ast_data, ast_err = verify_zcc_ast(target_c_file)
+                            diff_ok, diff_msg, diff_telem = verify_differential_execution(
+                                source_path=target_c_file,
+                                output_bin=output_bin,
+                                expected_exit_code=expected_oracle_code
+                            )
+                            if ast_ok and diff_ok:
+                                print(f"  🏆 Candidate {c_idx} WON Tournament! Full clean compile! {diff_msg}")
+                                step_winner = {
+                                    "candidate_idx": c_idx,
+                                    "repaired_code": full_code,
+                                    "diff_telem": diff_telem,
+                                    "ast_nodes": len(ast_data.get("nodes", [])),
+                                    "root_cause": root_cause,
+                                    "gen_time_sec": cand["gen_time_sec"],
+                                    "full_clean": True
+                                }
+                                break
+                            else:
+                                best_failure_msg = f"Candidate {c_idx} clean compile but failed verification: {diff_msg if not diff_ok else ast_err}"
+                                continue
+
+                        # If rc2 != 0 and surgical_mode: check if defect in this function block was eliminated!
+                        if surgical_mode:
+                            diag_after = parse_zcc_diagnostics(stderr2, stdout2, file_path=target_c_file)
+                            new_end_l = start_l + len(repaired_code.splitlines()) - 1
+                            errors_in_block = [
+                                e for e in diag_after.get("errors", [])
+                                if start_l <= e["line"] <= new_end_l
+                            ]
+
+                            first_err_line = diag_after["errors"][0]["line"] if diag_after.get("errors") else None
+                            if not errors_in_block and (first_err_line is None or first_err_line > new_end_l):
+                                # Defect in this function successfully healed and compiler progressed!
+                                print(f"  ✔ Candidate {c_idx} WON Step! Healed lines {start_l}..{new_end_l} (Remaining errors elsewhere: {diag_after.get('error_count', 0)})")
+                                step_winner = {
+                                    "candidate_idx": c_idx,
+                                    "repaired_code": full_code,
+                                    "diff_telem": None,
+                                    "ast_nodes": None,
+                                    "root_cause": root_cause,
+                                    "gen_time_sec": cand["gen_time_sec"],
+                                    "full_clean": False,
+                                    "remaining_errors": diag_after.get("error_count", 0)
+                                }
+                                break
+                            else:
+                                if errors_in_block:
+                                    best_failure_msg = f"Candidate {c_idx} still has errors in block: {errors_in_block[0]['message']}"
+                                else:
+                                    best_failure_msg = f"Candidate {c_idx} caused regression at line {first_err_line}"
+                        else:
+                            raw_combined = f"{stdout2}\n{stderr2}".strip()
+                            best_failure_msg = f"Candidate {c_idx} failed ZCC compile (exit {rc2}): {raw_combined[:100]}"
+
+                    if step_winner:
+                        break
+                    else:
+                        last_error = best_failure_msg
+                        target_c_file.write_text(current_source, encoding="utf-8")
+
+                if step_winner:
+                    current_source = step_winner["repaired_code"]
+                    target_c_file.write_text(current_source, encoding="utf-8")
                     attempt_logs.append({
-                        "attempt": attempt,
-                        "status": "PASS",
-                        "winning_candidate": tournament_winner["candidate_idx"],
-                        "latency_sec": tournament_winner["gen_time_sec"],
-                        "root_cause": tournament_winner["root_cause"],
-                        "ast_nodes": tournament_winner["ast_nodes"],
-                        "differential_telemetry": tournament_winner["diff_telem"]
+                        "cascade_step": cascade_step,
+                        "target_block": [start_l, end_l],
+                        "status": "PASS" if step_winner.get("full_clean") else "CLUSTER_RESOLVED",
+                        "winning_candidate": step_winner["candidate_idx"],
+                        "latency_sec": step_winner["gen_time_sec"],
+                        "root_cause": step_winner["root_cause"],
+                        "ast_nodes": step_winner.get("ast_nodes"),
+                        "differential_telemetry": step_winner.get("diff_telem"),
+                        "remaining_errors": step_winner.get("remaining_errors", 0)
+                    })
+                    if step_winner.get("full_clean"):
+                        success = True
+                        final_repaired_code = current_source
+                        break
+                else:
+                    print(f"  ✖ Cascade Step {cascade_step} failed to resolve defect at line {err_line} across all {max_attempts} attempts.")
+                    attempt_logs.append({
+                        "cascade_step": cascade_step,
+                        "status": "FAILED",
+                        "error": last_error
                     })
                     break
-                else:
-                    print(f"  ✖ Round {attempt} failed across all {len(candidates)} candidates.")
-                    print(f"    Feedback for next round: {best_failure_msg}")
-                    last_error = best_failure_msg
-                    attempt_logs.append({
-                        "attempt": attempt,
-                        "status": "RETRY_NEEDED",
-                        "error": best_failure_msg
-                    })
 
         finally:
             # Shield 2: Transactional Rollback Safety Guard
             if not success and backup_path.exists():
-                print(f"\n[ROLLBACK] All {max_attempts} attempts failed or aborted. Rolling back to original source...")
+                print(f"\n[ROLLBACK] Cascade repair failed or aborted. Rolling back to original source...")
                 target_c_file.write_text(orig_source, encoding="utf-8")
                 status = "REPAIR_FAILED_ROLLED_BACK"
             elif success:
@@ -799,10 +887,12 @@ class ZccSquozenRepairLoop:
 
         receipt = {
             "target_file": str(target_c_file),
-            "original_errors": diag.get("errors", []),
+            "original_errors": initial_errors,
             "repair_status": status,
+            "cascade_steps_used": len(attempt_logs),
             "attempts_used": len(attempt_logs),
             "repaired_sha256": hashlib.sha256(final_repaired_code.encode()).hexdigest() if success else None,
+            "cascade_history": attempt_logs,
             "attempt_history": attempt_logs,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
         }
@@ -1129,6 +1219,124 @@ def run_wgsl_shader_healing():
     return master_receipt
 
 
+def run_multi_defect_cascade_conquest():
+    """
+    ===================================================================================================
+     🔱 FRONTIER 8: MULTI-DEFECT CASCADE HEALING (NON-CONTIGUOUS MULTI-FUNCTION REPAIR) 🔱
+    ===================================================================================================
+    Objective:
+      Inject 3+ independent, non-contiguous corruptions across distinct functions in a macro-codebase
+      (tools/zcc_boundary_stress_gauntlet.c, 204 lines).
+      Execute the Blackwell Quad-Warp speculative cascade tournament to iteratively heal each cluster
+      until global convergence (count(errors) == 0).
+
+    Injected Corruptions:
+      - Function 1 (init_wavepacket, lines 36-58): Dropped semicolon on numerical loop coordinate:
+          'double x = (j - center) * dx;' -> 'double x = (j - center) * dx'
+      - Function 2 (hamiltonian_derivs, lines 60-72): Dropped semicolon on coupling gradient update:
+          'out_dr[j] = -J * lap_i;' -> 'out_dr[j] = -J * lap_i'
+      - Function 3 (step_rk4, lines 74-114): Dropped semicolon on half-step RK4 time delta:
+          'double hdt = 0.5 * dt;' -> 'double hdt = 0.5 * dt'
+
+    Verification:
+      - Iterative cascade loop across multiple functions (cascade_steps_used >= 3).
+      - Step-by-step defect isolation via surgical AST extraction and error cluster elimination.
+      - Global convergence: ZCC exit 0, AST schema 'zcc.ast.v1' (nodes > 0).
+      - Dual-oracle differential execution parity with GCC (-lm) passing 18/18 physics regimes.
+      - Formal attestation receipt sealed at H:/artifacts/ZCC_SQUOZEN_MULTI_DEFECT_CASCADE_RECEIPT.json.
+    ===================================================================================================
+    """
+    scratch_dir = Path("scratch/cascade_conquest")
+    scratch_dir.mkdir(parents=True, exist_ok=True)
+
+    master_c_file = Path("tools/zcc_boundary_stress_gauntlet.c")
+    assert master_c_file.exists(), f"Macro-codebase missing: {master_c_file}"
+
+    orig_content = master_c_file.read_text(encoding="utf-8")
+
+    # Incur 3 independent, non-contiguous corruptions across 3 distinct functions
+    c1 = "double x = (j - center) * dx"
+    c2 = "out_dr[j] = -J * lap_i"
+    c3 = "double hdt = 0.5 * dt"
+
+    corrupted_content = orig_content.replace("double x = (j - center) * dx;", c1, 1)
+    corrupted_content = corrupted_content.replace("out_dr[j] = -J * lap_i;", c2, 1)
+    corrupted_content = corrupted_content.replace("double hdt = 0.5 * dt;", c3, 1)
+
+    assert corrupted_content != orig_content, "Multi-defect corruption failed!"
+    assert c1 in corrupted_content and c2 in corrupted_content and c3 in corrupted_content
+
+    target_macro = scratch_dir / "zcc_boundary_stress_multidefect.c"
+    target_macro.write_text(corrupted_content, encoding="utf-8")
+
+    print("\n================================================================================")
+    print(" 🔱 FRONTIER 8: MULTI-DEFECT CASCADE HEALING GAUNTLET 🔱")
+    print("================================================================================")
+    print(f"  Target Codebase      : {target_macro} ({len(corrupted_content.splitlines())} lines)")
+    print(f"  Injected Corruptions : 3 Independent Non-Contiguous Function Faults:")
+    print(f"    1. init_wavepacket    : Dropped semicolon on coordinate declaration")
+    print(f"    2. hamiltonian_derivs : Dropped semicolon on coupling gradient assignment")
+    print(f"    3. step_rk4           : Dropped semicolon on RK4 half-timestep declaration")
+
+    repairer = ZccSquozenRepairLoop()
+    repair_receipt = repairer.repair_file(
+        target_macro,
+        expected_oracle_code=0,
+        max_attempts=3,
+        num_candidates=4,
+        max_cascade_steps=8
+    )
+
+    assert repair_receipt.get("repair_status") == "REPAIR_VERIFIED_PASS", f"Cascade Repair Failed: {repair_receipt}"
+    assert repair_receipt.get("cascade_steps_used", 0) >= 3, f"Expected >= 3 cascade steps, got {repair_receipt.get('cascade_steps_used')}"
+
+    receipt_path = Path("H:/artifacts/ZCC_SQUOZEN_MULTI_DEFECT_CASCADE_RECEIPT.json")
+    receipt_path.parent.mkdir(parents=True, exist_ok=True)
+
+    master_receipt = {
+        "receipt_id": "ZCC_SQUOZEN_MULTI_DEFECT_CASCADE_V1_AUTONOMOUS",
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "frontier": "Frontier 8: Multi-Defect Cascade Healing (Non-Contiguous Multi-Function Repair)",
+        "target_file": str(target_macro),
+        "total_lines": len(corrupted_content.splitlines()),
+        "injected_corruptions": [
+            {
+                "function": "init_wavepacket",
+                "corruption": "Dropped semicolon on coordinate declaration: 'double x = (j - center) * dx'",
+                "target_block": "lines 36..58"
+            },
+            {
+                "function": "hamiltonian_derivs",
+                "corruption": "Dropped semicolon on coupling gradient: 'out_dr[j] = -J * lap_i'",
+                "target_block": "lines 60..72"
+            },
+            {
+                "function": "step_rk4",
+                "corruption": "Dropped semicolon on RK4 half-timestep: 'double hdt = 0.5 * dt'",
+                "target_block": "lines 74..114"
+            }
+        ],
+        "repair_status": repair_receipt.get("repair_status"),
+        "cascade_steps_used": repair_receipt.get("cascade_steps_used"),
+        "repaired_sha256": repair_receipt.get("repaired_sha256"),
+        "cascade_history": repair_receipt.get("cascade_history", []),
+        "ast_nodes": repair_receipt["cascade_history"][-1].get("ast_nodes") if repair_receipt.get("cascade_history") else None,
+        "differential_telemetry": repair_receipt["cascade_history"][-1].get("differential_telemetry") if repair_receipt.get("cascade_history") else None,
+        "verdict": "PASS"
+    }
+
+    with open(receipt_path, "w", encoding="utf-8") as f:
+        json.dump(master_receipt, f, indent=2)
+
+    print(f"\n================================================================================")
+    print(f" 🔱 FRONTIER 8 MULTI-DEFECT CASCADE RECEIPT SEALED: {receipt_path}")
+    print(f"    Repair Status      : {master_receipt['repair_status']}")
+    print(f"    Cascade Steps Used : {master_receipt['cascade_steps_used']}")
+    print(f"    Verdict            : {master_receipt['verdict']}")
+    print(f"================================================================================")
+    return master_receipt
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--gauntlet":
         run_hardened_repair_gauntlet()
@@ -1136,6 +1344,8 @@ if __name__ == "__main__":
         run_macro_conquest()
     elif len(sys.argv) > 1 and sys.argv[1] == "--wgsl-healing":
         run_wgsl_shader_healing()
+    elif len(sys.argv) > 1 and (sys.argv[1] == "--multi-defect" or sys.argv[1] == "--cascade"):
+        run_multi_defect_cascade_conquest()
     elif len(sys.argv) > 1:
         target = Path(sys.argv[1])
         repairer = ZccSquozenRepairLoop()
@@ -1145,4 +1355,5 @@ if __name__ == "__main__":
         print("  python tools/prime/zcc_squozen_self_repair.py --gauntlet")
         print("  python tools/prime/zcc_squozen_self_repair.py --macro-conquest")
         print("  python tools/prime/zcc_squozen_self_repair.py --wgsl-healing")
+        print("  python tools/prime/zcc_squozen_self_repair.py --multi-defect")
         print("  python tools/prime/zcc_squozen_self_repair.py path/to/failing_file.c")
