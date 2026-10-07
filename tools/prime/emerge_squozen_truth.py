@@ -493,6 +493,7 @@ class IncrementalFSM:
         self.scanned_token_count: int = 0
 
     def feed_token_text(self, text: str):
+        self.scanned_token_count += 1
         for ch in text:
             if self.escape:
                 self.escape = False
@@ -860,6 +861,8 @@ class ZkaediPrimeSquozenEngine(LogitsProcessor):
                                 scores[b, self.kv_null_idx] = 100.0
                             else:
                                 scores[b, self.pure_quote_idx] = 100.0
+                        else:
+                            scores[b, self.eos_token_id] = 100.0
                         continue
 
                     if len(fsm.stack) > 0:
@@ -869,6 +872,10 @@ class ZkaediPrimeSquozenEngine(LogitsProcessor):
                             scores[b, self.close_brace_idx] = 100.0
                         elif needed_closer == ']':
                             scores[b, self.close_bracket_idx] = 100.0
+                        continue
+                    else:
+                        scores[b, :] = -float("inf")
+                        scores[b, self.eos_token_id] = 100.0
                         continue
 
             else:
@@ -890,6 +897,11 @@ class ZkaediPrimeSquozenEngine(LogitsProcessor):
                             continue
                         self.rules_fired[b].add("cycle_breaker")
                         scores[b, c1[0]] = -float("inf")
+
+        # Invariant 8: Hardened fail-safe guard ensuring every batch row has >=1 finite score
+        for b in range(batch_size):
+            if not torch.any(torch.isfinite(scores[b])):
+                scores[b, self.eos_token_id] = 100.0
 
         return scores
 
