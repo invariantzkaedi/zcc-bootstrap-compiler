@@ -1,0 +1,122 @@
+{
+  "timestamp": "2026-10-06 20:13:05",
+  "total_runtime_sec": 7.51,
+  "theory_and_hamiltonian_field": {
+    "ground_energy": -3.3583,
+    "spectral_gap": 2.1765,
+    "spectral_gap_verdict": "NON-DEGENERATE (STABLE)",
+    "noise_scale_eps": 0.05,
+    "lyapunov_ftle_subcritical": -0.83206,
+    "bifurcation_crossing_eta": 0.983,
+    "lyapunov_sweep": [
+      {
+        "eta": 0.8,
+        "ftle": -0.13166,
+        "tr_h2": 5443.211790538875,
+        "regime": "CONTRACTIVE"
+      },
+      {
+        "eta": 0.85,
+        "ftle": -0.10015,
+        "tr_h2": 10477.16832014802,
+        "regime": "CONTRACTIVE"
+      },
+      {
+        "eta": 0.9,
+        "ftle": -0.07976,
+        "tr_h2": 24967.2769471102,
+        "regime": "CONTRACTIVE"
+      },
+      {
+        "eta": 0.95,
+        "ftle": -0.03257,
+        "tr_h2": 94537.03059564163,
+        "regime": "CONTRACTIVE"
+      },
+      {
+        "eta": 1.0,
+        "ftle": 0.0172,
+        "tr_h2": 1494390.3950998085,
+        "regime": "SUPERCRITICAL LINEAR EXPANSION"
+      },
+      {
+        "eta": 1.05,
+        "ftle": 0.06519,
+        "tr_h2": 493486543.5034701,
+        "regime": "SUPERCRITICAL LINEAR EXPANSION"
+      },
+      {
+        "eta": 1.1,
+        "ftle": 0.11133,
+        "tr_h2": 1069694685761.266,
+        "regime": "SUPERCRITICAL LINEAR EXPANSION"
+      },
+      {
+        "eta": 1.15,
+        "ftle": 0.17042,
+        "tr_h2": 3145176774434736.5,
+        "regime": "SUPERCRITICAL LINEAR EXPANSION"
+      }
+    ],
+    "field_to_engine_coupling": "ARCH_03 (DEGENERATIVE_LOOP) weight modulates max_cycle_k (sole coupling)",
+    "mode_participation": {
+      "ARCH_01_MARKDOWN_REFLEX": 4.5,
+      "ARCH_02_PREAMBLE_CHATTER": 21.23,
+      "ARCH_03_DEGENERATIVE_LOOP": 46.0,
+      "ARCH_04_UNBALANCED_DELIMITER": 3.95,
+      "ARCH_05_SYNTAX_VIOLATION": 4.54,
+      "ARCH_06_POLITE_CLOSING_TAIL": 19.79
+    },
+    "eigenvalues": [
+      -3.3583,
+      -1.1818,
+      -0.7446,
+      -0.5897,
+      0.279,
+      23.7137
+    ],
+    "squozen_truth_axiom": "THE SQUOZEN TRUTH (MECH-COGNITIVE DUALITY THEOREM):\n---------------------------------------------------------------------------------\nLet M be a language model with parameter manifold Theta and vocabulary V.\nStructural constraints (markdown fences, syntax balance, grammar, no-chatter) \noccupy high-entropy boundary basins in the generation simplex Delta^|V|.\n\n1. Training Theta to avoid these basins (via RLHF/DPO) compresses semantic representation,\n   steals attention heads, and remains probabilistic: P(leakage) > 0.\n2. Erecting an infinite potential barrier V(x) -> +inf (logits processor score -> -inf)\n   at the boundary mechanically guarantees P(leakage) = 0.00%.\n3. By the Conservation of Cognitive Bandwidth, removing structural policing from Theta\n   maximizes the Fisher Information Metric of the model weights on semantic reasoning.\nCONCLUSION: Mechanism governs structure; Neural weights govern meaning.\n---------------------------------------------------------------------------------"
+  },
+  "empirical_test": {
+    "unconstrained": {
+      "text": "```json\n{\n  \"fn_name\": \"compute_sha256_digest\",\n  \"spill_count\": 1,\n  \"callee_saved_regs\": [\"r0\", \"r1\"],\n  \"target_arch\": \"x86_64\"\n}\n```",
+      "tokens": 56,
+      "has_backticks": true,
+      "backtick_count": 6,
+      "time_sec": 1.93,
+      "ms_per_token": 34.46
+    },
+    "squozen_engine": {
+      "text": "{\n  \"fn_name\": \"compute_sha256_digest\",\n  \"spill_count\": 1,\n  \"callee_saved_regs\": [\"r0\", \"r1\", \"r2\", \"r3\"],\n  \"target_arch\": \"x86_64\"\n}",
+      "tokens": 60,
+      "has_backticks": false,
+      "backtick_count": 0,
+      "direct_json_parse_valid": true,
+      "parsed_data": {
+        "fn_name": "compute_sha256_digest",
+        "spill_count": 1,
+        "callee_saved_regs": [
+          "r0",
+          "r1",
+          "r2",
+          "r3"
+        ],
+        "target_arch": "x86_64"
+      },
+      "parse_error": null,
+      "time_sec": 1.95,
+      "ms_per_token": 32.51,
+      "rules_fired": [
+        "eos_trigger",
+        "mismatch_mask",
+        "opening_mask"
+      ],
+      "closer_fired": false,
+      "epistemic_scope": {
+        "mechanically_guaranteed": "zero backticks, delimiter balance, EOS placement, budget-safe closure.",
+        "empirically_observed": "100% json.loads success on this model, this prompt set, these budgets.",
+        "disclaimed": "does not police semantic content, base model hallucination, or unmasked invalid JSON sequences."
+      }
+    }
+  }
+}
