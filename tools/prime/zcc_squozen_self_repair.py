@@ -23,6 +23,7 @@ import os
 import re
 import json
 import time
+import shutil
 import subprocess
 import hashlib
 from pathlib import Path
@@ -327,38 +328,63 @@ def extract_enclosing_function_or_block(code: str, error_line: int) -> Tuple[int
     """
     Surgical Fault Localization (Macro-Codebase Optimization):
     Extracts the exact enclosing function or code block surrounding error_line (1-indexed).
+    Guarantees that start_line <= error_line <= end_line.
+    Supports multi-line function signatures, prototypes, and macro declarations.
     Enables healing 200+ or 10,000+ line C files in <2s without token budget overflow.
     """
     lines = code.splitlines()
     if not lines or error_line < 1 or error_line > len(lines):
         return 1, len(lines), code
 
-    idx = min(len(lines) - 1, max(0, error_line - 1))
-    start_idx = idx
-    while start_idx > 0:
-        line = lines[start_idx]
-        if re.match(r'^[a-zA-Z_][a-zA-Z0-9_\s\*]+\s*\([^;]*\)\s*\{?', line) and not line.strip().startswith(('if', 'for', 'while', 'switch')):
-            break
-        start_idx -= 1
+    target_idx = error_line - 1
 
     depth = 0
-    end_idx = start_idx
-    opened = False
-    for i in range(start_idx, len(lines)):
-        line = lines[i]
-        depth += line.count('{') - line.count('}')
-        if '{' in line:
-            opened = True
-        if opened and depth == 0:
-            end_idx = i
-            break
-    if end_idx == start_idx:
-        end_idx = min(len(lines) - 1, idx + 15)
+    current_func_start = None
+    in_block_comment = False
 
-    start_line = start_idx + 1
-    end_line = end_idx + 1
-    block_text = "\n".join(lines[start_idx:end_idx + 1])
-    return start_line, end_line, block_text
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+
+        # Handle block comments /* ... */
+        if in_block_comment:
+            if "*/" in line:
+                in_block_comment = False
+            continue
+        if stripped.startswith("/*"):
+            if "*/" not in line:
+                in_block_comment = True
+            continue
+
+        open_c = line.count('{')
+        close_c = line.count('}')
+
+        if depth == 0:
+            if current_func_start is None:
+                if stripped and not stripped.startswith("//") and not stripped.startswith("#"):
+                    current_func_start = i
+            # If line terminated with semicolon at depth 0 before { opened, it is a prototype/typedef
+            if open_c == 0 and stripped.endswith(';'):
+                current_func_start = None
+
+        depth += open_c - close_c
+
+        if depth <= 0 and current_func_start is not None and (open_c > 0 or close_c > 0):
+            func_end = i
+            if current_func_start <= target_idx <= func_end:
+                return current_func_start + 1, func_end + 1, "\n".join(lines[current_func_start:func_end + 1])
+            depth = 0
+            current_func_start = None
+
+    # If target_idx is inside an open-ended block
+    if current_func_start is not None and current_func_start <= target_idx:
+        end_idx = min(len(lines) - 1, target_idx + 25)
+        return current_func_start + 1, end_idx + 1, "\n".join(lines[current_func_start:end_idx + 1])
+
+    # Fallback window guaranteed to contain target_idx
+    w_start = max(0, target_idx - 15)
+    w_end = min(len(lines) - 1, target_idx + 15)
+    return w_start + 1, w_end + 1, "\n".join(lines[w_start:w_end + 1])
+
 
 
 class PrimeHamiltonianLogitSteerer(LogitsProcessor):
@@ -919,11 +945,197 @@ def run_macro_conquest():
     print(f"================================================================================")
 
 
+def run_wgsl_shader_healing():
+    """
+    ===================================================================================================
+     🔱 FRONTIER 7: AUTONOMOUS C-TO-WGSL WEBGPU SHADER HEALING PIPELINE 🔱
+    ===================================================================================================
+    End-to-End Silicon Integration:
+      1. Generates discrete Hamiltonian 2D stencil C simulation kernel (prime_symplectic_kernel.c).
+      2. Injects syntax/numerical corruption into C simulation kernel.
+      3. Squozen Mechanical Grammar FSM surgically heals the broken C kernel on RTX 5070.
+      4. Verifies AST topological schema zcc.ast.v1 and GCC differential execution parity (-lm).
+      5. Automatically lowers the healed kernel to WebGPU WGSL Silicon compute shader via bin/zcc_wgsl.
+      6. Pre-flight validates WGSL syntax, balanced braces, workgroup size, and bounds guards.
+      7. Emits WebGPU JavaScript dispatch launcher bridge (.js).
+      8. Syncs compiled WGSL shader directly to H:/_shader/public/kernels/ for live workstation execution.
+      9. Seals formal attestation receipt at H:/artifacts/ZCC_SQUOZEN_WGSL_HEALING_RECEIPT.json.
+    ===================================================================================================
+    """
+    scratch_dir = Path("scratch/wgsl_conquest")
+    scratch_dir.mkdir(parents=True, exist_ok=True)
+
+    kernel_c_file = scratch_dir / "prime_symplectic_kernel.c"
+    clean_source = (
+        "/* SPDX-License-Identifier: MIT */\n"
+        "/*\n"
+        " * =========================================================================\n"
+        " *  ZKAEDI PRIME // NATIVE SYMPLECTIC HAMILTONIAN COMPUTE KERNEL\n"
+        " *  Target: Discrete 2D Stencil & Sigmoidal Field Shaping Engine\n"
+        " *  Invariants:\n"
+        " *    1. One equation, two regimes: eta shapes fields; scars + eps navigate.\n"
+        " *    2. Dual-oracle bit-identical verification (ZCC vs GCC).\n"
+        " *    3. Direct lowering to WebGPU WGSL Silicon compute shader.\n"
+        " * =========================================================================\n"
+        " */\n"
+        "#include <stdio.h>\n"
+        "#include <stdlib.h>\n"
+        "#include <math.h>\n\n"
+        "double zcc_sigmoid(double z) {\n"
+        "    return 1.0 / (1.0 + exp(-z));\n"
+        "}\n\n"
+        "void prime_hamiltonian_stencil_step(\n"
+        "    double *h_curr,\n"
+        "    const double *h_prev,\n"
+        "    const double *h_base,\n"
+        "    int width,\n"
+        "    int height,\n"
+        "    double eta,\n"
+        "    double gamma,\n"
+        "    double eps,\n"
+        "    int step\n"
+        ") {\n"
+        "    for (int y = 1; y < height - 1; y++) {\n"
+        "        for (int x = 1; x < width - 1; x++) {\n"
+        "            int idx = y * width + x;\n"
+        "            double laplacian = h_prev[(y - 1) * width + x]\n"
+        "                             + h_prev[(y + 1) * width + x]\n"
+        "                             + h_prev[y * width + (x - 1)]\n"
+        "                             + h_prev[y * width + (x + 1)]\n"
+        "                             - 4.0 * h_prev[idx];\n"
+        "            double sig = zcc_sigmoid(gamma * h_prev[idx]);\n"
+        "            double shaping = eta * h_prev[idx] * sig;\n"
+        "            double noise = eps * ((step % 7) * 0.01 - 0.03);\n"
+        "            h_curr[idx] = h_base[idx] + shaping + noise + 0.05 * laplacian;\n"
+        "        }\n"
+        "    }\n"
+        "}\n\n"
+        "int main(void) {\n"
+        "    const int W = 8;\n"
+        "    const int H = 8;\n"
+        "    double base[64];\n"
+        "    double prev[64];\n"
+        "    double curr[64];\n"
+        "    for (int i = 0; i < 64; i++) {\n"
+        "        base[i] = 0.0;\n"
+        "        prev[i] = 1.0;\n"
+        "        curr[i] = 0.0;\n"
+        "    }\n"
+        "    prime_hamiltonian_stencil_step(curr, prev, base, W, H, 0.4, 0.3, 0.05, 1);\n"
+        "    int center_idx = 3 * W + 3;\n"
+        "    printf(\"Center Node Energy: %.6f\\n\", curr[center_idx]);\n"
+        "    return (curr[center_idx] > 0.0) ? 0 : 1;\n"
+        "}\n"
+    )
+
+    # Incur surgical defect: drop semicolon on shaping declaration
+    corrupted_source = clean_source.replace(
+        "double shaping = eta * h_prev[idx] * sig;",
+        "double shaping = eta * h_prev[idx] * sig",
+        1
+    )
+    assert corrupted_source != clean_source, "Corruption injection failed!"
+
+    kernel_c_file.write_text(corrupted_source, encoding="utf-8")
+
+    print("\n================================================================================")
+    print(" 🔱 FRONTIER 7: AUTONOMOUS C-TO-WGSL WEBGPU SHADER HEALING GAUNTLET 🔱")
+    print("================================================================================")
+    print(f"  Target Kernel C File : {kernel_c_file}")
+    print(f"  Injected Corruption  : Dropped semicolon in numerical field shaping line")
+
+    # Step 1: Autonomous Squozen Healing on RTX 5070
+    repairer = ZccSquozenRepairLoop()
+    repair_receipt = repairer.repair_file(kernel_c_file, expected_oracle_code=0, max_attempts=3, num_candidates=4)
+
+    assert repair_receipt.get("repair_status") == "REPAIR_VERIFIED_PASS", f"C Kernel Repair Failed: {repair_receipt}"
+    print(f"  ✔ C Kernel Successfully Repaired & Verified under ZCC + GCC dual-oracles!")
+
+    # Step 2: Compile & Lower Repaired Kernel to WebGPU WGSL Silicon Compute Shader
+    print("\n[STAGE 3] Autonomous WebGPU WGSL Lowering via ZCC Silicon Backend...")
+    artifacts_wgsl_dir = REPO_ROOT / "artifacts" / "wgsl"
+    artifacts_wgsl_dir.mkdir(parents=True, exist_ok=True)
+    out_wgsl = artifacts_wgsl_dir / "repaired_prime_kernel.wgsl"
+    wsl_out = to_wsl_path(out_wgsl)
+
+    wgsl_compile_cmd = f"./bin/zcc_wgsl --kernel prime_hamiltonian --workgroup 16,16,1 --bounds-guard --emit-js --out {wsl_out} --validate"
+    proc_wgsl = subprocess.run(
+        ["wsl", "-d", "Ubuntu", "bash", "-c", f"cd /mnt/h/__DOWNLOADS/zcc_github_upload && {wgsl_compile_cmd}"],
+        capture_output=True,
+        text=True,
+        timeout=30
+    )
+    print(f"  WGSL Compiler Output:\n{proc_wgsl.stdout.strip()}")
+    assert proc_wgsl.returncode == 0, f"WGSL lowering failed (exit {proc_wgsl.returncode}): {proc_wgsl.stderr}"
+
+    # Step 3: Inspect Emitted WGSL Artifacts (Rule EF-2)
+    assert out_wgsl.exists(), f"Emitted WGSL shader missing: {out_wgsl}"
+    wgsl_text = out_wgsl.read_text(encoding="utf-8")
+    assert "@compute @workgroup_size(16, 16, 1)" in wgsl_text
+    assert "enable subgroups;" in wgsl_text
+    assert "texture_storage_2d<rgba8unorm, write>" in wgsl_text
+    assert "%" not in wgsl_text.replace(" % ", "")
+    print(f"  ✔ Rule EF-2 Verified: Emitted WGSL shader valid ({len(wgsl_text)} bytes, SHA-256: {hashlib.sha256(wgsl_text.encode()).hexdigest()[:16]}...)")
+
+    out_js = Path(str(out_wgsl) + ".js")
+    js_text = out_js.read_text(encoding="utf-8") if out_js.exists() else ""
+    if js_text:
+        print(f"  ✔ Rule EF-2 Verified: WebGPU JS Bridge emitted ({len(js_text)} bytes)")
+
+    # Step 4: Sync to Apex Omega Studio Public Assets
+    shader_public_dir = Path("H:/_shader/public/kernels")
+    shader_public_dir.mkdir(parents=True, exist_ok=True)
+    dest_wgsl = shader_public_dir / "repaired_prime_kernel.wgsl"
+    dest_js = shader_public_dir / "repaired_prime_kernel.js"
+
+    shutil.copy2(out_wgsl, dest_wgsl)
+    if out_js.exists():
+        shutil.copy2(out_js, dest_js)
+    print(f"  ✔ Silicon Artifacts Synced to Apex Omega Workstation: {dest_wgsl}")
+
+    # Step 5: Seal Master Attestation Receipt
+    receipt_path = Path("H:/artifacts/ZCC_SQUOZEN_WGSL_HEALING_RECEIPT.json")
+    receipt_path.parent.mkdir(parents=True, exist_ok=True)
+
+    master_receipt = {
+        "receipt_id": "ZCC_SQUOZEN_WGSL_HEALING_V1_AUTONOMOUS",
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "frontier": "Frontier 7: Autonomous C-to-WGSL Shader Healing Pipeline",
+        "target_kernel": str(kernel_c_file),
+        "injected_corruption": "Dropped semicolon on numerical shaping variable declaration",
+        "c_repair_status": repair_receipt.get("repair_status"),
+        "c_attempts_used": repair_receipt.get("attempts_used"),
+        "c_repaired_sha256": repair_receipt.get("repaired_sha256"),
+        "ast_nodes": repair_receipt["attempt_history"][-1].get("ast_nodes") if repair_receipt.get("attempt_history") else None,
+        "differential_telemetry": repair_receipt["attempt_history"][-1].get("differential_telemetry") if repair_receipt.get("attempt_history") else None,
+        "wgsl_emitted_path": str(out_wgsl),
+        "wgsl_bytes": len(wgsl_text),
+        "wgsl_sha256": hashlib.sha256(wgsl_text.encode()).hexdigest(),
+        "wgsl_workgroup": [16, 16, 1],
+        "wgsl_bounds_guard": True,
+        "js_bridge_emitted": out_js.exists(),
+        "synced_to_shader_studio": str(dest_wgsl),
+        "verdict": "PASS"
+    }
+
+    with open(receipt_path, "w", encoding="utf-8") as f:
+        json.dump(master_receipt, f, indent=2)
+
+    print(f"\n================================================================================")
+    print(f" 🔱 FRONTIER 7 ATTESTATION RECEIPT SEALED: {receipt_path}")
+    print(f"    Repair Status: {master_receipt['c_repair_status']}")
+    print(f"    WGSL SHA256  : {master_receipt['wgsl_sha256'][:16]}...")
+    print(f"================================================================================")
+    return master_receipt
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--gauntlet":
         run_hardened_repair_gauntlet()
     elif len(sys.argv) > 1 and sys.argv[1] == "--macro-conquest":
         run_macro_conquest()
+    elif len(sys.argv) > 1 and sys.argv[1] == "--wgsl-healing":
+        run_wgsl_shader_healing()
     elif len(sys.argv) > 1:
         target = Path(sys.argv[1])
         repairer = ZccSquozenRepairLoop()
@@ -932,4 +1144,5 @@ if __name__ == "__main__":
         print("Usage:")
         print("  python tools/prime/zcc_squozen_self_repair.py --gauntlet")
         print("  python tools/prime/zcc_squozen_self_repair.py --macro-conquest")
+        print("  python tools/prime/zcc_squozen_self_repair.py --wgsl-healing")
         print("  python tools/prime/zcc_squozen_self_repair.py path/to/failing_file.c")
