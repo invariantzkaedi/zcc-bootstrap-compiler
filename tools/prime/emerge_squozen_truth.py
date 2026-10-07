@@ -32,6 +32,7 @@
 import sys
 import time
 import json
+import re
 from pathlib import Path
 from typing import Dict, Any, Tuple
 
@@ -243,12 +244,13 @@ def blend_and_emerge_squozen_truth(embed_weights: torch.Tensor, tokenizer) -> Di
         "THE SQUOZEN TRUTH (MECH-COGNITIVE DUALITY THEOREM):\n"
         "---------------------------------------------------------------------------------\n"
         "Let M be a language model with parameter manifold Theta and vocabulary V.\n"
-        "Structural constraints (markdown fences, syntax balance, grammar, no-chatter) \n"
+        "Structural boundary invariants (markdown fences, delimiter balance, EOS placement, budget closure)\n"
         "occupy high-entropy boundary basins in the generation simplex Delta^|V|.\n\n"
-        "1. Training Theta to avoid these basins (via RLHF/DPO) compresses semantic representation,\n"
-        "   steals attention heads, and remains probabilistic: P(leakage) > 0.\n"
+        "1. Training Theta to avoid these boundary violations (via RLHF/DPO) compresses semantic representation,\n"
+        "   steals attention heads, and remains probabilistic: P(structural leakage) > 0.\n"
         "2. Erecting an infinite potential barrier V(x) -> +inf (logits processor score -> -inf)\n"
-        "   at the boundary mechanically guarantees P(leakage) = 0.00%.\n"
+        "   at the boundary mechanically guarantees zero structural leakage (fences, delimiter mismatches, EOS/budget).\n"
+        "   Grammar and semantic validity beyond these structural boundaries remain empirical.\n"
         "3. By the Conservation of Cognitive Bandwidth, removing structural policing from Theta\n"
         "   maximizes the Fisher Information Metric of the model weights on semantic reasoning.\n"
         "CONCLUSION: Mechanism governs structure; Neural weights govern meaning.\n"
@@ -275,10 +277,10 @@ def blend_and_emerge_squozen_truth(embed_weights: torch.Tensor, tokenizer) -> Di
 # =============================================================================
 
 # Module-level cache for tokenizer structural table precomputations
-_TOKENIZER_CACHE: Dict[int, Dict[str, Any]] = {}
+_TOKENIZER_CACHE: Dict[Tuple[str, int], Dict[str, Any]] = {}
 
 def get_cached_tokenizer_tables(tokenizer) -> Dict[str, Any]:
-    key = id(tokenizer)
+    key = (getattr(tokenizer, "name_or_path", str(type(tokenizer))), len(tokenizer.get_vocab()))
     if key in _TOKENIZER_CACHE:
         return _TOKENIZER_CACHE[key]
 
@@ -300,6 +302,8 @@ def get_cached_tokenizer_tables(tokenizer) -> Dict[str, Any]:
             dec = tokenizer.decode(tids)
             if dec.strip() == '"':
                 pure_quote_set.add(tids[0])
+    if len(pure_quote_set) == 0:
+        raise RuntimeError("Tokenizer lacks single-token pure quote representation.")
 
     close_brace_set = set()
     for s in ["}", "}\n", " }"]:
@@ -319,6 +323,7 @@ def get_cached_tokenizer_tables(tokenizer) -> Dict[str, Any]:
 
     all_close_brace_tokens = set()
     all_close_bracket_tokens = set()
+    multi_closer_tokens = []  # List of (tok_id, tuple_of_closers) for tokens with >1 closer chars
     comma_tokens = set()
     colon_tokens = set()
     structural_tokens = set()
@@ -326,10 +331,14 @@ def get_cached_tokenizer_tables(tokenizer) -> Dict[str, Any]:
     for tok_str, tok_id in vocab.items():
         dec = tokenizer.decode([tok_id])
         stripped = dec.strip()
-        if stripped.startswith('}'):
-            all_close_brace_tokens.add(tok_id)
-        if stripped.startswith(']'):
-            all_close_bracket_tokens.add(tok_id)
+        closers = tuple(c for c in dec if c in '}]')
+        if closers:
+            if closers[0] == '}':
+                all_close_brace_tokens.add(tok_id)
+            elif closers[0] == ']':
+                all_close_bracket_tokens.add(tok_id)
+            if len(closers) > 1:
+                multi_closer_tokens.append((tok_id, closers))
         if ',' in dec:
             comma_tokens.add(tok_id)
         if stripped.startswith(':'):
@@ -379,6 +388,31 @@ def get_cached_tokenizer_tables(tokenizer) -> Dict[str, Any]:
         if len(tids) == 1:
             kv_null_set.add(tids[0])
 
+    # Literal prefixes for mid-scalar completion outside strings
+    literal_prefixes = {
+        't': ['rue', 'r'],
+        'tr': ['ue'],
+        'tru': ['e'],
+        'f': ['alse', 'a'],
+        'fa': ['lse', 'l'],
+        'fal': ['se', 's'],
+        'fals': ['e'],
+        'n': ['ull', 'u'],
+        'nu': ['ll', 'l'],
+        'nul': ['l'],
+    }
+    literal_completion_table = {}
+    for p, candidates in literal_prefixes.items():
+        found = None
+        for cand in candidates:
+            enc = tokenizer.encode(cand, add_special_tokens=False)
+            if len(enc) == 1:
+                found = enc[0]
+                break
+        if found is None:
+            raise RuntimeError(f"Tokenizer lacks single-token completion for literal prefix '{p}'.")
+        literal_completion_table[p] = found
+
     chatter_words = [
         "Sure", "sure", "Certainly", "certainly", "Here", "here",
         "Below", "below", "Okay", "okay", "I", "As", "Understood",
@@ -413,6 +447,7 @@ def get_cached_tokenizer_tables(tokenizer) -> Dict[str, Any]:
         "close_bracket_tokens": torch.tensor(sorted(close_bracket_set), dtype=torch.long),
         "all_close_brace_tokens": torch.tensor(sorted(all_close_brace_tokens), dtype=torch.long),
         "all_close_bracket_tokens": torch.tensor(sorted(all_close_bracket_tokens), dtype=torch.long),
+        "multi_closer_tokens": multi_closer_tokens,
         "comma_tokens": torch.tensor(sorted(comma_tokens), dtype=torch.long),
         "colon_tokens": torch.tensor(sorted(colon_tokens), dtype=torch.long),
         "dot_tokens": torch.tensor(sorted(dot_tokens), dtype=torch.long),
@@ -422,6 +457,7 @@ def get_cached_tokenizer_tables(tokenizer) -> Dict[str, Any]:
         "colon_single_tokens": torch.tensor(sorted(colon_single_set), dtype=torch.long),
         "space_tokens": torch.tensor(sorted(space_set), dtype=torch.long),
         "kv_null_tokens": torch.tensor(sorted(kv_null_set), dtype=torch.long),
+        "literal_completion_table": literal_completion_table,
         "chatter_tokens": torch.tensor(sorted(chatter_set), dtype=torch.long),
         "backtick_token_ids": torch.tensor(sorted(backtick_set), dtype=torch.long),
         "special_tokens": torch.tensor(sorted(special_token_set), dtype=torch.long),
@@ -442,6 +478,7 @@ class IncrementalFSM:
       - in_key: Whether currently parsing an object key string.
       - after_key: True immediately after an object key closes, prior to encountering ':'.
       - mismatches: Count of closing delimiters encountered that do not match top of stack.
+      - current_scalar: Buffer of characters accumulated in the current literal/number outside strings.
     """
     def __init__(self):
         self.stack: list = []
@@ -452,6 +489,7 @@ class IncrementalFSM:
         self.in_key: bool = False
         self.after_key: bool = False
         self.mismatches: int = 0
+        self.current_scalar: str = ""
         self.scanned_token_count: int = 0
 
     def feed_token_text(self, text: str):
@@ -464,6 +502,7 @@ class IncrementalFSM:
                     self.escape = True
                 continue
             if ch == '"':
+                self.current_scalar = ""
                 if not self.in_string:
                     # Entering a string
                     self.in_string = True
@@ -486,27 +525,33 @@ class IncrementalFSM:
                 continue
 
             if not self.in_string:
-                if not ch.isspace():
+                if ch in ('{', '}', '[', ']', ':', ','):
+                    self.current_scalar = ""
                     self.last_sig_char = ch
                     if ch == ':':
                         self.after_key = False
-                if ch == '{':
-                    self.stack.append('}')
-                    self.opened_ever = True
-                    self.after_key = False
-                    self.in_key = False
-                elif ch == '[':
-                    self.stack.append(']')
-                    self.opened_ever = True
-                    self.after_key = False
-                    self.in_key = False
-                elif ch in ('}', ']'):
-                    self.after_key = False
-                    self.in_key = False
-                    if self.stack and self.stack[-1] == ch:
-                        self.stack.pop()
-                    else:
-                        self.mismatches += 1
+                    if ch == '{':
+                        self.stack.append('}')
+                        self.opened_ever = True
+                        self.after_key = False
+                        self.in_key = False
+                    elif ch == '[':
+                        self.stack.append(']')
+                        self.opened_ever = True
+                        self.after_key = False
+                        self.in_key = False
+                    elif ch in ('}', ']'):
+                        self.after_key = False
+                        self.in_key = False
+                        if self.stack and self.stack[-1] == ch:
+                            self.stack.pop()
+                        else:
+                            self.mismatches += 1
+                elif ch.isspace():
+                    self.current_scalar = ""
+                else:
+                    self.current_scalar += ch
+                    self.last_sig_char = ch
 
 def scan_json_state_stack(text: str) -> Tuple[list, bool, bool]:
     """
@@ -553,7 +598,7 @@ class ZkaediPrimeSquozenEngine(LogitsProcessor):
       1. Step 0..Open: Continuous opening-only mask prevents chatter and whitespace leakage until root opens.
       2. Step 1..N: Eliminates backticks via vectorized index tensors for 100% zero-leakage guarantee.
       3. Proactive Mismatch Guard: Proactively clamps mismatched closing braces/brackets to -inf.
-      4. Anti-Loop: Calibrated symplectic n-gram cycle breaker (k >= 3 with >= 4 repetitions).
+      4. Anti-Loop: Calibrated symplectic n-gram cycle breaker (k in [2, max_cycle_k] with >= 4 repetitions).
          Breaks runaway non-structural token cycles only (exempting structural JSON tokens like quotes,
          commas, brackets to protect valid array/object repetition).
       5. Syntax Guard: Full string-aware FSM with delimiter stack tracking across BPE token merges.
@@ -586,6 +631,7 @@ class ZkaediPrimeSquozenEngine(LogitsProcessor):
         self.close_bracket_tokens = self.tables["close_bracket_tokens"]
         self.all_close_brace_tokens = self.tables["all_close_brace_tokens"]
         self.all_close_bracket_tokens = self.tables["all_close_bracket_tokens"]
+        self.multi_closer_tokens = self.tables["multi_closer_tokens"]
         self.comma_tokens = self.tables["comma_tokens"]
         self.dot_tokens = self.tables["dot_tokens"]
         self.colon_null_tokens = self.tables["colon_null_tokens"]
@@ -594,10 +640,12 @@ class ZkaediPrimeSquozenEngine(LogitsProcessor):
         self.zero_tokens = self.tables["zero_tokens"]
         self.space_tokens = self.tables["space_tokens"]
         self.kv_null_tokens = self.tables["kv_null_tokens"]
+        self.literal_completion_table = self.tables["literal_completion_table"]
         self.chatter_tokens = self.tables["chatter_tokens"]
         self.backtick_token_ids = self.tables["backtick_token_ids"]
         self.special_tokens = self.tables["special_tokens"]
         self.structural_token_ids = self.tables["structural_token_ids"]
+        self.number_pattern = re.compile(r'^-?\d*\.?\d*([eE][+-]?)?$')
 
         # Field-coupled parameters:
         # Loop weight from ground state modulates the cycle breaker depth (sole coupling)
@@ -729,14 +777,38 @@ class ZkaediPrimeSquozenEngine(LogitsProcessor):
                 # Invariant 4: Proactive Mismatch Guard (ban wrong closer family outside strings)
                 if not fsm.in_string and len(fsm.stack) > 0:
                     expected_closer = fsm.stack[-1]
+                    masked_mismatch = False
                     if expected_closer == ']':
-                        self.rules_fired[b].add("mismatch_mask")
+                        if torch.any(torch.isfinite(scores[b, self.all_close_brace_idx])):
+                            masked_mismatch = True
                         scores[b, self.all_close_brace_idx] = -float("inf")
                     elif expected_closer == '}':
-                        self.rules_fired[b].add("mismatch_mask")
+                        if torch.any(torch.isfinite(scores[b, self.all_close_bracket_idx])):
+                            masked_mismatch = True
                         scores[b, self.all_close_bracket_idx] = -float("inf")
 
-                # Invariant 5 & 6: Unified Budget Closer Mode
+                    # Check multi-closers against reversed stack prefix
+                    for tid, seq in self.multi_closer_tokens:
+                        if len(fsm.stack) < len(seq) or tuple(fsm.stack[-1:-len(seq)-1:-1]) != seq:
+                            if scores[b, tid] > -float("inf"):
+                                masked_mismatch = True
+                            scores[b, tid] = -float("inf")
+
+                    if masked_mismatch:
+                        self.rules_fired[b].add("mismatch_mask")
+
+                # Invariant 5: Proactive Comma and Dot Ban when runway is tight
+                if not fsm.in_string and remaining_tokens <= len(fsm.stack) + 10:
+                    if torch.any(torch.isfinite(scores[b, self.comma_idx])):
+                        self.rules_fired[b].add("comma_ban")
+                    scores[b, self.comma_idx] = -float("inf")
+
+                if not fsm.in_string and remaining_tokens <= len(fsm.stack) + 8:
+                    if torch.any(torch.isfinite(scores[b, self.dot_idx])):
+                        self.rules_fired[b].add("dot_ban")
+                    scores[b, self.dot_idx] = -float("inf")
+
+                # Invariant 6: Unified Budget Closer Mode
                 # Triggers deterministically when remaining_tokens <= len(stack) + 8 to prevent opening
                 # uncloseable elements and guarantee clean structural closure before token exhaustion.
                 if remaining_tokens <= len(fsm.stack) + 8:
@@ -744,12 +816,10 @@ class ZkaediPrimeSquozenEngine(LogitsProcessor):
                     self.closer_fired[b] = True
 
                     if fsm.in_string:
-                        # If escape pending, emit neutral space to consume escape; otherwise emit pure closing quote
+                        # Always force pure quote. If escape is pending, this emits '\"',
+                        # keeping in_string=True with escape=False; next token forces quote to close string cleanly.
                         scores[b, :] = -float("inf")
-                        if fsm.escape:
-                            scores[b, self.space_idx] = 100.0
-                        else:
-                            scores[b, self.pure_quote_idx] = 100.0
+                        scores[b, self.pure_quote_idx] = 100.0
                         continue
 
                     if fsm.after_key:
@@ -761,11 +831,20 @@ class ZkaediPrimeSquozenEngine(LogitsProcessor):
                             scores[b, self.colon_single_idx] = 100.0
                         continue
 
-                    if fsm.last_sig_char == '.':
-                        # Trailing decimal point: emit 0 to form valid JSON float before closing container
-                        scores[b, :] = -float("inf")
-                        scores[b, self.zero_idx] = 100.0
-                        continue
+                    # Mid-scalar closure outside strings
+                    if fsm.current_scalar:
+                        sc = fsm.current_scalar
+                        if sc in ('true', 'false', 'null'):
+                            pass  # complete literal, fall through to structural closer
+                        elif sc in self.literal_completion_table:
+                            next_tok = self.literal_completion_table[sc]
+                            scores[b, :] = -float("inf")
+                            scores[b, next_tok] = 100.0
+                            continue
+                        elif self.number_pattern.match(sc) and (sc in ('-', '+') or sc.endswith(('.', 'e', 'E', 'e+', 'e-', 'E+', 'E-'))):
+                            scores[b, :] = -float("inf")
+                            scores[b, self.zero_idx] = 100.0
+                            continue
 
                     if fsm.last_sig_char == ':':
                         scores[b, :] = -float("inf")
@@ -777,7 +856,10 @@ class ZkaediPrimeSquozenEngine(LogitsProcessor):
                         if fsm.stack and fsm.stack[-1] == ']':
                             scores[b, self.null_idx] = 100.0
                         elif fsm.stack and fsm.stack[-1] == '}':
-                            scores[b, self.kv_null_idx] = 100.0
+                            if len(self.kv_null_idx) > 0:
+                                scores[b, self.kv_null_idx] = 100.0
+                            else:
+                                scores[b, self.pure_quote_idx] = 100.0
                         continue
 
                     if len(fsm.stack) > 0:
@@ -924,7 +1006,7 @@ def execute_squozen_live_test(model, tokenizer, theory_results: Dict[str, Any]) 
         "squozen_engine": {
             "text": resp_con,
             "tokens": tokens_con,
-            "has_backticks": False,
+            "has_backticks": backtick_leakage > 0,
             "backtick_count": backtick_leakage,
             "direct_json_parse_valid": parse_ok,
             "parsed_data": parsed if parse_ok else None,

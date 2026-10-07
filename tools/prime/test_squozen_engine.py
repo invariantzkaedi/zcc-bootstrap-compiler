@@ -223,7 +223,11 @@ def test_adversarial_closer_and_cycle(model, tokenizer):
     budget_prompts = [
         ("mid_string", "Output raw JSON with keys 'alpha': 'a very long description string here', 'beta': 'another long string'."),
         ("post_comma", "Output raw JSON with keys 'a': 1, 'b': 2, 'c': 3, 'd': 4, 'e': 5, 'f': 6, 'g': 7."),
-        ("post_colon", "Output raw JSON with key 'matrix' set to [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]].")
+        ("post_colon", "Output raw JSON with key 'matrix' set to [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]."),
+        ("mid_literal_bool", "Output raw JSON with key 'ok' set to true, 'status' set to 'healthy', 'flag' set to false."),
+        ("mid_literal_null", "Output raw JSON with key 'payload' set to null, 'code' set to 200, 'extra' set to null."),
+        ("mid_exponent", "Output raw JSON with key 'tolerance' set to 1e-05, 'max_bound' set to 2.5e+03, 'scale' set to 1e02."),
+        ("mid_float", "Output raw JSON with key 'pi' set to 3.1415926535, 'e' set to 2.718281828, 'phi' set to 1.618033988.")
     ]
 
     closer_results = []
@@ -260,9 +264,9 @@ def test_adversarial_closer_and_cycle(model, tokenizer):
             closer_fired = engine.closer_fired[0] if engine.closer_fired else False
             rules_fired = sorted(list(engine.rules_fired[0])) if engine.rules_fired else []
             status = "PASS" if parse_ok and backticks == 0 else f"FAIL ({parse_err})"
-            disp_text = resp if len(resp) <= 80 else f"{resp[:45]}...{resp[-25:]}"
-            print(f"  [CLOSER] Budget {max_toks:2d} ({tag:10s}) | Tokens: {num_gen:2d} | Closer: {closer_fired} | Rules: {rules_fired} | {status} | Text: {repr(disp_text)}")
-            assert parse_ok, f"Budget closer produced invalid JSON on budget={max_toks}, prompt={tag}: {resp}"
+            print(f"  [CLOSER] Budget {max_toks:2d} ({tag:18s}) | Tokens: {num_gen:2d} | Closer: {closer_fired} | Rules: {rules_fired} | {status}")
+            print(f"           Full Output: {repr(resp)}")
+            assert parse_ok, f"Budget closer produced invalid JSON on budget={max_toks}, prompt={tag}: {resp} (error: {parse_err})"
             assert backticks == 0, f"Budget closer leaked backticks on budget={max_toks}: {resp}"
 
             closer_results.append({

@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-10-06 20:13:05",
-  "total_runtime_sec": 7.51,
+  "timestamp": "2026-10-06 20:27:28",
+  "total_runtime_sec": 8.6,
   "theory_and_hamiltonian_field": {
     "ground_energy": -3.3583,
     "spectral_gap": 2.1765,
@@ -75,7 +75,7 @@
       0.279,
       23.7137
     ],
-    "squozen_truth_axiom": "THE SQUOZEN TRUTH (MECH-COGNITIVE DUALITY THEOREM):\n---------------------------------------------------------------------------------\nLet M be a language model with parameter manifold Theta and vocabulary V.\nStructural constraints (markdown fences, syntax balance, grammar, no-chatter) \noccupy high-entropy boundary basins in the generation simplex Delta^|V|.\n\n1. Training Theta to avoid these basins (via RLHF/DPO) compresses semantic representation,\n   steals attention heads, and remains probabilistic: P(leakage) > 0.\n2. Erecting an infinite potential barrier V(x) -> +inf (logits processor score -> -inf)\n   at the boundary mechanically guarantees P(leakage) = 0.00%.\n3. By the Conservation of Cognitive Bandwidth, removing structural policing from Theta\n   maximizes the Fisher Information Metric of the model weights on semantic reasoning.\nCONCLUSION: Mechanism governs structure; Neural weights govern meaning.\n---------------------------------------------------------------------------------"
+    "squozen_truth_axiom": "THE SQUOZEN TRUTH (MECH-COGNITIVE DUALITY THEOREM):\n---------------------------------------------------------------------------------\nLet M be a language model with parameter manifold Theta and vocabulary V.\nStructural boundary invariants (markdown fences, delimiter balance, EOS placement, budget closure)\noccupy high-entropy boundary basins in the generation simplex Delta^|V|.\n\n1. Training Theta to avoid these boundary violations (via RLHF/DPO) compresses semantic representation,\n   steals attention heads, and remains probabilistic: P(structural leakage) > 0.\n2. Erecting an infinite potential barrier V(x) -> +inf (logits processor score -> -inf)\n   at the boundary mechanically guarantees zero structural leakage (fences, delimiter mismatches, EOS/budget).\n   Grammar and semantic validity beyond these structural boundaries remain empirical.\n3. By the Conservation of Cognitive Bandwidth, removing structural policing from Theta\n   maximizes the Fisher Information Metric of the model weights on semantic reasoning.\nCONCLUSION: Mechanism governs structure; Neural weights govern meaning.\n---------------------------------------------------------------------------------"
   },
   "empirical_test": {
     "unconstrained": {
@@ -83,8 +83,8 @@
       "tokens": 56,
       "has_backticks": true,
       "backtick_count": 6,
-      "time_sec": 1.93,
-      "ms_per_token": 34.46
+      "time_sec": 1.832,
+      "ms_per_token": 32.71
     },
     "squozen_engine": {
       "text": "{\n  \"fn_name\": \"compute_sha256_digest\",\n  \"spill_count\": 1,\n  \"callee_saved_regs\": [\"r0\", \"r1\", \"r2\", \"r3\"],\n  \"target_arch\": \"x86_64\"\n}",
@@ -104,8 +104,8 @@
         "target_arch": "x86_64"
       },
       "parse_error": null,
-      "time_sec": 1.95,
-      "ms_per_token": 32.51,
+      "time_sec": 2.607,
+      "ms_per_token": 43.46,
       "rules_fired": [
         "eos_trigger",
         "mismatch_mask",
