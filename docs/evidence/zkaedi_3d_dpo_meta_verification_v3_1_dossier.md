@@ -29,6 +29,7 @@ This dossier incorporates the forensic investigation executed in response to the
 | **Gate 6** | **Full-Scale Production DPO & Adapter Persistence** | **P0:** 100% dataset scale, sub-millipoint loss & 100% held-out generalization | **PASS (51/51 Wins)** | [`docs/evidence/full_scale_3d_dpo_receipt.json`](file:///h:/__DOWNLOADS/zcc_github_upload/docs/evidence/full_scale_3d_dpo_receipt.json)<br>[`docs/evidence/independent_full_scale_adapter_verification_receipt.json`](file:///h:/__DOWNLOADS/zcc_github_upload/docs/evidence/independent_full_scale_adapter_verification_receipt.json) |
 | **Gate 6-B** | **Joined Leakage, Correlation & Asset-Cluster Audit** | **P0/P1:** Stable per-pair join, 37/37 disjoint derivation, cross-label reuse, graph clusters & 11-mode mutation suite | **PASS (Reported)**<br>*(Asset-Independent Generalization Established in 6-G)* | [`docs/evidence/gate6_joined_leakage_audit_receipt.json`](file:///h:/__DOWNLOADS/zcc_github_upload/docs/evidence/gate6_joined_leakage_audit_receipt.json) |
 | **Gate G6B-MASK-01** | **Tokenization Boundary & Completion Mask Verification** | **P0:** Subword boundary merging, character offset mapping vs TRL collator, left truncation & adversarial merging (4/4 caught) | **PASS (102/102 Identical)** | [`docs/evidence/gate6b_mask_verification_receipt.json`](file:///h:/__DOWNLOADS/zcc_github_upload/docs/evidence/gate6b_mask_verification_receipt.json) |
+| **Gate G6B-META-02** | **Verifier Independence & Canonical Scoring Reconciliation** | **P0/P1/P2:** 14-mutation gauntlet with diagnostic tripwires, float32 log-softmax contract & base revision attestation | **PASS (14/14 Mutations)** | [`docs/evidence/gate6b_meta02_verifier_independence_receipt.json`](file:///h:/__DOWNLOADS/zcc_github_upload/docs/evidence/gate6b_meta02_verifier_independence_receipt.json)<br>[`docs/evidence/gate6b_meta02_mutation_receipt.json`](file:///h:/__DOWNLOADS/zcc_github_upload/docs/evidence/gate6b_meta02_mutation_receipt.json) |
 | **Gate 6-C** | **External 3D Geometric Oracle (Trimesh Topology)** | **P0:** Closed 2-manifold (`is_watertight`), Euler $\chi=2$, degenerate faces & volume across 8 shapes | **FAIL_CLOSED (0/8 Synthesis)**<br>*(Empirical Proof of Evaluative Boundary)* | [`docs/evidence/external_3d_geometric_oracle_receipt.json`](file:///h:/__DOWNLOADS/zcc_github_upload/docs/evidence/external_3d_geometric_oracle_receipt.json) |
 | **Gate 6-D** | **Procedural 3D & DPO Supervisory Bridge** | Procedural GLB generation + supervisory evaluation & dynamic asset certification | **PASS** | [`docs/evidence/procedural_dpo_supervisory_bridge_receipt.json`](file:///h:/__DOWNLOADS/zcc_github_upload/docs/evidence/procedural_dpo_supervisory_bridge_receipt.json) |
 | **Gate 6-E** | **Live HTTP DPO & Inference Server Verification** | E2E health, models, /v1/dpo/evaluate pair scoring, and /v1/chat/completions | **PASS** | [`docs/evidence/dpo_server_endpoint_verification_receipt.json`](file:///h:/__DOWNLOADS/zcc_github_upload/docs/evidence/dpo_server_endpoint_verification_receipt.json) |
@@ -651,6 +652,76 @@ Enforced strict integrity checks on the entity hypergraph:
 
 ##### 8. Epistemic Limitation: Text-Feature Shortcut Confounding
 While the 14 novel pairs are strictly disjoint across prompts, responses, and asset identifiers, their completions contain predictive textual markers (e.g. `MASTER_HIGH_POLY`, `RUNTIME_LOD`, `FULL_PBR`, payload sizes). Therefore, high accuracy on this cohort alone does not prove that the model's representations are intrinsically spatial rather than linguistic. To isolate physical geometric reasoning from text matching, downstream verification relies on **Gate 6-H** (Topological Mutation Gauntlet) and **Gate 6-D** (Procedural Geometry Bridge).
+
+---
+
+#### 6.7.12 Gate G6B-META-02: Verifier Independence, Mutation Validity & Canonical Scoring Reconciliation
+
+Authoritative Harness: [`tools/verify_g6b_meta02_verifier_independence.py`](file:///h:/__DOWNLOADS/zcc_github_upload/tools/verify_g6b_meta02_verifier_independence.py)  
+Primary Execution Receipt: [`docs/evidence/gate6b_meta02_verifier_independence_receipt.json`](file:///h:/__DOWNLOADS/zcc_github_upload/docs/evidence/gate6b_meta02_verifier_independence_receipt.json)  
+Adversarial Mutation Receipt: [`docs/evidence/gate6b_meta02_mutation_receipt.json`](file:///h:/__DOWNLOADS/zcc_github_upload/docs/evidence/gate6b_meta02_mutation_receipt.json)  
+Lineage Attestation: Base Model `Qwen/Qwen2.5-Coder-1.5B-Instruct` @ commit revision `2e1fd397ee46e1388853d2af2c993145b0f1098a` on RTX 5070 GPU.
+
+##### 1. Forensic Resolution of the Receipt Discrepancy (Three-Tier Precision Hierarchy)
+The Gate 6-B forensic review identified a numerical discrepancy between the mask verification receipt ($\mu = +5.8000$) and the reconstruction receipt ($\mu = +5.7775$). Investigation into PyTorch tensor reduction semantics identified the exact three-tier precision hierarchy:
+* **Tier 1 (Integer-Quantized Truncation in `run_gate6b_mask_verification.py`):** In the mask harness, `offset_mask` was instantiated as `torch.tensor(offset_mask[1:], device=device)` without explicit dtype. Multiplying `bfloat16 * int64` kept the tensor in `bfloat16`. Summing $\sim 125$ token log-probabilities in `bfloat16` (7 bits of mantissa) caused repeated truncation of fractional bits on additions $\ge 256.0$, quantizing sequence log-probabilities into even whole numbers (e.g., $\pi_c = -342.0$, $\text{ref}_c = -372.0 \implies \Delta r = 0.1 \times 50 = +5.0$, cohort mean $+5.8000$).
+* **Tier 2 (Float32 Accumulation on bfloat16 Softmax in `verify_gate6b_independent_reconstruction.py`):** In the reconstruction harness, `shift_mask` was typed `torch.float32`, upcasting the accumulator to single precision. However, `F.log_softmax` was executed directly on raw `bfloat16` logits, preserving the ~0.03/token precision drift of bfloat16 softmax ($\pi_c = -342.6846$, cohort mean $+5.7775$).
+* **Tier 3 (Canonical HuggingFace DPOTrainer Ground Truth Contract):** Logits are explicitly upcast to `torch.float32` prior to `F.log_softmax`, and all masking products and reductions are computed in single-precision `float32` ($\pi_c = -342.7971$). 
+
+When all evaluators conform to the canonical Tier-3 contract, the scoring oracles achieve **exact numerical convergence down to IEEE-754 single precision**.
+
+##### 2. Reconciled Canonical Tier-3 Metrics (N=14 Novel Holdout Cohort)
+```text
+================================================================================
+RECONCILED CANONICAL TIER-3 METRICS (N=14 Novel Holdout Cohort):
+================================================================================
+[*] Total Novel Pairs Evaluated:   14 / 14
+[*] Model Wins:                    14 / 14 (100.00%)
+[*] Wilson 95% Confidence Interval:[78.47%, 100.00%]
+[*] Mean Reward Margin (μ):        +5.774156 ± 0.490729
+[*] Minimum Margin in Cohort:      +4.941376
+[*] Maximum Margin in Cohort:      +6.317712
+[*] One-Sample Student t-Stat:     t = 44.026176
+[*] Survival Function p-Value:     p = 7.769118e-16 (via scipy.stats.t.sf, zero underflow)
+[*] Cohen's d Effect Size:         d = 11.766491
+[*] Authenticity Probes:           Rule AV-1 Active LoRA Delta: 0.7769 (Verified)
+[*] Epistemic Status:              G6B_META02_REPORTED_EXECUTION_RECEIPT (Self-Reported)
+================================================================================
+```
+
+##### 3. P0, P1, and P2 Forensic Corrections Verified
+1. **P0 Diagnostic-Specific Mutation Tripwires:** `run_adversarial_mutation_gauntlet()` was upgraded from generic exit code checks (`proc.returncode != 0`) to requiring both non-zero exit AND positive string matching against `mutation["expected_diagnostic"]` in stderr/stdout. Clean baseline execution was established first (`exit code 0`).
+2. **P0 Real Completion Mask Index Perturbation (`M09`):** The off-by-one mutation was rewritten to actually shift the completion mask tensor indexing in GPU memory during inference. The independent boundary oracle detected the resulting $L_1$ discrepancy ($2.0$ tokens) and aborted with `Rule AV-3 / NV-1 Invariant Violation: Mutated completion mask diverges from independent oracle collator!`.
+3. **P1 Fail-Closed Metadata Ingestion (`M13`):** `extract_entities()` was hardened to raise `ValueError` on malformed JSON strings rather than silently falling back to `{}`. Furthermore, records are required to contain substantive asset tokens (`pair_id`, `concept`, `mesh_file`); a bare `source_key` alone fails closed.
+4. **P1 Complete Cross-Label Response Disjointness (`M14`):** Evaluation chosen and rejected responses are verified against the complete union of all training responses (`train_chosen | train_rejected`), preventing cross-label response reuse.
+5. **P1 Exact Student-t Survival Function:** Statistical significance is computed exclusively using `scipy.stats.t.sf(t_stat, df=n-1)`; the normal-tail `0.5 * erfc(...)` approximation was removed.
+6. **P1 Physical Base Snapshot Attestation (`M12`):** Rather than comparing a constant against itself, the verifier physically accesses `~/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-1.5B-Instruct/snapshots/2e1fd397ee46e1388853d2af2c993145b0f1098a` on disk, confirming directory existence, `config.json` SHA-256 (`88f9a178...`), and `tokenizer.json` SHA-256 (`c0382117...`).
+7. **P2 Sensitivity Analysis Diagnostic Categorization:** Separate tokenization was formally reclassified as a sensitivity analysis diagnostic rather than an equivalence test.
+8. **P2 Non-Overstated Receipt Provenance:** All receipts explicitly record `self_reported_execution_receipt: true` and disposition `G6B_META02_REPORTED_EXECUTION_RECEIPT`.
+
+##### 4. Adversarial Mutation Gauntlet Results (14 Fault Modes)
+Executed on RTX 5070 Laptop GPU, preserved in `gate6b_meta02_mutation_receipt.json`:
+
+| Mutation ID | Fault Injected | Target Rule | Expected Diagnostic Substring | Exit | Verdict |
+| :--- | :--- | :---: | :--- | :---: | :---: |
+| **M01** | `M01_CORRUPTED_TRAIN_SHA` | Rule AV-4 | `Rule AV-4 Lineage Failure: Train SHA mismatch` | 1 | **PASS (Target Diagnostic Verified)** |
+| **M02** | `M02_CORRUPTED_EVAL_SHA` | Rule AV-4 | `Rule AV-4 Lineage Failure: Eval SHA mismatch` | 1 | **PASS (Target Diagnostic Verified)** |
+| **M03** | `M03_CORRUPTED_ADAPTER_SHA` | Rule AV-4 | `Rule AV-4 Lineage Failure: Adapter SHA mismatch` | 1 | **PASS (Target Diagnostic Verified)** |
+| **M04** | `M04_CORRUPTED_CONFIG_SHA` | Rule AV-4 | `Rule AV-4 Lineage Failure: Adapter Config SHA mismatch` | 1 | **PASS (Target Diagnostic Verified)** |
+| **M05** | `M05_TRANSITIVE_LEAKAGE_BRIDGE`| Rule EF-2 | `Derived indices mismatch! Derived=` | 1 | **PASS (Target Diagnostic Verified)** |
+| **M06** | `M06_NON_FINITE_LOGP_NAN` | Rule AV-3 | `Rule AV-3 Violation: Non-finite log-likelihood value detected` | 1 | **PASS (Target Diagnostic Verified)** |
+| **M07** | `M07_ADVERSARIAL_MARGIN_INVERSION`| Rule EF-2| `Rule EF-2 / Gate 6-B Invariant Violation: Non-positive margin on novel pair` | 1 | **PASS (Target Diagnostic Verified)** |
+| **M08** | `M08_DROPPED_NOVEL_PAIR` | Rule EF-2 | `Derived indices mismatch! Derived=` | 1 | **PASS (Target Diagnostic Verified)** |
+| **M09** | `M09_OFF_BY_ONE_MASK_SLICE` | Rule NV-1 | `Rule AV-3 / NV-1 Invariant Violation: Mutated completion mask diverges from independent oracle collator` | 1 | **PASS (Target Diagnostic Verified)** |
+| **M10** | `M10_ZERO_VARIANCE_MARGIN` | Rule NV-3 | `Rule NV-3 Violation: Zero variance detected across margins` | 1 | **PASS (Target Diagnostic Verified)** |
+| **M11** | `M11_DISJOINT_SET_CONTRADICTION`| Rule EF-2| `Disjoint invariant violation on pair 0` | 1 | **PASS (Target Diagnostic Verified)** |
+| **M12** | `M12_FORGED_LINEAGE_REVISION` | Rule AV-4 | `Rule AV-4 Lineage Failure: Base Model Snapshot config.json SHA-256 mismatch` | 1 | **PASS (Target Diagnostic Verified)** |
+| **M13** | `M13_MALFORMED_METADATA_JSON` | Rule AV-4 | `Fail-closed: Malformed metadata JSON in row` | 1 | **PASS (Target Diagnostic Verified)** |
+| **M14** | `M14_CROSS_LABEL_RESPONSE_LEAK`| Rule AV-4 | `Rule AV-4 Invariant Violation: Cross-label response leakage detected on pair` | 1 | **PASS (Target Diagnostic Verified)** |
+
+* **Gauntlet Summary:** **14 / 14 Mutations Verified via Specific Diagnostic (100.0%)** | **Official Verdict: PASS**.
+
+---
 
 ### 6.8 Gate 6-C: External 3D Geometric Oracle & Physical Topology Compliance Audit
 

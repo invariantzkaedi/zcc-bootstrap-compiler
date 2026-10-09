@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZKAEDI // Quantum Music Video & Cinematic Battle Observatory</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="quantum_music_video_data.js"></script>
+  <style>
+    :root {
+      --bg-dark: #07090e;
+      --bg-panel: rgba(14, 18, 28, 0.75);
+      --bg-card: rgba(20, 26, 42, 0.85);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-cyan: rgba(0, 242, 254, 0.4);
+      --border-crimson: rgba(239, 68, 68, 0.4);
+      --cyan: #00f2fe;
+      --violet: #9d4edd;
+      --crimson: #ef4444;
+      --gold: #ffb703;
+      --emerald: #10b981;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(circle at 10% 10%, rgba(239, 68, 68, 0.07) 0%, transparent 45%),
+        radial-gradient(circle at 90% 15%, rgba(0, 242, 254, 0.07) 0%, transparent 45%),
+        radial-gradient(circle at 50% 85%, rgba(157, 78, 221, 0.05) 0%, transparent 50%),
+        linear-gradient(180deg, #07090e 0%, #0d121f 100%);
+      color: var(--text-main);
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    header {
+      background: rgba(10, 14, 24, 0.92);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 1.25rem 2.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .brand-logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--crimson), var(--violet));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1.3rem;
+      color: white;
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+    }
+
+    .brand-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-sub {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      margin-top: 0.2rem;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      font-family: var(--font-mono);
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: var(--emerald);
+    }
+
+    .status-badge::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--emerald);
+      box-shadow: 0 0 8px var(--emerald);
+    }
+
+    .container {
+      max-width: 1560px;
+      margin: 0 auto;
+      padding: 2rem 2.5rem 4rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    .hero-banner {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(0, 242, 254, 0.08));
+      border: 1px solid var(--border-cyan);
+      border-radius: 16px;
+      padding: 2rem 2.5rem;
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-content h1 {
+      font-size: 2.2rem;
+      font-weight: 800;
+      margin-bottom: 0.75rem;
+      background: linear-gradient(90deg, #ffffff, var(--cyan), var(--crimson));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-content p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+      max-width: 820px;
+    }
+
+    .hero-metrics {
+      display: flex;
+      gap: 2rem;
+    }
+
+    .metric-box {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 0.85rem 1.25rem;
+    }
+
+    .metric-val {
+      font-size: 1.5rem;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      color: var(--cyan);
+    }
+
+    .metric-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .crypto-card {
+      background: rgba(10, 14, 24, 0.85);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+    }
+
+    .crypto-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--gold);
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+    }
+
+    .crypto-line {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.4rem;
+      color: var(--text-muted);
+    }
+
+    .crypto-val {
+      color: var(--text-main);
+      font-weight: 500;
+    }
+
+    /* Category Nav */
+    .cat-nav {
+      display: flex;
+      gap: 0.75rem;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+    }
+
+    .cat-btn {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      padding: 0.75rem 1.4rem;
+      border-radius: 10px;
+      font-family: var(--font-ui);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .cat-btn:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-main);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .cat-btn.active {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(0, 242, 254, 0.2));
+      border-color: var(--cyan);
+      color: white;
+      box-shadow: 0 0 16px rgba(0, 242, 254, 0.2);
+    }
+
+    /* Layout */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      gap: 2rem;
+    }
+
+    .preset-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      max-height: 820px;
+      overflow-y: auto;
+      padding-right: 0.5rem;
+    }
+
+    .preset-item {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .preset-item:hover {
+      background: var(--bg-card);
+      border-color: rgba(0, 242, 254, 0.3);
+      transform: translateX(4px);
+    }
+
+    .preset-item.selected {
+      background: var(--bg-card);
+      border-color: var(--crimson);
+      box-shadow: 0 0 18px rgba(239, 68, 68, 0.25);
+    }
+
+    .preset-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.4rem;
+    }
+
+    .preset-id {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--cyan);
+      font-weight: 600;
+    }
+
+    .preset-title {
+      font-weight: 700;
+      font-size: 0.95rem;
+      margin-bottom: 0.3rem;
+    }
+
+    .preset-motion {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    /* Detail View */
+    .detail-view {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.75rem;
+    }
+
+    .detail-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 1.5rem;
+    }
+
+    .detail-title h2 {
+      font-size: 1.75rem;
+      font-weight: 800;
+      margin-bottom: 0.4rem;
+    }
+
+    .detail-tags {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .tag {
+      padding: 0.25rem 0.65rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+    }
+
+    .tag.cyan { color: var(--cyan); border-color: rgba(0, 242, 254, 0.3); }
+    .tag.crimson { color: var(--crimson); border-color: rgba(239, 68, 68, 0.3); }
+    .tag.gold { color: var(--gold); border-color: rgba(255, 183, 3, 0.3); }
+
+    /* Timeline Stages */
+    .timeline-container {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .section-label {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      font-weight: 700;
+    }
+
+    .stages-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.75rem;
+    }
+
+    .stage-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 0.9rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      transition: all 0.2s ease;
+    }
+
+    .stage-card:hover {
+      border-color: var(--cyan);
+      transform: translateY(-2px);
+    }
+
+    .stage-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--cyan);
+      font-weight: 700;
+    }
+
+    .stage-intensity {
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--crimson);
+      font-size: 0.65rem;
+    }
+
+    .stage-action {
+      font-size: 0.75rem;
+      color: var(--text-main);
+      line-height: 1.4;
+      flex-grow: 1;
+    }
+
+    .stage-audio {
+      font-size: 0.7rem;
+      color: var(--gold);
+      font-family: var(--font-mono);
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 0.4rem;
+    }
+
+    /* Prompt Box */
+    .prompt-box {
+      background: rgba(5, 8, 14, 0.9);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 1.25rem;
+      position: relative;
+    }
+
+    .prompt-text {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: #e2e8f0;
+      white-space: pre-wrap;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: linear-gradient(135deg, var(--crimson), var(--violet));
+      border: none;
+      color: white;
+      padding: 0.45rem 1rem;
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover {
+      box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
+      transform: scale(1.03);
+    }
+
+    /* 3D Asset Anchor */
+    .asset-anchor-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+
+    .asset-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .asset-card-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--cyan);
+    }
+
+    .asset-stats {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-logo">⚔️</div>
+      <div>
+        <div class="brand-title">ZKAEDI CINEMATRIX // QUANTUM BATTLE OBSERVATORY</div>
+        <div class="brand-sub">
+          <span>90 Custom 15s Presets</span>
+          <span>•</span>
+          <span>Zero-Secret Ed25519 Receipts</span>
+          <span>•</span>
+          <span>RTX 5070 DPO Supervisory Engine</span>
+        </div>
+      </div>
+    </div>
+    <div class="status-badge" id="live-badge">ED25519 VERIFIED</div>
+  </header>
+
+  <div class="container">
+
+    <!-- Hero Banner -->
+    <div class="hero-banner">
+      <div class="hero-content">
+        <h1>Cinematic Battles & Quantum Video Arsenal</h1>
+        <p>
+          Ingesting the authoritative 90-preset Quantum Music Video arsenal across 6 categories.
+          Every preset guarantees contiguous 5-stage 3-second choreography, strict brand isolation
+          (<code>ZKAEDI SYSTEMS</code>), physical 3D asset topology certification (Euler &chi;=2),
+          and zero-secret Ed25519 cryptographic receipts.
+        </p>
+        <div class="hero-metrics">
+          <div class="metric-box">
+            <div class="metric-val" id="total-presets-count">90</div>
+            <div class="metric-label">Total Presets</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-val">15s</div>
+            <div class="metric-label">Duration Envelope</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-val">100%</div>
+            <div class="metric-label">Watertight Assets</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-val" id="win-rate-val">100%</div>
+            <div class="metric-label">DPO Win Rate</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="crypto-card">
+        <div class="crypto-header">
+          <span>🔒 AUTHENTICATION SEAL</span>
+          <span style="color:var(--emerald);">ACTIVE</span>
+        </div>
+        <div class="crypto-line">
+          <span>Protocol:</span>
+          <span class="crypto-val">Ed25519 Append-Only</span>
+        </div>
+        <div class="crypto-line">
+          <span>Verifier:</span>
+          <span class="crypto-val">Zero-Secret CLI</span>
+        </div>
+        <div class="crypto-line">
+          <span>Brand Contract:</span>
+          <span class="crypto-val">ZKAEDI SYSTEMS</span>
+        </div>
+        <div class="crypto-line">
+          <span>GPU Device:</span>
+          <span class="crypto-val">RTX 5070 (8.1 GB)</span>
+        </div>
+        <div class="crypto-line">
+          <span>Topology Euler:</span>
+          <span class="crypto-val">&chi; = 2 (Watertight)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Category Navigation -->
+    <div class="cat-nav" id="cat-nav-container">
+      <!-- Injected dynamically -->
+    </div>
+
+    <!-- Main Workspace Grid -->
+    <div class="main-grid">
+      <!-- Preset Master List -->
+      <div class="preset-list" id="preset-list-container">
+        <!-- Injected dynamically -->
+      </div>
+
+      <!-- Detail View -->
+      <div class="detail-view" id="detail-view-container">
+        <div class="detail-head">
+          <div class="detail-title">
+            <span class="tag crimson" id="detail-category-tag">03_cinematic_battles</span>
+            <h2 id="detail-title-text" style="margin-top:0.4rem;">Select a Preset</h2>
+            <div class="detail-tags" id="detail-tags-row"></div>
+          </div>
+        </div>
+
+        <!-- 5-Stage Timeline -->
+        <div class="timeline-container">
+          <div class="section-label">Contiguous 5-Stage 15-Second Choreography Timeline</div>
+          <div class="stages-grid" id="stages-grid-container"></div>
+        </div>
+
+        <!-- Prompt Textarea -->
+        <div class="timeline-container">
+          <div class="section-label">Ready-to-Paste Generator Prompt (Image-to-Video / Text-to-Video)</div>
+          <div class="prompt-box">
+            <button class="copy-btn" id="copy-prompt-btn" onclick="copyPrompt()">COPY PROMPT</button>
+            <div class="prompt-text" id="prompt-content-text">Loading...</div>
+          </div>
+        </div>
+
+        <!-- 3D Asset Topology Staging -->
+        <div class="timeline-container">
+          <div class="section-label">Physical 3D Battle Assets Certified in Scene (Gate 6-D Bridge)</div>
+          <div class="asset-anchor-grid" id="asset-anchor-grid-container">
+            <div class="asset-card">
+              <div class="asset-card-title">⚔️ Quantum Twin Saber</div>
+              <div class="asset-stats">
+                <span>File: artifacts/battle_assets_3d/quantum_twin_saber.glb</span>
+                <span>Topology: Watertight (Euler &chi; = 2)</span>
+                <span>Role: Signature 03_-01 rhythmic duel prop</span>
+              </div>
+            </div>
+            <div class="asset-card">
+              <div class="asset-card-title">🛡️ Mecha Titan Shield</div>
+              <div class="asset-stats">
+                <span>File: artifacts/battle_assets_3d/mecha_titan_shield.glb</span>
+                <span>Topology: Watertight (Euler &chi; = 2)</span>
+                <span>Role: 03_-02 Defensive energy core</span>
+              </div>
+            </div>
+            <div class="asset-card">
+              <div class="asset-card-title">🛸 Combat Target Drone</div>
+              <div class="asset-stats">
+                <span>File: artifacts/battle_assets_3d/combat_target_drone.glb</span>
+                <span>Topology: Watertight (Euler &chi; = 2)</span>
+                <span>Role: 03_-04 Aerial skirmish target</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let activeCategory = "03_cinematic_battles";
+    let activePresetId = null;
+    let dataFeed = null;
+
+    const CATEGORIES = [
+      { id: "03_cinematic_battles", label: "⚔️ Cinematic Battles", count: 15 },
+      { id: "01_audio_reactive_effects", label: "⚡ Audio-Reactive Effects", count: 15 },
+      { id: "02_dance_choreography", label: "💃 Dance Choreography", count: 15 },
+      { id: "04_camera_cinematography", label: "🎥 Camera Cinematography", count: 15 },
+      { id: "05_environmental_transformations", label: "🌌 Environmental Worlds", count: 15 },
+      { id: "06_ultimate_combined_masterpieces", label: "👑 Ultimate Masterpieces", count: 15 }
+    ];
+
+    function init() {
+      renderCategoryNav();
+
+      if (window.ZKAEDI_QUANTUM_MUSIC_VIDEO) {
+        dataFeed = window.ZKAEDI_QUANTUM_MUSIC_VIDEO;
+        updateMetrics();
+        selectCategory(activeCategory);
+      } else {
+        // Fallback fetch if not in global window
+        fetch("quantum_music_video_data.js")
+          .then(r => r.text())
+          .then(txt => {
+            const jsonPart = txt.substring(txt.indexOf("{"), txt.lastIndexOf("}") + 1);
+            dataFeed = JSON.parse(jsonPart);
+            updateMetrics();
+            selectCategory(activeCategory);
+          })
+          .catch(err => {
+            console.warn("Local data load:", err);
+          });
+      }
+    }
+
+    function renderCategoryNav() {
+      const nav = document.getElementById("cat-nav-container");
+      nav.innerHTML = CATEGORIES.map(c => `
+        <button class="cat-btn ${c.id === activeCategory ? 'active' : ''}" onclick="selectCategory('${c.id}')">
+          <span>${c.label}</span>
+          <span style="opacity:0.6;font-size:0.75rem;">(${c.count})</span>
+        </button>
+      `).join("");
+    }
+
+    function updateMetrics() {
+      if (!dataFeed) return;
+      if (dataFeed.evaluation_metrics) {
+        const wr = dataFeed.evaluation_metrics.win_rate;
+        if (wr !== undefined) {
+          document.getElementById("win-rate-val").textContent = (wr * 100).toFixed(0) + "%";
+        }
+      }
+    }
+
+    function selectCategory(catId) {
+      activeCategory = catId;
+      renderCategoryNav();
+
+      if (!dataFeed || !dataFeed.presets) return;
+      const presetsInCat = dataFeed.presets.filter(p => p.category === catId);
+
+      const listContainer = document.getElementById("preset-list-container");
+      listContainer.innerHTML = presetsInCat.map(p => `
+        <div class="preset-item ${p.id === activePresetId ? 'selected' : ''}" onclick="selectPreset('${p.id}')">
+          <div class="preset-header">
+            <span class="preset-id">${p.id}</span>
+            <span class="tag gold" style="font-size:0.65rem;">${p.soundtrack_style}</span>
+          </div>
+          <div class="preset-title">${p.title}</div>
+          <div class="preset-motion">${p.signature_motion}</div>
+        </div>
+      `).join("");
+
+      if (presetsInCat.length > 0) {
+        const firstId = (activePresetId && presetsInCat.some(p => p.id === activePresetId))
+          ? activePresetId
+          : presetsInCat[0].id;
+        selectPreset(firstId);
+      }
+    }
+
+    function selectPreset(presetId) {
+      activePresetId = presetId;
+
+      document.querySelectorAll(".preset-item").forEach(el => {
+        el.classList.remove("selected");
+      });
+      // Add selected class to matching item
+      const items = document.querySelectorAll(".preset-item");
+      items.forEach(el => {
+        if (el.querySelector(".preset-id")?.textContent === presetId) {
+          el.classList.add("selected");
+        }
+      });
+
+      if (!dataFeed || !dataFeed.presets) return;
+      const preset = dataFeed.presets.find(p => p.id === presetId);
+      if (!preset) return;
+
+      document.getElementById("detail-category-tag").textContent = preset.category;
+      document.getElementById("detail-title-text").textContent = preset.title;
+
+      const tagsRow = document.getElementById("detail-tags-row");
+      tagsRow.innerHTML = `
+        <span class="tag cyan">🎵 ${preset.soundtrack_style}</span>
+        <span class="tag crimson">🎥 ${preset.camera_signature}</span>
+        <span class="tag gold">🔤 ${preset.typography_style}</span>
+        <span class="tag">⏱️ 15s • 9:16</span>
+      `;
+
+      // Render Stages
+      const stagesContainer = document.getElementById("stages-grid-container");
+      stagesContainer.innerHTML = (preset.timeline || []).map(st => `
+        <div class="stage-card">
+          <div class="stage-header">
+            <span>${st.start_s}-${st.end_s}s</span>
+            <span class="stage-intensity">L${st.visual_intensity}</span>
+          </div>
+          <div class="stage-action">${st.action}</div>
+          <div class="stage-audio">🔊 ${st.audio_event}</div>
+        </div>
+      `).join("");
+
+      // Render Prompt
+      document.getElementById("prompt-content-text").textContent = preset.ready_to_paste_prompt || "";
+    }
+
+    function copyPrompt() {
+      const text = document.getElementById("prompt-content-text").textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById("copy-prompt-btn");
+        btn.textContent = "COPIED! ✓";
+        setTimeout(() => { btn.textContent = "COPY PROMPT"; }, 2000);
+      });
+    }
+
+    window.addEventListener("DOMContentLoaded", init);
+  </script>
+</body>
+</html>

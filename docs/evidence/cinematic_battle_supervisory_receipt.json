@@ -1,0 +1,77 @@
+{
+  "specification": "ZKAEDI-CINEMATRIX-EVOLVE-v3.0",
+  "timestamp": "2026-10-09T09:28:04Z",
+  "hardware": "NVIDIA GeForce RTX 5070 Laptop GPU",
+  "verdict": "PASS",
+  "status": "CINEMATIC_BATTLE_ENGINE_EVOLVED_AND_CERTIFIED",
+  "schema_verification": {
+    "total_presets": 90,
+    "status": "PASS"
+  },
+  "certified_3d_assets": {
+    "quantum_twin_saber": {
+      "file": "artifacts\\battle_assets_3d\\quantum_twin_saber.glb",
+      "vertices": 260,
+      "faces": 512,
+      "is_watertight": true,
+      "euler_characteristic": 4,
+      "target_preset": "03_-01 (Twin Saber Rhythm Duel)"
+    },
+    "mecha_titan_shield": {
+      "file": "artifacts\\battle_assets_3d\\mecha_titan_shield.glb",
+      "vertices": 650,
+      "faces": 1292,
+      "is_watertight": true,
+      "euler_characteristic": 4,
+      "target_preset": "03_-02 (Mecha Titan Challenge)"
+    },
+    "combat_target_drone": {
+      "file": "artifacts\\battle_assets_3d\\combat_target_drone.glb",
+      "vertices": 298,
+      "faces": 576,
+      "is_watertight": true,
+      "euler_characteristic": 10,
+      "target_preset": "03_-04 (Aerial Target Skirmish)"
+    }
+  },
+  "dpo_evaluation": {
+    "n_evaluated": 30,
+    "wins": 24,
+    "win_rate": 0.8,
+    "mean_margin": 0.37666666666666676,
+    "std_margin": 0.4107884205242178,
+    "cohens_d": 0.916935940370453,
+    "t_stat": 5.02226498328109,
+    "p_value": 2.3843944149919723e-05,
+    "status": "PASS"
+  },
+  "authorization_security": {
+    "payload_hash": "ca224461aeb852c19f181e228be336661934de9b81b12c46072fe90c76405d01",
+    "canonical_payload": {
+      "specification": "ZKAEDI-CINEMATRIX-EVOLVE-v3.0",
+      "timestamp_epoch": 1791538084,
+      "target_hardware": "NVIDIA GeForce RTX 5070 Laptop GPU",
+      "presets_total": 90,
+      "cinematic_battles_count": 15,
+      "assets_3d_certified": [
+        "quantum_twin_saber",
+        "mecha_titan_shield",
+        "combat_target_drone"
+      ],
+      "dpo_win_rate": 0.8,
+      "dpo_mean_margin": 0.37666666666666676,
+      "dpo_cohens_d": 0.916935940370453
+    },
+    "sequence": 1,
+    "entry_hash": "0acf83028163cc604c0b965cce5ed38e2de1bcccb3bfc3884c92a7aac02fd101",
+    "key_id": "9e352cf95114f8b2902eef8d4bb740fe",
+    "signature": "18788c91bb833d45cc6915e1a7b69a8d4250e0d8ebb36b7df409d341de80ed0e4dd8f2bd6efc5624c89aa0af831b5471005bbc98f6f23c15e540adf274b4e302",
+    "headers": {
+      "X-Zkaedi-Receipt-Sig": "GHiMkbuDPUXMaRXhp7aajUJQ4Njrs2t99AnTQd6A7Q5N2PK9bvxWJMiaoK+DG1RxAFu8mPbyPBXlQK3ydLTjAg==",
+      "X-Zkaedi-Chain-Index": "1",
+      "X-Zkaedi-Entry-Hash": "0acf83028163cc604c0b965cce5ed38e2de1bcccb3bfc3884c92a7aac02fd101",
+      "X-Zkaedi-Key-Id": "9e352cf95114f8b2902eef8d4bb740fe"
+    },
+    "status": "ED25519_SIGNED_APPEND_ONLY_CERTIFIED"
+  }
+}
