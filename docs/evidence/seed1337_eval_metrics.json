@@ -1,0 +1,26 @@
+{
+  "seed": 1337,
+  "training_loss": 0.6629106819629669,
+  "eval_loss": 0.6580957770347595,
+  "eval_margin": 0.07480672255669739,
+  "eval_accuracy": 0.7450980392156863,
+  "runtime_sec": 6.936921119689941,
+  "all_metrics": {
+    "eval_loss": 0.6580957770347595,
+    "eval_runtime": 10.9372,
+    "eval_samples_per_second": 4.663,
+    "eval_steps_per_second": 4.663,
+    "eval_entropy": 1.857319857559952,
+    "eval_num_tokens": 5291.0,
+    "eval_logits/chosen": -2.8508870245773323,
+    "eval_logits/rejected": -2.823955818033749,
+    "eval_mean_token_accuracy": 0.5132948534161437,
+    "eval_rewards/chosen": 0.07232019891414572,
+    "eval_rewards/rejected": -0.0024865238451371517,
+    "eval_rewards/accuracies": 0.7450980392156863,
+    "eval_rewards/margins": 0.07480672255669739,
+    "eval_logps/chosen": -614.5406990799249,
+    "eval_logps/rejected": -595.2731903674555,
+    "epoch": 0.25
+  }
+}
