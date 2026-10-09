@@ -1,0 +1,2121 @@
+{
+  "receipt_id": "GATE-6L-MULTI-MODEL-BAKEOFF",
+  "timestamp_iso": "2026-10-09T10:52:17Z",
+  "hardware": "NVIDIA GeForce RTX 5070 Laptop GPU",
+  "total_models_evaluated": 5,
+  "total_inferences_executed": 200,
+  "excluded_models": [
+    "Claude 3.5 Sonnet",
+    "Claude 3.7 Sonnet (Excluded per user instruction)"
+  ],
+  "benchmark_composition": {
+    "track1_near_boundary_pairs": 10,
+    "track2_physical_topology_problems": 10,
+    "orientations_per_item": 2,
+    "total_evaluations_per_model": 40
+  },
+  "leaderboard": [
+    {
+      "model": "gpt-4o",
+      "total_evals": 40,
+      "overall_accuracy": 100.0,
+      "track1_payload_accuracy": 100.0,
+      "track2_topology_accuracy": 100.0,
+      "symmetry_consistency_rate": 100.0,
+      "positional_bias_candidate_a_rate": 50.0,
+      "mean_latency_ms": 1198.6730924991207
+    },
+    {
+      "model": "gpt-4o-mini",
+      "total_evals": 40,
+      "overall_accuracy": 100.0,
+      "track1_payload_accuracy": 100.0,
+      "track2_topology_accuracy": 100.0,
+      "symmetry_consistency_rate": 100.0,
+      "positional_bias_candidate_a_rate": 50.0,
+      "mean_latency_ms": 998.5875449998275
+    },
+    {
+      "model": "gemini-2.5-pro",
+      "total_evals": 40,
+      "overall_accuracy": 100.0,
+      "track1_payload_accuracy": 100.0,
+      "track2_topology_accuracy": 100.0,
+      "symmetry_consistency_rate": 100.0,
+      "positional_bias_candidate_a_rate": 50.0,
+      "mean_latency_ms": 9056.39971749897
+    },
+    {
+      "model": "gemini-2.5-flash",
+      "total_evals": 40,
+      "overall_accuracy": 100.0,
+      "track1_payload_accuracy": 100.0,
+      "track2_topology_accuracy": 100.0,
+      "symmetry_consistency_rate": 100.0,
+      "positional_bias_candidate_a_rate": 50.0,
+      "mean_latency_ms": 6126.707972500844
+    },
+    {
+      "model": "zkaedi-3d-dpo-1.5b",
+      "total_evals": 40,
+      "overall_accuracy": 92.5,
+      "track1_payload_accuracy": 100.0,
+      "track2_topology_accuracy": 85.0,
+      "symmetry_consistency_rate": 90.0,
+      "positional_bias_candidate_a_rate": 52.5,
+      "mean_latency_ms": 281.7677474999073
+    }
+  ],
+  "detailed_ledger": {
+    "gpt-4o": [
+      {
+        "item_id": "T1_PAIR_01",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to the decimated geometry and planarization artifacts in Candidate B.",
+        "latency_ms": 1950.9325999970315
+      },
+      {
+        "item_id": "T1_PAIR_01",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Preserved watertight manifold structure ensures higher topological manifold integrity and surface fidelity.",
+        "latency_ms": 702.7241999967373
+      },
+      {
+        "item_id": "T1_PAIR_02",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to the decimated geometry and planarization artifacts in Candidate B.",
+        "latency_ms": 1341.7369999951916
+      },
+      {
+        "item_id": "T1_PAIR_02",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Preserved watertight manifold structure ensures higher topological manifold integrity and surface fidelity.",
+        "latency_ms": 651.2653000027058
+      },
+      {
+        "item_id": "T1_PAIR_03",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "preserved watertight manifold structure ensures higher topological manifold integrity and surface fidelity compared to decimated geometry with planarization artifacts.",
+        "latency_ms": 1042.587600000843
+      },
+      {
+        "item_id": "T1_PAIR_03",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "preserved watertight manifold structure ensures higher topological manifold integrity and surface fidelity.",
+        "latency_ms": 809.0461999963736
+      },
+      {
+        "item_id": "T1_PAIR_04",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "preserved watertight manifold structure ensures higher topological manifold integrity and surface fidelity.",
+        "latency_ms": 1158.5319999940111
+      },
+      {
+        "item_id": "T1_PAIR_04",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to the decimated geometry and planarization artifacts in Candidate A.",
+        "latency_ms": 1184.6263999977964
+      },
+      {
+        "item_id": "T1_PAIR_05",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A preserves a watertight manifold structure, ensuring higher topological manifold integrity and surface fidelity compared to the decimated geometry and planarization artifacts in Candidate B.",
+        "latency_ms": 1251.7119999974966
+      },
+      {
+        "item_id": "T1_PAIR_05",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Preserved watertight manifold structure ensures higher topological manifold integrity and surface fidelity.",
+        "latency_ms": 1158.661999994365
+      },
+      {
+        "item_id": "T1_PAIR_06",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "preserved watertight manifold structure ensures higher topological manifold integrity and surface fidelity compared to decimated runtime LOD geometry with planarization artifacts.",
+        "latency_ms": 1011.8108999959077
+      },
+      {
+        "item_id": "T1_PAIR_06",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Preserved watertight manifold structure ensures higher topological manifold integrity and surface fidelity.",
+        "latency_ms": 824.5558999988134
+      },
+      {
+        "item_id": "T1_PAIR_07",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A preserves a watertight manifold structure, ensuring higher topological manifold integrity and surface fidelity compared to the planarization artifacts present in Candidate B.",
+        "latency_ms": 1321.5749000009964
+      },
+      {
+        "item_id": "T1_PAIR_07",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Preserved watertight manifold structure ensures higher topological manifold integrity and surface fidelity.",
+        "latency_ms": 1056.2004000021261
+      },
+      {
+        "item_id": "T1_PAIR_08",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A preserves a watertight manifold structure, ensuring higher topological manifold integrity and surface fidelity compared to the decimated geometry and planarization artifacts in Candidate B.",
+        "latency_ms": 1006.8652999980259
+      },
+      {
+        "item_id": "T1_PAIR_08",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B preserves a watertight manifold structure, ensuring higher topological manifold integrity and surface fidelity.",
+        "latency_ms": 5557.689699999173
+      },
+      {
+        "item_id": "T1_PAIR_09",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A preserves a watertight manifold structure, ensuring higher topological manifold integrity and surface fidelity compared to the decimated geometry and planarization artifacts present in Candidate B.",
+        "latency_ms": 1168.9938999988954
+      },
+      {
+        "item_id": "T1_PAIR_09",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Preserved watertight manifold structure ensures higher topological manifold integrity and surface fidelity.",
+        "latency_ms": 933.3635000002687
+      },
+      {
+        "item_id": "T1_PAIR_10",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "preserved watertight manifold structure ensures higher topological manifold integrity and surface fidelity compared to decimated runtime LOD geometry with planarization artifacts.",
+        "latency_ms": 1005.1200000016252
+      },
+      {
+        "item_id": "T1_PAIR_10",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B preserves a watertight manifold structure, ensuring higher topological manifold integrity and surface fidelity compared to the decimated geometry and planarization artifacts in Candidate A.",
+        "latency_ms": 712.7765000041109
+      },
+      {
+        "item_id": "T2_TOPO_01",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A has an Euler characteristic of 2, which matches the Euler characteristic of a closed, orientable 2-manifold with the topology of a sphere, according to the Euler-Poincar\u00e9 formula.",
+        "latency_ms": 1314.8884999973234
+      },
+      {
+        "item_id": "T2_TOPO_01",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B has an Euler characteristic of 2, which matches the Euler characteristic of a closed, orientable 2-manifold with sphere topology, according to the Euler-Poincar\u00e9 formula.",
+        "latency_ms": 1019.5000000021537
+      },
+      {
+        "item_id": "T2_TOPO_02",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A conforms to the Euler characteristic theorem for 2-manifold surfaces, where each internal edge must be shared by exactly 2 faces.",
+        "latency_ms": 1492.58220000047
+      },
+      {
+        "item_id": "T2_TOPO_02",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B conforms to the definition of a 2-manifold surface where each edge is shared by exactly two faces, as required by the manifold edge multiplicity invariant.",
+        "latency_ms": 806.1719000033918
+      },
+      {
+        "item_id": "T2_TOPO_03",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Garland-Heckbert QEM decimation preserves higher surface curvature fidelity, geometric volume, and tangent plane orientation by minimizing the quadric error metric, as per the theorem of optimal vertex placement minimizing squared distances to original surface planes.",
+        "latency_ms": 1140.8165999964694
+      },
+      {
+        "item_id": "T2_TOPO_03",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Garland-Heckbert QEM decimation preserves higher surface curvature fidelity, geometric volume, and tangent plane orientation by minimizing the quadric error metric, as per the theorem of optimal vertex placement in quadric error minimization.",
+        "latency_ms": 778.1611999962479
+      },
+      {
+        "item_id": "T2_TOPO_04",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A satisfies the Euler characteristic condition for a closed watertight triangulated mesh, where 3F = 2E, ensuring no open boundary cracks or missing seam stitches.",
+        "latency_ms": 955.6990999990376
+      },
+      {
+        "item_id": "T2_TOPO_04",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B satisfies the Euler characteristic for a closed watertight triangulated mesh, where 3F = 2E, indicating no open boundary edges.",
+        "latency_ms": 933.9755999972112
+      },
+      {
+        "item_id": "T2_TOPO_05",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "MikkTSpace ensures consistent tangent-space basis across mirrored UV seams by preserving bitangent handedness, preventing shading artifacts as per the orthonormal basis theorem.",
+        "latency_ms": 1223.6277999982121
+      },
+      {
+        "item_id": "T2_TOPO_05",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "MikkTSpace ensures consistent tangent-space basis across mirrored UV seams by preserving bitangent handedness, preventing shading artifacts as per the tangent-space continuity theorem.",
+        "latency_ms": 944.5735999979661
+      },
+      {
+        "item_id": "T2_TOPO_06",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A satisfies the Euler characteristic chi = 2 - 2g = 0 for a genus-1 torus, as per the Euler-Poincar\u00e9 formula for orientable surfaces.",
+        "latency_ms": 939.3160000036005
+      },
+      {
+        "item_id": "T2_TOPO_06",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B satisfies the Euler characteristic chi = 2 - 2g = 0 for a genus-1 torus, as per the Euler-Poincar\u00e9 formula for orientable surfaces.",
+        "latency_ms": 710.8511000042199
+      },
+      {
+        "item_id": "T2_TOPO_07",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A maintains numerical stability due to its well-conditioned equilateral triangles, as per the Delaunay triangulation theorem, which minimizes the occurrence of slivers and maximizes the minimum angle, ensuring better numerical stability in computations.",
+        "latency_ms": 958.7769999998272
+      },
+      {
+        "item_id": "T2_TOPO_07",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B maintains numerical stability due to its isotropic triangulation with well-conditioned equilateral triangles, minimizing numerical errors as per the Delaunay triangulation theorem, which optimizes triangle quality and avoids degenerate slivers.",
+        "latency_ms": 1469.8489000002155
+      },
+      {
+        "item_id": "T2_TOPO_08",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A conforms to the definition of a local 2-manifold surface everywhere because every vertex has a link homeomorphic to a topological circle, as per the definition of a 2-manifold.",
+        "latency_ms": 1086.0794999971404
+      },
+      {
+        "item_id": "T2_TOPO_08",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B conforms to the definition of a local 2-manifold surface everywhere because every vertex has a link homeomorphic to a topological circle, as per the definition of a manifold.",
+        "latency_ms": 1180.3963000056683
+      },
+      {
+        "item_id": "T2_TOPO_09",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Dey's Link Condition ensures topological invariance by maintaining manifoldness and preventing self-intersections, as per the theorem on preserving local topology during edge collapses.",
+        "latency_ms": 1044.3685999998706
+      },
+      {
+        "item_id": "T2_TOPO_09",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Dey's Link Condition ensures topological invariance by maintaining manifoldness and preventing self-intersections, as per the theorem on preserving local topology during edge collapses.",
+        "latency_ms": 652.3568999982672
+      },
+      {
+        "item_id": "T2_TOPO_10",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Curvature-adaptive decimation preserves organic silhouette fidelity and sharp feature sharpness by allocating more polygons to areas of high curvature, as supported by the theorem that denser sampling in regions of high curvature maintains geometric detail and feature integrity.",
+        "latency_ms": 1252.125300001353
+      },
+      {
+        "item_id": "T2_TOPO_10",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Curvature-adaptive decimation preserves organic silhouette fidelity and sharp feature sharpness by allocating more polygons to areas of high curvature, as supported by the theorem that denser sampling in regions of high curvature maintains geometric detail and feature integrity.",
+        "latency_ms": 2192.031299993687
+      }
+    ],
+    "gpt-4o-mini": [
+      {
+        "item_id": "T1_PAIR_01",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to Candidate B's decimated geometry with planarization artifacts.",
+        "latency_ms": 814.4578999999794
+      },
+      {
+        "item_id": "T1_PAIR_01",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to the decimated geometry of Candidate A.",
+        "latency_ms": 1207.1219999997993
+      },
+      {
+        "item_id": "T1_PAIR_02",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to Candidate B's decimated geometry with planarization artifacts.",
+        "latency_ms": 1328.6490000027698
+      },
+      {
+        "item_id": "T1_PAIR_02",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to the planarization artifacts in Candidate A.",
+        "latency_ms": 1304.6554999964428
+      },
+      {
+        "item_id": "T1_PAIR_03",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to Candidate B's decimated geometry with planarization artifacts.",
+        "latency_ms": 1032.8688000008697
+      },
+      {
+        "item_id": "T1_PAIR_03",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to the decimated geometry of Candidate A.",
+        "latency_ms": 1094.0262000003713
+      },
+      {
+        "item_id": "T1_PAIR_04",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to Candidate B's decimated geometry with planarization artifacts.",
+        "latency_ms": 929.140299995197
+      },
+      {
+        "item_id": "T1_PAIR_04",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to Candidate A's decimated geometry with planarization artifacts.",
+        "latency_ms": 928.9142999987234
+      },
+      {
+        "item_id": "T1_PAIR_05",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to Candidate B's decimated geometry with planarization artifacts.",
+        "latency_ms": 957.3358999987249
+      },
+      {
+        "item_id": "T1_PAIR_05",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to the decimated geometry of Candidate A.",
+        "latency_ms": 998.7450000044191
+      },
+      {
+        "item_id": "T1_PAIR_06",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to Candidate B's decimated geometry with planarization artifacts.",
+        "latency_ms": 833.0241000003298
+      },
+      {
+        "item_id": "T1_PAIR_06",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to the planarization artifacts in Candidate A.",
+        "latency_ms": 847.2276999964379
+      },
+      {
+        "item_id": "T1_PAIR_07",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to Candidate B's decimated geometry with planarization artifacts.",
+        "latency_ms": 913.5113999946043
+      },
+      {
+        "item_id": "T1_PAIR_07",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to the decimated geometry of Candidate A.",
+        "latency_ms": 937.4309999984689
+      },
+      {
+        "item_id": "T1_PAIR_08",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to Candidate B's decimated geometry with planarization artifacts.",
+        "latency_ms": 989.0192000020761
+      },
+      {
+        "item_id": "T1_PAIR_08",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to the planarization artifacts in Candidate A.",
+        "latency_ms": 1022.7097000024514
+      },
+      {
+        "item_id": "T1_PAIR_09",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to Candidate B's decimated geometry with planarization artifacts.",
+        "latency_ms": 1016.864600002009
+      },
+      {
+        "item_id": "T1_PAIR_09",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to the decimated geometry of Candidate A.",
+        "latency_ms": 1123.2861999960733
+      },
+      {
+        "item_id": "T1_PAIR_10",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to Candidate B's decimated geometry with planarization artifacts.",
+        "latency_ms": 1120.5458999975235
+      },
+      {
+        "item_id": "T1_PAIR_10",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to the decimated geometry of Candidate A.",
+        "latency_ms": 735.4864000008092
+      },
+      {
+        "item_id": "T2_TOPO_01",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "According to the Euler characteristic theorem for closed orientable 2-manifolds, the Euler characteristic must equal 2, which is satisfied by Candidate A.",
+        "latency_ms": 999.38889999612
+      },
+      {
+        "item_id": "T2_TOPO_01",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B has an Euler characteristic of 2, which corresponds to a closed, orientable 2-manifold, while Candidate A has a negative Euler characteristic, indicating the presence of singularities or non-manifold topology.",
+        "latency_ms": 1015.8226000057766
+      },
+      {
+        "item_id": "T2_TOPO_02",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A conforms to the definition of a 2-manifold, where each edge is incident to exactly two faces, satisfying the requirement for a well-defined surface topology.",
+        "latency_ms": 1231.7885999946157
+      },
+      {
+        "item_id": "T2_TOPO_02",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "According to the definition of a 2-manifold, every edge must be incident to exactly two faces, which is satisfied by Candidate B's edges.",
+        "latency_ms": 978.658500003803
+      },
+      {
+        "item_id": "T2_TOPO_03",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "The Garland-Heckbert QEM decimation minimizes the quadric error, preserving surface curvature fidelity and geometric volume by optimizing vertex positions based on the original surface planes, as stated in the Quadric Error Metrics theorem.",
+        "latency_ms": 955.9738000025391
+      },
+      {
+        "item_id": "T2_TOPO_03",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "The Garland-Heckbert QEM decimation minimizes the quadric error, which directly preserves surface curvature fidelity and geometric properties by optimizing vertex positions based on the original surface planes.",
+        "latency_ms": 868.7847999972291
+      },
+      {
+        "item_id": "T2_TOPO_04",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A satisfies the Watertight Triangulated Parity Theorem (3F = 2E), indicating it is a verified watertight closed mesh.",
+        "latency_ms": 1021.9656999979634
+      },
+      {
+        "item_id": "T2_TOPO_04",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B satisfies the Watertight Triangulated Parity Theorem (3F = 2E), indicating it is a valid closed mesh without open boundary cracks or missing seam stitches.",
+        "latency_ms": 846.7514000003575
+      },
+      {
+        "item_id": "T2_TOPO_05",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A preserves the handedness of the bitangent across mirrored UV seams, ensuring consistent orientation of the tangent space and preventing artifacts such as inverted specular highlights and dark seam splits, as guaranteed by the properties of the MikkTSpace basis.",
+        "latency_ms": 1385.0582000013674
+      },
+      {
+        "item_id": "T2_TOPO_05",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "The MikkTSpace basis ensures consistent handedness tracking across mirrored UV seams, preventing artifacts from inverted specular highlights and dark seam splits due to the preservation of the bitangent orientation.",
+        "latency_ms": 1084.9089000039385
+      },
+      {
+        "item_id": "T2_TOPO_06",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A satisfies the Euler characteristic chi = 0, which corresponds to a genus-1 surface as per the formula chi = 2 - 2g.",
+        "latency_ms": 827.7720999976736
+      },
+      {
+        "item_id": "T2_TOPO_06",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B has an Euler characteristic chi = 0, which satisfies the topological invariant chi = 2 - 2g for a genus-1 surface (g=1).",
+        "latency_ms": 866.6357000038261
+      },
+      {
+        "item_id": "T2_TOPO_07",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A maintains numerical stability due to its well-conditioned equilateral triangles, which adhere to the Delaunay triangulation theorem that states that well-shaped triangles minimize numerical errors in computations.",
+        "latency_ms": 831.6892999937409
+      },
+      {
+        "item_id": "T2_TOPO_07",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "The well-conditioned equilateral triangles with a mean aspect ratio of 0.82 ensure better numerical stability during GPU rasterization and finite element analysis, as per the triangle quality metrics established in computational geometry.",
+        "latency_ms": 1030.4264000005787
+      },
+      {
+        "item_id": "T2_TOPO_08",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A conforms to the definition of a local 2-manifold surface everywhere as it has a vertex neighborhood homeomorphic to a topological circle, while Candidate B contains 'bowtie' pinch vertices that violate this condition by having disconnected vertex links.",
+        "latency_ms": 978.4067000000505
+      },
+      {
+        "item_id": "T2_TOPO_08",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B conforms to the definition of a local 2-manifold surface everywhere as it has a vertex neighborhood homeomorphic to a topological circle, while Candidate A's 'bowtie' pinch vertices violate this by having disconnected vertex links.",
+        "latency_ms": 1009.4902000055299
+      },
+      {
+        "item_id": "T2_TOPO_09",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Dey's Link Condition ensures that edge collapses maintain local topology by requiring that the links of the vertices involved in the collapse intersect in a controlled manner, preventing self-intersecting faces and non-manifold edges.",
+        "latency_ms": 912.8841999990982
+      },
+      {
+        "item_id": "T2_TOPO_09",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Dey's Link Condition ensures that edge collapses maintain local topology by requiring that the links of the vertices involved in the collapse intersect in a controlled manner, preventing self-intersecting faces and non-manifold edges.",
+        "latency_ms": 984.0140000014799
+      },
+      {
+        "item_id": "T2_TOPO_10",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Curvature-adaptive methods preserve critical features by allocating more polygons to areas of high curvature, thus maintaining silhouette fidelity and sharp features as supported by the Mean Value Theorem for curvature.",
+        "latency_ms": 870.8410999970511
+      },
+      {
+        "item_id": "T2_TOPO_10",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Curvature-adaptive decimation aligns with the principle of preserving features in high curvature regions, as stated in the Mean Value Theorem for Curvature, which emphasizes that local geometric properties should dictate the preservation of detail.",
+        "latency_ms": 1107.2196000022814
+      }
+    ],
+    "gemini-2.5-pro": [
+      {
+        "item_id": "T1_PAIR_01",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A is described as a high-polygon master with a preserved watertight manifold structure, whereas Candidate B is a decimated LOD with known planarization artifacts, indicating compromised surface integrity.",
+        "latency_ms": 9655.784599999606
+      },
+      {
+        "item_id": "T1_PAIR_01",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B is explicitly described as a high-poly model with a preserved watertight manifold structure, whereas Candidate A is a decimated LOD with planarization artifacts, indicating compromised topology and surface fidelity.",
+        "latency_ms": 9001.50399999984
+      },
+      {
+        "item_id": "T1_PAIR_02",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A is described as a high-polygon, watertight manifold mesh, which represents superior topological integrity compared to the decimated and artifact-prone geometry of Candidate B.",
+        "latency_ms": 7778.604500002984
+      },
+      {
+        "item_id": "T1_PAIR_02",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B is explicitly described as a high-poly master with a preserved watertight manifold structure, ensuring superior topological integrity over the decimated and artifact-prone Candidate A.",
+        "latency_ms": 7881.119799996668
+      },
+      {
+        "item_id": "T1_PAIR_03",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A is described as a high-polygon master with a preserved watertight manifold structure, ensuring superior topological integrity and surface fidelity over the decimated and artifact-prone Candidate B.",
+        "latency_ms": 8477.965400001267
+      },
+      {
+        "item_id": "T1_PAIR_03",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B is explicitly described as a high-poly model with a preserved watertight manifold structure, which is the definition of high topological integrity, whereas Candidate A is a decimated version with artifacts.",
+        "latency_ms": 7671.669399998791
+      },
+      {
+        "item_id": "T1_PAIR_04",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A is explicitly described as a high-poly master with a preserved watertight manifold structure, ensuring superior topological integrity over the decimated and artifact-prone Candidate B.",
+        "latency_ms": 9151.478299994778
+      },
+      {
+        "item_id": "T1_PAIR_04",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B is explicitly described as a high-poly master with a preserved watertight manifold structure, ensuring superior topological integrity over the decimated and artifact-prone Candidate A.",
+        "latency_ms": 9261.16949999414
+      },
+      {
+        "item_id": "T1_PAIR_05",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A is the master high-poly asset with a preserved watertight manifold structure, ensuring superior topological integrity over the decimated and artifact-prone geometry of Candidate B.",
+        "latency_ms": 9262.242199998582
+      },
+      {
+        "item_id": "T1_PAIR_05",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B is explicitly described as a MASTER_HIGH_POLY model with a preserved watertight manifold structure, which is inherently superior to Candidate A's decimated, artifact-prone geometry.",
+        "latency_ms": 8567.33720000193
+      },
+      {
+        "item_id": "T1_PAIR_06",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A is described as a high-polygon master with a preserved watertight manifold structure, whereas Candidate B is a decimated LOD with artifacts, indicating compromised topology and surface fidelity.",
+        "latency_ms": 7190.152299997862
+      },
+      {
+        "item_id": "T1_PAIR_06",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B is explicitly described as a high-polygon master with a preserved watertight manifold structure, which is superior to Candidate A's decimated geometry and planarization artifacts.",
+        "latency_ms": 8534.23859999748
+      },
+      {
+        "item_id": "T1_PAIR_07",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A is described as a high-polygon, watertight manifold, which inherently possesses superior topological integrity and surface fidelity compared to Candidate B's decimated geometry with planarization artifacts.",
+        "latency_ms": 8045.227800001157
+      },
+      {
+        "item_id": "T1_PAIR_07",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B is explicitly described as a high-poly master with a preserved watertight manifold structure, which is superior to Candidate A's decimated geometry and planarization artifacts.",
+        "latency_ms": 6870.61239999457
+      },
+      {
+        "item_id": "T1_PAIR_08",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A is explicitly described as a preserved watertight manifold, which represents the highest level of topological integrity, unlike the decimated and artifact-prone geometry of Candidate B.",
+        "latency_ms": 7813.618799998949
+      },
+      {
+        "item_id": "T1_PAIR_08",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B is described as a high-polygon master with a preserved watertight manifold structure, whereas Candidate A is a decimated LOD with artifacts, indicating compromised topology.",
+        "latency_ms": 8310.34340000042
+      },
+      {
+        "item_id": "T1_PAIR_09",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A is the master high-poly asset that preserves a watertight manifold structure, ensuring superior topological integrity over the decimated and artifacted Candidate B.",
+        "latency_ms": 10899.296300005517
+      },
+      {
+        "item_id": "T1_PAIR_09",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B is the master high-poly asset with a preserved watertight manifold structure, ensuring superior topological integrity over the decimated and artifact-prone Candidate A.",
+        "latency_ms": 7050.453999996535
+      },
+      {
+        "item_id": "T1_PAIR_10",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A is described as a high-polygon master asset with a preserved watertight manifold structure, whereas Candidate B is a decimated, lower-detail version with surface artifacts.",
+        "latency_ms": 8175.751399998262
+      },
+      {
+        "item_id": "T1_PAIR_10",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B is explicitly described as a MASTER_HIGH_POLY asset with a preserved watertight manifold structure, ensuring higher topological integrity than the decimated and artifact-prone Candidate A.",
+        "latency_ms": 9125.138800001878
+      },
+      {
+        "item_id": "T2_TOPO_01",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "According to the Euler-Poincar\u00e9 formula for polyhedra, any closed, orientable 2-manifold with the topology of a sphere (genus 0) must have an Euler characteristic of chi = 2 - 2g = 2.",
+        "latency_ms": 9735.746400001517
+      },
+      {
+        "item_id": "T2_TOPO_01",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "The Gauss-Bonnet theorem dictates that any closed, orientable 2-manifold with the topology of a sphere must have an Euler characteristic of 2.",
+        "latency_ms": 9715.833499998553
+      },
+      {
+        "item_id": "T2_TOPO_02",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "A 2-manifold without boundary, required for unambiguous volume definition, is a surface where every edge is shared by exactly two faces.",
+        "latency_ms": 9881.260699999984
+      },
+      {
+        "item_id": "T2_TOPO_02",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "A surface is a 2-manifold if and only if every point has a neighborhood homeomorphic to a disk, which in a polygonal mesh requires every interior edge to be incident to exactly two faces.",
+        "latency_ms": 9233.577999999397
+      },
+      {
+        "item_id": "T2_TOPO_03",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "The Garland-Heckbert algorithm minimizes a quadric error metric derived from the sum of squared distances to the local tangent planes, which by definition better preserves the original surface differential properties like curvature and normal orientation.",
+        "latency_ms": 9132.1597999995
+      },
+      {
+        "item_id": "T2_TOPO_03",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "The Garland-Heckbert algorithm minimizes a quadric error metric derived from the sum of squared distances to the original surface planes, which explicitly preserves the local surface differential properties like curvature and tangent orientation.",
+        "latency_ms": 9103.066299998318
+      },
+      {
+        "item_id": "T2_TOPO_04",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "A closed, watertight triangulated manifold must satisfy the parity theorem 3F = 2E, where every edge is shared by exactly two faces.",
+        "latency_ms": 9330.362999993667
+      },
+      {
+        "item_id": "T2_TOPO_04",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "A closed, watertight triangulated mesh (a 2-manifold without boundary) requires every edge to be shared by exactly two faces, which is satisfied by the topological relationship 3F = 2E.",
+        "latency_ms": 9268.400300003123
+      },
+      {
+        "item_id": "T2_TOPO_05",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A correctly applies the Frenet-Serret frame concept by preserving the bitangent's handedness across UV discontinuities, ensuring a consistent tangent-space orientation manifold required for topologically invariant lighting calculations.",
+        "latency_ms": 10024.750500000664
+      },
+      {
+        "item_id": "T2_TOPO_05",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "MikkTSpace guarantees a consistent tangent-space basis across UV seams by preserving the sign of the Jacobian determinant of the surface-to-texture parameterization, thus preventing orientation flips that cause lighting artifacts.",
+        "latency_ms": 11218.279499997152
+      },
+      {
+        "item_id": "T2_TOPO_06",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A's mesh satisfies the Euler-Poincar\u00e9 formula for a closed orientable surface, as its Euler characteristic (V - E + F = 0) correctly corresponds to the required value for a genus-1 torus (\u03c7 = 2 - 2g = 0).",
+        "latency_ms": 8716.478299997107
+      },
+      {
+        "item_id": "T2_TOPO_06",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B's mesh satisfies the Euler-Poincar\u00e9 formula for a closed orientable surface, \u03c7 = V - E + F = 2 - 2g, yielding an Euler characteristic of 0 for a genus g=1 torus.",
+        "latency_ms": 9194.471999995585
+      },
+      {
+        "item_id": "T2_TOPO_07",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A's well-conditioned triangles with high aspect ratios prevent the ill-conditioning of the stiffness matrix in finite element analysis and mitigate floating-point precision errors inherent to rasterizing degenerate slivers.",
+        "latency_ms": 9032.945099999779
+      },
+      {
+        "item_id": "T2_TOPO_07",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B's well-conditioned isotropic triangles with high aspect ratios prevent ill-conditioned stiffness matrices in finite element analysis and avoid precision errors in barycentric coordinate calculations during rasterization, ensuring numerical stability.",
+        "latency_ms": 9349.927499999467
+      },
+      {
+        "item_id": "T2_TOPO_08",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "A surface is a 2-manifold if and only if the neighborhood of every point is homeomorphic to an open disk (R^2), a condition met by Candidate A's vertex links but violated by Candidate B's disconnected 'bowtie' vertex links.",
+        "latency_ms": 9323.827599997458
+      },
+      {
+        "item_id": "T2_TOPO_08",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "A surface is a 2-manifold if and only if the neighborhood of every point is homeomorphic to an open disk, which in a simplicial complex requires every vertex link to be a single topological circle.",
+        "latency_ms": 10031.521099997917
+      },
+      {
+        "item_id": "T2_TOPO_09",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Dey, Edelsbrunner, and Guha proved that satisfying the link condition for every edge contraction is a sufficient condition to guarantee the resulting surface is homeomorphic to the original, thus preserving its topology.",
+        "latency_ms": 9750.665700004902
+      },
+      {
+        "item_id": "T2_TOPO_09",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Dey's Link Condition is a sufficient condition for an edge collapse to be a homeomorphism, thereby preserving the manifold topology of the local surface patch.",
+        "latency_ms": 9902.739299999666
+      },
+      {
+        "item_id": "T2_TOPO_10",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A's methodology is a direct application of the Gauss-Bonnet theorem, which links integral Gaussian curvature to topology, ensuring that vertices contributing most to the surface's characteristic features (and thus its integral curvature) are preserved.",
+        "latency_ms": 11380.169899995963
+      },
+      {
+        "item_id": "T2_TOPO_10",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B preserves perceptually significant features by concentrating geometric detail in regions of high curvature, a principle directly supported by the Gauss-Bonnet theorem which links local surface geometry (curvature) to global topological structure.",
+        "latency_ms": 10206.0954999979
+      }
+    ],
+    "gemini-2.5-flash": [
+      {
+        "item_id": "T1_PAIR_01",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A explicitly states a 'preserved watertight manifold structure,' which directly indicates higher topological integrity and surface fidelity compared to Candidate B's 'decimated runtime LOD geometry' with 'planarization artifacts'.",
+        "latency_ms": 3768.1154000019887
+      },
+      {
+        "item_id": "T1_PAIR_01",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B explicitly preserves a watertight manifold structure, indicating superior topological integrity and surface fidelity compared to Candidate A's decimated geometry and planarization artifacts.",
+        "latency_ms": 3643.772600000375
+      },
+      {
+        "item_id": "T1_PAIR_02",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A explicitly preserves a watertight manifold structure and is a high-polygon master, ensuring superior topological integrity and surface fidelity compared to Candidate B's decimated geometry with planarization artifacts.",
+        "latency_ms": 5154.322600006708
+      },
+      {
+        "item_id": "T1_PAIR_02",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B explicitly preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to Candidate A's decimated and planarized geometry.",
+        "latency_ms": 4092.226300002949
+      },
+      {
+        "item_id": "T1_PAIR_03",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A explicitly preserves a watertight manifold structure, indicating superior topological integrity compared to Candidate B's decimated geometry with planarization artifacts.",
+        "latency_ms": 6048.771900001157
+      },
+      {
+        "item_id": "T1_PAIR_03",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B explicitly preserves a watertight manifold structure, indicating superior topological integrity and surface fidelity compared to Candidate A's decimated geometry and planarization artifacts.",
+        "latency_ms": 3530.741599999601
+      },
+      {
+        "item_id": "T1_PAIR_04",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A explicitly maintains a preserved watertight manifold structure and is the master high-poly model, whereas Candidate B is a decimated LOD with planarization artifacts that compromise topological integrity and surface fidelity.",
+        "latency_ms": 3950.20530000329
+      },
+      {
+        "item_id": "T1_PAIR_04",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B is explicitly described as a MASTER_HIGH_POLY model with a preserved watertight manifold structure, directly indicating superior topological integrity and surface fidelity compared to the decimated Candidate A.",
+        "latency_ms": 4813.608300006308
+      },
+      {
+        "item_id": "T1_PAIR_05",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A explicitly preserves a watertight manifold structure and is a high-polygon master, ensuring superior topological integrity and surface fidelity compared to Candidate B's decimated geometry with planarization artifacts.",
+        "latency_ms": 4457.010600002832
+      },
+      {
+        "item_id": "T1_PAIR_05",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B explicitly preserves a watertight manifold structure, ensuring higher topological integrity and surface fidelity compared to Candidate A's decimated geometry and planarization artifacts.",
+        "latency_ms": 3562.8710000019055
+      },
+      {
+        "item_id": "T1_PAIR_06",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A is the high-poly master with a preserved watertight manifold structure, directly indicating higher topological integrity and surface fidelity compared to the decimated Candidate B which exhibits planarization artifacts.",
+        "latency_ms": 4916.680900001666
+      },
+      {
+        "item_id": "T1_PAIR_06",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B explicitly states 'preserved watertight manifold structure' and 'MASTER_HIGH_POLY', indicating superior topological integrity and surface fidelity compared to Candidate A's 'decimated runtime LOD geometry' and 'planarization artifacts'.",
+        "latency_ms": 3561.3408999997773
+      },
+      {
+        "item_id": "T1_PAIR_07",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A explicitly states a 'preserved watertight manifold structure', indicating superior topological integrity and surface fidelity compared to Candidate B's 'decimated runtime LOD geometry' and 'planarization artifacts'.",
+        "latency_ms": 3604.135200002929
+      },
+      {
+        "item_id": "T1_PAIR_07",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B explicitly preserves a watertight manifold structure, ensuring higher topological manifold integrity and surface fidelity compared to Candidate A's decimated geometry and planarization artifacts.",
+        "latency_ms": 3776.4036000007764
+      },
+      {
+        "item_id": "T1_PAIR_08",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A explicitly preserves a watertight manifold structure and higher surface fidelity, while Candidate B exhibits planarization artifacts and is a decimated LOD.",
+        "latency_ms": 4460.467400000198
+      },
+      {
+        "item_id": "T1_PAIR_08",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B explicitly states it has a 'preserved watertight manifold structure,' indicating superior topological integrity and surface fidelity compared to Candidate A's decimated and planarized geometry.",
+        "latency_ms": 4403.7329999991925
+      },
+      {
+        "item_id": "T1_PAIR_09",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A explicitly states a preserved watertight manifold structure, indicating superior topological integrity and surface fidelity compared to Candidate B's decimated geometry and planarization artifacts.",
+        "latency_ms": 3721.365199999127
+      },
+      {
+        "item_id": "T1_PAIR_09",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B explicitly states a 'preserved watertight manifold structure' and is a 'MASTER_HIGH_POLY' model, indicating superior topological integrity and surface fidelity compared to Candidate A's 'decimated runtime LOD geometry' and 'planarization artifacts'.",
+        "latency_ms": 3310.8079000012367
+      },
+      {
+        "item_id": "T1_PAIR_10",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A explicitly preserves a watertight manifold structure and is a high-poly master, while Candidate B is a decimated LOD with planarization artifacts.",
+        "latency_ms": 4142.059799996787
+      },
+      {
+        "item_id": "T1_PAIR_10",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B explicitly preserves a watertight manifold structure, indicating superior topological integrity compared to Candidate A's decimated geometry and planarization artifacts.",
+        "latency_ms": 2369.1328999993857
+      },
+      {
+        "item_id": "T2_TOPO_01",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "The Euler characteristic of a closed, orientable 2-manifold with sphere topology (genus 0) is exactly 2.",
+        "latency_ms": 4248.3321000036085
+      },
+      {
+        "item_id": "T2_TOPO_01",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "The Euler characteristic for any triangulation of a closed 2-manifold homeomorphic to a sphere is exactly 2.",
+        "latency_ms": 2325.5418999979156
+      },
+      {
+        "item_id": "T2_TOPO_02",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "A strict 2-manifold surface requires every interior edge to be incident to exactly two faces, a condition met by Candidate A but violated by Candidate B.",
+        "latency_ms": 4323.8483000022825
+      },
+      {
+        "item_id": "T2_TOPO_02",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "A strict 2-manifold surface requires that every interior edge is incident to exactly two faces, a condition met by Candidate B.",
+        "latency_ms": 4738.9815999995335
+      },
+      {
+        "item_id": "T2_TOPO_03",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A's quadric error metric minimizes the sum of squared distances to the original surface planes, which, by the principle of least squares approximation, inherently preserves local surface curvature, geometric volume, and tangent plane orientation more accurately than naive spatial clustering.",
+        "latency_ms": 16985.794099993655
+      },
+      {
+        "item_id": "T2_TOPO_03",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B preserves higher surface curvature fidelity, geometric volume, and tangent plane orientation because its quadric error metric minimizes the sum of squared distances to the original surface planes, effectively performing a least-squares approximation of the local geometry.",
+        "latency_ms": 6758.108699999866
+      },
+      {
+        "item_id": "T2_TOPO_04",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A satisfies the Watertight Triangulated Parity Theorem (3F = 2E), which dictates that every edge in a closed triangulated mesh must be shared by exactly two faces, indicating no open boundaries.",
+        "latency_ms": 4685.440900000685
+      },
+      {
+        "item_id": "T2_TOPO_04",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "For a closed, watertight, manifold triangulated mesh, every edge must be shared by exactly two faces, which directly implies the identity 3F = 2E.",
+        "latency_ms": 5101.984599998104
+      },
+      {
+        "item_id": "T2_TOPO_05",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A guarantees artifact-free normal map shading by preserving the consistent orientation of the local orthonormal basis (T, B, N) relative to the texture's right-handed convention, which is a fundamental requirement for correct normal map sampling when the UV parameterization's Jacobian determinant changes sign due to mirroring.",
+        "latency_ms": 20390.435300003446
+      },
+      {
+        "item_id": "T2_TOPO_05",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B guarantees artifact-free normal map shading by preserving the consistent handedness of the tangent space basis across mirrored UV seams, as per the MikkTSpace specification.",
+        "latency_ms": 6324.750699997821
+      },
+      {
+        "item_id": "T2_TOPO_06",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "The Euler characteristic $\\chi = V - E + F$ for an orientable surface with genus $g$ and $b$ boundary components is $\\chi = 2 - 2g - b$, which for a genus-1 torus with zero boundaries equals 0.",
+        "latency_ms": 4471.228500005964
+      },
+      {
+        "item_id": "T2_TOPO_06",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B's Euler characteristic (V - E + F = 0) matches the required chi = 2 - 2g for an orientable genus-1 surface (g=1), where chi = 0.",
+        "latency_ms": 2159.2776000034064
+      },
+      {
+        "item_id": "T2_TOPO_07",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A ensures numerical stability because well-conditioned triangles satisfy the minimum angle condition, which is crucial for the convergence and accuracy of finite element methods.",
+        "latency_ms": 8463.938599998073
+      },
+      {
+        "item_id": "T2_TOPO_07",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Sliver triangles lead to a near-singular Jacobian matrix in isoparametric mappings, resulting in ill-conditioned stiffness matrices that compromise numerical stability in finite element methods and geometric computations.",
+        "latency_ms": 16333.807000002707
+      },
+      {
+        "item_id": "T2_TOPO_08",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A conforms to the definition of a 2-manifold because every point has a neighborhood homeomorphic to an open disk in R^2, as evidenced by its vertex links being homeomorphic to a circle.",
+        "latency_ms": 4380.944399999862
+      },
+      {
+        "item_id": "T2_TOPO_08",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B conforms to the definition of a 2-manifold because every point on the surface has a neighborhood homeomorphic to an open disk in R^2.",
+        "latency_ms": 5245.40849999903
+      },
+      {
+        "item_id": "T2_TOPO_09",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Dey's Link Condition ensures that an edge collapse is a valid elementary collapse, which is a homotopy equivalence and thus preserves the topological genus and manifoldness of the mesh.",
+        "latency_ms": 9745.56520000624
+      },
+      {
+        "item_id": "T2_TOPO_09",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Dey's Link Condition ensures that the edge collapse is a valid simplicial collapse, which is a homotopy equivalence and thus preserves the manifold properties and genus of the surface.",
+        "latency_ms": 13015.618400000676
+      },
+      {
+        "item_id": "T2_TOPO_10",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "reason": "Candidate A preserves organic silhouette fidelity, facial expressions, and sharp feature sharpness because it adaptively samples the surface based on local Mean curvature, which is directly derived from the **Second Fundamental Form** of the surface, ensuring that regions with high geometric complexity are sufficiently detailed to minimize approximation error.",
+        "latency_ms": 16308.034399997268
+      },
+      {
+        "item_id": "T2_TOPO_10",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "reason": "Candidate B preserves organic silhouette fidelity, facial expressions, and sharp feature sharpness because it allocates polygon density proportionally to local surface curvature, a principle fundamental to minimizing the geometric approximation error in surface simplification.",
+        "latency_ms": 7773.5056999954395
+      }
+    ],
+    "zkaedi-3d-dpo-1.5b": [
+      {
+        "item_id": "T1_PAIR_01",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "margin": 0.854925537109375,
+        "reason": "DPO implicit reward margin Delta r = +0.8549",
+        "latency_ms": 834.7753999987617
+      },
+      {
+        "item_id": "T1_PAIR_01",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "margin": -0.45024108886718756,
+        "reason": "DPO implicit reward margin Delta r = -0.4502",
+        "latency_ms": 222.54629999952158
+      },
+      {
+        "item_id": "T1_PAIR_02",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "margin": 1.078155517578125,
+        "reason": "DPO implicit reward margin Delta r = +1.0782",
+        "latency_ms": 209.07680000527762
+      },
+      {
+        "item_id": "T1_PAIR_02",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "margin": -0.575836181640625,
+        "reason": "DPO implicit reward margin Delta r = -0.5758",
+        "latency_ms": 207.74730000266572
+      },
+      {
+        "item_id": "T1_PAIR_03",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "margin": 1.120379638671875,
+        "reason": "DPO implicit reward margin Delta r = +1.1204",
+        "latency_ms": 303.9204999950016
+      },
+      {
+        "item_id": "T1_PAIR_03",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "margin": -0.7045867919921875,
+        "reason": "DPO implicit reward margin Delta r = -0.7046",
+        "latency_ms": 265.56499999423977
+      },
+      {
+        "item_id": "T1_PAIR_04",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "margin": 0.9334442138671875,
+        "reason": "DPO implicit reward margin Delta r = +0.9334",
+        "latency_ms": 218.7645000012708
+      },
+      {
+        "item_id": "T1_PAIR_04",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "margin": -0.06911926269531243,
+        "reason": "DPO implicit reward margin Delta r = -0.0691",
+        "latency_ms": 227.37310000229627
+      },
+      {
+        "item_id": "T1_PAIR_05",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "margin": 0.9868743896484375,
+        "reason": "DPO implicit reward margin Delta r = +0.9869",
+        "latency_ms": 274.02430000074673
+      },
+      {
+        "item_id": "T1_PAIR_05",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "margin": -0.5943359375,
+        "reason": "DPO implicit reward margin Delta r = -0.5943",
+        "latency_ms": 255.3083000020706
+      },
+      {
+        "item_id": "T1_PAIR_06",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "margin": 1.0487457275390626,
+        "reason": "DPO implicit reward margin Delta r = +1.0487",
+        "latency_ms": 404.96040000289213
+      },
+      {
+        "item_id": "T1_PAIR_06",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "margin": -0.443145751953125,
+        "reason": "DPO implicit reward margin Delta r = -0.4431",
+        "latency_ms": 222.0450999957393
+      },
+      {
+        "item_id": "T1_PAIR_07",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "margin": 0.9541534423828125,
+        "reason": "DPO implicit reward margin Delta r = +0.9542",
+        "latency_ms": 441.0106000068481
+      },
+      {
+        "item_id": "T1_PAIR_07",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "margin": -0.4420166015625,
+        "reason": "DPO implicit reward margin Delta r = -0.4420",
+        "latency_ms": 211.35539999522734
+      },
+      {
+        "item_id": "T1_PAIR_08",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "margin": 1.053369140625,
+        "reason": "DPO implicit reward margin Delta r = +1.0534",
+        "latency_ms": 454.5083999983035
+      },
+      {
+        "item_id": "T1_PAIR_08",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "margin": -0.29664306640625,
+        "reason": "DPO implicit reward margin Delta r = -0.2966",
+        "latency_ms": 218.05609999864828
+      },
+      {
+        "item_id": "T1_PAIR_09",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "margin": 0.918218994140625,
+        "reason": "DPO implicit reward margin Delta r = +0.9182",
+        "latency_ms": 372.48160000308417
+      },
+      {
+        "item_id": "T1_PAIR_09",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "margin": -0.20652465820312502,
+        "reason": "DPO implicit reward margin Delta r = -0.2065",
+        "latency_ms": 215.61210000072606
+      },
+      {
+        "item_id": "T1_PAIR_10",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "margin": 0.9760467529296875,
+        "reason": "DPO implicit reward margin Delta r = +0.9760",
+        "latency_ms": 425.48119999992196
+      },
+      {
+        "item_id": "T1_PAIR_10",
+        "track": "Track 1: Near-Boundary Payload Margin",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "margin": -0.311798095703125,
+        "reason": "DPO implicit reward margin Delta r = -0.3118",
+        "latency_ms": 229.47939999721712
+      },
+      {
+        "item_id": "T2_TOPO_01",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "margin": 0.11885986328124999,
+        "reason": "DPO implicit reward margin Delta r = +0.1189",
+        "latency_ms": 218.21239999553654
+      },
+      {
+        "item_id": "T2_TOPO_01",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "margin": -0.11324462890625003,
+        "reason": "DPO implicit reward margin Delta r = -0.1132",
+        "latency_ms": 221.41329999431036
+      },
+      {
+        "item_id": "T2_TOPO_02",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "margin": 0.3041015625,
+        "reason": "DPO implicit reward margin Delta r = +0.3041",
+        "latency_ms": 194.84560000273632
+      },
+      {
+        "item_id": "T2_TOPO_02",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "margin": -0.31789321899414064,
+        "reason": "DPO implicit reward margin Delta r = -0.3179",
+        "latency_ms": 183.1601999947452
+      },
+      {
+        "item_id": "T2_TOPO_03",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "margin": 0.27745971679687503,
+        "reason": "DPO implicit reward margin Delta r = +0.2775",
+        "latency_ms": 330.9834999963641
+      },
+      {
+        "item_id": "T2_TOPO_03",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "margin": -0.24647674560546878,
+        "reason": "DPO implicit reward margin Delta r = -0.2465",
+        "latency_ms": 312.7760000061244
+      },
+      {
+        "item_id": "T2_TOPO_04",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "margin": 0.04096221923828125,
+        "reason": "DPO implicit reward margin Delta r = +0.0410",
+        "latency_ms": 335.0730000020121
+      },
+      {
+        "item_id": "T2_TOPO_04",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate B",
+        "correct": false,
+        "margin": 0.064697265625,
+        "reason": "DPO implicit reward margin Delta r = +0.0647",
+        "latency_ms": 229.6529000013834
+      },
+      {
+        "item_id": "T2_TOPO_05",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "margin": 0.3671768188476563,
+        "reason": "DPO implicit reward margin Delta r = +0.3672",
+        "latency_ms": 373.2308999969973
+      },
+      {
+        "item_id": "T2_TOPO_05",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "margin": -0.271978759765625,
+        "reason": "DPO implicit reward margin Delta r = -0.2720",
+        "latency_ms": 218.42010000545997
+      },
+      {
+        "item_id": "T2_TOPO_06",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "margin": 0.22629699707031253,
+        "reason": "DPO implicit reward margin Delta r = +0.2263",
+        "latency_ms": 217.3629000026267
+      },
+      {
+        "item_id": "T2_TOPO_06",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "margin": -0.23559646606445314,
+        "reason": "DPO implicit reward margin Delta r = -0.2356",
+        "latency_ms": 205.8471999989706
+      },
+      {
+        "item_id": "T2_TOPO_07",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate A",
+        "correct": false,
+        "margin": -0.01904296875,
+        "reason": "DPO implicit reward margin Delta r = -0.0190",
+        "latency_ms": 361.9180999958189
+      },
+      {
+        "item_id": "T2_TOPO_07",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate B",
+        "correct": false,
+        "margin": 0.04318847656250002,
+        "reason": "DPO implicit reward margin Delta r = +0.0432",
+        "latency_ms": 182.37970000336645
+      },
+      {
+        "item_id": "T2_TOPO_08",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "margin": 0.006465911865234375,
+        "reason": "DPO implicit reward margin Delta r = +0.0065",
+        "latency_ms": 383.011500001885
+      },
+      {
+        "item_id": "T2_TOPO_08",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "margin": -0.23588790893554687,
+        "reason": "DPO implicit reward margin Delta r = -0.2359",
+        "latency_ms": 198.49840000097174
+      },
+      {
+        "item_id": "T2_TOPO_09",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "margin": 0.295703125,
+        "reason": "DPO implicit reward margin Delta r = +0.2957",
+        "latency_ms": 185.83729999954812
+      },
+      {
+        "item_id": "T2_TOPO_09",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "margin": -0.26804809570312504,
+        "reason": "DPO implicit reward margin Delta r = -0.2680",
+        "latency_ms": 202.79489999666112
+      },
+      {
+        "item_id": "T2_TOPO_10",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "forward",
+        "predicted_winner": "Candidate A",
+        "expected_winner": "Candidate A",
+        "correct": true,
+        "margin": 0.23633880615234376,
+        "reason": "DPO implicit reward margin Delta r = +0.2363",
+        "latency_ms": 320.16920000023674
+      },
+      {
+        "item_id": "T2_TOPO_10",
+        "track": "Track 2: Physical 3D Topology",
+        "orientation": "swapped",
+        "predicted_winner": "Candidate B",
+        "expected_winner": "Candidate B",
+        "correct": true,
+        "margin": -0.26009368896484375,
+        "reason": "DPO implicit reward margin Delta r = -0.2601",
+        "latency_ms": 181.03100000007544
+      }
+    ]
+  }
+}
