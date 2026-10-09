@@ -8,6 +8,7 @@
 /* ARENA ALLOCATOR                                                   */
 /* ================================================================ */
 
+int g_zsan_mode = 0;
 static unsigned long long next_alloc_id = 1;
 
 /* Cap total arena blocks to avoid OOM from unbounded allocation (e.g. corrupt AST / infinite loop). Use literal 64 so compiler without preprocessor still works. */

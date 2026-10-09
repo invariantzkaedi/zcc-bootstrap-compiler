@@ -5764,7 +5764,7 @@ void codegen_func(Compiler *cc, Node *func) {
   
   int shift = actual_param_space - parser_param_space;
   int param_offsets[64];
-  int current_param_offset = 0;
+  int current_param_offset = g_zsan_mode ? -16 : 0;
   if (ret_type && (ret_type->kind == TY_STRUCT || ret_type->kind == TY_UNION)) {
       abi_class_t eb[2];
       classify_aggregate(ret_type, eb);
@@ -5788,7 +5788,7 @@ void codegen_func(Compiler *cc, Node *func) {
   num_visited_nodes = 0;
   /* CG-ABI-STRUCT-002: include the sret slot (-8B) in the boundary so
    * trailing memory-class struct params are not misclassified as locals. */
-  int parser_param_limit = -actual_param_space;
+  int parser_param_limit = -(actual_param_space + (g_zsan_mode ? 16 : 0));
   traverse_and_adjust_node(func->body, cc, func, parser_param_limit, shift, param_offsets);
   if (shift > 0) {
       func->stack_size += shift;
@@ -5869,6 +5869,16 @@ void codegen_func(Compiler *cc, Node *func) {
         fprintf(cc->out, "    subq $%d, %%rsp\n", stack_size);
       }
 
+      if (g_zsan_mode) {
+        fprintf(cc->out, "    # ZSan Stack Canopy & Redzones\n");
+        fprintf(cc->out, "    movabsq $0x5a4b3c2d1e0f00ff, %%r11\n");
+        fprintf(cc->out, "    xorq %%rbp, %%r11\n");
+        fprintf(cc->out, "    movq %%r11, -8(%%rbp)\n");
+        fprintf(cc->out, "    movabsq $0xaaaaaaaaaaaaaaaa, %%r11\n");
+        fprintf(cc->out, "    movq %%r11, -16(%%rbp)\n");
+        fprintf(cc->out, "    movq %%r11, %d(%%rbp)\n", -(local_bytes + 48));
+      }
+
       for (i = 0; i < 5; i++) {
         if (used_regs & (1 << i)) {
           fprintf(cc->out, "    movq %s, %d(%%rbp)\n", get_callee_reg(i),
@@ -5892,9 +5902,9 @@ void codegen_func(Compiler *cc, Node *func) {
   int f_idx = 0;
   int gp_idx = 0;
   int stack_arg_off = 16; /* args on stack start at 16(%rbp) */
-  cc->sret_offset = -8;
+  cc->sret_offset = g_zsan_mode ? -24 : -8;
 
-  int param_offset = 0;
+  int param_offset = g_zsan_mode ? -16 : 0;
 
   if (!backend_ops) {
   Type *ret_type = func->func_type ? func->func_type->ret : NULL;
@@ -6026,6 +6036,30 @@ void codegen_func(Compiler *cc, Node *func) {
           fprintf(cc->out, "    movq %d(%%rbp), %s\n",
                   -(local_bytes + 8 * (i + 1)), get_callee_reg(i));
         }
+      }
+      if (g_zsan_mode) {
+        int label_ok = new_label(cc);
+        int label_trap = new_label(cc);
+        fprintf(cc->out, "    # ZSan Epilogue Integrity Gate\n");
+        fprintf(cc->out, "    movabsq $0x5a4b3c2d1e0f00ff, %%r11\n");
+        fprintf(cc->out, "    xorq %%rbp, %%r11\n");
+        fprintf(cc->out, "    cmpq -8(%%rbp), %%r11\n");
+        fprintf(cc->out, "    jne .Lzsan_trap_%d\n", label_trap);
+        fprintf(cc->out, "    movabsq $0xaaaaaaaaaaaaaaaa, %%r11\n");
+        fprintf(cc->out, "    cmpq -16(%%rbp), %%r11\n");
+        fprintf(cc->out, "    jne .Lzsan_trap_%d\n", label_trap);
+        fprintf(cc->out, "    cmpq %d(%%rbp), %%r11\n", -(local_bytes + 48));
+        fprintf(cc->out, "    je .Lzsan_ok_%d\n", label_ok);
+        fprintf(cc->out, ".Lzsan_trap_%d:\n", label_trap);
+        fprintf(cc->out, "    movq $1, %%rax\n");
+        fprintf(cc->out, "    movq $2, %%rdi\n");
+        fprintf(cc->out, "    leaq .Lzsan_msg_%d(%%rip), %%rsi\n", label_trap);
+        fprintf(cc->out, "    movq $40, %%rdx\n");
+        fprintf(cc->out, "    syscall\n");
+        fprintf(cc->out, "    ud2\n");
+        fprintf(cc->out, ".Lzsan_msg_%d:\n", label_trap);
+        fprintf(cc->out, "    .ascii \"==ZSAN: STACK BUFFER OVERRUN DETECTED==\\n\"\n");
+        fprintf(cc->out, ".Lzsan_ok_%d:\n", label_ok);
       }
       fprintf(cc->out, "    movq %%rbp, %%rsp\n");
       fprintf(cc->out, "    popq %%rbp\n");

@@ -1,0 +1,13 @@
+make zcc
+./zcc tests/probe_zsan_stack_overflow.c -o /tmp/probe_no_zsan.s
+gcc /tmp/probe_no_zsan.s -o /tmp/probe_no_zsan
+/tmp/probe_no_zsan
+./zcc -fzsan tests/probe_zsan_stack_overflow.c -o /tmp/probe_zsan.s
+gcc /tmp/probe_zsan.s -o /tmp/probe_zsan
+/tmp/probe_zsan
+./zcc -fzsan tests/test_zsan_safe.c -o /tmp/test_zsan_safe.s
+gcc /tmp/test_zsan_safe.s -o /tmp/test_zsan_safe
+/tmp/test_zsan_safe
+make selfhost
+cmp zcc2.s zcc3.s
+python3 verify_smt.py

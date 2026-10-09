@@ -1,0 +1,122 @@
++ echo '=== COMMAND: ./zcc tests/probe_zsan_stack_overflow.c -o /tmp/probe_no_zsan.s ==='
+=== COMMAND: ./zcc tests/probe_zsan_stack_overflow.c -o /tmp/probe_no_zsan.s ===
++ ./zcc tests/probe_zsan_stack_overflow.c -o /tmp/probe_no_zsan.s
+zcc: warning: using synthesized header stub for stdio.h
+pp_process_include: stdio.h added 180 macros, total is 217
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (12 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
++ gcc /tmp/probe_no_zsan.s -o /tmp/probe_no_zsan
++ echo '=== RUN: /tmp/probe_no_zsan ==='
+=== RUN: /tmp/probe_no_zsan ===
++ /tmp/probe_no_zsan
+gen_evidence.sh: line 12:  2242 Segmentation fault      /tmp/probe_no_zsan
++ echo 'Exit status: 139'
+Exit status: 139
++ echo ''
+
++ echo '=== COMMAND: ./zcc -fzsan tests/probe_zsan_stack_overflow.c -o /tmp/probe_zsan.s ==='
+=== COMMAND: ./zcc -fzsan tests/probe_zsan_stack_overflow.c -o /tmp/probe_zsan.s ===
++ ./zcc -fzsan tests/probe_zsan_stack_overflow.c -o /tmp/probe_zsan.s
+zcc: warning: using synthesized header stub for stdio.h
+pp_process_include: stdio.h added 180 macros, total is 217
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (12 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
++ gcc /tmp/probe_zsan.s -o /tmp/probe_zsan
++ echo '=== RUN: /tmp/probe_zsan ==='
+=== RUN: /tmp/probe_zsan ===
++ /tmp/probe_zsan
+==ZSAN: STACK BUFFER OVERRUN DETECTED==
+gen_evidence.sh: line 20:  2248 Illegal instruction     /tmp/probe_zsan
++ echo 'Exit status: 132'
+Exit status: 132
++ echo ''
+
++ echo '=== COMMAND: ./zcc -fzsan tests/test_zsan_safe.c -o /tmp/test_zsan_safe.s ==='
+=== COMMAND: ./zcc -fzsan tests/test_zsan_safe.c -o /tmp/test_zsan_safe.s ===
++ ./zcc -fzsan tests/test_zsan_safe.c -o /tmp/test_zsan_safe.s
+zcc: warning: using synthesized header stub for stdio.h
+pp_process_include: stdio.h added 180 macros, total is 217
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (31 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
++ gcc /tmp/test_zsan_safe.s -o /tmp/test_zsan_safe
++ echo '=== RUN: /tmp/test_zsan_safe ==='
+=== RUN: /tmp/test_zsan_safe ===
++ /tmp/test_zsan_safe
+PASS: ZSAN_SAFE_EXECUTION
++ echo 'Exit status: 0'
+Exit status: 0
++ echo ''
+
++ echo '=== GATE 1: cmp zcc2.s zcc3.s ==='
+=== GATE 1: cmp zcc2.s zcc3.s ===
++ cmp zcc2.s zcc3.s
++ echo 'cmp exit code: 0'
+cmp exit code: 0
++ echo ''
+
++ echo '=== GATE 2: python3 verify_smt.py ==='
+=== GATE 2: python3 verify_smt.py ===
++ python3 verify_smt.py
+=== SMT Optimization Prover Verification Gauntlet ===
+Compiling SMT test harness...
+Generating SMT test proofs...
+Auditing: proof_peep_ir_peep_band_neg1_id410.smt2
+Auditing: proof_peep_ir_peep_band_not_self_id404.smt2
+Auditing: proof_peep_ir_peep_bor_not_self_id405.smt2
+Auditing: proof_peep_ir_peep_bxor_neg1_id411.smt2
+Auditing: proof_peep_ir_peep_cmp_self_id412.smt2
+Auditing: proof_peep_ir_peep_cmp_self_id413.smt2
+Auditing: proof_peep_ir_peep_double_bnot_id406.smt2
+Auditing: proof_peep_ir_peep_op_one_id408.smt2
+Auditing: proof_peep_ir_peep_op_zero_const_id409.smt2
+Auditing: proof_peep_ir_peep_op_zero_id407.smt2
+Auditing: proof_peep_ir_peep_self_copy_id403.smt2
+Auditing: proof_peep_ir_peep_self_zero_id401.smt2
+Auditing: proof_peep_ir_peep_self_zero_id402.smt2
+Auditing: proof_peep_ir_peep_shift_zero_id414.smt2
+Auditing: proof_push_lea_pop_triad_line109.smt2
+Auditing: proof_push_pop_elide_line106.smt2
+Auditing: proof_push_pop_replace_line100.smt2
+Auditing: proof_push_pop_replace_line101.smt2
+Auditing: proof_push_pop_replace_line102.smt2
+Auditing: proof_push_pop_replace_line103.smt2
+Auditing: proof_push_pop_replace_line104.smt2
+Auditing: proof_push_pop_replace_line105.smt2
+Auditing: proof_push_pop_replace_line107.smt2
+Auditing: proof_push_pop_replace_line108.smt2
+Auditing: proof_push_pop_replace_line110.smt2
+Auditing: proof_push_pop_replace_line111.smt2
+Auditing: proof_push_pop_replace_line200.smt2
+Auditing: proof_push_pop_replace_line201.smt2
+Auditing: proof_push_pop_replace_line202.smt2
+Auditing: proof_push_pop_replace_line203.smt2
+Auditing: proof_stack_align_line501.smt2
+Auditing: proof_strength_ir_div_shr_id303.smt2
+Auditing: proof_strength_ir_mod_band_id304.smt2
+Auditing: proof_strength_ir_mul2_add_id301.smt2
+Auditing: proof_strength_ir_mul2_add_id305.smt2
+Auditing: proof_strength_ir_mul_shl_id302.smt2
+
+Running targeted edge-case verification:
+  [PASS] Collision check: %foo-bar mapped to distinct hashed symbol: 2bf1b570 and %foo_bar correctly mapped to unhashed foo_bar.
+  [PASS] Empty register input % correctly sanitized to a fallback hash.
+  [PASS] Standard registers %rax and %rbx were correctly treated as rax and rbx.
+  [PASS] Standard registers rax and rbx were declared exactly once in the prelude.
+  [PASS] Long name audit: long names correctly sanitized and hashed: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa__638793db vs bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb__a5d33505
+  [PASS] Long name audit: sanitized names remain within 127-character limits.
+==================================================
+=== SMT VERIFICATION GAUNTLET: ALL TESTS PASSED ===
++ echo 'verify_smt exit code: 0'
+verify_smt exit code: 0
