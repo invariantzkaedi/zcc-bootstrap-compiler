@@ -10,10 +10,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@500;600;700;800;900&display=swap" rel="stylesheet">
   
-  <!-- Data Feed & Three.js 3D Engine -->
+  <!-- Data Feeds & Three.js 3D Engine + GLTF Loader -->
   <script src="quantum_music_video_data.js"></script>
+  <script src="battle_assets_glb_data.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 
   <style>
     /* ═══════════════════════════════════════════════════════════════════════════
@@ -194,13 +196,6 @@
       box-shadow: 0 0 10px rgba(0, 242, 254, 0.15);
     }
 
-    .badge-pill.violet {
-      background: rgba(139, 92, 246, 0.12);
-      border-color: rgba(139, 92, 246, 0.4);
-      color: var(--violet);
-      box-shadow: 0 0 10px rgba(139, 92, 246, 0.15);
-    }
-
     .pulse-dot {
       width: 7px;
       height: 7px;
@@ -250,9 +245,9 @@
       gap: 1.5rem;
     }
 
-    /* ═══════════════════════════════════════════════════════════════════════════
+    /* ═══════════════════════════════════════════════════════════════════════
        HERO: 3D HOLOGRAPHIC BATTLE ARENA & ACTIVE LOD TOPOLOGY INSPECTOR
-       ═══════════════════════════════════════════════════════════════════════════ */
+       ═══════════════════════════════════════════════════════════════════════ */
     .hero-arena-stage {
       background: var(--bg-surface);
       border: 1px solid var(--border-glow-cyan);
@@ -366,10 +361,16 @@
       box-shadow: 0 0 14px var(--crimson-glow);
     }
 
+    .cyber-btn.active.gold {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.3), rgba(16, 185, 129, 0.3));
+      border: 1px solid var(--gold);
+      box-shadow: 0 0 14px var(--gold-glow);
+    }
+
     /* 3D WebGL Canvas Viewport */
     .arena-viewport-wrapper {
       width: 100%;
-      height: 520px;
+      height: 540px;
       position: relative;
       background: radial-gradient(circle at 50% 50%, #0d172e 0%, #040814 100%);
       overflow: hidden;
@@ -405,7 +406,7 @@
       box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65), inset 0 0 20px rgba(0, 242, 254, 0.06);
       pointer-events: none;
       z-index: 5;
-      min-width: 290px;
+      min-width: 310px;
     }
 
     .hud-header {
@@ -1239,10 +1240,16 @@
           <div>
             <h2 id="hero-asset-title">APEX COMBAT INTERCEPTOR DRONE</h2>
           </div>
-          <span class="tag-sub">GATE 6-M CERTIFIED</span>
+          <span class="tag-sub" id="hero-mesh-tag">APEX ULTRA CAD</span>
         </div>
 
         <div class="cyber-pill-row">
+          <!-- Mesh Fidelity Mode Switcher -->
+          <div class="cyber-pill-group">
+            <button class="cyber-btn active" id="btn-mode-ultra" onclick="handleMeshFidelitySelect('ultra')">✨ Apex Ultra</button>
+            <button class="cyber-btn" id="btn-mode-glb" onclick="handleMeshFidelitySelect('glb')">🔬 Certified GLB</button>
+          </div>
+
           <!-- 3D Asset Switcher -->
           <div class="cyber-pill-group">
             <button class="cyber-btn active" id="btn-asset-drone" onclick="handleAssetSelect('drone')">🛸 Drone</button>
@@ -1285,6 +1292,11 @@
           <div class="hud-row">
             <span class="hud-key">Active LOD Tier:</span>
             <span class="hud-val cyan" id="hud-lod-name">LOD1_HIGH</span>
+          </div>
+
+          <div class="hud-row">
+            <span class="hud-key">Geometry Mode:</span>
+            <span class="hud-val gold" id="hud-mode-name">✨ APEX ULTRA CAD</span>
           </div>
 
           <div class="hud-row">
@@ -1531,6 +1543,7 @@
     let currentPresetId = "03_-01";
     let activeAsset = "drone";
     let activeLodIdx = 1; // Default to LOD1 High
+    let meshFidelityMode = "ultra"; // 'ultra' (High-Fidelity CAD) or 'glb' (Gate 6-M Certified GLB)
     let wireframeMode = false;
     let explodedView = false;
     let autoRotate = true;
@@ -1543,12 +1556,17 @@
     let assetRootGroup = null;
     let starParticles = null;
     let floorScannerRing = null;
+    let gltfLoaderInstance = null;
     let lastRenderTime = performance.now();
     let frameCounter = 0;
     let currentFps = 60;
 
-    // Exploded View Submesh references
+    // Dynamic Animation Handles
     let animatableParts = [];
+    let turbineFans = [];
+    let gyroRings = [];
+    let pulsingMaterials = [];
+    let singularityCoreMesh = null;
 
     // ═════════════════════════════════════════════════════════════════════════
     // 2. SYNTHESIZED CYBERNETIC SOUND FX (WEB AUDIO API)
@@ -1578,32 +1596,32 @@
 
         if (type === 'click') {
           osc.type = 'sine';
-          osc.frequency.setValueAtTime(800, now);
-          osc.frequency.exponentialRampToValueAtTime(300, now + 0.05);
+          osc.frequency.setValueAtTime(850, now);
+          osc.frequency.exponentialRampToValueAtTime(320, now + 0.05);
           gain.gain.setValueAtTime(0.12, now);
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
           osc.start(now);
           osc.stop(now + 0.05);
         } else if (type === 'switch') {
           osc.type = 'triangle';
-          osc.frequency.setValueAtTime(350, now);
-          osc.frequency.exponentialRampToValueAtTime(1100, now + 0.09);
-          gain.gain.setValueAtTime(0.15, now);
+          osc.frequency.setValueAtTime(380, now);
+          osc.frequency.exponentialRampToValueAtTime(1250, now + 0.09);
+          gain.gain.setValueAtTime(0.14, now);
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
           osc.start(now);
           osc.stop(now + 0.09);
         } else if (type === 'explode') {
           osc.type = 'sawtooth';
-          osc.frequency.setValueAtTime(240, now);
-          osc.frequency.exponentialRampToValueAtTime(80, now + 0.18);
+          osc.frequency.setValueAtTime(260, now);
+          osc.frequency.exponentialRampToValueAtTime(75, now + 0.18);
           gain.gain.setValueAtTime(0.18, now);
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
           osc.start(now);
           osc.stop(now + 0.18);
         } else if (type === 'copy') {
           osc.type = 'sine';
-          osc.frequency.setValueAtTime(520, now);
-          osc.frequency.setValueAtTime(1040, now + 0.06);
+          osc.frequency.setValueAtTime(540, now);
+          osc.frequency.setValueAtTime(1080, now + 0.06);
           gain.gain.setValueAtTime(0.15, now);
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
           osc.start(now);
@@ -1804,11 +1822,11 @@
       if (!canvas || !window.THREE) return;
 
       const width = wrapper.clientWidth || 1000;
-      const height = wrapper.clientHeight || 520;
+      const height = wrapper.clientHeight || 540;
 
       // Scene & Atmospheric Space Fog
       scene = new THREE.Scene();
-      scene.fog = new THREE.FogExp2(0x030712, 0.04);
+      scene.fog = new THREE.FogExp2(0x030712, 0.038);
 
       // Perspective Camera
       camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
@@ -1827,6 +1845,11 @@
       controls.dampingFactor = 0.05;
       controls.maxDistance = 12;
       controls.minDistance = 1.2;
+
+      // Initialize GLTFLoader if available
+      if (window.THREE.GLTFLoader) {
+        gltfLoaderInstance = new THREE.GLTFLoader();
+      }
 
       // Cybernetic Ground Pedestal & Scanning Grid
       const grid = new THREE.GridHelper(14, 28, 0x00f2fe, 0x172554);
@@ -1868,19 +1891,19 @@
       scene.add(starParticles);
 
       // Multi-Point Cybernetic Cinematic Lighting
-      const ambient = new THREE.AmbientLight(0xffffff, 0.85);
+      const ambient = new THREE.AmbientLight(0xffffff, 0.9);
       scene.add(ambient);
 
-      const cyanKey = new THREE.PointLight(0x00f2fe, 3.8, 20);
+      const cyanKey = new THREE.PointLight(0x00f2fe, 4.2, 22);
       cyanKey.position.set(4, 4, 4);
       scene.add(cyanKey);
 
-      const crimsonRim = new THREE.PointLight(0xff2a5f, 4.0, 20);
+      const crimsonRim = new THREE.PointLight(0xff2a5f, 4.5, 22);
       crimsonRim.position.set(-4, -1, -4);
       scene.add(crimsonRim);
 
-      const goldFill = new THREE.PointLight(0xf59e0b, 2.2, 12);
-      goldFill.position.set(0, 3, -3);
+      const goldFill = new THREE.PointLight(0xf59e0b, 2.5, 14);
+      goldFill.position.set(0, 3.5, -3);
       scene.add(goldFill);
 
       // Asset Container Group
@@ -1888,10 +1911,10 @@
       scene.add(assetRootGroup);
 
       // Construct Initial 3D Model & Telemetry
-      constructModelGeometry();
+      loadActiveMeshGeometry();
       refreshHudTelemetry();
 
-      // Render Loop & FPS Counter
+      // Render Loop & Animation Controller
       function animateLoop(time) {
         requestAnimationFrame(animateLoop);
 
@@ -1919,6 +1942,26 @@
           starParticles.rotation.y += 0.0002;
         }
 
+        // Dynamic High-Fidelity Mechanical Animations
+        if (turbineFans.length > 0) {
+          turbineFans.forEach(f => f.rotation.z += 0.28);
+        }
+        if (gyroRings.length >= 2) {
+          gyroRings[0].rotation.y += 0.02;
+          gyroRings[1].rotation.y -= 0.024;
+        }
+        if (singularityCoreMesh) {
+          singularityCoreMesh.rotation.x += 0.02;
+          singularityCoreMesh.rotation.y += 0.028;
+          singularityCoreMesh.position.y = Math.sin(time * 0.003) * 0.05;
+        }
+
+        // Pulsing Emissive Materials
+        if (pulsingMaterials.length > 0) {
+          const pulse = 1.0 + Math.sin(time * 0.006) * 0.45;
+          pulsingMaterials.forEach(m => m.emissiveIntensity = pulse);
+        }
+
         // Exploded view animation interpolation
         if (animatableParts.length > 0) {
           animatableParts.forEach(p => {
@@ -1944,160 +1987,399 @@
     }
 
     // Material Generator with PBR Standards
-    function createSciFiMaterial(colorHex, emissiveHex = 0x000000, roughness = 0.25, metalness = 0.85) {
-      return new THREE.MeshStandardMaterial({
+    function createSciFiMaterial(colorHex, emissiveHex = 0x000000, roughness = 0.25, metalness = 0.85, opacity = 1.0) {
+      const mat = new THREE.MeshStandardMaterial({
         color: colorHex,
         emissive: emissiveHex,
-        emissiveIntensity: emissiveHex ? 0.75 : 0.0,
+        emissiveIntensity: emissiveHex ? 0.85 : 0.0,
         roughness: roughness,
         metalness: metalness,
-        wireframe: wireframeMode
+        wireframe: wireframeMode,
+        transparent: opacity < 1.0,
+        opacity: opacity
       });
+      if (emissiveHex) {
+        pulsingMaterials.push(mat);
+      }
+      return mat;
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // 5. PROCEDURAL 3D SCI-FI MODELS WITH EXPLODED VIEW SUPPORT
+    // 5. MESH ARCHITECTURE: APEX ULTRA PROCEDURAL & CERTIFIED BINARY GLB
     // ═════════════════════════════════════════════════════════════════════════
 
-    function constructModelGeometry() {
+    function loadActiveMeshGeometry() {
       if (!assetRootGroup) return;
 
-      // Clear existing meshes
+      // Clear existing scene geometry & animation handles
       while (assetRootGroup.children.length > 0) {
         assetRootGroup.remove(assetRootGroup.children[0]);
       }
       animatableParts = [];
+      turbineFans = [];
+      gyroRings = [];
+      pulsingMaterials = [];
+      singularityCoreMesh = null;
 
-      const matArmor = createSciFiMaterial(0x111827, 0x000000, 0.2, 0.95);
-      const matCyan = createSciFiMaterial(0x00f2fe, 0x00f2fe, 0.1, 0.85);
-      const matCrimson = createSciFiMaterial(0xff2a5f, 0xff2a5f, 0.1, 0.85);
-      const matGold = createSciFiMaterial(0xf59e0b, 0xf59e0b, 0.15, 0.9);
+      if (meshFidelityMode === 'glb') {
+        loadCertifiedBinaryGLB();
+      } else {
+        constructApexUltraCADGeometry();
+      }
+    }
 
-      const lodMultipliers = [1.0, 0.6, 0.35, 0.15];
-      const ratio = lodMultipliers[activeLodIdx] || 0.6;
+    // ── MODE A: GATE 6-M CERTIFIED PHYSICAL GLB FROM BASE64 DATA FEED ───────
+    function loadCertifiedBinaryGLB() {
+      const glbKey = `${activeAsset}_lod${activeLodIdx}`;
+      if (!window.ZKAEDI_BATTLE_GLB_DATA || !window.ZKAEDI_BATTLE_GLB_DATA[glbKey]) {
+        console.warn("GLB binary not found for key:", glbKey, "falling back to procedural.");
+        constructApexUltraCADGeometry();
+        return;
+      }
+
+      try {
+        const b64 = window.ZKAEDI_BATTLE_GLB_DATA[glbKey];
+        const binaryStr = atob(b64);
+        const len = binaryStr.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryStr.charCodeAt(i);
+        }
+
+        if (gltfLoaderInstance) {
+          gltfLoaderInstance.parse(bytes.buffer, '', (gltf) => {
+            const loadedModel = gltf.scene;
+
+            // Apply high-end PBR materials & scale normalization
+            loadedModel.traverse(node => {
+              if (node.isMesh) {
+                node.material.wireframe = wireframeMode;
+                node.material.metalness = 0.85;
+                node.material.roughness = 0.22;
+                node.castShadow = true;
+                node.receiveShadow = true;
+              }
+            });
+
+            // Normalize bounding scale to ~2.2 units
+            const box = new THREE.Box3().setFromObject(loadedModel);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z) || 1.0;
+            const scaleFactor = 2.4 / maxDim;
+            loadedModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
+
+            // Center model
+            const center = box.getCenter(new THREE.Vector3());
+            loadedModel.position.sub(center.multiplyScalar(scaleFactor));
+
+            assetRootGroup.add(loadedModel);
+          }, (err) => {
+            console.error("GLTF Parse Error:", err);
+            constructApexUltraCADGeometry();
+          });
+        } else {
+          constructApexUltraCADGeometry();
+        }
+      } catch (e) {
+        console.error("Binary decode exception:", e);
+        constructApexUltraCADGeometry();
+      }
+    }
+
+    // ── MODE B: APEX ULTRA PROCEDURAL HIGH-FIDELITY CAD GEOMETRY ─────────────
+    function constructApexUltraCADGeometry() {
+      const matCarbonArmor = createSciFiMaterial(0x181e2b, 0x050810, 0.25, 0.92);
+      const matTitaniumTrim = createSciFiMaterial(0x475569, 0x000000, 0.18, 0.98);
+      const matCyanPlasma = createSciFiMaterial(0x00f2fe, 0x00f2fe, 0.1, 0.85);
+      const matCrimsonCore = createSciFiMaterial(0xff2a5f, 0xff2a5f, 0.1, 0.85);
+      const matPhotovoltaicGold = createSciFiMaterial(0xf59e0b, 0xf59e0b, 0.15, 0.95);
+      const matRubyGlass = createSciFiMaterial(0xe11d48, 0x991b1b, 0.05, 0.35, 0.85);
+
+      const lodMultipliers = [1.0, 0.7, 0.45, 0.25];
+      const ratio = lodMultipliers[activeLodIdx] || 0.7;
 
       if (activeAsset === "drone") {
-        // 🛸 APEX COMBAT INTERCEPTOR DRONE
+        // 🛸 APEX COMBAT INTERCEPTOR DRONE (UPGRADED HIGH-FIDELITY CAD)
 
-        // 1. Central Armored Fuselage Core
-        const segs = Math.max(6, Math.floor(28 * ratio));
-        const coreGeo = new THREE.IcosahedronGeometry(0.72, Math.max(0, Math.floor(3 * ratio)));
-        const coreMesh = new THREE.Mesh(coreGeo, matArmor);
-        assetRootGroup.add(coreMesh);
-        animatableParts.push({ mesh: coreMesh, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0, 0) });
+        // 1. Aerodynamic Chined Stealth Fuselage
+        const fuseGroup = new THREE.Group();
+        const mainHullGeo = new THREE.ConeGeometry(0.85, 2.2, Math.max(6, Math.floor(18 * ratio)));
+        mainHullGeo.rotateX(Math.PI / 2);
+        const mainHull = new THREE.Mesh(mainHullGeo, matCarbonArmor);
+        mainHull.scale.set(1.1, 0.45, 1.0);
+        fuseGroup.add(mainHull);
 
-        // 2. Dual Concentric Quantum Stabilizer Rings
-        const ringGeo1 = new THREE.TorusGeometry(1.15, 0.07, 6, Math.max(8, Math.floor(32 * ratio)));
-        const ring1 = new THREE.Mesh(ringGeo1, matCyan);
-        ring1.rotation.x = Math.PI / 2;
-        assetRootGroup.add(ring1);
-        animatableParts.push({ mesh: ring1, origPos: new THREE.Vector3(0, 0.1, 0), explodedPos: new THREE.Vector3(0, 0.65, 0) });
+        // Cockpit Canopy Visor (Faceted Ruby Crystal with HUD Glow)
+        const canopyGeo = new THREE.ConeGeometry(0.32, 0.9, 4);
+        canopyGeo.rotateX(Math.PI / 2);
+        const canopy = new THREE.Mesh(canopyGeo, matRubyGlass);
+        canopy.position.set(0, 0.25, 0.35);
+        canopy.scale.set(1.0, 0.55, 1.0);
+        fuseGroup.add(canopy);
 
-        const ringGeo2 = new THREE.TorusGeometry(1.35, 0.05, 4, Math.max(8, Math.floor(28 * ratio)));
-        const ring2 = new THREE.Mesh(ringGeo2, matCyan);
-        ring2.rotation.x = Math.PI / 2;
-        ring2.rotation.y = Math.PI / 4;
-        assetRootGroup.add(ring2);
-        animatableParts.push({ mesh: ring2, origPos: new THREE.Vector3(0, -0.1, 0), explodedPos: new THREE.Vector3(0, -0.65, 0) });
+        // Twin Nose Railgun Cannons
+        for (let i = -1; i <= 1; i += 2) {
+          const gunGeo = new THREE.CylinderGeometry(0.035, 0.045, 0.85, 8);
+          gunGeo.rotateX(Math.PI / 2);
+          const gun = new THREE.Mesh(gunGeo, matTitaniumTrim);
+          gun.position.set(i * 0.28, 0.05, 1.25);
+          fuseGroup.add(gun);
 
-        // 3. 4 Articulated Quad-Thruster Nacelles
-        for (let i = 0; i < 4; i++) {
-          const angle = (i * Math.PI) / 2 + (Math.PI / 4);
-          const podGeo = new THREE.CylinderGeometry(0.16, 0.12, 0.6, Math.max(4, Math.floor(14 * ratio)));
-          const pod = new THREE.Mesh(podGeo, matCrimson);
-          const origX = Math.cos(angle) * 1.15;
-          const origZ = Math.sin(angle) * 1.15;
-          pod.position.set(origX, 0, origZ);
-          assetRootGroup.add(pod);
-
-          const expX = Math.cos(angle) * 1.85;
-          const expZ = Math.sin(angle) * 1.85;
-          animatableParts.push({ mesh: pod, origPos: new THREE.Vector3(origX, 0, origZ), explodedPos: new THREE.Vector3(expX, 0, expZ) });
+          // Muzzle Flash Emitters
+          const muzzleGeo = new THREE.TorusGeometry(0.045, 0.015, 4, 8);
+          const muzzle = new THREE.Mesh(muzzleGeo, matCyanPlasma);
+          muzzle.position.set(i * 0.28, 0.05, 1.68);
+          fuseGroup.add(muzzle);
         }
 
-        // 4. Levitating Golden Singularity Core
-        const singGeo = new THREE.OctahedronGeometry(0.38, Math.max(0, Math.floor(2 * ratio)));
-        const singCore = new THREE.Mesh(singGeo, matGold);
-        assetRootGroup.add(singCore);
-        animatableParts.push({ mesh: singCore, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 1.1, 0) });
+        assetRootGroup.add(fuseGroup);
+        animatableParts.push({ mesh: fuseGroup, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0, 0) });
+
+        // 2. Swept Delta Aerofoil Wings
+        const wingsGroup = new THREE.Group();
+        for (let i = -1; i <= 1; i += 2) {
+          const wingGeo = new THREE.BoxGeometry(1.2, 0.04, 0.7);
+          const wing = new THREE.Mesh(wingGeo, matCarbonArmor);
+          wing.position.set(i * 1.05, 0, -0.2);
+          wing.rotation.y = i * -0.35;
+          wingsGroup.add(wing);
+
+          // Wingtip Stabilizer Canards
+          const canardGeo = new THREE.BoxGeometry(0.04, 0.45, 0.45);
+          const canard = new THREE.Mesh(canardGeo, matCyanPlasma);
+          canard.position.set(i * 1.6, 0.15, -0.35);
+          wingsGroup.add(canard);
+        }
+        assetRootGroup.add(wingsGroup);
+        animatableParts.push({ mesh: wingsGroup, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0, -0.5) });
+
+        // 3. Dual Turbofan Engine Nacelles with Spinning Rotor Blades
+        const leftNacelle = createTurbofanNacelle(-0.95, matCarbonArmor, matTitaniumTrim, matCyanPlasma, ratio);
+        const rightNacelle = createTurbofanNacelle(0.95, matCarbonArmor, matTitaniumTrim, matCrimsonCore, ratio);
+        assetRootGroup.add(leftNacelle.group);
+        assetRootGroup.add(rightNacelle.group);
+        turbineFans.push(leftNacelle.fanMesh, rightNacelle.fanMesh);
+        animatableParts.push(
+          { mesh: leftNacelle.group, origPos: new THREE.Vector3(-0.95, 0, -0.25), explodedPos: new THREE.Vector3(-1.8, 0.3, -0.25) },
+          { mesh: rightNacelle.group, origPos: new THREE.Vector3(0.95, 0, -0.25), explodedPos: new THREE.Vector3(1.8, 0.3, -0.25) }
+        );
+
+        // 4. Dual-Chiral Gyro Stabilizer Rings (Counter-Rotating)
+        const gyroGroup = new THREE.Group();
+        const gRingGeo1 = new THREE.TorusGeometry(1.35, 0.055, 6, Math.max(12, Math.floor(36 * ratio)));
+        const gRing1 = new THREE.Mesh(gRingGeo1, matCyanPlasma);
+        gRing1.rotation.x = Math.PI / 2;
+        gyroGroup.add(gRing1);
+
+        const gRingGeo2 = new THREE.TorusGeometry(1.52, 0.045, 4, Math.max(12, Math.floor(32 * ratio)));
+        const gRing2 = new THREE.Mesh(gRingGeo2, matPhotovoltaicGold);
+        gRing2.rotation.x = Math.PI / 2 + 0.25;
+        gyroGroup.add(gRing2);
+
+        gyroRings.push(gRing1, gRing2);
+        assetRootGroup.add(gyroGroup);
+        animatableParts.push({ mesh: gyroGroup, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0.9, 0) });
+
+        // 5. Levitating Golden Singularity Core
+        const coreGeo = new THREE.DodecahedronGeometry(0.34, 0);
+        singularityCoreMesh = new THREE.Mesh(coreGeo, matPhotovoltaicGold);
+        singularityCoreMesh.position.set(0, 0.55, -0.2);
+        assetRootGroup.add(singularityCoreMesh);
+        animatableParts.push({ mesh: singularityCoreMesh, origPos: new THREE.Vector3(0, 0.55, -0.2), explodedPos: new THREE.Vector3(0, 1.4, -0.2) });
 
       } else if (activeAsset === "shield") {
-        // 🛡️ AEGIS QUANTUM TITAN SHIELD
+        // 🛡️ AEGIS QUANTUM TITAN SHIELD (UPGRADED BASTION CHASSIS)
 
-        // 1. Curved Multi-Segment Shield Carapace
-        const segs = Math.max(4, Math.floor(24 * ratio));
-        const shieldGeo = new THREE.CylinderGeometry(1.05, 0.85, 2.1, segs, 1, false, 0, Math.PI);
-        const shieldMesh = new THREE.Mesh(shieldGeo, matArmor);
-        shieldMesh.rotation.y = -Math.PI / 2;
-        assetRootGroup.add(shieldMesh);
-        animatableParts.push({ mesh: shieldMesh, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0, -0.5) });
+        // 1. Layered Triple-Faceted Hexagonal Bastion Plate
+        const shieldGroup = new THREE.Group();
+        const plateGeo = new THREE.CylinderGeometry(1.2, 1.0, 2.3, 6, 1, false);
+        plateGeo.rotateY(Math.PI / 6);
+        plateGeo.scale.set(1.0, 1.0, 0.18);
+        const plate = new THREE.Mesh(plateGeo, matCarbonArmor);
+        shieldGroup.add(plate);
 
-        // 2. Central Honeycomb Energy Spine
-        const spineGeo = new THREE.BoxGeometry(0.28, 1.6, 0.15);
-        const spine = new THREE.Mesh(spineGeo, matCyan);
-        spine.position.z = 0.85;
-        assetRootGroup.add(spine);
-        animatableParts.push({ mesh: spine, origPos: new THREE.Vector3(0, 0, 0.85), explodedPos: new THREE.Vector3(0, 0, 1.4) });
+        // Armor Plate Bevel Rim
+        const rimGeo = new THREE.TorusGeometry(1.25, 0.065, 6, 6);
+        const rim = new THREE.Mesh(rimGeo, matTitaniumTrim);
+        rim.position.z = 0.09;
+        shieldGroup.add(rim);
 
-        // 3. Central Pulsing Reactor Lattice Node
-        const nodeGeo = new THREE.IcosahedronGeometry(0.26, Math.max(0, Math.floor(2 * ratio)));
-        const node = new THREE.Mesh(nodeGeo, matCrimson);
-        node.position.z = 0.92;
-        assetRootGroup.add(node);
-        animatableParts.push({ mesh: node, origPos: new THREE.Vector3(0, 0, 0.92), explodedPos: new THREE.Vector3(0, 0, 1.8) });
+        assetRootGroup.add(shieldGroup);
+        animatableParts.push({ mesh: shieldGroup, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0, -0.6) });
 
-        // 4. Perimeter Deflector Teeth
-        for (let i = -1; i <= 1; i += 2) {
-          const toothGeo = new THREE.ConeGeometry(0.18, 0.5, 4);
-          const tooth = new THREE.Mesh(toothGeo, matGold);
-          tooth.rotation.z = (i * Math.PI) / 4;
-          tooth.position.set(i * 0.9, 0, 0.4);
-          assetRootGroup.add(tooth);
-          animatableParts.push({ mesh: tooth, origPos: new THREE.Vector3(i * 0.9, 0, 0.4), explodedPos: new THREE.Vector3(i * 1.5, 0, 0.4) });
-        }
+        // 2. Central Honeycomb Singularity Core
+        const coreReactor = new THREE.Group();
+        const coreRingsGeo = new THREE.TorusGeometry(0.48, 0.045, 6, 24);
+        const coreRings = new THREE.Mesh(coreRingsGeo, matCyanPlasma);
+        coreRings.position.z = 0.22;
+        coreReactor.add(coreRings);
+
+        const coreNodeGeo = new THREE.OctahedronGeometry(0.28, 1);
+        const coreNode = new THREE.Mesh(coreNodeGeo, matCrimsonCore);
+        coreNode.position.z = 0.25;
+        coreReactor.add(coreNode);
+        singularityCoreMesh = coreNode;
+
+        assetRootGroup.add(coreReactor);
+        animatableParts.push({ mesh: coreReactor, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0, 0.8) });
+
+        // 3. 4 Floating Perimeter Deflector Pylons
+        const pylonGroup = new THREE.Group();
+        const deflectorPositions = [
+          [-1.1, 1.0, 0.15],
+          [1.1, 1.0, 0.15],
+          [-1.1, -1.0, 0.15],
+          [1.1, -1.0, 0.15]
+        ];
+        deflectorPositions.forEach(pos => {
+          const pylonGeo = new THREE.ConeGeometry(0.18, 0.65, 4);
+          const pylon = new THREE.Mesh(pylonGeo, matPhotovoltaicGold);
+          pylon.position.set(...pos);
+          pylon.rotation.z = Math.atan2(pos[1], pos[0]);
+          pylonGroup.add(pylon);
+        });
+
+        assetRootGroup.add(pylonGroup);
+        animatableParts.push({ mesh: pylonGroup, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0, 1.2) });
 
       } else if (activeAsset === "saber") {
-        // ⚔️ DUAL SINGULARITY QUANTUM SABER
+        // ⚔️ DUAL SINGULARITY QUANTUM SABER (HIGH-PRECISION MACHINED WEAPON)
 
-        // 1. Machined Mechanical Hilt
-        const hiltGeo = new THREE.CylinderGeometry(0.09, 0.09, 1.1, Math.max(6, Math.floor(18 * ratio)));
-        const hilt = new THREE.Mesh(hiltGeo, matArmor);
-        assetRootGroup.add(hilt);
-        animatableParts.push({ mesh: hilt, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0, 0) });
+        // 1. Knurled Ergonomic Titanium Hilt
+        const hiltGroup = new THREE.Group();
+        const hiltGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.15, Math.max(8, Math.floor(20 * ratio)));
+        const hilt = new THREE.Mesh(hiltGeo, matCarbonArmor);
+        hiltGroup.add(hilt);
 
-        // 2. Top Radiant Cyan Plasma Blade
-        const topBladeGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.75, Math.max(4, Math.floor(14 * ratio)));
-        const topBlade = new THREE.Mesh(topBladeGeo, matCyan);
-        topBlade.position.y = 1.42;
-        assetRootGroup.add(topBlade);
-        animatableParts.push({ mesh: topBlade, origPos: new THREE.Vector3(0, 1.42, 0), explodedPos: new THREE.Vector3(0, 2.2, 0) });
+        // Grip Ribs / Rings
+        for (let i = -3; i <= 3; i++) {
+          const ribGeo = new THREE.TorusGeometry(0.088, 0.012, 4, 16);
+          ribGeo.rotateX(Math.PI / 2);
+          const rib = new THREE.Mesh(ribGeo, matTitaniumTrim);
+          rib.position.y = i * 0.12;
+          hiltGroup.add(rib);
+        }
 
-        // 3. Bottom Crimson Plasma Blade
-        const botBladeGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.75, Math.max(4, Math.floor(14 * ratio)));
-        const botBlade = new THREE.Mesh(botBladeGeo, matCrimson);
-        botBlade.position.y = -1.42;
-        assetRootGroup.add(botBlade);
-        animatableParts.push({ mesh: botBlade, origPos: new THREE.Vector3(0, -1.42, 0), explodedPos: new THREE.Vector3(0, -2.2, 0) });
+        // Central Power Crystal Chamber
+        const crystalChamberGeo = new THREE.CylinderGeometry(0.07, 0.07, 0.22, 8);
+        const crystalChamber = new THREE.Mesh(crystalChamberGeo, matRubyGlass);
+        hiltGroup.add(crystalChamber);
 
-        // 4. Dual Emitter Guard Collars
-        const collarGeo = new THREE.TorusGeometry(0.2, 0.035, 4, Math.max(6, Math.floor(18 * ratio)));
-        const collar1 = new THREE.Mesh(collarGeo, matGold);
-        collar1.rotation.x = Math.PI / 2;
-        collar1.position.y = 0.55;
-        assetRootGroup.add(collar1);
-        animatableParts.push({ mesh: collar1, origPos: new THREE.Vector3(0, 0.55, 0), explodedPos: new THREE.Vector3(0, 0.95, 0) });
+        const powerCellGeo = new THREE.OctahedronGeometry(0.045, 0);
+        const powerCell = new THREE.Mesh(powerCellGeo, matPhotovoltaicGold);
+        singularityCoreMesh = powerCell;
+        hiltGroup.add(powerCell);
 
-        const collar2 = new THREE.Mesh(collarGeo, matGold);
-        collar2.rotation.x = Math.PI / 2;
-        collar2.position.y = -0.55;
-        assetRootGroup.add(collar2);
-        animatableParts.push({ mesh: collar2, origPos: new THREE.Vector3(0, -0.55, 0), explodedPos: new THREE.Vector3(0, -0.95, 0) });
+        assetRootGroup.add(hiltGroup);
+        animatableParts.push({ mesh: hiltGroup, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0, 0) });
+
+        // 2. Dual Volumetric High-Energy Plasma Blades
+        // Top Radiant Cyan Blade
+        const topBladeGroup = createDualLayerBlade(matCyanPlasma, 1.0);
+        assetRootGroup.add(topBladeGroup);
+        animatableParts.push({ mesh: topBladeGroup, origPos: new THREE.Vector3(0, 0.6, 0), explodedPos: new THREE.Vector3(0, 1.4, 0) });
+
+        // Bottom Fiery Crimson Blade
+        const botBladeGroup = createDualLayerBlade(matCrimsonCore, -1.0);
+        assetRootGroup.add(botBladeGroup);
+        animatableParts.push({ mesh: botBladeGroup, origPos: new THREE.Vector3(0, -0.6, 0), explodedPos: new THREE.Vector3(0, -1.4, 0) });
+
+        // 3. Dual Emitter Collars
+        const collarsGroup = new THREE.Group();
+        [-0.58, 0.58].forEach(yPos => {
+          const colGeo = new THREE.CylinderGeometry(0.12, 0.08, 0.15, 12);
+          const col = new THREE.Mesh(colGeo, matPhotovoltaicGold);
+          col.position.y = yPos;
+          collarsGroup.add(col);
+        });
+        assetRootGroup.add(collarsGroup);
+        animatableParts.push({ mesh: collarsGroup, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0, 0.5) });
       }
+    }
+
+    // Helper: Turbofan Nacelle Assembly with Rotating Compressor Blades
+    function createTurbofanNacelle(xOffset, matCowling, matTrim, matExhaust, ratio) {
+      const group = new THREE.Group();
+      group.position.set(xOffset, 0, -0.25);
+
+      // Nacelle Outer Cowling
+      const cowlGeo = new THREE.CylinderGeometry(0.24, 0.22, 1.0, Math.max(8, Math.floor(18 * ratio)));
+      cowlGeo.rotateX(Math.PI / 2);
+      const cowl = new THREE.Mesh(cowlGeo, matCowling);
+      group.add(cowl);
+
+      // Intake Rim
+      const intakeRimGeo = new THREE.TorusGeometry(0.24, 0.025, 4, 16);
+      const intakeRim = new THREE.Mesh(intakeRimGeo, matTrim);
+      intakeRim.position.z = 0.5;
+      group.add(intakeRim);
+
+      // 8-Blade Compressor Fan
+      const fanMesh = new THREE.Group();
+      fanMesh.position.z = 0.42;
+      for (let b = 0; b < 8; b++) {
+        const bladeGeo = new THREE.BoxGeometry(0.04, 0.18, 0.015);
+        const blade = new THREE.Mesh(bladeGeo, matTrim);
+        blade.position.y = 0.09;
+        blade.rotation.z = (b * Math.PI) / 4;
+        fanMesh.add(blade);
+      }
+      group.add(fanMesh);
+
+      // Aft Plasma Exhaust Cone
+      const exhaustGeo = new THREE.ConeGeometry(0.18, 0.45, 12);
+      exhaustGeo.rotateX(-Math.PI / 2);
+      const exhaust = new THREE.Mesh(exhaustGeo, matExhaust);
+      exhaust.position.z = -0.7;
+      group.add(exhaust);
+
+      return { group, fanMesh };
+    }
+
+    // Helper: Volumetric Dual-Layer Plasma Blade Assembly
+    function createDualLayerBlade(matPlasma, direction = 1.0) {
+      const bladeGroup = new THREE.Group();
+      const bladeLen = 1.85;
+
+      // Inner White Hot Plasma Core Beam
+      const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: wireframeMode });
+      const coreGeo = new THREE.CylinderGeometry(0.028, 0.028, bladeLen, 12);
+      coreGeo.translate(0, (bladeLen / 2) * direction, 0);
+      const coreBeam = new THREE.Mesh(coreGeo, coreMat);
+      bladeGroup.add(coreBeam);
+
+      // Outer Volumetric Colored Plasma Sheath
+      const sheathGeo = new THREE.CylinderGeometry(0.055, 0.045, bladeLen + 0.1, 16);
+      sheathGeo.translate(0, ((bladeLen + 0.1) / 2) * direction, 0);
+      const sheathBeam = new THREE.Mesh(sheathGeo, matPlasma);
+      bladeGroup.add(sheathBeam);
+
+      // Tapered Energy Ion Flare Tip
+      const tipGeo = new THREE.ConeGeometry(0.055, 0.28, 12);
+      if (direction < 0) tipGeo.rotateX(Math.PI);
+      tipGeo.translate(0, (bladeLen + 0.14) * direction, 0);
+      const tip = new THREE.Mesh(tipGeo, matPlasma);
+      bladeGroup.add(tip);
+
+      return bladeGroup;
     }
 
     // ═════════════════════════════════════════════════════════════════════════
     // 6. CONTROLLER ACTIONS & TELEMETRY BINDING
     // ═════════════════════════════════════════════════════════════════════════
+
+    function handleMeshFidelitySelect(mode) {
+      playSound('switch');
+      meshFidelityMode = mode;
+
+      document.getElementById("btn-mode-ultra").classList.toggle("active", mode === 'ultra');
+      document.getElementById("btn-mode-glb").classList.toggle("active", mode === 'glb');
+      document.getElementById("hero-mesh-tag").textContent = mode === 'ultra' ? "APEX ULTRA CAD" : "CERTIFIED BINARY GLB";
+      document.getElementById("hud-mode-name").innerHTML = mode === 'ultra' ? "✨ APEX ULTRA CAD" : "🔬 GATE 6-M CERTIFIED GLB";
+
+      loadActiveMeshGeometry();
+      refreshHudTelemetry();
+    }
 
     function handleAssetSelect(assetKey) {
       playSound('switch');
@@ -2116,7 +2398,7 @@
       document.getElementById("hero-asset-icon").textContent = data.icon;
       document.getElementById("hero-asset-title").textContent = data.title;
 
-      constructModelGeometry();
+      loadActiveMeshGeometry();
       refreshHudTelemetry();
     }
 
@@ -2129,7 +2411,7 @@
         if (btn) btn.classList.toggle("active", i === lodIdx);
       }
 
-      constructModelGeometry();
+      loadActiveMeshGeometry();
       refreshHudTelemetry();
     }
 
@@ -2138,7 +2420,7 @@
       wireframeMode = !wireframeMode;
       const btn = document.getElementById("btn-wireframe");
       if (btn) btn.classList.toggle("active", wireframeMode);
-      constructModelGeometry();
+      loadActiveMeshGeometry();
     }
 
     function handleToggleExploded() {
