@@ -4,28 +4,55 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ZKAEDI // Quantum Music Video & Cinematic Battle Observatory</title>
+  
+  <!-- Modern Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <!-- Data Feed & Three.js 3D Engine -->
   <script src="quantum_music_video_data.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
   <style>
+    /* ═══════════════════════════════════════════════════════════════════════════
+       DESIGN SYSTEM & CYBERNETIC PALETTE
+       ═══════════════════════════════════════════════════════════════════════════ */
     :root {
-      --bg-dark: #07090e;
-      --bg-panel: rgba(14, 18, 28, 0.75);
-      --bg-card: rgba(20, 26, 42, 0.85);
+      --bg-void: #030712;
+      --bg-surface: #070d1a;
+      --bg-card: rgba(13, 22, 38, 0.75);
+      --bg-card-hover: rgba(20, 32, 56, 0.9);
+      --bg-panel: rgba(8, 14, 26, 0.85);
+      
       --border-subtle: rgba(255, 255, 255, 0.08);
-      --border-cyan: rgba(0, 242, 254, 0.4);
-      --border-crimson: rgba(239, 68, 68, 0.4);
+      --border-medium: rgba(255, 255, 255, 0.15);
+      --border-glow-cyan: rgba(0, 242, 254, 0.4);
+      --border-glow-crimson: rgba(255, 42, 95, 0.4);
+      
       --cyan: #00f2fe;
-      --violet: #9d4edd;
-      --crimson: #ef4444;
-      --gold: #ffb703;
+      --cyan-bright: #38bdf8;
+      --cyan-glow: rgba(0, 242, 254, 0.35);
+      
+      --crimson: #ff2a5f;
+      --crimson-glow: rgba(255, 42, 95, 0.35);
+      
+      --violet: #8b5cf6;
+      --violet-glow: rgba(139, 92, 246, 0.35);
+      
+      --gold: #f59e0b;
+      --gold-glow: rgba(245, 158, 11, 0.35);
+      
       --emerald: #10b981;
+      --emerald-glow: rgba(16, 185, 129, 0.35);
+      
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
-      --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --text-dim: #64748b;
+      
+      --font-display: 'Outfit', -apple-system, sans-serif;
+      --font-ui: 'Inter', -apple-system, sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
     }
 
@@ -36,29 +63,53 @@
     }
 
     body {
-      background-color: var(--bg-dark);
+      background-color: var(--bg-void);
       background-image: 
-        radial-gradient(circle at 10% 10%, rgba(239, 68, 68, 0.07) 0%, transparent 45%),
-        radial-gradient(circle at 90% 15%, rgba(0, 242, 254, 0.07) 0%, transparent 45%),
-        radial-gradient(circle at 50% 85%, rgba(157, 78, 221, 0.05) 0%, transparent 50%),
-        linear-gradient(180deg, #07090e 0%, #0d121f 100%);
+        radial-gradient(circle at 10% 5%, rgba(255, 42, 95, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 90% 10%, rgba(0, 242, 254, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 50% 60%, rgba(139, 92, 246, 0.05) 0%, transparent 50%),
+        linear-gradient(180deg, #030712 0%, #050a17 50%, #030712 100%);
       color: var(--text-main);
       font-family: var(--font-ui);
       min-height: 100vh;
       overflow-x: hidden;
+      line-height: 1.5;
     }
 
+    /* Custom Cyberpunk Scrollbar */
+    ::-webkit-scrollbar {
+      width: 7px;
+      height: 7px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(3, 7, 18, 0.8);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.16);
+      border-radius: 999px;
+      border: 1px solid rgba(0, 242, 254, 0.2);
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--cyan);
+      box-shadow: 0 0 10px var(--cyan);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       HEADER DECK: SOVEREIGN COMMAND NAVIGATION
+       ═══════════════════════════════════════════════════════════════════════════ */
     header {
-      background: rgba(10, 14, 24, 0.92);
-      backdrop-filter: blur(20px);
+      background: rgba(5, 10, 20, 0.88);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
       border-bottom: 1px solid var(--border-subtle);
-      padding: 1.25rem 2.5rem;
+      padding: 0.85rem 2rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
       position: sticky;
       top: 0;
-      z-index: 100;
+      z-index: 1000;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
     }
 
     .brand {
@@ -67,792 +118,1373 @@
       gap: 1rem;
     }
 
-    .brand-logo {
+    .brand-logo-frame {
       width: 44px;
       height: 44px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, var(--crimson), var(--violet));
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--crimson), var(--cyan));
+      padding: 2px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-weight: 800;
-      font-size: 1.3rem;
-      color: white;
-      box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+      box-shadow: 0 0 20px var(--cyan-glow);
+    }
+
+    .brand-logo-inner {
+      width: 100%;
+      height: 100%;
+      border-radius: 10px;
+      background: #060b17;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.35rem;
     }
 
     .brand-title {
-      font-size: 1.15rem;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-    }
-
-    .brand-sub {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      font-family: var(--font-mono);
-      display: flex;
-      gap: 0.75rem;
-      align-items: center;
-      margin-top: 0.2rem;
-    }
-
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-      padding: 0.2rem 0.6rem;
-      border-radius: 999px;
-      font-size: 0.7rem;
-      font-weight: 600;
-      font-family: var(--font-mono);
-      background: rgba(16, 185, 129, 0.15);
-      border: 1px solid rgba(16, 185, 129, 0.4);
-      color: var(--emerald);
-    }
-
-    .status-badge::before {
-      content: '';
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--emerald);
-      box-shadow: 0 0 8px var(--emerald);
-    }
-
-    .container {
-      max-width: 1560px;
-      margin: 0 auto;
-      padding: 2rem 2.5rem 4rem;
-      display: flex;
-      flex-direction: column;
-      gap: 2rem;
-    }
-
-    .hero-banner {
-      background: linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(0, 242, 254, 0.08));
-      border: 1px solid var(--border-cyan);
-      border-radius: 16px;
-      padding: 2rem 2.5rem;
-      display: grid;
-      grid-template-columns: 2fr 1fr;
-      gap: 2rem;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .hero-content h1 {
-      font-size: 2.2rem;
+      font-family: var(--font-display);
+      font-size: 1.25rem;
       font-weight: 800;
-      margin-bottom: 0.75rem;
-      background: linear-gradient(90deg, #ffffff, var(--cyan), var(--crimson));
+      letter-spacing: -0.01em;
+      background: linear-gradient(90deg, #ffffff 30%, var(--cyan) 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
-    }
-
-    .hero-content p {
-      color: var(--text-muted);
-      font-size: 0.95rem;
-      line-height: 1.6;
-      margin-bottom: 1.5rem;
-      max-width: 820px;
-    }
-
-    .hero-metrics {
-      display: flex;
-      gap: 2rem;
-    }
-
-    .metric-box {
-      background: var(--bg-panel);
-      border: 1px solid var(--border-subtle);
-      border-radius: 10px;
-      padding: 0.85rem 1.25rem;
-    }
-
-    .metric-val {
-      font-size: 1.5rem;
-      font-weight: 800;
-      font-family: var(--font-mono);
-      color: var(--cyan);
-    }
-
-    .metric-label {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .crypto-card {
-      background: rgba(10, 14, 24, 0.85);
-      border: 1px solid var(--border-subtle);
-      border-radius: 12px;
-      padding: 1.25rem;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-    }
-
-    .crypto-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      color: var(--gold);
-      font-weight: 600;
-      margin-bottom: 0.75rem;
-    }
-
-    .crypto-line {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 0.4rem;
-      color: var(--text-muted);
-    }
-
-    .crypto-val {
-      color: var(--text-main);
-      font-weight: 500;
-    }
-
-    /* Category Nav */
-    .cat-nav {
-      display: flex;
-      gap: 0.75rem;
-      overflow-x: auto;
-      padding-bottom: 0.5rem;
-    }
-
-    .cat-btn {
-      background: var(--bg-panel);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-muted);
-      padding: 0.75rem 1.4rem;
-      border-radius: 10px;
-      font-family: var(--font-ui);
-      font-size: 0.85rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      white-space: nowrap;
       display: flex;
       align-items: center;
       gap: 0.6rem;
     }
 
-    .cat-btn:hover {
-      background: rgba(255, 255, 255, 0.05);
-      color: var(--text-main);
-      border-color: rgba(255, 255, 255, 0.2);
-    }
-
-    .cat-btn.active {
-      background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(0, 242, 254, 0.2));
-      border-color: var(--cyan);
-      color: white;
-      box-shadow: 0 0 16px rgba(0, 242, 254, 0.2);
-    }
-
-    /* Layout */
-    .main-grid {
-      display: grid;
-      grid-template-columns: 420px 1fr;
-      gap: 2rem;
-    }
-
-    .preset-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-      max-height: 820px;
-      overflow-y: auto;
-      padding-right: 0.5rem;
-    }
-
-    .preset-item {
-      background: var(--bg-panel);
-      border: 1px solid var(--border-subtle);
-      border-radius: 10px;
-      padding: 1rem 1.25rem;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .preset-item:hover {
-      background: var(--bg-card);
-      border-color: rgba(0, 242, 254, 0.3);
-      transform: translateX(4px);
-    }
-
-    .preset-item.selected {
-      background: var(--bg-card);
-      border-color: var(--crimson);
-      box-shadow: 0 0 18px rgba(239, 68, 68, 0.25);
-    }
-
-    .preset-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 0.4rem;
-    }
-
-    .preset-id {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--cyan);
-      font-weight: 600;
-    }
-
-    .preset-title {
-      font-weight: 700;
-      font-size: 0.95rem;
-      margin-bottom: 0.3rem;
-    }
-
-    .preset-motion {
-      font-size: 0.78rem;
-      color: var(--text-muted);
-      line-height: 1.4;
-    }
-
-    /* Detail View */
-    .detail-view {
-      background: var(--bg-panel);
-      border: 1px solid var(--border-subtle);
-      border-radius: 16px;
-      padding: 2rem;
-      display: flex;
-      flex-direction: column;
-      gap: 1.75rem;
-    }
-
-    .detail-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      border-bottom: 1px solid var(--border-subtle);
-      padding-bottom: 1.5rem;
-    }
-
-    .detail-title h2 {
-      font-size: 1.75rem;
-      font-weight: 800;
-      margin-bottom: 0.4rem;
-    }
-
-    .detail-tags {
-      display: flex;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
-
-    .tag {
-      padding: 0.25rem 0.65rem;
-      border-radius: 6px;
-      font-size: 0.75rem;
-      font-family: var(--font-mono);
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-muted);
-    }
-
-    .tag.cyan { color: var(--cyan); border-color: rgba(0, 242, 254, 0.3); }
-    .tag.crimson { color: var(--crimson); border-color: rgba(239, 68, 68, 0.3); }
-    .tag.gold { color: var(--gold); border-color: rgba(255, 183, 3, 0.3); }
-
-    /* Timeline Stages */
-    .timeline-container {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-
-    .section-label {
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--text-muted);
-      font-weight: 700;
-    }
-
-    .stages-grid {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 0.75rem;
-    }
-
-    .stage-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      border-radius: 10px;
-      padding: 0.9rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      transition: all 0.2s ease;
-    }
-
-    .stage-card:hover {
-      border-color: var(--cyan);
-      transform: translateY(-2px);
-    }
-
-    .stage-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--cyan);
-      font-weight: 700;
-    }
-
-    .stage-intensity {
-      padding: 0.15rem 0.4rem;
-      border-radius: 4px;
-      background: rgba(239, 68, 68, 0.2);
-      color: var(--crimson);
-      font-size: 0.65rem;
-    }
-
-    .stage-action {
-      font-size: 0.75rem;
-      color: var(--text-main);
-      line-height: 1.4;
-      flex-grow: 1;
-    }
-
-    .stage-audio {
-      font-size: 0.7rem;
-      color: var(--gold);
-      font-family: var(--font-mono);
-      border-top: 1px solid var(--border-subtle);
-      padding-top: 0.4rem;
-    }
-
-    /* Prompt Box */
-    .prompt-box {
-      background: rgba(5, 8, 14, 0.9);
-      border: 1px solid var(--border-subtle);
-      border-radius: 12px;
-      padding: 1.25rem;
-      position: relative;
-    }
-
-    .prompt-text {
-      font-family: var(--font-mono);
-      font-size: 0.85rem;
-      line-height: 1.6;
-      color: #e2e8f0;
-      white-space: pre-wrap;
-      max-height: 220px;
-      overflow-y: auto;
-    }
-
-    .copy-btn {
-      position: absolute;
-      top: 1rem;
-      right: 1rem;
-      background: linear-gradient(135deg, var(--crimson), var(--violet));
-      border: none;
-      color: white;
-      padding: 0.45rem 1rem;
-      border-radius: 6px;
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .copy-btn:hover {
-      box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
-      transform: scale(1.03);
-    }
-
-    /* 3D Asset Anchor */
-    .asset-anchor-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1rem;
-    }
-
-    .asset-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      border-radius: 10px;
-      padding: 1rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-
-    .asset-card-title {
-      font-size: 0.85rem;
-      font-weight: 700;
-      color: var(--cyan);
-    }
-
-    .asset-stats {
+    .brand-sub {
       font-family: var(--font-mono);
       font-size: 0.72rem;
       color: var(--text-muted);
       display: flex;
-      flex-direction: column;
-    /* 3D WebGL Viewport */
-    .viewport-section {
-      background: var(--bg-card);
+      gap: 0.6rem;
+      align-items: center;
+      margin-top: 0.15rem;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 0.65rem;
+      align-items: center;
+    }
+
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.3rem 0.75rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: var(--emerald);
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.15);
+    }
+
+    .badge-pill.cyan {
+      background: rgba(0, 242, 254, 0.12);
+      border-color: rgba(0, 242, 254, 0.4);
+      color: var(--cyan);
+      box-shadow: 0 0 10px rgba(0, 242, 254, 0.15);
+    }
+
+    .badge-pill.violet {
+      background: rgba(139, 92, 246, 0.12);
+      border-color: rgba(139, 92, 246, 0.4);
+      color: var(--violet);
+      box-shadow: 0 0 10px rgba(139, 92, 246, 0.15);
+    }
+
+    .pulse-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 8px currentColor;
+      animation: pulse-glow 2s infinite ease-in-out;
+    }
+
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .btn-sound-toggle {
+      background: rgba(255, 255, 255, 0.06);
       border: 1px solid var(--border-subtle);
-      border-radius: 14px;
+      color: var(--text-muted);
+      border-radius: 999px;
+      padding: 0.35rem 0.85rem;
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.2s ease;
+    }
+
+    .btn-sound-toggle:hover {
+      background: rgba(0, 242, 254, 0.12);
+      border-color: var(--cyan);
+      color: var(--text-main);
+      box-shadow: 0 0 12px var(--cyan-glow);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       MAIN CONTAINER & LAYOUT
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .app-container {
+      max-width: 1680px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       HERO: 3D HOLOGRAPHIC BATTLE ARENA & ACTIVE LOD TOPOLOGY INSPECTOR
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .hero-arena-stage {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-glow-cyan);
+      border-radius: 20px;
       overflow: hidden;
       display: flex;
       flex-direction: column;
       position: relative;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 35px rgba(0, 242, 254, 0.12);
+      backdrop-filter: blur(20px);
     }
 
-    .viewport-header {
-      background: rgba(10, 14, 24, 0.95);
+    /* Top Command Bar */
+    .arena-top-bar {
+      background: rgba(7, 13, 26, 0.95);
+      backdrop-filter: blur(16px);
       border-bottom: 1px solid var(--border-subtle);
-      padding: 0.75rem 1.25rem;
+      padding: 0.85rem 1.4rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
       flex-wrap: wrap;
-      gap: 0.75rem;
+      gap: 1rem;
+      z-index: 10;
     }
 
-    .viewport-title {
-      font-size: 0.85rem;
-      font-weight: 700;
-      letter-spacing: 0.05em;
+    .arena-hero-title {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+    }
+
+    .arena-badge-icon {
+      font-size: 1.4rem;
+      filter: drop-shadow(0 0 10px var(--cyan));
+    }
+
+    .arena-hero-title h2 {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
-      color: var(--cyan);
+      color: #ffffff;
       display: flex;
       align-items: center;
       gap: 0.5rem;
     }
 
-    .viewport-controls {
+    .arena-hero-title .tag-sub {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--cyan);
+      background: rgba(0, 242, 254, 0.1);
+      border: 1px solid rgba(0, 242, 254, 0.3);
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+    }
+
+    /* Modern Cyber Button Groups */
+    .cyber-pill-row {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: 0.6rem;
       flex-wrap: wrap;
     }
 
-    .pill-group {
+    .cyber-pill-group {
       display: flex;
-      background: rgba(0, 0, 0, 0.4);
-      border: 1px solid var(--border-subtle);
-      border-radius: 8px;
-      padding: 0.2rem;
-      gap: 0.2rem;
+      background: rgba(3, 7, 18, 0.7);
+      border: 1px solid var(--border-medium);
+      border-radius: 10px;
+      padding: 0.25rem;
+      gap: 0.25rem;
     }
 
-    .pill-btn {
+    .cyber-btn {
       background: transparent;
-      border: none;
+      border: 1px solid transparent;
       color: var(--text-muted);
       font-family: var(--font-mono);
-      font-size: 0.7rem;
+      font-size: 0.75rem;
       font-weight: 600;
-      padding: 0.3rem 0.65rem;
-      border-radius: 6px;
+      padding: 0.4rem 0.85rem;
+      border-radius: 7px;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      white-space: nowrap;
     }
 
-    .pill-btn:hover {
+    .cyber-btn:hover {
       color: var(--text-main);
-      background: rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.15);
     }
 
-    .pill-btn.active {
-      background: linear-gradient(135deg, var(--cyan), var(--violet));
-      color: white;
-      box-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
+    .cyber-btn.active {
+      background: linear-gradient(135deg, rgba(0, 242, 254, 0.25), rgba(139, 92, 246, 0.35));
+      border: 1px solid var(--cyan);
+      color: #ffffff;
+      font-weight: 700;
+      box-shadow: 0 0 14px var(--cyan-glow);
     }
 
-    .pill-btn.active.crimson {
-      background: linear-gradient(135deg, var(--crimson), var(--gold));
-      box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+    .cyber-btn.active.crimson {
+      background: linear-gradient(135deg, rgba(255, 42, 95, 0.3), rgba(245, 158, 11, 0.3));
+      border: 1px solid var(--crimson);
+      box-shadow: 0 0 14px var(--crimson-glow);
     }
 
-    .viewport-canvas-container {
+    /* 3D WebGL Canvas Viewport */
+    .arena-viewport-wrapper {
       width: 100%;
-      height: 380px;
+      height: 520px;
       position: relative;
-      background: radial-gradient(circle at 50% 50%, #0d1424 0%, #050810 100%);
+      background: radial-gradient(circle at 50% 50%, #0d172e 0%, #040814 100%);
+      overflow: hidden;
     }
 
-    #viewport-3d-canvas {
+    #webgl-canvas-3d {
       width: 100%;
       height: 100%;
       display: block;
       cursor: grab;
     }
 
-    #viewport-3d-canvas:active {
+    #webgl-canvas-3d:active {
       cursor: grabbing;
     }
 
-    .viewport-hud {
+    /* Floating Holographic Cockpit HUD Overlay */
+    .hologram-hud-panel {
       position: absolute;
-      top: 1rem;
-      left: 1rem;
-      background: rgba(10, 14, 24, 0.85);
-      backdrop-filter: blur(12px);
-      border: 1px solid var(--border-subtle);
-      border-radius: 8px;
-      padding: 0.75rem 1rem;
+      top: 1.25rem;
+      left: 1.25rem;
+      background: rgba(6, 12, 24, 0.88);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--border-glow-cyan);
+      border-radius: 14px;
+      padding: 1.1rem 1.35rem;
       font-family: var(--font-mono);
-      font-size: 0.72rem;
+      font-size: 0.74rem;
       display: flex;
       flex-direction: column;
-      gap: 0.3rem;
+      gap: 0.45rem;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65), inset 0 0 20px rgba(0, 242, 254, 0.06);
       pointer-events: none;
-      z-index: 10;
+      z-index: 5;
+      min-width: 290px;
     }
 
-    .hud-line {
+    .hud-header {
       display: flex;
       justify-content: space-between;
-      gap: 1.5rem;
+      align-items: center;
+      border-bottom: 1px solid rgba(0, 242, 254, 0.25);
+      padding-bottom: 0.45rem;
+      margin-bottom: 0.3rem;
     }
 
-    .hud-label { color: var(--text-muted); }
-    .hud-val { color: var(--cyan); font-weight: 600; }
-    .hud-val.pass { color: var(--emerald); }
+    .hud-title-text {
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--cyan);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .hud-fps-pill {
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: var(--emerald);
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      padding: 0.1rem 0.45rem;
+      border-radius: 4px;
+    }
+
+    .hud-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1.2rem;
+    }
+
+    .hud-key {
+      color: var(--text-muted);
+      font-size: 0.72rem;
+    }
+
+    .hud-val {
+      color: var(--text-main);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .hud-val.cyan { color: var(--cyan); }
+    .hud-val.emerald { color: var(--emerald); font-weight: 700; }
+    .hud-val.gold { color: var(--gold); }
     .hud-val.crimson { color: var(--crimson); }
+
+    /* Interactive Bottom Viewport Bar */
+    .viewport-bottom-bar {
+      position: absolute;
+      bottom: 1.25rem;
+      left: 1.25rem;
+      right: 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .camera-preset-dock {
+      pointer-events: auto;
+      display: flex;
+      background: rgba(6, 12, 24, 0.85);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border-medium);
+      border-radius: 10px;
+      padding: 0.25rem;
+      gap: 0.25rem;
+    }
+
+    .viewport-orbit-hint {
+      background: rgba(6, 12, 24, 0.85);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 0.4rem 0.85rem;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--text-dim);
+    }
+
+    /* 3D Asset Trio Comparison Strip */
+    .asset-comparison-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.2rem;
+      padding: 1.2rem 1.4rem;
+      background: rgba(5, 9, 18, 0.95);
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    @media (max-width: 1024px) {
+      .asset-comparison-strip {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .asset-card {
+      background: rgba(13, 22, 38, 0.6);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 1rem 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .asset-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: transparent;
+      transition: background 0.2s;
+    }
+
+    .asset-card:hover {
+      background: rgba(18, 30, 54, 0.8);
+      border-color: rgba(0, 242, 254, 0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .asset-card.active {
+      border-color: var(--cyan);
+      background: rgba(0, 242, 254, 0.08);
+      box-shadow: 0 0 20px rgba(0, 242, 254, 0.2);
+    }
+
+    .asset-card.active::before {
+      background: linear-gradient(90deg, var(--cyan), var(--violet));
+    }
+
+    .asset-card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .asset-card-title {
+      font-family: var(--font-display);
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .asset-card-badge {
+      font-size: 0.68rem;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      color: var(--emerald);
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+    }
+
+    .asset-card-stats {
+      font-size: 0.72rem;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       CATEGORY NAVIGATION RIBBON (6 GENRES)
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .category-ribbon-bar {
+      display: flex;
+      gap: 0.75rem;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+    }
+
+    .cat-tab-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      padding: 0.85rem 1.4rem;
+      border-radius: 14px;
+      font-family: var(--font-display);
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      position: relative;
+    }
+
+    .cat-tab-btn:hover {
+      background: var(--bg-card-hover);
+      color: var(--text-main);
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-2px);
+    }
+
+    .cat-tab-btn.active {
+      background: linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(139, 92, 246, 0.2));
+      color: #ffffff;
+      border-color: var(--cyan);
+      box-shadow: 0 0 20px rgba(0, 242, 254, 0.25);
+    }
+
+    .cat-tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 20%;
+      right: 20%;
+      height: 2px;
+      background: var(--cyan);
+      box-shadow: 0 0 8px var(--cyan);
+      border-radius: 999px;
+    }
+
+    .cat-count-pill {
+      font-size: 0.7rem;
+      font-family: var(--font-mono);
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      color: var(--cyan-bright);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       SPLIT STUDIO WORKSPACE (PRESET MATRIX + CHOREOGRAPHY DIRECTOR)
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .studio-workspace-grid {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    @media (max-width: 1200px) {
+      .studio-workspace-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Preset Matrix (Left Column) */
+    .preset-browser-deck {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 18px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      max-height: 860px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    .browser-deck-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .browser-title {
+      font-family: var(--font-display);
+      font-size: 0.95rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .search-input-box {
+      width: 100%;
+      background: rgba(3, 7, 18, 0.85);
+      border: 1px solid var(--border-medium);
+      border-radius: 10px;
+      padding: 0.7rem 1rem;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--text-main);
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    .search-input-box:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 12px var(--cyan-glow);
+    }
+
+    .preset-cards-scroll-box {
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      overflow-y: auto;
+      max-height: 720px;
+      padding-right: 0.4rem;
+    }
+
+    .preset-card-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 0.9rem 1.1rem;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+      position: relative;
+    }
+
+    .preset-card-item:hover {
+      border-color: rgba(0, 242, 254, 0.35);
+      background: var(--bg-card-hover);
+      transform: translateX(4px);
+    }
+
+    .preset-card-item.selected {
+      border-color: var(--cyan);
+      background: linear-gradient(135deg, rgba(0, 242, 254, 0.15), rgba(139, 92, 246, 0.12));
+      box-shadow: 0 0 18px rgba(0, 242, 254, 0.2);
+    }
+
+    .preset-card-item.selected::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: 4px;
+      background: var(--cyan);
+      border-top-left-radius: 12px;
+      border-bottom-left-radius: 12px;
+      box-shadow: 0 0 8px var(--cyan);
+    }
+
+    .preset-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .preset-id-badge {
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      font-weight: 700;
+      color: var(--cyan);
+    }
+
+    /* Animated CSS Audio EQ Bars */
+    .eq-bars-anim {
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 12px;
+      padding-right: 2px;
+    }
+
+    .eq-bar {
+      width: 2px;
+      background: var(--cyan);
+      border-radius: 1px;
+      animation: eq-pulse 1s infinite alternate ease-in-out;
+    }
+
+    .eq-bar:nth-child(1) { height: 40%; animation-delay: 0.1s; }
+    .eq-bar:nth-child(2) { height: 100%; animation-delay: 0.3s; }
+    .eq-bar:nth-child(3) { height: 60%; animation-delay: 0.2s; }
+    .eq-bar:nth-child(4) { height: 80%; animation-delay: 0.4s; }
+
+    @keyframes eq-pulse {
+      0% { transform: scaleY(0.3); opacity: 0.5; }
+      100% { transform: scaleY(1); opacity: 1; }
+    }
+
+    .preset-card-title {
+      font-family: var(--font-display);
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: #ffffff;
+    }
+
+    .preset-card-tags {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+    }
+
+    .micro-tag {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+    }
+
+    .micro-tag.gold {
+      color: var(--gold);
+      background: rgba(245, 158, 11, 0.12);
+      border-color: rgba(245, 158, 11, 0.3);
+    }
+
+    /* Choreography Director Deck (Right Column) */
+    .choreography-director-deck {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 18px;
+      padding: 1.6rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.4rem;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    .director-header-wrap {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 1.2rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .director-title-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .director-chip-row {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .director-chip {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 0.25rem 0.65rem;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+    }
+
+    .director-chip.cyan { color: var(--cyan); border-color: rgba(0, 242, 254, 0.35); background: rgba(0, 242, 254, 0.1); }
+    .director-chip.crimson { color: var(--crimson); border-color: rgba(255, 42, 95, 0.35); background: rgba(255, 42, 95, 0.1); }
+    .director-chip.gold { color: var(--gold); border-color: rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.1); }
+
+    .director-main-heading {
+      font-family: var(--font-display);
+      font-size: 1.65rem;
+      font-weight: 900;
+      letter-spacing: -0.01em;
+      color: #ffffff;
+    }
+
+    /* 15-Second Interactive Visual Timeline Scrubber */
+    .scrubber-strip-box {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      background: rgba(3, 7, 18, 0.6);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 1.1rem 1.35rem;
+    }
+
+    .scrubber-head-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .scrubber-label {
+      font-family: var(--font-display);
+      font-size: 0.85rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--cyan);
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+
+    .scrubber-progress-track {
+      height: 8px;
+      width: 100%;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 2px;
+    }
+
+    .track-segment {
+      height: 100%;
+      background: rgba(255, 255, 255, 0.2);
+      transition: all 0.2s;
+    }
+
+    .track-segment.active {
+      background: linear-gradient(90deg, var(--cyan), var(--crimson));
+      box-shadow: 0 0 10px var(--cyan);
+    }
+
+    /* 5-Stage Timeline Cards Grid */
+    .timeline-stages-deck {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.85rem;
+    }
+
+    @media (max-width: 1100px) {
+      .timeline-stages-deck {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .stage-card-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      transition: all 0.25s ease;
+    }
+
+    .stage-card-box:hover {
+      border-color: var(--cyan);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    }
+
+    .stage-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: var(--cyan);
+    }
+
+    /* LED Intensity Meter (1 to 5 bars) */
+    .led-intensity-meter {
+      display: flex;
+      gap: 3px;
+      align-items: center;
+    }
+
+    .led-bar {
+      width: 4px;
+      height: 10px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 1px;
+    }
+
+    .led-bar.lit {
+      background: var(--crimson);
+      box-shadow: 0 0 6px var(--crimson);
+    }
+
+    .stage-action-desc {
+      font-size: 0.76rem;
+      color: var(--text-main);
+      line-height: 1.45;
+      flex-grow: 1;
+    }
+
+    .stage-audio-cue {
+      font-size: 0.7rem;
+      font-family: var(--font-mono);
+      color: var(--gold);
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    /* Brand Assembly Invariant Card */
+    .brand-reveal-card {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(0, 242, 254, 0.05));
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .brand-reveal-text {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .brand-reveal-title {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--gold);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .brand-reveal-rule {
+      font-size: 0.8rem;
+      color: #ffffff;
+      font-weight: 500;
+    }
+
+    .brand-reveal-badge {
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      font-weight: 800;
+      color: #030712;
+      background: linear-gradient(135deg, var(--gold), #fef08a);
+      padding: 0.35rem 0.85rem;
+      border-radius: 6px;
+      letter-spacing: 0.08em;
+      box-shadow: 0 0 14px rgba(245, 158, 11, 0.4);
+    }
+
+    /* Production Prompt Console Terminal */
+    .prompt-console-terminal {
+      background: #02050b;
+      border: 1px solid var(--border-glow-cyan);
+      border-radius: 14px;
+      padding: 1.35rem;
+      position: relative;
+      box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.8), 0 8px 24px rgba(0, 0, 0, 0.5);
+    }
+
+    .terminal-top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.85rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 0.65rem;
+    }
+
+    .terminal-heading-left {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .terminal-dots {
+      display: flex;
+      gap: 5px;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+    }
+    .dot.red { background: #ef4444; }
+    .dot.yellow { background: #f59e0b; }
+    .dot.green { background: #10b981; }
+
+    .terminal-tag {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: var(--cyan);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .btn-copy-prompt {
+      background: linear-gradient(135deg, var(--crimson), var(--cyan));
+      border: none;
+      color: #ffffff;
+      padding: 0.45rem 1.25rem;
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 0 16px var(--cyan-glow);
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+
+    .btn-copy-prompt:hover {
+      box-shadow: 0 0 25px var(--cyan-glow);
+      transform: translateY(-1px);
+    }
+
+    .prompt-raw-text {
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      line-height: 1.65;
+      color: #e2e8f0;
+      white-space: pre-wrap;
+      max-height: 220px;
+      overflow-y: auto;
+      padding-right: 0.5rem;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       FOOTER: CRYPTOGRAPHIC ATTESTATION & CITATION BAR
+       ═══════════════════════════════════════════════════════════════════════════ */
+    footer {
+      background: rgba(5, 9, 18, 0.98);
+      border-top: 1px solid var(--border-subtle);
+      padding: 1.25rem 2.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      color: var(--text-muted);
+    }
+
+    .footer-left-info {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .checkpoint-token {
+      color: var(--cyan);
+      background: rgba(0, 242, 254, 0.1);
+      padding: 0.2rem 0.6rem;
+      border-radius: 6px;
+      border: 1px solid rgba(0, 242, 254, 0.25);
+    }
+
+    .cli-verify-code {
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--border-subtle);
+      padding: 0.3rem 0.75rem;
+      border-radius: 6px;
+      color: var(--emerald);
+    }
   </style>
 </head>
 <body>
 
+  <!-- Header Deck: Sovereign Command Navigation -->
   <header>
     <div class="brand">
-      <div class="brand-logo">⚔️</div>
+      <div class="brand-logo-frame">
+        <div class="brand-logo-inner">⚔️</div>
+      </div>
       <div>
         <div class="brand-title">ZKAEDI CINEMATRIX // QUANTUM BATTLE OBSERVATORY</div>
         <div class="brand-sub">
-          <span>90 Custom 15s Presets</span>
-          <span>•</span>
-          <span>Zero-Secret Ed25519 Receipts</span>
+          <span>90 Multi-Genre 15s Presets</span>
           <span>•</span>
           <span>RTX 5070 DPO Supervisory Engine</span>
+          <span>•</span>
+          <span>Gate 6-M Autonomous Closed-Loop Healer</span>
         </div>
       </div>
     </div>
-    <div class="status-badge" id="live-badge">ED25519 VERIFIED</div>
+    
+    <div class="header-actions">
+      <div class="badge-pill" id="attest-badge">
+        <span class="pulse-dot"></span>
+        <span>ED25519 VERIFIED</span>
+      </div>
+      <div class="badge-pill cyan">
+        <span class="pulse-dot"></span>
+        <span>RTX 5070 ACTIVE</span>
+      </div>
+      <button class="btn-sound-toggle" id="btn-sound" onclick="toggleAudioFx()">
+        <span id="sound-icon">🔊</span>
+        <span id="sound-label">AUDIO: ON</span>
+      </button>
+    </div>
   </header>
 
-  <div class="container">
+  <div class="app-container">
 
-    <!-- Hero Banner -->
-    <div class="hero-banner">
-      <div class="hero-content">
-        <h1>Cinematic Battles & Quantum Video Arsenal</h1>
-        <p>
-          Ingesting the authoritative 90-preset Quantum Music Video arsenal across 6 categories.
-          Every preset guarantees contiguous 5-stage 3-second choreography, strict brand isolation
-          (<code>ZKAEDI SYSTEMS</code>), physical 3D asset topology certification (Euler &chi;=2),
-          and zero-secret Ed25519 cryptographic receipts.
-        </p>
-        <div class="hero-metrics">
-          <div class="metric-box">
-            <div class="metric-val" id="total-presets-count">90</div>
-            <div class="metric-label">Total Presets</div>
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         HERO: 3D HOLOGRAPHIC BATTLE ARENA & ACTIVE LOD TOPOLOGY INSPECTOR
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div class="hero-arena-stage">
+      
+      <!-- Top Command Bar -->
+      <div class="arena-top-bar">
+        <div class="arena-hero-title">
+          <span class="arena-badge-icon" id="hero-asset-icon">🛸</span>
+          <div>
+            <h2 id="hero-asset-title">APEX COMBAT INTERCEPTOR DRONE</h2>
           </div>
-          <div class="metric-box">
-            <div class="metric-val">15s</div>
-            <div class="metric-label">Duration Envelope</div>
+          <span class="tag-sub">GATE 6-M CERTIFIED</span>
+        </div>
+
+        <div class="cyber-pill-row">
+          <!-- 3D Asset Switcher -->
+          <div class="cyber-pill-group">
+            <button class="cyber-btn active" id="btn-asset-drone" onclick="handleAssetSelect('drone')">🛸 Drone</button>
+            <button class="cyber-btn" id="btn-asset-shield" onclick="handleAssetSelect('shield')">🛡️ Shield</button>
+            <button class="cyber-btn" id="btn-asset-saber" onclick="handleAssetSelect('saber')">⚔️ Saber</button>
           </div>
-          <div class="metric-box">
-            <div class="metric-val">100%</div>
-            <div class="metric-label">Watertight Assets</div>
+
+          <!-- LOD Tier Switcher -->
+          <div class="cyber-pill-group">
+            <button class="cyber-btn" id="btn-lod-0" onclick="handleLodSelect(0)">LOD0 (100%)</button>
+            <button class="cyber-btn active" id="btn-lod-1" onclick="handleLodSelect(1)">LOD1 (60%)</button>
+            <button class="cyber-btn" id="btn-lod-2" onclick="handleLodSelect(2)">LOD2 (35%)</button>
+            <button class="cyber-btn" id="btn-lod-3" onclick="handleLodSelect(3)">LOD3 (15%)</button>
           </div>
-          <div class="metric-box">
-            <div class="metric-val" id="win-rate-val">100%</div>
-            <div class="metric-label">DPO Win Rate</div>
+
+          <!-- Display Mode Toggles -->
+          <div class="cyber-pill-group">
+            <button class="cyber-btn" id="btn-wireframe" onclick="handleToggleWireframe()">🌐 Wireframe</button>
+            <button class="cyber-btn" id="btn-exploded" onclick="handleToggleExploded()">💥 Exploded View</button>
+            <button class="cyber-btn active" id="btn-autorotate" onclick="handleToggleAutoRotate()">🔄 Turntable</button>
           </div>
         </div>
       </div>
 
-      <div class="crypto-card">
-        <div class="crypto-header">
-          <span>🔒 AUTHENTICATION SEAL</span>
-          <span style="color:var(--emerald);">ACTIVE</span>
-        </div>
-        <div class="crypto-line">
-          <span>Protocol:</span>
-          <span class="crypto-val">Ed25519 Append-Only</span>
-        </div>
-        <div class="crypto-line">
-          <span>Verifier:</span>
-          <span class="crypto-val">Zero-Secret CLI</span>
-        </div>
-        <div class="crypto-line">
-          <span>Brand Contract:</span>
-          <span class="crypto-val">ZKAEDI SYSTEMS</span>
-        </div>
-        <div class="crypto-line">
-          <span>GPU Device:</span>
-          <span class="crypto-val">RTX 5070 (8.1 GB)</span>
-        </div>
-        <div class="crypto-line">
-          <span>Topology Euler:</span>
-          <span class="crypto-val">&chi; = 2 (Watertight)</span>
-        </div>
-      </div>
-    </div>
+      <!-- 3D Canvas Stage -->
+      <div class="arena-viewport-wrapper">
+        <canvas id="webgl-canvas-3d"></canvas>
 
-    <!-- Category Navigation -->
-    <div class="cat-nav" id="cat-nav-container">
-      <!-- Injected dynamically -->
-    </div>
-
-    <!-- Main Workspace Grid -->
-    <div class="main-grid">
-      <!-- Preset Master List -->
-      <div class="preset-list" id="preset-list-container">
-        <!-- Injected dynamically -->
-      </div>
-
-      <!-- Detail View -->
-      <div class="detail-view" id="detail-view-container">
-        <div class="detail-head">
-          <div class="detail-title">
-            <span class="tag crimson" id="detail-category-tag">03_cinematic_battles</span>
-            <h2 id="detail-title-text" style="margin-top:0.4rem;">Select a Preset</h2>
-            <div class="detail-tags" id="detail-tags-row"></div>
+        <!-- Floating Holographic Cockpit HUD Overlay -->
+        <div class="hologram-hud-panel">
+          <div class="hud-header">
+            <div class="hud-title-text">
+              <span>TOPOLOGY TELEMETRY</span>
+              <span style="color:var(--text-dim);">//</span>
+              <span style="color:var(--cyan);">GATE 6-M</span>
+            </div>
+            <div class="hud-fps-pill" id="hud-fps-indicator">60 FPS</div>
           </div>
-        </div>
-
-        <!-- 5-Stage Timeline -->
-        <div class="timeline-container">
-          <div class="section-label">Contiguous 5-Stage 15-Second Choreography Timeline</div>
-          <div class="stages-grid" id="stages-grid-container"></div>
-        </div>
-
-        <!-- Prompt Textarea -->
-        <div class="timeline-container">
-          <div class="section-label">Ready-to-Paste Generator Prompt (Image-to-Video / Text-to-Video)</div>
-          <div class="prompt-box">
-            <button class="copy-btn" id="copy-prompt-btn" onclick="copyPrompt()">COPY PROMPT</button>
-            <div class="prompt-text" id="prompt-content-text">Loading...</div>
-          </div>
-        </div>
-
-        <!-- Interactive 3D WebGL Battle Arena & Asset Viewport -->
-        <div class="timeline-container">
-          <div class="section-label">Live 3D WebGL Battle Arena & Active LOD Topology Inspector (Gate 6-M)</div>
           
-          <div class="viewport-section">
-            <div class="viewport-header">
-              <div class="viewport-title">
-                <span id="active-asset-icon">🛸</span>
-                <span id="active-asset-name">Combat Target Drone</span>
-                <span class="status-badge" style="font-size:0.65rem; padding:0.15rem 0.5rem;" id="viewport-watertight-badge">WATERTIGHT CERTIFIED</span>
-              </div>
-              
-              <div class="viewport-controls">
-                <!-- Asset Selector -->
-                <div class="pill-group">
-                  <button class="pill-btn active" id="btn-asset-drone" onclick="switch3DAsset('drone')">🛸 Drone</button>
-                  <button class="pill-btn" id="btn-asset-shield" onclick="switch3DAsset('shield')">🛡️ Shield</button>
-                  <button class="pill-btn" id="btn-asset-saber" onclick="switch3DAsset('saber')">⚔️ Saber</button>
-                </div>
-
-                <!-- LOD Selector -->
-                <div class="pill-group">
-                  <button class="pill-btn" id="btn-lod-0" onclick="switchLOD(0)">LOD0 (100%)</button>
-                  <button class="pill-btn active" id="btn-lod-1" onclick="switchLOD(1)">LOD1 (60%)</button>
-                  <button class="pill-btn" id="btn-lod-2" onclick="switchLOD(2)">LOD2 (35%)</button>
-                  <button class="pill-btn" id="btn-lod-3" onclick="switchLOD(3)">LOD3 (15%)</button>
-                </div>
-
-                <!-- Wireframe & Auto-rotate -->
-                <div class="pill-group">
-                  <button class="pill-btn" id="btn-toggle-wire" onclick="toggleWireframe()">Wireframe</button>
-                  <button class="pill-btn active" id="btn-toggle-rotate" onclick="toggleAutoRotate()">Auto-Rotate</button>
-                </div>
-              </div>
-            </div>
-
-            <div class="viewport-canvas-container">
-              <canvas id="viewport-3d-canvas"></canvas>
-              
-              <div class="viewport-hud" id="viewport-telemetry-hud">
-                <div class="hud-line">
-                  <span class="hud-label">Active LOD:</span>
-                  <span class="hud-val" id="hud-lod-name">LOD1_HIGH</span>
-                </div>
-                <div class="hud-line">
-                  <span class="hud-label">Vertices / Faces:</span>
-                  <span class="hud-val" id="hud-vert-faces">182 / 344</span>
-                </div>
-                <div class="hud-line">
-                  <span class="hud-label">Tri Efficiency:</span>
-                  <span class="hud-val" id="hud-tri-eff">1.89 t/v</span>
-                </div>
-                <div class="hud-line">
-                  <span class="hud-label">Topology Invariant:</span>
-                  <span class="hud-val pass" id="hud-euler">&chi; = 10 (Watertight)</span>
-                </div>
-                <div class="hud-line">
-                  <span class="hud-label">DPO Reward Margin:</span>
-                  <span class="hud-val pass" id="hud-dpo-margin">+0.5081 [PASS]</span>
-                </div>
-                <div class="hud-line">
-                  <span class="hud-label">QEM Surface Error:</span>
-                  <span class="hud-val" id="hud-qem">0.01987</span>
-                </div>
-              </div>
-            </div>
+          <div class="hud-row">
+            <span class="hud-key">Active LOD Tier:</span>
+            <span class="hud-val cyan" id="hud-lod-name">LOD1_HIGH</span>
           </div>
 
-          <!-- 3D Asset Anchor Cards -->
-          <div class="asset-anchor-grid" id="asset-anchor-grid-container" style="margin-top:0.75rem;">
-            <div class="asset-card" onclick="switch3DAsset('drone')" style="cursor:pointer;">
-              <div class="asset-card-title">🛸 Combat Target Drone (Healed LOD Suite)</div>
-              <div class="asset-stats">
-                <span>Certified: artifacts/healed_lods/combat_target_drone_lod*.glb</span>
-                <span>Topology: Closed 2-Manifold (Watertight, Euler &chi; = 10)</span>
-                <span>DPO Margins: LOD1 (+0.5081), LOD2 (+0.4482), LOD3 (+0.5004)</span>
-              </div>
-            </div>
-            <div class="asset-card" onclick="switch3DAsset('shield')" style="cursor:pointer;">
-              <div class="asset-card-title">🛡️ Mecha Titan Shield (Healed LOD Suite)</div>
-              <div class="asset-stats">
-                <span>Certified: artifacts/healed_lods/mecha_titan_shield_lod*.glb</span>
-                <span>Topology: Closed 2-Manifold (Watertight, Euler &chi; = 4)</span>
-                <span>DPO Margins: LOD1 (+0.5592), LOD2 (+0.4749), LOD3 (+0.4047)</span>
-              </div>
-            </div>
-            <div class="asset-card" onclick="switch3DAsset('saber')" style="cursor:pointer;">
-              <div class="asset-card-title">⚔️ Quantum Twin Saber (Healed LOD Suite)</div>
-              <div class="asset-stats">
-                <span>Certified: artifacts/healed_lods/quantum_twin_saber_lod*.glb</span>
-                <span>Topology: Closed 2-Manifold (Watertight, Euler &chi; = 3)</span>
-                <span>DPO Margins: LOD1 (+0.5641), LOD2 (+0.5036), LOD3 (+0.5315)</span>
-              </div>
-            </div>
+          <div class="hud-row">
+            <span class="hud-key">Vertices / Triangles:</span>
+            <span class="hud-val" id="hud-vert-tri">182 / 344</span>
+          </div>
+
+          <div class="hud-row">
+            <span class="hud-key">Triangle Efficiency (t/v):</span>
+            <span class="hud-val cyan" id="hud-tri-eff">1.89 t/v</span>
+          </div>
+
+          <div class="hud-row">
+            <span class="hud-key">Euler Invariant (&chi;):</span>
+            <span class="hud-val emerald" id="hud-euler-status">&chi; = 10 (Watertight)</span>
+          </div>
+
+          <div class="hud-row">
+            <span class="hud-key">DPO Reward Margin (&Delta;r):</span>
+            <span class="hud-val emerald" id="hud-dpo-margin">+0.5081 [PASS]</span>
+          </div>
+
+          <div class="hud-row">
+            <span class="hud-key">QEM Surface Error:</span>
+            <span class="hud-val gold" id="hud-qem-error">0.01987</span>
           </div>
         </div>
 
+        <!-- Floating Camera & Orbit Hint Dock -->
+        <div class="viewport-bottom-bar">
+          <div class="camera-preset-dock">
+            <button class="cyber-btn" onclick="setCameraView('orbit')">🎥 Orbit</button>
+            <button class="cyber-btn" onclick="setCameraView('tactical')">📐 Top Tactical</button>
+            <button class="cyber-btn" onclick="setCameraView('core')">🔍 Core Zoom</button>
+            <button class="cyber-btn" onclick="resetCameraView()">🔄 Reset</button>
+          </div>
+
+          <div class="viewport-orbit-hint">Left Drag: Orbit Camera • Scroll: Zoom • Right Drag: Pan</div>
+        </div>
       </div>
+
+      <!-- 3D Asset Trio Comparison Strip -->
+      <div class="asset-comparison-strip">
+        <div class="asset-card active" id="card-asset-drone" onclick="handleAssetSelect('drone')">
+          <div class="asset-card-head">
+            <span class="asset-card-title">🛸 Combat Target Drone</span>
+            <span class="asset-card-badge">Euler &chi; = 10</span>
+          </div>
+          <div class="asset-card-stats">
+            <span>Gate 6-M Watertight Battery</span>
+            <span style="color:var(--emerald); font-weight:700;">DPO: +0.5081</span>
+          </div>
+        </div>
+
+        <div class="asset-card" id="card-asset-shield" onclick="handleAssetSelect('shield')">
+          <div class="asset-card-head">
+            <span class="asset-card-title">🛡️ Mecha Titan Shield</span>
+            <span class="asset-card-badge">Euler &chi; = 4</span>
+          </div>
+          <div class="asset-card-stats">
+            <span>Gate 6-M Watertight Battery</span>
+            <span style="color:var(--emerald); font-weight:700;">DPO: +0.5592</span>
+          </div>
+        </div>
+
+        <div class="asset-card" id="card-asset-saber" onclick="handleAssetSelect('saber')">
+          <div class="asset-card-head">
+            <span class="asset-card-title">⚔️ Quantum Twin Saber</span>
+            <span class="asset-card-badge">Euler &chi; = 3</span>
+          </div>
+          <div class="asset-card-stats">
+            <span>Gate 6-M Watertight Battery</span>
+            <span style="color:var(--emerald); font-weight:700;">DPO: +0.5641</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         CATEGORY NAVIGATION RIBBON (6 GENRES)
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div class="category-ribbon-bar" id="category-tabs-container">
+      <!-- Dynamic category tabs injected by JS -->
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         SPLIT STUDIO WORKSPACE (PRESET MATRIX + CHOREOGRAPHY DIRECTOR)
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div class="studio-workspace-grid">
+
+      <!-- Left Column: Preset Arsenal Browser -->
+      <div class="preset-browser-deck">
+        <div class="browser-deck-head">
+          <span class="browser-title">Preset Arsenal</span>
+          <span class="micro-tag gold" id="cat-count-badge">15 Presets</span>
+        </div>
+        
+        <input type="text" class="search-input-box" id="search-filter" placeholder="🔍 Search title, sound, motion..." oninput="handleSearchFilter()">
+        
+        <div class="preset-cards-scroll-box" id="preset-list-container">
+          <!-- Dynamic preset cards injected by JS -->
+        </div>
+      </div>
+
+      <!-- Right Column: Choreography Director Deck -->
+      <div class="choreography-director-deck">
+        
+        <div class="director-header-wrap">
+          <div class="director-title-group">
+            <div class="director-chip-row">
+              <span class="director-chip crimson" id="chip-category">03_cinematic_battles</span>
+              <span class="director-chip cyan" id="chip-soundtrack">🎵 Synth-Metal</span>
+              <span class="director-chip gold" id="chip-camera">🎥 Dynamic Arc Shot</span>
+              <span class="director-chip">⏱️ 15.0s</span>
+              <span class="director-chip">📐 9:16 Vertical</span>
+            </div>
+            <h1 class="director-main-heading" id="director-title">Gravity Blade Ascension</h1>
+          </div>
+        </div>
+
+        <!-- 15-Second Interactive Visual Timeline Scrubber -->
+        <div class="scrubber-strip-box">
+          <div class="scrubber-head-row">
+            <span class="scrubber-label">Contiguous 5-Stage 15-Second Choreography Timeline</span>
+            <span style="font-family:var(--font-mono); font-size:0.75rem; color:var(--cyan);" id="scrubber-time-label">0.0s - 15.0s</span>
+          </div>
+          
+          <div class="scrubber-progress-track">
+            <div class="track-segment active" id="track-seg-0"></div>
+            <div class="track-segment active" id="track-seg-1"></div>
+            <div class="track-segment active" id="track-seg-2"></div>
+            <div class="track-segment active" id="track-seg-3"></div>
+            <div class="track-segment active" id="track-seg-4"></div>
+          </div>
+        </div>
+
+        <!-- 5-Stage Timeline Cards Grid -->
+        <div class="timeline-stages-deck" id="stages-grid-box">
+          <!-- Dynamic 5 stage cards injected by JS -->
+        </div>
+
+        <!-- Brand Assembly Signature Invariant -->
+        <div class="brand-reveal-card">
+          <div class="brand-reveal-text">
+            <span class="brand-reveal-title">Stage 5 Invariant • Brand Assembly (11.5s - 14.5s)</span>
+            <span class="brand-reveal-rule">Individual quantum glyphs assemble into brand title with zero spoken dialogue.</span>
+          </div>
+          <span class="brand-reveal-badge">ZKAEDI SYSTEMS</span>
+        </div>
+
+        <!-- Production Diffusion Prompt Console -->
+        <div class="prompt-console-terminal">
+          <div class="terminal-top-row">
+            <div class="terminal-heading-left">
+              <div class="terminal-dots">
+                <span class="dot red"></span>
+                <span class="dot yellow"></span>
+                <span class="dot green"></span>
+              </div>
+              <span class="terminal-tag">⚡ PRODUCTION READY-TO-PASTE PROMPT</span>
+            </div>
+            <button class="btn-copy-prompt" id="btn-copy-prompt" onclick="handleCopyPrompt()">
+              <span>📋</span>
+              <span id="copy-label">COPY PROMPT</span>
+            </button>
+          </div>
+          
+          <div class="prompt-raw-text" id="prompt-content-text">Loading preset prompt...</div>
+        </div>
+
+      </div>
+
     </div>
 
   </div>
 
-  <script>
-    let activeCategory = "03_cinematic_battles";
-    let activePresetId = null;
-    let dataFeed = null;
+  <!-- Footer Cryptographic Ledger Bar -->
+  <footer>
+    <div class="footer-left-info">
+      <span>🔒 Security Engine: <strong>Ed25519 Append-Only Attestation</strong></span>
+      <span>•</span>
+      <span>Ledger Checkpoint: <span class="checkpoint-token">344282b2dc712e96...</span></span>
+      <span>•</span>
+      <span>173 Hardware-Verified Events</span>
+    </div>
+    <div>
+      <span>Zero-Secret CLI Audit: <code class="cli-verify-code">python -m zkaedi.verify_cli docs/evidence/zkaedi_dpo_attestation.db</code></span>
+    </div>
+  </footer>
 
-    const CATEGORIES = [
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       JAVASCRIPT APPLICATION CORE & THREE.JS 3D ENGINE
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <script>
+    // ═════════════════════════════════════════════════════════════════════════
+    // 1. DATA CONSTANTS & GATE 6-M CERTIFIED TELEMETRY
+    // ═════════════════════════════════════════════════════════════════════════
+    
+    const GENRE_CATEGORIES = [
       { id: "03_cinematic_battles", label: "⚔️ Cinematic Battles", count: 15 },
       { id: "01_audio_reactive_effects", label: "⚡ Audio-Reactive Effects", count: 15 },
       { id: "02_dance_choreography", label: "💃 Dance Choreography", count: 15 },
@@ -861,138 +1493,9 @@
       { id: "06_ultimate_combined_masterpieces", label: "👑 Ultimate Masterpieces", count: 15 }
     ];
 
-    function init() {
-      renderCategoryNav();
-
-      if (window.ZKAEDI_QUANTUM_MUSIC_VIDEO) {
-        dataFeed = window.ZKAEDI_QUANTUM_MUSIC_VIDEO;
-        updateMetrics();
-        selectCategory(activeCategory);
-      } else {
-        // Fallback fetch if not in global window
-        fetch("quantum_music_video_data.js")
-          .then(r => r.text())
-          .then(txt => {
-            const jsonPart = txt.substring(txt.indexOf("{"), txt.lastIndexOf("}") + 1);
-            dataFeed = JSON.parse(jsonPart);
-            updateMetrics();
-            selectCategory(activeCategory);
-          })
-          .catch(err => {
-            console.warn("Local data load:", err);
-          });
-      }
-    }
-
-    function renderCategoryNav() {
-      const nav = document.getElementById("cat-nav-container");
-      nav.innerHTML = CATEGORIES.map(c => `
-        <button class="cat-btn ${c.id === activeCategory ? 'active' : ''}" onclick="selectCategory('${c.id}')">
-          <span>${c.label}</span>
-          <span style="opacity:0.6;font-size:0.75rem;">(${c.count})</span>
-        </button>
-      `).join("");
-    }
-
-    function updateMetrics() {
-      if (!dataFeed) return;
-      if (dataFeed.evaluation_metrics) {
-        const wr = dataFeed.evaluation_metrics.win_rate;
-        if (wr !== undefined) {
-          document.getElementById("win-rate-val").textContent = (wr * 100).toFixed(0) + "%";
-        }
-      }
-    }
-
-    function selectCategory(catId) {
-      activeCategory = catId;
-      renderCategoryNav();
-
-      if (!dataFeed || !dataFeed.presets) return;
-      const presetsInCat = dataFeed.presets.filter(p => p.category === catId);
-
-      const listContainer = document.getElementById("preset-list-container");
-      listContainer.innerHTML = presetsInCat.map(p => `
-        <div class="preset-item ${p.id === activePresetId ? 'selected' : ''}" onclick="selectPreset('${p.id}')">
-          <div class="preset-header">
-            <span class="preset-id">${p.id}</span>
-            <span class="tag gold" style="font-size:0.65rem;">${p.soundtrack_style}</span>
-          </div>
-          <div class="preset-title">${p.title}</div>
-          <div class="preset-motion">${p.signature_motion}</div>
-        </div>
-      `).join("");
-
-      if (presetsInCat.length > 0) {
-        const firstId = (activePresetId && presetsInCat.some(p => p.id === activePresetId))
-          ? activePresetId
-          : presetsInCat[0].id;
-        selectPreset(firstId);
-      }
-    }
-
-    function selectPreset(presetId) {
-      activePresetId = presetId;
-
-      document.querySelectorAll(".preset-item").forEach(el => {
-        el.classList.remove("selected");
-      });
-      // Add selected class to matching item
-      const items = document.querySelectorAll(".preset-item");
-      items.forEach(el => {
-        if (el.querySelector(".preset-id")?.textContent === presetId) {
-          el.classList.add("selected");
-        }
-      });
-
-      if (!dataFeed || !dataFeed.presets) return;
-      const preset = dataFeed.presets.find(p => p.id === presetId);
-      if (!preset) return;
-
-      document.getElementById("detail-category-tag").textContent = preset.category;
-      document.getElementById("detail-title-text").textContent = preset.title;
-
-      const tagsRow = document.getElementById("detail-tags-row");
-      tagsRow.innerHTML = `
-        <span class="tag cyan">🎵 ${preset.soundtrack_style}</span>
-        <span class="tag crimson">🎥 ${preset.camera_signature}</span>
-        <span class="tag gold">🔤 ${preset.typography_style}</span>
-        <span class="tag">⏱️ 15s • 9:16</span>
-      `;
-
-      // Render Stages
-      const stagesContainer = document.getElementById("stages-grid-container");
-      stagesContainer.innerHTML = (preset.timeline || []).map(st => `
-        <div class="stage-card">
-          <div class="stage-header">
-            <span>${st.start_s}-${st.end_s}s</span>
-            <span class="stage-intensity">L${st.visual_intensity}</span>
-          </div>
-          <div class="stage-action">${st.action}</div>
-          <div class="stage-audio">🔊 ${st.audio_event}</div>
-        </div>
-      `).join("");
-
-      // Render Prompt
-      document.getElementById("prompt-content-text").textContent = preset.ready_to_paste_prompt || "";
-    }
-
-    function copyPrompt() {
-      const text = document.getElementById("prompt-content-text").textContent;
-      navigator.clipboard.writeText(text).then(() => {
-        const btn = document.getElementById("copy-prompt-btn");
-        btn.textContent = "COPIED! ✓";
-        setTimeout(() => { btn.textContent = "COPY PROMPT"; }, 2000);
-      });
-    }
-
-    // ═════════════════════════════════════════════════════════════════════════
-    // 🔱 LIVE 3D WEBGL BATTLE ARENA & ACTIVE LOD TOPOLOGY ENGINE (GATE 6-M)
-    // ═════════════════════════════════════════════════════════════════════════
-
-    const ASSET_LOD_DATA = {
+    const ASSET_LOD_METRICS = {
       drone: {
-        name: "Combat Target Drone",
+        title: "APEX COMBAT INTERCEPTOR DRONE",
         icon: "🛸",
         lods: [
           { name: "LOD0_MASTER", verts: 298, faces: 576, triEff: 1.93, euler: "10 (Watertight)", margin: "BASELINE", qem: "0.00000" },
@@ -1002,7 +1505,7 @@
         ]
       },
       shield: {
-        name: "Mecha Titan Shield",
+        title: "AEGIS QUANTUM TITAN SHIELD",
         icon: "🛡️",
         lods: [
           { name: "LOD0_MASTER", verts: 650, faces: 1292, triEff: 1.99, euler: "4 (Watertight)", margin: "BASELINE", qem: "0.00000" },
@@ -1012,10 +1515,10 @@
         ]
       },
       saber: {
-        name: "Quantum Twin Saber",
+        title: "DUAL SINGULARITY QUANTUM SABER",
         icon: "⚔️",
         lods: [
-          { name: "LOD0_MASTER", verts: 260, faces: 512, triEff: 1.97, euler: "4 (Watertight)", margin: "BASELINE", qem: "0.00000" },
+          { name: "LOD0_MASTER", verts: 260, faces: 512, triEff: 1.97, euler: "3 (Watertight)", margin: "BASELINE", qem: "0.00000" },
           { name: "LOD1_HIGH",   verts: 156, faces: 306, triEff: 1.96, euler: "3 (Watertight)", margin: "+0.5641 [PASS]", qem: "0.00750" },
           { name: "LOD2_MED",    verts: 131, faces: 256, triEff: 1.95, euler: "3 (Watertight)", margin: "+0.5036 [PASS]", qem: "0.00784" },
           { name: "LOD3_LOW",    verts: 131, faces: 256, triEff: 1.95, euler: "3 (Watertight)", margin: "+0.5315 [PASS]", qem: "0.00815" }
@@ -1023,236 +1526,669 @@
       }
     };
 
-    let active3DAssetKey = "drone";
-    let activeLODIndex = 1; // Start at LOD1 (Healed High)
-    let isWireframe = false;
-    let isAutoRotate = true;
+    // State Variables
+    let currentCategory = "03_cinematic_battles";
+    let currentPresetId = "03_-01";
+    let activeAsset = "drone";
+    let activeLodIdx = 1; // Default to LOD1 High
+    let wireframeMode = false;
+    let explodedView = false;
+    let autoRotate = true;
+    let audioFxEnabled = true;
+    let audioCtx = null;
+    let globalData = null;
 
-    let scene3D, camera3D, renderer3D, controls3D, currentMeshGroup;
+    // Three.js Runtime Globals
+    let scene, camera, renderer, controls;
+    let assetRootGroup = null;
+    let starParticles = null;
+    let floorScannerRing = null;
+    let lastRenderTime = performance.now();
+    let frameCounter = 0;
+    let currentFps = 60;
 
-    function init3DViewport() {
-      const container = document.querySelector(".viewport-canvas-container");
-      const canvas = document.getElementById("viewport-3d-canvas");
-      if (!canvas || !window.THREE) return;
+    // Exploded View Submesh references
+    let animatableParts = [];
 
-      const width = container.clientWidth || 800;
-      const height = container.clientHeight || 380;
+    // ═════════════════════════════════════════════════════════════════════════
+    // 2. SYNTHESIZED CYBERNETIC SOUND FX (WEB AUDIO API)
+    // ═════════════════════════════════════════════════════════════════════════
 
-      scene3D = new THREE.Scene();
-      scene3D.fog = new THREE.FogExp2(0x07090e, 0.05);
-
-      camera3D = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-      camera3D.position.set(0, 1.8, 4.5);
-
-      renderer3D = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-      renderer3D.setSize(width, height);
-      renderer3D.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      renderer3D.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer3D.toneMappingExposure = 1.2;
-
-      controls3D = new THREE.OrbitControls(camera3D, canvas);
-      controls3D.enableDamping = true;
-      controls3D.dampingFactor = 0.05;
-      controls3D.maxDistance = 12;
-      controls3D.minDistance = 1.5;
-
-      // Cyber Grid Helper
-      const grid = new THREE.GridHelper(10, 20, 0x00f2fe, 0x1e293b);
-      grid.position.y = -1.2;
-      scene3D.add(grid);
-
-      // Cyber Lighting
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-      scene3D.add(ambientLight);
-
-      const cyanLight = new THREE.PointLight(0x00f2fe, 2.5, 15);
-      cyanLight.position.set(3, 3, 3);
-      scene3D.add(cyanLight);
-
-      const crimsonLight = new THREE.PointLight(0xef4444, 2.5, 15);
-      crimsonLight.position.set(-3, -1, -3);
-      scene3D.add(crimsonLight);
-
-      // Asset Container
-      currentMeshGroup = new THREE.Group();
-      scene3D.add(currentMeshGroup);
-
-      buildActive3DMesh();
-      updateHUD();
-
-      // Render Loop
-      function animate() {
-        requestAnimationFrame(animate);
-        if (isAutoRotate && currentMeshGroup) {
-          currentMeshGroup.rotation.y += 0.008;
-        }
-        controls3D.update();
-        renderer3D.render(scene3D, camera3D);
+    function initAudio() {
+      if (!audioCtx && (window.AudioContext || window.webkitAudioContext)) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       }
-      animate();
+    }
 
-      window.addEventListener("resize", () => {
-        if (!container || !renderer3D) return;
-        const w = container.clientWidth;
-        const h = container.clientHeight;
-        camera3D.aspect = w / h;
-        camera3D.updateProjectionMatrix();
-        renderer3D.setSize(w, h);
+    function playSound(type) {
+      if (!audioFxEnabled) return;
+      try {
+        initAudio();
+        if (!audioCtx) return;
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        const now = audioCtx.currentTime;
+
+        if (type === 'click') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(800, now);
+          osc.frequency.exponentialRampToValueAtTime(300, now + 0.05);
+          gain.gain.setValueAtTime(0.12, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+          osc.start(now);
+          osc.stop(now + 0.05);
+        } else if (type === 'switch') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(350, now);
+          osc.frequency.exponentialRampToValueAtTime(1100, now + 0.09);
+          gain.gain.setValueAtTime(0.15, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+          osc.start(now);
+          osc.stop(now + 0.09);
+        } else if (type === 'explode') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(240, now);
+          osc.frequency.exponentialRampToValueAtTime(80, now + 0.18);
+          gain.gain.setValueAtTime(0.18, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+          osc.start(now);
+          osc.stop(now + 0.18);
+        } else if (type === 'copy') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(520, now);
+          osc.frequency.setValueAtTime(1040, now + 0.06);
+          gain.gain.setValueAtTime(0.15, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+          osc.start(now);
+          osc.stop(now + 0.14);
+        }
+      } catch (e) {
+        // Audio policy ignore
+      }
+    }
+
+    function toggleAudioFx() {
+      audioFxEnabled = !audioFxEnabled;
+      const label = document.getElementById("sound-label");
+      const icon = document.getElementById("sound-icon");
+      if (audioFxEnabled) {
+        label.textContent = "AUDIO: ON";
+        icon.textContent = "🔊";
+        playSound('click');
+      } else {
+        label.textContent = "AUDIO: OFF";
+        icon.textContent = "🔇";
+      }
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // 3. UI INITIALIZATION & CATEGORY/PRESET ROUTING
+    // ═════════════════════════════════════════════════════════════════════════
+
+    function initApplication() {
+      renderCategoryTabs();
+
+      if (window.ZKAEDI_QUANTUM_MUSIC_VIDEO) {
+        globalData = window.ZKAEDI_QUANTUM_MUSIC_VIDEO;
+        loadCategoryPres(currentCategory);
+      } else {
+        // Fallback fetch
+        fetch("quantum_music_video_data.js")
+          .then(r => r.text())
+          .then(txt => {
+            const jsonPart = txt.substring(txt.indexOf("{"), txt.lastIndexOf("}") + 1);
+            globalData = JSON.parse(jsonPart);
+            loadCategoryPres(currentCategory);
+          })
+          .catch(err => console.warn("Fallback data fetch:", err));
+      }
+
+      initThreeJSArena();
+    }
+
+    function renderCategoryTabs() {
+      const container = document.getElementById("category-tabs-container");
+      container.innerHTML = GENRE_CATEGORIES.map(c => `
+        <button class="cat-tab-btn ${c.id === currentCategory ? 'active' : ''}" onclick="handleCategoryChange('${c.id}')">
+          <span>${c.label}</span>
+          <span class="cat-count-pill">${c.count}</span>
+        </button>
+      `).join("");
+    }
+
+    function handleCategoryChange(catId) {
+      playSound('switch');
+      currentCategory = catId;
+      renderCategoryTabs();
+      loadCategoryPres(catId);
+    }
+
+    function loadCategoryPres(catId) {
+      if (!globalData || !globalData.presets) return;
+      const presetsInCat = globalData.presets.filter(p => p.category === catId);
+      document.getElementById("cat-count-badge").textContent = `${presetsInCat.length} Presets`;
+
+      renderPresetCards(presetsInCat);
+
+      if (presetsInCat.length > 0) {
+        const targetId = (presetsInCat.some(p => p.id === currentPresetId)) ? currentPresetId : presetsInCat[0].id;
+        displayActivePreset(targetId);
+      }
+    }
+
+    function renderPresetCards(presets) {
+      const container = document.getElementById("preset-list-container");
+      container.innerHTML = presets.map(p => `
+        <div class="preset-card-item ${p.id === currentPresetId ? 'selected' : ''}" onclick="handlePresetClick('${p.id}')">
+          <div class="preset-card-top">
+            <span class="preset-id-badge">${p.id}</span>
+            <div class="eq-bars-anim">
+              <span class="eq-bar"></span>
+              <span class="eq-bar"></span>
+              <span class="eq-bar"></span>
+              <span class="eq-bar"></span>
+            </div>
+          </div>
+          <div class="preset-card-title">${p.title}</div>
+          <div class="preset-card-tags">
+            <span class="micro-tag gold">🎵 ${p.soundtrack_style}</span>
+            <span class="micro-tag">🎥 ${p.camera_signature}</span>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function handleSearchFilter() {
+      const query = document.getElementById("search-filter").value.toLowerCase();
+      if (!globalData || !globalData.presets) return;
+
+      const filtered = globalData.presets.filter(p => {
+        const inCat = p.category === currentCategory;
+        const match = p.title.toLowerCase().includes(query) ||
+                      p.soundtrack_style.toLowerCase().includes(query) ||
+                      p.signature_motion.toLowerCase().includes(query) ||
+                      p.id.toLowerCase().includes(query);
+        return inCat && match;
+      });
+
+      renderPresetCards(filtered);
+    }
+
+    function handlePresetClick(presetId) {
+      playSound('click');
+      displayActivePreset(presetId);
+    }
+
+    function displayActivePreset(presetId) {
+      currentPresetId = presetId;
+
+      // Update card active classes
+      const cards = document.querySelectorAll(".preset-card-item");
+      cards.forEach(el => {
+        const idSpan = el.querySelector(".preset-id-badge");
+        if (idSpan && idSpan.textContent === presetId) {
+          el.classList.add("selected");
+        } else {
+          el.classList.remove("selected");
+        }
+      });
+
+      if (!globalData || !globalData.presets) return;
+      const preset = globalData.presets.find(p => p.id === presetId);
+      if (!preset) return;
+
+      document.getElementById("director-title").textContent = preset.title;
+      document.getElementById("chip-category").textContent = preset.category;
+      document.getElementById("chip-soundtrack").textContent = "🎵 " + preset.soundtrack_style;
+      document.getElementById("chip-camera").textContent = "🎥 " + preset.camera_signature;
+
+      // Render 5 timeline stages
+      const stagesContainer = document.getElementById("stages-grid-box");
+      stagesContainer.innerHTML = (preset.timeline || []).map(st => {
+        const intensity = parseInt(st.visual_intensity) || 3;
+        let ledsHtml = '';
+        for (let i = 1; i <= 5; i++) {
+          ledsHtml += `<span class="led-bar ${i <= intensity ? 'lit' : ''}"></span>`;
+        }
+
+        return `
+          <div class="stage-card-box">
+            <div class="stage-card-header">
+              <span>${st.start_s}-${st.end_s}s</span>
+              <div class="led-intensity-meter" title="Visual Intensity L${intensity}">
+                ${ledsHtml}
+              </div>
+            </div>
+            <div class="stage-action-desc">${st.action}</div>
+            <div class="stage-audio-cue">🔊 ${st.audio_event}</div>
+          </div>
+        `;
+      }).join("");
+
+      // Render raw prompt text
+      document.getElementById("prompt-content-text").textContent = preset.ready_to_paste_prompt || "";
+    }
+
+    function handleCopyPrompt() {
+      playSound('copy');
+      const text = document.getElementById("prompt-content-text").textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById("btn-copy-prompt");
+        const label = document.getElementById("copy-label");
+        label.textContent = "COPIED TO CLIPBOARD! ✓";
+        btn.style.background = "linear-gradient(135deg, #10b981, #00f2fe)";
+        btn.style.boxShadow = "0 0 25px rgba(16, 185, 129, 0.6)";
+        
+        setTimeout(() => {
+          label.textContent = "COPY PROMPT";
+          btn.style.background = "linear-gradient(135deg, var(--crimson), var(--cyan))";
+          btn.style.boxShadow = "0 0 16px var(--cyan-glow)";
+        }, 2200);
       });
     }
 
-    function createCyberMaterial(colorHex, emissiveHex = 0x000000, roughness = 0.25, metalness = 0.85) {
+    // ═════════════════════════════════════════════════════════════════════════
+    // 4. THREE.JS HOLOGRAPHIC 3D BATTLE ARENA ENGINE
+    // ═════════════════════════════════════════════════════════════════════════
+
+    function initThreeJSArena() {
+      const canvas = document.getElementById("webgl-canvas-3d");
+      const wrapper = document.querySelector(".arena-viewport-wrapper");
+      if (!canvas || !window.THREE) return;
+
+      const width = wrapper.clientWidth || 1000;
+      const height = wrapper.clientHeight || 520;
+
+      // Scene & Atmospheric Space Fog
+      scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x030712, 0.04);
+
+      // Perspective Camera
+      camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+      camera.position.set(0, 1.8, 4.4);
+
+      // WebGL Renderer with ACES Tone Mapping
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.35;
+
+      // OrbitControls with smooth inertia
+      controls = new THREE.OrbitControls(camera, canvas);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.maxDistance = 12;
+      controls.minDistance = 1.2;
+
+      // Cybernetic Ground Pedestal & Scanning Grid
+      const grid = new THREE.GridHelper(14, 28, 0x00f2fe, 0x172554);
+      grid.position.y = -1.35;
+      scene.add(grid);
+
+      // Concentric Cybernetic Rings
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0x00f2fe, wireframe: true, transparent: true, opacity: 0.35 });
+      const floorRing1 = new THREE.Mesh(new THREE.RingGeometry(1.8, 1.85, 32), ringMat);
+      floorRing1.rotation.x = -Math.PI / 2;
+      floorRing1.position.y = -1.34;
+      scene.add(floorRing1);
+
+      const floorRing2 = new THREE.Mesh(new THREE.RingGeometry(3.2, 3.25, 48), ringMat);
+      floorRing2.rotation.x = -Math.PI / 2;
+      floorRing2.position.y = -1.34;
+      scene.add(floorRing2);
+
+      // Radar Scanner Beam Mesh
+      const scanGeo = new THREE.RingGeometry(0.1, 3.2, 32, 1, 0, Math.PI / 3);
+      const scanMat = new THREE.MeshBasicMaterial({ color: 0x00f2fe, transparent: true, opacity: 0.18, side: THREE.DoubleSide });
+      floorScannerRing = new THREE.Mesh(scanGeo, scanMat);
+      floorScannerRing.rotation.x = -Math.PI / 2;
+      floorScannerRing.position.y = -1.33;
+      scene.add(floorScannerRing);
+
+      // Starfield Dust Particles
+      const starGeo = new THREE.BufferGeometry();
+      const starCount = 1000;
+      const starCoords = new Float32Array(starCount * 3);
+      for (let i = 0; i < starCount * 3; i += 3) {
+        starCoords[i] = (Math.random() - 0.5) * 50;
+        starCoords[i + 1] = (Math.random() - 0.5) * 50;
+        starCoords[i + 2] = (Math.random() - 0.5) * 50;
+      }
+      starGeo.setAttribute('position', new THREE.BufferAttribute(starCoords, 3));
+      const starMat = new THREE.PointsMaterial({ color: 0x94a3b8, size: 0.085, transparent: true, opacity: 0.7 });
+      starParticles = new THREE.Points(starGeo, starMat);
+      scene.add(starParticles);
+
+      // Multi-Point Cybernetic Cinematic Lighting
+      const ambient = new THREE.AmbientLight(0xffffff, 0.85);
+      scene.add(ambient);
+
+      const cyanKey = new THREE.PointLight(0x00f2fe, 3.8, 20);
+      cyanKey.position.set(4, 4, 4);
+      scene.add(cyanKey);
+
+      const crimsonRim = new THREE.PointLight(0xff2a5f, 4.0, 20);
+      crimsonRim.position.set(-4, -1, -4);
+      scene.add(crimsonRim);
+
+      const goldFill = new THREE.PointLight(0xf59e0b, 2.2, 12);
+      goldFill.position.set(0, 3, -3);
+      scene.add(goldFill);
+
+      // Asset Container Group
+      assetRootGroup = new THREE.Group();
+      scene.add(assetRootGroup);
+
+      // Construct Initial 3D Model & Telemetry
+      constructModelGeometry();
+      refreshHudTelemetry();
+
+      // Render Loop & FPS Counter
+      function animateLoop(time) {
+        requestAnimationFrame(animateLoop);
+
+        // Track FPS
+        frameCounter++;
+        if (time - lastRenderTime >= 1000) {
+          currentFps = Math.round((frameCounter * 1000) / (time - lastRenderTime));
+          document.getElementById("hud-fps-indicator").textContent = currentFps + " FPS";
+          frameCounter = 0;
+          lastRenderTime = time;
+        }
+
+        // Turntable Auto-Rotation
+        if (autoRotate && assetRootGroup) {
+          assetRootGroup.rotation.y += 0.007;
+        }
+
+        // Radar sweep rotation
+        if (floorScannerRing) {
+          floorScannerRing.rotation.z -= 0.015;
+        }
+
+        // Starfield drift
+        if (starParticles) {
+          starParticles.rotation.y += 0.0002;
+        }
+
+        // Exploded view animation interpolation
+        if (animatableParts.length > 0) {
+          animatableParts.forEach(p => {
+            const targetPos = explodedView ? p.explodedPos : p.origPos;
+            p.mesh.position.lerp(targetPos, 0.08);
+          });
+        }
+
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      requestAnimationFrame(animateLoop);
+
+      // Responsive Resize
+      window.addEventListener("resize", () => {
+        if (!wrapper || !renderer) return;
+        const w = wrapper.clientWidth;
+        const h = wrapper.clientHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      });
+    }
+
+    // Material Generator with PBR Standards
+    function createSciFiMaterial(colorHex, emissiveHex = 0x000000, roughness = 0.25, metalness = 0.85) {
       return new THREE.MeshStandardMaterial({
         color: colorHex,
         emissive: emissiveHex,
-        emissiveIntensity: emissiveHex ? 0.6 : 0.0,
+        emissiveIntensity: emissiveHex ? 0.75 : 0.0,
         roughness: roughness,
         metalness: metalness,
-        wireframe: isWireframe
+        wireframe: wireframeMode
       });
     }
 
-    function buildActive3DMesh() {
-      if (!currentMeshGroup) return;
+    // ═════════════════════════════════════════════════════════════════════════
+    // 5. PROCEDURAL 3D SCI-FI MODELS WITH EXPLODED VIEW SUPPORT
+    // ═════════════════════════════════════════════════════════════════════════
 
-      while (currentMeshGroup.children.length > 0) {
-        currentMeshGroup.remove(currentMeshGroup.children[0]);
+    function constructModelGeometry() {
+      if (!assetRootGroup) return;
+
+      // Clear existing meshes
+      while (assetRootGroup.children.length > 0) {
+        assetRootGroup.remove(assetRootGroup.children[0]);
       }
+      animatableParts = [];
 
-      const matMetal = createCyberMaterial(0x1e293b, 0x000000, 0.2, 0.9);
-      const matCyan = createCyberMaterial(0x00f2fe, 0x00f2fe, 0.1, 0.7);
-      const matCrimson = createCyberMaterial(0xef4444, 0xef4444, 0.1, 0.7);
-      const matGold = createCyberMaterial(0xffb703, 0xffb703, 0.15, 0.8);
+      const matArmor = createSciFiMaterial(0x111827, 0x000000, 0.2, 0.95);
+      const matCyan = createSciFiMaterial(0x00f2fe, 0x00f2fe, 0.1, 0.85);
+      const matCrimson = createSciFiMaterial(0xff2a5f, 0xff2a5f, 0.1, 0.85);
+      const matGold = createSciFiMaterial(0xf59e0b, 0xf59e0b, 0.15, 0.9);
 
-      const lodRes = [1.0, 0.6, 0.35, 0.15][activeLODIndex] || 0.6;
+      const lodMultipliers = [1.0, 0.6, 0.35, 0.15];
+      const ratio = lodMultipliers[activeLodIdx] || 0.6;
 
-      if (active3DAssetKey === "drone") {
-        // Combat Target Drone
-        const segs = Math.max(6, Math.floor(24 * lodRes));
-        const bodyGeo = new THREE.SphereGeometry(0.7, segs, Math.max(4, Math.floor(segs * 0.75)));
-        const body = new THREE.Mesh(bodyGeo, matMetal);
-        currentMeshGroup.add(body);
+      if (activeAsset === "drone") {
+        // 🛸 APEX COMBAT INTERCEPTOR DRONE
 
-        const ringGeo = new THREE.TorusGeometry(1.0, 0.08, 6, Math.max(8, Math.floor(28 * lodRes)));
-        const ring = new THREE.Mesh(ringGeo, matCyan);
-        ring.rotation.x = Math.PI / 2;
-        currentMeshGroup.add(ring);
+        // 1. Central Armored Fuselage Core
+        const segs = Math.max(6, Math.floor(28 * ratio));
+        const coreGeo = new THREE.IcosahedronGeometry(0.72, Math.max(0, Math.floor(3 * ratio)));
+        const coreMesh = new THREE.Mesh(coreGeo, matArmor);
+        assetRootGroup.add(coreMesh);
+        animatableParts.push({ mesh: coreMesh, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0, 0) });
 
-        // 4 Thruster Pods
+        // 2. Dual Concentric Quantum Stabilizer Rings
+        const ringGeo1 = new THREE.TorusGeometry(1.15, 0.07, 6, Math.max(8, Math.floor(32 * ratio)));
+        const ring1 = new THREE.Mesh(ringGeo1, matCyan);
+        ring1.rotation.x = Math.PI / 2;
+        assetRootGroup.add(ring1);
+        animatableParts.push({ mesh: ring1, origPos: new THREE.Vector3(0, 0.1, 0), explodedPos: new THREE.Vector3(0, 0.65, 0) });
+
+        const ringGeo2 = new THREE.TorusGeometry(1.35, 0.05, 4, Math.max(8, Math.floor(28 * ratio)));
+        const ring2 = new THREE.Mesh(ringGeo2, matCyan);
+        ring2.rotation.x = Math.PI / 2;
+        ring2.rotation.y = Math.PI / 4;
+        assetRootGroup.add(ring2);
+        animatableParts.push({ mesh: ring2, origPos: new THREE.Vector3(0, -0.1, 0), explodedPos: new THREE.Vector3(0, -0.65, 0) });
+
+        // 3. 4 Articulated Quad-Thruster Nacelles
         for (let i = 0; i < 4; i++) {
-          const angle = (i * Math.PI) / 2;
-          const podGeo = new THREE.CylinderGeometry(0.15, 0.12, 0.5, Math.max(4, Math.floor(12 * lodRes)));
+          const angle = (i * Math.PI) / 2 + (Math.PI / 4);
+          const podGeo = new THREE.CylinderGeometry(0.16, 0.12, 0.6, Math.max(4, Math.floor(14 * ratio)));
           const pod = new THREE.Mesh(podGeo, matCrimson);
-          pod.position.set(Math.cos(angle) * 1.05, 0, Math.sin(angle) * 1.05);
-          currentMeshGroup.add(pod);
+          const origX = Math.cos(angle) * 1.15;
+          const origZ = Math.sin(angle) * 1.15;
+          pod.position.set(origX, 0, origZ);
+          assetRootGroup.add(pod);
+
+          const expX = Math.cos(angle) * 1.85;
+          const expZ = Math.sin(angle) * 1.85;
+          animatableParts.push({ mesh: pod, origPos: new THREE.Vector3(origX, 0, origZ), explodedPos: new THREE.Vector3(expX, 0, expZ) });
         }
 
-        // Central Quantum Core
-        const coreGeo = new THREE.OctahedronGeometry(0.35, Math.max(0, Math.floor(2 * lodRes)));
-        const core = new THREE.Mesh(coreGeo, matGold);
-        currentMeshGroup.add(core);
+        // 4. Levitating Golden Singularity Core
+        const singGeo = new THREE.OctahedronGeometry(0.38, Math.max(0, Math.floor(2 * ratio)));
+        const singCore = new THREE.Mesh(singGeo, matGold);
+        assetRootGroup.add(singCore);
+        animatableParts.push({ mesh: singCore, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 1.1, 0) });
 
-      } else if (active3DAssetKey === "shield") {
-        // Mecha Titan Shield
-        const segs = Math.max(4, Math.floor(20 * lodRes));
-        const shieldGeo = new THREE.CylinderGeometry(0.9, 0.75, 1.8, segs, 1, false, 0, Math.PI);
-        const shield = new THREE.Mesh(shieldGeo, matMetal);
-        shield.rotation.y = -Math.PI / 2;
-        currentMeshGroup.add(shield);
+      } else if (activeAsset === "shield") {
+        // 🛡️ AEGIS QUANTUM TITAN SHIELD
 
-        const crestGeo = new THREE.BoxGeometry(0.25, 1.4, 0.1);
-        const crest = new THREE.Mesh(crestGeo, matCyan);
-        crest.position.z = 0.75;
-        currentMeshGroup.add(crest);
+        // 1. Curved Multi-Segment Shield Carapace
+        const segs = Math.max(4, Math.floor(24 * ratio));
+        const shieldGeo = new THREE.CylinderGeometry(1.05, 0.85, 2.1, segs, 1, false, 0, Math.PI);
+        const shieldMesh = new THREE.Mesh(shieldGeo, matArmor);
+        shieldMesh.rotation.y = -Math.PI / 2;
+        assetRootGroup.add(shieldMesh);
+        animatableParts.push({ mesh: shieldMesh, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0, -0.5) });
 
-        const coreNodeGeo = new THREE.IcosahedronGeometry(0.22, Math.max(0, Math.floor(1 * lodRes)));
-        const coreNode = new THREE.Mesh(coreNodeGeo, matCrimson);
-        coreNode.position.z = 0.8;
-        currentMeshGroup.add(coreNode);
+        // 2. Central Honeycomb Energy Spine
+        const spineGeo = new THREE.BoxGeometry(0.28, 1.6, 0.15);
+        const spine = new THREE.Mesh(spineGeo, matCyan);
+        spine.position.z = 0.85;
+        assetRootGroup.add(spine);
+        animatableParts.push({ mesh: spine, origPos: new THREE.Vector3(0, 0, 0.85), explodedPos: new THREE.Vector3(0, 0, 1.4) });
 
-      } else if (active3DAssetKey === "saber") {
-        // Quantum Twin Saber
-        const hiltGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.9, Math.max(6, Math.floor(16 * lodRes)));
-        const hilt = new THREE.Mesh(hiltGeo, matMetal);
-        currentMeshGroup.add(hilt);
+        // 3. Central Pulsing Reactor Lattice Node
+        const nodeGeo = new THREE.IcosahedronGeometry(0.26, Math.max(0, Math.floor(2 * ratio)));
+        const node = new THREE.Mesh(nodeGeo, matCrimson);
+        node.position.z = 0.92;
+        assetRootGroup.add(node);
+        animatableParts.push({ mesh: node, origPos: new THREE.Vector3(0, 0, 0.92), explodedPos: new THREE.Vector3(0, 0, 1.8) });
 
-        // Top Blade
-        const bladeGeo1 = new THREE.CylinderGeometry(0.04, 0.04, 1.5, Math.max(4, Math.floor(12 * lodRes)));
-        const blade1 = new THREE.Mesh(bladeGeo1, matCyan);
-        blade1.position.y = 1.2;
-        currentMeshGroup.add(blade1);
+        // 4. Perimeter Deflector Teeth
+        for (let i = -1; i <= 1; i += 2) {
+          const toothGeo = new THREE.ConeGeometry(0.18, 0.5, 4);
+          const tooth = new THREE.Mesh(toothGeo, matGold);
+          tooth.rotation.z = (i * Math.PI) / 4;
+          tooth.position.set(i * 0.9, 0, 0.4);
+          assetRootGroup.add(tooth);
+          animatableParts.push({ mesh: tooth, origPos: new THREE.Vector3(i * 0.9, 0, 0.4), explodedPos: new THREE.Vector3(i * 1.5, 0, 0.4) });
+        }
 
-        // Bottom Blade
-        const bladeGeo2 = new THREE.CylinderGeometry(0.04, 0.04, 1.5, Math.max(4, Math.floor(12 * lodRes)));
-        const blade2 = new THREE.Mesh(bladeGeo2, matCrimson);
-        blade2.position.y = -1.2;
-        currentMeshGroup.add(blade2);
+      } else if (activeAsset === "saber") {
+        // ⚔️ DUAL SINGULARITY QUANTUM SABER
 
-        // Emitter Guards
-        const guardGeo = new THREE.TorusGeometry(0.18, 0.03, 4, Math.max(6, Math.floor(16 * lodRes)));
-        const guard1 = new THREE.Mesh(guardGeo, matGold);
-        guard1.rotation.x = Math.PI / 2;
-        guard1.position.y = 0.45;
-        currentMeshGroup.add(guard1);
+        // 1. Machined Mechanical Hilt
+        const hiltGeo = new THREE.CylinderGeometry(0.09, 0.09, 1.1, Math.max(6, Math.floor(18 * ratio)));
+        const hilt = new THREE.Mesh(hiltGeo, matArmor);
+        assetRootGroup.add(hilt);
+        animatableParts.push({ mesh: hilt, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0, 0) });
 
-        const guard2 = new THREE.Mesh(guardGeo, matGold);
-        guard2.rotation.x = Math.PI / 2;
-        guard2.position.y = -0.45;
-        currentMeshGroup.add(guard2);
+        // 2. Top Radiant Cyan Plasma Blade
+        const topBladeGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.75, Math.max(4, Math.floor(14 * ratio)));
+        const topBlade = new THREE.Mesh(topBladeGeo, matCyan);
+        topBlade.position.y = 1.42;
+        assetRootGroup.add(topBlade);
+        animatableParts.push({ mesh: topBlade, origPos: new THREE.Vector3(0, 1.42, 0), explodedPos: new THREE.Vector3(0, 2.2, 0) });
+
+        // 3. Bottom Crimson Plasma Blade
+        const botBladeGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.75, Math.max(4, Math.floor(14 * ratio)));
+        const botBlade = new THREE.Mesh(botBladeGeo, matCrimson);
+        botBlade.position.y = -1.42;
+        assetRootGroup.add(botBlade);
+        animatableParts.push({ mesh: botBlade, origPos: new THREE.Vector3(0, -1.42, 0), explodedPos: new THREE.Vector3(0, -2.2, 0) });
+
+        // 4. Dual Emitter Guard Collars
+        const collarGeo = new THREE.TorusGeometry(0.2, 0.035, 4, Math.max(6, Math.floor(18 * ratio)));
+        const collar1 = new THREE.Mesh(collarGeo, matGold);
+        collar1.rotation.x = Math.PI / 2;
+        collar1.position.y = 0.55;
+        assetRootGroup.add(collar1);
+        animatableParts.push({ mesh: collar1, origPos: new THREE.Vector3(0, 0.55, 0), explodedPos: new THREE.Vector3(0, 0.95, 0) });
+
+        const collar2 = new THREE.Mesh(collarGeo, matGold);
+        collar2.rotation.x = Math.PI / 2;
+        collar2.position.y = -0.55;
+        assetRootGroup.add(collar2);
+        animatableParts.push({ mesh: collar2, origPos: new THREE.Vector3(0, -0.55, 0), explodedPos: new THREE.Vector3(0, -0.95, 0) });
       }
     }
 
-    function switch3DAsset(assetKey) {
-      active3DAssetKey = assetKey;
+    // ═════════════════════════════════════════════════════════════════════════
+    // 6. CONTROLLER ACTIONS & TELEMETRY BINDING
+    // ═════════════════════════════════════════════════════════════════════════
+
+    function handleAssetSelect(assetKey) {
+      playSound('switch');
+      activeAsset = assetKey;
+
+      // Update toolbar buttons
       ["drone", "shield", "saber"].forEach(k => {
         const btn = document.getElementById("btn-asset-" + k);
         if (btn) btn.classList.toggle("active", k === assetKey);
+
+        const card = document.getElementById("card-asset-" + k);
+        if (card) card.classList.toggle("active", k === assetKey);
       });
-      document.getElementById("active-asset-icon").textContent = ASSET_LOD_DATA[assetKey].icon;
-      document.getElementById("active-asset-name").textContent = ASSET_LOD_DATA[assetKey].name;
-      buildActive3DMesh();
-      updateHUD();
+
+      const data = ASSET_LOD_METRICS[assetKey];
+      document.getElementById("hero-asset-icon").textContent = data.icon;
+      document.getElementById("hero-asset-title").textContent = data.title;
+
+      constructModelGeometry();
+      refreshHudTelemetry();
     }
 
-    function switchLOD(lodIdx) {
-      activeLODIndex = lodIdx;
+    function handleLodSelect(lodIdx) {
+      playSound('switch');
+      activeLodIdx = lodIdx;
+
       for (let i = 0; i < 4; i++) {
         const btn = document.getElementById("btn-lod-" + i);
         if (btn) btn.classList.toggle("active", i === lodIdx);
       }
-      buildActive3DMesh();
-      updateHUD();
+
+      constructModelGeometry();
+      refreshHudTelemetry();
     }
 
-    function toggleWireframe() {
-      isWireframe = !isWireframe;
-      const btn = document.getElementById("btn-toggle-wire");
-      if (btn) btn.classList.toggle("active", isWireframe);
-      buildActive3DMesh();
+    function handleToggleWireframe() {
+      playSound('click');
+      wireframeMode = !wireframeMode;
+      const btn = document.getElementById("btn-wireframe");
+      if (btn) btn.classList.toggle("active", wireframeMode);
+      constructModelGeometry();
     }
 
-    function toggleAutoRotate() {
-      isAutoRotate = !isAutoRotate;
-      const btn = document.getElementById("btn-toggle-rotate");
-      if (btn) btn.classList.toggle("active", isAutoRotate);
+    function handleToggleExploded() {
+      playSound('explode');
+      explodedView = !explodedView;
+      const btn = document.getElementById("btn-exploded");
+      if (btn) btn.classList.toggle("active", explodedView);
+      if (btn) btn.classList.toggle("crimson", explodedView);
     }
 
-    function updateHUD() {
-      const data = ASSET_LOD_DATA[active3DAssetKey];
+    function handleToggleAutoRotate() {
+      playSound('click');
+      autoRotate = !autoRotate;
+      const btn = document.getElementById("btn-autorotate");
+      if (btn) btn.classList.toggle("active", autoRotate);
+    }
+
+    function setCameraView(mode) {
+      playSound('click');
+      if (!camera || !controls) return;
+      if (mode === 'orbit') {
+        camera.position.set(0, 1.8, 4.4);
+      } else if (mode === 'tactical') {
+        camera.position.set(0, 5.0, 0.1);
+      } else if (mode === 'core') {
+        camera.position.set(0, 0.3, 2.2);
+      }
+      controls.target.set(0, 0, 0);
+      controls.update();
+    }
+
+    function resetCameraView() {
+      setCameraView('orbit');
+    }
+
+    function refreshHudTelemetry() {
+      const data = ASSET_LOD_METRICS[activeAsset];
       if (!data) return;
-      const curLOD = data.lods[activeLODIndex];
-      document.getElementById("hud-lod-name").textContent = curLOD.name;
-      document.getElementById("hud-vert-faces").textContent = `${curLOD.verts} / ${curLOD.faces}`;
-      document.getElementById("hud-tri-eff").textContent = `${curLOD.triEff} t/v`;
-      document.getElementById("hud-euler").innerHTML = `&chi; = ${curLOD.euler}`;
-      document.getElementById("hud-dpo-margin").textContent = curLOD.margin;
-      document.getElementById("hud-qem").textContent = curLOD.qem;
+      const lod = data.lods[activeLodIdx];
+
+      document.getElementById("hud-lod-name").textContent = lod.name;
+      document.getElementById("hud-vert-tri").textContent = `${lod.verts} / ${lod.faces}`;
+      document.getElementById("hud-tri-eff").textContent = `${lod.triEff} t/v`;
+      document.getElementById("hud-euler-status").innerHTML = `&chi; = ${lod.euler}`;
+      document.getElementById("hud-dpo-margin").textContent = lod.margin;
+      document.getElementById("hud-qem-error").textContent = lod.qem;
     }
 
-    window.addEventListener("DOMContentLoaded", () => {
-      init();
-      setTimeout(init3DViewport, 150);
-    });
+    // Launch application on DOM ready
+    window.addEventListener("DOMContentLoaded", initApplication);
   </script>
 </body>
 </html>
