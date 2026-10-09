@@ -32,6 +32,7 @@
       --border-medium: rgba(255, 255, 255, 0.15);
       --border-glow-cyan: rgba(0, 242, 254, 0.4);
       --border-glow-crimson: rgba(255, 42, 95, 0.4);
+      --border-glow-gold: rgba(245, 158, 11, 0.4);
       
       --cyan: #00f2fe;
       --cyan-bright: #38bdf8;
@@ -367,10 +368,80 @@
       box-shadow: 0 0 14px var(--gold-glow);
     }
 
+    .cyber-btn.active.emerald {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(0, 242, 254, 0.3));
+      border: 1px solid var(--emerald);
+      box-shadow: 0 0 14px var(--emerald-glow);
+    }
+
+    .cyber-btn.active.violet,
+    .cyber-btn.violet:hover {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.35), rgba(0, 242, 254, 0.35));
+      border: 1px solid var(--violet);
+      box-shadow: 0 0 14px var(--violet-glow);
+    }
+
+    /* Mutation & Fusion Control Dock */
+    .special-ops-dock {
+      background: rgba(6, 12, 24, 0.95);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 0.6rem 1.4rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+    }
+
+    .special-ops-left {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      flex-wrap: wrap;
+    }
+
+    .special-ops-label {
+      color: var(--gold);
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .slider-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--text-muted);
+    }
+
+    .cyber-slider {
+      -webkit-appearance: none;
+      width: 140px;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      outline: none;
+    }
+
+    .cyber-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 8px var(--cyan);
+      cursor: pointer;
+    }
+
     /* 3D WebGL Canvas Viewport */
     .arena-viewport-wrapper {
       width: 100%;
-      height: 540px;
+      height: 560px;
       position: relative;
       background: radial-gradient(circle at 50% 50%, #0d172e 0%, #040814 100%);
       overflow: hidden;
@@ -406,7 +477,7 @@
       box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65), inset 0 0 20px rgba(0, 242, 254, 0.06);
       pointer-events: none;
       z-index: 5;
-      min-width: 310px;
+      min-width: 320px;
     }
 
     .hud-header {
@@ -499,19 +570,19 @@
       color: var(--text-dim);
     }
 
-    /* 3D Asset Trio Comparison Strip */
+    /* 3D Asset 5-Way Comparison Battery */
     .asset-comparison-strip {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1.2rem;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 1rem;
       padding: 1.2rem 1.4rem;
       background: rgba(5, 9, 18, 0.95);
       border-top: 1px solid var(--border-subtle);
     }
 
-    @media (max-width: 1024px) {
+    @media (max-width: 1200px) {
       .asset-comparison-strip {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
       }
     }
 
@@ -519,10 +590,10 @@
       background: rgba(13, 22, 38, 0.6);
       border: 1px solid var(--border-subtle);
       border-radius: 12px;
-      padding: 1rem 1.2rem;
+      padding: 0.9rem 1.1rem;
       display: flex;
       flex-direction: column;
-      gap: 0.45rem;
+      gap: 0.4rem;
       cursor: pointer;
       transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
       position: relative;
@@ -557,6 +628,14 @@
       background: linear-gradient(90deg, var(--cyan), var(--violet));
     }
 
+    .asset-card.active.gold {
+      border-color: var(--gold);
+      box-shadow: 0 0 20px rgba(245, 158, 11, 0.25);
+    }
+    .asset-card.active.gold::before {
+      background: linear-gradient(90deg, var(--gold), var(--crimson));
+    }
+
     .asset-card-head {
       display: flex;
       justify-content: space-between;
@@ -565,27 +644,27 @@
 
     .asset-card-title {
       font-family: var(--font-display);
-      font-size: 0.95rem;
+      font-size: 0.9rem;
       font-weight: 700;
       color: #ffffff;
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: 0.45rem;
     }
 
     .asset-card-badge {
-      font-size: 0.68rem;
+      font-size: 0.65rem;
       font-family: var(--font-mono);
       font-weight: 700;
       color: var(--emerald);
       background: rgba(16, 185, 129, 0.15);
       border: 1px solid rgba(16, 185, 129, 0.4);
-      padding: 0.15rem 0.5rem;
+      padding: 0.12rem 0.45rem;
       border-radius: 4px;
     }
 
     .asset-card-stats {
-      font-size: 0.72rem;
+      font-size: 0.7rem;
       font-family: var(--font-mono);
       color: var(--text-muted);
       display: flex;
@@ -1205,7 +1284,7 @@
           <span>•</span>
           <span>RTX 5070 DPO Supervisory Engine</span>
           <span>•</span>
-          <span>Gate 6-M Autonomous Closed-Loop Healer</span>
+          <span>Sovereign 3D Foundry Champion Synthesis (Gate 6-N)</span>
         </div>
       </div>
     </div>
@@ -1238,7 +1317,7 @@
         <div class="arena-hero-title">
           <span class="arena-badge-icon" id="hero-asset-icon">🛸</span>
           <div>
-            <h2 id="hero-asset-title">APEX COMBAT INTERCEPTOR DRONE</h2>
+            <h2 id="hero-asset-title">CYBERNETIC STEALTH RECON DRONE</h2>
           </div>
           <span class="tag-sub" id="hero-mesh-tag">APEX ULTRA CAD</span>
         </div>
@@ -1250,27 +1329,56 @@
             <button class="cyber-btn" id="btn-mode-glb" onclick="handleMeshFidelitySelect('glb')">🔬 Certified GLB</button>
           </div>
 
-          <!-- 3D Asset Switcher -->
+          <!-- 3D Asset Switcher (Foundry Champions + Fused Composite Dreadnought) -->
           <div class="cyber-pill-group">
-            <button class="cyber-btn active" id="btn-asset-drone" onclick="handleAssetSelect('drone')">🛸 Drone</button>
-            <button class="cyber-btn" id="btn-asset-shield" onclick="handleAssetSelect('shield')">🛡️ Shield</button>
+            <button class="cyber-btn active" id="btn-asset-fused_dreadnought" onclick="handleAssetSelect('fused_dreadnought')">🔱 Fused Vessel</button>
+            <button class="cyber-btn" id="btn-asset-stealth_drone" onclick="handleAssetSelect('stealth_drone')">🛸 Recon Drone</button>
+            <button class="cyber-btn" id="btn-asset-singularity_core" onclick="handleAssetSelect('singularity_core')">⚛️ Singularity Core</button>
             <button class="cyber-btn" id="btn-asset-saber" onclick="handleAssetSelect('saber')">⚔️ Saber</button>
+            <button class="cyber-btn" id="btn-asset-shield" onclick="handleAssetSelect('shield')">🛡️ Shield</button>
           </div>
 
           <!-- LOD Tier Switcher -->
           <div class="cyber-pill-group">
-            <button class="cyber-btn" id="btn-lod-0" onclick="handleLodSelect(0)">LOD0 (100%)</button>
-            <button class="cyber-btn active" id="btn-lod-1" onclick="handleLodSelect(1)">LOD1 (60%)</button>
-            <button class="cyber-btn" id="btn-lod-2" onclick="handleLodSelect(2)">LOD2 (35%)</button>
-            <button class="cyber-btn" id="btn-lod-3" onclick="handleLodSelect(3)">LOD3 (15%)</button>
+            <button class="cyber-btn" id="btn-lod-0" onclick="handleLodSelect(0)">LOD0 (Master)</button>
+            <button class="cyber-btn active" id="btn-lod-1" onclick="handleLodSelect(1)">LOD1 (High)</button>
+            <button class="cyber-btn" id="btn-lod-2" onclick="handleLodSelect(2)">LOD2 (Med)</button>
+            <button class="cyber-btn" id="btn-lod-3" onclick="handleLodSelect(3)">LOD3 (Low)</button>
           </div>
 
-          <!-- Display Mode Toggles -->
+          <!-- Action Operators -->
           <div class="cyber-pill-group">
+            <button class="cyber-btn" id="btn-mutate" onclick="handleToggleMutate()">🧬 Mutate</button>
+            <button class="cyber-btn active" id="btn-forcefield" onclick="handleToggleForcefield()">✨ Forcefield</button>
             <button class="cyber-btn" id="btn-wireframe" onclick="handleToggleWireframe()">🌐 Wireframe</button>
-            <button class="cyber-btn" id="btn-exploded" onclick="handleToggleExploded()">💥 Exploded View</button>
+            <button class="cyber-btn" id="btn-exploded" onclick="handleToggleExploded()">💥 Exploded</button>
             <button class="cyber-btn active" id="btn-autorotate" onclick="handleToggleAutoRotate()">🔄 Turntable</button>
           </div>
+        </div>
+      </div>
+
+      <!-- Specialized Operators Dock (Mutate & Fuse Controls) -->
+      <div class="special-ops-dock" id="special-ops-dock">
+        <div class="special-ops-left">
+          <span class="special-ops-label">🧬 TOPOLOGICAL MUTATION GAUNTLET:</span>
+          <div class="cyber-pill-group">
+            <button class="cyber-btn active" id="btn-mut-wave" onclick="setMutationType('wave')">Wave</button>
+            <button class="cyber-btn" id="btn-mut-jitter" onclick="setMutationType('jitter')">Quantum Jitter</button>
+            <button class="cyber-btn" id="btn-mut-vortex" onclick="setMutationType('vortex')">Vortex Warp</button>
+          </div>
+          <div class="cyber-pill-group">
+            <button class="cyber-btn" id="btn-seed-42" onclick="applyMutationSeed(42)">Seed 42</button>
+            <button class="cyber-btn" id="btn-seed-101" onclick="applyMutationSeed(101)">Seed 101</button>
+            <button class="cyber-btn active" id="btn-seed-777" onclick="applyMutationSeed(777)">Seed 777 (Champ)</button>
+            <button class="cyber-btn" id="btn-seed-1337" onclick="applyMutationSeed(1337)">Seed 1337</button>
+          </div>
+          <button class="cyber-btn crimson" onclick="resetActiveMutation()">↩️ Reset Mutation</button>
+        </div>
+
+        <div class="slider-wrap">
+          <span>⚛️ FUSION DOCKING:</span>
+          <input type="range" class="cyber-slider" id="fusion-slider" min="0" max="100" value="100" oninput="handleFusionSlider(this.value)">
+          <span id="fusion-pct-label" style="color:var(--cyan); font-weight:700;">100% (Docked)</span>
         </div>
       </div>
 
@@ -1284,44 +1392,69 @@
             <div class="hud-title-text">
               <span>TOPOLOGY TELEMETRY</span>
               <span style="color:var(--text-dim);">//</span>
-              <span style="color:var(--cyan);">GATE 6-M</span>
+              <span style="color:var(--cyan);">FOUNDRY v1.0</span>
             </div>
             <div class="hud-fps-pill" id="hud-fps-indicator">60 FPS</div>
           </div>
           
           <div class="hud-row">
-            <span class="hud-key">Active LOD Tier:</span>
+            <span class="hud-key">Active Asset:</span>
+            <span class="hud-val cyan" id="hud-asset-tag">STEALTH_RECON_DRONE</span>
+          </div>
+
+          <div class="hud-row">
+            <span class="hud-key">LOD Tier:</span>
             <span class="hud-val cyan" id="hud-lod-name">LOD1_HIGH</span>
           </div>
 
           <div class="hud-row">
-            <span class="hud-key">Geometry Mode:</span>
+            <span class="hud-key">Mesh Engine:</span>
             <span class="hud-val gold" id="hud-mode-name">✨ APEX ULTRA CAD</span>
           </div>
 
           <div class="hud-row">
             <span class="hud-key">Vertices / Triangles:</span>
-            <span class="hud-val" id="hud-vert-tri">182 / 344</span>
+            <span class="hud-val" id="hud-vert-tri">431 / 846</span>
           </div>
 
           <div class="hud-row">
             <span class="hud-key">Triangle Efficiency (t/v):</span>
-            <span class="hud-val cyan" id="hud-tri-eff">1.89 t/v</span>
+            <span class="hud-val cyan" id="hud-tri-eff">1.96 t/v</span>
           </div>
 
           <div class="hud-row">
             <span class="hud-key">Euler Invariant (&chi;):</span>
-            <span class="hud-val emerald" id="hud-euler-status">&chi; = 10 (Watertight)</span>
+            <span class="hud-val emerald" id="hud-euler-status">&chi; = 8 (Watertight)</span>
           </div>
 
           <div class="hud-row">
             <span class="hud-key">DPO Reward Margin (&Delta;r):</span>
-            <span class="hud-val emerald" id="hud-dpo-margin">+0.5081 [PASS]</span>
+            <span class="hud-val emerald" id="hud-dpo-margin">+0.0984 [PASS]</span>
           </div>
 
           <div class="hud-row">
-            <span class="hud-key">QEM Surface Error:</span>
-            <span class="hud-val gold" id="hud-qem-error">0.01987</span>
+            <span class="hud-key">Mutation Status:</span>
+            <span class="hud-val gold" id="hud-mutation-status">PRISTINE (SEED 777)</span>
+          </div>
+
+          <div class="hud-row" style="margin-top:0.4rem; padding-top:0.4rem; border-top:1px dashed var(--border-subtle);">
+            <span class="hud-key">Attestation Ledger:</span>
+            <span class="hud-val emerald" style="font-size:0.68rem; font-family:var(--font-mono);" title="Checkpoint 88875c... | 181 Events | 0 GPU / 0 Secret">
+              🔒 Gate 6-O (181/181)
+            </span>
+          </div>
+
+          <div class="hud-row">
+            <span class="hud-key">Merkle Head:</span>
+            <span class="hud-val cyan" style="font-size:0.64rem; font-family:var(--font-mono);">
+              88875c23...00c0
+            </span>
+          </div>
+
+          <div style="margin-top: 0.55rem;">
+            <button class="cyber-btn emerald" id="btn-export-glb" style="width: 100%; justify-content: center; font-weight: 700; padding: 0.4rem;" onclick="downloadActiveGLB()">
+              📥 Download Certified GLB
+            </button>
           </div>
         </div>
 
@@ -1338,38 +1471,60 @@
         </div>
       </div>
 
-      <!-- 3D Asset Trio Comparison Strip -->
+      <!-- 3D Asset Multi-Concept Comparison Strip -->
       <div class="asset-comparison-strip">
-        <div class="asset-card active" id="card-asset-drone" onclick="handleAssetSelect('drone')">
+        <div class="asset-card gold active" id="card-asset-fused_dreadnought" onclick="handleAssetSelect('fused_dreadnought')">
           <div class="asset-card-head">
-            <span class="asset-card-title">🛸 Combat Target Drone</span>
-            <span class="asset-card-badge">Euler &chi; = 10</span>
+            <span class="asset-card-title">🔱 Fused Dreadnought</span>
+            <span class="asset-card-badge" style="color:var(--gold); border-color:var(--gold);">Euler &chi; = 18</span>
           </div>
           <div class="asset-card-stats">
-            <span>Gate 6-M Watertight Battery</span>
-            <span style="color:var(--emerald); font-weight:700;">DPO: +0.5081</span>
+            <span>Composite Manifold (Drone+Core)</span>
+            <span style="color:var(--gold); font-weight:700;">DPO: +0.2746</span>
           </div>
         </div>
 
-        <div class="asset-card" id="card-asset-shield" onclick="handleAssetSelect('shield')">
+        <div class="asset-card" id="card-asset-stealth_drone" onclick="handleAssetSelect('stealth_drone')">
           <div class="asset-card-head">
-            <span class="asset-card-title">🛡️ Mecha Titan Shield</span>
-            <span class="asset-card-badge">Euler &chi; = 4</span>
+            <span class="asset-card-title">🛸 Stealth Recon Drone</span>
+            <span class="asset-card-badge">Euler &chi; = 8</span>
           </div>
           <div class="asset-card-stats">
-            <span>Gate 6-M Watertight Battery</span>
-            <span style="color:var(--emerald); font-weight:700;">DPO: +0.5592</span>
+            <span>Foundry Champion (Seed 777)</span>
+            <span style="color:var(--emerald); font-weight:700;">DPO: +0.1031</span>
+          </div>
+        </div>
+
+        <div class="asset-card" id="card-asset-singularity_core" onclick="handleAssetSelect('singularity_core')">
+          <div class="asset-card-head">
+            <span class="asset-card-title">⚛️ Singularity Core</span>
+            <span class="asset-card-badge">Euler &chi; = 10</span>
+          </div>
+          <div class="asset-card-stats">
+            <span>Foundry Champion (Seed 777)</span>
+            <span style="color:var(--emerald); font-weight:700;">DPO: +0.1716</span>
           </div>
         </div>
 
         <div class="asset-card" id="card-asset-saber" onclick="handleAssetSelect('saber')">
           <div class="asset-card-head">
-            <span class="asset-card-title">⚔️ Quantum Twin Saber</span>
+            <span class="asset-card-title">⚔️ Twin Plasma Saber</span>
             <span class="asset-card-badge">Euler &chi; = 3</span>
           </div>
           <div class="asset-card-stats">
             <span>Gate 6-M Watertight Battery</span>
             <span style="color:var(--emerald); font-weight:700;">DPO: +0.5641</span>
+          </div>
+        </div>
+
+        <div class="asset-card" id="card-asset-shield" onclick="handleAssetSelect('shield')">
+          <div class="asset-card-head">
+            <span class="asset-card-title">🛡️ Aegis Titan Shield</span>
+            <span class="asset-card-badge">Euler &chi; = 4</span>
+          </div>
+          <div class="asset-card-stats">
+            <span>Gate 6-M Watertight Battery</span>
+            <span style="color:var(--emerald); font-weight:700;">DPO: +0.5592</span>
           </div>
         </div>
       </div>
@@ -1493,7 +1648,7 @@
        ═══════════════════════════════════════════════════════════════════════════ -->
   <script>
     // ═════════════════════════════════════════════════════════════════════════
-    // 1. DATA CONSTANTS & GATE 6-M CERTIFIED TELEMETRY
+    // 1. DATA CONSTANTS & SOVEREIGN 3D FOUNDRY CERTIFIED TELEMETRY
     // ═════════════════════════════════════════════════════════════════════════
     
     const GENRE_CATEGORIES = [
@@ -1506,34 +1661,59 @@
     ];
 
     const ASSET_LOD_METRICS = {
-      drone: {
-        title: "APEX COMBAT INTERCEPTOR DRONE",
+      stealth_drone: {
+        title: "CYBERNETIC STEALTH RECON DRONE",
         icon: "🛸",
+        glbPrefix: "stealth_drone",
         lods: [
-          { name: "LOD0_MASTER", verts: 298, faces: 576, triEff: 1.93, euler: "10 (Watertight)", margin: "BASELINE", qem: "0.00000" },
-          { name: "LOD1_HIGH",   verts: 182, faces: 344, triEff: 1.89, euler: "10 (Watertight)", margin: "+0.5081 [PASS]", qem: "0.01987" },
-          { name: "LOD2_MED",    verts: 110, faces: 200, triEff: 1.82, euler: "10 (Watertight)", margin: "+0.4482 [PASS]", qem: "0.02013" },
-          { name: "LOD3_LOW",    verts: 53,  faces: 86,  triEff: 1.62, euler: "10 (Watertight)", margin: "+0.5004 [PASS]", qem: "0.02133" }
+          { name: "LOD0_MASTER", verts: 713, faces: 1410, triEff: 1.98, euler: "8 (Watertight)", margin: "+0.1031 [CHAMPION]", qem: "0.00000" },
+          { name: "LOD1_HIGH",   verts: 431, faces: 846,  triEff: 1.96, euler: "8 (Watertight)", margin: "+0.0984 [PASS]", qem: "0.01240" },
+          { name: "LOD2_MED",    verts: 254, faces: 492,  triEff: 1.94, euler: "8 (Watertight)", margin: "+0.0892 [PASS]", qem: "0.01850" },
+          { name: "LOD3_LOW",    verts: 113, faces: 210,  triEff: 1.86, euler: "8 (Watertight)", margin: "+0.0754 [PASS]", qem: "0.02410" }
         ]
       },
-      shield: {
-        title: "AEGIS QUANTUM TITAN SHIELD",
-        icon: "🛡️",
+      singularity_core: {
+        title: "QUANTUM SINGULARITY CONTAINMENT CORE",
+        icon: "⚛️",
+        glbPrefix: "singularity_core",
         lods: [
-          { name: "LOD0_MASTER", verts: 650, faces: 1292, triEff: 1.99, euler: "4 (Watertight)", margin: "BASELINE", qem: "0.00000" },
-          { name: "LOD1_HIGH",   verts: 391, faces: 774,  triEff: 1.98, euler: "4 (Watertight)", margin: "+0.5592 [PASS]", qem: "0.02106" },
-          { name: "LOD2_MED",    verts: 230, faces: 452,  triEff: 1.97, euler: "4 (Watertight)", margin: "+0.4749 [PASS]", qem: "0.02073" },
-          { name: "LOD3_LOW",    verts: 100, faces: 192,  triEff: 1.92, euler: "4 (Watertight)", margin: "+0.4047 [PASS]", qem: "0.02072" }
+          { name: "LOD0_MASTER", verts: 794, faces: 1568, triEff: 1.97, euler: "10 (Watertight)", margin: "+0.1716 [CHAMPION]", qem: "0.00000" },
+          { name: "LOD1_HIGH",   verts: 464, faces: 916,  triEff: 1.97, euler: "6 (Watertight)", margin: "+0.1652 [PASS]", qem: "0.01420" },
+          { name: "LOD2_MED",    verts: 268, faces: 524,  triEff: 1.96, euler: "6 (Watertight)", margin: "+0.1510 [PASS]", qem: "0.02100" },
+          { name: "LOD3_LOW",    verts: 127, faces: 234,  triEff: 1.84, euler: "10 (Watertight)", margin: "+0.1388 [PASS]", qem: "0.02890" }
+        ]
+      },
+      fused_dreadnought: {
+        title: "APEX RECON-DREADNOUGHT (FUSED COMPOSITE)",
+        icon: "🔱",
+        glbPrefix: "fused",
+        lods: [
+          { name: "LOD0_MASTER", verts: 1507, faces: 2978, triEff: 1.98, euler: "18 (Dual Watertight)", margin: "+0.2746 [FUSED SUPERIOR]", qem: "0.00000" },
+          { name: "LOD1_HIGH",   verts: 895,  faces: 1762, triEff: 1.97, euler: "14 (Dual Watertight)", margin: "+0.2636 [PASS]", qem: "0.01330" },
+          { name: "LOD2_MED",    verts: 522,  faces: 1016, triEff: 1.95, euler: "14 (Dual Watertight)", margin: "+0.2402 [PASS]", qem: "0.01970" },
+          { name: "LOD3_LOW",    verts: 240,  faces: 444,  triEff: 1.85, euler: "18 (Dual Watertight)", margin: "+0.2142 [PASS]", qem: "0.02650" }
         ]
       },
       saber: {
         title: "DUAL SINGULARITY QUANTUM SABER",
         icon: "⚔️",
+        glbPrefix: "saber",
         lods: [
           { name: "LOD0_MASTER", verts: 260, faces: 512, triEff: 1.97, euler: "3 (Watertight)", margin: "BASELINE", qem: "0.00000" },
           { name: "LOD1_HIGH",   verts: 156, faces: 306, triEff: 1.96, euler: "3 (Watertight)", margin: "+0.5641 [PASS]", qem: "0.00750" },
           { name: "LOD2_MED",    verts: 131, faces: 256, triEff: 1.95, euler: "3 (Watertight)", margin: "+0.5036 [PASS]", qem: "0.00784" },
           { name: "LOD3_LOW",    verts: 131, faces: 256, triEff: 1.95, euler: "3 (Watertight)", margin: "+0.5315 [PASS]", qem: "0.00815" }
+        ]
+      },
+      shield: {
+        title: "AEGIS QUANTUM TITAN SHIELD",
+        icon: "🛡️",
+        glbPrefix: "shield",
+        lods: [
+          { name: "LOD0_MASTER", verts: 650, faces: 1292, triEff: 1.99, euler: "4 (Watertight)", margin: "BASELINE", qem: "0.00000" },
+          { name: "LOD1_HIGH",   verts: 391, faces: 774,  triEff: 1.98, euler: "4 (Watertight)", margin: "+0.5592 [PASS]", qem: "0.02106" },
+          { name: "LOD2_MED",    verts: 230, faces: 452,  triEff: 1.97, euler: "4 (Watertight)", margin: "+0.4749 [PASS]", qem: "0.02073" },
+          { name: "LOD3_LOW",    verts: 100, faces: 192,  triEff: 1.92, euler: "4 (Watertight)", margin: "+0.4047 [PASS]", qem: "0.02072" }
         ]
       }
     };
@@ -1541,19 +1721,27 @@
     // State Variables
     let currentCategory = "03_cinematic_battles";
     let currentPresetId = "03_-01";
-    let activeAsset = "drone";
+    let activeAsset = "fused_dreadnought";
     let activeLodIdx = 1; // Default to LOD1 High
-    let meshFidelityMode = "ultra"; // 'ultra' (High-Fidelity CAD) or 'glb' (Gate 6-M Certified GLB)
+    let meshFidelityMode = "ultra"; // 'ultra' or 'glb'
     let wireframeMode = false;
+    let forcefieldActive = true;
     let explodedView = false;
     let autoRotate = true;
     let audioFxEnabled = true;
     let audioCtx = null;
     let globalData = null;
 
+    // Mutation & Fusion States
+    let mutationActive = false;
+    let mutationType = "wave"; // 'wave', 'jitter', 'vortex'
+    let activeSeed = 777;
+    let fusionPercentage = 100; // 0 (separated) to 100 (docked)
+
     // Three.js Runtime Globals
     let scene, camera, renderer, controls;
     let assetRootGroup = null;
+    let forcefieldSphereMesh = null;
     let starParticles = null;
     let floorScannerRing = null;
     let gltfLoaderInstance = null;
@@ -1567,6 +1755,11 @@
     let gyroRings = [];
     let pulsingMaterials = [];
     let singularityCoreMesh = null;
+    let fusedCoreSubgroup = null;
+    let lightningArcsGroup = null;
+
+    // Original unmutated vertex snapshots for non-destructive resetting
+    let originalVertexPositions = new Map();
 
     // ═════════════════════════════════════════════════════════════════════════
     // 2. SYNTHESIZED CYBERNETIC SOUND FX (WEB AUDIO API)
@@ -1610,6 +1803,23 @@
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
           osc.start(now);
           osc.stop(now + 0.09);
+        } else if (type === 'mutate') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(150, now);
+          osc.frequency.linearRampToValueAtTime(600, now + 0.08);
+          osc.frequency.exponentialRampToValueAtTime(200, now + 0.2);
+          gain.gain.setValueAtTime(0.16, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+          osc.start(now);
+          osc.stop(now + 0.2);
+        } else if (type === 'fuse') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(120, now);
+          osc.frequency.exponentialRampToValueAtTime(440, now + 0.25);
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+          osc.start(now);
+          osc.stop(now + 0.25);
         } else if (type === 'explode') {
           osc.type = 'sawtooth';
           osc.frequency.setValueAtTime(260, now);
@@ -1651,13 +1861,45 @@
     // ═════════════════════════════════════════════════════════════════════════
 
     function initApplication() {
+      // 1. Deep-linking URL parameters support
+      const params = new URLSearchParams(window.location.search);
+      if (params.has("asset")) {
+        const a = params.get("asset");
+        if (ASSET_LOD_METRICS[a]) activeAsset = a;
+      }
+      if (params.has("mode")) {
+        const m = params.get("mode");
+        if (m === "ultra" || m === "glb") meshFidelityMode = m;
+      }
+      if (params.has("lod")) {
+        const l = parseInt(params.get("lod"));
+        if (!isNaN(l) && l >= 0 && l <= 3) activeLodIdx = l;
+      }
+      if (params.has("mutate")) {
+        const mut = params.get("mutate");
+        if (["wave", "jitter", "vortex"].includes(mut)) {
+          mutationType = mut;
+          mutationActive = true;
+        }
+      }
+      if (params.has("seed")) {
+        const s = parseInt(params.get("seed"));
+        if (!isNaN(s)) activeSeed = s;
+      }
+      if (params.has("fusion")) {
+        const f = parseInt(params.get("fusion"));
+        if (!isNaN(f) && f >= 0 && f <= 100) fusionPercentage = f;
+      }
+      if (params.has("forcefield")) {
+        forcefieldActive = params.get("forcefield") !== "0";
+      }
+
       renderCategoryTabs();
 
       if (window.ZKAEDI_QUANTUM_MUSIC_VIDEO) {
         globalData = window.ZKAEDI_QUANTUM_MUSIC_VIDEO;
         loadCategoryPres(currentCategory);
       } else {
-        // Fallback fetch
         fetch("quantum_music_video_data.js")
           .then(r => r.text())
           .then(txt => {
@@ -1747,7 +1989,6 @@
     function displayActivePreset(presetId) {
       currentPresetId = presetId;
 
-      // Update card active classes
       const cards = document.querySelectorAll(".preset-card-item");
       cards.forEach(el => {
         const idSpan = el.querySelector(".preset-id-badge");
@@ -1790,7 +2031,6 @@
         `;
       }).join("");
 
-      // Render raw prompt text
       document.getElementById("prompt-content-text").textContent = preset.ready_to_paste_prompt || "";
     }
 
@@ -1822,76 +2062,71 @@
       if (!canvas || !window.THREE) return;
 
       const width = wrapper.clientWidth || 1000;
-      const height = wrapper.clientHeight || 540;
+      const height = wrapper.clientHeight || 560;
 
-      // Scene & Atmospheric Space Fog
       scene = new THREE.Scene();
-      scene.fog = new THREE.FogExp2(0x030712, 0.038);
+      scene.fog = new THREE.FogExp2(0x030712, 0.035);
 
-      // Perspective Camera
       camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
       camera.position.set(0, 1.8, 4.4);
 
-      // WebGL Renderer with ACES Tone Mapping
       renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
       renderer.setSize(width, height);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.35;
 
-      // OrbitControls with smooth inertia
       controls = new THREE.OrbitControls(camera, canvas);
       controls.enableDamping = true;
       controls.dampingFactor = 0.05;
-      controls.maxDistance = 12;
+      controls.maxDistance = 14;
       controls.minDistance = 1.2;
 
-      // Initialize GLTFLoader if available
       if (window.THREE.GLTFLoader) {
         gltfLoaderInstance = new THREE.GLTFLoader();
       }
 
       // Cybernetic Ground Pedestal & Scanning Grid
-      const grid = new THREE.GridHelper(14, 28, 0x00f2fe, 0x172554);
-      grid.position.y = -1.35;
+      const grid = new THREE.GridHelper(16, 32, 0x00f2fe, 0x172554);
+      grid.position.y = -1.4;
       scene.add(grid);
 
-      // Concentric Cybernetic Rings
+      // Concentric Rings
       const ringMat = new THREE.MeshBasicMaterial({ color: 0x00f2fe, wireframe: true, transparent: true, opacity: 0.35 });
-      const floorRing1 = new THREE.Mesh(new THREE.RingGeometry(1.8, 1.85, 32), ringMat);
+      const floorRing1 = new THREE.Mesh(new THREE.RingGeometry(2.0, 2.05, 36), ringMat);
       floorRing1.rotation.x = -Math.PI / 2;
-      floorRing1.position.y = -1.34;
+      floorRing1.position.y = -1.39;
       scene.add(floorRing1);
 
-      const floorRing2 = new THREE.Mesh(new THREE.RingGeometry(3.2, 3.25, 48), ringMat);
+      const floorRing2 = new THREE.Mesh(new THREE.RingGeometry(3.6, 3.65, 48), ringMat);
       floorRing2.rotation.x = -Math.PI / 2;
-      floorRing2.position.y = -1.34;
+      floorRing2.position.y = -1.39;
       scene.add(floorRing2);
 
-      // Radar Scanner Beam Mesh
-      const scanGeo = new THREE.RingGeometry(0.1, 3.2, 32, 1, 0, Math.PI / 3);
+      // Radar Scanner Beam
+      const scanGeo = new THREE.RingGeometry(0.1, 3.6, 36, 1, 0, Math.PI / 3);
       const scanMat = new THREE.MeshBasicMaterial({ color: 0x00f2fe, transparent: true, opacity: 0.18, side: THREE.DoubleSide });
       floorScannerRing = new THREE.Mesh(scanGeo, scanMat);
       floorScannerRing.rotation.x = -Math.PI / 2;
-      floorScannerRing.position.y = -1.33;
+      floorScannerRing.position.y = -1.38;
       scene.add(floorScannerRing);
 
-      // Starfield Dust Particles
+      // Starfield
       const starGeo = new THREE.BufferGeometry();
-      const starCount = 1000;
+      const starCount = 1200;
       const starCoords = new Float32Array(starCount * 3);
       for (let i = 0; i < starCount * 3; i += 3) {
-        starCoords[i] = (Math.random() - 0.5) * 50;
-        starCoords[i + 1] = (Math.random() - 0.5) * 50;
-        starCoords[i + 2] = (Math.random() - 0.5) * 50;
+        starCoords[i] = (Math.random() - 0.5) * 60;
+        starCoords[i + 1] = (Math.random() - 0.5) * 60;
+        starCoords[i + 2] = (Math.random() - 0.5) * 60;
       }
       starGeo.setAttribute('position', new THREE.BufferAttribute(starCoords, 3));
-      const starMat = new THREE.PointsMaterial({ color: 0x94a3b8, size: 0.085, transparent: true, opacity: 0.7 });
+      const starMat = new THREE.PointsMaterial({ color: 0x94a3b8, size: 0.08, transparent: true, opacity: 0.7 });
       starParticles = new THREE.Points(starGeo, starMat);
       scene.add(starParticles);
 
-      // Multi-Point Cybernetic Cinematic Lighting
-      const ambient = new THREE.AmbientLight(0xffffff, 0.9);
+      // Multi-Point Lighting
+      const ambient = new THREE.AmbientLight(0xffffff, 0.95);
       scene.add(ambient);
 
       const cyanKey = new THREE.PointLight(0x00f2fe, 4.2, 22);
@@ -1906,19 +2141,39 @@
       goldFill.position.set(0, 3.5, -3);
       scene.add(goldFill);
 
+      // Holographic Energy Forcefield Sphere
+      const ffGeo = new THREE.IcosahedronGeometry(2.3, 3);
+      const ffMat = new THREE.MeshBasicMaterial({
+        color: 0x00f2fe,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.22
+      });
+      forcefieldSphereMesh = new THREE.Mesh(ffGeo, ffMat);
+      scene.add(forcefieldSphereMesh);
+
       // Asset Container Group
       assetRootGroup = new THREE.Group();
       scene.add(assetRootGroup);
 
       // Construct Initial 3D Model & Telemetry
-      loadActiveMeshGeometry();
-      refreshHudTelemetry();
+      handleAssetSelect(activeAsset);
+      handleMeshFidelitySelect(meshFidelityMode);
+      handleLodSelect(activeLodIdx);
+      if (mutationActive) {
+        setMutationType(mutationType);
+        applyMutationSeed(activeSeed);
+      }
+      if (fusionPercentage !== 100) {
+        const slider = document.getElementById("fusion-slider");
+        if (slider) slider.value = fusionPercentage;
+        handleFusionSlider(fusionPercentage);
+      }
 
       // Render Loop & Animation Controller
       function animateLoop(time) {
         requestAnimationFrame(animateLoop);
 
-        // Track FPS
         frameCounter++;
         if (time - lastRenderTime >= 1000) {
           currentFps = Math.round((frameCounter * 1000) / (time - lastRenderTime));
@@ -1932,9 +2187,18 @@
           assetRootGroup.rotation.y += 0.007;
         }
 
-        // Radar sweep rotation
+        // Floor Scanner
         if (floorScannerRing) {
           floorScannerRing.rotation.z -= 0.015;
+        }
+
+        // Forcefield pulse & rotate
+        if (forcefieldSphereMesh) {
+          forcefieldSphereMesh.visible = forcefieldActive;
+          forcefieldSphereMesh.rotation.y += 0.004;
+          forcefieldSphereMesh.rotation.x += 0.002;
+          const s = 1.0 + Math.sin(time * 0.003) * 0.03;
+          forcefieldSphereMesh.scale.set(s, s, s);
         }
 
         // Starfield drift
@@ -1942,7 +2206,7 @@
           starParticles.rotation.y += 0.0002;
         }
 
-        // Dynamic High-Fidelity Mechanical Animations
+        // Mechanical Turbofan animations
         if (turbineFans.length > 0) {
           turbineFans.forEach(f => f.rotation.z += 0.28);
         }
@@ -1962,6 +2226,17 @@
           pulsingMaterials.forEach(m => m.emissiveIntensity = pulse);
         }
 
+        // Live Fusion Docking Kinematics (for Fused Dreadnought)
+        if (fusedCoreSubgroup) {
+          const fusionRatio = fusionPercentage / 100.0;
+          // Target docked pos: (0, 0.4, -0.2), Target undocked pos: (0, 1.6, -0.2)
+          const targetY = THREE.MathUtils.lerp(1.6, 0.4, fusionRatio);
+          fusedCoreSubgroup.position.y = THREE.MathUtils.lerp(fusedCoreSubgroup.position.y, targetY, 0.08);
+
+          // Rotate floating core faster when undocked
+          fusedCoreSubgroup.rotation.y += 0.01 + (1.0 - fusionRatio) * 0.03;
+        }
+
         // Exploded view animation interpolation
         if (animatableParts.length > 0) {
           animatableParts.forEach(p => {
@@ -1975,7 +2250,6 @@
       }
       requestAnimationFrame(animateLoop);
 
-      // Responsive Resize
       window.addEventListener("resize", () => {
         if (!wrapper || !renderer) return;
         const w = wrapper.clientWidth;
@@ -2005,13 +2279,12 @@
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // 5. MESH ARCHITECTURE: APEX ULTRA PROCEDURAL & CERTIFIED BINARY GLB
+    // 5. MESH ARCHITECTURE: APEX ULTRA, CERTIFIED GLB & FUSED COMPOSITE
     // ═════════════════════════════════════════════════════════════════════════
 
     function loadActiveMeshGeometry() {
       if (!assetRootGroup) return;
 
-      // Clear existing scene geometry & animation handles
       while (assetRootGroup.children.length > 0) {
         assetRootGroup.remove(assetRootGroup.children[0]);
       }
@@ -2020,70 +2293,114 @@
       gyroRings = [];
       pulsingMaterials = [];
       singularityCoreMesh = null;
+      fusedCoreSubgroup = null;
+      originalVertexPositions.clear();
 
       if (meshFidelityMode === 'glb') {
         loadCertifiedBinaryGLB();
       } else {
         constructApexUltraCADGeometry();
       }
+
+      // Snapshot original vertex buffers for mutation operators
+      assetRootGroup.traverse(node => {
+        if (node.isMesh && node.geometry && node.geometry.attributes && node.geometry.attributes.position) {
+          const posAttr = node.geometry.attributes.position;
+          originalVertexPositions.set(node, posAttr.array.slice());
+        }
+      });
+
+      if (mutationActive) {
+        applyTopologicalMutation();
+      }
     }
 
-    // ── MODE A: GATE 6-M CERTIFIED PHYSICAL GLB FROM BASE64 DATA FEED ───────
+    // ── MODE A: GATE 6-M & 6-N CERTIFIED BINARY GLB ──────────────────────────
     function loadCertifiedBinaryGLB() {
-      const glbKey = `${activeAsset}_lod${activeLodIdx}`;
+      const assetDef = ASSET_LOD_METRICS[activeAsset];
+      let glbKey = `${assetDef.glbPrefix}_lod${activeLodIdx}`;
+
+      // Handle Fused Dreadnought by combining drone_lod + singularity_core_lod
+      if (activeAsset === 'fused_dreadnought') {
+        const droneKey = `stealth_drone_lod${activeLodIdx}`;
+        const coreKey = `singularity_core_lod${activeLodIdx}`;
+        loadAndCompositeTwoGLBs(droneKey, coreKey);
+        return;
+      }
+
       if (!window.ZKAEDI_BATTLE_GLB_DATA || !window.ZKAEDI_BATTLE_GLB_DATA[glbKey]) {
-        console.warn("GLB binary not found for key:", glbKey, "falling back to procedural.");
+        console.warn("GLB binary not found for key:", glbKey, "falling back to ultra CAD.");
         constructApexUltraCADGeometry();
         return;
       }
 
       try {
         const b64 = window.ZKAEDI_BATTLE_GLB_DATA[glbKey];
-        const binaryStr = atob(b64);
-        const len = binaryStr.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryStr.charCodeAt(i);
-        }
-
-        if (gltfLoaderInstance) {
-          gltfLoaderInstance.parse(bytes.buffer, '', (gltf) => {
-            const loadedModel = gltf.scene;
-
-            // Apply high-end PBR materials & scale normalization
-            loadedModel.traverse(node => {
-              if (node.isMesh) {
-                node.material.wireframe = wireframeMode;
-                node.material.metalness = 0.85;
-                node.material.roughness = 0.22;
-                node.castShadow = true;
-                node.receiveShadow = true;
-              }
-            });
-
-            // Normalize bounding scale to ~2.2 units
-            const box = new THREE.Box3().setFromObject(loadedModel);
-            const size = box.getSize(new THREE.Vector3());
-            const maxDim = Math.max(size.x, size.y, size.z) || 1.0;
-            const scaleFactor = 2.4 / maxDim;
-            loadedModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
-
-            // Center model
-            const center = box.getCenter(new THREE.Vector3());
-            loadedModel.position.sub(center.multiplyScalar(scaleFactor));
-
-            assetRootGroup.add(loadedModel);
-          }, (err) => {
-            console.error("GLTF Parse Error:", err);
-            constructApexUltraCADGeometry();
-          });
-        } else {
-          constructApexUltraCADGeometry();
-        }
+        parseAndMountGLB(b64, assetRootGroup, 2.4);
       } catch (e) {
         console.error("Binary decode exception:", e);
         constructApexUltraCADGeometry();
       }
+    }
+
+    function parseAndMountGLB(b64, targetGroup, targetScale = 2.4, yOffset = 0) {
+      const binaryStr = atob(b64);
+      const len = binaryStr.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+
+      if (gltfLoaderInstance) {
+        gltfLoaderInstance.parse(bytes.buffer, '', (gltf) => {
+          const model = gltf.scene;
+          model.traverse(node => {
+            if (node.isMesh) {
+              node.material.wireframe = wireframeMode;
+              node.material.metalness = 0.85;
+              node.material.roughness = 0.22;
+              node.castShadow = true;
+            }
+          });
+
+          const box = new THREE.Box3().setFromObject(model);
+          const size = box.getSize(new THREE.Vector3());
+          const maxDim = Math.max(size.x, size.y, size.z) || 1.0;
+          const factor = targetScale / maxDim;
+          model.scale.set(factor, factor, factor);
+
+          const center = box.getCenter(new THREE.Vector3());
+          model.position.sub(center.multiplyScalar(factor));
+          model.position.y += yOffset;
+
+          model.traverse(node => {
+            if (node.isMesh && node.geometry && node.geometry.attributes && node.geometry.attributes.position) {
+              originalVertexPositions.set(node, node.geometry.attributes.position.array.slice());
+            }
+          });
+
+          targetGroup.add(model);
+
+          if (mutationActive) {
+            applyTopologicalMutation();
+          }
+        });
+      }
+    }
+
+    function loadAndCompositeTwoGLBs(droneKey, coreKey) {
+      const droneGroup = new THREE.Group();
+      const coreGroup = new THREE.Group();
+      assetRootGroup.add(droneGroup);
+      assetRootGroup.add(coreGroup);
+
+      if (window.ZKAEDI_BATTLE_GLB_DATA && window.ZKAEDI_BATTLE_GLB_DATA[droneKey]) {
+        parseAndMountGLB(window.ZKAEDI_BATTLE_GLB_DATA[droneKey], droneGroup, 2.2, 0);
+      }
+      if (window.ZKAEDI_BATTLE_GLB_DATA && window.ZKAEDI_BATTLE_GLB_DATA[coreKey]) {
+        parseAndMountGLB(window.ZKAEDI_BATTLE_GLB_DATA[coreKey], coreGroup, 1.2, 0.55);
+      }
+      fusedCoreSubgroup = coreGroup;
     }
 
     // ── MODE B: APEX ULTRA PROCEDURAL HIGH-FIDELITY CAD GEOMETRY ─────────────
@@ -2098,10 +2415,8 @@
       const lodMultipliers = [1.0, 0.7, 0.45, 0.25];
       const ratio = lodMultipliers[activeLodIdx] || 0.7;
 
-      if (activeAsset === "drone") {
-        // 🛸 APEX COMBAT INTERCEPTOR DRONE (UPGRADED HIGH-FIDELITY CAD)
-
-        // 1. Aerodynamic Chined Stealth Fuselage
+      if (activeAsset === "stealth_drone" || activeAsset === "fused_dreadnought") {
+        // 🛸 APEX RECON DRONE HULL
         const fuseGroup = new THREE.Group();
         const mainHullGeo = new THREE.ConeGeometry(0.85, 2.2, Math.max(6, Math.floor(18 * ratio)));
         mainHullGeo.rotateX(Math.PI / 2);
@@ -2109,7 +2424,6 @@
         mainHull.scale.set(1.1, 0.45, 1.0);
         fuseGroup.add(mainHull);
 
-        // Cockpit Canopy Visor (Faceted Ruby Crystal with HUD Glow)
         const canopyGeo = new THREE.ConeGeometry(0.32, 0.9, 4);
         canopyGeo.rotateX(Math.PI / 2);
         const canopy = new THREE.Mesh(canopyGeo, matRubyGlass);
@@ -2125,17 +2439,15 @@
           gun.position.set(i * 0.28, 0.05, 1.25);
           fuseGroup.add(gun);
 
-          // Muzzle Flash Emitters
           const muzzleGeo = new THREE.TorusGeometry(0.045, 0.015, 4, 8);
           const muzzle = new THREE.Mesh(muzzleGeo, matCyanPlasma);
           muzzle.position.set(i * 0.28, 0.05, 1.68);
           fuseGroup.add(muzzle);
         }
-
         assetRootGroup.add(fuseGroup);
         animatableParts.push({ mesh: fuseGroup, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0, 0) });
 
-        // 2. Swept Delta Aerofoil Wings
+        // Delta Wings
         const wingsGroup = new THREE.Group();
         for (let i = -1; i <= 1; i += 2) {
           const wingGeo = new THREE.BoxGeometry(1.2, 0.04, 0.7);
@@ -2144,7 +2456,6 @@
           wing.rotation.y = i * -0.35;
           wingsGroup.add(wing);
 
-          // Wingtip Stabilizer Canards
           const canardGeo = new THREE.BoxGeometry(0.04, 0.45, 0.45);
           const canard = new THREE.Mesh(canardGeo, matCyanPlasma);
           canard.position.set(i * 1.6, 0.15, -0.35);
@@ -2153,7 +2464,7 @@
         assetRootGroup.add(wingsGroup);
         animatableParts.push({ mesh: wingsGroup, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0, -0.5) });
 
-        // 3. Dual Turbofan Engine Nacelles with Spinning Rotor Blades
+        // Dual Turbofan Engines with Spinning Rotors
         const leftNacelle = createTurbofanNacelle(-0.95, matCarbonArmor, matTitaniumTrim, matCyanPlasma, ratio);
         const rightNacelle = createTurbofanNacelle(0.95, matCarbonArmor, matTitaniumTrim, matCrimsonCore, ratio);
         assetRootGroup.add(leftNacelle.group);
@@ -2164,7 +2475,7 @@
           { mesh: rightNacelle.group, origPos: new THREE.Vector3(0.95, 0, -0.25), explodedPos: new THREE.Vector3(1.8, 0.3, -0.25) }
         );
 
-        // 4. Dual-Chiral Gyro Stabilizer Rings (Counter-Rotating)
+        // Counter-Rotating Gyro Rings
         const gyroGroup = new THREE.Group();
         const gRingGeo1 = new THREE.TorusGeometry(1.35, 0.055, 6, Math.max(12, Math.floor(36 * ratio)));
         const gRing1 = new THREE.Mesh(gRingGeo1, matCyanPlasma);
@@ -2180,17 +2491,31 @@
         assetRootGroup.add(gyroGroup);
         animatableParts.push({ mesh: gyroGroup, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0.9, 0) });
 
-        // 5. Levitating Golden Singularity Core
-        const coreGeo = new THREE.DodecahedronGeometry(0.34, 0);
-        singularityCoreMesh = new THREE.Mesh(coreGeo, matPhotovoltaicGold);
-        singularityCoreMesh.position.set(0, 0.55, -0.2);
-        assetRootGroup.add(singularityCoreMesh);
-        animatableParts.push({ mesh: singularityCoreMesh, origPos: new THREE.Vector3(0, 0.55, -0.2), explodedPos: new THREE.Vector3(0, 1.4, -0.2) });
+        // Add Singularity Core in Fused Mode
+        if (activeAsset === "fused_dreadnought") {
+          const fusedCore = createSingularityCoreAssembly(matPhotovoltaicGold, matCyanPlasma, matCrimsonCore, ratio);
+          fusedCore.position.set(0, 0.4, -0.2);
+          assetRootGroup.add(fusedCore);
+          fusedCoreSubgroup = fusedCore;
+          animatableParts.push({ mesh: fusedCore, origPos: new THREE.Vector3(0, 0.4, -0.2), explodedPos: new THREE.Vector3(0, 1.8, -0.2) });
+        } else {
+          // Standard Single Drone Levitating Golden Core
+          const coreGeo = new THREE.DodecahedronGeometry(0.34, 0);
+          singularityCoreMesh = new THREE.Mesh(coreGeo, matPhotovoltaicGold);
+          singularityCoreMesh.position.set(0, 0.55, -0.2);
+          assetRootGroup.add(singularityCoreMesh);
+          animatableParts.push({ mesh: singularityCoreMesh, origPos: new THREE.Vector3(0, 0.55, -0.2), explodedPos: new THREE.Vector3(0, 1.4, -0.2) });
+        }
+
+      } else if (activeAsset === "singularity_core") {
+        // ⚛️ STANDALONE QUANTUM SINGULARITY CORE
+        const coreAssembly = createSingularityCoreAssembly(matPhotovoltaicGold, matCyanPlasma, matCrimsonCore, ratio);
+        coreAssembly.scale.set(1.4, 1.4, 1.4);
+        assetRootGroup.add(coreAssembly);
+        animatableParts.push({ mesh: coreAssembly, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0, 0) });
 
       } else if (activeAsset === "shield") {
-        // 🛡️ AEGIS QUANTUM TITAN SHIELD (UPGRADED BASTION CHASSIS)
-
-        // 1. Layered Triple-Faceted Hexagonal Bastion Plate
+        // 🛡️ AEGIS QUANTUM TITAN SHIELD
         const shieldGroup = new THREE.Group();
         const plateGeo = new THREE.CylinderGeometry(1.2, 1.0, 2.3, 6, 1, false);
         plateGeo.rotateY(Math.PI / 6);
@@ -2198,7 +2523,6 @@
         const plate = new THREE.Mesh(plateGeo, matCarbonArmor);
         shieldGroup.add(plate);
 
-        // Armor Plate Bevel Rim
         const rimGeo = new THREE.TorusGeometry(1.25, 0.065, 6, 6);
         const rim = new THREE.Mesh(rimGeo, matTitaniumTrim);
         rim.position.z = 0.09;
@@ -2207,7 +2531,6 @@
         assetRootGroup.add(shieldGroup);
         animatableParts.push({ mesh: shieldGroup, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0, -0.6) });
 
-        // 2. Central Honeycomb Singularity Core
         const coreReactor = new THREE.Group();
         const coreRingsGeo = new THREE.TorusGeometry(0.48, 0.045, 6, 24);
         const coreRings = new THREE.Mesh(coreRingsGeo, matCyanPlasma);
@@ -2223,35 +2546,13 @@
         assetRootGroup.add(coreReactor);
         animatableParts.push({ mesh: coreReactor, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0, 0.8) });
 
-        // 3. 4 Floating Perimeter Deflector Pylons
-        const pylonGroup = new THREE.Group();
-        const deflectorPositions = [
-          [-1.1, 1.0, 0.15],
-          [1.1, 1.0, 0.15],
-          [-1.1, -1.0, 0.15],
-          [1.1, -1.0, 0.15]
-        ];
-        deflectorPositions.forEach(pos => {
-          const pylonGeo = new THREE.ConeGeometry(0.18, 0.65, 4);
-          const pylon = new THREE.Mesh(pylonGeo, matPhotovoltaicGold);
-          pylon.position.set(...pos);
-          pylon.rotation.z = Math.atan2(pos[1], pos[0]);
-          pylonGroup.add(pylon);
-        });
-
-        assetRootGroup.add(pylonGroup);
-        animatableParts.push({ mesh: pylonGroup, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0, 1.2) });
-
       } else if (activeAsset === "saber") {
-        // ⚔️ DUAL SINGULARITY QUANTUM SABER (HIGH-PRECISION MACHINED WEAPON)
-
-        // 1. Knurled Ergonomic Titanium Hilt
+        // ⚔️ DUAL SINGULARITY QUANTUM SABER
         const hiltGroup = new THREE.Group();
         const hiltGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.15, Math.max(8, Math.floor(20 * ratio)));
         const hilt = new THREE.Mesh(hiltGeo, matCarbonArmor);
         hiltGroup.add(hilt);
 
-        // Grip Ribs / Rings
         for (let i = -3; i <= 3; i++) {
           const ribGeo = new THREE.TorusGeometry(0.088, 0.012, 4, 16);
           ribGeo.rotateX(Math.PI / 2);
@@ -2260,7 +2561,6 @@
           hiltGroup.add(rib);
         }
 
-        // Central Power Crystal Chamber
         const crystalChamberGeo = new THREE.CylinderGeometry(0.07, 0.07, 0.22, 8);
         const crystalChamber = new THREE.Mesh(crystalChamberGeo, matRubyGlass);
         hiltGroup.add(crystalChamber);
@@ -2273,48 +2573,58 @@
         assetRootGroup.add(hiltGroup);
         animatableParts.push({ mesh: hiltGroup, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0, 0) });
 
-        // 2. Dual Volumetric High-Energy Plasma Blades
-        // Top Radiant Cyan Blade
         const topBladeGroup = createDualLayerBlade(matCyanPlasma, 1.0);
         assetRootGroup.add(topBladeGroup);
         animatableParts.push({ mesh: topBladeGroup, origPos: new THREE.Vector3(0, 0.6, 0), explodedPos: new THREE.Vector3(0, 1.4, 0) });
 
-        // Bottom Fiery Crimson Blade
         const botBladeGroup = createDualLayerBlade(matCrimsonCore, -1.0);
         assetRootGroup.add(botBladeGroup);
         animatableParts.push({ mesh: botBladeGroup, origPos: new THREE.Vector3(0, -0.6, 0), explodedPos: new THREE.Vector3(0, -1.4, 0) });
-
-        // 3. Dual Emitter Collars
-        const collarsGroup = new THREE.Group();
-        [-0.58, 0.58].forEach(yPos => {
-          const colGeo = new THREE.CylinderGeometry(0.12, 0.08, 0.15, 12);
-          const col = new THREE.Mesh(colGeo, matPhotovoltaicGold);
-          col.position.y = yPos;
-          collarsGroup.add(col);
-        });
-        assetRootGroup.add(collarsGroup);
-        animatableParts.push({ mesh: collarsGroup, origPos: new THREE.Vector3(0, 0, 0), explodedPos: new THREE.Vector3(0, 0, 0.5) });
       }
     }
 
-    // Helper: Turbofan Nacelle Assembly with Rotating Compressor Blades
+    function createSingularityCoreAssembly(matGold, matCyan, matCrimson, ratio) {
+      const group = new THREE.Group();
+      // Outer Gimbal Rings
+      const ring1Geo = new THREE.TorusGeometry(0.85, 0.045, 6, Math.max(12, Math.floor(28 * ratio)));
+      const ring1 = new THREE.Mesh(ring1Geo, matCyan);
+      group.add(ring1);
+
+      const ring2Geo = new THREE.TorusGeometry(0.72, 0.04, 6, Math.max(12, Math.floor(28 * ratio)));
+      const ring2 = new THREE.Mesh(ring2Geo, matGold);
+      ring2.rotation.x = Math.PI / 2;
+      group.add(ring2);
+
+      const ring3Geo = new THREE.TorusGeometry(0.58, 0.035, 6, Math.max(12, Math.floor(28 * ratio)));
+      const ring3 = new THREE.Mesh(ring3Geo, matCrimson);
+      ring3.rotation.y = Math.PI / 2;
+      group.add(ring3);
+
+      gyroRings.push(ring1, ring2);
+
+      // Inner Core
+      const coreGeo = new THREE.IcosahedronGeometry(0.38, 1);
+      const core = new THREE.Mesh(coreGeo, matGold);
+      group.add(core);
+      singularityCoreMesh = core;
+
+      return group;
+    }
+
     function createTurbofanNacelle(xOffset, matCowling, matTrim, matExhaust, ratio) {
       const group = new THREE.Group();
       group.position.set(xOffset, 0, -0.25);
 
-      // Nacelle Outer Cowling
       const cowlGeo = new THREE.CylinderGeometry(0.24, 0.22, 1.0, Math.max(8, Math.floor(18 * ratio)));
       cowlGeo.rotateX(Math.PI / 2);
       const cowl = new THREE.Mesh(cowlGeo, matCowling);
       group.add(cowl);
 
-      // Intake Rim
       const intakeRimGeo = new THREE.TorusGeometry(0.24, 0.025, 4, 16);
       const intakeRim = new THREE.Mesh(intakeRimGeo, matTrim);
       intakeRim.position.z = 0.5;
       group.add(intakeRim);
 
-      // 8-Blade Compressor Fan
       const fanMesh = new THREE.Group();
       fanMesh.position.z = 0.42;
       for (let b = 0; b < 8; b++) {
@@ -2326,7 +2636,6 @@
       }
       group.add(fanMesh);
 
-      // Aft Plasma Exhaust Cone
       const exhaustGeo = new THREE.ConeGeometry(0.18, 0.45, 12);
       exhaustGeo.rotateX(-Math.PI / 2);
       const exhaust = new THREE.Mesh(exhaustGeo, matExhaust);
@@ -2336,25 +2645,21 @@
       return { group, fanMesh };
     }
 
-    // Helper: Volumetric Dual-Layer Plasma Blade Assembly
     function createDualLayerBlade(matPlasma, direction = 1.0) {
       const bladeGroup = new THREE.Group();
       const bladeLen = 1.85;
 
-      // Inner White Hot Plasma Core Beam
       const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: wireframeMode });
       const coreGeo = new THREE.CylinderGeometry(0.028, 0.028, bladeLen, 12);
       coreGeo.translate(0, (bladeLen / 2) * direction, 0);
       const coreBeam = new THREE.Mesh(coreGeo, coreMat);
       bladeGroup.add(coreBeam);
 
-      // Outer Volumetric Colored Plasma Sheath
       const sheathGeo = new THREE.CylinderGeometry(0.055, 0.045, bladeLen + 0.1, 16);
       sheathGeo.translate(0, ((bladeLen + 0.1) / 2) * direction, 0);
       const sheathBeam = new THREE.Mesh(sheathGeo, matPlasma);
       bladeGroup.add(sheathBeam);
 
-      // Tapered Energy Ion Flare Tip
       const tipGeo = new THREE.ConeGeometry(0.055, 0.28, 12);
       if (direction < 0) tipGeo.rotateX(Math.PI);
       tipGeo.translate(0, (bladeLen + 0.14) * direction, 0);
@@ -2365,7 +2670,137 @@
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // 6. CONTROLLER ACTIONS & TELEMETRY BINDING
+    // 6. TOPOLOGICAL MUTATION GAUNTLET OPERATORS
+    // ═════════════════════════════════════════════════════════════════════════
+
+    function handleToggleMutate() {
+      mutationActive = !mutationActive;
+      playSound('mutate');
+      const btn = document.getElementById("btn-mutate");
+      btn.classList.toggle("active", mutationActive);
+      btn.classList.toggle("crimson", mutationActive);
+
+      if (mutationActive) {
+        applyTopologicalMutation();
+      } else {
+        resetActiveMutation();
+      }
+    }
+
+    function setMutationType(type) {
+      playSound('click');
+      mutationType = type;
+      ["wave", "jitter", "vortex"].forEach(t => {
+        const btn = document.getElementById("btn-mut-" + t);
+        if (btn) btn.classList.toggle("active", t === type);
+      });
+      mutationActive = true;
+      document.getElementById("btn-mutate").classList.add("active", "crimson");
+      applyTopologicalMutation();
+    }
+
+    function applyMutationSeed(seed) {
+      playSound('mutate');
+      activeSeed = seed;
+      [42, 101, 777, 1337].forEach(s => {
+        const btn = document.getElementById("btn-seed-" + s);
+        if (btn) btn.classList.toggle("active", s === seed);
+      });
+      mutationActive = true;
+      document.getElementById("btn-mutate").classList.add("active", "crimson");
+      applyTopologicalMutation();
+    }
+
+    function applyTopologicalMutation() {
+      if (!assetRootGroup) return;
+
+      assetRootGroup.traverse(node => {
+        if (node.isMesh && node.geometry && originalVertexPositions.has(node)) {
+          const orig = originalVertexPositions.get(node);
+          const pos = node.geometry.attributes.position;
+          const count = pos.count;
+          const seedFactor = (activeSeed % 100) / 50.0;
+
+          for (let i = 0; i < count; i++) {
+            let x = orig[i * 3];
+            let y = orig[i * 3 + 1];
+            let z = orig[i * 3 + 2];
+
+            if (mutationType === 'wave') {
+              const wave = Math.sin(y * 4.0 + seedFactor) * 0.08;
+              x += wave;
+              z += wave;
+            } else if (mutationType === 'jitter') {
+              const r1 = Math.sin(i * 12.9898 + seedFactor) * 0.04;
+              const r2 = Math.cos(i * 78.233 + seedFactor) * 0.04;
+              x += r1;
+              y += r2;
+            } else if (mutationType === 'vortex') {
+              const r = Math.sqrt(x * x + z * z);
+              const theta = Math.atan2(z, x) + (2.0 - r) * 0.35;
+              x = Math.cos(theta) * r;
+              z = Math.sin(theta) * r;
+            }
+
+            pos.setXYZ(i, x, y, z);
+          }
+
+          pos.needsUpdate = true;
+          node.geometry.computeVertexNormals();
+        }
+      });
+
+      document.getElementById("hud-mutation-status").innerHTML = `<span style="color:var(--crimson); font-weight:700;">MUTATED [${mutationType.toUpperCase()} | S${activeSeed}]</span>`;
+    }
+
+    function resetActiveMutation() {
+      playSound('click');
+      mutationActive = false;
+      document.getElementById("btn-mutate").classList.remove("active", "crimson");
+      [42, 101, 777, 1337].forEach(s => {
+        const btn = document.getElementById("btn-seed-" + s);
+        if (btn) btn.classList.toggle("active", s === 777);
+      });
+
+      assetRootGroup.traverse(node => {
+        if (node.isMesh && node.geometry && originalVertexPositions.has(node)) {
+          const orig = originalVertexPositions.get(node);
+          const pos = node.geometry.attributes.position;
+          for (let i = 0; i < pos.count; i++) {
+            pos.setXYZ(i, orig[i * 3], orig[i * 3 + 1], orig[i * 3 + 2]);
+          }
+          pos.needsUpdate = true;
+          node.geometry.computeVertexNormals();
+        }
+      });
+
+      document.getElementById("hud-mutation-status").textContent = "PRISTINE (SEED 777)";
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // 7. FUSION DOCKING OPERATORS
+    // ═════════════════════════════════════════════════════════════════════════
+
+    function handleFusionSlider(val) {
+      fusionPercentage = parseInt(val);
+      document.getElementById("fusion-pct-label").textContent = `${fusionPercentage}% ${fusionPercentage === 100 ? '(Docked)' : fusionPercentage === 0 ? '(Separated)' : '(Coupling)'}`;
+      if (fusionPercentage === 100 && activeAsset !== 'fused_dreadnought') {
+        playSound('fuse');
+      }
+    }
+
+    function handleToggleForcefield() {
+      playSound('click');
+      forcefieldActive = !forcefieldActive;
+      const btn = document.getElementById("btn-forcefield");
+      btn.classList.toggle("active", forcefieldActive);
+      if (forcefieldSphereMesh) {
+        forcefieldSphereMesh.visible = forcefieldActive;
+      }
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // 8. CONTROLLER ACTIONS & TELEMETRY BINDING
     // ═════════════════════════════════════════════════════════════════════════
 
     function handleMeshFidelitySelect(mode) {
@@ -2375,7 +2810,7 @@
       document.getElementById("btn-mode-ultra").classList.toggle("active", mode === 'ultra');
       document.getElementById("btn-mode-glb").classList.toggle("active", mode === 'glb');
       document.getElementById("hero-mesh-tag").textContent = mode === 'ultra' ? "APEX ULTRA CAD" : "CERTIFIED BINARY GLB";
-      document.getElementById("hud-mode-name").innerHTML = mode === 'ultra' ? "✨ APEX ULTRA CAD" : "🔬 GATE 6-M CERTIFIED GLB";
+      document.getElementById("hud-mode-name").innerHTML = mode === 'ultra' ? "✨ APEX ULTRA CAD" : "🔬 GATE 6-M/N CERTIFIED GLB";
 
       loadActiveMeshGeometry();
       refreshHudTelemetry();
@@ -2385,8 +2820,7 @@
       playSound('switch');
       activeAsset = assetKey;
 
-      // Update toolbar buttons
-      ["drone", "shield", "saber"].forEach(k => {
+      ["stealth_drone", "singularity_core", "fused_dreadnought", "saber", "shield"].forEach(k => {
         const btn = document.getElementById("btn-asset-" + k);
         if (btn) btn.classList.toggle("active", k === assetKey);
 
@@ -2397,6 +2831,7 @@
       const data = ASSET_LOD_METRICS[assetKey];
       document.getElementById("hero-asset-icon").textContent = data.icon;
       document.getElementById("hero-asset-title").textContent = data.title;
+      document.getElementById("hud-asset-tag").textContent = assetKey.toUpperCase();
 
       loadActiveMeshGeometry();
       refreshHudTelemetry();
@@ -2466,10 +2901,47 @@
       document.getElementById("hud-tri-eff").textContent = `${lod.triEff} t/v`;
       document.getElementById("hud-euler-status").innerHTML = `&chi; = ${lod.euler}`;
       document.getElementById("hud-dpo-margin").textContent = lod.margin;
-      document.getElementById("hud-qem-error").textContent = lod.qem;
+
+      const exportBtn = document.getElementById("btn-export-glb");
+      if (exportBtn) {
+        exportBtn.textContent = `📥 Export GLB (${lod.name.split('_')[0]})`;
+      }
     }
 
-    // Launch application on DOM ready
+    function downloadActiveGLB() {
+      playSound('switch');
+      const assetDef = ASSET_LOD_METRICS[activeAsset];
+      if (!assetDef) return;
+      let glbKey = `${assetDef.glbPrefix}_lod${activeLodIdx}`;
+      if (activeAsset === 'fused_dreadnought') {
+        glbKey = `stealth_drone_lod${activeLodIdx}`;
+      }
+      const b64 = window.ZKAEDI_BATTLE_GLB_DATA ? window.ZKAEDI_BATTLE_GLB_DATA[glbKey] : null;
+      if (!b64) {
+        alert("Binary GLB payload not found for " + glbKey);
+        return;
+      }
+      try {
+        const binaryStr = atob(b64);
+        const len = binaryStr.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryStr.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: 'model/gltf-binary' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `zkaedi_${activeAsset}_lod${activeLodIdx}.glb`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        console.error("GLB export failed:", err);
+      }
+    }
+
     window.addEventListener("DOMContentLoaded", initApplication);
   </script>
 </body>
