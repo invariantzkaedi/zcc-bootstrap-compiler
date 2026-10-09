@@ -1,0 +1,3 @@
+python3 verify_smt.py
+make selfhost
+git --no-pager diff --stat src/zcc_smt_prover.c

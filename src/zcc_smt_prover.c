@@ -1,4 +1,5 @@
 #include "zcc_smt_prover.h"
+#include "prelude.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -307,7 +308,7 @@ void smt_prove_push_lea_pop_triad(
             if (len >= 63) len = 63;
             strncpy(base, paren + 1, len);
             base[len] = '\0';
-            
+
             if (strcmp(base, "%rip") == 0) {
                 is_rip = 1;
             } else {
@@ -319,7 +320,7 @@ void smt_prove_push_lea_pop_triad(
             while (*p && isspace((unsigned char)*p)) p++;
             if (strncmp(p, "leaq ", 5) == 0) p += 5;
             while (*p && isspace((unsigned char)*p)) p++;
-            
+
             char disp_str[64];
             size_t disp_len = paren - p;
             if (disp_len >= 63) disp_len = 63;
@@ -344,7 +345,7 @@ void smt_prove_push_lea_pop_triad(
     fprintf(f, "; push rax\n");
     fprintf(f, "(define-fun rsp_1 () (_ BitVec 64) (bvsub rsp_0 #x0000000000000008))\n");
     fprintf(f, "(define-fun mem_1 () (Array (_ BitVec 64) (_ BitVec 64)) (store mem_0 rsp_1 rax_0))\n");
-    
+
     fprintf(f, "; %s\n", lea_instruction);
     if (is_rip) {
         fprintf(f, "(declare-fun rip_label_addr () (_ BitVec 64))\n");
@@ -423,6 +424,247 @@ void smt_prove_stack_alignment(
     fprintf(f, "(define-fun sp_alloc () (_ BitVec 64) (bvsub sp_0 #x%016llx))\n", (unsigned long long)aligned_size);
     fprintf(f, "; Prove: Allocated SP maintains 16-byte alignment\n");
     fprintf(f, "(assert (not (= (bvand sp_alloc #x000000000000000F) #x0000000000000000)))\n\n");
+    fprintf(f, "(check-sat)\n");
+    fprintf(f, "(get-model)\n");
+    close_smt_file(ctx);
+}
+
+/* Helper to start standard SMT-LIB2 QF_BV file for IR transformations */
+static SmtProofContext *start_ir_smt_file(const char *category, const char *opt_name, size_t instr_id) {
+    if (!g_emit_smt_proofs) return NULL;
+    ensure_proofs_dir();
+    char path[512];
+    snprintf(path, sizeof(path), "%s/proof_%s_%s_id%lu.smt2", g_smt_proofs_dir, category, opt_name, (unsigned long)instr_id);
+    FILE *f = fopen(path, "w");
+    if (!f) return NULL;
+
+    SmtProofContext *ctx = (SmtProofContext *)malloc(sizeof(SmtProofContext));
+    if (!ctx) {
+        fclose(f);
+        return NULL;
+    }
+    ctx->file = f;
+    ctx->declared_symbols_count = 0;
+
+    fprintf(f, "; ZCC IR FORMAL VERIFICATION: %s (%s) ID %lu\n", category, opt_name, (unsigned long)instr_id);
+    fprintf(f, "(set-logic QF_BV)\n\n");
+    return ctx;
+}
+
+void smt_prove_ir_strength_reduction(
+    const char *opt_name,
+    int op_before,
+    int op_after,
+    long long val_before,
+    long long val_after,
+    int bit_width,
+    size_t instr_id
+) {
+    if (!g_emit_smt_proofs) return;
+    (void)op_before;
+    (void)op_after;
+
+    int width = (bit_width == 32) ? 32 : 64;
+    SmtProofContext *ctx = start_ir_smt_file("strength", opt_name, instr_id);
+    if (!ctx) return;
+    FILE *f = ctx->file;
+
+    fprintf(f, "; Input variable x_0\n");
+    fprintf(f, "(declare-fun x_0 () (_ BitVec %d))\n\n", width);
+
+    fprintf(f, "; --- PRE-OPTIMIZATION STATE ---\n");
+    if (strcmp(opt_name, "ir_mul2_add") == 0) {
+        fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvmul x_0 (_ bv2 %d)))\n", width, width);
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) (bvadd x_0 x_0))\n\n", width);
+    } else if (strcmp(opt_name, "ir_mul2_add_comm") == 0) {
+        fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvmul (_ bv2 %d) x_0))\n", width, width);
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) (bvadd x_0 x_0))\n\n", width);
+    } else if (strcmp(opt_name, "ir_mul_shl") == 0) {
+        fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvmul x_0 (_ bv%lld %d)))\n", width, val_before, width);
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) (bvshl x_0 (_ bv%lld %d)))\n\n", width, val_after, width);
+    } else if (strcmp(opt_name, "ir_mul_shl_comm") == 0) {
+        fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvmul (_ bv%lld %d) x_0))\n", width, val_before, width);
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) (bvshl x_0 (_ bv%lld %d)))\n\n", width, val_after, width);
+    } else if (strcmp(opt_name, "ir_div_shr") == 0) {
+        fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvudiv x_0 (_ bv%lld %d)))\n", width, val_before, width);
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) (bvlshr x_0 (_ bv%lld %d)))\n\n", width, val_after, width);
+    } else if (strcmp(opt_name, "ir_mod_band") == 0) {
+        fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvurem x_0 (_ bv%lld %d)))\n", width, val_before, width);
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) (bvand x_0 (_ bv%lld %d)))\n\n", width, val_after, width);
+    } else {
+        fprintf(f, "; Unknown strength reduction: %s\n", opt_name);
+        close_smt_file(ctx);
+        return;
+    }
+
+    fprintf(f, "; --- EQUIVALENCE PROOF TARGET ---\n");
+    fprintf(f, "(assert (not (= out_pre out_post)))\n\n");
+    fprintf(f, "(check-sat)\n");
+    fprintf(f, "(get-model)\n");
+    close_smt_file(ctx);
+}
+
+void smt_prove_ir_peephole(
+    const char *opt_name,
+    int op_before,
+    int op_after,
+    long long val_before,
+    long long val_after,
+    int has_val_before,
+    int has_val_after,
+    int bit_width,
+    size_t instr_id
+) {
+    if (!g_emit_smt_proofs) return;
+    (void)op_after;
+    (void)has_val_before;
+    (void)has_val_after;
+
+    int width = (bit_width == 32) ? 32 : 64;
+    SmtProofContext *ctx = start_ir_smt_file("peep", opt_name, instr_id);
+    if (!ctx) return;
+    FILE *f = ctx->file;
+
+    fprintf(f, "; Input variable x_0\n");
+    fprintf(f, "(declare-fun x_0 () (_ BitVec %d))\n\n", width);
+
+    fprintf(f, "; --- PRE-OPTIMIZATION STATE ---\n");
+    if (strcmp(opt_name, "ir_peep_self_zero") == 0) {
+        if (op_before == OP_SUB) {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvsub x_0 x_0))\n", width);
+        } else {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvxor x_0 x_0))\n", width);
+        }
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) (_ bv0 %d))\n\n", width, width);
+    } else if (strcmp(opt_name, "ir_peep_self_copy") == 0) {
+        if (op_before == OP_BAND) {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvand x_0 x_0))\n", width);
+        } else {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvor x_0 x_0))\n", width);
+        }
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) x_0)\n\n", width);
+    } else if (strcmp(opt_name, "ir_peep_band_not_self") == 0) {
+        fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvand x_0 (bvnot x_0)))\n", width);
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) (_ bv0 %d))\n\n", width, width);
+    } else if (strcmp(opt_name, "ir_peep_bor_not_self") == 0) {
+        if (op_before == OP_BXOR) {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvxor x_0 (bvnot x_0)))\n", width);
+        } else {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvor x_0 (bvnot x_0)))\n", width);
+        }
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) (bvnot (_ bv0 %d)))\n\n", width, width);
+    } else if (strcmp(opt_name, "ir_peep_double_bnot") == 0) {
+        fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvnot (bvnot x_0)))\n", width);
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) x_0)\n\n", width);
+    } else if (strcmp(opt_name, "ir_peep_op_zero") == 0) {
+        if (op_before == OP_ADD) {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvadd x_0 (_ bv0 %d)))\n", width, width);
+        } else if (op_before == OP_SUB) {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvsub x_0 (_ bv0 %d)))\n", width, width);
+        } else if (op_before == OP_BOR) {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvor x_0 (_ bv0 %d)))\n", width, width);
+        } else if (op_before == OP_BXOR) {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvxor x_0 (_ bv0 %d)))\n", width, width);
+        } else {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvadd x_0 (_ bv0 %d)))\n", width, width);
+        }
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) x_0)\n\n", width);
+    } else if (strcmp(opt_name, "ir_peep_zero_op") == 0) {
+        if (op_before == OP_ADD) {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvadd (_ bv0 %d) x_0))\n", width, width);
+        } else if (op_before == OP_BOR) {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvor (_ bv0 %d) x_0))\n", width, width);
+        } else {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvxor (_ bv0 %d) x_0))\n", width, width);
+        }
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) x_0)\n\n", width);
+    } else if (strcmp(opt_name, "ir_peep_op_one") == 0) {
+        if (op_before == OP_DIV) {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvudiv x_0 (_ bv1 %d)))\n", width, width);
+        } else {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvmul x_0 (_ bv1 %d)))\n", width, width);
+        }
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) x_0)\n\n", width);
+    } else if (strcmp(opt_name, "ir_peep_one_mul") == 0) {
+        fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvmul (_ bv1 %d) x_0))\n", width, width);
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) x_0)\n\n", width);
+    } else if (strcmp(opt_name, "ir_peep_op_zero_const") == 0) {
+        if (op_before == OP_BAND) {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvand x_0 (_ bv0 %d)))\n", width, width);
+        } else {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvmul x_0 (_ bv0 %d)))\n", width, width);
+        }
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) (_ bv0 %d))\n\n", width, width);
+    } else if (strcmp(opt_name, "ir_peep_band_neg1") == 0) {
+        fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvand x_0 (bvnot (_ bv0 %d))))\n", width, width);
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) x_0)\n\n", width);
+    } else if (strcmp(opt_name, "ir_peep_neg1_band") == 0) {
+        fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvand (bvnot (_ bv0 %d)) x_0))\n", width, width);
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) x_0)\n\n", width);
+    } else if (strcmp(opt_name, "ir_peep_bor_neg1") == 0) {
+        fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvor x_0 (bvnot (_ bv0 %d))))\n", width, width);
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) (bvnot (_ bv0 %d)))\n\n", width, width);
+    } else if (strcmp(opt_name, "ir_peep_bxor_neg1") == 0) {
+        fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvxor x_0 (bvnot (_ bv0 %d))))\n", width, width);
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) (bvnot x_0))\n\n", width);
+    } else if (strcmp(opt_name, "ir_peep_neg1_bxor") == 0) {
+        fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvxor (bvnot (_ bv0 %d)) x_0))\n", width, width);
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) (bvnot x_0))\n\n", width);
+    } else if (strcmp(opt_name, "ir_peep_cmp_self") == 0) {
+        if (op_before == OP_EQ) {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (ite (= x_0 x_0) (_ bv1 %d) (_ bv0 %d)))\n", width, width, width);
+        } else if (op_before == OP_NE) {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (ite (not (= x_0 x_0)) (_ bv1 %d) (_ bv0 %d)))\n", width, width, width);
+        } else if (op_before == OP_LE) {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (ite (bvsle x_0 x_0) (_ bv1 %d) (_ bv0 %d)))\n", width, width, width);
+        } else if (op_before == OP_GE) {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (ite (bvsge x_0 x_0) (_ bv1 %d) (_ bv0 %d)))\n", width, width, width);
+        } else if (op_before == OP_LT) {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (ite (bvslt x_0 x_0) (_ bv1 %d) (_ bv0 %d)))\n", width, width, width);
+        } else if (op_before == OP_GT) {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (ite (bvsgt x_0 x_0) (_ bv1 %d) (_ bv0 %d)))\n", width, width, width);
+        } else {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (ite (= x_0 x_0) (_ bv1 %d) (_ bv0 %d)))\n", width, width, width);
+        }
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) (_ bv%lld %d))\n\n", width, val_after, width);
+    } else if (strcmp(opt_name, "ir_peep_shift_zero") == 0) {
+        if (op_before == OP_SHL) {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvshl x_0 (_ bv0 %d)))\n", width, width);
+        } else {
+            fprintf(f, "(define-fun out_pre () (_ BitVec %d) (bvlshr x_0 (_ bv0 %d)))\n", width, width);
+        }
+        fprintf(f, "\n; --- POST-OPTIMIZATION STATE ---\n");
+        fprintf(f, "(define-fun out_post () (_ BitVec %d) x_0)\n\n", width);
+    } else {
+        fprintf(f, "; Unknown peephole optimization: %s\n", opt_name);
+        close_smt_file(ctx);
+        return;
+    }
+
+    fprintf(f, "; --- EQUIVALENCE PROOF TARGET ---\n");
+    fprintf(f, "(assert (not (= out_pre out_post)))\n\n");
     fprintf(f, "(check-sat)\n");
     fprintf(f, "(get-model)\n");
     close_smt_file(ctx);
