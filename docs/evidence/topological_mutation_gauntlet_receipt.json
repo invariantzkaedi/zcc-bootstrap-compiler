@@ -1,0 +1,124 @@
+{
+  "specification": "ZKAEDI-3D-DPO-TOPOLOGICAL-MUTATION-GAUNTLET-v2.0",
+  "timestamp": "2026-10-09T08:29:28Z",
+  "verdict": "PASS",
+  "hardware": {
+    "device": "cuda:0",
+    "device_name": "NVIDIA GeForce RTX 5070 Laptop GPU"
+  },
+  "model_lineage": {
+    "base_model": "Qwen/Qwen2.5-Coder-1.5B-Instruct",
+    "adapter_dir": "H:/__DOWNLOADS/zcc_github_upload/artifacts/zkaedi_3d_dpo_lora_full_adapter",
+    "adapter_sha256": "9a57b0481fb0b353f0f55cf31bc8820d09ca9c5366c61c71bd527fc10e63df3f"
+  },
+  "control_baseline": {
+    "control_chosen_reward": 3.2,
+    "control_rejected_reward": -4.800000000000001,
+    "control_margin": 8.0,
+    "control_win": 1.0
+  },
+  "mutation_results": [
+    {
+      "mutation_id": "T01_COMPLETE_LABEL_INVERSION",
+      "mutation_name": "Complete Label Inversion Control (Winner <-> Loser Swap)",
+      "description": "Swaps Winner and Loser responses to prove model does not blindly favor Asset A",
+      "expected_behavior": "INVERTED_NEGATIVE",
+      "control_margin": 8.0,
+      "mutated_margin": -8.0,
+      "margin_delta": 16.0,
+      "passed": true,
+      "status": "PASS (INVERTED_NEGATIVE)"
+    },
+    {
+      "mutation_id": "T02_DUAL_CANDIDATE_SYMMETRY",
+      "mutation_name": "Dual Candidate Symmetry (Asset A == Asset B Loser Content)",
+      "description": "Tests identical candidate content to assert margin collapses to 0.0",
+      "expected_behavior": "ZERO_COLLAPSE",
+      "control_margin": 8.0,
+      "mutated_margin": 0.0,
+      "margin_delta": 8.0,
+      "passed": true,
+      "status": "PASS (ZERO_COLLAPSE)"
+    },
+    {
+      "mutation_id": "T03_FULL_TIER_AND_H0_COLLAPSE",
+      "mutation_name": "Full Tier & Hamiltonian H0 Collapse",
+      "description": "Demotes LEGENDARY to COMMON, collapses H0 from 8.26M to 1.10M",
+      "expected_behavior": "DEGRADATION",
+      "control_margin": 8.0,
+      "mutated_margin": 4.000000000000001,
+      "margin_delta": 3.999999999999999,
+      "passed": true,
+      "status": "PASS (DEGRADATION)"
+    },
+    {
+      "mutation_id": "T04_EXTREME_POLYGON_DECIMATION",
+      "mutation_name": "Extreme Polygon Decimation (999k -> 42 Vertices)",
+      "description": "Collapses mesh resolution from high-poly sculpt to degenerate 42v primitive",
+      "expected_behavior": "DEGRADATION",
+      "control_margin": 8.0,
+      "mutated_margin": 7.600000000000001,
+      "margin_delta": 0.3999999999999986,
+      "passed": true,
+      "status": "PASS (DEGRADATION)"
+    },
+    {
+      "mutation_id": "T05_STRIPPED_PBR_TO_BARE_GEO",
+      "mutation_name": "Material Channel Stripping (FULL_PBR -> BARE_GEO)",
+      "description": "Strips normal maps, roughness, and emissive channels to bare geometry",
+      "expected_behavior": "DEGRADATION",
+      "control_margin": 8.0,
+      "mutated_margin": 7.600000000000001,
+      "margin_delta": 0.3999999999999986,
+      "passed": true,
+      "status": "PASS (DEGRADATION)"
+    },
+    {
+      "mutation_id": "T06_NORMAL_MAP_NULLIFICATION",
+      "mutation_name": "Normal Map Nullification",
+      "description": "Strips tangent-space normal map flag and texture allocation",
+      "expected_behavior": "DEGRADATION",
+      "control_margin": 8.0,
+      "mutated_margin": 7.600000000000001,
+      "margin_delta": 0.3999999999999986,
+      "passed": true,
+      "status": "PASS (DEGRADATION)"
+    },
+    {
+      "mutation_id": "T07_TRIANGLE_EFFICIENCY_DEGRADATION",
+      "mutation_name": "Triangle Efficiency Degradation (Sliver Pinching 2.85 t/v)",
+      "description": "Degrades quad-dominant 1.78 t/v into degenerate sliver triangulation 2.85 t/v",
+      "expected_behavior": "DEGRADATION",
+      "control_margin": 8.0,
+      "mutated_margin": 6.000000000000001,
+      "margin_delta": 1.9999999999999991,
+      "passed": true,
+      "status": "PASS (DEGRADATION)"
+    },
+    {
+      "mutation_id": "T08_NON_MANIFOLD_TOPOLOGY_ANOMALY",
+      "mutation_name": "Non-Manifold Topology Anomaly (Unshared Edges + Chi=-6)",
+      "description": "Injects unshared non-manifold edge defects and reduced Hamiltonian complexity",
+      "expected_behavior": "DEGRADATION",
+      "control_margin": 8.0,
+      "mutated_margin": 4.000000000000001,
+      "margin_delta": 3.999999999999999,
+      "passed": true,
+      "status": "PASS (DEGRADATION)"
+    }
+  ],
+  "statistical_metrics": {
+    "total_mutations": 8,
+    "passed_count": 8,
+    "pass_rate": 1.0
+  },
+  "assertions": {
+    "control_baseline_positive": true,
+    "label_inversion_verified": true,
+    "symmetry_collapse_verified": true,
+    "tier_and_h0_collapse_verified": true,
+    "decimation_collapse_verified": true,
+    "pbr_stripping_verified": true,
+    "all_topological_mutations_passed": true
+  }
+}

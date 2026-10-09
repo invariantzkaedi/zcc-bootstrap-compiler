@@ -1,0 +1,91 @@
+{
+  "gate_id": "GATE-6D-PROCEDURAL-DPO-SUPERVISORY-BRIDGE",
+  "verdict": "PASS",
+  "timestamp": "2026-10-09T08:17:07Z",
+  "hardware": {
+    "device": "cuda",
+    "gpu_name": "NVIDIA GeForce RTX 5070 Laptop GPU",
+    "vram_total_mib": 8123.4375,
+    "torch_version": "2.11.0+cu128",
+    "cuda_version": "12.8"
+  },
+  "lineage": {
+    "base_model": "Qwen/Qwen2.5-Coder-1.5B-Instruct",
+    "adapter_dir": "H:\\__DOWNLOADS\\zcc_github_upload\\artifacts\\zkaedi_3d_dpo_lora_full_adapter",
+    "adapter_weights_sha256": "9a57b0481fb0b353f0f55cf31bc8820d09ca9c5366c61c71bd527fc10e63df3f",
+    "bridge_script": "H:\\__DOWNLOADS\\zcc_github_upload\\tools\\procedural_dpo_supervisory_bridge.py",
+    "bridge_script_sha256": "66627fb46ef0cbf65dff1d3f4f11a70c1463e988ed43179d8d1e1f6b6bb54758"
+  },
+  "candidates": {
+    "candidate_a": {
+      "name": "DePIN Interceptor Drone (Master High-Poly)",
+      "file_path": "H:\\__DOWNLOADS\\zcc_github_upload\\artifacts\\procedural_selected_assets\\candidate_a_depin_drone_master.glb",
+      "sha256": "10f4f18e2c0a0b82a3494c39eff822f6a85c5e15cd3ddc3f095710cad928c5a7",
+      "file_size_bytes": 160660,
+      "metrics": {
+        "vertices": 4296,
+        "faces": 8420,
+        "edges_unique": 12630,
+        "total_components": 45,
+        "euler_characteristic_total": 86,
+        "all_components_euler_valid": true,
+        "is_watertight": true,
+        "all_components_watertight": true,
+        "volume": 8.538952033410737,
+        "degenerate_faces": 0,
+        "tri_efficiency_ratio": 1.96
+      }
+    },
+    "candidate_b": {
+      "name": "DePIN Interceptor Drone (Degraded / Open Boundary)",
+      "file_path": "H:\\__DOWNLOADS\\zcc_github_upload\\artifacts\\procedural_selected_assets\\candidate_b_depin_drone_degraded.glb",
+      "sha256": "1f9c268aee027850a4454a43f8e092ad3a1e690c8af7acb935077a1fa4efbd74",
+      "file_size_bytes": 7188,
+      "metrics": {
+        "vertices": 201,
+        "faces": 332,
+        "edges_unique": 490,
+        "total_components": 23,
+        "euler_characteristic_total": 43,
+        "all_components_euler_valid": true,
+        "is_watertight": false,
+        "all_components_watertight": true,
+        "volume": 0.0,
+        "degenerate_faces": 0,
+        "tri_efficiency_ratio": 1.6517
+      }
+    }
+  },
+  "dpo_metrics": {
+    "beta": 0.1,
+    "pi_logp_chosen": -462.0,
+    "ref_logp_chosen": -468.0,
+    "reward_chosen": 0.6000000000000001,
+    "pi_logp_rejected": -478.0,
+    "ref_logp_rejected": -442.0,
+    "reward_rejected": -3.6,
+    "margin_delta_r": 4.2,
+    "prob_chosen_preferred": 0.9852259683067269,
+    "negative_control_margin": -4.2
+  },
+  "supervisory_decision": {
+    "selected_winner": "Candidate A (Master High-Poly)",
+    "certified_asset_path": "H:\\__DOWNLOADS\\zcc_github_upload\\artifacts\\procedural_selected_assets\\depin_drone_supervisory_certified.glb",
+    "certified_asset_sha256": "10f4f18e2c0a0b82a3494c39eff822f6a85c5e15cd3ddc3f095710cad928c5a7"
+  },
+  "assertions": {
+    "candidate_a_watertight": true,
+    "candidate_a_components_euler_valid": true,
+    "candidate_b_degraded": true,
+    "dpo_margin_positive": true,
+    "dpo_prob_above_threshold": true,
+    "negative_control_inverted": true,
+    "certified_asset_persisted": true
+  },
+  "timings": {
+    "generation_seconds": 0.2432,
+    "load_seconds": 4.2645,
+    "evaluation_seconds": 0.759,
+    "total_seconds": 5.3094
+  }
+}

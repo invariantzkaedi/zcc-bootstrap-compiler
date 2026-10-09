@@ -1,0 +1,23 @@
+{
+  "specification": "ZKAEDI-3D-DPO-ZERO-ASSET-OOD-BENCHMARK-v1.0",
+  "benchmark_type": "Zero-Graph Entity Overlap Out-of-Distribution Preference Benchmark",
+  "total_pairs": 50,
+  "source_catalog": "C:/Users/zkaed/.gemini/antigravity-ide/knowledge/zkaedi_3d_asset_catalog/artifacts/3d_assets_catalog.db",
+  "parquet_artifact": "H:/__DOWNLOADS/zcc_github_upload/artifacts/zkaedi_3d_dpo_zero_asset_ood.parquet",
+  "parquet_sha256": "510660c8519cadf4ff306c9c89547fd09d92a4ab3e5453074a3dca1e1b01b582",
+  "parquet_bytes": 27151,
+  "jsonl_artifact": "H:/__DOWNLOADS/zcc_github_upload/artifacts/zkaedi_3d_dpo_zero_asset_ood.jsonl",
+  "jsonl_sha256": "6bb5f11d7f91526889388b68221a23e4f654433392b9c3a65b101a5b244a1abd",
+  "jsonl_bytes": 135309,
+  "entity_independence_audit": {
+    "seen_train_eval_concepts_count": 145,
+    "seen_train_eval_files_count": 277,
+    "ood_concepts_count": 50,
+    "ood_files_count": 93,
+    "shared_concepts_count": 0,
+    "shared_files_count": 0,
+    "graph_intersection": 0,
+    "strictly_disjoint": true
+  },
+  "gauntlet_verdict": "PASS"
+}

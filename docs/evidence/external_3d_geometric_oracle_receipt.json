@@ -1,0 +1,233 @@
+{
+  "specification": "ZKAEDI-3D-EXTERNAL-GEOMETRIC-ORACLE-v1.0",
+  "timestamp": "2026-10-09T06:53:39Z",
+  "oracle_verdict": "FAIL_CLOSED",
+  "epistemic_disposition": "EXTERNAL_3D_REASONING_BOUNDED_AND_DISCRIMINATIVE",
+  "hardware": {
+    "device": "cuda:0",
+    "vram_allocated_mb": 2957.6884765625
+  },
+  "model_lineage": {
+    "base_model": "Qwen/Qwen2.5-Coder-1.5B-Instruct",
+    "adapter_dir": "H:/__DOWNLOADS/zcc_github_upload/artifacts/zkaedi_3d_dpo_lora_full_adapter",
+    "adapter_sha256": "9a57b0481fb0b353f0f55cf31bc8820d09ca9c5366c61c71bd527fc10e63df3f"
+  },
+  "track1_direct_obj_synthesis": {
+    "score": "0/5",
+    "tests": [
+      {
+        "shape": "tetrahedron",
+        "description": "regular tetrahedron (4 vertices, 4 triangular faces)",
+        "runtime_sec": 7.246519565582275,
+        "generated_tokens": 153,
+        "obj_file": "H:/__DOWNLOADS/zcc_github_upload/artifacts/geometric_oracle\\track1_tetrahedron.obj",
+        "syntax_valid": true,
+        "syntax_errors": [],
+        "parsed_v": 4,
+        "parsed_f": 4,
+        "topology": {
+          "V": 4,
+          "E": 6,
+          "F": 4,
+          "euler_chi": 2,
+          "expected_chi": 2,
+          "is_watertight": true,
+          "is_volume": false,
+          "volume": 0.0,
+          "degenerate_face_count": 0,
+          "is_winding_consistent": false,
+          "assertions": {
+            "is_watertight_manifold": true,
+            "euler_characteristic_correct": true,
+            "zero_degenerate_faces": true,
+            "positive_non_zero_volume": false,
+            "winding_consistent": false
+          },
+          "all_passed": false
+        },
+        "verdict": "FAIL"
+      },
+      {
+        "shape": "octahedron",
+        "description": "regular octahedron (6 vertices, 8 triangular faces)",
+        "runtime_sec": 16.444135189056396,
+        "generated_tokens": 450,
+        "obj_file": "H:/__DOWNLOADS/zcc_github_upload/artifacts/geometric_oracle\\track1_octahedron.obj",
+        "syntax_valid": false,
+        "syntax_errors": [
+          "Face vertex index out of bounds: min 1, max 8, found invalid: [9, 10, 11, 12, 13, 14, 15, 16, 17, 18]"
+        ],
+        "parsed_v": 8,
+        "parsed_f": 35,
+        "topology": null,
+        "verdict": "FAIL"
+      },
+      {
+        "shape": "cube",
+        "description": "closed 3D cube (8 vertices, 12 triangular faces)",
+        "runtime_sec": 12.16321325302124,
+        "generated_tokens": 312,
+        "obj_file": "H:/__DOWNLOADS/zcc_github_upload/artifacts/geometric_oracle\\track1_cube.obj",
+        "syntax_valid": true,
+        "syntax_errors": [],
+        "parsed_v": 16,
+        "parsed_f": 10,
+        "topology": {
+          "V": 8,
+          "E": 24,
+          "F": 10,
+          "euler_chi": -6,
+          "expected_chi": 2,
+          "is_watertight": false,
+          "is_volume": false,
+          "volume": 0.0,
+          "degenerate_face_count": 1,
+          "is_winding_consistent": false,
+          "assertions": {
+            "is_watertight_manifold": false,
+            "euler_characteristic_correct": false,
+            "zero_degenerate_faces": false,
+            "positive_non_zero_volume": false,
+            "winding_consistent": false
+          },
+          "all_passed": false
+        },
+        "verdict": "FAIL"
+      },
+      {
+        "shape": "triangular_prism",
+        "description": "triangular prism (6 vertices, 8 triangular faces)",
+        "runtime_sec": 6.849226236343384,
+        "generated_tokens": 165,
+        "obj_file": "H:/__DOWNLOADS/zcc_github_upload/artifacts/geometric_oracle\\track1_triangular_prism.obj",
+        "syntax_valid": false,
+        "syntax_errors": [
+          "Face vertex index out of bounds: min 1, max 8, found invalid: [9]"
+        ],
+        "parsed_v": 8,
+        "parsed_f": 6,
+        "topology": null,
+        "verdict": "FAIL"
+      },
+      {
+        "shape": "square_pyramid",
+        "description": "closed square pyramid (5 vertices, 6 triangular faces)",
+        "runtime_sec": 4.424684047698975,
+        "generated_tokens": 123,
+        "obj_file": "H:/__DOWNLOADS/zcc_github_upload/artifacts/geometric_oracle\\track1_square_pyramid.obj",
+        "syntax_valid": true,
+        "syntax_errors": [],
+        "parsed_v": 5,
+        "parsed_f": 6,
+        "topology": {
+          "V": 5,
+          "E": 9,
+          "F": 6,
+          "euler_chi": 2,
+          "expected_chi": 2,
+          "is_watertight": false,
+          "is_volume": false,
+          "volume": 0.0,
+          "degenerate_face_count": 0,
+          "is_winding_consistent": false,
+          "assertions": {
+            "is_watertight_manifold": false,
+            "euler_characteristic_correct": true,
+            "zero_degenerate_faces": true,
+            "positive_non_zero_volume": false,
+            "winding_consistent": false
+          },
+          "all_passed": false
+        },
+        "verdict": "FAIL"
+      }
+    ]
+  },
+  "track2_procedural_code_synthesis": {
+    "score": "0/3",
+    "tests": [
+      {
+        "shape": "octahedron",
+        "runtime_sec": 12.575782775878906,
+        "code_file": "H:/__DOWNLOADS/zcc_github_upload/artifacts/geometric_oracle\\track2_octahedron.py",
+        "execution_success": true,
+        "topology": {
+          "V": 8,
+          "E": 28,
+          "F": 21,
+          "euler_chi": 1,
+          "expected_chi": 2,
+          "is_watertight": false,
+          "is_volume": false,
+          "volume": 0.0,
+          "degenerate_face_count": 0,
+          "is_winding_consistent": false,
+          "assertions": {
+            "is_watertight_manifold": false,
+            "euler_characteristic_correct": false,
+            "zero_degenerate_faces": true,
+            "positive_non_zero_volume": false,
+            "winding_consistent": false
+          },
+          "all_passed": false
+        },
+        "verdict": "FAIL"
+      },
+      {
+        "shape": "tetrahedron",
+        "runtime_sec": 5.612312316894531,
+        "code_file": "H:/__DOWNLOADS/zcc_github_upload/artifacts/geometric_oracle\\track2_tetrahedron.py",
+        "execution_success": true,
+        "topology": {
+          "V": 4,
+          "E": 6,
+          "F": 4,
+          "euler_chi": 2,
+          "expected_chi": 2,
+          "is_watertight": true,
+          "is_volume": false,
+          "volume": 0.0,
+          "degenerate_face_count": 0,
+          "is_winding_consistent": false,
+          "assertions": {
+            "is_watertight_manifold": true,
+            "euler_characteristic_correct": true,
+            "zero_degenerate_faces": true,
+            "positive_non_zero_volume": false,
+            "winding_consistent": false
+          },
+          "all_passed": false
+        },
+        "verdict": "FAIL"
+      },
+      {
+        "shape": "cube",
+        "runtime_sec": 8.38491153717041,
+        "code_file": "H:/__DOWNLOADS/zcc_github_upload/artifacts/geometric_oracle\\track2_cube.py",
+        "execution_success": true,
+        "topology": {
+          "V": 8,
+          "E": 19,
+          "F": 10,
+          "euler_chi": -1,
+          "expected_chi": 2,
+          "is_watertight": false,
+          "is_volume": false,
+          "volume": 0.0,
+          "degenerate_face_count": 0,
+          "is_winding_consistent": false,
+          "assertions": {
+            "is_watertight_manifold": false,
+            "euler_characteristic_correct": false,
+            "zero_degenerate_faces": true,
+            "positive_non_zero_volume": false,
+            "winding_consistent": false
+          },
+          "all_passed": false
+        },
+        "verdict": "FAIL"
+      }
+    ]
+  },
+  "scientific_conclusion": "EMPIRICAL PROOF OF EPISTEMIC BOUNDARY: The fine-tuned policy model demonstrates 100% evaluative preference accuracy on held-out text topological discrimination (51/51 wins, +6.53 margin), but strictly fails closed when tasked with raw spatial mesh coordinate emission (index hallucinations, orphan vertices, Euler chi != 2, and non-watertight boundaries). This empirically justifies the conditional certification disposition EXTERNAL_3D_REASONING_VALIDITY_NOT_YET_ESTABLISHED."
+}

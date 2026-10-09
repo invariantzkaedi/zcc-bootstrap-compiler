@@ -1,0 +1,39 @@
+{
+  "gate_id": "TEST-DPO-SERVER-ENDPOINTS",
+  "verdict": "PASS",
+  "timestamp": "2026-10-09T08:17:51Z",
+  "server_url": "http://127.0.0.1:8018",
+  "health": {
+    "status": "healthy",
+    "model": "qwen2.5-coder-1.5b-zkaedi-3d-dpo",
+    "device": "cuda",
+    "gpu": "NVIDIA GeForce RTX 5070 Laptop GPU",
+    "adapter": "H:\\__DOWNLOADS\\zcc_github_upload\\artifacts\\zkaedi_3d_dpo_lora_full_adapter"
+  },
+  "tests": {
+    "get_health": {
+      "status": 200,
+      "result": {
+        "status": "healthy",
+        "model": "qwen2.5-coder-1.5b-zkaedi-3d-dpo",
+        "device": "cuda",
+        "gpu": "NVIDIA GeForce RTX 5070 Laptop GPU",
+        "adapter": "H:\\__DOWNLOADS\\zcc_github_upload\\artifacts\\zkaedi_3d_dpo_lora_full_adapter"
+      }
+    },
+    "get_models": {
+      "status": 200,
+      "models_count": 1
+    },
+    "post_dpo_evaluate": {
+      "status": 200,
+      "winner": "Asset A",
+      "margin": 2.3
+    },
+    "post_chat_completions": {
+      "status": 200,
+      "tokens": 64,
+      "latency_s": 11.0369
+    }
+  }
+}

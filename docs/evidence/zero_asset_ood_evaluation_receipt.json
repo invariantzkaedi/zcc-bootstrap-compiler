@@ -1,0 +1,541 @@
+{
+  "specification": "ZKAEDI-3D-DPO-ZERO-ASSET-OOD-BENCHMARK-v1.0",
+  "timestamp": "2026-10-09T08:30:02Z",
+  "dataset_metadata": {
+    "parquet_file": "H:/__DOWNLOADS/zcc_github_upload/artifacts/zkaedi_3d_dpo_zero_asset_ood.parquet",
+    "parquet_sha256": "510660c8519cadf4ff306c9c89547fd09d92a4ab3e5453074a3dca1e1b01b582",
+    "total_pairs": 50,
+    "zero_leakage_guarantee": "Zero concept, filename, UUID, or prompt overlap with training corpus"
+  },
+  "model_lineage": {
+    "base_model": "Qwen/Qwen2.5-Coder-1.5B-Instruct",
+    "adapter_dir": "H:/__DOWNLOADS/zcc_github_upload/artifacts/zkaedi_3d_dpo_lora_full_adapter",
+    "adapter_sha256": "9a57b0481fb0b353f0f55cf31bc8820d09ca9c5366c61c71bd527fc10e63df3f"
+  },
+  "overall_metrics": {
+    "total_pairs": 50,
+    "total_wins": 50,
+    "win_rate": 1.0,
+    "wilson_ci_95": [
+      0.9286524008666414,
+      1.0
+    ],
+    "mean_reward_margin": 1.52,
+    "std_reward_margin": 0.43330716823151716,
+    "cohens_d": 3.507904118465587,
+    "t_statistic": 24.804627899192344,
+    "p_value_one_tailed": 1.0762854002083743e-29,
+    "eval_duration_sec": 11.648550510406494
+  },
+  "category_metrics": {
+    "EASY": {
+      "count": 50,
+      "wins": 50,
+      "win_rate": 1.0,
+      "mean_margin": 1.52,
+      "std_margin": 0.43330716823151716
+    }
+  },
+  "exact_per_pair_results": [
+    {
+      "pair_idx": 0,
+      "concept": "Meshy AI Oracle Mask Ceremoni",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.6,
+      "margin": 2.0,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 1,
+      "concept": "Meshy AI ZkaediOracleMask Cer",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.8,
+      "r_rejected": -1.2000000000000002,
+      "margin": 2.0,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 2,
+      "concept": "Meshy AI triuneoracleglyphvoid",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 3,
+      "concept": "fantasy warrior 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 4,
+      "concept": "Meshy AI",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.8,
+      "r_rejected": -1.6,
+      "margin": 2.4000000000000004,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 5,
+      "concept": "R001 neon emblem.spotfixed",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.0,
+      "r_rejected": -1.6,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 6,
+      "concept": "Meshy AI A highly detailed is",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 7,
+      "concept": "fantasy weapon 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.0,
+      "r_rejected": -0.8,
+      "margin": 0.8,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 8,
+      "concept": "Meshy AI ULTIMATE EPIC MOBA AR",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.8,
+      "r_rejected": -1.2000000000000002,
+      "margin": 2.0,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 9,
+      "concept": "Meshy AI celestialsigilreactor",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 10,
+      "concept": "futuristic armored robot 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.0,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.2000000000000002,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 11,
+      "concept": "ornate shield 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.8,
+      "r_rejected": -1.2000000000000002,
+      "margin": 2.0,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 12,
+      "concept": "Meshy AI Meshy Ready Template",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.8,
+      "r_rejected": -1.2000000000000002,
+      "margin": 2.0,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 13,
+      "concept": "Meshy AI Neon Sentinel",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 14,
+      "concept": "Meshy AI Universe Dasher stars",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.8,
+      "r_rejected": -1.6,
+      "margin": 2.4000000000000004,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 15,
+      "concept": "Meshy AI Wings of Fire and Ice",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 16,
+      "concept": "Meshy AI celestialharvestengin",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.6,
+      "margin": 2.0,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 17,
+      "concept": "dragon 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 18,
+      "concept": "Meshy AI Cinematic viral logo",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": -0.4,
+      "r_rejected": -1.6,
+      "margin": 1.2000000000000002,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 19,
+      "concept": "Meshy AI Neon One Eyed Monster",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 20,
+      "concept": "Meshy AI Omega 17 Rises",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -0.8,
+      "margin": 1.2000000000000002,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 21,
+      "concept": "armored knight 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 22,
+      "concept": "butterfly 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 23,
+      "concept": "cosmic crystal 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 24,
+      "concept": "fantasy monster 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 25,
+      "concept": "Meshy AI neuralreactorhumanoid",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.8,
+      "r_rejected": -1.6,
+      "margin": 2.4000000000000004,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 26,
+      "concept": "businessman bust 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 27,
+      "concept": "cyberpunk valkyrie 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.0,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.2000000000000002,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 28,
+      "concept": "fantasy elephant 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 29,
+      "concept": "futuristic device 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": -0.4,
+      "r_rejected": -1.0,
+      "margin": 0.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 30,
+      "concept": "futuristic gun 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.0,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.2000000000000002,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 31,
+      "concept": "hooded figure 3d model repaired",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 32,
+      "concept": "mecha combat robot 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": -0.4,
+      "r_rejected": -1.0,
+      "margin": 0.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 33,
+      "concept": "steampunk creature 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 34,
+      "concept": "6115d629 d03b 4805 a1ba 06188c67f0eb",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.0,
+      "r_rejected": -1.0,
+      "margin": 1.0,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 35,
+      "concept": "Meshy AI Zkadi Prime",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 36,
+      "concept": "Meshy AI quantummandalareactor",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.6,
+      "margin": 2.0,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 37,
+      "concept": "cute fantasy creature 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 38,
+      "concept": "cyberpunk fairy 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": -0.4,
+      "r_rejected": -1.4000000000000001,
+      "margin": 1.0,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 39,
+      "concept": "dragon ball character 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.0,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.2000000000000002,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 40,
+      "concept": "eye monster 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 41,
+      "concept": "fantasy battle axe 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.6,
+      "margin": 2.0,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 42,
+      "concept": "fantasy elf fairy 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": -0.4,
+      "r_rejected": -1.4000000000000001,
+      "margin": 1.0,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 43,
+      "concept": "lava monster 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 44,
+      "concept": "space battleship 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": -0.4,
+      "r_rejected": -1.0,
+      "margin": 0.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 45,
+      "concept": "stylized pickaxe 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.0,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.2000000000000002,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 46,
+      "concept": "Hiphop aliens",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.8,
+      "r_rejected": -0.8,
+      "margin": 1.6,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 47,
+      "concept": "dark fantasy armor 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -0.8,
+      "margin": 1.2000000000000002,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 48,
+      "concept": "fantasy dragon 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.0,
+      "r_rejected": -1.2000000000000002,
+      "margin": 1.2000000000000002,
+      "win": 1.0
+    },
+    {
+      "pair_idx": 49,
+      "concept": "futuristic armored warrior 3d model",
+      "margin_cat": "EASY",
+      "h0_delta": 0.0,
+      "r_chosen": 0.4,
+      "r_rejected": -0.8,
+      "margin": 1.2000000000000002,
+      "win": 1.0
+    }
+  ]
+}
