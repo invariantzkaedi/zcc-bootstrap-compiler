@@ -1,0 +1,19 @@
+{
+  "specification": "ZKAEDI-3D-DPO-EPSILON-HARD-NEGATIVES-v1.0",
+  "timestamp": "2026-10-09T09:30:00Z",
+  "verdict": "PASS",
+  "total_pairs": 100,
+  "catalog_source": "C:\\Users\\zkaed\\.gemini\\antigravity-ide\\knowledge\\zkaedi_3d_asset_catalog\\artifacts\\3d_assets_catalog.db",
+  "artifacts": {
+    "parquet_workspace": "H:\\__DOWNLOADS\\zcc_github_upload\\artifacts\\zkaedi_3d_dpo_epsilon_hard_negatives.parquet",
+    "parquet_sha256": "043206d88f32939033677eb7dcad32ceda808b4e5762fed99096b8cfdc5b13eb",
+    "jsonl_workspace": "H:\\__DOWNLOADS\\zcc_github_upload\\artifacts\\zkaedi_3d_dpo_epsilon_hard_negatives.jsonl",
+    "jsonl_sha256": "7fe088abc7d25170987dc8f32e761a3d7124be32f5ea754aa62665e28561bfa8"
+  },
+  "epsilon_metrics": {
+    "mean_size_ratio": 1.08782,
+    "max_delta_h0_norm": 0.0793,
+    "mean_delta_h0_norm": 0.030891999999999996,
+    "difficulty": "HARD_EPSILON"
+  }
+}

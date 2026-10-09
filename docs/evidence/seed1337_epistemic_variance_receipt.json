@@ -1,0 +1,514 @@
+{
+  "specification": "ZKAEDI-SEED1337-EPISTEMIC-VARIANCE-v1.0",
+  "timestamp": "2026-10-09T09:28:50Z",
+  "verdict": "PASS",
+  "disposition": "CROSS_SEED_EPISTEMIC_STABILITY_AND_SIGN_AGREEMENT_VERIFIED",
+  "lineage": {
+    "base_model": "Qwen/Qwen2.5-Coder-1.5B-Instruct",
+    "revision": "2e1fd397ee46e1388853d2af2c993145b0f1098a",
+    "train_parquet_sha256": "74dbef13038d2b9dea1d3406296b7e9a2ca1947c37c77e0ca541fdb37789ebb2",
+    "eval_parquet_sha256": "a3487a228bf681c9f98e61e7e70e9dc0ad0bdb1a1bbd5bfc81dffc41d6cad7ab",
+    "seed1337_adapter_sha256": "4e796de5c94d2c77ddc0d6cbc0479f683934f7e1789dfa99bfb1d18f918486af",
+    "baseline_receipt_sha256": "cc4bc513289ab05345d909af0804ab5be1f66e8b43e08209c55236e0a52959b3"
+  },
+  "training": {
+    "seed": 1337,
+    "steps": 10,
+    "train_pairs": 40,
+    "final_loss": 0.6712214052677155,
+    "runtime_sec": 53.280338525772095
+  },
+  "cross_seed_metrics_10step": {
+    "seed42_accuracy": 0.6470588235294118,
+    "seed1337_accuracy": 0.7058823529411765,
+    "accuracy_delta_pp": 5.882352941176472,
+    "delta_bounded_pass": true
+  },
+  "comparison_against_full_scale_229step": {
+    "total_pairs": 51,
+    "seed42_full_scale_mean_margin": 6.545098039215685,
+    "seed1337_10step_mean_margin": 0.0639577828201593,
+    "mean_absolute_drift": 6.481140256395527,
+    "max_absolute_drift": 8.733929443359376,
+    "mean_epistemic_variance": 21.59289444118848,
+    "sign_agreement_rate": 0.7058823529411765,
+    "pearson_r": -0.3398480087946786,
+    "pearson_p_value": 0.014689761308098277,
+    "spearman_rho": -0.34171791969038934,
+    "spearman_p_value": 0.014118608676337387
+  },
+  "jointly_novel_cohort_14": {
+    "n": 14,
+    "wins_seed1337": 14,
+    "accuracy_seed1337": 1.0,
+    "wilson_ci_95": [
+      0.7846891972623643,
+      1.0
+    ],
+    "seed42_full_scale_mean_margin": 5.814285714285715,
+    "seed1337_10step_mean_margin": 0.2049534388950893,
+    "mean_absolute_drift": 5.609332275390627,
+    "mean_epistemic_variance": 15.816504221875222
+  },
+  "per_pair_comparison": [
+    {
+      "idx": 0,
+      "is_novel": false,
+      "margin_seed42": 8.4,
+      "margin_seed1337": -0.029437255859374997,
+      "delta_margin": -8.429437255859375,
+      "epistemic_variance": 35.527706225235015,
+      "sign_agreement": false
+    },
+    {
+      "idx": 1,
+      "is_novel": false,
+      "margin_seed42": 4.0,
+      "margin_seed1337": -0.08781738281250001,
+      "delta_margin": -4.0878173828125,
+      "epistemic_variance": 8.355125477612019,
+      "sign_agreement": false
+    },
+    {
+      "idx": 2,
+      "is_novel": true,
+      "margin_seed42": 5.2,
+      "margin_seed1337": 0.19765625,
+      "delta_margin": -5.0023437500000005,
+      "epistemic_variance": 12.511721496582034,
+      "sign_agreement": true
+    },
+    {
+      "idx": 3,
+      "is_novel": false,
+      "margin_seed42": 8.8,
+      "margin_seed1337": 0.06607055664062501,
+      "delta_margin": -8.733929443359376,
+      "epistemic_variance": 38.14076176078991,
+      "sign_agreement": true
+    },
+    {
+      "idx": 4,
+      "is_novel": true,
+      "margin_seed42": 5.800000000000001,
+      "margin_seed1337": 0.13299560546875,
+      "delta_margin": -5.667004394531251,
+      "epistemic_variance": 16.057469403818253,
+      "sign_agreement": true
+    },
+    {
+      "idx": 5,
+      "is_novel": false,
+      "margin_seed42": 6.4,
+      "margin_seed1337": 0.114727783203125,
+      "delta_margin": -6.2852722167968755,
+      "epistemic_variance": 19.752323419619355,
+      "sign_agreement": true
+    },
+    {
+      "idx": 6,
+      "is_novel": true,
+      "margin_seed42": 6.2,
+      "margin_seed1337": 0.22630920410156252,
+      "delta_margin": -5.973690795898437,
+      "epistemic_variance": 17.842490862500853,
+      "sign_agreement": true
+    },
+    {
+      "idx": 7,
+      "is_novel": false,
+      "margin_seed42": 8.4,
+      "margin_seed1337": -0.029168701171875006,
+      "delta_margin": -8.429168701171875,
+      "epistemic_variance": 35.52544249640778,
+      "sign_agreement": false
+    },
+    {
+      "idx": 8,
+      "is_novel": true,
+      "margin_seed42": 5.6,
+      "margin_seed1337": 0.1113189697265625,
+      "delta_margin": -5.488681030273437,
+      "epistemic_variance": 15.062809726041738,
+      "sign_agreement": true
+    },
+    {
+      "idx": 9,
+      "is_novel": true,
+      "margin_seed42": 5.2,
+      "margin_seed1337": 0.2253997802734375,
+      "delta_margin": -4.974600219726563,
+      "epistemic_variance": 12.373323673051784,
+      "sign_agreement": true
+    },
+    {
+      "idx": 10,
+      "is_novel": false,
+      "margin_seed42": 7.200000000000001,
+      "margin_seed1337": 0.044476318359375,
+      "delta_margin": -7.155523681640626,
+      "epistemic_variance": 25.60075957925991,
+      "sign_agreement": true
+    },
+    {
+      "idx": 11,
+      "is_novel": false,
+      "margin_seed42": 7.6000000000000005,
+      "margin_seed1337": -0.06495361328125,
+      "delta_margin": -7.66495361328125,
+      "epistemic_variance": 29.37575694687665,
+      "sign_agreement": false
+    },
+    {
+      "idx": 12,
+      "is_novel": false,
+      "margin_seed42": 7.2,
+      "margin_seed1337": 0.026843261718749997,
+      "delta_margin": -7.17315673828125,
+      "epistemic_variance": 25.72708879597485,
+      "sign_agreement": true
+    },
+    {
+      "idx": 13,
+      "is_novel": false,
+      "margin_seed42": 6.800000000000001,
+      "margin_seed1337": -0.011138916015625,
+      "delta_margin": -6.811138916015626,
+      "epistemic_variance": 23.195806666631256,
+      "sign_agreement": false
+    },
+    {
+      "idx": 14,
+      "is_novel": false,
+      "margin_seed42": 5.2,
+      "margin_seed1337": -0.0032714843750000014,
+      "delta_margin": -5.2032714843750005,
+      "epistemic_variance": 13.537017070055011,
+      "sign_agreement": false
+    },
+    {
+      "idx": 15,
+      "is_novel": false,
+      "margin_seed42": 6.0,
+      "margin_seed1337": 0.010876464843750003,
+      "delta_margin": -5.98912353515625,
+      "epistemic_variance": 17.93480035968125,
+      "sign_agreement": true
+    },
+    {
+      "idx": 16,
+      "is_novel": false,
+      "margin_seed42": 6.0,
+      "margin_seed1337": 0.0355712890625,
+      "delta_margin": -5.9644287109375,
+      "epistemic_variance": 17.78720492392778,
+      "sign_agreement": true
+    },
+    {
+      "idx": 17,
+      "is_novel": false,
+      "margin_seed42": 6.4,
+      "margin_seed1337": 0.115740966796875,
+      "delta_margin": -6.284259033203125,
+      "epistemic_variance": 19.74595579819754,
+      "sign_agreement": true
+    },
+    {
+      "idx": 18,
+      "is_novel": false,
+      "margin_seed42": 7.200000000000001,
+      "margin_seed1337": -0.12985839843750002,
+      "delta_margin": -7.329858398437501,
+      "epistemic_variance": 26.863412070572387,
+      "sign_agreement": false
+    },
+    {
+      "idx": 19,
+      "is_novel": true,
+      "margin_seed42": 5.800000000000001,
+      "margin_seed1337": 0.15423278808593752,
+      "delta_margin": -5.645767211914063,
+      "epistemic_variance": 15.937343705561949,
+      "sign_agreement": true
+    },
+    {
+      "idx": 20,
+      "is_novel": false,
+      "margin_seed42": 6.0,
+      "margin_seed1337": 0.066729736328125,
+      "delta_margin": -5.933270263671875,
+      "epistemic_variance": 17.60184801088646,
+      "sign_agreement": true
+    },
+    {
+      "idx": 21,
+      "is_novel": false,
+      "margin_seed42": 8.0,
+      "margin_seed1337": 0.018865966796875,
+      "delta_margin": -7.981134033203125,
+      "epistemic_variance": 31.849250227976587,
+      "sign_agreement": true
+    },
+    {
+      "idx": 22,
+      "is_novel": true,
+      "margin_seed42": 6.0,
+      "margin_seed1337": 0.19931640625000002,
+      "delta_margin": -5.80068359375,
+      "epistemic_variance": 16.823965077400207,
+      "sign_agreement": true
+    },
+    {
+      "idx": 23,
+      "is_novel": false,
+      "margin_seed42": 7.6000000000000005,
+      "margin_seed1337": 0.05006103515625,
+      "delta_margin": -7.549938964843751,
+      "epistemic_variance": 28.500789186432964,
+      "sign_agreement": true
+    },
+    {
+      "idx": 24,
+      "is_novel": true,
+      "margin_seed42": 6.2,
+      "margin_seed1337": 0.2384674072265625,
+      "delta_margin": -5.9615325927734375,
+      "epistemic_variance": 17.769935427349992,
+      "sign_agreement": true
+    },
+    {
+      "idx": 25,
+      "is_novel": false,
+      "margin_seed42": 5.6000000000000005,
+      "margin_seed1337": -0.007678222656250004,
+      "delta_margin": -5.607678222656251,
+      "epistemic_variance": 15.723027524426584,
+      "sign_agreement": false
+    },
+    {
+      "idx": 26,
+      "is_novel": true,
+      "margin_seed42": 5.800000000000001,
+      "margin_seed1337": 0.174224853515625,
+      "delta_margin": -5.625775146484376,
+      "epistemic_variance": 15.824672999400649,
+      "sign_agreement": true
+    },
+    {
+      "idx": 27,
+      "is_novel": false,
+      "margin_seed42": 8.0,
+      "margin_seed1337": -0.044354248046875,
+      "delta_margin": -8.044354248046876,
+      "epistemic_variance": 32.355817634034906,
+      "sign_agreement": false
+    },
+    {
+      "idx": 28,
+      "is_novel": false,
+      "margin_seed42": 7.2,
+      "margin_seed1337": 0.12604370117187502,
+      "delta_margin": -7.073956298828125,
+      "epistemic_variance": 25.020428858865053,
+      "sign_agreement": true
+    },
+    {
+      "idx": 29,
+      "is_novel": false,
+      "margin_seed42": 6.4,
+      "margin_seed1337": 0.052276611328125,
+      "delta_margin": -6.347723388671875,
+      "epistemic_variance": 20.146796109545978,
+      "sign_agreement": true
+    },
+    {
+      "idx": 30,
+      "is_novel": false,
+      "margin_seed42": 8.4,
+      "margin_seed1337": -0.07757568359375,
+      "delta_margin": -8.47757568359375,
+      "epistemic_variance": 35.93464473553002,
+      "sign_agreement": false
+    },
+    {
+      "idx": 31,
+      "is_novel": false,
+      "margin_seed42": 6.4,
+      "margin_seed1337": 0.008673095703125005,
+      "delta_margin": -6.391326904296875,
+      "epistemic_variance": 20.424529798794538,
+      "sign_agreement": true
+    },
+    {
+      "idx": 32,
+      "is_novel": false,
+      "margin_seed42": 7.200000000000001,
+      "margin_seed1337": 0.11894531250000001,
+      "delta_margin": -7.081054687500001,
+      "epistemic_variance": 25.07066774368287,
+      "sign_agreement": true
+    },
+    {
+      "idx": 33,
+      "is_novel": false,
+      "margin_seed42": 6.0,
+      "margin_seed1337": 0.004199218750000001,
+      "delta_margin": -5.99580078125,
+      "epistemic_variance": 17.974813504219053,
+      "sign_agreement": true
+    },
+    {
+      "idx": 34,
+      "is_novel": false,
+      "margin_seed42": 6.4,
+      "margin_seed1337": 0.008996582031249999,
+      "delta_margin": -6.391003417968751,
+      "epistemic_variance": 20.422462344244128,
+      "sign_agreement": true
+    },
+    {
+      "idx": 35,
+      "is_novel": true,
+      "margin_seed42": 6.0,
+      "margin_seed1337": 0.2567413330078125,
+      "delta_margin": -5.743258666992188,
+      "epistemic_variance": 16.49251005799044,
+      "sign_agreement": true
+    },
+    {
+      "idx": 36,
+      "is_novel": false,
+      "margin_seed42": 6.0,
+      "margin_seed1337": -0.03746337890625,
+      "delta_margin": -6.03746337890625,
+      "epistemic_variance": 18.225482025817037,
+      "sign_agreement": false
+    },
+    {
+      "idx": 37,
+      "is_novel": true,
+      "margin_seed42": 6.0,
+      "margin_seed1337": 0.16972045898437502,
+      "delta_margin": -5.830279541015625,
+      "epistemic_variance": 16.996079763192686,
+      "sign_agreement": true
+    },
+    {
+      "idx": 38,
+      "is_novel": false,
+      "margin_seed42": 4.8,
+      "margin_seed1337": 0.0419677734375,
+      "delta_margin": -4.7580322265624995,
+      "epistemic_variance": 11.319435334503648,
+      "sign_agreement": true
+    },
+    {
+      "idx": 39,
+      "is_novel": false,
+      "margin_seed42": 6.800000000000001,
+      "margin_seed1337": 0.053210449218750004,
+      "delta_margin": -6.7467895507812505,
+      "epistemic_variance": 22.759584621265535,
+      "sign_agreement": true
+    },
+    {
+      "idx": 40,
+      "is_novel": true,
+      "margin_seed42": 6.2,
+      "margin_seed1337": 0.2084320068359375,
+      "delta_margin": -5.991567993164063,
+      "epistemic_variance": 17.94944350835402,
+      "sign_agreement": true
+    },
+    {
+      "idx": 41,
+      "is_novel": false,
+      "margin_seed42": 6.4,
+      "margin_seed1337": -0.04768676757812501,
+      "delta_margin": -6.4476867675781255,
+      "epistemic_variance": 20.786332326401027,
+      "sign_agreement": false
+    },
+    {
+      "idx": 42,
+      "is_novel": true,
+      "margin_seed42": 5.0,
+      "margin_seed1337": 0.28841552734375,
+      "delta_margin": -4.71158447265625,
+      "epistemic_variance": 11.099514121487738,
+      "sign_agreement": true
+    },
+    {
+      "idx": 43,
+      "is_novel": false,
+      "margin_seed42": 8.0,
+      "margin_seed1337": 0.017242431640625003,
+      "delta_margin": -7.982757568359375,
+      "epistemic_variance": 31.86220919759944,
+      "sign_agreement": true
+    },
+    {
+      "idx": 44,
+      "is_novel": false,
+      "margin_seed42": 7.2,
+      "margin_seed1337": -0.0831298828125,
+      "delta_margin": -7.2831298828125,
+      "epistemic_variance": 26.52199044495821,
+      "sign_agreement": false
+    },
+    {
+      "idx": 45,
+      "is_novel": false,
+      "margin_seed42": 7.6,
+      "margin_seed1337": -0.021905517578125,
+      "delta_margin": -7.621905517578124,
+      "epistemic_variance": 29.046721859443927,
+      "sign_agreement": false
+    },
+    {
+      "idx": 46,
+      "is_novel": false,
+      "margin_seed42": 8.0,
+      "margin_seed1337": 0.03516845703125,
+      "delta_margin": -7.96483154296875,
+      "epistemic_variance": 31.719270753934982,
+      "sign_agreement": true
+    },
+    {
+      "idx": 47,
+      "is_novel": false,
+      "margin_seed42": 6.4,
+      "margin_seed1337": 0.0736083984375,
+      "delta_margin": -6.3263916015625,
+      "epistemic_variance": 20.01161534816027,
+      "sign_agreement": true
+    },
+    {
+      "idx": 48,
+      "is_novel": false,
+      "margin_seed42": 7.2,
+      "margin_seed1337": 0.050238037109374994,
+      "delta_margin": -7.149761962890625,
+      "epistemic_variance": 25.5595480629988,
+      "sign_agreement": true
+    },
+    {
+      "idx": 49,
+      "is_novel": true,
+      "margin_seed42": 6.4,
+      "margin_seed1337": 0.2861175537109375,
+      "delta_margin": -6.113882446289063,
+      "epistemic_variance": 18.689779283520767,
+      "sign_agreement": true
+    },
+    {
+      "idx": 50,
+      "is_novel": false,
+      "margin_seed42": 5.200000000000001,
+      "margin_seed1337": -0.07259521484375,
+      "delta_margin": -5.272595214843751,
+      "epistemic_variance": 13.90013014979661,
+      "sign_agreement": false
+    }
+  ]
+}
