@@ -1,10 +1,14 @@
 {
-  "total_bugs": 33,
-  "resolved_bugs": 33,
+  "total_bugs": 80,
+  "resolved_bugs": 80,
   "dimensions": {
     "04_Designated_Union_Initializer_Stride": {
       "total": 33,
       "resolved": 33
+    },
+    "22_Setjmp_Volatile_Register_Preservation": {
+      "total": 47,
+      "resolved": 47
     }
   },
   "results": [
@@ -16,6 +20,24 @@
       "gcc_exit": 109,
       "original_zcc_exit": -11,
       "original_gcc_exit": 109
+    },
+    {
+      "proof_id": "APEX_BUG_06abb0b83b62907a",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 4,
+      "gcc_exit": 4,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 4
+    },
+    {
+      "proof_id": "APEX_BUG_0909d915e97c4959",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 108,
+      "gcc_exit": 108,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 108
     },
     {
       "proof_id": "APEX_BUG_0a2e78ae1ea51368",
@@ -36,6 +58,15 @@
       "original_gcc_exit": 125
     },
     {
+      "proof_id": "APEX_BUG_103662ed9eecfd8d",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 162,
+      "gcc_exit": 162,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 162
+    },
+    {
       "proof_id": "APEX_BUG_104ccc4f3e9c6230",
       "dimension": "04_Designated_Union_Initializer_Stride",
       "resolved": true,
@@ -54,6 +85,15 @@
       "original_gcc_exit": 65
     },
     {
+      "proof_id": "APEX_BUG_10d587b913f3ab2b",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 200,
+      "gcc_exit": 200,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 200
+    },
+    {
       "proof_id": "APEX_BUG_14f1996668ec9270",
       "dimension": "04_Designated_Union_Initializer_Stride",
       "resolved": true,
@@ -61,6 +101,33 @@
       "gcc_exit": 143,
       "original_zcc_exit": -11,
       "original_gcc_exit": 143
+    },
+    {
+      "proof_id": "APEX_BUG_1d62ecdc125ec7ef",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 126,
+      "gcc_exit": 126,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 126
+    },
+    {
+      "proof_id": "APEX_BUG_26fdf40386e96681",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 86,
+      "gcc_exit": 86,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 86
+    },
+    {
+      "proof_id": "APEX_BUG_2b6a482f6f89579a",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 198,
+      "gcc_exit": 198,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 198
     },
     {
       "proof_id": "APEX_BUG_2e670c33a5e10855",
@@ -72,6 +139,33 @@
       "original_gcc_exit": 31
     },
     {
+      "proof_id": "APEX_BUG_3082ca1fffff8be8",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 184,
+      "gcc_exit": 184,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 184
+    },
+    {
+      "proof_id": "APEX_BUG_344a740df2b423a6",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 88,
+      "gcc_exit": 88,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 88
+    },
+    {
+      "proof_id": "APEX_BUG_3537bd12c278415b",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 62,
+      "gcc_exit": 62,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 62
+    },
+    {
       "proof_id": "APEX_BUG_35630709fee38e15",
       "dimension": "04_Designated_Union_Initializer_Stride",
       "resolved": true,
@@ -79,6 +173,15 @@
       "gcc_exit": 95,
       "original_zcc_exit": -11,
       "original_gcc_exit": 95
+    },
+    {
+      "proof_id": "APEX_BUG_4978d279bfde3aca",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 26,
+      "gcc_exit": 26,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 26
     },
     {
       "proof_id": "APEX_BUG_4b34f00c6c7e840f",
@@ -90,6 +193,15 @@
       "original_gcc_exit": 220
     },
     {
+      "proof_id": "APEX_BUG_4e8a9ba46d4b11e6",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 40,
+      "gcc_exit": 40,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 40
+    },
+    {
       "proof_id": "APEX_BUG_504e76c50cc48a4d",
       "dimension": "04_Designated_Union_Initializer_Stride",
       "resolved": true,
@@ -97,6 +209,24 @@
       "gcc_exit": 88,
       "original_zcc_exit": -11,
       "original_gcc_exit": 88
+    },
+    {
+      "proof_id": "APEX_BUG_533642b4b2716d38",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 124,
+      "gcc_exit": 124,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 124
+    },
+    {
+      "proof_id": "APEX_BUG_5456bf0ab72b9432",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 100,
+      "gcc_exit": 100,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 100
     },
     {
       "proof_id": "APEX_BUG_54630a753c657d27",
@@ -108,6 +238,42 @@
       "original_gcc_exit": 27
     },
     {
+      "proof_id": "APEX_BUG_557b5a6101811edf",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 202,
+      "gcc_exit": 202,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 202
+    },
+    {
+      "proof_id": "APEX_BUG_56538ed4464cdf40",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 92,
+      "gcc_exit": 92,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 92
+    },
+    {
+      "proof_id": "APEX_BUG_58e9833dfd8d0bef",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 226,
+      "gcc_exit": 226,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 226
+    },
+    {
+      "proof_id": "APEX_BUG_5e411d01c7b0bc0a",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 124,
+      "gcc_exit": 124,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 124
+    },
+    {
       "proof_id": "APEX_BUG_609e01c2c98c789e",
       "dimension": "04_Designated_Union_Initializer_Stride",
       "resolved": true,
@@ -115,6 +281,60 @@
       "gcc_exit": 37,
       "original_zcc_exit": -11,
       "original_gcc_exit": 37
+    },
+    {
+      "proof_id": "APEX_BUG_60a9def0b8aee80d",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 184,
+      "gcc_exit": 184,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 184
+    },
+    {
+      "proof_id": "APEX_BUG_6669cda06cc0baea",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 94,
+      "gcc_exit": 94,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 94
+    },
+    {
+      "proof_id": "APEX_BUG_69f41a75a17dc9ef",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 208,
+      "gcc_exit": 208,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 208
+    },
+    {
+      "proof_id": "APEX_BUG_6beda038b6aacda0",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 126,
+      "gcc_exit": 126,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 126
+    },
+    {
+      "proof_id": "APEX_BUG_6e3767462e0f8a55",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 106,
+      "gcc_exit": 106,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 106
+    },
+    {
+      "proof_id": "APEX_BUG_6f8a6b1128dfa06b",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 132,
+      "gcc_exit": 132,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 132
     },
     {
       "proof_id": "APEX_BUG_72224c1af3fbab3d",
@@ -135,6 +355,15 @@
       "original_gcc_exit": 30
     },
     {
+      "proof_id": "APEX_BUG_7495ffff515285b0",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 166,
+      "gcc_exit": 166,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 166
+    },
+    {
       "proof_id": "APEX_BUG_77b2bb18e943412b",
       "dimension": "04_Designated_Union_Initializer_Stride",
       "resolved": true,
@@ -144,6 +373,78 @@
       "original_gcc_exit": 81
     },
     {
+      "proof_id": "APEX_BUG_82482e0c49fb0ba6",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 92,
+      "gcc_exit": 92,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 92
+    },
+    {
+      "proof_id": "APEX_BUG_8b878cf3c12720a6",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 212,
+      "gcc_exit": 212,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 212
+    },
+    {
+      "proof_id": "APEX_BUG_8f57b623d42b41d6",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 62,
+      "gcc_exit": 62,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 62
+    },
+    {
+      "proof_id": "APEX_BUG_9ae5340e617ec714",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 170,
+      "gcc_exit": 170,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 170
+    },
+    {
+      "proof_id": "APEX_BUG_9c3993ac9f1ce74b",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 32,
+      "gcc_exit": 32,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 32
+    },
+    {
+      "proof_id": "APEX_BUG_9c6c2475b52369b3",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 38,
+      "gcc_exit": 38,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 38
+    },
+    {
+      "proof_id": "APEX_BUG_9e37a9a6faa9a293",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 44,
+      "gcc_exit": 44,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 44
+    },
+    {
+      "proof_id": "APEX_BUG_9f79d219a1adfdf9",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 220,
+      "gcc_exit": 220,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 220
+    },
+    {
       "proof_id": "APEX_BUG_a6b19dea92574312",
       "dimension": "04_Designated_Union_Initializer_Stride",
       "resolved": true,
@@ -151,6 +452,15 @@
       "gcc_exit": 217,
       "original_zcc_exit": -11,
       "original_gcc_exit": 217
+    },
+    {
+      "proof_id": "APEX_BUG_a8d23111c95cdc6b",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 142,
+      "gcc_exit": 142,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 142
     },
     {
       "proof_id": "APEX_BUG_a9387c1612a98e88",
@@ -171,6 +481,33 @@
       "original_gcc_exit": 35
     },
     {
+      "proof_id": "APEX_BUG_aa447df82942b092",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 132,
+      "gcc_exit": 132,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 132
+    },
+    {
+      "proof_id": "APEX_BUG_add2a35256a8664d",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 72,
+      "gcc_exit": 72,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 72
+    },
+    {
+      "proof_id": "APEX_BUG_afcbb28d285a513b",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 26,
+      "gcc_exit": 26,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 26
+    },
+    {
       "proof_id": "APEX_BUG_b2be31817fb0bc9a",
       "dimension": "04_Designated_Union_Initializer_Stride",
       "resolved": true,
@@ -178,6 +515,33 @@
       "gcc_exit": 118,
       "original_zcc_exit": -11,
       "original_gcc_exit": 118
+    },
+    {
+      "proof_id": "APEX_BUG_b311c59d12ff6510",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 10,
+      "gcc_exit": 10,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 10
+    },
+    {
+      "proof_id": "APEX_BUG_bd7c1f575e72f9f6",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 230,
+      "gcc_exit": 230,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 230
+    },
+    {
+      "proof_id": "APEX_BUG_c0e4d2ffbfb382ff",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 46,
+      "gcc_exit": 46,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 46
     },
     {
       "proof_id": "APEX_BUG_c212a38b8168047f",
@@ -189,6 +553,42 @@
       "original_gcc_exit": 65
     },
     {
+      "proof_id": "APEX_BUG_c6713ba33fbadb6a",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 158,
+      "gcc_exit": 158,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 158
+    },
+    {
+      "proof_id": "APEX_BUG_cbf8df22a8893f90",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 202,
+      "gcc_exit": 202,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 202
+    },
+    {
+      "proof_id": "APEX_BUG_d042398d0a97a164",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 98,
+      "gcc_exit": 98,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 98
+    },
+    {
+      "proof_id": "APEX_BUG_d5ce3ed879402fb9",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 132,
+      "gcc_exit": 132,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 132
+    },
+    {
       "proof_id": "APEX_BUG_db41235e147db37c",
       "dimension": "04_Designated_Union_Initializer_Stride",
       "resolved": true,
@@ -196,6 +596,24 @@
       "gcc_exit": 53,
       "original_zcc_exit": -11,
       "original_gcc_exit": 53
+    },
+    {
+      "proof_id": "APEX_BUG_dbddd480b4cdeae2",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 254,
+      "gcc_exit": 254,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 254
+    },
+    {
+      "proof_id": "APEX_BUG_dc589eee2e18b5b6",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 180,
+      "gcc_exit": 180,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 180
     },
     {
       "proof_id": "APEX_BUG_dfc39b10fae54670",
@@ -259,6 +677,15 @@
       "gcc_exit": 88,
       "original_zcc_exit": -11,
       "original_gcc_exit": 88
+    },
+    {
+      "proof_id": "APEX_BUG_fdb51fe725eabf33",
+      "dimension": "22_Setjmp_Volatile_Register_Preservation",
+      "resolved": true,
+      "zcc_exit": 72,
+      "gcc_exit": 72,
+      "original_zcc_exit": -1,
+      "original_gcc_exit": 72
     },
     {
       "proof_id": "APEX_BUG_ffd3317bd077abd5",

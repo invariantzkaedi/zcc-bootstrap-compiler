@@ -9,5 +9,8 @@
   "tri_compiler_consensus": true,
   "energy_microjoules": 246417.16177,
   "timestamp_epoch": 1791679356,
-  "signature": "ZCC_SOVEREIGN_APEX_PROOF_OF_BUG_v4"
+  "signature": "ZCC_SOVEREIGN_APEX_PROOF_OF_BUG_v4",
+  "resolution_status": "RESOLVED_AND_VERIFIED",
+  "current_zcc_exit": 44,
+  "current_gcc_exit": 44
 }

@@ -1,0 +1,41 @@
+# Commands executed in order for Setjmp Volatile Register Preservation (Vault Dimension 22) Fix:
+
+# Phase 0 RBT Baseline Self-host
+make selfhost 2>&1 | tee /tmp/zcc-selfhost-baseline.log
+cmp zcc2.s zcc3.s
+
+# Pre-patch Probe
+./zcc docs/evidence/proof_of_bug_vault/APEX_BUG_06abb0b83b62907a/repro.c -o /tmp/probe_pre.s
+gcc /tmp/probe_pre.s -o /tmp/probe_pre
+/tmp/probe_pre # Pre-patch failure (undeclared identifier setjmp/longjmp)
+
+# Apply minimal surgical declaration in part0_pp.c
+# Declare setjmp, longjmp, _setjmp, _longjmp, sigjmp_buf, sigsetjmp, siglongjmp in zcc_stddef_text
+
+# Compile ZCC
+make zcc
+
+# Post-patch Probe
+./zcc docs/evidence/proof_of_bug_vault/APEX_BUG_06abb0b83b62907a/repro.c -o /tmp/probe_post.s
+gcc /tmp/probe_post.s -o /tmp/probe_post
+/tmp/probe_post # Exit 83 (Exact match vs GCC and Clang)
+
+# Vault Dimension 22 47-bug batch audit & receipt update
+python3 tools/auto_patch_bug_vault.py --dimension 22_Setjmp_Volatile_Register_Preservation --update-receipts --json
+
+# Gate 1: Self-host Identity
+make selfhost 2>&1 | tee /tmp/zcc-selfhost-postpatch.log
+cmp zcc2.s zcc3.s
+md5sum zcc2.s zcc3.s
+
+# Gate 2: Cross-Toolchain Bidirectional Interop
+echo 'int add(int a, int b) { return a + b; }' > /tmp/interop_lib.c
+echo 'extern int add(int a, int b); int main(void) { return add(40, 2); }' > /tmp/interop_main.c
+./zcc /tmp/interop_lib.c -o /tmp/interop_lib_zcc.s && gcc -c /tmp/interop_lib_zcc.s -o /tmp/interop_lib_zcc.o && gcc /tmp/interop_main.c /tmp/interop_lib_zcc.o -o /tmp/test1 && /tmp/test1
+gcc -c /tmp/interop_lib.c -o /tmp/interop_lib_gcc.o && ./zcc /tmp/interop_main.c -o /tmp/interop_main_zcc.s && gcc /tmp/interop_main_zcc.s /tmp/interop_lib_gcc.o -o /tmp/test2 && /tmp/test2
+
+# Gate 3: Opt-Gauntlet
+python3 tools/test_zcc_opt_passes.py
+
+# Gate 4: Full Vault Consensus Verification (80 / 80 resolved)
+python3 tools/auto_patch_bug_vault.py
