@@ -812,7 +812,7 @@ static void codegen_addr_offset(Compiler *cc, Node *node, int offset) {
         }
       }
     }
-    char gname[32];
+    char gname[256];
     sprintf(gname, "%%%s", node->name);
     char *dst = ir_bridge_fresh_tmp();
     ZCC_EMIT_UNARY(IR_ADDR, IR_TY_PTR, dst, gname, node->line);
@@ -3077,10 +3077,11 @@ void codegen_expr(Compiler *cc, Node *node) {
     lbl_overflow = new_label(cc);
     lbl_end = new_label(cc);
 
-    int fp = is_float_type(node->type);
+    int fp = is_float_type(node->type), is_agg = (node->type && (node->type->kind == TY_STRUCT || node->type->kind == TY_UNION));
+    int needed = is_agg ? (((type_size(node->type) + 7) / 8) * 8) : 8;
     
     if (fp) {
-        /* Float path: Check fp_offset (4(%%rcx)) threshold 176 */
+        /* Float path: Check fp_offset (4(%rcx)) threshold 176 */
         fprintf(cc->out, "    movl 4(%%rcx), %%edx\n");
         fprintf(cc->out, "    cmpl $176, %%edx\n");
         fprintf(cc->out, "    jae .L%d\n", lbl_overflow);
@@ -3099,17 +3100,18 @@ void codegen_expr(Compiler *cc, Node *node) {
         fprintf(cc->out, "    addl $16, %%edx\n");
         fprintf(cc->out, "    movl %%edx, 4(%%rcx)\n");
     } else {
-        /* GP path: Check gp_offset (0(%%rcx)) threshold 48 */
+        /* GP scalar & aggregate path */
         fprintf(cc->out, "    movl 0(%%rcx), %%edx\n");
-        fprintf(cc->out, "    cmpl $48, %%edx\n");
+        fprintf(cc->out, "    cmpl $%d, %%edx\n", 48 - needed + 8);
         fprintf(cc->out, "    jae .L%d\n", lbl_overflow);
         /* Fast path: fetch from reg_save_area */
         fprintf(cc->out, "    movq 16(%%rcx), %%rsi\n");
         fprintf(cc->out, "    movslq %%edx, %%rax\n");
         fprintf(cc->out, "    addq %%rax, %%rsi\n");
-        fprintf(cc->out, "    movq (%%rsi), %%rax\n");
-        /* Increment gp_offset by 8 */
-        fprintf(cc->out, "    addl $8, %%edx\n");
+        if (is_agg) fprintf(cc->out, "    movq %%rsi, %%rax\n");
+        else fprintf(cc->out, "    movq (%%rsi), %%rax\n");
+        /* Increment gp_offset by needed */
+        fprintf(cc->out, "    addl $%d, %%edx\n", needed);
         fprintf(cc->out, "    movl %%edx, 0(%%rcx)\n");
     }
 
@@ -3118,7 +3120,9 @@ void codegen_expr(Compiler *cc, Node *node) {
     /* Slow path: fetch from overflow_arg_area */
     emit_label_fmt(cc, lbl_overflow, FMT_DEF);
     fprintf(cc->out, "    movq 8(%%rcx), %%rsi\n");
-    if (fp && node->type && node->type->kind == TY_FLOAT) {
+    if (is_agg) {
+        fprintf(cc->out, "    movq %%rsi, %%rax\n");
+    } else if (fp && node->type && node->type->kind == TY_FLOAT) {
         fprintf(cc->out, "    movss (%%rsi), %%xmm0\n");
         fprintf(cc->out, "    movd %%xmm0, %%eax\n");
     } else if (fp) {
@@ -3128,8 +3132,8 @@ void codegen_expr(Compiler *cc, Node *node) {
         fprintf(cc->out, "    movq (%%rsi), %%rax\n");
     }
 
-    /* Increment overflow_arg_area by 8 (even for floats, stack passing is 8-aligned) */
-    fprintf(cc->out, "    leaq 8(%%rsi), %%rdi\n");
+    /* Increment overflow_arg_area by 8 or needed */
+    fprintf(cc->out, "    leaq %d(%%rsi), %%rdi\n", is_agg ? needed : 8);
     fprintf(cc->out, "    movq %%rdi, 8(%%rcx)\n");
 
     /* End */
@@ -5693,6 +5697,7 @@ static void adjust_sym(Compiler *cc, Symbol *sym, Node *func, int parser_param_l
 
 static Node *visited_nodes[MAX_VISITED_NODES];
 static int num_visited_nodes = 0;
+static int g_max_call_sret_size = 0;
 
 static void traverse_and_adjust_node(Node *n, Compiler *cc, Node *func, int parser_param_limit, int shift, int *param_offsets) {
   if (!n) return;
@@ -5709,6 +5714,14 @@ static void traverse_and_adjust_node(Node *n, Compiler *cc, Node *func, int pars
   if (n->kind == ND_VAR && n->sym) {
     adjust_sym(cc, n->sym, func, parser_param_limit, shift, param_offsets);
   }
+  if (n->kind == ND_CALL && n->type && (n->type->kind == TY_STRUCT || n->type->kind == TY_UNION)) {
+    abi_class_t eb[2];
+    classify_aggregate(n->type, eb);
+    if (eb[0] == CLASS_MEMORY) {
+      int sz = type_size(n->type);
+      if (sz > g_max_call_sret_size) g_max_call_sret_size = sz;
+    }
+  }
   traverse_and_adjust_node(n->lhs, cc, func, parser_param_limit, shift, param_offsets);
   traverse_and_adjust_node(n->rhs, cc, func, parser_param_limit, shift, param_offsets);
   traverse_and_adjust_node(n->cond, cc, func, parser_param_limit, shift, param_offsets);
@@ -5716,6 +5729,7 @@ static void traverse_and_adjust_node(Node *n, Compiler *cc, Node *func, int pars
   traverse_and_adjust_node(n->else_body, cc, func, parser_param_limit, shift, param_offsets);
   traverse_and_adjust_node(n->init, cc, func, parser_param_limit, shift, param_offsets);
   traverse_and_adjust_node(n->inc, cc, func, parser_param_limit, shift, param_offsets);
+  traverse_and_adjust_node(n->body, cc, func, parser_param_limit, shift, param_offsets);
   if (n->stmts) {
     for (int i = 0; i < n->num_stmts; i++) {
       traverse_and_adjust_node(n->stmts[i], cc, func, parser_param_limit, shift, param_offsets);
@@ -5795,6 +5809,7 @@ void codegen_func(Compiler *cc, Node *func) {
   
   num_adjusted = 0;
   num_visited_nodes = 0;
+  g_max_call_sret_size = 0;
   /* CG-ABI-STRUCT-002: include the sret slot (-8B) in the boundary so
    * trailing memory-class struct params are not misclassified as locals. */
   int parser_param_limit = -(actual_param_space + (g_zsan_mode ? 16 : 0));
@@ -5845,7 +5860,8 @@ void codegen_func(Compiler *cc, Node *func) {
   } else {
       int local_bytes = (func->stack_size + 15) & ~15;
       stack_size = local_bytes + 40; /* reserve 5x8 byte push slots */
-      stack_size += 256;             /* ABI: 256-byte scratch for sret aggregate returns and call scratch */
+      int sret_scratch = (g_max_call_sret_size > 224) ? ((g_max_call_sret_size + 32 + 15) & ~15) : 256;
+      stack_size += sret_scratch;    /* ABI: dynamic scratch for sret aggregate returns and call scratch */
       cc->abi_scratch_offset = -stack_size;
       if (func->func_type && func->func_type->is_variadic) {
           stack_size += 176;
@@ -5986,7 +6002,7 @@ void codegen_func(Compiler *cc, Node *func) {
   }
 
   if (func->func_type && func->func_type->is_variadic) {
-    int save_base = -(func->stack_size + 40 + 176);
+    int save_base = -stack_size;
     /* Save GP regs at offsets 0-47 */
     for (i = 0; i < 6; i++) {
         fprintf(cc->out, "    movq %%%s, %d(%%rbp)\n", argregs[i], save_base + i*8);
@@ -6604,7 +6620,8 @@ static void emit_global_init_list(Compiler *cc, Type *type, Node *init_list, int
     if (type->kind == TY_ARRAY) {
         Type *elem_type = type->base;
         int elem_size = type_size(elem_type);
-        for (int i = 0; i < type->array_len; i++) {
+        int count = (type->array_len > 0) ? type->array_len : init_list->num_args;
+        for (int i = 0; i < count; i++) {
             int expected_end = base_offset + (i + 1) * elem_size;
             if (i < init_list->num_args) {
                 Node *elem = init_list->args[i];
@@ -6663,6 +6680,22 @@ static void emit_global_init_list(Compiler *cc, Type *type, Node *init_list, int
     } else if (type->kind == TY_STRUCT || type->kind == TY_UNION) {
         StructField *f = type->fields;
         for (int i = 0; i < init_list->num_args && f != NULL; i++, f = f->next) {
+            if (f->is_bitfield) {
+                unsigned long long bit_accum = 0;
+                int c_sz = type_size(f->type) <= 0 ? 4 : type_size(f->type), c_off = f->offset, f_abs = base_offset + c_off;
+                if (f_abs > *emitted) { fprintf(cc->out, "    .zero %d\n", f_abs - *emitted); *emitted = f_abs; }
+                while (f && f->is_bitfield && f->offset == c_off && i < init_list->num_args) {
+                    Node *elem = init_list->args[i]; while (elem && elem->kind == ND_CAST) elem = elem->lhs;
+                    int ok = 1; long long val = eval_const_expr_p4(elem, &ok);
+                    unsigned long long mask = (f->bit_size >= 64) ? ~0ULL : ((1ULL << f->bit_size) - 1);
+                    bit_accum |= ((unsigned long long)val & mask) << f->bit_offset;
+                    if (f->next && f->next->is_bitfield && f->next->offset == c_off && (i + 1) < init_list->num_args) { f = f->next; i++; } else break;
+                }
+                const char *dir = (c_sz == 1) ? ".byte" : (c_sz == 2) ? ".short" : (c_sz == 4) ? ".long" : ".quad";
+                fprintf(cc->out, "    %s %llu\n", dir, bit_accum);
+                *emitted += c_sz;
+                continue;
+            }
             Node *elem = init_list->args[i];
             int field_off = f->offset;
             if (elem && elem->member_name[0]) {

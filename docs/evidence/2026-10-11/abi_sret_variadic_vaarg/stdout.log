@@ -1,0 +1,79 @@
+=== PROBE 1: Variadic Register Save Area vs sret Scratch Collision ===
+Command: ./zcc tests/probe_sret_variadic_collision.c -o /tmp/probe1.s && gcc -no-pie /tmp/probe1.s -o /tmp/probe1 && /tmp/probe1
+Output:
+zcc: warning: using synthesized header stub for stdio.h
+pp_process_include: stdio.h added 180 macros, total is 218
+zcc: warning: using synthesized header stub for stdarg.h
+pp_process_include: stdarg.h added 0 macros, total is 218
+zcc: warning: using synthesized header stub for assert.h
+pp_process_include: assert.h added 0 macros, total is 218
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (63 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+Result: 270 (Expected: 10 + 20 + 30 + 40 + 0xAA = 270)
+SUCCESS: No clobbering!
+
+=== PROBE 2: Large sret Buffer Overflow (>224 Bytes) ===
+Command: ./zcc tests/probe_large_sret_overflow.c -o /tmp/probe2.s && gcc -no-pie /tmp/probe2.s -o /tmp/probe2 && /tmp/probe2
+Output:
+zcc: warning: using synthesized header stub for stdio.h
+pp_process_include: stdio.h added 180 macros, total is 218
+zcc: warning: using synthesized header stub for assert.h
+pp_process_include: assert.h added 0 macros, total is 218
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (59 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+SUCCESS: Large sret data intact!
+
+=== PROBE 3: va_arg Struct 16-Byte Aggregate Extraction ===
+Command: ./zcc tests/probe_va_arg_struct16.c -o /tmp/probe3.s && gcc -no-pie /tmp/probe3.s -o /tmp/probe3 && /tmp/probe3
+Output:
+zcc: warning: using synthesized header stub for stdio.h
+pp_process_include: stdio.h added 180 macros, total is 218
+zcc: warning: using synthesized header stub for stdarg.h
+pp_process_include: stdarg.h added 0 macros, total is 218
+zcc: warning: using synthesized header stub for assert.h
+pp_process_include: assert.h added 0 macros, total is 218
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (56 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+Extracted p1: x=100, y=200 | extra=999
+SUCCESS: va_arg struct16 works!
+
+=== GATE 1: Self-Host Fixed Point Verification ===
+Command: cmp zcc2.s zcc3.s
+Output:
+CMP_IDENTICAL (exit code 0)
+
+=== GATE 2: Cross-Toolchain Interoperability ===
+Command: bash scripts/gate2_interop.sh
+Output:
+=== 1. ZCC LIB + GCC MAIN ===
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (18 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+INTEROP_SUCCESS: x=10 y=17 z=300
+=== 2. GCC LIB + ZCC MAIN ===
+zcc: warning: using synthesized header stub for stdio.h
+pp_process_include: stdio.h added 180 macros, total is 218
+zcc: warning: using synthesized header stub for assert.h
+pp_process_include: assert.h added 0 macros, total is 218
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (10 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+INTEROP_SUCCESS: x=10 y=17 z=300

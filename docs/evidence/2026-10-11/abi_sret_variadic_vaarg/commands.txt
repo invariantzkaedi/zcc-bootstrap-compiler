@@ -1,0 +1,17 @@
+# Commands executed for ABI sret, variadic save base, and va_arg aggregate verification
+# Date: 2026-10-11
+
+# 1. Compile ZCC compiler
+make zcc
+
+# 2. Run minimal reproducible defect probes (Probe before patch & post-fix validation)
+./zcc tests/probe_sret_variadic_collision.c -o /tmp/probe1.s && gcc -no-pie /tmp/probe1.s -o /tmp/probe1 && /tmp/probe1
+./zcc tests/probe_large_sret_overflow.c -o /tmp/probe2.s && gcc -no-pie /tmp/probe2.s -o /tmp/probe2 && /tmp/probe2
+./zcc tests/probe_va_arg_struct16.c -o /tmp/probe3.s && gcc -no-pie /tmp/probe3.s -o /tmp/probe3 && /tmp/probe3
+
+# 3. Gate 1 - Self-host byte identity verification
+make selfhost
+cmp zcc2.s zcc3.s
+
+# 4. Gate 2 - Cross-toolchain interoperability
+bash scripts/gate2_interop.sh
