@@ -1,0 +1,36 @@
+# Commands executed in order for Designated Union Initializer Stride (Vault 04) Fix:
+
+# Phase 0 RBT Baseline Self-host
+make selfhost 2>&1 | tee /tmp/zcc-selfhost-baseline.log
+cmp zcc2.s zcc3.s
+
+# Pre-patch Probe
+./zcc docs/evidence/proof_of_bug_vault/APEX_BUG_03a6564c0351d740/repro.c -o /tmp/probe_pre.s
+gcc /tmp/probe_pre.s -o /tmp/probe_pre
+/tmp/probe_pre # Exit 139 (SIGSEGV)
+
+# Compile ZCC with patch
+make zcc
+
+# Post-patch Probe
+./zcc docs/evidence/proof_of_bug_vault/APEX_BUG_03a6564c0351d740/repro.c -o /tmp/probe_post.s
+gcc /tmp/probe_post.s -o /tmp/probe_post
+/tmp/probe_post # Exit 109 (PASS, matches GCC and Clang)
+
+# Vault 04 33-bug batch audit
+python3 tools/auto_patch_bug_vault.py --dimension 04_Designated_Union_Initializer_Stride --update-receipts --json
+
+# Gate 1: Self-host Identity
+make selfhost 2>&1 | tee /tmp/zcc-selfhost-postpatch.log
+cmp zcc2.s zcc3.s
+md5sum zcc2.s zcc3.s
+
+# Gate 2: Cross-Toolchain Bidirectional Interop
+./zcc /tmp/interop_lib.c -o /tmp/interop_lib_zcc.s && gcc -c /tmp/interop_lib_zcc.s -o /tmp/interop_lib_zcc.o && gcc /tmp/interop_main.c /tmp/interop_lib_zcc.o -o /tmp/test1 && /tmp/test1
+gcc -c /tmp/interop_lib.c -o /tmp/interop_lib_gcc.o && ./zcc /tmp/interop_main.c -o /tmp/interop_main_zcc.s && gcc /tmp/interop_main_zcc.s /tmp/interop_lib_gcc.o -o /tmp/test2 && /tmp/test2
+
+# Gate 3: Opt-Gauntlet
+python3 tools/test_zcc_opt_passes.py
+
+# Gate 4: Full Vault Audit
+python3 tools/auto_patch_bug_vault.py

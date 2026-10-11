@@ -1,0 +1,309 @@
+{
+  "total_bugs": 33,
+  "resolved_bugs": 33,
+  "dimensions": {
+    "04_Designated_Union_Initializer_Stride": {
+      "total": 33,
+      "resolved": 33
+    }
+  },
+  "results": [
+    {
+      "proof_id": "APEX_BUG_03a6564c0351d740",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 109,
+      "gcc_exit": 109,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 109
+    },
+    {
+      "proof_id": "APEX_BUG_0a2e78ae1ea51368",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 134,
+      "gcc_exit": 134,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 134
+    },
+    {
+      "proof_id": "APEX_BUG_0bea596b4ac8f4f0",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 125,
+      "gcc_exit": 125,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 125
+    },
+    {
+      "proof_id": "APEX_BUG_104ccc4f3e9c6230",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 238,
+      "gcc_exit": 238,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 238
+    },
+    {
+      "proof_id": "APEX_BUG_10c0dd8ab745cc9e",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 65,
+      "gcc_exit": 65,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 65
+    },
+    {
+      "proof_id": "APEX_BUG_14f1996668ec9270",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 143,
+      "gcc_exit": 143,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 143
+    },
+    {
+      "proof_id": "APEX_BUG_2e670c33a5e10855",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 31,
+      "gcc_exit": 31,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 31
+    },
+    {
+      "proof_id": "APEX_BUG_35630709fee38e15",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 95,
+      "gcc_exit": 95,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 95
+    },
+    {
+      "proof_id": "APEX_BUG_4b34f00c6c7e840f",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 220,
+      "gcc_exit": 220,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 220
+    },
+    {
+      "proof_id": "APEX_BUG_504e76c50cc48a4d",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 88,
+      "gcc_exit": 88,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 88
+    },
+    {
+      "proof_id": "APEX_BUG_54630a753c657d27",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 27,
+      "gcc_exit": 27,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 27
+    },
+    {
+      "proof_id": "APEX_BUG_609e01c2c98c789e",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 37,
+      "gcc_exit": 37,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 37
+    },
+    {
+      "proof_id": "APEX_BUG_72224c1af3fbab3d",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 94,
+      "gcc_exit": 94,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 94
+    },
+    {
+      "proof_id": "APEX_BUG_73646f49ccbd0094",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 30,
+      "gcc_exit": 30,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 30
+    },
+    {
+      "proof_id": "APEX_BUG_77b2bb18e943412b",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 81,
+      "gcc_exit": 81,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 81
+    },
+    {
+      "proof_id": "APEX_BUG_a6b19dea92574312",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 217,
+      "gcc_exit": 217,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 217
+    },
+    {
+      "proof_id": "APEX_BUG_a9387c1612a98e88",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 9,
+      "gcc_exit": 9,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 9
+    },
+    {
+      "proof_id": "APEX_BUG_aa3201350481971b",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 35,
+      "gcc_exit": 35,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 35
+    },
+    {
+      "proof_id": "APEX_BUG_b2be31817fb0bc9a",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 118,
+      "gcc_exit": 118,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 118
+    },
+    {
+      "proof_id": "APEX_BUG_c212a38b8168047f",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 65,
+      "gcc_exit": 65,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 65
+    },
+    {
+      "proof_id": "APEX_BUG_db41235e147db37c",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 53,
+      "gcc_exit": 53,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 53
+    },
+    {
+      "proof_id": "APEX_BUG_dfc39b10fae54670",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 178,
+      "gcc_exit": 178,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 178
+    },
+    {
+      "proof_id": "APEX_BUG_dfd7a00e5007fdd0",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 89,
+      "gcc_exit": 89,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 89
+    },
+    {
+      "proof_id": "APEX_BUG_e1a1e74344ae0aed",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 118,
+      "gcc_exit": 118,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 118
+    },
+    {
+      "proof_id": "APEX_BUG_e1e82a95775bcdf9",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 180,
+      "gcc_exit": 180,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 180
+    },
+    {
+      "proof_id": "APEX_BUG_e6d0fd8eac2907d3",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 117,
+      "gcc_exit": 117,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 117
+    },
+    {
+      "proof_id": "APEX_BUG_e8cc0783f58d67bc",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 210,
+      "gcc_exit": 210,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 210
+    },
+    {
+      "proof_id": "APEX_BUG_fa6678696d37b659",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 88,
+      "gcc_exit": 88,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 88
+    },
+    {
+      "proof_id": "APEX_BUG_ffd3317bd077abd5",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 128,
+      "gcc_exit": 128,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 128
+    },
+    {
+      "proof_id": "APEX_BUG_ffdb9daaf0581d47",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 152,
+      "gcc_exit": 152,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 152
+    },
+    {
+      "proof_id": "BUG_67da164bda992468",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 6,
+      "gcc_exit": 6,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 6
+    },
+    {
+      "proof_id": "BUG_d9ad9fce57b437fc",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 183,
+      "gcc_exit": 183,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 183
+    },
+    {
+      "proof_id": "BUG_e7cacf1ce6a1dc64",
+      "dimension": "04_Designated_Union_Initializer_Stride",
+      "resolved": true,
+      "zcc_exit": 66,
+      "gcc_exit": 66,
+      "original_zcc_exit": -11,
+      "original_gcc_exit": 66
+    }
+  ]
+}

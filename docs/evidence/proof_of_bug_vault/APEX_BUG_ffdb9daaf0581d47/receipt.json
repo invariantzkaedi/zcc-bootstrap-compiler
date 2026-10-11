@@ -1,0 +1,16 @@
+{
+  "proof_id": "APEX_BUG_ffdb9daaf0581d47",
+  "dimension": "04_Designated_Union_Initializer_Stride",
+  "sha256": "ffdb9daaf0581d4755487dd2cd22f036a87502d289689983c786d27d7a5d985d",
+  "status": "TRI_COMPILER_CONSENSUS_MISCOMPILE",
+  "oracle_gcc_exit": 152,
+  "oracle_clang_exit": 152,
+  "oracle_zcc_exit": -11,
+  "tri_compiler_consensus": true,
+  "energy_microjoules": 107276.651755,
+  "timestamp_epoch": 1791673439,
+  "signature": "ZCC_SOVEREIGN_APEX_PROOF_OF_BUG_v4",
+  "resolution_status": "RESOLVED_AND_VERIFIED",
+  "current_zcc_exit": 152,
+  "current_gcc_exit": 152
+}

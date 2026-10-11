@@ -1,0 +1,14 @@
+{
+  "proof_id": "BUG_e7cacf1ce6a1dc64",
+  "dimension": "04_Designated_Union_Initializer_Stride",
+  "sha256": "e7cacf1ce6a1dc64e1e7205e3727f1c161879b472b3acfe3e2ca0d959c73b817",
+  "status": "MISCOMPILE_DIVERGENCE",
+  "oracle_gcc_exit": 66,
+  "oracle_zcc_exit": -11,
+  "energy_microjoules": 45605.64671,
+  "timestamp_epoch": 1791673167,
+  "signature": "ZCC_SOVEREIGN_PROOF_OF_BUG_v3",
+  "resolution_status": "RESOLVED_AND_VERIFIED",
+  "current_zcc_exit": 66,
+  "current_gcc_exit": 66
+}

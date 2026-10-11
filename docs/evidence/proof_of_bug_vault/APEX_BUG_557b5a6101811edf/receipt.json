@@ -1,0 +1,13 @@
+{
+  "proof_id": "APEX_BUG_557b5a6101811edf",
+  "dimension": "22_Setjmp_Volatile_Register_Preservation",
+  "sha256": "557b5a6101811edff2bd5764ee28cd4b21648acf984df49f014da1643c7ee7a5",
+  "status": "ZCC_COMPILER_CRASH_OR_ICE",
+  "oracle_gcc_exit": 202,
+  "oracle_clang_exit": 202,
+  "oracle_zcc_exit": -1,
+  "tri_compiler_consensus": true,
+  "energy_microjoules": 224089.67633,
+  "timestamp_epoch": 1791679243,
+  "signature": "ZCC_SOVEREIGN_APEX_PROOF_OF_BUG_v4"
+}

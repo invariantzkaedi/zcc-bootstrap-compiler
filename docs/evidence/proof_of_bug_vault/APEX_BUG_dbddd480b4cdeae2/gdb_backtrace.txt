@@ -1,0 +1,8 @@
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... /tmp/zcc_mine_apex_115_846285.c:900: error: use of undeclared identifier 'setjmp'
+/tmp/zcc_mine_apex_115_846285.c:902: error: use of undeclared identifier 'longjmp'
+[0;31mFAILED[0m
+zcc: 2 error(s)
+[Inferior 1 (process 2274) exited with code 01]

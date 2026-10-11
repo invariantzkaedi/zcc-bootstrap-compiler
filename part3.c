@@ -3342,7 +3342,8 @@ static Node *parse_initializer_list(Compiler *cc, int *out_count) {
     
     while (cc->tk != TK_EOF) {
         Node *item = NULL;
-        char desig_name[MAX_IDENT] = {0};
+        char desig_names[8][MAX_IDENT];
+        int desig_count = 0;
         int has_desig = 0;
         if (cc->tk == TK_LBRACE) {
             item = parse_initializer_list(cc, NULL);
@@ -3352,7 +3353,11 @@ static Node *parse_initializer_list(Compiler *cc, int *out_count) {
             while (cc->tk == TK_DOT) {
                 next_token(cc); /* consume '.' */
                 if (cc->tk == TK_IDENT) {
-                    strncpy(desig_name, cc->tk_text, MAX_IDENT - 1);
+                    if (desig_count < 8) {
+                        strncpy(desig_names[desig_count], cc->tk_text, MAX_IDENT - 1);
+                        desig_names[desig_count][MAX_IDENT - 1] = '\0';
+                        desig_count++;
+                    }
                     has_desig = 1;
                     next_token(cc); /* consume field name */
                 }
@@ -3390,8 +3395,18 @@ static Node *parse_initializer_list(Compiler *cc, int *out_count) {
                 list->args[i] = old_args[i];
             }
         }
-        if (item && has_desig) {
-            strncpy(item->member_name, desig_name, MAX_IDENT - 1);
+        if (item && has_desig && desig_count > 0) {
+            strncpy(item->member_name, desig_names[desig_count - 1], MAX_IDENT - 1);
+            item->member_name[MAX_IDENT - 1] = '\0';
+            for (int k = desig_count - 2; k >= 0; k--) {
+                Node *wrapper = node_new(cc, ND_INIT_LIST, cc->line);
+                wrapper->args = (Node **)cc_alloc(cc, sizeof(Node *));
+                wrapper->args[0] = item;
+                wrapper->num_args = 1;
+                strncpy(wrapper->member_name, desig_names[k], MAX_IDENT - 1);
+                wrapper->member_name[MAX_IDENT - 1] = '\0';
+                item = wrapper;
+            }
         }
         list->args[list->num_args++] = item;
         
@@ -3462,6 +3477,11 @@ static void validate_initializer_dimensions(Compiler *cc, Type *t, Node *init) {
             f = t->fields;
             for (int i = 0; i < init->num_args && f != NULL; i++, f = f->next) {
                 Node *item = init->args[i];
+                if (item && item->member_name[0]) {
+                    for (StructField *sf = t->fields; sf != NULL; sf = sf->next) {
+                        if (strcmp(sf->name, item->member_name) == 0) { f = sf; break; }
+                    }
+                }
                 if (item->kind == ND_INIT_LIST) {
                     validate_initializer_dimensions(cc, f->type, item);
                 }
@@ -3527,16 +3547,21 @@ static void emit_local_initializer(Compiler *cc, Node *block, int *cnt, int *cap
     } else if (curr_type->kind == TY_STRUCT || curr_type->kind == TY_UNION) {
         StructField *f = curr_type->fields;
         int i = 0;
-        while (i < init_list->num_args && f != NULL) {
-            /* Skip anonymous bitfields (e.g. :0 or :5): they do not
-             * consume an initializer slot. */
-            if (f->name[0] == '\0' && f->type->kind != TY_STRUCT && f->type->kind != TY_UNION) {
-                f = f->next;
-                continue;
-            }
-
+        while (i < init_list->num_args) {
             Node *item = init_list->args[i];
             i++;
+
+            if (item && item->member_name[0]) {
+                for (StructField *sf = curr_type->fields; sf != NULL; sf = sf->next) {
+                    if (strcmp(sf->name, item->member_name) == 0) { f = sf; break; }
+                }
+            } else {
+                /* Skip anonymous bitfields (e.g. :0 or :5) for positional items */
+                while (f != NULL && f->name[0] == '\0' && f->type->kind != TY_STRUCT && f->type->kind != TY_UNION) {
+                    f = f->next;
+                }
+            }
+            if (f == NULL) break;
 
             if (item->kind == ND_INIT_LIST) {
                 emit_local_initializer(cc, block, cnt, cap, base_var, f->type, item, offset + f->offset);
