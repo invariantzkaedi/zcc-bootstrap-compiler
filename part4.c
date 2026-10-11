@@ -4313,6 +4313,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       Symbol *fsym = scope_find(cc, cc->current_func);
       int gp_idx = 0;
       int f_idx = 0;
+      int stack_arg_off = 16;
       if (fsym && fsym->type && fsym->type->params) {
           for (int j = 0; j < fsym->type->num_params; j++) {
               Type *ptype = fsym->type->params[j];
@@ -4330,10 +4331,18 @@ void codegen_expr(Compiler *cc, Node *node) {
                   if (fits) {
                       gp_idx += needed_gp;
                       f_idx += needed_fp;
+                  } else {
+                      int slots = (sz + 7) / 8;
+                      stack_arg_off += slots * 8;
                   }
               } else {
-                  if (is_float_type(ptype) && f_idx < 8) f_idx++;
-                  else if (!is_float_type(ptype) && gp_idx < 6) gp_idx++;
+                  if (is_float_type(ptype)) {
+                      if (f_idx < 8) f_idx++;
+                      else stack_arg_off += 8;
+                  } else {
+                      if (gp_idx < 6) gp_idx++;
+                      else stack_arg_off += 8;
+                  }
               }
           }
       }
@@ -4342,7 +4351,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       fprintf(cc->out, "    # arg0 = ap, arg1 ignored\n");
       fprintf(cc->out, "    movl $%d, 0(%%rdi)\n", gp_offset);
       fprintf(cc->out, "    movl $%d, 4(%%rdi)\n", fp_offset);
-      fprintf(cc->out, "    leaq 16(%%rbp), %%rax\n");
+      fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", stack_arg_off);
       fprintf(cc->out, "    movq %%rax, 8(%%rdi)\n");
       /* The reg_save_area is dynamically stored at stack bottom. */
       fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", fsym ? fsym->stack_offset : -176);

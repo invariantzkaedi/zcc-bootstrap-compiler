@@ -1,0 +1,44 @@
+# Commands executed in order for VLA Decay Variadic Spill (Vault Dimension 27) Fix:
+
+# Phase 0 RBT Baseline Self-host
+make selfhost 2>&1 | tee /tmp/zcc-selfhost-baseline.log
+cmp zcc2.s zcc3.s
+
+# Pre-patch Probe
+./zcc docs/evidence/proof_of_bug_vault/APEX_BUG_f95d07c7c967a4b7/repro.c -o /tmp/probe_pre.s
+gcc /tmp/probe_pre.s -o /tmp/probe_pre
+/tmp/probe_pre # Exit 179 (MISCOMPILE vs GCC exit 71)
+
+# Apply minimal surgical fix in part4.c
+# Track stack_arg_off dynamically in __builtin_va_start to preserve overflow_arg_area across spilled parameters
+
+# Compile ZCC
+make zcc
+
+# Post-patch Probe
+./zcc docs/evidence/proof_of_bug_vault/APEX_BUG_f95d07c7c967a4b7/repro.c -o /tmp/probe_post.s
+gcc /tmp/probe_post.s -o /tmp/probe_post
+/tmp/probe_post # Exit 71 (PASS: Exact match vs GCC and Clang)
+
+# Vault Dimension 27 7-bug batch audit & receipt update
+python3 tools/auto_patch_bug_vault.py --dimension 27_VLA_Decay_Variadic_Spill --update-receipts --json
+
+# Full 87-bug multi-compiler audit
+python3 tools/auto_patch_bug_vault.py
+
+# Gate 1: Self-host Identity
+make selfhost 2>&1 | tee /tmp/zcc-selfhost-postpatch.log
+cmp zcc2.s zcc3.s
+md5sum zcc2.s zcc3.s
+
+# Gate 2: Cross-Toolchain Bidirectional Interop
+echo 'int add(int a, int b) { return a + b; }' > /tmp/interop_lib.c
+echo 'extern int add(int a, int b); int main(void) { return add(40, 2); }' > /tmp/interop_main.c
+./zcc /tmp/interop_lib.c -o /tmp/interop_lib_zcc.s && gcc -c /tmp/interop_lib_zcc.s -o /tmp/interop_lib_zcc.o && gcc /tmp/interop_main.c /tmp/interop_lib_zcc.o -o /tmp/test1 && /tmp/test1
+gcc -c /tmp/interop_lib.c -o /tmp/interop_lib_gcc.o && ./zcc /tmp/interop_main.c -o /tmp/interop_main_zcc.s && gcc /tmp/interop_main_zcc.s /tmp/interop_lib_gcc.o -o /tmp/test2 && /tmp/test2
+
+# Gate 3: Opt-Gauntlet
+python3 tools/test_zcc_opt_passes.py
+
+# Gate 4: Full Vault Consensus Verification (87 / 87 resolved)
+python3 tools/auto_patch_bug_vault.py

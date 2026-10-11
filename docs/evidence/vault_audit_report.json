@@ -1,6 +1,6 @@
 {
-  "total_bugs": 80,
-  "resolved_bugs": 80,
+  "total_bugs": 87,
+  "resolved_bugs": 87,
   "dimensions": {
     "04_Designated_Union_Initializer_Stride": {
       "total": 33,
@@ -9,6 +9,10 @@
     "22_Setjmp_Volatile_Register_Preservation": {
       "total": 47,
       "resolved": 47
+    },
+    "27_VLA_Decay_Variadic_Spill": {
+      "total": 7,
+      "resolved": 7
     }
   },
   "results": [
@@ -58,6 +62,15 @@
       "original_gcc_exit": 125
     },
     {
+      "proof_id": "APEX_BUG_0d524a5ec94b32db",
+      "dimension": "27_VLA_Decay_Variadic_Spill",
+      "resolved": true,
+      "zcc_exit": 213,
+      "gcc_exit": 213,
+      "original_zcc_exit": 250,
+      "original_gcc_exit": 213
+    },
+    {
       "proof_id": "APEX_BUG_103662ed9eecfd8d",
       "dimension": "22_Setjmp_Volatile_Register_Preservation",
       "resolved": true,
@@ -92,6 +105,15 @@
       "gcc_exit": 200,
       "original_zcc_exit": -1,
       "original_gcc_exit": 200
+    },
+    {
+      "proof_id": "APEX_BUG_13e5e4b7dd0e5f70",
+      "dimension": "27_VLA_Decay_Variadic_Spill",
+      "resolved": true,
+      "zcc_exit": 177,
+      "gcc_exit": 177,
+      "original_zcc_exit": 104,
+      "original_gcc_exit": 177
     },
     {
       "proof_id": "APEX_BUG_14f1996668ec9270",
@@ -337,6 +359,15 @@
       "original_gcc_exit": 132
     },
     {
+      "proof_id": "APEX_BUG_70f8adcd70b4b36e",
+      "dimension": "27_VLA_Decay_Variadic_Spill",
+      "resolved": true,
+      "zcc_exit": 157,
+      "gcc_exit": 157,
+      "original_zcc_exit": 94,
+      "original_gcc_exit": 157
+    },
+    {
       "proof_id": "APEX_BUG_72224c1af3fbab3d",
       "dimension": "04_Designated_Union_Initializer_Stride",
       "resolved": true,
@@ -398,6 +429,15 @@
       "gcc_exit": 62,
       "original_zcc_exit": -1,
       "original_gcc_exit": 62
+    },
+    {
+      "proof_id": "APEX_BUG_97f7ee753aa35d70",
+      "dimension": "27_VLA_Decay_Variadic_Spill",
+      "resolved": true,
+      "zcc_exit": 35,
+      "gcc_exit": 35,
+      "original_zcc_exit": 33,
+      "original_gcc_exit": 35
     },
     {
       "proof_id": "APEX_BUG_9ae5340e617ec714",
@@ -580,6 +620,15 @@
       "original_gcc_exit": 98
     },
     {
+      "proof_id": "APEX_BUG_d383240b5efb14f9",
+      "dimension": "27_VLA_Decay_Variadic_Spill",
+      "resolved": true,
+      "zcc_exit": 7,
+      "gcc_exit": 7,
+      "original_zcc_exit": 19,
+      "original_gcc_exit": 7
+    },
+    {
       "proof_id": "APEX_BUG_d5ce3ed879402fb9",
       "dimension": "22_Setjmp_Volatile_Register_Preservation",
       "resolved": true,
@@ -668,6 +717,24 @@
       "gcc_exit": 210,
       "original_zcc_exit": -11,
       "original_gcc_exit": 210
+    },
+    {
+      "proof_id": "APEX_BUG_f95d07c7c967a4b7",
+      "dimension": "27_VLA_Decay_Variadic_Spill",
+      "resolved": true,
+      "zcc_exit": 71,
+      "gcc_exit": 71,
+      "original_zcc_exit": 179,
+      "original_gcc_exit": 71
+    },
+    {
+      "proof_id": "APEX_BUG_f9c3275a7f4d1a3e",
+      "dimension": "27_VLA_Decay_Variadic_Spill",
+      "resolved": true,
+      "zcc_exit": 245,
+      "gcc_exit": 245,
+      "original_zcc_exit": 138,
+      "original_gcc_exit": 245
     },
     {
       "proof_id": "APEX_BUG_fa6678696d37b659",
