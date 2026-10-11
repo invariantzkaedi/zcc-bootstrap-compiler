@@ -1303,6 +1303,7 @@ typedef struct TargetBackend {
 
 extern TargetBackend *backend_ops;
 extern TargetBackend backend_thumbv6m;
+extern TargetBackend backend_cortex_m4;
 extern TargetBackend backend_aarch64;
 extern TargetBackend backend_riscv;
 

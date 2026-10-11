@@ -1,0 +1,37 @@
+# Commands executed in exact order for Bare-metal ARM/Thumb-2 lowering for Flipper Zero (Vector 1)
+
+# Phase 0 Baseline Truth
+set -o pipefail
+make selfhost 2>&1 | tee /tmp/zcc-selfhost-baseline.log
+cmp zcc2.s zcc3.s
+
+# Probe before patch (Rule EF-3)
+./zcc /tmp/probe_arm.c -target thumb -S -o /tmp/probe_thumb.s
+arm-none-eabi-as -mthumb -mcpu=cortex-m0plus /tmp/probe_thumb.s -o /tmp/probe_thumb.o
+arm-none-eabi-objdump -d /tmp/probe_thumb.o
+
+# Build updated compiler
+make zcc
+
+# Rich Cortex-M4 Flipper Zero probe validation
+./zcc /tmp/probe_flipper_rich.c -target flipper -S -o /tmp/probe_flipper_rich.s
+arm-none-eabi-as -mthumb -mcpu=cortex-m4 /tmp/probe_flipper_rich.s -o /tmp/probe_flipper_rich.o
+arm-none-eabi-objdump -d /tmp/probe_flipper_rich.o
+
+# End-to-end GNU EABI linking with arm-none-eabi-gcc
+arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb --specs=nosys.specs /tmp/main_harness.c /tmp/probe_flipper_rich.o -o /tmp/flipper_kernel.elf
+arm-none-eabi-size /tmp/flipper_kernel.elf
+
+# Standalone Flipper GUI App compile and relocation verification
+./zcc tests/test_flipper_app.c -target flipper -S -o tests/test_flipper_app.s
+arm-none-eabi-as -mthumb -mcpu=cortex-m4 tests/test_flipper_app.s -o tests/test_flipper_app.o
+arm-none-eabi-objdump -d tests/test_flipper_app.o
+arm-none-eabi-objdump -r tests/test_flipper_app.o
+
+# 5-test regression gauntlet
+python3 tests/test_thumb_codegen.py
+
+# Gate 1 Self-Host byte identity post-patch
+make selfhost
+cmp zcc2.s zcc3.s
+sha256sum zcc2.s zcc3.s

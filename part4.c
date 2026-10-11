@@ -1104,8 +1104,17 @@ void codegen_expr(Compiler *cc, Node *node) {
 
   case ND_STR: {
     char lbl_buf[32];
-    fprintf(cc->out, "    leaq .LS%d(%%rip), %%rax\n",
-            cc->strings[node->str_id].label_id);
+    if (backend_ops) {
+      if (backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j')
+        fprintf(cc->out, "    la a0, .LS%d\n", cc->strings[node->str_id].label_id);
+      else if (backend_ops->ptr_size == 8)
+        fprintf(cc->out, "    ldr x0, =.LS%d\n", cc->strings[node->str_id].label_id);
+      else
+        fprintf(cc->out, "    ldr r0, =.LS%d\n", cc->strings[node->str_id].label_id);
+    } else {
+      fprintf(cc->out, "    leaq .LS%d(%%rip), %%rax\n",
+              cc->strings[node->str_id].label_id);
+    }
     sprintf(lbl_buf, ".LS%d", cc->strings[node->str_id].label_id);
     char *dst = ir_bridge_fresh_tmp();
     ZCC_EMIT_UNARY(IR_CONST_STR, IR_TY_PTR, dst, lbl_buf,
@@ -2528,7 +2537,14 @@ void codegen_expr(Compiler *cc, Node *node) {
     }
     codegen_expr_checked(cc, node->lhs);
     ir_save_result(src_ir);
-    if (node->type && type_size(node->type) == 4) {
+    if (backend_ops) {
+      if (backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j')
+        fprintf(cc->out, "    not a0, a0\n");
+      else if (backend_ops->ptr_size == 8)
+        fprintf(cc->out, "    mvn x0, x0\n");
+      else
+        fprintf(cc->out, "    mvns r0, r0\n");
+    } else if (node->type && type_size(node->type) == 4) {
       if (node_type_unsigned(node)) {
         fprintf(cc->out, "    notl %%eax\n");
       } else {
@@ -2630,7 +2646,14 @@ void codegen_expr(Compiler *cc, Node *node) {
     }
     codegen_expr_checked(cc, node->lhs);
     ir_save_result(src_ir);
-    if (node->type && type_size(node->type) == 4) {
+    if (backend_ops) {
+      if (backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j')
+        fprintf(cc->out, "    neg a0, a0\n");
+      else if (backend_ops->ptr_size == 8)
+        fprintf(cc->out, "    neg x0, x0\n");
+      else
+        fprintf(cc->out, "    negs r0, r0\n");
+    } else if (node->type && type_size(node->type) == 4) {
       if (node_type_unsigned(node)) {
         fprintf(cc->out, "    negl %%eax\n");
       } else {
@@ -2676,17 +2699,31 @@ void codegen_expr(Compiler *cc, Node *node) {
       fprintf(cc->out, "    andb %%r11b, %%al\n");
     } else {
       if (backend_ops) {
-        fprintf(cc->out, "    cmp r0, #0\n");
+        if (backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j') {
+          fprintf(cc->out, "    seqz a0, a0\n");
+        } else if (backend_ops->ptr_size == 8) {
+          fprintf(cc->out, "    cmp x0, #0\n    cset x0, eq\n");
+        } else {
+          int l_true = new_label(cc);
+          int l_end = new_label(cc);
+          fprintf(cc->out, "    cmp r0, #0\n");
+          fprintf(cc->out, "    beq .L%d\n", l_true);
+          fprintf(cc->out, "    movs r0, #0\n");
+          fprintf(cc->out, "    b .L%d\n", l_end);
+          fprintf(cc->out, ".L%d:\n", l_true);
+          fprintf(cc->out, "    movs r0, #1\n");
+          fprintf(cc->out, ".L%d:\n", l_end);
+        }
       } else {
         if (node->lhs && node->lhs->type && type_size(node->lhs->type) <= 4) {
           fprintf(cc->out, "    cmpl $0, %%eax\n");
         } else {
           fprintf(cc->out, "    cmpq $0, %%rax\n");
         }
+        fprintf(cc->out, "    sete %%al\n");
+        fprintf(cc->out, "    movzbl %%al, %%eax\n");
       }
-      fprintf(cc->out, "    sete %%al\n");
     }
-    fprintf(cc->out, "    movzbl %%al, %%eax\n");
     {
       char zero_ir[32];
       char *zt = ir_bridge_fresh_tmp();
@@ -3899,7 +3936,20 @@ void codegen_expr(Compiler *cc, Node *node) {
     callee_ir[0] = '\0';
 
     int max_gp_args = g_win64_abi_mode ? 4 : 6;
-    if (g_win64_abi_mode) {
+    if (backend_ops) {
+      if (backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j') {
+        max_gp_args = 6;
+        argregs[0] = "a0"; argregs[1] = "a1"; argregs[2] = "a2";
+        argregs[3] = "a3"; argregs[4] = "a4"; argregs[5] = "a5";
+      } else if (backend_ops->ptr_size == 8) {
+        max_gp_args = 6;
+        argregs[0] = "x0"; argregs[1] = "x1"; argregs[2] = "x2";
+        argregs[3] = "x3"; argregs[4] = "x4"; argregs[5] = "x5";
+      } else {
+        max_gp_args = 4;
+        argregs[0] = "r0"; argregs[1] = "r1"; argregs[2] = "r2"; argregs[3] = "r3";
+      }
+    } else if (g_win64_abi_mode) {
       argregs[0] = "rcx"; argregs[1] = "rdx"; argregs[2] = "r8"; argregs[3] = "r9";
       argregs[4] = "r10"; argregs[5] = "r11";
     } else {
@@ -4076,7 +4126,12 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (node->func_name[0] == 0 && node->lhs) {
       codegen_expr_checked(cc, node->lhs);
       ir_save_result(callee_ir);
-      fprintf(cc->out, "    movq %%rax, %d(%%rbp)\n", cc->abi_scratch_offset + 16);
+      if (backend_ops) {
+        if (backend_ops->emit_store_stack)
+          backend_ops->emit_store_stack(cc, cc->abi_scratch_offset + 16, (backend_ops->ptr_size == 8) ? "x0" : "r0");
+      } else {
+        fprintf(cc->out, "    movq %%rax, %d(%%rbp)\n", cc->abi_scratch_offset + 16);
+      }
     }
 
     /* push args in reverse order */
@@ -4299,20 +4354,29 @@ void codegen_expr(Compiler *cc, Node *node) {
           fprintf(cc->out, "    movl $%d, %%eax\n", total_fp_args > 8 ? 8 : total_fp_args);
       }
     if (node->func_name[0] == 0 && node->lhs) {
-      /* indirect call: restore callee into r10, call *r10 */
-      fprintf(cc->out, "    movq %d(%%rbp), %%r10\n", cc->abi_scratch_offset + 16);
-      int call_lbl = cc->label_count++;
-      fprintf(cc->out, "    movq %%rsp, %%r11\n");
-      fprintf(cc->out, "    andq $15, %%r11\n");
-      fprintf(cc->out, "    testq %%r11, %%r11\n");
-      fprintf(cc->out, "    je .Lcall_ind_aligned_%d\n", call_lbl);
-      fprintf(cc->out, "    subq $8, %%rsp\n");
-      fprintf(cc->out, "    call *%%r10\n");
-      fprintf(cc->out, "    addq $8, %%rsp\n");
-      fprintf(cc->out, "    jmp .Lcall_ind_end_%d\n", call_lbl);
-      fprintf(cc->out, ".Lcall_ind_aligned_%d:\n", call_lbl);
-      fprintf(cc->out, "    call *%%r10\n");
-      fprintf(cc->out, ".Lcall_ind_end_%d:\n", call_lbl);
+      if (backend_ops) {
+        if (backend_ops->emit_load_stack)
+          backend_ops->emit_load_stack(cc, cc->abi_scratch_offset + 16, (backend_ops->ptr_size == 8) ? "x16" : "r4");
+        if (backend_ops->emit_call)
+          backend_ops->emit_call(cc, node);
+        else
+          fprintf(cc->out, "    blx r4\n");
+      } else {
+        /* indirect call: restore callee into r10, call *r10 */
+        fprintf(cc->out, "    movq %d(%%rbp), %%r10\n", cc->abi_scratch_offset + 16);
+        int call_lbl = cc->label_count++;
+        fprintf(cc->out, "    movq %%rsp, %%r11\n");
+        fprintf(cc->out, "    andq $15, %%r11\n");
+        fprintf(cc->out, "    testq %%r11, %%r11\n");
+        fprintf(cc->out, "    je .Lcall_ind_aligned_%d\n", call_lbl);
+        fprintf(cc->out, "    subq $8, %%rsp\n");
+        fprintf(cc->out, "    call *%%r10\n");
+        fprintf(cc->out, "    addq $8, %%rsp\n");
+        fprintf(cc->out, "    jmp .Lcall_ind_end_%d\n", call_lbl);
+        fprintf(cc->out, ".Lcall_ind_aligned_%d:\n", call_lbl);
+        fprintf(cc->out, "    call *%%r10\n");
+        fprintf(cc->out, ".Lcall_ind_end_%d:\n", call_lbl);
+      }
     } else if (strcmp(node->func_name, "__builtin_va_start") == 0) {
       Symbol *fsym = scope_find(cc, cc->current_func);
       int gp_idx = 0;

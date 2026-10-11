@@ -13,9 +13,10 @@ int ZCC_POINTER_WIDTH = 8;
 int ZCC_INT_WIDTH = 4;
 
 static void thumb_emit_prologue(Compiler *cc, Node *func) {
-    int stack_size = func->stack_size + 40;
-    if (stack_size < 256) stack_size = 256;
-    stack_size = (stack_size + 7) & ~7;
+    int total_frame = func->stack_size + 40 + 20;
+    if (total_frame < 256) total_frame = 256;
+    total_frame = (total_frame + 7) & ~7;
+    int stack_size = total_frame - 20;
 
     fprintf(cc->out, "    .text\n");
     fprintf(cc->out, "    .syntax unified\n");
@@ -24,6 +25,7 @@ static void thumb_emit_prologue(Compiler *cc, Node *func) {
     if (!func->is_static) {
         fprintf(cc->out, "    .global %s\n", func->func_def_name);
     }
+    fprintf(cc->out, "    .thumb_func\n");
     fprintf(cc->out, "    .type %s, %%function\n", func->func_def_name);
     fprintf(cc->out, "%s:\n", func->func_def_name);
     
@@ -41,7 +43,7 @@ static void thumb_emit_prologue(Compiler *cc, Node *func) {
 
     int i;
     for (i = 0; i < func->num_params && i < 4; i++) {
-        fprintf(cc->out, "    ldr r4, =%d\n", -(i * 4 + 8));
+        fprintf(cc->out, "    ldr r4, =%d\n", -(i * 8 + 8));
         fprintf(cc->out, "    adds r4, r7, r4\n");
         fprintf(cc->out, "    str r%d, [r4]\n", i);
     }
@@ -54,7 +56,11 @@ static void thumb_emit_epilogue(Compiler *cc, Node *func) {
 }
 
 static void thumb_emit_call(Compiler *cc, Node *func) {
-    fprintf(cc->out, "    bl %s\n", func->func_name);
+    if (func->func_name[0]) {
+        fprintf(cc->out, "    bl %s\n", func->func_name);
+    } else {
+        fprintf(cc->out, "    blx r4\n");
+    }
 }
 
 static void thumb_emit_binary_op(Compiler *cc, int op) {
@@ -96,23 +102,39 @@ static void thumb_emit_binary_op(Compiler *cc, int op) {
     }
 }
 
+static const char *thumb_map_reg(const char *reg) {
+    if (!reg) return "r0";
+    if (reg[0] == '%') reg++;
+    if (strcmp(reg, "rax") == 0 || strcmp(reg, "eax") == 0 || strcmp(reg, "ax") == 0 || strcmp(reg, "al") == 0 || strcmp(reg, "r0") == 0) return "r0";
+    if (strcmp(reg, "rdi") == 0 || strcmp(reg, "edi") == 0 || strcmp(reg, "di") == 0 || strcmp(reg, "dil") == 0 || strcmp(reg, "r1") == 0 || strcmp(reg, "r11") == 0) return "r1";
+    if (strcmp(reg, "rsi") == 0 || strcmp(reg, "esi") == 0 || strcmp(reg, "si") == 0 || strcmp(reg, "sil") == 0 || strcmp(reg, "r2") == 0) return "r2";
+    if (strcmp(reg, "rdx") == 0 || strcmp(reg, "edx") == 0 || strcmp(reg, "dx") == 0 || strcmp(reg, "dl") == 0 || strcmp(reg, "r3") == 0) return "r3";
+    if (strcmp(reg, "rcx") == 0 || strcmp(reg, "ecx") == 0 || strcmp(reg, "cx") == 0 || strcmp(reg, "cl") == 0 || strcmp(reg, "r4") == 0) return "r4";
+    if (strcmp(reg, "r8") == 0 || strcmp(reg, "r8d") == 0 || strcmp(reg, "r5") == 0) return "r5";
+    if (strcmp(reg, "r9") == 0 || strcmp(reg, "r9d") == 0 || strcmp(reg, "r6") == 0) return "r6";
+    if (strcmp(reg, "r10") == 0 || strcmp(reg, "r10d") == 0 || strcmp(reg, "r7") == 0) return "r7";
+    return reg;
+}
+
 static void thumb_emit_load_stack(Compiler *cc, int offset, const char *reg) {
+    const char *r = thumb_map_reg(reg);
     if (offset >= 0 && offset <= 1020 && (offset % 4 == 0)) {
-        fprintf(cc->out, "    ldr %s, [r7, #%d]\n", reg, offset);
+        fprintf(cc->out, "    ldr %s, [r7, #%d]\n", r, offset);
     } else {
         fprintf(cc->out, "    ldr r3, =%d\n", offset);
         fprintf(cc->out, "    adds r3, r7, r3\n");
-        fprintf(cc->out, "    ldr %s, [r3]\n", reg);
+        fprintf(cc->out, "    ldr %s, [r3]\n", r);
     }
 }
 
 static void thumb_emit_store_stack(Compiler *cc, int offset, const char *reg) {
+    const char *r = thumb_map_reg(reg);
     if (offset >= 0 && offset <= 1020 && (offset % 4 == 0)) {
-        fprintf(cc->out, "    str %s, [r7, #%d]\n", reg, offset);
+        fprintf(cc->out, "    str %s, [r7, #%d]\n", r, offset);
     } else {
         fprintf(cc->out, "    ldr r3, =%d\n", offset);
         fprintf(cc->out, "    adds r3, r7, r3\n");
-        fprintf(cc->out, "    str %s, [r3]\n", reg);
+        fprintf(cc->out, "    str %s, [r3]\n", r);
     }
 }
 
@@ -129,6 +151,85 @@ static void thumb_emit_float_binop(Compiler *cc, int op) {
     }
 }
 
+static void thumb_emit_push(Compiler *cc, const char *reg) {
+    const char *r = thumb_map_reg(reg);
+    fprintf(cc->out, "    push {%s}\n", r);
+}
+
+static void thumb_emit_pop(Compiler *cc, const char *reg) {
+    const char *r = thumb_map_reg(reg);
+    fprintf(cc->out, "    pop {%s}\n", r);
+}
+
+static void thumb_emit_load(Compiler *cc, Type *type) {
+    if (!type || type->size >= 4 || type->kind == TY_PTR) {
+        fprintf(cc->out, "    ldr r0, [r0]\n");
+    } else if (type->size == 1) {
+        fprintf(cc->out, "    ldrb r0, [r0]\n");
+        if (!is_unsigned_type(type))
+            fprintf(cc->out, "    sxtb r0, r0\n");
+    } else if (type->size == 2) {
+        fprintf(cc->out, "    ldrh r0, [r0]\n");
+        if (!is_unsigned_type(type))
+            fprintf(cc->out, "    sxth r0, r0\n");
+    }
+}
+
+static void thumb_emit_store(Compiler *cc, Type *type) {
+    if (!type || type->size >= 4 || type->kind == TY_PTR) {
+        fprintf(cc->out, "    str r1, [r0]\n");
+    } else if (type->size == 1) {
+        fprintf(cc->out, "    strb r1, [r0]\n");
+    } else if (type->size == 2) {
+        fprintf(cc->out, "    strh r1, [r0]\n");
+    }
+    fprintf(cc->out, "    movs r0, r1\n");
+}
+
+static void thumb_emit_addr(Compiler *cc, int folded_off) {
+    fprintf(cc->out, "    ldr r3, =%d\n", folded_off);
+    fprintf(cc->out, "    adds r0, r7, r3\n");
+}
+
+static void thumb_emit_num(Compiler *cc, long long val) {
+    if (val >= 0 && val <= 255)
+        fprintf(cc->out, "    movs r0, #%lld\n", val);
+    else
+        fprintf(cc->out, "    ldr r0, =%lld\n", val);
+}
+
+static void thumb_emit_prep_rhs(Compiler *cc) {
+    fprintf(cc->out, "    movs r1, r0\n");
+}
+
+static void thumb_emit_cmp_zero(Compiler *cc) {
+    fprintf(cc->out, "    cmp r0, #0\n");
+}
+
+static void thumb_emit_div(Compiler *cc, int is_unsigned) {
+    if (is_unsigned)
+        fprintf(cc->out, "    bl __aeabi_uidiv\n");
+    else
+        fprintf(cc->out, "    bl __aeabi_idiv\n");
+}
+
+static void thumb_emit_mod(Compiler *cc, int is_unsigned) {
+    if (is_unsigned) {
+        fprintf(cc->out, "    bl __aeabi_uidivmod\n");
+        fprintf(cc->out, "    movs r0, r1\n");
+    } else {
+        fprintf(cc->out, "    bl __aeabi_idivmod\n");
+        fprintf(cc->out, "    movs r0, r1\n");
+    }
+}
+
+static void thumb_emit_shr(Compiler *cc, int is_unsigned) {
+    if (is_unsigned)
+        fprintf(cc->out, "    lsrs r0, r0, r1\n");
+    else
+        fprintf(cc->out, "    asrs r0, r0, r1\n");
+}
+
 TargetBackend backend_thumbv6m = {
     4, /* ptr_size */
     thumb_emit_prologue,
@@ -137,7 +238,202 @@ TargetBackend backend_thumbv6m = {
     thumb_emit_binary_op,
     thumb_emit_load_stack,
     thumb_emit_store_stack,
-    thumb_emit_float_binop
+    thumb_emit_float_binop,
+    thumb_emit_push,
+    thumb_emit_pop,
+    thumb_emit_load,
+    thumb_emit_store,
+    thumb_emit_addr,
+    thumb_emit_num,
+    thumb_emit_prep_rhs,
+    thumb_emit_cmp_zero,
+    thumb_emit_div,
+    thumb_emit_mod,
+    thumb_emit_shr,
+    "b" /* jump_mnemonic */
+};
+
+/* ================================================================ */
+/* PART 6A-2: CORTEX-M4 TARGET BACKEND (Flipper Zero STM32WB55)    */
+/* ================================================================ */
+
+static void cm4_emit_prologue(Compiler *cc, Node *func) {
+    int total_frame = func->stack_size + 40 + 20;
+    if (total_frame < 256) total_frame = 256;
+    total_frame = (total_frame + 7) & ~7;
+    int stack_size = total_frame - 20;
+
+    fprintf(cc->out, "    .text\n");
+    fprintf(cc->out, "    .syntax unified\n");
+    fprintf(cc->out, "    .cpu cortex-m4\n");
+    fprintf(cc->out, "    .thumb\n");
+    if (!func->is_static) {
+        fprintf(cc->out, "    .global %s\n", func->func_def_name);
+    }
+    fprintf(cc->out, "    .thumb_func\n");
+    fprintf(cc->out, "    .type %s, %%function\n", func->func_def_name);
+    fprintf(cc->out, "%s:\n", func->func_def_name);
+    
+    fprintf(cc->out, "    push {r4, r5, r6, r7, lr}\n");
+    fprintf(cc->out, "    mov r7, sp\n");
+
+    if (stack_size <= 508 && (stack_size % 4 == 0)) {
+        fprintf(cc->out, "    sub sp, #%d\n", stack_size);
+    } else if (stack_size <= 4095) {
+        fprintf(cc->out, "    sub sp, sp, #%d\n", stack_size);
+    } else {
+        fprintf(cc->out, "    ldr r5, =%d\n", stack_size);
+        fprintf(cc->out, "    sub sp, sp, r5\n");
+    }
+
+    int i;
+    for (i = 0; i < func->num_params && i < 4; i++) {
+        int off = -(i * 8 + 8);
+        if (off >= -255) {
+            fprintf(cc->out, "    str r%d, [r7, #%d]\n", i, off);
+        } else {
+            fprintf(cc->out, "    ldr r4, =%d\n", off);
+            fprintf(cc->out, "    add r4, r7, r4\n");
+            fprintf(cc->out, "    str r%d, [r4]\n", i);
+        }
+    }
+}
+
+static void cm4_emit_binary_op(Compiler *cc, int op) {
+    switch (op) {
+        case ND_ADD:  fprintf(cc->out, "    add r0, r0, r1\n"); break;
+        case ND_SUB:  fprintf(cc->out, "    sub r0, r0, r1\n"); break;
+        case ND_MUL:  fprintf(cc->out, "    mul r0, r0, r1\n"); break;
+        case ND_DIV:  fprintf(cc->out, "    sdiv r0, r0, r1\n"); break;
+        case ND_MOD:
+            fprintf(cc->out, "    sdiv r2, r0, r1\n");
+            fprintf(cc->out, "    mls r0, r2, r1, r0\n");
+            break;
+        case ND_BAND: fprintf(cc->out, "    and r0, r0, r1\n"); break;
+        case ND_BOR:  fprintf(cc->out, "    orr r0, r0, r1\n"); break;
+        case ND_BXOR: fprintf(cc->out, "    eor r0, r0, r1\n"); break;
+        case ND_SHL:  fprintf(cc->out, "    lsl r0, r0, r1\n"); break;
+        case ND_SHR:  fprintf(cc->out, "    asr r0, r0, r1\n"); break;
+    }
+}
+
+static void cm4_emit_load_stack(Compiler *cc, int offset, const char *reg) {
+    const char *r = thumb_map_reg(reg);
+    if (offset >= -255 && offset <= 4095) {
+        fprintf(cc->out, "    ldr %s, [r7, #%d]\n", r, offset);
+    } else {
+        fprintf(cc->out, "    ldr r3, =%d\n", offset);
+        fprintf(cc->out, "    add r3, r7, r3\n");
+        fprintf(cc->out, "    ldr %s, [r3]\n", r);
+    }
+}
+
+static void cm4_emit_store_stack(Compiler *cc, int offset, const char *reg) {
+    const char *r = thumb_map_reg(reg);
+    if (offset >= -255 && offset <= 4095) {
+        fprintf(cc->out, "    str %s, [r7, #%d]\n", r, offset);
+    } else {
+        fprintf(cc->out, "    ldr r3, =%d\n", offset);
+        fprintf(cc->out, "    add r3, r7, r3\n");
+        fprintf(cc->out, "    str %s, [r3]\n", r);
+    }
+}
+
+static void cm4_emit_load(Compiler *cc, Type *type) {
+    if (!type || type->size >= 4 || type->kind == TY_PTR) {
+        fprintf(cc->out, "    ldr r0, [r0]\n");
+    } else if (type->size == 1) {
+        if (is_unsigned_type(type))
+            fprintf(cc->out, "    ldrb r0, [r0]\n");
+        else
+            fprintf(cc->out, "    ldrsb r0, [r0]\n");
+    } else if (type->size == 2) {
+        if (is_unsigned_type(type))
+            fprintf(cc->out, "    ldrh r0, [r0]\n");
+        else
+            fprintf(cc->out, "    ldrsh r0, [r0]\n");
+    }
+}
+
+static void cm4_emit_store(Compiler *cc, Type *type) {
+    if (!type || type->size >= 4 || type->kind == TY_PTR) {
+        fprintf(cc->out, "    str r1, [r0]\n");
+    } else if (type->size == 1) {
+        fprintf(cc->out, "    strb r1, [r0]\n");
+    } else if (type->size == 2) {
+        fprintf(cc->out, "    strh r1, [r0]\n");
+    }
+    fprintf(cc->out, "    mov r0, r1\n");
+}
+
+static void cm4_emit_addr(Compiler *cc, int folded_off) {
+    if (folded_off < 0 && -folded_off <= 4095) {
+        fprintf(cc->out, "    sub r0, r7, #%d\n", -folded_off);
+    } else if (folded_off >= 0 && folded_off <= 4095) {
+        fprintf(cc->out, "    add r0, r7, #%d\n", folded_off);
+    } else {
+        fprintf(cc->out, "    ldr r3, =%d\n", folded_off);
+        fprintf(cc->out, "    add r0, r7, r3\n");
+    }
+}
+
+static void cm4_emit_num(Compiler *cc, long long val) {
+    if (val >= 0 && val <= 65535) {
+        fprintf(cc->out, "    movw r0, #%lld\n", val);
+    } else {
+        fprintf(cc->out, "    ldr r0, =%lld\n", val);
+    }
+}
+
+static void cm4_emit_prep_rhs(Compiler *cc) {
+    fprintf(cc->out, "    mov r1, r0\n");
+}
+
+static void cm4_emit_div(Compiler *cc, int is_unsigned) {
+    if (is_unsigned)
+        fprintf(cc->out, "    udiv r0, r0, r1\n");
+    else
+        fprintf(cc->out, "    sdiv r0, r0, r1\n");
+}
+
+static void cm4_emit_mod(Compiler *cc, int is_unsigned) {
+    if (is_unsigned) {
+        fprintf(cc->out, "    udiv r2, r0, r1\n");
+        fprintf(cc->out, "    mls r0, r2, r1, r0\n");
+    } else {
+        fprintf(cc->out, "    sdiv r2, r0, r1\n");
+        fprintf(cc->out, "    mls r0, r2, r1, r0\n");
+    }
+}
+
+static void cm4_emit_shr(Compiler *cc, int is_unsigned) {
+    if (is_unsigned)
+        fprintf(cc->out, "    lsr r0, r0, r1\n");
+    else
+        fprintf(cc->out, "    asr r0, r0, r1\n");
+}
+
+TargetBackend backend_cortex_m4 = {
+    4, /* ptr_size */
+    cm4_emit_prologue,
+    thumb_emit_epilogue,
+    thumb_emit_call,
+    cm4_emit_binary_op,
+    cm4_emit_load_stack,
+    cm4_emit_store_stack,
+    thumb_emit_float_binop,
+    thumb_emit_push,
+    thumb_emit_pop,
+    cm4_emit_load,
+    cm4_emit_store,
+    cm4_emit_addr,
+    cm4_emit_num,
+    cm4_emit_prep_rhs,
+    thumb_emit_cmp_zero,
+    cm4_emit_div,
+    cm4_emit_mod,
+    cm4_emit_shr,
+    "b" /* jump_mnemonic */
 };
 
 /* ================================================================ */

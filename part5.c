@@ -1645,8 +1645,13 @@ int zcc_main(int argc, char **argv) {
       if (i < argc) {
         if (strncmp(argv[i], "wasm", 4) == 0) {
           g_emit_wasm = 1;
-        } else if (strcmp(argv[i], "arm") == 0 || strcmp(argv[i], "thumb") == 0 || strcmp(argv[i], "thumbv6m") == 0) {
+        } else if (strcmp(argv[i], "arm") == 0 || strcmp(argv[i], "thumb") == 0 || strcmp(argv[i], "thumbv6m") == 0 ||
+                   strcmp(argv[i], "cortex-m0plus") == 0) {
           backend_ops = &backend_thumbv6m;
+          ZCC_POINTER_WIDTH = 4;
+        } else if (strcmp(argv[i], "cortex-m4") == 0 || strcmp(argv[i], "thumbv7em") == 0 || strcmp(argv[i], "flipper") == 0) {
+          backend_ops = &backend_cortex_m4;
+          ZCC_POINTER_WIDTH = 4;
         } else if (strcmp(argv[i], "arm64") == 0 || strcmp(argv[i], "aarch64") == 0 ||
                    strcmp(argv[i], "arm64-linux") == 0 || strcmp(argv[i], "aarch64-linux") == 0 ||
                    strcmp(argv[i], "aarch64-linux-gnu") == 0) {
@@ -1677,8 +1682,16 @@ int zcc_main(int argc, char **argv) {
       qasm_sim_c_mode = 1;
     } else if (strncmp(argv[i], "--seed=", 7) == 0) {
       qasm_sim_seed = strtoull(argv[i] + 7, NULL, 0);
-    } else if (strcmp(argv[i], "--target=arm") == 0 || strcmp(argv[i], "--target=thumb") == 0 || strcmp(argv[i], "--target=thumbv6m") == 0) {
+    } else if (strcmp(argv[i], "--target=arm") == 0 || strcmp(argv[i], "--target=thumb") == 0 || strcmp(argv[i], "--target=thumbv6m") == 0 ||
+               strcmp(argv[i], "-target=arm") == 0 || strcmp(argv[i], "-target=thumb") == 0 ||
+               strcmp(argv[i], "--target=cortex-m0plus") == 0 || strcmp(argv[i], "-target=cortex-m0plus") == 0) {
       backend_ops = &backend_thumbv6m;
+      ZCC_POINTER_WIDTH = 4;
+    } else if (strcmp(argv[i], "--target=cortex-m4") == 0 || strcmp(argv[i], "-target=cortex-m4") == 0 ||
+               strcmp(argv[i], "--target=thumbv7em") == 0 || strcmp(argv[i], "-target=thumbv7em") == 0 ||
+               strcmp(argv[i], "--target=flipper") == 0 || strcmp(argv[i], "-target=flipper") == 0) {
+      backend_ops = &backend_cortex_m4;
+      ZCC_POINTER_WIDTH = 4;
     } else if (strcmp(argv[i], "--target=arm64") == 0 || strcmp(argv[i], "--target=aarch64") == 0 ||
                strcmp(argv[i], "-target=arm64") == 0 || strcmp(argv[i], "-target=aarch64") == 0 ||
                strcmp(argv[i], "-arm64") == 0 || strcmp(argv[i], "-aarch64") == 0 ||

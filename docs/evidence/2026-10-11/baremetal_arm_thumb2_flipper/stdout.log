@@ -1,0 +1,171 @@
+=== 1. DISASSEMBLY OF PROBE_THUMB.O (CORTEX-M0+) ===
+/tmp/probe_thumb.o:     file format elf32-littlearm
+
+Disassembly of section .text:
+
+00000000 <add>:
+   0:	b5f0      	push	{r4, r5, r6, r7, lr}
+   2:	466f      	mov	r7, sp
+   4:	b0c0      	sub	sp, #256	@ 0x100
+   6:	4c09      	ldr	r4, [pc, #36]	@ (2c <add+0x2c>)
+   8:	193c      	adds	r4, r7, r4
+   a:	6020      	str	r0, [r4, #0]
+   c:	4c08      	ldr	r4, [pc, #32]	@ (30 <add+0x30>)
+   e:	193c      	adds	r4, r7, r4
+  10:	6021      	str	r1, [r4, #0]
+  12:	4b06      	ldr	r3, [pc, #24]	@ (2c <add+0x2c>)
+  14:	18f8      	adds	r0, r7, r3
+  16:	6800      	ldr	r0, [r0, #0]
+  18:	b401      	push	{r0}
+  1a:	4b05      	ldr	r3, [pc, #20]	@ (30 <add+0x30>)
+  1c:	18f8      	adds	r0, r7, r3
+  1e:	6800      	ldr	r0, [r0, #0]
+  20:	0001      	movs	r1, r0
+  22:	bc01      	pop	{r0}
+  24:	1840      	adds	r0, r0, r1
+  26:	e7ff      	b.n	28 <add+0x28>
+  28:	46bd      	mov	sp, r7
+  2a:	bdf0      	pop	{r4, r5, r6, r7, pc}
+  2c:	fffffff8 	.word	0xfffffff8
+  30:	fffffff0 	.word	0xfffffff0
+
+=== 2. DISASSEMBLY OF PROBE_FLIPPER_RICH.O (CORTEX-M4 HARDWARE SDIV/MLS) ===
+/tmp/probe_flipper_rich.o:     file format elf32-littlearm
+
+Disassembly of section .text:
+
+00000000 <math_kernel>:
+   0:	b5f0      	push	{r4, r5, r6, r7, lr}
+   2:	466f      	mov	r7, sp
+   4:	b0c0      	sub	sp, #256	@ 0x100
+   6:	f847 0c08 	str.w	r0, [r7, #-8]
+   a:	f847 1c10 	str.w	r1, [r7, #-16]
+   e:	f847 2c18 	str.w	r2, [r7, #-24]
+  12:	f847 3c20 	str.w	r3, [r7, #-32]
+  16:	f1a7 0008 	sub.w	r0, r7, #8
+  1a:	6800      	ldr	r0, [r0, #0]
+  1c:	b401      	push	{r0}
+  1e:	f1a7 0010 	sub.w	r0, r7, #16
+  22:	6800      	ldr	r0, [r0, #0]
+  24:	4601      	mov	r1, r0
+  26:	bc01      	pop	{r0}
+  28:	4408      	add	r0, r1
+  2a:	b401      	push	{r0}
+  2c:	f1a7 0028 	sub.w	r0, r7, #40	@ 0x28
+  30:	bc02      	pop	{r1}
+  32:	6001      	str	r1, [r0, #0]
+  34:	4608      	mov	r0, r1
+  36:	f1a7 0028 	sub.w	r0, r7, #40	@ 0x28
+  3a:	6800      	ldr	r0, [r0, #0]
+  3c:	b401      	push	{r0}
+  3e:	f1a7 0018 	sub.w	r0, r7, #24
+  42:	6800      	ldr	r0, [r0, #0]
+  44:	4601      	mov	r1, r0
+  46:	bc01      	pop	{r0}
+  48:	eba0 0001 	sub.w	r0, r0, r1
+  4c:	b401      	push	{r0}
+  4e:	f1a7 0030 	sub.w	r0, r7, #48	@ 0x30
+  52:	bc02      	pop	{r1}
+  54:	6001      	str	r1, [r0, #0]
+  56:	4608      	mov	r0, r1
+  58:	f1a7 0030 	sub.w	r0, r7, #48	@ 0x30
+  5c:	6800      	ldr	r0, [r0, #0]
+  5e:	b401      	push	{r0}
+  60:	f1a7 0020 	sub.w	r0, r7, #32
+  64:	6800      	ldr	r0, [r0, #0]
+  66:	bc02      	pop	{r1}
+  68:	fb00 f001 	mul.w	r0, r0, r1
+  6c:	b401      	push	{r0}
+  6e:	f1a7 0038 	sub.w	r0, r7, #56	@ 0x38
+  72:	bc02      	pop	{r1}
+  74:	6001      	str	r1, [r0, #0]
+  76:	4608      	mov	r0, r1
+  78:	f1a7 0038 	sub.w	r0, r7, #56	@ 0x38
+  7c:	6800      	ldr	r0, [r0, #0]
+  7e:	b401      	push	{r0}
+  80:	f1a7 0010 	sub.w	r0, r7, #16
+  84:	6800      	ldr	r0, [r0, #0]
+  86:	4601      	mov	r1, r0
+  88:	bc01      	pop	{r0}
+  8a:	fb90 f0f1 	sdiv	r0, r0, r1
+  8e:	b401      	push	{r0}
+  90:	f1a7 0040 	sub.w	r0, r7, #64	@ 0x40
+  94:	bc02      	pop	{r1}
+  96:	6001      	str	r1, [r0, #0]
+  98:	4608      	mov	r0, r1
+  9a:	f1a7 0038 	sub.w	r0, r7, #56	@ 0x38
+  9e:	6800      	ldr	r0, [r0, #0]
+  a0:	b401      	push	{r0}
+  a2:	f1a7 0018 	sub.w	r0, r7, #24
+  a6:	6800      	ldr	r0, [r0, #0]
+  a8:	4601      	mov	r1, r0
+  aa:	bc01      	pop	{r0}
+  ac:	fb90 f2f1 	sdiv	r2, r0, r1
+  b0:	fb02 0011 	mls	r0, r2, r1, r0
+  b4:	b401      	push	{r0}
+  b6:	f1a7 0048 	sub.w	r0, r7, #72	@ 0x48
+  ba:	bc02      	pop	{r1}
+  bc:	6001      	str	r1, [r0, #0]
+  be:	4608      	mov	r0, r1
+  c0:	f1a7 0048 	sub.w	r0, r7, #72	@ 0x48
+  c4:	6800      	ldr	r0, [r0, #0]
+  c6:	b401      	push	{r0}
+  c8:	f240 0000 	movw	r0, #0
+  cc:	4601      	mov	r1, r0
+  ce:	bc01      	pop	{r0}
+  d0:	4288      	cmp	r0, r1
+  d2:	dc01      	bgt.n	d8 <math_kernel+0xd8>
+  d4:	2000      	movs	r0, #0
+  d6:	e000      	b.n	da <math_kernel+0xda>
+  d8:	2001      	movs	r0, #1
+  da:	2800      	cmp	r0, #0
+  dc:	d00b      	beq.n	f6 <math_kernel+0xf6>
+  de:	f1a7 0040 	sub.w	r0, r7, #64	@ 0x40
+  e2:	6800      	ldr	r0, [r0, #0]
+  e4:	b401      	push	{r0}
+  e6:	f1a7 0048 	sub.w	r0, r7, #72	@ 0x48
+  ea:	6800      	ldr	r0, [r0, #0]
+  ec:	4601      	mov	r1, r0
+  ee:	bc01      	pop	{r0}
+  f0:	4408      	add	r0, r1
+  f2:	e004      	b.n	fe <math_kernel+0xfe>
+  f4:	e003      	b.n	fe <math_kernel+0xfe>
+  f6:	f1a7 0040 	sub.w	r0, r7, #64	@ 0x40
+  fa:	6800      	ldr	r0, [r0, #0]
+  fc:	e7ff      	b.n	fe <math_kernel+0xfe>
+  fe:	46bd      	mov	sp, r7
+ 100:	bdf0      	pop	{r4, r5, r6, r7, pc}
+
+=== 3. PYTHON AUTOMATED REGRESSION SUITE OUTPUT ===
+[1/5] Testing Cortex-M0+ (thumbv6m) arithmetic and parameter slots...
+  --> Cortex-M0+ basic arithmetic & stack slots PASS
+[2/5] Testing Cortex-M4 hardware sdiv and mls (Flipper Zero)...
+  --> Cortex-M4 hardware division & modulo PASS
+[3/5] Testing Flipper Zero string literals and AAPCS call registers...
+  --> Flipper Zero string literals and AAPCS calls PASS
+[4/5] Testing end-to-end GNU EABI ELF32 linking with arm-none-eabi-gcc...
+  Linked ELF size:
+text	   data	    bss	    dec	    hex	filename
+   4884	   1364	    808	   7056	   1b90	/tmp/tmpcb1kcgrm.elf
+  --> End-to-end ARM EABI link PASS
+[5/5] Testing CLI target flag aliases...
+  --> All CLI target flag aliases PASS
+[6/6] Testing hardened unary ops (mvns, negs, cmp) and indirect blx calls...
+  --> Unary ops and indirect blx call PASS
+
+ALL 6 HARDENED ARM/THUMB-2/FLIPPER REGRESSION TESTS PASSED CLEANLY!
+
+=== 4. GATE 1 SELF-HOST BYTE IDENTITY VERIFICATION (HARDENED) ===
+═══ [GATE 1] SELF-HOST IDENTITY VERIFICATION ═══
+   ✓ Gate 1 PASS: Assembly byte-identical (cmp stage2.s stage3.s).
+ 6m[Semantic Oracle] Cross-verifying against GCC & Golden Oracle... [PASS: Byte-Identical]
+  ABI Oracle] Bidirectional Interop (MV1.2, MV1.3a & MV1.3b)... [PASS: Triple-Corpus Bidirectional]
+Lineage check: PASS
+★ ZKAEDI PRIME FIXED POINT REPO - H0 CONVERGED - exit 0 (scars: 0, ⟐ BYTE-IDENTICAL SEAL ⟐) ★
+zcc_quest: child exit=0 warnings=0 errors=0 elapsed=256.2s
+
+cmp zcc2.s zcc3.s (exit code 0)
+sha256sum zcc2.s zcc3.s:
+1d881cf2fdb1db8d795309700efaeb03e8198ec40ed6c88c818d53c457833fcc  zcc2.s
+1d881cf2fdb1db8d795309700efaeb03e8198ec40ed6c88c818d53c457833fcc  zcc3.s
+
