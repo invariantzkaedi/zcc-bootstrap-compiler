@@ -1,3 +1,21 @@
+## CG-FLOAT-RETURN-WIDEN-001: Missing System V Float Return Widening (FIXED - Oct 14, 2026)
+
+**Status**: ✅ FIXED  
+**Severity**: HIGH (Silent IEEE-754 precision loss / subnormal corruption)  
+**Fix Date**: October 14, 2026  
+**Commit**: `f3fbe86ba`  
+
+### The Bug
+When a C function declared to return `double` returned an expression of type `float` (e.g. `return (float)a;` inside `Math.fround`), `part4.c` (`case ND_RETURN:`) omitted System V AMD64 scalar widening (`cvtss2sd %xmm0, %xmm0`). Instead, it bitcast the 32-bit float into `%xmm0` with `movq %rax, %xmm0`, zero-extending the upper 32 bits into the 64-bit exponent/fraction fields and creating deep subnormals ($10^{-315}$).
+
+### Fix (`part4.c:L5117-5132`)
+Emitted `cvtss2sd %xmm0, %xmm0` when returning `TY_FLOAT` from a `TY_DOUBLE` function, and `cvtsd2ss %xmm0, %xmm0` when narrowing. Removed unqualified `"next_token"` from `ir_whitelisted()` per `E-LEARN-016`.
+
+### Verification
+- ✅ `tests/probe_float_return_widen.c`: bit-exact `0x4340000000000000`
+- ✅ QuickJS ES2020 Engine: 15/15 PASS
+- ✅ V8 Differential Gauntlet: 100/100 consensus (100% parity across Ignition, Maglev, TurboFan, and ZCC QuickJS)
+- ✅ Bootstrap stable: `cmp stage2.s stage3.s` byte-identical (`8b4b28bc4cfbd9ff867ba66f5931fb68`)
 
 ## CG-IR-011: Callee-Saved Register Mismatch (FIXED - Apr 15, 2026)
 
@@ -42,9 +60,9 @@ Fixed surgically in `part3.c` without altering `part4.c` ABI behavior by unrolli
 
 ## CG-SIGFPE-002 / CG-SIGFPE-003: Runtime SIGFPE from Variable-Denominator Division (RESOLVED)
 
-**Status**: ✅ RESOLVED (Static paths closed in `532bb4ae`, runtime variable-denominator paths closed via `ZCC_SAFE_DIV=1` / commit `68914f27`)  
+**Status**: ✅ PERMANENTLY RESOLVED (Phase 2 Compile-Time ICP-to-Codegen Feedback Loop; zero runtime branch overhead)  
 **Severity**: LOW / HIGH (Csmith `--no-safe-math` zero-denominator division handling)  
-**Fix Date**: July 4, 2026 (commit `68914f27`)
+**Fix Date**: September 8, 2026 (Phase 2 closure)
 
 ### Resolution Architecture
 
@@ -54,47 +72,19 @@ Fixed surgically in `part3.c` without altering `part4.c` ABI behavior by unrolli
    - `part4.c:4776`: Global static initializer fold
    - ICP Oracle Substrate (`--icp-closed-world`, `--trace-constprop` flags)
 
-2. **Dynamic / Runtime Denominator Paths (`CG-SIGFPE-003`, commit `68914f27`)**:
-   - Activated via `ZCC_SAFE_DIV=1` environment variable or `--safe-div` CLI flag.
-   - Emits runtime zero-guard check before `idiv`/`divl`/`divq`:
-     ```asm
-     testq %rcx, %rcx
-     je .Ldivzero_skip_NNN
-     idivq %rcx
-     ```
-   - Eliminates hardware SIGFPE crashes on opaque dynamic zero denominators in Csmith campaigns.
+2. **Compile-Time Feedback Loop (`CG-SIGFPE-003`, Phase 2)**:
+   - Enhanced `part3.c` Interprocedural Constant Propagation to track:
+     - Single-assigned local variables (assign_count <= 1, !addr_taken).
+     - Immutable scalar static global variables (assign_count == 0, !addr_taken, is_integer, !volatile).
+     - Guarded `solve_icp` and `rewrite_constant_vars_rec` against pointers/strings (`zcc_stddef_text`).
+   - Fed proven zero constants into the codegen division path, folding proven zero denominators to 0 and suppressing `idiv`/`div` emission at compile time.
+   - Eliminates Csmith `--no-safe-math` SIGFPE 136 crashes with zero runtime instructions/branching overhead.
 
 ### Verification
-- ✅ `ZCC_SAFE_DIV=1 ./zcc tests/regressions/test_safe_div.c` passes cleanly with exit code 0.
-- ✅ Without `ZCC_SAFE_DIV`: traps with `SIGFPE` (confirming guard is active only when requested to preserve raw UB diagnostics).
-- ✅ Bootstrap stable (`zcc2.s == zcc3.s`).
-
-### The Pattern
-Csmith programs generated with `--no-safe-math` contain raw `/` operators on variables
-that are provably zero at compile time (e.g., `int l_7 = 0; ... / l_7`). GCC exploits
-integer division by zero as Undefined Behavior and eliminates the entire computation via
-dead-code / constant-propagation passes. ZCC, as a non-optimizing compiler, emits `idiv`
-or `divl` for all non-constant denominators, triggering SIGFPE at runtime on x86.
-
-### Affected Seeds
-Seeds where ZCC crashes with exit code 136 (SIGFPE): 2915565, 5655137, 999611, 674304,
-862616, 715931, 9131349, 2746786, 5900524, 5964344, 6030850 (from warfare-harness run,
-seed=42, 100 iterations).
-
-### Root Cause
-ZCC lacks full **interprocedural constant propagation → codegen feedback**. The ICP
-solver can now *prove* x=0 via `--icp-closed-world`, but does not yet feed that proof
-back into the division emitter to suppress or guard the `idiv`. The oracle substrate
-exists (commit `a62e8f97`); the codegen feedback loop is the next phase.
-
-### Non-Fix Rationale
-Adding a runtime zero-check before every `idiv`/`divl`/`divq` would silently suppress
-real division-by-zero crashes in production code and is the wrong fix. The proper fix is
-feeding ICP-proven constants into the codegen path to elide the division entirely.
-
-### Workaround
-Use `--safe-math` csmith mode for ZCC CI regression testing. For differential fuzzing:
-`python3 scripts/csmith_warfare.py --iterations 100 --csmith-args "..."` (omitting `--no-safe-math`).
+- ✅ Probe 1 (`/tmp/probe_divzero.c`): Local variable zero denominator folded cleanly to 0, zero `idiv` instructions in assembly, exit code 0.
+- ✅ Probe 2 (`/tmp/csmith_nochecksum.c` Csmith seed 7475864): Static global zero denominator folded cleanly without `--safe-div`, exit code 0.
+- ✅ Bootstrap fixed-point verified (`cmp zcc2.s zcc3.s` byte-identical, SHA-256 `3a95685ee95d7a2067f5b5bc490fdb8044e6dc49aabc5b0da702f1cab5f3903e`).
+- ✅ Diff audit: `part3.c` 44 lines changed (< 50 line boundary), `part4.c` 0 lines.
 
 ## CG-MISMATCH-1003697: Wrong Checksum in Seed 1003697 (FIXED - May 30, 2026)
 
@@ -200,11 +190,8 @@ as of 2026-07-24. Generating source not retained; divergence cannot be reproduce
 or attributed. Likely resolved by CG-IR-011 era fixes. Lesson: witnesses MUST
 retain source + seed + regeneration command, not binaries alone.
 
-## swarm-prove: Gate Cannot Fail (QUARANTINED - Jul 24, 2026)
-**Status**: Removed from release-prep and v1.0 ship path. Makefile PASS branch
-greps for "violat" but src/evm/symbolic.c:90 emits only HOLD/UNKNOWN — the
-VIOLATED branch is unreachable dead code; gate cannot produce a red verdict.
-Underlying syntactic check (barriers==0 → HOLD) is sound but weak.
-**Re-entry criteria**: pass condition changed to PROVED==TOTAL, plus one
-known-barrier contract in corpus asserted to yield UNKNOWN (fault-injection
-proof the gate can fail).
+## swarm-prove: Gate Cannot Fail (RESOLVED & VERIFIED - Sep 08, 2026)
+**Status**: ✅ RESOLVED & RESTORED to release path (`release-v1.0`).
+- Synchronized `Makefile` swarm-prove recipe to explicitly track `UNKNOWN` along with `HOLD`, `VIOLATED`, and `ERROR`.
+- Upgraded pass condition from vacuous `((PROVED+VIOLATED) == TOTAL)` to strict `PROVED == TOTAL` with `UNKNOWN == 0`, `VIOLATED == 0`, and `ERROR == 0`.
+- Added `make swarm-prove-fault-injection` negative control: verifies a known-barrier contract (`tests/evm/fault_injection_barrier.bin` containing `REVERT`) yields `UNKNOWN`, proving the gate produces a red verdict on non-holding contracts.

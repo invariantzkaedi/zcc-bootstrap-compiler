@@ -17,6 +17,7 @@ Generation 3 — supersedes generation 2 below
 | Rust Frontend v2 Expansion (LIMIT-007) | **VERIFIED (`struct`, `impl`, `enum`, `match`, method dispatch, 0 test drift)** |
 | WebAssembly CLI Target (LIMIT-008) | **VERIFIED (-target wasm / -wasm, 57/57 wasm tests pass, 0 drift)** |
 | QuickJS ES2020 Engine Suite | **VERIFIED (15/15 PASS across 6 suites)** |
+| Float Return Widen & V8 Consensus (CG-001) | **VERIFIED (0x4340000000000000 bit-exact, 100/100 V8 consensus, QuickJS 15/15)** |
 | Production Opt Gauntlet (`tools/test_zcc_opt_passes.py`) | **19/19 Bit-Exact PASS (2,067 instructions elided, 0 divergences)** |
 | IR Backend | Operational (CG-IR-001 through CG-IR-022 all closed) |
 | IR Telemetry | Operational |
@@ -41,6 +42,7 @@ Generation 3 — supersedes generation 2 below
 | Complex & Ext Prec (LIMIT-003) | 4d414daa3c2c23bcf09fdee45c40b727 | locked Sep 22 on WSL2 & Azure (commit 19724a2c) |
 | Autonomous Linker (LIMIT-004) | c951344bc1dfe7b9e9395f49f22163d4 | locked Sep 22 on WSL2 & Azure (commit 70f3d143) |
 | Rust Frontend v2 (LIMIT-007) | 42e05e5c401cf3a462958f8cd81e860f | locked Sep 22 on WSL2 & Azure (commit 68097a82) |
+| Float Return Widen (CG-001) | 8b4b28bc4cfbd9ff867ba66f5931fb68 | locked Oct 14 on WSL2 & Azure (commit f3fbe86b) |
 
 If a future bootstrap produces a different hash, either codegen drifted (regression) or new compilation units were added (intentional). Use this table as the first line of forensic defense.
 
