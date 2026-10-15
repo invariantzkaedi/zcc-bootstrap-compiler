@@ -1,0 +1,38 @@
+# Exact commands executed in verification order for CG-FLOAT-RETURN-WIDEN-001
+
+# 1. Pre-fix reproduction probe
+gcc -no-pie -O0 -w -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -Iinclude -I. -o zcc zcc.c $(PASSES) -lm
+./zcc tests/probe_float_return_widen.c -o /tmp/probe_pre.s
+gcc -no-pie /tmp/probe_pre.s -o /tmp/probe_pre
+/tmp/probe_pre
+
+# 2. Patch application to part4.c and regeneration of zcc.c
+cat $(PARTS) > zcc.c
+make zcc
+
+# 3. Post-fix regression probe verification
+./zcc tests/probe_float_return_widen.c -o /tmp/probe_fround.s
+gcc -no-pie /tmp/probe_fround.s -o /tmp/probe_fround
+/tmp/probe_fround
+
+# 4. QuickJS re-compilation under patched ZCC
+./zcc /tmp/quickjs_objs/quickjs.i.c -o /tmp/quickjs_objs/quickjs.s
+as /tmp/quickjs_objs/quickjs.s -o /tmp/quickjs_objs/quickjs.o
+gcc -no-pie -I/tmp/quickjs -o /tmp/test_quickjs_runner tests/test_quickjs_native.c tests/zcc_quickjs_runtime.s /tmp/quickjs_objs/quickjs.o /tmp/quickjs_objs/cutils.o /tmp/quickjs_objs/libunicode.o /tmp/quickjs_objs/dtoa.o /tmp/quickjs_objs/libregexp.o -lm -lpthread -ldl
+/tmp/test_quickjs_runner
+
+# 5. QuickJS eval tool verification on target expression
+gcc -no-pie -I/tmp/quickjs -o /tmp/zcc_qjs_eval tools/zcc_qjs_eval.c tests/zcc_quickjs_runtime.s /tmp/quickjs_objs/quickjs.o /tmp/quickjs_objs/cutils.o /tmp/quickjs_objs/libunicode.o /tmp/quickjs_objs/dtoa.o /tmp/quickjs_objs/libregexp.o -lm -lpthread -ldl
+/tmp/zcc_qjs_eval "Math.fround(9007199254740994)"
+/tmp/zcc_qjs_eval "((a, b) => (Math.fround(a) + b))(9007199254740994, 0.5000000000000001)"
+
+# 6. V8 vs QuickJS 100-iteration multi-tier differential gauntlet
+python e:/__GROUPED_IMAGES/ABSTRACT/v8_differential_tester_enhanced.py --iterations 100 --workers 8 --mode typer_subnormal --tier all --with-qjs
+
+# 7. Self-host identity bootstrap verification (Gate 1 & Gate 2)
+make selfhost
+cmp evidence/zcc-omega-1792022505-1509/stage2.s evidence/zcc-omega-1792022505-1509/stage3.s
+md5sum evidence/zcc-omega-1792022505-1509/stage2.s evidence/zcc-omega-1792022505-1509/stage3.s
+sha256sum evidence/zcc-omega-1792022505-1509/stage2.s evidence/zcc-omega-1792022505-1509/stage3.s
+cat evidence/zcc-omega-1792022505-1509/abi_interop/v13_zlib_gmain.stdout
+cat evidence/zcc-omega-1792022505-1509/abi_interop/v13_glib_zmain.stdout

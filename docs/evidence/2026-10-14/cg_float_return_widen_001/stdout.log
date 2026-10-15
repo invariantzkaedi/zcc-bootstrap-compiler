@@ -1,0 +1,91 @@
+=== 1. PRE-FIX PROBE EXECUTION ===
+Input:    9007199254740994.0
+Actual:   7.460141452612285e-315 (0x000000005a000000)
+Expected: 9007199254740992.0 (0x4340000000000000)
+VERDICT:  FAIL (DEFECT CONFIRMED)
+
+=== 2. POST-FIX PROBE EXECUTION ===
+Input:    9007199254740994.0
+Actual:   9.007199254740992e+15 (0x4340000000000000)
+Expected: 9007199254740992.0 (0x4340000000000000)
+VERDICT:  PASS
+
+=== 3. QUICKJS TEST RUNNER EXECUTION ===
+===============================================================
+  ZCC NATIVE QUICKJS ES2020 TEST HARNESS
+===============================================================
+
+--- Test Suite 1: Arithmetic & IEEE-754 Floats ---
+  [PASS] 1 + 2 * 3 == 7
+  [PASS] Math.hypot(3, 4) == 5
+  [PASS] Math.sin(0) == 0
+  [PASS] Math.PI > 3.14 && Math.PI < 3.15 == true
+  [PASS] Number.MAX_SAFE_INTEGER.toString() == 9007199254740991
+
+--- Test Suite 2: Objects, Arrays & JSON ---
+  [PASS] JSON.stringify({ a: 42, b: 'hello' }) == {"a":42,"b":"hello"}
+  [PASS] [1, 2, 3, 4, 5].map(x => x * x).reduce((a, b) => a + b, 0) == 55
+  [PASS] ['apple', 'banana', 'cherry'].join('-') == apple-banana-cherry
+
+--- Test Suite 3: Closures, Loops & Functions ---
+  [PASS] (() => { let s = 0; for (let i = 1; i <= 10; i++) s += i; return s; })() == 55
+  [PASS] function fib(n) { return n <= 1 ? n : fib(n-1) + fib(n-2); }; fib(10) == 55
+
+--- Test Suite 4: RegExp & Strings ---
+  [PASS] 'quickjs-2024'.replace(/([a-z]+)-([0-9]+)/, '$2-$1') == 2024-quickjs
+  [PASS] /^[a-z0-9_]+$/i.test('zcc_2026') == true
+
+--- Test Suite 5: ES6 Classes & Prototypes ---
+  [PASS] class Point { constructor(x, y) { this.x = x; this.y = y; } norm2() { return this.x*this.x + this.y*this.y; } }; new Point(3, 4).norm2() == 25
+
+--- Test Suite 6: Date & BigInt ---
+  [PASS] new Date(0).toISOString() == 1970-01-01T00:00:00.000Z
+  [PASS] (2n ** 64n).toString() == 18446744073709551616
+
+===============================================================
+  ALL QUICKJS TESTS PASSED CLEANLY! (Failures: 0)
+===============================================================
+
+=== 4. TARGET EVALUATION ===
+$ /tmp/zcc_qjs_eval "Math.fround(9007199254740994)"
+9007199254740992
+$ /tmp/zcc_qjs_eval "((a, b) => (Math.fround(a) + b))(9007199254740994, 0.5000000000000001)"
+9007199254740992
+$ /tmp/zcc_qjs_eval "Math.sin(1.5)"
+0.9974949866040544
+
+=== 5. GATE 1 CMP OUTPUT ===
+$ cmp evidence/zcc-omega-1792022505-1509/stage2.s evidence/zcc-omega-1792022505-1509/stage3.s
+GATE 1: BYTE-IDENTICAL PASS
+
+$ md5sum evidence/zcc-omega-1792022505-1509/stage2.s evidence/zcc-omega-1792022505-1509/stage3.s
+8b4b28bc4cfbd9ff867ba66f5931fb68  evidence/zcc-omega-1792022505-1509/stage2.s
+8b4b28bc4cfbd9ff867ba66f5931fb68  evidence/zcc-omega-1792022505-1509/stage3.s
+
+$ sha256sum evidence/zcc-omega-1792022505-1509/stage2.s evidence/zcc-omega-1792022505-1509/stage3.s
+ba67813def6f9177fe1985a67528b601233e124c49c67ca774138e5ae0c3bce9  evidence/zcc-omega-1792022505-1509/stage2.s
+ba67813def6f9177fe1985a67528b601233e124c49c67ca774138e5ae0c3bce9  evidence/zcc-omega-1792022505-1509/stage3.s
+
+=== 6. GATE 2 ABI INTEROP OUTPUT ===
+$ cat evidence/zcc-omega-1792022505-1509/abi_interop/v13_zlib_gmain.stdout
+ARG8:1122334455667788
+ARG16:477aade114477a8f
+ARG24:cf168ad2468dff0c
+RET8:9988776655443322
+RET16:13579bdf2468ace0:2468ace13579bdf
+RET24:13579bdf2468ace0:2468ace3579bdf1:3175b9fd064a8ec2
+
+$ cat evidence/zcc-omega-1792022505-1509/abi_interop/v13_glib_zmain.stdout
+ARG8:1122334455667788
+ARG16:477aade114477a8f
+ARG24:cf168ad2468dff0c
+RET8:9988776655443322
+RET16:13579bdf2468ace0:2468ace13579bdf
+RET24:13579bdf2468ace0:2468ace3579bdf1:3175b9fd064a8ec2
+
+=== 7. V8 DIFFERENTIAL JIT GAUNTLET SUMMARY ===
+Total Iterations:             100
+Semantic Consensus Rate:      100.00% (100/100)
+Divergences Found:            0
+Evaluation Errors:            0
+STATUS: PASS — Zero semantic discrepancies across all evaluated tiers.
