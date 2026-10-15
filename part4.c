@@ -6928,11 +6928,69 @@ static int resolve_global_addr(Node *node, char **out_name, long long *out_offse
     return 0;
 }
 
+static long long coerce_const_init_val(long long const_val, Type *src_type, Type *target_type) {
+    if (!src_type || !target_type) return const_val;
+    int lk = src_type->kind;
+    int tk = target_type->kind;
+    if (lk == tk) return const_val;
+
+    double f_val = 0;
+    unsigned long long u_val = 0;
+    long long i_val = 0;
+    int is_float_src = 0;
+    if (lk == TY_FLOAT) {
+        unsigned int fbt = (unsigned int)const_val;
+        float ftmp; memcpy(&ftmp, &fbt, 4);
+        f_val = (double)ftmp;
+        is_float_src = 1;
+    } else if (lk == TY_DOUBLE) {
+        memcpy(&f_val, &const_val, 8);
+        is_float_src = 1;
+    } else if (lk == TY_UCHAR || lk == TY_USHORT || lk == TY_UINT || lk == TY_ULONG || lk == TY_ULONGLONG) {
+        u_val = (unsigned long long)const_val;
+        i_val = (long long)const_val;
+    } else {
+        i_val = const_val;
+        u_val = (unsigned long long)const_val;
+    }
+
+    if (tk == TY_FLOAT) {
+        float fv = is_float_src ? (float)f_val : ((lk == TY_UCHAR || lk == TY_USHORT || lk == TY_UINT || lk == TY_ULONG || lk == TY_ULONGLONG) ? (float)u_val : (float)i_val);
+        unsigned int fb; memcpy(&fb, &fv, 4);
+        return (long long)fb;
+    } else if (tk == TY_DOUBLE) {
+        double dv = is_float_src ? f_val : ((lk == TY_UCHAR || lk == TY_USHORT || lk == TY_UINT || lk == TY_ULONG || lk == TY_ULONGLONG) ? (double)u_val : (double)i_val);
+        unsigned long long db; memcpy(&db, &dv, 8);
+        return (long long)db;
+    } else if (is_float_src) {
+        return (long long)f_val;
+    }
+    return const_val;
+}
+
 static void emit_global_init_list(Compiler *cc, Type *type, Node *init_list, int base_offset, int *emitted) {
     if (type->kind == TY_ARRAY) {
         Type *elem_type = type->base;
         int elem_size = type_size(elem_type);
         if (backend_ops && backend_ops->ptr_size == 4 && is_pointer(elem_type)) elem_size = 4;
+        if (init_list->num_args == 1 && init_list->args[0] && init_list->args[0]->kind == ND_STR && elem_type && (elem_type->kind == TY_CHAR || elem_type->kind == TY_UCHAR)) {
+            int str_id = init_list->args[0]->str_id;
+            int len = cc->strings[str_id].len;
+            int total_sz = type_size(type);
+            int copy_len = len < total_sz ? len : total_sz;
+            if (*emitted < base_offset) {
+                fprintf(cc->out, "    .zero %d\n", base_offset - *emitted);
+                *emitted = base_offset;
+            }
+            for (int j = 0; j < copy_len; j++) {
+                fprintf(cc->out, "    .byte %d\n", (unsigned char)cc->strings[str_id].data[j]);
+            }
+            if (copy_len < total_sz) {
+                fprintf(cc->out, "    .zero %d\n", total_sz - copy_len);
+            }
+            *emitted = base_offset + total_sz;
+            return;
+        }
         int count = (type->array_len > 0) ? type->array_len : init_list->num_args;
         for (int i = 0; i < count; i++) {
             int expected_end = base_offset + (i + 1) * elem_size;
@@ -6952,6 +7010,7 @@ static void emit_global_init_list(Compiler *cc, Type *type, Node *init_list, int
                     while (elem && elem->kind == ND_CAST) elem = elem->lhs;
                     int const_ok = 1;
                     long long const_val = eval_const_expr_p4(elem, &const_ok);
+                    if (const_ok && elem) const_val = coerce_const_init_val(const_val, elem->type, elem_type);
                     if (*emitted < base_offset + i * elem_size) {
                         fprintf(cc->out, "    .zero %d\n", (base_offset + i * elem_size) - *emitted);
                         *emitted = base_offset + i * elem_size;
@@ -7040,6 +7099,7 @@ static void emit_global_init_list(Compiler *cc, Type *type, Node *init_list, int
                 while (elem && elem->kind == ND_CAST) elem = elem->lhs;
                 int const_ok = 1;
                 long long const_val = eval_const_expr_p4(elem, &const_ok);
+                if (const_ok && elem) const_val = coerce_const_init_val(const_val, elem->type, f->type);
                 if (const_ok) {
                     if (elem_size == 1) fprintf(cc->out, "    .byte %lld\n", const_val);
                     else if (elem_size == 2) fprintf(cc->out, "    .short %lld\n", const_val);
