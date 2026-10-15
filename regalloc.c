@@ -14,6 +14,7 @@
 
 #include "regalloc.h"
 #include "ir_dominance.h"
+#include "regalloc_config.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -57,7 +58,27 @@ static double absolute_val(double x) {
 
 static double zcc_prime_compute_state(double h_prev, double h_0, const ZkaediPrimeParams *params) {
     if (!params) return h_prev;
-    double evolution = params->eta * h_prev * fast_sigmoid(params->gamma * h_prev);
+
+    double eta_adj = params->eta;
+    double gamma_adj = params->gamma;
+    
+#if REGALLOC_COALESCING_ENABLED == 1
+    eta_adj = (eta_adj * 12) / 10;
+#else
+    eta_adj = (eta_adj * 8) / 10;
+#endif
+
+#if REGALLOC_LOOP_WEIGHT_ENABLED == 1
+    gamma_adj = (gamma_adj * 115) / 100;
+#else
+    gamma_adj = (gamma_adj * 9) / 10;
+#endif
+
+#if REGALLOC_PRESSURE_WEIGHT_ENABLED == 1
+    eta_adj = (eta_adj * 11) / 10;
+#endif
+
+    double evolution = eta_adj * h_prev * fast_sigmoid(gamma_adj * h_prev);
     double std_dev = 1.0 + (params->beta * absolute_val(h_prev));
     double noise = params->epsilon * deterministic_normal_distribution(std_dev);
     return h_0 + evolution + noise;
@@ -159,6 +180,11 @@ static void add_ref(RegAllocator *ra, const char *name, int pos, int weight, int
     iv->loop_depth_weight += weight;
 }
 
+/* Static dominance buffers: zero-stack footprint to prevent -8(%rbp) clobbering (Rule E-LEARN-020) */
+static int s_loop_depth[DOM_MAX_BLOCKS];
+static char s_in_loop[DOM_MAX_BLOCKS];
+static int s_queue[DOM_MAX_BLOCKS];
+
 static void build_intervals(RegAllocator *ra, const ir_func_t *fn) {
     const ir_node_t *n;
     int pos = 0;
@@ -166,8 +192,7 @@ static void build_intervals(RegAllocator *ra, const ir_func_t *fn) {
     /* Build CFG for loop depth calculations */
     dom_cfg_t cfg;
     int has_cfg = 0;
-    int loop_depth[DOM_MAX_BLOCKS];
-    memset(loop_depth, 0, sizeof(loop_depth));
+    memset(s_loop_depth, 0, sizeof(s_loop_depth));
 
     if (dom_build_cfg(&cfg, (ir_func_t *)fn) >= 0) {
         dom_compute_idom(&cfg);
@@ -185,37 +210,35 @@ static void build_intervals(RegAllocator *ra, const ir_func_t *fn) {
             }
             if (!has_back_edge) continue;
 
-            char in_loop[DOM_MAX_BLOCKS];
-            memset(in_loop, 0, sizeof(in_loop));
-            in_loop[h] = 1;
+            memset(s_in_loop, 0, sizeof(s_in_loop));
+            s_in_loop[h] = 1;
 
-            int queue[DOM_MAX_BLOCKS];
             int qhead = 0, qtail = 0;
 
             for (int pi = 0; pi < cfg.blocks[h].pred_count; pi++) {
                 int pred = cfg.blocks[h].pred[pi];
                 if (dom_dominates(&cfg, h, pred)) {
-                    if (!in_loop[pred]) {
-                        in_loop[pred] = 1;
-                        queue[qtail++] = pred;
+                    if (!s_in_loop[pred]) {
+                        s_in_loop[pred] = 1;
+                        s_queue[qtail++] = pred;
                     }
                 }
             }
 
             while (qhead < qtail) {
-                int curr = queue[qhead++];
+                int curr = s_queue[qhead++];
                 for (int pi = 0; pi < cfg.blocks[curr].pred_count; pi++) {
                     int pred = cfg.blocks[curr].pred[pi];
-                    if (!in_loop[pred]) {
-                        in_loop[pred] = 1;
-                        queue[qtail++] = pred;
+                    if (!s_in_loop[pred]) {
+                        s_in_loop[pred] = 1;
+                        s_queue[qtail++] = pred;
                     }
                 }
             }
 
             for (int b = 0; b < cfg.block_count; b++) {
-                if (in_loop[b]) {
-                    loop_depth[b]++;
+                if (s_in_loop[b]) {
+                    s_loop_depth[b]++;
                 }
             }
         }
@@ -226,7 +249,7 @@ static void build_intervals(RegAllocator *ra, const ir_func_t *fn) {
         if (has_cfg) {
             bid = dom_find_block_for_node(&cfg, n);
         }
-        int depth = (bid >= 0 && bid < cfg.block_count) ? loop_depth[bid] : 0;
+        int depth = (bid >= 0 && bid < cfg.block_count) ? s_loop_depth[bid] : 0;
         int weight = 1;
         if (depth > 6) depth = 6;
         for (int d = 0; d < depth; d++) {
@@ -244,6 +267,9 @@ static void build_intervals(RegAllocator *ra, const ir_func_t *fn) {
         if (is_temp(n->src2)) {
             add_ref(ra, n->src2, pos, weight, 0, n->type);
         }
+        if ((n->op == IR_FMA || n->op == IR_FNMA || n->op == IR_VFMA) && is_temp(n->label)) {
+            add_ref(ra, n->label, pos, weight, 0, n->type);
+        }
         
         /* If it is a copy move/phi-related, mark it */
         if (n->op == IR_COPY && is_temp(n->dst)) {
@@ -253,7 +279,9 @@ static void build_intervals(RegAllocator *ra, const ir_func_t *fn) {
     }
 
     /* Sort by start for the scan */
-    qsort(ra->intervals, ra->num_intervals, sizeof(LiveInterval), iv_cmp_start);
+    if (ra->num_intervals > 0 && ra->intervals) {
+        qsort(ra->intervals, ra->num_intervals, sizeof(LiveInterval), iv_cmp_start);
+    }
 }
 
 /* ── Phase 2: Chaitin-Briggs Graph Coloring ──────────────────────────── */
@@ -309,7 +337,7 @@ static void chaitin_briggs(RegAllocator *ra, const ir_func_t *fn) {
                 while(alias[v] != v) v = alias[v];
                 if (u != v && ra->intervals[u].is_float == ra->intervals[v].is_float && !adj[u*N + v]) {
                     /* Briggs conservative coalescing check */
-                    int K = 7;
+                    int K = GPR_K;
                     int significant_neighbors = 0;
                     for (int k = 0; k < N; k++) {
                         if (k == u || k == v) continue;
@@ -345,7 +373,7 @@ static void chaitin_briggs(RegAllocator *ra, const ir_func_t *fn) {
         int target = -1;
         for (i = 0; i < N; i++) {
              if (removed[i]) continue;
-             int K = 7;
+             int K = GPR_K;
             if (degree[i] < K) {
                 if (target == -1 || strcmp(ra->intervals[i].name, ra->intervals[target].name) < 0) {
                     target = i;
@@ -414,7 +442,7 @@ static void chaitin_briggs(RegAllocator *ra, const ir_func_t *fn) {
 
     while (stack_top > 0) {
         int target = stack[--stack_top];
-        int K = 7;
+        int K = ra->intervals[target].is_float ? FLOAT_K : GPR_K;
         int used_colors = 0;
 
         for (j = 0; j < N; j++) {

@@ -74,6 +74,7 @@ static int node_uses(ir_node_t *n, const char *name) {
     if (n->src2[0] && strcmp(n->src2, name) == 0) return 1;
     /* IR_STORE uses dst as the address operand — it's a USE, not a DEF */
     if (n->op == IR_STORE && n->dst[0] && strcmp(n->dst, name) == 0) return 1;
+    if ((n->op == IR_FMA || n->op == IR_FNMA || n->op == IR_VFMA) && n->label[0] && strcmp(n->label, name) == 0) return 1;
     return 0;
 }
 
@@ -1353,6 +1354,138 @@ static ir_pass_result_t ir_pass_coalesce_vload(void *fn_ptr) {
     return r;
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+ * PASS: Scalar FMA3 / FNMA Auto-Fusion
+ * ════════════════════════════════════════════════════════════════════════
+ * Fuses pattern (a * b) + c or c + (a * b) into IR_FMA, and
+ * pattern c - (a * b) into IR_FNMA.
+ * Eliminates intermediate IR_FMUL when it has no other consumers.
+ */
+static int count_temp_uses(ir_func_t *fn, const char *vreg) {
+    if (!vreg || !vreg[0]) return 0;
+    int count = 0;
+    ir_node_t *n;
+    for (n = fn->head; n; n = n->next) {
+        if (n->src1[0] && strcmp(n->src1, vreg) == 0) count++;
+        if (n->src2[0] && strcmp(n->src2, vreg) == 0) count++;
+        if (n->op == IR_STORE && n->dst[0] && strcmp(n->dst, vreg) == 0) count++;
+        if ((n->op == IR_FMA || n->op == IR_FNMA || n->op == IR_VFMA) &&
+            n->label[0] && strcmp(n->label, vreg) == 0) count++;
+    }
+    return count;
+}
+
+static int is_safe_fma_window(ir_node_t *def, ir_node_t *consumer) {
+    ir_node_t *s;
+    if (!def || !consumer) return 0;
+    for (s = def->next; s && s != consumer; s = s->next) {
+        if (s->op == IR_LABEL || s->op == IR_BR || s->op == IR_BR_IF || s->op == IR_CALL) {
+            return 0;
+        }
+        if (s->dst[0]) {
+            if (strcmp(s->dst, def->src1) == 0 || strcmp(s->dst, def->src2) == 0) {
+                return 0;
+            }
+        }
+    }
+    return (s == consumer);
+}
+
+ir_pass_result_t ir_pass_fma_fusion(void *fn_ptr) {
+    ir_func_t *fn = (ir_func_t *)fn_ptr;
+    ir_pass_result_t r;
+    ir_node_t *n;
+    int modified = 0;
+    int deleted = 0;
+
+    memset(&r, 0, sizeof(r));
+    r.nodes_before = count_nodes(fn);
+
+    for (n = fn->head; n; n = n->next) {
+        if (n->op == IR_FADD && (n->type == IR_TY_F32 || n->type == IR_TY_F64)) {
+            ir_node_t *def1 = ir_find_def(fn, n, n->src1);
+            ir_node_t *def2 = ir_find_def(fn, n, n->src2);
+            ir_node_t *mul_def = NULL;
+            const char *addend = NULL;
+
+            if (def1 && def1->op == IR_FMUL && def1->type == n->type && is_safe_fma_window(def1, n)) {
+                mul_def = def1;
+                addend = n->src2;
+            } else if (def2 && def2->op == IR_FMUL && def2->type == n->type && is_safe_fma_window(def2, n)) {
+                mul_def = def2;
+                addend = n->src1;
+            }
+
+            if (mul_def && addend) {
+                char mul_src1[IR_NAME_MAX];
+                char mul_src2[IR_NAME_MAX];
+                char add_src[IR_NAME_MAX];
+
+                strncpy(mul_src1, mul_def->src1, IR_NAME_MAX - 1);
+                mul_src1[IR_NAME_MAX - 1] = '\0';
+                strncpy(mul_src2, mul_def->src2, IR_NAME_MAX - 1);
+                mul_src2[IR_NAME_MAX - 1] = '\0';
+                strncpy(add_src, addend, IR_NAME_MAX - 1);
+                add_src[IR_NAME_MAX - 1] = '\0';
+
+                n->op = IR_FMA;
+                strncpy(n->src1, mul_src1, IR_NAME_MAX - 1);
+                n->src1[IR_NAME_MAX - 1] = '\0';
+                strncpy(n->src2, mul_src2, IR_NAME_MAX - 1);
+                n->src2[IR_NAME_MAX - 1] = '\0';
+                strncpy(n->label, add_src, IR_LABEL_MAX - 1);
+                n->label[IR_LABEL_MAX - 1] = '\0';
+
+                if (count_temp_uses(fn, mul_def->dst) == 0) {
+                    mul_def->op = IR_NOP;
+                    mul_def->dst[0] = '\0';
+                    mul_def->src1[0] = '\0';
+                    mul_def->src2[0] = '\0';
+                    deleted++;
+                }
+                modified++;
+            }
+        } else if (n->op == IR_FSUB && (n->type == IR_TY_F32 || n->type == IR_TY_F64)) {
+            ir_node_t *def2 = ir_find_def(fn, n, n->src2);
+            if (def2 && def2->op == IR_FMUL && def2->type == n->type && is_safe_fma_window(def2, n)) {
+                char mul_src1[IR_NAME_MAX];
+                char mul_src2[IR_NAME_MAX];
+                char minuend[IR_NAME_MAX];
+
+                strncpy(mul_src1, def2->src1, IR_NAME_MAX - 1);
+                mul_src1[IR_NAME_MAX - 1] = '\0';
+                strncpy(mul_src2, def2->src2, IR_NAME_MAX - 1);
+                mul_src2[IR_NAME_MAX - 1] = '\0';
+                strncpy(minuend, n->src1, IR_NAME_MAX - 1);
+                minuend[IR_NAME_MAX - 1] = '\0';
+
+                n->op = IR_FNMA;
+                strncpy(n->src1, mul_src1, IR_NAME_MAX - 1);
+                n->src1[IR_NAME_MAX - 1] = '\0';
+                strncpy(n->src2, mul_src2, IR_NAME_MAX - 1);
+                n->src2[IR_NAME_MAX - 1] = '\0';
+                strncpy(n->label, minuend, IR_LABEL_MAX - 1);
+                n->label[IR_LABEL_MAX - 1] = '\0';
+
+                if (count_temp_uses(fn, def2->dst) == 0) {
+                    def2->op = IR_NOP;
+                    def2->dst[0] = '\0';
+                    def2->src1[0] = '\0';
+                    def2->src2[0] = '\0';
+                    deleted++;
+                }
+                modified++;
+            }
+        }
+    }
+
+    r.nodes_after = count_nodes(fn);
+    r.nodes_modified = modified;
+    r.nodes_deleted = deleted;
+    r.changed = (modified > 0 || deleted > 0);
+    return r;
+}
+
 /* ── Snapshot Logic for SSA Courtroom ────────────────────────────────── */
 static unsigned long long hash_ir_full(ir_func_t *fn) {
     unsigned long long h = 14695981039346656037ULL;
@@ -1740,10 +1873,12 @@ void ir_pm_run_default(void *mod_ptr, int verbose) {
     int opt_constfold = opt_level;
     int opt_dce = opt_level;
     int opt_mem2reg = opt_level;
+    int opt_fma = opt_level;
     
     if (getenv("ZCC_OPT_CONSTFOLD") && strcmp(getenv("ZCC_OPT_CONSTFOLD"), "0") == 0) opt_constfold = 0;
     if (getenv("ZCC_OPT_DCE") && strcmp(getenv("ZCC_OPT_DCE"), "0") == 0) opt_dce = 0;
     if (getenv("ZCC_OPT_MEM2REG") && strcmp(getenv("ZCC_OPT_MEM2REG"), "0") == 0) opt_mem2reg = 0;
+    if (getenv("ZCC_OPT_FMA") && strcmp(getenv("ZCC_OPT_FMA"), "0") == 0) opt_fma = 0;
 
     /* ZCC DPO Pass Policy Ordering Engine (Phase 5) */
     const char *dpo_policy = getenv("ZCC_DPO_PASS_POLICY");
@@ -1758,6 +1893,7 @@ void ir_pm_run_default(void *mod_ptr, int verbose) {
         if (opt_constfold) ir_pm_register(pm, "const_fold", ir_pass_const_fold);
         if (opt_constfold) ir_pm_register(pm, "strength_reduce", ir_pass_strength_reduce);
         if (opt_constfold) ir_pm_register(pm, "copy_const_prop", ir_pass_copy_const_prop);
+        if (opt_fma) ir_pm_register(pm, "fma_fusion", ir_pass_fma_fusion);
         if (opt_dce) ir_pm_register(pm, "dce", ir_pass_dce);
         ir_pm_register(pm, "lower_float", ir_pass_lower_float);
         ir_pm_register(pm, "warden", ir_pass_warden);
@@ -1789,6 +1925,7 @@ void ir_pm_run_default(void *mod_ptr, int verbose) {
         if (opt_constfold) ir_pm_register(pm, "gvn", ir_pass_gvn);
         if (opt_constfold) ir_pm_register(pm, "copy_const_prop", ir_pass_copy_const_prop);
         if (opt_constfold) ir_pm_register(pm, "coalesce_vload", ir_pass_coalesce_vload);
+        if (opt_fma) ir_pm_register(pm, "fma_fusion", ir_pass_fma_fusion);
 
         ir_pm_register(pm, "lower_float", ir_pass_lower_float);
         ir_pm_register(pm, "warden", ir_pass_warden);
