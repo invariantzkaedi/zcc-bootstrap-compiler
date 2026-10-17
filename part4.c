@@ -6187,8 +6187,18 @@ void codegen_func(Compiler *cc, Node *func) {
         fprintf(cc->out, "    .globl %s\n", func->func_def_name);
       }
       fprintf(cc->out, "%s:\n", func->func_def_name);
+      if (!g_win64_abi_mode) {
+        fprintf(cc->out, "    .cfi_startproc\n");
+      }
       fprintf(cc->out, "    pushq %%rbp\n");
+      if (!g_win64_abi_mode) {
+        fprintf(cc->out, "    .cfi_def_cfa_offset 16\n");
+        fprintf(cc->out, "    .cfi_offset %%rbp, -16\n");
+      }
       fprintf(cc->out, "    movq %%rsp, %%rbp\n");
+      if (!g_win64_abi_mode) {
+        fprintf(cc->out, "    .cfi_def_cfa_register %%rbp\n");
+      }
       if (stack_size > 4096) {
         int probe_label = new_label(cc);
         int rem = stack_size % 4096;
@@ -6400,7 +6410,13 @@ void codegen_func(Compiler *cc, Node *func) {
       }
       fprintf(cc->out, "    movq %%rbp, %%rsp\n");
       fprintf(cc->out, "    popq %%rbp\n");
+      if (!g_win64_abi_mode) {
+        fprintf(cc->out, "    .cfi_def_cfa %%rsp, 8\n");
+      }
       fprintf(cc->out, "    ret\n");
+      if (!g_win64_abi_mode) {
+        fprintf(cc->out, "    .cfi_endproc\n");
+      }
   }
 
   ir_bridge_func_end();
