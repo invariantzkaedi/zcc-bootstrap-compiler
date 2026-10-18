@@ -1,0 +1,40 @@
+# Peephole Optimizer Upgrade Verification Sequence
+# Date: 2026-10-17
+
+# 1. Baseline Selfhost Verification
+set -o pipefail
+make selfhost 2>&1 | tee /tmp/zcc-selfhost-baseline.log
+cmp zcc2.s zcc3.s && sha256sum zcc2.s zcc3.s
+
+# 2. Reproduction Probe Compilation (Pre-Patch)
+./zcc tests/probe_peephole_upgrade.c -o /tmp/probe_peep_before.s
+
+# 3. Patch Applied to part5.c (40 lines added)
+# Added redundant jump to next label elision, shift-by-zero elision,
+# dead movq %r11, %rax overwrite elision, 32-bit zero register idiom (movl $0 -> xorl),
+# and extended imulq powers-of-two shift reductions.
+
+# 4. Compiler Rebuild
+make zcc
+
+# 5. Post-Patch Probe Compilation & Execution (Rule EF-3)
+./zcc tests/probe_peephole_upgrade.c -o /tmp/probe_peep_after.s
+diff -u /tmp/probe_peep_before.s /tmp/probe_peep_after.s
+gcc -no-pie /tmp/probe_peep_after.s -o /tmp/probe_peep_bin
+/tmp/probe_peep_bin
+
+# 6. Gate 1 — Self-Host Identity Verification
+make selfhost 2>&1 | tee /tmp/zcc-selfhost-peephole.log
+cmp zcc2.s zcc3.s && sha256sum zcc2.s zcc3.s
+
+# 7. Gate 2 — Cross-Toolchain Bidirectional Interop
+bash scripts/gate2_interop.sh
+
+# 8. Gate 3 — Optimization Pass Gauntlet (19 Suites)
+python3 tools/test_zcc_opt_passes.py
+
+# 9. Gate 4 — 100-Case Tri-Compiler Metamorphic Csmith Gauntlet
+python3 tools/metamorphic_csmith_gauntlet.py --iterations 100 --parallel 8
+
+# 10. Gate 5 — Multi-Target Cross-Compilation Sentinel
+python3 tools/run_multi_target_hardening_gauntlet.py

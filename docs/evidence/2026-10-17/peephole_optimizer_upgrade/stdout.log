@@ -1,0 +1,127 @@
+=== 1. PRE-PATCH PROBE ASSEMBLY (tests/probe_peephole_upgrade.c) ===
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (72 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+
+=== 2. POST-PATCH PROBE ASSEMBLY DIFF & EXECUTION ===
+--- /tmp/probe_peep_before.s	2026-10-17 22:25:47.498230522 -0700
++++ /tmp/probe_peep_after.s	2026-10-17 22:27:19.727825741 -0700
+@@ -76,7 +76,6 @@
+     movq %r11, %rax
+     .loc 1 464
+     movslq -32(%rbp), %rax
+-    shlq $0, %rax
+     movq %rax, %r11
+     movl %r11d, -48(%rbp)
+     movq %r11, %rax
+@@ -111,7 +110,6 @@
+     addq %r11, %rax
+     cltq
+-    jmp .Lfunc_end_103
+ .Lfunc_end_103:
+     movq %rbp, %rsp
+     popq %rbp
+@@ -133,7 +131,7 @@
+     movq $3, %rax
+     movq %rax, %rdi
+     popq %rsi
+-    movl $0, %eax
++    xorl %eax, %eax
+     movq %rsp, %r11
+     andq $15, %r11
+     testq %r11, %r11
+@@ -155,7 +153,7 @@
+     leaq .LS100(%rip), %rax
+     movq %rax, %rdi
+     popq %rsi
+-    movl $0, %eax
++    xorl %eax, %eax
+     movq %rsp, %r11
+     andq $15, %r11
+     testq %r11, %r11
+@@ -182,7 +180,6 @@
+ .L107:
+     .loc 1 478
+     movq $1, %rax
+-    jmp .Lfunc_end_104
+ .Lfunc_end_104:
+     movq %rbp, %rsp
+     popq %rbp
+
+PEEPHOLE_PROBE_RESULT: 324
+EXEC_STATUS: 0
+
+=== 3. GATE 1 — SELF-HOST IDENTITY ===
+be3f48a24a069361ace8d50ea2bb49303522bce53372ea6a52eee1b4d69a136e  zcc2.s
+be3f48a24a069361ace8d50ea2bb49303522bce53372ea6a52eee1b4d69a136e  zcc3.s
+CMP EXACT BYTES IDENTICAL
+
+=== 4. GATE 2 — CROSS-TOOLCHAIN INTEROP ===
+=== 1. ZCC LIB + GCC MAIN ===
+INTEROP_SUCCESS: x=10 y=17 z=300
+=== 2. GCC LIB + ZCC MAIN ===
+INTEROP_SUCCESS: x=10 y=17 z=300
+
+=== 5. GATE 3 — OPTIMIZATION PASS GAUNTLET ===
+==============================================================================
+  ZCC MULTI-SUITE PRODUCTION OPTIMIZATION PASS GAUNTLET
+  Testing: GVN Store-to-Load, Constant Fold, DCE & Symbolic CFG
+==============================================================================
+Target Test Suite          Baseline   Optimized  Reduction    Verdict
+------------------------------------------------------------------------------
+test_abi                   432        413        -19 (4.4%)   [PASS]
+test_asm_real              45         44         -1 (2.2%)    [PASS]
+test_vla                   295        272        -23 (7.8%)   [PASS]
+exp1_raytracer             5870       5445       -425 (7.2%)  [PASS]
+exp2_voxel                 5584       5038       -546 (9.8%)  [PASS]
+exp3_audio                 6341       5859       -482 (7.6%)  [PASS]
+exp4_vr_stereo             5690       5148       -542 (9.5%)  [PASS]
+exp5_physics               40435      36230      -4205 (10.4%) [PASS]
+t_rigging_regressions      2192       2043       -149 (6.8%)  [PASS]
+diff_read_escape           2414       2124       -290 (12.0%) [PASS]
+diff_parse_initializer_list 9423       8679       -744 (7.9%)  [PASS]
+diff_HUlib_drawTextLine    2701       2419       -282 (10.4%) [PASS]
+diff_R_DrawColumn          2995       2690       -305 (10.2%) [PASS]
+diff_my_sha256_final       1668       1444       -224 (13.4%) [PASS]
+diff_PIT_CheckThing        832        713        -119 (14.3%) [PASS]
+diff_cf_socket_open        833        727        -106 (12.7%) [PASS]
+diff_addsfx                1600       1318       -282 (17.6%) [PASS]
+diff_P_SpawnMapThing       1170       957        -213 (18.2%) [PASS]
+diff_cr_eob_read           1210       1076       -134 (11.1%) [PASS]
+------------------------------------------------------------------------------
+GAUNTLET SUMMARY:
+  * Suites Evaluated:          19
+  * Bit-Exact Passes:          19/19
+  * Semantic Divergences:      0
+  * Total Assembly (Baseline): 91,730 lines
+  * Total Assembly (Optimized):82,639 lines
+  * Net Instructions Elided:   9,091 lines (9.91% net reduction)
+==============================================================================
+★ ALL 19 TEST SUITES BIT-EXACT & VERIFIED (EXIT 0) ★
+
+=== 6. GATE 4 — 100-CASE METAMORPHIC CSMITH GAUNTLET ===
+================================================================================
+  🏁 METAMORPHIC GAUNTLET SUMMARY
+     Total Cases Executed: 100
+     Passed Parity:        90
+     Divergences Caught:   0
+     Crashes Caught:       0
+     UB Cases Discarded:   10
+     Tickets Emitted:      0
+     Total Elapsed Time:   15.31s (6.5 cases/sec)
+     FINAL VERDICT:        PASS
+================================================================================
+
+=== 7. GATE 5 — MULTI-TARGET HARDENING GAUNTLET ===
+================================================================================
+  🏆 MULTI-TARGET GAUNTLET VERDICT: PASS
+  ⚡ Latency:       29.97s
+  🛡️ Gate 1:        PASS
+  🌐 Target 1 WASM: PASS (14/14 + 3/3 Negative Controls)
+  🪟 Target 2 WIN64:PASS (33/33 + NC-WIN64-1)
+  📱 Target 3 ARM64:PASS (3/3 + NC-ARM64-1)
+  ⚡ Target 4 RISCV:PASS (5/5 + NC-RISCV-1)
+================================================================================

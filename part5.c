@@ -959,6 +959,37 @@ static void peephole_optimize(char *filename) {
       if (strncmp(l1, "    movq $0, ", 13) == 0 && sscanf(l1, "    movq $0, %63s", reg) == 1 && reg[0] == '%') {
         sprintf(line_ptrs[i], "    xorq %s, %s\n", reg, reg); eliminated++; i++; continue;
       }
+      if (strncmp(l1, "    movl $0, ", 13) == 0 && sscanf(l1, "    movl $0, %63s", reg) == 1 && reg[0] == '%') {
+        sprintf(line_ptrs[i], "    xorl %s, %s\n", reg, reg); eliminated++; i++; continue;
+      }
+      if (strncmp(l1, "    shlq $0, ", 13) == 0 || strncmp(l1, "    shrq $0, ", 13) == 0 ||
+          strncmp(l1, "    shll $0, ", 13) == 0 || strncmp(l1, "    shrl $0, ", 13) == 0) {
+        line_ptrs[i][0] = 0; eliminated++; i++; continue;
+      }
+      if (strncmp(l1, "    jmp .L", 10) == 0) {
+        char target[64], expected[70];
+        if (sscanf(l1, "    jmp %63s", target) == 1) {
+          int k = i + 1;
+          while (k < nlines && (line_ptrs[k][0] == 0 || strncmp(line_ptrs[k], "    .loc ", 9) == 0 || strncmp(line_ptrs[k], "    .file ", 10) == 0)) k++;
+          if (k < nlines) {
+            sprintf(expected, "%s:\n", target);
+            if (strcmp(line_ptrs[k], expected) == 0) { line_ptrs[i][0] = 0; eliminated++; i++; continue; }
+          }
+        }
+      }
+      if (strcmp(l1, "    movq %r11, %rax\n") == 0) {
+        int k = i + 1;
+        while (k < nlines && (line_ptrs[k][0] == 0 || strncmp(line_ptrs[k], "    .loc ", 9) == 0 || strncmp(line_ptrs[k], "    .file ", 10) == 0)) k++;
+        if (k < nlines) {
+          char *nl = line_ptrs[k];
+          int nlen = strlen(nl);
+          if (nlen >= 6 && (strcmp(nl + nlen - 6, ", %rax\n") == 0 || strcmp(nl + nlen - 6, ", %eax\n") == 0)) {
+            if (strstr(nl, "(%rbp)") || strncmp(nl, "    xor", 7) == 0 || strncmp(nl, "    movq $", 10) == 0 || strncmp(nl, "    movl $", 10) == 0) {
+              line_ptrs[i][0] = 0; eliminated++; i++; continue;
+            }
+          }
+        }
+      }
       if (strncmp(l1, "    imulq $2, ", 14) == 0 && sscanf(l1, "    imulq $2, %63s", reg) == 1 && reg[0] == '%') {
         sprintf(line_ptrs[i], "    addq %s, %s\n", reg, reg); eliminated++; i++; continue;
       }
@@ -967,6 +998,15 @@ static void peephole_optimize(char *filename) {
       }
       if (strncmp(l1, "    imulq $8, ", 14) == 0 && sscanf(l1, "    imulq $8, %63s", reg) == 1 && reg[0] == '%') {
         sprintf(line_ptrs[i], "    shlq $3, %s\n", reg); eliminated++; i++; continue;
+      }
+      if (strncmp(l1, "    imulq $16, ", 15) == 0 && sscanf(l1, "    imulq $16, %63s", reg) == 1 && reg[0] == '%') {
+        sprintf(line_ptrs[i], "    shlq $4, %s\n", reg); eliminated++; i++; continue;
+      }
+      if (strncmp(l1, "    imulq $32, ", 15) == 0 && sscanf(l1, "    imulq $32, %63s", reg) == 1 && reg[0] == '%') {
+        sprintf(line_ptrs[i], "    shlq $5, %s\n", reg); eliminated++; i++; continue;
+      }
+      if (strncmp(l1, "    imulq $64, ", 15) == 0 && sscanf(l1, "    imulq $64, %63s", reg) == 1 && reg[0] == '%') {
+        sprintf(line_ptrs[i], "    shlq $6, %s\n", reg); eliminated++; i++; continue;
       }
     }
 
