@@ -1,0 +1,20 @@
+{
+  "timestamp": 1792372347.7186604,
+  "verdict": "PASS",
+  "stats": {
+    "total_runs": 1000,
+    "passed": 886,
+    "divergences": 0,
+    "crashes": 0,
+    "ub_discarded": 114,
+    "reduced_tickets": 0,
+    "start_time": 1792372222.841402,
+    "base_seed": "1000 (Default)"
+  },
+  "compiler": "ZCC (X86-64 System V)",
+  "reference_oracles": [
+    "gcc -O2",
+    "clang -O2"
+  ],
+  "hash": "fcdd8290af394fff4630858b3216f4da63c82b4d6f3c7c02831b72868e38b273"
+}

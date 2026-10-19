@@ -4352,7 +4352,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       int current_pushed_bytes = (cc->stack_depth - stack_depth_at_reservation) * slot_sz;
       if (arg_is_stack[i]) {
           if (backend_ops) {
-              fprintf(cc->out, "    str r0, [sp, #%d]\n", current_pushed_bytes + arg_stack_offset[i]);
+              fprintf(cc->out, "    str r0, [sp, #%d]\n", current_pushed_bytes + shadow_space + arg_stack_offset[i]);
           } else {
               if (atype && (atype->kind == TY_STRUCT || atype->kind == TY_UNION)) {
                   /* Copy aggregate to reserved stack slots */
@@ -4360,10 +4360,10 @@ void codegen_expr(Compiler *cc, Node *node) {
                   fprintf(cc->out, "    movq %%rax, %%r10\n");
                   for (j = 0; j < n_slots; j++) {
                       fprintf(cc->out, "    movq %d(%%r10), %%rax\n", j * 8);
-                      fprintf(cc->out, "    movq %%rax, %d(%%rsp)\n", current_pushed_bytes + arg_stack_offset[i] + j * 8);
+                      fprintf(cc->out, "    movq %%rax, %d(%%rsp)\n", current_pushed_bytes + shadow_space + arg_stack_offset[i] + j * 8);
                   }
               } else {
-                  fprintf(cc->out, "    movq %%rax, %d(%%rsp)\n", current_pushed_bytes + arg_stack_offset[i]);
+                  fprintf(cc->out, "    movq %%rax, %d(%%rsp)\n", current_pushed_bytes + shadow_space + arg_stack_offset[i]);
               }
           }
           ir_save_result(&args_ir_1d[i * 32]);
@@ -5935,7 +5935,7 @@ static int ir_whitelisted(const char *name) {
       "cc_strdup", "error", "error_at",
       "type_new", "type_ptr", "type_array", "type_func",
       "node_new", "node_num", "node_flit",
-      "scope_push", "scope_pop", "scope_find", "scope_find_local", "scope_add", "scope_add_local",
+      /* "scope_push", "scope_pop", "scope_find", "scope_find_local", "scope_add", "scope_add_local", */
       /* Batch 7: Token & Lexing Core + Missed AST Helpers (bisect-safe) */
       "peek_token", "peek_char", "is_type_token", "lookup_keyword",
       "lookup_keyword_fallback", "expect",
@@ -5957,7 +5957,7 @@ static int ir_whitelisted(const char *name) {
 }
 
 static int is_ir_eligible(Node *func) {
-  if (backend_ops) return 0;
+  if (backend_ops || g_win64_abi_mode) return 0;
   if (!func || !func->func_def_name) return 0;
   Type *ret_type = func->func_type ? func->func_type->ret : NULL;
   if (ret_type && (ret_type->kind == TY_STRUCT || ret_type->kind == TY_UNION)) {
@@ -6183,6 +6183,9 @@ void codegen_func(Compiler *cc, Node *func) {
       stack_size = (stack_size + 15) & ~15;
 
       fprintf(cc->out, "    .text\n");
+      if (g_win64_abi_mode) {
+        fprintf(cc->out, "    .align 16\n");
+      }
       if (!func->is_static) {
         fprintf(cc->out, "    .globl %s\n", func->func_def_name);
       }
@@ -6248,7 +6251,7 @@ void codegen_func(Compiler *cc, Node *func) {
   /* Store params using System V ABI classification rules §3.2.3. */
   int f_idx = 0;
   int gp_idx = 0;
-  int stack_arg_off = 16; /* args on stack start at 16(%rbp) */
+  int stack_arg_off = 16 + (g_win64_abi_mode ? 32 : 0); /* args on stack start at 16(%rbp) in SysV, 48(%rbp) in Win64 */
   cc->sret_offset = g_zsan_mode ? -24 : -8;
 
   int param_offset = g_zsan_mode ? -16 : 0;
@@ -6371,6 +6374,13 @@ void codegen_func(Compiler *cc, Node *func) {
   }
   if (!ir_ok) {
     codegen_stmt(cc, func->body);
+  }
+
+  /* C99 §5.1.2.2.3: Reaching the end of main implicitly returns 0 */
+  if (func->func_def_name && strcmp(func->func_def_name, "main") == 0) {
+    if (!backend_ops) {
+      fprintf(cc->out, "    xorl %%eax, %%eax\n");
+    }
   }
 
   if (backend_ops && backend_ops->emit_epilogue) {

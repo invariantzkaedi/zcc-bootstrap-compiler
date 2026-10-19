@@ -235,6 +235,11 @@ static const char *zcc_stddef_text =
     "typedef long __time_t;\n"
     "static void platform_main_begin(void) {}\n"
     "static void platform_main_end(uint64_t x, int y) {}\n"
+    "#define platform_main_begin()\n"
+    "#define platform_main_end(crc, flag)\n"
+    "static uint32_t crc32_context;\n"
+    "#define crc32_gentab()\n"
+    "#define transparent_crc(val, varname, flag)\n"
     "#define UINT64_C(c) ((unsigned long long)(c))\n"
     "#define UINT32_C(c) ((unsigned int)(c))\n"
     "#define INT64_C(c)  ((long long)(c))\n"
@@ -316,8 +321,10 @@ static const char *zcc_stddef_text =
     "int __builtin_popcountl(unsigned long x);\n"
     "int __builtin_popcountll(unsigned long long x);\n"
     "int __builtin_clz(unsigned int x);\n"
-    "int __builtin_ctz(unsigned int x);\n"
+    "int __builtin_clzl(unsigned long x);\n"
     "int __builtin_clzll(unsigned long long x);\n"
+    "int __builtin_ctz(unsigned int x);\n"
+    "int __builtin_ctzl(unsigned long x);\n"
     "int __builtin_ctzll(unsigned long long x);\n"
     "typedef int bool;\n"
     "int getchar(void);\n"
@@ -1006,6 +1013,7 @@ static int is_stddef_stub(const char *path) {
          strcmp(base, "mman.h") == 0 || strcmp(base, "in.h") == 0 ||
          strcmp(base, "inet.h") == 0 || strcmp(base, "un.h") == 0 ||
          strcmp(base, "dirent.h") == 0 || strcmp(base, "utime.h") == 0 ||
+         strcmp(base, "alloca.h") == 0 ||
          strcmp(base, "fake_csmith.h") == 0 || strcmp(base, "csmith.h") == 0 ||
          strcmp(base, "float.h") == 0 ||
          strcmp(base, "fenv.h") == 0;
@@ -1385,10 +1393,62 @@ static long long pp_e_primary(PPEval *e) {
     /* regular identifier: expand as macro if defined, else 0 */
     PPMacro *m = pp_find_macro(e->state, name);
     if (m) {
-      PPEval sub = {m->body, e->state, e->depth + 1};
-      if (sub.depth > 32)
-        return 0;
-      return pp_e_expr(&sub);
+      if (e->depth > 32) return 0;
+      if (!m->is_function_like) {
+        PPEval sub = {m->body, e->state, e->depth + 1};
+        return pp_e_expr(&sub);
+      }
+      pp_e_skip(e);
+      if (*e->s == '(') {
+        e->s++;
+        char args[16][256];
+        int nargs = 0, pdepth = 0, alen = 0;
+        args[0][0] = 0;
+        while (*e->s && (*e->s != ')' || pdepth > 0)) {
+          if (*e->s == '(') pdepth++;
+          else if (*e->s == ')') pdepth--;
+          else if (*e->s == ',' && pdepth == 0) {
+            args[nargs][alen] = 0;
+            if (nargs < 15) nargs++;
+            alen = 0;
+            args[nargs][0] = 0;
+            e->s++;
+            continue;
+          }
+          if (alen < 254 && *e->s != '\r' && *e->s != '\n')
+            args[nargs][alen++] = *e->s;
+          e->s++;
+        }
+        if (*e->s == ')') e->s++;
+        args[nargs][alen] = 0;
+        if (alen > 0 || nargs > 0) nargs++;
+        char exp_buf[4096];
+        int ei = 0;
+        const char *bp = m->body;
+        while (*bp && ei < 4000) {
+          if (is_ident_start(*bp)) {
+            char id[128]; int il = 0;
+            while (is_ident_char(*bp) && il < 127) id[il++] = *bp++;
+            id[il] = 0;
+            int pi;
+            for (pi = 0; pi < m->num_params && pi < nargs; pi++) {
+              if (strcmp(id, m->params[pi]) == 0) break;
+            }
+            if (pi < m->num_params && pi < nargs) {
+              int al = strlen(args[pi]);
+              if (ei + al < 4000) { memcpy(exp_buf + ei, args[pi], al); ei += al; }
+            } else {
+              if (ei + il < 4000) { memcpy(exp_buf + ei, id, il); ei += il; }
+            }
+          } else {
+            exp_buf[ei++] = *bp++;
+          }
+        }
+        exp_buf[ei] = 0;
+        PPEval sub = {exp_buf, e->state, e->depth + 1};
+        return pp_e_expr(&sub);
+      }
+      return 0;
     }
     return 0;
   }
@@ -1687,10 +1747,14 @@ static void pp_parse_directive(PPState *state) {
     } else if (strcmp(dir, "include") == 0) {
       char inc_path[4096];
       int is_system = 0;
+      int had_delims = 0;
+      while (pp_peek(state) == ' ' || pp_peek(state) == '\t') pp_next(state);
       if (pp_peek(state) == '<') {
         is_system = 1;
+        had_delims = 1;
         pp_next(state);
       } else if (pp_peek(state) == '"') {
+        had_delims = 1;
         pp_next(state);
       }
       pp_read_line(state, inc_path, 4096);
@@ -1704,6 +1768,36 @@ static void pp_parse_directive(PPState *state) {
         if (plen > 0 &&
             (inc_path[plen - 1] == '"' || inc_path[plen - 1] == '>'))
           inc_path[--plen] = 0;
+      }
+      if (!had_delims) {
+        /* C99 computed #include: #include MACRO */
+        char macro_name[256];
+        int mi = 0;
+        while (is_ident_char(inc_path[mi]) && mi < 255) {
+          macro_name[mi] = inc_path[mi];
+          mi++;
+        }
+        macro_name[mi] = 0;
+        PPMacro *m = pp_find_macro(state, macro_name);
+        if (m) {
+          const char *mb = m->body;
+          while (*mb == ' ' || *mb == '\t') mb++;
+          if (*mb == '<') {
+            is_system = 1;
+            mb++;
+          } else if (*mb == '"') {
+            is_system = 0;
+            mb++;
+          }
+          strncpy(inc_path, mb, 4095);
+          inc_path[4095] = 0;
+          int plen = strlen(inc_path);
+          while (plen > 0 &&
+                 (inc_path[plen - 1] == ' ' || inc_path[plen - 1] == '\t' ||
+                  inc_path[plen - 1] == '\r' || inc_path[plen - 1] == '\n' ||
+                  inc_path[plen - 1] == '"' || inc_path[plen - 1] == '>'))
+            inc_path[--plen] = 0;
+        }
       }
       pp_process_include(state, inc_path, is_system);
     } else if (strcmp(dir, "error") == 0) {
@@ -2475,6 +2569,8 @@ char *zcc_preprocess(const char *source, int source_len, const char *filename,
     m = pp_add_macro(state, "__FUNCTION__");
     strcpy(m->body, "\"zcc_func\"");
     m = pp_add_macro(state, "__GNUC__");
+    strcpy(m->body, "1");
+    m = pp_add_macro(state, "__ZCC__");
     strcpy(m->body, "1");
     if (zcc_pp_config.raw_glibc || getenv("ZCC_RAW_GLIBC")) {
       zcc_glibc_init_macros(state);
