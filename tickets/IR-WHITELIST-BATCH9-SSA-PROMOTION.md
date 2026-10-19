@@ -4,7 +4,7 @@
 **Author:** Antigravity / ZCC Systems Engineering  
 **Date:** 2026-10-19  
 **Status:** **RESOLVED & VERIFIED (Gate 1 Byte-Identical, Gate 2 19/19 Optimization Gauntlet, Gate 4 QuickJS 15/15 PASS)**  
-**Minimal Diff Line Count:** `part4.c` (+5 lines, strictly < 50 lines)
+**Minimal Diff Line Count:** `part4.c` (+14 lines, strictly < 50 lines)
 
 ---
 
@@ -58,10 +58,10 @@ Prior batches established:
 - **Output:** Exit Code 0 (Byte-Identical)
 - **Assembly Hashes:**
   ```text
-  9d5fee36290aa712530e0f33f616d3fc  zcc2.s
-  9d5fee36290aa712530e0f33f616d3fc  zcc3.s
+  b13b1207c7cee38741746b83a12deba9  zcc2.s
+  b13b1207c7cee38741746b83a12deba9  zcc3.s
   ```
-- **Line Count:** 492,024 lines
+- **Line Count:** 492,144 lines
 - **Verdict:** **PASS**
 
 ### Gate 2 — Multi-Suite Production Optimizer Gauntlet
@@ -102,8 +102,14 @@ Prior batches established:
 - **Verdict:** **PASS**
 
 ### Gate 3 — Boundary Diff Audit (Rule EF-5)
-- `part4.c`: +5 lines (whitelisted function array entries)
+- `part4.c`: +14 insertions, -3 deletions (diff: 17 lines changed).
 - Diff bounds strictly preserved (< 50 lines on foundational files).
+- Structural Hardening verified in `is_ir_eligible`:
+  1. `!func->body`: Disqualifies non-definition prototypes.
+  2. `func->num_params > 6`: Disqualifies stack parameters to match System V register parameter window.
+  3. `func->func_type->is_variadic`: Disqualifies variadic parameter functions.
+  4. `type_size(ret_type) > 8`: Defensively shields all aggregate returns $>8$ bytes, permanently immunizing against E-LEARN-016 `%rdx` truncation.
+  5. `type_size(ptype) > 8 || ptype->kind == TY_STRUCT || ptype->kind == TY_UNION`: Protects parameter slot alignment against multi-register and stack-passed structs.
 - **Verdict:** **PASS**
 
 ### Gate 4 — Target Harness (QuickJS ES2020 15/15 Suite)
@@ -141,5 +147,5 @@ Prior batches established:
 - **Verdict:** **PASS**
 
 ### Gate 5 — Evidence Freshness & Baseline Ledger Audit (Rule E-LEARN-017)
-- Appended verified MD5 hash `9d5fee36290aa712530e0f33f616d3fc` to `BOOTSTRAP_BASELINES.tsv` across WSL2 and Azure runner profiles.
+- Appended verified MD5 hash `b13b1207c7cee38741746b83a12deba9` (492,144 lines) to `BOOTSTRAP_BASELINES.tsv` across WSL2 and Azure runner profiles.
 - **Verdict:** **PASS**

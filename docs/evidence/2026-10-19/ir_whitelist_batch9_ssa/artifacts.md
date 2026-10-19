@@ -10,8 +10,8 @@
 
 | Artifact | Path | Size (Bytes) | MD5 Checksum | SHA256 Checksum |
 |---|---|---|---|---|
-| Stage 2 Assembly | `zcc2.s` | 9,580,212 | `9d5fee36290aa712530e0f33f616d3fc` | `1101e33c2b8bc6c6e30f950b6613e3b2336dd43cad985fe66076f73cec1e0885` |
-| Stage 3 Assembly | `zcc3.s` | 9,580,212 | `9d5fee36290aa712530e0f33f616d3fc` | `1101e33c2b8bc6c6e30f950b6613e3b2336dd43cad985fe66076f73cec1e0885` |
+| Stage 2 Assembly | `zcc2.s` | 9,582,450 | `b13b1207c7cee38741746b83a12deba9` | `139294a163463c776510ea98095100e67e2a2b57e9f845f6af65117e5931d67c` |
+| Stage 3 Assembly | `zcc3.s` | 9,582,450 | `b13b1207c7cee38741746b83a12deba9` | `139294a163463c776510ea98095100e67e2a2b57e9f845f6af65117e5931d67c` |
 | Compiler Binary | `zcc` | 1,771,784 | `2a884bfdbb42491a6d9534c0fb35ec05` | `e181a7fc0a744aa7e6cfd0c8cff8fb16fdfa1b17065cba124f20d573a15849c9` |
 | QuickJS Harness | `/tmp/test_quickjs_runner` | 2,302,088 | `6f38ad9b302c40c8152e7ce3fa7a4991` | `f22655605a57d8ac299539f3007e807fa14f9385274143fb0737dce2f5ca104d` |
 
@@ -28,7 +28,9 @@
     `"is_rax_deref"`, `"is_rax_moved"`, `"type_to_str"`.
   - Guarded `is_ir_eligible()`:
     - Null node & body check: `if (!func || !func->func_def_name || !func->body) return 0;`
+    - System V 6-arg window: `if (func->num_params > 6) return 0;`
     - Variadic check: `if (func->func_type && func->func_type->is_variadic) return 0;`
-    - Bounded struct return size: `if (type_size(ret_type) > 8) return 0;` (prevents ABI register splitting conflicts on multi-register aggregate returns).
+    - Bounded return size: `if (type_size(ret_type) > 8) return 0;` (prevents ABI register splitting conflicts on multi-register aggregate returns / E-LEARN-016 `%rdx` truncation).
+    - Parameter scalar size check: `if (type_size(ptype) > 8 || ptype->kind == TY_STRUCT || ptype->kind == TY_UNION) return 0;` (protects parameter slot alignment).
 - **Line Count Impact:**
-  - `part4.c`: +10 lines, -3 lines (net +7 lines, strictly < 50-line limit).
+  - `part4.c`: +14 lines, -3 lines (net +11 lines, strictly < 50-line limit).

@@ -3,17 +3,17 @@ $ cmp zcc2.s zcc3.s
 (exit 0)
 
 $ md5sum zcc2.s zcc3.s
-9d5fee36290aa712530e0f33f616d3fc  zcc2.s
-9d5fee36290aa712530e0f33f616d3fc  zcc3.s
+b13b1207c7cee38741746b83a12deba9  zcc2.s
+b13b1207c7cee38741746b83a12deba9  zcc3.s
 
 $ sha256sum zcc2.s zcc3.s
-1101e33c2b8bc6c6e30f950b6613e3b2336dd43cad985fe66076f73cec1e0885  zcc2.s
-1101e33c2b8bc6c6e30f950b6613e3b2336dd43cad985fe66076f73cec1e0885  zcc3.s
+139294a163463c776510ea98095100e67e2a2b57e9f845f6af65117e5931d67c  zcc2.s
+139294a163463c776510ea98095100e67e2a2b57e9f845f6af65117e5931d67c  zcc3.s
 
 $ wc -l zcc2.s zcc3.s
-  492024 zcc2.s
-  492024 zcc3.s
-  984048 total
+  492144 zcc2.s
+  492144 zcc3.s
+  984288 total
 
 === SELF-HOST PIPELINE CONVERGENCE ===
 ═══ [GATE 1] SELF-HOST IDENTITY VERIFICATION ═══

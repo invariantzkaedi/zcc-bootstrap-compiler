@@ -10,11 +10,11 @@
 
 | Gate | Description | Status | Evidence Command / Artifact |
 |---|---|---|---|
-| **Gate 1** | Self-Host Identity | **PASS** | `cmp zcc2.s zcc3.s` (Exit 0, MD5 `9d5fee36290aa712530e0f33f616d3fc`, 492,024 lines) |
+| **Gate 1** | Self-Host Identity | **PASS** | `cmp zcc2.s zcc3.s` (Exit 0, MD5 `b13b1207c7cee38741746b83a12deba9`, 492,144 lines) |
 | **Gate 2** | Production Optimizer Gauntlet | **PASS** | `python3 tools/test_zcc_opt_passes.py` (19/19 suites bit-exact, -9,082 lines / -9.89% net assembly reduction) |
-| **Gate 3** | Boundary Diff Audit | **PASS** | `part4.c` (+10, -3, net +7 lines; strictly < 50-line boundary) |
+| **Gate 3** | Boundary Diff Audit | **PASS** | `part4.c` (+14, -3, net +11 lines; strictly < 50-line boundary) |
 | **Gate 4** | Target Harness (QuickJS ES2020) | **PASS** | `/tmp/test_quickjs_runner` (15/15 tests pass across 6 suites, 0 failures) |
-| **Gate 5** | Evidence Freshness & Baseline Ledger | **PASS** | `BOOTSTRAP_BASELINES.tsv` updated with verified hash `9d5fee36290aa712530e0f33f616d3fc` |
+| **Gate 5** | Evidence Freshness & Baseline Ledger | **PASS** | `BOOTSTRAP_BASELINES.tsv` updated with verified hash `b13b1207c7cee38741746b83a12deba9` |
 
 ---
 
@@ -24,8 +24,8 @@
 - Command: `cmp zcc2.s zcc3.s && md5sum zcc2.s zcc3.s`
 - Raw Output:
   ```text
-  9d5fee36290aa712530e0f33f616d3fc  zcc2.s
-  9d5fee36290aa712530e0f33f616d3fc  zcc3.s
+  b13b1207c7cee38741746b83a12deba9  zcc2.s
+  b13b1207c7cee38741746b83a12deba9  zcc3.s
   ```
 - Exit: `0`
 
