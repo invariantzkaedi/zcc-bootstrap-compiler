@@ -113,6 +113,11 @@ ZCC is compiled by concatenating discrete parts inside the `Makefile` before inv
     4. Guarded IR whitelist against target program function collisions (`next_token`) preserving 16-byte SystemV struct returns.
   - Native QuickJS ES2020 test suite **100% PASS (15/15 tests, 0 failures)** across 6 test suites: Arithmetic/Floats, Objects/JSON, Closures/Loops, RegExp, ES6 Classes, Date/BigInt.
   - Self-host identity byte-exact verified (`cmp zcc2.s zcc3.s`).
+- **Full SSA-IR Lowering Promotion — Batch 9 Frontier**:
+  - Promoted 14 core compiler and type system functions (`symbol_alignment`, `alignment_log2`, `node_stmts`, `node_is_float`, `node_is_char_or_void_ptr_cast`, `is_complex_type`, `is_compatible_type`, `is_unsigned_cmp`, `abi_join`, `is_nullable_call`, `is_null_check`, `is_rax_deref`, `is_rax_moved`, `type_to_str`) into SSA-IR lowering backend (`part4.c:ir_whitelisted()`).
+  - Verified 100% byte-identical selfhost assembly (`cmp zcc2.s zcc3.s` PASS, baseline `b13b1207c7cee38741746b83a12deba9`, 492,144 lines).
+  - Multi-suite production optimizer gauntlet 100% PASS (19/19 test suites bit-exact, 9,082 instructions elided, 9.89% net reduction).
+  - QuickJS ES2020 target harness 100% PASS (15/15 tests passing across 6 suites).
 - **Autonomous Self-Hosting Linker & Multi-Archive Resolution (LIMIT-004)**:
   - Extended `-zld` linker pipeline in `part5.c`, `src/codegen.c`, and `src/zld.c` to accept static `.a` archives directly without invoking external GNU `ld`.
   - In-place static archive (`!<arch>\n`) decoding and fixed-point topological symbol resolution across multiple object and archive inputs.
