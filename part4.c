@@ -5947,6 +5947,11 @@ static int ir_whitelisted(const char *name) {
       /* Split Lexer Core (fortified and hardened) */
       "read_char", "read_escape", "node_name", "lex_char", "lex_operator",
       /* "next_token", */ "forced_spill_calc",
+      /* Batch 9: Compiler Core & Type Resolution SSA Promotion */
+      "symbol_alignment", "alignment_log2", "node_stmts", "node_is_float",
+      "node_is_char_or_void_ptr_cast", "is_complex_type", "is_compatible_type",
+      "is_unsigned_cmp", "abi_join", "is_nullable_call", "is_null_check",
+      "is_rax_deref", "is_rax_moved", "type_to_str",
       NULL
   };
   int i;
@@ -5958,10 +5963,16 @@ static int ir_whitelisted(const char *name) {
 
 static int is_ir_eligible(Node *func) {
   if (backend_ops || g_win64_abi_mode) return 0;
-  if (!func || !func->func_def_name) return 0;
+  if (!func || !func->func_def_name || !func->body) return 0;
+  if (func->num_params > 6) return 0;
+  if (func->func_type && func->func_type->is_variadic) return 0;
   Type *ret_type = func->func_type ? func->func_type->ret : NULL;
-  if (ret_type && (ret_type->kind == TY_STRUCT || ret_type->kind == TY_UNION)) {
-    if (type_size(ret_type) > 16) return 0;
+  if (ret_type && type_size(ret_type) > 8) return 0;
+  if (func->func_params && func->func_params->types) {
+    for (int p_idx = 0; p_idx < func->num_params; p_idx++) {
+      Type *ptype = func->func_params->types[p_idx];
+      if (ptype && (type_size(ptype) > 8 || ptype->kind == TY_STRUCT || ptype->kind == TY_UNION)) return 0;
+    }
   }
   return ir_whitelisted(func->func_def_name);
 }

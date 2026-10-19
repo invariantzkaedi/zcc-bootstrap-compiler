@@ -1,0 +1,21 @@
+# IR-WHITELIST-BATCH9-SSA-PROMOTION Verification Commands
+# Date: 2026-10-19
+# Target: Codegen / SSA-IR Lowering Promotion (14 Core Routines)
+
+# 0. Baseline Self-Host Check
+make selfhost 2>&1 | tee /tmp/zcc-selfhost-baseline.log
+
+# 1. Gate 1 — Self-Host Identity (Mandatory)
+cmp zcc2.s zcc3.s
+md5sum zcc2.s zcc3.s
+wc -l zcc2.s zcc3.s
+
+# 2. Gate 2 — Multi-Suite Production Optimizer Gauntlet
+python3 tools/test_zcc_opt_passes.py
+
+# 3. Gate 4 — Target Harness (QuickJS ES2020 15/15 Suite)
+/tmp/test_quickjs_runner
+
+# 4. Scope & Diff Audit
+git diff part4.c
+git status -s
