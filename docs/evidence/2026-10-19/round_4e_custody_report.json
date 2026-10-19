@@ -1,0 +1,58 @@
+{
+  "gauntlet_version": "3.0.0-HARDENED-CUSTODY",
+  "timestamp": 1792452036.2995784,
+  "curve": "SECG_SECP256K1",
+  "gates": {
+    "gate_4e_1": {
+      "vulnerability_demonstrated": true,
+      "revocation_rejection_pass": true,
+      "production_exit_code": 12,
+      "cleanroom_exit_code": 12,
+      "diagnostic": "HARDWARE_KEY_REVOKED"
+    },
+    "gate_4e_2": {
+      "daemon_api_pass": true,
+      "leak_scan_pass": true,
+      "leaked_files": [],
+      "enclave_metadata": {
+        "hardware_uid": "5A6B616564690001",
+        "device_name": "ZKAEDI Sovereign Secure Enclave HSM v1.0",
+        "enclave_address": "0xf5a4d50a499750f7732508833a5fddf4d7283546",
+        "public_key_uncompressed": "04f00939149b59a68819fc20becb061c94f8c8150fd664568108f6c188025a98a715566d7f88e9b9892d3088fa19fe643cbbf28085a04fceea3d2a895b025efeca",
+        "curve": "SECG_SECP256K1",
+        "key_custody": "NON_EXPORTABLE_HARDWARE_ISOLATED",
+        "challenge_response_supported": true
+      }
+    },
+    "gate_4e_3": {
+      "challenge_positive_control": true,
+      "challenge_mismatch_rejected": true,
+      "missing_challenge_rejected": true,
+      "session_replay_blocked": true
+    },
+    "gate_4e_4": {
+      "b01_mutated_payload_rejected": true,
+      "rogue_signature_rejected": true,
+      "unregistered_uid_rejected": true
+    },
+    "gate_4e_5": {
+      "b07_crash_injection_pass": true,
+      "b10_true_state_rollback_pass": true,
+      "b14_multi_relic_inclusion_pass": true,
+      "b22_entropy_independence_pass": true,
+      "differential_consensus_pass": true,
+      "entropy_metrics": {
+        "raw_min_entropy": 5.0,
+        "conditioned_min_entropy": 7.192645077942396,
+        "shannon_entropy": 7.94909,
+        "raw_serial_correlation": -0.003600928453798035,
+        "conditioned_serial_correlation": 0.018593047157690622
+      }
+    }
+  },
+  "summary": {
+    "total_tests": 16,
+    "passed_tests": 16,
+    "verdict": "PASS"
+  }
+}
