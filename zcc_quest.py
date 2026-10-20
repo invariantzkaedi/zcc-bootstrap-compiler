@@ -27,6 +27,8 @@ import logging
 import os
 import random
 import re
+import secrets
+import shlex
 import shutil
 import signal
 import subprocess
@@ -122,6 +124,7 @@ class BuildState:
     started: float = field(default_factory=time.monotonic)
     started_wall: float = field(default_factory=time.time)
     cmd_str: str = ""
+    run_id: str = ""
     proc: Optional[subprocess.Popen] = None
     started_event: threading.Event = field(default_factory=threading.Event)
 
@@ -139,6 +142,7 @@ class BuildState:
                 "exit_code": self.exit_code,
                 "boss_seen": self.boss_seen,
                 "oracle_verified": ov,
+                "run_id": self.run_id,
                 "is_demo": self.is_demo,
                 "files_seen": list(self.files_seen),
                 "elapsed": time.monotonic() - self.started,
@@ -158,18 +162,57 @@ WARN_RE = re.compile(r"\bwarning\b", re.I)
 ERR_RE = re.compile(r"\berror\b|\bfatal\b|segmentation fault", re.I)
 
 
-def is_bootstrap_command(cmd: str) -> bool:
-    """Validate that the command actually executes an authorized bootstrap gate."""
-    if not cmd:
+def is_bootstrap_command(cmd: str, repo_dir: Optional[str] = None) -> bool:
+    """Validate that the command actually executes an authorized bootstrap gate,
+    immune to shell comment injection and argument smuggling."""
+    if not cmd or not cmd.strip():
         return False
-    c = cmd.strip().lower()
-    valid_patterns = [
-        r"\bgate\.sh\b",
-        r"\bmake\s+(?:selfhost|selfhost-\w+|compat-\w+)",
-        r"\b(?:bash|sh)\s+.*gate\.sh\b",
-        r"\bscripts/selfhost\b",
-    ]
-    return any(re.search(p, c) for p in valid_patterns)
+    try:
+        tokens = shlex.split(cmd, comments=True)
+    except Exception:
+        return False
+    if not tokens:
+        return False
+
+    if repo_dir is None:
+        repo_dir = os.path.dirname(os.path.abspath(__file__))
+    canon_gate = os.path.realpath(os.path.join(repo_dir, "gate.sh"))
+
+    prog = os.path.basename(tokens[0]).lower()
+
+    # Direct gate.sh execution: ./gate.sh, /path/to/gate.sh, gate.sh
+    if prog == "gate.sh":
+        cand = os.path.realpath(tokens[0])
+        return cand == canon_gate or os.path.basename(cand) == "gate.sh"
+
+    # Shell-wrapped execution: bash gate.sh, sh ./gate.sh, bash -c "..."
+    if prog in ("bash", "sh"):
+        i = 1
+        while i < len(tokens):
+            tok = tokens[i]
+            if tok == "-c":
+                if i + 1 < len(tokens):
+                    return is_bootstrap_command(tokens[i + 1], repo_dir)
+                return False
+            elif tok.startswith("-"):
+                i += 1
+                continue
+            else:
+                cand = os.path.realpath(tok)
+                return cand == canon_gate or (os.path.basename(cand) == "gate.sh" and os.path.isfile(cand))
+        return False
+
+    # Make target execution: make selfhost, make selfhost-runner, etc.
+    if prog == "make":
+        valid_targets = {
+            "selfhost", "selfhost-garden", "selfhost-runner",
+            "selfhost-frogger", "selfhost-prime", "selfhost-sovereign",
+            "compat-quickjs", "compat-sqlite", "compat-micropython",
+        }
+        targets = [t for t in tokens[1:] if not t.startswith("-") and "=" not in t]
+        return any(t in valid_targets for t in targets)
+
+    return False
 
 
 def validate_assembly_file(path: str) -> bool:
@@ -206,6 +249,23 @@ def validate_assembly_file(path: str) -> bool:
         return False
 
 
+def validate_binary_elf(path: str) -> bool:
+    """Verify that an artifact is a genuine 64-bit ELF binary executable."""
+    if not os.path.isfile(path):
+        return False
+    try:
+        sz = os.path.getsize(path)
+        if sz < 10_000:
+            return False
+        with open(path, "rb") as f:
+            hdr = f.read(16)
+            if len(hdr) < 16 or hdr[:4] != b"\x7fELF" or hdr[4] != 2 or hdr[5] != 1:
+                return False
+        return True
+    except Exception:
+        return False
+
+
 def compute_sha256(path: str) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -214,117 +274,141 @@ def compute_sha256(path: str) -> str:
     return h.hexdigest()
 
 
-def verify_selfhost_oracle(started_wall: float, cmd: str = "") -> bool:
+def verify_selfhost_oracle(started_wall: float, cmd: str = "", state: Optional[BuildState] = None) -> bool:
     """Independent oracle: verify that stage2/stage3 assembly was generated during this run,
-    matches cryptographic provenance ledger receipts, and is byte-identical."""
+    matches cryptographic provenance ledger receipts in the supervisor-bound run directory,
+    and is byte-identical."""
     import filecmp
-    import glob
-
-    # 1. Monitored command must be an authorized bootstrap invocation
-    if cmd and not is_bootstrap_command(cmd):
-        LOG.warning("Oracle rejected: command %r is not a recognized bootstrap gate", cmd)
-        return False
 
     repo_dir = os.path.dirname(os.path.abspath(__file__))
-    search_roots = [os.getcwd()]
-    if repo_dir not in search_roots:
-        search_roots.append(repo_dir)
 
-    # 2. Locate fresh evidence directories generated during this run
-    ev_dirs = []
-    for root in search_roots:
-        for pattern in ("evidence/zcc-omega-*", "evidence/zcc-run-*"):
-            for d in glob.glob(os.path.join(root, pattern)):
-                if os.path.isdir(d):
-                    try:
-                        # Must be created strictly AFTER started_wall (zero negative allowance)
-                        if os.path.getmtime(d) >= started_wall:
-                            ev_dirs.append(d)
-                    except OSError:
-                        pass
-
-    # Sort newest first
-    ev_dirs.sort(key=lambda d: os.path.getmtime(d), reverse=True)
-
-    # 3. Locate candidate assembly pairs
-    candidate_pairs = []
-    for ed in ev_dirs:
-        candidate_pairs.append((os.path.join(ed, "stage2.s"), os.path.join(ed, "stage3.s"), ed))
-
-    if ev_dirs:
-        for root in search_roots:
-            candidate_pairs.append((os.path.join(root, "zcc2.s"), os.path.join(root, "zcc3.s"), ev_dirs[0]))
-            candidate_pairs.append((os.path.join(root, "build/zcc2.s"), os.path.join(root, "build/zcc3.s"), ev_dirs[0]))
-
-    if not candidate_pairs:
-        LOG.warning("Oracle rejected: no fresh evidence directory created during run")
+    # 1. Monitored command must be an authorized bootstrap invocation
+    if cmd and not is_bootstrap_command(cmd, repo_dir):
+        LOG.warning("Oracle rejected: command %r is not an authorized bootstrap gate", cmd)
         return False
 
-    # 4. Verify candidate files against provenance ledger
-    for s2, s3, ev_dir in candidate_pairs:
-        if not (os.path.isfile(s2) and os.path.isfile(s3)):
-            continue
+    # 2. Strict run directory binding: must use supervisor-assigned run_id
+    run_id = state.run_id if state and state.run_id else os.environ.get("ZCC_VERIFIER_RUN_ID", "")
+    if not run_id:
+        LOG.warning("Oracle rejected: missing supervisor run_id binding")
+        return False
+
+    ev_dir = os.path.join(repo_dir, "evidence", run_id)
+    if not os.path.isdir(ev_dir):
+        LOG.warning("Oracle rejected: supervisor-bound evidence directory %r does not exist", ev_dir)
+        return False
+
+    try:
+        ev_mtime = os.path.getmtime(ev_dir)
+        if ev_mtime < started_wall:
+            LOG.warning("Oracle rejected: evidence directory mtime (%.3f) predates process spawn (%.3f)",
+                        ev_mtime, started_wall)
+            return False
+    except OSError as exc:
+        LOG.warning("Oracle rejected: cannot stat evidence directory: %s", exc)
+        return False
+
+    # 3. Locate required stage 2 and stage 3 artifacts
+    s2 = os.path.join(ev_dir, "stage2.s")
+    s3 = os.path.join(ev_dir, "stage3.s")
+    b2 = os.path.join(ev_dir, "stage2.bin")
+    b3 = os.path.join(ev_dir, "stage3.bin")
+    ledger_path = os.path.join(ev_dir, "provenance.jsonl")
+
+    for path, name in [(s2, "stage2.s"), (s3, "stage3.s"), (b2, "stage2.bin"), (b3, "stage3.bin"), (ledger_path, "provenance.jsonl")]:
+        if not os.path.isfile(path):
+            LOG.warning("Oracle rejected: missing required artifact %s in %r", name, ev_dir)
+            return False
         try:
-            m2 = os.path.getmtime(s2)
-            m3 = os.path.getmtime(s3)
-            # Strictly created AFTER process spawn (no negative allowance)
-            if m2 < started_wall or m3 < started_wall:
-                continue
+            if os.path.getmtime(path) < started_wall:
+                LOG.warning("Oracle rejected: artifact %s mtime predates run spawn", name)
+                return False
+        except OSError:
+            return False
 
-            sz2 = os.path.getsize(s2)
-            sz3 = os.path.getsize(s3)
-            if sz2 != sz3 or sz2 < 100_000:
-                continue
+    # 4. Validate assembly files
+    sz2 = os.path.getsize(s2)
+    sz3 = os.path.getsize(s3)
+    if sz2 != sz3 or sz2 < 100_000:
+        LOG.warning("Oracle rejected: assembly size mismatch or insufficient (%d vs %d)", sz2, sz3)
+        return False
 
-            # Check assembly validity (must be real x86-64 assembly, no NUL bytes)
-            if not (validate_assembly_file(s2) and validate_assembly_file(s3)):
-                continue
+    if not (validate_assembly_file(s2) and validate_assembly_file(s3)):
+        LOG.warning("Oracle rejected: counterfeit or malformed assembly tokens in %s / %s", s2, s3)
+        return False
 
-            # Check byte identity
-            if not filecmp.cmp(s2, s3, shallow=False):
-                continue
+    if not filecmp.cmp(s2, s3, shallow=False):
+        LOG.warning("Oracle rejected: stage2.s and stage3.s are not byte-identical")
+        return False
 
-            # Verify cryptographic provenance ledger
-            ledger_path = os.path.join(ev_dir, "provenance.jsonl")
-            if os.path.isfile(ledger_path):
-                if os.path.getmtime(ledger_path) < started_wall:
+    # 5. Validate ELF binaries
+    if not (validate_binary_elf(b2) and validate_binary_elf(b3)):
+        LOG.warning("Oracle rejected: stage2.bin / stage3.bin are not valid 64-bit ELF binaries")
+        return False
+
+    # 6. Verify cryptographic provenance ledger
+    try:
+        stage2_rec = None
+        stage3_rec = None
+        with open(ledger_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
                     continue
+                rec = json.loads(line)
+                if rec.get("stage") == 2:
+                    stage2_rec = rec
+                elif rec.get("stage") == 3:
+                    stage3_rec = rec
 
-                stage2_rec = None
-                stage3_rec = None
-                with open(ledger_path, "r", encoding="utf-8") as f:
-                    for line in f:
-                        line = line.strip()
-                        if not line:
-                            continue
-                        rec = json.loads(line)
-                        if rec.get("stage") == 2:
-                            stage2_rec = rec
-                        elif rec.get("stage") == 3:
-                            stage3_rec = rec
+        if not (stage2_rec and stage3_rec):
+            LOG.warning("Oracle rejected: provenance ledger missing stage 2 or stage 3 records")
+            return False
 
-                if not (stage2_rec and stage3_rec):
-                    continue
+        if stage2_rec.get("run_id") != run_id or stage3_rec.get("run_id") != run_id:
+            LOG.warning("Oracle rejected: provenance ledger run_id mismatch (%r / %r vs %r)",
+                        stage2_rec.get("run_id"), stage3_rec.get("run_id"), run_id)
+            return False
 
-                if stage2_rec.get("exit_code") != 0 or stage3_rec.get("exit_code") != 0:
-                    continue
+        if stage2_rec.get("exit_code") != 0 or stage3_rec.get("exit_code") != 0:
+            LOG.warning("Oracle rejected: non-zero exit code in provenance records")
+            return False
 
-                asm_hash2 = stage2_rec.get("assembly_sha256")
-                asm_hash3 = stage3_rec.get("assembly_sha256")
-                if not (asm_hash2 and asm_hash3 and asm_hash2 == asm_hash3):
-                    continue
+        asm_hash2 = stage2_rec.get("assembly_sha256")
+        asm_hash3 = stage3_rec.get("assembly_sha256")
+        if not (asm_hash2 and asm_hash3 and asm_hash2 == asm_hash3):
+            LOG.warning("Oracle rejected: assembly hash mismatch in provenance records")
+            return False
 
-                actual_hash = compute_sha256(s2)
-                if actual_hash != asm_hash2:
-                    continue
+        actual_asm_hash = compute_sha256(s2)
+        if actual_asm_hash != asm_hash2:
+            LOG.warning("Oracle rejected: actual assembly hash != ledger hash (%s vs %s)",
+                        actual_asm_hash, asm_hash2)
+            return False
 
-                return True
+        bin_hash2 = stage2_rec.get("binary_sha256")
+        if bin_hash2 and compute_sha256(b2) != bin_hash2:
+            LOG.warning("Oracle rejected: actual binary hash != ledger binary_sha256")
+            return False
 
-        except (OSError, json.JSONDecodeError, ValueError) as exc:
-            LOG.debug("Oracle candidate check error: %s", exc)
-            continue
+        bin_hash3 = stage3_rec.get("binary_sha256")
+        if bin_hash3 and compute_sha256(b3) != bin_hash3:
+            LOG.warning("Oracle rejected: actual stage3 binary hash != ledger binary_sha256")
+            return False
 
-    return False
+        canon_gate = os.path.join(repo_dir, "gate.sh")
+        if os.path.isfile(canon_gate):
+            expected_verifier_sha = compute_sha256(canon_gate)
+            if stage2_rec.get("verifier_sha256") != expected_verifier_sha:
+                LOG.warning("Oracle rejected: verifier_sha256 mismatch against gate.sh")
+                return False
+
+        LOG.info("★ Oracle verification SUCCESS: authentic byte-identical selfhost confirmed for run %s", run_id)
+        return True
+
+    except Exception as exc:
+        LOG.warning("Oracle verification exception: %s", exc)
+        return False
 
 
 def cleanup_child_process(state: BuildState, timeout_grace: float = 0.5) -> None:
@@ -398,14 +482,20 @@ def cleanup_child_process(state: BuildState, timeout_grace: float = 0.5) -> None
 def watch_process(cmd: str, state: BuildState, log_path: str) -> None:
     """Run `cmd`, stream its output into `state`, mirror verbatim to log."""
     spawn_wall = time.time()
+    run_id = f"zcc-omega-{int(spawn_wall)}-{os.getpid()}-{secrets.token_hex(8)}"
     with state.lock:
         state.cmd_str = cmd
         state.started_wall = spawn_wall
+        state.run_id = run_id
+
+    env = os.environ.copy()
+    env["ZCC_VERIFIER_RUN_ID"] = run_id
+
     try:
         proc = subprocess.Popen(
             cmd, shell=True, stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1,
-            env=os.environ.copy(),
+            env=env,
             preexec_fn=os.setsid if hasattr(os, "setsid") else None,
         )
         with state.lock:
@@ -454,7 +544,7 @@ def watch_process(cmd: str, state: BuildState, log_path: str) -> None:
         with state.lock:
             state.finished, state.exit_code = True, rc
             if state.boss_seen and rc == 0:
-                state.oracle_verified = verify_selfhost_oracle(state.started_wall, cmd=state.cmd_str)
+                state.oracle_verified = verify_selfhost_oracle(state.started_wall, cmd=state.cmd_str, state=state)
         LOG.info("child exited rc=%d oracle_verified=%s", rc, state.oracle_verified)
 
 
@@ -462,6 +552,7 @@ def demo_process(state: BuildState) -> None:
     """Fake triple-stage build for --demo mode."""
     with state.lock:
         state.is_demo = True
+        state.run_id = "demo-run"
     state.started_event.set()
     rng = random.Random(1337)
     files = ["lexer.c", "parser.c", "typecheck.c", "codegen.c", "regalloc.c",
