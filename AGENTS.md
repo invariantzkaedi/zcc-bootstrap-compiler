@@ -1,5 +1,52 @@
 # Agent instructions for ZCC
 
+## ZCC-EF-0 — Independent Verification Authority
+
+**Classification:** Mandatory engineering invariant\
+**Priority:** Release-blocking\
+**Applies to:** All ZCC agents, compilers, build scripts, bootstrap gates, test harnesses, provenance ledgers, dashboards, CI pipelines, and verification tools.
+
+### The absolute rule
+
+**NO COMPONENT MAY CERTIFY ITS OWN CORRECTNESS USING EVIDENCE OR VERDICTS THAT IT CAN FABRICATE, MODIFY, REPLACE, OR CONTROL WITHOUT INDEPENDENT VERIFICATION.**
+
+The system under test may produce evidence. It must never be the sole authority deciding whether that evidence proves success.
+
+### Mandatory enforcement requirements
+
+1. **Separate evidence production from verification authority.** A trusted verifier must operate outside the monitored process's write authority. A child process must not control its authoritative verdict, receipt, or signing credentials.
+2. **Never trust success messages.** Printed markers such as `PASS`, `VERIFIED`, `BYTE-IDENTICAL`, or `BOOTSTRAP_GREEN` are telemetry, not proof. Exit code `0` alone is also insufficient to establish correctness.
+3. **Verify actual artifacts and execution.** A trusted runner must invoke the approved executable, independently capture its termination status, inspect its generated outputs, validate required invariants, and produce the final verdict. Command-name matching, timestamps, hashes, and child-written ledgers alone cannot establish authentic execution.
+4. **Fail closed by default.** Missing evidence, skipped tests, unexpected exit codes, timeouts, malformed receipts, interrupted runs, stale artifacts, inconsistent hashes, and verifier exceptions must produce a nonzero gate result. Unknown is never PASS.
+5. **Prove the verifier can detect failure.** Every critical gate must include adversarial negative controls, at least one valid positive control, and mutation tests. A verifier that passes when its checks are disabled, bypassed, or replaced is defective.
+6. **Preserve independent evidence lineage.** Every release verdict must link the source revision, exact command, environment, toolchain, inputs, execution record, artifact hashes, test results, and verifier version. The authoritative receipt must be created and protected by the trusted verification process.
+7. **Treat dashboards as observers, never authorities.** ZCC Quest and other interfaces may display a trusted verification result but must not invent certification from progress, stdout, file existence, or inferred success.
+8. **Require independent review of the verification infrastructure.** No verification system may achieve release approval solely through its own tests or self-reported results.
+
+### Mandatory release decision
+
+**PASS** is permitted only when the trusted verification system has independently executed the required checks and validated the complete evidence.
+
+**FAIL** is required when any mandatory invariant is violated.
+
+**UNVERIFIED** is required when sufficient independent evidence is unavailable.
+
+Neither FAIL nor UNVERIFIED may be represented as success.
+
+### Violation policy
+
+Any false-positive certification, vacuous test pass, fabricated provenance acceptance, silent skip, or fail-open condition is a **release-blocking verification defect**.
+
+The affected gate must be repaired, regression-tested, mutation-tested, and independently revalidated before release approval.
+
+**Foundational invariant: Evidence producers do not grant themselves verification authority.**
+
+### Permanent Operating Instruction for Every Agent
+
+> Before reporting PASS, attempt to make the verifier report PASS without the required work actually succeeding. If the attempt works, the verifier is defective and certification is prohibited.
+
+---
+
 ## Read-Before-Touch (RBT) — FIRES ON EVERY SESSION, NON-NEGOTIABLE
 
 Before you propose, draft, or implement ANY change to ANY file in
@@ -234,8 +281,5 @@ hypotheses about forensic work:
 * **E-LEARN-018 (Heterogeneous Packed Bitfield Boundary Coalescing):** In `part3.c` / `part4.c`, when packing mixed-width adjacent bitfields (e.g. `int32_t` adjacent to `uint16_t` in `__attribute__((packed))`), do NOT prematurely close the container if the cumulative bit-span fits within the aligned word. Forcing boundary splits on type change inflates packed struct sizes (e.g. 9B vs GCC's 8B). Furthermore, bitfield loads/stores must span the full container word width rather than truncating to `member_size`, and signed bitfields in IR must be sign-extended via shift pairs (`shl`/`sar`) rather than zero-extended with `OP_BAND`.
 * **E-LEARN-019 (GVN Union Punning Bitstream vs Numeric Cast):** In GVN Store-to-Load Forwarding (`compiler_passes.c`), when forwarding a floating-point store (e.g. `double`) to an integer load (e.g. `uint64_t`), the forwarded value must preserve the raw IEEE-754 bitstream (`movq %xmm, %rax`), NEVER lower to a numeric conversion instruction (`cvttsd2si %xmm, %rax`). Additionally, store invalidation must check bounding box intervals rather than exact offset equality (`store_offset == load_offset`) to properly invalidate overlapping sub-byte mutations.
 * **E-LEARN-020 (Variable Length Array Stack Dynamic Reservation):** In `part3.c`, local variable frame allocation must not default to scalar sizes (8 bytes) for VLAs with runtime dimensions (`vtype->array_len == 0`). Allocating fixed small slots causes writes to indices $> 0$ to clobber adjacent stack parameters (such as `n` at `-8(%rbp)`) and corrupt the base pointer `%rbp`.
-
-
-
-
-
+* **E-LEARN-021 (HTML Canvas Zero-Dimension Gradient Kill-Switch & Chunk Truncation):** In HTML5/WebGL dashboards with tabbed or collapsible containers (`display: none`), `getBoundingClientRect()` returns $0 \times 0$. Calculating radial gradients or canvas arcs with unconstrained radii (e.g. $\min(cx, cy) - 24 = -24$) throws an unhandled `IndexSizeError` `DOMException` that silently terminates `requestAnimationFrame(animationLoop)` on frame 0, permanently freezing all canvases into blank rectangles. Furthermore, editing large JS/HTML amalgamation files via chunk replacement without re-auditing neighboring symbol references risks wiping critical functions (`renderGridCanvas`, `initEvmMemoryGrid`) and triggering fatal `ReferenceError` crashes during DOM initialization.
+* **E-LEARN-022 (Flipper mJS Exception Handling Prohibition):** The Cesanta mJS engine utilized in Flipper Zero firmware does NOT support JavaScript exception handling (`try`, `catch`, `throw`, `finally`). Including `try { ... } catch (e) { ... }` causes an immediate, fatal syntax parser error at compile time (`parse error at line NN: [try {`). All code paths in Flipper mJS scripts must use procedural state checks (`if / else`) and guard flags rather than exception blocks.

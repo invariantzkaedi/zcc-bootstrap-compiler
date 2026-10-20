@@ -689,8 +689,15 @@ docs/*
 !docs/SPEC_C_SUBSET_v1.md
 !docs/XMM_VALIDATION.md
 !docs/ZCC_LIMITATIONS_AND_GOALS.md
+!docs/AGENT_GOVERNANCE_PROTOCOL.md
 !docs/evidence/
 !docs/evidence/**
+!docs/postmortems/
+!docs/postmortems/**
+!docs/releases/
+!docs/releases/**
+
+
 
 
 # Evidence archive: track manifest & latest evidence, ignore heavy zcc-run history
@@ -788,4 +795,8 @@ temp_*
 # Agent Governance Protocol & Schemas
 !contracts/agent-governance-verdict.schema.json
 !docs/AGENT_GOVERNANCE_PROTOCOL.md
+
+# Non-exportable hardware enclave private key vault
+config/.isolated_vault/
+
 

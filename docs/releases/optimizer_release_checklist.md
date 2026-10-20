@@ -22,6 +22,7 @@ This checklist defines the pre-release hardening process and release gating crit
 ---
 
 ## 2) Core Correctness Gates (Required)
+- [ ] **ZCC-EF-0 Independent Verification Authority**: No component certifies its own correctness. Verification runs outside the monitored process's write authority, validates ELF binary headers, enforces supervisor run receipts, and passes adversarial negative controls (`python tools/test_oracle_negative_controls.py`).
 - [ ] **Selfhost Identity Gate**: Stage 2 and Stage 3 assembly outputs must be byte-identical:
   ```bash
   make selfhost
