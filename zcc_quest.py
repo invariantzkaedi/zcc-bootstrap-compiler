@@ -121,6 +121,7 @@ class BuildState:
     files_seen: List[str] = field(default_factory=list)   # filenames, in order
     started: float = field(default_factory=time.monotonic)
     started_wall: float = field(default_factory=time.time)
+    cmd_str: str = ""
     proc: Optional[subprocess.Popen] = None
     started_event: threading.Event = field(default_factory=threading.Event)
 
@@ -157,33 +158,172 @@ WARN_RE = re.compile(r"\bwarning\b", re.I)
 ERR_RE = re.compile(r"\berror\b|\bfatal\b|segmentation fault", re.I)
 
 
-def verify_selfhost_oracle(started_wall: float) -> bool:
-    """Independent oracle: verify that stage2/stage3 assembly was generated during this run and is byte-identical."""
+def is_bootstrap_command(cmd: str) -> bool:
+    """Validate that the command actually executes an authorized bootstrap gate."""
+    if not cmd:
+        return False
+    c = cmd.strip().lower()
+    valid_patterns = [
+        r"\bgate\.sh\b",
+        r"\bmake\s+(?:selfhost|selfhost-\w+|compat-\w+)",
+        r"\b(?:bash|sh)\s+.*gate\.sh\b",
+        r"\bscripts/selfhost\b",
+    ]
+    return any(re.search(p, c) for p in valid_patterns)
+
+
+def validate_assembly_file(path: str) -> bool:
+    """Verify that an artifact is authentic, non-counterfeit x86-64 assembly text."""
+    if not os.path.isfile(path):
+        return False
+    try:
+        sz = os.path.getsize(path)
+        # Authentic ZCC assembly is ~9.5 MB. Reject tiny counterfeit files.
+        if sz < 100_000:
+            return False
+
+        # Reject binary / zero-byte counterfeit payloads
+        with open(path, "rb") as f:
+            header = f.read(65536)
+            if b"\x00" in header:
+                return False
+            f.seek(max(0, sz - 65536))
+            footer = f.read(65536)
+            if b"\x00" in footer:
+                return False
+
+        header_str = header.decode("utf-8", errors="replace")
+        footer_str = footer.decode("utf-8", errors="replace")
+
+        # Must contain genuine x86-64 assembly directives and instruction tokens
+        has_text = ".text" in header_str or ".text" in footer_str
+        has_reg = "%rbp" in header_str or "%rsp" in header_str or "%rbp" in footer_str or "%rsp" in footer_str
+        has_ret = "ret" in header_str or "retq" in header_str or "ret" in footer_str or "retq" in footer_str
+        has_globl = ".globl" in header_str or ".globl" in footer_str or "pushq" in header_str or ".cfi" in header_str
+
+        return has_text and has_reg and has_ret and has_globl
+    except Exception:
+        return False
+
+
+def compute_sha256(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while chunk := f.read(131072):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def verify_selfhost_oracle(started_wall: float, cmd: str = "") -> bool:
+    """Independent oracle: verify that stage2/stage3 assembly was generated during this run,
+    matches cryptographic provenance ledger receipts, and is byte-identical."""
     import filecmp
     import glob
 
-    candidates = [
-        ("zcc2.s", "zcc3.s"),
-        ("build/zcc2.s", "build/zcc3.s"),
-    ]
-    ev_dirs = sorted(glob.glob("evidence/zcc-run-*"), key=lambda d: os.path.getmtime(d) if os.path.exists(d) else 0, reverse=True)
-    if ev_dirs:
-        candidates.append((os.path.join(ev_dirs[0], "stage2.s"), os.path.join(ev_dirs[0], "stage3.s")))
+    # 1. Monitored command must be an authorized bootstrap invocation
+    if cmd and not is_bootstrap_command(cmd):
+        LOG.warning("Oracle rejected: command %r is not a recognized bootstrap gate", cmd)
+        return False
 
-    for s2, s3 in candidates:
-        if os.path.isfile(s2) and os.path.isfile(s3):
-            try:
-                m2 = os.path.getmtime(s2)
-                m3 = os.path.getmtime(s3)
-                # Must be generated during this run (allowing 3.0s clock skew)
-                if m2 >= started_wall - 3.0 and m3 >= started_wall - 3.0:
-                    sz2 = os.path.getsize(s2)
-                    sz3 = os.path.getsize(s3)
-                    if sz2 > 1000 and sz2 == sz3:
-                        if filecmp.cmp(s2, s3, shallow=False):
-                            return True
-            except OSError:
-                pass
+    repo_dir = os.path.dirname(os.path.abspath(__file__))
+    search_roots = [os.getcwd()]
+    if repo_dir not in search_roots:
+        search_roots.append(repo_dir)
+
+    # 2. Locate fresh evidence directories generated during this run
+    ev_dirs = []
+    for root in search_roots:
+        for pattern in ("evidence/zcc-omega-*", "evidence/zcc-run-*"):
+            for d in glob.glob(os.path.join(root, pattern)):
+                if os.path.isdir(d):
+                    try:
+                        # Must be created strictly AFTER started_wall (zero negative allowance)
+                        if os.path.getmtime(d) >= started_wall:
+                            ev_dirs.append(d)
+                    except OSError:
+                        pass
+
+    # Sort newest first
+    ev_dirs.sort(key=lambda d: os.path.getmtime(d), reverse=True)
+
+    # 3. Locate candidate assembly pairs
+    candidate_pairs = []
+    for ed in ev_dirs:
+        candidate_pairs.append((os.path.join(ed, "stage2.s"), os.path.join(ed, "stage3.s"), ed))
+
+    if ev_dirs:
+        for root in search_roots:
+            candidate_pairs.append((os.path.join(root, "zcc2.s"), os.path.join(root, "zcc3.s"), ev_dirs[0]))
+            candidate_pairs.append((os.path.join(root, "build/zcc2.s"), os.path.join(root, "build/zcc3.s"), ev_dirs[0]))
+
+    if not candidate_pairs:
+        LOG.warning("Oracle rejected: no fresh evidence directory created during run")
+        return False
+
+    # 4. Verify candidate files against provenance ledger
+    for s2, s3, ev_dir in candidate_pairs:
+        if not (os.path.isfile(s2) and os.path.isfile(s3)):
+            continue
+        try:
+            m2 = os.path.getmtime(s2)
+            m3 = os.path.getmtime(s3)
+            # Strictly created AFTER process spawn (no negative allowance)
+            if m2 < started_wall or m3 < started_wall:
+                continue
+
+            sz2 = os.path.getsize(s2)
+            sz3 = os.path.getsize(s3)
+            if sz2 != sz3 or sz2 < 100_000:
+                continue
+
+            # Check assembly validity (must be real x86-64 assembly, no NUL bytes)
+            if not (validate_assembly_file(s2) and validate_assembly_file(s3)):
+                continue
+
+            # Check byte identity
+            if not filecmp.cmp(s2, s3, shallow=False):
+                continue
+
+            # Verify cryptographic provenance ledger
+            ledger_path = os.path.join(ev_dir, "provenance.jsonl")
+            if os.path.isfile(ledger_path):
+                if os.path.getmtime(ledger_path) < started_wall:
+                    continue
+
+                stage2_rec = None
+                stage3_rec = None
+                with open(ledger_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        rec = json.loads(line)
+                        if rec.get("stage") == 2:
+                            stage2_rec = rec
+                        elif rec.get("stage") == 3:
+                            stage3_rec = rec
+
+                if not (stage2_rec and stage3_rec):
+                    continue
+
+                if stage2_rec.get("exit_code") != 0 or stage3_rec.get("exit_code") != 0:
+                    continue
+
+                asm_hash2 = stage2_rec.get("assembly_sha256")
+                asm_hash3 = stage3_rec.get("assembly_sha256")
+                if not (asm_hash2 and asm_hash3 and asm_hash2 == asm_hash3):
+                    continue
+
+                actual_hash = compute_sha256(s2)
+                if actual_hash != asm_hash2:
+                    continue
+
+                return True
+
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            LOG.debug("Oracle candidate check error: %s", exc)
+            continue
+
     return False
 
 
@@ -257,6 +397,10 @@ def cleanup_child_process(state: BuildState, timeout_grace: float = 0.5) -> None
 
 def watch_process(cmd: str, state: BuildState, log_path: str) -> None:
     """Run `cmd`, stream its output into `state`, mirror verbatim to log."""
+    spawn_wall = time.time()
+    with state.lock:
+        state.cmd_str = cmd
+        state.started_wall = spawn_wall
     try:
         proc = subprocess.Popen(
             cmd, shell=True, stdout=subprocess.PIPE,
@@ -310,7 +454,7 @@ def watch_process(cmd: str, state: BuildState, log_path: str) -> None:
         with state.lock:
             state.finished, state.exit_code = True, rc
             if state.boss_seen and rc == 0:
-                state.oracle_verified = verify_selfhost_oracle(state.started_wall)
+                state.oracle_verified = verify_selfhost_oracle(state.started_wall, cmd=state.cmd_str)
         LOG.info("child exited rc=%d oracle_verified=%s", rc, state.oracle_verified)
 
 
