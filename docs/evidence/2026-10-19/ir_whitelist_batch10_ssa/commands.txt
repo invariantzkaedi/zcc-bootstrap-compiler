@@ -1,0 +1,42 @@
+# Batch 10 SSA Promotion Command Sequence
+# Date: 2026-10-19 / 2026-10-20
+# Environment: WSL2 Ubuntu 24.04 (Linux 6.18.33.2-microsoft-standard-WSL2 x86_64)
+
+# Phase 0 Baseline Check
+git log --all --oneline --format='%h %ad %s' --date=short | head -30
+cmp zcc2.s zcc3.s
+
+# Pre-Patch Probe Compilation & Execution (Rule EF-3)
+./zcc tests/probe_batch10_ssa.c -S -o /tmp/probe_batch10_before.s
+grep -c '\.Lir_b_' /tmp/probe_batch10_before.s
+gcc /tmp/probe_batch10_before.s -o /tmp/probe_batch10_before
+/tmp/probe_batch10_before
+
+# Minimal Whitelist Patch
+# Edit part4.c ir_whitelisted (+5 lines)
+
+# Post-Patch Probe Compilation & Verification
+make zcc
+./zcc tests/probe_batch10_ssa.c -S -o /tmp/probe_batch10_after.s
+grep -c '\.Lir_b_' /tmp/probe_batch10_after.s
+gcc /tmp/probe_batch10_after.s -o /tmp/probe_batch10_after
+/tmp/probe_batch10_after
+
+# Gate 1: Stage 1/2/3 Full Self-Host Verification
+make selfhost 2>&1 | tee /tmp/zcc-selfhost-b10.log
+cmp zcc2.s zcc3.s
+md5sum zcc2.s zcc3.s
+wc -l zcc2.s
+
+# Gate 2: Multi-Suite Production Optimizer Gauntlet
+python3 tools/test_zcc_opt_passes.py
+
+# Gate 3: Scope Audit
+git diff part4.c
+
+# Gate 4: QuickJS ES2020 Target Harness
+/tmp/test_quickjs_runner
+
+# Gate 5: Evidence & Ledger Synchronization
+# Update BOOTSTRAP_BASELINES.tsv
+# Update ZCC_STATUS.md

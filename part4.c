@@ -5952,6 +5952,11 @@ static int ir_whitelisted(const char *name) {
       "node_is_char_or_void_ptr_cast", "is_complex_type", "is_compatible_type",
       "is_unsigned_cmp", "abi_join", "is_nullable_call", "is_null_check",
       "is_rax_deref", "is_rax_moved", "type_to_str",
+      /* Batch 10: Preprocessor, Verification & AST Inspection SSA Promotion */
+      "node_float_bits", "node_label_name", "is_ident_start", "is_ident_char",
+      "is_simd_stub", "is_curl_stub", "is_stddef_stub", "is_empty_fallback_safe",
+      "verify_shared_access", "verify_job_ownership", "verify_runtime_policy",
+      "verify_manifest_abi", "verify_opcode_registry", "node_is_array", "node_has_label",
       NULL
   };
   int i;

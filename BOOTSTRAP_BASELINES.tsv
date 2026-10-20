@@ -135,5 +135,8 @@ REWRITE	37d34e76	[history-rewrite]	-	git filter-repo	Linux 6.6.123.2-microsoft-s
 2026-10-19T22:45:00Z	b840c4e2	b13b1207c7cee38741746b83a12deba9	492144	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	feat(ir): Batch 9 SSA-IR lowering promotion & eligibility hardening baseline lock
 2026-10-19T22:45:00Z	b840c4e2	b13b1207c7cee38741746b83a12deba9	492144	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.8.0-1018-azure x86_64	feat(ir): Batch 9 SSA-IR lowering promotion & eligibility hardening Azure lock
 2026-10-19T22:45:00Z	b840c4e2	b13b1207c7cee38741746b83a12deba9	492144	gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0	azure	feat(ir): Batch 9 SSA-IR lowering promotion & eligibility hardening Azure lock
+2026-10-20T00:15:00Z	37b94739d	becaea8339cb7f3bb0d5d07c8e5cf787	493351	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	feat(ir): Batch 10 SSA-IR lowering promotion & preprocessor/verification baseline lock
+2026-10-20T00:15:00Z	37b94739d	becaea8339cb7f3bb0d5d07c8e5cf787	493351	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.8.0-1018-azure x86_64	feat(ir): Batch 10 SSA-IR lowering promotion & preprocessor/verification Azure lock
+2026-10-20T00:15:00Z	37b94739d	becaea8339cb7f3bb0d5d07c8e5cf787	493351	gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0	azure	feat(ir): Batch 10 SSA-IR lowering promotion & preprocessor/verification Azure lock
 
 
