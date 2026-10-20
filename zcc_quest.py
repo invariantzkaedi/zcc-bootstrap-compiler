@@ -119,6 +119,7 @@ class BuildState:
     files_seen: List[str] = field(default_factory=list)   # filenames, in order
     started: float = field(default_factory=time.monotonic)
     proc: Optional[subprocess.Popen] = None
+    started_event: threading.Event = field(default_factory=threading.Event)
 
     def snapshot(self) -> dict:
         with self.lock:
@@ -145,6 +146,74 @@ WARN_RE = re.compile(r"\bwarning\b", re.I)
 ERR_RE = re.compile(r"\berror\b|\bfatal\b|segmentation fault", re.I)
 
 
+def cleanup_child_process(state: BuildState, timeout_grace: float = 0.5) -> None:
+    """Terminate child process group cleanly: SIGTERM -> bounded grace -> SIGKILL -> reap -> verify."""
+    state.started_event.wait(timeout=1.0)
+    with state.lock:
+        p = state.proc
+    if not p:
+        return
+
+    pgid = None
+    if hasattr(os, "getpgid"):
+        try:
+            pgid = os.getpgid(p.pid)
+        except OSError:
+            pass
+
+    # 1. Terminate process group with SIGTERM
+    try:
+        if pgid and hasattr(os, "killpg"):
+            os.killpg(pgid, signal.SIGTERM)
+        else:
+            p.terminate()
+    except OSError:
+        pass
+
+    # 2. Bounded grace period for graceful termination
+    t_end = time.monotonic() + timeout_grace
+    while time.monotonic() < t_end:
+        if p.poll() is not None:
+            break
+        time.sleep(0.05)
+
+    # 3. Escalate to SIGKILL if child process or group is still alive
+    group_alive = False
+    if pgid and hasattr(os, "killpg"):
+        try:
+            os.killpg(pgid, 0)
+            group_alive = True
+        except OSError:
+            group_alive = False
+
+    if p.poll() is None or group_alive:
+        try:
+            if pgid and hasattr(os, "killpg"):
+                os.killpg(pgid, signal.SIGKILL)
+            else:
+                p.kill()
+        except OSError:
+            pass
+
+    # 4. Reap child process
+    try:
+        p.wait(timeout=1.0)
+    except Exception:
+        pass
+
+    # 5. Verify no members of process group remain
+    if pgid and hasattr(os, "killpg"):
+        t_verify = time.monotonic() + 0.5
+        while time.monotonic() < t_verify:
+            try:
+                os.killpg(pgid, 0)
+                os.killpg(pgid, signal.SIGKILL)
+                time.sleep(0.05)
+            except OSError:
+                # ESRCH: Process group has completely vacated
+                break
+
+
 def watch_process(cmd: str, state: BuildState, log_path: str) -> None:
     """Run `cmd`, stream its output into `state`, mirror verbatim to log."""
     try:
@@ -156,11 +225,13 @@ def watch_process(cmd: str, state: BuildState, log_path: str) -> None:
         )
         with state.lock:
             state.proc = proc
+        state.started_event.set()
     except OSError as exc:
         LOG.error("failed to spawn %r: %s", cmd, exc)
         with state.lock:
             state.finished, state.exit_code = True, 127
             state.tail.append(f"spawn failed: {exc}")
+        state.started_event.set()
         return
 
     try:
@@ -202,6 +273,7 @@ def watch_process(cmd: str, state: BuildState, log_path: str) -> None:
 
 def demo_process(state: BuildState) -> None:
     """Fake triple-stage build for --demo mode."""
+    state.started_event.set()
     rng = random.Random(1337)
     files = ["lexer.c", "parser.c", "typecheck.c", "codegen.c", "regalloc.c",
              "peephole.c", "quantum_rules.c", "emit_x86.c", "driver.c",
@@ -296,7 +368,10 @@ class GemmaCompanionThread(threading.Thread):
                     
                     if snap["finished"]:
                         if snap["exit_code"] == 0:
-                            self.last_thought = f"[{self.active_agent}] Fixed-point converged. Byte-identical seal verified (exit 0)."
+                            if snap.get("boss_seen", False):
+                                self.last_thought = f"[{self.active_agent}] Fixed-point converged. Byte-identical seal verified (exit 0)."
+                            else:
+                                self.last_thought = f"[{self.active_agent}] Command completed successfully with exit 0."
                         else:
                             self.last_thought = f"[{self.active_agent}] Build halted with exit {snap['exit_code']}. Inspecting logs."
                     elif snap["warnings"] > 0:
@@ -476,8 +551,12 @@ class Game:
 
         if snap["finished"]:
             if snap["exit_code"] == 0:
-                A(f" {BOLD}{fg(46)}★ SELF-HOST COMPLETE — {BOSS_NAME} — exit 0 "
-                  f"(evidence: see .build log) ★{RESET}")
+                if snap.get("boss_seen", False):
+                    A(f" {BOLD}{fg(46)}★ SELF-HOST VERIFIED — {BOSS_NAME} — exit 0 "
+                      f"(evidence: see .build log) ★{RESET}")
+                else:
+                    A(f" {BOLD}{fg(46)}★ COMMAND SUCCEEDED — exit 0 "
+                      f"(evidence: see .build log) ★{RESET}")
             else:
                 A(f" {BOLD}{fg(196)}✖ BUILD FAILED — exit {snap['exit_code']} — "
                   f"the SEGFAULT DRAGON wins. Check the .build log.{RESET}")
@@ -637,8 +716,12 @@ class FroggerGame:
 
         if snap["finished"]:
             if snap["exit_code"] == 0:
-                A(f" {BOLD}{fg(46)}★ FROG HOME — {BOSS_NAME} — exit 0 "
-                  f"(near-misses: {self.near_miss}, evidence: .build log) ★{RESET}")
+                if snap.get("boss_seen", False):
+                    A(f" {BOLD}{fg(46)}★ FROG HOME — {BOSS_NAME} — exit 0 "
+                      f"(near-misses: {self.near_miss}, evidence: .build log) ★{RESET}")
+                else:
+                    A(f" {BOLD}{fg(46)}★ COMMAND SUCCEEDED — exit 0 "
+                      f"(near-misses: {self.near_miss}, evidence: .build log) ★{RESET}")
             else:
                 A(f" {BOLD}{fg(196)}✖ SQUISHED — exit {snap['exit_code']} — "
                   f"traffic wins. Check the .build log.{RESET}")
@@ -819,8 +902,12 @@ class GardenGame:
 
         if snap["finished"]:
             if success:
-                A(f" {BOLD}{fg(213)}❀ FULL BLOOM — {BOSS_NAME} — exit 0 — "
-                  f"garden {garden_id} will grow the same way next run ❀{RESET}")
+                if snap.get("boss_seen", False):
+                    A(f" {BOLD}{fg(213)}❀ FULL BLOOM — {BOSS_NAME} — exit 0 — "
+                      f"garden {garden_id} will grow the same way next run ❀{RESET}")
+                else:
+                    A(f" {BOLD}{fg(213)}❀ COMMAND SUCCEEDED — exit 0 — "
+                      f"garden {garden_id} completed ❀{RESET}")
             else:
                 A(f" {BOLD}{fg(196)}† FROST — exit {snap['exit_code']} — "
                   f"the garden sleeps. Check the .build log.{RESET}")
@@ -946,8 +1033,12 @@ class PrimeEnergyGame:
 
         if snap["finished"]:
             if snap["exit_code"] == 0:
-                A(f" {BOLD}{fg(46)}★ ZKAEDI PRIME FIXED POINT REPO - H0 CONVERGED - exit 0 "
-                  f"(scars: {self.scars}, {BOSS_NAME}) ★{RESET}")
+                if snap.get("boss_seen", False):
+                    A(f" {BOLD}{fg(46)}★ ZKAEDI PRIME FIXED POINT REPO - H0 CONVERGED - exit 0 "
+                      f"(scars: {self.scars}, {BOSS_NAME}) ★{RESET}")
+                else:
+                    A(f" {BOLD}{fg(46)}★ COMMAND SUCCEEDED - exit 0 "
+                      f"(scars: {self.scars}) ★{RESET}")
             else:
                 A(f" {BOLD}{fg(196)}✖ BIFURCATION DRIFT - exit {snap['exit_code']} - "
                   f"Check the .build log.{RESET}")
@@ -1061,7 +1152,7 @@ class SovereignHudGame:
         A(f" {BOLD}{fg(226)}── 7-SYSTEM SOVEREIGN STATUS MATRIX ──────────────────────────────────────────{RESET}")
         sys_active_count = min(7, int(p * 7) + (1 if not snap["finished"] else 0))
         for idx, (sys_name, desc, metric) in enumerate(self.SYSTEMS):
-            if idx < sys_active_count or (snap["finished"] and snap["exit_code"] == 0):
+            if idx < sys_active_count or (snap["finished"] and snap["exit_code"] == 0 and snap.get("boss_seen", False)):
                 status_glyph = f"{fg(46)}● ONLINE {RESET}"
             elif idx == sys_active_count:
                 status_glyph = f"{fg(226)}◐ SYNCING{RESET}"
@@ -1136,7 +1227,10 @@ class SovereignHudGame:
 
         if snap["finished"]:
             if snap["exit_code"] == 0:
-                A(f" {BOLD}{fg(46)}★ SOVEREIGN VICTORY — 7/7 SYSTEMS SYNCHRONIZED — BYTE-IDENTICAL VERIFIED ({BOSS_NAME}) ★{RESET}")
+                if snap.get("boss_seen", False):
+                    A(f" {BOLD}{fg(46)}★ SOVEREIGN VICTORY — 7/7 SYSTEMS SYNCHRONIZED — BYTE-IDENTICAL VERIFIED ({BOSS_NAME}) ★{RESET}")
+                else:
+                    A(f" {BOLD}{fg(46)}★ SOVEREIGN COMMAND SUCCEEDED — EXIT 0 — SEE BUILD LOG ★{RESET}")
             else:
                 A(f" {BOLD}{fg(196)}✖ SOVEREIGN DRIFT — EXIT {snap['exit_code']} — CHECK BUILD LOG{RESET}")
 
@@ -1244,21 +1338,20 @@ def main(argv: Optional[List[str]] = None) -> int:
             sys.stdout.flush()
 
     snap = state.snapshot()
-    if snap["exit_code"] is not None:
-        rc = snap["exit_code"]
+    if snap["finished"]:
+        rc = snap["exit_code"] if snap["exit_code"] is not None else 0
+    elif stop["flag"]:
+        cleanup_child_process(state, timeout_grace=0.5)
+        rc = 130
+    elif args.frames and frames >= args.frames:
+        cleanup_child_process(state, timeout_grace=0.5)
+        rc = 124
     else:
-        # Child has not finished (e.g. frame limit reached or interrupted)
-        with state.lock:
-            p = state.proc
-        if p and p.poll() is None:
-            try:
-                if hasattr(os, "killpg") and hasattr(os, "getpgid"):
-                    os.killpg(os.getpgid(p.pid), signal.SIGTERM)
-                else:
-                    p.terminate()
-            except Exception:
-                pass
-        rc = 124 if (args.frames and frames >= args.frames) else 130
+        cleanup_child_process(state, timeout_grace=0.5)
+        snap = state.snapshot()
+        rc = snap["exit_code"] if snap["exit_code"] is not None else 1
+
+    snap = state.snapshot()
     print(f"zcc_quest: child exit={snap['exit_code']} warnings={snap['warnings']} "
           f"errors={snap['errors']} elapsed={snap['elapsed']:.1f}s "
           f"(raw output: {args.log}.build)")
