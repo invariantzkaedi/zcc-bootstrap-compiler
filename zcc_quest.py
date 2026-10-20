@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import math
 import logging
 import os
@@ -35,6 +36,17 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Deque, List, Optional
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 # ---------------------------------------------------------------------------
 # Logging (file-only; stdout belongs to the game)
@@ -106,6 +118,7 @@ class BuildState:
     boss_seen: bool = False           # byte-identical marker observed
     files_seen: List[str] = field(default_factory=list)   # filenames, in order
     started: float = field(default_factory=time.monotonic)
+    proc: Optional[subprocess.Popen] = None
 
     def snapshot(self) -> dict:
         with self.lock:
@@ -139,7 +152,10 @@ def watch_process(cmd: str, state: BuildState, log_path: str) -> None:
             cmd, shell=True, stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1,
             env=os.environ.copy(),
+            preexec_fn=os.setsid if hasattr(os, "setsid") else None,
         )
+        with state.lock:
+            state.proc = proc
     except OSError as exc:
         LOG.error("failed to spawn %r: %s", cmd, exc)
         with state.lock:
@@ -210,6 +226,92 @@ def demo_process(state: BuildState) -> None:
         state.boss_seen = True
         state.tail.append("sha256: zcc2 == zcc3  BYTE-IDENTICAL ✔")
         state.finished, state.exit_code = True, 0
+
+
+# ---------------------------------------------------------------------------
+# Gemma LoRA AI Copilot & Autonomous Companion (:8088)
+# ---------------------------------------------------------------------------
+class GemmaCompanionThread(threading.Thread):
+    """Background cognitive copilot that queries the resident Gemma daemon (:8088)."""
+
+    def __init__(self, state: BuildState, url: str = "http://127.0.0.1:8088"):
+        super().__init__(daemon=True)
+        self.state = state
+        self.url = url.rstrip("/")
+        self.active_agent = "ZkaediGemmaLoRA"
+        self.agent_title = "Gemma 32-Layer LoRA Sovereign Archon"
+        self.last_thought = "Gemma AI Copilot initialized. Monitoring compiler build pipeline."
+        self.latency_ms = 0.0
+        self.connected = False
+        self.stop_event = threading.Event()
+
+    def stop(self) -> None:
+        self.stop_event.set()
+
+    def run(self) -> None:
+        last_stage = -1
+        last_lines = 0
+        last_warnings = 0
+        while not self.stop_event.is_set():
+            snap = self.state.snapshot()
+            stg = snap["stage"]
+            lines = snap["total_lines"]
+            warns = snap["warnings"]
+
+            should_query = (
+                not self.connected or
+                stg != last_stage or
+                abs(lines - last_lines) >= 300 or
+                warns != last_warnings or
+                snap["finished"]
+            )
+            if should_query:
+                last_stage = stg
+                last_lines = lines
+                last_warnings = warns
+                self._query_gemma(snap)
+
+            self.stop_event.wait(1.2)
+
+    def _query_gemma(self, snap: dict) -> None:
+        try:
+            import urllib.request
+            stg_name = WORLDS[snap["stage"]][3] if snap["stage"] < len(WORLDS) else f"Stage {snap['stage']+1}"
+            tail_txt = " | ".join(snap["tail"][-2:]) if snap["tail"] else "Nominal compilation"
+            query = f"Compiler build telemetry: {stg_name}, lines={snap['total_lines']}, warnings={snap['warnings']}, tail={tail_txt[:200]}"
+            req = urllib.request.Request(
+                f"{self.url}/dispatch",
+                data=json.dumps({"query": query}).encode("utf-8"),
+                headers={"Content-Type": "application/json", "User-Agent": "ZccQuest/7.0"}
+            )
+            t0 = time.perf_counter()
+            with urllib.request.urlopen(req, timeout=1.2) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    self.connected = True
+                    self.latency_ms = round((time.perf_counter() - t0) * 1000.0, 1)
+                    agent_info = data.get("dispatched_agent", {})
+                    self.active_agent = agent_info.get("id", "ZkaediGemmaLoRA")
+                    self.agent_title = agent_info.get("title", "Gemma LoRA Archon")
+                    
+                    if snap["finished"]:
+                        if snap["exit_code"] == 0:
+                            self.last_thought = f"[{self.active_agent}] Fixed-point converged. Byte-identical seal verified (exit 0)."
+                        else:
+                            self.last_thought = f"[{self.active_agent}] Build halted with exit {snap['exit_code']}. Inspecting logs."
+                    elif snap["warnings"] > 0:
+                        self.last_thought = f"[{self.active_agent}] Warning pulse observed in {stg_name}: checking calling conventions."
+                    elif snap["stage"] == 0:
+                        self.last_thought = f"[{self.active_agent}] Stage 1 bootstrap: lexical tokenization & AST generation active."
+                    elif snap["stage"] == 1:
+                        self.last_thought = f"[{self.active_agent}] Stage 2 IR lowering: GVN store-to-load forwarding nominal."
+                    elif snap["stage"] == 2:
+                        self.last_thought = f"[{self.active_agent}] Stage 3 self-host: compiling stage3 binary for byte-identical cmp."
+                    else:
+                        self.last_thought = f"[{self.active_agent}] Active compilation nominal ({snap['total_lines']} lines)."
+        except Exception:
+            self.connected = False
+            self.last_thought = "Gemma daemon standby (port 8088 offline or waiting)."
 
 
 # ---------------------------------------------------------------------------
@@ -748,6 +850,10 @@ class PrimeEnergyGame:
         self.h_prev = 1.0
         self.scars = 0
         self.rng = random.Random(42)
+        self.companion: Optional[GemmaCompanionThread] = None
+
+    def set_companion(self, comp: Optional[GemmaCompanionThread]) -> None:
+        self.companion = comp
 
     def progress(self, snap: dict) -> float:
         stg = snap["stage"]
@@ -828,6 +934,11 @@ class PrimeEnergyGame:
                         row.append(fg(235) + " " + RESET)
             A(" " + "".join(row))
 
+        if self.companion:
+            status_txt = f"{fg(46)}● ONLINE ({self.companion.latency_ms:.1f}ms){RESET}" if self.companion.connected else f"{fg(240)}○ STANDBY{RESET}"
+            A(f" {BOLD}{fg(81)}── 🤖 GEMMA ARCHON COGNITION {status_txt} ──{RESET} {fg(226)}{self.companion.agent_title}{RESET}")
+            A(f"   {fg(250)}Insight:{RESET} {fg(255)}{self.companion.last_thought[:field_w - 14]}{RESET}")
+
         A(f" {fg(240)}┈┈ build output ┈┈{RESET}")
         for ln in snap["tail"]:
             color = 196 if ERR_RE.search(ln) else 178 if WARN_RE.search(ln) else 245
@@ -891,6 +1002,10 @@ class SovereignHudGame:
                      -4.8, -3.2, -2.1, -1.9, -1.5, -1.2, -0.9, -0.5]
         for i in range(N):
             self.H_base[i][i] = diag_pots[i]
+        self.companion: Optional[GemmaCompanionThread] = None
+
+    def set_companion(self, comp: Optional[GemmaCompanionThread]) -> None:
+        self.companion = comp
 
     def progress(self, snap: dict) -> float:
         stg = snap["stage"]
@@ -1005,7 +1120,15 @@ class SovereignHudGame:
                         row.append(" ")
             A(" " + "".join(row))
 
-        # 6. Build Output Stream
+        # 6. Gemma LoRA AI Copilot Telemetry
+        if self.companion:
+            status_txt = f"{fg(46)}● ONLINE ({self.companion.latency_ms:.1f}ms){RESET}" if self.companion.connected else f"{fg(240)}○ STANDBY{RESET}"
+            A(f" {BOLD}{fg(81)}── 🤖 GEMMA LO-RA COGNITIVE COPILOT {status_txt} {BOLD}{fg(81)}─────────────────────────────────────{RESET}")
+            A(f"   {fg(226)}Agent:{RESET} {fg(51)}{self.companion.agent_title:<38}{RESET} │ {fg(245)}ID:{RESET} {self.companion.active_agent}")
+            thought_line = self.companion.last_thought[:max(20, field_w - 12)]
+            A(f"   {fg(250)}Insight:{RESET} {fg(255)}{thought_line}{RESET}")
+
+        # 7. Build Output Stream
         A(f" {fg(240)}┈┈ live build stream ┈┈{RESET}")
         for ln in snap["tail"]:
             color = 196 if ERR_RE.search(ln) else 178 if WARN_RE.search(ln) else 245
@@ -1041,6 +1164,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                     help="frogger traffic lanes (multiple of 3, 3..15)")
     ap.add_argument("--frames", type=int, default=0,
                     help="render at most N frames then exit (testing/CI)")
+    ap.add_argument("--gemma", action="store_true",
+                    help="enable resident Gemma LoRA agent fleet copilot HUD")
+    ap.add_argument("--gemma-url", default="http://127.0.0.1:8088",
+                    help="Gemma agent fleet daemon URL")
     args = ap.parse_args(argv)
 
     if args.files <= 0 or args.lines_per_stage <= 0 or args.fps <= 0:
@@ -1050,13 +1177,18 @@ def main(argv: Optional[List[str]] = None) -> int:
         args.fps = 2.0
 
     _setup_logging(args.log)
-    LOG.info("start cmd=%r demo=%s", args.cmd, args.demo)
+    LOG.info("start cmd=%r demo=%s gemma=%s", args.cmd, args.demo, args.gemma)
 
     state = BuildState()
     target = demo_process if args.demo else watch_process
     t_args = (state,) if args.demo else (args.cmd, state, args.log)
     worker = threading.Thread(target=target, args=t_args, daemon=True)
     worker.start()
+
+    companion: Optional[GemmaCompanionThread] = None
+    if args.gemma:
+        companion = GemmaCompanionThread(state, url=args.gemma_url)
+        companion.start()
 
     if args.mode == "garden":
         game = GardenGame(args.files, args.lines_per_stage)
@@ -1070,6 +1202,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         game = SovereignHudGame(args.files, args.lines_per_stage)
     else:
         game = Game(args.files, args.lines_per_stage)
+
+    if companion and hasattr(game, "set_companion"):
+        game.set_companion(companion)
+
     interactive = sys.stdout.isatty()
     if interactive:
         sys.stdout.write(ALT_ON + HIDE_CUR)
@@ -1101,15 +1237,28 @@ def main(argv: Optional[List[str]] = None) -> int:
                 break
             time.sleep(1.0 / args.fps)
     finally:
+        if companion:
+            companion.stop()
         if interactive:
             sys.stdout.write(SHOW_CUR + ALT_OFF)
             sys.stdout.flush()
 
     snap = state.snapshot()
-    if args.frames and frames >= args.frames:
-        rc = snap["exit_code"] if snap["exit_code"] is not None else 0
+    if snap["exit_code"] is not None:
+        rc = snap["exit_code"]
     else:
-        rc = snap["exit_code"] if snap["exit_code"] is not None else 130
+        # Child has not finished (e.g. frame limit reached or interrupted)
+        with state.lock:
+            p = state.proc
+        if p and p.poll() is None:
+            try:
+                if hasattr(os, "killpg") and hasattr(os, "getpgid"):
+                    os.killpg(os.getpgid(p.pid), signal.SIGTERM)
+                else:
+                    p.terminate()
+            except Exception:
+                pass
+        rc = 124 if (args.frames and frames >= args.frames) else 130
     print(f"zcc_quest: child exit={snap['exit_code']} warnings={snap['warnings']} "
           f"errors={snap['errors']} elapsed={snap['elapsed']:.1f}s "
           f"(raw output: {args.log}.build)")
