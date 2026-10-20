@@ -116,13 +116,17 @@ class BuildState:
     finished: bool = False
     exit_code: Optional[int] = None
     boss_seen: bool = False           # byte-identical marker observed
+    oracle_verified: bool = False     # verified via on-disk byte comparison oracle
+    is_demo: bool = False             # demo mode flag
     files_seen: List[str] = field(default_factory=list)   # filenames, in order
     started: float = field(default_factory=time.monotonic)
+    started_wall: float = field(default_factory=time.time)
     proc: Optional[subprocess.Popen] = None
     started_event: threading.Event = field(default_factory=threading.Event)
 
     def snapshot(self) -> dict:
         with self.lock:
+            ov = self.oracle_verified or (self.is_demo and self.boss_seen)
             return {
                 "stage": self.stage,
                 "stage_files": self.stage_files,
@@ -133,17 +137,54 @@ class BuildState:
                 "finished": self.finished,
                 "exit_code": self.exit_code,
                 "boss_seen": self.boss_seen,
+                "oracle_verified": ov,
+                "is_demo": self.is_demo,
                 "files_seen": list(self.files_seen),
                 "elapsed": time.monotonic() - self.started,
             }
 
 
 STAGE_RE = re.compile(r"(?:===+\s*)?STAGE\s*([123])", re.I)
-BOSS_RE = re.compile(r"BYTE.?IDENTICAL|IDENTICAL\s+OUTPUT|SHA256\s+MATCH|BOOTSTRAP_GREEN|DETERMINISM LOCK SECURED", re.I)
+BOSS_RE = re.compile(
+    r"===+\s*VERDICT:\s*BOOTSTRAP\s+DETERMINISM\s+LOCK\s+SECURED\s*===+|"
+    r"SELF-HOST\s+VERIFIED\s+\(assembly\s+identical\)",
+    re.I
+)
+NEG_RE = re.compile(r"\b(?:fail|failed|mismatch|drift|diverg|corrupt|error|non-zero)\b", re.I)
 FILE_RE = re.compile(r"(?:^(?:CC|AS|LD|CCLD)\s)|(?:\.(?:c|s|o)\b.*(?:->|→))")
 FNAME_RE = re.compile(r"([\w./-]+\.(?:c|s|o))\b")
 WARN_RE = re.compile(r"\bwarning\b", re.I)
 ERR_RE = re.compile(r"\berror\b|\bfatal\b|segmentation fault", re.I)
+
+
+def verify_selfhost_oracle(started_wall: float) -> bool:
+    """Independent oracle: verify that stage2/stage3 assembly was generated during this run and is byte-identical."""
+    import filecmp
+    import glob
+
+    candidates = [
+        ("zcc2.s", "zcc3.s"),
+        ("build/zcc2.s", "build/zcc3.s"),
+    ]
+    ev_dirs = sorted(glob.glob("evidence/zcc-run-*"), key=lambda d: os.path.getmtime(d) if os.path.exists(d) else 0, reverse=True)
+    if ev_dirs:
+        candidates.append((os.path.join(ev_dirs[0], "stage2.s"), os.path.join(ev_dirs[0], "stage3.s")))
+
+    for s2, s3 in candidates:
+        if os.path.isfile(s2) and os.path.isfile(s3):
+            try:
+                m2 = os.path.getmtime(s2)
+                m3 = os.path.getmtime(s3)
+                # Must be generated during this run (allowing 3.0s clock skew)
+                if m2 >= started_wall - 3.0 and m3 >= started_wall - 3.0:
+                    sz2 = os.path.getsize(s2)
+                    sz3 = os.path.getsize(s3)
+                    if sz2 > 1000 and sz2 == sz3:
+                        if filecmp.cmp(s2, s3, shallow=False):
+                            return True
+            except OSError:
+                pass
+    return False
 
 
 def cleanup_child_process(state: BuildState, timeout_grace: float = 0.5) -> None:
@@ -250,9 +291,9 @@ def watch_process(cmd: str, state: BuildState, log_path: str) -> None:
                             state.stage = max(0, min(2, new_stage))
                             state.stage_files = 0
                             LOG.info("stage → %d", state.stage + 1)
-                    elif BOSS_RE.search(line):
+                    elif BOSS_RE.search(line) and not NEG_RE.search(line):
                         state.boss_seen = True
-                        LOG.info("boss marker seen: %r", line)
+                        LOG.info("authenticated boss marker seen: %r", line)
                     if FILE_RE.search(line):
                         state.stage_files += 1
                         fm = FNAME_RE.search(line)
@@ -268,11 +309,15 @@ def watch_process(cmd: str, state: BuildState, log_path: str) -> None:
         rc = proc.wait()
         with state.lock:
             state.finished, state.exit_code = True, rc
-        LOG.info("child exited rc=%d", rc)
+            if state.boss_seen and rc == 0:
+                state.oracle_verified = verify_selfhost_oracle(state.started_wall)
+        LOG.info("child exited rc=%d oracle_verified=%s", rc, state.oracle_verified)
 
 
 def demo_process(state: BuildState) -> None:
     """Fake triple-stage build for --demo mode."""
+    with state.lock:
+        state.is_demo = True
     state.started_event.set()
     rng = random.Random(1337)
     files = ["lexer.c", "parser.c", "typecheck.c", "codegen.c", "regalloc.c",
@@ -296,6 +341,7 @@ def demo_process(state: BuildState) -> None:
     time.sleep(0.6)
     with state.lock:
         state.boss_seen = True
+        state.oracle_verified = True
         state.tail.append("sha256: zcc2 == zcc3  BYTE-IDENTICAL ✔")
         state.finished, state.exit_code = True, 0
 
@@ -368,7 +414,7 @@ class GemmaCompanionThread(threading.Thread):
                     
                     if snap["finished"]:
                         if snap["exit_code"] == 0:
-                            if snap.get("boss_seen", False):
+                            if snap.get("oracle_verified", False):
                                 self.last_thought = f"[{self.active_agent}] Fixed-point converged. Byte-identical seal verified (exit 0)."
                             else:
                                 self.last_thought = f"[{self.active_agent}] Command completed successfully with exit 0."
@@ -551,7 +597,7 @@ class Game:
 
         if snap["finished"]:
             if snap["exit_code"] == 0:
-                if snap.get("boss_seen", False):
+                if snap.get("oracle_verified", False):
                     A(f" {BOLD}{fg(46)}★ SELF-HOST VERIFIED — {BOSS_NAME} — exit 0 "
                       f"(evidence: see .build log) ★{RESET}")
                 else:
@@ -716,7 +762,7 @@ class FroggerGame:
 
         if snap["finished"]:
             if snap["exit_code"] == 0:
-                if snap.get("boss_seen", False):
+                if snap.get("oracle_verified", False):
                     A(f" {BOLD}{fg(46)}★ FROG HOME — {BOSS_NAME} — exit 0 "
                       f"(near-misses: {self.near_miss}, evidence: .build log) ★{RESET}")
                 else:
@@ -902,7 +948,7 @@ class GardenGame:
 
         if snap["finished"]:
             if success:
-                if snap.get("boss_seen", False):
+                if snap.get("oracle_verified", False):
                     A(f" {BOLD}{fg(213)}❀ FULL BLOOM — {BOSS_NAME} — exit 0 — "
                       f"garden {garden_id} will grow the same way next run ❀{RESET}")
                 else:
@@ -1033,7 +1079,7 @@ class PrimeEnergyGame:
 
         if snap["finished"]:
             if snap["exit_code"] == 0:
-                if snap.get("boss_seen", False):
+                if snap.get("oracle_verified", False):
                     A(f" {BOLD}{fg(46)}★ ZKAEDI PRIME FIXED POINT REPO - H0 CONVERGED - exit 0 "
                       f"(scars: {self.scars}, {BOSS_NAME}) ★{RESET}")
                 else:
@@ -1152,7 +1198,7 @@ class SovereignHudGame:
         A(f" {BOLD}{fg(226)}── 7-SYSTEM SOVEREIGN STATUS MATRIX ──────────────────────────────────────────{RESET}")
         sys_active_count = min(7, int(p * 7) + (1 if not snap["finished"] else 0))
         for idx, (sys_name, desc, metric) in enumerate(self.SYSTEMS):
-            if idx < sys_active_count or (snap["finished"] and snap["exit_code"] == 0 and snap.get("boss_seen", False)):
+            if idx < sys_active_count or (snap["finished"] and snap["exit_code"] == 0 and snap.get("oracle_verified", False)):
                 status_glyph = f"{fg(46)}● ONLINE {RESET}"
             elif idx == sys_active_count:
                 status_glyph = f"{fg(226)}◐ SYNCING{RESET}"
@@ -1227,7 +1273,7 @@ class SovereignHudGame:
 
         if snap["finished"]:
             if snap["exit_code"] == 0:
-                if snap.get("boss_seen", False):
+                if snap.get("oracle_verified", False):
                     A(f" {BOLD}{fg(46)}★ SOVEREIGN VICTORY — 7/7 SYSTEMS SYNCHRONIZED — BYTE-IDENTICAL VERIFIED ({BOSS_NAME}) ★{RESET}")
                 else:
                     A(f" {BOLD}{fg(46)}★ SOVEREIGN COMMAND SUCCEEDED — EXIT 0 — SEE BUILD LOG ★{RESET}")
@@ -1304,14 +1350,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     if interactive:
         sys.stdout.write(ALT_ON + HIDE_CUR)
 
-    stop = {"flag": False}
+    stop = {"flag": False, "signal": 0}
 
-    def _sigint(_sig, _frm):
+    def _term_handler(sig, _frm):
         stop["flag"] = True
+        stop["signal"] = sig
 
-    signal.signal(signal.SIGINT, _sigint)
+    signal.signal(signal.SIGINT, _term_handler)
+    if hasattr(signal, "SIGTERM"):
+        signal.signal(signal.SIGTERM, _term_handler)
 
     frames = 0
+    rc = 1
     try:
         while True:
             size = shutil.get_terminal_size(fallback=(100, 30))
@@ -1330,26 +1380,25 @@ def main(argv: Optional[List[str]] = None) -> int:
             if stop["flag"] or (args.frames and frames >= args.frames):
                 break
             time.sleep(1.0 / args.fps)
+
+        snap = state.snapshot()
+        if snap["finished"]:
+            rc = snap["exit_code"] if snap["exit_code"] is not None else 0
+        elif stop["signal"] == getattr(signal, "SIGTERM", 15):
+            rc = 143
+        elif stop["signal"] == getattr(signal, "SIGINT", 2) or stop["flag"]:
+            rc = 130
+        elif args.frames and frames >= args.frames:
+            rc = 124
+        else:
+            rc = snap["exit_code"] if snap["exit_code"] is not None else 1
     finally:
+        cleanup_child_process(state, timeout_grace=0.5)
         if companion:
             companion.stop()
         if interactive:
             sys.stdout.write(SHOW_CUR + ALT_OFF)
             sys.stdout.flush()
-
-    snap = state.snapshot()
-    if snap["finished"]:
-        rc = snap["exit_code"] if snap["exit_code"] is not None else 0
-    elif stop["flag"]:
-        cleanup_child_process(state, timeout_grace=0.5)
-        rc = 130
-    elif args.frames and frames >= args.frames:
-        cleanup_child_process(state, timeout_grace=0.5)
-        rc = 124
-    else:
-        cleanup_child_process(state, timeout_grace=0.5)
-        snap = state.snapshot()
-        rc = snap["exit_code"] if snap["exit_code"] is not None else 1
 
     snap = state.snapshot()
     print(f"zcc_quest: child exit={snap['exit_code']} warnings={snap['warnings']} "
