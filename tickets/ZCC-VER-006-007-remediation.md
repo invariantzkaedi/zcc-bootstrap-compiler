@@ -116,3 +116,26 @@ Executing ZCC Oracle Negative Controls & Verification Gauntlet against: /mnt/h/_
 ★ ALL NEGATIVE CONTROLS PASSED (0 false certifications) ★
 ========================================================
 ```
+
+---
+
+## 4. Distribution Package Manifest
+
+- **Target Commit:** `d4b2cb7bbb663dc3bd27974638e4d9717c336f85`
+- **Git Bundle:** `zcc_repo.bundle` (74 verified refs including `d4b2cb7bb`)
+- **Audit Archive:** `zcc_bootstrap_compiler_audit_package.zip`
+  - Member count: 4,446
+  - Archive size: 155,451,828 bytes
+  - SHA-256: `5604e4cb36533e93a4f5e58c59ac30436d6238e77d9006cea03597f1cf0501df`
+  - MD5: `4fdae1b50949335baad622da12330453`
+- **Deployment Locations:**
+  - `E:\__GROUPED_IMAGES\ABSTRACT\zcc_bootstrap_compiler_audit_package.zip`
+  - `h:\__DOWNLOADS\zcc_github_upload\zcc_bootstrap_compiler_audit_package.zip`
+- **Updated Package Members:**
+  - `zcc_quest.py` (comment-immune parsing, supervisor run-id binding, 64-bit ELF binary validation)
+  - `ZCC_ORACLE_NEGATIVE_CONTROLS.py` (probes A, B, C with exit 0 ordinary banner checks, sidecar log assertions, and mutation self-test)
+  - `tools/test_oracle_negative_controls.py` (synchronized with main harness)
+  - `gate.sh` (ZCC_VERIFIER_RUN_ID binding)
+  - `tickets/ZCC-VER-006-007-remediation.md` (forensic remediation receipt)
+  - `zcc_repo.bundle` (verified git bundle through commit `d4b2cb7bb`)
+
