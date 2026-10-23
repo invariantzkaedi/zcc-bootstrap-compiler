@@ -6360,7 +6360,7 @@ void codegen_func(Compiler *cc, Node *func) {
   } /* end !backend_ops block */
 
   int ir_ok = 0;
-  if (getenv("ZCC_IR_BACKEND") || getenv("ZCC_IR_LOWER") || is_ir_eligible(func)) {
+  if (!g_ir_primary && (getenv("ZCC_IR_BACKEND") || getenv("ZCC_IR_LOWER") || is_ir_eligible(func))) {
     if (zcc_run_passes_emit_body_pgo && zcc_node_from) {
       void *ir_ast = zcc_node_from((void *)func->body);
       if (ir_ast) {
