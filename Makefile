@@ -25,7 +25,7 @@ COMPAT_SMOKE_SRCS = \
 	tests/regressions/t_zkaedi_rigging_regressions.c
 COMPAT_EXTENDED_SRCS = $(COMPAT_SMOKE_SRCS) raytracer.c
 
-.PHONY: all clean selfhost selfhost-fast verify-lexicon compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test test-float rust-front-smoke check-rust-c-ffi check-evm-lifter check-ir-vuln-tag check-forgezero-receipt check-ir-bridge-guard check-copy-const-prop verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration zjs test-zjs visualize-svg-diffs wasm-svg-bridge test_zcc_dag abi-lanes zcc-opt zcc-verify dream dream-auto apply-blueprints test-upgrade-div avxzkd test-avxzkd libavxzkd.a fullcov check-fullcov
+.PHONY: all clean selfhost selfhost-fast verify-lexicon compat-smoke compat-extended compat-report compat-report-ci pp-crlf-gate fortify-ad fortify-ci fortify-snapshot fortify-recursive fortify-recursive-ci fortify-pack-init fortify-pack-preflight fortify-pack-layout fortify-pack-production fortify-pack-replay fortify-pack-clean supercharge-ad test test-float test-ir rust-front-smoke check-rust-c-ffi check-evm-lifter check-ir-vuln-tag check-forgezero-receipt check-ir-bridge-guard check-copy-const-prop verify-attestation verify-replay-pack verify-genome-diff genome_diff verify-lineage stability_observatory topology_bisector cross_genome build_ledger verify-stability verify-bisector verify-cross-genome verify-ledger runtime_probe behavioral_diff verify-runtime-probe impact_attribution function_ranker verify-impact-attribution health_report verify-golden freeze-golden zcc_calibration_corpus verify-calibration zjs test-zjs visualize-svg-diffs wasm-svg-bridge test_zcc_dag abi-lanes zcc-opt zcc-verify dream dream-auto apply-blueprints test-upgrade-div avxzkd test-avxzkd libavxzkd.a fullcov check-fullcov
 
 
 .SECONDARY: zcc zcc2 zcc3
@@ -937,6 +937,16 @@ test-float: zcc test-xmm
 
 test: zcc test-float
 	bash zcc_test_suite.sh --quick
+
+test-ir: zcc
+	@echo "=== Running ZCC --ir Pipeline Regression Battery ==="
+	@bash -c 'for c in tests/test_simple.c tests/test_main.c tests/test_flit.c; do \
+		echo "[*] Testing --ir on $$c..."; \
+		./zcc --ir "$$c" -o /tmp/zcc_ir_test.s || exit 1; \
+		gcc -fno-pie -no-pie /tmp/zcc_ir_test.s -o /tmp/zcc_ir_test || exit 1; \
+		/tmp/zcc_ir_test || exit 1; \
+	done'
+	@echo "=== test-ir: ALL TESTS PASSED ===" 
 
 .PHONY: readme
 readme:
