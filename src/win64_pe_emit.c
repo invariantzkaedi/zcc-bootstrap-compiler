@@ -221,6 +221,29 @@ const char *zcc_win64_pe_resolve_dll_for_symbol(const char *sym) {
         strcmp(sym, "fseek") == 0 ||
         strcmp(sym, "ftell") == 0 ||
         strcmp(sym, "fflush") == 0 ||
+        strcmp(sym, "fputs") == 0 ||
+        strcmp(sym, "fgets") == 0 ||
+        strcmp(sym, "fputc") == 0 ||
+        strcmp(sym, "fgetc") == 0 ||
+        strcmp(sym, "feof") == 0 ||
+        strcmp(sym, "ferror") == 0 ||
+        strcmp(sym, "clearerr") == 0 ||
+        strcmp(sym, "rewind") == 0 ||
+        strcmp(sym, "scanf") == 0 ||
+        strcmp(sym, "fscanf") == 0 ||
+        strcmp(sym, "sscanf") == 0 ||
+        strcmp(sym, "atoi") == 0 ||
+        strcmp(sym, "atol") == 0 ||
+        strcmp(sym, "atoll") == 0 ||
+        strcmp(sym, "atof") == 0 ||
+        strcmp(sym, "strtol") == 0 ||
+        strcmp(sym, "strtoul") == 0 ||
+        strcmp(sym, "rand") == 0 ||
+        strcmp(sym, "srand") == 0 ||
+        strcmp(sym, "qsort") == 0 ||
+        strcmp(sym, "bsearch") == 0 ||
+        strcmp(sym, "clock") == 0 ||
+        strcmp(sym, "time") == 0 ||
         strcmp(sym, "strlen") == 0 ||
         strcmp(sym, "strcmp") == 0 ||
         strcmp(sym, "strncmp") == 0 ||

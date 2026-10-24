@@ -1445,6 +1445,52 @@ class TestWin64PEEmitter(unittest.TestCase):
             run_res = subprocess.run(["cmd.exe", "/c", exe])
             self.assertEqual(run_res.returncode, 42)
 
+    def test_34_win64_pe_stdio_file_io(self):
+        """Verifies standard C runtime file I/O (fopen, fputs, fclose) binds to msvcrt.dll and writes correctly."""
+        scratch_dir = os.path.join(REPO_ROOT, "scratch")
+        os.makedirs(scratch_dir, exist_ok=True)
+        src = os.path.join(scratch_dir, "test_stdio_io.c")
+        exe = os.path.join(scratch_dir, "test_stdio_io.exe")
+        out_txt = os.path.join(scratch_dir, "test_stdio_out.txt")
+
+        if os.path.exists(out_txt):
+            os.remove(out_txt)
+
+        code = """extern void *fopen(const char *filename, const char *mode);
+extern int fclose(void *stream);
+extern int fputs(const char *str, void *stream);
+int main(void) {
+    void *fp = fopen("scratch/test_stdio_out.txt", "w");
+    if (!fp) return 1;
+    fputs("ZCC_WIN64_STDIO_IO_VERIFIED", fp);
+    fclose(fp);
+    return 0;
+}
+"""
+        with open(src, "w", encoding="utf-8") as f:
+            f.write(code)
+
+        if sys.platform == "win32":
+            wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c",
+                   f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
+        else:
+            cmd = [self.zcc_bin, src, "-target", "win64", "-o", exe]
+
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(res.returncode, 0, f"Compilation failed: {res.stderr}\n{res.stdout}")
+        self.assertTrue(os.path.exists(exe), "Output EXE does not exist")
+
+        if sys.platform == "win32":
+            run_res = subprocess.run(["cmd.exe", "/c", exe], cwd=REPO_ROOT)
+            self.assertEqual(run_res.returncode, 0, f"Execution failed: {run_res.returncode}")
+            self.assertTrue(os.path.exists(out_txt), "Output file was not created by executable")
+            with open(out_txt, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.assertEqual(content, "ZCC_WIN64_STDIO_IO_VERIFIED")
+
 
 if __name__ == "__main__":
     unittest.main()
