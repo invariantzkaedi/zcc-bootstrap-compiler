@@ -1406,7 +1406,9 @@ void codegen_expr(Compiler *cc, Node *node) {
     return;
   }
 
-  case ND_COMPOUND_ASSIGN:
+  case ND_COMPOUND_ASSIGN: {
+    char lhs_addr_ir[32] = "";
+    char rhs_ir[32] = "";
     if (!node->lhs || !node->rhs) {
       error_at(cc, node->line,
                "codegen_expr: ND_COMPOUND_ASSIGN missing operand");
@@ -1417,6 +1419,7 @@ void codegen_expr(Compiler *cc, Node *node) {
         node->lhs->sym->assigned_reg) {
       char *reg = node->lhs->sym->assigned_reg;
       codegen_expr_checked(cc, node->rhs);
+      ir_save_result(rhs_ir);
       if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
       if (backend_ops) fprintf(cc->out, "    mov r0, %s\n", reg); else fprintf(cc->out, "    movq %s, %%rax\n", reg);
@@ -1535,9 +1538,40 @@ void codegen_expr(Compiler *cc, Node *node) {
       }
       emit_node_extend(cc, node->lhs);
       if (backend_ops) fprintf(cc->out, "    mov %s, r0\n", reg); else fprintf(cc->out, "    movq %%rax, %s\n", reg);
+      if (g_emit_ir && g_ir_cur_func) {
+        char *vname = ir_var_name(node->lhs);
+        char val_tmp[32];
+        char new_val_tmp[32];
+        strcpy(val_tmp, ir_bridge_fresh_tmp());
+        strcpy(new_val_tmp, ir_bridge_fresh_tmp());
+        ZCC_EMIT_LOAD(ir_map_type(node->lhs->type), val_tmp, vname, node->line);
+        char rhs_scaled_ir[32];
+        strcpy(rhs_scaled_ir, rhs_ir);
+        if (is_pointer(node->lhs->type) && (node->compound_op == ND_ADD || node->compound_op == ND_SUB)) {
+            int esz = ptr_elem_size(node->lhs->type);
+            if (esz > 1) {
+                char scale_str[32];
+                sprintf(scale_str, "%d", esz);
+                char *dst = ir_bridge_fresh_tmp();
+                ZCC_EMIT_BINARY(IR_MUL, IR_TY_I64, dst, rhs_ir, scale_str, node->line);
+                strcpy(rhs_scaled_ir, dst);
+            }
+        }
+        ir_op_t op = ir_map_binop(node->compound_op);
+        if (is_float_type(node->lhs->type)) {
+            if (op == IR_ADD)      op = IR_FADD;
+            else if (op == IR_SUB) op = IR_FSUB;
+            else if (op == IR_MUL) op = IR_FMUL;
+            else if (op == IR_DIV) op = IR_FDIV;
+        }
+        ZCC_EMIT_BINARY(op, ir_map_type(node->lhs->type), new_val_tmp, val_tmp, rhs_scaled_ir, node->line);
+        ZCC_EMIT_STORE(ir_map_type(node->lhs->type), vname, new_val_tmp, node->line);
+        strcpy(ir_last_result, new_val_tmp);
+      }
       return;
     }
     codegen_addr_checked(cc, node->lhs);
+    ir_save_result(lhs_addr_ir);
     if (is_bad_ptr(node->lhs)) {
       error_at(cc, node->line, "codegen_expr: ND_COMPOUND_ASSIGN lhs bad ptr");
       fprintf(cc->out, "    movq $0, %%rax\n");
@@ -1573,6 +1607,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (node->lhs->is_bitfield) emit_bitfield_extract_p4(cc, node->lhs);
     push_reg(cc, "rax");
     codegen_expr_checked(cc, node->rhs);
+    ir_save_result(rhs_ir);
     if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rax");
@@ -1821,11 +1856,37 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (backend_ops) fprintf(cc->out, "    mov r0, r1\n");
       else fprintf(cc->out, "    movq %%r11, %%rax\n");
     emit_node_extend(cc, node->lhs);
-    {
-      char *dst = ir_bridge_fresh_tmp();
-      ir_emit_binary_op(node->compound_op, node->lhs->type, "ca_lhs", "ca_rhs", node->line);
+    if (g_emit_ir && g_ir_cur_func) {
+      char val_tmp[32];
+      char new_val_tmp[32];
+      strcpy(val_tmp, ir_bridge_fresh_tmp());
+      strcpy(new_val_tmp, ir_bridge_fresh_tmp());
+      ZCC_EMIT_LOAD(ir_map_type(node->lhs->type), val_tmp, lhs_addr_ir, node->line);
+      char rhs_scaled_ir[32];
+      strcpy(rhs_scaled_ir, rhs_ir);
+      if (is_pointer(node->lhs->type) && (node->compound_op == ND_ADD || node->compound_op == ND_SUB)) {
+          int esz = ptr_elem_size(node->lhs->type);
+          if (esz > 1) {
+              char scale_str[32];
+              sprintf(scale_str, "%d", esz);
+              char *dst = ir_bridge_fresh_tmp();
+              ZCC_EMIT_BINARY(IR_MUL, IR_TY_I64, dst, rhs_ir, scale_str, node->line);
+              strcpy(rhs_scaled_ir, dst);
+          }
+      }
+      ir_op_t op = ir_map_binop(node->compound_op);
+      if (is_float_type(node->lhs->type)) {
+          if (op == IR_ADD)      op = IR_FADD;
+          else if (op == IR_SUB) op = IR_FSUB;
+          else if (op == IR_MUL) op = IR_FMUL;
+          else if (op == IR_DIV) op = IR_FDIV;
+      }
+      ZCC_EMIT_BINARY(op, ir_map_type(node->lhs->type), new_val_tmp, val_tmp, rhs_scaled_ir, node->line);
+      ZCC_EMIT_STORE(ir_map_type(node->lhs->type), lhs_addr_ir, new_val_tmp, node->line);
+      strcpy(ir_last_result, new_val_tmp);
     }
     return;
+  }
 
   case ND_ADD: {
     char lhs_ir[32];
@@ -6360,7 +6421,7 @@ void codegen_func(Compiler *cc, Node *func) {
   } /* end !backend_ops block */
 
   int ir_ok = 0;
-  if (getenv("ZCC_IR_BACKEND") || getenv("ZCC_IR_LOWER") || is_ir_eligible(func)) {
+  if (!g_ir_primary && (getenv("ZCC_IR_BACKEND") || getenv("ZCC_IR_LOWER") || is_ir_eligible(func))) {
     if (zcc_run_passes_emit_body_pgo && zcc_node_from) {
       void *ir_ast = zcc_node_from((void *)func->body);
       if (ir_ast) {
