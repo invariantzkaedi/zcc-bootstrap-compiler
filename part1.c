@@ -1414,6 +1414,7 @@ extern int ZCC_INT_WIDTH;
 void *cc_alloc(Compiler *cc, int size);
 char *cc_strdup(Compiler *cc, const char *s);
 char *cc_memdup(Compiler *cc, const void *data, int len);
+extern int g_zsan_mode;
 /* LEXICAL ARMOR: Strict bounds checking and zero-copy token validation */
 void validate_token_bounds(Compiler *cc, int offset, int length);
 void ast_quarantine_lift_phase(Compiler *cc, Node *root);
