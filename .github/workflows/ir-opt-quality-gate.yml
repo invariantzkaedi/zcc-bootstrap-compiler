@@ -101,7 +101,14 @@ jobs:
       - name: Evaluate statistical thresholds
         run: |
           set -euo pipefail
-          python3 scripts/bench/evaluate_robust_thresholds.py             --summary out/bench/summary.json             --max-compile-overhead-pct 8.0             --min-runtime-geomean-pct 3.0             --max-regressed-benches 2             --per-bench-regress-pct -2.0             --alpha 0.05
+          source scripts/max/env.sh
+          python3 scripts/bench/evaluate_robust_thresholds.py \
+            --summary out/bench/summary.json \
+            --max-compile-overhead-pct "$THRESH_MAX_COMPILE_OVERHEAD_PCT" \
+            --min-runtime-geomean-pct "$THRESH_MIN_RUNTIME_GEOMEAN_PCT" \
+            --max-regressed-benches "$THRESH_MAX_REGRESSED_BENCHES" \
+            --per-bench-regress-pct "$THRESH_PER_BENCH_REGRESS_PCT" \
+            --alpha "$THRESH_ALPHA"
 
       - name: Generate PR summary markdown
         if: always()
