@@ -16,7 +16,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from zcc_oneirogenesis import SelfHostGate, FitnessOracle, PASSES, REPO_ROOT
+try:
+    from zcc_oneirogenesis_live import SelfHostGate, FitnessOracle, PASSES, REPO_ROOT
+except ImportError:
+    from zcc_oneirogenesis import SelfHostGate, FitnessOracle, PASSES, REPO_ROOT
 
 
 def apply_sweep_branch_straightening(asm_lines: list) -> tuple:
@@ -155,6 +158,54 @@ def apply_blueprint(blueprint_path: str, input_asm_path: str, output_asm_path: s
         "blueprint_id": blueprint.get("algorithm_info", {}).get("id"),
         "modifications": total_modifications,
         "summary": applied_summary,
+    }
+
+
+def apply_blueprints_batch(blueprint_paths: list, input_asm_path: str, output_asm_path: str) -> dict:
+    """Applies a sequence of blueprints in memory with a single read and write."""
+    with open(input_asm_path, "r", encoding="utf-8", errors="ignore") as f:
+        full_text = f.read()
+
+    total_modifications = 0
+    lines = None
+
+    for bp_path in blueprint_paths:
+        try:
+            with open(bp_path, "r", encoding="utf-8") as f:
+                bp = json.load(f)
+        except Exception:
+            continue
+
+        for mut in bp.get("mutations", []):
+            cat = mut.get("category")
+            name = mut.get("name")
+            orig = mut.get("original_asm")
+            mutated = mut.get("mutated_asm")
+
+            if orig and mutated and orig in full_text:
+                full_text = full_text.replace(orig, mutated, 1)
+                total_modifications += 1
+            elif name == "sweep_branch_straighten" or cat == "SWEEP" and "branch" in mut.get("description", ""):
+                if lines is None:
+                    lines = full_text.splitlines(keepends=True)
+                lines, count = apply_sweep_branch_straightening(lines)
+                if count > 0:
+                    total_modifications += count
+                    full_text = "".join(lines)
+            elif name == "sweep_cmpq_zero_to_testq" or cat == "SWEEP" and "cmpq" in mut.get("description", ""):
+                if lines is None:
+                    lines = full_text.splitlines(keepends=True)
+                lines, count = apply_sweep_cmpq_zero_to_testq(lines)
+                if count > 0:
+                    total_modifications += count
+                    full_text = "".join(lines)
+
+    with open(output_asm_path, "w", encoding="utf-8") as f:
+        f.write(full_text)
+
+    return {
+        "blueprints_evaluated": len(blueprint_paths),
+        "total_modifications": total_modifications,
     }
 
 

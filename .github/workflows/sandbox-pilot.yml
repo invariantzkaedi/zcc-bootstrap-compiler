@@ -51,8 +51,11 @@ jobs:
           free -h || true
 
       - name: Build ZCC binary
+        env:
+          ZCC_MUTATION_SANDBOX: "1"
         run: |
           set -euxo pipefail
+          make zcc.c
           make zcc
           test -x zcc
           sha256sum zcc

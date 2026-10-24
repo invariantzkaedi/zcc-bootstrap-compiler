@@ -56,6 +56,11 @@ CANONICAL_GAMMA = 0.3
 CANONICAL_BETA = 0.1
 CANONICAL_EPSILON = 0.05
 
+# ANSI colour palette for live terminal logging
+_R = "\033[91m"; _G = "\033[92m"; _Y = "\033[93m"
+_C = "\033[96m"; _M = "\033[95m"; _W = "\033[0m"; _B = "\033[1m"
+_DIM = "\033[2m"
+
 
 # ---------------------------------------------------------------------------
 # Utility / evidence
@@ -596,10 +601,151 @@ class MutationEngine:
             i += 1
         return "\n".join(out) + ("\n" if source.endswith("\n") else "")
 
+    # Branch condition mappings
+    _INVERT_COND = {
+        "e": "ne", "ne": "e", "z": "nz", "nz": "z",
+        "l": "ge", "le": "g", "g": "le", "ge": "l",
+        "b": "ae", "be": "a", "a": "be", "ae": "b",
+    }
+    _DIRECT_COND = {
+        "e": "e", "ne": "ne", "z": "z", "nz": "nz",
+        "l": "l", "le": "le", "g": "g", "ge": "ge",
+        "b": "b", "be": "be", "a": "a", "ae": "ae",
+    }
+
+    _SET_CC = re.compile(r"^(\s*)set([a-z]+)\s+%al\s*$", re.IGNORECASE)
+    _MOVZBL = re.compile(r"^\s*movzbl\s+%al,\s*%eax\s*$", re.IGNORECASE)
+    _TESTL_EAX = re.compile(r"^\s*testl\s+%eax,\s*%eax\s*$", re.IGNORECASE)
+    _J_CC = re.compile(r"^\s*j(e|ne|z|nz)\s+([.a-zA-Z0-9_]+)\s*$", re.IGNORECASE)
+
+    def fold_branch_conditions(self, source: str) -> str:
+        lines = source.splitlines()
+        out: List[str] = []
+        i = 0
+        n = len(lines)
+        while i < n:
+            if i + 3 < n:
+                m1 = self._SET_CC.match(lines[i])
+                m2 = self._MOVZBL.match(lines[i+1])
+                m3 = self._TESTL_EAX.match(lines[i+2])
+                m4 = self._J_CC.match(lines[i+3])
+                if m1 and m2 and m3 and m4:
+                    cond = m1.group(2).lower()
+                    j_type = m4.group(1).lower()
+                    target = m4.group(2)
+                    indent = m1.group(1)
+                    new_j = self._INVERT_COND.get(cond) if j_type in ("e", "z") else self._DIRECT_COND.get(cond)
+                    if new_j:
+                        out.append(f"{indent}j{new_j} {target}")
+                        i += 4
+                        continue
+            out.append(lines[i])
+            i += 1
+        return "\n".join(out) + ("\n" if source.endswith("\n") else "")
+
+    _MOV_IMM_R11 = re.compile(r"^(\s*)mov(?:q|l)?\s+\$(-?\d+),\s*%r11(?:d)?\s*$", re.IGNORECASE)
+    _CMP_R11 = re.compile(r"^\s*(cmp(?:q|l|w|b)?)\s*%r11(?:d)?,\s*(%[a-z0-9]+)\s*$", re.IGNORECASE)
+
+    def fold_immediate_compares(self, source: str) -> str:
+        lines = source.splitlines()
+        out: List[str] = []
+        i = 0
+        n = len(lines)
+        while i < n:
+            if i + 1 < n:
+                m1 = self._MOV_IMM_R11.match(lines[i])
+                m2 = self._CMP_R11.match(lines[i+1])
+                if m1 and m2:
+                    indent = m1.group(1)
+                    imm_val = m1.group(2)
+                    cmp_op = m2.group(1)
+                    dst_reg = m2.group(2)
+                    out.append(f"{indent}{cmp_op} ${imm_val}, {dst_reg}")
+                    i += 2
+                    continue
+            out.append(lines[i])
+            i += 1
+        return "\n".join(out) + ("\n" if source.endswith("\n") else "")
+
+    _ADD_DISP = re.compile(r"^(\s*)addq\s+\$(\d+),\s*(%[a-z0-9]+)\s*$", re.IGNORECASE)
+    _MOV_INDIR = re.compile(r"^\s*(mov[a-z]*)\s+\((%[a-z0-9]+)\),\s*(%[a-z0-9]+)\s*$", re.IGNORECASE)
+
+    def fold_add_displacement(self, source: str) -> str:
+        lines = source.splitlines()
+        out: List[str] = []
+        i = 0
+        n = len(lines)
+        while i < n:
+            if i + 1 < n:
+                m1 = self._ADD_DISP.match(lines[i])
+                m2 = self._MOV_INDIR.match(lines[i+1])
+                if m1 and m2:
+                    reg1 = m1.group(3).lower()
+                    reg2 = m2.group(2).lower()
+                    dst = m2.group(3).lower()
+                    if reg1 == reg2 and reg1 == dst:
+                        indent = m1.group(1)
+                        disp = m1.group(2)
+                        mov_op = m2.group(1)
+                        out.append(f"{indent}{mov_op} {disp}({reg1}), {dst}")
+                        i += 2
+                        continue
+            out.append(lines[i])
+            i += 1
+        return "\n".join(out) + ("\n" if source.endswith("\n") else "")
+
+    def point_mutation(self, source: str) -> str:
+        lines = source.splitlines()
+        candidates = []
+        n = len(lines)
+        for idx in range(n):
+            if idx + 3 < n and self._SET_CC.match(lines[idx]) and self._MOVZBL.match(lines[idx+1]) and self._TESTL_EAX.match(lines[idx+2]) and self._J_CC.match(lines[idx+3]):
+                candidates.append(("branch", idx))
+            elif idx + 1 < n and self._MOV_IMM_R11.match(lines[idx]) and self._CMP_R11.match(lines[idx+1]):
+                candidates.append(("imm_cmp", idx))
+            elif idx + 1 < n and self._ADD_DISP.match(lines[idx]) and self._MOV_INDIR.match(lines[idx+1]):
+                m1 = self._ADD_DISP.match(lines[idx])
+                m2 = self._MOV_INDIR.match(lines[idx+1])
+                if m1 and m2 and m1.group(3).lower() == m2.group(2).lower() == m2.group(3).lower():
+                    candidates.append(("add_disp", idx))
+        if not candidates:
+            return source
+        kind, idx = self.rng.choice(candidates)
+        if kind == "branch":
+            m1 = self._SET_CC.match(lines[idx])
+            m4 = self._J_CC.match(lines[idx+3])
+            cond = m1.group(2).lower()
+            j_type = m4.group(1).lower()
+            target = m4.group(2)
+            indent = m1.group(1)
+            new_j = self._INVERT_COND.get(cond) if j_type in ("e", "z") else self._DIRECT_COND.get(cond)
+            if new_j:
+                return "\n".join(lines[:idx] + [f"{indent}j{new_j} {target}"] + lines[idx+4:]) + ("\n" if source.endswith("\n") else "")
+        elif kind == "imm_cmp":
+            m1 = self._MOV_IMM_R11.match(lines[idx])
+            m2 = self._CMP_R11.match(lines[idx+1])
+            indent = m1.group(1)
+            imm_val = m1.group(2)
+            cmp_op = m2.group(1)
+            dst_reg = m2.group(2)
+            return "\n".join(lines[:idx] + [f"{indent}{cmp_op} ${imm_val}, {dst_reg}"] + lines[idx+2:]) + ("\n" if source.endswith("\n") else "")
+        elif kind == "add_disp":
+            m1 = self._ADD_DISP.match(lines[idx])
+            m2 = self._MOV_INDIR.match(lines[idx+1])
+            reg1 = m1.group(3).lower()
+            indent = m1.group(1)
+            disp = m1.group(2)
+            mov_op = m2.group(1)
+            return "\n".join(lines[:idx] + [f"{indent}{mov_op} {disp}({reg1}), {reg1}"] + lines[idx+2:]) + ("\n" if source.endswith("\n") else "")
+        return source
+
     def wkb_tunnel_mutation(self, source: str) -> str:
         cur = source
         for _ in range(5):
             nxt = self.safe_peephole(cur)
+            nxt = self.fold_branch_conditions(nxt)
+            nxt = self.fold_immediate_compares(nxt)
+            nxt = self.fold_add_displacement(nxt)
             nxt = self.fold_addressing(nxt)
             nxt = self.fold_store_load(nxt)
             nxt = self.eliminate_dead_writes(nxt)
@@ -611,9 +757,13 @@ class MutationEngine:
     def mutate(self, source: str) -> str:
         candidates = [
             self.safe_peephole,
+            self.fold_branch_conditions,
+            self.fold_immediate_compares,
+            self.fold_add_displacement,
             self.fold_addressing,
             self.fold_store_load,
             self.eliminate_dead_writes,
+            self.point_mutation,
             self.wkb_tunnel_mutation,
             lambda s: s,  # explicit neutral mutation maintains reproducibility
         ]
@@ -922,11 +1072,13 @@ class DreamEngine:
         deterministic: bool = False,
         telemetry: bool = True,
         ledger_path: Path = EVENT_LOG,
+        live: bool = False,
     ):
         if islands < 1:
             raise ValueError("islands must be >= 1")
         self.seed = int(seed)
         self.deterministic = bool(deterministic)
+        self.live = bool(live)
         self.rng = random.Random(self.seed)
         self.oracle = FitnessOracle()
         self.mutation = MutationEngine(self.rng)
@@ -971,6 +1123,9 @@ class DreamEngine:
         if cycles < 0:
             raise ValueError("cycles must be >= 0")
         self.seed_population(source)
+
+        if self.live:
+            print(f"  {_B}═══ EVOLVING ({cycles} cycles, {len(self.islands)} islands) ════════════════════{_W}", flush=True)
 
         for cycle in range(cycles):
             for island in self.islands:
@@ -1026,6 +1181,19 @@ class DreamEngine:
                     "navigation_score": navigation,
                     "eta_navigation_lift": 0.0,
                 })
+
+                if self.live:
+                    diff_inst = child.vector.inst_count - parent.vector.inst_count
+                    diff_str = f"{diff_inst:+d}" if diff_inst != 0 else "±0"
+                    if inserted and diff_inst < 0:
+                        status = f"{_G}✦ EVOLVED{_W}"
+                    elif tunneled:
+                        status = f"{_M}◇ TUNNEL {_W}"
+                    elif inserted:
+                        status = f"{_C}✦ PARETO {_W}"
+                    else:
+                        status = f"{_DIM}○ SEARCH {_W}"
+                    print(f"  {status} │ C{cycle+1:03d} I{island.island_id} │ insts: {child.vector.inst_count:,} ({diff_str}) │ size: {child.vector.size:,} B │ {child.digest[:12]}", flush=True)
 
             # Ring migration: best local tail moves to next island.
             if len(self.islands) > 1:
@@ -1088,6 +1256,8 @@ def _cli(argv: Optional[Sequence[str]] = None) -> int:
     p.add_argument("--no-telemetry", action="store_true")
     p.add_argument("--event-log", default=str(EVENT_LOG))
     p.add_argument("--version", action="store_true")
+    p.add_argument("--live", action="store_true", help="stream live terminal updates during evolution")
+    p.add_argument("--json", action="store_true", help="output only JSON report")
     args = p.parse_args(argv)
 
     if args.version:
@@ -1105,12 +1275,28 @@ def _cli(argv: Optional[Sequence[str]] = None) -> int:
     if not args.dry_run and source is None:
         p.error("provide an input assembly file or use --dry-run")
 
+    is_live = args.live or (sys.stdout.isatty() and not args.json and not args.deterministic)
+
+    if is_live and source is not None:
+        init_oracle = FitnessOracle().evaluate(source)
+        print(f"\n  {_B}╔══════════════════════════════════════════════════════════╗{_W}")
+        print(f"  {_B}║   ZCC ONEIROGENESIS v4.0 — Sovereign Evolution Engine    ║{_W}")
+        print(f"  {_B}╠══════════════════════════════════════════════════════════╣{_W}")
+        print(f"  {_B}║{_W}  Seed:          {_C}{args.seed:<41}{_W}  {_B}║{_W}")
+        print(f"  {_B}║{_W}  Cycles:        {_C}{args.cycles:<41}{_W}  {_B}║{_W}")
+        print(f"  {_B}║{_W}  Islands:       {_C}{args.islands:<41}{_W}  {_B}║{_W}")
+        print(f"  {_B}║{_W}  Input:         {_C}{str(args.input or 'specimen')[:41]:<41}{_W}  {_B}║{_W}")
+        print(f"  {_B}║{_W}  Initial Insts: {_C}{init_oracle.inst_count:<41}{_W}  {_B}║{_W}")
+        print(f"  {_B}║{_W}  Assembly Size: {_C}{init_oracle.size:<41}{_W}  {_B}║{_W}")
+        print(f"  {_B}╚══════════════════════════════════════════════════════════╝{_W}\n", flush=True)
+
     engine = DreamEngine(
         seed=args.seed,
         islands=args.islands,
         deterministic=args.deterministic,
         telemetry=not args.no_telemetry,
         ledger_path=Path(args.event_log),
+        live=is_live,
     )
     if source is not None:
         candidates = engine.evolve(source, cycles=args.cycles)
@@ -1131,10 +1317,29 @@ def _cli(argv: Optional[Sequence[str]] = None) -> int:
             "digest": best.digest,
             "output": args.output,
         }
+        if is_live:
+            print(f"\n  {_B}═══════════════════════════════════════════════════════{_W}")
+            print(f"  {_B}                 EVOLUTION COMPLETE{_W}")
+            print(f"  {_B}═══════════════════════════════════════════════════════{_W}")
+            print(f"  Original Insts:   {_C}{orig_count:,}{_W}")
+            print(f"  Optimized Insts:  {_G}{opt_count:,}{_W} ({opt_count - orig_count:+d} insts, {_G}-{reduction}%{_W})")
+            print(f"  Best Digest:      {_C}{best.digest}{_W}")
+            if args.output:
+                print(f"  Output File:      {_G}{args.output}{_W}")
+            print(f"  {_B}═══════════════════════════════════════════════════════{_W}\n", flush=True)
     else:
         report = engine.dry_run(source=source, cycles=args.cycles)
     print(json.dumps(report, sort_keys=True, indent=2))
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Downstream compatibility re-exports (tools/blueprints)
+# ---------------------------------------------------------------------------
+try:
+    from zcc_oneirogenesis_live import SelfHostGate, PASSES, DREAM_DIR
+except ImportError:
+    pass
 
 
 if __name__ == "__main__":

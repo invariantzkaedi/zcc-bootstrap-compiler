@@ -93,26 +93,28 @@ jobs:
               exit 1
             fi
 
-            # Line-count equality check (fast proxy for byte-identical)
-            if [ "$S2" -ne "$S3" ]; then
-              echo "ERROR: Assembly line counts differ (zcc2.s=${S2}, zcc3.s=${S3})"
-              diff zcc2.s zcc3.s | head -30
+            # Gate 1: Byte-identical assembly verification (Rules EF-1, EF-2, ZCC-EF-0)
+            if ! cmp zcc2.s zcc3.s; then
+              echo "ERROR: Self-host divergence detected! zcc2.s and zcc3.s are NOT byte-identical."
+              diff -u <(head -n 50 zcc2.s) <(head -n 50 zcc3.s) || true
               exit 1
             fi
 
-            echo "  Run ${RUN}/3: SELF-HOST VERIFIED (${S2} lines identical)"
+            H2=$(sha256sum zcc2.s | cut -d' ' -f1)
+            H3=$(sha256sum zcc3.s | cut -d' ' -f1)
+            echo "  Run ${RUN}/3: SELF-HOST VERIFIED (byte-identical, SHA256: ${H2}, ${S2} lines)"
           done
-          echo "All 3 selfhost runs VERIFIED."
+          echo "All 3 selfhost runs VERIFIED (byte-identical)."
 
-      - name: Upload assembly artifacts on failure
-        if: failure()
+      - name: Upload verified assembly artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: diverged-assembly
+          name: selfhost-assembly-${{ github.sha }}
           path: |
             zcc2.s
             zcc3.s
-          retention-days: 7
+          retention-days: 30
 
 
   rust-bridge-smoke:

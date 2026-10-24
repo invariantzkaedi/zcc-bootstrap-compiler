@@ -14,7 +14,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from tools.apply_oneirogenesis_blueprint import apply_blueprint
-from zcc_oneirogenesis import SelfHostGate, FitnessOracle, PASSES
+try:
+    from zcc_oneirogenesis_live import SelfHostGate, FitnessOracle, PASSES
+except ImportError:
+    from zcc_oneirogenesis import SelfHostGate, FitnessOracle, PASSES
 
 def main():
     journal = REPO_ROOT / "dreams" / "journal"
