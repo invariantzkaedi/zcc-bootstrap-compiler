@@ -17,8 +17,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Add/update item in ProjectV2
-        if: ${{ secrets.PROJECTV2_TOKEN != '' }}
         env:
+          PROJECTV2_TOKEN: ${{ secrets.PROJECTV2_TOKEN }}
           GH_TOKEN: ${{ secrets.PROJECTV2_TOKEN || secrets.GITHUB_TOKEN }}
           OWNER: invariantzkaedi
           PROJECT_NUMBER: "1"
@@ -27,6 +27,7 @@ jobs:
           IS_PR: ${{ github.event.pull_request.number && 'true' || 'false' }}
           TITLE: ${{ github.event.issue.title || github.event.pull_request.title }}
           LABELS_JSON: ${{ toJson(github.event.issue.labels || github.event.pull_request.labels) }}
+        if: env.PROJECTV2_TOKEN != ''
         run: |
           set -euo pipefail
           python3 .github/scripts/projectv2_route.py

@@ -10,14 +10,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Sync PR status field
-        if: ${{ secrets.PROJECTV2_TOKEN != '' }}
         env:
+          PROJECTV2_TOKEN: ${{ secrets.PROJECTV2_TOKEN }}
           GH_TOKEN: ${{ secrets.PROJECTV2_TOKEN || secrets.GITHUB_TOKEN }}
           OWNER: invariantzkaedi
           PROJECT_NUMBER: "1"
           PR_NODE_ID: ${{ github.event.pull_request.node_id }}
           PR_MERGED: ${{ github.event.pull_request.merged }}
           PR_STATE: ${{ github.event.pull_request.state }}
+        if: env.PROJECTV2_TOKEN != ''
         run: |
           set -euo pipefail
           python3 .github/scripts/projectv2_pr_status_sync.py
