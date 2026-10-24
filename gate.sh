@@ -1655,6 +1655,14 @@ if [ "${1:-}" = "--self-test" ]; then
     exit 0
 fi
 
+if [ "${1:-}" = "--verify-dir" ]; then
+    SCHEMA_FILE="$REPO_ROOT/contracts/determinism-gate.schema.json"
+    TARGET_DIR="${2:?missing target dir}"
+    LEDGER="${3:-$TARGET_DIR/provenance.jsonl}"
+    verify_gate_constraints "$TARGET_DIR" "$LEDGER" "$SCHEMA_FILE" "verify-cli" "dummy" "dummy" "dummy" "{}"
+    exit $?
+fi
+
 # Main Executable Action
 RUN_ID="${ZCC_VERIFIER_RUN_ID:-zcc-omega-$(date +%s)-$$}"
 EVIDENCE_DIR="$REPO_ROOT/evidence/$RUN_ID"

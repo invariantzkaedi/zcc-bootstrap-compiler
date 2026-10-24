@@ -1,0 +1,62 @@
+name: ZCC Harness Meta-Verification (Rule ZCC-EF-0)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  negative-controls:
+    name: "Adversarial Mutation Tests (Assembly 20, Object 21, Binary 22)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Build Toolchain
+        run: |
+          sudo apt-get update -qq || true
+          sudo apt-get install -y gcc make binutils python3
+
+      - name: Generate Fresh Bootstrap Stage Artifacts
+        run: |
+          make zcc
+          ZCC_VERIFIER_RUN_ID="latest" bash gate.sh
+
+      - name: Execute Hardened Negative Control Gauntlet
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tools/test_adjudication_negative_control.sh \
+            "$GITHUB_WORKSPACE/meta_verification_receipt.json" \
+            "$GITHUB_WORKSPACE/evidence/latest" \
+            2>&1 | tee meta_verification.log
+
+      - name: Independently Adjudicate Meta-Verification Receipt (NC-14, NC-15, NC-16)
+        shell: bash
+        run: |
+          python3 tools/verify_meta_receipt.py \
+            "$GITHUB_WORKSPACE/meta_verification_receipt.json" \
+            "${{ github.sha }}" \
+            "$GITHUB_WORKSPACE/evidence/latest" \
+            2>&1 | tee -a meta_verification.log
+
+      - name: Upload Meta-Verification Evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: meta-verification-${{ github.sha }}-${{ github.run_id }}
+          path: |
+            meta_verification_receipt.json
+            meta_verification.log
+          if-no-files-found: error
+          retention-days: 30
+

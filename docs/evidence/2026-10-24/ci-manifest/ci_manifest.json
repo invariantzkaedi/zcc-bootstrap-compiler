@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "manifest_version": "2.3.0",
+  "generated_at_utc": "2026-10-24T23:15:00Z",
+  "target_repository": "https://github.com/invariantzkaedi/zcc-bootstrap-compiler",
+  "commit": {
+    "sha": "46b73dc5d07b8abce6e87c167f0627ff16a5bb2d",
+    "short_sha": "46b73dc",
+    "branch": "main",
+    "author": "invariantzkaedi <invariantzkaedi@gmail.com>",
+    "date": "2026-10-24T14:39:27-07:00",
+    "subject": "fix(ci): route PROJECTV2_TOKEN via env to resolve step-level if condition schema failure",
+    "parent_commit": "63d1702b57a984004183391efb1441def0c35f0d"
+  },
+  "verdict": {
+    "workflow_execution_certification": "PASS",
+    "harness_mutation_sensitivity": "VERIFIED (Strict cmp exit 1, and production gate.sh exit 20, 21, 22 on XOR bitflips with exact diagnostics)",
+    "harness_input_lineage_contract": "VERIFIED (Mandatory explicit artifact directory; EF-01 resolved)",
+    "failure_path_evidence_retention": "VERIFIED (Universal EXIT trap guarantees receipt emission on failure; EF-02 resolved)",
+    "github_ci_mutation_enforcement": "WORKFLOW_COMMITTED (.github/workflows/harness-meta-verification.yml pinned to ubuntu-24.04)",
+    "repository_wide_completeness": "INCONCLUSIVE",
+    "compiler_semantic_correctness": "INCONCLUSIVE (Bounded by Independent Oracles)",
+    "projectv2_status": "CONFIRMED (Source schema & env routing repaired; runtime board mutation guarded by secret presence)"
+  },
+  "independent_verification_roles": {
+    "self_hosting_reproducibility_engineer": {
+      "obligation": "Independently inspect Stage 2 vs Stage 3 assembly and normalized binary comparisons",
+      "status": "VERIFIED",
+      "evidence": {
+        "run_id": 40135189862,
+        "job_id": 120995116510,
+        "step": "Self-Host Verification — zcc2.s == zcc3.s",
+        "comparison_command": "cmp -s stage2.s stage3.s",
+        "exit_code": 0,
+        "raw_marker": "✓ Gate 1 PASS: Assembly byte-identical (cmp stage2.s stage3.s)",
+        "retained_archive": {
+          "id": 12576687755,
+          "name": "selfhost-assembly-46b73dc5d07b8abce6e87c167f0627ff16a5bb2d",
+          "size_bytes": 1522894,
+          "sha256": "8518937fac685b64cfa3719b5573ef1d88543956f968140c25351a33089f1fbe"
+        },
+        "individual_artifact_digests": {
+          "stage2_s": {
+            "sha256": "e8d52fa3e5c8ee89305313e0d19a0ef06b3aa041c0fa09fc4c73ecdcf5b2da9d",
+            "bytes": 9561806
+          },
+          "stage3_s": {
+            "sha256": "e8d52fa3e5c8ee89305313e0d19a0ef06b3aa041c0fa09fc4c73ecdcf5b2da9d",
+            "bytes": 9561806
+          },
+          "assembly_identity": "BYTE-IDENTICAL (cmp -s stage2.s stage3.s exit 0)",
+          "stage2_o": {
+            "sha256": "d4789f24233dc0514d0d9871cfd2a7dc3925d982927356af3f3ae6c7b6486390",
+            "bytes": 2130832
+          },
+          "stage3_o": {
+            "sha256": "d4789f24233dc0514d0d9871cfd2a7dc3925d982927356af3f3ae6c7b6486390",
+            "bytes": 2130832
+          },
+          "object_identity": "BYTE-IDENTICAL (cmp -s stage2.o stage3.o exit 0)",
+          "stage2_bin_norm": {
+            "sha256": "ea8e0f4cf25cc483775cf8103d8c6d2f6ac512f14d7eacc8b79cd3d2ea173e29",
+            "bytes": 2351536
+          },
+          "stage3_bin_norm": {
+            "sha256": "ea8e0f4cf25cc483775cf8103d8c6d2f6ac512f14d7eacc8b79cd3d2ea173e29",
+            "bytes": 2351536
+          },
+          "binary_norm_identity": "BYTE-IDENTICAL (cmp -s stage2.bin.norm stage3.bin.norm exit 0)"
+        }
+      }
+    },
+    "harness_meta_verifier": {
+      "obligation": "Prove verification harness fails closed via negative controls and deliberate mutation injection (Rule ZCC-EF-0 Requirement 5)",
+      "status": "VERIFIED",
+      "gate_revision": {
+        "commit_sha": "46b73dc5d07b8abce6e87c167f0627ff16a5bb2d",
+        "gate_sh_sha256": "5e9c2c49e2ef52c43fa5214a7c12bcfe6347c592b5408702db5b56180efabee7",
+        "harness_script_sha256": "9bec9ada05886eaf200242dec6b92bc31ab3db2b37f0770f3e382a9825b54495",
+        "adjudicator_script_sha256": "add7837a9c0a207dfc188782432b40c3c78fb91a3e41379cba491b18f84a2a27",
+        "verify_dir_contract": "Invokes production verify_gate_constraints() directly on target directories"
+      },
+      "audit_findings_remediation": {
+        "EF-01": "Artifact directory is now a mandatory CLI argument (realpath verified); all 9 required artifacts audited; zero silent fallback.",
+        "EF-02": "Universal EXIT trap captures failure exit codes, failure diagnostics, and emits structured failure receipt.",
+        "EF-03": "Workdir cleanup executed strictly before receipt generation, with verified status recorded in receipt.",
+        "EF-04": "Harness script's own SHA-256 recorded in receipt and compared against expected committed values.",
+        "EF-05": "Git commit, branch, and single-line dirty status captured.",
+        "EF-06": "Full toolchain versions (GCC, AS, LD, Python, OS) captured in receipt.",
+        "P2_JSON_ESCAPING": "Emits JSON receipt via python3 json.dump() to prevent shell interpolation syntax breakage on special characters."
+      },
+      "executed_negative_controls": {
+        "test_script": "tools/test_adjudication_negative_control.sh",
+        "adjudicator_script": "tools/verify_meta_receipt.py",
+        "target_artifacts_dir": "/mnt/h/__DOWNLOADS/zcc_github_upload/evidence/latest",
+        "isolation_protocol": "mktemp -d with EXIT trap cleanup",
+        "assembly_mutation": {
+          "mutation": "Appended comment '# ZCC_NEGATIVE_CONTROL' to stage3.s",
+          "comparator_sensitivity": "PASS: cmp detected divergence with exit code strictly 1",
+          "production_gate_invocation": "bash gate.sh --verify-dir <work_dir>/gate_fail_asm",
+          "observed_gate_rc": 20,
+          "expected_gate_rc": 20,
+          "designated_error": "EXIT_ASM_DIVERG",
+          "diagnostic_text": "FAIL: Assembly files diverged.",
+          "status": "PASS"
+        },
+        "object_mutation": {
+          "mutation": "XOR bitflip at byte offset 128 (0x89 -> 0x88)",
+          "production_gate_invocation": "bash gate.sh --verify-dir <work_dir>/gate_fail_obj",
+          "observed_gate_rc": 21,
+          "expected_gate_rc": 21,
+          "designated_error": "EXIT_OBJ_DIVERG",
+          "diagnostic_text": "FAIL: Object files diverged.",
+          "status": "PASS"
+        },
+        "binary_mutation": {
+          "mutation": "XOR bitflip at byte offset 256 (0x00 -> 0x01) in stage3.bin, re-normalized via objcopy",
+          "comparator_sensitivity": "PASS: cmp detected divergence with exit code strictly 1 on stage3.bin.norm",
+          "production_gate_invocation": "bash gate.sh --verify-dir <work_dir>/gate_fail_bin",
+          "observed_gate_rc": 22,
+          "expected_gate_rc": 22,
+          "designated_error": "EXIT_BIN_DIVERG",
+          "diagnostic_text": "FAIL: Binary files diverged post-normalization.",
+          "status": "PASS"
+        },
+        "nc14_vacuous_success_injection": {
+          "mutation": "Supplied empty negative controls collection",
+          "adjudicator_observed_rc": 1,
+          "expected_adjudicator_rc": 1,
+          "diagnostic_text": "ADJUDICATION FAIL: NC-14 VIOLATION: Empty / vacuous negative controls collection (evaluated_tests == 0)",
+          "status": "PASS"
+        },
+        "nc15_forged_receipt_injection": {
+          "mutation": "Changed top-level verdict to PASS while underlying assembly gate_rc=0 / status=FAIL",
+          "adjudicator_observed_rc": 1,
+          "expected_adjudicator_rc": 1,
+          "diagnostic_text": "ADJUDICATION FAIL: NC-15 FORGERY DETECTED: Control 'assembly' marked 'FAIL' despite top-level PASS verdict",
+          "status": "PASS"
+        },
+        "nc16_stale_artifact_substitution": {
+          "mutation": "Substituted falsified SHA-256 digest and commit identifier",
+          "adjudicator_observed_rc": 1,
+          "expected_adjudicator_rc": 1,
+          "diagnostic_text": "ADJUDICATION FAIL: NC-16 STALE ARTIFACT / LINEAGE MISMATCH",
+          "status": "PASS"
+        }
+      }
+    },
+    "release_gate_architect": {
+      "obligation": "Reconcile all workflow conclusions, historical failures, and dependency migrations at target commit",
+      "status": "RECONCILED",
+      "reconciliation_summary": "All 9 push-triggered workflows on commit 46b73dc5d succeeded. Historical failures in Sandbox Pilot (#147) and ProjectV2 (#10, #11) ran on older commits and were resolved prior to or at 46b73dc5d."
+    }
+  },
+  "continuous_mutation_enforcement_workflow": {
+    "workflow_file": ".github/workflows/harness-meta-verification.yml",
+    "runner": "ubuntu-24.04 (pinned)",
+    "execution_command": "bash tools/test_adjudication_negative_control.sh $GITHUB_WORKSPACE/meta_verification_receipt.json $GITHUB_WORKSPACE/evidence/latest 2>&1 | tee meta_verification.log && python3 tools/verify_meta_receipt.py $GITHUB_WORKSPACE/meta_verification_receipt.json ${{ github.sha }} $GITHUB_WORKSPACE/evidence/latest",
+    "retention_policy": "Uploads meta_verification_receipt.json and meta_verification.log under if: always() for 30 days"
+  },
+  "epistemic_boundary_declaration": "Stage convergence (cmp zcc2.s zcc3.s exit 0) establishes that the tested bootstrap generations converged to byte-identical assembly under the recorded environment and inputs. Per ZCC Epistemic Protocol, this is necessary evidence of bootstrap reproducibility but does not, by itself, prove universal semantic correctness. Compiler correctness is established by independent oracles including GCC/Clang differential execution, SystemV ABI corpus, and full external application gauntlets (Lua, SQLite, QuickJS, DOOM)."
+}
