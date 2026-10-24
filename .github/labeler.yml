@@ -1,16 +1,30 @@
 compiler:
-  - "src/ir/**"
-  - "src/verifier/**"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/ir/**"
+          - "src/verifier/**"
 optimizer:
-  - "src/opt/**"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/opt/**"
 perf:
-  - "scripts/bench/**"
-  - "benchmarks/**"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "scripts/bench/**"
+          - "benchmarks/**"
 ci:
-  - ".github/workflows/**"
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/**"
 infra:
-  - "scripts/ci/**"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "scripts/ci/**"
 qa:
-  - "tests/**"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "tests/**"
 release:
-  - "docs/releases/**"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/releases/**"

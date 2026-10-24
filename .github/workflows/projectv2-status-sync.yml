@@ -10,6 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Sync PR status field
+        if: ${{ secrets.PROJECTV2_TOKEN != '' }}
         env:
           GH_TOKEN: ${{ secrets.PROJECTV2_TOKEN || secrets.GITHUB_TOKEN }}
           OWNER: invariantzkaedi
