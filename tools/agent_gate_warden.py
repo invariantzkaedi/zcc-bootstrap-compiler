@@ -33,15 +33,22 @@ ARTIFACT_INSPECT = re.compile(
 )
 CMD_LINE = re.compile(r"^\s*\$\s+(.+)$", re.M)
 PASS_CLAIM = re.compile(r"\bPASS\b")
-GATE_LINE = re.compile(r"^\s*GATE\s+([\w\-]+)\s*:\s*([A-Z\-]+)\s*$", re.M)
+GATE_LINE = re.compile(r"^\s*(?:GATE|Gate)\s+([\w\-\(\)\s]+?)\s*:\s*([A-Z\-]+)\s*$", re.M)
 GATES_DECL = re.compile(r"^\s*GATES:\s*(.+)$", re.M)
 SCOPE_DECL = re.compile(r"^\s*SCOPE:\s*(.+)$", re.M)
-DIFF_STAT = re.compile(r"git diff --stat")
-DIFF_FILE = re.compile(r"^\s*([\w./\-]+)\s*\|\s*\d+", re.M)
+DIFF_STAT = re.compile(r"git diff (?:--cached\s+|HEAD\s+)*--stat")
+DIFF_FILE = re.compile(r"^\s*([\w./\\-]+)\s*\|\s*\d+", re.M)
 SOFT_CLOSURE = re.compile(
     r"\b(done|looks good|should work|all good|fixed|complete[d]?|✅|works now)\b", re.I
 )
-EDIT_MARKER = re.compile(r"(^\s*(\+\+\+|---)\s+\S+|\bedit(ed|ing)?\b|\bpatch(ed)?\b|\bapply_patch\b)", re.M | re.I)
+EDIT_MARKER = re.compile(
+    r"^[ \t]*(?:(?:---|\+\+\+)[ \t]+\S+|diff[ \t]+--git[ \t]+\S+|TargetFile:[ \t]*\S+)",
+    re.M,
+)
+BOUNDARY = re.compile(
+    r"^[ \t]*(?:(?:---|\+\+\+)[ \t]+\S+|diff[ \t]+--git[ \t]+\S+|TargetFile:[ \t]*\S+|(?:GATE|Gate)\s+[\w\-\(\)\s]+?\s*:\s*[A-Z\-]+|#{1,4}[ \t]+.*|---[ \t]*)$",
+    re.M,
+)
 
 
 @dataclass
@@ -79,15 +86,18 @@ def _blocks(text: str) -> list[str]:
 # ── EF-1 ──────────────────────────────────────────────────────────
 def check_ef1(text: str) -> RuleVerdict:
     ev: list[str] = []
+    has_pass = False
     for m in PASS_CLAIM.finditer(text):
-        before = text[: m.start()]
-        # Same block = text since last blank line
-        block = before.rsplit("\n\n", 1)[-1]
-        if not CMD_LINE.search(block):
-            ev.append(f"L{_lineno(text, m.start())}: PASS without same-block command/output")
+        has_pass = True
+        pos = m.start()
+        boundaries = [b.end() for b in BOUNDARY.finditer(text[:pos])]
+        start = max(boundaries) if boundaries else 0
+        window = text[start:pos]
+        if not CMD_LINE.search(window):
+            ev.append(f"L{_lineno(text, pos)}: PASS without same-block command/output")
     if ev:
         return RuleVerdict("EF-1", "FAIL", ev)
-    if not PASS_CLAIM.search(text):
+    if not has_pass:
         return RuleVerdict("EF-1", "NOT-APPLICABLE", ["no PASS claims"])
     return RuleVerdict("EF-1", "PASS", ["every PASS has same-block evidence"])
 
@@ -125,10 +135,19 @@ def check_ef4(text: str) -> RuleVerdict:
     decl = GATES_DECL.search(text)
     if not decl:
         return RuleVerdict("EF-4", "NOT-APPLICABLE", ["no GATES: declaration"])
-    declared = {g.strip() for g in decl.group(1).split(",") if g.strip()}
-    reported = {m.group(1): m.group(2) for m in GATE_LINE.finditer(text)}
-    missing = sorted(declared - reported.keys())
-    bad = {k: v for k, v in reported.items() if v not in VERDICTS}
+    declared = {g.strip().lower() for g in decl.group(1).split(",") if g.strip()}
+    reported = {}
+    bad = {}
+    for m in GATE_LINE.finditer(text):
+        gname = m.group(1).strip().lower()
+        verdict = m.group(2).strip()
+        reported[gname] = verdict
+        m_sub = re.search(r"\(([\w\-]+)\)", gname)
+        if m_sub:
+            reported[m_sub.group(1).lower()] = verdict
+        if verdict not in VERDICTS:
+            bad[gname] = verdict
+    missing = sorted(d for d in declared if d not in reported)
     ev = []
     if missing:
         ev.append(f"declared but unreported: {', '.join(missing)}")
@@ -145,10 +164,11 @@ def check_ef5(text: str, diff_stat: str | None) -> RuleVerdict:
     stat_src = diff_stat if diff_stat is not None else text
     if not DIFF_STAT.search(text) and diff_stat is None:
         return RuleVerdict("EF-5", "FAIL", ["no `git diff --stat` present"])
-    files = set(DIFF_FILE.findall(stat_src))
+    raw_files = DIFF_FILE.findall(stat_src)
+    files = {f.replace("\\", "/").strip() for f in raw_files}
     if not scope:
         return RuleVerdict("EF-5", "INCONCLUSIVE", ["diff present but no SCOPE: declaration"])
-    allowed = set(scope.group(1).split())
+    allowed = {a.replace("\\", "/").strip() for a in scope.group(1).split()}
     out_of_scope = sorted(f for f in files if not any(f == a or f.startswith(a.rstrip("/") + "/") for a in allowed))
     if out_of_scope:
         return RuleVerdict("EF-5", "FAIL", [f"files outside SCOPE: {', '.join(out_of_scope)}"])
@@ -161,7 +181,6 @@ def check_ef6(text: str) -> RuleVerdict:
     for m in GATE_LINE.finditer(text):
         if m.group(2) not in VERDICTS:
             ev.append(f"L{_lineno(text, m.start())}: gate verdict {m.group(2)!r}")
-    # Soft closures in the final block are the classic phantom-closure smell
     final = _blocks(text)[-1] if _blocks(text) else ""
     for m in SOFT_CLOSURE.finditer(final):
         ev.append(f"final block uses soft closure {m.group(0)!r}")

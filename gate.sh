@@ -373,8 +373,13 @@ import sys
 try:
     import jsonschema
 except ImportError:
-    print('FAIL: jsonschema library is required for strict provenance validation.', file=sys.stderr)
-    sys.exit($EXIT_SCHEMA_FAIL)
+    import subprocess
+    try:
+        subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', 'jsonschema'], check=True)
+        import jsonschema
+    except Exception:
+        print('FAIL: jsonschema library is required for strict provenance validation.', file=sys.stderr)
+        sys.exit($EXIT_SCHEMA_FAIL)
 
 try:
     with open('$schema_path') as sf:
