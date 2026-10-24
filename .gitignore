@@ -21,6 +21,13 @@ seed*_zcc
 tmp_gcc
 tmp_zcc
 
+# Secrets & Environment Keys
+.env
+.env.*
+*keypair*.json
+mainnet_bot_wallet.json
+*.secret
+
 # Build artifacts
 *.s
 !run_tests.sh
@@ -439,6 +446,8 @@ patches/
 # ─── Preserve these ───────────────────────────────────
 # (explicit negation if anything above matched them by mistake)
 !tools/
+!tests/selfhost/
+!tests/selfhost/**
 !probe_fp24_surface.c
 !probe_attr_packed.c
 !probe_float_cmp.c
