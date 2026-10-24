@@ -1,8 +1,10 @@
 # ZCC: High-Integrity Multi-Target C Compiler, EVM Engine & Sovereign Systems Suite
 
 [![ZCC Self-Host Verification](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/workflows/selfhost.yml/badge.svg)](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/workflows/selfhost.yml)
-[![Quantum Verification Assurance](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/workflows/quantum-ci.yml/badge.svg)](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/workflows/quantum-ci.yml)
-[![ZCC Boundary Contract Gates](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/workflows/gate-ir1.yml/badge.svg)](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/workflows/gate-ir1.yml)
+[![Quantum Verification Assurance](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/workflows/quantum-verification.yml/badge.svg)](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/workflows/quantum-verification.yml)
+[![ZCC Boundary Contract Gates](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/workflows/boundary-gates.yml/badge.svg)](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/workflows/boundary-gates.yml)
+[![IR Opt Quality Gate](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/workflows/ir-opt-quality-gate.yml/badge.svg)](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/workflows/ir-opt-quality-gate.yml)
+[![Agent Governance Gate](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/workflows/agent-governance.yml/badge.svg)](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/workflows/agent-governance.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Verified Coverage: 100%](https://img.shields.io/badge/Coverage-100.00%25%20gcov%20(1%2C529%2F1%2C529)-brightgreen.svg)](README_INTERACTIVE.html)
 [![Interactive Observatory](https://img.shields.io/badge/Interactive%20Observatory-Live%20Visual%20Lab-blueviolet.svg)](README_INTERACTIVE.html)
@@ -124,6 +126,13 @@ ZCC natively compiles the full QuickJS ES2020 JavaScript engine amalgamation wit
   - Formally verified non-reverting bytecode execution invariants (`./zcc --prove`) via SSA dominance and bitset liveness, exporting SMT-LIBv2 theorems to `proof.smt2`.
 * **Z3 SMT Formal Optimization & CVE Miscompile Trap**: Mathematically proved sound strength reductions across all $2^{64}$ bitvectors while trapping and rejecting signed division replacement (`x / 8 -> x >> 3`), isolating counterexample witness $x = 14123288431433875452$ and preventing silent CVE miscompilations.
 * **Sovereign Hardening Shield (H1–H5)**: Verified dual-ring stack canaries (16 magic guards), saturating arithmetic, memory bounds enforcement, monotonic epoch token invalidation, and IEEE-754 poison neutralization.
+
+### 7. SSA-IR Module Pipeline Hardening & Dead Snapshot Pruning (PR #2, October 2026)
+* **Fallthrough Basic Block Guard**: Prevented empty function bodies under `--ir` by ensuring unclosed terminal basic blocks emit explicit unconditional jumps or return blocks.
+* **Compound Assignment Module IR Lowering (`ND_COMPOUND_ASSIGN`)**: Implemented direct 3-address quad lowering for compound assignments (`+=`, `-=`, `*=`, `/=`, `%=`, `<<=`, `>>=`, `&=`, `^=`, `|=`), eliminating silent AST fallbacks and unhandled IR node warnings.
+* **Continuous IR Regression Target (`make test-ir`)**: Integrated automated end-to-end regression testing over multi-function compilation cases linking with `-no-pie`.
+* **Manifest & Amalgamation Hygiene**: Pruned 7 dead legacy snapshots (`part3_b1_all3.c`, `part4_BATCH3_CLEAN.c`, `part4_BATCH3a_VERIFIED.c`, `part4_BATCH3c_LEXER_VERIFIED.c`, `part4_expr.c`, `part4_stmt.c`, `part4_strength_reduction.patch.c`), synchronizing `MATRIX_MANIFEST.json` to 4,882 verified files.
+* **29/29 GitHub Actions CI Workflows Clean**: 100% green status across all automated pipelines on `main`.
 
 ---
 
@@ -375,6 +384,9 @@ make test-xmm
 
 # Run full floating-point test battery (XMM harness + 12 float probes)
 make test-float
+
+# Verify SSA Intermediate Representation (--ir) module pipeline
+make test-ir
 
 # Run AST differential mutation fuzzer self-test
 python3 tools/zfuzz.py --self-test

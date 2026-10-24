@@ -1,7 +1,7 @@
 # ZCC Status Report
 
-Generated: 2026-09-22
-Generation 3 — supersedes generation 2 below
+Generated: 2026-10-24
+Generation 4 — supersedes generation 3 below
 
 ## Build Health (verified Sep 22, 2026)
 
@@ -43,6 +43,12 @@ Generation 3 — supersedes generation 2 below
 | Autonomous Linker (LIMIT-004) | c951344bc1dfe7b9e9395f49f22163d4 | locked Sep 22 on WSL2 & Azure (commit 70f3d143) |
 | Rust Frontend v2 (LIMIT-007) | 42e05e5c401cf3a462958f8cd81e860f | locked Sep 22 on WSL2 & Azure (commit 68097a82) |
 | Float Return Widen (CG-001) | 8b4b28bc4cfbd9ff867ba66f5931fb68 | locked Oct 14 on WSL2 & Azure (commit f3fbe86b) |
+| IR-FMA3 Auto-Fusion         | c836006231888c2b99be305e3fd1dc14 | locked Oct 15 on WSL2 & Azure (commit 623a8f8c) |
+| Float Narrowing & Strings   | 4a1fe6c26e013806c6b951f8c7f014cf | locked Oct 15 on WSL2 & Azure (commit 1f09e05f) |
+| Native C Peephole Upgrade   | 6294cfe649fc8d1d6ed63bc10c06c114 | locked Oct 18 on WSL2 (commit 712b9591) |
+| Batch 9 SSA-IR Promotion    | b13b1207c7cee38741746b83a12deba9 | locked Oct 19 on WSL2 & Azure (commit b840c4e2) |
+| Batch 10 SSA-IR Promotion   | becaea8339cb7f3bb0d5d07c8e5cf787 | locked Oct 20 on WSL2 & Azure (commit 37b94739) |
+| Fable IR Cleanup (PR #2)    | 7c10a39c65251e3d92a72d95994b3d34 | locked Oct 24 on WSL2 (Azure: 57f8f6cf68e8886b) |
 
 If a future bootstrap produces a different hash, either codegen drifted (regression) or new compilation units were added (intentional). Use this table as the first line of forensic defense.
 
@@ -97,7 +103,7 @@ ZCC is compiled by concatenating discrete parts inside the `Makefile` before inv
 - CQAS Quantum-Superposition JIT Engine (`make test-cqas-superposition`): 16-node Continuous-Time Quantum Walk (CTQW) wave-packet collapse in <3ns, in-memory atomic 5-byte JMP patch, and .zcc.oracle provenance ledger
 - AVX2 Reciprocal-FMA Step Fusion: Single-cycle `_mm_rsqrt_ss` + `_mm_fnmadd_ss` Newton-Raphson refinement achieving 387.4M evals/sec (1.42x vector speedup)
 - ZCC Quest HUD v6.0 (`python3 zcc_quest.py --mode sovereign`): Real-time 7-system status matrix, 16-node wave-packet probability density visualization, and 3D WebGL observatory integration
-- SQLite 3.45.0: Initial compilation succeeded in dev WSL environment; currently flagged as an open defect in generic containers (see below)
+- SQLite 3.45.0 & 3.53.1: Full native amalgamation compilation verified clean (SQL-CRASH-38060 closed via 424B Parse struct layout and static float limits constant folding)
 - CG-IR-018: static pointer array .zero corruption — most significant find
 - DCE pass: eliminated 1,862 / 17,264 instructions (10.79%)
 - IR bridge: GCC-compiled boundary module with three-pointer ABI
@@ -112,6 +118,12 @@ ZCC is compiled by concatenating discrete parts inside the `Makefile` before inv
     3. Bitfield extraction unsigned zero-extension for `TY_ENUM` types in `part4.c`.
     4. Guarded IR whitelist against target program function collisions (`next_token`) preserving 16-byte SystemV struct returns.
   - Native QuickJS ES2020 test suite **100% PASS (15/15 tests, 0 failures)** across 6 test suites: Arithmetic/Floats, Objects/JSON, Closures/Loops, RegExp, ES6 Classes, Date/BigInt.
+- **PR #2 SSA-IR Module Pipeline Hardening & Manifest Hygiene (October 2026)**:
+  - Guarded fallthrough basic blocks under `--ir`, preventing empty function body codegen omissions.
+  - Lowered compound assignment expressions (`ND_COMPOUND_ASSIGN`) directly into real 3-address module IR quad-code.
+  - Added continuous integration target `make test-ir` linking with `-no-pie`.
+  - Pruned 7 dead legacy source snapshots, synchronizing `MATRIX_MANIFEST.json` to 4,882 verified files.
+  - Verified 29/29 GitHub Actions CI checks passing with zero drift.
 - **Full SSA-IR Lowering Promotion — Batch 10 Frontier**:
   - Promoted 14 preprocessor, runtime verification, and AST inspection functions (`node_float_bits`, `node_label_name`, `is_ident_start`, `is_ident_char`, `is_simd_stub`, `is_curl_stub`, `is_stddef_stub`, `is_empty_fallback_safe`, `verify_shared_access`, `verify_job_ownership`, `verify_runtime_policy`, `verify_manifest_abi`, `verify_opcode_registry`, `node_is_array`, `node_has_label`) into SSA-IR lowering backend (`part4.c:ir_whitelisted()`).
   - Verified 100% byte-identical selfhost assembly (`cmp zcc2.s zcc3.s` PASS, baseline `becaea8339cb7f3bb0d5d07c8e5cf787`, 493,351 lines).
