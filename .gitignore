@@ -628,6 +628,7 @@ dreams/dream_state.json
 governance/
 identity/
 *.pem
+!contracts/*.pem
 
 # Whitelist fuzzing harness
 !zcc_fuzz_harness.py
