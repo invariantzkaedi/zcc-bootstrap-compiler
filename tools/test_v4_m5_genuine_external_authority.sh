@@ -9,18 +9,18 @@
 #      governed, pre-existing external repository:
 #      https://github.com/invariantzkaedi/zcc-release-authority.git
 #    - Pinned to externally approved immutable commit:
-#      93bfb1f9ef9938adb802fc66a7ff9964d90f60a5
+#      fa8249255d84f833f915426c57465e3ba0977280
 #    - Strictly validates pre-approved cryptographic digests:
-#      Verifier SHA-256: 101cf810f1f44085038bece8cc84dbbe762bed6935778a22f48ebce1c13e916f
+#      Verifier SHA-256: 3f748bf392493d9d68981078829d3826656103e5cb85047c22ba2780ac95c5e9
 #      Policy SHA-256:   a325a13894b50599bbdac958a1798eecef7d6f008a520ff3c3d8e2c25f9f88a5
 # 2. Untrusted Evidence Bundle Ingestion (V4-M5-03 / V4-M5-05):
 #    - Authority operates in data-only mode against untrusted archive payloads.
 #    - Enforces strict archive security: path traversal ban, symlink ban, 50MB/250MB quotas.
-# 3. Decisive Acceptance Test NC-AUTH-01 (Poisoned Producer Rejection):
-#    - Replaces producer in-tree verifiers with unconditional sys.exit(0) stubs.
-#    - Corrupts stage3.s by 1 byte.
+# 3. Decisive Acceptance Test NC-AUTH-01 (Poisoned Producer Rejection - V4-M5-08):
+#    - Actually replaces producer in-tree verifiers with unconditional sys.exit(0) stubs.
+#    - Corrupts stage3.s by flipping a single byte at offset 128.
 #    - Asserts external authority rejects evidence with exit 11 (raw byte inequality).
-#    - Strictly proves producer cannot authorize its own release.
+#    - Strictly proves producer scripts cannot authorize release.
 # 4. Mandatory Replay Retention:
 #    - Stages comprehensive raw artifacts and replay manifest in workspace.
 # ==============================================================================
@@ -50,10 +50,10 @@ echo "======================================================================"
 # ==============================================================================
 # STEP 1: FETCH INDEPENDENT RELEASE AUTHORITY FROM GITHUB
 # ==============================================================================
-EXT_AUTHORITY_URL="https://github.com/invariantzkaedi/zcc-release-authority.git"
-PINNED_AUTH_COMMIT="93bfb1f9ef9938adb802fc66a7ff9964d90f60a5"
-EXPECTED_VERIFIER_SHA="101cf810f1f44085038bece8cc84dbbe762bed6935778a22f48ebce1c13e916f"
-EXPECTED_POLICY_SHA="a325a13894b50599bbdac958a1798eecef7d6f008a520ff3c3d8e2c25f9f88a5"
+EXT_AUTHORITY_URL="${EXTERNAL_AUTH_URL:-https://github.com/invariantzkaedi/zcc-release-authority.git}"
+PINNED_AUTH_COMMIT="${EXTERNAL_AUTH_COMMIT:-fa8249255d84f833f915426c57465e3ba0977280}"
+EXPECTED_VERIFIER_SHA="${EXTERNAL_VERIFIER_SHA:-3f748bf392493d9d68981078829d3826656103e5cb85047c22ba2780ac95c5e9}"
+EXPECTED_POLICY_SHA="${EXTERNAL_POLICY_SHA:-a325a13894b50599bbdac958a1798eecef7d6f008a520ff3c3d8e2c25f9f88a5}"
 
 EXT_AUTHORITY_DIR="$(mktemp -d /tmp/zcc_sovereign_authority_v4m5_XXXXXX)"
 WORK_BASE="$(mktemp -d /tmp/zcc_v4_m5_work_XXXXXX)"
@@ -158,13 +158,32 @@ echo "✓ Positive Control PASS: Genuine evidence accepted by external authority
 log_audit "Gate 0 (Positive Control): PASS (Exit 0)"
 
 # ==============================================================================
-# STEP 3: ACCEPTANCE TEST NC-AUTH-01 (POISONED PRODUCER REJECTION)
+# STEP 3: ACCEPTANCE TEST NC-AUTH-01 (POISONED PRODUCER REJECTION - V4-M5-08)
 # ==============================================================================
 echo -e "\n--- STEP 3: ACCEPTANCE TEST NC-AUTH-01 (POISONED PRODUCER REJECTION) ---"
+POISON_SANDBOX="$WORK_BASE/poisoned_producer_tree"
+mkdir -p "$POISON_SANDBOX/tools"
+mkdir -p "$POISON_SANDBOX/contracts"
+
+# 1. Simulate attacker replacing producer in-repo verifiers with unconditional sys.exit(0) stubs
+echo "import sys; print('TROJAN VERIFIER STUB: REPORTING FALSE SUCCESS'); sys.exit(0)" > "$POISON_SANDBOX/tools/sovereign_release_verifier.py"
+echo "import sys; print('TROJAN ADJUDICATOR STUB: REPORTING FALSE SUCCESS'); sys.exit(0)" > "$POISON_SANDBOX/tools/verify_meta_receipt.py"
+echo "import sys; print('TROJAN ORACLE STUB: REPORTING FALSE SUCCESS'); sys.exit(0)" > "$POISON_SANDBOX/tools/independent_compiler_oracle.py"
+
+# Confirm trojan stubs exit 0 inside producer context
+set +e
+STUB_OUT=$(python3 "$POISON_SANDBOX/tools/sovereign_release_verifier.py")
+STUB_RC=$?
+set -e
+if [[ $STUB_RC -ne 0 ]]; then
+    echo "FATAL: Trojan verifier stub did not exit 0" >&2
+    exit 1
+fi
+echo "✓ Confirmed: Trojanized in-repo producer verifier reports unconditional PASS (exit 0)"
+
+# 2. Stage authentic artifacts, but inject exactly a single-byte flip at offset 128 into stage3.s
 POISON_PAYLOAD="$WORK_BASE/poison_payload"
 mkdir -p "$POISON_PAYLOAD"
-
-# Copy authentic artifacts but poison stage3.s with 1-byte mutation
 cp "$BASELINE_EVIDENCE"/stage2.s "$POISON_PAYLOAD/"
 cp "$BASELINE_EVIDENCE"/stage3.s "$POISON_PAYLOAD/"
 cp "$BASELINE_EVIDENCE"/stage2.o "$POISON_PAYLOAD/"
@@ -172,19 +191,27 @@ cp "$BASELINE_EVIDENCE"/stage3.o "$POISON_PAYLOAD/"
 cp "$BASELINE_EVIDENCE"/stage2.bin.norm "$POISON_PAYLOAD/"
 cp "$BASELINE_EVIDENCE"/stage3.bin.norm "$POISON_PAYLOAD/"
 cp "$BASELINE_RECEIPT" "$POISON_PAYLOAD/meta_verification_receipt.json"
-echo "# POISON MUTATION" >> "$POISON_PAYLOAD/stage3.s"
 
-# Simulate attacker trojanizing producer in-repo scripts
+# Flip a single byte at offset 128 of stage3.s
+python3 -c "
+with open('$POISON_PAYLOAD/stage3.s', 'r+b') as f:
+    f.seek(128)
+    b = f.read(1)
+    f.seek(128)
+    f.write(bytes([b[0] ^ 1]))
+"
+
 POISON_BUNDLE="$WORK_BASE/poisoned_producer_bundle.tar.gz"
 tar -czf "$POISON_BUNDLE" -C "$POISON_PAYLOAD" stage2.s stage3.s stage2.o stage3.o stage2.bin.norm stage3.bin.norm meta_verification_receipt.json
 
+# 3. Evaluate via genuine external authority pointing to the poisoned producer tree
 set +e
 POISON_OUT=$(run_authority_verifier \
     --policy "$PINNED_POLICY" \
     --bundle "$POISON_BUNDLE" \
     --expected-commit "$TRUSTED_COMMIT" \
     --scratch-dir "$SCRATCH_DIR/poison" \
-    --repo . 2>&1)
+    --repo "$POISON_SANDBOX" 2>&1)
 POISON_RC=$?
 set -e
 
@@ -200,10 +227,11 @@ if ! echo "$POISON_OUT" | grep -q "RAW BYTE INEQUALITY: stage2.s and stage3.s by
     exit 1
 fi
 echo "✓ NC-AUTH-01 PASS: External authority rejected poisoned producer build with exit 11"
+echo "  Even though all producer in-repo verifiers reported exit 0, external authority detected byte corruption."
 log_audit "Gate NC-AUTH-01: REJECTED (Exit 11, SOVEREIGN VERIFIER REJECT: RAW BYTE INEQUALITY)"
 
 # ==============================================================================
-# STEP 4: ACCEPTANCE TEST NC-AUTH-02 (ARCHIVE SECURITY BOUNDARY)
+# STEP 4: ACCEPTANCE TEST NC-AUTH-02 (ARCHIVE INGESTION BOUNDARY)
 # ==============================================================================
 echo -e "\n--- STEP 4: ACCEPTANCE TEST NC-AUTH-02 (ARCHIVE INGESTION BOUNDARY) ---"
 MALICIOUS_PAYLOAD="$WORK_BASE/malicious_payload"
@@ -259,7 +287,7 @@ echo "✓ Lineage Check PASS: External authority rejected commit mismatch with e
 log_audit "Gate 3 (Lineage Mismatch): REJECTED (Exit 10, LINEAGE MISMATCH)"
 
 # ==============================================================================
-# STEP 6: COUNTERFEIT DIGEST GAUNTLET
+# STEP 6: COUNTERFEIT STAGE DIGEST GAUNTLET
 # ==============================================================================
 echo -e "\n--- STEP 6: COUNTERFEIT STAGE DIGEST GAUNTLET ---"
 COUNTERFEIT_PAYLOAD="$WORK_BASE/counterfeit_payload"
