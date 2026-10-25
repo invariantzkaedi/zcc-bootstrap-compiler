@@ -16,12 +16,12 @@ set -euo pipefail
 VERIFIER="${1:?verifier required}"
 EVIDENCE="${2:?evidence required}"
 POLICY="${3:?policy required}"
-EXPECTED_COMMIT="${4:-$(python3 -c 'import json; print(json.load(open("meta_verification_receipt.json")).get("provenance",{}).get("git_commit",""))' 2>/dev/null || git rev-parse HEAD 2>/dev/null || true)}"
-
-COMMIT_ARG=""
-if [[ -n "$EXPECTED_COMMIT" ]]; then
-    COMMIT_ARG="--expected-commit $EXPECTED_COMMIT"
+EXPECTED_COMMIT="${4:-$(git rev-parse HEAD 2>/dev/null || true)}"
+if [[ -z "$EXPECTED_COMMIT" ]]; then
+    echo "ERROR (V4-05): EXPECTED_COMMIT must be provided via trusted caller context or git HEAD" >&2
+    exit 1
 fi
+COMMIT_ARG="--expected-commit $EXPECTED_COMMIT"
 
 echo "======================================================================"
 echo "🛡️  ZCC OMEGA V4 — MILESTONE V4-M1: NC-21 FORGED ADJUDICATOR TEST"

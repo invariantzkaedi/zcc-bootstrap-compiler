@@ -81,6 +81,15 @@ jobs:
             "${{ github.sha }}" \
             2>&1 | tee -a meta_verification.log
 
+      - name: External Authority Separation Experiment (Milestone V4-M3 / Coordinated Compromise Rejection)
+        shell: bash
+        run: |
+          bash tools/test_v4_m3_external_authority_separation.sh \
+            "$GITHUB_WORKSPACE/evidence/latest" \
+            "$GITHUB_WORKSPACE/meta_verification_receipt.json" \
+            "${{ github.sha }}" \
+            2>&1 | tee -a meta_verification.log
+
       - name: Upload Meta-Verification Evidence
         if: always()
         uses: actions/upload-artifact@v4.6.1

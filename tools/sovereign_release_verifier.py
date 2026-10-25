@@ -28,8 +28,9 @@ def main():
     parser.add_argument("--policy", required=True, help="Path to externally maintained sovereign trust policy JSON")
     parser.add_argument("--evidence", required=True, help="Path to evidence directory containing raw artifacts")
     parser.add_argument("--receipt", default=None, help="Optional explicit path to receipt JSON")
-    parser.add_argument("--expected-commit", default=None, help="Optional expected commit SHA to bind evidence")
+    parser.add_argument("--expected-commit", default=None, help="Mandatory expected commit SHA from trusted caller context")
     parser.add_argument("--repo", default=None, help="Optional path to repository root under evaluation")
+    parser.add_argument("--log", default=None, help="Optional path to execution log to audit negative control execution proofs")
     args = parser.parse_args()
 
     policy_path = Path(args.policy).resolve()
@@ -40,6 +41,18 @@ def main():
         policy = json.loads(policy_path.read_text())
     except Exception as e:
         reject(f"Malformed policy JSON: {e}", EXIT_POLICY_ERROR)
+
+    # V4-06 Remediation: Hardcoded Architectural Invariants
+    # The external sovereign verifier enforces fail-closed minimums regardless
+    # of any attempt by a compromised in-repo policy to disable them.
+    if policy.get("required_commit_binding") is False:
+        reject("POLICY INTEGRITY VIOLATION (V4-06): Policy cannot disable required_commit_binding", EXIT_POLICY_ERROR)
+    if policy.get("stage_identity", {}).get("require_direct_byte_equality") is False:
+        reject("POLICY INTEGRITY VIOLATION (V4-06): Policy cannot disable require_direct_byte_equality", EXIT_POLICY_ERROR)
+    if policy.get("negative_controls", {}).get("disallow_unconditional_pass") is False:
+        reject("POLICY INTEGRITY VIOLATION (V4-06): Policy cannot allow unconditional pass in negative controls", EXIT_POLICY_ERROR)
+    if policy.get("stage_identity", {}).get("require_double_stage_hash_recomputation") is False:
+        reject("POLICY INTEGRITY VIOLATION (V4-06): Policy cannot disable require_double_stage_hash_recomputation", EXIT_POLICY_ERROR)
 
     evidence_dir = Path(args.evidence).resolve()
     if not evidence_dir.is_dir():
@@ -203,6 +216,29 @@ def main():
             actual_sha = hashlib.sha256(script_path.read_bytes()).hexdigest()
             if actual_sha != expected_sha:
                 reject(f"ADJUDICATOR COMPROMISED (NC-21B / NC-25): Script '{script_name}' SHA-256 {actual_sha} != pinned {expected_sha}", EXIT_FORGERY_DETECTED)
+
+    # 6. Negative Control Execution Proof Audit (V4-07 Remediation)
+    log_file = None
+    if args.log:
+        log_file = Path(args.log).resolve()
+    elif (evidence_dir / "meta_verification.log").is_file():
+        log_file = evidence_dir / "meta_verification.log"
+    elif (evidence_dir.parent / "meta_verification.log").is_file():
+        log_file = evidence_dir.parent / "meta_verification.log"
+    elif Path("meta_verification.log").is_file():
+        log_file = Path("meta_verification.log").resolve()
+
+    if log_file and log_file.is_file():
+        log_text = log_file.read_text(errors="replace")
+        required_log_markers = [
+            "FAIL: Assembly files diverged",
+            "FAIL: Object files diverged",
+            "FAIL: Binary files diverged post-normalization",
+            "ALL NEGATIVE CONTROL GATES METICULOUSLY VERIFIED"
+        ]
+        for marker in required_log_markers:
+            if marker not in log_text:
+                reject(f"EXECUTION AUDIT FAILURE (V4-07): Execution log lacks verified negative control failure marker: '{marker}'", EXIT_FORGERY_DETECTED)
 
     print("SOVEREIGN RELEASE POLICY VERIFIED: PASS", file=sys.stdout)
     sys.exit(EXIT_OK)

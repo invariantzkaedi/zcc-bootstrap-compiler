@@ -25,13 +25,9 @@ if [[ ! -f "$RECEIPT" ]]; then
     exit 1
 fi
 
-EXPECTED_COMMIT="${3:-$(python3 -c 'import json; print(json.load(open("'"$RECEIPT"'")).get("provenance",{}).get("git_commit",""))' 2>/dev/null || true)}"
+EXPECTED_COMMIT="${3:-$(git rev-parse HEAD 2>/dev/null || true)}"
 if [[ -z "$EXPECTED_COMMIT" ]]; then
-    EXPECTED_COMMIT="$(git rev-parse HEAD 2>/dev/null || true)"
-fi
-
-if [[ -z "$EXPECTED_COMMIT" ]]; then
-    echo "ERROR: Could not resolve EXPECTED_COMMIT from receipt or git" >&2
+    echo "ERROR (V4-05): EXPECTED_COMMIT must be provided via trusted caller context or git HEAD" >&2
     exit 1
 fi
 

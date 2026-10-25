@@ -177,7 +177,7 @@ In response to the formal external audit adjudication by the Verification Archit
 
 ---
 
-## 9. ZCC OMEGA V4 — Sovereign Verification Independence (Milestones V4-M1 & V4-M2 Verified)
+## 9. ZCC OMEGA V4 — Sovereign Verification Independence (Milestones V4-M1, V4-M2, & V4-M3 Verified)
 
 OMEGA V4 establishes the supreme assurance principle under Rule ZCC-EF-0+:
 > **No producer-side component, test harness, or repository commit may declare its own release correctness.**
@@ -191,10 +191,17 @@ OMEGA V4 establishes the supreme assurance principle under Rule ZCC-EF-0+:
    - Genuine evidence exits `0` (`SOVEREIGN RELEASE POLICY VERIFIED: PASS`).
    - Forged evidence is **STRICTLY REJECTED** with exit code `12` (`EXIT_FORGERY_DETECTED`) and explicit diagnostic: `CRITICAL FORGERY DETECTED (NC-21): negative control 'assembly' reported gate_rc=0 (forbidden unconditional PASS)`.
 5. **Milestone V4-M2 Forensic Remediation & Sovereign Resilience Gauntlet:**
-   In response to the forensic audit findings (V4-01 through V4-04), [`tools/test_v4_m2_sovereign_resilience.sh`](file:///H:/__DOWNLOADS/zcc_github_upload/tools/test_v4_m2_sovereign_resilience.sh) executes a 6-test gauntlet proving external authority resistance:
-   - **V4-01 (External Authority Independence):** Authority installs immutable pinned copies in an isolated directory outside repository control. In-repo policy tampering is rendered inert (exit 12 on forgery).
+   In response to forensic audit findings, [`tools/test_v4_m2_sovereign_resilience.sh`](file:///H:/__DOWNLOADS/zcc_github_upload/tools/test_v4_m2_sovereign_resilience.sh) executes a 6-test gauntlet proving external authority resistance:
+   - **V4-01 (External Authority Isolation):** In-repo policy tampering is rendered inert against pinned authority policy (exit 12 on forgery).
    - **V4-02 (Mandatory Commit Binding):** Omission of `--expected-commit` or SHA-256/git commit mismatch is strictly rejected with exit code `10` (`EXIT_POLICY_ERROR`).
    - **V4-03 (Receipt Digest Format & Completeness):** Omission of any stage-3 digest (`stage3_s`, `stage3_o`, `stage3_bin_norm`) or non-64-hex strings is strictly rejected with exit code `12` (`RECEIPT INCOMPLETE`).
    - **V4-04 / NC-21B (Compromised Adjudicator Code Replacement):** Tampering with `tools/verify_meta_receipt.py` to return an unconditional `PASS` is detected via pinned script integrity and rejected with exit code `12` (`ADJUDICATOR COMPROMISED`).
    - **NC-21A (Forged Negative Control):** Injected `gate_rc=0` rejected with exit code `12`.
-6. **Continuous CI Integration:** Wired directly into `.github/workflows/harness-meta-verification.yml` to guarantee zero-self-certification and full sovereign resilience on every push.
+6. **Milestone V4-M3 External Authority Separation Experiment:**
+   [`tools/test_v4_m3_external_authority_separation.sh`](file:///H:/__DOWNLOADS/zcc_github_upload/tools/test_v4_m3_external_authority_separation.sh) implements the decisive experiment specified by the Verification Architect:
+   - **V4-01 (PARTIALLY REMEDIATED):** Out-of-tree authority execution and resistance to the tested post-initialization repository compromise demonstrated. Independent verifier and policy provenance remains pending V4-M4.
+   - **V4-05 (Non-Circular Commit Lineage):** The trusted commit SHA is passed strictly from external context (e.g. GitHub Actions event SHA or external caller); receipt fallback is completely eradicated.
+   - **V4-06 (Hardcoded Architectural Invariants):** Foundational invariants (direct byte equality, double-stage hash recomputation, non-empty negative controls, commit binding) are hardcoded into the verifier; policies attempting to disable them are rejected with `EXIT_POLICY_ERROR` (exit 10).
+   - **V4-07 (PARTIALLY REMEDIATED):** Execution-log marker presence and consistency are enforced. Independent replay of negative controls remains pending.
+   - **Coordinated Repository Compromise Defeated:** An adversarial checkout tampering with all local policies, verifiers, adjudicators, stage artifacts (`stage3.s != stage2.s`), and receipts is evaluated by the external authority and **STRICTLY REJECTED** with exit code `12`.
+7. **Continuous CI Integration:** Wired directly into `.github/workflows/harness-meta-verification.yml` to guarantee zero-self-certification and full sovereign resilience on every push.
