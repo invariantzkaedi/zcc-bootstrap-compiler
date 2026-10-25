@@ -119,6 +119,97 @@ int main(void) {
     printf("MISALIGN_ACCUM: %lu\n", (unsigned long)misalignment);
     return 0;
 }
+""",
+    "sysv_fp_reg_exhaustion": r"""
+#include <stdio.h>
+
+double fp_sum(double a, double b, double c, double d, double e, double f, double g, double h, double i, double j) {
+    return a + b + c + d + e + f + g + h + i + j;
+}
+
+int main(void) {
+    // 10 doubles: 8 in %xmm0..%xmm7, 2 spilled to stack
+    double s = fp_sum(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0);
+    printf("FP_SUM: %.1f\n", s);
+    return 0;
+}
+""",
+    "sysv_mixed_aggregate_fp_int": r"""
+#include <stdio.h>
+#include <stdint.h>
+
+typedef struct {
+    int64_t i;
+    double d;
+} Mixed16;
+
+Mixed16 make_mixed(int64_t a, double b) {
+    Mixed16 m;
+    m.i = a + 42;
+    m.d = b * 2.5;
+    return m;
+}
+
+int main(void) {
+    Mixed16 m = make_mixed(100, 4.0);
+    printf("MIXED_16: i=%lld, d=%.2f\n", (long long)m.i, m.d);
+    return 0;
+}
+""",
+    "sysv_nested_struct_alignment": r"""
+#include <stdio.h>
+#include <stdint.h>
+
+typedef struct {
+    uint8_t c;
+    uint32_t x;
+    uint16_t s;
+} Inner;
+
+typedef struct {
+    uint8_t a;
+    Inner in;
+    uint64_t b;
+} Outer;
+
+Outer make_outer(uint8_t a, uint32_t x, uint64_t b) {
+    Outer o;
+    o.a = a;
+    o.in.c = a + 1;
+    o.in.x = x;
+    o.in.s = 0x1234;
+    o.b = b;
+    return o;
+}
+
+int main(void) {
+    Outer o = make_outer(5, 0xdeadbeef, 0x1122334455667788ULL);
+    printf("OUTER: a=%u, in.c=%u, in.x=%x, in.s=%x, b=%llx\n",
+           o.a, o.in.c, o.in.x, o.in.s, (unsigned long long)o.b);
+    return 0;
+}
+""",
+    "sysv_variadic_mixed_fp_int": r"""
+#include <stdio.h>
+#include <stdarg.h>
+
+void format_mixed(char *buf, int n, ...) {
+    va_list ap;
+    va_start(ap, n);
+    int ival = va_arg(ap, int);
+    double dval = va_arg(ap, double);
+    int ival2 = va_arg(ap, int);
+    double dval2 = va_arg(ap, double);
+    va_end(ap);
+    sprintf(buf, "%d:%.2f:%d:%.2f", ival, dval, ival2, dval2);
+}
+
+int main(void) {
+    char buf[128];
+    format_mixed(buf, 4, 12, 3.14, 99, 2.72);
+    printf("FMT: %s\n", buf);
+    return 0;
+}
 """
 }
 
@@ -172,8 +263,14 @@ def test_oracle(zcc_binary, repo_root):
                 res_clang = run_cmd(["clang", "-O2", "-w", str(c_file), "-o", str(clang_bin), "-lm"])
                 if res_clang.returncode == 0:
                     run_clang = run_cmd([str(clang_bin)])
+                    if run_clang.returncode != run_gcc.returncode:
+                        print(f"FAIL [{name}]: Clang exit code ({run_clang.returncode}) != GCC exit code ({run_gcc.returncode})")
+                        return False
                     if run_clang.stdout != run_gcc.stdout:
-                        print(f"FAIL [{name}]: GCC vs Clang divergence detected!")
+                        print(f"FAIL [{name}]: GCC vs Clang stdout divergence detected!")
+                        return False
+                    if run_clang.stderr != run_gcc.stderr:
+                        print(f"FAIL [{name}]: GCC vs Clang stderr divergence detected!")
                         return False
 
             # 3. Compile with ZCC
@@ -192,18 +289,25 @@ def test_oracle(zcc_binary, repo_root):
                 return False
 
             run_zcc = run_cmd([str(zcc_bin)])
-            if run_zcc.returncode != 0:
-                print(f"FAIL [{name}]: ZCC binary returned exit code {run_zcc.returncode} (expected 0)")
+
+            # 4. Compare execution exit codes, stdout, and stderr
+            if run_zcc.returncode != run_gcc.returncode:
+                print(f"FAIL [{name}]: Exit code divergence between ZCC ({run_zcc.returncode}) and GCC ({run_gcc.returncode})")
                 return False
 
-            # 4. Compare outputs
             if run_zcc.stdout != run_gcc.stdout:
-                print(f"FAIL [{name}]: Output divergence between ZCC and GCC:")
+                print(f"FAIL [{name}]: Stdout divergence between ZCC and GCC:")
                 print(f"  GCC stdout: {run_gcc.stdout.strip()}")
                 print(f"  ZCC stdout: {run_zcc.stdout.strip()}")
                 return False
 
-            print(f"  ✓ {name:<25} Consensus Verified (Output: {run_zcc.stdout.strip()})")
+            if run_zcc.stderr != run_gcc.stderr:
+                print(f"FAIL [{name}]: Stderr divergence between ZCC and GCC:")
+                print(f"  GCC stderr: {run_gcc.stderr.strip()}")
+                print(f"  ZCC stderr: {run_zcc.stderr.strip()}")
+                return False
+
+            print(f"  ✓ {name:<25} Consensus Verified (Exit: {run_zcc.returncode}, Output: {run_zcc.stdout.strip()})")
             passed += 1
 
         print("=" * 60)

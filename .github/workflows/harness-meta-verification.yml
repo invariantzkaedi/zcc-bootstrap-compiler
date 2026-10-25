@@ -39,6 +39,11 @@ jobs:
         run: |
           python3 tools/independent_compiler_oracle.py ./zcc 2>&1 | tee -a meta_verification.log
 
+      - name: Independent Cross-Translation-Unit ABI Interoperability & Mutation Gauntlet
+        shell: bash
+        run: |
+          python3 tools/test_cross_tu_abi_interop.py ./zcc 2>&1 | tee -a meta_verification.log
+
       - name: Execute Hardened Negative Control Gauntlet
         shell: bash
         run: |

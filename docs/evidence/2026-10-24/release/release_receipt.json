@@ -4,15 +4,17 @@
   "generated_at_utc": "2026-10-25T00:30:00Z",
   "target_repository": "https://github.com/invariantzkaedi/zcc-bootstrap-compiler",
   "commit": {
-    "sha": "092b88178118198db50e9a0385ca49e761ca7294",
+    "sha": "6271d372cf6be5c13dd1ca79a55dbee5ef74b3e1",
     "branch": "main",
     "author": "invariantzkaedi <invariantzkaedi@gmail.com>"
   },
   "verification_layers": {
     "layer_1_independent_execution": {
       "platform": "GitHub-hosted Ubuntu 24.04.5 LTS",
-      "run_id": "40144648130",
-      "job_id": "121023288317",
+      "run_id": "40146839321",
+      "job_id": "121029887747",
+      "selfhost_run_id": "40146839271",
+      "selfhost_job_id": "121029887465",
       "verdict": "PASS",
       "retained_artifacts": [
         "meta_verification_receipt.json",
@@ -47,7 +49,25 @@
         "sysv_abi_aggregate_16b_24b",
         "sysv_mixed_fp_int",
         "variadic_spill_10args",
-        "recursive_stack_align"
+        "recursive_stack_align",
+        "sysv_fp_reg_exhaustion_10args",
+        "sysv_mixed_aggregate_fp_int_16b",
+        "sysv_nested_struct_alignment",
+        "sysv_variadic_mixed_fp_int"
+      ]
+    },
+    "layer_4_cross_translation_unit_abi_interop": {
+      "tool_file": "tools/test_cross_tu_abi_interop.py",
+      "verdict": "PASS",
+      "interop_directions_verified": [
+        "Direction 1: GCC caller -> ZCC callee",
+        "Direction 2: ZCC caller -> GCC callee",
+        "Direction 3: Clang caller -> ZCC callee",
+        "Direction 4: ZCC caller -> Clang callee"
+      ],
+      "adversarial_negative_controls": [
+        "NC-ABI-01 (Corrupted Mixed16 return lowering): REJECTED exit 1",
+        "NC-ABI-02 (Dropped sret struct copy): REJECTED exit 2"
       ]
     }
   },

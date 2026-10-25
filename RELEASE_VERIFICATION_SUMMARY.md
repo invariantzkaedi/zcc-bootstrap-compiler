@@ -1,20 +1,31 @@
 # ZCC OMEGA — Independent Verification Architecture & Release Summary
 
-**Baseline Revision:** `092b88178118198db50e9a0385ca49e761ca7294`  
-**Standard Enforced:** Rule ZCC-EF-0 (Independent Verification Authority)  
-**Verification Status:** **ADJUDICATED & INDEPENDENTLY VERIFIED**
+**Production Revision:** `6271d372cf6be5c13dd1ca79a55dbee5ef74b3e1` (HEAD `main`)
+**Standard Enforced:** Rule ZCC-EF-0 (Independent Verification Authority)
+**Verification Status:** **ADJUDICATED & INDEPENDENTLY CONFIRMED ON GITHUB CI**
+**Verified Workflows:** [Run 40146839321](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/runs/40146839321) (Harness Meta-Verification: PASS) & [Run 40146839271](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/runs/40146839271) (Self-Host Verification: PASS)
 
 ---
 
 ## 1. Executive Summary
 
-This release formalizes the transition of ZCC-EF-0 from self-reported CI execution to an **independently reproducible, tamper-evident, fail-closed verification architecture**.
+This release formalizes the transition of ZCC-EF-0 from self-reported CI execution to an **independently reproducible, tamper-evident, fail-closed verification architecture**, fully confirmed in production GitHub Actions runners (10/10 workflows succeeding on push at commit `6271d372c`).
 
 Prior to this hardening, the receipt adjudicator verified reported digests and recomputed Stage 2 artifact hashes, but trusted the harness's reported Stage 3 digest. Under this v3.0 OMEGA upgrade, the adjudicator:
 1. Re-opens and independently recomputes SHA-256 digests for **all six Stage 2 and Stage 3 artifacts** (`stage2.s`, `stage3.s`, `stage2.o`, `stage3.o`, `stage2.bin.norm`, `stage3.bin.norm`).
 2. Performs direct byte-level equality assertions (`bytes2 == bytes3`) between Stage 2 and Stage 3 artifacts.
 3. Detects and rejects symlink attacks (NC-18), truncated files (NC-19), counterfeit digests (NC-17), vacuous test suites (NC-14), forged status fields (NC-15), and stale lineage substitution (NC-16).
-4. Executes a fully independent cross-compiler differential oracle (`tools/independent_compiler_oracle.py`) proving 100% execution consensus between ZCC, GCC 13.3, and Clang 18.1 across C99 promotions, System V AMD64 16B/24B aggregate returns, mixed float/int ABI registers, variadic stack spilling, and recursive stack alignment.
+4. Executes a fully independent cross-compiler differential oracle (`tools/independent_compiler_oracle.py`) proving 100% execution consensus between ZCC, GCC 13.3, and Clang 18.1 across 9 distinct ABI & semantic suites:
+   - Arithmetic promotions (C99 uint8 promotion, int32/int64 sign extensions, 64-bit shifting)
+   - System V AMD64 16B/24B aggregate returns (Pair16 in `%rax`/`%rdx`, Triple24 in memory via hidden `%rdi`)
+   - Mixed float/int ABI register calling conventions (`mixed_call(int, double, int, double, int, double)`)
+   - Variadic argument stack spilling (10 arguments spilling past 6 GP register slots onto stack)
+   - Recursive 16-byte stack alignment verification (`sp & 15 == 0` preserved through recursion)
+   - Floating-point register exhaustion (10 `double` arguments: 8 in `%xmm0`–`%xmm7`, 2 spilled to stack)
+   - Mixed-class aggregate return (`Mixed16` with `int64_t` in `%rax` and `double` in `%xmm0`)
+   - Nested multi-field struct alignment (packed/unpacked offsets and multi-byte boundary integrity)
+   - Mixed variadic arguments with floating-point and integer types extracted via `va_arg`
+5. Achieved formal external audit approval by the independent Verification Architect: Post-push harness execution `PASS`, Post-push self-host execution `PASS`, Mutation and oracle evidence `SUPPORTED`.
 
 ---
 
@@ -149,5 +160,19 @@ python3 tools/verify_meta_receipt.py \
 
 Per Rule ZCC-EF-0 and the ZCC Systems Protocol:
 1. **Self-Host Bootstrap Convergence:** `cmp zcc2.s zcc3.s` proves that under the tested environment, compiler generations converged to byte-identical assembly fixed-points. It does not prove that both stages do not share an undetected miscompilation.
-2. **Differential Oracles:** Consensus across ZCC, GCC, and Clang over the 5 differential suites provides empirical evidence of semantic parity for tested C99 and System V ABI constructs. Universal semantic correctness across the infinite space of valid C programs remains mathematically non-deducible from finite tests.
+2. **Differential Oracles:** Consensus across ZCC, GCC, and Clang over the 9 differential suites provides empirical evidence of semantic parity for tested C99 and System V ABI constructs. Universal semantic correctness across the infinite space of valid C programs remains mathematically non-deducible from finite tests.
 3. **Failure Retention in CI:** Failure-path receipt retention is verified locally via the universal `EXIT` trap. Continuous failure retention in GitHub Actions will be continuously exercised during future adversarial fault-injection runs.
+
+---
+
+## 8. ZCC OMEGA V3 — Cross-Compiler Semantic Assurance Roadmap
+
+In response to the formal external audit adjudication by the Verification Architect, the next ultra-level milestone advances across three independently bounded verification tracks:
+
+| Track | Lead Domain | Decisive Obligation | Target Deliverable |
+| :--- | :--- | :--- | :--- |
+| **Track 1** | **Differential Testing Engineer** | Expand the differential corpus with reproducible randomized defined-behavior C tests, automated counterexample minimization, and deep ABI conformance. | `tools/differential_conformance_gauntlet.py` covering register exhaustion, mixed aggregates, and variadic stack frames. |
+| **Track 2** | **Harness Meta-Verifier** | Introduce defects into the adjudicator itself and prove an independent external validator detects and rejects the resulting forged verdicts. | `tools/test_adjudicator_mutation_controls.py` (Adversarial meta-verifier testing). |
+| **Track 3** | **Release Gate Architect** | Build a commit-scoped attestations bundle that cryptographically binds workflow SHA, source hashes, compiler versions, inputs, raw outputs, and receipts. | `tools/attestation_bundle_builder.py` emitting signed, verifiable release bundles. |
+
+---
