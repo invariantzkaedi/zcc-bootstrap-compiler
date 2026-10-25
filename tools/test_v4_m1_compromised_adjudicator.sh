@@ -16,18 +16,25 @@ set -euo pipefail
 VERIFIER="${1:?verifier required}"
 EVIDENCE="${2:?evidence required}"
 POLICY="${3:?policy required}"
+EXPECTED_COMMIT="${4:-$(python3 -c 'import json; print(json.load(open("meta_verification_receipt.json")).get("provenance",{}).get("git_commit",""))' 2>/dev/null || git rev-parse HEAD 2>/dev/null || true)}"
+
+COMMIT_ARG=""
+if [[ -n "$EXPECTED_COMMIT" ]]; then
+    COMMIT_ARG="--expected-commit $EXPECTED_COMMIT"
+fi
 
 echo "======================================================================"
 echo "🛡️  ZCC OMEGA V4 — MILESTONE V4-M1: NC-21 FORGED ADJUDICATOR TEST"
 echo "Verifier: $VERIFIER"
 echo "Evidence: $EVIDENCE"
 echo "Policy:   $POLICY"
+echo "Commit:   $EXPECTED_COMMIT"
 echo "======================================================================"
 
 # --- STEP 1: POSITIVE CONTROL (GENUINE EVIDENCE) ---
 echo -e "\n--- STEP 1: POSITIVE CONTROL (GENUINE UNCORRUPTED EVIDENCE) ---"
 set +e
-eval "$VERIFIER --policy '$POLICY' --evidence '$EVIDENCE'" > /tmp/pos_ctrl.stdout 2> /tmp/pos_ctrl.stderr
+eval "$VERIFIER --policy '$POLICY' --evidence '$EVIDENCE' $COMMIT_ARG" > /tmp/pos_ctrl.stdout 2> /tmp/pos_ctrl.stderr
 pos_rc=$?
 set -e
 
@@ -67,7 +74,7 @@ PY
 echo "Injected forged unconditional PASS (gate_rc=0) into receipt in isolated workdir."
 
 set +e
-eval "$VERIFIER --policy '$POLICY' --evidence '$WORK'" \
+eval "$VERIFIER --policy '$POLICY' --evidence '$WORK' $COMMIT_ARG" \
     > "$WORK/verifier.stdout" \
     2> "$WORK/verifier.stderr"
 rc=$?

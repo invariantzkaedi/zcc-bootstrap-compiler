@@ -29,6 +29,7 @@ def main():
     parser.add_argument("--evidence", required=True, help="Path to evidence directory containing raw artifacts")
     parser.add_argument("--receipt", default=None, help="Optional explicit path to receipt JSON")
     parser.add_argument("--expected-commit", default=None, help="Optional expected commit SHA to bind evidence")
+    parser.add_argument("--repo", default=None, help="Optional path to repository root under evaluation")
     args = parser.parse_args()
 
     policy_path = Path(args.policy).resolve()
@@ -126,13 +127,30 @@ def main():
             if sha2 != sha3:
                 reject(f"DIGEST MISMATCH: {fn2} ({sha2}) != {fn3} ({sha3})", EXIT_BYTE_MISMATCH)
 
-            # Cross-check against receipt digests if available
-            rec2 = digests.get(f"stage2_{pair.get('name')}")
-            rec3 = digests.get(f"stage3_{pair.get('name')}")
-            if rec2 and rec2 != sha2:
-                reject(f"STALE DIGEST: Recomputed {fn2} ({sha2}) != receipt ({rec2})", EXIT_BYTE_MISMATCH)
-            if rec3 and rec3 != sha3:
-                reject(f"COUNTERFEIT STAGE 3 DIGEST: Recomputed {fn3} ({sha3}) != receipt ({rec3})", EXIT_BYTE_MISMATCH)
+            # V4-03 Remediation: Require each receipt digest to exist, have 64-char hex format, and match
+            dkey = pair.get("digest_key") or pair.get("name")
+            key2 = f"stage2_{dkey}"
+            key3 = f"stage3_{dkey}"
+            rec2 = digests.get(key2)
+            rec3 = digests.get(key3)
+
+            if not rec2:
+                reject(f"RECEIPT INCOMPLETE (V4-03): Missing required digest field '{key2}' in receipt", EXIT_FORGERY_DETECTED)
+            if not rec3:
+                reject(f"RECEIPT INCOMPLETE (V4-03): Missing required digest field '{key3}' in receipt", EXIT_FORGERY_DETECTED)
+
+            def is_valid_sha256(h):
+                return isinstance(h, str) and len(h) == 64 and all(c in "0123456789abcdefABCDEF" for c in h)
+
+            if not is_valid_sha256(rec2):
+                reject(f"MALFORMED DIGEST (V4-03): Field '{key2}' is not a valid 64-char hex SHA-256: '{rec2}'", EXIT_FORGERY_DETECTED)
+            if not is_valid_sha256(rec3):
+                reject(f"MALFORMED DIGEST (V4-03): Field '{key3}' is not a valid 64-char hex SHA-256: '{rec3}'", EXIT_FORGERY_DETECTED)
+
+            if rec2.lower() != sha2.lower():
+                reject(f"STALE DIGEST (V4-03): Recomputed {fn2} ({sha2}) != receipt ({rec2})", EXIT_BYTE_MISMATCH)
+            if rec3.lower() != sha3.lower():
+                reject(f"COUNTERFEIT STAGE 3 DIGEST (V4-03): Recomputed {fn3} ({sha3}) != receipt ({rec3})", EXIT_BYTE_MISMATCH)
 
     # 3. Cleanliness Enforcement
     clean_policy = policy.get("cleanliness", {})
@@ -141,12 +159,50 @@ def main():
         if not cleanup.get("harness_workdir_cleaned"):
             reject("Workdir cleanup was not verified (EF-03 violation)", EXIT_POLICY_ERROR)
 
-    # 4. Lineage Binding
-    if args.expected_commit:
+    # 4. Lineage Binding (V4-02 Remediation)
+    if policy.get("required_commit_binding", True):
+        if not args.expected_commit:
+            reject("POLICY VIOLATION (V4-02): 'required_commit_binding' is true but --expected-commit was omitted.", EXIT_POLICY_ERROR)
+
+        exp_commit = args.expected_commit.strip().lower()
+        if len(exp_commit) != 40 or not all(c in "0123456789abcdef" for c in exp_commit):
+            reject(f"MALFORMED INPUT (V4-02): --expected-commit must be a 40-character hex commit SHA: '{args.expected_commit}'", EXIT_POLICY_ERROR)
+
         prov = receipt.get("provenance", {})
         rec_commit = prov.get("git_commit")
-        if rec_commit != args.expected_commit:
-            reject(f"LINEAGE MISMATCH: Receipt commit {rec_commit} != expected {args.expected_commit}", EXIT_POLICY_ERROR)
+        if not rec_commit:
+            reject("LINEAGE VIOLATION (V4-02): Receipt is missing 'provenance.git_commit'", EXIT_POLICY_ERROR)
+
+        if str(rec_commit).strip().lower() != exp_commit:
+            reject(f"LINEAGE MISMATCH (V4-02): Receipt commit '{rec_commit}' does not match expected '{args.expected_commit}'", EXIT_POLICY_ERROR)
+    elif args.expected_commit:
+        prov = receipt.get("provenance", {})
+        rec_commit = prov.get("git_commit")
+        if rec_commit and str(rec_commit).strip().lower() != args.expected_commit.strip().lower():
+            reject(f"LINEAGE MISMATCH: Receipt commit '{rec_commit}' != expected '{args.expected_commit}'", EXIT_POLICY_ERROR)
+
+    # 5. Adjudicator Script Integrity (NC-21B / NC-25)
+    adj_policy = policy.get("adjudicator_integrity", {})
+    if adj_policy.get("require_adjudicator_hash_pinned", False):
+        pinned = adj_policy.get("pinned_scripts", {})
+        if args.repo:
+            repo_root = Path(args.repo).resolve()
+        else:
+            curr = evidence_dir
+            repo_root = Path(".")
+            while curr != curr.parent:
+                if (curr / "gate.sh").is_file():
+                    repo_root = curr
+                    break
+                curr = curr.parent
+
+        for script_name, expected_sha in pinned.items():
+            script_path = repo_root / script_name
+            if not script_path.is_file():
+                reject(f"MISSING ADJUDICATOR SCRIPT: {script_name} not found at {script_path}", EXIT_POLICY_ERROR)
+            actual_sha = hashlib.sha256(script_path.read_bytes()).hexdigest()
+            if actual_sha != expected_sha:
+                reject(f"ADJUDICATOR COMPROMISED (NC-21B / NC-25): Script '{script_name}' SHA-256 {actual_sha} != pinned {expected_sha}", EXIT_FORGERY_DETECTED)
 
     print("SOVEREIGN RELEASE POLICY VERIFIED: PASS", file=sys.stdout)
     sys.exit(EXIT_OK)

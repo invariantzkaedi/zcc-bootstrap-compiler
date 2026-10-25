@@ -10,16 +10,19 @@
     "required_stage_pairs": [
       {
         "name": "assembly",
+        "digest_key": "s",
         "stage2": "stage2.s",
         "stage3": "stage3.s"
       },
       {
         "name": "object",
+        "digest_key": "o",
         "stage2": "stage2.o",
         "stage3": "stage3.o"
       },
       {
         "name": "binary_norm",
+        "digest_key": "bin_norm",
         "stage2": "stage2.bin.norm",
         "stage3": "stage3.bin.norm"
       }
@@ -37,5 +40,12 @@
   },
   "cleanliness": {
     "require_workdir_cleaned": true
+  },
+  "adjudicator_integrity": {
+    "require_adjudicator_hash_pinned": true,
+    "pinned_scripts": {
+      "gate.sh": "5e9c2c49e2ef52c43fa5214a7c12bcfe6347c592b5408702db5b56180efabee7",
+      "tools/verify_meta_receipt.py": "e0e19ee654fc9bd36269b299b08495fd9856cb1eb5b0036ed28af33651ea5dff"
+    }
   }
 }

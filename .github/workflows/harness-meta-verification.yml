@@ -69,6 +69,16 @@ jobs:
             "python3 tools/sovereign_release_verifier.py" \
             "$GITHUB_WORKSPACE/evidence/latest" \
             "$GITHUB_WORKSPACE/contracts/sovereign_release_policy.json" \
+            "${{ github.sha }}" \
+            2>&1 | tee -a meta_verification.log
+
+      - name: Sovereign Resilience Gauntlet (Milestone V4-M2 / V4-01 through V4-04)
+        shell: bash
+        run: |
+          bash tools/test_v4_m2_sovereign_resilience.sh \
+            "$GITHUB_WORKSPACE/evidence/latest" \
+            "$GITHUB_WORKSPACE/meta_verification_receipt.json" \
+            "${{ github.sha }}" \
             2>&1 | tee -a meta_verification.log
 
       - name: Upload Meta-Verification Evidence

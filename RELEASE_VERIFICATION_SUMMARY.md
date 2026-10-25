@@ -177,17 +177,24 @@ In response to the formal external audit adjudication by the Verification Archit
 
 ---
 
-## 9. ZCC OMEGA V4 — Sovereign Verification Independence (Milestone V4-M1 Verified)
+## 9. ZCC OMEGA V4 — Sovereign Verification Independence (Milestones V4-M1 & V4-M2 Verified)
 
 OMEGA V4 establishes the supreme assurance principle under Rule ZCC-EF-0+:
 > **No producer-side component, test harness, or repository commit may declare its own release correctness.**
 
 ### Five-Boundary Architecture
 1. **Producer Isolation:** The producing compiler builds software and produces ordinary raw artifacts and test telemetry.
-2. **External Trust Policy:** An independently governed, immutable policy (`contracts/sovereign_release_policy.json`) specifies non-negotiable release rules, forbidden exit codes (e.g. `gate_rc: 0` for negative controls), and direct raw byte comparison obligations.
-3. **Sovereign Release Verifier:** [`tools/sovereign_release_verifier.py`](file:///H:/__DOWNLOADS/zcc_github_upload/tools/sovereign_release_verifier.py) runs as an external authority that directly reconstructs hashes and byte identities from raw disk bytes, actively rejecting forged receipts or producer collusion.
+2. **External Trust Policy:** An independently governed, immutable policy (`contracts/sovereign_release_policy.json`) specifies non-negotiable release rules, forbidden exit codes (e.g. `gate_rc: 0` for negative controls), direct raw byte comparison obligations, and pinned script checksums.
+3. **Sovereign Release Verifier:** [`tools/sovereign_release_verifier.py`](file:///H:/__DOWNLOADS/zcc_github_upload/tools/sovereign_release_verifier.py) runs as an external authority that directly reconstructs hashes and byte identities from raw disk bytes, actively rejecting forged receipts, omitted lineage, incomplete digests, or producer collusion.
 4. **Milestone V4-M1 Adversarial Proof (NC-21 Defeated):**
    [`tools/test_v4_m1_compromised_adjudicator.sh`](file:///H:/__DOWNLOADS/zcc_github_upload/tools/test_v4_m1_compromised_adjudicator.sh) demonstrates that when a compromised producer injects an unconditional `PASS` with forged `gate_rc=0` into its receipt:
    - Genuine evidence exits `0` (`SOVEREIGN RELEASE POLICY VERIFIED: PASS`).
    - Forged evidence is **STRICTLY REJECTED** with exit code `12` (`EXIT_FORGERY_DETECTED`) and explicit diagnostic: `CRITICAL FORGERY DETECTED (NC-21): negative control 'assembly' reported gate_rc=0 (forbidden unconditional PASS)`.
-5. **Continuous CI Integration:** Wired directly into `.github/workflows/harness-meta-verification.yml` to guarantee zero-self-certification on every push.
+5. **Milestone V4-M2 Forensic Remediation & Sovereign Resilience Gauntlet:**
+   In response to the forensic audit findings (V4-01 through V4-04), [`tools/test_v4_m2_sovereign_resilience.sh`](file:///H:/__DOWNLOADS/zcc_github_upload/tools/test_v4_m2_sovereign_resilience.sh) executes a 6-test gauntlet proving external authority resistance:
+   - **V4-01 (External Authority Independence):** Authority installs immutable pinned copies in an isolated directory outside repository control. In-repo policy tampering is rendered inert (exit 12 on forgery).
+   - **V4-02 (Mandatory Commit Binding):** Omission of `--expected-commit` or SHA-256/git commit mismatch is strictly rejected with exit code `10` (`EXIT_POLICY_ERROR`).
+   - **V4-03 (Receipt Digest Format & Completeness):** Omission of any stage-3 digest (`stage3_s`, `stage3_o`, `stage3_bin_norm`) or non-64-hex strings is strictly rejected with exit code `12` (`RECEIPT INCOMPLETE`).
+   - **V4-04 / NC-21B (Compromised Adjudicator Code Replacement):** Tampering with `tools/verify_meta_receipt.py` to return an unconditional `PASS` is detected via pinned script integrity and rejected with exit code `12` (`ADJUDICATOR COMPROMISED`).
+   - **NC-21A (Forged Negative Control):** Injected `gate_rc=0` rejected with exit code `12`.
+6. **Continuous CI Integration:** Wired directly into `.github/workflows/harness-meta-verification.yml` to guarantee zero-self-certification and full sovereign resilience on every push.
