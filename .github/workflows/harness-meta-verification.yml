@@ -14,6 +14,9 @@ jobs:
     name: "Adversarial Mutation Tests (Assembly 20, Object 21, Binary 22)"
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash --noprofile --norc -euo pipefail {0}
 
     steps:
       - name: Checkout Code
@@ -26,22 +29,24 @@ jobs:
 
       - name: Install Build Toolchain & Oracles
         run: |
+          set -euo pipefail
           sudo apt-get update -qq || true
           sudo apt-get install -y gcc clang make binutils python3 python3-jsonschema
 
       - name: Generate Fresh Bootstrap Stage Artifacts
         run: |
+          set -euo pipefail
           make zcc
           ZCC_VERIFIER_RUN_ID="latest" bash gate.sh
 
       - name: Independent Compiler Oracle (GCC & Clang Consensus)
-        shell: bash
         run: |
+          set -euo pipefail
           python3 tools/independent_compiler_oracle.py ./zcc 2>&1 | tee -a meta_verification.log
 
       - name: Independent Cross-Translation-Unit ABI Interoperability & Mutation Gauntlet
-        shell: bash
         run: |
+          set -euo pipefail
           python3 tools/test_cross_tu_abi_interop.py ./zcc 2>&1 | tee -a meta_verification.log
 
       - name: Execute Hardened Negative Control Gauntlet
@@ -54,8 +59,8 @@ jobs:
             2>&1 | tee -a meta_verification.log
 
       - name: Independently Adjudicate Meta-Verification Receipt (NC-14 through NC-20, Double-Stage Hashes & Direct Byte Equality)
-        shell: bash
         run: |
+          set -euo pipefail
           python3 tools/verify_meta_receipt.py \
             "$GITHUB_WORKSPACE/meta_verification_receipt.json" \
             "${{ github.sha }}" \
@@ -63,8 +68,8 @@ jobs:
             2>&1 | tee -a meta_verification.log
 
       - name: Sovereign Release Authority & Compromised Adjudicator Rejection (Milestone V4-M1 / NC-21)
-        shell: bash
         run: |
+          set -euo pipefail
           bash tools/test_v4_m1_compromised_adjudicator.sh \
             "python3 tools/sovereign_release_verifier.py" \
             "$GITHUB_WORKSPACE/evidence/latest" \
@@ -73,8 +78,8 @@ jobs:
             2>&1 | tee -a meta_verification.log
 
       - name: Sovereign Resilience Gauntlet (Milestone V4-M2 / V4-01 through V4-04)
-        shell: bash
         run: |
+          set -euo pipefail
           bash tools/test_v4_m2_sovereign_resilience.sh \
             "$GITHUB_WORKSPACE/evidence/latest" \
             "$GITHUB_WORKSPACE/meta_verification_receipt.json" \
@@ -82,9 +87,18 @@ jobs:
             2>&1 | tee -a meta_verification.log
 
       - name: External Authority Separation Experiment (Milestone V4-M3 / Coordinated Compromise Rejection)
-        shell: bash
         run: |
+          set -euo pipefail
           bash tools/test_v4_m3_external_authority_separation.sh \
+            "$GITHUB_WORKSPACE/evidence/latest" \
+            "$GITHUB_WORKSPACE/meta_verification_receipt.json" \
+            "${{ github.sha }}" \
+            2>&1 | tee -a meta_verification.log
+
+      - name: Independent Authority Provenance & Single-Fault Isolation Gauntlet (Milestone V4-M4)
+        run: |
+          set -euo pipefail
+          bash tools/test_v4_m4_independent_authority.sh \
             "$GITHUB_WORKSPACE/evidence/latest" \
             "$GITHUB_WORKSPACE/meta_verification_receipt.json" \
             "${{ github.sha }}" \
@@ -98,6 +112,7 @@ jobs:
           path: |
             meta_verification_receipt.json
             meta_verification.log
+            evidence/latest/v4_m4_authority_audit.log
           if-no-files-found: error
           retention-days: 30
 
