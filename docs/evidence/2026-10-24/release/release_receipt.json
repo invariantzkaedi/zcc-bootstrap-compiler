@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "receipt_version": "3.0.0-OMEGA",
+  "generated_at_utc": "2026-10-25T00:30:00Z",
+  "target_repository": "https://github.com/invariantzkaedi/zcc-bootstrap-compiler",
+  "commit": {
+    "sha": "092b88178118198db50e9a0385ca49e761ca7294",
+    "branch": "main",
+    "author": "invariantzkaedi <invariantzkaedi@gmail.com>"
+  },
+  "verification_layers": {
+    "layer_1_independent_execution": {
+      "platform": "GitHub-hosted Ubuntu 24.04.5 LTS",
+      "run_id": "40144648130",
+      "job_id": "121023288317",
+      "verdict": "PASS",
+      "retained_artifacts": [
+        "meta_verification_receipt.json",
+        "meta_verification.log"
+      ]
+    },
+    "layer_2_independent_verification_authority": {
+      "oracle_file": "tools/verify_meta_receipt.py",
+      "schema_file": "contracts/meta_verification_receipt.schema.json",
+      "verdict": "PASS",
+      "checks_enforced": [
+        "double_stage_sha256_recomputation",
+        "direct_byte_level_stage2_stage3_identity",
+        "symlink_sabotage_rejection (NC-18)",
+        "truncation_check (NC-19)",
+        "anti_vacuity (NC-14)",
+        "anti_forgery (NC-15)",
+        "stale_artifact_rejection (NC-16)",
+        "counterfeit_stage3_rejection (NC-17)",
+        "verified_cleanup (EF-03)"
+      ]
+    },
+    "layer_3_independent_compiler_differential_oracle": {
+      "oracle_file": "tools/independent_compiler_oracle.py",
+      "reference_compilers": [
+        "gcc 13.3.0",
+        "clang 18.1.3"
+      ],
+      "verdict": "PASS",
+      "suites_passed": [
+        "arithmetic_promotions",
+        "sysv_abi_aggregate_16b_24b",
+        "sysv_mixed_fp_int",
+        "variadic_spill_10args",
+        "recursive_stack_align"
+      ]
+    }
+  },
+  "epistemic_boundary": {
+    "bootstrap_fixed_point": "Byte-identical assembly (cmp stage2.s stage3.s exit 0) establishes reproducible self-hosting under tested environment.",
+    "compiler_semantic_correctness": "Differential execution against GCC and Clang provides empirical evidence of C99/SystemV semantics over tested programs. Universal semantic correctness across all programs remains non-deducible from finite tests.",
+    "release_decision": "CERTIFIED_FOR_PRODUCTION_CI"
+  }
+}

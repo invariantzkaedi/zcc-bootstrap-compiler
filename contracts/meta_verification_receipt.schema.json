@@ -1,0 +1,192 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ZCC Meta-Verification Receipt Schema (ZCC-EF-0 v3.0)",
+  "type": "object",
+  "required": [
+    "timestamp_utc",
+    "verdict",
+    "exit_code",
+    "last_stage",
+    "error_message",
+    "provenance",
+    "digests",
+    "positive_controls",
+    "negative_controls",
+    "cleanup"
+  ],
+  "properties": {
+    "timestamp_utc": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["PASS", "FAIL", "INCOMPLETE"]
+    },
+    "exit_code": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "last_stage": {
+      "type": "string",
+      "minLength": 1
+    },
+    "error_message": {
+      "type": "string"
+    },
+    "provenance": {
+      "type": "object",
+      "required": [
+        "git_commit",
+        "gate_script_sha256",
+        "harness_script_sha256",
+        "ci_context",
+        "toolchain",
+        "source_artifacts_dir"
+      ],
+      "properties": {
+        "git_commit": {
+          "type": "string",
+          "minLength": 7
+        },
+        "git_branch": {
+          "type": "string"
+        },
+        "git_dirty": {
+          "type": "string"
+        },
+        "gate_script_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "expected_gate_script_sha256": {
+          "type": "string"
+        },
+        "gate_hash_status": {
+          "type": "string"
+        },
+        "harness_script_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "ci_context": {
+          "type": "object",
+          "required": [
+            "github_sha",
+            "github_run_id",
+            "github_run_attempt"
+          ],
+          "properties": {
+            "github_sha": { "type": "string" },
+            "github_run_id": { "type": "string" },
+            "github_run_attempt": { "type": "string" }
+          }
+        },
+        "toolchain": {
+          "type": "object",
+          "required": ["gcc", "as", "ld", "python", "os"],
+          "properties": {
+            "gcc": { "type": "string" },
+            "as": { "type": "string" },
+            "ld": { "type": "string" },
+            "python": { "type": "string" },
+            "os": { "type": "string" }
+          }
+        },
+        "source_artifacts_dir": {
+          "type": "string"
+        }
+      }
+    },
+    "digests": {
+      "type": "object",
+      "required": [
+        "stage2_s",
+        "stage3_s",
+        "stage2_o",
+        "stage3_o",
+        "stage2_bin_norm",
+        "stage3_bin_norm"
+      ],
+      "properties": {
+        "stage2_s": { "type": "string" },
+        "stage3_s": { "type": "string" },
+        "stage2_o": { "type": "string" },
+        "stage3_o": { "type": "string" },
+        "stage2_bin_norm": { "type": "string" },
+        "stage3_bin_norm": { "type": "string" }
+      }
+    },
+    "positive_controls": {
+      "type": "object",
+      "required": [
+        "cmp_assembly",
+        "cmp_object",
+        "cmp_binary_norm",
+        "status"
+      ],
+      "properties": {
+        "cmp_assembly": { "type": "integer" },
+        "cmp_object": { "type": "integer" },
+        "cmp_binary_norm": { "type": "integer" },
+        "status": {
+          "type": "string",
+          "enum": ["PASS", "UNVERIFIED", "FAIL"]
+        }
+      }
+    },
+    "negative_controls": {
+      "type": "object",
+      "required": ["assembly", "object", "binary"],
+      "properties": {
+        "assembly": {
+          "type": "object",
+          "required": ["mutation", "gate_rc", "expected_gate_rc", "status"],
+          "properties": {
+            "mutation": { "type": "string" },
+            "cmp_rc": { "type": "integer" },
+            "gate_rc": { "type": "integer" },
+            "expected_gate_rc": { "type": "integer" },
+            "designated_error": { "type": "string" },
+            "diagnostic": { "type": "string" },
+            "status": { "type": "string", "enum": ["PASS", "FAIL"] }
+          }
+        },
+        "object": {
+          "type": "object",
+          "required": ["mutation", "gate_rc", "expected_gate_rc", "status"],
+          "properties": {
+            "mutation": { "type": "string" },
+            "gate_rc": { "type": "integer" },
+            "expected_gate_rc": { "type": "integer" },
+            "designated_error": { "type": "string" },
+            "diagnostic": { "type": "string" },
+            "status": { "type": "string", "enum": ["PASS", "FAIL"] }
+          }
+        },
+        "binary": {
+          "type": "object",
+          "required": ["mutation", "gate_rc", "expected_gate_rc", "status"],
+          "properties": {
+            "mutation": { "type": "string" },
+            "cmp_rc": { "type": "integer" },
+            "gate_rc": { "type": "integer" },
+            "expected_gate_rc": { "type": "integer" },
+            "designated_error": { "type": "string" },
+            "diagnostic": { "type": "string" },
+            "status": { "type": "string", "enum": ["PASS", "FAIL"] }
+          }
+        }
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "required": ["work_dir", "harness_workdir_cleaned"],
+      "properties": {
+        "work_dir": { "type": "string" },
+        "harness_workdir_cleaned": { "type": "boolean" }
+      }
+    }
+  },
+  "additionalProperties": true
+}
