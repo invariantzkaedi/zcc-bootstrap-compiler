@@ -1,0 +1,75 @@
+{
+  "timestamp_utc": "2026-10-25T07:15:07Z",
+  "verdict": "PASS",
+  "exit_code": 0,
+  "last_stage": "COMPLETE",
+  "error_message": "",
+  "provenance": {
+    "git_commit": "13003a77834a1b247a3fdd1821d91b8df836adad",
+    "git_branch": "main",
+    "git_dirty": "DIRTY (1939 modified/untracked files)",
+    "gate_script_sha256": "5e9c2c49e2ef52c43fa5214a7c12bcfe6347c592b5408702db5b56180efabee7",
+    "expected_gate_script_sha256": "5e9c2c49e2ef52c43fa5214a7c12bcfe6347c592b5408702db5b56180efabee7",
+    "gate_hash_status": "MATCH_COMMITTED_HEAD",
+    "harness_script_sha256": "9bec9ada05886eaf200242dec6b92bc31ab3db2b37f0770f3e382a9825b54495",
+    "ci_context": {
+      "github_sha": "LOCAL_DEV",
+      "github_run_id": "LOCAL_RUN",
+      "github_run_attempt": "1"
+    },
+    "toolchain": {
+      "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "as": "GNU assembler (GNU Binutils for Ubuntu) 2.42",
+      "ld": "GNU ld (GNU Binutils for Ubuntu) 2.42",
+      "python": "Python 3.12.3",
+      "os": "Ubuntu 24.04.4 LTS"
+    },
+    "source_artifacts_dir": "/mnt/h/__DOWNLOADS/zcc_github_upload/evidence/latest"
+  },
+  "digests": {
+    "stage2_s": "e8d52fa3e5c8ee89305313e0d19a0ef06b3aa041c0fa09fc4c73ecdcf5b2da9d",
+    "stage3_s": "e8d52fa3e5c8ee89305313e0d19a0ef06b3aa041c0fa09fc4c73ecdcf5b2da9d",
+    "stage2_o": "d4789f24233dc0514d0d9871cfd2a7dc3925d982927356af3f3ae6c7b6486390",
+    "stage3_o": "d4789f24233dc0514d0d9871cfd2a7dc3925d982927356af3f3ae6c7b6486390",
+    "stage2_bin_norm": "ea8e0f4cf25cc483775cf8103d8c6d2f6ac512f14d7eacc8b79cd3d2ea173e29",
+    "stage3_bin_norm": "ea8e0f4cf25cc483775cf8103d8c6d2f6ac512f14d7eacc8b79cd3d2ea173e29"
+  },
+  "positive_controls": {
+    "cmp_assembly": 0,
+    "cmp_object": 0,
+    "cmp_binary_norm": 0,
+    "status": "PASS"
+  },
+  "negative_controls": {
+    "assembly": {
+      "mutation": "Appended comment '# ZCC_NEGATIVE_CONTROL' to stage3.s",
+      "cmp_rc": 1,
+      "gate_rc": 20,
+      "expected_gate_rc": 20,
+      "designated_error": "EXIT_ASM_DIVERG",
+      "diagnostic": "FAIL: Assembly files diverged.",
+      "status": "PASS"
+    },
+    "object": {
+      "mutation": "XOR bitflip at byte offset 128 (0x89->0x88)",
+      "gate_rc": 21,
+      "expected_gate_rc": 21,
+      "designated_error": "EXIT_OBJ_DIVERG",
+      "diagnostic": "FAIL: Object files diverged.",
+      "status": "PASS"
+    },
+    "binary": {
+      "mutation": "XOR bitflip at byte offset 256 (0x00->0x01) in stage3.bin, re-normalized via objcopy",
+      "cmp_rc": 1,
+      "gate_rc": 22,
+      "expected_gate_rc": 22,
+      "designated_error": "EXIT_BIN_DIVERG",
+      "diagnostic": "FAIL: Binary files diverged post-normalization.",
+      "status": "PASS"
+    }
+  },
+  "cleanup": {
+    "work_dir": "/tmp/zcc_neg_ctrl_3yQ5ln",
+    "harness_workdir_cleaned": true
+  }
+}

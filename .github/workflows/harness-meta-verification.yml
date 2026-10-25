@@ -104,6 +104,16 @@ jobs:
             "${{ github.sha }}" \
             2>&1 | tee -a meta_verification.log
 
+      - name: Genuine External Release Authority & Sovereign Provenance Gauntlet (Milestone V4-M5 / NC-AUTH-01)
+        run: |
+          set -euo pipefail
+          bash tools/test_v4_m5_genuine_external_authority.sh \
+            "$GITHUB_WORKSPACE/evidence/latest" \
+            "$GITHUB_WORKSPACE/meta_verification_receipt.json" \
+            "${{ github.sha }}" \
+            "$GITHUB_WORKSPACE/evidence/latest" \
+            2>&1 | tee -a meta_verification.log
+
       - name: Upload Meta-Verification Evidence
         if: always()
         uses: actions/upload-artifact@v4.6.1
@@ -113,6 +123,8 @@ jobs:
             meta_verification_receipt.json
             meta_verification.log
             evidence/latest/v4_m4_authority_audit.log
+            evidence/latest/v4_m5_authority_audit.log
+            evidence/latest/replay_bundle/
           if-no-files-found: error
           retention-days: 30
 
