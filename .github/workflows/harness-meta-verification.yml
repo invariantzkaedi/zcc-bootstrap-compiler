@@ -62,6 +62,15 @@ jobs:
             "$GITHUB_WORKSPACE/evidence/latest" \
             2>&1 | tee -a meta_verification.log
 
+      - name: Sovereign Release Authority & Compromised Adjudicator Rejection (Milestone V4-M1 / NC-21)
+        shell: bash
+        run: |
+          bash tools/test_v4_m1_compromised_adjudicator.sh \
+            "python3 tools/sovereign_release_verifier.py" \
+            "$GITHUB_WORKSPACE/evidence/latest" \
+            "$GITHUB_WORKSPACE/contracts/sovereign_release_policy.json" \
+            2>&1 | tee -a meta_verification.log
+
       - name: Upload Meta-Verification Evidence
         if: always()
         uses: actions/upload-artifact@v4.6.1

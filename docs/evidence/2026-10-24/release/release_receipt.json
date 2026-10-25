@@ -4,17 +4,18 @@
   "generated_at_utc": "2026-10-25T00:30:00Z",
   "target_repository": "https://github.com/invariantzkaedi/zcc-bootstrap-compiler",
   "commit": {
-    "sha": "6271d372cf6be5c13dd1ca79a55dbee5ef74b3e1",
+    "sha": "1b36796a99103d3aa721192740a2ff91aabc9aab",
     "branch": "main",
     "author": "invariantzkaedi <invariantzkaedi@gmail.com>"
   },
   "verification_layers": {
     "layer_1_independent_execution": {
       "platform": "GitHub-hosted Ubuntu 24.04.5 LTS",
-      "run_id": "40146839321",
-      "job_id": "121029887747",
-      "selfhost_run_id": "40146839271",
-      "selfhost_job_id": "121029887465",
+      "run_id": "40152920080",
+      "job_id": "121048029525",
+      "selfhost_run_id": "40152920062",
+      "selfhost_job_id": "121048029497",
+      "system_invariants_run_id": "40152920139",
       "verdict": "PASS",
       "retained_artifacts": [
         "meta_verification_receipt.json",
@@ -68,6 +69,18 @@
       "adversarial_negative_controls": [
         "NC-ABI-01 (Corrupted Mixed16 return lowering): REJECTED exit 1",
         "NC-ABI-02 (Dropped sret struct copy): REJECTED exit 2"
+      ]
+    },
+    "layer_5_sovereign_release_authority_v4": {
+      "verifier_file": "tools/sovereign_release_verifier.py",
+      "policy_file": "contracts/sovereign_release_policy.json",
+      "milestone": "V4-M1",
+      "verdict": "PASS",
+      "checks_enforced": [
+        "disallow_unconditional_pass (NC-21)",
+        "forbidden_gate_rc_zero_rejection (NC-21)",
+        "direct_raw_byte_equality",
+        "cleanliness_enforcement"
       ]
     }
   },

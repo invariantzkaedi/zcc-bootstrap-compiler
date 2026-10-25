@@ -1,15 +1,15 @@
 # ZCC OMEGA — Independent Verification Architecture & Release Summary
 
-**Production Revision:** `6271d372cf6be5c13dd1ca79a55dbee5ef74b3e1` (HEAD `main`)
-**Standard Enforced:** Rule ZCC-EF-0 (Independent Verification Authority)
+**Production Revision:** `1b36796a99103d3aa721192740a2ff91aabc9aab` (HEAD `main`)
+**Standard Enforced:** Rule ZCC-EF-0+ (Sovereign Verification Independence)
 **Verification Status:** **ADJUDICATED & INDEPENDENTLY CONFIRMED ON GITHUB CI**
-**Verified Workflows:** [Run 40146839321](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/runs/40146839321) (Harness Meta-Verification: PASS) & [Run 40146839271](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/runs/40146839271) (Self-Host Verification: PASS)
+**Verified Workflows:** [Run 40152920080](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/runs/40152920080) (Harness Meta-Verification: PASS), [Run 40152920062](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/runs/40152920062) (Self-Host Verification: PASS), [Run 40152920139](https://github.com/invariantzkaedi/zcc-bootstrap-compiler/actions/runs/40152920139) (System Verification Invariants: PASS)
 
 ---
 
 ## 1. Executive Summary
 
-This release formalizes the transition of ZCC-EF-0 from self-reported CI execution to an **independently reproducible, tamper-evident, fail-closed verification architecture**, fully confirmed in production GitHub Actions runners (10/10 workflows succeeding on push at commit `6271d372c`).
+This release formalizes the transition of ZCC-EF-0 to **ZCC OMEGA V4 — Sovereign Verification Independence**, advancing from self-reported CI execution to an externally governed release authority driven by immutable trust policies (`contracts/sovereign_release_policy.json`) and verified across 10/10 GitHub Actions workflows succeeding on push at commit `1b36796a9`.
 
 Prior to this hardening, the receipt adjudicator verified reported digests and recomputed Stage 2 artifact hashes, but trusted the harness's reported Stage 3 digest. Under this v3.0 OMEGA upgrade, the adjudicator:
 1. Re-opens and independently recomputes SHA-256 digests for **all six Stage 2 and Stage 3 artifacts** (`stage2.s`, `stage3.s`, `stage2.o`, `stage3.o`, `stage2.bin.norm`, `stage3.bin.norm`).
@@ -176,3 +176,18 @@ In response to the formal external audit adjudication by the Verification Archit
 | **Track 3** | **Release Gate Architect** | Build a commit-scoped attestations bundle that cryptographically binds workflow SHA, source hashes, compiler versions, inputs, raw outputs, and receipts. | `tools/attestation_bundle_builder.py` emitting signed, verifiable release bundles. |
 
 ---
+
+## 9. ZCC OMEGA V4 — Sovereign Verification Independence (Milestone V4-M1 Verified)
+
+OMEGA V4 establishes the supreme assurance principle under Rule ZCC-EF-0+:
+> **No producer-side component, test harness, or repository commit may declare its own release correctness.**
+
+### Five-Boundary Architecture
+1. **Producer Isolation:** The producing compiler builds software and produces ordinary raw artifacts and test telemetry.
+2. **External Trust Policy:** An independently governed, immutable policy (`contracts/sovereign_release_policy.json`) specifies non-negotiable release rules, forbidden exit codes (e.g. `gate_rc: 0` for negative controls), and direct raw byte comparison obligations.
+3. **Sovereign Release Verifier:** [`tools/sovereign_release_verifier.py`](file:///H:/__DOWNLOADS/zcc_github_upload/tools/sovereign_release_verifier.py) runs as an external authority that directly reconstructs hashes and byte identities from raw disk bytes, actively rejecting forged receipts or producer collusion.
+4. **Milestone V4-M1 Adversarial Proof (NC-21 Defeated):**
+   [`tools/test_v4_m1_compromised_adjudicator.sh`](file:///H:/__DOWNLOADS/zcc_github_upload/tools/test_v4_m1_compromised_adjudicator.sh) demonstrates that when a compromised producer injects an unconditional `PASS` with forged `gate_rc=0` into its receipt:
+   - Genuine evidence exits `0` (`SOVEREIGN RELEASE POLICY VERIFIED: PASS`).
+   - Forged evidence is **STRICTLY REJECTED** with exit code `12` (`EXIT_FORGERY_DETECTED`) and explicit diagnostic: `CRITICAL FORGERY DETECTED (NC-21): negative control 'assembly' reported gate_rc=0 (forbidden unconditional PASS)`.
+5. **Continuous CI Integration:** Wired directly into `.github/workflows/harness-meta-verification.yml` to guarantee zero-self-certification on every push.

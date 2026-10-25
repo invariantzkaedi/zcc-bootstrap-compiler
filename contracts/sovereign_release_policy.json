@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "policy_version": "4.0.0-OMEGA",
+  "policy_name": "ZCC Sovereign Release Policy",
+  "enforcement_mode": "FAIL_CLOSED",
+  "required_commit_binding": true,
+  "stage_identity": {
+    "require_double_stage_hash_recomputation": true,
+    "require_direct_byte_equality": true,
+    "required_stage_pairs": [
+      {
+        "name": "assembly",
+        "stage2": "stage2.s",
+        "stage3": "stage3.s"
+      },
+      {
+        "name": "object",
+        "stage2": "stage2.o",
+        "stage3": "stage3.o"
+      },
+      {
+        "name": "binary_norm",
+        "stage2": "stage2.bin.norm",
+        "stage3": "stage3.bin.norm"
+      }
+    ]
+  },
+  "negative_controls": {
+    "require_adversarial_rejection": true,
+    "disallow_unconditional_pass": true,
+    "forbidden_gate_rc_values": [0],
+    "required_rejection_codes": {
+      "assembly": 20,
+      "object": 21,
+      "binary": 22
+    }
+  },
+  "cleanliness": {
+    "require_workdir_cleaned": true
+  }
+}
