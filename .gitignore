@@ -39,6 +39,7 @@ mainnet_bot_wallet.json
 *.txt
 !README*.txt
 !gate_ir*_xfail.txt
+!tests/core05_fixtures*
 !BUILD.txt
 !requirements.txt
 !COMMANDS.md

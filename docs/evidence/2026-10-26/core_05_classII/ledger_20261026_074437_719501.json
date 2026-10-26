@@ -1,0 +1,2808 @@
+{
+  "metadata": {
+    "milestone": "ZCC-CORE-05",
+    "claim": "Class II Tri-Compiler Differential on Standalone C Corpus",
+    "governing_rule_version": "ZCC-EF-7 v1.0.0",
+    "evidence_tier": "E2",
+    "evidence_tier_assigned_at": "2026-10-26T07:42:00Z",
+    "baseline_sha": "1a56cd6a6",
+    "contract_path": "tickets/CORE-05-acceptance-contract.md",
+    "contract_sha256": "28efbc43f7723c34f70ce80ba037174969903a5dd40df39612cf7d6ac0723410",
+    "fixtures_list_path": "tests/core05_fixtures.txt",
+    "fixtures_sha256": "3d35b5432c827f0d95da23243ece62efd981c0d110535c65016b5f1a7829f131",
+    "fixture_count": 136,
+    "started_at": "2026-10-26T07:44:37.719501+00:00"
+  },
+  "toolchains": {
+    "zcc": {
+      "sha256": "c76e3cb8b1db6a22209e0949013432b26c2bbf9d13e4127eb4f0d5b3239ae71d",
+      "version": "ZCC Stage 3 Native"
+    },
+    "gcc": {
+      "version": "gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0"
+    },
+    "clang": {
+      "version": "Ubuntu clang version 21.1.8 (6ubuntu1)"
+    }
+  },
+  "controls": {
+    "POS-01": {
+      "fixture": "tests/test_7arg_test.c",
+      "status": "PASS",
+      "exit": 0,
+      "stdout": "SUCCESS: 7-arg passing works (28)",
+      "sha256_stdout": "be1994da4ee4fd644ecb97d1c5ccad06b50e429b0a7d2091f5a5610d8719ba16"
+    },
+    "NEG-01": {
+      "fixture": "tests/test_7arg_test.c",
+      "status": "PASS",
+      "mutation": "cmpl $28 -> cmpl $99 / jne flip",
+      "mutated_exit": 1,
+      "mutated_stdout": "FAILURE: Got 28"
+    },
+    "NEG-02": {
+      "fixture": "tests/test_7arg_test.c",
+      "status": "PASS",
+      "exit": 1,
+      "stderr_snippet": ""
+    }
+  },
+  "summary": {
+    "verdict": "FAIL",
+    "total_fixtures": 136,
+    "passed_fixtures": 131,
+    "divergent_fixtures": 5,
+    "pass_rate_pct": 96.32,
+    "duration_seconds": 108.16,
+    "completed_at": "2026-10-26T07:46:25.876987+00:00",
+    "composite_fnv1a": {
+      "zcc": "0x8abd7b56269fa7e2",
+      "gcc": "0xf03c7f817c17685",
+      "clang": "0xf03c7f817c17685"
+    }
+  },
+  "divergences": [
+    {
+      "index": 41,
+      "fixture": "tests/test_flipper_dpo_policy.c",
+      "status": "FAIL_ZCC_COMPILE",
+      "phase": "compile",
+      "error": "",
+      "reference_consensus": [
+        0,
+        "bb03328c16d865acc1281cd1f7b4c13e00decfa411b8f83475ce6324deb5e607",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 59,
+      "fixture": "tests/test_ir_spill_forced.c",
+      "status": "FAIL_ZCC_COMPILE",
+      "phase": "compile",
+      "error": "",
+      "reference_consensus": [
+        0,
+        "695a7418ce056522fb0413f7a207f620213917eb0dd5ff22da1df8f2e19276a1",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 98,
+      "fixture": "tests/test_posix_socket_native.c",
+      "status": "FAIL_ZCC_COMPILE",
+      "phase": "compile",
+      "error": "",
+      "reference_consensus": [
+        0,
+        "6d0aea43547107d729b36af6a2990b625561393b5f34f86e0705830c27aecc65",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 124,
+      "fixture": "tests/test_va.c",
+      "status": "FAIL_ZCC_COMPILE",
+      "phase": "compile",
+      "error": "",
+      "reference_consensus": [
+        0,
+        "d117fa006ba9208500b2930ce69cbde436c647afa917cb7396a9bc9111a46dd2",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 125,
+      "fixture": "tests/test_va2.c",
+      "status": "FAIL_ZCC_COMPILE",
+      "phase": "compile",
+      "error": "",
+      "reference_consensus": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    }
+  ],
+  "fixtures": [
+    {
+      "index": 1,
+      "fixture": "tests/test_3d.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "2eb57df2b808d3a6ff2c97abe6d46b3fb768db99f41cb0e3e0dcad2373681cee",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "2eb57df2b808d3a6ff2c97abe6d46b3fb768db99f41cb0e3e0dcad2373681cee",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "2eb57df2b808d3a6ff2c97abe6d46b3fb768db99f41cb0e3e0dcad2373681cee",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 2,
+      "fixture": "tests/test_7arg_test.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "be1994da4ee4fd644ecb97d1c5ccad06b50e429b0a7d2091f5a5610d8719ba16",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "be1994da4ee4fd644ecb97d1c5ccad06b50e429b0a7d2091f5a5610d8719ba16",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "be1994da4ee4fd644ecb97d1c5ccad06b50e429b0a7d2091f5a5610d8719ba16",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 3,
+      "fixture": "tests/test_abi.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "9171018cc5fa40c6c8a29ef6b27cc6d3922a0222fea577f2399884d9e7de9391",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "9171018cc5fa40c6c8a29ef6b27cc6d3922a0222fea577f2399884d9e7de9391",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "9171018cc5fa40c6c8a29ef6b27cc6d3922a0222fea577f2399884d9e7de9391",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 4,
+      "fixture": "tests/test_abi_promotion.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "60951d549c1e61466ec69ade80e2de84dc51dd7e57b6069f4143a6a85a64fddd",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "60951d549c1e61466ec69ade80e2de84dc51dd7e57b6069f4143a6a85a64fddd",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "60951d549c1e61466ec69ade80e2de84dc51dd7e57b6069f4143a6a85a64fddd",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 5,
+      "fixture": "tests/test_addeq.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "680e33831636947601bd278cbb1deeea2e6554211c2a548c1facce3f049fac6c",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "680e33831636947601bd278cbb1deeea2e6554211c2a548c1facce3f049fac6c",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "680e33831636947601bd278cbb1deeea2e6554211c2a548c1facce3f049fac6c",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 6,
+      "fixture": "tests/test_addr_fold.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 7,
+      "fixture": "tests/test_alignment.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "dd79504b41e97590ce33d2b0063d2e292d6e29927dda241138591996d3955a95",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "dd79504b41e97590ce33d2b0063d2e292d6e29927dda241138591996d3955a95",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "dd79504b41e97590ce33d2b0063d2e292d6e29927dda241138591996d3955a95",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 8,
+      "fixture": "tests/test_anon.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 9,
+      "fixture": "tests/test_anon_typedef.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 10,
+      "fixture": "tests/test_args.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "db4522d064b17ae45a61be54c8ebe24bcd1cf2fa80c4b05c679196405eb35acc",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "db4522d064b17ae45a61be54c8ebe24bcd1cf2fa80c4b05c679196405eb35acc",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "db4522d064b17ae45a61be54c8ebe24bcd1cf2fa80c4b05c679196405eb35acc",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 11,
+      "fixture": "tests/test_array_loop.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "c016da44ff059cd0a65cf4f81124309475293186f8c4c4cf61df8faeb9cde754",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "c016da44ff059cd0a65cf4f81124309475293186f8c4c4cf61df8faeb9cde754",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "c016da44ff059cd0a65cf4f81124309475293186f8c4c4cf61df8faeb9cde754",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 12,
+      "fixture": "tests/test_array_math.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "51e388976506ac9656243c07a65982047e6a1ee1cdb8e451bafdb314013ceeca",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "51e388976506ac9656243c07a65982047e6a1ee1cdb8e451bafdb314013ceeca",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "51e388976506ac9656243c07a65982047e6a1ee1cdb8e451bafdb314013ceeca",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 13,
+      "fixture": "tests/test_asm_real.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 14,
+      "fixture": "tests/test_assign.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "428c5c6fc5711c6beb77ef5d3400c0a718133f02a9e6698004bdc8983e081a46",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "428c5c6fc5711c6beb77ef5d3400c0a718133f02a9e6698004bdc8983e081a46",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "428c5c6fc5711c6beb77ef5d3400c0a718133f02a9e6698004bdc8983e081a46",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 15,
+      "fixture": "tests/test_assign2.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "1617d2c1a074835e78d51befacd55ad1682cee37aed83969f9357944b81247a3",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "1617d2c1a074835e78d51befacd55ad1682cee37aed83969f9357944b81247a3",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "1617d2c1a074835e78d51befacd55ad1682cee37aed83969f9357944b81247a3",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 16,
+      "fixture": "tests/test_basic_float.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "6c5bd6a0ada3f8a149e734bb6fb79dbf834d92da1ab6d8706c324cae9f281e9f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "6c5bd6a0ada3f8a149e734bb6fb79dbf834d92da1ab6d8706c324cae9f281e9f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "6c5bd6a0ada3f8a149e734bb6fb79dbf834d92da1ab6d8706c324cae9f281e9f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 17,
+      "fixture": "tests/test_bitfield.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "279de03822971a53df4cf970e9151bdf8c95fe657cf929da26bd9fe7b7dd52b7",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "279de03822971a53df4cf970e9151bdf8c95fe657cf929da26bd9fe7b7dd52b7",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "279de03822971a53df4cf970e9151bdf8c95fe657cf929da26bd9fe7b7dd52b7",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 18,
+      "fixture": "tests/test_call_extend.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 19,
+      "fixture": "tests/test_call_promo.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "7256caef8dc23a916c27f327160fe2c420bc7fa02c2cc2181e5ca30d644da0b0",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "7256caef8dc23a916c27f327160fe2c420bc7fa02c2cc2181e5ca30d644da0b0",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "7256caef8dc23a916c27f327160fe2c420bc7fa02c2cc2181e5ca30d644da0b0",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 20,
+      "fixture": "tests/test_cast.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "6715dac305341509de1c7a9675f738585cc3eb6df1887f0858828343d8c6c90d",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "6715dac305341509de1c7a9675f738585cc3eb6df1887f0858828343d8c6c90d",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "6715dac305341509de1c7a9675f738585cc3eb6df1887f0858828343d8c6c90d",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 21,
+      "fixture": "tests/test_cast2.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "4f2191a5ed346706e926700b2eb34bb4bd9660c560d27e907deae8b9362c0019",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "4f2191a5ed346706e926700b2eb34bb4bd9660c560d27e907deae8b9362c0019",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "4f2191a5ed346706e926700b2eb34bb4bd9660c560d27e907deae8b9362c0019",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 22,
+      "fixture": "tests/test_cast_prec.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "25f638ddec8b454c9e70653c279844b2f583919257933b5e1c7ebd46f95b0ead",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "25f638ddec8b454c9e70653c279844b2f583919257933b5e1c7ebd46f95b0ead",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "25f638ddec8b454c9e70653c279844b2f583919257933b5e1c7ebd46f95b0ead",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 23,
+      "fixture": "tests/test_cg_ir_011_aggressive.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "88179fd2011b09757b392c8cc6a97cba8e64832d76784158bd348dae854646f1",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "88179fd2011b09757b392c8cc6a97cba8e64832d76784158bd348dae854646f1",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "88179fd2011b09757b392c8cc6a97cba8e64832d76784158bd348dae854646f1",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 24,
+      "fixture": "tests/test_cg_ir_011_fib.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "723bd93167eca0a32e48f431ca54f01631810cfe6cca9a15066e3fdad2a4d849",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "723bd93167eca0a32e48f431ca54f01631810cfe6cca9a15066e3fdad2a4d849",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "723bd93167eca0a32e48f431ca54f01631810cfe6cca9a15066e3fdad2a4d849",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 25,
+      "fixture": "tests/test_cmp.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 26,
+      "fixture": "tests/test_codegen.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "04bd47328d4b9837be51045247def0e92136f59a591b0c5801f113363a9b276d",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "04bd47328d4b9837be51045247def0e92136f59a591b0c5801f113363a9b276d",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "04bd47328d4b9837be51045247def0e92136f59a591b0c5801f113363a9b276d",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 27,
+      "fixture": "tests/test_comm3.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 28,
+      "fixture": "tests/test_comm4.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 29,
+      "fixture": "tests/test_compound.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "bab957e7cb8161d580c7dc66d89cabe763d964ccb748e6b68228ee5d6ba921d7",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "bab957e7cb8161d580c7dc66d89cabe763d964ccb748e6b68228ee5d6ba921d7",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "bab957e7cb8161d580c7dc66d89cabe763d964ccb748e6b68228ee5d6ba921d7",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 30,
+      "fixture": "tests/test_cond74.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "0ae3b9ad91d9ece20606ef4f94eb8086f39fe136687d8d6ec936c1dca5619e35",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "0ae3b9ad91d9ece20606ef4f94eb8086f39fe136687d8d6ec936c1dca5619e35",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "0ae3b9ad91d9ece20606ef4f94eb8086f39fe136687d8d6ec936c1dca5619e35",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 31,
+      "fixture": "tests/test_dek.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "2f0a41c4f4f912862aa33b49edc19fae4af1900554304fa7cd623d807289fb20",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "2f0a41c4f4f912862aa33b49edc19fae4af1900554304fa7cd623d807289fb20",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "2f0a41c4f4f912862aa33b49edc19fae4af1900554304fa7cd623d807289fb20",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 32,
+      "fixture": "tests/test_divmod32.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "30880b22f4c167a078f44f1ad7cf535f60c1f8985310ac9220c727eb018b5a40",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "30880b22f4c167a078f44f1ad7cf535f60c1f8985310ac9220c727eb018b5a40",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "30880b22f4c167a078f44f1ad7cf535f60c1f8985310ac9220c727eb018b5a40",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 33,
+      "fixture": "tests/test_dot.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "fd8c77d9b4dfc7dc58ccc90c4308177f47ffd0265f49c3ec5b8bad996ac218db",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "fd8c77d9b4dfc7dc58ccc90c4308177f47ffd0265f49c3ec5b8bad996ac218db",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "fd8c77d9b4dfc7dc58ccc90c4308177f47ffd0265f49c3ec5b8bad996ac218db",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 34,
+      "fixture": "tests/test_double_bug.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "d07af7e474855a929fb02d381389373d95447b38530967078cf737e7df29dbbe",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "d07af7e474855a929fb02d381389373d95447b38530967078cf737e7df29dbbe",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "d07af7e474855a929fb02d381389373d95447b38530967078cf737e7df29dbbe",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 35,
+      "fixture": "tests/test_double_math.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "561d56247af9862a4b3709dded6a6335fd97bcaddf9799b4bf6b2e76d4c977fa",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "561d56247af9862a4b3709dded6a6335fd97bcaddf9799b4bf6b2e76d4c977fa",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "561d56247af9862a4b3709dded6a6335fd97bcaddf9799b4bf6b2e76d4c977fa",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 36,
+      "fixture": "tests/test_eval.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "09fee710d34044a6ab4839599253a52568d98b7418a575c3d1a35f9f858a4f47",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "09fee710d34044a6ab4839599253a52568d98b7418a575c3d1a35f9f858a4f47",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "09fee710d34044a6ab4839599253a52568d98b7418a575c3d1a35f9f858a4f47",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 37,
+      "fixture": "tests/test_exp.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "898e606515fc0eb2809eac2e3b3aaedb2775a1836cf84e71207a4c0362eaf11a",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "898e606515fc0eb2809eac2e3b3aaedb2775a1836cf84e71207a4c0362eaf11a",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "898e606515fc0eb2809eac2e3b3aaedb2775a1836cf84e71207a4c0362eaf11a",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 38,
+      "fixture": "tests/test_exp_declared.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e425411e7afe16c81eac5c807d5b9721e263fc3a13c678fd4f42094600f368ae",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e425411e7afe16c81eac5c807d5b9721e263fc3a13c678fd4f42094600f368ae",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e425411e7afe16c81eac5c807d5b9721e263fc3a13c678fd4f42094600f368ae",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 39,
+      "fixture": "tests/test_fallthrough.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "7880fd7b574c371ceedd5324947c1f380941c08cd8526e283fc088c1c9947017",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "7880fd7b574c371ceedd5324947c1f380941c08cd8526e283fc088c1c9947017",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "7880fd7b574c371ceedd5324947c1f380941c08cd8526e283fc088c1c9947017",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 40,
+      "fixture": "tests/test_fcmp.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 41,
+      "fixture": "tests/test_flipper_dpo_policy.c",
+      "status": "FAIL_ZCC_COMPILE",
+      "phase": "compile",
+      "error": "",
+      "reference_consensus": [
+        0,
+        "bb03328c16d865acc1281cd1f7b4c13e00decfa411b8f83475ce6324deb5e607",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 42,
+      "fixture": "tests/test_flit.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "300f6e4f289a85bdc3ceb29f15bd907da96999933d6d91b765fb6c74d9de7e96",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "300f6e4f289a85bdc3ceb29f15bd907da96999933d6d91b765fb6c74d9de7e96",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "300f6e4f289a85bdc3ceb29f15bd907da96999933d6d91b765fb6c74d9de7e96",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 43,
+      "fixture": "tests/test_float_abi_regression.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "53514bcf63bed69b8cbd216eed8742633d0e91c4e49869ac0b3c46b22171edbb",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "53514bcf63bed69b8cbd216eed8742633d0e91c4e49869ac0b3c46b22171edbb",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "53514bcf63bed69b8cbd216eed8742633d0e91c4e49869ac0b3c46b22171edbb",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 44,
+      "fixture": "tests/test_float_array_bug.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "b52c2d821c7dfee35928ab73aadc4230aadf9b9b9d3a82722ae796e87802c199",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "b52c2d821c7dfee35928ab73aadc4230aadf9b9b9d3a82722ae796e87802c199",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "b52c2d821c7dfee35928ab73aadc4230aadf9b9b9d3a82722ae796e87802c199",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 45,
+      "fixture": "tests/test_float_bug.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "d07af7e474855a929fb02d381389373d95447b38530967078cf737e7df29dbbe",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "d07af7e474855a929fb02d381389373d95447b38530967078cf737e7df29dbbe",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "d07af7e474855a929fb02d381389373d95447b38530967078cf737e7df29dbbe",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 46,
+      "fixture": "tests/test_float_deep.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "6aee3925ed3b4b7f01b01c392f986d50950ce053480ecec9faf343d545b3c119",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "6aee3925ed3b4b7f01b01c392f986d50950ce053480ecec9faf343d545b3c119",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "6aee3925ed3b4b7f01b01c392f986d50950ce053480ecec9faf343d545b3c119",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 47,
+      "fixture": "tests/test_float_diag.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "422a0a4549c319ac768a06aaad1f0cc171937760551b0f13ebe74720a000f2c9",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "422a0a4549c319ac768a06aaad1f0cc171937760551b0f13ebe74720a000f2c9",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "422a0a4549c319ac768a06aaad1f0cc171937760551b0f13ebe74720a000f2c9",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 48,
+      "fixture": "tests/test_float_memcpy.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "594f51e21b746defa6614324131ce5d7c83d741137762e6250c4007b1322f5b6",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "594f51e21b746defa6614324131ce5d7c83d741137762e6250c4007b1322f5b6",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "594f51e21b746defa6614324131ce5d7c83d741137762e6250c4007b1322f5b6",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 49,
+      "fixture": "tests/test_fp_loop.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "4965cbc0dbc2503e095894ffac5ffdfd87764e2448c3ca85c3b4afc075259c32",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "4965cbc0dbc2503e095894ffac5ffdfd87764e2448c3ca85c3b4afc075259c32",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "4965cbc0dbc2503e095894ffac5ffdfd87764e2448c3ca85c3b4afc075259c32",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 50,
+      "fixture": "tests/test_fp_ops.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "1734d830770dc2ee4e3d4dd3b00b33b8b67474365f6a815e8ea0afbabccaa94f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "1734d830770dc2ee4e3d4dd3b00b33b8b67474365f6a815e8ea0afbabccaa94f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "1734d830770dc2ee4e3d4dd3b00b33b8b67474365f6a815e8ea0afbabccaa94f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 51,
+      "fixture": "tests/test_fpx_simple.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "c124d02204b356e4badbdc21ce7de79dd16fd8a93523091c246a89ce6a4b688f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "c124d02204b356e4badbdc21ce7de79dd16fd8a93523091c246a89ce6a4b688f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "c124d02204b356e4badbdc21ce7de79dd16fd8a93523091c246a89ce6a4b688f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 52,
+      "fixture": "tests/test_fret.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "4a6f9b1ed9917d3c97bb4b2df5568468db2530e9ed8bc9333f28589ec8227f13",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "4a6f9b1ed9917d3c97bb4b2df5568468db2530e9ed8bc9333f28589ec8227f13",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "4a6f9b1ed9917d3c97bb4b2df5568468db2530e9ed8bc9333f28589ec8227f13",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 53,
+      "fixture": "tests/test_full_yystack.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "3d1132ed823831f471de911f5ec5425f65c022edc3460fb0be2e3f4c5751d6d8",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "3d1132ed823831f471de911f5ec5425f65c022edc3460fb0be2e3f4c5751d6d8",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "3d1132ed823831f471de911f5ec5425f65c022edc3460fb0be2e3f4c5751d6d8",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 54,
+      "fixture": "tests/test_generic.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "1c6af6d32904624cc1702334fbee5f1fb179d40fea660b47623ea2cdc5926b0c",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "1c6af6d32904624cc1702334fbee5f1fb179d40fea660b47623ea2cdc5926b0c",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "1c6af6d32904624cc1702334fbee5f1fb179d40fea660b47623ea2cdc5926b0c",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 55,
+      "fixture": "tests/test_ir.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 56,
+      "fixture": "tests/test_ir_full.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "26ff419d3e7696b5d9ab5cf01cafe62f91298d0060388af617b36cd0fad2d4c9",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "26ff419d3e7696b5d9ab5cf01cafe62f91298d0060388af617b36cd0fad2d4c9",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "26ff419d3e7696b5d9ab5cf01cafe62f91298d0060388af617b36cd0fad2d4c9",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 57,
+      "fixture": "tests/test_ir_ops.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "db2cdbf3721492bcae5a27615e44f52ec0173779f3d7d2bb30a13bf91ba9eb89",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "db2cdbf3721492bcae5a27615e44f52ec0173779f3d7d2bb30a13bf91ba9eb89",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "db2cdbf3721492bcae5a27615e44f52ec0173779f3d7d2bb30a13bf91ba9eb89",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 58,
+      "fixture": "tests/test_ir_p456.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e4e2c55c50cd1f2914b9578867729d910f8425f515a7ca7eb4ea9528b377b7e0",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e4e2c55c50cd1f2914b9578867729d910f8425f515a7ca7eb4ea9528b377b7e0",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e4e2c55c50cd1f2914b9578867729d910f8425f515a7ca7eb4ea9528b377b7e0",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 59,
+      "fixture": "tests/test_ir_spill_forced.c",
+      "status": "FAIL_ZCC_COMPILE",
+      "phase": "compile",
+      "error": "",
+      "reference_consensus": [
+        0,
+        "695a7418ce056522fb0413f7a207f620213917eb0dd5ff22da1df8f2e19276a1",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 60,
+      "fixture": "tests/test_ir_spill_pressure.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "3c6f34a8cce2e2b80091f292543d9c705e74b068b587f5ddda5901279e935a75",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "3c6f34a8cce2e2b80091f292543d9c705e74b068b587f5ddda5901279e935a75",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "3c6f34a8cce2e2b80091f292543d9c705e74b068b587f5ddda5901279e935a75",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 61,
+      "fixture": "tests/test_ir_target.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 62,
+      "fixture": "tests/test_kraken_weights.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "8514fadf7f4730567f999cbdb26e78c7c049a1289e78a0a4f20ab48080ebe887",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "8514fadf7f4730567f999cbdb26e78c7c049a1289e78a0a4f20ab48080ebe887",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "8514fadf7f4730567f999cbdb26e78c7c049a1289e78a0a4f20ab48080ebe887",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 63,
+      "fixture": "tests/test_large_array.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "256a6fef940faaf67a7b0f71215b0e9890265a2ccbddd038b9bfb5ee27a2d0e8",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "256a6fef940faaf67a7b0f71215b0e9890265a2ccbddd038b9bfb5ee27a2d0e8",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "256a6fef940faaf67a7b0f71215b0e9890265a2ccbddd038b9bfb5ee27a2d0e8",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 64,
+      "fixture": "tests/test_layout.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "224af3c2e42df509247e6865a025b7ee0f05968e37d5f8c73f7cd5982baad199",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "224af3c2e42df509247e6865a025b7ee0f05968e37d5f8c73f7cd5982baad199",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "224af3c2e42df509247e6865a025b7ee0f05968e37d5f8c73f7cd5982baad199",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 65,
+      "fixture": "tests/test_limit003_complex.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "38619b399c1e56b15fd1b13a4bbf1840a3ec8ca36ecaa84a20d890d8c3fa20ab",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "38619b399c1e56b15fd1b13a4bbf1840a3ec8ca36ecaa84a20d890d8c3fa20ab",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "38619b399c1e56b15fd1b13a4bbf1840a3ec8ca36ecaa84a20d890d8c3fa20ab",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 66,
+      "fixture": "tests/test_lit.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e4d6995188ba3a091b996765a3522e3151c48668ea026b413adfcaf020d7bb13",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e4d6995188ba3a091b996765a3522e3151c48668ea026b413adfcaf020d7bb13",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e4d6995188ba3a091b996765a3522e3151c48668ea026b413adfcaf020d7bb13",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 67,
+      "fixture": "tests/test_log2_runtime.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "f052e9f5da8a2058185fc84d1f52b0b16970a88eff32b25595d0a9264172f975",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "f052e9f5da8a2058185fc84d1f52b0b16970a88eff32b25595d0a9264172f975",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "f052e9f5da8a2058185fc84d1f52b0b16970a88eff32b25595d0a9264172f975",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 68,
+      "fixture": "tests/test_lrs.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 69,
+      "fixture": "tests/test_macro.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 70,
+      "fixture": "tests/test_macro_val.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 71,
+      "fixture": "tests/test_main.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 72,
+      "fixture": "tests/test_mat.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "0644fd8bc7ed5916af8cea0c8be04dadc1739a9d1110a2316b0734bd5ee8aa79",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "0644fd8bc7ed5916af8cea0c8be04dadc1739a9d1110a2316b0734bd5ee8aa79",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "0644fd8bc7ed5916af8cea0c8be04dadc1739a9d1110a2316b0734bd5ee8aa79",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 73,
+      "fixture": "tests/test_math_include.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 74,
+      "fixture": "tests/test_memlayout.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "2c4684833fa1b9af38d1d194e532585a655b1d5e622df1de366294af0f3ad4bc",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "2c4684833fa1b9af38d1d194e532585a655b1d5e622df1de366294af0f3ad4bc",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "2c4684833fa1b9af38d1d194e532585a655b1d5e622df1de366294af0f3ad4bc",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 75,
+      "fixture": "tests/test_memset.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e8b6a5b69524fa9b919202bc98c29c4878d0a4b98bc262cc33409efa49ce823c",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e8b6a5b69524fa9b919202bc98c29c4878d0a4b98bc262cc33409efa49ce823c",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e8b6a5b69524fa9b919202bc98c29c4878d0a4b98bc262cc33409efa49ce823c",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 76,
+      "fixture": "tests/test_multiline_array.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "36ad2ed3d20ee66689d193993e00d45dfd0519e43cbcc08c0735b2f3b032c582",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "36ad2ed3d20ee66689d193993e00d45dfd0519e43cbcc08c0735b2f3b032c582",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "36ad2ed3d20ee66689d193993e00d45dfd0519e43cbcc08c0735b2f3b032c582",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 77,
+      "fixture": "tests/test_neg.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "0160e328e8c92aa2abde9026452fc0224913347c8ef9f2bdd4c8b9a5fe15b05f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "0160e328e8c92aa2abde9026452fc0224913347c8ef9f2bdd4c8b9a5fe15b05f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "0160e328e8c92aa2abde9026452fc0224913347c8ef9f2bdd4c8b9a5fe15b05f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 78,
+      "fixture": "tests/test_neg_flit.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "125c637f767be7e822494acab6e950b5bc34b923c06a1635bf259b49c1a818ec",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "125c637f767be7e822494acab6e950b5bc34b923c06a1635bf259b49c1a818ec",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "125c637f767be7e822494acab6e950b5bc34b923c06a1635bf259b49c1a818ec",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 79,
+      "fixture": "tests/test_nested.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "365742491be8c606ba0b9ee320e30936985abe2c852c3572806a9db5766090f0",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "365742491be8c606ba0b9ee320e30936985abe2c852c3572806a9db5766090f0",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "365742491be8c606ba0b9ee320e30936985abe2c852c3572806a9db5766090f0",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 80,
+      "fixture": "tests/test_nested2.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "d69af4e7a7fbbabfb33f1e0ea5ff02c22e651f85cc36a83231d92f1b1ed46461",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "d69af4e7a7fbbabfb33f1e0ea5ff02c22e651f85cc36a83231d92f1b1ed46461",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "d69af4e7a7fbbabfb33f1e0ea5ff02c22e651f85cc36a83231d92f1b1ed46461",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 81,
+      "fixture": "tests/test_oprreal_helper.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "48145d7a973afaeae0410c1c96be881b9a213ae8c65bab842bffeec524d017d4",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "48145d7a973afaeae0410c1c96be881b9a213ae8c65bab842bffeec524d017d4",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "48145d7a973afaeae0410c1c96be881b9a213ae8c65bab842bffeec524d017d4",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 82,
+      "fixture": "tests/test_param.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "82ebd06c9faca549ed6384d3a12ea75a46de4fc0c32a6bda65435bb285711bff",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "82ebd06c9faca549ed6384d3a12ea75a46de4fc0c32a6bda65435bb285711bff",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "82ebd06c9faca549ed6384d3a12ea75a46de4fc0c32a6bda65435bb285711bff",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 83,
+      "fixture": "tests/test_peephole.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "575edaa976f7b438c2e30af0915df41569964cc73768bff9ea4446dc5e4615b6",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "575edaa976f7b438c2e30af0915df41569964cc73768bff9ea4446dc5e4615b6",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "575edaa976f7b438c2e30af0915df41569964cc73768bff9ea4446dc5e4615b6",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 84,
+      "fixture": "tests/test_phase10_struct_return_chain.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "ecc21fcfb1f6250f8cf9276d3487666255f5f483f0b33b2b42bdf022005e3348",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "ecc21fcfb1f6250f8cf9276d3487666255f5f483f0b33b2b42bdf022005e3348",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "ecc21fcfb1f6250f8cf9276d3487666255f5f483f0b33b2b42bdf022005e3348",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 85,
+      "fixture": "tests/test_phase11_stack_arg_spill.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "163bc8bf028a0c5d1e3cda0e904502d2b4d3d0796810f60f97088925e0c4bf0a",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "163bc8bf028a0c5d1e3cda0e904502d2b4d3d0796810f60f97088925e0c4bf0a",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "163bc8bf028a0c5d1e3cda0e904502d2b4d3d0796810f60f97088925e0c4bf0a",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 86,
+      "fixture": "tests/test_phase12_callback_stack_pressure.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "114e5cf1b86c942f959352aeec34ddd7ab12a953405a469d855ff629788322b2",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "114e5cf1b86c942f959352aeec34ddd7ab12a953405a469d855ff629788322b2",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "114e5cf1b86c942f959352aeec34ddd7ab12a953405a469d855ff629788322b2",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 87,
+      "fixture": "tests/test_phase13_short_circuit_mutation.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "09b964a3f897183528ed73574fb06c6c1746f07493975671594142fbb7c54bec",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "09b964a3f897183528ed73574fb06c6c1746f07493975671594142fbb7c54bec",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "09b964a3f897183528ed73574fb06c6c1746f07493975671594142fbb7c54bec",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 88,
+      "fixture": "tests/test_phase14_nested_union_payload.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "bb023d27511be07cbe8d449270d9491da32bca2c269726551e7965cf85d2e1f3",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "bb023d27511be07cbe8d449270d9491da32bca2c269726551e7965cf85d2e1f3",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "bb023d27511be07cbe8d449270d9491da32bca2c269726551e7965cf85d2e1f3",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 89,
+      "fixture": "tests/test_phase15_recursive_struct_return.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "c70e803429f945b46d80381576bd29bf353fdca8cddb7a025b517e3e585011c6",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "c70e803429f945b46d80381576bd29bf353fdca8cddb7a025b517e3e585011c6",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "c70e803429f945b46d80381576bd29bf353fdca8cddb7a025b517e3e585011c6",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 90,
+      "fixture": "tests/test_phase16_alias_aggregate_mutation.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "24163b025ccb0fd3b49dc93e139a4266f77d20668088f8ddd988e0699c9f4434",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "24163b025ccb0fd3b49dc93e139a4266f77d20668088f8ddd988e0699c9f4434",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "24163b025ccb0fd3b49dc93e139a4266f77d20668088f8ddd988e0699c9f4434",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 91,
+      "fixture": "tests/test_phase17_fp_integer_pressure.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "cdbd8a4352c541df6ee90073186385b9b8e32908991b8ea0b4d71b1258311077",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "cdbd8a4352c541df6ee90073186385b9b8e32908991b8ea0b4d71b1258311077",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "cdbd8a4352c541df6ee90073186385b9b8e32908991b8ea0b4d71b1258311077",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 92,
+      "fixture": "tests/test_phase2_zcc_runtime.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "8f9916452bdacccbcd38f2bb907c17cdc6140f4d84de5d602775e2775157a6d7",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "8f9916452bdacccbcd38f2bb907c17cdc6140f4d84de5d602775e2775157a6d7",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "8f9916452bdacccbcd38f2bb907c17cdc6140f4d84de5d602775e2775157a6d7",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 93,
+      "fixture": "tests/test_phase3_nested_aggregate_return.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "dfb3906ec246a78630458efbca7a7e9a2b9b588e681fb55b8ac883a15d10b5c7",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "dfb3906ec246a78630458efbca7a7e9a2b9b588e681fb55b8ac883a15d10b5c7",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "dfb3906ec246a78630458efbca7a7e9a2b9b588e681fb55b8ac883a15d10b5c7",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 94,
+      "fixture": "tests/test_phase4_callback_aggregate_ffi.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "4f9335e3981ebb164c2f9c49850dcfceb6f781f714c335f26d6f9d27f52c04c5",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "4f9335e3981ebb164c2f9c49850dcfceb6f781f714c335f26d6f9d27f52c04c5",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "4f9335e3981ebb164c2f9c49850dcfceb6f781f714c335f26d6f9d27f52c04c5",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 95,
+      "fixture": "tests/test_phase5_recursive_callback_sret.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "53307004894c5df4bde060f91335ced52c4e8725e92190b45dc465c4c1a99ec2",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "53307004894c5df4bde060f91335ced52c4e8725e92190b45dc465c4c1a99ec2",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "53307004894c5df4bde060f91335ced52c4e8725e92190b45dc465c4c1a99ec2",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 96,
+      "fixture": "tests/test_phase6_trapdoor_side_effect_abi.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "9851a7d3e0740992c074570bcbd953e54d33e497ebb2440eb18cbd70acdfecca",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "9851a7d3e0740992c074570bcbd953e54d33e497ebb2440eb18cbd70acdfecca",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "9851a7d3e0740992c074570bcbd953e54d33e497ebb2440eb18cbd70acdfecca",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 97,
+      "fixture": "tests/test_phase9_bitfield_double_layout.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "58a4b1995e3ce964e7ee62cbf2135933c992fa4186c7feec975743eb7c9861d9",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "58a4b1995e3ce964e7ee62cbf2135933c992fa4186c7feec975743eb7c9861d9",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "58a4b1995e3ce964e7ee62cbf2135933c992fa4186c7feec975743eb7c9861d9",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 98,
+      "fixture": "tests/test_posix_socket_native.c",
+      "status": "FAIL_ZCC_COMPILE",
+      "phase": "compile",
+      "error": "",
+      "reference_consensus": [
+        0,
+        "6d0aea43547107d729b36af6a2990b625561393b5f34f86e0705830c27aecc65",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 99,
+      "fixture": "tests/test_pp_miniz.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 100,
+      "fixture": "tests/test_preal.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "7563eac97928f431babc3f590bed965398f1804cacdf746331c6f45a70e63fa2",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "7563eac97928f431babc3f590bed965398f1804cacdf746331c6f45a70e63fa2",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "7563eac97928f431babc3f590bed965398f1804cacdf746331c6f45a70e63fa2",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 101,
+      "fixture": "tests/test_printf.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 102,
+      "fixture": "tests/test_probe_abi.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "226ee762449edc055a9065d55332b86e7b0644ed89830fc842997c7a0d7643d8",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "226ee762449edc055a9065d55332b86e7b0644ed89830fc842997c7a0d7643d8",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "226ee762449edc055a9065d55332b86e7b0644ed89830fc842997c7a0d7643d8",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 103,
+      "fixture": "tests/test_relu.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "22b258e6073f48ebfaff5448f8aba7d420b7684ae738503ef5ef4ef0b74e8819",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "22b258e6073f48ebfaff5448f8aba7d420b7684ae738503ef5ef4ef0b74e8819",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "22b258e6073f48ebfaff5448f8aba7d420b7684ae738503ef5ef4ef0b74e8819",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 104,
+      "fixture": "tests/test_rhs.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "a5918219554b1f4dd35e58a2d595b70f40bdcde8b62f306d5e9626b9f3aee130",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "a5918219554b1f4dd35e58a2d595b70f40bdcde8b62f306d5e9626b9f3aee130",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "a5918219554b1f4dd35e58a2d595b70f40bdcde8b62f306d5e9626b9f3aee130",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 105,
+      "fixture": "tests/test_setdouble.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "dc9b8edbcf6b7f9e39e80f9f14c503001f742bc313621eae5d9539d1248b51cb",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "dc9b8edbcf6b7f9e39e80f9f14c503001f742bc313621eae5d9539d1248b51cb",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "dc9b8edbcf6b7f9e39e80f9f14c503001f742bc313621eae5d9539d1248b51cb",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 106,
+      "fixture": "tests/test_shift.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "f28d9b4ca18b4067691453c88915c13f34de0964e9044e237837724196c6b181",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "f28d9b4ca18b4067691453c88915c13f34de0964e9044e237837724196c6b181",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "f28d9b4ca18b4067691453c88915c13f34de0964e9044e237837724196c6b181",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 107,
+      "fixture": "tests/test_shift2.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "a5f4edc93585fb9acdae4b42aa142fee8fb7a99b16b4a8d400acd1e1b522d74f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "a5f4edc93585fb9acdae4b42aa142fee8fb7a99b16b4a8d400acd1e1b522d74f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "a5f4edc93585fb9acdae4b42aa142fee8fb7a99b16b4a8d400acd1e1b522d74f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 108,
+      "fixture": "tests/test_sigmoid.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "c1353a6fbe6f0d7dd186324c27349da9be76bb3dbc7796ba623bf050ec335694",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "c1353a6fbe6f0d7dd186324c27349da9be76bb3dbc7796ba623bf050ec335694",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "c1353a6fbe6f0d7dd186324c27349da9be76bb3dbc7796ba623bf050ec335694",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 109,
+      "fixture": "tests/test_simple.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 110,
+      "fixture": "tests/test_simple2.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 111,
+      "fixture": "tests/test_sizeof2.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e6c21e8d260fe71882debdb339d2402a2ca7648529bc2303f48649bce0380017",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e6c21e8d260fe71882debdb339d2402a2ca7648529bc2303f48649bce0380017",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e6c21e8d260fe71882debdb339d2402a2ca7648529bc2303f48649bce0380017",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 112,
+      "fixture": "tests/test_snippet.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 113,
+      "fixture": "tests/test_static.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "fbe2ba2c290a2640cbd577da7ac8d169ad735c0208c4c07072a0ae19876e28e9",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "fbe2ba2c290a2640cbd577da7ac8d169ad735c0208c4c07072a0ae19876e28e9",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "fbe2ba2c290a2640cbd577da7ac8d169ad735c0208c4c07072a0ae19876e28e9",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 114,
+      "fixture": "tests/test_str.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 115,
+      "fixture": "tests/test_struct.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 116,
+      "fixture": "tests/test_tcc_expr.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "88333a1dcb156c273b1d3edf31c6bc0b67c4525d31ebbba2bfd9eeeea5b07098",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "88333a1dcb156c273b1d3edf31c6bc0b67c4525d31ebbba2bfd9eeeea5b07098",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "88333a1dcb156c273b1d3edf31c6bc0b67c4525d31ebbba2bfd9eeeea5b07098",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 117,
+      "fixture": "tests/test_tcc_h.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 118,
+      "fixture": "tests/test_tcc_struct.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "193a5e32ca2f800c173d72dfc095966640f3ddb42bd6b10604a27caea91d7443",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "193a5e32ca2f800c173d72dfc095966640f3ddb42bd6b10604a27caea91d7443",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "193a5e32ca2f800c173d72dfc095966640f3ddb42bd6b10604a27caea91d7443",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 119,
+      "fixture": "tests/test_tcc_tok.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "3eab55290bc66a40402a7c26f3c2d900d21f5d9ac9a9cd3cc3c73d5d6f469ba3",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "3eab55290bc66a40402a7c26f3c2d900d21f5d9ac9a9cd3cc3c73d5d6f469ba3",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "3eab55290bc66a40402a7c26f3c2d900d21f5d9ac9a9cd3cc3c73d5d6f469ba3",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 120,
+      "fixture": "tests/test_tqpu.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "c53c388da1bee8e3d83d81f94c4551188bcc036b613bd21b71fddaa1b86b399c",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "c53c388da1bee8e3d83d81f94c4551188bcc036b613bd21b71fddaa1b86b399c",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "c53c388da1bee8e3d83d81f94c4551188bcc036b613bd21b71fddaa1b86b399c",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 121,
+      "fixture": "tests/test_typeof.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "635a973c02e9cecc6e911aeb5eddd3eb63143fa1e7a4ff9cedc24718bee1e0a8",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "635a973c02e9cecc6e911aeb5eddd3eb63143fa1e7a4ff9cedc24718bee1e0a8",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "635a973c02e9cecc6e911aeb5eddd3eb63143fa1e7a4ff9cedc24718bee1e0a8",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 122,
+      "fixture": "tests/test_union_offset.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "0707a30b4d50af13e19abc0635cf5c285db3c801bc9b3d2a4bfb4f1ecc7954df",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "0707a30b4d50af13e19abc0635cf5c285db3c801bc9b3d2a4bfb4f1ecc7954df",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "0707a30b4d50af13e19abc0635cf5c285db3c801bc9b3d2a4bfb4f1ecc7954df",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 123,
+      "fixture": "tests/test_uv.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "a987e4e1642743fbc65bd7a8c11fd3bb0875d676895a2ed4e4b322654a882e7f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "a987e4e1642743fbc65bd7a8c11fd3bb0875d676895a2ed4e4b322654a882e7f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "a987e4e1642743fbc65bd7a8c11fd3bb0875d676895a2ed4e4b322654a882e7f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 124,
+      "fixture": "tests/test_va.c",
+      "status": "FAIL_ZCC_COMPILE",
+      "phase": "compile",
+      "error": "",
+      "reference_consensus": [
+        0,
+        "d117fa006ba9208500b2930ce69cbde436c647afa917cb7396a9bc9111a46dd2",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 125,
+      "fixture": "tests/test_va2.c",
+      "status": "FAIL_ZCC_COMPILE",
+      "phase": "compile",
+      "error": "",
+      "reference_consensus": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 126,
+      "fixture": "tests/test_va_list2.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 127,
+      "fixture": "tests/test_vdbeop.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "ee4ef16aadb5a15dd63b5b8d09462746cdffdcb1b66f408ca640e3c30f419f4f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "ee4ef16aadb5a15dd63b5b8d09462746cdffdcb1b66f408ca640e3c30f419f4f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "ee4ef16aadb5a15dd63b5b8d09462746cdffdcb1b66f408ca640e3c30f419f4f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 128,
+      "fixture": "tests/test_vec4_probe.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "28f304eb7623f470e8550de6496002f85edbd95b85983595a60b3a25f72175bd",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "28f304eb7623f470e8550de6496002f85edbd95b85983595a60b3a25f72175bd",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "28f304eb7623f470e8550de6496002f85edbd95b85983595a60b3a25f72175bd",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 129,
+      "fixture": "tests/test_vla_loop.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "84e3673959535f002ec12c82613e6d9cbed0f56c7ee02c3a0986ecb9aea5460f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "84e3673959535f002ec12c82613e6d9cbed0f56c7ee02c3a0986ecb9aea5460f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "84e3673959535f002ec12c82613e6d9cbed0f56c7ee02c3a0986ecb9aea5460f",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 130,
+      "fixture": "tests/test_yyparser.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "2517fdb82479414e323fcfc4cd45301b47b39418811616dc800774b5d53b6296",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "2517fdb82479414e323fcfc4cd45301b47b39418811616dc800774b5d53b6296",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "2517fdb82479414e323fcfc4cd45301b47b39418811616dc800774b5d53b6296",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 131,
+      "fixture": "tests/test_yystack_gcc.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "6f5c1965c0221ca09180f5801e26574534db03c03c4a86606e15aade238a0e2e",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "6f5c1965c0221ca09180f5801e26574534db03c03c4a86606e15aade238a0e2e",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "6f5c1965c0221ca09180f5801e26574534db03c03c4a86606e15aade238a0e2e",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 132,
+      "fixture": "tests/test_yystack_zcc.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "bc96e90a7251f6727b9e3c434fe9008fac7882683c6b741f4fb345d45e1ce331",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "bc96e90a7251f6727b9e3c434fe9008fac7882683c6b741f4fb345d45e1ce331",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "bc96e90a7251f6727b9e3c434fe9008fac7882683c6b741f4fb345d45e1ce331",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 133,
+      "fixture": "tests/test_zcc_c99.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 134,
+      "fixture": "tests/test_zcc_c99_param.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 135,
+      "fixture": "tests/test_zero_idiom.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "index": 136,
+      "fixture": "tests/test_zsan_safe.c",
+      "status": "PASS",
+      "gcc_tuple": [
+        0,
+        "96755cc7425ee0cefe081226f91c5c130512d20cf36c0f494d1138960c30752b",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "clang_tuple": [
+        0,
+        "96755cc7425ee0cefe081226f91c5c130512d20cf36c0f494d1138960c30752b",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "zcc_tuple": [
+        0,
+        "96755cc7425ee0cefe081226f91c5c130512d20cf36c0f494d1138960c30752b",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    }
+  ]
+}

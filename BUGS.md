@@ -195,3 +195,17 @@ retain source + seed + regeneration command, not binaries alone.
 - Synchronized `Makefile` swarm-prove recipe to explicitly track `UNKNOWN` along with `HOLD`, `VIOLATED`, and `ERROR`.
 - Upgraded pass condition from vacuous `((PROVED+VIOLATED) == TOTAL)` to strict `PROVED == TOTAL` with `UNKNOWN == 0`, `VIOLATED == 0`, and `ERROR == 0`.
 - Added `make swarm-prove-fault-injection` negative control: verifies a known-barrier contract (`tests/evm/fault_injection_barrier.bin` containing `REVERT`) yields `UNKNOWN`, proving the gate produces a red verdict on non-holding contracts.
+
+## BUG-CORE05-001: ZCC CLI .i Extension Fallthrough & Silent GCC Linker Delegation (OPEN - Oct 26, 2026)
+**Status**: ⚠️ OPEN / HARNESS MITIGATION ACTIVE (E-LEARN-024)
+- **Component**: `part5.c:2038` CLI argument parsing.
+- **Symptom**: Passing a `.i` translation unit (standard GCC preprocessed file) causes `input_file` to remain `NULL`. The argument falls through to `extra_link_args`, and ZCC triggers a fallback command `gcc -O0 -no-pie ... -o <output> <extra_link_args>`, silently delegating compilation to host GCC.
+- **Severity**: Release-blocking verification hazard (silent fail-open).
+- **Mitigation**: All harnesses must name preprocessed translation units with `.c` (e.g. `.tu.c`) or `.i.c` until `part5.c` explicitly includes `.i` in the accepted source extension list.
+
+## BUG-CORE05-002: HARNESS/CORPUS Reference Divergence in root test_bitfield.c (OPEN - Oct 26, 2026)
+**Status**: 🔍 HARNESS/CORPUS DEFECT / UNDEFINED BEHAVIOR
+- **Component**: `test_bitfield.c` (root test suite).
+- **Symptom**: When compiled under `-O0 -fno-builtin -no-pie`, host GCC 13.3 and Clang 18.1 produce divergent runtime outputs (`(stdout, stderr, exit)`).
+- **Disposition**: Excluded from CORE-05 differential gauntlet under §2f as reference-divergent / UB. Root test file requires audit for implementation-defined bitfield sign-extension assumptions.
+
