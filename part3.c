@@ -2059,6 +2059,12 @@ Node *parse_primary(Compiler *cc) {
                 n->kind = ND_STR;
                 n->str_id = sid;
                 n->type = type_ptr(cc, cc->ty_char);
+            } else if (strcmp(n->name, "__builtin_bswap16") == 0) {
+                n->type = type_func(cc, cc->ty_ushort);
+            } else if (strcmp(n->name, "__builtin_bswap32") == 0) {
+                n->type = type_func(cc, cc->ty_uint);
+            } else if (strcmp(n->name, "__builtin_bswap64") == 0) {
+                n->type = type_func(cc, cc->ty_ulong);
             } else {
                 /* ZCC SCOPING HARDENING: undeclared identifiers must be rejected    */
                 /* at AST build time. The old silent int decay caused CWE-476 healer */
@@ -2431,7 +2437,15 @@ Node *parse_postfix(Compiler *cc) {
                         call->type = cc->ty_int;
                     }
                 } else {
-                    call->type = cc->ty_int;
+                    if (strcmp(call->func_name, "__builtin_bswap16") == 0) {
+                        call->type = cc->ty_ushort;
+                    } else if (strcmp(call->func_name, "__builtin_bswap32") == 0) {
+                        call->type = cc->ty_uint;
+                    } else if (strcmp(call->func_name, "__builtin_bswap64") == 0) {
+                        call->type = cc->ty_ulong;
+                    } else {
+                        call->type = cc->ty_int;
+                    }
                 }
                 n = call;
                 continue;

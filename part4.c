@@ -4707,6 +4707,28 @@ void codegen_expr(Compiler *cc, Node *node) {
     } else if (strcmp(node->func_name, "__builtin_va_end") == 0) {
       /* va_end is a no-op on x86-64 SysV ABI */
       fprintf(cc->out, "    # __builtin_va_end (no-op)\n");
+    } else if (strcmp(node->func_name, "__builtin_bswap16") == 0) {
+      if (backend_ops) {
+          fprintf(cc->out, "    rev16 r0, r0\n");
+      } else {
+          fprintf(cc->out, "    movzwl %%di, %%eax\n");
+          fprintf(cc->out, "    bswapl %%eax\n");
+          fprintf(cc->out, "    shrl $16, %%eax\n");
+      }
+    } else if (strcmp(node->func_name, "__builtin_bswap32") == 0) {
+      if (backend_ops) {
+          fprintf(cc->out, "    rev r0, r0\n");
+      } else {
+          fprintf(cc->out, "    movl %%edi, %%eax\n");
+          fprintf(cc->out, "    bswapl %%eax\n");
+      }
+    } else if (strcmp(node->func_name, "__builtin_bswap64") == 0) {
+      if (backend_ops) {
+          fprintf(cc->out, "    rev x0, x0\n");
+      } else {
+          fprintf(cc->out, "    movq %%rdi, %%rax\n");
+          fprintf(cc->out, "    bswapq %%rax\n");
+      }
     } else {
       if (backend_ops && backend_ops->emit_call) {
           backend_ops->emit_call(cc, node);
@@ -6658,6 +6680,27 @@ static int eval_const_call_math(Node *elem, long long *out_bits) {
             unsigned int bits;
             memcpy(&bits, &f, sizeof(float));
             *out_bits = (long long)bits;
+        }
+        return 1;
+    }
+
+    if ((strcmp(elem->func_name, "__builtin_bswap16") == 0 ||
+         strcmp(elem->func_name, "__builtin_bswap32") == 0 ||
+         strcmp(elem->func_name, "__builtin_bswap64") == 0) &&
+        elem->num_args == 1 && elem->args && elem->args[0]) {
+        ok0 = 1;
+        arg0_bits = eval_const_expr_p4(elem->args[0], &ok0);
+        if (!ok0) return 0;
+        if (strcmp(elem->func_name, "__builtin_bswap16") == 0) {
+            unsigned short v = (unsigned short)arg0_bits;
+            *out_bits = (long long)((unsigned short)((v >> 8) | (v << 8)));
+        } else if (strcmp(elem->func_name, "__builtin_bswap32") == 0) {
+            unsigned int v = (unsigned int)arg0_bits;
+            *out_bits = (long long)((unsigned int)(((v >> 24) & 0xff) | ((v >> 8) & 0xff00) | ((v << 8) & 0xff0000) | ((v << 24) & 0xff000000)));
+        } else {
+            unsigned long long v = (unsigned long long)arg0_bits;
+            *out_bits = (long long)(((v >> 56) & 0xffULL) | ((v >> 40) & 0xff00ULL) | ((v >> 24) & 0xff0000ULL) | ((v >> 8) & 0xff000000ULL) |
+                                    ((v << 8) & 0xff00000000ULL) | ((v << 24) & 0xff0000000000ULL) | ((v << 40) & 0xff000000000000ULL) | ((v << 56) & 0xff00000000000000ULL));
         }
         return 1;
     }

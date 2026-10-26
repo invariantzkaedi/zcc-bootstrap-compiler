@@ -2197,6 +2197,27 @@ static int assemble(const char *in_s_filename, const char *out_o_filename, const
             seg_append(&text_seg, &opcode, 1);
             seg_append(&text_seg, &modrm, 1);
             matched = 1;
+        } else if (strcmp(mnemonic, "bswapq") == 0 || strcmp(mnemonic, "bswapl") == 0 || strcmp(mnemonic, "bswap") == 0) {
+            char *op = args_start ? trim(args_start) : "";
+            int reg = parse_reg(op);
+            if (reg < 0) {
+                fprintf(stderr, "assembler error: invalid register '%s' in %s\n", op, mnemonic);
+                exit(1);
+            }
+            int is_64 = (strcmp(mnemonic, "bswapq") == 0 || (reg >= 0 && reg < 16 && op[1] == 'r'));
+            unsigned char rex = 0;
+            if (is_64) {
+                rex = 0x48;
+            } else if (reg & 8) {
+                rex = 0x40;
+            }
+            if (reg & 8) rex |= 0x01;
+            unsigned char b1 = 0x0f;
+            unsigned char b2 = 0xc8 | (reg & 7);
+            if (rex) seg_append(&text_seg, &rex, 1);
+            seg_append(&text_seg, &b1, 1);
+            seg_append(&text_seg, &b2, 1);
+            matched = 1;
         }
         /* 2-operand instructions */
         else if (args_start) {
