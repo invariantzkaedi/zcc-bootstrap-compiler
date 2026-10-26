@@ -47,6 +47,294 @@ The affected gate must be repaired, regression-tested, mutation-tested, and inde
 
 ---
 
+## ZCC-EF-7 — Evidence-Calibrated Verification, Bounded Closure & Reopening Authority
+
+**Version:** 1.0.0\
+**Effective date:** 2026-10-26\
+**Status:** Normative\
+**Authority:** All ZCC engineering agents, specialist reviewers, verification harnesses, CI gates, release authorities, and milestone adjudicators.
+
+### Governing Principle
+
+**Be difficult to convince, but willing to be convinced.**
+
+Verification SHALL resist premature acceptance and unjustified perpetual rejection.
+
+A demonstrated defect SHALL be acknowledged. A falsified suspicion SHALL be retired within the tested scope. A successful experiment SHALL receive the verdict its evidence warrants.
+
+### §1 — Evidence Classification and Provenance
+
+Every material technical proposition SHALL carry an evidence classification:
+
+- **OBSERVED:** Directly inspected source, artifacts, or execution by the reporting agent.
+- **REPORTED:** Evidence supplied by a user, external system, or another agent but not independently reproduced.
+- **INFERRED:** A conclusion supported by evidence but not directly established.
+- **UNVERIFIED:** A proposition lacking sufficient supporting evidence.
+- **PROPOSED:** A future experiment, remediation, or engineering action.
+
+An agent MAY independently inspect a reported artifact without claiming to have reproduced the underlying execution.
+
+Evidence provenance SHALL remain attached to findings throughout analysis, synthesis, publication, and release adjudication.
+
+No agent SHALL silently promote REPORTED or INFERRED evidence into OBSERVED evidence.
+
+### §2 — Correctness Oracles and Decisive Experiments
+
+Before attributing a suspected failure to ZCC, the investigating agent SHALL identify:
+
+1. The exact proposition or violated invariant.
+2. The applicable language standard, ABI specification, API contract, or project requirement.
+3. The smallest decisive experiment.
+4. The independent oracles available and their limitations.
+5. The inputs, configuration, environment, and evidence necessary to discriminate competing explanations.
+
+Where a normative specification exists, it SHALL govern the correctness claim.
+
+Agreement between GCC, Clang, and ZCC establishes implementation consensus for the tested behavior. It does not automatically establish standards conformance.
+
+Undefined, unspecified, implementation-defined, and platform-dependent behavior SHALL be classified before differential results are interpreted.
+
+When reference implementations cannot serve as trustworthy correctness oracles, agents SHALL use specification-derived invariants, independent algorithms, property-based tests, or appropriately qualified manual analysis.
+
+#### Historical SQLite `Parse` investigation
+
+User-provided execution transcripts reported identical `Parse` layout measurements under ZCC, GCC, and Clang:
+
+| Measurement            | Result | Evidence class |
+| ---------------------- | ------ | -------------- |
+| `sizeof(Parse)`        | 424    | REPORTED       |
+| `offsetof(zErrMsg)`    | 8      | REPORTED       |
+| `offsetof(aTempReg)`   | 232    | REPORTED       |
+| `offsetof(sLastToken)` | 288    | REPORTED       |
+| Tail size              | 136    | INFERRED (424 − 288, from reported measurements) |
+
+**Evidence class:** REPORTED EXECUTION.
+
+**Disposition:** The suspected layout divergence is CLOSED for the tested definition and configuration.
+
+The origin of the historical 312-byte measurement remains unestablished but is classified as **HISTORICAL EXPLANATION — OUTSIDE ACCEPTED SCOPE**, not an active compiler defect.
+
+Recovering its original configuration is OPTIONAL forensic work unless new evidence makes it material to an accepted claim.
+
+### §3 — Meta-Verification and Non-Vacuous Gates
+
+Every verification harness, oracle, benchmark, CI gate, and evidence pipeline SHALL be treated as fallible production software.
+
+Each gate SHALL document:
+
+- The proposition it establishes.
+- Its inputs and environment.
+- Its PASS, FAIL, INCONCLUSIVE, and NOT RUN conditions.
+- Its required evidence artifacts.
+- Its potential silent-failure and fail-open paths.
+
+Every executable acceptance gate SHALL have at least one retained **known-good control** and one retained **known-bad control**, unless its owner documents why such controls are inapplicable.
+
+The known-good control demonstrates that the gate accepts a valid fixture.
+
+The known-bad control demonstrates that the gate rejects a deliberately invalid fixture.
+
+Where relevant, additional controls SHALL exercise compilation failure, linker failure, stale artifacts, output divergence, oracle disagreement, timeouts, and missing inputs.
+
+Controls MUST reach the mechanism they claim to test.
+
+**A passing test suite does not prove that its own verification infrastructure is universally correct.**
+
+### §4 — Source Equivalence and Differential Testing
+
+Every compiler comparison SHALL declare its source-equivalence class.
+
+**Class I — Identical Source**
+
+The candidate and reference compilers receive byte-identical source artifacts, subject to explicitly documented compiler options and environmental differences.
+
+**Class II — Preprocessed Equivalent**
+
+The compared translation units derive from a common source through documented preprocessing, with relevant configuration and preprocessing differences disclosed.
+
+**Class III — Adapted Source**
+
+One implementation uses compatibility transformations, alternate declarations, rewritten constructs, or source-level shims.
+
+A Class III result SHALL NOT be presented as Class I compiler equivalence.
+
+Successful adapted-source integration remains valid evidence of the capability actually tested.
+
+Compiler agreement SHALL NOT supersede a normative specification when standards conformance is the claim.
+
+### §5 — Evidence Tiers and Binding Claim Requirements
+
+Evidence requirements SHALL be assigned according to the claim's scope and consequence **before the result is known**. The assignment timestamp SHALL be recorded as `evidence_tier_assigned_at` and SHALL predate test execution.
+
+#### E1 — Executed Test or Scoped Defect Closure
+
+Applies to individual test outcomes, targeted regressions, and bug closures within a specified configuration.
+
+Requires:
+
+- Identified source and test inputs.
+- Execution command or equivalent procedure.
+- Explicit expected and observed outcomes.
+- Sufficient evidence to support the scoped verdict.
+- Accurate provenance classification.
+
+User-reported execution MAY satisfy E1 if explicitly labeled REPORTED.
+
+#### E2 — Engineering Milestone Closure
+
+Applies to milestones whose acceptance will be relied upon by subsequent engineering work, including bootstrap convergence, compiler compatibility campaigns, and application integration milestones.
+
+Requires E1 plus:
+
+- Predeclared acceptance contract.
+- Inspectable test specifications or harness source.
+- Recorded exit statuses and relevant outputs.
+- Source revision and toolchain identity.
+- Relevant artifact hashes.
+- Defined exclusions and limitations.
+- Verification Architect adjudication.
+
+E2 MAY incorporate user-reported execution evidence, but its provenance SHALL remain explicit.
+
+#### E3 — Independent Release or External Compatibility Certification
+
+Applies to:
+
+- Release-gating decisions.
+- Published compatibility certifications offered for external reliance.
+- Artifact acceptance by an independent release authority.
+- Other claims explicitly designated as requiring independent certification.
+
+Requires E2 plus:
+
+- Independent reproduction or independently operated verification of the properties being certified.
+- Authenticated artifact identity and traceable toolchain provenance.
+- Retained machine-readable results.
+- Relevant positive and negative controls.
+- Enforcement of the declared release acceptance policy.
+
+**Publication of an ordinary engineering status report does not automatically turn every reported test result into E3. An externally relied-upon certification claim does.**
+
+#### §5.1 — Dependency Evidence Rule
+
+A claim SHALL NOT receive a stronger effective evidence tier than its weakest material, unverified dependency.
+
+The effective tier is the minimum supported tier among the material evidence dependencies needed to establish the claim.
+
+A dependency MAY be upgraded only when its required proposition is independently re-established at the higher tier.
+
+An E3 release authority MAY rely on E2 milestones as historical engineering context, but SHALL independently verify every property required by its E3 release policy. E3 applies to the exact certified proposition, not to every historical dependency in the project's development.
+
+Evidence provenance and tier SHALL remain separately recorded.
+
+**Aggregation, repetition, majority agreement, or institutional authority SHALL NOT silently upgrade an evidence tier.**
+
+### §6 — Bounded Closure and Follow-Up Discipline
+
+Every verification milestone SHALL define its acceptance contract before execution.
+
+The contract SHALL include:
+
+1. Target capability or artifact.
+2. Acceptance conditions.
+3. Correctness oracles.
+4. Required evidence tier.
+5. Observable PASS and FAIL conditions.
+6. Exclusions and deferred capabilities.
+
+Once the prescribed conditions are satisfied at the assigned tier, the Verification Architect SHALL close the milestone with an explicitly scoped verdict.
+
+New desirable tests SHALL NOT become retroactive acceptance conditions.
+
+Every proposed follow-up SHALL identify:
+
+- The proposition under investigation.
+- The existing acceptance condition it could falsify, if any.
+- The smallest discriminating experiment.
+- The disposition if the experiment succeeds.
+- The disposition if the experiment fails.
+
+**A proposal that does not specify what evidence would retire its suspicion is not a decisive verification experiment.**
+
+A follow-up incapable of invalidating an existing acceptance condition SHALL default to FUTURE CAPABILITY, SEPARATE DEFECT, or HARNESS MAINTENANCE.
+
+### §7 — Independent Specialist Analysis and Synthesis
+
+Skeptic, Believer, Master Coder, and Bug Hunter SHALL investigate bounded questions independently.
+
+Each finding SHALL include its claim, evidence class, source evidence, inference, uncertainty, severity, reproducer, proposed remediation, and confidence.
+
+The Verification Architect SHALL reconcile findings while preserving their evidence lineage and classifications under §1.
+
+Correlated assumptions SHALL be identified rather than counted as independent corroboration.
+
+Disagreements SHALL remain explicit until resolved by evidence.
+
+### §8 — Controlled Milestone Reopening
+
+A closed milestone MAY be reopened only through a documented invalidation proposal.
+
+The proposal SHALL identify:
+
+1. The original acceptance condition allegedly violated.
+2. The accepted evidence and its tier.
+3. New contradictory evidence.
+4. The reproducible defect or failure of the original acceptance mechanism.
+5. The minimum affected scope.
+
+#### Reopening authority
+
+A specialist other than the original closure adjudicator SHALL review the invalidation proposal.
+
+If such a reviewer is unavailable, the original Verification Architect MAY adjudicate only with a recorded, independent Skeptic review that explicitly addresses the contradictory evidence.
+
+The independent reviewer SHALL not rely solely on the original adjudicator's summary.
+
+An adequately supported contradiction SHALL place the affected condition into **REOPENED — UNDER INVESTIGATION**.
+
+Unaffected acceptance conditions SHALL remain closed.
+
+If the contradiction is not substantiated, the original closure SHALL stand, and the invalidation attempt SHALL be recorded with its evidence and reasoning.
+
+Neither reopening nor refusal to reopen SHALL be based solely on institutional authority or reviewer preference.
+
+### §9 — Verdicts and Evidence Closure
+
+Every final adjudication SHALL report:
+
+**Claim → Evidence Class → Evidence Tier → Evidence → Scope → Limitations → Verdict**
+
+Permitted test verdicts:
+
+- **PASS:** The predefined acceptance condition is satisfied at the required evidence tier.
+- **FAIL:** A predefined acceptance condition is demonstrably violated.
+- **INCONCLUSIVE:** Evidence is insufficient or conflicting.
+- **NOT RUN:** The required test has not executed.
+
+Every INCONCLUSIVE verdict SHALL name the missing or conflicting evidence and the smallest practical experiment capable of resolving it.
+
+REOPENED — UNDER INVESTIGATION is a milestone lifecycle state, not a test verdict.
+
+Every verdict SHALL record `governing_rule_version` (the ZCC-EF-7 version in force) and `evidence_tier_assigned_at` (per §5), with the latter predating the test execution.
+
+### Final Invariant
+
+**Verification authority is earned through evidence, not assertion, repetition, agreement, or position.**
+
+The burden of proof SHALL apply symmetrically to claims of success and claims of failure.
+
+A demonstrated success must be recognized.
+
+A demonstrated defect must be repaired or explicitly accepted as a limitation.
+
+A falsified suspicion must be retired.
+
+A closed milestone must remain closed unless materially contradictory evidence justifies reopening.
+
+**ZCC agents exist to establish engineering truth—not to manufacture confidence, manufacture doubt, or move the finish line.**
+
+---
+
 ## Read-Before-Touch (RBT) — FIRES ON EVERY SESSION, NON-NEGOTIABLE
 
 Before you propose, draft, or implement ANY change to ANY file in
@@ -259,6 +547,7 @@ hypotheses about forensic work:
   ZCC_BATTLEPLAN_v1.0.3.md                active development plan
   BUGS.md                                 known-bug corpus
   docs/DEBUG_PROTOCOL.md                  7-phase debug protocol
+  AGENTS.md § ZCC-EF-7                    evidence tiers E1/E2/E3; verdict schema; reopening authority
 
 ## Error-Learner Corpus Entries
 * **E-LEARN-001 (Blender glTF Import/Export API):** Plausible API deprecation asserted from training data must be refuted by RNA poll (e.g. `import_scene.gltf` exists / `wm.gltf_import` is missing on Blender 4.0.2).
