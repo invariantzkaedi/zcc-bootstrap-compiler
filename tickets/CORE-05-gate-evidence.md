@@ -187,34 +187,26 @@ Per Contract §5, a milestone verdict of FAIL on $N$ fixtures is a successful, c
   ```
 
 ### DEFECT-CORE05-02: Undeclared `__PRETTY_FUNCTION__` Identifier
-- **Evidence Class**: **INFERRED**
+- **Status**: **RESOLVED** (Commit `135456c8b`, Azure lock `3d8ad6643b5054a193b5a66ea000a8b5021d23a9`)
+- **Evidence Class**: **OBSERVED** (Resolved)
 - **Symptom Fixture**: `tests/test_ir_spill_forced.c`
 - **Phase**: `compile`
 - **Observed Diagnostic**: `/tmp/...:338: error: use of undeclared identifier '__PRETTY_FUNCTION__'`
 - **Inference**: Glibc assertion handlers pass `__PRETTY_FUNCTION__` as a string argument. ZCC does not inject `__PRETTY_FUNCTION__` into function scope during lexical analysis or AST creation.
+- **Remediation**: Added `__PRETTY_FUNCTION__` identifier lowering in `part3.c:parse_primary()` with `current_func` tracking, cleaned macro stubs from `part0_pp.c`, added regression test `tests/test_pretty_function.c`.
 - **Reference Consensus**: GCC exit `0`, Clang exit `0`.
-- **Proposed Decisive Experiment (Minimal Repro Oracle)**:
-  ```c
-  int main(void) {
-      const char *s = __PRETTY_FUNCTION__;
-      return (s != 0) ? 0 : 1;
-  }
-  ```
+- **Decisive Experiment**: Verified clean compilation and byte-exact execution via `tests/test_pretty_function.c`.
 
 ### DEFECT-CORE05-03: Missing Byte-Swap Builtins (`__builtin_bswap16/32/64`)
-- **Evidence Class**: **INFERRED**
+- **Status**: **RESOLVED** (Commit `436f718f2`, Azure lock `3d8ad6643b5054a193b5a66ea000a8b5021d23a9`)
+- **Evidence Class**: **OBSERVED** (Resolved)
 - **Symptom Fixture**: `tests/test_posix_socket_native.c`
 - **Phase**: `compile`
 - **Observed Diagnostic**: `/tmp/...:106: error: use of undeclared identifier '__builtin_bswap16'`
 - **Inference**: Inlined `<netinet/in.h>` and `<byteswap.h>` lower `htons()` / `htonl()` to `__builtin_bswap*`. ZCC's symbol table does not register `__builtin_bswap*` functions.
+- **Remediation**: Added AST identifier recognition and type resolution in `part3.c`, lowered in `part4.c` (via `movzwl`/`bswapl`/`shrl $16` for 16-bit, `bswapl` for 32-bit, `bswapq` for 64-bit), implemented direct 1-operand `bswap` machine-code encoding in `src/codegen.c`, added constant evaluation in `eval_const_call_math()`, added regression test `tests/test_builtin_bswap.c`.
 - **Reference Consensus**: GCC exit `0`, Clang exit `0`.
-- **Proposed Decisive Experiment (Minimal Repro Oracle)**:
-  ```c
-  int main(void) {
-      unsigned short x = __builtin_bswap16(0x1234);
-      return (x == 0x3412) ? 0 : 1;
-  }
-  ```
+- **Decisive Experiment**: Verified clean compilation and byte-exact execution via `tests/test_builtin_bswap.c` and target fixture `tests/test_posix_socket_native.c` (exit 0).
 
 ### DEFECT-CORE05-04: Undeclared `__builtin_va_start` (Deduped from `test_va.c` & `test_va2.c`)
 - **Evidence Class**: **INFERRED**
