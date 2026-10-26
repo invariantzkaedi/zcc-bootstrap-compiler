@@ -15,30 +15,33 @@ Acceptance Contract:
   * GCC 13.3 and Clang 18.1 compile upstream libcurl sources directly using standard system headers.
   * Both sides share identical configure macros, the identical single curl_config.h, and tests/curl_stubs.c.
   * Any divergence must first be triaged as header-surface vs compiler.
-- Full Class III Disclosures (byte-for-byte audit against commit 3b4f9da91):
+- Full Class III Disclosures (byte-for-byte audit against commit 3b4f9da91, 66-line file):
   * include/zcc_curl_compat.h:
-    - Builtin redefinition macros (codegen hint alteration):
-        #define __builtin_expect(expr, val) (expr)
-        #define __builtin_unreachable() do {} while (0)
+    - Builtin redefinitions (codegen hint alteration):
+        #define __builtin_expect(exp, c) (exp)
+        #define __builtin_unreachable() do {} while(0)
+        #define __builtin_clz(x) __builtin_clz(x)
     - POSIX scalar types:
-        time_t, suseconds_t, pid_t, uid_t, gid_t, mode_t, socklen_t, sa_family_t
+        socklen_t, pid_t, uid_t, gid_t, mode_t, time_t, suseconds_t, sa_family_t
     - Socket structures & network constants:
-        struct in_addr, struct sockaddr_in, struct in6_addr, struct sockaddr_in6,
-        struct sockaddr_storage, struct addrinfo, fd_set,
-        AF_INET, AF_INET6, AF_UNSPEC, PF_INET, PF_INET6, PF_UNSPEC,
-        SOCK_STREAM, SOCK_DGRAM, IPPROTO_TCP, IPPROTO_UDP, SOL_SOCKET, SO_ERROR
+        fd_set, struct in_addr, struct sockaddr_in, struct in6_addr, struct sockaddr_in6,
+        AF_UNSPEC, AF_INET, AF_INET6, PF_UNSPEC, PF_INET, PF_INET6,
+        SOCK_STREAM, SOCK_DGRAM, IPPROTO_IP, IPPROTO_TCP, IPPROTO_UDP
     - Prototypes: inet_ntop, inet_pton, strerror_r
   * tests/curl_stubs.c:
     - 5 allocator pointers:
         Curl_cmalloc, Curl_cfree, Curl_crealloc, Curl_cstrdup, Curl_ccalloc
     - 4 dummy protocol/utility helpers:
         Curl_get_scheme_handler, Curl_is_ASCII_name, ZSTD_versionNumber, Curl_parse_login_details
+- Partition & Limitations:
+  * zcc_compiled_units: 11 archive units (escape, urlapi, strerror, mprintf, dynbuf, strdup, timediff, warnless, base64, version, strcase)
+  * gcc_compiled_shared: core04_curl_driver.c, curl_stubs.c (isolates compiler backend as tested variable)
 - Deterministic Consensus Driver: tests/core04_curl_driver.c (commit 3d859aeed)
   * Explicit printf of observed values, no assert/SIGABRT, no telemetry banners.
   * POS-01 (default): Exit 0.
   * NEG-01 (--neg01): Deliberately malformed URL rejected with exit 42.
-- Meta-Verification: NEG-02 (deliberately corrupted in-place urlapi.o payload rejected by linker).
-- Fail-Closed Rule: Missing compiler or corrupted oracle immediately aborts with non-zero exit code.
+- Meta-Verification: NEG-02 (Missing-member / stale-symbol link failure control).
+- Fail-Closed Rule: Missing compiler or corrupted oracle writes partial failure ledger and aborts with non-zero exit code.
 """
 
 import os
@@ -76,6 +79,14 @@ CURL_SRCS = [
     "strcase"
 ]
 
+_GLOBAL_CONTEXT = {
+    "repo_root": None,
+    "timestamp": None,
+    "workdir": None,
+    "ledger_path": None,
+    "partial_results": []
+}
+
 def hash_file(path):
     if not os.path.isfile(path):
         return None
@@ -85,8 +96,28 @@ def hash_file(path):
             h.update(chunk)
     return h.hexdigest()
 
-def fail_closed(msg):
+def fail_closed(msg, partial_data=None):
     print(f"\n[FAIL-CLOSED FATAL ERROR] {msg}", file=sys.stderr)
+    repo_root = _GLOBAL_CONTEXT.get("repo_root")
+    run_timestamp = _GLOBAL_CONTEXT.get("timestamp") or datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+    if repo_root:
+        fail_evidence_dir = os.path.join(repo_root, "docs", "evidence", "2026-10-26", "core_04_curl")
+        os.makedirs(fail_evidence_dir, exist_ok=True)
+        fail_ledger_path = os.path.join(fail_evidence_dir, f"core04_ledger_{run_timestamp}_FAIL.json")
+        fail_payload = {
+            "timestamp": run_timestamp,
+            "verdict": "FAIL",
+            "error": msg,
+            "governing_rule_version": GOVERNING_RULE_VERSION,
+            "evidence_tier": EVIDENCE_TIER,
+            "partial_data": partial_data or _GLOBAL_CONTEXT.get("partial_results", [])
+        }
+        try:
+            with open(fail_ledger_path, "w") as f:
+                json.dump(fail_payload, f, indent=2)
+            print(f"[FAIL-CLOSED] Preserved partial failure ledger at: {fail_ledger_path}", file=sys.stderr)
+        except Exception as e:
+            print(f"[FAIL-CLOSED] Failed to write fail ledger: {e}", file=sys.stderr)
     sys.exit(1)
 
 def ensure_compilers_present():
@@ -276,7 +307,7 @@ def compile_reference_archive(compiler_name, compiler_cmd, repo_root, curl_dir, 
 
 def run_meta_verification_neg02(workdir, zcc_obj_dir, repo_root, curl_dir):
     print("\n--------------------------------------------------------------------------------")
-    print("🛡️  META-VERIFICATION: NEG-02 (In-Place Corrupted Object Linkage Rejection)")
+    print("🛡️  META-VERIFICATION: NEG-02 (Missing-Member / Stale-Symbol Link Failure Control)")
     print("--------------------------------------------------------------------------------")
     target_obj = os.path.join(zcc_obj_dir, "urlapi.o")
     corrupt_backup = os.path.join(zcc_obj_dir, "urlapi.o.bak")
@@ -289,7 +320,9 @@ def run_meta_verification_neg02(workdir, zcc_obj_dir, repo_root, curl_dir):
 
         corrupt_lib = os.path.join(workdir, "libcorrupted_curl.a")
         objs = [os.path.join(zcc_obj_dir, f"{src}.o") for src in CURL_SRCS] + [os.path.join(zcc_obj_dir, "curl_stubs.o")]
-        run_cmd(["ar", "rcs", corrupt_lib] + objs)
+        r_ar = run_cmd(["ar", "rcs", corrupt_lib] + objs)
+        if r_ar["returncode"] != 0:
+            fail_closed(f"NEG-02 ar archive creation failed: {r_ar['stderr']}")
 
         bad_bin = os.path.join(workdir, "bad_link_bin")
         link_cmd = [
@@ -302,8 +335,8 @@ def run_meta_verification_neg02(workdir, zcc_obj_dir, repo_root, curl_dir):
         ]
         r_link = run_cmd(link_cmd)
         if r_link["returncode"] != 0:
-            print("  ✔ NEG-02 PASS: Linker rejected in-place corrupted object payload with non-zero exit code.")
-            print(f"    Observed linker diagnostic: {r_link['stderr'].splitlines()[0] if r_link['stderr'] else 'non-zero exit'}")
+            print("  ✔ NEG-02 PASS: Linker rejected incomplete archive (non-ELF member skipped) with non-zero exit code.")
+            print(f"    Observed diagnostic: {r_link['stderr'].splitlines()[0] if r_link['stderr'] else 'non-zero exit'}")
             return True, r_link
         else:
             print("  ❌ NEG-02 FAIL: Linker silently accepted corrupted object payload! Fail-closed triggered.")
@@ -321,14 +354,19 @@ def main():
     print("================================================================================")
 
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    run_timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+    workdir = tempfile.mkdtemp(prefix=f"zcc_core04_curl_{run_timestamp}_")
+
+    _GLOBAL_CONTEXT["repo_root"] = repo_root
+    _GLOBAL_CONTEXT["timestamp"] = run_timestamp
+    _GLOBAL_CONTEXT["workdir"] = workdir
+
     compilers = ensure_compilers_present()
     print("✔ Tri-compiler toolchain verified present:")
     print(f"  ZCC:   {compilers['zcc']}")
     print(f"  GCC:   {compilers['gcc']}")
     print(f"  Clang: {compilers['clang']}")
 
-    run_timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
-    workdir = tempfile.mkdtemp(prefix=f"zcc_core04_curl_{run_timestamp}_")
     print(f"\n✔ Isolated workspace sandboxed: {workdir}")
 
     curl_dir, config_h = setup_curl_source()
@@ -367,7 +405,7 @@ def main():
         r_link = run_cmd(link_cmd)
         if r_link["returncode"] != 0:
             fail_closed(f"Failed to link Suite 4A for {comp}: {r_link['stderr']}")
-        r_run = run_cmd([bin_path])
+        r_run = run_cmd([bin_path], timeout=RUN_TIMEOUT)
         outputs_4a[comp] = r_run
         print(f"  {comp.upper():<5} -> Exit: {r_run['returncode']:<3} OutBytes: {len(r_run['stdout']):<5} ErrBytes: {len(r_run['stderr'])}")
 
@@ -385,7 +423,7 @@ def main():
             print(f"[{comp.upper()} stderr]:\n{outputs_4a[comp]['stderr']}")
         fail_closed("Suite 4A failed 3-way consensus check!")
     print("  ✔ SUITE 4A PASS: 100% byte-for-byte tri-compiler consensus across ZCC, GCC, and Clang (Exit 0).")
-    results.append({
+    res_4a = {
         "id": "CORE-04A",
         "name": "Suite 4A & POS-01 URL API / RFC 3986 Gauntlet",
         "verdict": "PASS",
@@ -394,7 +432,9 @@ def main():
         "stdout_sha256": hashlib.sha256(outputs_4a["zcc"]["stdout"].encode()).hexdigest(),
         "stdout_snippet": outputs_4a["zcc"]["stdout"].strip(),
         "details": f"Exit 0, matching stdout ({len(outputs_4a['zcc']['stdout'])}B) across ZCC, GCC, Clang."
-    })
+    }
+    results.append(res_4a)
+    _GLOBAL_CONTEXT["partial_results"].append(res_4a)
 
     # --- SUITE 4B: NEG-01 (Malformed URL Rejection Control) ---
     print("\n--------------------------------------------------------------------------------")
@@ -403,14 +443,15 @@ def main():
     outputs_4b = {}
     for comp in ["zcc", "gcc", "clang"]:
         bin_path = os.path.join(workdir, f"bin_4a_{comp}") # Reuse linked binary with argument
-        r_run = run_cmd([bin_path, "--neg01"])
+        r_run = run_cmd([bin_path, "--neg01"], timeout=RUN_TIMEOUT)
         outputs_4b[comp] = r_run
         print(f"  {comp.upper():<5} -> Exit: {r_run['returncode']:<3} OutBytes: {len(r_run['stdout']):<5} ErrBytes: {len(r_run['stderr'])}")
 
     consensus_4b = (
         outputs_4b["zcc"]["returncode"] == 42 and
         outputs_4b["zcc"]["returncode"] == outputs_4b["gcc"]["returncode"] == outputs_4b["clang"]["returncode"] and
-        outputs_4b["zcc"]["stdout"] == outputs_4b["gcc"]["stdout"] == outputs_4b["clang"]["stdout"]
+        outputs_4b["zcc"]["stdout"] == outputs_4b["gcc"]["stdout"] == outputs_4b["clang"]["stdout"] and
+        outputs_4b["zcc"]["stderr"] == outputs_4b["gcc"]["stderr"] == outputs_4b["clang"]["stderr"]
     )
     if not consensus_4b:
         print("\n--- Output Divergence in Suite 4B / NEG-01 ---")
@@ -420,7 +461,7 @@ def main():
             print(f"[{comp.upper()} stderr]:\n{outputs_4b[comp]['stderr']}")
         fail_closed(f"Suite 4B / NEG-01 failed consensus check: exits=({outputs_4b['zcc']['returncode']}, {outputs_4b['gcc']['returncode']}, {outputs_4b['clang']['returncode']})")
     print("  ✔ SUITE 4B / NEG-01 PASS: Malformed URL rejected deterministically with exit code 42 on all three compilers.")
-    results.append({
+    res_4b = {
         "id": "CORE-04B",
         "name": "Suite 4B / NEG-01 Malformed URL Rejection Control",
         "verdict": "PASS",
@@ -429,18 +470,22 @@ def main():
         "stdout_sha256": hashlib.sha256(outputs_4b["zcc"]["stdout"].encode()).hexdigest(),
         "stdout_snippet": outputs_4b["zcc"]["stdout"].strip(),
         "details": "Exit 42 consensus across ZCC, GCC, Clang."
-    })
+    }
+    results.append(res_4b)
+    _GLOBAL_CONTEXT["partial_results"].append(res_4b)
 
     # --- META-VERIFICATION: NEG-02 ---
     neg02_pass, neg02_link_res = run_meta_verification_neg02(workdir, zcc_obj_dir, repo_root, curl_dir)
     if not neg02_pass:
         fail_closed("Meta-verification NEG-02 failed!")
-    results.append({
+    res_neg02 = {
         "id": "META-NEG-02",
-        "name": "In-Place Corrupted Object Linkage Rejection",
+        "name": "Missing-member / stale-symbol link failure control",
         "verdict": "PASS",
-        "details": "In-place corrupted urlapi.o payload rejected by linker with non-zero exit code."
-    })
+        "details": "Incomplete archive (non-ELF member urlapi.o skipped by ld) rejected with non-zero exit code due to unresolved symbols."
+    }
+    results.append(res_neg02)
+    _GLOBAL_CONTEXT["partial_results"].append(res_neg02)
 
     # 4. Ledger Persistence under docs/evidence/2026-10-26/core_04_curl/
     evidence_dir = os.path.join(repo_root, "docs", "evidence", "2026-10-26", "core_04_curl")
@@ -461,17 +506,17 @@ def main():
         "class_iii_disclosures": {
             "include_zcc_curl_compat_h": {
                 "builtin_redefinitions": [
-                    "__builtin_expect(expr, val) -> (expr)",
-                    "__builtin_unreachable() -> do {} while(0)"
+                    "__builtin_expect(exp, c) -> (exp)",
+                    "__builtin_unreachable() -> do {} while(0)",
+                    "__builtin_clz(x) -> __builtin_clz(x)"
                 ],
                 "posix_types": [
-                    "time_t", "suseconds_t", "pid_t", "uid_t", "gid_t", "mode_t", "socklen_t", "sa_family_t", "fd_set"
+                    "socklen_t", "pid_t", "uid_t", "gid_t", "mode_t", "time_t", "suseconds_t", "sa_family_t", "fd_set"
                 ],
                 "network_types_and_constants": [
                     "struct in_addr", "struct sockaddr_in", "struct in6_addr", "struct sockaddr_in6",
-                    "struct sockaddr_storage", "struct addrinfo",
-                    "AF_INET", "AF_INET6", "AF_UNSPEC", "PF_INET", "PF_INET6", "PF_UNSPEC",
-                    "SOCK_STREAM", "SOCK_DGRAM", "IPPROTO_TCP", "IPPROTO_UDP", "SOL_SOCKET", "SO_ERROR"
+                    "AF_UNSPEC", "AF_INET", "AF_INET6", "PF_UNSPEC", "PF_INET", "PF_INET6",
+                    "SOCK_STREAM", "SOCK_DGRAM", "IPPROTO_IP", "IPPROTO_TCP", "IPPROTO_UDP"
                 ],
                 "prototypes": ["inet_ntop", "inet_pton", "strerror_r"]
             },
@@ -484,6 +529,15 @@ def main():
                 ]
             }
         },
+        "scope_partition": {
+            "zcc_compiled_units": CURL_SRCS,
+            "gcc_compiled_shared": ["core04_curl_driver.c", "curl_stubs.c"]
+        },
+        "limitations": [
+            "tests/core04_curl_driver.c and tests/curl_stubs.c are gcc-compiled in all three variants to isolate the 11 archive units as the tested variable.",
+            "__builtin_expect and __builtin_unreachable are neutered on the ZCC side only via include/zcc_curl_compat.h.",
+            "Single fixture per suite (POS-01 and NEG-01); establishes differential consensus for the tested offline units, not a general libcurl or network conformance claim."
+        ],
         "compilers": {
             "zcc": {
                 "path": compilers["zcc"],

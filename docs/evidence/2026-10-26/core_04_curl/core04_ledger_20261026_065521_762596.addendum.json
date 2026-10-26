@@ -1,0 +1,97 @@
+{
+  "addendum_version": "1.0.0",
+  "created_at": "2026-10-26T07:10:00Z",
+  "referencing_ledger": "docs/evidence/2026-10-26/core_04_curl/core04_ledger_20261026_065521_762596.json",
+  "referencing_ledger_sha256": "039d5cd916edc926d94d0efaf83519f1da5a201a5ec7ae35ba4767c0ffcaebee",
+  "adjudication": {
+    "verdict": "PASS",
+    "evidence_tier": "E2",
+    "evidence_class": "REPORTED execution; source-inspected harness",
+    "adjudicator": "Verification Architect",
+    "effective_status": "CLOSED"
+  },
+  "record_corrections": {
+    "D1_class_iii_disclosure_correction": {
+      "target_file": "include/zcc_curl_compat.h",
+      "target_file_sha256": "87ea4f81c13374fc6e4f60518baf639fa90c8ab185012fb77d8e8992142690a2",
+      "description": "Correction of class III disclosure to match exact 66-line on-disk file committed at 3b4f9da91.",
+      "actual_file_contents": {
+        "builtin_redefinitions": [
+          "__builtin_expect(exp, c) -> (exp)",
+          "__builtin_unreachable() -> do {} while(0)",
+          "__builtin_clz(x) -> __builtin_clz(x)"
+        ],
+        "posix_scalar_typedefs": [
+          "socklen_t (unsigned int)",
+          "pid_t (int)",
+          "uid_t (int)",
+          "gid_t (int)",
+          "mode_t (int)",
+          "time_t (long)",
+          "suseconds_t (long)",
+          "sa_family_t (unsigned short)"
+        ],
+        "structures_and_typedefs": [
+          "fd_set (unsigned long fds_bits[16])",
+          "struct in_addr (unsigned int s_addr)",
+          "struct sockaddr_in (sa_family_t sin_family, unsigned short sin_port, struct in_addr sin_addr, char sin_zero[8])",
+          "struct in6_addr (unsigned char s6_addr[16])",
+          "struct sockaddr_in6 (sa_family_t sin6_family, unsigned short sin6_port, unsigned int sin6_flowinfo, struct in6_addr sin6_addr, unsigned int sin6_scope_id)"
+        ],
+        "constants": [
+          "AF_UNSPEC (0)", "AF_INET (2)", "AF_INET6 (10)",
+          "PF_UNSPEC (0)", "PF_INET (2)", "PF_INET6 (10)",
+          "SOCK_STREAM (1)", "SOCK_DGRAM (2)",
+          "IPPROTO_IP (0)", "IPPROTO_TCP (6)", "IPPROTO_UDP (17)"
+        ],
+        "prototypes": [
+          "const char *inet_ntop(int af, const void *src, char *dst, socklen_t size)",
+          "int inet_pton(int af, const char *src, void *dst)",
+          "int strerror_r(int errnum, char *buf, size_t buflen)"
+        ]
+      },
+      "omitted_erroneous_entries": [
+        "struct sockaddr_storage (NOT present in header; erroneously reported in initial ledger)",
+        "struct addrinfo (NOT present in header; erroneously reported in initial ledger)",
+        "SOL_SOCKET (NOT present in header; erroneously reported in initial ledger)",
+        "SO_ERROR (NOT present in header; erroneously reported in initial ledger)"
+      ]
+    },
+    "D2_neg02_mechanism_relabeling": {
+      "original_label": "In-Place Corrupted Object Linkage Rejection",
+      "corrected_label": "Missing-member / stale-symbol link failure control",
+      "observed_mechanism": "GNU ar rcs packages raw bytes into an archive without validating ELF headers. GNU ld inspects member ELF headers and silently skips non-ELF archive members rather than throwing a malformed format abort. Linkage subsequently fails with non-zero exit code due to unresolved undefined references (curl_url, curl_url_set, etc.).",
+      "verdict": "PASS (valid negative link failure control)",
+      "associated_e_learn": "E-LEARN-023"
+    },
+    "D3_fail_closed_and_harness_hygiene": {
+      "fail_closed_partial_ledger": "Harness updated to write partial failure ledger before calling sys.exit(1), ensuring failure evidence is preserved rather than leaving no artifact on disk.",
+      "run_timeout": "Harness updated to bind process execution to RUN_TIMEOUT (30s).",
+      "stderr_consensus": "Suite 4B / NEG-01 updated to compare stderr as well as returncode and stdout."
+    },
+    "D4_scope_and_limitations": {
+      "zcc_compiled_units": [
+        "escape",
+        "urlapi",
+        "strerror",
+        "mprintf",
+        "dynbuf",
+        "strdup",
+        "timediff",
+        "warnless",
+        "base64",
+        "version",
+        "strcase"
+      ],
+      "gcc_compiled_shared": [
+        "core04_curl_driver.c",
+        "curl_stubs.c"
+      ],
+      "limitations": [
+        "tests/core04_curl_driver.c and tests/curl_stubs.c are gcc-compiled in all three variants to isolate the compiler backend as the tested variable across the 11 archive units.",
+        "__builtin_expect and __builtin_unreachable are neutered on the ZCC side only via include/zcc_curl_compat.h.",
+        "Single fixture per suite (POS-01 and NEG-01); establishes differential consensus for the tested offline units, not a general libcurl or network conformance claim."
+      ]
+    }
+  }
+}
