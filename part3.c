@@ -2046,7 +2046,7 @@ Node *parse_primary(Compiler *cc) {
             /* stdio global pointers: stdin, stdout, stderr are FILE* (size 8) */
             if (strcmp(n->name, "stdin") == 0 || strcmp(n->name, "stdout") == 0 || strcmp(n->name, "stderr") == 0) {
                 n->type = type_ptr(cc, cc->ty_char);
-            } else if (strcmp(n->name, "__func__") == 0 || strcmp(n->name, "__FUNCTION__") == 0) {
+            } else if (strcmp(n->name, "__func__") == 0 || strcmp(n->name, "__FUNCTION__") == 0 || strcmp(n->name, "__PRETTY_FUNCTION__") == 0) {
                 const char *fn = cc->current_func[0] ? cc->current_func : "top_level";
                 int sid = cc->num_strings;
                 if (sid < MAX_STRINGS) {
@@ -4410,7 +4410,16 @@ static Node *parse_func_def(Compiler *cc, Type *ret_type, char *name, int is_sta
     }
 
     /* definition: ) { ... } */
+    char prev_func[MAX_IDENT];
+    strncpy(prev_func, cc->current_func, MAX_IDENT - 1);
+    prev_func[MAX_IDENT - 1] = '\0';
+    strncpy(cc->current_func, name, MAX_IDENT - 1);
+    cc->current_func[MAX_IDENT - 1] = '\0';
+
     func->body = parse_stmt(cc);
+
+    strncpy(cc->current_func, prev_func, MAX_IDENT - 1);
+    cc->current_func[MAX_IDENT - 1] = '\0';
     func->stack_size = -cc->local_offset;
     scope_pop(cc);
 

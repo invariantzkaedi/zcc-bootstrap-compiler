@@ -176,9 +176,6 @@ static const char *zcc_stddef_text =
     "#define __TIME__ \"00:00:00\"\n"
     "#define __DATE__ \"Sep 04 2026\"\n"
     "#define __VERSION__ \"zcc\"\n"
-    "#define __func__ \"zcc_func\"\n"
-    "#define __FUNCTION__ \"zcc_func\"\n"
-    "#define __PRETTY_FUNCTION__ \"zcc_func\"\n"
     "#define PRIi32 \"d\"\n"
     "#define PRIi64 \"ld\"\n"
     "#define PRId32 \"d\"\n"
@@ -2564,10 +2561,6 @@ char *zcc_preprocess(const char *source, int source_len, const char *filename,
     strcpy(m->body, "\"zcc_file.c\"");
     m = pp_add_macro(state, "__LINE__");
     strcpy(m->body, "1");
-    m = pp_add_macro(state, "__func__");
-    strcpy(m->body, "\"zcc_func\"");
-    m = pp_add_macro(state, "__FUNCTION__");
-    strcpy(m->body, "\"zcc_func\"");
     m = pp_add_macro(state, "__GNUC__");
     strcpy(m->body, "1");
     m = pp_add_macro(state, "__ZCC__");

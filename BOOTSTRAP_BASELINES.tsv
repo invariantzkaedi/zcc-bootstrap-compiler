@@ -140,3 +140,4 @@ REWRITE	37d34e76	[history-rewrite]	-	git filter-repo	Linux 6.6.123.2-microsoft-s
 2026-10-20T00:15:00Z	37b94739d	becaea8339cb7f3bb0d5d07c8e5cf787	493351	gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0	azure	feat(ir): Batch 10 SSA-IR lowering promotion & preprocessor/verification Azure lock
 2026-10-24T00:00:00Z	b73e062f	57f8f6cf68e8886b0ea92cc4a76a04aa	493351	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.17.0-1022-azure x86_64	fable-ir-cleanup verified codegen Azure lock
 2026-10-24T00:00:00Z	b73e062f	7c10a39c65251e3d92a72d95994b3d34	493351	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 5.15.167.4-microsoft-standard-WSL2 x86_64	fable-ir-cleanup verified codegen WSL2 lock
+2026-10-26T09:27:08Z	4191411b	72013513b22e4875fc7459d855fef579	?	gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	fix(part3): support __PRETTY_FUNCTION__ string identifier and remove preprocessor macro stubs
