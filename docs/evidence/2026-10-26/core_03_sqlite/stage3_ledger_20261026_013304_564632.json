@@ -1,0 +1,102 @@
+{
+  "timestamp": "20261026_013304_564632",
+  "workspace": "/tmp/zcc_core03_sqlite_20261026_013304_564632_z4ufnscq",
+  "provenance": {
+    "zcc_binary": {
+      "path": "./zcc",
+      "sha256": "c76e3cb8b1db6a22209e0949013432b26c2bbf9d13e4127eb4f0d5b3239ae71d"
+    },
+    "sqlite_zcc_source": {
+      "path": "sqlite3_zcc.c",
+      "sha256": "08cd7f19b2f1bd2ef55ef5913024c992af606ec5bf3862248e20cd1118307c5b"
+    },
+    "sqlite_ref_source": {
+      "path": "src/sqlite3.c",
+      "sha256": "7956a38f236a6be6c0bb30c96ba4f85f19e5a69f6beb6d2c62c9d246972a6775"
+    },
+    "sqlite_ref_header": {
+      "path": "src/sqlite3.h",
+      "sha256": "0c207567adc631521a353e067cfbc5044ebf11868f3c3fbf3178d6990409740e"
+    },
+    "stress_driver": {
+      "path": "tests/test_sqlite_extended_stress.c",
+      "sha256": "a165f5823cb0fd462dbbefa00d68e6bf0958c6a1545d343c89b10d36c3605fcc"
+    },
+    "ieee_driver": {
+      "path": "tests/test_zcc_sqlite_ieee754.c",
+      "sha256": "dbcc3a624d005267b8263c97038826c14a8d18e280f300d01b0f4aea8b00e454"
+    }
+  },
+  "total_targets": 2,
+  "pass_count": 2,
+  "results": [
+    {
+      "id": "CORE-03A",
+      "name": "SQLite Extended Industrial Stress Suite",
+      "verdict": "PASS",
+      "details": "Identical across ZCC, GCC, Clang (SHA:ad41bbcb79f1, Exit:0)",
+      "sources": [
+        "sqlite3_zcc.c",
+        "tests/test_sqlite_extended_stress.c"
+      ],
+      "timings_ms": {
+        "engine_build": 6682.595491409302
+      },
+      "commands": {
+        "zcc_driver_compile": "./zcc -I. tests/test_sqlite_extended_stress.c -o /tmp/zcc_core03_sqlite_20261026_013304_564632_z4ufnscq/driver_CORE-03A.s",
+        "zcc_link": "gcc -no-pie /tmp/zcc_core03_sqlite_20261026_013304_564632_z4ufnscq/sqlite3_zcc.o /tmp/zcc_core03_sqlite_20261026_013304_564632_z4ufnscq/driver_CORE-03A.s -o /tmp/zcc_core03_sqlite_20261026_013304_564632_z4ufnscq/bin_zcc_CORE-03A -ldl -lpthread -lm",
+        "gcc_build": "gcc -O0 src/sqlite3.c tests/test_sqlite_extended_stress.c -o /tmp/zcc_core03_sqlite_20261026_013304_564632_z4ufnscq/bin_gcc_CORE-03A -ldl -lpthread -lm",
+        "clang_build": "clang -O0 src/sqlite3.c tests/test_sqlite_extended_stress.c -o /tmp/zcc_core03_sqlite_20261026_013304_564632_z4ufnscq/bin_clang_CORE-03A -ldl -lpthread -lm"
+      },
+      "exit_codes": {
+        "zcc": 0,
+        "gcc": 0,
+        "clang": 0
+      },
+      "stdout_hashes": {
+        "zcc": "ad41bbcb79f1",
+        "gcc": "ad41bbcb79f1",
+        "clang": "ad41bbcb79f1"
+      },
+      "stderr_hashes": {
+        "zcc": "e3b0c44298fc",
+        "gcc": "e3b0c44298fc",
+        "clang": "e3b0c44298fc"
+      }
+    },
+    {
+      "id": "CORE-03B",
+      "name": "SQLite IEEE-754 & Subnormal Gauntlet",
+      "verdict": "PASS",
+      "details": "Identical across ZCC, GCC, Clang (SHA:2c7ee1ff2040, Exit:0)",
+      "sources": [
+        "sqlite3_zcc.c",
+        "tests/test_zcc_sqlite_ieee754.c"
+      ],
+      "timings_ms": {
+        "engine_build": 6682.595491409302
+      },
+      "commands": {
+        "zcc_driver_compile": "./zcc -I. tests/test_zcc_sqlite_ieee754.c -o /tmp/zcc_core03_sqlite_20261026_013304_564632_z4ufnscq/driver_CORE-03B.s",
+        "zcc_link": "gcc -no-pie /tmp/zcc_core03_sqlite_20261026_013304_564632_z4ufnscq/sqlite3_zcc.o /tmp/zcc_core03_sqlite_20261026_013304_564632_z4ufnscq/driver_CORE-03B.s -o /tmp/zcc_core03_sqlite_20261026_013304_564632_z4ufnscq/bin_zcc_CORE-03B -ldl -lpthread -lm",
+        "gcc_build": "gcc -O0 src/sqlite3.c tests/test_zcc_sqlite_ieee754.c -o /tmp/zcc_core03_sqlite_20261026_013304_564632_z4ufnscq/bin_gcc_CORE-03B -ldl -lpthread -lm",
+        "clang_build": "clang -O0 src/sqlite3.c tests/test_zcc_sqlite_ieee754.c -o /tmp/zcc_core03_sqlite_20261026_013304_564632_z4ufnscq/bin_clang_CORE-03B -ldl -lpthread -lm"
+      },
+      "exit_codes": {
+        "zcc": 0,
+        "gcc": 0,
+        "clang": 0
+      },
+      "stdout_hashes": {
+        "zcc": "2c7ee1ff2040",
+        "gcc": "2c7ee1ff2040",
+        "clang": "2c7ee1ff2040"
+      },
+      "stderr_hashes": {
+        "zcc": "e3b0c44298fc",
+        "gcc": "e3b0c44298fc",
+        "clang": "e3b0c44298fc"
+      }
+    }
+  ]
+}
