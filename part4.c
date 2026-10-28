@@ -4707,6 +4707,20 @@ void codegen_expr(Compiler *cc, Node *node) {
     } else if (strcmp(node->func_name, "__builtin_va_end") == 0) {
       /* va_end is a no-op on x86-64 SysV ABI */
       fprintf(cc->out, "    # __builtin_va_end (no-op)\n");
+    } else if (strcmp(node->func_name, "__builtin_va_copy") == 0) {
+      if (backend_ops) {
+          fprintf(cc->out, "    # __builtin_va_copy (ARM)\n");
+          fprintf(cc->out, "    ldr r2, [r1]\n");
+          fprintf(cc->out, "    str r2, [r0]\n");
+      } else {
+          fprintf(cc->out, "    # __builtin_va_copy (SysV 24-byte struct copy)\n");
+          fprintf(cc->out, "    movq 0(%%rsi), %%rax\n");
+          fprintf(cc->out, "    movq %%rax, 0(%%rdi)\n");
+          fprintf(cc->out, "    movq 8(%%rsi), %%rax\n");
+          fprintf(cc->out, "    movq %%rax, 8(%%rdi)\n");
+          fprintf(cc->out, "    movq 16(%%rsi), %%rax\n");
+          fprintf(cc->out, "    movq %%rax, 16(%%rdi)\n");
+      }
     } else if (strcmp(node->func_name, "__builtin_bswap16") == 0) {
       if (backend_ops) {
           fprintf(cc->out, "    rev16 r0, r0\n");
@@ -4832,6 +4846,20 @@ void codegen_expr(Compiler *cc, Node *node) {
       if (g_emit_ir && g_ir_cur_func) {
         long ret_sz = (node->type && (node->type->kind == TY_STRUCT || node->type->kind == TY_UNION)) ? type_size(node->type) : 0;
         ir_emit(g_ir_cur_func, IR_CALL, ir_map_type(node->type), dst, 0, 0, target, ret_sz, node->line);
+      }
+    }
+    return;
+  }
+
+  case ND_BLOCK: {
+    int i;
+    int nst = node->num_stmts;
+    if (!node->stmts) return;
+    for (i = 0; i < nst; i++) {
+      if (i == nst - 1 && node->type && node->type->kind != TY_VOID) {
+        codegen_expr_checked(cc, node->stmts[i]);
+      } else {
+        codegen_stmt(cc, node->stmts[i]);
       }
     }
     return;

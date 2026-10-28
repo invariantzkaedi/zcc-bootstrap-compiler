@@ -144,3 +144,5 @@ REWRITE	37d34e76	[history-rewrite]	-	git filter-repo	Linux 6.6.123.2-microsoft-s
 2026-10-26T10:06:06Z	135456c8	639fde75d59c0ebed3cc62b95c9c08e7	?	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.17.0-1022-azure x86_64	fix(part3): __PRETTY_FUNCTION__ verified codegen Azure lock
 2026-10-26T10:30:27Z	436f718f	974a847812e56ee1636b3578f251f782	?	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	feat(codegen): implement __builtin_bswap16/32/64 with native bswap machine-code lowering
 2026-10-26T10:34:31Z	436f718f	05b4a7a60d83b9cf2a477ec7a070367d	?	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.17.0-1022-azure x86_64	feat(codegen): __builtin_bswap16/32/64 verified codegen Azure lock
+2026-10-26T12:28:50Z	08a5c25f	86bdbe1348dc3430cdf2e284745115d1	?	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	
+2026-10-28T23:49:00Z	HEAD	d687f0bc26097603c462671f9e30f66b	?	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	feat(parser,codegen): support GNU statement expressions ({ ... }) and lower ND_BLOCK in expression position

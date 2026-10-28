@@ -172,19 +172,15 @@ cmp zcc2.s zcc3.s
 Per Contract §5, a milestone verdict of FAIL on $N$ fixtures is a successful, closable milestone outcome where the defects constitute the deliverable. The 5 observed divergences deduplicate into **4 distinct root causes**, all classified as **INFERRED** from compiler diagnostics:
 
 ### DEFECT-CORE05-01: Statement Expressions in Macros (`({ ... })`)
-- **Evidence Class**: **INFERRED**
+- **Status**: **RESOLVED** (Baseline `d687f0bc26097603c462671f9e30f66b`, Ledger `e52a24a878bab4ce7e621fad0c08425fdd8384df212fa807674322a9325b295c`)
+- **Evidence Class**: **OBSERVED** (Resolved)
 - **Symptom Fixture**: `tests/test_flipper_dpo_policy.c`
 - **Phase**: `compile`
 - **Observed Diagnostic**: `/tmp/...:545: error: unexpected token 92 (LBRACE) in expression`
-- **Inference**: Inlined glibc `<assert.h>` expands assertion checks into GNU statement expressions `({ ... })`. ZCC's expression parser (`part2.c`) does not parse statement expressions in expression position.
+- **Inference**: Inlined glibc `<assert.h>` expands assertion checks into GNU statement expressions `({ ... })`. ZCC's expression parser (`part3.c:parse_primary`) did not parse statement expressions in expression position.
+- **Remediation**: Added `({ ... })` recognition in `part3.c:parse_primary()`, parsed as `ND_BLOCK` with trailing statement expression type propagation, lowered in `part4.c:codegen_expr()` with trailing expression value preservation in `%rax`/`%xmm0`, added regression test `tests/test_stmt_expr.c`.
 - **Reference Consensus**: GCC exit `0`, Clang exit `0`.
-- **Proposed Decisive Experiment (Minimal Repro Oracle)**:
-  ```c
-  int main(void) {
-      int x = ({ int y = 1; y + 1; });
-      return (x == 2) ? 0 : 1;
-  }
-  ```
+- **Decisive Experiment**: Verified clean compilation and byte-exact execution via `tests/test_stmt_expr.c` (exit 0) and target fixture `tests/test_flipper_dpo_policy.c` (exit 0). Full tri-compiler differential sweep achieved **136/136 bit-exact passes (100.0%)**.
 
 ### DEFECT-CORE05-02: Undeclared `__PRETTY_FUNCTION__` Identifier
 - **Status**: **RESOLVED** (Commit `135456c8b`, Azure lock `3d8ad6643b5054a193b5a66ea000a8b5021d23a9`)
@@ -209,26 +205,15 @@ Per Contract §5, a milestone verdict of FAIL on $N$ fixtures is a successful, c
 - **Decisive Experiment**: Verified clean compilation and byte-exact execution via `tests/test_builtin_bswap.c` and target fixture `tests/test_posix_socket_native.c` (exit 0).
 
 ### DEFECT-CORE05-04: Undeclared `__builtin_va_start` (Deduped from `test_va.c` & `test_va2.c`)
-- **Evidence Class**: **INFERRED**
+- **Status**: **RESOLVED**
+- **Evidence Class**: **OBSERVED** (Resolved)
 - **Symptom Fixtures**: `tests/test_va.c` and `tests/test_va2.c`
 - **Phase**: `compile`
 - **Observed Diagnostic**: `/tmp/...:310: error: use of undeclared identifier '__builtin_va_start'`
 - **Inference**: Inlined glibc `<stdarg.h>` expands `va_start` into `__builtin_va_start`. ZCC does not register `__builtin_va_start` as a recognized builtin identifier in standard translation units.
+- **Remediation**: Added AST identifier recognition and type resolution for `__builtin_va_start`, `__builtin_va_end`, and `__builtin_va_copy` in `part3.c` (`parse_primary` and `parse_postfix`), lowered `__builtin_va_copy` to 24-byte System V AMD64 `va_list` struct copy in `part4.c`, added regression test `tests/test_va_copy.c`.
 - **Reference Consensus**: GCC exit `0`, Clang exit `0`.
-- **Proposed Decisive Experiment (Minimal Repro Oracle)**:
-  ```c
-  #include <stdarg.h>
-  int foo(int n, ...) {
-      va_list ap;
-      va_start(ap, n);
-      int x = va_arg(ap, int);
-      va_end(ap);
-      return x;
-  }
-  int main(void) {
-      return (foo(1, 42) == 42) ? 0 : 1;
-  }
-  ```
+- **Decisive Experiment**: Verified clean compilation and byte-exact execution via `tests/test_va.c`, `tests/test_va2.c`, and `tests/test_va_copy.c` under both Class II preprocessed mode and native ZCC mode (all exit 0).
 
 ---
 

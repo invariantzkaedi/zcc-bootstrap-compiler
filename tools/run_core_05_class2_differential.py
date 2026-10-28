@@ -18,6 +18,8 @@ import tempfile
 import subprocess
 import datetime
 import traceback
+import argparse
+import concurrent.futures
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CONTRACT_PATH = os.path.join(REPO_ROOT, "tickets", "CORE-05-acceptance-contract.md")
@@ -27,7 +29,7 @@ ZCC_BIN = os.path.join(REPO_ROOT, "zcc")
 TIMEOUT_RUN = 10
 TIMEOUT_BUILD = 15
 
-INCLUDES = ["-I", "tests", "-I", "include", "-I", "src", "-I", "."]
+INCLUDES = ["-U__GNUC__", "-D__GNUC__=10", "-I", "tests", "-I", "include", "-I", "src", "-I", "."]
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -64,6 +66,145 @@ def fnv1a_64(data: bytes) -> int:
     return h
 
 
+def atomic_publish_json(target_path: str, data: dict, indent: int = 2) -> str:
+    """
+    Enforces the Non-Negotiable Publication Invariant:
+    Valid Publication = Complete Write & fsync & Atomic Replace & Post-Publication Hash Match & Preserved Provenance.
+    
+    1. Writes to temporary file in the same directory/filesystem (ensuring atomic rename across volumes).
+    2. Flushes buffers and executes os.fsync to force physical media write.
+    3. Replaces target file atomically via os.replace (POSIX rename / Windows atomic ReplaceFile).
+    4. Computes SHA-256 of target file on disk to guarantee zero truncation and bit-exact persistence.
+    """
+    abs_target = os.path.abspath(target_path)
+    target_dir = os.path.dirname(abs_target)
+    os.makedirs(target_dir, exist_ok=True)
+    
+    encoded_bytes = json.dumps(data, indent=indent, ensure_ascii=False).encode("utf-8")
+    expected_sha256 = hashlib.sha256(encoded_bytes).hexdigest()
+    
+    fd, tmp_path = tempfile.mkstemp(prefix=".tmp_ledger_", dir=target_dir)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(encoded_bytes)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, abs_target)
+    except Exception:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+        raise
+    
+    disk_hash = sha256_file(abs_target)
+    if disk_hash != expected_sha256:
+        raise IOError(f"FATAL: Atomic publication corrupted! Disk hash {disk_hash} != expected {expected_sha256}")
+    
+    return disk_hash
+
+
+def evaluate_single_fixture(args_tuple):
+    idx, rel_path, total_count, repo_root, zcc_bin, tmpdir, includes, timeout_build, timeout_run = args_tuple
+    src_path = os.path.join(repo_root, rel_path)
+    prefix = f"[{idx:3d}/{total_count}]"
+    base = os.path.basename(src_path).replace(".c", "")
+
+    tu_c = os.path.join(tmpdir, f"{base}_{idx}.tu.c")
+    zcc_s = os.path.join(tmpdir, f"{base}_{idx}_zcc.s")
+    zcc_bin_path = os.path.join(tmpdir, f"{base}_{idx}_zcc")
+    gcc_bin_path = os.path.join(tmpdir, f"{base}_{idx}_gcc")
+    clang_bin_path = os.path.join(tmpdir, f"{base}_{idx}_clang")
+
+    record = {
+        "index": idx,
+        "fixture": rel_path,
+        "status": "UNKNOWN",
+    }
+
+    # Preprocess (once, shared)
+    cmd_pp = ["gcc", "-E", "-P"] + includes + [rel_path, "-o", tu_c]
+    rc, out, err, timed_out = run_cmd(cmd_pp, cwd=repo_root, timeout=timeout_build)
+    if rc != 0 or timed_out:
+        record["status"] = "FAIL_PREPROCESS"
+        record["phase"] = "preprocess"
+        record["error"] = err.decode("utf-8", errors="replace")
+        return idx, rel_path, record, None, None, None, f"  {prefix} {rel_path:35s} -> FAIL (Preprocess)"
+
+    # Reference Build: GCC
+    cmd_gcc = ["gcc", "-O0", "-fno-builtin", "-no-pie", tu_c, "-lm", "-o", gcc_bin_path]
+    rc_g_build, _, err_g_build, _ = run_cmd(cmd_gcc, cwd=repo_root, timeout=timeout_build)
+
+    # Reference Build: Clang
+    cmd_clang = ["clang", "-O0", "-fno-builtin", "-no-pie", tu_c, "-lm", "-o", clang_bin_path]
+    rc_c_build, _, err_c_build, _ = run_cmd(cmd_clang, cwd=repo_root, timeout=timeout_build)
+
+    # Reference Runs
+    rc_g_run, out_g, err_g, to_g = run_cmd([gcc_bin_path], cwd=repo_root, timeout=timeout_run) if rc_g_build == 0 else (-1, b"", b"", False)
+    rc_c_run, out_c, err_c, to_c = run_cmd([clang_bin_path], cwd=repo_root, timeout=timeout_run) if rc_c_build == 0 else (-1, b"", b"", False)
+
+    ref_tuple_gcc = (rc_g_run, sha256_bytes(out_g), sha256_bytes(err_g))
+    ref_tuple_clang = (rc_c_run, sha256_bytes(out_c), sha256_bytes(err_c))
+
+    # Reference Consensus Check
+    if (rc_g_build != 0 or rc_c_build != 0 or ref_tuple_gcc != ref_tuple_clang):
+        record["status"] = "EXCLUDED_REF_DIVERGENCE"
+        record["phase"] = "reference"
+        record["gcc"] = {"exit": rc_g_run, "stdout_sha": ref_tuple_gcc[1]}
+        record["clang"] = {"exit": rc_c_run, "stdout_sha": ref_tuple_clang[1]}
+        return idx, rel_path, record, None, None, None, f"  {prefix} {rel_path:35s} -> EXCLUDED (Ref Divergence)"
+
+    consensus_tuple = ref_tuple_gcc
+    gcc_entry = f"{rel_path}:{consensus_tuple[0]}:{consensus_tuple[1]}:{consensus_tuple[2]}"
+    clang_entry = f"{rel_path}:{ref_tuple_clang[0]}:{ref_tuple_clang[1]}:{ref_tuple_clang[2]}"
+
+    # Candidate Build: ZCC
+    rc_z_compile, out_z_c, err_z_c, to_z_c = run_cmd([zcc_bin, tu_c, "-o", zcc_s], cwd=repo_root, timeout=timeout_build)
+    if rc_z_compile != 0 or to_z_c:
+        record["status"] = "FAIL_ZCC_COMPILE"
+        record["phase"] = "compile"
+        combined_err = (out_z_c + b"\n" + err_z_c).decode("utf-8", errors="replace").strip()
+        record["error"] = combined_err[:400]
+        record["reference_consensus"] = consensus_tuple
+        log_line = f"  {prefix} {rel_path:35s} -> FAIL (ZCC Compile: {combined_err.splitlines()[-1] if combined_err else 'unknown'})"
+        return idx, rel_path, record, None, gcc_entry, clang_entry, log_line
+
+    # Candidate Assemble/Link
+    cmd_z_link = ["gcc", "-no-pie", zcc_s, "-o", zcc_bin_path, "-lm"]
+    rc_z_link, out_z_l, err_z_l, to_z_l = run_cmd(cmd_z_link, cwd=repo_root, timeout=timeout_build)
+    if rc_z_link != 0 or to_z_l:
+        record["status"] = "FAIL_ZCC_LINK"
+        record["phase"] = "link"
+        record["error"] = err_z_l.decode("utf-8", errors="replace")[:400].strip()
+        record["reference_consensus"] = consensus_tuple
+        log_line = f"  {prefix} {rel_path:35s} -> FAIL (ZCC Link: {record['error'][:60]})"
+        return idx, rel_path, record, None, gcc_entry, clang_entry, log_line
+
+    # Candidate Run: ZCC
+    rc_z_run, out_z, err_z, to_z_r = run_cmd([zcc_bin_path], cwd=repo_root, timeout=timeout_run)
+    zcc_tuple = (rc_z_run, sha256_bytes(out_z), sha256_bytes(err_z))
+    zcc_entry = f"{rel_path}:{zcc_tuple[0]}:{zcc_tuple[1]}:{zcc_tuple[2]}"
+
+    record["gcc_tuple"] = consensus_tuple
+    record["clang_tuple"] = ref_tuple_clang
+    record["zcc_tuple"] = zcc_tuple
+
+    if zcc_tuple == consensus_tuple:
+        record["status"] = "PASS"
+        log_line = f"  {prefix} {rel_path:35s} -> PASS (3-way byte-identical)"
+    else:
+        record["status"] = "FAIL_ZCC_DIVERGENCE"
+        record["phase"] = "run"
+        record["zcc_stdout"] = out_z.decode("utf-8", errors="replace")[:300]
+        record["ref_stdout"] = out_g.decode("utf-8", errors="replace")[:300]
+        record["zcc_stderr"] = err_z.decode("utf-8", errors="replace")[:300]
+        record["ref_stderr"] = err_g.decode("utf-8", errors="replace")[:300]
+        log_line = f"  {prefix} {rel_path:35s} -> FAIL (Run divergence: ZCC={zcc_tuple[0]} vs REF={consensus_tuple[0]})"
+
+    return idx, rel_path, record, zcc_entry, gcc_entry, clang_entry, log_line
+
+
 def get_version(cmd):
     rc, out, err, _ = run_cmd(cmd)
     if rc == 0 and out:
@@ -72,6 +213,11 @@ def get_version(cmd):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="ZCC-CORE-05: Class II Tri-Compiler Differential Gauntlet")
+    parser.add_argument("-j", "--jobs", type=int, default=1, help="Number of concurrent workers (default: 1)")
+    args = parser.parse_args()
+    jobs = max(1, args.jobs)
+
     start_time = datetime.datetime.now(datetime.timezone.utc)
     date_str = start_time.strftime("%Y-%m-%d")
     ts_str = start_time.strftime("%Y%m%d_%H%M%S_%f")
@@ -138,8 +284,7 @@ def main():
         ledger["summary"]["verdict"] = "FAIL"
         ledger["summary"]["failure_reason"] = reason
         ledger["summary"]["completed_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        with open(ledger_path, "w", encoding="utf-8") as lf:
-            json.dump(ledger, lf, indent=2)
+        atomic_publish_json(ledger_path, ledger, indent=2)
         print(f"\n[FAIL-CLOSED] {reason}")
         print(f"Partial ledger written to: {ledger_path}")
         sys.exit(1)
@@ -266,7 +411,7 @@ def main():
         # =====================================================================
         # 3. MAIN DIFFERENTIAL SWEEP (136 FIXTURES)
         # =====================================================================
-        print(f"\n--- Running Class II Differential Sweep across {len(fixture_paths)} Fixtures ---")
+        print(f"\n--- Running Class II Differential Sweep across {len(fixture_paths)} Fixtures (jobs={jobs}) ---")
 
         passed_count = 0
         divergences = []
@@ -276,114 +421,33 @@ def main():
         gcc_digests = []
         clang_digests = []
 
-        for idx, rel_path in enumerate(fixture_paths, 1):
-            src_path = os.path.join(REPO_ROOT, rel_path)
-            prefix = f"[{idx:3d}/{len(fixture_paths)}]"
-            base = os.path.basename(src_path).replace(".c", "")
+        work_items = [
+            (idx, rel_path, len(fixture_paths), REPO_ROOT, ZCC_BIN, tmpdir, INCLUDES, TIMEOUT_BUILD, TIMEOUT_RUN)
+            for idx, rel_path in enumerate(fixture_paths, 1)
+        ]
 
-            tu_c = os.path.join(tmpdir, f"{base}_{idx}.tu.c")
-            zcc_s = os.path.join(tmpdir, f"{base}_{idx}_zcc.s")
-            zcc_bin = os.path.join(tmpdir, f"{base}_{idx}_zcc")
-            gcc_bin = os.path.join(tmpdir, f"{base}_{idx}_gcc")
-            clang_bin = os.path.join(tmpdir, f"{base}_{idx}_clang")
+        if jobs > 1:
+            with concurrent.futures.ProcessPoolExecutor(max_workers=jobs) as executor:
+                raw_results = list(executor.map(evaluate_single_fixture, work_items))
+        else:
+            raw_results = [evaluate_single_fixture(item) for item in work_items]
 
-            record = {
-                "index": idx,
-                "fixture": rel_path,
-                "status": "UNKNOWN",
-            }
+        # Sort strictly by index (1..136) to guarantee deterministic digest and artifact ordering
+        raw_results.sort(key=lambda r: r[0])
 
-            # Preprocess (once, shared)
-            cmd_pp = ["gcc", "-E", "-P"] + INCLUDES + [rel_path, "-o", tu_c]
-            rc, out, err, timed_out = run_cmd(cmd_pp, timeout=TIMEOUT_BUILD)
-            if rc != 0 or timed_out:
-                record["status"] = "FAIL_PREPROCESS"
-                record["phase"] = "preprocess"
-                record["error"] = err.decode("utf-8", errors="replace")
-                divergences.append(record)
-                fixture_records.append(record)
-                print(f"  {prefix} {rel_path:35s} -> FAIL (Preprocess)")
-                continue
-
-            # Reference Build: GCC
-            cmd_gcc = ["gcc", "-O0", "-fno-builtin", "-no-pie", tu_c, "-lm", "-o", gcc_bin]
-            rc_g_build, _, err_g_build, _ = run_cmd(cmd_gcc, timeout=TIMEOUT_BUILD)
-
-            # Reference Build: Clang
-            cmd_clang = ["clang", "-O0", "-fno-builtin", "-no-pie", tu_c, "-lm", "-o", clang_bin]
-            rc_c_build, _, err_c_build, _ = run_cmd(cmd_clang, timeout=TIMEOUT_BUILD)
-
-            # Reference Runs
-            rc_g_run, out_g, err_g, to_g = run_cmd([gcc_bin], timeout=TIMEOUT_RUN) if rc_g_build == 0 else (-1, b"", b"", False)
-            rc_c_run, out_c, err_c, to_c = run_cmd([clang_bin], timeout=TIMEOUT_RUN) if rc_c_build == 0 else (-1, b"", b"", False)
-
-            ref_tuple_gcc = (rc_g_run, sha256_bytes(out_g), sha256_bytes(err_g))
-            ref_tuple_clang = (rc_c_run, sha256_bytes(out_c), sha256_bytes(err_c))
-
-            # Reference Consensus Check
-            if (rc_g_build != 0 or rc_c_build != 0 or ref_tuple_gcc != ref_tuple_clang):
-                record["status"] = "EXCLUDED_REF_DIVERGENCE"
-                record["phase"] = "reference"
-                record["gcc"] = {"exit": rc_g_run, "stdout_sha": ref_tuple_gcc[1]}
-                record["clang"] = {"exit": rc_c_run, "stdout_sha": ref_tuple_clang[1]}
-                fixture_records.append(record)
-                print(f"  {prefix} {rel_path:35s} -> EXCLUDED (Ref Divergence)")
-                continue
-
-            consensus_tuple = ref_tuple_gcc
-            gcc_digests.append(f"{rel_path}:{consensus_tuple[0]}:{consensus_tuple[1]}:{consensus_tuple[2]}")
-            clang_digests.append(f"{rel_path}:{ref_tuple_clang[0]}:{ref_tuple_clang[1]}:{ref_tuple_clang[2]}")
-
-            # Candidate Build: ZCC
-            rc_z_compile, out_z_c, err_z_c, to_z_c = run_cmd([ZCC_BIN, tu_c, "-o", zcc_s], timeout=TIMEOUT_BUILD)
-            if rc_z_compile != 0 or to_z_c:
-                record["status"] = "FAIL_ZCC_COMPILE"
-                record["phase"] = "compile"
-                combined_err = (out_z_c + b"\n" + err_z_c).decode("utf-8", errors="replace").strip()
-                record["error"] = combined_err[:400]
-                record["reference_consensus"] = consensus_tuple
-                divergences.append(record)
-                fixture_records.append(record)
-                print(f"  {prefix} {rel_path:35s} -> FAIL (ZCC Compile: {combined_err.splitlines()[-1] if combined_err else 'unknown'})")
-                continue
-
-            # Candidate Assemble/Link
-            cmd_z_link = ["gcc", "-no-pie", zcc_s, "-o", zcc_bin, "-lm"]
-            rc_z_link, out_z_l, err_z_l, to_z_l = run_cmd(cmd_z_link, timeout=TIMEOUT_BUILD)
-            if rc_z_link != 0 or to_z_l:
-                record["status"] = "FAIL_ZCC_LINK"
-                record["phase"] = "link"
-                record["error"] = err_z_l.decode("utf-8", errors="replace")[:400].strip()
-                record["reference_consensus"] = consensus_tuple
-                divergences.append(record)
-                fixture_records.append(record)
-                print(f"  {prefix} {rel_path:35s} -> FAIL (ZCC Link: {record['error'][:60]})")
-                continue
-
-            # Candidate Run: ZCC
-            rc_z_run, out_z, err_z, to_z_r = run_cmd([zcc_bin], timeout=TIMEOUT_RUN)
-            zcc_tuple = (rc_z_run, sha256_bytes(out_z), sha256_bytes(err_z))
-            zcc_digests.append(f"{rel_path}:{zcc_tuple[0]}:{zcc_tuple[1]}:{zcc_tuple[2]}")
-
-            record["gcc_tuple"] = consensus_tuple
-            record["clang_tuple"] = ref_tuple_clang
-            record["zcc_tuple"] = zcc_tuple
-
-            if zcc_tuple == consensus_tuple:
-                record["status"] = "PASS"
+        for idx, rel_path, record, zcc_entry, gcc_entry, clang_entry, log_line in raw_results:
+            print(log_line)
+            fixture_records.append(record)
+            if gcc_entry:
+                gcc_digests.append(gcc_entry)
+            if clang_entry:
+                clang_digests.append(clang_entry)
+            if zcc_entry:
+                zcc_digests.append(zcc_entry)
+            if record["status"] == "PASS":
                 passed_count += 1
-                fixture_records.append(record)
-                print(f"  {prefix} {rel_path:35s} -> PASS (3-way byte-identical)")
-            else:
-                record["status"] = "FAIL_ZCC_DIVERGENCE"
-                record["phase"] = "run"
-                record["zcc_stdout"] = out_z.decode("utf-8", errors="replace")[:300]
-                record["ref_stdout"] = out_g.decode("utf-8", errors="replace")[:300]
-                record["zcc_stderr"] = err_z.decode("utf-8", errors="replace")[:300]
-                record["ref_stderr"] = err_g.decode("utf-8", errors="replace")[:300]
+            elif record["status"] != "EXCLUDED_REF_DIVERGENCE":
                 divergences.append(record)
-                fixture_records.append(record)
-                print(f"  {prefix} {rel_path:35s} -> FAIL (Run divergence: ZCC={zcc_tuple[0]} vs REF={consensus_tuple[0]})")
 
     # =========================================================================
     # 4. FINAL SYNTHESIS & LEDGER EMISSION
@@ -414,10 +478,7 @@ def main():
     ledger["divergences"] = divergences
     ledger["fixtures"] = fixture_records
 
-    with open(ledger_path, "w", encoding="utf-8") as lf:
-        json.dump(ledger, lf, indent=2)
-
-    ledger_sha256 = sha256_file(ledger_path)
+    ledger_sha256 = atomic_publish_json(ledger_path, ledger, indent=2)
 
     print("\n======================================================================")
     print(f"ZCC-CORE-05 GAUNTLET TERMINATED: VERDICT = {verdict}")

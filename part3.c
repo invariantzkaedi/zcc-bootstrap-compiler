@@ -2065,6 +2065,10 @@ Node *parse_primary(Compiler *cc) {
                 n->type = type_func(cc, cc->ty_uint);
             } else if (strcmp(n->name, "__builtin_bswap64") == 0) {
                 n->type = type_func(cc, cc->ty_ulong);
+            } else if (strcmp(n->name, "__builtin_va_start") == 0 ||
+                       strcmp(n->name, "__builtin_va_end") == 0 ||
+                       strcmp(n->name, "__builtin_va_copy") == 0) {
+                n->type = type_func(cc, cc->ty_void);
             } else {
                 /* ZCC SCOPING HARDENING: undeclared identifiers must be rejected    */
                 /* at AST build time. The old silent int decay caused CWE-476 healer */
@@ -2082,9 +2086,22 @@ Node *parse_primary(Compiler *cc) {
 
     if (cc->tk == TK_LPAREN) {
         next_token(cc);
-
-
-
+        if (cc->tk == TK_LBRACE) {
+            /* GNU Statement Expression: ({ ... }) */
+            Node *block = parse_stmt(cc);
+            expect(cc, TK_RPAREN);
+            if (block && block->kind == ND_BLOCK && block->num_stmts > 0) {
+                Node *last = block->stmts[block->num_stmts - 1];
+                if (last && last->type) {
+                    block->type = last->type;
+                } else {
+                    block->type = cc->ty_void;
+                }
+            } else if (block) {
+                block->type = cc->ty_void;
+            }
+            return block;
+        }
         n = parse_expr(cc);
         expect(cc, TK_RPAREN);
         return n;
@@ -2443,6 +2460,10 @@ Node *parse_postfix(Compiler *cc) {
                         call->type = cc->ty_uint;
                     } else if (strcmp(call->func_name, "__builtin_bswap64") == 0) {
                         call->type = cc->ty_ulong;
+                    } else if (strcmp(call->func_name, "__builtin_va_start") == 0 ||
+                               strcmp(call->func_name, "__builtin_va_end") == 0 ||
+                               strcmp(call->func_name, "__builtin_va_copy") == 0) {
+                        call->type = cc->ty_void;
                     } else {
                         call->type = cc->ty_int;
                     }
