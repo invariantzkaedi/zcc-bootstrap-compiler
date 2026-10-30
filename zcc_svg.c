@@ -306,17 +306,183 @@ static void _pb_append(SvgPathBuilder* pb, const char* str) {
 void svg_path_move_to(SvgPathBuilder* pb, float x, float y) {
     char buf[64]; sprintf(buf, "M%.2f,%.2f ", x, y); _pb_append(pb, buf);
 }
+void svg_path_move_rel(SvgPathBuilder* pb, float dx, float dy) {
+    char buf[64]; sprintf(buf, "m%.2f,%.2f ", dx, dy); _pb_append(pb, buf);
+}
 void svg_path_line_to(SvgPathBuilder* pb, float x, float y) {
     char buf[64]; sprintf(buf, "L%.2f,%.2f ", x, y); _pb_append(pb, buf);
+}
+void svg_path_line_rel(SvgPathBuilder* pb, float dx, float dy) {
+    char buf[64]; sprintf(buf, "l%.2f,%.2f ", dx, dy); _pb_append(pb, buf);
+}
+void svg_path_horiz_to(SvgPathBuilder* pb, float x) {
+    char buf[64]; sprintf(buf, "H%.2f ", x); _pb_append(pb, buf);
+}
+void svg_path_horiz_rel(SvgPathBuilder* pb, float dx) {
+    char buf[64]; sprintf(buf, "h%.2f ", dx); _pb_append(pb, buf);
+}
+void svg_path_vert_to(SvgPathBuilder* pb, float y) {
+    char buf[64]; sprintf(buf, "V%.2f ", y); _pb_append(pb, buf);
+}
+void svg_path_vert_rel(SvgPathBuilder* pb, float dy) {
+    char buf[64]; sprintf(buf, "v%.2f ", dy); _pb_append(pb, buf);
 }
 void svg_path_cubic_to(SvgPathBuilder* pb, float x1, float y1, float x2, float y2, float x, float y) {
     char buf[128]; sprintf(buf, "C%.2f,%.2f %.2f,%.2f %.2f,%.2f ", x1, y1, x2, y2, x, y); _pb_append(pb, buf);
 }
+void svg_path_cubic_rel(SvgPathBuilder* pb, float dx1, float dy1, float dx2, float dy2, float dx, float dy) {
+    char buf[128]; sprintf(buf, "c%.2f,%.2f %.2f,%.2f %.2f,%.2f ", dx1, dy1, dx2, dy2, dx, dy); _pb_append(pb, buf);
+}
+void svg_path_smooth_cubic_to(SvgPathBuilder* pb, float x2, float y2, float x, float y) {
+    char buf[96]; sprintf(buf, "S%.2f,%.2f %.2f,%.2f ", x2, y2, x, y); _pb_append(pb, buf);
+}
+void svg_path_smooth_cubic_rel(SvgPathBuilder* pb, float dx2, float dy2, float dx, float dy) {
+    char buf[96]; sprintf(buf, "s%.2f,%.2f %.2f,%.2f ", dx2, dy2, dx, dy); _pb_append(pb, buf);
+}
+void svg_path_quad_to(SvgPathBuilder* pb, float x1, float y1, float x, float y) {
+    char buf[96]; sprintf(buf, "Q%.2f,%.2f %.2f,%.2f ", x1, y1, x, y); _pb_append(pb, buf);
+}
+void svg_path_quad_rel(SvgPathBuilder* pb, float dx1, float dy1, float dx, float dy) {
+    char buf[96]; sprintf(buf, "q%.2f,%.2f %.2f,%.2f ", dx1, dy1, dx, dy); _pb_append(pb, buf);
+}
+void svg_path_smooth_quad_to(SvgPathBuilder* pb, float x, float y) {
+    char buf[64]; sprintf(buf, "T%.2f,%.2f ", x, y); _pb_append(pb, buf);
+}
+void svg_path_smooth_quad_rel(SvgPathBuilder* pb, float dx, float dy) {
+    char buf[64]; sprintf(buf, "t%.2f,%.2f ", dx, dy); _pb_append(pb, buf);
+}
+void svg_path_arc_to(SvgPathBuilder* pb, float rx, float ry, float x_axis_rot, int large_arc, int sweep, float x, float y) {
+    char buf[128];
+    sprintf(buf, "A%.2f,%.2f %.2f %d,%d %.2f,%.2f ", rx, ry, x_axis_rot, large_arc ? 1 : 0, sweep ? 1 : 0, x, y);
+    _pb_append(pb, buf);
+}
+void svg_path_arc_rel(SvgPathBuilder* pb, float rx, float ry, float x_axis_rot, int large_arc, int sweep, float dx, float dy) {
+    char buf[128];
+    sprintf(buf, "a%.2f,%.2f %.2f %d,%d %.2f,%.2f ", rx, ry, x_axis_rot, large_arc ? 1 : 0, sweep ? 1 : 0, dx, dy);
+    _pb_append(pb, buf);
+}
 void svg_path_close(SvgPathBuilder* pb) {
     _pb_append(pb, "Z ");
 }
+void svg_path_close_rel(SvgPathBuilder* pb) {
+    _pb_append(pb, "z ");
+}
+void svg_path_circle(SvgPathBuilder* pb, float cx, float cy, float r) {
+    char buf[192];
+    sprintf(buf, "M%.1f,%.1fm-%.1f,0a%.1f,%.1f 0 1,0 %.1f,0a%.1f,%.1f 0 1,0 -%.1f,0 ",
+            cx, cy, r, r, r, 2.0f * r, r, r, 2.0f * r);
+    _pb_append(pb, buf);
+}
+void svg_path_ellipse(SvgPathBuilder* pb, float cx, float cy, float rx, float ry) {
+    char buf[192];
+    sprintf(buf, "M%.1f,%.1fm-%.1f,0a%.1f,%.1f 0 1,0 %.1f,0a%.1f,%.1f 0 1,0 -%.1f,0 ",
+            cx, cy, rx, rx, ry, 2.0f * rx, rx, ry, 2.0f * rx);
+    _pb_append(pb, buf);
+}
+void svg_path_rect_rounded(SvgPathBuilder* pb, float x, float y, float w, float h, float rx, float ry) {
+    if (rx <= 0.0f && ry <= 0.0f) {
+        char buf[128];
+        sprintf(buf, "M%.1f,%.1fH%.1fV%.1fH%.1fZ ", x, y, x + w, y + h, x);
+        _pb_append(pb, buf);
+        return;
+    }
+    if (ry <= 0.0f) ry = rx;
+    if (rx <= 0.0f) rx = ry;
+    svg_path_move_to(pb, x + rx, y);
+    svg_path_horiz_to(pb, x + w - rx);
+    svg_path_arc_to(pb, rx, ry, 0.0f, 0, 1, x + w, y + ry);
+    svg_path_vert_to(pb, y + h - ry);
+    svg_path_arc_to(pb, rx, ry, 0.0f, 0, 1, x + w - rx, y + h);
+    svg_path_horiz_to(pb, x + rx);
+    svg_path_arc_to(pb, rx, ry, 0.0f, 0, 1, x, y + h - ry);
+    svg_path_vert_to(pb, y + ry);
+    svg_path_arc_to(pb, rx, ry, 0.0f, 0, 1, x + rx, y);
+    svg_path_close(pb);
+}
+void svg_path_regular_polygon(SvgPathBuilder* pb, float cx, float cy, float r, int sides, float start_angle) {
+    if (sides < 3) return;
+    int k;
+    for (k = 0; k < sides; k++) {
+        float ang = start_angle + (float)k * (6.283185307f / (float)sides);
+        float px = cx + r * cosf(ang);
+        float py = cy + r * sinf(ang);
+        if (k == 0) svg_path_move_to(pb, px, py);
+        else svg_path_line_to(pb, px, py);
+    }
+    svg_path_close(pb);
+}
+void svg_path_star(SvgPathBuilder* pb, float cx, float cy, float r_outer, float r_inner, int points, float start_angle) {
+    if (points < 3) return;
+    int total = points * 2;
+    int k;
+    for (k = 0; k < total; k++) {
+        float ang = start_angle + (float)k * (3.1415926535f / (float)points);
+        float rad = (k % 2 == 0) ? r_outer : r_inner;
+        float px = cx + rad * cosf(ang);
+        float py = cy + rad * sinf(ang);
+        if (k == 0) svg_path_move_to(pb, px, py);
+        else svg_path_line_to(pb, px, py);
+    }
+    svg_path_close(pb);
+}
+void svg_path_harmonic_rose(SvgPathBuilder* pb, float cx, float cy, float base_r, float amp1, int k1, float amp2, int k2, int segments) {
+    if (segments < 8) segments = 8;
+    int i;
+    for (i = 0; i <= segments; i++) {
+        float t = ((float)i / (float)segments) * 6.283185307f;
+        float r = base_r + amp1 * cosf((float)k1 * t) + amp2 * sinf((float)k2 * t);
+        float px = cx + r * cosf(t);
+        float py = cy + r * sinf(t);
+        if (i == 0) svg_path_move_to(pb, px, py);
+        else svg_path_line_to(pb, px, py);
+    }
+    svg_path_close(pb);
+}
+char* svg_path_compact_d(const char* d_in) {
+    if (!d_in) return NULL;
+    int n = strlen(d_in);
+    char* out = (char*)calloc(1, n + 16);
+    if (!out) return NULL;
+    int oi = 0;
+    int i = 0;
+    char last_cmd = 0;
+    while (i < n) {
+        char c = d_in[i];
+        if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+            while (i < n && (d_in[i] == ' ' || d_in[i] == '\t' || d_in[i] == '\r' || d_in[i] == '\n')) i++;
+            if (oi > 0 && i < n) {
+                char prev = out[oi - 1];
+                char next = d_in[i];
+                int prev_is_cmd = ((prev >= 'A' && prev <= 'Z') || (prev >= 'a' && prev <= 'z'));
+                int next_is_cmd = ((next >= 'A' && next <= 'Z') || (next >= 'a' && next <= 'z'));
+                if (!prev_is_cmd && !next_is_cmd && prev != ',' && next != ',') {
+                    out[oi++] = ' ';
+                } else if (next_is_cmd && (next == 'L' || next == 'l') && next == last_cmd) {
+                    /* Elide repeated L/l command token and separate coordinate pair with space */
+                    out[oi++] = ' ';
+                    i++;
+                    while (i < n && (d_in[i] == ' ' || d_in[i] == '\t')) i++;
+                }
+            }
+            continue;
+        }
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
+            last_cmd = c;
+        }
+        out[oi++] = c;
+        i++;
+    }
+    out[oi] = '\0';
+    return out;
+}
 void svg_apply_path(ZccSvgNode* node, SvgPathBuilder* pb) {
-    svg_set_attr(node, "d", pb->d);
+    char* compact = svg_path_compact_d(pb->d);
+    if (compact) {
+        svg_set_attr(node, "d", compact);
+        free(compact);
+    } else {
+        svg_set_attr(node, "d", pb->d);
+    }
     free(pb->d);
     free(pb);
 }

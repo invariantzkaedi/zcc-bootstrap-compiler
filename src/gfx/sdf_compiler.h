@@ -29,5 +29,21 @@ int zcc_compile_sdf_shader_simd(const char *out_shader_path);
 void zcc_sculpt_sdf(const char *output_file, int resolution);
 void zcc_sculpt(const char *prompt, const char *output_file);
 
+typedef struct {
+    int raw_bytes;
+    int evolved_bytes;
+    int primitives_coalesced;
+    int coords_quantized;
+    int gpu_layers_promoted;
+    int commands_compacted;
+    int polygons_lowered;
+} ZccSvgEvolveStats;
+
+char *zcc_evolve_svg_buffer(const char *src, int src_len, int *out_len, ZccSvgEvolveStats *stats);
+int zcc_compile_svg_asset(const char *input_path, const char *source, int source_len,
+                          const char *output_path, int compile_only, int quiet);
+int zcc_svg_cli_dispatch(int mode, const char *input_path, const char *source, int source_len,
+                         const char *output_path, int explicit_output, int quiet);
+
 #endif /* ZCC_SDF_COMPILER_H */
 

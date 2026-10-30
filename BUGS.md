@@ -196,16 +196,15 @@ retain source + seed + regeneration command, not binaries alone.
 - Upgraded pass condition from vacuous `((PROVED+VIOLATED) == TOTAL)` to strict `PROVED == TOTAL` with `UNKNOWN == 0`, `VIOLATED == 0`, and `ERROR == 0`.
 - Added `make swarm-prove-fault-injection` negative control: verifies a known-barrier contract (`tests/evm/fault_injection_barrier.bin` containing `REVERT`) yields `UNKNOWN`, proving the gate produces a red verdict on non-holding contracts.
 
-## BUG-CORE05-001: ZCC CLI .i Extension Fallthrough & Silent GCC Linker Delegation (OPEN - Oct 26, 2026)
-**Status**: ⚠️ OPEN / HARNESS MITIGATION ACTIVE (E-LEARN-024)
-- **Component**: `part5.c:2038` CLI argument parsing.
-- **Symptom**: Passing a `.i` translation unit (standard GCC preprocessed file) causes `input_file` to remain `NULL`. The argument falls through to `extra_link_args`, and ZCC triggers a fallback command `gcc -O0 -no-pie ... -o <output> <extra_link_args>`, silently delegating compilation to host GCC.
-- **Severity**: Release-blocking verification hazard (silent fail-open).
-- **Mitigation**: All harnesses must name preprocessed translation units with `.c` (e.g. `.tu.c`) or `.i.c` until `part5.c` explicitly includes `.i` in the accepted source extension list.
+## BUG-CORE05-001: ZCC CLI .i Extension Fallthrough & Silent GCC Linker Delegation (RESOLVED & VERIFIED - Oct 30, 2026)
+**Status**: ✅ RESOLVED & VERIFIED (`tests/test_zcc_preprocessed_i_extension.sh`)
+- **Component**: `part5.c:2064` & `part5.c:2205` CLI argument parsing.
+- **Root Cause**: Passing a `.i` or `.ii` translation unit caused `input_file` to remain `NULL` and fall through to `extra_link_args`.
+- **Resolution**: Added explicit `.i` and `.ii` source extension recognition in `part5.c` ( skipping redundant preprocessor reinvocation for `.i`/`.ii` inputs) and fail-closed rejection (`zcc: unrecognized input file extension`) for unknown non-object extensions. Verified across Stage 1 (`./zcc`) and Stage 2 (`./zcc2`) in `tests/test_zcc_preprocessed_i_extension.sh`.
 
-## BUG-CORE05-002: HARNESS/CORPUS Reference Divergence in root test_bitfield.c (OPEN - Oct 26, 2026)
-**Status**: 🔍 HARNESS/CORPUS DEFECT / UNDEFINED BEHAVIOR
-- **Component**: `test_bitfield.c` (root test suite).
-- **Symptom**: When compiled under `-O0 -fno-builtin -no-pie`, host GCC 13.3 and Clang 18.1 produce divergent runtime outputs (`(stdout, stderr, exit)`).
-- **Disposition**: Excluded from CORE-05 differential gauntlet under §2f as reference-divergent / UB. Root test file requires audit for implementation-defined bitfield sign-extension assumptions.
+## BUG-CORE05-002: HARNESS/CORPUS Reference Divergence in root test_bitfield.c (RESOLVED & VERIFIED - Oct 30, 2026)
+**Status**: ✅ RESOLVED & VERIFIED
+- **Component**: `test_bitfield.c` and `tests/test_bitfield.c`.
+- **Root Cause**: Strict-aliasing pointer punning (`unsigned int *raw = (unsigned int *)&p; *raw = 0;`) and `int printf(char *fmt, ...);` signature mismatch (triggering `-Wincompatible-library-redeclaration` on Clang).
+- **Resolution**: Replaced raw pointer aliasing with a C99 standard-compliant `union PacketWord` covering the full 32-bit bitfield container (`1 + 1 + 6 + 24 = 32` bits) and `int printf(const char *fmt, ...);`, yielding 100% identical `(exit=0, stdout="raw: ABCD03...PASS", stderr="")` across GCC, Clang, and ZCC.
 

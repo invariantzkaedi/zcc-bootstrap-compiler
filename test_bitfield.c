@@ -1,4 +1,4 @@
-int printf(char *fmt, ...);
+int printf(const char *fmt, ...);
 
 struct PacketFlags {
     unsigned int is_syn : 1;
@@ -7,22 +7,27 @@ struct PacketFlags {
     unsigned int sequence : 24;
 };
 
-int main() {
+union PacketWord {
     struct PacketFlags p;
-    unsigned int *raw = (unsigned int *)&p;
-    *raw = 0;
+    unsigned int raw;
+};
 
-    p.is_syn = 1;
-    p.is_ack = 1;
-    p.sequence = 0xABCD;
+int main(void) {
+    union PacketWord u;
+    u.raw = 0;
 
-    printf("raw: %X\n", *raw);
-    printf("is_syn: %u\n", p.is_syn);
-    printf("is_ack: %u\n", p.is_ack);
-    printf("reserved: %u\n", p.reserved);
-    printf("sequence: %X\n", p.sequence);
+    u.p.is_syn = 1;
+    u.p.is_ack = 1;
+    u.p.reserved = 0;
+    u.p.sequence = 0xABCD;
+
+    printf("raw: %X\n", u.raw);
+    printf("is_syn: %u\n", u.p.is_syn);
+    printf("is_ack: %u\n", u.p.is_ack);
+    printf("reserved: %u\n", u.p.reserved);
+    printf("sequence: %X\n", u.p.sequence);
     
-    if (p.is_syn == 1 && p.is_ack == 1 && p.sequence == 0xABCD && p.reserved == 0) {
+    if (u.p.is_syn == 1 && u.p.is_ack == 1 && u.p.sequence == 0xABCD && u.p.reserved == 0) {
         printf("PASS\n");
     } else {
         printf("FAIL\n");

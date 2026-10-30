@@ -1,0 +1,24 @@
+# Phase 0 & Pre-Patch Probes (Rule EF-3)
+./zcc --svg-ast test_bitfield.c -o /tmp/probe_ast.svg
+./zcc --svg-to-sdf zcc_all_seeing_sovereign_oculus.svg -o /tmp/probe_sdf.c
+./zcc -c experiments/zcc_eai_006_g3_m5/zcc_m5_2_native_multiseed.c -o /tmp/probe_avx512.o
+clang -O0 -Wall -Wextra test_bitfield.c -o /tmp/probe_tb_clang
+
+# Build & Post-Patch Probes (Items 1, 2, 3, 4)
+make zcc.c && make zcc
+./zcc -c tests/test_avx512_evex_codegen.c -o /tmp/evex_probe.o
+objdump -d /tmp/evex_probe.o
+gcc -no-pie /tmp/evex_probe.o -o /tmp/evex_probe_bin && /tmp/evex_probe_bin
+./zcc -c test_bitfield.c -o /tmp/tb_zcc.o && gcc -no-pie /tmp/tb_zcc.o -o /tmp/tb_zcc && /tmp/tb_zcc
+gcc -O2 -Wall -Wextra -Werror test_bitfield.c -o /tmp/tb_gcc && /tmp/tb_gcc
+clang -O2 -Wall -Wextra -Werror test_bitfield.c -o /tmp/tb_clang && /tmp/tb_clang
+bash tests/test_zcc_svg_evolution.sh ./zcc
+
+# Verification Gates 1, 2, 3, 4, 5 & Scope Audit (Rule EF-4, EF-5)
+set -o pipefail
+make selfhost 2>&1 | tee /tmp/zcc-selfhost-postpatch.log
+make compat-smoke
+python3 tools/test_zcc_opt_passes.py
+git status --short --untracked-files=no
+git diff --stat
+

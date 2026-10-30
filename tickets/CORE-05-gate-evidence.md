@@ -219,8 +219,13 @@ Per Contract §5, a milestone verdict of FAIL on $N$ fixtures is a successful, c
 
 ## 8. Milestone Conclusion
 
-**Final Verdict: FAIL (E2; Bounded Closure per Contract §5)**
+**Initial CORE-05 Verdict (2026-10-26): FAIL (E2; Bounded Closure per Contract §5 — 131/136, 4 Root-Cause Deliverables)**
+**Remediation Follow-Up CORE-05b Verdict (2026-10-28 / 2026-10-30): PASS (E2; 136/136 = 100.0% Bit-Exact 3-Way Consensus)**
 
-- **Observed Truth**: No runtime divergence observed across 131 fixtures at `-O0`.
-- **Hypothesis Alignment**: Consistent with the hypothesis that Class III adaptation in CORE-03 and CORE-04 was required by inlined glibc header constructs; CORE-03/04 shims also covered socket/VFS typedefs not exercised here.
-- **Next Steps**: Each of the 4 root-cause defects constitutes an independent E1 remediation target with its minimal reproducer as the correctness oracle. Re-running the 136-fixture corpus after defect remediation will constitute a distinct follow-up milestone (CORE-05b).
+- **Observed Truth**: Following remediation of all 4 root-cause defects (`DEFECT-CORE05-01`..`04`) plus closure of `BUG-CORE05-001` (`.i` extension handling in `part5.c`) and `BUG-CORE05-002` (C99 union container normalization in `test_bitfield.c`), the full 136-fixture Class II Tri-Compiler Differential Sweep (`tools/run_core_05_class2_differential.py`) achieves **136 / 136 (100.0%)** bit-exact 3-way consensus across ZCC, GCC, and Clang (`0` compile divergences, `0` runtime divergences).
+- **CORE-05b Authoritative Ledger**: `docs/evidence/2026-10-28/core_05_classII/ledger_20261028_234233_426303.json`
+  - **Composite FNV-1a Digest (ZCC / GCC / Clang)**: `0xf03c7f817c17685` (100% 3-way match across all 136 fixtures)
+  - **Controls**: `POS-01: PASS`, `NEG-01: PASS`, `NEG-02: PASS`
+- **Auxiliary Defect Closures (`BUGS.md`)**:
+  - `BUG-CORE05-001` (`.i` preprocessed input extension fallthrough): **RESOLVED & VERIFIED** via `part5.c:2064,2205` and `tests/test_zcc_preprocessed_i_extension.sh`.
+  - `BUG-CORE05-002` (`test_bitfield.c` strict-aliasing pointer punning): **RESOLVED & VERIFIED** via C99 `union PacketWord` container normalization in `test_bitfield.c` and `tests/test_bitfield.c`.

@@ -1635,6 +1635,7 @@ int zcc_main(int argc, char **argv) {
   int sculpt_sdf_mode = 0;
   int sculpt_mode = 0;
   char *sculpt_prompt = 0;
+  int svg_cli_mode = 0;
 
   char smt_out_file[256];
   smt_out_file[0] = '\0';
@@ -1893,6 +1894,30 @@ int zcc_main(int argc, char **argv) {
       sculpt_mode = 1;
       i++;
       if (i < argc) sculpt_prompt = argv[i];
+    } else if (strcmp(argv[i], "--svg-evolve") == 0) {
+      svg_cli_mode = 1;
+      if (i + 1 < argc && argv[i + 1][0] != '-') input_file = argv[++i];
+    } else if (strcmp(argv[i], "--svg-stats") == 0) {
+      svg_cli_mode = 2;
+      if (i + 1 < argc && argv[i + 1][0] != '-') input_file = argv[++i];
+    } else if (strcmp(argv[i], "--svg-data-uri") == 0) {
+      svg_cli_mode = 3;
+      if (i + 1 < argc && argv[i + 1][0] != '-') input_file = argv[++i];
+    } else if (strcmp(argv[i], "--svg-hexdump") == 0) {
+      svg_cli_mode = 4;
+      if (i + 1 < argc && argv[i + 1][0] != '-') input_file = argv[++i];
+    } else if (strcmp(argv[i], "--svg-ast") == 0) {
+      svg_cli_mode = 5;
+      if (i + 1 < argc && argv[i + 1][0] != '-') input_file = argv[++i];
+    } else if (strcmp(argv[i], "--svg-cfg") == 0) {
+      svg_cli_mode = 6;
+      if (i + 1 < argc && argv[i + 1][0] != '-') input_file = argv[++i];
+    } else if (strcmp(argv[i], "--svg-ir") == 0) {
+      svg_cli_mode = 7;
+      if (i + 1 < argc && argv[i + 1][0] != '-') input_file = argv[++i];
+    } else if (strcmp(argv[i], "--svg-to-sdf") == 0) {
+      svg_cli_mode = 8;
+      if (i + 1 < argc && argv[i + 1][0] != '-') input_file = argv[++i];
     } else if (strcmp(argv[i], "--release") == 0) {
       if (i + 1 < argc) {
           const char* ticket = argv[++i];
@@ -2036,8 +2061,11 @@ int zcc_main(int argc, char **argv) {
       strncat(extra_link_args, argv[i], 4095 - (int)strlen(extra_link_args));
     } else {
       int len = strlen(argv[i]);
-      if (len > 2 && (strcmp(argv[i] + len - 2, ".c") == 0 || (len > 4 && strcmp(argv[i] + len - 4, ".cpp") == 0) || strcmp(argv[i] + len - 3, ".rs") == 0 || (len > 4 && strcmp(argv[i] + len - 4, ".yul") == 0) || (len > 5 && strcmp(argv[i] + len - 5, ".html") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".css") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".svg") == 0) || (len > 7 && strcmp(argv[i] + len - 7, ".circom") == 0) || (len > 5 && strcmp(argv[i] + len - 5, ".qasm") == 0) || (qasm_canonical_mode && argv[i][0] != '-') || (qasm_validate_mode && argv[i][0] != '-') || (qasm_sim_mode && argv[i][0] != '-') || (qasm_opt_mode && argv[i][0] != '-') || (qasm_clifford_t_mode && argv[i][0] != '-') || (qasm_sim_c_mode && argv[i][0] != '-'))) {
+      if (len > 2 && (strcmp(argv[i] + len - 2, ".c") == 0 || strcmp(argv[i] + len - 2, ".i") == 0 || (len > 3 && (strcmp(argv[i] + len - 3, ".ii") == 0 || strcmp(argv[i] + len - 3, ".cc") == 0)) || (len > 4 && (strcmp(argv[i] + len - 4, ".cpp") == 0 || strcmp(argv[i] + len - 4, ".cxx") == 0)) || strcmp(argv[i] + len - 3, ".rs") == 0 || (len > 4 && strcmp(argv[i] + len - 4, ".yul") == 0) || (len > 5 && strcmp(argv[i] + len - 5, ".html") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".css") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".svg") == 0) || (len > 7 && strcmp(argv[i] + len - 7, ".circom") == 0) || (len > 5 && strcmp(argv[i] + len - 5, ".qasm") == 0) || (qasm_canonical_mode && argv[i][0] != '-') || (qasm_validate_mode && argv[i][0] != '-') || (qasm_sim_mode && argv[i][0] != '-') || (qasm_opt_mode && argv[i][0] != '-') || (qasm_clifford_t_mode && argv[i][0] != '-') || (qasm_sim_c_mode && argv[i][0] != '-') || (svg_cli_mode && argv[i][0] != '-'))) {
         input_file = argv[i];
+      } else if (argv[i][0] != '-' && !(len > 2 && (strcmp(argv[i] + len - 2, ".s") == 0 || strcmp(argv[i] + len - 2, ".S") == 0 || strcmp(argv[i] + len - 2, ".o") == 0 || strcmp(argv[i] + len - 2, ".a") == 0 || (len > 3 && strcmp(argv[i] + len - 3, ".so") == 0)))) {
+        fprintf(stderr, "zcc: unrecognized input file extension: '%s'\n", argv[i]);
+        return 1;
       } else {
         if (extra_link_args[0]) strncat(extra_link_args, " ", 4095 - (int)strlen(extra_link_args));
         strncat(extra_link_args, argv[i], 4095 - (int)strlen(extra_link_args));
@@ -2174,6 +2202,10 @@ int zcc_main(int argc, char **argv) {
   }
 
   if (!input_file) {
+    if (compile_only) {
+        fprintf(stderr, "zcc: no source input file specified for compilation\n");
+        return 1;
+    }
     if (extra_link_args[0] && output_file) {
         char cmd[8192];
         int written = snprintf(cmd, sizeof(cmd),
@@ -2529,7 +2561,20 @@ int zcc_main(int argc, char **argv) {
     return 0;
   }
 
+  if (svg_cli_mode > 0) {
+    extern int zcc_svg_cli_dispatch(int mode, const char *input_path, const char *source, int source_len, const char *output_path, int explicit_output, int quiet);
+    int svg_rc = zcc_svg_cli_dispatch(svg_cli_mode, input_file, source, source_len, output_file, explicit_output_file, enable_telemetry_stdout || zcc_quiet_flag);
+    free(source);
+    return svg_rc;
+  }
+
   if (frontend_lang == FRONTEND_LANG_ASSET) {
+      if (strlen(input_file) >= 4 && strcmp(input_file + strlen(input_file) - 4, ".svg") == 0) {
+          extern int zcc_compile_svg_asset(const char *input_path, const char *source, int source_len, const char *output_path, int compile_only, int quiet);
+          int svg_rc = zcc_compile_svg_asset(input_file, source, source_len, output_file, compile_only, enable_telemetry_stdout || zcc_quiet_flag);
+          free(source);
+          return svg_rc;
+      }
       /* heap-allocate compiler state (too large for stack) */
       cc = (Compiler *)calloc(1, sizeof(Compiler));
       if (!cc) {
@@ -2537,16 +2582,18 @@ int zcc_main(int argc, char **argv) {
           free(source); return 1;
       }
       
-      char asm_f[256];
-      strncpy(asm_f, output_file ? output_file : "a.s", 250);
-      int alf = 0; while (asm_f[alf]) alf++;
-      if (!(alf >= 2 && asm_f[alf - 2] == '.' && asm_f[alf - 1] == 's')) {
-          asm_f[alf] = '.'; asm_f[alf + 1] = 's'; asm_f[alf + 2] = 0;
+      stop_at_asm = 0;
+      strncpy(asm_file, output_file ? output_file : "a.s", 250);
+      int alf = 0; while (asm_file[alf]) alf++;
+      if (alf >= 2 && asm_file[alf - 2] == '.' && asm_file[alf - 1] == 's') {
+          stop_at_asm = 1;
+      } else {
+          asm_file[alf] = '.'; asm_file[alf + 1] = 's'; asm_file[alf + 2] = 0;
       }
       
-      cc->out = fopen(asm_f, "w");
+      cc->out = fopen(asm_file, "w");
       if (!cc->out) {
-          printf("zcc: cannot write '%s'\n", asm_f);
+          printf("zcc: cannot write '%s'\n", asm_file);
           free(source); free(cc); return 1;
       }
       

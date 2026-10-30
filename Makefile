@@ -1720,7 +1720,7 @@ zcc_ghost.so: zcc_mesh_warden_shim.c zcc_voxel_shrinkwrap.c zcc_mesh_warden_shim
 release-prepare:
 	@mkdir -p scratch evidence release_artifacts
 
-release-verify: verify-lexicon clean zcc selfhost test-float check-evm-lifter check-ir-vuln-tag check-copy-const-prop max-quality max-perf max-audit verify-ledger-production
+release-verify: verify-lexicon clean zcc selfhost verify-argon4 test-float check-evm-lifter check-ir-vuln-tag check-copy-const-prop max-quality max-perf max-audit verify-ledger-production
 
 release-package: release-verify
 	@cp -f zcc zcc-opt zcc-verify release_artifacts/ 2>/dev/null || echo "Warning: Binaries missing"
@@ -1752,10 +1752,10 @@ release: release-prepare release-verify release-package release-sign release-app
 # Every gate logs to /tmp/qopt_gate*.log with the exit code echoed.
 
 zcc-qopt: src/opt/quantum_rules.c
-	$(CC) $(CFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) -o $@ $< -lm
 
 zcc-qopt-fault: src/opt/quantum_rules.c
-	$(CC) $(CFLAGS) -DFAULT_INJECT -o $@ $<
+	$(CC) $(CFLAGS) -DFAULT_INJECT -o $@ $< -lm
 
 gate-red:
 	-python3 tools/qopt_harness.py --binary ./zcc-qopt-MISSING > /tmp/qopt_gate_red.log 2>&1; \
@@ -1772,5 +1772,38 @@ gate-green: zcc-qopt
 	  > /tmp/qopt_gate_property.log 2>&1; \
 	echo "EXIT:$$?" | tee -a /tmp/qopt_gate_property.log
 
-.PHONY: gate-red gate-fault gate-green
+test-qopt: gate-red gate-fault gate-green
+
+.PHONY: gate-red gate-fault gate-green test-qopt verify-argon4 rebuild-m5-2
+
+# ─── ARGON 4 Unified Verification & M5-2 Native AVX-512 Suite ────────────────
+verify-argon4:
+	@if [ ! -x ./zcc ]; then $(MAKE) zcc; fi
+	@echo "=== [ARGON 4] 1/6 Courtroom Schema & Mandatory T0 Completeness ==="
+	PYTHONPATH=courtroom python3 courtroom/test_case_schema.py
+	@echo "=== [ARGON 4] 2/6 Courtroom Hamiltonian Energy & 1,730-Case Fuzzer (I1..I7) ==="
+	PYTHONPATH=courtroom python3 courtroom/test_release_energy.py
+	@echo "=== [ARGON 4] 3/6 Courtroom Ledger & Tier Parser Invariants ==="
+	PYTHONPATH=courtroom python3 courtroom/test_ledger_store.py
+	PYTHONPATH=courtroom python3 courtroom/test_tier_parser.py
+	@echo "=== [ARGON 4] 4/6 Fail-Closed Release Gate Ticket Verifier ==="
+	python3 tools/release_gate.py tickets/MEGA-SWARM-VERIFICATION.md
+	@echo "=== [ARGON 4] 5/6 Gate M5-2 Independent Verifier & 12 Adversarial Negative Controls ==="
+	python3 tools/verify_m5_2_noise_bootstrap.py
+	python3 tools/verify_m5_2_noise_bootstrap.py --self-test
+	@echo "=== [ARGON 4] 6/6 ZCC Stage 1 & Stage 2 .i Preprocessed Input, .svg Evolution & Unknown Extension Guard ==="
+	bash tests/test_zcc_preprocessed_i_extension.sh ./zcc
+	bash tests/test_zcc_svg_evolution.sh ./zcc
+	@if [ -x ./zcc2 ]; then bash tests/test_zcc_preprocessed_i_extension.sh ./zcc2 && bash tests/test_zcc_svg_evolution.sh ./zcc2; fi
+	@echo "=== [ARGON 4] ALL 6 VERIFICATION SUITES PASSED (0 REGRESSIONS) ==="
+
+rebuild-m5-2: zcc2
+	@echo "=== [M5-2] Compiling Native 10-Seed AVX-512 Engine (Stage 2 ZCC & GCC -O2) ==="
+	./zcc2 experiments/zcc_eai_006_g3_m5/zcc_m5_2_native_multiseed.c -o experiments/zcc_eai_006_g3_m5/zcc_m5_2_native_bin -lm
+	gcc -O2 -ffp-contract=off experiments/zcc_eai_006_g3_m5/zcc_m5_2_native_multiseed.c -o experiments/zcc_eai_006_g3_m5/gcc_m5_2_native_bin -lm
+	@echo "=== [M5-2] Running Full 10-Seed Bootstrap & Native Differential Suite ==="
+	python3 experiments/zcc_eai_006_g3_m5/run_m5_2_bootstrap.py
+	python3 tools/verify_m5_2_noise_bootstrap.py
+	python3 tools/verify_m5_2_noise_bootstrap.py --self-test
+
 

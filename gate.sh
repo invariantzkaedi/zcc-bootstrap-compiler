@@ -1699,6 +1699,9 @@ cp "$EVIDENCE_DIR/stage2.bin" "$REPO_ROOT/zcc2" 2>/dev/null || true
 cp "$EVIDENCE_DIR/stage3.bin" "$REPO_ROOT/zcc3" 2>/dev/null || true
 chmod +x "$REPO_ROOT/zcc2" "$REPO_ROOT/zcc3" 2>/dev/null || true
 
+echo -e "\n[Stage 6/6] Running ARGON 4 Independent Release & M5-2 Verification Suite (make verify-argon4)..."
+make -C "$REPO_ROOT" --no-print-directory verify-argon4
+
 echo -e "\n\033[1;32m================================================================================\033[0m"
 echo -e "   ✨ SELFHOST-MV1.3b PASS"
 echo -e "   Bootstrap fixed-point, semantic-canary, and full SystemV ABI constraints satisfied."

@@ -31,17 +31,40 @@ char* svg_to_html_uri(ZccSvgNode* root);
 char* hexdump_to_ascii(const unsigned char* data, size_t len);
 char* hexdump_to_svg(const unsigned char* data, size_t len);
 
-/* Path Builder Utility */
+/* Path Builder Utility — Full SVG 1.1 / SVG 2 Command Set */
 typedef struct SvgPathBuilder {
     char* d;
     int cap;
     int len;
 } SvgPathBuilder;
-SvgPathBuilder* svg_path_begin();
+SvgPathBuilder* svg_path_begin(void);
 void svg_path_move_to(SvgPathBuilder* pb, float x, float y);
+void svg_path_move_rel(SvgPathBuilder* pb, float dx, float dy);
 void svg_path_line_to(SvgPathBuilder* pb, float x, float y);
+void svg_path_line_rel(SvgPathBuilder* pb, float dx, float dy);
+void svg_path_horiz_to(SvgPathBuilder* pb, float x);
+void svg_path_horiz_rel(SvgPathBuilder* pb, float dx);
+void svg_path_vert_to(SvgPathBuilder* pb, float y);
+void svg_path_vert_rel(SvgPathBuilder* pb, float dy);
 void svg_path_cubic_to(SvgPathBuilder* pb, float x1, float y1, float x2, float y2, float x, float y);
+void svg_path_cubic_rel(SvgPathBuilder* pb, float dx1, float dy1, float dx2, float dy2, float dx, float dy);
+void svg_path_smooth_cubic_to(SvgPathBuilder* pb, float x2, float y2, float x, float y);
+void svg_path_smooth_cubic_rel(SvgPathBuilder* pb, float dx2, float dy2, float dx, float dy);
+void svg_path_quad_to(SvgPathBuilder* pb, float x1, float y1, float x, float y);
+void svg_path_quad_rel(SvgPathBuilder* pb, float dx1, float dy1, float dx, float dy);
+void svg_path_smooth_quad_to(SvgPathBuilder* pb, float x, float y);
+void svg_path_smooth_quad_rel(SvgPathBuilder* pb, float dx, float dy);
+void svg_path_arc_to(SvgPathBuilder* pb, float rx, float ry, float x_axis_rot, int large_arc, int sweep, float x, float y);
+void svg_path_arc_rel(SvgPathBuilder* pb, float rx, float ry, float x_axis_rot, int large_arc, int sweep, float dx, float dy);
 void svg_path_close(SvgPathBuilder* pb);
+void svg_path_close_rel(SvgPathBuilder* pb);
+void svg_path_circle(SvgPathBuilder* pb, float cx, float cy, float r);
+void svg_path_ellipse(SvgPathBuilder* pb, float cx, float cy, float rx, float ry);
+void svg_path_rect_rounded(SvgPathBuilder* pb, float x, float y, float w, float h, float rx, float ry);
+void svg_path_regular_polygon(SvgPathBuilder* pb, float cx, float cy, float r, int sides, float start_angle);
+void svg_path_star(SvgPathBuilder* pb, float cx, float cy, float r_outer, float r_inner, int points, float start_angle);
+void svg_path_harmonic_rose(SvgPathBuilder* pb, float cx, float cy, float base_r, float amp1, int k1, float amp2, int k2, int segments);
+char* svg_path_compact_d(const char* d_in);
 void svg_apply_path(ZccSvgNode* node, SvgPathBuilder* pb);
 
 /* ZCC AST Visualizer Utilities */

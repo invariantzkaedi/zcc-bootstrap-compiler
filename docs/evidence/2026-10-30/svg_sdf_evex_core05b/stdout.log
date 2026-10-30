@@ -1,0 +1,439 @@
+[1;36m================================================================================[0m
+   🚀 ZCC SUPERCHARGED DETERMINISM & ABI VERIFICATION GATE (v3.3 OMEGA / MV1.3b)
+[1;36m================================================================================[0m
+Run ID: [1;33mzcc-omega-1793393696-38273-af9012b456c531a0[0m
+
+[1;35m═══ EXECUTING DETERMINISTIC SELF-HOST PIPELINE ═══[0m
+  [1;36m[Stage 2/3][0m Compiling /mnt/h/__DOWNLOADS/zcc_github_upload/zcc.c via /mnt/h/__DOWNLOADS/zcc_github_upload/zcc... [1;32m[PASS][0m (SHA: f64fc0216758cee0...)
+  [1;36m[Stage 3/3][0m Compiling /mnt/h/__DOWNLOADS/zcc_github_upload/zcc.c via /mnt/h/__DOWNLOADS/zcc_github_upload/evidence/zcc-omega-1793393696-38273-af9012b456c531a0/stage2.bin... [1;32m[PASS][0m (SHA: f64fc0216758cee0...)
+
+[1;35m═══ [GATE 1] SELF-HOST IDENTITY VERIFICATION ═══[0m
+  [1;32m✓ Gate 1 PASS: Assembly byte-identical (cmp stage2.s stage3.s).[0m
+  [1;36m[Semantic Oracle][0m Cross-verifying against GCC & Golden Oracle... [1;32m[PASS: Byte-Identical Semantic Parity][0m
+  [1;36m[Cross-TU ABI Oracle][0m Bidirectional Interop (MV1.2, MV1.3a & MV1.3b)... [1;32m[PASS: Triple-Corpus Bidirectional Parity][0m
+Lineage check: PASS
+
+[Stage 6/6] Running ARGON 4 Independent Release & M5-2 Verification Suite (make verify-argon4)...
+=== [ARGON 4] 1/6 Courtroom Schema & Mandatory T0 Completeness ===
+PYTHONPATH=courtroom python3 courtroom/test_case_schema.py
+============================================================
+CASE SCHEMA
+============================================================
+
+--- happy path ---
+[PASS] S-1a: id parsed
+[PASS] S-1b: 2 tumblers
+[PASS] S-1c: tumbler 0 status
+[PASS] S-1d: tumbler 1 has waiver
+[PASS] S-1e: 1 evidence
+[PASS] S-1f: case parses to SHIP_WITH_RISK_ACCEPTANCE
+
+--- malformed ---
+[PASS] S-2a: missing id  ($: missing required key 'id')
+[PASS] S-2b: missing risk  ($: missing required key 'risk')
+[PASS] S-2c: empty tumblers  ($/tumblers: must be non-empty)
+[PASS] S-2d: invalid risk value  ($/risk: 'yolo' not in ['critical', 'deployed_breach', 'high', 'low', 'medium'])
+[PASS] S-2e: invalid status enum  ($/tumblers[0]/status: invalid status 'yolo'. Must be one of: unknown, locked, partial, seated, waived, not_applicable)
+[PASS] S-2f: malformed tier  ($/tumblers[0]/tier: unparseable tier: 'TX')
+[PASS] S-2g: dangling evidence_id  ($/tumblers[0]/evidence_ids: referenced evidence 'NO-SUCH' not found in evidence list)
+
+--- file roundtrip ---
+[PASS] S-3a: file roundtrip preserves id
+[PASS] S-3b: missing file raises  (case file not found: /tmp/tmpcsh6t7jj/nope.json)
+[PASS] S-3c: malformed JSON raises  (/tmp/tmpcsh6t7jj/bad.json: malformed JSON (Expecting property name enclosed in double quotes: line 1 column 3 (char 2)))
+
+--- mandatory-gate completeness (ARGON 4 Section 4.A) ---
+[PASS] S-4a: empty tumbler list fails closed (HOLD)
+[PASS] S-4b: T0 marked NOT_APPLICABLE without any seated T0 fails closed (HOLD)
+[PASS] S-4c: omitted T0 (only T7 seated) fails closed (HOLD)
+[PASS] S-4d: duplicate (tier, invariant) in decide() fails closed (HOLD)
+[PASS] S-4e: duplicate (tier, invariant) in parse_case() raises CaseSchemaError  ($/tumblers[1]: duplicate tumbler ('T0-01', 'Self-host'))
+[PASS] S-4f: missing required gate in required_tiers fails closed (HOLD)
+[PASS] S-4g: all required_tiers present and seated -> SHIP
+[PASS] S-4h: null/malformed tumbler entry fails closed (HOLD)
+[PASS] S-4i: mixed valid + dangling evidence_ids in decide() fails closed (HOLD)
+[PASS] S-4j: empty claim_supported in Evidence fails closed (HOLD)
+
+=== 26/26 case-schema tests passed ===
+=== [ARGON 4] 2/6 Courtroom Hamiltonian Energy & 1,730-Case Fuzzer (I1..I7) ===
+PYTHONPATH=courtroom python3 courtroom/test_release_energy.py
+============================================================
+RELEASE ENERGY
+============================================================
+
+--- energy ---
+[PASS] E-1: SHIP-ready energy = 0
+[PASS] E-2: T0 unseated energy = 100
+[PASS] E-3: T0+T1 unseated energy = 170
+
+--- Hamiltonian recursion ---
+[PASS] H-1a: trajectory length = steps + 1
+[PASS] H-1b: starts at H_base
+[PASS] H-1c: trajectory bounded by 4*H_base
+[PASS] H-2: H_base=0 with sigma=0 stays at 0
+
+--- fuzzer on clean case ---
+[PASS] F-1a: 200 perturbations + 30 invariance checks
+[PASS] F-1b: zero violations on clean case
+
+--- fuzzer catches a known-bad gate ---
+[PASS] F-2a: fuzzer detects T0 invariance violation in buggy decide()
+[PASS] F-2b: at least one T0/waiver invariance violation reported
+
+--- adversarial sweep on real compiler ---
+[PASS] F-3: 50 random cases × 30 invariance checks each, zero violations
+
+=== 12/12 release-energy tests passed ===
+=== [ARGON 4] 3/6 Courtroom Ledger & Tier Parser Invariants ===
+PYTHONPATH=courtroom python3 courtroom/test_ledger_store.py
+============================================================
+LEDGER STORE — persistence regression
+============================================================
+
+--- round trip ---
+[PASS] P-1a: file written
+[PASS] P-1b: loaded ledger verifies
+[PASS] P-1c: entry count survives round trip
+[PASS] P-1d: head hash matches
+[PASS] P-1e: kinds preserved
+
+--- refuse-bad-save ---
+[PASS] P-2: save raises on broken chain  (LedgerStoreError: refusing to save unverified ledger: seq=0 entry_hash mismatch (tampered))
+
+--- tamper-on-disk ---
+[PASS] P-3a: load raises on payload tamper  (LedgerStoreError: seq=0: entry_hash mismatch (tampered))
+[PASS] P-3b: load raises on entry_hash flip  (LedgerStoreError: seq=1: entry_hash mismatch (tampered))
+
+--- partial last line ---
+[PASS] P-4a: partial last line dropped, valid entries kept
+[PASS] P-4b: partial last line raises when not tolerated  (LedgerStoreError: line 3: malformed JSON (Unterminated string starting at: line 1 column 11 (char 10)))
+
+--- missing file ---
+[PASS] P-5: load raises on missing file  (LedgerStoreError: ledger file not found: /tmp/tmpxhoaz36b/does_not_exist.jsonl)
+
+--- persisted ledger streaming append ---
+[PASS] P-6a: streamed entries readable
+[PASS] P-6b: streamed chain verifies
+[PASS] P-6c: PersistedLedger reloads existing file
+[PASS] P-6d: append after reload extends correctly
+[PASS] P-6e: extension persisted
+[PASS] P-6f: extended chain verifies
+
+--- out-of-order seq ---
+[PASS] P-7: out-of-order seq raises  (LedgerStoreError: seq=2: out-of-order or missing entry (expected seq=1))
+
+--- rotation ---
+[PASS] P-8a: archive file exists
+[PASS] P-8b: new ledger file exists
+[PASS] P-8c: archive verifies
+[PASS] P-8d: archive entry count preserved
+[PASS] P-8e: archive head hash preserved
+[PASS] P-8f: new ledger has 1 entry (the checkpoint)
+[PASS] P-8g: checkpoint has _checkpoint=True
+[PASS] P-8h: checkpoint references archived head_hash
+[PASS] P-8i: checkpoint records archived count
+[PASS] P-8j: post-rotation chain verifies
+[PASS] P-8k: post-rotation entry count = 2
+[PASS] P-8l: rotate raises on missing source  (LedgerStoreError: cannot rotate non-existent ledger: /tmp/tmpxhoaz36b/nope.jsonl)
+[PASS] P-8m: rotate refuses corrupt source  (LedgerStoreError: seq=0: entry_hash mismatch (tampered))
+
+=== 31/31 ledger-store tests passed ===
+PYTHONPATH=courtroom python3 courtroom/test_tier_parser.py
+============================================================
+TIER PARSER
+============================================================
+[PASS] T-1: T0 → n=0, ordinal=None
+[PASS] T-2: T0-01 → n=0, ordinal=1
+[PASS] T-3: T7-04 → n=7, ordinal=4
+
+--- T1-vs-T10 collision (was the bug) ---
+[PASS] T-4a: is_t0('T0') True
+[PASS] T-4b: is_t0('T1') False
+[PASS] T-4c: is_t0('T10') False
+[PASS] T-4d: is_t0('T0-01') True
+[PASS] T-4e: is_t0('T10-01') False
+[PASS] T-4f: T1.n != T10.n
+[PASS] T-5a: severity('T1-01') == 70
+[PASS] T-5b: severity('T10-01') == 10 (out of ladder)
+[PASS] T-6a: T0 → 4
+[PASS] T-6b: T3-01 → 5
+[PASS] T-6c: T6 → 4
+[PASS] T-6d: T2-04 → 3
+[PASS] T-6e: T10-01 → 3 (default)
+
+--- malformed input raises ---
+[PASS] T-7a: '' raises
+[PASS] T-7b: 'T' raises
+[PASS] T-7c: 'T-01' raises
+[PASS] T-7d: 't0-01' (lower) raises
+[PASS] T-7e: 'T0-01-extra' raises
+[PASS] T-7f: 'T20' (over max) raises
+[PASS] T-7g: None raises
+
+=== 23/23 tier-parser tests passed ===
+=== [ARGON 4] 4/6 Fail-Closed Release Gate Ticket Verifier ===
+python3 tools/release_gate.py tickets/MEGA-SWARM-VERIFICATION.md
+
+🔱 ZKAEDI RELEASE GATE
+Case: MEGA-SWARM-VERIFICATION
+Verdict: Verdict.SHIP
+Summary: 4/4 tumblers seated → SHIP
+
+✅ GATE PASSED — SHIP AUTHORIZED
+=== [ARGON 4] 5/6 Gate M5-2 Independent Verifier & 12 Adversarial Negative Controls ===
+python3 tools/verify_m5_2_noise_bootstrap.py
+M5-2 INDEPENDENT VERIFIER PASS: {"verdict": "VERIFIED", "receipt_sha256": "8483ae27c7ec9ef41c0181a5d2cc5479ef1df8a82ee792d9f6669b1269ec6cd8", "manifest_rows_verified": 16, "train_rows_verified": 1000, "test_rows_verified": 400}
+python3 tools/verify_m5_2_noise_bootstrap.py --self-test
+=== [M5-2 INDEPENDENT VERIFIER] RUNNING 12 ADVERSARIAL NEGATIVE CONTROLS ===
+[PASS] Positive Control: {'verdict': 'VERIFIED', 'receipt_sha256': '8483ae27c7ec9ef41c0181a5d2cc5479ef1df8a82ee792d9f6669b1269ec6cd8', 'manifest_rows_verified': 16, 'train_rows_verified': 1000, 'test_rows_verified': 400}
+[PASS] NC-1 (Remove mandatory section): rejected as expected (rc=11: Missing mandatory top-level key: 'experiment_2_paired_block_bootstrap')
+[PASS] NC-2 (Empty Control 0 fail-open bypass): rejected as expected (rc=11: Mandatory section 'control_0_numerical_parity' is empty or invalid)
+[PASS] NC-3 (Control 0 status=FAIL): rejected as expected (rc=12: Control 0 status is not PASS: 'FAIL')
+[PASS] NC-4 (Forged ref_train_csv_sha256): rejected as expected (rc=14: Control 0 ref_train_csv_sha256 mismatch vs on-disk CSV)
+[PASS] NC-5 (Control 0 error > 1e-12): rejected as expected (rc=12: Control 0 Row 0 max_abs_error exceeds 1e-12: 1e-06)
+[PASS] NC-6 (Post-receipt report tampering vs artifacts.md): rejected as expected (rc=14: Manifest size mismatch for docs/evidence/2026-10-28/m5_2_noise_bootstrap/M5_2_NOISE_BOOTSTRAP_REPORT.md: manifest=16454, disk=16473)
+[PASS] NC-7 (Corrupted detached .sha256): rejected as expected (rc=14: Detached .sha256 mismatch: file has 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  m5_2_noise_bootstrap_receipt.json', recomputed '8483ae27c7ec9ef41c0181a5d2cc5479ef1df8a82ee792d9f6669b1269ec6cd8')
+[PASS] NC-8 (Symlinked receipt file): rejected as expected (rc=15: Symlink rejected: /tmp/tmpngbtcuq7/ev/m5_2_noise_bootstrap_receipt.json)
+[PASS] NC-9 (Stale receipt SHA-256 in report): rejected as expected (rc=14: Cross-document drift: M5_2_NOISE_BOOTSTRAP_REPORT.md does not contain current receipt SHA-256 8483ae27c7ec9ef41c0181a5d2cc5479ef1df8a82ee792d9f6669b1269ec6cd8)
+[PASS] NC-10 (Experiment 1 Q1 mean R^2 statistical collapse): rejected as expected (rc=13: Experiment 1 Q1 mean R^2 below threshold 0.05)
+[PASS] NC-11 (Native 10-seed ZCC R^2 tamper on Seed 45): rejected as expected (rc=12: Control 0b ZCC vs GCC R^2 divergence on Q1_Quantum_LinearPhase seed index 3)
+[PASS] NC-12 (AVX-512 vs Scalar non-zero ULP drift): rejected as expected (rc=12: Control 0b ZCC scalar_vs_avx512_max_ulp_diff != 0)
+=== ALL 12/12 NEGATIVE CONTROLS + 1 POSITIVE CONTROL PASSED ===
+=== [ARGON 4] 6/6 ZCC Stage 1 & Stage 2 .i Preprocessed Input, .svg Evolution & Unknown Extension Guard ===
+bash tests/test_zcc_preprocessed_i_extension.sh ./zcc
+=== [E-LEARN-024] Testing ZCC Preprocessed .i Input & Compile-Only Fail-Closed Guards ===
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (10 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[PASS] Positive Control 1A: ./zcc -S valid_tu.i emitted genuine assembly
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (10 elided)
+[Phase 6] GCC Assembly/Linker Binding... OK
+[OK] ZCC Engine Compilation Terminated Successfully.
+[PASS] Positive Control 1B: ./zcc valid_tu.i compiled and executed cleanly (exit 0)
+[PASS] Negative Control 1: GCC-only .i file rejected by ZCC native parser (rc=1)
+[PASS] Negative Control 2: -S without source input failed closed (rc=1)
+[PASS] Negative Control 3: Unknown extension (.tu) rejected fail-closed (rc=1)
+=== [E-LEARN-024] ALL POSITIVE & NEGATIVE CONTROLS PASSED ===
+bash tests/test_zcc_svg_evolution.sh ./zcc
+=== [ZCC-SVG] Testing Upgraded Native SVG Evolution, CLI Commands & SvgPathBuilder (./zcc) ===
+[ZCC-SVG] Evolved zcc_all_seeing_sovereign_oculus.svg -> /tmp/tmp.6gM4q6vGtD/evolved.svg: 77001 -> 56349 bytes (-26.82%), 205 primitives coalesced (5 polygons lowered), 6182 coords quantized, 3883 path cmds compacted, 2 GPU layers promoted.
+[PASS] Target 1 (.svg evolution): XML valid, DOM elements 312 -> 112 (-200 coalesced/lowered)
+[ZCC-SVG] Evolved zcc_all_seeing_sovereign_oculus.svg (77001 -> 56349 bytes, -26.82%, 205 coalesced, 6182 quantized, 3883 compacted, 2 GPU layers) -> /tmp/tmp.6gM4q6vGtD/oculus.s
+[PASS] Target 2 (-S -o oculus.s): Assembly emitted & verified cleanly (exit 0)
+[ZCC-SVG] Evolved zcc_all_seeing_sovereign_oculus.svg (77001 -> 56349 bytes, -26.82%, 205 coalesced, 6182 quantized, 3883 compacted, 2 GPU layers) -> /tmp/tmp.6gM4q6vGtD/oculus.o.s
+[PASS] Target 3 (-c -o oculus.o): ELF relocatable object symbols verified
+[ZCC-SVG] Evolved zcc_all_seeing_sovereign_oculus.svg (77001 -> 56349 bytes, -26.82%, 205 coalesced, 6182 quantized, 3883 compacted, 2 GPU layers) -> /tmp/tmp.6gM4q6vGtD/oculus_bin.s
+  [ZCC-SVG EXECUTABLE] asset=zcc_all_seeing_sovereign_oculus_svg raw=77001 evolved=56349 (-26.82%) coalesced=205 quantized=6182 compacted=3883 gpu_layers=2
+[PASS] Target 4 (-o oculus_bin): Native ELF executable banner & --emit payload verified
+[ZCC-SVG-EVOLVE] zcc_all_seeing_sovereign_oculus.svg -> /tmp/tmp.6gM4q6vGtD/cli_evolved.svg: 77001 -> 56349 bytes (-26.82%), 205 coalesced (5 polygons lowered), 6182 quantized, 3883 commands compacted, 2 GPU layers.
+[PASS] Target 5 (--svg-evolve): Byte-identical to direct .svg compilation
+[PASS] Target 6 (--svg-stats): JSON telemetry verified (L cmds: 2520 -> 376, H=4, V=4, compacted=3883)
+[ZCC-SVG-URI] zcc_all_seeing_sovereign_oculus.svg -> /tmp/tmp.6gM4q6vGtD/oculus.uri (56349 bytes evolved SVG -> 75158 bytes Base64 Data URI)
+[PASS] Target 7 (--svg-data-uri): Base64 SVG Data URI verified (75158 bytes)
+[ZCC-SVG-HEXDUMP] /tmp/tmp.6gM4q6vGtD/oculus.o (57464 bytes) -> /tmp/tmp.6gM4q6vGtD/hexdump.svg (47239 bytes evolved Matrix SVG)
+[PASS] Target 8 (--svg-hexdump): Binary Entropy Matrix SVG valid (553 DOM nodes)
+zcc: warning: using synthesized header stub for stdio.h
+pp_process_include: stdio.h added 181 macros, total is 218
+zcc: warning: using synthesized header stub for stdlib.h
+pp_process_include: stdlib.h added 0 macros, total is 218
+zcc: warning: using synthesized header stub for string.h
+pp_process_include: string.h added 0 macros, total is 218
+zcc: warning: using synthesized header stub for stdint.h
+pp_process_include: stdint.h added 0 macros, total is 218
+pp_process_include: zcc_svg.h added 182 macros, total is 218
+zcc: warning: using synthesized header stub for math.h
+pp_process_include: math.h added 0 macros, total is 218
+zcc: warning: using synthesized header stub for stdint.h
+pp_process_include: stdint.h added 0 macros, total is 219
+pp_process_include: zcc_ast_bridge_constants.h added 70 macros, total is 293
+pp_process_include: zcc_ast_bridge.h added 81 macros, total is 299
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (4870 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+zcc: warning: using synthesized header stub for stdio.h
+pp_process_include: stdio.h added 181 macros, total is 217
+zcc: warning: using synthesized header stub for string.h
+pp_process_include: string.h added 0 macros, total is 217
+zcc: warning: using synthesized header stub for assert.h
+pp_process_include: assert.h added 0 macros, total is 217
+zcc: warning: using synthesized header stub for stdio.h
+pp_process_include: stdio.h added 0 macros, total is 218
+zcc: warning: using synthesized header stub for stdlib.h
+pp_process_include: stdlib.h added 0 macros, total is 218
+zcc: warning: using synthesized header stub for string.h
+pp_process_include: string.h added 0 macros, total is 218
+zcc: warning: using synthesized header stub for stdint.h
+pp_process_include: stdint.h added 0 macros, total is 218
+pp_process_include: zcc_svg.h added 1 macros, total is 218
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (144 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[PASS] Target 9 (zcc_svg.c SvgPathBuilder): 20 commands + 6 primitives verified (raw=1546 -> compacted=1452 bytes)
+[ZCC-SVG-AST] test_bitfield.c (784 bytes C) -> /tmp/tmp.6gM4q6vGtD/tb_ast.svg (5720 bytes evolved AST SVG)
+[ZCC-SVG-CFG] test_bitfield.c -> /tmp/tmp.6gM4q6vGtD/tb_cfg.svg (2838 bytes evolved CFG SVG | 5 blocks, 5 edges, M=2)
+[ZCC-SVG-IR] test_bitfield.c -> /tmp/tmp.6gM4q6vGtD/tb_ir.svg (6618 bytes evolved SSA/Liveness SVG | 13 SSA ops)
+[PASS] Target 10 (--svg-ast / --svg-cfg / --svg-ir): C-to-SVG AST/CFG/IR telemetry graphs verified.
+[ZCC-SVG-TO-SDF] zcc_all_seeing_sovereign_oculus.svg -> /tmp/tmp.6gM4q6vGtD/probe_sdf.c (256 analytic 2D SDF primitives lowered to C99 SDF Evaluator, 24068 bytes)
+[ZCC-SVG-TO-SDF] zcc_all_seeing_sovereign_oculus.svg -> /tmp/tmp.6gM4q6vGtD/probe_sdf.glsl (256 analytic 2D SDF primitives lowered to GLSL #version 330, 21537 bytes)
+zcc: warning: using synthesized header stub for stdio.h
+pp_process_include: stdio.h added 181 macros, total is 217
+zcc: warning: using synthesized header stub for math.h
+pp_process_include: math.h added 0 macros, total is 217
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (2230 elided)
+[Phase 6] GCC Assembly/Linker Binding... OK
+[OK] ZCC Engine Compilation Terminated Successfully.
+[PASS] Target 11 (--svg-to-sdf): [ZCC-SVG-SDF-VERIFY] primitives=256 center_d=-600.0000 min_d=-120.0000 max_d=0.0000 inside=256 PASS
+zcc: warning: using synthesized header stub for stdio.h
+pp_process_include: stdio.h added 181 macros, total is 218
+zcc: warning: using synthesized header stub for stdlib.h
+pp_process_include: stdlib.h added 0 macros, total is 218
+zcc: warning: using synthesized header stub for stdint.h
+pp_process_include: stdint.h added 0 macros, total is 218
+zcc: warning: using synthesized header stub for string.h
+pp_process_include: string.h added 0 macros, total is 218
+zcc: warning: using synthesized header stub for time.h
+pp_process_include: time.h added 0 macros, total is 218
+zcc: warning: using synthesized header stub for math.h
+pp_process_include: math.h added 0 macros, total is 218
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (2802 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+codegen: PASS 1 DONE, text_seg.size=50461, data_seg.size=4816, labels=1157, relocs=1429
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (104 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+codegen: PASS 1 DONE, text_seg.size=1843, data_seg.size=128, labels=29, relocs=29
+/usr/bin/ld: warning: /tmp/tmp.6gM4q6vGtD/evex_unit.o: missing .note.GNU-stack section implies executable stack
+/usr/bin/ld: NOTE: This behaviour is deprecated and will be removed in a future version of the linker
+[PASS] Target 12 (AVX-512 EVEX Direct ELF .o): 53 (m5_2) + 11 (unit) %zmm instructions encoded -> [ZCC-AVX512-EVEX] dst[0]=41.0 dst[7]=328.0 PASS
+=== [ZCC-SVG] ALL 12 SVG COMPILER, CLI, SDF & EVEX TARGETS PASSED ===
+=== [E-LEARN-024] Testing ZCC Preprocessed .i Input & Compile-Only Fail-Closed Guards ===
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (10 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[PASS] Positive Control 1A: ./zcc -S valid_tu.i emitted genuine assembly
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (10 elided)
+[Phase 6] GCC Assembly/Linker Binding... OK
+[OK] ZCC Engine Compilation Terminated Successfully.
+[PASS] Positive Control 1B: ./zcc valid_tu.i compiled and executed cleanly (exit 0)
+[PASS] Negative Control 1: GCC-only .i file rejected by ZCC native parser (rc=1)
+[PASS] Negative Control 2: -S without source input failed closed (rc=1)
+[PASS] Negative Control 3: Unknown extension (.tu) rejected fail-closed (rc=1)
+=== [E-LEARN-024] ALL POSITIVE & NEGATIVE CONTROLS PASSED ===
+=== [ZCC-SVG] Testing Upgraded Native SVG Evolution, CLI Commands & SvgPathBuilder (./zcc2) ===
+[ZCC-SVG] Evolved zcc_all_seeing_sovereign_oculus.svg -> /tmp/tmp.ogjqetBADq/evolved.svg: 77001 -> 56349 bytes (-26.82%), 205 primitives coalesced (5 polygons lowered), 6182 coords quantized, 3883 path cmds compacted, 2 GPU layers promoted.
+[PASS] Target 1 (.svg evolution): XML valid, DOM elements 312 -> 112 (-200 coalesced/lowered)
+[ZCC-SVG] Evolved zcc_all_seeing_sovereign_oculus.svg (77001 -> 56349 bytes, -26.82%, 205 coalesced, 6182 quantized, 3883 compacted, 2 GPU layers) -> /tmp/tmp.ogjqetBADq/oculus.s
+[PASS] Target 2 (-S -o oculus.s): Assembly emitted & verified cleanly (exit 0)
+[ZCC-SVG] Evolved zcc_all_seeing_sovereign_oculus.svg (77001 -> 56349 bytes, -26.82%, 205 coalesced, 6182 quantized, 3883 compacted, 2 GPU layers) -> /tmp/tmp.ogjqetBADq/oculus.o.s
+[PASS] Target 3 (-c -o oculus.o): ELF relocatable object symbols verified
+[ZCC-SVG] Evolved zcc_all_seeing_sovereign_oculus.svg (77001 -> 56349 bytes, -26.82%, 205 coalesced, 6182 quantized, 3883 compacted, 2 GPU layers) -> /tmp/tmp.ogjqetBADq/oculus_bin.s
+  [ZCC-SVG EXECUTABLE] asset=zcc_all_seeing_sovereign_oculus_svg raw=77001 evolved=56349 (-26.82%) coalesced=205 quantized=6182 compacted=3883 gpu_layers=2
+[PASS] Target 4 (-o oculus_bin): Native ELF executable banner & --emit payload verified
+[ZCC-SVG-EVOLVE] zcc_all_seeing_sovereign_oculus.svg -> /tmp/tmp.ogjqetBADq/cli_evolved.svg: 77001 -> 56349 bytes (-26.82%), 205 coalesced (5 polygons lowered), 6182 quantized, 3883 commands compacted, 2 GPU layers.
+[PASS] Target 5 (--svg-evolve): Byte-identical to direct .svg compilation
+[PASS] Target 6 (--svg-stats): JSON telemetry verified (L cmds: 2520 -> 376, H=4, V=4, compacted=3883)
+[ZCC-SVG-URI] zcc_all_seeing_sovereign_oculus.svg -> /tmp/tmp.ogjqetBADq/oculus.uri (56349 bytes evolved SVG -> 75158 bytes Base64 Data URI)
+[PASS] Target 7 (--svg-data-uri): Base64 SVG Data URI verified (75158 bytes)
+[ZCC-SVG-HEXDUMP] /tmp/tmp.ogjqetBADq/oculus.o (57464 bytes) -> /tmp/tmp.ogjqetBADq/hexdump.svg (47239 bytes evolved Matrix SVG)
+[PASS] Target 8 (--svg-hexdump): Binary Entropy Matrix SVG valid (553 DOM nodes)
+zcc: warning: using synthesized header stub for stdio.h
+pp_process_include: stdio.h added 181 macros, total is 218
+zcc: warning: using synthesized header stub for stdlib.h
+pp_process_include: stdlib.h added 0 macros, total is 218
+zcc: warning: using synthesized header stub for string.h
+pp_process_include: string.h added 0 macros, total is 218
+zcc: warning: using synthesized header stub for stdint.h
+pp_process_include: stdint.h added 0 macros, total is 218
+pp_process_include: zcc_svg.h added 182 macros, total is 218
+zcc: warning: using synthesized header stub for math.h
+pp_process_include: math.h added 0 macros, total is 218
+zcc: warning: using synthesized header stub for stdint.h
+pp_process_include: stdint.h added 0 macros, total is 219
+pp_process_include: zcc_ast_bridge_constants.h added 70 macros, total is 293
+pp_process_include: zcc_ast_bridge.h added 81 macros, total is 299
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (4870 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+zcc: warning: using synthesized header stub for stdio.h
+pp_process_include: stdio.h added 181 macros, total is 217
+zcc: warning: using synthesized header stub for string.h
+pp_process_include: string.h added 0 macros, total is 217
+zcc: warning: using synthesized header stub for assert.h
+pp_process_include: assert.h added 0 macros, total is 217
+zcc: warning: using synthesized header stub for stdio.h
+pp_process_include: stdio.h added 0 macros, total is 218
+zcc: warning: using synthesized header stub for stdlib.h
+pp_process_include: stdlib.h added 0 macros, total is 218
+zcc: warning: using synthesized header stub for string.h
+pp_process_include: string.h added 0 macros, total is 218
+zcc: warning: using synthesized header stub for stdint.h
+pp_process_include: stdint.h added 0 macros, total is 218
+pp_process_include: zcc_svg.h added 1 macros, total is 218
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (144 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[PASS] Target 9 (zcc_svg.c SvgPathBuilder): 20 commands + 6 primitives verified (raw=1546 -> compacted=1452 bytes)
+[ZCC-SVG-AST] test_bitfield.c (784 bytes C) -> /tmp/tmp.ogjqetBADq/tb_ast.svg (5720 bytes evolved AST SVG)
+[ZCC-SVG-CFG] test_bitfield.c -> /tmp/tmp.ogjqetBADq/tb_cfg.svg (2838 bytes evolved CFG SVG | 5 blocks, 5 edges, M=2)
+[ZCC-SVG-IR] test_bitfield.c -> /tmp/tmp.ogjqetBADq/tb_ir.svg (6618 bytes evolved SSA/Liveness SVG | 13 SSA ops)
+[PASS] Target 10 (--svg-ast / --svg-cfg / --svg-ir): C-to-SVG AST/CFG/IR telemetry graphs verified.
+[ZCC-SVG-TO-SDF] zcc_all_seeing_sovereign_oculus.svg -> /tmp/tmp.ogjqetBADq/probe_sdf.c (256 analytic 2D SDF primitives lowered to C99 SDF Evaluator, 24068 bytes)
+[ZCC-SVG-TO-SDF] zcc_all_seeing_sovereign_oculus.svg -> /tmp/tmp.ogjqetBADq/probe_sdf.glsl (256 analytic 2D SDF primitives lowered to GLSL #version 330, 21537 bytes)
+zcc: warning: using synthesized header stub for stdio.h
+pp_process_include: stdio.h added 181 macros, total is 217
+zcc: warning: using synthesized header stub for math.h
+pp_process_include: math.h added 0 macros, total is 217
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (2230 elided)
+[Phase 6] GCC Assembly/Linker Binding... OK
+[OK] ZCC Engine Compilation Terminated Successfully.
+[PASS] Target 11 (--svg-to-sdf): [ZCC-SVG-SDF-VERIFY] primitives=256 center_d=-600.0000 min_d=-120.0000 max_d=0.0000 inside=256 PASS
+=== [ZCC-SVG] ALL 12 SVG COMPILER, CLI, SDF & EVEX TARGETS PASSED ===
+=== [ARGON 4] ALL 6 VERIFICATION SUITES PASSED (0 REGRESSIONS) ===
+
+[1;32m================================================================================[0m
+   ✨ SELFHOST-MV1.3b PASS
+   Bootstrap fixed-point, semantic-canary, and full SystemV ABI constraints satisfied.
+[1;32m================================================================================[0m
+Chained Provenance Ledger: [1;34m/mnt/h/__DOWNLOADS/zcc_github_upload/evidence/zcc-omega-1793393696-38273-af9012b456c531a0/provenance.jsonl[0m
+
