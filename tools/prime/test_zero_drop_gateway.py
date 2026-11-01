@@ -116,11 +116,81 @@ def run_regression_suite() -> int:
     assert v_neg_py["valid"] is False
     print("  ✔ Independent oracle positive & negative controls verified!")
 
+    # 6. Nested-Object & String-Value Key Spoofing Immunity
+    print(" [Test 6] Verifying Nested-Object & String-Value Key Spoofing Immunity...")
+    spoof_nested_ids = tokenizer.encode('{"alpha": {"beta": 1}', add_special_tokens=False)
+    seq_spoof_nested = torch.cat([prompt_ids, torch.tensor([spoof_nested_ids])], dim=1)
+    scores_spoof_nested = req_engine(seq_spoof_nested, dummy_scores.clone())
+    assert scores_spoof_nested[0, req_engine.brace_close_id].item() == -float("inf"), (
+        "Nested key 'beta' inside 'alpha' must NOT satisfy top-level required_keys!"
+    )
+    print("  ✔ Nested-object key spoofing immunity verified!")
+
+    # 7. RFC 8259 Trailing Comma Prohibition
+    print(" [Test 7] Verifying RFC 8259 Trailing Comma Prohibition ('{\"alpha\": 1, ')...")
+    comma_ids = tokenizer.encode('{"alpha": 1, ', add_special_tokens=False)
+    seq_comma = torch.cat([prompt_ids, torch.tensor([comma_ids])], dim=1)
+    scores_comma = engine(seq_comma, dummy_scores.clone())
+    assert scores_comma[0, engine.brace_close_id].item() == -float("inf"), (
+        "Closing '}' immediately after trailing comma ',' must be blocked!"
+    )
+    assert scores_comma[0, quote_id].item() == 0.0, "Quote '\"' for next key must be allowed after ','!"
+    print("  ✔ RFC 8259 trailing comma prohibition verified!")
+
+    # 8. RFC 8259 Section 7 Raw Unescaped Control Character Shield Inside JSON Strings
+    print(" [Test 8] Verifying Raw Control Character Shield ('\\n', '\\r', '\\t') Inside Open Strings...")
+    in_str_ids = tokenizer.encode('{"code": "int main() {', add_special_tokens=False)
+    seq_in_str = torch.cat([prompt_ids, torch.tensor([in_str_ids])], dim=1)
+    scores_in_str = engine(seq_in_str, dummy_scores.clone())
+    raw_nl_id = tokenizer.encode("\n", add_special_tokens=False)[0]
+    assert scores_in_str[0, raw_nl_id].item() == -float("inf"), (
+        "Raw unescaped newline inside JSON string literal must be clamped to -inf!"
+    )
+    print("  ✔ Raw unescaped control character shield verified!")
+
+    # 9. Bounded Nesting Depth Cap (max_nesting_depth = 64)
+    print(" [Test 9] Verifying Bounded Recursion / Nesting Depth Cap (max_nesting_depth=64)...")
+    deep_ids = tokenizer.encode("{" + '"a": [' * 65, add_special_tokens=False)
+    seq_deep = torch.cat([prompt_ids, torch.tensor([deep_ids])], dim=1)
+    scores_deep = engine(seq_deep, dummy_scores.clone())
+    assert scores_deep[0, engine.bracket_open_id].item() == -float("inf"), (
+        "Further '[' opening at depth >= 64 must be clamped to -inf!"
+    )
+    assert scores_deep[0, engine.brace_open_id].item() == -float("inf"), (
+        "Further '{' opening at depth >= 64 must be clamped to -inf!"
+    )
+    print("  ✔ Bounded nesting depth cap verified!")
+
+    # 10. Multi-Batch (B=2) Isolation & All-(-inf) Deadlock Recovery Shield
+    print(" [Test 10] Verifying Multi-Batch (B=2) Isolation & All-(-inf) Deadlock Recovery Shield...")
+    r0_toks = tokenizer.encode('{"a": "x', add_special_tokens=False)
+    r1_toks = tokenizer.encode('{"a": 1}', add_special_tokens=False)
+    x_tok = tokenizer.encode("x", add_special_tokens=False)[0]
+    while len(r0_toks) < len(r1_toks):
+        r0_toks.append(x_tok)
+    assert len(r0_toks) == len(r1_toks)
+    batch_seq = torch.tensor([
+        prompt_ids[0].tolist() + r0_toks,
+        prompt_ids[0].tolist() + r1_toks,
+    ])
+    batch_scores = torch.zeros((2, len(tokenizer)))
+    out_batch = engine(batch_seq, batch_scores)
+    assert out_batch[0, engine.eos_token_id].item() == -float("inf"), "Row 0 (in_string) must block EOS!"
+    assert out_batch[1, engine.eos_token_id].item() == 100.0, "Row 1 (closed root) must force EOS!"
+
+    # All-(-inf) deadlock recovery check
+    all_neg_inf = torch.full((1, len(tokenizer)), -float("inf"))
+    recovered = engine(seq_in_str, all_neg_inf)
+    assert torch.isfinite(recovered[0]).any().item() is True, "All-(-inf) row must recover with finite fallback token!"
+    assert recovered[0, engine.quote_id].item() == 0.0, "In-string deadlock fallback must unclamp quote token!"
+    print("  ✔ Multi-batch (B=2) isolation & deadlock recovery shield verified!")
+
     print("=" * 88)
-    print(" 🔱 VERDICT: ZERO-DROP GATEWAY REGRESSION SUITE 5 / 5 PASS 🔱")
+    print(" 🔱 VERDICT: HARDENED ZERO-DROP GATEWAY REGRESSION SUITE 10 / 10 PASS 🔱")
     print("=" * 88)
     return 0
 
 
 if __name__ == "__main__":
     sys.exit(run_regression_suite())
+

@@ -227,6 +227,11 @@ def verify_structured_output(
 # =====================================================================================================
 # UNIFIED ZERO-DROP STRUCTURED LLM GATEWAY
 # =====================================================================================================
+SUPPORTED_GRAMMAR_MODES = {"json", "c", "python", "javascript", "rust"}
+SUPPORTED_ARMS = {"active", "unconstrained", "naive_sham", "stress"}
+MAX_HTTP_BODY_BYTES = 262_144
+
+
 class ZeroDropStructuredGateway:
     """
     Production-grade Structured LLM Gateway combining:
@@ -244,6 +249,7 @@ class ZeroDropStructuredGateway:
         self.model_path = model_path
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.dtype = torch.bfloat16 if (self.device == "cuda" and torch.cuda.is_bf16_supported()) else torch.float16
+        self._infer_lock = threading.Lock()
 
         t0 = time.perf_counter()
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_path)
@@ -307,7 +313,7 @@ class ZeroDropStructuredGateway:
         )
         return {
             "status": "ONLINE",
-            "gateway": "ZKAEDI PRIME Zero-Drop Structured LLM Gateway v1.0",
+            "gateway": "ZKAEDI PRIME Zero-Drop Structured LLM Gateway v1.1 (Hardened)",
             "invariant": "One equation, two regimes: eta shapes fields; scars + eps navigate.",
             "model_path": self.model_path,
             "device": self.device,
@@ -335,132 +341,153 @@ class ZeroDropStructuredGateway:
         apply_chat_template: bool = False,
     ) -> Dict[str, Any]:
         """
-        Executes structured generation under one of the 4 causal arms:
+        Executes structured generation under one of the 4 causal arms (fail-closed on invalid mode/arm):
           - 'active': Full Squozen String-Aware BPE-Delta PDA / CodeGrammar PDA + SymplecticAnnealingSampler
           - 'unconstrained': Negative control (no grammar/squozen processor, eta=0, kick=0, eps=0)
           - 'naive_sham': Arm 3 control (legacy single-token brace counter without string/BPE-merge awareness)
           - 'stress': Out-of-sample high-temperature (T0=1.35) adversarial regime with full Zero-Drop Gateway
         """
-        torch.manual_seed(seed)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(seed)
+        if not isinstance(prompt, str) or not prompt:
+            raise ValueError("Prompt must be a non-empty string")
+        if grammar_mode not in SUPPORTED_GRAMMAR_MODES:
+            raise ValueError(f"Unsupported grammar_mode {grammar_mode!r}; must be one of {sorted(SUPPORTED_GRAMMAR_MODES)}")
+        if arm not in SUPPORTED_ARMS:
+            raise ValueError(f"Unsupported arm {arm!r}; must be one of {sorted(SUPPORTED_ARMS)}")
 
-        if apply_chat_template:
-            messages = [{"role": "user", "content": prompt}]
-            formatted_prompt = self.tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True
-            )
-        else:
-            formatted_prompt = prompt
+        max_new_tokens = max(1, min(int(max_new_tokens), 1024))
 
-        inputs = self.tokenizer(formatted_prompt, return_tensors="pt").to(self.device)
-        prompt_len = inputs.input_ids.shape[1]
+        with self._infer_lock:
+            torch.manual_seed(seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(seed)
 
-        processors = LogitsProcessorList()
-        sampler: Optional[SymplecticAnnealingSampler] = None
-
-        if arm in ("active", "stress"):
-            eff_temp = 1.35 if arm == "stress" else t0_temp
-            sampler = SymplecticAnnealingSampler(
-                t_base=eff_temp,
-                eta=eta,
-                gamma=gamma,
-                beta=beta,
-                eps=eps,
-                kick=kick,
-                prompt_len=prompt_len,
-            )
-            processors.append(sampler)
-
-            if grammar_mode == "json":
-                squozen = SquozenLogitsEngine(
-                    prompt_len=prompt_len,
-                    tokenizer=self.tokenizer,
-                    mode=SquozenMode.JSON,
-                    allow_backticks=False,
-                    anti_repetition=True,
-                    required_keys=required_keys,
+            if apply_chat_template:
+                messages = [{"role": "user", "content": prompt}]
+                formatted_prompt = self.tokenizer.apply_chat_template(
+                    messages, tokenize=False, add_generation_prompt=True
                 )
-                processors.append(squozen)
-            elif grammar_mode in ("c", "python", "javascript", "rust"):
-                squozen_code = SquozenLogitsEngine(
+            else:
+                formatted_prompt = prompt
+
+            inputs = self.tokenizer(formatted_prompt, return_tensors="pt").to(self.device)
+            prompt_len = inputs.input_ids.shape[1]
+
+            processors = LogitsProcessorList()
+            sampler: Optional[SymplecticAnnealingSampler] = None
+
+            if arm in ("active", "stress"):
+                eff_temp = 1.35 if arm == "stress" else t0_temp
+                sampler = SymplecticAnnealingSampler(
+                    t_base=eff_temp,
+                    eta=eta,
+                    gamma=gamma,
+                    beta=beta,
+                    eps=eps,
+                    kick=kick,
                     prompt_len=prompt_len,
-                    tokenizer=self.tokenizer,
-                    mode=SquozenMode.BALANCED_DELIMITERS if grammar_mode != "python" else SquozenMode.CODE_ONLY,
-                    allow_backticks=False,
-                    anti_repetition=True,
                 )
-                code_pda = self._get_code_pda(grammar_mode, prompt_len)
-                processors.append(squozen_code)
-                processors.append(code_pda)
+                processors.append(sampler)
 
-        elif arm == "naive_sham":
-            # Legacy single-token counter + sham zero-kick sampler
-            sampler = SymplecticAnnealingSampler(
-                t_base=t0_temp,
-                eta=0.0,
-                gamma=gamma,
-                beta=0.0,
-                eps=0.0,
-                kick=0.0,
-                prompt_len=prompt_len,
-            )
-            naive_proc = LegacyNaiveBraceProcessor(prompt_len=prompt_len, tokenizer=self.tokenizer)
-            processors.append(sampler)
-            processors.append(naive_proc)
+                if grammar_mode == "json":
+                    squozen = SquozenLogitsEngine(
+                        prompt_len=prompt_len,
+                        tokenizer=self.tokenizer,
+                        mode=SquozenMode.JSON,
+                        allow_backticks=False,
+                        anti_repetition=True,
+                        required_keys=required_keys,
+                    )
+                    processors.append(squozen)
+                elif grammar_mode in ("c", "python", "javascript", "rust"):
+                    squozen_code = SquozenLogitsEngine(
+                        prompt_len=prompt_len,
+                        tokenizer=self.tokenizer,
+                        mode=SquozenMode.BALANCED_DELIMITERS if grammar_mode != "python" else SquozenMode.CODE_ONLY,
+                        allow_backticks=False,
+                        anti_repetition=True,
+                    )
+                    code_pda = self._get_code_pda(grammar_mode, prompt_len)
+                    processors.append(squozen_code)
+                    processors.append(code_pda)
 
-        elif arm == "unconstrained":
-            # Negative control: no grammar processors, eta=0, kick=0, eps=0
-            sampler = SymplecticAnnealingSampler(
-                t_base=t0_temp,
-                eta=0.0,
-                gamma=gamma,
-                beta=0.0,
-                eps=0.0,
-                kick=0.0,
-                prompt_len=prompt_len,
-            )
-            processors.append(sampler)
+            elif arm == "naive_sham":
+                sampler = SymplecticAnnealingSampler(
+                    t_base=t0_temp,
+                    eta=0.0,
+                    gamma=gamma,
+                    beta=0.0,
+                    eps=0.0,
+                    kick=0.0,
+                    prompt_len=prompt_len,
+                )
+                naive_proc = LegacyNaiveBraceProcessor(prompt_len=prompt_len, tokenizer=self.tokenizer)
+                processors.append(sampler)
+                processors.append(naive_proc)
 
-        t_start = time.perf_counter()
-        with torch.no_grad():
-            outputs = self.model.generate(
-                **inputs,
-                max_new_tokens=max_new_tokens,
-                do_sample=False,  # Deterministic argmax over Symplectic Hamiltonian + Squozen barrier field
-                logits_processor=processors,
-                pad_token_id=self.tokenizer.eos_token_id,
-                eos_token_id=self.tokenizer.eos_token_id,
-            )
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
-        elapsed_ms = (time.perf_counter() - t_start) * 1000.0
+            elif arm == "unconstrained":
+                sampler = SymplecticAnnealingSampler(
+                    t_base=t0_temp,
+                    eta=0.0,
+                    gamma=gamma,
+                    beta=0.0,
+                    eps=0.0,
+                    kick=0.0,
+                    prompt_len=prompt_len,
+                )
+                processors.append(sampler)
 
-        gen_ids = outputs[0, prompt_len:].tolist()
-        # Strip trailing EOS token if present at the very end for clean decoding
-        if gen_ids and gen_ids[-1] == self.tokenizer.eos_token_id:
-            gen_ids_clean = gen_ids[:-1]
-        else:
-            gen_ids_clean = gen_ids
+            t_start = time.perf_counter()
+            with torch.no_grad():
+                outputs = self.model.generate(
+                    **inputs,
+                    max_new_tokens=max_new_tokens,
+                    do_sample=False,
+                    logits_processor=processors,
+                    pad_token_id=self.tokenizer.eos_token_id,
+                    eos_token_id=self.tokenizer.eos_token_id,
+                )
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+            elapsed_ms = (time.perf_counter() - t_start) * 1000.0
 
-        text = self.tokenizer.decode(gen_ids_clean, skip_special_tokens=True)
-        verification = verify_structured_output(text, grammar_mode=grammar_mode, required_keys=required_keys)
+            gen_ids = outputs[0, prompt_len:].tolist()
+            if gen_ids and gen_ids[-1] == self.tokenizer.eos_token_id:
+                gen_ids_clean = gen_ids[:-1]
+            else:
+                gen_ids_clean = gen_ids
 
-        ftle_val = float(sampler.ftle) if sampler is not None else 0.0
-        scar_l_inf = float(abs(sampler.h_current)) if sampler is not None else 0.0
+            text = self.tokenizer.decode(gen_ids_clean, skip_special_tokens=True)
+            verification = verify_structured_output(text, grammar_mode=grammar_mode, required_keys=required_keys)
 
-        return {
-            "arm": arm,
-            "grammar_mode": grammar_mode,
-            "required_keys": required_keys or [],
-            "output": text,
-            "tokens_generated": len(gen_ids),
-            "latency_ms": round(elapsed_ms, 2),
-            "tokens_per_sec": round(len(gen_ids) / max(elapsed_ms / 1000.0, 1e-6), 2),
-            "ftle": round(ftle_val, 5),
-            "scar_l_inf": round(scar_l_inf, 4),
-            "verification": verification,
-        }
+            ftle_val = float(sampler.ftle) if sampler is not None else 0.0
+            scar_l_inf = float(abs(sampler.h_current)) if sampler is not None else 0.0
+
+            attest_material = json.dumps(
+                {
+                    "arm": arm,
+                    "grammar_mode": grammar_mode,
+                    "required_keys": required_keys or [],
+                    "output": text,
+                    "valid": verification["valid"],
+                },
+                sort_keys=True,
+                ensure_ascii=False,
+            ).encode("utf-8")
+            attestation_sha256 = hashlib.sha256(attest_material).hexdigest()
+
+            return {
+                "arm": arm,
+                "grammar_mode": grammar_mode,
+                "required_keys": required_keys or [],
+                "output": text,
+                "tokens_generated": len(gen_ids),
+                "latency_ms": round(elapsed_ms, 2),
+                "tokens_per_sec": round(len(gen_ids) / max(elapsed_ms / 1000.0, 1e-6), 2),
+                "ftle": round(ftle_val, 5),
+                "scar_l_inf": round(scar_l_inf, 4),
+                "verification": verification,
+                "attestation_sha256": attestation_sha256,
+            }
 
 
 # =====================================================================================================
@@ -691,24 +718,38 @@ class ZeroDropHTTPHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         assert self.gateway is not None
-        length = int(self.headers.get("Content-Length", "0"))
-        raw = self.rfile.read(length).decode("utf-8") if length > 0 else "{}"
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            self._send_json(400, {"error": "Invalid Content-Length header"})
+            return
+
+        if length < 0 or length > MAX_HTTP_BODY_BYTES:
+            self._send_json(413, {"error": f"Request body exceeds maximum size ({MAX_HTTP_BODY_BYTES} bytes)"})
+            return
+
+        raw = self.rfile.read(length).decode("utf-8", errors="replace") if length > 0 else "{}"
         try:
             req = json.loads(raw)
+            if not isinstance(req, dict):
+                raise ValueError("JSON body must be an object")
         except Exception as e:
             self._send_json(400, {"error": f"Invalid JSON request body: {e}"})
             return
 
         if self.path == "/v1/structured/generate":
-            res = self.gateway.generate_structured(
-                prompt=req.get("prompt", "Return JSON:"),
-                grammar_mode=req.get("grammar_mode", "json"),
-                required_keys=req.get("required_keys"),
-                max_new_tokens=int(req.get("max_new_tokens", 128)),
-                arm=req.get("arm", "active"),
-                seed=int(req.get("seed", 42)),
-            )
-            self._send_json(200, res)
+            try:
+                res = self.gateway.generate_structured(
+                    prompt=req.get("prompt", "Return JSON:"),
+                    grammar_mode=req.get("grammar_mode", "json"),
+                    required_keys=req.get("required_keys"),
+                    max_new_tokens=int(req.get("max_new_tokens", 128)),
+                    arm=req.get("arm", "active"),
+                    seed=int(req.get("seed", 42)),
+                )
+                self._send_json(200, res)
+            except ValueError as e:
+                self._send_json(400, {"error": str(e)})
 
         elif self.path == "/v1/chat/completions":
             messages = req.get("messages", [])
@@ -717,14 +758,19 @@ class ZeroDropHTTPHandler(BaseHTTPRequestHandler):
             grammar_mode = req.get("grammar_mode", "json" if resp_fmt.get("type") == "json_object" else "json")
             required_keys = req.get("required_keys") or resp_fmt.get("required_keys")
 
-            res = self.gateway.generate_structured(
-                prompt=prompt,
-                grammar_mode=grammar_mode,
-                required_keys=required_keys,
-                max_new_tokens=int(req.get("max_tokens", 128)),
-                arm="active",
-                seed=int(req.get("seed", 42)),
-            )
+            try:
+                res = self.gateway.generate_structured(
+                    prompt=prompt,
+                    grammar_mode=grammar_mode,
+                    required_keys=required_keys,
+                    max_new_tokens=int(req.get("max_tokens", 128)),
+                    arm="active",
+                    seed=int(req.get("seed", 42)),
+                )
+            except ValueError as e:
+                self._send_json(400, {"error": str(e)})
+                return
+
             openai_payload = {
                 "id": f"chatcmpl-zkaedi-{int(time.time() * 1000)}",
                 "object": "chat.completion",
@@ -746,6 +792,7 @@ class ZeroDropHTTPHandler(BaseHTTPRequestHandler):
                     "ftle": res["ftle"],
                     "scar_l_inf": res["scar_l_inf"],
                     "verification": res["verification"],
+                    "attestation_sha256": res["attestation_sha256"],
                 },
             }
             self._send_json(200, openai_payload)

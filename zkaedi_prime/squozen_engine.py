@@ -41,6 +41,7 @@ class SquozenLogitsEngine(LogitsProcessor):
         anti_repetition: bool = True,
         max_cycle_period: int = 4,
         required_keys: Optional[List[str]] = None,
+        max_nesting_depth: int = 64,
     ):
         self.prompt_len = prompt_len
         self.tokenizer = tokenizer
@@ -49,10 +50,11 @@ class SquozenLogitsEngine(LogitsProcessor):
         self.anti_repetition = anti_repetition
         self.max_cycle_period = max_cycle_period
         self.required_keys = list(required_keys) if required_keys else []
+        self.max_nesting_depth = max_nesting_depth
         self.eos_token_id = tokenizer.eos_token_id
 
         cache = getattr(tokenizer, "_squozen_vocab_cache", None)
-        if cache is None:
+        if cache is None or "raw_control_char_tokens" not in cache:
             opening_brace_tokens: Set[int] = set()
             for s in ["{", "{\n", " {\n", '{"', ' {"', " {"]:
                 tids = tokenizer.encode(s, add_special_tokens=False)
@@ -76,7 +78,9 @@ class SquozenLogitsEngine(LogitsProcessor):
             closing_brace_tokens: Set[int] = set()
             closing_bracket_tokens: Set[int] = set()
             opening_brace_all_tokens: Set[int] = set()
+            opening_bracket_all_tokens: Set[int] = set()
             json_after_open_brace_tokens: Set[int] = set()
+            raw_control_char_tokens: Set[int] = set()
             pct_r_id = None
             vocab = tokenizer.get_vocab()
             ws_chars = " \t\r\n\u0120\u010a\u010d"
@@ -85,10 +89,14 @@ class SquozenLogitsEngine(LogitsProcessor):
                     backtick_tokens.add(tok_id)
                 if "{" in tok_str:
                     opening_brace_all_tokens.add(tok_id)
+                if "[" in tok_str:
+                    opening_bracket_all_tokens.add(tok_id)
                 if "}" in tok_str and "{" not in tok_str:
                     closing_brace_tokens.add(tok_id)
                 if "]" in tok_str and "[" not in tok_str:
                     closing_bracket_tokens.add(tok_id)
+                if any(c in tok_str for c in ("\n", "\r", "\t", "\u010a", "\u010d", "\u0109")):
+                    raw_control_char_tokens.add(tok_id)
                 if pct_r_id is None and tok_str in ["%r", " %r", "%"]:
                     pct_r_id = tok_id
                 s_clean = tok_str.lstrip(ws_chars)
@@ -99,7 +107,9 @@ class SquozenLogitsEngine(LogitsProcessor):
             cache = {
                 "opening_brace_tokens": opening_brace_tokens,
                 "opening_brace_all_tokens": opening_brace_all_tokens,
+                "opening_bracket_all_tokens": opening_bracket_all_tokens,
                 "json_after_open_brace_tokens": json_after_open_brace_tokens,
+                "raw_control_char_tokens": raw_control_char_tokens,
                 "chatter_tokens": chatter_tokens,
                 "backtick_tokens": backtick_tokens,
                 "closing_brace_tokens": closing_brace_tokens,
@@ -108,13 +118,16 @@ class SquozenLogitsEngine(LogitsProcessor):
                 "brace_close_id": tokenizer.encode("}", add_special_tokens=False)[0],
                 "bracket_open_id": tokenizer.encode("[", add_special_tokens=False)[0],
                 "bracket_close_id": tokenizer.encode("]", add_special_tokens=False)[0],
+                "quote_id": tokenizer.encode('"', add_special_tokens=False)[0],
                 "pct_r_id": pct_r_id,
             }
             setattr(tokenizer, "_squozen_vocab_cache", cache)
 
         self.opening_brace_tokens = cache["opening_brace_tokens"]
         self.opening_brace_all_tokens = cache["opening_brace_all_tokens"]
+        self.opening_bracket_all_tokens = cache["opening_bracket_all_tokens"]
         self.json_after_open_brace_tokens = cache["json_after_open_brace_tokens"]
+        self.raw_control_char_tokens = cache["raw_control_char_tokens"]
         self.chatter_tokens = cache["chatter_tokens"]
         self.backtick_tokens = cache["backtick_tokens"]
         self.closing_brace_tokens = cache["closing_brace_tokens"]
@@ -123,6 +136,7 @@ class SquozenLogitsEngine(LogitsProcessor):
         self.brace_close_id = cache["brace_close_id"]
         self.bracket_open_id = cache["bracket_open_id"]
         self.bracket_close_id = cache["bracket_close_id"]
+        self.quote_id = cache["quote_id"]
         self.pct_r_id = cache["pct_r_id"]
 
         # 5. Valid System V AMD64 64-bit Register Tokens
@@ -132,20 +146,30 @@ class SquozenLogitsEngine(LogitsProcessor):
         }
 
     @staticmethod
-    def scan_pda_state(text: str):
+    def scan_pda_full(text: str):
         """
-        String-aware character-level Pushdown Automaton for JSON & Balanced Delimiters.
-        Ignores '{', '}', '[', ']' inside string literals and tracks escape sequences.
-        Returns (brace_depth, bracket_depth, in_string, opened_ever).
+        Hardened string-aware and depth-aware character-level Pushdown Automaton.
+        Ignores '{', '}', '[', ']' inside string literals, tracks escape sequences,
+        and extracts ONLY genuine top-level JSON object keys at (brace_depth == 1, bracket_depth == 0)
+        that immediately follow '{' or ',' and are followed by ':'.
+        Returns (brace_depth, bracket_depth, in_string, escape_next, opened_ever, top_level_keys).
         """
         brace_depth = 0
         bracket_depth = 0
         in_string = False
         escape_next = False
         opened_ever = False
+        top_level_keys: Set[str] = set()
+
+        cur_str_chars: List[str] = []
+        str_started_as_root_key = False
+        pending_root_key: Optional[str] = None
+        last_non_ws_at_root = ""
 
         for ch in text:
             if escape_next:
+                if in_string:
+                    cur_str_chars.append(ch)
                 escape_next = False
                 continue
             if ch == "\\":
@@ -153,32 +177,72 @@ class SquozenLogitsEngine(LogitsProcessor):
                     escape_next = True
                 continue
             if ch == '"':
-                in_string = not in_string
+                if not in_string:
+                    in_string = True
+                    cur_str_chars = []
+                    str_started_as_root_key = (
+                        brace_depth == 1
+                        and bracket_depth == 0
+                        and last_non_ws_at_root in ("{", ",")
+                    )
+                else:
+                    in_string = False
+                    if str_started_as_root_key:
+                        pending_root_key = "".join(cur_str_chars)
+                    str_started_as_root_key = False
                 continue
-            if not in_string:
-                if ch == "{":
-                    brace_depth += 1
-                    opened_ever = True
-                elif ch == "}":
-                    brace_depth = max(0, brace_depth - 1)
-                elif ch == "[":
-                    bracket_depth += 1
-                    opened_ever = True
-                elif ch == "]":
-                    bracket_depth = max(0, bracket_depth - 1)
 
+            if in_string:
+                cur_str_chars.append(ch)
+                continue
+
+            # Outside string literal
+            if brace_depth == 1 and bracket_depth == 0:
+                if ch == ":" and pending_root_key is not None:
+                    top_level_keys.add(pending_root_key)
+                    pending_root_key = None
+                    last_non_ws_at_root = ":"
+                    continue
+                elif not ch.isspace():
+                    if pending_root_key is not None:
+                        pending_root_key = None
+                    last_non_ws_at_root = ch
+
+            if ch == "{":
+                brace_depth += 1
+                opened_ever = True
+                if brace_depth == 1 and bracket_depth == 0:
+                    last_non_ws_at_root = "{"
+            elif ch == "}":
+                brace_depth = max(0, brace_depth - 1)
+            elif ch == "[":
+                bracket_depth += 1
+                opened_ever = True
+            elif ch == "]":
+                bracket_depth = max(0, bracket_depth - 1)
+
+        return brace_depth, bracket_depth, in_string, escape_next, opened_ever, top_level_keys
+
+    @staticmethod
+    def scan_pda_state(text: str):
+        """
+        Backward-compatible wrapper returning (brace_depth, bracket_depth, in_string, opened_ever).
+        """
+        brace_depth, bracket_depth, in_string, _, opened_ever, _ = SquozenLogitsEngine.scan_pda_full(text)
         return brace_depth, bracket_depth, in_string, opened_ever
 
-    def _missing_required_keys(self, text: str) -> bool:
+    def _missing_required_keys(self, text: str, top_level_keys: Optional[Set[str]] = None) -> bool:
         if not self.required_keys:
             return False
+        if top_level_keys is None:
+            _, _, _, _, _, top_level_keys = self.scan_pda_full(text)
         for key in self.required_keys:
-            if f'"{key}":' not in text and f'"{key}" :' not in text:
+            if key not in top_level_keys:
                 return True
         return False
 
     def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
-        cur_len = input_ids.shape[1]
+        batch_size, cur_len = input_ids.shape
         step = cur_len - self.prompt_len
 
         # ---------------------------------------------------------------------
@@ -186,13 +250,11 @@ class SquozenLogitsEngine(LogitsProcessor):
         # ---------------------------------------------------------------------
         if step == 0:
             if self.mode == SquozenMode.JSON:
-                # Force opening brace '{' strictly
                 mask = torch.full_like(scores, -float("inf"))
                 for tid in self.opening_brace_tokens:
                     mask[:, tid] = scores[:, tid]
                 return mask
             else:
-                # Suppress conversational preamble chatter
                 for tid in self.chatter_tokens:
                     scores[:, tid] = -float("inf")
 
@@ -204,77 +266,118 @@ class SquozenLogitsEngine(LogitsProcessor):
                 scores[:, tid] = -float("inf")
 
         # ---------------------------------------------------------------------
-        # RULE 3: STRING-AWARE BPE-DELTA PDA & SCHEMA KEY GUARD
+        # RULE 3: PER-ROW STRING-AWARE BPE-DELTA PDA, RFC 8259 & SCHEMA GUARD
         # ---------------------------------------------------------------------
-        gen_tokens = input_ids[0, self.prompt_len:].tolist()
-        gen_text = self.tokenizer.decode(gen_tokens, skip_special_tokens=False) if gen_tokens else ""
-        brace_depth, bracket_depth, in_string, opened_ever = self.scan_pda_state(gen_text)
-        depth = brace_depth + bracket_depth
+        for b in range(batch_size):
+            gen_tokens = input_ids[b, self.prompt_len:].tolist()
+            gen_text = self.tokenizer.decode(gen_tokens, skip_special_tokens=False) if gen_tokens else ""
+            brace_depth, bracket_depth, in_string, escape_next, opened_ever, top_level_keys = self.scan_pda_full(gen_text)
+            depth = brace_depth + bracket_depth
 
-        if self.mode in (SquozenMode.JSON, SquozenMode.BALANCED_DELIMITERS):
-            missing_keys = self._missing_required_keys(gen_text)
+            if self.mode in (SquozenMode.JSON, SquozenMode.BALANCED_DELIMITERS):
+                missing_keys = self._missing_required_keys(gen_text, top_level_keys=top_level_keys)
 
-            # Structure was opened, all delimiters closed outside string, and schema keys satisfied -> FORCE IMMEDIATE EOS!
-            if opened_ever and depth == 0 and not in_string and not missing_keys:
-                mask = torch.full_like(scores, -float("inf"))
-                mask[:, self.eos_token_id] = 100.0
-                return mask
+                # Structure was opened, all delimiters closed outside string, and schema keys satisfied -> FORCE IMMEDIATE EOS!
+                if opened_ever and depth == 0 and not in_string and not missing_keys:
+                    scores[b, :] = -float("inf")
+                    scores[b, self.eos_token_id] = 100.0
+                    continue
 
-            # If structure remains open, inside string literal, or missing required keys -> PROHIBIT PREMATURE EOS
-            if depth > 0 or in_string or not opened_ever or missing_keys:
-                scores[:, self.eos_token_id] = -float("inf")
+                # If structure remains open, inside string literal, or missing required keys -> PROHIBIT PREMATURE EOS
+                if depth > 0 or in_string or not opened_ever or missing_keys:
+                    scores[b, self.eos_token_id] = -float("inf")
 
-            # Prevent root closure while required schema keys are still missing
-            if not in_string and brace_depth == 1 and bracket_depth == 0 and missing_keys:
-                for tid in self.closing_brace_tokens:
-                    scores[:, tid] = -float("inf")
+                # RFC 8259 Section 7: Prohibit raw unescaped control chars (\n, \r, \t) inside open JSON string literals
+                if self.mode == SquozenMode.JSON and in_string and not escape_next:
+                    for tid in self.raw_control_char_tokens:
+                        scores[b, tid] = -float("inf")
 
-            # RFC 8259 JSON Object Member Invariant: after '{', only whitespace or '"' (or '}' if no missing keys) is legal
-            if self.mode == SquozenMode.JSON and not in_string:
-                rstripped = gen_text.rstrip()
-                if rstripped.endswith("{"):
-                    allowed = self.json_after_open_brace_tokens if missing_keys else (self.json_after_open_brace_tokens | self.closing_brace_tokens)
-                    mask = torch.full_like(scores, -float("inf"))
-                    for tid in allowed:
-                        mask[:, tid] = scores[:, tid]
-                    return mask
+                # Recursion Depth Bound: prevent unbounded delimiter nesting (depth >= max_nesting_depth)
+                if not in_string and depth >= self.max_nesting_depth:
+                    for tid in self.opening_brace_all_tokens:
+                        scores[b, tid] = -float("inf")
+                    for tid in self.opening_bracket_all_tokens:
+                        scores[b, tid] = -float("inf")
 
-            # Prevent delimiter underflow outside string literals
-            if not in_string:
-                if brace_depth == 0 and step > 0:
+                # Prevent root closure while required top-level schema keys are still missing
+                if not in_string and brace_depth == 1 and bracket_depth == 0 and missing_keys:
                     for tid in self.closing_brace_tokens:
-                        scores[:, tid] = -float("inf")
-                if bracket_depth == 0:
-                    for tid in self.closing_bracket_tokens:
-                        scores[:, tid] = -float("inf")
+                        scores[b, tid] = -float("inf")
 
-        elif self.mode == SquozenMode.CODE_ONLY:
-            # For indentation-scoped Python functions: once 'def ...:' and a balanced 'return ...\n' line complete, force EOS
-            if not in_string and depth == 0 and gen_text.count("(") == gen_text.count(")"):
-                lines = gen_text.splitlines(keepends=True)
-                has_def = any(ln.lstrip().startswith("def ") and ":" in ln for ln in lines)
-                has_completed_return = any(
-                    ln.lstrip().startswith("return ") and ln.endswith("\n") and len(ln.strip()) > len("return")
-                    for ln in lines
-                )
-                if has_def and has_completed_return:
-                    mask = torch.full_like(scores, -float("inf"))
-                    mask[:, self.eos_token_id] = 100.0
-                    return mask
+                if self.mode == SquozenMode.JSON and not in_string:
+                    rstripped = gen_text.rstrip()
+                    # RFC 8259 Object Member Invariant: after '{', only whitespace or '"' (or '}' if no missing keys) is legal
+                    if rstripped.endswith("{"):
+                        allowed = (
+                            self.json_after_open_brace_tokens
+                            if missing_keys
+                            else (self.json_after_open_brace_tokens | self.closing_brace_tokens)
+                        )
+                        row_mask = torch.full_like(scores[b], -float("inf"))
+                        for tid in allowed:
+                            row_mask[tid] = scores[b, tid]
+                        scores[b] = row_mask
+                    # RFC 8259 Trailing Comma Prohibition: after ',', closing '}' or ']' is always illegal
+                    elif rstripped.endswith(","):
+                        for tid in self.closing_brace_tokens:
+                            scores[b, tid] = -float("inf")
+                        for tid in self.closing_bracket_tokens:
+                            scores[b, tid] = -float("inf")
+                        # At object level (not inside array), ',' must be followed by whitespace or next '"key"'
+                        if brace_depth > 0 and bracket_depth == 0:
+                            row_mask = torch.full_like(scores[b], -float("inf"))
+                            for tid in self.json_after_open_brace_tokens:
+                                row_mask[tid] = scores[b, tid]
+                            scores[b] = row_mask
 
-        # ---------------------------------------------------------------------
-        # RULE 4: SYMPLECTIC N-GRAM LIMIT CYCLE BREAKER
-        # ---------------------------------------------------------------------
-        if self.anti_repetition:
-            gen_len = len(gen_tokens)
-            if gen_len >= 8:
-                for k in range(1, self.max_cycle_period + 1):
-                    if gen_len >= 2 * k:
-                        recent = gen_tokens[-k:]
-                        prior = gen_tokens[-2 * k : -k]
-                        if recent == prior:
-                            # Periodic repetition detected! Clamp the cyclic continuation token to -inf
-                            next_cycle_tok = recent[0]
-                            scores[:, next_cycle_tok] = -float("inf")
+                # Prevent delimiter underflow outside string literals
+                if not in_string:
+                    if brace_depth == 0 and step > 0:
+                        for tid in self.closing_brace_tokens:
+                            scores[b, tid] = -float("inf")
+                    if bracket_depth == 0:
+                        for tid in self.closing_bracket_tokens:
+                            scores[b, tid] = -float("inf")
+
+            elif self.mode == SquozenMode.CODE_ONLY:
+                # For indentation-scoped Python functions: once 'def ...:' and a balanced 'return ...\n' line complete, force EOS
+                if not in_string and depth == 0 and gen_text.count("(") == gen_text.count(")"):
+                    lines = gen_text.splitlines(keepends=True)
+                    has_def = any(ln.lstrip().startswith("def ") and ":" in ln for ln in lines)
+                    has_completed_return = any(
+                        ln.lstrip().startswith("return ") and ln.endswith("\n") and len(ln.strip()) > len("return")
+                        for ln in lines
+                    )
+                    if has_def and has_completed_return:
+                        scores[b, :] = -float("inf")
+                        scores[b, self.eos_token_id] = 100.0
+                        continue
+
+            # ---------------------------------------------------------------------
+            # RULE 4: SYMPLECTIC N-GRAM LIMIT CYCLE BREAKER (PER-ROW)
+            # ---------------------------------------------------------------------
+            if self.anti_repetition:
+                gen_len = len(gen_tokens)
+                if gen_len >= 8:
+                    for k in range(1, self.max_cycle_period + 1):
+                        if gen_len >= 2 * k:
+                            recent = gen_tokens[-k:]
+                            prior = gen_tokens[-2 * k : -k]
+                            if recent == prior:
+                                next_cycle_tok = recent[0]
+                                scores[b, next_cycle_tok] = -float("inf")
+
+            # ---------------------------------------------------------------------
+            # RULE 5: ALL-(-INF) DEADLOCK RECOVERY FALLBACK SHIELD
+            # ---------------------------------------------------------------------
+            if not torch.isfinite(scores[b]).any():
+                if in_string:
+                    scores[b, self.quote_id] = 0.0
+                elif brace_depth > 0:
+                    scores[b, self.brace_close_id] = 0.0
+                elif bracket_depth > 0:
+                    scores[b, self.bracket_close_id] = 0.0
+                else:
+                    scores[b, self.eos_token_id] = 0.0
 
         return scores
