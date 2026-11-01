@@ -84,6 +84,8 @@ def main():
     if neg_policy.get("disallow_unconditional_pass", True):
         forbidden_rcs = set(neg_policy.get("forbidden_gate_rc_values", [0]))
         required_codes = neg_policy.get("required_rejection_codes", {})
+        if not isinstance(required_codes, dict) or len(required_codes) == 0:
+            reject("POLICY INTEGRITY VIOLATION: required_rejection_codes must be a non-empty map", EXIT_POLICY_ERROR)
         neg_receipt = receipt.get("negative_controls", {})
 
         if not neg_receipt or len(neg_receipt) == 0:
@@ -112,6 +114,8 @@ def main():
     stage_policy = policy.get("stage_identity", {})
     if stage_policy.get("require_direct_byte_equality", True):
         stage_pairs = stage_policy.get("required_stage_pairs", [])
+        if not isinstance(stage_pairs, list) or len(stage_pairs) == 0:
+            reject("POLICY INTEGRITY VIOLATION: required_stage_pairs must be a non-empty list", EXIT_POLICY_ERROR)
         digests = receipt.get("digests", {})
 
         for pair in stage_pairs:
@@ -198,6 +202,8 @@ def main():
     adj_policy = policy.get("adjudicator_integrity", {})
     if adj_policy.get("require_adjudicator_hash_pinned", False):
         pinned = adj_policy.get("pinned_scripts", {})
+        if not isinstance(pinned, dict) or len(pinned) == 0:
+            reject("POLICY INTEGRITY VIOLATION: require_adjudicator_hash_pinned is true but pinned_scripts is empty", EXIT_POLICY_ERROR)
         if args.repo:
             repo_root = Path(args.repo).resolve()
         else:
@@ -211,6 +217,8 @@ def main():
 
         for script_name, expected_sha in pinned.items():
             script_path = repo_root / script_name
+            if os.path.islink(script_path):
+                reject(f"ADJUDICATOR SYMLINK REJECTED: {script_name} must not be a symlink", EXIT_POLICY_ERROR)
             if not script_path.is_file():
                 reject(f"MISSING ADJUDICATOR SCRIPT: {script_name} not found at {script_path}", EXIT_POLICY_ERROR)
             actual_sha = hashlib.sha256(script_path.read_bytes()).hexdigest()

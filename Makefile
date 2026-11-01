@@ -1794,7 +1794,7 @@ verify-argon4:
 	@echo "=== [ARGON 4] 6/6 ZCC Stage 1 & Stage 2 .i Preprocessed Input, .svg Evolution & Unknown Extension Guard ==="
 	bash tests/test_zcc_preprocessed_i_extension.sh ./zcc
 	bash tests/test_zcc_svg_evolution.sh ./zcc
-	@if [ -x ./zcc2 ]; then bash tests/test_zcc_preprocessed_i_extension.sh ./zcc2 && bash tests/test_zcc_svg_evolution.sh ./zcc2; fi
+	@CAND="$${ZCC2_CANDIDATE:-./zcc2}"; if [ -x "$$CAND" ]; then bash tests/test_zcc_preprocessed_i_extension.sh "$$CAND" && bash tests/test_zcc_svg_evolution.sh "$$CAND"; fi
 	@echo "=== [ARGON 4] ALL 6 VERIFICATION SUITES PASSED (0 REGRESSIONS) ==="
 
 rebuild-m5-2: zcc2

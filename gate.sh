@@ -1689,18 +1689,71 @@ if [ ! -f "$STAGE1_COMPILER" ]; then
     make -C "$REPO_ROOT" zcc >/dev/null 2>&1 || (gcc -O2 -o "$STAGE1_COMPILER" "$REPO_ROOT/zcc.c" 2>/dev/null || true)
 fi
 
+# Transactional Release Backup & Fail-Closed Rollback Guard
+TX_BACKUP_DIR="$EVIDENCE_DIR/.tx_backup"
+mkdir -p "$TX_BACKUP_DIR"
+TX_COMMITTED=0
+for tx_art in zcc2.s zcc3.s zcc2 zcc3; do
+    if [ -f "$REPO_ROOT/$tx_art" ]; then
+        cp -f "$REPO_ROOT/$tx_art" "$TX_BACKUP_DIR/$tx_art"
+        touch "$TX_BACKUP_DIR/$tx_art.present"
+    else
+        touch "$TX_BACKUP_DIR/$tx_art.absent"
+    fi
+done
+
+tx_exit_handler() {
+    local tx_rc=$?
+    rm -f "$REPO_ROOT/zcc2.s.tx_tmp" "$REPO_ROOT/zcc3.s.tx_tmp" "$REPO_ROOT/zcc2.tx_tmp" "$REPO_ROOT/zcc3.tx_tmp" 2>/dev/null || true
+    if [ "$TX_COMMITTED" -ne 1 ]; then
+        for tx_art in zcc2.s zcc3.s zcc2 zcc3; do
+            if [ -f "$TX_BACKUP_DIR/$tx_art.present" ]; then
+                cp -f "$TX_BACKUP_DIR/$tx_art" "$REPO_ROOT/$tx_art" 2>/dev/null || true
+            elif [ -f "$TX_BACKUP_DIR/$tx_art.absent" ]; then
+                rm -f "$REPO_ROOT/$tx_art" 2>/dev/null || true
+            fi
+        done
+        chmod +x "$REPO_ROOT/zcc2" "$REPO_ROOT/zcc3" 2>/dev/null || true
+        echo "[TRANSACTIONAL ROLLBACK] Release transaction aborted (rc=$tx_rc); previously published root artifacts preserved byte-for-byte." >&2
+        if [ "$tx_rc" -eq 0 ]; then
+            exit 70
+        fi
+    fi
+    exit "$tx_rc"
+}
+trap 'tx_exit_handler' EXIT
+
 run_main_gate "$EVIDENCE_DIR" "$STAGE1_COMPILER" "$REPO_ROOT/zcc.c" "$LEDGER_FILE" "$RUN_ID" "$SCHEMA_FILE" \
   "$VERIFIER_SHA" "$SCHEMA_SHA" "$TOOLCHAIN_SHA" "$ENV_JSON"
 
-# Expose stage2.s/stage3.s to root directory for backward compatibility
-cp "$EVIDENCE_DIR/stage2.s" "$REPO_ROOT/zcc2.s" 2>/dev/null || true
-cp "$EVIDENCE_DIR/stage3.s" "$REPO_ROOT/zcc3.s" 2>/dev/null || true
-cp "$EVIDENCE_DIR/stage2.bin" "$REPO_ROOT/zcc2" 2>/dev/null || true
-cp "$EVIDENCE_DIR/stage3.bin" "$REPO_ROOT/zcc3" 2>/dev/null || true
-chmod +x "$REPO_ROOT/zcc2" "$REPO_ROOT/zcc3" 2>/dev/null || true
-
 echo -e "\n[Stage 6/6] Running ARGON 4 Independent Release & M5-2 Verification Suite (make verify-argon4)..."
-make -C "$REPO_ROOT" --no-print-directory verify-argon4
+make -C "$REPO_ROOT" --no-print-directory verify-argon4 ZCC2_CANDIDATE="$EVIDENCE_DIR/stage2.bin"
+
+# Stage candidate release artifacts into temporary transactional paths before atomic commit
+cp -f "$EVIDENCE_DIR/stage2.s" "$REPO_ROOT/zcc2.s.tx_tmp"
+cp -f "$EVIDENCE_DIR/stage3.s" "$REPO_ROOT/zcc3.s.tx_tmp"
+cp -f "$EVIDENCE_DIR/stage2.bin" "$REPO_ROOT/zcc2.tx_tmp"
+cp -f "$EVIDENCE_DIR/stage3.bin" "$REPO_ROOT/zcc3.tx_tmp"
+chmod +x "$REPO_ROOT/zcc2.tx_tmp" "$REPO_ROOT/zcc3.tx_tmp" 2>/dev/null || true
+
+if ! cmp -s "$REPO_ROOT/zcc2.s.tx_tmp" "$REPO_ROOT/zcc3.s.tx_tmp"; then
+    echo "FAIL: Staged transactional assembly candidates diverged prior to commit." >&2
+    exit "$EXIT_ASM_DIVERG"
+fi
+
+if [ -n "${ZCC_INJECT_TX_FAULT:-}" ] && [ "${ZCC_INJECT_TX_FAULT}" != "0" ]; then
+    echo "FAIL: Controlled post-candidate release gate fault injected (ZCC_INJECT_TX_FAULT=${ZCC_INJECT_TX_FAULT})." >&2
+    exit 70
+fi
+
+# Atomic transactional commit to root release artifacts
+mv -f "$REPO_ROOT/zcc2.s.tx_tmp" "$REPO_ROOT/zcc2.s"
+mv -f "$REPO_ROOT/zcc3.s.tx_tmp" "$REPO_ROOT/zcc3.s"
+mv -f "$REPO_ROOT/zcc2.tx_tmp" "$REPO_ROOT/zcc2"
+mv -f "$REPO_ROOT/zcc3.tx_tmp" "$REPO_ROOT/zcc3"
+cmp -s "$REPO_ROOT/zcc2.s" "$EVIDENCE_DIR/stage2.s"
+cmp -s "$REPO_ROOT/zcc3.s" "$EVIDENCE_DIR/stage3.s"
+TX_COMMITTED=1
 
 echo -e "\n\033[1;32m================================================================================\033[0m"
 echo -e "   ✨ SELFHOST-MV1.3b PASS"
