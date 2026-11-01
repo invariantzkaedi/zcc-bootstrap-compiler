@@ -21,8 +21,9 @@ import sys
 import time
 from dataclasses import dataclass, field, asdict
 from enum import IntEnum
+from fractions import Fraction
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Pattern, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Pattern, Sequence, Set, Tuple
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -186,11 +187,18 @@ def num_eq(a: float, b: float) -> bool:
     return math.isclose(a, b, rel_tol=REL_TOL, abs_tol=1e-9)
 
 def safe_ratio(num: Optional[float], den: Optional[float]) -> Optional[float]:
-    """Returns None (not a fake 0.0) when undefined, so gaps stay visible downstream."""
+    """Returns None (not a fake 0.0) when undefined, so gaps stay visible downstream.
+    Computes exact rational division over Fraction before rounding once to IEEE-754 float64."""
     if num is None or den is None or math.isclose(den, 0.0, abs_tol=1e-12):
         return None
-    r = num / den
+    if not (math.isfinite(num) and math.isfinite(den)):
+        return None
+    r = float(Fraction(num) / Fraction(den))
     return r if math.isfinite(r) else None
+
+def exact_linear(terms: Sequence[float]) -> float:
+    """Computes exact rational sum over IEEE-754 float64 terms with zero intermediate ULP drift."""
+    return float(sum(Fraction(x) for x in terms))
 
 
 # ======================================================================================
@@ -305,24 +313,25 @@ def _v(metrics: Dict[str, GroundedMetric], name: str) -> Optional[float]:
 def engineer_features(metrics: Dict[str, GroundedMetric]) -> Dict[str, DerivedMetric]:
     try:
         rp, rc = _v(metrics, "revenue_prior"), _v(metrics, "revenue_current")
-        growth = safe_ratio(None if rp is None or rc is None else rc - rp, rp)
+        rev_delta = None if rp is None or rc is None else exact_linear([rc, -rp])
+        growth = safe_ratio(rev_delta, rp)
         fcf_margin = safe_ratio(_v(metrics, "free_cash_flow"), rc)
         cash, debt = _v(metrics, "cash"), _v(metrics, "total_debt")
 
         d = {
-            "yoy_growth_pct": DerivedMetric("yoy_growth_pct", None if growth is None else growth * 100, "pct",
+            "yoy_growth_pct": DerivedMetric("yoy_growth_pct", None if growth is None else float(Fraction(growth) * 100), "pct",
                                             "(revenue_current - revenue_prior) / revenue_prior * 100",
                                             ("revenue_prior", "revenue_current")),
-            "fcf_margin_pct": DerivedMetric("fcf_margin_pct", None if fcf_margin is None else fcf_margin * 100, "pct",
+            "fcf_margin_pct": DerivedMetric("fcf_margin_pct", None if fcf_margin is None else float(Fraction(fcf_margin) * 100), "pct",
                                             "free_cash_flow / revenue_current * 100",
                                             ("free_cash_flow", "revenue_current")),
-            "net_cash": DerivedMetric("net_cash", None if cash is None or debt is None else cash - debt, "usd",
+            "net_cash": DerivedMetric("net_cash", None if cash is None or debt is None else exact_linear([cash, -debt]), "usd",
                                       "cash - total_debt", ("cash", "total_debt")),
             "arpa": DerivedMetric("arpa", safe_ratio(rc, _v(metrics, "customer_count")), "usd",
                                   "revenue_current / customer_count", ("revenue_current", "customer_count")),
         }
         g, f = d["yoy_growth_pct"].value, d["fcf_margin_pct"].value
-        d["rule_of_40"] = DerivedMetric("rule_of_40", None if g is None or f is None else g + f, "score",
+        d["rule_of_40"] = DerivedMetric("rule_of_40", None if g is None or f is None else exact_linear([g, f]), "score",
                                         "yoy_growth_pct + fcf_margin_pct", ("yoy_growth_pct", "fcf_margin_pct"))
     except (TypeError, ArithmeticError) as exc:
         raise FeatureEngineeringError("Derived metric computation failed") from exc

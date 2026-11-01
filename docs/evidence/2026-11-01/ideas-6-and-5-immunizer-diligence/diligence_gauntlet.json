@@ -1,0 +1,65 @@
+{
+  "arms": {
+    "arm1_active_diligence": {
+      "tickers_evaluated": 6,
+      "dossiers_verified": 6,
+      "pass_rate_pct": 100.0,
+      "ulp_error_dist": {
+        "mean": 0.0,
+        "median": 0.0,
+        "std": 0.0,
+        "max_linf": 0.0
+      },
+      "ulp_drift_prevented_dist": {
+        "mean": 3866624.0,
+        "median": 4194304.0,
+        "std": 2511833.3858,
+        "max_linf": 8388608.0
+      },
+      "latency_ms_dist": {
+        "mean": 1.3352,
+        "median": 0.8919,
+        "std": 1.0233,
+        "max_linf": 3.6017
+      },
+      "seals": {
+        "SNOW": "b45d83600dc1811dfbc07621fda11dfa51ed4c08115d05bde58584c9f5380118",
+        "CRWD": "16caaa10f5826aa00ae96203bf0f184baa218a9a79d6b385a473ec3f5324fa35",
+        "PLTR": "1cd073b9f22c2d888479f61d50c716759e28072c9b1b267e3b8d2b392a8a6b7c",
+        "NVDA": "db6b0e8cf43e7612fac5d46a4ecc563430b2024ba3176321ed89a864a7f1a01a",
+        "ACME": "19bbb4c4b653f14c32def47e2962870e370bcaaaad85c602d38801f5e0c390bc",
+        "ZETA": "15461527e11afa9a126c02b0a043806b9280aaeb44aa72233421414dd9062f9e"
+      }
+    },
+    "arm2_naive_unimmunized": {
+      "tickers_evaluated": 6,
+      "rigid_regex_extracted": 4,
+      "exact_segment_matches": 0,
+      "naive_ulp_drift_dist": {
+        "mean": 3866624.0,
+        "median": 4194304.0,
+        "std": 2511833.3858,
+        "max_linf": 8388608.0
+      }
+    },
+    "arm3_sham_hallucinated": {
+      "total_adversarial_attacks": 6,
+      "attacks_blocked_fail_closed": 6,
+      "hallucination_escape_count": 0,
+      "rejection_rate_pct": 100.0
+    },
+    "arm4_stress_corrupted_unstructured": {
+      "total_stress_filings": 4,
+      "stress_verified": 4,
+      "live_holographic_shard_heals": 1,
+      "pass_rate_pct": 100.0,
+      "ulp_error_dist": {
+        "mean": 0.0,
+        "median": 0.0,
+        "std": 0.0,
+        "max_linf": 0.0
+      }
+    }
+  },
+  "verdict": "PASS"
+}

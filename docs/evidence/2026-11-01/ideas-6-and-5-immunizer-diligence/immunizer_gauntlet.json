@@ -1,0 +1,42 @@
+{
+  "arms": {
+    "arm1_active": {
+      "total_trials": 20,
+      "healed_success": 20,
+      "recovery_rate_pct": 100.0,
+      "lore_merkle_root": "496db9453eb1c0c537f5c13c220671ed7bd4223f8bc0022e4eb4e67c77800e9a",
+      "ftle_lambda": -1.398407,
+      "latency_ms_dist": {
+        "mean": 0.5136,
+        "median": 0.0139,
+        "std": 0.8908,
+        "max_linf": 2.5263
+      }
+    },
+    "arm2_zeroed_control": {
+      "total_trials": 20,
+      "healed_success": 0,
+      "unhealed_crashes": 20,
+      "recovery_rate_pct": 0.0
+    },
+    "arm3_sham_permuted": {
+      "total_trials": 5,
+      "unsafe_sham_executions": 0,
+      "fail_closed_rejections": 5,
+      "sham_rejection_rate_pct": 100.0
+    },
+    "arm4_stress_corrupted": {
+      "total_trials": 20,
+      "healed_success": 20,
+      "holographic_shard_heals": 5,
+      "recovery_rate_pct": 100.0,
+      "latency_ms_dist": {
+        "mean": 0.6989,
+        "median": 0.0129,
+        "std": 1.2755,
+        "max_linf": 4.4856
+      }
+    }
+  },
+  "verdict": "PASS"
+}

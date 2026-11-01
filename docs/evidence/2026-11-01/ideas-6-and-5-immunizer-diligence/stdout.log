@@ -1,0 +1,116 @@
+=== Gate 1: cmp zcc2.s zcc3.s ===
+CMP_EXIT=0 (zcc2.s == zcc3.s)
+d3d5fcf2043ff16cf17dee6641dfa216de2c6047fb0c20a0c4e78c78f770420c  zcc2.s
+d3d5fcf2043ff16cf17dee6641dfa216de2c6047fb0c20a0c4e78c78f770420c  zcc3.s
+
+=== Gate 4a: Idea 6 CrashImmunizer 4-Arm Gauntlet ===
+{
+  "arms": {
+    "arm1_active": {
+      "total_trials": 20,
+      "healed_success": 20,
+      "recovery_rate_pct": 100.0,
+      "lore_merkle_root": "19817065ac0edcd44cbe791d41b213bc2ffd4b3cc09ebe1bdccd31eb828a8c9a",
+      "ftle_lambda": -1.398407,
+      "latency_ms_dist": {
+        "mean": 0.8625,
+        "median": 0.0106,
+        "std": 1.5271,
+        "max_linf": 4.6532
+      }
+    },
+    "arm2_zeroed_control": {
+      "total_trials": 20,
+      "healed_success": 0,
+      "unhealed_crashes": 20,
+      "recovery_rate_pct": 0.0
+    },
+    "arm3_sham_permuted": {
+      "total_trials": 5,
+      "unsafe_sham_executions": 0,
+      "fail_closed_rejections": 5,
+      "sham_rejection_rate_pct": 100.0
+    },
+    "arm4_stress_corrupted": {
+      "total_trials": 20,
+      "healed_success": 20,
+      "holographic_shard_heals": 5,
+      "recovery_rate_pct": 100.0,
+      "latency_ms_dist": {
+        "mean": 0.8163,
+        "median": 0.0105,
+        "std": 1.4298,
+        "max_linf": 4.4862
+      }
+    }
+  },
+  "verdict": "PASS"
+}
+
+=== Gate 4b: Idea 5 ZeroHallucinationDiligenceEngine 4-Arm Gauntlet ===
+{
+  "arms": {
+    "arm1_active_diligence": {
+      "tickers_evaluated": 6,
+      "dossiers_verified": 6,
+      "pass_rate_pct": 100.0,
+      "ulp_error_dist": {
+        "mean": 0.0,
+        "median": 0.0,
+        "std": 0.0,
+        "max_linf": 0.0
+      },
+      "ulp_drift_prevented_dist": {
+        "mean": 3866624.0,
+        "median": 4194304.0,
+        "std": 2511833.3858,
+        "max_linf": 8388608.0
+      },
+      "latency_ms_dist": {
+        "mean": 1.773,
+        "median": 1.0402,
+        "std": 1.7236,
+        "max_linf": 5.6252
+      }
+    },
+    "arm2_naive_unimmunized": {
+      "tickers_evaluated": 6,
+      "rigid_regex_extracted": 4,
+      "exact_segment_matches": 0,
+      "naive_ulp_drift_dist": {
+        "mean": 3866624.0,
+        "median": 4194304.0,
+        "std": 2511833.3858,
+        "max_linf": 8388608.0
+      }
+    },
+    "arm3_sham_hallucinated": {
+      "total_adversarial_attacks": 6,
+      "attacks_blocked_fail_closed": 6,
+      "hallucination_escape_count": 0,
+      "rejection_rate_pct": 100.0
+    },
+    "arm4_stress_corrupted_unstructured": {
+      "total_stress_filings": 4,
+      "stress_verified": 4,
+      "live_holographic_shard_heals": 1,
+      "pass_rate_pct": 100.0,
+      "ulp_error_dist": {
+        "mean": 0.0,
+        "median": 0.0,
+        "std": 0.0,
+        "max_linf": 0.0
+      }
+    }
+  },
+  "verdict": "PASS"
+}
+
+=== Gate 4c: 55-Test Regression Suite ===
+tools/prime/test_ideas_6_and_5.py ......                                 [ 10%]
+tests/test_infinimemory.py ..................                            [ 43%]
+tests/test_infinimemory_deep.py ........                                 [ 58%]
+tests/test_infinimemory_gauntlet.py .........                            [ 74%]
+tests/test_sec_alpha_engine.py ..............                            [100%]
+55 passed in 53.33s
+

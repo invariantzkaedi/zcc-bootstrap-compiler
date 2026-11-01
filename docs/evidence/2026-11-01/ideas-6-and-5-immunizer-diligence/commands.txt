@@ -1,0 +1,7 @@
+# Commands executed in order for Ideas 6 & 5 (CrashImmunizer + QuantDiligenceEngine)
+python "C:\Users\zkaed\.gemini\antigravity\brain\363b8fa0-5979-44ee-a9f7-cccf00e52f25\scratch\probe_ideas_6_and_5.py"
+wsl -d Ubuntu-24.04 -- bash -c "set -o pipefail && cd /mnt/h/__DOWNLOADS/zcc_github_upload && cmp zcc2.s zcc3.s && sha256sum zcc2.s zcc3.s"
+python "h:\__DOWNLOADS\zcc_github_upload\tools\prime\crash_immunizer.py" --gauntlet --out "h:\__DOWNLOADS\zcc_github_upload\docs\evidence\2026-11-01\ideas-6-and-5-immunizer-diligence\immunizer_gauntlet.json"
+python "h:\__DOWNLOADS\zcc_github_upload\tools\prime\quant_diligence_engine.py" --gauntlet --out "h:\__DOWNLOADS\zcc_github_upload\docs\evidence\2026-11-01\ideas-6-and-5-immunizer-diligence\diligence_gauntlet.json"
+python -m pytest tools/prime/test_ideas_6_and_5.py tests/test_infinimemory.py tests/test_infinimemory_deep.py tests/test_infinimemory_gauntlet.py tests/test_sec_alpha_engine.py
+
