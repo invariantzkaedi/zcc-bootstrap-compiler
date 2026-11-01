@@ -1,0 +1,5 @@
+# Exact commands executed in order for Zero-Drop Structured LLM Gateway (Idea 1)
+python "C:\Users\zkaed\.gemini\antigravity\brain\363b8fa0-5979-44ee-a9f7-cccf00e52f25\scratch\probe_squozen_bug.py"
+python -u "H:\__DOWNLOADS\zcc_github_upload\tools\prime\zero_drop_gateway.py" --gauntlet
+wsl -e bash -c "cd /mnt/h/__DOWNLOADS/zcc_github_upload && cmp zcc2.s zcc3.s && echo GATE1_CMP_EXIT=0 && sha256sum zcc2.s zcc3.s zkaedi_prime/squozen_engine.py zkaedi_prime/code_grammar_engine.py tools/prime/symplectic_annealing_sampler.py tools/prime/zero_drop_gateway.py docs/evidence/2026-11-01/zero-drop-gateway/gauntlet_report.json && git diff --stat"
+

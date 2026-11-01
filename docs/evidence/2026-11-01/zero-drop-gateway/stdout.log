@@ -1,0 +1,95 @@
+=== 1. PRE-PATCH PROBE (scratch/probe_squozen_bug.py) ===
+Single '{' token ID: 90 ('{')
+Single '}' token ID: 92 ('}')
+Allowed opening_brace_tokens at step 0: [(90, "'{'"), (198, "'\\n'"), (341, "' {\\n'"), (515, "'{\\n'"), (4913, '\'{"\''), (5212, '\' {"\'')]
+
+[Case A] Sequence: '{\n [1]'
+Outer JSON brace is STILL OPEN, but EOS forced mid-object = True (BUG: outer '{\n' was not counted, so closing inner ']' dropped depth to 0 with opened_ever=True!)
+
+[Case B] Sequence: '{"}'
+Inside unclosed string literal, EOS forced prematurely = True (BUG: '}' inside string literal was counted as structural close!)
+
+[Case C] Sequence: '{"}\n'
+After closing JSON with BPE-merged '}\n' (id=532), EOS forced = False (BUG: '}\n' ignored, model keeps generating trailing tokens!)
+
+=== 2. POST-PATCH PROBE (scratch/probe_squozen_bug.py) ===
+Single '{' token ID: 90 ('{')
+Single '}' token ID: 92 ('}')
+Allowed opening_brace_tokens at step 0: [(90, "'{'"), (314, "' {'"), (341, "' {\\n'"), (515, "'{\\n'"), (4913, '\'{"\''), (5212, '\' {"\'')]
+
+[Case A] Sequence: '{\n [1]'
+Outer JSON brace is STILL OPEN, but EOS forced mid-object = False
+
+[Case B] Sequence: '{"}'
+Inside unclosed string literal, EOS forced prematurely = False
+
+[Case C] Sequence: '{"ok": true}\n'
+After closing JSON with BPE-merged '}\n' (id=532), EOS forced = True (EXPECTED: True!)
+
+=== 3. 4-ARM PAIRED CAUSAL GAUNTLET & HTTP GATEWAY SMOKE TEST (tools/prime/zero_drop_gateway.py --gauntlet) ===
+================================================================================================
+ 🔱 ZKAEDI PRIME // ZERO-DROP STRUCTURED LLM GATEWAY — 4-ARM PAIRED CAUSAL GAUNTLET 🔱
+================================================================================================
+ [HARDWARE] GPU: NVIDIA GeForce RTX 5070 Laptop GPU (cuda) | VRAM: 2945.28 MB
+ [SILICON]  NPU DirectML: {'available': True, 'provider': 'DmlExecutionProvider', 'device_id': 1, 'silicon': 'AMD Ryzen AI NPU (Krackan / DirectML)'}
+ [CANON]    One equation, two regimes: eta shapes fields; scars + eps navigate.
+------------------------------------------------------------------------------------------------
+
+>>> Prompt [JSON-1-CODE-IN-STRING] (mode=json, req_keys=['function', 'c_code', 'status'])
+  [active       ] VALID                                  | 39 tok | 17969.5 ms | FTLE=-0.036 | out='{\n  "function": "add",\n  "c_code": "int add(int a, int b) { return a + b; }"'
+  [unconstrained] INVALID (Contains prohibited markdown backtick fence) | 96 tok | 4526.8 ms | FTLE=-0.873 | out='```json\n{\n  "function": "add",\n  "c_code": "int add(int a, int b) { return '
+  [naive_sham   ] INVALID (JSON does not strictly start with '{' and end with '}') | 96 tok | 3628.2 ms | FTLE=-0.914 | out='{\n  "function": "add",\n  "c_code": "int add(int a, int b) { return a + b; }"'
+  [stress       ] VALID                                  | 39 tok | 1578.1 ms | FTLE=-0.036 | out='{\n  "function": "add",\n  "c_code": "int add(int a, int b) { return a + b; }"'
+
+>>> Prompt [JSON-2-UNBALANCED-BRACE-STRING] (mode=json, req_keys=['token', 'closing_brace_char', 'valid'])
+  [active       ] VALID                                  | 27 tok | 1412.4 ms | FTLE=-0.539 | out='{\n  "token": "RBRACE",\n  "closing_brace_char": "}",\n  "valid": true\n}\n'
+  [unconstrained] INVALID (Contains prohibited markdown backtick fence) | 80 tok | 2671.6 ms | FTLE=-2.141 | out='{\n  "token": "RBRACE",\n  "closing_brace_char": "}",\n  "valid": true\n}\n```'
+  [naive_sham   ] INVALID (JSON does not strictly start with '{' and end with '}') | 80 tok | 3074.4 ms | FTLE=-0.042 | out='{\n  "token": "RBRACE",\n  "closing_brace_char": "}",\n  "valid": true\n}\nHum'
+  [stress       ] VALID                                  | 27 tok | 1116.2 ms | FTLE=-0.539 | out='{\n  "token": "RBRACE",\n  "closing_brace_char": "}",\n  "valid": true\n}\n'
+
+>>> Prompt [JSON-3-NESTED-ARRAY-SCHEMA] (mode=json, req_keys=['module', 'registers', 'verified'])
+  [active       ] VALID                                  | 31 tok | 1749.7 ms | FTLE=-1.088 | out='{\n  "module": "sysv_abi",\n  "registers": ["rdi", "rsi"],\n  "verified": true'
+  [unconstrained] INVALID (Contains prohibited markdown backtick fence) | 96 tok | 5164.7 ms | FTLE=-1.787 | out='```json\n{\n  "module": "sysv_abi",\n  "registers": ["rdi", "rsi"],\n  "verifi'
+  [naive_sham   ] INVALID (JSON does not strictly start with '{' and end with '}') | 96 tok | 5622.3 ms | FTLE=-1.660 | out='{\n  "module": "sysv_abi",\n  "registers": ["rdi", "rsi"],\n  "verified": true'
+  [stress       ] VALID                                  | 31 tok | 1847.3 ms | FTLE=-1.088 | out='{\n  "module": "sysv_abi",\n  "registers": ["rdi", "rsi"],\n  "verified": true'
+
+>>> Prompt [JSON-4-ADVERSARIAL-FENCE-TRAP] (mode=json, req_keys=['kernel', 'simd_lanes', 'safe'])
+  [active       ] VALID                                  | 25 tok | 1494.9 ms | FTLE=-1.143 | out='{ "kernel": "avx2_fma", "simd_lanes": 8, "safe": true }\n'
+  [unconstrained] INVALID (Contains prohibited markdown backtick fence) | 88 tok | 4663.1 ms | FTLE=-3.724 | out='```json\n{\n  "kernel": "avx2_fma",\n  "simd_lanes": 8,\n  "safe": true\n}\n``'
+  [naive_sham   ] INVALID (JSON does not strictly start with '{' and end with '}') | 88 tok | 4947.1 ms | FTLE=-2.651 | out='{{\n    "kernel": "avx2_fma",\n    "simd_lanes": 8,\n    "safe": true\n}}\nTha'
+  [stress       ] VALID                                  | 25 tok | 1473.3 ms | FTLE=-1.143 | out='{ "kernel": "avx2_fma", "simd_lanes": 8, "safe": true }\n'
+
+>>> Prompt [C-5-SYSV-FUNC-BODY] (mode=c, req_keys=None)
+  [active       ] VALID                                  | 49 tok | 6419.7 ms | FTLE=-0.696 | out=' // return max(0, min(x, INT_MAX))\n{\n    if (x < 0)\n        return 0;\n    '
+  [unconstrained] INVALID (Contains prohibited markdown backtick fence) | 80 tok | 6575.6 ms | FTLE=-1.555 | out=' {\n    if (x < 0) {\n        return 0;\n    } else {\n        return x;\n    '
+  [naive_sham   ] INVALID (Unbalanced delimiters: brace=1, bracket=0, in_string=True, opened=True) | 80 tok | 5735.6 ms | FTLE=-1.636 | out=' {\n    if (x < 0) {\n        return 0;\n    } else {\n        return x;\n    '
+  [stress       ] VALID                                  | 49 tok | 6686.4 ms | FTLE=-0.696 | out=' // return max(0, min(x, INT_MAX))\n{\n    if (x < 0)\n        return 0;\n    '
+
+>>> Prompt [PY-6-DEF-SYNTAX] (mode=python, req_keys=None)
+  [active       ] VALID                                  | 22 tok | 2627.1 ms | FTLE=+0.777 | out='def add_ints(a: int, b: int) -> int:\n    return a + b\n'
+  [unconstrained] INVALID (Contains prohibited markdown backtick fence) | 64 tok | 10932.0 ms | FTLE=-0.983 | out='```python\ndef add_ints(a: int, b: int) -> int:\n    return a + b\n```\nYou ca'
+  [naive_sham   ] INVALID (ast.parse SyntaxError: unterminated string literal (detected at line 13) (<unknown>, line 13)) | 64 tok | 13479.5 ms | FTLE=-0.314 | out='{\n    "function": "add_ints",\n    "parameters": {\n        "a": "int",\n    '
+  [stress       ] VALID                                  | 22 tok | 6182.9 ms | FTLE=+0.777 | out='def add_ints(a: int, b: int) -> int:\n    return a + b\n'
+
+================================================================================================
+ 📊 4-ARM DISTRIBUTION SUMMARY (RULE NV-2: MEAN / MEDIAN / STD / MAX L_INF)
+================================================================================================
+  * ARM [active       ]: Validity=100.00% | BacktickLeak=  0.0% | Latency(ms) mean=5278.9, med=2188.4, std=5931.7, L_inf=17969.5 | Scar L_inf=0.25
+  * ARM [unconstrained]: Validity=  0.00% | BacktickLeak=100.0% | Latency(ms) mean=5755.6, med=4913.9, std=2583.0, L_inf=10932.0 | Scar L_inf=0.10
+  * ARM [naive_sham   ]: Validity=  0.00% | BacktickLeak=  0.0% | Latency(ms) mean=6081.2, med=5284.7, std=3449.9, L_inf=13479.5 | Scar L_inf=0.13
+  * ARM [stress       ]: Validity=100.00% | BacktickLeak=  0.0% | Latency(ms) mean=3147.4, med=1712.7, std=2338.8, L_inf=6686.4 | Scar L_inf=0.25
+
+ [ARTIFACT SAVED] H:\__DOWNLOADS\zcc_github_upload\docs\evidence\2026-11-01\zero-drop-gateway\gauntlet_report.json
+================================================================================================
+ 🏁 4-ARM CAUSAL GATE VERDICT: PASS (Active=100.0%, Stress=100.0% vs Unconstrained=0.0%, NaiveSham=0.0%)
+================================================================================================
+
+ [HTTP GATEWAY SMOKE TEST] Port 52343 -> 200 OK
+   Generated JSON: {
+  "service": "zero_drop_gateway",
+  "code_sample": "int f() { return 42; }",
+  "ok": true
+}
+
+   Telemetry:      {'latency_ms': 3954.24, 'tokens_per_sec': 8.85, 'ftle': -0.91057, 'scar_l_inf': 0.0767, 'verification': {'valid': True, 'has_backticks': False, 'brace_depth': 0, 'bracket_depth': 0, 'in_string': False, 'opened_ever': True, 'schema_keys_ok': True, 'error': None}}
+
