@@ -1671,15 +1671,23 @@ LEDGER_FILE="$EVIDENCE_DIR/provenance.jsonl"
 TOOLCHAIN_FILE="$EVIDENCE_DIR/toolchain.json"
 SCHEMA_FILE="$REPO_ROOT/contracts/determinism-gate.schema.json"
 
+# Native Linux /tmp transactional staging arena (eliminates DrvFs 9P round-trip overhead)
+TX_STAGE_DIR="/tmp/zcc-tx-$RUN_ID"
+rm -rf "$TX_STAGE_DIR"
+mkdir -p "$TX_STAGE_DIR"
+TX_LEDGER_FILE="$TX_STAGE_DIR/provenance.jsonl"
+TX_TOOLCHAIN_FILE="$TX_STAGE_DIR/toolchain.json"
+
 echo -e "\033[1;36m================================================================================\033[0m"
 echo -e "   🚀 ZCC SUPERCHARGED DETERMINISM & ABI VERIFICATION GATE (v3.3 OMEGA / MV1.3b)"
 echo -e "\033[1;36m================================================================================\033[0m"
-echo -e "Run ID: \033[1;33m$RUN_ID\033[0m"
-record_toolchain "$TOOLCHAIN_FILE"
+echo -e "Run ID: \033[1;33m$RUN_ID\033[0m (Staging Arena: $TX_STAGE_DIR)"
+record_toolchain "$TX_TOOLCHAIN_FILE"
+cp -f "$TX_TOOLCHAIN_FILE" "$TOOLCHAIN_FILE"
 
 VERIFIER_SHA=$(sha256_file "$REPO_ROOT/gate.sh")
 SCHEMA_SHA=$(sha256_file "$SCHEMA_FILE")
-TOOLCHAIN_SHA=$(sha256_file "$TOOLCHAIN_FILE")
+TOOLCHAIN_SHA=$(sha256_file "$TX_TOOLCHAIN_FILE")
 ENV_JSON=$(serialize_env_json)
 
 # Check if stage 1 bootstrap binary exists
@@ -1688,9 +1696,12 @@ if [ ! -f "$STAGE1_COMPILER" ]; then
     echo "Compiling initial bootstrap driver (make zcc)..."
     make -C "$REPO_ROOT" zcc >/dev/null 2>&1 || (gcc -O2 -o "$STAGE1_COMPILER" "$REPO_ROOT/zcc.c" 2>/dev/null || true)
 fi
+STAGE1_LOCAL="$TX_STAGE_DIR/zcc"
+cp -f "$STAGE1_COMPILER" "$STAGE1_LOCAL"
+chmod 755 "$STAGE1_LOCAL" 2>/dev/null || true
 
 # Transactional Release Backup & Fail-Closed Rollback Guard
-TX_BACKUP_DIR="$EVIDENCE_DIR/.tx_backup"
+TX_BACKUP_DIR="$TX_STAGE_DIR/.tx_backup"
 mkdir -p "$TX_BACKUP_DIR"
 TX_COMMITTED=0
 for tx_art in zcc2.s zcc3.s zcc2 zcc3; do
@@ -1715,25 +1726,37 @@ tx_exit_handler() {
         done
         chmod +x "$REPO_ROOT/zcc2" "$REPO_ROOT/zcc3" 2>/dev/null || true
         echo "[TRANSACTIONAL ROLLBACK] Release transaction aborted (rc=$tx_rc); previously published root artifacts preserved byte-for-byte." >&2
+        rm -rf "$TX_STAGE_DIR" 2>/dev/null || true
         if [ "$tx_rc" -eq 0 ]; then
             exit 70
         fi
     fi
+    rm -rf "$TX_STAGE_DIR" 2>/dev/null || true
     exit "$tx_rc"
 }
 trap 'tx_exit_handler' EXIT
 
-run_main_gate "$EVIDENCE_DIR" "$STAGE1_COMPILER" "$REPO_ROOT/zcc.c" "$LEDGER_FILE" "$RUN_ID" "$SCHEMA_FILE" \
+run_main_gate "$TX_STAGE_DIR" "$STAGE1_LOCAL" "$REPO_ROOT/zcc.c" "$TX_LEDGER_FILE" "$RUN_ID" "$SCHEMA_FILE" \
   "$VERIFIER_SHA" "$SCHEMA_SHA" "$TOOLCHAIN_SHA" "$ENV_JSON"
 
-echo -e "\n[Stage 6/6] Running ARGON 4 Independent Release & M5-2 Verification Suite (make verify-argon4)..."
-make -C "$REPO_ROOT" --no-print-directory verify-argon4 ZCC2_CANDIDATE="$EVIDENCE_DIR/stage2.bin"
+echo -e "\n[Stage 6/6] Running ARGON 4 Independent Release, Differential C99 & M5-2 Suite (make verify-argon4)..."
+make -C "$REPO_ROOT" --no-print-directory verify-argon4 \
+    ZCC1_CANDIDATE="$STAGE1_LOCAL" \
+    ZCC2_CANDIDATE="$TX_STAGE_DIR/stage2.bin" \
+    DIFF_RECEIPT="$TX_STAGE_DIR/differential_c99_receipt.json"
+
+# Sync verified /tmp staging artifacts to persistent evidence/$RUN_ID directory
+for ev_f in "$TX_STAGE_DIR"/*; do
+    if [ -f "$ev_f" ] && [ "$(basename "$ev_f")" != "zcc" ]; then
+        cp -f "$ev_f" "$EVIDENCE_DIR/$(basename "$ev_f")"
+    fi
+done
 
 # Stage candidate release artifacts into temporary transactional paths before atomic commit
-cp -f "$EVIDENCE_DIR/stage2.s" "$REPO_ROOT/zcc2.s.tx_tmp"
-cp -f "$EVIDENCE_DIR/stage3.s" "$REPO_ROOT/zcc3.s.tx_tmp"
-cp -f "$EVIDENCE_DIR/stage2.bin" "$REPO_ROOT/zcc2.tx_tmp"
-cp -f "$EVIDENCE_DIR/stage3.bin" "$REPO_ROOT/zcc3.tx_tmp"
+cp -f "$TX_STAGE_DIR/stage2.s" "$REPO_ROOT/zcc2.s.tx_tmp"
+cp -f "$TX_STAGE_DIR/stage3.s" "$REPO_ROOT/zcc3.s.tx_tmp"
+cp -f "$TX_STAGE_DIR/stage2.bin" "$REPO_ROOT/zcc2.tx_tmp"
+cp -f "$TX_STAGE_DIR/stage3.bin" "$REPO_ROOT/zcc3.tx_tmp"
 chmod +x "$REPO_ROOT/zcc2.tx_tmp" "$REPO_ROOT/zcc3.tx_tmp" 2>/dev/null || true
 
 if ! cmp -s "$REPO_ROOT/zcc2.s.tx_tmp" "$REPO_ROOT/zcc3.s.tx_tmp"; then

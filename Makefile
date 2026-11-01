@@ -1774,7 +1774,10 @@ gate-green: zcc-qopt
 
 test-qopt: gate-red gate-fault gate-green
 
-.PHONY: gate-red gate-fault gate-green test-qopt verify-argon4 rebuild-m5-2
+.PHONY: gate-red gate-fault gate-green test-qopt verify-argon4 verify-differential rebuild-m5-2
+
+verify-differential:
+	@CAND="$${ZCC2_CANDIDATE:-./zcc2}"; python3 tools/zcc_differential_c99_oracle.py --compiler "$$CAND" --seeds 32 --receipt "$${DIFF_RECEIPT:-/tmp/zcc_differential_c99_receipt.json}"
 
 # ─── ARGON 4 Unified Verification & M5-2 Native AVX-512 Suite ────────────────
 verify-argon4:
@@ -1791,10 +1794,9 @@ verify-argon4:
 	@echo "=== [ARGON 4] 5/6 Gate M5-2 Independent Verifier & 12 Adversarial Negative Controls ==="
 	python3 tools/verify_m5_2_noise_bootstrap.py
 	python3 tools/verify_m5_2_noise_bootstrap.py --self-test
-	@echo "=== [ARGON 4] 6/6 ZCC Stage 1 & Stage 2 .i Preprocessed Input, .svg Evolution & Unknown Extension Guard ==="
-	bash tests/test_zcc_preprocessed_i_extension.sh ./zcc
-	bash tests/test_zcc_svg_evolution.sh ./zcc
-	@CAND="$${ZCC2_CANDIDATE:-./zcc2}"; if [ -x "$$CAND" ]; then bash tests/test_zcc_preprocessed_i_extension.sh "$$CAND" && bash tests/test_zcc_svg_evolution.sh "$$CAND"; fi
+	@echo "=== [ARGON 4] 6/6 ZCC Stage 1 & Stage 2 .i Preprocessed Input, .svg Evolution, Unknown Extension Guard & Differential C99 Oracle ==="
+	@ZCC1="$${ZCC1_CANDIDATE:-./zcc}"; bash tests/test_zcc_preprocessed_i_extension.sh "$$ZCC1" && bash tests/test_zcc_svg_evolution.sh "$$ZCC1"
+	@CAND="$${ZCC2_CANDIDATE:-./zcc2}"; if [ -x "$$CAND" ]; then bash tests/test_zcc_preprocessed_i_extension.sh "$$CAND" && bash tests/test_zcc_svg_evolution.sh "$$CAND" && python3 tools/zcc_differential_c99_oracle.py --compiler "$$CAND" --seeds 32 --receipt "$${DIFF_RECEIPT:-/tmp/zcc_differential_c99_receipt.json}"; fi
 	@echo "=== [ARGON 4] ALL 6 VERIFICATION SUITES PASSED (0 REGRESSIONS) ==="
 
 rebuild-m5-2: zcc2
