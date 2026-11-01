@@ -403,7 +403,7 @@ static int get_gvar_size(const struct Node *gvar) {
 /* ========================================================================= */
 
 #define MAX_TYPES_LIST 65536
-static Type *types_list_ser[MAX_TYPES_LIST];
+static Type **types_list_ser = NULL;
 static int num_types_ser = 0;
 
 static int collect_type(Type *t) {
@@ -432,7 +432,7 @@ static int collect_type(Type *t) {
 }
 
 #define MAX_NODES_LIST 1048576
-static Node *nodes_list_ser[MAX_NODES_LIST];
+static Node **nodes_list_ser = NULL;
 static int num_nodes_ser = 0;
 
 static int collect_node(Node *n) {
@@ -464,6 +464,11 @@ int ir_serialize_json(const ir_module_t *mod, const char *out_filename, const ch
     int i, j;
     if (!fp) {
         return -1;
+    }
+    if (!types_list_ser) {
+        void *slab = malloc(MAX_TYPES_LIST * sizeof(Type *) + MAX_NODES_LIST * sizeof(Node *));
+        types_list_ser = (Type **)slab;
+        nodes_list_ser = (Node **)((char *)slab + MAX_TYPES_LIST * sizeof(Type *));
     }
 
     fprintf(fp, "; ZCC IR Graph v1.0.0\n");

@@ -126,14 +126,14 @@ int main(void) {{
     int sc2 = (bump_true({c2}) || bump_true(2000));
     int sc3 = (bump_true({c3}) && bump_false({c4}) && bump_true(3000));
 
-    /* 2. Pointer stride & function pointer table */
-    long acc = 1469598103934665603ULL & 0x7fffffffffffffffL;
+    /* 2. Pointer stride & function pointer table (C99 6.2.5#9 unsigned modular FNV-1a) */
+    long acc = (long)(1469598103934665603ULL & 0x7fffffffffffffffULL);
     long *p = &arr[0];
     int i;
     for (i = 0; i < 16; i = i + 1) {{
         long v = *(p + i);
         long fn_res = fn_table[i & 3](v, (long)(i + {c5}));
-        acc = ((acc ^ fn_res) * 1099511628211L) & 0x7fffffffL;
+        acc = (long)((((unsigned long)(acc ^ fn_res)) * 1099511628211UL) & 0x7fffffffUL);
     }}
 
     /* 3. Struct value passing (INTEGER 16B & MEMORY 28B sret) */
@@ -206,7 +206,7 @@ int main(void) {{
     int s2 = (f_true({c2}) || f_true(2000));
     int s3 = (f_true({c3}) && f_false({c4}) && f_true(3000));
 
-    long acc = 1469598103934665603ULL & 0x7fffffffffffffffL;
+    long acc = (long)(1469598103934665603ULL & 0x7fffffffffffffffULL);
     int k = 0;
     while (k < 16) {{
         long v = data[k];
@@ -216,7 +216,7 @@ int main(void) {{
         else if ((k & 3) == 1) res = m_sub(v, arg2);
         else if ((k & 3) == 2) res = m_xor(v, arg2);
         else res = m_band(v, arg2);
-        acc = (demorgan_xor(acc, res) * 1099511628211L) & 0x7fffffffL;
+        acc = (long)((((unsigned long)demorgan_xor(acc, res)) * 1099511628211UL) & 0x7fffffffUL);
         k = k + 1;
     }}
 
@@ -268,11 +268,74 @@ def compile_and_run_zcc(zcc_bin: str, gcc_bin: str, c_path: str, asm_path: str, 
 
 
 def compile_and_run_gcc(gcc_bin: str, c_path: str, bin_path: str, work_dir: str) -> Tuple[int, str, str]:
-    c_res = subprocess.run([gcc_bin, "-O0", "-no-pie", "-std=c99", c_path, "-o", bin_path], cwd=work_dir, capture_output=True, text=True)
+    c_res = subprocess.run([gcc_bin, "-O0", "-no-pie", "-std=c99", "-Wall", "-Wextra", "-Werror", c_path, "-o", bin_path], cwd=work_dir, capture_output=True, text=True)
     if c_res.returncode != 0 or not os.path.isfile(bin_path):
         return EXIT_COMPILE_FAIL, "", f"gcc reference build failed: {c_res.stderr}"
     r_res = subprocess.run([bin_path], cwd=work_dir, capture_output=True, text=True)
     return r_res.returncode, r_res.stdout, r_res.stderr
+
+
+def compile_and_run_ubsan_asan(gcc_bin: str, c_path: str, bin_path: str, work_dir: str) -> Tuple[int, str, str]:
+    """
+    Compile and execute under GCC with UBSan + ASan + strict -Wall -Wextra -Werror
+    and -fno-sanitize-recover=all to empirically prove zero undefined behavior.
+    """
+    c_res = subprocess.run(
+        [
+            gcc_bin,
+            "-O1",
+            "-std=c99",
+            "-fsanitize=undefined,address",
+            "-fno-sanitize-recover=all",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            c_path,
+            "-o",
+            bin_path,
+        ],
+        cwd=work_dir,
+        capture_output=True,
+        text=True,
+    )
+    if c_res.returncode != 0 or not os.path.isfile(bin_path):
+        return EXIT_COMPILE_FAIL, "", f"gcc UBSan/ASan build failed: {c_res.stderr}"
+    r_res = subprocess.run([bin_path], cwd=work_dir, capture_output=True, text=True)
+    if r_res.returncode != 0 or r_res.stderr.strip():
+        return EXIT_COMPILE_FAIL, r_res.stdout, f"UBSan/ASan runtime trap (rc={r_res.returncode}): {r_res.stderr}"
+    return r_res.returncode, r_res.stdout, r_res.stderr
+
+
+def run_ubsan_negative_control(gcc_bin: str, work_dir: str) -> Tuple[bool, str]:
+    """
+    Rule MV-6 / EF-3 UBSan Negative Control:
+    Verify that GCC with -fsanitize=undefined -fno-sanitize-recover=all detects and
+    aborts on signed 64-bit long multiplication overflow (`acc * 1099511628211L`).
+    """
+    ub_c = os.path.join(work_dir, "ub_neg_ctrl.c")
+    ub_bin = os.path.join(work_dir, "ub_neg_ctrl.bin")
+    ub_src = """#include <stdio.h>
+int main(void) {
+    volatile long acc = 1469598103934665575L;
+    volatile long mul = 1099511628211L;
+    long out = (acc * mul) & 0x7fffffffL;
+    printf("%ld\\n", out);
+    return 0;
+}
+"""
+    with open(ub_c, "w", encoding="utf-8") as f:
+        f.write(ub_src)
+    c_res = subprocess.run(
+        [gcc_bin, "-O1", "-std=c99", "-fsanitize=undefined", "-fno-sanitize-recover=all", ub_c, "-o", ub_bin],
+        cwd=work_dir,
+        capture_output=True,
+        text=True,
+    )
+    if c_res.returncode != 0 or not os.path.isfile(ub_bin):
+        return False, "failed to compile UBSan negative control"
+    r_res = subprocess.run([ub_bin], cwd=work_dir, capture_output=True, text=True)
+    ok = (r_res.returncode != 0) and ("signed integer overflow" in r_res.stderr)
+    return ok, r_res.stderr.strip()
 
 
 def run_negative_control(zcc_bin: str, gcc_bin: str, work_dir: str) -> bool:
@@ -326,6 +389,8 @@ def evaluate_seed(seed: int, zcc_local: str, gcc_bin: str, work_dir: str) -> Tup
     bzb = os.path.join(work_dir, f"s{seed}_zb.bin")
     bga = os.path.join(work_dir, f"s{seed}_ga.bin")
     bgb = os.path.join(work_dir, f"s{seed}_gb.bin")
+    bsana = os.path.join(work_dir, f"s{seed}_sana.bin")
+    bsanb = os.path.join(work_dir, f"s{seed}_sanb.bin")
 
     with open(ca, "w", encoding="utf-8") as f:
         f.write(prog_a)
@@ -340,6 +405,10 @@ def evaluate_seed(seed: int, zcc_local: str, gcc_bin: str, work_dir: str) -> Tup
     if rc_ga != 0:
         return EXIT_COMPILE_FAIL, f"FAIL [seed={seed} prog_a GCC]: {err_ga}", {}
 
+    rc_sa, out_sa, err_sa = compile_and_run_ubsan_asan(gcc_bin, ca, bsana, work_dir)
+    if rc_sa != 0:
+        return EXIT_COMPILE_FAIL, f"FAIL [seed={seed} prog_a UBSan/ASan]: {err_sa}", {}
+
     rc_zb, out_zb, err_zb = compile_and_run_zcc(zcc_local, gcc_bin, cb, sb, bzb, work_dir)
     if rc_zb != 0:
         return EXIT_COMPILE_FAIL, f"FAIL [seed={seed} prog_b ZCC]: {err_zb}", {}
@@ -348,10 +417,14 @@ def evaluate_seed(seed: int, zcc_local: str, gcc_bin: str, work_dir: str) -> Tup
     if rc_gb != 0:
         return EXIT_COMPILE_FAIL, f"FAIL [seed={seed} prog_b GCC]: {err_gb}", {}
 
-    if out_za != out_ga or out_zb != out_gb:
+    rc_sb, out_sb, err_sb = compile_and_run_ubsan_asan(gcc_bin, cb, bsanb, work_dir)
+    if rc_sb != 0:
+        return EXIT_COMPILE_FAIL, f"FAIL [seed={seed} prog_b UBSan/ASan]: {err_sb}", {}
+
+    if out_za != out_ga or out_zb != out_gb or out_za != out_sa or out_zb != out_sb:
         return (
             EXIT_DIFF_DIVERGENCE,
-            f"FAIL: Differential divergence on seed {seed}!\n  ZCC_A: {out_za.strip()}\n  GCC_A: {out_ga.strip()}\n  ZCC_B: {out_zb.strip()}\n  GCC_B: {out_gb.strip()}",
+            f"FAIL: Differential divergence on seed {seed}!\n  ZCC_A: {out_za.strip()}\n  GCC_A: {out_ga.strip()}\n  SAN_A: {out_sa.strip()}\n  ZCC_B: {out_zb.strip()}\n  GCC_B: {out_gb.strip()}\n  SAN_B: {out_sb.strip()}",
             {},
         )
 
@@ -396,14 +469,19 @@ def main() -> int:
         shutil.copy2(zcc_bin, zcc_local)
         os.chmod(zcc_local, 0o755)
 
-        # 1. Always run the mutation negative control first (Rule MV-6 / MV-7)
+        # 1. Always run the mutation & UBSan negative controls first (Rule MV-6 / MV-7)
         neg_ok = run_negative_control(zcc_local, gcc_bin, work_dir)
         if not neg_ok:
             print("FAIL: Differential oracle mutation negative control failed to detect perturbation!", file=sys.stderr)
             return EXIT_NEG_CTRL_FAIL
 
+        ub_neg_ok, ub_neg_diag = run_ubsan_negative_control(gcc_bin, work_dir)
+        if not ub_neg_ok:
+            print("FAIL: UBSan negative control failed to trap signed overflow!", file=sys.stderr)
+            return EXIT_NEG_CTRL_FAIL
+
         if args.self_test and args.seeds == 0:
-            print("PASS: Differential C99 oracle mutation negative control verified.")
+            print("PASS: Differential C99 oracle mutation & UBSan negative controls verified.")
             return EXIT_OK
 
         seeds = [args.base_seed + idx for idx in range(args.seeds)]
@@ -429,10 +507,14 @@ def main() -> int:
             "compiler_path": zcc_bin,
             "compiler_sha256": zcc_sha256,
             "oracle": gcc_bin,
+            "sanitizers": "-std=c99 -O1 -fsanitize=undefined,address -fno-sanitize-recover=all -Wall -Wextra -Werror",
             "seeds_evaluated": args.seeds,
             "programs_compiled_and_verified": args.seeds * 2,
-            "executions_verified": args.seeds * 4,
+            "executions_verified": args.seeds * 6,
             "mutation_negative_control": "PASS",
+            "ubsan_negative_control": "PASS",
+            "ubsan_negative_control_diagnostic": ub_neg_diag,
+            "ubsan_asan_clean_programs": args.seeds * 2,
             "corpus_stdout_sha256": corpus_sha256,
             "elapsed_seconds": round(elapsed_s, 3),
         }
@@ -442,8 +524,8 @@ def main() -> int:
             Path(args.receipt).write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
 
         print(
-            f"  \033[1;32m[PASS: Differential & Metamorphic C99 Oracle]\033[0m "
-            f"({args.seeds} seeds, {args.seeds * 2} C99 TUs, {args.seeds * 4} executions, "
+            f"  \033[1;32m[PASS: Differential & Metamorphic C99 Oracle + UBSan/ASan]\033[0m "
+            f"({args.seeds} seeds, {args.seeds * 2} UB-free C99 TUs, {args.seeds * 6} executions [ZCC2 + GCC -O0 + GCC UBSan/ASan], "
             f"0 divergences in {elapsed_s:.2f}s, SHA: {corpus_sha256[:16]}...)"
         )
         return EXIT_OK

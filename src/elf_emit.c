@@ -164,6 +164,7 @@ int elf_emit_obj(const char *out_filename,
     int idx_debug_abbrev = -1;
     int idx_debug_str = -1;
     int idx_rela_debug_info = -1;
+    int idx_note_gnu_stack = -1;
 
     int next_idx = 1;
     idx_text = next_idx++;
@@ -181,6 +182,7 @@ int elf_emit_obj(const char *out_filename,
         idx_debug_str = next_idx++;
         idx_rela_debug_info = next_idx++;
     }
+    idx_note_gnu_stack = next_idx++;
     int num_sections = next_idx;
 
     /* Offsets of sections inside the file */
@@ -674,6 +676,7 @@ int elf_emit_obj(const char *out_filename,
         off_debug_str = add_shstr(&shstr_buf, ".debug_str");
         off_rela_debug_info = add_shstr(&shstr_buf, ".rela.debug_info");
     }
+    size_t off_note_gnu_stack = add_shstr(&shstr_buf, ".note.GNU-stack");
 
     /* 6. Set up the ELF Header */
     memset(&ehdr, 0, sizeof(ehdr));
@@ -905,6 +908,18 @@ int elf_emit_obj(const char *out_filename,
             shdrs[idx_rela_debug_info].sh_entsize = sizeof(zcc_elf_rela_entry_t);
         }
     }
+
+    /* Section idx_note_gnu_stack: .note.GNU-stack (non-executable stack marker) */
+    shdrs[idx_note_gnu_stack].sh_name = (zcc_u32)off_note_gnu_stack;
+    shdrs[idx_note_gnu_stack].sh_type = SHT_PROGBITS;
+    shdrs[idx_note_gnu_stack].sh_flags = 0;
+    shdrs[idx_note_gnu_stack].sh_addr = 0;
+    shdrs[idx_note_gnu_stack].sh_offset = shstrtab_off + shstr_buf.size;
+    shdrs[idx_note_gnu_stack].sh_size = 0;
+    shdrs[idx_note_gnu_stack].sh_link = 0;
+    shdrs[idx_note_gnu_stack].sh_info = 0;
+    shdrs[idx_note_gnu_stack].sh_addralign = 1;
+    shdrs[idx_note_gnu_stack].sh_entsize = 0;
 
     /* Write out all Section Headers */
     fwrite(shdrs, sizeof(zcc_elf_shdr_t), num_sections, f);

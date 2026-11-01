@@ -20,11 +20,55 @@
 #endif
 #include <windows.h>
 #include <d3d12.h>
-#include <dstorage.h>
-#include <dxgi.h>
+#include <dxgi1_4.h>
 #include <directxmath.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 #include <random>
+
+#if defined(__has_include) && __has_include(<dstorage.h>)
+#include <dstorage.h>
+#else
+// Self-contained DirectStorage 1.2 ABI definitions when Microsoft.Direct3D.DirectStorage NuGet is not in INCLUDE
+#define DSTORAGE_MAX_QUEUE_CAPACITY 0x2000
+enum DSTORAGE_PRIORITY { DSTORAGE_PRIORITY_LOW = -1, DSTORAGE_PRIORITY_NORMAL = 0, DSTORAGE_PRIORITY_HIGH = 1, DSTORAGE_PRIORITY_REALTIME = 2 };
+enum DSTORAGE_REQUEST_SOURCE_TYPE { DSTORAGE_REQUEST_SOURCE_FILE = 0, DSTORAGE_REQUEST_SOURCE_MEMORY = 1 };
+enum DSTORAGE_REQUEST_DESTINATION_TYPE { DSTORAGE_REQUEST_DESTINATION_MEMORY = 0, DSTORAGE_REQUEST_DESTINATION_BUFFER = 1 };
+struct DSTORAGE_QUEUE_DESC {
+    DSTORAGE_REQUEST_SOURCE_TYPE SourceType;
+    UINT16 Capacity;
+    DSTORAGE_PRIORITY Priority;
+    const char* Name;
+    ID3D12Device* Device;
+};
+struct IDStorageFile : public IUnknown {};
+struct DSTORAGE_REQUEST {
+    struct {
+        DSTORAGE_REQUEST_SOURCE_TYPE SourceType;
+        DSTORAGE_REQUEST_DESTINATION_TYPE DestinationType;
+    } Options;
+    struct {
+        struct { IDStorageFile* Source; UINT64 Offset; UINT32 Size; } File;
+    } Source;
+    struct {
+        struct { ID3D12Resource* Resource; UINT64 Offset; UINT32 Size; } Buffer;
+    } Destination;
+};
+struct __declspec(uuid("cf28414e-0918-4c2e-b25c-61b6127c3111")) IDStorageQueue : public IUnknown {
+    virtual void STDMETHODCALLTYPE EnqueueRequest(const DSTORAGE_REQUEST* request) = 0;
+    virtual void STDMETHODCALLTYPE EnqueueStatus(void* statusArray, UINT32 index) = 0;
+    virtual void STDMETHODCALLTYPE EnqueueSignal(ID3D12Fence* fence, UINT64 value) = 0;
+    virtual void STDMETHODCALLTYPE Submit() = 0;
+};
+struct __declspec(uuid("6924ea0c-c3cd-4826-b10a-f64f4ed927c1")) IDStorageFactory : public IUnknown {
+    virtual HRESULT STDMETHODCALLTYPE CreateQueue(const DSTORAGE_QUEUE_DESC* desc, REFIID riid, void** ppv) = 0;
+};
+inline HRESULT DStorageGetFactory(REFIID, void** ppv) {
+    if (ppv) *ppv = nullptr;
+    return E_NOTIMPL;
+}
+#endif
 
 // 🛡️ ZKAEDI Swarm Pipeline Hardening Macros
 #if defined(DEBUG) || defined(_DEBUG)
@@ -230,7 +274,9 @@ inline HRESULT CreateXboxIndexBuffer(
 class alignas(16) ZkaediPrimeNpuEngine {
 private:
     struct DirtyBoneCache {
-        float CachedAngle = -1.0f;
+        float CachedAngle = -1e30f;
+        DirectX::XMFLOAT3 Pivot = { 0.0f, 0.0f, 0.0f };
+        DirectX::XMFLOAT3 Axis  = { 0.0f, 1.0f, 0.0f };
         DirectX::XMFLOAT4X4 CachedWorld;
         DirectX::XMFLOAT4X4 CachedInvTranspose;
     };
@@ -384,6 +430,17 @@ public:
         return m_gpuUploadBuffer ? m_gpuUploadBuffer->GetGPUVirtualAddress() : 0;
     }
 
+    const ZkaediXboxJointTransform* GetMappedJoints() const {
+        return reinterpret_cast<const ZkaediXboxJointTransform*>(m_mappedGpuData);
+    }
+
+    void SetBonePivotAndAxis(UINT boneIdx, DirectX::XMFLOAT3 pivot, DirectX::XMFLOAT3 axis) {
+        if (!m_boneCache || boneIdx >= m_boneCount) return;
+        m_boneCache[boneIdx].Pivot = pivot;
+        m_boneCache[boneIdx].Axis  = axis;
+        m_boneCache[boneIdx].CachedAngle = -1e30f; // Invalidate dirty cache for this bone
+    }
+
     void Shutdown() {
         if (m_gpuUploadBuffer) {
             m_gpuUploadBuffer->Unmap(0, nullptr);
@@ -417,15 +474,24 @@ private:
                 continue;
             }
 
-            // Cache miss: Recompute transformations
+            // Cache miss: Recompute pivot-relative hierarchical transformation
             m_boneCache[i].CachedAngle = angle;
-            DirectX::XMMATRIX rot = DirectX::XMMatrixRotationY(angle);
-            DirectX::XMStoreFloat4x4(&m_boneCache[i].CachedWorld, rot);
-            DirectX::XMStoreFloat4x4(&gpuJoints[i].WorldMatrix, rot);
+            DirectX::XMVECTOR axisVec = DirectX::XMLoadFloat3(&m_boneCache[i].Axis);
+            if (DirectX::XMVectorGetX(DirectX::XMVector3LengthSq(axisVec)) < 1e-8f) {
+                axisVec = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+            }
+            const DirectX::XMFLOAT3& p = m_boneCache[i].Pivot;
+            DirectX::XMMATRIX toOrigin   = DirectX::XMMatrixTranslation(-p.x, -p.y, -p.z);
+            DirectX::XMMATRIX rotAxis    = DirectX::XMMatrixRotationAxis(axisVec, angle);
+            DirectX::XMMATRIX fromOrigin = DirectX::XMMatrixTranslation(p.x, p.y, p.z);
+            DirectX::XMMATRIX worldMat   = DirectX::XMMatrixMultiply(DirectX::XMMatrixMultiply(toOrigin, rotAxis), fromOrigin);
+
+            DirectX::XMStoreFloat4x4(&m_boneCache[i].CachedWorld, worldMat);
+            DirectX::XMStoreFloat4x4(&gpuJoints[i].WorldMatrix, worldMat);
 
             DirectX::XMVECTOR det;
             DirectX::XMMATRIX invT = DirectX::XMMatrixTranspose(
-                DirectX::XMMatrixInverse(&det, rot));
+                DirectX::XMMatrixInverse(&det, worldMat));
             DirectX::XMStoreFloat4x4(&m_boneCache[i].CachedInvTranspose, invT);
             DirectX::XMStoreFloat4x4(&gpuJoints[i].InverseTransposeMatrix, invT);
         }
@@ -544,15 +610,281 @@ public:
         return m_dsQueue;
     }
 
-    IDStorageFactory* GetFactory() const {
-        return m_dsFactory;
-    }
-
     void Shutdown() {
         if (m_dsQueue) { m_dsQueue->Release(); m_dsQueue = nullptr; }
         if (m_dsFactory) { m_dsFactory->Release(); m_dsFactory = nullptr; }
     }
 };
+
+// 7. Zero-Copy GLB 72-Byte Interleaved Binary Parser & Root Signature Extractor
+struct ZkaediGlbBinaryView {
+    const ZkaediXboxVertex* Vertices;
+    UINT                    VertexCount;
+    const void*             Indices;
+    UINT                    IndexCount;
+    DXGI_FORMAT             IndexFormat;
+    UINT                    VertexByteOffsetInBin;
+    UINT                    IndexByteOffsetInBin;
+    const uint8_t*          BaseColorImageBytes;
+    UINT                    BaseColorImageSize;
+    const uint8_t*          NormalImageBytes;
+    UINT                    NormalImageSize;
+    const uint8_t*          OrmImageBytes;
+    UINT                    OrmImageSize;
+};
+
+inline int ParseJsonIntField(const char* objStart, const char* objEnd, const char* key, int defaultVal = -1) {
+    const char* p = objStart;
+    size_t klen = strlen(key);
+    while (p && p + klen < objEnd) {
+        const char* hit = strstr(p, key);
+        if (!hit || hit >= objEnd) break;
+        const char* colon = strchr(hit + klen, ':');
+        if (!colon || colon >= objEnd) break;
+        const char* val = colon + 1;
+        while (val < objEnd && (*val == ' ' || *val == '\t' || *val == '\r' || *val == '\n')) ++val;
+        if (val < objEnd && ((*val >= '0' && *val <= '9') || *val == '-')) {
+            return static_cast<int>(strtol(val, nullptr, 10));
+        }
+        p = hit + klen;
+    }
+    return defaultVal;
+}
+
+inline HRESULT ParseXboxGlbInterleavedBuffer(
+    const void* glbBytes,
+    size_t glbSize,
+    ZkaediGlbBinaryView* pOutView)
+{
+    if (!glbBytes || glbSize < 28 || !pOutView) return E_INVALIDARG;
+    memset(pOutView, 0, sizeof(ZkaediGlbBinaryView));
+    const uint8_t* raw = reinterpret_cast<const uint8_t*>(glbBytes);
+
+    uint32_t magic = *reinterpret_cast<const uint32_t*>(raw + 0);
+    uint32_t version = *reinterpret_cast<const uint32_t*>(raw + 4);
+    uint32_t totalLen = *reinterpret_cast<const uint32_t*>(raw + 8);
+    uint32_t jsonLen = *reinterpret_cast<const uint32_t*>(raw + 12);
+    uint32_t jsonType = *reinterpret_cast<const uint32_t*>(raw + 16);
+
+    if (magic != 0x46546C67u || version != 2u || jsonType != 0x4E4F534Au) return E_FAIL;
+    if (totalLen > glbSize || 20u + jsonLen + 8u > glbSize) return E_FAIL;
+
+    const char* jsonStr = reinterpret_cast<const char*>(raw + 20);
+    const char* jsonEnd = jsonStr + jsonLen;
+    // Verify 72-byte interleaved stride marker in JSON
+    const char* strideTag = strstr(jsonStr, "\"byteStride\":72");
+    if (!strideTag || strideTag >= jsonEnd) strideTag = strstr(jsonStr, "\"byteStride\": 72");
+    if (!strideTag || strideTag >= jsonEnd) return E_INVALIDARG;
+
+    uint32_t binLen = *reinterpret_cast<const uint32_t*>(raw + 20 + jsonLen);
+    uint32_t binType = *reinterpret_cast<const uint32_t*>(raw + 20 + jsonLen + 4);
+    if (binType != 0x004E4942u) return E_FAIL;
+    const uint8_t* binChunk = raw + 20 + jsonLen + 8;
+
+    // Parse all bufferViews (up to 32)
+    UINT bvOffsets[32] = {};
+    UINT bvLengths[32] = {};
+    int  bvCount = 0;
+    const char* bvTag = strstr(jsonStr, "\"bufferViews\"");
+    if (!bvTag || bvTag >= jsonEnd) return E_FAIL;
+    const char* bvArrStart = strchr(bvTag, '[');
+    const char* bvArrEnd   = bvArrStart ? strchr(bvArrStart, ']') : nullptr;
+    if (!bvArrStart || !bvArrEnd || bvArrEnd > jsonEnd) return E_FAIL;
+
+    const char* cur = bvArrStart;
+    while (cur < bvArrEnd && bvCount < 32) {
+        const char* oStart = strchr(cur, '{');
+        if (!oStart || oStart >= bvArrEnd) break;
+        const char* oEnd = strchr(oStart, '}');
+        if (!oEnd || oEnd >= bvArrEnd) break;
+        int off = ParseJsonIntField(oStart, oEnd, "\"byteOffset\"", 0);
+        int len = ParseJsonIntField(oStart, oEnd, "\"byteLength\"", 0);
+        bvOffsets[bvCount] = (off > 0) ? static_cast<UINT>(off) : 0u;
+        bvLengths[bvCount] = (len > 0) ? static_cast<UINT>(len) : 0u;
+        bvCount++;
+        cur = oEnd + 1;
+    }
+    if (bvCount < 2) return E_FAIL;
+
+    UINT vbByteLen = bvLengths[0];
+    if (vbByteLen == 0 || (vbByteLen % sizeof(ZkaediXboxVertex)) != 0 || vbByteLen > binLen) return E_FAIL;
+    UINT vertexCount = vbByteLen / sizeof(ZkaediXboxVertex);
+
+    UINT ibByteOffset = bvOffsets[1];
+    UINT ibByteLen    = bvLengths[1];
+    if ((ibByteOffset % 64u) != 0 || ibByteOffset + ibByteLen > binLen) return E_FAIL;
+
+    DXGI_FORMAT idxFmt = (vertexCount < 65535u) ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
+    UINT idxStride = (idxFmt == DXGI_FORMAT_R16_UINT) ? 2u : 4u;
+
+    pOutView->Vertices              = reinterpret_cast<const ZkaediXboxVertex*>(binChunk);
+    pOutView->VertexCount           = vertexCount;
+    pOutView->Indices               = binChunk + ibByteOffset;
+    pOutView->IndexCount            = ibByteLen / idxStride;
+    pOutView->IndexFormat           = idxFmt;
+    pOutView->VertexByteOffsetInBin = 0;
+    pOutView->IndexByteOffsetInBin  = ibByteOffset;
+
+    // Parse embedded images[] and materials[] to bind Albedo, Normal, and ORM textures
+    int imgBv[32]  = {};
+    int imgCount   = 0;
+    const char* imgTag = strstr(jsonStr, "\"images\"");
+    if (imgTag && imgTag < jsonEnd) {
+        const char* iStart = strchr(imgTag, '[');
+        const char* iEnd   = iStart ? strchr(iStart, ']') : nullptr;
+        if (iStart && iEnd && iEnd <= jsonEnd) {
+            const char* ic = iStart;
+            while (ic < iEnd && imgCount < 32) {
+                const char* oS = strchr(ic, '{');
+                if (!oS || oS >= iEnd) break;
+                const char* oE = strchr(oS, '}');
+                if (!oE || oE >= iEnd) break;
+                imgBv[imgCount++] = ParseJsonIntField(oS, oE, "\"bufferView\"", -1);
+                ic = oE + 1;
+            }
+        }
+    }
+
+    int texSrc[32] = {};
+    int texCount   = 0;
+    const char* texTag = strstr(jsonStr, "\"textures\"");
+    if (texTag && texTag < jsonEnd) {
+        const char* tStart = strchr(texTag, '[');
+        const char* tEnd   = tStart ? strchr(tStart, ']') : nullptr;
+        if (tStart && tEnd && tEnd <= jsonEnd) {
+            const char* tc = tStart;
+            while (tc < tEnd && texCount < 32) {
+                const char* oS = strchr(tc, '{');
+                if (!oS || oS >= tEnd) break;
+                const char* oE = strchr(oS, '}');
+                if (!oE || oE >= tEnd) break;
+                texSrc[texCount++] = ParseJsonIntField(oS, oE, "\"source\"", texCount);
+                tc = oE + 1;
+            }
+        }
+    }
+
+    auto resolveTexSlotToBv = [&](const char* slotKey) -> int {
+        const char* mTag = strstr(jsonStr, "\"materials\"");
+        if (!mTag || mTag >= jsonEnd) return -1;
+        const char* sTag = strstr(mTag, slotKey);
+        if (!sTag || sTag >= jsonEnd) return -1;
+        const char* oS = strchr(sTag, '{');
+        const char* oE = oS ? strchr(oS, '}') : nullptr;
+        if (!oS || !oE || oE > jsonEnd) return -1;
+        int tIdx = ParseJsonIntField(oS, oE, "\"index\"", -1);
+        if (tIdx < 0) return -1;
+        int sIdx = (tIdx < texCount) ? texSrc[tIdx] : tIdx;
+        if (sIdx < 0 || sIdx >= imgCount) return -1;
+        return imgBv[sIdx];
+    };
+
+    int baseBv = resolveTexSlotToBv("\"baseColorTexture\"");
+    int normBv = resolveTexSlotToBv("\"normalTexture\"");
+    int ormBv  = resolveTexSlotToBv("\"metallicRoughnessTexture\"");
+
+    if (baseBv >= 0 && baseBv < bvCount && bvOffsets[baseBv] + bvLengths[baseBv] <= binLen) {
+        pOutView->BaseColorImageBytes = binChunk + bvOffsets[baseBv];
+        pOutView->BaseColorImageSize  = bvLengths[baseBv];
+    }
+    if (normBv >= 0 && normBv < bvCount && bvOffsets[normBv] + bvLengths[normBv] <= binLen) {
+        pOutView->NormalImageBytes = binChunk + bvOffsets[normBv];
+        pOutView->NormalImageSize  = bvLengths[normBv];
+    }
+    if (ormBv >= 0 && ormBv < bvCount && bvOffsets[ormBv] + bvLengths[ormBv] <= binLen) {
+        pOutView->OrmImageBytes = binChunk + bvOffsets[ormBv];
+        pOutView->OrmImageSize  = bvLengths[ormBv];
+    }
+
+    return S_OK;
+}
+
+inline HRESULT CreateXboxRootSignatureFromDxil(
+    ID3D12Device* device,
+    const void* dxilBytecode,
+    size_t bytecodeLength,
+    ID3D12RootSignature** ppRootSignature)
+{
+    if (!device || !dxilBytecode || bytecodeLength == 0 || !ppRootSignature) return E_INVALIDARG;
+    ZKAEDI_HR(device->CreateRootSignature(0, dxilBytecode, bytecodeLength, IID_PPV_ARGS(ppRootSignature)));
+    return S_OK;
+}
+
+// ============================================================================
+// 5. SIMULTANEOUS PLACED-RESOURCE HEAP SUBALLOCATION & TRANSIENT ALIASING
+// ============================================================================
+// Replaces serial CreateCommittedResource vidmm calls with a single unified
+// 64KB-aligned ID3D12Heap and simultaneous CreatePlacedResource placement,
+// plus transient memory aliasing between Shadow-Pass and SSAO Post-FX buffers.
+// ============================================================================
+struct UnifiedPlacedSceneArena {
+    ComPtr<ID3D12Heap>     SceneBufferHeap;
+    ComPtr<ID3D12Resource> PlacedVertexBuffer;
+    ComPtr<ID3D12Resource> PlacedIndexBuffer;
+    ComPtr<ID3D12Resource> PlacedSkinningCBuffer;
+    ComPtr<ID3D12Resource> TransientShadowBuffer;
+    ComPtr<ID3D12Resource> AliasedSsaoBuffer;
+    UINT64                 TotalHeapBytes = 0;
+    UINT64                 AliasedSavedBytes = 0;
+};
+
+inline UINT64 AlignD3D12Placement(UINT64 sz) {
+    return (sz + 65535ULL) & ~65535ULL;
+}
+
+inline HRESULT AllocateSimultaneousPlacedSceneBuffers(
+    ID3D12Device* device,
+    UINT64 vbBytes,
+    UINT64 ibBytes,
+    UINT64 transientBytes,
+    UnifiedPlacedSceneArena* outArena)
+{
+    if (!device || !outArena) return E_INVALIDARG;
+
+    const UINT64 offVB        = 0;
+    const UINT64 offIB        = offVB + AlignD3D12Placement(vbBytes);
+    const UINT64 offCB        = offIB + AlignD3D12Placement(ibBytes);
+    const UINT64 offTransient = offCB + AlignD3D12Placement(sizeof(SkinningConstants));
+    const UINT64 totalBytes   = offTransient + AlignD3D12Placement(transientBytes);
+
+    D3D12_HEAP_DESC heapDesc = {};
+    heapDesc.SizeInBytes = totalBytes;
+    heapDesc.Properties.Type = D3D12_HEAP_TYPE_DEFAULT;
+    heapDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+    heapDesc.Flags = D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS;
+
+    ZKAEDI_HR(device->CreateHeap(&heapDesc, IID_PPV_ARGS(&outArena->SceneBufferHeap)));
+    outArena->TotalHeapBytes    = totalBytes;
+    outArena->AliasedSavedBytes = AlignD3D12Placement(transientBytes);
+
+    auto makeBufDesc = [](UINT64 width) -> D3D12_RESOURCE_DESC {
+        D3D12_RESOURCE_DESC d = {};
+        d.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        d.Width = width;
+        d.Height = 1;
+        d.DepthOrArraySize = 1;
+        d.MipLevels = 1;
+        d.SampleDesc.Count = 1;
+        d.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        return d;
+    };
+
+    const D3D12_RESOURCE_DESC vbDesc = makeBufDesc(vbBytes);
+    const D3D12_RESOURCE_DESC ibDesc = makeBufDesc(ibBytes);
+    const D3D12_RESOURCE_DESC cbDesc = makeBufDesc((sizeof(SkinningConstants) + 255) & ~255ULL);
+    const D3D12_RESOURCE_DESC trDesc = makeBufDesc(transientBytes);
+
+    // Simultaneous placement inside the single unified GPU heap:
+    ZKAEDI_HR(device->CreatePlacedResource(outArena->SceneBufferHeap.Get(), offVB, &vbDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&outArena->PlacedVertexBuffer)));
+    ZKAEDI_HR(device->CreatePlacedResource(outArena->SceneBufferHeap.Get(), offIB, &ibDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&outArena->PlacedIndexBuffer)));
+    ZKAEDI_HR(device->CreatePlacedResource(outArena->SceneBufferHeap.Get(), offCB, &cbDesc, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, nullptr, IID_PPV_ARGS(&outArena->PlacedSkinningCBuffer)));
+
+    // Hidden memory area: Transient Shadow & SSAO buffers share the exact same heap offset via D3D12 Aliasing!
+    ZKAEDI_HR(device->CreatePlacedResource(outArena->SceneBufferHeap.Get(), offTransient, &trDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&outArena->TransientShadowBuffer)));
+    ZKAEDI_HR(device->CreatePlacedResource(outArena->SceneBufferHeap.Get(), offTransient, &trDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&outArena->AliasedSsaoBuffer)));
+
+    return S_OK;
+}
 
 } // namespace Xbox
 } // namespace Zkaedi

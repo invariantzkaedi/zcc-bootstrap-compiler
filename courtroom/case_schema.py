@@ -155,12 +155,36 @@ def parse_case(d: dict, *, path: str = "$") -> ReleaseCase:
     tumblers = [_parse_tumbler(t, f"{path}/tumblers[{i}]")
                 for i, t in enumerate(tumblers_raw)]
 
+    seen_tumblers: set[tuple[str, str]] = set()
+    for i, t in enumerate(tumblers):
+        if not isinstance(t.invariant, str) or not t.invariant.strip():
+            raise CaseSchemaError(f"{path}/tumblers[{i}]/invariant: must be non-empty string")
+        key = (t.tier, t.invariant)
+        if key in seen_tumblers:
+            raise CaseSchemaError(f"{path}/tumblers[{i}]: duplicate tumbler {key!r}")
+        seen_tumblers.add(key)
+
     evidence_raw = _opt(d, "evidence", [])
+    if isinstance(evidence_raw, dict):
+        evidence_raw = list(evidence_raw.values())
     if not isinstance(evidence_raw, list):
         raise CaseSchemaError(f"{path}/evidence: expected list")
     evidence_list = [_parse_evidence(e, f"{path}/evidence[{i}]")
                      for i, e in enumerate(evidence_raw)]
-    evidence = {e.id: e for e in evidence_list}
+    evidence: dict[str, Evidence] = {}
+    for i, e in enumerate(evidence_list):
+        if e.id in evidence:
+            raise CaseSchemaError(f"{path}/evidence[{i}]/id: duplicate evidence id {e.id!r}")
+        evidence[e.id] = e
+
+    required_tiers_raw = _opt(d, "required_tiers", [])
+    if not isinstance(required_tiers_raw, list):
+        raise CaseSchemaError(f"{path}/required_tiers: expected list")
+    for i, rt in enumerate(required_tiers_raw):
+        try:
+            parse_tier(rt)
+        except TierParseError as ex:
+            raise CaseSchemaError(f"{path}/required_tiers[{i}]: {ex}") from ex
 
     # Cross-validate: every evidence_id referenced in a tumbler must exist.
     for i, t in enumerate(tumblers):
@@ -171,7 +195,13 @@ def parse_case(d: dict, *, path: str = "$") -> ReleaseCase:
                     f"referenced evidence '{ev_id}' not found in evidence list"
                 )
 
-    return ReleaseCase(id=case_id, risk=risk, tumblers=tumblers, evidence=evidence)
+    return ReleaseCase(
+        id=case_id,
+        risk=risk,
+        tumblers=tumblers,
+        evidence=evidence,
+        required_tiers=list(required_tiers_raw),
+    )
 
 
 def load_case(path: str) -> ReleaseCase:

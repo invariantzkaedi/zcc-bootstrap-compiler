@@ -7,10 +7,11 @@
 #include "zcc_ir.h"
 #include "zcc_ir_opt_helpers.h"
 
-extern Instr g_ic_snapshot[MAX_INSTRS];
+extern Instr *g_ic_snapshot;
+extern int g_ic_snapshot_cap;
 
 static inline Instr* ic_snapshot_def_of(int reg) {
-    if (reg <= 0 || reg >= MAX_INSTRS || g_ic_snapshot[reg].op == OP_NOP) return NULL;
+    if (!g_ic_snapshot || reg <= 0 || reg >= g_ic_snapshot_cap || g_ic_snapshot[reg].op == OP_NOP) return NULL;
     return &g_ic_snapshot[reg];
 }
 

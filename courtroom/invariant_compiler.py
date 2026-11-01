@@ -85,6 +85,7 @@ class ReleaseCase:
     risk: str
     tumblers: list[TumblerStatus]
     evidence: dict[str, Evidence]
+    required_tiers: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -109,11 +110,22 @@ def has_valid_evidence(tumbler: TumblerStatus, case: ReleaseCase,
                        min_quality: int) -> bool:
     if not tumbler.evidence_ids:
         return False
+    meets_threshold = False
     for evidence_id in tumbler.evidence_ids:
+        if not isinstance(evidence_id, str) or not evidence_id.strip():
+            return False
         evidence = case.evidence.get(evidence_id)
-        if evidence and evidence.quality >= min_quality:
-            return True
-    return False
+        if not evidence or not isinstance(evidence, Evidence):
+            return False
+        if (not isinstance(evidence.id, str) or not evidence.id.strip()
+                or not isinstance(evidence.type, str) or not evidence.type.strip()
+                or not isinstance(evidence.claim_supported, str) or not evidence.claim_supported.strip()):
+            return False
+        if evidence.quality < 0:
+            return False
+        if evidence.quality >= min_quality:
+            meets_threshold = True
+    return meets_threshold
 
 
 def has_valid_waiver(tumbler: TumblerStatus, now: datetime | None = None) -> bool:
@@ -144,12 +156,80 @@ def _worse(a: Verdict, b: Verdict) -> Verdict:
     return a if _SEVERITY[a] >= _SEVERITY[b] else b
 
 
-def decide(case: ReleaseCase, now: datetime | None = None) -> DecisionReport:
+def decide(case: ReleaseCase, now: datetime | None = None,
+           required_tiers: list[str] | None = None) -> DecisionReport:
+    from collections import Counter
+    from tier_parser import TierParseError
+
     findings: list[TumblerFinding] = []
+    if not case.tumblers:
+        return DecisionReport(
+            verdict=Verdict.HOLD,
+            findings=findings,
+            summary="0/0 tumblers seated (empty tumbler collection) → HOLD",
+        )
+
     verdict = Verdict.SHIP
+    key_counts = Counter(
+        (t.tier, t.invariant)
+        for t in case.tumblers
+        if isinstance(t, TumblerStatus)
+        and isinstance(t.tier, str)
+        and isinstance(t.invariant, str)
+    )
 
     for tumbler in case.tumblers:
-        min_q = required_quality_for_tier(tumbler.tier)
+        if not isinstance(tumbler, TumblerStatus):
+            findings.append(TumblerFinding(
+                tier="<malformed>",
+                invariant="<malformed>",
+                status=Status.UNKNOWN,
+                seated=False,
+                reason="malformed or null tumbler entry",
+                contribution=Verdict.HOLD,
+            ))
+            verdict = _worse(verdict, Verdict.HOLD)
+            continue
+
+        try:
+            min_q = required_quality_for_tier(tumbler.tier)
+            t0_flag = is_t0(tumbler.tier)
+        except (TierParseError, TypeError, ValueError) as exc:
+            findings.append(TumblerFinding(
+                tier=str(tumbler.tier),
+                invariant=str(tumbler.invariant),
+                status=tumbler.status if isinstance(tumbler.status, Status) else Status.UNKNOWN,
+                seated=False,
+                reason=f"invalid tier identifier: {exc}",
+                contribution=Verdict.HOLD,
+            ))
+            verdict = _worse(verdict, Verdict.HOLD)
+            continue
+
+        if not isinstance(tumbler.invariant, str) or not tumbler.invariant.strip():
+            findings.append(TumblerFinding(
+                tier=tumbler.tier,
+                invariant=str(tumbler.invariant),
+                status=tumbler.status if isinstance(tumbler.status, Status) else Status.UNKNOWN,
+                seated=False,
+                reason="missing or empty invariant description",
+                contribution=Verdict.HOLD,
+            ))
+            verdict = _worse(verdict, Verdict.HOLD)
+            continue
+
+        if key_counts[(tumbler.tier, tumbler.invariant)] > 1:
+            findings.append(TumblerFinding(
+                tier=tumbler.tier,
+                invariant=tumbler.invariant,
+                status=tumbler.status if isinstance(tumbler.status, Status) else Status.UNKNOWN,
+                seated=False,
+                reason=f"duplicate tumbler ({tumbler.tier}, {tumbler.invariant})",
+                contribution=Verdict.HOLD,
+            ))
+            verdict = _worse(verdict, Verdict.HOLD)
+            continue
+
         contribution = Verdict.SHIP
         seated = False
         reason = ""
@@ -168,7 +248,7 @@ def decide(case: ReleaseCase, now: datetime | None = None) -> DecisionReport:
                 contribution = Verdict.HOLD
 
         elif tumbler.status == Status.WAIVED:
-            if is_t0(tumbler.tier):
+            if t0_flag:
                 reason = "T0/P0 may not be waived"
                 contribution = Verdict.HOLD
             elif not has_valid_waiver(tumbler, now=now):
@@ -205,9 +285,35 @@ def decide(case: ReleaseCase, now: datetime | None = None) -> DecisionReport:
         ))
         verdict = _worse(verdict, contribution)
 
+    req_list = required_tiers if required_tiers is not None else getattr(case, "required_tiers", [])
+    present_tiers = {f.tier for f in findings}
+    for req_tier in req_list or []:
+        if req_tier not in present_tiers:
+            findings.append(TumblerFinding(
+                tier=req_tier,
+                invariant="<missing mandatory gate>",
+                status=Status.UNKNOWN,
+                seated=False,
+                reason=f"missing mandatory gate {req_tier}",
+                contribution=Verdict.HOLD,
+            ))
+            verdict = _worse(verdict, Verdict.HOLD)
+
+    has_seated_t0 = any(
+        f.tier != "<malformed>"
+        and is_t0(f.tier)
+        and f.seated
+        and f.status == Status.SEATED
+        for f in findings
+    )
+    if not has_seated_t0:
+        verdict = _worse(verdict, Verdict.HOLD)
+
     # Optional explicit rollback escalation if the case is flagged post-deploy.
     if case.risk == "deployed_breach" and verdict == Verdict.HOLD:
-        if any(is_t0(f.tier) and not f.seated for f in findings):
+        if (not has_seated_t0) or any(
+            f.tier != "<malformed>" and is_t0(f.tier) and not f.seated for f in findings
+        ):
             verdict = Verdict.ROLLBACK_OR_CONTAIN
 
     seated_count = sum(1 for f in findings if f.seated)

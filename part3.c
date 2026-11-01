@@ -5792,7 +5792,7 @@ static void init_local_lattices(Node *n) {
     if (!n) return;
     if (n->kind == ND_VAR && n->sym && n->sym->is_local) {
         SymStats *stats = get_sym_stats(n->sym);
-        if (stats && (stats->assign_count > 0 || stats->addr_taken)) {
+        if (stats && (stats->addr_taken || (n->sym->is_param && stats->assign_count > 0))) {
             LatticeVal bot = {LATTICE_BOT, 0};
             set_sym_lattice(n->sym, bot);
         }
@@ -5831,14 +5831,14 @@ static void propagate_local_assignments(Node *n, Node *current_func) {
     if (n->kind == ND_ASSIGN) {
         Node *lhs = n->lhs;
         while (lhs && lhs->kind == ND_CAST) lhs = lhs->lhs;
-        if (lhs && lhs->kind == ND_VAR && lhs->sym && lhs->sym->is_local) {
+        if (lhs && lhs->kind == ND_VAR && lhs->sym && lhs->sym->is_local && !lhs->sym->is_param) {
             /* CG-VOLATILE-001: never enter a volatile symbol into the ICP lattice.
              * Volatile writes must always reach memory — if ICP marks the symbol
              * LATTICE_CONST, a later read could be folded away, silently skipping
              * the required memory access. */
             if (lhs->sym->type && (lhs->sym->type->is_volatile || lhs->sym->type->kind == TY_FLOAT || lhs->sym->type->kind == TY_DOUBLE)) goto icp_assign_done;
             SymStats *stats = get_sym_stats(lhs->sym);
-            if (stats && stats->assign_count <= 1 && stats->addr_taken == 0) {
+            if (stats && stats->addr_taken == 0) {
                 LatticeVal rhs_val = icp_eval_expr(n->rhs);
                 if (rhs_val.kind == LATTICE_CONST && lhs->sym->type) {
                     rhs_val.val = force_truncate(rhs_val.val, lhs->sym->type);
@@ -5854,6 +5854,18 @@ static void propagate_local_assignments(Node *n, Node *current_func) {
             }
         }
         icp_assign_done:;
+    } else if (n->kind == ND_COMPOUND_ASSIGN || n->kind == ND_PRE_INC ||
+               n->kind == ND_POST_INC || n->kind == ND_PRE_DEC || n->kind == ND_POST_DEC) {
+        Node *lhs = n->lhs;
+        while (lhs && lhs->kind == ND_CAST) lhs = lhs->lhs;
+        if (lhs && lhs->kind == ND_VAR && lhs->sym && lhs->sym->is_local) {
+            LatticeVal cur_val = get_sym_lattice(lhs->sym);
+            if (cur_val.kind != LATTICE_BOT) {
+                LatticeVal bot = {LATTICE_BOT, 0};
+                set_sym_lattice(lhs->sym, bot);
+                add_to_worklist(current_func);
+            }
+        }
     }
     
     propagate_local_assignments(n->lhs, current_func);
@@ -5896,8 +5908,8 @@ static void rewrite_constant_vars_rec(Node *n, int is_lvalue) {
             return;
         }
         SymStats *stats = get_sym_stats(n->sym);
-        if (!stats || stats->assign_count > 0 || stats->addr_taken) {
-            // Symbol is untracked, assigned, or address-taken inside function; whole-function constant rewriting is unsound.
+        if (!stats || stats->addr_taken || (n->sym->is_param && stats->assign_count > 0)) {
+            // Symbol is untracked, address-taken, or a mutated parameter; whole-function constant rewriting is unsound.
             goto skip_rewrite;
         }
         LatticeVal lv = get_sym_lattice(n->sym);

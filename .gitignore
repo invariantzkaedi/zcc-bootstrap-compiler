@@ -13,6 +13,7 @@ zcc2_*
 zcc3_*
 zcc_[!s]*[!.cph]
 !zcc_compiler_explorer.html
+!deliverables/**
 zcc_s[!y]*[!.cph]
 zcc_sy[!s]*[!.cph]
 gcc_*
@@ -630,6 +631,8 @@ governance/
 identity/
 *.pem
 !contracts/*.pem
+!deliverables/**/*.pem
+.authority_keys/
 
 # Whitelist fuzzing harness
 !zcc_fuzz_harness.py
@@ -809,5 +812,12 @@ temp_*
 
 # Non-exportable hardware enclave private key vault
 config/.isolated_vault/
+
+# Transactional release generations, WAL journal, and temporary staging
+.releases/
+*.tx_tmp
+build/
+releases/
+
 
 

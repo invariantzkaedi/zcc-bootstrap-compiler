@@ -13,7 +13,10 @@ typedef struct {
 
 bool ic_try_rules(Function *fn, Instr *it);
 
-Instr g_ic_snapshot[MAX_INSTRS];
+#include <stdlib.h>
+
+Instr *g_ic_snapshot = NULL;
+int g_ic_snapshot_cap = 0;
 
 bool opt_instcombine_pass(Function *fn, OptMetricsSink *metrics) {
     (void)metrics;
@@ -24,6 +27,11 @@ bool opt_instcombine_pass(Function *fn, OptMetricsSink *metrics) {
     rebuild_def_use(fn);
     int max_reg = fn_max_register(fn);
     if (max_reg >= MAX_INSTRS) max_reg = MAX_INSTRS - 1;
+    if (max_reg + 1 > g_ic_snapshot_cap) {
+        int new_cap = (max_reg + 1 < 1024) ? 1024 : (max_reg + 1);
+        g_ic_snapshot = (Instr *)realloc(g_ic_snapshot, (size_t)new_cap * sizeof(Instr));
+        g_ic_snapshot_cap = new_cap;
+    }
     memset(g_ic_snapshot, 0, (max_reg + 1) * sizeof(Instr));
     for (int i = 0; i <= max_reg; i++) {
         if (fn->def_of[i]) {

@@ -1,0 +1,90 @@
+{
+  "toolchain": "ZCC",
+  "governing_standards": ["ZCC-EF-0", "ZCC-EF-7", "NV-1..NV-5", "AV-1..AV-6"],
+  "equivalence_verification": {
+    "closed_form_expression": "out_j = rn(out_j +/- rn(c_dt * rn(rn((-J) * rn(rn(in_{j-1} + in_{j+1}) - rn(2.0 * in_j))) + rn(V_j * in_j))))",
+    "seeds_verified": 10,
+    "rows_per_seed_train": 1000,
+    "rows_per_seed_test": 400,
+    "features_per_row": 512,
+    "scalar_vs_fused_max_abs_diff": 0.00000000000000000e+00,
+    "scalar_vs_avx512_max_abs_diff": 0.00000000000000000e+00,
+    "scalar_vs_avx512_max_ulp_diff": 0,
+    "status": "PASS"
+  },
+  "native_10seed_r2": {
+    "seeds": [42, 43, 44, 45, 46, 47, 48, 49, 50, 51],
+    "Q1_Quantum_LinearPhase": [1.05480823490237241e-01, 6.71335809901940639e-02, 1.15295402120684232e-01, 9.65446060664566508e-02, 6.46022875138159147e-02, 6.34176859571164986e-02, 1.18080717678118785e-01, 6.52338474450141481e-02, 1.40856657720774825e-02, 7.84355893829401518e-02],
+    "Q2_Quantum_LocalIntensity": [4.50885633297060107e-02, -2.40480366554196578e-03, 3.16484919276025511e-02, 1.18604036526834822e-02, 2.45942741312018542e-02, -1.26212950928805689e-03, 5.35156246615353659e-02, 3.33581006030788663e-02, -6.30737154104139552e-02, 2.87318245818188878e-02],
+    "Q4_Quantum_AllQuadratic": [4.67180613795799005e-02, -1.01299132120034052e-02, 3.24336223039146665e-02, 1.18329649366933909e-02, 2.15332730894048918e-02, -1.27681582725958087e-03, 5.48764031013708742e-02, 3.91483953729139245e-02, -5.78759684335723446e-02, 2.33773262413839999e-02],
+    "Q5_Quantum_FullCandidate": [9.26287689475562281e-02, 5.37115736065043592e-02, 1.26603600970865537e-01, 1.02580947523302601e-01, 8.76868804227637355e-02, 5.78162740507525141e-02, 1.43871194488102705e-01, 5.23010864956076071e-02, -1.81781210118132641e-02, 8.67233582101755163e-02],
+    "B0_Linear_Delay": [-1.25979461988838803e-02, -1.04134371995412423e-04, -4.13420477904447026e-03, -4.52036575415482034e-03, -2.45756825972929249e-02, -1.82984303464588383e-02, -9.49919682543232113e-03, 7.60614680641991114e-03, -4.35749866893744287e-02, 6.00867274481464708e-03],
+    "V1_Volterra_Filter": [9.99999999999988454e-01, 9.99999999999988565e-01, 9.99999999999988454e-01, 9.99999999999989564e-01, 9.99999999999988232e-01, 9.99999999999988898e-01, 9.99999999999987343e-01, 9.99999999999989564e-01, 9.99999999999988565e-01, 9.99999999999989342e-01]
+  },
+  "native_ablation_seed42": {
+    "decoupled_J0_V100_r2": -4.33769663788829973e-03,
+    "free_wave_J25_V0_r2": -2.66818803224721846e-01
+  },
+  "kernel_benchmarks_10k_steps": {
+    "kernel_0_scalar_ref": {
+      "benchmark_steps": 10000,
+      "total_wall_ms": 2172.9513,
+      "throughput_steps_per_sec": 4602.04,
+      "mean_us": 217.1652,
+      "std_us": 533.3106,
+      "min_us": 106.4820,
+      "p50_us": 174.6810,
+      "p90_us": 267.4170,
+      "p95_us": 297.8340,
+      "p99_us": 772.2490,
+      "p999_us": 8840.7290,
+      "wcet_us": 10545.2600,
+      "jitter_us": 597.5680,
+      "phase_2_propagation_us": 209.0542
+    },
+    "kernel_1_fused_branchfree_c": {
+      "benchmark_steps": 10000,
+      "total_wall_ms": 1671.4159,
+      "throughput_steps_per_sec": 5982.95,
+      "mean_us": 167.0562,
+      "std_us": 237.6058,
+      "min_us": 114.8380,
+      "p50_us": 159.6430,
+      "p90_us": 202.4940,
+      "p95_us": 245.8560,
+      "p99_us": 371.3470,
+      "p999_us": 2112.6980,
+      "wcet_us": 9746.9520,
+      "jitter_us": 211.7040,
+      "phase_2_propagation_us": 145.6439
+    },
+    "kernel_2_avx512_zmm": {
+      "benchmark_steps": 10000,
+      "total_wall_ms": 90.5198,
+      "throughput_steps_per_sec": 110473.06,
+      "mean_us": 9.0098,
+      "std_us": 17.0012,
+      "min_us": 5.1390,
+      "p50_us": 7.3840,
+      "p90_us": 10.5400,
+      "p95_us": 10.8110,
+      "p99_us": 30.8590,
+      "p999_us": 265.0380,
+      "wcet_us": 1003.6890,
+      "jitter_us": 23.4750,
+      "phase_2_propagation_us": 3.3475
+    }
+  },
+  "speedup_attribution": {
+    "fused_vs_scalar_mean_speedup": 1.3000,
+    "avx512_vs_scalar_mean_speedup": 24.1032,
+    "avx512_vs_scalar_p50_speedup": 23.6567,
+    "avx512_vs_scalar_phase2_propagation_speedup": 62.4503,
+    "mechanisms": [
+      "512-bit AVX-512 SIMD width (8x binary64 lanes per zmm instruction, 16 vector steps per 128-site ring)",
+      "Elimination of 9,600 redundant hardware divsd (/ HBAR = 1.0) instructions per macro-step",
+      "Periodic halo padding (g_halo[130]) eliminating 19,200 conditional boundary ternary branches per macro-step",
+      "In-register 25-substep Verlet loop fusion eliminating 75 function calls and intermediate g_H_psi buffer round-trips"
+    ]
+  }
+}

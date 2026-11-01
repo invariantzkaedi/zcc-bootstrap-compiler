@@ -1,0 +1,83 @@
+==============================================================================================================
+  ZCC-EAI-006-G3-M5: GATE M5-2 MULTI-SEED GENERALIZATION & STATISTICAL HARDENING
+  Governing Standards: ZCC-EF-0 & ZCC-EF-7 (Evidence Tier E3)
+==============================================================================================================
+
+[CONTROL 0] Checking Python Simulator Bit-Parity & Precision Metrics...
+  * Maximum Absolute Discrepancy on Row 0: 4.9960e-16 (2.25 x binary64 eps_mach)
+  * Full Matrix Max Discrepancy (1000 tr / 400 te): train=1.3323e-15, test=8.8818e-16
+  * Active Wave State Max Relative Error:  4.0687e-15
+  * Active Wave State Max ULP Distance:    15.00 ULPs
+  [PASS] Zero Drift: Simulator verified against full ZCC binary dataset (1,400 rows x 512 cols).
+
+--- [EXPERIMENT 1] MULTI-SEED GENERALIZATION (10 INDEPENDENT INPUT REALISATIONS) ---
+  Progress: Seed 42 (1/10 completed)  Progress: Seed 43 (2/10 completed)  Progress: Seed 44 (3/10 completed)  Progress: Seed 45 (4/10 completed)  Progress: Seed 46 (5/10 completed)  Progress: Seed 47 (6/10 completed)  Progress: Seed 48 (7/10 completed)  Progress: Seed 49 (8/10 completed)  Progress: Seed 50 (9/10 completed)  Progress: Seed 51 (10/10 completed)
+  Experiment 1 finished in 68781.39 ms.
+
+[CONTROL 0b] Verifying 10-Seed Native ZCC + AVX-512 Engine Parity (Seeds 42..51)...
+  * 10-Seed ZCC vs GCC Native C Max |Delta R^2|: 0.0000e+00
+  * 10-Seed Python vs ZCC Native C Max |Delta R^2|: 6.7100e-12
+  * Scalar vs 512-bit AVX-512 Max ULP Distance: 0 ULPs (ZCC), 0 ULPs (GCC)
+  * ZCC AVX-512 Symplectic Verlet Speedup: 62.45x Phase-2 (24.10x Mean)
+  [PASS] All 10 seeds (42..51) & AVX-512 Verlet kernel verified in native ZCC machine code.
+
+  MULTI-SEED ENSEMBLE SUMMARY (10 SEEDS):
+    * B0_Linear_Delay                 : Mean R^2 = -0.0104 +/- 0.0146  [Min: -0.0436, Max: +0.0076]
+    * V1_Volterra_Filter              : Mean R^2 = +1.0000 +/- 0.0000  [Min: +1.0000, Max: +1.0000]
+    * Q1_Quantum_LinearPhase          : Mean R^2 = +0.0788 +/- 0.0297  [Min: +0.0141, Max: +0.1181]
+    * Q2_Quantum_LocalIntensity       : Mean R^2 = +0.0162 +/- 0.0315  [Min: -0.0631, Max: +0.0535]
+    * Q4_Quantum_AllQuadratic         : Mean R^2 = +0.0161 +/- 0.0313  [Min: -0.0579, Max: +0.0549]
+    * Q5_Quantum_FullCandidate        : Mean R^2 = +0.0786 +/- 0.0431  [Min: -0.0182, Max: +0.1439]
+    * C1_Classical_ZeroBias_Linear    : Mean R^2 = -0.0967 +/- 0.0792  [Min: -0.2569, Max: -0.0180]
+    * C2_Classical_ZeroBias_PureQuad  : Mean R^2 = +0.1273 +/- 0.0572  [Min: -0.0206, Max: +0.1880]
+    * C4_Classical_Bias_Linear        : Mean R^2 = +0.1548 +/- 0.0349  [Min: +0.0906, Max: +0.2037]
+    * C5_Classical_Bias_Hybrid        : Mean R^2 = +0.1735 +/- 0.0623  [Min: +0.0421, Max: +0.2690]
+
+  PAIRED 10-SEED T-TESTS:
+    * Q1 (Linear) vs Q5 (Full): Mean Delta = +0.0003, t(9) = +0.04, p = 0.9656 (Statistically Equivalent)
+    * Q1 (Linear) vs Q2 (Int):  Mean Delta = +0.0626, t(9) = +11.18, p = 1.41e-06 (Linear Strongly Superior)
+    * C5 (Hybrid) vs Q1 (Lin):  Mean Delta = +0.0947, t(9) = +3.84, p = 0.0040 (Classical Superior, p < 0.01)
+
+--- [EXPERIMENT 2] PAIRED CIRCULAR BLOCK BOOTSTRAP (B=25, K=2000 RESAMPLES ON SEED 42) ---
+    * Paired Difference C5_minus_Q1   : Mean Delta = +0.0769 | 95% CI: [-0.0101, +0.1540] | 99% CI: [-0.0343, +0.1704] | p = 0.0930
+    * Paired Difference Q1_minus_Q5   : Mean Delta = +0.0127 | 95% CI: [-0.0131, +0.0390] | 99% CI: [-0.0219, +0.0463] | p = 0.3270
+    * Paired Difference Q1_minus_Q2   : Mean Delta = +0.0600 | 95% CI: [-0.0029, +0.1223] | 99% CI: [-0.0213, +0.1446] | p = 0.0620
+
+--- [EXPERIMENT 3] REGULARIZATION STRENGTH (LAMBDA) SWEEP & CONDITIONING ISOLATION ---
+    * Q1 (Linear Phase 256 F): Optimal Lambda = 1e-05 -> Test R^2 = +0.1093 (at default 1e-4: +0.1055)
+    * Q5 (Full Cand. 512 F):  Optimal Lambda = 1e-04 -> Test R^2 = +0.0926 (at default 1e-4: +0.0926)
+    * C5 (Classical Hybrid):  Optimal Lambda = 1e-03 -> Test R^2 = +0.1992 (at default 1e-4: +0.1825)
+
+--- [EXPERIMENT 4] INPUT NOISE ROBUSTNESS SWEEP (SNR: Inf, 30, 20, 15, 10, 5, 0 dB) ---
+    * SNR = Inf dB | Volterra: +1.0000 | Classical Hybrid: +0.1825 | Quantum LinPhase: +0.1055 | Quantum Full: +0.0926
+    * SNR = 30 dB  | Volterra: +0.9974 | Classical Hybrid: +0.1910 | Quantum LinPhase: +0.1024 | Quantum Full: +0.0885
+    * SNR = 20 dB  | Volterra: +0.9804 | Classical Hybrid: +0.1498 | Quantum LinPhase: +0.0711 | Quantum Full: +0.0582
+    * SNR = 15 dB  | Volterra: +0.9415 | Classical Hybrid: +0.1090 | Quantum LinPhase: +0.0536 | Quantum Full: +0.0654
+    * SNR = 10 dB  | Volterra: +0.8235 | Classical Hybrid: +0.0341 | Quantum LinPhase: +0.0753 | Quantum Full: +0.0585
+    * SNR =  5 dB  | Volterra: +0.5455 | Classical Hybrid: -0.1789 | Quantum LinPhase: +0.0372 | Quantum Full: +0.0055
+    * SNR =  0 dB  | Volterra: +0.2089 | Classical Hybrid: -0.4784 | Quantum LinPhase: -0.0005 | Quantum Full: -0.0100
+
+--- [EXPERIMENT 5] TARGET GENERALIZATION (UNSEEN POLYNOMIAL & NARMA-LIKE TARGETS) ---
+    * Target: parity       | Volterra: +1.0000 | Classical Hybrid: +0.1825 | Quantum LinPhase: +0.1055 | Quantum Full: +0.0926
+    * Target: unseen_poly  | Volterra: +1.0000 | Classical Hybrid: +0.3149 | Quantum LinPhase: +0.0893 | Quantum Full: +0.0813
+    * Target: narma_like   | Volterra: +0.9781 | Classical Hybrid: +0.7368 | Quantum LinPhase: +0.5836 | Quantum Full: +0.5979
+
+--- [EXPERIMENT 6] REPEATED-MEASURES 2-WAY FACTORIAL ANOVA (BIAS x QUADRATIC) ---
+    * Readout Non-Linearity: F(1, 9) =  68.39 (p = 1.70e-05, eta_p^2 = 0.8837)
+    * Bias Symmetry-Breaking: F(1, 9) = 190.92 (p = 2.30e-07, eta_p^2 = 0.9550)
+    * Interaction (Readout x Bias): F(1, 9) =  25.24 (p = 7.15e-04, eta_p^2 = 0.7371) [Mean Contrast: -0.2053]
+
+--- [EXPERIMENT 7] PHYSICAL MECHANISM ABLATION (J-COUPLING & POTENTIAL V ISOLATION) ---
+    * J-Coupling Strength =  0.0 -> Held-out R^2 = -0.0043
+    * J-Coupling Strength =  5.0 -> Held-out R^2 = +0.0403
+    * J-Coupling Strength = 15.0 -> Held-out R^2 = +0.0719
+    * J-Coupling Strength = 25.0 -> Held-out R^2 = +0.0926
+    * J-Coupling Strength = 50.0 -> Held-out R^2 = +0.1583
+    * Decoupled Lattice (J=0, V=100): R^2 = -0.0043 (Memory completely collapses)
+    * Free Wave (J=25, V=0):          R^2 = -0.2668 (Nonlinearity completely collapses)
+
+==============================================================================================================
+  GATE M5-2 EXECUTION COMPLETE: PASS
+  Receipt Path:     /mnt/h/__DOWNLOADS/zcc_github_upload/docs/evidence/2026-10-28/m5_2_noise_bootstrap/m5_2_noise_bootstrap_receipt.json
+  Receipt SHA-256:  8483ae27c7ec9ef41c0181a5d2cc5479ef1df8a82ee792d9f6669b1269ec6cd8
+==============================================================================================================

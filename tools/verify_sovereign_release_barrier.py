@@ -82,7 +82,7 @@ def main():
     parser.add_argument("--expected-run-id", required=True, help="Expected producer GitHub Actions run ID (V4-M5-17)")
     parser.add_argument("--expected-producer-repo", default="invariantzkaedi/zcc-bootstrap-compiler", help="Expected producer repo (V4-M5-18)")
     parser.add_argument("--expected-authority", default="invariantzkaedi/zcc-release-authority", help="Expected authority repo (V4-M5-18)")
-    parser.add_argument("--expected-authority-commit", required=False, help="Expected authority commit SHA (V4-M5-18)")
+    parser.add_argument("--expected-authority-commit", required=True, help="Expected authority commit SHA (Mandatory V4-M5-18 & V4-M5-20)")
     parser.add_argument("--authority-pubkey", required=False, help="Path to authority Ed25519 public key")
     parser.add_argument("--pinned-fingerprint", default=CANONICAL_AUTHORITY_FINGERPRINT, help="Expected public key fingerprint")
 
@@ -131,13 +131,15 @@ def main():
         print(f"RELEASE BLOCKED: Workflow run ID mismatch! Verdict certified run '{prod_run}', but releasing '{exp_run}'", file=sys.stderr)
         sys.exit(EXIT_RELEASE_BLOCKED)
 
-    # 5. Authority Revision Check (if specified) (V4-M5-18)
-    if args.expected_authority_commit:
-        auth_commit = str(verdict.get("authority_commit", "")).strip().lower()
-        exp_auth = str(args.expected_authority_commit).strip().lower()
-        if auth_commit != exp_auth:
-            print(f"RELEASE BLOCKED: Authority revision mismatch! Certified revision '{auth_commit}' != expected '{exp_auth}'", file=sys.stderr)
-            sys.exit(EXIT_RELEASE_BLOCKED)
+    # 5. Authority Revision Check (Mandatory V4-M5-18 & V4-M5-20)
+    auth_commit = str(verdict.get("authority_commit", "")).strip().lower()
+    exp_auth = str(args.expected_authority_commit).strip().lower()
+    if not auth_commit:
+        print("RELEASE BLOCKED: Missing authority_commit in verdict! Untrusted attestation.", file=sys.stderr)
+        sys.exit(EXIT_RELEASE_BLOCKED)
+    if auth_commit != exp_auth:
+        print(f"RELEASE BLOCKED: Authority revision mismatch! Certified revision '{auth_commit}' != expected '{exp_auth}'", file=sys.stderr)
+        sys.exit(EXIT_RELEASE_BLOCKED)
 
     # 6. Artifact SHA-256 Digest Verification
     actual_art_sha = compute_file_sha256(artifact_path)

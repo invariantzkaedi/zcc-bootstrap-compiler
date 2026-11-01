@@ -19,6 +19,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#ifndef _WIN32
+#include <sys/stat.h>
+#endif
 
 static int g_verbose = 0;
 static uint8_t *g_attest_data = NULL;
@@ -48,6 +51,7 @@ static size_t   g_build_attest_sz = 0;
 #define SHF_ALLOC    0x2
 #define SHF_EXECINSTR 0x4
 #define SHF_WRITE    0x1
+#define SHF_TLS      0x400
 #define STB_GLOBAL   1
 #define STB_WEAK     2
 #define STV_DEFAULT  0
@@ -56,6 +60,7 @@ static size_t   g_build_attest_sz = 0;
 #define SHN_COMMON   0xfff2
 #define PT_LOAD      1
 #define PT_NOTE      4
+#define PT_TLS       7
 #define PF_X         0x1
 #define PF_W         0x2
 #define PF_R         0x4
@@ -67,6 +72,12 @@ static size_t   g_build_attest_sz = 0;
 #define R_X86_64_32      10
 #define R_X86_64_32S     11
 #define R_X86_64_PLT32   4
+#define R_X86_64_GOTPC32 9
+#define R_X86_64_TLSGD   19
+#define R_X86_64_GOTTPOFF 22
+#define R_X86_64_TPOFF32 23
+#define R_X86_64_GOTPCRELX 41
+#define R_X86_64_REX_GOTPCRELX 42
 
 typedef uint64_t Elf64_Addr;
 typedef uint64_t Elf64_Off;
@@ -224,6 +235,67 @@ static char      g_output[256] = "a.out";
 static OutSection g_out[32];  /* .text .rodata .data .bss */
 static int        g_nout = 0;
 
+#define MAX_GOT 512
+typedef struct {
+    char name[256];
+    int is_global;
+    int obj_idx;
+    uint32_t sym_idx;
+} GotEntry;
+static GotEntry g_got[MAX_GOT];
+static uint64_t g_got_offsets[MAX_GOT];
+static int g_got_cnt = 0;
+
+static uint64_t resolve_sym_value(ObjFile *o, uint32_t sym_idx);
+
+static int find_or_add_got_entry(ObjFile *o, int obj_idx, uint32_t sym_idx) {
+    Elf64_Sym *sym = &o->symtab[sym_idx];
+    int bind = ELF64_ST_BIND(sym->st_info);
+    const char *name = o->strtab + sym->st_name;
+
+    int g;
+    if (bind == STB_GLOBAL || bind == STB_WEAK) {
+        for (g = 0; g < g_got_cnt; g++) {
+            if (g_got[g].is_global && strcmp(g_got[g].name, name) == 0) {
+                return g;
+            }
+        }
+    } else {
+        for (g = 0; g < g_got_cnt; g++) {
+            if (!g_got[g].is_global && g_got[g].obj_idx == obj_idx && g_got[g].sym_idx == sym_idx) {
+                return g;
+            }
+        }
+    }
+
+    if (g_got_cnt >= MAX_GOT) {
+        fprintf(stderr, "zld: too many GOT entries\n");
+        exit(1);
+    }
+
+    int idx = g_got_cnt++;
+    g_got[idx].is_global = (bind == STB_GLOBAL || bind == STB_WEAK);
+    strncpy(g_got[idx].name, name, sizeof(g_got[idx].name) - 1);
+    g_got[idx].name[sizeof(g_got[idx].name) - 1] = '\0';
+    g_got[idx].obj_idx = obj_idx;
+    g_got[idx].sym_idx = sym_idx;
+    return idx;
+}
+
+static uint64_t g_tls_vma = 0;
+static uint64_t g_aligned_tls_sz = 0;
+
+static int64_t get_tls_offset(GlobalSym *gs) {
+    if (!gs) return 0;
+    ObjFile *o = &g_objs[gs->obj_idx];
+    Elf64_Sym *sym = &o->symtab[gs->sym_idx];
+    unsigned char st_type = ELF64_ST_TYPE(sym->st_info);
+    if (st_type == 6) { /* STT_TLS = 6 */
+        return (int64_t)gs->value - (int64_t)(g_tls_vma + g_aligned_tls_sz);
+    }
+    return (int64_t)sym->st_value;
+}
+
 typedef struct {
     char name[64];
     char val_str[128];
@@ -263,6 +335,9 @@ static void *xrealloc(void *ptr, size_t sz) {
 
 static void cleanup_linker_state(void) {
     int i;
+    g_got_cnt = 0;
+    g_tls_vma = 0;
+    g_aligned_tls_sz = 0;
     if (g_attest_data) {
         free(g_attest_data);
         g_attest_data = NULL;
@@ -911,10 +986,16 @@ static const char *match_section(const char *secname, int is_common) {
     if (strcmp(secname, ".note.zcc.tensor") == 0) return ".note.zcc.tensor";
     if (strcmp(secname, ".note.zcc.build") == 0)  return ".note.zcc.build";
     if (strcmp(secname, ".zcc_tensor_attest") == 0) return ".zcc_tensor_attest";
+    if (strncmp(secname, ".init_array", 11) == 0) return ".init_array";
+    if (strncmp(secname, ".fini_array", 11) == 0) return ".fini_array";
+    if (strcmp(secname, ".init") == 0) return ".init";
+    if (strcmp(secname, ".fini") == 0) return ".fini";
     if (strncmp(secname, ".text", 5) == 0 || strncmp(secname, ".multiboot", 10) == 0)
         return ".text";
     if (strncmp(secname, ".rodata", 7) == 0) return ".rodata";
     if (strncmp(secname, ".note", 5) == 0)   return ".note";
+    if (strncmp(secname, ".tdata", 6) == 0)  return ".tdata";
+    if (strncmp(secname, ".tbss", 5) == 0)   return ".tbss";
     if (strncmp(secname, ".data", 5) == 0)   return ".data";
     if (strncmp(secname, ".bss", 4) == 0 || is_common) return ".bss";
     if (strncmp(secname, ".debug_", 7) == 0) return secname;
@@ -934,12 +1015,72 @@ static uint64_t get_section_base(const char *out_name) {
 static GlobalSym *find_sym(const char *name);
 static GlobalSym *add_sym(const char *name);
 
+static int has_strong_definition(const char *name) {
+    int oi;
+    for (oi = 0; oi < g_nobj; oi++) {
+        ObjFile *o = &g_objs[oi];
+        uint32_t si;
+        if (!o->symtab) continue;
+        for (si = 0; si < o->symcnt; si++) {
+            Elf64_Sym *sym = &o->symtab[si];
+            if (sym->st_shndx == SHN_UNDEF || sym->st_shndx == SHN_COMMON) continue;
+            if (ELF64_ST_BIND(sym->st_info) != STB_GLOBAL) continue;
+            const char *sname = o->strtab + sym->st_name;
+            if (strcmp(sname, name) == 0) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+static int is_rw_section_name(const char *oname) {
+    return strcmp(oname, ".init_array") == 0 ||
+           strcmp(oname, ".fini_array") == 0 ||
+           strcmp(oname, ".tdata") == 0 ||
+           strcmp(oname, ".tbss") == 0 ||
+           strcmp(oname, ".got") == 0 ||
+           strcmp(oname, ".data") == 0 ||
+           strcmp(oname, ".bss") == 0;
+}
+
 /* ── Layout pass: assign VMAs to all input sections ─────────────────────── */
 static void layout(void) {
-    static const char *out_order[] = { ".text", ".rodata", ".note", ".note.zcc.tensor", ".note.zcc.build", ".zcc_tensor_attest", ".data", ".bss", NULL };
+    static const char *out_order[] = {
+        ".init", ".text", ".fini", ".rodata",
+        ".note", ".note.zcc.tensor", ".note.zcc.build", ".zcc_tensor_attest",
+        ".init_array", ".fini_array", ".tdata", ".tbss", ".got", ".data", ".bss",
+        NULL
+    };
     int oi;
     int max_shnum = 0;
     int i;
+
+    /* Pre-scan relocations for R_X86_64_GOTTPOFF, GOTPC32, and GOTPCRELX to populate GOT */
+    g_got_cnt = 0;
+    for (i = 0; i < g_nobj; i++) {
+        ObjFile *o = &g_objs[i];
+        uint32_t si;
+        for (si = 0; si < o->ehdr->e_shnum; si++) {
+            Elf64_Shdr *sh = &o->shdrs[si];
+            if (sh->sh_type != SHT_RELA) continue;
+            Elf64_Rela *relas = (Elf64_Rela *)(o->data + sh->sh_offset);
+            uint32_t nrela = (uint32_t)(sh->sh_size / sizeof(Elf64_Rela));
+            uint32_t ri;
+            for (ri = 0; ri < nrela; ri++) {
+                Elf64_Rela *r = &relas[ri];
+                uint32_t rtype = (uint32_t)ELF64_R_TYPE(r->r_info);
+                if (rtype == R_X86_64_GOTTPOFF || rtype == R_X86_64_GOTPC32 || rtype == R_X86_64_GOTPCRELX || rtype == R_X86_64_REX_GOTPCRELX) {
+                    uint32_t sym_idx = (uint32_t)ELF64_R_SYM(r->r_info);
+                    Elf64_Sym *sym = &o->symtab[sym_idx];
+                    const char *name = o->strtab + sym->st_name;
+                    if (strcmp(name, "_GLOBAL_OFFSET_TABLE_") == 0) continue;
+                    find_or_add_got_entry(o, i, sym_idx);
+                }
+            }
+        }
+    }
+
     for (i = 0; i < g_nobj; i++) {
         if (g_objs[i].ehdr->e_shnum > max_shnum) {
             max_shnum = g_objs[i].ehdr->e_shnum;
@@ -954,19 +1095,23 @@ static void layout(void) {
         /* If no rule set a base, we continue from the end of the previous output section */
         if (base == 0) {
             int prev_idx;
+            int has_prev_rw = 0;
             uint64_t prev_end = 0x100000;
             for (prev_idx = 0; prev_idx < oi; prev_idx++) {
                 OutSection *prev_sec = get_out_section(out_order[prev_idx], SHF_ALLOC);
                 if (prev_sec->size > 0 && prev_sec->vma + prev_sec->size > prev_end) {
                     prev_end = prev_sec->vma + prev_sec->size;
                 }
+                if (prev_sec->size > 0 && is_rw_section_name(out_order[prev_idx])) {
+                    has_prev_rw = 1;
+                }
             }
             OutSection *sec = get_out_section(oname, SHF_ALLOC);
             uint64_t sec_align = sec->align ? sec->align : 16;
-            /* If we transition from RX to RW (e.g. to .data/.bss), force page alignment for segment boundary safety.
+            /* If we transition from RX to the first RW section, force page alignment for segment boundary safety.
              * Note: This dynamic adjustment applies only to implicit layout (when base == 0).
              * Explicit linker script directives (e.g. '. = ADDR;') bypass this and are respected exactly as specified. */
-            if (strcmp(oname, ".data") == 0 || strcmp(oname, ".bss") == 0) {
+            if (is_rw_section_name(oname) && !has_prev_rw) {
                 if (sec_align < 0x1000) sec_align = 0x1000;
             }
             base = ALIGN_UP(prev_end, sec_align);
@@ -998,6 +1143,7 @@ static void layout(void) {
                         GlobalSym *gs = find_sym(name);
                         if (!gs) gs = add_sym(name);
                         if (gs->defined) continue;
+                        if (has_strong_definition(name)) continue;
 
                         {
                             uint64_t align = sym->st_value ? sym->st_value : 1;
@@ -1054,7 +1200,7 @@ static void layout(void) {
                                 laid_out[obj_i * stride + si] = 1;
 
                                 /* record contribution */
-                                uint64_t f = sh->sh_flags & (SHF_ALLOC | SHF_WRITE | SHF_EXECINSTR);
+                                uint64_t f = sh->sh_flags & (SHF_ALLOC | SHF_WRITE | SHF_EXECINSTR | SHF_TLS);
                                 OutSection *out = get_out_section(oname, f);
                                 if (out->contrib_cnt >= out->contrib_cap) {
                                     int old_cap = out->contrib_cap;
@@ -1095,7 +1241,7 @@ static void layout(void) {
                         laid_out[obj_i * stride + si] = 1;
 
                         /* record contribution */
-                        uint64_t f = sh->sh_flags & (SHF_ALLOC | SHF_WRITE | SHF_EXECINSTR);
+                        uint64_t f = sh->sh_flags & (SHF_ALLOC | SHF_WRITE | SHF_EXECINSTR | SHF_TLS);
                         OutSection *out = get_out_section(oname, f);
                         if (out->contrib_cnt >= out->contrib_cap) {
                             int old_cap = out->contrib_cap;
@@ -1114,12 +1260,22 @@ static void layout(void) {
 
             /* finalize output section VMA and size */
             uint64_t final_flags = SHF_ALLOC;
-            if (strcmp(oname, ".bss") == 0 || strcmp(oname, ".data") == 0) final_flags |= SHF_WRITE;
-            if (strcmp(oname, ".text") == 0) final_flags |= SHF_EXECINSTR;
+            if (is_rw_section_name(oname)) final_flags |= SHF_WRITE;
+            if (strcmp(oname, ".tdata") == 0 || strcmp(oname, ".tbss") == 0) final_flags |= SHF_WRITE | SHF_TLS;
+            if (strcmp(oname, ".text") == 0 || strcmp(oname, ".init") == 0 || strcmp(oname, ".fini") == 0) final_flags |= SHF_EXECINSTR;
             OutSection *out = get_out_section(oname, final_flags);
             out->vma = original_base;
             out->lma = original_base;
             out->size = cursor - original_base;
+
+            if (strcmp(oname, ".got") == 0 && g_got_cnt > 0) {
+                cursor = ALIGN_UP(cursor, 8);
+                out->vma = cursor;
+                out->lma = cursor;
+                out->align = 8;
+                cursor += (uint64_t)g_got_cnt * 8;
+                out->size = (uint64_t)g_got_cnt * 8;
+            }
 
             if (strcmp(oname, ".note.zcc.tensor") == 0 && g_attest_data) {
                 cursor = ALIGN_UP(cursor, 4);
@@ -1306,8 +1462,21 @@ static void collect_symbols(void) {
 
             GlobalSym *gs = find_sym(name);
             if (!gs) gs = add_sym(name);
-            if (gs->defined && bind != STB_WEAK) {
-                /* allow weak override — skip */
+            if (gs->defined) {
+                int existing_bind = ELF64_ST_BIND(g_objs[gs->obj_idx].symtab[gs->sym_idx].st_info);
+                if (bind == STB_WEAK) {
+                    /* New symbol is weak: ignore it, first/strong wins. */
+                    continue;
+                }
+                if (existing_bind != STB_WEAK) {
+                    /* Both are strong: first one wins, ignore new. */
+                    if (g_verbose) {
+                        printf("zld: warning: duplicate strong symbol '%s' in %s (first in %s wins)\n",
+                               name, o->path, g_objs[gs->obj_idx].path);
+                    }
+                    continue;
+                }
+                /* Existing was weak, new is strong: override. */
             }
 
             {
@@ -1329,11 +1498,45 @@ static void collect_symbols(void) {
     /* resolve custom linker script symbols */
     {
         uint64_t end_va = 0x100000;
+        uint64_t etext_val = 0;
+        uint64_t edata_val = 0;
         int s;
         int j;
         for (s = 0; s < g_nout; s++) {
             if (g_out[s].vma + g_out[s].size > end_va) {
                 end_va = g_out[s].vma + g_out[s].size;
+            }
+            if (strcmp(g_out[s].name, ".text") == 0) {
+                etext_val = g_out[s].vma + g_out[s].size;
+            }
+            if (strcmp(g_out[s].name, ".data") == 0) {
+                edata_val = g_out[s].vma + g_out[s].size;
+            }
+        }
+
+        /* Resolve standard end/edata/etext boundary symbols */
+        {
+            const char *end_names[] = { "_end", "end", "__end", NULL };
+            const char *edata_names[] = { "_edata", "edata", "__edata", NULL };
+            const char *etext_names[] = { "_etext", "etext", "__etext", NULL };
+            int idx;
+            for (idx = 0; end_names[idx] != NULL; idx++) {
+                GlobalSym *gs = find_sym(end_names[idx]);
+                if (!gs) gs = add_sym(end_names[idx]);
+                gs->value = end_va;
+                gs->defined = 1;
+            }
+            for (idx = 0; edata_names[idx] != NULL; idx++) {
+                GlobalSym *gs = find_sym(edata_names[idx]);
+                if (!gs) gs = add_sym(edata_names[idx]);
+                gs->value = edata_val ? edata_val : end_va;
+                gs->defined = 1;
+            }
+            for (idx = 0; etext_names[idx] != NULL; idx++) {
+                GlobalSym *gs = find_sym(etext_names[idx]);
+                if (!gs) gs = add_sym(etext_names[idx]);
+                gs->value = etext_val ? etext_val : end_va;
+                gs->defined = 1;
             }
         }
         
@@ -1408,6 +1611,116 @@ static void collect_symbols(void) {
         }
     }
 
+    /* Redirect IFUNC symbols to concrete SSE2 implementations to bypass resolver calls */
+    {
+        struct {
+            const char *from;
+            const char *to;
+        } redirects[] = {
+            {"memcpy", "__memcpy_sse2_unaligned"},
+            {"__memcpy", "__memcpy_sse2_unaligned"},
+            {"memmove", "__memmove_sse2_unaligned"},
+            {"__memmove", "__memmove_sse2_unaligned"},
+            {"memset", "__memset_sse2_unaligned"},
+            {"__memset", "__memset_sse2_unaligned"},
+            {"mempcpy", "__mempcpy_sse2_unaligned"},
+            {"__mempcpy", "__mempcpy_sse2_unaligned"},
+            {"strcmp", "__strcmp_sse2_unaligned"},
+            {"__strcmp", "__strcmp_sse2_unaligned"},
+            {"strlen", "__strlen_sse2"},
+            {"__strlen", "__strlen_sse2"},
+            {"strcpy", "__strcpy_sse2_unaligned"},
+            {"__strcpy", "__strcpy_sse2_unaligned"},
+            {"strncmp", "__strncmp_sse2"},
+            {"__strncmp", "__strncmp_sse2"},
+            {"strchr", "__strchr_sse2"},
+            {"__strchr", "__strchr_sse2"},
+            {"memchr", "__memchr_sse2"},
+            {"__memchr", "__memchr_sse2"},
+            {"memcmp", "__memcmp_sse2"},
+            {"__memcmp", "__memcmp_sse2"},
+            {"strnlen", "__strnlen_sse2"},
+            {"__strnlen", "__strnlen_sse2"},
+            {"strchrnul", "__strchrnul_sse2"},
+            {"__strchrnul", "__strchrnul_sse2"},
+            {"strrchr", "__strrchr_sse2"},
+            {"__strrchr", "__strrchr_sse2"},
+            {"stpcpy", "__stpcpy_sse2_unaligned"},
+            {"__stpcpy", "__stpcpy_sse2_unaligned"},
+            {"strcasecmp", "__strcasecmp_sse2"},
+            {"__strcasecmp", "__strcasecmp_sse2"},
+            {"strncasecmp", "__strncasecmp_sse2"},
+            {"__strncasecmp", "__strncasecmp_sse2"},
+            {"strcat", "__strcat_sse2_unaligned"},
+            {"__strcat", "__strcat_sse2_unaligned"},
+            {"strncat", "__strncat_sse2_unaligned"},
+            {"__strncat", "__strncat_sse2_unaligned"},
+            {"strncpy", "__strncpy_sse2_unaligned"},
+            {"__strncpy", "__strncpy_sse2_unaligned"},
+            {"wcslen", "__wcslen_sse2"},
+            {"__wcslen", "__wcslen_sse2"},
+            {"wmemchr", "__wmemchr_sse2"},
+            {"__wmemchr", "__wmemchr_sse2"},
+            {"strspn", "__strspn_generic"},
+            {"__strspn", "__strspn_generic"},
+            {"strcspn", "__strcspn_generic"},
+            {"__strcspn", "__strcspn_generic"},
+            {"wcsnlen", "__wcsnlen_generic"},
+            {"__wcsnlen", "__wcsnlen_generic"},
+            {"strstr", "__strstr_sse2_unaligned"},
+            {"__strstr", "__strstr_sse2_unaligned"},
+            {"wmemset", "__wmemset_sse2_unaligned"},
+            {"__wmemset", "__wmemset_sse2_unaligned"},
+            {NULL, NULL}
+        };
+        int r_idx;
+        for (r_idx = 0; redirects[r_idx].from != NULL; r_idx++) {
+            GlobalSym *from_sym = find_sym(redirects[r_idx].from);
+            GlobalSym *to_sym = find_sym(redirects[r_idx].to);
+            if (from_sym && to_sym && to_sym->defined) {
+                from_sym->value = to_sym->value;
+                from_sym->defined = 1;
+                from_sym->obj_idx = to_sym->obj_idx;
+                from_sym->sym_idx = to_sym->sym_idx;
+                if (g_verbose) {
+                    printf("zld: redirected IFUNC '%s' to concrete '%s' (0x%llx)\n",
+                           redirects[r_idx].from, redirects[r_idx].to, (unsigned long long)to_sym->value);
+                }
+            }
+        }
+    }
+
+    /* Resolve __init_array_start, __init_array_end, __fini_array_start, __fini_array_end */
+    {
+        const char *names[] = {
+            "__init_array_start", "__init_array_end",
+            "__fini_array_start", "__fini_array_end",
+            NULL
+        };
+        int n_idx;
+        for (n_idx = 0; names[n_idx] != NULL; n_idx++) {
+            GlobalSym *gs = find_sym(names[n_idx]);
+            if (!gs) gs = add_sym(names[n_idx]);
+            if (gs) {
+                const char *sec_name = (n_idx < 2) ? ".init_array" : ".fini_array";
+                int is_end = (n_idx % 2 == 1);
+                int s;
+                gs->value = 0;
+                gs->defined = 1;
+                for (s = 0; s < g_nout; s++) {
+                    if (strcmp(g_out[s].name, sec_name) == 0) {
+                        gs->value = g_out[s].vma + (is_end ? g_out[s].size : 0);
+                        break;
+                    }
+                }
+                if (g_verbose) {
+                    printf("zld: resolved array symbol '%s' = 0x%llx\n",
+                           gs->name, (unsigned long long)gs->value);
+                }
+            }
+        }
+    }
+
     /* resolve runtime fallback symbols for unlinked memory primitives */
     for (i = 0; i < g_nsym; i++) {
         GlobalSym *gs = &g_syms[i];
@@ -1462,6 +1775,28 @@ static void collect_symbols(void) {
 /* ── Copy section data into output buffers ──────────────────────────────── */
 static void copy_sections(void) {
     int i, c;
+
+    /* Initialize TLS VMA and size globally for relocation resolution */
+    OutSection *tdata_sec = NULL;
+    OutSection *tbss_sec = NULL;
+    for (i = 0; i < g_nout; i++) {
+        if (strcmp(g_out[i].name, ".tdata") == 0) tdata_sec = &g_out[i];
+        if (strcmp(g_out[i].name, ".tbss") == 0) tbss_sec = &g_out[i];
+    }
+    uint64_t tdata_sz = tdata_sec ? tdata_sec->size : 0;
+    uint64_t tbss_sz = tbss_sec ? tbss_sec->size : 0;
+    uint64_t tls_sz = tdata_sz + tbss_sz;
+    if (tdata_sz > 0 && tbss_sz > 0) {
+        tls_sz = (tbss_sec->vma + tbss_sec->size) - tdata_sec->vma;
+    }
+    uint64_t tls_align = 16;
+    if (tdata_sec && tdata_sec->align > tls_align) tls_align = tdata_sec->align;
+    if (tbss_sec && tbss_sec->align > tls_align) tls_align = tbss_sec->align;
+    uint64_t aligned_tls_sz = ALIGN_UP(tls_sz, tls_align);
+    
+    g_tls_vma = (tdata_sec && tdata_sz > 0) ? tdata_sec->vma : ((tbss_sec && tbss_sz > 0) ? tbss_sec->vma : 0);
+    g_aligned_tls_sz = aligned_tls_sz;
+
     for (i = 0; i < g_nout; i++) {
         OutSection *out = &g_out[i];
         out->buf_used = 0;
@@ -1621,6 +1956,47 @@ static void copy_sections(void) {
         }
     }
 
+    /* 4. Populate .got section */
+    if (g_got_cnt > 0) {
+        OutSection *got_out = get_out_section(".got", SHF_ALLOC | SHF_WRITE);
+        uint64_t got_aligned = ALIGN_UP(got_out->buf_used, 8);
+        if (got_aligned > got_out->buf_used) {
+            outsec_append(got_out, NULL, got_aligned - got_out->buf_used, 8);
+        }
+        int g;
+        for (g = 0; g < g_got_cnt; g++) {
+            int64_t offset = 0;
+            if (g_got[g].is_global) {
+                GlobalSym *gs = find_sym(g_got[g].name);
+                if (gs && gs->defined) {
+                    ObjFile *o = &g_objs[gs->obj_idx];
+                    Elf64_Sym *sym = &o->symtab[gs->sym_idx];
+                    if (ELF64_ST_TYPE(sym->st_info) == 6) { /* STT_TLS = 6 */
+                        offset = get_tls_offset(gs);
+                    } else {
+                        offset = (int64_t)gs->value;
+                    }
+                }
+            } else {
+                /* Local symbol GOT entry */
+                ObjFile *o = &g_objs[g_got[g].obj_idx];
+                Elf64_Sym *sym = &o->symtab[g_got[g].sym_idx];
+                uint64_t S = resolve_sym_value(o, g_got[g].sym_idx);
+                if (ELF64_ST_TYPE(sym->st_info) == 6) { /* STT_TLS = 6 */
+                    offset = (int64_t)S - (int64_t)(g_tls_vma + g_aligned_tls_sz);
+                } else {
+                    offset = (int64_t)S;
+                }
+            }
+            g_got_offsets[g] = (uint64_t)offset;
+            outsec_append(got_out, (uint8_t *)&offset, 8, 8);
+            if (g_verbose) {
+                printf("zld: GOT[%d] for '%s' (global=%d, obj=%d, sym=%d) = %lld\n",
+                       g, g_got[g].name, g_got[g].is_global, g_got[g].obj_idx, g_got[g].sym_idx, (long long)offset);
+            }
+        }
+    }
+
     /* finalize sizes from actual copy */
     for (i = 0; i < g_nout; i++) {
         if (g_out[i].buf_used > g_out[i].size) {
@@ -1679,6 +2055,33 @@ static uint64_t resolve_sym_value(ObjFile *o, uint32_t sym_idx) {
         /* global/common symbol lookup */
         GlobalSym *gs = find_sym(name);
         if (gs && gs->defined) return gs->value;
+        if (ELF64_ST_BIND(sym->st_info) == STB_WEAK) {
+            if (g_verbose) {
+                printf("zld: resolved weak symbol '%s' to 0\n", name);
+            }
+            return 0;
+        }
+        if (strcmp(name, "_GLOBAL_OFFSET_TABLE_") == 0) {
+            int s;
+            for (s = 0; s < g_nout; s++) {
+                if (strcmp(g_out[s].name, ".got") == 0) {
+                    return g_out[s].vma;
+                }
+            }
+            return 0;
+        }
+        if (strcmp(name, "__preinit_array_start") == 0) return 0;
+        if (strcmp(name, "__preinit_array_end") == 0) return 0;
+        if (strcmp(name, "_Unwind_Resume") == 0) return 0;
+        if (strcmp(name, "__gcc_personality_v0") == 0) return 0;
+        if (strcmp(name, "_DYNAMIC") == 0) return 0;
+        if (strcmp(name, "__ehdr_start") == 0) return 0x100000;
+        if (strcmp(name, "__pthread_unwind") == 0) return 0;
+        if (strcmp(name, "__pthread_initialize_minimal") == 0) return 0;
+        if (strcmp(name, "_dl_rtld_map") == 0) return 0;
+        if (strcmp(name, "__call_tls_dtors") == 0) return 0;
+        if (strcmp(name, "__rela_iplt_start") == 0) return 0;
+        if (strcmp(name, "__rela_iplt_end") == 0) return 0;
         if (strcmp(name, "realloc") == 0 || strcmp(name, "malloc") == 0 ||
             strcmp(name, "calloc") == 0 || strcmp(name, "free") == 0) {
             OutSection *text = find_out_section(".text");
@@ -1711,6 +2114,39 @@ static uint8_t *find_vma_in_buf(uint64_t vma) {
             return s->buf + (vma - s->vma);
     }
     return NULL;
+}
+
+static uint64_t find_got_entry_vma(ObjFile *o, int obj_idx, uint32_t sym_idx) {
+    Elf64_Sym *sym = &o->symtab[sym_idx];
+    int bind = ELF64_ST_BIND(sym->st_info);
+    const char *name = o->strtab + sym->st_name;
+
+    int g;
+    int got_idx = -1;
+    if (bind == STB_GLOBAL || bind == STB_WEAK) {
+        for (g = 0; g < g_got_cnt; g++) {
+            if (g_got[g].is_global && strcmp(g_got[g].name, name) == 0) {
+                got_idx = g;
+                break;
+            }
+        }
+    } else {
+        for (g = 0; g < g_got_cnt; g++) {
+            if (!g_got[g].is_global && g_got[g].obj_idx == obj_idx && g_got[g].sym_idx == sym_idx) {
+                got_idx = g;
+                break;
+            }
+        }
+    }
+    if (got_idx >= 0) {
+        int s;
+        for (s = 0; s < g_nout; s++) {
+            if (strcmp(g_out[s].name, ".got") == 0) {
+                return g_out[s].vma + (uint64_t)got_idx * 8;
+            }
+        }
+    }
+    return 0;
 }
 
 static void apply_relocations(void) {
@@ -1789,6 +2225,129 @@ static void apply_relocations(void) {
                     memcpy(loc, &v32, 4);
                     break;
                 }
+                case R_X86_64_GOTPC32: {
+                    /* GOT PC-relative relocation (type 9, R_X86_64_GOTPCREL) -> GOT entry VMA */
+                    uint64_t target_S = find_got_entry_vma(o, oi, sym_idx);
+                    if (target_S == 0) {
+                        int s;
+                        for (s = 0; s < g_nout; s++) {
+                            if (strcmp(g_out[s].name, ".bss") == 0) {
+                                target_S = g_out[s].vma;
+                                break;
+                            }
+                        }
+                    }
+                    int64_t val = (int64_t)(target_S + A - P);
+                    int32_t v32 = (int32_t)val;
+                    memcpy(loc, &v32, 4);
+                    break;
+                }
+                case R_X86_64_GOTPCRELX:
+                case R_X86_64_REX_GOTPCRELX: {
+                    /* GOT relaxation when target symbol S is resolved; otherwise load via GOT entry */
+                    if (S != 0 && loc[-2] == 0x8b) {
+                        /* mov foo@GOTPCREL(%rip), %reg -> lea foo(%rip), %reg */
+                        loc[-2] = 0x8d;
+                        int64_t val = (int64_t)(S + A - P);
+                        int32_t v32 = (int32_t)val;
+                        memcpy(loc, &v32, 4);
+                    } else if (S != 0 && loc[-2] == 0xff && loc[-1] == 0x15) {
+                        /* call *foo@GOTPCREL(%rip) -> call foo; nop */
+                        loc[-2] = 0xe8;
+                        int64_t val = (int64_t)(S - P - 3);
+                        int32_t v32 = (int32_t)val;
+                        memcpy(loc - 1, &v32, 4);
+                        loc[3] = 0x90; /* nop */
+                    } else {
+                        /* fallback to loading from GOT entry, pointing to .bss VMA if unresolved/weak */
+                        uint64_t target_S = find_got_entry_vma(o, oi, sym_idx);
+                        if (target_S == 0) {
+                            int s;
+                            for (s = 0; s < g_nout; s++) {
+                                if (strcmp(g_out[s].name, ".bss") == 0) {
+                                    target_S = g_out[s].vma;
+                                    break;
+                                }
+                            }
+                        }
+                        int64_t val = (int64_t)(target_S + A - P);
+                        int32_t v32 = (int32_t)val;
+                        memcpy(loc, &v32, 4);
+                    }
+                    break;
+                }
+                case R_X86_64_GOTTPOFF: {
+                    /* GOT TLS offset relocation: compute PC-relative offset to GOT entry */
+                    Elf64_Sym *sym = &o->symtab[sym_idx];
+                    int bind = ELF64_ST_BIND(sym->st_info);
+                    const char *name = o->strtab + sym->st_name;
+                    int got_idx = -1;
+                    int g;
+                    if (bind == STB_GLOBAL || bind == STB_WEAK) {
+                        for (g = 0; g < g_got_cnt; g++) {
+                            if (g_got[g].is_global && strcmp(g_got[g].name, name) == 0) {
+                                got_idx = g;
+                                break;
+                            }
+                        }
+                    } else {
+                        for (g = 0; g < g_got_cnt; g++) {
+                            if (!g_got[g].is_global && g_got[g].obj_idx == oi && g_got[g].sym_idx == sym_idx) {
+                                got_idx = g;
+                                break;
+                            }
+                        }
+                    }
+                    if (got_idx < 0) {
+                        fprintf(stderr, "zld: internal error: symbol '%s' (bind=%d, obj=%d, sym=%d) not in GOT for GOTTPOFF\n",
+                                name, bind, oi, sym_idx);
+                        exit(1);
+                    }
+                    OutSection *got_sec = find_out_section(".got");
+                    if (!got_sec) {
+                        fprintf(stderr, "zld: internal error: .got section not found\n");
+                        exit(1);
+                    }
+                    uint64_t got_entry_vma = got_sec->vma + (uint64_t)got_idx * 8;
+                    int64_t val = (int64_t)(got_entry_vma + A - P);
+                    int32_t v32 = (int32_t)val;
+                    memcpy(loc, &v32, 4);
+                    break;
+                }
+                case R_X86_64_TLSGD: {
+                    /* For TLSGD fallback (local dynamic/general dynamic model), point to .bss */
+                    uint64_t target_S = 0;
+                    int s;
+                    for (s = 0; s < g_nout; s++) {
+                        if (strcmp(g_out[s].name, ".bss") == 0) {
+                            target_S = g_out[s].vma;
+                            break;
+                        }
+                    }
+                    int64_t val = (int64_t)(target_S - P);
+                    int32_t v32 = (int32_t)val;
+                    memcpy(loc, &v32, 4);
+                    break;
+                }
+                case R_X86_64_TPOFF32: {
+                    Elf64_Sym *sym = &o->symtab[sym_idx];
+                    int64_t val = 0;
+                    int bind = ELF64_ST_BIND(sym->st_info);
+                    if (bind == STB_GLOBAL || bind == STB_WEAK) {
+                        const char *name = o->strtab + sym->st_name;
+                        GlobalSym *gs = find_sym(name);
+                        if (gs && gs->defined) {
+                            val = get_tls_offset(gs) + A;
+                        }
+                    } else {
+                        /* Local symbol */
+                        uint64_t S_loc = resolve_sym_value(o, sym_idx);
+                        val = (int64_t)S_loc - (int64_t)(g_tls_vma + g_aligned_tls_sz) + A;
+                    }
+                    int32_t v32 = (int32_t)val;
+                    memcpy(loc, &v32, 4);
+                    break;
+                }
                 default:
                     fprintf(stderr, "zld: unhandled reloc type %u at 0x%llx\n",
                             rtype, (unsigned long long)P);
@@ -1832,13 +2391,13 @@ static void write_output(const char *path) {
     uint64_t phdr_size;
     uint64_t headers_size;
     uint64_t data_offset;
-    Elf64_Phdr phdrs[4];
+    Elf64_Phdr phdrs[8];
     int ph_idx = 0;
     uint64_t rx_file_off;
     uint64_t rx_vaddr = 0;
     uint64_t rx_filesz = 0;
     uint64_t rx_memsz = 0;
-    uint32_t rx_flags = PF_R;
+    uint32_t rx_flags = PF_R | PF_W;
     uint64_t rw_file_off = 0;
     uint64_t rw_vaddr = 0;
     uint64_t rw_filesz = 0;
@@ -1873,9 +2432,20 @@ static void write_output(const char *path) {
         }
     }
 
+    OutSection *tdata_sec = NULL;
+    OutSection *tbss_sec = NULL;
+    for (i = 0; i < g_nout; i++) {
+        if (strcmp(g_out[i].name, ".tdata") == 0) tdata_sec = &g_out[i];
+        if (strcmp(g_out[i].name, ".tbss") == 0) tbss_sec = &g_out[i];
+    }
+    uint64_t tdata_sz = tdata_sec ? tdata_sec->size : 0;
+    uint64_t tbss_sz = tbss_sec ? tbss_sec->size : 0;
+    uint64_t tls_sz = tdata_sz + tbss_sz;
+
     if (rx_count > 0) phnum++;
     if (rw_count > 0) phnum++;
     if (note_first) phnum++;  /* one spanning PT_NOTE covers all note sections */
+    if (tls_sz > 0) phnum++;  /* PT_TLS */
 
     ehdr_size = sizeof(Elf64_Ehdr);
     phdr_size = sizeof(Elf64_Phdr);
@@ -1925,7 +2495,10 @@ static void write_output(const char *path) {
             if (sec_end - rw_vaddr > rw_memsz) {
                 rw_memsz = sec_end - rw_vaddr;
             }
-            if (strcmp(s->name, ".bss") != 0) {
+            if (s->flags & SHF_EXECINSTR) {
+                rw_flags |= PF_X;
+            }
+            if (strcmp(s->name, ".bss") != 0 && strcmp(s->name, ".tbss") != 0) {
                 if (sec_end - rw_vaddr > rw_filesz) {
                     rw_filesz = sec_end - rw_vaddr;
                 }
@@ -1950,16 +2523,16 @@ static void write_output(const char *path) {
     }
 
     if (note_first) {
-        /* Spanning PT_NOTE: covers note_first->vma through note_last->vma+size.
-         * This is the standard single-phdr multi-note encoding:
-         *   p_vaddr  = start of first note section
-         *   p_filesz = end of last note section - start of first
-         * Both sections must be contiguous in the layout (guaranteed by
-         * out_order[]: .note.zcc.tensor immediately precedes .note.zcc.build). */
+        /* Spanning PT_NOTE: covers note_first->vma through note_last->vma+size. */
         uint64_t span_vma   = note_first->vma;
         uint64_t span_end   = note_last->vma + note_last->size;
         uint64_t span_size  = span_end - span_vma;
-        uint64_t note_file_off = rx_file_off + (span_vma - rx_vaddr);
+        uint64_t note_file_off;
+        if (note_first->flags & SHF_WRITE) {
+            note_file_off = rw_file_off + (span_vma - rw_vaddr);
+        } else {
+            note_file_off = rx_file_off + (span_vma - rx_vaddr);
+        }
         memset(&phdrs[ph_idx], 0, sizeof(Elf64_Phdr));
         phdrs[ph_idx].p_type   = PT_NOTE;
         phdrs[ph_idx].p_flags  = PF_R;
@@ -1974,6 +2547,35 @@ static void write_output(const char *path) {
                    " [%s..%s], flags=%d\n",
                    (unsigned long long)span_vma, (unsigned long long)span_size,
                    note_first->name, note_last->name, (int)PF_R);
+        }
+        ph_idx++;
+    }
+
+    if (tls_sz > 0) {
+        uint64_t tls_vma = (tdata_sec && tdata_sz > 0) ? tdata_sec->vma : tbss_sec->vma;
+        uint64_t tls_file_off = rw_file_off + (tls_vma - rw_vaddr);
+        uint64_t tls_align = 16;
+        if (tdata_sec && tdata_sec->align > tls_align) tls_align = tdata_sec->align;
+        if (tbss_sec && tbss_sec->align > tls_align) tls_align = tbss_sec->align;
+
+        uint64_t tls_memsz = tls_sz;
+        if (tdata_sz > 0 && tbss_sz > 0) {
+            tls_memsz = (tbss_sec->vma + tbss_sec->size) - tdata_sec->vma;
+        }
+
+        memset(&phdrs[ph_idx], 0, sizeof(Elf64_Phdr));
+        phdrs[ph_idx].p_type   = PT_TLS;
+        phdrs[ph_idx].p_flags  = PF_R;
+        phdrs[ph_idx].p_offset = tls_file_off;
+        phdrs[ph_idx].p_vaddr  = tls_vma;
+        phdrs[ph_idx].p_paddr  = tls_vma;
+        phdrs[ph_idx].p_filesz = tdata_sz;
+        phdrs[ph_idx].p_memsz  = tls_memsz;
+        phdrs[ph_idx].p_align  = tls_align;
+        if (g_verbose) {
+            printf("zld segment: PT_TLS, VMA=0x%llx, memsz=0x%llx, filesz=0x%llx, flags=%d\n",
+                   (unsigned long long)tls_vma, (unsigned long long)tls_memsz,
+                   (unsigned long long)tdata_sz, (int)PF_R);
         }
         ph_idx++;
     }
@@ -2021,7 +2623,7 @@ static void write_output(const char *path) {
 
     for (i = 0; i < rw_count; i++) {
         OutSection *sec = rw_sections[i];
-        if (strcmp(sec->name, ".bss") == 0) continue;
+        if (strcmp(sec->name, ".bss") == 0 || strcmp(sec->name, ".tbss") == 0) continue;
         uint64_t expected = rw_file_off + (sec->vma - rw_vaddr);
         cur_pos = (uint64_t)ftell(f);
         while (cur_pos < expected) { fputc(0, f); cur_pos++; }
@@ -2094,8 +2696,12 @@ static void write_output(const char *path) {
             OutSection *sec = &g_out[i];
             Elf64_Shdr *sh = &shdrs[i + 1];
             sh->sh_name = name_offsets[i];
-            if (strcmp(sec->name, ".bss") == 0) {
+            if (strcmp(sec->name, ".bss") == 0 || strcmp(sec->name, ".tbss") == 0) {
                 sh->sh_type = SHT_NOBITS;
+            } else if (strcmp(sec->name, ".init_array") == 0) {
+                sh->sh_type = 14; /* SHT_INIT_ARRAY */
+            } else if (strcmp(sec->name, ".fini_array") == 0) {
+                sh->sh_type = 15; /* SHT_FINI_ARRAY */
             } else if (strncmp(sec->name, ".rela", 5) == 0) {
                 sh->sh_type = SHT_RELA;
                 sh->sh_entsize = sizeof(Elf64_Rela);
@@ -2108,15 +2714,15 @@ static void write_output(const char *path) {
             sh->sh_addralign = sec->align ? sec->align : 8;
 
             if (sec->flags & SHF_ALLOC) {
+                if (sec->flags & SHF_WRITE) {
+                    sh->sh_offset = rw_file_off + (sec->vma - rw_vaddr);
+                } else {
+                    sh->sh_offset = rx_file_off + (sec->vma - rx_vaddr);
+                }
                 if (strcmp(sec->name, ".note") == 0 ||
                     strcmp(sec->name, ".note.zcc.tensor") == 0 ||
                     strcmp(sec->name, ".note.zcc.build") == 0) {
                     sh->sh_type = SHT_NOTE;
-                    sh->sh_offset = rx_file_off + (sec->vma - rx_vaddr);
-                } else if (sec->flags & SHF_WRITE) {
-                    sh->sh_offset = rw_file_off + (sec->vma - rw_vaddr);
-                } else {
-                    sh->sh_offset = rx_file_off + (sec->vma - rx_vaddr);
                 }
             } else {
                 sh->sh_offset = debug_file_offsets[i];
@@ -2159,6 +2765,9 @@ static void write_output(const char *path) {
         free(shdrs);
     }
     fclose(f);
+#ifndef _WIN32
+    chmod(path, 0755);
+#endif
     if (g_verbose) {
         printf("zld: wrote %s (entry=0x%llx, %d segments)\n",
                path, (unsigned long long)g_entry, phnum);
@@ -2219,11 +2828,17 @@ int zld_link(const char **obj_files, int obj_count, const char *out_path, const 
         LdRule *r;
         strncpy(g_entry_name, "_start", sizeof(g_entry_name)-1);
         r = add_rule();
+        strcpy(r->out_name, ".init"); strcpy(r->in_pattern, ".init*");
+        r->addr = 0; r->has_addr = 0;
+        r = add_rule();
         strcpy(r->out_name, ".text"); strcpy(r->in_pattern, ".text*");
-        r->addr = 0x100000; r->has_addr = 1;
+        r->addr = 0; r->has_addr = 0;
         r = add_rule();
         strcpy(r->out_name, ".text"); strcpy(r->in_pattern, ".multiboot");
-        r->addr = 0x100000; r->has_addr = 1;
+        r->addr = 0; r->has_addr = 0;
+        r = add_rule();
+        strcpy(r->out_name, ".fini"); strcpy(r->in_pattern, ".fini*");
+        r->addr = 0; r->has_addr = 0;
         r = add_rule();
         strcpy(r->out_name, ".rodata"); strcpy(r->in_pattern, ".rodata*");
         r->addr = 0; r->has_addr = 0;

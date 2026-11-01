@@ -3,7 +3,12 @@ set -euo pipefail
 
 ZCC_BIN="${1:-./zcc}"
 TMP_DIR="$(mktemp -d)"
-trap 'rm -rf "$TMP_DIR"' EXIT
+CLEAN_ROOT_SVG=0
+if [ ! -f "zcc_all_seeing_sovereign_oculus.svg" ] && [ -f "tests/fixtures/zcc_all_seeing_sovereign_oculus.svg" ]; then
+    cp -f "tests/fixtures/zcc_all_seeing_sovereign_oculus.svg" "zcc_all_seeing_sovereign_oculus.svg"
+    CLEAN_ROOT_SVG=1
+fi
+trap 'rm -rf "$TMP_DIR"; if [ "$CLEAN_ROOT_SVG" -eq 1 ]; then rm -f "zcc_all_seeing_sovereign_oculus.svg"; fi' EXIT
 
 echo "=== [ZCC-SVG] Testing Upgraded Native SVG Evolution, CLI Commands & SvgPathBuilder ($ZCC_BIN) ==="
 
@@ -31,17 +36,19 @@ echo "[PASS] Target 2 (-S -o oculus.s): Assembly emitted & verified cleanly (exi
 
 # 3. Linkable ELF Object File Mode (-c -o out.o)
 "$ZCC_BIN" zcc_all_seeing_sovereign_oculus.svg -c -o "$TMP_DIR/oculus.o"
-nm "$TMP_DIR/oculus.o" | grep -q "zcc_all_seeing_sovereign_oculus_svg_data"
-nm "$TMP_DIR/oculus.o" | grep -q "zcc_all_seeing_sovereign_oculus_svg_compacted_count"
+nm "$TMP_DIR/oculus.o" > "$TMP_DIR/oculus_nm.txt"
+grep -q "zcc_all_seeing_sovereign_oculus_svg_data" "$TMP_DIR/oculus_nm.txt"
+grep -q "zcc_all_seeing_sovereign_oculus_svg_compacted_count" "$TMP_DIR/oculus_nm.txt"
 echo "[PASS] Target 3 (-c -o oculus.o): ELF relocatable object symbols verified"
 
 # 4. Standalone Native Executable Mode (-o out_bin)
 "$ZCC_BIN" zcc_all_seeing_sovereign_oculus.svg -o "$TMP_DIR/oculus_bin"
 BANNER_OUT="$("$TMP_DIR/oculus_bin")"
-echo "$BANNER_OUT" | grep -q "\[ZCC-SVG EXECUTABLE\]"
+grep -q "\[ZCC-SVG EXECUTABLE\]" <<< "$BANNER_OUT"
 echo "  $BANNER_OUT"
-EMIT_FIRST_LINE="$("$TMP_DIR/oculus_bin" --emit | head -n 1)"
-echo "$EMIT_FIRST_LINE" | grep -q "<?xml"
+"$TMP_DIR/oculus_bin" --emit > "$TMP_DIR/oculus_emitted.svg"
+EMIT_FIRST_LINE="$(head -n 1 "$TMP_DIR/oculus_emitted.svg")"
+grep -q "<?xml" <<< "$EMIT_FIRST_LINE"
 echo "[PASS] Target 4 (-o oculus_bin): Native ELF executable banner & --emit payload verified"
 
 # 5. CLI --svg-evolve
@@ -65,7 +72,8 @@ PYEOF
 
 # 7. CLI --svg-data-uri
 "$ZCC_BIN" --svg-data-uri zcc_all_seeing_sovereign_oculus.svg -o "$TMP_DIR/oculus.uri"
-head -c 26 "$TMP_DIR/oculus.uri" | grep -q "^data:image/svg+xml;base64,"
+URI_PREFIX="$(head -c 26 "$TMP_DIR/oculus.uri")"
+grep -q "^data:image/svg+xml;base64," <<< "$URI_PREFIX"
 echo "[PASS] Target 7 (--svg-data-uri): Base64 SVG Data URI verified ($(wc -c < "$TMP_DIR/oculus.uri") bytes)"
 
 # 8. CLI --svg-hexdump
@@ -164,9 +172,11 @@ if [ "$(basename "$ZCC_BIN")" = "zcc" ]; then
         exit 1
     fi
     "$ZCC_BIN" -c tests/test_avx512_evex_codegen.c -o "$TMP_DIR/evex_unit.o"
+    readelf -S "$TMP_DIR/evex_unit.o" > "$TMP_DIR/evex_sections.txt"
+    grep -q "\.note\.GNU-stack" "$TMP_DIR/evex_sections.txt"
     UNIT_ZMM=$(objdump -d "$TMP_DIR/evex_unit.o" | grep -c "%zmm" || true)
-    if [ "$UNIT_ZMM" -lt 10 ]; then
-        echo "[FAIL] Target 12: Expected >= 10 EVEX %zmm instructions in evex_unit.o, got $UNIT_ZMM"
+    if [ "$UNIT_ZMM" -lt 25 ]; then
+        echo "[FAIL] Target 12: Expected >= 25 EVEX %zmm instructions in evex_unit.o, got $UNIT_ZMM"
         exit 1
     fi
     gcc -no-pie "$TMP_DIR/evex_unit.o" -o "$TMP_DIR/evex_unit_bin"
@@ -176,7 +186,7 @@ if [ "$(basename "$ZCC_BIN")" = "zcc" ]; then
     else
         EVEX_OUT="(binary linked clean; CPU lacks avx512f)"
     fi
-    echo "[PASS] Target 12 (AVX-512 EVEX Direct ELF .o): $ZMM_COUNT (m5_2) + $UNIT_ZMM (unit) %zmm instructions encoded -> $EVEX_OUT"
+    echo "[PASS] Target 12 (AVX-512 EVEX Direct ELF .o + .note.GNU-stack): $ZMM_COUNT (m5_2) + $UNIT_ZMM (unit) %zmm ops -> $EVEX_OUT"
 fi
 
 echo "=== [ZCC-SVG] ALL 12 SVG COMPILER, CLI, SDF & EVEX TARGETS PASSED ==="

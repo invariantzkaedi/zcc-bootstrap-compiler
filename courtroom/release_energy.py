@@ -185,13 +185,15 @@ class CaseFuzzer:
         self.report = FuzzReport(cases_run=0, perturbations_run=0)
 
     def fuzz(self, n_perturbations: int = 200) -> FuzzReport:
-        # I1, I2, I3 — generate random cases and check core invariants.
+        # I1, I2, I3, I6, I7 — generate random cases and check core invariants.
         for _ in range(n_perturbations):
             case = self._random_perturbation()
             self.report.perturbations_run += 1
             self._check_t0_invariance(case)
             self._check_waiver_t0_invariance(case)
             self._check_expiry_invariance(case)
+            self._check_mandatory_t0_completeness(case)
+            self._check_duplicate_rejection(case)
 
         # I4 — order invariance against the original case.
         self._check_order_invariance(self.base, n=20)
@@ -337,6 +339,42 @@ class CaseFuzzer:
                     expected_max_severity=_SEVERITY[baseline],
                     actual_severity=_SEVERITY[v],
                 ))
+
+    def _check_mandatory_t0_completeness(self, case: ReleaseCase) -> None:
+        """I6: a case with zero genuinely SEATED T0 tumblers must never
+        produce SHIP or SHIP_WITH_RISK_ACCEPTANCE."""
+        report = decide(case, now=self.now)
+        has_seated_t0 = any(
+            is_t0(f.tier) and f.seated and f.status == Status.SEATED
+            for f in report.findings
+        )
+        if not has_seated_t0 and _SEVERITY[report.verdict] < _SEVERITY[Verdict.HOLD]:
+            self.report.violations.append(FuzzViolation(
+                invariant="I6: mandatory T0 completeness",
+                case_id=case.id,
+                description=f"no seated T0 tumbler, yet verdict={report.verdict.value}",
+                perturbation=self._describe_case(case),
+                expected_max_severity=_SEVERITY[Verdict.HOLD],
+                actual_severity=_SEVERITY[report.verdict],
+            ))
+
+    def _check_duplicate_rejection(self, case: ReleaseCase) -> None:
+        """I7: duplicating any tumbler (tier, invariant) must force HOLD or worse."""
+        if not case.tumblers:
+            return
+        dup_case = copy.deepcopy(case)
+        dup_case.id = f"{case.id}#dup"
+        dup_case.tumblers.append(copy.deepcopy(dup_case.tumblers[0]))
+        report = decide(dup_case, now=self.now)
+        if _SEVERITY[report.verdict] < _SEVERITY[Verdict.HOLD]:
+            self.report.violations.append(FuzzViolation(
+                invariant="I7: duplicate tumbler rejection",
+                case_id=dup_case.id,
+                description=f"duplicate tumbler accepted with verdict={report.verdict.value}",
+                perturbation=self._describe_case(dup_case),
+                expected_max_severity=_SEVERITY[Verdict.HOLD],
+                actual_severity=_SEVERITY[report.verdict],
+            ))
 
     @staticmethod
     def _describe_case(case: ReleaseCase) -> str:

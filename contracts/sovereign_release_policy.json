@@ -46,7 +46,7 @@
   "adjudicator_integrity": {
     "require_adjudicator_hash_pinned": true,
     "pinned_scripts": {
-      "gate.sh": "d44fbddd03404e3ba9b737d04d57236d82f1273cb01f4de3533a302e714504d7",
+      "gate.sh": "b839731eca1f1d2320bcaf2ded29c8bcc16d81c9cc4c858c0416da29606fdc14",
       "tools/verify_meta_receipt.py": "e0e19ee654fc9bd36269b299b08495fd9856cb1eb5b0036ed28af33651ea5dff"
     }
   }

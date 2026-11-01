@@ -154,6 +154,118 @@ with tempfile.TemporaryDirectory() as td:
                   msg_substr="malformed JSON")
 
 
+# ─── S-4: mandatory-gate completeness & adversarial negative controls ───
+print()
+print("--- mandatory-gate completeness (ARGON 4 Section 4.A) ---")
+from invariant_compiler import Evidence, ReleaseCase, TumblerStatus
+
+expect("S-4a: empty tumbler list fails closed (HOLD)",
+       decide(ReleaseCase(id="empty", risk="high", tumblers=[], evidence={})).verdict,
+       Verdict.HOLD)
+
+expect("S-4b: T0 marked NOT_APPLICABLE without any seated T0 fails closed (HOLD)",
+       decide(ReleaseCase(
+           id="t0-na",
+           risk="high",
+           tumblers=[TumblerStatus(tier="T0-01", invariant="Self-host", status=Status.NOT_APPLICABLE)],
+           evidence={},
+       )).verdict,
+       Verdict.HOLD)
+
+expect("S-4c: omitted T0 (only T7 seated) fails closed (HOLD)",
+       decide(ReleaseCase(
+           id="no-t0",
+           risk="high",
+           tumblers=[TumblerStatus(tier="T7-01", invariant="Doc", status=Status.SEATED, evidence_ids=["e1"])],
+           evidence={"e1": Evidence(id="e1", type="doc", claim_supported="c", quality=5)},
+       )).verdict,
+       Verdict.HOLD)
+
+expect("S-4d: duplicate (tier, invariant) in decide() fails closed (HOLD)",
+       decide(ReleaseCase(
+           id="dup-t0",
+           risk="high",
+           tumblers=[
+               TumblerStatus(tier="T0-01", invariant="Self-host", status=Status.SEATED, evidence_ids=["e1"]),
+               TumblerStatus(tier="T0-01", invariant="Self-host", status=Status.SEATED, evidence_ids=["e1"]),
+           ],
+           evidence={"e1": Evidence(id="e1", type="log", claim_supported="c", quality=5)},
+       )).verdict,
+       Verdict.HOLD)
+
+expect_raises("S-4e: duplicate (tier, invariant) in parse_case() raises CaseSchemaError",
+              CaseSchemaError,
+              lambda: parse_case({
+                  "id": "dup",
+                  "risk": "low",
+                  "tumblers": [
+                      {"tier": "T0-01", "invariant": "Self-host", "status": "seated", "evidence_ids": ["e1"]},
+                      {"tier": "T0-01", "invariant": "Self-host", "status": "seated", "evidence_ids": ["e1"]},
+                  ],
+                  "evidence": [{"id": "e1", "type": "log", "claim_supported": "c", "quality": 5}],
+              }),
+              msg_substr="duplicate tumbler")
+
+expect("S-4f: missing required gate in required_tiers fails closed (HOLD)",
+       decide(ReleaseCase(
+           id="missing-req",
+           risk="high",
+           tumblers=[TumblerStatus(tier="T0-01", invariant="Self-host", status=Status.SEATED, evidence_ids=["e1"])],
+           evidence={"e1": Evidence(id="e1", type="log", claim_supported="c", quality=5)},
+           required_tiers=["T0-01", "T0-02"],
+       )).verdict,
+       Verdict.HOLD)
+
+expect("S-4g: all required_tiers present and seated -> SHIP",
+       decide(ReleaseCase(
+           id="all-req",
+           risk="high",
+           tumblers=[
+               TumblerStatus(tier="T0-01", invariant="Self-host", status=Status.SEATED, evidence_ids=["e1"]),
+               TumblerStatus(tier="T0-02", invariant="Cross-ABI", status=Status.SEATED, evidence_ids=["e1"]),
+           ],
+           evidence={"e1": Evidence(id="e1", type="log", claim_supported="c", quality=5)},
+           required_tiers=["T0-01", "T0-02"],
+       )).verdict,
+       Verdict.SHIP)
+
+expect("S-4h: null/malformed tumbler entry fails closed (HOLD)",
+       decide(ReleaseCase(
+           id="null-entry",
+           risk="high",
+           tumblers=[
+               TumblerStatus(tier="T0-01", invariant="Self-host", status=Status.SEATED, evidence_ids=["e1"]),
+               None,  # type: ignore[list-item]
+           ],
+           evidence={"e1": Evidence(id="e1", type="log", claim_supported="c", quality=5)},
+       )).verdict,
+       Verdict.HOLD)
+
+expect("S-4i: mixed valid + dangling evidence_ids in decide() fails closed (HOLD)",
+       decide(ReleaseCase(
+           id="dangling-ev",
+           risk="high",
+           tumblers=[
+               TumblerStatus(tier="T0-01", invariant="Self-host", status=Status.SEATED, evidence_ids=["e1", "NO_SUCH_EV"]),
+           ],
+           evidence={"e1": Evidence(id="e1", type="log", claim_supported="c", quality=5)},
+       )).verdict,
+       Verdict.HOLD)
+
+expect("S-4j: empty claim_supported in Evidence fails closed (HOLD)",
+       decide(ReleaseCase(
+           id="empty-claim",
+           risk="high",
+           tumblers=[
+               TumblerStatus(tier="T0-01", invariant="Self-host", status=Status.SEATED, evidence_ids=["e1"]),
+           ],
+           evidence={"e1": Evidence(id="e1", type="log", claim_supported="   ", quality=5)},
+       )).verdict,
+       Verdict.HOLD)
+
+
 print()
 passed = sum(1 for ok, _ in results if ok)
 print(f"=== {passed}/{len(results)} case-schema tests passed ===")
+import sys
+sys.exit(0 if passed == len(results) else 1)

@@ -643,17 +643,19 @@ static void peephole_optimize(char *filename) {
     fseek(fp, 0, 0);
   }
 
+  long dyn_lines = (file_size / 6) + 8192;
+  if (dyn_lines > MAX_PEEP_LINES) dyn_lines = MAX_PEEP_LINES;
   if (!line_ptrs) {
     line_ptrs = (char **)malloc(MAX_PEEP_LINES * sizeof(char *));
   }
-  line_buffer = (char *)malloc(file_size + MAX_PEEP_LINES * 128);
+  line_buffer = (char *)malloc(file_size + dyn_lines * 128);
   if (!line_buffer || !line_ptrs) {
     fclose(fp);
     record_pass_end("peephole");
     return;
   }
 
-  while (nlines < MAX_PEEP_LINES && fgets(line_buffer + nlines * 128, 128, fp)) {
+  while (nlines < dyn_lines && fgets(line_buffer + nlines * 128, 128, fp)) {
     line_ptrs[nlines] = line_buffer + nlines * 128;
     nlines++;
   }
@@ -983,7 +985,7 @@ static void peephole_optimize(char *filename) {
         if (k < nlines) {
           char *nl = line_ptrs[k];
           int nlen = strlen(nl);
-          if (nlen >= 6 && (strcmp(nl + nlen - 6, ", %rax\n") == 0 || strcmp(nl + nlen - 6, ", %eax\n") == 0)) {
+          if (nlen >= 7 && (strcmp(nl + nlen - 7, ", %rax\n") == 0 || strcmp(nl + nlen - 7, ", %eax\n") == 0)) {
             if (strstr(nl, "(%rbp)") || strncmp(nl, "    xor", 7) == 0 || strncmp(nl, "    movq $", 10) == 0 || strncmp(nl, "    movl $", 10) == 0) {
               line_ptrs[i][0] = 0; eliminated++; i++; continue;
             }
@@ -1046,6 +1048,10 @@ static void peephole_optimize(char *filename) {
     }
     i++;
     }
+  }
+  {
+    extern int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr);
+    eliminated += zcc_x86_peephole_boost(line_ptrs, &nlines);
   }
 
   if (g_use_in_mem_asm) {
@@ -2009,6 +2015,11 @@ int zcc_main(int argc, char **argv) {
       strncpy(audit_export_file, argv[i] + 20, 255);
       audit_export_file[255] = '\0';
       audit_export_mode = 2;
+    } else if (strcmp(argv[i], "--3d-render") == 0 && i + 1 < argc) {
+      char rcmd[1024];
+      snprintf(rcmd, sizeof(rcmd), "zcc_3d_glb_renderer.exe --glb \"%s\" --ppm \"%s\"",
+               argv[i + 1], output_file ? output_file : "zcc_3d_render.ppm");
+      exit(system(rcmd));
     } else if (strcmp(argv[i], "-Zstub-silent") == 0) {
       zcc_pp_config.stub_silent = 1;
     } else if (strcmp(argv[i], "--raw-glibc") == 0) {

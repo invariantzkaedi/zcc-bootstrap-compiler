@@ -90,7 +90,7 @@ int zcc_emit_win64_pe_file_ex(const char *filename, const uint8_t *code_bytes, s
     opt_hdr.SizeOfImage = 0x1000 + win64_pe_align_to(raw_code_len, 0x1000) + 0x1000;
     opt_hdr.Subsystem = 3; /* IMAGE_SUBSYSTEM_WINDOWS_CUI (Console) */
     opt_hdr.DllCharacteristics = 0x8160 | (g_win64_guard_cf ? 0x4000 : 0);
-    opt_hdr.SizeOfStackReserve = 0x100000;
+    opt_hdr.SizeOfStackReserve = 0x800000;
     opt_hdr.SizeOfStackCommit = 0x1000;
     opt_hdr.SizeOfHeapReserve = 0x100000;
     opt_hdr.SizeOfHeapCommit = 0x1000;
@@ -272,7 +272,33 @@ const char *zcc_win64_pe_resolve_dll_for_symbol(const char *sym) {
         strcmp(sym, "log10") == 0 ||
         strcmp(sym, "floor") == 0 ||
         strcmp(sym, "ceil") == 0 ||
-        strcmp(sym, "fabs") == 0) {
+        strcmp(sym, "fabs") == 0 ||
+        strcmp(sym, "sinf") == 0 ||
+        strcmp(sym, "cosf") == 0 ||
+        strcmp(sym, "tanf") == 0 ||
+        strcmp(sym, "asinf") == 0 ||
+        strcmp(sym, "acosf") == 0 ||
+        strcmp(sym, "atanf") == 0 ||
+        strcmp(sym, "atan2f") == 0 ||
+        strcmp(sym, "sqrtf") == 0 ||
+        strcmp(sym, "powf") == 0 ||
+        strcmp(sym, "expf") == 0 ||
+        strcmp(sym, "logf") == 0 ||
+        strcmp(sym, "log10f") == 0 ||
+        strcmp(sym, "floorf") == 0 ||
+        strcmp(sym, "ceilf") == 0 ||
+        strcmp(sym, "fmod") == 0 ||
+        strcmp(sym, "fmodf") == 0 ||
+        strcmp(sym, "ldexp") == 0 ||
+        strcmp(sym, "frexp") == 0 ||
+        strcmp(sym, "toupper") == 0 ||
+        strcmp(sym, "tolower") == 0 ||
+        strcmp(sym, "isdigit") == 0 ||
+        strcmp(sym, "isalpha") == 0 ||
+        strcmp(sym, "isalnum") == 0 ||
+        strcmp(sym, "isspace") == 0 ||
+        strcmp(sym, "isxdigit") == 0 ||
+        strcmp(sym, "__iob_func") == 0) {
         return "msvcrt.dll";
     }
     if (strncmp(sym, "Reg", 3) == 0 ||
@@ -1090,7 +1116,7 @@ int zcc_emit_win64_pe_file_v8(const char *filename, const uint8_t *code_bytes,
     opt_hdr.SizeOfHeaders = aligned_headers_size;
     opt_hdr.Subsystem = (subsystem == 2) ? 2 : 3;
     opt_hdr.DllCharacteristics = 0x8160 | (g_win64_guard_cf ? 0x4000 : 0);
-    opt_hdr.SizeOfStackReserve = 0x100000;
+    opt_hdr.SizeOfStackReserve = 0x800000;
     opt_hdr.SizeOfStackCommit = 0x1000;
     opt_hdr.SizeOfHeapReserve = 0x100000;
     opt_hdr.SizeOfHeapCommit = 0x1000;
@@ -1789,7 +1815,7 @@ int zcc_emit_win64_pe_dll_v8(const char *filename, const char *dll_name,
     opt_hdr.SizeOfHeaders = aligned_headers_size;
     opt_hdr.Subsystem = 3;
     opt_hdr.DllCharacteristics = 0x8160 | (g_win64_guard_cf ? 0x4000 : 0);
-    opt_hdr.SizeOfStackReserve = 0x100000;
+    opt_hdr.SizeOfStackReserve = 0x800000;
     opt_hdr.SizeOfStackCommit = 0x1000;
     opt_hdr.SizeOfHeapReserve = 0x100000;
     opt_hdr.SizeOfHeapCommit = 0x1000;

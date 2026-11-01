@@ -322,11 +322,27 @@ typedef struct {
     char details[256];
 } ZxrEvent;
 
-static ZxrEvent g_zxr_events[MAX_ZXR_EVENTS];
+static ZxrEvent *g_zxr_events = NULL;
+static int g_zxr_event_cap = 0;
 static int g_zxr_event_count = 0;
+
+#define MAX_ZXR_PROOFS 65536
+static ZXRProof *g_zxr_proofs = NULL;
+static int g_zxr_proof_cap = 0;
+static int g_zxr_proof_count = 0;
+
+static void ensure_zxr_event_slot(void) {
+    if (g_zxr_event_count >= g_zxr_event_cap) {
+        int ncap = g_zxr_event_cap ? g_zxr_event_cap * 2 : 1024;
+        if (ncap > MAX_ZXR_EVENTS) ncap = MAX_ZXR_EVENTS;
+        g_zxr_events = (ZxrEvent *)realloc(g_zxr_events, (size_t)ncap * sizeof(ZxrEvent));
+        g_zxr_event_cap = ncap;
+    }
+}
 
 void record_pass_begin(const char *pass_name) {
     if (g_zxr_event_count >= MAX_ZXR_EVENTS) return;
+    ensure_zxr_event_slot();
     ZxrEvent *ev = &g_zxr_events[g_zxr_event_count++];
     strcpy(ev->event_type, "pass_begin");
     strncpy(ev->pass_name, pass_name, 63);
@@ -337,6 +353,7 @@ void record_pass_begin(const char *pass_name) {
 
 void record_pass_end(const char *pass_name) {
     if (g_zxr_event_count >= MAX_ZXR_EVENTS) return;
+    ensure_zxr_event_slot();
     ZxrEvent *ev = &g_zxr_events[g_zxr_event_count++];
     strcpy(ev->event_type, "pass_end");
     strncpy(ev->pass_name, pass_name, 63);
@@ -347,6 +364,7 @@ void record_pass_end(const char *pass_name) {
 
 void record_transform(const char *pass_name, uint64_t node_id, const char *transform_details) {
     if (g_zxr_event_count >= MAX_ZXR_EVENTS) return;
+    ensure_zxr_event_slot();
     ZxrEvent *ev = &g_zxr_events[g_zxr_event_count++];
     strcpy(ev->event_type, "transform");
     strncpy(ev->pass_name, pass_name, 63);
@@ -358,6 +376,7 @@ void record_transform(const char *pass_name, uint64_t node_id, const char *trans
 
 void zcc_oracle_log_event(const char *context, const char *title, const char *body) {
     if (g_zxr_event_count >= MAX_ZXR_EVENTS) return;
+    ensure_zxr_event_slot();
     ZxrEvent *ev = &g_zxr_events[g_zxr_event_count++];
     strcpy(ev->event_type, "alert");
     strncpy(ev->pass_name, context, 63);
@@ -366,10 +385,6 @@ void zcc_oracle_log_event(const char *context, const char *title, const char *bo
     snprintf(ev->details, 255, "%s: %s", title, body);
     ev->details[255] = '\0';
 }
-
-#define MAX_ZXR_PROOFS 65536
-static ZXRProof g_zxr_proofs[MAX_ZXR_PROOFS];
-static int g_zxr_proof_count = 0;
 
 void record_proof(
     const char *theorem_name,
@@ -381,6 +396,12 @@ void record_proof(
     int preserves_flags
 ) {
     if (g_zxr_proof_count >= MAX_ZXR_PROOFS) return;
+    if (g_zxr_proof_count >= g_zxr_proof_cap) {
+        int ncap = g_zxr_proof_cap ? g_zxr_proof_cap * 2 : 512;
+        if (ncap > MAX_ZXR_PROOFS) ncap = MAX_ZXR_PROOFS;
+        g_zxr_proofs = (ZXRProof *)realloc(g_zxr_proofs, (size_t)ncap * sizeof(ZXRProof));
+        g_zxr_proof_cap = ncap;
+    }
     ZXRProof *p = &g_zxr_proofs[g_zxr_proof_count++];
     strncpy(p->theorem_name, theorem_name, 63);
     p->theorem_name[63] = '\0';
@@ -614,7 +635,13 @@ int zxr_replay_record(const char *zxr_input_filename) {
     fclose(f);
 
     int expected_count = 0;
-    static ZxrEvent expected_events[MAX_ZXR_EVENTS];
+    static ZxrEvent *expected_events = NULL;
+    static ZXRProof *expected_proofs = NULL;
+    if (!expected_events) {
+        void *slab = calloc(1, MAX_ZXR_EVENTS * sizeof(ZxrEvent) + MAX_ZXR_PROOFS * sizeof(ZXRProof));
+        expected_events = (ZxrEvent *)slab;
+        expected_proofs = (ZXRProof *)((char *)slab + MAX_ZXR_EVENTS * sizeof(ZxrEvent));
+    }
 
     char *p = buf;
     while (*p) {
@@ -681,7 +708,6 @@ int zxr_replay_record(const char *zxr_input_filename) {
     }
 
     int expected_proof_count = 0;
-    static ZXRProof expected_proofs[MAX_ZXR_PROOFS];
 
     char *proofs_start = strstr(buf, "\"proofs\":");
     if (proofs_start) {
@@ -1218,7 +1244,8 @@ uint64_t compute_asm_cfg_hash(char **lines, int nlines) {
             instr_to_block[k] = temp_num_blocks;
         }
 
-        static AsmBlock blocks[4096];
+        static AsmBlock *blocks = NULL;
+        if (!blocks) blocks = (AsmBlock *)calloc(4096, sizeof(AsmBlock));
         int num_blocks = 0;
 
         int current_block_start_idx = 0;
@@ -1409,8 +1436,9 @@ static int extract_func_hashes(char **lines, int nlines, FuncHash *out_hashes, i
             instr_to_block[k] = temp_num_blocks;
         }
 
-        static AsmBlock blocks[4096];
-        memset(blocks, 0, sizeof(blocks));
+        static AsmBlock *blocks = NULL;
+        if (!blocks) blocks = (AsmBlock *)calloc(4096, sizeof(AsmBlock));
+        memset(blocks, 0, 4096 * sizeof(AsmBlock));
         int num_blocks = 0;
 
         int current_block_start_idx = 0;

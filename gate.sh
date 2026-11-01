@@ -1648,10 +1648,333 @@ with open(path, 'w') as f:
     echo "=== ALL SELF-TEST CONTROL CHECKS PASSED (A, B, B2, C, D, E, F, G, H, I, J, K, L, M, N) ==="
 }
 
+# --- Crash-Consistent Release Publication & WAL Recovery Engine ---
+write_tx_journal() {
+    local target_repo="$1"
+    local tx_run_id="$2"
+    local tx_state="$3"
+    local rb_dir="$4"
+    local extra_note="${5:-}"
+    mkdir -p "$target_repo/.releases"
+    local j_tmp="$target_repo/.releases/tx_journal.json.tmp.$$"
+    python3 - "$j_tmp" "$tx_run_id" "$tx_state" "$rb_dir" "$extra_note" <<'PY'
+import json, os, sys
+from datetime import datetime, timezone
+out_path, run_id, state, rb_dir, note = sys.argv[1:6]
+payload = {
+    "timestamp_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    "run_id": run_id,
+    "state": state,
+    "rollback_dir": rb_dir,
+    "note": note,
+}
+with open(out_path, "w", encoding="utf-8") as f:
+    json.dump(payload, f, indent=2)
+    f.write("\n")
+    f.flush()
+    os.fsync(f.fileno())
+PY
+    mv -f "$j_tmp" "$target_repo/.releases/tx_journal.json"
+}
+
+recover_release_transaction() {
+    local target_repo="${1:-$REPO_ROOT}"
+    local reason="${2:-EXIT_TRAP}"
+    local j_file="$target_repo/.releases/tx_journal.json"
+    rm -f "$target_repo/zcc2.s.tx_tmp" "$target_repo/zcc3.s.tx_tmp" "$target_repo/zcc2.tx_tmp" "$target_repo/zcc3.tx_tmp" 2>/dev/null || true
+    rm -f "$target_repo/.releases/ACTIVE_GENERATION.tmp."* "$target_repo/.releases/current.tmp."* 2>/dev/null || true
+
+    if [ ! -f "$j_file" ]; then
+        return 0
+    fi
+
+    local j_info
+    j_info=$(python3 - "$j_file" <<'PY'
+import json, sys
+try:
+    d = json.load(open(sys.argv[1], encoding="utf-8"))
+    print(f"{d.get('state', 'UNKNOWN')}|{d.get('run_id', 'UNKNOWN')}|{d.get('rollback_dir', '')}")
+except Exception:
+    print("MALFORMED|UNKNOWN|")
+PY
+)
+    local j_state="${j_info%%|*}"
+    local rest="${j_info#*|}"
+    local j_run="${rest%%|*}"
+    local rb_dir="${rest#*|}"
+
+    if [ "$j_state" = "COMMITTED" ] || [ "$j_state" = "ROLLED_BACK" ] || [ "$j_state" = "CLEAN" ]; then
+        return 0
+    fi
+
+    if [ -n "$rb_dir" ] && [ -d "$rb_dir" ]; then
+        if [ -f "$rb_dir/ACTIVE_GENERATION.present" ] && [ -f "$rb_dir/ACTIVE_GENERATION" ]; then
+            cp -f "$rb_dir/ACTIVE_GENERATION" "$target_repo/.releases/ACTIVE_GENERATION.restore_tmp"
+            mv -f "$target_repo/.releases/ACTIVE_GENERATION.restore_tmp" "$target_repo/.releases/ACTIVE_GENERATION"
+            local prev_rel_dir
+            prev_rel_dir=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('release_dir','').replace('.releases/',''))" "$target_repo/.releases/ACTIVE_GENERATION" 2>/dev/null || true)
+            if [ -n "$prev_rel_dir" ] && [ -d "$target_repo/.releases/$prev_rel_dir" ]; then
+                ln -sfn "$prev_rel_dir" "$target_repo/.releases/current.restore_tmp" 2>/dev/null && mv -Tf "$target_repo/.releases/current.restore_tmp" "$target_repo/.releases/current" 2>/dev/null || ln -sfn "$prev_rel_dir" "$target_repo/.releases/current" 2>/dev/null || true
+            fi
+        elif [ -f "$rb_dir/ACTIVE_GENERATION.absent" ]; then
+            rm -f "$target_repo/.releases/ACTIVE_GENERATION" "$target_repo/.releases/current" 2>/dev/null || true
+        fi
+
+        for tx_art in zcc2.s zcc3.s zcc2 zcc3; do
+            if [ -f "$rb_dir/$tx_art.present" ] && [ -f "$rb_dir/$tx_art" ]; then
+                cp -f "$rb_dir/$tx_art" "$target_repo/$tx_art.restore_tmp"
+                mv -f "$target_repo/$tx_art.restore_tmp" "$target_repo/$tx_art"
+            elif [ -f "$rb_dir/$tx_art.absent" ]; then
+                rm -f "$target_repo/$tx_art" 2>/dev/null || true
+            fi
+        done
+        chmod +x "$target_repo/zcc2" "$target_repo/zcc3" 2>/dev/null || true
+    fi
+
+    if [ -n "$j_run" ] && [ "$j_run" != "UNKNOWN" ]; then
+        rm -rf "$target_repo/.releases/rel-$j_run.staging" "$target_repo/.releases/rel-$j_run" 2>/dev/null || true
+    fi
+
+    write_tx_journal "$target_repo" "$j_run" "ROLLED_BACK" "$rb_dir" "Recovered from $j_state ($reason)"
+    echo "[TRANSACTIONAL ROLLBACK] Release transaction ($j_run, state=$j_state, reason=$reason) aborted; ACTIVE_GENERATION and all 4 root artifacts preserved byte-for-byte." >&2
+    return 0
+}
+
+prepare_release_transaction() {
+    local target_repo="$1"
+    local tx_run_id="$2"
+    recover_release_transaction "$target_repo" "STARTUP_RECOVERY_CHECK"
+    local rb_dir="$target_repo/.releases/rollback-$tx_run_id"
+    rm -rf "$rb_dir"
+    mkdir -p "$rb_dir"
+
+    if [ -f "$target_repo/.releases/ACTIVE_GENERATION" ]; then
+        cp -f "$target_repo/.releases/ACTIVE_GENERATION" "$rb_dir/ACTIVE_GENERATION"
+        touch "$rb_dir/ACTIVE_GENERATION.present"
+    else
+        touch "$rb_dir/ACTIVE_GENERATION.absent"
+    fi
+
+    for tx_art in zcc2.s zcc3.s zcc2 zcc3; do
+        if [ -f "$target_repo/$tx_art" ]; then
+            cp -f "$target_repo/$tx_art" "$rb_dir/$tx_art"
+            touch "$rb_dir/$tx_art.present"
+        else
+            touch "$rb_dir/$tx_art.absent"
+        fi
+    done
+
+    write_tx_journal "$target_repo" "$tx_run_id" "IN_PROGRESS" "$rb_dir" "Transaction initialized"
+}
+
+publish_release_transaction() {
+    local target_repo="$1"
+    local tx_stage_dir="$2"
+    local evidence_dir="$3"
+    local tx_run_id="$4"
+    local rb_dir="$target_repo/.releases/rollback-$tx_run_id"
+
+    # Boundary 1: Pre-staging fault injection hook
+    if [ "${ZCC_INJECT_TX_FAULT:-}" = "pre_stage_dir" ]; then
+        echo "FAIL: Controlled release fault injected at boundary=pre_stage_dir." >&2
+        exit 70
+    fi
+
+    # Same-filesystem device check (prevents EXDEV cross-mount rename hazards)
+    mkdir -p "$target_repo/.releases"
+    local repo_dev rel_dev
+    repo_dev=$(stat -c '%d' "$target_repo")
+    rel_dev=$(stat -c '%d' "$target_repo/.releases")
+    if [ "$repo_dev" != "$rel_dev" ]; then
+        echo "FAIL: Cross-filesystem mount boundary detected between $target_repo (dev=$repo_dev) and .releases (dev=$rel_dev)." >&2
+        exit 71
+    fi
+
+    write_tx_journal "$target_repo" "$tx_run_id" "STAGING_RELEASE_DIR" "$rb_dir" "Staging versioned release directory on destination filesystem (dev=$repo_dev)"
+
+    local rel_staging="$target_repo/.releases/rel-$tx_run_id.staging"
+    local rel_final="$target_repo/.releases/rel-$tx_run_id"
+    rm -rf "$rel_staging" "$rel_final"
+    mkdir -p "$rel_staging"
+
+    cp -f "$tx_stage_dir/stage2.s" "$rel_staging/zcc2.s"
+    cp -f "$tx_stage_dir/stage3.s" "$rel_staging/zcc3.s"
+    cp -f "$tx_stage_dir/stage2.bin" "$rel_staging/zcc2"
+    cp -f "$tx_stage_dir/stage3.bin" "$rel_staging/zcc3"
+    chmod +x "$rel_staging/zcc2" "$rel_staging/zcc3" 2>/dev/null || true
+    for opt_f in stage2.o stage3.o stage2.bin.norm stage3.bin.norm provenance.jsonl toolchain.json differential_c99_receipt.json; do
+        if [ -f "$tx_stage_dir/$opt_f" ]; then
+            cp -f "$tx_stage_dir/$opt_f" "$rel_staging/$opt_f"
+        fi
+    done
+
+    # Verify byte equality & destination-filesystem digest integrity before atomic directory install
+    if ! cmp -s "$rel_staging/zcc2.s" "$rel_staging/zcc3.s"; then
+        echo "FAIL: Destination-staged assembly candidates diverged prior to commit." >&2
+        exit "${EXIT_ASM_DIVERG:-20}"
+    fi
+    if ! cmp -s "$rel_staging/zcc2" "$rel_staging/zcc3"; then
+        echo "FAIL: Destination-staged binary candidates diverged prior to commit." >&2
+        exit "${EXIT_BIN_DIVERG:-22}"
+    fi
+    if ! cmp -s "$tx_stage_dir/stage2.s" "$rel_staging/zcc2.s" || ! cmp -s "$tx_stage_dir/stage2.bin" "$rel_staging/zcc2"; then
+        echo "FAIL: Cross-filesystem copy verification failed between /tmp staging and destination filesystem." >&2
+        exit 72
+    fi
+
+    # Write release_manifest.json inside versioned release directory with per-file fsync
+    python3 - "$rel_staging" "$target_repo" "$tx_run_id" <<'PY'
+import hashlib, json, os, subprocess, sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+rel_dir = Path(sys.argv[1])
+repo_root = Path(sys.argv[2])
+run_id = sys.argv[3]
+
+def sha(p: Path) -> str:
+    return hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else "MISSING"
+
+commit = os.environ.get("ZCC_KNOWN_HEAD", "").strip()
+if not commit:
+    try:
+        commit = subprocess.check_output(["git", "-C", str(repo_root), "rev-parse", "HEAD"], text=True).strip()
+    except Exception:
+        commit = "UNKNOWN"
+
+manifest = {
+    "generation_id": run_id,
+    "published_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    "git_commit": commit,
+    "filesystem_device_id": rel_dir.stat().st_dev,
+    "artifacts": {
+        "zcc2.s": sha(rel_dir / "zcc2.s"),
+        "zcc3.s": sha(rel_dir / "zcc3.s"),
+        "zcc2": sha(rel_dir / "zcc2"),
+        "zcc3": sha(rel_dir / "zcc3"),
+        "stage2.o": sha(rel_dir / "stage2.o"),
+        "stage3.o": sha(rel_dir / "stage3.o"),
+        "stage2.bin.norm": sha(rel_dir / "stage2.bin.norm"),
+        "stage3.bin.norm": sha(rel_dir / "stage3.bin.norm"),
+    },
+}
+m_path = rel_dir / "release_manifest.json"
+with open(m_path, "w", encoding="utf-8") as f:
+    f.write(json.dumps(manifest, indent=2) + "\n")
+    f.flush()
+    os.fsync(f.fileno())
+PY
+
+    # Intra-filesystem atomic directory rename (.staging -> rel-$tx_run_id)
+    mv -f "$rel_staging" "$rel_final"
+
+    # Boundary 2: Post-stage-directory / pre-pointer-flip fault injection hook
+    if [ "${ZCC_INJECT_TX_FAULT:-}" = "post_stage_dir" ] || [ "${ZCC_INJECT_TX_FAULT:-}" = "1" ] || [ "${ZCC_INJECT_TX_FAULT:-}" = "post_candidate" ]; then
+        echo "FAIL: Controlled post-candidate release gate fault injected (ZCC_INJECT_TX_FAULT=${ZCC_INJECT_TX_FAULT})." >&2
+        exit 70
+    fi
+
+    # Stage intra-filesystem legacy root candidates (.tx_tmp) from same-filesystem rel_final
+    cp -f "$rel_final/zcc2.s" "$target_repo/zcc2.s.tx_tmp"
+    cp -f "$rel_final/zcc3.s" "$target_repo/zcc3.s.tx_tmp"
+    cp -f "$rel_final/zcc2" "$target_repo/zcc2.tx_tmp"
+    cp -f "$rel_final/zcc3" "$target_repo/zcc3.tx_tmp"
+    chmod +x "$target_repo/zcc2.tx_tmp" "$target_repo/zcc3.tx_tmp" 2>/dev/null || true
+
+    # Single-Pointer Atomic Release Generation Switch (ACTIVE_GENERATION + .releases/current)
+    write_tx_journal "$target_repo" "$tx_run_id" "FLIPPING_POINTER" "$rb_dir" "Switching single atomic release pointer ACTIVE_GENERATION"
+    local gen_tmp="$target_repo/.releases/ACTIVE_GENERATION.tmp.$tx_run_id"
+    python3 - "$gen_tmp" "$rel_final" "$tx_run_id" <<'PY'
+import hashlib, json, os, sys
+from pathlib import Path
+gen_tmp, rel_final, run_id = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
+manifest_bytes = (rel_final / "release_manifest.json").read_bytes()
+m_data = json.loads(manifest_bytes.decode("utf-8"))
+pointer = {
+    "generation_id": run_id,
+    "release_dir": f".releases/rel-{run_id}",
+    "git_commit": m_data.get("git_commit", "UNKNOWN"),
+    "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+    "artifacts": m_data.get("artifacts", {}),
+}
+with open(gen_tmp, "w", encoding="utf-8") as f:
+    f.write(json.dumps(pointer, indent=2) + "\n")
+    f.flush()
+    os.fsync(f.fileno())
+PY
+    mv -f "$gen_tmp" "$target_repo/.releases/ACTIVE_GENERATION"
+    ln -sfn "rel-$tx_run_id" "$target_repo/.releases/current.tmp.$tx_run_id" 2>/dev/null && mv -Tf "$target_repo/.releases/current.tmp.$tx_run_id" "$target_repo/.releases/current" 2>/dev/null || ln -sfn "rel-$tx_run_id" "$target_repo/.releases/current" 2>/dev/null || true
+
+    # Boundary 3: Post-pointer-flip / pre-legacy-rename fault injection hook
+    if [ "${ZCC_INJECT_TX_FAULT:-}" = "post_pointer_flip" ]; then
+        echo "FAIL: Controlled release fault injected at boundary=post_pointer_flip." >&2
+        exit 70
+    fi
+
+    # Intra-filesystem legacy root replacements protected by WAL journal
+    write_tx_journal "$target_repo" "$tx_run_id" "COMMITTING_LEGACY_ROOT" "$rb_dir" "Replacing legacy 4-file root targets via same-filesystem rename(2)"
+
+    mv -f "$target_repo/zcc2.s.tx_tmp" "$target_repo/zcc2.s"
+    if [ "${ZCC_INJECT_TX_FAULT:-}" = "mid_rename_1" ]; then
+        echo "FAIL: Controlled release fault injected at boundary=mid_rename_1 (1/4 legacy files replaced)." >&2
+        exit 70
+    fi
+
+    mv -f "$target_repo/zcc3.s.tx_tmp" "$target_repo/zcc3.s"
+    if [ "${ZCC_INJECT_TX_FAULT:-}" = "mid_rename_2" ]; then
+        echo "FAIL: Controlled release fault injected at boundary=mid_rename_2 (2/4 legacy files replaced)." >&2
+        exit 70
+    fi
+    if [ "${ZCC_INJECT_TX_FAULT:-}" = "sigkill_mid_rename_2" ]; then
+        echo "FAIL: Uncatchable SIGKILL crash injected at boundary=sigkill_mid_rename_2 (2/4 legacy files replaced; EXIT trap bypassed)." >&2
+        kill -9 "${BASHPID:-$$}"
+    fi
+
+    mv -f "$target_repo/zcc2.tx_tmp" "$target_repo/zcc2"
+    if [ "${ZCC_INJECT_TX_FAULT:-}" = "mid_rename_3" ]; then
+        echo "FAIL: Controlled release fault injected at boundary=mid_rename_3 (3/4 legacy files replaced)." >&2
+        exit 70
+    fi
+
+    mv -f "$target_repo/zcc3.tx_tmp" "$target_repo/zcc3"
+
+    cmp -s "$target_repo/zcc2.s" "$rel_final/zcc2.s"
+    cmp -s "$target_repo/zcc3.s" "$rel_final/zcc3.s"
+    cmp -s "$target_repo/zcc2" "$rel_final/zcc2"
+    cmp -s "$target_repo/zcc3" "$rel_final/zcc3"
+
+    if [ -d "$evidence_dir" ]; then
+        cp -f "$rel_final/release_manifest.json" "$evidence_dir/release_manifest.json"
+        cp -f "$target_repo/.releases/ACTIVE_GENERATION" "$evidence_dir/ACTIVE_GENERATION.json"
+    fi
+
+    write_tx_journal "$target_repo" "$tx_run_id" "COMMITTED" "$rb_dir" "All generation & legacy root artifacts published cleanly"
+    rm -rf "$rb_dir" 2>/dev/null || true
+    TX_COMMITTED=1
+}
+
 # --- CLI Dispatcher ---
 if [ "${1:-}" = "--self-test" ]; then
     SCHEMA_FILE="$REPO_ROOT/contracts/determinism-gate.schema.json"
     run_self_test "$SCHEMA_FILE"
+    exit 0
+fi
+
+if [ "${1:-}" = "--recover-tx" ]; then
+    TARGET_REPO="${2:-$REPO_ROOT}"
+    recover_release_transaction "$TARGET_REPO" "EXPLICIT_CLI_RECOVERY"
+    exit $?
+fi
+
+if [ "${1:-}" = "--test-publish-tx" ]; then
+    TEST_REPO="${2:?missing test repo dir}"
+    TEST_STAGE="${3:?missing test stage dir}"
+    TEST_EVID="${4:?missing test evidence dir}"
+    TEST_RUN_ID="${5:-test-tx-run}"
+    TX_COMMITTED=0
+    prepare_release_transaction "$TEST_REPO" "$TEST_RUN_ID"
+    trap 'if [ "${TX_COMMITTED:-0}" -ne 1 ]; then recover_release_transaction "$TEST_REPO" "EXIT_TRAP"; fi' EXIT
+    publish_release_transaction "$TEST_REPO" "$TEST_STAGE" "$TEST_EVID" "$TEST_RUN_ID"
     exit 0
 fi
 
@@ -1700,32 +2023,14 @@ STAGE1_LOCAL="$TX_STAGE_DIR/zcc"
 cp -f "$STAGE1_COMPILER" "$STAGE1_LOCAL"
 chmod 755 "$STAGE1_LOCAL" 2>/dev/null || true
 
-# Transactional Release Backup & Fail-Closed Rollback Guard
-TX_BACKUP_DIR="$TX_STAGE_DIR/.tx_backup"
-mkdir -p "$TX_BACKUP_DIR"
+# Same-Filesystem Persistent Transactional Release Backup & WAL Guard
 TX_COMMITTED=0
-for tx_art in zcc2.s zcc3.s zcc2 zcc3; do
-    if [ -f "$REPO_ROOT/$tx_art" ]; then
-        cp -f "$REPO_ROOT/$tx_art" "$TX_BACKUP_DIR/$tx_art"
-        touch "$TX_BACKUP_DIR/$tx_art.present"
-    else
-        touch "$TX_BACKUP_DIR/$tx_art.absent"
-    fi
-done
+prepare_release_transaction "$REPO_ROOT" "$RUN_ID"
 
 tx_exit_handler() {
     local tx_rc=$?
-    rm -f "$REPO_ROOT/zcc2.s.tx_tmp" "$REPO_ROOT/zcc3.s.tx_tmp" "$REPO_ROOT/zcc2.tx_tmp" "$REPO_ROOT/zcc3.tx_tmp" 2>/dev/null || true
     if [ "$TX_COMMITTED" -ne 1 ]; then
-        for tx_art in zcc2.s zcc3.s zcc2 zcc3; do
-            if [ -f "$TX_BACKUP_DIR/$tx_art.present" ]; then
-                cp -f "$TX_BACKUP_DIR/$tx_art" "$REPO_ROOT/$tx_art" 2>/dev/null || true
-            elif [ -f "$TX_BACKUP_DIR/$tx_art.absent" ]; then
-                rm -f "$REPO_ROOT/$tx_art" 2>/dev/null || true
-            fi
-        done
-        chmod +x "$REPO_ROOT/zcc2" "$REPO_ROOT/zcc3" 2>/dev/null || true
-        echo "[TRANSACTIONAL ROLLBACK] Release transaction aborted (rc=$tx_rc); previously published root artifacts preserved byte-for-byte." >&2
+        recover_release_transaction "$REPO_ROOT" "EXIT_TRAP_RC_${tx_rc}"
         rm -rf "$TX_STAGE_DIR" 2>/dev/null || true
         if [ "$tx_rc" -eq 0 ]; then
             exit 70
@@ -1752,31 +2057,8 @@ for ev_f in "$TX_STAGE_DIR"/*; do
     fi
 done
 
-# Stage candidate release artifacts into temporary transactional paths before atomic commit
-cp -f "$TX_STAGE_DIR/stage2.s" "$REPO_ROOT/zcc2.s.tx_tmp"
-cp -f "$TX_STAGE_DIR/stage3.s" "$REPO_ROOT/zcc3.s.tx_tmp"
-cp -f "$TX_STAGE_DIR/stage2.bin" "$REPO_ROOT/zcc2.tx_tmp"
-cp -f "$TX_STAGE_DIR/stage3.bin" "$REPO_ROOT/zcc3.tx_tmp"
-chmod +x "$REPO_ROOT/zcc2.tx_tmp" "$REPO_ROOT/zcc3.tx_tmp" 2>/dev/null || true
-
-if ! cmp -s "$REPO_ROOT/zcc2.s.tx_tmp" "$REPO_ROOT/zcc3.s.tx_tmp"; then
-    echo "FAIL: Staged transactional assembly candidates diverged prior to commit." >&2
-    exit "$EXIT_ASM_DIVERG"
-fi
-
-if [ -n "${ZCC_INJECT_TX_FAULT:-}" ] && [ "${ZCC_INJECT_TX_FAULT}" != "0" ]; then
-    echo "FAIL: Controlled post-candidate release gate fault injected (ZCC_INJECT_TX_FAULT=${ZCC_INJECT_TX_FAULT})." >&2
-    exit 70
-fi
-
-# Atomic transactional commit to root release artifacts
-mv -f "$REPO_ROOT/zcc2.s.tx_tmp" "$REPO_ROOT/zcc2.s"
-mv -f "$REPO_ROOT/zcc3.s.tx_tmp" "$REPO_ROOT/zcc3.s"
-mv -f "$REPO_ROOT/zcc2.tx_tmp" "$REPO_ROOT/zcc2"
-mv -f "$REPO_ROOT/zcc3.tx_tmp" "$REPO_ROOT/zcc3"
-cmp -s "$REPO_ROOT/zcc2.s" "$EVIDENCE_DIR/stage2.s"
-cmp -s "$REPO_ROOT/zcc3.s" "$EVIDENCE_DIR/stage3.s"
-TX_COMMITTED=1
+# Crash-consistent same-filesystem versioned directory installation, single-pointer switch & WAL root commit
+publish_release_transaction "$REPO_ROOT" "$TX_STAGE_DIR" "$EVIDENCE_DIR" "$RUN_ID"
 
 echo -e "\n\033[1;32m================================================================================\033[0m"
 echo -e "   ✨ SELFHOST-MV1.3b PASS"

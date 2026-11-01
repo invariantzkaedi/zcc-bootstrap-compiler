@@ -22,12 +22,19 @@ def win64_pe_align_to_py(val: int, align: int) -> int:
     return ((val + align - 1) // align) * align
 
 
+def _pjoin(a: str, b: str) -> str:
+    return os.path.join(a, b).replace("\\", "/")
+
+
 class TestWin64PEEmitter(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp_dir = tempfile.TemporaryDirectory()
-        cls.out_exe = os.path.join(cls.tmp_dir.name, "test_win64_out.exe")
-        cls.zcc_bin = os.path.join(REPO_ROOT, "zcc")
+        cls.tmp_dir.name = cls.tmp_dir.name.replace("\\", "/")
+        cls.out_exe = f"{cls.tmp_dir.name}/test_win64_out.bin"
+        win_bin = os.path.join(REPO_ROOT, "zcc.exe")
+        cls.use_native_zcc = sys.platform == "win32" and os.path.exists(win_bin)
+        cls.zcc_bin = win_bin if cls.use_native_zcc else os.path.join(REPO_ROOT, "zcc")
 
     @classmethod
     def tearDownClass(cls):
@@ -80,13 +87,13 @@ class TestWin64PEEmitter(unittest.TestCase):
 
     def test_03_direct_zcc_win64_compilation_and_headers(self):
         """Verify ./zcc input.c -target win64 -o app.exe emits valid PE32+ headers."""
-        src_file = os.path.join(self.tmp_dir.name, "probe_simple.c")
-        exe_file = os.path.join(self.tmp_dir.name, "probe_simple.exe")
+        src_file = _pjoin(self.tmp_dir.name, "probe_simple.c")
+        exe_file = _pjoin(self.tmp_dir.name, "probe_simple.exe")
         with open(src_file, "w", encoding="utf-8") as f:
             f.write("int main(void) { return 42; }\n")
 
-        # Compile using WSL zcc if on Windows or direct if on Linux
-        if sys.platform == "win32":
+        # Compile using WSL zcc if on Windows without native zcc.exe, or direct
+        if sys.platform == "win32" and not self.use_native_zcc:
             # Translate path to WSL
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
@@ -127,7 +134,7 @@ class TestWin64PEEmitter(unittest.TestCase):
         if sys.platform != "win32":
             self.skipTest("Host execution test requires Windows environment")
 
-        exe_file = os.path.join(self.tmp_dir.name, "probe_simple.exe")
+        exe_file = _pjoin(self.tmp_dir.name, "probe_simple.exe")
         self.assertTrue(os.path.exists(exe_file))
 
         run_res = subprocess.run([exe_file])
@@ -135,8 +142,8 @@ class TestWin64PEEmitter(unittest.TestCase):
 
     def test_05_multi_function_recursive_execution(self):
         """Verify multi-function program with arithmetic & recursion compiles and executes with code 43."""
-        src_file = os.path.join(self.tmp_dir.name, "probe_calc.c")
-        exe_file = os.path.join(self.tmp_dir.name, "probe_calc.exe")
+        src_file = _pjoin(self.tmp_dir.name, "probe_calc.c")
+        exe_file = _pjoin(self.tmp_dir.name, "probe_calc.exe")
         with open(src_file, "w", encoding="utf-8") as f:
             f.write(
                 "int add(int a, int b) { return a + b; }\n"
@@ -144,7 +151,7 @@ class TestWin64PEEmitter(unittest.TestCase):
                 "int main(void) { int x = add(10, 20); int f = fib(7); return x + f; }\n"
             )
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
@@ -162,12 +169,12 @@ class TestWin64PEEmitter(unittest.TestCase):
 
     def test_06_target_auto_detection_from_exe(self):
         """Verify -o app.exe automatically enables PE32+ emission without explicit -target flag."""
-        src_file = os.path.join(self.tmp_dir.name, "probe_auto.c")
-        exe_file = os.path.join(self.tmp_dir.name, "probe_auto.exe")
+        src_file = _pjoin(self.tmp_dir.name, "probe_auto.c")
+        exe_file = _pjoin(self.tmp_dir.name, "probe_auto.exe")
         with open(src_file, "w", encoding="utf-8") as f:
             f.write("int main(void) { return 77; }\n")
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
@@ -185,8 +192,8 @@ class TestWin64PEEmitter(unittest.TestCase):
 
     def test_07_win64_pe_import_directory_headers(self):
         """Verify emitted PE binary has valid DataDirectory[1] (Import) and DataDirectory[12] (IAT)."""
-        src_file = os.path.join(self.tmp_dir.name, "probe_import_hdr.c")
-        exe_file = os.path.join(self.tmp_dir.name, "probe_import_hdr.exe")
+        src_file = _pjoin(self.tmp_dir.name, "probe_import_hdr.c")
+        exe_file = _pjoin(self.tmp_dir.name, "probe_import_hdr.exe")
         with open(src_file, "w", encoding="utf-8") as f:
             f.write(
                 "extern void ExitProcess(unsigned int uExitCode);\n"
@@ -194,7 +201,7 @@ class TestWin64PEEmitter(unittest.TestCase):
                 "int main(void) { void *h = GetStdHandle(-11); ExitProcess(42); return 0; }\n"
             )
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
@@ -232,8 +239,8 @@ class TestWin64PEEmitter(unittest.TestCase):
         if sys.platform != "win32":
             self.skipTest("Host execution test requires Windows environment")
 
-        src_file = os.path.join(self.tmp_dir.name, "probe_dll_run.c")
-        exe_file = os.path.join(self.tmp_dir.name, "probe_dll_run.exe")
+        src_file = _pjoin(self.tmp_dir.name, "probe_dll_run.c")
+        exe_file = _pjoin(self.tmp_dir.name, "probe_dll_run.exe")
         with open(src_file, "w", encoding="utf-8") as f:
             f.write(
                 "extern void ExitProcess(unsigned int uExitCode);\n"
@@ -249,10 +256,13 @@ class TestWin64PEEmitter(unittest.TestCase):
                 "}\n"
             )
 
-        wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
-        wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
-        wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
-        cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
+        if not self.use_native_zcc:
+            wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
+        else:
+            cmd = [self.zcc_bin, src_file.replace("\\", "/"), "-target", "win64", "-o", exe_file.replace("\\", "/")]
 
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         self.assertEqual(res.returncode, 0, f"Compilation failed: {res.stderr}\n{res.stdout}")
@@ -267,8 +277,8 @@ class TestWin64PEEmitter(unittest.TestCase):
         if sys.platform != "win32":
             self.skipTest("Host execution test requires Windows environment")
 
-        src_file = os.path.join(self.tmp_dir.name, "probe_multi_api.c")
-        exe_file = os.path.join(self.tmp_dir.name, "probe_multi_api.exe")
+        src_file = _pjoin(self.tmp_dir.name, "probe_multi_api.c")
+        exe_file = _pjoin(self.tmp_dir.name, "probe_multi_api.exe")
         with open(src_file, "w", encoding="utf-8") as f:
             f.write(
                 "extern void *GetStdHandle(int nStdHandle);\n"
@@ -289,10 +299,13 @@ class TestWin64PEEmitter(unittest.TestCase):
                 "}\n"
             )
 
-        wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
-        wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
-        wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
-        cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -o '{wsl_exe}'"]
+        if not self.use_native_zcc:
+            wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+            wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
+            cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c", f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -o '{wsl_exe}'"]
+        else:
+            cmd = [self.zcc_bin, src_file.replace("\\", "/"), "-o", exe_file.replace("\\", "/")]
 
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         self.assertEqual(res.returncode, 0, f"Compilation failed: {res.stderr}\n{res.stdout}")
@@ -304,8 +317,8 @@ class TestWin64PEEmitter(unittest.TestCase):
 
     def test_10_multi_dll_msvcrt_printf_malloc(self):
         """Verify multi-DLL PE import directory with msvcrt.dll and KERNEL32.dll dynamic binding."""
-        src_file = os.path.join(self.tmp_dir.name, "probe_msvcrt_kernel32.c")
-        exe_file = os.path.join(self.tmp_dir.name, "probe_msvcrt_kernel32.exe")
+        src_file = _pjoin(self.tmp_dir.name, "probe_msvcrt_kernel32.c")
+        exe_file = _pjoin(self.tmp_dir.name, "probe_msvcrt_kernel32.exe")
         with open(src_file, "w", encoding="utf-8") as f:
             f.write(
                 "extern void *malloc(unsigned long long sz);\n"
@@ -323,7 +336,7 @@ class TestWin64PEEmitter(unittest.TestCase):
                 "}\n"
             )
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
@@ -361,8 +374,8 @@ class TestWin64PEEmitter(unittest.TestCase):
 
     def test_11_multi_dll_three_libraries_user32(self):
         """Verify simultaneous multi-DLL binding across 3 libraries (KERNEL32, msvcrt, USER32)."""
-        src_file = os.path.join(self.tmp_dir.name, "probe_tri_dll.c")
-        exe_file = os.path.join(self.tmp_dir.name, "probe_tri_dll.exe")
+        src_file = _pjoin(self.tmp_dir.name, "probe_tri_dll.c")
+        exe_file = _pjoin(self.tmp_dir.name, "probe_tri_dll.exe")
         with open(src_file, "w", encoding="utf-8") as f:
             f.write(
                 "extern void *malloc(unsigned long long sz);\n"
@@ -385,7 +398,7 @@ class TestWin64PEEmitter(unittest.TestCase):
                 "}\n"
             )
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
@@ -423,8 +436,8 @@ class TestWin64PEEmitter(unittest.TestCase):
 
     def test_12_win64_pe_exception_directory_headers(self):
         """Verify emitted PE binary has valid DataDirectory[3] (.pdata) and valid UNWIND_INFO entries."""
-        src_file = os.path.join(self.tmp_dir.name, "probe_pdata_hdr.c")
-        exe_file = os.path.join(self.tmp_dir.name, "probe_pdata_hdr.exe")
+        src_file = _pjoin(self.tmp_dir.name, "probe_pdata_hdr.c")
+        exe_file = _pjoin(self.tmp_dir.name, "probe_pdata_hdr.exe")
         with open(src_file, "w", encoding="utf-8") as f:
             f.write(
                 "int helper(int a) { return a * 2; }\n"
@@ -432,7 +445,7 @@ class TestWin64PEEmitter(unittest.TestCase):
                 "int main(void) { return compute(10, 22); }\n"
             )
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
@@ -504,7 +517,7 @@ class TestWin64PEEmitter(unittest.TestCase):
         if sys.platform != "win32":
             self.skipTest("Host execution test requires Windows environment")
 
-        exe_file = os.path.join(self.tmp_dir.name, "probe_pdata_hdr.exe")
+        exe_file = _pjoin(self.tmp_dir.name, "probe_pdata_hdr.exe")
         self.assertTrue(os.path.exists(exe_file))
 
         run_res = subprocess.run([exe_file])
@@ -514,16 +527,16 @@ class TestWin64PEEmitter(unittest.TestCase):
 
     def test_14_multi_source_win64_pe_compilation(self):
         """Verify multi-source compilation: two C source files compiled directly to PE32+ executable."""
-        src1 = os.path.join(self.tmp_dir.name, "probe_m1.c")
-        src2 = os.path.join(self.tmp_dir.name, "probe_m2.c")
-        exe_file = os.path.join(self.tmp_dir.name, "probe_multi_run.exe")
+        src1 = _pjoin(self.tmp_dir.name, "probe_m1.c")
+        src2 = _pjoin(self.tmp_dir.name, "probe_m2.c")
+        exe_file = _pjoin(self.tmp_dir.name, "probe_multi_run.exe")
 
         with open(src1, "w", encoding="utf-8") as f:
             f.write("extern int helper(int x);\nint main(void) { return helper(40) + 2; }\n")
         with open(src2, "w", encoding="utf-8") as f:
             f.write("int helper(int x) { return x * 2; }\n")
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_s1 = src1.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_s2 = src2.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
@@ -546,15 +559,15 @@ class TestWin64PEEmitter(unittest.TestCase):
 
     def test_15_direct_assembly_to_pe_emission(self):
         """Verify direct assembly (.s) compilation to Win64 PE32+ executable."""
-        src_file = os.path.join(self.tmp_dir.name, "probe_asm_in.c")
-        asm_file = os.path.join(self.tmp_dir.name, "probe_asm_in.s")
-        exe_file = os.path.join(self.tmp_dir.name, "probe_asm_out.exe")
+        src_file = _pjoin(self.tmp_dir.name, "probe_asm_in.c")
+        asm_file = _pjoin(self.tmp_dir.name, "probe_asm_in.s")
+        exe_file = _pjoin(self.tmp_dir.name, "probe_asm_out.exe")
 
         with open(src_file, "w", encoding="utf-8") as f:
             f.write("int calc(int x) { return x + 15; }\nint main(void) { return calc(30); }\n")
 
         # Compile to .s first
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_s = asm_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
@@ -583,9 +596,9 @@ class TestWin64PEEmitter(unittest.TestCase):
 
     def test_16_multi_source_dynamic_import_binding(self):
         """Verify multi-source compilation with dynamic DLL imports (printf from msvcrt, ExitProcess from KERNEL32)."""
-        src1 = os.path.join(self.tmp_dir.name, "probe_dyn1.c")
-        src2 = os.path.join(self.tmp_dir.name, "probe_dyn2.c")
-        exe_file = os.path.join(self.tmp_dir.name, "probe_dyn_run.exe")
+        src1 = _pjoin(self.tmp_dir.name, "probe_dyn1.c")
+        src2 = _pjoin(self.tmp_dir.name, "probe_dyn2.c")
+        exe_file = _pjoin(self.tmp_dir.name, "probe_dyn_run.exe")
 
         with open(src1, "w", encoding="utf-8") as f:
             f.write(
@@ -600,7 +613,7 @@ class TestWin64PEEmitter(unittest.TestCase):
         with open(src2, "w", encoding="utf-8") as f:
             f.write("int compute_sum(int a, int b) { return a + b; }\n")
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_s1 = src1.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_s2 = src2.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
@@ -619,9 +632,9 @@ class TestWin64PEEmitter(unittest.TestCase):
             self.assertIn("DYN_RESULT: 53", run_res.stdout)
     def test_17_mixed_c_and_assembly_win64_pe_compilation(self):
         """Verify compiling mixed C and hand-written assembly sources directly to Win64 PE."""
-        src_c = os.path.join(self.tmp_dir.name, "probe_mixed_c.c")
-        src_s = os.path.join(self.tmp_dir.name, "probe_mixed_s.s")
-        exe_file = os.path.join(self.tmp_dir.name, "probe_mixed_run.exe")
+        src_c = _pjoin(self.tmp_dir.name, "probe_mixed_c.c")
+        src_s = _pjoin(self.tmp_dir.name, "probe_mixed_s.s")
+        exe_file = _pjoin(self.tmp_dir.name, "probe_mixed_run.exe")
 
         with open(src_c, "w", encoding="utf-8") as f:
             f.write(
@@ -641,7 +654,7 @@ class TestWin64PEEmitter(unittest.TestCase):
                 "    ret\n"
             )
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_c = src_c.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_s = src_s.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
@@ -660,9 +673,9 @@ class TestWin64PEEmitter(unittest.TestCase):
 
     def test_18_multi_assembly_win64_pe_compilation(self):
         """Verify compiling multiple .s assembly files directly to Win64 PE."""
-        s1 = os.path.join(self.tmp_dir.name, "probe_m_s1.s")
-        s2 = os.path.join(self.tmp_dir.name, "probe_m_s2.s")
-        exe_file = os.path.join(self.tmp_dir.name, "probe_m_s_run.exe")
+        s1 = _pjoin(self.tmp_dir.name, "probe_m_s1.s")
+        s2 = _pjoin(self.tmp_dir.name, "probe_m_s2.s")
+        exe_file = _pjoin(self.tmp_dir.name, "probe_m_s_run.exe")
 
         with open(s1, "w", encoding="utf-8") as f:
             f.write(
@@ -684,7 +697,7 @@ class TestWin64PEEmitter(unittest.TestCase):
                 "    ret\n"
             )
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_s1 = s1.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_s2 = s2.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
@@ -703,8 +716,8 @@ class TestWin64PEEmitter(unittest.TestCase):
 
     def test_19_large_scale_pdata_unwind_extents(self):
         """Verify dynamic .pdata extent scaling with > 256 functions (exceeding fixed buffer)."""
-        src = os.path.join(self.tmp_dir.name, "probe_300_funcs.c")
-        exe_file = os.path.join(self.tmp_dir.name, "probe_300_funcs.exe")
+        src = _pjoin(self.tmp_dir.name, "probe_300_funcs.c")
+        exe_file = _pjoin(self.tmp_dir.name, "probe_300_funcs.exe")
 
         lines = ["int dummy(void) { return 1; }\n"]
         for fi in range(300):
@@ -714,7 +727,7 @@ class TestWin64PEEmitter(unittest.TestCase):
         with open(src, "w", encoding="utf-8") as f:
             f.writelines(lines)
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
@@ -743,9 +756,9 @@ class TestWin64PEEmitter(unittest.TestCase):
 
     def test_20_win64_ms_abi_calling_convention(self):
         """Verify Win64 MS ABI calling convention: rcx, rdx, r8, r9 + 32-byte shadow space."""
-        src = os.path.join(self.tmp_dir.name, "probe_ms_abi.c")
-        asm_file = os.path.join(self.tmp_dir.name, "probe_ms_abi.s")
-        exe_file = os.path.join(self.tmp_dir.name, "probe_ms_abi.exe")
+        src = _pjoin(self.tmp_dir.name, "probe_ms_abi.c")
+        asm_file = _pjoin(self.tmp_dir.name, "probe_ms_abi.s")
+        exe_file = _pjoin(self.tmp_dir.name, "probe_ms_abi.exe")
 
         with open(src, "w", encoding="utf-8") as f:
             f.write(
@@ -758,7 +771,7 @@ class TestWin64PEEmitter(unittest.TestCase):
                 "}\n"
             )
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_asm = asm_file.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
@@ -797,8 +810,8 @@ class TestWin64PEEmitter(unittest.TestCase):
 
     def test_21_win64_gui_subsystem_and_winmain(self):
         """Verify Win64 PE GUI Subsystem (-mwindows) sets Subsystem=2 and resolves WinMain entry point."""
-        src = os.path.join(self.tmp_dir.name, "probe_gui_subsystem.c")
-        exe = os.path.join(self.tmp_dir.name, "probe_gui_subsystem.exe")
+        src = _pjoin(self.tmp_dir.name, "probe_gui_subsystem.c")
+        exe = _pjoin(self.tmp_dir.name, "probe_gui_subsystem.exe")
 
         with open(src, "w", encoding="utf-8") as f:
             f.write(
@@ -807,7 +820,7 @@ class TestWin64PEEmitter(unittest.TestCase):
                 "}\n"
             )
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
@@ -833,8 +846,8 @@ class TestWin64PEEmitter(unittest.TestCase):
 
     def test_22_win64_pe_resource_directory_and_manifest(self):
         """Verify Win64 PE .rsrc section and DataDirectory[2] Resource Table with Common-Controls manifest."""
-        src = os.path.join(self.tmp_dir.name, "probe_rsrc_test.c")
-        exe = os.path.join(self.tmp_dir.name, "probe_rsrc_test.exe")
+        src = _pjoin(self.tmp_dir.name, "probe_rsrc_test.c")
+        exe = _pjoin(self.tmp_dir.name, "probe_rsrc_test.exe")
 
         with open(src, "w", encoding="utf-8") as f:
             f.write(
@@ -843,7 +856,7 @@ class TestWin64PEEmitter(unittest.TestCase):
                 "}\n"
             )
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
@@ -873,8 +886,8 @@ class TestWin64PEEmitter(unittest.TestCase):
 
     def test_23_win64_pe_native_dll_export_directory(self):
         """Verify Win64 PE native dynamic library emission with -shared and .edata Export Address Table."""
-        src = os.path.join(self.tmp_dir.name, "probe_dll_test.c")
-        dll = os.path.join(self.tmp_dir.name, "probe_dll_test.dll")
+        src = _pjoin(self.tmp_dir.name, "probe_dll_test.c")
+        dll = _pjoin(self.tmp_dir.name, "probe_dll_test.dll")
 
         with open(src, "w", encoding="utf-8") as f:
             f.write(
@@ -886,7 +899,7 @@ class TestWin64PEEmitter(unittest.TestCase):
                 "}\n"
             )
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_dll = dll.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
@@ -952,8 +965,8 @@ class TestWin64PEEmitter(unittest.TestCase):
 
     def test_24_win64_pe_dll_runtime_loadlibrary(self):
         """Verify Win64 PE DLL runtime execution via ctypes LoadLibrary on Windows host."""
-        src = os.path.join(self.tmp_dir.name, "probe_dll_runtime.c")
-        dll = os.path.join(self.tmp_dir.name, "probe_dll_runtime.dll")
+        src = _pjoin(self.tmp_dir.name, "probe_dll_runtime.c")
+        dll = _pjoin(self.tmp_dir.name, "probe_dll_runtime.dll")
 
         with open(src, "w", encoding="utf-8") as f:
             f.write(
@@ -965,7 +978,7 @@ class TestWin64PEEmitter(unittest.TestCase):
                 "}\n"
             )
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_dll = dll.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
@@ -996,8 +1009,8 @@ class TestWin64PEEmitter(unittest.TestCase):
 
     def test_25_win64_pe_seh_unwind_ehandler_and_scope_table(self):
         """Verify Win64 PE Structured Exception Handling .pdata emission with UNW_FLAG_EHANDLER and ScopeTable."""
-        src = os.path.join(self.tmp_dir.name, "probe_seh_test.c")
-        exe = os.path.join(self.tmp_dir.name, "probe_seh_test.exe")
+        src = _pjoin(self.tmp_dir.name, "probe_seh_test.c")
+        exe = _pjoin(self.tmp_dir.name, "probe_seh_test.exe")
 
         with open(src, "w", encoding="utf-8") as f:
             f.write(
@@ -1020,7 +1033,7 @@ class TestWin64PEEmitter(unittest.TestCase):
                 "}\n"
             )
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
@@ -1086,7 +1099,7 @@ class TestWin64PEEmitter(unittest.TestCase):
         if sys.platform != "win32":
             self.skipTest("Host execution test requires Windows environment")
 
-        exe = os.path.join(self.tmp_dir.name, "probe_seh_test.exe")
+        exe = _pjoin(self.tmp_dir.name, "probe_seh_test.exe")
         self.assertTrue(os.path.exists(exe))
 
         run_res = subprocess.run([exe])
@@ -1095,9 +1108,9 @@ class TestWin64PEEmitter(unittest.TestCase):
 
     def test_27_win64_pe_module_definition_file_emission(self):
         """Verify automatic emission of Module-Definition (.def) file during -shared compilation."""
-        src = os.path.join(self.tmp_dir.name, "probe_def_test.c")
-        dll = os.path.join(self.tmp_dir.name, "probe_def_test.dll")
-        deffile = os.path.join(self.tmp_dir.name, "probe_def_test.def")
+        src = _pjoin(self.tmp_dir.name, "probe_def_test.c")
+        dll = _pjoin(self.tmp_dir.name, "probe_def_test.dll")
+        deffile = _pjoin(self.tmp_dir.name, "probe_def_test.def")
 
         with open(src, "w", encoding="utf-8") as f:
             f.write(
@@ -1105,7 +1118,7 @@ class TestWin64PEEmitter(unittest.TestCase):
                 "int export_beta(int y) { return y * 2; }\n"
             )
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
             wsl_dll = dll.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c")
@@ -1128,8 +1141,8 @@ class TestWin64PEEmitter(unittest.TestCase):
 
     def test_28_win64_pe_coff_import_library_emission(self):
         """Verify automatic emission of MSVC-compatible COFF Import Library (.lib) archive during -shared compilation."""
-        dll = os.path.join(self.tmp_dir.name, "probe_def_test.dll")
-        libfile = os.path.join(self.tmp_dir.name, "probe_def_test.lib")
+        dll = _pjoin(self.tmp_dir.name, "probe_def_test.dll")
+        libfile = _pjoin(self.tmp_dir.name, "probe_def_test.lib")
 
         self.assertTrue(os.path.exists(libfile), ".lib import library was not emitted alongside .dll")
 
@@ -1174,8 +1187,8 @@ class TestWin64PEEmitter(unittest.TestCase):
         """Verify Win64 PE .tls section, IMAGE_TLS_DIRECTORY64 (40 bytes), DataDirectory[9], and runtime execution."""
         scratch_dir = os.path.join(REPO_ROOT, "scratch")
         os.makedirs(scratch_dir, exist_ok=True)
-        src = os.path.join(scratch_dir, "probe_tls_test.c")
-        exe = os.path.join(scratch_dir, "probe_tls_test.exe")
+        src = _pjoin(scratch_dir, "probe_tls_test.c")
+        exe = _pjoin(scratch_dir, "probe_tls_test.exe")
 
         with open(src, "w", encoding="utf-8") as f:
             f.write(
@@ -1192,7 +1205,7 @@ class TestWin64PEEmitter(unittest.TestCase):
                 "}\n"
             )
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
@@ -1253,8 +1266,8 @@ class TestWin64PEEmitter(unittest.TestCase):
         """Verify multiple initialized and uninitialized TLS variables with alignment and offset calculation."""
         scratch_dir = os.path.join(REPO_ROOT, "scratch")
         os.makedirs(scratch_dir, exist_ok=True)
-        src = os.path.join(scratch_dir, "probe_tls_multi.c")
-        exe = os.path.join(scratch_dir, "probe_tls_multi.exe")
+        src = _pjoin(scratch_dir, "probe_tls_multi.c")
+        exe = _pjoin(scratch_dir, "probe_tls_multi.exe")
 
         with open(src, "w", encoding="utf-8") as f:
             f.write(
@@ -1271,7 +1284,7 @@ class TestWin64PEEmitter(unittest.TestCase):
                 "}\n"
             )
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
@@ -1291,9 +1304,9 @@ class TestWin64PEEmitter(unittest.TestCase):
         """Verify Win64 PE IMAGE_DIRECTORY_ENTRY_SECURITY and WIN_CERTIFICATE attribute certificate table."""
         scratch_dir = os.path.join(REPO_ROOT, "scratch")
         os.makedirs(scratch_dir, exist_ok=True)
-        src = os.path.join(scratch_dir, "probe_cert_unit.c")
-        exe = os.path.join(scratch_dir, "probe_cert_unit.exe")
-        cert_file = os.path.join(scratch_dir, "probe_unit_sig.der")
+        src = _pjoin(scratch_dir, "probe_cert_unit.c")
+        exe = _pjoin(scratch_dir, "probe_cert_unit.exe")
+        cert_file = _pjoin(scratch_dir, "probe_unit_sig.der")
 
         with open(src, "w", encoding="utf-8") as f:
             f.write("int main(void) { return 77; }\n")
@@ -1302,7 +1315,7 @@ class TestWin64PEEmitter(unittest.TestCase):
         with open(cert_file, "wb") as f:
             f.write(cert_payload)
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
@@ -1345,13 +1358,13 @@ class TestWin64PEEmitter(unittest.TestCase):
         """Verify Win64 PE IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT (DataDirectory[13]) and .didat section emission."""
         scratch_dir = os.path.join(REPO_ROOT, "scratch")
         os.makedirs(scratch_dir, exist_ok=True)
-        src = os.path.join(scratch_dir, "probe_delay_unit.c")
-        exe = os.path.join(scratch_dir, "probe_delay_unit.exe")
+        src = _pjoin(scratch_dir, "probe_delay_unit.c")
+        exe = _pjoin(scratch_dir, "probe_delay_unit.exe")
 
         with open(src, "w", encoding="utf-8") as f:
             f.write("int main(void) { return 88; }\n")
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
@@ -1411,13 +1424,13 @@ class TestWin64PEEmitter(unittest.TestCase):
     def test_33_win64_pe_reproducible_and_guard_cf(self):
         scratch_dir = os.path.join(REPO_ROOT, "scratch")
         os.makedirs(scratch_dir, exist_ok=True)
-        src = os.path.join(scratch_dir, "test_repro.c")
-        exe = os.path.join(scratch_dir, "test_repro.exe")
+        src = _pjoin(scratch_dir, "test_repro.c")
+        exe = _pjoin(scratch_dir, "test_repro.exe")
 
         with open(src, "w", encoding="utf-8") as f:
             f.write("int main(void) { return 42; }\n")
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
@@ -1449,9 +1462,9 @@ class TestWin64PEEmitter(unittest.TestCase):
         """Verifies standard C runtime file I/O (fopen, fputs, fclose) binds to msvcrt.dll and writes correctly."""
         scratch_dir = os.path.join(REPO_ROOT, "scratch")
         os.makedirs(scratch_dir, exist_ok=True)
-        src = os.path.join(scratch_dir, "test_stdio_io.c")
-        exe = os.path.join(scratch_dir, "test_stdio_io.exe")
-        out_txt = os.path.join(scratch_dir, "test_stdio_out.txt")
+        src = _pjoin(scratch_dir, "test_stdio_io.c")
+        exe = _pjoin(scratch_dir, "test_stdio_io.exe")
+        out_txt = _pjoin(scratch_dir, "test_stdio_out.txt")
 
         if os.path.exists(out_txt):
             os.remove(out_txt)
@@ -1470,7 +1483,7 @@ int main(void) {
         with open(src, "w", encoding="utf-8") as f:
             f.write(code)
 
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not self.use_native_zcc:
             wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
             wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")

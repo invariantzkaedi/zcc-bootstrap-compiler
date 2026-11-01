@@ -1,0 +1,21 @@
+# Exact commands executed for Gate M5-2 Multi-Seed Generalization, Native 10-Seed Engine & AVX-512 Optimization
+
+1. Compile and execute Native 10-Seed & 512-Bit AVX-512 Symplectic Verlet Engine (ZCC Stage 2 & GCC Reference):
+   ./zcc2 experiments/zcc_eai_006_g3_m5/zcc_m5_2_native_multiseed.c -S -o experiments/zcc_eai_006_g3_m5/zcc_m5_2_native_bin.s
+   sed -i '/\.section[[:space:]]*\.note\.GNU-stack/d' experiments/zcc_eai_006_g3_m5/zcc_m5_2_native_bin.s
+   as --64 experiments/zcc_eai_006_g3_m5/zcc_m5_2_native_bin.s -o experiments/zcc_eai_006_g3_m5/zcc_m5_2_native_bin.o
+   gcc experiments/zcc_eai_006_g3_m5/zcc_m5_2_native_bin.o -o experiments/zcc_eai_006_g3_m5/zcc_m5_2_native_bin -lm
+   rm -f experiments/zcc_eai_006_g3_m5/zcc_m5_2_native_bin.o
+   gcc -O2 -ffp-contract=off experiments/zcc_eai_006_g3_m5/zcc_m5_2_native_multiseed.c -o experiments/zcc_eai_006_g3_m5/gcc_m5_2_native_bin -lm
+   ./experiments/zcc_eai_006_g3_m5/zcc_m5_2_native_bin ZCC docs/evidence/2026-10-28/m5_2_noise_bootstrap/m5_2_zcc_native_multiseed_receipt.json
+   ./experiments/zcc_eai_006_g3_m5/gcc_m5_2_native_bin GCC docs/evidence/2026-10-28/m5_2_noise_bootstrap/m5_2_gcc_native_multiseed_receipt.json
+
+2. Execute full Gate M5-2 experimental suite (with Control 0 & Control 0b verification) and tee output:
+   python3 experiments/zcc_eai_006_g3_m5/run_m5_2_bootstrap.py 2>&1 | tee docs/evidence/2026-10-28/m5_2_noise_bootstrap/stdout.log
+
+3. Verify detached receipt checksum:
+   cd docs/evidence/2026-10-28/m5_2_noise_bootstrap && sha256sum -c m5_2_noise_bootstrap_receipt.json.sha256
+
+4. Run independent ZCC-EF-0 verifier & 12-control adversarial self-test:
+   python3 tools/verify_m5_2_noise_bootstrap.py
+   python3 tools/verify_m5_2_noise_bootstrap.py --self-test
