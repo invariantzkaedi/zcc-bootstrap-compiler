@@ -1,0 +1,129 @@
+CMP_EXIT=0
+d3d5fcf2043ff16cf17dee6641dfa216de2c6047fb0c20a0c4e78c78f770420c  zcc2.s
+d3d5fcf2043ff16cf17dee6641dfa216de2c6047fb0c20a0c4e78c78f770420c  zcc3.s
+
+{
+  "engine": "IEEE-1_SELF_AUTHENTICATING_VECTOR_FIREWALL",
+  "verdict": "PASS",
+  "arm1_active_treatment": {
+    "passed": true,
+    "dense_cosine_drift": 1.0053572196966343e-08,
+    "dense_max_ulp_drift": 1,
+    "sparse_dot_product_delta": 0.0,
+    "sparse_ieee754_equality": true,
+    "wots_pk_root": "636f75c7989c04d30d3c69f3a4aa7524b80f99c239009495de4f60f471a2715a"
+  },
+  "arm2_negative_control": {
+    "passed": true,
+    "unredundant_1x_rejected_on_2bit_flip": true
+  },
+  "arm3_sham_control": {
+    "passed": true,
+    "tenant_swap_caught": true,
+    "prompt_injection_caught": true,
+    "sham_wots_signature_caught": true
+  },
+  "arm4_stress_regime": {
+    "passed": true,
+    "survived_64_prefix_bit_flips": true,
+    "quantization_fraud_caught": {
+      "FP16": true,
+      "BF16": true,
+      "INT8": true,
+      "ZERO_STRIP": true
+    },
+    "top10_rank_invariant": true
+  }
+}
+{
+  "engine": "IEEE-2_QNAN_TOMBSTONE_AND_SUBNORMAL_SENTINEL",
+  "verdict": "PASS",
+  "arm1_active_treatment": {
+    "passed": true,
+    "tombstone_hex": "0x7FFD045390A8131A",
+    "recovered_op": "ZERO_DIV_ZERO",
+    "recovered_site_id": 1337,
+    "recovered_row_col": [
+      42,
+      19
+    ],
+    "sqrt_neg_zero_sign_preserved": true
+  },
+  "arm2_negative_control": {
+    "passed": true,
+    "uninstrumented_nan_hex": "0xFFF8000000000000",
+    "is_valid_tombstone": false
+  },
+  "arm3_sham_control": {
+    "passed": true,
+    "forged_crc8_rejected": true,
+    "snan_trap_triggered": true
+  },
+  "arm4_stress_regime": {
+    "passed": true,
+    "first_born_fault_preserved": true,
+    "clean_subnormals_preserved": true,
+    "simulated_ftz_caught": true
+  }
+}
+{
+  "engine": "IEEE-3_KULISCH_DETERMINISTIC_SUPERACCUMULATOR",
+  "verdict": "PASS",
+  "arm1_active_treatment": {
+    "passed": true,
+    "super_sum_result": 1e-50,
+    "super_sum_hex": "0x358DEE7A4AD4B81F",
+    "ulp_error_vs_exact": 0,
+    "super_dot_ulp_error": 0
+  },
+  "arm2_negative_control": {
+    "passed": true,
+    "naive_result": -1.0,
+    "neumaier_result": 0.0,
+    "naive_ulp_drift": 9980558990174275553,
+    "neumaier_ulp_drift": 3859002664735258655
+  },
+  "arm3_sham_permutation_control": {
+    "passed": true,
+    "kulisch_unique_bit_patterns_across_25_perms": 1,
+    "naive_unique_bit_patterns_across_25_perms": 11,
+    "canonical_hex": "0x40200A3D70A3D70A"
+  },
+  "arm4_stress_regime": {
+    "passed": true,
+    "subnormal_5e324_recovered_after_1e300_cancel": true,
+    "signed_neg_zero_preserved": true,
+    "tie_to_even_pos_zero_preserved": true,
+    "non_finite_rejected": true
+  }
+}
+{
+  "engine": "IEEE-4_HAMILTONIAN_NEURAL_WEIGHT_WATERMARKER",
+  "verdict": "PASS",
+  "arm1_active_treatment": {
+    "passed": true,
+    "ownership_digest_hex": "cf889cbc3948659068f1d88ab4f5c57b6195b4b90945f464b6f63d9f582fd4d4",
+    "wots_pk_root_hex": "da7d29281201ce4e4ecbfeba0243087a5d0d404a7284adac3d832f3d662ea0ab",
+    "hamiltonian_ftle": -1.6189195167365449,
+    "max_weight_ulp_drift": 1,
+    "max_forward_logit_drift": 2.1211146283839355e-08
+  },
+  "arm2_negative_control": {
+    "passed": true,
+    "hamiltonian_7x_survived_512_prefix_scrub": true,
+    "unredundant_1x_destroyed_by_scrub": true
+  },
+  "arm3_sham_control": {
+    "passed": true,
+    "thief_owner_claim_rejected": true,
+    "wrong_secret_key_rejected": true
+  },
+  "arm4_stress_regime": {
+    "passed": true,
+    "survived_400_random_weight_bit_flips": true,
+    "post_ecc_ber": 0.0
+  }
+}
+FLOAT-GUARD SELF-TEST: PASS (12/12)
+============================= 15 passed in 7.09s ==============================
+

@@ -41,6 +41,8 @@ def bits_to_double(b):
 def ulp_diff(a, b):
     if math.isnan(a) or math.isnan(b):
         return float('inf')
+    if a == 0.0 and b == 0.0:
+        return 0
     ia = struct.unpack('<q', struct.pack('<d', a))[0]
     ib = struct.unpack('<q', struct.pack('<d', b))[0]
     # Handle sign-magnitude to 2's complement style ordering
@@ -49,6 +51,12 @@ def ulp_diff(a, b):
     if ib < 0:
         ib = 0x8000000000000000 - ib
     return abs(ia - ib)
+
+def signed_zero_bits_differ(a, b):
+    """Returns True when both values are zero (+0.0 / -0.0) but have opposite IEEE-754 sign bits."""
+    if a == 0.0 and b == 0.0:
+        return double_to_bits(a) != double_to_bits(b)
+    return False
 
 def inspect(d):
     b = double_to_bits(d)
@@ -59,6 +67,8 @@ def inspect(d):
         "sign": sign,
         "unbiased_exponent": exponent - 1023 if exponent > 0 else -1022,
         "mantissa_bits": mantissa,
+        "is_zero": exponent == 0 and mantissa == 0,
+        "is_negative_zero": sign == 1 and exponent == 0 and mantissa == 0,
         "is_subnormal": exponent == 0 and mantissa > 0,
         "is_nan": math.isnan(d),
         "is_inf": math.isinf(d)

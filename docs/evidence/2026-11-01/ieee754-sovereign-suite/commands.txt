@@ -1,0 +1,8 @@
+wsl -d Ubuntu-24.04 -- bash -c "cmp zcc2.s zcc3.s && echo CMP_EXIT=0 && sha256sum zcc2.s zcc3.s"
+python tools/prime/ieee754_vector_firewall.py --gauntlet
+python tools/prime/ieee754_nan_tombstone_tracer.py --gauntlet
+python tools/prime/ieee754_deterministic_reducer.py --gauntlet
+python tools/prime/ieee754_weight_watermarker.py --gauntlet
+python float_guard.py
+python -m pytest tools/prime/test_ieee754_suite.py tests/test_post_quantum_wots.py -v
+
